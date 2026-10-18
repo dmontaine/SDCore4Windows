@@ -2,6 +2,83 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  MORE FILEINFO() AND SYSTEM() KEYS, NUMBERED AS THE OPENQM MANUAL
+           NUMBERS THEM.
+
+           FILEINFO() gains the keys the openQM 4 manual lists from 1022 to
+           1040.  The ones that report something real in SD:
+
+             FL$SEQTYPE (1023)    a sequential file's kind: 1 serial port, 2
+                                  character device (/dev/null), 3 FIFO, 4
+                                  block device; 0 for a plain file.  Only the
+                                  character device and the plain file have
+                                  been tried.
+             FL$INDEX.SCAN (1030) 1 for a hashed file
+             FL$NON.TXN (1032)    opened as non-transactional
+             FL$COLLECTION (1035) a data collection file
+             FL$TXN.UPDATE (1038) written or deleted in the current
+                                  transaction
+             FL$LOCKS (1039)      the locks you hold in the file, one to a
+                                  field: RU or RL, a value mark and the record
+                                  id; FX or SX for a file lock
+
+           The rest answer as openQM does for a file without the feature: no
+           QMNet (FL$NETFILE 1022), replication, ECS, distributed file, SYNC,
+           temporary file or integrity constraint (all 0), and a null string
+           for the replication list, ECS map, encoding, sequential key, forced
+           id casing and owner.  FL$COLLECTION was 1022 for a few days; the
+           manual gives 1022 to FL$NETFILE and 1035 to FL$COLLECTION, so it has
+           moved.  A program that used the number 1022 for it, instead of the
+           name, must change; none was released.  FL$HOLDERS (1021) is
+           unchanged and is not the manual's FL$WHO: it gives text, "12 (don)",
+           where FL$WHO gives a list of user numbers.
+
+           SYSTEM() gains, by the manual's numbers: 13 (always 1), 16 (the
+           command level, @LEVEL), 22 (the user number, @USERNO), 33 (the name
+           of the program that called this subroutine), 1019 (the time zone's
+           offset from UTC in seconds), 1033 (COMO active), 1035 (seconds
+           since 1 Jan 1970 UTC), 1037 (every open file and the users that
+           have it open), 1038 (login time as an epoch value), 1052 / 1057 /
+           1058 (a phantom's children, its parent), 1053 (the highest user
+           number), 1065 (the transaction cache: transaction number, file
+           number, record id and W or D for each cached write or delete), 1070
+           (PRECISION), 1076 (the CALL depth), 1077 / 1078 (the user's group
+           names and numbers), 1081 and 1082 (milliseconds since 1970 and since
+           midnight).  Keys 1034, 1040, 1044, 1051, 1054 and 1080 answer 0 or
+           null: COMO cannot be suspended, file names are case sensitive on
+           Linux, there is no ECS mode or USB installation or package, and no
+           Proc.
+
+           The array the STATUS statement and FILEINFO(f, FL$STATUS) return
+           is now the manual's: the dates and times of last access and
+           modification (fields 13 to 16) are in the user's time zone rather
+           than UTC, and the operating system file name is repeated in field
+           27 and the two times are given again as epoch values in fields 34
+           and 35, which makes the array 35 fields long, not 21.  For a hashed
+           file the later of the primary and overflow subfiles' times is used.
+           OSPATH(path, 20) (OS$INFO) gives the same array for any operating
+           system path, null if it is not there; OS$FULLPATHX is another name
+           for OS$FULLPATH, which already keeps the case on Linux.  OSPATH() is
+           still a function only the system's own programs may call, and SD's
+           other OSPATH key numbers are the older ones, not the manual's.
+
+           GETPU() gains keys 1020 to 1025: PU$FORM.QUEUE (0: there is no
+           SP.ASSIGN), PU$FORM.FEED (the string sent between pages, CR FF or
+           just FF with SETPTR ... FORM.FEED FF), PU$ENCODING and PU$FONT
+           (null), PU$PATHNAME (the file the output is going to while one is
+           open) and PU$FONT.SIZE (0).  A $SYSTEM subroutine for your own
+           SYSTEM() keys, catalogued globally (CATALOG bp system GLOBAL $),
+           was already given the key correctly; it is now tested.
+
+           Not done: FL$WHO (see above), FL$LAST.PART (SD has no distributed
+           files), OS$SET.LINK and the other OSPATH keys that take a third
+           argument, FC$CRLF, SYSTEM(1071), which describes the file just read
+           by OSREAD (SD has no OSREAD), and the many other SYSTEM() keys in
+           the manual that need features SD does not have, such as 1073
+           (phantoms grouped with their parent) and 1066 (SP.ASSIGN).  The
+           lock table holds record ids in upper case, so FL$LOCKS shows them
+           that way, as GETLOCKS() does.
+
 18 Oct 26  TWO NEW FORMS OF FOR / NEXT.
 
              FOR i = 5, 7, 22                    the loop runs once for each

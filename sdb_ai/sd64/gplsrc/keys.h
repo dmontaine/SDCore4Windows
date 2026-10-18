@@ -91,10 +91,37 @@
    file open, as printable text.  READ-ONLY, so it belongs in the 1000 block
    with the other queries and not with the 10000 actions.                    */
 #define FL_HOLDERS      1021
-/* 13 Oct 26 dm - data collections: is this a data collection file?  Boolean.
-   Mirrored in sdsys/syscom/keys.h.  1022 is SD's own; the Windows port may use
-   the same number. */
-#define FL_COLLECTION   1022
+/* 12 Oct 26 dm - the openQM FILEINFO() keys above 1021, numbered as the openQM 4
+   manual numbers them (1021 is the exception: SD's FL_HOLDERS above has the
+   Windows port's shape, text, where openQM's FL$WHO is a list of user numbers).
+   Mirrored in sdsys/syscom/keys.h.  Several have nothing to report in SD (no
+   QMNet, no replication, no ECS, no distributed files) and answer as openQM
+   does for a file without the feature.
+   FL_COLLECTION was 1022, SD's own guess, on 13 Oct; the manual says 1035 and
+   gives 1022 to FL_NETFILE.  It had not been released.                       */
+#define FL_NETFILE      1022 /* QMNet file?                            */
+#define FL_SEQTYPE      1023 /* Sequential file sub-type, below        */
+#define FL_SEQTYPE_PORT  1
+#define FL_SEQTYPE_CHDEV 2
+#define FL_SEQTYPE_FIFO  3
+#define FL_SEQTYPE_DRIVE 4
+#define FL_REPLICATED   1024 /* Replication targets                    */
+#define FL_NOMAP        1025 /* Directory file, id translation off?    */
+#define FL_ECS          1026 /* Created in ECS mode?                   */
+#define FL_ECS_MAP_NAME 1027 /* ECS map name                           */
+#define FL_ENCODING     1028 /* Data encoding of a directory file      */
+#define FL_LAST_PART    1029 /* Last part of a distributed file        */
+#define FL_INDEX_SCAN   1030 /* Index scanning operations supported?   */
+#define FL_SEQ_KEY      1031 /* Sequential record id                   */
+#define FL_NON_TXN      1032 /* Opened NON.TRANSACTIONAL?              */
+#define FL_SYNC         1033 /* Opened with SYNC?                      */
+#define FL_ID_CASING    1034 /* "L" or "U" for forced id casing        */
+#define FL_COLLECTION   1035 /* Data collection file?                  */
+#define FL_OWNER        1036 /* Owner of the file (Windows only)       */
+#define FL_TEMP         1037 /* Temporary file?                        */
+#define FL_TXN_UPDATE   1038 /* Updated in the current transaction?    */
+#define FL_LOCKS        1039 /* Locks the caller holds in this file    */
+#define FL_CONSTRAINTS  1040 /* Data integrity constraints?            */
 
 /* Values over 10000 are restricted */
 #define FL_EXCLUSIVE   10000
@@ -366,6 +393,11 @@
 #define OS_DIR         12  /* Return content of directory */
 #define OS_MKDIR       13  /* Create a directory */
 #define OS_MKPATH      14  /* Create a directory path */
+/* 12 Oct 26 dm - the openQM 4 manual's key 20.  SD's other OS_ numbers are the older
+   scheme (the manual's OS$OPEN is 6, SD's is 11), so only numbers that clash with none
+   of them are taken from the manual.  OS$FULLPATHX (9 in the manual, where SD's is
+   OS_CD) is OS_FULLPATH under another name: SD keeps the case on Linux.            */
+#define OS_INFO        20  /* Information in the form of the STATUS statement's array */
 /* 20240225 mab add CHOWN to OSPATH                       */
 #define OS_CHOWN      100  /* change file / dir ownership */
 
@@ -477,6 +509,13 @@
 #define PU_PRINTER_NAME       1017
 #define PU_FILE_NAME          1018
 #define PU_SEQNO              1019
+/* 12 Oct 26 dm - the openQM 4 manual's GETPU() keys 1020 to 1025 (read only) */
+#define PU_FORM_QUEUE         1020  /* Last form queue assigned by SP.ASSIGN: SD has none, 0 */
+#define PU_FORM_FEED          1021  /* The form feed string of this print unit */
+#define PU_ENCODING           1022  /* Character encoding: SD is English only, null */
+#define PU_FONT               1023  /* Font name: not used, null */
+#define PU_PATHNAME           1024  /* Pathname of the output file, null when there is none open */
+#define PU_FONT_SIZE          1025  /* GDI mode font size: not used, 0 */
 #define PU_LINENO             2000
 
 /* SETNLS key values */

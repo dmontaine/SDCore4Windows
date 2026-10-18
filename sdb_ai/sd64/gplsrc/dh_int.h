@@ -160,5 +160,7 @@ int16_t txn_read(FILE_VAR* fvar,
 #define TXC_FOUND 1   /* Record found in cache */
 #define TXC_DELETED 2 /* Record deleted in cache */
 bool txn_write(FILE_VAR* fvar, char* id, int16_t id_len, STRING_CHUNK* str);
+bool txn_file_updated(FILE_VAR* fvar);      /* FILEINFO(FL$TXN.UPDATE) */
+STRING_CHUNK* txn_cache_report(void);       /* SYSTEM(1065)            */
 
 /* END-CODE */

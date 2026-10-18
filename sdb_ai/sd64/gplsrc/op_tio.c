@@ -1787,6 +1787,25 @@ void op_getpu() {
         k_put_c_string(pu->seqno, &result);
         break;
 
+      /* 12 Oct 26: keys 1020 to 1025 of the openQM 4 manual */
+      case PU_FORM_QUEUE: /* SD has no SP.ASSIGN, so no form queue was ever assigned */
+      case PU_FONT_SIZE: /* GDI mode only */
+        result.data.value = 0;
+        break;
+
+      case PU_FORM_FEED: /* What print_header() sends between pages: CR FF, or FF alone with FORM.FEED FF */
+        k_put_c_string((pu->flags & PU_FF_ONLY) ? "\f" : "\r\f", &result);
+        break;
+
+      case PU_ENCODING: /* English only */
+      case PU_FONT:
+        k_put_c_string("", &result);
+        break;
+
+      case PU_PATHNAME: /* The file the output is going to, while one is open */
+        k_put_c_string(pu->file.pathname, &result);
+        break;
+
       case PU_LINENO:
         n = (int16_t)(pu->line + 1);
         if (n > pu->data_lines_per_page)

@@ -79,7 +79,32 @@
 *     else has it, which is a real answer and not a failure: it means the
 *     obstacle is this session's own cached reference, not another user.
       $define FL$HOLDERS     1021  ;* Sessions holding this file open
-      $define FL$COLLECTION  1022  ;* Data collection file? (13 Oct 26, mirrored from gplsrc/keys.h)
+*     12 Oct 26 - the openQM FILEINFO() keys above 1021, numbered as the openQM 4
+*     manual numbers them; mirrored from gplsrc/keys.h, which says what each does
+*     in SD.  FL$COLLECTION was 1022 until then (an unreleased guess).
+      $define FL$NETFILE     1022  ;* QMNet file?
+      $define FL$SEQTYPE     1023  ;* Sequential file sub-type
+      $define FL$SEQTYPE.PORT  1
+      $define FL$SEQTYPE.CHDEV 2
+      $define FL$SEQTYPE.FIFO  3
+      $define FL$SEQTYPE.DRIVE 4
+      $define FL$REPLICATED  1024  ;* Replication targets
+      $define FL$NOMAP       1025  ;* Directory file, id translation off?
+      $define FL$ECS         1026  ;* Created in ECS mode?
+      $define FL$ECS.MAP.NAME 1027 ;* ECS map name
+      $define FL$ENCODING    1028  ;* Data encoding of a directory file
+      $define FL$LAST.PART   1029  ;* Last part of a distributed file
+      $define FL$INDEX.SCAN  1030  ;* Index scanning operations supported?
+      $define FL$SEQ.KEY     1031  ;* Sequential record id
+      $define FL$NON.TXN     1032  ;* Opened NON.TRANSACTIONAL?
+      $define FL$SYNC        1033  ;* Opened with SYNC?
+      $define FL$ID.CASING   1034  ;* "L" or "U" for forced id casing
+      $define FL$COLLECTION  1035  ;* Data collection file?
+      $define FL$OWNER       1036  ;* Owner of the file (Windows only)
+      $define FL$TEMP        1037  ;* Temporary file?
+      $define FL$TXN.UPDATE  1038  ;* Updated in the current transaction?
+      $define FL$LOCKS       1039  ;* Locks the caller holds in this file
+      $define FL$CONSTRAINTS 1040  ;* Data integrity constraints?
       
       * PRINTER.SETTING() function keys
       * This function is obsolete - Use GETPU() and SETPU()
@@ -226,6 +251,12 @@
       $define PU$PRINTER.NAME       1017
       $define PU$FILE.NAME          1018
       $define PU$SEQNO              1019
+      $define PU$FORM.QUEUE         1020
+      $define PU$FORM.FEED          1021
+      $define PU$ENCODING           1022
+      $define PU$FONT               1023
+      $define PU$PATHNAME           1024
+      $define PU$FONT.SIZE          1025
       $define PU$LINENO             2000
       
       * SETNLS key values
@@ -484,4 +515,38 @@
       $define SYS$EXC_DATA    9013  ;*   @EXCEPTION.DATA
       $define SYS$EXC_ORIGIN  9014  ;*   @EXCEPTION.ORIGIN: program name, field mark, line
       $define SYS$EXC_STACK   9015  ;*   @EXCEPTION.STACK: call stack when SAVING.STACK
-      $define SYS$SEQNO       9016  ;*   @SEQNO: number of the last SETPTR AS NEXT hold file         
+      $define SYS$SEQNO       9016  ;*   @SEQNO: number of the last SETPTR AS NEXT hold file
+*     12 Oct 26 - the openQM 4 SYSTEM() keys added with FILEINFO keys 1022-1040 (the manual lists numbers and
+*     meanings, not token names; these names follow the ones above).  Those that name a feature SD does not
+*     have answer as openQM does without it.
+      $define SYS$TIMESLICE   13    ;*   Relinquish timeslice: always 1
+      $define SYS$CPROC_LEVEL 16    ;*   Command processor level (@LEVEL)
+      $define SYS$USER_NO     22    ;*   User number (@USERNO), the same as 18
+      $define SYS$CALLER      33    ;*   Name of the program that called this subroutine
+      $define SYS$TZ_OFFSET   1019  ;*   Offset of the local time zone from UTC, in seconds
+      $define SYS$COMO_ON     1033  ;*   COMO file active?
+      $define SYS$COMO_SUSP   1034  ;*   COMO output suspended? (never in SD)
+      $define SYS$EPOCH       1035  ;*   Seconds since 1 Jan 1970 UTC
+      $define SYS$FILE_USERS  1037  ;*   Open files and the users that have them open
+      $define SYS$LOGIN_EPOCH 1038  ;*   Login time as an epoch value
+      $define SYS$NOCASE_OS   1040  ;*   OS file names case insensitive? (never on Linux)
+      $define SYS$ECS         1044  ;*   ECS mode? (never in SD)
+      $define SYS$USB         1051  ;*   USB installation? (never in SD)
+      $define SYS$CHILD_COUNT 1052  ;*   Number of direct child phantoms
+      $define SYS$MAX_USERNO  1053  ;*   Highest user number
+      $define SYS$PACKAGES    1054  ;*   Active packages (none in SD)
+      $define SYS$PARENT      1057  ;*   Parent process user number
+      $define SYS$CHILDREN    1058  ;*   Direct child phantoms' user numbers
+      $define SYS$TXN_CACHE   1065  ;*   The transaction cache
+      $define SYS$PRECISION   1070  ;*   The PRECISION setting
+      $define SYS$CALL_DEPTH  1076  ;*   Current CALL depth
+      $define SYS$GROUP_NAMES 1077  ;*   Names of the user's groups
+      $define SYS$GROUP_NBRS  1078  ;*   Numbers of the user's groups
+      $define SYS$FROM_PROC   1080  ;*   Started from a Proc? (never in SD)
+      $define SYS$EPOCH_MS    1081  ;*   Epoch time in milliseconds
+      $define SYS$TIME_MS_LCL 1082  ;*   Time of day in milliseconds, local time
+
+*     12 Oct 26 - OSPATH() keys from the openQM 4 manual that do not clash with SD's own numbers (the rest of
+*     SD's OS$ names are in the internal program header int$keys.h and keep the older numbering).
+      $define OS$FULLPATHX    4     ;*   Full path name keeping the case: the same as OS$FULLPATH, which keeps it on Linux
+      $define OS$INFO         20    ;*   Information in the form of the STATUS statement's array

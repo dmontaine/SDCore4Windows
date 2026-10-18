@@ -105,8 +105,10 @@
 
 #include <time.h>
 #include <sys/time.h>
+#include <grp.h>
 
 extern int txn_depth;
+extern time_t clock_time; /* time.c: set by every call of local_time() */
 
 void op_getprompt(void);
 void op_sysdir(void);
@@ -201,7 +203,16 @@ void op_system() {
       descr->data.value = local_time() % 86400L;
       break;
 
+    case 13: /* Relinquish timeslice: nothing to give up, always 1 (openQM manual) */
+      descr->data.value = 1;
+      break;
+
+    case 16: /* Command processor level, same as @LEVEL (openQM manual) */
+      descr->data.value = cproc_level;
+      break;
+
     case 18: /* User number */
+    case 22: /* User number, same as @USERNO (openQM manual; 18 is the older Ladybridge key) */
       descr->data.value = my_uptr->uid;
       break;
 
@@ -510,6 +521,198 @@ void op_system() {
         }
         k_put_c_string(s, descr);
       }
+      break;
+
+    /* ---- 12 Oct 26 dm: more of the openQM 4 SYSTEM() keys (sheet B-2 part 2).  Numbers and meanings are the
+       manual's.  Those that name a feature SD does not have answer as openQM does without it. ---- */
+
+    case 33: /* Name of the program that called this subroutine (openQM item 308) */
+      k_put_c_string((process.program.prev != NULL) ? (char*)ProgramName(process.program.prev->saved_c_base) : "",
+                     descr);
+      break;
+
+    case 1019: /* Offset in seconds of the local time zone from UTC, negative west of Greenwich */
+      {
+        int32_t lt = local_time(); /* which sets clock_time, so it must be called first */
+
+        descr->data.value = lt - (int32_t)clock_time;
+      }
+      break;
+
+    case 1033: /* COMO file active? */
+      descr->data.value = ValidFileHandle(tio.como_file) ? 1 : 0;
+      break;
+
+    case 1034: /* COMO output suspended?  SD's COMO cannot be suspended */
+    case 1040: /* Operating system file names case insensitive?  Not on Linux */
+    case 1044: /* ECS mode?  SD is English only */
+    case 1051: /* USB installation? */
+    case 1080: /* Started from a Proc?  SD has no Procs */
+      descr->data.value = 0;
+      break;
+
+    case 1035: /* Seconds since 1 Jan 1970 UTC, independent of the time zone (EPOCH()) */
+      descr->data.value = (int32_t)time(NULL);
+      break;
+
+    case 1038: /* Login time as an epoch value.  The login time is held in the local clock, so it is moved back by
+                  the zone's offset now (a login either side of a change to or from summer time is an hour out) */
+      {
+        int32_t lt = local_time(); /* which sets clock_time, so it must be called first */
+
+        descr->data.value = my_uptr->login_time - (732 * 86400L) - (lt - (int32_t)clock_time);
+      }
+      break;
+
+    case 1037: /* Every open file and the users that have it open: file number VM pathname VM user numbers (SM) */
+      str = NULL;
+      ts_init(&str, 1024);
+      StartExclusive(FILE_TABLE_LOCK, 78);
+      for (i = 1, fptr = FPtr(1); i <= sysseg->used_files; i++, fptr++) {
+        if (fptr->ref_ct) {
+          int16_t hu;
+          bool first = TRUE;
+          USER_ENTRY* huptr;
+
+          if (str != NULL)
+            ts_copy_byte(FIELD_MARK);
+          ts_printf("%d%c%s%c", (int)i, VALUE_MARK, fptr->pathname, VALUE_MARK);
+          for (hu = 1; hu <= sysseg->max_users; hu++) {
+            huptr = UPtr(hu);
+            if ((huptr->uid <= 0) || (*UFMPtr(huptr, i) == 0))
+              continue;
+            if (!first)
+              ts_copy_byte(SUBVALUE_MARK);
+            ts_printf("%d", (int)(huptr->uid));
+            first = FALSE;
+          }
+        }
+      }
+      EndExclusive(FILE_TABLE_LOCK);
+      ts_terminate();
+      InitDescr(descr, STRING);
+      descr->data.str.saddr = str;
+      break;
+
+    case 1052: /* Number of direct child phantom processes */
+    case 1058: /* Their user numbers, field mark delimited */
+      str = NULL;
+      if (key == 1058)
+        ts_init(&str, 64);
+      i = 0;
+      {
+        int16_t hu;
+        USER_ENTRY* huptr;
+
+        for (hu = 1; hu <= sysseg->max_users; hu++) {
+          huptr = UPtr(hu);
+          if ((huptr->uid > 0) && (huptr->puid == process.user_no) && (huptr->flags & USR_PHANTOM)) {
+            if (key == 1058) {
+              if (i > 0)
+                ts_copy_byte(FIELD_MARK);
+              ts_printf("%d", (int)(huptr->uid));
+            }
+            i++;
+          }
+        }
+      }
+      if (key == 1058) {
+        ts_terminate();
+        InitDescr(descr, STRING);
+        descr->data.str.saddr = str;
+      } else {
+        descr->data.value = i;
+      }
+      break;
+
+    case 1053: /* Highest user number that can be assigned */
+      descr->data.value = sysseg->max_users;
+      break;
+
+    case 1054: /* Active packages: SD has none */
+      k_put_c_string("", descr);
+      break;
+
+    case 1057: /* Parent process user number, zero if this is not a phantom or the parent has gone */
+      {
+        int16_t pu = my_uptr->puid;
+        USER_ENTRY* puptr;
+
+        descr->data.value = 0;
+        if ((pu > 0) && (pu <= sysseg->max_users) && ((puptr = UserPtr(pu)) != NULL) && (puptr->uid == pu))
+          descr->data.value = pu;
+      }
+      break;
+
+    case 1065: /* The transaction cache, one cached write or delete to a field */
+      {
+        STRING_CHUNK* rep = txn_cache_report();
+
+        InitDescr(descr, STRING);
+        descr->data.str.saddr = rep;
+      }
+      break;
+
+    case 1070: /* The current PRECISION setting */
+      descr->data.value = process.program.precision;
+      break;
+
+    case 1076: /* Current CALL depth */
+      {
+        struct PROGRAM* cp;
+
+        i = 0;
+        for (cp = process.program.prev; cp != NULL; cp = cp->prev)
+          i++;
+        descr->data.value = i;
+      }
+      break;
+
+    case 1077: /* Names of the groups the user belongs to, field mark delimited */
+    case 1078: /* And their numbers */
+      {
+        gid_t groups[256];
+        int ng = getgroups(256, groups);
+        int gi;
+        bool have_egid = FALSE;
+        struct group* gr;
+
+        str = NULL;
+        ts_init(&str, 128);
+        for (gi = 0; gi < ng; gi++) {
+          if (groups[gi] == getegid())
+            have_egid = TRUE;
+        }
+        if (ng < 0)
+          ng = 0;
+        for (gi = 0; gi < ng + (have_egid ? 0 : 1); gi++) {
+          gid_t g = (gi < ng) ? groups[gi] : getegid();
+
+          if (gi > 0)
+            ts_copy_byte(FIELD_MARK);
+          if (key == 1078) {
+            ts_printf("%d", (int)g);
+          } else if ((gr = getgrgid(g)) != NULL) {
+            ts_printf("%s", gr->gr_name);
+          } else {
+            ts_printf("%d", (int)g);
+          }
+        }
+        ts_terminate();
+        InitDescr(descr, STRING);
+        descr->data.str.saddr = str;
+      }
+      break;
+
+    case 1081: /* Epoch time in milliseconds */
+      gettimeofday(&tv, NULL);
+      InitDescr(descr, FLOATNUM);
+      descr->data.float_value = ((double)tv.tv_sec * 1000.0) + (double)(tv.tv_usec / 1000);
+      break;
+
+    case 1082: /* Time of day in milliseconds since midnight, local time */
+      gettimeofday(&tv, NULL);
+      descr->data.value = ((local_time() % 86400L) * 1000) + (tv.tv_usec / 1000);
       break;
 
     case 1032: /* Test and clear break pending flag */

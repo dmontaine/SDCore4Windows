@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 084ff8a (12 Oct 26): txn_file_updated() (FILEINFO FL$TXN.UPDATE) and txn_cache_report()
+ *           (SYSTEM(1065)): read-only walks of the cache and of the cache each
+ *           enclosing transaction is holding on txn_stack.
  *  4 Sep 26 Windows port - a commit that fails half way now PUTS BACK the
  *           records it had already applied.  Owner's ruling, disambiguated
  *           3 Sep 26: restore each already-applied record to what it held
@@ -631,6 +634,76 @@ bool txn_close(FILE_VAR* fvar) {
 
 exit_txn_close:
   return status;
+}
+
+/* ======================================================================
+   txn_file_updated()  -  Has the file had a write or a delete cached in
+   the current transaction (this level, or one it is nested in)?          */
+
+bool txn_file_updated(FILE_VAR* fvar) {
+  TXN_CACHE* txn;
+  TXN_STACK* stk;
+
+  if (process.txn_id == 0)
+    return FALSE;
+
+  for (txn = txn_head; txn != NULL; txn = txn->next) {
+    if ((txn->mode != TXN_CLOSE) && (txn->fvar->file_id == fvar->file_id))
+      return TRUE;
+  }
+
+  for (stk = txn_stack; stk != NULL; stk = stk->next) {
+    for (txn = stk->txn_head; txn != NULL; txn = txn->next) {
+      if ((txn->mode != TXN_CLOSE) && (txn->fvar->file_id == fvar->file_id))
+        return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/* ======================================================================
+   txn_cache_report()  -  SYSTEM(1065): the cached actions, one per field,
+   as four values: transaction number, file number, record id and W or D.
+   The innermost transaction first, then each one it is nested in.  A
+   file close held in the cache is not an action on a record and is left
+   out.  Null when there is no transaction.                               */
+
+STRING_CHUNK* txn_cache_report(void) {
+  STRING_CHUNK* str = NULL;
+  TXN_CACHE* txn;
+  TXN_STACK* stk;
+  u_int32_t id;
+
+  if (process.txn_id == 0)
+    return NULL;
+
+  ts_init(&str, 256);
+
+  id = process.txn_id;
+  for (txn = txn_head; txn != NULL; txn = txn->next) {
+    if (txn->mode == TXN_CLOSE)
+      continue;
+    if (str != NULL)
+      ts_copy_byte(FIELD_MARK);
+    ts_printf("%u%c%d%c%.*s%c%s", (unsigned)id, VALUE_MARK, (int)(txn->fvar->file_id), VALUE_MARK, (int)(txn->id_len),
+              txn->id, VALUE_MARK, (txn->mode == TXN_DELETE) ? "D" : "W");
+  }
+
+  for (stk = txn_stack; stk != NULL; stk = stk->next) {
+    id = stk->txn_id;
+    for (txn = stk->txn_head; txn != NULL; txn = txn->next) {
+      if (txn->mode == TXN_CLOSE)
+        continue;
+      if (str != NULL)
+        ts_copy_byte(FIELD_MARK);
+      ts_printf("%u%c%d%c%.*s%c%s", (unsigned)id, VALUE_MARK, (int)(txn->fvar->file_id), VALUE_MARK,
+                (int)(txn->id_len), txn->id, VALUE_MARK, (txn->mode == TXN_DELETE) ? "D" : "W");
+    }
+  }
+
+  (void)ts_terminate();
+  return str;
 }
 
 /* ======================================================================
