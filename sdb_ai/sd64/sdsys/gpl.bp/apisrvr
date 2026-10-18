@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - RELEASE_1.1 142 (Linux 400500c, 15 Oct 26): vb.call returns after refusing a subroutine that is
+*           not flagged $sdcall (a $ name, or SDCLIENT 2): it was refused in the reply but still ran.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (12286) while the administrator has logins
 *           inhibited, after the backup login hold and before any credential is looked at.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): Call names: the lower of 128 and MAXIDLEN (openQM item 241), 63 at the default.  Refused logins
@@ -1328,6 +1330,7 @@ vb.call:
                   if not(bitand(obj.flags, HDR.SDCALL.ALLOWED)) then
                      abort.message = sysmsg(5264, subr.name) ;* %1 cannot be called from a SDClient session
                      server.error = SV$ON.ERROR
+                     return     ;* 18 Oct 26 RELEASE_1.1 142 (Linux 400500c): it was refused in the reply but still RAN
                   end
                end
 
