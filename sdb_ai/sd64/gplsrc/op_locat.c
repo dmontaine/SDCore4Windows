@@ -417,9 +417,10 @@ Private void locate(bool numeric_mode) {
         if (item_len == numeric_len) {
           if ((SortCompare(item_string, numeric_string, item_len, nocase) <
                0) != ascending)
-            goto not_found;
+            goto found;
         } else if ((item_len < numeric_len) != ascending)
-          goto not_found;
+          goto found; /* 11 Oct 26 openQM 3.4-1 (item 527): these two said not_found, which put the search item AFTER
+                         a single non-numeric item that sorts after it; the items before the last always said found */
       }
     }
     goto not_found;

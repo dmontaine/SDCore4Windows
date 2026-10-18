@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  TWO BASIC DEFECTS FIXED.
+
+             SEEK from the end   SEEK file, -3, 2 failed with error 3028
+                                 although a negative offset from the end of
+                                 a sequential file is the usual way to say
+                                 "three bytes before the end".  It now
+                                 positions there.  A positive offset with 2
+                                 meant the same thing in SD before and still
+                                 does, so no existing program changes; an
+                                 offset that lands before the start of the
+                                 file is still refused.
+             LOCATE, right       LOCATE 5 IN s BY 'AR' where s held a single
+             justified           item that was text, such as 'abc', said
+                                 position 2.  Text sorts after numbers, so
+                                 the number goes first: it now says 1, as it
+                                 already did when the list held two or more
+                                 text items.
+
 18 Oct 26  FIVE CONVERSION CODE ADDITIONS AND TRIMW.
 
              MCN- and MC/N-   MCN keeps only the digits; MCN- also keeps a

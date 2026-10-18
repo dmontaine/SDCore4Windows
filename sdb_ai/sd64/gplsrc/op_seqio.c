@@ -1415,7 +1415,9 @@ void op_seek() {
       break;
 
     case 2:
-      posn = fsize - offset;
+      /* A negative offset is before the end (openQM 3.0-4, item 259); a positive one has always meant the
+         same here, so both go backwards from the end */
+      posn = (offset < 0) ? fsize + offset : fsize - offset;
       break;
 
     default:
