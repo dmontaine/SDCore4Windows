@@ -59,7 +59,13 @@ $include parser.h
 
    * Check no further information in command
 
+   saved.name = '$savedlists'     ;* 12 Oct 26 dm - openQM 494: IN file names another file of saved lists
    call @parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END and upcase(token) = 'IN' then
+      call @parser(parser$get.token, token.type, saved.name, keyword)
+      if token.type = PARSER$END or saved.name = '' then stop sysmsg(12082) ;* Saved lists file name required after IN
+      call @parser(parser$get.token, token.type, token, keyword)
+   end
    if token.type # PARSER$END then
       stop sysmsg(2018, token) ;* Unexpected token (xx)
    end
@@ -67,7 +73,7 @@ $include parser.h
 
 * ---------------  Step 2 -  Open the save list file
 
-   open "$savedlists" to saved.lists.file else
+   open saved.name to saved.lists.file else
       @system.return.code = -status()
       stop sysmsg(3248, status()) ;* Error xx opening $savedlists
    end

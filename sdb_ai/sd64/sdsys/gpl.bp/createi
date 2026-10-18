@@ -93,6 +93,7 @@ $include err.h
 
    no.case = @false
    no.nulls = @false
+   deleting = @false
    new.ak.names = ''
    loop
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
@@ -100,6 +101,9 @@ $include err.h
       begin case
          case keyword = KW$NO.NULLS
             no.nulls = @true
+
+         case keyword = KW$DELETING     ;* 12 Oct 26 dm - openQM 424
+            deleting = @true
 
          case keyword = KW$PATHNAME
             call @parser(PARSER$GET.TOKEN, token.type, akpath, keyword)
@@ -134,8 +138,31 @@ $include err.h
    data.path = fileinfo(data.f, FL$PATH)
    dict.path = fileinfo(dict.f, FL$PATH)
 
+   * DELETING: an index of the same name that is already there is deleted first, with DELETE.INDEX (12 Oct 26 dm)
+   old.indices = ''
+   if deleting then
+      have = indices(data.f)
+      uhave = upcase(have)
+      for i = 1 to dcount(new.ak.names, @fm)
+         uname = upcase(new.ak.names<i>)
+         locate uname in uhave<0> setting pos then old.indices<-1> = have<pos>
+      next i
+   end
+
    close data.f
    close dict.f
+
+   for i = 1 to dcount(old.indices, @fm)
+      junk = ''
+      execute 'DELETE.INDEX ' : (if dict.flag # '' then 'DICT ' else '') : filename : ' ' : old.indices<i> capturing junk
+   next i
+
+   * 18 Oct 26 Windows port - from Linux 405a6f0 (12 Oct 26): - openQM 184: without PATHNAME the indices go where a VOC record $INDEX.PATH says  (X / pathname)
+   if akpath = '' then
+      read index.path.rec from @voc, '$INDEX.PATH' then
+         if upcase(index.path.rec[1,1]) = 'X' then akpath = index.path.rec<2>
+      end
+   end
 
    flags = MKI$CREATE
    if no.case then flags += MKI$NO.CASE

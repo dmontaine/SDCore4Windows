@@ -612,7 +612,7 @@ _opc_(0xCFEF, OP_CFEF,     "OPCFEF",     op_illegal2,  OPCODE_BYTE,         0)
 
 _opc_(0xCFF0, OP_TRIMW,    "TRIMW",      op_trimw,     OPCODE_BYTE,         0)
 _opc_(0xCFF1, OP_SSELECTM, "SSELECTM",   op_sselectm,  OPCODE_BYTE,        -2)
-_opc_(0xCFF2, OP_CFF2,     "OPCFF2",     op_illegal2,  OPCODE_BYTE,         0)
+_opc_(0xCFF2, OP_MD5,      "MD5",        op_md5,       OPCODE_BYTE,         0)
 _opc_(0xCFF3, OP_CFF3,     "OPCFF3",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFF4, OP_CFF4,     "OPCFF4",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFF5, OP_CFF5,     "OPCFF5",     op_illegal2,  OPCODE_BYTE,         0)

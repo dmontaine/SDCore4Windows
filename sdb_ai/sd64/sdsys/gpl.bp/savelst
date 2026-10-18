@@ -72,7 +72,8 @@ $include parser.h
    list.name = ''
 
    call @parser(parser$get.token, token.type, token, keyword)
-   if token.type # PARSER$END and keyword # KW$FROM and keyword # KW$KEEP and keyword # KW$COUNT.SUP then
+   saved.name = '$savedlists'     ;* 12 Oct 26 dm - openQM 494: IN file names another file of saved lists
+   if token.type # PARSER$END and keyword # KW$FROM and keyword # KW$KEEP and keyword # KW$COUNT.SUP and upcase(token) # 'IN' then
       list.name = token
       call @parser(parser$get.token, token.type, token, keyword)
    end
@@ -96,6 +97,10 @@ $include parser.h
          case keyword = KW$KEEP        ;* Leave the active list as it is (ref 387)
             keep = @true
 
+         case upcase(token) = 'IN'     ;* 12 Oct 26 dm - openQM 494
+            call @parser(parser$get.token, token.type, saved.name, keyword)
+            if token.type = PARSER$END or saved.name = '' then stop sysmsg(12082) ;* Saved lists file name required after IN
+
          case keyword = KW$COUNT.SUP   ;* No count of the records (ref 2)
             count.sup = @true
 
@@ -115,9 +120,11 @@ $include parser.h
 
 * ---------------  Step 2 -  Create the save list file if necessary
 
-   open "$savedlists" to saved.lists.file else
+   open saved.name to saved.lists.file else
       @system.return.code = -status()
-      
+
+      if saved.name # '$savedlists' then stop sysmsg(3248, status()) ;* Error xx opening the file named by IN
+
       if status() # ER$NVR then
          stop sysmsg(3248, status()) ;* Error xx opening $savedlists
       end

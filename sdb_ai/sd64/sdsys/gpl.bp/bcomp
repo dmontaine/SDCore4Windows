@@ -551,6 +551,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "MATCHFIELD"      ; intrinsic.opcodes<-1> = OP.MATCHFLD
    intrinsics<-1> = "MAX"             ; intrinsic.opcodes<-1> = OP.MAX
    intrinsics<-1> = "MAXIMUM"         ; intrinsic.opcodes<-1> = OP.MAXIMUM
+   intrinsics<-1> = "MD5"             ; intrinsic.opcodes<-1> = OP.MD5   ;* 12 Oct 26 dm - openQM 63
    intrinsics<-1> = "MIN"             ; intrinsic.opcodes<-1> = OP.MIN
    intrinsics<-1> = "MINIMUM"         ; intrinsic.opcodes<-1> = OP.MINIMUM
    intrinsics<-1> = "MOD"             ; intrinsic.opcodes<-1> = OP.MOD
@@ -4025,6 +4026,7 @@ end
                       in.three,       ;* MATCHFIELD
                       in.two,         ;* MAX
                       in.one,         ;* MAXIMUM
+                      in.one,         ;* MD5
                       in.two,         ;* MIN
                       in.one,         ;* MINIMUM
                       in.two,         ;* MOD

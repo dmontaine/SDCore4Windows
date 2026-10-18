@@ -96,6 +96,8 @@ $include ak_info.h
    stats = @false
    detail = @false
    ak.list = ''
+   lptr = -1
+   printer.opened = @false
    loop
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
@@ -110,6 +112,15 @@ $include ak_info.h
 
          case keyword = KW$STATISTICS
             stats = @true
+
+         case keyword = KW$LPTR          ;* 12 Oct 26 dm - openQM 73: LPTR {n} sends the report to a printer
+            lptr = 0
+            call @parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+            if s matches '1N0N' then
+               call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+               lptr = token + 0
+               if lptr > LPTR$HIGH.PRINT.UNIT then stop sysmsg(2053) ;* Invalid print unit number
+            end
 
          case 1
             ak.list<-1> = token
@@ -136,13 +147,18 @@ $include ak_info.h
    end
 not.all.keyword:
 
+   if lptr >= 0 then
+      if lptr = 0 then printer on
+      printer.opened = @true
+   end
+
    * Get AK data
 
    ak.names = indices(data.f)
    num.aks = dcount(ak.names, @fm)
 
    if num.aks = 0 then
-      crt sysmsg(2603)  ;* File has no indices
+      print on lptr sysmsg(2603)  ;* File has no indices
       goto exit.list.index
    end
 
@@ -165,11 +181,11 @@ not.all.keyword:
 
 
 
-   crt sysmsg(2619, filename)  ;* Alternate key indices for file xx
-   crt sysmsg(2620, num.aks)  ;* Number of indices = xx
+   print on lptr sysmsg(2619, filename)  ;* Alternate key indices for file xx
+   print on lptr sysmsg(2620, num.aks)  ;* Number of indices = xx
    s = fileinfo(data.f, FL$AKPATH)
-   if s # '' then crt sysmsg(2637, s)  ;* Indices relocated to %1
-   crt
+   if s # '' then print on lptr sysmsg(2637, s)  ;* Indices relocated to %1
+   print on lptr ''
 
 *          1         2         3         4         5         6         7         8
 * 12345678901234567890123456789012345678901234567890123456789012345678901234567890
@@ -186,7 +202,7 @@ not.all.keyword:
       end
 
       if show.headings then
-         crt sysmsg(2621)  ;* Index name...... En Type Nulls S/M Fmt Field/Expression
+         print on lptr sysmsg(2621)  ;* Index name...... En Type Nulls S/M Fmt Field/Expression
          show.headings = @false
       end
 
@@ -196,7 +212,7 @@ not.all.keyword:
 
       * Field name
 
-      if len(index.name) > 16 then crt index.name
+      if len(index.name) > 16 then print on lptr index.name
          else line[1, 18] = index.name
 
       * Enabled
@@ -259,7 +275,7 @@ not.all.keyword:
             comp.field = 2
       end case
 
-      crt line
+      print on lptr line
 
       * Check against dictionary entry
 
@@ -274,10 +290,10 @@ not.all.keyword:
          end
          if dict.found then
             if type # upcase(dict.rec[1, 1]) or trimb(trimf(ak.data<comp.field>)) # trimb(trimf(dict.rec<comp.field>)) then
-               crt sysmsg(2622)  ;* ** The above index differs from its dictionary definition
+               print on lptr sysmsg(2622)  ;* ** The above index differs from its dictionary definition
             end
          end else
-            crt sysmsg(2623)  ;* ** The above index is not in the dictionary
+            print on lptr sysmsg(2623)  ;* ** The above index is not in the dictionary
          end
       end
 
@@ -287,8 +303,8 @@ not.all.keyword:
          show.headings = @true ;* Repeat main headings for next index
 
          if detail then
-            crt sysmsg(2624)  ;* Alternate key details:
-            crt sysmsg(2625)  ;* Records...  Key value......................................................
+            print on lptr sysmsg(2624)  ;* Alternate key details:
+            print on lptr sysmsg(2625)  ;* Records...  Key value......................................................
          end
 
          key.count = 0
@@ -301,7 +317,7 @@ not.all.keyword:
             readnext key from 10 else exit
             selectindex index.name, key from data.f to 11
             if detail then
-               crt fmt(@selected, '10R') : '  ' : key
+               print on lptr fmt(@selected, '10R') : '  ' : key
             end
 
             key.count += 1
@@ -319,18 +335,19 @@ not.all.keyword:
             avg.targets = target.count / key.count
          end
 
-         crt sysmsg(2626)  ;* Index entries      Key values     Min Recs       Avg Recs       Max Recs
-         crt fmt(target.count, '13R') : '   ' :
-         crt fmt(key.count, '13R') : '   ' :
-         crt fmt(min.targets, '10R') : '   ' :
-         crt fmt(avg.targets, '12R') : '   ' :
-         crt fmt(max.targets, '12R')
+         print on lptr sysmsg(2626)  ;* Index entries      Key values     Min Recs       Avg Recs       Max Recs
+         print on lptr fmt(target.count, '13R') : '   ' :
+         print on lptr fmt(key.count, '13R') : '   ' :
+         print on lptr fmt(min.targets, '10R') : '   ' :
+         print on lptr fmt(avg.targets, '12R') : '   ' :
+         print on lptr fmt(max.targets, '12R')
       end
 
-      crt
+      print on lptr ''
    next i
 
 exit.list.index:
+   if lptr >= 0 and printer.opened then printer close on lptr
    @system.return.code = 0
 
    return
@@ -341,7 +358,7 @@ show.expr:
    loop
       line[40, 40] = remove(expr, delim)
    while delim
-      crt line
+      print on lptr line
       line = space(79)
    repeat
 
