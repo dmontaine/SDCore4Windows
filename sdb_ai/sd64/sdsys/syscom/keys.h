@@ -464,4 +464,8 @@
       $define SYS$START_TIME  1045  ;*   Time SD was started, Unix epoch
       $define SYS$GUID        1047  ;*   Globally unique identifier
       $define SYS$SYS_TYPE    9010  ;*   Return "SD"
-      $define SYS$MAX_STR     9011  ;*   Return MAX_STRING_SIZE - max string / record length         
+      $define SYS$MAX_STR     9011  ;*   Return MAX_STRING_SIZE - max string / record length
+      $define SYS$EXCEPTION   9012  ;*   @EXCEPTION: name of the exception last thrown
+      $define SYS$EXC_DATA    9013  ;*   @EXCEPTION.DATA
+      $define SYS$EXC_ORIGIN  9014  ;*   @EXCEPTION.ORIGIN: program name, field mark, line
+      $define SYS$EXC_STACK   9015  ;*   @EXCEPTION.STACK: call stack when SAVING.STACK         

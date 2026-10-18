@@ -2,6 +2,90 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  TRY / CATCH / THROW, CAUGHT() AND @EXCEPTION.
+
+           An exception is a named event that a program raises with THROW
+           and handles with TRY / CATCH, wherever in the program, or in the
+           subroutines it CALLs, the THROW happens.  The program leaves
+           every level below the TRY, then goes on in the CATCH clause that
+           names the exception:
+
+             LOOP
+                READNEXT ACC.ID ELSE EXIT
+                TRY
+                   CALL PROCESS.ACCOUNT
+                CATCH ACCOUNT.INVALID
+                   DISPLAY 'Account ' : ACC.ID : ' is invalid'
+                END
+             REPEAT
+
+             TRY {statement}
+                statements
+             CATCH exception {qualifiers} {, exception {qualifiers} ...}
+                statements
+             {CATCH ... any number of further clauses}
+             END
+
+             THROW exception {, data}
+
+           The exception name is not case sensitive and may be up to 63
+           characters.  In CATCH it may be written in quotes or without
+           them; in THROW it is any expression.  A TRY may have several
+           CATCH clauses and one clause may name several exceptions; the
+           first clause that names it is the one used.  Two special names
+           can be used in CATCH: SYS$ANY takes any exception that no clause
+           names, and SYS$UNHANDLED takes an exception that no TRY anywhere
+           in the program's call chain names or takes by SYS$ANY.
+
+           In the CATCH clause these hold what was thrown:
+
+             @EXCEPTION          the name, as it was written in THROW
+             @EXCEPTION.DATA    the data given to THROW, null if none
+             @EXCEPTION.ORIGIN  the name of the program that threw it, a
+                                field mark and the line number of the
+                                THROW (-1 where the program has no line
+                                table), the program being named as error
+                                messages and SYSTEM(1002) name it
+             @EXCEPTION.STACK   the call stack, in the form of SYSTEM(1002),
+                                when the CATCH name was followed by
+                                SAVING.STACK; null otherwise
+
+           Two qualifiers may follow an exception name in CATCH, and apply
+           to that name only: DUMPING writes a process dump file, as PDUMP
+           does, and SAVING.STACK fills @EXCEPTION.STACK; both are done
+           when the exception is thrown, before the program leaves the
+           levels below the TRY.  $MODE EXCEPTION.SAVE.STACK gives every
+           CATCH in the program SAVING.STACK.
+
+             CAUGHT(exception {, modes})
+
+           is 1 if a TRY that is active now (in this program or in one that
+           called it) has a CATCH for that exception, 0 if not, so that a
+           subroutine can find out before it throws.  Modes adds up what
+           else counts: 1 a SYS$ANY handler, 2 a SYS$UNHANDLED handler;
+           without it only a clause that names the exception counts.
+
+           An exception that nothing handles stops the program, with
+           "Unhandled exception name" and the data after a colon, as a run
+           time error does.
+
+18 Oct 26  INMAT() AFTER MATCHES AND MATCHFIELD.
+
+           A MATCHES template may hold several patterns separated by value
+           marks; the string matches if any one of them does.  Until now
+           there was no way to tell which one.  After MATCHES or
+           MATCHFIELD(), INMAT() is now the number of the pattern that
+           matched, counting from 1 in the order they are written in the
+           template, and 0 when none of them matched:
+
+             IF 'ab12' MATCHES '3N':@VM:'3A':@VM:'2A2N' THEN
+                CRT INMAT()                 ;* 3
+             END
+
+           The first pattern that matches is the one reported, as it is the
+           one used.  A template with a single pattern gives 1 when it
+           matches.
+
 18 Oct 26  EREPLACE(), FIX() AND MATSTR().
 
              EREPLACE(string, old, new {, occurrence {, start}})

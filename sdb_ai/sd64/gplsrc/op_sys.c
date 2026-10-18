@@ -525,8 +525,15 @@ void op_system() {
       k_put_c_string("SD", descr);
       break;
 
-    case 9011: /*MAX_STRING_SIZE */     
+    case 9011: /*MAX_STRING_SIZE */
       descr->data.value = MAX_STRING_SIZE;
+      break;
+
+    case 9012: /* @EXCEPTION */
+    case 9013: /* @EXCEPTION.DATA */
+    case 9014: /* @EXCEPTION.ORIGIN */
+    case 9015: /* @EXCEPTION.STACK */
+      exc_value(key - 9012, descr);
       break;
 
     default:

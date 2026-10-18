@@ -364,7 +364,7 @@ _opc_(0xCF0A, OP_LOGIN,    "LOGIN",      op_login,     OPCODE_BYTE,        -1)
 _opc_(0xCF0B, OP_UMASK,    "UMASK",      op_umask,     OPCODE_BYTE,        -1)
 _opc_(0xCF0C, OP_TERMINFO, "TERMINFO",   op_terminfo,  OPCODE_BYTE,         1)
 _opc_(0xCF0D, OP_KEYCODE,  "KEYCODE",    op_keycode,   OPCODE_BYTE,         1)
-_opc_(0xCF0E, OP_CF0E,     "OPCF0E",     op_illegal,   OPCODE_BYTE,         0)
+_opc_(0xCF0E, OP_EXC,      "EXC",        op_exc,       ONE_BYTE_VALUE,      0)  /* 12 Oct 26 dm - TRY/CATCH/THROW, openQM 355 */
 _opc_(0xCF0F, OP_VARTYPE,  "VARTYPE",    op_vartype,   OPCODE_BYTE,         0)
 
 _opc_(0xCF10, OP_CROP,     "CROP",       op_crop,      OPCODE_BYTE,         0)
@@ -401,8 +401,8 @@ _opc_(0xCF2D, OP_EVENTS,   "EVENTS",     op_events,    OPCODE_BYTE,        -1)
 _opc_(0xCF2E, OP_DBGSET,   "DBGSET",     op_dbgset,    OPCODE_BYTE,        -3)
 _opc_(0xCF2F, OP_PCONFIG,  "PCONFIG",    op_pconfig,  OPCODE_BYTE,         -1)
 
-_opc_(0xCF30, OP_CF30,     "OPCF30",     op_illegal,   OPCODE_BYTE,         0)
-_opc_(0xCF31, OP_CF31,     "OPCF31",     op_illegal,   OPCODE_BYTE,         0)
+_opc_(0xCF30, OP_TRY,      "TRY",        op_try,       JUMP_ADDR,           0)  /* 12 Oct 26 dm - TRY/CATCH/THROW, openQM 355 */
+_opc_(0xCF31, OP_ENDTRY,   "ENDTRY",     op_endtry,    JUMP_ADDR,           0)  /* 12 Oct 26 dm - TRY/CATCH/THROW, openQM 355 */
 _opc_(0xCF32, OP_INPUTAT,  "INPUTAT",    op_inputat,   OPCODE_BYTE,        -5)
 _opc_(0xCF33, OP_INPUT,    "INPUT",      op_input,     OPCODE_BYTE,        -3)
 _opc_(0xCF34, OP_PRNAME,   "PRNAME",     op_prname,    OPCODE_BYTE,        -1)

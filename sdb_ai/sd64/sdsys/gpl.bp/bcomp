@@ -166,6 +166,7 @@ $define M.OPTIONAL.THEN.ELSE   21; *rdm
 $define M.IMPLIED.STOP         22  ;* 10 Oct 26 dm
 $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
 $define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
+$define M.EXCEPTION.SAVE.STACK 25  ;* 12 Oct 26 dm - openQM 355: every CATCH behaves as if SAVING.STACK were given
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -197,6 +198,7 @@ mode.names := @VM:"OPTIONAL.THEN.ELSE"
 mode.names := @VM:"IMPLIED.STOP"
 mode.names := @VM:"STRICT.EQUATE"
 mode.names := @VM:"TIME.MS"
+mode.names := @VM:"EXCEPTION.SAVE.STACK"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -275,6 +277,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.constants := @fm:"GID":@fm:"UID":@fm:"SDSYS"
    at.constants := @fm:"LINE":@fm:"BUILD.TIME"   ;* 10 Oct 26 dm  (not in bbcmp.py:
                                                  ;* the bootstrap programs use neither)
+   at.constants := @fm:"EXCEPTION":@fm:"EXCEPTION.DATA":@fm:"EXCEPTION.ORIGIN":@fm:"EXCEPTION.STACK"
+                                                 ;* 12 Oct 26 dm - openQM 355, read through SYSTEM(9012-9015)
 
    * The AT.SYSCOM.VARS list contains @ variables which correspond to data
    * in the SYSCOM common block. The offset of the common variable is in
@@ -341,7 +345,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * Statement names.  All these statements generate DEBUG calls if debugging
    statements = "ABORT"
    statements := @fm:"BEGIN":@fm:"BREAK"
-   statements := @fm:"CALL":@fm:"CASE":@fm:"CHAIN"
+   statements := @fm:"CALL":@fm:"CASE":@fm:"CATCH":@fm:"CHAIN"
    statements := @fm:"CLEAR":@fm:"CLEARCOMMON"
    statements := @fm:"CLEARDATA":@fm:"CLEARFILE":@fm:"CLEARINPUT"
    statements := @fm:"CLEARSELECT":@fm:"CLOSE":@fm:"CLOSESEQ":@fm:"CLOSE.SOCKET"
@@ -390,7 +394,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"SETNLS":@fm:"SETPU":@fm:"SETRIGHT":@fm:"SETREM"
    statements := @fm:"SLEEP":@fm:"SSELECT":@fm:"SSELECTN":@fm:"STATUS"
    statements := @fm:"STOP"
-   statements := @fm:"TCLREAD":@fm:"TIMEOUT":@fm:"TRANSACTION"     
+   statements := @fm:"TCLREAD":@fm:"THROW":@fm:"TIMEOUT":@fm:"TRANSACTION":@fm:"TRY"
    statements := @fm:"UNLOCK":@fm:"UNTIL":@fm:"VOID"
    statements := @fm:"WAKE"
    statements := @fm:"WEOFSEQ":@fm:"WHILE":@fm:"WRITE":@fm:"WRITEBLK"
@@ -479,6 +483,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "BITXOR"          ; intrinsic.opcodes<-1> = OP.BITXOR
    intrinsics<-1> = "CATALOGUED"      ; intrinsic.opcodes<-1> = OP.CHKCAT
    intrinsics<-1> = "CATS"            ; intrinsic.opcodes<-1> = OP.CATS
+   intrinsics<-1> = "CAUGHT"          ; intrinsic.opcodes<-1> = OP.EXC   ;* 12 Oct 26 dm - openQM 355
    intrinsics<-1> = "CCALL"           ; intrinsic.opcodes<-1> = OP.CCALL
    intrinsics<-1> = "CHANGE"          ; intrinsic.opcodes<-1> = OP.CHANGE
    intrinsics<-1> = "CHAR"            ; intrinsic.opcodes<-1> = OP.CHAR
@@ -1021,6 +1026,7 @@ $define J.CASE                 4  ;* CASE
 $define J.IF                   5  ;* IF / THEN / ELSE
 $define J.IF.EXPR              6  ;* IF / THEN / ELSE in expression
 $define J.TXN                  7  ;* TRANSACTION
+$define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
                         * V2 : Jump number
                         * V3 : Element number for CASE
 
@@ -2083,6 +2089,7 @@ is.statement:
                  st.break,
                  st.call,
                  st.case,
+                 st.misplaced,                 ;* CATCH: 12 Oct 26 dm - openQM 355 (a TRY takes its own)
                  st.chain,
                  st.clear,
                  st.clearcommon,
@@ -2233,8 +2240,10 @@ is.statement:
                  st.status,
                  st.stop,
                  st.tclread,
+                 st.throw,                     ;* 12 Oct 26 dm - openQM 355
                  st.timeout,
                  st.transaction,
+                 st.try,                       ;* 12 Oct 26 dm - openQM 355
                  st.unlock,
                  st.until,
                  st.void,
@@ -3965,6 +3974,7 @@ end
                       in.two,         ;* BITXOR
                       in.one,         ;* CATALOGUED
                       in.two,         ;* CATS
+                      in.caught,      ;* CAUGHT
                       in.two,         ;* CCALL
                       in.change,      ;* CHANGE
                       in.one,         ;* CHAR
@@ -4212,6 +4222,22 @@ in.matstr:
             end
             gosub emit.var.load             ;* LDLCL or LDCOM for the matrix
             goto intrinsic.common
+
+*** CAUGHT(exception {, modes})   12 Oct 26 dm - openQM 355.  An absent modes is 0.  Not a one-byte function of its own: the
+*** EXC prefix opcode is followed by the sub-opcode 2 (CAUGHT), see op_exc() in op_jumps.c.
+in.caught:
+            arg.count = 1 ; gosub get.args
+
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = 0 ; gosub emit.numeric.load
+            end
+
+            opcode.byte = intrinsic.stack<1> ; gosub emit.simple
+            opcode.byte = 2 ; gosub emit
+            goto intrinsic.end
 
 *** FIX(number {, precision {, mode}})   12 Oct 26 dm - absent precision is -1 (the program's PRECISION), absent mode 0
 in.fix:
@@ -4987,9 +5013,13 @@ emit.at.var.load:
            at.uid,
            at.sdsys,
            at.line,
-           at.build.time
+           at.build.time,
+           at.exception,
+           at.exception.data,
+           at.exception.origin,
+           at.exception.stack
 
-at.mark:                                    ;* FM, VM, SM, TM, IM, AM, SVM
+at.mark:                                  ;* FM, VM, SM, TM, IM, AM, SVM
       opcode.string = mark.chars[i,1] ; gosub emit.string.load
       return
 
@@ -5108,6 +5138,23 @@ at.build.time:                              ;* @BUILD.TIME  -  compile time
       * time, as MVEPOCH() gives it.
       n = ((date() - 732) * 86400) + int(time())
       gosub emit.numeric.load
+      return
+
+at.exception:                               ;* @EXCEPTION  -  SYSTEM(9012)
+      n = 9012 ; goto at.exception.common
+
+at.exception.data:                          ;* @EXCEPTION.DATA  -  SYSTEM(9013)
+      n = 9013 ; goto at.exception.common
+
+at.exception.origin:                        ;* @EXCEPTION.ORIGIN  -  SYSTEM(9014)
+      n = 9014 ; goto at.exception.common
+
+at.exception.stack:                         ;* @EXCEPTION.STACK  -  SYSTEM(9015)
+      n = 9015
+
+at.exception.common:
+      gosub emit.numeric.load
+      opcode.byte = OP.SYSTEM ; gosub emit.simple
       return
    end
 
@@ -11473,6 +11520,238 @@ st.transaction:
 
 st.unload.object:
    opcode.byte = OP.UNLOAD ; gosub emit.simple
+   return
+
+*****************************************************************************
+* ST.THROW  -  THROW statement (12 Oct 26 dm, openQM 355)
+*
+*     THROW exception {, data}
+*
+* The exception is any expression: its value is the exception name (not case
+* sensitive, up to 63 characters). The data, null if left out, is what
+* @EXCEPTION.DATA holds in the CATCH clause. Code: EXC, sub-opcode 1.
+
+st.throw:
+   gosub exprf
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub exprf
+   end else
+      opcode.byte = OP.LDNULL ; gosub emit.simple
+   end
+   opcode.byte = OP.EXC ; gosub emit.simple
+   opcode.byte = 1 ; gosub emit             ;* Sub-opcode THROW
+
+   return
+
+*****************************************************************************
+* ST.TRY  -  TRY / CATCH construct (12 Oct 26 dm, openQM 355)
+*
+*     TRY {statement}
+*        statements
+*     CATCH exception {qualifiers} {, exception {qualifiers}...}
+*        statements
+*     {CATCH ...
+*        statements}
+*     END
+*
+* The code generated, and what the kernel does with it, are described above
+* op_try() in gplsrc/op_jumps.c. The qualifiers are DUMPING and SAVING.STACK.
+*
+* The jump stack entry holds after its type and number: <1,3> the handler
+* table (entries "<flags digit><NAME>" separated by commas, turned into value
+* marks when emitted), <1,4> the number of CATCH clauses and <1,4+n> the names
+* in clause n (commas, upper case). Everything needed after a nested construct
+* has been compiled is read back from the top of the jump stack, because the
+* nested TRY uses the same variables.
+
+st.try:
+   ins j.try:@vm:jump.no before jump.stack<1>
+   jump.no += 1
+   jump.stack<1,3> = ''
+   jump.stack<1,4> = 0
+
+   label.name = "_":jump.stack<1,2>:"T"
+   opcode.byte = OP.TRY ; gosub emit.simple
+   gosub emit.jump.addr
+
+   * A statement may follow TRY on the same line
+
+   if look.ahead.token = TKN.END then     ;* Nothing further on this line
+      gosub get.token
+   end else
+      gosub get.token
+      gosub proc.statement.group
+      if look.ahead.token = TKN.END then gosub get.token
+   end
+
+   * The TRY clause
+
+   loop
+      if end.source then
+         err.msg = sysmsg(12101) ;* Unterminated TRY clause
+         gosub error
+         goto exit.try
+      end
+
+      gosub get.token
+      gosub check.for.label
+   until u.token.string = "CATCH" or u.token.string = "END"
+      gosub proc.line.prefetched
+   repeat
+
+   if u.token.string # "CATCH" then
+      err.msg = sysmsg(12106) ;* TRY needs at least one CATCH clause
+      gosub error
+      goto exit.try
+   end
+
+   * Normal end of the clause: drop the handlers and skip the CATCH clauses
+
+   label.name = "_":jump.stack<1,2>:"T"
+   opcode.byte = OP.ENDTRY ; gosub emit.simple
+   gosub emit.jump.addr
+   label.name = "_":jump.stack<1,2>:"X"
+   opcode.byte = OP.JMP ; gosub emit.jump
+
+   * The CATCH clauses; the token is CATCH, the first on its line
+
+   loop
+      gosub try.catch.names
+      if try.err then goto exit.try
+
+      label.name = "_":jump.stack<1,2>:"H":jump.stack<1,4>
+      gosub set.label
+
+      loop
+         if end.source then
+            err.msg = sysmsg(12102) ;* Unterminated CATCH clause
+            gosub error
+            goto exit.try
+         end
+
+         gosub get.token
+         gosub check.for.label
+      until u.token.string = "CATCH" or u.token.string = "END"
+         gosub proc.line.prefetched
+      repeat
+
+      label.name = "_":jump.stack<1,2>:"X"
+      opcode.byte = OP.JMP ; gosub emit.jump
+   until u.token.string = "END"
+   repeat
+
+   if look.ahead.token = TKN.END then gosub get.token
+
+   * The handler table, and the code the kernel arrives at when an exception
+   * is thrown: choose the CATCH clause that names it.
+
+   label.name = "_":jump.stack<1,2>:"T"
+   gosub set.label
+   opcode.string = change(jump.stack<1,3>, ',', @vm)
+   gosub emit.string.load
+
+   try.n = jump.stack<1,4>
+   for try.i = 1 to try.n
+      opcode.string = change(jump.stack<1,4 + try.i>, ',', @vm)
+      gosub emit.string.load
+      opcode.byte = OP.EXC ; gosub emit.simple
+      opcode.byte = 3 ; gosub emit            ;* Sub-opcode MATCH
+      label.name = "_":jump.stack<1,2>:"H":try.i
+      opcode.byte = OP.JTRUE ; gosub emit.jump
+   next try.i
+
+   opcode.byte = OP.EXC ; gosub emit.simple
+   opcode.byte = 4 ; gosub emit               ;* Sub-opcode RETHROW
+
+   label.name = "_":jump.stack<1,2>:"X"
+   gosub set.label
+
+exit.try:
+   del jump.stack<1>
+
+   return
+
+* CATCH exception {qualifiers} {, exception {qualifiers}...}
+* The token is CATCH. Reads to the end of the line and adds the clause to the
+* top jump stack entry.
+
+try.catch.names:
+   try.err = @false
+   try.h = jump.stack<1,4> + 1
+   jump.stack<1,4> = try.h
+   try.list = ''
+   try.table = jump.stack<1,3>
+
+   loop
+      gosub get.token                ;* The exception name
+
+      begin case
+         case token = TKN.STRING
+            try.name = upcase(token.string)
+         case token = TKN.NAME
+            try.name = u.token.string
+         case 1
+            try.name = ''
+      end case
+
+      if try.name = '' then
+         err.msg = sysmsg(12100) ;* Exception name expected in CATCH clause
+         gosub error
+         try.err = @true
+         return
+      end
+
+      if len(try.name) > 63 then
+         err.msg = sysmsg(12104) ;* Exception name is longer than 63 characters
+         gosub error
+         try.err = @true
+         return
+      end
+
+      try.flags = 0
+      if bittest(mode, M.EXCEPTION.SAVE.STACK) then try.flags = 2
+
+      loop
+      while (look.ahead.token = TKN.NAME) and ~
+            ((u.look.ahead.token.string = "DUMPING") or (u.look.ahead.token.string = "SAVING.STACK"))
+         gosub get.token
+         if u.token.string = "DUMPING" then
+            try.flags = bitor(try.flags, 1)
+         end else
+            try.flags = bitor(try.flags, 2)
+         end
+      repeat
+
+      if try.list # '' then try.list := ','
+      try.list := try.name
+      if try.table # '' then try.table := ','
+      try.table := try.flags : try.name
+
+      try.more = (look.ahead.token = TKN.COMMA)
+      if try.more then gosub get.token   ;* Skip the comma
+   while try.more
+   repeat
+
+   if look.ahead.token # TKN.END then
+      err.msg = sysmsg(12103) ;* Unknown CATCH qualifier
+      gosub error
+      try.err = @true
+      return
+   end
+
+   if len(try.table) > 250 then
+      err.msg = sysmsg(12105) ;* Too many exception names in one TRY construct
+      gosub error
+      try.err = @true
+      return
+   end
+
+   gosub get.token                   ;* Skip the end of the line
+
+   jump.stack<1,3> = try.table
+   jump.stack<1,4 + try.h> = try.list
+
    return
 
 *****************************************************************************

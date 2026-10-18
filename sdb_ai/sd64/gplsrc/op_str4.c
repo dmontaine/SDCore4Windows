@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux e91ed09 (12 Oct 26): MATCHES and MATCHFIELD set INMAT() to the number of the template that matched (1.2-0, 315)
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -1651,6 +1652,7 @@ Private void matches(bool matchfield) {
   char *q;
   int16_t return_component; /* Component number for MATCHFIELD */
   bool match = FALSE;
+  int32_t template_no = 0; /* Which value mark delimited template is being tried */
 
   if (matchfield) {
     descr = e_stack - 1;
@@ -1684,12 +1686,16 @@ Private void matches(bool matchfield) {
     if (q != NULL)
       *q = '\0';
 
+    template_no++;
     match = match_template(src_string, p, 0, return_component);
     if (match)
       break;
 
     p = q + 1;
   } while (q != NULL);
+
+  /* INMAT() is the number of the template that matched, 0 if none did (1.2-0, item 315) */
+  process.inmat = match ? template_no : 0;
 
   if (matchfield) {
     if (match && (component_start != NULL)) /* Item found */

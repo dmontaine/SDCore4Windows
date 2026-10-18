@@ -64,6 +64,7 @@
 #include "locks.h"
 
 #include <time.h>
+#include <strings.h>
 
 /* Modified by Composer AI - 2026/06/10.
    k_error() longjmps back to the kernel command loop and never returns,
@@ -908,6 +909,553 @@ bool valid_call_name(char* p) {
   }
 
   return TRUE;
+}
+
+/* ======================================================================
+   TRY / CATCH / THROW  (12 Oct 26 dm, openQM 355 CAUGHT() and the
+   TRY/CATCH construct it belongs to)
+
+   The compiler lays a TRY construct out as
+
+            TRY      Lt          push a handler frame; Lt is the table
+            ...                  the statements of the TRY clause
+            ENDTRY   Lt          leave the clause normally: pop the frame
+            JMP      Lx
+       Lh1: ...                  the statements of the first CATCH clause
+            JMP      Lx
+       Lh2: ...                  and so on for each CATCH clause
+            JMP      Lx
+       Lt:  LDSTR    <table>     NOT executed: TRY reads it, and the frame
+                                 holds the address of the next instruction
+            LDSTR    <names of clause 1>
+            EXC      MATCH       does the exception being handled have one?
+            JTRUE    Lh1
+            ...
+            EXC      RETHROW     none of them (cannot happen): carry on up
+       Lx:
+
+   The table is one string of entries separated by value marks. Each entry
+   is a digit, the sum of the qualifier flags EXC_DUMPING and
+   EXC_SAVE_STACK, then the exception name in upper case. THROW looks for a
+   frame whose table holds the name (or SYS$ANY), then for one holding
+   SYS$UNHANDLED, unwinds the call stack to that frame's program level and
+   continues at the dispatch code after its table.
+
+   A throw does not reach past a command processor (EXECUTE), a trigger, a
+   recursive call or a dictionary expression: such a level ends the search,
+   so an exception thrown inside it and not handled inside it is unhandled.
+
+   Leaving a TRY clause by GOTO, EXIT or CONTINUE is not allowed (the openQM
+   rule too): the frame stays until its program level returns. A RETURN from
+   a GOSUB that was called inside the clause is allowed, and so is a RETURN
+   from a CALL; the frames of the returning level are dropped.            */
+
+#define MAX_TRY_FRAMES 64
+#define MAX_EXC_NAME_LEN 63
+#define EXC_LDSTR 0x12 /* OP_LDSTR: the table is loaded by an ordinary LDSTR */
+
+#define EXC_THROW 1
+#define EXC_CAUGHT 2
+#define EXC_MATCH 3
+#define EXC_RETHROW 4
+
+#define EXC_DUMPING 1    /* Qualifier DUMPING */
+#define EXC_SAVE_STACK 2 /* Qualifier SAVING.STACK */
+
+#define EXC_BARRIER                                                          \
+  (HDR_IS_CPROC | HDR_RECURSIVE | HDR_ITYPE | HDR_IS_CLASS | PF_IS_TRIGGER)
+
+typedef struct {
+  int call_depth;     /* process.call_depth when the TRY was entered */
+  int16_t recursion;  /* recursion_depth then */
+  int16_t gosub_depth; /* GOSUB depth of that program level then */
+  int32_t e_depth;    /* Evaluation stack depth then */
+  int32_t catch_pc;   /* Offset in that level's object of the dispatch code */
+  int32_t table_pc;   /* ...of the handler table (what ENDTRY names) */
+  const u_char* table;
+  int table_len;
+} TRY_FRAME;
+
+Private TRY_FRAME try_frame[MAX_TRY_FRAMES];
+Private int try_top = 0;
+
+Private char exc_name[MAX_EXC_NAME_LEN + 1] = "";
+Private char* exc_data = NULL;
+Private char* exc_origin = NULL;
+Private char* exc_stack = NULL;
+Private bool exc_unhandled = FALSE; /* Caught by a SYS$UNHANDLED handler */
+
+Private void exc_op_throw(void);
+Private void exc_op_caught(void);
+Private void exc_op_match(void);
+Private void exc_raise(bool rethrow);
+Private void exc_set_origin(void);
+Private void exc_save_stack(void);
+Private int try_find(const char* name, int modes, int* flags);
+Private bool exc_table_find(const u_char* tab, int len, const char* name,
+                            int modes, int* flags);
+
+/* ======================================================================
+   try_level_gone()  -  A program level has been given up (called by
+   k_return() once process.call_depth has been reduced): drop its frames. */
+
+void try_level_gone() {
+  while ((try_top > 0) && (try_frame[try_top - 1].call_depth > process.call_depth))
+    try_top--;
+}
+
+/* ======================================================================
+   try_prune()  -  Drop frames of this level that a RETURN from a GOSUB
+   made inside their clause has left behind.                              */
+
+Private void try_prune() {
+  while ((try_top > 0) &&
+         (try_frame[try_top - 1].call_depth == process.call_depth) &&
+         (try_frame[try_top - 1].gosub_depth > process.program.gosub_depth))
+    try_top--;
+}
+
+/* ======================================================================
+   try_floor()  -  The lowest program level a throw may unwind to          */
+
+Private int try_floor() {
+  struct PROGRAM* p;
+  int d;
+
+  p = &process.program;
+  d = process.call_depth;
+  while (p != NULL) {
+    if (p->flags & EXC_BARRIER)
+      return d;
+    p = p->prev;
+    d--;
+  }
+  return 1;
+}
+
+/* ======================================================================
+   op_try()  -  Establish exception handlers                              */
+
+void op_try() {
+  int32_t t;
+  u_char* tab;
+  TRY_FRAME* f;
+
+  t = *pc | (((int32_t) * (pc + 1)) << 8) | (((int32_t) * (pc + 2)) << 16);
+  pc += 3;
+
+  tab = c_base + t;
+  if (*tab != EXC_LDSTR)
+    k_error(sysmsg(12099));
+
+  try_prune();
+  if (try_top >= MAX_TRY_FRAMES)
+    k_error(sysmsg(12098), MAX_TRY_FRAMES);
+
+  f = &try_frame[try_top++];
+  f->call_depth = process.call_depth;
+  f->recursion = recursion_depth;
+  f->gosub_depth = process.program.gosub_depth;
+  f->e_depth = (int32_t)(e_stack - e_stack_base);
+  f->table_pc = t;
+  f->table_len = *(tab + 1);
+  f->table = tab + 2;
+  f->catch_pc = t + 2 + f->table_len;
+}
+
+/* ======================================================================
+   op_endtry()  -  Leave a TRY clause normally                            */
+
+void op_endtry() {
+  int32_t t;
+  int i;
+  TRY_FRAME* f;
+
+  t = *pc | (((int32_t) * (pc + 1)) << 8) | (((int32_t) * (pc + 2)) << 16);
+  pc += 3;
+
+  try_prune();
+  for (i = try_top - 1; i >= 0; i--) {
+    f = &try_frame[i];
+    if ((f->call_depth < process.call_depth) || (f->recursion != recursion_depth))
+      break;
+    if (f->table_pc == t) {
+      try_top = i; /* This frame and any left above it */
+      break;
+    }
+  }
+}
+
+/* ======================================================================
+   op_exc()  -  THROW, CAUGHT() and the dispatch code of a CATCH           */
+
+void op_exc() {
+  int op;
+
+  op = *(pc++);
+  switch (op) {
+    case EXC_THROW:
+      exc_op_throw();
+      break;
+
+    case EXC_CAUGHT:
+      exc_op_caught();
+      break;
+
+    case EXC_MATCH:
+      exc_op_match();
+      break;
+
+    case EXC_RETHROW:
+      exc_raise(TRUE);
+      break;
+
+    default:
+      k_error("Illegal EXC sub-opcode x%02X", op);
+  }
+}
+
+/* ======================================================================
+   exc_table_find()  -  Is there a handler for name in a handler table?
+   Returns the flags of the entry that applies: the named one, else the
+   SYS$ANY one when bit 1 of modes is set, else the SYS$UNHANDLED one when
+   bit 2 is.                                                              */
+
+Private bool exc_table_find(const u_char* tab, int len, const char* name,
+                            int modes, int* flags) {
+  const u_char* p;
+  const u_char* q;
+  const u_char* end;
+  int n;
+  int nlen;
+  int any = -1;
+  int unhandled = -1;
+
+  nlen = (int)strlen(name);
+  p = tab;
+  end = tab + len;
+  while (p < end) {
+    q = p;
+    while ((q < end) && (*q != (u_char)VALUE_MARK)) /* VALUE_MARK is a signed char */
+      q++;
+    n = (int)(q - p) - 1; /* Length of the name; p[0] is the flag digit */
+    if (n > 0) {
+      if ((n == nlen) && (strncasecmp((const char*)p + 1, name, n) == 0)) {
+        *flags = p[0] - '0';
+        return TRUE;
+      }
+      if ((n == 7) && (strncasecmp((const char*)p + 1, "SYS$ANY", 7) == 0))
+        any = p[0] - '0';
+      else if ((n == 13) &&
+               (strncasecmp((const char*)p + 1, "SYS$UNHANDLED", 13) == 0))
+        unhandled = p[0] - '0';
+    }
+    p = q + 1;
+  }
+
+  if ((modes & 1) && (any >= 0)) {
+    *flags = any;
+    return TRUE;
+  }
+  if ((modes & 2) && (unhandled >= 0)) {
+    *flags = unhandled;
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/* ======================================================================
+   try_find()  -  The innermost frame with a handler for name that a throw
+   from here can reach. Returns its index, or -1.                         */
+
+Private int try_find(const char* name, int modes, int* flags) {
+  int floor;
+  int i;
+  TRY_FRAME* f;
+
+  try_prune();
+  floor = try_floor();
+  for (i = try_top - 1; i >= 0; i--) {
+    f = &try_frame[i];
+    if ((f->recursion != recursion_depth) || (f->call_depth < floor))
+      break;
+    if (exc_table_find(f->table, f->table_len, name, modes, flags))
+      return i;
+  }
+  return -1;
+}
+
+/* ======================================================================
+   exc_set_origin()  -  @EXCEPTION.ORIGIN: program name, field mark, line
+   number (-1 where the program has no cross reference table)              */
+
+Private void exc_set_origin() {
+  char s[MAX_PROGRAM_NAME_LEN + 32];
+  int line = -1;
+
+  if (exc_origin != NULL) {
+    free(exc_origin);
+    exc_origin = NULL;
+  }
+  if (c_base != NULL) {
+    line = k_line_no((int32_t)(pc - c_base) - 1, c_base);
+    snprintf(s, sizeof(s), "%s%c%d", ProgramName(c_base), FIELD_MARK, line);
+    exc_origin = strdup(s);
+  }
+}
+
+/* ======================================================================
+   exc_save_stack()  -  @EXCEPTION.STACK: the call stack as SYSTEM(1002)
+   gives it                                                               */
+
+Private void exc_save_stack() {
+  STRING_CHUNK* str = NULL;
+  struct PROGRAM* prg;
+  int32_t offset;
+  int i;
+  DESCRIPTOR d;
+
+  if (exc_stack != NULL) {
+    free(exc_stack);
+    exc_stack = NULL;
+  }
+  if (c_base == NULL)
+    return;
+
+  ts_init(&str, 1024);
+  prg = &(process.program);
+  offset = pc - c_base;
+  do {
+    ts_printf("%s%c%d%c%d", ProgramName(prg->saved_c_base), VALUE_MARK,
+              (int)offset, SUBVALUE_MARK, k_line_no(offset, prg->saved_c_base));
+
+    for (i = prg->gosub_depth - 1; i >= 0; i--) {
+      offset = prg->gosub_stack[i] - 1; /* Back up to GOSUB (etc) */
+      ts_printf("%c%d%c%d", VALUE_MARK, (int)offset, SUBVALUE_MARK,
+                k_line_no(offset, prg->saved_c_base));
+    }
+
+    if ((prg = prg->prev) == NULL)
+      break;
+
+    offset = prg->saved_pc_offset - 1; /* Back up into CALL */
+    ts_printf("%c", FIELD_MARK);
+  } while (1);
+  ts_terminate();
+
+  InitDescr(&d, STRING);
+  d.data.str.saddr = str;
+  exc_stack = alloc_c_string(&d);
+  k_release(&d);
+}
+
+/* ======================================================================
+   exc_op_throw()  -  THROW name {, data}                                 */
+
+Private void exc_op_throw() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Data (null if none)        |                             |
+     |-----------------------------|-----------------------------|
+     |  Exception name             |                             |
+     |=============================|=============================|
+ */
+
+  DESCRIPTOR* descr;
+  char name[MAX_EXC_NAME_LEN + 1];
+  char* data;
+  int n;
+
+  descr = e_stack - 1;
+  GetString(descr);
+  data = alloc_c_string(descr);
+  k_dismiss();
+
+  descr = e_stack - 1;
+  GetString(descr);
+  n = k_get_c_string(descr, name, MAX_EXC_NAME_LEN);
+  k_dismiss();
+
+  if (n < 0) {
+    free(data);
+    k_error(sysmsg(12097), MAX_EXC_NAME_LEN);
+  }
+  if (n == 0) {
+    free(data);
+    k_error(sysmsg(12096));
+  }
+
+  strcpy(exc_name, name);
+  if (exc_data != NULL)
+    free(exc_data);
+  exc_data = data;
+  exc_set_origin();
+  if (exc_stack != NULL) {
+    free(exc_stack);
+    exc_stack = NULL;
+  }
+
+  exc_raise(FALSE);
+}
+
+/* ======================================================================
+   exc_raise()  -  Find the handler for the exception in exc_name and go
+   to it. rethrow is TRUE when carrying an exception on (the state, origin
+   and qualifiers are those of the original throw).                        */
+
+Private void exc_raise(bool rethrow) {
+  int idx;
+  int flags = 0;
+  bool unhandled = FALSE;
+  TRY_FRAME f;
+  DESCRIPTOR* restored;
+
+  idx = try_find(exc_name, 1, &flags); /* Named or SYS$ANY */
+  if (idx < 0) {
+    idx = try_find(exc_name, 2, &flags); /* SYS$UNHANDLED */
+    unhandled = TRUE;
+  }
+  if (idx < 0) {
+    if ((exc_data != NULL) && (*exc_data != '\0'))
+      k_error(sysmsg(12095), exc_name, exc_data);
+    k_error(sysmsg(12094), exc_name);
+  }
+
+  f = try_frame[idx];
+  exc_unhandled = unhandled;
+
+  if (!rethrow) {
+    /* The qualifiers act when the exception is thrown, before the call
+       stack is unwound.                                                  */
+    if (flags & EXC_SAVE_STACK)
+      exc_save_stack();
+    if (flags & EXC_DUMPING)
+      pdump();
+  }
+
+  /* Give up the program levels above the frame's, as STOP does */
+
+  while (process.call_depth > f.call_depth) {
+    restored = e_stack_base + process.program.e_stack_depth;
+    while (e_stack > restored)
+      k_dismiss();
+    k_return();
+  }
+
+  restored = e_stack_base + f.e_depth;
+  while (e_stack > restored)
+    k_dismiss();
+
+  process.for_init = FALSE;
+  process.op_flags = 0;
+  process.program.gosub_depth = f.gosub_depth;
+  try_top = idx; /* The frame and every one above it */
+  pc = c_base + f.catch_pc;
+}
+
+/* ======================================================================
+   exc_op_caught()  -  CAUGHT(name, modes)                                */
+
+Private void exc_op_caught() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Modes                      | Result                      |
+     |-----------------------------|-----------------------------|
+     |  Exception name             |                             |
+     |=============================|=============================|
+ */
+
+  DESCRIPTOR* descr;
+  char name[MAX_EXC_NAME_LEN + 1];
+  int modes;
+  int flags;
+  int n;
+  bool found;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  modes = (int)descr->data.value;
+  k_pop(1);
+
+  descr = e_stack - 1;
+  GetString(descr);
+  n = k_get_c_string(descr, name, MAX_EXC_NAME_LEN);
+  k_dismiss();
+
+  found = (n > 0) && (try_find(name, modes, &flags) >= 0);
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = found;
+}
+
+/* ======================================================================
+   exc_op_match()  -  Does the exception being handled appear in a list of
+   names (value mark delimited, upper case)? The dispatch code of a CATCH
+   uses this to choose the clause.                                        */
+
+Private void exc_op_match() {
+  DESCRIPTOR* descr;
+  char* list;
+  char* p;
+  char* q;
+  bool found = FALSE;
+
+  descr = e_stack - 1;
+  GetString(descr);
+  list = alloc_c_string(descr);
+  k_dismiss();
+
+  p = list;
+  do {
+    q = strchr(p, VALUE_MARK);
+    if (q != NULL)
+      *q = '\0';
+    if (strcasecmp(p, "SYS$ANY") == 0)
+      found = !exc_unhandled;
+    else if (strcasecmp(p, "SYS$UNHANDLED") == 0)
+      found = exc_unhandled;
+    else
+      found = (strcasecmp(p, exc_name) == 0);
+    p = q + 1;
+  } while (!found && (q != NULL));
+
+  free(list);
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = found;
+}
+
+/* ======================================================================
+   exc_value()  -  @EXCEPTION (0), @EXCEPTION.DATA (1), @EXCEPTION.ORIGIN
+   (2) and @EXCEPTION.STACK (3), read through SYSTEM() keys 9012-9015     */
+
+void exc_value(int which, DESCRIPTOR* descr) {
+  char* s = "";
+
+  switch (which) {
+    case 0:
+      s = exc_name;
+      break;
+    case 1:
+      if (exc_data != NULL)
+        s = exc_data;
+      break;
+    case 2:
+      if (exc_origin != NULL)
+        s = exc_origin;
+      break;
+    case 3:
+      if (exc_stack != NULL)
+        s = exc_stack;
+      break;
+  }
+  k_put_c_string(s, descr);
 }
 
 /* END-CODE */

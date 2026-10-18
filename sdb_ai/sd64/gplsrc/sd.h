@@ -230,6 +230,8 @@ void k_error(char msg[], ...);
 void k_quit(void);
 void k_err_pu(void);
 int k_line_no(int32_t offset, u_char * xcbase);
+void try_level_gone(void);                   /* op_jumps.c: TRY frames of a returned level */
+void exc_value(int which, DESCRIPTOR * descr); /* op_jumps.c: @EXCEPTION and friends */
 char * k_var_name(DESCRIPTOR * descr);
 void log_message(char * msg);
 void audit_message(char * msg);

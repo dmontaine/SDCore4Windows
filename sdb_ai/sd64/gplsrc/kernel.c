@@ -798,6 +798,8 @@ void k_return() {
     k_exit_cause = K_LOGOUT;
   }
 
+  try_level_gone(); /* 12 Oct 26: drop the TRY frames of the level just left */
+
   if (old_flags & SORT_ACTIVE) {
     op_sortclr();
   }
