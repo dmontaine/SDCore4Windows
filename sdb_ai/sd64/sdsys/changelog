@@ -2,6 +2,18 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  NEW OPTION: PICK.ML.CONV.MASK.
+
+           With OPTION PICK.ML.CONV.MASK in effect, a left bracket in an ML
+           or MR conversion code no longer asks for negative values to be
+           shown in round brackets: it starts a format mask that is
+           enclosed in round brackets, as in MR2(#10) or ML2,(%8), which is
+           how some other multivalue systems write it.  The mask is read as
+           if the brackets were not there, in output and in input
+           conversion.  The other negative value styles (+ - < C D) and
+           the P, Z and T options are as they were, and a program that
+           does not set the option sees no change.
+
 18 Oct 26  NEW $MODE SETTING: PICK.READNEXT.
 
            A program compiled with $MODE PICK.READNEXT keeps the value of

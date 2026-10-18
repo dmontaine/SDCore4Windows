@@ -1006,16 +1006,21 @@ Private int32_t masked_decimal_conversion(char* p) {
 
   /* Negative value action present? */
 
-  switch (UpperCase(*p)) {
-    case '+':
-    case '-':
-    case '<':
-    case '(':
-    case 'C':
-    case 'D':
-      p++;
-      break;
-  }
+  /* 14 Oct 26 dm - OPTION PICK.ML.CONV.MASK (openQM item 49): a left bracket starts a parenthesised format mask,
+     which is not a negative value action; the mask is read as if the bracket were not there */
+  if ((*p == '(') && Option(OptPickMLConvMask))
+    p++;
+  else
+    switch (UpperCase(*p)) {
+      case '+':
+      case '-':
+      case '<':
+      case '(':
+      case 'C':
+      case 'D':
+        p++;
+        break;
+    }
 
   /* Suppress scaling if decimal point present? */
 

@@ -98,6 +98,8 @@ $include int$keys.h
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
    opt<-1> = 'CATALOGUE.LOCAL||12080'
    opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
+   * 14 Oct 26  1.2-0, openQM ref 49.
+   opt<-1> = 'PICK.ML.CONV.MASK||12240'
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
    * Shortcuts
