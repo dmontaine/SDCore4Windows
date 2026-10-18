@@ -2,6 +2,21 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  LISTDICT.
+
+             LISTDICT filename {LPTR}
+
+           Lists the dictionary of a file in the form Pick systems use: one
+           line for each A, D, I and S record, with its type, its field
+           number or expression, conversion, column heading, format, S/M
+           and association, in that order of type.  LPTR sends the listing
+           to the printer instead of the screen.
+
+           It is a paragraph over LIST DICT, so the layout is the one LIST
+           DICT gives and the columns follow the DICT.DICT dictionary.  What
+           it adds is the choice of record types: phrases and every other
+           type are left out.  LIST DICT filename still lists everything.
+
 18 Oct 26  TRY / CATCH / THROW, CAUGHT() AND @EXCEPTION.
 
            An exception is a named event that a program raises with THROW
