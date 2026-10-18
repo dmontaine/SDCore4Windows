@@ -26,9 +26,9 @@
 *
 * START-DESCRIPTION:
 *
-* CREATE.INDEX filename field... [NO.NULLS] [PATHNAME akpath]
+* CREATE.INDEX filename field... [NO.CASE] [NO.NULLS] [PATHNAME akpath]
 *
-* MAKE.INDEX filename field... [NO.NULLS] [PATHNAME akpath]
+* MAKE.INDEX filename field... [NO.CASE] [NO.NULLS] [PATHNAME akpath]
 *
 * The two commands are identical except that MAKE.INDEX automatically
 * goes on to build the index.
@@ -101,6 +101,9 @@ $include err.h
       begin case
          case keyword = KW$NO.NULLS
             no.nulls = @true
+
+         case keyword = KW$NO.CASE      ;* 14 Oct 26 dm - openQM 54
+            no.case = @true
 
          case keyword = KW$DELETING     ;* 12 Oct 26 dm - openQM 424
             deleting = @true

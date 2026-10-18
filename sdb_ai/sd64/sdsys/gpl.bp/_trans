@@ -78,13 +78,13 @@ $include syscom.h
    end else
       if file.name[1,5] = 'DICT ' then
          open "DICT", file.name[6,999] to file else
-            display "Cannot open 'DICT " : file.name : "'"
-            return value ""
+            gosub open.failed
+            return value open.result
          end
       end else
          open file.name to file else
-            display "Cannot open '" : file.name : "'"
-            return value ""
+            gosub open.failed
+            return value open.result
          end
       end
 
@@ -168,6 +168,22 @@ $include syscom.h
    repeat
 
    return value result
+
+   * 18 Oct 26 Windows port - from Linux 0ecd317 (14 Oct 26): - openQM 43: failing to open the file takes the action the code argument names, as a missing
+   * record does: X (the default) gives null, V gives null and says so, C gives the id.
+open.failed:
+   open.result = ''
+   begin case
+      case code = "C"
+         open.result = ids
+      case code = "V"
+         if file.name[1,5] = 'DICT ' then
+            display "Cannot open '" : file.name : "'"
+         end else
+            display "Cannot open '" : file.name : "'"
+         end
+   end case
+   return
 end
 
 * END-CODE

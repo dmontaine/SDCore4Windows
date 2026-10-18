@@ -520,6 +520,7 @@ build.index:
       display sysmsg(2605, index.name)
       ak.info = indices(data.f, index.name)
       akno = ak.info<1,5> + 0
+      ak.nocase = (ak.info<1,8> # 0 and ak.info<1,8> # '')
 
       dim key.data(2) ; mat key.data = BT.DATA
       if ak.info<6> = 'R' then key.data(1) += BT.RIGHT.ALIGNED
@@ -652,6 +653,9 @@ build.index:
 * ======================================================================
 
 add.key:
+   * 18 Oct 26 Windows port - from Linux 0ecd317 (14 Oct 26): - sheet 54: the keys of a NO.CASE index that differ only in case are one key; they are grouped
+   * below by an exact compare, so fold them here the way the index folds them (upper case, as dh_ak.c compare()).
+   if ak.nocase then key = upcase(key)
    key.data(1) = key
    key.data(2) = id
    sortadd key.data, id
