@@ -1,0 +1,150 @@
+* SELECTI
+* SELECTINDEX command
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux ada8c02 (12 Oct 26): 1.2-0 bundle A-7 (openQM ref 119).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    SELECTINDEX {DICT} filename indexname {value} {TO n}
+*
+* The command form of the SELECTINDEX statement.  Builds select list 0 (or n
+* with TO) from an alternate key index of a dynamic file.  Without a value
+* the list is every value held in the index; with one it is the ids of the
+* records that have that value.  The value is matched as it is stored in the
+* index (internal form), as the statement does.  The index name is looked up
+* as typed, then in lower, then in upper case.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $select.index
+$catalog $selecti
+
+$include err.h
+$include keys.h
+$include parser.h
+$include syscom.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   list.no = 0
+   dict.flag = ''
+   has.value = @false
+   value = ''
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   * The file
+
+   call @parser(PARSER$MFILE, token.type, filename, keyword)
+   if keyword = KW$DICT then
+      dict.flag = 'DICT'
+      call @parser(PARSER$MFILE, token.type, filename, keyword)
+   end
+   if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
+
+   * The index
+
+   call @parser(PARSER$GET.TOKEN, token.type, index.name, keyword)
+   if token.type = PARSER$END or index.name = '' then
+      stop sysmsg(12107) ;* Index name required
+   end
+
+   * {value} {TO n}
+
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   if token.type # PARSER$END and keyword # KW$TO then
+      has.value = @true
+      value = token
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   end
+
+   if keyword = KW$TO then
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      if (token.type = PARSER$END) or not(num(token)) then
+         stop sysmsg(3271) ;* Select list number missing or invalid
+      end
+      list.no = token + 0
+      if list.no > HIGH.USER.SELECT then
+         stop sysmsg(3271) ;* Select list number missing or invalid
+      end
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   end
+
+   if token.type # PARSER$END then
+      stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   * Open the file; the name folds as typed, then lower, then upper
+
+   open dict.flag, filename to data.f else
+      open dict.flag, downcase(filename) to data.f else
+         open dict.flag, upcase(filename) to data.f else
+            stop sysmsg(2019) ;* File not found
+         end
+      end
+   end
+
+   if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then
+      stop sysmsg(2020) ;* Dynamic file required
+   end
+
+   * The index name folds the same way
+
+   found = @false
+   for try = 1 to 3
+      begin case
+         case try = 1 ; nm = index.name
+         case try = 2 ; nm = downcase(index.name)
+         case 1 ; nm = upcase(index.name)
+      end case
+      if has.value then
+         selectindex nm, value from data.f to list.no
+      end else
+         selectindex nm from data.f to list.no
+      end
+      if status() = 0 then
+         found = @true
+         exit
+      end
+   next try
+
+   if not(found) then stop sysmsg(2604, index.name) ;* Unrecognised index name (xx)
+
+   * Count what was selected, which puts the list back as it was
+
+   readlist items from list.no else items = ''
+   n = 0
+   if items # '' then n = dcount(items, @fm)
+   formlist items to list.no
+
+   @system.return.code = n
+   display sysmsg(3261, n, list.no) ;* xx records selected to select list xx
+
+   return
+end
+
+* END-CODE

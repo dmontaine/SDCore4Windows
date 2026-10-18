@@ -2,6 +2,26 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SELECTINDEX COMMAND.
+
+             SELECTINDEX {DICT} filename indexname {value} {TO n}
+
+           The command form of the SELECTINDEX statement, for the command
+           prompt and paragraphs.  Without a value it builds select list 0
+           (or n) from the values held in the alternate key index; with
+           one, from the ids of the records that have that value.  It says
+           how many it selected, as SELECT does.  The index name is found
+           as typed, then in lower and then in upper case, and the file name
+           the same.
+
+             SELECTINDEX orders customer.name
+             SELECTINDEX orders customer.name Smith
+             LIST orders
+
+           Also corrected: SELECT.DIR and GET.LIST, given TO with no list
+           number, said "Error writing saved list record"; they now say
+           "Select list number missing or invalid".
+
 18 Oct 26  COPY.LISTP.
 
              COPY.LISTP {{DICT} src.file} {id.list | *} {(options}

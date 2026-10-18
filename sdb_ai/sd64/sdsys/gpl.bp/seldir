@@ -66,11 +66,11 @@ $include syscom.h
    if keyword = KW$TO then
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
       if (token.type = PARSER$END) or not(num(token)) then
-         stop sysmsg(3272) ;* Select list number missing or invalid
+         stop sysmsg(3271) ;* Select list number missing or invalid
       end
       list.no = token + 0
       if list.no > HIGH.USER.SELECT then
-         stop sysmsg(3272) ;* Select list number missing or invalid
+         stop sysmsg(3271) ;* Select list number missing or invalid
       end
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end
