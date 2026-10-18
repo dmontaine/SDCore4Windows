@@ -142,7 +142,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            1040.  The ones that report something real in SD:
 
              FL$SEQTYPE (1023)    a sequential file's kind: 1 serial port, 2
-                                  character device (/dev/null), 3 FIFO, 4
+                                  character device (the null device), 3 FIFO, 4
                                   block device; 0 for a plain file.  Only the
                                   character device and the plain file have
                                   been tried.
@@ -177,10 +177,10 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            number, record id and W or D for each cached write or delete), 1070
            (PRECISION), 1076 (the CALL depth), 1077 / 1078 (the user's group
            names and numbers), 1081 and 1082 (milliseconds since 1970 and since
-           midnight).  Keys 1034, 1040, 1044, 1051, 1054 and 1080 answer 0 or
-           null: COMO cannot be suspended, file names are case sensitive on
-           Linux, there is no ECS mode or USB installation or package, and no
-           Proc.
+           midnight).  Keys 1034, 1044, 1051, 1054 and 1080 answer 0 or null:
+           COMO cannot be suspended, there is no ECS mode or USB installation
+           or package, and no Proc.  Key 1040 answers 1: operating system file
+           names are not case sensitive here.
 
            The array the STATUS statement and FILEINFO(f, FL$STATUS) return
            is now the manual's: the dates and times of last access and
@@ -191,7 +191,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            file the later of the primary and overflow subfiles' times is used.
            OSPATH(path, 20) (OS$INFO) gives the same array for any operating
            system path, null if it is not there; OS$FULLPATHX is another name
-           for OS$FULLPATH, which already keeps the case on Linux.  OSPATH() is
+           for OS$FULLPATH.  OSPATH() is
            still a function only the system's own programs may call, and SD's
            other OSPATH key numbers are the older ones, not the manual's.
 

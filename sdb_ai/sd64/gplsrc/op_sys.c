@@ -544,11 +544,15 @@ void op_system() {
       break;
 
     case 1034: /* COMO output suspended?  SD's COMO cannot be suspended */
-    case 1040: /* Operating system file names case insensitive?  Not on Linux */
     case 1044: /* ECS mode?  SD is English only */
     case 1051: /* USB installation? */
     case 1080: /* Started from a Proc?  SD has no Procs */
       descr->data.value = 0;
+      break;
+
+    case 1040: /* Operating system file names case insensitive?  18 Oct 26 Windows port: YES -
+                  NTFS, which Linux's answer (0) does not describe */
+      descr->data.value = 1;
       break;
 
     case 1035: /* Seconds since 1 Jan 1970 UTC, independent of the time zone (EPOCH()) */
