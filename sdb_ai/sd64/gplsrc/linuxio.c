@@ -330,7 +330,10 @@ bool start_connection(int unused) {
     }
   }
 
-  case_inversion = FALSE; /* 14 Sep 26 - RELEASE_1.1 5, see the console branch */
+  /* 14 Sep 26 - RELEASE_1.1 5, see the console branch.  18 Oct 26, from Linux:
+     the start state is the INVCASE parameter (openQM item 399), off unless the
+     administrator turns it on in sd.conf. */
+  case_inversion = pcfg.invcase;
   set_term(TRUE);
 
   /* Set up signal handler */
@@ -419,8 +422,10 @@ bool init_console() {
 
   /* 14 Sep 26 Windows port - RELEASE_1.1 5: case inversion starts OFF, owner's
      ruling.  It was TRUE here and in the socket branch above, and LOGIN turned
-     it on again; all three are gone.  PTERM CASE INVERT still sets it. */
-  case_inversion = FALSE;
+     it on again; all three are gone.  PTERM CASE INVERT still sets it.
+     18 Oct 26, from Linux: INVCASE=1 in sd.conf turns it on (openQM item 399);
+     the default is still OFF. */
+  case_inversion = pcfg.invcase;
   set_term(TRUE);
 
   fstat(0, &statbuf);

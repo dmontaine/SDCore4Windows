@@ -111,6 +111,7 @@ report.params:
    print 'GRPDIR    '        : config('GRPDIR')
    print 'GRPSIZE   '        : config('GRPSIZE')
    print 'INTPREC   '        : config('INTPREC')
+   print 'INVCASE   '        : config('INVCASE')
    print 'JNLMODE   '        : config('JNLMODE')
    print 'JNLDIR    '        : config('JNLDIR')
    print 'LPTRHIGH  '        : config('LPTRHIGH')

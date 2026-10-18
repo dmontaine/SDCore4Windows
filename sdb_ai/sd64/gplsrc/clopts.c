@@ -41,6 +41,7 @@
  * -K         Kill user(s)
  * -RECOVER   Recover users
  * -U         Show users
+ * -STATUS    Version, start time and process counts
  *
  * END-DESCRIPTION
  *
@@ -50,6 +51,8 @@
 #include <signal.h>
 #include "sd.h"
 #include "locks.h"
+#include "revstamp.h"
+#include <time.h>
 
 
 Private void kill_process(USER_ENTRY* uptr);
@@ -130,6 +133,47 @@ void show_users() {
              (int)(uptr->puid), origin, uptr->username);
     }
   }
+
+  unbind_sysseg();
+}
+
+/* ======================================================================
+   show_status()  -  Version, start time and process counts (SD -STATUS)  */
+
+void show_status() {
+  int i;
+  int users = 0;
+  int phantoms = 0;
+  int api = 0;
+  USER_ENTRY* uptr;
+  time_t started;
+  char when[40];
+
+  if (!attach_shared_memory()) {
+    printf("SD (%s) is not active.\n", SD_REV_STAMP);
+    return;
+  }
+
+  for (i = 1; i <= sysseg->max_users; i++) {
+    uptr = UPtr(i);
+    if (uptr->uid > 0) {
+      if (uptr->flags & USR_PHANTOM)
+        phantoms++;
+      else if (uptr->flags & USR_SDAPISRVR)
+        api++;
+      else
+        users++;
+    }
+  }
+
+  started = (time_t)sysseg->start_time;
+  if (started > 0)
+    strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", localtime(&started));
+  else
+    strcpy(when, "not recorded (started by an older build)");
+  printf("SD (%s)\n", SD_REV_STAMP);
+  printf("Started   %s\n", when);
+  printf("Users     %d interactive, %d phantom, %d API, limit %d\n", users, phantoms, api, (int)sysseg->max_users);
 
   unbind_sysseg();
 }

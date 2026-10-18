@@ -125,6 +125,8 @@ void op_config() {
     result.data.value = pcfg.grpsize;
   else if (!strcmp(param, "INTPREC"))
     result.data.value = pcfg.intprec;
+  else if (!strcmp(param, "INVCASE"))
+    result.data.value = pcfg.invcase;
   else if (!strcmp(param, "JNLMODE"))
     result.data.value = sysseg->jnlmode;
   else if (!strcmp(param, "JNLDIR"))
@@ -295,6 +297,11 @@ void op_pconfig() {
     if ((descr->data.value < 0) || (descr->data.value > 14))
       goto exit_op_pconfig;
     pcfg.intprec = (int16_t)(descr->data.value);
+  } else if (!strcmp(param, "INVCASE")) {
+    GetInt(descr);
+    if ((descr->data.value < 0) || (descr->data.value > 1))
+      goto exit_op_pconfig;
+    pcfg.invcase = (descr->data.value != 0);
   } else if (!strcmp(param, "LPTRHIGH")) {
     GetInt(descr);
     if ((descr->data.value < 1) || (descr->data.value > 32767))

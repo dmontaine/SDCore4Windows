@@ -103,6 +103,7 @@ struct PCFG  {
   char grpdir[MAX_PATHNAME_LEN+1];      /* GRPDIR:   Parent Directory for group accounts */
   int16_t grpsize;                      /* GRPSIZE:  Default group size (1-8) */
   int16_t intprec;                      /* INTPREC:  Precision for INT() etc */
+  bool invcase;                         /* INVCASE:  Initial case inversion of terminal input */
   int16_t lptrhigh;                     /* LPTRHIGH: Default printer lines */
   int16_t lptrwide;                     /* LPTRWIDE: Default printer width */
   int maxcall;                          /* MAXCALL:  Maximum call depth */
