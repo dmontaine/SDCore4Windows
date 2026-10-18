@@ -22,6 +22,8 @@
  * 31 Dec 23 SD launch - prior history suppressed
  * 01 Oct 26 Windows port - a port of -1 now means 4247, the full product's
  *           fixed API port (it was 4243)
+ * 18 Oct 26 Windows port - from Linux 6f35445: read_packet() reads the body in pieces
+ *           bounded by what is left of the packet, not the buffer's free space
  * START-HISTORY (winSDclilib):
  * xxDec23 mab add more functions, at this build we now include:
  * SDCallx
@@ -4337,7 +4339,7 @@ Private bool read_packet() {
     p = (char*)(buff);
     buff_bytes = 0;
     while (buff_bytes < packet_bytes) {
-        rcv_len = min(buff_size - buff_bytes, 16384);
+        rcv_len = min(packet_bytes - buff_bytes, 16384); /* 18 Oct 26: what is left of THIS packet, not the buffer's free space (Linux 6f35445) */
         rcvd_bytes = transport_recv(p, rcv_len);
         if (rcvd_bytes == 0) { /* orderly close: WSAGetLastError is stale */
             snprintf(session[session_idx].sderror,
