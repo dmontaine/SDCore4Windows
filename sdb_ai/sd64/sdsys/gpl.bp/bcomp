@@ -4142,7 +4142,7 @@ end
                       in.one,         ;* UNASSIGNED
                       in.one,         ;* UPCASE
                       in.one,         ;* VARTYPE
-                      in.two,         ;* VSLICE
+                      in.vslice,      ;* VSLICE
                       in.four,        ;* WRITE.SOCKET
                       in.trans,       ;* XLATE
                       in.one          ;* XTD
@@ -4369,6 +4369,16 @@ in.fold:
             end
             goto intrinsic.common
             
+*** VSLICE()  Two args, or three to take a subvalue slice (different opcode required) - 13 Oct 26 dm, openQM 132
+in.vslice:
+            arg.count = 2 ; gosub get.args
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+               intrinsic.stack<1> = OP.VSLICE3
+            end
+            goto intrinsic.common
+
 *** INDICES()  One or two args (different opcode required)
 in.indices:
             gosub convert.pick.file.reference

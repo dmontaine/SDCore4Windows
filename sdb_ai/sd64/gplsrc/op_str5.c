@@ -1577,6 +1577,117 @@ void op_vslice() {
 }
 
 /* ======================================================================
+   op_vslice3()  -  VSLICE(string, vpos, svpos)                            */
+
+void op_vslice3() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Subvalue position          |  Result string              |
+     |-----------------------------|-----------------------------|
+     |  Value position             |                             |
+     |-----------------------------|-----------------------------|
+     |  Source string              |                             |
+     |=============================|=============================|
+
+     vpos < 1 takes the subvalue from every value and keeps the value marks
+     that place it; vpos >= 1 takes it from that value only, with no value
+     marks.  Marks are written only in front of data, so trailing empty
+     fields and values are dropped, as the openQM examples show.  svpos < 1
+     with vpos >= 1 is the plain value slice.  Both < 1 leaves the source.  */
+
+  DESCRIPTOR* descr;
+  int32_t vpos;
+  int32_t svpos;
+  int32_t v;
+  int32_t sv;
+  int32_t fm_pending = 0;
+  int32_t vm_pending = 0;
+  bool want;
+  STRING_CHUNK* src_hdr;
+  int src_bytes_remaining;
+  char* src;
+  char c;
+  DESCRIPTOR result;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  svpos = descr->data.value;
+  descr = e_stack - 2;
+  GetInt(descr);
+  vpos = descr->data.value;
+  k_pop(2);
+
+  if (vpos < 1 && svpos < 1)
+    return; /* Source is the result */
+
+  descr = e_stack - 1;
+  k_get_string(descr);
+  src_hdr = descr->data.str.saddr;
+  if (src_hdr == NULL)
+    return;
+
+  result.type = STRING;
+  result.flags = 0;
+  result.data.str.saddr = NULL;
+  ts_init(&result.data.str.saddr, 64);
+
+  v = 1;
+  sv = 1;
+#define VS3_WANT() ((vpos < 1 || v == vpos) && (svpos < 1 || sv == svpos))
+  want = VS3_WANT();
+
+  do {
+    src_bytes_remaining = src_hdr->bytes;
+    src = src_hdr->data;
+
+    while (src_bytes_remaining--) {
+      c = *(src++);
+      if (c == FIELD_MARK || c == VALUE_MARK || (c == SUBVALUE_MARK && svpos >= 1)) {
+        switch (c) {
+          case FIELD_MARK:
+            fm_pending++;
+            vm_pending = 0;
+            v = 1;
+            sv = 1;
+            break;
+          case VALUE_MARK:
+            v++;
+            sv = 1;
+            if (vpos < 1)
+              vm_pending++;
+            break;
+          case SUBVALUE_MARK:
+            sv++;
+            break;
+        }
+        want = VS3_WANT();
+      } else if (want) {
+        while (fm_pending) {
+          ts_copy_byte(FIELD_MARK);
+          fm_pending--;
+        }
+        while (vm_pending) {
+          ts_copy_byte(VALUE_MARK);
+          vm_pending--;
+        }
+        ts_copy_byte(c);
+      }
+    }
+
+    src_hdr = src_hdr->next;
+  } while (src_hdr != NULL);
+#undef VS3_WANT
+
+  ts_terminate();
+
+  k_dismiss();
+  *(e_stack++) = result;
+}
+
+/* ======================================================================
    convert()  -  Common path for op_convert() and op_fconvert()           */
 
 Private STRING_CHUNK* convert() {
