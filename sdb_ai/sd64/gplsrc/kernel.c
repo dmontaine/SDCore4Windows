@@ -126,6 +126,8 @@ bool init_kernel() {
   /* Program control */
 
   init_program();
+  process.program.csv_mode = 1; /* CSV.MODE: not reset by init_program(), a called program inherits it */
+  process.program.csv_delim = ',';
   process.program.prev = NULL;
   process.debugging = FALSE;
 

@@ -507,6 +507,8 @@
       $define SYS$OS_PID      1031  ;*   Operating system process id
       $define SYS$BRK_PT_FLG  1032  ;*   Test and clear break pending flag
       $define SYS$USERS         35  ;*   Current number of users
+      $define SYS$CSV.MODE    1043  ;*   CSV.MODE setting, 1 - 3 (14 Oct 26)
+      $define SYS$CSV.DELIM   1046  ;*   CSV delimiter (14 Oct 26)
       $define SYS$START_TIME  1045  ;*   Time SD was started, Unix epoch
       $define SYS$GUID        1047  ;*   Globally unique identifier
       $define SYS$SYS_TYPE    9010  ;*   Return "SD"

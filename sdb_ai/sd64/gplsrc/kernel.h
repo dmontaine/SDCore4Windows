@@ -119,6 +119,8 @@ struct PROGRAM {
   int32_t col1;
   int32_t col2;
   int16_t precision;
+  int16_t csv_mode;  /* CSV.MODE 1 - 3 (14 Oct 26, openQM 173): copied to a called program, so it persists through calls */
+  char csv_delim;    /* ... and its delimiter, a comma by default (openQM 200) */
   u_char* saved_c_base;
   int32_t saved_pc_offset;
   char saved_prompt_char;

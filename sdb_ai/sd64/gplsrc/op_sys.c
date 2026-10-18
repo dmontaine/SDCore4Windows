@@ -85,8 +85,10 @@
  *  1031   Operating system process id
  *  1032   Test and clear break pending flag
  *    35   Current number of users
+ *  1043   CSV.MODE (1, 2 or 3)
  *  1045   Time SD was started, Unix epoch
- *  1047   Globally unique identifier
+ *  1046   CSV delimiter
+ *  1047  Globally unique identifier
  *  9010   Return "SD"
  *  9011   Return MAX_STRING_SIZE - max string / record lenght
  *
@@ -496,6 +498,16 @@ void op_system() {
         }
       }
       descr->data.value = (key == 35) ? i : ((sysseg->max_users > i) ? (sysseg->max_users - i) : 0);
+      break;
+
+    case 1043: /* CSV.MODE: 1, 2 or 3 (openQM item 173) */
+      descr->data.value = process.program.csv_mode;
+      break;
+
+    case 1046: /* The CSV delimiter set by CSV.MODE, a comma by default (openQM item 200) */
+      s[0] = process.program.csv_delim;
+      s[1] = '\0';
+      k_put_c_string(s, descr);
       break;
 
     case 1045: /* Time at which SD was started, as a Unix epoch value (openQM item 192) */

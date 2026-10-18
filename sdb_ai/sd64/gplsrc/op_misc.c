@@ -50,6 +50,8 @@
  *    op_ojoin          OJOIN          Outer join
  *    op_onerror        ONERROR
  *    op_oserror        OS.ERROR()
+ *    op_csvmode        CSV.MODE
+ *    op_csvdelim       Push the CSV delimiter
  *    op_precision      PRECISION
  *    op_procread()     PROCREAD
  *    op_rtrans()       RTRANS()
@@ -1180,6 +1182,45 @@ void op_pause() {
 
 exit_op_pause:
   return;
+}
+
+/* ======================================================================
+   op_csvmode()  -  CSV.MODE mode {, delim}   (14 Oct 26, openQM items 173, 200)
+
+   Stack: mode, delimiter (top).  The setting lives in the program struct, which a called program copies and the
+   return restores, so it persists through calls and a change in a subroutine is undone on return.  A mode outside
+   1 - 3 leaves the mode as it was; a null delimiter is a comma and only the first character of a longer one is used. */
+
+void op_csvmode() {
+  DESCRIPTOR* delim_descr;
+  DESCRIPTOR* mode_descr;
+  char delim[8 + 1];
+  int32_t mode;
+
+  delim_descr = e_stack - 1;
+  mode_descr = e_stack - 2;
+
+  GetInt(mode_descr);
+  mode = mode_descr->data.value;
+  if (mode >= 1 && mode <= 3)
+    process.program.csv_mode = (int16_t)mode;
+
+  delim[0] = '\0';
+  k_get_c_string(delim_descr, delim, 8);
+  process.program.csv_delim = (delim[0] != '\0') ? delim[0] : ',';
+
+  k_pop(2);
+}
+
+/* ======================================================================
+   op_csvdelim()  -  The CSV delimiter, as a one character string          */
+
+void op_csvdelim() {
+  char s[2];
+
+  s[0] = process.program.csv_delim;
+  s[1] = '\0';
+  k_put_c_string(s, e_stack++);
 }
 
 /* ======================================================================

@@ -376,7 +376,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"CLEARDATA":@fm:"CLEARFILE":@fm:"CLEARINPUT"
    statements := @fm:"CLEARSELECT":@fm:"CLOSE":@fm:"CLOSESEQ":@fm:"CLOSE.SOCKET"
    statements := @fm:"COMMIT":@fm:"CONTINUE":@fm:"CONVERT":@fm:"CREATE"
-   statements := @fm:"CREATE.FILE":@fm:"CRT"
+   statements := @fm:"CREATE.FILE":@fm:"CRT":@fm:"CSV.MODE"       ;* CSV.MODE: 14 Oct 26 dm - openQM 173, 200
    statements := @fm:"DATA":@fm:"DEBUG":@fm:"DEL":@fm:"DELETE"
    statements := @fm:"DELETELIST":@fm:"DELETESEQ":@fm:"DELETEU"
    statements := @fm:"DIM":@fm:"DIMENSION":@fm:"DISINHERIT"
@@ -2153,6 +2153,7 @@ is.statement:
                  st.create,
                  st.create.file,
                  st.crt,
+                 st.csv.mode,
                  st.data,
                  st.debug,
                  st.del,
@@ -5746,6 +5747,19 @@ st.disinherit:
 st.inherit:
    if not(object.state) then goto err.class
    opcode = OP.INHERIT ; goto common.path
+
+* ST.CSV.MODE  -  CSV.MODE mode {, delim} (14 Oct 26 dm, openQM 173 and 200).  The delimiter is a null string when
+* absent, which the kernel takes as a comma.
+st.csv.mode:
+   gosub expr ; if err then return
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub expr ; if err then return
+   end else
+      opcode.string = '' ; gosub emit.string.load
+   end
+   opcode.byte = OP.CSVMODE ; gosub emit.simple
+   return
 
 st.logmsg:
    opcode = OP.LOGMSG ; goto common.path
@@ -13851,7 +13865,7 @@ emit.csv.list:
       end
 
       if not(first.csv.item) then
-         opcode.string = ',' ; gosub emit.string.load
+         opcode.byte = OP.CSVDELIM ; gosub emit.simple     ;* 14 Oct 26: the delimiter CSV.MODE set, a comma as a rule
          opcode.byte = OP.CAT ; gosub emit.simple
       end
 

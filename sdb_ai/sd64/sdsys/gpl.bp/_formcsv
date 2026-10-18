@@ -37,15 +37,31 @@ $no.xref
 $recursive
 subroutine formcsv((s))
 
+   * 18 Oct 26 Windows port - from Linux b67e277 (14 Oct 26): - openQM 173 and 200: CSV.MODE sets the mode and the delimiter (system keys 1043 and 1046).
+   *   1  RFC 4180: an item holding a double quote or the delimiter is enclosed in double quotes
+   *   2  every non-null item is enclosed, except a number
+   *   3  every item is enclosed, a null one too
+   * Embedded double quotes are doubled in each mode.
+   csv.mode = system(1043)
+   csv.delim = system(1046)
+
    n = dcount(s, @fm)
    for i = 1 to n
       ss = s<i>
-      if index(ss, '"', 1) or index(ss, ',', 1) then
-        s<i> = '"' : change(ss, '"', '""') : '"'
+      begin case
+         case csv.mode = 3
+            enclose = @true
+         case csv.mode = 2
+            enclose = (ss # '' and not(num(ss)))
+         case 1
+            enclose = (index(ss, '"', 1) or index(ss, csv.delim, 1))
+      end case
+      if enclose then
+         s<i> = '"' : change(ss, '"', '""') : '"'
       end
    next i
 
-   return value change(s, @fm, ',')
+   return value change(s, @fm, csv.delim)
 end
 
 * END-CODE
