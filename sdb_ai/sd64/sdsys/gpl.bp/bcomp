@@ -622,6 +622,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "TRIMF"           ; intrinsic.opcodes<-1> = OP.TRIMF
    intrinsics<-1> = "TRIMFS"          ; intrinsic.opcodes<-1> = OP.TRIMFS
    intrinsics<-1> = "TRIMS"           ; intrinsic.opcodes<-1> = OP.TRIMS
+   intrinsics<-1> = "TRIMW"           ; intrinsic.opcodes<-1> = OP.TRIMW   ;* 11 Oct 26 dm
    intrinsics<-1> = "UMASK"           ; intrinsic.opcodes<-1> = OP.UMASK
    intrinsics<-1> = "UNASSIGNED"      ; intrinsic.opcodes<-1> = OP.UNASS
    intrinsics<-1> = "UPCASE"          ; intrinsic.opcodes<-1> = OP.UPCASE
@@ -4073,6 +4074,7 @@ end
                       in.one,         ;* TRIMF
                       in.one,         ;* TRIMFS
                       in.trim,        ;* TRIMS
+                      in.one,         ;* TRIMW
                       in.one,         ;* UMASK
                       in.one,         ;* UNASSIGNED
                       in.one,         ;* UPCASE

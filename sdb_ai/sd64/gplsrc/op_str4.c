@@ -974,6 +974,76 @@ exit_trimb:
 }
 
 /* ======================================================================
+   op_trimw()  -  Trim whitespace from string
+
+   11 Oct 26  openQM ref 302.  Like TRIM() but for every white space
+   character (space, tab, line feed, carriage return, form feed, vertical
+   tab): leading and trailing white space is removed and each run inside
+   the string becomes one space.                                          */
+
+void op_trimw() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Source string              |  Result string              |
+     |=============================|=============================|
+ */
+
+  DESCRIPTOR *src_descr;       /* Source string descriptor */
+  DESCRIPTOR result;           /* Result string descriptor */
+  STRING_CHUNK *src_str;       /* Current source chunk */
+  char *src;                   /* Ptr to current byte */
+  int16_t src_bytes_remaining; /* Remaining bytes in this chunk */
+
+  bool front_of_string = TRUE;
+  bool white_pending = FALSE;
+  char c;
+
+  src_descr = e_stack - 1;
+  k_get_string(src_descr);
+  src_str = src_descr->data.str.saddr;
+  if (src_str == NULL)
+    goto exit_trimw; /* Null source */
+
+  InitDescr(&result, STRING);
+  result.data.str.saddr = NULL;
+
+  ts_init(&result.data.str.saddr, min(64, src_str->string_len));
+
+  while (src_str != NULL) {
+    src_bytes_remaining = src_str->bytes;
+    src = src_str->data;
+
+    while (src_bytes_remaining-- > 0) {
+      c = *(src++);
+      if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v') {
+        white_pending = !front_of_string;
+      } else {
+        if (white_pending) {
+          ts_copy_byte(' ');
+          white_pending = FALSE;
+        }
+        front_of_string = FALSE;
+        ts_copy_byte(c);
+      }
+    }
+
+    src_str = src_str->next;
+  }
+
+  ts_terminate();
+
+  k_dismiss(); /* Dismiss source string */
+
+  *(e_stack++) = result;
+
+exit_trimw:
+  return;
+}
+
+/* ======================================================================
    op_trimf()  -  Trim leading spaces from string                         */
 
 void op_trimf() {

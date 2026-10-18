@@ -1708,52 +1708,77 @@ rescan:
     p++;
   }
 
-  /* Negative value action */
+  /* The action for a negative value (+ - < ( C D), and the options P
+     (suppress scaling if a decimal point is present), Z (represent zero by
+     a null string) and T (truncate rather than round), may follow in any
+     order, the negative value action once only.  They had to be in exactly
+     that order before (11 Oct 26, openQM ref 23). */
 
-  switch (UpperCase(*p)) {
-    case '+':
-      neg = TRAILING_SIGN;
-      p++;
-      break;
-    case '-':
-      neg = TRAILING_MINUS;
-      p++;
-      break;
-    case '<':
-      neg = ANGLE_BRACKETS;
-      p++;
-      break;
-    case '(':
-      neg = ROUND_BRACKETS;
-      p++;
-      break;
-    case 'C':
-      neg = TRAILING_CR;
-      p++;
-      break;
-    case 'D':
-      neg = TRAILING_DB;
-      p++;
-      break;
-    default:
-      neg = LEADING_MINUS;
-      break;
+  neg = LEADING_MINUS;
+  suppress_decimal_scale = FALSE;
+  null_zero = FALSE;
+  truncate = FALSE;
+  {
+    bool neg_seen = FALSE;
+    bool more = TRUE;
+
+    while (more) {
+      switch (UpperCase(*p)) {
+        case '+':
+        case '-':
+        case '<':
+        case '(':
+        case 'C':
+        case 'D':
+          if (neg_seen) {
+            more = FALSE;
+            break;
+          }
+          neg_seen = TRUE;
+          switch (UpperCase(*p)) {
+            case '+':
+              neg = TRAILING_SIGN;
+              break;
+            case '-':
+              neg = TRAILING_MINUS;
+              break;
+            case '<':
+              neg = ANGLE_BRACKETS;
+              break;
+            case '(':
+              neg = ROUND_BRACKETS;
+              break;
+            case 'C':
+              neg = TRAILING_CR;
+              break;
+            case 'D':
+              neg = TRAILING_DB;
+              break;
+          }
+          p++;
+          break;
+
+        case 'P':
+          suppress_decimal_scale = TRUE;
+          p++;
+          break;
+
+        case 'Z':
+          null_zero = TRUE;
+          p++;
+          break;
+
+        case 'T':
+          truncate = TRUE;
+          p++;
+          break;
+
+        default:
+          more = FALSE;
+          break;
+      }
+    }
   }
-
-  /* Suppress scaling if decimal point present? */
-
-  if ((suppress_decimal_scale = (UpperCase(*p) == 'P')) != 0)
-    p++;
-
-  /* Represent zero value by null string? */
-
-  if ((null_zero = (UpperCase(*p) == 'Z')) != 0)
-    p++;
-
-  /* Truncate rather than round? */
-
-  if ((truncate = (UpperCase(*p) == 'T')) != 0)
-    p++;
 
   /* Field width */
 
@@ -1987,9 +2012,28 @@ int32_t mc_conversion(char* p) {
   DESCRIPTOR result_descr; /* Result string */
   int16_t bytes;
   register char c;
-  bool upcase_next;
+  bool upcase_next = TRUE;
+  char repl = '.';       /* MCP replacement character */
+  bool keep_minus = FALSE; /* MCN- and MC/N-: a leading minus is numeric */
+  bool at_start = TRUE;
+  bool cap_next = TRUE;   /* MCS: next letter starts a sentence */
+  bool sentence_end = FALSE;
 
   /* Get conversion mode */
+
+  /* 11 Oct 26  MCP may be followed by the character that replaces each
+     non-printing one: MCP*, MCP'*' or MCP"*" (openQM ref 488).  Take it
+     before the whole string is made upper case, as it is not to be. */
+  if ((p[0] == 'P' || p[0] == 'p') && p[1] != '\0') {
+    char* r = p + 1;
+    if ((r[0] == '\'' || r[0] == '"') && r[1] != '\0' && r[2] == r[0] && r[3] == '\0')
+      repl = r[1];
+    else if (r[1] == '\0')
+      repl = r[0];
+    else
+      goto exit_mc_conversion;
+    p[1] = '\0';
+  }
 
   UpperCaseString(p);
   if (strcmp(p, "A") == 0)
@@ -2000,6 +2044,14 @@ int32_t mc_conversion(char* p) {
     mode = 3;
   else if (strcmp(p, "/N") == 0)
     mode = 4;
+  else if (strcmp(p, "N-") == 0) { /* 11 Oct 26  openQM ref 298 */
+    mode = 2;
+    keep_minus = TRUE;
+  } else if (strcmp(p, "/N-") == 0) {
+    mode = 4;
+    keep_minus = TRUE;
+  } else if (strcmp(p, "S") == 0) /* 11 Oct 26  Sentence capitals, openQM ref 183 */
+    mode = 9;
   else if (strcmp(p, "T") == 0) {
     mode = 5;
     upcase_next = TRUE;
@@ -2038,8 +2090,9 @@ int32_t mc_conversion(char* p) {
       case 2: /* Delete all non-numeric */
         while (bytes--) {
           c = *(p++);
-          if (IsDigit(c))
+          if (IsDigit(c) || (keep_minus && at_start && c == '-'))
             ts_copy_byte(c);
+          at_start = FALSE;
         }
         break;
 
@@ -2054,8 +2107,9 @@ int32_t mc_conversion(char* p) {
       case 4: /* Delete all numeric */
         while (bytes--) {
           c = *(p++);
-          if (!IsDigit(c))
+          if (!(IsDigit(c) || (keep_minus && at_start && c == '-')))
             ts_copy_byte(c);
+          at_start = FALSE;
         }
         break;
 
@@ -2093,7 +2147,7 @@ int32_t mc_conversion(char* p) {
           if ((c == ' ') || IsGraph(c))
             ts_copy_byte(c);
           else
-            ts_copy_byte('.');
+            ts_copy_byte(repl);
         }
         break;
 
@@ -2110,6 +2164,25 @@ int32_t mc_conversion(char* p) {
           c = *(p++);
           if (!IsAlnum(c))
             ts_copy_byte(c);
+        }
+        break;
+
+      case 9: /* Capitalise the first letter of each sentence; the rest stay */
+        while (bytes--) {
+          c = *(p++);
+          if (cap_next && IsAlpha(c)) {
+            c = UpperCase(c);
+            cap_next = FALSE;
+            sentence_end = FALSE;
+          } else if (c == '.' || c == '!' || c == '?') {
+            sentence_end = TRUE;
+          } else if (sentence_end && (c == ' ' || c == '\t')) {
+            cap_next = TRUE;
+            sentence_end = FALSE;
+          } else {
+            sentence_end = FALSE;
+          }
+          ts_copy_byte(c);
         }
         break;
     }
@@ -2470,17 +2543,39 @@ Private int32_t time_conversion(char* p) {
 
   p++; /* Skip T */
 
-  if (UpperCase(*p) == 'H') /* 12 hour format */
+  /* 11 Oct 26  The options H, S and the new M (the value is in milliseconds,
+     openQM ref 198) may come in any order. */
   {
-    p++;
-    am_pm = TRUE;
-    secs = secs % 86400L; /* 0152 */
-  }
+    bool ms = FALSE;
+    bool more = TRUE;
 
-  if (UpperCase(*p) == 'S') /* Include seconds */
-  {
-    p++;
-    include_seconds = TRUE;
+    while (more) {
+      switch (UpperCase(*p)) {
+        case 'H': /* 12 hour format */
+          p++;
+          am_pm = TRUE;
+          break;
+
+        case 'S': /* Include seconds */
+          p++;
+          include_seconds = TRUE;
+          break;
+
+        case 'M': /* Value is in milliseconds */
+          p++;
+          ms = TRUE;
+          break;
+
+        default:
+          more = FALSE;
+          break;
+      }
+    }
+
+    if (ms)
+      secs = secs / 1000;
+    if (am_pm)
+      secs = secs % 86400L; /* 0152 */
   }
 
   if (*p != '\0') /* Separator specified */
