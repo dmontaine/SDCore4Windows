@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FILEINFO KEY 1021 AND THE PICK STYLE CALL "FILE NAME" (QM4 FIXES TAB, BATCH E).
+
+             FL$WHO      FILEINFO(file, 1021) now answers as the openQM manual says FL$WHO does: the user numbers of
+                        the other sessions that have the file open, with a field mark between them, and null when
+                        there are none.  The caller is left out unless it has the file open through more than one file
+                        variable.  Until now 1021 answered the Windows port's text form, "12 (don), 14 (ann)"; that is
+                        at 1100 (FL$HOLDERS) and is what SD's own "cannot gain exclusive access" messages use.  A
+                        program that asked FILEINFO for 1021 by number and wanted the text must ask 1100; programs
+                        that use the name FL$HOLDERS or FL$WHO from keys.h are right once they are compiled again.
+                        The Windows port still has the text form at 1021.
+             CALL file   CALL "file name" (arguments) calls the program compiled into a file, without the catalogue:
+                        the string is a file as the VOC names it, a space, and the program; the object directory is the
+                        VOC entry file.out.  It can also be held in a variable (CALL @nm).  The file must be a VOC
+                        name, found as OPEN finds it, so a Q-pointer follows the OS-access gate as for OPEN; an
+                        operating system path, a program name beginning with $ ! * or _, a third word and an unknown
+                        file are refused as an illegal call name, and a program that is not in the file as not found.
+                        STATUS() is left as it was.
+
 18 Oct 26  L-TYPE DICTIONARY LINKS IN I-TYPES, AND LINKS TO LINKS (QM4 FIXES TAB, BATCH D).
 
              Links       An L-type dictionary record names another file and how to find the record in it, and can now

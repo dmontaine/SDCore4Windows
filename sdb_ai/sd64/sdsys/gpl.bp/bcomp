@@ -6987,6 +6987,20 @@ st.call:
          gosub emit.var.load
       end
    end
+   else if look.ahead.token = TKN.STRING then
+      * 17 Oct 26 dm, QM4 Fixes 208: the Pick style CALL "file name".  The string is the name of a file as the VOC has it, a
+      * space, and the name of a compiled program in the file's object directory (op_jumps.c pick_style_runfile()).  It is
+      * called like any direct call, through a variable that starts out holding the string; a string with no space in it is
+      * not this form and is refused as it always was.
+
+      gosub get.token
+      s = downcase(token.string)
+      if index(s, ' ', 1) = 0 then
+         err.msg = sysmsg(2883) ;* Expected direct or indirect subroutine reference
+         goto error
+      end
+      gosub emit.direct.call.reference
+   end
    else if (look.ahead.token = TKN.NAME) or (look.ahead.token = TKN.NAME.LBR) or (look.ahead.token.string = '!')  or (look.ahead.token.string = '*') or (look.ahead.token = TKN.DOLLAR) then
       * Direct call
 

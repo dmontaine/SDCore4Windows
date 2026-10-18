@@ -74,11 +74,16 @@
       $define FL$NO.RESIZE   1018  ;* Resizing inhibited?
       $define FL$UPDATE      1019  ;* File update counter
       $define FL$ENCRYPTED   1020  ;* File uses encryption
-*     PRE_RELEASE_FIXES 16.  Which sessions hold this file open, as printable
-*     text - "12 (don)", or several separated by commas.  Empty when nothing
-*     else has it, which is a real answer and not a failure: it means the
-*     obstacle is this session's own cached reference, not another user.
-      $define FL$HOLDERS     1021  ;* Sessions holding this file open
+*     17 Oct 26 - 1021 is the openQM FL$WHO: the user numbers of the other sessions
+*     that hold this file open, a field mark between them, null for none (the caller
+*     is left out unless it has the file open through more than one file variable).
+*     Until then 1021 was FL$HOLDERS, the Windows port's text form ("12 (don)", or
+*     several separated by commas), which SD's own programs print in "cannot gain
+*     exclusive access" messages; it is at 1100 now.  Empty when nothing else has the
+*     file, which is a real answer and not a failure: the obstacle is this session's
+*     own cached reference.
+      $define FL$WHO         1021  ;* User numbers of the sessions holding this file open
+      $define FL$HOLDERS     1100  ;* The same as text, "12 (don), 14 (ann)", for messages
 *     12 Oct 26 - the openQM FILEINFO() keys above 1021, numbered as the openQM 4
 *     manual numbers them; mirrored from gplsrc/keys.h, which says what each does
 *     in SD.  FL$COLLECTION was 1022 until then (an unreleased guess).

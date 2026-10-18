@@ -87,13 +87,21 @@
 #define FL_NO_RESIZE    1018
 #define FL_UPDATE       1019
 #define FL_ENCRYPTED    1020
-/* 04 Sep 26 Windows port - PRE_RELEASE_FIXES.md 16.  Which sessions hold this
-   file open, as printable text.  READ-ONLY, so it belongs in the 1000 block
-   with the other queries and not with the 10000 actions.                    */
-#define FL_HOLDERS      1021
+/* 17 Oct 26 dm (QM4 Fixes 62; owner's yes in chat): 1021 is the openQM FL$WHO, as the manual
+   has it: the user numbers of the other sessions that hold this file open, a field mark
+   between them, and null when there are none.  The caller is left out unless it has the file
+   open through more than one file variable.  READ-ONLY, so it is in the 1000 block with the
+   other queries and not with the 10000 actions.
+
+   Until 17 Oct 26 1021 was FL_HOLDERS, the Windows port's text form ("12 (don), 14 (ann)"),
+   which SD's own programs print in "cannot gain exclusive access" messages (10168).  That
+   form stays, for those programs, at 1100: a number the manual does not use and is not
+   likely to.  18 Oct 26 Windows port: carried here (Linux a0a1ad6); the text form (the Windows port's PRE_RELEASE_FIXES 16, shipped at
+   1021 in W1.1) is at 1100 now, so a program of an installation that used FL$HOLDERS by number rather than by name changes.     */
+#define FL_WHO          1021
+#define FL_HOLDERS      1100
 /* 12 Oct 26 dm - the openQM FILEINFO() keys above 1021, numbered as the openQM 4
-   manual numbers them (1021 is the exception: SD's FL_HOLDERS above has the
-   Windows port's shape, text, where openQM's FL$WHO is a list of user numbers).
+   manual numbers them (1021 was the exception until 17 Oct 26, above).
    Mirrored in sdsys/syscom/keys.h.  Several have nothing to report in SD (no
    QMNet, no replication, no ECS, no distributed files) and answer as openQM
    does for a file without the feature.
