@@ -51,6 +51,9 @@
 *   need a file or select list.  OUTERJOIN joins across files and its arity is
 *   not satisfiable with literals; measured 31 Aug 26, the literal form is a
 *   compile error, not a value.
+*   EXPAND joins a record of a data collection FILE into a collection; the carry's own
+*   steps (verify-carry, the coll suite) cover it with a file.
+* NOT.TESTED: EXPAND
 * NOT.TESTED: FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
 * NOT.TESTED: TRANS RTRANS XLATE ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
 *   session or host state
@@ -404,6 +407,93 @@ program basicfuncs
 * And the common, pinned with the answer it actually gives - a fresh named
 * common is ASSIGNED, and that is worth a case rather than a footnote.
    n = 'ASSIGNED.common' ; g = assigned(unset.var) ; w = 1 ; gosub check
+
+* ------------------------------------------- the 1.2-0 carry from Linux, 18 Oct 26
+* Every value below is the one Linux's own suite wants (sandbox-func-b4, -conv-b3, -oq2, -coll, -try).
+* Written to make test-basicfuncscov-units green again after the carry added 28 intrinsics to
+* BCOMP; the carry's own steps (verify-carry) run the full Linux rows.
+* Multivalued results keep their marks: check converts both sides to F V S before comparing.
+
+   n = 'ADDS' ; g = adds('1':@vm:'2', '10':@vm:'20')  ; w = '11':@vm:'22'  ; gosub check
+   n = 'ADDS.short' ; g = adds('1':@vm:'2':@vm:'3', '10') ; w = '11':@vm:'2':@vm:'3' ; gosub check
+   n = 'SUBS' ; g = subs('10':@vm:'20', '1':@vm:'2')  ; w = '9':@vm:'18'   ; gosub check
+   n = 'MULS' ; g = muls('2':@vm:'3', '5':@vm:'7')    ; w = '10':@vm:'21'  ; gosub check
+   n = 'DIVS' ; g = divs('10':@vm:'20', '2':@vm:'5')  ; w = '5':@vm:'4'    ; gosub check
+   n = 'QUOTES' ; g = quotes('a':@vm:'b')    ; w = '"a"':@vm:'"b"'         ; gosub check
+   n = 'DQUOTES' ; g = dquotes('a':@vm:'b')  ; w = '"a"':@vm:'"b"'         ; gosub check
+   n = 'TRIMW' ; g = trimw(char(9):'  a':char(9):char(9):'b  ':char(10)) ; w = 'a b' ; gosub check
+   n = 'TRIMW.none' ; g = trimw('abc')       ; w = 'abc'                   ; gosub check
+   n = 'EREPLACE' ; g = ereplace('a-b-c-d', '-', '+')         ; w = 'a+b+c+d' ; gosub check
+   n = 'EREPLACE.count' ; g = ereplace('a-b-c-d', '-', '+', 2) ; w = 'a+b+c-d' ; gosub check
+   n = 'EREPLACE.start' ; g = ereplace('a-b-c-d', '-', '+', 1, 3) ; w = 'a-b-c+d' ; gosub check
+   n = 'EREPLACE.delete' ; g = ereplace('a-b-c', '-', '')    ; w = 'abc'     ; gosub check
+   n = 'EREPLACE.front' ; g = ereplace('world', '', 'hello ') ; w = 'hello world' ; gosub check
+   n = 'FIX' ; g = fix(37.73629273)           ; w = '37.7363'               ; gosub check
+   n = 'FIX.2' ; g = fix(37.73629273, 2)      ; w = '37.74'                 ; gosub check
+   n = 'FIX.cut' ; g = fix(37.73629273, 2, 1) ; w = '37.73'                 ; gosub check
+   n = 'FIX.zeros' ; g = fix(37.5, 2)         ; w = '37.50'                 ; gosub check
+   n = 'FIX.neg' ; g = fix(-2.675, 2) : '/' : fix(-2.675, 2, 1) ; w = '-2.68/-2.67' ; gosub check
+   n = 'MD5' ; g = md5('abc')                 ; w = '900150983cd24fb0d6963f7d28e17f72' ; gosub check
+   n = 'MD5.null' ; g = md5('')               ; w = 'd41d8cd98f00b204e9800998ecf8427e' ; gosub check
+   n = 'REGEX' ; g = regex('hello world', 'wor') ; w = 1                    ; gosub check
+   n = 'REGEX.anchor' ; g = regex('abc123', '^[a-z]+[0-9]+$') : regex('abc123x', '^[a-z]+[0-9]+$') ; w = '10' ; gosub check
+   n = 'REGEX.case' ; g = regex('ABC', 'abc') : regex('ABC', '(?i)abc') ; w = '01' ; gosub check
+   n = 'SADD' ; g = sadd('123456789012345678901234567890', '987654321098765432109876543210') ; w = '1111111110111111111011111111100' ; gosub check
+   n = 'SADD.dec' ; g = sadd('0.1', '0.2')    ; w = '0.3'                   ; gosub check
+   n = 'SSUB' ; g = ssub('1000000000000000000000', '1') ; w = '999999999999999999999' ; gosub check
+   n = 'SSUB.neg' ; g = ssub('3', '10')       ; w = '-7'                    ; gosub check
+   n = 'SMUL' ; g = smul('1.5', '-2.25')      ; w = '-3.375'                ; gosub check
+   n = 'SMUL.zero' ; g = smul('-5', '0')      ; w = '0'                     ; gosub check
+   n = 'SDIV' ; g = sdiv('10', '4') : '/' : sdiv('1', '3') : '/' : sdiv('-7', '2') ; w = '2.5/0.333333333333333/-3.5' ; gosub check
+   n = 'SCMP' ; g = scmp('9', '10') : '/' : scmp('5.0', '5') : '/' : scmp('-1', '-2') ; w = '-1/0/1' ; gosub check
+
+* A matrix and a data collection, built in place.
+   dim zzm2(2, 2)
+   mat zzm2 = ''
+   zzm2(1, 2) = 'b' ; zzm2(2, 1) = 'c'
+   n = 'MATSTR' ; g = change(change(matstr(zzm2), @vm, ','), @fm, '/') ; w = ',b/c,' ; gosub check
+   dim zzm1(5)
+   mat zzm1 = ''
+   zzm1(1) = 'a' ; zzm1(2) = 'b' ; zzm1(3) = 'c'
+   n = 'MATSTR.1' ; g = change(matstr(zzm1), @fm, '/') ; w = 'a/b/c' ; gosub check
+
+   zzc = collection()
+   zzc{'b'} = 2
+   zzc{'a'} = 'x'
+   zzc{'k'} = 'v'
+   n = 'COLLECTION' ; g = zzc{'k'} ; w = 'v' ; gosub check
+   n = 'ELEMENT.EXISTS' ; g = element.exists(zzc, 'a') : element.exists(zzc, 'zz') ; w = '10' ; gosub check
+   n = 'ENUMERATE' ; g = enumerate(zzc) ; w = 'a':@fm:'b':@fm:'k' ; gosub check
+   zzd = collection(zzc)
+   zzd{'k'} = 'other'
+   n = 'COLLECTION.copy' ; g = zzc{'k'} : '|' : zzd{'k'} ; w = 'v|other' ; gosub check
+   zzc{'ar'} = mat()
+   zzc{'ar', 1} = 'x'
+   zzc{'ar', 2} = 'y'
+   n = 'MAT' ; g = inmat(zzc{'ar'}) : '|' : zzc{'ar', 2} ; w = '2|y' ; gosub check
+   n = 'JBUILD' ; g = jbuild(zzc) ; w = '{"a":"x","ar":["x","y"],"b":2,"k":"v"}' ; gosub check
+   zzp = jparse('{"name":"Acme","n":5,"t":true,"z":null}')
+   n = 'JPARSE' ; g = zzp{'name'} : '|' : zzp{'n'} + 1 : '|' : status() ; w = 'Acme|6|0' ; gosub check
+   n = 'JPARSE.bad' ; g = '[' : jparse('{"a" 1}') : ']' ; w = '[]' ; gosub check
+   n = 'JBOOLEAN' ; g = jboolean(7) + 0 : jboolean(0) + 0 : jboolean('') + 0 : jboolean('FaLsE') + 0 : jboolean('abc') + 0 ; w = '10001' ; gosub check
+   zzc{'t'} = jboolean(1)
+   zzc{'nl'} = jnull()
+   zze = collection()
+   zze{'t'} = jboolean(1)
+   zze{'f'} = jboolean(0)
+   zze{'n'} = jnull()
+   n = 'JNULL' ; g = jbuild(zze) ; w = '{"f":false,"n":null,"t":true}' ; gosub check
+   n = 'JTYPE' ; g = jtype(zzc{'t'}) : '|' : jtype(zzc{'nl'}) : '|' : jtype(zzc{'k'}) : '|' : jtype(zzc{'b'}) : '|' : jtype(zzc{'ar'}) ; w = 'boolean|null|string|number|array' ; gosub check
+
+* CAUGHT: 0 outside a TRY, 1 for a name the enclosing TRY catches, in any case.
+   n = 'CAUGHT.outside' ; g = caught('oops') ; w = 0 ; gosub check
+   zzk = ''
+   try
+      zzk = caught('OOPS')
+   catch oops
+      null
+   end
+   n = 'CAUGHT' ; g = zzk ; w = 1 ; gosub check
 
    crt 'TOTAL|' : cases : '|FAILS|' : fails
    crt 'PROBE.DONE'
