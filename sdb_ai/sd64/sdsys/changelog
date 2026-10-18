@@ -83,9 +83,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            line.  JBUILD() has a mode for the same layout, JB$PRETTY (128), an
            addition of SD's.
 
-           Not yet: TRANS() and I-type items that use an E-type item, indices on
-           E-type items, linked collections (EXPAND), the collection editor
-           and XPARSE().
+           Not built: the collection editor and XPARSE().
 
 18 Oct 26  COLLECTIONS: BOOLEANS AND NULLS, OPERATORS ON AN ELEMENT, THE HU
            CONVERSION.
@@ -195,8 +193,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            INS value AS ...), so a variable called AS can no longer follow a
            value as a format.
 
-18 Oct 26  DATA COLLECTIONS, FIRST PART.  This is a kernel change, so it needs
-           a rebuild.
+18 Oct 26  DATA COLLECTIONS.  This is a kernel change, so it needs a rebuild.
 
              c = COLLECTION()                  a new, empty collection
              d = COLLECTION(c)                 an independent copy
@@ -224,10 +221,8 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            to the same collection, as with a file variable.  Use
            COLLECTION(c) for a copy; it copies nested collections as well.
 
-           This is the first part.  Not there yet: arrays inside a
-           collection, JPARSE() and JBUILD() for JSON, collection files, the
-           collection editor.  A collection that contains itself is never
-           freed, which is how openQM behaves too.
+           The collection editor is not built.  A collection that contains
+           itself is never freed, which is how openQM behaves too.
 
 18 Oct 26  FIELD AND VSLICE TAKE MORE, CATALOG ... GLOBAL c, THREE SHOW
            CHANGES AND SP.VIEW SORTING.
