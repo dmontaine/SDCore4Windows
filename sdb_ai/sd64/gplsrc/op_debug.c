@@ -481,6 +481,11 @@ Private void get_var_info(
     case SOCK:
       break;
 
+    case COLL:
+      ts_printf("%s with %d element(s)", var_descr->data.coll->is_array ? "Array" : "Collection",
+                (int)var_descr->data.coll->count);
+      break;
+
     case LOCALVARS:
       break;
 

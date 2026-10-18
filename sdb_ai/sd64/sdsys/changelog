@@ -2,8 +2,48 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
-18 Oct 26  FIELD AND VSLICE TAKE MORE, CATALOG ... GLOBAL c, AND THREE
-           SHOW CHANGES.
+18 Oct 26  DATA COLLECTIONS, FIRST PART.  This is a kernel change, so it needs
+           a rebuild.
+
+             c = COLLECTION()                  a new, empty collection
+             d = COLLECTION(c)                 an independent copy
+             c{'name'} = value                 put an element in
+             value = c{'name'}                 read it back
+             DEL c{'name'}                     take it out
+             ELEMENT.EXISTS(c, 'name')         1 if it is there, else 0
+             ENUMERATE(c)                      its names, sorted
+
+           A data collection is a set of named values, like a dynamic array
+           whose elements are found by name instead of position.  The value
+           of an element can be a number, a string or another collection, so
+           collections nest as deeply as memory allows.  Names are case
+           sensitive and ENUMERATE() gives them in simple left-to-right
+           order, capitals before lower case.
+
+           The braces take a name, several names or a path.  c{'a','b'},
+           c{'a'}{'b'} and c{'a/b'} are all the same element, and the forms
+           can be mixed.  Setting an element creates whatever levels are
+           missing on the way; DEL of a level removes everything below it.
+           Reading an element that is not there gives a null string and
+           sets STATUS() to 1004.
+
+           Assigning a collection (d = c) does not copy it: both names refer
+           to the same collection, as with a file variable.  Use
+           COLLECTION(c) for a copy; it copies nested collections as well.
+
+           This is the first part.  Not there yet: arrays inside a
+           collection, JPARSE() and JBUILD() for JSON, collection files, the
+           collection editor.  A collection that contains itself is never
+           freed, which is how openQM behaves too.
+
+18 Oct 26  FIELD AND VSLICE TAKE MORE, CATALOG ... GLOBAL c, THREE SHOW
+           CHANGES AND SP.VIEW SORTING.
+
+           SP.VIEW file BY field (or BY.DSND, with NO.CASE before or after
+           the field name) sorts the list of records it offers.  It works as
+           SELECT does, so the field is a dictionary item of the file, and
+           like openQM's it replaces the default select list.  In a record,
+           Return now pages forward (it did nothing) and Esc-Z pages back.
 
            FIELD(string, delimiter, n, *) and string[delimiter, n, *]
            return everything from the n-th field to the end.  Before, the

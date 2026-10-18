@@ -218,6 +218,10 @@ DESCRIPTOR* k_dereference(DESCRIPTOR* p) /* Descriptor to be dereferenced */
     case OBJ:
       p->data.objdata->ref_ct++;
       break;
+
+    case COLL:
+      p->data.coll->ref_ct++;
+      break;
   }
 
   return q;
@@ -631,6 +635,7 @@ void k_get_value(DESCRIPTOR* p) {
     case SELLIST:
     case SOCK:
     case OBJ: /* 0473 */
+    case COLL:
       break;
 
     case UNASSIGNED:
@@ -702,6 +707,10 @@ void k_incr_refct(DESCRIPTOR* p) {
 
     case OBJ:
       p->data.objdata->ref_ct++;
+      break;
+
+    case COLL:
+      p->data.coll->ref_ct++;
       break;
   }
 }
@@ -1280,6 +1289,10 @@ void k_release(DESCRIPTOR* p) {
     case OBJ:
       objdata = p->data.objdata;
       free_object(objdata);
+      break;
+
+    case COLL:
+      coll_deref(p->data.coll);
       break;
 
     case OBJCDX:

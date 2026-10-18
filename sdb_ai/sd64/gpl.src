@@ -35,6 +35,7 @@ objprog
 op_arith
 op_array
 op_btree
+op_coll
 op_ccall
 op_chnge
 op_config

@@ -199,6 +199,9 @@ struct DESCRIPTOR {
     /* OBJ */
     OBJDATA* objdata;
 
+    /* COLL */
+    COLL_HEADER* coll;
+
     /* OBJCD */
     struct {
       OBJDATA* objdata; /* Object associated with this data */
@@ -244,6 +247,7 @@ struct DESCRIPTOR {
 #define OBJCD 16
 #define OBJCDX 17
 #define PERSISTENT 18
+#define COLL 19 /* Data collection or array in a collection (13 Oct 26) */
 
 /* When adding new entry, all places that include a comment containing
    ++ALLTYPES++ must be amended.                                       */
@@ -455,6 +459,31 @@ struct SOCKVAR {
      OPEN.SOCKET was given SKT$TLS, else NULL.  Every k_alloc of a SOCKVAR
      must set it - k_alloc does not zero. */
   void* tls;
+};
+
+/* --------------------- COLL (data collection) --------------------- */
+
+/* A data collection is either an object (name / value pairs, held sorted by
+   name) or an array (values only, position 1 upward).  It is reference
+   counted: a copy of the descriptor is another reference to the same
+   collection.  A collection that contains itself is never freed.         */
+
+struct COLL_ENTRY {
+  char* name;       /* NULL in an array */
+  int32_t name_len;
+  DESCRIPTOR d;     /* INTEGER, FLOATNUM, STRING or COLL */
+  u_char tag;       /* How d is to be read and written out */
+#define CT_PLAIN 0
+#define CT_BOOL 1   /* d is INTEGER 0 or 1, JSON true / false */
+#define CT_NULL 2   /* d is a null string, JSON null */
+};
+
+struct COLL_HEADER {
+  int32_t ref_ct;
+  u_char is_array;
+  int32_t count;
+  int32_t alloc;
+  COLL_ENTRY* e;
 };
 
 /* -------------------- OBJECT NAME MAP ------------------ */

@@ -492,6 +492,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "CHGPHANT"        ; intrinsic.opcodes<-1> = OP.CHGPHANT
    intrinsics<-1> = "COL1"            ; intrinsic.opcodes<-1> = OP.COL1
    intrinsics<-1> = "COL2"            ; intrinsic.opcodes<-1> = OP.COL2
+   intrinsics<-1> = "COLLECTION"      ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - data collections
    intrinsics<-1> = "COMPARE"         ; intrinsic.opcodes<-1> = OP.COMPARE
    intrinsics<-1> = "CONFIG"          ; intrinsic.opcodes<-1> = OP.CONFIG
    intrinsics<-1> = "CONVERT"         ; intrinsic.opcodes<-1> = OP.FCONVERT
@@ -512,6 +513,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "DQUOTES"         ; intrinsic.opcodes<-1> = OP.QUOTES   ;* 11 Oct 26 dm - openQM 11
    intrinsics<-1> = "DTX"             ; intrinsic.opcodes<-1> = OP.DTX
    intrinsics<-1> = "EBCDIC"          ; intrinsic.opcodes<-1> = OP.EBCDIC
+   intrinsics<-1> = "ELEMENT.EXISTS"  ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - data collections
+   intrinsics<-1> = "ENUMERATE"       ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "ENV"             ; intrinsic.opcodes<-1> = OP.ENV
    intrinsics<-1> = "EQS"             ; intrinsic.opcodes<-1> = OP.EQS
    intrinsics<-1> = "EREPLACE"        ; intrinsic.opcodes<-1> = OP.EREPLACE   ;* 12 Oct 26 dm - openQM 472
@@ -1041,6 +1044,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
    testlock.stack = ""
    thenelse.stack = ""
    arg.count.stack = ""
+   collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
    for.var = ""
    lock.opcode = 0
 
@@ -2078,8 +2082,9 @@ proc.statement:
       case look.ahead.token = TKN.MULTEQ    ;* *= Assignment
       case look.ahead.token = TKN.DIVEQ     ;* /= Assignment
       case look.ahead.token = TKN.OBJREF    ;* Object reference
+      case look.ahead.token = TKN.LCBR      ;* Data collection element assignment
 
-      case 1 
+      case 1
 * 20240728 mab remove ABORTE/st.aborte, ABORTM/st.abortm, ERRMSG/st.errmsg, STOPE/st.stope, STOPM/st.stopm, TTYSET/St.ttyset
 * 20240806 mab remove PROCREAD/PROCWRITE
 is.statement:
@@ -2639,6 +2644,19 @@ process.operator:
 
          opcode.byte = OP.FLDSTOR ; gosub emit.simple
       end
+
+   case look.ahead.token = TKN.LCBR   ;* Data collection element assignment: c{a, b} = value  13 Oct 26 dm
+      gosub emit.collection.path
+      if err then goto exit.proc.statement
+      if look.ahead.token # TKN.EQ then
+         err.msg = sysmsg(2833)  ;* Improperly formed field assignment
+         gosub error
+         goto exit.proc.statement
+      end
+      gosub get.token
+      gosub exprf            ;* The value
+      n = 4 ; gosub emit.numeric.load       ;* Function: set
+      opcode.byte = OP.COLL ; gosub emit.simple
 
    case look.ahead.token = TKN.LT     ;* Field assignment
       format.qualifier.allowed = @false
@@ -3983,6 +4001,7 @@ end
                       in.none,        ;* CHGPHANT
                       in.none,        ;* COL1
                       in.none,        ;* COL2
+                      in.collection,  ;* COLLECTION
                       in.compare,     ;* COMPARE
                       in.one,         ;* CONFIG
                       in.three,       ;* CONVERT
@@ -4003,6 +4022,8 @@ end
                       in.one,         ;* DQUOTES
                       in.dtx,         ;* DTX
                       in.one,         ;* EBCDIC
+                      in.element.exists, ;* ELEMENT.EXISTS
+                      in.enumerate,   ;* ENUMERATE
                       in.one,         ;* ENV
                       in.two,         ;* EQS
                       in.change,      ;* EREPLACE
@@ -4226,6 +4247,33 @@ in.matstr:
 
 *** CAUGHT(exception {, modes})   12 Oct 26 dm - openQM 355.  An absent modes is 0.  Not a one-byte function of its own: the
 *** EXC prefix opcode is followed by the sub-opcode 2 (CAUGHT), see op_exc() in op_jumps.c.
+*** COLLECTION()  COLLECTION(c)  - data collections, 13 Oct 26 dm.  All the collection operations are the one
+*** opcode OP.COLL; the number loaded last is the function (see op_coll.c): 1 new, 2 copy, 3 get, 4 set,
+*** 5 delete, 6 element exists, 7 enumerate.
+in.collection:
+            if look.ahead.token = TKN.RBR then
+               n = 1 ; gosub emit.numeric.load
+            end else
+               gosub exprf
+               n = 2 ; gosub emit.numeric.load
+            end
+            goto intrinsic.common
+
+*** ELEMENT.EXISTS(c, name)
+in.element.exists:
+            gosub exprf
+            gosub check.comma
+            gosub exprf
+            n = 1 ; gosub emit.numeric.load      ;* One path component
+            n = 6 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+*** ENUMERATE(c)
+in.enumerate:
+            gosub exprf
+            n = 7 ; gosub emit.numeric.load
+            goto intrinsic.common
+
 in.caught:
             arg.count = 1 ; gosub get.args
 
@@ -7033,6 +7081,14 @@ st.deffun:
 
 st.del:
    gosub simple.lvar.reference ; if err then return
+
+   if look.ahead.token = TKN.LCBR then     ;* DEL c{path}: a data collection element  13 Oct 26 dm
+      gosub emit.collection.path ; if err then return
+      n = 5 ; gosub emit.numeric.load
+      opcode.byte = OP.COLL ; gosub emit.simple
+      return
+   end
+
    opcode.byte = OP.DUP ; gosub emit.simple
 
    if look.ahead.token # TKN.LT then
@@ -12730,6 +12786,12 @@ if.then.else.expr.abort:
             if look.ahead.token # TKN.RSQBR then goto err.rsqbr
             gosub get.token        ;* Skip bracket
 
+         case look.ahead.token = TKN.LCBR  ;* Data collection element: c{a, b}{c}  13 Oct 26 dm
+            gosub emit.collection.path
+            if err then goto exit.get.expr.item
+            n = 3 ; gosub emit.numeric.load       ;* Function: get
+            opcode.byte = OP.COLL ; gosub emit.simple
+
          case 1
             exit
       end case
@@ -12966,6 +13028,32 @@ is.field.ref:
    tokens(n) = TKN.END.FIELD
 
 exit.is.field.ref:
+   return
+
+*****************************************************************************
+* EMIT.COLLECTION.PATH  -  Process {name, name}{name} after a data collection
+*
+* Every {} group is part of one path, so the groups are run together: the
+* components are pushed in order and then their number.  On entry the next
+* token is the first {; on exit we are positioned after the last }.
+
+emit.collection.path:
+   ins 0 before collection.count.stack<1>
+   loop
+      gosub get.token         ;* Skip the {
+      loop
+         gosub exprf
+         collection.count.stack<1> += 1
+      while look.ahead.token = TKN.COMMA
+         gosub get.token
+      repeat
+      if look.ahead.token # TKN.RCBR then goto err.rcbr
+      gosub get.token         ;* Skip the }
+   while look.ahead.token = TKN.LCBR
+   repeat
+   n = collection.count.stack<1>
+   del collection.count.stack<1>
+   gosub emit.numeric.load
    return
 
 *****************************************************************************
@@ -13265,6 +13353,10 @@ err.rbr:
 
 err.rsqbr:
    err.msg = sysmsg(2964) ;* Right square bracket not found where expected
+   goto error
+
+err.rcbr:
+   err.msg = sysmsg(12129) ;* Right curly bracket not found where expected
    goto error
 
 err.semicolon:

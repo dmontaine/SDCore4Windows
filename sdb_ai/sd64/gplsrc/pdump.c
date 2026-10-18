@@ -619,6 +619,11 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
       fprintf(fu, "%s: Socket\n", s);
       break;
 
+    case COLL:
+      fprintf(fu, "%s: %s of %d element(s)\n", s, descr->data.coll->is_array ? "Array in a collection" : "Data collection",
+              (int)descr->data.coll->count);
+      break;
+
     case LOCALVARS:
       ahdr = descr->data.ahdr_addr;
       lsub_level = 0;

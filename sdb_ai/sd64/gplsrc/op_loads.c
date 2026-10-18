@@ -314,6 +314,10 @@ void op_dup() {
     case OBJ:
       e_stack->data.objdata->ref_ct++;
       break;
+
+    case COLL:
+      e_stack->data.coll->ref_ct++;
+      break;
   }
 
   e_stack++;
@@ -999,6 +1003,7 @@ Private void set_descr(DESCRIPTOR* p, u_char type) {
     case SELLIST:
     case SOCK:
     case OBJ:
+    case COLL:
     case OBJCD:
     case OBJCDX:
       k_release(p);

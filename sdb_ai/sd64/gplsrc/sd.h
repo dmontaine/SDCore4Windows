@@ -72,6 +72,8 @@ typedef struct BTREE_HEADER BTREE_HEADER;
 typedef struct PMATRIX_HEADER PMATRIX_HEADER;
 typedef struct SOCKVAR SOCKVAR;
 typedef struct OBJDATA OBJDATA;
+typedef struct COLL_HEADER COLL_HEADER;
+typedef struct COLL_ENTRY COLL_ENTRY;
 
 /* ======================================================================
    Standard includes needed everywhere                                    */
@@ -255,6 +257,7 @@ void k_num_array2(void(op(void)), int16_t default_value);
 void k_release(DESCRIPTOR * p);
 void k_deref_image(SCREEN_IMAGE * image);
 void k_deref_string(STRING_CHUNK * str);
+void coll_deref(COLL_HEADER * h);
 int k_get_c_string(DESCRIPTOR * descr, char * s, int max_bytes);
 void k_incr_refct(DESCRIPTOR * p);
 void k_put_c_string(char * s, DESCRIPTOR * descr);
