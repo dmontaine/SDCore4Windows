@@ -2,6 +2,42 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE ELEMENT KEYWORD IN QUERIES.
+
+             LIST file ELEMENT "detail/*/prodno" ...
+             LIST file ... WITH ELEMENT "ship" = "Dock B"
+             SORT file ... BY ELEMENT "n"
+
+           ELEMENT names an element of a data collection file by its path,
+           the way A n or F n names a field, so a query no longer needs a
+           dictionary item for every element it touches.  It can be used
+           wherever a field name can: in the display list, in WITH and WHEN
+           clauses, with BY, BY.DSND and BY.EXP, with SUM, TOTAL and BREAK.ON,
+           and in COUNT and SELECT.  The usual qualifiers (AS, COL.HDG, FMT,
+           CONV, MULTI.VALUE, SINGLE.VALUE) work on it as on any other field.
+
+           The path is the one a collection variable takes: names and array
+           positions separated by /, as in detail/1/prodno.  An * in place of
+           a position stands for every element of that array, so
+           detail/*/prodno gives a list of values, one for each element, and
+           detail/*/serial/* a value for each element of detail with a
+           subvalue for each of its serial numbers.  A path with an asterisk
+           is multivalued.  Quotes are needed only for a path that holds a
+           blank or a character the command parser splits on.  A name is case
+           sensitive and keeps the case it is typed in; an element that is not
+           there is a null value, not an error.
+
+           With no FMT the item is 10 characters, left justified, and its
+           heading is the path.  Left justified means that a sort or a test on
+           a number compares characters, so BY ELEMENT "n" puts 10 before 3;
+           add FMT "5R" (and AS, to sort by the formatted item) for numbers.
+
+           ELEMENT works only on a data collection file; on any other file it
+           says so (12165), and ELEMENT with no path says "ELEMENT path not
+           found where expected" (12166).  ELEMENT is now a keyword, like
+           EVAL, so a dictionary item that happens to be called ELEMENT should
+           be given another name.
+
 18 Oct 26  ED, COPY, COPYP, COMPARE.FILES AND TRIGGERS WORK ON A DATA
            COLLECTION FILE.
 

@@ -236,6 +236,7 @@ $define KW$NUM.SUP        220   ;* 11 Oct 26  1.2-0 (openQM ref 242)
 $define KW$STRINGS        221   ;* 12 Oct 26  1.2-0 (openQM refs 141, 447)
 $define KW$SORT.SUP       222   ;* 13 Oct 26  1.2-0 (openQM ref 495)
 $define KW$COLLECTION     223   ;* 13 Oct 26  1.2-0 (data collection files)
+$define KW$ELEMENT        224   ;* 13 Oct 26  1.2-0 (data collection element path in a query)
 
 * ----------------------------------------------------------------------
 * !PARSER action key values

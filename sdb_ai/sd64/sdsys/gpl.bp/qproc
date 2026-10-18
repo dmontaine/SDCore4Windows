@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0ce7663 (13 Oct 26): Data collection files (1.2-0): E-type items, which are fields of the
+*               view make.coll.view builds, and the ELEMENT keyword (a path named on
+*               the command line, add.field; messages 12165, 12166).
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: every dictionary read folds
 *           (as given, lower, upper).
 * 02 Sep 26 Windows port - a directory-file record whose FILE is present under
@@ -2733,6 +2736,15 @@ parse.command.options:
             det.sup = @true
             id.sup = @true
 
+* --- ELEMENT
+         case keyword = KW$ELEMENT
+            * 18 Oct 26 Windows port - from Linux 0ce7663 (13 Oct 26): - the path of an element of a data collection, as A n names a field (openQM ELEMENT)
+            if sum.command then item.report.mode = REPORT.TOTAL
+            else item.report.mode = 0
+            gosub add.display.item
+            gosub check.field.modifiers
+            continue          ;* Already got next token
+
 * --- ENUMERATE
          case keyword = KW$ENUMERATE and (report.command or reformat.command)
             item.report.mode = REPORT.NUMBER
@@ -5299,6 +5311,50 @@ add.field:
    * Make a new item
 
    if no.items = max.items then gosub extend.item.tables
+
+   * Is it an ELEMENT path?  13 Oct 26 dm (openQM ELEMENT): the path of an element of a data collection, named as A n
+   * names a field.  It is a field of the view make.coll.view builds, as an E-type item is, with the path as its name
+   * and heading, 10L as its default format, and several values when the path has an asterisk.  The qualifiers
+   * (FMT, AS, COL.HDG, ...) act on it as on any item; SINGLE.VALUE and MULTI.VALUE override the asterisk rule.
+
+   if keyword = KW$ELEMENT then
+      if not(coll.file) then
+         display sysmsg(12165) ;* ELEMENT can only be used with a data collection file
+         goto exit.qproc
+      end
+
+      gosub get.token
+      if token.type # PARSER$STRING and token.type # PARSER$TOKEN then
+         display sysmsg(12166) ;* ELEMENT path not found where expected
+         goto exit.qproc
+      end
+
+      no.items += 1
+      item.index = no.items
+      item.name(item.index) = token
+      item.display.name(item.index) = token
+      locate token in coll.paths<1> setting coll.j else
+         coll.paths<-1> = token
+         coll.j = dcount(coll.paths, @fm)
+      end
+      item.detail(item.index) = coll.j
+      item.fmt(item.index) = "10L"
+      gosub get.width.and.justification
+      item.conv(item.index) = ""
+      item.assoc(item.index) = 0
+      item.multivalued(item.index) = (index(token, '*', 1) # 0)
+      item.totals(item.index) = 0
+      item.breakpoint(item.index) = 0
+      item.flags(item.index) = 0
+      if option(OPT.ASSOC.UNASSOC.MV) then
+         if item.multivalued(item.index) then
+            s = '__QPROC.ASSOC__' ; gosub add.item.association
+         end
+      end
+      item.type(item.index) = FIELD.ITEM
+      item.ok = @true
+      return
+   end
 
    * Is it an EVAL expression?
 
