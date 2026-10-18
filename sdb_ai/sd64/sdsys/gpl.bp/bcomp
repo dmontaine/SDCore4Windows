@@ -470,7 +470,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    non.debug.statements = "CLASS":@fm:"COM":@fm:"COMMON":@fm:"DEFFUN"
    non.debug.statements := @fm:"EQU":@fm:"EQUATE"
    non.debug.statements := @fm:"FUNCTION":@fm:"GET":@fm:"PRIVATE":@fm:"PROGRAM"
-   non.debug.statements := @fm:"PUBLIC":@fm:"SET":@fm:"SUB":@fm:"SUBROUTINE"
+   non.debug.statements := @fm:"PUBLIC":@fm:"RESTRICTED":@fm:"SET":@fm:"SUB":@fm:"SUBROUTINE"   ;* RESTRICTED 16 Oct 26 dm - QM4 gaps
 
    * Internal (restricted) statements
 * 20240728 mab remove TRACE 
@@ -1510,7 +1510,8 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
         
         name.map := char(if i # n then len(s) + 10 else 0) ;* Offset to next entry
         name.map := iconv(z<1,1,1> + 0, 'ISL') ;* Public variable number
-        name.map := iconv(z<1,1,2> + 0, 'ISL') ;* Set routine key
+        k = z<1,1,2> + 0                       ;* Set routine key, with bit 7 of its high byte set for RESTRICTED (16 Oct 26)
+        name.map := char(rem(k, 256)) : char(int(k / 256) + (if z<1,1,6> then 128 else 0))
         name.map := iconv(z<1,1,3> + 0, 'ISL') ;* Get routine key
         name.map := char(z<1,1,4>)             ;* Set arg count
         name.map := char(z<1,1,5>)             ;* Get arg count
@@ -2439,6 +2440,7 @@ is.statement:
                           st.private,
                           st.program,
                           st.public,
+                          st.restricted, ;* 16 Oct 26 dm - QM4 gaps
                           st.set,
                           st.subroutine, ;* SUB
                           st.subroutine
@@ -11747,19 +11749,33 @@ st.printer:
 
 st.get:
    is.public = @true
+   is.restricted = @false
    is.public.function = @true
    goto st.get.set.entry
 
 st.set:
    is.public = @true
+   is.restricted = @false
    is.public.function = @false
    goto st.get.set.entry
 
 st.private:
    is.public = @false
+   is.restricted = @false
    goto st.private.common
 
+* ST.RESTRICTED  -  RESTRICTED var / SUBROUTINE name / FUNCTION name  (16 Oct 26 dm, QM4 gaps).  A PUBLIC name with the flag
+* is.restricted: the name map entry carries it (subvalue 6, bit 7 of the set key's high byte in the object) and the run time
+* hides the name from an object outside the inheritance tree of the class that declares it.  RESTRICTED var = value (an initial
+* value) is not supported, as it is not for PUBLIC and PRIVATE.
+
+st.restricted:
+   is.restricted = @true
+   goto st.public.common
+
 st.public:
+   is.restricted = @false
+st.public.common:
    is.public = @true
 
    if listindex('FUNCTION,SUB,SUBROUTINE', ',', u.look.ahead.token.string) then
@@ -11803,8 +11819,13 @@ st.get.set.entry:
             err.msg = sysmsg(3457) ;* This method or property name has already been defined
             goto error
          end
+         if (object.name.map<2,obj.pos,6> + 0) # is.restricted then   ;* one name cannot be public in one routine and restricted in another
+            err.msg = sysmsg(3457) ;* This method or property name has already been defined
+            goto error
+         end
       end else
          object.name.map<1,obj.pos> = u.token.string
+         object.name.map<2,obj.pos,6> = is.restricted + 0
       end
 
       object.keys += 1
@@ -11945,6 +11966,7 @@ st.private.common:
          end else
             object.name.map<2,-1> = symbol.common.offset
          end
+         if is.restricted then object.name.map<2,dcount(object.name.map<1>, @vm),6> = 1   ;* 16 Oct 26 - RESTRICTED
       end
 
    while look.ahead.token = TKN.COMMA

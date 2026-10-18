@@ -154,6 +154,12 @@ struct SYSSEG {
    /* 15 Oct 26 dm - QM4 gaps Q-19 and Q-18.  Last, so no offset moves. */
    int16_t usplit;              /* USPLIT: 1 = interactive users take the lowest user number, others the highest */
    u_int32_t print_jobs;        /* SYSTEM(20): print jobs passed to the operating system spooler since SD started (atomic) */
+   /* 16 Oct 26 dm - QM4 gaps, CLEANUP and PHANTOMS.  Last, so no offset moves (a segment made by an older build has none of them,
+      which is why they are read only after a restart: the installer restarts the service). */
+   int16_t cleanup;             /* CLEANUP: seconds between sdlnxd's scans for processes that ended abnormally */
+   int16_t phantoms_base;       /* PHANTOMS: lowest user number kept for PHANTOM USER n... */
+   int16_t phantoms_range;      /*           ...and how many; 0 = none kept */
+   int16_t lock_trace;          /* LOCK.TRACER: 1 while every lock taken or let go is added to the file locktrace */
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */

@@ -427,6 +427,15 @@
                        then opens, reads, writes, deletes, clears, selects, AK reads, AK writes, AK deletes, splits, merges and
                        the sdtime() the counts started at, as values, and the login name last. */
 #define K_USER_STATS         112
+/* 113 is Linux's K_NON_DURABLE_TXN (QMClient SDTxn mode 4, held with the QMClient requests); left free so the numbers agree. */
+/* 16 Oct 26 dm - QM4 gaps (PHANTOM USER n and the PHANTOMS parameter).
+     K_PHANTOM_USER    n: the next phantom() of this process is to be user number n, and no other.  The number has to be one of
+                       those the PHANTOMS parameter keeps and not be in use, or phantom() returns 0.  0 cancels.  phantom() clears
+                       it, made or not.  Returns 1. */
+#define K_PHANTOM_USER       114
+/* 115 is Linux's K_LOCK_TRACE (LOCK.TRACER).  Not carried here: the trace file lives in the system directory with mode 0620 and
+   the directory's group so that every session can append, which an ordinary Windows user cannot do in SDSYS's directory (and
+   loosening that is not a thing to do for a diagnostic).  The number is left unused.                                         */
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

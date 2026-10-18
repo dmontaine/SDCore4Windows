@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): K_PHANTOM_USER: PHANTOM USER n takes the user number n from those PHANTOMS keeps (QM4 gaps).
  * 31 Dec 23 SD launch - prior history suppressed
  * 28 Jul 24 mab remove op_cnctport() / CONNECT.PORT not supported
  * 17 Aug 26 Windows port - K_SET_USERNAME added, gated on HDR_INTERNAL;
@@ -75,6 +76,7 @@ void set_date(int32_t);
 
 #define INPUT_FILL_MAX 3
 Private char input_fill[INPUT_FILL_MAX + 1] = ""; /* K_INPUT_FILL_SET / _GET (sheet item 389) */
+Private int16_t phantom_requested_user = 0;           /* PHANTOM USER n (16 Oct 26): the user number the next phantom() is to take, 0 for any */
 Private char input_null_char = '\0';               /* INPUTNULL (sheet item 408): '\0' for none */
 Private bool run_exe(char *exe_name, char *cmd_line);
 
@@ -865,6 +867,13 @@ void op_kernel() {
 
     /* 15 Oct 26 dm - QM4 gaps Q-8, COMMAND.LOGGING.  See keys.h.  The file is the user's own (mode 0600), and is opened
        with O_NOFOLLOW so that a link left in its place is not written through. */
+    case K_PHANTOM_USER:
+      /* PHANTOM USER n: see keys.h.  op_phantom() takes the number and checks it against PHANTOMS and the user map. */
+      GetInt(descr);
+      phantom_requested_user = (int16_t)descr->data.value;
+      result.data.value = 1;
+      break;
+
     case K_USER_STATS: {
       int16_t us_i;
       USER_ENTRY* us_ptr;
@@ -1275,6 +1284,7 @@ void op_phantom() {
   USER_ENTRY *uptr;
   int16_t phantom_user_index;
   int16_t phantom_uid = 0;
+  int16_t requested_user;
   char path[MAX_PATHNAME_LEN + 1];
   char bindir[MAX_PATHNAME_LEN + 1];
   char option[15 + 1];
@@ -1282,13 +1292,25 @@ void op_phantom() {
 
   /* Reserve a user table entry for the phantom process */
 
+  requested_user = phantom_requested_user; /* PHANTOM USER n: asked for once, for this phantom only */
+  phantom_requested_user = 0;
+
   StartExclusive(SHORT_CODE, 38);
   phantom_user_index = 0;
   for (i = 1; i <= sysseg->max_users; i++) {
     uptr = UPtr(i);
     if (uptr->uid == 0) /* Spare cell */
     {
-      phantom_uid = assign_user_no(i, FALSE);
+      if (requested_user != 0) {
+        /* 16 Oct 26 dm - PHANTOM USER n.  The number has to be one PHANTOMS keeps, and nobody may hold it; if either fails no
+           cell is taken and phantom() answers 0.                                                                       */
+        if ((sysseg->phantoms_range == 0) || (requested_user < sysseg->phantoms_base) ||
+            (requested_user >= sysseg->phantoms_base + sysseg->phantoms_range) || *(UMap(requested_user)))
+          break;
+        *(UMap(requested_user)) = i;
+        phantom_uid = requested_user;
+      } else
+        phantom_uid = assign_user_no(i, FALSE);
       uptr->uid = phantom_uid;
       uptr->puid = process.user_no;
       uptr->grouped = 0;

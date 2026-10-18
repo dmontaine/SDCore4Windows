@@ -516,7 +516,11 @@ struct OBJECT_NAME_MAP /* This is embedded in the object code */
    The two arg count items use the top bit to indicate that the
    routine is declared as VAR.ARGS.                                   */
 
-#define SetKey(p) ((p)->lo_set + ((int16_t)((p)->hi_set) << 8))
+/* 16 Oct 26 dm - RESTRICTED: the top bit of hi_set marks a name declared RESTRICTED (visible only to an object in the inheritance
+   tree of the class that declares it).  A set key never needs 15 bits, so the key is the other seven.  Objects compiled before
+   the statement existed have the bit clear. */
+#define SetKey(p) ((p)->lo_set + ((int16_t)((p)->hi_set & 0x7F) << 8))
+#define IsRestricted(p) (((p)->hi_set & 0x80) != 0)
 #define GetKey(p) ((p)->lo_get + ((int16_t)((p)->hi_get) << 8))
 #define PublicVar(p) ((p)->lo_var + ((int16_t)((p)->hi_var) << 8))
 #define NextNameMapEntry(p) \

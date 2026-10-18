@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): RESTRICTED names (QM4 gaps): find_name_map_entry() skips one the running object is not in the inheritance tree of.
  * 14 Sep 26 Windows port - op_object() lowers the class catalogue name, as
  *           op_call() does.  The property name in op_objref() stays upper:
  *           it is an identifier, not a catalogue name.  RELEASE_1.1_FIXES.md 5,
@@ -56,6 +57,29 @@ Private bool find_undefined_name_handler(int16_t mode,
 Private DESCRIPTOR* resolve_index(DESCRIPTOR* array_descr,
                                   DESCRIPTOR* indx_descr,
                                   int16_t dims);
+
+/* ======================================================================
+   restricted_visible()  -  RESTRICTED names (16 Oct 26)
+
+   A name its class declared RESTRICTED is seen only by an object in the inheritance tree of the object that holds the name: the
+   object whose method is running now is that object, or inherits it, directly or through others.  The main program, an
+   unrelated class and a sibling that shares a parent are outside it.                                                    */
+
+Private bool object_inherits(OBJDATA* x, OBJDATA* owner) {
+  OBJDATA* o;
+
+  if (x == owner)
+    return TRUE;
+  for (o = x->inherits; o != NULL; o = o->next_inherited) {
+    if (object_inherits(o, owner))
+      return TRUE;
+  }
+  return FALSE;
+}
+
+Private bool restricted_visible(OBJDATA* owner) {
+  return (process.program.objdata != NULL) && object_inherits(process.program.objdata, owner);
+}
 
 /* ======================================================================
    op_disinh()  -  DISINHERIT                                             */
@@ -385,6 +409,10 @@ Private bool find_name_map_entry(int16_t mode,
     for (p = scanobj->name_map; p != NULL; p = NextNameMapEntry(p)) {
       if (!strcmp(p->name, name)) /* Found it */
       {
+        /* RESTRICTED (16 Oct 26): a name the class declared RESTRICTED is not there for an object outside its inheritance tree */
+        if (IsRestricted(p) && !restricted_visible(scanobj))
+          continue;
+
         var = PublicVar(p);
 
         if (mode == 0) /* PUT / Method subroutine */

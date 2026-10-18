@@ -434,6 +434,21 @@ Private void init_program() {
 }
 
 /* ======================================================================
+   reserved_user_top()  -  The user numbers kept for FIXUSERS, PORTMAP and PHANTOMS (16 Oct 26).
+   Returns the last number of the kept block that holds user number i, zero if i is in none.  The kept blocks do not overlap
+   (read_config() refuses a configuration where they do).                                                                  */
+
+Private int16_t reserved_user_top(int16_t i) {
+  if ((sysseg->portmap_range != 0) && (i >= sysseg->portmap_base_user) && (i < sysseg->portmap_base_user + sysseg->portmap_range))
+    return sysseg->portmap_base_user + sysseg->portmap_range - 1;
+  if ((sysseg->fixusers_range != 0) && (i >= sysseg->fixusers_base) && (i < sysseg->fixusers_base + sysseg->fixusers_range))
+    return sysseg->fixusers_base + sysseg->fixusers_range - 1;
+  if ((sysseg->phantoms_range != 0) && (i >= sysseg->phantoms_base) && (i < sysseg->phantoms_base + sysseg->phantoms_range))
+    return sysseg->phantoms_base + sysseg->phantoms_range - 1;
+  return 0;
+}
+
+/* ======================================================================
    assign_user_no()
    NOTE: The caller must own the SHORT_CODE semaphore.
    Returns the user number, or zero if clash of fixed port/user           */
@@ -441,8 +456,9 @@ Private void init_program() {
 int16_t assign_user_no(int16_t user_table_index, bool interactive) {
   int16_t i;
   int16_t hi;
+  int16_t top;
+  int tries;
   int16_t portmap_lo_user = 9999;
-  int16_t portmap_hi_user;
   int16_t portmap_lo_port;
   int16_t portmap_range;
   int16_t fixusers_lo_user = 9999;
@@ -491,7 +507,6 @@ int16_t assign_user_no(int16_t user_table_index, bool interactive) {
 
   if ((portmap_range = sysseg->portmap_range) != 0) {
     portmap_lo_user = sysseg->portmap_base_user;
-    portmap_hi_user = portmap_lo_user + portmap_range - 1;
     portmap_lo_port = sysseg->portmap_base_port;
 
     if ((port_no >= portmap_lo_port) &&
@@ -515,15 +530,17 @@ int16_t assign_user_no(int16_t user_table_index, bool interactive) {
 
   i = (sysseg->userpool == 0) ? 0 : sysseg->last_user;
   hi = sysseg->hi_user_no;
+  tries = 0;
   do {
     i = (i % hi) + 1;
-    if ((i >= portmap_lo_user) && (i <= portmap_hi_user)) {
-      /* Skip reserved ports */
-      i = (portmap_hi_user % hi) + 1;
-    } else if ((i >= fixusers_lo_user) && (i <= fixusers_hi_user)) {
-      /* Skip reserved ports */
-      i = (fixusers_hi_user % hi) + 1;
-    }
+
+    /* 16 Oct 26 dm - skip the numbers FIXUSERS, PORTMAP and PHANTOMS keep.  After a skip the number landed on may be the first
+       of the next kept block (two blocks side by side), so it is looked at again; the old code looked once and could hand
+       out a kept number.  The count of tries stops a configuration that keeps every number from looping for ever.        */
+    while (((top = reserved_user_top(i)) != 0) && (++tries <= 2 * hi))
+      i = (top % hi) + 1;
+    if (tries > 2 * hi)
+      return 0;
   } while (*(UMap(i)));
 
   sysseg->last_user = i;

@@ -57,6 +57,9 @@ struct CONFIG {
   int16_t lgnwait;                 /* LGNWAIT:  Tenths of a second a login waits for a spare user number */
   int16_t userpool;                /* USERPOOL: Highest user number to allocate; 0 = lowest free number first */
   int16_t usplit;                  /* USPLIT:   1 = interactive users take the lowest free user number, all other processes the highest (15 Oct 26) */
+  int16_t cleanup;                 /* CLEANUP:  Seconds between scans for processes that ended abnormally, 30 to 3600, default 300 (16 Oct 26) */
+  int16_t phantoms_base;           /* PHANTOMS: Lowest user number reserved for PHANTOM ... USER n, and... (16 Oct 26) */
+  int16_t phantoms_range;          /*           ...how many are reserved; 0 = none */
   int16_t maxidlen;                /* MAXIDLEN: Maximum record id length */
   /* 21 Aug 26 Windows port - NETDIRS: directories outside its own account
      that a network session may reach.  Semicolon separated, because a

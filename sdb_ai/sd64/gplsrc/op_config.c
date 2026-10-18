@@ -252,6 +252,14 @@ void op_config() {
     result.data.value = sysseg->userpool;
   else if (!strcmp(param, "USPLIT"))
     result.data.value = sysseg->usplit; /* 15 Oct 26, QM4 gaps Q-19 */
+  else if (!strcmp(param, "CLEANUP"))
+    result.data.value = sysseg->cleanup; /* 16 Oct 26, QM4 gaps */
+  else if (!strcmp(param, "PHANTOMS")) {
+    if (sysseg->phantoms_range) {
+      sprintf(s, "%d,%d", sysseg->phantoms_base, sysseg->phantoms_range);
+    }
+    k_put_c_string(s, &result); /* 16 Oct 26: "u,n", null when none are kept, as FIXUSERS */
+  }
  /* 20240219 mab create-account based on type (user / group / other) */
   else if (!strcmp(param, "USRDIR"))
     k_put_c_string(pcfg.usrdir, &result);

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): USER n: the phantom takes user number n, one of those the PHANTOMS parameter keeps (QM4 gaps).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -75,9 +76,11 @@ $define como.dir.voc.name "$COMO"
    *    DATA          hand the DATA queue of this process to the phantom (it is emptied here)
    *    LOG dirfile   the phantom's log (COMO record) goes in this directory file instead of $COMO
    *    GROUP         the phantom is grouped with this process: it is logged out when this process ends (15 Oct 26)
+   *    USER n        the phantom is user number n, one of the numbers the PHANTOMS parameter keeps (16 Oct 26)
    no.msg = @false
    pass.data = @false
    group.it = @false
+   req.user = ''
    log.file = ''
    loop
       w = upcase(field(ph.command, ' ', 1))
@@ -91,6 +94,13 @@ $define como.dir.voc.name "$COMO"
          case w = 'GROUP'      ;* 15 Oct 26 dm - logged out when this process ends (QM4 gaps Q-8, sheet 427 and 433)
             group.it = @true
             ph.command = trimf(ph.command[len(w) + 1, 999999])
+         case w = 'USER'      ;* 16 Oct 26 dm - PHANTOM USER n: the user number the phantom is to take
+            ph.command = trimf(ph.command[len(w) + 1, 999999])
+            req.user = field(ph.command, ' ', 1)
+            ph.command = trimf(ph.command[len(req.user) + 1, 999999])
+            if req.user = '' then stop sysmsg(12361)
+            if not(num(req.user)) then stop sysmsg(12361)
+            if req.user < 1 or req.user # int(req.user) then stop sysmsg(12361)
          case w = 'LOG'
             ph.command = trimf(ph.command[4, 999999])
             log.file = field(ph.command, ' ', 1)
@@ -104,17 +114,36 @@ $define como.dir.voc.name "$COMO"
    if len(ph.command) then
       gosub check.como.dir
 
+      * USER n (16 Oct 26): the number has to be one the PHANTOMS parameter keeps.  CONFIG('PHANTOMS') is "first,count", null
+      * when none are kept.  Whether the number is free is for the kernel to say, under the lock on the user table.
+
+      if req.user # '' then
+         ph.range = config('PHANTOMS')
+         if ph.range = '' then
+            ok.range = @false
+         end else
+            ok.range = (req.user >= field(ph.range, ',', 1) and req.user < field(ph.range, ',', 1) + field(ph.range, ',', 2))
+         end
+         if not(ok.range) then
+            @system.return.code = -ER$ARGS
+            stop sysmsg(12362, req.user)
+         end
+      end
+
       * We hold the file lock on the $IPC file across process creation so
       * that we can enter the uid of the new process into the parent process
       * register entry and write a copy of the command in the Xn record.
 
       filelock ipc.f
 
+      if req.user # '' then void kernel(K$PHANTOM.USER, req.user)
+
       uid = phantom()
 
       if (uid = 0) then   ;* Could not create process
         fileunlock ipc.f
         @system.return.code = -ER$PROCESS
+        if req.user # '' then stop sysmsg(12363, req.user)   ;* that user number is already in use
         stop sysmsg(6481) ;* Failed to create phantom process
       end
 

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux 7f7a4fd (sdlnxd.c, 16 Oct 26): the scan for lost
+ *                      processes runs every CLEANUP seconds (sd.conf, 30 to 3600,
+ *                      default 300); the loop's tick is ten seconds, kept on the clock
  * 01 Oct 26 Windows port - the API port is the fixed SD_API_PORT, 4247, set
  *                      by config.c; this file only comments on it
  * 17 Sep 26 Windows port - RELEASE_1.1 37: check_lost_users() starts
@@ -108,9 +111,12 @@ void signal_handler(int signum);
 
 /* ====================================================================== */
 
+#define TICK_SECONDS 10 /* the loop's tick; CLEANUP is kept to within one tick */
+
 int main() {
   char errmsg[80];
-  int timer = 0;
+  int elapsed = 0; /* seconds since the last scan for lost processes */
+  int interval;    /* CLEANUP */
   int fd;
   struct stat statbuf;
   time_t next_tick;
@@ -179,7 +185,7 @@ int main() {
      there is no descriptor to watch and select() is just the old sleep.    */
   api_listener = open_api_listener((int)sysseg->api_port);
 
-  next_tick = time(NULL) + 60;
+  next_tick = time(NULL) + TICK_SECONDS;
 
   while (!terminate) {
     fd_set rd;
@@ -215,15 +221,19 @@ int main() {
     while (waitpid(-1, NULL, WNOHANG) > 0)
       ;
 
+    /* 18 Oct 26 - from Linux 7f7a4fd: the scan for lost processes runs every CLEANUP seconds (30 to 3600, 300 unless sd.conf
+       says otherwise; it was a fixed five minutes).  The tick is ten seconds so the shortest interval is kept to within one
+       tick.  A segment that holds no usable value (one made by an older build) gets the five minutes it always had.       */
     if (time(NULL) >= next_tick) {
-      next_tick += 60;
-      timer++;
+      next_tick += TICK_SECONDS;
 
-      /* One minute actions */
+      interval = sysseg->cleanup;
+      if ((interval < 30) || (interval > 3600))
+        interval = 300;
 
-      if ((timer % 5) == 0) {
-        /* Five minute actions */
-
+      elapsed += TICK_SECONDS;
+      if (elapsed >= interval) {
+        elapsed = 0;
         check_lost_users();
       }
     }

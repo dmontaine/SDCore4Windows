@@ -217,6 +217,8 @@
       $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
       $define K$FORM.QUEUE      111      ;* unit * 1000 + queue: SP.ASSIGN gave form queue 'queue' to print unit 'unit' (15 Oct 26, Q-9)
       $define K$USER.STATS      112      ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
+*  113 and 115 are Linux's K$NON.DURABLE.TXN (QMClient, held) and K$LOCK.TRACE (LOCK.TRACER, not carried): left unused.
+      $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
