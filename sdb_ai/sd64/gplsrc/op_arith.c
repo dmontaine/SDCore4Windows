@@ -57,6 +57,7 @@
  */
 
 #include "sd.h"
+#include "header.h"
 #include "config.h"
 #include "options.h"
 
@@ -425,6 +426,16 @@ void op_div() {
   return;
 
 div_zero:
+  /* 10 Oct 26  In a dictionary expression (I-type, C-type, A/S correlative) a
+     divide by zero returns zero with neither an error nor a warning, for
+     compatibility with other multivalue systems (openQM 2.8-8). */
+  if (process.program.flags & HDR_ITYPE) {
+    k_dismiss();
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = 0;
+    return;
+  }
   if (!Option(OptDivZeroWarning))
     k_div_zero_error(arg1);
   k_div_zero_warning(arg1);
@@ -633,6 +644,16 @@ void op_idiv() {
   return;
 
 div_zero:
+  /* 10 Oct 26  In a dictionary expression (I-type, C-type, A/S correlative) a
+     divide by zero returns zero with neither an error nor a warning, for
+     compatibility with other multivalue systems (openQM 2.8-8). */
+  if (process.program.flags & HDR_ITYPE) {
+    k_dismiss();
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = 0;
+    return;
+  }
   if (!Option(OptDivZeroWarning))
     k_div_zero_error(arg1);
   k_div_zero_warning(arg1);
@@ -1230,6 +1251,16 @@ void op_quotient() {
   return;
 
 div_zero:
+  /* 10 Oct 26  In a dictionary expression (I-type, C-type, A/S correlative) a
+     divide by zero returns zero with neither an error nor a warning, for
+     compatibility with other multivalue systems (openQM 2.8-8). */
+  if (process.program.flags & HDR_ITYPE) {
+    k_dismiss();
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = 0;
+    return;
+  }
   if (!Option(OptDivZeroWarning))
     k_div_zero_error(arg1);
   k_div_zero_warning(arg1);

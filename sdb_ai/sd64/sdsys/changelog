@@ -2,6 +2,41 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  DICTIONARY EXPRESSIONS: SIX THINGS THEY COULD NOT DO BEFORE.
+
+           These are in I-types and in the compiled forms of A, S and C items.
+           Nothing that compiled before changes its answer.
+
+           IF with a part missing.  IF cond THEN a  and  IF cond ELSE b  are
+           now accepted, and the part that is not there gives the null string.
+           Before, either was a compile error ("ELSE not found where expected
+           in conditional expression").  IF with neither part is still refused.
+
+           Field by number.  A name that is F and a number, such as F4, is
+           field 4 when the dictionary has no item of that name.  An item that
+           is called F4 still wins.
+
+           A format after a value.  F1 '6"0"R'  with no operator between the
+           value and the format string is the format operation, as it is in
+           BASIC.  It was a compile error.
+
+           Hyphens in names.  If an item is called HY-X, the expression HY-X + 1
+           now reads it.  The compiler first tries a name, a minus and another
+           name or number as one id, and only if no dictionary item has that id
+           is the minus a subtraction.  So F1-F2 is still F1 minus F2 unless
+           someone has made an item called F1-F2.
+
+           TRANS() of an A or S item.  TRANS(file, key, name, ...) used to
+           accept only a D-type or I-type name.  A or S items are now accepted,
+           and so is C-type: one with no correlative gives its field, the
+           others give the value they compute against the record read.
+
+           Divide by zero.  Inside a dictionary expression, dividing by zero
+           now gives zero with no error and no warning.  It used to stop the
+           report with "Divide by zero error in dictionary expression".  This
+           is the one change in the kernel (op_arith.c).  A BASIC program is
+           not affected: OPTION DIV.ZERO.WARNING still decides what it does.
+
 18 Oct 26  THE BASIC COMPILER LEARNS SOME THINGS OTHER MULTIVALUE SYSTEMS
            ALREADY DO.
 

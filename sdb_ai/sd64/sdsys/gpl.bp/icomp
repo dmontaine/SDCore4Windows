@@ -612,6 +612,42 @@ get.token:
    return
 
 * ======================================================================
+* JOIN.HYPHEN.NAME  -  A name, then - and another name or a number, that
+* together are the id of a dictionary item is one name (10 Oct 26 dm, openQM
+* ref 423).  TOKEN.STRING holds the name on entry; on exit it holds the joined
+* name and the tokens that made it up have been consumed.  If no item has the
+* joined id the expression is left alone, so A-B is still a subtraction.
+
+join.hyphen.name:
+   loop
+      jh.found = @false
+      if look.ahead.token = tkn.minus then
+         jh.next = tokens(token.index + 1)
+         if jh.next = tkn.name or jh.next = tkn.num then
+            jh.cand = token.string : '-' : token.strings(token.index + 1)
+            read jh.rec from dict.file, jh.cand then jh.found = @true
+            else
+               read jh.rec from dict.file, downcase(jh.cand) then
+                  jh.found = @true
+                  jh.cand = downcase(jh.cand)
+               end else
+                  read jh.rec from dict.file, upcase(jh.cand) then
+                     jh.found = @true
+                     jh.cand = upcase(jh.cand)
+                  end
+               end
+            end
+         end
+      end
+   while jh.found
+      gosub get.token         ;* The minus
+      gosub get.token         ;* The name or number
+      token.string = jh.cand
+      u.token.string = upcase(jh.cand)
+   repeat
+   return
+
+* ======================================================================
 * EMIT.FIELD.LOAD  -  Load a field from the current record
 * fno = field number
 
@@ -1115,6 +1151,25 @@ expr:
    loop
       gosub get.expr.item
 
+      * A format string directly after a value, with no operator between them,
+      * is a format operation as it is in BASIC (10 Oct 26 dm, openQM ref 564).
+      * Insert the FMT operator that is not in the source.
+
+      if look.ahead.token = tkn.string then
+         priority = op.priority(tkn.fmt)
+         loop
+         while priority >= priority.stack(op.stack.depth)
+            opcode.byte = operator.stack(op.stack.depth)
+            gosub emit.simple
+            op.stack.depth -= 1
+         repeat
+         op.stack.depth += 1
+         operator.stack(op.stack.depth) = op(tkn.fmt)
+         priority.stack(op.stack.depth) = priority
+         gosub get.token              ;* The format string becomes the operand
+         continue
+      end
+
       * Check for operator using look ahead
 
    until look.ahead.token < tkn.low.operator
@@ -1173,16 +1228,23 @@ get.expr.item.again:
             opcode.byte = op.jfalse    ;* 0253
             gosub emit.jump
 
-            * Emit THEN clause
+            * Emit THEN clause.  10 Oct 26 dm (openQM ref 36): a THEN or an
+            * ELSE that is not there gives a null string, as in other
+            * multivalue systems, instead of a compile error.  (IF c ELSE x
+            * has no THEN part; IF c THEN x has no ELSE part.)
 
-            if u.look.ahead.token.string # "THEN" then
-               err.msg = sysmsg(2950) ;* THEN not found where expected in conditional expression
-               goto error
-            end
+            begin case
+               case u.look.ahead.token.string = "THEN"
+                  gosub get.token
+                  gosub expr          ;* Process THEN clause
 
-            gosub get.token
+               case u.look.ahead.token.string = "ELSE"
+                  opcode.byte = op.ldnull ; gosub emit.simple
 
-            gosub expr          ;* Process THEN clause
+               case 1
+                  err.msg = sysmsg(2950) ;* THEN not found where expected in conditional expression
+                  goto error
+            end case
 
             * Emit jump to exit label
 
@@ -1195,13 +1257,15 @@ get.expr.item.again:
             label.name = "_":jump.stack<1>:"E"
             gosub set.label
 
-            if u.look.ahead.token.string # "ELSE" then
-               err.msg = sysmsg(2951) ;* ELSE not found where expected in conditional expression
-               goto error
-            end
-            gosub get.token
+            if u.look.ahead.token.string = "ELSE" then
+               gosub get.token
 
-            gosub expr          ;* Process ELSE clause
+               gosub expr          ;* Process ELSE clause
+            end else
+               * No ELSE part: the value is the null string.  (A construct with
+               * neither THEN nor ELSE was refused above, with 2950.)
+               opcode.byte = op.ldnull ; gosub emit.simple
+            end
 
             * Emit exit label
             label.name = "_":jump.stack<1>:"X"
@@ -1218,6 +1282,7 @@ if.then.else.expr.abort:
 *           then upper; token.string becomes the id that matched, because it is
 *           written back and recorded as an embedded object name below.  The
 *           VOC fallback after it is unchanged.
+            gosub join.hyphen.name   ;* 10 Oct 26 dm, openQM ref 423
             read field.rec from dict.file, token.string else
                read field.rec from dict.file, downcase(token.string) then
                   token.string = downcase(token.string)
@@ -1229,6 +1294,17 @@ if.then.else.expr.abort:
                         read field.rec from @voc, u.token.string then
                            token.string = u.token.string
                         end else
+                           * 10 Oct 26 dm, openQM ref 547: a name that is F and
+                           * a number, and that no dictionary item has, is the
+                           * field of that number.
+                           if len(u.token.string) > 1 and u.token.string[1,1] = 'F' ~
+                              and num(u.token.string[2,99]) and not(index(u.token.string[2,99], '.', 1)) ~
+                              and u.token.string[2,99] + 0 > 0 then
+                              field.rec = ''
+                              field.rec<1> = 'D'
+                              field.rec<dict.loc> = u.token.string[2,99] + 0
+                              goto have.field.rec
+                           end
                            err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
                            goto error
                         end
@@ -1237,6 +1313,7 @@ if.then.else.expr.abort:
                end
             end
 
+have.field.rec:
             type = upcase(field.rec[1,1])
             begin case
                case type = 'D' or ((type = 'A' or type = 'S') and field.rec<dict.a.correlative> = '')
@@ -1927,10 +2004,38 @@ parse.as.dictionary.name:
                   end
                end
 
+               trans.type = upcase(trans.dict.rec[1,1])
                begin case
-                  case trans.dict.rec[1,1] = 'D'   
+                  case trans.type = 'D'
                      n = trans.dict.rec<2>
                      gosub emit.numeric.load
+
+                  case (trans.type = 'A' or trans.type = 'S') and trans.dict.rec<dict.a.correlative> = ''
+                     * 10 Oct 26 dm, openQM ref 182: an A or S item with no
+                     * correlative is a field position, as a D-type is.
+                     n = trans.dict.rec<dict.loc>
+                     gosub emit.numeric.load
+
+                  case trans.type = 'A' or trans.type = 'S' or trans.type = 'C'
+                     * 10 Oct 26 dm, openQM ref 182: an A, S or C item with an
+                     * expression is compiled as the same object code an I-type
+                     * gives, and evaluated against the record read by TRANS().
+                     call $dcomp(trans.file.dict,   ;* File var of dictionary
+                                 token.string,      ;* Record name
+                                 trans.dict.rec,    ;* Record to compile
+                                 z,                 ;* I-type format
+                                 z,                 ;* I-type conversion
+                                 z,                 ;* I-type S/M flag
+                                 z,                 ;* I-type association
+                                 z,                 ;* I-type is constant
+                                 depth + 1)         ;* Recursive compilation depth
+                     if trans.dict.rec<DICT.ITYPE.OBJECT> = '' then
+                        err.msg = sysmsg(2612, token.string) ;* Compilation error in %1
+                        goto error
+                     end
+
+                     opcode.string = trans.dict.rec<DICT.ITYPE.OBJECT>
+                     gosub emit.string.load
 
                   case trans.dict.rec[1,1] = 'I'
                      call @icomp(trans.file.dict,    ;* File var of dictionary
