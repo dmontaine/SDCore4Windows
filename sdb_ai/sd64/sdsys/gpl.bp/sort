@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c5f64c8 (14 Oct 26): in.list may be a select list variable (openQM 274); the sort works on a copy, so the caller's
+*               remove pointer is no longer moved.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -27,6 +29,7 @@
 * CALL !SORT(in.list, out.list, mode)
 *
 * in.list  = mark delimited list of items to sort. Any marks may be used.
+*            May also be a select list variable, whose ids are sorted.
 * out.list = field mark delimited sorted list
 * mode     = Sort mode : A = ascending
 *                        D = descending
@@ -48,8 +51,21 @@ $catalog !sort
 
 $include int$keys.h
 
-   if len(in.list) = 0 then
-      out.list = in.list
+   * 14 Oct 26 (openQM 274): a select list variable is read out, id by id, into a list of its own to be sorted;
+   * the caller's variable is left as it was (its ids are used up, as with any READNEXT)
+
+   if vartype(in.list) = V$SELLIST then
+      work.list = ''
+      loop
+         readnext s from in.list else exit
+         work.list<-1> = s
+      repeat
+   end else
+      work.list = in.list
+   end
+
+   if len(work.list) = 0 then
+      out.list = work.list
       return
    end
 
@@ -65,7 +81,7 @@ $include int$keys.h
    no.nulls = index(u.mode, "N", 1)
 
    loop
-      s = remove(in.list, delim)
+      s = remove(work.list, delim)
       if len(s) or not(no.nulls) then add s to sort.tree
    while delim
    repeat
