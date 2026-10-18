@@ -2,6 +2,36 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FIELD AND VSLICE TAKE MORE, CATALOG ... GLOBAL c, AND THREE
+           SHOW CHANGES.
+
+           FIELD(string, delimiter, n, *) and string[delimiter, n, *]
+           return everything from the n-th field to the end.  Before, the
+           last number had to be a count.  An asterisk anywhere else in an
+           expression is still a multiplication.
+
+           VSLICE(string, vpos, svpos) takes a slice of subvalues.  With a
+           vpos of 1 or more it comes from that value only; with a vpos
+           below 1 it comes from every value, and the value marks that keep
+           the positions are kept.  Marks are written only in front of data,
+           so empty values and fields at the end are dropped.  With svpos
+           below 1 and vpos of 1 or more it is the ordinary value slice.
+           VSLICE(string, vpos) is unchanged.
+
+           CATALOG file name GLOBAL c puts the prefix character c (one of
+           * ! _ $) in front of every call name that has none of its own, so
+           a whole select list can be catalogued globally with a prefix.  A
+           name that already has a prefix keeps it.  It does not accept a
+           hyphen as a prefix.
+
+           SHOW: B moves to the last page (T was the only way to move far).
+           The keyword SORT.SUP stops SHOW sorting its list by record id when
+           there is no BY clause, which matters when the order the file gives
+           is the order wanted; a BY clause still sorts.  Record ids given on
+           the command line that are not in the file are now listed, one per
+           line as 'id' not found, and SHOW stops without drawing the screen
+           or making a list.  Before, they were skipped without a word.
+
 18 Oct 26  PTERM ERASE, CTRL.FILTER AND QUERY.
 
              PTERM ERASE ON | OFF | n | ^c | DEFAULT

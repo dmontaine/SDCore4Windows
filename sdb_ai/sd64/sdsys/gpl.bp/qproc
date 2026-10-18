@@ -380,6 +380,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    hdr.sup = @false              ;* HDR.SUP
    id.only = @false              ;* ID.ONLY
    id.sup = @false               ;* ID.SUP
+   sort.sup = @false             ;* SORT.SUP (SHOW: no default sort by id)
    new.page = @false             ;* NEW.PAGE
    no.case = @false              ;* NO.CASE
    no.match= @false              ;* NO.MATCH
@@ -1346,7 +1347,7 @@ template.found:
 *-----------------------------------------------------------------------------
 * If doing any sorting, set up sort tree(s)
 
-   if show.command and no.of.sort.items = 0 then implicit.id.sort = @true
+   if show.command and no.of.sort.items = 0 and not(sort.sup) then implicit.id.sort = @true
 
 * 0080 Moved the following code from inside the if len(sort.item.list)
 * block just below. Previously, SORT with an active select list did not
@@ -2075,6 +2076,10 @@ skip.record:
             end
          end
 
+         * 18 Oct 26 Windows port - from Linux 0ce438c (13 Oct 26): - openQM 524: SHOW reports record ids given on the command line that are not in the
+         * file and stops, before the screen is drawn.  No list is made.
+         if show.command and len(not.found.list) and not(absent.ignore) then goto done
+
          if show.command then gosub show.selection  ;* Refine list
 
          * Transfer to target list (this is an inline FORMLIST)
@@ -2304,7 +2309,7 @@ skip.record:
 done:
    clearselect 12
 
-   if (list.command or count.command or reformat.command) and len(not.found.list) and not(absent.ignore) then
+   if (list.command or count.command or reformat.command or show.command) and len(not.found.list) and not(absent.ignore) then
       loop
          printline =  "'" : remove(not.found.list, not.found.delim) : "' not found"
          if qdisp(QD$EMIT, printline, 'X') then goto qdisp.error
@@ -2822,6 +2827,10 @@ parse.command.options:
 * --- ID.SUP
          case keyword = KW$ID.SUP and (list.command or show.command)
             id.sup = @true
+
+* --- SORT.SUP
+         case keyword = KW$SORT.SUP and show.command
+            sort.sup = @true
 
 * --- LABEL
          case keyword = KW$LABEL
@@ -7025,6 +7034,19 @@ repaint:
             offset = 0
             gosub show.page
 
+         case action = 'B'     ;* 13 Oct 26 dm - openQM 477: move to the last page
+            loop
+            while offset + items.on.page < records.selected
+               n = pg.offset<pgno + 1>
+               pgno += 1
+               if len(n) then offset = n
+               else
+                  offset += items.on.page
+                  pg.offset<pgno> = offset
+               end
+               gosub show.page      ;* A page's size is only known once it is laid out
+            repeat
+
          case action = '?' or action[1,1] = "H"
             gosub display.help
             goto repaint
@@ -7225,7 +7247,7 @@ show.page:
       ln += 1
    repeat
 
-   display @(0,error.line) : 'Select, Clear, Top, Previous, Next, Quit, ?' :
+   display @(0,error.line) : 'Select, Clear, Top, Bottom, Previous, Next, Quit, ?' :
 
    gosub display.status
 
@@ -7307,10 +7329,10 @@ display.help:
    display @(10,  6) : '  | C ss   Clear items defined by ss           |  ' :
    display @(10,  7) : '  |   ss is  number, range, VISIBLE or ALL     |  ' :
    display @(10,  8) : '  | T      Display top page                    |  ' :
-   display @(10,  9) : '  | P      Display previous page               |  ' :
-   display @(10, 10) : '  | N      Display next page (default command) |  ' :
-   display @(10, 11) : '  | Q      Quit, setting target list           |  ' :
-   display @(10, 12) : '  | QC     Quit, clearing any selection        |  ' :
+   display @(10,  9) : '  | B      Display bottom page                 |  ' :
+   display @(10, 10) : '  | P      Display previous page               |  ' :
+   display @(10, 11) : '  | N      Display next page (default command) |  ' :
+   display @(10, 12) : '  | Q      Quit, setting target list           |  ' :
    display @(10, 13) : '  | QC     Quit, clearing any selection        |  ' :
    display @(10, 14) : '  ==============================================  ' :
    display @(10, 15) : '                                                  ' :
