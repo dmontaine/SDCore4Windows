@@ -678,6 +678,24 @@ exit_keyin:
      moments before it was re-enabled will be picked up later.         */
 
   input_handler_enabled = TRUE;
+
+  /* 12 Oct 26 (openQM item 155): PTERM MARK - ctrl-\ (28), ctrl-] (29) and
+     ctrl-^ (30) typed at the keyboard are the subvalue, value and field marks,
+     in that order (openQM item 254 had the first two swapped). */
+  if (mark_input) {
+    switch ((u_char)c) {
+      case 28:
+        c = SUBVALUE_MARK;
+        break;
+      case 29:
+        c = VALUE_MARK;
+        break;
+      case 30:
+        c = FIELD_MARK;
+        break;
+    }
+  }
+
   return (int16_t)((u_char)c);
 }
 

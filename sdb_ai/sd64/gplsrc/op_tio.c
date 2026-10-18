@@ -2341,6 +2341,30 @@ void op_pterm() {
       result.data.value = telnet_negotiation;
       break;
 
+    case PT_MARK: /* Typed ctrl-\ ctrl-] ctrl-^ become subvalue, value and field marks */
+      GetInt(descr);
+      new_value = descr->data.value;
+      if (new_value >= 0)
+        mark_input = (new_value != 0);
+      result.data.value = mark_input;
+      break;
+
+    case PT_ERASE: /* INPUT's erase key: 0 default, 1-255 a character, 256 none; -1 only asks */
+      GetInt(descr);
+      new_value = descr->data.value;
+      if ((new_value >= 0) && (new_value <= 256))
+        erase_key = (int16_t)new_value;
+      result.data.value = erase_key;
+      break;
+
+    case PT_CTRL_FILTER: /* Discard control characters in INPUT and INPUT@; one setting per command level */
+      GetInt(descr);
+      new_value = descr->data.value;
+      if (new_value >= 0)
+        ctrl_filter[cproc_level & 63] = (new_value != 0);
+      result.data.value = ctrl_filter[cproc_level & 63];
+      break;
+
     default:
       k_error(sysmsg(1707));
   }

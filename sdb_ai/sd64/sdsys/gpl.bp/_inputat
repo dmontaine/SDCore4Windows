@@ -71,6 +71,7 @@ $include err.h
    return.key = seq(pterm(PT$INEWLINE,''))
    uppercase = bitand(flags, IN$UPCASE)
    panning = bitand(flags, IN$PANNING)
+   ctrl.filter = pterm(PT$CTRL.FILTER, -1)    ;* 12 Oct 26 dm - PTERM CTRL.FILTER ON: other C0 characters are discarded
 
 
    * Display the prompt character, if required, and position cursor at
@@ -230,7 +231,7 @@ $include err.h
                   exit
 
                case n < 32                  ;* Some other C0 character
-                  if field.mode then
+                  if field.mode and not(ctrl.filter) then
                      set.status n
                      exit
                   end

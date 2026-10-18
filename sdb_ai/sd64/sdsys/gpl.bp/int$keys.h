@@ -203,6 +203,9 @@
       $define PT$BINARY.IN       6       ;* Telnet binary mode, client -> server
       $define PT$BINARY.OUT      7       ;* Telnet binary mode, server -> client
       $define PT$TELNET          8       ;* Recognise TN_IAC on input?
+      $define PT$MARK            9       ;* Typed ctrl-\ ctrl-] ctrl-^ become SM VM FM?
+      $define PT$ERASE          10       ;* INPUT erase key: 0 default, 1-255 a character, 256 none
+      $define PT$CTRL.FILTER    11       ;* Discard control characters in INPUT and INPUT@?
 
       * OSPATH() action keys
       $define OS$PATHNAME        0       ;* Test if valid filename

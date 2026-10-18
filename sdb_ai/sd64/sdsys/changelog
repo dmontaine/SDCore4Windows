@@ -2,6 +2,53 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  PTERM ERASE, CTRL.FILTER AND QUERY.
+
+             PTERM ERASE ON | OFF | n | ^c | DEFAULT
+             PTERM CTRL.FILTER ON | OFF
+             PTERM QUERY
+
+           ERASE chooses the key that rubs out a character in INPUT.  At the
+           start of a session INPUT accepts ctrl-H, DEL and whatever the
+           terminal type names (kbs), all together.  PTERM ERASE then makes
+           one key the erase key and nothing else: ON is ctrl-H (character
+           8), n is a character number (1 to 31, or 127 for DEL), ^c is the
+           control key written with its letter (^D, ^H, ...), OFF means INPUT
+           has no erase key at all, so the keys that were erase keys are
+           ordinary characters.  DEFAULT, an addition, goes back to how a
+           session starts.  PTERM ERASE on its own says which it is.  INPUT@
+           is not affected; it keeps using the terminal type.
+
+           CTRL.FILTER ON makes INPUT and INPUT@ throw away the control
+           characters that are not keys they use (the erase key and Return
+           still work).  It is set for one command level: a program run with
+           EXECUTE starts with it off, and the level that set it has it on
+           again when the program returns.  Off is how a session starts.
+
+           QUERY shows what keys send, which is what you need to write a
+           terminfo entry.  Press a key and it shows the bytes in
+           hexadecimal, as characters (a dot for those that do not print) and
+           for a control key or a sequence the way terminfo writes it (\E[A
+           for ESC [ A).  A space ends it.  The mark translation of PTERM MARK
+           is held off while it runs.
+
+           PTERM DISPLAY now reports the erase key and the control filter.
+
+18 Oct 26  PTERM MARK.
+
+             PTERM MARK ON
+             PTERM MARK OFF
+             PTERM MARK
+
+           With MARK ON, three control keys typed at the keyboard are
+           turned into the delimiters a program cannot otherwise get from a
+           terminal: ctrl-\ (character 28) becomes a subvalue mark,
+           ctrl-] (29) a value mark and ctrl-^ (30) a field mark.  It
+           applies to everything read from the keyboard, so INPUT, KEYIN()
+           and the rest see the marks.  PTERM MARK on its own says whether
+           it is on, and PTERM DISPLAY now reports it.  It is off when a
+           session starts.
+
 18 Oct 26  SCAN, SEARCH ... DISPLAY AND STRINGS.
 
              SCAN {DICT} file {selection} {ids} {ALL} {NO.CASE}

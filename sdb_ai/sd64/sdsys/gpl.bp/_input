@@ -18,6 +18,8 @@
 	  * 
 	  * 
 	  * START-HISTORY:
+	  * 18 Oct 26 Windows port - from Linux 5f02bae (12 Oct 26): PTERM ERASE names the erase key (or none) and PTERM CTRL.FILTER discards
+	  *           control characters (openQM 253).
 	  * 22 Aug 26 Windows port - the erase is char(8), not @(IT$CUB).  cub1 came
 	  *           back EMPTY in the installer's console, so the erase printed a
 	  *           bare space and the cursor walked forward.  TWO FAULTS, one
@@ -117,6 +119,18 @@
       erase.keys = char(8) : char(127)
       if len(c) = 1 and index(erase.keys, c, 1) = 0 then erase.keys := c
 
+*     18 Oct 26 Windows port - from Linux 5f02bae (12 Oct 26): - openQM 253, PTERM ERASE: when the session has named an erase key that one
+*     is the only one, 256 means none at all (a backspace is then an ordinary character), and
+*     0, the start-up state, leaves the set above. PTERM CTRL.FILTER discards the other C0 characters.
+      erase.setting = pterm(PT$ERASE, -1)
+      begin case
+         case erase.setting = 256
+            erase.keys = ''
+         case erase.setting > 0
+            erase.keys = char(erase.setting)
+      end case
+      ctrl.filter = pterm(PT$CTRL.FILTER, -1)
+
       string = ''
       if max.input = 0 then max.input = 99999
 
@@ -193,6 +207,8 @@
                case n = 10
                   null
                case n = 13
+                  null
+               case ctrl.filter and n < 32           ;* PTERM CTRL.FILTER ON
                   null
                case 1
                   if len(string) < max.input then

@@ -338,6 +338,9 @@
 #define PT_BINARY_IN          6
 #define PT_BINARY_OUT         7
 #define PT_TELNET             8
+#define PT_MARK               9  /* 12 Oct 26 (openQM item 155): ctrl-\ ctrl-] ctrl-^ type SM VM FM */
+#define PT_ERASE             10  /* INPUT's erase key: 0 as the terminal type and PAL-21 say, 1-255 that one, 256 none */
+#define PT_CTRL_FILTER       11  /* Discard control characters in INPUT and INPUT@ (per command processor level) */
 
 /* SELECTINFO() function keys */
 #define SL_ACTIVE       1

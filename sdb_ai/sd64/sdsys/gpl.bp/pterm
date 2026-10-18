@@ -33,6 +33,17 @@
 *
 *   PTERM CASE INVERT      Enable case inversion
 *   PTERM CASE NOINVERT    Disable case inversion
+*   PTERM MARK ON          Typed ctrl-\ ctrl-] ctrl-^ become subvalue, value, field marks
+*   PTERM MARK OFF         ...and do not (the start-up state)
+*   PTERM MARK             Show which
+*   PTERM ERASE ON         INPUT erases on ctrl-H only
+*   PTERM ERASE OFF        INPUT has no erase key
+*   PTERM ERASE n          INPUT erases on character n (1-31 or 127); ^c does the same
+*   PTERM ERASE DEFAULT    As at the start of a session
+*   PTERM ERASE            Show which
+*   PTERM CTRL.FILTER ON   INPUT and INPUT@ discard control characters (per command level)
+*   PTERM CTRL.FILTER OFF  ...and do not
+*   PTERM QUERY            Show what keys send, in hex and in terminfo form; a space ends
 *
 *   PTERM NEWLINE CR       Set output newline as CR
 *   PTERM NEWLINE LF       Set output newline as LF
@@ -82,6 +93,13 @@ $include syscom.h
 
             * Case inversion
             print if pterm(PT$INVERT, -1) then sysmsg(6832) else sysmsg(6833)
+
+            * Mark translation (12 Oct 26 dm, openQM 155)
+            print if pterm(PT$MARK, -1) then sysmsg(12113) else sysmsg(12114)
+
+            * Erase key and control character filter (12 Oct 26 dm, openQM 253)
+            gosub show.erase
+            print if pterm(PT$CTRL.FILTER, -1) then sysmsg(12118) else sysmsg(12119)
 
             s = pterm(PT$INEWLINE,'')
             s = change(s, char(10), 'LF')
@@ -198,6 +216,79 @@ $include syscom.h
                   return
             end case
 
+         case upcase(token) = 'MARK'                  ;* 12 Oct 26 dm - openQM 155
+            call @parser(parser$get.token, token.type, token, keyword)
+            begin case
+               case keyword = KW$ON
+                  i = pterm(PT$MARK, @true)
+
+               case keyword = KW$OFF
+                  i = pterm(PT$MARK, @false)
+
+               case token.type = PARSER$END         ;* PTERM MARK alone shows the state
+                  display if pterm(PT$MARK, -1) then sysmsg(12113) else sysmsg(12114)
+
+               case 1
+                  display sysmsg(2029, token) ;* Unrecognised option (xx)
+                  return
+            end case
+
+         case upcase(token) = 'ERASE'                 ;* 12 Oct 26 dm - openQM 253
+            call @parser(parser$get.token, token.type, token, keyword)
+            begin case
+               case keyword = KW$ON
+                  i = pterm(PT$ERASE, 8)             ;* ctrl-H, the backspace key of most terminals
+
+               case keyword = KW$OFF
+                  i = pterm(PT$ERASE, 256)           ;* No erase key at all
+
+               case keyword = KW$DEFAULT
+                  i = pterm(PT$ERASE, 0)             ;* As at the start of a session
+
+               case token matches '1-3N'
+                  n = token + 0
+                  if (n >= 1 and n <= 31) or n = 127 then
+                     i = pterm(PT$ERASE, n)
+                  end else
+                     display sysmsg(12120) ;* Erase character must be in range 1 - 31 or 127
+                  end
+
+               case token matches '^1X'
+                  n = seq(upcase(token)[2,1])
+                  if n >= 65 and n <= 95 then
+                     i = pterm(PT$ERASE, n - 64)
+                  end else
+                     display sysmsg(12121) ;* Invalid erase key
+                  end
+
+               case token.type = PARSER$END         ;* PTERM ERASE alone shows the setting
+                  gosub show.erase
+
+               case 1
+                  display sysmsg(2029, token) ;* Unrecognised option (xx)
+                  return
+            end case
+
+         case upcase(token) = 'CTRL.FILTER'          ;* 12 Oct 26 dm - openQM 253
+            call @parser(parser$get.token, token.type, token, keyword)
+            begin case
+               case keyword = KW$ON
+                  i = pterm(PT$CTRL.FILTER, @true)
+
+               case keyword = KW$OFF
+                  i = pterm(PT$CTRL.FILTER, @false)
+
+               case token.type = PARSER$END
+                  display if pterm(PT$CTRL.FILTER, -1) then sysmsg(12118) else sysmsg(12119)
+
+               case 1
+                  display sysmsg(2029, token) ;* Unrecognised option (xx)
+                  return
+            end case
+
+         case upcase(token) = 'QUERY'                 ;* 12 Oct 26 dm - openQM 253
+            gosub query.keys
+
          case keyword = KW$NEWLINE
             call @parser(parser$get.token, token.type, token, keyword)
             token = upcase(token)
@@ -308,6 +399,84 @@ $include syscom.h
   repeat
 
   return
+
+* ======================================================================
+* show.erase  -  Say which key erases in INPUT (12 Oct 26 dm, openQM 253)
+
+show.erase:
+   n = pterm(PT$ERASE, -1)
+   begin case
+      case n = 0
+         print sysmsg(12115)
+      case n = 256
+         print sysmsg(12116)
+      case 1
+         begin case
+            case n < 32  ; s = '^' : char(n + 64)
+            case n = 127 ; s = 'DEL'
+            case 1       ; s = char(n)
+         end case
+         print sysmsg(12117, n, s)
+   end case
+
+   return
+
+* ======================================================================
+* query.keys  -  PTERM QUERY (12 Oct 26 dm, openQM 253): show what each key
+* sends, in hexadecimal and as characters, and the way a terminfo entry
+* would write it. Reads raw, so mark translation is held off meanwhile.
+* A space ends it.
+
+query.keys:
+   mark.was = pterm(PT$MARK, -1)
+   i = pterm(PT$MARK, @false)
+   display sysmsg(12122) ;* Press keys to see what they send. Enter a space to finish.
+
+   loop
+      c = keyinc(0)
+      if c = '' then exit                      ;* Input has ended
+
+      s = c                                    ;* The rest of a key's sequence follows at once
+      loop
+         c = keyinc(0.1)
+      while c # ''
+         s := c
+      repeat
+
+      * A space ends it (a line-fed or piped session sends the end of line with it)
+      if s = ' ' or s = ' ' : char(10) or s = ' ' : char(13) or s = ' ' : char(13) : char(10) then exit
+
+      hexs = '' ; chars = '' ; tis = ''
+      for qi = 1 to len(s)
+         c = s[qi, 1]
+         j = seq(c)
+         hexs := fmt(oconv(j, 'MX'), "2'0'R") : ' '
+         if j > 32 and j < 127 then chars := c else chars := '.'
+         begin case
+            case c = '^'              ; tis := '\^'
+            case c = '\'              ; tis := '\\'
+            case j > 32 and j < 127   ; tis := c
+            case j >= 127             ; tis := '\' : oconv(c, 'MO0C')
+            case j = 8                ; tis := '\B'
+            case j = 27               ; tis := '\E'
+            case j = 12               ; tis := '\F'
+            case j = 10               ; tis := '\N'
+            case j = 13               ; tis := '\R'
+            case j = 32               ; tis := '\S'
+            case j = 9                ; tis := '\T'
+            case 1                    ; tis := '^' : char(j + 64)
+         end case
+      next qi
+
+      display sysmsg(12123, trim(hexs)) ;* Received: xx
+      display sysmsg(12124, chars)      ;* As characters: xx
+      if len(s) > 1 or seq(s) < 32 or seq(s) = 127 then
+         display sysmsg(12125, tis)     ;* Terminfo form: xx
+      end
+   repeat
+
+   i = pterm(PT$MARK, mark.was)
+   return
 end
 
 * END-CODE

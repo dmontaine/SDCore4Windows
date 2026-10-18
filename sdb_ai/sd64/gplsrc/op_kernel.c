@@ -547,8 +547,12 @@ void op_kernel() {
       break;
 
     case K_CPROC_LEVEL:
-      if (descr->data.value > 0)
+      if (descr->data.value > 0) {
+        /* 12 Oct 26: a command level just entered starts without PTERM CTRL.FILTER */
+        if (descr->data.value > cproc_level)
+          ctrl_filter[(int16_t)(descr->data.value) & 63] = FALSE;
         cproc_level = (int16_t)(descr->data.value);
+      }
       result.data.value = cproc_level;
       break;
       
