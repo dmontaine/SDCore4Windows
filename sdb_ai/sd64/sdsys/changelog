@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  LOCATE CAN FORCE CASE.
+
+             The BY string of LOCATE takes C and N  C forces a case sensitive
+                        comparison and N a case insensitive one, whatever the
+                        program was compiled to do: LOCATE 'banana' IN list<0>
+                        BY 'ALN' SETTING p finds 'Banana' in a list kept in
+                        alphabetical order without regard to case.  The
+                        letters may come in any order and in either case
+                        (NAL, aln); N alone does an unsorted search ignoring
+                        case.  A BY string without C or N behaves as before.
+                        One change in passing: a string whose first letter is
+                        L or R (LAN) used to be read as "no sort", and is now
+                        ascending, as the letter A in it says.
+
 18 Oct 26  CSV.MODE.
 
              CSV.MODE mode {, delim}  Sets how PRINTCSV and WRITECSV build a

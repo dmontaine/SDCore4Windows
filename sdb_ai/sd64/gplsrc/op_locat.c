@@ -101,8 +101,11 @@ Private void locate(bool numeric_mode) {
   STRING_CHUNK* search_hdr;
   int16_t search_bytes_remaining;
   int32_t search_string_len;
-  char order_string[2 + 1]; /* Ordering code */
+  char order_string[4 + 1]; /* Ordering code: A or D, L or R, C or N, in any order (C/N: openQM item 419) */
   int16_t order_string_len;
+  char sort_ch = ' '; /* The A or D */
+  char align_ch = 'L'; /* The L or R */
+  int16_t oi;
   int16_t status = 0; /* Assume failed for now */
   bool ordered = FALSE;
   bool ascending = FALSE;
@@ -151,7 +154,7 @@ Private void locate(bool numeric_mode) {
   /* Fetch ordering string */
 
   descr = e_stack - 1;
-  order_string_len = k_get_c_string(descr, order_string, 2);
+  order_string_len = k_get_c_string(descr, order_string, 4);
   k_dismiss();
 
   /* Fetch field, value and subvalue of search start */
@@ -222,7 +225,31 @@ Private void locate(bool numeric_mode) {
   if (order_string_len < 0)
     goto exit_locate; /* Failed to extract ordering string */
 
-  switch (UpperCase(order_string[0])) {
+  /* 14 Oct 26 (openQM item 419): the codes are letters in any order.  A or D sorts, L or R aligns (ignored without a
+     sort), C forces case sensitivity and N forces none, over the program's own setting.  The first of each pair
+     wins, as before for the first two letters.  Before this the first letter was the sort and the second the
+     alignment, so 'AL' and 'DR' read as they always did. */
+  for (oi = 0; oi < order_string_len; oi++) {
+    switch (UpperCase(order_string[oi])) {
+      case 'A':
+      case 'D':
+        if (sort_ch == ' ')
+          sort_ch = UpperCase(order_string[oi]);
+        break;
+      case 'L':
+      case 'R':
+        align_ch = UpperCase(order_string[oi]);
+        break;
+      case 'C':
+        nocase = FALSE;
+        break;
+      case 'N':
+        nocase = TRUE;
+        break;
+    }
+  }
+
+  switch (sort_ch) {
     case 'A':
       ordered = TRUE;
       ascending = TRUE;
@@ -234,7 +261,7 @@ Private void locate(bool numeric_mode) {
   }
 
   if (ordered) {
-    switch (UpperCase(order_string[1])) {
+    switch (align_ch) {
       case 'R':
         right = TRUE;
 
