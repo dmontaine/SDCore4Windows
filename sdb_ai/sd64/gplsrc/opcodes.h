@@ -602,7 +602,7 @@ _opc_(0xCFEA, OP_CFEA,     "OPCFEA",     op_illegal2,  OPCODE_BYTE,         0)  
 _opc_(0xCFEB, OP_INPUTTRAP, "INPUTTRAP", op_inputtrap, JUMP_ADDR,           -3)  /* 14 Oct 26: INPUTTRAP (openQM 408): chars, mode, label count; the stub's address follows */
 _opc_(0xCFEC, OP_ITRAPCHK, "ITRAPCHK",   op_itrapchk,  ONE_BYTE_VALUE,       0)  /* 14 Oct 26: after INPUT @: jump to the INPUTTRAP stub if a trapped character was typed */
 _opc_(0xCFED, OP_SSELECTV, "SSELECTV",   op_sselectv,  OPCODE_BYTE,        -3)  /* 14 Oct 26: SSELECTV file TO listvar (openQM 209) */
-_opc_(0xCFEE, OP_CFEE,     "OPCFEE",     op_illegal2,  OPCODE_BYTE,         0)
+_opc_(0xCFEE, OP_EPOCHCV, "EPOCHCV",    op_epochcv,   OPCODE_BYTE,        -2)  /* 14 Oct 26: MVDATE MVTIME MVDATE.TIME MVEPOCH; arg, arg, mode */
 _opc_(0xCFEF, OP_CFEF,     "OPCFEF",     op_illegal2,  OPCODE_BYTE,         0)
 
 /* The last 16 extended opcodes will never be used by Ladybridge Systems.

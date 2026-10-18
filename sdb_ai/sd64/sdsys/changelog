@@ -2,6 +2,46 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  STATUS() AFTER END TRANSACTION, AND A TIMEOUT FOR OPEN.SOCKET.
+
+             A program can now test STATUS() straight after END TRANSACTION:
+             it is 0 when the transaction committed and 1021 (ER_ROLLBACK)
+             when it was rolled back, whether by ROLLBACK or by running into
+             END TRANSACTION without a COMMIT.  A commit that fails does not
+             come back as an error code (ER_COMMIT_FAIL, 1022, is defined for
+             it): a failed commit still stops the program with its message, as
+             before.
+
+             OPEN.SOCKET(address, port, flags, timeout)  The optional fourth
+                        argument is the number of seconds to wait for the
+                        connection; when it runs out the call fails with
+                        STATUS() 7005 as any failed connect does.  Zero, or no
+                        argument, is as it was.  Until now the argument was an
+                        unused place for a security context and had to be
+                        zero.  A connect that failed also left its socket
+                        open; it is closed now.
+
+18 Oct 26  EPOCH, MVDATE, MVTIME, MVDATE.TIME AND MVEPOCH.
+
+             EPOCH()        The time now as a time zone independent number of
+                            seconds since 1 January 1970 UTC (the same as
+                            SYSTEM(1035)).
+             MVDATE(e)      The multivalue date (days since 31 December 1967)
+                            of epoch value e, MVTIME(e) the time of day in
+                            seconds since midnight, MVDATE.TIME(e) both,
+                            joined by an underscore, as 15020_84690.
+             MVEPOCH(s)     The epoch value of a date and time written as one
+                            string "date_time", and MVEPOCH(date, time) the
+                            same with the two apart.
+                        The zone is the one the session runs in (the TZ
+                        setting of the machine), as DATE() and TIME() use, and
+                        summer time is allowed for.  Epoch values are 32 bit
+                        (13 December 1901 to 19 January 2038): a value outside
+                        that, a time of a day or more, or something that is not
+                        a number gives the null string.  A fraction of a second
+                        is cut off.  There is no SET.TIMEZONE yet, so a program
+                        cannot choose a zone of its own.
+
 18 Oct 26  SSELECTV.
 
              SSELECTV file TO listvar {RIGHT.ALIGNED} {DESCENDING}

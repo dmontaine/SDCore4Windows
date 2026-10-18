@@ -85,6 +85,8 @@
 #define ER_INVA_ITYPE  1018    /* Invalid I-type */
 #define ER_BUILD_ERROR 1019    /* JBUILD(): a value has no JSON form */
 #define ER_PARSE_ERROR 1020    /* JPARSE(): not a JSON object or array */
+#define ER_ROLLBACK    1021    /* STATUS() after END TRANSACTION: the transaction was rolled back */
+#define ER_COMMIT_FAIL 1022    /* STATUS() after END TRANSACTION: an error occurred during the commit (not produced: a failed commit aborts) */
 #define ER_MAX_STRING  1900    /* Max String (record) Size */
 
 /* 20xx  Catalog management errors */

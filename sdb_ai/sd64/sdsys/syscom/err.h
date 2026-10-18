@@ -80,6 +80,8 @@ $define ER$CONNECTED   1017    ;* Device already connected
 $define ER$INVA.ITYPE  1018    ;* Invalid I-type
 $define ER$BUILD.ERROR 1019    ;* JBUILD(): a value has no JSON form
 $define ER$PARSE.ERROR 1020    ;* JPARSE(): not a JSON object or array
+$define ER$ROLLBACK    1021    ;* STATUS() after END TRANSACTION: the transaction was rolled back
+$define ER$COMMIT.FAIL 1022    ;* STATUS() after END TRANSACTION: an error occurred during the commit (not produced: a failed commit aborts)
 $define ER$MAX.STRING  1900    ;* Max String (record) Size
 
 * 20xx  Catalog management errors

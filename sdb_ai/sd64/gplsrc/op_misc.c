@@ -52,6 +52,7 @@
  *    op_oserror        OS.ERROR()
  *    op_csvmode        CSV.MODE
  *    op_csvdelim       Push the CSV delimiter
+ *    op_epochcv        MVDATE() MVTIME() MVDATE.TIME() MVEPOCH()
  *    op_precision      PRECISION
  *    op_procread()     PROCREAD
  *    op_rtrans()       RTRANS()
@@ -82,6 +83,7 @@
 #include "config.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <time.h>
 
 #define _timezone timezone
@@ -1221,6 +1223,104 @@ void op_csvdelim() {
   s[0] = process.program.csv_delim;
   s[1] = '\0';
   k_put_c_string(s, e_stack++);
+}
+
+/* ======================================================================
+   op_epochcv()  -  MVDATE(), MVTIME(), MVDATE.TIME() and MVEPOCH()   (14 Oct 26, openQM 124 and the epoch family)
+
+   Stack:  arg1, arg2, mode  ->  result.   The mode, pushed last by the compiler:
+      1  MVDATE(epoch)          internal date (days since 31 Dec 1967) in the process's time zone
+      2  MVTIME(epoch)          seconds since midnight in the process's time zone
+      3  MVDATE.TIME(epoch)     "date_time" in the process's time zone
+      4  MVEPOCH("date_time")   the epoch value of a date and time written as one string
+      5  MVEPOCH(date, time)    the same with the date and time apart
+   The time zone is the one the process runs in (the TZ environment variable, as DATE() and TIME() use).  Epoch values are
+   32 bit, 13 Dec 1901 to 19 Jan 2038: an epoch value outside that, a date and time that cannot be converted and an argument that
+   is not a number all give the null string, as the manual says.  A time with a fraction of a second is cut to the second. */
+
+void op_epochcv() {
+  DESCRIPTOR* arg1_descr;
+  DESCRIPTOR* arg2_descr;
+  DESCRIPTOR* mode_descr;
+  int32_t mode;
+  int64_t d, s, ls;
+  time_t t;
+  struct tm tmv;
+  char result[32];
+
+  mode_descr = e_stack - 1;
+  arg2_descr = e_stack - 2;
+  arg1_descr = e_stack - 3;
+
+  GetInt(mode_descr);
+  mode = mode_descr->data.value;
+  result[0] = '\0';
+
+  if (mode <= 3) { /* From an epoch value */
+    char text[32];
+
+    k_get_c_string(arg1_descr, text, 31);
+    if (text[0] != '\0' && strspn(text, "-0123456789.") == strlen(text)) {
+      int64_t e = atoll(text);
+
+      if (e >= INT32_MIN && e <= INT32_MAX) {
+        t = (time_t)e;
+        localtime_r(&t, &tmv);
+        ls = (int64_t)e + tmv.tm_gmtoff;                       /* Local seconds since 1 Jan 1970 */
+        d = (ls >= 0 ? ls / 86400 : -((-ls + 86399) / 86400)); /* Floor division */
+        s = ls - (d * 86400);
+        d += 732; /* 1 Jan 1970 is internal date 732 */
+        if (mode == 1)
+          sprintf(result, "%lld", (long long)d);
+        else if (mode == 2)
+          sprintf(result, "%lld", (long long)s);
+        else
+          sprintf(result, "%lld_%lld", (long long)d, (long long)s);
+      }
+    }
+  } else { /* To an epoch value */
+    char dtext[32], ttext[32];
+    bool ok = FALSE;
+
+    dtext[0] = ttext[0] = '\0';
+    if (mode == 4) {
+      char both[64];
+      char* us;
+
+      k_get_c_string(arg1_descr, both, 63);
+      us = strchr(both, '_');
+      if (us != NULL) {
+        *us = '\0';
+        strncpy(dtext, both, 31);
+        dtext[31] = '\0';
+        strncpy(ttext, us + 1, 31);
+        ttext[31] = '\0';
+        ok = TRUE;
+      }
+    } else {
+      k_get_c_string(arg1_descr, dtext, 31);
+      k_get_c_string(arg2_descr, ttext, 31);
+      ok = TRUE;
+    }
+
+    if (ok && dtext[0] != '\0' && ttext[0] != '\0' && strspn(dtext, "-0123456789") == strlen(dtext) &&
+        strspn(ttext, "0123456789.") == strlen(ttext)) {
+      d = atoll(dtext);
+      s = atoll(ttext); /* A fraction is cut off by atoll() stopping at the point */
+      if (s >= 0 && s < 86400 && d > -100000 && d < 100000) {
+        ls = ((d - 732) * 86400) + s;           /* Local seconds since 1 Jan 1970 */
+        t = (time_t)ls;
+        gmtime_r(&t, &tmv);                     /* The broken down local time ... */
+        tmv.tm_isdst = -1;                      /* ... and the zone decides whether summer time applies */
+        t = mktime(&tmv);
+        if (t != (time_t)-1 && (int64_t)t >= INT32_MIN && (int64_t)t <= INT32_MAX)
+          sprintf(result, "%lld", (long long)t);
+      }
+    }
+  }
+
+  k_pop(3);
+  k_put_c_string(result, e_stack++);
 }
 
 /* ======================================================================

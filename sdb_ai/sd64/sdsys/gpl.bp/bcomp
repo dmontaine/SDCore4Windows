@@ -543,6 +543,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "ELEMENT.EXISTS"  ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - data collections
    intrinsics<-1> = "ENUMERATE"       ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "ENV"             ; intrinsic.opcodes<-1> = OP.ENV
+   intrinsics<-1> = "EPOCH"           ; intrinsic.opcodes<-1> = OP.SYSTEM   ;* 14 Oct 26 dm - SYSTEM(1035)
    intrinsics<-1> = "EQS"             ; intrinsic.opcodes<-1> = OP.EQS
    intrinsics<-1> = "EREPLACE"        ; intrinsic.opcodes<-1> = OP.EREPLACE   ;* 12 Oct 26 dm - openQM 472
    intrinsics<-1> = "EXP"             ; intrinsic.opcodes<-1> = OP.EXP
@@ -605,6 +606,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "MOD"             ; intrinsic.opcodes<-1> = OP.MOD
    intrinsics<-1> = "MODS"            ; intrinsic.opcodes<-1> = OP.MODS
    intrinsics<-1> = "MULS"            ; intrinsic.opcodes<-1> = OP.MULS   ;* 11 Oct 26 dm - openQM 207
+   intrinsics<-1> = "MVDATE"          ; intrinsic.opcodes<-1> = OP.EPOCHCV   ;* 14 Oct 26 dm - openQM 124 and the epoch family
+   intrinsics<-1> = "MVDATE.TIME"     ; intrinsic.opcodes<-1> = OP.EPOCHCV
+   intrinsics<-1> = "MVEPOCH"         ; intrinsic.opcodes<-1> = OP.EPOCHCV
+   intrinsics<-1> = "MVTIME"          ; intrinsic.opcodes<-1> = OP.EPOCHCV
    intrinsics<-1> = "NEG"             ; intrinsic.opcodes<-1> = OP.NEG
    intrinsics<-1> = "NEGS"            ; intrinsic.opcodes<-1> = OP.NEGS
    intrinsics<-1> = "NES"             ; intrinsic.opcodes<-1> = OP.NES
@@ -4109,6 +4114,7 @@ end
                       in.element.exists, ;* ELEMENT.EXISTS
                       in.enumerate,   ;* ENUMERATE
                       in.one,         ;* ENV
+                      in.epoch,       ;* EPOCH
                       in.two,         ;* EQS
                       in.change,      ;* EREPLACE
                       in.one,         ;* EXP
@@ -4171,6 +4177,10 @@ end
                       in.two,         ;* MOD
                       in.two,         ;* MODS
                       in.two,         ;* MULS
+                      in.mvdate,      ;* MVDATE
+                      in.mvdatetime,  ;* MVDATE.TIME
+                      in.mvepoch,     ;* MVEPOCH
+                      in.mvtime,      ;* MVTIME
                       in.one,         ;* NEG
                       in.one,         ;* NEGS
                       in.two,         ;* NES
@@ -4986,6 +4996,39 @@ in.time:
                opcode.byte = OP.DIV ; gosub emit.simple
                goto intrinsic.end
             end
+            goto intrinsic.common               ;* The plain TIME() opcode
+
+in.epoch:                       ;* EPOCH()  -  SYSTEM(1035), seconds since 1 Jan 1970 UTC
+            n = 1035 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+in.mvdate:                      ;* MVDATE(epoch)  -  14 Oct 26 dm
+            epoch.mode = 1 ; goto in.epoch.one
+
+in.mvtime:                      ;* MVTIME(epoch)
+            epoch.mode = 2 ; goto in.epoch.one
+
+in.mvdatetime:                  ;* MVDATE.TIME(epoch)
+            epoch.mode = 3
+
+in.epoch.one:
+            gosub exprf
+            n = 0 ; gosub emit.numeric.load     ;* Second argument, unused
+            n = epoch.mode ; gosub emit.numeric.load
+            goto intrinsic.common
+
+in.mvepoch:                     ;* MVEPOCH(date_time) or MVEPOCH(date, time)
+            gosub exprf
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+               epoch.mode = 5
+            end else
+               n = 0 ; gosub emit.numeric.load
+               epoch.mode = 4
+            end
+            n = epoch.mode ; gosub emit.numeric.load
+            goto intrinsic.common
 
 in.none:
 intrinsic.common:
