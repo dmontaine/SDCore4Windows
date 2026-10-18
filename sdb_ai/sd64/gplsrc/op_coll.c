@@ -12,6 +12,9 @@
  *               and ENUMERATE().
  * 18 Oct 26 Windows port - from Linux 2e043bc (13 Oct 26): Arrays: MAT(), MAT(matrix {, max}), MAT target = MAT c{path},
  *               INMAT(c{path}), INS value AS c{path}, and asterisk paths.
+ * 18 Oct 26 Windows port - from Linux 81fea55 (12 Oct 26): coll_record_text() builds with JB_INVALID: an element a file cannot
+ *               hold (a file variable) is stored as a JSON null, as the manual says,
+ *               where the write failed with ER$BUILD.ERROR.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -1748,7 +1751,8 @@ bool coll_record_text(DESCRIPTOR* d) {
   int32_t saved_inmat = process.inmat;
 
   if (d->type == COLL) {
-    r = json_build(d->data.coll, 0);
+    /* JB_INVALID: an element a file cannot hold (a file variable) is stored as a null */
+    r = json_build(d->data.coll, JB_INVALID_BIT);
     if (process.status == ER_BUILD_ERROR)
       return FALSE;
     k_release(d);

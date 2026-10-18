@@ -2,6 +2,22 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  A COLLECTION THAT HOLDS A FILE VARIABLE CAN BE WRITTEN TO A
+           COLLECTION FILE.
+
+           A data collection in a program can hold things a file has no way to
+           keep, such as a file variable.  Writing a collection like that to a
+           data collection file used to fail with error 1019.  The openQM
+           manual says those elements are stored as SQL-style nulls, and now
+           they are: the WRITE succeeds, the other elements are stored as they
+           were, and the element reads back as a null.
+
+           What it does not change: JBUILD() of such a collection still fails
+           with 1019 unless the JB$INVALID mode is given, which asks for a
+           null in the same way; a collection that contains itself still
+           cannot be written (1019); and only a collection or JSON text that
+           is an object or an array can be written to a collection file.
+
 18 Oct 26  THE ELEMENT KEYWORD IN QUERIES.
 
              LIST file ELEMENT "detail/*/prodno" ...
