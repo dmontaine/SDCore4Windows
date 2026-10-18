@@ -1,0 +1,147 @@
+* COMPFILE
+* COMPARE.FILES command
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): 1.2-0 openQM ref 534.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   COMPARE.FILES file1 file2 {DETAIL}
+*
+* Compares the records of two files (a dictionary is named DICT file).
+* Reports how many records are only in the first, only in the second, in
+* both but different, and the same.  DETAIL lists the record ids of the
+* first three groups.  The exit value (@SYSTEM.RETURN.CODE) is 0 when the
+* files hold the same records and 1 when they do not.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $compare.files
+$catalog $compfile
+
+$include err.h
+$include keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   detail = @false
+   names = ''
+   dict.next = @false
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case upcase(token) = 'DETAIL'
+            detail = @true
+         case upcase(token) = 'DICT'
+            dict.next = @true
+         case 1
+            names<-1> = (if dict.next then 'DICT ' else '') : token
+            dict.next = @false
+      end case
+   repeat
+
+   if dcount(names, @fm) # 2 then stop sysmsg(12070) ;* Two file names required
+
+   * Open both
+
+   dim f(2)
+   for n = 1 to 2
+      name = names<n>
+      flag = ''
+      if upcase(name[1,5]) = 'DICT ' then
+         flag = 'DICT'
+         name = name[6,99]
+      end
+      open flag, name to f(n) else
+         stop sysmsg(12071, names<n>) ;* Cannot open xx
+      end
+   next n
+
+   * Read the ids of the second into a list, then walk the first
+
+   only.1 = '' ; only.2 = '' ; differ = '' ; same = 0
+   ids.2 = ''
+   select f(2) to 12
+   loop
+      readnext id from 12 else exit
+      ids.2<-1> = id
+   repeat
+
+   seen = ''
+   select f(1) to 11
+   loop
+      readnext id from 11 else exit
+      read rec.1 from f(1), id else rec.1 = ''
+      locate id in ids.2<0> setting pos then
+         read rec.2 from f(2), id else rec.2 = ''
+         if rec.1 = rec.2 then same += 1 else differ<-1> = id
+         seen<-1> = id
+      end else
+         only.1<-1> = id
+      end
+   repeat
+
+   for i = 1 to dcount(ids.2, @fm)
+      locate ids.2<i> in seen<0> setting pos else only.2<-1> = ids.2<i>
+   next i
+
+   n1 = dcount(only.1, @fm) ; if only.1 = '' then n1 = 0
+   n2 = dcount(only.2, @fm) ; if only.2 = '' then n2 = 0
+   nd = dcount(differ, @fm) ; if differ = '' then nd = 0
+
+   display sysmsg(12072, names<1>, n1) ;* Records only in xx: xx
+   if detail then gosub show.ids1
+   display sysmsg(12072, names<2>, n2)
+   if detail then gosub show.ids2
+   display sysmsg(12073, nd) ;* Records in both that differ: xx
+   if detail then gosub show.differ
+   display sysmsg(12074, same) ;* Records that are the same: xx
+
+   @system.return.code = if (n1 + n2 + nd) = 0 then 0 else 1
+
+   return
+
+show.ids1:
+   for i = 1 to n1
+      display '   ' : only.1<i>
+   next i
+   return
+
+show.ids2:
+   for i = 1 to n2
+      display '   ' : only.2<i>
+   next i
+   return
+
+show.differ:
+   for i = 1 to nd
+      display '   ' : differ<i>
+   next i
+   return
+end
+
+* END-CODE

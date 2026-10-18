@@ -2,6 +2,40 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FILE UTILITIES, COMMON BLOCKS, AUTOMATIC INCLUDES AND NAMES WITH
+           TWO UNDERSCORES.  The openQM notes give the purpose of these
+           and not the syntax, so the syntax below is SD's own.  The BASIC
+           tokenizer changed in the kernel, so it needs a rebuild.
+
+             COMPARE.FILES file1 file2 {DETAIL}
+                          Counts the records only in one, only in the
+                          other, in both but different, and the same;
+                          DETAIL lists the ids.  DICT file names a
+                          dictionary.  The exit value is 0 when the files
+                          are alike.
+             !MULTISORT(data, key, order)
+                          Sorts several related lists (one to a field,
+                          elements separated by value marks) by one of
+                          them and keeps the others in step.
+             FIXDIR file {id ...}
+                          Takes the carriage returns out of directory file
+                          items that were made with CR LF line ends.
+             DELETE.COMMON ALL EXCEPT name ...
+                          Deletes every named common block but those
+                          listed.
+             DELETE        A record another user holds locked is now
+                          reported and skipped; DELETE used to wait for it.
+             newvoc.mods   If SDSYS has a file of that name, its records
+                          are copied over the standard VOC records in each
+                          new or updated account.  An account's own record
+                          marked [locked] is left alone.
+             $BASIC.OPTIONS  A line INCLUDE record (or INCLUDE file record)
+                          makes the compiler include that record at the top
+                          of every program it compiles.  Line numbers in
+                          error messages and the debugger are unchanged.
+             BASIC names   a__b, with two or more underscores together, is
+                          now a valid name.
+
 18 Oct 26  SSELECT SORT OPTIONS AND SSELECTN.
 
              SSELECT file RIGHT.ALIGNED     Sorts the ids as numbers where
@@ -389,10 +423,6 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            private catalogue. Remove (y/<n>)?" and the two like it when it
            catalogues a program (the old entries are removed without asking,
            exactly as CATALOGUE NO.QUERY already does).
-
-           What this does not do.  A variable name with two underscores in a
-           row (a__b) is still refused, because the tokenizer is in the
-           kernel and is not part of this change.
 
 W1.1-3 - 10 Oct 2026
 -------------

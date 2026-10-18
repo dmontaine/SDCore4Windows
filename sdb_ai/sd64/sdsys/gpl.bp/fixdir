@@ -1,0 +1,89 @@
+* FIXDIR
+* FIXDIR command
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): 1.2-0 openQM ref 458.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   FIXDIR file {id ...}
+*
+* Removes the carriage return from the end of each line of the records of a
+* directory file, for items that arrived from a Windows system with CR LF
+* line ends.  With no record ids every record of the file is done.  A record
+* with no carriage return is not rewritten.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $fixdir
+$catalog $fixdir
+
+$include err.h
+$include keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   fname = ''
+   ids = ''
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      if fname = '' then fname = token else ids<-1> = token
+   repeat
+
+   if fname = '' then stop sysmsg(12075) ;* File name required
+
+   open fname to f else stop sysmsg(12071, fname) ;* Cannot open xx
+   if fileinfo(f, FL$TYPE) # FL$TYPE.DIR then stop sysmsg(12076, fname) ;* xx is not a directory file
+
+   if ids = '' then
+      select f to 11
+      loop
+         readnext id from 11 else exit
+         ids<-1> = id
+      repeat
+   end
+
+   fixed = 0
+   cr = char(13)
+   for i = 1 to dcount(ids, @fm)
+      id = ids<i>
+      read rec from f, id then
+         if index(rec, cr, 1) then
+            rec = convert(cr, '', rec)
+            write rec to f, id
+            fixed += 1
+         end
+      end
+   next i
+
+   @system.return.code = 0
+   display sysmsg(12077, fixed, fname) ;* xx record(s) fixed in xx
+
+   return
+end
+
+* END-CODE

@@ -1311,6 +1311,18 @@ make.account:
 *  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
 *  program any more, so there is nothing to close here.
 
+* 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): - openQM 501: the administrator's optional newvoc.mods (see login's update.voc) is applied on top.
+   openpath @sdsys:@ds:"newvoc.mods" to mods.f then
+      select mods.f to 11
+      loop
+         readnext id from 11 else exit
+         read rec from mods.f, id then
+            write rec to voc.f, id
+         end
+      repeat
+      close mods.f
+   end
+
    * Set up $COMMAND,STACK VOC entry
 
 * 19 Aug 26 Windows port - lower case, PROJECT_STATUS.md 5.12 (b).  The two

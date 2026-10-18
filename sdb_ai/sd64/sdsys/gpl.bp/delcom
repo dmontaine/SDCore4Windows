@@ -24,6 +24,8 @@
 * START-DESCRIPTION:
 *
 * DELETE.COMMON name
+* DELETE.COMMON ALL
+* DELETE.COMMON ALL EXCEPT name ...    (all the named blocks but those listed)
 *
 *
 * END-DESCRIPTION
@@ -48,17 +50,43 @@ $include syscom keys.h
    call @parser(parser$get.token, token.type, common.name, keyword)
    if token.type = PARSER$END then stop sysmsg(3230) ;* Common block name required
 
+   * 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): - openQM 425, SD's own syntax:  DELETE.COMMON ALL EXCEPT name ...
+   except.list = ''
+   all.keyword = (keyword = KW$ALL)
    call @parser(parser$get.token, token.type, token, k)
-   if token.type # PARSER$END then stop sysmsg(2018, token) ;* Unexpected token (xx)
-
-   if keyword = KW$ALL then
-      delete.common ""
-   end else
-      common.name = upcase(trim(common.name))
-      if len(common.name) = 0 or common.name[1,1] = "$" then
-         stop sysmsg(3231) ;* Illegal common block name
+   if token.type # PARSER$END then
+      if upcase(token) = 'EXCEPT' and all.keyword then
+         loop
+            call @parser(parser$get.token, token.type, token, k)
+         until token.type = PARSER$END
+            except.list<-1> = upcase(trim(token))
+         repeat
+         if except.list = '' then stop sysmsg(3230) ;* Common block name required
+      end else
+         stop sysmsg(2018, token) ;* Unexpected token (xx)
       end
-      delete.common common.name
+   end
+
+   if all.keyword and except.list # '' then
+      commons = list.common()
+      for i = 1 to dcount(commons, @fm)
+         s = commons<i>
+         if s[1,1] # '$' then
+            locate upcase(s) in except.list<0> setting pos else
+               delete.common s
+            end
+         end
+      next i
+   end else
+      if keyword = KW$ALL then
+         delete.common ""
+      end else
+         common.name = upcase(trim(common.name))
+         if len(common.name) = 0 or common.name[1,1] = "$" then
+            stop sysmsg(3231) ;* Illegal common block name
+         end
+         delete.common common.name
+      end
    end
 
    begin case

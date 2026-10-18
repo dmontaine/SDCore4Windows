@@ -743,6 +743,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    * Check for $BASIC.OPTIONS record, first in source file, then in VOC
 
+   auto.include = ''
    read voc.rec from src.f, "$BASIC.OPTIONS" else
       read voc.rec from @voc, "$BASIC.OPTIONS" else null
    end
@@ -791,6 +792,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
             case s = "DEBUGGING"
                debug = @true
 
+            case s = "INCLUDE"
+               * 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): - openQM 407.  INCLUDE [file] record: inserted at the top of every program.  SD's own
+               * syntax (the release note gives none): the words after INCLUDE are exactly what follows $INCLUDE.
+               auto.include<-1> = "$include " : field(voc.rec<1>, ' ', 2, 99)
+
             case s = "LISTING"
                listing.option = @true
 
@@ -830,13 +836,22 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
       repeat
    end
 
+   * The automatic includes go in front of the source.  The line counter starts that many lines early, so
+   * every line number reported or recorded for debugging is still the line of the program as written.
+
+   auto.include.lines = 0
+   if auto.include # '' then
+      auto.include.lines = dcount(auto.include, @fm)
+      include.record(1) = auto.include : @fm : include.record(1)
+   end
+
    last.debug.line = -1
    errors = 0
    if is.ctype then header.flags = bitor(header.flags, HDR.CTYPE + HDR.ITYPE)
    gosub set.kernel.modes
 
    eof = @false
-   line.no(1) = 0
+   line.no(1) = -auto.include.lines
    listing(0) = @true       ; listing(1) = listing.option
    if listing.option then gosub start.listing
 

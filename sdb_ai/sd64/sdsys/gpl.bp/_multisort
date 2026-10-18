@@ -1,0 +1,88 @@
+* _MULTISORT
+* !MULTISORT() - sort a set of related lists together
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): 1.2-0 openQM ref 568.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !MULTISORT(data, key, order)
+*
+* DATA holds several related lists, one in each FIELD, the elements of a
+* list separated by value marks:  the third element of every list belongs
+* with the third element of every other.  The elements are put in the order
+* of list number KEY, and every list is re-ordered the same way, so the
+* relationship between them is kept.  ORDER is AL, DL, AR or DR as for
+* LOCATE (default AL; R compares numerically).  The sort is stable: elements
+* with equal keys stay in their original order.  DATA is changed in place.
+* A list that is shorter than the key list is padded with nulls.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine multisort(data, key, order)
+$catalog !MULTISORT
+
+   if order = '' then order = 'AL'
+   order = upcase(order)
+   ascending = (order[1,1] # 'D')
+   numeric = (order[2,1] = 'R')
+
+   lists = dcount(data, @fm)
+   if key < 1 or key > lists then return
+   n = dcount(data<key>, @vm)
+   if n < 2 then return
+
+   * Insertion sort of the positions 1..n by the key list; stable because an equal key is not moved past.
+
+   keys = data<key>
+   perm = ''
+   for i = 1 to n
+      k = keys<1,i>
+      pos = i - 1
+      * Find the place in perm (already sorted) from the end: after every element not greater (ascending)
+      loop
+      while pos >= 1
+         other = keys<1,perm<pos>>
+         if numeric then
+            move = if ascending then (other + 0 > k + 0) else (other + 0 < k + 0)
+         end else
+            move = if ascending then (other > k) else (other < k)
+         end
+      while move
+         pos -= 1
+      repeat
+      ins i before perm<pos + 1>
+   next i
+
+   result = ''
+   for l = 1 to lists
+      src = data<l>
+      dst = ''
+      for i = 1 to n
+         dst<1,i> = src<1,perm<i>>
+      next i
+      result<l> = dst
+   next l
+
+   data = result
+   return
+end
+
+* END-CODE

@@ -396,7 +396,8 @@ void op_rmvtkn() {
                 else
                   x = '\0';
 
-                done = (!IsAlnum(x)) && (x != '.') && (x != '%') && (x != '$');
+                /* 12 Oct 26 (openQM 3.4-1, item 336): another underscore may follow, so a__b is one name */
+                done = (!IsAlnum(x)) && (x != '.') && (x != '%') && (x != '$') && (x != '_');
               } else {
                 done = (!IsAlnum(c)) && (c != '.') && (c != '%') && (c != '$');
               }

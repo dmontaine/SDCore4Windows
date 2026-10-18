@@ -1962,6 +1962,25 @@ accept.without.query:
 *  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
 *  routine any more, so there is nothing to close here.
 
+* 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): - openQM 501.  An optional SDSYS file, newvoc.mods, holds the administrator's changes to the standard
+*   VOC (a verb withdrawn, a Q-pointer to a shared file, a paragraph for every account).  Each record in it is written to
+*   this account's VOC after the standard records, so it has the last word; an account record marked [locked] keeps
+*   its own, as for the standard ones.
+   openpath @sdsys:@ds:"newvoc.mods" to mods.f then
+      select mods.f to 11
+      loop
+         readnext id from 11 else exit
+         read rec from mods.f, id then
+            old.rec = ''
+            read old.rec from update.voc.f, id else null
+            if not(index(upcase(old.rec<1>), '[LOCKED]', 1)) and compare(old.rec, rec) then
+               write rec to update.voc.f, id
+            end
+         end
+      repeat
+      close mods.f
+   end
+
    return
 end
 
