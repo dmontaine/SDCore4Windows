@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): QM4 Fixes 7: an L-type record can be used in an I-type, as link%item (link.reference; $linkref;
+*               the file expression of a link in in.trans; a link to a link in the dictionary of the file a
+*               TRANS() names).  Also: an undefined name that did not look like Fn stopped the compile with
+*               "Non-numeric where numeric required" at the F test, which BASIC does not short-circuit; it
+*               now gives message 2982.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a field named in an I-type
 *           is looked up as written, then lower, then upper; it had read only
 *           the upper-cased token, twice.
@@ -367,6 +372,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    unary.minus = @false
 
    trans.stack = ""
+   link.dict.pending = ""           ;* 17 Oct 26 dm - see link.reference
    collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
 
    * Label table and jump opcode control data
@@ -1347,16 +1353,28 @@ if.then.else.expr.abort:
                         read field.rec from @voc, u.token.string then
                            token.string = u.token.string
                         end else
+                           * 17 Oct 26 dm, QM4 Fixes 7: link%item names an item of the file an
+                           * L-type record in this dictionary points to.
+                           if index(token.string, '%', 1) then goto link.reference
+
                            * 10 Oct 26 dm, openQM ref 547: a name that is F and
                            * a number, and that no dictionary item has, is the
-                           * field of that number.
-                           if len(u.token.string) > 1 and u.token.string[1,1] = 'F' ~
-                              and num(u.token.string[2,99]) and not(index(u.token.string[2,99], '.', 1)) ~
-                              and u.token.string[2,99] + 0 > 0 then
-                              field.rec = ''
-                              field.rec<1> = 'D'
-                              field.rec<dict.loc> = u.token.string[2,99] + 0
-                              goto have.field.rec
+                           * field of that number.  17 Oct 26: the tests are
+                           * nested, because BASIC does not stop at the first
+                           * false one, and any other undefined name (F is only
+                           * the start of this one) stopped the compile with
+                           * "Non-numeric where numeric required" instead of
+                           * the message below.
+                           if len(u.token.string) > 1 and u.token.string[1,1] = 'F' then
+                              fn = u.token.string[2,99]
+                              if num(fn) then
+                                 if not(index(fn, '.', 1)) and fn + 0 > 0 then
+                                    field.rec = ''
+                                    field.rec<1> = 'D'
+                                    field.rec<dict.loc> = fn + 0
+                                    goto have.field.rec
+                                 end
+                              end
                            end
                            err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
                            goto error
@@ -1441,6 +1459,9 @@ have.field.rec:
                      nested.source = nested.source[2,99999]
                   end
 
+* 17 Oct 26 dm: a link%item reference (link.reference, below) makes its TRANS() source and comes in here, so that
+* it is spliced into the token stream by the code that splices a nested I-type.
+splice.nested.source:
                   max.nested.tokens = 200
                   dim nested.tokens(max.nested.tokens)
                   dim nested.token.strings(max.nested.tokens)
@@ -1964,6 +1985,20 @@ in.total:
 
 in.trans:
          gosub get.token                ;* Read file name
+         if token = tkn.lbr and link.dict.pending # '' then
+            * 17 Oct 26 dm, QM4 Fixes 7: the file expression of a link (link.reference).  Only a link makes this form:
+            * it is not offered to an I-type as written.  The item name is looked up in the dictionary of the file field
+            * 3 of the link names, which is what link.dict.pending holds.
+            ins link.dict.pending before trans.stack<1>
+            link.dict.pending = ''
+            gosub expr                  ;* File name expression
+            gosub get.token
+            if token # tkn.rbr then
+               err.msg = sysmsg(2963) ;* Right bracket not found where expected
+               goto error
+            end
+            goto trans.file.read
+         end
          if token # tkn.string then     ;* It's not a quoted string
             if token # tkn.name then
                err.msg = sysmsg(2985) ;* Filename not found where expected in TRANS()
@@ -1986,6 +2021,7 @@ in.trans:
 
          opcode.string = token.string
          gosub emit.string.load         ;* File name
+trans.file.read:
          if look.ahead.token # tkn.comma then
             err.msg = sysmsg(2959) ;* Comma not found where expected
             goto error
@@ -2060,8 +2096,18 @@ parse.as.dictionary.name:
                read trans.dict.rec from trans.file.dict, token.string else
                   read trans.dict.rec from trans.file.dict, downcase(token.string) else
                      read trans.dict.rec from trans.file.dict, upcase(token.string) else
-                        err.msg = sysmsg(2024, token.string)  ;* 'xx' not found in dictionary
-                        goto error
+                        * 17 Oct 26 dm, QM4 Fixes 7: link%item in that dictionary is a link to a third file.  It is
+                        * compiled below as an I-type whose expression is the name, which this compiler resolves.
+                        trans.dict.rec = ''
+                        if index(token.string, '%', 1) then
+                           * (a different variable for each output: they are passed by reference)
+                           call $linkref(trans.file.dict, token.string, 1, tl.rec, tl.rest, tl.attr, trans.link.status, tl.detail)
+                           if trans.link.status = 0 then trans.dict.rec = 'I' : @fm : token.string
+                        end
+                        if trans.dict.rec = '' then
+                           err.msg = sysmsg(2024, token.string)  ;* 'xx' not found in dictionary
+                           goto error
+                        end
                      end
                   end
                end
@@ -2650,6 +2696,75 @@ display.code:
    return
 
 *****************************************************************************
+* LINK.REFERENCE  -  link%item (17 Oct 26 dm, QM4 Fixes 7)
+*
+* TOKEN.STRING is a name with a % in it that no dictionary item has.  $LINKREF
+* finds the L-type record of the part before the first % and the display
+* properties of the item the whole name reaches (through any further links).
+* The reference means TRANS(file, id expression, item, "X"), and it is made
+* here at compile time: the source below is spliced into the token stream as a
+* nested I-type is.  A link with a file expression in field 4 has the file
+* expression for the TRANS() file name and field 3 for the dictionary its item is
+* looked up in; link.dict.pending carries that to in.trans, which takes it as it
+* reads the file name.  Changing a link means recompiling the I-types that use it.
+
+link.reference:
+   call $linkref(dict.file, token.string, 1, link.rec, link.rest, link.attr, link.status, link.detail)
+   begin case
+      case link.status = 0
+         null
+      case link.status = 2
+         err.msg = sysmsg(7271, link.detail<1>, link.detail<2>) ;* Cannot open xx dictionary for link xx
+      case link.status = 3
+         err.msg = sysmsg(12406, link.detail) ;* Links nested too deeply
+      case link.status = 4
+         err.msg = sysmsg(12407, link.detail) ;* Link xx names no file
+      case link.status = 5
+         err.msg = sysmsg(7272, link.detail) ;* Link item xx not found
+      case link.status = 6
+         err.msg = sysmsg(7274, link.detail) ;* Link item xx is not of a suitable type
+      case 1
+         err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined: the part before the % is not a link
+   end case
+   if link.status then goto error
+
+   link.name = token.string[1, index(token.string, '%', 1) - 1]
+   link.id.expr = trim(link.rec<2>)
+   link.file.expr = trim(link.rec<4>)
+   if link.id.expr = '' then
+      err.msg = sysmsg(12408, link.name) ;* Link xx has no id expression
+      goto error
+   end
+   if index(link.id.expr, ';', 1) or index(link.file.expr, ';', 1) then
+      err.msg = sysmsg(12409, link.name) ;* The expressions of link xx cannot be compound
+      goto error
+   end
+   if index(link.rec<3>, '"', 1) then
+      err.msg = sysmsg(12407, link.name)
+      goto error
+   end
+
+   * The properties of what it reaches are the defaults for an I-type that begins with this reference
+
+   constant = @false
+   if first.field then
+      format = link.attr<2>
+      conversion = link.attr<3>
+      sm = link.attr<4>
+      assoc = link.attr<5>
+      first.field = @false
+   end
+
+   if link.file.expr = '' then
+      link.file.part = '"' : link.rec<3> : '"'
+   end else
+      link.file.part = '(' : link.file.expr : ')'
+      link.dict.pending = link.rec<3>
+   end
+   nested.source = 'TRANS(' : link.file.part : ',(' : link.id.expr : '),' : link.rest : ',"X")'
+   goto splice.nested.source
+
+* ======================================================================
 * ERROR  -  Report error
 
 error:

@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): L-type links in a query (link%item) go through $linkref and $icomp, so they reach A, S and E items and
+*               follow a link to a link and a link's file expression (QM4 Fixes 7); they reached D, I and C items one
+*               link away.
 * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): LIST.ITEM / SORT.ITEM number lines of more than 999 fields with as many digits as they need (openQM 349).
 * 18 Oct 26 Windows port - from Linux 0ce7663 (13 Oct 26): Data collection files (1.2-0): E-type items, which are fields of the
 *               view make.coll.view builds, and the ELEMENT keyword (a path named on
@@ -5980,69 +5983,66 @@ add.field:
             item.flags(item.index) = 0
 
          case type = 'L'
-            link.name = field(token, '%', 1)
-            link.item = field(token, '%', 2, 999)
+            * 17 Oct 26 dm, QM4 Fixes 7: $LINKREF finds what the reference reaches - through further links, for any kind
+            * of item - and $ICOMP makes the code from the reference itself, as it does for an I-type that names a link
+            * (it was a TRANS() written here for a D, I or C item one link away).  The item is multivalued whatever the
+            * item it reaches is, since the id expression of the link may give several ids.
+            call $linkref(dict.file, token, 1, link.rec, link.rest, link.attr, link.status, link.detail)
+            begin case
+               case link.status = 0
+                  null
+               case link.status = 2
+                  display sysmsg(7271, link.detail<1>, link.detail<2>) ;* Cannot open xx dictionary for link xx
+               case link.status = 3
+                  display sysmsg(12406, link.detail) ;* Links are nested too deeply
+               case link.status = 4
+                  display sysmsg(12407, link.detail) ;* Link xx names no file
+               case link.status = 5
+                  display sysmsg(7272, link.detail) ;* Link item xx not found
+               case link.status = 6
+                  display sysmsg(7274, link.detail) ;* Link item xx is not of a suitable type
+               case 1
+                  display sysmsg(7272, token)
+            end case
+            if link.status then goto exit.qproc
 
-            open 'DICT', dict.rec<3> to link.dict.f else
-               display sysmsg(7271, dict.rec<3>, link.name) ;* Cannot open xx dictionary for link xx
+            no.items += 1
+            item.index = no.items
+            item.name(item.index) = token
+            item.type(item.index) = ITYPE.ITEM
+            item.expression(item.index) = token
+            s = link.attr<1> ; gosub set.col.hdg
+            item.fmt(item.index) = link.attr<2>
+            item.conv(item.index) = link.attr<3>
+            s = link.attr<5> ; gosub add.item.association
+            sm.flag = 'M'
+
+            call $icomp(dict.file,
+                        item.expression(item.index),
+                        item.detail(item.index),
+                        z, z, z, z, constant, 1)
+            if @system.return.code then
+               @system.return.code = -ER$ICOMP
+               display sysmsg(7273, token) ;* Compilation error in link expression xx
                goto exit.qproc
             end
 
-            read link.dict.rec from link.dict.f, link.item else
-               read link.dict.rec from link.dict.f, downcase(link.item) else
-                  read link.dict.rec from link.dict.f, upcase(link.item) else
-                     display sysmsg(7272, link.name) ;* Link item xx not found
-                     goto exit.qproc
-                  end
+            item.multivalued(item.index) = (sm.flag[1,1] = "M")
+            gosub get.width.and.justification
+
+            item.totals(item.index) = seq(item.detail(item.index)[HDR.TOTALS,1])
+            item.breakpoint(item.index) = 0
+            item.flags(item.index) = 0
+
+            if option(OPT.ASSOC.UNASSOC.MV) then
+               if item.multivalued(item.index) and not(item.assoc(item.index)) then
+                  s = '__QPROC.ASSOC__' ; gosub add.item.association
                end
             end
 
-            link.type = upcase(link.dict.rec[1,1])
-            begin case
-               case link.type = 'D' or link.type = 'I' or link.type = 'C'
-                  no.items += 1
-                  item.index = no.items
-                  item.name(item.index) = token
-                  item.type(item.index) = ITYPE.ITEM
-                  item.expression(item.index) = 'TRANS(':dict.rec<3>:',':dict.rec<2>:',':link.item:',"X")'
-                  s = link.dict.rec<DICT.DISPLAY.NAME> ; gosub set.col.hdg
-                  item.fmt(item.index) = link.dict.rec<DICT.FORMAT>
-!                  gosub get.width.and.justification
-                  item.conv(item.index) = link.dict.rec<DICT.CONV>
-                  s = link.dict.rec<DICT.ASSOC> ; gosub add.item.association
-                  sm.flag = 'M'
+            item.ok = @true
 
-                  call $icomp(dict.file,
-                              item.expression(item.index),
-                              item.detail(item.index),
-                              z, z, z, z, constant, 1)
-                  if @system.return.code then
-                     @system.return.code = -ER$ICOMP
-                     display sysmsg(7273, token) ;* Compilation error in link expression xx
-                     goto exit.qproc
-                  end
-
-                  item.multivalued(item.index) = (sm.flag[1,1] = "M")
-                  gosub get.width.and.justification
-
-                  item.totals(item.index) = seq(item.detail(item.index)[HDR.TOTALS,1])
-                  item.breakpoint(item.index) = 0
-                  item.flags(item.index) = 0
-
-                  if option(OPT.ASSOC.UNASSOC.MV) then
-                     if item.multivalued(item.index) and not(item.assoc(item.index)) then
-                        s = '__QPROC.ASSOC__' ; gosub add.item.association
-                     end
-                  end
-
-                  item.ok = @true
-
-                  return
-
-               case 1
-                  display sysmsg(7274, link.name) ;* Link item xx is not of a suitable type
-                  goto exit.qproc
-            end case
+            return
 
          case 1
             display sysmsg(7275, type, token) ;* Unexpected %1 type item (%2) in query sentence.

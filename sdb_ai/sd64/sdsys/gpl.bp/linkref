@@ -1,0 +1,156 @@
+* LINKREF
+* Resolve a dictionary link reference, link%item, for the I-type compiler and the query processor.
+* Copyright (c) 2026 SD Core for Linux.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): Written (QM4 Fixes 7, L-type dictionary records in I-type expressions).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL $LINKREF(dict.file, name, depth, link.rec, rest, attr, status, detail)
+*
+*    dict.file  = file variable of the dictionary the reference is made from
+*    name       = the reference: link%item, or link%link%item for a link that
+*                 names a link in the file it points to
+*    depth      = 1 on the first call (the routine calls itself for a chain)
+*    link.rec   = Out: the L-type record of the first link, whose fields are
+*                 2 the id expression, 3 the file name, 4 the optional file
+*                 expression (the caller builds the TRANS() from these)
+*    rest       = Out: what follows the first %, the item to fetch from the file
+*    attr       = Out: the display properties of the item the reference finally
+*                 reaches, found through any further links, as a dynamic array:
+*                 1 column heading, 2 format, 3 conversion, 4 S/M, 5 association
+*    status     = Out: 0 resolved
+*                 1 name is not a link reference (no %, or its first part is not an L-type record)
+*                 2 the dictionary of the file the link names cannot be opened
+*                 3 links nested too deeply
+*                 4 the link names no file
+*                 5 the item is not in the dictionary of that file
+*                 6 the item is not a data item
+*    detail     = Out: the arguments of the message that goes with status, as a dynamic
+*                 array: 2 -> file, link; 5 -> item; 6 -> item; 3, 4 -> link
+*
+* A link is the L-type record of a dictionary:
+*
+*    1  L
+*    2  Id expression    derives the record id(s) in the linked file from the record being listed
+*    3  File name        the file whose dictionary is searched for the item (and, if field 4 is
+*                        empty, the file read)
+*    4  File expression  optional: derives the name of the file actually read, for several
+*                        files that share one dictionary
+*
+* The reference means TRANS(file, id expression, item, "X") worked out when the I-type is
+* compiled, so a change to a link means recompiling the I-types that use it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine linkref(dict.file, name, depth, link.rec, rest, attr, status, detail)
+$catalog $linkref
+
+$include dictdict.h
+
+   status = 0
+   link.rec = ''
+   rest = ''
+   attr = ''
+   detail = ''
+
+   p = index(name, '%', 1)
+   if p < 2 or p = len(name) then
+      status = 1
+      return
+   end
+
+   link.name = name[1, p - 1]
+   rest = name[p + 1, 99999]
+
+   if depth > 10 then
+      status = 3
+      detail = link.name
+      return
+   end
+
+   read link.rec from dict.file, link.name else
+      read link.rec from dict.file, downcase(link.name) else
+         read link.rec from dict.file, upcase(link.name) else link.rec = ''
+      end
+   end
+   if upcase(link.rec[1,1]) # 'L' then
+      link.rec = ''
+      status = 1
+      return
+   end
+
+   file.name = link.rec<3>
+   if file.name = '' then
+      status = 4
+      detail = link.name
+      return
+   end
+
+   open 'DICT', file.name to target.f else
+      status = 2
+      detail = file.name
+      detail<2> = link.name
+      return
+   end
+
+   if index(rest, '%', 1) then
+      * The item is itself a link in the dictionary of that file: the properties are those of what it reaches
+      call $linkref(target.f, rest, depth + 1, link2, rest2, attr, status, detail)
+   end else
+      read item.rec from target.f, rest else
+         read item.rec from target.f, downcase(rest) else
+            read item.rec from target.f, upcase(rest) else item.rec = ''
+         end
+      end
+      begin case
+         case item.rec = ''
+            status = 5
+            detail = rest
+
+         case index('DICE', upcase(item.rec[1,1]), 1) and item.rec[1,1] # ''
+            attr<1> = item.rec<DICT.DISPLAY.NAME>
+            attr<2> = item.rec<DICT.FORMAT>
+            attr<3> = item.rec<DICT.CONV>
+            attr<4> = item.rec<DICT.S.M>
+            attr<5> = item.rec<DICT.ASSOC>
+
+         case index('AS', upcase(item.rec[1,1]), 1) and item.rec[1,1] # ''
+            * A and S types keep these in other fields; the format is the width and justification
+            attr<1> = item.rec<DICT.A.DISPLAY.NAME>
+            attr<2> = item.rec<DICT.A.WIDTH> : item.rec<DICT.A.JUSTIFY>
+            attr<3> = item.rec<DICT.A.CONV>
+            attr<4> = 'M'
+            attr<5> = item.rec<DICT.A.ASSOC>
+
+         case 1
+            status = 6
+            detail = rest
+      end case
+   end
+
+   close target.f
+
+   return
+end
+
+* END-CODE

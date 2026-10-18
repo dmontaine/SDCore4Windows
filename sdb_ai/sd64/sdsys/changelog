@@ -2,6 +2,34 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  L-TYPE DICTIONARY LINKS IN I-TYPES, AND LINKS TO LINKS (QM4 FIXES TAB, BATCH D).
+
+             Links       An L-type dictionary record names another file and how to find the record in it, and can now
+                        be used inside an I-type as well as in a query: an I-type whose expression is TTL%TITLE, or
+                        UPCASE(TTL%AUTHOR), or COPY : "/" : TTL%TITLE, fetches the item TITLE or AUTHOR of the file the
+                        link TTL names, for the record the link's id expression gives, just as the same expression
+                        written with TRANS() would.  Before, a name with a percent sign in an I-type stopped the
+                        compile with an internal error message.
+             Chains      A link may reach through another link: if READERS has a link OUT to BOOKS, and BOOKS has a
+                        link TTL to TITLES, OUT%TTL%TITLE is the title of each book on loan, in a query or in an
+                        I-type.  Up to ten links may follow one another.
+             Queries     A link named in a query reached only D, I and C items one link away, and treated every
+                        result as multivalued.  It now reaches A, S and E items too and follows links to links, and
+                        it takes the column heading, format, conversion and association of the item it reaches.
+             Field 4     An L record may have a fourth field, an expression that gives the name of the file actually
+                        read, for a set of files that share one dictionary; field 3 is still the file whose dictionary
+                        is searched.
+             Messages    A link whose file has no dictionary, whose item is not in it, that has no id expression or
+                        file name, or whose expressions have semicolons, is refused with a message naming the link or
+                        the item (12406-12409 are new).  "Link item xx not found" used to name the link, not the item.
+             Undefined   An I-type that named a field the dictionary does not have, other than one called F and a
+                        number, aborted the compile with "Non-numeric where numeric required" in $ICOMP instead of
+                        saying "Field 'xx' is not defined".  It says the second now.
+             What it does not do.  A link is worked out when an I-type is compiled, so after a link is changed the
+                        I-types that use it need CD (COMPILE.DICT) to follow it; a query that names the link is
+                        compiled each time and does not.  The item name after the percent sign cannot contain a hyphen.
+                        A record in the dictionary whose id contains the percent sign is found before any link.
+
 18 Oct 26  RUN TIME ERRORS AS EXCEPTIONS, EXCEPTION GROUPS AND TRANSACTIONS IN TRY (QM4 FIXES TAB, BATCH C).
 
              SYS.*       Many errors that stop a program can now be caught with TRY / CATCH, under the names
