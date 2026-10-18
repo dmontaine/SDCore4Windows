@@ -58,8 +58,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            alternative list file on SAVE.LIST and GET.LIST are not built; the
            release notes do not give their syntax.
 
-18 Oct 26  SP.VIEW SHOWS WHERE OUTPUT GOES FOR PRINT UNIT MODES 0, 4, 5 AND 6
-           (openQM compatibility).
+18 Oct 26  SP.VIEW SHOWS WHERE OUTPUT GOES FOR PRINT UNIT MODES 0, 4, 5 AND 6.
 
            When SP.VIEW asks which printer to use it shows the print unit's
            destination.  It did that for modes 1 and 3 only; for a unit in
