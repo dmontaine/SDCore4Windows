@@ -4334,7 +4334,12 @@ in.field:
             arg.count = 3 ; gosub get.args
             if look.ahead.token = TKN.COMMA then
                gosub get.token
-               gosub exprf
+               if look.ahead.token = TKN.MULT then   ;* FIELD(s, d, n, *): all remaining fields
+                  gosub get.token
+                  n = 2147483647 ; gosub emit.numeric.load
+               end else
+                  gosub exprf
+               end
             end else
                n = 1 ; gosub emit.numeric.load
             end
@@ -12696,7 +12701,12 @@ if.then.else.expr.abort:
                gosub exprf         ;* Get substring length
                if look.ahead.token = TKN.COMMA then  ;* Three items, group extraction
                   gosub get.token  ;* Skip comma
-                  gosub exprf      ;* Get field count
+                  if look.ahead.token = TKN.MULT then  ;* [d,i,*]: all remaining fields
+                     gosub get.token
+                     n = 2147483647 ; gosub emit.numeric.load
+                  end else
+                     gosub exprf   ;* Get field count
+                  end
                   opcode.byte = OP.FIELD
                   gosub emit.simple
                end else
