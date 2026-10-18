@@ -260,6 +260,8 @@ void k_deref_string(STRING_CHUNK * str);
 void coll_deref(COLL_HEADER * h);
 bool coll_record_in(DESCRIPTOR * d);
 bool coll_record_text(DESCRIPTOR * d);
+void coll_debug_json(COLL_HEADER * h);
+COLL_ENTRY * coll_debug_find(COLL_HEADER * root, char * path, int32_t len);
 int32_t url_encode_top(void);
 int32_t url_decode_top(void);
 int k_get_c_string(DESCRIPTOR * descr, char * s, int max_bytes);

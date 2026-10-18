@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 8da7e5d (11 Oct 26): A data collection variable is shown (kind, element count and its
+*               JSON text), and /name{path} and DUMP name{path} show the
+*               element the path names (sheet item 530).
 * 14 Sep 26 Windows port - the call stack names $cproc, lower case
 *           (RELEASE_1.1 5 stage 3a)
 * 25 Aug 26 Windows port - dropped the FVAR.NET arm: it printed "(Networked)"
@@ -222,7 +225,7 @@ found.program:
                         end else
                            var.name = command[2, 9999]
                         end
-                        if not(case.sensitive) then var.name = upcase(var.name)
+                        gosub fold.var.name
                         mouse.action = @false
                         last.display = var.name
                         gosub display.variable
@@ -308,7 +311,7 @@ found.program:
                case action = 'DUMP'
                   command = trim(command) ;* Tidy up embedded spaces
                   var.name = field(command, ' ', 2)
-                  if not(case.sensitive) then var.name = upcase(var.name)
+                  gosub fold.var.name
                   dump.path = field(command, ' ', 3, 999) ;* Allow spaces in path
                   if dump.path = '' then
                      message = sysmsg(6702) ;* Command format error
@@ -1117,7 +1120,30 @@ display.array.element:
    fpos = 0 ; vpos = 0 ; spos = 0
    goto display.data.common
 
+fold.var.name:
+   * Fold the case of var.name, but not of the path of a collection element, which
+   * is case sensitive: name{path}
+
+   if not(case.sensitive) then
+      brace.pos = index(var.name, '{', 1)
+      if brace.pos then
+         var.name = upcase(var.name[1, brace.pos - 1]) : var.name[brace.pos, 99999]
+      end else
+         var.name = upcase(var.name)
+      end
+   end
+   return
+
 display.variable:
+   has.path = @false
+   brace.pos = index(var.name, '{', 1)
+   if brace.pos then   ;* An element of a collection: name{path}
+      var.path = var.name[brace.pos + 1, 99999]
+      if var.path[len(var.path), 1] = '}' then var.path = var.path[1, len(var.path) - 1]
+      var.name = var.name[1, brace.pos - 1]
+      has.path = @true
+   end
+
    if var.name matches '...<1N...>' then
       fpos = matchfield(var.name, '...<0N...', 3) + 0
       vpos = matchfield(var.name, '...<0N,0N...', 5) + 0
@@ -1224,6 +1250,20 @@ display.variable:
       end
    end
 
+   if has.path then
+      if var.dim or var.info<1> + 0 # V$COLL then
+         message = sysmsg(6719) ;* Index not allowed with scalar variable
+         gosub emit.err.msg
+         return
+      end
+      var.info = dbg.info(6, var.no : @fm : var.path)
+      if len(var.info) = 0 then
+         message = sysmsg(12136) ;* Element not found in the collection
+         gosub emit.err.msg
+         return
+      end
+   end
+
    message = if mouse.action then var.name : '=' else ''
 
 display.data.common:
@@ -1325,6 +1365,24 @@ display.data.common:
 
       case var.type = V$PERSISTENT
          message := 'Persistent: '
+
+      case var.type = V$JSON.BOOLEAN
+         s = var.info<2>
+         message := 'Boolean: ' : s
+
+      case var.type = V$JSON.NULL
+         message := 'Null'
+
+      case var.type = V$COLL
+         * Field 2 is C or A, field 3 the number of elements, then the JSON text
+         s = field(var.info, @fm, 4, 9999999)
+         n = var.info<3> + 0
+         message := if var.info<2> = 'A' then 'Array' else 'Collection'
+         message := ' (' : n : ' element' : (if n = 1 then '' else 's') : ')'
+         if dump.path = '' then
+            message := ': ' : convert(banned, replacements, s[1, 10240])
+            if len(s) > 10240 then message := '...'
+         end
    end case
 
    if dump.path = '' then

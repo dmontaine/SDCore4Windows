@@ -397,6 +397,10 @@
       $define V$OBJCD        16
       $define V$OBJCDX       17
       $define V$PERSISTENT   18
+      $define V$COLL         19
+      ;* Not variable types: what DEBUG.INFO(6) says an element of a collection holds
+      $define V$JSON.BOOLEAN 20
+      $define V$JSON.NULL    21
 
       * Option flags (see also csrc options.h)
       $define OPT.UNASS.WARNING        0 ;* Treat unassigned variable as warning

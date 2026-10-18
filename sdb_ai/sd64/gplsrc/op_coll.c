@@ -1768,6 +1768,106 @@ bool coll_record_text(DESCRIPTOR* d) {
 }
 
 /* ======================================================================
+   The debugger's view of a collection (op_debug.c)
+
+   coll_debug_json()  appends the collection, as compact JSON text, to the
+                      string being built with the ts_ routines.  A collection
+                      that cannot be built (one that contains itself) is
+                      reported in words instead.  The caller's STATUS() and
+                      INMAT() are as they were.
+   coll_debug_find()  the entry a path names, or NULL if there is none.  The
+                      path is what a person types: names separated by a slash
+                      or a comma, each name optionally in single or double
+                      quotes, and a number selects an element of an array.  */
+
+void coll_debug_json(COLL_HEADER* h) {
+  COLL_BUF cb;
+  COLL_ENTRY top;
+  bool ok;
+  int32_t saved_status = process.status;
+  int32_t saved_inmat = process.inmat;
+
+  /* Build into a private buffer: json_build() makes its result with the same
+     ts_ routines the caller is part way through using.                    */
+
+  cb.b = (char*)k_alloc(COLL_ALLOC_TAG, 256);
+  cb.len = 0;
+  cb.cap = 256;
+  memset(&top, 0, sizeof top);
+  InitDescr(&top.d, COLL);
+  top.d.data.coll = h;
+  ok = jb_value(&cb, &top, 0, 0);
+
+  if (ok)
+    ts_copy(cb.b, cb.len);
+  else
+    ts_copy_c_string("(cannot be shown)");
+  k_free(cb.b);
+  process.status = saved_status;
+  process.inmat = saved_inmat;
+}
+
+COLL_ENTRY* coll_debug_find(COLL_HEADER* root, char* path, int32_t len) {
+  COLL_SEG* segs;
+  COLL_HEADER* parent;
+  COLL_ENTRY* found = NULL;
+  int32_t pos;
+  int32_t i;
+  int32_t start = 0;
+  int32_t k;
+  int nseg = 0;
+  int rc;
+  bool exists;
+  bool bad = FALSE;
+  char q;
+
+  segs = (COLL_SEG*)k_alloc(COLL_ALLOC_TAG, (len + 1) * sizeof(COLL_SEG));
+  for (i = 0; i <= len; i++) {
+    if ((i == len) || (path[i] == '/') || (path[i] == ',')) {
+      COLL_SEG* sg = &segs[nseg];
+      int32_t b = start;
+      int32_t e = i;
+
+      while ((b < e) && (path[b] == ' '))
+        b++;
+      while ((e > b) && (path[e - 1] == ' '))
+        e--;
+      if (((e - b) >= 2) && ((path[b] == '\'') || (path[b] == '"'))) {
+        q = path[b];
+        if (path[e - 1] == q) {
+          b++;
+          e--;
+        }
+      }
+      if (e == b) { /* An empty name */
+        bad = TRUE;
+        break;
+      }
+      sg->p = path + b;
+      sg->len = e - b;
+      sg->numeric = ((sg->len > 0) && (sg->len < 10));
+      sg->num = 0;
+      for (k = 0; (k < sg->len) && sg->numeric; k++) {
+        if ((sg->p[k] < '0') || (sg->p[k] > '9'))
+          sg->numeric = FALSE;
+        else
+          sg->num = sg->num * 10 + (sg->p[k] - '0');
+      }
+      nseg++;
+      start = i + 1;
+    }
+  }
+
+  if (!bad && (nseg > 0)) {
+    rc = walk(root, segs, nseg, FALSE, &parent, &pos, &exists);
+    if ((rc == 0) && exists)
+      found = &parent->e[pos];
+  }
+  k_free(segs);
+  return found;
+}
+
+/* ======================================================================
    OCONV(s, 'HU') and ICONV(s, 'HU')  -  percent encoding
 
    Everything but letters, digits and - . _ ~ is written as %xx with
