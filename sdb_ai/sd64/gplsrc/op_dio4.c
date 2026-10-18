@@ -1346,6 +1346,13 @@ void op_dir() {
         ts_copy_c_string(name);
         ts_copy_byte(VALUE_MARK);
         ts_copy_byte(mode);
+        /* 12 Oct 26 (openQM item 366): a third value, the size in bytes */
+        {
+          char size_text[32];
+          snprintf(size_text, sizeof(size_text), "%lld", (long long)statbuf.st_size);
+          ts_copy_byte(VALUE_MARK);
+          ts_copy_c_string(size_text);
+        }
       }
       closedir(dfu);
     }

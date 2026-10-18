@@ -1,0 +1,72 @@
+* _OPTION
+* !OPTION() - read or set an OPTION state from a program
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM refs 224 and 473.  The syntax is SD's own: a subroutine, because OPTION() is
+*               a function only inside SD's own programs.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !OPTION(number, state)
+*
+* NUMBER is the option's number, OPT.xxx in INT$KEYS.H (include it with
+* $INCLUDE GPL.BP INT$KEYS.H).  If STATE is null on entry the option is only
+* read and STATE comes back 0 or 1.  If STATE is 0 or 1 on entry the option
+* is set (1) or cleared (0) and STATE comes back as it now is.  Any other
+* STATE, or a number that is not an option, comes back as -1.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine option(number, state)
+$catalog !OPTION
+
+$include syscom.h
+$include keys.h
+$include int$keys.h
+
+   if not(number matches '1N0N') then
+      state = -1
+      return
+   end
+
+   flags = kernel(K$GET.OPTIONS, 0)
+   if number + 0 >= len(flags) then
+      state = -1
+      return
+   end
+
+   if state = '' then
+      state = flags[number + 1, 1]
+      return
+   end
+
+   if state # 0 and state # 1 then
+      state = -1
+      return
+   end
+
+   flags[number + 1, 1] = state
+   void kernel(K$SET.OPTIONS, flags)
+   state = kernel(K$GET.OPTIONS, 0)[number + 1, 1]
+
+   return
+end
+
+* END-CODE

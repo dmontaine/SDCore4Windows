@@ -2,6 +2,30 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FIVE NEW SUBROUTINES AND A SIZE FROM DIR(). is kernel code, so it
+           needs a rebuild).  Where openQM has a function, SD's own
+           programs have the same thing as a function only inside SD, so
+           these are subroutines an application can CALL.
+
+             CALL !MERGELIST(result, list1, list2, mode)
+                          Merges two field mark lists in order.  Mode words:
+                          U union (default), A all with duplicates, I in
+                          both, D in list 1 not list 2, X in one only; AL,
+                          DL, AR or DR for the order; N if the lists are not
+                          in order.  A null list is just an empty one.
+             CALL !OPTION(number, state)
+                          Reads (state null) or sets (state 0 or 1) one of
+                          the OPTION flags, by its number, OPT.xxx in
+                          INT$KEYS.H.
+             CALL !VOCPATH(name, path, status)
+                          The full pathname that OPEN would use for a VOC
+                          file name, following Q-pointers; DICT name works.
+             CALL !TESTLOCK(n, owner)
+                          The user number holding task lock n, or 0.
+             DIR(path)    Each entry now has a third value, the size in
+                          bytes: name, F or D, size.  Programs that took the
+                          first two values are unaffected.
+
 18 Oct 26  REBUILD.ALL.INDICES, REDO AND A PHANTOM STATEMENT.  Syntax is SD's own.
 
              REBUILD.ALL.INDICES {NO.QUERY}

@@ -1,0 +1,69 @@
+* _VOCPATH
+* !VOCPATH() - the operating system path of a VOC file name
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM ref 86.  The syntax is SD's own: a subroutine.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !VOCPATH(name, path, status)
+*
+* Resolves NAME as OPEN would (an F-type VOC record, a Q-pointer followed to
+* the file it names, "DICT name", "name,subfile", and the Account:File and
+* PATH: forms the FILERULE setting allows) and returns the full pathname in
+* PATH.  STATUS is 0, or the error number OPEN would have given (PATH is null).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine vocpath(name, path, status)
+$catalog !VOCPATH
+
+$include syscom.h
+$include keys.h
+
+   * Opening the file is how SD resolves the name (VOC record, Q-pointers, subfile, DICT), so ask it to, then
+   * read the path of what it opened.
+
+   path = ''
+   status = 0
+   if name = '' then
+      status = 2
+      return
+   end
+
+   if upcase(name[1,5]) = 'DICT ' then
+      open 'DICT', name[6,99999] to f else
+         status = status()
+         return
+      end
+   end else
+      open name to f else
+         status = status()
+         return
+      end
+   end
+
+   path = fileinfo(f, FL$PATH)
+   close f
+
+   return
+end
+
+* END-CODE

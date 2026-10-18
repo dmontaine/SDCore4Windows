@@ -1,0 +1,42 @@
+* _TESTLOCK
+* !TESTLOCK() - the owner of a task lock
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM ref 42.  TESTLOCK() is a function only inside SD's own programs, so this
+*               makes it available to an application as a subroutine.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !TESTLOCK(lock.number, owner)
+*
+* OWNER is the user number that holds task lock LOCK.NUMBER (0 to 63), or 0
+* if it is free.  A lock number outside 0 to 63 stops the program as LOCK
+* would.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine testlck(lock.number, owner)
+$catalog !TESTLOCK
+
+   owner = testlock(lock.number)
+   return
+end
+
+* END-CODE

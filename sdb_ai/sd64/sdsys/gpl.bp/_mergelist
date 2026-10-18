@@ -1,0 +1,116 @@
+* _MERGELIST
+* !MERGELIST() - merge two lists
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM refs 420, 539 and 566.  The syntax is SD's own: a subroutine.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !MERGELIST(result, list1, list2, mode)
+*
+* LIST1 and LIST2 are field mark delimited lists.  RESULT is the merge,
+* in order.  MODE is words separated by spaces or commas, in any order:
+*
+*     U  the items of either list, each once (the default)
+*     A  all the items of both lists, duplicates kept
+*     I  the items in both lists, each once
+*     D  the items in list 1 that are not in list 2, each once
+*     X  the items in one list only, each once
+*
+*     AL (default), DL, AR, DR   the order of the result, as for LOCATE
+*     N  the lists are not in order (accepted; the lists need not be in
+*        order for any mode, the result is put in order as it is built)
+*
+* A null list is a list with nothing in it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine mergelist(result, list1, list2, mode)
+$catalog !MERGELIST
+
+   type = 'U'
+   order = 'AL'
+   words = convert(',', ' ', upcase(mode))
+   for w = 1 to dcount(words, ' ')
+      word = field(words, ' ', w)
+      begin case
+         case word = 'U' or word = 'A' or word = 'I' or word = 'D' or word = 'X'
+            type = word
+         case word = 'AL' or word = 'DL' or word = 'AR' or word = 'DR'
+            order = word
+         case 1
+            null     ;* N, and anything else, is ignored
+      end case
+   next w
+
+   result = ''
+   n1 = dcount(list1, @fm) ; if list1 = '' then n1 = 0
+   n2 = dcount(list2, @fm) ; if list2 = '' then n2 = 0
+
+   * What each list holds, for the lookups of I, D and X
+
+   in1 = list1 ; in2 = list2
+
+   begin case
+      case type = 'U' or type = 'A'
+         for i = 1 to n1
+            it = list1<i> ; gosub add.item
+         next i
+         for i = 1 to n2
+            it = list2<i> ; gosub add.item
+         next i
+
+      case type = 'I'
+         for i = 1 to n1
+            it = list1<i>
+            locate it in in2<0> setting p then gosub add.item
+         next i
+
+      case type = 'D'
+         for i = 1 to n1
+            it = list1<i>
+            locate it in in2<0> setting p else gosub add.item
+         next i
+
+      case type = 'X'
+         for i = 1 to n1
+            it = list1<i>
+            locate it in in2<0> setting p else gosub add.item
+         next i
+         for i = 1 to n2
+            it = list2<i>
+            locate it in in1<0> setting p else gosub add.item
+         next i
+   end case
+
+   return
+
+* Put IT in RESULT in order; for every type but A an item already there is not added again
+
+add.item:
+   if type # 'A' then
+      locate it in result<0> by order setting p then return
+   end
+   locate it in result<0> by order setting p else null
+   ins it before result<p>
+   return
+end
+
+* END-CODE
