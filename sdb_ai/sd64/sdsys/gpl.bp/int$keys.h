@@ -64,7 +64,8 @@
       $define IN$NO.CASE.INVERT  0x00040000  ;* Disable PTERM CASE inversion for the input session
       $define IN$NO.ECHO         0x00080000  ;* NO.ECHO: no echo of typed characters (14 Oct 26, openQM 168)
       $define IN$IF              0x00100000  ;* INPUTIF: only if input is waiting (14 Oct 26, openQM 584)
-      $define IN$RAW             0x00200000  ;* INPUT ... RAW: exactly `length` characters, no interpretation of newline or erase (openQM 548)
+      $define IN$FILL            0x00400000  ;* a fill string was given (K$INPUT.FILL.SET): fill the field with it (openQM 389)
+      $define IN$RAW             0x00200000 ;* INPUT ... RAW: exactly `length` characters, no interpretation of newline or erase (openQM 548)
 
       * KERNEL() function action keys
       $define K$INTERNAL         0       ;* Set/clear internal mode
@@ -202,6 +203,8 @@
 *   (its block is 90-99; 90-96 are left empty here).  Must match gplsrc/keys.h.
       $define K$SET.ACCOUNT     97       ;* Set the session's account name (user table)
       $define K$USER.PEAK       98       ;* Peak number of users since SD started
+      $define K$INPUT.FILL.SET  99       ;* The fill string for the next INPUT / INPUT @ (14 Oct 26, openQM 389)
+      $define K$INPUT.FILL.GET  100      ;* ...and its pick-up by _INPUT / _INPUTAT, which forgets it
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

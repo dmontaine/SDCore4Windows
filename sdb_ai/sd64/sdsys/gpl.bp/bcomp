@@ -9150,6 +9150,13 @@ st.input.common:
       if look.ahead.token = TKN.COMMA then
          gosub get.token     ;* Skip comma
          gosub expr1
+
+         * 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389: a fill expression may follow the length
+         if look.ahead.token = TKN.COMMA then
+            gosub get.token
+            fill.simple = @true ; gosub emit.input.fill
+            if err then return
+         end
       end else
          if bitand(input.flags, IN$FIELD.MODE) then
             err.msg = sysmsg(2928) ;* Length is mandatory in INPUTFIELD
@@ -9253,6 +9260,13 @@ st.input.common:
          * is ambiguous.
 
          gosub expr
+
+         * 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389: a fill expression may follow the length
+         if look.ahead.token = TKN.COMMA then
+            gosub get.token
+            fill.simple = @false ; gosub emit.input.fill
+            if err then return
+         end
       end else
          n = 0 ; gosub emit.numeric.load
       end
@@ -9319,6 +9333,11 @@ st.input.common:
       input.flags = bitor(input.flags, IN$THENELSE)
    end
 
+   if bitand(input.flags, IN$FILL) and bitand(input.flags, IN$PASSWORD) then
+      err.msg = sysmsg(12270)             ;* A fill expression cannot be used with HIDDEN (openQM 389)
+      goto error
+   end
+
    * Emit flags
 
    n = input.flags ; gosub emit.numeric.load
@@ -9326,6 +9345,20 @@ st.input.common:
    
    if input.flags = bitor(input.flags, IN$THENELSE) then goto st.if.back.end
 
+   return
+
+*****************************************************************************
+* EMIT.INPUT.FILL  -  the fill string of INPUT var, length, fill (14 Oct 26 dm, openQM 389)
+* The fill is handed to _INPUT / _INPUTAT through the kernel (K$INPUT.FILL.SET), so the stack of OP.INPUT and
+* OP.INPUTAT stays as it was; flag IN$FILL tells them to pick it up.  fill.simple: a primary expression (INPUT @,
+* where a comma-led expression is ambiguous with a mask), else a full one.
+emit.input.fill:
+   n = K$INPUT.FILL.SET ; gosub emit.numeric.load
+   if fill.simple then gosub expr1 else gosub expr
+   if err then return
+   opcode.byte = OP.KERNEL ; gosub emit.simple
+   opcode.byte = OP.POP ; gosub emit.simple
+   input.flags = bitor(input.flags, IN$FILL)
    return
 
 *****************************************************************************

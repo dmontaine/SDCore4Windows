@@ -83,6 +83,20 @@ $include err.h
       password = 1
       mask.ch = ' '
    end
+   * 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389, INPUT @ ..., length, fill: the first character fills the unused part of the field while it is being
+   * typed in, the second (a blank if there is only one) fills what is left once the entry is finished, and a third leaves the cursor
+   * at the end of the field instead of after the last character.  The string comes from the kernel (the compiler put it there).
+   fill1 = ' '
+   fill2 = ' '
+   fill.end = @false
+   if bitand(flags, IN$FILL) then
+      fill.str = kernel(K$INPUT.FILL.GET, '')
+      if len(fill.str) then
+         fill1 = fill.str[1, 1]
+         if len(fill.str) > 1 then fill2 = fill.str[2, 1]
+         fill.end = (len(fill.str) > 2)
+      end
+   end
    pagination = kernel(K$PAGINATE, -1)
    return.key = seq(pterm(PT$INEWLINE,''))
    uppercase = bitand(flags, IN$UPCASE)
@@ -103,13 +117,13 @@ $include err.h
 
       if max.input then
          if password then display str(mask.ch,max.input) : @(x, y) :
-         else display fmt(s[1, max.input], max.input:'L') : @(x, y) :
+         else display (s[1, max.input] : str(fill1, max.input))[1, max.input] : @(x, y) :
       end else
          if password then display str(mask.ch,len(s)) : @(x, y) :
          else display s : @(x, y) :
       end
    end else
-      display space(max.input) : @(x, y) :
+      display str(fill1, max.input) : @(x, y) :
       string = ''
    end
 
@@ -128,7 +142,7 @@ $include err.h
       if echo.input then
          if max.input then
             if password then display str(mask.ch,max.input) :
-            else display fmt(string[1,max.input], max.input:'L') :
+            else display (string[1,max.input] : str(fill2, max.input))[1, max.input] :
          end else
             if password then display str(mask.ch,len(string)) :
             else display string :
@@ -304,7 +318,7 @@ insert.char:
    if uppercase then c = upcase(c)
 
    if first and not(bitand(flags, IN$EDIT)) then
-      if echo.input and max.input then display space(max.input) : @(rem(col, @crtwide), y+idiv(col,@crtwide)) :
+      if echo.input and max.input then display str(fill1, max.input) : @(rem(col, @crtwide), y+idiv(col,@crtwide)) :
       string = ''
    end
 
@@ -366,7 +380,7 @@ backspace:
          if echo.input then
              s = if password then str(mask.ch,len(string)) else string
              display @(rem(col - 1, @crtwide), y+idiv(col - 1,@crtwide)) :
-             display (s:' ')[posn, n] :
+             display (s:fill1)[posn, n] :
          end
       end
    end
@@ -383,6 +397,14 @@ return.key:
       end else if panning then
          if password then display @(x,y) : str(mask.ch,len(string))[1,max.input] :
          else display @(x,y) : string[1,max.input] :
+      end
+
+      * 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389: the part of the field the entry did not use is filled with the second fill character, and the
+      * cursor goes to the end of the field if there was a third (else it comes back to the end of the entry)
+      if bitand(flags, IN$FILL) and max.input and not(panning) and len(string) < max.input then
+         fc = x + len(string)
+         display @(rem(fc, @crtwide), y+idiv(fc,@crtwide)) : str(fill2, max.input - len(string)) :
+         if not(fill.end) then display @(rem(fc, @crtwide), y+idiv(fc,@crtwide)) :
       end
 
       if not(bitand(flags, IN$NOLF)) then display
@@ -402,7 +424,7 @@ delete.char:
       else n = 99999999
       s = if password then str(mask.ch,len(string)) else string
       display @(rem(col, @crtwide), y+idiv(col,@crtwide)) :
-      display (s:' ')[posn, n] :
+      display (s:fill1)[posn, n] :
    end
 
    return
@@ -424,7 +446,7 @@ repaint.panned.region:
    if password then
       display (str(mask.ch,len(string)):space(max.input))[pan.offset+1, max.input] :
    end else
-      display (string:space(max.input))[pan.offset+1, max.input] :
+      display (string:str(fill1, max.input))[pan.offset+1, max.input] :
    end
 
    col = x + posn - pan.offset - 1

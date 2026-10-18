@@ -70,6 +70,8 @@ Public bool case_sensitive;
 bool recover_users(void);
 void set_date(int32_t);
 
+#define INPUT_FILL_MAX 3
+Private char input_fill[INPUT_FILL_MAX + 1] = ""; /* K_INPUT_FILL_SET / _GET (sheet item 389) */
 Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
@@ -674,6 +676,22 @@ void op_kernel() {
 
     case K_USER_PEAK:
       result.data.value = (int32_t)(sysseg->users_peak);
+      break;
+
+    /* 14 Oct 26 dm - sheet item 389: the fill string of INPUT var, length, fill (see keys.h). */
+    case K_INPUT_FILL_SET:
+      {
+        char fillbuf[INPUT_FILL_MAX + 1];
+        int fl = k_get_c_string(descr, fillbuf, INPUT_FILL_MAX);
+
+        strcpy(input_fill, (fl >= 0) ? fillbuf : "");
+      }
+      k_put_c_string("", &result);
+      break;
+
+    case K_INPUT_FILL_GET:
+      k_put_c_string(input_fill, &result);
+      input_fill[0] = '\0';
       break;
 
     /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  HOW DID THIS SESSION

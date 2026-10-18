@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  A FILL EXPRESSION FOR INPUT.
+
+             INPUT var, length, fill  and  INPUT @(x, y) : var, length, fill
+                        The first character of the fill string is shown in
+                        every cell of the field that has no character in it, so
+                        the width of the field is clear while you type; the
+                        erase key puts it back.  When the entry is finished
+                        the cells left over take the second character (a blank
+                        if the fill has only one).  A third character leaves
+                        the cursor at the end of the field instead of after
+                        the last character typed.  The fill needs a length,
+                        and cannot be used with HIDDEN (refused when the
+                        program is compiled).  Without a fill nothing changes.
+
 18 Oct 26  INPUT ... RAW.
 
              INPUT var, length RAW  Reads exactly length characters and puts

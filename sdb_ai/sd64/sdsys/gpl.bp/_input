@@ -137,6 +137,21 @@
       string = ''
       if max.input = 0 then max.input = 99999
 
+      * 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389, INPUT var, length, fill: the first fill character shows the width of the field while it is typed
+      * in, the second (a blank when only one is given) fills what is left when the entry is done, a third leaves the cursor at the
+      * end of the field.  Only with a length, and only when the characters are echoed.  The string was put in the kernel by the
+      * compiled code; it is collected here whether or not it is used, so that no later INPUT can find it.
+      fill1 = ' ' ; fill2 = ' ' ; fill.end = @false ; has.fill = @false
+      if bitand(flags, IN$FILL) then
+         fill.str = kernel(K$INPUT.FILL.GET, '')
+         if len(fill.str) and max.input < 99999 and echo.input and not(no.echo) and not(raw) then
+            has.fill = @true
+            fill1 = fill.str[1, 1]
+            if len(fill.str) > 1 then fill2 = fill.str[2, 1]
+            fill.end = (len(fill.str) > 2)
+         end
+      end
+
       * Display prompt character if required
 
       * 18 Oct 26 Windows port - from Linux fdde3cc (14 Oct 26): - openQM 584, INPUTIF: with nothing in the DATA queue and nothing typed ahead there is nothing to
@@ -147,6 +162,8 @@
       end
 
       if len(prompt()) and not(nothing.waiting) then display prompt() :
+
+      if has.fill and not(nothing.waiting) then display str(fill1, max.input) : str(char(8), max.input) :
 
       * Process input
 
@@ -161,6 +178,7 @@
          if not(no.echo.data) then
             if echo.input then
                if not(no.echo) then display if password then str('*', len(string)) else string :
+               if has.fill then gosub fill.finish
                if not(bitand(flags, in$nolf)) then display
             end
          end
@@ -215,11 +233,13 @@
 *                    moves the cursor left on every terminal SD supports and on
 *                    the Windows console, and cub1 for the windows type IS \b,
 *                    so this changes no terminal on which it already worked.
-*                    18 Oct 26 - and not(no.echo): INPUT ... NO.ECHO (Linux bddbb79).
-                     if echo.input and not(no.echo) then display char(8) : ' ' : char(8) :
+*                    18 Oct 26 - and not(no.echo): INPUT ... NO.ECHO (Linux bddbb79); the
+*                    blanking character is fill1 (INPUT var, length, fill: Linux 923469c).
+                     if echo.input and not(no.echo) then display char(8) : fill1 : char(8) :
                   end
 
                case n = return.key                    ;* RETURN key
+                  if has.fill then gosub fill.finish
                   if echo.input and not(bitand(flags, in$nolf)) then display
                   exit
                case n = 10
@@ -234,6 +254,7 @@
                      string := c
                      if echo.input and not(no.echo) then
                         display if password then '*' else c :
+                        if has.fill and len(string) < max.input then display str(fill1, max.input - len(string)) : str(char(8), max.input - len(string)) :
                      end
                   end
 
@@ -273,6 +294,18 @@
 
       if bitand(flags, IN$THENELSE) then return value then.else.flag
 
+      return
+
+* ======================================================================
+* 18 Oct 26 Windows port - from Linux 923469c (14 Oct 26): - openQM 389: the entry is finished; the unused part of the field gets the second fill character, and the cursor
+* stays at the end of the field if a third was given, else comes back to the end of the entry
+
+fill.finish:
+      rem.n = max.input - len(string)
+      if rem.n > 0 then
+         display str(fill2, rem.n) :
+         if not(fill.end) then display str(char(8), rem.n) :
+      end
       return
       end
 

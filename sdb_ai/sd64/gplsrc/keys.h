@@ -372,6 +372,14 @@
      K_USER_PEAK    the most user table cells in use at once since SD started (sysseg->users_peak).               */
 #define K_SET_ACCOUNT        97
 #define K_USER_PEAK          98
+/* 14 Oct 26 dm - 1.2-0 sheet item 389 (INPUT var, length, fill).  The compiler cannot add an element to the stack of OP_INPUT /
+   OP_INPUTAT without changing the kernel, APISRVR and the test for INPUT var, -1, so a fill string given in a program is handed to
+   _INPUT / _INPUTAT through the kernel instead.
+     K_INPUT_FILL_SET  the fill string the next INPUT or INPUT @ is to use (the compiler plants this call before it, and sets the
+                       flag IN$FILL); the first three characters are kept.  Open to any program: it holds a string and nothing else.
+     K_INPUT_FILL_GET  returns the fill string and forgets it, so that no later INPUT can see it.                            */
+#define K_INPUT_FILL_SET     99
+#define K_INPUT_FILL_GET     100
 
 /* PTERM() function action keys */
 #define PT_BREAK              1
