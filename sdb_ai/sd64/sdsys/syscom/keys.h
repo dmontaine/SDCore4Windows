@@ -275,6 +275,17 @@
       $define SKT$INFO.FAMILY.IPV4     1    ;* Socket address family IPV4
       $define SKT$INFO.FAMILY.IPV6     2    ;* Socket address family IPV6     
       
+      * JPARSE() and JBUILD() modes (13 Oct 26, data collections), mirrored from gplsrc/keys.h
+      $define JP$NULL                  1    ;* A JSON null is read as a null string
+      $define JP$UNQUOTED.NAME         2    ;* Element names may be unquoted
+      $define JB$INVALID               1    ;* A value JSON cannot hold is saved as null
+      $define JB$NULL                  2    ;* A null string is saved as null
+      $define JB$NUM                   4    ;* A string that is a number is saved as one
+      $define JB$SQUOTE.NAME           8    ;* Names in single quotes
+      $define JB$NOQUOTE.NAME          16   ;* Names with no quotes
+      $define JB$SQUOTE.VALUE          32   ;* String values in single quotes
+      $define JB$NOQUOTE.VALUE         64   ;* String values with no quotes
+
       * OBJINFO() keys
       $define OI$ISOBJ                 0    ;* Is descriptor an object
       $define OI$CLASS                 1    ;* Class name

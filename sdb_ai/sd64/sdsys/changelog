@@ -2,6 +2,51 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  JSON: JPARSE() AND JBUILD().
+
+             c = JPARSE(text)                  JSON text into a collection
+             c = JPARSE(text, mode)
+             text = JBUILD(c)                  and back
+             text = JBUILD(c, mode)
+
+           JPARSE() reads a JSON object or array.  An object becomes a
+           collection, an array an array, a string a string, a number an
+           integer when it is whole and fits in 32 bits and a floating point
+           number otherwise.  true and false are kept as true and false and
+           null as null, so JBUILD() writes them back as they were; read from
+           the collection they are 1, 0 and a null string.  Spaces, tabs,
+           returns, line feeds and all five mark characters between elements
+           are ignored.  Names and strings may be in single or double quotes.
+           \uXXXX is the single byte XX when it is 255 or less (so marks and
+           8 bit characters come back as they went out) and UTF-8 above that.
+           Nesting is limited to 500 levels.  A name that appears twice takes
+           the later value.
+
+           If the text is not JSON, or is not an object or an array,
+           JPARSE() returns a null string, STATUS() is 1020 (ER$PARSE.ERROR)
+           and INMAT() is the position of the character where it gave up.
+
+           JBUILD() writes compact text with no spaces and the names in
+           order.  Strings are escaped; marks, control characters and 8 bit
+           characters become \u00XX, which JPARSE() reads back as the same
+           byte.  A value with no JSON form (a file variable, say) or a
+           collection that contains itself makes it return a null string with
+           STATUS() 1019 (ER$BUILD.ERROR).
+
+           The modes are added together and are named in the KEYS.H include:
+
+             JP$NULL            a null is read as a null string
+             JP$UNQUOTED.NAME   names may have no quotes
+             JB$INVALID         a value with no JSON form is written as null
+             JB$NULL            a null string is written as null
+             JB$NUM             a string that is a JSON number is written as one
+             JB$SQUOTE.NAME     names in single quotes
+             JB$NOQUOTE.NAME    names with no quotes
+             JB$SQUOTE.VALUE    strings in single quotes
+             JB$NOQUOTE.VALUE   strings with no quotes
+
+           The values (1, 2, 1, 2, 4, 8, 16, 32, 64) are SD's own.
+
 18 Oct 26  ARRAYS IN DATA COLLECTIONS.
 
              c{'list'} = MAT()                 an empty array

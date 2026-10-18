@@ -253,7 +253,8 @@ TKN_END_FIELD = 99  # Pseudo-token for ">" of dynamic array reference
 #
 #  N O T E - init_tokens needs to be sized to compile the largest program we expect bbcomp to compile
 #            I know we could play games with resizing (allocate and copy) as we go along, but not doing it.
-INIT_TOKENS = 400          # Initial size of token tables (tokens per line)
+INIT_TOKENS = 800          # Initial size of token tables (tokens per line). 13 Oct 26: was 400; bcomp's
+                           # intrinsic dispatch table is one logical line and grew past it with data collections
 
    #dim btree.keys(1)
    

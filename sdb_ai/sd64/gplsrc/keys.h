@@ -502,6 +502,18 @@
 #define SKT_TLS            0x01000000
 #define SKT_INFO_TLS_CBIND       8    /* SCRAM c= for this TLS session */
 
+/* JPARSE() and JBUILD() modes (13 Oct 26, data collections).  Mirrored in
+   sdsys/syscom/keys.h; the values are SD's own - openQM names them only. */
+#define JP_NULL                  1    /* A JSON null is read as a null string */
+#define JP_UNQUOTED_NAME         2    /* Element names may be unquoted */
+#define JB_INVALID               1    /* A value JSON cannot hold is saved as null */
+#define JB_NULL                  2    /* A null string is saved as null */
+#define JB_NUM                   4    /* A string that is a number is saved as one */
+#define JB_SQUOTE_NAME           8    /* Names in single quotes */
+#define JB_NOQUOTE_NAME          16   /* Names with no quotes */
+#define JB_SQUOTE_VALUE          32   /* String values in single quotes */
+#define JB_NOQUOTE_VALUE         64   /* String values with no quotes */
+
 /* OBJINFO() keys */
 #define OI_ISOBJ      0  /* Is descriptor an object */
 #define OI_CLASS      1  /* Class name */

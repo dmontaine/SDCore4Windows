@@ -31,6 +31,8 @@
  *    CF_MATGET   MAT target = MAT c{path}       [ADDR, array, fn]
  *    CF_INMAT    INMAT(c{path})                 [array, fn]        -> count
  *    CF_INS      INS value AS c{path}           [value, ADDR, p1..pn, n, fn]
+ *    CF_JPARSE   JPARSE(string, mode)           [string, mode, fn] -> coll
+ *    CF_JBUILD   JBUILD(coll, mode)             [coll, mode, fn]   -> string
  *
  *    A path component that is a string may hold several names separated by
  *    slashes; an integer (or a string of digits met in an array) selects an
@@ -48,6 +50,19 @@
 #include "sd.h"
 #include "header.h"
 #include "err.h"
+#include "keys.h"
+#include <ctype.h>
+
+/* The JPARSE() and JBUILD() mode bits, as keys.h names them */
+#define JP_NULL_BIT JP_NULL
+#define JP_UNQUOTED_NAME_BIT JP_UNQUOTED_NAME
+#define JB_INVALID_BIT JB_INVALID
+#define JB_NULL_BIT JB_NULL
+#define JB_NUM_BIT JB_NUM
+#define JB_SQUOTE_NAME_BIT JB_SQUOTE_NAME
+#define JB_NOQUOTE_NAME_BIT JB_NOQUOTE_NAME
+#define JB_SQUOTE_VALUE_BIT JB_SQUOTE_VALUE
+#define JB_NOQUOTE_VALUE_BIT JB_NOQUOTE_VALUE
 
 #define CF_NEW 1
 #define CF_COPY 2
@@ -61,8 +76,11 @@
 #define CF_MATGET 10
 #define CF_INMAT 11
 #define CF_INS 12
+#define CF_JPARSE 13
+#define CF_JBUILD 14
 
 #define COLL_ALLOC_TAG 160
+#define JSON_MAX_DEPTH 500
 
 /* One name in a path, after splitting on slashes */
 typedef struct {
@@ -98,6 +116,8 @@ Private bool matrix_span(DESCRIPTOR* d, ARRAY_HEADER** hdr, int32_t* first, int3
 Private void buf_add(COLL_BUF* b, char* s, int32_t len);
 Private void buf_value(COLL_BUF* b, COLL_ENTRY* e);
 Private void star_get(COLL_BUF* b, COLL_HEADER* cur, COLL_SEG* seg, int nseg, int i, int star);
+Private DESCRIPTOR json_parse(char* text, int32_t len, int mode);
+Private DESCRIPTOR json_build(COLL_HEADER* root, int mode);
 
 /* ======================================================================
    coll_deref()  -  Drop a reference, freeing the collection at zero      */
@@ -252,6 +272,34 @@ void op_coll() {
       }
       k_dismiss();
       k_pop(1); /* The matrix, an ADDR */
+      break;
+
+    case CF_JPARSE:
+      descr = e_stack - 1;
+      GetInt(descr);
+      max = descr->data.value; /* The mode */
+      descr = e_stack - 2;
+      GetString(descr);
+      {
+        int32_t jlen;
+        char* jbuf = chunks_to_buffer(descr->data.str.saddr, &jlen);
+        result = json_parse(jbuf, jlen, (int)max);
+        k_free(jbuf);
+      }
+      k_pop(1);
+      k_dismiss();
+      *(e_stack++) = result;
+      break;
+
+    case CF_JBUILD:
+      descr = e_stack - 1;
+      GetInt(descr);
+      max = descr->data.value; /* The mode */
+      root = need_coll(e_stack - 2);
+      result = json_build(root, (int)max);
+      k_pop(1);
+      k_dismiss();
+      *(e_stack++) = result;
       break;
 
     case CF_GET:
@@ -886,6 +934,540 @@ Private void star_get(COLL_BUF* b, COLL_HEADER* cur, COLL_SEG* seg, int nseg, in
     buf_value(b, ent);
   else if (ent->d.type == COLL)
     star_get(b, ent->d.data.coll, seg, nseg, i + 1, star);
+}
+
+/* ======================================================================
+   JSON
+
+   json_parse() turns text into a collection (an object becomes a
+   collection, an array an array; true and false are kept as booleans and
+   null as a null, so that JBUILD() writes them back as they came).  On
+   failure it returns a null string, sets STATUS to ER_PARSE_ERROR and
+   INMAT() to the position of the character where it went wrong.
+
+   Spaces, tabs, returns, line feeds and all five mark characters between
+   elements are ignored.  Names and strings may be in double or single
+   quotes.  \uXXXX is the byte XX when it is 255 or less, so a mark or
+   an 8 bit character written by JBUILD() comes back as it was, and UTF-8
+   above that.  A number that is a whole number within 32 bits is an integer;
+   any other is a floating point number.                                   */
+
+#include <errno.h>
+#include <math.h>
+#include <stdlib.h>
+
+typedef struct {
+  unsigned char* s;
+  int32_t len;
+  int32_t pos;
+  int mode;
+} JP;
+
+Private bool jp_value(JP* jp, COLL_ENTRY* out, int depth);
+
+Private void jp_ws(JP* jp) {
+  unsigned char c;
+
+  while (jp->pos < jp->len) {
+    c = jp->s[jp->pos];
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || (c >= 0xFB))
+      jp->pos++;
+    else
+      break;
+  }
+}
+
+Private int jp_hex4(JP* jp, int32_t at) {
+  int v = 0;
+  int i;
+  char c;
+
+  if (at + 4 > jp->len)
+    return -1;
+  for (i = 0; i < 4; i++) {
+    c = jp->s[at + i];
+    v <<= 4;
+    if (c >= '0' && c <= '9')
+      v |= c - '0';
+    else if (c >= 'a' && c <= 'f')
+      v |= c - 'a' + 10;
+    else if (c >= 'A' && c <= 'F')
+      v |= c - 'A' + 10;
+    else
+      return -1;
+  }
+  return v;
+}
+
+/* Decode a quoted string.  The caller frees *out. */
+
+Private bool jp_string(JP* jp, char** out, int32_t* outlen) {
+  char quote = (char)jp->s[jp->pos];
+  char* b = (char*)k_alloc(COLL_ALLOC_TAG, jp->len - jp->pos + 8);
+  int32_t n = 0;
+  unsigned char c;
+  int cp;
+  int lo;
+
+  jp->pos++;
+  while (jp->pos < jp->len) {
+    c = jp->s[jp->pos];
+    if (c == (unsigned char)quote) {
+      jp->pos++;
+      b[n] = '\0';
+      *out = b;
+      *outlen = n;
+      return TRUE;
+    }
+    if (c != '\\') {
+      b[n++] = c;
+      jp->pos++;
+      continue;
+    }
+    jp->pos++;
+    if (jp->pos >= jp->len)
+      break;
+    c = jp->s[jp->pos];
+    switch (c) {
+      case '"': b[n++] = '"'; jp->pos++; break;
+      case '\'': b[n++] = '\''; jp->pos++; break;
+      case '\\': b[n++] = '\\'; jp->pos++; break;
+      case '/': b[n++] = '/'; jp->pos++; break;
+      case 'b': b[n++] = '\b'; jp->pos++; break;
+      case 'f': b[n++] = '\f'; jp->pos++; break;
+      case 'n': b[n++] = '\n'; jp->pos++; break;
+      case 'r': b[n++] = '\r'; jp->pos++; break;
+      case 't': b[n++] = '\t'; jp->pos++; break;
+      case 'u':
+        cp = jp_hex4(jp, jp->pos + 1);
+        if (cp < 0) {
+          k_free(b);
+          return FALSE;
+        }
+        jp->pos += 5;
+        if (cp >= 0xD800 && cp <= 0xDBFF && jp->pos + 1 < jp->len && jp->s[jp->pos] == '\\' && jp->s[jp->pos + 1] == 'u') {
+          lo = jp_hex4(jp, jp->pos + 2);
+          if (lo >= 0xDC00 && lo <= 0xDFFF) {
+            cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+            jp->pos += 6;
+          }
+        }
+        if (cp <= 0xFF) {
+          b[n++] = (char)cp; /* A byte, so marks and 8 bit data round trip */
+        } else if (cp <= 0x7FF) {
+          b[n++] = (char)(0xC0 | (cp >> 6));
+          b[n++] = (char)(0x80 | (cp & 0x3F));
+        } else if (cp <= 0xFFFF) {
+          b[n++] = (char)(0xE0 | (cp >> 12));
+          b[n++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+          b[n++] = (char)(0x80 | (cp & 0x3F));
+        } else {
+          b[n++] = (char)(0xF0 | (cp >> 18));
+          b[n++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+          b[n++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+          b[n++] = (char)(0x80 | (cp & 0x3F));
+        }
+        break;
+      default:
+        k_free(b);
+        return FALSE;
+    }
+  }
+  k_free(b);
+  return FALSE; /* No closing quote */
+}
+
+Private DESCRIPTOR str_descr(char* s, int32_t len) {
+  DESCRIPTOR d;
+
+  InitDescr(&d, STRING);
+  d.data.str.saddr = NULL;
+  if (len > 0) {
+    ts_init(&d.data.str.saddr, len + 1);
+    ts_copy(s, len);
+    ts_terminate();
+  }
+  return d;
+}
+
+/* How many bytes of s are a JSON number, 0 if none */
+
+Private int32_t json_number_len(unsigned char* s, int32_t len, bool* is_int) {
+  int32_t i = 0;
+
+  *is_int = TRUE;
+  if (i < len && s[i] == '-')
+    i++;
+  if (i >= len || s[i] < '0' || s[i] > '9')
+    return 0;
+  if (s[i] == '0') {
+    i++;
+  } else {
+    while (i < len && s[i] >= '0' && s[i] <= '9')
+      i++;
+  }
+  if (i < len && s[i] == '.') {
+    i++;
+    if (i >= len || s[i] < '0' || s[i] > '9')
+      return 0;
+    while (i < len && s[i] >= '0' && s[i] <= '9')
+      i++;
+    *is_int = FALSE;
+  }
+  if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+    i++;
+    if (i < len && (s[i] == '+' || s[i] == '-'))
+      i++;
+    if (i >= len || s[i] < '0' || s[i] > '9')
+      return 0;
+    while (i < len && s[i] >= '0' && s[i] <= '9')
+      i++;
+    *is_int = FALSE;
+  }
+  return i;
+}
+
+Private bool jp_value(JP* jp, COLL_ENTRY* out, int depth) {
+  unsigned char c;
+  COLL_HEADER* h;
+  COLL_ENTRY* ent;
+  char* str;
+  int32_t slen;
+  int32_t p;
+  int32_t n;
+  bool is_int;
+  bool found;
+  char tmp[64];
+
+  if (depth > JSON_MAX_DEPTH)
+    return FALSE;
+  jp_ws(jp);
+  if (jp->pos >= jp->len)
+    return FALSE;
+  c = jp->s[jp->pos];
+
+  if (c == '{' || c == '[') {
+    bool obj = (c == '{');
+    unsigned char close = obj ? '}' : ']';
+
+    h = coll_new(!obj);
+    InitDescr(&out->d, COLL);
+    out->d.data.coll = h;
+    out->tag = CT_PLAIN;
+    jp->pos++;
+    jp_ws(jp);
+    if (jp->pos < jp->len && jp->s[jp->pos] == close) {
+      jp->pos++;
+      return TRUE;
+    }
+    for (;;) {
+      jp_ws(jp);
+      if (jp->pos >= jp->len)
+        return FALSE;
+      if (obj) {
+        c = jp->s[jp->pos];
+        if (c == '"' || c == '\'') {
+          if (!jp_string(jp, &str, &slen))
+            return FALSE;
+        } else if ((jp->mode & JP_UNQUOTED_NAME_BIT) && (isalpha(c) || c == '_' || c == '$')) {
+          int32_t st = jp->pos;
+          while (jp->pos < jp->len && (isalnum(jp->s[jp->pos]) || jp->s[jp->pos] == '_' || jp->s[jp->pos] == '$' ||
+                                       jp->s[jp->pos] == '.' || jp->s[jp->pos] == '-'))
+            jp->pos++;
+          slen = jp->pos - st;
+          str = (char*)k_alloc(COLL_ALLOC_TAG, slen + 1);
+          memcpy(str, jp->s + st, slen);
+          str[slen] = '\0';
+        } else {
+          return FALSE;
+        }
+        jp_ws(jp);
+        if (jp->pos >= jp->len || jp->s[jp->pos] != ':') {
+          k_free(str);
+          return FALSE;
+        }
+        jp->pos++;
+        found = coll_find(h, str, slen, &p);
+        if (found) {
+          ent = &h->e[p];
+          k_release(&ent->d);
+          InitDescr(&ent->d, STRING);
+          ent->d.data.str.saddr = NULL;
+        } else {
+          coll_insert(h, p);
+          ent = &h->e[p];
+          ent->name = str;
+          ent->name_len = slen;
+          str = NULL;
+        }
+        if (str != NULL)
+          k_free(str);
+      } else {
+        coll_insert(h, h->count);
+        ent = &h->e[h->count - 1];
+      }
+      if (!jp_value(jp, ent, depth + 1))
+        return FALSE;
+      jp_ws(jp);
+      if (jp->pos >= jp->len)
+        return FALSE;
+      c = jp->s[jp->pos];
+      if (c == ',') {
+        jp->pos++;
+        continue;
+      }
+      if (c == close) {
+        jp->pos++;
+        return TRUE;
+      }
+      return FALSE;
+    }
+  }
+
+  if (c == '"' || c == '\'') {
+    if (!jp_string(jp, &str, &slen))
+      return FALSE;
+    out->d = str_descr(str, slen);
+    out->tag = CT_PLAIN;
+    k_free(str);
+    return TRUE;
+  }
+
+  if (c == '-' || (c >= '0' && c <= '9')) {
+    n = json_number_len(jp->s + jp->pos, jp->len - jp->pos, &is_int);
+    if (n == 0 || n > 60)
+      return FALSE;
+    memcpy(tmp, jp->s + jp->pos, n);
+    tmp[n] = '\0';
+    jp->pos += n;
+    out->tag = CT_PLAIN;
+    if (is_int) {
+      errno = 0;
+      long v = strtol(tmp, NULL, 10);
+      if (errno == 0 && v >= -2147483647L && v <= 2147483647L) {
+        InitDescr(&out->d, INTEGER);
+        out->d.data.value = (int32_t)v;
+        return TRUE;
+      }
+    }
+    InitDescr(&out->d, FLOATNUM);
+    out->d.data.float_value = strtod(tmp, NULL);
+    return TRUE;
+  }
+
+  if (jp->len - jp->pos >= 4 && memcmp(jp->s + jp->pos, "true", 4) == 0) {
+    jp->pos += 4;
+    InitDescr(&out->d, INTEGER);
+    out->d.data.value = 1;
+    out->tag = CT_BOOL;
+    return TRUE;
+  }
+  if (jp->len - jp->pos >= 5 && memcmp(jp->s + jp->pos, "false", 5) == 0) {
+    jp->pos += 5;
+    InitDescr(&out->d, INTEGER);
+    out->d.data.value = 0;
+    out->tag = CT_BOOL;
+    return TRUE;
+  }
+  if (jp->len - jp->pos >= 4 && memcmp(jp->s + jp->pos, "null", 4) == 0) {
+    jp->pos += 4;
+    InitDescr(&out->d, STRING);
+    out->d.data.str.saddr = NULL;
+    out->tag = (jp->mode & JP_NULL_BIT) ? CT_PLAIN : CT_NULL;
+    return TRUE;
+  }
+  return FALSE;
+}
+
+Private DESCRIPTOR json_parse(char* text, int32_t len, int mode) {
+  JP jp;
+  COLL_ENTRY top;
+  DESCRIPTOR result;
+
+  jp.s = (unsigned char*)text;
+  jp.len = len;
+  jp.pos = 0;
+  jp.mode = mode;
+  memset(&top, 0, sizeof top);
+  InitDescr(&top.d, STRING);
+  top.d.data.str.saddr = NULL;
+
+  jp_ws(&jp);
+  if (jp.pos < jp.len && (jp.s[jp.pos] == '{' || jp.s[jp.pos] == '[') && jp_value(&jp, &top, 0)) {
+    jp_ws(&jp);
+    if (jp.pos == jp.len) {
+      process.status = 0;
+      result = top.d;
+      return result;
+    }
+  }
+
+  /* Failed: give back what was built, say where */
+  k_release(&top.d);
+  process.status = ER_PARSE_ERROR;
+  process.inmat = jp.pos + 1;
+  InitDescr(&result, STRING);
+  result.data.str.saddr = NULL;
+  return result;
+}
+
+/* ----------------------------------------------------------------------
+   json_build()  -  A collection as JSON text
+
+   Compact: no spaces.  Names are in the collection's order.  A string
+   goes out in quotes unless JB_NUM is set and it is a number, or JB_NULL
+   is set and it is empty.  Every mark, control character and byte of 8 bits
+   or more inside a string is written as \u00XX, which is both valid JSON
+   and what JPARSE() reads back as the same byte.  A value with no JSON
+   form (a file variable, say) makes the whole build fail, or is a null
+   when JB_INVALID is set.                                                */
+
+Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth);
+
+Private void jb_str(COLL_BUF* b, unsigned char* s, int32_t len, int quote) {
+  int32_t i;
+  char t[8];
+  unsigned char c;
+
+  if (quote)
+    buf_add(b, (char*)&quote, 1);
+  for (i = 0; i < len; i++) {
+    c = s[i];
+    if (quote && c == (unsigned char)quote) {
+      t[0] = '\\';
+      t[1] = (char)c;
+      buf_add(b, t, 2);
+    } else if (c == '\\') {
+      buf_add(b, "\\\\", 2);
+    } else if (c == '\b') {
+      buf_add(b, "\\b", 2);
+    } else if (c == '\f') {
+      buf_add(b, "\\f", 2);
+    } else if (c == '\n') {
+      buf_add(b, "\\n", 2);
+    } else if (c == '\r') {
+      buf_add(b, "\\r", 2);
+    } else if (c == '\t') {
+      buf_add(b, "\\t", 2);
+    } else if (c < 0x20 || c >= 0x80) {
+      sprintf(t, "\\u%04x", c);
+      buf_add(b, t, 6);
+    } else {
+      buf_add(b, (char*)&s[i], 1);
+    }
+  }
+  if (quote)
+    buf_add(b, (char*)&quote, 1);
+}
+
+Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth) {
+  char t[64];
+  char* s;
+  int32_t len;
+  int32_t i;
+  bool is_int;
+  int vq;
+  int nq;
+  COLL_HEADER* h;
+  DESCRIPTOR d;
+
+  if (depth > JSON_MAX_DEPTH)
+    return FALSE;
+
+  if (e->tag == CT_NULL) {
+    buf_add(b, "null", 4);
+    return TRUE;
+  }
+  if (e->tag == CT_BOOL) {
+    if (e->d.data.value)
+      buf_add(b, "true", 4);
+    else
+      buf_add(b, "false", 5);
+    return TRUE;
+  }
+
+  switch (e->d.type) {
+    case INTEGER:
+      sprintf(t, "%d", (int)e->d.data.value);
+      buf_add(b, t, (int32_t)strlen(t));
+      return TRUE;
+
+    case FLOATNUM:
+      if (isnan(e->d.data.float_value) || isinf(e->d.data.float_value))
+        return FALSE;
+      sprintf(t, "%.15g", e->d.data.float_value);
+      if (strtod(t, NULL) != e->d.data.float_value)
+        sprintf(t, "%.17g", e->d.data.float_value);
+      buf_add(b, t, (int32_t)strlen(t));
+      return TRUE;
+
+    case STRING:
+      s = chunks_to_buffer(e->d.data.str.saddr, &len);
+      if ((mode & JB_NULL_BIT) && len == 0) {
+        buf_add(b, "null", 4);
+      } else if ((mode & JB_NUM_BIT) && len > 0 && json_number_len((unsigned char*)s, len, &is_int) == len) {
+        buf_add(b, s, len);
+      } else {
+        vq = (mode & JB_NOQUOTE_VALUE_BIT) ? 0 : (mode & JB_SQUOTE_VALUE_BIT) ? '\'' : '"';
+        jb_str(b, (unsigned char*)s, len, vq);
+      }
+      k_free(s);
+      return TRUE;
+
+    case COLL:
+      h = e->d.data.coll;
+      buf_add(b, h->is_array ? "[" : "{", 1);
+      nq = (mode & JB_NOQUOTE_NAME_BIT) ? 0 : (mode & JB_SQUOTE_NAME_BIT) ? '\'' : '"';
+      for (i = 0; i < h->count; i++) {
+        if (i)
+          buf_add(b, ",", 1);
+        if (!h->is_array) {
+          jb_str(b, (unsigned char*)h->e[i].name, h->e[i].name_len, nq);
+          buf_add(b, ":", 1);
+        }
+        if (!jb_value(b, &h->e[i], mode, depth + 1))
+          return FALSE;
+      }
+      buf_add(b, h->is_array ? "]" : "}", 1);
+      return TRUE;
+
+    default:
+      (void)d;
+      if (mode & JB_INVALID_BIT) {
+        buf_add(b, "null", 4);
+        return TRUE;
+      }
+      return FALSE;
+  }
+}
+
+Private DESCRIPTOR json_build(COLL_HEADER* root, int mode) {
+  COLL_BUF cb;
+  COLL_ENTRY top;
+  DESCRIPTOR result;
+  bool ok;
+
+  cb.b = (char*)k_alloc(COLL_ALLOC_TAG, 256);
+  cb.len = 0;
+  cb.cap = 256;
+
+  /* The root as an entry, without taking a reference */
+  memset(&top, 0, sizeof top);
+  InitDescr(&top.d, COLL);
+  top.d.data.coll = root;
+  ok = jb_value(&cb, &top, mode, 0);
+
+  if (!ok) {
+    k_free(cb.b);
+    process.status = ER_BUILD_ERROR;
+    InitDescr(&result, STRING);
+    result.data.str.saddr = NULL;
+    return result;
+  }
+  process.status = 0;
+  result = str_descr(cb.b, cb.len);
+  k_free(cb.b);
+  return result;
 }
 
 /* END-CODE */

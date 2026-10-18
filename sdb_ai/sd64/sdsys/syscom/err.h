@@ -78,6 +78,8 @@ $define ER$RDONLY.VAR  1015    ;* Variable is read-only
 $define ER$NOT.PHANTOM 1016    ;* Not a phantom process
 $define ER$CONNECTED   1017    ;* Device already connected
 $define ER$INVA.ITYPE  1018    ;* Invalid I-type
+$define ER$BUILD.ERROR 1019    ;* JBUILD(): a value has no JSON form
+$define ER$PARSE.ERROR 1020    ;* JPARSE(): not a JSON object or array
 $define ER$MAX.STRING  1900    ;* Max String (record) Size
 
 * 20xx  Catalog management errors

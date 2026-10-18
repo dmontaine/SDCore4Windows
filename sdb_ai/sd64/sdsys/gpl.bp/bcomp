@@ -549,6 +549,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "INSERT"          ; intrinsic.opcodes<-1> = OP.INSERT
    intrinsics<-1> = "INT"             ; intrinsic.opcodes<-1> = OP.INT
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
+   intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
+   intrinsics<-1> = "JPARSE"          ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "KEYCODE"         ; intrinsic.opcodes<-1> = OP.KEYCODE
    intrinsics<-1> = "KEYIN"           ; intrinsic.opcodes<-1> = OP.KEYIN
    intrinsics<-1> = "KEYINC"          ; intrinsic.opcodes<-1> = OP.KEYINC
@@ -1047,6 +1049,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
    thenelse.stack = ""
    arg.count.stack = ""
    collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
+   json.stack = ""
    for.var = ""
    lock.opcode = 0
 
@@ -4059,6 +4062,8 @@ end
                       in.insert,      ;* INSERT
                       in.one,         ;* INT
                       in.itype,       ;* ITYPE
+                      in.jbuild,      ;* JBUILD
+                      in.jparse,      ;* JPARSE
                       in.keyin,       ;* KEYCODE
                       in.keyin,       ;* KEYIN
                       in.keyin,       ;* KEYINC
@@ -4293,6 +4298,25 @@ in.element.exists:
             gosub exprf
             n = 1 ; gosub emit.numeric.load      ;* One path component
             n = 6 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+*** JPARSE(string {, mode})  JBUILD(collection {, mode})  - JSON text and data collections (functions 13, 14)
+in.jparse:
+            n = 13 ; goto in.json
+in.jbuild:
+            n = 14
+in.json:
+            ins n before json.stack<1>     ;* The argument may hold another JPARSE or JBUILD
+            gosub exprf
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = 0 ; gosub emit.numeric.load
+            end
+            n = json.stack<1>
+            del json.stack<1>
+            gosub emit.numeric.load
             goto intrinsic.common
 
 *** ENUMERATE(c)
