@@ -535,6 +535,7 @@
       $define SYS$CHILD_COUNT 1052  ;*   Number of direct child phantoms
       $define SYS$MAX_USERNO  1053  ;*   Highest user number
       $define SYS$PACKAGES    1054  ;*   Active packages (none in SD)
+      $define SYS$USER_COUNTS 1056  ;*   Users now: interactive, API, iPhantom, other phantom, and the peak (14 Oct 26)
       $define SYS$PARENT      1057  ;*   Parent process user number
       $define SYS$CHILDREN    1058  ;*   Direct child phantoms' user numbers
       $define SYS$TXN_CACHE   1065  ;*   The transaction cache

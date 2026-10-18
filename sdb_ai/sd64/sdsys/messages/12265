@@ -1,0 +1,10 @@
+T            Top of the list
+N or Return  Next page
+P            Previous page
+Q            Quit, keeping the items that have an asterisk
+QC           Quit, clearing every item
+S item       Select item (an asterisk shows it is selected); S may be left out
+C item       Clear item
+?            This help
+An item is a number, a range a-b, VISIBLE (this page) or ALL, which may be shortened to V and A.
+Several may be given, separated by a space or a comma: 1,4,8-11

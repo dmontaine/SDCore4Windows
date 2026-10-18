@@ -2,6 +2,64 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE USER TABLE, THE HOT SPOT MONITOR AND PSTAT.
+
+             LISTU and !LISTU show the account  Each user's line now ends with
+                        the account the user is in (": jack, sales"), and the
+                        ninth value of !LISTU is the account.  A user moves
+                        into another account with LOGTO and the table follows;
+                        a phantom starts in its parent's account.  The account
+                        is shown to the administrator and, for anybody else,
+                        only for the sessions of the login user who is asking;
+                        another user's account is left blank.  (LISTU itself
+                        is still the administrator's verb: an ordinary account
+                        has !LISTU, from a program.)
+             LISTU DETAIL  Adds a line above the report: the interactive users,
+                        the API sessions, the phantoms that count as licensed,
+                        the other phantoms, and the most users there have been
+                        at once since SD started.  SYSTEM(1056) gives the same
+                        five numbers.  SD has no licence count, so the third
+                        number is whatever the system marks as chargeable.
+             HSM  The Hot Spot Monitor counts each program's opens, reads,
+                        writes and deletes as well as its calls and processor
+                        time, and the report has a column for each.  What a
+                        program asks for through the OPEN of a name (its VOC
+                        lookup) or through READV and WRITEV (which read and
+                        write the record themselves) is not counted against it.
+             PSTAT  For a process that is waiting for a lock it also shows
+                        when the wait began, as LIST.READU DETAIL already did.
+
+             None of this changes what a user can do.  The shared memory
+             layout changed, so SD must be restarted by the installer, as for
+             any new build.
+
+18 Oct 26  SHOW.LIST, AND SMALLER CHANGES TO THE COMMAND LINE, CATALOG AND ED.
+
+             SHOW.LIST {n}  A new verb: it lists the items of an active select
+                        list a page at a time, each with an asterisk, and lets
+                        you clear and set the asterisks (C and S with numbers,
+                        ranges, VISIBLE or ALL, or just the number); T N P move
+                        about, Q keeps what is starred, QC keeps nothing, ? is
+                        help.  The list is made again from what is starred.
+             Catalogue names  A program run by typing its catalogue name,
+                        not the name of a VOC verb, now takes LPTR and NO.PAGE
+                        as RUN does.  The words stay in the sentence for the
+                        program.  A word in quotation marks is not a keyword.
+             .C-  In the command stack editor, .C- undoes the .C just before it.
+                        A .L or .? may come between; anything else ends the
+                        chance.
+             CATALOG ... LOCAL  When the VOC already holds a local catalogue
+                        pointer under that name and it points at a different
+                        object file, you are asked before it is overwritten
+                        (Return is no); NO.QUERY goes ahead as before, and the
+                        same file again does not ask.
+             ED  EV on an I-type that holds quoted text, brackets and
+                        semicolons no longer corrupts the expression (a quoted
+                        string was cut from the wrong place).  Text, subvalue
+                        and value marks can be typed into ED without NPRINT;
+                        the field and item marks still need it, because one in
+                        a line would split the line unseen.
+
 18 Oct 26  A BATCH OF SMALLER ADDITIONS (SD BASIC, THE QUERY PROCESSOR AND
            OPTION), EACH OFF UNLESS ASKED FOR.
 

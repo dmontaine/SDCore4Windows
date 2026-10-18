@@ -339,6 +339,7 @@ restart.cproc:
       xeq.command = ""
       data.queue = ""
       command.stack = ""
+      undo.n = 0 ; undo.text = ''     ;* 14 Oct 26 - the .C that .C- would undo (openQM item 296)
       command.stack.depth = min(max(config('CMDSTACK'), 20), 999)
       at.sentence = ""
       last.command = ""
@@ -735,6 +736,8 @@ connected.port:
          gosub stack.manipulation
          if at.command = "" then continue
       end
+
+      undo.n = 0      ;* 14 Oct 26 - a command that is run, or added with ?, ends the chance to undo a .C (item 296)
 
       if at.command[1] = '?' then
          if len(at.command) = 1 then
@@ -1166,6 +1169,20 @@ zoned.update:
 stack.manipulation:
    c = upcase(at.command[2,1])
 
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 296.  .C- puts back what the .C before it changed.  .L and .? may come between; any other dot
+*   command, and any command that is run (the main loop clears UNDO.N), ends the chance.  A second .C- has nothing left.
+   if upcase(trimb(at.command)) = '.C-' then
+      if undo.n > 0 and undo.n <= dcount(command.stack, @fm) then
+         command.stack<undo.n> = undo.text
+         display fmt(undo.n, "2'0'R") : '  ' : undo.text
+      end else
+         display sysmsg(12264) ;* There is no .C to undo
+      end
+      undo.n = 0
+      goto exit.stack.command
+   end
+   if c # 'L' and c # '?' then undo.n = 0
+
    if at.command matches "'.'1A1N0X" then
       n = matchfield(at.command, "'.'1A1-3N0X", 3)
       at.command = matchfield(at.command, "'.'1A1-3N0X", 4)
@@ -1205,6 +1222,7 @@ stack.manipulation:
             i = 1
          end
 
+         undo.text = command.stack<n>     ;* 14 Oct 26 - what .C- would put back (item 296)
          loop
             j = index(s, arg1, i)
          while j
@@ -1213,6 +1231,7 @@ stack.manipulation:
          while i
          repeat
          command.stack<n> = s
+         undo.n = n
          display fmt(n, "2'0'R") : '  ' : s
  
       case c = "D"                                    ;* .D
@@ -1921,6 +1940,7 @@ reparse:
                if z # '' then
                   voc.rec = 'V':@fm:'CA':@fm:verb
                   if option(OPT.RUN.NO.PAGE) then s = @(0,0)    ;* 0185 Inhibit pagination
+                  gosub scan.catalogued.options                 ;* 14 Oct 26 - LPTR and NO.PAGE, as RUN does (item 146)
                   goto reparse
                end
             end
@@ -3011,6 +3031,7 @@ int.logto:
 *   that way now, so new.account always holds the registered name.
 
    who = new.account
+   void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU, sheet 24 and 29)
 
 * 13 Aug 26 Windows port - administrator rights belong to SDSYS and are given
 *   up on the way out of it.  Nothing cleared the flag before, so they
@@ -4124,6 +4145,51 @@ expand.at.vars:
 
    value = new.value : value
 
+   return
+
+* ======================================================================
+* scan.catalogued.options
+*
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 146.  A program run by typing its catalogue name, not the name of a VOC verb, has the words
+*   LPTR and NO.PAGE after the name handled as RUN handles them: LPTR sends the output to printer 0, NO.PAGE stops the
+*   output being paginated.  Both stay in the sentence, so the program sees them if it scans its own command line.  A word
+*   inside quotation marks is not a keyword.  The words are looked for in the sentence as typed, split at spaces; the first
+*   is the program's own name.
+
+scan.catalogued.options:
+   sco.line = new.sentence : ' '      ;* the command line about to be executed (@SENTENCE is set after this)
+   sco.q = ''                ;* the quotation mark in force, if any
+   sco.w = ''                ;* the word being collected
+   sco.first = @true         ;* the first word is the program's name
+   for sco.i = 1 to len(sco.line)
+      sco.c = sco.line[sco.i, 1]
+      begin case
+         case sco.q # ''
+            sco.w := sco.c
+            if sco.c = sco.q then sco.q = ''
+         * 18 Oct 26 Windows port - Linux also treats the backslash as a quotation mark here; on
+         *   Windows it is the path separator, an ordinary character (BACKSLASH.NOT.QUOTE has no
+         *   effect here), so a path argument must not open a quotation.
+         case sco.c = "'" or sco.c = '"'
+            sco.q = sco.c
+            sco.w := sco.c
+         case sco.c = ' '
+            if sco.w # '' then
+               if not(sco.first) then
+                  begin case
+                     case upcase(sco.w) = 'LPTR'
+                        printer on
+                     case upcase(sco.w) = 'NO.PAGE'
+                        s = @(0,0)
+                  end case
+               end
+               sco.first = @false
+               sco.w = ''
+            end
+         case 1
+            sco.w := sco.c
+      end case
+   next sco.i
    return
 
 * ======================================================================

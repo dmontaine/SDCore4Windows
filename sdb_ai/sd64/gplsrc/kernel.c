@@ -174,6 +174,22 @@ retry_login:
     my_uptr->lockwait_index = 0;
     my_uptr->ttyname[0] = '\0';
 
+    /* 14 Oct 26 dm - sheet items 24 and 29: the account is empty until the session enters one (a phantom's cell
+       was given its parent's account when the parent reserved it, and keeps it).  And item 38: the peak number of
+       cells in use, counted here while this process holds SHORT_CODE, including the cell it has just taken.    */
+    if (!is_phantom)
+      my_uptr->account[0] = '\0';
+    {
+      u_int32_t in_use = 0;
+      int16_t ui;
+
+      for (ui = 1; ui <= sysseg->max_users; ui++)
+        if (UPtr(ui)->uid != 0)
+          in_use++;
+      if (in_use > sysseg->users_peak)
+        sysseg->users_peak = in_use;
+    }
+
     /* Ensure file map table is all zero */
 
     memset((char*)(my_uptr->file_map), 0, sysseg->numfiles * sizeof(u_int16_t));
@@ -1439,6 +1455,8 @@ Private void dump_status() {
       ev_printf("%d%c%s%c", abs(fptr->file_lock), VALUE_MARK, fptr->pathname,
                 VALUE_MARK);
     }
+    /* 14 Oct 26 dm - sheet item 577: value 4, when the wait began (seconds since 1 Jan 1970 UTC), for PSTAT */
+    ev_printf("%c%d", VALUE_MARK, (int)(my_uptr->lockwait_time));
   }
 
   /* Field 5  -  Account name */

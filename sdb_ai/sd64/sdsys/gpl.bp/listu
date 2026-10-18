@@ -19,17 +19,27 @@
 * 
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-5: the account the user is in follows the user name (sheet 24 and 29), shown for the
+*               administrator and for the caller's own sessions only; DETAIL adds the line of counts (sheet 38).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
+*   LISTU {DETAIL} {NO.PAGE} {LPTR n}
+*
 * 0         1         2         3         4         5         6         7
 * 01234567890123456789012345678901234567890123456789012345678901234567890123456789
-*   User  Pid          Puid  Login time    Origin : Username
-* * 1234  12345678901  1234  24 Apr 17:52  Console : Administrator
-*   1234  12345678901  1234  24 Apr 17:52  123.123.123.123 : Guest
+*   User  Pid          Puid  Login time    Origin : Username, Account
+* * 1234  12345678901  1234  24 Apr 17:52  Console : Administrator, sdsys
+*   1234  12345678901  1234  24 Apr 17:52  123.123.123.123 : Guest, sales
 *   1234  12345678901  1234  24 Apr 17:52  123.123.123.123 pts/1 : Guest
-*   1234  12345678901  1234  24 Apr 17:52  Phantom : Administrator (xxx)
+*   1234  12345678901  1234  24 Apr 17:52  Phantom : Administrator, sdsys (xxx)
+*
+* The account is shown for the administrator and for the sessions of the login user who runs LISTU; it is left out
+* for everybody else's (and for a session that has not entered an account yet).
+*
+* DETAIL puts a line of counts above the report: interactive users, API sessions, phantoms that count as licensed
+* (iPhantom), other phantoms, and the most users there have been at once since SD started.
 *
 * END-DESCRIPTION
 *
@@ -47,6 +57,7 @@ $include keys.h
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
    lptr = -1
+   detail = @false
 
 * ---------------  Step 1 -  Parse command
 
@@ -61,6 +72,9 @@ $include keys.h
       begin case
          case keyword = KW$NO.PAGE
             s = @(0,0)
+
+         case keyword = KW$DETAIL
+            detail = @true
 
          case keyword = KW$LPTR
             lptr = 0
@@ -97,7 +111,15 @@ $include keys.h
 
    if lptr = 0 then printer on
 
-   print '  User  Pid          Puid  Login time    Origin : Username'
+   if detail then
+      counts = system(1056)    ;* interactive, API, iPhantom, other phantoms, peak (14 Oct 26, sheet 38)
+      print sysmsg(12261, counts<1>, counts<2>, counts<3>, counts<4>) : ', ' : sysmsg(12263, counts<5>)
+   end
+
+   print '  User  Pid          Puid  Login time    Origin : Username, Account'
+
+   see.all = kernel(K$ADMINISTRATOR, -1)    ;* 14 Oct 26: the account is for the administrator and for one's own sessions
+   me = kernel(K$USERNAME, 0)
 
    for i = 1 to num.users
       udata = raise(ulist<i>)
@@ -110,6 +132,8 @@ $include keys.h
       username = udata<K$USERS.UNAME>
       ttyname = udata<K$USERS.DEV>
       login.time = udata<K$USERS.LOGIN>
+      acct = udata<K$USERS.ACCOUNT>
+      if not(see.all) and username # me then acct = ''
 
       begin case
          case bitand(flg, USR$PHANTOM)   ; s = 'Phantom'
@@ -121,6 +145,7 @@ $include keys.h
 
       if ttyname # '' then s := ' ' : ttyname
       if username # '' then s := ': ':username
+      if acct # '' then s := ', ':acct
 
       begin case
          case bitand(flg, USR$LOGOUT)   ; s := ' (logout pending)'

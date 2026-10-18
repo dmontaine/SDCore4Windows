@@ -658,6 +658,41 @@ void op_system() {
       descr->data.str.saddr = str;
       break;
 
+    case 1056: /* 14 Oct 26 - sheet item 38 (LISTU DETAIL), openQM SYS$USER.COUNTS: the user counts as a field mark delimited
+                  array: interactive users, API (the QMClient count) sessions, interactive phantoms that count as
+                  licensed (USR_CHGPHANT: SD has no licence, so the flag is only ever set by what sets it), other
+                  phantoms, and the peak number of users at once since SD started.  Counted from the user table.   */
+      {
+        unsigned cnt[5] = {0, 0, 0, 0, 0};
+        int16_t ui;
+        USER_ENTRY *up;
+
+        StartExclusive(SHORT_CODE, 81);
+        for (ui = 1; ui <= sysseg->max_users; ui++) {
+          up = UPtr(ui);
+          if (up->uid <= 0)
+            continue;
+          /* A phantom's cell is reserved by its parent (puid set) a moment before the phantom itself starts and sets
+             USR_PHANTOM, so a cell with a parent is a phantom too.                                              */
+          if ((up->flags & USR_PHANTOM) || (up->puid != 0))
+            cnt[(up->flags & USR_CHGPHANT) ? 2 : 3]++;
+          else if (up->flags & (USR_SDAPISRVR | USR_SDNET))
+            cnt[1]++;
+          else
+            cnt[0]++;
+        }
+        cnt[4] = sysseg->users_peak;
+        EndExclusive(SHORT_CODE);
+
+        str = NULL;
+        ts_init(&str, 64);
+        ts_printf("%u%c%u%c%u%c%u%c%u", cnt[0], FIELD_MARK, cnt[1], FIELD_MARK, cnt[2], FIELD_MARK, cnt[3], FIELD_MARK, cnt[4]);
+        ts_terminate();
+      }
+      InitDescr(descr, STRING);
+      descr->data.str.saddr = str;
+      break;
+
     case 1072: /* The IP address SD listens on: sdwind.c's API listener binds INADDR_ANY, so null (all addresses) */
       k_put_c_string("", descr);
       break;

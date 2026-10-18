@@ -1,0 +1,187 @@
+* SHWLIST
+* SHOW.LIST command
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-7 (openQM ref 449).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   SHOW.LIST {listno}
+*
+* Shows the items of an active numbered select list (list 0 if no number is given) a page at a time, each with its number
+* and an asterisk when it is selected, and lets the user clear and set the asterisks.  All items start selected.  When the
+* user quits, the list is made again from the items that carry an asterisk.
+*
+*   T            top of the list              N or Return   next page             P   previous page
+*   Q            quit, keeping the asterisks  QC            quit, clearing all    ?   help
+*   S item       select item                  C item        clear item            item   the same as S item
+*
+* An item is a number, a range a-b (no spaces round the hyphen), VISIBLE (the items on this page) or ALL; VISIBLE and ALL may
+* be shortened to their first letters.  Several may be given, separated by spaces or commas: "1,4,8-11".  The space after S
+* and C is optional.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $show.list
+$catalog $shwlist
+
+$include err.h
+$include keys.h
+$include parser.h
+$include syscom.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   * The list number, if there is one
+
+   list.no = 0
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   if token.type # PARSER$END then
+      if not(token matches '1N0N') then stop sysmsg(3255) ;* Illegal select list number
+      list.no = token + 0
+      if list.no > high.select then stop sysmsg(3255)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      if token.type # PARSER$END then stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   if not(selectinfo(list.no, SL$ACTIVE)) then stop sysmsg(3260, list.no) ;* Select list xx is not active
+
+   * The items.  Reading a list uses it up: it is made again from what is kept.
+
+   items = ''
+   num.items = 0
+   loop
+      readnext id from list.no else exit
+      num.items += 1
+      items<num.items> = id
+   repeat
+
+   sel = str('1', num.items)           ;* one character for each item: 1 selected, 0 not
+   page.len = max(@crthigh - 3, 3)
+   top = 1
+   done = @false
+
+   loop
+      gosub show.page
+      prompt ''
+      print ': ' :
+      input cmd
+      * When the input has ended (a pipe, a dropped line) INPUT gives '' for ever, which is "next page" for ever:
+      * end as Q does, keeping what is starred.
+      if cmd = '' and status() = ER$EOF then cmd = 'Q'
+      ucmd = upcase(trim(cmd))
+      begin case
+         case ucmd = '' or ucmd = 'N'
+            if top + page.len <= num.items then top += page.len
+         case ucmd = 'P'
+            top = max(1, top - page.len)
+         case ucmd = 'T'
+            top = 1
+         case ucmd = 'Q'
+            done = @true
+         case ucmd = 'QC'
+            sel = str('0', num.items)
+            done = @true
+         case ucmd = '?'
+            htxt = sysmsg(12265)
+            for i = 1 to dcount(htxt, @fm)
+               print htxt<i>
+            next i
+            print sysmsg(5042) :       ;* Press return to continue, Q to quit
+            x = keyin()
+            print
+         case 1
+            mark = @true
+            spec = trim(cmd)
+            if ucmd[1,1] = 'S' then spec = trim(spec[2,999999])
+            else if ucmd[1,1] = 'C' then
+               mark = @false
+               spec = trim(spec[2,999999])
+            end
+            gosub apply.spec
+      end case
+   until done
+   repeat
+
+   * Make the list again from the items that are still selected
+
+   kept = ''
+   for i = 1 to num.items
+      if sel[i,1] = '1' then kept<-1> = items<i>
+   next i
+   clearselect list.no
+   if kept # '' then formlist kept to list.no
+
+   @system.return.code = dcount(kept, @fm)
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+* show.page - the page that starts at TOP
+
+show.page:
+   last = min(top + page.len - 1, num.items)
+   for i = top to last
+      print fmt(i, '5R') : ' ' : (if sel[i,1] = '1' then '*' else ' ') : ' ' : items<i>
+   next i
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+* apply.spec - set (MARK true) or clear (MARK false) the items SPEC names.  A bad part of it is reported and the rest is
+* still applied.
+
+apply.spec:
+   spec = convert(',', ' ', spec)
+   for k = 1 to dcount(spec, ' ')
+      word = upcase(field(spec, ' ', k))
+      if word = '' then continue
+      from.i = 0
+      to.i = 0
+      begin case
+         case word matches '1N0N'
+            from.i = word + 0 ; to.i = from.i
+         case word matches "1N0N'-'1N0N"
+            from.i = field(word, '-', 1) + 0
+            to.i = field(word, '-', 2) + 0
+         case 'ALL'[1, len(word)] = word
+            from.i = 1 ; to.i = num.items
+         case 'VISIBLE'[1, len(word)] = word
+            from.i = top ; to.i = last
+      end case
+      if from.i < 1 or to.i > num.items or from.i > to.i then
+         print sysmsg(12266, word)      ;* Invalid item (xx)
+         continue
+      end
+      for i = from.i to to.i
+         sel[i,1] = if mark then '1' else '0'
+      next i
+   next k
+   return
+end
+
+* END-CODE

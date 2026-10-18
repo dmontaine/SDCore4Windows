@@ -524,9 +524,10 @@ void op_kernel() {
           if (result.data.str.saddr != NULL)
             ts_copy_byte(FIELD_MARK);
 
-          ts_printf("%d%c%d%c%s%c%d%c%d%c%s%c%s%c%d", (int)(uptr->uid), VALUE_MARK, (int)(uptr->pid), VALUE_MARK, 
+          ts_printf("%d%c%d%c%s%c%d%c%d%c%s%c%s%c%d%c%s", (int)(uptr->uid), VALUE_MARK, (int)(uptr->pid), VALUE_MARK,
                     uptr->ip_addr, VALUE_MARK, (int)(uptr->flags), VALUE_MARK, uptr->puid, VALUE_MARK,
-                    uptr->username, VALUE_MARK, uptr->ttyname, VALUE_MARK, uptr->login_time);
+                    uptr->username, VALUE_MARK, uptr->ttyname, VALUE_MARK, uptr->login_time, VALUE_MARK,
+                    uptr->account);   /* 14 Oct 26: the ninth value (sheet 24, 29) */
           if (n)
             break;
         }
@@ -654,6 +655,26 @@ void op_kernel() {
       result.data.value =
           (is_admin && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
     } break;
+
+    /* 14 Oct 26 dm - sheet items 24, 29 and 38.  K_SET_ACCOUNT: the account the session is in, for the user table
+       (LISTU, !LISTU).  Set only from a $internal program, like K_SET_USERNAME; the name as it stands is returned,
+       so a refused caller is told what it still is.  An overlength name (k_get_c_string answers -1) sets nothing.
+       K_USER_PEAK: the most user table cells in use at once since SD started.
+       18 Oct 26 Windows port - carried from Linux 0b6a207 with Linux's key numbers (97, 98); the S.63 gate keys
+       it sits among (K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN) are not carried here.                          */
+    case K_SET_ACCOUNT:
+      {
+        char aname[MAX_ACCOUNT_NAME_LEN + 1];
+
+        if ((process.program.flags & HDR_INTERNAL) && (k_get_c_string(descr, aname, MAX_ACCOUNT_NAME_LEN) >= 0))
+          strcpy((char *)(my_uptr->account), aname);
+      }
+      k_put_c_string((char *)(my_uptr->account), &result);
+      break;
+
+    case K_USER_PEAK:
+      result.data.value = (int32_t)(sysseg->users_peak);
+      break;
 
     /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  HOW DID THIS SESSION
        ARRIVE?  keys.h has the three-way table this completes.
@@ -1039,6 +1060,7 @@ void op_phantom() {
       uptr->uid = phantom_uid;
       uptr->puid = process.user_no;
       strcpy((char *)(uptr->username), (char *)(my_uptr->username));
+      strcpy((char *)(uptr->account), (char *)(my_uptr->account));   /* 14 Oct 26: starts in its parent's account */
       phantom_user_index = i;
       break;
     }

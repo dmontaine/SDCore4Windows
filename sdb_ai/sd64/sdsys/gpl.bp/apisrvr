@@ -903,6 +903,7 @@ i = ospath("", os$flush.cache)
 account.path = ospath("", os$cwd)     ;* Ensure @PATH is absolute path
 initial.account.path = account.path   ;* Make WHO show only one element
 who = new.account
+void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU, sheet 24 and 29)
 
 voc = new.voc
 

@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-5, sheet 24: the ninth value is the account the user is in.  Shown only to the
+*               administrator and for the caller's own sessions; blank for anybody else's (owner's rule: the
+*               delivered system is the tighter one).
 * 18 Oct 26 Windows port - from Linux 0867e45 (10 Oct 26): 1.2-0 bundle A-5, openQM ref 12 (and ref 24, partly).
 * END-HISTORY
 *
@@ -33,10 +36,13 @@
 *    2  operating system pid  6  login user name
 *    3  IP address            7  terminal device name
 *    4  process flags (bits)  8  login time, seconds since 1 Jan 1970
+*    9  account the user is in (see below)
 *
 * The values are those the kernel keeps for K$USERS and the flag bits are
 * the USR$ values of INT$KEYS.H, so a program can test them with BITAND().
-* The account a user is in is not among them: the kernel does not record it.
+* The account (value 9) is shown for the administrator, and for the sessions of
+* the login user who is asking; it is empty for everybody else's, and for a
+* session that has not entered an account yet.
 *
 * END-DESCRIPTION
 *
@@ -55,9 +61,13 @@ $include int$keys.h
    unsorted = kernel(K$USERS, 0)
    if unsorted = '' then return
 
+   see.all = kernel(K$ADMINISTRATOR, -1)
+   me = kernel(K$USERNAME, 0)
+
    keys = ''
    for i = 1 to dcount(unsorted, @fm)
       uid = unsorted<i,K$USERS.UID> + 0
+      if not(see.all) and unsorted<i,K$USERS.UNAME> # me then unsorted<i,K$USERS.ACCOUNT> = ''
       locate uid in keys<1> by 'AR' setting pos else null
       ins uid before keys<pos>
       ins unsorted<i> before data<pos>

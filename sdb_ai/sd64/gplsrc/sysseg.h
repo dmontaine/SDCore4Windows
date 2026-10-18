@@ -141,6 +141,9 @@ struct SYSSEG {
    u_int32_t lgn_waiting;       /* Waiting now */
    u_int32_t lgn_peak;          /* Peak number waiting at once */
    u_int32_t lgn_failed;        /* ...of which gave up and were refused */
+   /* 14 Oct 26 dm - 1.2-0 sheet item 38 (LISTU DETAIL).  The most user table cells in use at once since SD started,
+      counted at each login under SHORT_CODE; kernel(K$USERS.PEAK, 0).  Last, so no offset moves.                 */
+   u_int32_t users_peak;
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */
@@ -193,6 +196,10 @@ struct USER_ENTRY
   char ip_addr[MAX_SOCKET_ADDR_STR_LEN];
   #define MAX_TTYNAME_LEN 15
   char ttyname[MAX_TTYNAME_LEN+1];
+  /* 14 Oct 26 dm - 1.2-0 sheet items 24 and 29 (LISTU shows the account).  The account the session is in, set by
+     the programs that own entry to an account (LOGIN, CPROC's logto, APISRVR) through kernel(K$SET.ACCOUNT, ...).
+     Empty until then, and for a session that has not entered an account yet.                                  */
+  char account[MAX_ACCOUNT_NAME_LEN+1];
   int16_t flags;                 /* Also defined in INT$KEYS.H */
      #define USR_PHANTOM     0x0001 /* Is a phantom */
      #define USR_LOGOUT      0x0002 /* Logout in progress */

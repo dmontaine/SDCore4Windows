@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-11: EV on a compound I-type no longer corrupts a quoted string (openQM item 268: the
+*               string was cut from CURRENT.LINE with an index nothing had set); text, subvalue and value marks are
+*               accepted as typed input without NPRINT (item 320).
 * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is edited as its JSON text, one
 *               element to a line (JB$PRETTY); filed or unloaded into a data
 *               collection file the lines go back as text, which the file parses
@@ -99,6 +102,14 @@ $define COMMAND.STACK.DEPTH 99
 
 !  for i = 160 to 250              ;* 0244
    for i = 128 to 250              ;* Allow C1 set for some languages
+      printing.chars := char(i)
+   next i
+
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 320: the text, subvalue and value marks (251 to 253) are accepted as typed, without NPRINT:
+*   they are what separates the parts of one line (a field) in the record being edited.  The field mark (254) and the
+*   item mark (255) are not: a field mark typed into a line would split it into two without the user seeing it, so those
+*   two still need NPRINT or a ^254 / ^255 escape.
+   for i = 251 to 253
       printing.chars := char(i)
    next i
 
@@ -1258,7 +1269,7 @@ e:
                   case c = '"' or c = "'" or c = '\'
                      j = index(s[1,9999999], c, 2)
                      if j = 0 then j = len(s)
-                     rec := current.line[i,j]
+                     rec := s[1,j]       ;* 14 Oct 26 (openQM item 268): was current.line[i,j], with I never assigned
                      s = s[j+1,9999999]
 
                   case parenthesis.level

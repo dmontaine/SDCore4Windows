@@ -78,6 +78,7 @@ $include keys.h
    account.path = ospath("", os$cwd)     ;* @PATH
 
    who = acc
+   void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU, sheet 24 and 29)
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
    private.catalogue = 'cat'

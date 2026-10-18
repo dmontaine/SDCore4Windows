@@ -360,6 +360,19 @@
    answers about Windows groups, which any caller can already read.        */
 #define K_GROUP_MEMBER       68
 
+/* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26 dm): 1.2-0 sheet items 24, 29 and 38 (LISTU).
+   THE NUMBERS ARE LINUX'S, in its own block 90-99, and are kept exactly (kernel key numbers are
+   compiled into BASIC programs shared byte for byte).  This port keeps 58-89 for its own keys; 90-96
+   are LEFT EMPTY here on purpose (Linux's K_REAL_USER, K_LOGIN_UID, K_WINSIZE and the S.63 gate keys
+   K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN are not carried: PAM and a terminfo screen library, and
+   the held OS-access gates).  GPL.BP/INT$KEYS.H carries the same numbers.
+     K_SET_ACCOUNT  the account the session is in, for the user table.  The argument is the account name, set only from
+                    a $internal program (LOGIN, CPROC's logto, APISRVR, which own entry to an account), and the name
+                    as it stands is returned.  K_USERS answers it as the ninth value of each user.
+     K_USER_PEAK    the most user table cells in use at once since SD started (sysseg->users_peak).               */
+#define K_SET_ACCOUNT        97
+#define K_USER_PEAK          98
+
 /* PTERM() function action keys */
 #define PT_BREAK              1
 #define PT_INVERT             2

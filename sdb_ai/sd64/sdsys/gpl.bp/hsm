@@ -132,15 +132,20 @@ $include int$keys.h
             if n = 0 then
                display sysmsg(3350)     ;* There is no data to report - check HSM is enabled
             end else
-               * Calls..  CP time...  Program
-               * 1234567  123456.789  xxxxxxxxxxxxxxxxxxxxx
+               * Calls..  CP time...  Opens... Reads.... Writes.. Deletes. Program
+               * 1234567  123456.789  12345678 123456789 12345678 12345678 xxxxxxxxxxxxxxxxxxxxx
+               * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 491: the i/o counters, values 4 to 7 of each program's data
 
                if user then display sysmsg(3352, user)  ;* Data for user %1
-               display sysmsg(3351)     ;* Calls..  CP time...  Program
+               display sysmsg(12262)    ;* Calls..  CP time...  Opens... Reads.... Writes.. Deletes. Program
                for i = 1 to n
                   ss = s<i>
                   display fmt(ss<1, 2>, '7R') : '  ' :         ;* Calls
                   display fmt(ss<1, 3> / 1000, '10R3') : '  ' :     ;* CP time
+                  display fmt(ss<1, 4> + 0, '8R') : ' ' :           ;* Opens
+                  display fmt(ss<1, 5> + 0, '9R') : ' ' :           ;* Reads
+                  display fmt(ss<1, 6> + 0, '8R') : ' ' :           ;* Writes
+                  display fmt(ss<1, 7> + 0, '8R') : ' ' :           ;* Deletes
                   display ss<1, 1>                             ;* Program name
                next i
             end

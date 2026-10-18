@@ -304,6 +304,12 @@ void * find_object(int32_t id);
 STRING_CHUNK * hsm_dump(void);
 void hsm_enter(void);
 void hsm_on(void);
+/* 14 Oct 26 - sheet item 491: count a file operation against the running program (object.c) */
+#define HSM_OPEN 0
+#define HSM_READ 1
+#define HSM_WRITE 2
+#define HSM_DELETE 3
+void hsm_io(int what);
 
 /* OBJPROG.C */
 OBJDATA * create_objdata(u_char * obj);

@@ -247,6 +247,15 @@ report:
          print '        ' : sysmsg(6810, rec<4,2>) ;* File xx
          print '        ' : sysmsg(6812, rec<4,3>) ;* Record xx
       end
+
+      * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 577: when the wait began, in the time zone of the user running the command (the
+      * kernel keeps seconds since 1 Jan 1970 UTC; LIST.READU DETAIL formats it the same way).
+      if rec<4,4> > 0 then
+         loc = rec<4,4> + system(1019)
+         d = int(loc / 86400) + 732
+         stamp = oconv(d, 'DD'):' ':oconv(oconv(d, 'DMA'), 'MCT')[1,3]:' ':oconv(d, 'DY')[3,2]:' ':oconv(rem(loc, 86400), 'MTS')
+         print '        ' : sysmsg(12171, stamp) ;* Wait since xx
+      end
    end
 
    delete ipc.f, 'S':user

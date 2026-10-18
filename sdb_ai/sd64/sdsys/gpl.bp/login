@@ -947,6 +947,7 @@ deffun pw_complex(pw) calling '!pw_complex'
    end
 
    who = initial.account
+   void kernel(K$SET.ACCOUNT, who)      ;* 14 Oct 26 - the user table's account (LISTU, sheet 24 and 29)
 
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  AFTER THE MOVE, NOT INSIDE
 *   THE CASE, and for the reason CPROC:2723 gives at the same moment: the

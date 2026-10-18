@@ -193,6 +193,12 @@
 *   -1 COULD NOT TELL - and a caller that reads -1 as 0 restores the defect
 *   this replaced, where a failed lookup read as "not granted".
       $define K$GROUP.MEMBER     68      ;* 1 member, 0 not, -1 could not tell
+* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): sheet items 24, 29 and 38 (LISTU).  K$SET.ACCOUNT: the account the session is in, for the user
+*   table; settable only from $internal (LOGIN, CPROC's logto, APISRVR), the name as it stands is returned.
+*   K$USER.PEAK: the most user table cells in use at once since SD started.  Linux's numbers, kept exactly
+*   (its block is 90-99; 90-96 are left empty here).  Must match gplsrc/keys.h.
+      $define K$SET.ACCOUNT     97       ;* Set the session's account name (user table)
+      $define K$USER.PEAK       98       ;* Peak number of users since SD started
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

@@ -400,6 +400,8 @@ catalogue.program:
             end
          end
 
+         had.local = @false
+         old.local.path = ''
          readu voc.rec from @voc, call.name then
             if upcase(voc.rec[1,1]) # 'V' or voc.rec<2> # 'CS' then
                release @voc, call.name
@@ -407,6 +409,8 @@ catalogue.program:
                display sysmsg(3028, call.name) ;* VOC already contains a conflicting entry named xx
                return
             end
+            had.local = @true
+            old.local.path = voc.rec<3>
          end
 
          program.path = fileinfo(object.file, fl$path) : @ds : program.name
@@ -417,6 +421,23 @@ catalogue.program:
             * Windows paths are case blind, and the two spellings come from different places
             if upcase(program.path[1, len(home)]) = upcase(home) then program.path = program.path[len(home) + 1, 99999]
          end
+         * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 490: a local pointer that already exists and names a DIFFERENT object file is not
+         * overwritten without asking (NO.QUERY goes ahead as before).  Enter is N, as at 3033-3035.
+         if had.local and old.local.path # program.path and not(no.query) then
+            loop
+               display sysmsg(12267, call.name, old.local.path) : ;* Local catalogue entry xx is for yy. Replace it (y/<n>)?
+               input yn
+               yn = upcase(yn)
+               if yn = '' then yn = 'N'
+            until yn = 'Y' or yn = 'N'
+            repeat
+            if yn = 'N' then
+               release @voc, call.name
+               if old.local.id # '' then release @voc, old.local.id
+               return
+            end
+         end
+
          voc.rec = "V" : @fm : "CS" : @fm : program.path
          write voc.rec to @voc, call.name
          if old.local.id # '' then delete @voc, old.local.id

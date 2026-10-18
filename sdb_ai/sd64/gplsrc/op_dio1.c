@@ -563,6 +563,7 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
      reading only.  Always TRUE for a session that is not CN_SOCKET.       */
   bool net_may_write = TRUE;
 
+  hsm_io(HSM_OPEN); /* 14 Oct 26: Hot Spot Monitor counts, sheet 491 */
   /* Stack:
 
       |================================|=============================|
