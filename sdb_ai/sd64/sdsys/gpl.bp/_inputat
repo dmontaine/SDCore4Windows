@@ -67,6 +67,13 @@ $include err.h
 
    field.mode = bitand(flags, IN$FIELD.MODE)
    password = bitand(flags, IN$PASSWORD)
+   * 18 Oct 26 Windows port - from Linux bddbb79 (14 Oct 26): - openQM 168, NO.ECHO: the field is masked like a password's, with blanks, so nothing typed shows.
+   * (HIDDEN with NO.ECHO shows blanks too, as INPUT does: nothing at all appears.)
+   mask.ch = '*'
+   if bitand(flags, IN$NO.ECHO) then
+      password = 1
+      mask.ch = ' '
+   end
    pagination = kernel(K$PAGINATE, -1)
    return.key = seq(pterm(PT$INEWLINE,''))
    uppercase = bitand(flags, IN$UPCASE)
@@ -86,10 +93,10 @@ $include err.h
       s = if bitand(flags, IN$MASK) then fmt(string, mask) else string
 
       if max.input then
-         if password then display str('*', max.input) : @(x, y) :
+         if password then display str(mask.ch,max.input) : @(x, y) :
          else display fmt(s[1, max.input], max.input:'L') : @(x, y) :
       end else
-         if password then display str('*', len(s)) : @(x, y) :
+         if password then display str(mask.ch,len(s)) : @(x, y) :
          else display s : @(x, y) :
       end
    end else
@@ -111,10 +118,10 @@ $include err.h
 
       if echo.input then
          if max.input then
-            if password then display str('*', max.input) :
+            if password then display str(mask.ch,max.input) :
             else display fmt(string[1,max.input], max.input:'L') :
          end else
-            if password then display str('*', len(string)) :
+            if password then display str(mask.ch,len(string)) :
             else display string :
          end
          if not(bitand(flags, IN$NOLF)) then display
@@ -308,13 +315,13 @@ insert.char:
    if posn > len(string) then                ;* Appending to string
       string := c
       if echo.input then
-         display if password then '*' else c :
+         display if password then mask.ch else c :
       end
    end else
       if overlay then                 ;* Overlaying
          string[posn, 1] = c
          if echo.input then
-            display if password then '*' else c :
+            display if password then mask.ch else c :
          end
       end else                            ;* Inserting in mid-string
          string = (string[1, posn - 1] : c : string[posn, 99999999])
@@ -323,7 +330,7 @@ insert.char:
          if echo.input then
             if panning then n = max.input + pan.offset + 1 - posn
             else n = len(string) - posn + 1
-            if password then display str('*', n)
+            if password then display str(mask.ch,n)
             else display string[posn, n] :
          end
       end
@@ -348,7 +355,7 @@ backspace:
          if panning then n = max.input + pan.offset + 1- posn
          else n = 99999999
          if echo.input then
-             s = if password then str('*', len(string)) else string
+             s = if password then str(mask.ch,len(string)) else string
              display @(rem(col - 1, @crtwide), y+idiv(col - 1,@crtwide)) :
              display (s:' ')[posn, n] :
          end
@@ -365,7 +372,7 @@ return.key:
          * Redisplay data with mask applied
          display @(x, y) : fmt(string, mask) :
       end else if panning then
-         if password then display @(x,y) : str('*', len(string))[1,max.input] :
+         if password then display @(x,y) : str(mask.ch,len(string))[1,max.input] :
          else display @(x,y) : string[1,max.input] :
       end
 
@@ -384,7 +391,7 @@ delete.char:
    if echo.input then
       if panning then n = max.input + pan.offset + 1 - posn
       else n = 99999999
-      s = if password then str('*', len(string)) else string
+      s = if password then str(mask.ch,len(string)) else string
       display @(rem(col, @crtwide), y+idiv(col,@crtwide)) :
       display (s:' ')[posn, n] :
    end
@@ -406,7 +413,7 @@ repaint.panned.region:
 
    display @(x,y) :
    if password then
-      display (str('*',len(string)):space(max.input))[pan.offset+1, max.input] :
+      display (str(mask.ch,len(string)):space(max.input))[pan.offset+1, max.input] :
    end else
       display (string:space(max.input))[pan.offset+1, max.input] :
    end

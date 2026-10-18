@@ -9130,7 +9130,7 @@ st.input.common:
       end
 
 * NJS use @VM
-      reserved.names<2> = "APPEND":@VM:"EDIT":@VM:"FOR":@VM:"HIDDEN":@VM:"OVERLAY":@VM:"PANNING":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
+      reserved.names<2> = "APPEND":@VM:"EDIT":@VM:"FOR":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"OVERLAY":@VM:"PANNING":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
 
       * Check for mask
 
@@ -9162,6 +9162,10 @@ st.input.common:
                gosub get.token
                input.flags = bitor(input.flags, IN$PASSWORD)
 
+            case u.look.ahead.token.string = 'NO.ECHO'      ;* 14 Oct 26 dm - openQM 168
+               gosub get.token
+               input.flags = bitor(input.flags, IN$NO.ECHO)
+
             case u.look.ahead.token.string = 'OVERLAY'
                gosub get.token
                input.flags = bitor(input.flags, IN$OVERLAY)
@@ -9190,7 +9194,7 @@ st.input.common:
       if err then return
 
   * NJS use @vm
-      reserved.names<2> = "FOR":@VM:"HIDDEN":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
+      reserved.names<2> = "FOR":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
 
       * Emit maximum input string length
 
@@ -9223,6 +9227,10 @@ st.input.common:
             case u.look.ahead.token.string = 'HIDDEN'
                gosub get.token
                input.flags = bitor(input.flags, IN$PASSWORD)
+
+            case u.look.ahead.token.string = 'NO.ECHO'      ;* 14 Oct 26 dm - openQM 168
+               gosub get.token
+               input.flags = bitor(input.flags, IN$NO.ECHO)
 
             case u.look.ahead.token.string = 'UPCASE'
                gosub get.token

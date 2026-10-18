@@ -76,6 +76,8 @@
       return.key = seq(pterm(PT$INEWLINE,''))
       uppercase = bitand(flags, IN$UPCASE)
       no.echo.data = bitand(flags, IN$NO.ECHO.DATA)
+      no.echo = bitand(flags, IN$NO.ECHO)       ;* 14 Oct 26 dm - openQM 168: no echo of typed characters;
+                                                ;* the new line at the end of the entry is still echoed
       no.case.invert = bitand(flags, IN$NO.CASE.INVERT)
 
       if pterm(PT$INVERT, -1) then
@@ -147,7 +149,7 @@
 
          if not(no.echo.data) then
             if echo.input then
-               display if password then str('*', len(string)) else string :
+               if not(no.echo) then display if password then str('*', len(string)) else string :
                if not(bitand(flags, in$nolf)) then display
             end
          end
@@ -198,7 +200,8 @@
 *                    moves the cursor left on every terminal SD supports and on
 *                    the Windows console, and cub1 for the windows type IS \b,
 *                    so this changes no terminal on which it already worked.
-                     if echo.input then display char(8) : ' ' : char(8) :
+*                    18 Oct 26 - and not(no.echo): INPUT ... NO.ECHO (Linux bddbb79).
+                     if echo.input and not(no.echo) then display char(8) : ' ' : char(8) :
                   end
 
                case n = return.key                    ;* RETURN key
@@ -214,7 +217,7 @@
                   if len(string) < max.input then
                      if uppercase then c = upcase(c)
                      string := c
-                     if echo.input then
+                     if echo.input and not(no.echo) then
                         display if password then '*' else c :
                      end
                   end

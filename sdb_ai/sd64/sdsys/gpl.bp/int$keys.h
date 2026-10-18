@@ -62,6 +62,7 @@
       $define IN$PANNING         0x00010000  ;* Panning input field
       $define IN$NO.ECHO.DATA    0x00020000  ;* Supress echo on input from DATA statements.
       $define IN$NO.CASE.INVERT  0x00040000  ;* Disable PTERM CASE inversion for the input session
+      $define IN$NO.ECHO         0x00080000  ;* NO.ECHO: no echo of typed characters (14 Oct 26, openQM 168)
 
       * KERNEL() function action keys
       $define K$INTERNAL         0       ;* Set/clear internal mode
