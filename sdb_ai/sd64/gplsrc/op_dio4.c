@@ -973,7 +973,54 @@ void op_sselect() {
   descr = e_stack - 2;
   k_get_value(descr); /* 0208 */
 
-  k_recurse(pcode_sselct, 2);
+  /* 11 Oct 26 - SSELECT now takes the sort mode as a third argument; none here */
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = 0;
+
+  k_recurse(pcode_sselct, 3);
+}
+
+/* ======================================================================
+   op_sselectm()  -  SSELECT with RIGHT.ALIGNED and/or DESCENDING
+
+   11 Oct 26  openQM refs 243 and 367.  Mode: 1 right aligned, 2 descending
+   (the BT_ flags of SORTINIT).                                           */
+
+void op_sselectm() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Sort mode                  | Status 0=ok                 |
+     |-----------------------------|-----------------------------|
+     |  Select list number         |                             |
+     |-----------------------------|-----------------------------|
+     |  File variable              |                             |
+     |=============================|=============================|
+ */
+
+  DESCRIPTOR* descr;
+  int16_t list_no;
+
+  process.op_flags = 0;
+  process.status = 0;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+
+  descr = e_stack - 2;
+  GetInt(descr);
+  list_no = (int16_t)(descr->data.value);
+
+  if (InvalidSelectListNo(list_no))
+    k_select_range_error();
+
+  descr = e_stack - 3;
+  k_get_value(descr);
+
+  k_recurse(pcode_sselct, 3);
 }
 
 /* ======================================================================

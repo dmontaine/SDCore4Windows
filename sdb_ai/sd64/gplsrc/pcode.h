@@ -71,7 +71,7 @@ Pcode(repmul)    /* REPMUL(DYN.ARRAY, F, V, S, VAL) */
 Pcode(repsub)    /* REPSUB(DYN.ARRAY, F, V, S, VAL) */
 Pcode(repsubst)  /* REPSUBST(DYN.ARRAY, F, V, S, P, Q, VAL) */
 Pcode(savelst)   /* SAVELIST(NAME, LIST.NO) */
-Pcode(sselct)    /* SSELECT(FVAR, LIST.NO) */
+Pcode(sselct)    /* SSELECT(FVAR, LIST.NO, SORT.MODE) */
 Pcode(subst)     /* SUBSTITUTE(STR, OLD.LIST, NEW.LIST, DELIMITER) */
 Pcode(substrn)   /* SUBSTRNG(STR, START, LENGTH) */
 Pcode(sum)       /* SUM(STR) */

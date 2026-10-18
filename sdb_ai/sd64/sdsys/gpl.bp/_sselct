@@ -34,7 +34,7 @@ $no.xref
 $recursive
 $flags allow.break
 
-subroutine sselct(file.var, list.no)
+subroutine sselct(file.var, list.no, sort.mode)
 
 $include syscom.h
 $include syscom err.h
@@ -44,7 +44,7 @@ $include int$keys.h
    dim sort.modes(1)
    dim keys(1)
 
-   sort.modes(1) = 0
+   sort.modes(1) = sort.mode    ;* 1 right aligned, 2 descending; 0 from the old SSELECT opcode
    sortinit 1, sort.modes
 
    select file.var to list.no

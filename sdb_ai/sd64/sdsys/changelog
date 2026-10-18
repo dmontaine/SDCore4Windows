@@ -2,6 +2,19 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SSELECT SORT OPTIONS AND SSELECTN.
+
+             SSELECT file RIGHT.ALIGNED     Sorts the ids as numbers where
+                                            they are numbers (9, 10, 100)
+                                            instead of as text (10, 100, 9).
+             SSELECT file DESCENDING        Sorts the other way round.
+             SSELECT file TO n ...          Both options may be given, in
+                                            either order, before TO.
+             SSELECTN file TO n             Same as SSELECT file TO n.
+
+           A program compiled before this change keeps working: the old
+           SSELECT instruction still sorts left aligned and ascending.
+
 18 Oct 26  SIX MULTIVALUED FUNCTIONS.
 
              ADDS(a, b)    Adds a and b element by element, where each is

@@ -386,7 +386,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"SET.BREAK.HANDLER"
    statements := @fm:"SET.EXIT.STATUS":@fm:"SETLEFT"
    statements := @fm:"SETNLS":@fm:"SETPU":@fm:"SETRIGHT":@fm:"SETREM"
-   statements := @fm:"SLEEP":@fm:"SSELECT":@fm:"STATUS"
+   statements := @fm:"SLEEP":@fm:"SSELECT":@fm:"SSELECTN":@fm:"STATUS"
    statements := @fm:"STOP"
    statements := @fm:"TCLREAD":@fm:"TIMEOUT":@fm:"TRANSACTION"     
    statements := @fm:"UNLOCK":@fm:"UNTIL":@fm:"VOID"
@@ -2200,6 +2200,7 @@ is.statement:
                  st.setrem,
                  st.sleep,
                  st.sselect,
+                 st.sselect,                   ;* SSELECTN: 11 Oct 26 dm - openQM 209
                  st.status,
                  st.stop,
                  st.tclread,
@@ -10809,6 +10810,9 @@ st.select.common:
    gosub convert.pick.file.reference
    gosub expr    ;* 0208
 
+   sselect.mode = 0
+   if opcode = OP.SSELECT then gosub sselect.clauses    ;* the clauses may come before TO...
+
    if u.look.ahead.token.string = "TO" then
       gosub get.token       ;* Skip TO
       if opcode = OP.SELECTV then
@@ -10821,12 +10825,36 @@ st.select.common:
       n = 0 ; gosub emit.numeric.load
    end
 
+   * 18 Oct 26 Windows port - from Linux 9d13815 (11 Oct 26): - openQM 243 and 367: SSELECT [TO n] [RIGHT.ALIGNED] [DESCENDING], the two in either order.
+   * The sort mode goes in as a third argument through its own opcode; the two-argument SSELECT is unchanged.
+
+   if opcode = OP.SSELECT then
+      gosub sselect.clauses                ;* ...or here, when there is no TO (after TO the list number swallows the word)
+      if sselect.mode then
+         n = sselect.mode ; gosub emit.numeric.load
+         opcode = OP.SSELECTM
+      end
+   end
+
    * Perform common back-end processing
 
    ins '1' before onerror.stack<1>        ;* Optional ON ERROR clause
    ins '0' before testlock.stack<1>       ;* No LOCKED clause allowed
    ins '0' before thenelse.stack<1>       ;* No THEN / ELSE clause
    goto back.end
+
+sselect.clauses:
+   loop
+      begin case
+         case u.look.ahead.token.string = "RIGHT.ALIGNED"
+            sselect.mode = bitor(sselect.mode, 1) ; gosub get.token
+         case u.look.ahead.token.string = "DESCENDING"
+            sselect.mode = bitor(sselect.mode, 2) ; gosub get.token
+         case 1
+            exit
+      end case
+   repeat
+   return
 
 *****************************************************************************
 * ST.SELECTE   -  SELECTE statement
