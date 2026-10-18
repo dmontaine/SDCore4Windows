@@ -173,6 +173,7 @@ $define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns 
 $define M.EXCEPTION.SAVE.STACK 25  ;* 12 Oct 26 dm - openQM 355: every CATCH behaves as if SAVING.STACK were given
 $define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN sets the file variable to 0, not unassigned
 $define M.PICK.READNEXT        27  ;* 14 Oct 26 dm - openQM 418: READNEXT leaves the id variable alone when it takes ELSE
+$define M.EXECUTE.CLEARLIST    28  ;* 14 Oct 26 dm - openQM 521: EXECUTE clears list 0 first, unless PASSLIST is given
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -207,6 +208,7 @@ mode.names := @VM:"TIME.MS"
 mode.names := @VM:"EXCEPTION.SAVE.STACK"
 mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
 mode.names := @VM:"PICK.READNEXT"
+mode.names := @VM:"EXECUTE.CLEARLIST"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -7864,6 +7866,7 @@ st.execute:
 
 st.execute.options:
    execute.flags = 0
+   passlist.any = @false          ;* 14 Oct 26 dm - openQM 521: a PASSLIST clause, with or without a variable
 
    * Look for options
 
@@ -7911,6 +7914,7 @@ st.execute.options:
 
          case u.look.ahead.token.string = "PASSLIST"
             gosub get.token
+            passlist.any = @true
 
             * 2.2-13 For compatibility with other systems, the PASSLIST option
             * can be used without a qualifying name. This implies that list 0
@@ -7967,6 +7971,13 @@ st.execute.options:
       s = "EXECUTE  " : execute.flags
       gosub show.code
     end
+
+   * 18 Oct 26 Windows port - from Linux 745ea42 (14 Oct 26): - openQM 521: $MODE EXECUTE.CLEARLIST clears the default select list before the command runs,
+   * unless a PASSLIST clause was given (the stack is as it was after the two instructions)
+   if bittest(mode, M.EXECUTE.CLEARLIST) and not(passlist.any) then
+      n = 0 ; gosub emit.numeric.load
+      opcode.byte = OP.CLEARSEL ; gosub emit.simple
+   end
 
    opcode.byte = OP.EXECUTE ; gosub emit
    opcode.byte = execute.flags ; gosub emit
