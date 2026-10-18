@@ -2676,10 +2676,14 @@ int.status:
 * INT.WHO  -  WHO (Internal verb 16)
 
 int.who:
+   * WHO USER also shows the user's login name (10 Oct 26 dm, openQM ref 289)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   who.user = if keyword = KW$USER then (' ' : @user) else ''
+
    if initial.account.path = account.path then
-      display @userno : ' ' : who
+      display @userno : ' ' : who : who.user
    end else
-      display sysmsg(5140, @userno, who, initial.account)
+      display sysmsg(5140, @userno, who, initial.account) : who.user
    end
 
    return

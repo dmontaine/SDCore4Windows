@@ -1,0 +1,69 @@
+* _LISTU
+* !LISTU subroutine
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 0867e45 (10 Oct 26): 1.2-0 bundle A-5, openQM ref 12 (and ref 24, partly).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !LISTU(DATA)
+*
+* Returns the raw data behind the LISTU command: one field for each user,
+* ordered by user number, each of whose values is, in order,
+*
+*    1  user number           5  parent user number (phantoms), else 0
+*    2  operating system pid  6  login user name
+*    3  IP address            7  terminal device name
+*    4  process flags (bits)  8  login time, seconds since 1 Jan 1970
+*
+* The values are those the kernel keeps for K$USERS and the flag bits are
+* the USR$ values of INT$KEYS.H, so a program can test them with BITAND().
+* The account a user is in is not among them: the kernel does not record it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine listu(data)
+$catalog !LISTU
+
+$include syscom.h
+$include keys.h
+$include int$keys.h
+
+   data = ''
+   unsorted = kernel(K$USERS, 0)
+   if unsorted = '' then return
+
+   keys = ''
+   for i = 1 to dcount(unsorted, @fm)
+      uid = unsorted<i,K$USERS.UID> + 0
+      locate uid in keys<1> by 'AR' setting pos else null
+      ins uid before keys<pos>
+      ins unsorted<i> before data<pos>
+   next i
+
+   return
+end
+
+* END-CODE

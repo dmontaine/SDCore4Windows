@@ -54,6 +54,7 @@ $include int$keys.h
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
    lptr = -1
    user = 0
+   user.name = ''
    level = 0
 
    internal = kernel(K$INTERNAL, -1)
@@ -90,10 +91,16 @@ $include int$keys.h
 
          case keyword = KW$USER
             call @parser(parser$get.token, token.type, token, keyword)
-            if not(token matches "1N0N") then
+            if token = '' then
                stop sysmsg(2110) ;* User number required
             end
-            user = token + 0
+            * A number is a user number; anything else is a login user name
+            * (10 Oct 26 dm, openQM ref 77).
+            if token matches "1N0N" then
+               user = token + 0
+            end else
+               user.name = token
+            end
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
@@ -106,7 +113,21 @@ $include int$keys.h
    if user then
       gosub report
    end else
-      users = vslice(kernel(K$USERS, 0), K$USERS.UID)
+      if user.name # '' then
+         * Only the processes whose login user name is the one given
+         users = ''
+         ulist = kernel(K$USERS, 0)
+         for i = 1 to dcount(ulist, @fm)
+            if upcase(ulist<i,K$USERS.UNAME>) = upcase(user.name) then
+               users<-1> = ulist<i,K$USERS.UID>
+            end
+         next i
+         if users = '' then
+            stop sysmsg(12051, user.name)  ;* No process is running for user xx
+         end
+      end else
+         users = vslice(kernel(K$USERS, 0), K$USERS.UID)
+      end
       loop
          user = remove(users, user.delim)
          gosub report
@@ -213,11 +234,16 @@ report:
    * =============== Field 4  -  Lock wait data
 
    if rec<4> # '' then
+      * The login name of the process holding the lock, after its number
+      * (10 Oct 26 dm, openQM ref 121)
+      holder = kernel(K$USERS, rec<4,1> + 0)<1,K$USERS.UNAME>
+      holder = if holder # '' then (' (' : holder : ')') else ''
+
       if rec<4,3> = '' then    ;* File lock
-         print '     ' : sysmsg(6809, rec<4,1>) ;* Waiting for file lock held by user xx
+         print '     ' : sysmsg(6809, rec<4,1>) : holder ;* Waiting for file lock held by user xx
          print '        ' : sysmsg(6810, rec<4,2>) ;* File xx
       end else                 ;* Record lock
-         print '     ' : sysmsg(6811, rec<4,1>) ;* Waiting for record lock held by user xx
+         print '     ' : sysmsg(6811, rec<4,1>) : holder ;* Waiting for record lock held by user xx
          print '        ' : sysmsg(6810, rec<4,2>) ;* File xx
          print '        ' : sysmsg(6812, rec<4,3>) ;* Record xx
       end
