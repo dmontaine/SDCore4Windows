@@ -89,7 +89,8 @@
 #define OptAssocAll          54   /*            the query processor treats all fields as one association (BASIC, qproc) */
 #define OptCorrelativeNoCase 55   /*            string operations in a correlative or I-type are case blind: HDR_NOCASE is set when its object is started (kernel.c) */
 #define OptCorrelativeReuse  56   /*            every operand of an array operation in a correlative or I-type is read as if it had REUSE() (ReuseFlag below) */
-#define NumOptions           57
+#define OptQueryMergePrint   57   /* 15 Oct 26  openQM ref 57: a query to printer 0 leaves an already active printer on (BASIC, gpl.bp/qdisp) */
+#define NumOptions           58
 
 Public char option_flags[NumOptions];
 

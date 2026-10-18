@@ -412,7 +412,7 @@ void op_delete() {
         /* Increment statistics and transaction counters */
 
         StartExclusive(FILE_TABLE_LOCK, 50);
-        sysseg->global_stats.deletes++;
+        NoteStat(deletes);
         fptr->upd_ct++;
         EndExclusive(FILE_TABLE_LOCK);
 
@@ -1260,7 +1260,7 @@ Private void read_record(bool matread) {
       /* Increment statistics counter */
 
       StartExclusive(FILE_TABLE_LOCK, 49);
-      sysseg->global_stats.reads++;
+      NoteStat(reads);
       EndExclusive(FILE_TABLE_LOCK);
 
       strcpy(pathname, (char *)(FPtr(fvar->file_id)->pathname));
@@ -1615,7 +1615,7 @@ bool dir_read(FILE_VAR *fvar,
   /* Increment statistics counter */
 
   StartExclusive(FILE_TABLE_LOCK, 49);
-  sysseg->global_stats.reads++;
+  NoteStat(reads);
   EndExclusive(FILE_TABLE_LOCK);
 
   strcpy(pathname, (char *)(FPtr(fvar->file_id)->pathname));
@@ -1731,7 +1731,7 @@ bool dir_write(FILE_VAR *fvar, char *mapped_id, STRING_CHUNK *str) {
   /* Increment statistics and transactions counters */
 
   StartExclusive(FILE_TABLE_LOCK, 51);
-  sysseg->global_stats.writes++;
+  NoteStat(writes);
   FPtr(fvar->file_id)->upd_ct++;
   EndExclusive(FILE_TABLE_LOCK);
 

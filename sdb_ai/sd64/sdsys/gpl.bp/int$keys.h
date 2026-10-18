@@ -214,6 +214,9 @@
       $define K$KEEP.SELECT     107      ;* KEEP.SELECT flag of the running command: 1 set, 0 clear, -1 ask; the old value returns (15 Oct 26, Q-16)
       $define K$CMDLOG          108      ;* COMMAND.LOGGING: 1 on, 0 off, -1 ask; the log's pathname when it is on, else null (15 Oct 26, Q-8)
       $define K$CMDLOG.WRITE    109      ;* "origin<FM>command": one line in the command log if it is on (15 Oct 26, Q-8)
+      $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
+      $define K$FORM.QUEUE      111      ;* unit * 1000 + queue: SP.ASSIGN gave form queue 'queue' to print unit 'unit' (15 Oct 26, Q-9)
+      $define K$USER.STATS      112      ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
@@ -264,6 +267,7 @@
       $define USR$SDNET        0x0010    ;* SDNet process (USR$SDVBSRVR also set)
       $define USR$CHGPHANT     0x0020    ;* Chargeable phantom
       $define USR$MSG.OFF      0x0040    ;* Messge reception disabled
+      $define USR$GROUPED      0x0800    ;* (K$USERS only) a phantom grouped with its parent: logged out when the parent ends
 
       * USER_ENTRY events word
       $define EVT$LOGOUT       0x0001    ;* Forced logout - immediate termination
@@ -480,6 +484,7 @@
       $define OPT.ASSOC.ALL           54 ;* The query processor treats all fields as one association (qproc)
       $define OPT.CORRELATIVE.NOCASE  55 ;* String operations in a correlative or I-type are case blind (kernel)
       $define OPT.CORRELATIVE.REUSE   56 ;* Every operand of an array operation in a correlative or I-type is read as if REUSE() was applied (kernel)
+      $define OPT.QUERY.MERGE.PRINT   57 ;* A query to printer 0 leaves an already active printer on (qdisp)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

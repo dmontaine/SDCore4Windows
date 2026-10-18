@@ -361,6 +361,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.vars<-1> = "OPTION"             ; at.syscom.offsets<-1> = SYSCOM.OPTION
    at.syscom.vars<-1> = "PARASENTENCE"       ; at.syscom.offsets<-1> = SYSCOM.PARASENTENCE
    at.syscom.vars<-1> = "PATH"               ; at.syscom.offsets<-1> = SYSCOM.ACCOUNT.PATH
+   at.syscom.vars<-1> = "PSTAT"              ; at.syscom.offsets<-1> = SYSCOM.AT.PSTAT     ;* 15 Oct 26 dm - sheet 492
    at.syscom.vars<-1> = "PIB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.IBUF:'.0'
    at.syscom.vars<-1> = "POB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.OBUF:'.0'
    at.syscom.vars<-1> = "RECORD"             ; at.syscom.offsets<-1> = SYSCOM.QPROC.RECORD
@@ -393,6 +394,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.lvars := @fm:"RECORD":@fm:"SELECTED":@fm:"TRIGGER.RETURN.CODE"
    at.syscom.lvars := @fm:"USER0":@fm:"USER1":@fm:"USER2":@fm:"USER3":@fm:"USER4"
    at.syscom.lvars := @fm:"ANS":@fm:"PIB":@fm:"SIB":@fm:"POB":@fm:"SOB"
+   at.syscom.lvars := @fm:"PSTAT"                   ;* 15 Oct 26 dm - sheet 492: a program sets it for PSTAT to show
 
 * 20240728 mab remove ABORTE/M, ERRMSG, STOPE, STOPM, TTYSET
 * 20240806 mab remove PROCREAD, PROCWRITE
@@ -460,6 +462,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
    statements := @fm:"SET.TIMEZONE":@fm:"KEEP.SELECT":@fm:"MATWRITECSV"       ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-16, Q-4 (same)
    statements := @fm:"SELECTINDEXV"                                           ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
+   statements := @fm:"BSCAN":@fm:"KEY":@fm:"ROOT"                             ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
+   statements := @fm:"SELECTLEFTV":@fm:"SELECTRIGHTV"                         ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291 (same)
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -734,6 +738,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SUMMATION"       ; intrinsic.opcodes<-1> = OP.SUMMATION
    intrinsics<-1> = "SWAP"            ; intrinsic.opcodes<-1> = OP.CHANGE
    intrinsics<-1> = "SWAPCASE"        ; intrinsic.opcodes<-1> = OP.SWAPCASE
+   intrinsics<-1> = "SWAPMARKS"       ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - QM4 gaps Q-1, sheet 238 (see in.xfun)
    intrinsics<-1> = "SYSMSG"          ; intrinsic.opcodes<-1> = OP.SYSMSG
    intrinsics<-1> = "SYSTEM"          ; intrinsic.opcodes<-1> = OP.SYSTEM
    intrinsics<-1> = "TAN"             ; intrinsic.opcodes<-1> = OP.TAN
@@ -2415,7 +2420,12 @@ is.statement:
                  st.settimezone,               ;* 15 Oct 26 dm - QM4 gaps Q-3
                  st.keepselect,                ;* 15 Oct 26 dm - QM4 gaps Q-16
                  st.matwritecsv,               ;* 15 Oct 26 dm - QM4 gaps Q-4
-                 st.selectindexv               ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.selectindexv,              ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.bscan,                     ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.key,                       ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.root,                      ;* 15 Oct 26 dm - QM4 gaps Q-2
+                 st.selectleftv,               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
+                 st.selectrightv               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -2492,6 +2502,11 @@ is.statement:
       if u.token.string = 'RANDOMIZE' then goto is.statement
       if u.token.string = 'SUB' then goto is.statement
       if u.token.string = 'SUBROUTINE' then goto is.statement   ;* 0243
+      if u.token.string = 'KEY' then                            ;* 15 Oct 26 dm - QM4 gaps Q-2: KEY(op, scan, key, id) is the
+         symbol.name = token.string                             ;* index scan statement unless the program has a matrix called KEY
+         gosub find.var
+         if symbol.var.no < 0 or symbol.dim = 0 then goto is.statement
+      end
       goto is.assignment
 
    case token = TKN.AT.NAME
@@ -4377,6 +4392,7 @@ end
                       in.one,         ;* SUMMATION
                       in.change,      ;* SWAP
                       in.one,         ;* SWAPCASE
+                      in.xfun,        ;* SWAPMARKS
                       in.sysmsg,      ;* SYSMSG
                       in.one,         ;* SYSTEM
                       in.one,         ;* TAN
@@ -4458,6 +4474,7 @@ xfun.table.load:
             xfun.rows := @fm:"TRIMWS,16,1,,1":@fm:"MATCHESS,17,2,,1":@fm:"MATCHFIELDS,18,3,,1"
             xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"
             xfun.rows := @fm:"DIGEST,26,3,,0"   ;* 15 Oct 26 dm - QM4 gaps Q-13
+            xfun.rows := @fm:"SWAPMARKS,28,1,,0" ;* 15 Oct 26 dm - QM4 gaps Q-1, sheet 238 (27 is SELECT.SOCKET, which has its own handler)
             for xf.j = 1 to dcount(xfun.rows, @fm)
                xf.row = xfun.rows<xf.j>
                xfun.names<xf.j> = field(xf.row, ',', 1)
@@ -12738,6 +12755,153 @@ st.selectindexv:
    if u.look.ahead.token.string # 'TO' then goto err.to
    gosub get.token             ;* Skip TO
    gosub simple.lvar.reference ;* The variable that is to hold the list
+   if err then return
+   sys.call.n = 5
+   gosub emit.sys.call.end
+   return
+
+*****************************************************************************
+* ST.ROOT  -  ROOT file.name, index TO scan.var THEN / ELSE       (15 Oct 26 dm, QM4 gaps Q-2)
+* ST.KEY   -  KEY( operator, scan.var, index.key, item.id ) THEN / ELSE
+* ST.BSCAN -  BSCAN value {, ids} FROM file.var {, key} USING index {RESET} {BY A | D} THEN / ELSE
+*
+* The Pick style index scans.  Each is a call of a catalogued function (!rootidx, !keyop, !bscan), made of SETLEFT, SELECTINDEX,
+* SELECTLEFT and SELECTRIGHT, whose 1 or 0 the THEN and ELSE test, as OSREAD's does; the function leaves STATUS() as the manual
+* describes it (SET.STATUS just before it returns).  A scan variable is a string, the file name and the index name, so KEY
+* opens the file again each time.  The brackets of KEY are optional.  KEY( is a statement unless the program has a matrix
+* called KEY, which proc.statement checks before it gets here.
+
+st.root:
+   s = '!rootidx'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub expr                           ;* The file name
+   gosub check.comma
+   gosub expr                           ;* The index
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token
+   gosub simple.lvar.reference          ;* The scan variable
+   if err then return
+   sys.call.n = 4
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
+
+st.key:
+   s = '!keyop'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   key.paren = @false
+   if look.ahead.token = TKN.LBR then
+      gosub get.token
+      key.paren = @true
+   end
+   gosub expr                           ;* The operator
+   gosub check.comma
+   gosub expr                           ;* The scan variable
+   gosub check.comma
+   gosub simple.lvar.reference          ;* The indexed value, in and out
+   if err then return
+   gosub check.comma
+   gosub simple.lvar.reference          ;* The record id, in and out
+   if err then return
+   if key.paren then
+      if look.ahead.token # TKN.RBR then goto err.rbr
+      gosub get.token
+   end
+   sys.call.n = 5
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
+
+st.bscan:
+   s = '!bscan'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub simple.lvar.reference          ;* The indexed value
+   if err then return
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub simple.lvar.reference       ;* The list of ids
+      if err then return
+   end else
+      opcode.byte = OP.LDNULL ; gosub emit.simple    ;* none wanted: a constant takes the callee's assignment
+   end
+   if u.look.ahead.token.string # 'FROM' then goto err.from
+   gosub get.token
+   gosub convert.pick.file.reference
+   gosub simple.var.reference           ;* The file variable
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub expr                        ;* The value to find
+      n = 1
+   end else
+      opcode.byte = OP.LDNULL ; gosub emit.simple
+      n = 0
+   end
+   gosub emit.numeric.load              ;* has.value
+   if u.look.ahead.token.string # 'USING' then goto err.syntax
+   gosub get.token
+   gosub expr                           ;* The index
+   n = 0
+   if u.look.ahead.token.string = 'RESET' then
+      gosub get.token
+      n = 1
+   end
+   gosub emit.numeric.load              ;* reset
+   opcode.string = 'A'
+   if u.look.ahead.token.string = 'BY' then
+      gosub get.token
+      if u.look.ahead.token.string = 'A' or u.look.ahead.token.string = 'D' then
+         gosub get.token
+         opcode.string = u.token.string
+         gosub emit.string.load
+      end else
+         gosub expr                     ;* a seq in a variable
+      end
+   end else
+      gosub emit.string.load
+   end
+   sys.call.n = 9
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
+
+*****************************************************************************
+* ST.SELECTLEFTV   -  SELECTLEFTV index FROM file.var {SETTING key} TO list.var     (15 Oct 26 dm, QM4 gaps Q-2, sheet 291)
+* ST.SELECTRIGHTV  -  SELECTRIGHTV index FROM file.var {SETTING key} TO list.var
+*
+* SELECTLEFT / SELECTRIGHT into a select list VARIABLE: a call of the catalogued subroutine !sellrv, which takes the step with
+* list 10 as scratch and makes the variable with SELECTV, leaving STATUS() as the step left it.
+
+st.selectleftv:
+   opcode.string = 'L'
+   goto st.selectlrv
+
+st.selectrightv:
+   opcode.string = 'R'
+
+st.selectlrv:
+   lr.string = opcode.string
+   s = '!sellrv'
+   gosub emit.direct.call.reference
+   opcode.string = lr.string
+   gosub emit.string.load      ;* direction
+   gosub expr                  ;* index name
+   if u.look.ahead.token.string # 'FROM' then goto err.from
+   gosub get.token
+   gosub convert.pick.file.reference
+   gosub simple.var.reference  ;* file variable
+   if u.look.ahead.token.string = 'SETTING' then
+      gosub get.token
+      gosub simple.lvar.reference
+      if err then return
+   end else
+      opcode.byte = OP.LDNULL ; gosub emit.simple
+   end
+   if u.look.ahead.token.string # 'TO' then goto err.to
+   gosub get.token
+   gosub simple.lvar.reference ;* the list variable
    if err then return
    sys.call.n = 5
    gosub emit.sys.call.end

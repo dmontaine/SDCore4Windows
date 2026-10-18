@@ -117,6 +117,8 @@ $include int$keys.h
    opt<-1> = 'ASSOC.ALL||12276'                  ;* 54
    opt<-1> = 'CORRELATIVE.NOCASE||12283'         ;* 55
    opt<-1> = 'CORRELATIVE.REUSE||12284'          ;* 56
+   * 15 Oct 26  openQM refs 57 and others of bundle Q-17 (57 on)
+   opt<-1> = 'QUERY.MERGE.PRINT||12325'          ;* 57, openQM ref 57
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
    * Shortcuts

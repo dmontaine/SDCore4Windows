@@ -116,7 +116,7 @@ void dh_split(DH_FILE* dh_file) {
 
   (fptr->inhibit_count)++;
   fptr->stats.splits++;
-  sysseg->global_stats.splits++;
+  NoteStat(splits);
   EndExclusive(FILE_TABLE_LOCK);
 
   /* Lock group to split now that we have released the file table lock.  If
@@ -320,7 +320,7 @@ void dh_merge(DH_FILE* dh_file) {
 
   (fptr->inhibit_count)++;
   fptr->stats.merges++;
-  sysseg->global_stats.merges++;
+  NoteStat(merges);
 
   /* Adjust file parameters
     0081 Moved this code from much later. We must adjust the parameters

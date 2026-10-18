@@ -36,6 +36,13 @@ $recursive
 subroutine system(arg)
 $include syscom.h
 
+   common /sd.osreadinfo/ osread.info    ;* set by !osread (15 Oct 26 dm, SYSTEM(1071) / SYS$OSREAD.INFO, sheet 421)
+
+   if arg = 1071 then
+      if osread.info = 0 then osread.info = ''      ;* a named common starts as 0, not unassigned
+      return value osread.info
+   end
+
    subr.name = '$SYSTEM'
    if catalogued(subr.name) then
       call @subr.name(result, arg)

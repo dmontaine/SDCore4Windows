@@ -612,8 +612,9 @@ void op_system() {
 
     case 1052: /* Number of direct child phantom processes */
     case 1058: /* Their user numbers, field mark delimited */
+    case 1073: /* The user numbers of those grouped with this process (PHANTOM GROUP), field mark delimited */
       str = NULL;
-      if (key == 1058)
+      if (key != 1052)
         ts_init(&str, 64);
       i = 0;
       {
@@ -622,8 +623,9 @@ void op_system() {
 
         for (hu = 1; hu <= sysseg->max_users; hu++) {
           huptr = UPtr(hu);
-          if ((huptr->uid > 0) && (huptr->puid == process.user_no) && (huptr->flags & USR_PHANTOM)) {
-            if (key == 1058) {
+          if ((huptr->uid > 0) && (huptr->puid == process.user_no) && (huptr->flags & USR_PHANTOM) &&
+              ((key != 1073) || huptr->grouped)) {
+            if (key != 1052) {
               if (i > 0)
                 ts_copy_byte(FIELD_MARK);
               ts_printf("%d", (int)(huptr->uid));
@@ -632,13 +634,17 @@ void op_system() {
           }
         }
       }
-      if (key == 1058) {
+      if (key != 1052) {
         ts_terminate();
         InitDescr(descr, STRING);
         descr->data.str.saddr = str;
       } else {
         descr->data.value = i;
       }
+      break;
+
+    case 1066: /* The last form queue number SP.ASSIGN assigned to any print unit; -1 if it has not been used */
+      descr->data.value = last_form_queue;
       break;
 
     case 1053: /* Highest user number that can be assigned: the greater of USERPOOL and the licence's users */

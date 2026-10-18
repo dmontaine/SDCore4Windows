@@ -258,6 +258,10 @@ report:
       end
    end
 
+   * =============== Field 6  -  @PSTAT, the text the process's application left for this command (15 Oct 26, sheet 492)
+
+   if rec<6> # '' then print '     ' : rec<6>
+
    delete ipc.f, 'S':user
 
    return

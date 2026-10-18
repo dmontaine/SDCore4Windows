@@ -1,0 +1,208 @@
+* KEYOP
+* KEY statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-2 (KEY).  The compiler (bcomp, st.key) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !KEYOP(result, operator, scan.var, index.key, item.id)
+*
+* One step of a scan of an alternate key index, in the manner of the Pick KEY statement.  SCAN.VAR is what ROOT made: the
+* file name and the index name.  Each call opens the file and finds its place again with SELECTINDEX, so nothing is kept
+* between calls but INDEX.KEY and ITEM.ID, the entry last returned.  The operators:
+*
+*   C  the first entry at or beyond INDEX.KEY, left to right (INDEX.KEY and ITEM.ID are set)
+*   L  with a null INDEX.KEY the rightmost entry; otherwise as P
+*   N  the entry after (INDEX.KEY, ITEM.ID): the next id of the same value, else the first id of the next value; with both
+*      null, the first entry of the index
+*   P  the entry before (INDEX.KEY, ITEM.ID); with both null, the last entry
+*   R  the first id of the value INDEX.KEY
+*   V  does the entry (INDEX.KEY, ITEM.ID) exist
+*   X  ITEM.ID becomes the field mark delimited list of the ids of the value INDEX.KEY
+*
+* RESULT is 1 when the step found something, otherwise 0 and STATUS() says why: ER$EOF (3030) no entry beyond or before,
+* 1 no entry for that value or pair, ER$AKNF (3019) the index is not there, 2 an operator that is not one of the above.
+* An entry is an indexed value and one record id; ids of one value come in the order SELECTINDEX gives them.  List 10 is
+* the scratch select list of this subroutine and what it held is lost.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine keyop(ret, op, scan, k, id)
+$catalog !keyop
+
+$include err.h
+
+   ret = 0
+   idx = scan<2>
+   open scan<1> to f else
+      set.status status()
+      return
+   end
+   ak = indices(f)
+   locate idx in ak<1> setting p else
+      s = downcase(idx)
+      locate s in ak<1> setting p else
+         s = upcase(idx)
+         locate s in ak<1> setting p else
+            close f
+            set.status ER$AKNF
+            return
+         end
+      end
+      idx = s
+   end
+
+   code = 1               ;* the STATUS() of a failed step
+   op = upcase(op)
+   begin case
+      case op = 'R'
+         gosub ids.of.k
+         if ids # '' then
+            id = ids<1>
+            code = 0
+         end
+
+      case op = 'X'
+         gosub ids.of.k
+         if ids # '' then
+            id = ids
+            code = 0
+         end
+
+      case op = 'V'
+         gosub ids.of.k
+         locate id in ids<1> setting p then code = 0
+
+      case op = 'C'
+         gosub ids.of.k
+         if ids # '' then
+            id = ids<1>
+            code = 0
+         end else
+            code = ER$EOF
+            gosub right.of.k
+            if found then
+               k = nk
+               id = ids<1>
+               code = 0
+            end
+         end
+
+      case op = 'N'
+         code = ER$EOF
+         if k = '' and id = '' then
+            setleft idx from f
+            gosub right.of.k
+            if found then
+               k = nk
+               id = ids<1>
+               code = 0
+            end
+         end else
+            gosub ids.of.k
+            n = dcount(ids, @fm)
+            locate id in ids<1> setting p then
+               if p < n then
+                  id = ids<p + 1>
+                  code = 0
+               end
+            end
+            if code # 0 then
+               * The id is the last of its value, or the pair is not in the index: the next value to the right.  (The
+               * position left by the SELECTINDEX above is still the one for K.)
+               gosub right.of.k
+               if found then
+                  k = nk
+                  id = ids<1>
+                  code = 0
+               end
+            end
+         end
+
+      case op = 'P' or op = 'L'
+         code = ER$EOF
+         if k = '' then
+            setright idx from f
+            gosub left.of.k
+            if found then
+               k = nk
+               id = ids<dcount(ids, @fm)>
+               code = 0
+            end
+         end else
+            gosub ids.of.k
+            locate id in ids<1> setting p then
+               if p > 1 then
+                  id = ids<p - 1>
+                  code = 0
+               end
+            end
+            if code # 0 then
+               gosub left.of.k
+               if found then
+                  k = nk
+                  id = ids<dcount(ids, @fm)>
+                  code = 0
+               end
+            end
+         end
+
+      case 1
+         code = 2
+   end case
+
+   close f
+   set.status code
+   if code = 0 then ret = 1
+   return
+
+* ======================================================================
+* ids.of.k - IDS = the record ids of the value K (empty when there are none); the scan position is now at K.
+ids.of.k:
+   selectindex idx, k from f to 10
+   gosub read.list
+   return
+
+* right.of.k - the entry to the right of the scan position: FOUND, NK the value and IDS its ids.
+right.of.k:
+   selectright idx from f setting nk to 10
+   gosub read.list
+   found = (ids # '')
+   return
+
+left.of.k:
+   selectleft idx from f setting nk to 10
+   gosub read.list
+   found = (ids # '')
+   return
+
+read.list:
+   ids = ''
+   loop
+      readnext x from 10 else exit
+      ids<-1> = x
+   repeat
+   return
+end
+
+* END-CODE

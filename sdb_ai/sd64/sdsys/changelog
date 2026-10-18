@@ -2,6 +2,122 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  INDEX SCANS, DISABLE.INDEX, BIG LETTERS, PHANTOM GROUP AND MORE.
+
+             BSCAN value {, ids} FROM file.var {, key} USING index
+                    {RESET} {BY A | D} THEN / ELSE
+                        Scans an alternate key index entry by entry, left
+                        to right (BY A, the default) or right to left.  With
+                        a key it goes to that entry or, if the index has none,
+                        returns the nearest one in the direction of the scan
+                        and takes ELSE with STATUS() 2.  RESET starts at the
+                        extreme left or right.  THEN means an entry was found
+                        (STATUS() 1); ELSE with STATUS() 0 is the end of the
+                        index, 3 a file that is not a dynamic file, 4 an index
+                        the file has not, 5 a sequence other than A or D.
+             ROOT file.name, index TO scan.var THEN / ELSE
+             KEY( operator, scan.var, index.key, item.id ) THEN / ELSE
+                        The Pick way of the same thing.  ROOT makes the scan
+                        variable (it is a string: the file name and the index
+                        name; ELSE with STATUS() 3019 for an index the file
+                        has not).  KEY takes C (first entry at or beyond the
+                        key), L (the last entry), N (the next), P (the
+                        previous), R (the first id of the key), V (is this
+                        key and id in the index) and X (all the ids of the
+                        key, field mark delimited), in upper or lower case.
+                        Failure is ELSE with STATUS() 3030 past either end,
+                        1 for no such entry, 2 for any other operator.  ROOT
+                        takes the name of an index only, not an A-correlative
+                        that an index was built from.  A program that has a
+                        matrix called KEY still gets its matrix.  Numbered
+                        list 10 is the scratch list of all of these.
+             SELECTLEFTV and SELECTRIGHTV index FROM file.var
+                    {SETTING key} TO list.var
+                        SELECTLEFT and SELECTRIGHT into a select list
+                        variable.
+             DISABLE.INDEX file index...   or   DISABLE.INDEX file ALL
+                        Stops an index being kept up to date and stops the
+                        query processor using it, for a large load of records
+                        or a batch that would change most of them.  BUILD.INDEX
+                        builds it again and switches it on; until then LIST.INDEX
+                        shows it as needing a build.  Like DELETE.INDEX it
+                        needs the file to itself: an index switched off while
+                        another session had the file open would go on being
+                        used, and kept up, there.  (openQM later dropped that
+                        need; SD does not.)
+             BLOCK.PRINT text   and   BLOCK.TERM text
+                        Print text, or show it on the terminal, in letters
+                        seven rows high drawn with W.  Eight letters fit an
+                        80 column line; longer text breaks at a space where it
+                        can.  Letters, digits and . , ! ? - : / + = * ( ) ' have
+                        shapes, small letters print as capitals, anything
+                        else as a question mark.  openQM's $BIGLTRS record,
+                        which changes the drawing character, is not read.
+             FILE.STAT {DICT} {file.list} {LPTR} {NO.PAGE}
+                        One line for each file of the account (or of the
+                        select list, or of the names given): type, current
+                        and minimum modulus, group size, record count, bytes
+                        in the primary and overflow subfiles, and Y or N for
+                        indices, trigger, statistics, case insensitive ids,
+                        NO.RESIZE, encryption, replication and journalling.
+                        The last three are always N here.  openQM can also
+                        report on the files of other accounts; SD does not.
+             SWAPMARKS(string)
+                        The string as it is, which is what openQM gives on a
+                        system without its extended character set.
+             SYSTEM(1071)
+                        After OSREAD, the STATUS array of the file that was
+                        read: permissions, size, links, owner, inode, times,
+                        pathname and type.  Null before any OSREAD and after
+                        one that failed.
+             OPTION QUERY.MERGE.PRINT
+                        A query sent to printer 0 while the printer is already
+                        on leaves it on at the end of the report, so that the
+                        report and what the program prints round it are one
+                        job.  Without it the report closes the job, as before.
+             PHANTOM GROUP command
+                        The phantom is logged out when the process that
+                        started it ends.  SYSTEM(1073) lists the user numbers
+                        of those grouped with this process (SYSTEM(1058) lists
+                        all its phantoms) and LISTU shows a G after the parent
+                        number of a grouped phantom.  A parent that goes before
+                        the phantom has finished starting takes it with it.
+             SET.QUEUE queue, width, depth, top.margin, bottom.margin,
+                    mode {, options}   and   SP.ASSIGN {options} {, setptr}
+                        Pick style form queues.  SET.QUEUE (0 to 999) keeps
+                        what SETPTR would be given for a print unit; mode is
+                        1 (printer), 3 (hold file) or 6 (both), the options
+                        are SETPTR's.  SET.QUEUE queue shows one queue,
+                        SET.QUEUE DISPLAY {LPTR} all of them, SET.QUEUE
+                        DELETING queue removes one.  SP.ASSIGN F3 sets print
+                        unit 0 from queue 3; n copies, R unit, H (hold file:
+                        with S mode 3, without it mode 6), O (keep open) and
+                        a SETPTR list after a comma can follow, as in
+                        "SP.ASSIGN 2R4HF3,BANNER ""Sales""".  SP.ASSIGN with
+                        nothing says which queue unit 0 has.  Options of the
+                        queue that do not belong to the mode used (AT for a
+                        hold file, AS for printing) are left out.
+                        GETPU(PU$FORM.QUEUE, unit) and SYSTEM(1066) give the
+                        queue last assigned to a unit and to any unit (-1 if
+                        none).  THE FORMS ARE KEPT IN THE ACCOUNT, in the
+                        directory file $FORMS, not in one file shared by every
+                        account as openQM does: a queue names a printer and a
+                        hold file, and a definition any account could change
+                        would change where everybody's reports go.  An account
+                        can point its own $FORMS entry at another's.
+             FSTAT.USER {TOP} {USER n} {LPTR {unit}} {NO.PAGE}
+                        File activity of each session: reads, writes and
+                        deletes since it started (TOP puts the busiest
+                        first); USER n adds opens, clears, selects, index
+                        reads, writes and deletes, splits and merges.  An
+                        administrator sees every session, anyone else the
+                        sessions of their own login name.  It shows the
+                        figures once; openQM's repeats every two seconds.
+             @PSTAT     Text a program can leave in @PSTAT for PSTAT to show
+                        under the command and the call stack of that process
+                        ("PSTAT USER n").  Marks in it print as spaces; at
+                        most 4000 characters.
+
 18 Oct 26  SELECT.SOCKET() AND SELECTINDEXV.
 
              SELECT.SOCKET(matrix, milliseconds)

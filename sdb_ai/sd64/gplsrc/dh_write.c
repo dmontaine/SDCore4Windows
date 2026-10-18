@@ -155,7 +155,7 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
 
   StartExclusive(FILE_TABLE_LOCK, 20);
   fptr->stats.writes++;
-  sysseg->global_stats.writes++;
+  NoteStat(writes);
   group = dh_hash_group(fptr, id, id_len);
   lock_slot = GetGroupWriteLock(dh_file, group);
   fptr->upd_ct++;

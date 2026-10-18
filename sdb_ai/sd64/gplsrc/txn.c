@@ -367,7 +367,7 @@ void op_txncmt() {
             /* Increment statistics and transaction counters */
 
             StartExclusive(FILE_TABLE_LOCK, 50);
-            sysseg->global_stats.deletes++;
+            NoteStat(deletes);
             fptr = FPtr(fvar->file_id);
             fptr->upd_ct++;
             EndExclusive(FILE_TABLE_LOCK);

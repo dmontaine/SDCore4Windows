@@ -618,7 +618,7 @@ int16_t get_file_entry(char* filename,
       fptr->flags = header->flags;
       fptr->stats = header->stats;
       fptr->stats.opens++;
-      sysseg->global_stats.opens++;
+      NoteStat(opens);
     }
   }
 

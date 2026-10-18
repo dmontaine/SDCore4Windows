@@ -413,6 +413,20 @@
                        The line is tab separated: epoch value, user number, login name, origin, command.                  */
 #define K_CMDLOG             108
 #define K_CMDLOG_WRITE       109
+/* 15 Oct 26 dm - QM4 gaps Q-8 (PHANTOM GROUP, sheet 427 and 433).
+     K_GROUP_PHANTOM   the user number of a phantom this process has started: it is marked as grouped with this process and is
+                       logged out when this process ends.  1 if it was marked, 0 if the number is not one of this process's
+                       phantoms.  SYSTEM(1073) lists the grouped ones; K_USERS reports the mark as USR_GROUPED in the flags. */
+#define K_GROUP_PHANTOM      110
+/* 15 Oct 26 dm - QM4 gaps Q-9 (SP.ASSIGN and SET.QUEUE).
+     K_FORM_QUEUE      unit * 1000 + queue: SP.ASSIGN has assigned form queue (0 to 999) to print unit (0 to 255).  GETPU(PU$FORM.QUEUE,
+                       unit) gives it back, SYSTEM(1066) gives the last one given to any unit.  Returns 1, or 0 for numbers out of range. */
+#define K_FORM_QUEUE         111
+/* 15 Oct 26 dm - QM4 gaps Q-8 (FSTAT.USER).
+     K_USER_STATS      the file activity counts of one user (the number) or of every user (0): a field for each, the user number,
+                       then opens, reads, writes, deletes, clears, selects, AK reads, AK writes, AK deletes, splits, merges and
+                       the sdtime() the counts started at, as values, and the login name last. */
+#define K_USER_STATS         112
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

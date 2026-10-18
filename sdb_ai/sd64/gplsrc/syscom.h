@@ -66,5 +66,6 @@
 #define SYSCOM_SYS0                 76
 #define SYSCOM_TRANS_FILES          78
 #define SYSCOM_TRANS_FVARS          79
+#define SYSCOM_AT_PSTAT             82   /* @PSTAT (15 Oct 26, sheet 492): text PSTAT shows for the process; see the status dump in kernel.c */
 
 /* END-CODE */

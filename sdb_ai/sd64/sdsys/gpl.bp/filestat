@@ -1,0 +1,178 @@
+* FILESTAT
+* FILE.STAT verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-8 (FILE.STAT).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   FILE.STAT {DICT} {file.list} {LPTR {n}} {NO.PAGE}
+*
+* A summary line for each file of the current account: type (DYN, DIR or COL), current and minimum modulus, group size,
+* record count, bytes in the primary and overflow subfiles and their total, and Y or N for indices (AK), trigger (TR),
+* statistics (ST), case insensitive ids (NC), NO.RESIZE (NR), encryption (EN), replication (RP) and journalling (JN).
+* A directory file shows its type and record count only.  With no names, the files are those on an active select list
+* (list 0) or, if there is none, every file the VOC points at with an F entry.  DICT reports the dictionaries.
+*
+* openQM can also report on other accounts (FILE.STAT account.list, FILE.STAT ALL).  SD does not: the report reads each
+* file, and a file of another account is the business of that account's users and of the administrator, who has
+* LIST.FILES and the account's own session.  The report needs 122 columns.  EN, RP and JN are always N here: SD has no
+* file encryption, replication or journalling.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program filestat
+$catalog $filestat
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include keys.h
+
+   @system.return.code = -ER$ARGS
+
+   call !parser(PARSER$RESET, 0, @sentence, 0)
+   call !parser(PARSER$GET.TOKEN, token.type, token, keyword)  ;* Verb
+
+   dict = @false
+   lptr = -1
+   nopage = @false
+   names = ''
+   loop
+      call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$DICT
+            dict = @true
+         case keyword = KW$NO.PAGE
+            nopage = @true
+         case keyword = KW$LPTR
+            lptr = 0
+            call !parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+            if s matches '1N0N' then
+               call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+               lptr = token + 0
+               if lptr > LPTR$HIGH.PRINT.UNIT then stop sysmsg(2053) ;* Invalid print unit number
+            end
+         case 1
+            names<-1> = token
+      end case
+   repeat
+
+   if names = '' then
+      if selectinfo(0, 1) then
+         loop
+            readnext name from 0 else exit
+            names<-1> = name
+         repeat
+      end else
+         select @voc to 9
+         loop
+            readnext name from 9 else exit
+            read vrec from @voc, name then
+               if upcase(vrec<1>[1, 1]) = 'F' then names<-1> = name
+            end
+         repeat
+      end
+   end
+
+   if lptr >= 0 then
+      if lptr = 0 then printer on
+   end
+   if nopage then page.state = kernel(K$PAGINATE, @false)
+
+   @system.return.code = 0
+   print on lptr sysmsg(12321)  ;* File name ... column headings
+   shown = 0
+   for i = 1 to dcount(names, @fm)
+      name = names<i>
+      if dict then
+         open 'DICT', name to f else continue
+      end else
+         open name to f else continue
+      end
+      gosub report
+      close f
+   next i
+   if shown = 0 then print on lptr sysmsg(12322)  ;* No files to report
+
+   if nopage then page.state = kernel(K$PAGINATE, page.state)
+   if lptr >= 0 then printer close on lptr
+   stop
+
+* ======================================================================
+* report - one line for the open file F called NAME.
+report:
+   type = fileinfo(f, FL$TYPE)
+   cur = ''
+   min = ''
+   grp = ''
+   pri = ''
+   ovf = ''
+   tot = ''
+   flags = ''
+   begin case
+      case type = FL$TYPE.DH and fileinfo(f, FL$COLLECTION)
+         typ = 'COL'
+      case type = FL$TYPE.DH
+         typ = 'DYN'
+      case type = FL$TYPE.DIR
+         typ = 'DIR'
+      case 1
+         return        ;* a sequential or other file has no line
+   end case
+   if typ = 'DIR' then
+      select f to 8
+      recs = @selected
+      clearselect 8
+   end else
+      cur = fileinfo(f, FL$MODULUS)
+      min = fileinfo(f, FL$MINMOD)
+      grp = fileinfo(f, FL$GRPSIZE)
+      recs = fileinfo(f, FL$RECORD.COUNT)
+      pri = fileinfo(f, FL$PRI.BYTES)
+      ovf = fileinfo(f, FL$OVF.BYTES)
+      tot = pri + ovf
+      flags = ''
+      flags<1> = fileinfo(f, FL$AK) # 0
+      flags<2> = fileinfo(f, FL$TRIGGER) # ''
+      flags<3> = fileinfo(f, FL$STATS.QUERY) # 0
+      flags<4> = fileinfo(f, FL$NOCASE) # 0
+      flags<5> = fileinfo(f, FL$NO.RESIZE) # 0
+      flags<6> = @false
+      flags<7> = @false
+      flags<8> = @false
+   end
+   line = fmt(name, '24L') : ' ' : fmt(typ, '3L') : ' ' : fmt(cur, '8R') : ' ' : fmt(min, '8R') : ' ' : fmt(grp, '3R')
+   line := ' ' : fmt(recs, '11R') : ' ' : fmt(pri, '11R') : ' ' : fmt(ovf, '11R') : ' ' : fmt(tot, '11R')
+   if typ # 'DIR' then
+      for k = 1 to 8
+         line := ' ' : fmt(if flags<k> then 'Y' else 'N', '2R')
+      next k
+   end
+   print on lptr line
+   shown += 1
+   return
+
+end
+
+* END-CODE

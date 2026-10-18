@@ -65,7 +65,7 @@ bool dh_select(DH_FILE* dh_file, /* File descriptor */
 
   fptr->inhibit_count++;
   fptr->stats.selects++;
-  sysseg->global_stats.selects++;
+  NoteStat(selects);
 
   /* We can use the select as a way to correct any error in the file header
     record count and load bytes so long as the file is not updated during

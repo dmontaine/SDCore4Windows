@@ -1,0 +1,1 @@
+SET.QUEUE queue, width, depth, top.margin, bottom.margin, mode {, options}  or  SET.QUEUE queue  or  SET.QUEUE DISPLAY {LPTR {unit}}  or  SET.QUEUE DELETING queue

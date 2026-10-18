@@ -223,6 +223,14 @@ struct USER_ENTRY
      /* 15 Oct 26 QM4 gaps Q-5: the application signal.  SIGNAL(user) sets it in a process of the same login user (or in
         any process, from an administrator); SYSTEM(1062) in that process reads it and clears it.                */
      #define USR_SIGNAL      0x0400 /* SIGNAL() has been raised for this process */
+     /* 15 Oct 26 dm - QM4 gaps (PHANTOM GROUP, sheet 427, 433).  Never a bit of the flags word itself: a phantom's flags are set
+        to zero as it starts, so the parent's mark is the GROUPED field below.  K$USERS adds this bit to the flags it reports
+        for a phantom whose parent has grouped it, which is how LISTU shows it.                                            */
+     #define USR_GROUPED     0x0800 /* reported flag: grouped with its parent */
+  u_int8_t grouped;              /* 15 Oct 26 dm - set by the parent (K_GROUP_PHANTOM) after PHANTOM GROUP; when the parent's
+                                    entry is released, a phantom with this set and its puid is logged out. Zero for any other */
+  struct FILESTATS ustats;       /* 15 Oct 26 dm - FSTAT.USER: this process's file activity (the counts of global_stats, by user);
+                                    cleared as the process takes its entry */
   u_int16_t events;        /* Any bit set causes processing interrupt */
      #define EVT_LOGOUT      0x0001 /* Forced logout - immediate termination */
      #define EVT_STATUS      0x0002 /* Return status dump */

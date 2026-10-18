@@ -491,12 +491,20 @@ void op_akenable() {
   DH_FILE *dh_file;
   DH_AK_HEADER ak_hdr;
   int16_t subfile;
+  bool disable = FALSE;
+  DESCRIPTOR *flags_descr;
 
-  /* AK number */
+  /* AK number.  15 Oct 26 dm - DISABLE.INDEX: a negative number is the AK number -1 - n, to be disabled instead of enabled.
+     A disabled AK is not updated (the AK subroutine skips it) and is not used by the query processor (INDICES() says it needs
+     a rebuild); BUILD.INDEX enables it again. */
 
   descr = e_stack - 1;
   GetInt(descr);
   akno = (int16_t)(descr->data.value);
+  if (akno < 0) {
+    disable = TRUE;
+    akno = -1 - akno;
+  }
 
   /* File */
 
@@ -504,7 +512,7 @@ void op_akenable() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == DYNAMIC_FILE) {
+  if (fvar->type == DYNAMIC_FILE && akno < MAX_INDICES) {
     dh_file = fvar->access.dh.dh_file;
 
     if (dh_file->ak_map & (1 << akno)) {
@@ -515,10 +523,24 @@ void op_akenable() {
           goto exit_ak_enable;
         }
 
-        ak_hdr.flags |= AK_ENABLED;
+        if (disable)
+          ak_hdr.flags &= ~AK_ENABLED;
+        else
+          ak_hdr.flags |= AK_ENABLED;
 
         if (!dh_write_group(dh_file, subfile, 0, (char *)&ak_hdr, DH_AK_HEADER_SIZE)) {
           goto exit_ak_enable;
+        }
+
+        /* The flags this process has for the open file (the dh cache shares them between its variables) */
+        if (dh_file->ak_data != NULL && akno < (int16_t)(dh_file->ak_data->rows)) {
+          flags_descr = AKData(dh_file, akno, AKD_FLGS);
+          if (flags_descr->type == INTEGER) {
+            if (disable)
+              flags_descr->data.value &= ~AK_ENABLED;
+            else
+              flags_descr->data.value |= AK_ENABLED;
+          }
         }
       }
     }
@@ -1981,7 +2003,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   rj = (flags & AK_RIGHT) != 0;
   nocase = (flags & AK_NOCASE) != 0;
   fptr->stats.ak_writes++;
-  sysseg->global_stats.ak_writes++;
+  NoteStat(ak_writes);
 
   /* Examine record to determine space requirements */
 
@@ -2851,7 +2873,7 @@ Private void ak_delete(DH_FILE *dh_file, /* File descriptor */
   rj = (flags & AK_RIGHT) != 0;
   nocase = (flags & AK_NOCASE) != 0;
   fptr->stats.ak_deletes++;
-  sysseg->global_stats.ak_deletes++;
+  NoteStat(ak_deletes);
 
   /* Lock the AK subfile */
 
@@ -3118,7 +3140,7 @@ Private STRING_CHUNK *ak_read(DH_FILE *dh_file, /* File descriptor */
   nocase = (flags & AK_NOCASE) != 0;
   ak_upd = fptr->ak_upd;
   fptr->stats.ak_reads++;
-  sysseg->global_stats.ak_reads++;
+  NoteStat(ak_reads);
 
   /* Lock the AK subfile */
 

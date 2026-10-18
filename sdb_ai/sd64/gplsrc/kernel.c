@@ -173,14 +173,23 @@ retry_login:
     strcpy((char*)(my_uptr->ip_addr), ip_addr);
     my_uptr->events = 0;
     my_uptr->flags = 0;
+    memset((void*)&(my_uptr->ustats), 0, sizeof(struct FILESTATS)); /* FSTAT.USER */
+    my_uptr->ustats.reset = sdtime();
+    if (is_phantom && my_uptr->grouped && (my_uptr->puid == 0)) {
+      /* PHANTOM GROUP, and the parent ended before this phantom had started: it goes at once (ReleaseLicence) */
+      my_uptr->events = EVT_TERMINATE;
+      my_uptr->flags = USR_LOGOUT;
+    }
     my_uptr->lockwait_index = 0;
     my_uptr->ttyname[0] = '\0';
 
     /* 14 Oct 26 dm - sheet items 24 and 29: the account is empty until the session enters one (a phantom's cell
        was given its parent's account when the parent reserved it, and keeps it).  And item 38: the peak number of
        cells in use, counted here while this process holds SHORT_CODE, including the cell it has just taken.    */
-    if (!is_phantom)
+    if (!is_phantom) {
       my_uptr->account[0] = '\0';
+      my_uptr->grouped = 0;   /* a phantom's was set, or not, by its parent */
+    }
     {
       u_int32_t in_use = 0;
       int16_t ui;
@@ -1499,6 +1508,33 @@ Private void dump_status() {
 
   ev_printf("%c%s", FIELD_MARK, account());
 
+  /* Field 6  -  @PSTAT, the text the application left for PSTAT (15 Oct 26 dm, sheet 492).  A string, or a number; the
+     marks in it become spaces so that it cannot disturb the fields of this record.  A common block starts as zeros, and
+     a zero is no text.                                                                                                  */
+
+  ev_printf("%c", FIELD_MARK);
+  {
+    DESCRIPTOR* ps = Element(process.syscom, SYSCOM_AT_PSTAT);
+
+    while (ps->type == ADDR)
+      ps = ps->data.d_addr;
+    if (ps->type == STRING) {
+      int32_t pcount = 0; /* at most 4000 characters */
+
+      for (str = ps->data.str.saddr; (str != NULL) && (pcount < 4000); str = str->next) {
+        int32_t pi;
+        char pc;
+
+        for (pi = 0; (pi < str->bytes) && (pcount < 4000); pi++, pcount++) {
+          pc = str->data[pi];
+          ev_printf("%c", ((u_char)pc >= 248) ? ' ' : pc);
+        }
+      }
+    } else if ((ps->type == INTEGER) && (ps->data.value != 0)) {
+      ev_printf("%d", (int)(ps->data.value));
+    }
+  }
+
   EndExclusive(SHORT_CODE);
   EndExclusive(GROUP_LOCK_SEM);
   EndExclusive(REC_LOCK_SEM);
@@ -1633,13 +1669,24 @@ void ReleaseLicence(USER_ENTRY* uptr) {
   *(UMap(uptr->uid)) = 0;
   uptr->uid = 0;
   uptr->puid = 0;
+  uptr->grouped = 0;
 
-  /* Also, clear parent user id from any phantoms started by this process */
+  /* Also, clear parent user id from any phantoms started by this process.  15 Oct 26 dm - PHANTOM GROUP: one that was
+     grouped with it is logged out as the parent goes (the event is the one a LOGOUT of that user raises) */
 
   for (i = 1; i <= sysseg->max_users; i++) {
     uptr = UPtr(i);
-    if (uptr->puid == uid)
+    if (uptr->puid == uid) {
+      if (uptr->grouped && uptr->uid > 0) {
+        uptr->events |= (uptr->flags & USR_LOGOUT) ? EVT_LOGOUT : EVT_TERMINATE;
+        uptr->flags |= USR_LOGOUT;
+        /* `grouped` stays set, with no parent now: a phantom that has not finished starting yet clears its events and flags as
+           it takes its cell (init_kernel), and finding the mark with no parent is how it knows to go as well */
+      } else {
+        uptr->grouped = 0;
+      }
       uptr->puid = 0;
+    }
   }
 }
 

@@ -1,0 +1,188 @@
+* SETQUEUE
+* SET.QUEUE verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-9 (SET.QUEUE, with SP.ASSIGN).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.QUEUE queue {, width, depth, top.margin, bottom.margin, mode {, options}}
+*   SET.QUEUE DISPLAY {LPTR {unit}}
+*   SET.QUEUE DELETING queue
+*
+* Pick style form queues for SP.ASSIGN: a queue number (0 to 999) stands for the settings SETPTR would be given for a print unit.
+* The settings are kept in the directory file $FORMS (a hashed file of that name cannot be made: the name begins with a dollar
+* sign), one record for each queue (width, depth, top margin, bottom margin, mode, options, one to a line).
+* The mode is 1 (printer), 3 (hold file) or 6 (both); the options are SETPTR's, as typed, with commas between them, and the ones
+* that do not belong to the mode SP.ASSIGN ends up using are left out then.
+*
+* $FORMS IS THE ACCOUNT'S OWN, NOT ONE SHARED BY EVERY ACCOUNT as openQM's is by default (a VOC pointer to a file in QMSYS):
+* a form queue names a printer and a hold file name, and a definition that any account could change would change where
+* everybody else's reports go.  The file is made in the account the first time a queue is set; an account that wants to share
+* another's can point its $FORMS VOC entry at it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program setqueue
+$catalog $setqueue
+
+$include err.h
+
+   @system.return.code = -ER$ARGS
+   lptr = -1
+
+   args = trim(field(@sentence, ' ', 2, 999999))
+   if args = '' then stop sysmsg(12328)    ;* SET.QUEUE queue, width, depth, ...
+
+   first = upcase(field(args, ' ', 1))
+   begin case
+      case first = 'DISPLAY'
+         lptr = -1
+         rest = trim(args[8, 999999])
+         if rest # '' then
+            if upcase(field(rest, ' ', 1)) # 'LPTR' then stop sysmsg(2018, field(rest, ' ', 1))   ;* Unexpected token
+            lptr = 0
+            n = trim(field(rest, ' ', 2))
+            if n # '' then
+               if not(n matches '1N0N') or n > 255 then stop sysmsg(2053)    ;* Invalid print unit number
+               lptr = n + 0
+            end
+         end
+         gosub open.forms.read
+         if not(have.forms) then
+            print on lptr sysmsg(12330)        ;* No form queues are defined
+            @system.return.code = 0
+            return
+         end
+         gosub display.all
+         @system.return.code = 0
+
+      case first = 'DELETING'
+         q = trim(args[9, 999999])
+         gosub check.queue
+         gosub open.forms.read
+         if not(have.forms) then stop sysmsg(12326, q)    ;* Form queue %1 is not defined
+         read rec from forms.f, q else stop sysmsg(12326, q)
+         delete forms.f, q
+         display sysmsg(12331, q)                         ;* Deleted form queue %1
+         @system.return.code = 0
+
+      case 1
+         * queue {, width, depth, top.margin, bottom.margin, mode {, options}}
+         q = trim(field(args, ',', 1))
+         gosub check.queue
+         if index(args, ',', 1) = 0 then
+            * Only the queue: its settings are reported
+            gosub open.forms.read
+            if not(have.forms) then stop sysmsg(12326, q)
+            read rec from forms.f, q else stop sysmsg(12326, q)
+            print sysmsg(12332)                           ;* Queue   Width ...
+            gosub show.queue
+            @system.return.code = 0
+            return
+         end
+
+         names = 'Width':@fm:'Depth':@fm:'Top margin':@fm:'Bottom margin':@fm:'Mode'
+         lows = 1:@fm:0:@fm:0:@fm:0:@fm:1
+         highs = 999:@fm:999:@fm:999:@fm:999:@fm:6
+         rec = ''
+         for i = 1 to 5
+            v = trim(field(args, ',', i + 1))
+            if v = '' then stop sysmsg(12328)
+            if not(v matches '1N0N') or v + 0 < lows<i> or v + 0 > highs<i> then
+               stop sysmsg(12338, names<i>, lows<i>, highs<i>)   ;* %1 must be a whole number from %2 to %3
+            end
+            rec<i> = v + 0
+         next i
+         if rec<5> # 1 and rec<5> # 3 and rec<5> # 6 then stop sysmsg(12329, rec<5>)   ;* Mode %1 is not a printing mode
+         p = index(args, ',', 6)
+         rec<6> = if p then trim(args[p + 1, 999999]) else ''
+         gosub open.forms.write
+         write rec on forms.f, q
+         @system.return.code = 0
+   end case
+
+   return
+
+* ======================================================================
+* check.queue - Q is a queue number from 0 to 999 (no sign, no point)
+check.queue:
+   if not(q matches '1N0N') or q + 0 > 999 then stop sysmsg(12327, q)   ;* A form queue number is from 0 to 999
+   q = q + 0
+   return
+
+* ======================================================================
+* open.forms.read - FORMS.F is the file $FORMS, or null if the account has none
+open.forms.read:
+   have.forms = @false
+   open '$forms' to forms.f then have.forms = @true
+   return
+
+* open.forms.write - the same, made if it is not there
+open.forms.write:
+   open '$forms' to forms.f else
+      create.file '$forms' directory on error
+         @system.return.code = -ER$NOT.CREATED
+         stop sysmsg(1432, status(), os.error(), '$forms')     ;* Error xx creating xx
+      end
+      * The statement makes the directory; the pointer to it in the VOC is the program's to write (as $PHANTOM does for $COMO)
+      recordlocku @voc, '$forms'
+      write 'F':@fm:'$forms' to @voc, '$forms'
+      open '$forms' to forms.f else stop sysmsg(1430, status(), '$forms')   ;* Error xx opening xx
+   end
+   have.forms = @true
+   return
+
+* ======================================================================
+display.all:
+   select forms.f to 9
+   ids = ''
+   loop
+      readnext id from 9 else exit
+      if id matches '1N0N' then
+         locate id in ids<1> by 'AR' setting pos else null
+         ins id before ids<pos>
+      end
+   repeat
+   if ids = '' then
+      print on lptr sysmsg(12330)
+      return
+   end
+   if lptr = 0 then printer on
+   print on lptr sysmsg(12332)
+   for i = 1 to dcount(ids, @fm)
+      q = ids<i>
+      read rec from forms.f, q else continue
+      gosub show.queue
+   next i
+   if lptr = 0 then printer off
+   return
+
+show.queue:
+   line = fmt(q, '5R') : fmt(rec<1>, '8R') : fmt(rec<2>, '7R') : fmt(rec<3>, '6R') : fmt(rec<4>, '8R') : fmt(rec<5>, '6R')
+   line := '  ' : rec<6>
+   print on lptr line
+   return
+
+end
+
+* END-CODE

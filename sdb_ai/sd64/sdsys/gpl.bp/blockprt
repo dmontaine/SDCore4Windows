@@ -1,0 +1,165 @@
+* BLOCKPRT
+* BLOCK.PRINT and BLOCK.TERM verbs
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-8 (BLOCK.PRINT, BLOCK.TERM).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   BLOCK.PRINT text      to the default printer (print unit 0)
+*   BLOCK.TERM text       to the terminal
+*
+* Text in large letters, each character drawn in a 7 by 7 block of the letter W with two blank columns after it, so that
+* eight characters fill an 80 column line.  Long text wraps, breaking at a space where it can.  Lower case prints as
+* upper case.  Letters, digits and  . , ! ? - : / + = * ( ) '  have shapes; any other character prints as a question
+* mark, and a space is a blank block.
+*
+* openQM can change the drawing character and the shapes through an X-type record $BIGLTRS in the VOC of QMSYS.  SD has
+* no such record: the letter is always W.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program blockprt
+$catalog $blockprt
+
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   verb = downcase(field(trim(@sentence), ' ', 1))
+   text = trim(@sentence)
+   text = trim(text[index(text, ' ', 1) + 1, 99999])
+   if text = '' or index(trim(@sentence), ' ', 1) = 0 then stop sysmsg(12320)  ;* Text to print required
+   text = upcase(text)
+
+   gosub load.font
+
+   to.printer = (verb = 'block.print')
+   @system.return.code = 0
+   if to.printer then printer on
+
+   * Split the text into lines of at most eight characters.
+   rest = text
+   loop
+   while rest # ''
+      if len(rest) <= 8 then
+         line = rest
+         rest = ''
+      end else
+         cut = 8
+         if rest[9, 1] # ' ' then
+            for i = 8 to 1 step -1
+               if rest[i, 1] = ' ' then cut = i - 1 ; exit
+            next i
+            if cut < 1 then cut = 8
+         end
+         line = trim(rest[1, cut], ' ', 'T')
+         rest = rest[cut + 1, 99999]
+      end
+      rest = trim(rest, ' ', 'L')
+      gosub draw.line
+   repeat
+
+   if to.printer then printer close
+   stop
+
+* ======================================================================
+* draw.line - seven rows of LINE, then a blank row.
+draw.line:
+   for r = 1 to 7
+      out = ''
+      for c = 1 to len(line)
+         ch = line[c, 1]
+         locate ch in keys<1> setting p else
+            locate '?' in keys<1> setting p else p = 1
+         end
+         g = glyphs<p>
+         bits = field(g, '|', r)
+         bits = convert('#.', 'W ', bits)
+         out := ' ' : bits : '   '
+      next c
+      out = trim(out, ' ', 'T')
+      if to.printer then print on 0 out else print out
+   next r
+   if to.printer then print on 0 '' else print ''
+   return
+
+* ======================================================================
+* load.font - KEYS holds the characters, GLYPHS the seven rows of five columns of each, separated by |.
+load.font:
+   keys = ''
+   glyphs = ''
+   keys<-1> = 'A' ; glyphs<-1> = '.###.|#...#|#...#|#####|#...#|#...#|#...#'
+   keys<-1> = 'B' ; glyphs<-1> = '####.|#...#|#...#|####.|#...#|#...#|####.'
+   keys<-1> = 'C' ; glyphs<-1> = '.###.|#...#|#....|#....|#....|#...#|.###.'
+   keys<-1> = 'D' ; glyphs<-1> = '####.|#...#|#...#|#...#|#...#|#...#|####.'
+   keys<-1> = 'E' ; glyphs<-1> = '#####|#....|#....|####.|#....|#....|#####'
+   keys<-1> = 'F' ; glyphs<-1> = '#####|#....|#....|####.|#....|#....|#....'
+   keys<-1> = 'G' ; glyphs<-1> = '.###.|#...#|#....|#.###|#...#|#...#|.###.'
+   keys<-1> = 'H' ; glyphs<-1> = '#...#|#...#|#...#|#####|#...#|#...#|#...#'
+   keys<-1> = 'I' ; glyphs<-1> = '.###.|..#..|..#..|..#..|..#..|..#..|.###.'
+   keys<-1> = 'J' ; glyphs<-1> = '..###|...#.|...#.|...#.|...#.|#..#.|.##..'
+   keys<-1> = 'K' ; glyphs<-1> = '#...#|#..#.|#.#..|##...|#.#..|#..#.|#...#'
+   keys<-1> = 'L' ; glyphs<-1> = '#....|#....|#....|#....|#....|#....|#####'
+   keys<-1> = 'M' ; glyphs<-1> = '#...#|##.##|#.#.#|#.#.#|#...#|#...#|#...#'
+   keys<-1> = 'N' ; glyphs<-1> = '#...#|##..#|#.#.#|#..##|#...#|#...#|#...#'
+   keys<-1> = 'O' ; glyphs<-1> = '.###.|#...#|#...#|#...#|#...#|#...#|.###.'
+   keys<-1> = 'P' ; glyphs<-1> = '####.|#...#|#...#|####.|#....|#....|#....'
+   keys<-1> = 'Q' ; glyphs<-1> = '.###.|#...#|#...#|#...#|#.#.#|#..#.|.##.#'
+   keys<-1> = 'R' ; glyphs<-1> = '####.|#...#|#...#|####.|#.#..|#..#.|#...#'
+   keys<-1> = 'S' ; glyphs<-1> = '.####|#....|#....|.###.|....#|....#|####.'
+   keys<-1> = 'T' ; glyphs<-1> = '#####|..#..|..#..|..#..|..#..|..#..|..#..'
+   keys<-1> = 'U' ; glyphs<-1> = '#...#|#...#|#...#|#...#|#...#|#...#|.###.'
+   keys<-1> = 'V' ; glyphs<-1> = '#...#|#...#|#...#|#...#|#...#|.#.#.|..#..'
+   keys<-1> = 'W' ; glyphs<-1> = '#...#|#...#|#...#|#.#.#|#.#.#|##.##|#...#'
+   keys<-1> = 'X' ; glyphs<-1> = '#...#|#...#|.#.#.|..#..|.#.#.|#...#|#...#'
+   keys<-1> = 'Y' ; glyphs<-1> = '#...#|#...#|.#.#.|..#..|..#..|..#..|..#..'
+   keys<-1> = 'Z' ; glyphs<-1> = '#####|....#|...#.|..#..|.#...|#....|#####'
+   keys<-1> = '0' ; glyphs<-1> = '.###.|#...#|#..##|#.#.#|##..#|#...#|.###.'
+   keys<-1> = '1' ; glyphs<-1> = '..#..|.##..|..#..|..#..|..#..|..#..|.###.'
+   keys<-1> = '2' ; glyphs<-1> = '.###.|#...#|....#|...#.|..#..|.#...|#####'
+   keys<-1> = '3' ; glyphs<-1> = '.###.|#...#|....#|..##.|....#|#...#|.###.'
+   keys<-1> = '4' ; glyphs<-1> = '...#.|..##.|.#.#.|#..#.|#####|...#.|...#.'
+   keys<-1> = '5' ; glyphs<-1> = '#####|#....|####.|....#|....#|#...#|.###.'
+   keys<-1> = '6' ; glyphs<-1> = '..##.|.#...|#....|####.|#...#|#...#|.###.'
+   keys<-1> = '7' ; glyphs<-1> = '#####|....#|...#.|..#..|.#...|.#...|.#...'
+   keys<-1> = '8' ; glyphs<-1> = '.###.|#...#|#...#|.###.|#...#|#...#|.###.'
+   keys<-1> = '9' ; glyphs<-1> = '.###.|#...#|#...#|.####|....#|...#.|.##..'
+   keys<-1> = '.' ; glyphs<-1> = '.....|.....|.....|.....|.....|.##..|.##..'
+   keys<-1> = ',' ; glyphs<-1> = '.....|.....|.....|.....|.##..|..#..|.#...'
+   keys<-1> = '!' ; glyphs<-1> = '..#..|..#..|..#..|..#..|..#..|.....|..#..'
+   keys<-1> = '?' ; glyphs<-1> = '.###.|#...#|....#|...#.|..#..|.....|..#..'
+   keys<-1> = '-' ; glyphs<-1> = '.....|.....|.....|#####|.....|.....|.....'
+   keys<-1> = ':' ; glyphs<-1> = '.....|.##..|.##..|.....|.##..|.##..|.....'
+   keys<-1> = '/' ; glyphs<-1> = '....#|....#|...#.|..#..|.#...|#....|#....'
+   keys<-1> = '+' ; glyphs<-1> = '.....|..#..|..#..|#####|..#..|..#..|.....'
+   keys<-1> = '=' ; glyphs<-1> = '.....|.....|#####|.....|#####|.....|.....'
+   keys<-1> = '*' ; glyphs<-1> = '.....|#.#.#|.###.|#####|.###.|#.#.#|.....'
+   keys<-1> = '(' ; glyphs<-1> = '...#.|..#..|.#...|.#...|.#...|..#..|...#.'
+   keys<-1> = ')' ; glyphs<-1> = '.#...|..#..|...#.|...#.|...#.|..#..|.#...'
+   keys<-1> = "'" ; glyphs<-1> = '..#..|..#..|.#...|.....|.....|.....|.....'
+   keys<-1> = ' ' ; glyphs<-1> = '.....|.....|.....|.....|.....|.....|.....'
+   return
+
+end
+
+* END-CODE

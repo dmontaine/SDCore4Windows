@@ -1,0 +1,67 @@
+* ROOTIDX
+* ROOT statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-2 (ROOT).  The compiler (bcomp, st.root) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !ROOTIDX(result, file.name, index, scan.var)
+*
+* Makes the scan variable that the KEY statement uses: the file name and the name of the index, checked now.  RESULT is 1
+* when the file opens and has the index (found in the case given, then in lower and upper case), otherwise 0 with STATUS()
+* the error of the OPEN or ER$AKNF (3019).  openQM also takes an A-correlative expression for INDEX and looks for an index
+* built from it; SD takes the name of an index only.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine rootidx(ret, fname, idx, scan)
+$catalog !rootidx
+
+$include err.h
+
+   ret = 0
+   open fname to f else
+      set.status status()
+      return
+   end
+   ak = indices(f)
+   locate idx in ak<1> setting p else
+      s = downcase(idx)
+      locate s in ak<1> setting p else
+         s = upcase(idx)
+         locate s in ak<1> setting p else
+            close f
+            set.status ER$AKNF
+            return
+         end
+      end
+      idx = s
+   end
+   close f
+   scan = fname : @fm : idx
+   set.status 0
+   ret = 1
+   return
+end
+
+* END-CODE

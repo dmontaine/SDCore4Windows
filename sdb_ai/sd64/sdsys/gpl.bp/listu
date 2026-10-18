@@ -155,7 +155,8 @@ $include keys.h
       else print '  ' :
       print fmt(uid, '4R') : '  ' :
       print fmt(pid, '11L') : '  ' :
-      print if puid then (fmt(puid, '4R') : '  ') else '      ' :
+      * A phantom grouped with its parent (PHANTOM GROUP) has a G after the parent's number (15 Oct 26, sheet 427)
+      print if puid then (fmt(puid, '4R') : (if bitand(flg, USR$GROUPED) then 'G' else ' ') : ' ') else '      ' :
       print oconv(idiv(login.time, 86400), 'DDML[,A3]') : ' ' :
       print oconv(rem(login.time, 86400), 'MT') : '  ' :
       print trimf(s)

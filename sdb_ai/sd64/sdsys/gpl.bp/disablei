@@ -1,0 +1,161 @@
+* DISABLEI
+* DISABLE.INDEX verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-8 (DISABLE.INDEX).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    DISABLE.INDEX filename index...
+*    DISABLE.INDEX filename ALL
+*
+* Switches off the updating and the use of the named indices of a file, for a large load of records or a batch run that
+* would change most of them: the index is not kept up as records are written, and the query processor does not use it.
+* BUILD.INDEX builds it again and switches it on.  Until then its data are out of date and LIST.INDEX shows it as needing a
+* build.
+*
+* Like DELETE.INDEX the verb needs the file to itself: another session that had the file open would go on using, and
+* keeping up, an index this one had switched off.  (openQM 2.10-4 removed that need; doing so would mean telling every open
+* copy of the file, which SD does not do.)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program disablei
+$catalog $disablei
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include ak_info.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS     ;* Preset for argument errors
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   call @parser(PARSER$MFILE, token.type, filename, keyword)
+   if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
+
+   * The file must exist and be a dynamic file
+
+   open '', filename to fu else
+      open '', downcase(filename) to fu then
+         filename = downcase(filename)
+      end else
+         open '', upcase(filename) to fu else
+            stop sysmsg(2019) ;* File not found
+         end
+         filename = upcase(filename)
+      end
+   end
+
+   if fileinfo(fu, FL$TYPE) # FL$TYPE.DH then
+      stop sysmsg(2020) ;* Dynamic file required
+   end
+
+   * The index names, or ALL
+
+   disable.all = @false
+   ak.list = ''
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$ALL
+            if ak.list # '' then stop sysmsg(2600) ;* Cannot use ALL with field names
+            disable.all = @true
+         case disable.all
+            stop sysmsg(2600)
+         case 1
+            ak.list<-1> = token
+      end case
+   repeat
+
+   if not(disable.all) and ak.list = '' then stop sysmsg(2601)  ;* Index name:
+
+   ak.names = indices(fu)
+   num.aks = dcount(ak.names, @fm)
+   if num.aks = 0 then stop sysmsg(2603) ;* File has no indices
+
+   * Fold the case of what was typed to the case of the index; a name that matches nothing stays as typed and is reported
+   * at the end.
+
+   if not(disable.all) then
+      u.ak.names = upcase(ak.names)
+      for j = 1 to dcount(ak.list, @fm)
+         s = ak.list<j>
+         locate s in ak.names<1> setting pos else
+            s = upcase(s)
+            locate s in u.ak.names<1> setting pos then
+               ak.list<j> = ak.names<pos>
+            end
+         end
+      next j
+   end
+
+   dim ak.details(num.aks)
+   for i = 1 to num.aks
+      ak.details(i) = indices(fu, ak.names<i>)
+   next i
+
+   * The file to ourselves, as DELETE.INDEX needs it
+
+   if not(fileinfo(fu, FL$EXCLUSIVE)) then
+      excl.holders = fileinfo(fu, FL$HOLDERS)
+      excl.name    = fileinfo(fu, FL$VOCNAME)
+      if excl.holders = '' then
+         stop sysmsg(10169, excl.name)
+      end else
+         stop sysmsg(10168, excl.name, excl.holders)
+      end
+   end
+
+   @system.return.code = 0
+
+   for i = 1 to num.aks
+      if not(disable.all) then
+         locate ak.names<i> in ak.list<1> setting pos else continue
+         del ak.list<pos>
+      end
+
+      akno = ak.details(i)<1,5> + 0       ;* the internal AK number, from 0, as BUILD.INDEX uses it
+      akenable fu, -1 - akno              ;* a negative number disables: -1 - n is the AK number n to switch off
+      display sysmsg(12323, ak.names<i>)  ;* Disabled index xx
+   next i
+
+   close fu
+   void ospath("", os$flush.cache)      ;* the next open reads the flags from the files
+
+   if ak.list # '' then
+      loop
+         display sysmsg(2604, remove(ak.list, delim)) ;* Unrecognised index name (xx)
+      while delim
+      repeat
+   end
+
+   return
+end
+
+* END-CODE

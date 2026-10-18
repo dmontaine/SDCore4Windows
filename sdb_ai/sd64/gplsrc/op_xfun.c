@@ -89,6 +89,7 @@
 #define XF_SIGNAL 25  /* SIGNAL(user.no), QM4 gaps Q-5 */
 #define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
 #define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
+#define XF_SWAPMARKS 28 /* SWAPMARKS(string): the string as it is - SD has no ECS mode, where the marks would be exchanged; sheet 238 */
 
 void op_dcount(void);
 void op_field(void);
@@ -227,6 +228,10 @@ void op_xfun() {
       break;
     case XF_SELSOCKET:
       x_select_socket();
+      break;
+    case XF_SWAPMARKS:
+      /* openQM's SWAPMARKS exchanges the mark characters with accented letters on an ECS system and, since release 3.0-2,
+         returns the data unchanged on any other.  SD has no ECS mode, so the argument is the result */
       break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */

@@ -67,7 +67,7 @@ bool dh_exists(DH_FILE* dh_file, /* File descriptor */
   group_locked = TRUE;
 
   fptr->stats.reads++;
-  sysseg->global_stats.reads++;
+  NoteStat(reads);
 
   EndExclusive(FILE_TABLE_LOCK);
 

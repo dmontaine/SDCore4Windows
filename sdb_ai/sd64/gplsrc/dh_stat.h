@@ -53,6 +53,16 @@ struct FILESTATS {
 };
 #define FILESTATS_COUNTERS 12    /* Used counters */
 
+/* 15 Oct 26 dm - QM4 gaps Q-8 (FSTAT.USER).  Count one event in the system's totals and in the user table entry of the process
+   doing it.  Both are in shared memory and neither is locked, as global_stats never was: a count may be a few short when two
+   processes add at once, which is all statistics of this kind promise. */
+#define NoteStat(counter)                 \
+  do {                                    \
+    sysseg->global_stats.counter++;       \
+    if (my_uptr != NULL)                  \
+      my_uptr->ustats.counter++;          \
+  } while (0)
+
 #endif
 
 /* END-CODE */

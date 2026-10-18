@@ -1,0 +1,160 @@
+* SPASSIGN
+* SP.ASSIGN verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-9 (SP.ASSIGN, with SET.QUEUE).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SP.ASSIGN {options} {, setptr.options}
+*
+* Sets a print unit from a form queue defined with SET.QUEUE: the unit's width, depth, margins, mode and options come from the
+* record of the queue in $FORMS, and SP.ASSIGN does a SETPTR with them.  The options, in one word with no spaces needed:
+*   n        the number of copies (digits at the start)
+*   F qno    the form queue, 0 to 999 (default 0)        Q qno   the same
+*   H        hold file: with S mode 3, without S mode 6 (the output is kept and printed)
+*   O        keep the print unit open until PRINTER CLOSE
+*   R unit   the print unit (default 0)
+*   S        suppress printing: only with H, which makes mode 3
+* The SETPTR options after a comma are added at the end and so override the queue's.  An option of the queue that does not
+* belong to the mode in use (AT, BANNER, FORM and OPTIONS are for printing, AS and INFORM for a hold file) is dropped.
+* With no options at all it says which form queue print unit 0 was last given, and SETPTR's report follows.
+*
+* GETPU(PU$FORM.QUEUE, unit) gives the queue last assigned to a unit and SYSTEM(1066) the last one assigned to any unit.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program spassign
+$catalog $spassign
+
+$include err.h
+$include int$keys.h
+$include keys.h
+
+   @system.return.code = -ER$ARGS
+
+   args = trim(field(@sentence, ' ', 2, 999999))
+
+   if args = '' then
+      display sysmsg(12336, 0, getpu(PU$FORM.QUEUE, 0))     ;* Print unit %1 uses form queue %2
+      execute 'SETPTR DISPLAY'
+      return
+   end
+
+   * The options (up to the first comma) and SETPTR's own after it
+
+   p = index(args, ',', 1)
+   if p then
+      opts = upcase(trim(args[1, p - 1]))
+      extra = trim(args[p + 1, 999999])
+   end else
+      opts = upcase(args)
+      extra = ''
+   end
+
+   copies = ''
+   qno = 0
+   unit = 0
+   hold = @false
+   keep.open = @false
+   suppress = @false
+
+   i = 1
+   n = len(opts)
+   loop                                  ;* digits first: the number of copies
+   while i <= n and opts[i, 1] matches '1N'
+      copies := opts[i, 1]
+      i += 1
+   repeat
+   loop
+   while i <= n
+      c = opts[i, 1]
+      i += 1
+      if c = ' ' then continue
+      digits = ''
+      loop                               ;* the number that follows a letter, spaces allowed before it
+      while i <= n and (opts[i, 1] matches '1N' or (opts[i, 1] = ' ' and digits = ''))
+         if opts[i, 1] # ' ' then digits := opts[i, 1]
+         i += 1
+      repeat
+      begin case
+         case c = 'F' or c = 'Q'
+            if digits = '' or digits + 0 > 999 then stop sysmsg(12327, digits)   ;* A form queue number is from 0 to 999
+            qno = digits + 0
+         case c = 'R'
+            if digits # '' then
+               if digits + 0 > 255 then stop sysmsg(12333, digits)               ;* Print unit %1 is not valid
+               unit = digits + 0
+            end
+         case c = 'H'
+            hold = @true
+         case c = 'O'
+            keep.open = @true
+         case c = 'S'
+            suppress = @true
+         case 1
+            stop sysmsg(12334, c)                                                ;* SP.ASSIGN option %1 is not understood
+      end case
+   repeat
+
+   if suppress and not(hold) then stop sysmsg(12335)         ;* S needs H
+
+   * The queue
+
+   open '$forms' to forms.f else stop sysmsg(12326, qno)     ;* Form queue %1 is not defined
+   read rec from forms.f, qno else stop sysmsg(12326, qno)
+   close forms.f
+
+   mode = rec<5>
+   if hold then mode = if suppress then 3 else 6
+
+   cmd = 'SETPTR ' : unit : ',' : rec<1> : ',' : rec<2> : ',' : rec<3> : ',' : rec<4> : ',' : mode
+
+   * The queue's options, less those that are not for this mode
+
+   queue.opts = rec<6>
+   loop
+      item = trim(field(queue.opts, ',', 1))
+      p = index(queue.opts, ',', 1)
+      queue.opts = if p then queue.opts[p + 1, 999999] else ''
+      if item # '' then
+         kw = upcase(field(item, ' ', 1))
+         keep = @true
+         if (kw = 'AS' or kw = 'INFORM') and not(mode = 3 or mode = 6) then keep = @false
+         if (kw = 'AT' or kw = 'BANNER' or kw = 'FORM' or kw = 'OPTIONS') and not(mode = 1 or mode = 6) then keep = @false
+         if keep then cmd := ',' : item
+      end
+   while queue.opts # ''
+   repeat
+
+   if copies # '' then cmd := ',COPIES ' : (copies + 0)
+   if keep.open then cmd := ',KEEP.OPEN'
+   cmd := ',BRIEF'
+   if extra # '' then cmd := ',' : extra
+
+   execute cmd
+   if @system.return.code = 0 then void kernel(K$FORM.QUEUE, unit * 1000 + qno)
+
+   return
+end
+
+* END-CODE

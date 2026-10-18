@@ -1,0 +1,145 @@
+* FSTATUSER
+* FSTAT.USER verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-8 (FSTAT.USER).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   FSTAT.USER {TOP} {USER n} {LPTR {unit}} {NO.PAGE}
+*
+* File activity by user: how many records each session has read, written and deleted since it started (the counts the system
+* keeps in FSTAT GLOBAL, kept for each session as well).  Sessions come in user number order, or with TOP in descending order
+* of reads + writes + deletes, which shows where a slow system is busy.  USER n shows all the counts of one session: opens,
+* reads, writes, deletes, clears, selects, index reads, writes and deletes, splits and merges.
+*
+* An administrator sees every session.  Anyone else sees the sessions of their own login name: the file activity of other people
+* is theirs to see only through an administrator.
+*
+* openQM's FSTAT.USER repeats the report every two seconds and takes T, I, D and U at the keyboard; this one shows it once.
+* Run it again for another look, or give TOP and USER on the command line.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program fstatuser
+$catalog $fstatuser
+
+$include int$keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   words = trim(upcase(field(@sentence, ' ', 2, 999999)))
+   top = @false
+   user = 0
+   lptr = -1
+   nopage = @false
+   i = 1
+   n.words = dcount(words, ' ')
+   loop
+   while i <= n.words
+      w = field(words, ' ', i)
+      i += 1
+      begin case
+         case w = 'TOP'
+            top = @true
+         case w = 'NO.PAGE'
+            nopage = @true
+         case w = 'USER'
+            v = field(words, ' ', i)
+            i += 1
+            if not(v matches '1N0N') or v = '0' then stop sysmsg(2018, v)         ;* Unexpected token (xx)
+            user = v + 0
+         case w = 'LPTR'
+            lptr = 0
+            v = field(words, ' ', i)
+            if v matches '1N0N' then
+               if v + 0 > 255 then stop sysmsg(2053)                               ;* Invalid print unit number
+               lptr = v + 0
+               i += 1
+            end
+         case 1
+            stop sysmsg(2018, w)
+      end case
+   repeat
+
+   see.all = kernel(K$ADMINISTRATOR, -1)
+   me = kernel(K$USERNAME, 0)
+
+   data = kernel(K$USER.STATS, user)
+   rows = ''
+   for r = 1 to dcount(data, @fm)
+      u = raise(data<r>)          ;* 1 user number, 2 to 12 the counts, 13 when counting began, 14 login name
+      if see.all or u<14> = me then rows<-1> = data<r>
+   next r
+
+   if lptr = 0 then printer on
+   if nopage then page.state = kernel(K$PAGINATE, @false)
+   @system.return.code = 0
+
+   if user # 0 then
+      if rows = '' then
+         print on lptr sysmsg(12339, user)             ;* No file activity to show for user %1
+      end else
+         u = raise(rows<1>)
+         print on lptr sysmsg(12341, user)             ;* File activity for user %1
+         print on lptr ''
+         labels = 'Opens':@fm:'Reads':@fm:'Writes':@fm:'Deletes':@fm:'Clears':@fm:'Selects'
+         labels := @fm:'Index reads':@fm:'Index writes':@fm:'Index deletes':@fm:'Splits':@fm:'Merges'
+         for k = 1 to 11
+            print on lptr fmt(labels<k>, '30L') : fmt(u<k + 1>, '10R')
+         next k
+         print on lptr ''
+         t = u<13>
+         print on lptr sysmsg(12342, oconv(idiv(t, 86400), 'DDML[,A3]'), oconv(rem(t, 86400), 'MT'))   ;* Counted since %1 %2
+      end
+   end else
+      if rows = '' then
+         print on lptr sysmsg(12343)                   ;* No sessions to show
+      end else
+         if top then
+            * Descending order of reads + writes + deletes
+            keys = ''
+            ordered = ''
+            for r = 1 to dcount(rows, @fm)
+               u = raise(rows<r>)
+               act = u<3> + u<4> + u<5>
+               locate act in keys<1> by 'DR' setting pos else null
+               ins act before keys<pos>
+               ins rows<r> before ordered<pos>
+            next r
+            rows = ordered
+         end
+         print on lptr sysmsg(12340)                   ;* User Name...                ....Reads        ..Writes       ..Deletes
+         for r = 1 to dcount(rows, @fm)
+            u = raise(rows<r>)
+            print on lptr fmt(u<1>, '5R') : ' ' : fmt(u<14>, '16L') : fmt(u<3>, '16R') : fmt(u<4>, '16R') : fmt(u<5>, '16R')
+         next r
+      end
+   end
+
+   if nopage then page.state = kernel(K$PAGINATE, page.state)
+   if lptr = 0 then printer close
+   return
+end
+
+* END-CODE

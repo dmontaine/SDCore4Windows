@@ -24,6 +24,9 @@
 *
 * flag = !OSREAD(data, path)
 *
+* SYSTEM(1071) (SYS$OSREAD.INFO) then gives the STATUS array of the file that was read, from the named common sd.osreadinfo that
+* _system reads; it is null before any OSREAD and after one that failed.
+*
 * Reads the whole of the operating system file PATH into DATA with no change to a byte (no newline is turned into a field mark),
 * and gives 1; gives 0 and leaves DATA null if the file cannot be opened or read.  A file larger than a gigabyte is not read.
 *
@@ -38,7 +41,10 @@
 function !osread(data, path)
 $catalog !osread
 
+   common /sd.osreadinfo/ osread.info    ;* what SYSTEM(1071) gives: _system reads it
+
    data = ''
+   osread.info = ''
    if path = '' then return 0
 
    openseq path readonly to f then null else return 0
@@ -54,6 +60,14 @@ $catalog !osread
       end
       data := block
    repeat
+
+   * The STATUS array of the file, as for a directory file item: the fields that are about reading a sequential file (position,
+   * end of file, bytes left) mean nothing for an OSREAD that has read it all, and are null.
+   status info from f then null else info = ''
+   info<1> = ''
+   info<2> = ''
+   info<4> = ''
+   osread.info = info
 
    closeseq f
    return 1

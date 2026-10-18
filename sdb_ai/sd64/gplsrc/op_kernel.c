@@ -531,7 +531,7 @@ void op_kernel() {
             ts_copy_byte(FIELD_MARK);
 
           ts_printf("%d%c%d%c%s%c%d%c%d%c%s%c%s%c%d%c%s", (int)(uptr->uid), VALUE_MARK, (int)(uptr->pid), VALUE_MARK,
-                    uptr->ip_addr, VALUE_MARK, (int)(uptr->flags), VALUE_MARK, uptr->puid, VALUE_MARK,
+                    uptr->ip_addr, VALUE_MARK, (int)(uptr->flags | (uptr->grouped ? USR_GROUPED : 0)), VALUE_MARK, uptr->puid, VALUE_MARK,
                     uptr->username, VALUE_MARK, uptr->ttyname, VALUE_MARK, uptr->login_time, VALUE_MARK,
                     uptr->account);   /* 14 Oct 26: the ninth value (sheet 24, 29) */
           if (n)
@@ -865,6 +865,68 @@ void op_kernel() {
 
     /* 15 Oct 26 dm - QM4 gaps Q-8, COMMAND.LOGGING.  See keys.h.  The file is the user's own (mode 0600), and is opened
        with O_NOFOLLOW so that a link left in its place is not written through. */
+    case K_USER_STATS: {
+      int16_t us_i;
+      USER_ENTRY* us_ptr;
+      int32_t us_n;
+
+      InitDescr(&result, STRING);
+      result.data.str.saddr = NULL;
+      ts_init(&(result.data.str.saddr), 128);
+      GetInt(descr);
+      us_n = descr->data.value; /* A user number, or zero for all */
+      for (us_i = 1; us_i <= sysseg->max_users; us_i++) {
+        us_ptr = UPtr(us_i);
+        if (((us_n == 0) && (us_ptr->uid > 0)) || ((us_n != 0) && (us_ptr->uid == us_n))) {
+          if (result.data.str.saddr != NULL)
+            ts_copy_byte(FIELD_MARK);
+          ts_printf("%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%d%c%s", (int)(us_ptr->uid), VALUE_MARK,
+                    (int)(us_ptr->ustats.opens), VALUE_MARK, (int)(us_ptr->ustats.reads), VALUE_MARK,
+                    (int)(us_ptr->ustats.writes), VALUE_MARK, (int)(us_ptr->ustats.deletes), VALUE_MARK,
+                    (int)(us_ptr->ustats.clears), VALUE_MARK, (int)(us_ptr->ustats.selects), VALUE_MARK,
+                    (int)(us_ptr->ustats.ak_reads), VALUE_MARK, (int)(us_ptr->ustats.ak_writes), VALUE_MARK,
+                    (int)(us_ptr->ustats.ak_deletes), VALUE_MARK, (int)(us_ptr->ustats.splits), VALUE_MARK,
+                    (int)(us_ptr->ustats.merges), VALUE_MARK, (int)(us_ptr->ustats.reset), VALUE_MARK,
+                    us_ptr->username);
+          if (us_n)
+            break;
+        }
+      }
+      ts_terminate();
+    } break;
+
+    case K_FORM_QUEUE: {
+      int32_t fq_unit, fq_queue;
+
+      GetInt(descr);
+      fq_unit = descr->data.value / 1000;
+      fq_queue = descr->data.value % 1000;
+      result.data.value = 0;
+      if ((descr->data.value >= 0) && (fq_unit <= HIGH_PRINT_UNIT)) {
+        form_queue_of[fq_unit] = (int16_t)fq_queue;
+        last_form_queue = (int16_t)fq_queue;
+        result.data.value = 1;
+      }
+    } break;
+
+    case K_GROUP_PHANTOM: {
+      /* PHANTOM GROUP: the phantom with this user number, if it is one this process started, is to be logged out when this
+         process ends (ReleaseLicence).  Returns 1 if it was marked, 0 if not. */
+      int16_t gu;
+      USER_ENTRY* gptr;
+
+      GetInt(descr);
+      gu = (int16_t)descr->data.value;
+      result.data.value = 0;
+      StartExclusive(SHORT_CODE, 69);
+      gptr = UserPtr(gu);
+      if ((gptr != NULL) && (gptr->puid == process.user_no) && (gptr->uid == gu)) {
+        gptr->grouped = 1;
+        result.data.value = 1;
+      }
+      EndExclusive(SHORT_CODE);
+    } break;
+
     case K_CMDLOG: {
       char* cl_dir;
       char cl_name[MAX_PATHNAME_LEN + 1];
@@ -1229,6 +1291,7 @@ void op_phantom() {
       phantom_uid = assign_user_no(i, FALSE);
       uptr->uid = phantom_uid;
       uptr->puid = process.user_no;
+      uptr->grouped = 0;
       strcpy((char *)(uptr->username), (char *)(my_uptr->username));
       strcpy((char *)(uptr->account), (char *)(my_uptr->account));   /* 14 Oct 26: starts in its parent's account */
       phantom_user_index = i;

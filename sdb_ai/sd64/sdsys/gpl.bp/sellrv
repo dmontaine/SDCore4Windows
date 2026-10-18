@@ -1,0 +1,57 @@
+* SELLRV
+* SELECTLEFTV and SELECTRIGHTV statements
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-2 and sheet item 291 (SELECTLEFTV, SELECTRIGHTV).  The compiler (bcomp,
+*               st.selectleftv and st.selectrightv) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !SELLRV(direction, index, file, key, list)
+*
+* SELECTLEFT or SELECTRIGHT (DIRECTION "L" or "R") into a select list variable: the step goes to numbered list 10 and the
+* ids are made into LIST as SELECTV makes one.  KEY is the indexed value of the entry found (the SETTING variable, or a
+* constant when the statement has none).  STATUS() is the SELECTLEFT's or SELECTRIGHT's: 3030 past the end of the index,
+* 3019 for an index the file has not.  List 10 is the scratch select list of this subroutine and what it held is lost.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sellrv(direction, index, file, key, list)
+$catalog !sellrv
+
+   if direction = 'L' then
+      selectleft index from file setting key to 10
+   end else
+      selectright index from file setting key to 10
+   end
+   st = status()
+   items = ''
+   loop
+      readnext id from 10 else exit
+      items<-1> = id
+   repeat
+   selectv items to list
+   set.status st
+   return
+end
+
+* END-CODE

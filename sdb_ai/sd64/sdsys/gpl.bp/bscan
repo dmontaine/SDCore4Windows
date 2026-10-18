@@ -1,0 +1,126 @@
+* BSCAN
+* BSCAN statement
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-2 (BSCAN).  The compiler (bcomp, st.bscan) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* CALL !BSCAN(result, indexed.value, ids, file, value, has.value, index, reset, seq)
+*
+* One step of a scan of an alternate key index, built on SETLEFT, SETRIGHT, SELECTINDEX, SELECTLEFT and SELECTRIGHT.  The
+* scan position is the file variable's, so a scan goes on from the entry the last BSCAN, SELECTINDEX, SELECTLEFT or
+* SELECTRIGHT on that file variable returned.
+*
+*   RESET   position at the extreme left (SEQ "A") or right ("D"), then return the entry there
+*   VALUE   position at that value and return its entry, or if the index has none the nearest entry in the direction of
+*           the scan, with STATUS() 2
+*   neither move one entry in the direction of the scan
+*
+* INDEXED.VALUE and IDS (the record ids of the entry, field mark delimited) are returned.  RESULT is 1 for an entry found
+* (STATUS() 1) and otherwise 0 with STATUS(): 0 the scan has run off the end of the index (both null), 2 no entry for VALUE
+* (the nearest is returned), 3 the file is not a dynamic hashed file, 4 the index is not there, 5 SEQ is not A or D, 10 any
+* other error.  List 10 is the scratch select list of this subroutine and what it held is lost.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine bscan(ret, v, ids, f, value, has.value, idx, reset, seq)
+$catalog !bscan
+
+$include keys.h
+
+   ret = 0
+   v = ''
+   ids = ''
+   seq = upcase(seq)
+   if seq = '' then seq = 'A'
+   if seq # 'A' and seq # 'D' then
+      set.status 5
+      return
+   end
+   if fileinfo(f, FL$TYPE) # FL$TYPE.DH then
+      set.status 3
+      return
+   end
+   ak = indices(f)
+   locate idx in ak<1> setting p else
+      s = downcase(idx)
+      locate s in ak<1> setting p else
+         s = upcase(idx)
+         locate s in ak<1> setting p else
+            set.status 4
+            return
+         end
+      end
+      idx = s
+   end
+
+   code = 1
+   begin case
+      case reset
+         if seq = 'A' then setleft idx from f else setright idx from f
+         gosub step
+      case has.value
+         selectindex idx, value from f to 10
+         gosub read.list
+         if ids # '' then
+            v = value
+         end else
+            code = 2
+            gosub step
+            code = 2
+         end
+      case 1
+         gosub step
+   end case
+
+   set.status code
+   if code = 1 then ret = 1
+   return
+
+* ======================================================================
+* step - the entry beyond the scan position in the direction of the scan.  Leaves CODE 1 for an entry, 0 for the end.
+step:
+   if seq = 'A' then
+      selectright idx from f setting v to 10
+   end else
+      selectleft idx from f setting v to 10
+   end
+   gosub read.list
+   if ids = '' then
+      v = ''
+      code = 0
+   end else
+      code = 1
+   end
+   return
+
+read.list:
+   ids = ''
+   loop
+      readnext x from 10 else exit
+      ids<-1> = x
+   repeat
+   return
+end
+
+* END-CODE

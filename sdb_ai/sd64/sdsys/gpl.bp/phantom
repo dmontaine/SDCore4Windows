@@ -74,8 +74,10 @@ $define como.dir.voc.name "$COMO"
    *    NO.MSG        do not display the "Started phantom" message
    *    DATA          hand the DATA queue of this process to the phantom (it is emptied here)
    *    LOG dirfile   the phantom's log (COMO record) goes in this directory file instead of $COMO
+   *    GROUP         the phantom is grouped with this process: it is logged out when this process ends (15 Oct 26)
    no.msg = @false
    pass.data = @false
+   group.it = @false
    log.file = ''
    loop
       w = upcase(field(ph.command, ' ', 1))
@@ -85,6 +87,9 @@ $define como.dir.voc.name "$COMO"
             ph.command = trimf(ph.command[len(w) + 1, 999999])
          case w = 'DATA'
             pass.data = @true
+            ph.command = trimf(ph.command[len(w) + 1, 999999])
+         case w = 'GROUP'      ;* 15 Oct 26 dm - logged out when this process ends (QM4 gaps Q-8, sheet 427 and 433)
+            group.it = @true
             ph.command = trimf(ph.command[len(w) + 1, 999999])
          case w = 'LOG'
             ph.command = trimf(ph.command[4, 999999])
@@ -112,6 +117,8 @@ $define como.dir.voc.name "$COMO"
         @system.return.code = -ER$PROCESS
         stop sysmsg(6481) ;* Failed to create phantom process
       end
+
+      if group.it then void kernel(K$GROUP.PHANTOM, uid)
 
       * Update parent process Pn phantom register record
 

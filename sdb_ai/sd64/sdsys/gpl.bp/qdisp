@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): OPTION QUERY.MERGE.PRINT: a report to printer 0 does not close a printer that was already active (openQM ref 57).
 * 18 Oct 26 Windows port - from Linux 770050a (14 Oct 26): OPTION QUERY.FOOTER.PAUSE: pause at the end of a report with a footer.
 * 13 Sep 26 Windows port - "Suppress pagination" at the page prompt now does
 *            what NO.PAGE does: the rest of the report runs on without clearing
@@ -141,7 +142,8 @@ common /$qdisp/ qd.header,
                 qd.boxed,             ;* Boxed report
                 qd.style.fgc,         ;* Foreground colours (OHCDSTFE order)
                 qd.style.bgc,         ;* Background colours (OHCDSTFE order)
-                qd.prt.styles         ;* F1 = prefix per mode (OHCDSTFE order)
+                qd.prt.styles,        ;* F1 = prefix per mode (OHCDSTFE order)
+                qd.merge              ;* QUERY.MERGE.PRINT: leave printer 0 active at the end
 
    err = 0
 
@@ -185,6 +187,7 @@ initialise:
    qd.header = ''
    qd.footer = ''
    qd.lptr = -1
+   qd.merge = @false
    gosub assess.live.output
 
    qd.linepos = 0
@@ -224,6 +227,9 @@ set.destination:
    end else
       qd.buffered = @false
       qd.paginate = @false
+      * QUERY.MERGE.PRINT: on the default print unit, a printer that was already active before the report began is left active
+      * when the report ends.  system(1) is read before PRINTER ON below, which would make it true.
+      qd.merge = (qd.lptr = 0) and option(OPT.QUERY.MERGE.PRINT) and (system(1) # 0)
       if qd.lptr = 0 then printer on
 
       is.pcl = bitand(getpu(PU$SPOOLFLAGS, qd.lptr), PU$FLG.PCL)
@@ -577,8 +583,9 @@ terminate:
          void kernel(K$SUPPRESS.COMO, @false)
       end
    end else
-      printer close on qd.lptr
+      if not(qd.merge) then printer close on qd.lptr
    end
+   qd.merge = @false
 
    gosub delete.scroll.data
 

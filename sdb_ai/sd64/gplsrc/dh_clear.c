@@ -51,7 +51,7 @@ bool dh_clear(DH_FILE* dh_file) {
   fptr = FPtr(dh_file->file_id);
   StartExclusive(FILE_TABLE_LOCK, 44);
   fptr->stats.clears++;
-  sysseg->global_stats.clears++;
+  NoteStat(clears);
   EndExclusive(FILE_TABLE_LOCK);
 
   /* ----------------------------------------------------------------------

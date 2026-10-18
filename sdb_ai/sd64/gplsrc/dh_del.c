@@ -102,7 +102,7 @@ bool dh_delete(DH_FILE* dh_file, /* File descriptor */
 
   StartExclusive(FILE_TABLE_LOCK, 4);
   fptr->stats.deletes++;
-  sysseg->global_stats.deletes++;
+  NoteStat(deletes);
   group = dh_hash_group(fptr, id, id_len);
   lock_slot = GetGroupWriteLock(dh_file, group);
   fptr->upd_ct++;

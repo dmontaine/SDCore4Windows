@@ -73,7 +73,7 @@ STRING_CHUNK* dh_read(
   group = dh_hash_group(fptr, id, id_len);
   lock_slot = GetGroupReadLock(dh_file, group);
   fptr->stats.reads++;
-  sysseg->global_stats.reads++;
+  NoteStat(reads);
   EndExclusive(FILE_TABLE_LOCK);
 
   if ((pcfg.reccache != 0) && scan_record_cache(fno, id_len, id, &head)) {
