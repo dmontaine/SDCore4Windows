@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  NEW $MODE SETTING: OPEN.FAIL.ZERO.FVAR.
+
+           A program compiled with $MODE OPEN.FAIL.ZERO.FVAR gets the
+           integer 0 in the file variable of an OPEN or OPENPATH that
+           fails, where it is otherwise left unassigned.  Some programs
+           written for other multivalue systems rely on that, and an
+           unassigned variable stops them with a run-time error the moment
+           they test it.  The ELSE clause is taken as always and an OPEN
+           that works is not touched.  Nothing changes for a program that
+           does not ask for it.
+
 18 Oct 26  FOUR SMALL FIXES.
 
            CLEAR.FILE on a file that has NO.RESIZE set (CONFIGURE.FILE ...

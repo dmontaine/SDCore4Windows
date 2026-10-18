@@ -171,6 +171,7 @@ $define M.IMPLIED.STOP         22  ;* 10 Oct 26 dm
 $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
 $define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
 $define M.EXCEPTION.SAVE.STACK 25  ;* 12 Oct 26 dm - openQM 355: every CATCH behaves as if SAVING.STACK were given
+$define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN sets the file variable to 0, not unassigned
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -203,6 +204,7 @@ mode.names := @VM:"IMPLIED.STOP"
 mode.names := @VM:"STRICT.EQUATE"
 mode.names := @VM:"TIME.MS"
 mode.names := @VM:"EXCEPTION.SAVE.STACK"
+mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -10364,6 +10366,12 @@ open.common:
             exit
       end case
    repeat
+
+   * 18 Oct 26 Windows port - from Linux 84580cc (14 Oct 26): - openQM 514: $MODE OPEN.FAIL.ZERO.FVAR, for OPEN and OPENPATH
+   if bittest(mode, M.OPEN.FAIL.ZERO.FVAR) then
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0x100 ; code.bytes = 2 ; gosub emit.multibyte.value
+   end
 
    if u.look.ahead.token.string # "TO" then goto err.to
    gosub get.token      ;* Skip "TO"
