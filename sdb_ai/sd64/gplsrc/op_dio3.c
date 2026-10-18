@@ -21,6 +21,7 @@
  *               the pre-write trigger, so a trigger is always given a collection, and the
  *               post-write trigger is given the collection (call_trigger passed it as a string
  *               and the trigger stopped the process: Fault type 11).
+ * 18 Oct 26 Windows port - from Linux 5572c08 (12 Oct 26): map_t1_id(): bytes 128 to 255 are allowed in a directory file record id (openQM item 34).
  *  4 Sep 26 Windows port - dir_read() added, the read half the directory code
  *           never had: dir_write() has always been callable but the only
  *           reader was read_record(), which takes its arguments off the VM's
@@ -1408,7 +1409,11 @@ bool map_t1_id(char *id, int16_t id_len, char *mapped_id) {
 
   while (id_len--) {
     c = *(p++);
-    if ((c < 32) || (c > 126)) {
+    /* 12 Oct 26 dm  openQM item 34, on the owner's yes in chat the same day: bytes 128 to 255 are
+       allowed in a record id (they were refused, c being a signed char, with everything over 126).
+       Control characters and DEL are still refused.  This is the one place SD's English-only rule
+       is lifted, by the owner, for the characters a directory file's record id may hold.        */
+    if (((unsigned char)c < 32) || (c == 127)) {
       mapped_id = '\0';
       return FALSE;
     } else if (map_dir_ids && ((r = strchr(df_restricted_chars, c)) != NULL)) {
