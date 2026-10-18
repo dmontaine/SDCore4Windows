@@ -1011,6 +1011,36 @@ Private void substra(bool pick_style) {
   STRING_CHUNK* str;
   STRING_CHUNK* new_str;
 
+  /* 12 Oct 26 dm  Trailing substring assignment, var[n] = expr (openQM item 41).  The compiler
+     leaves ADDR, n, expr and sets P_TRAIL; turn that into the ADDR, offset, length, expr that the
+     rest of this routine takes.  n below 1 is 1 and n above the length is the length.            */
+
+  if (process.op_flags & P_TRAIL) {
+    process.op_flags &= ~P_TRAIL;
+    tgt_descr = e_stack - 3;
+    do {
+      tgt_descr = tgt_descr->data.d_addr;
+    } while (tgt_descr->type == ADDR);
+    if (tgt_descr->type != STRING)
+      k_get_string(tgt_descr);
+    tgt_len = (tgt_descr->data.str.saddr == NULL) ? 0 : tgt_descr->data.str.saddr->string_len;
+
+    descr = e_stack - 2;
+    GetInt(descr);
+    substr_len = descr->data.value;
+    if (substr_len < 1)
+      substr_len = 1;
+    if (substr_len > tgt_len)
+      substr_len = tgt_len;
+
+    *e_stack = *(e_stack - 1); /* the replacement moves up one place... */
+    InitDescr(e_stack - 1, INTEGER);
+    (e_stack - 1)->data.value = substr_len;
+    InitDescr(e_stack - 2, INTEGER);
+    (e_stack - 2)->data.value = tgt_len - substr_len + 1;
+    e_stack++; /* ...to leave ADDR, offset, length, replacement */
+  }
+
   /* Get substring pointer */
 
   substr_descr = e_stack - 1;

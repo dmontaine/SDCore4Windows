@@ -18,6 +18,7 @@
  *
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): open_file() acts on the NON.TRANSACTIONAL option of OPEN and OPENPATH (P_NON_TXN; item 64).
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): open_file() acts on the mode letters N and R in field 6 of the
  *           F-type VOC entry (openQM items 380 and 197); _voc_ref returns them.
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
@@ -954,7 +955,7 @@ opened_via_txn_cache:
 
   if (strchr(vflags, 'R') != NULL)
     fvar->flags |= FV_RDONLY;
-  if (strchr(vflags, 'N') != NULL)
+  if ((strchr(vflags, 'N') != NULL) || (op_flags & P_NON_TXN)) /* P_NON_TXN: the NON.TRANSACTIONAL option of OPEN */
     fvar->flags |= FV_NON_TXN;
 
   /* Set file variable */

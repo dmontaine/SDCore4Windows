@@ -164,6 +164,9 @@ struct PROCESS {
 #define P_ULOCK 0x0008    /* ULOCK opcode executed       ** See int$keys.h */
 #define P_READONLY 0x0010 /* READONLY opcode executed */
 #define P_PICKREAD 0x0020 /* PICKREAD opcode executed */
+#define P_NON_TXN 0x0040  /* OPEN / OPENPATH ... NON.TRANSACTIONAL (openQM item 64) */
+#define P_TRAIL 0x0080    /* SUBSTRA is a trailing substring assignment, var[n] = expr (openQM item 41) */
+#define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
   bool numeric_array_allowed;           /* Opcode allows numeric arrays? */
   int32_t status;                       /* Value from STATUS() function */

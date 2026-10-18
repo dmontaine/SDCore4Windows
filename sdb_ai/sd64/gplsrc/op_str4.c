@@ -508,6 +508,7 @@ void op_matstr() {
   int32_t r;
   int32_t c;
   int32_t last;
+  bool cmp;
 
   mat_descr = e_stack - 1;
   while (mat_descr->type == ADDR)
@@ -537,9 +538,20 @@ void op_matstr() {
   tgt_descr.data.str.saddr = NULL;
   ts_init(&tgt_descr.data.str.saddr, 64);
 
+  /* 12 Oct 26 dm  openQM item 111, IF MAT A = MAT B: the compiler sets P_MATCMP so that the string is a
+     comparison key, not a value to use: the shape in front, rows and columns, and every element kept,
+     trailing empty ones too, so that two matrices give the same string only if they are equal.      */
+  cmp = (process.op_flags & P_MATCMP) != 0;
+  process.op_flags &= ~P_MATCMP;
+  if (cmp) {
+    char shape[40];
+    snprintf(shape, sizeof(shape), "%d,%d:", (int)rows, (int)cols);
+    ts_copy_c_string(shape);
+  }
+
   if (cols == 0) { /* One dimensional: as MATBUILD with an FM */
     last = rows;
-    while (last >= 1) {
+    while (!cmp && (last >= 1)) {
       a_chunk = a_hdr->chunk[(last + base) / MAX_ARRAY_CHUNK_SIZE];
       descr = &(a_chunk->descr[(last + base) % MAX_ARRAY_CHUNK_SIZE]);
       if ((descr->type != STRING) || (descr->data.str.saddr != NULL))

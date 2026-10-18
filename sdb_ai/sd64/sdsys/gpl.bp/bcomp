@@ -268,6 +268,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    mark.chars = @fm:@vm:@sm:@tm:@im:@fm:@sm ;* See EMIT.AT.VAR.LOAD for use
 
+   cond.mode = @false         ;* 12 Oct 26 dm - openQM 206: a THEN/ELSE statement is being compiled as a WHILE / UNTIL condition
+   cond.statements = "READ":@fm:"READU":@fm:"READL":@fm:"READV":@fm:"READVU":@fm:"READVL":@fm:"READNEXT"
+   cond.statements := @fm:"READSEQ":@fm:"READBLK":@fm:"READLIST":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
+   redim.stmt = @false
+
    * The AT.CONSTANTS list holds @ variables which are either constants or
    * have special code to produce the values.
 
@@ -387,7 +392,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"RANDOMIZE":@fm:"READ":@fm:"READBLK":@fm:"READCSV"
    statements := @fm:"READL":@fm:"READLIST":@fm:"READNEXT":@fm:"READSEQ"
    statements := @fm:"READU":@fm:"READV":@fm:"READVL":@fm:"READVU"
-   statements := @fm:"RECORDLOCKL":@fm:"RECORDLOCKU":@fm:"RELEASE":@fm:"REM"
+   statements := @fm:"RECORDLOCKL":@fm:"RECORDLOCKU":@fm:"REDIM":@fm:"REDIMENSION":@fm:"RELEASE":@fm:"REM"
    statements := @fm:"REMARK":@fm:"REMOVE":@fm:"REMOVE.BREAK.HANDLER"
    statements := @fm:"REPEAT":@fm:"RESTORE.SCREEN"
    statements := @fm:"RETURN":@fm:"ROLLBACK":@fm:"RQM"
@@ -928,7 +933,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    program.name = downcase(record.name[1,HDR.PROGRAM.NAME.LEN])   ;* 14 Sep 26 RELEASE_1.1 5 stage 3a
    subr.arg.count = 0                ;* Subroutine arguments
-   var.count = 0                     ;* Number of local variables
+   arg.mats = ''                     ;* MAT arguments given no dimensions (openQM 44 and 519), for this program
+   var.count = 0                    ;* Number of local variables
    symbol.table.offset = 0           ;* Symbol table position
    line.table.offset = 0             ;* Line table position
    internal = @false
@@ -1157,7 +1163,10 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
 
    n = dcount(symbols, @fm)
    for i = 1 to n
-      if symbol.info<i,3> < 0 then
+      * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): - openQM 44 and 519: a matrix that is an ARGUMENT needs no DIM statement; its subscripts say
+      * how many dimensions it has, and the caller's matrix is what it addresses.
+      locate symbols<i> in arg.mats<1> setting n else n = 0
+      if symbol.info<i,3> < 0 and not(n) then
          err.msg = sysmsg(3428, symbols<i>) ;* Matrix %1 is not referenced in a DIM statement
          gosub error
       end
@@ -2225,6 +2234,8 @@ is.statement:
                  st.readvu,
                  st.recordlockl,
                  st.recordlocku,
+                 st.redim,                     ;* REDIM          12 Oct 26 dm - openQM 215
+                 st.redim,                     ;* REDIMENSION
                  st.release,
                  st.remark,                    ;* REM
                  st.remark,
@@ -2607,7 +2618,20 @@ process.operator:
       * or delimited substring assignment s[d,x,y] = sss
 
       gosub get.token     ;* Skip [ token
-      gosub expr          ;* Process start position / delimiter 
+      gosub expr          ;* Process start position / delimiter / trailing length
+
+      if look.ahead.token = TKN.RSQBR then   ;* 12 Oct 26 dm - openQM 41: trailing substring assignment s[n] = sss
+         gosub get.token        ;* Skip bracket
+         if look.ahead.token # TKN.EQ then
+            err.msg = sysmsg(2832) ;* Expected equals after substring lvalue expression
+            goto error
+         end
+         gosub get.token
+         gosub exprf            ;* The replacement
+         opcode.byte = OP.SETFLAGS  ; gosub emit.simple    ;* P_TRAIL: SUBSTRA takes ADDR, n, replacement
+         code.value = 0x80 ; code.bytes = 2 ; gosub emit.multibyte.value
+         opcode.byte = OP.SUBSTRA   ; gosub emit.simple
+      end else
       gosub check.comma
       gosub expr             ;* Process length expresssion / position
 
@@ -2657,6 +2681,7 @@ process.operator:
 
          opcode.byte = OP.FLDSTOR ; gosub emit.simple
       end
+      end      ;* of the trailing / not trailing test
 
    case look.ahead.token = TKN.LCBR   ;* Data collection element assignment: c{a, b} = value  13 Oct 26 dm
       gosub emit.collection.path
@@ -7300,6 +7325,16 @@ st.deleteseq:
 * ST.DIM  -  DIM statement
 
 st.dim:
+   redim.stmt = @false
+   goto st.dim.body
+
+* 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): - openQM 215: REDIMENSION (REDIM) is DIM, except that where the matrix is an argument passed into
+* this subroutine it really redimensions the caller's matrix, which DIM leaves alone.
+
+st.redim:
+   redim.stmt = @true
+
+st.dim.body:
 !   if lsub.var.no >= 0 then
 !      err.msg = sysmsg(3422) ;* Statement not allowed inside a LOCAL subroutine or function
 !      goto error
@@ -7370,7 +7405,7 @@ st.dim:
          end
       end
 
-      if symbol.var.no < subr.arg.count then
+      if symbol.var.no < subr.arg.count and not(redim.stmt) then
          * Ignore actual redimensioning by popping ADDR and subscripts
          * Much as we'd like simply to ignore the values of the subscripts,
          * these could feasibly be expressions and it is easier just to let
@@ -8602,6 +8637,7 @@ st.function:
             symbol.dim = dim.dimensions
             symbol.mode = SYM.ARG
             gosub make.var
+            if symbol.dim < 0 then arg.mats<-1> = symbol.name   ;* openQM 44 and 519: a MAT argument with no dimensions given
 
             if deref.argument then
                if look.ahead.token # TKN.RBR then goto err.rbr
@@ -10285,13 +10321,13 @@ st.on:
 * ST.OPEN  -  OPEN and OPENPATH statements
 
 st.openpath:
-   reserved.names<2> = "READONLY"
+   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL"   ;* 12 Oct 26 dm - openQM 64
    opcode = OP.OPENPATH
    gosub exprf               ;* Emit file name expression
    goto open.common
 
 st.open:
-   reserved.names<2> = "READONLY"
+   reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL"   ;* 12 Oct 26 dm - openQM 64
    opcode = OP.OPEN
 
    * Emit first expresssion (file or dict flag)
@@ -10314,10 +10350,20 @@ st.open:
 open.common:
    del reserved.names<2>
 
-   if u.look.ahead.token.string = 'READONLY' then
-      gosub get.token
-      opcode.byte = OP.READONLY  ; gosub emit.simple
-   end
+   * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): - openQM 64: READONLY and NON.TRANSACTIONAL, either or both, in either order
+   loop
+      begin case
+         case u.look.ahead.token.string = 'READONLY'
+            gosub get.token
+            opcode.byte = OP.READONLY  ; gosub emit.simple
+         case u.look.ahead.token.string = 'NON.TRANSACTIONAL'
+            gosub get.token
+            opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+            code.value = 0x40 ; code.bytes = 2 ; gosub emit.multibyte.value
+         case 1
+            exit
+      end case
+   repeat
 
    if u.look.ahead.token.string # "TO" then goto err.to
    gosub get.token      ;* Skip "TO"
@@ -11897,6 +11943,7 @@ st.subroutine:
             symbol.dim = dim.dimensions
             symbol.mode = SYM.ARG
             gosub make.var
+            if symbol.dim < 0 then arg.mats<-1> = symbol.name   ;* openQM 44 and 519: a MAT argument with no dimensions given
 
             if deref.argument then
                if look.ahead.token # TKN.RBR then goto err.rbr
@@ -12264,7 +12311,30 @@ st.while.until.common:
       j.index += 1
    repeat
 
+   * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): - openQM 206: a statement that has THEN and ELSE clauses may be the condition, as in
+   *    LOOP WHILE READNEXT id DO ... REPEAT, true if the statement succeeds (the THEN way) and false if not.  It is
+   *    compiled as it always is, except that the status it leaves is turned into a truth value in place of the
+   *    clauses (cond.mode, seen in BACK.END).  It may not be given clauses of its own.
+   if look.ahead.token = TKN.NAME and (tokens(token.index + 1) = TKN.NAME or tokens(token.index + 1) = TKN.NAME.LBR or tokens(token.index + 1) = TKN.STRING) then
+      locate u.look.ahead.token.string in cond.statements<1> setting n then
+         cond.mode = @true
+         wu.opcode = opcode           ;* the jump this is for: compiling the statement sets OPCODE itself
+         wu.j.index = j.index
+         gosub get.token
+         gosub proc.statement
+         opcode = wu.opcode
+         j.index = wu.j.index
+         if err then return
+         if cond.mode then          ;* back.end did not use it: the statement had clauses, or none to give
+            cond.mode = @false
+            goto err.syntax
+         end
+         goto st.while.until.jump
+      end
+   end
+
    gosub exprf
+st.while.until.jump:
    label.name = "_":jump.stack<j.index,2>:"X"
    opcode.byte = opcode ; gosub emit.jump
 
@@ -12621,6 +12691,8 @@ back.end:
 
       if look.ahead.token = TKN.END then gosub get.token
 
+      if cond.mode and thenelse.stack<1> = 1 then thenelse.stack<1> = 2   ;* openQM 206: clauses are not asked for
+
       if thenelse.stack<1> = 2 then   ;* THEN/ELSE is optional
          if (u.look.ahead.token.string # "THEN") and (u.look.ahead.token.string # "ELSE") then
             goto no.then.or.else.clause
@@ -12730,9 +12802,15 @@ process.else.clause:
          gosub set.label
       end
    end else       ;* Statement does not take a THEN or ELSE clause
-no.then.or.else.clause: 
-      * Pop the status from the stack
-      opcode.byte = OP.POP ; gosub emit.simple
+no.then.or.else.clause:
+      if cond.mode then
+         * openQM 206: the status is 0 when the statement succeeded; the condition is true then, and false otherwise
+         cond.mode = @false
+         opcode.byte = OP.NOT ; gosub emit.simple
+      end else
+         * Pop the status from the stack
+         opcode.byte = OP.POP ; gosub emit.simple
+      end
    end
 
    * Set the exit label here for use by ON ERROR or LOCKED
@@ -12891,7 +12969,23 @@ get.expr.item:
 get.expr.item.again:
    begin case
       case token = TKN.NAME
-         if u.token.string = "IF" then
+         if u.token.string = "MAT" and look.ahead.token = TKN.NAME then
+            * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): - openQM 111: MAT a as a value, for IF MAT a = MAT b THEN.  It is a key that is the same for two
+            * matrices only if they are equal: MATSTR with the P_MATCMP prefix flag, which adds the shape and keeps
+            * every element.  Compared with = or # like any two strings.
+            gosub get.token
+            symbol.name = token.string
+            gosub find.var
+            if (symbol.var.no < 0) or (symbol.dim = 0) then
+               err.msg = sysmsg(2931) ;* Dimensioned matrix required
+               gosub error
+               goto exit.get.expr.item
+            end
+            gosub emit.var.load
+            opcode.byte = OP.SETFLAGS ; gosub emit.simple
+            code.value = 0x1000 ; code.bytes = 2 ; gosub emit.multibyte.value
+            opcode.byte = OP.MATSTR ; gosub emit.simple
+         end else if u.token.string = "IF" then
             gosub exprf          ;* Process condition
 
             * Add new entry to jump stack

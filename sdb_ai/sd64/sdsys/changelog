@@ -2,6 +2,44 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SIX SMALL BASIC ADDITIONS.
+
+           OPEN and OPENPATH take NON.TRANSACTIONAL, alone or with READONLY and
+           in either order: OPEN "ORDERS" NON.TRANSACTIONAL TO F ...  A write
+           through that file variable is made at once and is not undone when a
+           transaction it happened in is rolled back.  It is for the one open
+           only; the same file opened without it behaves as before.
+
+           A trailing substring can be assigned to: S[3] = "XY" overwrites the
+           last three characters of S.  A value that is too long loses its
+           tail and one that is too short is padded with spaces; a count above
+           the length of S is the length, and below 1 is 1.  It works on matrix
+           elements too, and S[3, 2] = ... is as it was.
+
+           REDIMENSION (short form REDIM) changes the size of a matrix that
+           was passed into a subroutine as an argument, which DIM has never
+           done: the caller's matrix is the one resized, and keeps its values
+           as DIM keeps them.  Elsewhere REDIM is DIM.
+
+           A matrix passed as an argument, MAT A, no longer needs a DIM
+           statement in the subroutine or LOCAL SUBROUTINE that receives it:
+           how many subscripts it has is read from how it is used.  A matrix
+           that is not an argument and is never dimensioned is still refused.
+
+           IF MAT A = MAT B THEN ... compares two matrices.  They are equal
+           only if they have the same shape and every element is the same
+           string; = and # both work.  A and B are compared as the text of
+           their elements, so 1 and 1.0 count as different.
+
+           A READ, READU, READL, READV, READVU, READVL, READNEXT, READSEQ,
+           READBLK, READLIST, OPEN, OPENPATH or OPENSEQ statement may be the
+           condition of a WHILE or UNTIL, as in LOOP WHILE READNEXT ID FROM 1
+           DO ... REPEAT: the condition is true if the statement would have
+           taken its THEN branch.  Such a statement cannot be given THEN or
+           ELSE clauses of its own there; that is a compile error.  It is not
+           yet allowed for the other statements that have THEN and ELSE
+           (LOCATE, FIND and the like).
+
 18 Oct 26  FILE HANDLING: READ-ONLY AND NON-TRANSACTIONAL OPENS FROM THE VOC,
            A LOCK ON A HELD PRINT FILE, AND BLOCK DEVICES.
 
