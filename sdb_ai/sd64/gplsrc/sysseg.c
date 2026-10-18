@@ -213,6 +213,7 @@ bool bind_sysseg(bool create, char* errmsg) {
 
   sysseg->revstamp = SYSSEG_REVSTAMP;
   sysseg->shmem_size = sharedMemSize;
+  sysseg->start_time = (int64_t)time(NULL);
 
   sysseg->flags |= SSF_SECURE; /* Secure until we know otherwise */
   sysseg->prtjob = 1;

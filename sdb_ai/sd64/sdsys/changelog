@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  FOUR NEW SYSTEM() KEYS.
+
+             SYSTEM(35)    The number of users logged in now, phantoms and
+                           the API server's sessions included.
+             SYSTEM(1016)  The number of user slots still free: the user
+                           limit (SYSTEM(1013)) less SYSTEM(35).
+             SYSTEM(1045)  The time SD was started, as a Unix epoch value
+                           (seconds since 1 January 1970).
+             SYSTEM(1047)  A new globally unique identifier, 36 characters
+                           such as 3f2c9a52-...; every call returns a new one.
+
+           The names SYS$USERS, SYS$START_TIME and SYS$GUID are in KEYS.H.
+           1016 had a name but no value before; it returned nothing useful.
+
 18 Oct 26  TWO BASIC DEFECTS FIXED.
 
              SEEK from the end   SEEK file, -3, 2 failed with error 3028

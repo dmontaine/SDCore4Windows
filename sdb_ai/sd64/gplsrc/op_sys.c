@@ -84,6 +84,9 @@
  *  1030   Login time as date * 86400 + time
  *  1031   Operating system process id
  *  1032   Test and clear break pending flag
+ *    35   Current number of users
+ *  1045   Time SD was started, Unix epoch
+ *  1047   Globally unique identifier
  *  9010   Return "SD"
  *  9011   Return MAX_STRING_SIZE - max string / record lenght
  *
@@ -469,6 +472,44 @@ void op_system() {
 
     case 1031: /* Operating system process id */
       descr->data.value = my_uptr->pid;
+      break;
+
+    case 35:   /* Current number of users (openQM 3.4-17, item 586) */
+    case 1016: /* Number of available users */
+      i = 0;
+      {
+        int16_t u;
+        for (u = 1; u <= sysseg->max_users; u++) {
+          if (UPtr(u)->uid > 0)
+            i++;
+        }
+      }
+      descr->data.value = (key == 35) ? i : ((sysseg->max_users > i) ? (sysseg->max_users - i) : 0);
+      break;
+
+    case 1045: /* Time at which SD was started, as a Unix epoch value (openQM item 192) */
+      descr->data.value = (int32_t)sysseg->start_time;
+      break;
+
+    case 1047: /* Globally unique identifier (openQM item 244): a random (version 4) uuid, lower case.
+                  Linux reads the kernel's /proc/sys/kernel/random/uuid; the MSYS2 runtime has no such
+                  file, so the 16 bytes come from /dev/urandom (18 Oct 26, Windows port). */
+      {
+        unsigned char ub[16];
+        FILE* fu = fopen("/dev/urandom", "rb");
+        s[0] = '\0';
+        if (fu != NULL) {
+          if (fread(ub, 1, 16, fu) == 16) {
+            ub[6] = (unsigned char)((ub[6] & 0x0f) | 0x40); /* version 4 */
+            ub[8] = (unsigned char)((ub[8] & 0x3f) | 0x80); /* variant 1 */
+            snprintf(s, 40, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x", ub[0], ub[1],
+                     ub[2], ub[3], ub[4], ub[5], ub[6], ub[7], ub[8], ub[9], ub[10], ub[11], ub[12], ub[13], ub[14],
+                     ub[15]);
+          }
+          fclose(fu);
+        }
+        k_put_c_string(s, descr);
+      }
       break;
 
     case 1032: /* Test and clear break pending flag */

@@ -132,6 +132,7 @@ struct SYSSEG {
    int32_t pcode_offset;        /* Pcode */
    int32_t pcfg_offset;         /* Offset to template pcfg structure */
    int pcode_len;
+   int64_t start_time;          /* Unix time at which SD was started (SYSTEM(1045)). Last, so no offset moves. */
 };
 
 Public SYSSEG * sysseg init(NULL);   /* 0234 */

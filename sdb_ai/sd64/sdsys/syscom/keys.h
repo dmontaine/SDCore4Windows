@@ -458,5 +458,8 @@
       $define SYS$LOGIN_TIME  1030  ;*   Login time as date      $define SYS$ 86400 + time
       $define SYS$OS_PID      1031  ;*   Operating system process id
       $define SYS$BRK_PT_FLG  1032  ;*   Test and clear break pending flag
+      $define SYS$USERS         35  ;*   Current number of users
+      $define SYS$START_TIME  1045  ;*   Time SD was started, Unix epoch
+      $define SYS$GUID        1047  ;*   Globally unique identifier
       $define SYS$SYS_TYPE    9010  ;*   Return "SD"
       $define SYS$MAX_STR     9011  ;*   Return MAX_STRING_SIZE - max string / record length         
