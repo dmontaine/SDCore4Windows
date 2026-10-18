@@ -19,11 +19,12 @@
 * 
 * START-HISTORY:
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): openQM 8, 9, 361: APPEND, IN dirfile, and record names mapped as for a directory file.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    COMO { ON record.name          }
+*    COMO { ON record.name {APPEND} {IN dirfile} }
 *         { OFF                     }
 *
 *
@@ -36,6 +37,7 @@ program $como
 $catalog $COMO
 
 $include keys.h
+$include int$keys.h
 $include err.h
 
 $include parser.h
@@ -62,6 +64,23 @@ $define como.dir.voc.name "$COMO"
          if como.record.name = "" then
             stop sysmsg(6410) ;* Record name required after ON keyword
          end
+
+         * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 8 and 361, SD's own syntax:  COMO ON record {APPEND} {IN dirfile}
+         append = @false
+         alt.dir = ''
+         loop
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+         until token.type = PARSER$END
+            begin case
+               case upcase(token) = 'APPEND'
+                  append = @true
+               case upcase(token) = 'IN'
+                  call @parser(PARSER$GET.TOKEN, token.type, alt.dir, keyword)
+                  if alt.dir = '' then stop sysmsg(12079) ;* Directory file name required after IN
+               case 1
+                  stop sysmsg(2018, token) ;* Unexpected token (xx)
+            end case
+         repeat
 
          gosub como.on
 
@@ -127,7 +146,24 @@ como.on:
       end
    end
 
-   como como.dir : @ds : como.record.name
+   * The directory: the $COMO one, or the file named after IN (openQM 361)
+   target.dir = como.dir
+   if alt.dir # '' then
+      open alt.dir to alt.f else
+         @system.return.code = -status()
+         stop sysmsg(1430, status(), alt.dir) ;* Error xx opening xx
+      end
+      if fileinfo(alt.f, FL$TYPE) # FL$TYPE.DIR then
+         @system.return.code = -ER$NDIR
+         stop sysmsg(1428, alt.dir) ;* xx is not a directory file
+      end
+      target.dir = fileinfo(alt.f, FL$PATH)
+      close alt.f
+   end
+
+   * Names with characters a directory file cannot hold are mapped as for any other record (openQM 9)
+   mapped.name = ospath(como.record.name, OS$MAPPED.NAME)
+   como (if append then '>>' else '') : target.dir : @ds : mapped.name
    como.record = como.record.name
    recordlocku como.file, como.record.name
 

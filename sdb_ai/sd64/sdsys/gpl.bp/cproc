@@ -3032,6 +3032,24 @@ int.if:
    if.or = @true
 
    loop
+      nocase = @false
+
+      * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 28:  EXISTS file record  /  NOT.EXISTS file record  (SD's own syntax)
+      call @parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+      if token.type = PARSER$TOKEN and (upcase(s) = 'EXISTS' or upcase(s) = 'NOT.EXISTS') then
+         negate = (upcase(s) = 'NOT.EXISTS')
+         call @parser(PARSER$GET.TOKEN, token.type, s, keyword)        ;* The word
+         gosub get.if.value ; exists.file = s
+         gosub get.if.value ; exists.rec = s
+         rel.val = @false
+         open exists.file to exists.f then
+            readv exists.x from exists.f, exists.rec, 0 then rel.val = @true else null
+            close exists.f
+         end
+         if negate then rel.val = not(rel.val)
+         goto test.if.result
+      end
+
       call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
       begin case
          case token.type = PARSER$TOKEN
@@ -3049,6 +3067,30 @@ int.if:
          value.1 = ''
       end else
          call @parser(PARSER$GET.TOKEN, token.type, s, rel.op)
+
+         * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 230 and 426:  value IN v1 v2 ... {NO.CASE}  /  value NOT.IN v1 v2 ...
+         if token.type = PARSER$TOKEN and (upcase(s) = 'IN' or upcase(s) = 'NOT.IN') then
+            negate = (upcase(s) = 'NOT.IN')
+            in.list = ''
+            loop
+               call @parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+            until token.type = PARSER$END or keyword = KW$AND or keyword = KW$OR or upcase(s) = 'THEN' or upcase(s) = 'NO.CASE'
+               gosub get.if.value
+               in.list<-1> = s
+            repeat
+            call @parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+            if upcase(s) = 'NO.CASE' then
+               call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
+               nocase = @true
+            end
+            if nocase then
+               value.1 = upcase(value.1) ; in.list = upcase(in.list)
+            end
+            locate value.1 in in.list<0> setting in.pos then rel.val = @true else rel.val = @false
+            if negate then rel.val = not(rel.val)
+            goto test.if.result
+         end
+
          if (rel.op < KW$LOW.REL.OP) or (rel.op > KW$HIGH.REL.OP) then
             abort sysmsg(5172) ;* Relational operator missing in IF
          end
@@ -3071,7 +3113,14 @@ int.if:
          end case
          value.2 = s
       end
-   
+
+      * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 476:  NO.CASE after the second value makes the comparison ignore case
+      call @parser(PARSER$LOOK.AHEAD, token.type, s, keyword)
+      if upcase(s) = 'NO.CASE' then
+         call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
+         value.1 = upcase(value.1) ; value.2 = upcase(value.2)
+      end
+
       * Perform relational comparison
 
       on rel.op goto op.eq, op.ne, op.lt, op.le, op.ge, op.gt, op.like,
@@ -3139,6 +3188,19 @@ substitute.at.var:
    value = s
    gosub expand.at.vars
    s = value
+   return
+
+* Next token of an IF as a value: a word or a quoted string, @ variables expanded (12 Oct 26)
+get.if.value:
+   call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
+   begin case
+      case token.type = PARSER$TOKEN
+         if s[1,1] = "@" then gosub substitute.at.var
+      case token.type = PARSER$STRING
+         null
+      case 1
+         abort sysmsg(5171) ;* Value 1 missing in IF
+   end case
    return
 
 

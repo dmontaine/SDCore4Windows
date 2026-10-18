@@ -147,6 +147,27 @@ $define NO.PROMPT   3
 
       loop
          token1 = field(prompt.string, ',', 1)
+
+         * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 171: the control letters may be in either case.  Only a control that is followed
+         * by a comma is changed, so a prompt text that is just "a" or "l" is left alone.
+         up1 = upcase(token1)
+         if up1 # token1 and len(prompt.string) > len(token1) then
+            if up1 matches "A":@vm:"R":@vm:"U":@vm:"L":@vm:"C#":@vm:"C1N0N":@vm:"C1N0N'-'1N0N":@vm:"C1N0N'+'":@vm:"I1N0N":@vm:"L1N0N":@vm:"S1N0N" then
+               prompt.string = up1 : prompt.string[len(token1) + 1, 99999]
+               token1 = up1
+            end
+         end
+         begin case
+            case upcase(prompt.string[1,2]) = "F(" and prompt.string[1,1] # "F"
+               prompt.string = "F" : prompt.string[2,99999]
+            case prompt.string[1,2] = "r(" and prompt.string matches "'r('0X'),'0X"
+               prompt.string = "R" : prompt.string[2,99999]
+            case upcase(prompt.string[1,5]) = "SUBR(" and prompt.string[1,4] # "SUBR"
+               prompt.string = "SUBR" : prompt.string[5,99999]
+            case upcase(prompt.string[1,7]) = "SYSTEM(" and prompt.string[1,6] # "SYSTEM"
+               prompt.string = "SYSTEM" : prompt.string[7,99999]
+         end case
+
          default = field(token1, ':', 2, 9999)
          token1 = field(token1, ':', 1)
          begin case
@@ -348,11 +369,34 @@ $define NO.PROMPT   3
 
       conv.code = ""
       pattern = ""
-      i = index(prompt.string, ",", 1)
-      if i then   ;* Check options present
-         check.code = trimf(prompt.string[i + 1, 99999])
-         prompt.string = prompt.string[1, i - 1]
 
+      * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): - openQM 377: the prompt text may be quoted ("..." or '...') so that it can hold a comma;
+      * whatever follows the closing quote and a comma is the check code as before.
+      check.code = ''
+      has.check = @false
+      quoted = @false
+      q = prompt.string[1,1]
+      if q = '"' or q = "'" then
+         j = index(prompt.string, q, 2)
+         if j then
+            quoted = @true
+            quoted.rest = trimf(prompt.string[j + 1, 99999])
+            prompt.string = prompt.string[2, j - 2]
+            if quoted.rest[1,1] = ',' then
+               check.code = trimf(quoted.rest[2,99999])
+               has.check = @true
+            end
+         end
+      end
+      if not(quoted) then
+         i = index(prompt.string, ",", 1)
+         if i then
+            check.code = trimf(prompt.string[i + 1, 99999])
+            prompt.string = prompt.string[1, i - 1]
+            has.check = @true
+         end
+      end
+      if has.check then   ;* Check options present
          if check.code matches "(0X)" then
             conv.code = check.code[2, len(check.code) - 2]
          end

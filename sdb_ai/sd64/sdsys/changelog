@@ -2,6 +2,25 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  COMMAND LANGUAGE: COMO, IF IN AND EXISTS, INLINE PROMPTS.  Syntax is SD's own.
+
+             COMO ON record APPEND   Adds to the record if it exists
+                                     instead of replacing it.
+             COMO ON record IN file  Writes the record in the directory file
+                                     named, not in $COMO.
+             IF EXISTS file record THEN ...      In a paragraph: true if the
+             IF NOT.EXISTS file record THEN ...  record is in the file.
+             IF value IN a b c THEN ...          True if the value is one of
+             IF value NOT.IN a b c THEN ...      the words after IN.
+             ... NO.CASE                         Put after IN's list, or
+                                                 after the second value of
+                                                 =, <>, < and so on, to
+                                                 ignore case.
+             <<a,Prompt>>   An inline prompt's control letters (A, C, F, I,
+                            L, R, S, U, SUBR, SYSTEM) may now be lower case.
+             <<A,"Prompt, with a comma">>
+                            Quotes round the prompt text let it hold commas.
+
 18 Oct 26  FILE UTILITIES, COMMON BLOCKS, AUTOMATIC INCLUDES AND NAMES WITH
            TWO UNDERSCORES.  The openQM notes give the purpose of these
            and not the syntax, so the syntax below is SD's own.  The BASIC

@@ -2560,7 +2560,14 @@ Private int como_open(char name[]) {
   if (ValidFileHandle(tio.como_file))
     como_close();
 
-  tio.como_file = dio_open(name, DIO_REPLACE);
+  /* 12 Oct 26 (openQM item 8): a path that begins >> is appended to, and made if it is not there */
+  if (name[0] == '>' && name[1] == '>') {
+    tio.como_file = dio_open(name + 2, DIO_OVERWRITE);
+    if (ValidFileHandle(tio.como_file))
+      lseek(tio.como_file, 0, SEEK_END);
+  } else {
+    tio.como_file = dio_open(name, DIO_REPLACE);
+  }
   if (!ValidFileHandle(tio.como_file))
     return ER_FNF;
 
