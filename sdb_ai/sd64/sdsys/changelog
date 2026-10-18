@@ -2,6 +2,22 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SIX MULTIVALUED FUNCTIONS.
+
+             ADDS(a, b)    Adds a and b element by element, where each is
+                           a dynamic array.  A list that runs out first
+                           counts as zero.
+             SUBS(a, b)    Subtracts.
+             MULS(a, b)    Multiplies.
+             DIVS(a, b)    Divides.
+             QUOTES(a)     Puts double quotes round every element of a
+             DQUOTES(a)    (the two names are the same function).
+
+           They work on field, value and sub-value marks the way the
+           existing ANDS, CATS and MODS do.
+
+           SQUOTES is not built.
+
 18 Oct 26  CONFIGURATION DEFAULTS, INVCASE AND sd -status.
 
              INTPREC    The default is now 11 (it was 13).  Thirteen

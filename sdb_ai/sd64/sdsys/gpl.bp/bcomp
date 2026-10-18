@@ -458,6 +458,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "ABSS"            ; intrinsic.opcodes<-1> = OP.ABSS
    intrinsics<-1> = "ACCEPT.SOCKET.CONNECTION" ; intrinsic.opcodes<-1> = OP.ACCPTSKT
    intrinsics<-1> = "ACOS"            ; intrinsic.opcodes<-1> = OP.ACOS
+   intrinsics<-1> = "ADDS"            ; intrinsic.opcodes<-1> = OP.ADDS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "ALPHA"           ; intrinsic.opcodes<-1> = OP.ALPHA
    intrinsics<-1> = "ANDS"            ; intrinsic.opcodes<-1> = OP.ANDS
    intrinsics<-1> = "ARG"             ; intrinsic.opcodes<-1> = OP.ARG
@@ -497,8 +498,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "DELETE"          ; intrinsic.opcodes<-1> = OP.DEL
    intrinsics<-1> = "DIR"             ; intrinsic.opcodes<-1> = OP.DIR
    intrinsics<-1> = "DIV"             ; intrinsic.opcodes<-1> = OP.QUOTIENT
+   intrinsics<-1> = "DIVS"            ; intrinsic.opcodes<-1> = OP.DIVS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "DOWNCASE"        ; intrinsic.opcodes<-1> = OP.DNCASE
    intrinsics<-1> = "DQUOTE"          ; intrinsic.opcodes<-1> = OP.QUOTE
+   intrinsics<-1> = "DQUOTES"         ; intrinsic.opcodes<-1> = OP.QUOTES   ;* 11 Oct 26 dm - openQM 11
    intrinsics<-1> = "DTX"             ; intrinsic.opcodes<-1> = OP.DTX
    intrinsics<-1> = "EBCDIC"          ; intrinsic.opcodes<-1> = OP.EBCDIC
    intrinsics<-1> = "ENV"             ; intrinsic.opcodes<-1> = OP.ENV
@@ -552,6 +555,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "MINIMUM"         ; intrinsic.opcodes<-1> = OP.MINIMUM
    intrinsics<-1> = "MOD"             ; intrinsic.opcodes<-1> = OP.MOD
    intrinsics<-1> = "MODS"            ; intrinsic.opcodes<-1> = OP.MODS
+   intrinsics<-1> = "MULS"            ; intrinsic.opcodes<-1> = OP.MULS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "NEG"             ; intrinsic.opcodes<-1> = OP.NEG
    intrinsics<-1> = "NEGS"            ; intrinsic.opcodes<-1> = OP.NEGS
    intrinsics<-1> = "NES"             ; intrinsic.opcodes<-1> = OP.NES
@@ -570,6 +574,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "PRINTER.SETTING" ; intrinsic.opcodes<-1> = OP.PSET
    intrinsics<-1> = "PWR"             ; intrinsic.opcodes<-1> = OP.PWR
    intrinsics<-1> = "QUOTE"           ; intrinsic.opcodes<-1> = OP.QUOTE
+   intrinsics<-1> = "QUOTES"          ; intrinsic.opcodes<-1> = OP.QUOTES   ;* 11 Oct 26 dm - openQM 11
    intrinsics<-1> = "RAISE"           ; intrinsic.opcodes<-1> = OP.RAISE
    intrinsics<-1> = "RDIV"            ; intrinsic.opcodes<-1> = OP.RDIV
    intrinsics<-1> = "READ.SOCKET"     ; intrinsic.opcodes<-1> = OP.READSKT
@@ -603,6 +608,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "STR"             ; intrinsic.opcodes<-1> = OP.STR
    intrinsics<-1> = "STRS"            ; intrinsic.opcodes<-1> = OP.STRS
    intrinsics<-1> = "SUBR"            ; intrinsic.opcodes<-1> = ''
+   intrinsics<-1> = "SUBS"            ; intrinsic.opcodes<-1> = OP.SUBS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "SUBSTITUTE"      ; intrinsic.opcodes<-1> = OP.SUBST
    intrinsics<-1> = "SUBSTRINGS"      ; intrinsic.opcodes<-1> = OP.SUBSTRNG
    intrinsics<-1> = "SUM"             ; intrinsic.opcodes<-1> = OP.SUM
@@ -3910,6 +3916,7 @@ end
                       in.one,         ;* ABSS
                       in.two,         ;* ACCEPT.SOCKET.CONNECTION
                       in.one,         ;* ACOS
+                      in.two,         ;* ADDS
                       in.one,         ;* ALPHA
                       in.two,         ;* ANDS
                       in.one,         ;* ARG
@@ -3949,8 +3956,10 @@ end
                       in.delete,      ;* DELETE
                       in.one,         ;* DIR
                       in.two,         ;* DIV
+                      in.two,         ;* DIVS
                       in.one,         ;* DOWNCASE
                       in.one,         ;* DQUOTE
+                      in.one,         ;* DQUOTES
                       in.dtx,         ;* DTX
                       in.one,         ;* EBCDIC
                       in.one,         ;* ENV
@@ -4004,6 +4013,7 @@ end
                       in.one,         ;* MINIMUM
                       in.two,         ;* MOD
                       in.two,         ;* MODS
+                      in.two,         ;* MULS
                       in.one,         ;* NEG
                       in.one,         ;* NEGS
                       in.two,         ;* NES
@@ -4022,6 +4032,7 @@ end
                       in.three,       ;* PRINTER.SETTING
                       in.two,         ;* PWR
                       in.one,         ;* QUOTE
+                      in.one,         ;* QUOTES
                       in.one,         ;* RAISE
                       in.two,         ;* RDIV
                       in.four,        ;* READ.SOCKET
@@ -4055,6 +4066,7 @@ end
                       in.two,         ;* STR
                       in.two,         ;* STRS
                       in.subr,        ;* SUBR
+                      in.two,         ;* SUBS
                       in.subst,       ;* SUBSTITUTE
                       in.three,       ;* SUBSTRINGS
                       in.one,         ;* SUM

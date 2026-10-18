@@ -650,8 +650,13 @@ _extop_("MVD",     "SPACE",      "SPACES")
 _extop_("MVD",     "TRIMB",      "TRIMBS")
 _extop_("MVD",     "TRIMF",      "TRIMFS")
 _extop_("MVD",     "TRIM",       "TRIMS")
+_extop_("MVD",     "QUOTE",      "QUOTES")           /* 11 Oct 26 openQM 11 (SQUOTES: no one-byte base opcode) */
 
-_extop_("MVDD",    "AND",        "ANDS")             
+_extop_("MVDD",    "ADD",        "ADDS")             /* 11 Oct 26 openQM 207 */
+_extop_("MVDD",    "DIV",        "DIVS")
+_extop_("MVDD",    "MUL",        "MULS")
+_extop_("MVDD",    "SUB",        "SUBS")
+_extop_("MVDD",    "AND",        "ANDS")
 _extop_("MVDD",    "CAT",        "CATS")             
 _extop_("MVDD",    "EQ",         "EQS")            
 _extop_("MVDD",    "GE",         "GES")            
