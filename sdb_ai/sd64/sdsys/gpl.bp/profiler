@@ -1,0 +1,312 @@
+* PROFILER
+* PROFILER command: the application event profiler.
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): New (QM4 gaps 66 and 203).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    PROFILER ON {USER n} {event ...}      Start logging
+*    PROFILER OFF {USER n}                 Stop logging and keep the data
+*    PROFILER {DISPLAY} {USER n}           Show the data
+*
+*    The events are CALL OPEN READ WRITE DELETE OPENSEQ READSEQ WRITESEQ EXECUTE OBJECT; none means all of them.
+*
+*    The kernel of the process that is being profiled counts the events (profiler.c).  OFF has it put its table in the
+*    $ipc record F<user>, which DISPLAY reads.  Another user's process can be profiled by the administrator only: what a
+*    profile holds is the files that user's programs open and the commands they execute.  Where openQM puts the data in a
+*    file in its temporary directory, this keeps it in $ipc, so no file is left behind on the disk, and DISPLAY asks for a
+*    line number where openQM uses the cursor keys.
+*
+*    The table (kernel(K$PROFILER, -2)) is field 1 PROFILE, the events logged, the entries and the events lost (value mark
+*    delimited), then a field for each entry: event, what it was on, program, line, count (value mark delimited).  The program
+*    is the name the kernel gives it: the pathname of the object code for a program of a user ($cproc and the like for the
+*    system's own).  The line is 0 where the program has no line table (an I-type).  DISPLAY with no USER and one profile
+*    available opens it without asking which.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program profiler
+$catalog $profiler
+
+$include parser.h
+$include syscom.h
+$include err.h
+$include keys.h
+$include int$keys.h
+
+   parser = "!PARSER"
+
+   events = 'CALL':@fm:'OPEN':@fm:'READ':@fm:'WRITE':@fm:'DELETE':@fm:'OPENSEQ':@fm:'READSEQ':@fm:'WRITESEQ':@fm:'EXECUTE':@fm:'OBJECT'
+   mode = ''
+   user = 0
+   user.given = @false
+   mask = 0
+
+   @system.return.code = -ER$ARGS    ;* Preset for command format errors
+
+   call @parser(parser$reset, 0, @sentence, 0)
+   call @parser(parser$get.token, token.type, token, keyword)  ;* Verb
+
+   loop
+      call @parser(parser$get.token, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$ON
+            if mode # '' then goto incompatible.modes
+            mode = 'ON'
+
+         case keyword = KW$OFF
+            if mode # '' then goto incompatible.modes
+            mode = 'OFF'
+
+         case keyword = KW$DISPLAY
+            if mode # '' then goto incompatible.modes
+            mode = 'DISPLAY'
+
+         case keyword = KW$USER
+            if user.given then goto incompatible.modes
+
+            call @parser(parser$get.token, token.type, token, keyword)
+            if not(token matches '0N') or token = 0 then
+               display sysmsg(2100)
+               return
+            end
+
+            user = token + 0
+            user.given = @true
+
+         case 1
+            locate upcase(token) in events<1> setting i then
+               mask = bitset(mask, i - 1)
+            end else
+               display sysmsg(2018, token)     ;* Unexpected token (%1)
+               return
+            end
+      end case
+   repeat
+
+   if mode = '' then mode = 'DISPLAY'
+   if mask # 0 and mode # 'ON' then goto incompatible.modes
+   if mask = 0 then mask = 1023       ;* All the events
+
+   if not(user.given) then user = @userno
+   if user # @userno and not(kernel(K$ADMINISTRATOR, -1)) then
+      display sysmsg(12376)
+      return
+   end
+
+   begin case
+      case mode = 'ON'
+         delete ipc.f, 'F':user          ;* An old profile of this user goes
+         if user = @userno then
+            i = kernel(K$PROFILER, mask)
+         end else
+            if kernel(K$PROFILER.USER, user * 4096 + 2048 + mask) # 1 then
+               display sysmsg(6802)      ;* Not logged in
+               return
+            end
+         end
+         display sysmsg(12377, user)
+
+      case mode = 'OFF'
+         if user = @userno then
+            i = kernel(K$PROFILER, 0)
+            s = kernel(K$PROFILER, -2)
+            write s to ipc.f, 'F':user
+         end else
+            delete ipc.f, 'F':user
+            if kernel(K$PROFILER.USER, user * 4096) # 1 then
+               display sysmsg(6802)      ;* Not logged in
+               return
+            end
+            response = @false
+            for i = 1 to 25
+               read s from ipc.f, 'F':user then
+                  response = @true
+                  exit
+               end
+               nap 200
+            next i
+            if not(response) then
+               display sysmsg(3354)      ;* Process is not responding
+               return
+            end
+         end
+         gosub count.events
+         display sysmsg(12378, user, total, dcount(s, @fm) - 1)
+
+      case 1                                ;* DISPLAY
+         gosub display.profile
+   end case
+
+   @system.return.code = 0
+
+   return
+
+incompatible.modes:
+   display sysmsg(2054)  ;* Illegal combination of options
+   return
+
+* ======================================================================
+* COUNT.EVENTS  -  total = the events in the profile in s
+
+count.events:
+   total = 0
+   for i = 2 to dcount(s, @fm)
+      total += s<i,5>
+   next i
+   return
+
+* ======================================================================
+* DISPLAY.PROFILE  -  Choose a profile if none was asked for, then walk down it
+
+display.profile:
+   if not(user.given) then
+      * A list of the profiles there are: the user's own, or, for the administrator, every one
+      profiles = ''
+      select ipc.f to 11
+      loop
+         readnext id from 11 else exit
+         if id matches '"F"1N0N' then
+            n = id[2, 99] + 0
+            if n = @userno or kernel(K$ADMINISTRATOR, -1) then
+               locate n in profiles<1> by 'AR' setting p else null
+               ins n before profiles<p>
+            end
+         end
+      repeat
+      if profiles = '' then
+         display sysmsg(12379, @userno)
+         return
+      end
+      if dcount(profiles, @fm) = 1 then
+         user = profiles<1>              ;* Only one: no need to ask
+      end else
+         display sysmsg(12380)
+         for p = 1 to dcount(profiles, @fm)
+            read s from ipc.f, 'F':profiles<p> then
+               gosub count.events
+               display fmt(profiles<p>, '6R') : fmt(total, '9R') : fmt(dcount(s, @fm) - 1, '9R')
+            end
+         next p
+         display sysmsg(12388) :
+         input answer
+         if upcase(trim(answer)) = 'Q' or trim(answer) = '' then return
+         if not(trim(answer) matches '1N0N') then return
+         user = trim(answer) + 0
+         if user # @userno and not(kernel(K$ADMINISTRATOR, -1)) then
+            display sysmsg(12376)
+            return
+         end
+      end
+   end
+
+   read s from ipc.f, 'F':user else
+      display sysmsg(12379, user)
+      return
+   end
+
+   if s<1,4> + 0 then display sysmsg(12387, s<1,4>)   ;* Events lost: the profile was full
+
+   level = 1
+   sel.type = '' ; sel.qual = '' ; sel.prog = ''
+   loop
+      gosub show.level
+   until level = 0
+   repeat
+   return
+
+* ======================================================================
+* SHOW.LEVEL  -  Show one level of the profile and act on the answer
+*   Level 1 event types, 2 what the events were on (file, subroutine, command...), 3 the programs that did them, 4 the lines
+
+show.level:
+   keys = '' ; counts = ''
+   for i = 2 to dcount(s, @fm)
+      e = s<i>
+      if level > 1 and e<1,1> # sel.type then continue
+      if level > 2 and e<1,2> # sel.qual then continue
+      if level > 3 and e<1,3> # sel.prog then continue
+      begin case
+         case level = 1 ; k = e<1,1>
+         case level = 2 ; k = e<1,2>
+         case level = 3 ; k = e<1,3>
+         case 1 ; k = e<1,4> + 0
+      end case
+      if level = 4 then
+         locate k in keys<1> by 'AR' setting p then
+            counts<p> += e<1,5>
+         end else
+            ins k before keys<p>
+            ins e<1,5> + 0 before counts<p>
+         end
+      end else
+         locate k in keys<1> by 'AL' setting p then
+            counts<p> += e<1,5>
+         end else
+            ins k before keys<p>
+            ins e<1,5> + 0 before counts<p>
+         end
+      end
+   next i
+
+   display
+   begin case
+      case level = 1 ; display sysmsg(12382)
+      case level = 2 ; display sysmsg(12383, sel.type)
+      case level = 3 ; display sysmsg(12384, sel.type, sel.qual)
+      case 1
+         display sysmsg(12385, sel.type, sel.qual, sel.prog)
+         if keys = '0' then display sysmsg(12386)
+   end case
+   for i = 1 to dcount(keys, @fm)
+      display fmt(i, '4R') : '  ' : fmt(counts<i>, '9R') : '  ' : (if keys<i> = '' then '(none)' else keys<i>)
+   next i
+   if keys = '' then
+      level -= 1
+      return
+   end
+
+   display sysmsg(12381) :
+   input answer
+   answer = upcase(trim(answer))
+   begin case
+      case answer = 'Q'
+         level = 0
+      case answer = 'B' or answer = ''
+         level -= 1
+      case answer matches '1N0N' and answer >= 1 and answer <= dcount(keys, @fm)
+         if level < 4 then
+            if level = 1 then sel.type = keys<answer>
+            if level = 2 then sel.qual = keys<answer>
+            if level = 3 then sel.prog = keys<answer>
+            level += 1
+         end
+      case 1
+         null
+   end case
+   return
+
+end
+
+* END-CODE

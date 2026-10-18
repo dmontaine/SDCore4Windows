@@ -572,6 +572,12 @@ void op_get() {
 
       object_key = descr->data.objcode.key;
 
+      if (prof_mask & PROF_OBJECT) /* a public routine or property of a class module: the application event profiler (16 Oct 26) */
+      {
+        const char* prof_class = ((OBJECT_HEADER*)(descr->data.objcode.objdata->objprog))->ext_hdr.prog.program_name;
+
+        prof_event(PROF_OBJECT, prof_class, (int)strlen(prof_class));
+      }
       k_call("", arg_ct, (u_char*)(descr->data.objcode.objdata->objprog), 1);
       process.program.objdata = descr->data.objcode.objdata;
       k_dismiss();
@@ -687,6 +693,12 @@ void op_set() {
 
       object_key = descr->data.objcode.key;
 
+      if (prof_mask & PROF_OBJECT) /* a public property being set: the application event profiler (16 Oct 26) */
+      {
+        const char* prof_class = ((OBJECT_HEADER*)(descr->data.objcode.objdata->objprog))->ext_hdr.prog.program_name;
+
+        prof_event(PROF_OBJECT, prof_class, (int)strlen(prof_class));
+      }
       k_call("", arg_ct, (u_char*)(descr->data.objcode.objdata->objprog), 1);
       process.program.objdata = descr->data.objcode.objdata;
       k_dismiss();

@@ -139,6 +139,7 @@ void op_call() {
           k_illegal_call_name();
       }
 
+      ProfEvent(PROF_CALL, call_name, (int)strlen(call_name)); /* the application event profiler (16 Oct 26) */
       k_call(call_name, num_args, NULL, 1);
 
       /* 0407 We need to find the name descriptor again as k_call() may
@@ -161,6 +162,8 @@ void op_call() {
       break;
 
     case SUBR:
+      if ((prof_mask & PROF_CALL) && (descr->data.subr.saddr != NULL)) /* the application event profiler (16 Oct 26): a linked call */
+        prof_event(PROF_CALL, descr->data.subr.saddr->data, descr->data.subr.saddr->bytes);
       k_call("", num_args, (u_char*)(descr->data.subr.object), 1);
       ((OBJECT_HEADER*)c_base)->ext_hdr.prog.refs++;
       break;
@@ -260,6 +263,7 @@ void op_callv() {
           k_illegal_call_name();
       }
 
+      ProfEvent(PROF_CALL, call_name, (int)strlen(call_name)); /* the application event profiler (16 Oct 26) */
       k_call(call_name, num_args, NULL, 0);
 
       /* Convert descriptor to become a SUBR.  Convert type, copy string
@@ -273,6 +277,8 @@ void op_callv() {
       break;
 
     case SUBR:
+      if ((prof_mask & PROF_CALL) && (subr_descr->data.subr.saddr != NULL)) /* the application event profiler (16 Oct 26): a linked call */
+        prof_event(PROF_CALL, subr_descr->data.subr.saddr->data, subr_descr->data.subr.saddr->bytes);
       k_call("", num_args, (u_char*)(subr_descr->data.subr.object), 0);
       ((OBJECT_HEADER*)c_base)->ext_hdr.prog.refs++;
       break;

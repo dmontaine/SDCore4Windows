@@ -166,6 +166,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
          else source = source[2,999999]
          gosub f.correlative
 
+      case upcase(source[1,2]) = 'IF' and (source[3,1] = ' ' or source[3,1] = '(')
+         * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): - openQM 104: field 8 of an A or S-type item may begin with an IF expression, which is an implied
+         * A-correlative.  (No conversion code starts IF followed by a space or a bracket.)
+         gosub a.correlative
+
       case 1     ;* Assume anything else is a conversion code
          fno = field.no ; gosub emit.field.load    ;* Load field data
          opcode.string = source ; gosub emit.string.load

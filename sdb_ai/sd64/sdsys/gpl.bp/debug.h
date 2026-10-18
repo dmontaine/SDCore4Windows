@@ -75,6 +75,7 @@ $define DATA.AREA.LINES        5
                    head(INITIAL.PROGRAMS),
                    lines(INITIAL.PROGRAMS),
                    symbols(INITIAL.PROGRAMS),
+                   equates(INITIAL.PROGRAMS),       ;* The equate and $DEFINE tokens of a $MODE DEBUG.EQUATES program: names @VM.. @FM values @VM..
                    program.flags(INITIAL.PROGRAMS),  ;* Header flags
                    last.program,
 

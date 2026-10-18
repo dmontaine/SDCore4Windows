@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_return() gives back the caller's @STDFIL after an EXECUTE (QM4 gap 225, $MODE STDFIL.SHARED)
  * 31 Dec 23 SD launch - prior history suppressed
  * 11 Jun 24 mab overwrite op_errmsg (pick error message) and op_pabort (pick abort) as illegal op code
  * 15 Jun 24 mab overwrite op_ttyset op_ttyget as illegal op code
@@ -429,6 +430,7 @@ Private void init_program() {
   process.program.itrap_hit = 0;
   process.program.str_ovl = 0; /* the overlap modes belong to the program that set them: the caller's copy keeps its own (Q-16) */
   process.program.has_stacked = FALSE; /* the caller's copy, saved before this call, keeps the stacked list (openQM 61) */
+  process.program.has_stdfil = FALSE;  /* ...and the @STDFIL of STDFIL.SHARED (16 Oct 26) */
   process.program.gosub_depth = 0;
   process.program.break_handler = NULL;
 }
@@ -915,8 +917,13 @@ void k_return() {
     op_sortclr();
   }
 
+  if (process.program.flags & HDR_IS_CPROC)
+    release_parked_fvars(cproc_level); /* back at the command processor: OPTION COMMAND.LEVEL.LOCKS lets its locks go (QM4 gap 231) */
+
   if (old_flags & IS_EXECUTE) {
     tio.prompt_char = process.program.saved_prompt_char;
+    if (process.program.has_stdfil)
+      stdfil_shared_restore(); /* the command's @STDFIL goes, the caller's comes back (QM4 gap 225) */
   }
 
   if (old_flags & HDR_IS_DEBUGGER) {
@@ -1301,6 +1308,28 @@ void process_events() {
       sprintf(id, "H%d", (int)process.user_no);
       dh_write(dh_file, id, strlen(id), str);
       s_free(str);
+    }
+  }
+
+  if (events & EVT_PROFILER) /* PROFILER ON / OFF USER n (16 Oct 26): start, or stop and put the table where the requester can read it */
+  {
+    int16_t req = my_uptr->prof_request;
+
+    if (req & 0x4000) {
+      prof_set((int16_t)(req & PROF_ALL));
+    } else {
+      prof_set(0);
+      ipc_descr = Element(process.syscom, SYSCOM_IPC);
+      if ((ipc_descr->type == FILE_REF) &&
+          ((fvar = ipc_descr->data.fvar) != NULL) &&
+          ((dh_file = fvar->access.dh.dh_file) != NULL)) {
+        DESCRIPTOR prof_table;
+
+        prof_dump(&prof_table);
+        sprintf(id, "F%d", (int)process.user_no);
+        dh_write(dh_file, id, strlen(id), prof_table.data.str.saddr);
+        k_release(&prof_table);
+      }
     }
   }
 

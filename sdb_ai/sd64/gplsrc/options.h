@@ -90,7 +90,9 @@
 #define OptCorrelativeNoCase 55   /*            string operations in a correlative or I-type are case blind: HDR_NOCASE is set when its object is started (kernel.c) */
 #define OptCorrelativeReuse  56   /*            every operand of an array operation in a correlative or I-type is read as if it had REUSE() (ReuseFlag below) */
 #define OptQueryMergePrint   57   /* 15 Oct 26  openQM ref 57: a query to printer 0 leaves an already active printer on (BASIC, gpl.bp/qdisp) */
-#define NumOptions           58
+#define OptCommandLevelLocks 58   /* 16 Oct 26  openQM refs 231 / 428: a file variable that goes keeps its locks until the program returns to the command processor (park_fvar() in op_lock.c) */
+#define OptStackedAccount    59   /* 16 Oct 26  openQM ref 248: an EXECUTE that changes account reverts to the account it started in (BASIC, gpl.bp/cproc) */
+#define NumOptions           60
 
 Public char option_flags[NumOptions];
 

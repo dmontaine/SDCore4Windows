@@ -2,6 +2,161 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  MODE AND RANGE IN A QUERY.
+
+             LIST file MODE field         the value that comes most often
+             LIST file RANGE field        the largest value less the smallest
+                        Like MEDIAN: the figure is at the end of the report and at
+                        each breakpoint, and NO.NULLS leaves the nulls out.  MODE
+                        takes any values; when several come equally often it shows
+                        the first.  RANGE takes numbers only.
+
+             What it does NOT do: they are two new words, so a dictionary item
+             called MODE or RANGE can no longer be named in a query
+             plainly (the same is true of MEDIAN).  Accounts get the words from
+             UPDATE.ACCOUNTS, which the installer runs.
+
+18 Oct 26  QUERY PROCESSOR: VERTICAL REPORTS, $QUERY.DEFAULTS, WHEN, BY.EXP; $BASIC.OPTIONS SEARCH; IF IN A DICTIONARY ITEM.
+
+             LIST file field ... VERTICALLY {FMT {"name.format"} {,"data.format"}}
+                        The name column of a vertical report can be given a
+                        format (FMT "25L", or FIT for a column as wide as the
+                        longest heading) and the values a data format (FMT
+                        ,"20L"), which every item that is not right justified in
+                        its dictionary entry and has no FMT of its own takes.  A
+                        record $VLIST in the dictionary or the VOC (X, then the name
+                        format or FIT, then the data format) sets them for every
+                        vertical report of that file; the command line wins.  A
+                        second value of a multivalued field now repeats the colon,
+                        and a line that wrapped has none, so the two can be told
+                        apart.
+             $QUERY.DEFAULTS
+                        Field 3 holds default words for SELECT, SSELECT and SEARCH,
+                        as field 2 does for LIST and SORT, and field 4 the format of
+                        the id column the query processor makes up when the
+                        dictionary has no @ID (a width and L, R, T or C).
+             WHEN field
+                        With no operator it keeps the values that are not null; it
+                        used to keep the null ones.  WHEN field BETWEEN a b compared
+                        only the first value of a multivalued field; it now compares
+                        them all.  UNLIKE NO.CASE ignores the case of the pattern.
+             BY.EXP f1 BY.EXP f2
+                        More than one exploded sort, provided the fields are in the
+                        same association; one outside it is refused.
+             $BASIC.OPTIONS: SEARCH file.list
+                        The files an $INCLUDE with no file name looks in, in order,
+                        @ being the file the source is in.  Without it: that file,
+                        then SYSCOM, as before.
+             A or S dictionary item, field 8
+                        May begin with an IF expression, which is taken as an
+                        A-correlative without the A; in front.  It was run as a
+                        conversion code and gave the field's own value.
+
+             What these do NOT do: VERTICALLY FMT and $VLIST do not change a
+             report that is not vertical.  The data format leaves a right
+             justified item and an item with its own FMT alone.  The SEARCH list
+             of a C-type dictionary item has no @ (it has no source file).
+
+18 Oct 26  THE APPLICATION EVENT PROFILER.
+
+             PROFILER ON {USER n} {event ...}
+             PROFILER OFF {USER n}
+             PROFILER {DISPLAY} {USER n}
+                        Records what the programs of a session do and where: the
+                        events CALL, OPEN, READ (READU, READV, MATREAD...), WRITE,
+                        DELETE, OPENSEQ, READSEQ, WRITESEQ, EXECUTE (the first 32
+                        characters of the command) and OBJECT (a call of a class
+                        module's object), counted by what they were on (the file,
+                        the subroutine, the command), the program and its line
+                        number.  DISPLAY shows the event types with their counts;
+                        type the number of a line to go down to the names, then the
+                        programs, then the line numbers, B to go back and Q to
+                        leave.  Only the administrator can profile another user's
+                        session (USER n): a profile holds the files and commands of
+                        that user.
+
+             What it does NOT do: openQM's display uses the cursor keys, this one
+             asks for a line number.  The profile lives in memory while it is on
+             and is put in the $ipc file when it is turned off, not in a file in a
+             temporary directory, so it is gone when SD is restarted.  It holds
+             4,000 different events and says how many it could not log.  A
+             user's program is shown by the pathname of its object code.  A
+             session needs the new version of SD running: the installer restarts it.
+
+18 Oct 26  OPTION STACKED.ACCOUNT.
+
+             OPTION STACKED.ACCOUNT
+                        An EXECUTE of a command that does a LOGTO now leaves
+                        the process in the account it began in.  Without the
+                        option it stays in the account the command went to, as
+                        it always did.  The revert undoes LOGTO's change and
+                        does not make a new entry: no membership test, no
+                        ON.LOGTO or LOGIN paragraph, and the account's SH and
+                        OS.EXECUTE switches go back to the ones the first
+                        account had, so nothing the visited account granted is
+                        kept.
+
+             What it does NOT do: a LOGTO typed at the prompt is not reverted,
+             and what an aborted EXECUTE leaves was not measured.  The option
+             is off unless you set it.
+
+18 Oct 26  A REPORT AS XML.
+
+             LIST file field ... XML {ELEMENTS} {WITH.DTD | DTD.ONLY}
+                                     {WITH.SCHEMA | SCHEMA.ONLY}
+                        The report is an XML document: the declaration, a root
+                        element ROOT, and an element for each record named for
+                        the file.  A single valued field is an attribute of it,
+                        a row of an association is a tag named for the
+                        association, and a multivalued field in no association
+                        is a tag for each value, named for the field with _MV
+                        added.  ELEMENTS makes every field an element of its
+                        own.  WITH.DTD puts a DOCTYPE with the DTD before the
+                        data, WITH.SCHEMA an XML Schema document before it, and
+                        DTD.ONLY and SCHEMA.ONLY give the DTD or the schema and
+                        no data.  Any query verb that reports takes it.
+
+             What it does NOT do: the openQM manual shows the data and not the
+             DTD or the schema, so those two are SD's own.  An XML report
+             cannot have breakpoints, totals or other arithmetic (it says so
+             and stops); a heading, a footing, DET.SUP and PAN are ignored.
+             A field with no value is left out.  A character in a field name
+             that XML does not allow in a name becomes an underscore.  The six
+             new words are in the VOC of an account after UPDATE.ACCOUNTS, which
+             the installer runs.
+
+18 Oct 26  STDFIL.SHARED, DEBUG.EQUATES AND COMMAND.LEVEL.LOCKS.
+
+             $MODE STDFIL.SHARED
+                        The default file variable, @STDFIL, as one variable
+                        for every program and subroutine of a command level.
+                        A subroutine you CALL uses the file the main program
+                        opened, and a file it opens is the main program's
+                        default afterwards.  An EXECUTE starts a command level
+                        of its own with a fresh @STDFIL and gives the caller's
+                        back when it returns.  $MODE STDFIL (one for each
+                        program) is as it was, and the two together are STDFIL.
+             $MODE DEBUG.EQUATES
+                        A program compiled for the debugger with this mode keeps
+                        its EQUATE and $DEFINE tokens in the object.  The
+                        debugger then shows, SETs and WATCHes a token equated to
+                        a variable, a matrix element or a field of a dynamic
+                        array variable, and shows a token of a number, a string
+                        or CHAR(n) as NAME = value.
+             OPTION COMMAND.LEVEL.LOCKS
+                        A file variable that goes (a subroutine returns) no
+                        longer takes its locks with it: the file is kept open,
+                        out of sight, until the program is back at the command
+                        processor, or the EXECUTE that started the level ends.
+
+             What these do NOT do: STDFIL.SHARED uses a named common block
+             called $STDFIL, so do not declare one of your own.  DEBUG.EQUATES
+             makes the object larger, and a token of a constant cannot be SET
+             or WATCHed.  COMMAND.LEVEL.LOCKS does not change CLOSE, which still
+             closes at once, and it holds a file open for as long as a lock on it
+             is held, so a program that opens many files in a loop and drops them
+             holds them all until it ends.  The option is off unless you set it.
+
 18 Oct 26  SD -STATUS ON A SERVER THAT RECORDED NO START TIME.
 
              The text sd -status prints when the running SD has no start

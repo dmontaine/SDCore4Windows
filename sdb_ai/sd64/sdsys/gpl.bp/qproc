@@ -164,6 +164,8 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       equ REPORT.BREAK.SUP  to  8    ;* BREAK.SUP keyword
       equ REPORT.CUMULATIVE to  9    ;* CUMULATIVE keyword
       equ REPORT.MEDIAN     to 10    ;* MEDIAN keyword (15 Oct 26 dm, QM4 gaps Q-20)
+      equ REPORT.MODE       to 11    ;* MODE keyword (16 Oct 26 dm, sheet 231)
+      equ REPORT.RANGE      to 12    ;* RANGE keyword (16 Oct 26 dm, sheet 231)
 
       equ REPORT.MODE.MASK  to 15
       equ REPORT.NO.NULLS   to 16    ;* Additive for NO.NULLS option
@@ -302,6 +304,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       equ SORT.BY.EXP      to 3
       equ SORT.BY.EXP.DSND to 4
    exploded.sort = 0             ;* Sort table index for BY.EXP or BY.EXP.DSND
+   exp.sort.list = ''            ;* Sort table index of every BY.EXP / BY.EXP.DSND
    explode = @false              ;* Read record is not to strip values
    exploded.assoc = 0            ;* Exploded association name index
    explosion.associated.in.dictionary = @true
@@ -348,7 +351,12 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    grand.total.text = ''         ;* GRAND.TOTAL text and...
    grand.total.control = ''      ;* ...control codes
    delimited.report = @false     ;* DELIMITER
-   csv = 0                       ;* CSV mode level
+   xml.report = @false           ;* XML (16 Oct 26, QM4 gap 211): an XML report is a delimited report in how it is set up,
+   xml.elements = @false         ;* ...ELEMENTS: each field an element, not an attribute
+   xml.option = @false           ;* ...one of the options below was given (they need XML)
+   xml.dtd = 0                   ;* ...0 none, 1 WITH.DTD, 2 DTD.ONLY
+   xml.schema = 0                ;* ...0 none, 1 WITH.SCHEMA, 2 SCHEMA.ONLY
+   csv = 0                      ;* CSV mode level
                                   * 0 = off
                                   * 1 = as per CSV standard
                                   * 2 = quote everything except numeric with no embedded comma
@@ -397,6 +405,13 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    no.split = @false             ;* NO.SPLIT
    require.select = @false       ;* REQUIRE.SELECT
    vertical = @false             ;* VERT
+   vlist.loaded = @false         ;* $VLIST read yet? (A-3, sheet 579)
+   vlist.nm.fmt = VLIST.NAME.FMT ;* VERTICALLY FMT "name.format": name column format
+   vlist.name.given = @false     ;* ... the name.format was given
+   vlist.fit = @false            ;* ... the name.format was FIT
+   vlist.fit.done = @false
+   vlist.data.fmt = ''           ;* VERTICALLY FMT ,"data.format"
+   explicit.fmt = ''             ;* Items given their own FMT qualifier
 
    * What are we doing?
 
@@ -580,7 +595,13 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
 *   stage 2b rename of shipped dictionary ids to lower case (owner's ruling,
 *   14 Sep 2026, @ID included) leaves every query that names them in upper case
 *   working, and so a user dictionary keeps working whichever case it uses.
-   if list.command and not(sum.command) then
+   * 1.2-0 bundle A-3 (sheet 122, 405): field 3 of $QUERY.DEFAULTS is inserted
+   * into SELECT, SSELECT and SEARCH as field 2 is into LIST and SORT, and field
+   * 4 is the format of the id column that is inserted when the dictionary has
+   * no @ID (default 12L; only a width and L, R, T or C are accepted).
+
+   id.fmt = '12L'
+   if (list.command and not(sum.command)) or select.command then
       if dict.open then
          read dict.rec from dict.file, '$QUERY.DEFAULTS' then goto defaults.found
          read dict.rec from dict.file, '$query.defaults' then goto defaults.found
@@ -590,7 +611,8 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       end
 defaults.found:
       if upcase(dict.rec[1,1]) = 'X' then
-         * Merge continuation lines
+         * Merge continuation lines, field 2 then field 3 then field 4. Each
+         * merge leaves the next field at position 2.
 
          s = dict.rec<2>
          loop
@@ -598,8 +620,29 @@ defaults.found:
          while s[1] = '_'
             s = s[1, len(s)-1]:' ':dict.rec<2>
          repeat
-         call @parser(PARSER$GET.REST, token.type, n, keyword)
-         call @parser(PARSER$RESET, 0, s:n, 0)
+
+         s3 = dict.rec<2>
+         loop
+            del dict.rec<2>
+         while s3[1] = '_'
+            s3 = s3[1, len(s3)-1]:' ':dict.rec<2>
+         repeat
+
+         s4 = trim(dict.rec<2>)
+         if s4 # '' then
+            u4 = upcase(s4)
+            if u4 matches '1N0N"L"' or u4 matches '1N0N"R"' or u4 matches '1N0N"T"' or u4 matches '1N0N"C"' then
+               id.fmt = u4
+            end else
+               display sysmsg(12248) ;* $QUERY.DEFAULTS id format ignored
+            end
+         end
+
+         if select.command then s = s3
+         if (list.command and not(sum.command)) or s # '' then
+            call @parser(PARSER$GET.REST, token.type, n, keyword)
+            call @parser(PARSER$RESET, 0, s:n, 0)
+         end
       end
    end
 
@@ -674,6 +717,24 @@ parse.default.phrase:
 
    if vertical or delimited.report then
       pan = 0   ;* Ignore PAN
+   end
+
+   * XML (16 Oct 26 dm, QM4 gap 211): its options need it, and the report has no breakpoints or arithmetic
+
+   if xml.option and not(xml.report) then
+      display sysmsg(12373) ;* The XML options need the xml keyword
+      goto exit.qproc
+   end
+   if xml.report then
+      det.sup = @false                  ;* DET.SUP, PAN, HEADING and FOOTING are ignored (the manual)
+      bad.xml = (no.of.breakpoints > 0)
+      for xml.i = 1 to no.of.list.items
+         if bitand(list.item(xml.i, ITEM.MODE), REPORT.MODE.MASK) # REPORT.ITEMS then bad.xml = @true
+      next xml.i
+      if bad.xml then
+         display sysmsg(12374) ;* An XML report cannot have breakpoints or arithmetic
+         goto exit.qproc
+      end
    end
 
    if require.select then
@@ -784,7 +845,7 @@ parse.default.phrase:
             goto exit.qproc
          end
       end else
-         dict.rec = "D" : @FM : "0" : @fm : @fm : qproc.file.name : @fm : "12L" : @fm : "S"
+         dict.rec = "D" : @FM : "0" : @fm : @fm : qproc.file.name : @fm : id.fmt : @fm : "S"
          if dict.open then
             read s from dict.file, "@ID" then
                if (upcase(s[1,1]) = "D") and (s<dict.loc> = 0) then
@@ -969,6 +1030,26 @@ template.found:
             end
          end
       next i
+   end
+
+*----------------------------------------------------------------------
+* VERTICALLY FMT ,"data.format": the default data format for every item that
+* is not right justified in the dictionary and has no FMT of its own.
+
+   if vertical and report.command and not(vlist.loaded) then gosub load.vlist   ;* $VLIST: what the command line left out (sheet 579)
+
+   if vlist.data.fmt # '' and vertical and report.command then
+      saved.item.index = item.index
+      for i = 1 to no.of.list.items
+         if list.item(i, ITEM.MODE) = REPORT.BREAK.SUP then continue
+         item.to.list = list.item(i, ITEM.NO)
+         if item.justification(item.to.list) = 'R' then continue
+         locate item.to.list in explicit.fmt<1> setting s.pos then continue
+         item.fmt(item.to.list) = vlist.data.fmt
+         item.index = item.to.list
+         gosub get.width.and.justification
+      next i
+      item.index = saved.item.index
    end
 
 *----------------------------------------------------------------------
@@ -1214,6 +1295,8 @@ template.found:
                if trim(column.headings, ' ', 'B') # '' then
                   writeseq column.headings to csv.f else null
                end
+            case xml.report
+               null                    ;* An XML report has no column headings
             case delimited.report
                * A delimited report does not use the display handler so we
                * must emit the column headings using a simple PRINT.
@@ -1260,6 +1343,14 @@ template.found:
       * using STYLE "" on the command line to prevent use of a style.
 
       if style.rec then void qdisp(QD$STYL, field(style.rec, @fm, 2, 99))
+   end
+
+*-----------------------------------------------------------------------------
+* XML report: the declaration, the DTD and schema if asked for, and the root element (16 Oct 26 dm, QM4 gap 211)
+
+   if xml.report then
+      gosub xml.start
+      if xml.dtd = 2 or xml.schema = 2 then goto done   ;* DTD.ONLY or SCHEMA.ONLY: no data
    end
 
 *-----------------------------------------------------------------------------
@@ -1434,6 +1525,15 @@ template.found:
             next j
          end
          exploded.assoc = item.assoc(sort.items(exploded.sort))
+
+         * Every further BY.EXP / BY.EXP.DSND must be in the same association
+
+         for i = 1 to dcount(exp.sort.list, @fm)
+            if item.assoc(sort.items(exp.sort.list<i>)) # exploded.assoc then
+               display sysmsg(12252) ;* All exploded sort items must be in the same association
+               goto exit.qproc
+            end
+         next i
 
          * 0447 Check if we have a SAVING clause for a field with an exploded sort
 
@@ -2349,6 +2449,8 @@ done:
       write qdisp(QD$GETP) to pageseq.f, pageseq.id
    end
 
+   if xml.report then gosub xml.end
+
    qproc.record = ""           ;* Release memory in SYSCOM
    void qdisp(QD$END)
 
@@ -2508,6 +2610,17 @@ parse.command.options:
             gosub add.qualified.display.item
             continue    ;* Already read next token
 
+* --- MODE and RANGE (16 Oct 26 dm, sheet 231): the most frequent value, and the largest less the smallest
+         case keyword = KW$MODE and (report.command or reformat.command)
+            item.report.mode = REPORT.MODE
+            gosub add.qualified.display.item
+            continue    ;* Already read next token
+
+         case keyword = KW$RANGE and (report.command or reformat.command)
+            item.report.mode = REPORT.RANGE
+            gosub add.qualified.display.item
+            continue    ;* Already read next token
+
 * --- BETWEEN
          case keyword = KW$BETWEEN
             gosub implicit.selection.clause
@@ -2617,10 +2730,6 @@ parse.command.options:
 
 * --- BY.EXP
          case keyword = KW$BY.EXP and not(raw.command)
-            if exploded.sort then
-               display sysmsg(7226) ;* Only one exploded sort item is allowed
-               goto exit.qproc
-            end
             gosub get.token
             literal.allowed = @true  ;* Allows better error message
             gosub add.field
@@ -2630,16 +2739,13 @@ parse.command.options:
             end
             sort.item.list<-1> = item.index
             sort.mode<-1> = SORT.BY.EXP
-            exploded.sort = dcount(sort.item.list, @fm)
+            exp.sort.list<-1> = dcount(sort.item.list, @fm)
+            if not(exploded.sort) then exploded.sort = dcount(sort.item.list, @fm)
             gosub check.for.synonym   ;* Is there an AS following this item?
             continue    ;* Already read next token
 
 * --- BY.EXP.DSND
          case keyword = KW$BY.EXP.DSND and not(raw.command)
-            if exploded.sort then
-               display sysmsg(7226) ;* Only one exploded sort item is allowed
-               goto exit.qproc
-            end
             gosub get.token
             literal.allowed = @true  ;* Allows better error message
             gosub add.field
@@ -2649,7 +2755,10 @@ parse.command.options:
             end
             sort.item.list<-1> = item.index
             sort.mode<-1> = SORT.BY.EXP.DSND
-            exploded.sort = dcount(sort.item.list, @fm)
+            * More than one exploded sort is allowed provided they are all in
+            * the same association (checked once the dictionary is known).
+            exp.sort.list<-1> = dcount(sort.item.list, @fm)
+            if not(exploded.sort) then exploded.sort = dcount(sort.item.list, @fm)
             gosub check.for.synonym   ;* Is there an AS following this item?
             continue    ;* Already read next token
 
@@ -2712,6 +2821,36 @@ parse.command.options:
             end else
                continue    ;* Already read next token
             end
+
+* --- XML and its options (16 Oct 26 dm, QM4 gap 211)
+         case keyword = KW$XML and report.command
+            if delimited.report then
+               display sysmsg(7290) ;* Multiple use of DELIMITER or CSV options
+               goto exit.qproc
+            end
+            delimited.report = @true
+            xml.report = @true
+            delimiter = ''
+            count.sup = @true            ;* no "n record(s) listed" line inside the document
+         case keyword = KW$ELEMENTS and report.command
+            xml.elements = @true
+            xml.option = @true
+
+         case keyword = KW$WITH.DTD and report.command
+            xml.dtd = 1
+            xml.option = @true
+
+         case keyword = KW$DTD.ONLY and report.command
+            xml.dtd = 2
+            xml.option = @true
+
+         case keyword = KW$WITH.SCHEMA and report.command
+            xml.schema = 1
+            xml.option = @true
+
+         case keyword = KW$SCHEMA.ONLY and report.command
+            xml.schema = 2
+            xml.option = @true
 
 * --- CUMULATIVE
          case keyword = KW$CUMULATIVE and (report.command or reformat.command)
@@ -3288,6 +3427,42 @@ label.template.found:
 * --- VERTICALLY
          case keyword = KW$VERTICALLY and report.command
             vertical = @true
+
+* VERTICALLY {FMT {"name.format"} {, "data.format"}}  (openQM 4.0)
+* The next token is read here; it is processed by the loop (CONTINUE) whether
+* or not it was an FMT.
+
+            gosub get.token
+            if token.type = PARSER$TOKEN and keyword = KW$FMT then
+               gosub get.token
+               got.fmt = @false
+               if token.type = PARSER$STRING then
+                  vlist.name.given = (token # '')
+                  if upcase(token) = 'FIT' then
+                     vlist.fit = @true
+                  end else
+                     vlist.nm.fmt = token
+                  end
+                  got.fmt = @true
+                  gosub get.token
+               end
+               if token.type = PARSER$COMMA then
+                  gosub get.token
+                  if token.type # PARSER$STRING then
+                     display sysmsg(7265) ;* Format specification not found where expected
+                     goto exit.qproc
+                  end
+                  vlist.data.fmt = token
+                  got.fmt = @true
+                  gosub get.token
+               end
+               if not(got.fmt) then
+                  display sysmsg(7265) ;* Format specification not found where expected
+                  goto exit.qproc
+               end
+               if vlist.nm.fmt = '' then vlist.nm.fmt = VLIST.NAME.FMT
+            end
+            continue           ;* Already read next token
 
 * --- WHEN
          case keyword = KW$WHEN
@@ -4025,6 +4200,7 @@ check.field.modifiers:
 
                item.index = list.item(no.of.list.items, ITEM.NO)
                item.fmt(item.index) = token
+               explicit.fmt<-1> = item.index   ;* VERTICALLY FMT's data.format leaves it alone
 
                gosub get.width.and.justification
 
@@ -4032,7 +4208,7 @@ check.field.modifiers:
                item.to.list = list.item(no.of.list.items, ITEM.NO)
                item.multivalued(item.to.list) = @true
 
-            case keyword = KW$NO.NULLS and (item.report.mode = REPORT.AVERAGE or item.report.mode = REPORT.MIN or item.report.mode = REPORT.MEDIAN)
+            case keyword = KW$NO.NULLS and (item.report.mode = REPORT.AVERAGE or item.report.mode = REPORT.MIN or item.report.mode = REPORT.MEDIAN or item.report.mode = REPORT.MODE or item.report.mode = REPORT.RANGE)
                list.item(no.of.list.items, ITEM.MODE) = bitor(list.item(no.of.list.items, ITEM.MODE), REPORT.NO.NULLS)
 
             * 15 Oct 26 dm, QM4 gaps Q-20: field RPT repeats a single valued item on every line of a multivalued report.  An
@@ -6134,7 +6310,9 @@ list.bytes:
                                      accumulate.calc,
                                      accumulate.continue,   ;* BREAK.SUP
                                      accumulate.cumulative,
-                                     accumulate.median
+                                     accumulate.median,
+                                     accumulate.mode,
+                                     accumulate.range
 
 accumulate.total:
 accumulate.average:
@@ -6225,6 +6403,7 @@ accumulate.cumulative:
             else cumulative.data := z
             goto accumulate.continue
 
+accumulate.range:      ;* RANGE keeps the same list as MEDIAN and reads the two ends of it (sheet 231)
 accumulate.median:
             * 15 Oct 26 dm, QM4 gaps Q-20.  The values are kept in numeric order, every one, since the report began and since
             * each breakpoint, as a list of values led by the letter L (a list that has not been started, or has been cleared
@@ -6241,6 +6420,21 @@ accumulate.median:
                   list.item(list.index, ITEM.LOCAL.VALUE)<bp> = m
                next bp
             end
+            goto accumulate.continue
+
+accumulate.mode:
+            * 16 Oct 26 dm, sheet 231.  Every distinct value and how many times it has come, in the order they came, in the
+            * item's list (see MODE.INSERT).  A null is a value too (NO.NULLS has stopped it before it gets here); it is kept
+            * as a text mark, which no value can hold.  MODE.OF.LIST reads the largest count at the end.
+            zv = if len(z) then z else @tm
+            m = list.item(list.index, ITEM.ACCUM.VALUE)
+            gosub mode.insert
+            list.item(list.index, ITEM.ACCUM.VALUE) = m
+            for bp = 1 to no.of.breakpoints
+               m = list.item(list.index, ITEM.LOCAL.VALUE)<bp>
+               gosub mode.insert
+               list.item(list.index, ITEM.LOCAL.VALUE)<bp> = m
+            next bp
             goto accumulate.continue
 
 accumulate.number:
@@ -6361,6 +6555,8 @@ report.record: ;* Enter here from SHOW.ACCUMULATIONS
    end
 
    begin case
+      case xml.report                        ;* ===== XML report
+         gosub show.xml
       case delimited.report                  ;* ===== Delimited report
          gosub show.delimited
       case vertical                          ;* ===== Vertical listing
@@ -6377,6 +6573,305 @@ record.to.list.not.found:
    * Back out of this item
    qproc.ni -= 1
    qproc.nd -= 1
+   return
+
+* ======================================================================
+* XML REPORT  (16 Oct 26 dm, QM4 gap 211)
+*
+* The manual shows the output and not the DTD or the schema, so those are SD's own.  Layout, for LIST sales XML:
+*     <?xml version="1.0" encoding="UTF-8"?>
+*     <ROOT>
+*     <sales sale = "12140" date = "14 Oct 07">
+*       <LINE item = "003" qty = "1"/>           an association: one tag per row, named for the association
+*       <price_MV price = "1.70"/>               a multivalued field in no association: one tag per value
+*     </sales>
+*     </ROOT>
+* The tag of a record is the file name.  A field with no value is left out.  With ELEMENTS every field is an element
+* of its own and the association rows are elements that contain elements.  The names of fields are made fit to be an XML
+* name: a character that is not a letter, a digit, an underscore, a dot or a dash becomes an underscore.
+
+* XML.NAME  -  xml.in -> xml.out, made fit to be an XML name
+
+xml.name:
+   xml.out = trim(change(xml.in, @vm, ' '))
+   xml.out = convert(' ', '_', xml.out)
+   xml.bad = convert('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-', '', xml.out)
+   if xml.bad # '' then xml.out = convert(xml.bad, str('_', len(xml.bad)), xml.out)
+   if xml.out = '' then xml.out = '_'
+   if not(xml.out[1,1] matches '1A' or xml.out[1,1] = '_') then xml.out = '_' : xml.out
+   return
+
+* XML.ESC  -  xml.val -> xml.val with the marks of the data as spaces and the characters XML reserves as entities
+
+xml.esc:
+   xml.val = convert(@sm : @tm : @vm, '   ', xml.val)
+   xml.val = change(xml.val, '&', '&amp;')
+   xml.val = change(xml.val, '<', '&lt;')
+   xml.val = change(xml.val, '>', '&gt;')
+   xml.val = change(xml.val, '"', '&quot;')
+   return
+
+* XML.PREPARE  -  Sort the fields of the report into single valued ones, associations and multivalued ones in none
+
+xml.prepare:
+   xml.in = qproc.file.name ; gosub xml.name ; xml.tag = xml.out
+   xml.single = ''           ;* list.index of each single valued field
+   xml.groups = ''           ;* association names, made fit to be tags
+   xml.group.items = ''      ;* for each association, the list.index of its fields (value marks)
+   xml.mv = ''               ;* list.index of each multivalued field that is in no association
+   xml.names = ''            ;* by list.index, the field's name made fit to be an XML name
+   xml.assoc.raw = ''
+   for xml.li = 1 to no.of.list.items
+      if list.item(xml.li, ITEM.MODE) = REPORT.BREAK.SUP then continue
+      xml.n = list.item(xml.li, ITEM.NO)
+      xml.in = item.display.name(xml.n) ; gosub xml.name ; xml.names<xml.li> = xml.out
+      if not(item.multivalued(xml.n)) then
+         xml.single<-1> = xml.li
+         continue
+      end
+      xml.a = item.assoc(xml.n)
+      xml.an = if xml.a then association.names<xml.a> else ''
+      if xml.an = '' or xml.an[1,2] = '__' then   ;* in no association (the program's own names start with two underscores)
+         xml.mv<-1> = xml.li
+      end else
+         locate xml.an in xml.assoc.raw<1> setting xml.g else
+            xml.assoc.raw<xml.g> = xml.an
+            xml.in = xml.an ; gosub xml.name ; xml.groups<xml.g> = xml.out
+         end
+         xml.group.items<xml.g,-1> = xml.li
+      end
+   next xml.li
+   return
+
+* XML.START  -  The start of the output: schema, DTD, declaration and root element
+
+xml.start:
+   gosub xml.prepare
+   xml.decl = '<?xml version="1.0" encoding="UTF-8"?>'
+   if xml.schema # 0 then gosub xml.schema.out
+   if xml.dtd = 2 then
+      gosub xml.dtd.out
+      return
+   end
+   if xml.schema = 2 then return
+   print on lptr xml.decl
+   if xml.dtd = 1 then
+      print on lptr '<!DOCTYPE ROOT ['
+      gosub xml.dtd.out
+      print on lptr ']>'
+   end
+   print on lptr '<ROOT>'
+   return
+
+* XML.END  -  The end of the output
+
+xml.end:
+   if xml.dtd # 2 and xml.schema # 2 then print on lptr '</ROOT>'
+   return
+
+* XML.DTD.OUT  -  The declarations of the DTD
+
+xml.dtd.out:
+   xml.seen = ''
+   xml.kids = ''
+   if xml.elements then
+      for xml.i = 1 to dcount(xml.single, @fm) ; xml.kids<-1> = xml.names<xml.single<xml.i>> : '?' ; next xml.i
+      for xml.i = 1 to dcount(xml.groups, @fm) ; xml.kids<-1> = xml.groups<xml.i> : '*' ; next xml.i
+      for xml.i = 1 to dcount(xml.mv, @fm) ; xml.kids<-1> = xml.names<xml.mv<xml.i>> : '_MV*' ; next xml.i
+      xml.s = if xml.kids = '' then 'EMPTY' else '(' : change(xml.kids, @fm, ', ') : ')'
+   end else
+      for xml.i = 1 to dcount(xml.groups, @fm) ; xml.kids<-1> = xml.groups<xml.i> ; next xml.i
+      for xml.i = 1 to dcount(xml.mv, @fm) ; xml.kids<-1> = xml.names<xml.mv<xml.i>> : '_MV' ; next xml.i
+      xml.s = if xml.kids = '' then 'EMPTY' else '(' : change(xml.kids, @fm, ' | ') : ')*'
+   end
+   print on lptr '<!ELEMENT ROOT (' : xml.tag : '*)>'
+   print on lptr '<!ELEMENT ' : xml.tag : ' ' : xml.s : '>'
+   if not(xml.elements) and xml.single # '' then
+      xml.s = ''
+      for xml.i = 1 to dcount(xml.single, @fm) ; xml.s := ' ' : xml.names<xml.single<xml.i>> : ' CDATA #IMPLIED' ; next xml.i
+      print on lptr '<!ATTLIST ' : xml.tag : xml.s : '>'
+   end
+   if xml.elements then
+      for xml.i = 1 to dcount(xml.single, @fm)
+         xml.e = xml.names<xml.single<xml.i>> ; gosub xml.dtd.pcdata
+      next xml.i
+   end
+   for xml.g = 1 to dcount(xml.groups, @fm)
+      xml.items = xml.group.items<xml.g>
+      if xml.elements then
+         xml.s = ''
+         for xml.i = 1 to dcount(xml.items, @vm) ; xml.s := (if xml.i > 1 then ', ' else '') : xml.names<xml.items<1,xml.i>> : '?' ; next xml.i
+         print on lptr '<!ELEMENT ' : xml.groups<xml.g> : ' (' : xml.s : ')>'
+         for xml.i = 1 to dcount(xml.items, @vm)
+            xml.e = xml.names<xml.items<1,xml.i>> ; gosub xml.dtd.pcdata
+         next xml.i
+      end else
+         print on lptr '<!ELEMENT ' : xml.groups<xml.g> : ' EMPTY>'
+         xml.s = ''
+         for xml.i = 1 to dcount(xml.items, @vm) ; xml.s := ' ' : xml.names<xml.items<1,xml.i>> : ' CDATA #IMPLIED' ; next xml.i
+         print on lptr '<!ATTLIST ' : xml.groups<xml.g> : xml.s : '>'
+      end
+   next xml.g
+   for xml.i = 1 to dcount(xml.mv, @fm)
+      xml.m = xml.names<xml.mv<xml.i>>
+      if xml.elements then
+         xml.e = xml.m : '_MV' ; gosub xml.dtd.pcdata
+      end else
+         print on lptr '<!ELEMENT ' : xml.m : '_MV EMPTY>'
+         print on lptr '<!ATTLIST ' : xml.m : '_MV ' : xml.m : ' CDATA #IMPLIED>'
+      end
+   next xml.i
+   return
+
+* XML.DTD.PCDATA  -  Declare element xml.e as text, once
+
+xml.dtd.pcdata:
+   locate xml.e in xml.seen<1> setting xml.p else
+      xml.seen<xml.p> = xml.e
+      print on lptr '<!ELEMENT ' : xml.e : ' (#PCDATA)>'
+   end
+   return
+
+* XML.SCHEMA.OUT  -  The schema, a document of its own
+
+xml.schema.out:
+   print on lptr xml.decl
+   print on lptr '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">'
+   print on lptr '  <xs:element name="ROOT">'
+   print on lptr '    <xs:complexType>'
+   print on lptr '      <xs:sequence>'
+   print on lptr '        <xs:element name="' : xml.tag : '" minOccurs="0" maxOccurs="unbounded">'
+   print on lptr '          <xs:complexType>'
+   if xml.elements then
+      print on lptr '            <xs:sequence>'
+      for xml.i = 1 to dcount(xml.single, @fm)
+         print on lptr '              <xs:element name="' : xml.names<xml.single<xml.i>> : '" type="xs:string" minOccurs="0"/>'
+      next xml.i
+      for xml.g = 1 to dcount(xml.groups, @fm)
+         xml.items = xml.group.items<xml.g>
+         print on lptr '              <xs:element name="' : xml.groups<xml.g> : '" minOccurs="0" maxOccurs="unbounded">'
+         print on lptr '                <xs:complexType>'
+         print on lptr '                  <xs:sequence>'
+         for xml.i = 1 to dcount(xml.items, @vm)
+            print on lptr '                    <xs:element name="' : xml.names<xml.items<1,xml.i>> : '" type="xs:string" minOccurs="0"/>'
+         next xml.i
+         print on lptr '                  </xs:sequence>'
+         print on lptr '                </xs:complexType>'
+         print on lptr '              </xs:element>'
+      next xml.g
+      for xml.i = 1 to dcount(xml.mv, @fm)
+         print on lptr '              <xs:element name="' : xml.names<xml.mv<xml.i>> : '_MV" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>'
+      next xml.i
+      print on lptr '            </xs:sequence>'
+   end else
+      if xml.groups # '' or xml.mv # '' then
+         print on lptr '            <xs:choice minOccurs="0" maxOccurs="unbounded">'
+         for xml.g = 1 to dcount(xml.groups, @fm)
+            xml.items = xml.group.items<xml.g>
+            print on lptr '              <xs:element name="' : xml.groups<xml.g> : '">'
+            print on lptr '                <xs:complexType>'
+            for xml.i = 1 to dcount(xml.items, @vm)
+               print on lptr '                  <xs:attribute name="' : xml.names<xml.items<1,xml.i>> : '" type="xs:string"/>'
+            next xml.i
+            print on lptr '                </xs:complexType>'
+            print on lptr '              </xs:element>'
+         next xml.g
+         for xml.i = 1 to dcount(xml.mv, @fm)
+            print on lptr '              <xs:element name="' : xml.names<xml.mv<xml.i>> : '_MV">'
+            print on lptr '                <xs:complexType>'
+            print on lptr '                  <xs:attribute name="' : xml.names<xml.mv<xml.i>> : '" type="xs:string"/>'
+            print on lptr '                </xs:complexType>'
+            print on lptr '              </xs:element>'
+         next xml.i
+         print on lptr '            </xs:choice>'
+      end
+      for xml.i = 1 to dcount(xml.single, @fm)
+         print on lptr '            <xs:attribute name="' : xml.names<xml.single<xml.i>> : '" type="xs:string"/>'
+      next xml.i
+   end
+   print on lptr '          </xs:complexType>'
+   print on lptr '        </xs:element>'
+   print on lptr '      </xs:sequence>'
+   print on lptr '    </xs:complexType>'
+   print on lptr '  </xs:element>'
+   print on lptr '</xs:schema>'
+   return
+
+* SHOW.XML  -  Emit record for an XML report
+
+show.xml:
+   xml.lines = ''            ;* the children of the record's tag, one per line
+   if xml.elements then
+      xml.head = '<' : xml.tag : '>'
+      for xml.i = 1 to dcount(xml.single, @fm)
+         xml.li = xml.single<xml.i>
+         xml.val = disp.rec<xml.li> ; gosub xml.esc
+         if xml.val # '' then xml.lines<-1> = '  <' : xml.names<xml.li> : '>' : xml.val : '</' : xml.names<xml.li> : '>'
+      next xml.i
+   end else
+      xml.head = '<' : xml.tag
+      for xml.i = 1 to dcount(xml.single, @fm)
+         xml.li = xml.single<xml.i>
+         xml.val = disp.rec<xml.li> ; gosub xml.esc
+         if xml.val # '' then xml.head := ' ' : xml.names<xml.li> : ' = "' : xml.val : '"'
+      next xml.i
+   end
+
+   for xml.g = 1 to dcount(xml.groups, @fm)       ;* one tag for each row of each association
+      xml.items = xml.group.items<xml.g>
+      xml.rows = 0
+      for xml.i = 1 to dcount(xml.items, @vm)
+         xml.rows = max(xml.rows, dcount(disp.rec<xml.items<1,xml.i>>, @vm))
+      next xml.i
+      for xml.r = 1 to xml.rows
+         xml.cells = ''
+         for xml.i = 1 to dcount(xml.items, @vm)
+            xml.li = xml.items<1,xml.i>
+            xml.val = disp.rec<xml.li,xml.r> ; gosub xml.esc
+            if xml.val = '' then continue
+            if xml.elements then
+               xml.cells<-1> = '    <' : xml.names<xml.li> : '>' : xml.val : '</' : xml.names<xml.li> : '>'
+            end else
+               xml.cells := ' ' : xml.names<xml.li> : ' = "' : xml.val : '"'
+            end
+         next xml.i
+         if xml.cells = '' then continue           ;* a row with no value in it is not a row
+         if xml.elements then
+            xml.lines<-1> = '  <' : xml.groups<xml.g> : '>'
+            for xml.i = 1 to dcount(xml.cells, @fm) ; xml.lines<-1> = xml.cells<xml.i> ; next xml.i
+            xml.lines<-1> = '  </' : xml.groups<xml.g> : '>'
+         end else
+            xml.lines<-1> = '  <' : xml.groups<xml.g> : xml.cells : '/>'
+         end
+      next xml.r
+   next xml.g
+
+   for xml.i = 1 to dcount(xml.mv, @fm)           ;* one tag for each value of a multivalued field in no association
+      xml.li = xml.mv<xml.i>
+      for xml.r = 1 to dcount(disp.rec<xml.li>, @vm)
+         xml.val = disp.rec<xml.li,xml.r> ; gosub xml.esc
+         if xml.val = '' then continue
+         if xml.elements then
+            xml.lines<-1> = '  <' : xml.names<xml.li> : '_MV>' : xml.val : '</' : xml.names<xml.li> : '_MV>'
+         end else
+            xml.lines<-1> = '  <' : xml.names<xml.li> : '_MV ' : xml.names<xml.li> : ' = "' : xml.val : '"/>'
+         end
+      next xml.r
+   next xml.i
+
+   if xml.elements then
+      print on lptr xml.head
+      for xml.i = 1 to dcount(xml.lines, @fm) ; print on lptr xml.lines<xml.i> ; next xml.i
+      print on lptr '</' : xml.tag : '>'
+   end else
+      if xml.lines = '' then
+         print on lptr xml.head : '/>'
+      end else
+         print on lptr xml.head : '>'
+         for xml.i = 1 to dcount(xml.lines, @fm) ; print on lptr xml.lines<xml.i> ; next xml.i
+         print on lptr '</' : xml.tag : '>'
+      end
+   end
    return
 
 * ======================================================================
@@ -6418,9 +6913,54 @@ show.delimited:
    return
 
 * ======================================================================
+* load.vlist  -  The defaults of a vertical report that VERTICALLY FMT did not give (sheet 579)
+*   $VLIST in the dictionary, else in the VOC; type X in field 1, field 2 the name format (or FIT: as wide as the longest
+*   heading), field 3 the data format.  What the command line gave (VERTICALLY FMT) wins.
+
+load.vlist:
+   vlist.loaded = @true
+   vlist.rec = ''
+   if dict.open then
+      read vlist.rec from dict.file, '$VLIST' then null else
+         read vlist.rec from dict.file, '$vlist' then null else vlist.rec = ''
+      end
+   end
+   if upcase(vlist.rec[1,1]) # 'X' then
+      read vlist.rec from @voc, '$VLIST' then null else
+         read vlist.rec from @voc, '$vlist' then null else vlist.rec = ''
+      end
+   end
+   if upcase(vlist.rec[1,1]) = 'X' then
+      vlist.s = trim(vlist.rec<2>)
+      if vlist.s # '' and not(vlist.name.given or vlist.fit) then
+         if upcase(vlist.s) = 'FIT' then
+            vlist.fit = @true
+         end else
+            vlist.nm.fmt = vlist.s
+            vlist.name.given = @true
+         end
+      end
+      if vlist.data.fmt = '' then vlist.data.fmt = trim(vlist.rec<3>)
+   end
+   return
+
+* ======================================================================
 * show.vertical  -  Emit record for vertical format report
 
 show.vertical:
+   if vlist.fit and not(vlist.fit.done) then
+      * FIT: a name column exactly as wide as the longest heading in the report
+      vlist.fit.w = 0
+      for list.index = 1 to no.of.list.items
+         if list.item(list.index, ITEM.MODE) = REPORT.BREAK.SUP then continue
+         n = maximum(lens(convert(@vm, ' ', item.display.name(list.item(list.index, ITEM.NO)))))
+         if n > vlist.fit.w then vlist.fit.w = n
+      next list.index
+      if vlist.fit.w < 1 then vlist.fit.w = 1
+      vlist.nm.fmt = vlist.fit.w : 'L'
+      vlist.fit.done = @true
+   end
+
    if no.split then
       if not(pan.scroll) then lno = printer.setting(lptr, LPTR$LINE.NO, -2)
       if lno > 1 then
@@ -6461,7 +7001,13 @@ show.vertical:
    for list.index = 1 to no.of.list.items
       if list.item(list.index, ITEM.MODE) = REPORT.BREAK.SUP then continue
       item.to.list = list.item(list.index, ITEM.NO)
-      vlist.name = convert(@vm, ' ', fmt(item.display.name(item.to.list)[1,12], vlist.name.fmt))
+      if vlist.name.given or vlist.fit then
+         * VERTICALLY FMT: the whole heading, formatted as asked, first line only
+         vlist.name = field(fmt(convert(@vm, ' ', item.display.name(item.to.list)), vlist.nm.fmt), @tm, 1)
+      end else
+         vlist.name = convert(@vm, ' ', fmt(item.display.name(item.to.list)[1,12], VLIST.NAME.FMT))
+      end
+      vlist.name.w = len(vlist.name)
       vlist.item = disp.rec<list.index>
       separator = " : "
 
@@ -6475,12 +7021,11 @@ show.vertical:
 
             if margin then printline := space(margin)
             printline := vlist.name
-            vlist.name = space(12)
+            vlist.name = space(vlist.name.w)
 
             * Display separator
 
             printline := separator
-            separator = "   "
          end
 
          * Display item value chunk
@@ -6494,6 +7039,11 @@ show.vertical:
                s := s2
             repeat
          end
+
+         * The line that follows: a wrapped line (text mark) is shown with
+         * a blank separator, the next value of a multivalued item repeats
+         * the colon, so the two can be told apart (A-3, sheet 580).
+         if vlist.delimiter = 5 then separator = "   " else separator = " : "
 
          printline := s
          if qdisp(QD$EMIT, printline, class) then goto qdisp.error
@@ -6655,6 +7205,59 @@ median.of.list:
    return
 
 * ======================================================================
+* RANGE.OF.LIST  -  The largest value less the smallest of the list ACCUMULATE.MEDIAN made (RANGE keeps the same list).
+*
+* On entry:  m = the item's list: the letter L and the values in numeric order, value mark delimited
+* On exit:   s = the last less the first; null if there is none
+
+range.of.list:
+   s = ''
+   if m[1,1] = 'L' then
+      m.body = m[2, len(m)]
+      m.n = dcount(m.body, @vm)
+      if m.n then s = m.body<1, m.n> - m.body<1, 1>
+   end
+   return
+
+* ======================================================================
+* MODE.INSERT  -  Count the value ZV in the list ACCUMULATE.MODE keeps.
+*
+* On entry:  m = the item's list, or anything that is not a list yet (the 0 an item starts with, and is given back at a
+*                breakpoint), which is an empty one.  A list is three values: the letter L, the distinct values (subvalue mark
+*                delimited) and their counts (the same)
+* On exit:   m = the list with ZV counted
+
+mode.insert:
+   if m<1,1> # 'L' then m = 'L' : @vm : @vm
+   locate zv in m<1,2,1> setting m.p then
+      m<1,3,m.p> += 1
+   end else
+      ins zv before m<1,2,m.p>
+      ins 1 before m<1,3,m.p>
+   end
+   return
+
+* ======================================================================
+* MODE.OF.LIST  -  The value of the list ACCUMULATE.MODE made that came most often; the first of them if several came as often.
+*
+* On exit:   s = that value; null if there is none
+
+mode.of.list:
+   s = ''
+   if m<1,1> = 'L' then
+      m.best = 0
+      m.n = dcount(m<1,3>, @sm)
+      for m.p = 1 to m.n
+         if m<1,3,m.p> > m.best then
+            m.best = m<1,3,m.p>
+            s = m<1,2,m.p>
+         end
+      next m.p
+      if s = @tm then s = ''
+   end
+   return
+
+* ======================================================================
 * SHOW.ACCUMULATIONS  -  Show totals, averages, etc at end of report
 
 show.accumulations:
@@ -6674,7 +7277,9 @@ show.accumulations:
                                      show.calc,
                                      show.continue,  ;* BREAK.SUP
                                      show.cumulative,
-                                     show.median
+                                     show.median,
+                                     show.mode,
+                                     show.range
 show.total:
 show.max:
 show.min:
@@ -6690,6 +7295,16 @@ show.average:
 show.median:
             m = list.item(list.index, ITEM.ACCUM.VALUE)
             gosub median.of.list
+            goto show.continue
+
+show.mode:
+            m = list.item(list.index, ITEM.ACCUM.VALUE)
+            gosub mode.of.list
+            goto show.continue
+
+show.range:
+            m = list.item(list.index, ITEM.ACCUM.VALUE)
+            gosub range.of.list
             goto show.continue
 
 show.number:
@@ -6788,7 +7403,9 @@ show.breakpoint:
                                   break.calc,
                                   break.continue,     ;* BREAK.SUP
                                   break.cumulative,
-                                  break.median
+                                  break.median,
+                                  break.mode,
+                                  break.range
 break.total:
 break.max:
 break.min:
@@ -6804,6 +7421,16 @@ break.average:
 break.median:
          m = list.item(list.index, ITEM.LOCAL.VALUE)<breakpoint.index>
          gosub median.of.list
+         goto break.continue
+
+break.mode:
+         m = list.item(list.index, ITEM.LOCAL.VALUE)<breakpoint.index>
+         gosub mode.of.list
+         goto break.continue
+
+break.range:
+         m = list.item(list.index, ITEM.LOCAL.VALUE)<breakpoint.index>
+         gosub range.of.list
          goto break.continue
 
 break.number:
@@ -7806,7 +8433,7 @@ apply.when.filter:
                     op.error,      ;* OP.LIKE with EVERY and NO.CASE
                     when.unlike,   ;* OP.UNLIKE
                     op.error,      ;* OP.UNLIKE with EVERY
-                    when.unlike,   ;* OP.UNLIKE with NO.CASE
+                    when.unlike.nc, ;* OP.UNLIKE with NO.CASE
                     op.error,      ;* OP.UNLIKE with EVERY and NO.CASE
                     when.said,     ;* OP.SAID
                     op.error,      ;* OP.SAID with EVERY
@@ -7816,6 +8443,8 @@ apply.when.filter:
                     op.error,      ;* OP.NOT.NULL with EVERY
                     when.not.null, ;* OP.NOT.NULL with NO.CASE
                     op.error,      ;* OP.NOT.NULL with EVERY and NO.CASE
+                    when.between,  ;* OP.BETWEEN
+                    op.error,      ;* OP.BETWEEN with EVERY
                     when.between.nc, ;* OP.BETWEEN with NO.CASE
                     op.error,      ;* OP.BETWEEN with EVERY and NO.CASE
                     op.error,      ;* OP.OR
@@ -7890,7 +8519,7 @@ when.said:
          goto next.filter
 
 when.not.null:
-         truth = eqs(item1, reuse(''))
+         truth = nes(item1, reuse(''))   ;* not null (was eqs: the test was inverted)
          goto next.filter
 
 when.between.nc:
@@ -7905,8 +8534,8 @@ when.between.continue:
          if is.case.insensitive then ;* 0394
             if item1.type = ID.ITEM then item3 = upcase(item3)
          end
-         truth = ands(ges(item1, item3), les(item1, item2))
-         goto next.filter
+         truth = ands(ges(item1, reuse(item3)), les(item1, reuse(item2)))   ;* 16 Oct 26: reuse(), as the other operators have it - without it
+         goto next.filter                                                  ;* only the first value of a multivalued field was compared
 
 next.filter:
          if inverse then truth = nots(truth)

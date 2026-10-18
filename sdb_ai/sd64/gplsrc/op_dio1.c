@@ -102,7 +102,9 @@ void op_close() {
   k_get_file(descr);
   /* fvar = descr->data.fvar; variable set but never used */
 
+  explicit_close = TRUE; /* OPTION COMMAND.LEVEL.LOCKS does not keep a file that is closed on purpose */
   k_release(descr); /* This will close the file */
+  explicit_close = FALSE;
   k_pop(1);
 
   InitDescr(e_stack, INTEGER);
@@ -645,6 +647,8 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
     process.status = ER_NAM;
     goto exit_op_open; /* We failed to extract the name */
   }
+
+  ProfEvent(PROF_OPEN, map_name ? voc_name : mapped_name, name_len); /* the application event profiler (16 Oct 26) */
 
   /* Create a FILE_VAR structure for this file. We will remove it later if
      the open fails for any reason.                                        */

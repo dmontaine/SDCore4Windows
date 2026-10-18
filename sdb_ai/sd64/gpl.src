@@ -98,3 +98,4 @@ telnet
 time
 to_file
 txn
+profiler

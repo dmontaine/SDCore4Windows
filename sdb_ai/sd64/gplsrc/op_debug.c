@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): DEBUG.INFO() code 7: the equate and $DEFINE tokens of a $MODE DEBUG.EQUATES program (QM4 gap 218)
  * 14 Sep 26 Windows port - the debugger is $debug / $pdbg (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 8da7e5d (11 Oct 26): A data collection variable gives the debugger its kind, its count
@@ -358,6 +359,29 @@ void op_dbginf() {
       obj_hdr = (OBJECT_HEADER*)find_object(debug_id);
       result.data.value = obj_hdr->flags;
       goto return_integer;
+
+    case 7: /* Get the equate and $DEFINE tokens ($MODE DEBUG.EQUATES, 16 Oct 26): what follows the symbol table's zero byte */
+    {
+      int32_t len; /* int32 not int16: the table can be long */
+
+      obj_hdr = (OBJECT_HEADER*)find_object(debug_id);
+      sym_tab_offset = obj_hdr->sym_tab_offset;
+      if (sym_tab_offset) {
+        p = ((char*)obj_hdr) + sym_tab_offset;
+        len = obj_hdr->object_size - sym_tab_offset;
+        q = (char*)memchr(p, '\0', len);
+        if (q != NULL) {
+          len -= (int32_t)(q + 1 - p);
+          p = q + 1;
+          q = (len > 0) ? (char*)memchr(p, '\0', len) : NULL;
+          if (q != NULL)
+            len = (int32_t)(q - p);
+          if (len > 0)
+            ts_copy(p, len);
+        }
+      }
+      break;
+    }
 
     case 6: /* Get information about an element of a collection variable */
     {

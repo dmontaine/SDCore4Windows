@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_release() offers a file variable whose last reference has gone to park_fvar() (OPTION COMMAND.LEVEL.LOCKS)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -1260,8 +1261,10 @@ void k_release(DESCRIPTOR* p) {
 
     case FILE_REF:
       fvar = p->data.fvar;
-      if (--(fvar->ref_ct) == 0)
-        dio_close(fvar);
+      if (--(fvar->ref_ct) == 0) {
+        if (!park_fvar(fvar)) /* OPTION COMMAND.LEVEL.LOCKS keeps a file whose locks are wanted open */
+          dio_close(fvar);
+      }
       break;
 
     case ARRAY:

@@ -193,6 +193,9 @@ $define M2.TRAP.UNUSED.MAIN     5  ;* TRAP.UNUSED, for variables assigned in the
 $define M2.PICK.SELECT          6  ;* SELECTV moves an active default list to its target (P_PICK_SEL, op_selectv)
 $define M2.EXPLICIT             7  ;* a scalar must be named in a DIM statement before it is used (explicit.check, dim.declare.scalar)
 $define M2.DEFAULT.UNASS.ARGS   8  ;* an argument with a default value takes it when the caller passed it unassigned (arg.defaults.emit)
+*  bit 9 is Linux's M2.NON.DURABLE.TXN (QMClient SDTxn mode 4, held): left unused so the bit numbers agree
+$define M2.STDFIL.SHARED       10  ;* 16 Oct 26 dm - QM4 gap 225: the default file variable is one per command level (see stdfil.shared.make)
+$define M2.DEBUG.EQUATES       11  ;* 16 Oct 26 dm - QM4 gap 218: a debug object also holds the equate and $DEFINE tokens (emit.equate.table)
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
 * NJS remove hard coded fd hex, use @VM
@@ -242,6 +245,9 @@ mode.names<1,38> = "TRAP.UNUSED.MAIN"
 mode.names<1,39> = "PICK.SELECT"
 mode.names<1,40> = "EXPLICIT"
 mode.names<1,41> = "DEFAULT.UNASS.ARGS"
+*  position 42 is Linux's NON.DURABLE.TXN (held): left empty
+mode.names<1,43> = "STDFIL.SHARED"
+mode.names<1,44> = "DEBUG.EQUATES"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -839,6 +845,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    catalogue.mode = ''
    mode = 0
    mode2 = 0                         ;* The modes of position 33 up, see the M2. constants
+   stdfil.user = @false              ;* STDFIL itself was asked for ($MODE STDFIL): the default file variable is the program's own
+   stdfil.shared = @false            ;* only STDFIL.SHARED was asked for: it is the command level's (set.kernel.modes)
    arg.defaults = ''                 ;* name, position, value of each "name = value" in the SUBROUTINE or FUNCTION statement
    inject.lines = ''                 ;* lines the compiler writes itself, read by GET.LINE ahead of the source
    formlistv.stmt = @false           ;* a FORMLISTV statement is being compiled as SELECTV (st.formlistv)
@@ -879,6 +887,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * Check for $BASIC.OPTIONS record, first in source file, then in VOC
 
    auto.include = ''
+   include.search = ''       ;* 16 Oct 26 - openQM 290: SEARCH list.of.files in $BASIC.OPTIONS; '' is the default, @,syscom
    read voc.rec from src.f, "$BASIC.OPTIONS" else
       read voc.rec from @voc, "$BASIC.OPTIONS" else null
    end
@@ -934,6 +943,12 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
             case s = "LISTING"
                listing.option = @true
+
+            case s = "SEARCH"
+               * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): - openQM 290.  The files an $INCLUDE with no file name looks in, in this order; @ is the file the
+               * source record is in.  Spaces may separate the names as well as commas.
+               include.search = convert(' ', ',', trim(field(voc.rec<1>, ' ', 2, 99)))
+               include.search = change(include.search, ',,', ',')
 
             case s = "MODE"
                * One or more mode names, comma separated, each optionally
@@ -1812,6 +1827,8 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
 
          code.image[pc+1,1] = char(0)
          pc += 1
+
+         if debug and bittest(mode2, M2.DEBUG.EQUATES) then gosub emit.equate.table
       end
 
       * Go back and fill in the object header
@@ -3210,6 +3227,7 @@ proc.directive:
          if upcase(look.ahead.token.string) = "DEFAULT" then
             mode = 0
             mode2 = 0
+            stdfil.user = @false
          end else
             if look.ahead.token = TKN.MINUS then
                reset.mode = @true
@@ -3322,22 +3340,34 @@ process.include:
          goto error
 
       case n = 2
-         if not(is.ctype) then
-            include.file.name = source.file.name
-            include.record.name = field(src, ' ', 2)
-            ignore.not.found = @true
-            gosub open.include.record
-         end else
-            err = @true    ;* Treat as error to force path below
-         end
-
-         if err then            ;* Try SYSCOM
-            err = @false
-            include.file.name = "syscom"
+         * The files named by SEARCH in $BASIC.OPTIONS, in order; @ is the file the source is in (not for a C-type, which has
+         * none).  The default list is @, then SYSCOM.  All but the last that can be tried are allowed not to hold the record.
+         include.record.name = field(src, ' ', 2)
+         search.list = if include.search = '' then '@,syscom' else include.search
+         search.n = dcount(search.list, ',')
+         search.reported = @false      ;* the last attempt said so itself that the record was not there
+         err = @true
+         for si = 1 to search.n
+            search.name = field(search.list, ',', si)
+            if search.name = '@' then
+               if is.ctype then continue
+               include.file.name = source.file.name
+            end else
+               include.file.name = search.name
+            end
             include.error.name = include.record.name
-            ignore.not.found = @false
+            ignore.not.found = (si < search.n)
+            search.reported = not(ignore.not.found)
+            err = @false
             gosub open.include.record
-            if err then return
+            if not(err) then exit
+         next si
+         if err then
+            if not(search.reported) then
+               err.msg = sysmsg(2849, include.record.name) ;* Include record xx not found
+               gosub error
+            end
+            return
          end
 
       case n = 3
@@ -15152,6 +15182,41 @@ emit.debug.header:
    return
 
 *****************************************************************************
+* EMIT.EQUATE.TABLE  -  The equate and $DEFINE tokens of the program, behind the symbol table  (16 Oct 26 dm, QM4 gap 218)
+*
+* $MODE DEBUG.EQUATES on a program compiled for the debugger.  The symbol table ends with a zero byte, which is where every
+* reader of it (the error reporter, the process dump, the debugger's own key 0) stops, so what follows is invisible to them.
+* The debugger reads it with key 7 of its information call.  Layout: the names, a value mark between each, then a field mark,
+* then each token's value in the form the compiler keeps it (a type digit and the text: 0 string, 1 number, 2 matrix element,
+* 3 CHAR(n), 4 variable, 5 @variable, 6 field of a dynamic array variable), a value mark between each, and a zero byte.
+* A token whose text holds a value mark would be cut in two; none can, a CHAR(253) is the type 3 and its number.
+
+emit.equate.table:
+   eq.keys = ''
+   rewind defined.tokens
+   loop
+      eq.s = scan(defined.tokens, btree.keys)
+   until status()
+      eq.keys<-1> = btree.keys(1)         ;* the tree was made without data, so scan gives the key; FIND gives the data
+   repeat
+   eq.names = '' ; eq.values = ''
+   for eq.i = 1 to dcount(eq.keys, @fm)
+      eq.s = find(defined.tokens, eq.keys<eq.i>)
+      eq.names := eq.keys<eq.i> : @vm
+      eq.values := eq.s : @vm
+   next eq.i
+   if eq.names # '' then
+      eq.s = eq.names : @fm : eq.values : char(0)
+      if pc + len(eq.s) >= code.size then
+         code.size += len(eq.s)
+         code.image := str(char(0), len(eq.s))
+      end
+      code.image[pc+1, len(eq.s)] = eq.s
+      pc += len(eq.s)
+   end
+   return
+
+*****************************************************************************
 * EMIT.FINAL.HEADER  -  Update object header at end of compilation
 
 emit.final.header:
@@ -15425,6 +15490,12 @@ set.kernel.modes:
    * The overlap modes reach the run time through OP.STROVL at the call (see intrinsic.common)
    if bitand(mode2, 7) # 0 then str.ovl.used = @true
 
+   * The default file variable (openQM 17, QM4 gap 225): STDFIL gives each program its own, STDFIL.SHARED one for the command level,
+   * and both together are STDFIL.  Every statement tests the STDFIL bit, so STDFIL.SHARED alone turns it on and stdfil.shared
+   * says whose variable it is.
+   stdfil.shared = bittest(mode2, M2.STDFIL.SHARED) and not(stdfil.user)
+   if stdfil.user or stdfil.shared then mode = bitset(mode, M.STDFIL) else mode = bitreset(mode, M.STDFIL)
+
    return
 
 * ======================================================================
@@ -15434,6 +15505,7 @@ set.kernel.modes:
 * In: i = position in mode.names, mode.off = @true to turn it off
 
 set.mode.bit:
+   if i = 32 then stdfil.user = not(mode.off)
    if i <= 32 then
       if mode.off then
          mode = bitreset(mode, i - 1)
@@ -15539,7 +15611,46 @@ convert.pick.file.reference:
 * STDFIL.VAR.LOAD  -  Emit a load of the default file variable
 stdfil.var.load:
    symbol.name = '__STDFIL'
-   goto hidden.var.load     ;* the routine FOR EACH uses for its counters (15 Oct 26 dm: this was a copy of it)
+   if not(stdfil.shared) then
+      goto hidden.var.load     ;* the routine FOR EACH uses for its counters (15 Oct 26 dm: this was a copy of it)
+   end
+   symbol.mode = SYM.SET
+   gosub find.var
+   if symbol.var.no < 0 then gosub stdfil.shared.make
+   goto emit.var.load
+
+* STDFIL.SHARED.MAKE  -  Make the variable of $MODE STDFIL.SHARED (16 Oct 26 dm, QM4 gap 225)
+*
+* openQM's @STDFIL is one variable for every program of a command processor level, and an EXECUTE starts a level of its own
+* and gives the old one back on return.  It is the only element of a named common block, $STDFIL, which every program that
+* uses it binds to by name; op_execute saves and clears the element for the command it starts and op_return puts it back.
+* Out: the symbol is entered as the first and only element of the block, SYMBOL.VAR.NO / COMMON.OFFSET / DIM / COMMON.INDEX set.
+stdfil.shared.make:
+   s = '$STDFIL'
+   locate s in commons<1,1> setting common.index else
+      symbol.var.no = var.count
+      var.count += 1
+      symbol.table<-1> = s
+      commons<1,common.index> = s
+      commons<2,common.index> = symbol.var.no
+      commons<3,common.index> = '1'
+   end
+   symbol.var.no = commons<2,common.index>
+   symbol.common.offset = 1
+   symbol.dim = 0
+   symbol.common.index = common.index
+   locate symbol.name in symbols<1> by 'AL' setting sympos else
+      ins symbol.name before symbols<sympos>
+      ins symbol.var.no : @vm : symbol.common.offset : @vm : symbol.dim : @vm : common.index before symbol.info<sympos>
+      ins '' before symbol.refs<sympos>
+   end
+   commons<4,common.index,1> = symbol.name
+   commons<5,common.index,1> = 0
+   commons<6,common.index,1> = 0
+   symbol.mode = SYM.SET
+   gosub note.symbol.ref
+   symbol.mode = SYM.USE
+   return
 
 * SELLIST.DEFAULT.LOAD  -  Emit a load of the default select list variable  (15 Oct 26 dm, openQM item 85)
 *

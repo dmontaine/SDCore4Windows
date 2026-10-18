@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): $MODE STDFIL.SHARED (QM4 gap 225): EXECUTE saves and clears the $STDFIL common element, k_return() restores it
  * 14 Sep 26 Windows port - EXECUTE calls $cproc, lower case (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -152,6 +153,51 @@ void op_capture() {
 }
 
 /* ======================================================================
+   stdfil_element()  -  The descriptor of $MODE STDFIL.SHARED's default file variable, the only element of the named common
+   block $STDFIL, or NULL when no program has bound the block yet (16 Oct 26, QM4 gap 225).                                */
+
+Private DESCRIPTOR* stdfil_element() {
+  ARRAY_HEADER* a_hdr;
+  STRING_CHUNK* str_hdr;
+
+  for (a_hdr = process.named_common; a_hdr != NULL; a_hdr = a_hdr->next_common) {
+    str_hdr = a_hdr->chunk[0]->descr[0].data.str.saddr;
+    if (strcmp(str_hdr->data, "$STDFIL") == 0)
+      return (a_hdr->used_elements > 1) ? Element(a_hdr, 1) : NULL;
+  }
+  return NULL;
+}
+
+/* ======================================================================
+   stdfil_shared_save()  -  EXECUTE starts a command processor level, and @STDFIL is one variable per level: the caller's is
+   held in its PROGRAM structure and the command finds a fresh one (zero, as a new common block is).  k_return() puts it back
+   when the command ends, whether it stopped or aborted.                                                                    */
+
+Private void stdfil_shared_save() {
+  DESCRIPTOR* d = stdfil_element();
+
+  if (d == NULL)
+    return;
+  process.program.stdfil_saved = *d; /* moved, not copied: the reference the descriptor holds goes with it */
+  process.program.has_stdfil = TRUE;
+  InitDescr(d, INTEGER);
+  d->data.value = 0;
+}
+
+void stdfil_shared_restore() {
+  DESCRIPTOR* d = stdfil_element();
+
+  if (d == NULL) { /* The block has gone (CLEAR COMMON): nothing to give it back to */
+    k_release(&process.program.stdfil_saved);
+  } else {
+    k_release(d); /* whatever the command left */
+    *d = process.program.stdfil_saved;
+  }
+  InitDescr(&process.program.stdfil_saved, UNASSIGNED);
+  process.program.has_stdfil = FALSE;
+}
+
+/* ======================================================================
    op_execute()  -  EXECUTE opcode                                        */
 
 void op_execute() {
@@ -184,6 +230,17 @@ void op_execute() {
   u_char flags;
 
   flags = *(pc++);
+
+  if (prof_mask & PROF_EXECUTE) /* the application event profiler (16 Oct 26): the first 32 characters of the command */
+  {
+    char prof_cmd[32 + 1];
+    int prof_len = k_get_c_string(Element(process.syscom, SYSCOM_XEQ_COMMAND), prof_cmd, 32);
+
+    if (prof_len < 0) /* longer than 32: what was kept is the first 32 */
+      prof_len = (int)strlen(prof_cmd);
+    if (prof_len > 0)
+      prof_event(PROF_EXECUTE, prof_cmd, prof_len);
+  }
 
   if (flags & 0x40) /* STACKLIST (14 Oct 26, openQM 61): keep a copy of list 0 and its remove pointer, restored by op_stklst */
   {
@@ -244,6 +301,9 @@ void op_execute() {
   /* The EXECUTE opcode is simply a CALL to $CPROC.  The compiler cannot
     plant the actual CALL opcode as the called name is illegal for user
     mode programs.                                                      */
+
+  if (!(flags & 0x20)) /* CURRENT.LEVEL stays at the level it was started from */
+    stdfil_shared_save();
 
   k_call("$cproc", 0, NULL, 0);
   process.program.flags |= IS_EXECUTE;

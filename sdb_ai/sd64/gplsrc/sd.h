@@ -321,6 +321,36 @@ void free_common(ARRAY_HEADER * addr);
 void free_array(ARRAY_HEADER * hdr_addr);
 void delete_common(ARRAY_HEADER * ahdr);
 
+/* OP_EXEC.C */
+void stdfil_shared_restore(void);
+
+/* PROFILER.C: the application event profiler (16 Oct 26, QM4 gap 66) */
+#define PROF_CALL     0x0001
+#define PROF_OPEN     0x0002
+#define PROF_READ     0x0004
+#define PROF_WRITE    0x0008
+#define PROF_DELETE   0x0010
+#define PROF_OPENSEQ  0x0020
+#define PROF_READSEQ  0x0040
+#define PROF_WRITESEQ 0x0080
+#define PROF_EXECUTE  0x0100
+#define PROF_OBJECT   0x0200
+#define PROF_TYPES    10
+#define PROF_ALL      0x03FF
+Public int16_t prof_mask init(0);
+void prof_set(int16_t mask);
+void prof_event(int16_t bit, const char* qual, int qlen);
+void prof_dump(DESCRIPTOR* result);
+/* The hooks the opcodes use: nothing at all unless a profile is on. */
+#define ProfEvent(bit, qual, qlen) do { if (prof_mask & (bit)) prof_event((bit), (qual), (qlen)); } while (0)
+#define ProfFile(bit, fv) do { if (prof_mask & (bit)) prof_file_event((bit), (fv)); } while (0)
+void prof_file_event(int16_t bit, FILE_VAR * fvar);
+
+/* OP_LOCK.C: OPTION COMMAND.LEVEL.LOCKS */
+Public bool explicit_close init(FALSE); /* op_close() is releasing the file variable: park_fvar() leaves it alone */
+bool park_fvar(FILE_VAR * fvar);
+void release_parked_fvars(int16_t level);
+
 /* OP_BTREE.C */
 bool bt_get_string(DESCRIPTOR * descr, char ** s);
 void btree_to_string(DESCRIPTOR * descr);

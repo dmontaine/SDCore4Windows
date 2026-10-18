@@ -32,6 +32,7 @@
 #define SYSCOM_ITYPE_MODE            1
 #define SYSCOM_COMMAND               2
 #define SYSCOM_SENTENCE              3
+#define SYSCOM_XEQ_COMMAND           6
 #define SYSCOM_SYSTEM_RETURN_CODE    8
 #define SYSCOM_DATA_QUEUE            9
 #define SYSCOM_SELECT_LIST          12

@@ -251,6 +251,7 @@ struct USER_ENTRY
      #define EVT_MESSAGE     0x0400 /* Send immediate message */
      #define EVT_LICENCE     0x0800 /* Logout from licence expiry */
      #define EVT_REBUILD_LLT 0x1000 /* Rebuild local lock table */
+     #define EVT_PROFILER    0x2000 /* 16 Oct 26: start or stop the application event profiler as prof_request says (K_PROFILER_USER) */
   /* Lock wait data (protected by REC_LOCK_SEM) */
 
    int16_t lockwait_index;       /* 0 = not waiting,
@@ -258,6 +259,8 @@ struct USER_ENTRY
                                       -ve = file table index (file lock) */
    int32_t lockwait_time;        /* time() when lockwait_index became non-zero
                                       (openQM item 487) */
+   int16_t prof_request;         /* 16 Oct 26 dm - PROFILER ON / OFF USER n: set by the administrator's K_PROFILER_USER and read when
+                                      EVT_PROFILER is handled.  0x4000 = start, the low bits the events to log; 0 = stop and report. */
    u_int16_t file_map[1];          /* Count of opens by file.
                                                Protected by FILE_TABLE_LOCK */
  };

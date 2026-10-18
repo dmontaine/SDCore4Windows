@@ -135,6 +135,8 @@ struct PROGRAM {
   DESCRIPTOR stacked_list;
   int32_t stacked_count;
   int32_t stacked_ptr; /* where READNEXT had got to in it: bytes from the start of the list string, -1 for not started */
+  bool has_stdfil;     /* EXECUTE: the $STDFIL common block's element (the @STDFIL of $MODE STDFIL.SHARED) is held here, and the command */
+  DESCRIPTOR stdfil_saved; /* ...runs with a fresh one; k_return() puts it back (16 Oct 26, QM4 gap 225) */
   u_char* saved_c_base;
   int32_t saved_pc_offset;
   char saved_prompt_char;
