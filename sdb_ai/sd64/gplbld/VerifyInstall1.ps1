@@ -59,6 +59,11 @@
 # here, 39 in VerifyInstall2, one in both (verify-elevdoor, by design: its two
 # halves), 11 in neither.
 #
+# 18 Oct 26 - AND ON ADDING verify-carry.ps1 here (RELEASE_1.1 143), RE-DERIVED FROM THE
+# DIRECTORY AND BOTH TABLES (every figure below this line is older): 74 verify-*.ps1, 26 named
+# here, 39 in VerifyInstall2, one in both (verify-elevdoor), TEN in neither (apiwire, deadlock,
+# delacc-xref, doors, doors-admin, realupgrade, sdsyslocal, uninstallchoices, upgrade, vocwrite).
+#
 # 14 Sep 26 - AND verify-deadlock.ps1 (RELEASE_1.1 7) IS IN NEITHER TABLE, ON
 # PURPOSE: it kills an SD session and can leave the install forcing every new
 # session out, so it is a hand-run staged fault followed by a cycle, never a
@@ -844,6 +849,16 @@ $steps = @(
     # 17 rows failed on the two faults and the controls (S0, fixtures, cleanup)
     # stayed green.  The green half is owed to the first cycle after the fix.
     @{ Name = 'verify-trigak.ps1'; P = @{} },
+    # 18 Oct 26 - THE LINUX 1.2-0 AREA 1 CARRY (RELEASE_1.1 143): the 18 sandbox suites of Linux Dev
+    # 1c94d00..ba885ac, run unedited (gplbld\verify-carry-*.py are byte copies, verify-carry-run.py
+    # stands in for Linux's sandbox-fromtree.py) against this install in the caller's own account.
+    # HERE for trigak's reasons: own account, unelevated, no token, no Windows account.  ONE STEP FOR
+    # ALL 18 so that -Only verify-carry covers the lot; verify-carry.ps1 -Suite func-b4,conv-b3 runs
+    # some.  ***NOT YET RUN ON A FRESH INSTALL.***  Plumbing was measured on the stale W1.1-3 install
+    # (controls pass, the new rows fail "no output" because the compiler lacks the feature); the
+    # first cycle after the carry gives the real numbers, and rows that are a Linux mechanism go in
+    # $Known in verify-carry.ps1 with their reason.
+    @{ Name = 'verify-carry.ps1'; P = @{} },
     # 02 Sep 26 - THE AK INDEX WRITE PATH.  PRE_RELEASE_FIXES 112, owner's
     # ruling.  It sits HERE, beside verify-txn and verify-basicfuncs, because
     # the three ask the same kind of question - does the engine itself answer
