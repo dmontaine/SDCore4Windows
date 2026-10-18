@@ -18,6 +18,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 871bc87 (12 Oct 26): COPY.LISTP: the same program, source file defaulting to $savedlists (openQM 72).
 * 20240710 Prior history suppressed
 * END-HISTORY
 *
@@ -32,6 +33,14 @@
 * COPYP {DICT} filename id... {(options}
 *
 * Multiple record ids may be specified
+*
+* COPY.LISTP {{DICT} src.file} {id.list | *} {(options}
+*
+* The same program under another verb (12 Oct 26, openQM 72): it copies saved
+* select lists, so the source file is $savedlists unless one is named. The
+* first word is the source file if there are two or more words before the
+* options and the first of them opens as a file (or is preceded by DICT);
+* otherwise every word is a list name in $savedlists. * is every list.
 *
 * Options:
 *   D  Deletes source records
@@ -170,6 +179,12 @@ parse.command:
    call !parser(PARSER$RESET, 0, @sentence, 0)
    call !parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
+   * COPY.LISTP is this program with the source file defaulting to $savedlists
+   if downcase(token) = 'copy.listp' then
+      gosub parse.list.source
+      goto parse.options
+   end
+
    * Get source file name
 
    call !parser(PARSER$MFILE, token.type, from.file, keyword)
@@ -193,6 +208,7 @@ parse.command:
 
    * Get options
 
+parse.options:
    loop
    while token.type = PARSER$LBR
       call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
@@ -229,6 +245,42 @@ parse.command:
    if token.type # PARSER$END then
       stop sysmsg(2018, token) ;* Unexpected token (%1)
    end
+
+   return
+
+* ======================================================================
+* COPY.LISTP: the source file, if one is named, and the list names. Leaves
+* the parser at the first option, or the end, as the code above does.
+
+parse.list.source:
+   call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   from.file = '$savedlists'
+   words = ''
+
+   if keyword = KW$DICT then
+      from.file.dict.flag = 'DICT'
+      call !parser(PARSER$MFILE, token.type, from.file, keyword)
+      if token.type = PARSER$END then
+         stop sysmsg(2102) ;* File name required
+      end
+      call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   end
+
+   loop
+   until token.type = PARSER$END or token.type = PARSER$LBR
+      words<-1> = token
+      call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   repeat
+
+   if from.file.dict.flag = '' and dcount(words, @fm) > 1 then
+      open '', words<1> to probe.f then
+         close probe.f
+         from.file = words<1>
+         del words<1>
+      end
+   end
+
+   item.list = words
 
    return
 
