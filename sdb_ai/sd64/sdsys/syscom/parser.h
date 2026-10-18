@@ -232,6 +232,7 @@ $define KW$SORTED.SAMPLE  216   ;* 10 Oct 26  1.2-0 (openQM ref 438)
 $define KW$COL.HDR.SPACE  217   ;* 10 Oct 26  1.2-0 (openQM ref 467)
 $define KW$FOR            218   ;* 10 Oct 26  1.2-0 (openQM ref 190)
 $define KW$KEEP           219   ;* 11 Oct 26  1.2-0 (openQM ref 387)
+$define KW$NUM.SUP        220   ;* 11 Oct 26  1.2-0 (openQM ref 242)
 
 * ----------------------------------------------------------------------
 * !PARSER action key values

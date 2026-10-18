@@ -2,6 +2,45 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  DECATALOG, LIST.TERM.TYPES, CT ID.SUP AND NUM.SUP, A SPELLING OF
+           $PRIVATE.CATALOG, AND TWO DEBUGGER COMMANDS.
+
+             DECATALOG name ...    A new command.  Deletes the local
+                                   catalogue entry and the object code it
+                                   points to; DELETE.CATALOG ... LOCAL
+                                   deletes only the entry.  A file name in
+                                   front of the program name is accepted and
+                                   ignored.
+             LIST.TERM.TYPES       A new command.  Lists the terminal types
+                                   SD has a definition for (the names under
+                                   terminfo in the SD directory) and how
+                                   many there are.
+             CT ... ID.SUP         Leaves out the "file record" line.
+             CT ... NUM.SUP        Leaves out the line numbers.
+             CT DICT file item     The default display of a compiled
+                                   dictionary item no longer shows the object
+                                   code after the 15 lines of the item; HEX
+                                   and BINARY still show all of it.
+             $PRIVATE.CATALOG      The VOC record may be spelt this way as
+                                   well as $PRIVATE.CATALOGUE.
+             Debugger BRK          With no line number, lists the
+                                   breakpoints that are set.
+             Debugger blank line   Repeats the last command (not while
+                                   walking an array or the source, where it
+                                   steps on).
+
+           The debugger changes are built but not exercised: they need a
+           terminal.
+
+           What this does not do.  The paragraph IF with EXISTS, IN and
+           NO.CASE, COMO appending or naming another file, the stack editor's
+           .C- and the stacks directory, CATALOGUE RELATIVE and the prefix
+           option, the MAP options, the editor and SHOW and LIST.ITEM items,
+           the WATCH condition, WINDOW, /*, the PTERM and terminfo items,
+           DELETE.COMMON with an exception list, COMPARE.FILES, iOSCOPY,
+           !MULTISORT and a NEWVOC.MODS file are not built: the release notes
+           give no syntax, or the part of SD they change is not here.
+
 18 Oct 26  SET.TRIGGER WORKS AGAIN, AND GAINS ALL; LIST.TRIGGERS; FSTAT'S
            COLUMNS ARE WIDER.
 

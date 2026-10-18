@@ -1,0 +1,119 @@
+* DECAT
+* DECATALOG command
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux bc2f159 (11 Oct 26): 1.2-0 bundle A-10 (openQM ref 576).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   DECATALOG {file.name} name ...
+*
+* Deletes the local catalogue entry (the VOC pointer made by CATALOG ... LOCAL)
+* and the object code it points to.  DELETE.CATALOG ... LOCAL deletes the
+* pointer only and leaves the object file.  The file name, which other
+* systems need, is accepted and ignored: the pointer holds the pathname of
+* the object code.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $decatalog
+$catalog $decat
+
+$include err.h
+$include keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   names = ''
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      names<-1> = token
+   repeat
+
+   * With two names the first is a file name; accept and ignore it
+
+   if dcount(names, @fm) > 1 then del names<1>
+
+   if names = '' then stop sysmsg(3036) ;* Catalogue name required
+
+   @system.return.code = 0
+
+   for i = 1 to dcount(names, @fm)
+      cat.name = downcase(names<i>)
+
+      local.id = cat.name
+      voc.rec = ''
+      readu voc.rec from @voc, local.id else
+         release @voc, local.id
+         local.id = upcase(cat.name)
+         voc.rec = ''
+         readu voc.rec from @voc, local.id else voc.rec = ''
+      end
+
+      if upcase(voc.rec[1,1]) = 'V' and voc.rec<2> = 'CS' then
+         obj.path = voc.rec<3>
+         delete @voc, local.id
+         unload.object
+
+         * The object code goes too
+
+         * The pointer holds the pathname of a record of an object directory
+         * (BP.OUT and the like): open the directory and delete the record.
+
+         if obj.path # '' then
+            slash = index(obj.path, @ds, count(obj.path, @ds))
+            obj.dir = obj.path[1, slash - 1]
+            obj.name = obj.path[slash + 1, 999]
+            deleted = @false
+            if slash > 1 and obj.name # '' then
+               openpath obj.dir to obj.f then
+                  delete obj.f, obj.name
+                  deleted = @true
+               end
+            end
+            if not(deleted) then
+               display sysmsg(12061, obj.path) ;* Cannot delete the object code xx
+               @system.return.code = -ER$NOT.CAT
+            end
+         end
+
+         display sysmsg(3040, cat.name) ;* xx deleted from the local catalogue
+      end else
+         release @voc, local.id
+         display sysmsg(3041, cat.name) ;* xx is not in the local catalogue
+         @system.return.code = -ER$NOT.CAT
+      end
+   next i
+
+   return
+end
+
+* END-CODE

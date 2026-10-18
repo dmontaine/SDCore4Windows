@@ -81,9 +81,11 @@ $include keys.h
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
    private.catalogue = 'cat'
-   read voc.rec from voc, "$PRIVATE.CATALOGUE" then
-      if upcase(voc.rec[1,1]) = 'X' then private.catalogue = voc.rec<2>
+   * 18 Oct 26 Windows port - from Linux bc2f159 (11 Oct 26): $PRIVATE.CATALOG is accepted as well (openQM ref 93)
+   read voc.rec from voc, "$PRIVATE.CATALOGUE" else
+      read voc.rec from voc, "$PRIVATE.CATALOG" else voc.rec = ''
    end
+   if upcase(voc.rec[1,1]) = 'X' then private.catalogue = voc.rec<2>
    dummy = kernel(K$PRIVATE.CATALOGUE, private.catalogue)
 
    err = 0

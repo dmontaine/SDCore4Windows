@@ -60,6 +60,8 @@ equ F.BINARY to 2
    format = if is.dump then F.BINARY else F.DEFAULT
 
    portion = ''
+   id.sup = @false          ;* ID.SUP: no "file record" line
+   num.sup = @false         ;* NUM.SUP: no line numbers
    no.query = @false
    id.list = ''
    lptr = -1
@@ -119,6 +121,13 @@ equ F.BINARY to 2
 
          case keyword = KW$NO.QUERY
             no.query = @true
+
+*        18 Oct 26 Windows port - from Linux bc2f159 (11 Oct 26): (openQM ref 242)
+         case keyword = KW$ID.SUP
+            id.sup = @true
+
+         case keyword = KW$NUM.SUP
+            num.sup = @true
 
          case 1
             id.list<-1> = token
@@ -216,8 +225,18 @@ display.record:
       end
    end
 
-   if len(portion) then display portion : ' ' :
-   print on lptr file.name : ' ' : record.name
+   if not(id.sup) then
+      if len(portion) then display portion : ' ' :
+      print on lptr file.name : ' ' : record.name
+   end
+
+   * A compiled dictionary item carries its object code from field 16 on
+   * (DICT.ITYPE.OBJECT).  The default display leaves it out; HEX and BINARY
+   * show the record as it is (11 Oct 26 dm, openQM ref 373).
+
+   if format = F.DEFAULT and index('ASCI', upcase(rec[1,1]), 1) and dcount(rec, @fm) > 15 then
+      if len(portion) and upcase(portion) = 'DICT' then rec = field(rec, @fm, 1, 15)
+   end
 
    if len(rec) then
       begin case
@@ -238,12 +257,12 @@ display.record:
                if format = F.HEX then s = oconv(s, 'MX0C')
 
                line += 1
-               print on lptr fmt(line, line.fmt) : ': ' :
+               if not(num.sup) then print on lptr fmt(line, line.fmt) : ': ' :
                loop
                   print on lptr s[1,width]
                   s = s[width+1,999999]
                while s # ''
-                  print on lptr space(line.cols + 2) :
+                  if not(num.sup) then print on lptr space(line.cols + 2) :
                repeat
             repeat
 
