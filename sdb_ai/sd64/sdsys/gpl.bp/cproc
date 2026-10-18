@@ -1604,6 +1604,24 @@ proc.sentence.common:      ;* (Note: return to here from int.if)
       * We now either have a VOC entry in voc.rec or it's a null string
       * indicating that there was no VOC entry.
 
+      * 18 Oct 26 Windows port - from Linux bf1fed3 (12 Oct 26): - openQM 1: a PRIVATE VOCABULARY, searched last.  A VOC record $PRIVATE.VOC  (X / file name)
+      * names a file of verb, sentence and paragraph records laid out as the VOC is; a command that is nowhere in
+      * the VOC is looked for there, in the same cases (as typed, lower, upper).  SD's own syntax.
+      if voc.rec = '' then
+         read pv.rec from voc, '$PRIVATE.VOC' then
+            if upcase(pv.rec[1,1]) = 'X' and pv.rec<2> # '' then
+               open pv.rec<2> to pv.f then
+                  read voc.rec from pv.f, verb else
+                     read voc.rec from pv.f, downcase(verb) else
+                        read voc.rec from pv.f, upcase(verb) else null
+                     end
+                  end
+                  close pv.f
+               end
+            end
+         end
+      end
+
 execute.command:
       * Save date and time of start of command for @DATE, @TIME, etc
 

@@ -1933,4 +1933,392 @@ match_found:
   return TRUE;
 }
 
+/* ======================================================================
+   String arithmetic and REGEX()   (12 Oct 26, openQM items 391, 468, 510)
+
+   SADD SSUB SMUL SDIV SCMP work on numbers held as strings of any length,
+   with an optional sign and decimal point: no rounding, no floating point.
+   SDIV gives 15 decimal places, truncated, trailing zeros dropped.  SCMP
+   answers -1, 0 or 1.  A string that is not a number counts as zero.
+
+   REGEX(string, pattern) is 1 if the POSIX extended regular expression
+   matches anywhere in the string, else 0.  A pattern that begins (?i)
+   ignores case.  A pattern that does not compile is a run-time error.     */
+
+#include <regex.h>
+
+typedef struct SNUM {
+  int neg;
+  int scale;   /* digits after the decimal point */
+  int n;       /* digits held */
+  char* d;     /* the digits, most significant first, value = d / 10^scale */
+} SNUM;
+
+/* The bytes of the string at the top of the stack, as a NUL terminated copy (malloc) */
+Private char* top_string_copy(DESCRIPTOR* descr, int* lenp) {
+  STRING_CHUNK* str;
+  char* buf;
+  int len = 0;
+  int pos = 0;
+
+  k_get_string(descr);
+  for (str = descr->data.str.saddr; str != NULL; str = str->next)
+    len += str->bytes;
+  buf = (char*)malloc((size_t)len + 1);
+  if (buf == NULL)
+    return NULL;
+  for (str = descr->data.str.saddr; str != NULL; str = str->next) {
+    memcpy(buf + pos, str->data, (size_t)str->bytes);
+    pos += str->bytes;
+  }
+  buf[len] = '\0';
+  if (lenp != NULL)
+    *lenp = len;
+  return buf;
+}
+
+Private void snum_parse(const char* s, SNUM* v) {
+  const char* p = s;
+  int i;
+  int seen_dot = 0;
+  int bad = 0;
+
+  v->neg = 0;
+  v->scale = 0;
+  v->n = 0;
+  v->d = (char*)malloc(strlen(s) + 2);
+  while (*p == ' ')
+    p++;
+  if (*p == '-') {
+    v->neg = 1;
+    p++;
+  } else if (*p == '+') {
+    p++;
+  }
+  for (; *p != '\0'; p++) {
+    if (*p >= '0' && *p <= '9') {
+      v->d[v->n++] = *p;
+      if (seen_dot)
+        v->scale++;
+    } else if (*p == '.' && !seen_dot) {
+      seen_dot = 1;
+    } else if (*p == ' ') {
+      continue;
+    } else {
+      bad = 1;
+      break;
+    }
+  }
+  if (bad || v->n == 0) {
+    v->n = 1;
+    v->d[0] = '0';
+    v->scale = 0;
+    v->neg = 0;
+  }
+  /* drop leading zeros, keeping at least scale+1 digits */
+  i = 0;
+  while (i < v->n - 1 && v->d[i] == '0' && v->n - i > v->scale + 1)
+    i++;
+  if (i) {
+    memmove(v->d, v->d + i, (size_t)(v->n - i));
+    v->n -= i;
+  }
+}
+
+Private void snum_pad(SNUM* v, int scale) { /* raise the scale by appending zeros */
+  int add = scale - v->scale;
+  if (add > 0) {
+    v->d = (char*)realloc(v->d, (size_t)(v->n + add + 1));
+    memset(v->d + v->n, '0', (size_t)add);
+    v->n += add;
+    v->scale = scale;
+  }
+}
+
+/* compare magnitudes of two digit strings of the same scale */
+Private int mag_cmp(const char* a, int an, const char* b, int bn) {
+  int i = 0;
+  int j = 0;
+  while (i < an - 1 && a[i] == '0')
+    i++;
+  while (j < bn - 1 && b[j] == '0')
+    j++;
+  if ((an - i) != (bn - j))
+    return ((an - i) > (bn - j)) ? 1 : -1;
+  return memcmp(a + i, b + j, (size_t)(an - i)) < 0 ? -1 : (memcmp(a + i, b + j, (size_t)(an - i)) > 0 ? 1 : 0);
+}
+
+/* result = a + b (digit strings of equal scale, no sign); returns malloc'd, length in *rn */
+Private char* mag_add(const char* a, int an, const char* b, int bn, int* rn) {
+  int n = ((an > bn) ? an : bn) + 1;
+  char* r = (char*)malloc((size_t)n + 1);
+  int carry = 0;
+  int i = an - 1;
+  int j = bn - 1;
+  int k = n - 1;
+  while (k >= 0) {
+    int s = carry + ((i >= 0) ? a[i--] - '0' : 0) + ((j >= 0) ? b[j--] - '0' : 0);
+    r[k--] = (char)('0' + s % 10);
+    carry = s / 10;
+  }
+  *rn = n;
+  return r;
+}
+
+/* result = a - b where |a| >= |b| */
+Private char* mag_sub(const char* a, int an, const char* b, int bn, int* rn) {
+  char* r = (char*)malloc((size_t)an + 1);
+  int borrow = 0;
+  int i = an - 1;
+  int j = bn - 1;
+  int k = an - 1;
+  while (k >= 0) {
+    int s = (a[i--] - '0') - borrow - ((j >= 0) ? b[j--] - '0' : 0);
+    if (s < 0) {
+      s += 10;
+      borrow = 1;
+    } else {
+      borrow = 0;
+    }
+    r[k--] = (char)('0' + s);
+  }
+  *rn = an;
+  return r;
+}
+
+/* Build the result string: sign, integer part, point, fraction, trailing zeros of the fraction dropped */
+Private void snum_format(int neg, const char* d, int n, int scale, char* out) {
+  int i = 0;
+  int ip;
+  int fp;
+  char* o = out;
+
+  while (i < n - 1 && d[i] == '0' && n - i > scale + 1)
+    i++;
+  ip = n - i - scale; /* integer digits */
+  fp = scale;
+  /* trim trailing zeros of the fraction */
+  while (fp > 0 && d[n - 1 - (scale - fp)] == '0')
+    fp--;
+  {
+    int nonzero = 0;
+    int k;
+    for (k = i; k < n; k++)
+      if (d[k] != '0')
+        nonzero = 1;
+    if (neg && nonzero)
+      *o++ = '-';
+  }
+  if (ip <= 0)
+    *o++ = '0';
+  else {
+    memcpy(o, d + i, (size_t)ip);
+    o += ip;
+  }
+  if (fp > 0) {
+    int k;
+    *o++ = '.';
+    for (k = 0; k < fp; k++)
+      *o++ = d[i + (ip > 0 ? ip : 0) + k];
+  }
+  *o = '\0';
+}
+
+Private void sarith(int which) { /* 0 add, 1 sub, 2 mul, 3 div, 4 cmp */
+  DESCRIPTOR* a_descr = e_stack - 2;
+  DESCRIPTOR* b_descr = e_stack - 1;
+  char* as;
+  char* bs;
+  SNUM x;
+  SNUM y;
+  char* res = NULL;
+  int rn = 0;
+  int rneg = 0;
+  int rscale = 0;
+  char* out;
+  int cmp;
+
+  bs = top_string_copy(b_descr, NULL);
+  as = top_string_copy(a_descr, NULL);
+  if (as == NULL || bs == NULL) {
+    free(as);
+    free(bs);
+    k_error("Insufficient memory for string arithmetic");
+    return;
+  }
+  snum_parse(as, &x);
+  snum_parse(bs, &y);
+  free(as);
+  free(bs);
+
+  if (which == 4) { /* compare */
+    int sc = (x.scale > y.scale) ? x.scale : y.scale;
+    snum_pad(&x, sc);
+    snum_pad(&y, sc);
+    {
+      int xz = (mag_cmp(x.d, x.n, "0", 1) == 0);
+      int yz = (mag_cmp(y.d, y.n, "0", 1) == 0);
+      if (xz) x.neg = 0;
+      if (yz) y.neg = 0;
+    }
+    if (x.neg != y.neg)
+      cmp = x.neg ? -1 : 1;
+    else {
+      cmp = mag_cmp(x.d, x.n, y.d, y.n);
+      if (x.neg)
+        cmp = -cmp;
+    }
+    free(x.d);
+    free(y.d);
+    k_dismiss();
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = cmp;
+    return;
+  }
+
+  if (which == 0 || which == 1) {
+    int sc = (x.scale > y.scale) ? x.scale : y.scale;
+    int yneg = (which == 1) ? !y.neg : y.neg;
+    snum_pad(&x, sc);
+    snum_pad(&y, sc);
+    rscale = sc;
+    if (x.neg == yneg) {
+      res = mag_add(x.d, x.n, y.d, y.n, &rn);
+      rneg = x.neg;
+    } else if (mag_cmp(x.d, x.n, y.d, y.n) >= 0) {
+      res = mag_sub(x.d, x.n, y.d, y.n, &rn);
+      rneg = x.neg;
+    } else {
+      res = mag_sub(y.d, y.n, x.d, x.n, &rn);
+      rneg = yneg;
+    }
+  } else if (which == 2) {
+    int i;
+    int j;
+    int* t = (int*)calloc((size_t)(x.n + y.n + 1), sizeof(int));
+    res = (char*)malloc((size_t)(x.n + y.n + 1));
+    for (i = x.n - 1; i >= 0; i--)
+      for (j = y.n - 1; j >= 0; j--)
+        t[i + j + 1] += (x.d[i] - '0') * (y.d[j] - '0');
+    for (i = x.n + y.n - 1; i > 0; i--) {
+      t[i - 1] += t[i] / 10;
+      t[i] %= 10;
+    }
+    rn = x.n + y.n;
+    for (i = 0; i < rn; i++)
+      res[i] = (char)('0' + t[i]);
+    free(t);
+    rneg = x.neg != y.neg;
+    rscale = x.scale + y.scale;
+  } else { /* divide: 15 decimal places */
+    int sc = (x.scale > y.scale) ? x.scale : y.scale;
+    int places = 15;
+    char* num;
+    int nn;
+    char* rem;
+    int remn = 0;
+    int i;
+
+    snum_pad(&x, sc);
+    snum_pad(&y, sc);
+    if (mag_cmp(y.d, y.n, "0", 1) == 0) {
+      free(x.d);
+      free(y.d);
+      k_error("Division by zero in SDIV()");
+      return;
+    }
+    nn = x.n + places;
+    num = (char*)malloc((size_t)nn + 1);
+    memcpy(num, x.d, (size_t)x.n);
+    memset(num + x.n, '0', (size_t)places);
+    res = (char*)malloc((size_t)nn + 1);
+    rem = (char*)calloc((size_t)(y.n + 3), 1);
+    rem[0] = '0';
+    remn = 1;
+    for (i = 0; i < nn; i++) {
+      int q = 0;
+      char* r2;
+      int r2n;
+      /* rem = rem * 10 + digit */
+      rem = (char*)realloc(rem, (size_t)remn + 2);
+      rem[remn++] = num[i];
+      while (mag_cmp(rem, remn, y.d, y.n) >= 0) {
+        r2 = mag_sub(rem, remn, y.d, y.n, &r2n);
+        free(rem);
+        rem = r2;
+        remn = r2n;
+        q++;
+      }
+      res[i] = (char)('0' + q);
+    }
+    rn = nn;
+    free(num);
+    free(rem);
+    rneg = x.neg != y.neg;
+    rscale = places;
+  }
+
+  out = (char*)malloc((size_t)rn + 8);
+  snum_format(rneg, res, rn, rscale, out);
+  free(res);
+  free(x.d);
+  free(y.d);
+  k_dismiss();
+  k_dismiss();
+  k_put_c_string(out, e_stack);
+  e_stack++;
+  free(out);
+}
+
+void op_sadd() { sarith(0); }
+void op_ssub() { sarith(1); }
+void op_smul() { sarith(2); }
+void op_sdiv() { sarith(3); }
+void op_scmp() { sarith(4); }
+
+void op_regex() {
+  /* Stack:   top  pattern        below  string */
+  char* pat;
+  char* str;
+  regex_t re;
+  int flags = REG_EXTENDED | REG_NOSUB;
+  int rc;
+  int result = 0;
+  char* p;
+
+  pat = top_string_copy(e_stack - 1, NULL);
+  str = top_string_copy(e_stack - 2, NULL);
+  if (pat == NULL || str == NULL) {
+    free(pat);
+    free(str);
+    k_error("Insufficient memory for REGEX()");
+    return;
+  }
+  p = pat;
+  if (strncmp(p, "(?i)", 4) == 0) {
+    flags |= REG_ICASE;
+    p += 4;
+  }
+  rc = regcomp(&re, p, flags);
+  if (rc != 0) {
+    char msg[200];
+    char text[300];
+    regerror(rc, &re, msg, sizeof(msg));
+    snprintf(text, sizeof(text), "REGEX(): %s", msg);
+    free(pat);
+    free(str);
+    k_error(text);
+    return;
+  }
+  result = (regexec(&re, str, 0, NULL, 0) == 0) ? 1 : 0;
+  regfree(&re);
+  free(pat);
+  free(str);
+  k_dismiss();
+  k_dismiss();
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = result;
+}
+
 /* END-CODE */
