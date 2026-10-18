@@ -1,0 +1,56 @@
+* _EXPAND
+* EXPAND() function recursive code: read the record a link names
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): New (data collections: linked collections).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+* Called by the kernel (op_coll.c, EXPAND()) to read the record that a link in
+* a data collection names.  A link is "filename:id" (the filename is up to the
+* first colon), or just "id" when a file variable was given to EXPAND().  This
+* returns the record as READ gives it, which is a collection for a data
+* collection file, and a null string if there is no such file or record.  The
+* kernel decides whether what comes back can be used.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.symbols
+$no.xref
+$recursive
+
+subroutine expand(file.name, id, fvar)
+
+   if len(file.name) then
+      open file.name to f else return value ''
+   end else
+      f = fvar
+   end
+
+   read rec from f, id else return value ''
+
+   return value rec
+end
+
+* END-CODE

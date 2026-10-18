@@ -36,6 +36,7 @@
  *    CF_JBOOLEAN JBOOLEAN(x)                    [x, fn]            -> boolean
  *    CF_JNULL    JNULL()                        [fn]               -> null
  *    CF_JTYPE    JTYPE(x)                       [x, fn]            -> text
+ *    CF_EXPAND   EXPAND(c{path} {, filevar})    [c, p1..pn, n, filevar or 0, fn] -> 0 / 1
  *    CF_SETOP    c{path} += value (and -= *= /= :=)
  *                                               [ADDR, p1..pn, n, value, op, fn]
  *
@@ -93,6 +94,7 @@
 #define CF_JNULL 16
 #define CF_JTYPE 17
 #define CF_SETOP 18
+#define CF_EXPAND 19
 
 #define COLL_ALLOC_TAG 160
 #define JSON_MAX_DEPTH 500
@@ -295,6 +297,85 @@ void op_coll() {
       k_dismiss();
       k_pop(1); /* The matrix, an ADDR */
       break;
+
+    case CF_EXPAND: {
+      /* EXPAND(c{path} {, filevar}): the element holds a link, "filename:id" (or ":id" with a file
+         variable), and is replaced by the collection that record holds.  True if it now is one. */
+      DESCRIPTOR fv;
+      char* link;
+      int32_t linklen;
+      char* colon;
+      int32_t flen;
+      bool ok = FALSE;
+
+      descr = e_stack - 1;
+      while (descr->type == ADDR)
+        descr = descr->data.d_addr;
+      fv = *descr;
+      descr = e_stack - 2;
+      GetInt(descr);
+      n = descr->data.value;
+      comps = descr - n;
+      rootd = comps - 1;
+      root = need_coll(rootd);
+      nseg = split_path(comps, n, &segs, &bufs);
+      if (nseg < 0) {
+        free_path(segs, bufs, n);
+        k_error(sysmsg(12127), "");
+      }
+      parent = NULL;
+      pos = 0;
+      exists = FALSE;
+      rc = walk(root, segs, nseg, FALSE, &parent, &pos, &exists);
+      if (rc == 0 && exists) {
+        ent = &parent->e[pos];
+        if (ent->d.type == COLL) {
+          ok = TRUE; /* Already joined on */
+        } else if (ent->d.type == STRING && ent->tag != CT_NULL) {
+          link = chunks_to_buffer(ent->d.data.str.saddr, &linklen);
+          colon = memchr(link, ':', linklen);
+          if (colon != NULL) {
+            flen = (int32_t)(colon - link);
+            if (flen > 0 || fv.type == FILE_REF) {
+              DESCRIPTOR res;
+
+              *(e_stack++) = str_descr(link, flen);
+              *(e_stack++) = str_descr(colon + 1, linklen - flen - 1);
+              if (flen == 0) {
+                *(e_stack) = fv;
+                k_incr_refct(e_stack);
+                e_stack++;
+              } else {
+                InitDescr(e_stack, STRING);
+                (e_stack++)->data.str.saddr = NULL;
+              }
+              k_recurse(pcode_expand, 3); /* EXPAND(FILE.NAME, ID, FVAR) */
+              res = *(--e_stack);
+
+              /* The stack may have moved; the collection is as it was, but walk again for the element */
+              rc = walk(root, segs, nseg, FALSE, &parent, &pos, &exists);
+              if (res.type == COLL && rc == 0 && exists) {
+                ent = &parent->e[pos];
+                k_release(&ent->d);
+                ent->d = res;
+                ent->tag = CT_PLAIN;
+                ok = TRUE;
+              } else {
+                k_release(&res);
+              }
+            }
+          }
+          k_free(link);
+        }
+      }
+      free_path(segs, bufs, n);
+      for (i = 0; i < n + 3; i++)
+        k_dismiss(); /* The file variable (or 0), the count, the path and the collection */
+      InitDescr(&result, INTEGER);
+      result.data.value = ok ? 1 : 0;
+      *(e_stack++) = result;
+      break;
+    }
 
     case CF_JNULL:
       InitDescr(&result, STRING);

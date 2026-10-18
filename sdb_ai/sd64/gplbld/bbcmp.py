@@ -1173,6 +1173,7 @@ OP_CROP      =  53008  # CF10
 OP_FIND      =  53009  # CF11
 OP_CHANGE    =  53010  # CF12
 OP_VSLICE    =  53011  # CF13
+OP_COLL      =  53220  # CFE4  13 Oct 26: data collections (read side only is compiled here)
 OP_FINDSTR   =  53012  # CF14
 OP_SUBSTRNG  =  53013  # CF15
 OP_SWAPCASE  =  53014  # CF16
@@ -6410,6 +6411,41 @@ def in_insert():
     in_ins_rep()
     return
     
+def in_jbuild():
+    """JBUILD(c): a collection as JSON text (function 14 of OP_COLL, no mode)"""
+    exprf()
+    emit_numeric_load(0)
+    emit_numeric_load(14)
+    intrinsic_common()
+    return
+
+def in_jtype():
+    """JTYPE(x): the kind of a value (data collections, function 17 of OP_COLL)"""
+    exprf()
+    emit_numeric_load(17)
+    intrinsic_common()
+    return
+
+def emit_collection_path():
+    """c{name, name}{name}: one path of n components, then n.  Mirrors bcomp's routine of the same name."""
+    count = 0
+    while True:
+        get_token()                       # Skip the {
+        while True:
+            exprf()
+            count += 1
+            if look_ahead_token == TKN_COMMA:
+                get_token()
+            else:
+                break
+        if look_ahead_token != TKN_RCBR:
+            error('Right curly bracket not found where expected')
+        get_token()                       # Skip the }
+        if look_ahead_token != TKN_LCBR:
+            break
+    emit_numeric_load(count)
+    return
+
 def in_itype():
     """itype expression"""
     global intrinsic_stack
@@ -6836,6 +6872,8 @@ intrinsics = {
    "INSERT"          : [OP_INSERT     ,in_insert],      # INSERT
    "INT"             : [OP_INT        ,in_one],         # INT
    "ITYPE"           : [OP_ITYPE      ,in_itype],       # ITYPE
+   "JBUILD"          : [OP_COLL       ,in_jbuild],      # JBUILD  13 Oct 26: for _trans, which reads data collections
+   "JTYPE"           : [OP_COLL       ,in_jtype],       # JTYPE
    "KEYCODE"         : [OP_KEYCODE    ,in_keyin],       # KEYCODE
    "KEYIN"           : [OP_KEYIN      ,in_keyin],       # KEYIN
    "KEYINC"          : [OP_KEYINC     ,in_keyin],       # KEYINC
@@ -9107,6 +9145,11 @@ def get_expr_item_again():
                 error('Right square bracket not found where expected')
 
             get_token()    # Skip bracket
+
+        elif look_ahead_token == TKN_LCBR:  # Data collection element: c{a, b}{c}  13 Oct 26
+            emit_collection_path()
+            emit_numeric_load(3)           # Function: get
+            emit_simple(OP_COLL)
 
         else:
             break

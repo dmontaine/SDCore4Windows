@@ -2,6 +2,38 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  LINKED COLLECTIONS AND TRANS().
+
+             ok = EXPAND(c{'path'})            join the record a link names
+             ok = EXPAND(c{'path'}, filevar)   ...with a default file
+             TRANS('file', id, 'ITEM', 'X')    an E-type item, by name
+             TRANS(file, @ID, ITEM, 'X')       ...or in an I-type
+             @RECORD{'a/b'}                    in an I-type, of a collection
+
+           A link is a string in a collection of the form "filename:id", or
+           ":id" when EXPAND() is given a file variable.  EXPAND() reads that
+           record, which should be a data collection file's, and puts the
+           collection it gives where the link was.  It returns 1 if the element
+           is now a collection (including when it already was) and 0 if it is
+           not a link, the file or the record is missing, or the record is not a
+           collection, leaving the element as it was.  The file name is up to the
+           first colon, so an id may have colons in it.  What is joined on is a
+           copy; writing the parent back is up to the program.
+
+           TRANS() on a data collection file accepts an E-type dictionary item
+           for its third argument, and a program may now name any D or E-type
+           item as a string: TRANS('CLIENTS', id, 'NAME', 'X').  In an I-type
+           the item's name can be written without quotes as before.  A multivalued
+           (asterisk) path comes back as it does from any TRANS(), with the
+           marks lowered one level.  A D-type item with a field number gives a
+           null string on such a file, and field -1 gives the whole record as JSON.
+
+           In an I-type, a name that is an E-type item gives that element of the
+           record, and a collection element reference can be written after any
+           value: @RECORD{'city'}, @RECORD{'items', 1, 'p'}.  The query commands
+           now keep the collection as @RECORD for a collection file, so an I-type
+           sees it as a whole.
+
 18 Oct 26  DATA COLLECTION FILES.
 
              CREATE.FILE name COLLECTION       a file whose records are collections

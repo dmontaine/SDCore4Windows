@@ -363,6 +363,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    unary.minus = @false
 
    trans.stack = ""
+   collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
 
    * Label table and jump opcode control data
    * _Tn = skip label for TOTAL() function
@@ -1325,6 +1326,15 @@ have.field.rec:
 
                   gosub emit.field.load
 
+               case type = 'E'
+                  * 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): - an element of a data collection: the record is a collection, so this is
+                  * @RECORD{path}.  Field 2 is the path.
+                  n = SYSCOM.QPROC.RECORD ; gosub emit.ldsys
+                  opcode.string = field.rec<dict.loc> ; gosub emit.string.load
+                  n = 1 ; gosub emit.numeric.load       ;* One path component
+                  n = 3 ; gosub emit.numeric.load       ;* Function: get
+                  opcode.byte = OP.COLL ; gosub emit.simple
+
                case type = 'A' or type = 'S' or type = 'C'
                   * A/S-type item with correlative or C-type
                   * Unlike nested I-types, A/S-types that reference other
@@ -2010,6 +2020,12 @@ parse.as.dictionary.name:
                      n = trans.dict.rec<2>
                      gosub emit.numeric.load
 
+                  case trans.type = 'E'
+                     * 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): - an E-type item of a data collection file: the third argument is a path,
+                     * marked with a leading { so that _trans tells it from the object code of an I-type.
+                     opcode.string = '{' : trans.dict.rec<2>
+                     gosub emit.string.load
+
                   case (trans.type = 'A' or trans.type = 'S') and trans.dict.rec<dict.a.correlative> = ''
                      * 10 Oct 26 dm, openQM ref 182: an A or S item with no
                      * correlative is a field position, as a D-type is.
@@ -2265,6 +2281,14 @@ intrinsic.end:
       end
    end
 
+   * Check for a data collection element: item{name, name}{name}  (13 Oct 26 dm)
+
+   if look.ahead.token = tkn.lcbr then
+      gosub emit.collection.path
+      n = 3 ; gosub emit.numeric.load       ;* Function: get
+      opcode.byte = op.coll ; gosub emit.simple
+   end
+
    * Check for substring extraction
 
    if look.ahead.token = tkn.lsqbr then
@@ -2299,6 +2323,35 @@ intrinsic.end:
       gosub emit.simple
    end
 
+   return
+
+*****************************************************************************
+* EMIT.COLLECTION.PATH  -  The {name, name}{name} after a data collection
+*
+* All the groups are one path (see bcomp's routine of the same name): the
+* components are pushed in order and then their number.  The next token is the
+* first {; afterwards we are past the last }.
+
+emit.collection.path:
+   ins 0 before collection.count.stack<1>
+   loop
+      gosub get.token         ;* Skip the {
+      loop
+         gosub expr
+         collection.count.stack<1> += 1
+      while look.ahead.token = tkn.comma
+         gosub get.token
+      repeat
+      if look.ahead.token # tkn.rcbr then
+         err.msg = sysmsg(12129) ;* Right curly bracket not found where expected
+         goto error
+      end
+      gosub get.token         ;* Skip the }
+   while look.ahead.token = tkn.lcbr
+   repeat
+   n = collection.count.stack<1>
+   del collection.count.stack<1>
+   gosub emit.numeric.load
    return
 
 *****************************************************************************

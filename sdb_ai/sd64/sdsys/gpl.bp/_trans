@@ -39,7 +39,39 @@ subroutine trans(file.name, ids, field.no, code, lower.marks)
 $include dictdict.h
 $include syscom.h
 
-   is.itype = not(num(field.no))
+   * 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): - a field.no that starts with { is the path of an E-type item of a data collection file.
+   * The I-type compiler makes that from an item name it finds in the dictionary.  A program calling TRANS()
+   * may give the name itself, a short string of name characters (object code is binary): it is looked up in
+   * the dictionary of the file here, and an E-type item gives its path and a D-type item its field number.
+   is.name = @false
+   if not(num(field.no)) and field.no[1,1] # '{' and len(field.no) > 0 and len(field.no) < 64 then
+      is.name = (convert('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.$%_@-', '', field.no) = '')
+   end
+   if is.name then
+      name.item = field.no
+      field.no = ''
+      if file.name[1,5] # 'DICT ' then
+         open 'DICT', file.name to name.dict then
+            read name.rec from name.dict, name.item else
+               read name.rec from name.dict, downcase(name.item) else
+                  read name.rec from name.dict, upcase(name.item) else name.rec = ''
+               end
+            end
+            close name.dict
+            name.type = upcase(name.rec[1,1])
+            begin case
+               case name.type = 'E'
+                  field.no = '{' : name.rec<2>
+               case name.type = 'D' and num(name.rec<2>)
+                  field.no = name.rec<2>
+            end case
+         end
+      end
+      if field.no = '' then return value ''
+   end
+
+   is.path = (field.no[1,1] = '{')
+   is.itype = not(num(field.no)) and not(is.path)
 
    locate file.name in trans.files<1> setting pos then
       file = trans.fvars(pos)
@@ -73,14 +105,32 @@ $include syscom.h
 
       if len(id) then
          read rec from file, id then
-            if is.itype then
+            if is.path then
+               partial.result = ''
+               rec.type = jtype(rec)
+               if rec.type = 'collection' or rec.type = 'array' then partial.result = rec{field.no[2,99999]}
+               if lower.marks then partial.result = lower(partial.result)
+            end else if is.itype then
                stacked.id = @id ; @id = id               ;* 0332
                stacked.record = @record ; @record = rec  ;* 0332
                partial.result = itype(field.no)          ;* 0242
                @id = stacked.id                          ;* 0332
                @record = stacked.record                  ;* 0332
             end else
+               rec.type = jtype(rec)
                begin case
+                  case rec.type = 'collection' or rec.type = 'array'
+                     * 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): - a record of a data collection file has no fields: the id for field 0,
+                     * the JSON text for the whole record (-1), nothing for a field number
+                     begin case
+                        case field.no = 0
+                           partial.result = id
+                        case field.no < 0
+                           partial.result = jbuild(rec)
+                        case 1
+                           partial.result = ''
+                     end case
+
                   case field.no > 0
                      if lower.marks then
                         partial.result = lower(rec<field.no>)

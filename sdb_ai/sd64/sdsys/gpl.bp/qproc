@@ -184,6 +184,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    * Query processor @ variables
 
    qproc.record = ""
+   qproc.view = ""               ;* 13 Oct 26: the fields the items use (the record itself, but for a collection file)
    qproc.id = ""
    qproc.ni = 0                  ;* Normally records; values if exploding
    qproc.nd = 0
@@ -1798,7 +1799,7 @@ pct.id:
 pct.field:
                if new.record then gosub read.record
                if not(record.found) then goto skip.record
-               s = qproc.record<item.detail(pct.item)>
+               s = qproc.view<item.detail(pct.item)>
                goto pct.sum
 
 pct.itype:
@@ -1818,7 +1819,7 @@ pct.ni:
 pct.bytes:
                if new.record then gosub read.record
                if not(record.found) then goto skip.record
-               s = len(qproc.record)
+               s = len(qproc.view)
                goto pct.sum
 
 pct.sum:
@@ -1850,7 +1851,7 @@ by.id:
 by.field:
                if new.record then gosub read.record
                if not(record.found) then goto skip.record
-               by.item(i) = qproc.record<item.detail(sort.item)>
+               by.item(i) = qproc.view<item.detail(sort.item)>
                continue
 
 by.itype:
@@ -1870,7 +1871,7 @@ by.ni:
 by.bytes:
                if new.record then gosub read.record
                if not(record.found) then goto skip.record
-               by.item(i) = len(qproc.record)
+               by.item(i) = len(qproc.view)
             next i
 
             * If the QUERY.NO.CASE option is set, translate all sort keys
@@ -4254,7 +4255,9 @@ read.record:
          record.found = @false
       end
    end
-   if record.found and coll.file then gosub make.coll.view
+   if record.found then
+      if coll.file then gosub make.coll.view else qproc.view = qproc.record
+   end
    qproc.id = id
    new.record = @false
 
@@ -4263,16 +4266,16 @@ read.record:
 * ======================================================================
 * MAKE.COLL.VIEW  -  A collection record as the fields of the E-type items in use
 *
-* qproc.record holds the collection just read.  It is kept as qproc.coll and
-* qproc.record becomes a dynamic array with field j holding the element at
-* coll.paths<j>, which add.field set up when it met the E-type item.  An
-* asterisk path gives a multivalued field.
+* qproc.record (the @RECORD an I-type sees) stays the collection just read.
+* qproc.view, which every other item is taken from, is a dynamic array with
+* field j holding the element at coll.paths<j>, which add.field set up when it
+* met the E-type item.  An asterisk path gives a multivalued field.  For any
+* other file qproc.view is just the record.
 
 make.coll.view:
-   qproc.coll = qproc.record
-   qproc.record = ''
+   qproc.view = ''
    for coll.j = 1 to dcount(coll.paths, @fm)
-      qproc.record<coll.j> = qproc.coll{coll.paths<coll.j>}
+      qproc.view<coll.j> = qproc.record{coll.paths<coll.j>}
    next coll.j
    return
 
@@ -4772,7 +4775,7 @@ want.record:
          if new.record then gosub read.record
          if record.found then
             s = qproc.record
-            if coll.file then s = jbuild(qproc.coll)   ;* 13 Oct 26: a collection is searched as its JSON text
+            if coll.file then s = jbuild(s)   ;* 13 Oct 26: a collection is searched as its JSON text
             if search.ids then s = id : @fm : s     ;* ALL: the id is searched too
             if no.case then s = upcase(s)
             begin case
@@ -4813,7 +4816,7 @@ want.record:
 show.search.lines:
    print id
    sl.rec = qproc.record
-   if coll.file then sl.rec = jbuild(qproc.coll)   ;* 13 Oct 26: a collection is shown as its JSON text
+   if coll.file then sl.rec = jbuild(sl.rec)   ;* 13 Oct 26: a collection is shown as its JSON text
    for sl.n = 1 to dcount(sl.rec, @fm)
       sl.line = sl.rec<sl.n>
       sl.t = sl.line
@@ -5773,7 +5776,7 @@ get.id:
 
 get.field:
    if new.record then gosub read.record
-   item = qproc.record<item.detail(item.index)>
+   item = qproc.view<item.detail(item.index)>
    return
 
 get.itype:
@@ -5791,7 +5794,7 @@ get.ni:
 
 get.bytes:
    if new.record then gosub read.record
-   item = len(qproc.record)
+   item = len(qproc.view)
    return
 
 * =============================================================================
@@ -5826,7 +5829,7 @@ list.id:
 list.field:
       if new.record then gosub read.record
       if not(record.found) then goto record.to.list.not.found
-      s = qproc.record<item.detail(item.to.list)>
+      s = qproc.view<item.detail(item.to.list)>
       if explode then
          if (item.assoc(item.to.list) = exploded.assoc and exploded.assoc) ~
          or (not(exploded.assoc) ~
@@ -5876,7 +5879,7 @@ list.ni:
 list.bytes:
       if new.record then gosub read.record
       if not(record.found) then goto record.to.list.not.found
-      data.rec<list.index> = len(qproc.record)
+      data.rec<list.index> = len(qproc.view)
       record.found = @true
    next list.index
 
@@ -6205,7 +6208,9 @@ report.record: ;* Enter here from SHOW.ACCUMULATIONS
          s = field(disp.rec,@fm,2,999999)
          if reformat.append.record then
             * @RECORD: the source record follows, unconverted and unformatted
-            s = if no.of.list.items > 1 then s : @fm : qproc.record else qproc.record
+            rf.rec = qproc.record
+            if coll.file then rf.rec = jbuild(rf.rec)   ;* 13 Oct 26: a collection goes in as its JSON text
+            s = if no.of.list.items > 1 then s : @fm : rf.rec else rf.rec
          end
          write s to reformat.f, id
       end
@@ -7186,7 +7191,7 @@ show.page:
                   gosub read.record.to.show
                   if not(record.found) then continue
                end
-               data = rec<item.detail(item.to.list)>
+               data = show.view<item.detail(item.to.list)>
 
             case type = ITYPE.ITEM
                if not(record.found) then
@@ -7321,8 +7326,15 @@ show.page:
    return
 
 read.record.to.show:
-   read rec from data.f, id then record.found = @true
-   else  ;* Error reading record - remove from list
+   read rec from data.f, id then
+      record.found = @true
+      show.view = rec
+      if coll.file then     ;* 13 Oct 26: the fields of the E-type items, as make.coll.view makes them
+         qproc.record = rec
+         gosub make.coll.view
+         show.view = qproc.view
+      end
+   end else  ;* Error reading record - remove from list
       del s.list<rec.idx>
       selection.map = selection.map[1, rec.idx-1] : selection.map[rec.idx+1, 999999]
       records.selected -= 1

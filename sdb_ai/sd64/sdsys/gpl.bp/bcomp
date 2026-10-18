@@ -520,6 +520,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "EQS"             ; intrinsic.opcodes<-1> = OP.EQS
    intrinsics<-1> = "EREPLACE"        ; intrinsic.opcodes<-1> = OP.EREPLACE   ;* 12 Oct 26 dm - openQM 472
    intrinsics<-1> = "EXP"             ; intrinsic.opcodes<-1> = OP.EXP
+   intrinsics<-1> = "EXPAND"          ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - linked data collections
    intrinsics<-1> = "EXTRACT"         ; intrinsic.opcodes<-1> = OP.EXTRACT
    intrinsics<-1> = "FIELD"           ; intrinsic.opcodes<-1> = OP.FIELD
    intrinsics<-1> = "FIELDS"          ; intrinsic.opcodes<-1> = OP.FIELDS
@@ -4049,6 +4050,7 @@ end
                       in.two,         ;* EQS
                       in.change,      ;* EREPLACE
                       in.one,         ;* EXP
+                      in.expand,      ;* EXPAND
                       in.extract,     ;* EXTRACT
                       in.field,       ;* FIELD
                       in.field,       ;* FIELDS
@@ -4351,6 +4353,25 @@ in.jnull:
 in.jtype:
             gosub exprf
             n = 17 ; gosub emit.numeric.load
+            goto intrinsic.common
+
+*** EXPAND(c{path} {, filevar})  - join the record a link names onto its parent (function 19)
+*** The first argument is a data collection variable and the element that holds the link, not the value of it.
+in.expand:
+            gosub simple.var.reference
+            if err then return
+            if look.ahead.token # TKN.LCBR then
+               err.msg = sysmsg(12131) ;* Left curly bracket not found where expected
+               goto error
+            end
+            gosub emit.collection.path
+            if look.ahead.token = TKN.COMMA then
+               gosub get.token
+               gosub exprf
+            end else
+               n = 0 ; gosub emit.numeric.load
+            end
+            n = 19 ; gosub emit.numeric.load
             goto intrinsic.common
 
 *** ENUMERATE(c)
