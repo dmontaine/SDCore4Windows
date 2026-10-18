@@ -10,6 +10,8 @@
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux 3d67141 (13 Oct 26): New. COLLECTION(), element get, set and delete, ELEMENT.EXISTS()
  *               and ENUMERATE().
+ * 18 Oct 26 Windows port - from Linux 2e043bc (13 Oct 26): Arrays: MAT(), MAT(matrix {, max}), MAT target = MAT c{path},
+ *               INMAT(c{path}), INS value AS c{path}, and asterisk paths.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -24,11 +26,19 @@
  *    CF_DEL      DEL c{path}                    [ADDR, p1..pn, n, fn]
  *    CF_EXISTS   ELEMENT.EXISTS(c, path)        [c, p1..pn, n, fn] -> 0 / 1
  *    CF_ENUM     ENUMERATE(c)                   [c, fn]            -> names
+ *    CF_MATNEW   MAT()                          [fn]               -> array
+ *    CF_MATCOPY  MAT(matrix, max)               [ADDR, max, fn]    -> array
+ *    CF_MATGET   MAT target = MAT c{path}       [ADDR, array, fn]
+ *    CF_INMAT    INMAT(c{path})                 [array, fn]        -> count
+ *    CF_INS      INS value AS c{path}           [value, ADDR, p1..pn, n, fn]
  *
  *    A path component that is a string may hold several names separated by
  *    slashes; an integer (or a string of digits met in an array) selects an
  *    array element.  The components are one path whatever the way it was
  *    written: c{'a','b'}, c{'a'}{'b'} and c{'a/b'} are the same element.
+ *    In a GET a component of * stands for every element of an array and the
+ *    result is a dynamic array: values for the first *, subvalues for a
+ *    second.
  *
  * END-DESCRIPTION
  *
@@ -46,6 +56,11 @@
 #define CF_DEL 5
 #define CF_EXISTS 6
 #define CF_ENUM 7
+#define CF_MATNEW 8
+#define CF_MATCOPY 9
+#define CF_MATGET 10
+#define CF_INMAT 11
+#define CF_INS 12
 
 #define COLL_ALLOC_TAG 160
 
@@ -58,6 +73,13 @@ typedef struct {
   char buf[16];  /* Text of an integer component */
 } COLL_SEG;
 
+/* A growing buffer for the dynamic array an asterisk path returns */
+typedef struct {
+  char* b;
+  int32_t len;
+  int32_t cap;
+} COLL_BUF;
+
 Private COLL_HEADER* coll_new(bool is_array);
 Private COLL_HEADER* coll_copy(COLL_HEADER* src);
 Private void coll_free_entry(COLL_ENTRY* e);
@@ -65,10 +87,17 @@ Private bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos);
 Private void coll_insert(COLL_HEADER* h, int32_t pos);
 Private void coll_remove(COLL_HEADER* h, int32_t pos);
 Private COLL_HEADER* need_coll(DESCRIPTOR* d);
+Private COLL_HEADER* need_array(DESCRIPTOR* d);
 Private char* chunks_to_buffer(STRING_CHUNK* s, int32_t* len);
 Private int split_path(DESCRIPTOR* comps, int n, COLL_SEG** segs_out, char*** bufs_out);
 Private int walk(COLL_HEADER* root, COLL_SEG* seg, int nseg, bool create, COLL_HEADER** parent, int32_t* pos, bool* exists);
 Private DESCRIPTOR value_of(COLL_ENTRY* e);
+Private void set_entry_name(COLL_ENTRY* ent, COLL_SEG* seg);
+Private void free_path(COLL_SEG* segs, char** bufs, int n);
+Private bool matrix_span(DESCRIPTOR* d, ARRAY_HEADER** hdr, int32_t* first, int32_t* count);
+Private void buf_add(COLL_BUF* b, char* s, int32_t len);
+Private void buf_value(COLL_BUF* b, COLL_ENTRY* e);
+Private void star_get(COLL_BUF* b, COLL_HEADER* cur, COLL_SEG* seg, int nseg, int i, int star);
 
 /* ======================================================================
    coll_deref()  -  Drop a reference, freeing the collection at zero      */
@@ -99,14 +128,23 @@ void op_coll() {
   COLL_SEG* segs = NULL;
   char** bufs = NULL;
   DESCRIPTOR* comps;
+  DESCRIPTOR* value = NULL;
+  DESCRIPTOR* rootd;
   int32_t func;
   int32_t n;
   int32_t i;
   int32_t pos;
+  int32_t max;
+  int32_t first;
+  int32_t count;
+  ARRAY_HEADER* ahdr;
   bool exists;
+  bool star;
   int nseg;
   int rc;
+  int drop;
   COLL_ENTRY* ent;
+  COLL_BUF cb;
 
   descr = e_stack - 1;
   GetInt(descr);
@@ -117,6 +155,12 @@ void op_coll() {
     case CF_NEW:
       InitDescr(&result, COLL);
       result.data.coll = coll_new(FALSE);
+      *(e_stack++) = result;
+      break;
+
+    case CF_MATNEW:
+      InitDescr(&result, COLL);
+      result.data.coll = coll_new(TRUE);
       *(e_stack++) = result;
       break;
 
@@ -147,58 +191,156 @@ void op_coll() {
       *(e_stack++) = result;
       break;
 
+    case CF_INMAT:
+      /* A name that is not there reads as a null string: no elements */
+      descr = e_stack - 1;
+      while (descr->type == ADDR)
+        descr = descr->data.d_addr;
+      InitDescr(&result, INTEGER);
+      if (descr->type == STRING && descr->data.str.saddr == NULL)
+        result.data.value = 0;
+      else
+        result.data.value = need_coll(descr)->count;
+      k_dismiss();
+      *(e_stack++) = result;
+      break;
+
+    case CF_MATCOPY:
+      descr = e_stack - 1;
+      GetInt(descr);
+      max = descr->data.value;
+      descr = e_stack - 2;
+      while (descr->type == ADDR)
+        descr = descr->data.d_addr;
+      if (!matrix_span(descr, &ahdr, &first, &count))
+        k_error("A dimensioned matrix is required by MAT()");
+      if (max > 0 && count > max)
+        count = max;
+      InitDescr(&result, COLL);
+      root = coll_new(TRUE);
+      result.data.coll = root;
+      for (i = 0; i < count; i++) {
+        coll_insert(root, i);
+        ent = &root->e[i];
+        descr = Element(ahdr, first + i);
+        if (descr->type == UNASSIGNED || descr->type == ADDR) {
+          InitDescr(&ent->d, STRING);
+          ent->d.data.str.saddr = NULL;
+        } else {
+          ent->d = *descr;
+          ent->d.flags = 0;
+          IncrRefCt(&ent->d);
+        }
+      }
+      k_pop(2); /* The matrix is an ADDR and the maximum an integer */
+      *(e_stack++) = result;
+      break;
+
+    case CF_MATGET:
+      root = need_array(e_stack - 1);
+      descr = e_stack - 2;
+      while (descr->type == ADDR)
+        descr = descr->data.d_addr;
+      if (!matrix_span(descr, &ahdr, &first, &count))
+        k_error("A dimensioned matrix is required by MAT");
+      if (count > root->count)
+        count = root->count;
+      for (i = 0; i < count; i++) {
+        descr = Element(ahdr, first + i);
+        Release(descr);
+        *descr = value_of(&root->e[i]);
+      }
+      k_dismiss();
+      k_pop(1); /* The matrix, an ADDR */
+      break;
+
     case CF_GET:
     case CF_EXISTS:
     case CF_DEL:
     case CF_SET:
-      /* Value to store, for SET */
-      descr = e_stack - 1;
+    case CF_INS:
+      /* Find the pieces on the stack, whichever way round this function has them */
+      drop = 0;
+      value = NULL;
       if (func == CF_SET) {
-        if (descr->type == ADDR)
-          k_get_value(descr);
+        value = e_stack - 1;
+        if (value->type == ADDR)
+          k_get_value(value);
         descr = e_stack - 2;
+        drop = 1; /* The value is dismissed with the rest */
+      } else {
+        descr = e_stack - 1;
       }
       GetInt(descr);
       n = descr->data.value;
       comps = descr - n;
-      if (func == CF_SET) {
-        descr = e_stack - 3 - n; /* ADDR to the collection variable */
-        while (descr->type == ADDR)
-          descr = descr->data.d_addr;
-        root = need_coll(descr);
-      } else if (func == CF_DEL) {
-        descr = e_stack - 2 - n;
-        while (descr->type == ADDR)
-          descr = descr->data.d_addr;
-        root = need_coll(descr);
-      } else {
-        root = need_coll(e_stack - 2 - n);
+      rootd = comps - 1; /* The collection, or an ADDR to the variable that holds it */
+      if (func == CF_INS) {
+        value = rootd - 1; /* INS compiles the value first */
+        if (value->type == ADDR)
+          k_get_value(value);
       }
+      while (rootd->type == ADDR)
+        rootd = rootd->data.d_addr;
+      root = need_coll(rootd);
 
       nseg = split_path(comps, n, &segs, &bufs);
       if (nseg < 0) {
-        for (i = 0; i < n; i++)
-          if (bufs[i] != NULL)
-            k_free(bufs[i]);
-        k_free(segs);
-        k_free(bufs);
+        free_path(segs, bufs, n);
         k_error(sysmsg(12127), "");
+      }
+
+      star = FALSE;
+      for (i = 0; i < nseg; i++)
+        if (segs[i].len == 1 && segs[i].p[0] == '*')
+          star = TRUE;
+      if (star && func != CF_GET) {
+        free_path(segs, bufs, n);
+        k_error(sysmsg(12127), "*");
       }
 
       process.status = 0;
       parent = NULL;
       pos = 0;
       exists = FALSE;
-      rc = walk(root, segs, nseg, (func == CF_SET), &parent, &pos, &exists);
+
+      if (star) {
+        /* ELEMENT.EXISTS and the rest never reach here; this is a GET */
+        int stars = 0;
+        for (i = 0; i < nseg; i++)
+          if (segs[i].len == 1 && segs[i].p[0] == '*')
+            stars++;
+        if (stars > 2) {
+          free_path(segs, bufs, n);
+          k_error(sysmsg(12127), "*");
+        }
+        cb.b = (char*)k_alloc(COLL_ALLOC_TAG, 64);
+        cb.len = 0;
+        cb.cap = 64;
+        star_get(&cb, root, segs, nseg, 0, 0);
+        InitDescr(&result, STRING);
+        result.data.str.saddr = NULL;
+        if (cb.len > 0) {
+          ts_init(&result.data.str.saddr, cb.len + 1);
+          ts_copy(cb.b, cb.len);
+          ts_terminate();
+        }
+        k_free(cb.b);
+        for (i = 0; i < n + 1; i++)
+          k_dismiss();
+        k_dismiss(); /* The collection */
+        *(e_stack++) = result;
+        free_path(segs, bufs, n);
+        break;
+      }
+
+      rc = walk(root, segs, nseg, (func == CF_SET || func == CF_INS), &parent, &pos, &exists);
       if (rc < 0) {
         char shown[64];
         int32_t m = (segs[0].len < 60) ? segs[0].len : 60;
         memcpy(shown, segs[0].p, m);
         shown[m] = '\0';
-        for (i = 0; i < n; i++)
-          k_free(bufs[i]);
-        k_free(segs);
-        k_free(bufs);
+        free_path(segs, bufs, n);
         k_error(sysmsg(rc == -2 ? 12128 : 12127), shown);
       }
 
@@ -208,19 +350,15 @@ void op_coll() {
             /* Take the value before dropping the collection, which may be the
                last reference to it */
             result = value_of(&parent->e[pos]);
-            for (i = 0; i < n + 1; i++)
-              k_dismiss();
-            k_dismiss(); /* The collection */
-            *(e_stack++) = result;
           } else {
             process.status = ER_NOT_FOUND;
-            for (i = 0; i < n + 1; i++)
-              k_dismiss();
-            k_dismiss();
             InitDescr(&result, STRING);
             result.data.str.saddr = NULL;
-            *(e_stack++) = result;
           }
+          for (i = 0; i < n + 1; i++)
+            k_dismiss();
+          k_dismiss(); /* The collection */
+          *(e_stack++) = result;
           break;
 
         case CF_EXISTS:
@@ -244,40 +382,42 @@ void op_coll() {
           break;
 
         case CF_SET:
-          descr = e_stack - 1; /* The value */
-          if (!exists) {
+        case CF_INS:
+          if (!exists || (func == CF_INS && parent->is_array)) {
+            /* A new element; in an array INS opens a gap, so the rest move up */
             coll_insert(parent, pos);
             ent = &parent->e[pos];
-            if (!parent->is_array) {
-              ent->name = (char*)k_alloc(COLL_ALLOC_TAG, segs[nseg - 1].len + 1);
-              memcpy(ent->name, segs[nseg - 1].p, segs[nseg - 1].len);
-              ent->name[segs[nseg - 1].len] = '\0';
-              ent->name_len = segs[nseg - 1].len;
-            }
+            if (!parent->is_array)
+              set_entry_name(ent, &segs[nseg - 1]);
           } else {
             ent = &parent->e[pos];
             k_release(&ent->d);
           }
-          if (descr->type == UNASSIGNED) {
+          if (value->type == UNASSIGNED) {
             InitDescr(&ent->d, STRING);
             ent->d.data.str.saddr = NULL;
           } else {
-            ent->d = *descr;
+            ent->d = *value;
             ent->d.flags = 0;
             IncrRefCt(&ent->d);
           }
           ent->tag = CT_PLAIN;
-          k_dismiss(); /* The value */
-          for (i = 0; i < n + 1; i++)
-            k_dismiss();
-          k_pop(1); /* The ADDR */
+          if (func == CF_SET) {
+            k_dismiss(); /* The value */
+            for (i = 0; i < n + 1; i++)
+              k_dismiss();
+            k_pop(1); /* The ADDR */
+          } else {
+            for (i = 0; i < n + 1; i++)
+              k_dismiss();
+            k_pop(1);   /* The ADDR */
+            k_dismiss(); /* The value, which is below it */
+          }
           break;
       }
+      (void)drop;
 
-      for (i = 0; i < n; i++)
-        k_free(bufs[i]);
-      k_free(segs);
-      k_free(bufs);
+      free_path(segs, bufs, n);
       break;
 
     default:
@@ -294,6 +434,45 @@ Private COLL_HEADER* need_coll(DESCRIPTOR* d) {
   if (d->type != COLL)
     k_error(sysmsg(12126));
   return d->data.coll;
+}
+
+Private COLL_HEADER* need_array(DESCRIPTOR* d) {
+  COLL_HEADER* h = need_coll(d);
+
+  if (!h->is_array)
+    k_error(sysmsg(12130));
+  return h;
+}
+
+/* ======================================================================
+   matrix_span()  -  The elements of a dimensioned matrix
+
+   Gives the header, the offset of element 1 and the number of elements,
+   row by row for a two dimensional one.  False if d is not a matrix.      */
+
+Private bool matrix_span(DESCRIPTOR* d, ARRAY_HEADER** hdr, int32_t* first, int32_t* count) {
+  PMATRIX_HEADER* pm;
+
+  switch (d->type) {
+    case ARRAY:
+      *hdr = d->data.ahdr_addr;
+      if ((*hdr)->flags & AH_PICK_STYLE) {
+        *first = 0;
+        *count = (*hdr)->used_elements;
+      } else {
+        *first = 1; /* Element 0 is not part of the matrix */
+        *count = (*hdr)->used_elements - 1;
+      }
+      return TRUE;
+
+    case PMATRIX:
+      pm = d->data.pmatrix;
+      *hdr = pm->com_descr->data.ahdr_addr;
+      *first = pm->base_offset;
+      *count = (pm->cols == 0) ? pm->rows : pm->cols * pm->rows;
+      return TRUE;
+  }
+  return FALSE;
 }
 
 /* ======================================================================
@@ -347,6 +526,13 @@ Private void coll_free_entry(COLL_ENTRY* e) {
     k_free(e->name);
   e->name = NULL;
   k_release(&e->d);
+}
+
+Private void set_entry_name(COLL_ENTRY* ent, COLL_SEG* seg) {
+  ent->name = (char*)k_alloc(COLL_ALLOC_TAG, seg->len + 1);
+  memcpy(ent->name, seg->p, seg->len);
+  ent->name[seg->len] = '\0';
+  ent->name_len = seg->len;
 }
 
 /* ======================================================================
@@ -427,6 +613,19 @@ Private char* chunks_to_buffer(STRING_CHUNK* s, int32_t* len) {
   buf[total] = '\0';
   *len = total;
   return buf;
+}
+
+Private void free_path(COLL_SEG* segs, char** bufs, int n) {
+  int i;
+
+  if (bufs != NULL) {
+    for (i = 0; i < n; i++)
+      if (bufs[i] != NULL)
+        k_free(bufs[i]);
+    k_free(bufs);
+  }
+  if (segs != NULL)
+    k_free(segs);
 }
 
 /* ======================================================================
@@ -564,12 +763,11 @@ Private int walk(COLL_HEADER* root, COLL_SEG* seg, int nseg, bool create, COLL_H
         *exists = FALSE;
         return 0;
       }
+      if (cur->is_array)
+        return -1; /* Only the last name may add an element to an array */
       coll_insert(cur, p);
       ent = &cur->e[p];
-      ent->name = (char*)k_alloc(COLL_ALLOC_TAG, seg[i].len + 1);
-      memcpy(ent->name, seg[i].p, seg[i].len);
-      ent->name[seg[i].len] = '\0';
-      ent->name_len = seg[i].len;
+      set_entry_name(ent, &seg[i]);
       InitDescr(&ent->d, COLL);
       ent->d.data.coll = coll_new(FALSE);
     }
@@ -605,6 +803,89 @@ Private DESCRIPTOR value_of(COLL_ENTRY* e) {
     IncrRefCt(&r);
   }
   return r;
+}
+
+/* ======================================================================
+   Asterisk paths
+
+   star_get() follows seg[i] onward from cur.  Every element an asterisk
+   covers is followed in turn and the results are put one after another in
+   the buffer, with a value mark between those of the first asterisk and a
+   subvalue mark between those of the second.  A way that does not lead to
+   a value gives a null string in its place.                               */
+
+Private void buf_add(COLL_BUF* b, char* s, int32_t len) {
+  if (b->len + len + 1 > b->cap) {
+    int32_t nc = b->cap * 2;
+    char* nb;
+    while (nc < b->len + len + 1)
+      nc *= 2;
+    nb = (char*)k_alloc(COLL_ALLOC_TAG, nc);
+    memcpy(nb, b->b, b->len);
+    k_free(b->b);
+    b->b = nb;
+    b->cap = nc;
+  }
+  memcpy(b->b + b->len, s, len);
+  b->len += len;
+}
+
+/* The text of an element that holds a value */
+
+Private void buf_value(COLL_BUF* b, COLL_ENTRY* e) {
+  DESCRIPTOR t;
+  char* s;
+  int32_t len;
+
+  if (e->tag == CT_NULL || e->d.type == COLL || e->d.type == UNASSIGNED)
+    return;
+  t = e->d;
+  t.flags = 0;
+  IncrRefCt(&t);
+  GetString(&t);
+  if (t.data.str.saddr != NULL) {
+    s = chunks_to_buffer(t.data.str.saddr, &len);
+    buf_add(b, s, len);
+    k_free(s);
+  }
+  k_release(&t);
+}
+
+Private void star_get(COLL_BUF* b, COLL_HEADER* cur, COLL_SEG* seg, int nseg, int i, int star) {
+  int32_t k;
+  int32_t p;
+  bool last = (i == nseg - 1);
+  COLL_ENTRY* ent;
+  char mark;
+
+  if (seg[i].len == 1 && seg[i].p[0] == '*') {
+    if (!cur->is_array)
+      return;
+    mark = (star == 0) ? VALUE_MARK : SUBVALUE_MARK;
+    for (k = 0; k < cur->count; k++) {
+      if (k)
+        buf_add(b, &mark, 1);
+      ent = &cur->e[k];
+      if (last)
+        buf_value(b, ent);
+      else if (ent->d.type == COLL)
+        star_get(b, ent->d.data.coll, seg, nseg, i + 1, star + 1);
+    }
+    return;
+  }
+
+  if (cur->is_array) {
+    if (!seg[i].numeric || seg[i].num < 1 || seg[i].num > cur->count)
+      return;
+    p = seg[i].num - 1;
+  } else if (!coll_find(cur, seg[i].p, seg[i].len, &p)) {
+    return;
+  }
+  ent = &cur->e[p];
+  if (last)
+    buf_value(b, ent);
+  else if (ent->d.type == COLL)
+    star_get(b, ent->d.data.coll, seg, nseg, i + 1, star);
 }
 
 /* END-CODE */

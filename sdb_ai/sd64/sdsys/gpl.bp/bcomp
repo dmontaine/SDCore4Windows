@@ -440,7 +440,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * error handler removes field 2 if it is present. Therefore, it is
    * not necessary to tidy up in error paths.
 
-   reserved.names = "BEFORE"          ;* 0265
+   reserved.names = "AS"              ;* 13 Oct 26 dm - INS value AS c{path}
+   reserved.names<1,-1> = "BEFORE"    ;* 0265
    reserved.names<1,-1> = "BY"
    reserved.names<1,-1> = "DO"
    reserved.names<1,-1> = "ELSE"
@@ -561,6 +562,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "LOCATE"          ; intrinsic.opcodes<-1> = OP.LOCATEF
    intrinsics<-1> = "LOWER"           ; intrinsic.opcodes<-1> = OP.LOWER
    intrinsics<-1> = "LTS"             ; intrinsic.opcodes<-1> = OP.LTS
+   intrinsics<-1> = "MAT"             ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - arrays in data collections
    intrinsics<-1> = "MATCHFIELD"      ; intrinsic.opcodes<-1> = OP.MATCHFLD
    intrinsics<-1> = "MATSTR"          ; intrinsic.opcodes<-1> = OP.MATSTR   ;* 12 Oct 26 dm - openQM 509
    intrinsics<-1> = "MAX"             ; intrinsic.opcodes<-1> = OP.MAX
@@ -4070,6 +4072,7 @@ end
                       in.locate,      ;* LOCATE
                       in.one,         ;* LOWER
                       in.two,         ;* LTS
+                      in.mat,         ;* MAT
                       in.three,       ;* MATCHFIELD
                       in.matstr,      ;* MATSTR
                       in.two,         ;* MAX
@@ -4259,6 +4262,30 @@ in.collection:
             end
             goto intrinsic.common
 
+*** MAT()  MAT(matrix)  MAT(matrix, max)  - an array for a data collection: empty, or the elements of a
+*** dimensioned matrix (row by row if it has two dimensions), at most max of them if max is not zero.
+in.mat:
+            if look.ahead.token = TKN.RBR then
+               n = 8 ; gosub emit.numeric.load
+            end else
+               gosub get.token
+               symbol.name = token.string
+               gosub find.var
+               if (symbol.var.no < 0) or (symbol.dim = 0) then
+                  err.msg = sysmsg(2931) ;* Dimensioned matrix required
+                  goto error
+               end
+               gosub emit.var.load
+               if look.ahead.token = TKN.COMMA then
+                  gosub get.token
+                  gosub exprf
+               end else
+                  n = 0 ; gosub emit.numeric.load
+               end
+               n = 9 ; gosub emit.numeric.load
+            end
+            goto intrinsic.common
+
 *** ELEMENT.EXISTS(c, name)
 in.element.exists:
             gosub exprf
@@ -4443,17 +4470,31 @@ in.indices:
 in.inmat:
             if look.ahead.token # TKN.NAME then goto intrinsic.common
 
+            * INMAT(c{path}): the number of elements of an array in a data collection  13 Oct 26 dm
+            if tokens(token.index + 1) = TKN.LCBR then
+               gosub exprf
+               goto inmat.collection
+            end
+
             gosub get.token
             symbol.name = token.string
             gosub find.var
-            if (symbol.var.no < 0) or (symbol.dim = 0) then
+            if symbol.var.no < 0 then
                err.msg = sysmsg(2860) ;* Matrix name required
                goto error
             end
             gosub emit.var.load
 
+            * A variable that is not a matrix holds a data collection array
+            if symbol.dim = 0 then goto inmat.collection
+
             opcode.byte = OP.INMATA
             gosub emit.simple
+            goto intrinsic.end
+
+inmat.collection:
+            n = 11 ; gosub emit.numeric.load
+            opcode.byte = OP.COLL ; gosub emit.simple
             goto intrinsic.end
 
 *** ITYPE()   1 or 2 args. 2 arg version only allowed in internal mode
@@ -8781,6 +8822,20 @@ st.inputcsv:
 st.ins:
    gosub exprf
 
+   * INS value AS c{path}: put an element into a data collection, in an array opening a gap  13 Oct 26 dm
+   if u.look.ahead.token.string = "AS" then
+      gosub get.token          ;* Skip AS
+      gosub simple.lvar.reference ; if err then return
+      if look.ahead.token # TKN.LCBR then
+         err.msg = sysmsg(12131) ;* Left curly bracket not found where expected
+         goto error
+      end
+      gosub emit.collection.path ; if err then return
+      n = 12 ; gosub emit.numeric.load
+      opcode.byte = OP.COLL ; gosub emit.simple
+      return
+   end
+
    if u.look.ahead.token.string # "BEFORE" then
       err.msg = sysmsg(2929) ;* BEFORE not found where expected
       goto error
@@ -9459,7 +9514,15 @@ st.mat:
 
    if u.look.ahead.token.string = "MAT" then   ;* Matrix to matrix copy
       gosub get.token            ;* Skip MAT
-      
+
+      * MAT target = MAT c{path}: copy an array out of a data collection  13 Oct 26 dm
+      if look.ahead.token = TKN.NAME and tokens(token.index + 1) = TKN.LCBR then
+         gosub exprf
+         n = 10 ; gosub emit.numeric.load
+         opcode.byte = OP.COLL ; gosub emit.simple
+         return
+      end
+
       * Get name of source variable
 
       gosub get.token

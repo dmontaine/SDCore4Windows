@@ -2,6 +2,38 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  ARRAYS IN DATA COLLECTIONS.
+
+             c{'list'} = MAT()                 an empty array
+             c{'list'} = MAT(matrix)           a copy of a dimensioned matrix
+             c{'list'} = MAT(matrix, 10)       at most 10 elements of it
+             c{'list', n} = value              set element n (or add n+1)
+             c{'list', -1} = value             add on the end
+             INS value AS c{'list', n}         open a gap at n
+             DEL c{'list', n}                  take n out, renumbering
+             MAT target = MAT c{'list'}        copy it into a matrix
+             INMAT(c{'list'})                  how many elements it has
+             c{'orders/*/qty'}                 one value from every element
+
+           An array in a collection is numbered from 1 and has no gaps:
+           element n can only be set when 1 to n-1 exist, and a negative
+           position adds on the end.  A matrix of two dimensions is copied
+           row by row.  An element of a matrix nobody assigned becomes a null
+           string.  INS and DEL renumber everything after them.  INS on a
+           collection that is not an array just puts the element in, and
+           INS MAT() AS c{'list'} puts in an empty array.
+
+           An asterisk in a path stands for every element of an array, and
+           the answer is a dynamic array: one value for each element, and
+           with a second asterisk one subvalue for each element of the array
+           below.  An element that does not have the item leaves its place
+           empty.  Up to two asterisks may be used and only to read; setting
+           or deleting through one is refused.
+
+           AS is now a reserved word in expressions (it ends the value in
+           INS value AS ...), so a variable called AS can no longer follow a
+           value as a format.
+
 18 Oct 26  DATA COLLECTIONS, FIRST PART.  This is a kernel change, so it needs
            a rebuild.
 
