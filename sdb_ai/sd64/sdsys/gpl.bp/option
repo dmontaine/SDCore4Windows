@@ -88,6 +88,13 @@ $include int$keys.h
    opt<-1> = 'NO.DATE.WRAPPING||3131'
    opt<-1> = 'PROC.A||3132'
    opt<-1> = 'SPACE.MCT||3133'
+   * 10 Oct 26  1.2-0, openQM refs 140 299 412 165 205 403.  Same order as options.h.
+   opt<-1> = 'QUERY.STRING.COMP||12045'
+   opt<-1> = 'QUERY.STR.COMP.ALL||12046'
+   opt<-1> = 'QUERY.SORT.NO.CASE||12047'
+   opt<-1> = 'BACKSLASH.NOT.QUOTE||12048'
+   opt<-1> = 'DEFAULT.MV||12049'
+   opt<-1> = 'CLEAR.SELECT||12050'
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
    * Shortcuts

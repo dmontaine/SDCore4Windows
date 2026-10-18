@@ -428,6 +428,13 @@
       $define OPT.QUERY.PRIORITY.AND  30 ;* AND has priority over OR operator in query processor
       $define OPT.NO.DATE.WRAPPING    31 ;* Don't roll overlarge day number into next month
       $define OPT.PROC.A              32 ;* Treat Proc A command as in D3
+      $define OPT.SPACE.MCT           33 ;* Spaces in MCT conversion (kernel)
+      $define OPT.QUERY.STRING.COMP   34 ;* QPROC: EQ and NE are string comparisons
+      $define OPT.QUERY.STR.COMP.ALL  35 ;* QPROC: all relations on right aligned data are string comparisons
+      $define OPT.QUERY.SORT.NO.CASE  36 ;* QPROC: sorts are case insensitive
+      $define OPT.BACKSLASH.NOT.QUOTE 37 ;* Command parser: backslash is not a quote
+      $define OPT.DEFAULT.MV          38 ;* QPROC: C, D, I items with blank S/M are multivalued
+      $define OPT.CLEAR.SELECT        39 ;* Clear select list 0 after a command that did not make it
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

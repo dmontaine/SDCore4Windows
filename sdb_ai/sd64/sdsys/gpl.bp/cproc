@@ -306,6 +306,8 @@ restart.cproc:
    pa.line = 0
    dim pa.save(5)
    pa.depth = 0
+   cs.depth = 0                  ;* CLEAR.SELECT: command nesting depth...
+   cs.was.active = @false        ;* ...and was list 0 active before it
    unwinding = 0   ;* 1 = unwind current paragraph, 2 = unwind all
    echo.paragraph = @false
 
@@ -1589,6 +1591,14 @@ execute.command:
       cproc.date = date()
       cproc.time = time()
 
+      * CLEAR.SELECT (10 Oct 26 dm, openQM ref 403): note whether list 0 is
+      * active before the command, so that a list the command makes is kept.
+      * Only the outermost command counts; a command that is left by a path
+      * that does not return through the end of this routine leaves the depth
+      * raised and so never clears anything, which is the safe way to fail.
+      cs.depth += 1
+      if cs.depth = 1 then cs.was.active = selectinfo(0, 1)
+
 reparse:
       voc.entry.type = upcase(voc.rec<1>)
 
@@ -1906,6 +1916,16 @@ exit.command:
          end
       end
    repeat
+
+   * CLEAR.SELECT: the command has finished.  If a select list was waiting
+   * for it, it has had its chance, so clear it.
+
+   cs.depth -= 1
+   if cs.depth <= 0 then
+      cs.depth = 0
+      if cs.was.active and option(OPT.CLEAR.SELECT) then clearselect 0
+      cs.was.active = @false
+   end
 
    at.sentence = sentence.stack<1>
    del sentence.stack<1>

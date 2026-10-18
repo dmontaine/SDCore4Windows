@@ -2,6 +2,40 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SIX NEW OPTION NAMES FOR COMPATIBILITY WITH OTHER MULTIVALUE SYSTEMS
+           (openQM compatibility).
+
+           All are off, as every option is until OPTION turns it on, so an
+           existing application sees no change.  OPTION with no name lists them.
+           (The kernel's table of options grew by six, so this release must be
+           rebuilt, not just re-catalogued.)
+
+             QUERY.STRING.COMP   In a query, EQ and NE always compare as
+                                 strings.  By default "1", "1.0" and "01" are
+                                 all equal to 1, as numbers.
+             QUERY.STR.COMP.ALL  The same for every relation (LT, GT ...) on
+                                 data from a right aligned dictionary item,
+                                 which otherwise compare as numbers when both
+                                 sides look like numbers.
+             QUERY.SORT.NO.CASE  Sorts in the query processor ignore case.
+                                 QUERY.NO.CASE already did this and more
+                                 (it makes selection ignore case too).
+             BACKSLASH.NOT.QUOTE Accepted and has no effect here: a backslash
+                                 on a command line is a path separator and
+                                 is always an ordinary character.
+             DEFAULT.MV          A dictionary item whose single/multivalue
+                                 flag is blank is treated as multivalued.
+             CLEAR.SELECT        Select list 0 that was waiting when a command
+                                 started is cleared when that command
+                                 finishes, unless the command made it.
+
+           What this does not do.  FORCE.RELOAD, QUERY.MERGE.PRINT,
+           PAGINATE.ON.HEADING, QUERY.FOOTER.PAUSE, NUMERIC.EXPONENT,
+           DIR.SEL.OMIT.HIDDEN, INHERIT.MFILE.PATH and the OPTION D3 and
+           MVBASE shortcuts are not built; each needs a change in the kernel
+           or the print system, or the release notes do not say which options
+           the shortcuts set.
+
 18 Oct 26  THE QUERY PROCESSOR: TWELVE ADDITIONS FROM OTHER MULTIVALUE SYSTEMS
            (openQM compatibility).
 

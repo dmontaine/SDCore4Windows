@@ -66,7 +66,13 @@
 #define OptNoDateWrapping    31
 #define OptProcA             32
 #define OptSpaceMCT          33
-#define NumOptions           34
+#define OptQueryStringComp   34   /* 10 Oct 26  1.2-0 openQM refs 140, 299,  */
+#define OptQueryStrCompAll   35   /*            412, 165, 205, 403: every    */
+#define OptQuerySortNoCase   36   /*            new option is read by BASIC  */
+#define OptBackslashNotQuote 37   /*            only (gpl.bp/qproc, parser,  */
+#define OptDefaultMV         38   /*            cproc), so the C side only   */
+#define OptClearSelect       39   /*            needs room for the flags.    */
+#define NumOptions           40
 
 Public char option_flags[NumOptions];
 

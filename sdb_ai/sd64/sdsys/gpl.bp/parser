@@ -64,6 +64,7 @@ $include syscom.h
 $include parser.h
 $include keys.h
 $include err.h
+$include int$keys.h
 
    voc.rec = ''
    quote.char = ''
@@ -81,7 +82,7 @@ rescan:
          c = parser.sentence[1, 1]
 
          begin case
-            case (c = '"') or (c = "'") or (c = "\")      ;* Quoted string
+            case (c = '"') or (c = "'") or (c = "\" and not(option(OPT.BACKSLASH.NOT.QUOTE)))      ;* Quoted string
                j = index(parser.sentence, c, 2)
                if j = 0 then stop sysmsg(2055)  ;* Unpaired string quote
                type = PARSER$STRING
@@ -123,7 +124,10 @@ rescan:
                * NO BACKSLASH HERE, and it is not an omission.  On this
                * platform a backslash is a path separator, so splitting at one
                * truncates every native path typed at TCL - CREATE.ACCOUNT
-               * OTHER takes its pathname through this parser.
+               * OTHER takes its pathname through this parser.  Linux splits
+               * at a backslash unless OPTION BACKSLASH.NOT.QUOTE is on
+               * (openQM ref 165); here the option is accepted and has no
+               * effect, because the answer is always "do not split".
 
 
                type = PARSER$TOKEN
@@ -237,7 +241,7 @@ rescan:
          c = parser.sentence[1, 1]
 
          begin case
-            case (c = '"') or (c = "'") or (c = "\")      ;* Quoted string
+            case (c = '"') or (c = "'") or (c = "\" and not(option(OPT.BACKSLASH.NOT.QUOTE)))      ;* Quoted string
                j = index(parser.sentence, c, 2)
                if j = 0 then stop sysmsg(2055)  ;* Unpaired string quote
 

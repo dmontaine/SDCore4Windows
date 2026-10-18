@@ -1863,7 +1863,7 @@ by.bytes:
             * If the QUERY.NO.CASE option is set, translate all sort keys
             * to uppercase
 
-            if option(OPT.QUERY.NO.CASE) then
+            if option(OPT.QUERY.NO.CASE) or option(OPT.QUERY.SORT.NO.CASE) then
                for i = 1 to no.of.sort.items
                   by.item(i) = upcase(by.item(i))
                next i
@@ -3898,6 +3898,10 @@ check.field.modifiers:
                         item.conv(item.index) = dict.rec<dict.conv>
                         s = dict.rec<dict.assoc> ; gosub add.item.association
                         item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M"
+                        * DEFAULT.MV: a blank S/M flag means multivalued (10 Oct 26 dm, ref 205)
+                        if dict.rec<dict.s.m>[1,1] = '' and option(OPT.DEFAULT.MV) then
+                           item.multivalued(item.index) = @true
+                        end
                         item.totals(item.index) = 0
                         item.breakpoint(item.index) = 0
                         item.flags(item.index) = 0
@@ -4276,6 +4280,7 @@ check.selection:
       item1.conv = item.conv(item.index)
       item1.type = item.type(item.index)
       item1.mv = item.multivalued(item.index)
+      item1.right = (item.justification(item.index) = 'R')
       gosub get.item
       item1 = item
 
@@ -4296,6 +4301,24 @@ check.selection:
                item1 = upcase(item1)
                item2 = upcase(item2)
             end
+         end
+      end
+
+      * QUERY.STRING.COMP makes EQ and NE string comparisons; QUERY.STR.COMP.ALL
+      * does the same for every relation on right aligned data (10 Oct 26 dm,
+      * openQM refs 140 and 299).  BASIC compares two numeric strings as
+      * numbers, so both sides are given a letter in front, which leaves the
+      * order and the equality of the strings as they were and removes the
+      * numeric reading.  Several values are separated by value marks, and each
+      * one gets the letter.
+
+      if op >= OP.EQ and op <= OP.GT + 3 then
+         str.comp = @false
+         if op <= OP.NE + 3 then str.comp = option(OPT.QUERY.STRING.COMP)
+         if not(str.comp) and item1.right then str.comp = option(OPT.QUERY.STR.COMP.ALL)
+         if str.comp then
+            item1 = 'S' : change(item1, @vm, @vm : 'S')
+            item2 = 'S' : item2
          end
       end
 
@@ -5188,6 +5211,7 @@ add.field:
       if s # '' then gosub add.item.association
          
       item.multivalued(item.index) = (sm.flag[1,1] = "M")
+      if sm.flag[1,1] = '' and option(OPT.DEFAULT.MV) then item.multivalued(item.index) = @true
       gosub get.width.and.justification
 
       item.totals(item.index) = seq(item.detail(item.index)[HDR.TOTALS,1])
@@ -5284,6 +5308,9 @@ add.field:
             item.conv(item.index) = dict.rec<dict.conv>
             s = dict.rec<dict.assoc> ; gosub add.item.association
             item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M"
+            if dict.rec<dict.s.m>[1,1] = '' and option(OPT.DEFAULT.MV) then   ;* ref 205
+               item.multivalued(item.index) = @true
+            end
             item.totals(item.index) = 0
             item.breakpoint(item.index) = 0
             item.flags(item.index) = 0
@@ -5319,6 +5346,9 @@ add.field:
                item.conv(item.index) = dict.rec<dict.conv>
                s = dict.rec<dict.assoc> ; gosub add.item.association
                item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M"
+               if dict.rec<dict.s.m>[1,1] = '' and option(OPT.DEFAULT.MV) then   ;* ref 205
+                  item.multivalued(item.index) = @true
+               end
             end else    ;* A/S type
                item.expression(item.index) = dict.rec<dict.a.correlative>
                s = dict.rec<dict.a.display.name> ; gosub set.col.hdg
