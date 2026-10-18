@@ -76,6 +76,7 @@
       return.key = seq(pterm(PT$INEWLINE,''))
       uppercase = bitand(flags, IN$UPCASE)
       no.echo.data = bitand(flags, IN$NO.ECHO.DATA)
+      raw = bitand(flags, IN$RAW)               ;* 14 Oct 26 dm - openQM 548, INPUT ... RAW (the compiler insists on a length)
       no.echo = bitand(flags, IN$NO.ECHO)       ;* 14 Oct 26 dm - openQM 168: no echo of typed characters;
                                                 ;* the new line at the end of the entry is still echoed
       no.case.invert = bitand(flags, IN$NO.CASE.INVERT)
@@ -180,6 +181,10 @@
 
             n = seq(c)
             begin case  ;* 0392 Allow rebindable values
+               case raw                               ;* 14 Oct 26 dm - openQM 548: every character is data
+                  if uppercase then c = upcase(c)
+                  string := c
+
                case index(erase.keys, c, 1)           ;* BACKSPACE key - 22 Aug 26, see above
                   if len(string) then
                      string = string[1, len(string) - 1]
@@ -237,6 +242,7 @@
             * If we have reached the character limit and the underscore option
             * was not used, terminate input.
 
+            if raw and len(string) = max.input then exit     ;* RAW: exactly length characters, nothing echoed
             if len(string) = max.input and not(bitand(flags, in$nocrlf)) then
                if echo.input and not(bitand(flags, in$nolf)) then display
                exit

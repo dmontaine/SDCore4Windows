@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  INPUT ... RAW.
+
+             INPUT var, length RAW  Reads exactly length characters and puts
+                        them in the variable just as they arrive: a newline
+                        or an erase key is data, not an instruction, and
+                        nothing is echoed.  The length is required (a program
+                        without one is refused when it is compiled).  Items in
+                        the DATA queue are taken whole, as for any INPUT.
+                        UPCASE and TIMEOUT still work with it.  INPUT @ does
+                        not take RAW.
+
 18 Oct 26  INPUTIF.
 
              INPUTIF var {, length} THEN / ELSE  and  INPUTIF @(x, y) : var, length

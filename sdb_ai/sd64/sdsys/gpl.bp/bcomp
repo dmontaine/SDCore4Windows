@@ -9238,11 +9238,13 @@ st.input.common:
       if err then return
 
   * NJS use @vm
-      reserved.names<2> = "FOR":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
+      reserved.names<2> = "FOR":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"RAW":@VM:"TIMEOUT":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"
 
       * Emit maximum input string length
 
+      input.length.given = @false
       if look.ahead.token = TKN.COMMA then
+         input.length.given = @true
          gosub get.token     ;* Skip comma
          * 1.1-9 The line below was GOSUB EXPR1 but was changed to allow
          * an expression for the length.  We can do this for INPUT but not
@@ -9276,6 +9278,10 @@ st.input.common:
                gosub get.token
                input.flags = bitor(input.flags, IN$NO.ECHO)
 
+            case u.look.ahead.token.string = 'RAW'          ;* 14 Oct 26 dm - openQM 548 (INPUT, not INPUT @)
+               gosub get.token
+               input.flags = bitor(input.flags, IN$RAW)
+
             case u.look.ahead.token.string = 'UPCASE'
                gosub get.token
                input.flags = bitor(input.flags, IN$UPCASE)
@@ -9292,6 +9298,11 @@ st.input.common:
                exit
          end case
       repeat
+
+      if bitand(input.flags, IN$RAW) and not(input.length.given) then
+         err.msg = sysmsg(12269)          ;* INPUT with RAW needs a length
+         goto error
+      end
 
       opcode = OP.INPUT
    end
