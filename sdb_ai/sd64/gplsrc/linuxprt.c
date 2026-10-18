@@ -81,6 +81,7 @@
 #include "sd.h"
 #include "tio.h"
 #include "config.h"
+#include "options.h"
 
 #include <sys/wait.h>
 
@@ -185,6 +186,12 @@ void spool_print_job(PRINT_UNIT* pu) {
   }
 
   sd_powershell_path(psh, sizeof(psh));
+
+  /* 18 Oct 26 Windows port - from Linux 88dce92 (openQM SPOOL.COMMAND): a diagnostic aid - show the
+     command the print is about to run.  Linux shows its lp command line; here the command is the
+     PowerShell invocation below (an OS difference: the same option, this port's command). */
+  if (Option(OptSpoolCommand))
+    tio_printf("%s -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command %s\n", psh, script);
 
   cpid = fork();
   if (cpid < 0) {

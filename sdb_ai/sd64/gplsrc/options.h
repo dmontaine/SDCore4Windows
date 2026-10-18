@@ -81,7 +81,13 @@
 #define OptNumericExponent   46   /* 14 Oct 26  openQM ref 404: read by k_str_to_num() and k_is_num() in k_funcs.c */
 #define OptQueryFooterPause  47   /* 14 Oct 26  openQM ref 429: read by BASIC only (gpl.bp/qdisp) */
 #define OptInheritMFilePath  48   /* 14 Oct 26  openQM ref 461: read by BASIC only (gpl.bp/createf) */
-#define NumOptions           49
+#define OptGit               49   /* 15 Oct 26  Q-17, the QM4 gaps: .gitignore and .gitattributes are not mapped in a directory file (map_t1_id() in op_dio3.c) */
+#define OptDirDtm            50   /*            a write to a directory file moves the directory's date and time modified (dir_write() in op_dio3.c) */
+#define OptKeepOldObject     51   /*            a failed compilation leaves the previous object code (BASIC, gpl.bp/basic or bcomp) */
+#define OptNoPhantomNotify   52   /*            a phantom does not send its parent the message when it ends (BASIC, cproc) */
+#define OptSpoolCommand      53   /*            show the operating system command that prints (kernel, the print start) */
+#define OptAssocAll          54   /*            the query processor treats all fields as one association (BASIC, qproc) */
+#define NumOptions           55
 
 Public char option_flags[NumOptions];
 

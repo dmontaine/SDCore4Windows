@@ -467,6 +467,12 @@
       $define OPT.QUERY.FOOTER.PAUSE  47 ;* Pause for RETURN at end of a report with a page footer
       $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
       $define OPT.INHERIT.MFILE.PATH  48 ;* CREATE.FILE puts a new subfile in the directory of the default subfile (createf)
+      $define OPT.GIT                 49 ;* .gitignore and .gitattributes are not mapped in a directory file (kernel)
+      $define OPT.DIR.DTM             50 ;* A write to a directory file moves the directory's date and time modified (kernel)
+      $define OPT.KEEP.OLD.OBJECT     51 ;* A failed compilation leaves the previous object code (basic)
+      $define OPT.NO.PHANTOM.NOTIFY   52 ;* A phantom does not tell its parent when it ends (cproc)
+      $define OPT.SPOOL.COMMAND       53 ;* Show the operating system command that prints (kernel)
+      $define OPT.ASSOC.ALL           54 ;* The query processor treats all fields as one association (qproc)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

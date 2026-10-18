@@ -2,6 +2,36 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SIX NEW OPTIONS: GIT, DIR.DTM, KEEP.OLD.OBJECT, NO.PHANTOM.NOTIFY,
+           SPOOL.COMMAND AND ASSOC.ALL.
+
+             Each is off until OPTION name ON, and is the setting of one
+             thing; none changes a lot at once.
+             GIT          A directory file keeps .gitignore and .gitattributes
+                          under their own names on the disk.  Without it every
+                          name that begins with a dot has the dot replaced by
+                          %D, which git does not read.  Only those two names;
+                          any other name with a leading dot is mapped as ever.
+             DIR.DTM      Writing a record to a directory file moves the
+                          directory's date and time modified.  The system
+                          moves it only when a name is added or removed, so
+                          a program or a backup that looks for a changed
+                          directory missed a record that was replaced.
+                          Closing a written sequential file does not do it.
+             KEEP.OLD.OBJECT  A compilation that fails leaves the previous
+                          object code where it was, instead of a program
+                          that no longer runs.  The listing of the failed
+                          compile is not put back.
+             NO.PHANTOM.NOTIFY  Set in a phantom, it stops the message that
+                          the phantom sends its parent when it ends.
+             SPOOL.COMMAND  Shows the operating system command that prints a
+                          job, just before it runs.  A diagnostic aid.
+             ASSOC.ALL    The query processor ignores the associations in the
+                          dictionary and treats every field as one
+                          association: with BY.EXP on one multivalued field,
+                          each line shows the matching value of the others,
+                          not all of them.
+
 18 Oct 26  A K ENTRY OVER A LOCALLY CATALOGUED PROGRAM.
 
              A VOC entry of type K whose fields 3 onwards hold another entry

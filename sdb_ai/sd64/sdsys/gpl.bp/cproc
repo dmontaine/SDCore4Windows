@@ -670,7 +670,8 @@ restart.cproc:
 
 terminate.phantom:
       n = kernel(K$PPID, 0)
-      if n and fileinfo(ipc.f, FL$OPEN) then
+      * NO.PHANTOM.NOTIFY (15 Oct 26, openQM): a phantom that has set the option does not send the message
+      if n and fileinfo(ipc.f, FL$OPEN) and not(option(OPT.NO.PHANTOM.NOTIFY)) then
          * Send message to parent process
 
          x = 'M':n

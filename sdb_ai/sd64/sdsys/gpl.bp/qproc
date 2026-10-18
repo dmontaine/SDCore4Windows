@@ -4046,6 +4046,8 @@ check.field.modifiers:
 * item.index = item table reference
 
 add.item.association:
+   * 15 Oct 26 (openQM ASSOC.ALL): the associations in the dictionary are ignored; every item is in the one association
+   if option(OPT.ASSOC.ALL) then s = '__SD.ALL__'
    if s = '' then
       item.assoc(item.index) = 0
    end else
