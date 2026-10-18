@@ -2,6 +2,48 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  SAVED SELECT LISTS: KEEP, DELETING, COUNT.SUP, A DEFAULT NAME,
+           SORT.LIST AND SELECT.DIR (1.2-0, seventh of the openQM
+           compatibility bundles; the sixth is the one line below it).
+
+             SAVE.LIST name KEEP    Leaves the active select list as it was.
+                                    SAVE.LIST has always emptied it.
+             GET.LIST name DELETING Deletes the saved list once it is loaded.
+             COUNT.SUP              On GET.LIST and SAVE.LIST: do not print
+                                    the count of records.
+             SAVE.LIST, GET.LIST    The name may be left out.  The list is
+                                    then called after its number: SAVE.LIST
+                                    saves list 0 as "0", and GET.LIST 0
+                                    brings it back.  GET.LIST TO 2 and
+                                    SAVE.LIST FROM 2 name the list number as
+                                    before.
+             SORT.LIST name         A new command.  Sorts a saved list into
+                                    ascending order, as strings, in place.
+                                    FROM file names another list file.
+             SELECT.DIR pathname    A new command.  Makes a select list (0, or
+                                    TO n) of the names of the files and
+                                    subdirectories in an operating system
+                                    directory.
+
+           What this does not do.  There is no SELECT.DIR option to keep only
+           files or only directories, and SORT.LIST has no descending order or
+           numeric order.  SHOW.LIST, COPY.LISTP, the SELECTINDEX command, the
+           index commands' new options, LIST.INDEX to a printer and the
+           alternative list file on SAVE.LIST and GET.LIST are not built; the
+           release notes do not give their syntax.
+
+18 Oct 26  SP.VIEW SHOWS WHERE OUTPUT GOES FOR PRINT UNIT MODES 0, 4, 5 AND 6
+           (openQM compatibility).
+
+           When SP.VIEW asks which printer to use it shows the print unit's
+           destination.  It did that for modes 1 and 3 only; for a unit in
+           mode 0 (the screen), 4 (standard error), 5 (the auxiliary port) or
+           6 (a printer and a hold file) the line was blank.  It now says what
+           the destination is.  The other print system items in the release
+           notes (SETPTR INFORM, EJECT, the form feed sequence, SET.QUEUE, the
+           printer page size in TERM) change the print system in the kernel
+           and are not built.
+
 18 Oct 26  WHO USER, PSTAT USER name, A LOCK HOLDER'S NAME IN PSTAT, AND
            !LISTU (openQM compatibility).
 

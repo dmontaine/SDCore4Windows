@@ -1,0 +1,107 @@
+* SELDIR
+* SELECT.DIR command
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux e02672d (11 Oct 26): 1.2-0 bundle A-7 (openQM ref 465).
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   SELECT.DIR pathname {TO n}
+*
+* Builds a select list (0 unless TO gives another) of the names of the files
+* and subdirectories in an operating system directory.  The names are as the
+* operating system has them, in the order it returns them.  The directory
+* is read at the access of the user, like any other file.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $select.dir
+$catalog $seldir
+
+$include err.h
+$include keys.h
+$include parser.h
+$include syscom.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   list.no = 0
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   * The directory pathname
+
+   call @parser(PARSER$GET.TOKEN, token.type, path, keyword)
+   if token.type = PARSER$END or path = '' then
+      stop sysmsg(12055) ;* Directory pathname required
+   end
+
+   * TO n
+
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   if keyword = KW$TO then
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      if (token.type = PARSER$END) or not(num(token)) then
+         stop sysmsg(3272) ;* Select list number missing or invalid
+      end
+      list.no = token + 0
+      if list.no > HIGH.USER.SELECT then
+         stop sysmsg(3272) ;* Select list number missing or invalid
+      end
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   end
+
+   if token.type # PARSER$END then
+      stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   * DIR() returns one field for each entry: the name, then a value mark and
+   * F or D for a file or a directory.
+
+   entries = dir(path)
+   if entries = '' and status() # 0 then
+      @system.return.code = -status()
+      stop sysmsg(12056, path) ;* Cannot read directory xx
+   end
+
+   names = ''
+   n = 0
+   if entries # '' then
+      for i = 1 to dcount(entries, @fm)
+         names<-1> = entries<i,1>
+         n += 1
+      next i
+   end
+
+   formlist names to list.no
+   @system.return.code = n
+   display sysmsg(3261, n, list.no) ;* xx records selected to select list xx
+
+   return
+end
+
+* END-CODE

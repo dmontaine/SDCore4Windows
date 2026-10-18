@@ -62,38 +62,48 @@ $include parser.h
    call @parser(parser$reset, 0, @sentence, 0)
    call @parser(parser$get.token, token.type, token, keyword) ;* Verb
 
-   * Get list name
+   * Get list name.  It may be left out (10 Oct 26 dm, openQM ref 401): the
+   * list read is then the one whose name is the list number.
 
-   call @parser(parser$get.token, token.type, list.name, keyword)
-   if (token.type = PARSER$END) or (keyword = KW$TO) then
-      stop sysmsg(3273) ;* Saved select list name missing or invalid
-   end
-
-   * Get list number if present
+   count.sup = @false
+   deleting = @false
+   list.name = ''
 
    call @parser(parser$get.token, token.type, token, keyword)
-   if keyword = KW$TO then
-      call @parser(parser$get.token, token.type, token, keyword)
-      if (token.type = PARSER$END) or not(num(token)) then
-         stop sysmsg(3272) ;* Select list number missing or invalid
-      end
-
-      list.no = token + 0
-      if list.no > HIGH.USER.SELECT then
-         stop sysmsg(3272) ;* Select list number missing or invalid
-      end
-
+   if token.type # PARSER$END and keyword # KW$TO and keyword # KW$COUNT.SUP and keyword # KW$DELETING then
+      list.name = token
       call @parser(parser$get.token, token.type, token, keyword)
    end
 
-   * Check no further information in command
+   * Then TO n, DELETING and COUNT.SUP in any order
 
-   if token.type # PARSER$END then
-      stop sysmsg(2018, token) ;* Unexpected token (xx)
-   end
+   loop
+   until token.type = PARSER$END
+      begin case
+         case keyword = KW$TO
+            call @parser(parser$get.token, token.type, token, keyword)
+            if (token.type = PARSER$END) or not(num(token)) then
+               stop sysmsg(3272) ;* Select list number missing or invalid
+            end
 
+            list.no = token + 0
+            if list.no > HIGH.USER.SELECT then
+               stop sysmsg(3272) ;* Select list number missing or invalid
+            end
 
-* ---------------  Step 2 -  Open the save list file
+         case keyword = KW$DELETING    ;* Delete the saved list once it is loaded (ref 384)
+            deleting = @true
+
+         case keyword = KW$COUNT.SUP   ;* No count of the records (ref 2)
+            count.sup = @true
+
+         case 1
+            stop sysmsg(2018, token) ;* Unexpected token (xx)
+      end case
+      call @parser(parser$get.token, token.type, token, keyword)
+   repeat
+
+   if list.name = '' then list.name = list.no : ""
 
    open "$savedlists" to saved.lists.file else
       @system.return.code = -status()
@@ -112,7 +122,17 @@ $include parser.h
 
    formlist list.rec to list.no
    @system.return.code = dcount(list.rec, @fm)
-   display sysmsg(3261, @system.return.code, list.no) ;* xx records selected to select list xx
+
+   if deleting then
+      delete saved.lists.file, list.name on error
+         @system.return.code = -status()
+         stop sysmsg(3259, status(), list.name) ;* Error xx reading list 'xx'
+      end
+   end
+
+   if not(count.sup) then
+      display sysmsg(3261, @system.return.code, list.no) ;* xx records selected to select list xx
+   end
 
    return
 end
