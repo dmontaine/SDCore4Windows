@@ -1,0 +1,72 @@
+* _PHLOG
+* !PHLOG() - the name of a phantom's log record
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): 1.2-0 openQM ref 87.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !PHLOG(user, name)
+*
+* Returns in NAME the log record (the COMO record) of the phantom whose user
+* number is USER: the newest record in the $COMO directory file whose name
+* starts PH<user>_.  Null if there is none.  Only the $COMO directory file is
+* searched, not one named by PHANTOM LOG.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine phlog(user, name)
+$catalog !PHLOG
+
+$include keys.h
+$include int$keys.h
+
+   name = ''
+   como.dir = '$COMO'
+   read como.rec from @voc, '$COMO' then
+      if como.rec<2> # '' then como.dir = como.rec<2>
+   end
+
+   open como.dir to como.f else return
+   if fileinfo(como.f, FL$TYPE) # FL$TYPE.DIR then
+      close como.f
+      return
+   end
+   path = fileinfo(como.f, FL$PATH)
+   close como.f
+
+   prefix = 'PH' : user : '_'
+   newest = 0
+   entries = dir(path)
+   for i = 1 to dcount(entries, @fm)
+      id = entries<i,1>
+      if id[1, len(prefix)] = prefix then
+         dtm = ospath(path : @ds : id, OS$DTM)
+         if dtm >= newest then
+            newest = dtm
+            name = id
+         end
+      end
+   next i
+
+   return
+end
+
+* END-CODE

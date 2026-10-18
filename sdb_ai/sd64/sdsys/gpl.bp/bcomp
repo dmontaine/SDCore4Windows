@@ -370,7 +370,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"NAP":@fm:"NEXT":@fm:"NOBUF":@fm:"NULL"
    statements := @fm:"ON":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
    statements := @fm:"OS.EXECUTE"
-   statements := @fm:"PAGE":@fm:"PAUSE"
+   statements := @fm:"PAGE":@fm:"PAUSE":@fm:"PDUMP"
    statements := @fm:"PERFORM":@fm:"PRECISION":@fm:"PRINT"
    statements := @fm:"PRINTER":@fm:"PRINTCSV":@fm:"PRINTERR"
    * rev 1.0-1
@@ -2164,6 +2164,7 @@ is.statement:
                  st.os.execute,
                  st.page,
                  st.pause,
+                 st.pdump,                     ;* 12 Oct 26 dm - openQM 439
                  st.execute,                   ;* PERFORM
                  st.precision,
                  st.print,
@@ -6277,6 +6278,13 @@ st.clear:
    opcode.byte = OP.CLEAR ; gosub emit.simple
    clear.used = @true
 
+   return
+
+*****************************************************************************
+* ST.PDUMP  -  PDUMP statement (12 Oct 26 dm, openQM 439): writes a process dump file of this process
+
+st.pdump:
+   opcode.byte = OP.PDUMP ; gosub emit.simple
    return
 
 st.clearcommon:

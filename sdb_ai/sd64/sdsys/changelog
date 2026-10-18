@@ -2,6 +2,33 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  PHANTOM OPTIONS, PDUMP, LOGOUT GROUP.  The
+           openQM notes give no syntax, so this is SD's own.
+
+             PHANTOM NO.MSG command   Does not display "Started phantom".
+             PHANTOM DATA command     Hands this process's DATA queue to the
+                                      phantom (the queue here is emptied);
+                                      the phantom's INPUT reads it.
+             PHANTOM LOG file command The phantom's log record is made in the
+                                      directory file named, not in $COMO.
+                                      The words may come in any order, in
+                                      front of the command.
+             CALL !PHLOG(user, name)  The log record of the phantom with that
+                                      user number (the newest PH<user>_...
+                                      in $COMO), or null.
+             LOGOUT n GROUP           Logs out process n and every phantom it
+                                      started.
+             PDUMP                    A BASIC statement: writes a process
+                                      dump file of the running process and
+                                      goes on.
+             Process dump files       Show the length of each string
+                                      variable, and list the environment
+                                      (a value is left out when its name has
+                                      PASS, SECRET, TOKEN or KEY in it).
+             Q-pointers               A Q-pointer in the VOC whose file name
+                                      (field 3) is null now points at the
+                                      account's VOC.
+
 18 Oct 26  FOUR BASIC ADDITIONS.  Syntax is SD's
            own where the openQM notes give none.
 

@@ -417,7 +417,18 @@ restart.cproc:
 
          z = system(1005)
          s = oconv(idiv(z,86400), 'D2/DMY') : "_" : oconv(mod(z,86400), 'MTS')
-         execute "COMO ON PH" : @userno : "_" : convert('/:', '', s)
+
+         * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 364: PHANTOM LOG dirfile leaves the name of another directory file in the L record
+         ph.log.file = ''
+         filelock ipc.f
+         read ph.log.file from ipc.f, 'L':@userno then delete ipc.f, 'L':@userno else ph.log.file = ''
+         fileunlock ipc.f
+         ph.log.file = trim(ph.log.file)
+         if ph.log.file # '' then
+            execute "COMO ON PH" : @userno : "_" : convert('/:', '', s) : " IN " : ph.log.file
+         end else
+            execute "COMO ON PH" : @userno : "_" : convert('/:', '', s)
+         end
 
          display sysmsg(5010, @userno, oconv(mod(z,86400), 'MTS') : ' ' : oconv(idiv(z,86400), 'D4DMY[,A3]'))
          * Phantom xx started at hh:mm:ss dd mmm yyyy
@@ -455,6 +466,14 @@ restart.cproc:
          s = phantom.command<1>
          if s # '' then void kernel(K$SET.OPTIONS, s)
          del phantom.command<1>
+
+         * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 137: PHANTOM DATA left the parent's DATA queue in the D record; stack it here
+         read ph.data from ipc.f, 'D':@userno then
+            delete ipc.f, 'D':@userno
+            for ph.i = 1 to dcount(ph.data, @fm)
+               data ph.data<ph.i>
+            next ph.i
+         end
 
          fileunlock ipc.f
       end
@@ -3458,6 +3477,16 @@ int.logout:
             end case
       
             call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
+
+            * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 386, SD's own syntax:  LOGOUT n GROUP  also logs out every phantom that
+            * process n started (the parent user number is value 5 of each K$USERS field).
+            if token.type # PARSER$END and upcase(s) = 'GROUP' then
+               users = kernel(K$USERS, 0)
+               for gi = 1 to dcount(users, @fm)
+                  if users<gi,K$USERS.PUID> + 0 = i and users<gi,K$USERS.UID> + 0 # i then z = logout(users<gi,K$USERS.UID> + 0, @false)
+               next gi
+               call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
+            end
          until token.type = PARSER$END
          repeat
    end case

@@ -140,6 +140,35 @@ void pdump() {
   fprintf(fu, "\nSTATUS() = %d, OS.ERROR() = %d\n", process.status,
           process.os_error);
 
+  /* 12 Oct 26 (openQM item 569): the environment of the process.  The file is created 0600, but a value is
+     left out when its name suggests a secret (password, secret, token or key in it). */
+  {
+    extern char** environ;
+    char** ep;
+    char ename[64 + 1];
+    char* eq;
+    int k;
+    bool secret;
+
+    fprintf(fu, "\nEnvironment\n");
+    for (ep = environ; ep != NULL && *ep != NULL; ep++) {
+      eq = strchr(*ep, '=');
+      k = (eq != NULL) ? (int)(eq - *ep) : (int)strlen(*ep);
+      if (k > 64)
+        k = 64;
+      memcpy(ename, *ep, k);
+      ename[k] = '\0';
+      for (i = 0; ename[i] != '\0'; i++)
+        ename[i] = (char)((ename[i] >= 'a' && ename[i] <= 'z') ? ename[i] - 32 : ename[i]);
+      secret = (strstr(ename, "PASS") != NULL) || (strstr(ename, "SECRET") != NULL) ||
+               (strstr(ename, "TOKEN") != NULL) || (strstr(ename, "KEY") != NULL);
+      if (secret)
+        fprintf(fu, "  %.*s=(not shown)\n", k, *ep);
+      else
+        fprintf(fu, "  %s\n", *ep);
+    }
+  }
+
   /* SYSCOM data */
 
   fprintf(fu, "\n\n@-variables\n");
@@ -460,9 +489,12 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
             break;
           rmv_offset += str->bytes;
         }
-        fprintf(fu, "%s: String (rmv=%d): \"", s, rmv_offset);
+        fprintf(fu, "%s: String (len=%d, rmv=%d): \"", s,
+                (descr->data.str.saddr != NULL) ? (int)descr->data.str.saddr->string_len : 0, rmv_offset);
       } else {
-        fprintf(fu, "%s: String: \"", s);
+        /* 12 Oct 26 (openQM item 22): the length is shown, so a string cut short by the dump is seen to be */
+        fprintf(fu, "%s: String (len=%d): \"", s,
+                (descr->data.str.saddr != NULL) ? (int)descr->data.str.saddr->string_len : 0);
       }
       print_string(descr->data.str.saddr);
       break;
@@ -731,6 +763,14 @@ Private void dump_syscom_var(char* tag, int16_t offset) {
 
   descr = Element(process.syscom, offset);
   dump_variable(descr, -1, tag, 2);
+}
+
+/* ======================================================================
+   op_pdump()  -  PDUMP statement: a process dump file of this process
+   (12 Oct 26, openQM item 439)                                           */
+
+void op_pdump() {
+  pdump();
 }
 
 /* END-CODE */

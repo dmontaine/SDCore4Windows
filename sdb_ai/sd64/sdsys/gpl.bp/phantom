@@ -70,6 +70,32 @@ $define como.dir.voc.name "$COMO"
  
    ph.command = trimb(field(@sentence, ' ', 2, 999999))
 
+   * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 483, 137, 364, in SD's own syntax.  Words in front of the command, in any order:
+   *    NO.MSG        do not display the "Started phantom" message
+   *    DATA          hand the DATA queue of this process to the phantom (it is emptied here)
+   *    LOG dirfile   the phantom's log (COMO record) goes in this directory file instead of $COMO
+   no.msg = @false
+   pass.data = @false
+   log.file = ''
+   loop
+      w = upcase(field(ph.command, ' ', 1))
+      begin case
+         case w = 'NO.MSG'
+            no.msg = @true
+            ph.command = trimf(ph.command[len(w) + 1, 999999])
+         case w = 'DATA'
+            pass.data = @true
+            ph.command = trimf(ph.command[len(w) + 1, 999999])
+         case w = 'LOG'
+            ph.command = trimf(ph.command[4, 999999])
+            log.file = field(ph.command, ' ', 1)
+            ph.command = trimf(ph.command[len(log.file) + 1, 999999])
+            if log.file = '' then stop sysmsg(12084) ;* Directory file name required after LOG
+         case 1
+            exit
+      end case
+   repeat
+
    if len(ph.command) then
       gosub check.como.dir
 
@@ -107,9 +133,17 @@ $define como.dir.voc.name "$COMO"
       s = if option(OPT.INHERIT) then kernel(K$GET.OPTIONS,0) else ''
       write s:@fm:ph.command to ipc.f, 'X':uid
 
+      * The extras travel in their own records, read and deleted by the phantom (cproc)
+      if pass.data then
+         dq = @data.pending
+         cleardata
+         write dq to ipc.f, 'D':uid
+      end
+      if log.file # '' then write log.file to ipc.f, 'L':uid
+
       fileunlock ipc.f
 
-      crt sysmsg(6482, uid) ;* Started phantom user xx
+      if not(no.msg) then crt sysmsg(6482, uid) ;* Started phantom user xx
       @system.return.code = uid
    end else
       stop sysmsg(6483) ;* Phantom command missing
