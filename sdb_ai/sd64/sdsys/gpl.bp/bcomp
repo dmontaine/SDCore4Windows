@@ -174,6 +174,7 @@ $define M.EXCEPTION.SAVE.STACK 25  ;* 12 Oct 26 dm - openQM 355: every CATCH beh
 $define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN sets the file variable to 0, not unassigned
 $define M.PICK.READNEXT        27  ;* 14 Oct 26 dm - openQM 418: READNEXT leaves the id variable alone when it takes ELSE
 $define M.EXECUTE.CLEARLIST    28  ;* 14 Oct 26 dm - openQM 521: EXECUTE clears list 0 first, unless PASSLIST is given
+$define M.PARTIAL.EXPRESSIONS  29  ;* 14 Oct 26 dm - openQM 417: AND and OR stop evaluating when the result is known
 ** End New Modes
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
@@ -209,6 +210,7 @@ mode.names := @VM:"EXCEPTION.SAVE.STACK"
 mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
 mode.names := @VM:"PICK.READNEXT"
 mode.names := @VM:"EXECUTE.CLEARLIST"
+mode.names := @VM:"PARTIAL.EXPRESSIONS"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -265,6 +267,7 @@ mode.names := @VM:"EXECUTE.CLEARLIST"
    dim priority.stack(n)        ;* ...and associated priority stack
 $define STACK.MARK 9999         ;* Marks start of sub-expression
    priority.stack(0) = STACK.MARK
+   sc.labels = ''               ;* 14 Oct 26 dm - PARTIAL.EXPRESSIONS: by stack depth, the label an AND or OR jumps to
 
 
    * Source parsing
@@ -12878,6 +12881,7 @@ expr.common:
 
    op.stack.depth += 1
    priority.stack(op.stack.depth) = STACK.MARK
+   sc.labels<op.stack.depth> = ''
 
    loop
       gosub get.expr.item
@@ -12949,17 +12953,32 @@ insert.pseudo.operator:
       while priority >= priority.stack(op.stack.depth)
          opcode.byte = operator.stack(op.stack.depth)
          gosub emit.simple
+         if sc.labels<op.stack.depth> # '' then gosub sc.end.label
          op.stack.depth -= 1
       repeat
 
       op.stack.depth += 1
       operator.stack(op.stack.depth) =  op(token) ;* Opcode
+      sc.labels<op.stack.depth> = ''
       if look.ahead.token = TKN.PWR then
          * The ** operator associates right to left. Save a slightly higher
          * priority on the stack to force this action.
          priority.stack(op.stack.depth) = priority + 1            ;* Priority
       end
       else priority.stack(op.stack.depth) = priority              ;* Priority
+
+      * 18 Oct 26 Windows port - from Linux 614a811 (14 Oct 26): - openQM 417: with $MODE PARTIAL.EXPRESSIONS the right hand side of AND and OR is not evaluated
+      * when the left hand side settles the result.  The left value is kept: DUP, then a jump over the right hand
+      * side and the operator itself (the label goes after the operator) when the left is false (AND) or true (OR).
+      if bittest(mode, M.PARTIAL.EXPRESSIONS) and (token = TKN.AND or token = TKN.OR) then
+         sc.label.name = '_' : jump.no : 'S'
+         jump.no += 1
+         opcode.byte = OP.DUP ; gosub emit.simple
+         label.name = sc.label.name
+         opcode.byte = if token = TKN.AND then OP.JFALSE else OP.JTRUE
+         gosub emit.jump
+         sc.labels<op.stack.depth> = sc.label.name
+      end
 
       gosub get.token              ;* Get next data item token
    repeat
@@ -12970,11 +12989,19 @@ insert.pseudo.operator:
    while priority.stack(op.stack.depth) # STACK.MARK
       opcode.byte = operator.stack(op.stack.depth)
       gosub emit.simple
+      if sc.labels<op.stack.depth> # '' then gosub sc.end.label
       op.stack.depth -= 1
    repeat
 
    if op.stack.depth then op.stack.depth -= 1    ;* Remove STACK.MARK
 
+   return
+
+* The label after an AND or OR that was given a short circuit jump (PARTIAL.EXPRESSIONS)
+sc.end.label:
+   label.name = sc.labels<op.stack.depth>
+   sc.labels<op.stack.depth> = ''
+   gosub set.label
    return
 
 * ======================================================================
