@@ -1037,6 +1037,37 @@ void op_sselectm() {
 }
 
 /* ======================================================================
+   op_sselectv()  -  Select records from a file, sorted by id, into a SELLIST variable   (14 Oct 26, openQM 209) */
+
+void op_sselectv() {
+  /* Stack:
+
+     |=============================|=============================|
+     |            BEFORE           |           AFTER             |
+     |=============================|=============================|
+ top |  Sort mode                  | Status 0=ok                 |
+     |-----------------------------|-----------------------------|
+     |  ADDR of select list var    |                             |
+     |-----------------------------|-----------------------------|
+     |  File variable / dyn array  |                             |
+     |=============================|=============================|
+ */
+
+  DESCRIPTOR* descr;
+
+  process.op_flags = 0;
+  process.status = 0;
+
+  descr = e_stack - 1;
+  GetInt(descr);
+
+  descr = e_stack - 3;
+  k_get_value(descr);
+
+  k_recurse(pcode_sselctv, 3);
+}
+
+/* ======================================================================
    op_slctinfo()  -  SELECTINFO() function                                */
 
 void op_slctinfo() {

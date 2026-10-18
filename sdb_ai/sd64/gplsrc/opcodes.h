@@ -601,7 +601,7 @@ _opc_(0xCFE9, OP_STKLST,   "STKLST",     op_stklst,    OPCODE_BYTE,         0)  
 _opc_(0xCFEA, OP_CFEA,     "OPCFEA",     op_illegal2,  OPCODE_BYTE,         0)  /* Linux's OPENTEMP (held: it rests on the S.63 OS-access gate); left free so the numbers stay the same */
 _opc_(0xCFEB, OP_INPUTTRAP, "INPUTTRAP", op_inputtrap, JUMP_ADDR,           -3)  /* 14 Oct 26: INPUTTRAP (openQM 408): chars, mode, label count; the stub's address follows */
 _opc_(0xCFEC, OP_ITRAPCHK, "ITRAPCHK",   op_itrapchk,  ONE_BYTE_VALUE,       0)  /* 14 Oct 26: after INPUT @: jump to the INPUTTRAP stub if a trapped character was typed */
-_opc_(0xCFED, OP_CFED,     "OPCFED",     op_illegal2,  OPCODE_BYTE,         0)
+_opc_(0xCFED, OP_SSELECTV, "SSELECTV",   op_sselectv,  OPCODE_BYTE,        -3)  /* 14 Oct 26: SSELECTV file TO listvar (openQM 209) */
 _opc_(0xCFEE, OP_CFEE,     "OPCFEE",     op_illegal2,  OPCODE_BYTE,         0)
 _opc_(0xCFEF, OP_CFEF,     "OPCFEF",     op_illegal2,  OPCODE_BYTE,         0)
 

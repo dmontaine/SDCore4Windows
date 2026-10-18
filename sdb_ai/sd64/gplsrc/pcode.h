@@ -74,6 +74,7 @@ Pcode(repsub)    /* REPSUB(DYN.ARRAY, F, V, S, VAL) */
 Pcode(repsubst)  /* REPSUBST(DYN.ARRAY, F, V, S, P, Q, VAL) */
 Pcode(savelst)   /* SAVELIST(NAME, LIST.NO) */
 Pcode(sselct)    /* SSELECT(FVAR, LIST.NO, SORT.MODE) */
+Pcode(sselctv)   /* SSELECTV(FVAR, LIST.VAR, SORT.MODE) (14 Oct 26, openQM 209) */
 Pcode(subst)     /* SUBSTITUTE(STR, OLD.LIST, NEW.LIST, DELIMITER) */
 Pcode(substrn)   /* SUBSTRNG(STR, START, LENGTH) */
 Pcode(sum)       /* SUM(STR) */

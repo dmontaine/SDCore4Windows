@@ -419,7 +419,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"SET.BREAK.HANDLER"
    statements := @fm:"SET.EXIT.STATUS":@fm:"SETLEFT"
    statements := @fm:"SETNLS":@fm:"SETPU":@fm:"SETRIGHT":@fm:"SETREM"
-   statements := @fm:"SLEEP":@fm:"SSELECT":@fm:"SSELECTN":@fm:"STATUS"
+   statements := @fm:"SLEEP":@fm:"SSELECT":@fm:"SSELECTN":@fm:"SSELECTV":@fm:"STATUS"
    statements := @fm:"STOP"
    statements := @fm:"TCLREAD":@fm:"THROW":@fm:"TIMEOUT":@fm:"TRANSACTION":@fm:"TRY"
    statements := @fm:"UNLOCK":@fm:"UNTIL":@fm:"VOID"
@@ -2292,6 +2292,7 @@ is.statement:
                  st.sleep,
                  st.sselect,
                  st.sselect,                   ;* SSELECTN: 11 Oct 26 dm - openQM 209
+                 st.sselectv,                  ;* SSELECTV: 14 Oct 26 dm - openQM 209
                  st.status,
                  st.stop,
                  st.tclread,
@@ -11814,6 +11815,10 @@ st.sselect:
    opcode = OP.SSELECT
    goto st.select.common
 
+st.sselectv:
+   opcode = OP.SSELECTV
+   goto st.select.common
+
 st.selectn:
    opcode = OP.SELECT
    goto st.select.common
@@ -11826,10 +11831,14 @@ st.select:
    opcode = if bittest(mode, M.SELECTV) then OP.SELECTV else OP.SELECT
 
 st.select.common:
+   * 14 Oct 26: the two questions this routine kept asking of OPCODE, once each in several places, are asked once here
+   sorted.select = (opcode = OP.SSELECT or opcode = OP.SSELECTV)    ;* SSELECT clauses: RIGHT.ALIGNED, DESCENDING
+   to.variable = (opcode = OP.SELECTV or opcode = OP.SSELECTV)      ;* TO names a select list VARIABLE, not a list number
+
    * Emit file variable / dynamic array reference
 
    stdfil.use = @false
-   if bittest(mode, M.STDFIL) and opcode # OP.SSELECT then
+   if bittest(mode, M.STDFIL) and not(sorted.select) then
       * $MODE STDFIL: SELECT {TO list} names no file, so it is the default file variable
       if look.ahead.token = TKN.END or look.ahead.token = TKN.SEMICOLON then stdfil.use = @true
       if u.look.ahead.token.string = "TO" or u.look.ahead.token.string = "ON" then stdfil.use = @true
@@ -11842,26 +11851,29 @@ st.select.common:
    end
 
    sselect.mode = 0
-   if opcode = OP.SSELECT then gosub sselect.clauses    ;* the clauses may come before TO...
+   if sorted.select then gosub sselect.clauses    ;* the clauses may come before TO...
 
    if u.look.ahead.token.string = "TO" then
       gosub get.token       ;* Skip TO
-      if opcode = OP.SELECTV then
+      if to.variable then
          gosub simple.lvar.reference
       end else
          gosub exprf            ;* Emit list number expression
       end
    end else     ;* Use default select list
-      if opcode = OP.SELECTV then goto err.to
+      if to.variable then goto err.to
       n = 0 ; gosub emit.numeric.load
    end
 
    * 18 Oct 26 Windows port - from Linux 9d13815 (11 Oct 26): - openQM 243 and 367: SSELECT [TO n] [RIGHT.ALIGNED] [DESCENDING], the two in either order.
    * The sort mode goes in as a third argument through its own opcode; the two-argument SSELECT is unchanged.
+   * 14 Oct 26 - openQM 209: SSELECTV file TO var takes the same clauses and always has the mode (its own opcode).
 
-   if opcode = OP.SSELECT then
+   if sorted.select then
       gosub sselect.clauses                ;* ...or here, when there is no TO (after TO the list number swallows the word)
-      if sselect.mode then
+      if opcode = OP.SSELECTV then
+         n = sselect.mode ; gosub emit.numeric.load
+      end else if sselect.mode then
          n = sselect.mode ; gosub emit.numeric.load
          opcode = OP.SSELECTM
       end
