@@ -1,5 +1,5 @@
 * _HOLDLOG
-* Interlude to the user written HOLD.FILE.LOGGER subroutine
+* Interlude to the user written HOLD.FILE.LOGGER subroutine, and the update lock on a hold file's record
 * Copyright (c) 2026 Donald Montaine
 *
 * This program is free software; you can redistribute it and/or modify
@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): 1.2-0 bundle B-8 (openQM ref 53): opening = 2, before the file of a mode 3 print unit is made, takes an
+*               update lock on its record in $HOLD and keeps it until the file is closed (opening = 0).
 * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): 1.2-0 bundle A-6 (openQM ref 56).
 * END-HISTORY
 *
@@ -28,6 +30,14 @@
 * file and again when it closes it.  If a subroutine named hold.file.logger is
 * catalogued it is called with the print unit number, 1 for an open or 0 for a
 * close, and the name of the file being made.  Nothing happens if there is none.
+*
+* A mode 3 print unit whose file is a record of $HOLD (the default name, and
+* SETPTR ... AS name; not AS PATHNAME, which is outside any SD file) is also
+* called with opening = 2 just before the file is made, and takes an update
+* lock on that record, so that nobody can read it with a lock, or write it,
+* while the output is still being put there.  The file variable that holds the
+* lock is kept in COMMON for the print unit, and closing it at opening = 0
+* releases the lock.  Print units 0 to 255 are locked; a higher one is not.
 *
 * END-DESCRIPTION
 *
@@ -40,9 +50,50 @@ $recursive
 
 subroutine holdlog(unit, opening, pathname)
 
+   common /holdlock/ hl.f(256), hl.held(256)
+
+   if unassigned(hl.held(1)) then
+      for i = 1 to 256
+         hl.held(i) = @false
+      next i
+   end
+
+   in.range = (unit >= 0 and unit < 256)
+
+   begin case
+      case opening = 2
+         * The file is about to be made.  Lock its record if it is one of $HOLD's.
+         if in.range then
+            hold.dir = '$hold':@ds
+            if downcase(pathname[1, len(hold.dir)]) = hold.dir then
+               if hl.held(unit + 1) then close hl.f(unit + 1)    ;* an earlier file of this unit that was never closed
+               hl.held(unit + 1) = @false
+               open '$hold' to hl.f(unit + 1) then
+                  recordlocku hl.f(unit + 1), pathname[len(hold.dir) + 1, 9999]
+                  hl.held(unit + 1) = @true
+               end
+            end
+         end
+
+      case opening = 0
+         * The file is closed: let the record go, then tell the logger.
+         if in.range then
+            if hl.held(unit + 1) then
+               close hl.f(unit + 1)
+               hl.held(unit + 1) = @false
+            end
+         end
+         gosub call.logger
+
+      case 1
+         gosub call.logger
+   end case
+
+   return
+
+call.logger:
    logger = 'hold.file.logger'
    if catalogued(logger) then call @logger(unit, opening, pathname)
-
    return
 end
 

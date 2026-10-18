@@ -318,9 +318,10 @@ void btree_to_string(DESCRIPTOR * descr);
 void free_btree_element(BTREE_ELEMENT * element, int16_t keys);
 
 /* OP_DIO1.C */
+#define VOC_FLAGS_LEN 15  /* Longest field 6 of an F-type VOC entry that open_file() reads */
 void dio_close(FILE_VAR * fvar);
 bool get_voc_file_reference(char * voc_name, bool get_dict_name,
-                            char * path);
+                            char * path, char * vflags);
 void flush_dh_cache(void);
 
 /* OP_DIO2.C */

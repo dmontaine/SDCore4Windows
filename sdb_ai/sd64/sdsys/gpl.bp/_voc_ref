@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): A fourth argument returns field 6 of the F-type entry, in capitals, for the mode letters N (open
+*               non-transactionally) and R (read-only) that open_file() acts on (openQM items 380 and 197).  A
+*               Q-pointer gives the field 6 of the F-type entry it leads to.
 * 25 Aug 26 Windows port - removed the branch that skipped absolutising a
 *           VFS: pathname.  VFS is gone; every pathname is absolutised.
 * 19 Aug 26 Windows port - SDSYS accounts, and a Q-pointer target account's voc,
@@ -41,7 +44,7 @@ $no.symbols
 $no.xref
 $recursive
 
-subroutine voc_ref(filename, is.dict, pathname)
+subroutine voc_ref(filename, is.dict, pathname, vflags)
 
 $include syscom.h
 $include err.h
@@ -49,6 +52,7 @@ $include int$keys.h
 $include keys.h
 
 
+   vflags = ''     ;* Field 6 of the F-type entry that names the file, upper case (open_file() in op_dio1.c)
    voc.id = field(filename, ',', 1)
    component = field(filename, ',', 2)
 
@@ -160,6 +164,7 @@ parse.as.q.pointer:
       begin case
          case type = "F"
             pathname = voc.rec<fno>
+            vflags = upcase(voc.rec<6>)
 
             if fno = 2 then
                if voc.rec<4> # '' then   ;* It's a multifile
