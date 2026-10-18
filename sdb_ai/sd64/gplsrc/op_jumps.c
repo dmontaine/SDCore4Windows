@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): TRY / CATCH: exception GROUPS (a handler named a.b catches a.b.c, openQM manual "Exception Groups"), a
+ *           transaction begun inside the TRY clause is rolled back when an exception is thrown out of it, and the kernel
+ *           can throw the SYS.* exceptions (exc_sys_throw(), called by k_error()) - QM4 Fixes 354.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): op_chkcat(): a name beginning with a hyphen is global, like the other prefixes (QM4 Fixes 217).
  * 29 Sep 26 RELEASE_1.1 114 - op_run() takes a runfile path up to
  *           MAX_PATHNAME_LEN, not MAX_PROGRAM_NAME_LEN (from Solo's SOLO 12)
@@ -1052,6 +1055,27 @@ bool valid_call_name(char* p) {
    recursive call or a dictionary expression: such a level ends the search,
    so an exception thrown inside it and not handled inside it is unhandled.
 
+   An exception name is a path of components separated by periods, and a
+   handler covers the name it spells and every name beneath it: CATCH
+   account takes ACCOUNT.INVALID and ACCOUNT.INVALID.CLOSED, CATCH sys.locks
+   takes SYS.LOCKS.DEADLOCK. Whole components only: CATCH acc takes neither
+   (exc_covers()). Within one TRY the first clause that covers the name is
+   used, as the clauses are written.
+
+   A transaction begun inside the TRY clause and still active when an
+   exception is thrown out of it is rolled back (txn_rollback_to()); one that
+   was already active when the TRY was entered is left alone.
+
+   SYSTEM EXCEPTIONS.  Many run time errors that would abort the program are
+   thrown as exceptions in the SYS group when something can catch them: an
+   unassigned variable is SYS.PROGRAM.DATATYPE.UNASSIGNED, a deadlock is
+   SYS.LOCKS.DEADLOCK. k_error() (k_error.c) holds the table that gives a
+   message its name; it calls exc_sys_can_catch() and then exc_sys_throw(),
+   which sets up the exception as THROW does, with the abort message as the
+   data, and long jumps back to the dispatch loop (k_resume_exception() in
+   kernel.c, to the resume point k_run_program() keeps). With no handler
+   anywhere that can be reached the error aborts exactly as it always did.
+
    Leaving a TRY clause by GOTO, EXIT or CONTINUE is not allowed (the openQM
    rule too): the frame stays until its program level returns. A RETURN from
    a GOSUB that was called inside the clause is allowed, and so is a RETURN
@@ -1077,6 +1101,7 @@ typedef struct {
   int16_t recursion;  /* recursion_depth then */
   int16_t gosub_depth; /* GOSUB depth of that program level then */
   int32_t e_depth;    /* Evaluation stack depth then */
+  int txn_depth;      /* Transaction nesting depth then */
   int32_t catch_pc;   /* Offset in that level's object of the dispatch code */
   int32_t table_pc;   /* ...of the handler table (what ENDTRY names) */
   const u_char* table;
@@ -1092,6 +1117,9 @@ Private char* exc_origin = NULL;
 Private char* exc_stack = NULL;
 Private bool exc_unhandled = FALSE; /* Caught by a SYS$UNHANDLED handler */
 
+extern int txn_depth; /* txn.c: transactions begun and not yet ended */
+
+Private bool exc_covers(const char* handler, int hlen, const char* thrown);
 Private void exc_op_throw(void);
 Private void exc_op_caught(void);
 Private void exc_op_match(void);
@@ -1164,6 +1192,7 @@ void op_try() {
   f->recursion = recursion_depth;
   f->gosub_depth = process.program.gosub_depth;
   f->e_depth = (int32_t)(e_stack - e_stack_base);
+  f->txn_depth = txn_depth;
   f->table_pc = t;
   f->table_len = *(tab + 1);
   f->table = tab + 2;
@@ -1223,6 +1252,18 @@ void op_exc() {
 }
 
 /* ======================================================================
+   exc_covers()  -  Does a handler (hlen characters, not null terminated)
+   take the exception called thrown? It does if it spells the name or a
+   leading run of whole components of it (a.b takes a.b and a.b.c, not
+   a.bc). Case is not significant.                                        */
+
+Private bool exc_covers(const char* handler, int hlen, const char* thrown) {
+  if (strncasecmp(handler, thrown, hlen) != 0)
+    return FALSE;
+  return (thrown[hlen] == '\0') || (thrown[hlen] == '.');
+}
+
+/* ======================================================================
    exc_table_find()  -  Is there a handler for name in a handler table?
    Returns the flags of the entry that applies: the named one, else the
    SYS$ANY one when bit 1 of modes is set, else the SYS$UNHANDLED one when
@@ -1234,11 +1275,9 @@ Private bool exc_table_find(const u_char* tab, int len, const char* name,
   const u_char* q;
   const u_char* end;
   int n;
-  int nlen;
   int any = -1;
   int unhandled = -1;
 
-  nlen = (int)strlen(name);
   p = tab;
   end = tab + len;
   while (p < end) {
@@ -1247,7 +1286,7 @@ Private bool exc_table_find(const u_char* tab, int len, const char* name,
       q++;
     n = (int)(q - p) - 1; /* Length of the name; p[0] is the flag digit */
     if (n > 0) {
-      if ((n == nlen) && (strncasecmp((const char*)p + 1, name, n) == 0)) {
+      if (exc_covers((const char*)p + 1, n, name)) {
         *flags = p[0] - '0';
         return TRUE;
       }
@@ -1452,6 +1491,8 @@ Private void exc_raise(bool rethrow) {
     k_return();
   }
 
+  txn_rollback_to(f.txn_depth); /* Transactions begun inside the TRY clause */
+
   restored = e_stack_base + f.e_depth;
   while (e_stack > restored)
     k_dismiss();
@@ -1528,7 +1569,7 @@ Private void exc_op_match() {
     else if (strcasecmp(p, "SYS$UNHANDLED") == 0)
       found = exc_unhandled;
     else
-      found = (strcasecmp(p, exc_name) == 0);
+      found = exc_covers(p, (int)strlen(p), exc_name);
     p = q + 1;
   } while (!found && (q != NULL));
 
@@ -1536,6 +1577,50 @@ Private void exc_op_match() {
 
   InitDescr(e_stack, INTEGER);
   (e_stack++)->data.value = found;
+}
+
+/* ======================================================================
+   exc_sys_can_catch()  -  Would a throw of this exception from here find a
+   handler (named, SYS$ANY or SYS$UNHANDLED) it can reach?  k_error() asks
+   before it prints anything, so an error that is going to be caught leaves
+   the terminal alone.                                                    */
+
+bool exc_sys_can_catch(const char* name) {
+  int flags;
+
+  if ((try_top == 0) || !k_can_resume())
+    return FALSE;
+  return try_find(name, 3, &flags) >= 0;
+}
+
+/* ======================================================================
+   exc_sys_throw()  -  Throw a system exception for a run time error.
+   text is the abort message, which becomes @EXCEPTION.DATA. Returns only if
+   nothing can catch it; otherwise the dispatch loop goes on at the handler
+   and the opcode that failed is given up.                                */
+
+void exc_sys_throw(const char* name, const char* text) {
+  if (!exc_sys_can_catch(name))
+    return;
+
+  strncpy(exc_name, name, MAX_EXC_NAME_LEN);
+  exc_name[MAX_EXC_NAME_LEN] = '\0';
+  if (exc_data != NULL)
+    free(exc_data);
+  exc_data = strdup(text);
+  exc_set_origin();
+  if (exc_stack != NULL) {
+    free(exc_stack);
+    exc_stack = NULL;
+  }
+
+  /* A process waiting for a lock gives the wait up, as it does on an abort */
+
+  if (my_uptr->lockwait_index)
+    clear_lockwait();
+
+  exc_raise(FALSE);
+  k_resume_exception(); /* Does not return */
 }
 
 /* ======================================================================

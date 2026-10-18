@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
+ *               can go on at the handler (k_can_resume(), k_resume_exception(); QM4 Fixes 354).
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_return() gives back the caller's @STDFIL after an EXECUTE (QM4 gap 225, $MODE STDFIL.SHARED)
  * 31 Dec 23 SD launch - prior history suppressed
  * 11 Jun 24 mab overwrite op_errmsg (pick error message) and op_pabort (pick abort) as illegal op code
@@ -65,6 +67,7 @@ Private void init_program(void);
    change for PRE_RELEASE_FIXES.md 96.                                       */
 
 jmp_buf k_exit;
+Private jmp_buf* resume_env = NULL; /* Resume point of the innermost dispatch loop (system exceptions, below) */
 
 /* Declare opcode functions */
 
@@ -572,6 +575,7 @@ void kernel() {
 
   if (setjmp(k_exit)) /* Abort, Quit, Logout */
   {
+    resume_env = NULL;        /* The dispatch loops that held resume points are gone (17 Oct 26) */
     unwind_stack();           /* Tidy up e-stack */
     process.for_init = FALSE; /* Not initialising FOR loop */
     process.op_flags = 0;     /* Clear opcode prefix flags */
@@ -714,15 +718,42 @@ Private void kill_process() {
 }
 
 /* ======================================================================
+   k_can_resume() / k_resume_exception()  -  System exceptions (17 Oct 26,
+   QM4 Fixes 354).  An error that k_error() turns into a SYS.* exception
+   happens deep inside an opcode, and the opcode's C code expects k_error()
+   never to return, as it does not on an abort.  So k_run_program() keeps a
+   resume point, and exc_sys_throw() (op_jumps.c) sets the handler's state up
+   as THROW does and then comes here to abandon the opcode.  One resume point
+   per dispatch loop, innermost last: a throw never reaches past the loop its
+   TRY frame belongs to (try_find() tests the recursion depth).             */
+
+bool k_can_resume() {
+  return resume_env != NULL;
+}
+
+void k_resume_exception() {
+  longjmp(*resume_env, 1);
+}
+
+/* ======================================================================
    k_run_program()  -  Dispatch loop                                      */
 
 void k_run_program() /* Returns FALSE if aborts */
 {
   u_int32_t flags;
   DESCRIPTOR* restored_e_stack;
+  jmp_buf resume;
+  jmp_buf* outer_resume;
 
   k_exit_cause = 0;
   recursion_depth++;
+
+  outer_resume = resume_env;
+  resume_env = &resume;
+  if (setjmp(resume)) {
+    /* A system exception was thrown from inside an opcode: the handler's
+       program level, stacks and pc are already in place. Go on from there. */
+  }
 
   do {
     while (!k_exit_cause) {
@@ -773,6 +804,7 @@ void k_run_program() /* Returns FALSE if aborts */
 
           if (flags & HDR_RECURSIVE) {
             k_exit_cause = K_STOP;
+            resume_env = outer_resume;
             return;
           }
         }
@@ -841,6 +873,7 @@ void k_run_program() /* Returns FALSE if aborts */
            (k_exit_cause == K_STOP)); /* 0531 */
 
 exit_run_program:
+  resume_env = outer_resume;
   if (--recursion_depth == 0) /* Returning from outermost recursive code */
   {
     if (break_pending && !process.break_inhibits) {

@@ -234,6 +234,11 @@ void k_err_pu(void);
 int k_line_no(int32_t offset, u_char * xcbase);
 void try_level_gone(void);                   /* op_jumps.c: TRY frames of a returned level */
 void exc_value(int which, DESCRIPTOR * descr); /* op_jumps.c: @EXCEPTION and friends */
+bool exc_sys_can_catch(const char * name);       /* op_jumps.c: would a throw of this SYS.* exception find a handler? */
+void exc_sys_throw(const char * name, const char * text); /* op_jumps.c: throw it; returns only if nothing can catch it */
+bool k_can_resume(void);                         /* kernel.c: does a dispatch loop stand ready to take a system exception? */
+void k_resume_exception(void);                   /* kernel.c: go back to it (does not return) */
+void txn_rollback_to(int depth);                 /* txn.c: roll back the transactions begun since the nesting depth was depth */
 char * k_var_name(DESCRIPTOR * descr);
 void log_message(char * msg);
 void audit_message(char * msg);
@@ -285,6 +290,7 @@ u_int32_t GetUnsignedInt(DESCRIPTOR * descr);
 /* MESSAGES.C */
 bool init_messages(void);
 char * sysmsg(int msg_no);
+int sysmsg_number_of(const char * p);
 
 /* NETFILES.C - REMOVED 18 Aug 2026.  SDNet (remote files over port 4245) is
    gone; see PROJECT_STATUS.md section 8.  sdnet.h is NOT part of it and stays -

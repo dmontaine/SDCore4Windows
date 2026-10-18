@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_error(): an error with a row in sys_exc_table is thrown as a SYS.* exception when a TRY handler can
+ *               catch it (QM4 Fixes 354); with none it aborts as before.
  * 29 Sep 26 RELEASE_1.1 114 - the "at line N of <program>" suffix is
  *           snprintf-bounded; it could write past s[] (from Solo's SOLO 12)
  * 31 Aug 26 Windows port - k_error() truncated every message at about 84
@@ -82,6 +84,184 @@ void null_function(void);
 
 Private void k_descr_error(int16_t err, DESCRIPTOR* descr);
 
+/* ======================================================================
+   SYS.* EXCEPTIONS  (17 Oct 26, QM4 Fixes 354)
+
+   A fatal error whose message is in this table is thrown as the named
+   exception when a TRY handler for it (or for SYS$ANY or SYS$UNHANDLED) can
+   be reached; with none the error aborts as it always did, and the message
+   is the same either way. The names are those of the openQM manual's list of
+   system generated exceptions ("SYS." and the hierarchy); a message with no
+   row here is still a plain abort.
+
+   ONLY WHERE THE OPCODE HOLDS NOTHING THAT AN ABANDONED OPCODE WOULD LEAVE
+   BEHIND.  The thrown exception gives up the opcode where the error was
+   raised, without the abort's clearing of locks, select lists and the
+   transaction. These rows are all errors found at the head of an opcode
+   (operand type, range, argument count) or on its return from the file
+   system, none of them while a file lock, a DH group lock or the transaction
+   commit is held. The two commit failures (1422, 1423) and the S.63 gate
+   refusals (10054, 12185) have no row, on purpose.
+
+   The row is found by message number, which k_error() learns from
+   sysmsg_number_of() (the text it was given is the message buffer's) or, for
+   the descriptor errors, from k_descr_error(). A new row is one line here and
+   a message that exists; test-sysexc-units.py checks both.                 */
+
+typedef struct {
+  int16_t msg;
+  const char* name;
+} SYS_EXC;
+
+#define SE_KERNEL "SYS.KERNEL."
+#define SE_LOCKS "SYS.LOCKS."
+#define SE_PRINTER "SYS.PRINTER."
+#define SE_SELECT "SYS.SELECT."
+#define SE_SORT "SYS.SORT."
+#define SE_FILESYS "SYS.FILESYS."
+#define SE_PROGRAM "SYS.PROGRAM."
+#define SE_DATATYPE "SYS.PROGRAM.DATATYPE."
+
+Private const SYS_EXC sys_exc_table[] = {
+    {1002, SE_PROGRAM "NOT_FOUND"},
+    {1003, SE_KERNEL "NO_MEMORY"},
+    {1004, SE_KERNEL "NO_MEMORY"},
+    {1005, SE_PROGRAM "INVALID_ARGCT"},
+    {1006, SE_KERNEL "NO_MEMORY"},
+    {1008, SE_KERNEL "NO_MEMORY"},
+    {1009, SE_KERNEL "NO_MEMORY"},
+    {1026, SE_PROGRAM "INVALID_ARGCT"},
+    {1100, SE_PROGRAM "INVALID_MATRIX_INDEX"},
+    {1101, SE_FILESYS "INVALID_FILE_TYPE"},
+    {1102, SE_DATATYPE "NOT_MATRIX"},
+    {1104, SE_DATATYPE "NOT_NUMERIC"},
+    {1105, SE_DATATYPE "UNASSIGNED"},
+    {1106, SE_FILESYS "INVALID_RECORD_ID"},
+    {1107, SE_FILESYS "INVALID_RECORD_ID"},
+    {1108, SE_PROGRAM "DIV_ZERO"},
+    {1113, SE_DATATYPE "INVALID"},
+    {1114, SE_LOCKS "DEADLOCK"},
+    {1115, SE_PRINTER "INVALID_UNIT"},
+    {1116, SE_LOCKS "TASK_LOCK.INVALID"},
+    {1117, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1118, SE_SELECT "INVALID_LIST_NO"},
+    {1119, SE_PROGRAM "INVALID_IN_TXN"},
+    {1123, SE_PROGRAM "NOT_FOUND"},
+    {1124, SE_PROGRAM "NOT_FOUND"},
+    {1125, SE_PROGRAM "NOT_FOUND"},
+    {1126, SE_PROGRAM "LOAD_ERROR.READ_ERROR"},
+    {1127, SE_PROGRAM "LOAD_ERROR"},
+    {1128, SE_PROGRAM "LOAD_ERROR.READ_ERROR"},
+    {1129, SE_PROGRAM "INVALID_CALL_NAME"},
+    {1130, SE_PROGRAM "INVALID_CALL_NAME"},
+    {1131, SE_PROGRAM "INVALID_ARGCT"},
+    {1132, SE_PROGRAM "INVALID_MATRIX_SIZE"},
+    {1133, SE_PROGRAM "LIMIT.GOSUB_DEPTH"},
+    {1134, SE_PROGRAM "NOT_FOUND"},
+    {1136, SE_PROGRAM "INVALID_MATRIX_SIZE"},
+    {1137, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1138, SE_DATATYPE "NOT_SOCKET"},
+    {1139, SE_PROGRAM "INVALID_MATRIX_SIZE"},
+    {1140, SE_PROGRAM "LIMIT.CALL_DEPTH"},
+    {1200, SE_DATATYPE "NOT_FILE"},
+    {1202, SE_DATATYPE "INVALID"},
+    {1203, SE_DATATYPE "INVALID"},
+    {1220, SE_PROGRAM "RANGE"},
+    {1221, SE_DATATYPE "INVALID"},
+    {1222, SE_PROGRAM "RANGE"},
+    {1223, SE_PROGRAM "RANGE"},
+    {1224, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1231, SE_PROGRAM "RESIZE_ERROR"},
+    {1232, SE_DATATYPE "NOT_MATRIX"},
+    {1234, SE_PROGRAM "RESIZE_ERROR"},
+    {1236, SE_DATATYPE "NOT_MATRIX"},
+    {1300, SE_PROGRAM "LIMIT.MAX_BREAKPOINTS"},
+    {1302, SE_PROGRAM "INVALID_MATRIX_INDEX"},
+    {1400, SE_FILESYS "PERMISSIONS.READ_ONLY"},
+    {1401, SE_FILESYS "CREATION_ERROR"},
+    {1402, SE_FILESYS "OPEN_ERROR"},
+    {1403, SE_FILESYS "PERMISSIONS.READ_ONLY"},
+    {1404, SE_FILESYS "IO_ERROR"},
+    {1405, SE_FILESYS "IO_ERROR"},
+    {1406, SE_FILESYS "IO_ERROR"},
+    {1407, SE_FILESYS "IO_ERROR"},
+    {1408, SE_FILESYS "IO_ERROR"},
+    {1409, SE_FILESYS "TRIGGER"},
+    {1410, SE_FILESYS "TRIGGER.INVALID_ARGCT"},
+    {1412, SE_FILESYS "IO_ERROR"},
+    {1413, SE_FILESYS "INVALID_FILE_TYPE"},
+    {1414, SE_FILESYS "IO_ERROR"},
+    {1415, SE_FILESYS "INVALID_FILE_TYPE"},
+    {1416, SE_FILESYS "IO_ERROR"},
+    {1417, SE_FILESYS "IO_ERROR"},
+    {1418, SE_FILESYS "INVALID_FILE_TYPE"},
+    {1419, SE_FILESYS "PERMISSIONS.READ_ONLY"},
+    {1420, SE_FILESYS "IO_ERROR"},
+    {1421, SE_FILESYS "IO_ERROR"},
+    {1424, SE_PROGRAM "NOT_TXN"},
+    {1470, SE_PROGRAM "INVALID_ITYPE"},
+    {1471, SE_PROGRAM "INVALID_ITYPE"},
+    {1480, SE_SORT "IO_ERROR"},
+    {1481, SE_SORT "INVALID_KEY_COUNT"},
+    {1482, SE_KERNEL "NO_MEMORY"},
+    {1485, SE_SORT "IO_ERROR"},
+    {1486, SE_SORT "INVALID_KEY_COUNT"},
+    {1487, SE_SORT "INVALID_OPERATION"},
+    {1488, SE_SORT "INVALID_KEY_COUNT"},
+    {1489, SE_SORT "IO_ERROR"},
+    {1490, SE_SORT "IO_ERROR"},
+    {1491, SE_SORT "IO_ERROR"},
+    {1600, SE_PROGRAM "RANGE"},
+    {1601, SE_DATATYPE "NULL_STRING"},
+    {1602, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1603, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1604, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {1605, SE_DATATYPE "NULL_STRING"},
+    {1703, SE_PRINTER "INVALID_KEY"},
+    {1704, SE_PRINTER "INVALID_OPERATION"},
+    {1705, SE_PRINTER "IO_ERROR"},
+    {1706, SE_PRINTER "IO_ERROR"},
+    {1707, SE_PRINTER "INVALID_KEY"},
+    {1708, SE_DATATYPE "NOT_IMAGE"},
+    {1709, SE_PRINTER "INVALID_REGION"},
+    {1710, SE_KERNEL "NO_MEMORY"},
+    {1711, SE_PRINTER "INVALID_OPERATION"},
+    {1712, SE_KERNEL "NO_MEMORY"},
+    {1716, SE_PRINTER "IO_ERROR"},
+    {1717, SE_PRINTER "IO_ERROR"},
+    {3450, SE_PROGRAM "IS_CLASS"},
+    {3460, SE_DATATYPE "NOT_OBJECT"},
+    {10004, SE_PROGRAM "INVALID_DATA_SIZE"},
+    {10005, SE_KERNEL "NO_MEMORY"},
+    {10151, SE_FILESYS "LOCK_REQUIRED"},
+    {12126, SE_DATATYPE "NOT_COLLECTION"},
+    {12127, SE_PROGRAM "INVALID_NAME"},
+    {12130, SE_DATATYPE "INVALID"},
+    {12132, SE_FILESYS "INVALID_FILE_TYPE"},
+    {12167, SE_LOCKS "LIMIT"},
+    {12353, SE_FILESYS "INVALID_FILE_TYPE"},
+    {12360, SE_PROGRAM "INVALID_KEY"},
+    {12403, SE_DATATYPE "NOT_SORT"},
+    {12404, SE_SORT "INVALID_OPERATION"},
+};
+
+Private int descr_msg_no = 0; /* k_descr_error() tells k_error() which message it is passing on (its text is a copy) */
+
+/* ======================================================================
+   sys_exc_name()  -  The SYS.* exception a message stands for, or NULL   */
+
+Private const char* sys_exc_name(int msg_no) {
+  int i;
+
+  if (msg_no <= 0)
+    return NULL;
+  for (i = 0; i < (int)(sizeof(sys_exc_table) / sizeof(sys_exc_table[0])); i++) {
+    if (sys_exc_table[i].msg == msg_no)
+      return sys_exc_table[i].name;
+  }
+  return NULL;
+}
+
 /* ====================================================================== */
 
 void op_illegal() {
@@ -120,6 +300,7 @@ DescrError(1100, k_index_error) DescrError(1101, k_dh_error)
 
   strcpy(message, sysmsg(msg_no));
   p = strchr(message, '|');
+  descr_msg_no = msg_no; /* message is a copy, so k_error() cannot tell which it is */
   if ((var = k_var_name(descr)) != NULL) {
     *p = ' ';
     k_error(message, var);
@@ -182,17 +363,33 @@ void k_error(char* message, ...) {
   /* -------------------- */
   DESCRIPTOR* msg_descr;
   bool fatal;
+  const char* sys_exc = NULL; /* The SYS.* exception to throw instead of aborting, if it will be caught */
+
+  fatal = (*message != '!');
+
+  /* 17 Oct 26: an error with a name in the SYS group goes to a handler, if
+     one can be reached, in place of the message and the abort (QM4 Fixes
+     354). This is decided first, before the terminal is touched, so that an
+     error that is caught leaves the screen as it was. */
+
+  if (fatal && (c_base != NULL)) {
+    sys_exc = sys_exc_name((descr_msg_no != 0) ? descr_msg_no : sysmsg_number_of(message));
+    if ((sys_exc != NULL) && !exc_sys_can_catch(sys_exc))
+      sys_exc = NULL;
+  }
+  descr_msg_no = 0;
 
   /* Ensure terminal is in an appropriate mode to receive the error message */
 
-  tio.hush = FALSE;
-  tio.suppress_como = TRUE;
-  tio_write(sdtgetstr("rlt"));
-  tio.suppress_como = FALSE;
+  if (sys_exc == NULL) {
+    tio.hush = FALSE;
+    tio.suppress_como = TRUE;
+    tio_write(sdtgetstr("rlt"));
+    tio.suppress_como = FALSE;
+  }
 
   in_sh = FALSE; /* 0562 */
 
-  fatal = (*message != '!');
   if (!fatal)
     message++;
 
@@ -276,6 +473,18 @@ void k_error(char* message, ...) {
                ((OBJECT_HEADER*)xcbase)->ext_hdr.prog.program_name);
     }
   }
+
+  if (sys_exc != NULL) {
+    /* Caught: the message is kept for @ABORT.MESSAGE and is the exception's
+       data, but is not displayed, logged or dumped (openQM: "System
+       Generated Exceptions"). exc_sys_throw() does not return. */
+
+    msg_descr = Element(process.syscom, SYSCOM_ABORT_MESSAGE);
+    k_release(msg_descr);
+    k_put_c_string(s, msg_descr);
+    exc_sys_throw(sys_exc, s);
+  }
+
   tio_write(s);
   tio_write("\n");
 

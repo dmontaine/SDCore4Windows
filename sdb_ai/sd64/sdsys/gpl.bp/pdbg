@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): cannot.debug: throws SYS.PROGRAM.NO_PDEBUG when a handler is there (QM4 Fixes 513).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -136,6 +137,9 @@ deffun atvar(name) calling "!atvar"
 cannot.debug:
    release ipc.f
    void kernel(K$SUPPRESS.COMO,@false)
+   * 17 Oct 26 (QM4 Fixes 513): a process that has an exception handler for it gets SYS.PROGRAM.NO_PDEBUG, the message as
+   * its data, and the phantom goes on; without one the phantom ends as it always did.
+   if caught('SYS.PROGRAM.NO_PDEBUG', 3) then throw 'SYS.PROGRAM.NO_PDEBUG', sysmsg(6727)
    stop sysmsg(6727) ;* Phantom debugger not active
 end
 
