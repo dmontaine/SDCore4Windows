@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26): Directory files with a trigger are listed too (QM4 Fixes item 177).
 * 18 Oct 26 Windows port - from Linux 8d65796 (11 Oct 26): 1.2-0 bundle A-8 (openQM refs 74 and 187).
 * END-HISTORY
 *
@@ -105,9 +106,9 @@ $include parser.h
       for part = 1 to 2
          flag = if part = 1 then '' else 'DICT'
          open flag, fname to f then
-            * (openQM 321, triggers on directory files: SD's SET.TRIGGER refuses a file that is not dynamic, and
-            * FILEINFO(FL$TRIGGER) of a directory file is a meaningless 0, so only dynamic files are listed)
-            if fileinfo(f, FL$TYPE) = FL$TYPE.DH then
+            * 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26): (QM4 Fixes item 177): a directory file can have a trigger too (its %header% file names it), so it
+            * is listed; until then SET.TRIGGER refused a file that was not dynamic
+            if fileinfo(f, FL$TYPE) = FL$TYPE.DH or fileinfo(f, FL$TYPE) = FL$TYPE.DIR then
                trg = fileinfo(f, FL$TRIGGER)
                if trg # '' then
                   modes = fileinfo(f, FL$TRG.MODES)

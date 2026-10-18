@@ -1251,6 +1251,10 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
       if (Option(OptDirSelOmitHidden) && dp->d_name[0] == '.')
         continue;
 
+      /* 16 Oct 26 (QM4 Fixes item 177): %header% holds the directory file's trigger, and is not a record */
+      if (is_dir_header(dp->d_name))
+        continue;
+
       if (stat(name, &statbuf))
         continue; /* 1.3-8  Carry on rather than end */
 

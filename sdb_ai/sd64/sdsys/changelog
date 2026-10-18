@@ -2,6 +2,31 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  LINE TERMINATOR MODES AND TRIGGERS ON DIRECTORY FILES (QM4 FIXES TAB, BATCH B).
+
+             Line ends   A directory file, and a sequential file opened with OPENSEQ, can be put in one of four
+                        line terminator modes, as openQM does it: a letter in field 6 of the F-type VOC entry chooses
+                        the mode for every OPEN or OPENSEQ of the file: L (mode 0, LF only, a CR is data), C (mode 1,
+                        CR LF only, so a lone CR or LF is data and WRITE and WRITESEQ put CR LF), B (mode 2, CR LF or
+                        LF, a lone CR kept) and X (mode 3, CR LF or LF, every CR thrown away).  READ and WRITE of a
+                        directory file and READSEQ and WRITESEQ follow the mode; a record longer than the 31,744
+                        bytes SD reads at a time is converted the same however it is cut.  A file with no letter
+                        behaves exactly as before (READ ends a line at CR LF or LF and keeps a lone CR, READSEQ ends
+                        it at LF and drops a CR in front of it), so nothing changes for a program that does not ask.
+                        What it does not do: READBLK, WRITEBLK, OSREAD and OSWRITE never convert, MARK.MAPPING OFF
+                        still turns every conversion off, and openQM's FCONTROL(fvar, FC$CRLF, mode), which sets the
+                        mode of one open file variable, is not here: SD's FCONTROL for programs is not there yet.
+             Triggers   A directory file can have a trigger function.  SET.TRIGGER works on it, LIST.TRIGGERS lists it
+                        and FILEINFO(FL$TRIGGER) and (FL$TRG.MODES) answer for it.  The trigger is kept in a small
+                        text file called %header% in the directory (trigger=name, modes=n), which SELECT, COUNT and
+                        ANALYSE.FILE do not count as a record, CLEAR.FILE leaves, and no record id can name.  READ, WRITE,
+                        DELETE and CLEARFILE call the function for the modes that are set, with the arguments a hashed
+                        file's trigger gets; it can refuse the operation or change the data.  WRITESEQ, WRITEBLK,
+                        OSWRITE and OSDELETE do not call it (openQM's limit).  A change takes effect when the file is
+                        next opened.  Whoever can write to the directory can change %header%, as they can add or
+                        remove records, so a trigger on a directory file is only as safe as the directory.  CLEAR.FILE
+                        of a directory file also stopped losing a directory handle each time it ran.
+
 18 Oct 26  NEWVOC.MODS, PHANTOM DEBUGGER @VARIABLES, QUERY IN / NOT.IN AND USER SORT SYSTEM (QM4 FIXES TAB, BATCH A).
 
              NEWVOC.MODS  The optional @SDSYS/newvoc.mods file (already applied to new accounts
@@ -40,7 +65,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                         no promised order once a sort is large enough to spill to a work file
                         (newest first while it stays in memory), a mode above 4 is taken as 0,
                         and only the low byte of the flags is used.
-             SORT      The sort that SORT, SSELECT and the query processor use was reorganised to
+             SORTING   The sort that SORT, SSELECT and the query processor use was reorganised to
                         share its code with the new one.  Its results are unchanged, with one
                         correction: a unique sort that spilled to work files now drops a
                         duplicate that lay in two different files, which the old merge kept.

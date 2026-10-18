@@ -488,6 +488,7 @@ void dio_close(FILE_VAR* fvar) {
       /* (fptr->ref_ct)--; */
       /* (*UFMPtr(my_uptr, fno))--; */
       /* EndExclusive(FILE_TABLE_LOCK); */
+      dir_trigger_close(fvar); /* QM4 Fixes item 177 */
       if (fptr != NULL) {
         StartExclusive(FILE_TABLE_LOCK, 48);
         (fptr->ref_ct)--;
@@ -919,6 +920,8 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   {
     fvar->type = DIRECTORY_FILE;
     fvar->access.dir.mark_mapping = TRUE;
+    fvar->access.dir.crlf = CRLF_UNSET; /* a letter in field 6 of the VOC entry may choose a mode below */
+    fvar->access.dir.trg = NULL;        /* set before anything below can fail: dio_close() frees it */
     fvar->file_id = get_file_entry(pathname, device, inode, NULL);
     if (dh_err) /* Failed to allocate entry */
     {
@@ -935,6 +938,8 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
     }
     if (op_flags & P_READONLY)
       fvar->flags |= FV_RDONLY;
+
+    dir_trigger_open(fvar, pathname); /* the trigger named in the directory's %header% file, if any (QM4 Fixes item 177) */
   }
 
 opened_via_txn_cache:
@@ -958,8 +963,11 @@ opened_via_txn_cache:
      197), S in forced write mode (QM4 Fixes item 102, hashed files).  They
      apply to this open only, as the OPEN statement's own options do, and to a
      file reached through a Q-pointer as well.  The other letters the manual
-     lists (B C L M X) are not acted on.                                       */
+     lists (M) is not acted on.  L C B and X choose the line terminator mode of a directory file
+     (16 Oct 26, QM4 Fixes item 452); a hashed file ignores them.             */
 
+  if (fvar->type == DIRECTORY_FILE)
+    fvar->access.dir.crlf = crlf_from_vflags(vflags);
   if (strchr(vflags, 'R') != NULL)
     fvar->flags |= FV_RDONLY;
   if ((strchr(vflags, 'N') != NULL) || (op_flags & P_NON_TXN)) /* P_NON_TXN: the NON.TRANSACTIONAL option of OPEN */

@@ -363,6 +363,15 @@ bool get_voc_file_reference(char * voc_name, bool get_dict_name,
                             char * path, char * vflags);
 void flush_dh_cache(void);
 
+/* OP_DIO3.C - line terminator modes of directory and sequential files (16 Oct 26, QM4 Fixes item 452) */
+u_char crlf_from_vflags(const char * vflags);
+/* ...and the trigger function of a directory file (16 Oct 26, QM4 Fixes item 177) */
+void dir_trigger_open(FILE_VAR * fvar, const char * dirpath);
+void dir_trigger_close(FILE_VAR * fvar);
+int dir_set_trigger(FILE_VAR * fvar, const char * name, int modes);
+bool is_dir_header(const char * name);
+/* (Linux's OP_SH.C gate functions os_gate_open, os_path_ok_for_account, os_path_open_ok and os_path_inside belong to the held S.63 gates.) */
+
 /* OP_DIO2.C */
 bool delete_path(char * path);
 bool fullpath(char * path, char * name);

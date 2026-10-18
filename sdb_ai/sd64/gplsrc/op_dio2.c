@@ -281,6 +281,10 @@ void op_fileinfo() {
           p = dh_file->trigger_name;
           goto set_string;
         }
+        if (ftype == DIRECTORY_FILE) { /* 16 Oct 26, QM4 Fixes item 177: named in the directory's %header% file */
+          p = (fvar->access.dir.trg != NULL) ? fvar->access.dir.trg->name : NULL;
+          goto set_string;
+        }
         break;
 
       case FL_PHYSBYTES: /* 1003  Physical file size */
@@ -323,6 +327,8 @@ void op_fileinfo() {
       case FL_TRG_MODES: /* 1007  Trigger modes */
         if (dynamic)
           n = dh_file->trigger_modes;
+        else if ((ftype == DIRECTORY_FILE) && (fvar->access.dir.trg != NULL))
+          n = fvar->access.dir.trg->modes;
         break;
 
       case FL_NOCASE: /* 1008  Case insensitive ids? */

@@ -391,6 +391,8 @@ Private bool dir_analyse(FILE_VAR* fvar, char* result) {
       {
         goto exit_dir_analyse;
       }
+      if (is_dir_header(dp->d_name)) /* the trigger's file is not a record (QM4 Fixes item 177) */
+        continue;
       /* changed to snprintf() 21Feb20 -gwb) */
       /* I'm really not satisfied with how the user gets feedback if
        * there's an error condition.  It should probably add more detail

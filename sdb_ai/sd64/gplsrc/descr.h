@@ -310,6 +310,27 @@ struct SQ_FILE {
 #define SQ_CHDEV 0x0008 /* Character mode device */
 #define SQ_FIFO 0x0010  /* FIFO */
 #define SQ_NOTFL 0x001C /* Mask for "files" that aren't files */
+  u_char crlf;           /* Line terminator mode: CRLF_UNSET or CRLF_x (below) */
+};
+
+/* Line terminator modes of a directory file or a sequential file (openQM FC$CRLF, 16 Oct 26, QM4 Fixes item 452).  The value
+   kept in the file is 0 (CRLF_UNSET) until a mode is chosen, by FCONTROL(fvar, FC$CRLF, mode) or by a letter in field 6 of the
+   F-type VOC entry (L C B X), and the mode + 1 after.  UNSET is the behaviour SD always had: a directory file READ ends a line
+   at LF and keeps every CR, WRITE ends it with LF; READSEQ ends a line at LF and drops a CR in front of it, WRITESEQ writes LF. */
+#define CRLF_UNSET 0
+#define CRLF_LF 1   /* mode 0: LF ends a line, CR is data;                              VOC letter L */
+#define CRLF_CRLF 2 /* mode 1: CR LF ends a line, a lone CR or LF is data;               VOC letter C */
+#define CRLF_BOTH 3 /* mode 2: CR LF or LF ends a line, a lone CR is data;               VOC letter B */
+#define CRLF_NOCR 4 /* mode 3: CR LF or LF ends a line, a lone CR is thrown away;        VOC letter X */
+
+/* The trigger function of a directory file (16 Oct 26, QM4 Fixes item 177).  A hashed file keeps its trigger in its header (DH_FILE);
+   a directory file has no header, so its trigger is named in a file called %header% in the directory, read when the file is opened
+   and kept here for the life of the file variable.  A change to the trigger is seen by the next OPEN of the file, not this one. */
+typedef struct DIR_TRIGGER DIR_TRIGGER;
+struct DIR_TRIGGER {
+  char* name;      /* The function, in lower case */
+  u_char* trigger; /* Its object code, or NULL if it is not catalogued (the first call that needs it says so) */
+  u_char modes;    /* TRG_x: the operations that call it */
 };
 
 /* File variable structure
@@ -342,6 +363,8 @@ struct FILE_VAR {
     } seq;
     struct {
       u_int16_t mark_mapping : 1;
+      u_int16_t crlf : 3; /* CRLF_UNSET or CRLF_x */
+      DIR_TRIGGER* trg;   /* The file's trigger function, or NULL */
     } dir;
     struct {
       int file_no;

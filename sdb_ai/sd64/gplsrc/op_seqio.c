@@ -78,6 +78,8 @@ Private void writeseq(bool flush_to_disk);
 Private void emit(FILE_VAR* fvar, char* p, int16_t bytes);
 Private int flush_seq(FILE_VAR* fvar, bool force_write);
 Private OSFILE create_seq_record(FILE_VAR* fvar);
+Private int seq_byte_at(FILE_VAR* fvar, SQ_FILE* sq_file, int64 at, u_char* c);
+Private bool readseq_modal(FILE_VAR* fvar, SQ_FILE* sq_file);
 
 /* ======================================================================
    op_createsq()  -  Create an empty sequential file record               */
@@ -430,6 +432,7 @@ Private void openseq(bool map_name) {
   u_int32_t device = 0;
   u_int32_t inode = 0;
   struct stat stat_buf;
+  char vflags[VOC_FLAGS_LEN + 1] = ""; /* Field 6 of the F-type VOC entry, in capitals: its L C B X choose the line terminator mode */
 
   op_flags = process.op_flags;
 
@@ -475,7 +478,7 @@ Private void openseq(bool map_name) {
 
     /* Use VOC to translate file name to file system path */
 
-    if (!get_voc_file_reference(file_name, FALSE, file_name, NULL)) {
+    if (!get_voc_file_reference(file_name, FALSE, file_name, vflags)) {
       /* process.status set by _VOC_REF recursive */
       goto exit_op_openseq;
     }
@@ -798,6 +801,7 @@ Private void openseq(bool map_name) {
   sq_file->base = -1;
   sq_file->timeout = -1;
   sq_file->flags = flags;
+  sq_file->crlf = crlf_from_vflags(vflags); /* CRLF_UNSET unless a letter in field 6 of the VOC entry chose a mode (item 452) */
 
   /* Save full (mapped) pathname of record */
 
@@ -1123,6 +1127,95 @@ exit_op_readblk:
 }
 
 /* ======================================================================
+   seq_byte_at()  -  The byte of a sequential file at a position, through the file's one block buffer
+
+   Returns 1 and the byte, 0 at end of file, -1 if the buffer could not be written out first (STATUS() set).  The same
+   buffer handling as the loop in op_readseq() below, which has its own for speed.                                 */
+
+Private int seq_byte_at(FILE_VAR* fvar, SQ_FILE* sq_file, int64 at, u_char* c) {
+  int64 block = at & ~SEQ_BUFFER_MASK;
+  int16_t offset;
+
+  if (block != sq_file->base) {
+    if (flush_seq(fvar, FALSE))
+      return -1;
+
+    Seek(sq_file->fu, block, SEEK_SET);
+    if ((sq_file->bytes = (int16_t)Read(sq_file->fu, sq_file->buff, SEQ_BUFFER_SIZE)) < 0)
+      sq_file->bytes = 0;
+    sq_file->base = block;
+  }
+
+  offset = (int16_t)(at & SEQ_BUFFER_MASK);
+  if (offset >= sq_file->bytes)
+    return 0;
+  *c = (u_char)sq_file->buff[offset];
+  return 1;
+}
+
+/* ======================================================================
+   readseq_modal()  -  READSEQ of a file in the line terminator mode LF, CRLF or NOCR (16 Oct 26, QM4 Fixes item 452)
+
+   CRLF_LF     LF ends a line; a CR is data.
+   CRLF_CRLF   CR LF ends a line; a lone CR or LF is data, so a line may hold an LF.
+   CRLF_NOCR   LF ends a line, whatever is in front of it; every CR is thrown away.
+   (CRLF_BOTH, and no mode at all, is the loop in op_readseq(): LF ends a line and a CR in front of it is dropped.)  A last
+   line with no terminator is a line.  Called with the target string already started (ts_init); on TRUE the caller ends it.
+   On FALSE STATUS() is set: ER_RNF when there was nothing left to read.  A byte at a time: these modes are chosen on
+   purpose and read a file of another system's.                                                                     */
+
+Private bool readseq_modal(FILE_VAR* fvar, SQ_FILE* sq_file) {
+  u_char mode = sq_file->crlf;
+  u_char c;
+  u_char c2;
+  int r;
+  bool consumed = FALSE;
+
+  for (;;) {
+    r = seq_byte_at(fvar, sq_file, sq_file->posn, &c);
+    if (r < 0)
+      return FALSE;
+    if (r == 0) { /* end of file */
+      if (!consumed) {
+        process.status = ER_RNF;
+        return FALSE;
+      }
+      return TRUE; /* a last line with no terminator */
+    }
+    sq_file->posn++;
+    if ((c == '\r') && (mode == CRLF_NOCR))
+      continue; /* thrown away, and not a line of its own: a file that ends "a LF CR" has one line */
+    consumed = TRUE;
+
+    if (c == '\n') {
+      if (mode == CRLF_CRLF) { /* a lone LF is data */
+        ts_copy("\n", 1);
+        continue;
+      }
+      sq_file->line++;
+      return TRUE;
+    }
+
+    if (c == '\r') {
+      if (mode == CRLF_CRLF) {
+        r = seq_byte_at(fvar, sq_file, sq_file->posn, &c2);
+        if (r < 0)
+          return FALSE;
+        if ((r > 0) && (c2 == '\n')) { /* CR LF */
+          sq_file->posn++;
+          sq_file->line++;
+          return TRUE;
+        }
+      }
+      ts_copy("\r", 1); /* data */
+      continue;
+    }
+
+    ts_copy((char*)&c, 1);
+  }
+}
+
+/* ======================================================================
    op_readseq()  -  Read record from sequential file                      */
 
 void op_readseq() {
@@ -1279,6 +1372,13 @@ void op_readseq() {
       s_free(tgt_descr->data.str.saddr);
       tgt_descr->data.str.saddr = NULL;
     }
+  } else if ((sq_file->crlf != CRLF_UNSET) && (sq_file->crlf != CRLF_BOTH)) /* A line terminator mode chosen (item 452) */
+  {
+    /* CRLF_BOTH is what READSEQ has always done, so it keeps the code below; the others read byte by byte */
+
+    if (!readseq_modal(fvar, sq_file))
+      goto exit_op_readseq;
+    (void)ts_terminate();
   } else /* Normal file or device */
   {
     /* Copy data until we find EOF or a newline */
@@ -1764,6 +1864,8 @@ Private void writeseq(bool flush_to_disk) {
   OSFILE fu;
   STRING_CHUNK* src_str;
   u_int16_t op_flags;
+  char* nl = Newline;
+  int16_t nl_bytes = NewlineBytes;
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -1790,6 +1892,13 @@ Private void writeseq(bool flush_to_disk) {
   sq_file = fvar->access.seq.sq_file;
   if ((prof_mask & PROF_WRITESEQ) && (sq_file->pathname != NULL)) /* the application event profiler (16 Oct 26) */
     prof_event(PROF_WRITESEQ, sq_file->pathname, (int)strlen(sq_file->pathname));
+
+  /* What ends the line: LF, except in the mode that wants CR LF (16 Oct 26, QM4 Fixes item 452) */
+
+  if (sq_file->crlf == CRLF_CRLF) {
+    nl = "\r\n";
+    nl_bytes = 2;
+  }
 
   fu = sq_file->fu;
   if (!ValidFileHandle(fu)) /* File opened for creation */
@@ -1843,12 +1952,12 @@ Private void writeseq(bool flush_to_disk) {
 
     /* Write newline sequence */
 
-    if (Write(fu, Newline, NewlineBytes) < 0) {
+    if (Write(fu, nl, nl_bytes) < 0) {
       process.status = ER_WRITE_ERROR;
       process.os_error = OSError;
       goto exit_op_writeseq;
     }
-    sq_file->posn += NewlineBytes;
+    sq_file->posn += nl_bytes;
   } else {
     while (src_str != NULL) {
       emit(fvar, src_str->data, src_str->bytes);
@@ -1857,7 +1966,7 @@ Private void writeseq(bool flush_to_disk) {
 
     /* Write newline sequence */
 
-    emit(fvar, Newline, NewlineBytes);
+    emit(fvar, nl, nl_bytes);
 
     if (flush_to_disk)
       flush_seq(fvar, TRUE);
