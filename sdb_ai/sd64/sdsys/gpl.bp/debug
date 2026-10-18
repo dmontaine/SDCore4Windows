@@ -80,6 +80,17 @@ found.program:
 
    if rebind.string then display rebind.string :
 
+   * A WATCH with a condition (WATCH var op value, 14 Oct 26, openQM 45): the variable was assigned, but if the new value is not
+   * one the condition wants the program goes straight on, as the RUN command would, without showing anything
+
+   if bitand(event, DE$WATCH) and watch.op # '' then
+      gosub watch.test
+      if not(watch.met) then
+         gosub dbg.breakpoint(BRK$RUN, 0)
+         goto exit.debug
+      end
+   end
+
    * ------------------------------------------------------------
    * Display source program window
 
@@ -468,6 +479,7 @@ found.program:
                   done = @true
 
                case action = "UW" or action = "UNWATCH"
+                  watch.op = '' ; watch.val = ''
                   gosub dbg.watch(-1, 0)
 
                case (action = "V" or action = "VIEW") and full.screen and not(phantom)
@@ -476,7 +488,8 @@ found.program:
                case action = 'W' or action = 'WATCH'
                   var.name = field(command, ' ', 2)
                   if not(case.sensitive) then var.name = upcase(var.name)
-                  gosub watch
+                  gosub parse.watch.condition        ;* WATCH var op value (14 Oct 26, openQM 45)
+                  if watch.cond.ok then gosub watch
 
                case 1
 error:
@@ -1474,7 +1487,7 @@ watch:
             gosub emit.err.msg
             return
          end
-         gosub dbg.watch(var.no, var.row)
+         arm.no = var.no ; arm.index = var.row ; gosub arm.watch
       end else  ;* Two index values
          if cols = 0 then
             message = sysmsg(6721) ;* Single dimensional matrix requires one index value
@@ -1491,12 +1504,91 @@ watch:
             gosub emit.err.msg
             return
          end
-         gosub dbg.watch(watch var.no, cols * (var.row - 1) + var.col)
+         arm.no = var.no ; arm.index = cols * (var.row - 1) + var.col ; gosub arm.watch
       end
    end else    ;* Scalar variable
-      gosub dbg.watch(var.no, 0)
+      arm.no = var.no ; arm.index = 0 ; gosub arm.watch
    end
 
+   return
+
+* ======================================================================
+* ARM.WATCH  -  Start watching variable arm.no (element arm.index of a matrix, 0 for a scalar), with the condition
+* that PARSE.WATCH.CONDITION found, if any
+
+arm.watch:
+   watch.var.no = arm.no
+   watch.index = arm.index
+   watch.op = watch.op.new
+   watch.val = watch.val.new
+   gosub dbg.watch(arm.no, arm.index)
+   return
+
+* ======================================================================
+* PARSE.WATCH.CONDITION  -  WATCH var {op value}.  Sets watch.op.new and watch.val.new (null for a plain WATCH) and
+* watch.cond.ok false, with the unrecognised command message, when there is an operator that is not one of the
+* relational operators or MATCHES, or no value after it.  LIKE and UNLIKE are not supported.
+
+parse.watch.condition:
+   watch.op.new = '' ; watch.val.new = '' ; watch.cond.ok = @true
+   w.op = upcase(field(command, ' ', 3))
+   if w.op = '' then return
+
+   if not(index(',=,EQ,#,NE,<,LT,>,GT,<=,LE,>=,GE,MATCHES,MATCH,', ',' : w.op : ',', 1)) then
+      message = sysmsg(6709) ;* Unrecognised command
+      gosub emit.err.msg
+      watch.cond.ok = @false
+      return
+   end
+
+   w.val = trim(field(command, ' ', 4, 999999))
+   if w.val = '' then
+      message = sysmsg(6709) ;* Unrecognised command
+      gosub emit.err.msg
+      watch.cond.ok = @false
+      return
+   end
+
+   * A quoted value is that text; anything else is taken as typed
+
+   q = w.val[1, 1]
+   if (q = '"' or q = "'") and len(w.val) > 1 and w.val[len(w.val), 1] = q then w.val = w.val[2, len(w.val) - 2]
+
+   watch.op.new = w.op
+   watch.val.new = w.val
+   return
+
+* ======================================================================
+* WATCH.TEST  -  Is the watched variable's new value one that the WATCH condition wants?  Sets watch.met.  A WATCH without
+* a condition, a value that cannot be read (an array, a file...) and an element the variable no longer has all count as met,
+* so the program stops as it always did.
+
+watch.test:
+   watch.met = @true
+   if watch.op = '' then return
+
+   w.info = dbg.info(1, watch.var.no)
+   if watch.index then w.info = dbg.info(2, watch.index)
+   w.type = w.info<1> + 0
+   begin case
+      case w.type = V$INTEGER or w.type = V$FLOATNUM
+         w.now = w.info<2>
+      case w.type = V$STRING
+         w.now = field(w.info, @fm, 3, 9999999)
+      case 1
+         return
+   end case
+
+   w.want = watch.val
+   begin case
+      case watch.op = '=' or watch.op = 'EQ' ; watch.met = (w.now = w.want)
+      case watch.op = '#' or watch.op = 'NE' ; watch.met = (w.now # w.want)
+      case watch.op = '<' or watch.op = 'LT' ; watch.met = (w.now < w.want)
+      case watch.op = '>' or watch.op = 'GT' ; watch.met = (w.now > w.want)
+      case watch.op = '<=' or watch.op = 'LE' ; watch.met = (w.now <= w.want)
+      case watch.op = '>=' or watch.op = 'GE' ; watch.met = (w.now >= w.want)
+      case 1 ; watch.met = (w.now matches w.want)     ;* MATCHES
+   end case
    return
 
 * ======================================================================

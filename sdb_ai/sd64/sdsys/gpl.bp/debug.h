@@ -80,6 +80,14 @@ $define DATA.AREA.LINES        5
 
                    breakpoints,    ;* Stored as programindex.line, FM delimited
                    watch.var.name,              ;* Name of watched variable
+                   watch.var.no,                ;* ... its variable number (14 Oct 26, WATCH var op value)
+                   watch.index,                 ;* ... the element number of a matrix element, else 0
+                   watch.op,                    ;* The condition's operator, null for an unconditional WATCH
+                   watch.val,                   ;* ... and its value
+                   watch.op.new,                ;* Parsed from the WATCH command, taken into watch.op when it is armed
+                   watch.val.new,
+                   arm.no,                      ;* Passed to arm.watch
+                   arm.index,
 
                    system.variables,
                    basic.chars,                 ;* Valid characters in names

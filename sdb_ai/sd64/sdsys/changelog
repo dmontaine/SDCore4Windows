@@ -2,6 +2,21 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE DEBUGGER'S WATCH TAKES A CONDITION.
+
+             WATCH variable operator value
+                        The program stops only when the value just assigned
+                        meets the condition; otherwise it carries on without
+                        showing anything.  The operators are =, #, <, >, <=,
+                        >=, their word forms EQ, NE, LT, GT, LE, GE, and
+                        MATCHES.  A value in quotes is that text; a number
+                        compares as a number and anything else as text.
+                        A WATCH with no condition stops at every assignment as
+                        before, a new WATCH replaces the old one with its
+                        condition, and UNWATCH clears both.  LIKE and UNLIKE
+                        are not supported.  A condition on a local variable
+                        works while the program that set it is the one running.
+
 18 Oct 26  STATUS() AFTER END TRANSACTION.
 
              A program can now test STATUS() straight after END TRANSACTION:
