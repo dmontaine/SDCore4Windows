@@ -3,8 +3,7 @@ W1.2-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
 18 Oct 26  SET.TRIGGER WORKS AGAIN, AND GAINS ALL; LIST.TRIGGERS; FSTAT'S
-           COLUMNS ARE WIDER (1.2-0, eighth of the openQM compatibility
-           bundles).
+           COLUMNS ARE WIDER.
 
            SET.TRIGGER refused every function name.  Since the call-name
            change of 14 September it lower-cased the name and then checked it
@@ -31,8 +30,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            here to extend.
 
 18 Oct 26  SAVED SELECT LISTS: KEEP, DELETING, COUNT.SUP, A DEFAULT NAME,
-           SORT.LIST AND SELECT.DIR (1.2-0, seventh of the openQM
-           compatibility bundles; the sixth is the one line below it).
+           SORT.LIST AND SELECT.DIR.
 
              SAVE.LIST name KEEP    Leaves the active select list as it was.
                                     SAVE.LIST has always emptied it.
@@ -73,7 +71,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            and are not built.
 
 18 Oct 26  WHO USER, PSTAT USER name, A LOCK HOLDER'S NAME IN PSTAT, AND
-           !LISTU (openQM compatibility).
+           !LISTU.
 
              WHO USER        Also shows your login name after the user
                              number and the account.
@@ -98,8 +96,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            monitor has no input/output counters.  Each needs the kernel to
            record something it does not record now.
 
-18 Oct 26  SIX NEW OPTION NAMES FOR COMPATIBILITY WITH OTHER MULTIVALUE SYSTEMS
-           (openQM compatibility).
+18 Oct 26  SIX NEW OPTION NAMES FOR COMPATIBILITY WITH OTHER MULTIVALUE SYSTEMS.
 
            All are off, as every option is until OPTION turns it on, so an
            existing application sees no change.  OPTION with no name lists them.
@@ -132,8 +129,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            or the print system, or the release notes do not say which options
            the shortcuts set.
 
-18 Oct 26  THE QUERY PROCESSOR: TWELVE ADDITIONS FROM OTHER MULTIVALUE SYSTEMS
-           (openQM compatibility).
+18 Oct 26  THE QUERY PROCESSOR: TWELVE ADDITIONS FROM OTHER MULTIVALUE SYSTEMS.
 
            LIST, SORT, SELECT, COUNT, REFORMAT and SEARCH.  None of this
            changes a query that does not use it, except where it says so.
