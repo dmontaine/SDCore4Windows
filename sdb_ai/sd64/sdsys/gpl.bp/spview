@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux ab4dab3 (13 Oct 26): BY / BY.DSND field {NO.CASE} sorts the pick list (it is passed to SELECT,
+*               list 11); Return pages forward in a record; Esc-Z pages back (openQM page).
 * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): X deletes the item being shown, after asking; one taken from the
 *               pick list is taken off it (openQM 450).
 * 18 Aug 26 Windows port - the $HOLD VOC id is now $hold
@@ -59,11 +61,31 @@ $include keyin.h
    item.name = ''
    lptr = 0
    numbering = @false
+   sort.clause = ''              ;* 13 Oct 26 dm - openQM 'SP.VIEW file BY field'
+   sort.state = 0                ;* 1 = a field name must follow BY, 2 = NO.CASE may follow it
+   sort.no.case = @false         ;* The NO.CASE qualifier: SELECT has no such word, so OPTION QUERY.SORT.NO.CASE does it
 
    loop
       call @parser(PARSER$MFILE, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
+         case sort.state = 1 and keyword = KW$NO.CASE
+            sort.no.case = @true          ;* Before the field name
+
+         case sort.state = 1
+            sort.clause := ' ' : token
+            sort.state = 2
+
+         case sort.state = 2 and keyword = KW$NO.CASE
+            sort.no.case = @true          ;* After it
+            sort.state = 0
+
+         case keyword = KW$BY or keyword = KW$BY.DSND
+            if sort.clause # '' then stop sysmsg(2018, token) ;* Unexpected token (xx)
+            by.token = token
+            sort.clause = ' ' : token
+            sort.state = 1
+
          case keyword = KW$DICT
             call @parser(PARSER$MFILE, token.type, token, keyword)
             if token.type = PARSER$END then stop 'File name required'
@@ -87,6 +109,8 @@ $include keyin.h
             stop sysmsg(2018, token ) ;* Unexpected token (xx)
       end case
    repeat
+
+   if sort.state = 1 then stop sysmsg(7266, by.token) ;* Expected field name after xx
 
    if file.name = '' then
       * If we have just one name, resolve whether we are looking at a single
@@ -133,12 +157,30 @@ $include keyin.h
    void bindkey('', -5)
    i = bindkey(char(27):'V', K$PAGE.UP)
    i = bindkey(char(27):'v', K$PAGE.UP)
+   i = bindkey(char(27):'Z', K$PAGE.UP)    ;* 13 Oct 26 dm - the page's Esc-Z, up one page in a record
+   i = bindkey(char(27):'z', K$PAGE.UP)
    i = bindkey(char(27):'<', K$HOME)
    i = bindkey(char(27):'>', K$END)
    
    if item.name = '' then
-      sselect data.f to 11
-      readlist item.list from 11 else null
+      if sort.clause = '' then
+         sselect data.f to 11
+      end else
+         * 18 Oct 26 Windows port - from Linux ab4dab3 (13 Oct 26): - openQM: the sort clause has the form of a query processor BY / BY.DSND clause.
+         * Like openQM's, it makes the default select list and so replaces any that was active.
+         turn.off = sort.no.case and not(option(OPT.QUERY.SORT.NO.CASE))
+         if turn.off then execute 'OPTION QUERY.SORT.NO.CASE ON' capturing junk
+         execute 'SELECT ' : file.name : sort.clause capturing sort.output
+         if turn.off then execute 'OPTION QUERY.SORT.NO.CASE OFF' capturing junk
+         readlist item.list from 0 else
+            item.list = ''
+            if not(index(sort.output, 'selected', 1)) then   ;* Not the 'n record(s) selected' line: an error
+               display sort.output
+               stop
+            end
+         end
+      end
+      if sort.clause = '' then readlist item.list from 11 else null
       pick.pos = ''
       loop
          call !pick(item.name,
@@ -437,6 +479,7 @@ map.keys:
       case n = K$PAGE.DOWN  ; c = 'N'
       case n = K$LEFT       ; c = 'L'
       case n = K$RIGHT      ; c = 'R'
+      case n = K$RETURN     ; c = 'N'     ;* 13 Oct 26 dm - Return pages forward in a record
       case n = K$HOME       ; c = 'T'
       case n = K$END        ; c = 'B'
       case n = CTRL.B       ; c = 'L'
