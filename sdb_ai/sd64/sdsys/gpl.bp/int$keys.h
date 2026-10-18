@@ -435,6 +435,8 @@
       $define OPT.BACKSLASH.NOT.QUOTE 37 ;* Command parser: backslash is not a quote
       $define OPT.DEFAULT.MV          38 ;* QPROC: C, D, I items with blank S/M are multivalued
       $define OPT.CLEAR.SELECT        39 ;* Clear select list 0 after a command that did not make it
+      $define OPT.CATALOGUE.LOCAL     40 ;* CATALOG and DELETE.CATALOG default to the local catalogue
+      $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
 
       * MKINDEX flag values (additive)
       $define MKI$CREATE               1 ;* Create indices

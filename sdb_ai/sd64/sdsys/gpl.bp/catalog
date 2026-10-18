@@ -78,7 +78,8 @@ $include err.h
    dim name(3)
    no.names = 0
    no.query = @false
-   
+   relative = @false
+
    option.seen = @false          ;* No options yet - names still allowed
 
    mode = 0
@@ -134,6 +135,10 @@ $define CAT_PCODE  3
 
          case keyword = KW$NO.QUERY
             no.query = @true
+
+         case upcase(token) = 'RELATIVE' and no.names >= 1     ;* 12 Oct 26 dm - openQM 131
+            relative = @true
+            option.seen = @true
 
          case keyword = KW$NOXREF
             no.xref.keyword = token  ;* Hang onto name (May not be NOXREF)
@@ -215,6 +220,10 @@ $define CAT_PCODE  3
 *   inherits the test rather than rediscovering this.  The keyword's own test is
 *   left where it is: it reports while parsing, before the object file is
 *   opened, which is the better message for the common mistake.
+
+   * 18 Oct 26 Windows port - from Linux dcd661f (12 Oct 26): - openQM 288: with OPTION CATALOGUE.LOCAL a name with no mode and no global prefix is local
+   if mode = 0 and option(OPT.CATALOGUE.LOCAL) then mode = CAT_LOCAL
+
    if mode = CAT_GLOBAL and not(kernel(K$ADMINISTRATOR, -1)) then
       stop sysmsg(2001)  ;* Command requires administrator privileges
    end
@@ -382,6 +391,12 @@ catalogue.program:
          end
 
          program.path = fileinfo(object.file, fl$path) : @ds : program.name
+         * 18 Oct 26 Windows port - from Linux dcd661f (12 Oct 26): - openQM 131: RELATIVE stores the path below the account directory as a relative path, so
+         * the account (and its programs) can be moved; an object file elsewhere keeps its full path.
+         if relative then
+            home = @path : @ds
+            if program.path[1, len(home)] = home then program.path = program.path[len(home) + 1, 99999]
+         end
          voc.rec = "V" : @fm : "CS" : @fm : program.path
          write voc.rec to @voc, call.name
          if old.local.id # '' then delete @voc, old.local.id

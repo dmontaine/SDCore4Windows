@@ -72,7 +72,9 @@
 #define OptBackslashNotQuote 37   /*            only (gpl.bp/qproc, parser,  */
 #define OptDefaultMV         38   /*            cproc), so the C side only   */
 #define OptClearSelect       39   /*            needs room for the flags.    */
-#define NumOptions           40
+#define OptCatalogueLocal    40   /* 12 Oct 26  openQM refs 288 and 445: CATALOGUE.LOCAL is read by BASIC (catalog,  */
+#define OptDirSelOmitHidden  41   /*            delcat); DIR.SEL.OMIT.HIDDEN by dir_select() in op_dio4.c.       */
+#define NumOptions           42
 
 Public char option_flags[NumOptions];
 

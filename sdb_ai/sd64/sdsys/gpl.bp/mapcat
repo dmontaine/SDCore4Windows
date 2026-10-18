@@ -52,6 +52,8 @@ $include err.h
    prompt ''
 
    show.all = @false
+   no.page = @false
+   show.local = @false
    lptr = -1
    file.name = ''
 
@@ -88,6 +90,12 @@ $include err.h
          case keyword = KW$FILE
             call @parser(parser$get.token, token.type, file.name, keyword)
             if token.type = parser$end then file.name = '$map'
+
+         case keyword = KW$NO.PAGE      ;* 12 Oct 26 dm - openQM 153
+            no.page = @true
+
+         case keyword = KW$LOCAL        ;* 12 Oct 26 dm - openQM 287: list the locally catalogued programs only
+            show.local = @true
 
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
@@ -136,8 +144,26 @@ $include err.h
 
    cat.names = ''
    cat.modes = ''
+   cat.paths = ''
+
+   if show.local then
+      * Local catalogue entries are VOC records  V / CS / object pathname  (mode 3)
+      select @voc to 12
+      loop
+         readnext name from 12 else exit
+         read voc.rec from @voc, name then
+            if upcase(voc.rec[1,1]) = 'V' and voc.rec<2> = 'CS' then
+               locate name in cat.names<1> by 'AL' setting pos else null
+               ins name before cat.names<pos>
+               ins 3 before cat.modes<pos>
+               ins voc.rec<3> before cat.paths<pos>
+            end
+         end
+      repeat
+   end
 
    for i = 1 to 2    ;* Global then private
+      if show.local then continue
       select cat.f(i)
       loop
          readnext name else exit
@@ -158,21 +184,43 @@ $include err.h
       if file.name = '' then
          if lptr = 0 then printer on
          hdr = sysmsg(3046, oconv(time(), "MTS"), oconv(date(), "D4DMYL[,A3]"))  ;* Heading
-         heading on lptr hdr
+         if no.page and lptr < 0 then
+            * 18 Oct 26 Windows port - from Linux dcd661f (12 Oct 26): - openQM 153: the heading once, with no page breaks
+            print hdr
+            print
+         end else
+            heading on lptr hdr
+         end
 
          total.size= 0
       end
 
+      name.no = 0
       loop
          remove name from cat.names setting name.delim
          remove mode from cat.modes setting dummy
+         name.no += 1
 
 *          1         2         3         4         5         6         7         8
 * 12345678901234567890123456789012345678901234567890123456789012345678901234567890
 *   Catalogue name..................  Compiled.  Time....  ...Obj  ..Xref  ..Size
 
-         read object from cat.f(mode), name then
-            dtm = oconv(object[hdr.compile.time,4], 'IL')
+         object = ''
+         if mode = 3 then
+            * the object file of a local entry is read whole, in blocks, from the path in the VOC pointer
+            openseq cat.paths<name.no> to obj.f then
+               loop
+                  readblk blk from obj.f, 32768 else exit
+                  object := blk
+               repeat
+               closeseq obj.f
+            end else null
+            found.obj = (object # '')
+         end else
+            read object from cat.f(mode), name then found.obj = @true else found.obj = @false
+         end
+         if found.obj then
+            dtm =oconv(object[hdr.compile.time,4], 'IL')
             compile.date = int(dtm / 86400)
             compile.time = rem(dtm, 86400)
 
@@ -192,6 +240,7 @@ $include err.h
             if file.name = '' then
                line = space(79)
                if mode = 1 then line[1,1] = '*'
+               if mode = 3 then line[1,1] = 'L'
                line[3,32] = name
 
                line[37,9] = oconv(compile.date, 'D2DMYL[,A3]')

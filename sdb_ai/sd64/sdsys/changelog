@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  CATALOGUE AND MAP OPTIONS, TWO NEW OPTIONS.  Syntax is SD's own.
+
+             MAP LOCAL           Lists the programs catalogued locally in
+                                 the account (marked L), as MAP lists the
+                                 global (*) and private ones.
+             MAP NO.PAGE         Heading once, no page breaks, on the screen.
+             CATALOG ... LOCAL RELATIVE
+                                 Stores the object file's path relative to
+                                 the account when it lies below it, so the
+                                 account can be moved or copied.
+             OPTION CATALOGUE.LOCAL
+                                 CATALOG and DELETE.CATALOG use the local
+                                 catalogue when no mode is given.  A name
+                                 with a global prefix is still global.
+             OPTION DIR.SEL.OMIT.HIDDEN
+                                 SELECT of a directory file leaves out the
+                                 names that begin with a dot.
+
 18 Oct 26  COMMAND LANGUAGE: COMO, IF IN AND EXISTS, INLINE PROMPTS.  Syntax is SD's own.
 
              COMO ON record APPEND   Adds to the record if it exists

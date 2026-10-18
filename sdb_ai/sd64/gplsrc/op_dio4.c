@@ -1157,6 +1157,10 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
          */
         break; /* TODO: Work out the correct way of exiting this function with an error */
       }
+      /* 12 Oct 26 (openQM item 445): OPTION DIR.SEL.OMIT.HIDDEN leaves out the names that begin with a dot */
+      if (Option(OptDirSelOmitHidden) && dp->d_name[0] == '.')
+        continue;
+
       if (stat(name, &statbuf))
         continue; /* 1.3-8  Carry on rather than end */
 
