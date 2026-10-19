@@ -460,7 +460,7 @@
       $define OPT.PICK.NULL           16 ;* Return null for null data in ML, MR and FMT()
       $define OPT.PICK.GRAND.TOTAL    17 ;* GRAND.TOTAL text on same line as values
       $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
-      $define OPT.DEBUG.REBIND.KEYS   19 ;* Rebind AccuTerm keys on entry to debugger
+      $define OPT.DEBUG.REBIND.KEYS   19 ;* Reserved: no effect (it rebound AccuTerm keys on entry to the debugger)
       $define OPT.ED.NO.QUERY.FD      20 ;* Don't ask for confirmation on FD command in ED
       $define OPT.NO.SEL.LIST.QUERY   21 ;* Don't query use of select list
       $define OPT.CHAIN.KEEP.COMMON   22 ;* Keep unnamed common on CHAIN

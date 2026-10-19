@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
+*               with its styles and $sl_put, help is its message box, and the whole screen is the terminal's
+*               ALTERNATE screen, on any terminal that has one.  The AccuTerm code (screen images through the 'sreg'
+*               capability, its mouse and its key rebinding) is removed, on the owner's instruction.
 * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): NO.SOURCE.WARNING in the VOC record $DEBUG.OPTIONS stops the "unable to find source" message (openQM 203).
 * 18 Oct 26 Windows port - from Linux 8da7e5d (11 Oct 26): A data collection variable is shown (kind, element count and its
 *               JSON text), and /name{path} and DUMP name{path} show the
@@ -48,6 +52,7 @@ $include syscom.h
 
 $include int$keys.h
 $include header.h
+$include sl.h
 
 deffun atvar(name) calling "!atvar"
 deffun dbg.atvar(name) local
@@ -62,11 +67,17 @@ $define SOURCE.AREA            1
    return.key = seq(pterm(PT$INEWLINE,''))
    phantom = bitand(event, 0x80000000) # 0
 
-   if debug.initialised and not(phantom) then
-      screen.image = save.screen(0, 0, @crtwide, @crthigh)
-      if full.screen then restore.screen debug.screen.image, @true
+   * On a terminal that has an ALTERNATE screen the debugger takes the whole of it: the program's own screen is kept
+   * by the terminal and comes back when the debugger lets go.  alt.on is true between the two (initialise enters it
+   * itself the first time, to paint on it).  A terminal without one, or a session with no terminal, gets line mode.
+   alt.on = @false
+   if not(debug.initialised) then gosub initialise
+
+   alt.screen = full.screen and not(phantom)
+   if alt.screen and not(alt.on) then
+      display terminfo('smcup') : @(-1) :
+      alt.on = @true
    end
-   else gosub initialise
 
    * Find program details
 
@@ -79,7 +90,8 @@ $define SOURCE.AREA            1
 found.program:
    case.sensitive = bitand(program.flags(idx), HDR.CASE.SENSITIVE)
 
-   if rebind.string then display rebind.string :
+   if full.screen then gosub theme.in          ;* the library's styles for what follows (given back at exit.debug)
+   if alt.screen then gosub paint.data.area    ;* a fresh alternate screen: the messages of the last stop are shown again
 
    * A WATCH with a condition (WATCH var op value, 14 Oct 26, openQM 45): the variable was assigned, but if the new value is not
    * one the condition wants the program goes straight on, as the RUN command would, without showing anything
@@ -105,7 +117,6 @@ found.program:
 
       var.name = watch.var.name
       dump.path = ''    ;* 0499
-      mouse.action = @false
       gosub display.variable
    end
 
@@ -239,13 +250,11 @@ found.program:
                            var.name = command[2, 9999]
                         end
                         gosub fold.var.name
-                        mouse.action = @false
                         last.display = var.name
                         gosub display.variable
 
                      case last.display # ''
                         var.name = last.display
-                        mouse.action = @false
                         gosub display.variable
                   end case
 
@@ -330,7 +339,6 @@ found.program:
                      message = sysmsg(6702) ;* Command format error
                      gosub emit.err.msg
                   end else
-                     mouse.action = @false
                      gosub display.variable
                   end
 
@@ -503,13 +511,50 @@ error:
    repeat
 
 exit.debug:
-   if full.screen and not(phantom) then
-      debug.screen.image = save.screen(0, 0, @crtwide, @crthigh)
-      restore.screen screen.image, @true
-   end
+   if full.screen then gosub theme.out
+   gosub leave.alt
 
 exit.loop:
    return to exit.loop
+
+* **********************************************************************
+* THEME.IN / THEME.OUT  -  The screen library's styles for the debugger's own screen.  The theme belongs to the
+* debugged program, which has usually asked for none (mono): then, on a terminal with colour, the debugger
+* uses the 'classic' theme while it is up, so that it looks as it always has; any other theme is the program's
+* or the site's choice and is kept.  The library's context of the program is not touched: what is drawn goes
+* through a context of the debugger's own.
+
+theme.in:
+   call $sl_theme('name', '', '', '', '', dbg.theme)
+   dbg.themed = @false
+   if dbg.theme = '' or dbg.theme = 'mono' then
+      call $sl_theme('set', 'classic', '', '', '', dbg.r)
+      if dbg.r = 0 then dbg.themed = @true       ;* refused on a terminal with no colour: mono it stays
+   end
+   call $sl_scr('get', scr)
+   scr<SL.S.CLIP> = ''                           ;* a clip the program set is not the debugger's
+   title.attr = 'a'                              ;* bar: the title and the command line
+   command.attr = 'a'
+   source.attr = 't'                             ;* text: the source
+   highlight.source.attr = 'h'                   ;* highlight: the line about to run
+   breakpoint.source.attr = 'k'                  ;* hotkey: a line with a breakpoint (underlined in mono)
+   return
+
+* LEAVE.ALT  -  Give the terminal's main screen back (the program's), if the debugger was on the alternate one
+leave.alt:
+   if alt.on then
+      display terminfo('rmcup') :
+      alt.on = @false
+   end
+   return
+
+theme.out:
+   if dbg.themed then
+      call $sl_theme('set', dbg.theme, '', '', '', dbg.r)
+      if dbg.theme = '' then call $sl_theme('set', 'mono', '', '', '', dbg.r)
+      dbg.themed = @false
+   end
+   return
 
 * **********************************************************************
 * EMIT.MSG
@@ -529,9 +574,10 @@ emit.msg:
          ct += 1
          if rem(ct, DATA.AREA.LINES) = 0 then
             gosub paint.data.area
-            display @(0, command.line) : sysmsg(6710) :  ;* ---more---
+            call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
+            display @(len(sysmsg(6710)), command.line) :
             s = upcase(keycode())
-            display @(0, command.line) : space(wm1) :
+            call $sl_put(scr, 0, command.line, space(wm1), command.attr)
             if s = 'Q' or s = char(27) then exit
             ct = 0
          end
@@ -546,9 +592,8 @@ emit.msg:
    return
 
 paint.data.area:
-   display command.attr : @(0,data.area) :
    for i = 1 to DATA.AREA.LINES
-      display fmt(debug.data.area(i), wm1:'L')
+      call $sl_put(scr, 0, data.area + i - 1, fmt(debug.data.area(i), wm1 : 'L'), command.attr)
    next i
    return
 
@@ -556,53 +601,21 @@ paint.data.area:
 * INITIALISE  -  Initialise common block
 
 initialise:
-   full.screen = terminfo('sreg') # ''
-   if full.screen then
-      if not(phantom) then
-         screen.image = save.screen(0, 0, @crtwide, @crthigh)
-      end
-
-      if upcase(@term.type[3]) = '-AT' and terminfo('kmous') # '' then
-         mouse.on = char(27):char(2):'1'
-         mouse.off = char(27):char(2):'0'
-      end
-
-      if option(OPT.DEBUG.REBIND.KEYS) then
-         * Construct key rebind string
-
-         s = char(27):char(2):'F':'NU0':terminfo('kf1'):char(13)     ;* F1
-         s := char(27):char(2):'F':'NU1':terminfo('kf2'):char(13)    ;* F2
-         s := char(27):char(2):'F':'NU2':terminfo('kf3'):char(13)    ;* F3
-         s := char(27):char(2):'F':'NU3':terminfo('kf4'):char(13)    ;* F4
-         s := char(27):char(2):'F':'NU4':terminfo('kf5'):char(13)    ;* F5
-         s := char(27):char(2):'F':'NU5':terminfo('kf6'):char(13)    ;* F6
-         s := char(27):char(2):'F':'NU6':terminfo('kf7'):char(13)    ;* F7
-         s := char(27):char(2):'F':'NU7':terminfo('kf8'):char(13)    ;* F8
-         s := char(27):char(2):'F':'NU:':terminfo('kf11'):char(13)   ;* F11
-         ! Ctrl-Fn not in terminfo. Cannot rebind Ctrl-F7, Ctrl-F8
-         s := char(27):char(2):'F':'KU4':terminfo('khome'):char(13)  ;* Home
-         s := char(27):char(2):'F':'KU5':terminfo('kend'):char(13)   ;* End
-         s := char(27):char(2):'F':'KU6':terminfo('kpp'):char(13)    ;* PgUp
-         s := char(27):char(2):'F':'KU7':terminfo('knp'):char(13)    ;* PgDown
-         ! Absent AccuTerm codes. Cannot rebind ctrl-PgUp, ctrl-PgDown
-         s := char(27):char(2):'F':'KU8':terminfo('kcub1'):char(13)  ;* Left
-         s := char(27):char(2):'F':'KU9':terminfo('kcuf1'):char(13)  ;* Right
-         s := char(27):char(2):'F':'KU2':terminfo('kich1'):char(13)  ;* Insert
-         s := char(27):char(2):'F':'KU3':terminfo('kdch1'):char(13)  ;* Delete
-         s := char(27):char(2):'F':'KU0':terminfo('kbs'):char(13)    ;* Backspace
-         s := char(27):char(2):'F':'KU:':terminfo('kcuu1'):char(13)  ;* Up
-         s := char(27):char(2):'F':'KU;':terminfo('kcud1'):char(13)  ;* Down
-         rebind.string = s
-      end
+   * Full screen: a real terminal (the kernel can read its window size) that has an alternate screen.  (Until
+   * 13 Oct 26 it was a terminal with the AccuTerm 'sreg' capability, which kept screen images, a mouse and key
+   * rebinding of its own; all of that has been removed.)
+   full.screen = @false
+   if not(phantom) then
+      if kernel(K$WINSIZE, '') # '' and terminfo('smcup') # '' and terminfo('rmcup') # '' then full.screen = @true
    end
 
-   * Display attributes
-
-   title.attr = @(IT$FGC, IT$BLACK) : @(IT$BGC, IT$WHITE)
-   source.attr = @(IT$FGC, IT$BRIGHT.WHITE) : @(IT$BGC, IT$BLUE)
-   highlight.source.attr = @(IT$FGC, IT$BRIGHT.WHITE) : @(IT$BGC, IT$BRIGHT.BLUE)
-   breakpoint.source.attr = @(IT$FGC, IT$BLACK) : @(IT$BGC, IT$YELLOW)
-   command.attr = @(IT$FGC, IT$BLACK) : @(IT$BGC, IT$WHITE)
+   * Display attributes: the style codes of the screen library (set at every entry, theme.in, because the theme
+   * is the program's to change)
+   title.attr = 'a'
+   source.attr = 'n'
+   highlight.source.attr = 'n'
+   breakpoint.source.attr = 'n'
+   command.attr = 'a'
 
    basic.chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$.%@"
 
@@ -617,28 +630,22 @@ initialise:
    mat debug.data.area = ''
 
    if full.screen then
-      * Set up initial display and save screen image
-
-      display @(-1) : title.attr : space(@crtwide) :
-
-      i = SOURCE.AREA
-      display source.attr :
-      loop
-         crt @(0,i) : space(@crtwide) :
-         i += 1
-      while i < data.area
-      repeat
-
-      display command.attr :
-      loop
-         crt @(0,i) : space(@crtwide - (i = @crthigh)) :
-         i += 1
-      while i < @crthigh
-      repeat
-
+      * Set up initial display and save screen image: the title bar, the source area, the data area and the
+      * command line, in the library's styles
+      gosub theme.in
       if not(phantom) then
-         debug.screen.image = save.screen(0, 0, @crtwide, @crthigh)
+         display terminfo('smcup') :             ;* the alternate screen, before anything is drawn
+         alt.on = @true
       end
+      display @(-1) :
+      call $sl_put(scr, 0, 0, space(@crtwide), title.attr)
+      for i = SOURCE.AREA to data.area - 1
+         call $sl_put(scr, 0, i, space(@crtwide), source.attr)
+      next i
+      for i = data.area to @crthigh - 1
+         call $sl_put(scr, 0, i, space(@crtwide - (i = @crthigh - 1)), command.attr)
+      next i
+      gosub theme.out
    end
 
    * Program source control
@@ -686,7 +693,7 @@ get.input:
       image = space(wm1)
 
       if full.screen then
-         display command.attr : @(0, command.line) : space(wm1) :
+         call $sl_put(scr, 0, command.line, space(wm1), command.attr)
       end else display @(0) : @(-4) :
 
       first = @true
@@ -697,12 +704,18 @@ get.input:
          end
 
          ss = prefix : command[command.pan, command.width]
-         gosub zoned.update
-
-         i = prefix.len + x - command.pan
-         if i # csr.x then
-            display @(i) :
-            csr.x = i
+         if full.screen then
+            * the whole command line, in the library's style, and the cursor in it
+            i = prefix.len + x - command.pan
+            call $sl_put(scr, 0, command.line, fmt(ss, wm1 : 'L'), command.attr)
+            display @(i, command.line) :
+         end else
+            gosub zoned.update         ;* (it uses i: the cursor's place is worked out after it)
+            i = prefix.len + x - command.pan
+            if i # csr.x then
+               display @(i) :
+               csr.x = i
+            end
          end
 
          c = keycode()
@@ -1018,7 +1031,7 @@ display.source:
       s = program.name(src.idx) : " : "
       if src.idx = idx then s := src.line : "." : sub.ref
       else s := src.line
-      display @(0, 0) : title.attr : fmt(s, wm1:'L') :
+      call $sl_put(scr, 0, 0, fmt(s, wm1 : 'L'), title.attr)
 
       n = src.line - idiv(source.area.lines, 2) ;* First line to display
       if n < 1 then n = 1
@@ -1028,24 +1041,22 @@ display.source:
 *       convert "	" to "   " in s  charactes where hex "A8" x 3
       convert char(9):Char(27) to char(168):char(168):char(168) in s
 
-      j = SOURCE.AREA
-      display @(0, SOURCE.AREA) :
+      * One row of the source area for each line: its number (in the breakpoint style when it has a breakpoint)
+      * and its text (in the highlight style when it is the line about to run), padded to the width of the screen
       for i = 1 to source.area.lines
       until keyready()
          if n <= lines(src.idx) then
+            numcode = source.attr
             locate src.idx:'.':n in breakpoints<1> setting pos then
-               display breakpoint.source.attr :
-            end else
-               display source.attr:
+               numcode = breakpoint.source.attr
             end
-            display fmt(n, line.no.fmt) : ": " :
-
-            if n = line and src.idx = idx then display highlight.source.attr :
-            else display source.attr :
-
-            display s<i>[1, src.width] : @(IT$CLEOL)
+            numtxt = fmt(n, line.no.fmt) : ': '
+            txtcode = source.attr
+            if n = line and src.idx = idx then txtcode = highlight.source.attr
+            tx = fmt(s<i>[1, src.width], src.width : 'L')
+            call $sl_put(scr, 0, SOURCE.AREA + i - 1, numtxt : tx, str(numcode, len(numtxt)) : str(txtcode, src.width))
          end else
-            display source.attr : @(IT$CLEOL)
+            call $sl_put(scr, 0, SOURCE.AREA + i - 1, space(@crtwide), source.attr)
          end
          n += 1
       next i
@@ -1065,21 +1076,15 @@ display.source:
 
 help:
    if full.screen then
-      debug.screen.image = save.screen(0, 0, @crtwide, @crthigh)
-      
-      display source.attr : @(-1) :
-      s = change(sysmsg(6712), char(10), @fm) ;* Help text
-      loop
-         display remove(s, more)
-      while more
-      repeat
-      display @(0, 24) : sysmsg(6713) :  ;* Press RETURN to continue
-
-      loop
-         while seq(keyin()) # return.key
-      repeat
-
-      restore.screen debug.screen.image, @true
+      * The help text in a box over the screen (the library's message box puts back what was under it)
+      s = convert(char(13), '', sysmsg(6712))      ;* Help text
+      s = change(s, char(10), @vm)
+      hw = ''
+      hw<SL.W.D> = ''                              ;* no title
+      hw<SL.W.D + 1> = s                           ;* the lines
+      hw<SL.W.D + 2> = '&OK'
+      call $sl_msgbox('init', hw, scr, '', hb)     ;* over the debugger's own picture (scr is its shadow), which is
+      call $sl_msgbox('run', hw, scr, '', hb)      ;* put back, cell for cell, when it closes
    end else     ;* Not full screen
       display sysmsg(6714)  ;* Help text
    end
@@ -1090,20 +1095,25 @@ help:
 * VIEW
 
 view:
-   debug.screen.image = save.screen(0, 0, @crtwide, @crthigh)
-   restore.screen screen.image, @true
-   s = keycode()
-   screen.image = save.screen(0, 0, @crtwide, @crthigh)
-   restore.screen debug.screen.image, @true
+   if alt.on then
+      * The program's screen is behind the alternate one: show it until a key, then come back and draw again
+      display terminfo('rmcup') :
+      s = keycode()
+      display terminfo('smcup') : @(-1) :
+      call $sl_scr('get', scr)
+      scr<SL.S.CLIP> = ''
+      gosub paint.data.area
+      src.line = line
+      gosub display.source
+   end
    return
 
 * ======================================================================
 * ABORT.DEBUG:
 
 abort.debug:
-   if full.screen and not(phantom) then
-      restore.screen screen.image, @true
-   end
+   if full.screen then gosub theme.out
+   gosub leave.alt
    gosub dbg.stop(6716) ;* ABORT : Debugging terminated
    return
 
@@ -1111,9 +1121,8 @@ abort.debug:
 * STOP.DEBUG:
 
 stop.debug:
-   if full.screen and not(phantom) then
-      restore.screen screen.image, @true
-   end
+   if full.screen then gosub theme.out
+   gosub leave.alt
    gosub dbg.stop(6715) ;* STOP : Debugging terminated
    return
 
@@ -1260,10 +1269,8 @@ display.variable:
    end case
 
    find var.name in symbols(idx) setting f, v, sv else
-      if not(mouse.action) then
-         message = sysmsg(6718) ;* Variable not defined
-         gosub emit.err.msg
-      end
+      message = sysmsg(6718) ;* Variable not defined
+      gosub emit.err.msg
       return
    end
 
@@ -1333,7 +1340,7 @@ display.variable:
       end
    end
 
-   message = if mouse.action then var.name : '=' else ''
+   message = ''
 
 display.data.common:
    var.type = var.info<1> + 0   ;* Will not have set above if enter here
@@ -1793,9 +1800,10 @@ show.call.stack:
             k = dcount(ss, @vm)
             for j = 2 to k
                if rem(zz, DATA.AREA.LINES) = 0 then
-                  display @(0, command.line) : sysmsg(6710) :  ;* ---more---
+                  call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
+                  display @(len(sysmsg(6710)), command.line) :
                   if upcase(keycode()) = 'Q' then return
-                  display @(0, command.line) : @(-4) :
+                  call $sl_put(scr, 0, command.line, space(wm1), command.attr)
                end
                ln = ss<1,j,2>
                if ln then message := ' @ ' : ln           ;* If no line no...

@@ -42,8 +42,6 @@ $include int$keys.h
 
    break off
 
-   screen.image = save.screen(0, 0, @crtwide, @crthigh)
-
    start.id = 'DR.':@who:'!':@logname
    recordlocku ipc.f, start.id
    out.msg = 'START'
@@ -113,7 +111,6 @@ abort.pdebug.startup:
    delete ipc.f, start.id
 
 exit.pdebug:
-   restore.screen screen.image, @true
    break on
    stop msg
 end

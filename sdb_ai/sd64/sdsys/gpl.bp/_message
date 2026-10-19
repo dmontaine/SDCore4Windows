@@ -6,27 +6,36 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation; either version 3, or (at your option)
 * any later version.
-* 
+*
 * This program is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with this program; if not, write to the Free Software Foundation,
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-* 
-* 
+*
+*
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): The AccuTerm screen-image code is gone (the box was drawn only where the terminal had the AccuTerm
+*               'sreg' capability, so on every other terminal a message was never shown).  Messages are now shown
+*               in the screen library's message box on the terminal's alternate screen (so the program's own
+*               screen is left alone and comes back), or, on a terminal that has none, as lines followed by
+*               'Press return to continue'.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
 *
 * START-DESCRIPTION:
 *
+*   Called by the kernel (kernel.c, EVT_MESSAGE) when a message sent with MESSAGE ... IMMEDIATE has arrived for
+*   this user.  The messages wait in the IPC record M<userno>: each is a text, a value mark and its origin.
+*
 * END-DESCRIPTION
 *
 * START-CODE
+
 
 $internal
 $recursive
@@ -37,83 +46,72 @@ subroutine message
 $include syscom.h
 $include keys.h
 $include int$keys.h
+$include sl.h
 
-   if terminfo('sreg') # '' then   ;* Terminal can do save screen
-      srev = @(-13)
-      erev = @(-14)
-      border = srev : ' ' : erev
+   prc = 'Press return to continue'
 
-      prc = 'Press return to continue'
+   * Display any IPC messages
 
-      * Display any IPC messages
+   if fileinfo(ipc.f, FL$OPEN) then
+      x = 'M':@userno
+      readu messages from ipc.f, x then
+         delete ipc.f, x    ;* Free up the lock immediately
 
-      if fileinfo(ipc.f, FL$OPEN) then
-         x = 'M':@userno
-         readu messages from ipc.f, x then
-            delete ipc.f, x    ;* Free up the lock immediately
+         if messages # '' then
+            return.key = seq(pterm(PT$INEWLINE,''))
 
-            if messages # '' then
-               return.key = seq(pterm(PT$INEWLINE,''))
+            * The terminal's alternate screen, if it is a terminal and has one
 
-               * There could be many queued messages. Extract these a page
-               * at a time for display.
+            alt = @false
+            if kernel(K$WINSIZE, '') # '' and terminfo('smcup') # '' and terminfo('rmcup') # '' then alt = @true
 
-               max.messages = idiv(@crthigh - 6, 2) ;* Max per page
-               loop
-                  screen.image = save.screen(0, 0, @crtwide, @crthigh)
+            * There could be many queued messages.  Show them a page at a time.
 
-                  s = field(messages, @fm, 1, max.messages)
-                  messages = field(messages, @fm , max.messages + 1, 999999)
-                  n = dcount(s, @fm)
-               while n
-                  width = maximum(lens(s))     ;* Widest line to display
-                  if width < len(prc) then width = len(prc)
-                  width = min(width, @crtwide - 4)
-                  height = n * 2
+            max.messages = idiv(@crthigh - 8, 2)       ;* Max per page
+            if max.messages < 1 then max.messages = 1
+            width = @crtwide - 10
+            if width < 20 then width = 20
 
-                  top = idiv(@crthigh - height, 2) - 2
-                  left = idiv(@crtwide - width, 2) - 2
+            loop
+               s = field(messages, @fm, 1, max.messages)
+               messages = field(messages, @fm, max.messages + 1, 999999)
+               n = dcount(s, @fm)
+            while n
+               * The lines of the page: the origin (may be blank) and then the text of each message
+               text = ''
+               for i = 1 to n
+                  text<1, -1> = (s<i,2>)[1, width]
+                  text<1, -1> = (s<i,1>)[1, width]
+               next i
 
-                  * Two lines above text, one blank, one border
-                  ln = top
-                  crt @(left, ln) : space(width + 4) :
-                  ln += 1
-                  crt @(left, ln) : ' ' : srev : space(width + 2) : erev : ' ' :
-                  ln += 1
+               if alt then
+                  display terminfo('smcup') : @(-1) :
+                  call $sl_scr('get', scr)
+                  scr<SL.S.CLIP> = ''
+                  bw = ''
+                  bw<SL.W.D> = ''                       ;* no title
+                  bw<SL.W.D + 1> = text
+                  bw<SL.W.D + 2> = '&OK'
+                  call $sl_msgbox('init', bw, scr, '', rc)
+                  call $sl_msgbox('run', bw, scr, '', rc)
+                  display terminfo('rmcup') :
+               end else
                   for i = 1 to n
-                     * Display message origin (could be blank)
-                     crt @(left, ln) : ' ' : border : fmt(s<i,2>[1,width], width:'L') : border :  ' ' :
-                     ln += 1
-
-                     * Display message text
-                     crt @(left, ln) : ' ' : border : fmt(s<i,1>[1,width], width:'L') : border : ' ' :
-                     ln += 1
+                     crt s<i,2>[1, width]
+                     crt s<i,1>[1, width]
                   next i
-
-                  * Press return to continue prompt
-                  crt @(left, ln) : ' ' : border : fmt(prc, width:'L') : border :  ' ' :
-                  ln += 1
- 
-                  * Two lines below text, one border, one blank
-                  crt @(left, ln) : ' ' : srev : space(width + 2) : erev : ' ' :
-                  ln += 1
-                  crt @(left, ln) : space(width + 4) :
-
-                  crt @(left + 2 + len(prc), ln - 2) :
-
+                  crt prc :
                   inputclear
                   loop
                      i = seq(keyin())
                   until i = return.key
                   repeat
-
-                  restore.screen screen.image, @true
-               repeat
-
-            end
-         end else
-            release ipc.f, x
+                  crt
+               end
+            repeat
          end
+      end else
+         release ipc.f, x
       end
    end
 end

@@ -51,7 +51,7 @@
 #define OptPickNull          16
 #define OptPickGrandTotal    17
 #define OptSuppressAbortMsg  18
-#define OptDebugRebindKeys   19
+#define OptDebugRebindKeys   19   /* reserved: it rebound AccuTerm keys; no code uses it (13 Oct 26) */
 #define OptEDNoQueryFD       20
 #define OptNoSelListQuery    21
 #define OptChainKeepCommon   22
