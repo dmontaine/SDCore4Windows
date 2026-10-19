@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 19 Oct 26 Windows port - RELEASE_1.1 158 (Linux d6a86a7, 15 Oct 26, sheet 170): the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session,
+*           once, when it first enters an account, before the account's own LOGIN.
 * 18 Oct 26 Windows port - RELEASE_1.1 142 (Linux 400500c, 15 Oct 26): vb.call returns after refusing a subroutine that is
 *           not flagged $sdcall (a $ name, or SDCLIENT 2): it was refused in the reply but still ran.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (12286) while the administrator has logins
@@ -204,7 +206,8 @@ $include keys.h
 
 common /$APISRVR/ logged.in,          ;* Process is logged in
 files(100),         ;* Array of file variables
-logging             ;* Logging network traffic?
+logging,            ;* Logging network traffic?
+master.login.done   ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
 
 * 19 Aug 26 Windows port - DECLARED HERE, NOT IN vb.login.  Both the old login
 *   and the SCRAM one screen the user name with it, and phase 5 of
@@ -313,6 +316,7 @@ if not(kernel(K$CPROC.LEVEL,0)) then
    abort.code = 0
 
    tty = 'apisrvr'
+   master.login.done = @false      ;* MASTER.LOGIN is run once, at the first entry to an account
 
    openpath "voc" to voc else
       abort.message = sysmsg(2026) ;* Cannot open VOC
@@ -919,6 +923,23 @@ read voc.rec from voc, "$PRIVATE.CATALOGUE" then
 end
 
 i = kernel(K$PRIVATE.CATALOGUE, private.catalogue)
+
+* 19 Oct 26 Windows port - from Linux d6a86a7 (sheet 170): the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session as CPROC
+*   runs it for an interactive or phantom one: once, when the session first enters an account, before that account's own LOGIN.  There is
+*   no such paragraph unless the administrator wrote one.  It runs in the account just entered, under that account's switches.
+if not(master.login.done) then
+   master.login.done = @true
+   openpath @sdsys:@ds:'voc' to master.f on error null
+   then
+      read master.rec from master.f, 'MASTER.LOGIN' on error null
+      then
+         if upcase(master.rec[1,2]) = 'PA' then
+            execute field(master.rec, @fm, 2, 9999999) trapping aborts capturing master.out
+         end
+      end
+      close master.f
+   end
+end
 
 * Run the LOGIN paragraph, if it exists
 

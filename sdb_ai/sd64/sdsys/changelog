@@ -2,6 +2,13 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+19 Oct 26  MASTER.LOGIN NOW RUNS FOR AN API SESSION TOO.
+
+           The MASTER.LOGIN paragraph in the SDSYS VOC is run once by a session that connects through the API, when it
+           first enters an account, before that account's own LOGIN paragraph - as it already was for a terminal session
+           or a phantom.  There is none unless you write one.  It runs in the account just entered, under that account's
+           own switches.
+
 18 Oct 26  THE SCREEN LIBRARY AND THE SCREEN STATEMENT (FROM SD CORE FOR LINUX).
 
            A BASIC program can now draw a screen of its own with the SCREEN statement instead of cursor addressing:
