@@ -40,6 +40,7 @@ $include sl.h
 
    ret = ''
    status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn, nobody is waited for
    nm = dcount(menus, @fm)
    if menus = '' then nm = 0
    if nm = 0 then return

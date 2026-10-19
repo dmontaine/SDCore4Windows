@@ -32,6 +32,7 @@ $include sl.h
 
    ret = ''
    status = 0
+   if system(25) then return                  ;* a phantom has no terminal: nothing was drawn, nothing to give back
    call $sl_sgr('n', sq)
    display @(-31) : sq : @(0, @crthigh - 1) :
    scr = ''

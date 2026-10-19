@@ -34,6 +34,7 @@ $include sl.h
 
    ret = ''
    status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
    call $sl_scr('get', scr)
 
    if x = '' and y = '' and w = '' and h = '' then

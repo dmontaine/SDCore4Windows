@@ -288,6 +288,16 @@ strokes (validate on leaving a field, fill one list from another) without callba
 one in. The program loops: `screen wait f returning ev` then `begin case` on the event type
 (`button`, `change`, `select`, `key`, `timeout`) and the widget id.
 
+Stage 4's `wait`, as designed (proposed): the first call shows the form (what is under it is saved) and it
+STAYS on the screen between calls; each call returns one event in `ev` (field 1 the type, 2 the widget id,
+3 its data) and the program acts on it. THEN for an event the form produced - `button` (id), `change`
+(id, value: a check box, radio group or list changed), `focus` (the new id, the one before) and `key` (a
+key the form had no use for: a function key, a Ctrl key); ELSE for `cancel` (Esc: the form does not close
+by itself here, the program decides), `timeout` and `end` (the input ended). `screen set` redraws a widget
+of a form that is shown, and `screen hide f` puts the screen back. An entry reports no event for each key
+typed (that would wake the program per character): the program asks for the text with `get` on a `focus`
+or `button` event.
+
 ## a complete example (25 lines, proposed)
 
 ```

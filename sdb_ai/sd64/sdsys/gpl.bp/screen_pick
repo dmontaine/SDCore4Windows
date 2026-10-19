@@ -42,6 +42,7 @@ $include sl.h
 
    ret = ''
    status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn, nobody is waited for
    list = convert(@fm, @vm, items)
    n = dcount(list, @vm)
    if list = '' then n = 0

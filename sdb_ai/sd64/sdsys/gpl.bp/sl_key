@@ -30,6 +30,8 @@ $catalog $sl_key
 
 $include keyin.h
 
+   name = ''
+   if system(25) then return              ;* a phantom has no keyboard: asking for a key would abort it
    if timeout = '' then k = keycode() else k = keycode(timeout)
    name = ''
    if k = '' then return
