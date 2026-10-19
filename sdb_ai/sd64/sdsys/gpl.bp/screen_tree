@@ -1,0 +1,82 @@
+* SCREEN_TREE
+* The subroutine that SCREEN TREE calls: add a tree of nodes, some open to show what is under them, to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux f3cdc9d (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN TREE f, id, nodes {AT x,y} {SIZE w,h} {VALUE n} {EXPANDED}
+*
+*   is compiled into
+*
+*   call !screen_tree(f, id, nodes, x, y, w, h, value, expanded, ret, status)
+*
+*     f id      the form and the widget's name in it (as SCREEN LABEL)
+*     nodes     the nodes in the order they are shown with everything open, as values (a field mark does as well).
+*               A node is its label, a subvalue mark, its depth (1 for a root, 2 for what is under a root; left
+*               out it is 1; never more than one deeper than the node before it), a second subvalue mark and the
+*               code the program gets for it (left out, its number in the list)
+*     x y       the top left cell of the tree from the form's top left corner, default 1,1
+*     w h       its width and the number of rows it shows (default: as wide as the longest node needs, as many
+*               rows as there are nodes, at most 8)
+*     value     the node it starts on (default the first)
+*     expanded  every node that has nodes under it starts open (default: closed)
+*     status    0 added; 1 not (ELSE)
+*
+*   Up, Down, Home, End, Page Up and Page Down move; Right opens a node (or goes to its first node), Left closes
+*   it (or goes to the node it is under), the space bar opens or closes; a letter goes to the next node shown that
+*   starts with it; Return is a done event of the form that holds the tree.  SCREEN GET f, id answers the code of
+*   the current node; a change of the current node is a change event of SCREEN WAIT.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_tree(f, id, nodes, ax, ay, sw, sh, value, expanded, ret, status)
+$catalog !screen_tree
+
+   ret = ''
+   status = 1
+   list = convert(@fm, @vm, nodes)
+   n = dcount(list, @vm)
+   if list = '' then n = 0
+   widest = 0
+   for i = 1 to n
+      d = list<1, i, 2> + 0
+      if d < 1 then d = 1
+      if ((d - 1) * 2) + len(list<1, i, 1>) > widest then widest = ((d - 1) * 2) + len(list<1, i, 1>)
+   next i
+   th = n
+   if th > 8 then th = 8
+   if th < 1 then th = 1
+   if sh # '' then th = sh + 0
+   tw = widest + 3                                ;* the lead cell, the + or -, a blank
+   if n > th then tw += 1                         ;* the scroll bar
+   if sw # '' then tw = sw + 0
+
+   w = collection()
+   w{'id'} = id
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'w'} = tw
+   w{'h'} = th
+   w{'items'} = list
+   w{'expanded'} = (expanded # '')
+   w{'cur'} = value + 0
+   call $sl_tree('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

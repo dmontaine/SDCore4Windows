@@ -1,0 +1,330 @@
+* SL_TREE
+* Screen library, widget: a tree of nodes, some of them open to show what is under them.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux f3cdc9d (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_tree(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay (the top left cell of the tree on the screen), w h (its width and the number of rows it
+*   shows: no border), items (the nodes in the order they are shown with everything open, as values: a subvalue 1
+*   of a node is its label, 2 its depth - 1 for a root, 2 for what is under a root, and so on, 1 if left out, never
+*   more than one deeper than the node before - and 3 the code the program gets for it, its number if left out),
+*   cur (the number of the current node, 1 to start with), top (the place in the rows shown of the first row),
+*   open (the numbers of the nodes that are open, as values), value (the code of the current node)
+*
+*     init    w and h from what was given (at least 3 by 1); cur is brought into range; with expanded (1) every node
+*             that has anything under it is open
+*     draw    the rows shown (a node under a closed one is not): indented two cells for each level, then + for a node
+*             that is closed and has nodes under it, - for one that is open, a blank for one with none, then the label.
+*             The current node is in the highlight style while the tree has the focus and marked with > while it has
+*             not.  With more rows than room the right-hand column is a scroll bar
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     up, down, home, end, pgup, pgdn move; right opens the current node, or goes to its first node if it is
+*             open; left closes it, or goes to the node it is under if it is closed; the space bar opens or closes;
+*             a letter jumps to the next node shown whose label starts with it.  ret<1> is 'handled'; 'done' (Return,
+*             ret<2> the code of the current node); 'cancel' (Esc); or 'unhandled' with ret<2> the key's name (tab,
+*             btab, a function key; and up on the first row, down on the last, left on a root that is closed and right
+*             on a node with nothing under it, so that a form can go on to the widget before or after)
+*     mouse   a click on a node makes it current; a click on its + or - opens or closes it; a second click on the
+*             node the last click chose is Return; the wheel moves three rows
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_tree(op, w, scr, key, ret)
+$catalog $sl_tree
+
+$include sl.h
+
+   ret = ''
+   tw0 = w{'w'} + 0
+   th = w{'h'} + 0
+   if tw0 < 3 then tw0 = 3
+   if th < 1 then th = 1
+   items = w{'items'}
+   n = dcount(items, @vm)
+   if items = '' then n = 0
+   cur = w{'cur'} + 0
+   top = w{'top'} + 0
+   opn = w{'open'}
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'tree'
+         w{'focusable'} = 1
+         w{'w'} = tw0
+         w{'h'} = th
+         if cur < 1 or cur > n then cur = 1
+         if w{'expanded'} + 0 and w{'opened'} + 0 = 0 then
+            opn = ''
+            for i = 1 to n
+               if i < n and (items<1, i + 1, 2> + 0 > items<1, i, 2> + 0) then opn<1, -1> = i
+            next i
+            w{'opened'} = 1
+         end
+         top = 1
+         gosub rows
+         gosub scroll
+         gosub store
+
+      case op = 'draw'
+         gosub rows
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub rows
+         gosub paint
+
+      case op = 'key'
+         w{'clk'} = ''
+         gosub rows
+         gosub handle.key
+
+      case op = 'mouse'
+         gosub rows
+         gosub click
+   end case
+
+   return
+
+* The depth of node i
+depth.of:
+   dp = items<1, i, 2> + 0
+   if dp < 1 then dp = 1
+   return
+
+* has.kids = node i has a node under it
+kids.of:
+   has.kids = @false
+   if i < n then
+      j = i + 1
+      dp0 = dp
+      dp = items<1, j, 2> + 0
+      if dp < 1 then dp = 1
+      if dp > dp0 then has.kids = @true
+      dp = dp0
+   end
+   return
+
+* is.open = node i is among the open ones
+open.of:
+   is.open = @false
+   if opn # '' then
+      locate i in opn<1, 1> setting at then is.open = @true
+   end
+   return
+
+* vis = the numbers of the nodes shown, as fields; nv how many; cp the place of the current one among them
+rows:
+   vis = ''
+   nv = 0
+   skip = 0
+   cp = 0
+   for i = 1 to n
+      gosub depth.of
+      if skip > 0 and dp > skip then continue
+      skip = 0
+      nv += 1
+      vis<nv> = i
+      if i = cur then cp = nv
+      gosub kids.of
+      if has.kids then
+         gosub open.of
+         if not(is.open) then skip = dp
+      end
+   next i
+   if cp = 0 and nv > 0 then
+      * the current node is under a closed one: the nearest node shown before it stands in
+      for q = nv to 1 step -1
+         if vis<q> < cur then cp = q ; exit
+      next q
+      if cp = 0 then cp = 1
+      cur = vis<cp>
+   end
+   return
+
+click:
+   ret = 'handled'
+   if key<1> = 'wheel' then
+      if key<2> = 'up' then cp -= 3 else cp += 3
+      if cp > nv then cp = nv
+      if cp < 1 then cp = 1
+      cur = vis<cp>
+   end else
+      r = top + key<4> - w{'ay'}
+      if r < 1 or r > nv then return
+      i = vis<r>
+      gosub depth.of
+      gosub kids.of
+      cx0 = (dp - 1) * 2 + 1                       ;* the column of the node's + or -
+      if has.kids and key<3> - w{'ax'} = cx0 then
+         cur = i
+         gosub toggle.open
+      end else
+         if r = w{'clk'} then
+            ret = 'done' : @fm : (if items<1, i, 3> = '' then i else items<1, i, 3>)
+            return
+         end
+         cur = i
+         w{'clk'} = r
+      end
+   end
+   gosub rows
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+handle.key:
+   ret = 'handled'
+   i = cur
+   gosub depth.of
+   gosub kids.of
+   gosub open.of
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done' : @fm : (if items<1, cur, 3> = '' then cur else items<1, cur, 3>)
+      case key = 'down'
+         if cp < nv then cur = vis<cp + 1> else ret = 'unhandled' : @fm : key
+      case key = 'up'
+         if cp > 1 then cur = vis<cp - 1> else ret = 'unhandled' : @fm : key
+      case key = 'home'
+         if nv > 0 then cur = vis<1>
+      case key = 'end'
+         if nv > 0 then cur = vis<nv>
+      case key = 'pgdn'
+         cp += th - 1
+         if cp > nv then cp = nv
+         cur = vis<cp>
+      case key = 'pgup'
+         cp -= th - 1
+         if cp < 1 then cp = 1
+         cur = vis<cp>
+      case key = 'right'
+         begin case
+            case has.kids and not(is.open)
+               gosub toggle.open
+            case has.kids
+               cur = cur + 1                       ;* the first node under it
+            case 1
+               ret = 'unhandled' : @fm : key
+         end case
+      case key = 'left'
+         begin case
+            case has.kids and is.open
+               gosub toggle.open
+            case dp > 1
+               * the node this one is under: the nearest one before it that is a level up
+               cdp = dp
+               for q = cur - 1 to 1 step -1
+                  i = q
+                  gosub depth.of
+                  if dp < cdp then cur = q ; exit
+               next q
+            case 1
+               ret = 'unhandled' : @fm : key
+         end case
+      case key = ' ' or key = '+' or key = '-'
+         if has.kids then
+            gosub toggle.open
+         end
+      case len(key) = 1
+         uk = upcase(key)
+         found = 0
+         for k = 1 to nv
+            q = cp + k
+            if q > nv then q -= nv
+            if upcase(items<1, vis<q>, 1>[1, 1]) = uk then found = vis<q> ; exit
+         next k
+         if found then cur = found
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   gosub rows
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+* Node cur is opened if it is closed and closed if it is open
+toggle.open:
+   i = cur
+   gosub open.of
+   if is.open then
+      del opn<1, at>
+   end else
+      opn<1, -1> = cur
+   end
+   return
+
+* Keep the current node inside the rows shown
+scroll:
+   if cp < top then top = cp
+   if cp > top + th - 1 then top = cp - th + 1
+   if top < 1 then top = 1
+   return
+
+store:
+   w{'cur'} = cur
+   w{'top'} = top
+   w{'open'} = opn
+   code = items<1, cur, 3>
+   if code = '' then code = cur
+   w{'value'} = code
+   return
+
+paint:
+   tw = tw0
+   bar = (nv > th)
+   if bar then
+      tw = tw0 - 1
+      call $sl_scrollbar(th, top, nv, th, sbc)
+   end
+   call $sl_attr('highlight', hl)
+   call $sl_attr('window', nl)
+   focused = w{'focused'} + 0
+   for r = 0 to th - 1
+      q = top + r
+      if q > nv then
+         line = space(tw)
+         code = nl
+      end else
+         i = vis<q>
+         gosub depth.of
+         gosub kids.of
+         mk = ' '
+         if has.kids then
+            gosub open.of
+            mk = if is.open then '-' else '+'
+         end
+         lead = ' '
+         if i = cur and not(focused) then lead = '>'
+         line = lead : space((dp - 1) * 2) : mk : ' ' : items<1, i, 1>
+         line = line : space(tw)
+         line = line[1, tw]
+         code = nl
+         if i = cur and focused then code = hl
+      end
+      if bar then
+         line := sbc[r + 1, 1]
+         code = str(code, tw) : nl
+      end
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, line, code)
+   next r
+   if focused and cp >= 1 then display @(w{'ax'} + 0, w{'ay'} + cp - top) :
+   return
+end
+
+* END-CODE
