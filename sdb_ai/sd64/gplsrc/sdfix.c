@@ -19,6 +19,9 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ *           akpath[0] against the character '0'.  It also says "Corrected" only if the delete worked.  The repair
+ *           for the split and merge loads wrote 50 and 80, which its own check rejects: it writes the defaults
+ *           of dh_create_file(), 80 and 50.
  * 18 Oct 26 Windows port - from Linux 81ca1a8 (18 Oct 26): - -F could not delete an index subfile in the file's own directory: delete_subfile() tested
  *           akpath[0] against the character '0'.  It also says "Corrected" only if the delete worked.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - -Z clears the dead space at the end of each group (QM4 Fixes 33): the bytes after used_bytes of every block are zeroed.
@@ -1040,11 +1043,15 @@ bool check_file() {
   if ((header.params.split_load < 0) || (header.params.merge_load < 0) || (header.params.split_load <= header.params.merge_load)) {
     emit("Invalid split and/or merge loads (%d, %d)\n", (int)(header.params.split_load), (int)(header.params.merge_load));
     if (fix()) {
-      header.params.split_load = 50;
-      header.params.merge_load = 80;
+      /* 18 Oct 26 dm - split 50 and merge 80 were written, which the test above rejects (it wants split above
+         merge), so every -F wrote what the next check reported.  The defaults are the ones a new file gets from
+         dh_create_file(), DEFAULT_SPLIT_LOAD 80 and DEFAULT_MERGE_LOAD 50 (dh_int.h).  The message names (split,
+         merge) in the order the check message above does. */
+      header.params.split_load = DEFAULT_SPLIT_LOAD;
+      header.params.merge_load = DEFAULT_MERGE_LOAD;
       if (!write_header())
         goto exit_check;
-      emit("   Corrected by resetting to defaults (50, 80)\n");
+      emit("   Corrected by resetting to defaults (%d, %d)\n", DEFAULT_SPLIT_LOAD, DEFAULT_MERGE_LOAD);
     }
   }
 
