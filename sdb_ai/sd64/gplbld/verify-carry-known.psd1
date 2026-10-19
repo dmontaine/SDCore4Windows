@@ -117,8 +117,11 @@
         'proc-a5' = @{
             'one user (this session)'             = 'counts every logged-in user: a phantom left by an earlier suite or a console session of the owner makes it 2; it passes when run alone'
         }
+        'fix-b10' = @{
+            '545: the adds4000-at entry'          = 'the -at terminfo entries (the AccuTerm types) were removed by RELEASE_1.1 139, area 6c: there is no adds4000-at entry on purpose (measured 19 Oct: "no entry")'
+        }
         'sys-b2' = @{
-            '1024, 1027, 1028, 1034, 1036:'       = 'FILEINFO 1031 (CREATING.SEQKEY, Linux d6a86a7 and 400500c of the held QMClient chain) is not carried: the key answers a null string'
+            '1024, 1027, 1028, 1034, 1036:'     = 'FILEINFO 1031 (CREATING.SEQKEY, Linux d6a86a7 and 400500c of the held QMClient chain) is not carried: the key answers a null string'
             '1034, 1040, 1044, 1051, 1080:'       = 'SYSTEM(1040) answers 1 here: Windows file names are not case sensitive (deviation 8 of the areas 2-5 list)'
             'THE ZONE TOOK EFFECT'                = 'the MSYS2 runtime reads POSIX TZ strings (EST5EDT) and the Windows zone but not Olson names such as Asia/Kathmandu (measured 18 Oct: UTC)'
             '326: a catalogued $SYSTEM'           = 'the suite makes a GLOBAL catalogue entry (CATALOG ... GLOBAL $) from its own account and the subroutine was not called; global entries are an administrator''s'
