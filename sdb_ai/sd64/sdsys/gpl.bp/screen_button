@@ -1,0 +1,56 @@
+* SCREEN_BUTTON
+* The subroutine that SCREEN BUTTON calls: add a push button to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN BUTTON f, id, text {AT x,y} {DEFAULT} {CANCEL}
+*
+*   is compiled into
+*
+*   call !screen_button(f, id, text, x, y, default, cancel, ret, status)
+*
+*     f id     the form and the widget's name in it (as SCREEN LABEL)
+*     text     the caption; an & puts the letter after it first as the key that presses it (without
+*              one, the caption's first letter)
+*     x y      the place of the [ caption ] from the form's top left corner, default 1,1
+*     default  Return in any other widget presses this button
+*     cancel   pressing this button, like Esc, ends the form with ELSE
+*     status   0 added; 1 not (ELSE)
+*
+*   SCREEN RUN f answers the id of the button that ended the form.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_button(f, id, text, ax, ay, default, cancel, ret, status)
+$catalog !screen_button
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   w{'text'} = text
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   if default # '' then w{'default'} = 1
+   if cancel # '' then w{'cancel'} = 1
+   call $sl_button('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

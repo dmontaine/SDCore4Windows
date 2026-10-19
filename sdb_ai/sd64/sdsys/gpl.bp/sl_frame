@@ -1,0 +1,54 @@
+* SL_FRAME
+* Screen library, draw layer: a rectangle with a border, and a title in the top border.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New (the border code of SCREEN BOX, for the dialogues to share).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_frame(scr, x, y, w, h, title, code, fill)
+*
+*     scr     the screen context (sl.h), changed in place by $sl_put
+*     x y     the top left corner, from 0
+*     w h     the width and height, border included; less than 2 by 2 draws nothing
+*     title   shown in the top border, cut to fit; null for none
+*     code    the style code of the border (and of the inside if fill)
+*     fill    true blanks the inside; false leaves it as it is
+*
+*   The border is + - |.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_frame(scr, x, y, w, h, title, code, fill)
+$catalog $sl_frame
+
+$include sl.h
+
+   if w < 2 or h < 2 then return
+
+   topl = '+' : str('-', w - 2) : '+'
+   if title # '' then
+      t = title[1, w - 6]
+      if len(t) > 0 then topl = '+- ' : t : ' ' : str('-', w - 5 - len(t)) : '+'
+   end
+   call $sl_put(scr, x, y, topl[1, w], code)
+   for r = 1 to h - 2
+      if fill then
+         call $sl_put(scr, x, y + r, '|' : space(w - 2) : '|', code)
+      end else
+         call $sl_put(scr, x, y + r, '|', code)
+         call $sl_put(scr, x + w - 1, y + r, '|', code)
+      end
+   next r
+   call $sl_put(scr, x, y + h - 1, '+' : str('-', w - 2) : '+', code)
+
+   return
+end
+
+* END-CODE

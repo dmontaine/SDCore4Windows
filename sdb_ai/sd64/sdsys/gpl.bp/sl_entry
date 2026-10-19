@@ -1,0 +1,139 @@
+* SL_ENTRY
+* Screen library, widget: a one-line entry field.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): w is a data collection like every widget of a form ($sl_label describes the common elements).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_entry(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay (the first cell of the field on the screen), w (its width in cells), value (the
+*   text), mask (a character shown for each one typed, null for none), maxlen (the longest text allowed,
+*   null or 0 for no limit), pos (the cursor's place in the text, 1 = before the first character), pan
+*   (the first character shown)
+*
+*     init    w and h = 1; the text is cut to maxlen; the cursor goes after the text
+*     draw    the field: the text from pan on, blank-padded to the width, underlined (style 'field'), or in
+*             reverse video (style 'highlight') while it has the focus, with the cursor in it
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     left, right, home / ctrl-a, end / ctrl-e, bs, del / ctrl-d, ctrl-u (empties the field),
+*             ctrl-k (cuts to the end), ctrl-w (cuts the word before the cursor) and a printable character
+*             edit the text.  ret<1> is 'handled'; 'done' (Return, ret<2> the text); 'cancel' (Esc); or
+*             'unhandled' with ret<2> the key's name for a key the field has no use for (up, down, tab,
+*             btab, a function key): the form acts on it.
+*     close   nothing to undo: a field draws only its own cells
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_entry(op, w, scr, key, ret)
+$catalog $sl_entry
+
+$include sl.h
+
+   ret = ''
+   fw = w{'w'} + 0
+   if fw < 1 then fw = 1
+   text = w{'value'}
+   p = w{'pos'} + 0
+   pan = w{'pan'} + 0
+   if pan < 1 then pan = 1
+   mask = w{'mask'}
+   mask = mask[1, 1]
+   maxlen = w{'maxlen'} + 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'entry'
+         w{'focusable'} = 1
+         w{'w'} = fw
+         w{'h'} = 1
+         if maxlen > 0 then text = text[1, maxlen]
+         w{'value'} = text
+         w{'pos'} = len(text) + 1
+         w{'pan'} = 1
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         gosub handle.key
+   end case
+
+   return
+
+handle.key:
+   ret = 'handled'
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done' : @fm : text
+      case key = 'left'
+         if p > 1 then p -= 1
+      case key = 'right'
+         if p <= len(text) then p += 1
+      case key = 'home' or key = 'ctrl-a'
+         p = 1
+      case key = 'end' or key = 'ctrl-e'
+         p = len(text) + 1
+      case key = 'bs'
+         if p > 1 then
+            text = text[1, p - 2] : text[p, 99999]
+            p -= 1
+         end
+      case key = 'del' or key = 'ctrl-d'
+         text = text[1, p - 1] : text[p + 1, 99999]
+      case key = 'ctrl-u'
+         text = '' ; p = 1
+      case key = 'ctrl-k'
+         text = text[1, p - 1]
+      case key = 'ctrl-w'
+         q = p
+         loop while q > 1 and text[q - 1, 1] = ' ' do q -= 1 repeat
+         loop while q > 1 and text[q - 1, 1] # ' ' do q -= 1 repeat
+         text = text[1, q - 1] : text[p, 99999]
+         p = q
+      case len(key) = 1
+         if maxlen = 0 or len(text) < maxlen then
+            text = text[1, p - 1] : key : text[p, 99999]
+            p += 1
+         end
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   w{'value'} = text
+   w{'pos'} = p
+   gosub paint
+   return
+
+paint:
+   if p - pan >= fw then pan = p - fw + 1
+   if p < pan then pan = p
+   if pan < 1 then pan = 1
+   w{'pan'} = pan
+   vis = text[pan, fw]
+   if mask # '' then vis = str(mask, len(vis))
+   vis := space(fw - len(vis))
+   if w{'focused'} then
+      call $sl_attr('highlight', code)
+   end else
+      call $sl_attr('field', code)
+   end
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, vis, code)
+   if w{'focused'} then display @(w{'ax'} + p - pan, w{'ay'} + 0) :
+   return
+end
+
+* END-CODE

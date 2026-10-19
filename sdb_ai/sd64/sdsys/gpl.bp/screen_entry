@@ -1,0 +1,59 @@
+* SCREEN_ENTRY
+* The subroutine that SCREEN ENTRY calls: add a one-line entry field to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN ENTRY f, id {AT x,y} {WIDTH n} {VALUE v} {MASK} {MAXLEN n}
+*
+*   is compiled into
+*
+*   call !screen_entry(f, id, x, y, width, value, mask, maxlen, ret, status)
+*
+*     f id     the form and the widget's name in it (as SCREEN LABEL)
+*     x y      the first cell of the field from the form's top left corner, default 1,1
+*     width    the field's width in cells (default 20); a longer text scrolls
+*     value    the text the field starts with
+*     mask     show a * for each character (a password)
+*     maxlen   the longest text allowed (default: no limit)
+*     status   0 added; 1 not (ELSE)
+*
+*   Read the text with SCREEN GET f, id; change it with SCREEN SET f, id VALUE v.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_entry(f, id, ax, ay, width, value, mask, maxlen, ret, status)
+$catalog !screen_entry
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   x = 1
+   y = 1
+   fw = 20
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   if width # '' then fw = width + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'w'} = fw
+   w{'value'} = value
+   if mask # '' then w{'mask'} = '*'
+   if maxlen # '' then w{'maxlen'} = maxlen + 0
+   call $sl_entry('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

@@ -1,0 +1,80 @@
+* SL_CHECK
+* Screen library, widget: a check box in a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_check(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, text, x y, ax ay, value (1 checked, 0 not)
+*
+*     init    w = the width of "[x] text", h = 1; value is made 0 or 1
+*     draw    [x] text or [ ] text, in reverse video while it has the focus
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     the space bar checks or unchecks it ('handled').  Anything else is 'unhandled' with
+*             the key (Return, Tab, the arrows ...) for the form to act on.
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_check(op, w, scr, key, ret)
+$catalog $sl_check
+
+$include sl.h
+
+   ret = ''
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'check'
+         w{'focusable'} = 1
+         t = w{'text'}
+         p = index(t, '&', 1)
+         if p and p < len(t) then t = t[1, p - 1] : t[p + 1, 99999]
+         w{'label'} = t
+         v = 0
+         if w{'value'} + 0 # 0 then v = 1
+         w{'value'} = v
+         w{'w'} = len(t) + 4
+         w{'h'} = 1
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         if key = ' ' then
+            ret = 'handled'
+            v = 1
+            if w{'value'} then v = 0
+            w{'value'} = v
+            gosub paint
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+   end case
+
+   return
+
+paint:
+   code = 'n'
+   if w{'focused'} then call $sl_attr('highlight', code)
+   mark = '[ ] '
+   if w{'value'} then mark = '[x] '
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, mark : w{'label'}, code)
+   if w{'focused'} then display @(w{'ax'} + 1, w{'ay'} + 0) :
+   return
+end
+
+* END-CODE

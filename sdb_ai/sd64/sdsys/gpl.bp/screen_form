@@ -1,0 +1,54 @@
+* SCREEN_FORM
+* The subroutine that SCREEN FORM calls: make an empty form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN FORM {TITLE t} {AT x,y} {SIZE w,h} RETURNING f
+*
+*   is compiled into
+*
+*   call !screen_form(title, x, y, w, h, ret, status)
+*
+*     title    shown in the top border
+*     x y      the top left cell of the form on the screen, from 0; left out, the form is centred
+*     w h      its size, border included; left out, wide and high enough for the widgets added to it
+*     ret      the form: a data collection, which the other form verbs take as their first value.  It
+*              is one object however many variables hold it, so the verbs that add widgets and set
+*              values change the program's form without anything being handed back.  JBUILD writes it
+*              out as JSON and JPARSE reads it back.
+*     status   0
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_form(title, ax, ay, sw, sh, ret, status)
+$catalog !screen_form
+
+   f = collection()
+   f{'type'} = 'form'
+   f{'title'} = title
+   if ax # '' and ay # '' then
+      f{'x'} = ax + 0
+      f{'y'} = ay + 0
+   end
+   if sw # '' and sh # '' then
+      f{'w'} = sw + 0
+      f{'h'} = sh + 0
+   end
+   f{'widgets'} = mat()
+   f{'focus'} = 0
+   ret = f
+   status = 0
+
+   return
+end
+
+* END-CODE

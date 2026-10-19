@@ -1,0 +1,80 @@
+* SL_BUTTON
+* Screen library, widget: a push button in a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_button(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, text (an & puts the letter after it first as the button's key), x y, ax ay, default
+*   (1: Return in any other widget of the form presses this one), cancel (1: pressing it, like Esc,
+*   ends the form with ELSE).
+*
+*     init    w = the width of "[ text ]", h = 1
+*     draw    [ text ], in reverse video while it has the focus
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     Return or the space bar presses it: ret<1> 'done', ret<2> its id.  Anything else is
+*             'unhandled' with the key (Tab, the arrows ...) for the form to act on.
+*     close   nothing to undo
+*
+*   The mnemonic is w{'mn'} (the letter, upper case) for the form to match a typed letter against.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_button(op, w, scr, key, ret)
+$catalog $sl_button
+
+$include sl.h
+
+   ret = ''
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'button'
+         w{'focusable'} = 1
+         t = w{'text'}
+         p = index(t, '&', 1)
+         if p and p < len(t) then
+            w{'mn'} = upcase(t[p + 1, 1])
+            t = t[1, p - 1] : t[p + 1, 99999]
+         end else
+            w{'mn'} = upcase(t[1, 1])
+         end
+         w{'label'} = t
+         w{'w'} = len(t) + 4
+         w{'h'} = 1
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         if key = 'enter' or key = ' ' then
+            ret = 'done' : @fm : w{'id'}
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+   end case
+
+   return
+
+paint:
+   code = 'n'
+   if w{'focused'} then call $sl_attr('highlight', code)
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[ ' : w{'label'} : ' ]', code)
+   if w{'focused'} then display @(w{'ax'} + 2, w{'ay'} + 0) :
+   return
+end
+
+* END-CODE

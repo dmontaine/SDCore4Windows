@@ -1,0 +1,94 @@
+* SCREEN_MENU
+* The subroutine that SCREEN MENU calls: a pop-up menu.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MENU items {AT x,y} {DEFAULT n} {RETURNING v} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_menu(items, x, y, default, ret, status)
+*
+*     items    the entries, as values (a field mark does as well).  An entry is its label, a subvalue
+*              mark, the shortcut to show beside it (text only: the program acts on the key itself)
+*              and a second subvalue mark and the code it is to give back.  Without a code the entry's
+*              number in the list is given.  An entry of - alone is a line across the menu.
+*              An & in a label puts the letter after it first as the entry's key (without one, the
+*              label's first letter): that letter chooses the entry at once.
+*     x y      the top left cell of the menu, from 0; left out, it is centred.  It is moved to fit.
+*     default  the entry the menu starts on (the first)
+*     ret      the code of the entry chosen
+*     status   0 an entry was chosen (Return or its letter); 1 Esc or the input ended (ELSE)
+*
+*   Up and down move among the entries, skipping the lines.  What was under the menu is put back
+*   when it closes.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_menu(items, ax, ay, default, ret, status)
+$catalog !screen_menu
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   list = convert(@fm, @vm, items)
+   n = dcount(list, @vm)
+   if list = '' then n = 0
+   if n = 0 then return
+   call $sl_scr('get', scr)
+
+   * One menu, whose first value is a title nobody sees; each entry gets a code
+   m = ''
+   lw = 0
+   sc = 0
+   for i = 1 to n
+      lab = list<1, i, 1>
+      code = list<1, i, 3>
+      if code = '' then code = i
+      m<1, i + 1, 1> = lab
+      m<1, i + 1, 2> = list<1, i, 2>
+      m<1, i + 1, 3> = code
+      p = index(lab, '&', 1)
+      if p then pl = len(lab) - 1 else pl = len(lab)
+      if pl > lw then lw = pl
+      if len(list<1, i, 2>) > sc then sc = len(list<1, i, 2>)
+   next i
+   dw = lw + sc + 4
+   if sc then dw += 2
+
+   x = ax
+   y = ay
+   if x = '' or y = '' then
+      x = int((scr<SL.S.W> - dw) / 2)
+      y = int((scr<SL.S.H> - n) / 2)
+   end
+
+   w = ''
+   w<SL.W.X> = x + 0
+   w<SL.W.Y> = y + 0
+   w<15> = 1                                   ;* a pop-up: no bar (M.POPUP in $sl_menu)
+   w<20> = m
+   w<SL.W.S2> = default + 0
+   call $sl_menu('init', w, scr, '', r)
+   call $sl_menu('run', w, scr, '', r)
+   call $sl_scr('put', scr)
+
+   if r # '' then
+      ret = r
+      status = 0
+   end
+
+   return
+end
+
+* END-CODE

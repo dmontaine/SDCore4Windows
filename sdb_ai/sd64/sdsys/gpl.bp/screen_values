@@ -1,0 +1,51 @@
+* SCREEN_VALUES
+* The subroutine that SCREEN VALUES calls: every value of a form in one data collection.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN VALUES f RETURNING c
+*
+*   is compiled into
+*
+*   call !screen_values(f, ret, status)
+*
+*     ret      a new collection with one element for each widget that holds a value (entry, check, radio,
+*              list), named by the widget's id, the value being what SCREEN GET answers for it.  The
+*              program can JBUILD it, write it to a file, or read c{'name'}.
+*     status   0; 1 if f is not a form (ELSE)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_values(f, ret, status)
+$catalog !screen_values
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+
+   c = collection()
+   nw = inmat(f{'widgets'})
+   for i = 1 to nw
+      w = f{'widgets', i}
+      wt = w{'type'}
+      if wt = 'entry' or wt = 'check' or wt = 'radio' or wt = 'list' then
+         k = w{'id'}
+         c{k} = w{'value'}
+      end
+   next i
+   ret = c
+   status = 0
+
+   return
+end
+
+* END-CODE

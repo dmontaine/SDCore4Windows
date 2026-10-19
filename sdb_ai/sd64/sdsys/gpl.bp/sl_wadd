@@ -1,0 +1,47 @@
+* SL_WADD
+* Screen library: add a widget to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_wadd(f, w, ok)
+*
+*     f    the form: a data collection ($sl_form)
+*     w    the widget, a collection whose own init has run
+*     ok   1 if it was added; 0 if f is not a form, the widget has no id (or one with a / or a * in it:
+*          SCREEN VALUES names an element of a collection by it), or the form already has a widget
+*          of that id (nothing is changed)
+*
+*   The widget is put at the end of the form's array of widgets, so the focus ring goes round them in
+*   the order they were added and the last one added is drawn last.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_wadd(f, w, ok)
+$catalog $sl_wadd
+
+   ok = 0
+   if jtype(f) # 'collection' then return
+   if w{'id'} = '' then return
+   if index(w{'id'}, '/', 1) or index(w{'id'}, '*', 1) then return    ;* a / is a path in c{id}, a * a wildcard
+
+   call $sl_form('find', f, '', w{'id'}, n)
+   if n then return                           ;* a second widget of the same id
+
+   if jtype(f{'widgets'}) # 'array' then f{'widgets'} = mat()
+   n = inmat(f{'widgets'}) + 1
+   f{'widgets', n} = w
+   ok = 1
+
+   return
+end
+
+* END-CODE

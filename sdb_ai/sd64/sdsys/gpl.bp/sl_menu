@@ -48,10 +48,13 @@ $include sl.h
    equ M.UNDER to 12       ;* the screen under the drop-down ($sl_region)
    equ M.TX to 13          ;* value m: the column of title m
    equ M.TM to 14          ;* value m: its mnemonic letter
+   equ M.POPUP to 15       ;* 1: a pop-up menu, not a bar (see below)
    equ M.MENUS to 19       ;* menu m is field 19 + m
 
    ret = ''
    brow = w<SL.W.Y> + 0
+   popup = w<M.POPUP> + 0
+   if popup then brow = w<SL.W.Y> - 1       ;* the drop-down starts on the row after brow
    sw = w<SL.W.W> + 0
    if sw < 20 then sw = scr<SL.S.W> + 0
    nm = 0
@@ -67,6 +70,7 @@ $include sl.h
          w<SL.W.TYPE> = 'menu'
          w<SL.W.FLAGS> = 'focusable' : @vm : 'visible'
          x = 1
+         if popup then x = w<SL.W.X> + 1       ;* the drop-down's left edge is at SL.W.X
          for m = 1 to nm
             t = w<M.MENUS + m, 1>
             gosub mnem
@@ -140,6 +144,8 @@ handle.key:
          gosub next.item
       case key = 'up'
          gosub prev.item
+      case popup and (key = 'left' or key = 'right')
+         ret = 'unhandled'
       case key = 'left'
          gosub close.drop
          menu = if menu > 1 then menu - 1 else nm
@@ -217,6 +223,7 @@ label.styles:
    return
 
 draw.bar:
+   if popup then return                       ;* a pop-up menu has no bar
    gosub get.styles
    txt = space(sw)
    atr = str(ba, sw)
@@ -252,6 +259,8 @@ open.menu:
    dx = w<M.TX, menu> - 1
    if dx + dw > sw then dx = sw - dw
    dy = brow + 1
+   if popup and dy + ni > scr<SL.S.H> then dy = scr<SL.S.H> - ni
+   if dy < 0 then dy = 0
    call $sl_region('save', scr, dx, dy, dw, ni, under)
    w<M.UNDER> = under
    w<M.GEOM> = dx : ':' : dy : ':' : dw : ':' : ni

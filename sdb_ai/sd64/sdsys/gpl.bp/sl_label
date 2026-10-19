@@ -1,0 +1,61 @@
+* SL_LABEL
+* Screen library, widget: a line of fixed text in a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_label(op, w, scr, key, ret)      the widget contract (screenlib-design.md)
+*
+*   The widgets of a FORM are data collections (w{'name'}); a form is a collection too, so that the
+*   program, the statements and the library all see one object, and a form can be written to a file
+*   with JBUILD and read back with JPARSE.  The elements every widget has:
+*
+*     type  the widget's name          id   its name in the form          text  what it shows
+*     x y   its place, from the top left corner of the form (0,0 is the corner of the border)
+*     ax ay its place on the screen: set by the form from x, y when it draws it
+*     w h   its size in cells (a label: the width of its text, one row)
+*     attr  a style name (normal, reverse, underline ...)
+*     focused 1 while it has the focus     enabled 0 for a widget that does not take keys
+*
+*   init    fills in what the caller left out
+*   draw    the text at ax, ay in the style attr
+*   focus   a label never takes the focus; this does nothing
+*   key     'unhandled' with the key: a label has no use for one
+*   close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_label(op, w, scr, key, ret)
+$catalog $sl_label
+
+$include sl.h
+
+   ret = ''
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'label'
+         w{'focusable'} = 0
+         w{'w'} = len(w{'text'})
+         w{'h'} = 1
+
+      case op = 'draw'
+         call $sl_attr(w{'attr'}, code)
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, w{'text'}, code)
+
+      case op = 'key'
+         ret = 'unhandled' : @fm : key
+   end case
+
+   return
+end
+
+* END-CODE

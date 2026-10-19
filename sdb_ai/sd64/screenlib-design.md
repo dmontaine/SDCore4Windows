@@ -172,9 +172,12 @@ built.
 
 # SCOPE: the whole library as BASIC commands (12 Oct 2026, second sitting)
 
-Everything above is the first cut (SED's needs). This part scopes the rest. Built so far: the compiler
-mechanism and ONE verb (`screen msgbox`), `sandbox-screen.py`, 25 rows green. Everything else here is
-a PROPOSAL, written in the conditional, with what would falsify it.
+Everything above is the first cut (SED's needs). This part scopes the rest.
+
+**Built and tested (`sandbox-screen.py`, through user programs on the pty):** the compiler mechanism and
+the verbs `msgbox open close clear text box cursor refresh size key menu menubar pick ask` (stages 0 to 2);
+`test-screencmd-units.py` checks the verb table, the routines and their headers agree. Stage 3 (forms,
+below) is being built. Everything marked "proposed" is written in the conditional, with what would falsify it.
 
 ## owner rulings this rests on
 
@@ -231,8 +234,16 @@ buffer. A user program cannot be asked to build one, so the commands keep it in 
 
 ## the vocabulary (proposed; `built` marks the one that exists)
 
-Verbs with a form (`f`) take it as their first value by REFERENCE: a form is one dynamic array in the
-program's variable, so it can be written to a file, read back and run, and no new variable type is needed.
+**A form is a data collection** (decided 12 Oct while building stage 3, replacing the first idea of a
+dynamic array passed by reference). A collection is one reference-counted object however many variables
+hold it (`d = c` shares, `COLLECTION(c)` copies, and a subroutine given one changes the caller's), so
+`screen form ... returning f` makes it and every later verb takes `f` BY VALUE and changes the program's
+form with nothing handed back: no by-reference positional is needed in the compiler. A widget is a
+collection inside the form's `widgets` array (`f{'widgets', 3}{'value'}`), elements named in lower case
+(`type id x y w h value text items ...`); JBUILD writes a whole form out as JSON, JPARSE reads it back,
+so a screen can be kept as a record. The first widgets (menu, msgbox, SED's prompt) stay dynamic arrays:
+they are modal dialogues, not members of a form. Both obey the one contract
+`call $sl_x(op, w, scr, key, ret)`; the type of `w` is the widget's own.
 
 | verb | form | answer (`returning`) | routine |
 |---|---|---|---|
@@ -245,12 +256,12 @@ program's variable, so it can be written to a file, read back and run, and no ne
 | `refresh` | `screen refresh` | - | `!screen_refresh` |
 | `size` | `screen size` | width @fm height | `!screen_size` |
 | `key` | `screen key {timeout s}` | key name; else on timeout / end of input | `!screen_key` |
-| `msgbox` (built) | `screen msgbox text {title t} {buttons b} {default n} {at x,y}` | button number (0 = Esc) | `!screen_msgbox` |
-| `menu` | `screen menu items {title t} {at x,y} {default n}` | item code; else on Esc | `!screen_menu` |
-| `menubar` | `screen menubar menus {at row}` | item code of the chosen entry | `!screen_menubar` |
+| `msgbox` | `screen msgbox text {title t} {buttons b} {default n} {at x,y}` | button number (0 = Esc) | `!screen_msgbox` |
+| `menu` | `screen menu items {at x,y} {default n}` | item code; else on Esc | `!screen_menu` |
+| `menubar` | `screen menubar menus {row r} {draw}` | item code of the chosen entry | `!screen_menubar` |
 | `pick` | `screen pick items {title t} {at x,y} {size w,h} {default n} {multi}` | index (or list of indexes) | `!screen_pick` |
-| `ask` | `screen ask prompt {value v} {width n} {at x,y} {mask} {history h}` | the text; else on Esc | `!screen_ask` |
-| `form` | `screen form f {title t} {at x,y} {size w,h}` | - (creates / resets f) | `!screen_form` |
+| `ask` | `screen ask prompt {value v} {width n} {title t} {at x,y} {mask}` | the text; else on Esc | `!screen_ask` |
+| `form` | `screen form {title t} {at x,y} {size w,h} returning f` | the new form (a collection) | `!screen_form` |
 | `label` | `screen label f, id, text at x,y {attr a}` | - | `!screen_label` |
 | `frame` | `screen frame f, id at x,y size w,h {title t}` | - | `!screen_frame` |
 | `entry` | `screen entry f, id at x,y width n {value v} {mask} {maxlen n}` | - | `!screen_entry` |
@@ -262,6 +273,7 @@ program's variable, so it can be written to a file, read back and run, and no ne
 | `status` | `screen status f, id, text` | - | `!screen_status` |
 | `progress` | `screen progress f, id at x,y width n {value n}` | - | `!screen_progress` |
 | `run` | `screen run f` | id of the button that ended it; else on Esc or a cancel button | `!screen_run` |
+| `values` | `screen values f` | a collection id -> value of every entry, check, radio and list | `!screen_values` |
 | `wait` | `screen wait f {timeout s}` | event: type @vm id @vm data; else on timeout | `!screen_wait` |
 | `get` | `screen get f, id` | the widget's value | `!screen_get` |
 | `set` | `screen set f, id {value v} {text t} {items i} {enabled b}` | - | `!screen_set` |
@@ -281,7 +293,7 @@ one in. The program loops: `screen wait f returning ev` then `begin case` on the
 ```
    screen open clear else crt 'This needs a terminal.' ; stop
    cities = 'Albany':@vm:'Boston':@vm:'Chicago':@vm:'Denver'
-   screen form f title 'Customer' at 10,3 size 56,16
+   screen form title 'Customer' at 10,3 size 56,16 returning f
    screen label  f, 'l1', 'Name:'          at 2,2
    screen entry  f, 'name'                 at 12,2 width 30 value 'Smith'
    screen check  f, 'vip', '&VIP customer' at 12,4 value 1
@@ -348,10 +360,12 @@ one in. The program loops: `screen wait f returning ev` then `begin case` on the
    (done); a message added for the compile errors needs a file in `sdsys/messages` (12172-12175); the
    statement table must not be sorted by hand, only extended in step; `bbcmp.py` (the bootstrap compiler
    for the `_*` pcode routines) is NOT involved - it never sees a user statement.
-7. Not built yet: a positional value passed BY REFERENCE (a form: `r` in the table), flags (a keyword
-   with no value), a keyword that takes a list of words (`style single`), `at` as a pair that may be left
-   out (the null pair is passed today), a check that table, routine signature and docs agree
-   (`test-screencmd-units.py`, proposed).
+7. Added in stage 1: flags (`KEYWORD:F` in the table: no value follows, the subroutine is given 1) and
+   `test-screencmd-units.py` (the table, each routine's argument list and `$catalog` line, and the
+   statement form in its header agree; `--selftest` changes a copy five ways). Not needed after all: a
+   positional passed BY REFERENCE (a form is a collection, shared). Not built: a keyword that takes a
+   word list (`style single`); `at` as a pair that may be left out (the null pair is passed, and the
+   routine decides).
 
 ## spike result
 
@@ -369,18 +383,18 @@ compile errors are refused with their messages. Cost: about 130 lines in bcomp (
 | stage | what | size | test (through a USER program, on the pty) |
 |---|---|---|---|
 | 0 | compiler mechanism + `msgbox` - DONE | small | `sandbox-screen.py` 25 rows |
-| 1 | the owned screen: `$sl_put` with per-cell attributes, `open`/`close`/`clear`/`text`/`box`/`cursor`/`refresh`/`size`/`key`; move msgbox, menu and prompt onto it; the cursor rule | medium | text drawn, a dialogue over it, the text back row for row and attribute for attribute; cursor |
-| 2 | modal dialogues: `menu`, `menubar`, `pick`, `ask`, `msgbox at` | medium | each verb: choose, cancel, keys, background restored |
-| 3 | by-reference positionals and flags in the table; the form record; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus` | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
+| 1 | the owned screen: `$sl_put` with per-cell attributes, `open`/`close`/`clear`/`text`/`box`/`cursor`/`refresh`/`size`/`key`; move msgbox, menu and prompt onto it; the cursor rule - DONE | medium | text drawn, a dialogue over it, the text back row for row and attribute for attribute; cursor (61 rows) |
+| 2 | modal dialogues: `menu`, `menubar`, `pick`, `ask`, `msgbox at` - DONE | medium | each verb: choose, cancel, keys, background restored cell for cell (106 rows with stage 1; ten mutants, see PROJECT_STATUS) |
+| 3 | the form (a collection) and its container; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus`, `values` - BEING BUILT | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
 | 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress | medium | event order; a combo over a form; scrolling lists |
 | 5 | colour themes, mouse (SGR 1006 already reaches KEYIN), resize (SIGWINCH) | medium | attributes; clicks; a resized pty |
 | 6 | editor and viewer widgets; `ced_edit` and the debugger on the library; table, tree | large | the editors' existing suites (`sandbox-ced.py`) |
 | 7 | carry to Solo (bcomp, the library, 12172-12175), then the Windows agent when Core is declared stable | small each | their own suites |
 
 What would falsify the plan: (a) stage 1's per-cell shadow making a BASIC repaint slower than ~16 ms at
-160x48 with colour (S.1 measured monochrome rows only); (b) a form held in one dynamic array being too
-slow to copy per call (it is passed by reference, so only if `expr`'s `OP.VALUE` is applied by mistake);
-(c) the focus ring needing a widget to see keys before its parent, which the `unhandled` convention
+160x48 with colour (S.1 measured monochrome rows only); (b) collection reads and writes (about thirty a
+key at a form's widest) being too slow for a key to feel instant - measure it at stage 3 with the 25-line
+form; (c) the focus ring needing a widget to see keys before its parent, which the `unhandled` convention
 cannot express (the first worker's own doubt).
 
 ## risks and open questions for the owner
@@ -391,9 +405,11 @@ cannot express (the first worker's own doubt).
 2. **Library-owned screen.** The library keeps the shadow once `screen open` is done; before that a
    dialogue puts back blanks. The alternative is for every dialogue to open the screen implicitly,
    which would erase the program's output on the first call.
-3. **Forms as statements building one array** (proposed) versus a form read from a record (a data
-   collection or a JSON string), which suits stored screen definitions; the array can be saved and read
-   back as it is, so this is an addition, not a choice.
+3. **Forms as statements that build a collection** (decided in the build, 12 Oct) rather than a dynamic
+   array: a collection is shared by reference, so no compiler support for by-reference values was
+   needed, and JBUILD / JPARSE give a stored screen definition for nothing. A form built from a JSON record
+   instead of statements (`f = jparse(record)`) then works as it stands, once the widgets' elements are
+   documented; open: do you want that documented as a feature?
 4. **`ask` or `input`.** `screen input` would clash in the reader's mind with `input`; `ask` is not an SD
    word. Open.
 5. Phantom / API sessions: every verb answers ELSE (status 1) and draws nothing; an `open` in a phantom

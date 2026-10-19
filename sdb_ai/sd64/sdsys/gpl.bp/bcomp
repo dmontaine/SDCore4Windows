@@ -518,8 +518,25 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * subroutine's argument list; test-screencmd-units.py checks the three agree.
 
    screen.names = "MSGBOX"
-   screen.defs = "!screen_msgbox":@vm:1:@vm:"TITLE:1":@sm:"BUTTONS:1":@sm:"DEFAULT:1"
-   screen.names<-1> = "OPEN"    ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2"
+   screen.defs = "!screen_msgbox":@vm:1:@vm:"TITLE:1":@sm:"BUTTONS:1":@sm:"DEFAULT:1":@sm:"AT:2"
+   screen.names<-1> = "MENU"    ; screen.defs<-1> = "!screen_menu":@vm:1:@vm:"AT:2":@sm:"DEFAULT:1"
+   screen.names<-1> = "MENUBAR" ; screen.defs<-1> = "!screen_menubar":@vm:1:@vm:"ROW:1":@sm:"DRAW:F"
+   screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
+   screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F"
+   screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"
+   screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1"
+   screen.names<-1> = "FRAME"   ; screen.defs<-1> = "!screen_frame":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1"
+   screen.names<-1> = "ENTRY"   ; screen.defs<-1> = "!screen_entry":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"MASK:F":@sm:"MAXLEN:1"
+   screen.names<-1> = "CHECK"   ; screen.defs<-1> = "!screen_check":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
+   screen.names<-1> = "RADIO"   ; screen.defs<-1> = "!screen_radio":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ACROSS:F"
+   screen.names<-1> = "LIST"    ; screen.defs<-1> = "!screen_list":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F"
+   screen.names<-1> = "BUTTON"  ; screen.defs<-1> = "!screen_button":@vm:3:@vm:"AT:2":@sm:"DEFAULT:F":@sm:"CANCEL:F"
+   screen.names<-1> = "RUN"     ; screen.defs<-1> = "!screen_run":@vm:1
+   screen.names<-1> = "GET"     ; screen.defs<-1> = "!screen_get":@vm:2
+   screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1"
+   screen.names<-1> = "FOCUS"   ; screen.defs<-1> = "!screen_focus":@vm:2
+   screen.names<-1> = "VALUES"  ; screen.defs<-1> = "!screen_values":@vm:1
+   screen.names<-1> = "OPEN"   ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2"
    screen.names<-1> = "CLOSE"   ; screen.defs<-1> = "!screen_close":@vm:0
    screen.names<-1> = "CLEAR"   ; screen.defs<-1> = "!screen_clear":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"ATTR:1"
    screen.names<-1> = "TEXT"    ; screen.defs<-1> = "!screen_text":@vm:1:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1"

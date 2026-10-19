@@ -14,8 +14,9 @@
 *     init    w is filled in by the caller: SL.W.D the title (null for none), SL.W.D + 1 the
 *             lines of the message as values, SL.W.D + 2 the buttons as values.  An & in a
 *             button's name marks its mnemonic letter (without one, the first character).
-*             The box is centred on the screen of scr.  SL.W.S1 may hold the button to start
-*             on (the first is the default).
+*             The box is centred on the screen of scr unless fields 16 and 17 hold the column and
+*             row of its top left corner (it is moved to fit on the screen).  SL.W.S1 may hold the
+*             button to start on (the first is the default).
 *     draw    the box, saving the screen under it the first time
 *     focus   key = 1 gives it the focus (draws), key = 0 takes it away (as close)
 *     key     one key: left / up / btab and right / down / tab move among the buttons, enter
@@ -38,6 +39,8 @@ $include sl.h
    equ B.GEOM to 13        ;* bx : by : w : h
    equ B.UNDER to 14       ;* the screen under the box
    equ B.SHOWN to 15       ;* 1 while the box is on the screen
+   equ B.AX to 16          ;* the left column and top row asked for (null: centred)
+   equ B.AY to 17
 
    title = w<SL.W.D>
    nl = dcount(w<SL.W.D + 1>, @vm)
@@ -71,6 +74,13 @@ $include sl.h
    bx = int((scr<SL.S.W> - bwid) / 2)
    by = int((scr<SL.S.H> - bh) / 2)
    if by < 1 then by = 1
+   if w<B.AX> # '' and w<B.AY> # '' then      ;* the caller asked for a place
+      bx = w<B.AX> + 0 ; by = w<B.AY> + 0
+      if bx + bwid > scr<SL.S.W> then bx = scr<SL.S.W> - bwid
+      if by + bh > scr<SL.S.H> then by = scr<SL.S.H> - bh
+      if bx < 0 then bx = 0
+      if by < 0 then by = 0
+   end
 
    begin case
       case op = 'init'

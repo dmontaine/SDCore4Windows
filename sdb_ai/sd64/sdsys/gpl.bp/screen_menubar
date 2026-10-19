@@ -1,0 +1,74 @@
+* SCREEN_MENUBAR
+* The subroutine that SCREEN MENUBAR calls: a menu bar with drop-down menus.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MENUBAR menus {ROW r} {DRAW} {RETURNING v} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_menubar(menus, row, draw, ret, status)
+*
+*     menus    one FIELD for each menu: its title (an & puts the letter after it first as the key
+*              that opens it), then its entries as values, each as for SCREEN MENU (label, shortcut,
+*              code as subvalues; - is a line).  An entry without a code gives its number in its menu.
+*     row      the row of the bar, from 0 (default 0)
+*     draw     only draw the bar and return; the program calls again without DRAW to use it
+*     ret      the code of the entry chosen
+*     status   0 an entry was chosen; 1 Esc or the input ended, or DRAW was given (ELSE)
+*
+*   Without DRAW the first menu opens at once; left and right move to the next menu, up and down
+*   among the entries, Return chooses, Esc leaves, a letter chooses the entry that has it.  The bar
+*   stays on the screen afterwards (and in the library's shadow); what was under the drop-downs is
+*   put back when they close.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_menubar(menus, brow, draw, ret, status)
+$catalog !screen_menubar
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   nm = dcount(menus, @fm)
+   if menus = '' then nm = 0
+   if nm = 0 then return
+   call $sl_scr('get', scr)
+
+   w = ''
+   w<SL.W.Y> = brow + 0
+   w<SL.W.W> = scr<SL.S.W>
+   for k = 1 to nm
+      m = menus<k>
+      ni = dcount(m, @vm) - 1
+      for i = 1 to ni
+         if m<1, i + 1, 3> = '' then m<1, i + 1, 3> = i
+      next i
+      w<19 + k> = m
+   next k
+
+   call $sl_menu('init', w, scr, '', r)
+   call $sl_menu('draw', w, scr, '', r)
+   if draw = '' then
+      call $sl_menu('run', w, scr, '', r)
+      if r # '' then
+         ret = r
+         status = 0
+      end
+   end
+   call $sl_scr('put', scr)
+
+   return
+end
+
+* END-CODE

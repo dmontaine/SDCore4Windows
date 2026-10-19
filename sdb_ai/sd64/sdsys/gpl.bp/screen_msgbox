@@ -9,11 +9,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MSGBOX text {TITLE t} {BUTTONS list} {DEFAULT n} {RETURNING n} {THEN ... ELSE ...}
+*   SCREEN MSGBOX text {TITLE t} {BUTTONS list} {DEFAULT n} {AT x,y} {RETURNING n} {THEN ... ELSE ...}
 *
 *   is compiled into
 *
-*   call !screen_msgbox(text, title, buttons, default, ret, status)
+*   call !screen_msgbox(text, title, buttons, default, x, y, ret, status)
 *
 *     text      the message; field or value marks end a line
 *     title     shown in the top border; null for none
@@ -21,6 +21,7 @@
 *               commas ("&Yes,&No"); an & puts the letter after it first as the button's key
 *               (without one, the caption's first letter); null gives one button, OK
 *     default   the button the box starts on (1 if left out or out of range)
+*     x y       the top left cell of the box, from 0; left out, it is centred.  It is moved to fit.
 *     ret       the number of the button chosen, 0 if the user pressed Esc or the input ended
 *     status    0 when a button was chosen, 1 when not: THEN is taken on 0, ELSE on 1
 *
@@ -33,7 +34,7 @@
 * START-CODE
 
 $internal
-subroutine screen_msgbox(text, title, buttons, default, ret, status)
+subroutine screen_msgbox(text, title, buttons, default, ax, ay, ret, status)
 $catalog !screen_msgbox
 
 $include sl.h
@@ -54,6 +55,10 @@ $include sl.h
    w<SL.W.D + 1> = lines
    w<SL.W.D + 2> = btns
    if default + 0 > 0 then w<SL.W.S1> = default + 0
+   if ax # '' and ay # '' then
+      w<16> = ax + 0                      ;* B.AX, B.AY of $sl_msgbox: the top left corner asked for
+      w<17> = ay + 0
+   end
 
    call $sl_msgbox('init', w, scr, '', r)
    call $sl_msgbox('run', w, scr, '', r)

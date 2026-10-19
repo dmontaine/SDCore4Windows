@@ -1,0 +1,139 @@
+* SL_RADIO
+* Screen library, widget: a group of radio buttons, one of which is selected.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_radio(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, x y, ax ay, items (as values), value (the number of the item selected, 1 to start
+*   with), across (1: the items are side by side on one row, else one to a row), cur (the item the
+*   cursor is on while the group has the focus; it is the selected one)
+*
+*     init    w and h from the items; value is brought into range
+*     draw    each item as (*) item or ( ) item; the selected one's row is in reverse video while the
+*             group has the focus
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     up / left and down / right move to the previous / next item AND select it ('handled');
+*             at the first or last item they are 'unhandled' with the key so that the form can move
+*             to the widget before or after (when the items are side by side only left and right
+*             move among them, up and down are the form's).  The space bar selects the item the
+*             cursor is on.  Anything else is 'unhandled' with the key.
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_radio(op, w, scr, key, ret)
+$catalog $sl_radio
+
+$include sl.h
+
+   ret = ''
+   items = w{'items'}
+   n = dcount(items, @vm)
+   if items = '' then n = 0
+   across = w{'across'} + 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'radio'
+         w{'focusable'} = 1
+         v = w{'value'} + 0
+         if v < 1 or v > n then v = 1
+         w{'value'} = v
+         w{'cur'} = v
+         wid = 0
+         tot = 0
+         for i = 1 to n
+            l = len(items<1, i, 1>) + 4
+            if l > wid then wid = l
+            tot += l + 2
+         next i
+         if across then
+            w{'w'} = tot - 2
+            w{'h'} = 1
+         end else
+            w{'w'} = wid
+            w{'h'} = n
+         end
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         gosub handle.key
+   end case
+
+   return
+
+handle.key:
+   cur = w{'cur'} + 0
+   backk = 'up'
+   forwk = 'down'
+   if across then backk = 'left' ; forwk = 'right'
+   ret = 'handled'
+   begin case
+      case key = backk
+         if cur > 1 then
+            cur -= 1
+            w{'value'} = cur
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+      case key = forwk
+         if cur < n then
+            cur += 1
+            w{'value'} = cur
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+      case key = ' '
+         w{'value'} = cur
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   w{'cur'} = cur
+   gosub paint
+   return
+
+paint:
+   cur = w{'cur'} + 0
+   sel = w{'value'} + 0
+   x = w{'ax'} + 0
+   y = w{'ay'} + 0
+   for i = 1 to n
+      mark = '( ) '
+      if i = sel then mark = '(*) '
+      line = mark : items<1, i, 1>
+      code = 'n'
+      if w{'focused'} and i = cur then call $sl_attr('highlight', code)
+      if across then
+         call $sl_put(scr, x, y, line, code)
+         x += len(line) + 2
+      end else
+         call $sl_put(scr, x, y + i - 1, line : space(w{'w'} - len(line)), code)
+      end
+   next i
+   if w{'focused'} then
+      if across then
+         display @(w{'ax'} + 1, w{'ay'}) :
+      end else
+         display @(w{'ax'} + 1, w{'ay'} + cur - 1) :
+      end
+   end
+   return
+end
+
+* END-CODE

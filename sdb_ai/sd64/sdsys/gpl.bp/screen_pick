@@ -1,0 +1,120 @@
+* SCREEN_PICK
+* The subroutine that SCREEN PICK calls: choose from a list.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN PICK items {TITLE t} {AT x,y} {SIZE w,h} {DEFAULT n} {MULTI} {RETURNING v} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_pick(items, title, x, y, w, h, default, multi, ret, status)
+*
+*     items    the entries, as values (a field mark does as well)
+*     title    shown in the top border
+*     x y      the top left cell of the box, from 0; left out, it is centred
+*     w h      the size of the list inside the box (default: wide enough for the longest entry, as high
+*              as there are entries, at most four rows less than the screen).  With more entries than
+*              rows, the right-hand column is a scroll bar.
+*     default  the entry the list starts on (the first)
+*     multi    several entries can be picked: the space bar picks or unpicks the current one
+*     ret      the number of the entry chosen; with MULTI, the numbers of those picked, as values
+*              (null if none)
+*     status   0 Return was pressed; 1 Esc or the input ended (ELSE)
+*
+*   Up, down, home, end, page up and page down move; a letter jumps to the next entry that starts
+*   with it.  What was under the box is put back when it closes.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_pick(items, title, ax, ay, lw, lh, default, multi, ret, status)
+$catalog !screen_pick
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   list = convert(@fm, @vm, items)
+   n = dcount(list, @vm)
+   if list = '' then n = 0
+   if n = 0 then return
+   call $sl_scr('get', scr)
+
+   * The size of the list: a lead column (a marker, or [ ] when several can be picked) and the entry
+   widest = 0
+   for i = 1 to n
+      if len(list<1, i, 1>) > widest then widest = len(list<1, i, 1>)
+   next i
+   lead = 1
+   if multi # '' then lead = 4
+   maxh = scr<SL.S.H> - 4
+   if maxh < 1 then maxh = 1
+   if lh = '' then
+      lh = n
+      if lh > maxh then lh = maxh
+   end
+   lh += 0
+   if lw = '' then
+      lw = widest + lead
+      if n > lh then lw += 1                   ;* the scroll bar
+   end
+   lw += 0
+   if len(title) + 4 > lw then lw = len(title) + 4
+   bw = lw + 2
+   bh = lh + 2
+   if bw > scr<SL.S.W> then bw = scr<SL.S.W> ; lw = bw - 2
+   if bh > scr<SL.S.H> then bh = scr<SL.S.H> ; lh = bh - 2
+   bx = ax
+   by = ay
+   if bx = '' or by = '' then
+      bx = int((scr<SL.S.W> - bw) / 2)
+      by = int((scr<SL.S.H> - bh) / 2)
+   end
+   bx += 0 ; by += 0
+   if bx + bw > scr<SL.S.W> then bx = scr<SL.S.W> - bw
+   if by + bh > scr<SL.S.H> then by = scr<SL.S.H> - bh
+   if bx < 0 then bx = 0
+   if by < 0 then by = 0
+
+   call $sl_region('save', scr, bx, by, bw, bh, under)
+   call $sl_attr('normal', nc)
+   call $sl_frame(scr, bx, by, bw, bh, title, nc, 1)
+
+   w = collection()
+   w{'ax'} = bx + 1
+   w{'ay'} = by + 1
+   w{'w'} = lw
+   w{'h'} = lh
+   w{'items'} = list
+   w{'multi'} = (multi # '')
+   w{'cur'} = default + 0
+   call $sl_list('init', w, scr, '', r)
+   call $sl_list('focus', w, scr, 1, r)
+   loop
+      call $sl_key('', k)
+      if k = '' then k = 'esc'
+      call $sl_list('key', w, scr, k, r)
+      st = r<1>
+   until st = 'done' or st = 'cancel'
+   repeat
+
+   call $sl_region('restore', scr, bx, by, bw, bh, under)
+   call $sl_scr('put', scr)
+
+   if st = 'done' then
+      ret = r<2>
+      status = 0
+   end
+
+   return
+end
+
+* END-CODE

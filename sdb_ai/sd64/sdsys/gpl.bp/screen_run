@@ -1,0 +1,54 @@
+* SCREEN_RUN
+* The subroutine that SCREEN RUN calls: show a form and let the user fill it in.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN RUN f {RETURNING id} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_run(f, ret, status)
+*
+*     f        the form (SCREEN FORM and the verbs that add widgets)
+*     ret      the id of the button that ended the form; for Esc, the id of the form's cancel button,
+*              or null if it has none
+*     status   0 a button was pressed; 1 Esc or the cancel button was, or the input ended, or f is not a
+*              form (ELSE)
+*
+*   The form is drawn over the screen (what is under it is kept, and put back when it ends), the focus
+*   starts on the first widget that can have it, or where it was left by a run before, and the keys are
+*   those of $sl_form: Tab and Shift-Tab, the arrows, Return (the default button), Esc (cancel), and
+*   what each widget takes.  What the user typed stays in the widgets: read it with SCREEN GET, or run the
+*   form again to let the user go on.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_run(f, ret, status)
+$catalog !screen_run
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   call $sl_scr('get', scr)
+
+   call $sl_form('run', f, scr, '', r)
+   call $sl_scr('put', scr)
+
+   ret = r<2>
+   if r<1> = 'done' then status = 0
+
+   return
+end
+
+* END-CODE

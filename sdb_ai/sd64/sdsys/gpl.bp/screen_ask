@@ -1,0 +1,98 @@
+* SCREEN_ASK
+* The subroutine that SCREEN ASK calls: a small dialogue that asks for a line of text.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN ASK prompt {VALUE v} {WIDTH n} {TITLE t} {AT x,y} {MASK} {RETURNING v} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_ask(prompt, value, width, title, x, y, mask, ret, status)
+*
+*     prompt   shown above the field
+*     value    the text the field starts with
+*     width    the width of the field in cells (default 30, at most what the screen holds)
+*     title    shown in the top border
+*     x y      the top left cell of the box, from 0; left out, it is centred
+*     mask     show a * for each character instead of the character (a password)
+*     ret      the text
+*     status   0 Return was pressed; 1 Esc or the input ended (ELSE)
+*
+*   The keys are those of $sl_entry: left, right, home, end, backspace, delete, Ctrl-U (empty the
+*   field), Ctrl-K, Ctrl-W.  What was under the box is put back when it closes.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_ask(prompt, value, width, title, ax, ay, mask, ret, status)
+$catalog !screen_ask
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+
+   fw = width + 0
+   if fw < 1 then fw = 30
+   if fw > scr<SL.S.W> - 6 then fw = scr<SL.S.W> - 6
+   if fw < 1 then fw = 1
+   text = prompt[1, scr<SL.S.W> - 6]
+   bw = fw
+   if len(text) > bw then bw = len(text)
+   if len(title) + 2 > bw then bw = len(title) + 2
+   bw += 4
+   bh = 4
+   bx = ax
+   by = ay
+   if bx = '' or by = '' then
+      bx = int((scr<SL.S.W> - bw) / 2)
+      by = int((scr<SL.S.H> - bh) / 2)
+   end
+   bx += 0 ; by += 0
+   if bx + bw > scr<SL.S.W> then bx = scr<SL.S.W> - bw
+   if by + bh > scr<SL.S.H> then by = scr<SL.S.H> - bh
+   if bx < 0 then bx = 0
+   if by < 0 then by = 0
+
+   call $sl_region('save', scr, bx, by, bw, bh, under)
+   call $sl_attr('normal', nc)
+   call $sl_frame(scr, bx, by, bw, bh, title, nc, 1)
+   call $sl_put(scr, bx + 2, by + 1, text, nc)
+
+   w = collection()
+   w{'ax'} = bx + 2
+   w{'ay'} = by + 2
+   w{'w'} = fw
+   w{'value'} = value
+   if mask # '' then w{'mask'} = '*'
+   call $sl_entry('init', w, scr, '', r)
+   call $sl_entry('focus', w, scr, 1, r)
+   loop
+      call $sl_key('', k)
+      if k = '' then k = 'esc'
+      call $sl_entry('key', w, scr, k, r)
+      st = r<1>
+   until st = 'done' or st = 'cancel'
+   repeat
+
+   call $sl_region('restore', scr, bx, by, bw, bh, under)
+   call $sl_scr('put', scr)
+
+   if st = 'done' then
+      ret = r<2>
+      status = 0
+   end
+
+   return
+end
+
+* END-CODE

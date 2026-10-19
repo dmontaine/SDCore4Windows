@@ -46,22 +46,7 @@ $include sl.h
    if w < 2 or h < 2 then return
 
    call $sl_attr(attr, code)
-   topl = '+' : str('-', w - 2) : '+'
-   if title # '' then
-      t = title[1, w - 6]
-      if len(t) > 0 then topl = '+- ' : t : ' ' : str('-', w - 5 - len(t)) : '+'
-   end
-   topl = topl[1, w]
-   call $sl_put(scr, x, y, topl, code)
-   for r = 1 to h - 2
-      if fill # '' then
-         call $sl_put(scr, x, y + r, '|' : space(w - 2) : '|', code)
-      end else
-         call $sl_put(scr, x, y + r, '|', code)
-         call $sl_put(scr, x + w - 1, y + r, '|', code)
-      end
-   next r
-   call $sl_put(scr, x, y + h - 1, '+' : str('-', w - 2) : '+', code)
+   call $sl_frame(scr, x, y, w + 0, h + 0, title, code, fill # '')
 
    call $sl_scr('put', scr)
    status = 0
