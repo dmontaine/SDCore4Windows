@@ -19,6 +19,13 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ * 18 Oct 26 Windows port - from Linux 04a6baf (18 Oct 26): - The old local index files are deleted through a PATH_LEN buffer (-m and -d used a 33 byte one, so a data
+ *           path over 32 characters left the old %n behind and reported success).  -m and -d remove only the index
+ *           subfiles the header lists, never the rest of a relocated directory, and remove that directory only if it
+ *           is then empty (-m used to delete all of it, including a new target inside it).  -d answered n or met the
+ *           end of input and still cleared the header: now it stops.  -p says what -q would say, and checks the
+ *           header write.  A path argument over the header's limit is refused (strcpy overran the buffer).
+ * END-HISTORY
  *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
  *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
  * END-HISTORY      
@@ -75,7 +82,10 @@ bool write_primary_header(void);
 bool cross_check(char *path);
 bool copy_indices(void);
 bool yesno(void);
-bool delete_path(char *path);
+bool ak_file_path(char *path, char *dir, int16_t ak);
+bool delete_index_files(char *dir, bool remove_dir);
+void report_location(void);
+bool bounded_copy(char *dst, char *src);
 bool make_path(char *tgt);
 bool attach_shared_memory(void);
 void unbind_sysseg(void);
@@ -87,8 +97,7 @@ int main(int argc, char *argv[]) {
   int status = 1;
   int arg;
   char mode;
-  int16_t ak;
-  char path[MAX_PATHNAME_LEN + 1];
+  bool ak_deleted = TRUE; /* Old index files all removed? */
   char old_akpath[MAX_PATHNAME_LEN + 1];
   struct stat stat_buf;
 
@@ -143,47 +152,55 @@ int main(int argc, char *argv[]) {
     case 'D': /* Delete indices */
       if (arg >= argc)
         goto usage; /* Data pathname missing */
-      fullpath(data_path, argv[arg++]);
+      if (!fullpath(data_path, argv[arg++]))
+        goto exit_sdidx;
       if (arg != argc)
         goto usage; /* Unexpected argument */
 
       if (!open_primary())
         goto exit_sdidx;
 
-      if ((header.akpath[0] != '\0')               /* Has relocated indices */
-          && (stat(header.akpath, &stat_buf) == 0) /* Path exists */
-          && (stat_buf.st_mode & S_IFDIR))         /* It's a directory */
+      /* 18 Oct 26 dm - Only the index subfiles the header lists are removed, wherever they are.  A relocated
+         directory is asked about first, and a "no" (or input that ends) leaves the header and the files alone: it
+         used to clear the header and orphan the directory.  The directory itself goes only if it is then empty. */
+
+      if (header.akpath[0] != '\0') /* Has relocated indices */
       {
-        printf("Delete %s (Y/N)", header.akpath);
-        if (yesno()) {
-          delete_path(header.akpath);
+        if ((stat(header.akpath, &stat_buf) == 0) /* Path exists */
+            && (stat_buf.st_mode & S_IFDIR))      /* It's a directory */
+        {
+          printf("Delete the index files in %s (Y/N)", header.akpath);
+          if (!yesno()) {
+            printf("Indices not deleted\n");
+            goto exit_sdidx;
+          }
+          ak_deleted = delete_index_files(header.akpath, TRUE);
         }
         header.akpath[0] = '\0'; /* Wipe out reference to indices */
       } else                     /* Delete all "local" index subfiles */
       {
-        for (ak = 0; ak < MAX_INDICES; ak++) {
-          if (header.ak_map & (1 << ak)) {
-            // converted to snprintf() -gwb 25Feb20
-/* rev 0.9.0 */            
-            if (snprintf(path, MAX_ACCOUNT_NAME_LEN + 1, "%s%c%%%d", data_path, DS, SF(ak)) >= (MAX_ACCOUNT_NAME_LEN + 1)) {
-              printf("Overflowed path/filename buffer.  Truncated to:\n%s%c%%%d", data_path, DS, SF(ak));
-            }
-            remove(path);
-          }
-        }
+        ak_deleted = delete_index_files(data_path, FALSE);
       }
 
       header.ak_map = 0; /* Clear AK map */
-      write_primary_header();
+      if (!write_primary_header())
+        goto exit_sdidx;
+      if (!ak_deleted) {
+        printf("The indices are removed from the file, but some index files could not be deleted\n");
+        goto exit_sdidx;
+      }
       printf("All indices deleted\n");
       break;
 
     case 'M': /* Move indices */
       if (arg >= argc)
         goto usage; /* Data pathname missing */
-      fullpath(data_path, argv[arg++]);
-      if (arg < argc)
-        strcpy(ak_path, argv[arg++]);
+      if (!fullpath(data_path, argv[arg++]))
+        goto exit_sdidx;
+      if (arg < argc) {
+        if (!bounded_copy(ak_path, argv[arg++]))
+          goto exit_sdidx;
+      }
       if (arg != argc)
         goto usage; /* Unexpected argument */
 
@@ -230,34 +247,32 @@ int main(int argc, char *argv[]) {
       if (!write_primary_header())
         goto exit_sdidx;
 
-      /* Remove old indices */
+      /* Remove old indices - the index subfiles only, see -d above */
 
       if (old_akpath[0] != '\0') /* Had relocated indices */
       {
-        delete_path(old_akpath);
+        ak_deleted = delete_index_files(old_akpath, TRUE);
       } else /* Delete all "local" index subfiles */
       {
-        for (ak = 0; ak < MAX_INDICES; ak++) {
-          if (header.ak_map & (1 << ak)) {
-            // converted to snprintf() -gwb 25Feb20
-/* rev 0.9.0 */            
-            if (snprintf(path, MAX_ACCOUNT_NAME_LEN + 1, "%s%c%%%d", data_path, DS, SF(ak)) >= (MAX_ACCOUNT_NAME_LEN + 1)) {
-              printf("Overflowed path/filename buffer.  Truncated to:\n%s%c%%%d", data_path, DS, SF(ak));
-            }
-            remove(path);
-          }
-        }
+        ak_deleted = delete_index_files(data_path, FALSE);
       }
 
+      if (!ak_deleted) {
+        printf("Indices have been moved, but the old index files could not all be deleted\n");
+        goto exit_sdidx;
+      }
       printf("Indices have been moved\n");
       break;
 
     case 'P': /* Set index path */
       if (arg >= argc)
         goto usage; /* Data pathname missing */
-      fullpath(data_path, argv[arg++]);
-      if (arg < argc)
-        strcpy(ak_path, argv[arg++]);
+      if (!fullpath(data_path, argv[arg++]))
+        goto exit_sdidx;
+      if (arg < argc) {
+        if (!bounded_copy(ak_path, argv[arg++]))
+          goto exit_sdidx;
+      }
       if (arg != argc)
         goto usage; /* Unexpected argument */
 
@@ -291,27 +306,29 @@ int main(int argc, char *argv[]) {
       /* Update primary header */
 
       strcpy(header.akpath, ak_path);
-      write_primary_header();
+      if (!write_primary_header())
+        goto exit_sdidx;
+
+      /* 18 Oct 26 dm - Say what was done, in the words -q uses.  Every other mode prints its result; this one
+         printed nothing, so a success looked like nothing having happened.  sd-elevate's akpath-set still checks
+         with -q itself. */
+
+      report_location();
       break;
 
     case 'Q': /* Query path settings */
     case '\0':
       if (arg >= argc)
         goto usage; /* Data pathname missing */
-      fullpath(data_path, argv[arg++]);
+      if (!fullpath(data_path, argv[arg++]))
+        goto exit_sdidx;
       if (arg != argc)
         goto usage; /* Unexpected argument */
 
       if (!open_primary())
         goto exit_sdidx;
 
-      if (header.ak_map == 0) {
-        printf("File has no indices\n");
-      } else if (header.akpath[0] == '\0') {
-        printf("Indices are not relocated\n");
-      } else {
-        printf("Index directory is %s\n", header.akpath);
-      }
+      report_location();
       break;
 
     default:
@@ -531,6 +548,9 @@ exit_copy_indices:
 
 /* ====================================================================== */
 
+/* 18 Oct 26 dm - A "no" is the only way to get FALSE out of this except the end of input, which used to leave the
+   buffer as it was and so answered whatever the stack held (or looped for ever).  The end of input is "no". */
+
 bool yesno() {
   char c;
   char s[10 + 1];
@@ -538,60 +558,86 @@ bool yesno() {
   do {
     printf("? ");
     fflush(stdout);
-    fgets(s, 10, stdin);
+    if (fgets(s, sizeof(s), stdin) == NULL) {
+      printf("\nEnd of input\n");
+      return FALSE;
+    }
     c = toupper(s[0]);
   } while ((c != 'Y') && (c != 'N'));
   return (c == 'Y');
 }
 
 /* ======================================================================
-   delete_path()  -  Delete DOS file/directory path                       */
+   ak_file_path()  -  Form the path of index subfile AK in directory DIR  */
 
-bool delete_path(char *path) {
-  DIR *dfu;
-  struct dirent *dp;
-  struct stat stat_buf;
-  char parent_path[MAX_PATHNAME_LEN + 1];
-  int parent_len;
-  char sub_path[MAX_PATHNAME_LEN + 1];
-
-  /* Check path exists and get type information */
-
-  if (stat(path, &stat_buf) != 0)
+bool ak_file_path(char *path, char *dir, int16_t ak) {
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", dir, DS, SF(ak)) >= (MAX_PATHNAME_LEN + 1)) {
+    printf("Overflowed directory/filename path length in sdidx.c, index subfile %d\n", SF(ak));
     return FALSE;
+  }
+  return TRUE;
+}
 
-  if (stat_buf.st_mode & S_IFDIR) /* It's a directory */
-  {
-    dfu = opendir(path);
-    if (dfu == NULL)
-      return FALSE;
+/* ======================================================================
+   delete_index_files()  -  Delete the index subfiles the header lists
+   from directory DIR, and nothing else.  With REMOVE_DIR (a relocated
+   directory) the directory is removed too, but only if that leaves it
+   empty; one that holds anything else is left and said so.  A file that
+   is not there is not a failure.  Returns FALSE if a delete failed.      */
 
-    strcpy(parent_path, (char *)path);
-    parent_len = strlen(parent_path);
-    if (parent_path[parent_len - 1] == DS)
-      parent_path[parent_len - 1] = '\0';
+bool delete_index_files(char *dir, bool remove_dir) {
+  bool status = TRUE;
+  char path[MAX_PATHNAME_LEN + 1];
+  int16_t ak;
 
-    while ((dp = readdir(dfu)) != NULL) {
-      if (strcmp(dp->d_name, ".") == 0)
+  for (ak = 0; ak < MAX_INDICES; ak++) {
+    if (header.ak_map & (1 << ak)) {
+      if (!ak_file_path(path, dir, ak)) {
+        status = FALSE;
         continue;
-      if (strcmp(dp->d_name, "..") == 0)
-        continue;
-      // converted to snprintf() -gwb 25Feb20
-      if (snprintf(sub_path, MAX_PATHNAME_LEN + 1, "%s%c%s", parent_path, DS, dp->d_name) >= (MAX_PATHNAME_LEN + 1)) {
-        printf("Overflow of path/filename buffer.  Truncated to:\n%s%c%s\n", parent_path, DS, dp->d_name);
       }
-      if (!delete_path(sub_path))
-        return FALSE;
+      if ((remove(path) != 0) && (errno != ENOENT)) {
+        printf("Cannot delete %s [%d]\n", path, errno);
+        status = FALSE;
+      }
     }
-    closedir(dfu);
-
-    if (rmdir(path) != 0)
-      return FALSE;                        /* Delete the directory */
-  } else if (stat_buf.st_mode & S_IFREG) { /* It's a file */
-    if (remove(path) != 0)
-      return FALSE;
   }
 
+  if (remove_dir && status && (rmdir(dir) != 0)) {
+    if ((errno == ENOTEMPTY) || (errno == EEXIST))
+      printf("%s holds other files and has been left\n", dir);
+    else if (errno != ENOENT) {
+      printf("Cannot remove directory %s [%d]\n", dir, errno);
+      status = FALSE;
+    }
+  }
+
+  return status;
+}
+
+/* ======================================================================
+   report_location()  -  Say where the indices are (-q, and -p after it)  */
+
+void report_location() {
+  if (header.ak_map == 0) {
+    printf("File has no indices\n");
+  } else if (header.akpath[0] == '\0') {
+    printf("Indices are not relocated\n");
+  } else {
+    printf("Index directory is %s\n", header.akpath);
+  }
+}
+
+/* ======================================================================
+   bounded_copy()  -  Copy a path argument into one of the path buffers,
+   refusing one the file header could not hold                            */
+
+bool bounded_copy(char *dst, char *src) {
+  if (strlen(src) > MAX_PATHNAME_LEN) {
+    printf("Path is too long (the limit is %d characters)\n", MAX_PATHNAME_LEN);
+    return FALSE;
+  }
+  strcpy(dst, src);
   return TRUE;
 }
 
@@ -600,7 +646,7 @@ bool delete_path(char *path) {
 
 bool make_path(char *tgt) {
   char path[MAX_PATHNAME_LEN + 1];
-  char new_path[MAX_PATHNAME_LEN + 1];
+  char new_path[MAX_PATHNAME_LEN + 3]; /* 18 Oct 26 dm - room for the separator added after the last component */
   struct stat statbuf;
   char *p;
   char *q;
@@ -709,11 +755,14 @@ bool fullpath(char *path, char *name) {
     pathnames. Use a temporary buffer and then copy the data back to the
     caller's buffer.                                                      */
 
+  /* 18 Oct 26 dm - When realpath() fails (no such path) buff was copied unset, and a path longer than the caller's
+     buffer overran it.  A path that cannot be resolved is kept as given, so the open reports why; one the buffer
+     (and the file header) cannot hold is refused.  The result is FALSE only for the second.                    */
+
   char buff[PATH_MAX + 1];
   ok = (realpath(name, buff) != NULL);
-  strcpy(path, buff);
 
-  return ok;
+  return bounded_copy(path, ok ? buff : name);
 }
 
 /* END-CODE */
