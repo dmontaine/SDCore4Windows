@@ -32,7 +32,8 @@
  *           C:\data\idx was taken for a relative path and became <cwd>/C:\data\idx, which -m could not create and -p
  *           could not find: both ended status 1 with no message (verify-carry-tools, I1).  A relative path is completed
  *           from the current directory in WINDOWS form (getcwd() gives /cygdrive/c/...), as an absolute one is stored
- *           as typed (V12, V13).
+ *           as typed (V12, V13).  The test for a file open in SD ignores case (NTFS does; ...\Don\x and ...\don\x are one
+ *           file), and make_path() splits on a backslash as well as a slash, so -m can create missing parents.
  * END-HISTORY
  *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
  *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
@@ -380,7 +381,9 @@ bool open_primary() {
     for (fno = 1; fno <= sysseg->used_files; fno++) {
       fptr = FPtr(fno);
       if (fptr->ref_ct != 0) {
-        if (strcmp((char *)(fptr->pathname), data_path) == 0) {
+        /* 19 Oct 26 Windows port - NTFS ignores case, so C:\ProgramData\SD\user_accounts\Don\x and ...\don\x are one file;
+           realpath() keeps the case it was given, and a case-sensitive test let sdidx run on a file SD had open. */
+        if (strcasecmp((char *)(fptr->pathname), data_path) == 0) {
           printf("File is currently open within SD\n");
           goto exit_open_primary;
         }
@@ -721,16 +724,20 @@ bool make_path(char *tgt) {
     *(q++) = ':';
     *(q++) = DS;
     p += 2;
-  } else if (*p == DS) /* 0355 */
+  } else if ((*p == DS) || (*p == '\\')) /* 0355 */
   {
     *(q++) = DS;
     p++;
   }
   *q = '\0';
 
+  /* 19 Oct 26 Windows port - this path is typed by a person (op_dio2.c's copy is handed an SD path, always '/'), so a
+     backslash separates components too.  Without it C:\a\b\idx was one component, stat() failed, and mkdir of the
+     whole text failed when a parent was missing: -m ended status 1 with no message. */
+
   /* Modified by Composer AI - 2026/06/10. See savep above. */
   /* while ((q = strtok(p, DSS)) != NULL) { */
-  while ((q = strtok_r(p, DSS, &savep)) != NULL) {
+  while ((q = strtok_r(p, DSS "\\", &savep)) != NULL) {
   /* -------------------- */
     strcat(new_path, q);
 
