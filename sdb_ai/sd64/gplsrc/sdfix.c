@@ -23,6 +23,8 @@
  *           for the split and merge loads wrote 50 and 80, which its own check rejects: it writes the defaults
  *           of dh_create_file(), 80 and 50.  Input that ends no longer loops: the Fix? and dump questions take it as
  *           "no" and say so, the pager stops paging, interactive mode quits.  The interactive W command reads its
+ *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.  -R with
+ *           -F or -Q is refused (it ran no check and fixed nothing, silently).
  *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.
  *           "no" and say so, the pager stops paging, interactive mode quits.
  *           of dh_create_file(), 80 and 50.
@@ -304,13 +306,23 @@ char *argv[];
     } while (!arg_end);
   }
 
+  /* 18 Oct 26 dm - -R given with -F or -Q ran neither the check nor the fix (the test below left check off when
+     recover was on), so it fixed nothing and said nothing.  It is refused instead of being made to do both: -R
+     rewrites the file in place and first empties its free chain, and a repair that has just rewritten groups is
+     not something to follow with it in the same pass.  Run the fix, look at the result, then -R. */
+
+  if (recover && fix_level) {
+    printf("-r cannot be combined with -f or -q: run the fix first, then -r on its own\n");
+    goto exit_sdfix;
+  }
+
   if (!(check || fix_level || interactive || recover))
     check = TRUE;
 
   if (zero_dead)
     check = TRUE; /* the dead space is cleared while the groups are walked */
 
-  if (fix_level && !(interactive || recover))
+  if (fix_level && !interactive)
     check = TRUE;
 
   if (arg == argc)
