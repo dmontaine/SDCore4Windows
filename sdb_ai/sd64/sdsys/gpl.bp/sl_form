@@ -212,6 +212,7 @@ call.widget:
       case wt = 'memo' ; call $sl_memo(wop, w, scr, wkey, wr)
       case wt = 'table' ; call $sl_table(wop, w, scr, wkey, wr)
       case wt = 'tree' ; call $sl_tree(wop, w, scr, wkey, wr)
+      case wt = 'scroll' ; call $sl_scroll(wop, w, scr, wkey, wr)
       case wt = 'frame'
          if wop = 'draw' then
             call $sl_attr('window', wc)
@@ -512,7 +513,7 @@ wait.event:
             case fi1 # fi0 and fi1 >= 1
                w = f{'widgets', fi1}
                evt = 'focus' ; eid = w{'id'} ; edata = id0
-            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo' or wt0 = 'tabs' or wt0 = 'table' or wt0 = 'tree')
+            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo' or wt0 = 'tabs' or wt0 = 'table' or wt0 = 'tree' or wt0 = 'scroll')
                w = f{'widgets', fi0}
                if w{'value'} # v0 then
                   evt = 'change' ; eid = id0 ; edata = w{'value'}

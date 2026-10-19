@@ -1,0 +1,173 @@
+* SL_SCROLL
+* Screen library, widget: a scroll bar of its own, for the program's own drawing to follow.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux b19ba09 (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_scroll(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay (the top left cell on the screen), w h (its size: it is one cell wide and h long, or one
+*   cell high and w long when w is the greater), total (how many lines - or columns - there are), visible (how many of
+*   them show at a time), value (the number of the first one shown, from 1)
+*
+*     init    the size, with the long side at least 3; value is brought into range
+*     draw    ^ and v (< and > for a horizontal bar) at the ends, | (-) for the track and # for the part of it that
+*             is showing, in the highlight style
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away
+*     key     up / down (left / right for a horizontal bar) move one, pgup and pgdn a page less one, home and end go to
+*             the ends; ret<1> is 'handled' (value is the new first line: the form gives a change event when it
+*             moved) or 'unhandled' with ret<2> the key's name (tab, btab, a function key, the keys of the other
+*             direction, and a move that is not possible, so that a form can go on to the widget before or after)
+*     mouse   a click on an arrow moves one, a click on the track either side of the thumb a page, the wheel three
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_scroll(op, w, scr, key, ret)
+$catalog $sl_scroll
+
+$include sl.h
+
+   ret = ''
+   sw = w{'w'} + 0
+   sh = w{'h'} + 0
+   horiz = (sw > sh)
+   len0 = if horiz then sw else sh
+   total = w{'total'} + 0
+   vis = w{'visible'} + 0
+   val = w{'value'} + 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'scroll'
+         w{'focusable'} = 1
+         if horiz then
+            if sw < 3 then sw = 3
+            sh = 1
+         end else
+            sw = 1
+            if sh < 3 then sh = 3
+         end
+         w{'w'} = sw
+         w{'h'} = sh
+         len0 = if horiz then sw else sh
+         gosub range
+         w{'value'} = val
+
+      case op = 'draw'
+         gosub range
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub range
+         gosub paint
+
+      case op = 'key'
+         gosub range
+         ret = 'handled'
+         span = total - vis                       ;* how far the first one can go
+         if span < 0 then span = 0
+         pg = vis - 1
+         if pg < 1 then pg = 1
+         old = val
+         dec = if horiz then 'left' else 'up'
+         inc = if horiz then 'right' else 'down'
+         begin case
+            case key = dec
+               if val > 1 then val -= 1 else ret = 'unhandled' : @fm : key
+            case key = inc
+               if val < span + 1 then val += 1 else ret = 'unhandled' : @fm : key
+            case key = 'pgup'
+               val -= pg
+            case key = 'pgdn'
+               val += pg
+            case key = 'home'
+               val = 1
+            case key = 'end'
+               val = span + 1
+            case 1
+               ret = 'unhandled' : @fm : key
+         end case
+         gosub range
+         w{'value'} = val
+         gosub paint
+
+      case op = 'mouse'
+         gosub range
+         ret = 'handled'
+         span = total - vis
+         if span < 0 then span = 0
+         pg = vis - 1
+         if pg < 1 then pg = 1
+         if key<1> = 'wheel' then
+            if key<2> = 'up' then val -= 3 else val += 3
+         end else
+            pos = if horiz then key<3> - w{'ax'} else key<4> - w{'ay'}
+            gosub bar.string
+            hi = len0 - 1
+            first = index(bar, '#', 1) - 1
+            last = first
+            if first >= 0 then
+               loop
+               while bar[last + 2, 1] = '#'
+                  last += 1
+               repeat
+            end
+            begin case
+               case pos <= 0 ; val -= 1
+               case pos >= hi ; val += 1
+               case first >= 0 and pos < first ; val -= pg
+               case first >= 0 and pos > last ; val += pg
+            end case
+         end
+         gosub range
+         w{'value'} = val
+         gosub paint
+   end case
+
+   return
+
+* val is a first line that exists
+range:
+   span = total - vis
+   if span < 0 then span = 0
+   if val > span + 1 then val = span + 1
+   if val < 1 then val = 1
+   return
+
+* bar = the characters of the bar from its start
+bar.string:
+   call $sl_scrollbar(len0, val, total, vis, bar)
+   if horiz then
+      bar = convert('^v|', '<>-', bar)
+   end
+   return
+
+paint:
+   gosub bar.string
+   call $sl_attr('highlight', hl)
+   call $sl_attr('window', nl)
+   x = w{'ax'} + 0
+   y = w{'ay'} + 0
+   for r = 0 to len0 - 1
+      c = bar[r + 1, 1]
+      code = if c = '#' then hl else nl
+      if horiz then
+         call $sl_put(scr, x + r, y, c, code)
+      end else
+         call $sl_put(scr, x, y + r, c, code)
+      end
+   next r
+   if w{'focused'} then display @(x, y) :
+   return
+end
+
+* END-CODE

@@ -1,0 +1,70 @@
+* SCREEN_SCROLLBAR
+* The subroutine that SCREEN SCROLLBAR calls: add a scroll bar of its own to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux b19ba09 (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN SCROLLBAR f, id, total {AT x,y} {SIZE w,h} {VISIBLE n} {VALUE n}
+*
+*   is compiled into
+*
+*   call !screen_scrollbar(f, id, total, x, y, w, h, visible, value, ret, status)
+*
+*     f id      the form and the widget's name in it (as SCREEN LABEL)
+*     total     how many lines (or columns) there are to scroll through
+*     x y       the place of the bar from the form's top left corner, default 1,1
+*     w h       its size: one cell wide and h long, or one cell high and w long when w is the greater (default
+*               a vertical bar of 10 rows).  At least 3 long
+*     visible   how many of them show at a time (default the length of the bar)
+*     value     the number of the first one shown (default 1)
+*     status    0 added; 1 not (ELSE)
+*
+*   For a program that draws its own content (labels it changes with SCREEN SET, say) and wants the user to
+*   scroll it: the keys of the direction of the bar, Page Up and Page Down, Home and End move it, a click and
+*   the wheel as well, and each move is a change event whose value is the number of the first line shown.
+*   SCREEN SET f, id VALUE n moves it from the program; SCREEN GET f, id answers where it is.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_scrollbar(f, id, total, ax, ay, sw, sh, visible, value, ret, status)
+$catalog !screen_scrollbar
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   bw = 1
+   bh = 10
+   if sw # '' then bw = sw + 0
+   if sh # '' then bh = sh + 0
+   w{'w'} = bw
+   w{'h'} = bh
+   w{'total'} = total + 0
+   vis = if bw > bh then bw else bh
+   if visible # '' then vis = visible + 0
+   w{'visible'} = vis
+   v = 1
+   if value # '' then v = value + 0
+   w{'value'} = v
+   call $sl_scroll('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

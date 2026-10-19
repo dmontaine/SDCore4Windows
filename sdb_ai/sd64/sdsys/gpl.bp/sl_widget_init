@@ -36,6 +36,7 @@ $catalog $sl_widget_init
       case wt = 'memo' ; call $sl_memo('init', w, '', '', r)
       case wt = 'table' ; call $sl_table('init', w, '', '', r)
       case wt = 'tree' ; call $sl_tree('init', w, '', '', r)
+      case wt = 'scroll' ; call $sl_scroll('init', w, '', '', r)
    end case
 
    return
