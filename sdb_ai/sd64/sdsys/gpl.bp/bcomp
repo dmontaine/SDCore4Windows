@@ -555,7 +555,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
    screen.names<-1> = "PAGE"    ; screen.defs<-1> = "!screen_page":@vm:2
    screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F"
-   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1"
+   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F"
 
    * Reserved names
    * This list starts out as the list of names that are reserved in all

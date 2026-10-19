@@ -9,11 +9,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN TABLE f, id, columns, rows {AT x,y} {SIZE w,h} {VALUE n}
+*   SCREEN TABLE f, id, columns, rows {AT x,y} {SIZE w,h} {VALUE n} {MULTI}
 *
 *   is compiled into
 *
-*   call !screen_table(f, id, columns, rows, x, y, w, h, value, ret, status)
+*   call !screen_table(f, id, columns, rows, x, y, w, h, value, multi, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     columns   one value for each column: its heading, and as a subvalue what the column looks like: a width and
@@ -24,18 +24,23 @@
 *     w h       its size, the heading row and the scroll bar column included (default: wide enough for the columns, and
 *               the heading and as many rows as there are, at most 8)
 *     value     the row it starts on (default the first)
+*     multi     rows can be marked (the space bar; a * shows a marked row): SCREEN GET answers the numbers of the
+*               marked rows, as values, and Return gives them
 *     status    0 added; 1 not (ELSE)
 *
-*   Up, Down, Page Up, Page Down, Home and End move the current row; a letter goes to the next row whose first cell
-*   starts with it; Return is a done event of the form that holds it.  SCREEN GET f, id answers the number of the
-*   current row; SCREEN SET f, id ITEMS rows replaces the data.
+*   Up, Down, Page Up, Page Down, Home and End move the current row; Left and Right move the current column (the
+*   table scrolls sideways when the columns are wider than it); F3 sorts by the current column, up, then down, then
+*   the order of rows again (a click on a heading does the same); < and > make the current column narrower or wider;
+*   a letter goes to the next row whose first cell starts with it; Return is a done event of the form that holds
+*   it.  SCREEN GET f, id answers the number of the current row IN ROWS, whatever order it is shown in; SCREEN SET
+*   f, id ITEMS rows replaces the data (and puts the order of rows back).
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_table(f, id, columns, rows, ax, ay, sw, sh, value, ret, status)
+subroutine screen_table(f, id, columns, rows, ax, ay, sw, sh, value, multi, ret, status)
 $catalog !screen_table
 
    ret = ''
@@ -53,6 +58,7 @@ $catalog !screen_table
    if sw # '' then w{'w'} = sw + 0
    if sh # '' then w{'h'} = sh + 0
    w{'cur'} = value + 0
+   w{'multi'} = (multi # '')
    call $sl_table('init', w, '', '', r)
    call $sl_wadd(f, w, ok)
    if ok then status = 0

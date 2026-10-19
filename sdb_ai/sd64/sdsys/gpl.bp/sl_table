@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 1a73910 (13 Oct 26): Sorting, row marks (multi), horizontal scrolling by column, column width changes.
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
 * END-HISTORY
 *
@@ -15,19 +16,32 @@
 *   h - 1 rows of data, and in the last column of the widget a scroll bar), cols (the columns, as values: the
 *   heading, and as a subvalue what it is to look like - a width and then L, R or C for left, right or centred,
 *   '20L' or '6R'; a column given no width is as wide as its heading and the widest cell among its first 200 rows, at
-*   most 30), rows (the data: one row to a field, one cell to a value), cur (the current row, 1 to start with),
-*   top (the first row shown), value (the number of the current row)
+*   most 30), rows (the data: one row to a field, one cell to a value), multi (1: rows can be marked), cur (the
+*   current row, 1 to start with: its place on the screen), top (the first row shown), value (the number of the
+*   current row in rows - or with multi the numbers of the rows marked, as values), and the state: ord (the numbers of
+*   the rows in the order shown, null when it is the order of rows), ccol (the current column), hcol (the first column
+*   shown), sortcol and sortdir (the column the rows are sorted by, and 1 up or 2 down), cwid (a width a column was
+*   given by the keys, as values, 0 for none), picked (the numbers of the rows marked, as values)
 *
 *     init    the columns' widths; w and h from the columns and the rows if they were not given (the heading and at most
-*             8 rows); cur and top are brought into range
+*             8 rows); cur and top are brought into range; the order is that of rows
 *     draw    the heading in the 'header' style, then the rows in the 'text' style, one column apart; the current
-*             row is in the highlight style while the table has the focus and marked with > while it has not.
-*             A row longer than the widget is cut at the right-hand edge
+*             row is in the highlight style while the table has the focus and marked with > while it has not; with multi
+*             a row that is marked has a * in front of it.  The current column's heading is in the highlight style
+*             while the table has the focus (when there is more than one column) and the sorted column's has a ^ or v
+*             in its last cell.  A table wider than the widget shows the columns from hcol on and a row longer than that
+*             is cut at the right-hand edge
 *     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
-*     key     up, down, home, end, pgup, pgdn move; a letter jumps to the next row whose first cell starts with
-*             it.  ret<1> is 'handled'; 'done' (Return, ret<2> the number of the current row); 'cancel' (Esc); or
-*             'unhandled' with ret<2> the key's name (tab, btab, left, right, a function key; and up on the first
-*             row, down on the last, so that a form can go on to the widget before or after)
+*     key     up, down, home, end, pgup, pgdn move among the rows; left and right move among the columns (the table
+*             scrolls sideways to show the current one; at the first or last column they are 'unhandled'); a letter jumps
+*             to the next row whose first cell starts with it; f3 sorts by the current column - up, then down, then the
+*             order of rows again (numbers by value, other text without regard to case); < and > make the current
+*             column narrower or wider; with multi the space bar marks or unmarks the current row.  ret<1> is 'handled';
+*             'done' (Return, ret<2> the number of the current row, or with multi the numbers of those marked); 'cancel'
+*             (Esc); or 'unhandled' with ret<2> the key's name (tab, btab, a function key; and up on the first row, down
+*             on the last, left and right at the ends, so that a form can go on to the widget before or after)
+*     mouse   a click on a row makes it current (with multi it also marks or unmarks it); a second click on the same row
+*             is Return; a click on a heading makes that column current and sorts by it (as f3); the wheel moves three rows
 *     close   nothing to undo
 *
 * END-DESCRIPTION
@@ -49,11 +63,21 @@ $include sl.h
    if rows = '' then n = 0
    cur = w{'cur'} + 0
    top = w{'top'} + 0
+   multi = w{'multi'} + 0
+   ord = w{'ord'}
+   picked = w{'picked'}
+   ccol = w{'ccol'} + 0
+   hcol = w{'hcol'} + 0
+   sortcol = w{'sortcol'} + 0
+   sortdir = w{'sortdir'} + 0
+   cwid = w{'cwid'}
+   colsel = w{'colsel'} + 0                          ;* 1 once a key or click has used the columns: then the current one shows
 
    begin case
       case op = 'init'
          w{'type'} = 'table'
          w{'focusable'} = 1
+         ord = '' ; picked = '' ; cwid = '' ; ccol = 1 ; hcol = 1 ; sortcol = 0 ; sortdir = 0 ; colsel = 0
          gosub widths
          if w{'w'} = '' or w{'w'} + 0 < 4 then w{'w'} = tot + 1       ;* the cells, and the scroll bar column
          if w{'h'} = '' or w{'h'} + 0 < 2 then
@@ -94,8 +118,15 @@ $include sl.h
 
    return
 
-* A click on a row makes it the current one; a second click on the row the last click chose is Return.  A click on the
-* heading, or below the last row, does nothing.  The wheel moves the current row three at a time.
+* The number in rows of the row shown at place i
+orig:
+   oi = i
+   if ord # '' then oi = ord<1, i>
+   return
+
+* A click on a row makes it the current one (with multi it is also marked or unmarked); a second click on the row the
+* last click chose is Return.  A click on the heading makes that column current and sorts by it; below the last row it
+* does nothing.  The wheel moves the current row three at a time.
 click:
    ret = 'handled'
    if key<1> = 'wheel' then
@@ -103,18 +134,63 @@ click:
       if cur > n then cur = n
       if cur < 1 and n > 0 then cur = 1
    end else
-      i = top + key<4> - w{'ay'} - 1                 ;* the first row of the widget is the heading
-      if i < 1 or i > n then return
-      if i = w{'clk'} then
-         ret = 'done' : @fm : i
-         return
+      if key<4> = w{'ay'} then
+         * the heading: the column under the click
+         x = 1
+         hit = 0
+         for c = hcol to nc
+            if key<3> - w{'ax'} >= x and key<3> - w{'ax'} < x + cw<1, c> then hit = c ; exit
+            x += cw<1, c> + 1
+         next c
+         if hit then
+            ccol = hit
+            colsel = 1
+            gosub sort.column
+            cur = 1
+         end
+      end else
+         i = top + key<4> - w{'ay'} - 1
+         if i < 1 or i > n then return
+         if i = w{'clk'} then
+            gosub answer
+            ret = 'done' : @fm : answer
+            return
+         end
+         cur = i
+         w{'clk'} = i
+         if multi then
+            gosub orig
+            gosub toggle.mark
+         end
       end
-      cur = i
-      w{'clk'} = i
    end
    gosub scroll
    gosub store
    gosub paint
+   return
+
+* answer = what Return gives: the number of the current row, or with multi the numbers of those marked (the current one
+* if none is)
+answer:
+   i = cur
+   gosub orig
+   answer = oi
+   if multi and picked # '' then answer = picked
+   return
+
+* The row oi (its number in rows) is marked or not
+toggle.mark:
+   at = 0
+   np = dcount(picked, @vm)
+   if picked = '' then np = 0
+   for k = 1 to np
+      if picked<1, k> = oi then at = k ; exit
+   next k
+   if at then
+      del picked<1, at>
+   end else
+      picked<1, -1> = oi
+   end
    return
 
 * cw = the width of each column (values), ca = how each is aligned, tot = the width of all of them with the gaps
@@ -144,6 +220,7 @@ widths:
          if wd > 30 then wd = 30
          if wd < 1 then wd = 1
       end
+      if cwid<1, c> + 0 > 0 then wd = cwid<1, c> + 0   ;* a width the keys gave it
       cw<1, c> = wd
       ca<1, c> = al
       tot += wd + 1
@@ -153,15 +230,21 @@ widths:
 
 handle.key:
    ret = 'handled'
+   if key = 'left' or key = 'right' or key = 'f3' or key = '<' or key = '>' then colsel = 1
    begin case
       case key = 'esc'
          ret = 'cancel'
       case key = 'enter'
-         ret = 'done' : @fm : cur
+         gosub answer
+         ret = 'done' : @fm : answer
       case key = 'down'
          if cur < n then cur += 1 else ret = 'unhandled' : @fm : key
       case key = 'up'
          if cur > 1 then cur -= 1 else ret = 'unhandled' : @fm : key
+      case key = 'left'
+         if ccol > 1 then ccol -= 1 else ret = 'unhandled' : @fm : key
+      case key = 'right'
+         if ccol < nc then ccol += 1 else ret = 'unhandled' : @fm : key
       case key = 'home'
          if n > 0 then cur = 1
       case key = 'end'
@@ -173,36 +256,135 @@ handle.key:
          cur -= th - 1
          if cur < 1 then cur = 1
          if n = 0 then cur = 0
+      case key = 'f3'
+         gosub sort.column
+      case key = '<' or key = '>'
+         if ccol >= 1 and ccol <= nc then
+            wd = cw<1, ccol> + 0
+            if key = '>' then wd += 1 else wd -= 1
+            if wd < 1 then wd = 1
+            if wd > 60 then wd = 60
+            cwid<1, ccol> = wd
+         end
+      case key = ' ' and multi
+         if cur >= 1 then
+            i = cur
+            gosub orig
+            gosub toggle.mark
+         end
       case len(key) = 1
          uk = upcase(key)
          found = 0
          for k = 1 to n
             i = cur + k
             if i > n then i -= n
-            if upcase(rows<i, 1>[1, 1]) = uk then found = i ; exit
+            gosub orig
+            if upcase(rows<oi, 1>[1, 1]) = uk then found = i ; exit
          next k
          if found then cur = found
       case 1
          ret = 'unhandled' : @fm : key
    end case
    if n = 0 then cur = 0
+   gosub widths
    gosub scroll
    gosub store
    gosub paint
    return
 
-* Keep the current row inside the rows shown
+* Sort by column ccol: up, then down, then the order of rows again.  The current row stays the same row.
+sort.column:
+   if ccol < 1 or ccol > nc or n = 0 then return
+   i = cur
+   gosub orig
+   keep = oi                                         ;* the number of the current row
+   if sortcol = ccol then
+      sortdir += 1
+      if sortdir > 2 then sortdir = 0
+   end else
+      sortcol = ccol
+      sortdir = 1
+   end
+   if sortdir = 0 then
+      ord = ''
+      sortcol = 0
+   end else
+      * numbers by value when every cell of the column is a number, else the text without regard to case
+      isnum = @true
+      for r = 1 to n
+         v = rows<r, ccol>
+         if v # '' and not(num(v)) then isnum = @false ; exit
+      next r
+      lb = 'AL'
+      if isnum then lb = 'AR'
+      skeys = ''
+      order = ''
+      for r = 1 to n
+         v = rows<r, ccol>
+         if not(isnum) then v = upcase(v)
+         locate v in skeys<1> by lb setting pos then
+            pos += 1
+         end
+         ins v before skeys<pos>
+         ins r before order<pos>
+      next r
+      ord = ''
+      if sortdir = 1 then
+         ord = convert(@fm, @vm, order)
+      end else
+         for r = n to 1 step -1
+            ord<1, -1> = order<r>
+         next r
+      end
+   end
+   cur = 1
+   for r = 1 to n
+      i = r
+      gosub orig
+      if oi = keep then cur = r ; exit
+   next r
+   return
+
+* Keep the current row inside the rows shown, and the current column inside the columns shown
 scroll:
    if th < 1 then th = 1
    if cur < top then top = cur
    if cur > top + th - 1 then top = cur - th + 1
    if top < 1 then top = 1
+   if ccol < 1 then ccol = 1
+   if ccol > nc then ccol = nc
+   if hcol < 1 then hcol = 1
+   if hcol > ccol then hcol = ccol
+   avail = w{'w'} + 0 - 2                            ;* the lead cell and the scroll bar column are not for cells
+   loop
+      used = 0
+      for c = hcol to ccol
+         used += cw<1, c> + 1
+      next c
+   while used - 1 > avail and hcol < ccol
+      hcol += 1
+   repeat
    return
 
 store:
    w{'cur'} = cur
    w{'top'} = top
-   w{'value'} = cur
+   if multi then
+      w{'value'} = picked
+   end else
+      i = cur
+      gosub orig
+      w{'value'} = oi
+      if cur < 1 then w{'value'} = 0
+   end
+   w{'ord'} = ord
+   w{'picked'} = picked
+   w{'ccol'} = ccol
+   w{'hcol'} = hcol
+   w{'sortcol'} = sortcol
+   w{'sortdir'} = sortdir
+   w{'cwid'} = cwid
+   w{'colsel'} = colsel
    return
 
 paint:
@@ -217,14 +399,31 @@ paint:
 
    * the heading
    line = ' '
-   for c = 1 to nc
+   hatr = str(hc, tw)
+   if hcol < 1 then hcol = 1
+   for c = hcol to nc
       cell = cols<1, c, 1>
+      x0 = len(line)
       gosub fit
+      if c = sortcol and sortdir > 0 then
+         * the heading says how it is sorted in a blank cell of its column (the first, else the last), else over its last
+         mk = if sortdir = 1 then '^' else 'v'
+         begin case
+            case cell[1, 1] = ' ' ; cell[1, 1] = mk
+            case cell[len(cell), 1] = ' ' ; cell[len(cell), 1] = mk
+            case 1 ; cell[len(cell), 1] = mk
+         end case
+      end
       line := cell : ' '
+      if focused and c = ccol and colsel then
+         for k = 1 to len(cell)
+            if x0 + k <= tw then hatr[x0 + k, 1] = ac
+         next k
+      end
    next c
    line = line[1, tw]
    line := space(tw - len(line))
-   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, line : ' ', str(hc, tw) : wc)
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, line : ' ', hatr : wc)
 
    * the rows
    for r = 0 to th - 1
@@ -233,11 +432,19 @@ paint:
          line = space(tw)
          code = tc
       end else
+         gosub orig
          lead = ' '
+         if multi then
+            at = 0
+            if picked # '' then
+               locate oi in picked<1, 1> setting at else at = 0
+            end
+            if at then lead = '*'
+         end
          if i = cur and not(focused) then lead = '>'
          line = lead
-         for c = 1 to nc
-            cell = rows<i, c>
+         for c = hcol to nc
+            cell = rows<oi, c>
             gosub fit
             line := cell : ' '
          next c
