@@ -24,8 +24,8 @@
 *     enabled  0 takes the widget out of the focus ring and stops it taking keys; 1 puts it back
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
-*   A clause left out changes nothing.  The change is made in the form; it shows the next time the form is
-*   run.
+*   A clause left out changes nothing.  The change is made in the form; if the form is on the screen (SCREEN
+*   WAIT put it there) the form is redrawn at once, else it shows the next time the form is run or waited for.
 *
 * END-DESCRIPTION
 *
@@ -81,6 +81,11 @@ $catalog !screen_set
       end else
          w{'disabled'} = 0
       end
+   end
+   if f{'shown'} and not(system(25)) then       ;* the form is on the screen (SCREEN WAIT): show the change
+      call $sl_scr('get', scr)
+      call $sl_form('redraw', f, scr, '', r)
+      call $sl_scr('put', scr)
    end
    status = 0
 

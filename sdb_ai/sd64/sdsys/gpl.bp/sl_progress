@@ -1,0 +1,70 @@
+* SL_PROGRESS
+* Screen library, widget: a progress bar in a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_progress(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay, w (the whole width, default 20, at least 10), value (0 to 100: a number outside
+*   is brought to the nearest end)
+*
+*     init    w, h = 1, value in range
+*     draw    [#####     ]  60%  - the hashes are the share done, in reverse video where the terminal has it
+*     focus   never takes the focus: nothing to do
+*     key     'unhandled' with the key
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_progress(op, w, scr, key, ret)
+$catalog $sl_progress
+
+$include sl.h
+
+   ret = ''
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'progress'
+         w{'focusable'} = 0
+         pw = w{'w'} + 0
+         if pw = 0 then pw = 20
+         if pw < 10 then pw = 10
+         w{'w'} = pw
+         w{'h'} = 1
+         v = w{'value'} + 0
+         if v < 0 then v = 0
+         if v > 100 then v = 100
+         w{'value'} = v
+
+      case op = 'draw'
+         pw = w{'w'} + 0
+         v = w{'value'} + 0
+         if v < 0 then v = 0
+         if v > 100 then v = 100
+         inner = pw - 7                                ;* [ ... ] and a blank and 3 digits and %
+         done = int(inner * v / 100 + 0.5)
+         call $sl_attr('highlight', hl)
+         call $sl_attr('normal', nl)
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[', nl)
+         if done > 0 then call $sl_put(scr, w{'ax'} + 1, w{'ay'} + 0, str('#', done), hl)
+         if inner - done > 0 then call $sl_put(scr, w{'ax'} + 1 + done, w{'ay'} + 0, space(inner - done), nl)
+         call $sl_put(scr, w{'ax'} + 1 + inner, w{'ay'} + 0, '] ' : fmt(v, '3R') : '%', nl)
+
+      case op = 'key'
+         ret = 'unhandled' : @fm : key
+   end case
+
+   return
+end
+
+* END-CODE

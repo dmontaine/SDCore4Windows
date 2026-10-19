@@ -9,16 +9,19 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN LABEL f, id, text {AT x,y} {ATTR style}
+*   SCREEN LABEL f, id, text {AT x,y} {ATTR style} {WIDTH n}
 *
 *   is compiled into
 *
-*   call !screen_label(f, id, text, x, y, attr, ret, status)
+*   call !screen_label(f, id, text, x, y, attr, width, ret, status)
 *
 *     f        the form (SCREEN FORM)       id    the widget's name in the form: not null, not used before
 *     text     one line                     x y   its place from the form's top left corner (0,0 is the
 *                                                  border's corner), default 1,1
 *     attr     a style: normal, reverse, underline
+*     width    the label is this many cells wide, the text cut or blank-padded to fit (default: as wide
+*              as the text).  A label that will be changed with SCREEN SET needs the width of its longest
+*              text: a status line is a label with a width.
 *     status   0 added; 1 not (f is not a form, or the id is null or already used): ELSE
 *
 * END-DESCRIPTION
@@ -26,7 +29,7 @@
 * START-CODE
 
 $internal
-subroutine screen_label(f, id, text, ax, ay, attr, ret, status)
+subroutine screen_label(f, id, text, ax, ay, attr, width, ret, status)
 $catalog !screen_label
 
    ret = ''
@@ -41,6 +44,7 @@ $catalog !screen_label
    w{'x'} = x
    w{'y'} = y
    w{'attr'} = attr
+   if width # '' then w{'width'} = width + 0
    call $sl_label('init', w, '', '', r)
    call $sl_wadd(f, w, ok)
    if ok then status = 0

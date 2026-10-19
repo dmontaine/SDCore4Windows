@@ -1,0 +1,65 @@
+* SCREEN_WAIT
+* The subroutine that SCREEN WAIT calls: show a form and wait for one thing to happen to it.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN WAIT f {TIMEOUT s} RETURNING ev {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_wait(f, timeout, ret, status)
+*
+*     f        the form
+*     timeout  seconds to wait for a key (each key resets it); left out, for ever
+*     ret      the event: field 1 the type, field 2 the widget's id, field 3 its data:
+*                button   the id of the button pressed (a cancel button is `cancel`, below)
+*                change   the id of a check box, radio group, list or combo box whose value changed; data the new value
+*                focus    the id the focus went to; data the id it left (validate the one it left with SCREEN GET)
+*                key      data the name of a key the form had no use for (a function key, a Ctrl key, an arrow no
+*                         widget wanted); no id
+*                cancel   Esc (no id) or the form's cancel button (its id)
+*                timeout  no key came in time
+*                end      the input ended (a phantom, a closed terminal)
+*     status   0 for button, change, focus and key; 1 for cancel, timeout and end (ELSE)
+*
+*   The first call draws the form (what is under it is kept) and it STAYS on the screen between calls; the
+*   program acts on the event and calls again.  SCREEN SET redraws the widget it changes, SCREEN HIDE puts the
+*   screen back.  Esc does not close the form here: the program decides.  An entry field reports no event for
+*   each key typed; ask for its text with SCREEN GET on a focus or button event.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_wait(f, timeout, ret, status)
+$catalog !screen_wait
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then
+      ret = 'end' : @fm : '' : @fm : ''
+      return
+   end
+   if jtype(f) # 'collection' then return
+   call $sl_scr('get', scr)
+
+   call $sl_form('wait', f, scr, timeout, r)
+   call $sl_scr('put', scr)
+
+   ret = r<2> : @fm : r<3> : @fm : r<4>
+   t = r<2>
+   if t = 'button' or t = 'change' or t = 'focus' or t = 'key' then status = 0
+
+   return
+end
+
+* END-CODE

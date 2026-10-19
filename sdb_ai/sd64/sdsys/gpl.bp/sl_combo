@@ -1,0 +1,144 @@
+* SL_COMBO
+* Screen library, widget: an entry field with a list to choose from.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_combo(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   A combo box is an entry field ($sl_entry) followed by [v]: Down or F4 opens a list of the choices under
+*   it, Return picks the one the list is on, Esc closes the list and leaves the text as it was.  The text can
+*   also be typed.
+*
+*   Elements:  id, ax ay, fw (the width of the entry field, default 20), w (the whole width, fw + 3, set by
+*   init), items (the choices, as values), value (the text), pos pan mask maxlen as for $sl_entry
+*
+*     init    as $sl_entry's, and w = fw + 3
+*     draw    the field, then [v], both in reverse video while it has the focus
+*     focus   as $sl_entry's
+*     key     Down and F4 open the list ('handled' when it closes, with value changed if a choice was
+*             picked); every other key is the entry field's
+*     close   nothing to undo (the list puts the screen back when it closes)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_combo(op, w, scr, key, ret)
+$catalog $sl_combo
+
+$include sl.h
+
+   ret = ''
+   fw = w{'fw'} + 0
+   if fw < 1 then fw = w{'w'} - 3
+   if fw < 1 then fw = 20
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'combo'
+         w{'fw'} = fw
+         call $sl_entry('init', w, scr, key, r)
+         w{'w'} = fw + 3
+         w{'items'} = convert(@fm, @vm, w{'items'})
+
+      case op = 'draw'
+         call $sl_entry('draw', w, scr, key, ret)
+         gosub arrow
+
+      case op = 'focus'
+         call $sl_entry('focus', w, scr, key, ret)
+         gosub arrow
+
+      case op = 'key'
+         if key = 'down' or key = 'f4' then
+            gosub pick.item
+            ret = 'handled'
+         end else
+            call $sl_entry('key', w, scr, key, ret)
+            gosub arrow
+         end
+   end case
+
+   return
+
+arrow:
+   code = 'n'
+   if w{'focused'} then call $sl_attr('highlight', code)
+   call $sl_put(scr, w{'ax'} + fw, w{'ay'} + 0, '[v]', code)
+   if w{'focused'} then
+      display @(w{'ax'} + w{'pos'} - w{'pan'}, w{'ay'} + 0) :
+   end
+   return
+
+* The list of choices under the field: a modal loop of its own, and the screen put back at the end
+pick.item:
+   items = w{'items'}
+   n = dcount(items, @vm)
+   if items = '' then n = 0
+   if n = 0 then return
+
+   lh = n
+   if lh > 6 then lh = 6
+   lw = fw + 1
+   widest = 0
+   for i = 1 to n
+      if len(items<1, i, 1>) + 2 > widest then widest = len(items<1, i, 1>) + 2
+   next i
+   if n > lh then widest += 1
+   if widest > lw then lw = widest
+   bw = lw + 2
+   bh = lh + 2
+   bx = w{'ax'} + 0
+   by = w{'ay'} + 1
+   if bx + bw > scr<SL.S.W> then bx = scr<SL.S.W> - bw
+   if by + bh > scr<SL.S.H> then by = w{'ay'} - bh                ;* no room below the field: above it
+   if bx < 0 then bx = 0
+   if by < 0 then by = 0
+
+   call $sl_region('save', scr, bx, by, bw, bh, under)
+   call $sl_attr('normal', nc)
+   call $sl_frame(scr, bx, by, bw, bh, '', nc, 1)
+
+   lst = collection()
+   lst{'ax'} = bx + 1
+   lst{'ay'} = by + 1
+   lst{'w'} = lw
+   lst{'h'} = lh
+   lst{'items'} = items
+   cur = 1
+   text = w{'value'}
+   for i = 1 to n
+      if items<1, i, 1> = text then cur = i ; exit
+   next i
+   lst{'cur'} = cur
+   call $sl_list('init', lst, scr, '', r)
+   call $sl_list('focus', lst, scr, 1, r)
+   loop
+      call $sl_key('', k)
+      if k = '' then k = 'esc'
+      call $sl_list('key', lst, scr, k, r)
+      st = r<1>
+      if st = 'unhandled' and (k = 'tab' or k = 'btab' or k = 'left' or k = 'right') then st = 'cancel'
+   until st = 'done' or st = 'cancel'
+   repeat
+
+   call $sl_region('restore', scr, bx, by, bw, bh, under)
+   if st = 'done' then
+      text = items<1, r<2>, 1>
+      w{'value'} = text
+      w{'pos'} = len(text) + 1
+      w{'pan'} = 1
+   end
+   call $sl_entry('draw', w, scr, '', r)
+   gosub arrow
+   return
+end
+
+* END-CODE

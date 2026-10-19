@@ -16,7 +16,8 @@
 *   call !screen_values(f, ret, status)
 *
 *     ret      a new collection with one element for each widget that holds a value (entry, check, radio,
-*              list), named by the widget's id, the value being what SCREEN GET answers for it.  The
+*              list, combo, progress), named by the widget's id, the value being what SCREEN GET answers
+*              for it.  The
 *              program can JBUILD it, write it to a file, or read c{'name'}.
 *     status   0; 1 if f is not a form (ELSE)
 *
@@ -37,7 +38,7 @@ $catalog !screen_values
    for i = 1 to nw
       w = f{'widgets', i}
       wt = w{'type'}
-      if wt = 'entry' or wt = 'check' or wt = 'radio' or wt = 'list' then
+      if wt = 'entry' or wt = 'check' or wt = 'radio' or wt = 'list' or wt = 'combo' or wt = 'progress' then
          k = w{'id'}
          c{k} = w{'value'}
       end

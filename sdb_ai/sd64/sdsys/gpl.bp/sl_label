@@ -44,12 +44,19 @@ $include sl.h
       case op = 'init'
          w{'type'} = 'label'
          w{'focusable'} = 0
-         w{'w'} = len(w{'text'})
+         wd = w{'width'} + 0
+         if wd > 0 then
+            w{'w'} = wd
+         end else
+            w{'w'} = len(w{'text'})
+         end
          w{'h'} = 1
 
       case op = 'draw'
          call $sl_attr(w{'attr'}, code)
-         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, w{'text'}, code)
+         t = w{'text'} : space(w{'w'})                 ;* as wide as the label is: a shorter text blanks the old one
+         t = t[1, w{'w'}]
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, t, code)
 
       case op = 'key'
          ret = 'unhandled' : @fm : key

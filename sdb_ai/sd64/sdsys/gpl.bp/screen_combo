@@ -1,0 +1,57 @@
+* SCREEN_COMBO
+* The subroutine that SCREEN COMBO calls: add a combo box (an entry field with a list to choose from) to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN COMBO f, id, items {AT x,y} {WIDTH n} {VALUE v}
+*
+*   is compiled into
+*
+*   call !screen_combo(f, id, items, x, y, width, value, ret, status)
+*
+*     f id     the form and the widget's name in it (as SCREEN LABEL)
+*     items    the choices, as values (a field mark does as well)
+*     x y      the place of the field from the form's top left corner, default 1,1
+*     width    the width of the entry field (default 20); [v] follows it, three cells more
+*     value    the text it starts with
+*     status   0 added; 1 not (ELSE)
+*
+*   Typing edits the text as in an entry field; Down or F4 opens the list under it.  SCREEN GET f, id answers the text.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_combo(f, id, items, ax, ay, width, value, ret, status)
+$catalog !screen_combo
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   w{'items'} = convert(@fm, @vm, items)
+   x = 1
+   y = 1
+   fw = 20
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   if width # '' then fw = width + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'fw'} = fw
+   w{'value'} = value
+   call $sl_combo('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

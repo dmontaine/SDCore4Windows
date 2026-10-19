@@ -83,14 +83,29 @@ $include sl.h
       case op = 'run'
          gosub run.modal
 
-      case op = 'close'
+      case op = 'wait'
+         tmo = key
+         gosub wait.event
+
+      case op = 'hide' or op = 'close'
+         gosub hide.form
+
+      case op = 'redraw'
          if f{'shown'} then
-            under = f{'under'}
-            call $sl_region('restore', scr, f{'x'} + 0, f{'y'} + 0, f{'w'} + 0, f{'h'} + 0, under)
-            f{'shown'} = 0
+            gosub layout
+            gosub draw.all
          end
    end case
 
+   return
+
+* Put the screen back if the form is shown
+hide.form:
+   if f{'shown'} then
+      under = f{'under'}
+      call $sl_region('restore', scr, f{'x'} + 0, f{'y'} + 0, f{'w'} + 0, f{'h'} + 0, under)
+      f{'shown'} = 0
+   end
    return
 
 * The form's own elements, and a size and a place if there are none
@@ -164,6 +179,8 @@ call.widget:
       case wt = 'radio' ; call $sl_radio(wop, w, scr, wkey, wr)
       case wt = 'button' ; call $sl_button(wop, w, scr, wkey, wr)
       case wt = 'label' ; call $sl_label(wop, w, scr, wkey, wr)
+      case wt = 'combo' ; call $sl_combo(wop, w, scr, wkey, wr)
+      case wt = 'progress' ; call $sl_progress(wop, w, scr, wkey, wr)
       case wt = 'frame'
          if wop = 'draw' then
             call $sl_frame(scr, w{'ax'} + 0, w{'ay'} + 0, w{'w'} + 0, w{'h'} + 0, w{'title'}, 'n', 0)
@@ -313,6 +330,25 @@ route.key:
    return
 
 run.modal:
+   gosub show.form
+   loop
+      call $sl_key('', kk)
+      if kk = '' then kk = 'esc'
+      key = kk
+      gosub route.key
+      st = ret<1>
+   until st = 'done' or st = 'cancel'
+   repeat
+
+   result = ret
+   gosub hide.form
+   ret = result
+   return
+
+* Draw the form over the screen, keeping what is under it, with the focus on its first widget that can have it
+* (or where an earlier run left it)
+show.form:
+   gosub hide.form                           ;* shown by an earlier WAIT: start again from the screen underneath
    gosub init.form
    gosub layout
    call $sl_region('save', scr, f{'x'} + 0, f{'y'} + 0, f{'w'} + 0, f{'h'} + 0, under)
@@ -339,20 +375,60 @@ run.modal:
    end
 
    gosub draw.all
-   loop
-      call $sl_key('', kk)
-      if kk = '' then kk = 'esc'
-      key = kk
-      gosub route.key
-      st = ret<1>
-   until st = 'done' or st = 'cancel'
-   repeat
+   return
 
-   result = ret
-   under = f{'under'}
-   call $sl_region('restore', scr, f{'x'} + 0, f{'y'} + 0, f{'w'} + 0, f{'h'} + 0, under)
-   f{'shown'} = 0
-   ret = result
+* One event: show the form if it is not shown, read keys until one of them means something to the program.
+* tmo = seconds to wait for a key (null: for ever).  ret = 'event' : evt : eid : edata where evt is
+*   button  (eid the button's id)           cancel  (Esc, eid null; or the form's cancel button, eid its id)
+*   change  (eid, edata the new value: a check box, radio group, list or combo changed)
+*   focus   (eid the widget the focus went to, edata the one it left)
+*   key     (edata the key's name: one the form had no use for)    timeout    end (the input ended)
+wait.event:
+   if not(f{'shown'}) then gosub show.form
+   evt = ''
+   eid = ''
+   edata = ''
+   loop
+      call $sl_key(tmo, kk)
+      if kk = '' then
+         evt = 'end'
+         if tmo # '' then evt = 'timeout'
+      end else
+         nw = inmat(f{'widgets'})
+         fi0 = f{'focus'} + 0
+         v0 = ''
+         id0 = ''
+         wt0 = ''
+         if fi0 >= 1 and fi0 <= nw then
+            w = f{'widgets', fi0}
+            v0 = w{'value'}
+            id0 = w{'id'}
+            wt0 = w{'type'}
+         end
+         key = kk
+         gosub route.key
+         st = ret<1>
+         fi1 = f{'focus'} + 0
+         begin case
+            case st = 'done'
+               evt = 'button' ; eid = ret<2>
+            case st = 'cancel'
+               evt = 'cancel' ; eid = ret<2>
+            case st = 'unhandled'
+               evt = 'key' ; edata = ret<2>
+            case fi1 # fi0 and fi1 >= 1
+               w = f{'widgets', fi1}
+               evt = 'focus' ; eid = w{'id'} ; edata = id0
+            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo')
+               w = f{'widgets', fi0}
+               if w{'value'} # v0 then
+                  evt = 'change' ; eid = id0 ; edata = w{'value'}
+               end
+         end case
+      end
+   until evt # ''
+   repeat
+   ret = 'event' : @fm : evt : @fm : eid : @fm : edata
    return
 end
 

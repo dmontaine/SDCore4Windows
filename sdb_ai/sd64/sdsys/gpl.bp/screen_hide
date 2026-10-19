@@ -1,0 +1,49 @@
+* SCREEN_HIDE
+* The subroutine that SCREEN HIDE calls: take a form off the screen that SCREEN WAIT put there.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN HIDE f
+*
+*   is compiled into
+*
+*   call !screen_hide(f, ret, status)
+*
+*     f        the form
+*     status   0; 1 if f is not a form (ELSE)
+*
+*   What was under the form when it was shown is put back.  A form that is not shown is left alone.  The values
+*   in its widgets stay, so the form can be shown again.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_hide(f, ret, status)
+$catalog !screen_hide
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   if system(25) then
+      status = 0
+      return
+   end
+   call $sl_scr('get', scr)
+   call $sl_form('hide', f, scr, '', r)
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE

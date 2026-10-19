@@ -524,7 +524,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
    screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F"
    screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"
-   screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1"
+   screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1"
    screen.names<-1> = "FRAME"   ; screen.defs<-1> = "!screen_frame":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1"
    screen.names<-1> = "ENTRY"   ; screen.defs<-1> = "!screen_entry":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"MASK:F":@sm:"MAXLEN:1"
    screen.names<-1> = "CHECK"   ; screen.defs<-1> = "!screen_check":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
@@ -536,6 +536,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1"
    screen.names<-1> = "FOCUS"   ; screen.defs<-1> = "!screen_focus":@vm:2
    screen.names<-1> = "VALUES"  ; screen.defs<-1> = "!screen_values":@vm:1
+   screen.names<-1> = "WAIT"    ; screen.defs<-1> = "!screen_wait":@vm:1:@vm:"TIMEOUT:1"
+   screen.names<-1> = "HIDE"    ; screen.defs<-1> = "!screen_hide":@vm:1
+   screen.names<-1> = "PROGRESS" ; screen.defs<-1> = "!screen_progress":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
+   screen.names<-1> = "COMBO"   ; screen.defs<-1> = "!screen_combo":@vm:3:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
    screen.names<-1> = "OPEN"   ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2"
    screen.names<-1> = "CLOSE"   ; screen.defs<-1> = "!screen_close":@vm:0
    screen.names<-1> = "CLEAR"   ; screen.defs<-1> = "!screen_clear":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"ATTR:1"

@@ -30,6 +30,8 @@ $catalog $sl_widget_init
       case wt = 'radio' ; call $sl_radio('init', w, '', '', r)
       case wt = 'button' ; call $sl_button('init', w, '', '', r)
       case wt = 'label' ; call $sl_label('init', w, '', '', r)
+      case wt = 'combo' ; call $sl_combo('init', w, '', '', r)
+      case wt = 'progress' ; call $sl_progress('init', w, '', '', r)
    end case
 
    return

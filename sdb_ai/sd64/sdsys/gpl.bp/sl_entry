@@ -39,7 +39,8 @@ $catalog $sl_entry
 $include sl.h
 
    ret = ''
-   fw = w{'w'} + 0
+   fw = w{'fw'} + 0                          ;* a combo box has an entry field of its own width inside it
+   if fw < 1 then fw = w{'w'} + 0
    if fw < 1 then fw = 1
    text = w{'value'}
    p = w{'pos'} + 0
@@ -51,9 +52,11 @@ $include sl.h
 
    begin case
       case op = 'init'
-         w{'type'} = 'entry'
+         if w{'fw'} = '' then
+            w{'type'} = 'entry'
+            w{'w'} = fw
+         end
          w{'focusable'} = 1
-         w{'w'} = fw
          w{'h'} = 1
          if maxlen > 0 then text = text[1, maxlen]
          w{'value'} = text
