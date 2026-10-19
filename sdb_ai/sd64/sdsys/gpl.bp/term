@@ -92,9 +92,6 @@ $include syscom terminfo.h
          tinfo = terminfo()
 
          display sysmsg(6847) ;* INPUT KEY CODES
-         if @term.type = 'sdterm' then
-            display sysmsg(6848) ;* SDTerm does not use terminfo for input codes
-         end else
             k = T$KEY.BACKSPACE        ; s = 'kbs   : Backspace key' ; gosub show
             k = T$KEY.BTAB             ; s = 'kcbt  : Back tab key' ; gosub show
             k = T$KEY.LEFT             ; s = 'kcub1 : Cursor left key' ; gosub show
@@ -119,7 +116,6 @@ $include syscom terminfo.h
             k = T$KEY.F10              ; s = 'kf10  : F10 key' ; gosub show
             k = T$KEY.F11              ; s = 'kf11  : F11 key' ; gosub show
             k = T$KEY.F12              ; s = 'kf12  : F12 key' ; gosub show
-            k = T$KEY.MOUSE            ; s = 'kmous : Mouse input' ; gosub show
             k = T$KEY.USER0            ; s = 'ku0   : User 0' ; gosub show
             k = T$KEY.USER1            ; s = 'ku1   : User 1' ; gosub show
             k = T$KEY.USER2            ; s = 'ku2   : User 2' ; gosub show
@@ -130,7 +126,6 @@ $include syscom terminfo.h
             k = T$KEY.USER7            ; s = 'ku7   : User 7' ; gosub show
             k = T$KEY.USER8            ; s = 'ku8   : User 8' ; gosub show
             k = T$KEY.USER9            ; s = 'ku9   : User 9' ; gosub show
-         end
 
          display
          display sysmsg(6849)  ;* OUTPUT CONTROL CODES
@@ -162,9 +157,6 @@ $include syscom terminfo.h
          k = T$SCROLL.BACK          ; s = 'ri    : Scroll backward' ; gosub show
          k = T$SET.FOREGROUND       ; s = 'setf  : Set foreground colour attribute' ; gosub show
          k = T$SET.BACKGROUND       ; s = 'setb  : Set background colour attribute' ; gosub show
-         k = T$SREG                 ; s = 'sreg  : Save screen region' ; gosub show
-         k = T$RREG                 ; s = 'rreg  : Restore screen region' ; gosub show
-         k = T$DREG                 ; s = 'dreg  : Delete saved screen region' ; gosub show
          k = T$USER0                ; s = 'u0    : User 0  @(-100)' ; gosub show
          k = T$USER1                ; s = 'u1    : User 1  @(-101)' ; gosub show
          k = T$USER2                ; s = 'u2    : User 2  @(-102)' ; gosub show

@@ -343,17 +343,9 @@ void op_at() {
         break;
 
       case IT_E80: /* @(-29)  -  Set 80 columns */
-        if (is_SDTerm) {
-          sprintf(s, "\x1B[29Q");
-          p = s;
-        }
-        break;
-
       case IT_E132: /* @(-30)  -  Set 132 columns */
-        if (is_SDTerm) {
-          sprintf(s, "\x1B[30Q");
-          p = s;
-        }
+        /* There is no terminfo capability for these: SDTerm, the only terminal that had a sequence for them, is
+           no longer supported (13 Oct 26), so they write nothing. */
         break;
 
       case IT_RIC: /* @(-31)  -  Reset inhibit cursor */
@@ -405,11 +397,7 @@ void op_at() {
         p = end_attribute("ebold");
         break;
 
-      case IT_SCREEN: /* @(-256, n)  -  Set screen shape */
-        if (is_SDTerm) {
-          sprintf(s, "\x1B[256;%dQ", at2);
-          p = s;
-        }
+      case IT_SCREEN: /* @(-256, n)  -  Set screen shape: SDTerm only, so now nothing (13 Oct 26) */
         break;
 
       case IT_ACMD: /* @(-108)  -  Execute asynchronous command */
@@ -2552,18 +2540,8 @@ void op_savescrn() {
    freescrn()  -  Free a screen image descriptor                          */
 
 void freescrn(SCREEN_IMAGE *image) {
-  char *p;
-  char *q;
-  int n;
-
-  if ((connection_type == CN_SOCKET) || (connection_type == CN_PORT)) {
-    p = sdtgetstr("dreg");
-    if (p != NULL) {
-      q = tparm(&n, p, (int)(image->id));
-      write_socket(q, n, TRUE);
-    }
-  }
-
+  /* (A screen image was kept by the terminal, AccuTerm or SDTerm, and was deleted there with the 'dreg'
+     capability.  Neither is supported now: an image holds nothing outside this process.  13 Oct 26) */
   if (image->buffer != NULL)
     k_free(image->buffer);
   k_free(image);

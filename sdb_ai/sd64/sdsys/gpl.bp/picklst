@@ -38,9 +38,9 @@
 *                For this to work, the list must be sorted on this column.
 *                Specifying INDEX.COL as zero inhibits shortcut searches.
 *
-* If used in a SDTerm session (SDConsole or SDTerm), the screen region
-* used for the picklist display will be saved and restored.  Other telnet
-* connections must provide their own display restore mechanism.
+* The box is drawn over whatever is on the screen and is not put back: the
+* program that wants the screen under it restored must redraw it (or use the
+* screen library's own dialogues, which keep a picture of what they cover).
 *
 * END-DESCRIPTION
 *

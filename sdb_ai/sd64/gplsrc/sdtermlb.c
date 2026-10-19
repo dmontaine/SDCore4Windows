@@ -344,8 +344,6 @@ bool tsettermtype(termname) char* termname;
       tinfo.Strings[i] = ABSENT_STRING;
   }
 
-  is_SDTerm = !stricmp(tname, "sdterm");
-
   process.status = 0;
   strcpy(tio.term_type, tname);
   status = TRUE;
@@ -1094,7 +1092,7 @@ void op_terminfo() {
     ts_copy_byte(FIELD_MARK);
     ts_copy_c_string(sdtgetstr("kHOM")); /* KEY.SHOME Shifted home key */
     ts_copy_byte(FIELD_MARK);
-    ts_copy_c_string(sdtgetstr("kmous")); /* KEY.MOUSE Mouse input */
+    /* KEY.MOUSE: reserved, always null (it was AccuTerm's mouse report; 13 Oct 26) */
     /* SD extensions */
     ts_copy_byte(FIELD_MARK);
     ts_copy_c_string(sdtgetstr("slt")); /* Set line truncate mode */
@@ -1120,12 +1118,12 @@ void op_terminfo() {
     ts_copy_c_string(sdtgetstr("ku8")); /* User key 8 */
     ts_copy_byte(FIELD_MARK);
     ts_copy_c_string(sdtgetstr("ku9")); /* User key 9 */
+    /* Save, restore and delete screen region: reserved, always null.  They were the screen images of AccuTerm and
+       of SDTerm, two terminal programs that SD no longer supports (13 Oct 26); the fields stay so that the
+       positions of the items that follow are those the T$ constants of TTY.H name. */
     ts_copy_byte(FIELD_MARK);
-    ts_copy_c_string(sdtgetstr("sreg")); /* Save screen region */
     ts_copy_byte(FIELD_MARK);
-    ts_copy_c_string(sdtgetstr("rreg")); /* Restore screen region */
     ts_copy_byte(FIELD_MARK);
-    ts_copy_c_string(sdtgetstr("dreg")); /* Delete saved screen region */
     /* Other standard terminfo items */
     ts_copy_byte(FIELD_MARK);
     ts_copy_c_string(sdtgetstr("cvvis")); /* Set cursor visible */

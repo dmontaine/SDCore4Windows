@@ -338,11 +338,6 @@ deffun pw_complex(pw) calling '!pw_complex'
             display @(-1) :
          end
 
-         if system(7) = 'sdterm' then
-            if getpu(PU$WIDTH, -1) < 256 and getpu(PU$LENGTH, -1) < 256 then
-               display @(-256, getpu(PU$WIDTH, -1) + 256 * getpu(PU$LENGTH, -1)) :
-            end
-         end
       end
    end
 

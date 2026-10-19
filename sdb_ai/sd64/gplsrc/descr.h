@@ -76,10 +76,9 @@
  *              blank common is addressed by blank_common.
  *
  * IMAGE        A screen image.
- *              Points to a SCREEN_IMAGE structure.  On a Windows SDConsole
- *              session, this structure contains the actual screen data. On a
- *              SDTerm session, the data is held locally by SDTerm and a
- *              unique reference id is stored in the SCREEN_IMAGE.
+ *              Points to a SCREEN_IMAGE structure: a reference id and the
+ *              size and place of the region.  The terminal does not keep
+ *              the picture (AccuTerm and SDTerm did; neither is supported).
  *             
  * BTREE        A binary tree data item.
  *              Not accessible to user mode programs (because it's a bit

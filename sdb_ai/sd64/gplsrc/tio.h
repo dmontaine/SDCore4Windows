@@ -168,8 +168,6 @@ Public char last_seqno[9+1] init(""); /* @SEQNO: the last NEXT hold file number 
 Public char onewline[10+1] init("\r\n");
 Public char inewline init(13);
 
-Public bool is_SDTerm init(FALSE);    /* SDTerm? */
-
 /* Output buffer (socket connections only) */
 
 #define OUTBUF_SIZE 10240

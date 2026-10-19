@@ -916,20 +916,13 @@ int16_t y;
 int16_t w;
 int16_t h;
 {
-  char *p;
-  char *q;
+  /* 13 Oct 26: the terminal no longer keeps the image.  It used to be asked to, with the 'sreg' capability, by
+     AccuTerm and by SDTerm, neither of which SD supports now; SAVE.SCREEN() gives an image that holds nothing
+     outside this process and RESTORE.SCREEN writes nothing.  (The library's SCREEN statement keeps its own
+     shadow of what it draws and puts it back itself.) */
   static int32_t image_id = 0;
-  int n;
 
-  if (connection_type == CN_SOCKET) {
-    scrn->id = image_id++;
-    p = sdtgetstr("sreg");
-    if (p != NULL) {
-      q = tparm(&n, p, (int)(scrn->id), (int)x, (int)y, (int)w, (int)h);
-      write_socket(q, n, TRUE);
-    }
-  }
-
+  scrn->id = image_id++;
   return TRUE;
 }
 
@@ -938,17 +931,7 @@ int16_t h;
 void restore_screen(scrn, restore_cursor) SCREEN_IMAGE *scrn;
 bool restore_cursor;
 {
-  char *p;
-  char *q;
-  int n;
-
-  if (connection_type == CN_SOCKET) {
-    p = sdtgetstr("rreg");
-    if (p != NULL) {
-      q = tparm(&n, p, (int)(scrn->id), (int)(scrn->x), (int)(scrn->y), (int)restore_cursor);
-      write_socket(q, n, TRUE);
-    }
-  }
+  /* nothing: see save_screen() */
 }
 
 /* Interludes to map onto Windows style interfaces */
