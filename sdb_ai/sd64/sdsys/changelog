@@ -2,6 +2,36 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+19 Oct 26  SDIDX AND SDFIX, THE STAND-ALONE FILE TOOLS, NO LONGER DO SEVERAL WRONG THINGS (FROM SD CORE FOR LINUX).
+
+             sdidx       When it moved indexes out of a file's own directory, or deleted them, it removed the old %2, %3 ... through a name buffer
+                        only 33 bytes long, so on almost any real data path the old index file stayed behind while the program reported success.
+                        The leftover then stopped you moving the indexes back (error 17).  The buffer now holds any path the file header can hold.
+                        If you used an older sdidx, look for a stray %2 beside %0 and %1 and delete it by hand once you have checked the index is
+                        where the header says.  sdidx -d answered n at "Delete ... (Y/N)?" used to say "All indices deleted" and clear the header
+                        anyway, leaving the index files on disk with nothing pointing at them; it now stops ("Indices not deleted", exit status 1),
+                        and input that ends at the question counts as n.  sdidx -m and -d used to delete the whole old index directory with
+                        everything in it; they now delete only the index files the header lists and remove the directory only if that leaves it
+                        empty.  sdidx -p now prints what -q prints.  A relative index path given to -m or -p is made absolute from the current
+                        directory before it is stored; a path argument longer than 255 characters is refused.
+             sdfix       -F could not delete an index file in the file's own directory: it printed "Corrected" and removed nothing; it can now.
+                        The repair for "Invalid split and/or merge loads" wrote split 50 and merge 80, the very values the check rejects; it now
+                        writes the defaults SD gives a new file, split 80 and merge 50.  -Q looped for ever if its input ended while it was asking
+                        "Fix?" (and at the dump-and-rebuild question and the interactive prompt): the end of input now counts as "no" and says so.
+                        The interactive W command reads its address and value as the hex its help always said and writes the bytes in the order
+                        typed (it read decimal and swapped bytes).  -R together with -F or -Q is refused with a message (run the fix first, then -R
+                        alone).  sdfix now refuses a file that is open within a running SD, as sdidx always did.  A file whose path is 252
+                        characters or more is refused: with a path that long the names of the higher index files were cut short to the overflow
+                        subfile's name, and -F then deleted that subfile together with the real index.  The exit status is 1 if any named file
+                        failed.
+             sdconv      Named a hashed file, it used to print nothing, change nothing and exit 0, which read as a successful byte-order conversion.
+                        It now says "<file> is a hashed file: sdconv converts compiled programs only, nothing was changed" and exits 1.  It
+                        never did convert hashed files in this SD (the call had been lost in a compiler-warning clean-up), this SD cannot open a
+                        big-endian hashed file, and both Linux and Windows are little-endian, so nothing is lost.
+             Does not    Neither tool takes a backup and neither can be undone; sdidx still cannot move one index and leave the others; sdfix
+                        still only reports an index tree that is damaged; and sdconv still converts compiled programs only.
+             Not yet run on Windows: these were carried from Linux and compile, but have not been exercised here.
+
 19 Oct 26  MASTER.LOGIN NOW RUNS FOR AN API SESSION TOO.
 
            The MASTER.LOGIN paragraph in the SDSYS VOC is run once by a session that connects through the API, when it
