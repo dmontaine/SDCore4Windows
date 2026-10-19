@@ -24,6 +24,8 @@
  *           of dh_create_file(), 80 and 50.  Input that ends no longer loops: the Fix? and dump questions take it as
  *           "no" and say so, the pager stops paging, interactive mode quits.  The interactive W command reads its
  *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.  -R with
+ *           -F or -Q is refused (it ran no check and fixed nothing, silently).  A file that is open within a
+ *           running SD is refused, as sdidx does.
  *           -F or -Q is refused (it ran no check and fixed nothing, silently).
  *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.
  *           "no" and say so, the pager stops paging, interactive mode quits.
@@ -83,6 +85,7 @@
 #include "revstamp.h"
 
 #include <unistd.h>
+#include <sys/shm.h>
 
 #define Seek(fu, offset, whence) lseek(fu, offset, whence)
 
@@ -164,6 +167,7 @@ void Z_command(void);
 /* rev 0.9.0 */
 int fix_file(char *fn);
 bool is_dh_file(void);
+bool file_open_in_sd(void);
 int process_file(void);
 void show_window(int64 addr);
 void show_group(int32_t group);
@@ -417,6 +421,47 @@ exit_is_dh_file:
 }
 
 /* ======================================================================
+   file_open_in_sd()  -  Is the file being processed open within a running
+   SD?  The same test as sdidx.c's open_primary(): SD's table of open files
+   (shared memory) is searched for the file's resolved directory name.  It
+   checks nothing when SD is not running, which is also when nothing can be
+   told.  If SD is running but its table cannot be attached, that is said and
+   the file is processed as it was before this check existed.             */
+
+bool file_open_in_sd() {
+  bool in_use = FALSE;
+  int shmid;
+  int fno;
+  FILE_ENTRY *fptr;
+  char real[PATH_MAX + 1];
+
+  if (realpath(filename, real) == NULL) {
+    if (strlen(filename) > MAX_PATHNAME_LEN)
+      return FALSE; /* No SD file has a name this long */
+    strcpy(real, filename);
+  }
+
+  if ((shmid = shmget(SD_SHM_KEY, 0, 0666)) == -1)
+    return FALSE; /* SD is not running */
+
+  if ((sysseg = (SYSSEG *)shmat(shmid, NULL, SHM_RDONLY)) == (void *)(-1)) {
+    emit("Cannot attach to SD's shared memory [%d]: not checked whether the file is open in SD\n", errno);
+    return FALSE;
+  }
+
+  for (fno = 1; fno <= sysseg->used_files; fno++) {
+    fptr = FPtr(fno);
+    if ((fptr->ref_ct != 0) && (strcmp((char *)(fptr->pathname), real) == 0)) {
+      in_use = TRUE;
+      break;
+    }
+  }
+
+  shmdt((void *)sysseg);
+  return in_use;
+}
+
+/* ======================================================================
    process_file()  -  Process a file                                      */
 
 int process_file() {
@@ -431,6 +476,14 @@ int process_file() {
   char *p;
 
   emit("Processing %s\n", filename);
+
+  /* 18 Oct 26 dm - sdidx refuses a file that is open within SD; this tool, which writes far more of the file, did
+     not.  dh_fmt.h says of the off-line tools that "nothing has the file open while they run": this makes it so. */
+
+  if (file_open_in_sd()) {
+    emit("File is currently open within SD\n");
+    goto exit_process_file;
+  }
 
   /* Open primary and overflow subfiles */
 
