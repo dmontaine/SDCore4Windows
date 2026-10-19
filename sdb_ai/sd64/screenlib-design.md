@@ -1,6 +1,12 @@
 # screen library (sl_), stage 2 first cut - design note
 
-12 Oct 2026. Written before the menu, kept to what SED needs plus the obvious next widgets.
+> **Windows port (18 Oct 2026).** This is Linux's design note at its commit bb0881d, carried as written. The screen library, the SCREEN
+> statement, the debugger on the library and the removal of the AccuTerm, SDTerm and SDConsole support are in this tree (area 6a and
+> 6c of the Linux carry). SED, CED and the IDE are NOT (area 6b, held until the S.64 edit guard exists), so the sections that describe
+> them are for reference. Message ids: Linux id + 1005. The tests the note names (`sandbox-*.py`) drive a pseudo-terminal, which Python
+> on Windows does not have; nothing here has been run yet.
+
+12 Oct 2026; updated 13 Oct 2026 (see the 13 Oct sections). Written before the menu, kept to what SED needs plus the obvious next widgets.
 Background: PROJECT_STATUS.md S.1 (stage 1: a pure BASIC renderer is fast enough).
 First users: SED's menu bar and quit box. Tests: gplbld/sandbox-sed-menu.py.
 
@@ -17,7 +23,7 @@ First users: SED's menu bar and quit box. Tests: gplbld/sandbox-sed-menu.py.
 3. theme - `$sl_attr(name, seq)`: the one table of attributes (normal, highlight, bar, hotkey,
    hotkey.end, frame, disabled). Only reverse video and underline, so it reads on a monochrome
    terminal; hotkey letters are underlined. A colour theme replaces this routine's table only.
-   'disabled' is not yet different from normal (a monochrome terminal has no dim).
+   'disabled' is not different from normal on the mono theme (no dim); colour themes give it their own style (see the 13 Oct sections).
 4. widgets - `$sl_menu` (menu bar + drop-downs with shortcuts), `$sl_msgbox`, `$sl_prompt`.
 
 ## the model we follow
@@ -64,17 +70,20 @@ user programs can call library routines.
 A drop-down covers text; closing it must restore it. SD cannot ask the terminal what is on it. So
 the library never owns the screen: the CALLER hands in `scr` with the shadow (value r+1 = text of
 terminal row r) and `rattr`. `$sl_region('save')` copies the rectangle from the shadow, `'restore'`
-draws it back. Text and reverse video only; richer cells are repainted by the caller. (A
-double-buffered renderer, S.1, would own the shadow itself; the argument shape does not change.)
+draws it back. Text and reverse video only; richer cells are repainted by the caller. (This is the
+first cut's rule, for a caller of the `$sl_` routines. Since the `screen` statement the library owns the
+shadow itself once `screen open` is done, with a style code on every cell - see the SCOPE part below;
+the argument shape is the same.)
 
 ## layout and resize
 
 Character cells, from 0, as in `@(x, y)`. `SL.S.CLIP` is the clip rectangle: `$sl_region` skips rows
-outside the screen; per-cell clipping is not done yet (widgets are sized to fit: a message box
+outside the screen; `$sl_put` clips cell by cell to the screen and to `SL.S.CLIP` (SCREEN CLIP sets it; widgets are still sized to fit: a message box
 is clamped to the screen width, a menu shifts left if it would overflow). Size comes from
-@crtwide / @crthigh which the caller passes in `scr`. Resize hook (documented, not built): on a
-size change the caller re-reads the size, rebuilds `scr` and sends every widget `init` then `draw`;
-the widgets hold nothing that depends on the old size once re-initialised.
+@crtwide / @crthigh which the caller passes in `scr`. Resize is built (13 Oct 26, see "Resize" below): a
+program that owns the screen gets a `resize` event; a caller of the `$sl_` routines re-reads the size,
+rebuilds `scr` and sends every widget `init` then `draw`. The widgets hold nothing that depends on the
+old size once re-initialised.
 
 ## widgets expected later, and how each fits
 
@@ -88,7 +97,7 @@ the widgets hold nothing that depends on the old size once re-initialised.
 - drop-down (combo): entry field + a pick box opened over the text with `$sl_region`.
 - status line: `draw` only, text in a field.
 - progress bar: `draw` with value; no keys.
-- scroll bar: `draw` from top/total/visible, no keys of its own.
+- scroll bar: built as a standalone widget on 13 Oct (see below); lists, memos and tables draw their own column with `$sl_scrollbar`.
 - tab strip: like the menu bar with an always-open single level; `key` left/right -> `handled`, the form shows the page.
 - message / confirm box and input prompt: exist now (`$sl_msgbox`, `$sl_prompt`).
 
@@ -98,15 +107,24 @@ SED's text area, its status lines and its own prompt line (`get.string`, with hi
 Emacs line editing driven by SED's key bindings) stay SED's: they need SED's binding tables and
 SED's image buffer, which the library does not know. SED reads raw bytes with its own tables
 (the library's `$sl_key` would have to learn SED's rebindable keys). SED feeds the library a shadow
-of its image buffer; `ced_edit` is left on its own drawing code.
+of its image buffer for its menus. Since 13 Oct SED's syntax colour comes from the library's engine
+(`$sl_syntax`: one style code per character of each row), but SED still draws its own rows.
+
+`ced_edit` and the debugger were left on their own drawing code in the first cut and are on the
+library since 13 Oct 26 (owner: "use the TUI on ced and debugger"): the element list of `ced_edit` is
+a table widget and its questions are dialogues; the debugger draws with the library's styles and
+`$sl_put`, its help is `$sl_msgbox`, and its full screen is the terminal's alternate screen.
 
 ## not done yet (deliberately)
 
-(Written for the first cut; mouse, colour and the form have been built since: see SCOPE.)
-acsc/Unicode box drawing (boxes are + - |); a renderer owning the shadow; disabled/
-checked/submenu items; scrolling drop-downs longer than the screen; per-cell clipping; user
-programs calling `$sl_` routines (they need `$internal` and `sd -internal` to compile: settled by the `screen`
-statement, see SCOPE below); F10 is
+(Written for the first cut and brought up to date 13 Oct 26. Built since: mouse, colour, the form, borders, menu
+flags, submenus, the tree, the standalone scroll bar, per-cell clipping (`$sl_put` always cut at the screen's edge;
+`SCREEN CLIP AT x,y SIZE w,h` sets `SL.S.CLIP`, `SCREEN CLIP` alone takes it off), resize, `ced_edit` and the
+debugger on the library, and a library-owned shadow once `screen open` is done.) Still not built, each one by choice:
+scrolling drop-downs longer than the screen; SED's own text area and prompt line on the library; the editor widget as a
+separate widget (the memo covers its functions); a shadow that also holds what `print` and `crt` write (the shadow is
+the library's only). The evaluation of each is in "Revisited 13 Oct 26" at the end. User programs calling `$sl_`
+routines need `$internal` and `sd -internal` to compile: settled by the `screen` statement, see SCOPE below. F10 is
 bound by SED's table from `ESC [ 2 1 ~` (xterm, Linux console), not read from terminfo.
 
 ## evaluation: a C library as a back end (decision: NO, stay with BASIC over tio)
@@ -178,8 +196,9 @@ Everything above is the first cut (SED's needs). This part scopes the rest.
 
 **Built and tested (`sandbox-screen.py`, through user programs on the pty):** the compiler mechanism and
 the verbs `msgbox open close clear text box cursor refresh size key menu menubar pick ask` (stages 0 to 2);
-`test-screencmd-units.py` checks the verb table, the routines and their headers agree. Stage 3 (forms,
-below) is being built. Everything marked "proposed" is written in the conditional, with what would falsify it.
+`test-screencmd-units.py` checks the verb table, the routines and their headers agree. Stages 0 to 4 are
+built, and the 13 Oct additions (memo editing, menu flags and submenus, borders, tree, standalone scroll
+bar, table sorting and row marks) are built and tested in `sandbox-screen.py`; none is merged to Dev yet. Everything marked "proposed" is written in the conditional, with what would falsify it.
 
 ## owner rulings this rests on
 
@@ -228,9 +247,10 @@ buffer. A user program cannot be asked to build one, so the commands keep it in 
   pop-up saves "what is under me" from the shadow and a form needs no repaint code of its own. S.1
   measured the diff renderer: a full 160x48 repaint is 0.11 ms of CPU in BASIC.
 - The program's own `print @(x,y)` is not in the shadow (curses has the same rule); `screen refresh`
-  repaints from the shadow after it. The kernel's `SAVE.SCREEN` / `RESTORE.SCREEN` do nothing on a
-  Linux terminal (`linuxio.c:752`, they only work in an SDTerm client); once the shadow exists they could
-  be made to use it, which would also give the debugger's pop-ups back their screen - not proposed yet.
+  repaints from the shadow after it. The kernel's `SAVE.SCREEN` / `RESTORE.SCREEN` do nothing (since
+  13 Oct 26 on any terminal: they asked the terminal to keep the picture, which only AccuTerm and SDTerm
+  could, and both are no longer supported); the debugger uses the terminal's alternate screen and the
+  library's own shadow instead.
 - Existing widgets (`$sl_menu`, `$sl_msgbox`, `$sl_prompt`) draw with `display`; moving them to `$sl_put`
   is stage 1. SED keeps handing its own shadow in, so it does not change.
 
@@ -278,14 +298,16 @@ they are modal dialogues, not members of a form. Both obey the one contract
 | `values` | `screen values f` | a collection id -> value of every entry, check, radio and list | `!screen_values` |
 | `wait` | `screen wait f {timeout s}` | event: type @vm id @vm data; else on timeout | `!screen_wait` |
 | `get` | `screen get f, id` | the widget's value | `!screen_get` |
-| `set` | `screen set f, id {value v} {text t} {items i} {enabled b}` | - | `!screen_set` |
+| `set` | `screen set f, id {value v} {text t} {items i} {enabled b} {readonly b} {visible b}` | - | `!screen_set` |
 | `focus` | `screen focus f, id` | - | `!screen_focus` |
 | `theme` | `screen theme name` | the name of the theme in force; else when refused | `!screen_theme` |
 | `style` | `screen style name, fg, bg, flags` | - ; else when refused | `!screen_style` |
 | `tabs` | `screen tabs f, id, labels at x,y {value n}` | - | `!screen_tabs` |
 | `page` | `screen page f, n` | - | `!screen_page` |
-| `memo` | `screen memo f, id, text at x,y size w,h {readonly}` | - | `!screen_memo` |
+| `memo` | `screen memo f, id, text at x,y size w,h {readonly} {wrap}` | - | `!screen_memo` |
 | `table` | `screen table f, id, columns, rows at x,y size w,h {value n}` | - | `!screen_table` |
+| `tree` | `screen tree f, id, nodes {at x,y} {size w,h} {value n} {expanded}` | - | `!screen_tree` |
+| `scrollbar` | `screen scrollbar f, id, total {at x,y} {size w,h} {visible} {value n}` | - | `!screen_scrollbar` |
 
 A zero-value keyword (`fill`, `multi`, `mask`, `on`) is a flag: the subroutine is given 1, else null.
 `items` are values (or a comma list, as `buttons` already is); a menu item is label @sm shortcut @sm
@@ -404,9 +426,9 @@ compile errors are refused with their messages. Cost: about 130 lines in bcomp (
 | 1 | the owned screen: `$sl_put` with per-cell attributes, `open`/`close`/`clear`/`text`/`box`/`cursor`/`refresh`/`size`/`key`; move msgbox, menu and prompt onto it; the cursor rule - DONE | medium | text drawn, a dialogue over it, the text back row for row and attribute for attribute; cursor (61 rows) |
 | 2 | modal dialogues: `menu`, `menubar`, `pick`, `ask`, `msgbox at` - DONE | medium | each verb: choose, cancel, keys, background restored cell for cell (106 rows with stage 1; ten mutants, see PROJECT_STATUS) |
 | 3 | the form (a collection) and its container; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus`, `values` - DONE | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
-| 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress - DONE (tabs and the scroll bar painter 12 Oct, third sitting; a standalone scroll bar widget not built) | medium | event order; a combo over a form; scrolling lists |
-| 5 | colour themes - DONE; mouse - DONE (xterm SGR 1006; `_keycode` binds ESC [ <); resize - NOT built, needs the kernel to read the window size (the owner's say, see "Resize" above) | medium | attributes; clicks; a resized pty |
-| 6 | text area and viewer (`memo`) and `table` - DONE; an editor widget with undo, selection and search, `ced_edit` and the debugger on the library, tree - not built | large | the editors' existing suites (`sandbox-ced.py`) |
+| 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress - DONE (tabs and the scroll bar painter 12 Oct, third sitting; the standalone scroll bar widget 13 Oct) | medium | event order; a combo over a form; scrolling lists |
+| 5 | colour themes - DONE; mouse - DONE (xterm SGR 1006; `_keycode` binds ESC [ <); resize - DONE 13 Oct (the kernel reads the window size; see "Resize" above) | medium | attributes; clicks; a resized pty |
+| 6 | text area and viewer (`memo`, with selection, undo and find: 13 Oct), `table` (sorting, row marks, column resize, sideways scroll: 13 Oct), `tree` (13 Oct) - DONE; `ced_edit` and the debugger on the library - DONE 13 Oct (`sandbox-ced.py` 134, `sandbox-dbgui.py` 21); an editor widget as a separate widget - not built | large | the editors' existing suites (`sandbox-ced.py`) |
 | 7 | carry to Solo (bcomp, the library, 12172-12175), then the Windows agent when Core is declared stable | small each | their own suites |
 
 What would falsify the plan: (a) stage 1's per-cell shadow making a BASIC repaint slower than ~16 ms at
@@ -446,15 +468,23 @@ falsify it:* a form with two strips (the first one wins); pages inside pages (no
 
 **The text area.** `screen memo` is one widget for both an editor and a viewer (`readonly`): lines are fields of
 the value, no wrapping (it pans sideways), the last column is a scroll bar, Page Up/Down scroll a page less a line with
-the cursor keeping its screen row. It is deliberately not the CED editor's replacement: no undo, no selection, no
-search. Those belong to the editor widget of stage 6 and would be built on the same line buffer.
+the cursor keeping its screen row. Built 13 Oct: `wrap` (SCREEN MEMO ... WRAP; SCREEN SET ... WRAP b) wraps long lines at the width.
+Selection (Ctrl-G marks, Ctrl-X cut, Ctrl-C or Ctrl-O copy, Ctrl-V paste; the clipboard is shared between
+memos), undo and redo (Ctrl-Z, Ctrl-Y; 100 steps, a run of typing is one step), find (Ctrl-F or Ctrl-T prompts,
+Ctrl-B prompts and finds backwards, Ctrl-N finds the next; ignores case; wraps) and word movement (Ctrl-P back,
+Ctrl-U on: Ctrl-B and Ctrl-F were these until 14 Oct 26, when they became SED's find keys). A readonly viewer can
+select, copy and find. `SYNTAX name` colours the text as a language of `$sl_syntax` (the theme's syntax styles; `dark`, `light`,
+`classic` and `blue` have them, `mono` none) and `LNUM` puts line numbers down the left (13 Oct, later the same day; `part_memo3`).
+Still not built: a separate editor widget (`ced_edit` is on the library since 13 Oct, as a table and dialogues, not as a memo).
 
 **The scroll bar** is a routine (`$sl_scrollbar`) that returns the column of characters for a list, memo or table;
-the thumb is proportional (it was one cell). A standalone scroll-bar widget for a program's own drawing is not built
-(no demand yet).
+the thumb is proportional (it was one cell). The standalone scroll bar widget is built 13 Oct (`screen scrollbar`): vertical or horizontal,
+keys, mouse, `change` events.
 
 **The table** (`screen table f, id, columns, rows`): a heading row, columns with a width and L/R/C, one current row, a
-scroll bar; `change` events as for a list. Not built: sorting, column resize, horizontal scrolling, row marks.
+scroll bar; `change` events as for a list. Built 13 Oct: F3 sorts by the current column (up, down, natural order; numbers by value) and a click on a
+heading sorts; MULTI (space marks rows, `*` shows them; GET and Return give the original row numbers);
+Left and Right choose the column and scroll sideways; `<` and `>` narrow and widen the current column.
 
 **The mouse (built, xterm only).** `screen open` asks for modes 1000, 1002 and 1006 (buttons, drag, wheel, SGR form;
 `nomouse` opts out) and `screen close` turns them off; a terminal that does not know them, the Linux console, ignores
@@ -471,16 +501,37 @@ dies with reporting on (break, error) leaves the terminal reporting, and the mou
 sends no mode reset when a program ends (it never sends `smkx` / `rmkx` either). The proper fix is a kernel hook, which is
 the owner's to ask for; the documentation says what to do (`reset`).
 
-**Resize - NOT built, and the earlier plan rested on a false claim.** SD never reads the window size: there is no
-`TIOCGWINSZ` or `SIGWINCH` anywhere in `gplsrc`. `@crtwide` / `@crthigh` are terminfo's 120 x 36 unless `TERM w,h` was
-typed or `LOGIN` found `COLUMNS` / `LINES` in the environment (which a shell rarely exports). So a program on an 80 x 24
-terminal draws for 120 x 36 today, and `LIST` pages at 36 lines. Options, in the order I would take them, all conditional:
+**Resize - BUILT 13 Oct 26 as option (B), on the owner's "B. is fine, do it".** What follows is the analysis that led to
+it, kept for the reasons: before it, SD never read the window size - there was no `TIOCGWINSZ` or `SIGWINCH` anywhere in
+`gplsrc`, and `@crtwide` / `@crthigh` were terminfo's 120 x 36 unless `TERM w,h` was typed or `LOGIN` found `COLUMNS` /
+`LINES` in the environment. Now the kernel reads the pty's size at start-up and in the SIGWINCH handler (`linuxio.c`,
+`op_tio.c` `tio_check_resize`), kernel key 92 (`K$WINSIZE`) returns it, `LOGIN` prefers it to terminfo's default, the
+library's `$sl_key` reports `resize`, and `screen wait` gives a `resize` event. Options considered, in the order I
+would have taken them, all conditional:
 (B) the kernel reads the pty's size at start-up and on SIGWINCH into the display size, and `LOGIN` prefers it to terminfo's
 default: right for every session, but `@crtwide` changes for all of them, so it is a behaviour change to be agreed;
 (C) the same read, but only through a `SYSTEM()` / `KERNEL()` key that the library calls from `screen open` and `screen key`,
 and SIGWINCH only sets a flag: nothing else changes, at the price that only library programs see the real size;
 (A) no kernel change and the library asks nothing: a program keeps using `TERM w,h`. Falsified if the owner wants
 `@crtwide` left at terminfo's value for compatibility with scripts - then (C) is the only one left.
+
+## 13 Oct 26 additions (built and tested in `sandbox-screen.py`; merged to Dev 13 Oct, `2ca25c7`)
+
+**Menus.** An item carries flags in subvalue 4: `D` disabled (drawn in the style `bar.disabled`, skipped by the
+cursor), `C` checked (a `*` in the first cell). A submenu is a menu whose title begins with `>` and is not on the
+bar; an item whose code is that title opens it beside the item. Three levels deep. New theme style `bar.disabled`
+(code `m`).
+
+**Tree.** `screen tree f, id, nodes {at x,y} {size w,h} {value n} {expanded}`. A node is a label, a depth
+(subvalue) and a code (subvalue). Right and Left open and close a node or move to a child or parent; space toggles;
+a letter jumps; Return gives a `done` event; `change` events as for a list.
+
+**Scroll bar.** `screen scrollbar f, id, total {at x,y} {size w,h} {visible} {value n}`. Vertical or horizontal;
+keys, mouse, `change` events.
+
+**Borders.** `screen open ... lines` draws forms, boxes and dialogues with Unicode line-drawing characters. The
+stand-ins CHAR(14) to CHAR(19) from `$sl_line` are turned into the terminal's bytes by `$sl_put`. Otherwise plain
+`+ - |`. Reset by `screen close` and by the clean-up routine.
 
 ## risks and open questions for the owner
 
@@ -498,15 +549,148 @@ and SIGWINCH only sets a flag: nothing else changes, at the price that only libr
 4. **`ask` or `input`.** `screen input` would clash in the reader's mind with `input`; `ask` is not an SD
    word. Open.
 5. Phantom / API sessions: every verb answers ELSE (status 1) and draws nothing; an `open` in a phantom
-   takes the else branch. Proposed, untested.
+   takes the else branch. Tested by `sandbox-screen.py` on 13 Oct (see the decisions below).
 6. Cursor after a transient dialogue: nothing in SD reads the cursor position, so it is left at the
    box's last cell. After `open` the library owns it. A save/restore pair from terminfo (`sc`/`rc`) is
    possible for terminals that have it - not proposed.
 7. Carry-over: the statement is compiled by `bcomp`, so Solo and Windows get it with the compiler;
-   message numbers 12172-12175 are Linux's range, the Windows agent allocates its own. Nothing is sent
+   message numbers 12172-12175 are Linux's range; here they are 12172-12175 (Linux id + 1005). Nothing is sent
    to them until the owner declares Core stable (the standing order).
 8. **Resize.** SD never reads the window size (see the section above). Which of (A), (B), (C) - or none yet? (B) changes
    `@crtwide` for every session, which is why it is yours to say.
 9. **A default theme.** A program that never calls `screen theme` gets `mono`. Should an administrator be able to set
    another default for the site (a setting in `sd.conf` or a VOC record) so that colour terminals get colour without
    every program asking? Not proposed until you say.
+
+## Decisions taken 13 Oct 2026 on the open questions
+
+Taken by the agent under the owner's instruction to decide what gives the product the most depth. Each is open
+to the owner's veto.
+
+(a) The statement word stays `screen`.
+(b) The owned screen stays explicit (`screen open`); a dialogue before it puts back blanks.
+(c) Forms are collections built by statements. A form made from a JSON record with `jparse` works, and is a
+documented feature once the widgets' elements are listed (they are in each widget's header comment).
+(d) The prompt dialogue stays `ask`.
+(e) Phantom and API sessions answer ELSE and draw nothing (tested by the suite).
+
+## Revisited 13 Oct 26: the things left unbuilt "by choice"
+
+Asked: would any of them give users more function or a better experience? Two probes were run on a sandbox built
+from `6a2cb02` plus the doc edits (`probe-sed-small.py`, a pty at 100 columns; the output is in the session's
+scratchpad, not kept in the tree): SED on 24, 14 and 12 rows (12 is the least SED accepts), F10 then the Edit and
+Tools menus, and SED on a 24-row pty that is then resized to 40 rows and to 14. What each result means, best first.
+
+**The owner's answers, the same day:** 1 fix; 2 "sed should have a default size of 120x36, the sd default terminal size"
+(chosen from three options: always 120x36); 3 fix; 4 fix; 5 "on by default"; 6 no; 7 no; 8 "give me more information
+about this". **What was built:** 1 in `sl_menu` (rows `part_menutall` in `sandbox-screen.py`); 2 as a fixed layout and a
+refusal of a smaller window (message 11197; `sed` "Get screen characteristics"; rows in `sandbox-sed-menu.py`) - which also
+removes 1's SED case, so item 1 is tested on a user program; 3 and 5 in `sed` (UNDO AND REDO, THE MOUSE; messages 11194-11196;
+the new suite `sandbox-sed-edit.py`, 67 rows, red 49 of 67 on the SED before); 4 in `sl_memo`, `screen_memo` and `bcomp`
+(rows `part_memo3`). 6 and 7 are not built, by the owner's word. 8 is not built; what it would be is in the closing notes
+of the session that asked. The text below is the evaluation as it stood when the question was asked, and its item 2 is
+superseded by the owner's choice.
+
+1. **A drop-down taller than the screen is cut off - BUILT 13 Oct (a defect, measured).** `$sl_menu` `open.geom` clamps the
+   drop-down's width and, for a pop-up or a submenu, its top, but never its height: a bar menu of N items is N rows
+   from row 1. On 24 rows every item of SED's Edit (17 items, 3 separators) and Tools (14) menus shows. On 14 rows the
+   Edit menu shows 11 of 17 items and Tools 11 of 14; on 12 rows 10 of 17 and 10 of 14, and the menu paints over the
+   status lines. From the code (not observed): the cursor still moves over the items that are not drawn. Fix in the library (cap the rows to the space, scroll with the arrows, a marker at the cut edge); SED, and any
+   `screen menu` / `screen menubar` program on a small window or a split tmux pane, gets it. Small; a pty row at 12
+   and 14 rows is the test (red today).
+2. **SED does not follow the window - BUILD (a defect, measured; exposed by the 13 Oct window-size change).** SED
+   reads `@crthigh` and `@crtwide` once, at `sed:303-317`, and sizes its arrays from them. After the pty went from 24
+   to 40 rows SED kept its 24-row layout (status lines on rows 22-23, 16 blank rows below). After it went to 14 rows the
+   status line was off the screen and the text was corrupted (`xyalpha one two t3ree`: after the typed `x` and `y` a
+   `3`, probably the column number of the status line, appeared inside the first line). Before 13 Oct a window of another size was wrong from the first
+   line; now a window dragged mid-session breaks SED. SED needs a re-layout routine called when the size changes
+   (`kernel(K$WINSIZE)` read before each paint: cheap) and `redim` of `image`, `simage` and the row arrays. The
+   debugger reads the size once, at start (`debug:593`); it is modal and short, so lower priority. Medium.
+3. **Undo in SED - BUILD (a missing function, stated in the changelog: "SED still has no undo").** The memo has 100
+   steps with typing grouped (`part_memo2`); SED has none, and Ctrl-K and Ctrl-X are one key away from the text a user
+   was keeping. The syntax-colour hooks of 13 Oct (`syn.dirty`, `sed:3118`, `3558`, `3604`, `3618`) sit at the places
+   where text changes (`insert.line`, the line delete, the region kill), so a journal of (line, text before, text
+   after) hooks in at the same points. Not the memo's code: SED's text is in
+   chunks, not a field list. Medium; the risk is a primitive that is missed, which a mutation test per primitive finds.
+4. **Syntax colour and line numbers in the `screen memo` - BUILD, small.** `$sl_syntax` exists and `$sl_put` takes a style
+   for every cell, so `screen memo f, id, text ... syntax 'sd.basic'` and `lnum` are a keyword each and a draw change in
+   `sl_memo`. It gives any program that shows or edits source, JSON or a config file the colour SED has, and it is the
+   one missing part of a BASIC-written IDE. Check: the memo's draw time with the engine on, at 160x48.
+5. **SED's mouse - OPT-IN ONLY, low.** The library already reads the mouse (`$sl_mouse`) and `_keycode` binds the report,
+   but a program that asks the terminal to report the mouse takes away the terminal's own text selection and copy (shift
+   brings it back), and a program that dies leaves the reporting on (documented in the Mouse section above). Click to
+   place the cursor and the wheel to scroll are worth having for people who want them: a word in `&sed.options&`
+   (MOUSE), off by default. Per "The core direction" this is the delivered-off, administrator-loosens shape.
+6. **SED's text area on the library memo - NO.** SED has buffers, a split window, a kill ring, macros, overlay,
+   rebindable keys and a prompt line with history; the memo has none of them. Moving SED would lose features or rebuild
+   the memo into SED. The gains people would feel (undo, resize, mouse, colour in a widget) are items 2 to 5, done in
+   SED's own text area.
+7. **A shadow that also holds `print` and `crt` - NO, for now.** The kernel writes the bytes of `print` and `crt` straight
+   to the terminal (`tio_display_string` -> `write_console`); `@(x,y)` and the colour codes are already escape sequences by
+   then. A shadow would be a terminal emulator in the kernel: parse cursor addressing, SGR, clears, wrapping, tabs and
+   scrolling for every terminal definition SD ships, and decide what to do with a sequence it does not understand.
+   What it would give: `SAVE.SCREEN()` / `RESTORE.SCREEN` working again (they do nothing since AccuTerm went), a pop-up
+   over text a program wrote with `print`, and a resize that keeps it. What it costs: a large kernel change with a
+   failure that looks like a stray character. The way out for a program is `screen text` (12a says so), and nothing
+   else on this list needs the shadow.
+8. **An IDE - AFTER 1 to 4, and the owner's call.** The widgets exist (tree for the files, memo with colour for the
+   source, table for the compiler's errors, menu bar, status). The compile with error lines, the run and the debugger
+   exist too (SED's Tools menu, `debug`). What an IDE would add over SED is a project tree and an error list beside
+   the text; about two to three thousand lines of BASIC and a split-pane layout. Worth deciding after 2 and 4, because
+   both are what it would stand on.
+Not changed by this: scrolling pick lists (`screen pick` already scrolls), a separate editor widget (the memo is it).
+
+### The IDE, written out (13 Oct 26: the owner asked for "more information about this"; BUILT 14 Oct 26, see the next paragraph)
+
+**Built 14 Oct 26 (owner: "go ahead and build the ide").** `gpl.bp/ide` (`$ide`, VOC verb `ide`, messages 11198-11230), one
+user-level program on the `screen` statement: a form of tree, tabs, memo (`syntax`, `lnum`), table and a default button,
+the menu bar above it and a status line under it. Stages 1 and 2 were built together: open, save (asks if the record
+changed on disk), compile with the table that jumps (Return, F4), catalogue, run, debug, find in the records of a file,
+a tab for each open record (text and cursor kept per tab), new record, close with the save question, quit, theme, help,
+and the layout follows the window (`resize` rebuilds the form from the state). Measured: 100 keystrokes in a 2,000-line
+record with `sd.basic` colour took 3.2 s including 20 ms of idle per key - about 30 ms a key, so the falsifier above
+(memo too slow) did not hold; the colour is still worked out from line 1 at each paint. `sandbox-ide.py`, 63 rows, red
+56 of 63 with the program taken out of the sandbox. **Decisions and what they cost:** (a) Return in the tree and the
+table is the form's `activate` event: a form the program marks with `f{'activate'} = 1` gives Return in a tree or a
+table to the program (the id and the value) instead of pressing a default button or moving the focus on. The first
+build used a visible default button ("Open"); a hidden one does not work (`default.action` skips a button that is not
+on the page), and the owner asked for the button to go; (b) the status line is refreshed on the 1-second timeout of `screen wait`, because the
+memo consumes its own keys and returns nothing to the program for them (so a star appears within a second, not at the
+key); (c) no record locks are held while a record is open - the check at saving is the protection, which is weaker
+than SED's READU and says so in the changelog; (d) the tree lists at most 2000 records of a file (a `select` of a
+larger file is slow and the widget is not paged); (e) the tree is rebuilt, not edited, when a file is opened or
+closed, so the cursor is put back by code. **Not built:** a project tree of files outside the VOC, completion,
+replace across records, a mouse click on the menu bar (it is outside the form), splitters.
+
+**What it would be.** One SD BASIC program (a verb, `ide` say) on the screen library, in three panes and a bar: a
+**tree** of the account (its files from the VOC, and the records of each: `bp` first), the **editor** (a `screen memo` with
+`syntax` and `lnum`, tabs for several records open), and an **output pane** at the bottom (the compiler's messages as a
+`screen table` of line, error, with a click or Return jumping the editor to the line); a status line; and a menu bar
+(File, Edit, Search, Build, Run, Debug, Window). Build is `basic file record` through `execute ... capturing`, Catalogue
+the same, Run is `run`, Debug hands the terminal to `debug` (which takes the alternate screen), Search in files is `scan`.
+The account is the project: no project files.
+
+**What is already there.** Tree, memo (selection, undo, find, wrap, now colour and line numbers), table, tabs, scroll bar, menu
+bar, dialogues, forms, mouse, the `resize` event, themes, and the programs it would call. SED already edits, compiles with the
+errors put into the text, and runs.
+
+**What is missing.** (a) A layout that follows the window: the panes' sizes are numbers in `screen` statements, so the program
+lays them out again on a `resize` event (the library gives the event; the layout is the program's to write; no splitter widget
+is needed to start, a pane's size is a variable). (b) The memo is not SED: no macros, no buffers, no kill ring, no replace
+with query. The IDE's editor would be the memo, and SED stays for those who want its keys. (c) Running a program that
+draws on its own screen: leave the library's screen (`screen close`), run it, come back, as the debugger does. (d) The memo's
+colour is worked out from line 1 at each paint (cost grows with the text): a check-pointed state in the memo before it holds
+long programs. (e) Completion and inline help are not on this list.
+
+**Stages.** 1: the shell - bar, tree, memo with colour, open and save, build with the error table that jumps - one long sitting,
+about a thousand lines and a suite of its own (~80 rows, as `sandbox-ced.py`). 2: run, catalogue, debug, search in files,
+a tab for each open record. 3: resize layout, settings, polish. Each stage is usable on its own.
+
+**What would make it not worth it.** SED already has the menus, the colour, the compile with errors and (now) undo and the
+mouse; the IDE's gain over it is the tree, the error list and the output beside the text, in one program. A site that is
+happy with SED loses nothing. **What would falsify the plan:** the memo too slow to repaint a 2,000-line program with colour
+at each key (measure it first: a program of that size in a `screen memo` with `syntax 'sd.basic'`, 100 keystrokes), or
+`execute ... capturing` not giving the compiler's lines in a form the table can use (it does for SED's error tags).
+
+**Sequential order.** Core first; Solo and Windows only when the owner says Core is stable. The IDE is not bound by SED's
+120 by 36: it follows the window.

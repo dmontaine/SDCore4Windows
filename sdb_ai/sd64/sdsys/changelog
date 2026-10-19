@@ -2,6 +2,53 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  THE SCREEN LIBRARY AND THE SCREEN STATEMENT (FROM SD CORE FOR LINUX).
+
+           A BASIC program can now draw a screen of its own with the SCREEN statement instead of cursor addressing:
+
+               screen open ...            screen close            screen clear / text / box / cursor / refresh / size / key / clip
+               screen msgbox / menu / menubar / pick / ask        pop-up dialogues that give the screen back as they found it
+               screen form ... label, frame, entry, check, radio, list, combo, button, tabs, memo, table, tree, scroll bar, progress
+               screen wait / get / set / values / focus / hide    events from a form that stays on the screen
+
+           Everything is drawn in a named style (window, highlight, bar, hotkey, field ...) and a theme says what each looks like.
+           A program that asks for nothing gets the "mono" theme, which uses only reverse video and underline; "classic" and
+           "blue" use colour.  SCREENTHEME=name in sd.conf chooses the default.  The mouse (xterm SGR reports) and a resized
+           terminal are handled.  A program that ends without SCREEN CLOSE has the terminal put back at the next prompt.
+           Nothing is drawn in a phantom, and a colour theme is refused where the terminal cannot show colour.
+
+           THE LIBRARY IS NOT YET TRIED ON A WINDOWS CONSOLE.  It is Linux's code, carried and compiled here; Linux tests it on a
+           pseudo-terminal, which Windows does not have, so the first runs here will be by hand.  SED, CED and the IDE, which
+           Linux builds on this library, are not part of this release.
+
+           New messages 12172-12175 (Linux 11167-11170).  New kernel key K$WINSIZE (92).
+
+18 Oct 26  THE TERMINAL'S OWN SIZE IS NOW READ FROM THE TERMINAL.
+
+           SD used to start every session at the terminal type's 120 by 36 unless the user typed TERM w,h.  It now asks the terminal how
+           big it is when the session starts and again whenever the terminal is resized, and uses the answer as the width and the
+           lines per page; KERNEL(K$WINSIZE, '') returns the width, a field mark and the height, or null with no terminal (a phantom, a
+           pipe, the API).  TERM w,h still sets them by hand and holds until the next resize.  New accounts no longer carry
+           TERM 120,36 in their LOGIN paragraph (existing accounts keep theirs).
+
+18 Oct 26  THE DEBUGGER AND MESSAGE ... IMMEDIATE ON THE SCREEN LIBRARY; THE ACCUTERM, SDTERM AND SDCONSOLE SUPPORT IS GONE.
+
+           The code that asked a terminal to remember the screen under a pop-up, report the mouse and rebind function keys with escape
+           sequences only AccuTerm understood has been removed, with the eleven AccuTerm terminal types (vt100-at, vt220-at, vt320-at,
+           vt420-at, wy50-at, wy60-at, adds4000-at, vp-at, viewpoint60-at, addsviewpoint-at, pcmon-at, and their aliases).
+           SDTerm and SDConsole, Ladybridge's own Windows terminal programs, are not provided with SD and are no longer supported:
+           the sdterm terminal type, its @(-29), @(-30) and @(-256) sequences and the TERM DISPLAY lines about it are gone.
+           SAVE.SCREEN() and RESTORE.SCREEN still exist and do nothing a terminal could see.
+
+             The debugger  On a terminal that reports its size and has an alternate screen (xterm and the terminals that behave like
+                        it) the debugger takes the whole screen, drawn in the library's styles; F1 shows help in a box, F4 the
+                        program's own screen.  A terminal without an alternate screen, which includes the "windows" terminal type
+                        today, and a session with no terminal get the line-by-line debugger as before.
+             MESSAGE ... IMMEDIATE  Shown in a box over the alternate screen, or as lines and "Press return to continue".
+             OPTION DEBUG.REBIND.KEYS  Still accepted, no longer does anything.
+
+           A user on AccuTerm should set the terminal type to xterm or vt100: the -at types are no longer known.
+
 18 Oct 26  FILEINFO KEY 1021 AND THE PICK STYLE CALL "FILE NAME" (QM4 FIXES TAB, BATCH E).
 
              FL$WHO      FILEINFO(file, 1021) now answers as the openQM manual says FL$WHO does: the user numbers of
