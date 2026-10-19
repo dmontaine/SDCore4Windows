@@ -21,6 +21,12 @@
 *             the next character first as the mnemonic letter (without one, the first
 *             character).  A label of - is a separator.  SL.W.S1 / S2 may hold the menu and item
 *             to start on.
+*             An item's subvalue 4 holds flags: D (disabled: drawn in the 'disabled' style, skipped
+*             by the cursor keys, chosen by nothing) and C (checked: a * in the item's first cell).
+*             A SUBMENU is a menu whose title begins with > (it has no place on the bar); an item
+*             whose code is that title (>Recent, say) opens it to the right of the item, with a >
+*             at the right edge.  Right or Return opens it, Esc or Left closes it, and what is
+*             chosen in it is what $sl_menu answers.  Submenus may be three deep.
 *     draw    the bar, with the open menu's title in normal video
 *     focus   key = 1 opens the drop-down of SL.W.S1 over the text, key = 0 closes it and puts
 *             the screen under it back
@@ -49,9 +55,14 @@ $include sl.h
    equ M.TX to 13          ;* value m: the column of title m
    equ M.TM to 14          ;* value m: its mnemonic letter
    equ M.POPUP to 15       ;* 1: a pop-up menu, not a bar (see below)
+   equ M.LVL to 16         ;* how many submenus are open (0 = the menu itself)
+   equ M.TOP to 17         ;* the menu of the bar that is open (the one a submenu hangs from)
    equ M.MENUS to 19       ;* menu m is field 19 + m
+   equ M.PARENT to 110     ;* level l: the menu and item and geometry of the menu a submenu was opened from
+   equ M.PUNDER to 130     ;* level l: the screen under that menu's drop-down
 
    ret = ''
+   lvl = w<M.LVL> + 0
    brow = w<SL.W.Y> + 0
    popup = w<M.POPUP> + 0
    if popup then brow = w<SL.W.Y> - 1       ;* the drop-down starts on the row after brow
@@ -71,8 +82,14 @@ $include sl.h
          w<SL.W.FLAGS> = 'focusable' : @vm : 'visible'
          x = 1
          if popup then x = w<SL.W.X> + 1       ;* the drop-down's left edge is at SL.W.X
+         w<M.LVL> = 0
          for m = 1 to nm
             t = w<M.MENUS + m, 1>
+            if t[1, 1] = '>' then
+               w<M.TX, m> = 0                  ;* a submenu: not on the bar
+               w<M.TM, m> = ''
+               continue
+            end
             gosub mnem
             w<M.TX, m> = x
             w<M.TM, m> = mn
@@ -91,12 +108,12 @@ $include sl.h
             gosub draw.bar
             gosub draw.drop
          end else
-            gosub close.drop
+            gosub close.all
             gosub draw.bar
          end
 
       case op = 'close'
-         gosub close.drop
+         gosub close.all
          gosub draw.bar
 
       case op = 'key'
@@ -119,7 +136,7 @@ $include sl.h
          until st = 'done' or st = 'cancel'
          repeat
          code = if st = 'done' then ret<2> else ''
-         gosub close.drop
+         gosub close.all
          gosub draw.bar
          ret = code
    end case
@@ -141,26 +158,36 @@ handle.key:
    end
    ni = field(w<M.GEOM>, ':', 4)
    begin case
-      case key = 'esc' or key = 'f10'
+      case key = 'f10' or (key = 'esc' and lvl = 0)
          ret = 'cancel'
+      case key = 'esc' or (key = 'left' and lvl > 0)
+         gosub close.sub                        ;* a submenu: back to the menu it came from
       case key = 'mouse'
          gosub click.menu
-      case key = 'enter'
-         ret = 'done' : @fm : w<M.MENUS + menu, item + 1, 3>
+      case key = 'enter' or (key = 'right' and w<M.MENUS + menu, item + 1, 3>[1, 1] = '>')
+         gosub choose.item
       case key = 'down'
          gosub next.item
       case key = 'up'
          gosub prev.item
+      case lvl > 0 and key = 'right'
+         ret = 'handled'                        ;* nothing opens to the right of an ordinary item
       case popup and (key = 'left' or key = 'right')
          ret = 'unhandled'
       case key = 'left'
-         gosub close.drop
-         menu = if menu > 1 then menu - 1 else nm
+         gosub close.all
+         loop
+            menu = if menu > 1 then menu - 1 else nm
+         until w<M.MENUS + menu, 1>[1, 1] # '>'
+         repeat
          gosub open.menu
          gosub draw.bar
       case key = 'right'
-         gosub close.drop
-         menu = if menu < nm then menu + 1 else 1
+         gosub close.all
+         loop
+            menu = if menu < nm then menu + 1 else 1
+         until w<M.MENUS + menu, 1>[1, 1] # '>'
+         repeat
          gosub open.menu
          gosub draw.bar
       case key = 'home' or key = 'pgup'
@@ -172,19 +199,19 @@ handle.key:
          found = 0
          for i = 1 to ni
             t = w<M.MENUS + menu, i + 1, 1>
-            if t # '-' then
+            if t # '-' and not(index(upcase(w<M.MENUS + menu, i + 1, 4>), 'D', 1)) then
                gosub mnem
                if mn = uk then found = i ; exit
             end
          next i
          if found then
             item = found
-            ret = 'done' : @fm : w<M.MENUS + menu, item + 1, 3>
+            gosub choose.item
          end else
             ret = 'unhandled'
             for m = 1 to nm
-               if w<M.TM, m> = uk and m # menu then
-                  gosub close.drop
+               if w<M.TM, m> = uk and m # menu and lvl = 0 then
+                  gosub close.all
                   menu = m
                   gosub open.menu
                   gosub draw.bar
@@ -199,6 +226,69 @@ handle.key:
    w<SL.W.S1> = menu
    w<SL.W.S2> = item
    if w<M.OPEN> then gosub draw.drop
+   return
+
+* The current item is chosen: a disabled one does nothing, one whose code begins with > opens its submenu, any other
+* is the answer
+choose.item:
+   code = w<M.MENUS + menu, item + 1, 3>
+   begin case
+      case index(upcase(w<M.MENUS + menu, item + 1, 4>), 'D', 1)
+         ret = 'handled'
+      case code[1, 1] = '>'
+         gosub open.sub
+         ret = 'handled'
+      case 1
+         ret = 'done' : @fm : code
+   end case
+   return
+
+* Open the submenu that the code of the current item names (a menu with that title), to the right of the item
+open.sub:
+   target = 0
+   if lvl < 3 then
+      for m = 1 to nm
+         if w<M.MENUS + m, 1> = code then target = m ; exit
+      next m
+   end
+   if target = 0 then return
+   w<M.PARENT + lvl> = menu : ':' : item : ':' : w<M.GEOM>
+   w<M.PUNDER + lvl> = w<M.UNDER>
+   pdx = field(w<M.GEOM>, ':', 1)
+   pdy = field(w<M.GEOM>, ':', 2)
+   pdw = field(w<M.GEOM>, ':', 3)
+   lvl += 1
+   w<M.LVL> = lvl
+   dx = pdx + pdw - 1
+   dy = pdy + item - 1
+   menu = target
+   item = 1
+   gosub open.geom
+   return
+
+* Leave the submenu: what was under it goes back and the menu it came from is the open one again
+close.sub:
+   if lvl = 0 then return
+   gosub close.drop
+   lvl -= 1
+   w<M.LVL> = lvl
+   p = w<M.PARENT + lvl>
+   menu = field(p, ':', 1)
+   item = field(p, ':', 2)
+   w<M.GEOM> = field(p, ':', 3, 4)
+   w<M.UNDER> = w<M.PUNDER + lvl>
+   w<M.OPEN> = 1
+   w<SL.W.S1> = menu
+   w<SL.W.S2> = item
+   return
+
+* Close every drop-down that is open, the submenus first
+close.all:
+   loop
+   while lvl > 0
+      gosub close.sub
+   repeat
+   gosub close.drop
    return
 
 * A mouse event while a menu is open (ni is the number of items of the one that is).  A press of the left button on an
@@ -217,12 +307,13 @@ click.menu:
          ci = my - dy + 1
          if w<M.MENUS + menu, ci + 1, 1> # '-' then
             item = ci
-            ret = 'done' : @fm : w<M.MENUS + menu, item + 1, 3>
+            gosub choose.item
          end
       case not(popup) and my = brow
          hitm = 0
          for m = 1 to nm
             t = w<M.MENUS + m, 1>
+            if t[1, 1] = '>' then continue
             gosub mnem
             cx0 = w<M.TX, m> - 1                    ;* the column of the label's leading blank
             if mx >= cx0 and mx < cx0 + len(plain) + 2 then hitm = m ; exit
@@ -230,8 +321,8 @@ click.menu:
          if hitm = 0 then
             ret = 'cancel'
          end else
-            if hitm # menu then
-               gosub close.drop
+            if hitm # menu or lvl > 0 then
+               gosub close.all
                menu = hitm
                gosub open.menu
                gosub draw.bar
@@ -262,6 +353,7 @@ get.styles:
    call $sl_attr('barsel', bs)
    call $sl_attr('hotkey.bar', hb)
    call $sl_attr('hotkey', hu)
+   call $sl_attr('bar.disabled', da)
    return
 
 * The style codes of a label of len(lab) cells, style sa, with its mnemonic letter (cell mp + 1) in hk
@@ -277,10 +369,11 @@ draw.bar:
    atr = str(ba, sw)
    for m = 1 to nm
       t = w<M.MENUS + m, 1>
+      if t[1, 1] = '>' then continue          ;* a submenu has no place on the bar
       gosub mnem
       lab = ' ' : plain : ' '
       sa = ba ; hk = hb
-      if m = w<SL.W.S1> and w<M.OPEN> then sa = bs ; hk = hu
+      if m = w<M.TOP> and w<M.OPEN> then sa = bs ; hk = hu
       gosub label.styles
       x = w<M.TX, m>                           ;* the string position of the label's leading blank
       txt = txt[1, x - 1] : lab : txt[x + len(lab), sw]
@@ -291,8 +384,18 @@ draw.bar:
 
 * Work out the size of the drop-down of 'menu', save the screen under it and mark it open
 open.menu:
-   if w<M.OPEN> then gosub close.drop
+   if w<M.OPEN> then gosub close.all
    if menu < 1 or menu > nm then menu = 1
+   if w<M.MENUS + menu, 1>[1, 1] = '>' then menu = 1      ;* a submenu is not opened from the bar
+   w<M.TOP> = menu
+   dx = w<M.TX, menu> - 1
+   dy = brow + 1
+   gosub open.geom
+   return
+
+* Size the drop-down of 'menu' for the place dx, dy (clamped to the screen), save the screen under it, mark it open and
+* put the cursor on the first item that can be chosen
+open.geom:
    ni = dcount(w<M.MENUS + menu>, @vm) - 1
    lw = 0
    sc = 0
@@ -300,20 +403,22 @@ open.menu:
       t = w<M.MENUS + menu, i + 1, 1>
       gosub mnem
       if len(plain) > lw then lw = len(plain)
-      if len(w<M.MENUS + menu, i + 1, 2>) > sc then sc = len(w<M.MENUS + menu, i + 1, 2>)
+      shl = len(w<M.MENUS + menu, i + 1, 2>)
+      if w<M.MENUS + menu, i + 1, 3>[1, 1] = '>' and shl < 1 then shl = 1      ;* the > of a submenu
+      if shl > sc then sc = shl
    next i
    dw = lw + sc + 4 + (if sc then 2 else 0)
    if dw > sw then dw = sw
-   dx = w<M.TX, menu> - 1
    if dx + dw > sw then dx = sw - dw
-   dy = brow + 1
-   if popup and dy + ni > scr<SL.S.H> then dy = scr<SL.S.H> - ni
+   if dx < 0 then dx = 0
+   if (popup or lvl > 0) and dy + ni > scr<SL.S.H> then dy = scr<SL.S.H> - ni
    if dy < 0 then dy = 0
    call $sl_region('save', scr, dx, dy, dw, ni, under)
    w<M.UNDER> = under
    w<M.GEOM> = dx : ':' : dy : ':' : dw : ':' : ni
    w<M.OPEN> = 1
    if item < 1 or item > ni then item = 1
+   if index(upcase(w<M.MENUS + menu, item + 1, 4>), 'D', 1) or w<M.MENUS + menu, item + 1, 1> = '-' then gosub next.item
    w<SL.W.S1> = menu
    w<SL.W.S2> = item
    return
@@ -344,9 +449,13 @@ draw.drop:
       end
       gosub mnem
       sh = w<M.MENUS + menu, i + 1, 2>
+      fl = upcase(w<M.MENUS + menu, i + 1, 4>)
+      if sh = '' and w<M.MENUS + menu, i + 1, 3>[1, 1] = '>' then sh = '>'
       sa = ba ; hk = hb
+      if index(fl, 'D', 1) then sa = da ; hk = da
       if i = item then sa = bs ; hk = hu
       lab = ' ' : plain : space(dw - len(plain) - len(sh) - 2) : sh : ' '
+      if index(fl, 'C', 1) then lab = '*' : lab[2, 99999]
       gosub label.styles
       call $sl_put(scr, dx, dy + i - 1, lab, a)
    next i
@@ -358,7 +467,7 @@ next.item:
    loop
       i += 1
       if i > ni then i = 1
-   until w<M.MENUS + menu, i + 1, 1> # '-' or i = item
+   until (w<M.MENUS + menu, i + 1, 1> # '-' and not(index(upcase(w<M.MENUS + menu, i + 1, 4>), 'D', 1))) or i = item
    repeat
    item = i
    return
@@ -368,7 +477,7 @@ prev.item:
    loop
       i -= 1
       if i < 1 then i = ni
-   until w<M.MENUS + menu, i + 1, 1> # '-' or i = item
+   until (w<M.MENUS + menu, i + 1, 1> # '-' and not(index(upcase(w<M.MENUS + menu, i + 1, 4>), 'D', 1))) or i = item
    repeat
    item = i
    return

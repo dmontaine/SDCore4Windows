@@ -84,7 +84,7 @@ $include sl.h
       th.names := @fm : 'highlight' : @fm : 'bar' : @fm : 'barsel' : @fm : 'hotkey' : @fm : 'hotkey.bar'
       th.names := @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
       th.names := @fm : 'comment' : @fm : 'string' : @fm : 'constant' : @fm : 'keyword' : @fm : 'type'
-      th.names := @fm : 'preproc' : @fm : 'special' : @fm : 'error' : @fm : 'todo'
+      th.names := @fm : 'preproc' : @fm : 'special' : @fm : 'error' : @fm : 'todo' : @fm : 'bar.disabled'
    end
    names = th.names
 
@@ -148,6 +148,7 @@ set.theme:
          spec<-1> = 'hotkey.bar=,,reverse underline'
          spec<-1> = 'field=,,underline'
          spec<-1> = 'header=,,underline bold'
+         spec<-1> = 'bar.disabled=,,reverse dim'   ;* 13 Oct 26: a menu item that cannot be chosen
       case nm = 'classic'
          spec<-1> = 'desktop=white,blue,'
          spec<-1> = 'bold=white,blue,bold'
@@ -161,6 +162,7 @@ set.theme:
          spec<-1> = 'disabled=black,white,bold'
          spec<-1> = 'text=white,blue,bold'
          spec<-1> = 'header=black,cyan,'
+         spec<-1> = 'bar.disabled=blue,white,'
          gosub syntax.dark
       case nm = 'dark'
          * mono, and the syntax styles in colours that read on a dark terminal background
@@ -170,6 +172,7 @@ set.theme:
          spec<-1> = 'hotkey.bar=,,reverse underline'
          spec<-1> = 'field=,,underline'
          spec<-1> = 'header=,,underline bold'
+         spec<-1> = 'bar.disabled=,,reverse dim'
          gosub syntax.dark
       case nm = 'light'
          * the same for a light terminal background
@@ -179,6 +182,7 @@ set.theme:
          spec<-1> = 'hotkey.bar=,,reverse underline'
          spec<-1> = 'field=,,underline'
          spec<-1> = 'header=,,underline bold'
+         spec<-1> = 'bar.disabled=,,reverse dim'
          gosub syntax.light
       case nm = 'blue'
          spec<-1> = 'window=white,blue,bold'
@@ -191,6 +195,7 @@ set.theme:
          spec<-1> = 'disabled=cyan,blue,'
          spec<-1> = 'text=white,black,'
          spec<-1> = 'header=brown,black,bold'
+         spec<-1> = 'bar.disabled=blue,cyan,'
          gosub syntax.dark
       case 1
          ret = 2

@@ -18,6 +18,9 @@
 *     menus    one FIELD for each menu: its title (an & puts the letter after it first as the key
 *              that opens it), then its entries as values, each as for SCREEN MENU (label, shortcut,
 *              code as subvalues; - is a line).  An entry without a code gives its number in its menu.
+*              A fourth subvalue holds flags: D (disabled) and C (checked), as for SCREEN MENU.  A menu
+*              whose title begins with > is a submenu: it is not on the bar, and an entry whose code is
+*              that title opens it beside the entry (Right or Return opens, Esc or Left closes).
 *     row      the row of the bar, from 0 (default 0)
 *     draw     only draw the bar and return; the program calls again without DRAW to use it
 *     ret      the code of the entry chosen
