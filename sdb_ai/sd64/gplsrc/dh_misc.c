@@ -395,6 +395,15 @@ void op_settrig() {
   descr = e_stack - 3;
   k_get_file(descr);
   fvar = descr->data.fvar;
+
+  /* 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26, QM4 Fixes item 177), the hunk the first carry lost: a directory file has
+     no header to put the trigger in, so it goes into its %header% file.  Without it SET.TRIGGER on a directory file said ER_NDYN. */
+
+  if (fvar->type == DIRECTORY_FILE) {
+    process.status = dir_set_trigger(fvar, call_name, modes);
+    goto exit_op_settrig;
+  }
+
   if (fvar->type != DYNAMIC_FILE) {
     process.status = ER_NDYN;
     goto exit_op_settrig;

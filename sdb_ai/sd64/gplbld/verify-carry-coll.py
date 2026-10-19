@@ -75,6 +75,25 @@ CASES = [
      C + "c{'s'} = 'abc'\n   v = c{'s'}\n   v := 'def'\n   x = c{'s'}", "abc"),
     ("a collection held in a dimensioned array element",
      "dim t(2)\n   t(1) = collection()\n   t(1){'k'} = 'v'\n   x = t(1){'k'}", "v"),
+    # The manual: "A collection may be an element of a dimensioned array", CLIENT.DATA(CLI.NO){'NAME'}.  The rows
+    # below are for a feature that already worked (the row above), so none was run red.
+    ("...the index a variable (the manual's CLIENT.DATA(CLI.NO){'NAME'})",
+     "dim t(3)\n   i = 2\n   t(i) = collection()\n   t(i){'k'} = 'v'\n   x = t(i){'k'}", "v"),
+    ("...in a two dimensional matrix", "dim m(2,2)\n   m(1,2) = collection()\n   m(1,2){'k'} = 'w'\n   x = m(1,2){'k'}", "w"),
+    ("...with a path through levels, written both ways",
+     "dim t(2)\n   t(1) = collection()\n   t(1){'a','b'} = 'z'\n   x = t(1){'a'}{'b'}:t(1){'a/b'}", "zz"),
+    ("...two elements of the array are two collections",
+     "dim t(2)\n   t(1) = collection()\n   t(2) = collection()\n   t(1){'k'} = 'a'\n   t(2){'k'} = 'b'\n   x = t(1){'k'}:t(2){'k'}", "ab"),
+    ("...DEL, ELEMENT.EXISTS() and ENUMERATE() take it",
+     "dim t(2)\n   t(1) = collection()\n   t(1){'a'} = 1\n   t(1){'b'} = 2\n   del t(1){'a'}\n"
+     "   x = element.exists(t(1), 'a'):element.exists(t(1), 'b'):'|':change(enumerate(t(1)), @fm, '|')", "01|b"),
+    ("...INS AS puts an element in", "dim t(2)\n   t(1) = collection()\n   ins 'v' as t(1){'k'}\n   x = t(1){'k'}", "v"),
+    ("...an element passed to a subroutine is the same collection",
+     "dim t(2)\n   t(1) = collection()\n   call zzcsub1(t(1))\n   x = t(1){'k'}", "set by sub"),
+    ("...assigned to a simple variable it is another reference to the same collection",
+     "dim t(2)\n   t(1) = collection()\n   c = t(1)\n   c{'k'} = 'shared'\n   x = t(1){'k'}", "shared"),
+    ("...a collection variable stored in an element is shared, not copied",
+     "dim t(2)\n   " + C + "t(2) = c\n   c{'k'} = 'late'\n   x = t(2){'k'}", "late"),
     ("3000 elements go in sorted and come out again (the table grows and shrinks)",
      C + "for i = 1 to 3000\n   c{'k':i} = i\n   next i\n   x = dcount(enumerate(c), @fm)\n"
      "   for i = 1 to 3000 step 2\n   del c{'k':i}\n   next i\n   x := '|':dcount(enumerate(c), @fm):'|':c{'k2998'}:'|':element.exists(c, 'k2999')\n"
@@ -323,8 +342,12 @@ CASES = [
      "open 'zzcn' to g else stop 'no zzcn'\n   c = collection()\n   write c on g, 'x'", "ERR:Data cannot be converted to a string"),
     ("ERR: text that is not JSON cannot be written to a collection file", OPENF + "write 'not json' on f, 'bad'", "ERR:writing record"),
     ("ERR: nor can JSON that is only a number", OPENF + "write '5' on f, 'bad'", "ERR:writing record"),
-    ("ERR: a collection with something in it that has no JSON form cannot be written",
-     OPENF + "c = collection()\n   c{'f'} = f\n   write c on f, 'bad'", "ERR:writing record"),
+    # This row said the write must fail ("ERR:writing record").  The manual says an element a file cannot hold is stored
+    # as an SQL style null (collection files); it is the 12 Oct change to coll_record_text(), and the whole-set run
+    # found this row still asserting the old behaviour.
+    ("a collection with something in it that has no JSON form is written, the element as a null",
+     OPENF + "c = collection()\n   c{'f'} = f\n   write c on f, 'bad'\n   read r from f, 'bad' then x = jbuild(r):'|':status() else x = 'missing'",
+     "{\"f\":null}|0"),
     ("ERR: MATREAD makes no sense on a collection file", OPENF + "dim m(3)\n   c = collection()\n   write c on f, 'm1'\n   matread m from f, 'm1' else stop 'x'", "ERR:cannot be used on a data collection file"),
     ("ERR: READV of a field of a collection file", OPENF + "c = collection()\n   write c on f, 'v1'\n   readv x from f, 'v1', 1 else stop 'x'", "ERR:"),
     ("ERR: a variable that is not a collection cannot take an element", "n = 5\n   n{'a'} = 1", "ERR:not a data collection"),
@@ -426,6 +449,78 @@ QUERIES = [
 ]
 
 
+# ---- the ELEMENT keyword (openQM manual, ELEMENT) -------------------------------------------------------------------
+# A file zzce of orders shaped like the manual's example: detail is an array of collections with prodno, qty and an array
+# serial.  o3 has no detail at all and no Ship; o1 and o2 differ in case of nothing but have the capital in "Ship".
+ELEMENT_SETUP = """   execute 'DELETE.FILE zzce' capturing j0
+   execute 'CREATE.FILE zzce COLLECTION' capturing j1
+   open 'zzce' to f else stop 'no zzce'
+   write jparse('{"cust":"Acme","Ship":"Dock A","n":3,"detail":[{"prodno":"p1","qty":2,"serial":["s1","s2"]},{"prodno":"p2","qty":1,"serial":["s3"]}]}') on f, 'o1'
+   write jparse('{"cust":"Beta","Ship":"Dock B","n":10,"detail":[{"prodno":"p3","qty":5,"serial":[]}]}') on f, 'o2'
+   write jparse('{"cust":"Cargo","n":7}') on f, 'o3'
+   crt 'ELEMENT SETUP DONE'
+end
+"""
+
+# (label, command, [regexes the output must match], [regexes it must not match]).
+# THE SESSION ECHOES THE COMMAND, so a bare "Acme" in a pattern is matched by `WITH who = "Acme"` and a row passes on
+# nothing (the AS row did, on a build with no ELEMENT).  Every value is therefore anchored to the start of a line (an
+# echoed command starts with ":"), and a row that could pass on an error alone carries a pattern an error would stop.
+def ln(x):
+    """A line holding just x (leading and trailing blanks allowed)."""
+    return r"(?m)^\s*" + x + r"\s*$"
+
+
+def in_order(*xs):
+    """Lines holding just x, in that order."""
+    return r"(?ms)" + r".*?".join(r"^\s*" + x + r"\s*$" for x in xs)
+
+
+ELEMENT_QUERIES = [
+    ("ELEMENT names an element by its path, as A n names a field", "LIST zzce ELEMENT cust ID.SUP",
+     [ln("Acme"), ln("Beta"), ln("Cargo")], [r"Error|not found|can only"]),
+    ("...and the id is still the id (control)", "LIST zzce ELEMENT cust", [r"(?m)^o1\s+Acme", r"(?m)^o2\s+Beta", r"(?m)^o3\s+Cargo"], []),
+    ("the column heading is the path (a heading is padded with dots to the column width)", 'LIST zzce ELEMENT "cust" ID.SUP',
+     [in_order(r"cust\.+", "Acme")], []),
+    ("the path may be in single quotes", "LIST zzce ELEMENT 'cust' ID.SUP", [ln("Acme"), ln("Beta"), ln("Cargo")], [r"Error|not found"]),
+    ("a path keeps its case, quoted or not", 'LIST zzce ELEMENT Ship ELEMENT "Ship" ID.SUP',
+     [ln(r"Dock A\s+Dock A"), ln(r"Dock B\s+Dock B")], []),
+    ("...and a path in the wrong case is a different element (null)", "LIST zzce ELEMENT cust ELEMENT ship",
+     [r"(?m)^o1\s+Acme\s*$", r"(?m)^o2\s+Beta\s*$"], [r"Dock"]),
+    ("a path that is not there is null, not an error", 'LIST zzce ELEMENT cust ELEMENT "nosuch" ID.SUP',
+     [ln("Acme"), ln("Beta"), ln("Cargo")], [r"Error|not found"]),
+    ("a position in an array is a step of the path", 'LIST zzce ELEMENT "detail/1/prodno" ID.SUP', [ln("p1"), ln("p3")], [ln("p2")]),
+    ("the default is 10 characters left justified, so a sort puts 10 before 3 (strings)",
+     "SORT zzce ELEMENT cust ELEMENT n BY ELEMENT n ID.SUP", [in_order(r"Beta\s+10", r"Acme\s+3", r"Cargo\s+7")], []),
+    ("FMT and AS on an ELEMENT item: 5R sorts as numbers",
+     'SORT zzce ELEMENT cust ELEMENT n FMT "5R" AS num BY num ID.SUP', [in_order(r"Acme\s+3", r"Cargo\s+7", r"Beta\s+10")], []),
+    ("BY.DSND ELEMENT", "SORT zzce ELEMENT cust BY.DSND ELEMENT cust ID.SUP", [in_order("Cargo", "Beta", "Acme")], []),
+    ("WITH ELEMENT selects", 'LIST zzce ELEMENT cust WITH ELEMENT "Ship" = "Dock B"',
+     [r"(?m)^o2\s+Beta\s*$"], [r"(?m)^o1\b", r"(?m)^o3\b"]),
+    ("AS gives a name a later clause can use", 'LIST zzce ELEMENT cust AS who WITH who = "Acme"',
+     [r"(?m)^o1\s+Acme\s*$"], [r"(?m)^o2\b", r"(?m)^o3\b"]),
+    ("COL.HDG sets the heading", 'LIST zzce ELEMENT cust COL.HDG "Customer" ID.SUP',
+     [in_order(r"Customer\.+", "Acme")], [ln(r"cust\.+")]),
+    ("COUNT with WITH ELEMENT", 'COUNT zzce WITH ELEMENT "n" = 3', [r"1 record\(s\) counted"], []),
+    ("SELECT with WITH ELEMENT", 'SELECT zzce WITH ELEMENT "cust" = "Cargo"', [r"1 record\(s\) selected"], []),
+    ("SUM of an ELEMENT item", 'SUM zzce ELEMENT "n"', [r"(?m)^n\.+\s*:\s*20\s*$", r"3 record\(s\) summed"], []),
+    ("TOTAL of an ELEMENT item", 'LIST zzce ELEMENT cust TOTAL ELEMENT "n" ID.SUP', [ln("=+"), ln("20")], []),
+    ("an asterisk gives a value for each array element", 'LIST zzce ELEMENT "detail/*/prodno" ID.SUP', [in_order("p1", "p2", "p3")], []),
+    ("WITH EVERY ELEMENT tests every value of a multivalued path", 'LIST zzce ELEMENT cust WITH EVERY ELEMENT "detail/*/prodno" LIKE "p..."',
+     [r"(?m)^o1\s+Acme\s*$", r"(?m)^o2\s+Beta\s*$"], [r"(?m)^o3\b"]),
+    ("BY.EXP explodes a multivalued ELEMENT", 'LIST zzce ELEMENT cust BY.EXP ELEMENT "detail/*/prodno" ELEMENT "detail/*/prodno"',
+     [r"(?m)^o1\s+Acme\s+p1\s*$", r"(?m)^o1\s+Acme\s+p2\s*$", r"(?m)^o2\s+Beta\s+p3\s*$", r"4 value\(s\) listed"], []),
+    ("...and a record without the array has none", 'LIST zzce ELEMENT cust ELEMENT "detail/*/prodno"',
+     [r"(?m)^o3\s+Cargo\s*$", r"(?m)^o1\s+Acme\s+p1\s*$", ln("p2")], [r"Error|not found"]),
+    ("WITH ELEMENT on a multivalued path matches any value", 'LIST zzce ELEMENT cust WITH ELEMENT "detail/*/prodno" = "p3"',
+     [r"(?m)^o2\s+Beta\s*$"], [r"(?m)^o1\b", r"(?m)^o3\b"]),
+    ("two asterisks give a subvalue for each serial number", 'LIST zzce ELEMENT "detail/*/serial/*" ID.SUP',
+     [r"(?sm)^\s*s1\b.*\bs2\b.*\bs3\b"], []),
+    ("ELEMENT on an ordinary file is refused", "LIST zzcn ELEMENT name", [r"ELEMENT can only be used with a data collection file"], []),
+    ("ELEMENT with no path is refused", "LIST zzce ELEMENT", [r"ELEMENT path not found where expected"], []),
+]
+
+
 def run_queries(box, sysd, names):
     say("\n--- the query processor on a collection file -------------------------------------")
     setup = os.path.join(sysd, "bp", "zzcoqs")
@@ -519,7 +614,19 @@ def run_queries(box, sysd, names):
         text = sess(box, cmd)
         ok = all(re.search(rx, text) for rx in must) and not any(re.search(rx, text) for rx in mustnot)
         row(label, ok, "wanted %r, not %r; output: %s" % (must, mustnot, text[-600:]))
-    sess(box, "DELETE.FILE zzcq", "DELETE.FILE zzcq2", "DELETE.FILE zzcn", "DELETE.FILE zzcx")
+
+    say("\n--- the ELEMENT keyword ------------------------------------------------------------")
+    with open(os.path.join(sysd, "bp", "zzcoel"), "w") as f:
+        f.write(ELEMENT_SETUP)
+    names.append("zzcoel")
+    out = sess(box, "DELETE.FILE zzce", "CREATE.FILE zzce COLLECTION", "BASIC bp zzcoel", "RUN bp zzcoel")
+    row("setup: the ELEMENT file was made", "ELEMENT SETUP DONE" in out, out[-400:])
+    if "ELEMENT SETUP DONE" in out:
+        for label, cmd, must, mustnot in ELEMENT_QUERIES:
+            text = sess(box, cmd)
+            ok = all(re.search(rx, text) for rx in must) and not any(re.search(rx, text) for rx in mustnot)
+            row(label, ok, "wanted %r, not %r; output: %s" % (must, mustnot, text[-600:]))
+    sess(box, "DELETE.FILE zzcq", "DELETE.FILE zzcq2", "DELETE.FILE zzcn", "DELETE.FILE zzcx", "DELETE.FILE zzce")
 
 
 def main():

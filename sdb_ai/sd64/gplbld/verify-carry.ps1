@@ -30,9 +30,10 @@
     The first run on a fresh install is expected to find some; add them, with the
     reason, rather than loosening a row.  $Known is read from verify-carry-known.psd1
     beside this script, so a row is named there and the script is not edited.  That file
-    also lists the suites that cannot run at all in an ordinary account (NotRun: 24 of the
-    93, each with the Linux mechanism that stopped it); they are printed as NOT RUN, and a
-    run that skipped any is never reported as the whole carry.
+    also lists the suites that must not run in an ordinary account (NotRun, each with the
+    Linux mechanism that stopped it - and two that print on the Windows default printer);
+    they are printed as NOT RUN, and a run that skipped any is never reported as the whole
+    carry.
 
     ***NOT CARRIED, AND WHY.***  Seven Linux suites are left out because a suite that
     cannot start exits 2 and would make the whole step COULD NOT RUN: dbgui, footpause,

@@ -245,6 +245,9 @@ NON_WRITERS = {
     # gplbld/verify-internalgate.ps1 STARTS internal sessions with and WITHOUT a marker on purpose
     # (legs A, C and D measure the refusal), so it controls the marker explicitly, leg by leg.
     "verify-internalgate.ps1": "the witness controls the marker itself; legs A, C, D need it absent",
+    # 18 Oct 26: a byte copy of Linux's sandbox-sys-b2.py.  Most of it runs; the few rows that start `sd -internal` write NO marker, so
+    # the gate refuses them ("This command needs an elevated session") and verify-carry-known.psd1 Rows names each as N/A.
+    "verify-carry-sys-b2.py": "a Linux suite copy; its internal rows write no marker and are refused, named N/A in verify-carry-known.psd1",
 }
 # gplsrc/sd.c is outside gplbld and holds the "-INTERNAL" argument PARSER, not a session start.
 

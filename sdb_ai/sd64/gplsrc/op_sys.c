@@ -725,7 +725,10 @@ void op_system() {
         USER_ENTRY* puptr;
 
         descr->data.value = 0;
-        if ((pu > 0) && (pu <= sysseg->max_users) && ((puptr = UserPtr(pu)) != NULL) && (puptr->uid == pu))
+        /* 18 Oct 26 Windows port - the bound is the highest user NUMBER (hi_user_no), as for key 1053, not the number of cells
+           (max_users): a user number is up to USERPOOL, 1023 by default, and the first run found a phantom answering 0 for its
+           parent 694 on a system of 20 cells.  Told to Linux, whose suite never sees a number above NUMUSERS. */
+        if ((pu > 0) && (pu <= sysseg->hi_user_no) && ((puptr = UserPtr(pu)) != NULL) && (puptr->uid == pu))
           descr->data.value = pu;
       }
       break;

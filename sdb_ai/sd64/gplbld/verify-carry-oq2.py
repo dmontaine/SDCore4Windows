@@ -142,6 +142,16 @@ def sess(box, *cmds):
     return out.split(":TERM 200,9999", 1)[-1]
 
 
+def isess(box, *cmds):
+    """A session in INTERNAL mode (sd -internal), where the restricted statements compile: the BTREE ones (ADD, MODIFY, REWIND,
+    SCAN, FIND) are internal-only, so a row about them cannot use sess().  The sandbox must be running (sess() starts it)."""
+    env = dict(os.environ, SD_CONFIG=os.path.join(box, "sd.conf"))
+    body = "\nTERM 200,9999\n" + "".join(c + "\n" for c in cmds) + "OFF\n"
+    p = subprocess.run([os.path.join(box, "sys", "bin", "sd"), "-internal"], input=body, cwd=os.path.join(box, "sys"), env=env,
+                       capture_output=True, text=True, errors="replace", timeout=180)
+    return ANSI.sub("", p.stdout + p.stderr).split(":TERM 200,9999", 1)[-1]
+
+
 def write(path, text):
     with open(path, "w") as f:
         f.write(text)
@@ -158,7 +168,8 @@ def main():
     if "--build" in sys.argv:
         if os.path.exists(box) and os.listdir(box):
             bail("%s is not empty" % box)
-        r = subprocess.run([sys.executable, TOOL, box, "all"], capture_output=True, text=True, errors="replace", timeout=900)
+        r = subprocess.run([sys.executable, TOOL, box, "all"], capture_output=True, text=True, errors="replace", timeout=900,
+                           env=dict(os.environ, SDBOX_NEWVOC_MODS="1"))
         if "[FAIL]" in r.stdout or r.returncode != 0 or "[PASS] THIRD.COMPILE" not in r.stdout:
             bail("the sandbox build did not pass:\n" + r.stdout[-800:])
         say("sandbox-oq2: built, bootstrap passed")
@@ -200,6 +211,8 @@ def main():
                 got = m.group(1) if m else None
                 row("%s: wanted %r" % (label, want), got == want, "got %r" % got if m else "no output")
     finally:
+        # the VOC pointers of the scratch directory files
+        sess(box, *["DELETE.FILE zzoqd%02d" % i for i in range(len(CASES) + 1)])
         for p in made:
             if os.path.isdir(p):
                 shutil.rmtree(p)
@@ -207,8 +220,6 @@ def main():
                     shutil.rmtree(p + ".out")
             elif os.path.exists(p):
                 os.remove(p)
-        # the VOC pointers of the scratch directory files
-        sess(box, *["DELETE.FILE zzoqd%02d" % i for i in range(len(CASES) + 1)])
         for f in os.listdir(os.path.join(sysd, "bp.out")):
             if f.startswith("zzoq"):
                 os.remove(os.path.join(sysd, "bp.out", f))
@@ -563,8 +574,10 @@ def run_verbs(box, sysd, bp):
         write(trg, "subroutine zzoqtr(mode, file, id, rec, ctl)\n   return\nend\n")
         out = sess(box, "BASIC bp zzoqtr", "CATALOG bp zzoqtr LOCAL", "CREATE.FILE zzoqtd DIRECTORY",
                    "SET.TRIGGER zzoqtd zzoqtr PRE.WRITE", "LIST.TRIGGERS zzoqtd")
-        row("321 (a finding, no change): SD refuses a trigger on a directory file, so LIST.TRIGGERS has none to show",
-            has(out, r"Dynamic file required") and not has(out, r"^zzoqtd\s+\S+\s+PRE"), out[-500:])
+        # 16 Oct 26 (QM4 Fixes item 177): this row said SD refuses a trigger on a directory file ("Dynamic file required") and that
+        # LIST.TRIGGERS had none to show.  A directory file takes a trigger now (sandbox-dirtrig.py has the rows), so it is listed.
+        row("321: a trigger on a directory file is accepted (QM4 Fixes 177), and LIST.TRIGGERS lists it with its mode",
+            not has(out, r"Dynamic file required") and has(out, r"(?m)^zzoqtd\s+zzoqtr\s+PRE\.WRITE"), out[-500:])
         sess(box, "DELETE.CATALOG zzoqtr LOCAL", "DELETE.FILE zzoqtd")
 
         # --- CREATE.FILE COMMENT, MULTIFILE and a relative PATHNAME (383, 522, 278) ----------------------------
@@ -1016,6 +1029,16 @@ def run_verbs(box, sysd, bp):
         row("390: the PHANTOM statement starts a phantom (a user number comes back and it makes its log)",
             has(out, r"^PS\[1/1\]"), out[-300:])
 
+        # --- the log name of the PHANTOM statement may be a variable (351, 14 Oct 26) -----------------------------
+        sess(box, "DELETE.FILE zzcd3", "CREATE.FILE zzcd3 DIRECTORY")
+        write(probe, ("   lg = 'zzcd3'\n   phantom 'NO.MSG LOG ':lg:' LIST.FILES' capturing o\n   uid = @system.return.code\n"
+                      "   sleep 6\n   crt 'PV[':(uid > 0):']'\nend\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        zl = [n for n in os.listdir(os.path.join(sysd, "zzcd3"))] if os.path.isdir(os.path.join(sysd, "zzcd3")) else []
+        row("351: PHANTOM 'LOG ':variable starts a phantom whose log goes in the directory file the variable names",
+            has(out, r"^PV\[1\]") and any(n.startswith("PH") for n in zl), out[-300:] + repr(zl))
+        sess(box, "DELETE.FILE zzcd3")
+
         # --- REBUILD.ALL.INDICES (58) and REDO (188) -------------------------------------------------------
         write(probe, ("   execute 'CREATE.FILE zzrb' capturing j1\n   open 'zzrb' to f else stop\n"
                       "   open 'DICT', 'zzrb' to dv else stop\n"
@@ -1377,6 +1400,231 @@ def run_verbs(box, sysd, bp):
         text = sess(box, "TERM 120,12", "SP.VIEW zzoqsw big", "", "\x1bzq")
         row("SP.VIEW Esc-Z goes back a page", has(text, r"top = 9,") and text.rfind("top = 1,") > text.find("top = 9,"), text[-300:])
         sess(box, "DELETE.FILE zzoqsw", "DELETE.FILE zzoqsx")
+
+        # --- Batch A: 501 (NEWVOC.MODS), 251 (PDEBUG @variable), 94 (qproc IN/NOT.IN), 371 (SORT functions) ----------
+        # 501: NEWVOC.MODS in @SDSYS is copied into new/updated accounts and SDSYS during bbproc
+        # bbproc runs only in bootstrap pass 1, so a box built here (--build) holds a newvoc.mods from before that pass
+        if "--build" in sys.argv:
+            write(probe, ("program zzoqp1\n"
+                          "   openpath @sdsys:@ds:'voc' to vf else stop 'no sdsys voc'\n"
+                          "   read r from vf, 'ZZ.BBPROC.MODS' then crt 'BBM=':r<2> else crt 'BBM=none'\n"
+                          "end\n"))
+            out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+            row("501: bbproc copied @SDSYS/newvoc.mods into SDSYS's own VOC in bootstrap pass 1",
+                has(out, r"BBM=bbproc newvoc\.mods test entry"), out[-300:])
+        else:
+            say("  [SKIP] 501: bbproc row needs a sandbox built with --build (newvoc.mods must exist before pass 1)")
+        nvmods_dir = os.path.join(sysd, "newvoc.mods")
+        os.makedirs(nvmods_dir, exist_ok=True)
+        with open(os.path.join(nvmods_dir, "ZZ.NVMOD.TEST"), "w", encoding="latin-1") as f:
+            f.write("X\nCustom NEWVOC.MODS test entry\n")
+        out = sess(box, "UPDATE.ACCOUNTS", "", "CT VOC ZZ.NVMOD.TEST")
+        row("501: UPDATE.ACCOUNTS copies records from @SDSYS/newvoc.mods into VOC",
+            has(out, r"Custom NEWVOC\.MODS test entry"), out[-300:])
+        sess(box, "DELETE VOC ZZ.NVMOD.TEST")
+        shutil.rmtree(nvmods_dir, ignore_errors=True)
+
+        # 251: Phantom debugger (@variable evaluated in debugged phantom process rather than PDEBUG client)
+        probeph = os.path.join(sysd, "bp", "zzoqph")
+        made.append(probeph)
+        write(probeph, ("   @user0 = 'PHANTOM.USER0.VAL'\n"
+                        "   @user.return.code = 9876\n"
+                        "   debug\n"
+                        "   x = 1\n"
+                        "end\n"))
+        write(probe, ("program zzoqp1\n"
+                      "   deffun atvar(name) calling '!atvar'\n"
+                      "   crt 'ATVAR.NEW=':atvar('UID'):'/':atvar('CRTHIGH'):'/':atvar('SEQNO')\n"
+                      "   @user0 = 'CLIENT.USER0.VAL'\n"
+                      "   @user.return.code = 111\n"
+                      "   execute 'PDEBUG RUN bp zzoqph'\n"
+                      "   crt 'CLIENT.AFTER=':@user0:'/':@user.return.code\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqph DEBUGGING", "BASIC bp zzoqp1", "RUN bp zzoqp1",
+                   "   /@USER0", "/@USER.RETURN.CODE", "/@TTY", "RUN")
+        row("251: !atvar resolves newer @variables (@UID, @CRTHIGH, @SEQNO)",
+            has(out, r"ATVAR\.NEW=\d+/\d+/"), out[-400:])
+        row("251: phantom debugger displays @USER0 from the phantom, not the client",
+            has(out, r'PHANTOM\.USER0\.VAL') and not has(out, r'@USER0.*CLIENT\.USER0\.VAL'), out[-400:])
+        row("251: phantom debugger displays @USER.RETURN.CODE and @TTY from the phantom",
+            has(out, r"9876") and has(out, r'phantom') and has(out, r"CLIENT\.AFTER=CLIENT\.USER0\.VAL/111"), out[-400:])
+
+        # 94: Query processor IN and NOT.IN operators (saved lists, "file id", NO.CASE, EVERY, WHEN)
+        write(probe, ("   execute 'CREATE.FILE zzoqin' capturing j1\n"
+                      "   open 'zzoqin' to f else stop 'no zzoqin'\n"
+                      "   open 'DICT zzoqin' to df else stop 'no dict zzoqin'\n"
+                      "   write 'D':@fm:'1':@fm:'':@fm:'Color':@fm:'10L':@fm:'S' to df, 'color'\n"
+                      "   write 'D':@fm:'2':@fm:'':@fm:'Tags':@fm:'12L':@fm:'M':@fm:'TASSOC' to df, 'tags'\n"
+                      "   write 'RED':@fm:'alpha':@vm:'beta' to f, 'r1'\n"
+                      "   write 'blue':@fm:'beta':@vm:'gamma' to f, 'r2'\n"
+                      "   write 'GREEN':@fm:'alpha' to f, 'r3'\n"
+                      "   write 'YELLOW':@fm:'delta' to f, 'r4'\n"
+                      "   write 'RED':@fm:'BLUE':@fm:'alpha':@vm:'beta' to f, 'allow'\n"
+                      "   open '$SAVEDLISTS' to slf else stop 'no $SAVEDLISTS'\n"
+                      "   write 'RED':@fm:'GREEN' to slf, 'zzoq.colors'\n"
+                      "   write 'alpha':@fm:'beta' to slf, 'zzoq.tags'\n"
+                      "   crt 'IN FILE MADE'\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("94 CONTROL: test file and saved lists created", has(out, r"IN FILE MADE"), out[-200:])
+        out = sess(box, "LIST zzoqin WITH color IN zzoq.colors @ID")
+        row("94: field IN listname selects records whose field is in $SAVEDLISTS",
+            has(out, r"\br1\b") and has(out, r"\br3\b") and not has(out, r"\br2\b") and not has(out, r"\br4\b"), out[-300:])
+        out = sess(box, "LIST zzoqin WITH color NOT.IN zzoq.colors @ID")
+        row("94: field NOT.IN listname selects records whose field is not in $SAVEDLISTS",
+            has(out, r"\br2\b") and has(out, r"\br4\b") and not has(out, r"\br1\b") and not has(out, r"\br3\b"), out[-300:])
+        out = sess(box, 'LIST zzoqin WITH color IN "zzoqin allow" @ID')
+        row('94: field IN "filename id" case-sensitive matches RED but not blue',
+            has(out, r"\br1\b") and not has(out, r"\br2\b") and not has(out, r"\br3\b"), out[-300:])
+        out = sess(box, 'LIST zzoqin WITH color IN NO.CASE "zzoqin allow" @ID')
+        row('94: field IN NO.CASE "filename id" matches both RED and blue',
+            has(out, r"\br1\b") and has(out, r"\br2\b") and not has(out, r"\br3\b"), out[-300:])
+        out = sess(box, "LIST zzoqin WITH EVERY tags IN zzoq.tags @ID")
+        row("94: WITH EVERY mvfield IN listname requires all values to be in list",
+            has(out, r"\br1\b") and has(out, r"\br3\b") and not has(out, r"\br2\b") and not has(out, r"\br4\b"), out[-300:])
+        out = sess(box, "LIST zzoqin tags WHEN tags IN zzoq.tags")
+        row("94: WHEN mvfield IN listname filters displayed multivalues",
+            has(out, r"r2\s+beta") and not has(out, r"gamma") and not has(out, r"delta"), out[-300:])
+        # audit 16 Oct: in / not.in with the list name left out said "To:" (message 3520, COPYP's prompt); it is message 11400 now
+        # (a bare "IN" at the end of the sentence never gets this far: the clause reader says "Field name missing in selection clause")
+        out = sess(box, 'LIST zzoqin WITH color IN ""')
+        row("94: in with an empty list name says so (message 11400, not 3520's 'To:')",
+            has(out, r"A saved list name, or a quoted file and record id, is needed after in or not\.in") and not has(out, r"(?m)^To:"), out[-300:])
+        out = sess(box, 'LIST zzoqin WITH color NOT.IN ""')
+        row("94: and so does not.in", has(out, r"A saved list name, or a quoted file and record id, is needed after in or not\.in"), out[-300:])
+        out = sess(box, "LIST zzoqin WITH color IN zzoq.nosuchlist @ID")
+        row("94: a saved list that is not there says Record \"zzoq.nosuchlist\" not found (message 3521; the docs name it)",
+            has(out, r'Record "zzoq\.nosuchlist" not found'), out[-300:])
+        sess(box, "DELETE.FILE zzoqin", "DELETE.LIST zzoq.colors", "DELETE.LIST zzoq.tags")
+
+        # 371: SORT(), SORTADD, SORTCLEAR, SORTDATA(), SORTNEXT()
+        write(probe, ("$include keys.h\n"
+                      "   * 1. Single-key right-aligned sort with data and VARTYPE check\n"
+                      "   s1 = sort(1, SRT$RIGHT + SRT$DATA)\n"
+                      "   vt = vartype(s1)\n"
+                      "   sortadd s1, '10', 'ten'\n"
+                      "   sortadd s1, '2', 'two'\n"
+                      "   sortadd s1, '100', 'hundred'\n"
+                      "   d1 = sortdata(s1)\n"
+                      "   st1 = status()\n"
+                      "   crt 'S1=':vt:'|':st1:'|':change(d1, @fm, ',')\n"
+                      "   * 2. SORTNEXT with scalar key and max.items on SORTDATA\n"
+                      "   sortclear s1\n"
+                      "   s2 = sort(1, SRT$LEFT + SRT$NOCASE + SRT$UNIQUE)\n"
+                      "   sortadd s2, 'banana'\n"
+                      "   sortadd s2, 'Apple'\n"
+                      "   sortadd s2, 'apple'\n"
+                      "   sortadd s2, 'Cherry'\n"
+                      "   v1 = sortnext(s2, k1) ; st.n1 = status()\n"
+                      "   v2 = sortnext(s2)     ; st.n2 = status()\n"
+                      "   v3 = sortnext(s2, k3) ; st.n3 = status()\n"
+                      "   v4 = sortnext(s2, k4) ; st.n4 = status()\n"
+                      "   crt 'S2=':v1:'/':k1:'/':st.n1:'|':v2:'/':st.n2:'|':v3:'/':k3:'/':st.n3:'|':st.n4\n"
+                      "   * 3. Multi-key sort with MAT flags, MAT keys, and concurrent sort sessions\n"
+                      "   dim flg(2), kv(2), kout(2)\n"
+                      "   flg(1) = SRT$LEFT ; flg(2) = SRT$RIGHT + SRT$DESCENDING\n"
+                      "   s3 = sort(2, mat flg)\n"
+                      "   s4 = sort(1, SRT$COMPOUND)\n"
+                      "   kv(1) = 'B' ; kv(2) = '5'  ; sortadd s3, mat kv, 'B5'\n"
+                      "   kv(1) = 'A' ; kv(2) = '3'  ; sortadd s3, kv, 'A3'\n"
+                      "   kv(1) = 'A' ; kv(2) = '20' ; sortadd s3, mat kv, 'A20'\n"
+                      "   for n = 1 to 5\n"
+                      "      sortadd s4, 'AB':(6 - n):'CD'\n"
+                      "   next n\n"
+                      "   r3 = ''\n"
+                      "   loop\n"
+                      "      item = sortnext(s3, mat kout)\n"
+                      "   until status()\n"
+                      "      r3<-1> = kout(1):':':kout(2)\n"
+                      "   repeat\n"
+                      "   c1 = sortdata(s4, 2) ; sc1 = status()\n"
+                      "   c2 = sortdata(s4, 2) ; sc2 = status()\n"
+                      "   c3 = sortdata(s4, 2) ; sc3 = status()\n"
+                      "   crt 'S3=':change(r3, @fm, ',')\n"
+                      "   crt 'S4=':change(c1, @fm, ','):'(':sc1:')|':change(c2, @fm, ','):'(':sc2:')|':change(c3, @fm, ','):'(':sc3:')'\n"
+                      "   sortclear s3\n"
+                      "   sortclear s4\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371: SORT(1, SRT$RIGHT + SRT$DATA), VARTYPE=VT$SORT (20), SORTADD and SORTDATA()",
+            has(out, r"S1=20\|3\|two,ten,hundred"), out[-400:])
+        row("371: SORT with SRT$NOCASE + SRT$UNIQUE and SORTNEXT(sortvar {, key})",
+            has(out, r"S2=/Apple/0\|banana/0\|/Cherry/0\|1"), out[-400:])
+        row("371: multi-key SORT(2, MAT flags), SORTADD with MAT keys, and SORTNEXT(..., MAT kout)",
+            has(out, r"S3=A:20,A:3,B:5"), out[-400:])
+        row("371: concurrent sort session with SRT$COMPOUND and chunked SORTDATA(sortvar, max.items)",
+            has(out, r"S4=AB1CD,AB2CD\(2\)\|AB3CD,AB4CD\(2\)\|AB5CD\(1\)"), out[-400:])
+        # 371 (audit, 16 Oct): SORTCLEAR empties a sort and it can be filled again; a sort variable is refused by a BT statement
+        # (it is a BTREE header underneath); SORTADD on a variable that is not a sort is refused
+        write(probe, ("$include keys.h\n"
+                      "   s1 = sort(1, SRT$LEFT)\n"
+                      "   sortadd s1, 'b'\n"
+                      "   sortadd s1, 'a'\n"
+                      "   sortclear s1\n"
+                      "   d0 = sortdata(s1) ; st0 = status()\n"
+                      "   sortadd s1, 'z'\n"
+                      "   sortadd s1, 'y'\n"
+                      "   d1 = sortdata(s1)\n"
+                      "   crt 'CLR=[':d0:']/':st0:'/':change(d1, @fm, ',')\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371: SORTCLEAR empties a sort and it can be used again", has(out, r"CLR=\[\]/0/y,z"), out[-300:])
+        # The BTREE statements are internal-only, so these programs are compiled and run by `sd -internal` (the first version of this
+        # row used an ordinary session, got "Unrecognised statement" and tested nothing).  A real BTree is the control for each
+        # statement: it must not be refused, or a refusal of the sort variable proves only that the statement was wrong.
+        # (label, the statement, what a real BTree needs first).  MODIFY works on the current element, so its control finds one first;
+        # the sort variable gets the bare statement, which the guard refuses before anything else is looked at.
+        bt_stmts = [("ADD key,data TO", "   add 'x', 'y' to {V}\n", ""), ("ADD matrix TO", "   mk(1) = 'x'\n   add mk to {V}\n", ""),
+                    ("MODIFY", "   modify {V}, 'z'\n", "   r = find({V}, 'x')\n"), ("REWIND", "   rewind {V}\n", ""),
+                    ("SCAN(var)", "   r = scan({V})\n", ""), ("SCAN(var, matrix)", "   r = scan({V}, mk)\n", ""),
+                    ("FIND(var, key)", "   r = find({V}, 'x')\n", "")]
+        for label, stmt, first in bt_stmts:
+            body = ("$internal\n   dim m(1), mk(1)\n   m(1) = 0\n   mk(1) = 'k'\n" "   b = btree(1, m)\n   add 'x', 'y' to b\n"
+                    + first.replace("{V}", "b") + stmt.replace("{V}", "b") + "   crt 'BT.CONTROL.OK'\nend\n")
+            write(probe, body)
+            out = isess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+            row("371 CONTROL: %s a real BTree is accepted" % label, has(out, r"BT\.CONTROL\.OK") and not has(out, r"Not a BTree"), out[-300:])
+            body = ("$internal\n   dim m(1), mk(1)\n   m(1) = 0\n   mk(1) = 'k'\n   s = sort(1, 0)\n"
+                    + stmt.replace("{V}", "s") + "   crt 'BT.NOT.REFUSED'\nend\n")
+            write(probe, body)
+            out = isess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+            row("371: %s given a sort variable is refused (Not a BTree)" % label, has(out, r"Not a BTree") and not has(out, r"BT\.NOT\.REFUSED"),
+                out[-300:])
+        # the messages (audit 16 Oct): 11398 for a variable that is not a sort, 11399 for the 256th sort, 11400 for in / not.in with no list
+        write(probe, ("   notsort = 'abc'\n"
+                      "   sortadd notsort, 'x'\n"
+                      "   crt 'SORTADD.NOT.REFUSED'\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371: SORTADD on a variable that is not a sort is refused, as 'Not a sort variable'",
+            not has(out, r"SORTADD\.NOT\.REFUSED") and has(out, r"Not a sort variable") and not has(out, r"SORTDATA executed"), out[-300:])
+        write(probe, ("   v = 12\n"
+                      "   z = sortnext(v)\n"
+                      "   crt 'SORTNEXT.NOT.REFUSED'\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371: SORTNEXT on a variable that is not a sort says 'Not a sort variable' too",
+            not has(out, r"SORTNEXT\.NOT\.REFUSED") and has(out, r"Not a sort variable"), out[-300:])
+        write(probe, ("   dim sv(300)\n"
+                      "   for i = 1 to 300\n"
+                      "      sv(i) = sort(1, 0)\n"
+                      "      last = i\n"
+                      "   next i\n"
+                      "   crt 'SORT.256TH.NOT.REFUSED ':last\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371: the 256th sort open at once is refused with 'Too many sorts are open', not 'Insufficient memory'",
+            not has(out, r"SORT\.256TH\.NOT\.REFUSED") and has(out, r"Too many sorts are open") and not has(out, r"Insufficient memory for sort element"),
+            out[-300:])
+        write(probe, ("   for i = 1 to 1000\n"
+                      "      s = sort(1, 0)\n"
+                      "      sortadd s, i\n"
+                      "   next i\n"
+                      "   crt 'SORT.OVERWRITE.OK'\n"
+                      "end\n"))
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        row("371 CONTROL: 1000 sorts in turn in one variable (an overwritten sort frees its slot) are not refused",
+            has(out, r"SORT\.OVERWRITE\.OK") and not has(out, r"Too many sorts"), out[-300:])
     finally:
         sess(box, "DELETE.FILE zzoqfd", "DELETE.FILE zzoqc1", "DELETE.FILE zzoqc2", "DELETE.FILE zzoqld", "DELETE.FILE zzoqix",
              "DELETE.LIST zzoqla", "DELETE.LIST zzoqlb", "DELETE.LIST zzoqlc", "DELETE.LIST zzoqld2")
@@ -1384,7 +1632,7 @@ def run_verbs(box, sysd, bp):
         for p in made:
             if os.path.exists(p):
                 os.remove(p)
-        for f in ("zzoqp1",):
+        for f in ("zzoqp1", "zzoqph"):
             p = os.path.join(sysd, "bp.out", f)
             if os.path.exists(p):
                 os.remove(p)

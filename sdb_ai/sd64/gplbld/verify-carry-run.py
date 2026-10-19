@@ -103,6 +103,9 @@ def emulate(rest, kw):
             except OSError:
                 pass
         text = raw.decode("utf-8", "replace").replace("\r\n", "\n")
+        # sd.exe echoes a piped command twice: ":BASICbpzz1" for the keystrokes, a CR, then ":BASIC bp zz1" redrawn.  Linux's
+        # sd shows the second form on a line of its own, and suites find a command by `^:BASIC bp zz1$`; a bare CR is a line end.
+        text = re.sub(r"\r(?!\n)", "\n", text)
         if pw:
             text = text.replace(pw, "********")
         out = ANSI.sub("", text) + "\nexit %d\n" % p.returncode

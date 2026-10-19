@@ -133,6 +133,11 @@ def main():
         ditem("tctl", "IF F1 > 5 THEN 'big' ELSE 'small'")
         ditem("t182", "TRANS(zzd2b, F3, QA, 'X')")
         ditem("t182c", "TRANS(zzd2b, F3, QI, 'X')")
+        # 16 Oct 26, ref 104: field 8 of an A item that begins IF is an implied A-correlative.  The control is the same
+        # expression with the type letter and a semicolon in front (it always worked); the third item is a plain conversion code.
+        prog("zzd2tia", "A\n1\n\ntia\n8L\nS\n\nIF 1 > \"5\" THEN \"big\" ELSE \"small\"\n")
+        prog("zzd2tib", "A\n1\n\ntib\n8L\nS\n\nA;IF 1 > \"5\" THEN \"big\" ELSE \"small\"\n")
+        prog("zzd2tic", "A\n3\n\ntic\n8L\nS\n\nMCU\n")
         prog("zzd2b1", "FOUND\n")
         prog("zzd2b2", "OTHER\n")
         prog("zzd2qa", "A\n1\n\nQA\n8L\nS\n")             # A item, no correlative, field 1
@@ -145,7 +150,7 @@ def main():
         for n in (1, 2, 3):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2f%d,f%d" % (n, n))
         cmds.append("COPY FROM BP TO DICT zzd2a zzd2hy,hy-x")
-        for t in ("t36a", "t36b", "t48", "t547", "t564", "thy", "tsub", "tctl", "t182", "t182c"):
+        for t in ("t36a", "t36b", "t48", "t547", "t564", "thy", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2%s,%s" % (t, t))
         out = sess(box, *cmds, quiet=True)
         copied = len(re.findall(r"(?m)^1 record\(s\) copied\.", out))
@@ -178,6 +183,11 @@ def main():
 
         say("\n--- leg 6: divide by zero in a dictionary expression (ref 48, kernel op_arith.c) -----------")
         check("THE ROW: F1/F2 with F2 = 0 is zero; with F2 = 2 it is the quotient", "t48", ("0", "0.5"))
+
+        say("\n--- leg 7: an IF expression in field 8 of an A item is an implied A-correlative (ref 104) --------")
+        check("CONTROL: A;IF ... always worked", "tib", ("big", "small"))
+        check("THE ROW: IF ... with no A; in front gives the same", "tia", ("big", "small"))
+        check("CONTROL: a plain conversion code in field 8 is still a conversion code (MCU on field 3)", "tic", ("ABC", "XYZ"))
     finally:
         for n in made:
             for d in ("bp", "bp.out"):
