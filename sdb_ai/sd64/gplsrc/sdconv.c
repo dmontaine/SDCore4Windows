@@ -20,6 +20,10 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ * 18 Oct 26 Windows port - from Linux c42aa13 (18 Oct 26): A hashed file is refused with a message and exit status 1 (owner's choice "A", 18 Oct): the call that converted it was
+ *               commented out in a warning clean-up and the branch ran the compiled-program converter on a directory, so the command
+ *               printed nothing, changed nothing and exited 0.  The hashed-file conversion code below is left as it was, unused; this SD
+ *               cannot open a big-endian hashed file, and the owner works on Linux and Windows only (both little-endian).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -59,6 +63,7 @@
 #define MAX_SUBFILES (AK_BASE_SUBFILE + MAX_INDICES)
 
 static bool file_found = FALSE;
+static bool file_refused = FALSE; /* A hashed file was named: sdconv does not convert those */
 static int fu[MAX_SUBFILES];   /* File variables */
 static DH_HEADER header;       /* Primary subfile header */
 static DH_HEADER oheader;      /* Overflow subfile header */
@@ -166,7 +171,7 @@ int main(int argc, char* argv[]) {
     arg++;
   }
 
-  status = 0;
+  status = (file_refused) ? 1 : 0;
 
 exit_sdconv:
   return status;
@@ -176,6 +181,7 @@ usage:
   printf("Options:\n");
   printf("   -B      Force conversion to big-endian\n");
   printf("   -L      Force conversion to little-endian\n");
+  printf("\nOnly compiled programs are converted; a hashed file is refused (exit status 1).\n");
 
   goto exit_sdconv;
 }
@@ -190,11 +196,9 @@ void convert_file(char* fn) {
   strcpy(filename, fn);
 
   if (is_dh_file(filename)) {
-    if (file_found)
-      printf("\n\n");
-    file_found = TRUE;
-    //status = process_file(filename); value is never used, so don't assign it.
-    process_object_file(filename);
+    /* 18 Oct 26: refused, not converted (see the history line).  The old code ran process_object_file() on the directory. */
+    printf("%s is a hashed file: sdconv converts compiled programs only, nothing was changed\n", filename);
+    file_refused = TRUE;
   } else if (is_object_file(filename)) {
     if (file_found)
       printf("\n\n");
