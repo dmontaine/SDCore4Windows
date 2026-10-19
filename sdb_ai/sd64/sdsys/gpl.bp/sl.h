@@ -17,7 +17,16 @@
 *   SL.S.W, SL.S.H   size of the screen being used
 *   SL.S.CLIP        x0, y0, x1, y1 as values: nothing is drawn outside it
 *   SL.S.SHADOW      value r + 1 is the text of terminal row r (what the program believes is shown)
-*   SL.S.RATTR       value r + 1 is 'R' if row r is in reverse video
+*   SL.S.RATTR       value r + 1 is 'R' if row r is in reverse video (SED's screen: whole rows only)
+*   SL.S.ATTRS       value r + 1 is one style code per cell of row r (a screen the library owns; null on
+*                    SED's, which only knows RATTR).  Codes: n normal, r reverse, u underline, x reverse
+*                    and underline; a colour theme adds more.  $sl_attr turns a style name into a code.
+*   SL.S.CUR         the library's cursor: value 1 is x, value 2 is y (where the program's next output goes)
+*   SL.S.CURON       1 when the cursor is shown
+*   SL.S.OWNED       1 for the screen SCREEN OPEN made; 0 for a transient blank one
+*
+* Everything the library draws goes through $sl_put, which writes this shadow as well as the terminal, so a
+* pop-up can save what is under it and put it back.
 *
 $define SL.W.TYPE      1
 $define SL.W.X         2
@@ -35,3 +44,7 @@ $define SL.S.H         2
 $define SL.S.CLIP      3
 $define SL.S.SHADOW    4
 $define SL.S.RATTR     5
+$define SL.S.ATTRS     6
+$define SL.S.CUR       7
+$define SL.S.CURON     8
+$define SL.S.OWNED     9

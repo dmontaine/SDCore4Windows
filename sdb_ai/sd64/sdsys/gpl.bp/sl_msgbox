@@ -143,26 +143,28 @@ show:
 paint:
    call $sl_attr('normal', na)
    call $sl_attr('highlight', ha)
-   display na :
    topl = '+' : str('-', bwid - 2) : '+'
-   if title # '' then topl = '+- ' : title : ' ' : str('-', bwid - 6 - len(title)) : '+'
-   display @(bx, by) : topl[1, bwid] :
+   if title # '' then topl = '+- ' : title : ' ' : str('-', bwid - 5 - len(title)) : '+'
+   call $sl_put(scr, bx, by, topl[1, bwid], na)
    for l = 1 to nl
-      display @(bx, by + l) : fmt('| ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : '|' :
+      call $sl_put(scr, bx, by + l, fmt('| ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : '|', na)
    next l
-   display @(bx, by + nl + 1) : '|' : space(bwid - 2) : '|' :
-   display @(bx, by + nl + 3) : '|' : space(bwid - 2) : '|' :
-   display @(bx, by + nl + 4) : '+' : str('-', bwid - 2) : '+' :
-   display @(bx, by + nl + 2) : '|' : space(bwid - 2) : '|' :
-   x = bx + int((bwid - bw) / 2) + 1
+   call $sl_put(scr, bx, by + nl + 1, '|' : space(bwid - 2) : '|', na)
+   call $sl_put(scr, bx, by + nl + 3, '|' : space(bwid - 2) : '|', na)
+   call $sl_put(scr, bx, by + nl + 4, '+' : str('-', bwid - 2) : '+', na)
+   * The button row: the buttons are laid over the blank box row, the selected one in highlight
+   txt = '|' : space(bwid - 2) : '|'
+   atr = str(na, bwid)
+   x = int((bwid - bw) / 2) + 2                  ;* string position of the first button
    for b = 1 to nb
-      if b = sel then
-         display @(x, by + nl + 2) : ha : cap<b> : na :
-      end else
-         display @(x, by + nl + 2) : cap<b> :
-      end
-      x += len(cap<b>) + 2
+      ln = len(cap<b>)
+      txt = txt[1, x - 1] : cap<b> : txt[x + ln, bwid]
+      c = na
+      if b = sel then c = ha
+      atr = atr[1, x - 1] : str(c, ln) : atr[x + ln, bwid]
+      x += ln + 2
    next b
+   call $sl_put(scr, bx, by + nl + 2, txt, atr)
    return
 
 unpaint:

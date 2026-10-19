@@ -1,0 +1,43 @@
+* SCREEN_CLOSE
+* The subroutine that SCREEN CLOSE calls: the library gives the screen back.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN CLOSE
+*
+*   is compiled into
+*
+*   call !screen_close(ret, status)
+*
+*   The shadow is forgotten, the cursor is shown, the terminal is put back to the normal style and the
+*   cursor is moved to the first column of the last line, where the next prompt will be.  The screen
+*   is not cleared: SCREEN CLEAR first if that is wanted.  Doing it twice, or without SCREEN OPEN, does
+*   nothing but the last part.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_close(ret, status)
+$catalog !screen_close
+
+$include sl.h
+
+   ret = ''
+   status = 0
+   call $sl_sgr('n', sq)
+   display @(-31) : sq : @(0, @crthigh - 1) :
+   scr = ''
+   call $sl_scr('close', scr)
+
+   return
+end
+
+* END-CODE

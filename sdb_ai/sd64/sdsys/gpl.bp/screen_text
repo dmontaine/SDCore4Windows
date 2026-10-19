@@ -1,0 +1,59 @@
+* SCREEN_TEXT
+* The subroutine that SCREEN TEXT calls: put a line of text on the screen.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN TEXT string {AT x,y} {ATTR style} {WIDTH n}
+*
+*   is compiled into
+*
+*   call !screen_text(string, x, y, attr, width, ret, status)
+*
+*     string   one line; a mark character shows as a dot
+*     x y      the cell of its first character, from 0.  Left out, the text goes where the library's
+*              cursor is (after the last SCREEN TEXT, or where SCREEN CURSOR AT put it)
+*     attr     a style: normal, reverse, underline (default normal)
+*     width    the text is made exactly this wide: cut if longer, padded with blanks if shorter
+*
+*   The text is drawn and recorded in the shadow, and the cursor is left after it.  Text that runs
+*   past the right edge is cut off; it does not wrap.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_text(string, x, y, attr, width, ret, status)
+$catalog !screen_text
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+
+   if x = '' then x = scr<SL.S.CUR, 1>
+   if y = '' then y = scr<SL.S.CUR, 2>
+   line = string
+   if width # '' then
+      * exactly this wide: FMT would fold a long line (a text mark), so cut and pad by hand
+      line = line : space(width)
+      line = line[1, width]
+   end
+   call $sl_attr(attr, code)
+   call $sl_put(scr, x + 0, y + 0, line, code)
+
+   scr<SL.S.CUR> = (x + len(line)) : @vm : y
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE

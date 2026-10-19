@@ -1,0 +1,37 @@
+* SL_SGR
+* Screen library, theme: what to DISPLAY to switch the terminal to a style code.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_sgr(code, seq)
+*
+*     code  a style code from $sl_attr: n normal, r reverse, u underline, x reverse and underline
+*     seq   returned: the terminal's own strings (SD's @(-13) and friends, so terminfo decides),
+*           first switching both off and then the ones the code needs, so the result does not
+*           depend on what the terminal was doing before.  An unknown code gives n's.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_sgr(code, seq)
+$catalog $sl_sgr
+
+   begin case
+      case code = 'r' ; seq = @(-16) : @(-13)
+      case code = 'u' ; seq = @(-14) : @(-15)
+      case code = 'x' ; seq = @(-13) : @(-15)
+      case 1 ; seq = @(-14) : @(-16)
+   end case
+
+   return
+end
+
+* END-CODE

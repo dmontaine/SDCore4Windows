@@ -1,0 +1,63 @@
+* SCREEN_CLEAR
+* The subroutine that SCREEN CLEAR calls: blank the screen or a rectangle of it.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN CLEAR {AT x,y} {SIZE w,h} {ATTR style}
+*
+*   is compiled into
+*
+*   call !screen_clear(x, y, w, h, attr, ret, status)
+*
+*     (none)   the whole screen is cleared and the library's cursor goes to 0,0
+*     x y      the left column and top row of the rectangle, from 0 (default 0)
+*     w h      its width and height (default: to the right and bottom edges)
+*     attr     the style the blank cells are given (default normal); the whole-screen form ignores it
+*
+*   The shadow is made to match.  The cursor is left where it was, except in the whole-screen form.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_clear(x, y, w, h, attr, ret, status)
+$catalog !screen_clear
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+
+   if x = '' and y = '' and w = '' and h = '' then
+      display @(-1) :
+      for r = 0 to scr<SL.S.H> - 1
+         scr<SL.S.SHADOW, r + 1> = space(scr<SL.S.W>)
+         scr<SL.S.ATTRS, r + 1> = str('n', scr<SL.S.W>)
+      next r
+      scr<SL.S.CUR> = 0 : @vm : 0
+   end else
+      if x = '' then x = 0
+      if y = '' then y = 0
+      if w = '' then w = scr<SL.S.W> - x
+      if h = '' then h = scr<SL.S.H> - y
+      call $sl_attr(attr, code)
+      for r = 0 to h - 1
+         call $sl_put(scr, x + 0, y + r, space(w), code)
+      next r
+   end
+
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE

@@ -1,0 +1,68 @@
+* SCREEN_CURSOR
+* The subroutine that SCREEN CURSOR calls: place, show or hide the cursor.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN CURSOR {AT x,y} {ON} {OFF}
+*
+*   is compiled into
+*
+*   call !screen_cursor(x, y, on, off, ret, status)
+*
+*     x y    where the cursor goes, from 0; it is kept inside the screen
+*     on     shows the cursor
+*     off    hides it (when both are given, off wins)
+*
+*   The library puts the cursor back at this place, shown or hidden as set here, after each command
+*   that draws, so text and dialogues do not leave it wherever they finished.  Without SCREEN OPEN
+*   the place and the state are forgotten at once, but the cursor is moved and shown or hidden now.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_cursor(x, y, on, off, ret, status)
+$catalog !screen_cursor
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+
+   given = (x # '' or y # '' or on # '' or off # '')
+   if x # '' or y # '' then
+      if x = '' then x = scr<SL.S.CUR, 1>
+      if y = '' then y = scr<SL.S.CUR, 2>
+      x += 0 ; y += 0
+      if x < 0 then x = 0
+      if y < 0 then y = 0
+      if x > scr<SL.S.W> - 1 then x = scr<SL.S.W> - 1
+      if y > scr<SL.S.H> - 1 then y = scr<SL.S.H> - 1
+      scr<SL.S.CUR> = x : @vm : y
+   end
+   if on # '' then scr<SL.S.CURON> = 1
+   if off # '' then scr<SL.S.CURON> = 0
+
+   call $sl_scr('put', scr)
+   if given and not(scr<SL.S.OWNED>) then
+      * a transient screen keeps nothing, so do it now
+      if scr<SL.S.CURON> then
+         display @(-31) : @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) :
+      end else
+         display @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) : @(-32) :
+      end
+   end
+   status = 0
+
+   return
+end
+
+* END-CODE

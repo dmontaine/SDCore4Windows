@@ -132,8 +132,7 @@ paint:
    if p < pan then pan = p
    w<SL.W.S2> = pan
    call $sl_attr('highlight', ha)
-   call $sl_attr('normal', na)
-   display @(0, row) : ha : fmt(prompt : text[pan, fw], sw : 'L') : na :
+   call $sl_put(scr, 0, row, fmt(prompt : text[pan, fw], sw : 'L'), ha)
    display @(len(prompt) + p - pan, row) :
    return
 

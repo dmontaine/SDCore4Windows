@@ -1,0 +1,106 @@
+* SL_PUT
+* Screen library, draw layer: write text to the terminal AND to the shadow of it.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_put(scr, x, y, text, attr)
+*
+*     scr    the screen context (sl.h).  Its SHADOW row (and its ATTRS row, if it has them) is changed
+*            to match what is drawn, so scr must be the caller's own variable: it is changed in place.
+*     x y    the cell of the first character, from 0 as in @(x, y)
+*     text   one line.  A mark character (field mark and the like) is shown as a dot: the shadow is
+*            a dynamic array.
+*     attr   either one style code (n r u x, see $sl_attr) for all of text, or a string as long as
+*            text with one code per character
+*
+*   Anything outside the screen, or outside SL.S.CLIP if the context has one, is not drawn and not
+*   recorded.  The terminal is left in style n afterwards.  The cursor is left after the text, and
+*   the context's own cursor (SL.S.CUR) is not touched: that is the program's, and the commands put
+*   it back when they have finished.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_put(scr, x, y, text, attr)
+$catalog $sl_put
+
+$include sl.h
+
+   n = len(text)
+   if n = 0 then return
+   sw = scr<SL.S.W> + 0
+   sh = scr<SL.S.H> + 0
+   if y < 0 or y >= sh then return
+
+   * The style of every cell
+   if len(attr) = 1 then
+      cells = str(attr, n)
+   end else
+      cells = attr : str('n', n)
+      cells = cells[1, n]
+   end
+   text = convert(@fm : @vm : @sm : @tm : char(255), '.....', text)
+
+   * Clip to the screen and to the clip rectangle
+   x0 = 0 ; x1 = sw - 1
+   cl = scr<SL.S.CLIP>
+   if cl # '' then
+      if y < cl<1, 2> or y > cl<1, 4> then return
+      if cl<1, 1> > x0 then x0 = cl<1, 1>
+      if cl<1, 3> < x1 then x1 = cl<1, 3>
+   end
+   if x < x0 then
+      cut = x0 - x
+      text = text[cut + 1, n]
+      cells = cells[cut + 1, n]
+      x = x0
+      n = len(text)
+   end
+   if x + n - 1 > x1 then
+      n = x1 - x + 1
+      text = text[1, n]
+      cells = cells[1, n]
+   end
+   if n < 1 then return
+
+   * The shadow
+   row = scr<SL.S.SHADOW, y + 1>
+   if len(row) < sw then row := space(sw - len(row))
+   scr<SL.S.SHADOW, y + 1> = row[1, x] : text : row[x + n + 1, sw]
+   ar = scr<SL.S.ATTRS, y + 1>
+   if ar # '' then
+      if len(ar) < sw then ar := str('n', sw - len(ar))
+      scr<SL.S.ATTRS, y + 1> = ar[1, x] : cells : ar[x + n + 1, sw]
+   end
+
+   * The terminal: the cell, then each run of one style
+   out = @(x, y)
+   last = 'n'
+   i = 1
+   loop while i <= n do
+      c = cells[i, 1]
+      j = i
+      loop while j < n and cells[j + 1, 1] = c do j += 1 repeat
+      call $sl_sgr(c, sq)
+      out := sq : text[i, j - i + 1]
+      last = c
+      i = j + 1
+   repeat
+   if last # 'n' then
+      call $sl_sgr('n', sq)
+      out := sq
+   end
+   display out :
+
+   return
+end
+
+* END-CODE

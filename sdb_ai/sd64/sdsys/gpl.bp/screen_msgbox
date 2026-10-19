@@ -25,7 +25,8 @@
 *     status    0 when a button was chosen, 1 when not: THEN is taken on 0, ELSE on 1
 *
 *   Arguments are passed by value by the statement.  The box is drawn by $sl_msgbox on the
-*   context $sl_scr gives; what was under it is put back when it closes.
+*   context $sl_scr gives; what was under it is put back when it closes, from the shadow of what the
+*   library has drawn (SCREEN OPEN, SCREEN TEXT ...), or as blanks if there is none.
 *
 * END-DESCRIPTION
 *
@@ -56,6 +57,7 @@ $include sl.h
 
    call $sl_msgbox('init', w, scr, '', r)
    call $sl_msgbox('run', w, scr, '', r)
+   call $sl_scr('put', scr)
 
    ret = r
    status = if r > 0 then 0 else 1

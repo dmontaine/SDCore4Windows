@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): The owned screen: open / put / close, per-cell styles, the cursor.
 * 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): New (the spike: SCREEN MSGBOX).
 * END-HISTORY
 *
@@ -11,14 +12,19 @@
 *
 *   call $sl_scr(op, scr)
 *
-*     get    scr is the screen context (sl.h) the library is to use.  Until SCREEN OPEN has been
-*            done it is a blank one of the terminal's size, made afresh on every call: a pop-up
-*            such as a message box can then put back only blanks, where the program had text.
-*     open   keeps a context of the terminal's size, blank, from now on.  (Not built yet.)
+*     get    scr is the screen context (sl.h) the library is to use.  Until SCREEN OPEN has been done
+*            it is a blank one of the terminal's size, made afresh on every call and not kept
+*            (SL.S.OWNED 0): a pop-up such as a message box can then put back only blanks, where the
+*            program had text.  After SCREEN OPEN it is the kept one (SL.S.OWNED 1).
+*     put    stores scr back as the kept context if there is one, and puts the terminal's cursor where
+*            the context says it is (SL.S.CUR), shown or hidden as SL.S.CURON says.  Nothing to do
+*            for a transient context.
+*     open   makes the kept context: the terminal's size, every cell blank and style n, the cursor at
+*            0,0 and shown.  scr returns it.  The terminal is not touched.
 *     close  forgets it.
 *
-*   The routines of the SCREEN statement ask for the context here so that the program never
-*   handles one.  SED builds its own and calls the widget routines directly.
+*   The routines of the SCREEN statement ask for the context here and hand it back with put, so
+*   the program never handles one.  SED builds its own and calls the widget routines directly.
 *
 * END-DESCRIPTION
 *
@@ -46,25 +52,41 @@ $include sl.h
             scr = blank.scr
          end
 
-      case op = 'close'
-         ctx = ''
-         ctx.open = 0
+      case op = 'put'
+         if ctx.open then
+            ctx = scr
+            if scr<SL.S.CURON> then
+               display @(-31) : @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) :
+            end else
+               display @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) : @(-32) :
+            end
+         end
 
       case op = 'open'
          gosub blank
+         blank.scr<SL.S.OWNED> = 1
          ctx = blank.scr
          ctx.open = 1
+         scr = ctx
+
+      case op = 'close'
+         ctx = ''
+         ctx.open = 0
    end case
 
    return
 
 blank:
-   * A context of the terminal's size, every row blank
+   * A context of the terminal's size, every cell blank and style n
    blank.scr = ''
    blank.scr<SL.S.W> = @crtwide
    blank.scr<SL.S.H> = @crthigh
+   blank.scr<SL.S.CUR> = 0 : @vm : 0
+   blank.scr<SL.S.CURON> = 1
+   blank.scr<SL.S.OWNED> = 0
    for r = 0 to @crthigh - 1
       blank.scr<SL.S.SHADOW, r + 1> = space(@crtwide)
+      blank.scr<SL.S.ATTRS, r + 1> = str('n', @crtwide)
    next r
    return
 end

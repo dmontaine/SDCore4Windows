@@ -508,15 +508,26 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    * SCREEN verbs (12 Oct 26 dm, the screen library).  SCREEN.NAMES is the list of verbs and SCREEN.DEFS
    * (same order) says, for each: the catalogued subroutine the statement calls, how many positional
-   * values follow the verb, and the keyword clauses it takes as KEYWORD:n (n values follow the keyword).
+   * values follow the verb, and the keyword clauses it takes as KEYWORD:n (n values follow the keyword)
+   * or KEYWORD:F (a flag: no value follows, the subroutine is given 1 if it was written).
    * The subroutine is called with the positional values, then the keyword values in the order given
-   * here (null for a clause the program left out), then the RETURNING variable, then a status that
-   * is 0 when the user finished normally and 1 when the dialogue was cancelled (or no terminal).
+   * here (null for a clause the program left out; a two-value keyword such as AT is two arguments),
+   * then the RETURNING variable, then a status that is 0 when the user finished normally and 1 when
+   * the dialogue was cancelled (or no terminal).
    * A statement not listed here is a compile error, so a verb is added in both places and in the
    * subroutine's argument list; test-screencmd-units.py checks the three agree.
 
    screen.names = "MSGBOX"
    screen.defs = "!screen_msgbox":@vm:1:@vm:"TITLE:1":@sm:"BUTTONS:1":@sm:"DEFAULT:1"
+   screen.names<-1> = "OPEN"    ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2"
+   screen.names<-1> = "CLOSE"   ; screen.defs<-1> = "!screen_close":@vm:0
+   screen.names<-1> = "CLEAR"   ; screen.defs<-1> = "!screen_clear":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"ATTR:1"
+   screen.names<-1> = "TEXT"    ; screen.defs<-1> = "!screen_text":@vm:1:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1"
+   screen.names<-1> = "BOX"     ; screen.defs<-1> = "!screen_box":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1":@sm:"ATTR:1":@sm:"FILL:F"
+   screen.names<-1> = "CURSOR"  ; screen.defs<-1> = "!screen_cursor":@vm:0:@vm:"AT:2":@sm:"ON:F":@sm:"OFF:F"
+   screen.names<-1> = "REFRESH" ; screen.defs<-1> = "!screen_refresh":@vm:0
+   screen.names<-1> = "SIZE"    ; screen.defs<-1> = "!screen_size":@vm:0
+   screen.names<-1> = "KEY"     ; screen.defs<-1> = "!screen_key":@vm:0:@vm:"TIMEOUT:1"
 
    * Reserved names
    * This list starts out as the list of names that are reserved in all
@@ -8940,6 +8951,7 @@ st.screen:
    * The keywords of this verb, and the first hidden variable of each one's values
 
    scr.kwnames = ""
+   scr.kwflag = ""
    scr.kwcount = ""
    scr.kwslot = ""
    scr.nslots = 0
@@ -8948,7 +8960,12 @@ st.screen:
    for scr.k = 1 to scr.nkw
       scr.kw = field(scr.kws, @sm, scr.k)
       scr.kwnames<scr.k> = field(scr.kw, ":", 1)
-      scr.kwcount<scr.k> = field(scr.kw, ":", 2) + 0
+      scr.kwflag<scr.k> = (field(scr.kw, ":", 2) = "F")        ;* a flag: no value follows, the slot gets 1
+      if scr.kwflag<scr.k> then
+         scr.kwcount<scr.k> = 1
+      end else
+         scr.kwcount<scr.k> = field(scr.kw, ":", 2) + 0
+      end
       scr.kwslot<scr.k> = scr.nslots + 1
       scr.nslots += scr.kwcount<scr.k>
       reserved.names<2, -1> = scr.kwnames<scr.k>
@@ -8978,13 +8995,19 @@ st.screen:
       end
       scr.given<scr.k> = @true
       gosub get.token                         ;* Skip the keyword
-      for scr.j = 1 to scr.kwcount<scr.k>
-         if scr.j > 1 then gosub check.comma
-         n = 299 + scr.kwslot<scr.k> + scr.j - 1 ; gosub emit.temp.ref
-         gosub expr
-         if err then return
+      if scr.kwflag<scr.k> then
+         n = 299 + scr.kwslot<scr.k> ; gosub emit.temp.ref
+         opcode.byte = OP.LD1 ; gosub emit.simple
          opcode.byte = OP.STOR ; gosub emit.simple
-      next scr.j
+      end else
+         for scr.j = 1 to scr.kwcount<scr.k>
+            if scr.j > 1 then gosub check.comma
+            n = 299 + scr.kwslot<scr.k> + scr.j - 1 ; gosub emit.temp.ref
+            gosub expr
+            if err then return
+            opcode.byte = OP.STOR ; gosub emit.simple
+         next scr.j
+      end
    repeat
 
    * The keyword values, in table order; the null string for a keyword not written

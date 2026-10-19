@@ -1,0 +1,62 @@
+* SCREEN_REFRESH
+* The subroutine that SCREEN REFRESH calls: repaint the terminal from the shadow.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN REFRESH {RETURNING v}
+*
+*   is compiled into
+*
+*   call !screen_refresh(ret, status)
+*
+*   Clears the terminal and draws every row of the shadow again: for a program that has written to the
+*   terminal behind the library's back, or after the user redrew the screen.  If the terminal is not
+*   the size it was when SCREEN OPEN was done, the library starts again with a blank screen of the new
+*   size and RETURNING holds resized, so that the program draws everything again; otherwise it holds
+*   null.  Without SCREEN OPEN there is no shadow: nothing is drawn and the status is 1.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_refresh(ret, status)
+$catalog !screen_refresh
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+   if not(scr<SL.S.OWNED>) then return
+
+   if scr<SL.S.W> # @crtwide or scr<SL.S.H> # @crthigh then
+      scr = ''
+      call $sl_scr('open', scr)
+      display @(-1) :
+      ret = 'resized'
+   end else
+      display @(-1) :
+      shadow = scr<SL.S.SHADOW>
+      attrs = scr<SL.S.ATTRS>
+      for r = 0 to scr<SL.S.H> - 1
+         t = shadow<1, r + 1>
+         if trim(t) # '' or index(attrs<1, r + 1>, 'r', 1) or index(attrs<1, r + 1>, 'x', 1) or index(attrs<1, r + 1>, 'u', 1) then
+            call $sl_put(scr, 0, r, t, attrs<1, r + 1>)
+         end
+      next r
+   end
+
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE

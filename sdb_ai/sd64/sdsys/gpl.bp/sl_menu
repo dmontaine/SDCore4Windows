@@ -202,33 +202,36 @@ mnem:
    end
    return
 
-* Write plain at the cursor with its mnemonic letter underlined; sa is the attribute to go back to
-put.label:
-   call $sl_attr('hotkey', ha)
-   call $sl_attr('hotkey.end', he)
-   display plain[1, mp - 1] : ha : plain[mp, 1] : he : sa : plain[mp + 1, 99999] :
+* Styles: the bar's, the selected item's, and the mnemonic letter's on each of them
+get.styles:
+   call $sl_attr('bar', ba)
+   call $sl_attr('barsel', bs)
+   call $sl_attr('hotkey.bar', hb)
+   call $sl_attr('hotkey', hu)
+   return
+
+* The style codes of a label of len(lab) cells, style sa, with its mnemonic letter (cell mp + 1) in hk
+label.styles:
+   a = str(sa, len(lab))
+   a = a[1, mp] : hk : a[mp + 2, 99999]
    return
 
 draw.bar:
-   call $sl_attr('bar', ba)
-   call $sl_attr('normal', na)
-   display @(0, brow) : ba : space(sw) :
+   gosub get.styles
+   txt = space(sw)
+   atr = str(ba, sw)
    for m = 1 to nm
       t = w<M.MENUS + m, 1>
       gosub mnem
-      if m = w<SL.W.S1> and w<M.OPEN> then
-         sa = na
-         display @(w<M.TX, m> - 1, brow) : na : ' ' :
-         gosub put.label
-         display ' ' : ba :
-      end else
-         sa = ba
-         display @(w<M.TX, m> - 1, brow) : ' ' :
-         gosub put.label
-         display ' ' :
-      end
+      lab = ' ' : plain : ' '
+      sa = ba ; hk = hb
+      if m = w<SL.W.S1> and w<M.OPEN> then sa = bs ; hk = hu
+      gosub label.styles
+      x = w<M.TX, m>                           ;* the string position of the label's leading blank
+      txt = txt[1, x - 1] : lab : txt[x + len(lab), sw]
+      atr = atr[1, x - 1] : a : atr[x + len(lab), sw]
    next m
-   display na :
+   call $sl_put(scr, 0, brow, txt, atr)
    return
 
 * Work out the size of the drop-down of 'menu', save the screen under it and mark it open
@@ -275,22 +278,21 @@ draw.drop:
    dy = field(w<M.GEOM>, ':', 2)
    dw = field(w<M.GEOM>, ':', 3)
    ni = field(w<M.GEOM>, ':', 4)
-   call $sl_attr('bar', ba)
-   call $sl_attr('normal', na)
+   gosub get.styles
    for i = 1 to ni
       t = w<M.MENUS + menu, i + 1, 1>
       if t = '-' then
-         display @(dx, dy + i - 1) : ba : str('-', dw) :
+         call $sl_put(scr, dx, dy + i - 1, str('-', dw), ba)
          continue
       end
       gosub mnem
       sh = w<M.MENUS + menu, i + 1, 2>
-      sa = if i = item then na else ba
-      display @(dx, dy + i - 1) : sa : ' ' :
-      gosub put.label
-      display sa : space(dw - len(plain) - len(sh) - 2) : sh : ' ' :
+      sa = ba ; hk = hb
+      if i = item then sa = bs ; hk = hu
+      lab = ' ' : plain : space(dw - len(plain) - len(sh) - 2) : sh : ' '
+      gosub label.styles
+      call $sl_put(scr, dx, dy + i - 1, lab, a)
    next i
-   display na :
    display @(dx + 1, dy + item - 1) :
    return
 

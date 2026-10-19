@@ -1,0 +1,35 @@
+* SCREEN_SIZE
+* The subroutine that SCREEN SIZE calls: the size of the terminal.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN SIZE RETURNING v
+*
+*   is compiled into
+*
+*   call !screen_size(ret, status)
+*
+*   ret is the width, a field mark, the height, in character cells as the terminal is now
+*   (@CRTWIDE and @CRTHIGH), whether or not SCREEN OPEN has been done.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_size(ret, status)
+$catalog !screen_size
+
+   ret = @crtwide : @fm : @crthigh
+   status = 0
+
+   return
+end
+
+* END-CODE

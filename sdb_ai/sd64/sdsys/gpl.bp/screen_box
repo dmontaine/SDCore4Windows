@@ -1,0 +1,72 @@
+* SCREEN_BOX
+* The subroutine that SCREEN BOX calls: draw a rectangle with a border.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN BOX {AT x,y} {SIZE w,h} {TITLE t} {ATTR style} {FILL}
+*
+*   is compiled into
+*
+*   call !screen_box(x, y, w, h, title, attr, fill, ret, status)
+*
+*     x y      the top left corner, from 0 (default 0)
+*     w h      the width and height, border included (default: to the right and bottom edges); at
+*              least 2 by 2, else ELSE and nothing is drawn
+*     title    shown in the top border, cut to fit
+*     attr     the style of the border (and of the inside with FILL); default normal
+*     fill     1 blanks the inside; without it the inside is left as it is
+*
+*   The border is + - |.  The library's cursor is not moved.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_box(x, y, w, h, title, attr, fill, ret, status)
+$catalog !screen_box
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   call $sl_scr('get', scr)
+
+   if x = '' then x = 0
+   if y = '' then y = 0
+   x += 0 ; y += 0
+   if w = '' then w = scr<SL.S.W> - x
+   if h = '' then h = scr<SL.S.H> - y
+   if w < 2 or h < 2 then return
+
+   call $sl_attr(attr, code)
+   topl = '+' : str('-', w - 2) : '+'
+   if title # '' then
+      t = title[1, w - 6]
+      if len(t) > 0 then topl = '+- ' : t : ' ' : str('-', w - 5 - len(t)) : '+'
+   end
+   topl = topl[1, w]
+   call $sl_put(scr, x, y, topl, code)
+   for r = 1 to h - 2
+      if fill # '' then
+         call $sl_put(scr, x, y + r, '|' : space(w - 2) : '|', code)
+      end else
+         call $sl_put(scr, x, y + r, '|', code)
+         call $sl_put(scr, x + w - 1, y + r, '|', code)
+      end
+   next r
+   call $sl_put(scr, x, y + h - 1, '+' : str('-', w - 2) : '+', code)
+
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE

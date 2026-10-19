@@ -1,0 +1,53 @@
+* SCREEN_OPEN
+* The subroutine that SCREEN OPEN calls: the library takes the screen.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN OPEN {CLEAR} {NOCURSOR} {MINSIZE w,h} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_open(clear, nocursor, minw, minh, ret, status)
+*
+*     clear      1 clears the terminal.  Without it the library takes the screen as it is and BELIEVES
+*                it blank: a pop-up will put back blanks over whatever the program printed earlier.
+*     nocursor   1 hides the cursor (SCREEN CURSOR ON shows it again)
+*     minw minh  the least size accepted; a smaller terminal gives ELSE and the screen is not taken
+*     status     0 taken; 1 not: a phantom or other session with no terminal, or too small a terminal
+*
+*   From now on the library keeps a shadow of everything it draws (SCREEN TEXT, BOX, a dialogue ...),
+*   so that a pop-up over it can put it back, and SCREEN REFRESH can repaint it.  Output the program
+*   writes with PRINT or CRT is not in the shadow.  SCREEN CLOSE gives the screen back.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_open(clear, nocursor, minw, minh, ret, status)
+$catalog !screen_open
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then return                        ;* a phantom has no terminal
+   if minw # '' and @crtwide < minw then return
+   if minh # '' and @crthigh < minh then return
+
+   call $sl_scr('open', scr)
+   if clear # '' then display @(-1) :
+   if nocursor # '' then scr<SL.S.CURON> = 0
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE
