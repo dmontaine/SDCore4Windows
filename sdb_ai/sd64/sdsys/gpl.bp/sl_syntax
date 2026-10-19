@@ -1,0 +1,670 @@
+* SL_SYNTAX
+* Screen library, syntax colour: which language a record is written in, and the style of every character of a line.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 5170cd0 (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_syntax(op, a, b, c, d, ret)
+*
+*   op 'detect'  a = a file name (or a path), b = a record id, c = the first line of the record.
+*                ret = the name of the language, or null.  The file name is tried first, against every
+*                language, then the record id, then the first line, so SYSCOM's sl.h is SD BASIC and
+*                not C.  A path is cut to its last part.
+*        'index'  a = a language name; ret = its number, 0 if there is none.
+*        'list'   ret = the names of the languages, field by field; those a site added come first.
+*        'define' a = a name, b = rules (see below); ret = null if they are good and the language is
+*                 now known (a rule set of that name is replaced), else the first fault, with its line.
+*        'line'   a = a language number, b = a line of text, c = the state the line starts in (0 for the
+*                 first line, else the d of the line before); ret = one style code per character of the
+*                 line (sl.h); d = the state the line ends in.
+*        'state'  the same without the styles (ret is null): the cheap way to find the state at the top
+*                 of the screen.
+*        'errors' ret = the faults found in the definitions that came from &sed.syntax&.
+*
+*   THE RULES.  A language is a list of lines, each a rule of one kind, its words separated by blanks.
+*   The first word is the kind (a line that begins with # is a comment):
+*
+*     file <glob> ...      names of the file (or the last part of the path) the language is for; * is any text
+*     record <glob> ...    the same for the record id
+*     first <glob> ...     the same for the first line of the record
+*     nocase               keywords are matched whatever their case (give it before any words line)
+*     ident <chars>        characters, besides letters and digits, that make up a name
+*     line <style> <text> {bol} {word} {whole} {blank}
+*                          from <text> to the end of the line
+*     mark <style> <text> {bol} {word} {whole} {blank}
+*                          the text alone
+*     region <style> <start> <end> {esc=<c>} {bol} {word} {span}
+*                          from <start> to <end>; esc is the character that makes the next one ordinary;
+*                          the region ends with the line unless it has span (then the next line starts in it)
+*     words <style> <word> ...      keywords
+*     number <style>       names that begin with a digit
+*     label <style>        a name and a colon at the very start of the line
+*
+*   bol: <text> must be the first thing on the line; word: it must follow a blank or begin the line;
+*   whole: what follows it is not part of a name; blank: what follows it is a blank or the end of line.
+*   Styles: comment string constant keyword type preproc special error todo (normal for none).
+*   Where two rules start at the same place the one given first wins, so list the longer text first.
+*
+*   The built-in languages are in $sl_syndef.  A site can add its own, or replace one, with a record in the
+*   file &sed.syntax& whose id is the name of the language and whose fields are the lines of the rules.
+*   A language is fast because it never looks at a character it does not have to: it finds the next place
+*   a comment, a string or a marked text can begin with INDEX, and cuts the code between into names with
+*   CONVERT and REMOVE, one lookup in a table of keywords for each.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_syntax(op, a, b, c, d, ret)
+$catalog $sl_syntax
+
+$include sl.h
+
+   common /slsyn/ sy.ver, sy.names, sy.rules, sy.gf, sy.gr, sy.g1, sy.errs, sy.cur,
+                  cu.nocase, cu.dfrom, cu.dto, cu.nop, cu.ostr, cu.osty, cu.okind, cu.oflg, cu.oend, cu.oesc,
+                  cu.kw, cu.numsty, cu.labsty, cu.words
+
+   $define F.BOL    1
+   $define F.WORD   2
+   $define F.WHOLE  4
+   $define F.BLANK  8
+   $define F.SPAN  16
+
+   dim kb(27)
+
+   if unassigned(sy.ver) then sy.ver = 0
+   if sy.ver # 1 then gosub init.syntax
+
+   ret = ''
+   begin case
+      case op = 'line'
+         want = 1
+         gosub scan.line
+      case op = 'state'
+         want = 0
+         gosub scan.line
+      case op = 'detect'
+         gosub detect.language
+      case op = 'index'
+         ret = 0
+         nm = downcase(trim(a))
+         locate nm in sy.names<1> setting i then ret = i
+      case op = 'list'
+         ret = sy.names
+      case op = 'define'
+         nm = downcase(trim(a))
+         rl = b
+         check = 1
+         gosub define.language
+      case op = 'errors'
+         ret = sy.errs
+   end case
+
+   return
+
+* The built-in languages, and then the site's own
+init.syntax:
+   sy.ver = 1
+   sy.names = '' ; sy.rules = '' ; sy.gf = '' ; sy.gr = '' ; sy.g1 = '' ; sy.errs = '' ; sy.cur = 0
+   cu.nop = 0
+   call $sl_syndef('names', '', '', nlist)
+   for k = 1 to dcount(nlist, @fm)
+      nm = nlist<k>
+      call $sl_syndef('rules', nm, '', rl)
+      check = 0                ;* the built-in rules are the product's own: parsed when first used
+      gosub define.language
+   next k
+   * &sed.syntax&: one record a language, each replacing the built-in of its name.  Rules that do not parse
+   * are left out and named by 'errors'
+   open '&sed.syntax&' to uf then
+      select uf to 12                 ;* an internal list, so that the caller's own list is left alone
+      loop
+         readnext uid from 12 else exit
+         read urec from uf, uid then
+            nm = downcase(trim(uid))
+            rl = urec
+            check = 1
+            gosub define.language
+            if ret # '' then
+               sy.errs<-1> = uid : ': ' : ret
+               ret = ''
+            end
+         end
+      repeat
+   end
+   return
+
+* nm = the name, rl = the rules (lines in fields), check = 1 to parse them now.  ret = null, or the fault
+define.language:
+   ret = ''
+   if nm = '' then
+      ret = 'no name'
+      return
+   end
+   if check then
+      gosub parse.rules
+      sy.cur = 0                  ;* parse.rules has overwritten the language in use
+      if ret # '' then return
+   end
+   gosub scan.globs
+   locate nm in sy.names<1> setting j else
+      j = dcount(sy.names, @fm) + 1
+      sy.names<j> = nm
+   end
+   sy.rules<j> = convert(@fm, @vm, rl)
+   sy.gf<j> = gl.f
+   sy.gr<j> = gl.r
+   sy.g1<j> = gl.fl
+   if sy.cur = j then sy.cur = 0
+   return
+
+* gl.f, gl.r and gl.fl = the globs of the rules in rl (the file, record and first-line rules)
+scan.globs:
+   gl.f = '' ; gl.r = '' ; gl.fl = ''
+   for ln = 1 to dcount(rl, @fm)
+      s = trim(rl<ln>)
+      verb = downcase(field(s, ' ', 1))
+      if verb = 'file' then gl.f := downcase(trim(field(s, ' ', 2, 99999))) : ' '
+      if verb = 'record' then gl.r := downcase(trim(field(s, ' ', 2, 99999))) : ' '
+      if verb = 'first' then gl.fl := downcase(trim(field(s, ' ', 2, 99999))) : ' '
+   next ln
+   return
+
+* Parse the rules in rl into the cu variables (the language in use), ret = null or the fault
+parse.rules:
+   ret = ''
+   cu.nocase = 0
+   idx = ''
+   cu.ostr = '' ; cu.osty = '' ; cu.okind = '' ; cu.oflg = '' ; cu.oend = '' ; cu.oesc = ''
+   cu.nop = 0
+   cu.numsty = '' ; cu.labsty = ''
+   mat kb = ''
+   wlist = ''
+   alpha = 'abcdefghijklmnopqrstuvwxyz'
+   nl = dcount(rl, @fm)
+   for ln = 1 to nl
+      s = trim(rl<ln>)
+      if s = '' or s[1, 1] = '#' then continue
+      tk = convert(' ', @fm, s)
+      nt = dcount(tk, @fm)
+      verb = downcase(tk<1>)
+      begin case
+         case verb = 'file' or verb = 'record' or verb = 'first'
+            null                       ;* the globs are read by scan.globs
+         case verb = 'nocase'
+            cu.nocase = 1
+         case verb = 'ident'
+            idx = tk<2>
+         case verb = 'number'
+            if nt < 2 then
+               ret = 'number needs a style'
+            end else
+               sname = tk<2>
+               gosub style.code
+               if ret = '' then cu.numsty = scode
+            end
+         case verb = 'label'
+            if nt < 2 then
+               ret = 'label needs a style'
+            end else
+               sname = tk<2>
+               gosub style.code
+               if ret = '' then cu.labsty = scode
+            end
+         case verb = 'words'
+            if nt < 3 then
+               ret = 'words needs a style and words'
+            end else
+               sname = tk<2>
+               gosub style.code
+               if ret = '' then wlist<-1> = scode : @vm : trim(field(s, ' ', 3, 99999))
+            end
+         case verb = 'line' or verb = 'mark'
+            if nt < 3 then
+               ret = verb : ' needs a style and a text'
+            end else
+               sname = tk<2>
+               gosub style.code
+               if ret = '' then
+                  ostx = tk<3>
+                  oend = ''
+                  oesc = ''
+                  ofl = 0
+                  for k = 4 to nt
+                     f1 = downcase(tk<k>)
+                     begin case
+                        case f1 = 'bol'
+                           ofl = bitor(ofl, F.BOL)
+                        case f1 = 'word'
+                           ofl = bitor(ofl, F.WORD)
+                        case f1 = 'whole'
+                           ofl = bitor(ofl, F.WHOLE)
+                        case f1 = 'blank'
+                           ofl = bitor(ofl, F.BLANK)
+                        case 1
+                           ret = 'unknown flag ' : tk<k>
+                     end case
+                  next k
+                  if ret = '' then
+                     okd = if verb = 'line' then 'L' else 'M'
+                     gosub add.opener
+                  end
+               end
+            end
+         case verb = 'region'
+            if nt < 4 then
+               ret = 'region needs a style, a start and an end'
+            end else
+               sname = tk<2>
+               gosub style.code
+               if ret = '' then
+                  ostx = tk<3>
+                  oend = tk<4>
+                  oesc = ''
+                  ofl = 0
+                  for k = 5 to nt
+                     f1 = downcase(tk<k>)
+                     begin case
+                        case f1 = 'bol'
+                           ofl = bitor(ofl, F.BOL)
+                        case f1 = 'word'
+                           ofl = bitor(ofl, F.WORD)
+                        case f1 = 'span'
+                           ofl = bitor(ofl, F.SPAN)
+                        case f1[1, 4] = 'esc='
+                           oesc = tk<k>[5, 1]
+                        case 1
+                           ret = 'unknown flag ' : tk<k>
+                     end case
+                  next k
+                  if ret = '' then
+                     okd = 'R'
+                     gosub add.opener
+                  end
+               end
+            end
+         case 1
+            ret = 'unknown rule ' : tk<1>
+      end case
+      if ret # '' then exit
+   next ln
+   if ret # '' then
+      ret = 'line ' : ln : ': ' : ret
+      return
+   end
+
+   * The characters that make up a name, and the rest (the delimiters) as a CONVERT table
+   ids = alpha : upcase(alpha) : '0123456789' : idx
+   dl = ''
+   for k = 1 to 255
+      ch = char(k)
+      if k >= 128 and k <= 247 then continue
+      if index(ids, ch, 1) = 0 then dl := ch
+   next k
+   cu.dfrom = dl
+   cu.dto = str(@fm, len(dl))
+
+   * The keywords, in buckets by first letter
+   for k = 1 to dcount(wlist, @fm)
+      scode = wlist<k, 1>
+      ws = convert(' ', @fm, wlist<k, 2>)
+      for q = 1 to dcount(ws, @fm)
+         w1 = ws<q>
+         if cu.nocase then w1 = downcase(w1)
+         bk = index(alpha, w1[1, 1], 1)
+         if bk = 0 then bk = 27
+         kb(bk) := ' ' : w1 : '=' : scode
+      next q
+   next k
+   cu.words = 0
+   if wlist # '' or cu.numsty # '' then cu.words = 1
+   cu.kw = ''
+   for bk = 1 to 27
+      cu.kw<1, bk> = kb(bk) : ' '
+   next bk
+   return
+
+* sname = a style name; scode = its code; ret = a fault
+style.code:
+   scode = 'n'
+   sn = downcase(sname)
+   if sn = 'normal' then
+      scode = 'n'
+   end else
+      if index(',comment,string,constant,keyword,type,preproc,special,error,todo,', ',' : sn : ',', 1) = 0 then
+         ret = 'unknown style ' : sname
+      end else
+         call $sl_theme('code', sn, '', '', '', scode)
+      end
+   end
+   return
+
+* One opener: ostx the text, okd L M or R, ofl its flags, oend and oesc for a region, scode its style
+add.opener:
+   if cu.nocase then
+      ostx = downcase(ostx)
+      oend = downcase(oend)
+   end
+   * longer texts first, so that the longer wins where two start together
+   atp = cu.nop + 1
+   for k = 1 to cu.nop
+      if len(cu.ostr<1, k>) < len(ostx) then
+         atp = k
+         exit
+      end
+   next k
+   ins ostx before cu.ostr<1, atp>
+   ins scode before cu.osty<1, atp>
+   ins okd before cu.okind<1, atp>
+   ins ofl before cu.oflg<1, atp>
+   ins oend before cu.oend<1, atp>
+   ins oesc before cu.oesc<1, atp>
+   cu.nop += 1
+   return
+
+* Make language j the one in use
+activate:
+   if j = sy.cur then return
+   rl = convert(@vm, @fm, sy.rules<j>)
+   gosub parse.rules
+   if ret # '' then
+      cu.nop = 0
+      sy.cur = 0
+      ret = ''
+   end else
+      sy.cur = j
+   end
+   return
+
+* ---- the language of a record --------------------------------------------------------------------------------
+detect.language:
+   ret = ''
+   fname = a
+   n = dcount(fname, '/')
+   if n > 1 then fname = field(fname, '/', n)
+   fname = downcase(fname)
+   rname = downcase(b)
+   n = dcount(rname, '/')
+   if n > 1 then rname = field(rname, '/', n)
+   line1 = downcase(c)
+   for ps = 1 to 3
+      for j = 1 to dcount(sy.names, @fm)
+         begin case
+            case ps = 1
+               gl = sy.gf<j>
+               gs = fname
+            case ps = 2
+               gl = sy.gr<j>
+               gs = rname
+            case 1
+               gl = sy.g1<j>
+               gs = line1
+         end case
+         if gs # '' and gl # '' then
+            gl = convert(' ', @fm, trim(gl))
+            for k = 1 to dcount(gl, @fm)
+               gp = gl<k>
+               gosub glob.match
+               if gm then
+                  ret = sy.names<j>
+                  return
+               end
+            next k
+         end
+      next j
+   next ps
+   return
+
+* gp = a pattern (* is any text), gs = the text, both lower case.  gm = 1 if they match
+glob.match:
+   gm = 0
+   if index(gp, '*', 1) = 0 then
+      if gp = gs then gm = 1
+      return
+   end
+   gn = dcount(gp, '*')
+   gpos = 1
+   for gk = 1 to gn
+      piece = field(gp, '*', gk)
+      pl = len(piece)
+      begin case
+         case gk = 1
+            if gs[1, pl] # piece then return
+            gpos = pl + 1
+         case gk = gn
+            if pl > 0 then
+               gtp = len(gs) - pl + 1
+               if gtp < gpos then return
+               if gs[gtp, pl] # piece then return
+            end
+         case 1
+            if pl > 0 then
+               gi = index(gs[gpos, 99999], piece, 1)
+               if gi = 0 then return
+               gpos += gi - 1 + pl
+            end
+      end case
+   next gk
+   gm = 1
+   return
+
+* ---- one line -----------------------------------------------------------------------------------------------
+* a = language number, b = the line, c = the state it starts in.  ret = the styles (when want), d = the state it ends in
+scan.line:
+   text = b
+   n = len(text)
+   st = c + 0
+   out = ''
+   d = st
+   j = a + 0
+   if j < 1 or j > dcount(sy.names, @fm) then
+      if want then out = str('n', n)
+      ret = out
+      return
+   end
+   gosub activate
+   if sy.cur = 0 then
+      if want then out = str('n', n)
+      ret = out
+      return
+   end
+   if cu.nocase then stext = downcase(text) else stext = text
+   pos = 1
+   nxt = ''               ;* the next place each opener can start (0, not known yet)
+   for o = 1 to cu.nop
+      nxt<o> = 0
+   next o
+
+   * a region the last line did not finish
+   if st > cu.nop then st = 0
+   if st > 0 then
+      o = st ; q = 1
+      gosub region.end
+      if want then out := str(cu.osty<1, o>, re)
+      pos = re + 1
+      if fnd then st = 0
+   end
+
+   * a label: a name and a colon at the start of the line
+   if pos = 1 and cu.labsty # '' and n > 1 then
+      lp = index(text, ':', 1)
+      if lp > 1 then
+         if index(convert(cu.dfrom, cu.dto, text[1, lp - 1]), @fm, 1) = 0 then
+            if want then out := str(cu.labsty, lp)
+            pos = lp + 1
+         end
+      end
+   end
+
+   loop
+   while pos <= n
+      * the nearest opener
+      bo = 0 ; bp = n + 1
+      for o = 1 to cu.nop
+         p = nxt<o>
+         if p < pos then
+            gosub next.occurrence
+            nxt<o> = p
+         end
+         if p < bp then
+            bp = p
+            bo = o
+         end
+      next o
+
+      if bp > pos then
+         if want then
+            if cu.words then
+               sp = pos
+               sl = bp - pos
+               gosub code.segment
+            end else
+               out := str('n', bp - pos)
+            end
+         end
+         pos = bp
+      end
+      if bo = 0 then exit
+
+      begin case
+         case cu.okind<1, bo> = 'L'
+            if want then out := str(cu.osty<1, bo>, n - bp + 1)
+            pos = n + 1
+         case cu.okind<1, bo> = 'M'
+            ol = len(cu.ostr<1, bo>)
+            if want then out := str(cu.osty<1, bo>, ol)
+            pos = bp + ol
+         case 1
+            o = bo
+            q = bp + len(cu.ostr<1, bo>)
+            gosub region.end
+            if want then out := str(cu.osty<1, bo>, re - bp + 1)
+            pos = re + 1
+            if not(fnd) and bitand(cu.oflg<1, bo>, F.SPAN) then st = bo
+      end case
+   repeat
+
+   d = st
+   ret = out
+   return
+
+* p = where opener o first starts at or after pos (n + 1 if it does not)
+next.occurrence:
+   ost = cu.ostr<1, o>
+   ofg = cu.oflg<1, o>
+   ol = len(ost)
+   p = pos
+   loop
+      i = index(stext[p, n], ost, 1)
+      if i = 0 then
+         p = n + 1
+         return
+      end
+      p = p + i - 1
+      ok = 1
+      if bitand(ofg, F.BOL) then
+         if p > 1 then
+            if trim(convert(char(9), ' ', stext[1, p - 1])) # '' then
+               p = n + 1
+               return
+            end
+         end
+      end
+      if ok and bitand(ofg, F.WORD) then
+         if p > 1 then
+            pc = stext[p - 1, 1]
+            if pc # ' ' and pc # char(9) then ok = 0
+         end
+      end
+      if ok and bitand(ofg, F.WHOLE) then
+         pc = stext[p + ol, 1]
+         if pc # '' then
+            if index(cu.dfrom, pc, 1) = 0 then ok = 0
+         end
+      end
+      if ok and bitand(ofg, F.BLANK) then
+         pc = stext[p + ol, 1]
+         if pc # '' and pc # ' ' and pc # char(9) then ok = 0
+      end
+      if ok then return
+      p += 1
+   repeat
+   return
+
+* Region o ends where its end text next appears at or after q.  fnd = 1 if it does; re = the last character of the region
+* (the end text's last, or the line's)
+region.end:
+   es = cu.oend<1, o>
+   el = len(es)
+   ec = cu.oesc<1, o>
+   fnd = 0
+   re = n
+   if q > n then return
+   loop
+      i = index(stext[q, n], es, 1)
+      if i = 0 then exit
+      e = q + i - 1
+      if ec # '' then
+         k = e - 1
+         cnt = 0
+         loop
+         while k >= q and stext[k, 1] = ec
+            cnt += 1
+            k -= 1
+         repeat
+         if mod(cnt, 2) = 1 then
+            q = e + 1
+            continue
+         end
+      end
+      fnd = 1 ; re = e + el - 1
+      exit
+   repeat
+   return
+
+* The code between two places the line can change: sl characters from sp are cut into names and each is looked up
+code.segment:
+   wd = convert(cu.dfrom, cu.dto, stext[sp, sl])
+   plain = 0
+   loop
+      remove word from wd setting dl
+      wl = len(word)
+      if wl then
+         sc = ''
+         c1 = word[1, 1]
+         if index('0123456789', c1, 1) then
+            sc = cu.numsty
+         end else
+            bk = index('abcdefghijklmnopqrstuvwxyz', c1, 1)
+            if bk = 0 then bk = 27
+            kb1 = cu.kw<1, bk>
+            if len(kb1) > 1 then
+               i = index(kb1, ' ' : word : '=', 1)
+               if i then sc = kb1[i + wl + 2, 1]
+            end
+         end
+         if sc # '' then
+            if plain then
+               out := str('n', plain)
+               plain = 0
+            end
+            out := str(sc, wl)
+         end else
+            plain += wl
+         end
+      end
+      if dl then plain += 1
+   while dl
+   repeat
+   if plain then out := str('n', plain)
+   return
+
+end
+
+* END-CODE

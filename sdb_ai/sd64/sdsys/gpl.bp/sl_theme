@@ -83,6 +83,8 @@ $include sl.h
       th.names = 'normal' : @fm : 'reverse' : @fm : 'underline' : @fm : 'both' : @fm : 'bold' : @fm : 'window'
       th.names := @fm : 'highlight' : @fm : 'bar' : @fm : 'barsel' : @fm : 'hotkey' : @fm : 'hotkey.bar'
       th.names := @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
+      th.names := @fm : 'comment' : @fm : 'string' : @fm : 'constant' : @fm : 'keyword' : @fm : 'type'
+      th.names := @fm : 'preproc' : @fm : 'special' : @fm : 'error' : @fm : 'todo'
    end
    names = th.names
 
@@ -159,6 +161,25 @@ set.theme:
          spec<-1> = 'disabled=black,white,bold'
          spec<-1> = 'text=white,blue,bold'
          spec<-1> = 'header=black,cyan,'
+         gosub syntax.dark
+      case nm = 'dark'
+         * mono, and the syntax styles in colours that read on a dark terminal background
+         spec<-1> = 'highlight=,,reverse'
+         spec<-1> = 'bar=,,reverse'
+         spec<-1> = 'hotkey=,,underline'
+         spec<-1> = 'hotkey.bar=,,reverse underline'
+         spec<-1> = 'field=,,underline'
+         spec<-1> = 'header=,,underline bold'
+         gosub syntax.dark
+      case nm = 'light'
+         * the same for a light terminal background
+         spec<-1> = 'highlight=,,reverse'
+         spec<-1> = 'bar=,,reverse'
+         spec<-1> = 'hotkey=,,underline'
+         spec<-1> = 'hotkey.bar=,,reverse underline'
+         spec<-1> = 'field=,,underline'
+         spec<-1> = 'header=,,underline bold'
+         gosub syntax.light
       case nm = 'blue'
          spec<-1> = 'window=white,blue,bold'
          spec<-1> = 'highlight=black,cyan,'
@@ -170,6 +191,7 @@ set.theme:
          spec<-1> = 'disabled=cyan,blue,'
          spec<-1> = 'text=white,black,'
          spec<-1> = 'header=brown,black,bold'
+         gosub syntax.dark
       case 1
          ret = 2
          return
@@ -203,6 +225,31 @@ set.theme:
    gosub build.seqs
    th.name = nm
    ret = 0
+   return
+
+* The syntax styles (what $sl_syntax gives the editor): foreground colours only, on the terminal's own background
+syntax.dark:
+   spec<-1> = 'comment=blue,,bold'
+   spec<-1> = 'string=green,,'
+   spec<-1> = 'constant=magenta,,'
+   spec<-1> = 'keyword=brown,,bold'
+   spec<-1> = 'type=cyan,,'
+   spec<-1> = 'preproc=red,,'
+   spec<-1> = 'special=cyan,,bold'
+   spec<-1> = 'error=white,red,bold'
+   spec<-1> = 'todo=black,brown,'
+   return
+
+syntax.light:
+   spec<-1> = 'comment=green,,'
+   spec<-1> = 'string=red,,'
+   spec<-1> = 'constant=magenta,,'
+   spec<-1> = 'keyword=blue,,bold'
+   spec<-1> = 'type=blue,,'
+   spec<-1> = 'preproc=magenta,,bold'
+   spec<-1> = 'special=red,,bold'
+   spec<-1> = 'error=white,red,bold'
+   spec<-1> = 'todo=black,brown,'
    return
 
 * The theme mono, before anything has been asked for (the first drawing); the caller's ret is kept

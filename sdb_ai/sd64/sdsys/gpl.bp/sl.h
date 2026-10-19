@@ -22,7 +22,8 @@
 *                    SED's, which only knows RATTR).  The codes are SL.CODES below, one for each style that
 *                    $sl_theme names (n normal, r reverse, u underline, x both, b bold, w window, h highlight,
 *                    a bar, s barsel, k hotkey, j hotkey.bar, e field, d disabled, y desktop, t text,
-*                    g header);
+*                    g header, and the syntax styles c comment, q string, o constant, v keyword, p type,
+*                    l preproc, z special, f error, i todo - what $sl_syntax gives the editor);
 *                    $sl_attr turns a style name into its code and the theme says what each looks like.
 *   SL.S.CUR         the library's cursor: value 1 is x, value 2 is y (where the program's next output goes)
 *   SL.S.CURON       1 when the cursor is shown
@@ -44,7 +45,7 @@ $define SL.W.S2        9
 $define SL.W.D        10
 
 * The style codes, in the order of $sl_theme's list of names (a new style goes on the end of both)
-$define SL.CODES       'nruxbwhasjkedytg'
+$define SL.CODES       'nruxbwhasjkedytgcqovplzfi'
 
 $define SL.S.W         1
 $define SL.S.H         2
