@@ -146,6 +146,7 @@ range:
 * bar = the characters of the bar from its start
 bar.string:
    call $sl_scrollbar(len0, val, total, vis, bar)
+   bar = convert(char(19) : char(20) : char(21) : char(22), '|#^v', bar)    ;* this widget keeps to ASCII (14 Oct 26)
    if horiz then
       bar = convert('^v|', '<>-', bar)
    end

@@ -85,6 +85,9 @@ $include sl.h
       th.names := @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
       th.names := @fm : 'comment' : @fm : 'string' : @fm : 'constant' : @fm : 'keyword' : @fm : 'type'
       th.names := @fm : 'preproc' : @fm : 'special' : @fm : 'error' : @fm : 'todo' : @fm : 'bar.disabled'
+      th.names := @fm : 'gutter'                    ;* 14 Oct 26: the line numbers of a text area (code G: every letter was taken)
+      th.names := @fm : 'pane'                      ;* 14 Oct 26: the body of a tree, so that it can differ from the window's frame (code P)
+      th.names := @fm : 'tab' : @fm : 'scroll'      ;* 14 Oct 26: the strip of tabs (code T) and the scroll bar column of a list, text area, table or tree (code B)
    end
    names = th.names
 
@@ -163,6 +166,10 @@ set.theme:
          spec<-1> = 'text=white,blue,bold'
          spec<-1> = 'header=black,cyan,'
          spec<-1> = 'bar.disabled=blue,white,'
+         spec<-1> = 'gutter=cyan,blue,'
+         spec<-1> = 'pane=black,white,'
+         spec<-1> = 'tab=black,white,'
+         spec<-1> = 'scroll=black,white,'
          gosub syntax.dark
       case nm = 'dark'
          * mono, and the syntax styles in colours that read on a dark terminal background
@@ -196,6 +203,10 @@ set.theme:
          spec<-1> = 'text=white,black,'
          spec<-1> = 'header=brown,black,bold'
          spec<-1> = 'bar.disabled=blue,cyan,'
+         spec<-1> = 'gutter=cyan,black,'
+         spec<-1> = 'pane=white,black,'
+         spec<-1> = 'tab=black,cyan,'
+         spec<-1> = 'scroll=black,cyan,'
          gosub syntax.dark
       case 1
          ret = 2

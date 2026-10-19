@@ -28,8 +28,8 @@
 *             the text does not move when it is needed)
 *     focus   key = 1 gives it the focus (draws, with the cursor in the text), key = 0 takes it away
 *     key     left, right (past the end of a line to the next, and back), up, down (a row at a time: with wrap
-*             a line is several rows), home / ctrl-a and end / ctrl-e (the row's ends), ctrl-b and ctrl-f
-*             (a word back and on), pgup and pgdn (scroll a page less one row and the cursor keeps its row on
+*             a line is several rows), home / ctrl-a and end / ctrl-e (the row's ends), ctrl-p and ctrl-u
+*             (a word back and on; ctrl-b and ctrl-f were these until 14 Oct 26, and are SED's find keys now), pgup and pgdn (scroll a page less one row and the cursor keeps its row on
 *             the screen) move; a printable character, Return (splits the line), bs, del / ctrl-d (join lines
 *             at the ends) and ctrl-k (cuts to the end of the line) edit.
 *
@@ -38,7 +38,9 @@
 *             cut or copied in at the cursor (the clipboard is the library's, so it passes from one text area
 *             to another); typing, Return, bs and del on a selection replace or delete it.  ctrl-z undoes and
 *             ctrl-y does again (a run of typed characters, or of bs or del, is one step; there are 100 steps).
-*             ctrl-t asks for text on the bottom row of the area and finds it, ctrl-n finds the next one; the
+*             ctrl-f (or ctrl-t) asks for text on the bottom row of the area and finds it, ctrl-b asks and finds
+*             it backwards from the cursor, ctrl-n finds the next one forwards (and a Return on the question,
+*             which starts with the last text, repeats a find); the
 *             search ignores case, goes on past the end of the text to its start, and selects what it found
 *             (a bell if there is none).  A viewer can select, copy and find, and nothing else.
 *
@@ -422,13 +424,48 @@ find.next:
 find.prompt:
    pw = ''
    pw<SL.W.Y> = w{'ay'} + mh - 1
-   pw<SL.W.D> = 'Find: '
+   pw<SL.W.D> = if fdir = -1 then 'Find backward: ' else 'Find: '
    pw<SL.W.D + 1> = fnd
    call $sl_prompt('init', pw, scr, '', pr)
    call $sl_prompt('run', pw, scr, '', pr)
    if pr = 'enter' then
       fnd = pw<SL.W.VALUE>
-      gosub find.next
+      if fdir = -1 then gosub find.prev else gosub find.next
+   end
+   return
+
+* The same text again, backwards from the cursor (or from the start of the selection a find made): the last
+* occurrence that ends before it, in the lines above, and on past the start of the text to its end
+find.prev:
+   if fnd = '' then return
+   fl = upcase(fnd)
+   y = cy
+   found = @false
+   p = 0
+   for pn = 0 to n
+      t = upcase(lines<y>)
+      if pn = 0 then
+         lim = cx - 1
+         if my > 0 and my = cy and mx >= 1 and mx <= cx then lim = mx - 1
+         seg = t[1, lim]
+      end else
+         seg = t
+      end
+      cnt = count(seg, fl)
+      if cnt > 0 then
+         p = index(seg, fl, cnt)
+         found = @true
+         exit
+      end
+      y -= 1
+      if y < 1 then y = n
+   next pn
+   if found then
+      my = y ; mx = p
+      cy = y ; cx = p + len(fnd)
+      want = cx
+   end else
+      display char(7) :
    end
    return
 
@@ -488,7 +525,7 @@ handle.key:
          rr = dr
          gosub row.text
          cx = rstart + rcm - 1
-      case key = 'ctrl-f'
+      case key = 'ctrl-u'                       ;* 14 Oct 26: a word on (was ctrl-f; SED's ctrl-f is find forward)
          ln = lines<cy>
          if cx > len(ln) then
             if cy < n then
@@ -505,7 +542,7 @@ handle.key:
                cx += 1
             repeat
          end
-      case key = 'ctrl-b'
+      case key = 'ctrl-p'                       ;* 14 Oct 26: a word back (was ctrl-b; SED's ctrl-b is find backward)
          if cx = 1 then
             if cy > 1 then
                cy -= 1
@@ -555,7 +592,11 @@ handle.key:
             clip.has = 1
             my = 0 ; mx = 0
          end
-      case key = 'ctrl-t'
+      case key = 'ctrl-t' or key = 'ctrl-f'     ;* ctrl-f is SED's find forward (14 Oct 26); ctrl-t stays
+         fdir = 1
+         gosub find.prompt
+      case key = 'ctrl-b'                       ;* SED's find backward (14 Oct 26)
+         fdir = -1
          gosub find.prompt
       case key = 'ctrl-n'
          gosub find.next
@@ -675,9 +716,9 @@ handle.key:
 
 paint:
    call $sl_attr('text', tc)
-   call $sl_attr('window', wc)
+   call $sl_attr('scroll', wc)                  ;* 14 Oct 26: wc is only the scroll bar's column; was 'window'
    call $sl_attr('highlight', hc)
-   call $sl_attr('disabled', gc)
+   call $sl_attr('gutter', gc)                  ;* 14 Oct 26: was 'disabled', whose background is the window's, not the text's
    call $sl_scrollbar(mh, top, nr, mh, bar)
    gosub sel.range
    sl.line = 0                                   ;* the line whose syntax styles are in sty (rows of a wrapped line share them)

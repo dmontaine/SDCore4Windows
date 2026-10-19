@@ -100,7 +100,7 @@ $include sl.h
    return
 
 paint:
-   call $sl_attr('window', wc)
+   call $sl_attr('tab', wc)                     ;* 14 Oct 26: was 'window'; the same in every theme but blue
    call $sl_attr('highlight', hc)
    line = ''
    codes = ''

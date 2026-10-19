@@ -295,6 +295,16 @@ default.action:
       w = f{'widgets', dflt}
       gosub press.button
    end else
+      * 14 Oct 26: a form the program marked with f{'activate'} = 1 gives Return in a tree or a table to the program
+      * as an event of its own (activate: the widget's id and its value), where it would otherwise move the focus on
+      afi = f{'focus'} + 0
+      if afi >= 1 and afi <= nw and f{'activate'} + 0 then
+         aw = f{'widgets', afi}
+         if aw{'type'} = 'tree' or aw{'type'} = 'table' then
+            ret = 'activate' : @fm : aw{'id'} : @fm : aw{'value'}
+            return
+         end
+      end
       step = 1
       gosub move.focus
       ret = 'handled'
@@ -473,6 +483,8 @@ show.form:
 *   change  (eid, edata the new value: a check box, radio group, list or combo changed)
 *   focus   (eid the widget the focus went to, edata the one it left)
 *   key     (edata the key's name: one the form had no use for)    timeout    end (the input ended)
+*   activate  (eid the tree's or table's id, edata its value: Return in one of them, only when the program has set
+*             f{'activate'} = 1 and the form has no default button; otherwise Return moves the focus on)
 wait.event:
    if not(f{'shown'}) then gosub show.form
    evt = ''
@@ -502,6 +514,8 @@ wait.event:
          begin case
             case st = 'done'
                evt = 'button' ; eid = ret<2>
+            case st = 'activate'
+               evt = 'activate' ; eid = ret<2> ; edata = ret<3>
             case st = 'cancel'
                evt = 'cancel' ; eid = ret<2>
             case st = 'unhandled'

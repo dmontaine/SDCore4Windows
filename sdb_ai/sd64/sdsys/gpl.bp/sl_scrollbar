@@ -35,9 +35,15 @@ $catalog $sl_scrollbar
    bar = ''
    if h < 1 then return
 
-   bar = str('|', h)
-   bar[1, 1] = '^'
-   if h > 1 then bar[h, 1] = 'v'
+   * 14 Oct 26: with line drawing on, the track, the thumb and the arrows are stand-ins that $sl_put turns into
+   * │ █ ▲ ▼; otherwise they are | # ^ v as ever
+   call $sl_line('v', '', ch.track)
+   call $sl_line('thumb', '', ch.thumb)
+   call $sl_line('up', '', ch.up)
+   call $sl_line('down', '', ch.down)
+   bar = str(ch.track, h)
+   bar[1, 1] = ch.up
+   if h > 1 then bar[h, 1] = ch.down
 
    if h > 2 and total > visible and visible > 0 then
       room = h - 2                                       ;* the cells of the track
@@ -50,7 +56,7 @@ $catalog $sl_scrollbar
       if t > span then t = span
       ts = int((room - tl) * t / span + 0.5)             ;* the thumb's first cell, from 0
       for r = 0 to tl - 1
-         bar[2 + ts + r, 1] = '#'
+         bar[2 + ts + r, 1] = ch.thumb
       next r
    end
 

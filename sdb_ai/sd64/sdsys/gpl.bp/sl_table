@@ -395,7 +395,7 @@ paint:
    call $sl_attr('header', hc)
    call $sl_attr('text', tc)
    call $sl_attr('highlight', ac)
-   call $sl_attr('window', wc)
+   call $sl_attr('scroll', wc)                  ;* 14 Oct 26: wc is only the scroll bar's column; was 'window'
    call $sl_scrollbar(th, top, n, th, sbc)
    focused = w{'focused'} + 0
 

@@ -46,8 +46,11 @@ $catalog $sl_line
       case op = 'br' ; ret = if ln.on = 1 then char(17) else '+'
       case op = 'h' ; ret = if ln.on = 1 then char(18) else '-'
       case op = 'v' ; ret = if ln.on = 1 then char(19) else '|'
+      case op = 'thumb' ; ret = if ln.on = 1 then char(20) else '#'      ;* 14 Oct 26: for the scroll bar
+      case op = 'up' ; ret = if ln.on = 1 then char(21) else '^'
+      case op = 'down' ; ret = if ln.on = 1 then char(22) else 'v'
       case op = 'plain'
-         ret = convert(char(14) : char(15) : char(16) : char(17) : char(18) : char(19), '++++-|', a)
+         ret = convert(char(14) : char(15) : char(16) : char(17) : char(18) : char(19) : char(20) : char(21) : char(22), '++++-|#^v', a)
    end case
 
    return

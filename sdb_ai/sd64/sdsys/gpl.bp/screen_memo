@@ -34,9 +34,9 @@
 *     status    0 added; 1 not (ELSE)
 *
 *   Typing, Return (which splits the line), Backspace and Delete edit; Ctrl-A and Ctrl-E (or Home and End) go
-*   to the ends of the row, Ctrl-K cuts to the end of the line, Ctrl-B and Ctrl-F move a word.  Ctrl-G sets
+*   to the ends of the row, Ctrl-K cuts to the end of the line, Ctrl-P and Ctrl-U move a word back and on.  Ctrl-G sets
 *   the mark (the selection runs from it to the cursor), Ctrl-X cuts and Ctrl-C or Ctrl-O copies it, Ctrl-V
-*   pastes, Ctrl-Z undoes and Ctrl-Y does again, Ctrl-T finds text and Ctrl-N the next one ($sl_memo has the
+*   pastes, Ctrl-Z undoes and Ctrl-Y does again, Ctrl-F (or Ctrl-T) finds text, Ctrl-B finds it backwards and Ctrl-N the next one ($sl_memo has the
 *   whole account).  Without WRAP a long line is not wrapped: the area pans sideways with the cursor.
 *   SCREEN GET f, id answers the text, one line to a field, and SCREEN SET f, id VALUE t replaces it.
 *   SCREEN VALUES does not include a memo (it can be long): ask for it with SCREEN GET.

@@ -30,7 +30,9 @@
 *                cancel   Esc (no id) or the form's cancel button (its id)
 *                timeout  no key came in time
 *                end      the input ended (a phantom, a closed terminal)
-*     status   0 for button, change, focus, key and resize; 1 for cancel, timeout and end (ELSE)
+*     status   0 for button, change, focus, key, resize and activate; 1 for cancel, timeout and end (ELSE)
+*              (activate: Return in a tree or table of a form the program marked f{'activate'} = 1; ev<2> the
+*              widget's id, ev<3> its value)
 *
 *   The first call draws the form (what is under it is kept) and it STAYS on the screen between calls; the
 *   program acts on the event and calls again.  SCREEN SET redraws the widget it changes, SCREEN HIDE puts the
@@ -61,7 +63,7 @@ $include sl.h
 
    ret = r<2> : @fm : r<3> : @fm : r<4>
    t = r<2>
-   if t = 'button' or t = 'change' or t = 'focus' or t = 'key' or t = 'resize' then status = 0
+   if t = 'button' or t = 'change' or t = 'focus' or t = 'key' or t = 'resize' or t = 'activate' then status = 0
 
    return
 end

@@ -293,7 +293,8 @@ paint:
       call $sl_scrollbar(th, top, nv, th, sbc)
    end
    call $sl_attr('highlight', hl)
-   call $sl_attr('window', nl)
+   call $sl_attr('pane', nl)                    ;* 14 Oct 26: was 'window'; the same in every theme but blue
+   call $sl_attr('scroll', sbs)
    focused = w{'focused'} + 0
    for r = 0 to th - 1
       q = top + r
@@ -319,7 +320,7 @@ paint:
       end
       if bar then
          line := sbc[r + 1, 1]
-         code = str(code, tw) : nl
+         code = str(code, tw) : sbs
       end
       call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, line, code)
    next r

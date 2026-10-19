@@ -42,7 +42,7 @@ $include sl.h
    sh = scr<SL.S.H> + 0
    if y < 0 or y >= sh then return
 
-   lc.all = char(14) : char(15) : char(16) : char(17) : char(18) : char(19)
+   lc.all = char(14) : char(15) : char(16) : char(17) : char(18) : char(19) : char(20) : char(21) : char(22)
 
    * The style of every cell
    if len(attr) = 1 then
@@ -96,7 +96,7 @@ $include sl.h
       call $sl_sgr(c, sq)
       seg = text[i, j - i + 1]
       * the stand-ins of $sl_line become the bytes of a line-drawing character (or + - | if that is off)
-      if convert(lc.all, str(' ', 6), seg) # seg then
+      if convert(lc.all, str(' ', 9), seg) # seg then
          if ln.on = 1 then
             seg = change(seg, char(14), char(226) : char(148) : char(140))
             seg = change(seg, char(15), char(226) : char(148) : char(144))
@@ -104,8 +104,11 @@ $include sl.h
             seg = change(seg, char(17), char(226) : char(148) : char(152))
             seg = change(seg, char(18), char(226) : char(148) : char(128))
             seg = change(seg, char(19), char(226) : char(148) : char(130))
+            seg = change(seg, char(20), char(226) : char(150) : char(136))      ;* a full block
+            seg = change(seg, char(21), char(226) : char(150) : char(178))      ;* a triangle up
+            seg = change(seg, char(22), char(226) : char(150) : char(188))      ;* a triangle down
          end else
-            seg = convert(lc.all, '++++-|', seg)
+            seg = convert(lc.all, '++++-|#^v', seg)
          end
       end
       out := sq : seg

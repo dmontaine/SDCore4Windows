@@ -45,7 +45,7 @@ $define SL.W.S2        9
 $define SL.W.D        10
 
 * The style codes, in the order of $sl_theme's list of names (a new style goes on the end of both)
-$define SL.CODES       'nruxbwhasjkedytgcqovplzfim'
+$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTB'
 
 $define SL.S.W         1
 $define SL.S.H         2
