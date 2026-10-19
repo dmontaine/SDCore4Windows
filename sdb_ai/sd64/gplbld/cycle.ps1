@@ -532,7 +532,10 @@ if (Get-FullSdProcess) {
     $sdExe = Join-Path $PfTree 'usr\bin\sd.exe'
     if (Test-Path -LiteralPath $sdExe) {
         Write-Host '   service stopped but a daemon is still up - asking sd -stop'
+        # PowerShell 5.1 makes a native command's stderr a terminating error under 'Stop' with 2>&1; "sd -stop" warns on stderr.
+        $ErrorActionPreference = 'Continue'
         $stopOut = (& $sdExe -stop 2>&1 | Out-String)
+        $ErrorActionPreference = 'Stop'
         $stopOut -split "`r?`n" | Where-Object { $_.Trim() } | ForEach-Object { Write-Host "     $_" }
         $stopSaidOk = ($stopOut -match 'has been shut down')
         $deadline = (Get-Date).AddSeconds(20)
