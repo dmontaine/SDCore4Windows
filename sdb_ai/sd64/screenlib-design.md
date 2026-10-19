@@ -104,7 +104,8 @@ of its image buffer; `ced_edit` is left on its own drawing code.
 
 mouse; acsc/Unicode box drawing (boxes are + - |); colour; a renderer owning the shadow; disabled/
 checked/submenu items; scrolling drop-downs longer than the screen; per-cell clipping; the form; user
-programs calling `$sl_` routines (they need `$internal` and `sd -internal` to compile); F10 is
+programs calling `$sl_` routines (they need `$internal` and `sd -internal` to compile: settled by the `screen`
+statement, see SCOPE below); F10 is
 bound by SED's table from `ESC [ 2 1 ~` (xterm, Linux console), not read from terminfo.
 
 ## evaluation: a C library as a back end (decision: NO, stay with BASIC over tio)
@@ -166,3 +167,240 @@ SD to the system's terminfo. Main risk of this recommendation: the amount of BAS
 later widgets (list box, text field with history, forms) and its speed when a form redraws; the
 mitigation is the S.1 diff renderer behind the same `scr` argument. No prototype of a C route was
 built.
+
+---
+
+# SCOPE: the whole library as BASIC commands (12 Oct 2026, second sitting)
+
+Everything above is the first cut (SED's needs). This part scopes the rest. Built so far: the compiler
+mechanism and ONE verb (`screen msgbox`), `sandbox-screen.py`, 25 rows green. Everything else here is
+a PROPOSAL, written in the conditional, with what would falsify it.
+
+## owner rulings this rests on
+
+- A full form toolkit: buttons, entry fields, radio buttons, check boxes, pick lists, and the rest.
+- Exposed to end users as BASIC commands, not as `call $sl_x`: a user program (not `sd -internal`)
+  draws a menu, a message box, an entry field with BASIC. All 512 opcode slots are used, so the compiler
+  turns a statement into a CALL of a catalogued subroutine (no opcode).
+- Open source only; no new dependency without the owner; BASIC over SD's own tio, no C library (above).
+  English only, lower case everywhere SD writes a command word, GPL v3.
+
+## the shape: one statement, a table of verbs
+
+```
+screen <verb> {value {, value}} {KEYWORD value {, value}} ... {returning <variable>} {then ... else ...}
+```
+
+- ONE new statement word, `screen`. The verbs and keywords are rows of a table in bcomp, not
+  reserved words, so a program that uses `menu`, `form`, `title`, `buttons` as variables is unaffected,
+  and the only name taken from the program's namespace is `screen`, which a program can still use as a
+  variable (tested: `screen = 5`, `screen<2> = 'a'`, `title title` as keyword and variable).
+- Positional values come first (the object: a text, a form, a list), keyword clauses follow in ANY
+  order, each keyword with a fixed number of values (`at x,y`, `size w,h`, `title t`). A keyword left
+  out is passed as null: the subroutine decides its default.
+- `returning v` receives the answer. `then` is taken when the user finished normally (a button, a
+  choice, Return), `else` when not (Esc, the end of the input, no terminal at all - a phantom or the
+  API). Both optional: `screen msgbox 'Done.'` is a statement on its own.
+- One verb = one catalogued subroutine `!screen_<verb>(positionals, keyword values in table order,
+  ret, status)`. That is also the call a program can write by hand.
+- Statements, not functions, because a command has many optional parts and two results (the answer
+  and whether the user finished or cancelled). A function (`screenkey(2)`) fits only the one-value
+  reads; if wanted they are DEFFUN-style calls through the same table (the compiler already compiles
+  user functions as a CALL with a hidden return argument), a later item, not needed to start.
+
+## the screen: owned by the library once `screen open` is done
+
+The first cut leaves the shadow (the text the terminal shows) to the caller, because SED owns its image
+buffer. A user program cannot be asked to build one, so the commands keep it in a COMMON block
+(`$sl_scr`): width, height, one text string and one attribute string per row, the cursor, the clip.
+
+- `screen open` takes the screen (optionally clears it, hides the cursor); `screen close` gives it back.
+  Until `open`, a dialogue is TRANSIENT: it works, but has no text to put back under itself, so it puts
+  back blanks (tested, documented, not a defect) and leaves the cursor at its last cell. Text the
+  program wants kept under a dialogue is drawn with `screen text`, which records it.
+- Every library draw goes through one routine (`$sl_put`) that writes the shadow and the terminal, with
+  per-cell attributes (n normal, r reverse, u underline, b bold, h highlight, then colour pairs), so a
+  pop-up saves "what is under me" from the shadow and a form needs no repaint code of its own. S.1
+  measured the diff renderer: a full 160x48 repaint is 0.11 ms of CPU in BASIC.
+- The program's own `print @(x,y)` is not in the shadow (curses has the same rule); `screen refresh`
+  repaints from the shadow after it. The kernel's `SAVE.SCREEN` / `RESTORE.SCREEN` do nothing on a
+  Linux terminal (`linuxio.c:752`, they only work in an SDTerm client); once the shadow exists they could
+  be made to use it, which would also give the debugger's pop-ups back their screen - not proposed yet.
+- Existing widgets (`$sl_menu`, `$sl_msgbox`, `$sl_prompt`) draw with `display`; moving them to `$sl_put`
+  is stage 1. SED keeps handing its own shadow in, so it does not change.
+
+## the vocabulary (proposed; `built` marks the one that exists)
+
+Verbs with a form (`f`) take it as their first value by REFERENCE: a form is one dynamic array in the
+program's variable, so it can be written to a file, read back and run, and no new variable type is needed.
+
+| verb | form | answer (`returning`) | routine |
+|---|---|---|---|
+| `open` | `screen open {clear} {nocursor} {minsize w,h}` | - ; else when no terminal or too small | `!screen_open` |
+| `close` | `screen close` | - | `!screen_close` |
+| `clear` | `screen clear {at x,y} {size w,h} {attr a}` | - | `!screen_clear` |
+| `text` | `screen text s at x,y {attr a} {width n}` | - | `!screen_text` |
+| `box` | `screen box at x,y size w,h {title t} {style s} {attr a} {fill}` | - | `!screen_box` |
+| `cursor` | `screen cursor {at x,y} {on \| off}` | - | `!screen_cursor` |
+| `refresh` | `screen refresh` | - | `!screen_refresh` |
+| `size` | `screen size` | width @fm height | `!screen_size` |
+| `key` | `screen key {timeout s}` | key name; else on timeout / end of input | `!screen_key` |
+| `msgbox` (built) | `screen msgbox text {title t} {buttons b} {default n} {at x,y}` | button number (0 = Esc) | `!screen_msgbox` |
+| `menu` | `screen menu items {title t} {at x,y} {default n}` | item code; else on Esc | `!screen_menu` |
+| `menubar` | `screen menubar menus {at row}` | item code of the chosen entry | `!screen_menubar` |
+| `pick` | `screen pick items {title t} {at x,y} {size w,h} {default n} {multi}` | index (or list of indexes) | `!screen_pick` |
+| `ask` | `screen ask prompt {value v} {width n} {at x,y} {mask} {history h}` | the text; else on Esc | `!screen_ask` |
+| `form` | `screen form f {title t} {at x,y} {size w,h}` | - (creates / resets f) | `!screen_form` |
+| `label` | `screen label f, id, text at x,y {attr a}` | - | `!screen_label` |
+| `frame` | `screen frame f, id at x,y size w,h {title t}` | - | `!screen_frame` |
+| `entry` | `screen entry f, id at x,y width n {value v} {mask} {maxlen n}` | - | `!screen_entry` |
+| `check` | `screen check f, id, text at x,y {value 0\|1}` | - | `!screen_check` |
+| `radio` | `screen radio f, id, items at x,y {value n} {across}` | - | `!screen_radio` |
+| `list` | `screen list f, id, items at x,y size w,h {value n} {multi}` | - | `!screen_list` |
+| `combo` | `screen combo f, id, items at x,y width n {value v}` | - | `!screen_combo` |
+| `button` | `screen button f, id, text at x,y {default} {cancel}` | - | `!screen_button` |
+| `status` | `screen status f, id, text` | - | `!screen_status` |
+| `progress` | `screen progress f, id at x,y width n {value n}` | - | `!screen_progress` |
+| `run` | `screen run f` | id of the button that ended it; else on Esc or a cancel button | `!screen_run` |
+| `wait` | `screen wait f {timeout s}` | event: type @vm id @vm data; else on timeout | `!screen_wait` |
+| `get` | `screen get f, id` | the widget's value | `!screen_get` |
+| `set` | `screen set f, id {value v} {text t} {items i} {enabled b}` | - | `!screen_set` |
+| `focus` | `screen focus f, id` | - | `!screen_focus` |
+
+A zero-value keyword (`fill`, `multi`, `mask`, `on`) is a flag: the subroutine is given 1, else null.
+`items` are values (or a comma list, as `buttons` already is); a menu item is label @sm shortcut @sm
+code, as `$sl_menu` takes it today. `attr` names an attribute (`'reverse'`, `'bold'`, later colours).
+
+`run` is the simple modal form; `wait` is the event-loop form for a program that must react between key
+strokes (validate on leaving a field, fill one list from another) without callbacks - BASIC cannot hand
+one in. The program loops: `screen wait f returning ev` then `begin case` on the event type
+(`button`, `change`, `select`, `key`, `timeout`) and the widget id.
+
+## a complete example (25 lines, proposed)
+
+```
+   screen open clear else crt 'This needs a terminal.' ; stop
+   cities = 'Albany':@vm:'Boston':@vm:'Chicago':@vm:'Denver'
+   screen form f title 'Customer' at 10,3 size 56,16
+   screen label  f, 'l1', 'Name:'          at 2,2
+   screen entry  f, 'name'                 at 12,2 width 30 value 'Smith'
+   screen check  f, 'vip', '&VIP customer' at 12,4 value 1
+   screen label  f, 'l2', 'Type:'          at 2,6
+   screen radio  f, 'kind', 'Retail':@vm:'Wholesale':@vm:'Staff' at 12,6 value 2
+   screen label  f, 'l3', 'City:'          at 2,10
+   screen list   f, 'city', cities         at 12,10 size 20,4
+   screen button f, 'ok',     '&OK'        at 18,14 default
+   screen button f, 'cancel', '&Cancel'    at 28,14 cancel
+   loop
+      screen run f returning pressed else exit       ;* Esc or the Cancel button
+      screen get f, 'name' returning name
+      if name = '' then
+         screen msgbox 'The name is required.' title 'Customer'
+         screen focus f, 'name'
+         continue                                    ;* the form is run again with what was typed
+      end
+      screen get f, 'vip'  returning vip
+      screen get f, 'kind' returning kind
+      screen get f, 'city' returning city
+      gosub save.customer
+      exit
+   repeat
+   screen close
+```
+
+## naming and protecting existing programs
+
+- `screen` is the only new statement word (not in `statements`, `restricted.statements`, the intrinsic
+  tables or `reserved.names`; nothing in gpl.bp or syscom uses it as a statement). A statement is
+  recognised only where `proc.statement` already decides "statement" (`bcomp` "proc.statement"): a NAME
+  followed by a NAME decides it at once, and any look-ahead that is not an assignment token falls through
+  to the statement table. `screen = ...`, `screen<n> = ...`, `screen[n,m] = ...`, `screen := ...`,
+  `screen += ...` and `screen(n) = ...` are assignments by the existing look-ahead, so a program that has
+  a variable called `screen` compiles as before (tested for `=` and `<n> =`). Before this change
+  `screen 'x'` was a compile error, so no working program changes meaning.
+- Keywords (`title`, `at`, `size`, `buttons`, `default`, `returning` ...) live in the verb's row, not in
+  the global tables. While a `screen` statement is being compiled they are added to `reserved.names<2>`
+  (as `execute` does for `capturing`, `returning`), so an expression stops before them. A program's own
+  variable of the same name still works as a value (`title title`, tested).
+- Verb names are lower case in the table's output, the compile messages (12172-12175) and the docs.
+
+## the compiler mechanism (built; `st.screen` in `gpl.bp/bcomp`)
+
+1. `SCREEN` is added to `statements` and `st.screen` to the `on i gosub` list, in step (both lists are
+   alphabetical by convention and the position must match).
+2. `screen.names` / `screen.defs` (top of bcomp): the verb, the catalogued subroutine
+   (`!screen_msgbox`), the number of positional values, and the keyword list `TITLE:1`, `BUTTONS:1` ...
+   (value counts). A verb is a row; no code per verb.
+3. `st.screen` pushes the call target with `emit.direct.call.reference` (the call `st.call` uses), the
+   positional values with `expr` + `OP.VALUE`, then each keyword clause: the value goes into a hidden
+   variable `__300 + slot` (`emit.temp.ref`, `expr`, `OP.STOR`), so the clauses may be written in any
+   order. It then loads the slots in table order (the hidden variable, or `OP.LDNULL` if the clause was not
+   written), the `returning` variable (`simple.lvar.reference`, or hidden `__398`), the status
+   (hidden `__399`), `OP.CALL n`, and pushes `__399` for `back.end`.
+4. THEN / ELSE: `back.end` with `opcode = -1`, `thenelse.stack = 2` (optional): THEN on status 0, ELSE
+   on non-zero, the same machinery as `read`; with neither clause it pops the status.
+5. The subroutine is a `$internal` source catalogued `!screen_<verb>` (the pattern of `ced_sub` /
+   `!ced`), so a user program can call it and it can call `$sl_*` itself. The bootstrap compiles every
+   file in `gpl.bp`: no VOC entry, no registration.
+6. Traps met: `opcode` and `j.index` are overwritten by a nested statement (as for `while`/`until`, not
+   hit here: the clause values are expressions); the hidden variables must be set before the CALL
+   argument load (done: they are stored as the clauses are parsed); `err` after `expr` must return
+   (done); a message added for the compile errors needs a file in `sdsys/messages` (12172-12175); the
+   statement table must not be sorted by hand, only extended in step; `bbcmp.py` (the bootstrap compiler
+   for the `_*` pcode routines) is NOT involved - it never sees a user statement.
+7. Not built yet: a positional value passed BY REFERENCE (a form: `r` in the table), flags (a keyword
+   with no value), a keyword that takes a list of words (`style single`), `at` as a pair that may be left
+   out (the null pair is passed today), a check that table, routine signature and docs agree
+   (`test-screencmd-units.py`, proposed).
+
+## spike result
+
+`sandbox-screen.py`, 25 rows, all green on a fresh sandbox build (bootstrap compiled every program with
+no errors): the statement compiles in a plain (non-internal) session; the box is drawn with title, text
+and two buttons from a comma list, DEFAULT 2 puts the reverse video on the second; Return gives THEN with
+2, `y` THEN with 1, Esc ELSE with 0; the clauses written in the other order and with `@vm` buttons give
+the same box; with no clauses the next statement runs; a field mark ends a line; variables named
+`screen`, `title`, `buttons`, `default`, `returning` still work and are not changed by the call; four
+compile errors are refused with their messages. Cost: about 130 lines in bcomp (of which the table is
+10), one 40-line routine, no opcode, no kernel change.
+
+## staged plan (riskiest first; estimates are mine, small < medium < large)
+
+| stage | what | size | test (through a USER program, on the pty) |
+|---|---|---|---|
+| 0 | compiler mechanism + `msgbox` - DONE | small | `sandbox-screen.py` 25 rows |
+| 1 | the owned screen: `$sl_put` with per-cell attributes, `open`/`close`/`clear`/`text`/`box`/`cursor`/`refresh`/`size`/`key`; move msgbox, menu and prompt onto it; the cursor rule | medium | text drawn, a dialogue over it, the text back row for row and attribute for attribute; cursor |
+| 2 | modal dialogues: `menu`, `menubar`, `pick`, `ask`, `msgbox at` | medium | each verb: choose, cancel, keys, background restored |
+| 3 | by-reference positionals and flags in the table; the form record; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus` | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
+| 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress | medium | event order; a combo over a form; scrolling lists |
+| 5 | colour themes, mouse (SGR 1006 already reaches KEYIN), resize (SIGWINCH) | medium | attributes; clicks; a resized pty |
+| 6 | editor and viewer widgets; `ced_edit` and the debugger on the library; table, tree | large | the editors' existing suites (`sandbox-ced.py`) |
+| 7 | carry to Solo (bcomp, the library, 12172-12175), then the Windows agent when Core is declared stable | small each | their own suites |
+
+What would falsify the plan: (a) stage 1's per-cell shadow making a BASIC repaint slower than ~16 ms at
+160x48 with colour (S.1 measured monochrome rows only); (b) a form held in one dynamic array being too
+slow to copy per call (it is passed by reference, so only if `expr`'s `OP.VALUE` is applied by mistake);
+(c) the focus ring needing a widget to see keys before its parent, which the `unhandled` convention
+cannot express (the first worker's own doubt).
+
+## risks and open questions for the owner
+
+1. **The statement word.** `screen` (proposed) versus a name of its own such as `tui`, or one word per
+   widget (`msgbox`, `menu`, `form` ...). One word keeps the namespace clean and the grammar regular
+   (a table row per verb); several words read shorter.
+2. **Library-owned screen.** The library keeps the shadow once `screen open` is done; before that a
+   dialogue puts back blanks. The alternative is for every dialogue to open the screen implicitly,
+   which would erase the program's output on the first call.
+3. **Forms as statements building one array** (proposed) versus a form read from a record (a data
+   collection or a JSON string), which suits stored screen definitions; the array can be saved and read
+   back as it is, so this is an addition, not a choice.
+4. **`ask` or `input`.** `screen input` would clash in the reader's mind with `input`; `ask` is not an SD
+   word. Open.
+5. Phantom / API sessions: every verb answers ELSE (status 1) and draws nothing; an `open` in a phantom
+   takes the else branch. Proposed, untested.
+6. Cursor after a transient dialogue: nothing in SD reads the cursor position, so it is left at the
+   box's last cell. After `open` the library owns it. A save/restore pair from terminfo (`sc`/`rc`) is
+   possible for terminals that have it - not proposed.
+7. Carry-over: the statement is compiled by `bcomp`, so Solo and Windows get it with the compiler;
+   message numbers 12172-12175 are Linux's range, the Windows agent allocates its own. Nothing is sent
+   to them until the owner declares Core stable (the standing order).
