@@ -43,6 +43,7 @@ $include sl.h
       display mseq :
    end
    call $sl_theme('reset', '', '', '', '', r)
+   call $sl_line('on', 0, r)
    call $sl_sgr('n', sq)
    display @(-31) : sq :
    call $sl_scr('close', scr)

@@ -32,21 +32,29 @@ $include sl.h
 
    if w < 2 or h < 2 then return
 
-   topl = '+' : str('-', w - 2) : '+'
+   * The border characters: + - | or, with SCREEN OPEN ... LINES, stand-ins that $sl_put writes as line-drawing characters
+   call $sl_line('tl', '', ctl)
+   call $sl_line('tr', '', ctr)
+   call $sl_line('bl', '', cbl)
+   call $sl_line('br', '', cbr)
+   call $sl_line('h', '', chh)
+   call $sl_line('v', '', cvv)
+
+   topl = ctl : str(chh, w - 2) : ctr
    if title # '' then
       t = title[1, w - 6]
-      if len(t) > 0 then topl = '+- ' : t : ' ' : str('-', w - 5 - len(t)) : '+'
+      if len(t) > 0 then topl = ctl : chh : ' ' : t : ' ' : str(chh, w - 5 - len(t)) : ctr
    end
    call $sl_put(scr, x, y, topl[1, w], code)
    for r = 1 to h - 2
       if fill then
-         call $sl_put(scr, x, y + r, '|' : space(w - 2) : '|', code)
+         call $sl_put(scr, x, y + r, cvv : space(w - 2) : cvv, code)
       end else
-         call $sl_put(scr, x, y + r, '|', code)
-         call $sl_put(scr, x + w - 1, y + r, '|', code)
+         call $sl_put(scr, x, y + r, cvv, code)
+         call $sl_put(scr, x + w - 1, y + r, cvv, code)
       end
    next r
-   call $sl_put(scr, x, y + h - 1, '+' : str('-', w - 2) : '+', code)
+   call $sl_put(scr, x, y + h - 1, cbl : str(chh, w - 2) : cbr, code)
 
    return
 end

@@ -9,11 +9,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN OPEN {CLEAR} {NOCURSOR} {MINSIZE w,h} {NOMOUSE} {THEN ... ELSE ...}
+*   SCREEN OPEN {CLEAR} {NOCURSOR} {MINSIZE w,h} {NOMOUSE} {LINES} {THEN ... ELSE ...}
 *
 *   is compiled into
 *
-*   call !screen_open(clear, nocursor, minw, minh, nomouse, ret, status)
+*   call !screen_open(clear, nocursor, minw, minh, nomouse, lines, ret, status)
 *
 *     clear      1 clears the terminal.  Without it the library takes the screen as it is and BELIEVES
 *                it blank: a pop-up will put back blanks over whatever the program printed earlier.
@@ -26,6 +26,9 @@
 *                and SCREEN MOUSE says what it was.  A program that stops without SCREEN CLOSE leaves the
 *                terminal reporting, and the mouse then types garbage at the prompt: the terminal's reset
 *                command puts it right.
+*     lines      borders (forms, boxes, dialogues) are drawn with the line-drawing characters of Unicode
+*                (a terminal that is set to UTF-8 and has a font with them is needed: without it a border
+*                is + - | as before) until SCREEN CLOSE
 *     status     0 taken; 1 not: a phantom or other session with no terminal, or too small a terminal
 *
 *   From now on the library keeps a shadow of everything it draws (SCREEN TEXT, BOX, a dialogue ...),
@@ -37,7 +40,7 @@
 * START-CODE
 
 $internal
-subroutine screen_open(clear, nocursor, minw, minh, nomouse, ret, status)
+subroutine screen_open(clear, nocursor, minw, minh, nomouse, lines, ret, status)
 $catalog !screen_open
 
 $include sl.h
@@ -51,6 +54,7 @@ $include sl.h
    call $sl_theme('set', '', '', '', '', r)           ;* the sequences again, for the terminal type now in force
    call $sl_theme('default', '', '', '', '', r)       ;* the site's theme (SCREENTHEME in sd.conf), unless a program asked for one
    call $sl_scr('open', scr)
+   call $sl_line('on', (lines # ''), r)                ;* borders in line-drawing characters, if asked for
    if clear # '' then call $sl_desktop(scr)
    if nocursor # '' then scr<SL.S.CURON> = 0
    scr<SL.S.MOUSE> = 0

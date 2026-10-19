@@ -1,0 +1,56 @@
+* SL_LINE
+* Screen library, draw layer: the characters a border is drawn with.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux e7aebc7 (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_line(op, a, ret)
+*
+*     op 'on'    a = 1: borders are drawn with the terminal's line-drawing characters (UTF-8: a terminal that
+*                shows them is needed, which is why SCREEN OPEN asks for it with LINES); a = 0: with + - |
+*     op 'is'    ret = 1 if line drawing is on
+*     op 'tl' 'tr' 'bl' 'br' 'h' 'v'    ret = the character to draw the corner or line with: the + - | of
+*                the plain borders, or, when line drawing is on, a one-character STAND-IN that $sl_put turns into
+*                the right bytes as it writes it (a cell of the screen is one character in the shadow, and
+*                three bytes on the terminal)
+*     op 'plain' a = a string: ret = the same with the stand-ins turned into + - | (for a line drawn after line
+*                drawing was turned off)
+*
+*   The stand-ins are CHAR(14) to CHAR(19): top left, top right, bottom left, bottom right, horizontal,
+*   vertical.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_line(op, a, ret)
+$catalog $sl_line
+
+   common /sllin/ ln.on
+
+   ret = ''
+   begin case
+      case op = 'on'
+         ln.on = if a + 0 then 1 else 0
+      case op = 'is'
+         ret = if ln.on = 1 then 1 else 0
+      case op = 'tl' ; ret = if ln.on = 1 then char(14) else '+'
+      case op = 'tr' ; ret = if ln.on = 1 then char(15) else '+'
+      case op = 'bl' ; ret = if ln.on = 1 then char(16) else '+'
+      case op = 'br' ; ret = if ln.on = 1 then char(17) else '+'
+      case op = 'h' ; ret = if ln.on = 1 then char(18) else '-'
+      case op = 'v' ; ret = if ln.on = 1 then char(19) else '|'
+      case op = 'plain'
+         ret = convert(char(14) : char(15) : char(16) : char(17) : char(18) : char(19), '++++-|', a)
+   end case
+
+   return
+end
+
+* END-CODE

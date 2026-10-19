@@ -172,17 +172,23 @@ show:
 paint:
    call $sl_attr('window', na)
    call $sl_attr('highlight', ha)
-   topl ='+' : str('-', bwid - 2) : '+'
-   if title # '' then topl = '+- ' : title : ' ' : str('-', bwid - 5 - len(title)) : '+'
+   call $sl_line('tl', '', ctl)
+   call $sl_line('tr', '', ctr)
+   call $sl_line('bl', '', cbl)
+   call $sl_line('br', '', cbr)
+   call $sl_line('h', '', chh)
+   call $sl_line('v', '', cvv)
+   topl = ctl : str(chh, bwid - 2) : ctr
+   if title # '' then topl = ctl : chh : ' ' : title : ' ' : str(chh, bwid - 5 - len(title)) : ctr
    call $sl_put(scr, bx, by, topl[1, bwid], na)
    for l = 1 to nl
-      call $sl_put(scr, bx, by + l, fmt('| ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : '|', na)
+      call $sl_put(scr, bx, by + l, fmt(cvv : ' ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : cvv, na)
    next l
-   call $sl_put(scr, bx, by + nl + 1, '|' : space(bwid - 2) : '|', na)
-   call $sl_put(scr, bx, by + nl + 3, '|' : space(bwid - 2) : '|', na)
-   call $sl_put(scr, bx, by + nl + 4, '+' : str('-', bwid - 2) : '+', na)
+   call $sl_put(scr, bx, by + nl + 1, cvv : space(bwid - 2) : cvv, na)
+   call $sl_put(scr, bx, by + nl + 3, cvv : space(bwid - 2) : cvv, na)
+   call $sl_put(scr, bx, by + nl + 4, cbl : str(chh, bwid - 2) : cbr, na)
    * The button row: the buttons are laid over the blank box row, the selected one in highlight
-   txt = '|' : space(bwid - 2) : '|'
+   txt = cvv : space(bwid - 2) : cvv
    atr = str(na, bwid)
    x = int((bwid - bw) / 2) + 2                  ;* string position of the first button
    for b = 1 to nb

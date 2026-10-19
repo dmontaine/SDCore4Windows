@@ -34,11 +34,15 @@ $catalog $sl_put
 
 $include sl.h
 
+   common /sllin/ ln.on
+
    n = len(text)
    if n = 0 then return
    sw = scr<SL.S.W> + 0
    sh = scr<SL.S.H> + 0
    if y < 0 or y >= sh then return
+
+   lc.all = char(14) : char(15) : char(16) : char(17) : char(18) : char(19)
 
    * The style of every cell
    if len(attr) = 1 then
@@ -90,7 +94,21 @@ $include sl.h
       j = i
       loop while j < n and cells[j + 1, 1] = c do j += 1 repeat
       call $sl_sgr(c, sq)
-      out := sq : text[i, j - i + 1]
+      seg = text[i, j - i + 1]
+      * the stand-ins of $sl_line become the bytes of a line-drawing character (or + - | if that is off)
+      if convert(lc.all, str(' ', 6), seg) # seg then
+         if ln.on = 1 then
+            seg = change(seg, char(14), char(226) : char(148) : char(140))
+            seg = change(seg, char(15), char(226) : char(148) : char(144))
+            seg = change(seg, char(16), char(226) : char(148) : char(148))
+            seg = change(seg, char(17), char(226) : char(148) : char(152))
+            seg = change(seg, char(18), char(226) : char(148) : char(128))
+            seg = change(seg, char(19), char(226) : char(148) : char(130))
+         end else
+            seg = convert(lc.all, '++++-|', seg)
+         end
+      end
+      out := sq : seg
       last = c
       i = j + 1
    repeat

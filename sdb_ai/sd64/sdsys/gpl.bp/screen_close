@@ -46,6 +46,7 @@ $include sl.h
    scr = ''
    call $sl_scr('close', scr)
    call $sl_theme('reset', '', '', '', '', r)         ;* the next program starts from mono, having asked for nothing
+   call $sl_line('on', 0, r)                          ;* and from plain borders
 
    return
 end
