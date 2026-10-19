@@ -26,7 +26,8 @@
 *     init    the columns' widths; w and h from the columns and the rows if they were not given (the heading and at most
 *             8 rows); cur and top are brought into range; the order is that of rows
 *     draw    the heading in the 'header' style, then the rows in the 'text' style, one column apart; the current
-*             row is in the highlight style while the table has the focus and marked with > while it has not; with multi
+*             row is in the highlight style while the table has the focus and marked with > while it has not (with
+*             marker 1 - an element a caller sets, as CED does - it is marked with > in both cases); with multi
 *             a row that is marked has a * in front of it.  The current column's heading is in the highlight style
 *             while the table has the focus (when there is more than one column) and the sorted column's has a ^ or v
 *             in its last cell.  A table wider than the widget shows the columns from hcol on and a row longer than that
@@ -442,7 +443,7 @@ paint:
             end
             if at then lead = '*'
          end
-         if i = cur and not(focused) then lead = '>'
+         if i = cur and (not(focused) or w{'marker'} + 0) then lead = '>'     ;* marker 1: > on the current row always
          line = lead
          for c = hcol to nc
             cell = rows<oi, c>
