@@ -146,6 +146,7 @@ init.page:
 on.page:
    pg = w{'page'} + 0
    vis = (pg = 0 or f{'page'} = '' or pg = f{'page'} + 0)
+   if w{'hidden'} + 0 then vis = 0            ;* SCREEN SET ... VISIBLE 0
    return
 
 * Every widget's place on the screen

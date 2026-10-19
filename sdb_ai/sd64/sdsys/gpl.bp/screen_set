@@ -9,11 +9,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN SET f, id {VALUE v} {TEXT t} {ITEMS i} {ENABLED e}
+*   SCREEN SET f, id {VALUE v} {TEXT t} {ITEMS i} {ENABLED e} {WRAP b} {READONLY b} {VISIBLE b}
 *
 *   is compiled into
 *
-*   call !screen_set(f, id, value, text, items, enabled, ret, status)
+*   call !screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, ret, status)
 *
 *     f id     the form and the widget's name in it
 *     value    entry: the text (the cursor goes to its end).  check: 1 or 0.  radio: the choice.  list: the
@@ -23,6 +23,9 @@
 *     items    radio, list: the choices, as values (a field mark does as well); table: the rows, one row to a
 *              field and one cell to a value; the selection goes back to the first
 *     enabled  0 takes the widget out of the focus ring and stops it taking keys; 1 puts it back
+*     wrap     memo: 1 wraps long lines at a blank, 0 pans sideways
+*     readonly memo: 1 makes it a viewer, 0 an editor again
+*     visible  0 hides the widget (it is not drawn and takes no focus), 1 shows it again
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
 *   A clause left out changes nothing.  The change is made in the form; if the form is on the screen (SCREEN
@@ -33,7 +36,7 @@
 * START-CODE
 
 $internal
-subroutine screen_set(f, id, value, text, items, enabled, ret, status)
+subroutine screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, ret, status)
 $catalog !screen_set
 
    ret = ''
@@ -95,6 +98,15 @@ $catalog !screen_set
       end else
          w{'disabled'} = 0
       end
+   end
+   if wrap # '' and wt = 'memo' then
+      w{'wrap'} = if wrap + 0 # 0 then 1 else 0
+      w{'left'} = 1
+   end
+   if readonly # '' and wt = 'memo' then w{'readonly'} = if readonly + 0 # 0 then 1 else 0
+   if visible # '' then
+      * a hidden widget is not drawn and takes no focus; the form is redrawn without it (or with it again)
+      w{'hidden'} = if visible + 0 = 0 then 1 else 0
    end
    if f{'shown'} and not(system(25)) then       ;* the form is on the screen (SCREEN WAIT): show the change
       call $sl_scr('get', scr)

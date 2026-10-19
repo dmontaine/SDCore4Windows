@@ -533,7 +533,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "BUTTON"  ; screen.defs<-1> = "!screen_button":@vm:3:@vm:"AT:2":@sm:"DEFAULT:F":@sm:"CANCEL:F"
    screen.names<-1> = "RUN"     ; screen.defs<-1> = "!screen_run":@vm:1
    screen.names<-1> = "GET"     ; screen.defs<-1> = "!screen_get":@vm:2
-   screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1"
+   screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1":@sm:"WRAP:1":@sm:"READONLY:1":@sm:"VISIBLE:1"
    screen.names<-1> = "FOCUS"   ; screen.defs<-1> = "!screen_focus":@vm:2
    screen.names<-1> = "VALUES"  ; screen.defs<-1> = "!screen_values":@vm:1
    screen.names<-1> = "WAIT"    ; screen.defs<-1> = "!screen_wait":@vm:1:@vm:"TIMEOUT:1"
