@@ -27,6 +27,8 @@
 * 18 Oct 26 Windows port - from Linux dda6e65 (13 Oct 26): 1.2-0 (openQM FOR / NEXT, sheet 84 and 300): FOR var = value1, value2,
 *               ... and FOR EACH var IN string {DELIMITER delim}, compiled as a FOR over
 *               a hidden counter with the existing opcodes (st.for.list, st.for.each).
+* 18 Oct 26 Windows port - from Linux bc9ef2d (13 Oct 26): SCREEN MEMO takes SYNTAX name (colour for a language) and LNUM (line numbers): two more
+*               arguments of !screen_memo, after WRAP.  A program compiled before this needs compiling again.
 * 18 Oct 26 Windows port - from Linux 1c94d00 (10 Oct 26), RELEASE_1.1 143: $MODE
 *           names may be a comma separated list (ref 105), $BASIC.OPTIONS MODE
 *           may turn a mode off with a leading minus (406), new mode
@@ -554,7 +556,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "STYLE"   ; screen.defs<-1> = "!screen_style":@vm:4
    screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
    screen.names<-1> = "PAGE"    ; screen.defs<-1> = "!screen_page":@vm:2
-   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F"
+   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F":@sm:"SYNTAX:1":@sm:"LNUM:F"
    screen.names<-1> = "CLIP"    ; screen.defs<-1> = "!screen_clip":@vm:0:@vm:"AT:2":@sm:"SIZE:2"
    screen.names<-1> = "SCROLLBAR" ; screen.defs<-1> = "!screen_scrollbar":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VISIBLE:1":@sm:"VALUE:1"
    screen.names<-1> = "TREE"    ; screen.defs<-1> = "!screen_tree":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"EXPANDED:F"

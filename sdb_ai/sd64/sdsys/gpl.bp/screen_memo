@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux bc9ef2d (13 Oct 26): SYNTAX name (the text is coloured as that language) and LNUM (line numbers down the left).
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP}
+*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP} {SYNTAX name} {LNUM}
 *
 *   is compiled into
 *
-*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, ret, status)
+*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, syntax, lnum, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     text      what it starts with: one line to a field (a linefeed ends a line too).  Null for an empty area.
@@ -24,6 +25,12 @@
 *               nothing can be typed or deleted
 *     wrap      a long line is wrapped at a blank (or in a word longer than the width) instead of the area
 *               panning sideways; the text itself is not changed
+*     syntax    the name of a language $sl_syntax knows (sd.basic, c, json, markdown, sh, python, or one a
+*               site added in &sed.syntax&): the text is drawn in the syntax styles of the theme in force
+*               (the mono theme has none; classic, blue, dark and light do).  A name it does not know is
+*               not an error: the text is drawn plain
+*     lnum      a column of line numbers down the left, as wide as the number of the last line needs, one
+*               more for a blank; the width given in SIZE includes it
 *     status    0 added; 1 not (ELSE)
 *
 *   Typing, Return (which splits the line), Backspace and Delete edit; Ctrl-A and Ctrl-E (or Home and End) go
@@ -39,7 +46,7 @@
 * START-CODE
 
 $internal
-subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, ret, status)
+subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, syntax, lnum, ret, status)
 $catalog !screen_memo
 
    ret = ''
@@ -51,6 +58,7 @@ $catalog !screen_memo
       if len(lines<i>) > widest then widest = len(lines<i>)
    next i
    mw = widest + 1
+   if lnum # '' then mw += len(n) + 1          ;* the line numbers
    if mw > 60 then mw = 60
    if mw < 10 then mw = 10
    mh = n
@@ -72,6 +80,10 @@ $catalog !screen_memo
    w{'value'} = lines
    w{'readonly'} = (readonly # '')
    w{'wrap'} = (wrap # '')
+   w{'lnum'} = (lnum # '')
+   nl = 0
+   if syntax # '' then call $sl_syntax('index', downcase(trim(syntax)), '', '', '', nl)
+   w{'synlang'} = nl + 0
    call $sl_memo('init', w, '', '', r)
    call $sl_wadd(f, w, ok)
    if ok then status = 0

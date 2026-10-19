@@ -70,10 +70,17 @@ $include sl.h
    mh = w{'h'} + 0
    if mw < 3 then mw = 3
    if mh < 1 then mh = 1
-   tw = mw - 1                                   ;* the width of the text: the last column is the scroll bar
    ro = w{'readonly'} + 0
    wrap = w{'wrap'} + 0
    lines = w{'value'}
+   lnum = w{'lnum'} + 0                          ;* 13 Oct 26: line numbers down the left (gut cells: the digits and a blank)
+   syl = w{'synlang'} + 0                        ;* 13 Oct 26: the number of the language the text is coloured as (0: none)
+   gut = 0
+   if lnum then
+      gut = len(max(dcount(lines, @fm), 1)) + 1
+      if gut > mw - 4 then gut = 0               ;* an area too narrow for them has none
+   end
+   tw = mw - 1 - gut                             ;* the width of the text: the last column is the scroll bar
    cx = w{'cx'} + 0
    cy = w{'cy'} + 0
    top = w{'top'} + 0
@@ -137,7 +144,7 @@ click:
       rr = top + key<4> - w{'ay'}
       if rr > nr then rr = nr
       if rr < 1 then rr = 1
-      want = left + key<3> - w{'ax'}
+      want = left + key<3> - w{'ax'} - gut
       if want < 1 then want = 1
       gosub to.row
       gosub row.of
@@ -670,12 +677,15 @@ paint:
    call $sl_attr('text', tc)
    call $sl_attr('window', wc)
    call $sl_attr('highlight', hc)
+   call $sl_attr('disabled', gc)
    call $sl_scrollbar(mh, top, nr, mh, bar)
    gosub sel.range
+   sl.line = 0                                   ;* the line whose syntax styles are in sty (rows of a wrapped line share them)
    for r = 0 to mh - 1
       rr = top + r
       seg = ''
       base = 1
+      rline = 0
       if rr <= nr then
          gosub row.text
          seg = convert(char(9), ' ', rtext)
@@ -686,6 +696,14 @@ paint:
       end
       seg := space(tw - len(seg))
       attrs = str(tc, tw)
+      if syl and rr <= nr then
+         gosub syn.row
+         for k = 1 to len(seg)
+            if k > tw then exit
+            sc = sty[rstart + base + k - 2, 1]
+            if sc # '' and sc # 'n' then attrs[k, 1] = sc
+         next k
+      end
       if has.sel and rr <= nr then
          for k = 1 to len(rtext) - base + 1
             if k > tw then exit
@@ -696,12 +714,37 @@ paint:
             if inside then attrs[k, 1] = hc
          next k
       end
-      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, seg : bar[r + 1, 1], attrs : wc)
+      if gut then
+         * The line numbers: on the first row of a line (a wrapped line's other rows, and the rows past the text, have none)
+         gnum = space(gut)
+         if rr <= nr and rstart = 1 then gnum = fmt(rline, (gut - 1) : 'R') : ' '
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, gnum, str(gc, gut))
+      end
+      call $sl_put(scr, w{'ax'} + gut, w{'ay'} + r, seg : bar[r + 1, 1], attrs : wc)
    next r
    if w{'focused'} then
       gosub row.of
-      display @(w{'ax'} + dcx - left, w{'ay'} + dr - top) :
+      display @(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top) :
    end
+   return
+
+* The syntax styles of the line row rr belongs to (rline): in sty, one style code to each character.  A line's styles are made
+* from the state the line before ends in, so the state at the first line shown is found by running through the lines above it
+* (the cheap 'state' op) and a line that follows the last one done goes on from where that finished.  A text of some thousand lines
+* is slower to draw for it.
+syn.row:
+   if rline = sl.line then return
+   if sl.line > 0 and rline = sl.line + 1 then
+      sst = sst2
+   end else
+      sst = 0 ; sst2 = 0
+      for q = 1 to rline - 1
+         call $sl_syntax('state', syl, lines<q>, sst, sst2, '')
+         sst = sst2
+      next q
+   end
+   call $sl_syntax('line', syl, lines<rline>, sst, sst2, sty)
+   sl.line = rline
    return
 end
 
