@@ -1,0 +1,76 @@
+* SCREEN_MEMO
+* The subroutine that SCREEN MEMO calls: add a text area of several lines (an editor, or a viewer) to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY}
+*
+*   is compiled into
+*
+*   call !screen_memo(f, id, text, x, y, w, h, readonly, ret, status)
+*
+*     f id      the form and the widget's name in it (as SCREEN LABEL)
+*     text      what it starts with: one line to a field (a linefeed ends a line too).  Null for an empty area.
+*     x y       the place of the area from the form's top left corner, default 1,1
+*     w h       its size: the last column is a scroll bar, so w is the text's width plus one.  Default as
+*               wide as the longest line needs, at most 60, and as many rows as there are lines, between 3 and 8.
+*     readonly  a viewer: the cursor keys, Page Up and Page Down, Home and End move through the text, and
+*               nothing can be typed or deleted
+*     status    0 added; 1 not (ELSE)
+*
+*   Typing, Return (which splits the line), Backspace and Delete edit; Ctrl-A and Ctrl-E (or Home and End) go
+*   to the ends of the line, Ctrl-K cuts to the end of it.  A long line is not wrapped: the area pans sideways
+*   with the cursor.  SCREEN GET f, id answers the text, one line to a field, and SCREEN SET f, id VALUE t
+*   replaces it.  SCREEN VALUES does not include a memo (it can be long): ask for it with SCREEN GET.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, ret, status)
+$catalog !screen_memo
+
+   ret = ''
+   status = 1
+   lines = convert(char(10), @fm, text)
+   n = dcount(lines, @fm)
+   widest = 0
+   for i = 1 to n
+      if len(lines<i>) > widest then widest = len(lines<i>)
+   next i
+   mw = widest + 1
+   if mw > 60 then mw = 60
+   if mw < 10 then mw = 10
+   mh = n
+   if mh > 8 then mh = 8
+   if mh < 3 then mh = 3
+   if sw # '' then mw = sw + 0
+   if sh # '' then mh = sh + 0
+
+   w = collection()
+   w{'id'} = id
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'w'} = mw
+   w{'h'} = mh
+   w{'value'} = lines
+   w{'readonly'} = (readonly # '')
+   call $sl_memo('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

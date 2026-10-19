@@ -29,17 +29,69 @@ subroutine sl_key(timeout, name)
 $catalog $sl_key
 
 $include keyin.h
+$include err.h
+
+   common /slsz/ sz.last, sz.has, sz.held
 
    name = ''
    if system(25) then return              ;* a phantom has no keyboard: asking for a key would abort it
-   if timeout = '' then k = keycode() else k = keycode(timeout)
+
+   * The terminal's size is checked on the way in and between one-second slices of the wait: a resize (SIGWINCH makes the
+   * kernel change @crtwide and @crthigh; so does TERM w,h) is the key 'resize'.  A block starts as 0, so the first call only
+   * notes the size.
+   size.now = @crtwide : ',' : @crthigh
+   if unassigned(sz.last) then sz.last = size.now
+   if sz.last = 0 then sz.last = size.now
+   if sz.last # size.now then
+      gosub resized
+      return
+   end
+
+   * KEYCODE TAKES WHOLE SECONDS ONLY (op_keycodet converts its argument with GetInt, so 0.5 is 0 and 0 is "for ever": measured
+   * 13 Oct 26), so the slice is one second.  A timeout of 0 or null is for ever, as it always was; one under a second waits
+   * the second out.
+   * A key that arrived just as the size changed was kept back so that 'resize' could come first: it is the key now
+   k = ''
+   if sz.has then
+      sz.has = 0
+      k = sz.held
+   end
+
+   remain = timeout                       ;* seconds still to wait, null for ever
+   if remain = 0 then remain = ''
+   loop
+   until k # '' do
+      k = keycode(1)
+      if k # '' then
+         size.now = @crtwide : ',' : @crthigh
+         if sz.last # size.now then          ;* the window was resized as this key came: 'resize' first, the key next time
+            sz.held = k
+            sz.has = 1
+            gosub resized
+            return
+         end
+      end
+      if k = '' then
+         if status() # ER$TIMEOUT then return   ;* the input has ended
+         size.now = @crtwide : ',' : @crthigh
+         if sz.last # size.now then
+            gosub resized
+            return
+         end
+         if remain # '' then
+            remain -= 1
+            if remain <= 0 then return          ;* the time asked for has passed
+         end
+      end
+   repeat
    name = ''
-   if k = '' then return
    n = seq(k[1, 1])
 
    begin case
       case len(k) > 1
          name = k                     ;* A string a binding gave: handed back as it is
+      case n = K$MOUSE
+         gosub read.mouse
       case n = K$UP ; name = 'up'
       case n = K$DOWN ; name = 'down'
       case n = K$LEFT ; name = 'left'
@@ -61,6 +113,57 @@ $include keyin.h
       case 1 ; name = k
    end case
 
+   return
+
+* The size of the terminal is not what it was: the key is 'resize'.  This routine does NOT draw anything: the live screen context
+* is the caller's (a dialogue draws into its own copy, which becomes the kept one only when the statement ends), so the caller
+* calls $sl_resize on it.  SCREEN KEY, which has no dialogue, asks $sl_scr, which does it for the kept context.
+resized:
+   sz.last = size.now
+   name = 'resize'
+   return
+
+* KEYCODE gave K$MOUSE: an xterm mouse report started (ESC [ <).  The rest is b;x;y and M (pressed or moved) or m
+* (released), which the terminal sent in one piece.  name is 'mouse' and $sl_mouse holds the details; a report that
+* is cut short or not what was expected gives no key at all.
+read.mouse:
+   name = ''
+   rep = ''
+   fin = ''
+   loop
+      c = keyin(0.2)
+      set.status 0
+   until c = '' or c = 'M' or c = 'm' or len(rep) > 20 do
+      rep := c
+   repeat
+   if c = 'M' or c = 'm' then fin = c
+   if fin = '' then return
+   b = field(rep, ';', 1)
+   mx = field(rep, ';', 2)
+   my = field(rep, ';', 3)
+   if not(num(b)) or not(num(mx)) or not(num(my)) or b = '' or mx = '' or my = '' then return
+   b += 0
+   mods = ''
+   if bitand(b, 4) then mods := 's'
+   if bitand(b, 8) then mods := mods : 'a'
+   if bitand(b, 16) then mods := mods : 'c'
+   base = bitand(b, 3)
+   begin case
+      case bitand(b, 64)
+         kind = 'wheel'
+         btn = if base = 0 then 'up' else 'down'
+      case fin = 'm'
+         kind = 'release'
+         btn = base + 1
+      case bitand(b, 32)
+         kind = 'drag'
+         btn = if base = 3 then 4 else base + 1
+      case 1
+         kind = 'press'
+         btn = base + 1
+   end case
+   call $sl_mouse('set', kind : @fm : btn : @fm : (mx - 1) : @fm : (my - 1) : @fm : mods)
+   name = 'mouse'
    return
 end
 

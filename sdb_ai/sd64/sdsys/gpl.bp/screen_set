@@ -17,10 +17,11 @@
 *
 *     f id     the form and the widget's name in it
 *     value    entry: the text (the cursor goes to its end).  check: 1 or 0.  radio: the choice.  list: the
-*              current item.
+*              current item.  tabs: the tab (the form shows its page).  memo: the text, one line to a field
+*              (the cursor goes back to its start)
 *     text     label, button, check: the caption
-*     items    radio, list: the choices, as values (a field mark does as well); the selection goes back to
-*              the first
+*     items    radio, list: the choices, as values (a field mark does as well); table: the rows, one row to a
+*              field and one cell to a value; the selection goes back to the first
 *     enabled  0 takes the widget out of the focus ring and stops it taking keys; 1 puts it back
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
@@ -59,6 +60,15 @@ $catalog !screen_set
          case wt = 'list'
             w{'cur'} = value + 0
             w{'value'} = value + 0
+         case wt = 'memo'
+            w{'value'} = value                  ;* the new text: the cursor goes back to its start
+            call $sl_widget_init(w)
+         case wt = 'tabs'
+            nt = dcount(w{'items'}, @vm)
+            tv = value + 0
+            if tv < 1 then tv = 1
+            if tv > nt then tv = nt
+            w{'value'} = tv
          case 1
             w{'value'} = value
       end case
@@ -68,7 +78,11 @@ $catalog !screen_set
       call $sl_widget_init(w)
    end
    if items # '' then
-      w{'items'} = convert(@fm, @vm, items)
+      if wt = 'table' then
+         w{'rows'} = items                      ;* a table's rows are fields, their cells values: nothing is converted
+      end else
+         w{'items'} = convert(@fm, @vm, items)
+      end
       w{'picked'} = ''
       w{'top'} = 1
       w{'cur'} = 1

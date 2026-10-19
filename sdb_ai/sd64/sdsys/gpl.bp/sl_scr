@@ -12,7 +12,11 @@
 *
 *   call $sl_scr(op, scr)
 *
-*     get    scr is the screen context (sl.h) the library is to use.  Until SCREEN OPEN has been done
+*     resized  scr returns 1 if the kept context has been made a new size (the terminal was resized, or TERM w,h
+*            typed) since this was last asked, else 0, and the flag is cleared
+*     get    scr is the screen context (sl.h) the library is to use.  If the library owns the screen and the
+*            terminal is no longer the size the kept context was made for, the context is first made the new
+*            size, keeping every cell that still fits, and the screen drawn again from it.  Until SCREEN OPEN has been done
 *            it is a blank one of the terminal's size, made afresh on every call and not kept
 *            (SL.S.OWNED 0): a pop-up such as a message box can then put back only blanks, where the
 *            program had text.  After SCREEN OPEN it is the kept one (SL.S.OWNED 1).
@@ -36,7 +40,7 @@ $catalog $sl_scr
 
 $include sl.h
 
-   common /slscr/ ctx, ctx.open
+   common /slscr/ ctx, ctx.open, ctx.resized
 
    if unassigned(ctx.open) then
       ctx = ''
@@ -46,6 +50,7 @@ $include sl.h
    begin case
       case op = 'get'
          if ctx.open then
+            if ctx<SL.S.W> # @crtwide or ctx<SL.S.H> # @crthigh then gosub resize
             scr = ctx
          end else
             gosub blank
@@ -54,6 +59,7 @@ $include sl.h
 
       case op = 'put'
          if ctx.open then
+            if scr<SL.S.W> # ctx<SL.S.W> or scr<SL.S.H> # ctx<SL.S.H> then ctx.resized = 1   ;* a dialogue was resized under it
             ctx = scr
             if scr<SL.S.CURON> then
                display @(-31) : @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) :
@@ -69,11 +75,24 @@ $include sl.h
          ctx.open = 1
          scr = ctx
 
+      case op = 'resized'
+         scr = ctx.resized + 0                  ;* 1 if the context has been made a new size since this was last asked
+         ctx.resized = 0
+
       case op = 'close'
          ctx = ''
          ctx.open = 0
+         ctx.resized = 0
    end case
 
+   return
+
+* The terminal is not the size the kept context was made for (the window was resized, or TERM w,h was typed): $sl_resize
+* makes it the new size, keeping every cell that still fits, and draws the screen again from it.  What was drawn with PRINT
+* or CRT is not in the shadow, and goes, as for SCREEN REFRESH.
+resize:
+   call $sl_resize(ctx)
+   ctx.resized = 1
    return
 
 blank:

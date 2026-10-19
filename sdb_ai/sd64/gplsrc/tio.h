@@ -211,6 +211,11 @@ void copy_print_unit(PRINT_UNIT * old_pu, PRINT_UNIT * new_pu);
 void free_print_unit(PRINT_UNIT * pu);
 void stack_display_pu(void);
 void unstack_display_pu(void);
+void tio_check_resize(void);             /* 13 Oct 26: bring the display's data lines up to the terminal's size */
+
+/* LINUXIO.C (13 Oct 26: the terminal's own size) */
+bool console_resized(void);
+bool console_window_size(int * cols, int * rows);
 
 /* PIO.C */
 void end_printer(PRINT_UNIT * pu);

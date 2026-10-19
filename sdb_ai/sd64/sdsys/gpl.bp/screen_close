@@ -33,10 +33,19 @@ $include sl.h
    ret = ''
    status = 0
    if system(25) then return                  ;* a phantom has no terminal: nothing was drawn, nothing to give back
+   call $sl_scr('get', scr)
+   if scr<SL.S.OWNED> and scr<SL.S.MOUSE> then
+      call $sl_mouse('off', mseq)
+      display mseq :                                  ;* the terminal stops reporting the mouse
+   end
+   call $sl_attr('desktop', dc)
    call $sl_sgr('n', sq)
-   display @(-31) : sq : @(0, @crthigh - 1) :
+   display @(-31) : sq :
+   if dc # 'n' then display @(-1) :                   ;* a coloured desktop is not left behind
+   display @(0, @crthigh - 1) :
    scr = ''
    call $sl_scr('close', scr)
+   call $sl_theme('reset', '', '', '', '', r)         ;* the next program starts from mono, having asked for nothing
 
    return
 end

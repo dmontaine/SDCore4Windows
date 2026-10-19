@@ -105,7 +105,12 @@ $include sl.h
          loop
             call $sl_key('', key)
             if key = '' then key = 'esc'
-            gosub handle.key
+            if key = 'resize' then
+               call $sl_resize(scr)                ;* the terminal's size changed: the box is drawn again with the rest
+               ret = 'handled'
+            end else
+               gosub handle.key
+            end
             st = ret<1>
          until st = 'done' or st = 'cancel'
          repeat
@@ -127,6 +132,20 @@ handle.key:
          sel = if sel > 1 then sel - 1 else nb
       case key = 'right' or key = 'tab' or key = 'down'
          sel = if sel < nb then sel + 1 else 1
+      case key = 'mouse'
+         * a click on a button chooses it; a click anywhere else is ignored
+         call $sl_mouse('get', mev)
+         if mev<1> = 'press' and mev<2> = 1 and mev<4> = by + nl + 2 then
+            x = int((bwid - bw) / 2) + 2         ;* the string position of the first button, as paint has it
+            for b = 1 to nb
+               ln = len(cap<b>)
+               if mev<3> >= bx + x - 1 and mev<3> < bx + x - 1 + ln then
+                  sel = b
+                  ret = 'done' : @fm : b
+               end
+               x += ln + 2
+            next b
+         end
       case len(key) = 1
          ret = 'unhandled'
          for b = 1 to nb
@@ -151,9 +170,9 @@ show:
    end
 
 paint:
-   call $sl_attr('normal', na)
+   call $sl_attr('window', na)
    call $sl_attr('highlight', ha)
-   topl = '+' : str('-', bwid - 2) : '+'
+   topl ='+' : str('-', bwid - 2) : '+'
    if title # '' then topl = '+- ' : title : ' ' : str('-', bwid - 5 - len(title)) : '+'
    call $sl_put(scr, bx, by, topl[1, bwid], na)
    for l = 1 to nl

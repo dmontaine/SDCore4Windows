@@ -72,6 +72,17 @@ $include sl.h
 
       case op = 'key'
          gosub handle.key
+
+      case op = 'mouse'
+         * a click puts the cursor at the character under it (or after the last one)
+         ret = 'handled'
+         if key<1> = 'press' then
+            p = pan + (key<3> - w{'ax'})
+            if p > len(text) + 1 then p = len(text) + 1
+            if p < 1 then p = 1
+            w{'pos'} = p
+            gosub paint
+         end
    end case
 
    return

@@ -32,6 +32,9 @@ $catalog $sl_widget_init
       case wt = 'label' ; call $sl_label('init', w, '', '', r)
       case wt = 'combo' ; call $sl_combo('init', w, '', '', r)
       case wt = 'progress' ; call $sl_progress('init', w, '', '', r)
+      case wt = 'tabs' ; call $sl_tabs('init', w, '', '', r)
+      case wt = 'memo' ; call $sl_memo('init', w, '', '', r)
+      case wt = 'table' ; call $sl_table('init', w, '', '', r)
    end case
 
    return

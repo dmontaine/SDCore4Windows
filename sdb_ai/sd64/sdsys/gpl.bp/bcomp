@@ -540,7 +540,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "HIDE"    ; screen.defs<-1> = "!screen_hide":@vm:1
    screen.names<-1> = "PROGRESS" ; screen.defs<-1> = "!screen_progress":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
    screen.names<-1> = "COMBO"   ; screen.defs<-1> = "!screen_combo":@vm:3:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
-   screen.names<-1> = "OPEN"   ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2"
+   screen.names<-1> = "OPEN"   ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2":@sm:"NOMOUSE:F"
    screen.names<-1> = "CLOSE"   ; screen.defs<-1> = "!screen_close":@vm:0
    screen.names<-1> = "CLEAR"   ; screen.defs<-1> = "!screen_clear":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"ATTR:1"
    screen.names<-1> = "TEXT"    ; screen.defs<-1> = "!screen_text":@vm:1:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1"
@@ -549,6 +549,13 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "REFRESH" ; screen.defs<-1> = "!screen_refresh":@vm:0
    screen.names<-1> = "SIZE"    ; screen.defs<-1> = "!screen_size":@vm:0
    screen.names<-1> = "KEY"     ; screen.defs<-1> = "!screen_key":@vm:0:@vm:"TIMEOUT:1"
+   screen.names<-1> = "MOUSE"   ; screen.defs<-1> = "!screen_mouse":@vm:0
+   screen.names<-1> = "THEME"   ; screen.defs<-1> = "!screen_theme":@vm:1
+   screen.names<-1> = "STYLE"   ; screen.defs<-1> = "!screen_style":@vm:4
+   screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
+   screen.names<-1> = "PAGE"    ; screen.defs<-1> = "!screen_page":@vm:2
+   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F"
+   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1"
 
    * Reserved names
    * This list starts out as the list of names that are reserved in all

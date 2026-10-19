@@ -53,7 +53,9 @@ $include sl.h
          w{'h'} = 1
 
       case op = 'draw'
-         call $sl_attr(w{'attr'}, code)
+         lattr = w{'attr'}
+         if lattr = '' then lattr = 'window'               ;* a label sits on a form: the form's own style unless it names one
+         call $sl_attr(lattr, code)
          t = w{'text'} : space(w{'w'})                 ;* as wide as the label is: a shorter text blanks the old one
          t = t[1, w{'w'}]
          call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, t, code)

@@ -1,0 +1,45 @@
+* SCREEN_PAGE
+* The subroutine that SCREEN PAGE calls: the widgets added next belong to a tab's page.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN PAGE f, n
+*
+*   is compiled into
+*
+*   call !screen_page(f, n, ret, status)
+*
+*     f        the form (a collection from SCREEN FORM)
+*     n        the page the widgets added from now on belong to: the number of a tab of the form's tab
+*              strip (SCREEN TABS).  0 (or null) ends it: widgets added after that are on every page.
+*     status   0; 1 if f is not a form or n is not a number (ELSE)
+*
+*   A widget on page n is drawn, can have the focus and takes keys only while tab n is the one chosen;
+*   the others keep their values and SCREEN GET, SET and VALUES still reach them.  The tab strip itself,
+*   labels and buttons that are to be seen on every page are added with the page at 0.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_page(f, n, ret, status)
+$catalog !screen_page
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   if n # '' and not(num(n)) then return
+   f{'curpage'} = n + 0
+   status = 0
+
+   return
+end
+
+* END-CODE

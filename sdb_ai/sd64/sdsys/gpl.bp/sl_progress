@@ -54,7 +54,7 @@ $include sl.h
          inner = pw - 7                                ;* [ ... ] and a blank and 3 digits and %
          done = int(inner * v / 100 + 0.5)
          call $sl_attr('highlight', hl)
-         call $sl_attr('normal', nl)
+         call $sl_attr('window', nl)
          call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[', nl)
          if done > 0 then call $sl_put(scr, w{'ax'} + 1, w{'ay'} + 0, str('#', done), hl)
          if inner - done > 0 then call $sl_put(scr, w{'ax'} + 1 + done, w{'ay'} + 0, space(inner - done), nl)

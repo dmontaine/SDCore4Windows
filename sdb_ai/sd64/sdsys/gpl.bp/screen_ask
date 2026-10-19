@@ -65,7 +65,7 @@ $include sl.h
    if by < 0 then by = 0
 
    call $sl_region('save', scr, bx, by, bw, bh, under)
-   call $sl_attr('normal', nc)
+   call $sl_attr('window', nc)
    call $sl_frame(scr, bx, by, bw, bh, title, nc, 1)
    call $sl_put(scr, bx + 2, by + 1, text, nc)
 
@@ -80,7 +80,21 @@ $include sl.h
    loop
       call $sl_key('', k)
       if k = '' then k = 'esc'
-      call $sl_entry('key', w, scr, k, r)
+      if k = 'mouse' then
+         * a click in the field puts the cursor there; the rest is ignored
+         r = 'handled'
+         call $sl_mouse('get', mev)
+         if mev<1> = 'press' and mev<2> = 1 and mev<3> >= w{'ax'} and mev<3> < w{'ax'} + fw and mev<4> = w{'ay'} then
+            call $sl_entry('mouse', w, scr, mev, r)
+         end
+      end else
+         if k = 'resize' then
+            call $sl_resize(scr)                    ;* the terminal's size changed: the box is drawn again with the rest
+            r = 'handled'
+         end else
+            call $sl_entry('key', w, scr, k, r)
+         end
+      end
       st = r<1>
    until st = 'done' or st = 'cancel'
    repeat

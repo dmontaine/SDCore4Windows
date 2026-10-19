@@ -64,12 +64,21 @@ $include sl.h
             call $sl_entry('key', w, scr, key, ret)
             gosub arrow
          end
+
+      case op = 'mouse'
+         * a click on the [v] opens the list, a click on the field puts the cursor in the text
+         if key<1> = 'press' and key<3> >= w{'ax'} + fw then
+            gosub pick.item
+            ret = 'handled'
+         end else
+            call $sl_entry('mouse', w, scr, key, ret)
+         end
    end case
 
    return
 
 arrow:
-   code = 'n'
+   call $sl_attr('window', code)
    if w{'focused'} then call $sl_attr('highlight', code)
    call $sl_put(scr, w{'ax'} + fw, w{'ay'} + 0, '[v]', code)
    if w{'focused'} then
@@ -103,7 +112,7 @@ pick.item:
    if by < 0 then by = 0
 
    call $sl_region('save', scr, bx, by, bw, bh, under)
-   call $sl_attr('normal', nc)
+   call $sl_attr('window', nc)
    call $sl_frame(scr, bx, by, bw, bh, '', nc, 1)
 
    lst = collection()
@@ -123,7 +132,16 @@ pick.item:
    loop
       call $sl_key('', k)
       if k = '' then k = 'esc'
-      call $sl_list('key', lst, scr, k, r)
+      if k = 'mouse' then
+         gosub list.mouse
+      end else
+         if k = 'resize' then
+            call $sl_resize(scr)                    ;* the terminal's size changed: everything, the open list too, is drawn again
+            r = 'handled'
+         end else
+            call $sl_list('key', lst, scr, k, r)
+         end
+      end
       st = r<1>
       if st = 'unhandled' and (k = 'tab' or k = 'btab' or k = 'left' or k = 'right') then st = 'cancel'
    until st = 'done' or st = 'cancel'
@@ -138,6 +156,25 @@ pick.item:
    end
    call $sl_entry('draw', w, scr, '', r)
    gosub arrow
+   return
+
+* A mouse event while the list is open: a click on an entry chooses it, a click anywhere else closes the list, the
+* wheel scrolls it; anything else (a release, a move) is ignored
+list.mouse:
+   r = 'handled'
+   call $sl_mouse('get', mev)
+   inside = (mev<3> >= lst{'ax'} and mev<3> < lst{'ax'} + lw and mev<4> >= lst{'ay'} and mev<4> < lst{'ay'} + lh)
+   begin case
+      case mev<1> = 'wheel' and inside
+         call $sl_list('mouse', lst, scr, mev, r)
+      case mev<1> = 'press' and mev<2> = 1
+         if inside then
+            call $sl_list('mouse', lst, scr, mev, r)
+            if r<1> = 'handled' then r = 'done' : @fm : lst{'cur'}
+         end else
+            r = 'cancel'
+         end
+   end case
    return
 end
 

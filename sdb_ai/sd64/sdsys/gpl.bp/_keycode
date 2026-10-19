@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): ESC [ < (an xterm SGR mouse report) is bound to K$MOUSE.
 * 02 Oct 26 Windows port - RELEASE_1.1 120.  F1-F5, Home and End as xterm spells
 *           them (ESC O P-S, ESC [ 1 5 ~, ESC [ H, ESC [ F) are bound as defaults,
 *           before the terminfo binds.  F1 typed a P.
@@ -142,6 +143,13 @@ $include keycode.h
       code = K$DELETE     ; key.string = tinfo<T$KEY.DC>        ; gosub bind
       code = K$CTRL.TAB   ; key.string = tinfo<T$KEY.BTAB>      ; gosub bind
       code = K$MOUSE      ; key.string = tinfo<T$KEY.MOUSE>     ; gosub bind
+
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): - AN XTERM SGR MOUSE REPORT (mode 1006: ESC [ < b ; x ; y M or m) IS A MOUSE KEY TOO.
+*   Without a binding KEYCODE read ESC [ < , found no key that starts with it, rang the bell and
+*   threw the three characters away, leaving "0;12;5M" in the input as if typed.  Now it returns
+*   K$MOUSE and leaves b;x;y and the final M or m to be read (the screen library's $sl_key does).
+*   Nothing changes for a program that never switches mouse reporting on.
+      code = K$MOUSE      ; key.string = char(27) : '[<'        ; gosub bind
       code = K$BACKSPACE  ; key.string = tinfo<T$KEY.BACKSPACE> ; gosub bind
       code = K$RETURN     ; key.string = pterm(PT$INEWLINE,'')  ; gosub bind
 

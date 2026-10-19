@@ -19,11 +19,15 @@
 *   SL.S.SHADOW      value r + 1 is the text of terminal row r (what the program believes is shown)
 *   SL.S.RATTR       value r + 1 is 'R' if row r is in reverse video (SED's screen: whole rows only)
 *   SL.S.ATTRS       value r + 1 is one style code per cell of row r (a screen the library owns; null on
-*                    SED's, which only knows RATTR).  Codes: n normal, r reverse, u underline, x reverse
-*                    and underline; a colour theme adds more.  $sl_attr turns a style name into a code.
+*                    SED's, which only knows RATTR).  The codes are SL.CODES below, one for each style that
+*                    $sl_theme names (n normal, r reverse, u underline, x both, b bold, w window, h highlight,
+*                    a bar, s barsel, k hotkey, j hotkey.bar, e field, d disabled, y desktop, t text,
+*                    g header);
+*                    $sl_attr turns a style name into its code and the theme says what each looks like.
 *   SL.S.CUR         the library's cursor: value 1 is x, value 2 is y (where the program's next output goes)
 *   SL.S.CURON       1 when the cursor is shown
 *   SL.S.OWNED       1 for the screen SCREEN OPEN made; 0 for a transient blank one
+*   SL.S.MOUSE       1 while SCREEN OPEN has switched mouse reporting on (SCREEN CLOSE switches it off)
 *
 * Everything the library draws goes through $sl_put, which writes this shadow as well as the terminal, so a
 * pop-up can save what is under it and put it back.
@@ -39,6 +43,9 @@ $define SL.W.S1        8
 $define SL.W.S2        9
 $define SL.W.D        10
 
+* The style codes, in the order of $sl_theme's list of names (a new style goes on the end of both)
+$define SL.CODES       'nruxbwhasjkedytg'
+
 $define SL.S.W         1
 $define SL.S.H         2
 $define SL.S.CLIP      3
@@ -48,3 +55,4 @@ $define SL.S.ATTRS     6
 $define SL.S.CUR       7
 $define SL.S.CURON     8
 $define SL.S.OWNED     9
+$define SL.S.MOUSE     10

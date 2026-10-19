@@ -19,14 +19,18 @@
 *     timeout  seconds to wait for a key (each key resets it); left out, for ever
 *     ret      the event: field 1 the type, field 2 the widget's id, field 3 its data:
 *                button   the id of the button pressed (a cancel button is `cancel`, below)
-*                change   the id of a check box, radio group, list or combo box whose value changed; data the new value
+*                change   the id of a check box, radio group, list, combo box, tab strip or table whose value changed; data the new value
 *                focus    the id the focus went to; data the id it left (validate the one it left with SCREEN GET)
 *                key      data the name of a key the form had no use for (a function key, a Ctrl key, an arrow no
 *                         widget wanted); no id
+*                resize   the terminal was resized; data the new width, a value mark, the new height.  The
+*                         library has already drawn what it has (the form included) again at the new size; a
+*                         form too big for the new screen is clipped, and the program may hide it and lay it
+*                         out again
 *                cancel   Esc (no id) or the form's cancel button (its id)
 *                timeout  no key came in time
 *                end      the input ended (a phantom, a closed terminal)
-*     status   0 for button, change, focus and key; 1 for cancel, timeout and end (ELSE)
+*     status   0 for button, change, focus, key and resize; 1 for cancel, timeout and end (ELSE)
 *
 *   The first call draws the form (what is under it is kept) and it STAYS on the screen between calls; the
 *   program acts on the event and calls again.  SCREEN SET redraws the widget it changes, SCREEN HIDE puts the
@@ -57,7 +61,7 @@ $include sl.h
 
    ret = r<2> : @fm : r<3> : @fm : r<4>
    t = r<2>
-   if t = 'button' or t = 'change' or t = 'focus' or t = 'key' then status = 0
+   if t = 'button' or t = 'change' or t = 'focus' or t = 'key' or t = 'resize' then status = 0
 
    return
 end

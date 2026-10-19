@@ -18,7 +18,8 @@
 *     (none)   the whole screen is cleared and the library's cursor goes to 0,0
 *     x y      the left column and top row of the rectangle, from 0 (default 0)
 *     w h      its width and height (default: to the right and bottom edges)
-*     attr     the style the blank cells are given (default normal); the whole-screen form ignores it
+*     attr     the style the blank cells are given (default desktop, see $sl_theme); the whole-screen form
+*              always uses the desktop style
 *
 *   The shadow is made to match.  The cursor is left where it was, except in the whole-screen form.
 *
@@ -38,17 +39,13 @@ $include sl.h
    call $sl_scr('get', scr)
 
    if x = '' and y = '' and w = '' and h = '' then
-      display @(-1) :
-      for r = 0 to scr<SL.S.H> - 1
-         scr<SL.S.SHADOW, r + 1> = space(scr<SL.S.W>)
-         scr<SL.S.ATTRS, r + 1> = str('n', scr<SL.S.W>)
-      next r
-      scr<SL.S.CUR> = 0 : @vm : 0
+      call $sl_desktop(scr)
    end else
       if x = '' then x = 0
       if y = '' then y = 0
       if w = '' then w = scr<SL.S.W> - x
       if h = '' then h = scr<SL.S.H> - y
+      if attr = '' then attr = 'desktop'
       call $sl_attr(attr, code)
       for r = 0 to h - 1
          call $sl_put(scr, x + 0, y + r, space(w), code)

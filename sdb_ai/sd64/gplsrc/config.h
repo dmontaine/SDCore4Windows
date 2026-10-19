@@ -130,6 +130,7 @@ struct PCFG  {
   char sh1[MAX_SH_CMD_LEN+1];           /* SH1:      Command to run single shell */
   int32_t sortmem;                      /* SORTMEM: Limit on in-memory sort size */
   int16_t sortmrg;                      /* SORTMRG: Number of files in merge */
+  char screentheme[32+1];               /* SCREENTHEME: the screen library's default theme (13 Oct 26) */
   char sortworkdir[MAX_PATHNAME_LEN+1]; /* SORTWORK */
   char spooler[MAX_PATHNAME_LEN+1];     /* SPOOLER: Non-default spooler */
   char tempdir[MAX_PATHNAME_LEN+1];     /* TEMPDIR */

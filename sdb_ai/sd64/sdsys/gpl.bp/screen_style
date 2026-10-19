@@ -1,0 +1,58 @@
+* SCREEN_STYLE
+* The subroutine that SCREEN STYLE calls: change what one style of the theme in force looks like.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN STYLE name, foreground, background, flags {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_style(name, fg, bg, flags, ret, status)
+*
+*     name        a style of a theme: bold, window, highlight, bar, barsel, hotkey, hotkey.bar, field, disabled,
+*                 desktop, text or header (normal, reverse, underline and both are the same in every theme;
+*                 see $sl_theme)
+*     fg bg       a colour: black, blue, green, cyan, red, magenta, brown (or yellow) or white; null leaves
+*                 the terminal's own
+*     flags       any of bold, dim, reverse and underline, separated by spaces or +; null for none
+*     status      0 changed; 1 not: no terminal, or a name, colour or flag it does not know; nothing is changed
+*
+*   The change is to the theme in force and lasts until SCREEN CLOSE or the next SCREEN THEME.  Choose the
+*   theme first, then change its styles.  If the library owns the screen it is drawn again.  A colour
+*   needs a terminal that can show it, so a program that sets one should ask for a theme first and take
+*   the ELSE of that as "this terminal has no colour".
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_style(name, fg, bg, flags, ret, status)
+$catalog !screen_style
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
+
+   call $sl_theme('style', name, fg, bg, flags, r)
+   if r then return
+
+   call $sl_scr('get', scr)
+   if scr<SL.S.OWNED> then
+      call $sl_repaint(scr)
+      call $sl_scr('put', scr)
+   end
+   status = 0
+
+   return
+end
+
+* END-CODE

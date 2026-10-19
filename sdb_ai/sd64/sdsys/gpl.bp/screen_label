@@ -18,7 +18,7 @@
 *     f        the form (SCREEN FORM)       id    the widget's name in the form: not null, not used before
 *     text     one line                     x y   its place from the form's top left corner (0,0 is the
 *                                                  border's corner), default 1,1
-*     attr     a style: normal, reverse, underline
+*     attr     a style (see $sl_theme): normal, reverse, underline, bold, highlight ...; default window, the form's own
 *     width    the label is this many cells wide, the text cut or blank-padded to fit (default: as wide
 *              as the text).  A label that will be changed with SCREEN SET needs the width of its longest
 *              text: a status line is a label with a width.

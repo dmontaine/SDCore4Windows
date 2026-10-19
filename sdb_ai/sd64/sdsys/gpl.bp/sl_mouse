@@ -1,0 +1,52 @@
+* SL_MOUSE
+* Screen library: the last mouse event, and the sequences that switch mouse reporting on and off.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_mouse(op, a)
+*
+*     'set'   a = an event, as $sl_key found it: kind @fm button @fm x @fm y @fm mods (the library's last one is kept)
+*     'get'   a is returned as that event.  kind is press, release, drag or wheel; button is 1 left, 2 middle,
+*             3 right, 4 for a drag with none held, or for a wheel up or down; x and y are cells from 0 as in
+*             @(x, y); mods is any of s (shift), a (alt), c (ctrl), in that order
+*     'on'    a = the sequence that asks an xterm for button, drag and wheel reports in the SGR form
+*     'off'   a = the sequence that turns them off again
+*
+*   The reports are the xterm ones (modes 1000, 1002 and 1006).  A terminal that does not know them ignores the
+*   request, as the Linux console does, and no mouse key ever arrives.  $sl_key reads the report: KEYCODE hands it
+*   the first three characters as the key K$MOUSE (_keycode binds ESC [ <).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_mouse(op, a)
+$catalog $sl_mouse
+
+   common /slmse/ ms.event
+
+   begin case
+      case op = 'set'
+         ms.event = a
+      case op = 'get'
+         a = ''
+         if not(unassigned(ms.event)) then
+            if len(ms.event) > 1 then a = ms.event            ;* (a block starts as 0, and a real event is several fields)
+         end
+      case op = 'on'
+         a = char(27) : '[?1000h' : char(27) : '[?1002h' : char(27) : '[?1006h'
+      case op = 'off'
+         a = char(27) : '[?1006l' : char(27) : '[?1002l' : char(27) : '[?1000l'
+   end case
+
+   return
+end
+
+* END-CODE

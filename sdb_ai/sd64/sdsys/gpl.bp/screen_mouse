@@ -1,0 +1,44 @@
+* SCREEN_MOUSE
+* The subroutine that SCREEN MOUSE calls: what the last mouse event was.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MOUSE RETURNING m {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_mouse(ret, status)
+*
+*     ret      the last mouse event the library read, as fields: 1 the kind (press, release, drag or wheel),
+*              2 the button (1 left, 2 middle, 3 right; 4 for a drag with none held; up or down for the wheel),
+*              3 the column and 4 the row of the cell it was over, from 0 as in @(x, y), and 5 any of s, a and
+*              c for the shift, alt and control keys that were down, in that order
+*     status   0 there has been one; 1 there has not (ELSE), or there is no terminal
+*
+*   A program that handles the mouse itself calls SCREEN KEY, which answers mouse when the event was one, and
+*   then SCREEN MOUSE.  Forms, menus and dialogues take clicks without the program's help.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_mouse(ret, status)
+$catalog !screen_mouse
+
+   ret = ''
+   status = 1
+   if system(25) then return                  ;* a phantom has no terminal
+   call $sl_mouse('get', ret)
+   if ret # '' then status = 0
+
+   return
+end
+
+* END-CODE

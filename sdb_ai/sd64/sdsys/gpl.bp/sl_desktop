@@ -1,0 +1,60 @@
+* SL_DESKTOP
+* Screen library: clear the whole screen to the desktop style, terminal and shadow.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_desktop(scr)
+*
+*     scr   the screen context (sl.h), changed in place: every cell blank and of the desktop style,
+*           the cursor at 0,0.  The terminal is cleared the same way.
+*
+*   In a theme whose desktop is the terminal's own look (mono) this is the terminal's clear screen.  In
+*   one that gives the desktop a colour, the clear is followed by a blank line of that style on every
+*   row, because a terminal clears to the colour it was last told to use only if it has bce, and then
+*   only to that one.  The bottom right cell is not written on a terminal that scrolls when it is
+*   (no xenl in its terminfo entry): the library would scroll its own screen.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_desktop(scr)
+$catalog $sl_desktop
+
+$include sl.h
+
+   call $sl_attr('desktop', dc)
+   call $sl_sgr('n', sq)
+   display sq : @(-1) :
+
+   sw = scr<SL.S.W> + 0
+   sh = scr<SL.S.H> + 0
+   for r = 0 to sh - 1
+      scr<SL.S.SHADOW, r + 1> = space(sw)
+      scr<SL.S.ATTRS, r + 1> = str('n', sw)
+   next r
+
+   if dc # 'n' then
+      for r = 0 to sh - 1
+         n = sw
+         if r = sh - 1 and not(terminfo('xenl')) then n = sw - 1
+         call $sl_put(scr, 0, r, space(n), dc)
+      next r
+      if not(terminfo('xenl')) and sh > 0 then
+         scr<SL.S.ATTRS, sh> = scr<SL.S.ATTRS, sh>[1, sw - 1] : dc
+      end
+   end
+
+   scr<SL.S.CUR> = 0 : @vm : 0
+
+   return
+end
+
+* END-CODE

@@ -139,6 +139,7 @@ report.params:
    print 'RECCACHE  '        : config('RECCACHE')
    print 'RINGWAIT  '        : config('RINGWAIT')
    print 'SAFEDIR   '        : config('SAFEDIR')
+   print 'SCREENTHEME '      : config('SCREENTHEME')
    print 'SDCLIENT  '        : config('SDCLIENT')
 	print 'SH        '        : config('SH')
 	print 'SH1       '        : config('SH1')

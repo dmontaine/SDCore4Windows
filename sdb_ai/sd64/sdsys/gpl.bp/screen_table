@@ -1,0 +1,63 @@
+* SCREEN_TABLE
+* The subroutine that SCREEN TABLE calls: add a table (a heading and rows of cells) to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN TABLE f, id, columns, rows {AT x,y} {SIZE w,h} {VALUE n}
+*
+*   is compiled into
+*
+*   call !screen_table(f, id, columns, rows, x, y, w, h, value, ret, status)
+*
+*     f id      the form and the widget's name in it (as SCREEN LABEL)
+*     columns   one value for each column: its heading, and as a subvalue what the column looks like: a width and
+*               then L, R or C (left, right, centred) as in '20L' or '6R'.  With no width the column is as wide
+*               as its heading and the widest cell among the first 200 rows, at most 30.
+*     rows      the data: one row to a field, one cell to a value
+*     x y       the place of the table from the form's top left corner, default 1,1
+*     w h       its size, the heading row and the scroll bar column included (default: wide enough for the columns, and
+*               the heading and as many rows as there are, at most 8)
+*     value     the row it starts on (default the first)
+*     status    0 added; 1 not (ELSE)
+*
+*   Up, Down, Page Up, Page Down, Home and End move the current row; a letter goes to the next row whose first cell
+*   starts with it; Return is a done event of the form that holds it.  SCREEN GET f, id answers the number of the
+*   current row; SCREEN SET f, id ITEMS rows replaces the data.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_table(f, id, columns, rows, ax, ay, sw, sh, value, ret, status)
+$catalog !screen_table
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   w{'cols'} = convert(@fm, @vm, columns)
+   w{'rows'} = rows
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   if sw # '' then w{'w'} = sw + 0
+   if sh # '' then w{'h'} = sh + 0
+   w{'cur'} = value + 0
+   call $sl_table('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

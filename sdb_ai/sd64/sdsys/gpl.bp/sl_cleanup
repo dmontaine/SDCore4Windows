@@ -1,0 +1,53 @@
+* SL_CLEANUP
+* Screen library: put the terminal back as it was if a program left the library's screen open.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_cleanup
+*
+*   SCREEN OPEN switches the terminal into modes of its own: the mouse is reported, the cursor may be hidden, a
+*   colour theme may be in force.  SCREEN CLOSE puts them back.  A program that ends without it (a break, an error, a
+*   STOP) leaves the terminal as it was, and then the mouse types garbage at the command prompt and the cursor is
+*   not there.  This routine is called where the command processor is about to prompt (CPROC's RESET.ENVIRONMENT, at
+*   command level 1: a command that a program runs with EXECUTE is not the prompt) and where the debugger
+*   takes over a terminal: if the library still holds the screen it does what SCREEN CLOSE does, except that nothing is
+*   cleared and the cursor is not moved - it switches mouse reporting off, shows the cursor, puts the terminal
+*   in its normal style, forgets the screen and puts the theme back to mono.  Where the library holds nothing it
+*   does nothing and writes nothing.
+*
+*   The library's state is in common blocks, which survive the program that made it: that is how this routine knows.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_cleanup
+$catalog $sl_cleanup
+
+$include sl.h
+
+   if system(25) then return                  ;* a phantom has no terminal
+
+   call $sl_scr('get', scr)
+   if not(scr<SL.S.OWNED>) then return        ;* the library holds nothing
+
+   if scr<SL.S.MOUSE> then
+      call $sl_mouse('off', mseq)
+      display mseq :
+   end
+   call $sl_theme('reset', '', '', '', '', r)
+   call $sl_sgr('n', sq)
+   display @(-31) : sq :
+   call $sl_scr('close', scr)
+
+   return
+end
+
+* END-CODE

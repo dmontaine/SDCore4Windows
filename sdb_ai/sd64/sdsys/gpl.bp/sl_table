@@ -1,0 +1,268 @@
+* SL_TABLE
+* Screen library, widget: rows and columns under a heading, one row current.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_table(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay (the top left cell on the screen), w h (the whole widget: the heading row, then
+*   h - 1 rows of data, and in the last column of the widget a scroll bar), cols (the columns, as values: the
+*   heading, and as a subvalue what it is to look like - a width and then L, R or C for left, right or centred,
+*   '20L' or '6R'; a column given no width is as wide as its heading and the widest cell among its first 200 rows, at
+*   most 30), rows (the data: one row to a field, one cell to a value), cur (the current row, 1 to start with),
+*   top (the first row shown), value (the number of the current row)
+*
+*     init    the columns' widths; w and h from the columns and the rows if they were not given (the heading and at most
+*             8 rows); cur and top are brought into range
+*     draw    the heading in the 'header' style, then the rows in the 'text' style, one column apart; the current
+*             row is in the highlight style while the table has the focus and marked with > while it has not.
+*             A row longer than the widget is cut at the right-hand edge
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     up, down, home, end, pgup, pgdn move; a letter jumps to the next row whose first cell starts with
+*             it.  ret<1> is 'handled'; 'done' (Return, ret<2> the number of the current row); 'cancel' (Esc); or
+*             'unhandled' with ret<2> the key's name (tab, btab, left, right, a function key; and up on the first
+*             row, down on the last, so that a form can go on to the widget before or after)
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_table(op, w, scr, key, ret)
+$catalog $sl_table
+
+$include sl.h
+
+   ret = ''
+   cols = w{'cols'}
+   nc = dcount(cols, @vm)
+   if cols = '' then nc = 0
+   rows = w{'rows'}
+   n = dcount(rows, @fm)
+   if rows = '' then n = 0
+   cur = w{'cur'} + 0
+   top = w{'top'} + 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'table'
+         w{'focusable'} = 1
+         gosub widths
+         if w{'w'} = '' or w{'w'} + 0 < 4 then w{'w'} = tot + 1       ;* the cells, and the scroll bar column
+         if w{'h'} = '' or w{'h'} + 0 < 2 then
+            bh = n
+            if bh > 8 then bh = 8
+            if bh < 1 then bh = 1
+            w{'h'} = bh + 1
+         end
+         if cur < 1 or cur > n then cur = 1
+         if n = 0 then cur = 0
+         top = 1
+         th = w{'h'} + 0 - 1                      ;* the rows of data shown
+         gosub scroll
+         gosub store
+
+      case op = 'draw'
+         gosub widths
+         th = w{'h'} + 0 - 1
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub widths
+         th = w{'h'} + 0 - 1
+         gosub paint
+
+      case op = 'key'
+         w{'clk'} = ''
+         gosub widths
+         th = w{'h'} + 0 - 1
+         gosub handle.key
+
+      case op = 'mouse'
+         gosub widths
+         th = w{'h'} + 0 - 1
+         gosub click
+   end case
+
+   return
+
+* A click on a row makes it the current one; a second click on the row the last click chose is Return.  A click on the
+* heading, or below the last row, does nothing.  The wheel moves the current row three at a time.
+click:
+   ret = 'handled'
+   if key<1> = 'wheel' then
+      if key<2> = 'up' then cur -= 3 else cur += 3
+      if cur > n then cur = n
+      if cur < 1 and n > 0 then cur = 1
+   end else
+      i = top + key<4> - w{'ay'} - 1                 ;* the first row of the widget is the heading
+      if i < 1 or i > n then return
+      if i = w{'clk'} then
+         ret = 'done' : @fm : i
+         return
+      end
+      cur = i
+      w{'clk'} = i
+   end
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+* cw = the width of each column (values), ca = how each is aligned, tot = the width of all of them with the gaps
+widths:
+   cw = ''
+   ca = ''
+   tot = 1                                           ;* the cell before the first column marks the current row
+   for c = 1 to nc
+      hd = cols<1, c, 1>
+      sp = upcase(cols<1, c, 2>)
+      al = 'L'
+      if sp # '' then
+         lst = sp[len(sp), 1]
+         if lst = 'L' or lst = 'R' or lst = 'C' then
+            al = lst
+            sp = sp[1, len(sp) - 1]
+         end
+      end
+      wd = sp + 0
+      if wd < 1 then
+         wd = len(hd)
+         m = n
+         if m > 200 then m = 200
+         for r = 1 to m
+            if len(rows<r, c>) > wd then wd = len(rows<r, c>)
+         next r
+         if wd > 30 then wd = 30
+         if wd < 1 then wd = 1
+      end
+      cw<1, c> = wd
+      ca<1, c> = al
+      tot += wd + 1
+   next c
+   if tot > 1 then tot -= 1
+   return
+
+handle.key:
+   ret = 'handled'
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done' : @fm : cur
+      case key = 'down'
+         if cur < n then cur += 1 else ret = 'unhandled' : @fm : key
+      case key = 'up'
+         if cur > 1 then cur -= 1 else ret = 'unhandled' : @fm : key
+      case key = 'home'
+         if n > 0 then cur = 1
+      case key = 'end'
+         cur = n
+      case key = 'pgdn'
+         cur += th - 1
+         if cur > n then cur = n
+      case key = 'pgup'
+         cur -= th - 1
+         if cur < 1 then cur = 1
+         if n = 0 then cur = 0
+      case len(key) = 1
+         uk = upcase(key)
+         found = 0
+         for k = 1 to n
+            i = cur + k
+            if i > n then i -= n
+            if upcase(rows<i, 1>[1, 1]) = uk then found = i ; exit
+         next k
+         if found then cur = found
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   if n = 0 then cur = 0
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+* Keep the current row inside the rows shown
+scroll:
+   if th < 1 then th = 1
+   if cur < top then top = cur
+   if cur > top + th - 1 then top = cur - th + 1
+   if top < 1 then top = 1
+   return
+
+store:
+   w{'cur'} = cur
+   w{'top'} = top
+   w{'value'} = cur
+   return
+
+paint:
+   tw = w{'w'} - 1                                   ;* the last column is the scroll bar
+   if tw < 1 then tw = 1
+   call $sl_attr('header', hc)
+   call $sl_attr('text', tc)
+   call $sl_attr('highlight', ac)
+   call $sl_attr('window', wc)
+   call $sl_scrollbar(th, top, n, th, sbc)
+   focused = w{'focused'} + 0
+
+   * the heading
+   line = ' '
+   for c = 1 to nc
+      cell = cols<1, c, 1>
+      gosub fit
+      line := cell : ' '
+   next c
+   line = line[1, tw]
+   line := space(tw - len(line))
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, line : ' ', str(hc, tw) : wc)
+
+   * the rows
+   for r = 0 to th - 1
+      i = top + r
+      if i > n then
+         line = space(tw)
+         code = tc
+      end else
+         lead = ' '
+         if i = cur and not(focused) then lead = '>'
+         line = lead
+         for c = 1 to nc
+            cell = rows<i, c>
+            gosub fit
+            line := cell : ' '
+         next c
+         line = line[1, tw]
+         line := space(tw - len(line))
+         code = tc
+         if i = cur and focused then code = ac
+      end
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 1 + r, line : sbc[r + 1, 1], str(code, tw) : wc)
+   next r
+   if focused and cur >= 1 then display @(w{'ax'} + 0, w{'ay'} + 1 + cur - top) :
+   return
+
+* cell = the text of one cell of column c, made exactly the column's width and aligned as it says
+fit:
+   wd = cw<1, c> + 0
+   cell = convert(@sm : @tm : char(9), '...', cell)
+   cell = cell[1, wd]
+   pad = wd - len(cell)
+   begin case
+      case ca<1, c> = 'R' ; cell = space(pad) : cell
+      case ca<1, c> = 'C' ; cell = space(int(pad / 2)) : cell : space(pad - int(pad / 2))
+      case 1 ; cell := space(pad)
+   end case
+   return
+end
+
+* END-CODE

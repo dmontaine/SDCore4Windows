@@ -19,9 +19,12 @@
 *     focus    the number of the widget that has the focus (0 none)
 *     shown    1 while the form is on the screen
 *
-*   A widget is any of: label frame entry check radio list button.  It has x y, its place from the top left
-*   corner of the form (0,0 is the corner of the border), and w h, its size, once its own init has run.
-*   disabled (1) takes it out of the focus ring.
+*   A widget is any of: label frame entry check radio list combo button progress tabs memo table.  It has x y,
+*   its place from the top left corner of the form (0,0 is the corner of the border), and w h, its size, once its
+*   own init has run.  disabled (1) takes it out of the focus ring.  page (a number, set by SCREEN PAGE through
+*   $sl_wadd) puts it on one page of the form's tab strip: it is drawn, can have the focus and gets keys only while
+*   the strip's chosen tab is that number (f{'page'}, which the form takes from the strip); a widget with no page is
+*   on every page, and a form with no strip shows every widget.
 *
 *     init    fills in the form's own elements (and the size and place, if left out)
 *     find    key is a widget id; ret is its number, 0 if there is none
@@ -92,6 +95,7 @@ $include sl.h
 
       case op = 'redraw'
          if f{'shown'} then
+            gosub init.page
             gosub layout
             gosub draw.all
          end
@@ -126,6 +130,22 @@ init.form:
    end
    if f{'x'} = '' then f{'x'} = int((scr<SL.S.W> - f{'w'}) / 2)
    if f{'y'} = '' then f{'y'} = int((scr<SL.S.H> - f{'h'}) / 2)
+   gosub init.page
+   return
+
+* The page the form shows is the chosen tab of its tab strip; with no strip every widget shows
+init.page:
+   nw = inmat(f{'widgets'})
+   for i = 1 to nw
+      w = f{'widgets', i}
+      if w{'type'} = 'tabs' then f{'page'} = w{'value'} ; exit
+   next i
+   return
+
+* vis = 1 if widget w is on the page the form shows (a widget that has no page is on every page)
+on.page:
+   pg = w{'page'} + 0
+   vis = (pg = 0 or f{'page'} = '' or pg = f{'page'} + 0)
    return
 
 * Every widget's place on the screen
@@ -139,23 +159,29 @@ layout:
    return
 
 draw.all:
-   call $sl_attr('normal', nc)
+   call $sl_attr('window', nc)
    call $sl_frame(scr, f{'x'} + 0, f{'y'} + 0, f{'w'} + 0, f{'h'} + 0, f{'title'}, nc, 1)
    nw = inmat(f{'widgets'})
    fi = f{'focus'} + 0
    for i = 1 to nw
       if i # fi then
          w = f{'widgets', i}
-         wt = w{'type'}
-         wop = 'draw'
-         gosub call.widget
+         gosub on.page
+         if vis then
+            wt = w{'type'}
+            wop = 'draw'
+            gosub call.widget
+         end
       end
    next i
    if fi >= 1 and fi <= nw then
       w = f{'widgets', fi}
-      wt = w{'type'}
-      wop = 'draw'
-      gosub call.widget
+      gosub on.page
+      if vis then
+         wt = w{'type'}
+         wop = 'draw'
+         gosub call.widget
+      end
    end
    return
 
@@ -181,9 +207,13 @@ call.widget:
       case wt = 'label' ; call $sl_label(wop, w, scr, wkey, wr)
       case wt = 'combo' ; call $sl_combo(wop, w, scr, wkey, wr)
       case wt = 'progress' ; call $sl_progress(wop, w, scr, wkey, wr)
+      case wt = 'tabs' ; call $sl_tabs(wop, w, scr, wkey, wr)
+      case wt = 'memo' ; call $sl_memo(wop, w, scr, wkey, wr)
+      case wt = 'table' ; call $sl_table(wop, w, scr, wkey, wr)
       case wt = 'frame'
          if wop = 'draw' then
-            call $sl_frame(scr, w{'ax'} + 0, w{'ay'} + 0, w{'w'} + 0, w{'h'} + 0, w{'title'}, 'n', 0)
+            call $sl_attr('window', wc)
+            call $sl_frame(scr, w{'ax'} + 0, w{'ay'} + 0, w{'w'} + 0, w{'h'} + 0, w{'title'}, wc, 0)
          end
       case 1
          wr = 'unhandled' : @fm : wkey
@@ -193,7 +223,8 @@ call.widget:
 * A widget can have the focus if it takes keys at all and is not disabled
 can.focus:
    w = f{'widgets', i}
-   cf = (w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0)
+   gosub on.page
+   cf = (w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 and vis)
    return
 
 * The focus goes to widget number ni; the one that had it is redrawn without
@@ -254,7 +285,8 @@ default.action:
    dflt = 0
    for i = 1 to nw
       w = f{'widgets', i}
-      if w{'type'} = 'button' and w{'default'} + 0 and w{'disabled'} + 0 = 0 then dflt = i ; exit
+      gosub on.page
+      if w{'type'} = 'button' and w{'default'} + 0 and w{'disabled'} + 0 = 0 and vis then dflt = i ; exit
    next i
    if dflt then
       w = f{'widgets', dflt}
@@ -288,7 +320,8 @@ other.key:
          nw = inmat(f{'widgets'})
          for i = 1 to nw
             w = f{'widgets', i}
-            if w{'type'} = 'button' and w{'mn'} = uk and w{'disabled'} + 0 = 0 then
+            gosub on.page
+            if w{'type'} = 'button' and w{'mn'} = uk and w{'disabled'} + 0 = 0 and vis then
                gosub press.button
                exit
             end
@@ -299,6 +332,18 @@ other.key:
    return
 
 route.key:
+   if key = 'mouse' then
+      gosub route.mouse
+      return
+   end
+   if key = 'resize' then
+      * The terminal's size changed ($sl_key says so).  This form's screen context is the live one (the kept one is only
+      * updated when the statement ends), so it is made the new size and drawn again here, form and all; the key is then
+      * passed on as one nobody used, which WAIT turns into the event resize.
+      call $sl_resize(scr)
+      ret = 'unhandled' : @fm : key
+      return
+   end
    nw = inmat(f{'widgets'})
    fi = f{'focus'} + 0
    if fi < 1 or fi > nw then
@@ -310,8 +355,50 @@ route.key:
    wt = w{'type'}
    wop = 'key' ; wkey = key
    gosub call.widget
+   gosub after.widget
+   return
+
+* A mouse event ($sl_mouse has it): the press of the left button, or the wheel, over a widget that can have the
+* focus.  The widget under the pointer is the last one added that holds the cell (a later one is drawn over an
+* earlier).  It gets the focus, then the event as op 'mouse' with the event as its key (kind, button, x, y, mods),
+* and answers as it does to a key.  Anything else, and a click on nothing, is ignored.
+route.mouse:
+   call $sl_mouse('get', mev)
+   ret = 'handled'
+   mk = mev<1>
+   if not((mk = 'press' and mev<2> = 1) or mk = 'wheel') then return
+   hit = 0
+   nw = inmat(f{'widgets'})
+   for i = nw to 1 step -1
+      w = f{'widgets', i}
+      gosub on.page
+      if vis and w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 then
+         if mev<3> >= w{'ax'} and mev<3> < w{'ax'} + w{'w'} and mev<4> >= w{'ay'} and mev<4> < w{'ay'} + w{'h'} then
+            hit = i
+            exit
+         end
+      end
+   next i
+   if hit = 0 then return
+   if hit # f{'focus'} + 0 then
+      ni = hit
+      gosub set.focus
+   end
+   w = f{'widgets', hit}
+   wt = w{'type'}
+   wop = 'mouse' ; wkey = mev
+   gosub call.widget
+   gosub after.widget
+   return
+
+* What the form does with the answer (wr) of the widget w, of type wt, to a key or a click
+after.widget:
    st = wr<1>
    k2 = wr<2>
+   if wt = 'tabs' and f{'page'} # w{'value'} then
+      f{'page'} = w{'value'}                 ;* another tab was chosen: the form shows its page
+      gosub draw.all
+   end
    begin case
       case st = 'handled'
          ret = 'handled'
@@ -416,10 +503,14 @@ wait.event:
                evt = 'cancel' ; eid = ret<2>
             case st = 'unhandled'
                evt = 'key' ; edata = ret<2>
+               if edata = 'resize' then
+                  evt = 'resize'                  ;* $sl_key has drawn the screen again at its new size
+                  edata = @crtwide : @vm : @crthigh
+               end
             case fi1 # fi0 and fi1 >= 1
                w = f{'widgets', fi1}
                evt = 'focus' ; eid = w{'id'} ; edata = id0
-            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo')
+            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo' or wt0 = 'tabs' or wt0 = 'table')
                w = f{'widgets', fi0}
                if w{'value'} # v0 then
                   evt = 'change' ; eid = id0 ; edata = w{'value'}

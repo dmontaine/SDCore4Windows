@@ -110,7 +110,9 @@ ansi|ansi/pc-term compatible with color,
     sgr=\E[0;10%?%p1%t;7%;%?%p2%t;4%;%?%p3%t;7%;%?%p4%t;5%;%?%p6%t;1%;%?%p7%t;8%;%?%p9%t;11%;m,
     hts=\EH, ht=\E[I, kcbt=\E[Z, el1=\E[1K, op=\E[39;49m, setaf=\E[3%p1%dm,
     setab=\E[4%p1%dm, s0ds=\E(B, s1ds=\E)B, s2ds=\E*B, s3ds=\E+B, smpch=\E[11m,
-    rmpch=\E[10m
+    rmpch=\E[10m,
+    setf=\E[3%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m,
+    setb=\E[4%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m
 
 adds4000|ADDS 4000 (enhanced),
     bw, am, hs, mir, msgr, xon, mc5i,
@@ -298,7 +300,9 @@ linux|linux console,
     kf17=\E[31~, kf18=\E[32~, kf19=\E[33~, kf20=\E[34~, el1=\E[1K,
     u6=\E[%i%d;%dR, u7=\E[6n, op=\E[39;49m, oc=\E]R,
     initc=\E]P%p1%x%p2%{256}%*%{1000}%/%02x%p3%{256}%*%{1000}%/%02x%p4%{256}%*%{1000}%/%02x,
-    kmous=\E[M, setaf=\E[3%p1%dm, setab=\E[4%p1%dm, smpch=\E[11m, rmpch=\E[10m
+    kmous=\E[M, setaf=\E[3%p1%dm, setab=\E[4%p1%dm, smpch=\E[11m, rmpch=\E[10m,
+    setf=\E[3%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m,
+    setb=\E[4%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m
 
 # 19 Aug 26 Windows port - "windows" is a byte-exact copy of "linux" above,
 # and it is the login default.  The name "linux" describes an operating

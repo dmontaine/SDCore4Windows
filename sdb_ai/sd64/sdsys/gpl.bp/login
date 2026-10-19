@@ -311,15 +311,25 @@ deffun pw_complex(pw) calling '!pw_complex'
 
       * Set terminal depth and width
 
-      s = env('LINES');
-      if not(s matches '1N0N') then s = terminfo('lines')
-      if s <= 0 then s = DEFAULT.DEPTH
-      setpu PU$LENGTH, -1, max(s, MIN.DEPTH)
+* 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): - THE TERMINAL'S OWN SIZE WINS.  The kernel now asks the tty how big
+*   it is, at start-up and at every resize (K$WINSIZE answers what it read, null if
+*   it could not: no tty, or a terminal that says 0 by 0), and has already made that
+*   the display's width and depth.  Before, this block set them from the environment
+*   (COLUMNS and LINES, which a shell rarely exports) or from terminfo, whose entries
+*   say 120 by 36, so a program on an 80 by 24 terminal drew for 120 by 36.  The
+*   old rule is what is left for a session with no tty to ask.  TERM w,h typed by
+*   hand still sets them, until the next resize.
+      if kernel(K$WINSIZE, '') = '' then
+         s = env('LINES');
+         if not(s matches '1N0N') then s = terminfo('lines')
+         if s <= 0 then s = DEFAULT.DEPTH
+         setpu PU$LENGTH, -1, max(s, MIN.DEPTH)
 
-      s = env('COLUMNS');
-      if not(s matches '1N0N') then s = terminfo('cols')
-      if s <= 0 then s = DEFAULT.WIDTH
-      setpu PU$WIDTH, -1, max(s, MIN.WIDTH)
+         s = env('COLUMNS');
+         if not(s matches '1N0N') then s = terminfo('cols')
+         if s <= 0 then s = DEFAULT.WIDTH
+         setpu PU$WIDTH, -1, max(s, MIN.WIDTH)
+      end
 
       * Clear screen except for phantoms and single command execution
 

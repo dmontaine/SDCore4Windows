@@ -10,8 +10,8 @@ First users: SED's menu bar and quit box. Tests: gplbld/sandbox-sed-menu.py.
    down left right home end pgup pgdn ins del bs tab btab enter esc f1..f12 ctrl-a..ctrl-z, or the
    printable character). Built on KEYCODE(), so terminfo decides what a sequence means; a lone Esc
    is told from a sequence by KEYCODE()'s 0.2 s wait. Null = timeout or input ended. Mouse: SGR 1006
-   reports reach KEYIN intact (S.1 stage 1) - a later `mouse` name plus position fields in a context;
-   nothing decodes them yet. SED itself still reads raw bytes (its own binding tables) and only calls
+   reports reach KEYIN intact (S.1 stage 1). Since 12 Oct `_keycode` binds ESC [ < to K$MOUSE and `$sl_key`
+   reads the rest into `$sl_mouse` and answers `mouse`. SED itself still reads raw bytes (its own binding tables) and only calls
    the library once a menu is open - see "not moved onto the library".
 2. regions - `$sl_region(op, scr, x, y, w, h, saved)`: save what is under a rectangle, put it back.
 3. theme - `$sl_attr(name, seq)`: the one table of attributes (normal, highlight, bar, hotkey,
@@ -102,8 +102,9 @@ of its image buffer; `ced_edit` is left on its own drawing code.
 
 ## not done yet (deliberately)
 
-mouse; acsc/Unicode box drawing (boxes are + - |); colour; a renderer owning the shadow; disabled/
-checked/submenu items; scrolling drop-downs longer than the screen; per-cell clipping; the form; user
+(Written for the first cut; mouse, colour and the form have been built since: see SCOPE.)
+acsc/Unicode box drawing (boxes are + - |); a renderer owning the shadow; disabled/
+checked/submenu items; scrolling drop-downs longer than the screen; per-cell clipping; user
 programs calling `$sl_` routines (they need `$internal` and `sd -internal` to compile: settled by the `screen`
 statement, see SCOPE below); F10 is
 bound by SED's table from `ESC [ 2 1 ~` (xterm, Linux console), not read from terminfo.
@@ -129,8 +130,9 @@ Flag for a second look: newt (LGPL-2.x, version clause not confirmed from a file
 combines with GPLv3 on the memory above.
 
 **Who owns the terminal.** SD already does: its terminfo compiler (`sdtic`, terminfo/), tio output
-layer (`tio_printf`, `@(IT$...)` codes), raw mode and SIGWINCH in `linuxio.c`, and a ring buffer fed by
-`do_input()` on SIGIO. newt, tickit, ncurses and notcurses initialise the tty themselves (termios, alternate
+layer (`tio_printf`, `@(IT$...)` codes), raw mode in `linuxio.c`, and a ring buffer fed by
+`do_input()` on SIGIO. (An earlier version of this note also named SIGWINCH here. That was wrong, found
+12 Oct 26: nothing in `gplsrc` reads the window size or catches SIGWINCH - see "resize" under SCOPE.) newt, tickit, ncurses and notcurses initialise the tty themselves (termios, alternate
 screen, their own input read, own idea of cursor position and attributes). Running them beside tio
 means two writers and two readers on one fd: cursor/attribute tracking in tio goes wrong, and input
 bytes could be eaten by the library while SD's ring buffer holds them. A safe integration would
@@ -278,6 +280,12 @@ they are modal dialogues, not members of a form. Both obey the one contract
 | `get` | `screen get f, id` | the widget's value | `!screen_get` |
 | `set` | `screen set f, id {value v} {text t} {items i} {enabled b}` | - | `!screen_set` |
 | `focus` | `screen focus f, id` | - | `!screen_focus` |
+| `theme` | `screen theme name` | the name of the theme in force; else when refused | `!screen_theme` |
+| `style` | `screen style name, fg, bg, flags` | - ; else when refused | `!screen_style` |
+| `tabs` | `screen tabs f, id, labels at x,y {value n}` | - | `!screen_tabs` |
+| `page` | `screen page f, n` | - | `!screen_page` |
+| `memo` | `screen memo f, id, text at x,y size w,h {readonly}` | - | `!screen_memo` |
+| `table` | `screen table f, id, columns, rows at x,y size w,h {value n}` | - | `!screen_table` |
 
 A zero-value keyword (`fill`, `multi`, `mask`, `on`) is a flag: the subroutine is given 1, else null.
 `items` are values (or a comma list, as `buttons` already is); a menu item is label @sm shortcut @sm
@@ -395,10 +403,10 @@ compile errors are refused with their messages. Cost: about 130 lines in bcomp (
 | 0 | compiler mechanism + `msgbox` - DONE | small | `sandbox-screen.py` 25 rows |
 | 1 | the owned screen: `$sl_put` with per-cell attributes, `open`/`close`/`clear`/`text`/`box`/`cursor`/`refresh`/`size`/`key`; move msgbox, menu and prompt onto it; the cursor rule - DONE | medium | text drawn, a dialogue over it, the text back row for row and attribute for attribute; cursor (61 rows) |
 | 2 | modal dialogues: `menu`, `menubar`, `pick`, `ask`, `msgbox at` - DONE | medium | each verb: choose, cancel, keys, background restored cell for cell (106 rows with stage 1; ten mutants, see PROJECT_STATUS) |
-| 3 | the form (a collection) and its container; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus`, `values` - BEING BUILT | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
-| 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress | medium | event order; a combo over a form; scrolling lists |
-| 5 | colour themes, mouse (SGR 1006 already reaches KEYIN), resize (SIGWINCH) | medium | attributes; clicks; a resized pty |
-| 6 | editor and viewer widgets; `ced_edit` and the debugger on the library; table, tree | large | the editors' existing suites (`sandbox-ced.py`) |
+| 3 | the form (a collection) and its container; label, frame, entry, check, radio, list, button; focus ring; `run`, `get`, `set`, `focus`, `values` - DONE | large | the 25-line program above, field by field; Tab / Shift-Tab; default and cancel buttons |
+| 4 | `wait` (events), `combo`, tabs, scroll bar, status line, progress - DONE (tabs and the scroll bar painter 12 Oct, third sitting; a standalone scroll bar widget not built) | medium | event order; a combo over a form; scrolling lists |
+| 5 | colour themes - DONE; mouse - DONE (xterm SGR 1006; `_keycode` binds ESC [ <); resize - NOT built, needs the kernel to read the window size (the owner's say, see "Resize" above) | medium | attributes; clicks; a resized pty |
+| 6 | text area and viewer (`memo`) and `table` - DONE; an editor widget with undo, selection and search, `ced_edit` and the debugger on the library, tree - not built | large | the editors' existing suites (`sandbox-ced.py`) |
 | 7 | carry to Solo (bcomp, the library, 12172-12175), then the Windows agent when Core is declared stable | small each | their own suites |
 
 What would falsify the plan: (a) stage 1's per-cell shadow making a BASIC repaint slower than ~16 ms at
@@ -406,6 +414,73 @@ What would falsify the plan: (a) stage 1's per-cell shadow making a BASIC repain
 key at a form's widest) being too slow for a key to feel instant - measure it at stage 3 with the 25-line
 form; (c) the focus ring needing a widget to see keys before its parent, which the `unhandled` convention
 cannot express (the first worker's own doubt).
+
+## themes, tabs, the text area, the table (12 Oct 26, third sitting; built unless it says otherwise)
+
+**Themes.** A widget names a STYLE and never a colour. Every cell of the shadow keeps the one-character code
+of its style (`SL.CODES` in `sl.h`, 16 of them: the raw `n r u x` and the named `b w h a s k j e d y t g` - bold, window,
+highlight, bar, barsel, hotkey, hotkey.bar, field, disabled, desktop, text, header). A THEME (`$sl_theme`) says what
+each code looks like: a foreground, a background and any of bold, dim, reverse, underline. The codes do not change
+with the theme, so a theme can be switched with a screen on the glass and the screen repainted from the shadow.
+`mono` is the default and looks exactly as the library did before (reverse video and underline only: it reads on any
+terminal, and it is all SED ever uses); `classic` and `blue` use colour. `screen theme name` chooses one (ELSE when
+the terminal has no `setf`/`setb`, when there is no terminal, or when there is no such theme), `screen style name, fg, bg,
+flags` changes one style of the theme in force, `screen close` puts the theme back to mono. Colour goes through SD's own
+`@(-37, n)` / `@(-38, n)` (terminfo `setf`/`setb`, the Pick colour order black blue green cyan red magenta brown
+white): eight colours, bold for bright, because xterm's `setf` is right for 0-7 only.
+- *Found 12 Oct:* the shipped `linux` and `ansi` terminfo entries had `setaf`/`setab` but no `setf`/`setb`, so
+  `@(-37)` printed nothing on the entry that every `xterm-256color` session falls back to (login). `terminfo.src`
+  now carries xterm's mapping in both. `TERM COLOUR` therefore works there too (a visible change: changelog).
+- *The bottom right cell* is written like any other where the terminal has `xenl` (xterm, linux, vt100) and left
+  alone where it scrolls when it is written (`ansi`): one cell of the desktop colour is missing there.
+- *Objections raised in the sitting and how they were settled.* (1) "A palette in the widgets would tie them to
+  colours": they name styles. (2) "Colour should be the default on a terminal that has it": NOT settled - the default
+  stays `mono`, so nothing changes for a program that never asks; a site-wide default chosen by the administrator
+  is the owner's question (below). (3) "The colour numbers differ from ANSI": the API has names only.
+
+**Tabs and pages.** `screen tabs` is a strip (`[General] Address  Notes `); the chosen tab is the PAGE the form shows.
+`screen page f, n` is a cursor, not a keyword on every widget: the widgets added after it belong to page n, `screen page
+f, 0` ends it. A widget on another page is not drawn, cannot have the focus and takes no key, but still answers `get`, `set`
+and `values`. No form without a strip is affected. A strip gives a `change` event in `screen wait`. *What would
+falsify it:* a form with two strips (the first one wins); pages inside pages (not supported).
+
+**The text area.** `screen memo` is one widget for both an editor and a viewer (`readonly`): lines are fields of
+the value, no wrapping (it pans sideways), the last column is a scroll bar, Page Up/Down scroll a page less a line with
+the cursor keeping its screen row. It is deliberately not the CED editor's replacement: no undo, no selection, no
+search. Those belong to the editor widget of stage 6 and would be built on the same line buffer.
+
+**The scroll bar** is a routine (`$sl_scrollbar`) that returns the column of characters for a list, memo or table;
+the thumb is proportional (it was one cell). A standalone scroll-bar widget for a program's own drawing is not built
+(no demand yet).
+
+**The table** (`screen table f, id, columns, rows`): a heading row, columns with a width and L/R/C, one current row, a
+scroll bar; `change` events as for a list. Not built: sorting, column resize, horizontal scrolling, row marks.
+
+**The mouse (built, xterm only).** `screen open` asks for modes 1000, 1002 and 1006 (buttons, drag, wheel, SGR form;
+`nomouse` opts out) and `screen close` turns them off; a terminal that does not know them, the Linux console, ignores
+the request. Before this `_keycode` rang the bell on `ESC [ <`, found no key that began with it and left `0;12;5M` as typed
+text, so it binds `ESC [ <` to `K$MOUSE` (a shared kernel key number, already allocated; no new one). `$sl_key` reads the
+rest and answers `mouse`; `$sl_mouse` holds the event (kind, button, x, y, mods). A form finds the LAST ADDED visible
+focusable widget under the pointer (it is drawn on top), gives it the focus, and sends op `mouse`; each widget decides
+(`unhandled` / `handled` / `done`, as for a key), so the form needs no widget-specific code beyond the hit test. Only the
+press of the left button and the wheel act. *Settled in the build:* a click on a list or table row selects it and a second
+click on the same row is Return (no timing: BASIC has no clock finer than a second); dialogues that run their own loops
+(message box, menu, pick, ask, a combo's open list) take clicks in those loops; a click outside a menu, pick list or open
+combo list cancels it, outside a form or an input box it is ignored. *Objection raised and not resolved:* a program that
+dies with reporting on (break, error) leaves the terminal reporting, and the mouse then types at the prompt; the kernel
+sends no mode reset when a program ends (it never sends `smkx` / `rmkx` either). The proper fix is a kernel hook, which is
+the owner's to ask for; the documentation says what to do (`reset`).
+
+**Resize - NOT built, and the earlier plan rested on a false claim.** SD never reads the window size: there is no
+`TIOCGWINSZ` or `SIGWINCH` anywhere in `gplsrc`. `@crtwide` / `@crthigh` are terminfo's 120 x 36 unless `TERM w,h` was
+typed or `LOGIN` found `COLUMNS` / `LINES` in the environment (which a shell rarely exports). So a program on an 80 x 24
+terminal draws for 120 x 36 today, and `LIST` pages at 36 lines. Options, in the order I would take them, all conditional:
+(B) the kernel reads the pty's size at start-up and on SIGWINCH into the display size, and `LOGIN` prefers it to terminfo's
+default: right for every session, but `@crtwide` changes for all of them, so it is a behaviour change to be agreed;
+(C) the same read, but only through a `SYSTEM()` / `KERNEL()` key that the library calls from `screen open` and `screen key`,
+and SIGWINCH only sets a flag: nothing else changes, at the price that only library programs see the real size;
+(A) no kernel change and the library asks nothing: a program keeps using `TERM w,h`. Falsified if the owner wants
+`@crtwide` left at terminfo's value for compatibility with scripts - then (C) is the only one left.
 
 ## risks and open questions for the owner
 
@@ -430,3 +505,8 @@ cannot express (the first worker's own doubt).
 7. Carry-over: the statement is compiled by `bcomp`, so Solo and Windows get it with the compiler;
    message numbers 12172-12175 are Linux's range, the Windows agent allocates its own. Nothing is sent
    to them until the owner declares Core stable (the standing order).
+8. **Resize.** SD never reads the window size (see the section above). Which of (A), (B), (C) - or none yet? (B) changes
+   `@crtwide` for every session, which is why it is yours to say.
+9. **A default theme.** A program that never calls `screen theme` gets `mono`. Should an administrator be able to set
+   another default for the site (a setting in `sd.conf` or a VOC record) so that colour terminals get colour without
+   every program asking? Not proposed until you say.

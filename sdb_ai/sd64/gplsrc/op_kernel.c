@@ -107,6 +107,7 @@ void op_kernel() {
      K$IS.PHANTOM         Is this a phantom process
      K$TERM.TYPE          Terminal type name
      K$USERNAME           User name
+     K$WINSIZE            The terminal's size as the kernel last read it from the tty
      K$DATE.CONV          Set default date conversion
      K$PPID               Get parent process id
      K$USERS              Get user list
@@ -238,12 +239,29 @@ void op_kernel() {
       break;
 
     case K_CRTHIGH:
+      tio_check_resize();
       result.data.value = tio.dsp.lines_per_page;
       break;
 
     case K_CRTWIDE:
+      tio_check_resize();
       result.data.value = tio.dsp.width;
       break;
+
+    /* 13 Oct 26 dm - the terminal's own size, as the kernel last read it from
+       the tty: width, a field mark, height; null if it never could (no tty, or
+       a terminal that says 0 by 0).  See linuxio.c and K_WINSIZE in keys.h.   */
+    case K_WINSIZE: {
+      int cols;
+      int rows;
+
+      if (console_window_size(&cols, &rows)) {
+        sprintf(s, "%d%c%d", cols, FIELD_MARK, rows);
+        k_put_c_string(s, &result);
+      } else {
+        k_put_c_string("", &result);
+      }
+    } break;
 
     case K_SET_DATE:
       GetInt(descr);

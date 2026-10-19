@@ -18,7 +18,9 @@
 *     timeout  seconds to wait; left out, for ever
 *     ret      the key's name: up down left right home end pgup pgdn ins del bs tab btab enter esc
 *              f1 to f12, ctrl-a to ctrl-z (those with no name of their own), or the character itself.
-*              The terminal's own terminfo entry decides what a sequence means ($sl_key).
+*              The terminal's own terminfo entry decides what a sequence means ($sl_key).  A report of the
+*              mouse (once SCREEN OPEN has switched reporting on) is the name mouse: SCREEN MOUSE then says
+*              what it was.
 *     status   0 a key; 1 the time ran out or the input has ended (ELSE)
 *
 * END-DESCRIPTION
@@ -31,6 +33,10 @@ $catalog !screen_key
 
    ret = ''
    call $sl_key(timeout, ret)
+   if ret = 'resize' then
+      call $sl_scr('get', scr)                 ;* makes the kept picture the terminal's size and draws it again
+      call $sl_scr('put', scr)
+   end
    status = if ret = '' then 1 else 0
 
    return

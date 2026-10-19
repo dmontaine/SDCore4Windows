@@ -1,0 +1,60 @@
+* SL_SCROLLBAR
+* Screen library: the characters of a vertical scroll bar.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New (the list's own bar, made into a routine the viewer and the table use too).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_scrollbar(h, top, total, visible, bar)
+*
+*     h        the height of the bar in cells (a widget's rows)
+*     top      the number of the first line that is shown (from 1)
+*     total    how many lines there are
+*     visible  how many of them the widget shows at a time
+*     bar      returned: h characters, one for each row of the bar from the top.  ^ in the first row, v in
+*              the last, | for the track between and # for the part of it that is showing: as long as
+*              visible is of total (at least one cell), and as far down as top is of the way to the end.
+*              Nothing to scroll (total not above visible), or no room for a track (h under 3):
+*              the track only, without the thumb.
+*
+*   The routine draws nothing: the caller puts the string in the column beside what scrolls, in the
+*   style it likes (the SL.W.D-based widgets use their own).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_scrollbar(h, top, total, visible, bar)
+$catalog $sl_scrollbar
+
+   bar = ''
+   if h < 1 then return
+
+   bar = str('|', h)
+   bar[1, 1] = '^'
+   if h > 1 then bar[h, 1] = 'v'
+
+   if h > 2 and total > visible and visible > 0 then
+      room = h - 2                                       ;* the cells of the track
+      tl = int(room * visible / total + 0.5)             ;* the thumb's length
+      if tl < 1 then tl = 1
+      if tl > room then tl = room
+      span = total - visible                             ;* how far the top line can go
+      t = top - 1
+      if t < 0 then t = 0
+      if t > span then t = span
+      ts = int((room - tl) * t / span + 0.5)             ;* the thumb's first cell, from 0
+      for r = 0 to tl - 1
+         bar[2 + ts + r, 1] = '#'
+      next r
+   end
+
+   return
+end
+
+* END-CODE

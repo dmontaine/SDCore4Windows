@@ -86,7 +86,7 @@ $include sl.h
    if by < 0 then by = 0
 
    call $sl_region('save', scr, bx, by, bw, bh, under)
-   call $sl_attr('normal', nc)
+   call $sl_attr('window', nc)
    call $sl_frame(scr, bx, by, bw, bh, title, nc, 1)
 
    w = collection()
@@ -102,7 +102,16 @@ $include sl.h
    loop
       call $sl_key('', k)
       if k = '' then k = 'esc'
-      call $sl_list('key', w, scr, k, r)
+      if k = 'mouse' then
+         gosub pick.mouse
+      end else
+         if k = 'resize' then
+            call $sl_resize(scr)                    ;* the terminal's size changed: the box is drawn again with the rest
+            r = 'handled'
+         end else
+            call $sl_list('key', w, scr, k, r)
+         end
+      end
       st = r<1>
    until st = 'done' or st = 'cancel'
    repeat
@@ -115,6 +124,25 @@ $include sl.h
       status = 0
    end
 
+   return
+
+* A mouse event: a click on an entry chooses it (with MULTI it picks or unpicks it), a click outside the box cancels,
+* the wheel over the list scrolls it; releases and drags are ignored
+pick.mouse:
+   r = 'handled'
+   call $sl_mouse('get', mev)
+   inside = (mev<3> >= w{'ax'} and mev<3> < w{'ax'} + lw and mev<4> >= w{'ay'} and mev<4> < w{'ay'} + lh)
+   begin case
+      case mev<1> = 'wheel' and inside
+         call $sl_list('mouse', w, scr, mev, r)
+      case mev<1> = 'press' and mev<2> = 1
+         if inside then
+            call $sl_list('mouse', w, scr, mev, r)
+            if r<1> = 'handled' and multi = '' then r = 'done' : @fm : w{'cur'}
+         end else
+            if mev<3> < bx or mev<3> >= bx + bw or mev<4> < by or mev<4> >= by + bh then r = 'cancel'
+         end
+   end case
    return
 end
 

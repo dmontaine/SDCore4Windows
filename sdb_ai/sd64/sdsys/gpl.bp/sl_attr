@@ -1,11 +1,13 @@
 * SL_ATTR
-* Screen library, theme: the one table of styles every widget draws with.
+* Screen library, theme: the name of a style to its one-character code.
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): The name now gives a one-character style CODE (the shadow keeps one per cell), and
 *               $sl_sgr turns a code into the sequence to DISPLAY; before, the name gave the sequence.
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): The table is $sl_theme's: the codes are the same in every theme and the theme says what
+*               each looks like (colours as well as reverse video and underline).
 * 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
 * END-HISTORY
 *
@@ -13,16 +15,14 @@
 *
 *   call $sl_attr(name, code)
 *
-*     name  normal, highlight (the selected item, a focused button), bar (the menu bar and a
-*           menu's body), barsel (the selected item of a bar), hotkey (the mnemonic letter),
-*           hotkey.bar (the mnemonic on a bar), field (an entry field), frame, disabled, or
-*           reverse, underline; a code itself (n r u x) is taken as it is
-*     code  returned: n normal, r reverse, u underline, x reverse and underline
+*     name  a style: normal, reverse, underline, both, bold, window, highlight, bar, barsel, hotkey,
+*           hotkey.bar, field, disabled, desktop (what each is for, and its code, are in $sl_theme), or a
+*           code itself
+*     code  returned: the style's code (sl.h); n for an empty name or one it does not know
 *
-*   Only reverse video and underline are used, so every style reads on a monochrome terminal.
-*   A colour theme changes this table and $sl_sgr, nothing else.  'disabled' is the same as
-*   'normal' for now (a monochrome terminal has no dim); a widget shows a disabled item with its
-*   label in brackets.  An unknown name gives n.
+*   What a code looks like is the theme's business ($sl_theme, $sl_sgr), so a widget names the style it
+*   wants and never a colour.  In the default theme every style is reverse video, underline, both or
+*   plain, so it reads on a monochrome terminal.
 *
 * END-DESCRIPTION
 *
@@ -32,18 +32,7 @@ $internal
 subroutine sl_attr(name, code)
 $catalog $sl_attr
 
-   begin case
-      case name = 'highlight' ; code = 'r'
-      case name = 'bar' ; code = 'r'
-      case name = 'barsel' ; code = 'n'
-      case name = 'hotkey' ; code = 'u'
-      case name = 'hotkey.bar' ; code = 'x'
-      case name = 'field' ; code = 'u'
-      case name = 'reverse' ; code = 'r'
-      case name = 'underline' ; code = 'u'
-      case len(name) = 1 and index('nrux', name, 1) ; code = name
-      case 1 ; code = 'n'
-   end case
+   call $sl_theme('code', name, '', '', '', code)
 
    return
 end

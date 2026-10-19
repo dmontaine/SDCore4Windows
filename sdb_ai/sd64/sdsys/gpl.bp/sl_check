@@ -63,12 +63,21 @@ $include sl.h
          end else
             ret = 'unhandled' : @fm : key
          end
+
+      case op = 'mouse'
+         ret = 'handled'
+         if key<1> = 'press' then                  ;* a click on it ticks or unticks it
+            v = 1
+            if w{'value'} then v = 0
+            w{'value'} = v
+            gosub paint
+         end
    end case
 
    return
 
 paint:
-   code = 'n'
+   call $sl_attr('window', code)
    if w{'focused'} then call $sl_attr('highlight', code)
    mark = '[ ] '
    if w{'value'} then mark = '[x] '

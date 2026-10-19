@@ -47,6 +47,7 @@
 #include <netdb.h>
 #include <pwd.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -84,6 +85,20 @@ Private void do_input(void);
 Private bool input_handler_enabled = TRUE;
 Private bool piped_input = FALSE;
 Private bool connection_lost = FALSE;
+
+/* 13 Oct 26 dm - THE TERMINAL'S OWN SIZE.  Until now SD never asked the tty how big it was: the display was terminfo's 120 by
+   36 unless the user typed TERM w,h or the environment happened to carry COLUMNS and LINES, so a program on an 80 by 24 terminal
+   drew for 120 by 36 (LIST paged at 36 lines, @(x, y) past the real edge went off the screen).  The tty is asked at start-up
+   and again at every SIGWINCH, and the answer becomes the display's width and lines per page.  TERM w,h still sets them by
+   hand, and holds until the next resize.  Nothing is read when there is no tty (a pipe, a phantom, the API).
+   win_cols and win_rows are what the tty last said (0 0: it has not been able to); winch_seen is set when the display has
+   changed and its data lines per page (set_data_lines() in op_tio.c, which is not safe in a signal handler) are yet to be
+   worked out.                                                                                                             */
+Private int win_cols = 0;
+Private int win_rows = 0;
+Private volatile sig_atomic_t winch_seen = 0;
+Private bool read_window_size(void);
+Private void winch_handler(int sig);
 
 /* Keyboard */
 
@@ -448,6 +463,66 @@ bool init_console() {
     fcntl(0, F_SETFL, stdin_modes | O_NONBLOCK | O_ASYNC);
   }
 
+  /* 13 Oct 26 dm - the terminal's own size, now and at every resize (see win_cols above) */
+
+  if (read_window_size())
+    winch_seen = 1;
+  signal(SIGWINCH, winch_handler);
+
+  return TRUE;
+}
+
+/* ======================================================================
+   read_window_size()  -  Ask the tty how big it is
+   Returns TRUE and sets the display's width and lines per page if it said.
+   Only ioctl() and plain stores, so it is safe in a signal handler.  The
+   least width and depth are LOGIN's (MIN.WIDTH 20, MIN.DEPTH 10).         */
+
+Private bool read_window_size() {
+  struct winsize ws;
+
+  if ((ioctl(0, TIOCGWINSZ, &ws) != 0) || (ws.ws_col == 0) || (ws.ws_row == 0))
+    return FALSE;
+
+  win_cols = ws.ws_col;
+  win_rows = ws.ws_row;
+  tio.dsp.width = (win_cols < 20) ? 20 : win_cols;
+  tio.dsp.lines_per_page = (win_rows < 10) ? 10 : win_rows;
+  return TRUE;
+}
+
+/* ======================================================================
+   winch_handler()  -  SIGWINCH: the terminal has been resized            */
+
+Private void winch_handler(sig) int sig;
+{
+  (void)sig;
+  if (read_window_size())
+    winch_seen = 1;
+}
+
+/* ======================================================================
+   console_resized()  -  Has the display changed since the data lines per
+   page were last worked out?  Answers once per change.                    */
+
+Public bool console_resized() {
+  if (!winch_seen)
+    return FALSE;
+  winch_seen = 0;
+  return TRUE;
+}
+
+/* ======================================================================
+   console_window_size()  -  What the tty last said its size was
+   Returns FALSE (and leaves *cols and *rows alone) if it never has.       */
+
+Public bool console_window_size(cols, rows) int *cols;
+int *rows;
+{
+  if ((win_cols == 0) || (win_rows == 0))
+    return FALSE;
+  *cols = win_cols;
+  *rows = win_rows;
   return TRUE;
 }
 

@@ -73,9 +73,37 @@ $include sl.h
          gosub paint
 
       case op = 'key'
+         w{'clk'} = ''
          gosub handle.key
+
+      case op = 'mouse'
+         gosub click
    end case
 
+   return
+
+* A click on a row makes it the current one (with multi it also picks or unpicks it); a second click on the row
+* that the last click chose is Return.  The wheel moves the current row three at a time.
+click:
+   ret = 'handled'
+   if key<1> = 'wheel' then
+      if key<2> = 'up' then cur -= 3 else cur += 3
+      if cur > n then cur = n
+      if cur < 1 then cur = 1
+   end else
+      i = top + key<4> - w{'ay'}
+      if i < 1 or i > n then return
+      if i = w{'clk'} and not(multi) then
+         ret = 'done' : @fm : i
+         return
+      end
+      cur = i
+      w{'clk'} = i
+      if multi then gosub toggle
+   end
+   gosub scroll
+   gosub store
+   gosub paint
    return
 
 handle.key:
@@ -162,9 +190,12 @@ store:
 paint:
    tw = lw
    bar = (n > lh)
-   if bar then tw = lw - 1
+   if bar then
+      tw = lw - 1
+      call $sl_scrollbar(lh, top, n, lh, sbc)           ;* ^ v | and # as long as the part showing
+   end
    call $sl_attr('highlight', hl)
-   call $sl_attr('normal', nl)
+   call $sl_attr('window', nl)
    focused = w{'focused'} + 0
    for r = 0 to lh - 1
       i = top + r
@@ -189,14 +220,7 @@ paint:
          if i = cur and focused then code = hl
       end
       if bar then
-         sb = '|'
-         if r = 0 then sb = '^'
-         if r = lh - 1 then sb = 'v'
-         if lh > 2 and n > lh then
-            thumb = 1 + int((top - 1) * (lh - 3) / (n - lh))
-            if r = thumb and r > 0 and r < lh - 1 then sb = '#'
-         end
-         line := sb
+         line := sbc[r + 1, 1]
          code = str(code, tw) : nl
       end
       call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, line, code)

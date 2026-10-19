@@ -1,0 +1,64 @@
+* SCREEN_THEME
+* The subroutine that SCREEN THEME calls: choose how the library's styles look.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN THEME name {RETURNING current} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_theme(name, ret, status)
+*
+*     name     mono (reverse video and underline only: reads on any terminal; the default), classic
+*              (dark text on light dialogues over a blue desktop) or blue (white on blue dialogues).
+*              Null changes nothing and only answers.
+*     ret      the name of the theme in force afterwards
+*     status   0 the theme is in force; 1 it is not, and the theme in force is as it was: no such theme,
+*              a terminal that cannot show colour (or no terminal: a phantom) for a theme that needs it
+*
+*   Every dialogue and form is drawn with named styles (window, highlight, bar ...; see $sl_theme); a theme
+*   only says what each looks like, so one can be chosen at any time.  If the library owns the screen
+*   (SCREEN OPEN) it is drawn again in the new theme from the library's shadow: what the program wrote
+*   with PRINT or CRT is not in the shadow and goes.  SCREEN CLEAR then paints the desktop in the
+*   theme's desktop style.  SCREEN CLOSE puts the theme back to mono.  SCREEN STYLE changes one style.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_theme(name, ret, status)
+$catalog !screen_theme
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
+
+   if name # '' then
+      call $sl_theme('set', name, 'asked', '', '', r)        ;* asked for: the site's default theme is not for this program
+      if r then
+         call $sl_theme('name', '', '', '', '', ret)
+         return
+      end
+      call $sl_scr('get', scr)
+      if scr<SL.S.OWNED> then
+         call $sl_repaint(scr)
+         call $sl_scr('put', scr)
+      end
+   end
+
+   call $sl_theme('name', '', '', '', '', ret)
+   status = 0
+
+   return
+end
+
+* END-CODE

@@ -170,6 +170,8 @@ void op_at() {
   char *p;
   char *q;
 
+  tio_check_resize(); /* 13 Oct 26: the bounds below are the terminal's */
+
   arg1 = e_stack - 2;
   GetInt(arg1);
   at1 = arg1->data.value;
@@ -1141,6 +1143,7 @@ Private void getkey(bool invert, int timeout) /* -ve = none */
     k_error(sysmsg(1702));
 
   k = keyin((timeout < 0) ? 0 : timeout);
+  tio_check_resize(); /* 13 Oct 26: the terminal may have been resized while we waited */
   if ((k == 0) && (k_exit_cause & K_INTERRUPT)) { /* Break key, etc.  Process and then repeat */
     pc--;
     return;
@@ -3315,6 +3318,22 @@ exit_handle_break:
 }
 
 /* ======================================================================
+   tio_check_resize()  -  The terminal's size has changed
+
+   linuxio.c reads the tty's size at start-up and in its SIGWINCH handler, and
+   there it can set the display's width and lines per page but not work out
+   its data lines per page (set_data_lines() walks the heading and footing and
+   is not safe in a signal handler).  That is done here, at a place where the
+   program is not in the middle of changing the display: before an @ function,
+   at the end of a line, before waiting for a key, and when the display's size
+   is asked for.                                                             */
+
+void tio_check_resize() {
+  if (console_resized())
+    set_data_lines(&tio.dsp);
+}
+
+/* ======================================================================
    tio_init()  -  Initialise tio subsystem                                */
 
 bool tio_init() {
@@ -3369,6 +3388,8 @@ int tio_printf(char *template_string, ...) {
 /* ====================================================================== */
 
 Private void tio_new_line() {
+  tio_check_resize(); /* 13 Oct 26: the page length below is the terminal's */
+
   /* 0083 Do newline here rather than in tio_display_string */
 
   if (capturing)

@@ -1,0 +1,55 @@
+* SL_REPAINT
+* Screen library: clear the terminal and draw the whole screen again from the shadow.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New (the loop of SCREEN REFRESH, which a change of theme needs as well).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_repaint(scr)
+*
+*     scr   the screen context (sl.h) of a screen the library owns.  The terminal is cleared and every
+*           row that holds text, or any style but the plain one, is drawn again from SL.S.SHADOW and
+*           SL.S.ATTRS in the theme now in force.  The shadow is not changed.
+*
+*   Text the program wrote with PRINT or CRT is not in the shadow and is lost: the library cannot ask
+*   the terminal what it shows.  The bottom right cell is not drawn on a terminal that scrolls when it
+*   is written (no xenl).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_repaint(scr)
+$catalog $sl_repaint
+
+$include sl.h
+
+   call $sl_sgr('n', sq)
+   display sq : @(-1) :
+
+   shadow = scr<SL.S.SHADOW>
+   attrs = scr<SL.S.ATTRS>
+   sw = scr<SL.S.W> + 0
+   blank.row = str('n', sw)
+   last = scr<SL.S.H> - 1
+   for r = 0 to last
+      t = shadow<1, r + 1>
+      a = attrs<1, r + 1>
+      if trim(t) # '' or a # blank.row then
+         if r = last and not(terminfo('xenl')) then
+            t = t[1, sw - 1]                      ;* the corner cell would scroll the terminal
+            a = a[1, sw - 1]
+         end
+         call $sl_put(scr, 0, r, t, a)
+      end
+   next r
+
+   return
+end
+
+* END-CODE

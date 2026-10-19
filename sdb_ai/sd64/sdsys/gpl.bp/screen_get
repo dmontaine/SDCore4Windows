@@ -17,7 +17,9 @@
 *
 *     f id     the form and the widget's name in it
 *     ret      entry: the text.  check: 1 or 0.  radio: the number of the choice selected.  list: the number
-*              of the current item (with MULTI the numbers of those picked, as values).  label: its text.
+*              of the current item (with MULTI the numbers of those picked, as values).  combo: the text.
+*              tabs: the number of the chosen tab.  table: the number of the current row.  memo: the text,
+*              one line to a field.  label: its text.
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
 * END-DESCRIPTION

@@ -1,0 +1,276 @@
+* SL_MEMO
+* Screen library, widget: a text area of several lines, to edit or (readonly) to read.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_memo(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, ax ay (the top left cell of the area on the screen), w h (its width, the last column of
+*   which is the scroll bar, and the number of rows it shows), value (the text: one line to a field, so a
+*   dynamic array of lines), readonly (1: a viewer), and the state: cy and cx (the cursor's line and its
+*   place in it, 1 = before the first character), top (the first line shown), left (the first column shown),
+*   want (the column the cursor tries to keep when it moves up or down)
+*
+*     init    w and h from what was given (at least 3 by 1); a linefeed in the text is taken as the end of a
+*             line; the cursor goes to the start
+*     draw    the rows, from the first column shown, cut to the width and in the 'text' style, then the
+*             scroll bar in the last column (always there, so the text does not move when it is needed)
+*     focus   key = 1 gives it the focus (draws, with the cursor in the text), key = 0 takes it away
+*     key     left, right (past the end of a line to the next, and back), up, down, home / ctrl-a, end /
+*             ctrl-e move (pgup and pgdn scroll a page less one line and the cursor keeps its row on the
+*             screen); a printable character, Return (splits the line), bs, del / ctrl-d
+*             (join lines at the ends) and ctrl-k (cuts to the end of the line) edit.  ret<1> is 'handled';
+*             'cancel' (Esc); or 'unhandled' with ret<2> the key's name: tab, btab, a function key, and up on the
+*             first line and down on the last, so that a form can go on to the widget before or after.
+*             A readonly area moves and nothing more: Return and every character are 'unhandled'.
+*     close   nothing to undo: the caller repaints what is under it
+*
+*   No wrapping: a longer line is shown from the first column shown and the area pans sideways to follow the
+*   cursor.  A tab character is shown as a blank.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_memo(op, w, scr, key, ret)
+$catalog $sl_memo
+
+$include sl.h
+
+   ret = ''
+   mw = w{'w'} + 0
+   mh = w{'h'} + 0
+   if mw < 3 then mw = 3
+   if mh < 1 then mh = 1
+   tw = mw - 1                                   ;* the width of the text: the last column is the scroll bar
+   ro = w{'readonly'} + 0
+   lines = w{'value'}
+   cx = w{'cx'} + 0
+   cy = w{'cy'} + 0
+   top = w{'top'} + 0
+   left = w{'left'} + 0
+   want = w{'want'} + 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'memo'
+         w{'focusable'} = 1
+         w{'w'} = mw
+         w{'h'} = mh
+         lines = convert(char(10), @fm, lines)
+         cx = 1 ; cy = 1 ; top = 1 ; left = 1 ; want = 1
+         gosub store
+
+      case op = 'draw'
+         gosub count
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub count
+         gosub paint
+
+      case op = 'key'
+         gosub count
+         gosub handle.key
+
+      case op = 'mouse'
+         gosub count
+         gosub click
+   end case
+
+   return
+
+* A click puts the cursor on the character under it (after the last one of a shorter line, on the last line if it
+* is below the text); the wheel scrolls three lines and the cursor goes with it if it would leave the screen
+click:
+   ret = 'handled'
+   if key<1> = 'wheel' then
+      if key<2> = 'up' then top -= 3 else top += 3
+      if top > n - mh + 1 then top = n - mh + 1
+      if top < 1 then top = 1
+      if cy < top then cy = top
+      if cy > top + mh - 1 then cy = top + mh - 1
+   end else
+      cy = top + key<4> - w{'ay'}
+      cx = left + key<3> - w{'ax'}
+      if cy > n then cy = n
+      if cy < 1 then cy = 1
+      if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+      if cx < 1 then cx = 1
+      want = cx
+   end
+   gosub count
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+* n = the number of lines; a text with nothing in it has one, empty
+count:
+   n = dcount(lines, @fm)
+   if n < 1 then n = 1
+   if cy < 1 then cy = 1
+   if cy > n then cy = n
+   if cx < 1 then cx = 1
+   if top < 1 then top = 1
+   if left < 1 then left = 1
+   return
+
+store:
+   w{'value'} = lines
+   w{'cx'} = cx
+   w{'cy'} = cy
+   w{'top'} = top
+   w{'left'} = left
+   w{'want'} = want
+   return
+
+* Keep the cursor inside the rows and columns shown
+scroll:
+   if cy < top then top = cy
+   if cy > top + mh - 1 then top = cy - mh + 1
+   if cx < left then left = cx
+   if cx > left + tw - 1 then left = cx - tw + 1
+   if top < 1 then top = 1
+   if left < 1 then left = 1
+   return
+
+handle.key:
+   ret = 'handled'
+   ln = lines<cy>
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'up'
+         if cy > 1 then
+            cy -= 1
+            cx = want
+            if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+      case key = 'down'
+         if cy < n then
+            cy += 1
+            cx = want
+            if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         end else
+            ret = 'unhandled' : @fm : key
+         end
+      case key = 'left'
+         if cx > 1 then
+            cx -= 1
+         end else
+            if cy > 1 then
+               cy -= 1
+               cx = len(lines<cy>) + 1
+            end
+         end
+         want = cx
+      case key = 'right'
+         if cx <= len(ln) then
+            cx += 1
+         end else
+            if cy < n then
+               cy += 1
+               cx = 1
+            end
+         end
+         want = cx
+      case key = 'home' or key = 'ctrl-a'
+         cx = 1
+         want = cx
+      case key = 'end' or key = 'ctrl-e'
+         cx = len(ln) + 1
+         want = cx
+      case key = 'pgup'
+         * the view goes back a page (less one line, so the last line of the new page is the first of the old) and the
+         * cursor keeps its row on the screen
+         top -= mh - 1
+         if top < 1 then top = 1
+         cy -= mh - 1
+         if cy < 1 then cy = 1
+         cx = want
+         if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+      case key = 'pgdn'
+         top += mh - 1
+         if top > n - mh + 1 then top = n - mh + 1
+         if top < 1 then top = 1
+         cy += mh - 1
+         if cy > n then cy = n
+         cx = want
+         if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+      case ro
+         ret = 'unhandled' : @fm : key
+      case key = 'enter'
+         lines<cy> = ln[1, cx - 1]
+         rest = ln[cx, len(ln)]
+         ins rest before lines<cy + 1>
+         cy += 1
+         cx = 1
+         want = cx
+      case key = 'bs'
+         if cx > 1 then
+            lines<cy> = ln[1, cx - 2] : ln[cx, len(ln)]
+            cx -= 1
+         end else
+            if cy > 1 then
+               prev = lines<cy - 1>
+               lines<cy - 1> = prev : ln
+               del lines<cy>
+               cy -= 1
+               cx = len(prev) + 1
+            end
+         end
+         want = cx
+      case key = 'del' or key = 'ctrl-d'
+         if cx <= len(ln) then
+            lines<cy> = ln[1, cx - 1] : ln[cx + 1, len(ln)]
+         end else
+            if cy < n then
+               lines<cy> = ln : lines<cy + 1>
+               del lines<cy + 1>
+            end
+         end
+      case key = 'ctrl-k'
+         lines<cy> = ln[1, cx - 1]
+      case len(key) = 1
+         lines<cy> = ln[1, cx - 1] : key : ln[cx, len(ln)]
+         cx += 1
+         want = cx
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   gosub count
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+paint:
+   call $sl_attr('text', tc)
+   call $sl_attr('window', wc)
+   call $sl_scrollbar(mh, top, n, mh, bar)
+   for r = 0 to mh - 1
+      i = top + r
+      seg = ''
+      if i <= n then
+         seg = convert(char(9), ' ', lines<i>)
+         seg = seg[left, tw]
+      end
+      seg := space(tw - len(seg))
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, seg : bar[r + 1, 1], str(tc, tw) : wc)
+   next r
+   if w{'focused'} then display @(w{'ax'} + cx - left, w{'ay'} + cy - top) :
+   return
+end
+
+* END-CODE

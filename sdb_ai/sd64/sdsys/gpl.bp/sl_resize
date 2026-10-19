@@ -1,0 +1,72 @@
+* SL_RESIZE
+* Screen library: make a screen context the terminal's size, and draw it again.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_resize(scr)
+*
+*     scr   the screen context (sl.h) of a screen the library owns (SL.S.OWNED: SED's own context, and the blank one
+*           of a dialogue before SCREEN OPEN, are left alone), changed in place.  If its size is not
+*           the terminal's now (@crtwide by @crthigh: the kernel keeps them to the tty's own size, and TERM w,h
+*           sets them by hand), it is made that size: every row and column that still fits keeps its text
+*           and its style, the rest of a bigger screen is blank in style n, the clip rectangle is dropped, the cursor
+*           is kept inside the new screen, and the terminal is cleared and drawn again from it ($sl_repaint).
+*           Nothing is done if the size is the same.
+*
+*   The routine that holds the live context calls it when $sl_key says resize: a dialogue draws into
+*   its own copy of the context, which only becomes the kept one when the statement ends, so the kept
+*   context cannot be repainted for it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_resize(scr)
+$catalog $sl_resize
+
+$include sl.h
+
+   sw = @crtwide + 0
+   sh = @crthigh + 0
+   if scr<SL.S.W> = sw and scr<SL.S.H> = sh then return
+   if not(scr<SL.S.OWNED>) then return        ;* not a screen the library keeps (SED's own context, a transient blank one)
+
+   old = scr
+   nscr = ''
+   nscr<SL.S.W> = sw
+   nscr<SL.S.H> = sh
+   nscr<SL.S.CURON> = old<SL.S.CURON>
+   nscr<SL.S.OWNED> = old<SL.S.OWNED>
+   nscr<SL.S.MOUSE> = old<SL.S.MOUSE>
+   for r = 0 to sh - 1
+      if r < old<SL.S.H> then
+         t = old<SL.S.SHADOW, r + 1> : space(sw)
+         a = old<SL.S.ATTRS, r + 1> : str('n', sw)
+      end else
+         t = space(sw)
+         a = str('n', sw)
+      end
+      nscr<SL.S.SHADOW, r + 1> = t[1, sw]
+      nscr<SL.S.ATTRS, r + 1> = a[1, sw]
+   next r
+
+   cx = old<SL.S.CUR, 1> + 0
+   cy = old<SL.S.CUR, 2> + 0
+   if cx > sw - 1 then cx = sw - 1
+   if cy > sh - 1 then cy = sh - 1
+   nscr<SL.S.CUR> = cx : @vm : cy
+
+   scr = nscr
+   call $sl_repaint(scr)
+
+   return
+end
+
+* END-CODE

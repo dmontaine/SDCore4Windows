@@ -9,16 +9,23 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN OPEN {CLEAR} {NOCURSOR} {MINSIZE w,h} {THEN ... ELSE ...}
+*   SCREEN OPEN {CLEAR} {NOCURSOR} {MINSIZE w,h} {NOMOUSE} {THEN ... ELSE ...}
 *
 *   is compiled into
 *
-*   call !screen_open(clear, nocursor, minw, minh, ret, status)
+*   call !screen_open(clear, nocursor, minw, minh, nomouse, ret, status)
 *
 *     clear      1 clears the terminal.  Without it the library takes the screen as it is and BELIEVES
 *                it blank: a pop-up will put back blanks over whatever the program printed earlier.
 *     nocursor   1 hides the cursor (SCREEN CURSOR ON shows it again)
 *     minw minh  the least size accepted; a smaller terminal gives ELSE and the screen is not taken
+*     nomouse    1 leaves mouse reporting off.  Without it the terminal is asked to report the mouse
+*                (xterm modes 1000, 1002 and 1006: buttons, dragging and the wheel) until SCREEN CLOSE; a
+*                terminal that does not know them, such as the Linux console, ignores the request.  Forms
+*                and dialogues take clicks and the wheel; SCREEN KEY gives a mouse event the name mouse,
+*                and SCREEN MOUSE says what it was.  A program that stops without SCREEN CLOSE leaves the
+*                terminal reporting, and the mouse then types garbage at the prompt: the terminal's reset
+*                command puts it right.
 *     status     0 taken; 1 not: a phantom or other session with no terminal, or too small a terminal
 *
 *   From now on the library keeps a shadow of everything it draws (SCREEN TEXT, BOX, a dialogue ...),
@@ -30,7 +37,7 @@
 * START-CODE
 
 $internal
-subroutine screen_open(clear, nocursor, minw, minh, ret, status)
+subroutine screen_open(clear, nocursor, minw, minh, nomouse, ret, status)
 $catalog !screen_open
 
 $include sl.h
@@ -41,9 +48,17 @@ $include sl.h
    if minw # '' and @crtwide < minw then return
    if minh # '' and @crthigh < minh then return
 
+   call $sl_theme('set', '', '', '', '', r)           ;* the sequences again, for the terminal type now in force
+   call $sl_theme('default', '', '', '', '', r)       ;* the site's theme (SCREENTHEME in sd.conf), unless a program asked for one
    call $sl_scr('open', scr)
-   if clear # '' then display @(-1) :
+   if clear # '' then call $sl_desktop(scr)
    if nocursor # '' then scr<SL.S.CURON> = 0
+   scr<SL.S.MOUSE> = 0
+   if nomouse = '' then
+      call $sl_mouse('on', mseq)
+      display mseq :
+      scr<SL.S.MOUSE> = 1
+   end
    call $sl_scr('put', scr)
    status = 0
 

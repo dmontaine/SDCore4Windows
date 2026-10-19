@@ -233,6 +233,8 @@ void op_config() {
     result.data.value = pcfg.sortmem / 1024;
   else if (!strcmp(param, "SORTMRG"))
     result.data.value = pcfg.sortmrg;
+  else if (!strcmp(param, "SCREENTHEME"))
+    k_put_c_string(pcfg.screentheme, &result);  /* 13 Oct 26: the screen library's default theme */
   else if (!strcmp(param, "SORTWORK"))
     k_put_c_string(pcfg.sortworkdir, &result);
   else if (!strcmp(param, "SPOOLER"))

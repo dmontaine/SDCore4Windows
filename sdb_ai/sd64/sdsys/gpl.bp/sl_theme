@@ -1,0 +1,311 @@
+* SL_THEME
+* Screen library, theme: the named styles, and what each one looks like on this terminal.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_theme(op, a, b, c, d, ret)
+*
+*   The library draws with STYLES.  Every cell of the shadow keeps the one-character CODE of its style
+*   (sl.h) and a THEME says what each code looks like on the terminal: a colour for the text, a colour
+*   for the background and any of bold, dim, reverse and underline.  The codes do not depend on the
+*   theme, so one can be switched while there is something on the screen and the screen then repainted.
+*   The default theme, mono, uses only reverse video and underline and reads on any terminal; it is what
+*   a program gets until it asks for another, and what SED always uses.
+*
+*     style       code  mono looks like       what it is for
+*     normal      n     the terminal's own    the program's own output
+*     reverse     r     reverse video         (raw: the same in every theme)
+*     underline   u     underline             (raw)
+*     both        x     reverse and underline (raw)
+*     bold        b     bold                  bold text on the desktop: it keeps the desktop's colours (a theme may change it)
+*     window      w     normal                the body of a dialogue or a form, and what is drawn in it
+*     highlight   h     reverse               the selected entry, the button or field that has the focus
+*     bar         a     reverse               a menu bar and the body of a menu
+*     barsel      s     normal                the selected entry of a bar
+*     hotkey      k     underline             a mnemonic letter
+*     hotkey.bar  j     reverse and underline a mnemonic letter on a bar
+*     field       e     underline             an entry field that has not the focus
+*     disabled    d     normal                an entry that cannot be chosen
+*     desktop     y     normal                what SCREEN CLEAR, TEXT and BOX draw on: the background
+*     text        t     normal                the text of a memo (a text area), a viewer or a table
+*     header      g     underline and bold    the heading row of a table
+*
+*   op    'code'   a = a style name, or a code itself; ret = the code, n for a name it does not know
+*         'set'    a = the name of a theme: mono, classic or blue.  ret 0 done; 1 refused, because the
+*                  terminal has no colour (or there is no terminal) and the theme needs it - the theme in
+*                  force is left as it was; 2 no theme of that name.  a = '' builds the sequences again for
+*                  the terminal type now in force.
+*         'style'  a = a style name, b = foreground, c = background, d = flags: changes that style of the
+*                  theme in force.  ret 0 done; 2 the style is not one a theme may change (the raw ones, or
+*                  a name that is not a style); 3 a colour or flag it does not know.  A colour is black,
+*                  blue, green, cyan, red, magenta, brown (or yellow), white, or empty for the terminal's
+*                  own; the flags are any of bold, dim, reverse and underline, separated by spaces or +.
+*         'name'   ret = the name of the theme in force
+*
+*   $sl_sgr turns a code into what to DISPLAY to put the terminal into that style: it reads the sequences
+*   this routine keeps in the common block /slthm/.  A sequence starts by switching every attribute off,
+*   so it does not depend on the style before it.
+*   Colour comes from the terminal's own capabilities (SD's @(-37, n) and @(-38, n)), which need a
+*   terminfo entry with setf and setb; there are eight colours, and bold makes the text bright.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_theme(op, a, b, c, d, ret)
+$catalog $sl_theme
+
+$include sl.h
+
+   common /slthm/ th.name, th.codes, th.defs, th.seqs, th.names, th.asked
+
+   * A common block's variables start as 0 (measured 12 Oct 26: they are not unassigned), so the test is on the value
+   fresh = 0
+   if unassigned(th.codes) then
+      fresh = 1
+   end else
+      if th.codes # SL.CODES then fresh = 1
+   end
+   if fresh then
+      th.name = ''
+      th.codes = SL.CODES
+      th.defs = ''
+      th.seqs = ''
+      * The names of the styles, in the order of the codes
+      * (field marks: LOCATE x IN list<1> searches fields; a list of values needs list<1,1>)
+      th.names = 'normal' : @fm : 'reverse' : @fm : 'underline' : @fm : 'both' : @fm : 'bold' : @fm : 'window'
+      th.names := @fm : 'highlight' : @fm : 'bar' : @fm : 'barsel' : @fm : 'hotkey' : @fm : 'hotkey.bar'
+      th.names := @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
+   end
+   names = th.names
+
+   ret = ''
+   begin case
+      case op = 'code'
+         ret = 'n'
+         s = downcase(a)
+         locate s in names<1> setting i then
+            ret = th.codes[i, 1]
+         end else
+            if len(a) = 1 and index(th.codes, a, 1) then ret = a
+         end
+
+      case op = 'name'
+         ret = th.name
+         if ret = '' then ret = 'mono'
+
+      case op = 'set'
+         gosub set.theme
+         if b = 'asked' and ret = 0 then th.asked = 1      ;* a program asked for this theme: the site's default is not for it
+
+      case op = 'style'
+         gosub set.style
+         if ret = 0 then th.asked = 1
+
+      case op = 'default'
+         * SCREEN OPEN: the theme the administrator chose for the site (SCREENTHEME in sd.conf), unless the program has
+         * asked for one itself.  A name that is no theme, or a theme this terminal cannot show (no colour), is not an
+         * error here: the library stays as it is.
+         if not(th.asked) then
+            dn = downcase(trim(config('SCREENTHEME')))
+            if dn # '' and dn # downcase(th.name) then
+               a = dn
+               gosub set.theme
+            end
+         end
+
+      case op = 'reset'
+         * SCREEN CLOSE, and the clean-up after a program that did not: the next program starts from mono, having asked for nothing
+         a = 'mono'
+         gosub set.theme
+         th.asked = 0
+   end case
+
+   return
+
+* The theme the caller named (or, for null, the one in force) takes over
+set.theme:
+   nm = downcase(a)
+   if nm = '' then
+      nm = th.name
+      if nm = '' then nm = 'mono'
+   end
+   spec = ''
+   begin case
+      case nm = 'mono'
+         spec<-1> = 'highlight=,,reverse'
+         spec<-1> = 'bar=,,reverse'
+         spec<-1> = 'hotkey=,,underline'
+         spec<-1> = 'hotkey.bar=,,reverse underline'
+         spec<-1> = 'field=,,underline'
+         spec<-1> = 'header=,,underline bold'
+      case nm = 'classic'
+         spec<-1> = 'desktop=white,blue,'
+         spec<-1> = 'bold=white,blue,bold'
+         spec<-1> = 'window=black,white,'
+         spec<-1> = 'highlight=white,green,bold'
+         spec<-1> = 'bar=black,white,'
+         spec<-1> = 'barsel=white,green,bold'
+         spec<-1> = 'hotkey=red,white,'
+         spec<-1> = 'hotkey.bar=red,white,'
+         spec<-1> = 'field=white,blue,bold'
+         spec<-1> = 'disabled=black,white,bold'
+         spec<-1> = 'text=white,blue,bold'
+         spec<-1> = 'header=black,cyan,'
+      case nm = 'blue'
+         spec<-1> = 'window=white,blue,bold'
+         spec<-1> = 'highlight=black,cyan,'
+         spec<-1> = 'bar=black,cyan,'
+         spec<-1> = 'barsel=white,black,bold'
+         spec<-1> = 'hotkey=brown,blue,bold'
+         spec<-1> = 'hotkey.bar=red,cyan,'
+         spec<-1> = 'field=black,cyan,'
+         spec<-1> = 'disabled=cyan,blue,'
+         spec<-1> = 'text=white,black,'
+         spec<-1> = 'header=brown,black,bold'
+      case 1
+         ret = 2
+         return
+   end case
+
+   * A colour theme needs a terminal that can show colour
+   if nm # 'mono' then
+      if system(25) then
+         ret = 1
+         return
+      end
+      if @(-37, 7) = '' or @(-38, 0) = '' then
+         ret = 1
+         return
+      end
+   end
+
+   gosub clear.defs
+   n = dcount(spec, @fm)
+   for k = 1 to n
+      line = spec<k>
+      sname = field(line, '=', 1)
+      rest = field(line, '=', 2)
+      locate sname in names<1> setting i then
+         sfg = field(rest, ',', 1)
+         sbg = field(rest, ',', 2)
+         sfl = field(rest, ',', 3)
+         gosub put.def
+      end
+   next k
+   gosub build.seqs
+   th.name = nm
+   ret = 0
+   return
+
+* The theme mono, before anything has been asked for (the first drawing); the caller's ret is kept
+load.mono:
+   save.a = a
+   save.ret = ret
+   a = 'mono'
+   gosub set.theme
+   a = save.a
+   ret = save.ret
+   return
+
+* Every style plain, then reverse, underline and both (raw) and bold (a theme may colour it)
+clear.defs:
+   th.defs = ''
+   n = len(th.codes)
+   for i = 1 to n
+      th.defs<i> = '' : @vm : '' : @vm : ''
+   next i
+   th.defs<2> = '' : @vm : '' : @vm : 'reverse'
+   th.defs<3> = '' : @vm : '' : @vm : 'underline'
+   th.defs<4> = '' : @vm : '' : @vm : 'reverse underline'
+   th.defs<5> = '' : @vm : '' : @vm : 'bold'
+   return
+
+* One style of the theme in force
+set.style:
+   s = downcase(a)
+   locate s in names<1> setting i else
+      ret = 2
+      return
+   end
+   if i <= 4 then
+      ret = 2                                ;* normal and the three raw styles are the same in every theme
+      return
+   end
+   sfg = b
+   sbg = c
+   sfl = d
+   if th.name = '' then gosub load.mono
+   gosub put.def
+   if ret = 0 then gosub build.seqs
+   return
+
+* Style number i takes the colours sfg on sbg and the flags sfl; ret 0, or 3 for something it does not know
+put.def:
+   ret = 3
+   fg = sfg
+   gosub colour.number
+   if cn = -2 then return
+   fnum = cn
+   fg = sbg
+   gosub colour.number
+   if cn = -2 then return
+   bnum = cn
+   fl = trim(convert('+,', '  ', downcase(sfl)))
+   nf = dcount(fl, ' ')
+   if fl = '' then nf = 0
+   for kf = 1 to nf                                  ;* (not k: the caller is looping on it)
+      word = field(fl, ' ', kf)
+      if word # 'bold' and word # 'dim' and word # 'reverse' and word # 'underline' then return
+   next kf
+   fnum = if fnum < 0 then '' else fnum
+   bnum = if bnum < 0 then '' else bnum
+   th.defs<i> = fnum : @vm : bnum : @vm : fl
+   ret = 0
+   return
+
+* fg = a colour name; cn = its number in the order of AT.BLACK ... AT.WHITE, -1 for none, -2 if it is not a colour
+colour.number:
+   cn = -2
+   cname = downcase(trim(fg))
+   begin case
+      case cname = '' or cname = 'default' ; cn = -1
+      case cname = 'black' ; cn = 0
+      case cname = 'blue' ; cn = 1
+      case cname = 'green' ; cn = 2
+      case cname = 'cyan' ; cn = 3
+      case cname = 'red' ; cn = 4
+      case cname = 'magenta' ; cn = 5
+      case cname = 'brown' or cname = 'yellow' ; cn = 6
+      case cname = 'white' ; cn = 7
+   end case
+   return
+
+* The sequence for every code, from the definitions
+build.seqs:
+   th.seqs = ''
+   n = len(th.codes)
+   for i = 1 to n
+      dd = th.defs<i>
+      sq = @(-14) : @(-16)
+      fl = dd<1, 3>
+      if index(fl, 'reverse', 1) then sq := @(-13)
+      if index(fl, 'underline', 1) then sq := @(-15)
+      if index(fl, 'bold', 1) then sq := @(-58)
+      if index(fl, 'dim', 1) then sq := @(-11)
+      if dd<1, 1> # '' then sq := @(-37, dd<1, 1>)
+      if dd<1, 2> # '' then sq := @(-38, dd<1, 2>)
+      th.seqs<i> = sq
+   next i
+   return
+
+end
+
+* END-CODE

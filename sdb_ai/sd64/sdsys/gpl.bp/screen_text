@@ -18,7 +18,8 @@
 *     string   one line; a mark character shows as a dot
 *     x y      the cell of its first character, from 0.  Left out, the text goes where the library's
 *              cursor is (after the last SCREEN TEXT, or where SCREEN CURSOR AT put it)
-*     attr     a style: normal, reverse, underline (default normal)
+*     attr     a style: normal, reverse, underline, bold, window, highlight ... (see $sl_theme); default
+*              desktop, which is the terminal's own look until a theme says otherwise
 *     width    the text is made exactly this wide: cut if longer, padded with blanks if shorter
 *
 *   The text is drawn and recorded in the shadow, and the cursor is left after it.  Text that runs
@@ -47,6 +48,7 @@ $include sl.h
       line = line : space(width)
       line = line[1, width]
    end
+   if attr = '' then attr = 'desktop'
    call $sl_attr(attr, code)
    call $sl_put(scr, x + 0, y + 0, line, code)
 

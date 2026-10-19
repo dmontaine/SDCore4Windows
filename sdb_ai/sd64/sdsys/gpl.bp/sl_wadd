@@ -18,7 +18,9 @@
 *          of that id (nothing is changed)
 *
 *   The widget is put at the end of the form's array of widgets, so the focus ring goes round them in
-*   the order they were added and the last one added is drawn last.
+*   the order they were added and the last one added is drawn last.  If SCREEN PAGE has named a page
+*   (f{'curpage'}) the widget is given it (w{'page'}): the form shows the widget only while the chosen tab
+*   of its tab strip is that page.
 *
 * END-DESCRIPTION
 *
@@ -38,6 +40,7 @@ $catalog $sl_wadd
 
    if jtype(f{'widgets'}) # 'array' then f{'widgets'} = mat()
    n = inmat(f{'widgets'}) + 1
+   if f{'curpage'} + 0 > 0 then w{'page'} = f{'curpage'} + 0      ;* SCREEN PAGE: the widget belongs to a tab's page
    f{'widgets', n} = w
    ok = 1
 

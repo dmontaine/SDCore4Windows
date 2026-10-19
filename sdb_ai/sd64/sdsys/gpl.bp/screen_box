@@ -19,7 +19,7 @@
 *     w h      the width and height, border included (default: to the right and bottom edges); at
 *              least 2 by 2, else ELSE and nothing is drawn
 *     title    shown in the top border, cut to fit
-*     attr     the style of the border (and of the inside with FILL); default normal
+*     attr     the style of the border (and of the inside with FILL); default desktop (see $sl_theme)
 *     fill     1 blanks the inside; without it the inside is left as it is
 *
 *   The border is + - |.  The library's cursor is not moved.
@@ -46,6 +46,7 @@ $include sl.h
    if h = '' then h = scr<SL.S.H> - y
    if w < 2 or h < 2 then return
 
+   if attr = '' then attr = 'desktop'
    call $sl_attr(attr, code)
    call $sl_frame(scr, x, y, w + 0, h + 0, title, code, fill # '')
 

@@ -16,10 +16,12 @@
 *   call !screen_refresh(ret, status)
 *
 *   Clears the terminal and draws every row of the shadow again: for a program that has written to the
-*   terminal behind the library's back, or after the user redrew the screen.  If the terminal is not
-*   the size it was when SCREEN OPEN was done, the library starts again with a blank screen of the new
-*   size and RETURNING holds resized, so that the program draws everything again; otherwise it holds
-*   null.  Without SCREEN OPEN there is no shadow: nothing is drawn and the status is 1.
+*   terminal behind the library's back, or after the user redrew the screen.  The library notices a
+*   change of the terminal's size by itself (SCREEN KEY, SCREEN WAIT and every other statement look): it
+*   makes its picture the new size, keeping what still fits, and draws it again.  RETURNING holds
+*   resized if that has happened since SCREEN REFRESH was last called, so that a program that placed
+*   things by the old size can lay them out again; otherwise it holds null.  Without SCREEN OPEN there
+*   is no shadow: nothing is drawn and the status is 1.
 *
 * END-DESCRIPTION
 *
@@ -37,21 +39,12 @@ $include sl.h
    call $sl_scr('get', scr)
    if not(scr<SL.S.OWNED>) then return
 
-   if scr<SL.S.W> # @crtwide or scr<SL.S.H> # @crthigh then
-      scr = ''
-      call $sl_scr('open', scr)
-      display @(-1) :
+   * ($sl_scr('get') has already made the picture the terminal's size and drawn it again, if the size had changed)
+   call $sl_scr('resized', was)
+   if was then
       ret = 'resized'
    end else
-      display @(-1) :
-      shadow = scr<SL.S.SHADOW>
-      attrs = scr<SL.S.ATTRS>
-      for r = 0 to scr<SL.S.H> - 1
-         t = shadow<1, r + 1>
-         if trim(t) # '' or index(attrs<1, r + 1>, 'r', 1) or index(attrs<1, r + 1>, 'x', 1) or index(attrs<1, r + 1>, 'u', 1) then
-            call $sl_put(scr, 0, r, t, attrs<1, r + 1>)
-         end
-      next r
+      call $sl_repaint(scr)
    end
 
    call $sl_scr('put', scr)

@@ -1,0 +1,57 @@
+* SCREEN_TABS
+* The subroutine that SCREEN TABS calls: add a strip of tabs to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN TABS f, id, labels {AT x,y} {VALUE n}
+*
+*   is compiled into
+*
+*   call !screen_tabs(f, id, labels, x, y, value, ret, status)
+*
+*     f id     the form and the widget's name in it (as SCREEN LABEL)
+*     labels   the tabs' captions, as values (a field mark does as well)
+*     x y      the place of the strip from the form's top left corner, default 1,1
+*     value    the tab that is chosen to start with (default the first)
+*     status   0 added; 1 not (ELSE)
+*
+*   Left and Right choose the tab before and after, Home and End the first and last.  The chosen tab is
+*   the PAGE the form shows: a widget added after SCREEN PAGE f, n belongs to page n and is drawn, takes
+*   the focus and answers keys only while tab n is chosen; widgets added before any SCREEN PAGE, or after
+*   SCREEN PAGE f, 0, are on every page.  SCREEN GET f, id answers the number of the tab, and SCREEN WAIT
+*   gives a change event when it moves.  SCREEN SET f, id VALUE n chooses a tab from the program.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_tabs(f, id, labels, ax, ay, value, ret, status)
+$catalog !screen_tabs
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   w{'items'} = convert(@fm, @vm, labels)
+   x = 1
+   y = 1
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'value'} = if value = '' then 1 else value + 0
+   call $sl_tabs('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

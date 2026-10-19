@@ -270,6 +270,14 @@ deffun elevate(action,arg) calling '!elevate'
 
 $define max.elements 500
 
+* 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): - THE SCREEN LIBRARY'S KEPT SCREEN (only its flag is read here).  A program that SCREEN OPENs and then ends
+*   without SCREEN CLOSE (a break, an error, STOP) leaves the terminal in the library's modes - mouse reports on, perhaps the
+*   cursor hidden - and the library's state, which lives in this common block, outlives it.  RESET.ENVIRONMENT, which runs
+*   before every prompt, asks $sl_cleanup to put the terminal back when this flag says the library still holds it.  The block
+*   is named, so its flag is 0 until $sl_scr sets it, and the call is never made on a system or a pass in which the
+*   library is not in use (the bootstrap passes, before $sl_cleanup is catalogued).  Same three names, same order, as $sl_scr.
+   common /slscr/ sl.ctx, sl.open, sl.resized
+
    logto.reset = @false      ;* 0555
    logto.reset.all = @false  ;* 16 Oct 26, Fixes item 30: LOGTO name RESET ALL
 
@@ -863,6 +871,14 @@ para.reset.environment:
       if len(term.reset.string) then display term.reset.string :
       display @(IT$RLT) :   ;* 0277 Ensure line truncation off
       void kernel(K$SUPPRESS.COMO, @false)
+
+* 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): - a program left the screen library's screen open: mouse reporting off, cursor shown, style normal.  Only at
+*   command level 1: an EXECUTE inside a program that is using the library is a nested level, and not the prompt.
+      if sl.open and kernel(K$CPROC.LEVEL, 0) <= 1 then
+         void kernel(K$SUPPRESS.COMO, @true)
+         call $sl_cleanup
+         void kernel(K$SUPPRESS.COMO, @false)
+      end
 
       breakpoint BRK$CLEAR, 0
       breakpoints = ''

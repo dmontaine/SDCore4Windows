@@ -65,12 +65,20 @@ $include sl.h
          end else
             ret = 'unhandled' : @fm : key
          end
+
+      case op = 'mouse'
+         * a click on the button presses it (key is the event: kind, button, x, y, mods; the form sends only left presses)
+         if key<1> = 'press' then
+            ret = 'done' : @fm : w{'id'}
+         end else
+            ret = 'handled'
+         end
    end case
 
    return
 
 paint:
-   code = 'n'
+   call $sl_attr('window', code)
    if w{'focused'} then call $sl_attr('highlight', code)
    call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[ ' : w{'label'} : ' ]', code)
    if w{'focused'} then display @(w{'ax'} + 2, w{'ay'} + 0) :
