@@ -1,0 +1,149 @@
+* SL_PROMPT
+* Screen library, widget: a one-line input on one row of the screen.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_prompt(op, w, scr, key, ret)      the widget contract (screenlib-design.md)
+*
+*     init    w is filled in by the caller: SL.W.Y the row (the prompt and the text fill it in
+*             reverse video), SL.W.D the prompt, SL.W.D + 1 the text to edit.  SL.W.VALUE holds
+*             the text from then on.
+*     draw    the line, saving the row under it the first time
+*     focus   key = 1 draws it with the cursor, key = 0 puts the row back (as close)
+*     key     one key: left, right, home / ctrl-a, end / ctrl-e, bs, del / ctrl-d, ctrl-u
+*             (empty the line) and a printable character edit the text.  ret<1> is 'handled',
+*             'done' (enter), 'cancel' (esc) or 'unhandled' with ret<2> the key's name - a
+*             key the line has no use for (up, down, tab, a function key) is passed back so that
+*             the caller can act on it.
+*     close   puts the row back
+*     run     modal: draws, reads keys until enter, esc, an unhandled key or the end of the
+*             input, closes.  ret is 'enter', 'esc', or the unhandled key's name; the text is
+*             in SL.W.VALUE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_prompt(op, w, scr, key, ret)
+$catalog $sl_prompt
+
+$include sl.h
+
+   equ P.UNDER to 13       ;* the row under the prompt
+   equ P.SHOWN to 15       ;* 1 while the line is on the screen
+
+   row = w<SL.W.Y> + 0
+   sw = scr<SL.S.W> + 0
+   prompt = w<SL.W.D>
+   text = w<SL.W.VALUE>
+   p = w<SL.W.S1> + 0
+   pan = w<SL.W.S2> + 0
+   if pan < 1 then pan = 1
+   fw = sw - len(prompt) - 1
+   if fw < 1 then fw = 1
+   ret = ''
+
+   begin case
+      case op = 'init'
+         w<SL.W.TYPE> = 'prompt'
+         w<SL.W.FLAGS> = 'focusable' : @vm : 'visible'
+         w<SL.W.X> = 0 ; w<SL.W.W> = sw ; w<SL.W.H> = 1
+         w<SL.W.VALUE> = w<SL.W.D + 1>
+         w<SL.W.S1> = len(w<SL.W.D + 1>) + 1
+         w<SL.W.S2> = 1
+         w<P.SHOWN> = 0
+
+      case op = 'draw' or (op = 'focus' and key)
+         gosub show
+
+      case op = 'close' or op = 'focus'
+         gosub unpaint
+
+      case op = 'key'
+         gosub handle.key
+
+      case op = 'run'
+         gosub show
+         loop
+            call $sl_key('', key)
+            if key = '' then key = 'esc'
+            gosub handle.key
+            st = ret<1>
+         until st # 'handled'
+         repeat
+         result = if st = 'done' then 'enter' else if st = 'cancel' then 'esc' else ret<2>
+         gosub unpaint
+         ret = result
+   end case
+
+   return
+
+handle.key:
+   ret = 'handled'
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done'
+      case key = 'left'
+         if p > 1 then p -= 1
+      case key = 'right'
+         if p <= len(text) then p += 1
+      case key = 'home' or key = 'ctrl-a'
+         p = 1
+      case key = 'end' or key = 'ctrl-e'
+         p = len(text) + 1
+      case key = 'bs'
+         if p > 1 then
+            text = text[1, p - 2] : text[p, 99999]
+            p -= 1
+         end
+      case key = 'del' or key = 'ctrl-d'
+         text = text[1, p - 1] : text[p + 1, 99999]
+      case key = 'ctrl-u'
+         text = '' ; p = 1
+      case len(key) = 1
+         text = text[1, p - 1] : key : text[p, 99999]
+         p += 1
+      case 1
+         ret = 'unhandled' : @fm : key
+   end case
+   w<SL.W.VALUE> = text
+   w<SL.W.S1> = p
+   if w<P.SHOWN> then gosub paint
+   return
+
+show:
+   if not(w<P.SHOWN>) then
+      call $sl_region('save', scr, 0, row, sw, 1, under)
+      w<P.UNDER> = under
+      w<P.SHOWN> = 1
+   end
+
+paint:
+   if p - pan >= fw then pan = p - fw + 1
+   if p < pan then pan = p
+   w<SL.W.S2> = pan
+   call $sl_attr('highlight', ha)
+   call $sl_attr('normal', na)
+   display @(0, row) : ha : fmt(prompt : text[pan, fw], sw : 'L') : na :
+   display @(len(prompt) + p - pan, row) :
+   return
+
+unpaint:
+   if w<P.SHOWN> then
+      under = w<P.UNDER>
+      call $sl_region('restore', scr, 0, row, sw, 1, under)
+      w<P.SHOWN> = 0
+   end
+   return
+end
+
+* END-CODE

@@ -1,0 +1,60 @@
+* SL_REGION
+* Screen library, region layer: save what is under a rectangle and put it back.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_region(op, scr, x, y, w, h, saved)
+*
+*     op      'save' or 'restore'
+*     scr     the screen context (sl.h): SL.S.SHADOW is what the program believes is on the
+*             screen, SL.S.RATTR which rows are in reverse video.  The terminal cannot be
+*             asked, so the program supplies it.
+*     x y     the left column and top row of the rectangle (both from 0)
+*     w h     its width and height
+*     saved   'save' returns it: value r + 1 is the text of the rectangle's row r, subvalue 2
+*             its attribute.  'restore' draws it again at x, y.
+*
+*   Text only: a program that shows more than text and reverse video under a region must
+*   repaint the region itself after 'restore'.  A row outside the screen (SL.S.H) is not drawn.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_region(op, scr, x, y, w, h, saved)
+$catalog $sl_region
+
+$include sl.h
+
+   if op = 'save' then
+      saved = ''
+      for r = 0 to h - 1
+         t = fmt(scr<SL.S.SHADOW, y + r + 1>[x + 1, w], w : 'L')
+         saved<1, r + 1, 1> = t
+         saved<1, r + 1, 2> = scr<SL.S.RATTR, y + r + 1>
+      next r
+      return
+   end
+
+   if op = 'restore' then
+      for r = 0 to h - 1
+         if y + r < 0 or y + r >= scr<SL.S.H> then continue   ;* clipped
+         if saved<1, r + 1, 2> = 'R' then
+            display @(x, y + r) : @(-13) : saved<1, r + 1, 1> : @(-14) :
+         end else
+            display @(x, y + r) : saved<1, r + 1, 1> :
+         end
+      next r
+   end
+
+   return
+end
+
+* END-CODE

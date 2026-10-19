@@ -1,0 +1,65 @@
+* SL_KEY
+* Screen library, key layer: one key as a logical name.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_key(timeout, name)
+*
+*     timeout  seconds to wait, or null to wait for ever
+*     name     returned: null if the timeout ran out or the input has ended, else
+*                up down left right home end pgup pgdn ins del bs tab btab enter esc
+*                f1 ... f12, ctrl-a ... ctrl-z (those with no name of their own),
+*                or the character itself for a printable character
+*
+*   The decoding is KEYCODE()'s, i.e. the terminal's terminfo entry; a lone Esc is told from
+*   the start of a key sequence by KEYCODE()'s own short wait.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_key(timeout, name)
+$catalog $sl_key
+
+$include keyin.h
+
+   if timeout = '' then k = keycode() else k = keycode(timeout)
+   name = ''
+   if k = '' then return
+   n = seq(k[1, 1])
+
+   begin case
+      case len(k) > 1
+         name = k                     ;* A string a binding gave: handed back as it is
+      case n = K$UP ; name = 'up'
+      case n = K$DOWN ; name = 'down'
+      case n = K$LEFT ; name = 'left'
+      case n = K$RIGHT ; name = 'right'
+      case n = K$HOME ; name = 'home'
+      case n = K$END ; name = 'end'
+      case n = K$PAGE.UP ; name = 'pgup'
+      case n = K$PAGE.DOWN ; name = 'pgdn'
+      case n = K$INSERT ; name = 'ins'
+      case n = K$DELETE ; name = 'del'
+      case n = K$BACKSPACE or n = 127 ; name = 'bs'
+      case n = K$TAB ; name = 'tab'
+      case n = K$CTRL.TAB ; name = 'btab'
+      case n = K$RETURN or n = 10 ; name = 'enter'
+      case n = K$ESC ; name = 'esc'
+      case n >= K$F1 and n <= K$F12 ; name = 'f' : (n - K$F1 + 1)
+      case n >= 1 and n <= 26 ; name = 'ctrl-' : downcase(char(n + 64))
+      case n < 32 or n = 127 ; name = 'ctrl-?'
+      case 1 ; name = k
+   end case
+
+   return
+end
+
+* END-CODE

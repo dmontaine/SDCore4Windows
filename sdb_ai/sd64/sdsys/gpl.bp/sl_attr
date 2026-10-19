@@ -1,0 +1,44 @@
+* SL_ATTR
+* Screen library, theme: the one table of attributes every widget draws with.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_attr(name, seq)
+*
+*     name  normal, highlight (the selected item, a focused button), bar (the menu bar and a
+*           menu's body), hotkey (the mnemonic letter), frame, disabled
+*     seq   returned: what to DISPLAY to switch to it
+*
+*   Only reverse video and underline are used, so every one reads on a monochrome terminal.
+*   A colour theme changes this table and nothing else.  'disabled' is the same as 'normal'
+*   for now (a monochrome terminal has no dim); a widget shows a disabled item with its
+*   label in brackets.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_attr(name, seq)
+$catalog $sl_attr
+
+   begin case
+      case name = 'highlight' ; seq = @(-13)
+      case name = 'bar' ; seq = @(-13)
+      case name = 'hotkey' ; seq = @(-15)
+      case name = 'hotkey.end' ; seq = @(-16)
+      case name = 'frame' ; seq = @(-14)
+      case name = 'disabled' ; seq = @(-14)
+      case 1 ; seq = @(-14)
+   end case
+
+   return
+end
+
+* END-CODE

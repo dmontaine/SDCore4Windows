@@ -1,0 +1,177 @@
+* SL_MSGBOX
+* Screen library, widget: a message box with buttons, centred over the text.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_msgbox(op, w, scr, key, ret)      the widget contract (screenlib-design.md)
+*
+*     init    w is filled in by the caller: SL.W.D the title (null for none), SL.W.D + 1 the
+*             lines of the message as values, SL.W.D + 2 the buttons as values.  An & in a
+*             button's name marks its mnemonic letter (without one, the first character).
+*             The box is centred on the screen of scr.  SL.W.S1 may hold the button to start
+*             on (the first is the default).
+*     draw    the box, saving the screen under it the first time
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (as close)
+*     key     one key: left / up / btab and right / down / tab move among the buttons, enter
+*             chooses the selected one, esc cancels, a mnemonic letter chooses at once.
+*             ret<1> 'handled', 'unhandled', 'done' (ret<2> the button number) or 'cancel'.
+*     close   puts the screen under the box back
+*     run     init-less modal use: draws, reads keys until done or cancel, closes.  ret is the
+*             button number, 0 if the user pressed Esc or the input ended.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_msgbox(op, w, scr, key, ret)
+$catalog $sl_msgbox
+
+$include sl.h
+
+   equ B.GEOM to 13        ;* bx : by : w : h
+   equ B.UNDER to 14       ;* the screen under the box
+   equ B.SHOWN to 15       ;* 1 while the box is on the screen
+
+   title = w<SL.W.D>
+   nl = dcount(w<SL.W.D + 1>, @vm)
+   nb = dcount(w<SL.W.D + 2>, @vm)
+   sel = w<SL.W.S1> + 0
+   if sel < 1 or sel > nb then sel = 1
+   ret = ''
+
+   * Button captions and mnemonics, and the size of the box
+   cap = '' ; mn = '' ; bw = 0
+   for b = 1 to nb
+      t = w<SL.W.D + 2, b>
+      p = index(t, '&', 1)
+      if p and p < len(t) then
+         mn<b> = upcase(t[p + 1, 1])
+         t = t[1, p - 1] : t[p + 1, 99999]
+      end else
+         mn<b> = upcase(t[1, 1])
+      end
+      cap<b> = '[ ' : t : ' ]'
+      bw += len(cap<b>) + 2
+   next b
+   bwid = bw
+   for l = 1 to nl
+      if len(w<SL.W.D + 1, l>) + 4 > bwid then bwid = len(w<SL.W.D + 1, l>) + 4
+   next l
+   if len(title) + 6 > bwid then bwid = len(title) + 6
+   bwid += 2
+   if bwid > scr<SL.S.W> then bwid = scr<SL.S.W>
+   bh = nl + 5
+   bx = int((scr<SL.S.W> - bwid) / 2)
+   by = int((scr<SL.S.H> - bh) / 2)
+   if by < 1 then by = 1
+
+   begin case
+      case op = 'init'
+         w<SL.W.TYPE> = 'msgbox'
+         w<SL.W.FLAGS> = 'focusable' : @vm : 'visible'
+         w<SL.W.X> = bx ; w<SL.W.Y> = by ; w<SL.W.W> = bwid ; w<SL.W.H> = bh
+         w<SL.W.S1> = sel
+         w<B.SHOWN> = 0
+
+      case op = 'draw' or (op = 'focus' and key)
+         gosub show
+
+      case op = 'close' or op = 'focus'
+         gosub unpaint
+
+      case op = 'key'
+         gosub handle.key
+
+      case op = 'run'
+         w<SL.W.S1> = sel
+         gosub show
+         loop
+            call $sl_key('', key)
+            if key = '' then key = 'esc'
+            gosub handle.key
+            st = ret<1>
+         until st = 'done' or st = 'cancel'
+         repeat
+         result = if st = 'done' then ret<2> else 0
+         gosub unpaint
+         ret = result
+   end case
+
+   return
+
+handle.key:
+   ret = 'handled'
+   begin case
+      case key = 'esc'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done' : @fm : sel
+      case key = 'left' or key = 'btab' or key = 'up'
+         sel = if sel > 1 then sel - 1 else nb
+      case key = 'right' or key = 'tab' or key = 'down'
+         sel = if sel < nb then sel + 1 else 1
+      case len(key) = 1
+         ret = 'unhandled'
+         for b = 1 to nb
+            if mn<b> = upcase(key) then
+               sel = b
+               ret = 'done' : @fm : b
+            end
+         next b
+      case 1
+         ret = 'unhandled'
+   end case
+   w<SL.W.S1> = sel
+   w<SL.W.VALUE> = sel
+   if w<B.SHOWN> then gosub paint
+   return
+
+show:
+   if not(w<B.SHOWN>) then
+      call $sl_region('save', scr, bx, by, bwid, bh, under)
+      w<B.UNDER> = under
+      w<B.SHOWN> = 1
+   end
+
+paint:
+   call $sl_attr('normal', na)
+   call $sl_attr('highlight', ha)
+   display na :
+   topl = '+' : str('-', bwid - 2) : '+'
+   if title # '' then topl = '+- ' : title : ' ' : str('-', bwid - 6 - len(title)) : '+'
+   display @(bx, by) : topl[1, bwid] :
+   for l = 1 to nl
+      display @(bx, by + l) : fmt('| ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : '|' :
+   next l
+   display @(bx, by + nl + 1) : '|' : space(bwid - 2) : '|' :
+   display @(bx, by + nl + 3) : '|' : space(bwid - 2) : '|' :
+   display @(bx, by + nl + 4) : '+' : str('-', bwid - 2) : '+' :
+   display @(bx, by + nl + 2) : '|' : space(bwid - 2) : '|' :
+   x = bx + int((bwid - bw) / 2) + 1
+   for b = 1 to nb
+      if b = sel then
+         display @(x, by + nl + 2) : ha : cap<b> : na :
+      end else
+         display @(x, by + nl + 2) : cap<b> :
+      end
+      x += len(cap<b>) + 2
+   next b
+   return
+
+unpaint:
+   if w<B.SHOWN> then
+      under = w<B.UNDER>
+      call $sl_region('restore', scr, bx, by, bwid, bh, under)
+      w<B.SHOWN> = 0
+   end
+   return
+end
+
+* END-CODE

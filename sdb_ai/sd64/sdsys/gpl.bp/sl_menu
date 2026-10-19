@@ -1,0 +1,318 @@
+* SL_MENU
+* Screen library, widget: a menu bar with drop-down menus that show each item's shortcut.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_menu(op, w, scr, key, ret)
+*
+*   The widget contract (screenlib-design.md) -  w the widget record, scr the screen context
+*   (both in sl.h), key a key name from $sl_key, ret the answer:
+*
+*     init    w is filled in by the caller: SL.W.Y the bar's row, SL.W.W its width, and the
+*             menus in fields 20 up (field 19 + m is menu m).  A menu's value 1 is its title and
+*             each later value an item, whose subvalues are 1 the label, 2 the shortcut as it is
+*             to be shown and 3 the code the caller gets back.  An & in a title or label puts
+*             the next character first as the mnemonic letter (without one, the first
+*             character).  A label of - is a separator.  SL.W.S1 / S2 may hold the menu and item
+*             to start on.
+*     draw    the bar, with the open menu's title in normal video
+*     focus   key = 1 opens the drop-down of SL.W.S1 over the text, key = 0 closes it and puts
+*             the screen under it back
+*     key     one key: left / right / home / end change menu, up / down / home / end change
+*             item (separators are skipped), enter chooses, esc and f10 leave, a letter chooses
+*             the item with that mnemonic or, if none has it, opens the menu with it.
+*             ret<1> is 'handled', 'unhandled' (a key the menu has no use for), 'done' (an item
+*             was chosen; ret<2> is its code) or 'cancel'.  The caller then closes it.
+*     close   closes the drop-down if open (as focus 0)
+*     run     all of the above in a loop: opens the menu, reads keys until one is chosen or the
+*             user leaves, closes it, draws the bar.  ret is the code, null if the user left.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_menu(op, w, scr, key, ret)
+$catalog $sl_menu
+
+$include sl.h
+
+   equ M.OPEN to 10        ;* 1 while a drop-down is shown
+   equ M.GEOM to 11        ;* dx : dy : dw : ni
+   equ M.UNDER to 12       ;* the screen under the drop-down ($sl_region)
+   equ M.TX to 13          ;* value m: the column of title m
+   equ M.TM to 14          ;* value m: its mnemonic letter
+   equ M.MENUS to 19       ;* menu m is field 19 + m
+
+   ret = ''
+   brow = w<SL.W.Y> + 0
+   sw = w<SL.W.W> + 0
+   if sw < 20 then sw = scr<SL.S.W> + 0
+   nm = 0
+   loop while w<M.MENUS + nm + 1> # '' do nm += 1 repeat
+
+   if op # 'init' then
+      menu = w<SL.W.S1> + 0
+      item = w<SL.W.S2> + 0
+   end
+
+   begin case
+      case op = 'init'
+         w<SL.W.TYPE> = 'menu'
+         w<SL.W.FLAGS> = 'focusable' : @vm : 'visible'
+         x = 1
+         for m = 1 to nm
+            t = w<M.MENUS + m, 1>
+            gosub mnem
+            w<M.TX, m> = x
+            w<M.TM, m> = mn
+            x += len(plain) + 2
+         next m
+         if w<SL.W.S1> < 1 or w<SL.W.S1> > nm then w<SL.W.S1> = 1
+         if w<SL.W.S2> < 1 then w<SL.W.S2> = 1
+         w<M.OPEN> = 0
+
+      case op = 'draw'
+         gosub draw.bar
+
+      case op = 'focus'
+         if key then
+            gosub open.menu
+            gosub draw.bar
+            gosub draw.drop
+         end else
+            gosub close.drop
+            gosub draw.bar
+         end
+
+      case op = 'close'
+         gosub close.drop
+         gosub draw.bar
+
+      case op = 'key'
+         gosub handle.key
+
+      case op = 'run'
+         gosub open.menu
+         gosub draw.bar
+         loop
+            gosub draw.drop
+            call $sl_key('', key)
+            if key = '' then key = 'esc'
+            gosub handle.key
+            st = ret<1>
+         until st = 'done' or st = 'cancel'
+         repeat
+         code = if st = 'done' then ret<2> else ''
+         gosub close.drop
+         gosub draw.bar
+         ret = code
+   end case
+
+   return
+
+handle.key:
+   * The open menu's reaction to key; ret<1> says what came of it
+   ret = 'handled'
+   if not(w<M.OPEN>) then
+      if key = 'f10' then
+         gosub open.menu
+         gosub draw.bar
+         gosub draw.drop
+      end else
+         ret = 'unhandled'
+      end
+      return
+   end
+   ni = field(w<M.GEOM>, ':', 4)
+   begin case
+      case key = 'esc' or key = 'f10'
+         ret = 'cancel'
+      case key = 'enter'
+         ret = 'done' : @fm : w<M.MENUS + menu, item + 1, 3>
+      case key = 'down'
+         gosub next.item
+      case key = 'up'
+         gosub prev.item
+      case key = 'left'
+         gosub close.drop
+         menu = if menu > 1 then menu - 1 else nm
+         gosub open.menu
+         gosub draw.bar
+      case key = 'right'
+         gosub close.drop
+         menu = if menu < nm then menu + 1 else 1
+         gosub open.menu
+         gosub draw.bar
+      case key = 'home' or key = 'pgup'
+         item = 0 ; gosub next.item
+      case key = 'end' or key = 'pgdn'
+         item = ni + 1 ; gosub prev.item
+      case len(key) = 1
+         uk = upcase(key)
+         found = 0
+         for i = 1 to ni
+            t = w<M.MENUS + menu, i + 1, 1>
+            if t # '-' then
+               gosub mnem
+               if mn = uk then found = i ; exit
+            end
+         next i
+         if found then
+            item = found
+            ret = 'done' : @fm : w<M.MENUS + menu, item + 1, 3>
+         end else
+            ret = 'unhandled'
+            for m = 1 to nm
+               if w<M.TM, m> = uk and m # menu then
+                  gosub close.drop
+                  menu = m
+                  gosub open.menu
+                  gosub draw.bar
+                  ret = 'handled'
+                  exit
+               end
+            next m
+         end
+      case 1
+         ret = 'unhandled'
+   end case
+   w<SL.W.S1> = menu
+   w<SL.W.S2> = item
+   if w<M.OPEN> then gosub draw.drop
+   return
+
+* plain = t without its &, mn = the mnemonic letter in upper case, mp = its position in plain
+mnem:
+   p = index(t, '&', 1)
+   if p and p < len(t) then
+      mn = upcase(t[p + 1, 1])
+      plain = t[1, p - 1] : t[p + 1, 99999]
+      mp = p
+   end else
+      mn = upcase(t[1, 1])
+      plain = t
+      mp = 1
+   end
+   return
+
+* Write plain at the cursor with its mnemonic letter underlined; sa is the attribute to go back to
+put.label:
+   call $sl_attr('hotkey', ha)
+   call $sl_attr('hotkey.end', he)
+   display plain[1, mp - 1] : ha : plain[mp, 1] : he : sa : plain[mp + 1, 99999] :
+   return
+
+draw.bar:
+   call $sl_attr('bar', ba)
+   call $sl_attr('normal', na)
+   display @(0, brow) : ba : space(sw) :
+   for m = 1 to nm
+      t = w<M.MENUS + m, 1>
+      gosub mnem
+      if m = w<SL.W.S1> and w<M.OPEN> then
+         sa = na
+         display @(w<M.TX, m> - 1, brow) : na : ' ' :
+         gosub put.label
+         display ' ' : ba :
+      end else
+         sa = ba
+         display @(w<M.TX, m> - 1, brow) : ' ' :
+         gosub put.label
+         display ' ' :
+      end
+   next m
+   display na :
+   return
+
+* Work out the size of the drop-down of 'menu', save the screen under it and mark it open
+open.menu:
+   if w<M.OPEN> then gosub close.drop
+   if menu < 1 or menu > nm then menu = 1
+   ni = dcount(w<M.MENUS + menu>, @vm) - 1
+   lw = 0
+   sc = 0
+   for i = 1 to ni
+      t = w<M.MENUS + menu, i + 1, 1>
+      gosub mnem
+      if len(plain) > lw then lw = len(plain)
+      if len(w<M.MENUS + menu, i + 1, 2>) > sc then sc = len(w<M.MENUS + menu, i + 1, 2>)
+   next i
+   dw = lw + sc + 4 + (if sc then 2 else 0)
+   if dw > sw then dw = sw
+   dx = w<M.TX, menu> - 1
+   if dx + dw > sw then dx = sw - dw
+   dy = brow + 1
+   call $sl_region('save', scr, dx, dy, dw, ni, under)
+   w<M.UNDER> = under
+   w<M.GEOM> = dx : ':' : dy : ':' : dw : ':' : ni
+   w<M.OPEN> = 1
+   if item < 1 or item > ni then item = 1
+   w<SL.W.S1> = menu
+   w<SL.W.S2> = item
+   return
+
+close.drop:
+   if w<M.OPEN> then
+      dx = field(w<M.GEOM>, ':', 1)
+      dy = field(w<M.GEOM>, ':', 2)
+      dw = field(w<M.GEOM>, ':', 3)
+      ni = field(w<M.GEOM>, ':', 4)
+      under = w<M.UNDER>
+      call $sl_region('restore', scr, dx, dy, dw, ni, under)
+      w<M.OPEN> = 0
+   end
+   return
+
+draw.drop:
+   dx = field(w<M.GEOM>, ':', 1)
+   dy = field(w<M.GEOM>, ':', 2)
+   dw = field(w<M.GEOM>, ':', 3)
+   ni = field(w<M.GEOM>, ':', 4)
+   call $sl_attr('bar', ba)
+   call $sl_attr('normal', na)
+   for i = 1 to ni
+      t = w<M.MENUS + menu, i + 1, 1>
+      if t = '-' then
+         display @(dx, dy + i - 1) : ba : str('-', dw) :
+         continue
+      end
+      gosub mnem
+      sh = w<M.MENUS + menu, i + 1, 2>
+      sa = if i = item then na else ba
+      display @(dx, dy + i - 1) : sa : ' ' :
+      gosub put.label
+      display sa : space(dw - len(plain) - len(sh) - 2) : sh : ' ' :
+   next i
+   display na :
+   display @(dx + 1, dy + item - 1) :
+   return
+
+next.item:
+   i = item
+   loop
+      i += 1
+      if i > ni then i = 1
+   until w<M.MENUS + menu, i + 1, 1> # '-' or i = item
+   repeat
+   item = i
+   return
+
+prev.item:
+   i = item
+   loop
+      i -= 1
+      if i < 1 then i = ni
+   until w<M.MENUS + menu, i + 1, 1> # '-' or i = item
+   repeat
+   item = i
+   return
+end
+
+* END-CODE
