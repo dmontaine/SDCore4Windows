@@ -175,7 +175,8 @@ try {
             if (-not $mark) { Say $l }
         }
         $sw.Stop()
-        if ($rc -ge 2 -or ($rc -eq 0 -and $pass -eq 0)) { $verdict = 'COULD NOT RUN'; $worst = [Math]::Max($worst, 2) }
+        # A suite that printed no row at all, or exited with a code that is not 0 or 1 (-1 is a killed run), measured nothing.
+        if ($null -eq $rc -or $rc -lt 0 -or $rc -ge 2 -or ($pass + $fail + $na) -eq 0 -or ($rc -eq 0 -and $pass -eq 0)) { $verdict = 'COULD NOT RUN'; $worst = [Math]::Max($worst, 2) }
         elseif ($fail -gt 0 -or ($rc -eq 1 -and $na -eq 0)) { $verdict = 'FAIL'; $worst = [Math]::Max($worst, 1) }
         else { $verdict = 'PASS' }
         $rows += [pscustomobject]@{ Suite = $n; Rows = ($pass + $fail + $na); Pass = $pass; Fail = $fail; NA = $na; Exit = $rc; Secs = [int]$sw.Elapsed.TotalSeconds; Verdict = $verdict }
