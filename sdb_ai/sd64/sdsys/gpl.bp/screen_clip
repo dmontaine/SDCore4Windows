@@ -1,0 +1,57 @@
+* SCREEN_CLIP
+* The subroutine that SCREEN CLIP calls: keep what is drawn inside a rectangle.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 6287a36 (13 Oct 26): New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN CLIP {AT x,y SIZE w,h}
+*
+*   is compiled into
+*
+*   call !screen_clip(x, y, w, h, ret, status)
+*
+*     x y w h   the rectangle, from 0 as in SCREEN TEXT; all four are needed.  Left out, the clip is taken off and
+*               the whole screen can be drawn on again
+*     status    0 done; 1 the library does not own the screen (no SCREEN OPEN), or a phantom (ELSE)
+*
+*   While a clip is in force the library draws only the cells inside it - text, boxes, forms and dialogues that
+*   reach outside are cut at its edge, cell by cell, and the cut part is neither drawn nor remembered.  The clip
+*   ends with SCREEN CLOSE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_clip(ax, ay, aw, ah, ret, status)
+$catalog !screen_clip
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then return
+   call $sl_scr('get', scr)
+   if not(scr<SL.S.OWNED>) then return
+
+   if ax = '' or ay = '' or aw = '' or ah = '' then
+      scr<SL.S.CLIP> = ''
+   end else
+      x0 = ax + 0
+      y0 = ay + 0
+      x1 = x0 + aw - 1
+      y1 = y0 + ah - 1
+      scr<SL.S.CLIP> = x0 : @vm : y0 : @vm : x1 : @vm : y1
+   end
+   call $sl_scr('put', scr)
+   status = 0
+
+   return
+end
+
+* END-CODE
