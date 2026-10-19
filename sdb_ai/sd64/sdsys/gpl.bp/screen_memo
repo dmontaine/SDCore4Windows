@@ -9,11 +9,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY}
+*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP}
 *
 *   is compiled into
 *
-*   call !screen_memo(f, id, text, x, y, w, h, readonly, ret, status)
+*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     text      what it starts with: one line to a field (a linefeed ends a line too).  Null for an empty area.
@@ -22,19 +22,24 @@
 *               wide as the longest line needs, at most 60, and as many rows as there are lines, between 3 and 8.
 *     readonly  a viewer: the cursor keys, Page Up and Page Down, Home and End move through the text, and
 *               nothing can be typed or deleted
+*     wrap      a long line is wrapped at a blank (or in a word longer than the width) instead of the area
+*               panning sideways; the text itself is not changed
 *     status    0 added; 1 not (ELSE)
 *
 *   Typing, Return (which splits the line), Backspace and Delete edit; Ctrl-A and Ctrl-E (or Home and End) go
-*   to the ends of the line, Ctrl-K cuts to the end of it.  A long line is not wrapped: the area pans sideways
-*   with the cursor.  SCREEN GET f, id answers the text, one line to a field, and SCREEN SET f, id VALUE t
-*   replaces it.  SCREEN VALUES does not include a memo (it can be long): ask for it with SCREEN GET.
+*   to the ends of the row, Ctrl-K cuts to the end of the line, Ctrl-B and Ctrl-F move a word.  Ctrl-G sets
+*   the mark (the selection runs from it to the cursor), Ctrl-X cuts and Ctrl-C or Ctrl-O copies it, Ctrl-V
+*   pastes, Ctrl-Z undoes and Ctrl-Y does again, Ctrl-T finds text and Ctrl-N the next one ($sl_memo has the
+*   whole account).  Without WRAP a long line is not wrapped: the area pans sideways with the cursor.
+*   SCREEN GET f, id answers the text, one line to a field, and SCREEN SET f, id VALUE t replaces it.
+*   SCREEN VALUES does not include a memo (it can be long): ask for it with SCREEN GET.
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, ret, status)
+subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, ret, status)
 $catalog !screen_memo
 
    ret = ''
@@ -66,6 +71,7 @@ $catalog !screen_memo
    w{'h'} = mh
    w{'value'} = lines
    w{'readonly'} = (readonly # '')
+   w{'wrap'} = (wrap # '')
    call $sl_memo('init', w, '', '', r)
    call $sl_wadd(f, w, ok)
    if ok then status = 0

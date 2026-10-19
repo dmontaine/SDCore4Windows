@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 749574b (13 Oct 26): Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
 * END-HISTORY
 *
@@ -13,26 +14,44 @@
 *
 *   Elements:  id, ax ay (the top left cell of the area on the screen), w h (its width, the last column of
 *   which is the scroll bar, and the number of rows it shows), value (the text: one line to a field, so a
-*   dynamic array of lines), readonly (1: a viewer), and the state: cy and cx (the cursor's line and its
-*   place in it, 1 = before the first character), top (the first line shown), left (the first column shown),
-*   want (the column the cursor tries to keep when it moves up or down)
+*   dynamic array of lines), readonly (1: a viewer), wrap (1: long lines are wrapped at a blank), and the
+*   state: cy and cx (the cursor's line and its place in it, 1 = before the first character), top (the first
+*   ROW shown: a row is a line, or with wrap a part of one), left (the first column shown; 1 with wrap), want
+*   (the column in its row the cursor tries to keep when it moves up or down), mx and my (the mark: the
+*   other end of the selection, 0 when there is none), find (the text last searched for), undo and redo
+*   (what Ctrl-Z and Ctrl-Y go back to), lastop (what the last key did, so that a run of typing is one undo)
 *
 *     init    w and h from what was given (at least 3 by 1); a linefeed in the text is taken as the end of a
-*             line; the cursor goes to the start
-*     draw    the rows, from the first column shown, cut to the width and in the 'text' style, then the
-*             scroll bar in the last column (always there, so the text does not move when it is needed)
+*             line; the cursor goes to the start; no selection and nothing to undo
+*     draw    the rows, from the first column shown, cut to the width and in the 'text' style (the selected
+*             characters in the 'highlight' style), then the scroll bar in the last column (always there, so
+*             the text does not move when it is needed)
 *     focus   key = 1 gives it the focus (draws, with the cursor in the text), key = 0 takes it away
-*     key     left, right (past the end of a line to the next, and back), up, down, home / ctrl-a, end /
-*             ctrl-e move (pgup and pgdn scroll a page less one line and the cursor keeps its row on the
-*             screen); a printable character, Return (splits the line), bs, del / ctrl-d
-*             (join lines at the ends) and ctrl-k (cuts to the end of the line) edit.  ret<1> is 'handled';
-*             'cancel' (Esc); or 'unhandled' with ret<2> the key's name: tab, btab, a function key, and up on the
-*             first line and down on the last, so that a form can go on to the widget before or after.
-*             A readonly area moves and nothing more: Return and every character are 'unhandled'.
+*     key     left, right (past the end of a line to the next, and back), up, down (a row at a time: with wrap
+*             a line is several rows), home / ctrl-a and end / ctrl-e (the row's ends), ctrl-b and ctrl-f
+*             (a word back and on), pgup and pgdn (scroll a page less one row and the cursor keeps its row on
+*             the screen) move; a printable character, Return (splits the line), bs, del / ctrl-d (join lines
+*             at the ends) and ctrl-k (cuts to the end of the line) edit.
+*
+*             The selection runs from the mark to the cursor.  ctrl-g sets the mark where the cursor is (and
+*             takes it away again); ctrl-x cuts the selection, ctrl-c or ctrl-o copies it, ctrl-v puts what was
+*             cut or copied in at the cursor (the clipboard is the library's, so it passes from one text area
+*             to another); typing, Return, bs and del on a selection replace or delete it.  ctrl-z undoes and
+*             ctrl-y does again (a run of typed characters, or of bs or del, is one step; there are 100 steps).
+*             ctrl-t asks for text on the bottom row of the area and finds it, ctrl-n finds the next one; the
+*             search ignores case, goes on past the end of the text to its start, and selects what it found
+*             (a bell if there is none).  A viewer can select, copy and find, and nothing else.
+*
+*             ret<1> is 'handled'; 'cancel' (Esc); or 'unhandled' with ret<2> the key's name: tab, btab, a
+*             function key, and up on the first row and down on the last, so that a form can go on to the
+*             widget before or after.  A readonly area moves: Return and every character are 'unhandled'.
+*     mouse   a click puts the cursor on the character under it, the wheel scrolls three rows
 *     close   nothing to undo: the caller repaints what is under it
 *
-*   No wrapping: a longer line is shown from the first column shown and the area pans sideways to follow the
-*   cursor.  A tab character is shown as a blank.
+*   Wrapping breaks a line after the last blank that fits, or in the middle of a word that is longer than
+*   the width; the blank stays at the end of its row, and the line is not changed.  Without wrap a longer
+*   line is shown from the first column shown and the area pans sideways to follow the cursor.  A tab
+*   character is shown as a blank.
 *
 * END-DESCRIPTION
 *
@@ -44,6 +63,8 @@ $catalog $sl_memo
 
 $include sl.h
 
+   common /slclip/ clip.has, clip.text
+
    ret = ''
    mw = w{'w'} + 0
    mh = w{'h'} + 0
@@ -51,12 +72,19 @@ $include sl.h
    if mh < 1 then mh = 1
    tw = mw - 1                                   ;* the width of the text: the last column is the scroll bar
    ro = w{'readonly'} + 0
+   wrap = w{'wrap'} + 0
    lines = w{'value'}
    cx = w{'cx'} + 0
    cy = w{'cy'} + 0
    top = w{'top'} + 0
    left = w{'left'} + 0
    want = w{'want'} + 0
+   mx = w{'mx'} + 0
+   my = w{'my'} + 0
+   fnd = w{'find'}
+   undo = w{'undo'}
+   redo = w{'redo'}
+   if wrap then left = 1
 
    begin case
       case op = 'init'
@@ -66,6 +94,8 @@ $include sl.h
          w{'h'} = mh
          lines = convert(char(10), @fm, lines)
          cx = 1 ; cy = 1 ; top = 1 ; left = 1 ; want = 1
+         mx = 0 ; my = 0 ; undo = '' ; redo = ''
+         w{'lastop'} = ''
          gosub store
 
       case op = 'draw'
@@ -88,24 +118,30 @@ $include sl.h
 
    return
 
-* A click puts the cursor on the character under it (after the last one of a shorter line, on the last line if it
-* is below the text); the wheel scrolls three lines and the cursor goes with it if it would leave the screen
+* A click puts the cursor on the character under it (after the last one of a shorter row, on the last row if it
+* is below the text); the wheel scrolls three rows and the cursor goes with it if it would leave the screen
 click:
    ret = 'handled'
+   w{'lastop'} = ''
    if key<1> = 'wheel' then
       if key<2> = 'up' then top -= 3 else top += 3
-      if top > n - mh + 1 then top = n - mh + 1
+      if top > nr - mh + 1 then top = nr - mh + 1
       if top < 1 then top = 1
-      if cy < top then cy = top
-      if cy > top + mh - 1 then cy = top + mh - 1
+      gosub row.of
+      rr = dr
+      if rr < top then rr = top
+      if rr > top + mh - 1 then rr = top + mh - 1
+      if rr > nr then rr = nr
+      gosub to.row
    end else
-      cy = top + key<4> - w{'ay'}
-      cx = left + key<3> - w{'ax'}
-      if cy > n then cy = n
-      if cy < 1 then cy = 1
-      if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
-      if cx < 1 then cx = 1
-      want = cx
+      rr = top + key<4> - w{'ay'}
+      if rr > nr then rr = nr
+      if rr < 1 then rr = 1
+      want = left + key<3> - w{'ax'}
+      if want < 1 then want = 1
+      gosub to.row
+      gosub row.of
+      want = dcx
    end
    gosub count
    gosub scroll
@@ -113,7 +149,7 @@ click:
    gosub paint
    return
 
-* n = the number of lines; a text with nothing in it has one, empty
+* n = the number of lines, nr the number of rows (the same without wrap); a text with nothing in it has one
 count:
    n = dcount(lines, @fm)
    if n < 1 then n = 1
@@ -122,6 +158,106 @@ count:
    if cx < 1 then cx = 1
    if top < 1 then top = 1
    if left < 1 then left = 1
+   if wrap then
+      left = 1
+      gosub build.map
+   end else
+      nr = n
+   end
+   return
+
+* The rows of a wrapped text.  Row r is part of line rl(r), from the character rs(r) on, rn(r) characters; fr(i) is
+* the first row of line i.  A row but the last of its line is cut after the last blank that fits in tw characters, or
+* at tw characters if it holds none; the last row of a line needs a place for the cursor after its last character,
+* so it is at most tw - 1 long.
+build.map:
+   tot = 0
+   for i = 1 to n
+      tot += len(lines<i>)
+   next i
+   bound = (n * 2) + (int(tot / tw) * 4) + 8
+   dim rl(bound + 1)
+   dim rs(bound + 1)
+   dim rn(bound + 1)
+   dim fr(n + 1)
+   r = 0
+   for i = 1 to n
+      t = lines<i>
+      tlen = len(t)
+      s = 1
+      fr(i) = r + 1
+      done = @false
+      loop
+         r += 1
+         rl(r) = i
+         rs(r) = s
+         rlen.left = tlen - s + 1
+         if rlen.left <= tw - 1 or r >= bound then
+            rn(r) = rlen.left
+            done = @true
+         end else
+            seg = t[s, tw]
+            p = tw
+            loop
+            while p > 0 and seg[p, 1] # ' '
+               p -= 1
+            repeat
+            if p = 0 then p = tw
+            rn(r) = p
+            s += p
+         end
+      until done
+      repeat
+   next i
+   nr = r
+   rl(nr + 1) = 0                            ;* the row after the last: every part of a test on it is assigned
+   rs(nr + 1) = 0
+   rn(nr + 1) = 0
+   return
+
+* rr (a row) -> rline (its line), rstart (its first character in the line), rtext (what it holds), rlen (its length),
+* rlast (it is the last row of its line), rcm (the highest column the cursor can have in it)
+row.text:
+   if wrap then
+      rline = rl(rr)
+      rstart = rs(rr)
+      rlen = rn(rr)
+      rtext = lines<rline>[rstart, rlen]
+      rlast = (rl(rr + 1) # rline)
+   end else
+      rline = rr
+      rstart = 1
+      rtext = lines<rr>
+      rlen = len(rtext)
+      rlast = @true
+   end
+   rcm = rlen
+   if rlast then rcm = rlen + 1
+   return
+
+* The cursor (cy, cx) -> dr (the row it is on) and dcx (its column in the row, 1 = the row's first character)
+row.of:
+   if wrap then
+      dr = fr(cy)
+      loop
+      while dr < nr and rl(dr + 1) = cy and rs(dr + 1) <= cx
+         dr += 1
+      repeat
+      dcx = cx - rs(dr) + 1
+   end else
+      dr = cy
+      dcx = cx
+   end
+   return
+
+* Put the cursor on row rr, in the column want (or the row's last place if it is shorter)
+to.row:
+   gosub row.text
+   cy = rline
+   dc = want
+   if dc > rcm then dc = rcm
+   if dc < 1 then dc = 1
+   cx = rstart + dc - 1
    return
 
 store:
@@ -131,37 +267,189 @@ store:
    w{'top'} = top
    w{'left'} = left
    w{'want'} = want
+   w{'mx'} = mx
+   w{'my'} = my
+   w{'find'} = fnd
+   w{'undo'} = undo
+   w{'redo'} = redo
    return
 
 * Keep the cursor inside the rows and columns shown
 scroll:
-   if cy < top then top = cy
-   if cy > top + mh - 1 then top = cy - mh + 1
-   if cx < left then left = cx
-   if cx > left + tw - 1 then left = cx - tw + 1
+   gosub row.of
+   if dr < top then top = dr
+   if dr > top + mh - 1 then top = dr - mh + 1
+   if wrap then
+      left = 1
+   end else
+      if cx < left then left = cx
+      if cx > left + tw - 1 then left = cx - tw + 1
+   end
    if top < 1 then top = 1
    if left < 1 then left = 1
    return
 
+* has.sel = a selection exists: it runs from (sy, sx) to (ey, ex), the end not included
+sel.range:
+   has.sel = @false
+   if my > 0 and my <= n then
+      if my < cy or (my = cy and mx <= cx) then
+         sy = my ; sx = mx ; ey = cy ; ex = cx
+      end else
+         sy = cy ; sx = cx ; ey = my ; ex = mx
+      end
+      if sy # ey or sx # ex then has.sel = @true
+   end
+   return
+
+* st = the selected text, one line to a field
+sel.text:
+   if sy = ey then
+      st = lines<sy>[sx, ex - sx]
+   end else
+      st = lines<sy>[sx, 999999]
+      for i = sy + 1 to ey - 1
+         st := @fm : lines<i>
+      next i
+      st := @fm : lines<ey>[1, ex - 1]
+   end
+   return
+
+* Take the selection out; the cursor goes to where it began
+del.sel:
+   head = lines<sy>[1, sx - 1]
+   tail = lines<ey>[ex, 999999]
+   lines<sy> = head : tail
+   for i = ey to sy + 1 step -1
+      del lines<i>
+   next i
+   cy = sy
+   cx = sx
+   want = cx
+   my = 0 ; mx = 0
+   return
+
+* Before an edit, kind says what it is: remember the text so that it can be undone.  A run of typing, of bs or of del
+* is one step (k0 is what the key before did).
+snap.push:
+   if kind = k0 and (kind = 'type' or kind = 'bs' or kind = 'del') then return
+   gosub snap.make
+   undo = snap : @fm : undo
+   if dcount(undo, @fm) > 100 then undo = field(undo, @fm, 1, 100)
+   loop
+   while len(undo) > 1000000 and dcount(undo, @fm) > 1
+      undo = field(undo, @fm, 1, dcount(undo, @fm) - 1)
+   repeat
+   redo = ''
+   return
+
+* snap = the text and the cursor as one field
+snap.make:
+   snap = cy : @tm : cx : @tm : convert(@fm, @vm, lines)
+   return
+
+* Take a step back (src = undo, dst = redo) or on (the other way round): the first field of the stack is what it goes to
+snap.restore:
+   cur = field(src, @fm, 1)
+   if cur = '' then return
+   src = if dcount(src, @fm) > 1 then field(src, @fm, 2, 99999) else ''
+   gosub snap.make
+   dst = snap : @fm : dst
+   lines = convert(@vm, @fm, field(cur, @tm, 3, 99999))
+   cy = field(cur, @tm, 1) + 0
+   cx = field(cur, @tm, 2) + 0
+   want = cx
+   my = 0 ; mx = 0
+   return
+
+* Put the clipboard in at the cursor
+paste:
+   t = clip.text
+   ln = lines<cy>
+   nt = dcount(t, @fm)
+   if nt <= 1 then
+      lines<cy> = ln[1, cx - 1] : t : ln[cx, 999999]
+      cx += len(t)
+   end else
+      head = ln[1, cx - 1]
+      tail = ln[cx, 999999]
+      lines<cy> = head : t<1>
+      for i = 2 to nt - 1
+         ins t<i> before lines<cy + i - 1>
+      next i
+      ins t<nt> : tail before lines<cy + nt - 1>
+      cy += nt - 1
+      cx = len(t<nt>) + 1
+   end
+   want = cx
+   return
+
+* The next place the text in find is, from the cursor on (ignoring case); selected, or a bell
+find.next:
+   if fnd = '' then return
+   fl = upcase(fnd)
+   y = cy
+   found = @false
+   for pn = 0 to n
+      t = upcase(lines<y>)
+      st0 = 1
+      if pn = 0 then st0 = cx
+      p = index(t[st0, 999999], fl, 1)
+      if p > 0 then
+         found = @true
+         exit
+      end
+      y += 1
+      if y > n then y = 1
+   next pn
+   if found then
+      my = y ; mx = st0 + p - 1
+      cy = y ; cx = mx + len(fnd)
+      want = cx
+   end else
+      display char(7) :
+   end
+   return
+
+* Ask for the text on the bottom row of the area
+find.prompt:
+   pw = ''
+   pw<SL.W.Y> = w{'ay'} + mh - 1
+   pw<SL.W.D> = 'Find: '
+   pw<SL.W.D + 1> = fnd
+   call $sl_prompt('init', pw, scr, '', pr)
+   call $sl_prompt('run', pw, scr, '', pr)
+   if pr = 'enter' then
+      fnd = pw<SL.W.VALUE>
+      gosub find.next
+   end
+   return
+
 handle.key:
    ret = 'handled'
-   ln = lines<cy>
+   k0 = w{'lastop'}                  ;* what the key before did; a key that edits says what it did at the end
+   w{'lastop'} = ''
+   kind = ''
+   vert = @false
+   gosub sel.range
    begin case
       case key = 'esc'
          ret = 'cancel'
       case key = 'up'
-         if cy > 1 then
-            cy -= 1
-            cx = want
-            if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         gosub row.of
+         if dr > 1 then
+            rr = dr - 1
+            gosub to.row
+            vert = @true
          end else
             ret = 'unhandled' : @fm : key
          end
       case key = 'down'
-         if cy < n then
-            cy += 1
-            cx = want
-            if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         gosub row.of
+         if dr < nr then
+            rr = dr + 1
+            gosub to.row
+            vert = @true
          end else
             ret = 'unhandled' : @fm : key
          end
@@ -174,9 +462,8 @@ handle.key:
                cx = len(lines<cy>) + 1
             end
          end
-         want = cx
       case key = 'right'
-         if cx <= len(ln) then
+         if cx <= len(lines<cy>) then
             cx += 1
          end else
             if cy < n then
@@ -184,72 +471,196 @@ handle.key:
                cx = 1
             end
          end
-         want = cx
       case key = 'home' or key = 'ctrl-a'
-         cx = 1
-         want = cx
+         gosub row.of
+         rr = dr
+         gosub row.text
+         cx = rstart
       case key = 'end' or key = 'ctrl-e'
-         cx = len(ln) + 1
-         want = cx
+         gosub row.of
+         rr = dr
+         gosub row.text
+         cx = rstart + rcm - 1
+      case key = 'ctrl-f'
+         ln = lines<cy>
+         if cx > len(ln) then
+            if cy < n then
+               cy += 1
+               cx = 1
+            end
+         end else
+            loop
+            while cx <= len(ln) and ln[cx, 1] = ' '
+               cx += 1
+            repeat
+            loop
+            while cx <= len(ln) and ln[cx, 1] # ' '
+               cx += 1
+            repeat
+         end
+      case key = 'ctrl-b'
+         if cx = 1 then
+            if cy > 1 then
+               cy -= 1
+               cx = len(lines<cy>) + 1
+            end
+         end else
+            ln = lines<cy>
+            cx -= 1
+            loop
+            while cx > 1 and ln[cx, 1] = ' '
+               cx -= 1
+            repeat
+            loop
+            while cx > 1 and ln[cx - 1, 1] # ' '
+               cx -= 1
+            repeat
+         end
       case key = 'pgup'
-         * the view goes back a page (less one line, so the last line of the new page is the first of the old) and the
+         * the view goes back a page (less one row, so the last row of the new page is the first of the old) and the
          * cursor keeps its row on the screen
+         gosub row.of
          top -= mh - 1
          if top < 1 then top = 1
-         cy -= mh - 1
-         if cy < 1 then cy = 1
-         cx = want
-         if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         rr = dr - (mh - 1)
+         if rr < 1 then rr = 1
+         gosub to.row
+         vert = @true
       case key = 'pgdn'
+         gosub row.of
          top += mh - 1
-         if top > n - mh + 1 then top = n - mh + 1
+         if top > nr - mh + 1 then top = nr - mh + 1
          if top < 1 then top = 1
-         cy += mh - 1
-         if cy > n then cy = n
-         cx = want
-         if cx > len(lines<cy>) + 1 then cx = len(lines<cy>) + 1
+         rr = dr + (mh - 1)
+         if rr > nr then rr = nr
+         gosub to.row
+         vert = @true
+      case key = 'ctrl-g'
+         if my > 0 then
+            my = 0 ; mx = 0
+         end else
+            my = cy ; mx = cx
+         end
+      case key = 'ctrl-c' or key = 'ctrl-o'
+         if has.sel then
+            gosub sel.text
+            clip.text = st
+            clip.has = 1
+            my = 0 ; mx = 0
+         end
+      case key = 'ctrl-t'
+         gosub find.prompt
+      case key = 'ctrl-n'
+         gosub find.next
       case ro
          ret = 'unhandled' : @fm : key
       case key = 'enter'
+         kind = 'enter'
+         if has.sel then k0 = ''
+         gosub snap.push
+         if has.sel then gosub del.sel
+         ln = lines<cy>
          lines<cy> = ln[1, cx - 1]
          rest = ln[cx, len(ln)]
          ins rest before lines<cy + 1>
          cy += 1
          cx = 1
          want = cx
+         my = 0 ; mx = 0
       case key = 'bs'
-         if cx > 1 then
-            lines<cy> = ln[1, cx - 2] : ln[cx, len(ln)]
-            cx -= 1
+         kind = 'bs'
+         if has.sel then k0 = ''
+         gosub snap.push
+         if has.sel then
+            gosub del.sel
          end else
-            if cy > 1 then
-               prev = lines<cy - 1>
-               lines<cy - 1> = prev : ln
-               del lines<cy>
-               cy -= 1
-               cx = len(prev) + 1
+            ln = lines<cy>
+            if cx > 1 then
+               lines<cy> = ln[1, cx - 2] : ln[cx, len(ln)]
+               cx -= 1
+            end else
+               if cy > 1 then
+                  prev = lines<cy - 1>
+                  lines<cy - 1> = prev : ln
+                  del lines<cy>
+                  cy -= 1
+                  cx = len(prev) + 1
+               end
             end
          end
          want = cx
+         my = 0 ; mx = 0
       case key = 'del' or key = 'ctrl-d'
-         if cx <= len(ln) then
-            lines<cy> = ln[1, cx - 1] : ln[cx + 1, len(ln)]
+         kind = 'del'
+         if has.sel then k0 = ''
+         gosub snap.push
+         if has.sel then
+            gosub del.sel
          end else
-            if cy < n then
-               lines<cy> = ln : lines<cy + 1>
-               del lines<cy + 1>
+            ln = lines<cy>
+            if cx <= len(ln) then
+               lines<cy> = ln[1, cx - 1] : ln[cx + 1, len(ln)]
+            end else
+               if cy < n then
+                  lines<cy> = ln : lines<cy + 1>
+                  del lines<cy + 1>
+               end
             end
          end
+         want = cx
+         my = 0 ; mx = 0
       case key = 'ctrl-k'
+         kind = 'kill'
+         gosub snap.push
+         ln = lines<cy>
          lines<cy> = ln[1, cx - 1]
+         my = 0 ; mx = 0
+      case key = 'ctrl-x'
+         if has.sel then
+            kind = 'cut'
+            gosub snap.push
+            gosub sel.text
+            clip.text = st
+            clip.has = 1
+            gosub del.sel
+         end
+      case key = 'ctrl-v'
+         if clip.has = 1 then
+            kind = 'paste'
+            gosub snap.push
+            if has.sel then gosub del.sel
+            gosub paste
+            my = 0 ; mx = 0
+         end
+      case key = 'ctrl-z'
+         src = undo ; dst = redo
+         gosub snap.restore
+         undo = src ; redo = dst
+      case key = 'ctrl-y'
+         src = redo ; dst = undo
+         gosub snap.restore
+         redo = src ; undo = dst
       case len(key) = 1
+         kind = 'type'
+         if has.sel then
+            kind = 'replace'             ;* a step of its own: what is typed after it is another
+         end
+         gosub snap.push
+         if has.sel then gosub del.sel
+         ln = lines<cy>
          lines<cy> = ln[1, cx - 1] : key : ln[cx, len(ln)]
          cx += 1
          want = cx
+         my = 0 ; mx = 0
       case 1
          ret = 'unhandled' : @fm : key
    end case
+   w{'lastop'} = kind
    gosub count
+   if not(vert) and ret<1> = 'handled' then
+      gosub row.of
+      want = dcx
+   end
    gosub scroll
    gosub store
    gosub paint
@@ -258,18 +669,39 @@ handle.key:
 paint:
    call $sl_attr('text', tc)
    call $sl_attr('window', wc)
-   call $sl_scrollbar(mh, top, n, mh, bar)
+   call $sl_attr('highlight', hc)
+   call $sl_scrollbar(mh, top, nr, mh, bar)
+   gosub sel.range
    for r = 0 to mh - 1
-      i = top + r
+      rr = top + r
       seg = ''
-      if i <= n then
-         seg = convert(char(9), ' ', lines<i>)
-         seg = seg[left, tw]
+      base = 1
+      if rr <= nr then
+         gosub row.text
+         seg = convert(char(9), ' ', rtext)
+         if not(wrap) then
+            base = left
+            seg = seg[left, tw]
+         end
       end
       seg := space(tw - len(seg))
-      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, seg : bar[r + 1, 1], str(tc, tw) : wc)
+      attrs = str(tc, tw)
+      if has.sel and rr <= nr then
+         for k = 1 to len(rtext) - base + 1
+            if k > tw then exit
+            ac = rstart + base + k - 2           ;* the character's place in its line
+            inside = @true
+            if rline < sy or (rline = sy and ac < sx) then inside = @false
+            if rline > ey or (rline = ey and ac >= ex) then inside = @false
+            if inside then attrs[k, 1] = hc
+         next k
+      end
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, seg : bar[r + 1, 1], attrs : wc)
    next r
-   if w{'focused'} then display @(w{'ax'} + cx - left, w{'ay'} + cy - top) :
+   if w{'focused'} then
+      gosub row.of
+      display @(w{'ax'} + dcx - left, w{'ay'} + dr - top) :
+   end
    return
 end
 
