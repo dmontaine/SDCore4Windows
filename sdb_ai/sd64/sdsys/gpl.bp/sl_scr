@@ -1,0 +1,72 @@
+* SL_SCR
+* Screen library: the screen context that the SCREEN statement's subroutines draw on.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): New (the spike: SCREEN MSGBOX).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_scr(op, scr)
+*
+*     get    scr is the screen context (sl.h) the library is to use.  Until SCREEN OPEN has been
+*            done it is a blank one of the terminal's size, made afresh on every call: a pop-up
+*            such as a message box can then put back only blanks, where the program had text.
+*     open   keeps a context of the terminal's size, blank, from now on.  (Not built yet.)
+*     close  forgets it.
+*
+*   The routines of the SCREEN statement ask for the context here so that the program never
+*   handles one.  SED builds its own and calls the widget routines directly.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_scr(op, scr)
+$catalog $sl_scr
+
+$include sl.h
+
+   common /slscr/ ctx, ctx.open
+
+   if unassigned(ctx.open) then
+      ctx = ''
+      ctx.open = 0
+   end
+
+   begin case
+      case op = 'get'
+         if ctx.open then
+            scr = ctx
+         end else
+            gosub blank
+            scr = blank.scr
+         end
+
+      case op = 'close'
+         ctx = ''
+         ctx.open = 0
+
+      case op = 'open'
+         gosub blank
+         ctx = blank.scr
+         ctx.open = 1
+   end case
+
+   return
+
+blank:
+   * A context of the terminal's size, every row blank
+   blank.scr = ''
+   blank.scr<SL.S.W> = @crtwide
+   blank.scr<SL.S.H> = @crthigh
+   for r = 0 to @crthigh - 1
+      blank.scr<SL.S.SHADOW, r + 1> = space(@crtwide)
+   next r
+   return
+end
+
+* END-CODE

@@ -1,0 +1,66 @@
+* SCREEN_MSGBOX
+* The subroutine that SCREEN MSGBOX calls: a message box with buttons, centred on the screen.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): New (the spike for the SCREEN statement, screenlib-design.md).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MSGBOX text {TITLE t} {BUTTONS list} {DEFAULT n} {RETURNING n} {THEN ... ELSE ...}
+*
+*   is compiled into
+*
+*   call !screen_msgbox(text, title, buttons, default, ret, status)
+*
+*     text      the message; field or value marks end a line
+*     title     shown in the top border; null for none
+*     buttons   the captions, as values; a string with no value mark but commas is split at the
+*               commas ("&Yes,&No"); an & puts the letter after it first as the button's key
+*               (without one, the caption's first letter); null gives one button, OK
+*     default   the button the box starts on (1 if left out or out of range)
+*     ret       the number of the button chosen, 0 if the user pressed Esc or the input ended
+*     status    0 when a button was chosen, 1 when not: THEN is taken on 0, ELSE on 1
+*
+*   Arguments are passed by value by the statement.  The box is drawn by $sl_msgbox on the
+*   context $sl_scr gives; what was under it is put back when it closes.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_msgbox(text, title, buttons, default, ret, status)
+$catalog !screen_msgbox
+
+$include sl.h
+
+   call $sl_scr('get', scr)
+
+   lines = convert(@fm, @vm, text)
+
+   btns = buttons
+   if btns = '' then
+      btns = 'OK'
+   end else
+      if index(btns, @vm, 1) = 0 and index(btns, ',', 1) then btns = convert(',', @vm, btns)
+   end
+
+   w = ''
+   w<SL.W.D> = title
+   w<SL.W.D + 1> = lines
+   w<SL.W.D + 2> = btns
+   if default + 0 > 0 then w<SL.W.S1> = default + 0
+
+   call $sl_msgbox('init', w, scr, '', r)
+   call $sl_msgbox('run', w, scr, '', r)
+
+   ret = r
+   status = if r > 0 then 0 else 1
+
+   return
+end
+
+* END-CODE

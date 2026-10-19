@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): The SCREEN statement (screen library, sd64/screenlib-design.md): SCREEN verb {values}
+*               {KEYWORD values} {RETURNING var} {THEN / ELSE}, compiled by ST.SCREEN from the
+*               SCREEN.VERBS table into a CALL of a catalogued library subroutine (no opcode).
 * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV (openQM item 85): the list variable of SELECT / SELECTV / SSELECTV and the FROM list of READNEXT is
 *               optional, a hidden __SELLIST of the program (sellist.default.load); it and stdfil.var.load use the hidden.var.load of FOR EACH.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): A catalogue name in $CATALOG may be as long as the lower of 128 and MAXIDLEN (openQM item 241).
@@ -450,7 +453,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"REMARK":@fm:"REMOVE":@fm:"REMOVE.BREAK.HANDLER"
    statements := @fm:"REPEAT":@fm:"RESTORE.SCREEN"
    statements := @fm:"RETURN":@fm:"ROLLBACK":@fm:"RQM"
-   statements := @fm:"SAVELIST":@fm:"SEEK":@fm:"SELECT":@fm:"SELECTE"
+   statements := @fm:"SAVELIST":@fm:"SCREEN":@fm:"SEEK":@fm:"SELECT":@fm:"SELECTE"
    statements := @fm:"SELECTINDEX":@fm:"SELECTLEFT":@fm:"SELECTN"
    statements := @fm:"SELECTRIGHT":@fm:"SELECTV":@fm:"SENDMAIL":@fm:"SET.ARG"
    statements := @fm:"SET.BREAK.HANDLER"
@@ -502,6 +505,18 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    restricted.statements := @fm:"UNLOAD.OBJECT"
    restricted.statements := @fm:"VARSET"
    restricted.statements := @fm:"WATCH":@fm:"WRITEPKT"
+
+   * SCREEN verbs (12 Oct 26 dm, the screen library).  SCREEN.NAMES is the list of verbs and SCREEN.DEFS
+   * (same order) says, for each: the catalogued subroutine the statement calls, how many positional
+   * values follow the verb, and the keyword clauses it takes as KEYWORD:n (n values follow the keyword).
+   * The subroutine is called with the positional values, then the keyword values in the order given
+   * here (null for a clause the program left out), then the RETURNING variable, then a status that
+   * is 0 when the user finished normally and 1 when the dialogue was cancelled (or no terminal).
+   * A statement not listed here is a compile error, so a verb is added in both places and in the
+   * subroutine's argument list; test-screencmd-units.py checks the three agree.
+
+   screen.names = "MSGBOX"
+   screen.defs = "!screen_msgbox":@vm:1:@vm:"TITLE:1":@sm:"BUTTONS:1":@sm:"DEFAULT:1"
 
    * Reserved names
    * This list starts out as the list of names that are reserved in all
@@ -2395,6 +2410,7 @@ is.statement:
                  st.rollback,
                  st.sleep,                     ;* RQM
                  st.savelist,
+                 st.screen,                    ;* 12 Oct 26 dm - the screen library
                  st.seek,
                  st.select,
                  st.selecte,
@@ -8887,6 +8903,137 @@ st.execute.options:
    end
 
    return
+
+*****************************************************************************
+* ST.SCREEN  -  SCREEN statement (12 Oct 26 dm, the screen library)
+*
+*     SCREEN verb {value {, value}} {KEYWORD value {, value}} ... {RETURNING var} {THEN / ELSE}
+*
+* The verb, how many values follow it and the keywords it takes are in SCREEN.NAMES / SCREEN.DEFS
+* (top of this program).  The statement is a CALL of the verb's catalogued subroutine, no opcode:
+*
+*     sub(positional values, keyword values in table order, ret, status)
+*
+* A keyword the program leaves out is passed as the null string, whatever order the keywords are
+* written in: each value is first stored in a hidden variable of its own (__300 up) and the
+* arguments are loaded from them in table order.  RETURNING names the variable that receives the
+* answer (a hidden one if it is left out).  THEN is taken when the status is 0 (the user finished
+* normally), ELSE when it is not (cancelled, or no terminal); both are optional.  Every value is
+* passed by value, so the subroutine cannot change a variable of the program.
+
+st.screen:
+   if look.ahead.token # TKN.NAME then
+      err.msg = sysmsg(12172) ;* The screen statement needs a verb after it
+      goto error
+   end
+   gosub get.token
+   locate u.token.string in screen.names<1> setting scr.i else
+      err.msg = sysmsg(12173, downcase(token.string)) ;* Unrecognised screen verb %1
+      goto error
+   end
+   scr.verb = u.token.string
+   scr.def = screen.defs<scr.i>
+   scr.npos = scr.def<1,2> + 0
+   scr.kws = scr.def<1,3>
+   scr.nkw = dcount(scr.kws, @sm)
+
+   * The keywords of this verb, and the first hidden variable of each one's values
+
+   scr.kwnames = ""
+   scr.kwcount = ""
+   scr.kwslot = ""
+   scr.nslots = 0
+   scr.given = ""
+   reserved.names<2> = "RETURNING"
+   for scr.k = 1 to scr.nkw
+      scr.kw = field(scr.kws, @sm, scr.k)
+      scr.kwnames<scr.k> = field(scr.kw, ":", 1)
+      scr.kwcount<scr.k> = field(scr.kw, ":", 2) + 0
+      scr.kwslot<scr.k> = scr.nslots + 1
+      scr.nslots += scr.kwcount<scr.k>
+      reserved.names<2, -1> = scr.kwnames<scr.k>
+   next scr.k
+
+   * The subroutine, then the positional values in the order they were written
+
+   s = scr.def<1,1> ; gosub emit.direct.call.reference
+   for scr.p = 1 to scr.npos
+      if scr.p > 1 then gosub check.comma
+      gosub expr
+      if err then return
+      opcode.byte = OP.VALUE ; gosub emit.simple
+   next scr.p
+
+   * Keyword clauses, in any order
+
+   loop
+      scr.k = 0
+      if look.ahead.token = TKN.NAME then
+         locate u.look.ahead.token.string in scr.kwnames<1> setting scr.k else scr.k = 0
+      end
+   while scr.k
+      if scr.given<scr.k> then
+         err.msg = sysmsg(12174, downcase(scr.kwnames<scr.k>)) ;* The %1 clause appears twice in a screen statement
+         goto error
+      end
+      scr.given<scr.k> = @true
+      gosub get.token                         ;* Skip the keyword
+      for scr.j = 1 to scr.kwcount<scr.k>
+         if scr.j > 1 then gosub check.comma
+         n = 299 + scr.kwslot<scr.k> + scr.j - 1 ; gosub emit.temp.ref
+         gosub expr
+         if err then return
+         opcode.byte = OP.STOR ; gosub emit.simple
+      next scr.j
+   repeat
+
+   * The keyword values, in table order; the null string for a keyword not written
+
+   for scr.k = 1 to scr.nkw
+      for scr.j = 1 to scr.kwcount<scr.k>
+         if scr.given<scr.k> then
+            n = 299 + scr.kwslot<scr.k> + scr.j - 1 ; gosub emit.temp.ref
+            opcode.byte = OP.VALUE ; gosub emit.simple
+         end else
+            opcode.byte = OP.LDNULL ; gosub emit.simple
+         end
+      next scr.j
+   next scr.k
+
+   * The answer, and the status the THEN / ELSE clauses test
+
+   if u.look.ahead.token.string = "RETURNING" then
+      gosub get.token
+      gosub simple.lvar.reference
+   end else
+      n = 398 ; gosub emit.temp.ref
+   end
+   n = 399 ; gosub emit.temp.ref
+
+   if look.ahead.token = TKN.NAME and u.look.ahead.token.string # "THEN" and u.look.ahead.token.string # "ELSE" then
+      err.msg = sysmsg(12175, downcase(scr.verb), downcase(look.ahead.token.string)) ;* The screen %1 statement does not take %2
+      goto error
+   end
+
+   del reserved.names<2>
+
+   scr.argc = scr.npos + scr.nslots + 2
+   if scr.argc > greatest.call.arg.count then greatest.call.arg.count = scr.argc
+   if print.code then
+      s = "CALL     (" : scr.argc : " arguments) SCREEN " : scr.verb
+      gosub show.code
+   end
+   opcode.byte = OP.CALL ; gosub emit
+   opcode.byte = scr.argc ; gosub emit
+
+   n = 399 ; gosub emit.temp.ref
+   opcode.byte = OP.VALUE ; gosub emit.simple
+
+   opcode = -1                         ;* The status is already on the stack
+   ins '0' before onerror.stack<1>     ;* No ON ERROR clause
+   ins '0' before testlock.stack<1>    ;* No LOCKED clause allowed
+   ins '2' before thenelse.stack<1>    ;* Optional THEN / ELSE clause allowed
+   goto back.end
 
 *****************************************************************************
 * ST.FILE  -  FILE statement
