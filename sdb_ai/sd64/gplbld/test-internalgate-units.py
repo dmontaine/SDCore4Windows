@@ -248,7 +248,21 @@ NON_WRITERS = {
 }
 # gplsrc/sd.c is outside gplbld and holds the "-INTERNAL" argument PARSER, not a session start.
 
-TOKEN = re.compile(r"""['"]-internal['"]""", re.I)
+
+def carry_notrun():
+    """The verify-carry suites that verify-carry-known.psd1 lists under NotRun.  They are byte copies of Linux sandbox suites whose
+    `-internal` is the Linux sandbox's way of being SDSYS; here the launcher never runs them (and a session of theirs would be
+    refused: no marker, and `-internal` is forced to the real SDSYS), so they are non-writers BY THAT LIST and by nothing else."""
+    p = os.path.join(HERE, "verify-carry-known.psd1")
+    if not os.path.isfile(p):
+        return set()
+    m = re.search(r"NotRun\s*=\s*@\{(.*?)\n    \}", read(p), re.S)
+    return set(re.findall(r"^\s+'([^']+)'\s*=", m.group(1), re.M)) if m else set()
+
+
+NOTRUN = carry_notrun()
+
+TOKEN =re.compile(r"""['"]-internal['"]""", re.I)
 
 
 def is_comment(path, line):
@@ -278,6 +292,9 @@ def partition_problems(found):
     for name, (n, text) in found.items():
         if name in NON_WRITERS:
             continue
+        mc = re.match(r"verify-carry-(.+)\.py$", name)
+        if mc and mc.group(1) in NOTRUN:
+            continue
         need = WRITERS.get(name)
         if need is None:
             p.append(name + ": starts an internal session and is not declared (a writer, or a non-writer with a reason)")
@@ -306,6 +323,12 @@ extra = dict(found)
 extra["brand-new-step.ps1"] = (1, "Start-Process sd -ArgumentList '-internal'")
 row(any("brand-new-step.ps1" in x and "not declared" in x for x in partition_problems(extra)),
     "MUTANT: a NEW internal session with no declaration is caught")
+row(len(NOTRUN) >= 10, "CONTROL: verify-carry-known.psd1 NotRun was read (%d suites)" % len(NOTRUN),
+    "read %d - the file or the table is missing, and the carry suites below would be undeclared" % len(NOTRUN))
+carry_extra = dict(found)
+carry_extra["verify-carry-brand-new.py"] = (1, 'subprocess.run([sd, "-internal"])')
+row(any("verify-carry-brand-new.py" in x and "not declared" in x for x in partition_problems(carry_extra)),
+    "MUTANT: a verify-carry suite that starts an internal session and is not listed NotRun is caught")
 gone = dict(found)
 gone.pop("bootstrap.py", None)
 row(any("bootstrap.py" in x and "stale" in x for x in partition_problems(gone)),

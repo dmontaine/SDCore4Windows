@@ -65,9 +65,12 @@
 *   change the process
 * NOT.TESTED: CHGPHANT CONFIG UMASK CATALOGUED DIR
 * NOT.TESTED: GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
-*   18 Oct 26 - carried from Linux (areas 2 to 5 of the Dev carry).  Each is exercised, with Linux's expected values, by the carry's
-*   own verify steps (gplbld/verify-carry*.py: the func-q1, stmt-q3, epoch, q4, oq2, sortwide and coll suites), where it
-*   runs beside the file, collection and select-list state it needs.  A second set of cases here would only restate those.
+*   18 Oct 26 - carried from Linux (areas 2 to 5 of the Dev carry).  All but nine are exercised, with Linux's expected values, by the
+*   carry's own verify steps (gplbld/verify-carry*.py: the func-q1, oq2, sys-q18, crlf and coll suites), where each runs beside the file,
+*   collection and select-list state it needs.  A second set of cases here would only restate those.  The nine no running suite
+*   exercises yet are SWAPMARKS, SELECT.SOCKET, EPOCH, MVDATE, MVDATE.TIME, MVEPOCH, MVTIME, SORTDATA and SORTNEXT: only Linux's q4,
+*   stmt-q3, epoch and sortwide suites reach them, and those cannot run in an ordinary account (NotRun in verify-carry-known.psd1;
+*   RELEASE_1.1 148 holds the witness).
 * NOT.TESTED: ARG.PRESENT BOOL CEIL FLOOR ROUNDUP ROUNDDOWN LAST LASTS LEFT RIGHT NS NV
 * NOT.TESTED: IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.NULL IS.SPACE
 * NOT.TESTED: MATCHESS MATCHFIELDS NUMERIC REUSING RMVD SIGNAL SWAPMARKS TERMINFO.EX TRIMWS

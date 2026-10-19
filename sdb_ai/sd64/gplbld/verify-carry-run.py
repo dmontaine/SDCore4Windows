@@ -22,10 +22,16 @@ WHAT IT CHANGES, AND NOTHING ELSE:
   3. os.path.isfile/exists of <box>/sys/bin/sd -> True (there is no such file in an account, only sd.exe).
   4. open() in a text WRITE mode defaults to newline="\\n": the suites write BASIC source and directory-file
      records, and a CR LF written by Windows text mode would reach BCOMP as part of every line.
+  5. time.tzset (absent from Python on Windows) is a no-op, so a suite that sets TZ for the sessions it starts still
+     starts them; the zone it asks for is whatever sd.exe makes of the variable (the C library, not Python).
+  6. <box>/sd.conf is a COPY of the installed sd.conf (SD_CARRY_CONF, default C:\\ProgramData\\SD\\sd.conf), made when the
+     box has none.  Linux's suites read it, change a parameter and restart the daemon; here the copy is changed and the
+     installed service never reads it, so a row that needs the changed parameter FAILS, and is named in
+     verify-carry-known.psd1 as a Linux mechanism rather than hidden.
 
 Environment (all optional): SD_EXE the sd executable (default the multi-user install's sd.exe);
 SD_CARRY_PW the account password to send first (SD Core Solo); SD_CARRY_SPARE_OFF extra OFF lines;
-SD_CARRY_TIMEOUT seconds a session may run (default 600).
+SD_CARRY_TIMEOUT seconds a session may run (default 600); SD_CARRY_CONF the sd.conf to copy into the box.
 
 Exit status is the suite's own: 0 every row passed, 1 a row failed, 2 it could not run.
 """
@@ -33,8 +39,10 @@ import builtins
 import os
 import re
 import runpy
+import shutil
 import subprocess
 import sys
+import time
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 SD_EXE = os.environ.get("SD_EXE") or os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "SD", "usr", "bin", "sd.exe")
@@ -138,6 +146,12 @@ def main():
     if not real_isfile(SD_EXE):
         print("verify-carry-run: no sd.exe at %s" % SD_EXE)
         return 2
+    if not hasattr(time, "tzset"):
+        time.tzset = lambda: None
+    box = os.path.abspath(sys.argv[2])
+    conf = os.environ.get("SD_CARRY_CONF") or os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "SD", "sd.conf")
+    if os.path.isdir(box) and not real_exists(os.path.join(box, "sd.conf")) and real_isfile(conf):
+        shutil.copyfile(conf, os.path.join(box, "sd.conf"))
     subprocess.run = patched_run
     subprocess.Popen = PatchedPopen
     os.path.isfile = lambda p: True if is_stub_sd(p) else real_isfile(p)
