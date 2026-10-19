@@ -25,6 +25,9 @@
  *           is then empty (-m used to delete all of it, including a new target inside it).  -d answered n or met the
  *           end of input and still cleared the header: now it stops.  -p says what -q would say, and checks the
  *           header write.  A path argument over the header's limit is refused (strcpy overran the buffer).
+ * 18 Oct 26 Windows port - from Linux 73aee7a (18 Oct 26): - A RELATIVE index path given to -m or -p is made absolute (from the current directory) before it is
+ *           used and stored.  The header held the text as typed, so the indices were found only by a process whose
+ *           current directory was the one the command was run from; SD never is.
  * END-HISTORY
  *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
  *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
@@ -86,6 +89,7 @@ bool ak_file_path(char *path, char *dir, int16_t ak);
 bool delete_index_files(char *dir, bool remove_dir);
 void report_location(void);
 bool bounded_copy(char *dst, char *src);
+bool index_path_arg(char *dst, char *src);
 bool make_path(char *tgt);
 bool attach_shared_memory(void);
 void unbind_sysseg(void);
@@ -198,7 +202,7 @@ int main(int argc, char *argv[]) {
       if (!fullpath(data_path, argv[arg++]))
         goto exit_sdidx;
       if (arg < argc) {
-        if (!bounded_copy(ak_path, argv[arg++]))
+        if (!index_path_arg(ak_path, argv[arg++]))
           goto exit_sdidx;
       }
       if (arg != argc)
@@ -270,7 +274,7 @@ int main(int argc, char *argv[]) {
       if (!fullpath(data_path, argv[arg++]))
         goto exit_sdidx;
       if (arg < argc) {
-        if (!bounded_copy(ak_path, argv[arg++]))
+        if (!index_path_arg(ak_path, argv[arg++]))
           goto exit_sdidx;
       }
       if (arg != argc)
@@ -638,6 +642,33 @@ bool bounded_copy(char *dst, char *src) {
     return FALSE;
   }
   strcpy(dst, src);
+  return TRUE;
+}
+
+/* ======================================================================
+   index_path_arg()  -  The index path argument of -m and -p, as it is
+   stored in the header: a relative one is taken from the current
+   directory and so made absolute.  An empty one (the indices go back
+   into the file's own directory) stays empty.                            */
+
+bool index_path_arg(char *dst, char *src) {
+  char cwd[PATH_MAX + 1];
+  char full[MAX_PATHNAME_LEN + 1];
+
+  if (!bounded_copy(dst, src))
+    return FALSE;
+  if ((dst[0] == '\0') || (dst[0] == DS))
+    return TRUE;
+
+  if (getcwd(cwd, sizeof(cwd)) == NULL) {
+    printf("Cannot find the current directory to complete %s [%d]\n", src, errno);
+    return FALSE;
+  }
+  if (snprintf(full, sizeof(full), "%s%c%s", cwd, DS, src) >= (int)sizeof(full)) {
+    printf("Path is too long (the limit is %d characters)\n", MAX_PATHNAME_LEN);
+    return FALSE;
+  }
+  strcpy(dst, full);
   return TRUE;
 }
 

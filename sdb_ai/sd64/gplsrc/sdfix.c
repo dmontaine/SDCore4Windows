@@ -26,6 +26,12 @@
  *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.  -R with
  *           -F or -Q is refused (it ran no check and fixed nothing, silently).  A file that is open within a
  *           running SD is refused, as sdidx does.
+ * 18 Oct 26 Windows port - from Linux 73aee7a (18 Oct 26): - Verifier fixes.  A file whose path leaves no room for the name of its last index subfile (252 or more
+ *           characters) is refused: the names of AK 8 and up were cut short to "%1", so -F took the overflow subfile and
+ *           the index for index subfiles "found but not expected" and deleted them.  Interactive mode ends when its
+ *           input FAILS, not only when it ends.  The W address must be hex digits followed by '=' (g0, xyz or a space
+ *           after them wrote at the digits it could read).  An index subfile that cannot be read is repaired once, and
+ *           its (unread) header is not then tested for a magic number.  The exit status is 1 if any file named failed.
  *           -F or -Q is refused (it ran no check and fixed nothing, silently).
  *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.
  *           "no" and say so, the pager stops paging, interactive mode quits.
@@ -183,6 +189,8 @@ int32_t get_overflow(void);
 bool clear_group(int32_t grp);
 bool check_and_fix(void);
 bool open_subfile(int16_t subfile);
+bool subfile_path(char *path, int16_t sf);
+bool subfile_names_fit(void);
 bool read_block(int16_t subfile, int64 offset, int16_t bytes, char *buff);
 bool write_block(int16_t subfile, int64 offset, int16_t bytes, char *buff);
 bool read_header(void);
@@ -211,6 +219,7 @@ int main(argc, argv) int argc;
 char *argv[];
 {
   int status = 1;
+  int worst_status = 0; /* 1 if any file named failed */
   int arg;
   int argx;
   bool arg_end;
@@ -332,15 +341,21 @@ char *argv[];
   if (arg == argc)
     goto usage; /* No filenames */
 
+  /* 18 Oct 26 dm - The status is the last file's, so a file that was refused (open in SD, path too long, not found)
+     followed by one that was fine ended 0.  It is 1 if any of them failed. */
+
   while (arg < argc) {
 /* rev 0.9.0 */
     status = fix_file(argv[arg]);
+    if (status != 0)
+      worst_status = status;
     emit(
       " SDFIX processed:  %s   Status: %d"
       "\n",
       argv[arg], status);
     arg++;
   }
+  status = worst_status;
 
   if (!file_found)
     printf("No SD hashed files found matching given name(s)\n");
@@ -533,6 +548,15 @@ int process_file() {
 
   group_bytes = header.group_size;
 
+  /* 18 Oct 26 dm - Index subfiles are looked for under all 32 possible names.  If the last of them does not fit in a
+     pathname, the check would find some of them under a name that was cut short (AK 8 and up as "%1", the overflow
+     subfile) and -F would delete what it found.  Nothing more is opened for a path like that. */
+
+  if (!subfile_names_fit()) {
+    emit("The path is too long: the name of the last index subfile does not fit in %d characters\n", MAX_PATHNAME_LEN);
+    goto exit_process_file;
+  }
+
   /* Check for each AK subfile and open */
 
   for (i = 0; i < MAX_INDICES; i++) {
@@ -560,9 +584,18 @@ int process_file() {
       *cmnd = '\0'; /* For quit key path which aborts gets() */
       /* 18 Oct 26 dm - fgets() returns NULL at the end of input, leaving cmnd empty, which the loop took for a blank
          line for ever.  (An interrupt also returns NULL with cmnd cleared: that is not the end of input.) */
-      if ((fgets(cmnd, 80, stdin) == NULL) && feof(stdin)) {
-        emit("End of input\n");
-        break;
+      if (fgets(cmnd, 80, stdin) == NULL) {
+        if (feof(stdin)) {
+          emit("End of input\n");
+          break;
+        }
+        /* A failed read (an unreadable terminal or file as input) is not an interrupt either: it fails again at once,
+           for ever.  Only an interrupted read goes round again. */
+        if (errno != EINTR) {
+          emit("Input error [%d]\n", errno);
+          goto exit_process_file;
+        }
+        clearerr(stdin);
       }
       if ((p = strchr(cmnd, '\n')) != NULL)
         *p = '\0';
@@ -816,11 +849,20 @@ void W_command(char *cmnd) {
   char *p;
   char c;
 
-  if (sscanf(cmnd, "%x", &w_addr) != 1)
-    goto w_format_error; /* Address component not present */
+  /* The address is hex digits and then '=' and nothing between: sscanf() took the digits it could read and ignored what
+     followed, so W10xyz=41 and W1G0=41 wrote at 10 and at 1.  Spaces before the address are allowed. */
 
-  if ((p = strchr(cmnd, '=')) == NULL)
-    goto w_format_error;
+  while (*cmnd == ' ')
+    cmnd++;
+  for (p = cmnd, n = 0; isxdigit((u_char)*p); p++)
+    n++;
+  if ((n == 0) || (*p != '='))
+    goto w_format_error; /* Address component not present, or not hex */
+  if (n > 8) {
+    emit("Illegal address\n");
+    return;
+  }
+  sscanf(cmnd, "%x", &w_addr);
   p++; /* The value */
 
   if ((*p != '"') && (*p != '\'')) /* Hex assignment */
@@ -1132,15 +1174,17 @@ bool check_file() {
       {
         /* Read AK subfile header to check magic number */
 
+        /* 18 Oct 26 dm - The magic number is tested only if the header was read.  It used to be tested anyway, against
+           whatever ak_header held (the last index's, or nothing), so an index file that could not be read was also
+           reported as having a wrong magic number, and -F repaired it twice. */
+
         if (!read_block(sf, 0, DH_AK_HEADER_SIZE, (char *)&ak_header)) {
           emit("Cannot read AK%d subfile header\n", (int)akno);
           if (fix()) {
             if (!delete_bad_ak(sf, akno))
               goto exit_check;
           }
-        }
-
-        if (ak_header.magic != DH_INDEX) {
+        } else if (ak_header.magic != DH_INDEX) {
           emit("AK%d subfile has incorrect magic number (%04X)\n", (int)akno, (int)(ak_header.magic));
           if (fix()) {
             if (!delete_bad_ak(sf, akno))
@@ -2128,20 +2172,46 @@ Private void show_node(int32_t group) {
 
 bool open_subfile(int16_t sf) {
   char path[MAX_PATHNAME_LEN + 1];  // was hardcoded to 160.
-  // converted to snprintf() -gwb 23Feb20
-  if ((sf >= AK_BASE_SUBFILE) && (header.akpath[0] != '\0')) {
-/* rev 0.9.0 */    
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", header.akpath, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
-      emit("Overflow of max file/pathname size. Truncated to:\n\"%s\"\n", path);
-    }
-  } else {
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", filename, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
-      emit("Overflow of max file/pathname size. Truncated to:\n\"%s\"\n", path);
-    }
-  }
+
+  if (!subfile_path(path, sf))
+    return FALSE;
 
   fu[sf] = open(path, (int)(O_RDWR | O_BINARY), default_access);
   return (fu[sf] >= 0);
+}
+
+/* ======================================================================
+   subfile_path()  -  Form the pathname of subfile SF: an index subfile in
+   the relocated directory if the header names one, otherwise in the file's
+   own directory.  FALSE if the name does not fit, in which case PATH must
+   not be used.  (18 Oct 26 dm - the two callers went on with the truncated
+   name, and a name cut to "%1" is the overflow subfile.)                 */
+
+bool subfile_path(char *path, int16_t sf) {
+  char *dir = ((sf >= AK_BASE_SUBFILE) && (header.akpath[0] != '\0')) ? header.akpath : filename;
+
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", dir, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
+    emit("Overflow of max file/pathname size for subfile %d of \"%s\"\n", (int)sf, dir);
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/* ======================================================================
+   subfile_names_fit()  -  Does the name of the LAST index subfile fit in
+   the file's directory and in the relocated one?  Every other name is
+   shorter or the same length.                                            */
+
+bool subfile_names_fit() {
+  char path[MAX_PATHNAME_LEN + 1];
+  int16_t last = AK_BASE_SUBFILE + MAX_INDICES - 1;
+
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", filename, DS, (int)last) >= (MAX_PATHNAME_LEN + 1))
+    return FALSE;
+  if ((header.akpath[0] != '\0') &&
+      (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", header.akpath, DS, (int)last) >= (MAX_PATHNAME_LEN + 1)))
+    return FALSE;
+  return TRUE;
 }
 
 /* ======================================================================
@@ -2227,20 +2297,13 @@ bool delete_bad_ak(int16_t sf, int16_t akno) {
 
 bool delete_subfile(int16_t sf) {
   char path[MAX_PATHNAME_LEN + 1];  // was hardcoded 160
-  // converted to snprintf() -gwb 23Feb20
+
   /* 18 Oct 26 dm - was header.akpath[0] != '0': the character zero, not the end of the string.  An index in the
      file's own directory (akpath empty) was looked for in "" + "/%2", so -F reported "Corrected by deleting" and
-     removed nothing.  open_subfile() above has the right test. */
-  if ((sf >= AK_BASE_SUBFILE) && (header.akpath[0] != '\0')) {
-/* rev 0.9.0 */
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", header.akpath, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
-      emit("Overflow of max file/pathname size. Truncated to:\n\"%s\"\n", path);
-    }
-  } else {
-    if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", filename, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
-      emit("Overflow of max file/pathname size. Truncated to:\n\"%s\"\n", path);
-    }
-  }
+     removed nothing.  subfile_path() has the right test. */
+
+  if (!subfile_path(path, sf))
+    return FALSE;
 
   if (fu[sf] >= 0) {
     close(fu[sf]);
