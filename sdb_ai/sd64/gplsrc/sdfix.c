@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ * 18 Oct 26 Windows port - from Linux 81ca1a8 (18 Oct 26): - -F could not delete an index subfile in the file's own directory: delete_subfile() tested
+ *           akpath[0] against the character '0'.  It also says "Corrected" only if the delete worked.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - -Z clears the dead space at the end of each group (QM4 Fixes 33): the bytes after used_bytes of every block are zeroed.
  *           process_file was commented out??, sdfix didn't do anything.          
  * END-HISTORY
@@ -171,6 +173,7 @@ bool write_block(int16_t subfile, int64 offset, int16_t bytes, char *buff);
 bool read_header(void);
 bool write_header(void);
 bool delete_subfile(int16_t subfile);
+bool delete_bad_ak(int16_t sf, int16_t akno);
 bool read_sdconfig(void);
 bool map_big_rec(int16_t rec_hdr_sf, int64 rec_hdr_offset, DH_RECORD *rec_ptr, int32_t *map);
 void tag_block(int64 offset, int16_t ref_subfile, int64 ref_offset, int16_t usage);
@@ -1055,34 +1058,29 @@ bool check_file() {
         /* Read AK subfile header to check magic number */
 
         if (!read_block(sf, 0, DH_AK_HEADER_SIZE, (char *)&ak_header)) {
-          emit("Cannot read AK%d subfile header", (int)akno);
+          emit("Cannot read AK%d subfile header\n", (int)akno);
           if (fix()) {
-            delete_subfile(sf);
-            header.ak_map &= ~(1 << akno);
-            if (!write_header())
+            if (!delete_bad_ak(sf, akno))
               goto exit_check;
-            emit("   Corrected by deleting affected AK index subfile\n");
-            emit("   AK must be recreated and rebuilt\n");
           }
         }
 
         if (ak_header.magic != DH_INDEX) {
           emit("AK%d subfile has incorrect magic number (%04X)\n", (int)akno, (int)(ak_header.magic));
           if (fix()) {
-            delete_subfile(sf);
-            header.ak_map &= ~(1 << akno);
-            if (!write_header())
+            if (!delete_bad_ak(sf, akno))
               goto exit_check;
-            emit("   Corrected by deleting affected AK index subfile\n");
-            emit("   AK must be recreated and rebuilt\n");
           }
         }
       } else /* Did not expect this AK subfile */
       {
         emit("AK%d subfile found but not expected\n", (int)akno);
         if (fix()) {
-          delete_subfile(sf);
-          emit("   Corrected by deleting affected AK index subfile\n");
+          /* 18 Oct 26 dm - "Corrected" only when the file really went (it printed it whatever remove() said). */
+          if (delete_subfile(sf))
+            emit("   Corrected by deleting affected AK index subfile\n");
+          else
+            emit("   The AK index subfile could not be deleted\n");
         }
       }
     } else {
@@ -2130,13 +2128,36 @@ bool write_header() {
 }
 
 /* ======================================================================
+   delete_bad_ak()  -  The repair for an AK subfile that cannot be read or
+   has the wrong magic number: delete it and take it out of the header's
+   index map.  Returns FALSE if the primary header could not be written.
+   (18 Oct 26 dm - the two call sites were the same ten lines.)          */
+
+bool delete_bad_ak(int16_t sf, int16_t akno) {
+  bool deleted = delete_subfile(sf);
+
+  header.ak_map &= ~(1 << akno);
+  if (!write_header())
+    return FALSE;
+  if (deleted)
+    emit("   Corrected by deleting affected AK index subfile\n");
+  else
+    emit("   Removed from the index map, but the AK index subfile could not be deleted\n");
+  emit("   AK must be recreated and rebuilt\n");
+  return TRUE;
+}
+
+/* ======================================================================
    delete_subfile()  -  Delete a subfile                                  */
 
 bool delete_subfile(int16_t sf) {
   char path[MAX_PATHNAME_LEN + 1];  // was hardcoded 160
   // converted to snprintf() -gwb 23Feb20
-  if ((sf >= AK_BASE_SUBFILE) && (header.akpath[0] != '0')) {
-/* rev 0.9.0 */    
+  /* 18 Oct 26 dm - was header.akpath[0] != '0': the character zero, not the end of the string.  An index in the
+     file's own directory (akpath empty) was looked for in "" + "/%2", so -F reported "Corrected by deleting" and
+     removed nothing.  open_subfile() above has the right test. */
+  if ((sf >= AK_BASE_SUBFILE) && (header.akpath[0] != '\0')) {
+/* rev 0.9.0 */
     if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%c%%%d", header.akpath, DS, (int)sf) >= (MAX_PATHNAME_LEN + 1)) {
       emit("Overflow of max file/pathname size. Truncated to:\n\"%s\"\n", path);
     }
