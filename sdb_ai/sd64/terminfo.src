@@ -290,7 +290,9 @@ windows|Windows console,
     kf17=\E[31~, kf18=\E[32~, kf19=\E[33~, kf20=\E[34~, el1=\E[1K,
     u6=\E[%i%d;%dR, u7=\E[6n, op=\E[39;49m, oc=\E]R,
     initc=\E]P%p1%x%p2%{256}%*%{1000}%/%02x%p3%{256}%*%{1000}%/%02x%p4%{256}%*%{1000}%/%02x,
-    kmous=\E[M, setaf=\E[3%p1%dm, setab=\E[4%p1%dm, smpch=\E[11m, rmpch=\E[10m
+    kmous=\E[M, setaf=\E[3%p1%dm, setab=\E[4%p1%dm, smpch=\E[11m, rmpch=\E[10m,
+    setf=\E[3%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m,
+    setb=\E[4%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m
 
 ms-vt100|MS telnet imitating dec vt100,
     am, xenl, msgr, xon,
