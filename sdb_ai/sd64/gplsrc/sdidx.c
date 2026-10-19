@@ -28,6 +28,11 @@
  * 18 Oct 26 Windows port - from Linux 73aee7a (18 Oct 26): - A RELATIVE index path given to -m or -p is made absolute (from the current directory) before it is
  *           used and stored.  The header held the text as typed, so the indices were found only by a process whose
  *           current directory was the one the command was run from; SD never is.
+ * 19 Oct 26 Windows port - index_path_arg(): a DRIVE-LETTER path is absolute.  Linux's test was a leading '/', so
+ *           C:\data\idx was taken for a relative path and became <cwd>/C:\data\idx, which -m could not create and -p
+ *           could not find: both ended status 1 with no message (verify-carry-tools, I1).  A relative path is completed
+ *           from the current directory in WINDOWS form (getcwd() gives /cygdrive/c/...), as an absolute one is stored
+ *           as typed (V12, V13).
  * END-HISTORY
  *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
  *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
@@ -64,6 +69,7 @@
 #include <unistd.h>
 /* 13 Aug 26 Windows port - POSIX shared memory in place of System V */
 #include <sys/mman.h>
+#include <sys/cygwin.h> /* 19 Oct 26 Windows port - cygwin_conv_path(), for index_path_arg() */
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -654,10 +660,16 @@ bool bounded_copy(char *dst, char *src) {
 bool index_path_arg(char *dst, char *src) {
   char cwd[PATH_MAX + 1];
   char full[MAX_PATHNAME_LEN + 1];
+  char win[MAX_PATHNAME_LEN + 1];
 
   if (!bounded_copy(dst, src))
     return FALSE;
   if ((dst[0] == '\0') || (dst[0] == DS))
+    return TRUE;
+
+  /* 19 Oct 26 Windows port - the drive letter is the root (same test as make_path() below). */
+
+  if (isalpha((unsigned char)dst[0]) && (dst[1] == ':'))
     return TRUE;
 
   if (getcwd(cwd, sizeof(cwd)) == NULL) {
@@ -668,7 +680,14 @@ bool index_path_arg(char *dst, char *src) {
     printf("Path is too long (the limit is %d characters)\n", MAX_PATHNAME_LEN);
     return FALSE;
   }
-  strcpy(dst, full);
+
+  /* 19 Oct 26 Windows port - getcwd() answers in POSIX form (/cygdrive/c/...); what is stored is the form a user types
+     here, C:\...  An absolute path typed by the user is stored as typed, so a relative one is completed the same way. */
+
+  if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, full, win, sizeof(win)) == 0)
+    strcpy(dst, win);
+  else
+    strcpy(dst, full);
   return TRUE;
 }
 

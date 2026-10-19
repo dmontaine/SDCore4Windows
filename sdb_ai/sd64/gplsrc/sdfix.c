@@ -39,7 +39,9 @@
  * 18 Oct 26 Windows port - from Linux 81ca1a8 (18 Oct 26): - -F could not delete an index subfile in the file's own directory: delete_subfile() tested
  *           akpath[0] against the character '0'.  It also says "Corrected" only if the delete worked.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): - -Z clears the dead space at the end of each group (QM4 Fixes 33): the bytes after used_bytes of every block are zeroed.
- *           process_file was commented out??, sdfix didn't do anything.          
+ *           process_file was commented out??, sdfix didn't do anything.
+ * 19 Oct 26 Windows port - file_open_in_sd() attaches SD's table with shm_open()/mmap(), as sdidx.c does; the carried
+ *           shmget() is SysV shared memory, which this runtime does not have without cygserver, so the check never ran.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -92,6 +94,7 @@
 
 #include <unistd.h>
 #include <sys/shm.h>
+#include <sys/mman.h>
 
 #define Seek(fu, offset, whence) lseek(fu, offset, whence)
 
@@ -445,7 +448,9 @@ exit_is_dh_file:
 
 bool file_open_in_sd() {
   bool in_use = FALSE;
-  int shmid;
+  int fd;
+  struct stat statbuf;
+  size_t bytes;
   int fno;
   FILE_ENTRY *fptr;
   char real[PATH_MAX + 1];
@@ -456,10 +461,24 @@ bool file_open_in_sd() {
     strcpy(real, filename);
   }
 
-  if ((shmid = shmget(SD_SHM_KEY, 0, 0666)) == -1)
+  /* 19 Oct 26 Windows port - SD's table is POSIX shared memory here (SD_POSIX_SHM_NAME, sysseg.c), attached as
+     sdidx.c does.  Linux's shmget() is the SysV call: on this runtime it needs cygserver, answers -1, and the test
+     said "SD is not running" for ever, so a file open in SD was checked and repaired as if nothing had it
+     (verify-carry-tools, O2). */
+
+  if ((fd = shm_open(SD_POSIX_SHM_NAME, O_RDONLY, 0666)) == -1)
     return FALSE; /* SD is not running */
 
-  if ((sysseg = (SYSSEG *)shmat(shmid, NULL, SHM_RDONLY)) == (void *)(-1)) {
+  if (fstat(fd, &statbuf) || statbuf.st_size == 0) {
+    close(fd);
+    return FALSE;
+  }
+  bytes = (size_t)statbuf.st_size;
+
+  sysseg = (SYSSEG *)mmap(NULL, bytes, PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  if (sysseg == (SYSSEG *)MAP_FAILED) {
+    sysseg = NULL;
     emit("Cannot attach to SD's shared memory [%d]: not checked whether the file is open in SD\n", errno);
     return FALSE;
   }
@@ -472,7 +491,8 @@ bool file_open_in_sd() {
     }
   }
 
-  shmdt((void *)sysseg);
+  munmap((void *)sysseg, bytes);
+  sysseg = NULL;
   return in_use;
 }
 

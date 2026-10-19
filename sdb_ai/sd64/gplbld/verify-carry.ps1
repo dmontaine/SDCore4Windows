@@ -105,7 +105,7 @@ function Bail([int]$code, [string]$why) {
 $all = @(Get-ChildItem -LiteralPath $Gplbld -File -Filter 'verify-carry-*.py' |
          Where-Object { $_.Name -ne 'verify-carry-run.py' } |
          ForEach-Object { $_.Name -replace '^verify-carry-', '' -replace '\.py$', '' } | Sort-Object)
-if ($all.Count -lt 60) { Bail 2 "only $($all.Count) verify-carry-*.py found in $Gplbld; expected 93." }
+if ($all.Count -lt 60) { Bail 2 "only $($all.Count) verify-carry-*.py found in $Gplbld; expected at least 60." }
 $names = @($Suite | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 if ($names.Count -eq 0) { $names = $all }
 foreach ($n in $names) {
