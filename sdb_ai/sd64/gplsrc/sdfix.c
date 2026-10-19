@@ -22,6 +22,8 @@
  *           akpath[0] against the character '0'.  It also says "Corrected" only if the delete worked.  The repair
  *           for the split and merge loads wrote 50 and 80, which its own check rejects: it writes the defaults
  *           of dh_create_file(), 80 and 50.  Input that ends no longer loops: the Fix? and dump questions take it as
+ *           "no" and say so, the pager stops paging, interactive mode quits.  The interactive W command reads its
+ *           address and its value as the hex its help says (it read decimal) and writes the bytes as typed.
  *           "no" and say so, the pager stops paging, interactive mode quits.
  *           of dh_create_file(), 80 and 50.
  * 18 Oct 26 Windows port - from Linux 81ca1a8 (18 Oct 26): - -F could not delete an index subfile in the file's own directory: delete_subfile() tested
@@ -155,6 +157,7 @@ void H_command(void);
 void L_command(char *id, int16_t id_len);
 void S_command(int32_t n);
 void W_command(char *cmnd);
+static int hex_digit(char c);
 void Z_command(void);
 /* rev 0.9.0 */
 int fix_file(char *fn);
@@ -555,8 +558,8 @@ int process_file() {
         emit("RECOVER    recover disk space\n");
         emit("Sn         select subfile\n");
         emit(
-            "Wn=x       write hex value (1, 2 or 4 bytes in file byte "
-            "order)\n");
+            "Wa=x       write hex value x (2, 4 or 8 digits: 1, 2 or 4 bytes, in the order typed) at hex address a\n");
+        emit("Wa=\"t\"     write the text t at hex address a\n");
         emit("Z          show statistic counters\n");
         emit("n          show window from given hex address\n");
       } else {
@@ -731,63 +734,52 @@ void S_command(int32_t n) {
 /* ======================================================================
    W_command()  -  Write data                                             */
 
+/* 18 Oct 26 dm - Wa=x and Wa="text".  The help text says the address and the value are hex, and the code read them
+   with "%d", decimal (a 64 bit change of the %lx that was there had made it so), then byte-swapped what it had read as if
+   it were hex.  A is a hex file offset, as the offsets H prints are; X is 2, 4 or 8 hex digits for 1, 2 or 4 bytes and
+   the bytes are written in the order they are typed, which is the order a dump of the file shows them, so no byte order
+   comes into it.  "Was" shows the bytes that were there in the same form.  Anything that is not a hex digit is a format
+   error, not a number cut short.                                                                                       */
+
 void W_command(char *cmnd) {
   u_int32_t w_addr;
-  u_int32_t w_data;
-  u_int32_t old_data;
+  u_char w_data[4];
+  u_char old_data[4];
   int16_t n;
   int16_t bytes;
+  int16_t i;
   char *p;
   char c;
-  /* Modified by Composer AI - 2026/06/10.
-     "%d" requires pointers to signed int, but w_addr/w_data are u_int32_t:
-     that is undefined behaviour, and it also allowed a negative address to
-     wrap to a huge unsigned value because the "w_addr < 0" guards below
-     could never fire. Parse into signed temporaries, reject negatives, then
-     assign to the unsigned working variables. */
-  int w_addr_in;
-  int w_data_in;
 
-  /* n = sscanf(cmnd, "%d=%d", &w_addr, &w_data); */ /* was %lx for both - 64bit fix -gwb*/
-  n = sscanf(cmnd, "%d=%d", &w_addr_in, &w_data_in);
-
-  if (n < 1)
+  if (sscanf(cmnd, "%x", &w_addr) != 1)
     goto w_format_error; /* Address component not present */
 
-  if (w_addr_in < 0) {
-    emit("Illegal address\n");
-    return;
-  }
-  w_addr = (u_int32_t)w_addr_in;
-  w_data = (n == 2) ? (u_int32_t)w_data_in : 0;
-  /* -------------------- */
+  if ((p = strchr(cmnd, '=')) == NULL)
+    goto w_format_error;
+  p++; /* The value */
 
-  if (n == 2) /* Hex assignment */
+  if ((*p != '"') && (*p != '\'')) /* Hex assignment */
   {
-    n = strlen(cmnd) - (strchr(cmnd, '=') - cmnd) - 1; /* Chars after '=' */
-    switch (n) {
-      case 2:
-        break;
-      case 4:
-        w_data = ((w_data & 0x0000FF00L) >> 8) | ((w_data & 0x000000FFL) << 8);
-        break;
-      case 8:
-        w_data = (w_data >> 24) | ((w_data & 0x00FF0000L) >> 8) | ((w_data & 0x0000FF00L) << 8) | ((w_data & 0x000000FFL) << 24);
-        break;
-      default:
-        emit("Illegal data length\n");
-        return;
+    n = strlen(p); /* Hex digits */
+    for (i = 0; i < n; i++) {
+      if (!isxdigit((u_char)p[i]))
+        goto w_format_error;
+    }
+    if (n == 0)
+      goto w_format_error;
+    if ((n != 2) && (n != 4) && (n != 8)) {
+      emit("Illegal data length\n");
+      return;
     }
 
     bytes = n >> 1; /* Convert to bytes */
+    for (i = 0; i < bytes; i++) {
+      w_data[i] = (u_char)((hex_digit(p[2 * i]) << 4) | hex_digit(p[2 * i + 1]));
+    }
 
-    /* Modified by Composer AI - 2026/06/10.
-       w_addr is unsigned so "w_addr < 0" was always false (negative input is
-       now rejected at parse time above). Perform the range check in 64-bit
-       arithmetic so it cannot wrap. */
-    /* if ((w_addr < 0) || (w_addr + bytes > filelength64(fu[subfile]))) { */
+    /* The address is unsigned, so the range check is done in 64 bit arithmetic and cannot wrap (Composer AI,
+       2026/06/10) */
     if ((int64_t)w_addr + bytes > filelength64(fu[subfile])) {
-    /* -------------------- */
       emit("Illegal address\n");
       return;
     }
@@ -797,42 +789,27 @@ void W_command(char *cmnd) {
       return;
     }
 
-    old_data = 0;
-    read(fu[subfile], &old_data, bytes);
-
-    switch (n) {
-      case 2:
-        emit("Was %02X\n", old_data);
-        break;
-      case 4:
-        old_data = ((old_data & 0x0000FF00L) >> 8) | ((old_data & 0x000000FFL) << 8);
-        emit("Was %04X\n", old_data);
-        break;
-      case 8:
-        old_data = (old_data >> 24) | ((old_data & 0x00FF0000L) >> 8) | ((old_data & 0x0000FF00L) << 8) | ((old_data & 0x000000FFL) << 24);
-        emit("Was %08X\n", old_data);
-        break;
+    if (read(fu[subfile], old_data, bytes) != bytes) {
+      emit("Read error\n");
+      return;
     }
+
+    emit("Was ");
+    for (i = 0; i < bytes; i++)
+      emit("%02X", (int)old_data[i]);
+    emit("\n");
 
     if (Seek(fu[subfile], w_addr, SEEK_SET) < 0) {
       emit("Seek error\n");
       return;
     }
 
-    write(fu[subfile], &w_data, bytes);
-
-    if (subfile == 0) {
-      if (!read_header()) {
-        emit("Error re-reading primary subfile header\n");
-      }
+    if (write(fu[subfile], w_data, bytes) != bytes) {
+      emit("Write error\n");
+      return;
     }
-  } else if ((n == 1) && ((p = strchr(cmnd, '=')) != NULL) && (((c = *(++p)) == '"') || (c == '\'')) && ((n = strlen(p)) >= 2) && (p[n - 1] == c)) {
-    /* Modified by Composer AI - 2026/06/10.
-       Same as above: drop the always-false unsigned "< 0" test and do the
-       range check in 64-bit arithmetic so it cannot wrap. */
-    /* if ((w_addr < 0) || (w_addr + n - 2 > filelength64(fu[subfile]))) { */
+  } else if (((c = *p) == '"' || c == '\'') && ((n = strlen(p)) >= 2) && (p[n - 1] == c)) {
     if ((int64_t)w_addr + n - 2 > filelength64(fu[subfile])) {
-    /* -------------------- */
       emit("Illegal address\n");
       return;
     }
@@ -842,14 +819,32 @@ void W_command(char *cmnd) {
       return;
     }
 
-    write(fu[subfile], p + 1, n - 2);
+    if (write(fu[subfile], p + 1, n - 2) != n - 2) {
+      emit("Write error\n");
+      return;
+    }
   } else
     goto w_format_error;
+
+  if (subfile == 0) {
+    if (!read_header()) {
+      emit("Error re-reading primary subfile header\n");
+    }
+  }
 
   return;
 
 w_format_error:
   emit("Format error in W command\n");
+}
+
+/* ======================================================================
+   hex_digit()  -  Value of a hexadecimal digit (the caller has checked it) */
+
+static int hex_digit(char c) {
+  if ((c >= '0') && (c <= '9'))
+    return c - '0';
+  return (toupper((u_char)c) - 'A') + 10;
 }
 
 /* ======================================================================
