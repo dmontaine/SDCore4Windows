@@ -142,6 +142,7 @@ click:
             if key<3> - w{'ax'} >= x and key<3> - w{'ax'} < x + cw<1, c> then hit = c ; exit
             x += cw<1, c> + 1
          next c
+         w{'clk'} = ''                              ;* a click on a heading is not the first half of a double click
          if hit then
             ccol = hit
             colsel = 1
