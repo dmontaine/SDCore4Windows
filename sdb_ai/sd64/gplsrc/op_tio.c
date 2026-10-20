@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux 1c2d0af (S.71), RELEASE_1.1 163: op_readpkt() and process_client_input() refuse a declared packet
+ *           length they cannot accept (apipkt.h) and stop when read_socket() says the connection has gone
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): end_attribute(): @(-6), @(-12), @(-14) and @(-59) use eblink, edim, erev and ebold when the terminfo entry has them
  * 15 Jun 24 mab remove or disable op_ttyset and op_ttyget
  * 31 Dec 23 SD launch - prior history suppressed
@@ -101,10 +103,16 @@
 #include "config.h"
 #include "options.h"
 #include "debug.h"
+#include "apipkt.h"
 
 #include <stdarg.h>
 #include <setjmp.h>
+#include <syslog.h>
 #include <time.h>
+
+#if API_PKT_MAX_STRING != MAX_STRING_SIZE
+#error apipkt.h and sddefs.h disagree about the largest string
+#endif
 
 Private bool displaying_footer = FALSE;
 Private bool error_displayed = FALSE;
@@ -3664,6 +3672,28 @@ void break_key() {
 }
 
 /* ======================================================================
+   api_before_login()  -  Has the API user not been admitted yet?
+
+   20 Oct 26 Windows port - S.71.  Linux says "root" (geteuid() == 0): its API server is root until the SCRAM proof is accepted.  Here
+   the process that reads the SCRAM messages is the LocalSystem front, and the session that serves the user after the proof is a
+   different process, started as that user with sd -H (api_preauth, kernel.h) by K$HANDOFF.  So the front is exactly the process
+   that is still before the login.                                                                                                */
+
+Private bool api_before_login() {
+  return is_sdApiSrvr && !api_preauth;
+}
+
+/* ======================================================================
+   api_packet_refused()  -  Note a declared length that was not accepted
+
+   The session is ended by the callers (an empty packet, a lost connection), so this only says why.  One line in the system log, as
+   every other API connection event: the length, and whether it was met before the user had logged in.                      */
+
+Private void api_packet_refused(int32_t declared) {
+  syslog(LOG_INFO, "API packet length %ld refused (%s login)", (long)declared, api_before_login() ? "before" : "after");
+}
+
+/* ======================================================================
    op_readpkt()  - Read SDClient data packet                              */
 
 void op_readpkt() {
@@ -3695,6 +3725,14 @@ void op_readpkt() {
   packet_bytes = swap4(packet_bytes);
 #endif
 
+  /* 20 Oct 26 Windows port - S.71 (Linux 1c2d0af): a length the client had no business sending ends the session (the empty string
+     below is what the API server's loop takes as a lost connection).  Before this the length was believed: 'garb' was 1,651,663,207
+     and the server read for it.                                                                                                  */
+  if (!api_packet_length_ok(packet_bytes, api_before_login())) {
+    api_packet_refused(packet_bytes);
+    goto exit_op_readpkt;
+  }
+
   /* Read remainder of packet into user string */
 
   packet_bytes -= 4; /* Remove length header from packet size */
@@ -3710,8 +3748,12 @@ void op_readpkt() {
     tail = str;
 
     n = min(chunk_bytes, packet_bytes);
-    if (!read_socket(str->data, n))
+    if (!read_socket(str->data, n)) {
+      /* The connection went part way through: what was read is not a request, and is not given to the program as one */
+      s_free(str_hdr);
+      str_hdr = NULL;
       goto exit_op_readpkt;
+    }
 
     str->bytes = n;
     str_hdr->string_len += n;
@@ -3868,6 +3910,14 @@ Private void process_client_input() {
 
   /* Read remainder of packet into user string */
 
+  /* 20 Oct 26 Windows port - S.71 (Linux 1c2d0af): as op_readpkt().  Here the session is ended by the kernel itself (K_TERMINATE, as
+     for a connection that has gone), because there is no empty packet for the program to read.                                  */
+  if (!api_packet_length_ok(packet_bytes, api_before_login())) {
+    api_packet_refused(packet_bytes);
+    k_exit_cause = K_TERMINATE;
+    return;
+  }
+
   packet_bytes -= IN_PKT_SIZE; /* Remaining bytes to read */
   while (packet_bytes > 0) {
     str = s_alloc(packet_bytes, &chunk_bytes);
@@ -3881,8 +3931,10 @@ Private void process_client_input() {
     tail = str;
 
     n = min(chunk_bytes, packet_bytes);
-    if (!read_socket(str->data, n))
-      break;
+    if (!read_socket(str->data, n)) {
+      s_free(str_hdr); /* the connection went part way through the packet */
+      return;
+    }
 
     str->bytes = (int16_t)n;
     str_hdr->string_len += n;

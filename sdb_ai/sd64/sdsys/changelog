@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+20 Oct 26  AN API CLIENT THAT HANGS UP AT THE WRONG MOMENT, OR SENDS A FALSE PACKET LENGTH, NO LONGER TIES UP THE SERVER PROCESS (FROM SD CORE FOR LINUX).
+
+             What        The process that answers one API connection read each request as a four-byte length followed by that many bytes.
+                        It believed the length, and it did not notice when the connection ended in the middle of a read. SD Core for Linux
+                        found that a client that closed at the wrong moment, or sent four bytes that read as a huge length, left that
+                        process using a whole processor and growing in memory until it was killed. The same code was here; what it does
+                        on Windows has not been measured. Now a connection that has ended ends the session, and a packet length below
+                        the 6-byte header, over 65,536 bytes before the client has logged in, or over the largest SD string (the limit
+                        the client library already uses) after, ends the session at once and leaves one line in the system log.
+                        CLEARINPUT no longer loops when the connection has gone.
+             Why it      No login is needed to send a packet, and the process that reads the login is the LocalSystem one.
+             matters
+             Does not    It does not change what a logged-in client may send: a record up to the largest string still goes through.
+
 20 Oct 26  THE FOLDER THAT HOLDS GROUP ACCOUNTS IS LOCKED LIKE THE ONE THAT HOLDS USER ACCOUNTS.
 
              Setup locked C:\ProgramData\SD\user_accounts so that other SD users cannot read or change an account's files outside SD, but
