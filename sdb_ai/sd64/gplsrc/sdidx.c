@@ -33,7 +33,9 @@
  *           could not find: both ended status 1 with no message (verify-carry-tools, I1).  A relative path is completed
  *           from the current directory in WINDOWS form (getcwd() gives /cygdrive/c/...), as an absolute one is stored
  *           as typed (V12, V13).  The test for a file open in SD ignores case (NTFS does; ...\Don\x and ...\don\x are one
- *           file), and make_path() splits on a backslash as well as a slash, so -m can create missing parents.
+ *           file) and compares the two paths as Windows spells them (sdsamepath.h: SD Core Solo's accounts are inside the
+ *           runtime's root, recorded root-relative, and another case does not match the root), and make_path() splits
+ *           on a backslash as well as a slash, so -m can create missing parents.
  * END-HISTORY
  *  1 Sep 26 Windows port - make_path() keeps a drive letter as the root
  *           instead of mkdir'ing it as a component (PRE_RELEASE 6)
@@ -71,6 +73,7 @@
 /* 13 Aug 26 Windows port - POSIX shared memory in place of System V */
 #include <sys/mman.h>
 #include <sys/cygwin.h> /* 19 Oct 26 Windows port - cygwin_conv_path(), for index_path_arg() */
+#include "sdsamepath.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -382,8 +385,10 @@ bool open_primary() {
       fptr = FPtr(fno);
       if (fptr->ref_ct != 0) {
         /* 19 Oct 26 Windows port - NTFS ignores case, so C:\ProgramData\SD\user_accounts\Don\x and ...\don\x are one file;
-           realpath() keeps the case it was given, and a case-sensitive test let sdidx run on a file SD had open. */
-        if (strcasecmp((char *)(fptr->pathname), data_path) == 0) {
+           realpath() keeps the case it was given, and a case-sensitive test let sdidx run on a file SD had open.  A
+           file inside the runtime's root (SD Core Solo's accounts) is recorded root-relative and a path in another
+           case does not match the root, so the two are compared as Windows spells them (sdsamepath.h). */
+        if (sd_same_file_path((char *)(fptr->pathname), data_path)) {
           printf("File is currently open within SD\n");
           goto exit_open_primary;
         }

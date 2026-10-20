@@ -42,7 +42,7 @@
  *           process_file was commented out??, sdfix didn't do anything.
  * 19 Oct 26 Windows port - file_open_in_sd() attaches SD's table with shm_open()/mmap(), as sdidx.c does; the carried
  *           shmget() is SysV shared memory, which this runtime does not have without cygserver, so the check never ran.
- *           It ignores case in the path, as NTFS does.
+ *           It ignores case in the path, as NTFS does, and compares the two paths as Windows spells them (sdsamepath.h).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -96,6 +96,7 @@
 #include <unistd.h>
 #include <sys/shm.h>
 #include <sys/mman.h>
+#include "sdsamepath.h"
 
 #define Seek(fu, offset, whence) lseek(fu, offset, whence)
 
@@ -486,8 +487,9 @@ bool file_open_in_sd() {
 
   for (fno = 1; fno <= sysseg->used_files; fno++) {
     fptr = FPtr(fno);
-    /* 19 Oct 26 Windows port - ignore case, as NTFS does (see sdidx.c open_primary()). */
-    if ((fptr->ref_ct != 0) && (strcasecmp((char *)(fptr->pathname), real) == 0)) {
+    /* 19 Oct 26 Windows port - ignore case, as NTFS does, and compare as Windows spells the paths (sdsamepath.h;
+       see sdidx.c open_primary()). */
+    if ((fptr->ref_ct != 0) && sd_same_file_path((char *)(fptr->pathname), real)) {
       in_use = TRUE;
       break;
     }
