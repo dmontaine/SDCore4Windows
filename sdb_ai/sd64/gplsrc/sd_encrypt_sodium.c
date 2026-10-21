@@ -295,6 +295,16 @@ void sd_xf_key(void) {
   process.status = 0;
   keyb64[0] = '\0';
 
+  /* sodium_malloc() asserts (and kills the process) if libsodium has not been started: its page size and canary are set by
+     sodium_init().  SDKEY() as the FIRST libsodium call of a process used to do exactly that; the suite's rows ran after a
+     SDSALT() in the same session and so never saw it. */
+  if (sodium_init() == -1) {
+    k_dismiss();
+    k_dismiss();
+    xf_put_status(SD_SodInit_Err);
+    return;
+  }
+
   k_get_string(pw_d);
   k_get_string(salt_d);
   pwlen = (pw_d->data.str.saddr == NULL) ? 0 : pw_d->data.str.saddr->string_len;
