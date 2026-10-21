@@ -8,6 +8,7 @@
 # ways and expects each to be caught by exactly the check that owns it.
 #
 # START-HISTORY:
+# 18 Oct 26 dm  Rows may write no arguments (SDSALT, SDRANDKEY: encryption layer 2); check 4b says so, and two more mutants.
 # 15 Oct 26 dm  Written when the OP.XFUN functions were added: bcomp's list of intrinsic names and its list of handlers
 #               are two parallel lists that nothing ties together except order, and `locate ... by 'AL'` needs the names
 #               sorted.  A name put in one list and not the other, or in the wrong place, gives the next function the
@@ -111,8 +112,11 @@ def checks(d):
     rows = d["rows"]
     res.append(("4. xfun.rows has a row for every OP.XFUN name and for no other",
                 set(rows) == xnames, "only one side: %s" % sorted(set(rows) ^ xnames)))
-    bad = [n for n, (sel, argc, opt, mv) in rows.items() if not (1 <= argc <= 3) or (mv and not 1 <= argc <= 3)]
-    res.append(("4b. every row writes one to three arguments", not bad and len(rows) > 0, "rows: %s" % bad))
+    # 18 Oct 26: SDSALT() and SDRANDKEY() write none; in.xfun skips get.args for a row whose count is 0, and a multivalued
+    # function (a wrapper over the elements of an array) needs at least one
+    bad = [n for n, (sel, argc, opt, mv) in rows.items() if not (0 <= argc <= 3) or (mv and not 1 <= argc <= 3) or (argc == 0 and opt != "")]
+    res.append(("4b. every row writes none to three arguments (none only when single valued and with no optional last argument)",
+                not bad and len(rows) > 0, "rows: %s" % bad))
     sels = {sel for sel, _a, _o, _m in rows.values()}
     # XF_CASING (a statement) and XF_ARGPRESENT (ARG.PRESENT's own handler) are loaded by code of their own, not by a row
     own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27, "XF_GET": 30,
@@ -148,6 +152,8 @@ def selftest():
         ("a row left out", b.replace('"IS.MARK,9,1,,0":@fm:', ""), c, "4."),
         ("a function number changed", b.replace('"RIGHT,12,2,,0"', '"RIGHT,19,2,,0"'), c, "5."),
         ("a case removed from op_xfun()", b, c.replace("    case XF_NS:\n      x_nv(TRUE);\n      break;\n", ""), "5b."),
+        ("a no-argument row given four arguments", b.replace('"SDSALT,37,0,,0"', '"SDSALT,37,4,,0"'), c, "4b."),
+        ("SDKEY's case removed from op_xfun()", b, c.replace("    case XF_SDKEY:\n      sd_xf_key();\n      break;\n", ""), "5b."),
         ("ARG.PRESENT loading another number", b.replace("n = 20 ; gosub emit.numeric.load      ;* XF_ARGPRESENT", "n = 21 ; gosub emit.numeric.load      ;* XF_ARGPRESENT"), c, "5a."),
     ]
     ok_all = True

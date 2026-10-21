@@ -9,6 +9,7 @@ Declare Function SDChange Lib "SDClient.dll" (ByVal Str As String, ByVal OldStr 
 Declare Function SDConnect Lib "SDClient.dll" (ByVal Host As String, ByVal Port As Integer, ByVal UserName As String, ByVal Password As String, ByVal Account As String) As Boolean
 Declare Function SDConnectLocal Lib "SDClient.dll" (ByVal Account As String) As Boolean
 Declare Function SDConnected Lib "SDClient.dll" () As Boolean
+Declare Function SDChecksum Lib "SDClient.dll" (ByVal Data As String) As Long
 Declare Sub SDClearSelect Lib "SDClient.dll" (ByVal ListNo As Integer)
 Declare Sub SDClose Lib "SDClient.dll" (ByVal FileNo As Integer)
 Declare Function SDDcount Lib "SDClient.dll" (ByVal Src As String, ByVal Delim As String) As Long

@@ -18,6 +18,12 @@
  *
  * 
  * START-HISTORY:
+ * 18 Oct 26 dm  Encryption layer 2: SDSALT(), SDKEY(passphrase, salt) and SDRANDKEY() for every program (sd_xf_salt, sd_xf_key,
+ *               sd_xf_randkey, called from op_xfun()).  sd_derive_key() is the one place the key is made: argon2id with the limits
+ *               written out (2 passes, 64 MiB), a salt that must decode to exactly 16 bytes (a short one used to leave the rest of
+ *               the buffer as it was), the binary key and salt wiped.  sd_KeyFromPW() calls it, so SDEXT SD_KEYFROMPW gives the same
+ *               key as before for a good salt.  sd_decrypt: the plaintext buffer allocated before sdme_decrypt() was lost when it
+ *               was replaced (a leak per call), now freed; the decoded key is wiped.
  * 30 Jul 2024 MAB add SD_ENCRYPT_SODIUM.C
  * START-DESCRIPTION:
  * 
@@ -107,6 +113,11 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 /* -------------------- */
 
 char* sd_KeyFromPW(char* mypassword, char* mysalt);
+int sd_derive_key(const char* pw, size_t pwlen, const char* mysalt, size_t saltlen, char* keyb64);
+int sd_randkey(char* keyb64);
+void sd_xf_salt(void);
+void sd_xf_key(void);
+void sd_xf_randkey(void);
 
 void sd_encrypt(int encode_type, char *key, char *data);
 void sd_decrypt(int encode_type, char *key, char *data);
@@ -133,7 +144,13 @@ char* sd_salt(){
 
   unsigned char salt[crypto_pwhash_SALTBYTES];
   char* saltb64;    /* returned salt buffer */
-  
+
+  /* 18 Oct 26 dm - SDSALT() reaches this without SDEXT, so libsodium is started here as well */
+  if (sodium_init() == -1) {
+    process.status = SD_SodInit_Err;
+    return NULL;
+  }
+
   /* random bytes provides us a random salt */
   randombytes_buf(salt, sizeof salt);
 
@@ -153,18 +170,59 @@ char* sd_salt(){
 
 
 
+/* 18 Oct 26 dm - encryption layer 2.  The argon2id limits are part of the format of every key SDKEY() has made: change
+   either number and a passphrase and salt that gave one key give another, and everything encrypted under the first is
+   lost.  They are written out here, and not left to libsodium's INTERACTIVE macros, so that a libsodium that moved its
+   macros could not move them; the asserts say so at build time.  The docs give both numbers. */
+#define SD_PWHASH_OPSLIMIT 2ULL         /* argon2id passes */
+#define SD_PWHASH_MEMLIMIT 67108864ULL  /* 64 MiB */
+#define SD_PASSPHRASE_MAX  65536        /* a longer passphrase is refused (SD_Pass_Err) */
+_Static_assert(SD_PWHASH_OPSLIMIT == crypto_pwhash_OPSLIMIT_INTERACTIVE, "argon2id passes changed");
+_Static_assert(SD_PWHASH_MEMLIMIT == crypto_pwhash_MEMLIMIT_INTERACTIVE, "argon2id memory changed");
+_Static_assert(crypto_pwhash_SALTBYTES == 16, "the salt is 16 bytes");
+
+#define KEY_LEN crypto_secretbox_KEYBYTES
+#define KEY_B64_SZ (((KEY_LEN + 2) / 3) * 4 + 1)   /* base64 characters of a key and the terminator: 45 */
+
+/* Derive a key from a passphrase of pwlen bytes and a base64 salt of saltlen characters.  keyb64 must hold KEY_B64_SZ
+   bytes.  Returns 0 and the key as base64, or an SD_ error number and an empty keyb64.  The binary key is wiped here;
+   the caller wipes keyb64 and its copy of the passphrase.  NOT a BASIC-visible routine: SDKEY() and SD_KEYFROMPW call it. */
+int sd_derive_key(const char* pw, size_t pwlen, const char* mysalt, size_t saltlen, char* keyb64) {
+  unsigned char salt[crypto_pwhash_SALTBYTES];
+  unsigned char key[KEY_LEN];
+  size_t bin_len = 0;
+  int rc = 0;
+
+  keyb64[0] = '\0';
+  if (pwlen == 0 || pwlen > SD_PASSPHRASE_MAX)
+    return SD_Pass_Err;
+  if (sodium_init() == -1)
+    return SD_SodInit_Err;
+
+  /* the salt must be base64 for exactly the salt length: a short one used to leave the rest of the buffer as it was, which
+     made the key depend on whatever was on the stack */
+  if (sodium_base642bin(salt, sizeof salt, mysalt, saltlen, NULL, &bin_len, NULL, sodium_base64_VARIANT_ORIGINAL) != 0 ||
+      bin_len != sizeof salt)
+    return SD_Salt_Err;
+
+  if (crypto_pwhash(key, sizeof key, pw, pwlen, salt, SD_PWHASH_OPSLIMIT, SD_PWHASH_MEMLIMIT, crypto_pwhash_ALG_ARGON2ID13) != 0) {
+    rc = SD_Mem_Err;   /* the only failure crypto_pwhash has for good arguments is no memory for its 64 MiB */
+  } else {
+    sodium_bin2base64(keyb64, KEY_B64_SZ, key, KEY_LEN, sodium_base64_VARIANT_ORIGINAL);
+  }
+  sodium_memzero(key, sizeof key);
+  sodium_memzero(salt, sizeof salt);
+  return rc;
+}
+
 /* Create key from password and base64 encoded salt */
 /* returns b64 encoded (must be freed by caller!!!) */
 char* sd_KeyFromPW(char* mypassword, char* mysalt) {
 
-  #define KEY_LEN crypto_secretbox_KEYBYTES
-
-  unsigned char salt[crypto_pwhash_SALTBYTES];
-  unsigned char key[KEY_LEN];
   char* keyb64;    /* returned key buffer */
-  size_t bin_len;
+  int rc;
 
-  process.status = 0;  
+  process.status = 0;
 
   /* all important libsodium initialization */
   if (sodium_init() == -1) {
@@ -173,33 +231,114 @@ char* sd_KeyFromPW(char* mypassword, char* mysalt) {
   }
 
   /* create buffer for returned key */
-  keyb64 = sodium_malloc(sodium_base64_ENCODED_LEN(KEY_LEN, sodium_base64_VARIANT_ORIGINAL));     /* encoded key buffer */
+  keyb64 = sodium_malloc(KEY_B64_SZ);     /* encoded key buffer */
   if (keyb64 == NULL){
     process.status = SD_Mem_Err;
     return NULL;
   }
 
-  /* convert passed encoded salt to bin */
-  if (sodium_base642bin(salt, crypto_pwhash_SALTBYTES, mysalt, strlen(mysalt), NULL, &bin_len, NULL,sodium_base64_VARIANT_ORIGINAL) != 0) {
-  /* decode failed */
-    process.status = SD_Decode_Err;
-    keyb64[0] = '\0';
-    return keyb64;  
+  /* 18 Oct 26 dm - the work is sd_derive_key(), shared with SDKEY(); a failure is now an empty string AND a status for every
+     cause (a failed crypto_pwhash used to return the empty string with the status still 0) */
+  rc = sd_derive_key(mypassword, strlen(mypassword), mysalt, strlen(mysalt), keyb64);
+  if (rc != 0)
+    process.status = rc;
+  return keyb64;
+}
+
+/* 18 Oct 26 dm - a random 256 bit key as base64 (SDRANDKEY()); the caller wipes keyb64 (KEY_B64_SZ bytes) */
+int sd_randkey(char* keyb64) {
+  unsigned char key[KEY_LEN];
+
+  keyb64[0] = '\0';
+  if (sodium_init() == -1)
+    return SD_SodInit_Err;
+  randombytes_buf(key, sizeof key);
+  sodium_bin2base64(keyb64, KEY_B64_SZ, key, KEY_LEN, sodium_base64_VARIANT_ORIGINAL);
+  sodium_memzero(key, sizeof key);
+  return 0;
+}
+
+/* ====================================================================== */
+/* 18 Oct 26 dm - the three public BASIC functions, run from op_xfun() with the function number already taken off the stack.
+   Each leaves one string on the stack: the result, or the null string with STATUS() set.  Nothing here writes a key, a
+   passphrase or a salt anywhere but the stack: no audit line, no errlog, no $COMO. */
+
+Private void xf_put_status(int rc) {
+  sdme_err_rsp(rc);   /* a null string, and process.status = rc */
+}
+
+/* SDSALT(): a fresh random salt, base64 for 16 bytes (24 characters) */
+void sd_xf_salt(void) {
+  char* s;
+
+  process.status = 0;
+  s = sd_salt();
+  if (s == NULL) {
+    xf_put_status(process.status != 0 ? process.status : SD_Mem_Err);
+    return;
+  }
+  k_put_c_string(s, e_stack);
+  e_stack++;
+  free(s);
+}
+
+/* SDKEY(passphrase, salt): a 44 character base64 key.  Stack: passphrase, salt (top). */
+void sd_xf_key(void) {
+  DESCRIPTOR* salt_d = e_stack - 1;
+  DESCRIPTOR* pw_d = e_stack - 2;
+  char salt[96];
+  char* pw = NULL;
+  char keyb64[KEY_B64_SZ];
+  int32_t pwlen, saltlen;
+  int rc;
+
+  process.status = 0;
+  keyb64[0] = '\0';
+
+  k_get_string(pw_d);
+  k_get_string(salt_d);
+  pwlen = (pw_d->data.str.saddr == NULL) ? 0 : pw_d->data.str.saddr->string_len;
+  saltlen = (salt_d->data.str.saddr == NULL) ? 0 : salt_d->data.str.saddr->string_len;
+
+  if (pwlen < 1 || pwlen > SD_PASSPHRASE_MAX) {
+    rc = SD_Pass_Err;
+  } else if (saltlen < 1 || saltlen >= (int32_t)sizeof salt) {
+    rc = SD_Salt_Err;
+  } else if ((pw = sodium_malloc((size_t)pwlen + 1)) == NULL) {
+    rc = SD_Mem_Err;
+  } else {
+    (void)k_get_c_string(salt_d, salt, saltlen);
+    (void)k_get_c_string(pw_d, pw, pwlen);
+    rc = sd_derive_key(pw, (size_t)pwlen, salt, (size_t)saltlen, keyb64);
   }
 
-  /* create the key from passed password and salt */
-  if (crypto_pwhash
-      (key, sizeof key, mypassword, strlen(mypassword), salt,
-      crypto_pwhash_OPSLIMIT_INTERACTIVE, crypto_pwhash_MEMLIMIT_INTERACTIVE,
-      crypto_pwhash_ALG_DEFAULT) != 0) {
-      /* pwhash failed,                                    */  
-      /* usual cause is out of memory, return empty string */
-      keyb64[0] = '\0';
+  if (pw != NULL)
+    sodium_free(pw);   /* zeroes before it frees */
+  k_dismiss();         /* the salt */
+  k_dismiss();         /* the passphrase */
+  if (rc != 0) {
+    xf_put_status(rc);
   } else {
-      sodium_bin2base64(keyb64, sodium_base64_ENCODED_LEN(KEY_LEN, sodium_base64_VARIANT_ORIGINAL), key, KEY_LEN,sodium_base64_VARIANT_ORIGINAL);
-    
+    k_put_c_string(keyb64, e_stack);
+    e_stack++;
   }
-  return keyb64;
+  sodium_memzero(keyb64, sizeof keyb64);
+}
+
+/* SDRANDKEY(): a random 256 bit key as 44 base64 characters */
+void sd_xf_randkey(void) {
+  char keyb64[KEY_B64_SZ];
+  int rc;
+
+  process.status = 0;
+  rc = sd_randkey(keyb64);
+  if (rc != 0) {
+    xf_put_status(rc);
+  } else {
+    k_put_c_string(keyb64, e_stack);
+    e_stack++;
+  }
+  sodium_memzero(keyb64, sizeof keyb64);
 }
 
 /* ====================================================================== */
@@ -621,7 +760,8 @@ void sd_encrypt(int encode_type, char *key, char *data) {
       sdme_err_rsp(SD_EDType_Err);
 
   }
-return;      
+  sodium_memzero(dckey, sizeof dckey);   /* 18 Oct 26 dm */
+  return;
 }
 
 /* ====================================================================== */
@@ -698,14 +838,8 @@ void sd_decrypt(int encode_type, char *key, char *data) {
         break;
       }
 
-      /* need a buffer to hold the decrypted text */
-      plaintext_buf = sodium_malloc(bin_len);
-      if (plaintext_buf == NULL){
-        sodium_free(cipher_buf);
-        cipher_buf = NULL;
-        sdme_err_rsp(SD_Mem_Err);
-        break;  
-      }
+      /* 18 Oct 26 dm - sdme_decrypt() allocates the plaintext buffer; the one allocated here was replaced by it and lost */
+      plaintext_buf = NULL;
 
       /* decrypt the encrypted byte buffer */
 
@@ -775,14 +909,8 @@ void sd_decrypt(int encode_type, char *key, char *data) {
         break;
       }
 
-      /* need a buffer to hold the decrypted text */
-      plaintext_buf = sodium_malloc(bin_len);
-      if (plaintext_buf == NULL){
-        sodium_free(cipher_buf);
-        cipher_buf = NULL;
-        sdme_err_rsp(SD_Mem_Err);
-        break;  
-      }
+      /* 18 Oct 26 dm - sdme_decrypt() allocates the plaintext buffer; the one allocated here was replaced by it and lost */
+      plaintext_buf = NULL;
 
       /* decrypt the encrypted byte buffer */
 
@@ -811,6 +939,7 @@ void sd_decrypt(int encode_type, char *key, char *data) {
       sdme_err_rsp(SD_EDType_Err);
 
   }
+  sodium_memzero(dckey, sizeof dckey);   /* 18 Oct 26 dm */
   return;
 }
 
@@ -884,6 +1013,10 @@ int sdme_decrypt(unsigned char *cipher_in, int cipher_in_len, unsigned char *key
   unsigned char *plaintext_out;
   unsigned int plaintext_len;
   unsigned int cipher_len;
+
+  /* 18 Oct 26 dm - shorter than a nonce and a tag cannot be a message, and the unsigned subtractions below would wrap */
+  if (cipher_in_len < (int)(crypto_secretbox_NONCEBYTES + crypto_secretbox_MACBYTES))
+    return SD_Decrypt_Err;
 
   /* Remeber SDMEE_Encrypt appends the nonce to the end of the cipher output, do not what to add to decrypted output */
   cipher_len = cipher_in_len - crypto_secretbox_NONCEBYTES;

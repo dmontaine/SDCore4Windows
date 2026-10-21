@@ -19,6 +19,8 @@
  * along with this library.  If not, see <https://www.gnu.org/licenses/>.
  *
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): SDChecksum(): the QMChecksum equivalent, evaluated on the client with the
+ *           algorithm of BASIC's CHECKSUM().
  * 31 Dec 23 SD launch - prior history suppressed
  * 01 Oct 26 Windows port - a port of -1 now means 4247, the full product's
  *           fixed API port (it was 4243)
@@ -133,6 +135,7 @@
  * String Handling
  * ===============
  * SDChange()
+ * SDChecksum()
  * SDDcount()
  * SDField()
  * SDMatch()
@@ -890,6 +893,28 @@ return_unchanged:
     new_str = (char*)malloc(src_len + 1);
     memcpy(new_str, src, src_len + 1);
     return new_str;
+}
+
+/* ======================================================================
+   SDChecksum()  -  The checksum of a string (the QMChecksum equivalent)
+
+   Evaluated here, on the client; it needs no connection.  It is the algorithm of SD BASIC's CHECKSUM() with its default
+   mode (op_str5.c): rotate the 32 bit sum left one bit and exclusive-or the next character into it, a character being
+   a SIGNED byte as the server reads it, so a byte of 128 or more is sign-extended and the value is the same one CHECKSUM()
+   gives for the same data.  A null string is 0.  It is a check for accidental damage, not a hash for security: the
+   message digests (MD5, SHA) are the server's BASIC function DIGEST().                                             */
+
+int DLLEntry SDChecksum(char* data) {
+  uint32_t sum = 0;
+  const signed char* p;
+
+  initialise_client();
+
+  if (data != NULL) {
+    for (p = (const signed char*)data; *p != '\0'; p++)
+      sum = (((sum & 0x80000000U) != 0) | (sum << 1)) ^ (uint32_t)(int32_t)*p;
+  }
+  return (int32_t)sum;
 }
 
 /* ======================================================================

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): XF_SDSALT, XF_SDKEY, XF_SDRANDKEY: encryption layer 2, for any program
+ *               (sd_encrypt_sodium.c).  The first XFUN functions that take no arguments (bcomp's in.xfun skips get.args for a row that
+ *               writes none).
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): XF_GET, the GET statement (QM4 Fixes item 583); XF_OSPATH 31 (OSPATH for
  *               any program, behind the S.63 gate) and XF_FCONTROL 29 (400500c) are NOT carried.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
@@ -48,6 +51,10 @@
  *    XF_SIGNAL      SIGNAL(user.no)           raise the application signal in a process; SYSTEM(1062) reads and clears it
  *    XF_DIGEST      DIGEST(string, is.file, mode)   MD5 SHA1 SHA256 SHA384 SHA512 of a string or of an OS file, as hex
  *    XF_SELSOCKET   SELECT.SOCKET(skt.array, timeout)  wait for events on the sockets of a matrix; R, W and E letters per element
+ *    XF_SDSALT      SDSALT()                  a fresh random salt: base64 for 16 bytes (24 characters)
+ *    XF_SDKEY       SDKEY(passphrase, salt)   a 44 character base64 key by argon2id (2 passes, 64 MiB; fixed, they are part of the
+ *                   key's format).  A null string with STATUS() 10206 for a bad salt, 10207 for an empty or over-long passphrase
+ *    XF_SDRANDKEY   SDRANDKEY()               a random 256 bit key, 44 base64 characters
  *
  * END-DESCRIPTION
  *
@@ -100,7 +107,13 @@
 #define XF_SORTCLEAR 34 /* SORTCLEAR sortvar (QM4 Fixes item 371) */
 #define XF_SORTDATA 35  /* SORTDATA(sortvar {, max.items}) (QM4 Fixes item 371) */
 #define XF_SORTNEXT 36  /* SORTNEXT(sortvar {, {MAT} keys}) (QM4 Fixes item 371) */
+#define XF_SDSALT 37    /* SDSALT(): a fresh random salt (sd_xf_salt in sd_encrypt_sodium.c; encryption layer 2) */
+#define XF_SDKEY 38     /* SDKEY(passphrase, salt): a key by argon2id (sd_xf_key) */
+#define XF_SDRANDKEY 39 /* SDRANDKEY(): a random 256 bit key (sd_xf_randkey) */
 
+void sd_xf_salt(void);
+void sd_xf_key(void);
+void sd_xf_randkey(void);
 void op_get_device(void);
 void x_sort(void);
 void x_sortadd(void);
@@ -267,6 +280,15 @@ void op_xfun() {
       break;
     case XF_SORTNEXT:
       x_sortnext();
+      break;
+    case XF_SDSALT:
+      sd_xf_salt();
+      break;
+    case XF_SDKEY:
+      sd_xf_key();
+      break;
+    case XF_SDRANDKEY:
+      sd_xf_randkey();
       break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */

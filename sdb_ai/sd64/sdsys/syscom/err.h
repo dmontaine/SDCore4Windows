@@ -289,6 +289,9 @@ $define SD$Encode.Err  -10202  ;* error in call to bin2hex or bin2base64
 $define SD$Decode.Err  -10203  ;* error in call to hex2bin or base642bin
 $define SD$KeyLen.Err  -10204  ;* key length error
 $define SD$EDType.Err  -10205  ;* Encode Decode type error
+* 18 Oct 26 dm - encryption layer 2 (SDKEY): 10205 was already taken by SD_EDType_Err, so the new codes follow it
+$define SD$Salt.Err    -10206  ;* the salt is not base64 for exactly 16 bytes
+$define SD$Pass.Err    -10207  ;* the passphrase is empty or longer than 65536 bytes
 
 * SDEXT error codes
 $define SD$EXT.KEY.ERR -10300  ;* unknown key

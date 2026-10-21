@@ -16,6 +16,7 @@
 
    #define SDCall _SDCall
    #define SDChange _SDChange
+   #define SDChecksum _SDChecksum
    #define SDClearSelect _SDClearSelect
    #define SDClose _SDClose
    #define SDConnect _SDConnect
@@ -67,6 +68,7 @@
 
 DLLEntry void SDCall(char * subrname, short int argc, ...);
 DLLEntry char * SDChange(char * src, char * old_string, char * new_string, int occurrences, int start);
+DLLEntry int SDChecksum(char * data);
 DLLEntry void SDClearSelect(int listno);
 DLLEntry void SDClose(int fno);
 DLLEntry int SDConnect(char * host, int port, char * username, char * password, char * account);

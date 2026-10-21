@@ -305,6 +305,9 @@
 #define SD_Decode_Err  -10203  /* error in call to hex2bin or base642bin */
 #define SD_KeyLen_Err  -10204  /* key length error */
 #define SD_EDType_Err  -10205  /* Encode Decode type error */
+/* 18 Oct 26 dm - encryption layer 2 (SDKEY): 10205 was already taken by SD_EDType_Err, so the new codes follow it */
+#define SD_Salt_Err    -10206  /* the salt is not base64 for exactly 16 bytes */
+#define SD_Pass_Err    -10207  /* the passphrase is empty or longer than 65536 bytes */
 
 /* SDEXT error codes */
 #define SD_EXT_KEY_ERR -10300  /* unknown key */

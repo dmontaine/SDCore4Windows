@@ -29,6 +29,7 @@ SD_API void SDCall(char *subrname, int16_t argc, ...);
 SD_API void SDCallx(char *subrname, int16_t argc, ...);
 SD_API char *SDGetArg(int arg_number);
 SD_API char *SDChange(char *src, char *old_string, char *new_string, int occurrences, int start);
+SD_API int SDChecksum(char *data);
 SD_API void SDClearSelect(int listno);
 SD_API void SDClose(int fno);
 SD_API int SDConnect(char *host, int port, char *username, char *password, char *account);

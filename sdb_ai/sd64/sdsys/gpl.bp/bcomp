@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): SDSALT(), SDKEY(passphrase, salt) and SDRANDKEY() (encryption layer 2): XFUN rows 37-39,
+*               the first to write no arguments (in.xfun skips get.args for a row whose count is 0).
 * 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): The SCREEN statement (screen library, sd64/screenlib-design.md): SCREEN verb {values}
 *               {KEYWORD values} {RETURNING var} {THEN / ELSE}, compiled by ST.SCREEN from the
 *               SCREEN.VERBS table into a CALL of a catalogued library subroutine (no opcode).
@@ -775,6 +777,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SDDECRYPT"       ; intrinsic.opcodes<-1> = OP.DECRYPT
    intrinsics<-1> = "SDENCRYPT"       ; intrinsic.opcodes<-1> = OP.ENCRYPT
    intrinsics<-1> = "SDIV"            ; intrinsic.opcodes<-1> = OP.SDIV
+   intrinsics<-1> = "SDKEY"           ; intrinsic.opcodes<-1> = OP.XFUN      ;* 18 Oct 26 dm - encryption layer 2
+   intrinsics<-1> = "SDRANDKEY"       ; intrinsic.opcodes<-1> = OP.XFUN
+   intrinsics<-1> = "SDSALT"          ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "SELECT.SOCKET"   ; intrinsic.opcodes<-1> = OP.XFUN      ;* 15 Oct 26 dm - QM4 gaps Q-5
    intrinsics<-1> = "SELECTINFO"      ; intrinsic.opcodes<-1> = OP.SLCTINFO
    intrinsics<-1> = "SENTENCE"        ; intrinsic.opcodes<-1> = OP.NULL
@@ -4467,6 +4472,9 @@ end
                       in.three,       ;* SDDECRYPT
                       in.three,       ;* SDENCRYPT
                       in.two,         ;* SDIV
+                      in.xfun,        ;* SDKEY
+                      in.xfun,        ;* SDRANDKEY
+                      in.xfun,        ;* SDSALT
                       in.select.socket, ;* SELECT.SOCKET
                       in.two,         ;* SELECTINFO
                       in.sentence,    ;* SENTENCE
@@ -4552,7 +4560,8 @@ in.xfun:
             * An argument can be a call of one of these functions, which changes XF.I, so the row is kept on a stack
             * while the arguments are read
             ins xf.i before xfun.stack<1>
-            arg.count = xfun.argc<xf.i> ; gosub get.args
+            arg.count = xfun.argc<xf.i>
+            if arg.count then gosub get.args   ;* 18 Oct 26 dm - SDSALT() and SDRANDKEY() write none (get.args reads at least one)
             xf.i = xfun.stack<1>
             if xfun.opt<xf.i> # '' then          ;* an optional last argument
                if look.ahead.token = TKN.COMMA then
@@ -4584,6 +4593,7 @@ xfun.table.load:
             xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"
             xfun.rows := @fm:"DIGEST,26,3,,0"   ;* 15 Oct 26 dm - QM4 gaps Q-13
             xfun.rows := @fm:"SWAPMARKS,28,1,,0" ;* 15 Oct 26 dm - QM4 gaps Q-1, sheet 238 (27 is SELECT.SOCKET, which has its own handler)
+            xfun.rows := @fm:"SDSALT,37,0,,0":@fm:"SDKEY,38,2,,0":@fm:"SDRANDKEY,39,0,,0"   ;* 18 Oct 26 dm - encryption layer 2
             for xf.j = 1 to dcount(xfun.rows, @fm)
                xf.row = xfun.rows<xf.j>
                xfun.names<xf.j> = field(xf.row, ',', 1)

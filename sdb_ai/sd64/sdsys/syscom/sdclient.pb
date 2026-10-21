@@ -42,6 +42,7 @@ Declare SDCall18(Subrname.s, *Arg1, *Arg2, *Arg3, *Arg4, *Arg5, *Arg6, *Arg7, *A
 Declare SDCall19(Subrname.s, *Arg1, *Arg2, *Arg3, *Arg4, *Arg5, *Arg6, *Arg7, *Arg8, *Arg9, *Arg10, *Arg11, *Arg12, *Arg13, *Arg14, *Arg15, *Arg16, *Arg17, *Arg18, *Arg19)
 Declare SDCall20(Subrname.s, *Arg1, *Arg2, *Arg3, *Arg4, *Arg5, *Arg6, *Arg7, *Arg8, *Arg9, *Arg10, *Arg11, *Arg12, *Arg13, *Arg14, *Arg15, *Arg16, *Arg17, *Arg18, *Arg19, *Arg20)
 Declare.s SDChange(Src.s, Old.s, New.s, Occ.l, Start.l)
+Declare.l SDChecksum(Data.s)
 Declare SDClearSelect(ListNo.l)
 Declare SDClose(Fileno.l)
 Declare SDClose(Fileno.l)
@@ -258,6 +259,13 @@ Procedure.s SDChange(Src.s, Old.s, New.s, Occ.l, Start.l)
       CallCFunction(SDLib, "SDFree", *String)
    EndIf
    ProcedureReturn String$
+EndProcedure
+
+
+;===== SDChecksum
+Procedure.l SDChecksum(Data.s)
+   OpenSDClientLibrary()
+   ProcedureReturn CallCFunction(SDLib, "SDChecksum", Data)
 EndProcedure
 
 

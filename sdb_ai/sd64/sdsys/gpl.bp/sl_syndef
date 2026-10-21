@@ -99,7 +99,7 @@ rules.sd.basic:
    r<-1> = 'words type minimum mod mods muls neg negs nes not nots num nums object objinfo oconv oconvs open.socket option ors'
    r<-1> = 'words type os.error ospath osrename outerjoin pconfig phantom printer.setting prompt pterm pwcrypt pwr quote quotes'
    r<-1> = 'words type raise rdiv readpkt read.socket recordlocked regex rem remove removef replace reuse rnd rtrans sadd save.screen'
-   r<-1> = 'words type scan scmp sddecrypt sdencrypt sdext sdiv sdpyobj selectinfo sentence seq server.addr set.port.params'
+   r<-1> = 'words type scan scmp sddecrypt sdencrypt sdext sdiv sdkey sdpyobj sdrandkey sdsalt selectinfo sentence seq server.addr set.port.params'
    r<-1> = 'words type set.socket.mode shift sin smul socket.info sortdata sortnext soundex soundexs space spaces splice sqrt squote'
    r<-1> = 'words type ssub status str strs subr subs substitute substrings sum summation swap swapcase sysmsg system tan terminfo'
    r<-1> = 'words type testlock time timedate trans trim trimb trimbs trimf trimfs trims trimw umask unassigned upcase vartype'
