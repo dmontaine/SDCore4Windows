@@ -1,5 +1,5 @@
 # restart-sd.ps1 - stop SD properly and start it again.
-# PRE_RELEASE_FIXES 78.
+# PRE_RELEASE_FIXES 78.  RELEASE_1.1 164: waits out StartPending/StopPending first.
 #
 #   powershell -ExecutionPolicy Bypass -File restart-sd.ps1 -Show     report state, change nothing
 #   powershell -ExecutionPolicy Bypass -File restart-sd.ps1           stop, wait, start, verify
@@ -75,6 +75,27 @@ if (-not $svc) {
 Report 'before'
 
 if ($Show) { exit 0 }
+
+# 20 Oct 26 RELEASE_1.1 164 - LET A PENDING SERVICE SETTLE BEFORE STOPPING IT.
+# verify-registersweep's restart on 20 Oct 18:14 began with the service in
+# StartPending, printed "SD did not come back up", and minutes later sdwind was
+# gone with nothing in sdsvc.log.  READ, NOT MEASURED: sc stop met a service
+# that was still starting, and the sd -stop fallback below then shut down the
+# daemon that service had just started.  Waiting for Running or Stopped makes
+# the stop act on a service that has finished what it was doing.
+$waitFrom = Get-Date
+$wasPending = ''
+$deadline = (Get-Date).AddSeconds(45)
+while ((Get-Date) -lt $deadline) {
+    $svc = Get-Service -Name $SvcName -ErrorAction SilentlyContinue
+    if (-not $svc -or ($svc.Status -ne 'StartPending' -and $svc.Status -ne 'StopPending')) { break }
+    if (-not $wasPending) { $wasPending = [string]$svc.Status }
+    Start-Sleep -Milliseconds 500
+}
+if ($wasPending) {
+    Say ("service was {0}; waited {1:N1} s for it to settle" -f $wasPending, ((Get-Date) - $waitFrom).TotalSeconds)
+    Report 'settled'
+}
 
 # ---------------------------------------------------------------------------
 # Stop
