@@ -74,6 +74,7 @@ op_tio
 pdump
 reccache
 sd_encrypt_sodium
+sd_keyring
 sd_scram
 sd_tls
 sd_tlssrv

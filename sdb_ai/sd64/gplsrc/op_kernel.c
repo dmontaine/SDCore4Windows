@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3: K_SET_ACCOUNT (the account the session is in, set at sign-on,
+ *               API sign-on and LOGTO either way) also empties the key ring of the XE conversion (kr_wipe, sd_keyring.c).  Linux does it in
+ *               its K_NET set; this port has no K_NET (S.65), and K_SET_ACCOUNT is called at the same four places.
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): K_PHANTOM_USER: PHANTOM USER n takes the user number n from those PHANTOMS keeps (QM4 gaps).
  * 31 Dec 23 SD launch - prior history suppressed
  * 28 Jul 24 mab remove op_cnctport() / CONNECT.PORT not supported
@@ -58,6 +61,8 @@
 #include "sd_tls.h"
 
 #include <syslog.h>
+
+void kr_wipe(void); /* sd_keyring.c: empty the key ring of the XE conversion */
 
 #include <sys/wait.h>
 /* 16 Aug 26 Windows port - cygwin_conv_path(), for K_WINPATH.  sysseg.c
@@ -693,8 +698,12 @@ void op_kernel() {
       {
         char aname[MAX_ACCOUNT_NAME_LEN + 1];
 
-        if ((process.program.flags & HDR_INTERNAL) && (k_get_c_string(descr, aname, MAX_ACCOUNT_NAME_LEN) >= 0))
+        if ((process.program.flags & HDR_INTERNAL) && (k_get_c_string(descr, aname, MAX_ACCOUNT_NAME_LEN) >= 0)) {
           strcpy((char *)(my_uptr->account), aname);
+          /* 20 Oct 26 Windows port - Linux 00a5888, encryption layer 3: the keys of the XE conversion belong to the account scope, and this
+             is called at its four ends (sign-on, API sign-on, LOGTO going in and coming back).  Linux wipes in its K_NET set instead. */
+          kr_wipe();
+        }
       }
       k_put_c_string((char *)(my_uptr->account), &result);
       break;

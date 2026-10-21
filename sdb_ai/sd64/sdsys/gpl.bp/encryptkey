@@ -1,0 +1,164 @@
+* ENCRYPTKEY
+* ENCRYPT.KEY verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Written: encryption layer 3 (the XE conversion; gplsrc/sd_keyring.c).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   ENCRYPT.KEY SET name salt {CONFIRM}
+*   ENCRYPT.KEY CLEAR {name}
+*   ENCRYPT.KEY LIST
+*
+* SET asks for a passphrase at a hidden prompt, makes the key from it and the salt (SDKEY(): argon2id), and puts the key in this
+* process's key ring under name, where the conversion XE;name finds it.  The passphrase is never an argument, so it is not in the
+* command stack, the history or $COMO.  The salt is the 24 character text SDSALT() makes; it is not a secret and the application keeps
+* it (a wrong salt, or a wrong passphrase, gives a different key and the values will not decrypt: a key id tells which).  CONFIRM asks
+* for the passphrase twice: use it the first time, when a typing mistake would encrypt data under a key nobody can make again.
+*
+* CLEAR takes the keys of a name out of the ring; with no name, all of them.  LIST shows the names and key ids, never a key.
+*
+* The ring belongs to this process.  LOGTO and the end of the session clear it, and a phantom starts without one.
+*
+* Any account may use it: it only affects the process that runs it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program encrypt.key
+$catalog $encryptkey
+
+$include err.h
+$include int$keys.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   sent = trim(@sentence)
+   n = dcount(sent, ' ')
+   action = downcase(field(sent, ' ', 2))
+   if action = '' then action = 'list'
+
+   begin case
+      case action = 'list'
+         if n > 2 then stop sysmsg(12705)
+         gosub list.keys
+
+      case action = 'clear'
+         if n > 3 then stop sysmsg(12705)
+         key.name = field(sent, ' ', 3)
+         if key.name = '' then key.name = '*'
+         call !keyclear(key.name, removed)
+         if removed = '' then gosub key.error
+         crt sysmsg(12711, removed)
+         void kernel(K$AUDIT, 'encrypt.key clear name=' : downcase(key.name))
+         @system.return.code = 0
+
+      case action = 'set'
+         key.name = field(sent, ' ', 3)
+         salt = field(sent, ' ', 4)
+         if key.name = '' or salt = '' then stop sysmsg(12705)
+         confirm = (downcase(field(sent, ' ', 5)) = 'confirm')
+         if n > 5 or (n = 5 and not(confirm)) then stop sysmsg(12705)
+         gosub set.key
+
+      case 1
+         stop sysmsg(12705)
+   end case
+
+   stop
+
+*** the passphrase from a hidden prompt, the key from it and the salt, the key into the ring ******************************
+set.key:
+   * the name and the salt are checked BEFORE the prompt: a refusal after it would have eaten the next line of a script or
+   * a stacked command as the passphrase
+   lname = downcase(key.name)
+   bad = (len(lname) > 31)
+   for i = 1 to len(lname)
+      if index('abcdefghijklmnopqrstuvwxyz0123456789.-_', lname[i, 1], 1) = 0 then bad = @true
+   next i
+   if bad then stop sysmsg(12715)
+   bad = (len(salt) # 24)
+   for i = 1 to len(salt)
+      if index('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=', salt[i, 1], 1) = 0 then bad = @true
+   next i
+   if bad then stop sysmsg(12714)
+
+   prompt ''
+   display sysmsg(12706) : ' ' :
+   input pw hidden
+   display
+   if pw = '' then stop sysmsg(12709)
+   if confirm then
+      display sysmsg(12707) : ' ' :
+      input pw2 hidden
+      display
+      if pw2 # pw then
+         pw = '' ; pw2 = ''
+         stop sysmsg(12708)
+      end
+      pw2 = ''
+   end
+
+   key = sdkey(pw, salt)
+   st = status()
+   pw = ''
+   if key = '' then
+      begin case
+         case st = 10206 ; stop sysmsg(12714)
+         case st = 10207 ; stop sysmsg(12709)
+         case 1 ; stop sysmsg(12717, st)
+      end case
+   end
+
+   call !keyset(key.name, key, key.id)
+   key = ''
+   if key.id = '' then gosub key.error
+   crt sysmsg(12710, downcase(key.name), key.id)
+   void kernel(K$AUDIT, 'encrypt.key set name=' : downcase(key.name))
+   @system.return.code = 0
+   return
+
+*** what !KEYSET and !KEYCLEAR left in STATUS() ******************************************************************************
+key.error:
+   st = status()
+   begin case
+      case st = 10213 ; stop sysmsg(12715)
+      case st = 10211 ; stop sysmsg(12716)
+      case 1 ; stop sysmsg(12717, st)
+   end case
+   return
+
+*** the ring: names and key ids ***********************************************************************************************
+list.keys:
+   call !keylist(klist)
+   if klist = '' then
+      crt sysmsg(12712)
+   end else
+      for k = 1 to dcount(klist, @fm)
+         line = sysmsg(12713, klist<k, 1>, klist<k, 2>)
+         if klist<k, 3> then line := sysmsg(12718)
+         crt line
+      next k
+   end
+   @system.return.code = 0
+   return
+
+end

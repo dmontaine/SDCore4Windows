@@ -1,0 +1,43 @@
+subroutine keyring_list(key_list)
+* !KEYLIST(list)  -  which keys this process's key ring holds
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Written: encryption layer 3 (the XE conversion; gplsrc/sd_keyring.c).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   CALL !KEYLIST(list)
+*
+* list  returned: one field for each key in the ring, oldest first, with three values: the key's name, its id (8 hex digits)
+*       and 1 if it is the key new values of that name are encrypted with (0 for an older one kept to read old values).
+*       The null string for an empty ring.  The keys themselves are never returned.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$catalog !keylist
+$include keys.h
+
+   key_list = ''
+   key_list = sdext('list', @false, SD_KEYRING)
+
+return
+end

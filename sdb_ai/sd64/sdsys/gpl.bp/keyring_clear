@@ -1,0 +1,44 @@
+subroutine keyring_clear(key_name, removed)
+* !KEYCLEAR(name, removed)  -  take keys out of this process's key ring
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Written: encryption layer 3 (the XE conversion; gplsrc/sd_keyring.c).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   CALL !KEYCLEAR(name, removed)
+*
+* name     the keys of that name go; "*" empties the ring; a null name is "default"
+* removed  returned: how many keys went (0 for a name the ring did not hold: not an error)
+*
+* The memory the keys were in is zeroed.  STATUS() 10213 and removed = '' for a name that is not a key name.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$catalog !keyclear
+$include keys.h
+
+   removed = ''
+   removed = sdext('clear':@fm:key_name, @true, SD_KEYRING)
+
+return
+end

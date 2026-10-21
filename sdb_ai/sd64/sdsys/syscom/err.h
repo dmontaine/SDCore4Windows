@@ -292,6 +292,13 @@ $define SD$EDType.Err  -10205  ;* Encode Decode type error
 * 18 Oct 26 dm - encryption layer 2 (SDKEY): 10205 was already taken by SD_EDType_Err, so the new codes follow it
 $define SD$Salt.Err    -10206  ;* the salt is not base64 for exactly 16 bytes
 $define SD$Pass.Err    -10207  ;* the passphrase is empty or longer than 65536 bytes
+* 18 Oct 26 dm - encryption layer 3: the XE conversion and the key ring (sd_keyring.c)
+$define SD$NoKey.Err   -10208  ;* no key of that name is in the key ring
+$define SD$KeyId.Err   -10209  ;* the value was encrypted under a key that is not the one in the ring
+$define SD$NotEnc.Err  -10210  ;* the value is not an encrypted value of this format
+$define SD$Ring.Err    -10211  ;* the key ring is full
+$define SD$Damaged.Err -10212  ;* the encrypted value fails its check: it has been changed or damaged
+$define SD$KeyName.Err -10213  ;* a key name is 1 to 31 letters, digits, dots, dashes or underscores
 
 * SDEXT error codes
 $define SD$EXT.KEY.ERR -10300  ;* unknown key

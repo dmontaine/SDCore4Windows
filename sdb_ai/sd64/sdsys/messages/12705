@@ -1,0 +1,1 @@
+Usage: encrypt.key set name salt [confirm] | encrypt.key clear [name] | encrypt.key list

@@ -18,6 +18,9 @@
  * 
  * 
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3: SD_KEYRING (120), set / clear / list on the key ring of
+ *           the XE conversion (sd_keyring.c); and the argument buffers are wiped before they are freed, for every key (they carry
+ *           passphrases and SCRAM secrets).  SD_FILE_PRIVATE (111, S.65) is not carried.
  * 15 Aug 26 Windows port - NullString() no longer returns a STATIC buffer
  *           when malloc fails; the release loop frees what it returns
  * 06 Aug 2024 MAB add SDEXT
@@ -66,6 +69,11 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 
 extern char* sd_salt();
 extern char* sd_KeyFromPW(char* mypassword, char* mysalt);
+/* sd_keyring.c (Linux 00a5888, 18 Oct 26) */
+extern int kr_set(const char* name, const char* keyb64, char* idhex);
+extern int kr_clear(const char* name, int* removed);
+extern int kr_list(char* out, size_t out_sz);
+#define KEYRING_LIST_MAX 2048   /* 16 keys of at most 31 + 8 + 1 characters and their marks fit in 700 */
 
 /* 13 Aug 26 Windows port - embedded Python removed, see PROJECT_STATUS.md 5.15 */
 
@@ -410,6 +418,58 @@ void op_sdext() {
       py_ext_int("FIN", NULL);
       break;
 
+    /* 18 Oct 26 dm - encryption layer 3.  The key ring of the XE conversion (sd_keyring.c).  The first argument is the operation:
+         set    name, base64 key -> the key id, 8 hex digits       (STATUS() and the null string on a bad name or key, or a full ring)
+         clear  name or *        -> how many keys went
+         list                    -> one field per key: name, key id and 1 if it is the one new values use, value-mark separated
+       Only the $internal programs !keyset, !keyclear and !keylist reach this.  Nothing here keeps the key: the argument buffers
+       are wiped when the call ends (below), and the ring holds the key as sodium_malloc'd, access-protected memory. */
+    case SD_KEYRING: {
+      char idhex[2 * 4 + 1];
+      char numtxt[16];
+      char listbuf[KEYRING_LIST_MAX];
+      int rc = 0;
+      int removed = 0;
+
+      if (argCnt < 1) {
+        sdme_err_rsp(SD_EXT_ARG_CNT);
+        break;
+      }
+      if (strcmp(SDMEArgArray[0], "set") == 0) {
+        if (argCnt != 3) {
+          sdme_err_rsp(SD_EXT_ARG_CNT);
+          break;
+        }
+        rc = kr_set(SDMEArgArray[1], SDMEArgArray[2], idhex);
+        if (rc != 0) {
+          sdme_err_rsp(rc);
+          break;
+        }
+        k_put_c_string(idhex, e_stack);
+        e_stack++;
+      } else if (strcmp(SDMEArgArray[0], "clear") == 0) {
+        if (argCnt != 2) {
+          sdme_err_rsp(SD_EXT_ARG_CNT);
+          break;
+        }
+        rc = kr_clear(SDMEArgArray[1], &removed);
+        if (rc != 0) {
+          sdme_err_rsp(rc);
+          break;
+        }
+        snprintf(numtxt, sizeof numtxt, "%d", removed);
+        k_put_c_string(numtxt, e_stack);
+        e_stack++;
+      } else if (strcmp(SDMEArgArray[0], "list") == 0) {
+        (void)kr_list(listbuf, sizeof listbuf);
+        k_put_c_string(listbuf, e_stack);
+        e_stack++;
+      } else {
+        sdme_err_rsp(SD_EXT_KEY_ERR);
+      }
+      break;
+    }
+
     case SD_IsPyInit:
       /* ***THIS ONE MUST NOT START A HELPER TO ANSWER.***  "Is Python
          running?" asked of a session that has none is answered 0, not by
@@ -437,18 +497,22 @@ void op_sdext() {
   }
   
   /* release our arg Buffers  */
+  /* 18 Oct 26 dm - wiped first: the arguments carry passphrases, keys and SCRAM secrets, and a freed malloc block keeps its
+     contents until the allocator hands it out again */
   for (argIdx = 0; argIdx < SD_MAX_ARGS; argIdx++) {
 	  if (SDMEArgArray[argIdx] != NULL ){
+	    explicit_bzero(SDMEArgArray[argIdx], strlen(SDMEArgArray[argIdx]));
 	    free(SDMEArgArray[argIdx]);
 	    SDMEArgArray[argIdx] = NULL;
 	  }
-  }  
-  /* and the val buffer */	
+  }
+  /* and the val buffer */
   if (myval_buffer != NULL){
     if (IsArgMV != 0) {      /* rem if IsArgMV not set, we pointed DMEArgArray[0] to myval_buffer*/
+	    explicit_bzero(myval_buffer, strlen(myval_buffer));
 	    free(myval_buffer);    /* do not want to attempt to free the memory again!!*/
-    } 
-  } 
+    }
+  }
 
   return;
 }

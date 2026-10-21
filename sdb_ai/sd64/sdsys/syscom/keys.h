@@ -404,6 +404,9 @@
       *   this API session's SCRAM c= value, base64("p=tls-exporter,," +
       *   binding), or "" with no TLS.  Same number as Linux (S.19).
       $define SD_TLS_CBIND    110  ;* sd_tlssrv channel binding, 0 args
+      * 20 Oct 26 Windows port - from Linux 00a5888, mirrored from gplsrc/keys.h: encryption layer 3, the key ring of the XE conversion.
+      *   Args: 'set', name, base64 key (answers the key id, 8 hex digits) / 'clear', name or * (answers how many) / 'list'.
+      $define SD_KEYRING      120  ;* sd_keyring key ring: set, clear, list
 
       * 13 Aug 26 Windows port - embedded python keys removed with the
       *   interpreter.  See PROJECT_STATUS.md 5.15.

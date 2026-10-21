@@ -1,0 +1,53 @@
+subroutine keyring_set(key_name, key, key_id)
+* !KEYSET(name, key, id)  -  put a key in this process's key ring
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Written: encryption layer 3 (the XE conversion; gplsrc/sd_keyring.c).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   CALL !KEYSET(name, key, id)
+*
+* name  the key name the XE;name conversion asks for (1 to 31 letters, digits, dots, dashes or underscores, folded to lower
+*       case; a null name is "default", the key a bare XE uses)
+* key   a 256 bit key as 44 base64 characters: what SDKEY() and SDRANDKEY() return
+* id    returned: the key's id (8 hex digits) when it is in the ring; the null string and STATUS() 10213 (bad name), 10204 (the
+*       key is not 44 characters), 10203 (it is not base64) or 10211 (the ring holds 16 keys) when it is not
+*
+* The ring is this process's own memory: cleared by LOGTO, by !KEYCLEAR and when the process ends, never written to a file, the
+* audit trail or $COMO, and not handed to a phantom (a phantom that must decrypt calls !KEYSET itself).  A key set again under a
+* name is kept beside the old one: the newest is the one new values are encrypted with, and values made under the older one can
+* still be read.
+*
+* The key passes through the arguments of this call and so through the variables of the caller, which are the caller's to
+* clear (key = '').
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$catalog !keyset
+$include keys.h
+
+   key_id = ''
+   key_id = sdext('set':@fm:key_name:@fm:key, @true, SD_KEYRING)
+
+return
+end

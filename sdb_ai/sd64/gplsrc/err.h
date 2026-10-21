@@ -308,6 +308,13 @@
 /* 18 Oct 26 dm - encryption layer 2 (SDKEY): 10205 was already taken by SD_EDType_Err, so the new codes follow it */
 #define SD_Salt_Err    -10206  /* the salt is not base64 for exactly 16 bytes */
 #define SD_Pass_Err    -10207  /* the passphrase is empty or longer than 65536 bytes */
+/* 18 Oct 26 dm - encryption layer 3: the XE conversion and the key ring (sd_keyring.c) */
+#define SD_NoKey_Err   -10208  /* no key of that name is in the key ring */
+#define SD_KeyId_Err   -10209  /* the value was encrypted under a key that is not the one in the ring */
+#define SD_NotEnc_Err  -10210  /* the value is not an encrypted value of this format */
+#define SD_Ring_Err    -10211  /* the key ring is full */
+#define SD_Damaged_Err -10212  /* the encrypted value fails its check: it has been changed or damaged */
+#define SD_KeyName_Err -10213  /* a key name is 1 to 31 letters, digits, dots, dashes or underscores */
 
 /* SDEXT error codes */
 #define SD_EXT_KEY_ERR -10300  /* unknown key */

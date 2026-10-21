@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 dm  The XE{;name} conversion: decrypt with a key in the process's key ring (xe_oconv(), sd_keyring.c).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -76,6 +77,8 @@
  *
  *    Tfile;cv;i;o   TRANS()
  *
+ *    XE{;name} Decrypt a value that ICONV XE{;name} made, with the key of that name in the key ring
+ *
  *    <f,v,s>   Extract field, value or subvalue
  *
  *  FMT():
@@ -127,6 +130,7 @@ void op_xtd(void);
 
 void k_trace(void);
 STRING_CHUNK* b64encode(STRING_CHUNK* str);
+int32_t xe_oconv(char* p); /* sd_keyring.c */
 
 /* Public local functions */
 int32_t concatenation_conversion(char* src_ptr);
@@ -772,6 +776,13 @@ void op_oconv() {
 
       case 'S':
         process.status = substitution_conversion(p);
+        break;
+
+      case 'X': /* XE{;name}: decrypt with a key held in the process's key ring (18 Oct 26, encryption layer 3) */
+        if (UpperCase(*p) == 'E')
+          process.status = xe_oconv(p + 1);
+        else
+          goto bad_conv_string;
         break;
 
       case 'T':

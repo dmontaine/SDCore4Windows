@@ -31,6 +31,8 @@
         # A Linux call that does not exist in Python on Windows, or a daemon restart with a changed sd.conf.
         'getdev'       = 'os.mkfifo: a named pipe, Linux only (AttributeError at the start of the run)'
         'lock-b6'      = 'sets DEADLOCK=2 NUMLOCKS=10 in sd.conf and restarts the daemon, then stops "SD NOT STARTED" when it sees no change; the installed service does not read the box copy'
+        # Encryption layers 2 and 3 (RELEASE_1.1 168).  READ from the suite on 20 Oct 2026, not run: it stops before its first row.
+        'crypt'        = 'READ, not run: bails when ctypes.util.find_library("sodium") finds no libsodium (MSYS2 has cygsodium-26.dll, which native Python cannot load), and part 2 loads sandbox-stmt-q3.py (SDSYS sessions, fixture accounts); owed a Windows-native layer 2 and 3 check (RELEASE_1.1 168)'
         # The public FCONTROL function and the FC$ tokens are Linux 400500c, part of the held QMClient chain: not carried.
         'fcontrol'     = 'FCONTROL(fvar, FC$...) is the public FCONTROL (Linux 400500c, QMClient chain, held): the probes do not compile'
         'crlf'         = 'its first leg uses FCONTROL(fvar, FC$CRLF, ...), the public FCONTROL (held): the probe does not compile'

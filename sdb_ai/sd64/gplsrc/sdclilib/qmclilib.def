@@ -41,6 +41,7 @@ EXPORTS
     SDCall
     SDCallx
     SDChange
+    SDChecksum
     SDClearSelect
     SDClose
     SDConnect

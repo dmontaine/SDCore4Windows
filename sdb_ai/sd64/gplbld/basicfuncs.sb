@@ -64,7 +64,9 @@
 * NOT.TESTED: GET.PORT.PARAMS SET.PORT.PARAMS GETNLS
 *   change the process
 * NOT.TESTED: CHGPHANT CONFIG UMASK CATALOGUED DIR
-* NOT.TESTED: GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT
+* NOT.TESTED: GET.MESSAGES SYSMSG SDENCRYPT SDDECRYPT SDSALT SDKEY SDRANDKEY
+*   20 Oct 26 - from Linux 845d3b1: SDSALT and SDRANDKEY are random and SDKEY takes about a tenth of a second; the carried suite
+*   verify-carry-crypt.py has their rows.
 *   18 Oct 26 - carried from Linux (areas 2 to 5 of the Dev carry).  All but ten are exercised, with Linux's expected values, by the
 *   carry's own verify steps (gplbld/verify-carry*.py: the func-q1, sys-q18 and coll suites), where each runs beside the file,
 *   collection and select-list state it needs.  A second set of cases here would only restate those.  The ten no running suite

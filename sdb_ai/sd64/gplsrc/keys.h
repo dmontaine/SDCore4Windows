@@ -720,6 +720,12 @@
    when the session is not TLS (a local pipe connection).  Same number as
    Linux (S.19) so the two ports' catalogued objects agree.  No arguments. */
 #define SD_TLS_CBIND    110  /* sd_tlssrv channel binding, 0 args */
+/* 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3.  The process-held key ring of the XE conversion
+   (sd_keyring.c).  Same number as Linux (120); 111 (SD_FILE_PRIVATE, S.65) is not carried.
+   Args: the operation in lower case, then "set": name, base64 key (answers the key id as 8 hex digits); "clear": name or * for all
+   (answers how many keys went); "list": none (answers one field per key: name, key id and 1 if it is the one new values are
+   encrypted with, value-mark separated).  Mirrored in sdsys/syscom/keys.h. */
+#define SD_KEYRING      120  /* sd_keyring key ring: set, clear, list */
 
 /* embedded python  */
 /* py  object types */

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 dm  The XE{;name} conversion: encrypt with a key in the process's key ring (xe_iconv(), sd_keyring.c).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -65,6 +66,8 @@
  *
  *    Tfile;cv;i;o   TRANS()
  *
+ *    XE{;name} Encrypt with the newest key of that name in the key ring; never answers the plaintext
+ *
  * END-DESCRIPTION
  *
  * START-CODE
@@ -94,6 +97,7 @@ int32_t pattern_match_conversion(char* src_ptr);
 int32_t range_conversion(char* src_ptr);
 int32_t substitution_conversion(char* src_ptr);
 int32_t substring_conversion(char* src_ptr);
+int32_t xe_iconv(char* p); /* sd_keyring.c */
 
 /* Local functions */
 Private int32_t base64_conversion(void);
@@ -277,6 +281,13 @@ void op_iconv() {
 
       case 'S': /* Substitution conversion */
         process.status = substitution_conversion(p);
+        break;
+
+      case 'X': /* XE{;name}: encrypt with the newest key of that name in the key ring (18 Oct 26, encryption layer 3) */
+        if (UpperCase(*p) == 'E')
+          process.status = xe_iconv(p + 1);
+        else
+          goto bad_conv_string;
         break;
 
       case 'T':
