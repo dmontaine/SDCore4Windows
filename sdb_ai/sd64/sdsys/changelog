@@ -2,6 +2,38 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+20 Oct 26  ENCRYPTING A FIELD: AN ORDINARY PROGRAM CAN NOW MAKE A KEY, AND A LISTING CAN SHOW THE FIELD DECRYPTED FOR WHOEVER HOLDS IT (FROM SD CORE FOR LINUX).
+
+             What        Three new BASIC functions, open to every program: SDSALT() gives a fresh random salt; SDKEY(passphrase, salt) gives the
+                        256-bit key for that passphrase and salt, in the form SDENCRYPT() and SDDECRYPT() accept (the key is slow to make on
+                        purpose, so make it once per run, not once per field); SDRANDKEY() gives a random key.  The client library gains
+                        SDChecksum, a checksum computed on the client side.  Until now SDENCRYPT() was usable only with a key that an ordinary
+                        program had no way to make.
+                        On top of that a dictionary item can carry the conversion XE (or XE;name for a named key).  LIST, SORT, COUNT, an I-type
+                        that says OCONV(field,"XE;name") and ED then show the field decrypted for a session that holds the key and the stored
+                        cipher text for a session that does not; ICONV with XE encrypts a value.  The key is never written in the dictionary.  It
+                        is held in a key ring in the memory of the session's own process.  A program fills the ring with CALL !KEYSET(name, key,
+                        id); !KEYCLEAR and !KEYLIST empty and list it.  A person at a terminal types a passphrase at a hidden prompt with the new
+                        verb ENCRYPT.KEY SET name salt (add CONFIRM the first time); ENCRYPT.KEY CLEAR and ENCRYPT.KEY LIST empty and list the
+                        ring, and LIST shows only names and key ids, never a key.  The ring is emptied by LOGTO, by sign-on and when the session
+                        ends, and it is never written to disk, the audit trail or a $COMO file.  A phantom does not inherit it and has to set
+                        its own key.  A second key set under a name does not replace the first: the newest encrypts and older ones still read
+                        what they made.
+             Why         An application can keep a salary or an identity number encrypted in the file while a person who holds the passphrase
+                        still sees it in an ordinary listing.  A stored value carries a key id and a check, so SD can say "no such key", "wrong
+                        key" or "damaged" (STATUS() 10208 to 10213) and never shows a wrong decryption.  Without a key, OCONV leaves the stored
+                        value, so a listing shows cipher text and not a blank.  ICONV with no key returns the null string and never the plain
+                        text, so a field declared encrypted cannot be filled with plain text by mistake.  SD now also wipes the buffers it copies
+                        passphrases, keys and SCRAM secrets into before it frees them.
+             Does not    SD does not look after the key.  There is no vault, no recovery and no administrator override: a forgotten passphrase
+                        or a lost salt means the data is gone.  A SORT BY the field sorts the cipher text; WITH field = "value" finds nothing even
+                        with the key, because the value is encrypted with a fresh nonce each time; TOTAL adds the cipher text, which counts as
+                        zero; an index on the field holds the cipher text; COPY moves it untouched.  An administrator, or a debugger on the
+                        process, can still read the key from memory.  The ENCRYPT.KEY passphrase has no strength rule, because nothing is stored
+                        or compared and a long phrase beats any mixed-class rule.  This is not encryption of the files themselves: for a stolen or
+                        discarded disk use BitLocker or the file system's own encryption.  It was written for SD Core for Linux and carried here;
+                        it has not yet been run on Windows.
+
 20 Oct 26  AN API CLIENT THAT HANGS UP AT THE WRONG MOMENT, OR SENDS A FALSE PACKET LENGTH, NO LONGER TIES UP THE SERVER PROCESS (FROM SD CORE FOR LINUX).
 
              What        The process that answers one API connection read each request as a four-byte length followed by that many bytes.
