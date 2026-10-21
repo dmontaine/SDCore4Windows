@@ -3483,39 +3483,76 @@ end;
   secure.account.dir), so this step is for the ones already on disk - which is
   why it runs unconditionally on every install rather than only on a fresh
   one. }
+{ 20 Oct 26 - RELEASE_1.1 161.  THE GROUP ACCOUNTS' CONTAINER WAS NEVER LOCKED.
+  This step named user_accounts only, so group_accounts kept the data tree's
+  inheritable sdusers Modify (measured on the 23:04 install of 19 Oct: sdusers
+  (I)(OI)(CI)(M)), although secure-accounts.ps1's header said it was run for
+  both.  A group account whose own create-time stamp failed (message 10055: the
+  account is still reported made) was therefore left with that inherited Modify,
+  readable and writable by every SD user outside SD, and never repaired, since
+  the re-apply below named user_accounts and sdu_ only.  The same two scripts
+  now run over group_accounts with the group prefix CREATE.ACCOUNT GROUP uses
+  (sdg_).  A failed stamp then fails closed: the directory inherits only SYSTEM,
+  Administrators and CREATOR OWNER, nothing for other SD users.  The container
+  keeps sdusers' AD (add a subdirectory) because CREATE.ACCOUNT runs as an
+  unelevated SD user, in user_accounts too.  Linux found the same SHAPE in its
+  group accounts (mails T1610, T1625); the mechanism there is file ownership. }
+function SecureAccountRoot(Ps, Container, PerAccount, Root, GroupPrefix: String;
+  var Code: Integer; var Hint: String): Boolean;
+var
+  Args: String;
+begin
+  Args := ' -Root "' + Root + '"';
+  if GroupPrefix <> 'sdu_' then
+    Args := Args + ' -GroupPrefix ' + GroupPrefix;
+
+  Result := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                 Container + '" -Path "' + Root + '"',
+                 '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+
+  if Result then
+    Result := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                   PerAccount + '"' + Args,
+                   '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+
+  if not Result then
+    Hint := Hint +
+            '    powershell -ExecutionPolicy Bypass -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
+            '    powershell -ExecutionPolicy Bypass -File "' + PerAccount + '"' + Args + #13#10;
+end;
+
 function SecureAccountDirs: String;
 var
-  Code: Integer;
-  Ps, Container, PerAccount, Root: String;
-  ContainerOk, PerAccountOk: Boolean;
+  Code, FailCode: Integer;
+  Ps, Container, PerAccount, Hint: String;
+  UserOk, GroupOk: Boolean;
 begin
   Result := '';
   Code := 0;
+  FailCode := 0;
+  Hint := '';
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   Container := ExpandConstant('{app}\secure-accounts.ps1');
   PerAccount := ExpandConstant('{app}\secure-account-dirs.ps1');
-  Root := ExpandConstant('{#DataDir}\user_accounts');
 
-  ContainerOk := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                      Container + '" -Path "' + Root + '"',
-                      '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+  UserOk := SecureAccountRoot(Ps, Container, PerAccount,
+              ExpandConstant('{#DataDir}\user_accounts'), 'sdu_', Code, Hint);
+  if not UserOk then
+    FailCode := Code;
+  GroupOk := SecureAccountRoot(Ps, Container, PerAccount,
+              ExpandConstant('{#DataDir}\group_accounts'), 'sdg_', Code, Hint);
+  if (not GroupOk) and (FailCode = 0) then
+    FailCode := Code;
 
-  PerAccountOk := False;
-  if ContainerOk then
-    PerAccountOk := Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
-                         PerAccount + '" -Root "' + Root + '"',
-                         '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
-
-  if ContainerOk and PerAccountOk then
+  if UserOk and GroupOk then
     Exit;
 
   { NAMED, NOT BURIED, like the credential store and the shell list: an ACL
     that is the whole of a control fails silently, and nothing else in the
     install would reveal it. }
-  Result := 'The account directories were NOT locked (code ' + IntToStr(Code) + '). ' +
+  Result := 'The account directories were NOT locked (code ' + IntToStr(FailCode) + '). ' +
             'Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -ExecutionPolicy Bypass -File "' + Container + '" -Path "' + Root + '"' + #13#10 +
-            '    powershell -ExecutionPolicy Bypass -File "' + PerAccount + '" -Root "' + Root + '"' + #13#10#13#10;
+            Hint + #13#10;
 end;
 
 { LOCK THE GLOBAL CATALOGUE.  PROJECT_STATUS.md 8, UPSTREAM_FIXES.md 7.

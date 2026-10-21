@@ -235,7 +235,10 @@ if (-not (Test-Path -LiteralPath $script)) { Fail "no $script" }
 $acctDir = Join-Path $Root $Prefix
 $noVoc   = Join-Path $Root ($Prefix + 'nv')     # a directory with no voc
 $noGroup = Join-Path $Root ($Prefix + 'ng')     # a voc, but no sdu_ group
-$accRec  = Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
+$jnName  = $Prefix + 'jn'                       # RELEASE_1.1 161: a junction to the real account
+$jnPath  = Join-Path $Root $jnName
+$jnGroup = 'sdu_' + $jnName
+$accRec  =Join-Path $env:ProgramData ('SD\sdsys\accounts\' + $Prefix.ToUpper())
 
 if (Get-LocalUser -Name $Prefix -ErrorAction SilentlyContinue) {
     Fail "$Prefix already exists as a Windows account - use a fresh -Prefix."
@@ -245,8 +248,11 @@ if (Test-Path -LiteralPath $accRec)  {
     Fail ($Prefix.ToUpper() + ' is still in the ACCOUNTS register from an earlier run.' +
           '  Remove it with DELETE.ACCOUNT, or use a fresh -Prefix.')
 }
-foreach ($d in @($noVoc, $noGroup)) {
+foreach ($d in @($noVoc, $noGroup, $jnPath)) {
     if (Test-Path -LiteralPath $d) { Fail "$d is left over from an earlier run - remove it." }
+}
+if (Get-LocalGroup -Name $jnGroup -ErrorAction SilentlyContinue) {
+    Fail "group $jnGroup is left over from an earlier run - remove it."
 }
 
 $made = $false
@@ -431,6 +437,51 @@ try {
     # And -WhatIf really did leave the ACL alone, which is what made the sweep
     # safe to run across every account on the machine.
     Note '-WhatIf changed nothing' $true ((Get-Dacl $acctDir) -ceq $S)
+
+    # -----------------------------------------------------------------------
+    Step 6.5 'RELEASE_1.1 161 - the group_accounts container is locked like user_accounts'
+
+    # 20 Oct 26.  sd.iss SecureAccountDirs named user_accounts only until now, so
+    # group_accounts kept the data tree's inheritable sdusers Modify and a group
+    # account whose own stamp failed (message 10055) inherited it.  READ-ONLY: the
+    # container's DACL as the install left it, and a -WhatIf sweep that proves
+    # -GroupPrefix binds.  The null case is refused - a group_accounts that does
+    # not exist is a STOP, not a pass.
+    $grpRoot = Join-Path $env:ProgramData 'SD\group_accounts'
+    if (-not (Test-Path -LiteralPath $grpRoot)) { Fail "no $grpRoot - nothing was measured." }
+    Show-Acl 'G' $grpRoot
+    $aclG = Get-Acl -LiteralPath $grpRoot
+    Note 'G: inheritance is off' $true $aclG.AreAccessRulesProtected
+    $sduG = @($aclG.Access | Where-Object { $_.IdentityReference.Value -like '*\sdusers' })
+    Note 'G: sdusers has an ACE (the container is readable)' $true ($sduG.Count -ge 1)
+    Note 'G: ... none inheritable' 0 @($sduG | Where-Object { [int]$_.InheritanceFlags -ne 0 }).Count
+    Note 'G: ... none can create a file (WriteData)' 0 @($sduG | Where-Object { ([int]$_.FileSystemRights -band 2) -ne 0 }).Count
+    Note 'G: ... none can delete a child (DeleteSubdirectoriesAndFiles)' 0 @($sduG | Where-Object { ([int]$_.FileSystemRights -band 64) -ne 0 }).Count
+
+    $gsweep = & $script -Root $grpRoot -GroupPrefix sdg_ -WhatIf
+    $gsweepText = ($gsweep | Out-String)
+    Write-Host $gsweepText
+    Note 'G: -GroupPrefix sdg_ sweep ran and reported' $true ($gsweepText -match '\d+ stamped, \d+ skipped, \d+ failed')
+
+    # A REPAIR RUN BY A PRIVILEGED STEP MUST NOT BE AIMED BY THE PEOPLE IT REPAIRS
+    # (Linux mail T1625).  An SD user can add a subdirectory to either root, so a
+    # junction named after an existing sdu_ group whose directory is gone would,
+    # without the reparse-point skip, point the stamp at the REAL account's
+    # directory (it has a voc).  The control is the real account in the same
+    # sweep: "would stamp" for it, "reparse point" for the junction.
+    $null = New-LocalGroup -Name $jnGroup -Description 'verify-accountacl scratch'
+    $null = New-Item -ItemType Junction -Path $jnPath -Target $acctDir
+    Note 'J: the junction exists and is a reparse point' $true `
+        ([bool]((Get-Item -LiteralPath $jnPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint))
+    Note 'J: it reaches the real account (has a voc)' $true (Test-Path -LiteralPath (Join-Path $jnPath 'voc'))
+    $jsweepText = (& $script -Root $Root -WhatIf | Out-String)
+    Write-Host $jsweepText
+    Note 'J: junction -> skipped as a reparse point' $true `
+        ($jsweepText -match ([regex]::Escape('skipped ' + $jnName) + '.*reparse point'))
+    Note 'J: junction -> not stamped' $false `
+        ($jsweepText -match ([regex]::Escape('would stamp ' + $jnName) + '\s'))
+    Note 'J: real account beside it -> still stamped' $true `
+        ($jsweepText -match ([regex]::Escape('would stamp ' + $Prefix) + '\s'))
 }
 catch {
     # 20 Aug 26 - WITHOUT THIS THE FIRST RUN PRODUCED NO VERDICT AT ALL.  The
@@ -455,6 +506,17 @@ finally {
                 Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
                 Write-Host "   removed $d"
             }
+        }
+
+        # The junction goes FIRST and by itself: Remove-Item -Recurse on a link can
+        # walk into the target, and the target is the account directory.
+        if (Test-Path -LiteralPath $jnPath) {
+            [IO.Directory]::Delete($jnPath)
+            Write-Host "   removed junction $jnPath (the link only)"
+        }
+        if (Get-LocalGroup -Name $jnGroup -ErrorAction SilentlyContinue) {
+            Remove-LocalGroup -Name $jnGroup
+            Write-Host "   removed group $jnGroup"
         }
 
         if ($made) {

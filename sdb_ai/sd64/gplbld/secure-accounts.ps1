@@ -3,7 +3,10 @@
 #   powershell -ExecutionPolicy Bypass -File secure-accounts.ps1 -Path "C:\ProgramData\SD\user_accounts"
 #
 # PROJECT_STATUS.md 5.7.  Run by the installer AFTER the icacls that secures the
-# data tree, for both user_accounts and group_accounts.  This is HALF of the
+# data tree, for both user_accounts and group_accounts.  (20 Oct 26, RELEASE_1.1
+# 161: THIS LINE WAS NOT TRUE FOR group_accounts UNTIL TODAY - sd.iss SecureAccountDirs
+# named user_accounts only, and the installed group_accounts still carried
+# sdusers:(I)(OI)(CI)(M).  It now runs for both.)  This is HALF of the
 # per-account work: it governs the container, and CREATE.ACCOUNT puts the real
 # ACL on each account directory at the end of building it.
 #

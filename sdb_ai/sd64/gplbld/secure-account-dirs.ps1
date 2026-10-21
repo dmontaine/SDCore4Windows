@@ -44,9 +44,18 @@
 # install that mangled these ACLs would lock every user out of their own data,
 # so this errs towards leaving things alone.
 
+# 20 Oct 26 - RELEASE_1.1 161.  -GroupPrefix names the Windows group an account
+# directory is stamped with: sdu_ for user_accounts (the default, so every older
+# caller is unchanged) and sdg_ for group_accounts, where CREATE.ACCOUNT GROUP
+# writes ACC$GROUP as downcase("sdg_" : name) (create_account, create.group).
+# Windows group names are case-insensitive, so the directory's own spelling
+# does not need folding here.  Nothing re-applied the ACL of a GROUP account
+# before: if its create-time stamp failed (message 10055) the account stayed
+# reported as made with the inherited sdusers Modify, for ever.
 param(
     [Parameter(Mandatory = $true)] [string]$Root,
     [string]$Account = '',
+    [string]$GroupPrefix = 'sdu_',
     [switch]$WhatIf
 )
 
@@ -81,7 +90,19 @@ $done = 0; $skipped = 0; $failed = 0
 
 foreach ($d in $targets) {
     $name  = $d.Name
-    $group = 'sdu_' + $name
+    $group = $GroupPrefix + $name
+
+    # 20 Oct 26 - RELEASE_1.1 161.  A REPAIR RUN BY A PRIVILEGED STEP MUST NOT BE
+    # AIMED BY THE PEOPLE IT REPAIRS (Linux mail T1625).  Both roots let an SD
+    # user add a subdirectory (secure-accounts.ps1: AD), so a junction named
+    # after an existing sdu_/sdg_ group whose directory is gone could point this
+    # stamp at another account's real directory.  A reparse point is never an
+    # account directory: CREATE.ACCOUNT makes a plain one.
+    if ($d.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        Say "skipped $name - a reparse point, not an account directory"
+        $skipped++
+        continue
+    }
 
     if (-not (Test-LooksLikeAccount $d.FullName)) {
         Say "skipped $name - no voc, so it is not an account directory"

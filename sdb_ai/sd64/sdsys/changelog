@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+20 Oct 26  THE FOLDER THAT HOLDS GROUP ACCOUNTS IS LOCKED LIKE THE ONE THAT HOLDS USER ACCOUNTS.
+
+             Setup locked C:\ProgramData\SD\user_accounts so that other SD users cannot read or change an account's files outside SD, but
+             it never did the same for C:\ProgramData\SD\group_accounts.  Each group account's own folder is locked when the account is
+             made, so nothing was open in the normal case.  If that step failed ("Could not secure account directory ..."), the account was
+             still reported as made, and its folder kept the access every SD user has to the data tree; nothing repaired it later.  Setup
+             now locks group_accounts the same way and sets each group account's folder again on every install and upgrade, so a folder
+             left open by a failed step is closed.  The step also skips a folder that is really a link to another place.  If you have
+             made group accounts, check with: icacls C:\ProgramData\SD\group_accounts\<account>  (it should list only SYSTEM,
+             Administrators and sdg_<account>).
+
 19 Oct 26  SDIDX AND SDFIX, THE STAND-ALONE FILE TOOLS, NO LONGER DO SEVERAL WRONG THINGS (FROM SD CORE FOR LINUX).
 
              sdidx       When it moved indexes out of a file's own directory, or deleted them, it removed the old %2, %3 ... through a name buffer
