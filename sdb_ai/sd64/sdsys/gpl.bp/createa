@@ -434,6 +434,9 @@ deffun ps_script(script) calling '!ps_script'
 *   not the rule that ssh and the API are.
    os.sh   = @false
    os.exec = @false
+   edit.voc = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): VOC-ON, BP-ON and DICT-ON
+   edit.bp = @false
+   edit.dict = @false
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADOPT FLAG IS GONE WITH THE
 *   KEYWORD AND THE MARKER.  ADOPT attached an SD account to an OS account that
 *   already existed, and its only caller was the install - which is precisely
@@ -554,9 +557,10 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on}'
     crt '                  {no.query}'
-    crt '                  A new user account starts with no ssh, no API, no shell (sh) and no os.execute;'
+    crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, and no right to change'
+    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on);'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
     crt '                create.account group <group name> {no.query}'
     crt '                create.account other <account name> <pathname> {no.query}'
@@ -574,6 +578,9 @@ deffun ps_script(script) calling '!ps_script'
    if no.query then settings<CA$NO.QUERY> = 1
    if os.sh then settings<CA$OS.SH> = 1
    if os.exec then settings<CA$OS.EXECUTE> = 1
+   if edit.voc then settings<CA$VOC.EDIT> = 1
+   if edit.bp then settings<CA$BP.EDIT> = 1
+   if edit.dict then settings<CA$DICT.EDIT> = 1
 
    err = ''
    call !create_account(upcase(acc.type), acc.name, settings, err)
@@ -739,6 +746,14 @@ more.args:
             os.sh = @true
          case upcase(token) = 'OS-ON'
             os.exec = @true
+* 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: VOC-ON, BP-ON and DICT-ON, the edit gates.  Independent switches like the two
+*   above; off unless typed.
+         case upcase(token) = 'VOC-ON'
+            edit.voc = @true
+         case upcase(token) = 'BP-ON'
+            edit.bp = @true
+         case upcase(token) = 'DICT-ON'
+            edit.dict = @true
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

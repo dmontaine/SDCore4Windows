@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Oct 26 dm  S.64 part 2: edit_os_path_refusal() takes include_leaf (does the final component of the path count?); edit_leaf_counts().
+ * 17 Oct 26 dm  S.64: prototypes of the edit gates (op_sh.c): edit_kind_of_path, edit_permitted, edit_ok_for_path, edit_os_path_refusal.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  * 
@@ -383,6 +385,17 @@ bool os_path_ok_for_account(const char * name);
 bool os_path_open_ok(const char * name);
 bool os_path_inside(const char * rootdir, const char * name);
 
+/* OP_SH.C - the edit gates (17 Oct 26, S.64): which guarded kind a file is, and may the session save a change to it */
+#define EDIT_NONE 0
+#define EDIT_VOC  1
+#define EDIT_DICT 2
+#define EDIT_PROG 3
+int edit_kind_of_path(const char * path);
+bool edit_permitted(int kind);
+bool edit_ok_for_path(const char * path);
+int edit_os_path_refusal(const char * name, bool include_leaf);
+bool edit_leaf_counts(const char * name);
+
 /* OP_DIO2.C */
 bool delete_path(char * path);
 bool fullpath(char * path, char * name);
@@ -404,6 +417,8 @@ bool net_path_permitted(char * path, bool for_write);
 bool account_path_permitted(char * path, bool for_write);
 bool net_vocpath_permitted(char * path, bool for_write);
 bool path_in_enterable_account(char * resolved);
+bool path_view_for_edit(char * resolved, char * rel, size_t rel_size);
+bool path_fold(char * resolved, char * out);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

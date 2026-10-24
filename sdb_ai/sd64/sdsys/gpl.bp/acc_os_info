@@ -140,6 +140,9 @@ deffun os_group(action, group, member) calling '!os_group'
    if typ = 'USER' then
       info<-1> = 'os.sh: ' : (if upcase(trim(acc.rec<ACC$SH>)) = 'YES' then 1 else 0)
       info<-1> = 'os.execute: ' : (if upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES' then 1 else 0)
+      info<-1> = 'edit.voc: ' : (if upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.64 (Linux d7cda81)
+      info<-1> = 'edit.bp: ' : (if upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES' then 1 else 0)
+      info<-1> = 'edit.dict: ' : (if upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES' then 1 else 0)
    end
 
    return

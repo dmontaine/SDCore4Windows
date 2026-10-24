@@ -1,0 +1,1 @@
+Programs can only be compiled or catalogued by an account that has bp.edit (SDSYS can give it: modify.account <account> bp-on)

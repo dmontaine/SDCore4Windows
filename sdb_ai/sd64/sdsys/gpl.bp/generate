@@ -21,6 +21,15 @@
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: $INCLUDE is found as either
 *           $INCLUDE or $include.
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
+* 17 Oct 26 dm  S.64 part 2 (the edit gates): GENERATE writes into two files the user names, the dictionary (the $INCLUDE control
+*               record it makes when there is none) and the target file of that record (bp by default; the include records), and
+*               it is $internal, so the kernel's own test lets both through.  Each now asks edit_guard, the dictionary before the
+*               questions about the record are put, the target file once, before an include record is opened.
+* 06 Oct 26 dm  PAL-1 stage 2a (parity audit; the Windows port's RELEASE_1.1 5): a
+*               dictionary read folds case, as typed then lower then upper.
+* 13 Sep 26 dm  The default source file is bp, not BP (plan M3 D3; the port's
+*               1943704).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -57,6 +66,8 @@ $include parser.h
 $include err.h
 $include keys.h
 $include dictdict.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
@@ -99,6 +110,14 @@ $include dictdict.h
    release dict.file, "$INCLUDE"
    release dict.file, "$include"
    if not(incl.found) then
+* 17 Oct 26 dm - S.64: the control record below is written into the dictionary, which may be one the session may not change (a
+*   dictionary needs dict.edit; the dictionary of the VOC is one).  Asked before the questions, so a refused session is not made to
+*   answer them first.  The locks on the two spellings of the record were released above.
+      if not(edit_guard(dict.file)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
+
       incl.rec = 'X'
 
       loop
@@ -194,6 +213,19 @@ $include dictdict.h
 
       num.tokens = dcount(names, @fm)
       if num.tokens then
+* 17 Oct 26 dm - S.64: the include records below are made, or overwritten, in file.name (field 2 of the $INCLUDE record, bp by
+*   default), which is a program file or any file the dictionary's author named.  OPENSEQ in this $internal program is not asked
+*   by the kernel, so the file is opened here and asked as opened (a Q-pointer to a VOC is caught), once for both modes, before
+*   either record is opened.  A file that cannot be opened is reported as the OPENSEQ below reports it; it is not written.
+         open file.name to target.f else
+            stop sysmsg(1436, file.name)  ;* Cannot open %1 : %M
+         end
+         if not(edit_guard(target.f)) then
+            @system.return.code = -ER$PERM
+            stop
+         end
+         close target.f
+
          if generate.conversions then
             if conversion.present or generate.conversions = 2 then
                longest += 4  ;* Allow for .CNV

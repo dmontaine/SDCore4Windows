@@ -19,6 +19,12 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): COLLECTION makes a data collection file (the DHF_COLLECTION header bit):
+* 17 Oct 26 dm  S.64 part 2: naming a component of a file that already has a VOC record - turning a single file into a multifile (its
+*               %n parts move into a subdirectory and its pointer is rewritten) or adding a component to a multifile - changes an
+*               EXISTING file, so a VOC, a dictionary or a program file is changed only by a session that has the gate for it
+*               (edit.check.existing, K$EDIT.OK on each data path of the record).  Making a NEW file and its pointer, and an
+*               ordinary file's conversion, are as before.
+* 13 Oct 26 dm  COLLECTION makes a data collection file (the DHF_COLLECTION header bit):
 *               READ gives a collection and WRITE takes one.
 * 14 Sep 26 Windows port - the default dictionary record is @id, not @ID, as
 *            the shipped dictionaries are.  RELEASE_1.1_FIXES.md 5, stage 2b.
@@ -338,6 +344,11 @@ $define default.split.load 80
          end else
             if component = '' then component = file.name
 
+* 17 Oct 26 dm - S.64: from here the verb changes a file that already exists - it moves a single file's parts into a subdirectory and
+*   rewrites its pointer, or adds a component to its pointer - so a VOC, a dictionary or a program file is left alone unless the
+*   session may change it.  It is asked before the "Convert to multifile" question, since the answer would make no difference.
+            gosub edit.check.existing
+
             if voc.rec<2> # '' and voc.rec<4> = '' then   ;* 0262
                * We need to make this into a multifile.
 
@@ -574,6 +585,27 @@ $define default.split.load 80
 
    @system.return.code = 0
 
+   return
+
+* ======================================================================
+* edit.check.existing  -  may this session change the file that VOC.REC (an existing F record) describes?  (17 Oct 26 dm, S.64)
+*   The kernel decides by the last component of each data path of the record (K$EDIT.OK): voc, *.dic, bp, bp.out, *.bp, *.bp.out.
+*   The dictionary path (field 3) is not looked at: converting an ordinary file does not touch its dictionary, and it is the
+*   dictionary of a file called customers that is named customers.dic.  A refusal stops the verb with the reason and nothing has been
+*   changed (the VOC file is this program's own, so the record lock goes when it ends).
+
+edit.check.existing:
+   for ek = 1 to dcount(voc.rec<2>, @vm)
+      ek.path = voc.rec<2, ek>
+      if ek.path # '' then
+         if not(kernel(K$EDIT.OK, ek.path)) then
+            ek.kind = kernel(K$EDIT.KIND, ek.path)
+            if ek.kind < 1 or ek.kind > 3 then ek.kind = 1
+            @system.return.code = -ER$PERM
+            stop sysmsg(12409 + ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+         end
+      end
+   next ek
    return
 end
 

@@ -36,8 +36,8 @@ $define CA$ATTACH          6     ;* 1 = attach an existing OS user (install only
 $define CA$NO.QUERY        7     ;* 1 = ask nothing (refused for a new USER: password)
 $define CA$SUSPENDED       8     ;* 1 = create the account suspended
 
-$define CA$OS.SH          21     ;* Windows only: os.users field 1
-$define CA$OS.EXECUTE     22     ;* Windows only: os.users field 2
+$define CA$OS.SH          21     ;* ACC$SH 'yes' (was os.users field 1 until 23 Oct 26)
+$define CA$OS.EXECUTE     22     ;* ACC$OS.EXEC 'yes' (was os.users field 2 until 23 Oct 26)
 
 * READ BY BOTH PORTS (it sits in the Linux block because Linux added it first):
 * 1 = an OS user that SD itself created may be taken over instead of refused.
@@ -46,5 +46,10 @@ $define CA$OS.EXECUTE     22     ;* Windows only: os.users field 2
 * user is reused WITH A NEW PASSWORD, which sets the Windows password and
 * $cred together.
 $define CA$REUSE.SD.USER  31
+
+* Linux only (17 Oct 26, S.64, the edit gates): 1 = the new account starts with the gate on.  A blank or a 0 is off.
+$define CA$VOC.EDIT       32     ;* ACC$VOC.EDIT  'yes'
+$define CA$BP.EDIT        33     ;* ACC$BP.EDIT   'yes'
+$define CA$DICT.EDIT      34     ;* ACC$DICT.EDIT 'yes'
 
 * END-CODE

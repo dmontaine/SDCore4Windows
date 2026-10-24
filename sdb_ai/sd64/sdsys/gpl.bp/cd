@@ -22,6 +22,14 @@
 *           command line folds, and is written back under the id that matched.
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
+* 17 Oct 26 dm  S.64 part 2 (the edit gates): CD DATA file opens an ordinary file and rewrites the records it names as if they were
+*               dictionary items (the record is cut at its object code and written back), so the DATA form asks edit_guard for
+*               the file it opened, before a record is read.  The DICT form, CD LOCAL and CD ALL compile I-types into dictionaries,
+*               which is the sanctioned side effect of CD, and do not ask.
+* 06 Oct 26 dm  PAL-1 stage 2a (parity audit; the Windows port's RELEASE_1.1 5): a
+*               dictionary read folds case, as typed then lower then upper.
+* 14 Sep 26 dm  Enter at 2050 means N (W.2, the port's ruling of 13 Sep 26).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -67,10 +75,13 @@ $include dictdict.h
 $include bcomp.h
 $include int$keys.h
 
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
+
 
    @system.return.code = -1      ;* Preset for command format errors
 
    id = ""                       ;* List of I-type id's to compile
+   data.form = @false            ;* CD DATA file: the file is a data file, not a dictionary (S.64)
    no.query = @false
    errors = 0
    display.file.name = ''
@@ -137,6 +148,7 @@ $include int$keys.h
             call @parser(PARSER$MFILE, token.type, file.name, keyword)
             if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
             file.to.open = file.name
+            data.form = @true
 
          case upcase(field(file.to.open, ' ', 1)) # 'DICT'
             file.to.open = 'DICT ' : field(file.to.open, ',', 1)
@@ -156,6 +168,18 @@ $include int$keys.h
                end
 
                file.name = upcase(file.name)
+            end
+         end
+
+* 17 Oct 26 dm - S.64: CD DATA treats the records of an ordinary file as dictionary items, cuts each at its object code and writes it
+*   back, so on a program file, a VOC or a dictionary it would damage what the edit gates protect.  This program is $internal, which
+*   the kernel's own test lets through, so it asks.  Only the DATA form: compiling the I-types of a dictionary is what CD is for.
+*   Asked once, for the file opened, before an id is read or a record locked; the active select list is dropped as DELETE does.
+         if data.form then
+            if not(edit_guard(dict.f)) then
+               @system.return.code = -ER$PERM
+               clearselect
+               stop
             end
          end
 

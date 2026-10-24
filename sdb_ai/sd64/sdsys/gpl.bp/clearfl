@@ -22,6 +22,10 @@
 *            end of input, which re-asked for ever (the class of RELEASE_1.1 34,
 *            found at a prompt it never listed by SD Core for Linux, parity
 *            audit PAL-13; measured there, not here).
+* 17 Oct 26 dm  S.64: clearing a VOC, a dictionary or a program file asks edit_guard (voc.edit, dict.edit, bp.edit).
+* 06 Oct 26 dm  Enter at "Use file 'xx'?" (2051) means N, and the prompt shows
+*               (y/<n>).  Found by the parity audit: the same loop as cproc's
+*               5045, identical in both ports.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -40,6 +44,8 @@ $catalog $clearfl
 $include parser.h
 $include syscom err.h
 $include syscom keys.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
    prompt ""
    parser = "!PARSER"
@@ -93,6 +99,13 @@ $include syscom keys.h
    if fileinfo(file, FL$READONLY) then
       @system.return.code = -ER$RDONLY
       stop sysmsg(1431) ;* File is read-only
+   end
+
+* 17 Oct 26 dm - S.64: clearing a VOC, a dictionary or a program file needs the gate (voc.edit, dict.edit, bp.edit).  This program is
+*   $internal, which the kernel's own test lets through, so it asks.
+   if not(edit_guard(file)) then
+      @system.return.code = -ER$PERM
+      stop
    end
 
    filelock file

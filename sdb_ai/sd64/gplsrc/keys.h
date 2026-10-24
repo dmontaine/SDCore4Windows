@@ -464,6 +464,25 @@
    (kernel.c, class_main_ok).  CPROC sets it just before it calls a catalogued command; op_run() and op_chain() set it themselves.
    Used by that one call whatever becomes of it. */
 #define K_CLASS_MAIN         120
+/* 17 Oct 26 dm - S.64 (the edit gates, owner's request of 17 Oct).  K_VOC_EDIT, K_BP_EDIT and K_DICT_EDIT: like K_SD_ACCOUNTS, 1 / 0
+   sets (only from a $internal program), -1 asks; may the session save changes to a VOC, to a program file (source or object code, and
+   BASIC / CATALOG), to a dictionary.  Loaded at SIGN-ON only (LOGIN, the API server), never by LOGTO.  The administrator is never
+   refused whatever they say.
+     K_EDIT_OK    the argument is the pathname of an open file (FILEINFO(f, FL$PATH)); the answer is 1 if THIS SESSION may save a change to
+                  it - the file is none of the three kinds, or the gate for its kind is on, or the session is the administrator.  It
+                  does not matter who asks: a $internal program (exempt from the test in op_dio3.c, as it has to be to do its work)
+                  that writes a file the USER named asks here first, as K_PATH_OK is asked.
+     K_EDIT_KIND  the same argument; 0 the file is none of them, 1 a VOC, 2 a dictionary, 3 a program file.  For the message.
+   GPL.BP/INT$KEYS.H carries the same numbers. */
+#define K_VOC_EDIT           121
+#define K_BP_EDIT            122
+#define K_DICT_EDIT          123
+#define K_EDIT_OK            124
+#define K_EDIT_KIND          125
+/*   K_EDIT_OS_OK the argument is an OPERATING SYSTEM pathname that the caller is about to write, create, delete or copy into (OSCOPY,
+                  a print file): 1 if no component of it below the account's directory names a VOC, a dictionary or a program file
+                  that THIS SESSION may not change (op_sh.c edit_os_path_refusal).  Not asked for reading. */
+#define K_EDIT_OS_OK         126
 #define K_PROFILER           116
 #define K_PROFILER_USER      117
 /* 13 Oct 26 dm (Linux 7ff476f) - THE TERMINAL'S OWN SIZE.  kernel(K$WINSIZE, '') answers the terminal's width, a field mark and

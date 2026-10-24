@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 23 Oct 26 Windows port - from Linux d7cda81 and b6186cc (17 Oct 26), S.64, the edit gates: edit_kind_of_path(), edit_permitted(), edit_ok_for_path(),
+ *           edit_os_path_refusal(name, include_leaf), edit_leaf_counts() and the private catalogue as a program file.  Linux resolves with
+ *           getcwd / realpath and "/" only; here the name is resolved by fullpath() and folded by path_view_for_edit() / path_fold()
+ *           (op_dio2.c), which know the drive letter, the case and the two namespaces.  RELEASE_1.1 170.
  * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63, on the owner's two answers of 23 Oct: the SH and OS.EXECUTE
  *           grants are the ACCOUNT's (USR_SH, USR_OS_EXEC, loaded at account entry from ACC$SH / ACC$OS.EXEC), not the
  *           person's os.users record, which the kernel no longer reads; every session, a local console included, is held
@@ -38,6 +42,33 @@
  * 19 Aug 26 Windows port - OS.EXECUTE is gated.  It was open to every user
  *           from a program while SH was refused at the prompt.
  *           PROJECT_STATUS.md section 4 / section 7 step 7.
+ * 17 Oct 26 dm S.64 part 2 (Linux): the private catalogue directory (the value of $PRIVATE.CATALOGUE, "cat" by default, resolved against
+ *           the account directory, never by the bare name) is a PROGRAM FILE; edit_os_path_refusal() takes include_leaf.
+ * 17 Oct 26 dm S.64: edit_kind_of_path(), edit_permitted() and edit_ok_for_path(): which of a VOC, a dictionary and a
+ *           program file a pathname is, and whether the session may save a change to it (the gates voc.edit, dict.edit
+ *           and bp.edit, loaded at sign-on into the user table's gates word). op_dio3.c asks them before a write, a
+ *           delete or a clear; K_EDIT_OK and K_EDIT_KIND let a $internal program ask the same question.
+ * 13 Oct 26 dm S.63: os_permitted() is back, and the gate now reaches OS paths. OS.EXECUTE and the SH
+ *           verb are refused (10053, 10054, the Windows port's wording) to an account that has not been
+ *           given them; OPENSEQ and OPENPATH by pathname are refused (ER_PERM) outside the account's own
+ *           directory unless it holds OS.EXECUTE; K_PATH_OK lets an $internal program (SED) ask the same
+ *           question on the user's behalf. SH and OS.EXECUTE are OFF by default and SDSYS switches them
+ *           (owner, 13 Oct 2026: the tiers were to go and the gates to stay).
+ * 18 Sep 26 dm Teardown (S.27): os_permitted() and its refusal are gone.
+ *           OS.EXECUTE and the SH verb now run at the account's own Linux
+ *           permissions - the euid drop already made a session the account's
+ *           OS user, and SD keeps no second wall (owner's teardown of the
+ *           tier model, 18 Sep 2026).
+ * 10 Sep 26 dm  Parity audit: the SH1 clparse bound is 8, so a long configured
+ *               SH1 cannot write past argv (the Windows port's PRE_RELEASE 174).
+ * 09 Sep 26 dm PRE_RELEASE 23 commit 2: os_permitted() also honours USR_OS_EXEC,
+ *           the per-account ACC$OS.EXEC grant loaded at account entry, so an
+ *           administrator can give a named non-admin account OS.EXECUTE.
+ * 09 Sep 26 dm PRE_RELEASE 23 commit 1: os_permitted() gates OS.EXECUTE to a
+ *           $internal program or an administrator (owner's model, 9 Sep 26:
+ *           "os.execute and shell are off for anyone but administrators").
+ *           op_sh() was previously ungated.  The per-account ACC$OS.EXEC grant
+ *           that widens this to named non-admins is commit 2.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -282,6 +313,268 @@ bool os_path_open_ok(const char *name) {
   if (process.program.flags & HDR_INTERNAL)
     return TRUE;
   return os_path_ok_for_account(name);
+}
+
+/* ======================================================================
+   last_component()  -  The final component of a pathname, trailing slashes ignored.  Returns a pointer into PATH and sets
+   *LEN to its length, which is 0 for a null name or a bare "/".                                                       */
+
+Private const char *last_component(const char *path, size_t *len) {
+  const char *last;
+  const char *p;
+  size_t n;
+
+  *len = 0;
+  if (path == NULL)
+    return NULL;
+  n = strlen(path);
+  while ((n > 0) && (path[n - 1] == '/'))
+    n--;
+  if (n == 0)
+    return NULL;
+  last = path;
+  for (p = path; p < path + n; p++) {
+    if (*p == '/')
+      last = p + 1;
+  }
+  *len = (size_t)((path + n) - last);
+  return last;
+}
+
+/* ======================================================================
+   edit_kind_of_name()  -  Which of the three guarded kinds of file does the LAST COMPONENT of this name say it is?
+
+   17 Oct 26 dm, S.64 (owner, 17 Oct: the gates voc.edit, bp.edit and dict.edit).  By the last component of the pathname
+   of the OPEN file, not by the name that was typed, so a Q-pointer or an F-pointer to one is caught (Linux Solo's
+   voc_write_refused() does the same for the VOC alone).  Case does not matter; every name SD makes is lower case.
+     VOC          voc
+     dictionary   anything ending .dic         (voc.dic is the dictionary of the VOC, not the VOC)
+     program      bp, bp.out, anything ending .bp or .bp.out
+   bp.out is in because an object file written straight into it is the same as compiling one (owner's D3, 17 Oct, said
+   "bp or *.bp"; the object directory is part of that meaning and the plan file says so).  A trailing slash is ignored.
+
+   Names only.  edit_os_path_refusal() classifies the bare components of a path with this; the private catalogue is a place,
+   not a name, and is added by edit_kind_of_path() for the pathname of a file.                                          */
+
+Private int edit_kind_of_name(const char *path) {
+  const char *last;
+  size_t n;
+
+  last = last_component(path, &n);
+  if (n == 0)
+    return EDIT_NONE;
+
+  if ((n == 3) && (strncasecmp(last, "voc", 3) == 0))
+    return EDIT_VOC;
+  if ((n > 4) && (strncasecmp(last + n - 4, ".dic", 4) == 0))
+    return EDIT_DICT;
+  if ((n == 2) && (strncasecmp(last, "bp", 2) == 0))
+    return EDIT_PROG;
+  if ((n == 6) && (strncasecmp(last, "bp.out", 6) == 0))
+    return EDIT_PROG;
+  if ((n > 3) && (strncasecmp(last + n - 3, ".bp", 3) == 0))
+    return EDIT_PROG;
+  if ((n > 7) && (strncasecmp(last + n - 7, ".bp.out", 7) == 0))
+    return EDIT_PROG;
+  return EDIT_NONE;
+}
+
+/* ======================================================================
+   The private catalogue as a program file (17 Oct 26 dm, S.64 part 2, from the review).
+
+   CATALOG, DELETE.CATALOG and DECATALOG are refused without bp.edit (message 12413) because they change the code a command
+   finds, and the catalogue is a plain directory: with nothing here, OPENPATH "cat" and DELETE / CLEARFILE / WRITE on it, a
+   Q- or F-pointer to it, OSCOPY into it and OSPATH on it did the same thing with no gate.  So the directory is a program file.
+
+   WHICH DIRECTORY: the one the kernel loads commands from, private_catalogue (set by the K$PRIVATE.CATALOGUE key from the
+   $PRIVATE.CATALOGUE entry of the VOC, "cat" when there is none), resolved against the account directory as a pathname is
+   resolved by the OS gate.  NOT by the bare name "cat": a data directory that happens to be called cat somewhere else is
+   an ordinary file.  The gate follows the configured catalogue, and a catalogue outside the account is still one.
+
+   The private catalogue is a per-process variable, like the account directory, so nothing here is shared between users.    */
+
+/* private_catalogue_dir()  -  the private catalogue directory, resolved and folded (path_fold) into CAT (MAX_PATHNAME_LEN + 1 bytes), without
+   a trailing slash.  fullpath() resolves a relative name against the working directory, which is the account's.  FALSE when there is none,
+   it cannot be resolved or folded, or it would be the root.                                                                           */
+Private bool private_catalogue_dir(char *cat) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+  size_t n;
+
+  if ((private_catalogue[0] == '\0') || !fullpath(resolved, private_catalogue) || !path_fold(resolved, cat))
+    return FALSE;
+  n = strlen(cat);
+  while ((n > 1) && (cat[n - 1] == '/'))
+    cat[--n] = '\0';
+  return (n > 1);
+}
+
+/* catalogue_position()  -  where is this FOLDED pathname against the private catalogue?  0 elsewhere, 1 the directory itself, 2 something
+   below it.  Case does not matter (NTFS).                                                                                              */
+Private int catalogue_position(const char *folded) {
+  char cat[MAX_PATHNAME_LEN + 1];
+  size_t n;
+
+  if (!private_catalogue_dir(cat))
+    return 0;
+  n = strlen(cat);
+  if (strncasecmp(folded, cat, n) != 0)
+    return 0;
+  if (folded[n] == '\0')
+    return 1;
+  return (folded[n] == '/') ? 2 : 0;
+}
+
+/* path_is_private_catalogue()  -  is this the pathname OF the private catalogue directory (the pathname of an open file)?
+   edit_kind_of_path() is asked before every WRITE a session makes to a file it may not be allowed to change, so the test
+   that costs something - resolving two paths - is made only when the last component is the catalogue's own name.        */
+Private bool path_is_private_catalogue(const char *path) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+  char folded[MAX_PATHNAME_LEN + 1];
+  const char *last;
+  const char *cat_last;
+  size_t n, cat_n;
+
+  last = last_component(path, &n);
+  cat_last = last_component(private_catalogue, &cat_n);
+  if ((n == 0) || (cat_n == 0) || (n != cat_n) || (strncasecmp(last, cat_last, n) != 0))
+    return FALSE;
+  /* Same final name: now by place.  A name that cannot be placed is taken as the catalogue (a gate that fails open on a path it
+     cannot read is decoration); only a file of the catalogue's own name reaches here. */
+  if (!fullpath(resolved, (char *)path) || !path_fold(resolved, folded))
+    return TRUE;
+  return catalogue_position(folded) == 1;
+}
+
+/* ======================================================================
+   edit_kind_of_path()  -  Which of the three guarded kinds of file is this?  The PATHNAME of an open file: by its last
+   component (edit_kind_of_name), or the private catalogue directory, which is a program file.                          */
+
+int edit_kind_of_path(const char *path) {
+  int kind = edit_kind_of_name(path);
+
+  if ((kind == EDIT_NONE) && path_is_private_catalogue(path))
+    return EDIT_PROG;
+  return kind;
+}
+
+/* edit_permitted()  -  may THIS SESSION save a change to a file of that kind?  The administrator may always; anybody else
+   needs the gate for the kind, loaded at sign-on (UG_x in the user table's gates word) from the register.            */
+
+bool edit_permitted(int kind) {
+  if (my_uptr->flags & USR_ADMIN)
+    return TRUE;
+  switch (kind) {
+    case EDIT_VOC:
+      return (my_uptr->gates & UG_VOC_EDIT) != 0;
+    case EDIT_DICT:
+      return (my_uptr->gates & UG_DICT_EDIT) != 0;
+    case EDIT_PROG:
+      return (my_uptr->gates & UG_BP_EDIT) != 0;
+  }
+  return TRUE;
+}
+
+bool edit_ok_for_path(const char *path) {
+  int kind = edit_kind_of_path(path);
+
+  return (kind == EDIT_NONE) || edit_permitted(kind);
+}
+
+/* edit_os_path_refusal()  -  the OS-PATH routes to the same files: OPENSEQ, DELETESEQ, OSRENAME, a print file, OSCOPY.
+
+   A program file's records are files of a directory, so OPENSEQ 'bp','prog' and WRITESEQ change one as WRITE would, past the test
+   in op_dio3.c; a dictionary or the VOC can be corrupted the same way.  So the pathname a program gives is looked at for a
+   component that names a VOC, a dictionary or a program file: the path is resolved as the OS gate resolves it, and every component
+   below the account's own directory is classified (edit_kind_of_name).  Returns EDIT_NONE when the session may go on, or the kind
+   it may not change.  Read-only use is not asked: the callers use this where they would write, create, delete or rename.
+
+   INCLUDE_LEAF says whether the FINAL component is classified too.  A caller that names a plain file there - OPENSEQ, DELETESEQ and
+   a print file make or remove a regular file, never a directory - passes FALSE: the final name is a record of whatever file holds
+   it, and a record called x.bp in an ordinary directory file is not a program file (the kernel judges the file, not the record).
+   A caller whose final component may itself be a directory - the target of OSCOPY, which can be a directory, OSPATH deleting or
+   making one - passes TRUE.  CREATE.FILE and OPENTEMP pass FALSE: the name they make is the new file, and a new file called bp or
+   x.dic is what CREATE.FILE makes without the gate; it is what they put INSIDE a guarded directory that is refused.  Every
+   directory below the final component is classified either way.
+
+   The private catalogue directory, and anything below it, is a program file as well (see edit_kind_of_path), whichever of its
+   own names the final component has; the catalogue itself counts only when INCLUDE_LEAF.
+
+   NOT COVERED, and said in the documentation: an account that holds OS.EXECUTE or SH reaches the files from the shell as it
+   always could, so a path outside the account's own directory is not looked at for such an account.  For one that reaches another
+   account's directory through SD.ACCOUNTS the whole resolved path is searched (the other account's own catalogue is not known to
+   this process and is not recognised).  A path that cannot be resolved is refused.                                           */
+
+int edit_os_path_refusal(const char *name, bool include_leaf) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+  char relbuf[MAX_PATHNAME_LEN + 1];
+  char folded[MAX_PATHNAME_LEN + 1];
+  const char *rel;
+  char comp[MAX_PATHNAME_LEN + 1];
+  const char *p;
+  const char *more;
+  size_t n;
+  int kind;
+  int cat_pos;
+  bool inside;
+
+  if (my_uptr->flags & USR_ADMIN)
+    return EDIT_NONE;
+  if ((name == NULL) || (name[0] == '\0'))
+    return EDIT_NONE;
+  /* 23 Oct 26 Windows port: Linux resolved with getcwd / realpath and "/" only.  Here the name is resolved as an open resolves it
+     (fullpath) and folded into one namespace with the account root by path_view_for_edit() (op_dio2.c).  */
+  if (!fullpath(resolved, (char *)name))
+    return EDIT_VOC; /* cannot tell: refuse (a gate that fails open on a path it cannot read is decoration) */
+  inside = path_view_for_edit(resolved, relbuf, sizeof(relbuf));
+  if (relbuf[0] == '\0')
+    return EDIT_VOC; /* cannot be folded, or still holds "..": refuse */
+
+  if (inside) {
+    rel = relbuf; /* inside the account's own directory: look below it */
+  } else if (my_uptr->flags & USR_OS_EXEC) {
+    return EDIT_NONE; /* OS.EXECUTE: the whole machine, and a shell; not covered */
+  } else {
+    rel = relbuf; /* another account's directory through SD.ACCOUNTS: the whole path */
+  }
+
+  /* 17 Oct 26 dm, S.64 part 2: the private catalogue is a program file, found by PLACE (resolved, as the loader reaches it) and not by its name */
+  cat_pos = path_fold(resolved, folded) ? catalogue_position(folded) : 0;
+  if (((cat_pos == 2) || ((cat_pos == 1) && include_leaf)) && !edit_permitted(EDIT_PROG))
+    return EDIT_PROG;
+
+  for (p = rel; *p != '\0';) {
+    while (*p == '/')
+      p++;
+    n = 0;
+    while ((p[n] != '\0') && (p[n] != '/'))
+      n++;
+    more = p + n;
+    while (*more == '/')
+      more++;
+    if ((n > 0) && (n < sizeof(comp)) && (include_leaf || (*more != '\0'))) {
+      memcpy(comp, p, n);
+      comp[n] = '\0';
+      kind = edit_kind_of_name(comp);
+      if ((kind != EDIT_NONE) && !edit_permitted(kind))
+        return kind;
+    }
+    p += n;
+  }
+  return EDIT_NONE;
+}
+
+/* edit_leaf_counts()  -  for a caller that DELETES, or COPIES INTO, an OS pathname whose final name may be a plain file or a directory
+   (OSCOPY's target, OSPATH's delete): does that final name need classifying (include_leaf TRUE)?  Only if it is there and is not a plain
+   file.  A plain file called x.bp or x.dic is a record of whatever directory holds it, not a program file or a dictionary; a name not
+   made yet becomes a plain file when copied to, and there is nothing to delete.  A link, which could be to a directory, counts.      */
+
+bool edit_leaf_counts(const char *name) {
+  struct stat sb;
+  char resolved[MAX_PATHNAME_LEN + 1];
+
+  if ((name == NULL) || (name[0] == '\0') || !fullpath(resolved, (char *)name) || (lstat(resolved, &sb) != 0))
+    return FALSE;
+  return !S_ISREG(sb.st_mode);
 }
 
 /* ======================================================================

@@ -17,7 +17,13 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: OPENSEQ and DELETESEQ ask edit_os_path_refusal() about what is ABOVE the final
+ *               name only (include_leaf FALSE): a record called sample.bp, voc or x.dic in an ordinary directory file is a plain file.
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): op_openseq() opens a block device, a floppy disk drive among
+ * 17 Oct 26 dm  S.64: OPENSEQ opens read only, and cannot create, a file under a VOC, a dictionary or a program file the session may not
+ *               change (edit_os_path_refusal); DELETESEQ of such a file is refused.
+ * 13 Oct 26 dm  S.63: op_delseq() asks the OS-access gate when it is given a bare pathname (no record name).
+ * 12 Oct 26 dm  op_openseq() opens a block device, a floppy disk drive among
  *               them (openQM item 112).
  * 24 Aug 26 Windows port - WRITESEQ to a PORT sent "\r\n" with a byte count of
  *           1, so it terminated every line with a bare CR and never sent the
@@ -61,6 +67,7 @@
 
 #include "sd.h"
 #include "dh_int.h"
+#include "header.h" /* HDR_INTERNAL: the edit gates (17 Oct 26, S.64) */
 #include <poll.h>
 
 /* Modified by Composer AI - 2026/06/10.
@@ -232,6 +239,14 @@ void op_delseq() {
       process.status = ER_PERM;
       goto exit_op_delseq;
     }
+  }
+
+  /* 17 Oct 26 dm - S.64 (the edit gates): deleting a file of a program file, a dictionary or a VOC is a change to it, past the test in
+     op_dio3.c.  A $internal program is trusted, as in os_path_open_ok().  17 Oct 26 part 2: the final name is a plain file (S_ISREG
+     below), a record and not a program file, so only what is above it is asked (include_leaf FALSE). */
+  if (!(process.program.flags & HDR_INTERNAL) && (edit_os_path_refusal(file_name, FALSE) != EDIT_NONE)) {
+    process.status = ER_PERM;
+    goto exit_op_delseq;
   }
 
   /* Check file exists */
@@ -435,6 +450,7 @@ Private void openseq(bool map_name) {
   OSFILE fu = INVALID_FILE_HANDLE;
   u_int16_t op_flags;
   bool read_only = FALSE;
+  bool edit_blocked = FALSE; /* 17 Oct 26 S.64: a path in a VOC, a dictionary or a program file that the session may not change */
   int16_t blocking_user;
   int status;
   u_int16_t flags = 0;
@@ -637,6 +653,14 @@ Private void openseq(bool map_name) {
        file_name        Port name
  */
 
+  /* 17 Oct 26 dm - S.64 (the edit gates).  A record of a program file is a file of a directory, so OPENSEQ and WRITESEQ change one
+     as WRITE would, past the test in op_dio3.c; a dictionary or a VOC can be damaged the same way.  A session that may not change
+     the file gets the sequential file READ ONLY, and cannot create one there.  A $internal program is trusted, as in os_path_open_ok. */
+  /* 17 Oct 26 part 2: the final name is a record (a regular file, a device or a FIFO, never a directory): only what is above it is
+     asked (include_leaf FALSE), so a record called sample.bp or x.dic in an ordinary directory file is not refused. */
+  if (!(flags & SQ_PORT) && !(process.program.flags & HDR_INTERNAL))
+    edit_blocked = (edit_os_path_refusal(fullpathname, FALSE) != EDIT_NONE);
+
   if (!(flags & SQ_PORT)) /* Not a port */
   {
     /* Check if record to open exists */
@@ -667,7 +691,7 @@ Private void openseq(bool map_name) {
 
       /* Check if we have write access */
 
-      if ((op_flags & P_READONLY) || access(fullpathname, 2)) {
+      if ((op_flags & P_READONLY) || access(fullpathname, 2) || edit_blocked) {
         read_only = TRUE;
       }
 
@@ -679,6 +703,10 @@ Private void openseq(bool map_name) {
         process.status = ER_FNF;
         goto exit_op_openseq;
       }
+    } else if ((op_flags & 0x400) && edit_blocked) /* CREATING in a place the session may not change (17 Oct 26, S.64) */
+    {
+      process.status = ER_PERM;
+      goto exit_op_openseq;
     } else if (op_flags & 0x400) /* CREATING (and SHARED, which includes it): make the file now */
     {
       /* 12 Oct 26, openQM items 485 and 397 */
@@ -708,7 +736,7 @@ Private void openseq(bool map_name) {
   fvar->id_len = 0;
   fvar->id = NULL;
   fvar->flags = 0;
-  if (read_only)
+  if (read_only || edit_blocked) /* edit_blocked also covers a file that does not exist yet: its first WRITESEQ is refused */
     fvar->flags |= FV_RDONLY;
 
   if (flags & SQ_NOTFL) /* Not really a file at all */

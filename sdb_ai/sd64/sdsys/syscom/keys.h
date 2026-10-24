@@ -387,6 +387,15 @@
       *   it an account reaches any file under the directory of an account its user could LOGTO, except that account's VOC.  yes/no,
       *   blank = no; loaded as K$SD.ACCOUNTS at account entry; SDSYS switches it (MODIFY.ACCOUNT SD-ON / SD-OFF).
       $define ACC$SD.ACCOUNTS  9     ;* may reach files in the accounts its user could LOGTO (yes/no)
+      * 17 Oct 26 dm - FIELDS 10 TO 12: the edit gates (S.64, owner's request of 17 Oct).  Whether a session may SAVE CHANGES to a VOC, to a
+      *   program file (source or object code, and the compiler and CATALOG with it) or to a dictionary.  yes/no; BLANK MEANS NO, like the
+      *   gates above.  Loaded as K$VOC.EDIT / K$BP.EDIT / K$DICT.EDIT at SIGN-ON ONLY: LOGTO does not reload them, so the account a
+      *   person signed on to decides wherever they go.  The records that exist when this ships are set to 'yes' once (upgrade_editgates),
+      *   so no account loses what it had; accounts made afterwards start 'no'.  SDSYS switches them: MODIFY.ACCOUNT VOC-ON / VOC-OFF,
+      *   BP-ON / BP-OFF, DICT-ON / DICT-OFF; CREATE.ACCOUNT takes the -ON words.
+      $define ACC$VOC.EDIT     10    ;* may save changes to a VOC (yes/no)
+      $define ACC$BP.EDIT      11    ;* may save changes to a program file, and compile and catalogue (yes/no)
+      $define ACC$DICT.EDIT    12    ;* may save changes to a dictionary (yes/no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

@@ -1,6 +1,45 @@
+<<<<<<< windows
 W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
+
+23 Oct 26  THE EDIT GATES: VOC.EDIT, BP.EDIT AND DICT.EDIT (FROM SD CORE FOR LINUX).
+
+             Gates       Three more per-account switches, beside the shell, OS.EXECUTE, SD.ACCOUNTS, ssh and the API, say whether the person who
+                        signed on to an account may SAVE A CHANGE to a VOC, to a program file (source or object code) and to a dictionary. They
+                        are off for an account made from now on. The installer's upgrade switches all three on, once, for every USER account
+                        that exists and whose field is blank, so that no account loses what it had; group and other accounts are left off on
+                        purpose. SDSYS gives and takes them with modify.account name voc-on, voc-off, bp-on, bp-off, dict-on and dict-off, and
+                        create.account takes voc-on, bp-on and dict-on. The administrator is never refused. A switch takes effect when the
+                        person next signs on; the command prints where all three stand.
+             Which files  A file is known by the name of the file that is OPEN, not the name that was typed, so a Q-pointer to a VOC is caught:
+                        a VOC is a file called voc; a dictionary is any file whose name ends in .dic (voc.dic is the dictionary of the VOC, not
+                        the VOC); a program file is bp, bp.out (the object code), any name ending in .bp or .bp.out, or the private catalogue
+                        directory. Capitals do not matter.
+             What stops  A program's WRITE, WRITEV, DELETE and CLEARFILE of such a file: an error that says which switch is missing, or the ON
+                        ERROR status. The verbs that change a file the person names ask first, before they lock or change anything, and say why:
+                        ed, edit, copy and copyp into the file or moving records out of it, delete, clear.file, cname of a record, delete.file
+                        of a program file or of a dictionary on its own, fixdir, format, map file, sp.view (its X key), set.trigger when it
+                        installs or removes a trigger, copy.list, delete.list, get.list deleting in, save.list, sort.list, reformat, list
+                        pageseq, cd data, generate, como on, the .s and .d stack commands on an existing VOC record, and create.file naming a
+                        file that already exists. cname will not take a program file out of its name, or put a file under one, for a person
+                        without the switch. OPENSEQ in such a place opens the file read only and cannot create one; DELETESEQ and a print file
+                        made there are refused, and the CREATE.FILE statement refuses a new file inside one. For these routes by operating
+                        system pathname the name of the file being made counts only if it is a directory, so a plain file called sample.bp in an
+                        ordinary directory is not held back. Over the API a client's writes, deletes and file clears are held to the same rule.
+                        Reading is never stopped.
+             Compiling   Without bp.edit the basic, catalog, delete.catalog and decatalog commands are refused, since compiling is how source
+                        becomes code that runs.
+             LOGTO       The switches are those of the account the person SIGNED ON to (or, over the API, first entered); LOGTO does not change them.
+             Internal programs  A program compiled in internal mode is exempt from the gates on files, which SD's own commands need. The mark is a
+                        bit in the program's own object file, so it is now honoured only for an object from the global catalogue or for the
+                        administrator: a person who could put an object file where SD would run it no longer runs it with every gate skipped.
+             Backups      The account manifest records the three switches (edit.voc, edit.bp, edit.dict) and restore.account gives a restored
+                        account what it had; a manifest from before has none, and gives none.
+             After install  The installing user's own account starts with all three off like any new account; SDSYS turns on what the person needs.
+                        The user table in shared memory has a new word, so SD is restarted at the end of an upgrade, as always.
+             Does not    Anything done from the shell by an account that has sh-on or os-on is not stopped; nor is what SD writes as a side
+                        effect of an ordinary command (the pointer CREATE.FILE makes, a saved sentence, a compiled I-type, the command stack).
 
 23 Oct 26  A THIRD PER-ACCOUNT SWITCH, SD.ACCOUNTS, AND TWO LANGUAGE ADDITIONS, $MODE AUTOLOCK AND OPTION INHERIT.OWNERSHIP (FROM SD CORE FOR LINUX).
 
@@ -217,6 +256,82 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
            A user on AccuTerm should set the terminal type to xterm or vt100: the -at types are no longer known.
 
 18 Oct 26  FILEINFO KEY 1021 AND THE PICK STYLE CALL "FILE NAME" (QM4 FIXES TAB, BATCH E).
+=======
+Next release - in progress
+--------------------------
+
+17 Oct 26  THE EDIT GATES: VOC.EDIT, BP.EDIT AND DICT.EDIT (S.64).
+
+             Gates       Three more per-account switches, beside the shell, OS.EXECUTE, SD.ACCOUNTS, ssh and the API, say whether
+                        the person who signed on to an account may SAVE A CHANGE to a VOC, to a program file (source or object
+                        code) and to a dictionary.  They are off for an account made from now on.  When the installer is run by the
+                        user whose own account already exists, the upgrade switches all three on, once, for every USER account in
+                        the register, so that no such account loses what it had; group and other accounts are left off on purpose,
+                        and if a different OS user installs over existing accounts the upgrade step is not run and they stay off.
+                        SDSYS gives and takes them with modify.account name voc-on, voc-off, bp-on, bp-off, dict-on and dict-off,
+                        and create.account takes voc-on, bp-on and dict-on.  The administrator is never refused, on a terminal or
+                        in a batch job; an SDSYS session over the local API, which carries no administrator flag, is given all
+                        three on when it signs on.  A switch takes effect when the person next signs on.  After a change the
+                        command prints where all three stand; if the switch already had the value asked for it says only that the
+                        account already had that access.
+             Group accounts  A member of a group or other account's Linux group can sign on to it directly (sd -a name, a batch
+                        job, or the API), and then that account's own switches decide; only logto leaves the earlier account's
+                        switches alone.  SDSYS gives them to a group or other account with modify.account where members need them.
+             Which files  A file is known by the name of the file that is OPEN, not the name that was typed, so a Q-pointer to a
+                        VOC is caught: a VOC is a file called voc; a dictionary is any file whose name ends in .dic (voc.dic is
+                        the dictionary of the VOC, not the VOC); a program file is bp, bp.out (the object code), or any name
+                        ending in .bp or .bp.out.  Capitals do not matter.
+             What stops  A program's WRITE, WRITEV, DELETE and CLEARFILE of such a file: an error that says which switch is
+                        missing, or the ON ERROR status.  The verbs and statements that change a file the person names ask first,
+                        before they lock or change anything, and give the reason: sed, ide and ced show it in their message line,
+                        every other verb prints it and stops.  They are ed, edit, copy and copyp into the file or moving records
+                        out of it, delete, clear.file, cname of a record, delete.file of a program file or of a dictionary on its
+                        own, fixdir, format, map file, sp.view (its X key), set.trigger when it installs or removes a trigger,
+                        copy.list into the file or with deleting from it, delete.list in, get.list deleting in, save.list in,
+                        sort.list from, reformat to (and its Output file prompt), list pageseq, a delimited report written to a
+                        pathname, cd data, generate, como on in, the .s and .d stack commands on an existing VOC record, and
+                        create.file naming a file that already exists (adding a part, or converting to a multifile).  The private
+                        catalogue directory counts as a program file.  Programs are also refused (status 3035, no message) by
+                        create.file and opentemp of a new file inside such a place, ospath keys 5, 13 and 14, and the socket trace
+                        file.  Over the API a client's writes, deletes and file clears are held to the same rule, and SDOpenSeq of
+                        such a place opens read only.  cname will not take a program file out of its name, or put a file under
+                        one, for a person without the switch, so a rename cannot be used to get round it.  OPENSEQ in such a
+                        place opens the file read only and cannot create one; DELETESEQ, a print file made there and !oscopy or
+                        !ioscopy into it are refused.  For these operating-system routes the name of the file being made counts
+                        only if it is a directory or other than a plain file, so a plain file called sample.bp in an ordinary
+                        directory is not held back.  Reading is never stopped.
+             Compiling   Without bp.edit the basic, catalog, delete.catalog and decatalog commands are refused, since compiling
+                        is how source becomes code that runs: otherwise source could be copied to any file and compiled.
+             Internal programs  A program compiled in internal mode is exempt from the gates on files and on operating-system
+                        paths, which SD's own commands need.  The "internal" mark is a bit in the program's own object file, so
+                        until now a person who could put an object file where SD would run it (a directory file with a .out entry
+                        in the VOC, or a run file) could set the bit and run it with every gate skipped, the shell, OS.EXECUTE and
+                        sd-on gates included.  SD now honours the bit only for an object from the global catalogue, which only
+                        SDSYS can write, or for the administrator; for any other object it is ignored when the object is loaded.
+                        SD's own commands are all in the global catalogue and are not affected.  A program of your own that you
+                        compiled in internal mode as SDSYS and run as an ordinary user from your account is now an ordinary
+                        program there.
+             LOGTO       The switches are those of the account the person SIGNED ON to (or, over the API, first entered); logto
+                        does not change them, and unlike sh, os and sd the three edit switches are read at sign-on only.  A
+                        person with a switch on keeps it in another account, and a person without it does not gain it there.
+             Not stopped  What SD writes as a side effect of an ordinary command - a new pointer made by create.file, a new
+                        saved sentence, a compiled I-type, the command stack - and anything done from the shell by an account
+                        that has sh or os.execute.  The operating-system routes above are not looked at for an account that
+                        holds os-on, when the path is outside the account's own directory.  The switches are about changing
+                        these files by hand or by program.
+             Backups      The account manifest records the three switches (edit.voc, edit.bp, edit.dict) for user accounts.
+                        restore.account gives them back only to an account it has to create; an account that already exists
+                        keeps its current switches, group and other accounts are not in the manifest, and a manifest from
+                        before has none and gives none.
+             After install  On a fresh install the installing user's own account starts with all three off like any new
+                        account, and the installer prints the three modify.account lines.  A new account needs bp-on before it
+                        can save or compile its first program, voc-on before it can save a paragraph in its VOC, and os-on as
+                        well for nano and micro.  The user table of the shared memory has a new word, so SD is
+                        restarted at the end of an upgrade, as always.  Windows Solo's and Linux Solo's VOC gate (the
+                        administrator password) is the same idea for one account.
+
+17 Oct 26  FILEINFO KEY 1021 AND THE PICK STYLE CALL "FILE NAME" (QM4 FIXES TAB, BATCH E).
+>>>>>>> linux-b6186cc
 
              FL$WHO      FILEINFO(file, 1021) now answers as the openQM manual says FL$WHO does: the user numbers of
                         the other sessions that have the file open, with a field mark between them, and null when

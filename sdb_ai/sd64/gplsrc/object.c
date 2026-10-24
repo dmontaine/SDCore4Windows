@@ -24,6 +24,10 @@
  *               object_is_stale(), refresh_subr_object().
  * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-5, sheet 491: the Hot Spot Monitor counts opens, reads, writes and deletes
  *               by program (hsm_io(), OBJECT.io, HSM.io, hsm_dump).
+ * 17 Oct 26 dm  S.64 part 2 (owner, 17 Oct: ".out yes"): HDR_INTERNAL is honoured only for an object from the global
+ *               catalogue or for the administrator (load_object()).  Before, the bit was trusted from ANY object file, so
+ *               a user who could write one to a directory file with a <name>.out VOC entry, or to a runfile, set the bit
+ *               in the header and ran the program with every kernel gate (S.63, S.64) skipped.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -273,6 +277,14 @@ found:
   if (convert) {
     convert_object_header(&(obj->code));
   }
+
+  /* 17 Oct 26 S.64 part 2: an object runs as $internal (and skips the kernel's gates on files and operating-system paths) only when
+     it comes from the global catalogue, which only SDSYS can write, or when the session is the administrator, who can run what
+     they like.  The bit is a flag in the object's own header, so for any other object it is the bit that was set by whoever wrote
+     the file: a local or private catalogue entry, a runfile, a trigger.  It is cleared in this process's copy, before anything runs;
+     the cache search above returns that copy.  The compiler itself only sets the bit in an internal-mode compile.               */
+  if ((obj->code.flags & HDR_INTERNAL) && !(flags & OBJ_GLOBAL) && !(my_uptr->flags & USR_ADMIN))
+    obj->code.flags &= ~HDR_INTERNAL;
 
   obj->code.ext_hdr.prog.refs = 0;
 

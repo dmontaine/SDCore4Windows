@@ -19,6 +19,12 @@
 * 
 * START-HISTORY:
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
+* 17 Oct 26 dm  S.64 part 2: FORMAT writes the reformatted source back into the file it was given (bp unless named), so it asks edit_guard
+*               (voc.edit, dict.edit, bp.edit) once, right after the open and before it reads the select list or any record.  It is
+*               $internal, which the kernel's own test lets through.
+* 13 Sep 26 dm  The default source file is bp, not BP (plan M3 D3; the port's
+*               1943704).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -42,6 +48,8 @@ $catalog $format
 
 $include parser.h
 $include err.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
 
    parser = "!PARSER"
@@ -87,6 +95,14 @@ $include err.h
    * Open the file
 
    open file.name to src.f else stop sysmsg(2019) ;* File not found
+
+* 17 Oct 26 dm - S.64: every record done below is rewritten in the file opened here, which is a saved change to a program file (or to a
+*   VOC or dictionary, if one is named).  Asked once, before the active select list is read and before any record is locked, so a
+*   refusal leaves the list and the records as they were (edit_guard has said why).
+   if not(edit_guard(src.f)) then
+      @system.return.code = -ER$PERM
+      stop
+   end
 
 
    * Get record id(s)

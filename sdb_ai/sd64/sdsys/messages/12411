@@ -1,0 +1,1 @@
+A dictionary can only be changed by an account that has dict.edit (SDSYS can give it: modify.account <account> dict-on)

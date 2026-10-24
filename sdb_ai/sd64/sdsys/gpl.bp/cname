@@ -63,6 +63,7 @@ $include int$keys.h
 $include parser.h
 $include dictdict.h
 
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
    parser = "!PARSER"
 
@@ -177,6 +178,22 @@ rename.file:
          end
       end
    next clash.i
+
+* 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64.  Renaming a file moves it on disk, and the edit gates know a program file, a
+*   dictionary and the VOC by their names; so a rename could be used to take one out of its name and put it back (cname bp to work, change it,
+*   cname work to bp).  A file that is of one of those kinds now, or that would become one, is renamed only by a session that has the gate.
+*   An ordinary file, and its dictionary with it, is renamed as before.
+   for ek = 1 to 2
+      if ek = 1 then ek.path = rec<2> else ek.path = new.file.name
+      if ek.path # '' then
+         if not(kernel(K$EDIT.OK, ek.path)) then
+            @system.return.code = -ER$PERM
+            ek.kind = kernel(K$EDIT.KIND, ek.path)
+            if ek.kind < 1 or ek.kind > 3 then ek.kind = 1
+            stop sysmsg(12409 + ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file (Linux 11405-11407)
+         end
+      end
+   next ek
 
    if type = 'Q' then
       display sysmsg(6152) ;* This is a Q-pointer. The operating system files will not be renamed.
@@ -309,6 +326,12 @@ rename.records:
    if fileinfo(file, FL$READONLY) then
       @system.return.code = -ER$RDONLY
       stop sysmsg(1431) ;* File is read-only
+   end
+
+* 17 Oct 26 dm - S.64: renaming records of a VOC, a dictionary or a program file is a change to it and needs the gate.
+   if not(edit_guard(file)) then
+      @system.return.code = -ER$PERM
+      stop
    end
 
    if token.type = PARSER$END then stop sysmsg(2109) ;* Record name required

@@ -18,6 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 17 Oct 26  dm  S.64 part 2 (the edit gates): COMO ON record IN dirfile (and APPEND, and the log of PHANTOM LOG dirfile, which the
+*                phantom starts with this verb) writes terminal output into a record of the directory file, replacing it or
+*                adding to it, and the statement asks nothing itself (op_tio.c como_open).  The full pathname of the record is
+*                asked of K$EDIT.OS.OK before the statement, so a directory file that is a program file, a dictionary or the
+*                VOC is refused unless the session has the gate; the reason is displayed.  The $COMO pointer and directory the
+*                verb makes for itself are not asked: a log in $COMO is the verb's ordinary use.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 18 Oct 26 Windows port - from Linux f3a22e8 (12 Oct 26): openQM 8, 9, 361: APPEND, IN dirfile, and record names mapped as for a directory file.
 * END-HISTORY
@@ -163,6 +169,19 @@ como.on:
 
    * Names with characters a directory file cannot hold are mapped as for any other record (openQM 9)
    mapped.name = ospath(como.record.name, OS$MAPPED.NAME)
+
+* 17 Oct 26 dm - S.64.  The COMO statement replaces, or adds to, a record of the directory file, whichever file that is, and asks
+*   nothing itself.  The pathname it will be given is asked here, before it is: a directory file that is a program file, a dictionary
+*   or the VOC needs the gate for its kind (the administrator is never refused).  The record is a plain file, so no lock is held, and
+*   the $COMO directory opened above is closed again so that a refusal does not leave this verb looking active.
+   if not(kernel(K$EDIT.OS.OK, target.dir : @ds : mapped.name)) then
+      @system.return.code = -ER$PERM
+      eom.path = target.dir : @ds : mapped.name
+      gosub edit.os.message
+      if fileinfo(como.file, FL$OPEN) then close como.file
+      stop eom.text
+   end
+
    como (if append then '>>' else '') : target.dir : @ds : mapped.name
    como.record = como.record.name
    recordlocku como.file, como.record.name
@@ -185,6 +204,32 @@ como.off:
 
    display sysmsg(6415) ;* COMO file deactivated
 
+   return
+
+*****************************************************************************
+* EDIT.OS.MESSAGE  -  S.64: why K$EDIT.OS.OK refused the OS pathname in eom.path; the text comes back in eom.text
+*
+* The kernel refuses when ANY component of the path below the account names a VOC, a dictionary or a program file that the session
+* may not change, and K$EDIT.KIND looks only at the last one, so each component is asked and the first whose gate is off is the one
+* named (12410 the VOC, 12411 a dictionary, 12412 a program file).  A path the kernel refused without finding one in the text that
+* was typed (a symbolic link, one it could not resolve) gets 12415, the message edit_guard gives for a path it cannot read.
+
+edit.os.message:
+   eom.kind = 0
+   for eom.i = 1 to dcount(eom.path, '/')
+      eom.k = kernel(K$EDIT.KIND, field(eom.path, '/', eom.i))
+      if eom.kind = 0 and eom.k >= 1 and eom.k <= 3 then
+         begin case
+            case eom.k = 1 ; eom.gate = kernel(K$VOC.EDIT, -1)
+            case eom.k = 2 ; eom.gate = kernel(K$DICT.EDIT, -1)
+            case 1         ; eom.gate = kernel(K$BP.EDIT, -1)
+         end case
+         if not(eom.gate) then eom.kind = eom.k
+      end
+   next eom.i
+   eom.msg = 12415
+   if eom.kind then eom.msg = 12409 + eom.kind
+   eom.text = sysmsg(eom.msg)
    return
 end
 

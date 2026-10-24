@@ -3,6 +3,8 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 17 Oct 26 dm S.64: the manifest keys edit.voc, edit.bp and edit.dict (acc_os_info) are read and handed to !create_account (CA$VOC.EDIT and the
+*              others); a manifest that has none gives an account with the edit gates off.
 * 06 Oct 26 dm PAL-15 (parity audit J-3): each account restored is audited.
 * 01 Oct 26 dm Written for S.50 (owner's request of 30 Sep 2026, rulings of
 *              1 Oct; part of 1.1-3 on all four products).  SHARED WITH SD CORE
@@ -412,6 +414,9 @@ restore.one:
       if m.suspended = 1 then settings<CA$SUSPENDED> = 1
       settings<CA$OS.SH> = m.os.sh
       settings<CA$OS.EXECUTE> = m.os.execute
+      settings<CA$VOC.EDIT> = m.edit.voc      ;* 17 Oct 26, S.64: the edit gates the account had ('' for a manifest that has none: off)
+      settings<CA$BP.EDIT> = m.edit.bp
+      settings<CA$DICT.EDIT> = m.edit.dict
       settings<CA$REUSE.SD.USER> = 1
       call !create_account(m.type, acc.name, settings, err)
       if err # '' then gosub show.err ; return
@@ -694,6 +699,7 @@ show.err:
 load.section:
    m.source.path = '' ; m.type = '' ; m.desc = '' ; m.ssh = '' ; m.api = ''
    m.members = '' ; m.suspended = '' ; m.os.sh = '' ; m.os.execute = ''
+   m.edit.voc = '' ; m.edit.bp = '' ; m.edit.dict = ''
    m.files = '' ; m.bytes = '' ; m.dirs = ''
    for kp = 1 to dcount(sec.keys<s.idx>, @vm)
       kv = sec.vals<s.idx,kp>
@@ -707,6 +713,9 @@ load.section:
          case sec.keys<s.idx,kp> = 'suspended'   ; m.suspended = kv
          case sec.keys<s.idx,kp> = 'os.sh'       ; m.os.sh = kv
          case sec.keys<s.idx,kp> = 'os.execute'  ; m.os.execute = kv
+         case sec.keys<s.idx,kp> = 'edit.voc'    ; m.edit.voc = kv
+         case sec.keys<s.idx,kp> = 'edit.bp'     ; m.edit.bp = kv
+         case sec.keys<s.idx,kp> = 'edit.dict'   ; m.edit.dict = kv
          case sec.keys<s.idx,kp> = 'files'       ; m.files = kv
          case sec.keys<s.idx,kp> = 'bytes'       ; m.bytes = kv
          case sec.keys<s.idx,kp> = 'dirs'        ; m.dirs = kv

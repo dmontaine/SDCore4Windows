@@ -1,0 +1,69 @@
+* _MKSAVEDLISTS
+* Make the saved-lists file and its VOC pointer, for !WRITELIST.
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  Written for S.64 part 2 (the edit gates).  !WRITELIST is not $internal, so the write of the $savedlists pointer
+*               to the VOC, which it did itself the first time a list was saved in an account that had none, was refused (12410) to
+*               a session without voc.edit although all it was doing was saving a list.  SAVE.LIST and SAVE.STACK make the same
+*               pointer from $internal programs.  This holds the pointer's creation and nothing else; the write of the list
+*               stays in !WRITELIST, which is not $internal and so is still held to the gates for the file it writes to.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !mksavedlists(err)
+*
+* Makes the saved-lists file $svlists and the VOC entry $savedlists that names it, as SAVE.LIST does, when the VOC has no
+* $savedlists entry.  ERR is 0 when the entry exists afterwards (made here, or already there), else the error number of the
+* CREATE.FILE that failed.
+*
+* THIS PROGRAM IS $internal, WHICH THE KERNEL'S EDIT TEST LETS THROUGH, AND ANY PROGRAM CAN CALL IT BY NAME.  So it takes no
+* name and no path from its caller, writes one fixed record, and does nothing at all when $savedlists already exists: it can
+* never replace an entry the account has, which is what a change to the VOC would be.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine mksavedlists(err)
+$catalog !mksavedlists
+
+   err = 0
+
+   * Hold the id, and look again: the caller found no entry, but another process may have made it since, and an entry that
+   * is there is left exactly as it is.
+
+   recordlocku @voc, '$savedlists'
+   read s from @voc, '$savedlists' then
+      release @voc, '$savedlists'
+      return
+   end
+
+   create.file '$svlists' dynamic on error
+      err = status()
+      release @voc, '$savedlists'
+      return
+   end
+
+   write 'F' : @fm : '$svlists' to @voc, '$savedlists'     ;* Writing the record releases the id
+
+   return
+end
+
+* END-CODE

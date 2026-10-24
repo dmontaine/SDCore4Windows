@@ -1,0 +1,118 @@
+* UPGRADE_EDITGATES
+* S.64 (owner, 17 Oct 2026).  Keep what the existing accounts have when the edit gates arrive.
+*
+* The edit gates are OFF by default: a new account cannot save a change to a VOC, a program file or a dictionary until SDSYS gives it
+* the right (MODIFY.ACCOUNT VOC-ON / BP-ON / DICT-ON).  But the accounts that exist when this ships have always been able to, and a
+* blank in the register reads as denied, so an upgrade that did nothing would lock every one of them out of ED on their programs, of
+* BASIC and CATALOG, and of every dictionary edit on the morning after.  The owner's rule for gates that arrive (13 Oct, S.63, and
+* the same for these): "existing accounts leave on to preserve their existing situation".
+*
+* So this sets ACC$VOC.EDIT, ACC$BP.EDIT and ACC$DICT.EDIT to 'yes' ONCE for every USER account in the register (an sdu_ group: the
+* account a person normally signs on to) whose field is BLANK, that is, never told.  A field that already says 'no' is somebody's
+* decision and is left alone.
+*
+* GROUP AND OTHER ACCOUNTS ARE LEFT OFF ON PURPOSE (the delivered default is the tighter one: high security is delivered and the
+* administrator loosens it).  They are not unreachable: a member of the account's Linux group who signs on to one DIRECTLY - sd -a<name>,
+* a batch job run as sd -a<name>, or an API connection to it - gets THAT ACCOUNT'S OWN switches, because the sign-on account decides and
+* only a LOGTO from another account leaves the earlier account's gates alone.  So where members need to save to a VOC, a program file or
+* a dictionary in a group or other account that way, SDSYS gives it with modify.account <account> voc-on / bp-on / dict-on; nothing
+* here does it for them.  SDSYS needs nothing from this program: the administrator passes every gate on a terminal or in a batch job,
+* and an API session of SDSYS - which carries no administrator flag - is given the three gates ON in apisrvr (the sdsys account's
+* register record has no edit fields, and modify.account refuses sdsys).
+*
+* ONCE MEANS ONCE.  An administrator who later runs MODIFY.ACCOUNT jack BP-OFF must not find the next install turning it back on, so
+* the walk leaves a marker, sdsys/$editgates.done, and does nothing when the marker is there.  The marker is written only after every
+* account was written, so a run that stopped half way is repeated whole (a field that now says 'yes' is not blank and is left alone).
+*
+* RUN gpl.bp upgrade_editgates       set the edit gates for the existing accounts, once
+*
+* It runs from the installer's upgrade block, as sd -internal, next to upgrade_gates: after UPDATE.ACCOUNTS ALL and before the
+* register is chowned to sdsys.  It prints COMPLETE on a line of its own when, and only when, the register holds what it should; the
+* installer matches on that word and nothing else.
+*
+* START-HISTORY:
+* 23 Oct 26 Windows port - from Linux d7cda81: carried; the include is keys.h and the sdu_ test folds case.  Run by upgrade-gates.ps1 after
+*               upgrade_gates.  RELEASE_1.1 170.
+* 17 Oct 26 dm  S.64 part 2: the header says that group and other accounts are left off on purpose and what a direct sign-on to one gets,
+*               and that sdsys over the API is covered in apisrvr.  Comments only.
+* 17 Oct 26 dm  New, from upgrade_gates.
+* END-HISTORY
+*
+* START-CODE
+
+$internal
+program upgrade_editgates
+
+$include keys.h
+$include int$keys.h
+
+   marker = @sdsys:@ds:'$editgates.done'
+
+   if ospath(marker, OS$EXISTS) then
+      crt 'The edit gates were set for the existing accounts by an earlier install; nothing changed.'
+      crt 'COMPLETE'
+      stop
+   end
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      crt 'Cannot open the account register: the edit gates were NOT set.'
+      stop
+   end
+
+   changed = 0
+   kept = 0
+   failed = 0
+   select acc.f to 12
+   loop
+      readnext reg.name from 12 else exit
+      readu rec from acc.f, reg.name else
+         continue
+      end
+      if downcase(rec<ACC$GROUP>[1, 4]) = 'sdu_' then
+         if trim(rec<ACC$VOC.EDIT>) # '' and trim(rec<ACC$BP.EDIT>) # '' and trim(rec<ACC$DICT.EDIT>) # '' then
+            kept += 1
+            release acc.f, reg.name
+         end else
+            if trim(rec<ACC$VOC.EDIT>) = '' then rec<ACC$VOC.EDIT> = 'yes'
+            if trim(rec<ACC$BP.EDIT>) = '' then rec<ACC$BP.EDIT> = 'yes'
+            if trim(rec<ACC$DICT.EDIT>) = '' then rec<ACC$DICT.EDIT> = 'yes'
+            written = @true
+            write rec to acc.f, reg.name on error written = @false
+            if written then
+               changed += 1
+            end else
+               failed += 1
+               release acc.f, reg.name
+               crt 'Cannot write the register record of ' : reg.name
+            end
+         end
+      end else
+         release acc.f, reg.name
+      end
+   repeat
+
+   crt 'Edit gates: switched on for ' : changed : ' existing account(s); ' : kept : ' already had all three set; ' : failed : ' failed'
+
+   if failed # 0 then
+      crt 'The gates were NOT all set, so the marker is not written and the next install repeats this.'
+      stop
+   end
+
+   openseq marker to marker.f then
+      weofseq marker.f
+   end else
+      create marker.f else
+         crt 'Cannot write ' : marker : ': the gates are set, but the next install will repeat the walk (harmless).'
+         crt 'COMPLETE'
+         stop
+      end
+   end
+   writeseq 'S.64: the edit gates were set for the existing accounts' to marker.f else null
+   closeseq marker.f
+
+   crt 'COMPLETE'
+   stop
+
+end
+
+* END-CODE

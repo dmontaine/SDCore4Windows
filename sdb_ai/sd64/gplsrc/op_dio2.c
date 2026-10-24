@@ -1746,6 +1746,48 @@ bool os_path_inside(const char* rootdir, const char* name) {
   return path_within(cand, root);
 }
 
+/* path_fold()  -  an absolute pathname (as left by fullpath()) folded into the POSIX namespace, for comparing two of them.  Answers FALSE,
+   and OUT empty, when it cannot be folded or still holds "..".  OUT has MAX_PATHNAME_LEN + 1 bytes.  (S.64 part 2, the private catalogue.) */
+
+bool path_fold(char* resolved, char* out) {
+  out[0] = '\0';
+  if (!net_normalise(resolved, out) || has_parent_ref(out)) {
+    out[0] = '\0';
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/* path_view_for_edit()  -  the S.64 edit gates' view of a pathname (23 Oct 26 Windows port, from Linux d7cda81's edit_os_path_refusal).
+   RESOLVED is absolute, as left by fullpath().  REL receives the part BELOW the session's own account directory when the path is inside
+   it (answer TRUE), or the whole path folded into the POSIX namespace when it is not (answer FALSE).  Answers FALSE with REL empty when the path
+   cannot be folded or still holds "..": the caller refuses, as the gate does for a path it cannot read.                                  */
+
+bool path_view_for_edit(char* resolved, char* rel, size_t rel_size) {
+  char cand[MAX_PATHNAME_LEN + 1];
+  char root[MAX_PATHNAME_LEN + 1];
+  char item[MAX_PATHNAME_LEN + 1];
+  DESCRIPTOR* descr;
+  size_t root_len;
+
+  rel[0] = '\0';
+  if (!net_normalise(resolved, cand) || has_parent_ref(cand))
+    return FALSE;
+
+  if (process.syscom != NULL) {
+    descr = Element(process.syscom, SYSCOM_ACCOUNT_PATH);
+    if ((k_get_c_string(descr, item, MAX_PATHNAME_LEN) > 0) && net_normalise(item, root) && path_within(cand, root)) {
+      root_len = strlen(root);
+      while ((root_len > 1) && (root[root_len - 1] == '/'))
+        root_len--;
+      snprintf(rel, rel_size, "%s", cand + root_len);
+      return TRUE;
+    }
+  }
+  snprintf(rel, rel_size, "%s", cand);
+  return FALSE;
+}
+
 /* ======================================================================
    The SD.ACCOUNTS gate (23 Oct 26 Windows port, from Linux 7ceb50d, QM4 gap 22; the owner: "one that gives access to any file in
    any SD account directory the user has logto access to").  Between "its own account only" and OS.EXECUTE: an account holding the

@@ -19,6 +19,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux bc2f159 (11 Oct 26): 1.2-0 bundle A-10 (openQM ref 576).
+* 17 Oct 26 dm  S.64: DECATALOG needs bp.edit (SDSYS passes); message 12413.
+* 11 Oct 26 dm  1.2-0 bundle A-10 (openQM ref 576).
 * END-HISTORY
 *
 *
@@ -42,7 +44,14 @@ $catalog $decat
 
 $include err.h
 $include keys.h
+$include int$keys.h
 $include parser.h
+
+* 17 Oct 26 dm - S.64: DECATALOG deletes a local catalogue entry and its object code, so it needs bp.edit (SDSYS passes).
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$BP.EDIT, -1)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12413) ;* Programs can only be compiled or catalogued by an account that has bp.edit
+   end
 
    parser = "!PARSER"
 

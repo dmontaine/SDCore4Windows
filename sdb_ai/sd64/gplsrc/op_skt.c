@@ -17,7 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
- * rev 0.9-3 SIGPIPE Error in op_writeskt() (WRITE.SOCKET)  issue #89 / ScarletDME 
+ * rev 0.9-3 SIGPIPE Error in op_writeskt() (WRITE.SOCKET)  issue #89 / ScarletDME
  * 31 Dec 23 SD launch - prior history suppressed
  * 26 Aug 26 Windows port - SET.SOCKET.MODE's keep-alive case discarded the
  *           caller's value and always enabled it, while returning success.
@@ -91,6 +91,7 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 /* -------------------- */
 
 #include "sd.h"
+#include "header.h" /* HDR_INTERNAL: the edit gates of SKT$INFO.TRACE (17 Oct 26, S.64) */
 #include "keys.h"
 #include "sdnet.h"
 #include "sd_tls.h"

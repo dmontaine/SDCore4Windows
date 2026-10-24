@@ -20,6 +20,9 @@
 * START-HISTORY:
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 18 Aug 26 Windows port - $svlists lower case on disk; the VOC id is unchanged
+* 17 Oct 26 dm  S.64 part 2: SAVE.LIST ... IN a VOC, a dictionary or a program file asks edit_guard before it takes the list or writes.
+* 13 Sep 26 dm  A saved-list file it has to create is $svlists on disk (plan M3 D3).
+* 12 Sep 26 dm  The saved-list VOC id is $savedlists (plan M3, first rename).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -50,6 +53,8 @@ $include keys.h
 
 $include syscom.h
 $include parser.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64 part 2
 
 
    parser = "!PARSER"
@@ -148,6 +153,14 @@ $include parser.h
       open "$savedlists" to saved.lists.file else
          stop sysmsg(3248, status()) ;* Error xx opening $savedlists
       end
+   end
+
+* 17 Oct 26 dm - S.64 part 2: IN names any file, and this program is $internal, so the kernel's own test lets its WRITE through.  It asks
+*   about the file opened, before READLIST takes the list, so a refusal leaves the active select list as it was.  The default $savedlists
+*   (and the pointer made for it above, which is the sanctioned side effect) is none of the three guarded kinds.
+   if not(edit_guard(saved.lists.file)) then
+      @system.return.code = -ER$PERM
+      stop
    end
 
 * ---------------  Step 3 -  Save the select list

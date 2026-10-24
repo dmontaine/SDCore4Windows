@@ -1,0 +1,70 @@
+* EDIT_GUARD
+* May this session save a change to the file it has open?
+* Copyright (c) 2026 Ladybridge Systems, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 17 Oct 26 dm  New, S.64 (owner, 17 Oct 2026: the gates voc.edit, bp.edit and dict.edit).  The multi-user form of Linux Solo's
+*               !voc_guard, which asks for ADMIN; this asks the session's gates and does not look at the file itself.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    deffun edit_guard(f) calling '!edit_guard'
+*    if not(edit_guard(file.var)) then stop
+*
+* op_dio3.c refuses a user program's own WRITE, WRITEV, DELETE or CLEARFILE of a VOC, a dictionary or a program file when the session
+* has not the gate for it.  The verbs that edit a file the USER names (ED, SED, CED, IDE, EDIT, COPY, COPYP, DELETE, CLEAR.FILE,
+* CNAME, DELETE.FILE) are $internal, which the C test lets through because they have to be able to do their work, so each asks this
+* before it changes a file it was given.  The verbs that keep the account's own records as a side effect of a command (CREATE.FILE's
+* pointer, a saved sentence, the command stack, a compiled I-type) do not ask: the rule is DIRECT edits only.
+*
+* IT LOOKS AT THE FILE THAT WAS OPENED, NOT AT THE NAME THAT WAS TYPED, so a Q-pointer to a VOC, or "voc" in any case, is caught.  The
+* kind comes from the kernel (K$EDIT.KIND on the pathname) and so does the answer (K$EDIT.OK), so the rules live in one place, op_sh.c.
+* The administrator is never refused.
+*
+* Returns @true when the change may go ahead.  On @false it has already said why (12410 the VOC, 12411 a dictionary, 12412 a program
+* file; 12415 when the file's pathname cannot be read, which is refused because a gate that fails open on a path it cannot read is
+* decoration).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function edit_guard(f)
+$catalog !edit_guard
+
+$include keys.h
+$include int$keys.h
+
+   p = fileinfo(f, FL$PATH)
+   if p = '' then
+      if kernel(K$ADMINISTRATOR, -1) then return @true
+      display sysmsg(12415) ;* The pathname of the file cannot be read, so a change to it is refused
+      return @false
+   end
+
+   if kernel(K$EDIT.OK, p) then return @true
+
+   kind = kernel(K$EDIT.KIND, p)
+   if kind < 1 or kind > 3 then kind = 1
+   display sysmsg(12409 + kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+   return @false
+end
+
+* END-CODE

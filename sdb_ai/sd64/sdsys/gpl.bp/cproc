@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: the stack commands ask the voc.edit gate.  ".S name" may still make a NEW saved
+*           sentence or paragraph (a side effect of ordinary commands) but overwriting a VOC record that exists, and ".D name" deleting one, are refused
+*           with 12410 unless the session may save a change to its VOC (the administrator, or an account with voc.edit on).  This program is $internal,
+*           which the kernel's own test lets through, so it asks (voc.edit.ask).  RELEASE_1.1 170.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-16: KEEP.SELECT.  CLEAR.SELECT does not clear list 0 at the end of a command in which a
 *           program ran KEEP.SELECT (K$KEEP.SELECT, set by !keepselect, cleared as each outermost command starts).
 * 06 Oct 26 Windows port - end of input at the command prompt ends the session
@@ -1288,6 +1292,10 @@ stack.manipulation:
             if n > stack.depth or n = 0 then goto stack.position.error
             del command.stack<n>
          end else                                     ;* .D name
+* 17 Oct 26 dm - S.64: deleting a VOC record is a change to the VOC.  Asked before the readu, so that no lock is taken and nothing
+*   is read for a session the gate refuses (a refused session is told 12410 whether or not the name exists).
+            gosub voc.edit.ask
+            if not(voc.edit.ok) then goto exit.stack.command
 * 28 Aug 26 Windows port - TRY downcase TOO, AND SAY SO WHEN NOTHING MATCHES.
 * This tried the name as typed and then upcase only, where .L (:1180) and .R
 * (:1208) try as typed, then downcase, then upcase.  A paragraph saved as
@@ -1478,6 +1486,14 @@ stack.manipulation:
          end
 
          readvu voc.rec from voc, arg1, 0 then
+* 17 Oct 26 dm - S.64: the record exists, so this would REPLACE it (a verb, a file pointer, the LOGIN paragraph) - a change to the VOC
+*   that a session without voc.edit may not make.  A name that does not exist yet is a new saved sentence, which stays open to
+*   everybody.  The record is locked by the readvu, so it is released before leaving.
+            gosub voc.edit.ask
+            if not(voc.edit.ok) then
+               release voc, arg1
+               goto exit.stack.command
+            end
             loop
                display sysmsg(5045, arg1) :  ;* Overwrite VOC record 'xx'?
                prompt ""
@@ -1582,6 +1598,14 @@ stack.position.error:
 format.error:
    display sysmsg(5047) ;* Format error in stack command
    goto exit.stack.command
+
+* 17 Oct 26 dm - S.64: may this session save a change to its VOC?  Sets VOC.EDIT.OK and, on a refusal, has said why (12410).  The
+*   kernel answers for the file that is open (fileinfo FL$PATH, so a LOGTO account's VOC counts) and passes the administrator; an
+*   unreadable pathname is a refusal for anybody else.
+voc.edit.ask:
+   voc.edit.ok = kernel(K$EDIT.OK, fileinfo(voc, FL$PATH))
+   if not(voc.edit.ok) then display sysmsg(12410) ;* The VOC can only be changed by an account that has voc.edit
+   return
 
 *****************************************************************************
 * PROC.PARA.SENTENCE  -  Process sentence from a paragraph

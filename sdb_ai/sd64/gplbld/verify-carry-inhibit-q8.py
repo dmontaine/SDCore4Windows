@@ -246,7 +246,7 @@ def build_account(name):
     out = adm(["BASIC bp zzfix", "RUN bp zzfix"], internal=True)
     if not has(out, r"^FIX done " + name + "$"):
         bail("the fixture account %s was not built:\n%s" % (name, "\n".join(out[-6:])))
-    put(os.path.join(SYS, "accounts", name), "\n".join([path, "", GROUP, "", "", "", "", ""]) + "\n")
+    put(os.path.join(SYS, "accounts", name), "\n".join([path, "", GROUP, "", "", "", "", "", "", "yes", "yes", "yes"]) + "\n")   # 17 Oct 26: the edit gates (S.64) on
     for nm, text in USER_PROGS.items():
         put(os.path.join(path, "bp", nm), text)
     out = plain(name, ["BASIC bp " + " ".join(USER_PROGS)])

@@ -47,6 +47,27 @@ function Get-GatesVerdict([string] $Text) {
     }
 }
 
+# The same decision for the SECOND program this step runs, UPGRADE_EDITGATES (S.64, Linux d7cda81): it sets the three edit gates
+# (voc.edit, bp.edit, dict.edit) to 'yes' once for every USER account whose field is blank, because the accounts that exist at an
+# upgrade have always been able to change their VOC, programs and dictionaries.  It prints "Edit gates: switched on for N existing
+# account(s); K already had all three set; F failed" and COMPLETE, or "... by an earlier install; nothing changed".
+function Get-EditGatesVerdict([string] $Text) {
+    $complete = $Text -match '(?m)^\s*COMPLETE\s*$'
+    $set = -1; $kept = -1; $failed = -1
+    $m = [regex]::Match($Text, 'Edit gates: switched on for (\d+) existing account\(s\); (\d+) already had all three set; (\d+) failed')
+    if ($m.Success) { $set = [int]$m.Groups[1].Value; $kept = [int]$m.Groups[2].Value; $failed = [int]$m.Groups[3].Value }
+    $again = $Text -match 'The edit gates were set for the existing accounts by an earlier install; nothing changed'
+    $refused = ($Text -match 'Cannot open the account register') -or ($Text -match 'were NOT all set') -or ($Text -match 'Cannot write the register record')
+    return [pscustomobject]@{
+        Complete = $complete
+        Set = $set
+        Kept = $kept
+        Failed = $failed
+        Repeat = $again
+        Refused = $refused
+    }
+}
+
 # The units test dot-sources this file for Get-GatesVerdict with $SkipRun set, so nothing below - including the sd.exe check -
 # runs under test.
 if ($SkipRun) { return }
@@ -133,6 +154,30 @@ try {
         Say 'upgrade-gates: COMPLETE with no count of accounts - the program printed neither of its two positive lines'
         throw 'no count'
     }
+    # --- the edit gates, second program, same standard -------------------------------------------------------------------------
+    Say 'upgrade-gates: sd -internal RUN gpl.bp upgrade_editgates NO.PAGE'
+    $e = Invoke-Sd @('-internal', 'RUN', 'gpl.bp', 'UPGRADE_EDITGATES', 'NO.PAGE')
+    Say ("  exit {0}" -f $e.Code)
+    Say '  --- report ---'
+    foreach ($l in ("$($e.Text)" -split "`r?`n")) { if ($l.Trim()) { Say ("  | " + $l) } }
+    Say '  --- end ---'
+
+    $ev = Get-EditGatesVerdict $e.Text
+    Say ("upgrade-gates: edit gates complete={0} set={1} kept={2} failed={3} repeat={4} refused={5}" -f
+         $ev.Complete, $ev.Set, $ev.Kept, $ev.Failed, $ev.Repeat, $ev.Refused)
+    if (-not $ev.Complete) {
+        Say 'upgrade-gates: UPGRADE_EDITGATES did not reach COMPLETE'
+        throw 'incomplete (edit gates)'
+    }
+    if ($ev.Refused -or ($ev.Failed -gt 0)) {
+        Say 'upgrade-gates: one or more accounts could not be written for the edit gates (see the report)'
+        throw 'write trouble (edit gates)'
+    }
+    if ((-not $ev.Repeat) -and ($ev.Set -lt 0)) {
+        Say 'upgrade-gates: the edit gates reached COMPLETE with no count of accounts'
+        throw 'no count (edit gates)'
+    }
+
     Say 'upgrade-gates: DONE'
     $result = 0
 }

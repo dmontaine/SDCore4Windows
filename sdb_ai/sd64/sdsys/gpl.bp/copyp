@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 4750d16 (12 Oct 26): A record of a data collection file is shown as its JSON, and copied to a file that is not
+* 17 Oct 26 dm  S.64: copying INTO a VOC, a dictionary or a program file, and moving records OUT of one (the D flag), ask edit_guard.
+* 12 Oct 26 dm  A record of a data collection file is shown as its JSON, and copied to a file that is not
 *               one as its JSON text; text copied into a collection file must be JSON (as COPY does).
 * 18 Oct 26 Windows port - from Linux 871bc87 (12 Oct 26): COPY.LISTP: the same program, source file defaulting to $savedlists (openQM 72).
 * 20240710 Prior history suppressed
@@ -65,6 +67,8 @@ $include keys.h
 $include err.h
 $include parser.h
 
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
+
    prompt ''
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
@@ -110,6 +114,21 @@ $include parser.h
       end
    end else
       t.file = f.file
+   end
+
+* 17 Oct 26 dm - S.64: copying into a VOC, a dictionary or a program file, or moving records out of one (the D flag), needs the gate.
+*   This program is $internal, so the kernel's own test lets its writes through; it asks, once per file, before anything is read.
+   if dest = '' then
+      if not(edit_guard(t.file)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
+   end
+   if dflag then
+      if not(edit_guard(f.file)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
    end
 
    * Suppress mark mapping if source and target are both directory files

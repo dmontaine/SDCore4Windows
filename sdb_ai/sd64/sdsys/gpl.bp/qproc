@@ -19,6 +19,12 @@
 *  
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): L-type links in a query (link%item) go through $linkref and $icomp, so they reach A, S and E items and
+* 17 Oct 26 dm  S.64 part 2 (the edit gates): this program is $internal, so the kernel's own test lets its writes through, and it
+*               asks for itself before it changes a file the user named.  REFORMAT and SREFORMAT ask edit_guard for the TO file
+*               (the clause and the Output file: prompt, check.reformat.target), PAGESEQ asks it for the control file, and the
+*               delimited report asks the OS-access gate (K$PATH.OK) and the edit gate (K$EDIT.OS.OK) for its TO pathname, the
+*               APPENDING form too, before the file is opened.  A compiled I-type written back to the dictionary is not asked.
+* 17 Oct 26 dm  L-type links in a query (link%item) go through $linkref and $icomp, so they reach A, S and E items and
 *               follow a link to a link and a link's file expression (QM4 Fixes 7); they reached D, I and C items one
 *               link away.
 * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): LIST.ITEM / SORT.ITEM number lines of more than 999 fields with as many digits as they need (openQM 349).
@@ -86,6 +92,8 @@ $include err.h
 $include bcomp.h
 $include pcl.h
 $include qdisp.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
 $define VLIST.NAME.FMT "12.L"
 equ NUL to char(0)
@@ -767,6 +775,23 @@ parse.default.phrase:
          goto exit.qproc
       end
 
+* 17 Oct 26 dm - S.63 and S.64.  This program is $internal, so the kernel asks neither the OS-access gate nor the edit gates for the
+*   OPENSEQ below, and the report is written, or appended, wherever the name points.  Asked here, as the session, BEFORE the file is
+*   opened, so a refusal has created, truncated and locked nothing (the overwrite question below is only reached by a path that
+*   passed).  APPENDING is the same open, so it is covered by the same test.
+      if not(kernel(K$PATH.OK, csv.pathname)) then
+         @system.return.code = -ER$PERM
+         display sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached by pathname
+         goto exit.qproc
+      end
+      if not(kernel(K$EDIT.OS.OK, csv.pathname)) then
+         @system.return.code = -ER$PERM
+         eom.path = csv.pathname
+         gosub edit.os.message
+         display eom.text
+         goto exit.qproc
+      end
+
       openseq csv.pathname to csv.f then
          if not(csv.append) and not(csv.no.query) then
             loop
@@ -1404,6 +1429,7 @@ template.found:
          open upcase(reformat.filename) to reformat.f then exit
          display sysmsg(1427, reformat.filename)  ;* Cannot open %1
       repeat
+      gosub check.reformat.target   ;* 17 Oct 26 dm, S.64: the file typed at the prompt is asked like the TO clause's
    end
 
 *-----------------------------------------------------------------------------
@@ -3185,6 +3211,14 @@ label.template.found:
                end
             end
 
+* 17 Oct 26 dm - S.64: the page number is written back into a record of this file when the report ends, whatever the file is
+*   (this program is $internal, so the kernel's own test lets the write through).  Asked now, before the record is read and
+*   locked below, so a refusal holds no lock.
+            if not(edit_guard(pageseq.f)) then
+               @system.return.code = -ER$PERM
+               goto exit.qproc
+            end
+
             * Page sequence control record name
             gosub get.token
             if token = '' then
@@ -3391,6 +3425,7 @@ label.template.found:
                   reformat.filename = upcase(reformat.filename)
                end
             end
+            gosub check.reformat.target   ;* 17 Oct 26 dm, S.64
 
 * --- TOTAL
          case keyword = KW$TOTAL and (report.command or reformat.command)
@@ -3500,6 +3535,44 @@ report.progress:
    if rem(progress.examined, 1000) = 0 then
       display sysmsg(12044, progress.examined)  ;* %1 record(s) examined
    end
+   return
+
+* ======================================================================
+* CHECK.REFORMAT.TARGET  -  S.64: may this session save records into the file REFORMAT writes to?
+*
+* Called after reformat.f is open, from the TO clause and from the Output file: prompt, before a record is read or written.  The
+* file is looked at as opened (edit_guard), so a Q-pointer to a VOC or a pointer to a program file is caught under any name.  The
+* reason has been displayed when it comes back refused, and no lock is held at either call.
+
+check.reformat.target:
+   if edit_guard(reformat.f) then return
+   @system.return.code = -ER$PERM
+   goto exit.qproc
+
+* ======================================================================
+* EDIT.OS.MESSAGE  -  S.64: why K$EDIT.OS.OK refused the OS pathname in eom.path; the text comes back in eom.text
+*
+* The kernel refuses when ANY component of the path below the account names a VOC, a dictionary or a program file that the session
+* may not change, and K$EDIT.KIND looks only at the last one, so each component is asked and the first whose gate is off is the one
+* named (12410 the VOC, 12411 a dictionary, 12412 a program file).  A path the kernel refused without finding one in the text that
+* was typed (a symbolic link, one it could not resolve) gets 12415, the message edit_guard gives for a path it cannot read.
+
+edit.os.message:
+   eom.kind = 0
+   for eom.i = 1 to dcount(eom.path, '/')
+      eom.k = kernel(K$EDIT.KIND, field(eom.path, '/', eom.i))
+      if eom.kind = 0 and eom.k >= 1 and eom.k <= 3 then
+         begin case
+            case eom.k = 1 ; eom.gate = kernel(K$VOC.EDIT, -1)
+            case eom.k = 2 ; eom.gate = kernel(K$DICT.EDIT, -1)
+            case 1         ; eom.gate = kernel(K$BP.EDIT, -1)
+         end case
+         if not(eom.gate) then eom.kind = eom.k
+      end
+   next eom.i
+   eom.msg = 12415
+   if eom.kind then eom.msg = 12409 + eom.kind
+   eom.text = sysmsg(eom.msg)
    return
 
 * ======================================================================

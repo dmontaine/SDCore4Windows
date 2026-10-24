@@ -28,6 +28,15 @@
 *           no case of the three-case fold can ever reach again.  6, and
 *           PROJECT_STATUS.md 5.12 (b) - it is what BP had to move behind.
 * 19 Aug 26 Windows port - the default source file is bp, 5.12 (b).
+* 17 Oct 26 dm  S.64: compiling needs bp.edit (SDSYS passes); message 12413.
+* 10 Oct 26 dm  1.2-0 bundle A-1: the NO.QUERY option (openQM ref 27), passed to
+*               CATALOGUE; BCOMP also hands it back from $CATALOGUE and
+*               $BASIC.OPTIONS in the catalogue mode (ref 191).
+* 13 Sep 26 dm  The object file is named from the VOC id that answered the open
+*               and its suffix follows that id's case, so BASIC bp X makes
+*               bp.out, never bp.OUT; the default source file is bp (plan M3
+*               D3, the port's 1943704).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 24 0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -59,6 +68,13 @@ $define max.levels   10
 
 
 *****************************************************************************
+
+* 17 Oct 26 dm - S.64: compiling is how a program file's source becomes code that runs, so it needs bp.edit as changing the file does
+*   (SDSYS passes).  Without this an account without the gate copies source into any file and compiles it.
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$BP.EDIT, -1)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12413) ;* Programs can only be compiled or catalogued by an account that has bp.edit
+   end
 
    num.programs = 0
    parser = "!PARSER"

@@ -121,6 +121,10 @@ deffun ps_script(script) calling '!ps_script'
    reuse.sd.user = settings<CA$REUSE.SD.USER> = 1   ;* owner, 2 Oct 2026 - see the USER arm
    os.sh   = settings<CA$OS.SH> = 1
    os.exec = settings<CA$OS.EXECUTE> = 1
+* 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates, the same rule: off unless named (VOC-ON, BP-ON, DICT-ON), exactly 1 to be a request.
+   edit.voc.want = (settings<CA$VOC.EDIT> = 1)
+   edit.bp.want = (settings<CA$BP.EDIT> = 1)
+   edit.dict.want = (settings<CA$DICT.EDIT> = 1)
 
 *  ATTACH, re-checked here: -internal and the one-shot marker for THIS account
 *  (RELEASE_1.1 66).  The verb refuses the word with 2018 when either gate is
@@ -909,6 +913,16 @@ PW.TRY.AGAIN:
    if acc.type = "USER" then
       acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'
       acc.rec<ACC$OS.EXEC> = if os.exec then 'yes' else 'no'
+*     17 Oct 26 dm (Linux d7cda81) - S.64: the edit gates, written explicitly for a user account.
+      acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'
+      acc.rec<ACC$BP.EDIT> = if edit.bp.want then 'yes' else 'no'
+      acc.rec<ACC$DICT.EDIT> = if edit.dict.want then 'yes' else 'no'
+   end else
+*     A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words
+*     are honoured here too: written only when asked (blank is off).
+      if edit.voc.want then acc.rec<ACC$VOC.EDIT> = 'yes'
+      if edit.bp.want then acc.rec<ACC$BP.EDIT> = 'yes'
+      if edit.dict.want then acc.rec<ACC$DICT.EDIT> = 'yes'
    end
    write acc.rec to acc.f, acc.name
    locked = @false
@@ -916,6 +930,7 @@ PW.TRY.AGAIN:
    acc.f.open = @false
    if acc.type = "USER" then
       crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
+      crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
    end
 
    gosub secure.account.dir

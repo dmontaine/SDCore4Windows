@@ -77,6 +77,32 @@ $vp = Get-GatesVerdict $partial
 Check 'MUTANT: clean and partial verdicts differ on Failed' ($vc.Failed -ne $vp.Failed) "clean=$($vc.Failed) partial=$($vp.Failed)"
 Check 'MUTANT: clean and partial verdicts differ on Refused' ($vc.Refused -ne $vp.Refused)
 
+# --- the edit gates verdict (UPGRADE_EDITGATES, S.64) ------------------------------------------------------------------------------
+Check 'the edit gates function was lifted too' ($null -ne (Get-Command Get-EditGatesVerdict -ErrorAction SilentlyContinue))
+$eclean = @'
+Edit gates: switched on for 4 existing account(s); 1 already had all three set; 0 failed
+COMPLETE
+'@
+$ev = Get-EditGatesVerdict $eclean
+Check 'edit gates clean: COMPLETE, set 4, kept 1, failed 0' ($ev.Complete -and $ev.Set -eq 4 -and $ev.Kept -eq 1 -and $ev.Failed -eq 0 -and -not $ev.Refused)
+$erepeat = @'
+The edit gates were set for the existing accounts by an earlier install; nothing changed.
+COMPLETE
+'@
+$ev = Get-EditGatesVerdict $erepeat
+Check 'edit gates repeat: recognised, no counts' ($ev.Complete -and $ev.Repeat -and $ev.Set -eq -1)
+$epartial = @'
+Cannot write the register record of jack
+Edit gates: switched on for 2 existing account(s); 0 already had all three set; 1 failed
+The gates were NOT all set, so the marker is not written and the next install repeats this.
+'@
+$ev = Get-EditGatesVerdict $epartial
+Check 'edit gates partial: not complete, one failure, refused' ((-not $ev.Complete) -and $ev.Failed -eq 1 -and $ev.Refused)
+$ev = Get-EditGatesVerdict ($epartial + "`nCOMPLETE")
+Check 'edit gates: COMPLETE beside a failure is still refused' ($ev.Complete -and $ev.Refused)
+Check 'MUTANT: the SH-gates verdict does not read the edit gates line as its own count' `
+      ((Get-GatesVerdict $eclean).Set -eq -1)
+
 Write-Host ''
 Write-Host "test-upgradegates-units: $pass passed, $fail failed."
 if ($fail) { exit 1 } else { exit 0 }

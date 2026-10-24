@@ -20,6 +20,10 @@
 * START-HISTORY:
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
 * 18 Aug 26 Windows port - $svlists lower case on disk; the VOC id is unchanged
+* 17 Oct 26 dm  S.64 part 2: copying INTO a VOC, a dictionary or a program file, and moving lists OUT of one (DELETING), ask edit_guard.
+* 13 Sep 26 dm  A saved-list file it has to create is $svlists on disk (plan M3 D3).
+* 12 Sep 26 dm  The saved-list VOC id is $savedlists (plan M3, first rename).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -53,6 +57,8 @@ $catalog $copylst
 $include err.h
 $include keys.h
 $include parser.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64 part 2
 
 
    parser = "!PARSER"
@@ -225,6 +231,22 @@ $include parser.h
       if fileinfo(tgt.file, FL$READONLY) then
          @system.return.code = -ER$RDONLY
          stop sysmsg(1431) ;* File is read-only
+      end
+   end
+
+* 17 Oct 26 dm - S.64 part 2: this program is $internal, so the kernel's own test lets its WRITE and DELETE through.  When it copies to a
+*   file, the target is changed, and with DELETING the source is changed too; each is asked once, before any list is read or locked.
+*   The default $savedlists is none of the three guarded kinds, so edit_guard answers true for it.  CRT and LPTR change no file.
+   if to.file then
+      if not(edit_guard(tgt.file)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
+      if deleting then
+         if not(edit_guard(src.file)) then
+            @system.return.code = -ER$PERM
+            stop
+         end
       end
    end
 

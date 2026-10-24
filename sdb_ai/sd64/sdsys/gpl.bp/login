@@ -940,6 +940,11 @@ deffun pw_complex(pw) calling '!pw_complex'
    void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
    void kernel(K$SD.ACCOUNTS, upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
+* 17 Oct 26 dm - S.64: the edit gates are loaded HERE ONLY, at sign-on, and CPROC's logto neither reloads nor restores them
+*   (owner, 17 Oct: the account the person signed on to decides, wherever they go with LOGTO).  Off unless 'yes'.
+   void kernel(K$VOC.EDIT,  upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
+   void kernel(K$BP.EDIT,   upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
+   void kernel(K$DICT.EDIT, upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
 
    * Set @PATH
 

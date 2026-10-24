@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is copied to a file that is not
+* 17 Oct 26 dm  S.64: copying INTO a VOC, a dictionary or a program file, and moving records OUT of one (DELETING), ask edit_guard.
+* 11 Oct 26 dm  A record of a data collection file is copied to a file that is not
 *               one as its JSON text (the copy stopped with "Data cannot be
 *               converted to a string").
 * 06 Oct 26 Windows port - the closing line no longer says "copied and deleted"
@@ -61,6 +63,8 @@ $include syscom.h
 $include syscom err.h
 $include syscom keys.h
 $include int$keys.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
 
@@ -219,6 +223,21 @@ retry.target.file.open:
    if fileinfo(tgt.file, FL$READONLY) then
       @system.return.code = -ER$RDONLY
       stop sysmsg(1431) ;* File is read-only
+   end
+
+* 17 Oct 26 dm - S.64: copying into a VOC, a dictionary or a program file, or moving records out of one (DELETING), needs the gate.
+*   This program is $internal, so the kernel's own test lets its writes through; it asks, once per file, before anything is read.
+   if not(edit_guard(tgt.file)) then
+      @system.return.code = -ER$PERM
+      clearselect
+      stop
+   end
+   if deleting then
+      if not(edit_guard(src.file)) then
+         @system.return.code = -ER$PERM
+         clearselect
+         stop
+      end
    end
 
 *-----------------------------------------------------------------------------

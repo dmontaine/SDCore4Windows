@@ -14,6 +14,9 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): 1.2-0 openQM ref 458.  The syntax is SD's own.
+* 17 Oct 26 dm  S.64 part 2: FIXDIR rewrites the records it changes, so it asks edit_guard (voc.edit, dict.edit, bp.edit) once, for the
+*               file it opened, before it selects or reads anything.  It is $internal, which the kernel's own test lets through.
+* 12 Oct 26 dm  1.2-0 openQM ref 458.  The syntax is SD's own.
 * END-HISTORY
 *
 *
@@ -38,6 +41,8 @@ $include err.h
 $include keys.h
 $include parser.h
 
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
+
    parser = "!PARSER"
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
@@ -58,6 +63,13 @@ $include parser.h
 
    open fname to f else stop sysmsg(12071, fname) ;* Cannot open xx
    if fileinfo(f, FL$TYPE) # FL$TYPE.DIR then stop sysmsg(12076, fname) ;* xx is not a directory file
+
+* 17 Oct 26 dm - S.64: the program files (bp, bp.out, *.bp, *.bp.out) are directory files, and every record changed below is a saved change to
+*   one.  Asked once, for the file opened, before the select and before any record is read (edit_guard has said why when it refuses).
+   if not(edit_guard(f)) then
+      @system.return.code = -ER$PERM
+      stop
+   end
 
    if ids = '' then
       select f to 11

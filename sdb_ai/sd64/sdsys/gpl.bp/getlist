@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 18 Aug 26 Windows port - the $SAVEDLISTS VOC id is now $savedlists
+* 17 Oct 26 dm  S.64 part 2: GET.LIST ... DELETING IN a VOC, a dictionary or a program file asks edit_guard before it reads or loads.
+* 12 Sep 26 dm  The saved-list VOC id is $savedlists (plan M3, first rename).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -48,6 +50,8 @@ $include keys.h
 
 $include syscom.h
 $include parser.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64 part 2
 
 
    parser = "!PARSER"
@@ -113,6 +117,16 @@ $include parser.h
    open saved.name to saved.lists.file else
       @system.return.code = -status()
       stop sysmsg(3248, status()) ;* Error xx opening $savedlists
+   end
+
+* 17 Oct 26 dm - S.64 part 2: only DELETING changes the file (a plain GET.LIST reads it), and IN names any file.  This program is $internal,
+*   so the kernel's own test lets its DELETE through; it asks about the file opened, before the record is read and before the select list
+*   is formed, so a refusal leaves the select list as it was.  The default $savedlists is none of the three guarded kinds.
+   if deleting then
+      if not(edit_guard(saved.lists.file)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
    end
 
 * ---------------  Step 3 -  Fetch the select list

@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
+* 17 Oct 26 dm  S.64: cataloguing needs bp.edit (SDSYS passes); message 12413.
+* 12 Oct 26 dm  openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
 *               administrator raised it), as op_jumps.c valid_call_name() has it.
 * 18 Oct 26 Windows port - from Linux 5218c47 (13 Oct 26): openQM 210: GLOBAL may be followed by a prefix character (one of * ! _ $), which is put in front
 *               of every call name that has no prefix of its own - so a select list can be catalogued globally
@@ -74,6 +76,12 @@ $include syscom.h
 $include keys.h
 $include int$keys.h
 $include err.h
+
+* 17 Oct 26 dm - S.64: cataloguing puts code where commands and CALLs find it, so it needs bp.edit (SDSYS passes).
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$BP.EDIT, -1)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12413) ;* Programs can only be compiled or catalogued by an account that has bp.edit
+   end
 
    prompt ''
 

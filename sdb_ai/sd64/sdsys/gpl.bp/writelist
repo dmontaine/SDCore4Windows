@@ -18,6 +18,9 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-2 (WRITELIST).  The compiler (bcomp, st.writelist) calls it for
+* 17 Oct 26 dm  S.64 part 2: the creation of the $savedlists file and its VOC entry moved to !mksavedlists ($internal), so that a session
+*               without voc.edit can save a list in an account that has no entry yet (see _mksavedlists).  The write of the list stays here.
+* 15 Oct 26 dm  Written for QM4 gaps bundle Q-2 (WRITELIST).  The compiler (bcomp, st.writelist) calls it for
 *               WRITELIST ids TO list.name.
 * END-HISTORY
 *
@@ -40,13 +43,13 @@ $catalog !writelist
 $include err.h
 
    open '$savedlists' non.transactional to sl.f else
-      * The file is made the first time, as SAVE.LIST makes it ($svlists on the disk, $savedlists the VOC entry for it)
+      * The file is made the first time, as SAVE.LIST makes it ($svlists on the disk, $savedlists the VOC entry for it).
+      * 17 Oct 26 dm - S.64 part 2: this program is not $internal, so the kernel would refuse its write of the VOC entry (12410) to a
+      * session without voc.edit.  The entry is made by !mksavedlists, which is $internal and replaces nothing; the write of the
+      * list below stays here, held to the gates for the file it goes to.
       if status() # ER$NVR then abort sysmsg(2019)    ;* File not found
-      create.file '$svlists' dynamic on error
-         abort sysmsg(3249, status())                ;* Error xx creating $savedlists
-      end
-      recordlocku @voc, '$savedlists'
-      write 'F' : @fm : '$svlists' to @voc, '$savedlists'
+      call !mksavedlists(mk.err)
+      if mk.err # 0 then abort sysmsg(3249, mk.err)   ;* Error xx creating $savedlists
       open '$savedlists' non.transactional to sl.f else abort sysmsg(3248, status())   ;* Error xx opening $savedlists
    end
    write ids to sl.f, list.name

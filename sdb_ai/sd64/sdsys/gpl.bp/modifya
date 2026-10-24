@@ -242,6 +242,7 @@ deffun ps_script(script) calling '!ps_script'
       crt '                  modify.account <account> sh-on | sh-off'
       crt '                  modify.account <account> os-on | os-off'
       crt '                  modify.account <account> sd-on | sd-off'
+      crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
       crt '                  modify.account <account> suspended | unsuspended'
       stop
    end
@@ -355,6 +356,32 @@ deffun ps_script(script) calling '!ps_script'
             gosub os.set
          case upcase(action) = 'SD-OFF'
             os.field = ACC$SD.ACCOUNTS
+            os.want  = @false
+            gosub os.set
+* 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64 (owner, 17 Oct): the edit gates, six more switches beside the other three.  Like
+*   SD-ON they are allowed on a group account.  They take effect at the person's next SIGN-ON, not at LOGTO (LOGIN and the API server load them).
+         case upcase(action) = 'VOC-ON'
+            os.field = ACC$VOC.EDIT
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'VOC-OFF'
+            os.field = ACC$VOC.EDIT
+            os.want  = @false
+            gosub os.set
+         case upcase(action) = 'BP-ON'
+            os.field = ACC$BP.EDIT
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'BP-OFF'
+            os.field = ACC$BP.EDIT
+            os.want  = @false
+            gosub os.set
+         case upcase(action) = 'DICT-ON'
+            os.field = ACC$DICT.EDIT
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'DICT-OFF'
+            os.field = ACC$DICT.EDIT
             os.want  = @false
             gosub os.set
 
@@ -487,7 +514,8 @@ deffun ps_script(script) calling '!ps_script'
          
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
-         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, suspended or unsuspended'
+         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off,'
+         crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
 
@@ -697,7 +725,7 @@ route.apply:
 os.set:
 *   SD-ON / SD-OFF (the SD.ACCOUNTS gate, Linux 7ceb50d) are allowed on a GROUP account: what that gate opens is decided for
 *   each person by the groups they are in.
-   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS then
+   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
@@ -731,7 +759,16 @@ os.set:
    if os.field = ACC$SD.ACCOUNTS then
       crt sysmsg(12390, acc.name, if upcase(trim(acc.new<ACC$SD.ACCOUNTS>)) = 'YES' then 'yes' else 'no')   ;* Account %1 has SD.ACCOUNTS %2
    end else
-      crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+      if os.field = ACC$VOC.EDIT or os.field = ACC$BP.EDIT or os.field = ACC$DICT.EDIT then
+*        Where all three now stand, as for SH and OS.EXECUTE: VOC-OFF says nothing about the other two.
+         ed.voc = 'no' ; ed.bp = 'no' ; ed.dict = 'no'
+         if upcase(trim(acc.new<ACC$VOC.EDIT>)) = 'YES' then ed.voc = 'yes'
+         if upcase(trim(acc.new<ACC$BP.EDIT>)) = 'YES' then ed.bp = 'yes'
+         if upcase(trim(acc.new<ACC$DICT.EDIT>)) = 'YES' then ed.dict = 'yes'
+         crt sysmsg(12414, acc.name, ed.voc, ed.bp, ed.dict)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
+      end else
+         crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+      end
    end
    return
 

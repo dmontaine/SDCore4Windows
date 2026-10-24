@@ -24,6 +24,12 @@
 *            Linux, parity audit PAL-13; measured there, not here).
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
 *            (RELEASE_1.1_FIXES.md 33, owner's ruling).
+* 17 Oct 26 dm  S.64: deleting records of a VOC, a dictionary or a program file asks edit_guard, once, before any record is read.
+* 06 Oct 26 dm  Enter at the "Delete all records" prompt (3220) means N, and the
+*               prompt shows (y/<n>).  Found by the parity audit: the same loop
+*               as cproc's 5045, identical in both ports.
+* 14 Sep 26 dm  Enter at 2050 means N (W.2, the port's ruling of 13 Sep 26).
+* 12 Sep 26 dm  Name lookups fold as typed, then lower, then upper (plan M1).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -49,6 +55,7 @@ $include syscom err.h
 $include syscom keys.h
 $include int$keys.h
 
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
    parser = "!PARSER"
 
@@ -94,6 +101,14 @@ $include int$keys.h
    if fileinfo(file, FL$READONLY) then
       @system.return.code = -ER$RDONLY
       stop sysmsg(1431) ;* File is read-only
+   end
+
+* 17 Oct 26 dm - S.64: deleting records of a VOC, a dictionary or a program file needs the gate.  Asked once, for the file opened,
+*   before any record is read or selected (this program is $internal, so the kernel's own test lets it through).
+   if not(edit_guard(file)) then
+      @system.return.code = -ER$PERM
+      clearselect
+      stop
    end
 
    ids = ''

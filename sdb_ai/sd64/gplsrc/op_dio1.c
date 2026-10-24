@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2 (review): the CREATE.FILE statement (op_create_dh, op_create_t1) refuses to make a
+ *           file INSIDE a VOC, a dictionary, a program file or the private catalogue the session may not change (create_edit_refusal ->
+ *           edit_os_path_refusal, final name not counted): -ER_PERM with the reason.  $internal programs (createf and the rest) are not
+ *           asked.  Linux's OPENTEMP leg is not carried (this tree has no OPENTEMP yet); opentemp_edit_refused waits for it.
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): open_file() acts on the NON.TRANSACTIONAL option of OPEN and OPENPATH (P_NON_TXN; item 64).
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): open_file() acts on the mode letters N and R in field 6 of the
@@ -75,6 +79,22 @@ Private struct DH_CACHE dh_cache[MAX_DH_CACHE_SIZE];
 Private int16_t dh_cache_size = 0;
 
 Private void open_file(bool map_name);
+
+/* 17 Oct 26 dm - S.64 part 2.  CREATE.FILE (op_create_dh, op_create_t1) and OPENTEMP make a file at a path the program names. A
+   $internal program is trusted (createf and the rest make files for the user as a sanctioned side effect); anybody else may not
+   make one INSIDE a VOC, a dictionary, a program file or the private catalogue they may not change: a directory or a hashed file
+   made there becomes content of it. The name made is the new file itself, so only what is ABOVE it is asked (include_leaf FALSE):
+   CREATE.FILE of a new file called bp, x.bp or x.dic is what the verb makes without the gate, and a write into one is refused by
+   the kernel (op_dio3.c). Returns the kind refused, EDIT_NONE if the file may be made. The S.63 OS-access test is NOT added here. */
+Private int create_edit_refusal(const char* path) {
+  if (process.program.flags & HDR_INTERNAL)
+    return EDIT_NONE;
+  return edit_os_path_refusal(path, FALSE);
+}
+
+/* OPENTEMP names a place inside a guarded file: set by op_opentemp() for open_file(), which takes it at its first line (so that it
+   cannot be left set for the next OPEN) and answers ER_PERM, as it does for an OS path the account may not open. */
+Private bool opentemp_edit_refused = FALSE;
 
 /* ======================================================================
    op_close()  -  Close a file                                            */
@@ -260,6 +280,7 @@ void op_create_dh() {
   int16_t split_load;
   u_int16_t creation_flags;
   int16_t version;
+  int edit_kind;
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -339,6 +360,16 @@ void op_create_dh() {
     goto exit_op_create_dh;
   }
 
+  /* 17 Oct 26 dm - S.64 part 2: not INSIDE a guarded file (CREATE.FILE 'voc.dic/zz' DYNAMIC). Nothing has been made. A refusal
+     is an error with the reason, or with ON ERROR the status -ER_PERM, as op_dio3.c gives its own (see create_edit_refusal). */
+  edit_kind = create_edit_refusal(path_name);
+  if (edit_kind != EDIT_NONE) {
+    process.status = -ER_PERM;
+    if (!(op_flags & P_ON_ERROR))
+      k_error(sysmsg(12409 + edit_kind)); /* 12410 the VOC, 12411 a dictionary, 12412 a program file */
+    goto exit_op_create_dh;
+  }
+
   if (!dh_create_file(path_name, group_size, min_modulus, big_rec_size,
                       merge_load, split_load, creation_flags, version)) {
     process.status = -dh_err;
@@ -384,6 +415,7 @@ void op_create_t1() {
   DESCRIPTOR* descr;
   char path_name[MAX_PATHNAME_LEN + 1];
   int16_t name_len;
+  int edit_kind;
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -399,7 +431,14 @@ void op_create_t1() {
   if (name_len <= 0)
     process.status = -ER_NAM;
 
-  if (!make_path(path_name)) {
+  /* 17 Oct 26 dm - S.64 part 2: not INSIDE a guarded file (CREATE.FILE 'bp/zz' DIRECTORY). Nothing has been made. An error with
+     the reason, or with ON ERROR the status -ER_PERM, as in op_create_dh(). */
+  edit_kind = (name_len > 0) ? create_edit_refusal(path_name) : EDIT_NONE;
+  if (edit_kind != EDIT_NONE) {
+    process.status = -ER_PERM;
+    if (!(op_flags & P_ON_ERROR))
+      k_error(sysmsg(12409 + edit_kind));
+  } else if (!make_path(path_name)) {
     process.os_error = OSError;
     process.status = -ER_NOT_CREATED;
   } else {
@@ -649,7 +688,9 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   struct stat statbuf;
   u_int32_t device = 0;
   u_int32_t inode = 0;
+  bool temp_refused = opentemp_edit_refused; /* 17 Oct 26 S.64 part 2: OPENTEMP named a place inside a guarded file */
 
+  opentemp_edit_refused = FALSE; /* taken here, so that no later OPEN can find it set */
   op_flags = process.op_flags;
   process.op_flags = 0;
 
@@ -780,6 +821,13 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   net_may_write = map_name ? net_vocpath_permitted(pathname, TRUE) : net_path_permitted(pathname, TRUE);
 
   if (!net_may_write && !(map_name ? net_vocpath_permitted(pathname, FALSE) : net_path_permitted(pathname, FALSE))) {
+    process.status = ER_PERM;
+    goto exit_op_open;
+  }
+
+  /* 17 Oct 26 dm - S.64 part 2: OPENTEMP was given a name inside a VOC, a dictionary, a program file or the private catalogue that
+     the session may not change. op_opentemp() made nothing; the answer is the one above, ER_PERM, so that ELSE is taken. */
+  if (temp_refused) {
     process.status = ER_PERM;
     goto exit_op_open;
   }

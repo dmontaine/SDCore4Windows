@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: X (delete the item shown) asks the kernel (K$EDIT.OK, K$EDIT.KIND) for the file it has
+*               open before it asks "Delete xx from xx (Y/N)?" and before it locks the record, and a session without the gate (voc.edit,
+*               dict.edit, bp.edit) is told why on the prompt line and nothing is deleted.  SP.VIEW is $internal, which the kernel's own test lets
+*               through.  Viewing and spooling a record are reads and are not asked.  Not edit_guard(): it DISPLAYs, which would write over the page.
 * 18 Oct 26 Windows port - from Linux ab4dab3 (13 Oct 26): BY / BY.DSND field {NO.CASE} sorts the pick list (it is passed to SELECT,
 *               list 11); Return pages forward in a record; Esc-Z pages back (openQM page).
 * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): X deletes the item being shown, after asking; one taken from the
@@ -307,6 +311,19 @@ show.item:
 
 delete.item:
    item.deleted = @false
+
+* 17 Oct 26 dm - S.64: deleting a record of a VOC, a dictionary or a program file needs the gate.  The answer comes from the kernel by the
+*   pathname of the file OPEN in data.f, so a Q-pointer is caught.  Asked before the question and before the lock, and the reason goes on the
+*   prompt line as every complaint here does (edit_guard() would DISPLAY over the page).  $hold and every ordinary file pass, as before.
+   edit.p = fileinfo(data.f, FL$PATH)
+   if not(kernel(K$EDIT.OK, edit.p)) then
+      edit.kind = kernel(K$EDIT.KIND, edit.p)
+      if edit.kind < 1 or edit.kind > 3 then edit.kind = 1
+      prompt.text = sysmsg(12409 + edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+      display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+      c = keycode()
+      return
+   end
 
    prompt.text = sysmsg(12110, item.name, file.name) ;* Delete xx from xx (Y/N)?
    display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :

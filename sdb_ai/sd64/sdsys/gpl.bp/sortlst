@@ -19,6 +19,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux e02672d (11 Oct 26): 1.2-0 bundle A-7 (openQM ref 158).
+* 17 Oct 26 dm  S.64 part 2: SORT.LIST ... FROM a VOC, a dictionary or a program file asks edit_guard before it reads or rewrites.
+* 11 Oct 26 dm  1.2-0 bundle A-7 (openQM ref 158).
 * END-HISTORY
 *
 *
@@ -40,6 +42,8 @@ $catalog $sortlst
 $include err.h
 $include keys.h
 $include parser.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64 part 2
 
    parser = "!PARSER"
 
@@ -73,6 +77,13 @@ $include parser.h
    open file.name to list.f else
       @system.return.code = -status()
       stop sysmsg(3248, status()) ;* Error xx opening the list file
+   end
+
+* 17 Oct 26 dm - S.64 part 2: FROM names any file, and this program is $internal, so the kernel's own test lets its WRITE through.  It asks
+*   about the file opened, before the record is locked.  The default $savedlists is none of the three guarded kinds.
+   if not(edit_guard(list.f)) then
+      @system.return.code = -ER$PERM
+      stop
    end
 
    readu list.rec from list.f, list.name else

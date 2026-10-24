@@ -220,6 +220,12 @@
       $define K$USER.STATS      112      ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
 *  113 and 115 are Linux's K$NON.DURABLE.TXN (QMClient, held) and K$LOCK.TRACE (LOCK.TRACER, not carried): left unused.
       $define K$SD.ACCOUNTS     118      ;* may reach files under the directory of an account its user could LOGTO, except its VOC (set from $internal; -1 asks) (16 Oct 26, carried 23 Oct 26)
+      $define K$VOC.EDIT        121      ;* may save changes to a VOC (set from $internal at sign-on only; -1 asks) (17 Oct 26, S.64; carried 23 Oct 26)
+      $define K$BP.EDIT         122      ;* may save changes to a program file, source or object, and BASIC / CATALOG (same rules) (17 Oct 26, S.64)
+      $define K$DICT.EDIT       123      ;* may save changes to a dictionary (same rules) (17 Oct 26, S.64)
+      $define K$EDIT.OK         124      ;* the pathname of an open file: 1 if THIS SESSION may save a change to it (17 Oct 26, S.64; ask before writing a file the user named)
+      $define K$EDIT.KIND       125      ;* the same argument: 0 none of the three, 1 a VOC, 2 a dictionary, 3 a program file (for the message) (17 Oct 26, S.64)
+      $define K$EDIT.OS.OK      126      ;* an OS pathname about to be written, created, deleted or copied into: 1 if no part of it below the account names a guarded file the session may not change (17 Oct 26, S.64)
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
       $define K$PROFILER        116      ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
       $define K$PROFILER.USER   117      ;* user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only

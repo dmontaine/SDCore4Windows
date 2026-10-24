@@ -19,6 +19,9 @@
 *
 *
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux d7cda81 and b6186cc (17 Oct 26), S.64: the three edit gates (voc.edit, bp.edit, dict.edit) are loaded at the FIRST entry to an
+*           account, and check.edit asks them for the client before WRITE, WRITEU, DELETE, DELETEU and CLEARFILE (this program is $internal, so the
+*           kernel never sees the test).  vb.clearfile cleared files(i), a stale variable, instead of files(fno).  RELEASE_1.1 170.
 * 19 Oct 26 Windows port - RELEASE_1.1 158 (Linux d6a86a7, 15 Oct 26, sheet 170): the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session,
 *           once, when it first enters an account, before the account's own LOGIN.
 * 18 Oct 26 Windows port - RELEASE_1.1 142 (Linux 400500c, 15 Oct 26): vb.call returns after refusing a subroutine that is
@@ -649,6 +652,9 @@ acc.suspended = ''
 api.sh.grant = @false
 api.os.grant = @false
 api.sd.grant = @false      ;* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate
+api.voc.grant = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): the edit gates; loaded at the FIRST entry only (below)
+api.bp.grant = @false
+api.dict.grant = @false
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
 *   BRANCH ON THE AUDIT TRAIL, AND THAT IS KEPT RATHER THAN REMOVED WITH THE
 *   DIAGNOSTICS IT ARRIVED WITH.***  All five refusals answer the caller with
@@ -668,6 +674,9 @@ openpath @sdsys:@ds:'accounts' to acc.f then
       api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
       api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
       api.sd.grant = (upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')
+      api.voc.grant = (upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
+      api.bp.grant = (upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
+      api.dict.grant = (upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
    end
    close acc.f
 end
@@ -926,6 +935,15 @@ void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU
 void kernel(K$SH,      api.sh.grant)    ;* 23 Oct 26 - S.63, Linux abcda0c: see where they were read, above
 void kernel(K$OS.EXEC, api.os.grant)
 void kernel(K$SD.ACCOUNTS, api.sd.grant)
+* 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates are the SIGN-ON account's (owner, 17 Oct), so they are loaded at the
+*   first entry to an account and never again; an SDLogto leaves them as they were.  master.login.done is set once, at that same first entry.
+*   (Linux's part 2 also gives an API session of the OS user sdsys entering the sdsys account all three; the API is never open to SDSYS here -
+*   modify.account refuses it and sdsys is denied network sign-in - so that rule is not carried.)
+if not(master.login.done) then
+   void kernel(K$VOC.EDIT,  api.voc.grant)
+   void kernel(K$BP.EDIT,   api.bp.grant)
+   void kernel(K$DICT.EDIT, api.dict.grant)
+end
 
 voc = new.voc
 
@@ -1269,6 +1287,9 @@ vb.write:
                id.point = 'record write'
                gosub check.identity
 
+               gosub check.edit   ;* 23 Oct 26, Linux b6186cc (S.64 part 2): this program is $internal, so the kernel does not ask the edit gates; check.edit does
+               if err then return
+
                write cmnd[5 + id.len, 99999999] to files(fno), id
                on error server.error = SV$ON.ERROR
 
@@ -1289,6 +1310,9 @@ vb.writeu:
                id.len = oconv(cmnd[3,2], 'ISL')
                id = cmnd[5,id.len]
 
+               gosub check.edit   ;* 23 Oct 26, Linux b6186cc (S.64 part 2)
+               if err then return
+
                writeu cmnd[5 + id.len, 99999999] to files(fno), id
                on error server.error = SV$ON.ERROR
 
@@ -1305,6 +1329,10 @@ vb.delete:
                if err then return
 
                id = cmnd[3,99]
+
+               gosub check.edit   ;* 23 Oct 26, Linux b6186cc (S.64 part 2)
+               if err then return
+
                delete files(fno), id
                on error server.error = SV$ON.ERROR
 
@@ -1321,6 +1349,9 @@ vb.deleteu:
                if err then return
 
                id = cmnd[3,99]
+
+               gosub check.edit   ;* 23 Oct 26, Linux b6186cc (S.64 part 2)
+               if err then return
 
                deleteu files(fno), id
                on error server.error = SV$ON.ERROR
@@ -2280,7 +2311,10 @@ vb.clearfile:
                                              gosub check.file
                                              if err then return
 
-                                             clearfile files(i)
+                                             gosub check.edit   ;* 23 Oct 26, Linux b6186cc (S.64 part 2)
+                                             if err then return
+
+                                             clearfile files(fno)   ;* 23 Oct 26, Linux b6186cc: was files(i), a stale loop variable, which cleared whichever file it happened to index
 
                                              return
 
@@ -2583,6 +2617,34 @@ check.identity:
                                                                         end
                                                                      end
 
+                                                                     return
+
+                                                                     * ======================================================================
+                                                                     * check.edit - may this session save a change to the file in files(fno)?
+                                                                     *
+                                                                     * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26), S.64 part 2.  err is set, with the reply, when it may not.
+                                                                     * This program is $internal, which the kernel's own edit test lets through (op_dio3.c), so the API server asks for
+                                                                     * the client: the gates are the session's, loaded at its first entry to an account (vb.account).  The kernel answers
+                                                                     * by the last component of the pathname of the file that is open (voc, *.dic, bp, bp.out, *.bp, *.bp.out, and the private
+                                                                     * catalogue), so a Q-pointer to a VOC is caught.  Asked for WRITE, WRITEU, DELETE, DELETEU and CLEARFILE; reading is never asked.
+                                                                     * Out: err
+
+check.edit:
+                                                                     err = @true
+                                                                     ed.path = fileinfo(files(fno), FL$PATH)
+                                                                     if ed.path = '' then
+                                                                        server.error = SV$ERROR
+                                                                        error.msg = sysmsg(12415) ;* The pathname of the file cannot be read, so a change to it is refused
+                                                                        return
+                                                                     end
+                                                                     if not(kernel(K$EDIT.OK, ed.path)) then
+                                                                        ed.kind = kernel(K$EDIT.KIND, ed.path)
+                                                                        if ed.kind < 1 or ed.kind > 3 then ed.kind = 1
+                                                                        server.error = SV$ERROR
+                                                                        error.msg = sysmsg(12409 + ed.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+                                                                        return
+                                                                     end
+                                                                     err = @false
                                                                      return
 
 

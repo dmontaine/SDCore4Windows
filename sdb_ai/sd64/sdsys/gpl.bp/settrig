@@ -19,6 +19,11 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26): A directory file can have a trigger (QM4 Fixes item 177): it is kept in the file's %header% file and takes
+* 17 Oct 26 dm  S.64 part 2: setting or removing a trigger is a change to the file (it makes the %header% record, and the trigger then runs
+*               on every later write by anybody), so SET.TRIGGER asks edit_guard (voc.edit, dict.edit, bp.edit) once, for the file it
+*               opened, before the trigger name is checked and before the file is made exclusive.  Showing the trigger (no second
+*               argument) changes nothing and is not asked.  It is $internal, which the kernel's own test lets through.
+* 16 Oct 26 dm  A directory file can have a trigger (QM4 Fixes item 177): it is kept in the file's %header% file and takes
 *               effect when the file is next opened.
 * 11 Oct 26 Windows port - RELEASE_1.1 137.  The name is checked in upper case:
 *           stage 3a made it lower case but left the checked sets upper, so
@@ -50,6 +55,8 @@ $include keys.h
 $include int$keys.h
 $include parser.h
 $include err.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
 
    parser = "!PARSER"
@@ -96,6 +103,17 @@ $include err.h
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    trigger.name = downcase(token)   ;* 14 Sep 26 RELEASE_1.1 5 stage 3a: call names are lower
+
+* 17 Oct 26 dm - S.64: setting a trigger ("" removes one) makes a change to a VOC, a dictionary or a program file: the %header% record, and
+*   code that runs on every later write by anybody.  Asked as soon as a second argument shows that a change is wanted, so a refused
+*   session hears the gate and not a complaint about the trigger name, and before the exclusive-access test names who holds the file.
+*   The report form (no second argument) is a read and is left alone.  Nested IFs: BASIC does not short-circuit AND.
+   if token.type # PARSER$END then
+      if not(edit_guard(fu)) then
+         @system.return.code = -ER$PERM
+         stop
+      end
+   end
 
    begin case
       case token.type = PARSER$END     ;* Report trigger state
