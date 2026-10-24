@@ -376,7 +376,11 @@ void dir_trigger_open(FILE_VAR * fvar, const char * dirpath);
 void dir_trigger_close(FILE_VAR * fvar);
 int dir_set_trigger(FILE_VAR * fvar, const char * name, int modes);
 bool is_dir_header(const char * name);
-/* (Linux's OP_SH.C gate functions os_gate_open, os_path_ok_for_account, os_path_open_ok and os_path_inside belong to the held S.63 gates.) */
+
+/* OP_SH.C - the per-account OS-access gates (13 Oct 26, S.63; carried 23 Oct 26) */
+bool os_gate_open(void);
+bool os_path_ok_for_account(const char * name);
+bool os_path_open_ok(const char * name);
 
 /* OP_DIO2.C */
 bool delete_path(char * path);
@@ -384,8 +388,10 @@ bool fullpath(char * path, char * name);
 bool make_path(char * tgt);
 /* 21 Aug 26 Windows port - the containment gate for a network session.  Call
    it with an ABSOLUTE path, i.e. after fullpath(): it compares against @PATH
-   and relies on sdrealpath() having already collapsed "..".  Answers TRUE for
-   every session that is not CN_SOCKET.
+   and relies on sdrealpath() having already collapsed "..".  23 Oct 26: it now
+   answers for EVERY session (owner, 23 Oct: the console is held too), TRUE for
+   an administrator and for an account that holds OS.EXECUTE (os_gate_open()).
+   account_path_permitted() is the same test without the $internal exemption.
 
    for_write SEPARATES THE TWO ANSWERS.  The account and NETDIRS are
    read-write; the shipped SDSYS entries a stock VOC needs are READ ONLY, so
@@ -394,6 +400,7 @@ bool make_path(char * tgt);
    with TRUE first and marks the file variable FV_RDONLY when the answer is no.
    See op_dio2.c.                                                           */
 bool net_path_permitted(char * path, bool for_write);
+bool account_path_permitted(char * path, bool for_write);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

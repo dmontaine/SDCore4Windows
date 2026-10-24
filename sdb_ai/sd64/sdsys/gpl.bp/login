@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux 215ce2c (S.63): K$SH / K$OS.EXEC are loaded from ACC$SH / ACC$OS.EXEC at sign-on.  RELEASE_1.1 170.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  A new session is refused (12286) while the administrator has logins
 *           inhibited, unless it is the administrator, the setter or the setter's phantom; !login_inhibit decides.
 * 06 Oct 26 Windows port - a terminal session granted SDSYS prints one line, 12012,
@@ -932,6 +933,12 @@ deffun pw_complex(pw) calling '!pw_complex'
       goto terminate.connection
    end
 
+* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates are loaded at sign-on (CPROC's
+*   logto reloads them when the account changes): SH and OS.EXECUTE are OFF unless this account's register record says 'yes'.
+*   SDSYS switches them (MODIFY.ACCOUNT SH-ON / OS-ON).  Blank, or an account with no record, is denied.  The administrator
+*   needs no grant - USR_ADMIN passes the gate on its own.  This replaces the person-keyed OS.USERS record (owner, 23 Oct).
+   void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')
+   void kernel(K$OS.EXEC, upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
 
    * Set @PATH
 

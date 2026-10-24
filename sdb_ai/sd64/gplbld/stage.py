@@ -1587,6 +1587,13 @@ def main():
                    # that script's $neverShipped list.  test-upgradenocase-
                    # units.ps1 does NOT ship and IS in $neverShipped.
                    'upgrade-nocase.ps1',
+                   # 23 Oct 26 - RELEASE_1.1 170 (Linux S.63).  The SH and
+                   # OS.EXECUTE grants moved from the person's os.users record
+                   # to the account's register fields; this runs "sd -internal
+                   # RUN gpl.bp upgrade_gates", which copies the old answer
+                   # across once.  It SHIPS, so assert-current watches it - do
+                   # NOT add it to that script's $neverShipped list.
+                   'upgrade-gates.ps1',
                    # 28 Aug 26 - PRE_RELEASE_FIXES #36, and this pair is the
                    # half of that ruling that says something comes back for a
                    # profile SD could not remove.  secure-reclaim.ps1 creates

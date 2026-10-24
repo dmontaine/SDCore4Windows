@@ -469,6 +469,17 @@
    keeps what the kernel read and no longer overrides it with terminfo's 120 by 36.  Linux's number (its block 90-99), kept exactly;
    GPL.BP/INT$KEYS.H carries the same number. */
 #define K_WINSIZE            92
+/* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates, Linux's numbers.  K_REAL_USER 90 and
+   K_LOGIN_UID 91 are Linux's own and are not carried (this port has K_OS_ADMINISTRATOR and K_ASSUME_USER for the same questions).
+   GPL.BP/INT$KEYS.H must carry the same numbers.
+     K_SH       the session may use SH and "!".  Set only from a $internal program, like K_ADMINISTRATOR.
+     K_OS_EXEC  the session may use OS.EXECUTE and reach OS paths outside its own account.  Same rule.
+     K_PATH_OK  the argument is a pathname; the answer is 1 if THIS ACCOUNT may open it - whoever asks.
+                An $internal program (SED) is exempt from the gate itself, so it must ask on the user's
+                behalf; it cannot be allowed to be the way round the gate.                             */
+#define K_SH                 93
+#define K_OS_EXEC            94
+#define K_PATH_OK            95
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

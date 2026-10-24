@@ -225,7 +225,10 @@ struct USER_ENTRY
      #define USR_CHGPHANT    0x0020 /* "Chargeable" phantom; counts as licensed user */
      #define USR_MSG_OFF     0x0040 /* Message reception disabled */
      #define USR_WAKE        0x0080 /* Set by op_wake, cleared by op_pause */
-     /* 0x0100 and 0x0200 are Linux's USR_SH and USR_OS_EXEC (the S.63 OS-access gates, held); left free so the values agree */
+     /* 23 Oct 26 Windows port - from Linux 215ce2c (S.63): the per-account OS-access gates, off unless SDSYS turns them on.
+        Loaded at account entry (LOGIN, CPROC logto) from ACC$SH / ACC$OS.EXEC; see keys.h K_SH.  The values are Linux's. */
+     #define USR_SH          0x0100 /* may use the SH verb and "!" */
+     #define USR_OS_EXEC     0x0200 /* may use OS.EXECUTE, and reach OS paths outside its own account */
      /* 15 Oct 26 QM4 gaps Q-5: the application signal.  SIGNAL(user) sets it in a process of the same login user (or in
         any process, from an administrator); SYSTEM(1062) in that process reads it and clears it.                */
      #define USR_SIGNAL      0x0400 /* SIGNAL() has been raised for this process */

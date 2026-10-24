@@ -479,34 +479,18 @@ check.permitted:
       return
    end
 
-   openpath @sdsys : ds : 'os.users' to os.users.f else
-      error.text  = verb.text : ' is not available: this system has no os.users'
-      error.text := ' list, so nobody but an administrator may reach the'
-      error.text := ' operating system.' : char(10)
-      error.text := 'ed, the line editor, needs none of this.'
-      return
-   end
-
-*  THE THREE-CASE FOLD, as CPROC and LOGIN's batch gate do it: as held, then
-*  lower, then upper.  The record is written by hand with ED and the login
-*  name arrives in whatever case Windows reports it.
-   os.rec = ''
-   read os.rec from os.users.f, @logname else
-      read os.rec from os.users.f, downcase(@logname) else
-         read os.rec from os.users.f, upcase(@logname) else os.rec = ''
-      end
-   end
-   close os.users.f
-
-   if downcase(trim(os.rec<2>, ' ', 'B')) = 'yes' then
+*  23 Oct 26 Windows port - from Linux 215ce2c (S.63), on the owner's answer of 23 Oct: THE GRANT IS THE ACCOUNT'S OS-ON
+*  (K$OS.EXEC), loaded at account entry by LOGIN, APISRVR and CPROC's logto; the os.users record (the person's, three-case
+*  fold and all) is retired.  K$ADMINISTRATOR above covers SDSYS.
+   if kernel(K$OS.EXEC, -1) then
       permitted = @true
       return
    end
 
    error.text  = verb.text : ' is not available to ' : @logname : '.' : char(10)
    error.text := 'It runs an editor outside SD, so it needs OS.EXECUTE'
-   error.text := ' permission: field 2 of your record in the SD system file'
-   error.text := ' os.users, which only an administrator can change.' : char(10)
+   error.text := ' permission, which an administrator grants with' : char(10)
+   error.text := '   modify.account <account> os-on' : char(10)
    error.text := 'ed, the line editor, needs none of this.'
 return
 

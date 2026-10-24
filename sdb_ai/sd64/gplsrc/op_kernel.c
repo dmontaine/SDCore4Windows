@@ -869,6 +869,51 @@ void op_kernel() {
           (elevated && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
     } break;
 
+    /* 13 Oct 26 dm - S.63.  The per-account OS-access gates, back.  Set exactly like K_ADMINISTRATOR above:
+       only a $internal program (LOGIN, CPROC - the two that own entry to an account) may change them, and
+       they are loaded there from ACC$SH / ACC$OS.EXEC.  A non-internal caller cannot reach KERNEL at all
+       (BCOMP), and an internal one that is not LOGIN or CPROC has no reason to call it with a positive
+       argument.  USR_OS_EXEC is what op_sh.c reads; USR_SH is read by CPROC's SH gate through
+       kernel(K$SH, -1).                                                                                 */
+
+    case K_SH:
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->flags |= USR_SH;
+          else
+            my_uptr->flags &= ~USR_SH;
+        }
+      }
+      result.data.value = (my_uptr->flags & USR_SH) != 0;
+      break;
+
+    case K_OS_EXEC:
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->flags |= USR_OS_EXEC;
+          else
+            my_uptr->flags &= ~USR_OS_EXEC;
+        }
+      }
+      result.data.value = (my_uptr->flags & USR_OS_EXEC) != 0;
+      break;
+
+    /* May THIS ACCOUNT open this pathname?  An $internal program is exempt from the gate itself (it has to
+       be, to do its work), so one that opens a file for the user - SED's PATH: - asks here first.        */
+    case K_PATH_OK: {
+      char path_ok_name[MAX_PATHNAME_LEN + 1];
+
+      result.data.value = 0;
+      if (k_get_c_string(descr, path_ok_name, MAX_PATHNAME_LEN) > 0)
+        result.data.value = os_path_ok_for_account(path_ok_name) ? 1 : 0;
+    } break;
+
     case K_FILESTATS:
       GetInt(descr);
       if (descr->data.value) { /* Reset counters */

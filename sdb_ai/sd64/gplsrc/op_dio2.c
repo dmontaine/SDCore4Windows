@@ -1672,7 +1672,7 @@ Private char* net_sysdir_shared[] = {"$ipc",     "$map",    "$map.dic",
 Private bool net_raw_permitted(char* path, bool for_write) {
   char resolved[MAX_PATHNAME_LEN + 1];
 
-  if (connection_type != CN_SOCKET)
+  if (os_gate_open())  /* 23 Oct 26 S.63: was "not a network session"; see net_path_permitted() */
     return TRUE;
 
   if (process.program.flags & HDR_INTERNAL)
@@ -1691,23 +1691,33 @@ Private bool net_raw_permitted(char* path, bool for_write) {
   return net_path_permitted(resolved, for_write);
 }
 
+/* 23 Oct 26 Windows port - S.63 on the owner's answer of 23 Oct ("follow Linux"): THE GATE NO LONGER STOPS AT THE NETWORK.
+   It used to answer TRUE for every session that was not CN_SOCKET; now every session is held to its own account (plus the
+   shared SDSYS entries and NETDIRS) unless the account holds OS.EXECUTE or the session is the administrator (os_gate_open()),
+   and an $internal program is exempt as it always was.  account_path_permitted() below is the comparison itself, with no
+   exemption, for os_path_ok_for_account() (K_PATH_OK): an $internal program that opens a file for the user asks it.
+   RELEASE_1.1 170.                                                                                                     */
+
 bool net_path_permitted(char* path,     /* Absolute, as left by fullpath() */
                         bool for_write) /* Asking to modify, not just read? */
+{
+  if (os_gate_open())
+    return TRUE;
+
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+
+  return account_path_permitted(path, for_write);
+}
+
+bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() */
+                            bool for_write) /* Asking to modify, not just read? */
 {
   char cand[MAX_PATHNAME_LEN + 1];
   char root[MAX_PATHNAME_LEN + 1];
   char item[MAX_PATHNAME_LEN + 1];
   DESCRIPTOR* descr;
   int i;
-
-  /* Not a network session - nothing to contain.  This is the ONLY test that
-    should ever be widened; everything below assumes it has passed.        */
-
-  if (connection_type != CN_SOCKET)
-    return TRUE;
-
-  if (process.program.flags & HDR_INTERNAL)
-    return TRUE;
 
   if (!net_normalise(path, cand))
     return FALSE;

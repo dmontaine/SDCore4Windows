@@ -2,6 +2,31 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+23 Oct 26  A NEW ACCOUNT STARTS WITH NO SHELL, NO OS.EXECUTE, NO SSH AND NO API, AND SH AND OS.EXECUTE ARE NOW GRANTED TO THE ACCOUNT, NOT TO THE PERSON (FROM SD CORE FOR LINUX).
+
+             What        SD is delivered with the tighter setting and SDSYS loosens it for the accounts that need it. Four switches, each kept
+                        per account: ssh and api (the two remote doors; CREATE.ACCOUNT USER name ssh, api or both gives them, none, the default,
+                        gives neither, and MODIFY.ACCOUNT changes them later); sh-on (the SH verb and "!"); os-on (OS.EXECUTE in a BASIC
+                        program, the editors EDIT and MICRO, Python, and opening a file of the operating system by its path outside the
+                        account's own directory). CREATE.ACCOUNT USER name sh-on os-on gives the last two at creation; MODIFY.ACCOUNT
+                        name sh-on, sh-off, os-on or os-off changes either later, and they are independent, so sh-off leaves OS.EXECUTE
+                        alone. After either command SD says where the account now stands ("Account name has SH yes, OS.EXECUTE no"). A change
+                        takes effect the next time the account is entered, by sign-on, by the API or by LOGTO.
+                        The grant used to be a record in the SD system file os.users, keyed by the Windows login name, so it followed a person
+                        into every account they entered. It is now two fields of the account's own record, so it follows the account, and
+                        os.users is no longer read. An account without os-on is held to its own directory (and the SDSYS entries every VOC
+                        names, read only, and the directories listed in NETDIRS) for every open of a file by its path or through a VOC
+                        pointer: this used to apply only to sessions that arrived over the network, and a person at the console was not held.
+                        A refusal reaches the program as status 3035, so OPEN ... ELSE works as before.
+             Why it      An account that was given a shell or OS.EXECUTE for one purpose no longer carries it into another person's work, and
+             matters     a person at the console is held to the same rule as one on ssh.
+             Upgrading   The installer copies, once, what os.users said about each USER account's Windows user into the account's two
+                        fields, so nobody loses a command they were using (ssh and the API are left as they are); the administrator can then
+                        turn them off one account at a time, and a later install does not turn them back on. The installing user's own
+                        account gets all four. SDSYS is never refused.
+             Does not    SH-ON on a GROUP or OTHER account is refused, as before. The rule that a person with sh-on may use pipes and
+                        redirection in an SH command is unchanged. The file os.users stays where it is, unread.
+
 23 Oct 26  SDIDX -M SAYS WHY WHEN IT CANNOT MAKE THE DIRECTORY (FROM SD CORE FOR LINUX).
 
              What        Moving the indexes of a file to a directory that cannot be made (a drive that does not exist, a parent you may not write,

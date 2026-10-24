@@ -123,14 +123,10 @@ $predicates = @(
     # same shape as $neverShipped's one real gap.  It is a fourth predicate of
     # exactly the guarded kind: two "return FALSE" exits that are the check
     # failing to complete rather than the answer being no.
-    @{ Name = 'IsInteractive'; Text = $libText; Sig = 'bool IsInteractive(PRIV_WHY* why)' },
-    # 13 Sep 26 - RELEASE_1.1 23.  os_permitted() was split: it keeps the
-    # HDR_INTERNAL test and delegates, and tests 2 and 3 - every "return FALSE"
-    # this rule is about - moved to os_user_permitted().  The guard follows the
-    # body, in the same commit, or it would be examining a function with no
-    # failure exits and calling that clean.  Section 3 below covers the split
-    # itself.
-    @{ Name = 'os_user_permitted'; Text = $shText; Sig = 'Private bool os_user_permitted(PRIV_WHY* why) {' }
+    @{ Name = 'IsInteractive'; Text = $libText; Sig = 'bool IsInteractive(PRIV_WHY* why)' }
+    # 23 Oct 26 - RELEASE_1.1 170 (S.63).  os_user_permitted() LEFT THIS ROSTER: it no longer reads the os.users record, so
+    # it has no failure exit that is "could not tell"; it asks os_gate_open(), the account's flags in memory.  (13 Sep 26 -
+    # RELEASE_1.1 23 had put it here when os_permitted() was split.)  Section 3 below now guards that it reads nothing.
 )
 
 $checkedReturns = 0
@@ -162,19 +158,28 @@ foreach ($p in $predicates) {
 # 05 Sep 26 - RAISED 8 -> 10 WITH IsInteractive's TWO EXITS.  The floor has to
 # move with the roster or it stops being a floor: at 8 the whole of the new
 # predicate could stop matching and the count would still clear it.
-Check 'some return-FALSE sites were actually examined' $true ($checkedReturns -ge 10)
+Check 'some return-FALSE sites were actually examined' $true ($checkedReturns -ge 7)
 Write-Output ("       examined {0} 'return FALSE' site(s)" -f $checkedReturns)
 
-# --- 3. The ENOENT discrimination, which is deliberate and easy to "tidy" away.
+# --- 3. The OS gate reads NOTHING from disk (23 Oct 26, S.63).  It used to read sdsys\os.users per call, and this section
+#        guarded the ENOENT discrimination of that read.  The grant is the account's flags now (USR_OS_EXEC, loaded at account
+#        entry), so the guard is the opposite: no open() may come back into the gate, or "could not tell" returns with no
+#        tri-state to report it.
 Write-Output ''
-Write-Output '=== os.users: a missing record is the designed NO, not a failure ==='
+Write-Output '=== the OS gate asks the account, and reads no file ==='
 $osBody = Get-Body $shText 'Private bool os_user_permitted(PRIV_WHY* why) {'
+Check 'os_user_permitted() body was found' $true ($null -ne $osBody)
 if ($null -ne $osBody) {
-    Check 'the open() failure tests errno against ENOENT' $true `
-          ($osBody -match 'errno\s*!=\s*ENOENT')
-    Check 'it assigns PRIV_OPEN_FAILED for other errno values' $true `
-          ($osBody -match 'PRIV_OPEN_FAILED')
+    Check 'os_user_permitted() asks os_gate_open()' $true ($osBody -match '\bos_gate_open\s*\(')
+    Check 'os_user_permitted() opens no file and names no os.users record' $false `
+          ($osBody -match '\bopen\s*\(|os\.users|O_RDONLY')
 }
+$gateBody = Get-Body $shText 'bool os_gate_open(void) {'
+Check 'os_gate_open() body was found' $true ($null -ne $gateBody)
+Check 'os_gate_open() answers from the user entry flags: USR_ADMIN or USR_OS_EXEC' $true `
+      (($null -ne $gateBody) -and ($gateBody -match 'USR_ADMIN') -and ($gateBody -match 'USR_OS_EXEC'))
+Check 'os_gate_open() does NOT test HDR_INTERNAL (the question is about the account)' $false `
+      (($null -ne $gateBody) -and ($gateBody -match 'HDR_INTERNAL'))
 
 # --- 3a. The split, and the one call that must never go back.  RELEASE_1.1 23.
 #
@@ -198,8 +203,6 @@ if ($null -ne $permBody) {
 }
 Check 'os_user_permitted() does NOT test HDR_INTERNAL (the test that admits every PY_* caller)' $false `
       (($null -ne $osBody) -and ($osBody -match 'HDR_INTERNAL'))
-Check 'os_user_permitted() keeps the USR_ADMIN test (an administrator always may)' $true `
-      (($null -ne $osBody) -and ($osBody -match 'USR_ADMIN'))
 
 $wrapBody = Get-Body $shText 'bool sd_os_permitted(PRIV_WHY* why) {'
 Check 'sd_os_permitted() body was found' $true ($null -ne $wrapBody)

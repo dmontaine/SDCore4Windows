@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63, on the owner's two answers of 23 Oct: the SH and OS.EXECUTE
+ *           grants are the ACCOUNT's (USR_SH, USR_OS_EXEC, loaded at account entry from ACC$SH / ACC$OS.EXEC), not the
+ *           person's os.users record, which the kernel no longer reads; every session, a local console included, is held
+ *           to its own account's files unless it holds OS.EXECUTE (os_path_ok_for_account, account_path_permitted in
+ *           op_dio2.c); K_PATH_OK lets an $internal program ask the same question for the user.  RELEASE_1.1 170.
  * 17 Sep 26 Windows port - sd_powershell_path() lifted out of sh_execute()
  *           so linuxprt.c's spooler finds PowerShell the same way
  *           (RELEASE_1.1 54).
@@ -229,76 +234,51 @@ Private bool os_permitted(PRIV_WHY* why) {
    from CPROC keeps test 1.                                                */
 
 Private bool os_user_permitted(PRIV_WHY* why) {
-  char path[MAX_PATHNAME_LEN + 1];
-  char buff[128];
-  int fu;
-  int n;
-  char* p;
-  char* q;
-
+  /* 23 Oct 26 Windows port - from Linux 215ce2c (S.63), on the owner's answer of 23 Oct.  The grant is the ACCOUNT's,
+     not the person's: USR_OS_EXEC is loaded at account entry (LOGIN, CPROC logto) from the register field ACC$OS.EXEC, and
+     the person's record file this function used to read is retired.  Nothing is read from disk here, so there is no
+     "could not complete" answer to log: the tri-state stays for IsAdmin() and the callers that still take it.
+     RELEASE_1.1 170.                                                                                                  */
   if (why != NULL)
     *why = PRIV_ANSWERED;
 
-  if (my_uptr->flags & USR_ADMIN)
+  return os_gate_open();
+}
+
+/* ======================================================================
+   os_gate_open()  -  has THIS ACCOUNT been given OS access?  (23 Oct 26, S.63)
+
+   The administrator always has it; anyone else has it only if SDSYS switched OS.EXECUTE on for the account
+   (MODIFY.ACCOUNT name OS-ON), which LOGIN and CPROC logto load into the session.  It does NOT look at HDR_INTERNAL,
+   because the question is about the account, not the program: an $internal program that acts for the user (SED opening
+   a file by pathname) is exempt from the gate itself and must not become the way round it.                          */
+
+bool os_gate_open(void) {
+  return (my_uptr->flags & (USR_ADMIN | USR_OS_EXEC)) != 0;
+}
+
+/* os_path_ok_for_account()  -  may this account open this OS pathname?  Yes if it holds the OS gate; otherwise only
+   inside its own account, plus the SDSYS entries every VOC names (read only) and the NETDIRS the administrator listed:
+   account_path_permitted() in op_dio2.c, which resolves the name as the open would.  A name it cannot resolve is a no.  */
+
+bool os_path_ok_for_account(const char *name) {
+  char resolved[MAX_PATHNAME_LEN + 1];
+
+  if (os_gate_open())
     return TRUE;
-
-  if (process.username[0] == '\0') {
-    if (why != NULL)
-      *why = PRIV_NO_USERNAME;
+  if ((name == NULL) || (name[0] == '\0'))
     return FALSE;
-  }
-
-  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cos.users%c%s", sysseg->sysdir,
-               DS, DS, process.username) >= (MAX_PATHNAME_LEN + 1)) {
-    if (why != NULL)
-      *why = PRIV_PATH_TOO_LONG;
+  if (!fullpath(resolved, (char *)name))
     return FALSE;
-  }
+  return account_path_permitted(resolved, TRUE);
+}
 
-  /* 03 Sep 26 Windows port - ENOENT IS THE DESIGNED NO AND STAYS A PLAIN
-     FALSE, which PRE_RELEASE 96 called out specifically.  This file's own
-     banner says "MISSING FILE OR MISSING RECORD MEANS NO... the safe
-     direction", so an absent record is an ANSWER, not a failure to reach one.
-     Marking it undetermined would write a log line on every ordinary refusal
-     and drown the ones that matter - the same discrimination entry 101 made
-     for ENOENT in txn.c.  Any OTHER errno is the check failing to complete. */
+/* os_path_open_ok()  -  the same for a caller: an $internal program is trusted, anyone else is asked. */
 
-  fu = open(path, O_RDONLY);
-  if (fu < 0) {
-    if ((why != NULL) && (errno != ENOENT))
-      *why = PRIV_OPEN_FAILED;
-    return FALSE;
-  }
-  n = read(fu, buff, sizeof(buff) - 1);
-  close(fu);
-  if (n <= 0) {
-    if (why != NULL)
-      *why = PRIV_READ_FAILED;
-    return FALSE;
-  }
-  buff[n] = '\0';
-
-  /* OS.USERS is a DIRECTORY file, so a record is a file and a field mark is a
-     newline.  Field 1 is SH; field 2 is the one this reads.                */
-
-  p = strchr(buff, '\n');
-  if (p == NULL) {
-    if (why != NULL)
-      *why = PRIV_MALFORMED;
-    return FALSE;
-  }
-  p++;
-
-  for (q = p; (*q != '\0') && (*q != '\n') && (*q != '\r'); q++) {
-  }
-  *q = '\0';
-
-  while (*p == ' ')
-    p++;
-  while ((q > p) && (q[-1] == ' '))
-    *(--q) = '\0';
-
-  return (stricmp(p, "yes") == 0);
+bool os_path_open_ok(const char *name) {
+  if (process.program.flags & HDR_INTERNAL)
+    return TRUE;
+  return os_path_ok_for_account(name);
 }
 
 /* ======================================================================

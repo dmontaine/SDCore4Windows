@@ -1,1 +1,1 @@
-os.users: %1 has SH %2, OS.EXECUTE %3
+Account %1 has SH %2, OS.EXECUTE %3

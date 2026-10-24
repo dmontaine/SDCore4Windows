@@ -273,7 +273,11 @@ Write-Output '=== the fixtures reach the exits they claim ==='
 $anchored = ($shText -match 'strchr\(buff,\s*.\\n.\)') -and
             ($shText -match 'if \(n <= 0\)') -and
             ($shText -match 'stricmp\(p, "yes"\)')
-Note "op_sh.c still parses the record the way this model does" $true $anchored
+# 23 Oct 26 - RELEASE_1.1 170 (S.63).  THE ROW CHANGED MEANING.  op_sh.c no longer reads sdsys\os.users (the grant is the
+# account's, from the user entry's flags), so the parse this model describes is GONE from the C and the row now asserts exactly
+# that.  The model, the leg table and verify-privundetermined.ps1 describe retired code and stay only until they are retired
+# together (owed, on the table row for 170); they cannot witness the OS gate any more, and nothing here claims they do.
+Note "op_sh.c no longer parses the os.users record (the model below describes retired code)" $false $anchored
 
 # op_sh.c:191-224 in PowerShell.  Reads the same three decisions in the same
 # order: read() gave nothing -> READ_FAILED; no newline -> MALFORMED;

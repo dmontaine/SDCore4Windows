@@ -1,0 +1,125 @@
+* UPGRADE_GATES
+* S.63 (owner, 13 Oct 2026; carried to Windows 23 Oct 2026).  Keep what the existing accounts have when the OS-access gates move
+* from the person's os.users record to the account's register record.
+*
+* On Windows the grant used to be a record in sdsys\os.users keyed by the Windows login name (field 1 SH, field 2 OS.EXECUTE).
+* The owner's answer of 23 Oct 2026 is that the grant is the ACCOUNT's, as on Linux, and os.users is retired.  The register
+* fields ACC$SH and ACC$OS.EXEC are blank on every account that exists when this ships, and a blank reads as denied, so an
+* upgrade that did nothing would take `sh`, `!`, edit, micro and OS.EXECUTE from everybody who had them the morning after.
+*
+* So this copies, ONCE, for every USER account in the register (an sdu_ group: the only kind with a Windows user of its own),
+* what os.users says about that user: field 1 'yes' to ACC$SH and field 2 'yes' to ACC$OS.EXEC, 'no' for anything else and for
+* a user with no record.  GROUP and OTHER accounts have no shell to permit and are left blank.  SDSYS needs nothing: the
+* administrator passes the gate.  ssh and the API are not touched.
+*
+* ONCE MEANS ONCE.  An administrator who later runs MODIFY.ACCOUNT jack SH-OFF must not find the next install turning it back
+* on, so the walk leaves a marker, sdsys\$gates.done, and does nothing when the marker is there.  The marker is written only
+* after every account was written, so a run that stopped half way is repeated whole (copying the same answer again changes
+* nothing).  The os.users file itself is left where it is, unread by SD from now on.
+*
+* RUN gpl.bp upgrade_gates           set the gates for the existing accounts, once
+*
+* It runs from the installer's upgrade block, as sd -internal, AFTER UPDATE.ACCOUNTS ALL.  It prints COMPLETE on a line of its
+* own when, and only when, the register holds what it should; the installer matches on that word and nothing else.
+*
+* START-HISTORY:
+* 23 Oct 26 Windows port - from Linux 215ce2c: the source of the answer is os.users, not a blanket 'yes'.  RELEASE_1.1 170.
+* 13 Oct 26 dm  New (Linux).
+* END-HISTORY
+*
+* START-CODE
+
+$internal
+program upgrade_gates
+
+$include keys.h
+$include int$keys.h
+
+   marker = @sdsys:@ds:'$gates.done'
+
+   if ospath(marker, OS$EXISTS) then
+      crt 'The OS-access gates were set for the existing accounts by an earlier install; nothing changed.'
+      crt 'COMPLETE'
+      stop
+   end
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      crt 'Cannot open the account register: the OS-access gates were NOT set.'
+      stop
+   end
+
+*  A system with no os.users file has nobody to carry over: every USER account is written 'no', which is what a blank means anyway.
+   have.osu = @false
+   openpath @sdsys:@ds:'os.users' to osu.f then have.osu = @true
+
+   changed = 0
+   kept = 0
+   failed = 0
+   select acc.f to 12
+   loop
+      readnext reg.name from 12 else exit
+      readu rec from acc.f, reg.name else
+         continue
+      end
+      if downcase(rec<ACC$GROUP>[1, 4]) = 'sdu_' then
+         uname = rec<ACC$GROUP>[5, 999]
+         osu.rec = ''
+         if have.osu then
+*           the three-case fold the old gates used: as held, then lower, then upper
+            read osu.rec from osu.f, uname else
+               read osu.rec from osu.f, downcase(uname) else
+                  read osu.rec from osu.f, upcase(uname) else osu.rec = ''
+               end
+            end
+         end
+         new.sh = 'no'
+         new.ex = 'no'
+         if upcase(trim(osu.rec<1>)) = 'YES' then new.sh = 'yes'
+         if upcase(trim(osu.rec<2>)) = 'YES' then new.ex = 'yes'
+         if upcase(trim(rec<ACC$SH>)) = upcase(new.sh) and upcase(trim(rec<ACC$OS.EXEC>)) = upcase(new.ex) then
+            kept += 1
+            release acc.f, reg.name
+         end else
+            rec<ACC$SH> = new.sh
+            rec<ACC$OS.EXEC> = new.ex
+            written = @true
+            write rec to acc.f, reg.name on error written = @false
+            if written then
+               changed += 1
+            end else
+               failed += 1
+               release acc.f, reg.name
+               crt 'Cannot write the register record of ' : reg.name
+            end
+         end
+      end else
+         release acc.f, reg.name
+      end
+   repeat
+   if have.osu then close osu.f
+
+   crt 'OS-access gates: set for ' : changed : ' existing account(s) from os.users; ' : kept : ' already right; ' : failed : ' failed'
+
+   if failed # 0 then
+      crt 'The gates were NOT all set, so the marker is not written and the next install repeats this.'
+      stop
+   end
+
+   openseq marker to marker.f then
+      weofseq marker.f
+   end else
+      create marker.f else
+         crt 'Cannot write ' : marker : ': the gates are set, but the next install will repeat the walk (harmless).'
+         crt 'COMPLETE'
+         stop
+      end
+   end
+   writeseq 'S.63: the OS-access gates were set for the existing accounts' to marker.f else null
+   closeseq marker.f
+
+   crt 'COMPLETE'
+   stop
+
+end
+
+* END-CODE

@@ -373,6 +373,16 @@
       *   delta any more, so nothing writes or reads it.  FIELD 4 REMAINS
       *   POISONED, per the note above: records written between 13 and 14 Aug
       *   2026 still carry a grant list there.
+      *
+      * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  FIELDS 7 AND 8 ARE THE PER-ACCOUNT OS-ACCESS GATES
+      *   (owner, 23 Oct: the grant is the account's, as on Linux; the person-keyed OS.USERS record is retired).  SDSYS
+      *   switches them (MODIFY.ACCOUNT SH-ON / SH-OFF / OS-ON / OS-OFF; CREATE.ACCOUNT takes SH-ON and OS-ON).  Two
+      *   independent fields, so SH-OFF says nothing about OS.EXECUTE.  BLANK MEANS DENIED: a record that has never been told,
+      *   or one that cannot be read, gets no shell and no OS.EXECUTE.  Loaded into the session at account entry as K$SH /
+      *   K$OS.EXEC (LOGIN, CPROC logto).  UPGRADE_GATES sets them once from the OS.USERS records that exist, so no account
+      *   loses what its person had; accounts made afterwards start 'no'.
+      $define ACC$SH           7     ;* may use the SH verb and "!" (yes/no)
+      $define ACC$OS.EXEC      8     ;* may use OS.EXECUTE, and reach OS paths outside its account (yes/no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

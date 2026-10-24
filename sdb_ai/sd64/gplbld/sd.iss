@@ -3137,6 +3137,58 @@ begin
   end;
 end;
 
+{ CARRY AN UPGRADED INSTALL'S SH AND OS.EXECUTE GRANTS TO THE ACCOUNTS.
+  RELEASE_1.1 170 (Linux S.63; the owner's answer of 23 Oct 2026: the grant is
+  the account's and sdsys\os.users is retired).  Until this release the grant
+  was a record in os.users keyed by the Windows login; now it is two fields of
+  the account's register record, and a blank reads as denied.  An upgrade
+  replaces programs and rebuilds nothing, so this copies, once, what os.users
+  says about each USER account's Windows user into those fields - without it
+  everybody who could use sh, edit or OS.EXECUTE the day before would lose
+  them.  A first install has no os.users and returns at once.
+
+  Exit codes, from upgrade-gates.ps1's header: 0 complete, 1 it did not reach
+  COMPLETE, 3 SD would not start.
+
+  Ordering: after RefreshNocase, so the register it rewrites is the finished
+  one, and before MakeSdsysAccount and AttachInstallerAccount, whose accounts
+  are written with their own grants and need no carrying. }
+function RefreshGates: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  if DataTreeWasAbsent then Exit;
+
+  SayStep('Carrying each account''s shell and OS.EXECUTE access forward...');
+
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\upgrade-gates.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'The shell and OS.EXECUTE access of existing accounts could not ' +
+              'be carried forward. Run upgrade-gates.ps1 from the SD Core ' +
+              'program folder, as an administrator.' + #13#10#13#10;
+    Exit;
+  end;
+
+  case Code of
+    0: ;
+    3: Result := 'SD Core would not start during the upgrade, so the shell and ' +
+                 'OS.EXECUTE access of existing accounts was not carried forward. ' +
+                 'Run upgrade-gates.ps1 from the SD Core program folder, as an ' +
+                 'administrator, once SD Core is running.' + #13#10#13#10;
+  else
+    Result := 'The shell and OS.EXECUTE access of existing accounts could not ' +
+              'be carried forward. See upgrade-gates.log in the SD Core data ' +
+              'folder.' + #13#10#13#10;
+  end;
+end;
+
 (* 30 Aug 26 - THE '$standalone' MARKER AND WriteStandaloneMarker ARE GONE.
    PRE_RELEASE_FIXES 75.  The marker existed for one reader - CREATEA, which
    used it to refuse CREATE.ACCOUNT USER - and that refusal is removed with it,
@@ -4189,6 +4241,7 @@ var
     and was left, or the step could not run.  Its own variable for the same
     reason as VocMsg: it fails independently and its cure is its own. }
   NocaseMsg: String;
+  GatesMsg: String;
   SshOnlyMsg: String;
   MarkerMsg: String;
   { 03 Sep 26 - PRE_RELEASE_FIXES 135 and 147.  The two things a kept database
@@ -4409,6 +4462,11 @@ begin
       first install.  RELEASE_1.1 5 D2.  After the vocabulary step so the
       register it walks is the finished one. }
     NocaseMsg := RefreshNocase;
+
+    { EACH ACCOUNT'S SH AND OS.EXECUTE GRANT CARRIED FROM os.users, and a no-op
+      on a first install.  RELEASE_1.1 170.  After the case step so the register
+      is the finished one; see the function. }
+    GatesMsg := RefreshGates;
 
     if DataTreeUpgrade and (VocMsg = '') then
       VocDoneMsg := 'Every account has this release''s commands.' + #13#10#13#10;
@@ -4755,6 +4813,7 @@ begin
            UpgMsg +
            VocDoneMsg +
            NocaseMsg +
+           GatesMsg +
            MarkerMsg;
 
     { 20 Sep 26 - ONLY THE FAILURE HALF OF EACH, as four ifs rather than four

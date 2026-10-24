@@ -727,8 +727,11 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
      answer TRUE on the first call and never make the second, which is every
      ordinary open.  Only a shared SDSYS entry pays for both.
 
-     net_path_permitted() answers TRUE to everything when this is not a network
-     session, so net_may_write stays TRUE and nothing below changes.        */
+     23 Oct 26 (S.63, Linux 215ce2c): net_path_permitted() answers TRUE to
+     everything for the administrator and for an account that holds OS.EXECUTE,
+     and for an $internal program; for every other session, a console included,
+     it is the real test.  Linux asks only OPENPATH; this asks every open, a VOC
+     pointer too, which is Linux's later "VOC pointers held to the gate".   */
 
   net_may_write = net_path_permitted(pathname, TRUE);
 

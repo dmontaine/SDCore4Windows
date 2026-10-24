@@ -641,6 +641,13 @@ end
 account.path = ''
 acc.group = ''
 acc.suspended = ''
+* 23 Oct 26 Windows port - from Linux abcda0c (13 Oct 26, S.63 second sitting: "api should read switches").  The account's SH and
+*   OS.EXECUTE switches are read here from its register record, as LOGIN reads them at sign-on and CPROC's LOGTO reloads them,
+*   and are set only once the account has been entered (below, after K$SET.ACCOUNT), so a refusal or a revert leaves the previous
+*   account's switches with the previous account.  FAIL CLOSED: both start off for every call, and an account with no record
+*   keeps them off.  Until this an API session took the person's os.users record; the grant is the account's now (owner, 23 Oct).
+api.sh.grant = @false
+api.os.grant = @false
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
 *   BRANCH ON THE AUDIT TRAIL, AND THAT IS KEPT RATHER THAN REMOVED WITH THE
 *   DIAGNOSTICS IT ARRIVED WITH.***  All five refusals answer the caller with
@@ -657,6 +664,8 @@ openpath @sdsys:@ds:'accounts' to acc.f then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
       acc.group = acc.rec<ACC$GROUP>
       acc.suspended = acc.rec<ACC$SUSPENDED>
+      api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
+      api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
    end
    close acc.f
 end
@@ -912,6 +921,8 @@ account.path = ospath("", os$cwd)     ;* Ensure @PATH is absolute path
 initial.account.path = account.path   ;* Make WHO show only one element
 who = new.account
 void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU, sheet 24 and 29)
+void kernel(K$SH,      api.sh.grant)    ;* 23 Oct 26 - S.63, Linux abcda0c: see where they were read, above
+void kernel(K$OS.EXEC, api.os.grant)
 
 voc = new.voc
 

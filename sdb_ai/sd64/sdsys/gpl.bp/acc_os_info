@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux 215ce2c (S.63): os.sh and os.execute come from the register fields ACC$SH and ACC$OS.EXEC;
+*           the OS.USERS record is no longer read.  RELEASE_1.1 170.
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
 * 01 Oct 26 Windows port - USRDIR's backslashes are made @ds (which is "/")
 *           before the separators are counted; the count was always zero.
@@ -39,8 +41,8 @@
 *    route.ssh   1 when the user is in sdssh, else 0 (USER only)
 *    route.api   1 when the user is in sdapi, else 0 (USER only)
 *    members     the sdg_ group's members, comma separated (GROUP only)
-*    os.sh       SDSYS os.users field 1 "yes" -> 1, else 0   } only when the
-*    os.execute  SDSYS os.users field 2 "yes" -> 1, else 0   } user HAS a record
+*    os.sh       the register's ACC$SH "yes" -> 1, else 0   } USER only (S.63;
+*    os.execute  the register's ACC$OS.EXEC "yes" -> 1, else 0  } os.users is retired)
 *
 * WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
 * directory holding user_accounts, from USRDIR as CREATE.ACCOUNT reads it)
@@ -133,16 +135,11 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'members: ' : convert(@fm, ',', members)
    end
 
+*  23 Oct 26 Windows port - from Linux 215ce2c (S.63): the two gates are the register's own fields now, as on Linux; the OS.USERS
+*  record is retired.  1 only if the field says yes.
    if typ = 'USER' then
-      openpath @sdsys : @ds : 'os.users' to osu.f else
-         err = 12005 : @vm : acc.name : @vm : 'os.users'
-         return
-      end
-      read osu.rec from osu.f, uname then
-         if downcase(trim(osu.rec<1>)) = 'yes' then info<-1> = 'os.sh: 1' else info<-1> = 'os.sh: 0'
-         if downcase(trim(osu.rec<2>)) = 'yes' then info<-1> = 'os.execute: 1' else info<-1> = 'os.execute: 0'
-      end
-      close osu.f
+      info<-1> = 'os.sh: ' : (if upcase(trim(acc.rec<ACC$SH>)) = 'YES' then 1 else 0)
+      info<-1> = 'os.execute: ' : (if upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES' then 1 else 0)
    end
 
    return

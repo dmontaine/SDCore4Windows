@@ -409,7 +409,9 @@ void op_sdext() {
        os_permitted() returns TRUE on HDR_INTERNAL before it ever reads the
        username - so it would pass for every user, always.  The test lives in
        sdpy_session.c, at the moment the helper process is STARTED, which is
-       the only point where the real caller is still visible. */
+       the only point where the real caller is still visible.
+       23 Oct 26 (S.63, Linux 215ce2c): the answer there is now the ACCOUNT's OS.EXECUTE grant (sd_os_permitted() asks
+       os_gate_open()), which is where Linux gates the same three keys. */
     case SD_PyInit:
       py_ext_int("INIT", NULL);
       break;

@@ -110,8 +110,13 @@ deffun ps_script(script) calling '!ps_script'
 *  access.given); blank means on, which is RELEASE_1.1 68's "silence means
 *  BOTH".
    access.given = settings<CA$ROUTE.SSH> # '' or settings<CA$ROUTE.API> # ''
-   access.ssh = settings<CA$ROUTE.SSH> # '0'
-   access.api = settings<CA$ROUTE.API> # '0'
+* 13 Oct 26 dm - S.63 (owner, 13 Oct 2026: "the default was supposed to be no api, no ssh, no os.execute
+*   and no sh"; Core ships with high security and the administrator loosens it by choice).  A new account
+*   starts with NO ssh, NO API, NO shell and NO OS.EXECUTE, and each is given by naming it (ssh, api,
+*   both, sh-on, os-on) or later by MODIFY.ACCOUNT.  This was "both routes on unless a setting narrows
+*   them" from S.29 until today.  A setting is a request only when it is exactly 1: a blank or a 0 is off.
+   access.ssh = (settings<CA$ROUTE.SSH> = 1)
+   access.api = (settings<CA$ROUTE.API> = 1)
    no.query = settings<CA$NO.QUERY> = 1
    reuse.sd.user = settings<CA$REUSE.SD.USER> = 1   ;* owner, 2 Oct 2026 - see the USER arm
    os.sh   = settings<CA$OS.SH> = 1
@@ -130,6 +135,16 @@ deffun ps_script(script) calling '!ps_script'
       end else
          err = 2018:@vm:'ATTACH'  ;* Unexpected token (xx)
          return
+      end
+* 13 Oct 26 dm - S.63 (owner, 13 Oct 2026): the installing user's own account is made with all four
+*   switched on.  The person who installs owns the machine and can do all of it with sudo anyway; every
+*   other account starts off.  ATTACH is install-only (-internal and the one-shot marker), so this
+*   cannot be asked for from a session.
+      if attach then
+         access.ssh = @true
+         access.api = @true
+         os.sh = @true
+         os.exec = @true
       end
    end
 
@@ -514,6 +529,11 @@ PW.TRY.AGAIN:
        err = 2202 ;* Account name is invalid
        goto exit.create
      end
+     if os.sh or os.exec then
+       @system.return.code = -ER$ARGS
+       err = 10105:@vm:acc.name ;* %1 has no Windows user of its own, so it has no shell to permit
+       goto exit.create
+     end
      pathname = trim(settings<CA$PATH>)
      if pathname = '' then
        err = 6005 ;* Invalid account pathname
@@ -889,10 +909,20 @@ PW.TRY.AGAIN:
 *   AND THE TIER VARIABLE IS GONE WITH THEM, not merely left unused: its last
 *   three readers were the register write and the two ADMINISTRATOR arms, all
 *   deleted on 18 Sep 2026.
+* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The OS-access gates are written to the register explicitly, 'no'
+*   unless asked, so that a record that says 'no' (somebody decided) can be told from one that says nothing (never told, read as
+*   denied too).  They replace the person-keyed OS.USERS record that grant.os.access used to write.
+   if acc.type = "USER" then
+      acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'
+      acc.rec<ACC$OS.EXEC> = if os.exec then 'yes' else 'no'
+   end
    write acc.rec to acc.f, acc.name
    locked = @false
    close acc.f
    acc.f.open = @false
+   if acc.type = "USER" then
+      crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
+   end
 
    gosub secure.account.dir
 
@@ -920,11 +950,8 @@ PW.TRY.AGAIN:
 *   tier test beside it would make the answer depend on two things that can
 *   disagree.  A DEFAULT, NOT A RULE: edit the record to change it.
 *
-*   IT IS KEYED BY THE WINDOWS LOGIN NAME, because OS.USERS is - the permission
-*   belongs to the person and does not move when they LOGTO somewhere else
-*   (CPROC, "@logname, NOT the account").  acc.uname is that name on both the
-*   create path and the ADOPT path.
-   gosub grant.os.access
+*   23 Oct 26 - ***THE TWO PARAGRAPHS ABOVE ARE HISTORY.***  Owner, 23 Oct 2026: the grant is the ACCOUNT's, written to the
+*   register (ACC$SH, ACC$OS.EXEC) a few lines up, and the person-keyed OS.USERS record is retired.  grant.os.access is gone.
 
    @system.return.code = 0
    return
@@ -1049,43 +1076,7 @@ secure.account.dir:
 * nothing to read.
 * ======================================================================
 
-grant.os.access:
-   if not(os.sh) and not(os.exec) then return
-   if upcase(acc.type) # 'USER' then return
-   if trim(acc.uname, ' ', 'B') = '' then return
-
-   openpath @sdsys : @ds : 'os.users' to osu.f else
-      display sysmsg(10104, acc.uname)
-      * Unable to change operating-system access for %1
-      return
-   end
-
-   read osu.rec from osu.f, acc.uname then
-      close osu.f
-      display sysmsg(10103, acc.uname)
-      * %1 already has an os.users record, so it was left exactly as it was
-      return
-   end
-
-   osu.sh = 'no'
-   osu.ex = 'no'
-   if os.sh   then osu.sh = 'yes'
-   if os.exec then osu.ex = 'yes'
-   osu.rec    = osu.sh        ;* field 1 - SH
-   osu.rec<2> = osu.ex        ;* field 2 - OS.EXECUTE
-
-   osu.written = @true
-   write osu.rec to osu.f, acc.uname on error osu.written = @false
-   close osu.f
-
-   if osu.written then
-      display sysmsg(10102, acc.uname, osu.sh, osu.ex)
-      * os.users: %1 has SH %2, OS.EXECUTE %3
-   end else
-      display sysmsg(10104, acc.uname)
-   end
-
-   return
+* 23 Oct 26 - the routine is deleted (S.63; owner's answer of 23 Oct).  The gates are written to the register above.
 
 * ======================================================================
 

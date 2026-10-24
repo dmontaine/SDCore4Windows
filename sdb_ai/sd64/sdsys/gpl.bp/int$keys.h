@@ -146,7 +146,7 @@
       $define K$WINPID          59       ;* This session pid as Windows counts it
       $define K$SET.USERNAME    60       ;* Set the session user name ($internal)
       $define K$ASSUME.USER     61       ;* Become the authenticated user ($internal)
-      $define K$IMPERSONATING   62       ;* <1> identity Windows says, <2> token held?
+      $define K$IMPERSONATING   62      ;* <1> identity Windows says, <2> token held?
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  IS THE SIGNED-IN PERSON AN
 *   ADMINISTRATOR - not "is this session elevated", which is K$ADMINISTRATOR
 *   (26) and is a different question with a near-identical name.  26 is the
@@ -228,6 +228,14 @@
       * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
       *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
       $define K$WINSIZE          92      ;* The terminal's size from the tty
+* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  K$REAL.USER 90 and K$LOGIN.UID 91 are Linux's own and are not carried.
+* 13 Oct 26 dm - S.63.  The per-account OS-access gates are back (see gplsrc/keys.h): K$SH and
+*   K$OS.EXEC, at 93 and 94 now.  Settable only from $internal, like K$ADMINISTRATOR; LOGIN and CPROC
+*   load them at account entry from ACC$SH / ACC$OS.EXEC.  K$PATH.OK asks whether THIS ACCOUNT may open
+*   a pathname - for an $internal program (SED) that is exempt from the gate itself.  Must match keys.h.
+      $define K$SH              93       ;* may use SH and "!"
+      $define K$OS.EXEC         94       ;* may use OS.EXECUTE and reach OS paths outside its account
+      $define K$PATH.OK         95       ;* 1 if this account may open the pathname
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

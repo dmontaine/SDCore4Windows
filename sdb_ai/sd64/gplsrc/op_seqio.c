@@ -552,6 +552,14 @@ Private void openseq(bool map_name) {
     }
     ProfEvent(PROF_OPENSEQ, file_name, file_name_len); /* OPENSEQ by pathname: the application event profiler (16 Oct 26) */
 
+    /* 13 Oct 26 S.63: OPENSEQ by pathname (and a port, which is an OS device) is an OS file external to SD.  An
+       account without OS.EXECUTE reaches only paths inside its own directory; see op_sh.c os_path_ok_for_account.
+       A file named through the VOC (the file, record form above) is an SD file and is not asked this here.     */
+    if (!os_path_open_ok(file_name)) {
+      process.status = ER_PERM;
+      goto exit_op_openseq;
+    }
+
     /* Check if looks like a port name */
 
     if (is_port(file_name)) /* Opening a port */

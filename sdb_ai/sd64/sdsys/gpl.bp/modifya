@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 23 Oct 26 Windows port - from Linux 215ce2c (S.63), owner's answer of 23 Oct: SH-ON, SH-OFF, OS-ON and OS-OFF write the register
+*           fields ACC$SH and ACC$OS.EXEC (os.set) and no longer the person's OS.USERS record; reported with 10102 as Linux does.
 *  7 Oct 26 Windows port - COMMAND WORDS LOWER CASE in every audit record this program
 *   writes ('modify.account add|delete|suspend|unsuspended|route|os.users ...'), on the owner's
 *   rule of 7 Oct ("all command words ought to be lower case"; Linux, mail T1730).  This
@@ -329,19 +331,19 @@ deffun ps_script(script) calling '!ps_script'
 *   it alone.  That is why os.set takes a field number rather than a pair of
 *   wants.
          case upcase(action) = 'SH-ON'
-            os.field = 1
+            os.field = ACC$SH
             os.want  = @true
             gosub os.set
          case upcase(action) = 'SH-OFF'
-            os.field = 1
+            os.field = ACC$SH
             os.want  = @false
             gosub os.set
          case upcase(action) = 'OS-ON'
-            os.field = 2
+            os.field = ACC$OS.EXEC
             os.want  = @true
             gosub os.set
          case upcase(action) = 'OS-OFF'
-            os.field = 2
+            os.field = ACC$OS.EXEC
             os.want  = @false
             gosub os.set
 
@@ -673,113 +675,50 @@ route.apply:
 * READU AND RELEASE, because two administrators editing OS.USERS at once is
 * rare and silent corruption of a permission list is not a thing to leave to
 * chance.  The no-op path releases without writing.
+*
+* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63, ON THE OWNER'S ANSWER OF 23 OCT: THE GRANT IS THE ACCOUNT'S.  The text
+* above this line describes the person-keyed OS.USERS record, which is retired.  os.field is now the register field ACC$SH or
+* ACC$OS.EXEC, written under a lock as SET.SUSPENDED writes ACC$SUSPENDED; OS-ON also governs what an account can open by
+* pathname outside its own directory (op_sh.c, K$PATH.OK).  The grant takes effect at the NEXT ACCOUNT ENTRY: LOGIN, APISRVR
+* and CPROC's logto load the field into the session (K$SH / K$OS.EXEC), so a session already in the account keeps what it had.
+* A GROUP or OTHER account is entered by whoever its Windows group admits, so a shell granted to it would be a shell granted to
+* all of them: only sdu_ names one person (10105).
 os.set:
-   if group.name[1,4] = 'sdg_' then
+   if group.name[1,4] # 'sdu_' then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
    end
 
-   gosub account.user
-   if not(user.ok) then return
-
-   openpath @sdsys : @ds : 'os.users' to osu.f else
-      @system.return.code = -ER$FAILED
-      crt sysmsg(10104, acc.user) ;* Unable to change operating-system access
-      return
-   end
-
-   readu osu.rec from osu.f, acc.user else osu.rec = ''
-
-   os.was = (upcase(trim(osu.rec<os.field>, ' ', 'B')) = 'YES')
+   os.was = (upcase(trim(acc.rec<os.field>)) = 'YES')
    if os.was = os.want then
-      release osu.f, acc.user
-      close osu.f
-      crt sysmsg(10080, acc.user) ;* %1 already had that access; nothing changed
+      crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
       return
    end
 
-   os.new = 'no'
-   if os.want then os.new = 'yes'
-   osu.rec<os.field> = os.new
-
-*  BOTH FIELDS ARE REWRITTEN, in the two spellings this program uses, so a
-*  record hand-edited to "YES" or "Yes" or "y" comes out of here saying what
-*  the gates will actually read.  The gates fold case and compare to "yes"; a
-*  record that says "y" has always meant no and would otherwise keep looking
-*  as though it meant something.
-   osu.sh = 'no'
-   osu.ex = 'no'
-   if upcase(trim(osu.rec<1>, ' ', 'B')) = 'YES' then osu.sh = 'yes'
-   if upcase(trim(osu.rec<2>, ' ', 'B')) = 'YES' then osu.ex = 'yes'
-   osu.rec = osu.sh
-   osu.rec<2> = osu.ex
-
+   readu acc.new from acc.f, acc.name else acc.new = acc.rec
+   if os.want then acc.new<os.field> = 'yes' else acc.new<os.field> = 'no'
    osu.ok = @true
-   write osu.rec to osu.f, acc.user on error osu.ok = @false
-   close osu.f
-
-* 30 Aug 26 Windows port - AND THE SAME FALLBACK CRED_SET HAS.  PRE_RELEASE 68.
-*
-*   os.users is READ-ONLY to sdusers - secure-osusers.ps1 grants (OI)(CI)(RX) -
-*   so this write is refused by Windows for a session that reached SDSYS with
-*   LOGTO from an unelevated start, however administrator SD believes it is
-*   after CPROC:2769.  Same cause as the $cred write, same route out: ps_script
-*   hands the work to the elevated helper when K$ADMINISTRATOR is set
-*   (PS_SCRIPT:166) and falls back to os.execute when it is not, so an ordinary
-*   caller behaves exactly as before.  The long version of the reasoning is in
-*   CRED_SET, including why CRLF and why ASCII are both measured facts.
-*
-*   AFTER close, DELIBERATELY.  The readu above holds an update lock and close
-*   releases it; letting an outside process write the file while SD holds a lock
-*   on the record would be a lock SD believes in and Windows knows nothing about.
+   write acc.new to acc.f, acc.name on error osu.ok = @false
    if not(osu.ok) then
-      osu.path = kernel(K$WINPATH, @sdsys : @ds : 'os.users' : @ds : acc.user)
-      if osu.path # '' then
-         q = char(39)
-         ps =       '$p = ' : q : osu.path : q
-         ps := @fm : '$l = @(' : q : osu.sh : q : ',' : q : osu.ex : q : ')'
-         ps := @fm : '$nl = [char]13 + [char]10'
-         ps := @fm : 'try {'
-         ps := @fm : '  [System.IO.File]::WriteAllText($p, ($l -join $nl) + $nl,'
-         ps := @fm : '     [System.Text.Encoding]::ASCII)'
-         ps := @fm : '} catch { exit 1 }'
-         ps := @fm : 'exit 0'
-
-         if ps_script(ps) = 0 then osu.ok = @true
-      end
-   end
-
-*  READ BACK BEFORE REPORTING, for CRED_SET's reason: the elevated path runs a
-*  script whose exit code says the FILE was written and nothing about whether SD
-*  can read it back, and this file is the whole of the OS.EXECUTE gate.
-   if osu.ok then
-      osu.ok = @false
-      openpath @sdsys : @ds : 'os.users' to osu.chk then
-         read osu.back from osu.chk, acc.user then
-            if upcase(trim(osu.back<1>, ' ', 'B')) = upcase(osu.sh) then
-               if upcase(trim(osu.back<2>, ' ', 'B')) = upcase(osu.ex) then
-                  osu.ok = @true
-               end
-            end
-         end
-         close osu.chk
-      end
-   end
-
-   if not(osu.ok) then
+      release acc.f, acc.name
       @system.return.code = -ER$FAILED
-      crt sysmsg(10104, acc.user)
+      crt sysmsg(10104, acc.name)  ;* Unable to change operating-system access for %1; the register could not be updated
       return
    end
 
-*  6 Oct 26 Windows port - RELEASE_1.1 128: an os.users change is audited.  Linux
-*  has no os.users list, so these words are this port's own.
-   void kernel(K$AUDIT, 'modify.account os.users account=' : acc.name : ' sh=' : osu.sh : ' os.execute=' : osu.ex)
+*  THE RESULTING STATE OF BOTH FIELDS, NOT A SENTENCE ABOUT ONE: SH-OFF says nothing about OS.EXECUTE, so saying where both now
+*  stand is what tells the administrator the command did only what it named.
    @system.return.code = 0
-
-   crt sysmsg(10102, acc.user, osu.sh, osu.ex) ;* os.users: %1 has SH %2, OS.EXECUTE %3
+   osu.sh = 'no'
+   if upcase(trim(acc.new<ACC$SH>)) = 'YES' then osu.sh = 'yes'
+   osu.ex = 'no'
+   if upcase(trim(acc.new<ACC$OS.EXEC>)) = 'YES' then osu.ex = 'yes'
+   void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
    return
+
+*  (the rest of this routine, the os.users write with its elevated-helper fallback and read-back, is deleted: 23 Oct 26)
 
 * ======================================================================
 * SUSPENDED / UNSUSPENDED - set the account's suspension state.

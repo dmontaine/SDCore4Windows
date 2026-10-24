@@ -3159,6 +3159,13 @@ int.logto:
 *   the owner's ruling of 7 Oct, "All lower case", event names included (Linux T1830).
    void kernel(K$AUDIT, 'logto account=' : new.account)
 
+* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates are loaded here as LOGIN loads
+*   them at sign-on: SH and OS.EXECUTE are OFF unless the account's register record says 'yes' (SDSYS switches them with
+*   MODIFY.ACCOUNT SH-ON / OS-ON).  Account-scoped: a LOGTO to another account reloads from that account's own record, so one
+*   account's grant is never carried into another.  The administrator needs no grant: USR_ADMIN already passes the gate.
+   void kernel(K$SH,      upcase(trim(acc.record<ACC$SH>)) = 'YES')
+   void kernel(K$OS.EXEC, upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES')
+
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
    gosub find.private.catalogue
@@ -4110,14 +4117,10 @@ os.command:
 *   the machine's own administrator out of the shell - the same lockout ADOPT
 *   caused with sdsshonly on 15 Aug 2026 (CREATEA).
 *
-*   @logname, NOT the account: the permission belongs to the person, so it does
-*   not change when they LOGTO somewhere else.
-   sh.listed = @false
-   openpath @sdsys:@ds:'os.users' to sh.f then
-      read sh.rec from sh.f, @logname then
-         sh.listed = (upcase(trim(sh.rec<1>)) = 'YES')
-      end
-   end
+*   23 Oct 26 - S.63, Linux 215ce2c, ON THE OWNER'S ANSWER OF 23 OCT: OS.USERS IS RETIRED AND THE GRANT IS THE ACCOUNT'S.
+*   The paragraph above (the person, not the account; the file and its ACL) is history.  K$SH is loaded at sign-on and at
+*   LOGTO from the register's ACC$SH (LOGIN, int.logto), so the permission follows the account the session stands in.
+   sh.listed = kernel(K$SH, -1)
 
    if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then
       display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell
@@ -4125,7 +4128,8 @@ os.command:
    end
 
 * 17 Aug 26 Windows port - THE METACHARACTER BAN IS LIFTED FOR A LISTED
-*   ACCOUNT, owner's ruling.  Being in OS.USERS means a real shell: pipes,
+*   ACCOUNT, owner's ruling (now: an account with SH-ON; Linux keeps the filter for every one - a Windows rule to flag in the
+*   parity audit).  Being listed means a real shell: pipes,
 *   redirection and chaining, which is most of what a programmer needs one for.
 *   An ELEVATED session that is not listed keeps the ban exactly as before, so
 *   this adds capability and regresses nothing.

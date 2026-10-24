@@ -554,9 +554,10 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on}'
     crt '                  {no.query}'
-    crt '                  Omit the route and the account gets both ssh and the API.'
+    crt '                  A new user account starts with no ssh, no API, no shell (sh) and no os.execute;'
+    crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
     crt '                create.account group <group name> {no.query}'
     crt '                create.account other <account name> <pathname> {no.query}'
     @system.return.code = -ER$ARGS
