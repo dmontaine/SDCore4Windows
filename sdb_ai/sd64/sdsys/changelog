@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+23 Oct 26  SDIDX -M SAYS WHY WHEN IT CANNOT MAKE THE DIRECTORY (FROM SD CORE FOR LINUX).
+
+             What        Moving the indexes of a file to a directory that cannot be made (a drive that does not exist, a parent you may not write,
+                        or a path that goes through a file) ended with status 1 and not one word. It now prints "Cannot create directory <the
+                        path you typed>: <the reason>" (the operating system's reason, or "a file of that name exists") and still ends with
+                        status 1. Nothing is moved: the indexes and the file header are where they were.
+             Why it      A tool that fails without a message sends the person to look at permissions, drives and spelling with nothing to go on.
+             matters     SD Core for Linux prints the same two lines, so a message means the same on both.
+             Does not    It changes nothing when the directory can be made, and not the message for a target that already exists. Other
+                        errors in the tools keep their own wording.
+
 23 Oct 26  SORTING A LONG LIST OF EQUAL OR ALREADY ORDERED KEYS NO LONGER TAKES MINUTES (FROM SD CORE FOR LINUX).
 
              What        SORT, SSELECT, SELECT and LIST with BY, the SORT() functions and the index builder all use one sort. It put each key

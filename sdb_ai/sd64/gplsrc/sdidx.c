@@ -25,6 +25,11 @@
  *           is then empty (-m used to delete all of it, including a new target inside it).  -d answered n or met the
  *           end of input and still cleared the header: now it stops.  -p says what -q would say, and checks the
  *           header write.  A path argument over the header's limit is refused (strcpy overran the buffer).
+ * 23 Oct 26 Windows port - from Linux 0b49d68 (19 Oct 26): S.70.  make_path() said nothing when it could not make a directory (mkdir failed,
+ *           or a component of the path exists as a file) and -m ended with status 1 and no word.  It now prints, on standard
+ *           output, "Cannot create directory <the whole target as typed>: <the reason>" (strerror(errno), or "a file of that
+ *           name exists"); the status is still 1.  The wording was settled with the Windows agent (mail T1815), so that both
+ *           ports print one result.
  * 18 Oct 26 Windows port - from Linux 73aee7a (18 Oct 26): - A RELATIVE index path given to -m or -p is made absolute (from the current directory) before it is
  *           used and stored.  The header held the text as typed, so the indices were found only by a process whose
  *           current directory was the one the command was run from; SD never is.
@@ -101,6 +106,7 @@ void report_location(void);
 bool bounded_copy(char *dst, char *src);
 bool index_path_arg(char *dst, char *src);
 bool make_path(char *tgt);
+void make_path_failed(char *tgt, const char *why);
 bool attach_shared_memory(void);
 void unbind_sysseg(void);
 bool fullpath(char *path, char *name);
@@ -700,6 +706,15 @@ bool index_path_arg(char *dst, char *src) {
 }
 
 /* ======================================================================
+   make_path_failed()  -  Say why make_path() could not make TGT, the whole
+   target as the user typed it.  Standard output, like the tool's other
+   lines; the caller ends with status 1.  (19 Oct 26, S.70)               */
+
+void make_path_failed(char *tgt, const char *why) {
+  printf("Cannot create directory %s: %s\n", tgt, why);
+}
+
+/* ======================================================================
    make_path()  -  Recursive mkdir to make directory path                 */
 
 bool make_path(char *tgt) {
@@ -748,10 +763,13 @@ bool make_path(char *tgt) {
 
     if (stat(new_path, &statbuf)) /* Directory does not exist */
     {
-      if (MakeDirectory(new_path) != 0)
+      if (MakeDirectory(new_path) != 0) {
+        make_path_failed(tgt, strerror(errno));
         return FALSE;
+      }
     } else if (!(statbuf.st_mode & S_IFDIR)) /* Exists but not as a directory */
     {
+      make_path_failed(tgt, "a file of that name exists");
       return FALSE;
     }
 

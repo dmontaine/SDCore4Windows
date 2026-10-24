@@ -694,6 +694,57 @@ def verifier_rows():
     row("V13 -p with a RELATIVE index path stores the full path",
         rc == 0 and ("Index directory is " + where) in out and ("Index directory is " + where) in q(d), "%r %r" % (rc, q(d)[-200:]))
 
+    # 19 Oct 26 dm, S.70 (the owner: "sdidx should be fixed as a future task"; the wording agreed with the Windows agent, mail T1815): `sdidx -m` onto a
+    # directory it cannot make used to end with status 1 and NOT A WORD, in two places (mkdir failed; a component exists as a file).  The message is
+    # "Cannot create directory <the whole target as typed>: <strerror>" or "...: a file of that name exists", on STANDARD OUTPUT, and the status is still 1.
+    say("\n--- S.70: a directory that cannot be made says so -----------------------------------------------------")
+
+    def split(name, *args):
+        """(status, stdout, stderr) apart, in the C locale so that strerror() is the English text."""
+        cmd = [os.path.join(BIN, name)] + list(args)
+        say("    $ " + " ".join(cmd).replace(BOX, "<box>"))
+        p = subprocess.run(cmd, input="", capture_output=True, text=True, errors="replace",
+                           env=dict(os.environ, SD_CONFIG=CONF, LC_ALL="C"), cwd=WORK, timeout=20)
+        return p.returncode, ANSI.sub("", p.stdout), ANSI.sub("", p.stderr)
+
+    d = fresh("v-s70-ok")
+    ok_target = os.path.join(WORK, "v-s70-ok", "a", "b", "idx")
+    rc, out, err = split("sdidx", "-m", d, ok_target)
+    row("V14 (control) missing parents that CAN be made: -m ends status 0, moves the index, and says nothing about a directory",
+        rc == 0 and ls(ok_target) == ["%2"] and "Cannot create" not in out + err, "%r %r %r" % (rc, ls(ok_target), (out + err)[-200:]))
+
+    d = fresh("v-s70-ro")
+    ro = os.path.join(WORK, "v-s70-ro", "locked")
+    os.makedirs(ro)
+    os.chmod(ro, 0o555)
+    ro_target = os.path.join(ro, "sub", "deeper", "idx")
+    if not hasattr(os, "geteuid") or os.geteuid() == 0:  # 23 Oct 26 Windows port: no geteuid, and a read-only directory still takes subdirectories
+        say("  [SKIP] V15-V17: running as root, which can write into a mode 0555 directory; nothing measured (not counted as a pass)")
+    else:
+        rc, out, err = split("sdidx", "-m", d, ro_target)
+        row("V15 a parent that cannot be written: status 1 and the reason, naming the WHOLE target as typed",
+            rc == 1 and ("Cannot create directory " + ro_target + ": Permission denied") in out, "%r %r %r" % (rc, out[-250:], err[-100:]))
+        row("V16 ... the message is on standard output, and standard error stays empty", "Cannot create directory" in out and err == "",
+            "stdout %r stderr %r" % (out[-200:], err[-200:]))
+        row("V17 ... and nothing was moved: the index is where it was and the header still says so",
+            ls(d) == ["%0", "%1", "%2"] and "Indices are not relocated" in q(d), "%r %r" % (ls(d), q(d)[-150:]))
+    os.chmod(ro, 0o755)
+
+    d = fresh("v-s70-file")
+    blocker = os.path.join(WORK, "v-s70-file", "blocker")
+    with open(blocker, "w") as fh:
+        fh.write("x")
+    fb_target = os.path.join(blocker, "idx")
+    rc, out, err = split("sdidx", "-m", d, fb_target)
+    row("V18 a component that exists as a FILE: status 1 and 'a file of that name exists', naming the whole target",
+        rc == 1 and ("Cannot create directory " + fb_target + ": a file of that name exists") in out, "%r %r %r" % (rc, out[-250:], err[-100:]))
+    row("V19 ... on standard output, standard error empty, and nothing moved",
+        "Cannot create directory" in out and err == "" and ls(d) == ["%0", "%1", "%2"] and open(blocker).read() == "x",
+        "stdout %r stderr %r ls %r" % (out[-150:], err[-100:], ls(d)))
+    rc, out, err = split("sdidx", "-m", d, os.path.join(WORK, "v-s70-file"))
+    row("V20 (control) a target that already exists keeps its own message and makes no 'Cannot create' claim",
+        "already exists" in out and "Cannot create" not in out + err, "%r %r %r" % (rc, out[-200:], err[-100:]))
+
 
 def sdconv_rows():
     """sdconv (owner's choice A, 18 Oct 26): a hashed file is refused with a message and status 1, nothing changed; a compiled program is not refused."""

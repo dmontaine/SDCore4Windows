@@ -12,6 +12,8 @@
 #            (a path typed ...\Don\x was not the file SD had recorded as ...\don\x, so sdidx and sdfix ran on a file a
 #            session held open); sdidx -m could not create missing parents typed with backslashes (status 1, no message);
 #            and a relative index path with a missing parent failed the same way.  Each was red on the build before.
+# 23 Oct 26  W15, W16 (RELEASE_1.1 169): sdidx -m onto a drive that does not exist says why (Linux S.70, 0b49d68), as the carried V15-V17
+#            cannot on NTFS.  Written, parse-checked, not run.
 # END-HISTORY
 #
 # THE NULL CASES.  The held file is read back through the tools in its EXACT spelling first (a control: the refusal works at
@@ -103,6 +105,21 @@ def path_rows():
     rc, out, to = T.tool("sdidx", "-m", d, x)
     row("W14 -m with forward slashes and missing parents: moved, status 0 (as on Linux)",
         rc == 0 and T.ls(x) == ["%2"], "%r %r" % (rc, out[-150:]))
+
+    # 23 Oct 26, Linux 0b49d68 (S.70).  Linux's V15 makes a directory unwritable with chmod 0555; NTFS ignores that, so the
+    # carried rows V15-V17 skip here.  What stops mkdir on Windows is a drive that does not exist.
+    free = [c for c in "ZYXWVUTSRQPONMLKJIHGFED" if not os.path.exists(c + ":\\")]
+    if not free:
+        say("  [SKIP] W15-W16: every drive letter is in use; nothing measured (not counted as a pass)")
+    else:
+        d = T.fresh("w-nodrive")
+        x = free[0] + ":\\sdidx-s70\\idx"
+        rc, out, to = T.tool("sdidx", "-m", d, x)
+        say("    AFTER  data %r   target %s" % (T.ls(d), x))
+        row("W15 -m onto a drive that does not exist: status 1 and 'Cannot create directory <whole target as typed>: <reason>'",
+            rc == 1 and ("Cannot create directory " + x + ": ") in out, "%r %r" % (rc, out[-250:]))
+        row("W16 ... and nothing was moved: the index is where it was and the header still says so",
+            T.ls(d) == ["%0", "%1", "%2"] and "Indices are not relocated" in T.q(d), "%r %r" % (T.ls(d), T.q(d)[-150:]))
 
 
 def main():
