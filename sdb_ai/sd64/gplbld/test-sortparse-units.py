@@ -44,7 +44,7 @@ def checks(text):
     def ck(name, ok, detail=""):
         res.append((name, bool(ok), detail))
 
-    ins = function_body(src, "Private void sess_insert_bte(")
+    ins = function_body(src, "Private bool tree_insert(")   # 20 Oct 26: the classic walk moved out of sess_insert_bte() into tree_insert()
     cmp_ = function_body(src, "Private int sort_compare_keys(")
     ck("S0 both functions are there", bool(ins) and bool(cmp_), "insert %d bytes, compare %d bytes" % (len(ins), len(cmp_)))
     guard = ins.find("if (!(num_done &")

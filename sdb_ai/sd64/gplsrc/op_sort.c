@@ -25,6 +25,11 @@
  * 18 Oct 26 Windows port - from Linux ddd991e (16 Oct 26): Audit of that change: sess_sortdata() starts its target string before the merge again (a merge that
  *               failed reached ts_terminate() with no ts_init() behind it); messages 12403 (not a sort variable) and
  *               12404 (all 255 sorts open) in the place of 1487 and 1482, which named the wrong thing.
+ * 23 Oct 26 Windows port - from Linux e07c616 (20 Oct 26): A run of the sort is collected in arrival order and sorted once (array_add /
+ *               array_finalize) instead of being walked into an unbalanced tree node by node: 100,000 equal or ordered keys took
+ *               150-230 s, now well under a second.  Same output, byte for byte: the order of equal keys (newest first), the
+ *               work files and the merge are unchanged.  UNIQUE, COMPOUND and STRICT sorts, and any run in which a right
+ *               justified level has met both numbers and text (where the comparison is not transitive), keep the classic insertion.
  * rev 0.9.0 Jan 25 mab catch null key id in op_sortdata()
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): Disk record lengths are 32 bits (item 455), fields padded to 4.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -96,7 +101,24 @@ typedef struct SORT_SESSION {
   int32_t sort_buff_bytes;           /* Bytes in buffer */
   int32_t sort_buff_offset;          /* Offset of next byte to extract */
   OSFILE sort_fu;                    /* File unit for sort file */
+
+  /* An ARRAY run (20 Oct 26): the nodes of the run are kept in the order they arrived and sorted once, when the run is read
+     or written to a work file, instead of being walked into the tree one at a time (which is quadratic on equal keys and on
+     ordered input).  The positional initialiser of legacy_session above stops before these, so they start as zero. */
+  BTREE_ELEMENT** pend;              /* the run's nodes, in arrival order */
+  int32_t pend_n;
+  int32_t pend_cap;
+  double* pend_num;                  /* pend_cap * nrlev numbers: the right justified keys, each read once */
+  int16_t nrlev;                     /* right justified levels */
+  signed char rl_idx[MAX_SORT_KEYS]; /* level -> column of pend_num, -1 for a left justified level */
+  u_char lvl_seen[MAX_SORT_KEYS];    /* 1: numeric keys seen at this level, 2: non-numeric keys seen (3 = both) */
+  u_char run_kind;                   /* RK_NONE, RK_ARRAY or RK_CLASSIC */
+  bool tree_built;                   /* RK_ARRAY: sort_tree holds the nodes, sorted */
 } SORT_SESSION;
+
+#define RK_NONE 0    /* no run has begun */
+#define RK_ARRAY 1   /* nodes are collected, then sorted once */
+#define RK_CLASSIC 2 /* nodes are walked into the tree one by one, as before 20 Oct 26 */
 
 #define MAX_USER_SORTS 256
 
@@ -152,6 +174,10 @@ Private bool write_merge_record(char* rec,
                                 char* buff,
                                 int32_t* buff_bytes,
                                 bool temp);
+Private bool tree_insert(SORT_SESSION* sess, BTREE_ELEMENT* new_bte);
+Private void array_release(SORT_SESSION* sess);
+Private void free_pending_nodes(SORT_SESSION* sess);
+Private void array_finalize(SORT_SESSION* sess);
 
 /* ======================================================================
    make_workfile_path()  -  Format sort workfile path for a session       */
@@ -189,10 +215,12 @@ Private void clear_sort_session(SORT_SESSION* sess) {
 
   /* Cast off all sort tree elements */
 
+  free_pending_nodes(sess); /* nodes of an array run that were never put in the tree */
   if (sess->sort_tree != NULL) {
     free_btree_element(sess->sort_tree, sess->sort_keys);
     sess->sort_tree = NULL;
   }
+  array_release(sess);
 
   /* Free the disk based sort read buffer */
 
@@ -571,17 +599,289 @@ done:
 }
 
 /* ======================================================================
+   Array runs (20 Oct 26).
+
+   The classic insertion walks the tree from the root for every node, and the tree is not balanced: a run of equal keys makes
+   a chain on the left that every equal key walks to its end, and ordered or reversed keys make a chain on one side, so
+   100,000 equal or ordered keys took 150-230 seconds (SELECT file BY a field of five values, 94 seconds).  An array run
+   keeps the nodes in the order they arrive and sorts them once, when the run is read or written to a work file.
+
+   THE ORDER IT GIVES IS THE ORDER THE TREE GAVE.  The tree puts a new node before every node it compares equal to, so the
+   tree reads out in key order with equal keys NEWEST FIRST.  The sort below is stable over the nodes taken newest first, which
+   is the same order.  That holds only while the comparison is a consistent order, and it is not for a right justified level
+   that has met both numbers and text ("0010" < "11" by value, "11" < "1x" as text, "1x" < "0010" as text padded on the left,
+   observed 20 Oct 26): there the order depends on the shape of the tree.  So a run falls back to the classic tree, rebuilt
+   from the nodes in the order they came, as soon as a level has seen both, and a sort with a UNIQUE, COMPOUND or STRICT
+   level never uses an array run.  The run's records, the flush points (sort_size) and the merge are untouched, so a sort that
+   spills writes the same work files as before. */
+
+Private bool run_is_array_ok(SORT_SESSION* sess) {
+  int16_t i;
+  u_char mode;
+
+  for (i = 0; i < sess->sort_keys; i++) {
+    mode = sess->sort_flags[i] & SRT_MODE_MASK;
+    if ((sess->sort_flags[i] & SRT_UNIQUE) || ((mode != SRT_LEFT) && (mode != SRT_RIGHT) && (mode != SRT_RIGHT_FLOAT)))
+      return FALSE;
+  }
+  return TRUE;
+}
+
+/* Free the arrays only (the nodes are in the tree or have been freed) and end the run */
+Private void array_release(SORT_SESSION* sess) {
+  if (sess->pend != NULL)
+    k_free(sess->pend);
+  if (sess->pend_num != NULL)
+    k_free(sess->pend_num);
+  sess->pend = NULL;
+  sess->pend_num = NULL;
+  sess->pend_n = 0;
+  sess->pend_cap = 0;
+  sess->run_kind = RK_NONE;
+  sess->tree_built = FALSE;
+}
+
+/* The nodes of an array run that are not in the tree yet */
+Private void free_pending_nodes(SORT_SESSION* sess) {
+  int32_t i;
+  int16_t k;
+  BTREE_ELEMENT* bte;
+
+  if ((sess->run_kind == RK_ARRAY) && !sess->tree_built) {
+    for (i = 0; i < sess->pend_n; i++) {
+      bte = sess->pend[i];
+      if (bte->data != NULL)
+        k_free(bte->data);
+      for (k = 0; k < sess->sort_keys; k++) {
+        if (bte->key[k] != NULL)
+          k_free(bte->key[k]);
+      }
+      k_free(bte);
+    }
+    sess->pend_n = 0;
+  }
+}
+
+Private void array_start(SORT_SESSION* sess) {
+  int16_t i;
+  u_char mode;
+
+  array_release(sess);
+  sess->nrlev = 0;
+  for (i = 0; i < sess->sort_keys; i++) {
+    mode = sess->sort_flags[i] & SRT_MODE_MASK;
+    sess->lvl_seen[i] = 0;
+    sess->rl_idx[i] = ((mode == SRT_RIGHT) || (mode == SRT_RIGHT_FLOAT)) ? (signed char)(sess->nrlev++) : (signed char)-1;
+  }
+  sess->run_kind = RK_ARRAY;
+  sess->tree_built = FALSE;
+}
+
+/* Take one more node into an array run.  FALSE (and the node not taken) if the run has to become a classic one: a right
+   justified level would have seen both numbers and text, or there is no memory for the arrays. */
+Private bool array_add(SORT_SESSION* sess, BTREE_ELEMENT* bte) {
+  double val[MAX_SORT_KEYS];
+  u_char seen[MAX_SORT_KEYS];
+  int16_t i;
+  bool isnum;
+
+  for (i = 0; i < sess->sort_keys; i++) {
+    if (sess->rl_idx[i] < 0)
+      continue;
+    isnum = key_as_number(bte->key[i], sess->sort_flags[i] & SRT_MODE_MASK, sess->legacy_bt, &(val[i]));
+    seen[i] = sess->lvl_seen[i] | (isnum ? 1 : 2);
+    if (seen[i] == 3)
+      return FALSE;
+  }
+
+  if (sess->pend_n == sess->pend_cap) {
+    int32_t ncap = (sess->pend_cap > 0) ? (sess->pend_cap * 2) : 1024;
+    BTREE_ELEMENT** np = (BTREE_ELEMENT**)k_alloc(117, (size_t)ncap * sizeof(BTREE_ELEMENT*));
+    double* nn = NULL;
+
+    if (sess->nrlev > 0)
+      nn = (double*)k_alloc(118, (size_t)ncap * sess->nrlev * sizeof(double));
+    if ((np == NULL) || ((sess->nrlev > 0) && (nn == NULL))) {
+      if (np != NULL)
+        k_free(np);
+      if (nn != NULL)
+        k_free(nn);
+      return FALSE;
+    }
+    if (sess->pend_n > 0) {
+      memcpy(np, sess->pend, (size_t)sess->pend_n * sizeof(BTREE_ELEMENT*));
+      if (sess->nrlev > 0)
+        memcpy(nn, sess->pend_num, (size_t)sess->pend_n * sess->nrlev * sizeof(double));
+    }
+    if (sess->pend != NULL)
+      k_free(sess->pend);
+    if (sess->pend_num != NULL)
+      k_free(sess->pend_num);
+    sess->pend = np;
+    sess->pend_num = nn;
+    sess->pend_cap = ncap;
+  }
+
+  for (i = 0; i < sess->sort_keys; i++) {
+    if (sess->rl_idx[i] < 0)
+      continue;
+    sess->lvl_seen[i] = seen[i];
+    sess->pend_num[(size_t)sess->pend_n * sess->nrlev + sess->rl_idx[i]] = (seen[i] == 1) ? val[i] : 0.0;
+  }
+  sess->pend[sess->pend_n++] = bte;
+  if (sess->tree_built)
+    tree_insert(sess, bte); /* the run has been read once already: an ordinary insertion keeps the tree (no UNIQUE here) */
+  return TRUE;
+}
+
+/* End an array run: the nodes go into the tree in the order they came, as the classic insertion would have put them */
+Private void array_to_classic(SORT_SESSION* sess) {
+  int32_t i;
+  BTREE_ELEMENT* bte;
+
+  sess->sort_tree = NULL;
+  for (i = 0; i < sess->pend_n; i++) {
+    bte = sess->pend[i];
+    bte->parent = NULL;
+    bte->left = NULL;
+    bte->right = NULL;
+  }
+  for (i = 0; i < sess->pend_n; i++)
+    tree_insert(sess, sess->pend[i]);
+  array_release(sess);
+  sess->run_kind = RK_CLASSIC;
+}
+
+/* Compare two nodes of the run by their arrival numbers: the keys at every level, as the tree compared them */
+Private int pend_cmp(SORT_SESSION* sess, int32_t a, int32_t b) {
+  BTREE_ELEMENT* ba = sess->pend[a];
+  BTREE_ELEMENT* bb = sess->pend[b];
+  int16_t i;
+  int d;
+  double v1;
+  double v2;
+
+  for (i = 0; i < sess->sort_keys; i++) {
+    if ((sess->rl_idx[i] >= 0) && (sess->lvl_seen[i] == 1)) {
+      /* every key of this level is a number: compare the values read when the nodes arrived */
+      v1 = sess->pend_num[(size_t)a * sess->nrlev + sess->rl_idx[i]];
+      v2 = sess->pend_num[(size_t)b * sess->nrlev + sess->rl_idx[i]];
+      d = (v1 > v2) ? 1 : (v1 < v2) ? -1 : 0;
+      if (sess->sort_flags[i] & SRT_DESCENDING)
+        d = -d;
+    } else if ((sess->sort_flags[i] & (SRT_MODE_MASK | SRT_NOCASE)) == SRT_LEFT) {
+      /* a plain left justified key: strcmp() orders bytes as unsigned chars and ends at the null, as sort_compare_keys does */
+      d = strcmp(ba->key[i] ? ba->key[i] : "", bb->key[i] ? bb->key[i] : "");
+      d = (d < 0) ? -1 : (d > 0) ? 1 : 0;
+      if (sess->sort_flags[i] & SRT_DESCENDING)
+        d = -d;
+    } else {
+      d = sort_compare_keys(ba->key[i], bb->key[i], sess->sort_flags[i], sess->legacy_bt, NULL);
+    }
+    if (d != 0)
+      return d;
+  }
+  return 0;
+}
+
+/* Stable bottom-up merge sort of a[0..n), b is the same size; the result is in a */
+Private void merge_sort_idx(SORT_SESSION* sess, int32_t* a, int32_t* b, int32_t n) {
+  int32_t width;
+  int32_t lo;
+  int32_t mid;
+  int32_t hi;
+  int32_t i;
+  int32_t j;
+  int32_t k;
+  int32_t* src = a;
+  int32_t* dst = b;
+  int32_t* t;
+
+  for (width = 1; width < n; width *= 2) {
+    for (lo = 0; lo < n; lo += 2 * width) {
+      mid = min(lo + width, n);
+      hi = min(lo + 2 * width, n);
+      i = lo;
+      j = mid;
+      k = lo;
+      while ((i < mid) && (j < hi)) {
+        if (pend_cmp(sess, src[i], src[j]) <= 0)
+          dst[k++] = src[i++];
+        else
+          dst[k++] = src[j++];
+      }
+      while (i < mid)
+        dst[k++] = src[i++];
+      while (j < hi)
+        dst[k++] = src[j++];
+    }
+    t = src;
+    src = dst;
+    dst = t;
+  }
+  if (src != a)
+    memcpy(a, src, (size_t)n * sizeof(int32_t));
+}
+
+Private BTREE_ELEMENT* build_balanced(BTREE_ELEMENT** s, int32_t lo, int32_t hi, BTREE_ELEMENT* parent) {
+  int32_t mid;
+  BTREE_ELEMENT* bte;
+
+  if (lo > hi)
+    return NULL;
+  mid = lo + ((hi - lo) / 2);
+  bte = s[mid];
+  bte->parent = parent;
+  bte->left = build_balanced(s, lo, mid - 1, bte);
+  bte->right = build_balanced(s, mid + 1, hi, bte);
+  return bte;
+}
+
+/* Sort an array run that has not been read yet and link its nodes into a balanced tree, so that the walks that read the
+   tree (the next element, the flush to a work file) are the ones they always were */
+Private void array_finalize(SORT_SESSION* sess) {
+  int32_t n = sess->pend_n;
+  int32_t i;
+  int32_t* idx;
+  int32_t* tmp;
+  BTREE_ELEMENT** sorted;
+
+  if ((sess->run_kind != RK_ARRAY) || sess->tree_built || (n == 0))
+    return;
+
+  idx = (int32_t*)k_alloc(119, (size_t)n * sizeof(int32_t));
+  tmp = (int32_t*)k_alloc(120, (size_t)n * sizeof(int32_t));
+  sorted = (BTREE_ELEMENT**)k_alloc(121, (size_t)n * sizeof(BTREE_ELEMENT*));
+  if ((idx == NULL) || (tmp == NULL) || (sorted == NULL)) {
+    if (idx != NULL)
+      k_free(idx);
+    if (tmp != NULL)
+      k_free(tmp);
+    if (sorted != NULL)
+      k_free(sorted);
+    array_to_classic(sess); /* slow, but right */
+    return;
+  }
+
+  for (i = 0; i < n; i++)
+    idx[i] = n - 1 - i; /* newest first: equal keys keep this order */
+  merge_sort_idx(sess, idx, tmp, n);
+  for (i = 0; i < n; i++)
+    sorted[i] = sess->pend[idx[i]];
+  sess->sort_tree = build_balanced(sorted, 0, n - 1, NULL);
+  sess->tree_built = TRUE;
+
+  k_free(idx);
+  k_free(tmp);
+  k_free(sorted);
+}
+
+/* ======================================================================
    sess_insert_bte()  -  Insert a new BTREE_ELEMENT into a sort session   */
 
 Private void sess_insert_bte(SORT_SESSION* sess,
                              BTREE_ELEMENT* new_bte,
                              int32_t size) {
-  BTREE_ELEMENT* bte;
-  int16_t index;
-  int d;
-  KEY_NUM new_num[MAX_SORT_KEYS]; /* the new key at each level, read as a number the first time that level is compared... */
-  u_int32_t num_done = 0;         /* ...bit n set once new_num[n] holds it (only a right justified key is ever read) */
-
   /* Flush the tree if this would take us past the SORTMEM limit */
 
   sess->sort_size += size;
@@ -590,6 +890,39 @@ Private void sess_insert_bte(SORT_SESSION* sess,
       k_error(sysmsg(1485), process.os_error);
     sess->sort_size = size;
   }
+
+  /* A run begins with the first node after a flush (or the first of the sort).  20 Oct 26: unless the sort has a UNIQUE
+     or a COMPOUND / STRICT level, the nodes of the run are collected and sorted once (array_add / array_finalize); the
+     classic walk into the tree is kept for those sorts, and for any run in which a right justified level has met both
+     numbers and text, where the comparison is not transitive and only the tree gives the order it always gave. */
+
+  if ((sess->sort_tree == NULL) && (sess->pend_n == 0)) {
+    if (run_is_array_ok(sess))
+      array_start(sess);
+    else
+      sess->run_kind = RK_CLASSIC;
+  }
+
+  if (sess->run_kind == RK_ARRAY) {
+    if (array_add(sess, new_bte))
+      return;
+    array_to_classic(sess); /* put the nodes so far in the tree in the order they came, then this one as usual */
+  }
+
+  if (tree_insert(sess, new_bte))
+    sess->sort_size -= size;
+}
+
+/* ======================================================================
+   tree_insert()  -  The classic insertion: walk the tree to the place
+   TRUE if the new element was a duplicate of a UNIQUE level and was freed */
+
+Private bool tree_insert(SORT_SESSION* sess, BTREE_ELEMENT* new_bte) {
+  BTREE_ELEMENT* bte;
+  int16_t index;
+  int d;
+  KEY_NUM new_num[MAX_SORT_KEYS]; /* the new key at each level, read as a number the first time that level is compared... */
+  u_int32_t num_done = 0;         /* ...bit n set once new_num[n] holds it (only a right justified key is ever read) */
 
   /* Walk tree to insertion point */
 
@@ -612,7 +945,7 @@ Private void sess_insert_bte(SORT_SESSION* sess,
         if (bte->left == NULL) {
           bte->left = new_bte;
           new_bte->parent = bte;
-          return;
+          return FALSE;
         }
         bte = bte->left;
         index = 0;
@@ -620,16 +953,15 @@ Private void sess_insert_bte(SORT_SESSION* sess,
         if (bte->right == NULL) {
           bte->right = new_bte;
           new_bte->parent = bte;
-          return;
+          return FALSE;
         }
         bte = bte->right;
         index = 0;
       } else {
         if (sess->sort_flags[index] & SRT_UNIQUE) {
           free_btree_element(new_bte, sess->sort_keys);
-          sess->sort_size -= size;
           process.status = 1;
-          return;
+          return TRUE;
         }
 
         if (++index == sess->sort_keys) {
@@ -637,7 +969,7 @@ Private void sess_insert_bte(SORT_SESSION* sess,
           if (bte->left == NULL) {
             bte->left = new_bte;
             new_bte->parent = bte;
-            return;
+            return FALSE;
           }
           bte = bte->left;
           index = 0;
@@ -645,6 +977,7 @@ Private void sess_insert_bte(SORT_SESSION* sess,
       }
     } while (1);
   }
+  return FALSE;
 }
 
 /* ======================================================================
@@ -803,6 +1136,7 @@ Private void sess_sortdata(SORT_SESSION* sess,
       if (!sortmerge(sess))
         goto exit_sess_sortdata;
     } else {
+      array_finalize(sess);
       bte = sess->sort_tree;
       if (bte != NULL)
         while (bte->left != NULL)
@@ -950,6 +1284,7 @@ Private void sess_sortnext(SORT_SESSION* sess,
       if (!sortmerge(sess))
         goto exit_sess_sortnext;
     } else {
+      array_finalize(sess);
       bte = sess->sort_tree;
       if (bte != NULL)
         while (bte->left != NULL)
@@ -1199,7 +1534,7 @@ void x_sortadd() {
 
   process.status = 0;
   sess = get_sort_session(e_stack - 3);
-  if (!sess->sorting && (sess->sort_tree == NULL) && (sess->sortwork == 0))
+  if (!sess->sorting && (sess->sort_tree == NULL) && (sess->pend_n == 0) && (sess->sortwork == 0))
     sess->sorting = TRUE;
 
   bytes = sizeof(struct BTREE_ELEMENT) + ((sess->sort_keys - 1) * sizeof(char*));
@@ -1393,6 +1728,7 @@ Private bool flush_sort_tree(SORT_SESSION* sess) {
   char* q;
 
   process.os_error = 0;
+  array_finalize(sess); /* an array run is sorted and linked into the tree before it is written */
   make_workfile_path(sess, (int)sess->sortwork, pathname, "flush_sort_tree()");
   fu = dio_open(pathname, DIO_REPLACE);
   if (!ValidFileHandle(fu))
@@ -1507,6 +1843,7 @@ Private bool flush_sort_tree(SORT_SESSION* sess) {
   if (sess->sort_tree != NULL)
     free_btree_element(sess->sort_tree, sess->sort_keys);
   sess->sort_tree = NULL;
+  array_release(sess); /* the run is over; the nodes were in the tree */
   sess->sort_size = 0;
 
   status = TRUE;

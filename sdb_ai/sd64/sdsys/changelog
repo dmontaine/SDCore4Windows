@@ -2,6 +2,23 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+23 Oct 26  SORTING A LONG LIST OF EQUAL OR ALREADY ORDERED KEYS NO LONGER TAKES MINUTES (FROM SD CORE FOR LINUX).
+
+             What        SORT, SSELECT, SELECT and LIST with BY, the SORT() functions and the index builder all use one sort. It put each key
+                        into a tree one at a time, and the tree was never balanced, so a key equal to many others, or keys that arrived
+                        already in order, made it walk a longer and longer chain for every new key. Measured on Linux with 100,000 records: all keys
+                        equal 168 seconds, keys already in order 169 seconds, a field with five different values 141 seconds, and
+                        SELECT file BY a field of five values 94 seconds; 200,000 equal keys took 329 seconds. Now the keys of a run are
+                        collected and sorted once, and the same cases take a fraction of a second. SSELECT after an SSELECT, the usual way
+                        to meet already ordered keys, is covered too (159 seconds for 200,000 records with a five valued second field).
+             Why it      LIST or SELECT file BY a field with few different values (a status, a state, a yes or no flag) is an ordinary
+             matters     query. On a file of 100,000 records it could keep a user waiting for minutes, and for no reason.
+             Does not    The order is exactly the order it was: keys that compare equal still come out newest first, a sort that does not
+                        fit in SORTMEM still spills to work files and merges them as before, and every other key comes out in the same
+                        place. A sort with UNIQUE, a COMPOUND or STRICT mode, or a right aligned key that holds both numbers and text at
+                        once (where the comparison does not give one consistent order, so only the old tree gives the old order) is
+                        sorted the old way and is not faster. It does not change the hash that places records in a file, nor SORTMEM.
+
 20 Oct 26  ENCRYPTING A FIELD: AN ORDINARY PROGRAM CAN NOW MAKE A KEY, AND A LISTING CAN SHOW THE FIELD DECRYPTED FOR WHOEVER HOLDS IT (FROM SD CORE FOR LINUX).
 
              What        Three new BASIC functions, open to every program: SDSALT() gives a fresh random salt; SDKEY(passphrase, salt) gives the
