@@ -383,6 +383,10 @@
       *   loses what its person had; accounts made afterwards start 'no'.
       $define ACC$SH           7     ;* may use the SH verb and "!" (yes/no)
       $define ACC$OS.EXEC      8     ;* may use OS.EXECUTE, and reach OS paths outside its account (yes/no)
+      * 16 Oct 26 dm - FIELD 9: the SD.ACCOUNTS gate (QM4 gap 22), the owner's third gate between the own account and OS.EXECUTE: with
+      *   it an account reaches any file under the directory of an account its user could LOGTO, except that account's VOC.  yes/no,
+      *   blank = no; loaded as K$SD.ACCOUNTS at account entry; SDSYS switches it (MODIFY.ACCOUNT SD-ON / SD-OFF).
+      $define ACC$SD.ACCOUNTS  9     ;* may reach files in the accounts its user could LOGTO (yes/no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

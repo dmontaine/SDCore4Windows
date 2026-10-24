@@ -202,7 +202,8 @@ $define M2.EXPLICIT             7  ;* a scalar must be named in a DIM statement 
 $define M2.DEFAULT.UNASS.ARGS   8  ;* an argument with a default value takes it when the caller passed it unassigned (arg.defaults.emit)
 *  bit 9 is Linux's M2.NON.DURABLE.TXN (QMClient SDTxn mode 4, held): left unused so the bit numbers agree
 $define M2.STDFIL.SHARED       10  ;* 16 Oct 26 dm - QM4 gap 225: the default file variable is one per command level (see stdfil.shared.make)
-$define M2.DEBUG.EQUATES       11  ;* 16 Oct 26 dm - QM4 gap 218: a debug object also holds the equate and $DEFINE tokens (emit.equate.table)
+$define M2.AUTOLOCK            12  ;* 16 Oct 26 dm - QM4 gap 213: WRITE, MATWRITE and DELETE lock a record they do not hold a lock on (P_AUTOLOCK, op_dio3.c)
+$define M2.DEBUG.EQUATES       11 ;* 16 Oct 26 dm - QM4 gap 218: a debug object also holds the equate and $DEFINE tokens (emit.equate.table)
 
 * Corresponding names, value delimited, first name is bit 0 of mode flags
 * NJS remove hard coded fd hex, use @VM
@@ -255,6 +256,7 @@ mode.names<1,41> = "DEFAULT.UNASS.ARGS"
 *  position 42 is Linux's NON.DURABLE.TXN (held): left empty
 mode.names<1,43> = "STDFIL.SHARED"
 mode.names<1,44> = "DEBUG.EQUATES"
+mode.names<1,45> = "AUTOLOCK"
 *****************************************************************************
 
    * If this is a C-type, the {name} construct refers to the dictionary
@@ -1248,6 +1250,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
    testlock.stack = ""
    thenelse.stack = ""
    flagpatch.stack = ""      ;* Address of the SETFLAGS value to patch when a WRITE / DELETE has THEN / ELSE
+   autolock.stmt = @false    ;* Set by a WRITE, MATWRITE or DELETE under $MODE AUTOLOCK
    then.else.trig = @false   ;* Set by a statement whose THEN / ELSE is a trigger-failure clause
    arg.count.stack = ""
    collection.count.stack = ""      ;* 13 Oct 26 dm - data collections
@@ -8105,6 +8108,7 @@ st.delete:
    end else
       ins '0' before thenelse.stack<1>  ;* No THEN or ELSE clause
    end
+   if bittest(mode2, M2.AUTOLOCK) then autolock.stmt = @true
    goto back.end
 
 *****************************************************************************
@@ -11651,6 +11655,7 @@ st.matwrite:
    end else
       ins '0' before thenelse.stack<1>  ;* No THEN / ELSE required
    end
+   if bittest(mode2, M2.AUTOLOCK) then autolock.stmt = @true
    goto back.end
 
 *****************************************************************************
@@ -14465,6 +14470,7 @@ st.write.common:
    end else
       ins '0' before thenelse.stack<1>  ;* No THEN / ELSE required
    end
+   if opcode = OP.WRITE and bittest(mode2, M2.AUTOLOCK) then autolock.stmt = @true   ;* not WRITEV
    goto back.end
 
 *****************************************************************************
@@ -14561,6 +14567,14 @@ back.end:
       opcode.byte = OP.SETFLAGS  ; gosub emit.simple
       code.value = 0 ; code.bytes = 2 ; gosub emit.multibyte.value
       flagpatch.stack<1> = pc - 2     ;* Address before the first value byte
+   end
+
+   * $MODE AUTOLOCK (openQM, QM4 gap 213): a WRITE, MATWRITE or DELETE locks a record it does not hold a lock on (P_AUTOLOCK)
+
+   if autolock.stmt then
+      autolock.stmt = @false
+      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
+      code.value = 0x8000 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
    * Emit lock opcode if required

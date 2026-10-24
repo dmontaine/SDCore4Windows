@@ -403,6 +403,7 @@ bool make_path(char * tgt);
 bool net_path_permitted(char * path, bool for_write);
 bool account_path_permitted(char * path, bool for_write);
 bool net_vocpath_permitted(char * path, bool for_write);
+bool path_in_enterable_account(char * resolved);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

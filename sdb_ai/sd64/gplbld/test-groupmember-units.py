@@ -148,6 +148,10 @@ FAIL_CLOSED = {
         "idempotent ADDMEM runs and reports its own failure",
     ("modifya", "has.api = is_grp_member(acc.user, 'sdapi')"):
         "route change: same as has.ssh",
+    # 23 Oct 26 - RELEASE_1.1 170 (Linux abcda0c, S.63 second sitting).
+    ("_voc_ref", "q.ok = is_grp_member(@logname, q.group)"):
+        "a Q-pointer into a registered account is followed only if the user could LOGTO it: LOGTO's own test, so it fails "
+        "closed the same way (logto.authorised) - a could-not-tell refuses the hop with ER$PERM, nothing is opened by mistake",
 }
 
 # 18 Sep 26 - RELEASE_1.1 64 DELETED TWO DECLARED SITES: the administrator

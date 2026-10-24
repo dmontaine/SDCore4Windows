@@ -270,7 +270,10 @@ bool os_path_ok_for_account(const char *name) {
     return FALSE;
   if (!fullpath(resolved, (char *)name))
     return FALSE;
-  return account_path_permitted(resolved, TRUE);
+  if (account_path_permitted(resolved, TRUE))
+    return TRUE;
+  /* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate, between the own account and OS.EXECUTE (op_dio2.c) */
+  return ((my_uptr->flags & USR_SD_ACCOUNTS) != 0) && path_in_enterable_account(resolved);
 }
 
 /* os_path_open_ok()  -  the same for a caller: an $internal program is trusted, anyone else is asked. */

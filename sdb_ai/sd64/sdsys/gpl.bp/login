@@ -939,6 +939,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   needs no grant - USR_ADMIN passes the gate on its own.  This replaces the person-keyed OS.USERS record (owner, 23 Oct).
    void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
+   void kernel(K$SD.ACCOUNTS, upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
 
    * Set @PATH
 

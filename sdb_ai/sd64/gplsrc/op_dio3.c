@@ -396,10 +396,13 @@ void op_delete() {
     goto exit_op_delete;
   }
 
-  if (pcfg.must_lock || txn_id) {
+  if (pcfg.must_lock || txn_id || (op_flags & P_AUTOLOCK)) {
     if (!check_lock(fvar, id, id_len)) {
-      process.status = -ER_NOLOCK;
-      goto exit_op_delete;
+      /* $MODE AUTOLOCK: take the lock, waiting for it; it is let go below as a plain DELETE lets go of its own */
+      if (!(op_flags & P_AUTOLOCK) || (lock_record(fvar, id, id_len, TRUE, txn_id, FALSE) != 0)) {
+        process.status = -ER_NOLOCK;
+        goto exit_op_delete;
+      }
     }
   }
 
@@ -882,10 +885,13 @@ void op_write() {
 
   memcpy(lock_id, id, id_len);
 
-  if (pcfg.must_lock || (txn_id != 0)) {
+  if (pcfg.must_lock || (txn_id != 0) || (op_flags & P_AUTOLOCK)) {
     if (!check_lock(fvar, lock_id, id_len)) {
-      process.status = -ER_NOLOCK;
-      goto exit_op_write;
+      /* $MODE AUTOLOCK: take the lock, waiting for it; it is let go below as a plain WRITE lets go of its own */
+      if (!(op_flags & P_AUTOLOCK) || (lock_record(fvar, lock_id, id_len, TRUE, txn_id, FALSE) != 0)) {
+        process.status = -ER_NOLOCK;
+        goto exit_op_write;
+      }
     }
   }
 

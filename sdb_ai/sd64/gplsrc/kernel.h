@@ -194,6 +194,7 @@ struct PROCESS {
 #define P_PICK_SEL 0x2000 /* SELECTV under $MODE PICK.SELECT: an active list 0 is moved to the target variable (QM4 gaps Q-16) */
 /* 0x4000 is Linux's P_SEQKEY (WRITE ... CREATING.SEQKEY, commit 400500c); not carried yet, left free so the values agree */
 #define P_DEF_SELLIST 0x8000 /* READNEXT under $MODE SELECTV with no FROM: the list is the program's default select list variable, and one that has never been given a list is an empty list (openQM item 85) */
+#define P_AUTOLOCK 0x8000 /* WRITE, MATWRITE or DELETE under $MODE AUTOLOCK: take an update lock on a record not locked (QM4 gap 213); the bit READNEXT uses for P_DEF_SELLIST, never both */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
   bool numeric_array_allowed;           /* Opcode allows numeric arrays? */
   int32_t status;                       /* Value from STATUS() function */

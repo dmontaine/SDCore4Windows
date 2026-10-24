@@ -232,6 +232,9 @@ struct USER_ENTRY
      /* 15 Oct 26 QM4 gaps Q-5: the application signal.  SIGNAL(user) sets it in a process of the same login user (or in
         any process, from an administrator); SYSTEM(1062) in that process reads it and clears it.                */
      #define USR_SIGNAL      0x0400 /* SIGNAL() has been raised for this process */
+     /* 16 Oct 26 QM4 gap 22: the SD.ACCOUNTS gate, loaded at account entry from ACC$SD.ACCOUNTS: reach any file under the directory
+        of an account the user could LOGTO (not its VOC).  Between the own account and OS.EXECUTE; see op_sh.c.        */
+     #define USR_SD_ACCOUNTS 0x1000 /* may reach files in the accounts the user could LOGTO */
      /* 15 Oct 26 dm - QM4 gaps (PHANTOM GROUP, sheet 427, 433).  Never a bit of the flags word itself: a phantom's flags are set
         to zero as it starts, so the parent's mark is the GROUPED field below.  K$USERS adds this bit to the flags it reports
         for a phantom whose parent has grouped it, which is how LISTU shows it.                                            */

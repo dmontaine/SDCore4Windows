@@ -652,6 +652,9 @@ restart.cproc:
          stk.path = ospath("", os$cwd)
          stk.account.path = account.path
          stk.who = who
+         stk.sh = kernel(K$SH, -1)          ;* 23 Oct 26: the OS-access switches go back with the account (S.63; they were held)
+         stk.os.exec = kernel(K$OS.EXEC, -1)
+         stk.sd.accounts = kernel(K$SD.ACCOUNTS, -1)
 
          pa.name = ""
          pa.rec = "PA" : @fm : xeq.command
@@ -3165,6 +3168,7 @@ int.logto:
 *   account's grant is never carried into another.  The administrator needs no grant: USR_ADMIN already passes the gate.
    void kernel(K$SH,      upcase(trim(acc.record<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES')
+   void kernel(K$SD.ACCOUNTS, upcase(trim(acc.record<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
 
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
@@ -3232,7 +3236,7 @@ revert.account:
 * 18 Oct 26 Windows port - THE LINUX BODY OF THIS PARAGRAPH IS ADAPTED, NOT COPIED (carry of b51c637).  Two things it did have no
 *   Windows counterpart: it put the effective user back to sdsys with !EUID_SET when the session was an administrator's (no
 *   effective-user drop exists here, see the 14 Aug 26 note at the top of this program), and it set the two OS-access switches
-*   back to what they were (K$SH and K$OS.EXEC are the S.63 gate, which is held and not carried).  What is Windows' own is the
+*   back to what they were (K$SH and K$OS.EXEC are the S.63 gate, carried on 23 Oct 26 and restored at the foot of this paragraph).  What is Windows' own is the
 *   administrator state: LOGTO gives the rights up on the way out of SDSYS and releases the elevated helper with them, so a level
 *   that began in SDSYS and moved on has already lost them and nothing here can hand them back (that needs a fresh sign-in);
 *   a level that began outside SDSYS and reached SDSYS must not keep them, so the same release is made here.
@@ -3249,6 +3253,9 @@ revert.account:
          void kernel(K$AUDIT, 'elevation released account=' : who)
       end
    end
+   void kernel(K$SH,      stk.sh)
+   void kernel(K$OS.EXEC, stk.os.exec)
+   void kernel(K$SD.ACCOUNTS, stk.sd.accounts)
    void kernel(K$AUDIT, 'logto revert account=' : who)
    i = kernel(K$INVALIDATE.OBJECT, 0)
    gosub find.private.catalogue

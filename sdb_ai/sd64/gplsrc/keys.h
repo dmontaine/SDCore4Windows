@@ -451,7 +451,10 @@
      K_PROFILER_USER   user * 4096 + 2048 + n starts it in another process, user * 4096 alone stops it and has that process
                        write its table to the $ipc record F<user>.  The administrator only.  Returns 1 if the process was found,
                        0 if not, -1 if the caller may not. */
-/* 118 is Linux's K_SD_ACCOUNTS (the SD.ACCOUNTS per-account gate, S.63 family, held); left free so the numbers agree. */
+/* 23 Oct 26 Windows port - from Linux 7ceb50d (16 Oct 26, QM4 gap 22; the SD.ACCOUNTS gate).  K_SD_ACCOUNTS: like K_OS_EXEC, 1 / 0 sets
+   (only from a $internal program), -1 asks; the session may reach any file under the directory of an account its user could LOGTO,
+   except that account's VOC.  GPL.BP/INT$KEYS.H carries the same number. */
+#define K_SD_ACCOUNTS        118
 /* 16 Oct 26 dm - QM4 Fixes item 30 (LOGTO ... RESET ALL).  K_RESET_ALL with a command: keep it, cast off every programme and
    stacked command processor and return to the bottom one (k_exit_cause K_RESET_ALL_EXIT), which takes the command back with a
    null argument and runs it.  Returns 1 when accepted, 0 when refused (an API server has no bottom command processor to go

@@ -2,6 +2,23 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+23 Oct 26  A THIRD PER-ACCOUNT SWITCH, SD.ACCOUNTS, AND TWO LANGUAGE ADDITIONS, $MODE AUTOLOCK AND OPTION INHERIT.OWNERSHIP (FROM SD CORE FOR LINUX).
+
+             What        modify.account name sd-on | sd-off: with sd-on, an account's programs may open, list, copy, delete and print into
+                        files by path under the directory of any SD account the user could LOGTO (the register's Windows group is one the user
+                        is a member of, and the account is not suspended). Reading and writing are one switch. It may be set on a group account.
+                        It is off for a new account. The other account's VOC (voc, voc.dic) is never reachable this way, and a directory that is
+                        not an SD account's still needs os-on. SDSYS is never refused, and os-on implies sd-on.
+                        $MODE AUTOLOCK: a WRITE, MATWRITE or DELETE that does not hold a lock on the record takes an update lock, waiting for it,
+                        makes the change and lets the lock go as a plain WRITE does. For programs written for environments that lock for you; not
+                        recommended. WRITEV is not changed.
+                        OPTION INHERIT.OWNERSHIP: CREATE.FILE gives the new file, and what is in it, the owner and group of the account directory
+                        instead of the user's own, where Windows allows it; where it refuses nothing is said. Off unless asked for.
+             Why it      An account that needs to read another account's data no longer needs the whole of OS.EXECUTE.
+             matters
+             Does not    An account archive does not carry the sd-on setting, so a restored account starts with it off.
+                        INHERIT.OWNERSHIP does not change files that already exist.
+
 23 Oct 26  A NEW ACCOUNT STARTS WITH NO SHELL, NO OS.EXECUTE, NO SSH AND NO API, AND SH AND OS.EXECUTE ARE NOW GRANTED TO THE ACCOUNT, NOT TO THE PERSON (FROM SD CORE FOR LINUX).
 
              What        SD is delivered with the tighter setting and SDSYS loosens it for the accounts that need it. Four switches, each kept

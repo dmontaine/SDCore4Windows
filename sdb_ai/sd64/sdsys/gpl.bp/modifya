@@ -241,6 +241,7 @@ deffun ps_script(script) calling '!ps_script'
       crt '                  modify.account <account> ssh | api | both | none'
       crt '                  modify.account <account> sh-on | sh-off'
       crt '                  modify.account <account> os-on | os-off'
+      crt '                  modify.account <account> sd-on | sd-off'
       crt '                  modify.account <account> suspended | unsuspended'
       stop
    end
@@ -265,7 +266,7 @@ deffun ps_script(script) calling '!ps_script'
    end
    
    group.name = acc.rec<ACC$GROUP>   ;* get associated group
-   
+
    if is_group(group.name) then
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
@@ -344,6 +345,16 @@ deffun ps_script(script) calling '!ps_script'
             gosub os.set
          case upcase(action) = 'OS-OFF'
             os.field = ACC$OS.EXEC
+            os.want  = @false
+            gosub os.set
+* 23 Oct 26 Windows port - from Linux 7ceb50d (16 Oct 26, QM4 gap 22): SD-ON / SD-OFF, the SD.ACCOUNTS gate, a third switch beside the
+*   other two.  Unlike SH it is allowed on a GROUP account (see os.set).
+         case upcase(action) = 'SD-ON'
+            os.field = ACC$SD.ACCOUNTS
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'SD-OFF'
+            os.field = ACC$SD.ACCOUNTS
             os.want  = @false
             gosub os.set
 
@@ -476,7 +487,7 @@ deffun ps_script(script) calling '!ps_script'
          
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
-         crt '   sh-on, sh-off, os-on, os-off, suspended or unsuspended'
+         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, suspended or unsuspended'
       end
       end       ;* not(route.done)
 
@@ -684,7 +695,9 @@ route.apply:
 * A GROUP or OTHER account is entered by whoever its Windows group admits, so a shell granted to it would be a shell granted to
 * all of them: only sdu_ names one person (10105).
 os.set:
-   if group.name[1,4] # 'sdu_' then
+*   SD-ON / SD-OFF (the SD.ACCOUNTS gate, Linux 7ceb50d) are allowed on a GROUP account: what that gate opens is decided for
+*   each person by the groups they are in.
+   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
@@ -715,7 +728,11 @@ os.set:
    osu.ex = 'no'
    if upcase(trim(acc.new<ACC$OS.EXEC>)) = 'YES' then osu.ex = 'yes'
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
-   crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+   if os.field = ACC$SD.ACCOUNTS then
+      crt sysmsg(12390, acc.name, if upcase(trim(acc.new<ACC$SD.ACCOUNTS>)) = 'YES' then 'yes' else 'no')   ;* Account %1 has SD.ACCOUNTS %2
+   end else
+      crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+   end
    return
 
 *  (the rest of this routine, the os.users write with its elevated-helper fallback and read-back, is deleted: 23 Oct 26)

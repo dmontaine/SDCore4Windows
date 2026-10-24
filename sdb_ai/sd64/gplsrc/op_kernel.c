@@ -904,6 +904,20 @@ void op_kernel() {
       result.data.value = (my_uptr->flags & USR_OS_EXEC) != 0;
       break;
 
+    case K_SD_ACCOUNTS: /* 16 Oct 26, QM4 gap 22: the SD.ACCOUNTS gate, set as K_OS_EXEC is */
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->flags |= USR_SD_ACCOUNTS;
+          else
+            my_uptr->flags &= ~USR_SD_ACCOUNTS;
+        }
+      }
+      result.data.value = (my_uptr->flags & USR_SD_ACCOUNTS) != 0;
+      break;
+
     /* May THIS ACCOUNT open this pathname?  An $internal program is exempt from the gate itself (it has to
        be, to do its work), so one that opens a file for the user - SED's PATH: - asks here first.        */
     case K_PATH_OK: {

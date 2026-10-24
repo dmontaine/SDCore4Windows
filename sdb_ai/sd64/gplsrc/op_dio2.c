@@ -54,6 +54,8 @@
 #include <stdint.h>
 #include <pwd.h>
 #include <grp.h>
+#include <dirent.h>
+#include "win32group.h"
 /* 21 Aug 26 Windows port - cygwin_conv_path(), for net_path_permitted().
    op_kernel.c includes this too, for K_WINPATH.                           */
 #include <sys/cygwin.h>
@@ -1742,6 +1744,109 @@ bool os_path_inside(const char* rootdir, const char* name) {
   if (has_parent_ref(cand))
     return FALSE;
   return path_within(cand, root);
+}
+
+/* ======================================================================
+   The SD.ACCOUNTS gate (23 Oct 26 Windows port, from Linux 7ceb50d, QM4 gap 22; the owner: "one that gives access to any file in
+   any SD account directory the user has logto access to").  Between "its own account only" and OS.EXECUTE: an account holding the
+   gate reaches any file under the directory of an account its USER could LOGTO - the register's Windows group is one the user is
+   a member of (a live SAM query, win32_group_has_member, as K_GROUP_MEMBER asks it), and the account is not suspended - EXCEPT that
+   account's VOC (voc and voc.dic at the top of it), which is the account's own control record set.  SDSYS and OS.EXECUTE pass
+   before this is asked.  The register is read a record at a time, as LOGTO reads it: line 1 the path, line 3 the group, line 5
+   SUSPENDED.  A path that cannot be expanded is skipped; a group that cannot be asked about is NOT a member.                       */
+
+bool path_in_enterable_account(char* resolved) /* Absolute, as left by fullpath() */
+{
+  char cand[MAX_PATHNAME_LEN + 1];
+  char regdir[MAX_PATHNAME_LEN + 1];
+  char recpath[MAX_PATHNAME_LEN + 1];
+  char acct[MAX_PATHNAME_LEN + 1];
+  char root[MAX_PATHNAME_LEN + 1];
+  char body[4096];
+  char why[256];
+  char* line[6];
+  char* p;
+  DIR* d;
+  struct dirent* ent;
+  FILE* fp;
+  size_t got;
+  size_t root_len;
+  int i;
+  int member;
+  bool found = FALSE;
+
+  if (!net_normalise(resolved, cand) || has_parent_ref(cand))
+    return FALSE;
+  if (snprintf(regdir, sizeof(regdir), "%s%caccounts", sysseg->sysdir, DS) >= (int)sizeof(regdir))
+    return FALSE;
+  if ((d = opendir(regdir)) == NULL)
+    return FALSE;
+
+  while (!found && ((ent = readdir(d)) != NULL)) {
+    if ((ent->d_name[0] == '.') || (ent->d_name[0] == '%') || (strchr(ent->d_name, '/') != NULL))
+      continue;
+    if (snprintf(recpath, sizeof(recpath), "%s%c%s", regdir, DS, ent->d_name) >= (int)sizeof(recpath))
+      continue;
+    if ((fp = fopen(recpath, "r")) == NULL)
+      continue;
+    got = fread(body, 1, sizeof(body) - 1, fp);
+    fclose(fp);
+    body[got] = '\0';
+
+    p = body;
+    for (i = 0; i < 6; i++) { /* the first lines of the record; one that is missing is empty */
+      if (p == NULL) {
+        line[i] = body + got;
+        continue;
+      }
+      line[i] = p;
+      if ((p = strchr(p, '\n')) != NULL)
+        *p++ = '\0';
+      {
+        char* cr = strchr(line[i], '\r');
+        if (cr != NULL)
+          *cr = '\0';
+      }
+    }
+
+    if (line[0][0] == '\0')
+      continue;
+    if (strncasecmp(line[0], "@SDSYS", 6) == 0) {
+      if (snprintf(acct, sizeof(acct), "%s%s", sysseg->sysdir, line[0] + 6) >= (int)sizeof(acct))
+        continue;
+    } else if (line[0][0] == '@') {
+      continue; /* some other token: not expanded here, so not trusted */
+    } else {
+      strncpy(acct, line[0], sizeof(acct) - 1);
+      acct[sizeof(acct) - 1] = '\0';
+    }
+    if (!net_normalise(acct, root))
+      continue;
+    if (strcasecmp(line[4], "SUSPENDED") == 0)
+      continue;
+    if (!path_within(cand, root))
+      continue;
+
+    member = 0;
+    if (!win32_group_has_member(process.username, line[2], &member, why, sizeof(why)) || !member)
+      continue;
+
+    /* The VOC of the account is not part of what this gate opens, and it is in no other account */
+    root_len = strlen(root);
+    while ((root_len > 1) && (root[root_len - 1] == '/'))
+      root_len--;
+    p = cand + root_len;
+    if (*p == '/')
+      p++;
+    if ((strncasecmp(p, "voc", 3) == 0) &&
+        ((p[3] == '\0') || (p[3] == '/') || ((strncasecmp(p + 3, ".dic", 4) == 0) && ((p[7] == '\0') || (p[7] == '/')))))
+      found = FALSE;
+    else
+      found = TRUE;
+    break;
+  }
+  closedir(d);
+  return found;
 }
 
 bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() */
