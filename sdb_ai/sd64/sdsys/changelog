@@ -83,8 +83,9 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                         fields, so nobody loses a command they were using (ssh and the API are left as they are); the administrator can then
                         turn them off one account at a time, and a later install does not turn them back on. A new installation's first
                         account starts off like any other, and SDSYS turns on what the person needs. SDSYS is never refused.
-             Does not    SH-ON on a GROUP or OTHER account is refused, as before. The rule that a person with sh-on may use pipes and
-                        redirection in an SH command is unchanged. The file os.users stays where it is, unread.
+             Does not    SH-ON on a GROUP or OTHER account is refused, as before. An SH command no longer takes pipes, redirection
+                        or chaining from ANY account, sh-on included (an account that was listed in os.users could use them before): the filter is the
+                        same for everyone, as on Linux. The file os.users stays where it is, unread.
 
 23 Oct 26  SDIDX -M SAYS WHY WHEN IT CANNOT MAKE THE DIRECTORY (FROM SD CORE FOR LINUX).
 

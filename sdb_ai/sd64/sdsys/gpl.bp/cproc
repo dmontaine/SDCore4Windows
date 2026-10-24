@@ -4164,11 +4164,12 @@ os.command:
 *   redirection and chaining, which is most of what a programmer needs one for.
 *   An ELEVATED session that is not listed keeps the ban exactly as before, so
 *   this adds capability and regresses nothing.
-   if not(sh.listed) then
-      if not(valid_shell_cmd(os.command.text)) then
-         display sysmsg(5240, 2) ;* Error xx executing operating system command
-         return
-      end
+*   24 Oct 26 - ***THE LIFT ABOVE IS WITHDRAWN.***  Linux (mail T0100, 24 Oct): the filter for everyone is the template and this
+*   rule predates 13 Oct, so "high security wins" (the core direction).  valid_shell_cmd now refuses pipes, redirection and chaining
+*   for every account, an sh-on account and an elevated session included.  The 17 Aug ruling stands in history only.
+   if not(valid_shell_cmd(os.command.text)) then
+      display sysmsg(5240, 2) ;* Error xx executing operating system command
+      return
    end
 
    os.execute os.command.text
