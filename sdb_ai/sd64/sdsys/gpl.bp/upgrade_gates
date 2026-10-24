@@ -9,7 +9,8 @@
 *
 * So this copies, ONCE, for every USER account in the register (an sdu_ group: the only kind with a Windows user of its own),
 * what os.users says about that user: field 1 'yes' to ACC$SH and field 2 'yes' to ACC$OS.EXEC, 'no' for anything else and for
-* a user with no record.  GROUP and OTHER accounts have no shell to permit and are left blank.  SDSYS needs nothing: the
+* a user with no record, and ONLY into a field that is BLANK: a field that already says yes or no is the administrator's and is
+* never rewritten, so a walk repeated without its marker changes nothing.  GROUP and OTHER accounts have no shell to permit and are left blank.  SDSYS needs nothing: the
 * administrator passes the gate.  ssh and the API are not touched.
 *
 * ONCE MEANS ONCE.  An administrator who later runs MODIFY.ACCOUNT jack SH-OFF must not find the next install turning it back
@@ -23,6 +24,8 @@
 * own when, and only when, the register holds what it should; the installer matches on that word and nothing else.
 *
 * START-HISTORY:
+* 24 Oct 26 Windows port - from Linux 2463bac: a field is filled only where it is BLANK, so a second walk (a lost marker) changes
+*               nothing and never undoes a 'no' or an administrator's later sh-off / os-on.  RELEASE_1.1 170.
 * 23 Oct 26 Windows port - from Linux 215ce2c: the source of the answer is os.users, not a blanket 'yes'.  RELEASE_1.1 170.
 * 13 Oct 26 dm  New (Linux).
 * END-HISTORY
@@ -72,16 +75,20 @@ $include int$keys.h
                end
             end
          end
-         new.sh = 'no'
-         new.ex = 'no'
-         if upcase(trim(osu.rec<1>)) = 'YES' then new.sh = 'yes'
-         if upcase(trim(osu.rec<2>)) = 'YES' then new.ex = 'yes'
-         if upcase(trim(rec<ACC$SH>)) = upcase(new.sh) and upcase(trim(rec<ACC$OS.EXEC>)) = upcase(new.ex) then
+*        a field is filled ONLY where it is blank (never told).  Every writer since S.63 stores an explicit yes or no, so a 'no' is an
+*        administrator's decision and a second walk must not undo it, with or without the marker.
+         if trim(rec<ACC$SH>) # '' and trim(rec<ACC$OS.EXEC>) # '' then
             kept += 1
             release acc.f, reg.name
          end else
-            rec<ACC$SH> = new.sh
-            rec<ACC$OS.EXEC> = new.ex
+            if trim(rec<ACC$SH>) = '' then
+               rec<ACC$SH> = 'no'
+               if upcase(trim(osu.rec<1>)) = 'YES' then rec<ACC$SH> = 'yes'
+            end
+            if trim(rec<ACC$OS.EXEC>) = '' then
+               rec<ACC$OS.EXEC> = 'no'
+               if upcase(trim(osu.rec<2>)) = 'YES' then rec<ACC$OS.EXEC> = 'yes'
+            end
             written = @true
             write rec to acc.f, reg.name on error written = @false
             if written then
