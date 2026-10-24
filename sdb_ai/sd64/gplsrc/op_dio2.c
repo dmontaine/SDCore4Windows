@@ -1710,6 +1710,40 @@ bool net_path_permitted(char* path,     /* Absolute, as left by fullpath() */
   return account_path_permitted(path, for_write);
 }
 
+/* 23 Oct 26 Windows port - from Linux abcda0c (S.63, the second sitting).  A FILE NAMED THROUGH THE VOC is vetted by _VOC_REF in BASIC
+   for a local session, as on Linux: an F-pointer must lead into the account (or an account a Q-pointer was followed into, or what
+   the stock VOC says), and a Q-pointer is followed only into an account the user could LOGTO.  The kernel therefore keeps its own
+   containment of a VOC-mapped open for the sessions that were held before this release, the network ones, and adds nothing for a
+   local session on top of _VOC_REF - or a Q-pointer into an account the person may enter would be refused here after _VOC_REF
+   allowed it.  A name given as a PATHNAME (OPENPATH, OPENSEQ, DIR(), DELETESEQ, print files) has no VOC to vet it and is asked of
+   every session by net_path_permitted() / os_path_open_ok().                                                                    */
+
+bool net_vocpath_permitted(char* path, bool for_write) {
+  if (connection_type != CN_SOCKET)
+    return TRUE;
+  return net_path_permitted(path, for_write);
+}
+
+/* os_path_inside()  -  is name at or below rootdir?  Geometry only (Linux's K_PATH_IN): both are resolved as an open would
+   resolve them, folded into one namespace, and a surviving ".." refuses.  It does not ask the OS gate.                     */
+
+bool os_path_inside(const char* rootdir, const char* name) {
+  char rr[MAX_PATHNAME_LEN + 1];
+  char cc[MAX_PATHNAME_LEN + 1];
+  char root[MAX_PATHNAME_LEN + 1];
+  char cand[MAX_PATHNAME_LEN + 1];
+
+  if ((rootdir == NULL) || (name == NULL) || (rootdir[0] == '\0') || (name[0] == '\0'))
+    return FALSE;
+  if (!fullpath(rr, (char*)rootdir) || !fullpath(cc, (char*)name))
+    return FALSE;
+  if (!net_normalise(rr, root) || !net_normalise(cc, cand))
+    return FALSE;
+  if (has_parent_ref(cand))
+    return FALSE;
+  return path_within(cand, root);
+}
+
 bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() */
                             bool for_write) /* Asking to modify, not just read? */
 {

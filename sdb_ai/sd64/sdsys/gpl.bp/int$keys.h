@@ -236,6 +236,9 @@
       $define K$SH              93       ;* may use SH and "!"
       $define K$OS.EXEC         94       ;* may use OS.EXECUTE and reach OS paths outside its account
       $define K$PATH.OK         95       ;* 1 if this account may open the pathname
+* 13 Oct 26 dm - second sitting.  K$PATH.IN: "directory : @fm : pathname", 1 if the pathname is inside the
+*   directory (geometry only, realpath).  _VOC_REF uses it for a file reached through a Q-pointer.
+      $define K$PATH.IN         96       ;* 1 if the pathname is inside the directory
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?

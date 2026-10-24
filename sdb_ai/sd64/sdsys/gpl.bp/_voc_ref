@@ -51,6 +51,27 @@ $include err.h
 $include int$keys.h
 $include keys.h
 
+   deffun is_grp_member(user,group) calling '!is_grp_member'
+
+* 13 Oct 26 dm - S.63, second sitting (owner: "try to make tighter ... q pointers should only be allowed into an
+*   account the user can logto in any case").  A VOC pointer is a way to name a file, and the first S.63 left
+*   it open: an account without OS.EXECUTE could write an F-pointer in its own VOC, or make one with
+*   CREATE.FILE ... PATHNAME, naming any directory the Linux user may read, and open it as an SD file.
+*   Two rules now, for everybody but the administrator:
+*     1. A Q-pointer into a REGISTERED account is followed only if the user could LOGTO that account (a member
+*        of its group, not suspended - LOGTO's own test), whether or not the account holds OS.EXECUTE.  A Q-
+*        pointer that names a path is an OS path, and the OS gate asks (inside the account, or os-on).
+*     2. The file an F-pointer finally names must be inside the account's own directory, or inside the
+*        directory of an account a Q-pointer was followed into (rule 1), or hold os-on, or be what the
+*        STOCK VOC says: the record of the same id in SDSYS's NEWVOC names the same path.  The stock
+*        pointers ($map, syscom, sd.voclib, dict.dict, voc, newvoc, $acc) and the stock Q-pointers
+*        (sd.accounts, which leads into SDSYS - an account nobody may LOGTO - and md) need this last clause.
+*   Refusal is ER$PERM, 3035, as for OPENSEQ.
+   vr.admin = kernel(K$ADMINISTRATOR, -1)
+   vr.free = vr.admin or kernel(K$OS.EXEC, -1)      ;* SDSYS, or an account that holds os-on
+   qroot = ''                                       ;* the directory of an account a Q-pointer was followed into
+   cur.id = ''
+   f.raw = ''
 
    vflags = ''     ;* Field 6 of the F-type entry that names the file, upper case (open_file() in op_dio1.c)
    voc.id = field(filename, ',', 1)
@@ -138,6 +159,13 @@ $include keys.h
             case upcase(x1) = 'PATH'   ;* Could be a pathname
                if bitand(rules, 4) then
                   pathname = field(voc.id, ':', 2, 99) ;* Must allow PATH:C:/a/b
+* 13 Oct 26 dm - the administrator who turned this form on (FILERULE) did not turn off the OS gate: a path
+*   outside the account is still os-on's.
+                  if not(vr.free) and not(kernel(K$PATH.OK, pathname)) then
+                     pathname = ''
+                     set.status ER$PERM
+                     return
+                  end
                   set.status 0
                   return
                end
@@ -161,9 +189,11 @@ $include keys.h
 parse.as.q.pointer:
    for depth = 1 to 10
       type = upcase(voc.rec[1,1])
+      cur.id = if depth = 1 then voc.id else qfile        ;* the id of the VOC record being read, for the stock test
       begin case
          case type = "F"
             pathname = voc.rec<fno>
+            f.raw = pathname                                ;* as written, before @SDSYS and the like are expanded
             vflags = upcase(voc.rec<6>)
 
             if fno = 2 then
@@ -212,6 +242,16 @@ parse.as.q.pointer:
 						end
             end
 
+* 13 Oct 26 dm - second sitting: where the file finally is.  See the note at the top.
+            if not(vr.free) then
+               gosub check.f.path
+               if not(path.ok) then
+                  pathname = ''
+                  set.status ER$PERM
+                  return
+               end
+            end
+
             set.status 0
             return
 
@@ -231,6 +271,10 @@ parse.as.q.pointer:
             end
 
             qpath = voc.rec<2>
+            q.named = qpath                    ;* as the pointer wrote it
+            q.registered = @false
+            q.group = ''
+            q.susp = ''
             if qpath = '' then
                * A null account name means use the current account.
                * If this is the entry in a chain of Q-pointers, use the
@@ -244,6 +288,9 @@ parse.as.q.pointer:
                      openpath @sdsys:@ds:'accounts' to acc.f then
                         read acc.rec from acc.f, qpath then
                            qpath = acc.rec<ACC$PATH>
+                           q.registered = @true
+                           q.group = acc.rec<ACC$GROUP>
+                           q.susp = acc.rec<ACC$SUSPENDED>
                         end
                      end
                   end
@@ -255,6 +302,16 @@ parse.as.q.pointer:
                   set.status ER$NPN
                   return
                end
+
+* 13 Oct 26 dm - second sitting: only into an account the user could LOGTO (see the note at the top).
+               if not(vr.admin) then
+                  gosub check.q.hop
+                  if not(q.ok) then
+                     set.status ER$PERM
+                     return
+                  end
+               end
+               if qpath[1,1] = @ds then qroot = qpath
 
                * Open target VOC file
 
@@ -303,6 +360,59 @@ parse.as.q.pointer:
 
    set.status ER$VNF
 
+   return
+
+* ----------------------------------------------------------------------------------------------------------
+* 13 Oct 26 dm - second sitting.  The stock VOC is the allow-list: the record of the same id in SDSYS's NEWVOC.
+* Read each time it is needed, which is only for a pointer that leads outside the account.
+stock.record:
+   stock.found = @false
+   stock.rec = ''
+   if cur.id # '' then
+      openpath @sdsys:@ds:'newvoc' to stock.f then
+         read stock.rec from stock.f, downcase(cur.id) then
+            stock.found = @true
+         end
+         close stock.f
+      end
+   end
+   return
+
+* May a restricted account use the file this F-pointer names (pathname, absolute; f.raw as written)?
+check.f.path:
+   path.ok = kernel(K$PATH.OK, pathname)            ;* inside the account's own directory
+   if not(path.ok) and qroot # '' then
+      path.ok = kernel(K$PATH.IN, qroot : @fm : pathname)   ;* inside the directory of an account it may enter
+   end
+   if not(path.ok) then
+      gosub stock.record
+      if stock.found then
+         if upcase(stock.rec[1,1]) = 'F' and stock.rec<fno> = f.raw then
+            path.ok = @true
+         end
+      end
+   end
+   return
+
+* May a restricted account follow this Q-pointer?  q.named is what the pointer wrote, qpath where it leads.
+check.q.hop:
+   q.ok = @false
+   gosub stock.record
+   if stock.found and upcase(stock.rec[1,1]) = 'Q' and stock.rec<2> = q.named and stock.rec<3> = voc.rec<3> then
+      q.ok = @true                                  ;* a stock pointer: sd.accounts into SDSYS, md
+   end else
+      if q.registered then
+         * LOGTO's own test: not suspended, and a member of the account's group.  This is asked of an account that
+         * holds os-on too: a Q-pointer is not an OS path, it is a way into an account.
+         if upcase(trim(q.susp)) # 'SUSPENDED' then
+            q.ok = is_grp_member(@logname, q.group)
+         end
+      end else
+         * not an account: a path, or a name that is no account (taken relative to the account's own directory).
+         * That is an OS path, and the OS gate's question.
+         q.ok = vr.free or kernel(K$PATH.OK, qpath)
+      end
+   end
    return
 end
 

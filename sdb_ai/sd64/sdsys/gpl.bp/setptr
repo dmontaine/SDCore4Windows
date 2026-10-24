@@ -357,6 +357,12 @@ reparse:
                   if not(ospath(file.name, OS$PATHNAME)) then
                      stop sysmsg(7107) ;* Invalid pathname
                   end
+* 13 Oct 26 dm - S.63.  A pathname outside the account is an OS file the account has not been given.  Refused
+*   here, in words, so that the person is told when the unit is set rather than when the first line prints
+*   (the kernel asks again at print time: to_file.c start_file(), which also covers the SETPU statement).
+                  if not(kernel(K$PATH.OK, file.name)) then
+                     stop sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached
+                  end
                end else
                   if keyword = KW$NEXT then
                      old.flags = bitor(old.flags, PU$FLG.NEXT)

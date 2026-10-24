@@ -914,6 +914,22 @@ void op_kernel() {
         result.data.value = os_path_ok_for_account(path_ok_name) ? 1 : 0;
     } break;
 
+    /* K_PATH_IN: "<directory><field mark><pathname>" - is the pathname inside the directory?  Geometry only (second
+       sitting, 13 Oct): the caller has decided the directory is one the account may use.                     */
+    case K_PATH_IN: {
+      char path_in_buf[(2 * MAX_PATHNAME_LEN) + 2];
+      char *path_in_sep;
+
+      result.data.value = 0;
+      if (k_get_c_string(descr, path_in_buf, (2 * MAX_PATHNAME_LEN) + 1) > 0) {
+        path_in_sep = strchr(path_in_buf, FIELD_MARK);
+        if (path_in_sep != NULL) {
+          *path_in_sep = '\0';
+          result.data.value = os_path_inside(path_in_buf, path_in_sep + 1) ? 1 : 0;
+        }
+      }
+    } break;
+
     case K_FILESTATS:
       GetInt(descr);
       if (descr->data.value) { /* Reset counters */

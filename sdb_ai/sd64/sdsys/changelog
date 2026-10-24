@@ -17,13 +17,16 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                         os.users is no longer read. An account without os-on is held to its own directory (and the SDSYS entries every VOC
                         names, read only, and the directories listed in NETDIRS) for every open of a file by its path or through a VOC
                         pointer: this used to apply only to sessions that arrived over the network, and a person at the console was not held.
-                        A refusal reaches the program as status 3035, so OPEN ... ELSE works as before.
+                        A refusal reaches the program as status 3035, so OPEN ... ELSE works as before. The same limit holds for DIR(),
+                        DELETESEQ, SELECT.DIR, SETPTR ... AS PATHNAME and any print file made at a path, and a VOC pointer is held to it too:
+                        an F-pointer must lead into the account (or be what the stock VOC says), and a Q-pointer is followed only into an
+                        account the person could LOGTO.
              Why it      An account that was given a shell or OS.EXECUTE for one purpose no longer carries it into another person's work, and
              matters     a person at the console is held to the same rule as one on ssh.
              Upgrading   The installer copies, once, what os.users said about each USER account's Windows user into the account's two
                         fields, so nobody loses a command they were using (ssh and the API are left as they are); the administrator can then
-                        turn them off one account at a time, and a later install does not turn them back on. The installing user's own
-                        account gets all four. SDSYS is never refused.
+                        turn them off one account at a time, and a later install does not turn them back on. A new installation's first
+                        account starts off like any other, and SDSYS turns on what the person needs. SDSYS is never refused.
              Does not    SH-ON on a GROUP or OTHER account is refused, as before. The rule that a person with sh-on may use pipes and
                         redirection in an SH command is unchanged. The file os.users stays where it is, unread.
 

@@ -41,6 +41,7 @@ $catalog $seldir
 
 $include err.h
 $include keys.h
+$include int$keys.h
 $include parser.h
 $include syscom.h
 
@@ -77,6 +78,14 @@ $include syscom.h
 
    if token.type # PARSER$END then
       stop sysmsg(2018, token) ;* Unexpected token (xx)
+   end
+
+   * 13 Oct 26 dm - S.63.  A directory outside the account is an OS directory the account has not been given.
+   *   The administrator and an account SDSYS gave OS-ON pass; anyone else lists only its own directory.
+
+   if not(kernel(K$PATH.OK, path)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached
    end
 
    * DIR() returns one field for each entry: the name, then a value mark and

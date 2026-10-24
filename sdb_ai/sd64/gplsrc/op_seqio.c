@@ -222,6 +222,16 @@ void op_delseq() {
     if (file_name[strlen(file_name) - 1] != DS)
       strcat(file_name, DSS);
     strcat(file_name, rec_name);
+  } else {
+    /* 13 Oct 26 S.63 (the second sitting): with no record name the file name IS an OS pathname, and DELETESEQ
+       removes it.  That is an OS file external to SD, so it is asked as OPENSEQ asks: an account without
+       OS.EXECUTE reaches only paths inside its own directory (ER_PERM, which is the ELSE branch, as for
+       OPENSEQ).  A measured DELETESEQ of a file outside the account succeeded before this.  The record form
+       above names an SD directory file through the VOC and is not asked.                                    */
+    if (!os_path_open_ok(file_name)) {
+      process.status = ER_PERM;
+      goto exit_op_delseq;
+    }
   }
 
   /* Check file exists */
@@ -529,8 +539,8 @@ Private void openseq(bool map_name) {
        F-record points at - which for a stock account VOC can be SDSYS.  See
        net_path_permitted() in op_dio2.c.                                   */
 
-    if (!net_path_permitted(fullpathname, TRUE)) {
-      if (!net_path_permitted(fullpathname, FALSE)) {
+    if (!net_vocpath_permitted(fullpathname, TRUE)) {  /* 23 Oct 26: a VOC-mapped path, vetted by _VOC_REF for a local session */
+      if (!net_vocpath_permitted(fullpathname, FALSE)) {
         process.status = ER_PERM;
         goto exit_op_openseq;
       }

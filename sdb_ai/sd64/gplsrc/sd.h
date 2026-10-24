@@ -381,6 +381,7 @@ bool is_dir_header(const char * name);
 bool os_gate_open(void);
 bool os_path_ok_for_account(const char * name);
 bool os_path_open_ok(const char * name);
+bool os_path_inside(const char * rootdir, const char * name);
 
 /* OP_DIO2.C */
 bool delete_path(char * path);
@@ -401,6 +402,7 @@ bool make_path(char * tgt);
    See op_dio2.c.                                                           */
 bool net_path_permitted(char * path, bool for_write);
 bool account_path_permitted(char * path, bool for_write);
+bool net_vocpath_permitted(char * path, bool for_write);
 
 /* OP_DIO3.C */
 bool dir_write(FILE_VAR * fvar, char * mapped_id, STRING_CHUNK * str);

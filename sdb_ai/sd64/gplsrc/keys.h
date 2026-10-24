@@ -476,10 +476,15 @@
      K_OS_EXEC  the session may use OS.EXECUTE and reach OS paths outside its own account.  Same rule.
      K_PATH_OK  the argument is a pathname; the answer is 1 if THIS ACCOUNT may open it - whoever asks.
                 An $internal program (SED) is exempt from the gate itself, so it must ask on the user's
-                behalf; it cannot be allowed to be the way round the gate.                             */
+                behalf; it cannot be allowed to be the way round the gate.
+     K_PATH_IN  (second sitting, 13 Oct) the argument is a directory, a field mark and a pathname; the
+                answer is 1 if the pathname is inside that directory (realpath, so .. and links out do not
+                count).  The geometry only: it does not ask the gate.  _VOC_REF uses it for a file reached
+                through a Q-pointer into an account the user may enter.                                */
 #define K_SH                 93
 #define K_OS_EXEC            94
 #define K_PATH_OK            95
+#define K_PATH_IN            96
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

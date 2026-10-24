@@ -136,16 +136,10 @@ deffun ps_script(script) calling '!ps_script'
          err = 2018:@vm:'ATTACH'  ;* Unexpected token (xx)
          return
       end
-* 13 Oct 26 dm - S.63 (owner, 13 Oct 2026): the installing user's own account is made with all four
-*   switched on.  The person who installs owns the machine and can do all of it with sudo anyway; every
-*   other account starts off.  ATTACH is install-only (-internal and the one-shot marker), so this
-*   cannot be asked for from a session.
-      if attach then
-         access.ssh = @true
-         access.api = @true
-         os.sh = @true
-         os.exec = @true
-      end
+* 23 Oct 26 Windows port - from Linux abcda0c (13 Oct 26, S.63 second sitting; owner: "sh-off and os-off by default ... the only
+*   exception was pre-existing accounts").  THE INSTALLING USER'S ACCOUNT IS NOT AN EXCEPTION: ATTACH only says the Windows user
+*   already exists, and the account starts with no ssh, no API, no SH and no OS.EXECUTE like every other new account; SDSYS turns
+*   on what the person needs.  The accounts that keep their access are the ones that exist at an UPGRADE (upgrade_gates).
    end
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors

@@ -1398,10 +1398,22 @@ void op_dir() {
 
   ts_init(&result, 1024);
 
+  /* 13 Oct 26: STATUS() is 0 unless this call says otherwise.  It was never set here, so an empty directory read
+     as "cannot read directory" in a session whose last operation had left a status behind (SELECT.DIR's test
+     is "no entries and STATUS() not 0"); found by the S.63 suite's SELECT.DIR sub row.                         */
+  process.status = 0;
+
   descr = e_stack - 1;
   path_len = k_get_c_string(descr, pathname, MAX_PATHNAME_LEN);
   if (path_len > 0) {
-    if ((dfu = opendir(pathname)) != NULL) {
+    /* 13 Oct 26 S.63 (the second sitting): DIR() lists an OS directory by pathname, which is "a file external to
+       SD" exactly as OPENSEQ and OPENPATH name one.  An account without OS.EXECUTE lists only a directory inside
+       its own; the answer is a null string and STATUS() 3035, as OPEN ... ELSE gets.  A $internal program is
+       trusted and asks the account itself (SELECT.DIR asks K$PATH.OK).  The first gates suite did not cover this:
+       a measured DIR('/etc') gave 257 entries to an account with both gates off.                              */
+    if (!os_path_open_ok(pathname)) {
+      process.status = ER_PERM;
+    } else if ((dfu = opendir(pathname)) != NULL) {
       if (pathname[path_len - 1] == DS)
         pathname[path_len - 1] = '\0';
 
@@ -1449,6 +1461,10 @@ void op_dir() {
         }
       }
       closedir(dfu);
+    } else {
+      /* a directory that cannot be opened says so in STATUS(), which is what tells it from an empty one */
+      process.os_error = OSError;
+      process.status = (process.os_error == ENOENT) ? ER_FNF : ER_PERM;
     }
   }
 

@@ -733,9 +733,12 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
      it is the real test.  Linux asks only OPENPATH; this asks every open, a VOC
      pointer too, which is Linux's later "VOC pointers held to the gate".   */
 
-  net_may_write = net_path_permitted(pathname, TRUE);
+  /* 23 Oct 26 (S.63, the second sitting): a name that went through the VOC is vetted by _VOC_REF for a local session - an
+     F-pointer into the account, a Q-pointer only into an account the user could LOGTO - so the kernel keeps its own test of
+     that form for network sessions only (net_vocpath_permitted); a PATHNAME given directly (OPENPATH) is asked of every session. */
+  net_may_write = map_name ? net_vocpath_permitted(pathname, TRUE) : net_path_permitted(pathname, TRUE);
 
-  if (!net_may_write && !net_path_permitted(pathname, FALSE)) {
+  if (!net_may_write && !(map_name ? net_vocpath_permitted(pathname, FALSE) : net_path_permitted(pathname, FALSE))) {
     process.status = ER_PERM;
     goto exit_op_open;
   }
