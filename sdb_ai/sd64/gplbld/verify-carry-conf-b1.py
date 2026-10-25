@@ -9,6 +9,8 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 18 Oct 26 dm  SYSTEM(1057) with a parent whose user NUMBER is above NUMUSERS (the Windows agent's finding: op_sys.c bounded
+#               the number by the count of user table cells).  Restart with NUMUSERS=3, three logins, then a phantom's parent.
 # 12 Oct 26 dm  The rest of B-1: LGNWAIT (46), DHCACHE (90), PWDELAY (106), MAXRLOCK (313), USERPOOL (551), the
 #               startup process's @TTY (91) and the call-name limit (241).  Rows that need a parameter in sd.conf
 #               stop the sandbox, rewrite the config below a marker line, start it again and say whether SD started.
@@ -150,6 +152,13 @@ TTY_PROG = ("   crt 'TTY[':@tty:']'\n   os.execute 'echo \"ENV[${SD_STARTUP:-non
 CALL_PROG = ("   x = 0\n   call %s(x)\n   crt 'CALL[':x:']'\nend\n")
 NAMECALL_PROG = ("   nm = '%s'\n   x = 0\n   call @nm(x)\n   crt 'NEVER'\nend\n")
 STARTUP_PROG = "   crt 'startup ran'\nend\n"
+# 18 Oct 26: SYSTEM(1057), the parent's user number, seen by a phantom whose parent's NUMBER is above NUMUSERS.  The
+# parent starts the phantom, waits for the record the phantom writes and prints both numbers.
+PARENT_PROG = ("   execute 'DELETE.FILE zzb1pp' capturing j\n   execute 'CREATE.FILE zzb1pp' capturing j\n"
+               "   open 'zzb1pp' to p else stop 'no p'\n   execute 'PHANTOM NO.MSG RUN bp zzb1pch' capturing o\n"
+               "   t = 0\n   r = ''\n   loop\n      read r from p, 'ph' then exit\n      sleep 1\n      t += 1\n   until t > 30 repeat\n"
+               "   crt 'PP[':@userno:'][':r:']'\n   execute 'DELETE.FILE zzb1pp' capturing j\nend\n")
+CHILD_PROG = "   open 'zzb1pp' to p else stop\n   write system(1057) on p, 'ph'\nend\n"
 
 
 def say(s=""):
@@ -270,7 +279,8 @@ def main():
                           "   crt 'C%02d[':x:']'\nend\n" % i))
         progs += [("zzb1ml", MAXRLOCK_PROG), ("zzb1dc0", DHCACHE_PROG % (0, 0)), ("zzb1dc1", DHCACHE_PROG % (1, 1)),
                   ("zzb1dc10", DHCACHE_PROG % (10, 10)), ("zzb1dcr", DHRANGE_PROG), ("zzb1un", USER_PROG),
-                  ("zzb1hold", HOLD_PROG), ("zzb1lw", LGN_PROG), ("zzb1tty", TTY_PROG), ("zzb1st", STARTUP_PROG)]
+                  ("zzb1hold", HOLD_PROG), ("zzb1lw", LGN_PROG), ("zzb1tty", TTY_PROG), ("zzb1st", STARTUP_PROG),
+                  ("zzb1par", PARENT_PROG), ("zzb1pch", CHILD_PROG)]
         compile_all(box, sysd, progs)
 
         say("\n--- the parameters, as built ----------------------------------------------------")
@@ -362,6 +372,21 @@ def main():
                 ma.group(3) == "2000", ma and ma.group(0))
         else:
             row("551: USERPOOL=2000 starts SD", False, "did not start")
+        say("\n--- SYSTEM(1057), the parent's user number, when that NUMBER is above NUMUSERS ---------------")
+        # User numbers run to USERPOOL (1023), the user table has NUMUSERS cells.  After a restart the numbers count from 1,
+        # so with NUMUSERS=3 the fourth login is number 4: a bound of NUMUSERS on a user number refuses it.
+        if restart(box, "NUMUSERS=3"):
+            first = [tagged(sess(box, "RUN bp zzb1un"), "UN") for _ in range(3)]
+            say("    the first three logins: %r" % first)
+            out = sess(box, "RUN bp zzb1par")
+            mp = re.search(r"(?m)^PP\[(\d+)\]\[(.*)\]\s*$", out)
+            say("    parent line: %r" % (mp and mp.group(0)))
+            row("1057: CONTROL: the parent's user number is above NUMUSERS (3), so this row can tell the two apart",
+                bool(mp) and int(mp.group(1)) > 3, "got %r" % (mp and mp.group(0)))
+            row("1057: a phantom whose parent's user number is above NUMUSERS sees that number",
+                bool(mp) and mp.group(2) == mp.group(1), "got %r" % (mp and mp.group(0)))
+        else:
+            row("1057: SD starts with NUMUSERS=3", False, "did not start")
         for bad in ("USERPOOL=20000", "LGNWAIT=40000", "DHCACHE=2000", "MAXRLOCK=-1", "PWDELAY=5000"):
             up = restart(box, bad)
             log = ""

@@ -10,6 +10,8 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 18 Oct 26 dm  Row 56's mode 1 and mode 6 jobs name SPOOLER "true": they went to the machine's lp, and with a default printer set
+#               they printed on paper (the Windows agent's report; their printer printed pages).
 # 12 Oct 26 dm  Written: 336 names with two underscores, 407 INCLUDE in $BASIC.OPTIONS.
 # END-HISTORY
 #
@@ -789,9 +791,11 @@ def run_verbs(box, sysd, bp):
             has(t, r"^LOG\[0/1/\$?hold/zzoqlg\]"), t[-400:])
         row("56: ...and again with 0 when it is closed", has(t, r"^LOG\[0/0/\$?hold/zzoqlg\]"), t[-400:])
         row("56: ...the open before the close", t.find("LOG[0/1/") != -1 and t.find("LOG[0/1/") < t.find("LOG[0/0/"), t[-400:])
-        t = sess(box, "SETPTR 0,80,60,0,0,6,AS zzoqlg6,BRIEF", "RUN bp zzoqp1")
+        # SPOOLER "true": a mode 1 or 6 job is handed to the machine's lp, which prints on paper where there is a default
+        # printer; the sandbox user plays the administrator, so the unit's own spooler string is the one that is run (18 Oct 26).
+        t = sess(box, 'SETPTR 0,80,60,0,0,6,AS zzoqlg6,SPOOLER "true",BRIEF', "RUN bp zzoqp1")
         row("56: mode 6 (file and printer) does too", has(t, r"^LOG\[0/1/") and has(t, r"^LOG\[0/0/"), t[-400:])
-        t = sess(box, "SETPTR 0,80,60,0,0,1,BRIEF", "RUN bp zzoqp1")
+        t = sess(box, 'SETPTR 0,80,60,0,0,1,SPOOLER "true",BRIEF', "RUN bp zzoqp1")
         row("56: a plain printer job does not", not has(t, r"^LOG\[") and has(t, r"JOB DONE"), t[-400:])
         sess(box, "DELETE.CATALOG hold.file.logger LOCAL")
         t = sess(box, "SETPTR 0,80,60,0,0,3,AS zzoqlg,BRIEF", "RUN bp zzoqp1")

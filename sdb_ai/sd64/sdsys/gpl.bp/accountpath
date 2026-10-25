@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 5732bb2 (18 Oct 26): the register's path goes through parse.pathname.tokens (!PATHTKN); this file already did.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (ACCOUNT.PATH), as a function in BASIC that bcomp knows by name.
 * END-HISTORY
 *
@@ -47,7 +48,7 @@ $include int$keys.h
    name = downcase(trim(account))
    if name # '' then
       openpath @sdsys:@ds:'accounts' to acc.f then
-         read acc.rec from acc.f, name then path = acc.rec<ACC$PATH>
+         read acc.rec from acc.f, name then path = parse.pathname.tokens(acc.rec<ACC$PATH>)
          close acc.f
       end
    end

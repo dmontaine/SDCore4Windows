@@ -2,6 +2,23 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+25 Oct 26  MODIFY.ACCOUNT CARRIES OUT SEVERAL ACTIONS IN ONE COMMAND; CREATE.ACCOUNT AUDITS THE GATES IT GRANTS (FROM SD CORE FOR LINUX).
+
+             Several     modify.account name sh-on os-on voc-on bp-on does all four.  Every word is read first, and if any is refused nothing is
+             actions    changed: a word that is not an action (12795), two words that set one access to different states, such as sh-on with
+                        sh-off or ssh with api (12796), or add or delete among other words, which take a user name and stand alone (12719).  The
+                        words are then all carried out in a fixed order whatever order they were typed (the routes, then the switches, then
+                        suspended or unsuspended), each reported and audited as before, and a command of more than one ends with a line saying
+                        that every action was carried out (12798) or which were not (12799; the others are still done).  Before this, a word
+                        after the first was read by nobody: modify.account fred voc-off bp-off did the first and said nothing of the second.
+                        With no action at all the command now prints its usage.
+             Audit      The audit line of create.account now ends with gates=, the words of the sentence that grant or withdraw an access
+                        (create.account account=FRED type=user gates=ssh,api,sh-on), or gates=none.  The words up to type= are unchanged.
+             Also       restore.account compares a global-catalogue program by its lower-case name, so a different program already catalogued
+                        under that name is now reported (13017) instead of being overwritten.  SYSTEM(1057), a phantom's parent, tested the
+                        parent's user number against the number of table cells instead of the highest user number, so a parent numbered above
+                        the cell count was reported as missing.
+
 25 Oct 26  THE SHARED ACCOUNT: FILES THAT EVERY ACCOUNT CAN OPEN BY NAME, WITHOUT LOGTO OR A POINTER (FROM SD CORE FOR LINUX, S.66).
 
              What        The installer now makes a group account named shared (its directory is C:\ProgramData\SD\group_accounts\shared and

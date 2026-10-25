@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux 2287a0a (18 Oct 26): SYSTEM(1057) tested the parent's user NUMBER against max_users, the count of user table
+ *           cells; user numbers run to hi_user_no (USERPOOL), so a phantom whose parent had number 694 on 20 cells was told "no parent".
  * 17 Aug 26  SYSTEM(91) "Windows?" answers 1, not 0
  * rev 0.9.1 Mar 25 mab return to single rev track
  * 02 Jul 24 mab add 9010 and 9011 

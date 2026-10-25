@@ -3,6 +3,9 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 2287a0a (18 Oct 26): gcat.restore reads the global catalogue with the call name in LOWER case (it was upcase()d, so the
+*              lookup missed every entry, 13017 never fired and a different program already there was overwritten); the messages name the program in
+*              lower case.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the manifest keys shared.read and shared.write (acc_os_info) are read and handed to
 *              !create_account (CA$SHARED.READ.OFF when the manifest says 0, CA$SHARED.WRITE when it says 1); a manifest without them (an older
 *              one, Solo's) gives read on and write off.
@@ -581,7 +584,10 @@ gcat.restore:
    mark.mapping gcat.f, off
    for g = 1 to dcount(lines, @vm)
       val = lines<1,g>
-      call.name = upcase(trim(field(val, '=', 1)))
+* 18 Oct 26 dm - LOWER case.  Call names are lower case in the global catalogue since stage 3a; the upcase() left over from before it made
+*   the read below miss every entry, so a different program already under the name was overwritten (13017 never fired) and the message
+*   named the program in capitals.  An archive written before stage 3a holds upper-case names; downcase() serves both.
+      call.name = downcase(trim(field(val, '=', 1)))
       rest = trim(field(val, '=', 2, 99))
       rel = convert('\', '/', field(rest, ' ', 1))
       rec.id = field(rest, ' ', 2)

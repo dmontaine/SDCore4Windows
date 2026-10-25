@@ -19,6 +19,11 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26) and 2287a0a (18 Oct 26): MORE THAN ONE ACTION IN A COMMAND (owner: "modify.account should be changed
+*           to handle more than one gate at a time").  Every word is read first (validate.actions: an unknown word 12795, two words setting one access to
+*           different states 12796, add or delete among other words or a word after the user name of ADD / DELETE 12719) and then ALL are carried out
+*           (run.actions) in a fixed order through do.action (the old case block), each reported and audited as before, with a closing line 12798 / 12799.
+*           No action at all prints the usage; the usage is one subroutine, show.usage.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-ON / -OFF and SHARED-WRITE-ON / -OFF, the shared-account gates (register fields 13 and 14),
 *           through os.set; allowed on a group account (and on the account shared itself, which is not refused); reported with 12520.  SHARED-READ
 *           is the one gate whose blank field means ON, so os.set reads its "was" as "is not no" and writes 'yes' / 'no'.  Account-scoped: they take
@@ -140,6 +145,7 @@
 * END-HISTORY
 *
 * START-DESCRIPTION:
+* MODIFY.ACCOUNT account action {action ...}      every action except ADD and DELETE, any number in one command (25 Oct 26)
 * MODIFY.ACCOUNT account <ADD/DELETE> user.name
 * MODIFY.ACCOUNT account SSH               - ssh only
 * MODIFY.ACCOUNT account API               - the API only
@@ -241,14 +247,7 @@ deffun ps_script(script) calling '!ps_script'
    * Get next token, account name
    call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
    if token.type = PARSER$END then
-      crt 'Command Syntax:  modify.account <account> add | delete <username>'
-      crt '                  modify.account <account> ssh | api | both | none'
-      crt '                  modify.account <account> sh-on | sh-off'
-      crt '                  modify.account <account> os-on | os-off'
-      crt '                  modify.account <account> sd-on | sd-off'
-      crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
-      crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
-      crt '                  modify.account <account> suspended | unsuspended'
+      gosub show.usage
       stop
    end
    *
@@ -276,6 +275,35 @@ deffun ps_script(script) calling '!ps_script'
    if is_group(group.name) then
       * Get next token, ADD or DELETE
       call @parser(PARSER$GET.TOKEN, token.type, action, keyword)
+
+* 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26; owner: "modify.account should be changed to handle more than one gate at a time").
+*   A word after the action was read by nobody: MODIFY.ACCOUNT acc VOC-OFF BP-OFF did the first and said nothing of the second (Linux 2287a0a refused
+*   the command, 18 Oct).  The words are now ALL carried out, or the whole command is refused BEFORE ANYTHING CHANGES: validate.actions reads every
+*   word first (an unknown word 12795, two words that set one access to different states 12796, ADD or DELETE among other words 12719); run.actions
+*   then does them in a FIXED order whatever order they were typed, each through do.action (the case block below, unchanged), each reported and
+*   audited as it always was, and a run of more than one ends with a line saying which were done (12798) or which were not (12799).  Silence about
+*   half of a command is still impossible.  ADD and DELETE take a user name and stand alone: they read it next, and a word after it is refused
+*   (further down).  No action at all prints the usage (it fell through to "Action Must Be ...").
+      if token.type = PARSER$END then
+         gosub show.usage
+         stop
+      end
+      typed.first = action
+      if (upcase(action) # 'ADD') and (upcase(action) # 'DELETE') then
+         actions = upcase(action)
+         typed.list = typed.first
+         loop
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+         until token.type = PARSER$END
+            actions<-1> = upcase(token)
+            typed.list<-1> = token
+         repeat
+         gosub validate.actions
+         gosub run.actions
+         goto program.end
+      end
+      route.done = @false
+      goto add.delete.arm
 
 * 21 Aug 26 Windows port - SSH, API, BOTH and NONE.  Owner's decision, 21 Aug
 *   2026, replacing the SSH / NO.SSH / API / NO.API pairs of earlier the same
@@ -310,6 +338,9 @@ deffun ps_script(script) calling '!ps_script'
 *   DELETE" into arms of a case statement would rewrite all of it to add
 *   actions that share none of it.  One "if not(route.done)" leaves it
 *   untouched.
+* 25 Oct 26 Windows port - DO.ACTION: ONE ACTION, called by run.actions once for each word of the command.  It was inline before the multi-action
+*   change and is otherwise unchanged; action holds the word (any case), and every branch below returns to the caller (none of them stops).
+do.action:
       route.done = @true
       want.ssh = @false
       want.api = @false
@@ -448,7 +479,10 @@ deffun ps_script(script) calling '!ps_script'
          case 1
             route.done = @false
       end case
+      return
 
+* ADD and DELETE: a user name follows, and the word is not one of the actions above (route.done stays false).
+add.delete.arm:
       if not(route.done) then
       if (upcase(action) = 'ADD') or (upcase(action) = 'DELETE') then
       *  valid action
@@ -457,7 +491,12 @@ deffun ps_script(script) calling '!ps_script'
          if token.type = PARSER$END then
             stop sysmsg(10016)  ;* Missing User Name
          end
-         
+*        18 Oct 26 dm - one user name only; a second was added or removed by nobody (see the check after the action word above)
+         call @parser(PARSER$GET.TOKEN, token.type, extra.word, keyword)
+         if token.type # PARSER$END then
+            stop sysmsg(12719, extra.word)  ;* modify.account does one action at a time, and nothing was changed: %1 was not carried out
+         end
+
          if (upcase(action) = 'ADD') then
 
 * 29 Aug 26 Windows port - THE TIER ORDERING APPLIES HERE TOO.  Owner's rule,
@@ -549,6 +588,117 @@ deffun ps_script(script) calling '!ps_script'
      crt sysmsg(10024,group.name) ;* %1 is not a valid Windows group
    end
    goto program.end
+
+*****************************************************************************
+* SHOW.USAGE  -  the syntax, for no account and for no action
+*
+* 25 Oct 26 Windows port - from Linux 1daee9d: one place (the usage was typed out in the middle of the program), and printed for an account with NO
+*   ACTION as well, which used to fall through to "Action Must Be ...".
+
+show.usage:
+   crt 'Command Syntax:  modify.account <account> add | delete <username>'
+   crt '                  modify.account <account> ssh | api | both | none'
+   crt '                  modify.account <account> sh-on | sh-off'
+   crt '                  modify.account <account> os-on | os-off'
+   crt '                  modify.account <account> sd-on | sd-off'
+   crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
+   crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
+   crt '                  modify.account <account> suspended | unsuspended'
+   crt '  Any of the actions except add and delete may be given together in one command, for example'
+   crt '                  modify.account <account> sh-on os-on voc-on bp-on'
+   crt '  They are all carried out, in the order of the list above whatever order they were typed, or none is.'
+   return
+
+*****************************************************************************
+* VALIDATE.ACTIONS  -  every word of the command, BEFORE ANY OF THEM IS DONE
+*
+* 25 Oct 26 Windows port - from Linux 1daee9d.  actions holds the words in capitals and typed.list the same words as typed.  Nothing is changed here,
+*   and every refusal ends the program (stop), so a command is carried out whole or not at all as far as its WORDS go:
+*     - ADD and DELETE take a user name and stand alone: among other words they are refused with 12719;
+*     - a word that is not an action is refused with 12795, as typed;
+*     - two different words of the same slot set one access to different states (sh-on and sh-off, or ssh and api: say both) and are refused
+*       with 12796.
+*   word.arr is also the ORDER the words are carried out in (run.actions): the routes, the register switches, and the suspension last.  slot.arr
+*   holds the slot of each word.  do.action's case lines are the third list.  Linux's net, files, ai, start and pins words are not here: this
+*   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
+
+validate.actions:
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,SR,SR,SW,SW,S,S')
+   n.words = dcount(actions, @fm)
+   pos.of = ''
+   want.at = ''
+   for i = 1 to n.words
+      w = actions<i>
+      if (w = 'ADD') or (w = 'DELETE') then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12719, typed.list<i>)  ;* add and delete take a user name and stand alone, and nothing was changed: %1 was not carried out
+      end
+      locate w in word.arr<1> setting p else
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12795, typed.list<i>)  ;* %1 is not a modify.account action, and nothing was changed
+      end
+      pos.of<i> = p
+      want.at<p> = 1
+   next i
+   for i = 1 to n.words - 1
+      for j = i + 1 to n.words
+         if actions<i> # actions<j> then
+            pi = pos.of<i>
+            pj = pos.of<j>
+            if slot.arr<pi> = slot.arr<pj> then
+               @system.return.code = -ER$ARGS
+               stop sysmsg(12796, downcase(actions<i>), downcase(actions<j>))  ;* %1 and %2 set the same access to different states, and nothing was changed
+            end
+         end
+      next j
+   next i
+   return
+
+*****************************************************************************
+* RUN.ACTIONS  -  the words, one after the other, each through do.action
+*
+* 25 Oct 26 Windows port - from Linux 1daee9d.  In the order of word.arr (validate.actions made it), whatever order they were typed.  Each action
+*   reports itself and audits itself exactly as it did when it was the only one; the account's record is read again before each (an earlier action
+*   wrote it).  An action is "carried out" when it left @system.return.code at 0, which includes "already had that access; nothing changed"; a
+*   refusal or a failed write leaves a negative code.  A run of more than one ends with one line: 12798 when every action was carried out, 12799
+*   naming the ones that were not (a Windows group change can fail after a register write succeeded, and the line says so rather than leaving the
+*   person to count).  The code after the run is 0 only if every action was carried out.  The remaining actions are still attempted after a failure:
+*   they are independent accesses, and each says what it did.
+
+run.actions:
+   run.list = ''
+   for p = 1 to dcount(word.arr, @fm)
+      if want.at<p> then run.list<-1> = word.arr<p>
+   next p
+   n.run = dcount(run.list, @fm)
+   done.list = ''
+   undone.list = ''
+   for i = 1 to n.run
+      action = run.list<i>
+      read acc.rec from acc.f, acc.name else null
+      @system.return.code = 0
+      gosub do.action
+      if @system.return.code = 0 then
+         done.list<-1> = downcase(action)
+      end else
+         undone.list<-1> = downcase(action)
+      end
+   next i
+   if n.run > 1 then
+      if undone.list = '' then
+         crt sysmsg(12798, acc.name, n.run, change(done.list, @fm, ', '))  ;* Account %1: %2 actions carried out: %3
+      end else
+         if done.list = '' then done.said = 'none' else done.said = change(done.list, @fm, ', ')
+         crt sysmsg(12799, acc.name, done.said, change(undone.list, @fm, ', '))  ;* Account %1: NOT every action was carried out. Done: %2. Not done: %3
+      end
+   end
+   if undone.list = '' then
+      @system.return.code = 0
+   end else
+      @system.return.code = -ER$FAILED
+   end
+   return
 
 * ======================================================================
 * The account's OWN Windows user.

@@ -91,7 +91,7 @@ PROGS = {
                "   select v to 1\n   n = 0\n   loop while readnext id from 1 do n += 1 repeat\n   crt 'W1[':(n > 10):']'\n"
                "   k = 0\n   loop while read r from v, 'nosuchvocitem' do k += 1 repeat\n   crt 'W2[':k:']'\n"
                "   loop while read r from v, 'LOGTO' do k += 1 ; exit repeat\n   crt 'W3[':k:']'\n"
-               "   m = 0\n   loop\n      m += 1\n   until read r from v, 'LOGTO' do\n   repeat\n   crt 'U1[':m:']'\n"
+               "   m = 0\n   loop\n      m += 1\n   until read r from v, 'LOGTO' do if m > 3 then exit\n   repeat\n   crt 'U1[':m:']'\n"
                "   m = 0\n   loop\n      m += 1\n   until read r from v, 'nosuchvocitem' do if m > 3 then exit\n   repeat\n   crt 'U2[':m:']'\n"
                "   j = 0\n   loop while open 'voc' to w do j += 1 ; exit repeat\n   crt 'W4[':j:']'\n"
                "   j = 0\n   loop while open 'nosuchfile' to w2 do j += 1 repeat\n   crt 'W5[':j:']'\n"
