@@ -3,7 +3,7 @@
   From the Lazarus definitions of the SD Core owner; 15 Oct 2026: SDGetVar, SDIndices, SDRecordlocked, SDOpenSeq, SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq, SDRevision, SDSystem, SDTrans,
   SDRTrans, SDTxn, SDEvaluate, SDEvalConv, SDIConv, SDOConv, SDIConvs and SDOConvs added (the functions of the QMClient
   API that SD Core for Linux took on), and the load and unload routines written out.  The library's own signatures are in
-  gplsrc/sdclilib/sdclilib.h and win over this file.
+  gplsrc/sdclilib.h and win over this file.
 
   Name this file sdclilibbind.pas.  LoadSdCliLib('') looks for sdclilib.so by the system's rules; give the directory
   (the installed one is /usr/local/sdsys/bin) to load that copy.  It returns False, and leaves every pointer nil,
@@ -39,6 +39,8 @@ type
 
   TSDChangeFn = function(Src, OldStr, NewStr: PAnsiChar;
     Occurrences, StartPos: LongInt): PAnsiChar; cdecl;
+
+  TSDChecksumFn = function(Data: PAnsiChar): LongInt; cdecl;
 
   TSDClearSelectFn = procedure(ListNo: LongInt); cdecl;
 
@@ -194,6 +196,7 @@ var
   SDCall: TSDCallFn;
   SDCallx: TSDCallxFn;
   SDChange: TSDChangeFn;
+  SDChecksum: TSDChecksumFn;
   SDClearSelect: TSDClearSelectFn;
   SdCliLib: TLibHandle;
   SDClose: TSDCloseFn;
@@ -288,10 +291,18 @@ var
 begin
   Result := True;
   if SdCliLib <> NilHandle then Exit;
+  { Windows port: sdclilib.dll on Windows, sdclilib.so elsewhere }
+  {$IFDEF WINDOWS}
+  if BasePath = '' then
+    Path := 'sdclilib.dll'
+  else
+    Path := IncludeTrailingPathDelimiter(BasePath) + 'sdclilib.dll';
+  {$ELSE}
   if BasePath = '' then
     Path := 'sdclilib.so'
   else
     Path := IncludeTrailingPathDelimiter(BasePath) + 'sdclilib.so';
+  {$ENDIF}
   SdCliLib := LoadLibrary(Path);
   if SdCliLib = NilHandle then
   begin
@@ -302,6 +313,7 @@ begin
   SDCall := TSDCallFn(Sym('SDCall'));
   SDCallx := TSDCallxFn(Sym('SDCallx'));
   SDChange := TSDChangeFn(Sym('SDChange'));
+  SDChecksum := TSDChecksumFn(Sym('SDChecksum'));
   SDClearSelect := TSDClearSelectFn(Sym('SDClearSelect'));
   SDClose := TSDCloseFn(Sym('SDClose'));
   SDConnect := TSDConnectFn(Sym('SDConnect'));
@@ -383,6 +395,7 @@ begin
   SDCall := nil;
   SDCallx := nil;
   SDChange := nil;
+  SDChecksum := nil;
   SDClearSelect := nil;
   SDClose := nil;
   SDConnect := nil;

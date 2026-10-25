@@ -2,7 +2,7 @@
 
 From the Python definitions of the SD Core owner; 15 Oct 2026: SDGetVar, SDIndices, SDRecordlocked, SDOpenSeq, SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq, SDRevision, SDSystem, SDTrans,
 SDRTrans, SDTxn, SDEvaluate, SDEvalConv, SDIConv, SDOConv, SDIConvs and SDOConvs added (the functions of the QMClient
-API that SD Core for Linux took on).  The library's own signatures are in gplsrc/sdclilib/sdclilib.h and win over this file.
+API that SD Core for Linux took on).  The library's own signatures are in gplsrc/sdclilib.h and win over this file.
 
 Every function with a c_char_p result returns text the library allocated: ctypes copies it and the original is not
 freed, so a long-running program that calls these many times leaks.  Declare the result type c_void_p instead, read
@@ -16,6 +16,7 @@ The library is loaded from the current directory; change the path below (the ins
 """
 
 import ctypes
+import sys
 
 # Server status constants (sorted)
 SV_ELSE = 2
@@ -26,7 +27,8 @@ SV_ON_ERROR = 1
 SV_PROMPT = 5
 
 # Library loading
-_lib = ctypes.CDLL('./sdclilib.so')
+# Windows port: the Windows kit's library is sdclilib.dll (cdecl), the Linux one sdclilib.so
+_lib = ctypes.CDLL('./sdclilib.dll' if sys.platform == 'win32' else './sdclilib.so')
 
 # ctypes function bindings (sorted; argtypes / restype)
 SDCall = _lib.SDCall
@@ -40,6 +42,10 @@ SDCallx.restype = None
 SDChange = _lib.SDChange
 SDChange.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
 SDChange.restype = ctypes.c_char_p
+
+SDChecksum = _lib.SDChecksum
+SDChecksum.argtypes = [ctypes.c_char_p]
+SDChecksum.restype = ctypes.c_int
 
 SDClearSelect = _lib.SDClearSelect
 SDClearSelect.argtypes = [ctypes.c_int]

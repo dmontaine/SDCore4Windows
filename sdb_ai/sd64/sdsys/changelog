@@ -2,6 +2,56 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+15 Oct 26  THE CLIENT LIBRARY MAY BE USED FROM SEVERAL THREADS.
+
+             Until now the client library (sdclilib.dll) kept the current
+             session, its one transfer buffer and the arguments of SDCallx
+             in plain globals, so two threads of one program interleaved
+             them and a program with more than one thread could not use it.
+             Now:
+             - The current session is each thread's own: SDSetSession and
+               SDGetSession act on the calling thread, so two threads can
+               work on two sessions at the same time.  A thread starts on
+               session 0; a thread given a session by another selects it
+               with SDSetSession first.
+             - Connects from several threads at the same moment each get a
+               slot of their own.
+             - The transfer buffer and the SDCallx arguments are per thread
+               and are released when the thread ends.
+             - A connection that fails keeps its slot for the thread that
+               made it, so SDError() still says why after another thread
+               connected and disconnected.  It is given back by that
+               thread's next connect, SDSetSession or SDDisconnect, by its
+               end, or by SDDisconnectAll.
+
+             What it does NOT do: it does not make one session safe for two
+             threads at once - a program that can reach a session from more
+             than one thread takes its own lock round each action, and an
+             SDExecute with the SDRespond calls that answer it is one
+             action.  A thread that used to rely on the process-wide
+             current session now selects its session with SDSetSession.
+
+15 Oct 26  CLIENT LIBRARY HEADERS FOR C# AND PHP.
+
+             The client library's headers for programs in other languages
+             are installed in C:\ProgramData\SD\sdsys\syscom.  Two more are there:
+             sdclient.cs, for C# and .NET (P/Invoke), and sdclient.php, for
+             PHP 7.4 and later with the FFI extension.  Like the six before
+             them (C, Basic, PureBasic, Gambas 3, Free Pascal, Python) each
+             declares every function of the library with its parameters.
+             The C# file passes strings as bytes, so that SD's field, value
+             and subvalue marks arrive unharmed, and names the library
+             "sdclilib", so that the same file works with sdclilib.dll on a
+             Windows client and sdclilib.so on a Linux one.
+
+             What it does NOT do: neither file has been run - no .NET or PHP
+             runtime was available when they were written.  They are checked
+             against the library's header (every function, every parameter
+             and result type, the calling convention, the status constants,
+             and the PHP declarations read by a C compiler beside the header),
+             which is not the same as a program calling the library.  A Java
+             header is not provided (a Java program can call the C library).
+
 21 Oct 26  THE STATEMENTS THAT QUERY AN INDEX NOW WORK ON A FILE ON ANOTHER SD SERVER (SDNET), AND A QUERY ON ONE USES THE OTHER MACHINE'S INDEX.
 
              What        INDICES(f), INDICES(f, name), SELECTINDEX name FROM f, SELECTINDEX name, value FROM f, SETLEFT, SETRIGHT, SELECTLEFT

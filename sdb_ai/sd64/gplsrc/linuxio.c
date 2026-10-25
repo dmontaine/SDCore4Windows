@@ -839,6 +839,7 @@ void io_handler(int sig) {
 Private void do_input() {
   char c;
   int16_t n;
+  ssize_t got;
   static bool last_was_cr = TRUE; /* May need to skip leading NUL/LF */
 
 again:
@@ -850,10 +851,17 @@ again:
     if (n == ring_out)
       return; /* Ring buffer is full */
 
-    if (read(0, &c, 1) <= 0) {
-      if (errno == EAGAIN)
-        goto again; /* 0429 io_handler() stole our data */
+    got = read(0, &c, 1);
 
+    /* 15 Oct 26 - errno is only meaningful after a read that returned -1.  End of file (0) leaves it as it was, so an
+       EAGAIN left by any earlier call (a lock attempt that failed, a write that would have blocked) made this test
+       send an ended connection round the loop for ever: poll said hung up, read said nothing, errno still said try
+       again.  Two API sessions busy on one file left servers running at 100% of a processor after their clients had
+       gone.                                                                                                      */
+    if ((got < 0) && (errno == EAGAIN))
+      goto again; /* 0429 io_handler() stole our data */
+
+    if (got <= 0) {
       connection_lost = TRUE;     /* Lost connection */
       k_exit_cause = K_TERMINATE; /* 0393 */
       c = 0;                      /* 0338 */

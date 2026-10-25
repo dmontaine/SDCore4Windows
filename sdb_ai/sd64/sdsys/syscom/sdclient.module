@@ -3,7 +3,7 @@
 ' SD client API (sdclilib.so) function and constant definitions for Gambas 3.
 ' From the Gambas3 definitions of the SD Core owner; 15 Oct 2026: SDGetVar, SDIndices, SDRecordlocked, SDOpenSeq, SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq, SDRevision, SDSystem, SDTrans,
 ' SDRTrans, SDTxn, SDEvaluate, SDEvalConv, SDIConv, SDOConv, SDIConvs and SDOConvs added (the functions of the QMClient
-' API that SD Core for Linux took on).  The library's own signatures are in gplsrc/sdclilib/sdclilib.h and win over this file.
+' API that SD Core for Linux took on).  The library's own signatures are in gplsrc/sdclilib.h and win over this file.
 '
 ' Every function that returns a String returns memory the library allocated; Gambas does not free it (SDFree does).
 ' SDReadList and SDReadNext take only the list number: the ErrNo argument declared here is ignored by the library.
@@ -19,6 +19,7 @@ Library "./sdclilib"
 Extern SDCall(Name As String, ArgCount As Integer, Optional ByRef a1 As String, Optional ByRef a2 As String, Optional ByRef a3 As String, Optional ByRef a4 As String, Optional ByRef a5 As String, Optional ByRef a6 As String, Optional ByRef a7 As String, Optional ByRef a8 As String, Optional ByRef a9 As String, Optional ByRef a10 As String, Optional ByRef a11 As String, Optional ByRef a12 As String, Optional ByRef a13 As String, Optional ByRef a14 As String, Optional ByRef a15 As String, Optional ByRef a16 As String, Optional ByRef a17 As String, Optional ByRef a18 As String, Optional ByRef a19 As String, Optional ByRef a20 As String)
 Extern SDCallx(Name As String, ArgCount As Integer, Optional a1 As String, Optional a2 As String, Optional a3 As String, Optional a4 As String, Optional a5 As String, Optional a6 As String, Optional a7 As String, Optional a8 As String, Optional a9 As String, Optional a10 As String, Optional a11 As String, Optional a12 As String, Optional a13 As String, Optional a14 As String, Optional a15 As String, Optional a16 As String, Optional a17 As String, Optional a18 As String, Optional a19 As String, Optional a20 As String)
 Extern SDChange(Str As String, OldStr As String, NewStr As String, Optional ByRef Occurances As Long, Optional ByRef Start As Long) As String
+Extern SDChecksum(Data As String) As Long
 Extern SDClearSelect(ListNo As Integer)
 Extern SDClose(FileNo As Integer)
 Extern SDConnect(Host As String, Port As Integer, UserName As String, Password As String, Account As String) As Boolean

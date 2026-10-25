@@ -59,7 +59,8 @@
  * This port is not intended to be a complete port of sdclilib.c, at this time only porting functions that I currently need.
  * Also will probably not include the call function, but instead the Callx / Getarg functions of newer client versions.
  * Warning: winSDclilib does not maintian a storage area for Getarg parameters for each session.
- *  Using Callx will "overwrite" the previous Callx parameters regardless of session number.
+ *  Using Callx will "overwrite" the previous Callx parameters of the calling THREAD (since 25 Oct 26 they are per thread,
+ *  not shared by every thread of the process) regardless of session number.
  *  A solution would be to add the return call buffers to the session structure....
  *    Or size the pointer array CallArgArray to have a slot for the max number of call args * the max number of sessions
  *    char *    CallArgArray[MAX_ARGS*MAX_SESSIONS]
@@ -81,15 +82,16 @@
  *     SD_CONFIG_ENV / SD_CONFIG_DEFAULT; change them together.  The server
  *     used to read SCARLET_CONFIG instead; it does not any more.
  *
- * 15 Oct 26 Windows port - from Linux 400500c - - sheet 456: THREAD SAFETY.  The current session, the transfer
- *     buffer and the Callx argument buffers are per thread (__thread), the
- *     table of sessions is shared and its slots are claimed under
- *     session_lock, so threads work on different sessions at the same time
- *     and each tracks its own current session (SDSetSession) as the manual
- *     requires.  Two threads must still not use ONE session together.  A
- *     connection that fails keeps its slot (CX_HELD) so that its owner can read
- *     the error; gethostbyname / getpwnam are the reentrant forms, and the
- *     child of SDConnectLocal does nothing but exec.
+ * 25 Oct 26 Windows port - from Linux 375cbe7 (15 Oct 26) - sheet 456: THREAD SAFETY, in code (an earlier carry brought this entry without it).
+ *     The current session, the transfer buffer, the Callx argument buffers, the matching state and sysdir()'s answer are per thread
+ *     (one THREADCTX in fiber local storage, thread_ctx(); its callback gives the thread's buffers and held slots back when the thread
+ *     ends), the table of sessions is shared and its slots are claimed under session_lock, so threads work on different sessions at the
+ *     same time and each tracks its own current session (SDSetSession) as the manual requires.  Two threads must still not use ONE
+ *     session together.  A connection that fails keeps its slot (CX_HELD) so that its owner can read the error.  initialise_client()
+ *     is once per process (it used to run whenever the buffer was NULL and wiped slots in use).  Windows differences: no fork, and
+ *     SDConnectLocal's two handles are already passed by an explicit handle list, so it needs no lock round CreateProcess;
+ *     gethostbyname's buffer is per thread in Winsock.  Also: SDIndices used typeof, which the -std=c11 build refuses (5f12ad5 carry).
+ *     tests/thread_smoke.c measures it with no server (the old library fails it, this one passes).
  * 15 Oct 26 Windows port - from Linux 400500c - SDExecute copies reply_len bytes: an on-error reply
  *     (SDCLIENT 1 or 2) overran a one byte allocation with strcpy.
  *
@@ -356,6 +358,10 @@ Private void debug(unsigned char* p, int n);
 Private void initialise_client(void);
 Private bool FindFreeSession(void);
 Private void disconnect(void);
+Private void disconnect_session(int16_t final_context);
+Private void release_held_session(void);
+Private void release_thread_buffers(void);
+Private void ensure_thread_buffer(void);
 Private int32_t grow_buffer_size(int32_t needed);
 Private bool valid_packet_length(int32_t packet_length);
 Private bool read_arg_record(const char* buf, int32_t buf_bytes, int offset,
@@ -426,15 +432,41 @@ struct INBUFF {
 };
 #pragma pack()
 
-Private INBUFF* buff = NULL;
-Private int32_t buff_size;  /* Allocated size of buffer */
-Private int32_t buff_bytes; /* Size of received packet */
 Private FILE* srvr_debug = NULL;
 
 /* buffers for Callx return arguments  */
 #define MAX_ARGS 20
-Private char *    CallArgArray[MAX_ARGS];          /* create an array of pointers, for string arguments (returned by Callx) not sure if this is correct */
-Private int       CallArgArraySz[MAX_ARGS];        /* and size of memory allocated for each  string length + terminator */
+
+/* 25 Oct 26 Windows port - from Linux 375cbe7 (15 Oct 26, sheet 456): THREAD SAFETY.  What a call leaves behind for its caller - the
+   transfer buffer, the Callx arguments, the current session (SDSetSession), the matching state and sysdir()'s answer - belongs to the THREAD, so
+   two threads working on two sessions cannot meet in it.  Linux marks them __thread; here they are one THREADCTX per thread, held in a fiber
+   local storage slot (FlsAlloc), because the callback FLS runs when the thread ends is handed the pointer and so never has to read a thread local
+   variable of a thread that is going (the mingw runtime's emulated TLS is not safe to read from there).  The names below are macros for the
+   fields of this thread's context, so the rest of the file reads as it always did.  The table of sessions is shared; its slots are claimed and given
+   up under session_lock.  The buffer is made by the first packet a thread reads or builds (buff_size starts at 0, so every growth test already
+   allocates) and released when the thread ends or when no session is live.                                                                   */
+typedef struct THREADCTX THREADCTX;
+struct THREADCTX {
+  INBUFF* t_buff;
+  int32_t t_buff_size;  /* Allocated size of buffer */
+  int32_t t_buff_bytes; /* Size of received packet */
+  char* t_CallArgArray[MAX_ARGS]; /* string arguments (returned by Callx) */
+  int t_CallArgArraySz[MAX_ARGS]; /* and the size of memory allocated for each: string length + terminator */
+  int16_t t_session_idx;          /* this thread's current session (SDSetSession) */
+  char* t_component_start;        /* matching data */
+  char* t_component_end;
+  char sysdirpath[MAX_PATHNAME_LEN + 1];
+};
+
+Private THREADCTX* thread_ctx(void);
+#define buff (thread_ctx()->t_buff)
+#define buff_size (thread_ctx()->t_buff_size)
+#define buff_bytes (thread_ctx()->t_buff_bytes)
+#define CallArgArray (thread_ctx()->t_CallArgArray)
+#define CallArgArraySz (thread_ctx()->t_CallArgArraySz)
+#define session_idx (thread_ctx()->t_session_idx)
+#define component_start (thread_ctx()->t_component_start)
+#define component_end (thread_ctx()->t_component_end)
 
 
 /* 15 Oct 26 dm - was 4 (sheet 134: the QMClient API no longer limits the number of simultaneous connections).  The server's
@@ -447,6 +479,10 @@ Private struct {
 #define CX_DISCONNECTED 0 /* No session active */
 #define CX_CONNECTED 1    /* Session active but not... */
 #define CX_EXECUTING 2    /* ...executing command (implies connected) */
+#define CX_HELD 3         /* 25 Oct 26 (Linux 375cbe7): claimed by ONE thread - a connection being made, or one that failed or was
+                             abandoned and whose error text that thread has not read yet.  Not usable and not free: it is given up
+                             by that thread's next connect, SDSetSession, SDDisconnect or by SDDisconnectAll, so another thread
+                             cannot take the slot and clear the error first. */
   char sderror[512 + 1];
   int16_t server_error;
   int32_t sd_status;
@@ -464,13 +500,18 @@ Private struct {
   HANDLE hPipeRd; /* server -> client; the child's stdout */
   HANDLE hPipeWr; /* client -> server; the child's stdin  */
   bool is_local;
+  void* owner; /* 25 Oct 26 (Linux 375cbe7): while CX_HELD, the thread's context the slot is held for */
 } session[MAX_SESSIONS];
 
-Private int16_t session_idx = 0;
+/* Taken to claim or give up a slot of session[], to read the table for a free one, and round the start of a local server (below).  Nothing else
+   is shared, so no call holds it across a read from a server.                                                                              */
+Private CRITICAL_SECTION session_lock;
+Private INIT_ONCE ctx_once = INIT_ONCE_STATIC_INIT;
+Private INIT_ONCE client_once = INIT_ONCE_STATIC_INIT;
+Private DWORD thread_exit_index = FLS_OUT_OF_INDEXES;
 
-/* Matching data */
-Private char* component_start;
-Private char* component_end;
+#define session_live(i) \
+  ((session[i].context == CX_CONNECTED) || (session[i].context == CX_EXECUTING))
 
 /* Internally used routines */
 /*
@@ -1372,7 +1413,7 @@ exit_sdconnect:
 #define SD_CONFIG_DEFAULT "C:\\ProgramData\\SD\\sd.conf"
 
 Private char* sysdir(void) {
-  static char sysdirpath[MAX_PATHNAME_LEN + 1] = "";
+  char* sysdirpath = thread_ctx()->sysdirpath; /* per thread (25 Oct 26, Linux 375cbe7): the answer is not shared storage */
   char inipath[MAX_PATHNAME_LEN + 1];
   char section[50];
   char rec[200 + 1];
@@ -1435,7 +1476,7 @@ Private char* sysdir(void) {
     if (strcmp(section, "SD") == 0) /* [sd] items */
     {
       if (strncmp(rec, "SDSYS=", 6) == 0) {
-        snprintf(sysdirpath, sizeof(sysdirpath), "%s", rec + 6);
+        snprintf(sysdirpath, sizeof(thread_ctx()->sysdirpath), "%s", rec + 6);
         break;
       }
     }
@@ -1474,7 +1515,7 @@ Private char* sysdir(void) {
    it - a client .exe would otherwise get its own directory.  UNCHANGED_REFCOUNT
    because we are not holding a reference, only asking a question.          */
 
-Private int sd_exe_path(char* buff, size_t buffsize) {
+Private int sd_exe_path(char* pathbuf, size_t buffsize) {
   /* The address handed to FROM_ADDRESS only has to lie inside this module, so
      it is a static DATUM rather than this function.  Taking a function's
      address would mean casting a function pointer to an object pointer, which
@@ -1493,7 +1534,7 @@ Private int sd_exe_path(char* buff, size_t buffsize) {
           (LPCSTR)&anchor, &hmod))
     return FALSE;
 
-  n = GetModuleFileNameA(hmod, buff, (DWORD)buffsize);
+  n = GetModuleFileNameA(hmod, pathbuf, (DWORD)buffsize);
 
   /* GetModuleFileNameA truncates and reports success on a short buffer in
      some Windows versions, so the length is checked rather than trusted. */
@@ -1501,11 +1542,11 @@ Private int sd_exe_path(char* buff, size_t buffsize) {
   if ((n == 0) || (n >= buffsize))
     return FALSE;
 
-  p = strrchr(buff, '\\');
+  p = strrchr(pathbuf, '\\');
   if (p == NULL)
     return FALSE;
 
-  if ((size_t)(p - buff) + sizeof("\\sd.exe") > buffsize)
+  if ((size_t)(p - pathbuf) + sizeof("\\sd.exe") > buffsize)
     return FALSE;
 
   strcpy(p, "\\sd.exe");
@@ -1773,7 +1814,7 @@ exit_sdconnect_local:
    SDConnected()  -  Are we connected?                                    */
 DLLEntry  int SDConnected() {
   ClearError;
-  return (session[session_idx].context == CX_DISCONNECTED) ? FALSE : TRUE;
+  return session_live(session_idx) ? TRUE : FALSE;
 }
 
 /* ======================================================================
@@ -2002,8 +2043,10 @@ DLLEntry void SDDeleteu(int fno, char* id) {
 /* ======================================================================
    SDDisconnect()  -  Close connection to server.                         */
 DLLEntry void SDDisconnect() {
-  if (session[session_idx].context != CX_DISCONNECTED) {
+  if (session_live(session_idx)) {
     disconnect();
+  } else {
+    release_held_session(); /* a failed connection: give the slot back */
   }
 }
 
@@ -2014,7 +2057,14 @@ DLLEntry void SDDisconnectAll() {
   for (i = 0; i < MAX_SESSIONS; i++) {
     if (session[i].context != CX_DISCONNECTED) {
       session_idx = i;
-      disconnect();
+      if (session_live(i)) {
+        disconnect();
+      } else {
+        /* a failed connection, of any thread: "all" means all */
+        EnterCriticalSection(&session_lock);
+        session[i].context = CX_DISCONNECTED;
+        LeaveCriticalSection(&session_lock);
+      }
     }
   }
 }
@@ -3647,7 +3697,7 @@ char* DLLEntry SDRevision(void) {
 
   initialise_client();
 
-  if (session[session_idx].context == CX_DISCONNECTED) {
+  if (!session_live(session_idx)) {
     result = malloc(strlen(SD_REV_STAMP) + 1);
     strcpy(result, SD_REV_STAMP);
     return result;
@@ -3709,7 +3759,7 @@ char* DLLEntry SDIndices(int fno, char* index_name) {
   }
   packet.fno = ShortInt(fno);
   memcpy(packet.index_name, index_name, n);
-  return text_request((n == 0) ? SrvrIndices1 : SrvrIndices2, (char*)&packet, offsetof(typeof(packet), index_name) + n,
+  return text_request((n == 0) ? SrvrIndices1 : SrvrIndices2, (char*)&packet, (int32_t)(packet.index_name - (char*)&packet) + n, /* C11 has no typeof */
                       "Indices generated an abort event");
 }
 
@@ -3887,11 +3937,11 @@ Private char* conv_request(int16_t action, char* data, char* code) {
    SDSetSession()  -  Set session index                                   */
 
 int DLLEntry SDSetSession(int idx) {
-  if ((idx < 0) || (idx >= MAX_SESSIONS) ||
-      (session[idx].context == CX_DISCONNECTED)) {
+  if ((idx < 0) || (idx >= MAX_SESSIONS) || !session_live(idx)) {
     return FALSE;
   }
 
+  release_held_session(); /* leaving a failed connection of this thread's: its error has been had */
   session_idx = idx;
   return TRUE;
 }
@@ -4738,7 +4788,12 @@ Private bool CloseSocket() {
    header. Any diagnostic already in sderror is preserved.                    */
 Private void abandon_connection(void) {
     (void)CloseSocket();
-    session[session_idx].context = CX_DISCONNECTED;
+    /* 25 Oct 26 (Linux 375cbe7) - held, not free: the thread that met the failure reads its error text from this slot (SDError), and a slot
+       given back here could be taken, and the text cleared, by another thread's connect first. */
+    EnterCriticalSection(&session_lock);
+    session[session_idx].owner = thread_ctx();
+    session[session_idx].context = CX_HELD;
+    LeaveCriticalSection(&session_lock);
 }
 /* ======================================================================
    NetErr                                                               */
@@ -5043,28 +5098,93 @@ Private void debug(unsigned char* p, int n) {
     fprintf(srvr_debug, "\n");
 }
 
-Private void initialise_client() {
+/* ======================================================================
+   25 Oct 26 Windows port - from Linux 375cbe7 (sheet 456): THREAD SAFETY.
+
+   thread_ctx()  -  This thread's context, made on first need.  The slot is a fiber local storage index whose callback (thread_exit_cleanup)
+   is handed the pointer when the thread ends, and gives the thread's buffers, and any failed connection it was still holding, back.  Its LIVE
+   sessions are the process's: another thread may be using them.  If there is no memory for a context, or the slot cannot be made, every such
+   thread shares one static context (the library behaves as it did before this change, for those threads).                                    */
+
+Private THREADCTX shared_ctx; /* the fallback; zero filled */
+
+Private void CALLBACK thread_exit_cleanup(void* arg) {
+  THREADCTX* t = (THREADCTX*)arg;
   int16_t i;
-  /* if buff has been allocated, we have been here once before, skip */
-  if (buff == NULL) {
-	set_default_character_maps();
-	buff_size = 2048;
-    buff = (INBUFF*)malloc(buff_size);
-	for (i = 0; i < MAX_SESSIONS; i++) {
-	  session[i].context = CX_DISCONNECTED;
-	  session[i].winsock_started = FALSE;
-	  session[i].sderror[0] = '\0';
-	  session[i].sock = INVALID_SOCKET;
-	  session[i].tls = NULL; /* 15 Sep 26 Windows port - S.19 */
-	  session[i].hPipeRd = INVALID_HANDLE_VALUE;
-	  session[i].hPipeWr = INVALID_HANDLE_VALUE;
-	  session[i].is_local = FALSE;
-	}
-	  /* initialize the arg pointer array for EngCall */
-	for (i = 0; i < MAX_ARGS; i++) {
-	  CallArgArray[i] = NULL;
-	  CallArgArraySz[i] = 0;
-	}
+
+  if (t == NULL)
+    return;
+  EnterCriticalSection(&session_lock);
+  for (i = 0; i < MAX_SESSIONS; i++) {
+    if ((session[i].context == CX_HELD) && (session[i].owner == (void*)t))
+      session[i].context = CX_DISCONNECTED;
+  }
+  LeaveCriticalSection(&session_lock);
+  if (t->t_buff != NULL)
+    free(t->t_buff);
+  for (i = 0; i < MAX_ARGS; i++) {
+    if (t->t_CallArgArray[i] != NULL)
+      free(t->t_CallArgArray[i]);
+  }
+  free(t);
+}
+
+Private BOOL CALLBACK init_ctx_once(PINIT_ONCE once, PVOID param, PVOID* context) {
+  (void)once;
+  (void)param;
+  (void)context;
+  InitializeCriticalSection(&session_lock);
+  thread_exit_index = FlsAlloc(thread_exit_cleanup);
+  return TRUE;
+}
+
+Private THREADCTX* thread_ctx(void) {
+  THREADCTX* t;
+
+  (void)InitOnceExecuteOnce(&ctx_once, init_ctx_once, NULL, NULL);
+  if (thread_exit_index == FLS_OUT_OF_INDEXES)
+    return &shared_ctx;
+  t = (THREADCTX*)FlsGetValue(thread_exit_index);
+  if (t == NULL) {
+    t = (THREADCTX*)calloc(1, sizeof(THREADCTX));
+    if (t == NULL)
+      return &shared_ctx;
+    if (!FlsSetValue(thread_exit_index, t)) {
+      free(t);
+      return &shared_ctx;
+    }
+  }
+  return t;
+}
+
+/* ======================================================================
+   initialise_client()  -  Once per process: the character maps and the empty table.  It used to be done whenever the buffer was NULL - which a
+   second thread, or the first one after every session had ended, always found - and so wiped slots in use.  Then this thread's transfer buffer. */
+
+Private void prepare_session_slot(int16_t i) {
+  session[i].winsock_started = FALSE;
+  session[i].sderror[0] = '\0';
+  session[i].server_error = SV_OK;
+  session[i].sd_status = 0;
+  session[i].sock = INVALID_SOCKET;
+  session[i].tls = NULL; /* 15 Sep 26 Windows port - S.19 */
+  session[i].hPipeRd = INVALID_HANDLE_VALUE;
+  session[i].hPipeWr = INVALID_HANDLE_VALUE;
+  session[i].is_local = FALSE;
+  session[i].owner = NULL;
+}
+
+Private BOOL CALLBACK init_client_once(PINIT_ONCE once, PVOID param, PVOID* context) {
+  int16_t i;
+
+  (void)once;
+  (void)param;
+  (void)context;
+  set_default_character_maps();
+  for (i = 0; i < MAX_SESSIONS; i++) {
+    session[i].context = CX_DISCONNECTED;
+    prepare_session_slot(i);
+  }
 
     /* 19 Aug 26 Windows port - SD_CLIENT_DEBUG NOW TURNS LOGGING ON BY ITSELF.
        It used to choose the log's PATH and nothing else; the logging still had
@@ -5074,7 +5194,7 @@ Private void initialise_client() {
        and throwing QMError() away with it.  With no way to make such a client
        call SDDebug, there was no way to see which request had failed.
 
-       AFTER the loops above, not before: SDDebug() reports a log it could not
+       AFTER the loop above, not before: SDDebug() reports a log it could not
        open by writing into session[].sderror, and the loop clearing sderror
        would have wiped exactly the message that says why there is no log.
 
@@ -5082,75 +5202,143 @@ Private void initialise_client() {
        the caller's choice.  NOTE that the log holds a hex dump of every
        packet - since SCRAM that no longer includes a password, but it does
        include the user name and everything the session reads and writes. */
-    {
-      const char* auto_debug = getenv("SD_CLIENT_DEBUG");
-      if ((auto_debug != NULL) && (auto_debug[0] != '\0'))
-        SDDebug(1);
-    }
+  {
+    const char* auto_debug = getenv("SD_CLIENT_DEBUG");
+    if ((auto_debug != NULL) && (auto_debug[0] != '\0'))
+      SDDebug(1);
   }
+  return TRUE;
+}
+
+/* This thread's transfer buffer, made on first need; the callers' growth tests (bytes >= buff_size) cope with size 0 too. */
+Private void ensure_thread_buffer(void) {
+  THREADCTX* t = thread_ctx();
+
+  if (t->t_buff == NULL) {
+    t->t_buff = (INBUFF*)malloc(2048);
+    t->t_buff_size = (t->t_buff == NULL) ? 0 : 2048;
+  }
+}
+
+Private void initialise_client() {
+  (void)InitOnceExecuteOnce(&client_once, init_client_once, NULL, NULL);
+  ensure_thread_buffer();
 }
 
 /* ====================================================================== */
 Private bool FindFreeSession() {
   int16_t i;
+
+  /* 25 Oct 26 (Linux 375cbe7) - A failed connection of THIS thread, still holding its slot for the error to be read, is given up now that the
+     thread makes another.  The free slot is then claimed (CX_HELD) in the same hold of the lock that finds it, so two threads cannot be given
+     one slot; the caller makes it CX_CONNECTED once it is. */
+  release_held_session();
+
   /* Find a free session table entry */
+  EnterCriticalSection(&session_lock);
   for (i = 0; i < MAX_SESSIONS; i++) {
-	if (session[i].context == CX_DISCONNECTED)
-	  break;
+    if (session[i].context == CX_DISCONNECTED)
+      break;
   }
   if (i == MAX_SESSIONS) {
-	/* Must return error via a currently connected session */
-	strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), "Too many sessions");
-	return FALSE;
+    LeaveCriticalSection(&session_lock);
+    /* Must return error via a currently connected session */
+    strcpy_s(session[session_idx].sderror, sizeof(session[0].sderror), "Too many sessions");
+    return FALSE;
   }
+  session[i].context = CX_HELD;
+  prepare_session_slot(i);
+  session[i].owner = thread_ctx(); /* after the slot is prepared: that clears the owner */
+  LeaveCriticalSection(&session_lock);
+
   session_idx = i;
   return TRUE;
+}
+
+/* ======================================================================
+   release_held_session()  -  Give back this thread's failed connection
+
+   The current session, if it is a slot this thread was holding (a connection that failed or was abandoned, whose error text has been had), goes
+   back to the free list.  A live session, a slot already free or re-taken, and a held slot that belongs to another thread (a new thread's current
+   session is slot 0, whoever holds that) are left alone.                                                                                    */
+
+Private void release_held_session(void) {
+  EnterCriticalSection(&session_lock);
+  if ((session[session_idx].context == CX_HELD) && (session[session_idx].owner == (void*)thread_ctx()))
+    session[session_idx].context = CX_DISCONNECTED;
+  LeaveCriticalSection(&session_lock);
+}
+
+/* ======================================================================
+   release_thread_buffers()  -  Free this thread's transfer and Callx buffers */
+
+Private void release_thread_buffers(void) {
+  THREADCTX* t = thread_ctx();
+  int16_t i;
+
+  if (t->t_buff != NULL) {
+    free(t->t_buff);
+    t->t_buff = NULL;
+  }
+  t->t_buff_size = 0;
+  t->t_buff_bytes = 0;
+  for (i = 0; i < MAX_ARGS; i++) {
+    if (t->t_CallArgArray[i] != NULL) {
+      free(t->t_CallArgArray[i]);
+      t->t_CallArgArray[i] = NULL;
+    }
+    t->t_CallArgArraySz[i] = 0;
+  }
 }
 
 /* ====================================================================== */
 
 Private void disconnect() {
+  disconnect_session(CX_DISCONNECTED);
+}
+
+/* ======================================================================
+   disconnect_session()  -  End the current session
+
+   final_context is what the slot becomes: CX_DISCONNECTED, free for any thread, or CX_HELD for a connection that failed after the server was
+   started - the slot then stays this thread's, with its error text, until release_held_session() (see FindFreeSession).                    */
+
+Private void disconnect_session(int16_t final_context) {
   int16_t i;
+
   if (srvr_debug != NULL) {
-	fprintf(srvr_debug, "Disconnect session %d \n", session_idx);
+    fprintf(srvr_debug, "Disconnect session %d \n", session_idx);
     fflush(srvr_debug);
   }
   (void)write_packet(SrvrQuit, NULL, 0);
   (void)CloseSocket();
-  session[session_idx].context = CX_DISCONNECTED;
- /* I cannot find where the original transfer buffer "buff" is freed on exit
-	So look for connected session, if none, release buffer                */
 
-  /* 15 Oct 26 dm - was "== CX_CONNECTED": a session that is EXECUTING a command (waiting for input) is alive too, and the
-     buffer freed from under it made its next packet fail, and the next SDConnect, finding the buffer gone, re-initialised
-     every session including that one (sheet 281: a second connection could terminate abnormally).                      */
+  EnterCriticalSection(&session_lock);
+  if (final_context == CX_HELD)
+    session[session_idx].owner = thread_ctx();
+  session[session_idx].context = final_context;
+
+  /* The transfer buffer is released when no session is left to use it.
+     15 Oct 26 dm - was "== CX_CONNECTED": a session that is EXECUTING a command (waiting for input) is alive too, and the buffer freed from
+     under it made its next packet fail, and the next SDConnect, finding the buffer gone, re-initialised every session including that one
+     (sheet 281: a second connection could terminate abnormally).
+     Sheet 456: the buffers are this THREAD's, and any session it can still use is live, so while one is the buffers stay; a connection that is
+     merely being made or held does not need them.  The table is read under the lock. */
   for (i = 0; i < MAX_SESSIONS; i++) {
-	  if (session[i].context != CX_DISCONNECTED)
-	    break;
+    if (session_live(i))
+      break;
   }
+  LeaveCriticalSection(&session_lock);
 
   if (i == MAX_SESSIONS) {
-	/* looked at all the sessions and none connected free buff */
-	if (buff != NULL) {
-	  free(buff);
-	  buff = NULL;
-	}
-   /* free the callx arg buffers if they are still around */
-   /* this needs modifing if we go with more than 1 session, see comments at top */
-	for (i = 0; i < MAX_ARGS; i++) {
-	  if (CallArgArray[i] != NULL ){
-		free(CallArgArray[i]);
-		CallArgArray[i] = NULL;
-		CallArgArraySz[i] = 0;
-	}
-  }
-
+    /* looked at all the sessions and none live: free this thread's buffers (the Callx argument buffers too) */
+    release_thread_buffers();
   }
 }
 
 /* #include "ctype.c" */
 /* ======================================================================
-   Set default_character maps                                             */
+   Set default_character maps                                           */
 void set_default_character_maps() {
     int i;
     int j;
