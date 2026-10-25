@@ -150,6 +150,8 @@ deffun ps_script(script) calling '!ps_script'
    edit.dict.want = (settings<CA$DICT.EDIT> = 1)
 * 17 Oct 26 dm - S.65 slice 1: the NET gate (SDNet remote files), the same rule: off unless named (NET-ON), exactly 1 to be a request.
    net.want = (settings<CA$NET> = 1)
+* 17 Oct 26 dm - S.65 slice 2c: the files-only login (membership of sdfiles), the same rule: off unless named (FILES-ON), exactly 1 to be a request.
+   files.want = (settings<CA$FILES> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -189,6 +191,23 @@ deffun ps_script(script) calling '!ps_script'
      pathname = CONFIG('USRDIR')
      if pathname = '' then pathname = 'C:\ProgramData\SD\user_accounts'
      acc.uname = acc.name
+
+* 17 Oct 26 dm - S.65 slice 2c (Windows port 25 Oct 26): the group sdfiles is looked for before anything is made, so FILES-ON on a machine without it (an
+*   install from before this release) creates nothing and names the group, instead of leaving a Windows user behind with the join failed.
+     if files.want then
+       files.found = is_group('sdfiles')
+       files.stat = status()
+       if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:files.stat ;* Unable to change remote access for %1
+         goto exit.create
+       end
+       if not(files.found) then
+         @system.return.code = -ER$FAILED
+         err = 10024:@vm:'sdfiles' ;* %1 is not a valid Windows group
+         goto exit.create
+       end
+     end
 
      * Is the user a valid os user?
      * Check reserved names then
@@ -548,6 +567,12 @@ PW.TRY.AGAIN:
        err = 2202 ;* Account name is invalid
        goto exit.create
      end
+* 17 Oct 26 dm - S.65 slice 2c: and no files-only login to give (10087; the group account is reached with logto).
+     if files.want then
+       @system.return.code = -ER$ARGS
+       err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
+       goto exit.create
+     end
 
    case acc.type = 'OTHER'
 *    CREATE.ACCOUNT OTHER <account name> <pathname>, the path in CA$PATH
@@ -559,6 +584,12 @@ PW.TRY.AGAIN:
      if os.sh or os.exec then
        @system.return.code = -ER$ARGS
        err = 10105:@vm:acc.name ;* %1 has no Windows user of its own, so it has no shell to permit
+       goto exit.create
+     end
+* 17 Oct 26 dm - S.65 slice 2c: nor a files-only login (10081 with status 2, as MODIFY.ACCOUNT says it for an account with no Windows user).
+     if files.want then
+       @system.return.code = -ER$ARGS
+       err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
        goto exit.create
      end
      pathname = trim(settings<CA$PATH>)
@@ -970,6 +1001,9 @@ PW.TRY.AGAIN:
       crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
       crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
       crt sysmsg(12416, acc.name, acc.rec<ACC$NET>)  ;* Account %1 has NET %2
+*     17 Oct 26, S.65 slice 2c: FILES is membership of sdfiles, so the line is read off the group, not off the request.
+      files.now = is_grp_member(acc.uname, 'sdfiles')
+      crt sysmsg(12487, acc.name, if files.now then 'yes' else 'no')  ;* Account %1 has FILES %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
 
@@ -1530,6 +1564,17 @@ set.access:
       end
    end
 
+* 17 Oct 26 dm - S.65 slice 2c (Windows port 25 Oct 26): the files-only login, the group sdfiles, joined by the same call; a failed join is reported with its
+*   status and the account stops here, as for the routes.  The group's existence was checked before the Windows user was made.  Nothing is said on
+*   success: the state line (12487) is printed with the others after the register record is written.
+   if files.want then
+      stat = os_group("ADDMEM", "sdfiles", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
+
 *  9 Oct 26 Windows port - RELEASE_1.1 130.  A REUSED SD USER (restore, CA$REUSE.SD.USER) may already
 *   sit in sdssh / sdapi from its earlier account, and the adds above never remove: a restore that
 *   asks for a narrower route left the old membership standing while the line below said "no remote
@@ -1553,6 +1598,18 @@ set.access:
          rm.told = status()
          stat = rm.told
          if stat = 0 and rm.member then stat = os_group("DELMEM", "sdapi", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+*     25 Oct 26 Windows port - S.65 slice 2c: the same for sdfiles.  A machine without the group has nothing to take away (status 1 from
+*     the lookup is "no such group" there), so only a lookup that fails for another reason stops the verb.
+      if not(files.want) then
+         rm.member = is_grp_member(acc.uname, 'sdfiles')
+         rm.told = status()
+         stat = 0
+         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfiles", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

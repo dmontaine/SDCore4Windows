@@ -32,6 +32,10 @@
 *           not flagged $sdcall (a $ name, or SDCLIENT 2): it was refused in the reply but still ran.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (12286) while the administrator has logins
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the NET gate (K$NET; SDNet remote files, does nothing yet) is loaded at every entry to an account, as SD.ACCOUNTS is,
+* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: a second API route, files only.  A user in sdusers and sdfiles but not in sdapi logs in (vb.scram.final)
+*           and the session is marked (files.only, in the common block, set once and never cleared); sdapi wins when both.  The
+*           request loop asks !apifilesok before the dispatch and refuses, with 12485, anything it does not allow.  The SDNet login.
+* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 1: the NET gate (K$NET; SDNet remote files, does nothing yet) is loaded at every entry to an account, as SD.ACCOUNTS is,
 *           from ACC$NET; the OS user sdsys entering the sdsys account has it ON (the administrator passes).
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: an API session of SDSYS that enters the sdsys account loads the three edit gates ON.  An API session carries
 *           no administrator flag, and the sdsys register record has no edit fields (modify.account refuses sdsys), so SDSYS over the
@@ -220,10 +224,13 @@ $include keys.h
 
 * 20240219 mab user must be member of sdusers
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
+* 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: the one place that decides what a files-only session may ask for (pure; see the program).
+deffun apifilesok(action, entered) calling '!apifilesok'
 
 
 common /$APISRVR/ logged.in,          ;* Process is logged in
-files(100),         ;* Array of file variables
+files.only,         ;* 17 Oct 26 S.65 2c: this login is FILES ONLY (sdfiles route, not sdapi): set in vb.scram.final, never cleared
+files(100),        ;* Array of file variables
 logging,            ;* Logging network traffic?
 master.login.done   ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
 
@@ -337,6 +344,35 @@ if not(kernel(K$CPROC.LEVEL,0)) then
 
    tty = 'apisrvr'
    master.login.done = @false      ;* MASTER.LOGIN is run once, at the first entry to an account
+* 17 Oct 26 dm - S.65 slice 2c: THE FILES-ONLY MARK IS INITIALISED HERE, WITH logged.in AND master.login.done, AND NOT BESIDE THE scram.*
+*   STATE BELOW.  A runtime abort re-enters this program from the top (the else branch below); the common block survives it and
+*   so does logged.in, but every plain variable set outside this block (scram.stage and the rest) is set afresh.  A mark kept in a
+*   plain variable would be false again after the first abort while the session stayed logged in: a files-only login with the whole API.
+   files.only = @false
+* 25 Oct 26 Windows port - from Linux 96d8be8, S.65 slice 2c: ON WINDOWS THE SESSION THAT SERVES REQUESTS IS NOT THE PROCESS THAT RAN SCRAM.
+*   The front (LocalSystem) proves the password and hands the connection to a new pre-authenticated process (K$HANDOFF, above), which skips
+*   SCRAM; a mark set in the front's variables never reaches it, and a files-only login would have the whole API.  So THE SESSION WORKS OUT THE
+*   MARK FOR ITSELF at start, from the same two groups the front tested, by name and live (is_grp_member): sdapi wins; a person in sdfiles and
+*   not sdapi is files only; a person in neither, or whose groups cannot be read, is refused (10073) and never enters the request loop.  sdsys
+*   is exempt by name, as in the front.  Nothing is passed from the front, so there is nothing to forge or lose; a group change between the two
+*   tests can only tighten (sdapi taken away) or refuse.
+   if api.preauth<1> = 1 and downcase(logname) # 'sdsys' then
+      api.in.sdapi = is_grp_member(logname, 'sdapi')
+      api.route.stat = status()
+      if api.route.stat # 0 then
+         abort.message = sysmsg(10073, logname) ;* %1 is not permitted to use the API
+         goto connection.failed
+      end
+      if not(api.in.sdapi) then
+         api.in.sdfiles = is_grp_member(logname, 'sdfiles')
+         api.files.stat = status()
+         if api.files.stat # 0 or not(api.in.sdfiles) then
+            abort.message = sysmsg(10073, logname) ;* %1 is not permitted to use the API
+            goto connection.failed
+         end
+         files.only = @true
+      end
+   end
 
    openpath "voc" to voc else
       abort.message = sysmsg(2026) ;* Cannot open VOC
@@ -451,6 +487,21 @@ loop
       if action # 24 and action # 25 and action # 47 and action # 48 then
          abort.message = sysmsg(5270) ;* Not logged in
          goto connection.failed
+      end
+   end
+
+* 17 Oct 26 dm - S.65 slice 2c: THE FILES-ONLY GATE.  A session marked files.only (vb.scram.final) reaches the dispatch only with a
+*   request !apifilesok allows; any other is answered with an error and NOT dispatched.  It is after the not-logged-in test and before
+*   the dispatch so that no request, known or not, goes round it.  "entered" is master.login.done, true once vb.account has
+*   succeeded, so the first request 3 is allowed and a later one (an SDLogto) is not.  The SDCLIENT and SDNet tests in vb.open and
+*   the rest still apply to what is allowed through.
+   if files.only then
+      if not(apifilesok(action, master.login.done)) then
+         void kernel(K$AUDIT, 'api refused request=' : action : ' route=sdfiles user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
+         server.error = SV$ON.ERROR
+         abort.message = sysmsg(12485, action) ;* This login is for files only: request %1 is not allowed
+         st = status()
+         goto return.status.set
       end
    end
 
@@ -1900,14 +1951,40 @@ vb.scram.final:
 *   gplbld/sync-route-groups.ps1 did not run has no API at all.  Same rule as
 *   os_permitted()'s "missing file or missing record means no" (op_sh.c), and
 *   the opposite of NEWVOC's tier lists - do not carry that convention across.
-               if not(is_grp_member(scram.user, 'sdapi')) then
-                  * THE RECORD IS WRITTEN AT exit.vb.scram.fail LIKE EVERY OTHER
-                  * REFUSAL NOW.  This used to call K$AUDIT here and was the only
-                  * refusal that reached the trail at all.
-                  scram.refuse.reason = 'not in sdapi'
+* 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: A SECOND, NARROWER ROUTE - sdfiles.  A user in sdusers who is not in
+*   sdapi but is in sdfiles is let in FILES ONLY: the request loop then allows only what !apifilesok allows.  sdapi WINS when both: a member of
+*   sdapi keeps the whole API as before.  The three-valued reading is kept for BOTH groups (could not tell refuses, with its own reason).  A user
+*   in neither is refused exactly as before, same reason, same 10073.  Both groups are off for a new account.  On Windows the MARK is not
+*   carried by this process (it hands the connection to a new session): the session works it out for itself at start (see where files.only is
+*   initialised); this front only decides to let the login through, and audits the route.
+               api.files.login = @false
+               api.in.sdapi = is_grp_member(scram.user, 'sdapi')
+               api.route.stat = status()
+               if api.route.stat # 0 then
+                  scram.refuse.reason = 'the sdapi route could not be read, status ' : api.route.stat
                   abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
                   server.error = SV$ON.ERROR
                   goto exit.vb.scram.fail
+               end
+               if not(api.in.sdapi) then
+                  api.in.sdfiles = is_grp_member(scram.user, 'sdfiles')
+                  api.files.stat = status()
+                  if api.files.stat # 0 then
+                     scram.refuse.reason = 'the sdfiles route could not be read, status ' : api.files.stat
+                     abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
+                     server.error = SV$ON.ERROR
+                     goto exit.vb.scram.fail
+                  end
+                  if not(api.in.sdfiles) then
+                     * THE RECORD IS WRITTEN AT exit.vb.scram.fail LIKE EVERY OTHER
+                     * REFUSAL NOW.  This used to call K$AUDIT here and was the only
+                     * refusal that reached the trail at all.
+                     scram.refuse.reason = 'not in sdapi'
+                     abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
+                     server.error = SV$ON.ERROR
+                     goto exit.vb.scram.fail
+                  end
+                  api.files.login = @true
                end
 
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR REMOTE-API GATE
@@ -2009,6 +2086,9 @@ vb.scram.final:
 *   the prepare call before the writepkt at return.status.set and the
 *   commit after it, win or lose - see the header there.  scram.handoff
 *   is only the flag that says both belong to this login.
+* 17 Oct 26 dm - S.65 slice 2c: the login is audited as a login by this route (Windows port 25 Oct 26: the mark itself is the session's to work out).
+               if api.files.login then void kernel(K$AUDIT, 'api login route=sdfiles user=' : scram.user)
+
                response = 'v=' : scram.ssig
                scram.handoff = @true
 

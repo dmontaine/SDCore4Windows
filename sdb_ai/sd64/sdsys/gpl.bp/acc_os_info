@@ -27,6 +27,10 @@
 *           before the separators are counted; the count was always zero.
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the manifest key net (1 only if ACC$NET says yes), beside edit.voc, edit.bp and edit.dict; the NET gate does nothing yet.
 * 01 Oct 26 Windows port - from Linux 9d6f407 - Written for S.50 (per-OS helper; signature agreed with SD Core
+* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: the manifest key route.files (1 if the user is in the group sdfiles, the files-only SDNet login), beside route.ssh and
+*              route.api.  NOT `files`: the backup writes `files: N` (the file count) into the same section, and restorea reads it as that count.
+* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 1: the manifest key net (1 only if ACC$NET says yes), beside edit.voc, edit.bp and edit.dict; the NET gate does nothing yet.
+* 01 Oct 26 Windows port - from Linux 96d8be8 - Written for S.50 (per-OS helper; signature agreed with SD Core
 *              for Windows by mail, 2026-10-01T1030 and 1115).
 * END-HISTORY
 *
@@ -48,6 +52,10 @@
 *    members     the sdg_ group's members, comma separated (GROUP only)
 *    os.sh       the register's ACC$SH "yes" -> 1, else 0   } USER only (S.63;
 *    os.execute  the register's ACC$OS.EXEC "yes" -> 1, else 0  } os.users is retired)
+*    acc.name ''  - the system keys: product, host, accounts.root, sd.version.
+*    acc.name set - the account's keys, from its ACCOUNTS record (acc.rec):
+*                   type, os.user, os.group, route.ssh, route.api, route.files, os.sh,
+*                   os.execute, and for a GROUP account its members.
 *
 * WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
 * directory holding user_accounts, from USRDIR as CREATE.ACCOUNT reads it)
@@ -113,6 +121,7 @@ deffun os_group(action, group, member) calling '!os_group'
 
    ssh = 0
    api = 0
+   files = 0
    if typ = 'USER' then
       m = is_grp_member(uname, 'sdssh')
       if status() then
@@ -126,9 +135,14 @@ deffun os_group(action, group, member) calling '!os_group'
          return
       end
       if m then api = 1
+*     25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: membership of sdfiles, the files-only login.  An install from before
+*     this release has no such group: that reads as "not a member", not as a failure, so BACKUP.ACCOUNT still works there.
+      m = is_grp_member(uname, 'sdfiles')
+      if m and status() = 0 then files = 1
    end
    info<-1> = 'route.ssh: ' : ssh
    info<-1> = 'route.api: ' : api
+   info<-1> = 'route.files: ' : files     ;* NOT `files`: the backup writes `files: N` (the file count) into the same section
 
    if typ = 'GROUP' then
       members = ''

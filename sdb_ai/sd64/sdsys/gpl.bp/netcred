@@ -100,14 +100,12 @@ $define NETCRED.UMASK 63                   ;* 077: the file is private from its 
    made = @false
    old.umask = 0
    d = 0
-   created = ''
    chk.text = ''
    chk.set = ''
    chk.ok = @true
    what = ''
    pin.ok = @false
    dir.there = @false
-   n = 0
    i = 0
    k = 0
    root = ''

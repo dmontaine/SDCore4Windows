@@ -2,6 +2,57 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+17 Oct 26  SDNET, SECOND SLICE (C): A SECOND, NARROWER API ROUTE THAT REACHES FILES AND NOTHING ELSE (S.65).
+
+             Why         Until now a person could log in to a server's API only as a member of the Windows group sdapi, and then the
+                        whole API was theirs: execute commands, call subroutines, enter other accounts, read and write sequential files,
+                        and work with files.  A login that SDNet keeps for another server, if it were taken from a machine, would give
+                        whoever took it all of that on the server it was made for.  There is now a second route, the Windows group
+                        sdfiles.  A person who is in sdusers and in sdfiles and NOT in sdapi can log in over the API, and the session
+                        is held to files.
+             The rules   sdapi wins: a member of both groups has the whole API, as before.  A person in neither group is refused
+                        exactly as before.  The SDSYS login is never made files-only.  If a group cannot be read the login is
+                        refused rather than guessed.  The session that serves the requests works out for itself, from the two groups,
+                        whether it is files-only (on Windows it is a different process from the one that checked the password).  Both groups are empty for a new account until the administrator adds the person.
+             Allowed     Open and close a file; read, with or without a lock; write, write and keep the lock, delete and delete and
+                        keep the lock; select, read the next id, read and save lists; lock a record or a file and ask whether a
+                        record is locked; clear a file; the index requests; file information and reading one field; the mark
+                        mapping; the server's revision; ask for the error text; quit.  Setting the account is allowed ONCE, which is
+                        the entry to an account after login: a second one would be a logto and is refused.
+             Refused     Call a subroutine, execute a command, answer its prompt or end it, the other logins, open a file on another
+                        SDNet server, read a variable, system(), trans(), transactions, evaluate and the conversions, sequential
+                        files, and any request this release does not know.  The decision is one small function holding an ALLOW
+                        list, so a request added to the API later is refused to a files-only login until somebody decides it belongs.
+                        A refused request is not carried out; the client is told "This login is for files only: request n is not
+                        allowed" and the connection stays open.
+             What it is  It is NOT a read-only route: a files-only login can write and delete.  Everything else about the session is
+             not        as for any other API login: the account's switches, SDCLIENT in sd.conf and the API listener all still apply.
+             Words       modify.account name files-on / files-off, and files-on in create.account user.  After a change SD says
+                        "Account fred has FILES yes" (or no), read back from the group and not taken from the request, and a
+                        change that the group does not show is reported as a failure.  The words ssh, api, both and none leave
+                        files-on alone: modify.account fred none takes away ssh and the API and not the files-only login; files-off
+                        takes that away.  A group or other account is refused the words.  create.account looks for the group before it
+                        makes the Windows user, so on a machine without it nothing is left behind.  A change reaches the person at
+                        their next login; to remove it now, files-off and end their connection.
+             Audit       api login route=sdfiles user=name for a login, api refused request=n route=sdfiles user=name for a refused
+                        request, and modify.account files-on account=name for the administrator's act.
+             Installing  The installer makes the group sdfiles, empty, beside sdssh and sdapi, and the uninstaller removes it with
+                        them.  AN EXISTING INSTALLATION DOES NOT HAVE IT UNTIL THE INSTALLER IS RUN AGAIN; until then files-on says
+                        "sdfiles is not a valid Windows group" and changes nothing.  The upgrade does not put anyone in the group.
+             Archives    The account archive carries route.files: 1 or 0 for a user account, and restore.account puts an account it
+                        has to create back in the group.  The key is not called files because that is already the count of files in
+                        the archive.  An older archive has no such line and restores the account out of the group.
+             Not yet     Nothing on the client side uses the route yet: set.netlogin still makes the ordinary login exchange and no
+                        SDNet client opens a file on another server, so no one has connected by this route.
+             Tested      The free checks that read the programs as text pass.  NONE OF THE SD PROGRAMS FOR THE ROUTE WAS COMPILED OR RUN
+                        on Windows: the login with a real user in sdfiles, the refusal of a request on a live session, files-on and
+                        files-off against a real group, the installer making the group and the archive round trip have not been seen
+                        to work.
+             Messages    12485 (the refusal) and 12487 (the FILES state line) are new.
+             Documents   The Administrator guide's Accounts and Security page has a section on the route with the full lists of what
+                        is allowed and refused and the checks in the order the login makes them; its SDNet page, the Remote Access
+                        page and the Getting Started account and API pages mention it; the TCL syntax card lists the new words.
+
 17 Oct 26  SDNET, SECOND SLICE (B): A PERSON'S OWN LOGIN ON A SERVER, KEPT AS DERIVED VALUES AND NEVER AS THE PASSWORD (S.65).
 
              Why         To use a server SDSYS has defined, a person needs a login on it.  set.netlogin server asks for the user name

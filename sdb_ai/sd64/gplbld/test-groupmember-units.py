@@ -103,12 +103,33 @@ READS_STATUS = {
         "the verb with 10081 rather than leaving the old route in place without a word",
     ("create_account", "rm.member = is_grp_member(acc.uname, 'sdapi')"):
         "reused-user route removal: same as sdssh",
+    # 25 Oct 26 - RELEASE_1.1 171 (Linux 96d8be8, S.65 slice 2c): the sdfiles route, the same shapes as sdssh and sdapi.
+    ("acc_os_info", "m = is_grp_member(uname, 'sdfiles')"):
+        "backup manifest route.files: 'status() = 0' on the same line; a group that is missing (an install from before the route) reads as "
+        "not a member, which restores the account out of the group, the same as no route",
+    ("apisrvr", "api.in.sdapi = is_grp_member(logname, 'sdapi')"):
+        "the pre-authenticated session works out its own files-only mark: api.route.stat = status() on the next line; a lookup that "
+        "cannot tell refuses the session with 10073",
+    ("apisrvr", "api.in.sdfiles = is_grp_member(logname, 'sdfiles')"):
+        "same session test, second group: api.files.stat = status() on the next line; could-not-tell refuses",
+    ("apisrvr", "api.in.sdapi = is_grp_member(scram.user, 'sdapi')"):
+        "the sdapi gate at SCRAM: api.route.stat = status() on the next line; could-not-tell is refused with its own audit reason",
+    ("apisrvr", "api.in.sdfiles = is_grp_member(scram.user, 'sdfiles')"):
+        "the sdfiles gate at SCRAM: api.files.stat = status() on the next line; could-not-tell is refused with its own audit reason",
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfiles')"):
+        "reused-user route removal for sdfiles: rm.told = status() on the next line; only a lookup that fails for a reason other than "
+        "'no such group' stops the verb with 10081",
+    ("modifya", "has.files = is_grp_member(files.user, 'sdfiles')"):
+        "files-on / files-off: files.stat = status() on the next line; an unreadable group changes nothing and says 10081",
+    ("modifya", "in.sdusers = is_grp_member(files.user, 'sdusers')"):
+        "files-on: files.stat = status() on the next line; could-not-tell refuses",
+    ("modifya", "now.files = is_grp_member(files.user, 'sdfiles')"):
+        "files-on / files-off read-back: files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
 }
 FAIL_CLOSED = {
-    ("apisrvr", "if not(is_grp_member(scram.user, 'sdapi')) then"):
-        "the sdapi gate at SCRAM: an access check fails closed; the refusal "
-        "reason 'not in sdapi' does not tell a failed lookup from a real no "
-        "(the same conflation vb.account no longer has - see NOTES)",
+    # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).
+    ("create_account", "files.now = is_grp_member(acc.uname, 'sdfiles')"):
+        "the state line printed after the account is made: display only; a could-not-tell prints 'no' and nothing is granted by it",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
     # 02 Oct 26 - these two moved with CREATEA's body into create_account

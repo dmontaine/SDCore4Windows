@@ -1,0 +1,977 @@
+* NETFILE
+* $netfile  -  the handler for every operation on a remote file (S.65, stage 1: read only)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 3b: written.  No kernel code calls it yet (slice 3c will, as call_trigger() in op_dio3.c calls a trigger); it is
+*               driven by a test program against the fake server of gplbld/netfake.py.  NOT YET COMPILED OR RUN.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call $netfile(op, a, b, c, out, rc)
+*
+* The operation codes, rc and the limits are in netfile.h; this text is what is behind them.  Nothing here writes to a remote server or
+* stores anything: stage 1 is READ ONLY, and a write, delete, clear or lock is refused (message 12506) without a byte being sent.
+*
+* ORDER OF THE CHECKS ON NF$OPEN, every one of them local and BEFORE ANYTHING IS DIALLED (an internal program is exempt from the kernel's
+* gates, so the handler asks for itself - the S.63 lesson).  A refusal is audited as   netfile refused server=<name> reason=<why>:
+*     1  the NET gate or the administrator (kernel K$NET; 12465)                                             reason=gate
+*     2  the server name is well formed and the server is DEFINED (!netdefs; 12457, 12435) and its definition
+*        can be used (host, port, account and key in the shape set.server stores; 12497)                     reason=server
+*     3  this ACCOUNT is in the definition's accounts list, case blind; the administrator is exempt (12466)  reason=list
+*     4  the mode: stage 1 is read only whatever the definition says (nothing to check; no handle ever writes)
+*     5  a stored login exists for this person and was made for the definition's key ($netcred READ with the pin;
+*        its errors are given as they are, 12463 and 12464 as 12501)                                         reason=credential
+*     6  at most 10 servers per process and 100 remote files open (12498, 12510)                             reason=limit
+*     7  the remote file name is well formed (12496)                                                         reason=file
+* Only then:   netfile open server=<name> file=<remote file>   is audited, once, and the connection is made (a server this process is
+* already connected to is reused: nothing is dialled, but all seven checks were made again).  No password, key or hash is ever audited,
+* printed or kept; the keys the login is made from are copied out of the credential, handed to the class and cleared at once.
+* Read, readv, recordlocked, select and fileinfo ask the gate again and want the handle to belong to THIS ACCOUNT, so a handle opened before
+* a LOGTO is no use after it (the kernel is to call NF$CLOSEALL at LOGTO as well).  CLOSE, CLOSEALL and the refused write operations
+* send nothing that needs the gate; the refused ones still want a handle of this account.
+*
+* CONNECTIONS.  One object of the class !sdclient per server, in the named common block $netfile (so it lives for the process and is
+* released with it).  THE OBJECT IN COMMON IS NOT YET MEASURED.  What is expected from the kernel source: an object is a reference
+* counted OBJDATA in a descriptor of type OBJ (VARTYPE 15); assigning it to an element of a common array copies the descriptor and counts a
+* reference, so it survives the end of this program (a common block is on process.named_common and is freed only by DELETE.COMMON
+* or at the end of the process).  What this program does about it, so that a failure is SAID and not covered over:
+*     - it reads VARTYPE of the element straight after storing it and refuses the open (12504) if that is not an object;
+*     - it reads VARTYPE of the element before every use; a connection whose object is no longer an object is dropped and the call
+*       answers 12504, naming the server;
+*     - NF$STATE shows, for each server, the VARTYPE of its element (15 is an object) and the counters, for a test.
+* The server name, the handle table (handle -> server slot, file number on the server, remote file name, account) and the counters are
+* plain values in the same block, so what a handle meant can be told even when the object is gone.
+*
+* A LOST CONNECTION.  The class marks nothing itself: a request that gets no reply (peer gone, reset, 30 seconds with no data) returns its
+* failure value and leaves ServerStatus alone.  So ServerStatus is set to -1 before every request, and a reply (any reply) overwrites
+* it with the status field of its header, which is never negative: ServerStatus still -1 afterwards is the loss.  On a loss the object is
+* released (its destructor sends a quit down the dead socket and closes it), every handle on that server becomes "lost" (12500 on any
+* use; CLOSE of it still works and frees the entry), and the call answers 12502.  THERE IS NO RETRY AND NO RECONNECT INSIDE AN OPERATION.
+* The next NF$OPEN of that server dials again (a lost slot has been freed); an NF$OPEN on a connection that died without being noticed
+* fails once with 12502 and the one after it reconnects.  Timeouts: 5 seconds to connect (the class, connect.keys), then 30 seconds for each
+* read of a reply (NF$REQUEST.MS, set with settimeout()).  A server that is merely slow past that is treated as lost.
+*
+* WHAT THE CLASS DOES NOT DO, AND SO THIS PROGRAM DOES NOT: the class has no READV and no FILEINFO method.  NF$READV reads the whole
+* record and cuts the field out here.  NF$FILEINFO answers keys 0 (1), 1 (null, no VOC name) and 2 (null: a path on another machine is not
+* shown) without the server and refuses every other key (12507); a method on the class would let the rest through.  The class aborts the
+* calling program when the server answers a request with an ON ERROR reply (for READ, a lock wait that gave up, a corrupt record ...):
+* that abort cannot be caught here.
+*
+* rc<1>: 0 done; 2 the ELSE branch (the file, record or id was not there; rc<6> has the remote STATUS()); 3 an error.  rc<2> is the message
+* number, rc<3> to rc<5> its arguments.  EVERY ERROR MESSAGE NAMES THE SERVER, except 12499 (a handle that names no server) and, for the
+* gate, 12465 (the server is then rc<4>, which the text does not print).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine netfile(op, a, b, c, out, rc)
+$catalog $netfile
+
+$include int$keys.h
+$include keys.h
+$include err.h
+$include netfile.h
+
+$define NF$NOREPLY    -1          ;* ServerStatus before a request: still this afterwards means no reply came
+$define NF$REQUEST.MS 30000       ;* milliseconds to wait for each read of a reply (the plan, 4.6)
+$define NF$LIST       10          ;* the select list number used on the server (0 to 10 may be used by a client)
+
+*  The block is made by the first call and lives for the process.  COMMON STARTS AS 0, NOT UNASSIGNED.  Nothing secret is kept in it
+*  (no key, no hash, no password); what the object itself holds is the class's business.
+common /$netfile/ nf.opens,                     ;* remote files opened, in all
+                  nf.requests,                  ;* requests sent after a login
+                  nf.lost,                      ;* connections dropped: lost, or not held any more
+                  nf.s.state(NF$MAX.SERVERS),   ;* 0 free, 1 connected
+                  nf.s.name(NF$MAX.SERVERS),    ;* the server's name
+                  nf.s.obj(NF$MAX.SERVERS),     ;* the !sdclient object (VARTYPE 15)
+                  nf.h.state(NF$MAX.HANDLES),   ;* 0 free, 1 open, 2 lost with its connection
+                  nf.h.slot(NF$MAX.HANDLES),    ;* the server's slot
+                  nf.h.fno(NF$MAX.HANDLES),     ;* the file number the server gave
+                  nf.h.srv(NF$MAX.HANDLES),     ;* the server's name (kept after the connection is gone)
+                  nf.h.file(NF$MAX.HANDLES),    ;* the remote file name
+                  nf.h.acct(NF$MAX.HANDLES)     ;* the account that opened it
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   out = ''
+   rc = ''
+   rc<1> = NF$RC.OK
+   failed = @false
+   acc = downcase(@who)
+   is.admin = @false
+   gate.ok = @false
+   srv = ''
+   srvname = ''
+   fname = ''
+   body = ''
+   is.dict = @false
+   name.ok = @false
+   fname.ok = @false
+   safe = ''
+   refused.why = ''
+   defs = ''
+   dx = 0
+   n = 0
+   found = 0
+   host = ''
+   port = ''
+   racct = ''
+   pin = ''
+   accts = ''
+   bad.field = ''
+   cred = ''
+   ruser = ''
+   rsalt = ''
+   riter = ''
+   rck = ''
+   rsk = ''
+   err = ''
+   cn = 0
+   slot = 0
+   sx = 0
+   hx = 0
+   hy = 0
+   nh = 0
+   ns = 0
+   created = @false
+   obj = 0
+   ok = @false
+   fno = 0
+   e = ''
+   id = ''
+   fld = 0
+   fkey = 0
+   rec = ''
+   lst = ''
+   lk = 0
+   st = 0
+   rc.st = 0
+   rq.lost = @false
+   rq.err = @false
+   rq.st = 0
+   rq.txt = ''
+   opname = ''
+   need.gate = @false
+   need.conn = @false
+   any.acct = @false
+   allow.lost = @false
+   fail.num = 0
+   fail.a1 = ''
+   fail.a2 = ''
+   fail.a3 = ''
+   txt = ''
+   out.txt = ''
+   chk.text = ''
+   chk.set = ''
+   chk.ok = @true
+   ch = 0
+   k = 0
+   lc.set = 'abcdefghijklmnopqrstuvwxyz'    ;* not "lower": that is a BASIC function
+   digits = '0123456789'
+   hex.set = digits:'abcdef'
+   marks = char(251):char(252):char(253):char(254):char(255)
+
+   begin case
+      case op = NF$OPEN          ; gosub act.open
+      case op = NF$CLOSE         ; gosub act.close
+      case op = NF$READ          ; gosub act.read
+      case op = NF$READV         ; gosub act.read
+      case op = NF$RECORDLOCKED  ; gosub act.recordlocked
+      case op = NF$SELECT        ; gosub act.select
+      case op = NF$FILEINFO      ; gosub act.fileinfo
+      case op = NF$CLOSEALL      ; gosub act.closeall
+      case op = NF$WRITE or op = NF$DELETE or op = NF$CLEARFILE or op = NF$LOCK
+         gosub act.refuse
+      case op = NF$STATE         ; gosub act.state
+      case 1
+         txt = op ; gosub clean.text
+         fail.num = 12495 ; fail.a1 = out.txt
+         gosub fail
+   end case
+
+   return
+
+* ======================================================================
+* act.open - NF$OPEN: a = server name, b = remote file name.  The seven checks, the audit line, then the connection and the file.
+act.open:
+   gosub shape.names
+   safe = 'invalid'
+   if name.ok then safe = srv
+   srvname = safe
+
+*  (1) THE GATE
+   gosub check.gate
+   if not(gate.ok) then
+      fail.num = 12465 ; fail.a1 = acc ; fail.a2 = safe
+      refused.why = 'gate' ; gosub refuse
+      return
+   end
+
+*  (2) THE SERVER: a well formed name, defined, and a definition that can be used
+   if not(name.ok) then
+      txt = a ; gosub clean.text
+      fail.num = 12457 ; fail.a1 = out.txt
+      refused.why = 'server' ; gosub refuse
+      return
+   end
+   call !netdefs('READ', defs, err)
+   if err # '' then
+      fail.num = err<1,1> ; fail.a1 = err<1,2> ; fail.a2 = err<1,3> ; fail.a3 = err<1,4>
+      refused.why = 'server' ; gosub refuse
+      return
+   end
+   found = 0
+   n = dcount(defs, @fm)
+   for dx = 1 to n
+      if dcount(defs<dx>, @vm) = 8 and defs<dx,1> = srv then found = dx
+   next dx
+   if found = 0 then
+      fail.num = 12435 ; fail.a1 = srv
+      refused.why = 'server' ; gosub refuse
+      return
+   end
+   host = defs<found,2>
+   port = defs<found,3>
+   racct = defs<found,4>
+   pin = downcase(defs<found,5>)
+   accts = defs<found,7>
+   gosub check.def
+   if bad.field # '' then
+      fail.num = 12497 ; fail.a1 = srv ; fail.a2 = bad.field
+      refused.why = 'server' ; gosub refuse
+      return
+   end
+
+*  (3) THIS ACCOUNT IS LISTED FOR THE SERVER (case blind; the administrator is exempt, as in set.netlogin)
+   if not(is.admin) then
+      if index(',':downcase(accts):',', ',':acc:',', 1) = 0 then
+         fail.num = 12466 ; fail.a1 = acc ; fail.a2 = srv
+         refused.why = 'list' ; gosub refuse
+         return
+      end
+   end
+
+*  (4) THE MODE: stage 1 is read only whatever the definition says.  Nothing to look at: NF$WRITE .. NF$LOCK are refused for every handle.
+
+*  (5) THE STORED LOGIN, made for the key the definition holds now.  The remote user is attribute 1 of the credential, the account to enter
+*      on the remote server is the definition's.
+   cred = ''
+   err = ''
+   call $netcred('READ', srv, cred, pin, err)
+   if err # '' then
+      cred = ''
+      cn = err<1,1>
+      if cn = 12463 or cn = 12464 then
+*        These two do not name the server: say it, with the text of the netcred message.
+         txt = sysmsg(cn, err<1,2>) ; gosub clean.text
+         fail.num = 12501 ; fail.a1 = srv ; fail.a2 = out.txt
+      end else
+         fail.num = cn ; fail.a1 = err<1,2> ; fail.a2 = err<1,3> ; fail.a3 = err<1,4>
+      end
+      refused.why = 'credential' ; gosub refuse
+      return
+   end
+
+*  (6) THE LIMITS
+   gosub find.slot
+   gosub count.up
+   if slot = 0 and ns >= NF$MAX.SERVERS then
+      cred = ''
+      fail.num = 12498 ; fail.a1 = NF$MAX.SERVERS ; fail.a2 = srv
+      refused.why = 'limit' ; gosub refuse
+      return
+   end
+   if nh >= NF$MAX.HANDLES then
+      cred = ''
+      fail.num = 12510 ; fail.a1 = srv ; fail.a2 = nh
+      refused.why = 'limit' ; gosub refuse
+      return
+   end
+
+*  (7) THE REMOTE FILE NAME
+   if not(fname.ok) then
+      cred = ''
+      txt = b ; gosub clean.text
+      fail.num = 12496 ; fail.a1 = srv ; fail.a2 = out.txt
+      refused.why = 'file' ; gosub refuse
+      return
+   end
+
+*  Everything local has been asked.  One line in the audit trail for the open, and only now anything is dialled.
+   void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname)
+
+   created = @false
+   if slot > 0 then
+      cred = ''
+      if vartype(nf.s.obj(slot)) # V$OBJ then
+         gosub drop.conn
+         fail.num = 12504 ; fail.a1 = srv
+         gosub fail
+         return
+      end
+   end else
+      gosub connect.new
+      if failed then return
+      created = @true
+   end
+
+*  The file.  The object is taken out of common into obj; obj->error is cleared and ServerStatus set to the "no reply" mark first.
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   fno = obj->open(fname)
+   opname = 'open'
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub idle.release
+      gosub server.fail
+      return
+   end
+   if fno <= 0 then
+*     The ELSE branch: the server has no such file (STATUS() 3003 as a rule).  A connection made for this call and used for nothing is ended.
+      gosub idle.release
+      rc.st = rq.st
+      gosub rc.else
+      return
+   end
+
+   hx = 0
+   for hy = 1 to NF$MAX.HANDLES
+      if nf.h.state(hy) = 0 and hx = 0 then hx = hy
+   next hy
+   if hx = 0 then
+*     Not reachable after check 6, but the table is not trusted: give the file back.
+      obj->error = ''
+      obj->ServerStatus = NF$NOREPLY
+      obj->close(fno)
+      gosub idle.release
+      fail.num = 12510 ; fail.a1 = srv ; fail.a2 = NF$MAX.HANDLES
+      gosub fail
+      return
+   end
+   nf.h.state(hx) = 1
+   nf.h.slot(hx) = slot
+   nf.h.fno(hx) = fno
+   nf.h.srv(hx) = srv
+   nf.h.file(hx) = fname
+   nf.h.acct(hx) = acc
+   nf.opens += 1
+   out = hx
+   return
+
+* ======================================================================
+* connect.new - a connection to srv in a free slot (host, port, racct, pin and cred are set).  Sets slot, or failed with rc.
+connect.new:
+   slot = 0
+   for sx = 1 to NF$MAX.SERVERS
+      if nf.s.state(sx) = 0 and slot = 0 then slot = sx
+   next sx
+   if slot = 0 then
+      cred = ''
+      fail.num = 12498 ; fail.a1 = NF$MAX.SERVERS ; fail.a2 = srv
+      gosub fail
+      return
+   end
+
+*  The keys are copied out of the credential, the credential is cleared, and each copy is cleared the moment the login has used it.
+   ruser = cred<1>
+   rsalt = cred<2>
+   riter = cred<3>
+   rck = cred<4>
+   rsk = cred<5>
+   cred = ''
+   obj = object('!sdclient')
+   ok = obj->connect.keys(host, port, ruser, rsalt, riter, rck, rsk, racct, pin)
+   ruser = ''
+   rsalt = ''
+   riter = ''
+   rck = ''
+   rsk = ''
+   if not(ok) then
+      txt = obj->error ; gosub clean.text
+      obj = 0
+      slot = 0
+      fail.num = 12503 ; fail.a1 = srv ; fail.a2 = out.txt
+      gosub fail
+      return
+   end
+   obj->settimeout(NF$REQUEST.MS)
+
+*  THE OBJECT GOES INTO COMMON.  It is looked at at once: if the block did not keep an object, nothing is left half done.
+   nf.s.obj(slot) = obj
+   if vartype(nf.s.obj(slot)) # V$OBJ then
+      obj->disconnect
+      obj = 0
+      nf.s.obj(slot) = 0
+      slot = 0
+      fail.num = 12504 ; fail.a1 = srv
+      gosub fail
+      return
+   end
+   nf.s.state(slot) = 1
+   nf.s.name(slot) = srv
+   return
+
+* ======================================================================
+* act.close - NF$CLOSE: a = handle.  A handle of a lost connection is freed without a word; a close the server did not answer frees it too.
+act.close:
+   need.gate = @false ; need.conn = @false ; any.acct = @true ; allow.lost = @true
+   gosub get.handle
+   if failed then return
+   if nf.h.state(hx) = 1 then
+      if vartype(nf.s.obj(slot)) = V$OBJ then
+         obj = nf.s.obj(slot)
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->close(nf.h.fno(hx))
+         opname = 'close'
+         gosub after.rq
+         nf.requests += 1
+         if rq.lost then gosub drop.conn
+         obj = 0
+      end
+   end
+   gosub free.handle
+   return
+
+* ======================================================================
+* act.read - NF$READ and NF$READV: a = handle, b = record id, c = field number (READV)
+act.read:
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   gosub check.id
+   if failed then return
+   if op = NF$READV then
+      opname = 'readv'
+      gosub check.field
+      if failed then return
+   end else
+      opname = 'read'
+   end
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   e = ''
+   rec = obj->read(nf.h.fno(hx), id, e)
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   begin case
+      case e = 0
+         if op = NF$READV then
+            if fld > 0 then out = rec<fld>
+         end else
+            out = rec
+         end
+      case e = 2
+         rc.st = rq.st
+         gosub rc.else
+      case 1
+         fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
+         gosub fail
+   end case
+   return
+
+* ======================================================================
+* act.recordlocked - NF$RECORDLOCKED: a = handle, b = record id.  out is the class's code (0 not locked).
+act.recordlocked:
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   gosub check.id
+   if failed then return
+   opname = 'recordlocked'
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   lk = obj->recordlocked(nf.h.fno(hx), id)
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   out = lk
+   return
+
+* ======================================================================
+* act.select - NF$SELECT: a = handle.  Two requests: SELECT into list NF$LIST, then READLIST, which returns every id and uses the list up.
+act.select:
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   opname = 'select'
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   obj->select(nf.h.fno(hx), NF$LIST)
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   e = ''
+   lst = obj->readlist(NF$LIST, e)
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   if e # 0 then
+      fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
+      gosub fail
+      return
+   end
+   out = lst
+   return
+
+* ======================================================================
+* act.fileinfo - NF$FILEINFO: a = handle, b = key.  Answered here for FL$OPEN, FL$VOCNAME and FL$PATH; any other key is refused (12507).
+act.fileinfo:
+   need.gate = @true ; need.conn = @false ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   opname = 'fileinfo'
+   fkey = -1
+   if b matches '1N0N' then
+      if len(b) <= 6 then fkey = b + 0
+   end
+   begin case
+      case fkey = FL$OPEN    ; out = 1
+      case fkey = FL$VOCNAME ; out = ''
+      case fkey = FL$PATH    ; out = ''
+      case 1
+         txt = b ; gosub clean.text
+         fail.num = 12507 ; fail.a1 = srvname ; fail.a2 = out.txt
+         gosub fail
+   end case
+   return
+
+* ======================================================================
+* act.closeall - NF$CLOSEALL: end every connection of the process and forget every handle.  Always done, never refused, sends nothing but a quit
+* on each connection that is still held.  For LOGTO and for the end of a session.
+act.closeall:
+   for sx = 1 to NF$MAX.SERVERS
+      if vartype(nf.s.obj(sx)) = V$OBJ then
+         obj = nf.s.obj(sx)
+         obj->disconnect
+         obj = 0
+      end
+      nf.s.obj(sx) = 0
+      nf.s.state(sx) = 0
+      nf.s.name(sx) = ''
+   next sx
+   for hy = 1 to NF$MAX.HANDLES
+      gosub clear.handle
+   next hy
+   return
+
+* ======================================================================
+* act.refuse - NF$WRITE, NF$DELETE, NF$CLEARFILE, NF$LOCK: stage 1 is read only.  Nothing is sent.
+act.refuse:
+   need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
+   gosub get.handle
+   if failed then return
+   begin case
+      case op = NF$WRITE     ; opname = 'write'
+      case op = NF$DELETE    ; opname = 'delete'
+      case op = NF$CLEARFILE ; opname = 'clear.file'
+      case 1                 ; opname = 'lock'
+   end case
+   fail.num = 12506 ; fail.a1 = srvname ; fail.a2 = opname
+   gosub fail
+   return
+
+* ======================================================================
+* act.state - NF$STATE: out<1> servers connected, <2> files open, <3> files opened in all, <4> requests sent, <5> connections dropped,
+* <6> files lost with their connection; then one attribute for each connected server: name, VARTYPE of its object (15 is an object), files open.
+act.state:
+   gosub count.up
+   out = ''
+   out<1> = ns
+   out<2> = nh
+   out<3> = nf.opens
+   out<4> = nf.requests
+   out<5> = nf.lost
+   n = 0
+   for hy = 1 to NF$MAX.HANDLES
+      if nf.h.state(hy) = 2 then n += 1
+   next hy
+   out<6> = n
+   for sx = 1 to NF$MAX.SERVERS
+      if nf.s.state(sx) = 1 then
+         n = 0
+         for hy = 1 to NF$MAX.HANDLES
+            if nf.h.state(hy) = 1 then
+               if nf.h.slot(hy) = sx then n += 1
+            end
+         next hy
+         out<-1> = nf.s.name(sx) : @vm : vartype(nf.s.obj(sx)) : @vm : n
+      end
+   next sx
+   return
+
+* ======================================================================
+* get.handle - the handle in a, for an operation on it.  The caller sets need.gate (ask the NET gate again), need.conn (the connection must be
+* held), any.acct (a handle of another account will do) and allow.lost (a handle of a lost connection will do).  Sets hx and slot (and
+* srvname); failed, with rc, when the handle is not usable.
+get.handle:
+   failed = @false
+   hx = 0
+   slot = 0
+   if a matches '1N0N' then
+      if len(a) <= 9 then hx = a + 0
+   end
+   if hx < 1 or hx > NF$MAX.HANDLES then
+      hx = 0
+      txt = a ; gosub clean.text
+      fail.num = 12499 ; fail.a1 = out.txt
+      gosub fail
+      return
+   end
+   if nf.h.state(hx) = 0 then
+      fail.num = 12499 ; fail.a1 = hx
+      hx = 0
+      gosub fail
+      return
+   end
+   srvname = nf.h.srv(hx)
+   if nf.h.state(hx) = 2 then
+      if allow.lost then return
+      fail.num = 12500 ; fail.a1 = srvname ; fail.a2 = hx
+      gosub fail
+      return
+   end
+   if need.gate then
+      gosub check.gate
+      if not(gate.ok) then
+         fail.num = 12465 ; fail.a1 = acc ; fail.a2 = srvname
+         gosub fail
+         return
+      end
+   end
+   if not(any.acct) then
+      if nf.h.acct(hx) # acc then
+         fail.num = 12499 ; fail.a1 = hx
+         gosub fail
+         return
+      end
+   end
+   slot = nf.h.slot(hx)
+   if slot < 1 or slot > NF$MAX.SERVERS then
+*     A handle that says it is open on no server: lost.
+      slot = 0
+      nf.h.state(hx) = 2
+      fail.num = 12500 ; fail.a1 = srvname ; fail.a2 = hx
+      gosub fail
+      return
+   end
+   if need.conn then
+      if vartype(nf.s.obj(slot)) # V$OBJ then
+         gosub drop.conn
+         fail.num = 12504 ; fail.a1 = srvname
+         gosub fail
+         return
+      end
+   end
+   return
+
+* ======================================================================
+* check.id - the record id in b becomes id.  Empty is the ELSE branch with STATUS() 3000 (as a local READ); an id longer than MAX.ID.LEN or
+* holding a mark is an error.  Sets failed (and rc) in both cases, so the caller stops.
+check.id:
+   id = b
+   if id = '' then
+      rc.st = ER$IID
+      gosub rc.else
+      failed = @true
+      return
+   end
+   if len(id) > MAX.ID.LEN then
+      fail.num = 12508 ; fail.a1 = srvname ; fail.a2 = 'too long'
+      gosub fail
+      return
+   end
+   if len(convert(marks, '', id)) # len(id) then
+      fail.num = 12508 ; fail.a1 = srvname ; fail.a2 = 'holds a mark'
+      gosub fail
+   end
+   return
+
+* ======================================================================
+* check.field - the field number in c becomes fld (0 is allowed and answers null)
+check.field:
+   fld = -1
+   if c matches '1N0N' then
+      if len(c) <= 6 then fld = c + 0
+   end
+   if fld < 0 then
+      txt = c ; gosub clean.text
+      fail.num = 12511 ; fail.a1 = srvname ; fail.a2 = out.txt
+      gosub fail
+   end
+   return
+
+* ======================================================================
+* shape.names - srv from a and fname from b, lower case; name.ok and fname.ok say whether each has the shape of a server name / a remote file
+* name.  A remote file name is letters, digits and . _ - $ up to MAX.ID.LEN, with the word dict in front for a dictionary.  A slash is not one: no
+* pathname can be asked for.
+shape.names:
+   srv = downcase(trim(a))
+   chk.text = srv ; chk.set = lc.set:digits ; gosub check.chars
+   name.ok = (len(srv) >= 1 and len(srv) <= 16 and chk.ok)
+   if name.ok then name.ok = (index(lc.set, srv[1, 1], 1) # 0)
+   fname = downcase(trim(b))
+   body = fname
+   is.dict = @false
+   if fname[1, 5] = 'dict ' then
+      is.dict = @true
+      body = trim(fname[6, 999])
+   end
+   chk.text = body ; chk.set = lc.set:digits:'._-$' ; gosub check.chars
+   fname.ok = (len(body) >= 1 and len(body) <= MAX.ID.LEN and chk.ok)
+   if fname.ok then
+      if is.dict then fname = 'dict ' : body
+      else fname = body
+   end
+   return
+
+* ======================================================================
+* check.def - host, port, racct and pin (from the definition) have the shape set.server stores.  Sets bad.field to the first that has not.
+check.def:
+   bad.field = ''
+   chk.text = host ; chk.set = lc.set:upcase(lc.set):digits:'.-:_' ; gosub check.chars
+   if len(host) < 1 or len(host) > 253 or not(chk.ok) then bad.field = 'host'
+   if bad.field = '' then
+      if not(port matches '1N0N') or len(port) > 5 then
+         bad.field = 'port'
+      end else
+         if port + 0 < 1 or port + 0 > 65535 then bad.field = 'port'
+      end
+   end
+   if bad.field = '' then
+      chk.ok = (len(racct) >= 1 and len(racct) <= 255)
+      for k = 1 to len(racct)
+         ch = seq(racct[k, 1])
+         if ch < 33 or ch > 126 then chk.ok = @false
+      next k
+      if not(chk.ok) then bad.field = 'account'
+   end
+   if bad.field = '' then
+      chk.text = pin ; chk.set = hex.set ; gosub check.chars
+      if len(pin) # 64 or not(chk.ok) then bad.field = 'key'
+   end
+   return
+
+* ======================================================================
+* check.gate - does this session hold the NET gate, or is it the administrator?  Sets gate.ok (and is.admin).  The one place that asks.
+check.gate:
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   gate.ok = @true
+   if not(is.admin) and not(kernel(K$NET, -1)) then gate.ok = @false
+   return
+
+* ======================================================================
+* find.slot - the slot of the connected server srv, or 0
+find.slot:
+   slot = 0
+   for sx = 1 to NF$MAX.SERVERS
+      if nf.s.state(sx) = 1 then
+         if nf.s.name(sx) = srv then slot = sx
+      end
+   next sx
+   return
+
+* ======================================================================
+* count.up - ns servers connected, nh remote files open (state 1)
+count.up:
+   ns = 0
+   nh = 0
+   for sx = 1 to NF$MAX.SERVERS
+      if nf.s.state(sx) = 1 then ns += 1
+   next sx
+   for hy = 1 to NF$MAX.HANDLES
+      if nf.h.state(hy) = 1 then nh += 1
+   next hy
+   return
+
+* ======================================================================
+* after.rq - what the request that has just been made did, from the object in obj.  rq.lost: no reply at all (ServerStatus is still the
+* mark set before the call).  rq.err: the server answered with an error and obj->error holds its text (cleaned into rq.txt).  rq.st: the
+* STATUS() the server sent.
+after.rq:
+   st = obj->ServerStatus
+   rq.lost = (st < 0)
+   rq.st = st
+   if rq.lost then rq.st = 0
+   txt = obj->error
+   rq.err = (txt # '')
+   gosub clean.text
+   rq.txt = out.txt
+   return
+
+* ======================================================================
+* lost.fail - the request named in opname got no reply: the connection is dropped, every handle on it is lost, the call answers 12502.
+lost.fail:
+   srvname = nf.s.name(slot)
+   gosub drop.conn
+   fail.num = 12502 ; fail.a1 = srvname ; fail.a2 = opname
+   gosub fail
+   return
+
+* ======================================================================
+* server.fail - the server answered the request named in opname with an error (12505); rc<6> has the status it sent.
+server.fail:
+   fail.num = 12505 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = rq.txt
+   gosub fail
+   rc<6> = rq.st
+   return
+
+* ======================================================================
+* drop.conn - end the connection in slot: its object is released (its destructor sends a quit and closes the socket), the slot is free, and
+* every handle on it becomes lost (state 2).  The object in obj is released too.
+drop.conn:
+   obj = 0
+   if slot >= 1 then
+      if slot <= NF$MAX.SERVERS then
+         nf.s.obj(slot) = 0
+         nf.s.state(slot) = 0
+         nf.s.name(slot) = ''
+         for hy = 1 to NF$MAX.HANDLES
+            if nf.h.state(hy) = 1 then
+               if nf.h.slot(hy) = slot then
+                  nf.h.state(hy) = 2
+                  nf.h.slot(hy) = 0
+               end
+            end
+         next hy
+         nf.lost += 1
+      end
+   end
+   return
+
+* ======================================================================
+* idle.release - a connection that this very call made, and that has no file, is ended (a login nobody uses is not left on the server).
+idle.release:
+   if created then
+      obj->disconnect
+      obj = 0
+      nf.s.obj(slot) = 0
+      nf.s.state(slot) = 0
+      nf.s.name(slot) = ''
+   end
+   return
+
+* ======================================================================
+* free.handle / clear.handle - the entry in hx (free.handle) or hy (clear.handle) back to nothing
+free.handle:
+   hy = hx
+   gosub clear.handle
+   return
+
+clear.handle:
+   nf.h.state(hy) = 0
+   nf.h.slot(hy) = 0
+   nf.h.fno(hy) = 0
+   nf.h.srv(hy) = ''
+   nf.h.file(hy) = ''
+   nf.h.acct(hy) = ''
+   return
+
+* ======================================================================
+* fail - rc as an error: fail.num and its arguments.  failed is set so that the chain of checks stops.
+fail:
+   rc = ''
+   rc<1> = NF$RC.ERROR
+   rc<2> = fail.num
+   rc<3> = fail.a1
+   rc<4> = fail.a2
+   rc<5> = fail.a3
+   failed = @true
+   return
+
+* ======================================================================
+* rc.else - rc as the ELSE branch, with the remote STATUS() in rc.st
+rc.else:
+   rc = ''
+   rc<1> = NF$RC.ELSE
+   rc<6> = rc.st
+   return
+
+* ======================================================================
+* refuse - an NF$OPEN refused by a local check: rc from fail.num, and the audit line with the reason in refused.why.  Nothing was dialled.
+refuse:
+   gosub fail
+   void kernel(K$AUDIT, 'netfile refused server=' : safe : ' reason=' : refused.why)
+   return
+
+* ======================================================================
+* check.chars - is every character of chk.text in chk.set?  Sets chk.ok.
+check.chars:
+   chk.ok = @true
+   for k = 1 to len(chk.text)
+      if index(chk.set, chk.text[k, 1], 1) = 0 then chk.ok = @false
+   next k
+   return
+
+* ======================================================================
+* clean.text - txt as out.txt: printable ASCII only and at most 100 characters.  Text that came from another machine, or from the caller, is
+* shown, never trusted to hold nothing a terminal would act on.
+clean.text:
+   out.txt = ''
+   if len(txt) > 100 then txt = txt[1, 100]
+   for k = 1 to len(txt)
+      ch = seq(txt[k, 1])
+      if ch >= 32 and ch <= 126 then out.txt := txt[k, 1]
+   next k
+   return
+
+end
+
+* END-CODE

@@ -25,8 +25,8 @@ CA = os.path.join(HERE, os.pardir, "sdsys", "gpl.bp", "createa")
 
 # (setting, word) in the order of the usage line
 PAIRS = [("CA$ROUTE.SSH", "ssh"), ("CA$ROUTE.API", "api"), ("CA$OS.SH", "sh-on"), ("CA$OS.EXECUTE", "os-on"), ("CA$VOC.EDIT", "voc-on"),
-         ("CA$BP.EDIT", "bp-on"), ("CA$DICT.EDIT", "dict-on"), ("CA$NET", "net-on"), ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on")]
-# 25 Oct 26 Windows port: Linux's list also names files-on and files-write-on, which this tree has not got yet (net-on came with S.65); the account name is upcased here
+         ("CA$BP.EDIT", "bp-on"), ("CA$DICT.EDIT", "dict-on"), ("CA$NET", "net-on"), ("CA$FILES", "files-on"), ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on")]
+# 25 Oct 26 Windows port: Linux's list also names files-write-on, which this tree has not got yet (net-on and files-on came with S.65); the account name is upcased here
 # (this port's own case) and the create call passes the type upcased.
 AUDIT = "void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates)"
 CREATE_CALL = "call !create_account(upcase(acc.type), acc.name, settings, err)"

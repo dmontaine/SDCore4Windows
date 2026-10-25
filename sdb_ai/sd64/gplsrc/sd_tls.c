@@ -19,6 +19,8 @@
  *           is linked into sd.exe only.  The NATIVE client library's copy is
  *           gplsrc/sdclilib/sd_tls.c - Winsock, no signals.  RELEASE_1.1 41.
  * 15 Sep 26 dm S.19: created.  See sd_tls.h.
+ * 17 Oct 26 dm S.65: sd_tls_client_peer_spki_sha256() (the key, not the certificate); sd_tls_client_end() holds SIGPIPE off around the
+ *               close_notify (it ended the process when the peer had already closed the connection).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -376,11 +378,31 @@ const char* sd_tls_client_version(SD_TLS_CLIENT* c) {
   return SSL_get_version(c->ssl);
 }
 
-/* Sends close_notify and frees; the caller closes the descriptor. */
+/* Sends close_notify and frees; the caller closes the descriptor.
+
+   17 Oct 26 S.65: SIGPIPE IS HELD OFF FOR THE CLOSE_NOTIFY, AS FOR sd_tls_client_write().  SSL_shutdown() writes to the descriptor; when the
+   peer has already closed it (a server that dropped the connection, then the program closes its socket), that write raised SIGPIPE and
+   ended the whole process, silently.  Found by the SDNet handler suite: CLOSEALL after a connection the fake server had closed.  A SIGPIPE
+   this shutdown raised is consumed; one that was already pending is left alone. */
 void sd_tls_client_end(SD_TLS_CLIENT* c) {
+  sigset_t pipe_only;
+  sigset_t old_mask;
+  sigset_t pending;
+  bool was_pending;
+
   if (c == NULL)
     return;
+  sigemptyset(&pipe_only);
+  sigaddset(&pipe_only, SIGPIPE);
+  sigpending(&pending);
+  was_pending = sigismember(&pending, SIGPIPE) == 1;
+  pthread_sigmask(SIG_BLOCK, &pipe_only, &old_mask);
   (void)SSL_shutdown(c->ssl);
+  if (!was_pending) {
+    struct timespec no_wait = {0, 0};
+    (void)sigtimedwait(&pipe_only, NULL, &no_wait);
+  }
+  pthread_sigmask(SIG_SETMASK, &old_mask, NULL);
   SSL_free(c->ssl);
   SSL_CTX_free(c->ctx);
   ERR_clear_error();

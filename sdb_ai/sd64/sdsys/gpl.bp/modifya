@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26) S.65 slice 2c: FILES-ON / FILES-OFF put the account's person in or out of the Windows group sdfiles (the files-only
+*           SDNet login route) through os_group, as the api word does for sdapi (set.files); refused for a group or other account; reported with 12487.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: NET-ON / NET-OFF, the NET gate for SDNet remote files (register field 15), through os.set;
 *           allowed on a group account as SD-ON is; reported with 12416; account-scoped, so it takes effect at the next account entry.
 * 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26) and 2287a0a (18 Oct 26): MORE THAN ONE ACTION IN A COMMAND (owner: "modify.account should be changed
@@ -432,6 +434,16 @@ do.action:
             os.field = ACC$NET
             os.want  = @false
             gosub os.set
+* 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: FILES-ON / FILES-OFF, membership of the Windows group sdfiles, the
+*   files-only SDNet login route (an API login that may open, read and write files and do nothing else).  Like the api word it changes a group,
+*   not the register, so it needs a user account; sdapi, when the person is also in it, still gives the whole API.  Takes effect at the person's
+*   next login.
+         case upcase(action) = 'FILES-ON'
+            files.want = @true
+            gosub set.files
+         case upcase(action) = 'FILES-OFF'
+            files.want = @false
+            gosub set.files
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
 *   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
 *   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
@@ -591,7 +603,7 @@ add.delete.arm:
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, net-on, net-off,'
-         crt '   shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
+         crt '   files-on, files-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
@@ -615,6 +627,7 @@ show.usage:
    crt '                  modify.account <account> sd-on | sd-off'
    crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
    crt '                  modify.account <account> net-on | net-off'
+   crt '                  modify.account <account> files-on | files-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> suspended | unsuspended'
    crt '  Any of the actions except add and delete may be given together in one command, for example'
@@ -636,8 +649,8 @@ show.usage:
 *   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,SR,SR,SW,SW,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,SR,SR,SW,SW,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -820,6 +833,100 @@ route.set:
    @system.return.code = 0
 
    gosub say.access
+   return
+
+* ======================================================================
+* SET.FILES  -  MODIFY.ACCOUNT <account> FILES-ON | FILES-OFF
+*
+* 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c.  files.want is set by the caller.  Membership of the Windows group
+* sdfiles IS the files-only route (as sdapi is the API route), so nothing is written to the register.  Same call as route.apply: os_group.
+*
+* THE WINDOWS USER IS THE ONE THE ACCOUNT'S GROUP NAMES (sdu_<user>), which is what ACC_OS_INFO reads for the manifest, so the state line, the
+* manifest and the login agree.
+*
+* AS ROUTE.APPLY, THE LOOKUP IS THREE-VALUED: !is_grp_member answers @false for "not a member" and for "could not tell" and tells them apart only
+* by status().  An unreadable group changes NOTHING and says so (10081 with the status).  Three further refusals:
+*   - a group (sdg_) or other account has no Windows user: 10087 for a group, 10081 for the rest, as the api word ends up saying;
+*   - FILES-ON for a person who is not in sdusers: the login would refuse them first (10073), so the group is not added to look like access;
+*   - FILES-ON when the Windows group sdfiles does not exist on this machine (an install from before this release has not made it yet):
+*     10024 names it, and nothing is changed.
+*   The state line (12487) is read back from the group after the change, not taken from the request, and a read back that does not show the
+*   wanted state is reported as a failure (10081), never as a success.  sdapi is not touched: a person in both groups has the whole API (sdapi
+*   wins at login).
+set.files:
+   if group.name[1,4] # 'sdu_' then
+      @system.return.code = -ER$FAILED
+      if group.name[1,4] = 'sdg_' then
+         crt sysmsg(10087, acc.name)  ;* %1 is a group account and has no remote access; reach it with logto
+      end else
+         crt sysmsg(10081, acc.name, 2)  ;* Unable to change remote access for %1, status: %2
+      end
+      return
+   end
+   files.user = group.name[5,999]
+
+   if not(valid_os_name(files.user)) then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, 2)
+      return
+   end
+
+   has.files = is_grp_member(files.user, 'sdfiles')
+   files.stat = status()
+   if files.stat # 0 and not(files.want) then files.stat = 0   ;* no such group: nothing to take the person out of
+   if files.stat = 0 and files.want then
+      in.sdusers = is_grp_member(files.user, 'sdusers')
+      files.stat = status()
+      if files.stat = 0 and not(in.sdusers) then files.stat = 2
+   end
+   if files.stat # 0 and files.want and not(is_group('sdfiles')) and status() = 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10024, 'sdfiles')  ;* %1 is not a valid Windows group
+      return
+   end
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   if has.files = files.want then
+      @system.return.code = 0
+      crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
+      return
+   end
+
+   if files.want then
+      files.found = is_group('sdfiles')
+      files.stat = status()
+      if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10081, acc.name, files.stat)
+         return
+      end
+      if not(files.found) then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10024, 'sdfiles')  ;* %1 is not a valid Windows group
+         return
+      end
+      files.stat = os_group("ADDMEM", 'sdfiles', files.user)
+   end else
+      files.stat = os_group("DELMEM", 'sdfiles', files.user)
+   end
+   if files.stat = 0 then
+      now.files = is_grp_member(files.user, 'sdfiles')
+      files.stat = status()
+      if files.stat = 0 and now.files # files.want then files.stat = 2
+   end
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES %2
    return
 
 * ======================================================================

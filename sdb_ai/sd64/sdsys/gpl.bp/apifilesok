@@ -1,0 +1,110 @@
+* APIFILESOK(action, entered)
+* May a files-only API session make this request?
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 17 Oct 26 dm S.65 slice 2c: written.  The one place that decides what a files-only session (a user in sdusers and sdfiles but not in
+*           sdapi; the SDNet login) may ask the API server for.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    ok = !apifilesok(action, entered)
+*
+*    action  - the request number, the Srvr codes of sdclient and the dispatch table of apisrvr.
+*    entered - true when the session has already entered an account (apisrvr's master.login.done, set at the first
+*              successful vb.account).  Request 3 (set account) is allowed only while it is false: the first entry is the
+*              one after login; any later one would be an SDLogto, which a files-only session may not make.
+*
+*    Returns 1 when the request is allowed and 0 when it is not.  PURE: it reads nothing and writes nothing, so a
+*    sandbox can ask it about every number.  FAIL CLOSED: a number not in the table below - empty, not a number, one
+*    this tree does not know - is 0.  The table is an ALLOW list; a request added to apisrvr later is refused to a
+*    files-only session until someone decides it belongs here.
+*
+*    Everything else about the session (the edit gates, the OS-access gate, SDCLIENT, the NET gate) applies unchanged:
+*    this decides only which request numbers get as far as the dispatch.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function apifilesok(action, entered)
+$catalog !apifilesok
+
+* THE ALLOW TABLE.  One request number per line, the request in the comment.  A comma on each side so that the test
+* below cannot match part of a number.  NOT IN THE TABLE, ON PURPOSE (all refused): 0 (no such request), 20 call,
+* 21 execute, 22 respond, 23 end command, 24 and 25 the other logins, 27 and 28 (not supported), 29 open SDNet file,
+* 47 and 48 (the SCRAM login itself, only before logged.in), 50 getvar, 51 system, 52 and 53 trans, 54 transactions,
+* 55 to 60 evaluate and the conversions, 61 to 69 sequential files, and any number above 69.
+files.ok = ','
+files.ok := '1,'    ;* quit
+files.ok := '2,'    ;* get extended error text
+*                      3 set account is below: once only
+files.ok := '4,'    ;* open file
+files.ok := '5,'    ;* close file
+files.ok := '6,'    ;* read
+files.ok := '7,'    ;* readl
+files.ok := '8,'    ;* readlw
+files.ok := '9,'    ;* readu
+files.ok := '10,'   ;* readuw
+files.ok := '11,'   ;* select
+files.ok := '12,'   ;* readnext
+files.ok := '13,'   ;* clearselect
+files.ok := '14,'   ;* readlist
+files.ok := '15,'   ;* release
+files.ok := '16,'   ;* write
+files.ok := '17,'   ;* writeu
+files.ok := '18,'   ;* delete
+files.ok := '19,'   ;* deleteu
+files.ok := '26,'   ;* selectindex (a select, so allowed with 37 to 39)
+files.ok := '30,'   ;* lock record
+files.ok := '31,'   ;* clearfile
+files.ok := '32,'   ;* filelock
+files.ok := '33,'   ;* fileunlock
+files.ok := '34,'   ;* recordlocked
+files.ok := '35,'   ;* indices1
+files.ok := '36,'   ;* indices2
+files.ok := '37,'   ;* selectlist
+files.ok := '38,'   ;* selectindexv
+files.ok := '39,'   ;* selectindexk
+files.ok := '40,'   ;* fileinfo
+files.ok := '41,'   ;* readv
+files.ok := '42,'   ;* setleft
+files.ok := '43,'   ;* setright
+files.ok := '44,'   ;* selectleft
+files.ok := '45,'   ;* selectright
+files.ok := '46,'   ;* mark mapping
+files.ok := '49,'   ;* revision
+
+if action = '' then return 0
+if not(num(action)) then return 0
+
+* 3 SET ACCOUNT: the first time only.
+if action = 3 then
+   if entered then return 0
+   return 1
+end
+
+if index(files.ok, ',' : action : ',', 1) then return 1
+
+return 0
+
+end
+
+* END-CODE

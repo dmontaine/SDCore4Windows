@@ -23,6 +23,17 @@
 *           instead of the cleartext SrvrLogin, which APISRVR retired in the
 *           same change.  docs/SCRAM_AUTH.md phase 5.  The class is $internal
 *           now, because the derivation needs SDEXT.
+* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 3a: connect.keys(), the login from the stored derived keys of set.netlogin (no password; the server's public
+*               key is compared with a pin before a byte is sent; the salt and iteration count must be the stored ones).  scram.login is
+*               now a wrapper over scram.exchange, which both logins share; settimeout() and a bounded wait for the Ack and for each read
+*               (connect.keys sets 30 seconds; connect() still waits for ever).  connect() is otherwise unchanged.
+* 02 Oct 26 Windows port - from Linux 96d8be8 - The default port is 4247 (owner: full products 4247, Solo 4249).
+* 14 Sep 26 Windows port - from Linux 96d8be8 - connect() speaks SCRAM-SHA-256 (requests 47 and 48) instead of
+*               the cleartext SrvrLogin, which APISRVR retired in the same
+*               change - the Windows port's SDCLIENT of 20 Aug 2026, adopted
+*               unchanged (W.4 SCRAM phase 5).  The class is $internal now,
+*               because the derivation needs SDEXT.
+* 20 Aug 26 Windows port - the same change there.  docs/SCRAM_AUTH.md phase 5.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -30,6 +41,8 @@
 * START-DESCRIPTION:
 *
 * bool = obj->connect(host, port, username, password, account)
+* bool = obj->connect.keys(host, port, username, salt, iterations, client.key, server.key, account, pin)
+* obj->settimeout(ms)
 * obj->call(subr{, args})
 * obj->clearselect(listno)
 * obj->close(fno)
@@ -154,6 +167,10 @@ $define SV$ERROR          3    ;* Action failed. Error text available
 $define SV$LOCKED         4    ;* Took locked clause
 $define SV$PROMPT         5    ;* Server requesting input
 
+$define NET.CONNECT.SECS  5    ;* connect.keys: seconds to wait for the connection (17 Oct 26, S.65)
+$define NET.READ.MS   30000    ;* connect.keys: milliseconds to wait for each read once connected (the plan, 4.6)
+$define NET.ACK.TRIES    16    ;* connect.keys: bytes to read looking for the Ack
+
 
 deffun read.record(mode, fno, id, err) local
 deffun message.pair(pkt.type, pkt) local
@@ -162,10 +179,12 @@ deffun write.packet(pkt.type, pkt) local
 deffun read.packet() local
 deffun context.error(expected) local
 deffun scram.login(username, password) local
+deffun scram.exchange(username, password, stored.salt, stored.iter, stored.ck, stored.sk) local
 
 private context,        ;* State
         skt,            ;* Socket for connection
-        server.error    ;* Returned error code from server
+        server.error,   ;* Returned error code from server
+        io.ms           ;* Milliseconds to wait for each read; 0 waits for ever (17 Oct 26, S.65)
 
 public debugging,       ;* Debug mode
        ServerStatus,    ;* Returned status from server
@@ -177,6 +196,7 @@ public subroutine create.object
    error = ''
    context = CX.DISCONNECTED
    debugging = @false
+   io.ms = 0
 end
 
 * ======================================================================
@@ -319,6 +339,145 @@ public function connect(host, (port), username, password, account)
    context = CX.CONNECTED
 
    return @true
+end
+
+* ======================================================================
+* CONNECT.KEYS(host, port, username, salt, iterations, client.key, server.key, account, pin)   (17 Oct 26 dm, S.65 slice 3a)
+*
+* The login of a person who has run SET.NETLOGIN: NO PASSWORD.  salt, iterations, client.key and server.key are the four values
+* that command stored (base64 except the count), username the remote user name and pin the 64 hexadecimal digits of the server's
+* definition.  In this order, and nothing is sent before the third step:
+*   1. every argument is checked for shape, without touching the network;
+*   2. one TLS connection (5 seconds to connect), and the hash of the public key the server presents is compared with pin;
+*   3. the Ack byte, then the SCRAM exchange of scram.login with the stored keys in place of the password - the salt and iteration
+*      count the server sends must EQUAL the stored ones, or the stored login is out of date or this is not the server it was made
+*      with, and the exchange stops with only the client-first message sent;
+*   4. the account is entered as connect() does, and a refusal fails the call.
+* Every wait for the server is bounded (30 seconds a read; settimeout() changes it once connected).  The arguments are passed by
+* value: the copies here are cleared as soon as they are spent, the caller's variables are the caller's to clear.
+* On false, error says why and the socket is closed; ServerStatus is meaningful only after a failed connection (the status of the
+* open) or a refusal the server itself reported.
+
+public function connect.keys(host, (port), username, (salt), (iterations), (client.key), (server.key), account, (pin))
+   error = ''
+
+   if context # CX.DISCONNECTED then
+      error = 'A connection has already been established'
+      return @false
+   end
+
+   if len(host) = 0 then
+      error = 'Invalid host name'
+      return @false
+   end
+
+   * valid_os_name is declared once for the module, in connect() above (a second deffun here is "Duplicate function name")
+   if not(valid_os_name(username)) then
+      error = 'Invalid user name'
+      return @false
+   end
+
+   pin = downcase(trim(pin))
+   if len(pin) # 64 or len(convert('0123456789abcdef', '', pin)) # 0 then
+      error = 'Invalid public key pin'
+      return @false
+   end
+
+   if salt = '' or client.key = '' or server.key = '' then
+      error = 'The stored login is incomplete'
+      return @false
+   end
+
+   if len(iterations) < 1 or len(iterations) > 8 or not(iterations matches '1N0N') then
+      error = 'The stored iteration count is not a whole number'
+      return @false
+   end
+   iterations += 0
+   if iterations < SCRAM$MIN.ITER or iterations > SCRAM$MAX.ITER then
+      error = 'The stored iteration count is unacceptable'
+      return @false
+   end
+
+   if port = '' or port < 0 then port = 4247   ;* as connect()
+
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   st = status()
+   oserr = os.error()
+   if st # 0 then
+      ServerStatus = st
+      if st = ER$CONNECT and oserr = 0 then
+         error = 'The TLS handshake with ' : host : ':' : port : ' did not complete (status ' : st : ')'
+      end else
+         error = 'Cannot connect to ' : host : ':' : port : ' (status ' : st : ')'
+      end
+      return @false
+   end
+
+*  THE PIN, BEFORE A BYTE IS SENT.  'p' : forces a text comparison - two all-digit strings compare as numbers.
+   spki = downcase(trim(socket.info(skt, SKT$INFO.TLS.SPKI)))
+   if spki = '' then
+      error = 'The server gave no public key hash, so it cannot be checked against the pin; nothing was sent'
+      goto keys.fail
+   end
+   if ('p' : spki) # ('p' : pin) then
+      error = 'PIN MISMATCH: the public key of ' : host : ':' : port : ' is not the key pinned in its definition; nothing was sent'
+      goto keys.fail
+   end
+
+   if io.ms = 0 then io.ms = NET.READ.MS
+   acked = @false
+   tries = 0
+   loop
+      tries += 1
+      b = read.socket(skt, 1, SKT$BLOCKING, io.ms)
+      if status() # 0 or b = '' then
+         error = 'No acknowledgement from ' : host : ':' : port : ' at the start of the session'
+         goto keys.fail
+      end
+      if b = char(6) then acked = @true
+   until acked or tries >= NET.ACK.TRIES
+   repeat
+   if not(acked) then
+      error = 'No acknowledgement from ' : host : ':' : port : ' at the start of the session'
+      goto keys.fail
+   end
+
+   ok = scram.exchange(username, '', salt, iterations, client.key, server.key)
+   client.key = ''
+   server.key = ''
+   if not(ok) then
+      if error = '' then error = 'No reply from ' : host : ':' : port : ' during the login (the connection failed or timed out)'
+      goto keys.fail
+   end
+
+   if not(message.pair(SrvrAccount, account)) then
+      if error = '' then error = 'No reply from ' : host : ':' : port : ' when entering the account'
+      goto keys.fail
+   end
+   if server.error # SV$OK then
+      error = 'The server did not enter the account'
+      goto keys.fail
+   end
+
+   context = CX.CONNECTED
+   return @true
+
+keys.fail:
+   client.key = ''
+   server.key = ''
+   close.socket skt
+   return @false
+end
+
+* ======================================================================
+* SETTIMEOUT(ms)   (17 Oct 26 dm, S.65 slice 3a)
+* Milliseconds to wait for each read of the server's reply; 0 waits for ever.  A read that times out fails the request as a lost
+* connection does (the call returns its failure value and error is not set by it).  connect() leaves this at 0; connect.keys sets
+* 30000 unless this was called first with another value.
+
+public subroutine settimeout(ms)
+   if not(num(ms)) or ms < 0 then abort 'Illegal timeout'
+   io.ms = ms + 0
 end
 
 * ======================================================================
@@ -793,8 +952,18 @@ end
 * without sharing code - one is C in a DLL, the other BASIC in the server's
 * own catalogue.  Both are checked against the same server, which is what
 * keeps them honest; RFC 7677's vectors prove the primitives underneath.
+*
+* 17 Oct 26 dm - S.65 slice 3a: the exchange is scram.exchange, shared by two logins.  scram.login (connect) derives the keys from
+* the password.  connect.keys passes the stored salt, iteration count, ClientKey and ServerKey instead, with a null password: the
+* PBKDF2 is skipped, and the salt and count the server sends must equal the stored ones (checked before the client-final message,
+* so a server that is not the one the login was made with is sent nothing further).  Everything else is the same code.
 
 local function scram.login(username, password)
+   return scram.exchange(username, password, '', '', '', '')
+end
+
+local function scram.exchange(username, password, stored.salt, stored.iter, stored.ck, stored.sk)
+   keys.mode = (stored.ck # '')   ;* the login from stored derived keys, no password
    cnonce = SDEXT('18', @TRUE, SD_RANDBYTES)
    if cnonce = '' then
       error = 'Unable to generate a client nonce'
@@ -872,13 +1041,33 @@ local function scram.login(username, password)
       return @false
    end
 
-   salted = SDEXT(password : @FM : salt : @FM : iter : @FM : SCRAM$KEY.LEN, @TRUE, SD_PBKDF2)
-   if salted = '' then
-      error = 'Unable to derive the salted password'
-      return @false
-   end
+   if keys.mode then
+*     ONLY THE CLIENT-FIRST MESSAGE HAS BEEN SENT: a server whose salt or count is not the stored one is not the server the login was
+*     made with (or the password has been changed there), and its proof would be worth nothing.  Text comparison, as for the pin.
+      if ('s' : salt) # ('s' : stored.salt) then
+         error = "The server's salt is not the stored one: the stored login is out of date or this is not the server it was made with"
+         stored.ck = '' ; stored.sk = ''
+         return @false
+      end
+      if iter + 0 # stored.iter + 0 then
+         error = "The server's iteration count is not the stored one: the stored login is out of date or this is not the server it was made with"
+         stored.ck = '' ; stored.sk = ''
+         return @false
+      end
+      client.key = stored.ck
+      srvr.key = stored.sk
+      stored.ck = '' ; stored.sk = ''
+   end else
+      salted = SDEXT(password : @FM : salt : @FM : iter : @FM : SCRAM$KEY.LEN, @TRUE, SD_PBKDF2)
+      if salted = '' then
+         error = 'Unable to derive the salted password'
+         return @false
+      end
 
-   client.key = SDEXT(salted : @FM : 'Client Key', @TRUE, SD_HMACSHA256)
+      client.key = SDEXT(salted : @FM : 'Client Key', @TRUE, SD_HMACSHA256)
+      srvr.key = SDEXT(salted : @FM : 'Server Key', @TRUE, SD_HMACSHA256)
+      salted = ''
+   end
    stored.key = SDEXT(client.key, @TRUE, SD_SHA256)
 
    cfinal.bare = 'c=' : cbind : ',r=' : nonce
@@ -887,16 +1076,14 @@ local function scram.login(username, password)
    client.sig = SDEXT(stored.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
    proof = SDEXT(client.key : @FM : client.sig, @TRUE, SD_XORBYTES)
 
-*  Computed BEFORE the salted password is dropped, and kept to check the
-*  reply against.
-   srvr.key = SDEXT(salted : @FM : 'Server Key', @TRUE, SD_HMACSHA256)
+*  ServerKey was derived (or taken from the stored login) above, before the salted password was dropped; kept to check the reply.
    expect.v = SDEXT(srvr.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
 
-*  Dropped as soon as they are spent.  ClientKey is the one value whose holder
-*  could authenticate as this account.
-   salted = ''
+*  Dropped as soon as they are spent.
    client.key = ''
    srvr.key = ''
+   stored.key = ''
+   client.sig = ''
 
    if proof = '' or expect.v = '' then
       error = 'Unable to derive the authentication proof'
@@ -976,7 +1163,7 @@ local function read.packet()
    loop
       n = 10 - len(pkt.header)
    while n
-      s = read.socket(skt, n, SKT$BLOCKING, 0)
+      s = read.socket(skt, n, SKT$BLOCKING, io.ms)
       if status() then return @false
       pkt.header := s
    repeat
@@ -1001,7 +1188,7 @@ local function read.packet()
    in.pkt = ''
    loop
    while n
-      s = read.socket(skt, n, SKT$BLOCKING, 0)
+      s = read.socket(skt, n, SKT$BLOCKING, io.ms)
       if status() then return @false
       if debugging then
          display len(s) : ': ' : oconv(s, 'MX0C')
