@@ -17,6 +17,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 21 Oct 26 dm  S.73 item 3, D1: NF$INDEXQ 24 (act.indexq), the eight index QUERY statements of a remote file - INDICES, SELECTINDEX in both forms, SETLEFT, SETRIGHT, SELECTLEFT, SELECTRIGHT.  They
+*               change nothing and need no group beyond sdfiles (the owner's "no new gate"), so a read-mode handle may ask; not audited.  Needs selectindexv() and selectindexk() of the class.
 * 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): NF$ADMIN 20 (a verb run on the server on the open file: analyse, configure, index, delete a file), NF$CREATEFILE 21 (create.file on a server, no file
 *               yet), NF$FCONTROL 22 and NF$SEQKEY 23 (WRITE ... CREATING.SEQKEY), each audited as `netfile admin|fcontrol|write server=<name> file=<f> ...` and refused for a read-mode handle, in
 *               a transaction (not ANALYSE.FILE) and when the definition says read now; the server's groups sdfileswrite and sdfilesadmin are the wall (12526 / 12529).  REFACTORED while there: the
@@ -267,6 +269,7 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
       case op = NF$CREATEFILE    ; gosub act.createfile
       case op = NF$FCONTROL      ; gosub act.fcontrol
       case op = NF$SEQKEY        ; gosub act.seqkey
+      case op = NF$INDEXQ        ; gosub act.indexq
       case op = NF$STATE         ; gosub act.state
       case 1
          txt = op ; gosub clean.text
@@ -1208,6 +1211,82 @@ act.seqkey:
       return
    end
    out = res
+   return
+
+* ======================================================================
+* act.indexq - NF$INDEXQ: a = handle, b = what (1 to 8), c = its argument.  The index QUERY statements of a remote file (21 Oct 26, S.73 item 3, D1: the owner's "no new gate"): they change nothing, so a read-mode handle
+* may ask, a transaction does not matter, they are not audited (a SELECT is not either), and the server serves them to every sdfiles login.  b: 1 INDICES(f), 2 INDICES(f, name) (c = name), 3 SELECTINDEX name FROM f -
+* the indexed values (c = name), 4 SELECTINDEX name, value FROM f - the ids (c = name, a field mark, the value), 5 SETLEFT name, 6 SETRIGHT name, 7 SELECTLEFT name and 8 SELECTRIGHT name (c = name; two requests: the scan,
+* which answers the key, and READLIST for the ids).  out is the answer; for 7 and 8 the key, a field mark and the ids.  rc<8> is the server's STATUS() of the statement: 0 done, 1 no such index (7 and 8: no further key,
+* and then there is no second request).
+act.indexq:
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   opname = 'index'
+   what = 0
+   if b matches '1N' then what = b + 0
+   if what < 1 or what > 8 then
+      txt = b ; gosub clean.text
+      fail.num = 12495 ; fail.a1 = out.txt
+      gosub fail
+      return
+   end
+   iname = c ; ival = ''
+   if what = 4 then
+      fmp = index(c, @fm, 1)
+      if fmp > 0 then
+         iname = c[1, fmp - 1]
+         ival = c[fmp + 1, len(c)]
+      end
+   end
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   res = ''
+* each arm marks its own request (the mark and the request are on one line: NF7 reads them so)
+   begin case
+      case what = 1 ; obj->ServerStatus = NF$NOREPLY ; res = obj->indices(nf.h.fno(hx), '')
+      case what = 2 ; obj->ServerStatus = NF$NOREPLY ; res = obj->indices(nf.h.fno(hx), iname)
+      case what = 3 ; obj->ServerStatus = NF$NOREPLY ; res = obj->selectindexv(nf.h.fno(hx), iname)
+      case what = 4 ; obj->ServerStatus = NF$NOREPLY ; res = obj->selectindexk(nf.h.fno(hx), iname, ival)
+      case what = 5 ; obj->ServerStatus = NF$NOREPLY ; obj->setleft(nf.h.fno(hx), iname)
+      case what = 6 ; obj->ServerStatus = NF$NOREPLY ; obj->setright(nf.h.fno(hx), iname)
+      case what = 7 ; obj->ServerStatus = NF$NOREPLY ; res = obj->selectleft(nf.h.fno(hx), iname, NF$LIST)
+      case what = 8 ; obj->ServerStatus = NF$NOREPLY ; res = obj->selectright(nf.h.fno(hx), iname, NF$LIST)
+   end case
+   gosub admin.outcome
+   if failed then return
+   out = res
+   if what >= 7 and rc<8> = 0 then
+      st1 = rc<8>
+      key = res
+      obj->error = ''
+      obj->ServerStatus = NF$NOREPLY
+      e = ''
+      lst = obj->readlist(NF$LIST, e)
+      gosub after.rq
+      nf.requests += 1
+      if rq.lost then
+         gosub lost.fail
+         return
+      end
+      if rq.err then
+         gosub server.fail
+         return
+      end
+      if e = 1 then
+         gosub on.error.text
+         gosub server.fail
+         return
+      end
+      if e # 0 then
+         fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
+         gosub fail
+         return
+      end
+      out = key : @fm : lst
+      rc<8> = st1
+   end
    return
 
 * ======================================================================

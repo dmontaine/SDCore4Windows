@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 21 Oct 26 dm  S.73 item 3, D1: net_index_query() - INDICES, SELECTINDEX (both forms), SETLEFT, SETRIGHT, SELECTLEFT and SELECTRIGHT of a remote file go to the server through the handler's
+ *               NF$INDEXQ.  They change nothing and ask no gate beyond the NET gate (the owner's "no new gate"): a read-mode handle may use them, and a transaction does not matter.  The
+ *               statements themselves (dh_ak.c) turn the answer into a select list, a key variable and STATUS().
  * 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): FCONTROL(), WRITE ... CREATING.SEQKEY and the administration verbs work on a file of a write-mode server whose login holds sdfilesadmin.
  *               NETG_ADMIN is net_gate's new kind (read-mode refused, a transaction refused, the S.64 edit gate of the remote file's name asked); the refusal of CREATING.SEQKEY (step 2)
  *               is gone, the write has the same gate as any other.  net_admin (request 70, an operation on the open file: analyse, configure, index, delete), net_create_file (request 70,
@@ -47,6 +50,7 @@
  *  net_readv          READV (and the record-exists test, field 0)
  *  net_fileinfo       FILEINFO() keys the file variable does not answer itself
  *  net_select         SELECT, SELECTV: every record id of the remote file in one string (slice 3d)
+ *  net_index_query    INDICES, SELECTINDEX (both forms), SETLEFT, SETRIGHT, SELECTLEFT, SELECTRIGHT: the index QUERY statements, asked of the server (S.73 item 3, D1)
  *  net_refuse        Any other statement given the file variable: message 12506 (12516 for a write-mode file)
  *  net_gate           May a changing or locking statement go on for this file variable? (slice 3e: mode, CREATING.SEQKEY, transaction, edit gate)
  *  net_write          WRITE, WRITEU, MATWRITE (and so WRITEV): the record goes down as the string chain it is
@@ -140,6 +144,7 @@
 #define NF_CREATEFILE 21    /* S.73 item 3: create.file on a server, no file yet (request 70, operation 8) */
 #define NF_FCONTROL 22      /* S.73 item 3: FCONTROL(file, key, value) (request 71) */
 #define NF_SEQKEY 23        /* S.73 item 3: WRITE ... CREATING.SEQKEY (requests 68 and 69) */
+#define NF_INDEXQ 24        /* S.73 item 3, D1: the index QUERY statements (requests 35, 36, 38, 39, 42 to 45) */
 
 #define NF_RC_OK 0
 #define NF_RC_ELSE 2
@@ -1258,6 +1263,34 @@ int net_write_seqkey(FILE_VAR* fvar, STRING_CHUNK* rec, bool keep_lock, STRING_C
     net_set_message(MSG_HANDLER, "it gave no id", "", "");
     return net_raise(-ER_NETWORK, process.op_flags);
   }
+  return 0;
+}
+
+/* ======================================================================
+   net_index_query()  -  The index QUERY statements of a remote file (S.73 item 3, D1).  what is the handler's sub-operation (netfile.h, NF$INDEXQ): 1 INDICES(f), 2 INDICES(f, name), 3 SELECTINDEX
+   name FROM f (the indexed values), 4 SELECTINDEX name, value FROM f (the ids), 5 SETLEFT, 6 SETRIGHT, 7 SELECTLEFT, 8 SELECTRIGHT; c (clen bytes) is the name, and for 4 the name, a field mark and
+   the value.  The statements have no ON ERROR clause, so an error is always raised (process.op_flags is cleared first).  On success *answer is the handler's answer as a string chain the caller
+   owns (NULL for a null string; for 7 and 8 the key, a field mark and the ids) and *server_st the server's STATUS() of the statement: 0 done, 1 no such index (7 and 8: no further key).         */
+
+int net_index_query(FILE_VAR* fvar, int what, const char* c, int clen, STRING_CHUNK** answer, int* server_st) {
+  DESCRIPTOR out;
+  char wb[16];
+  int status;
+
+  *answer = NULL;
+  *server_st = 0;
+  process.op_flags = 0;
+  snprintf(wb, sizeof(wb), "%d", what);
+  status = net_op_ex(fvar, NF_INDEXQ, wb, (int)strlen(wb), c, clen, NULL, FALSE, ER_FNF, FALSE, FALSE, &out);
+  if (status > 0) { /* an ELSE answer: not one this statement can use */
+    net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+    status = -ER_NETWORK;
+  }
+  if (status < 0)
+    return net_raise(status, 0);
+  *server_st = net_reply_status;
+  *answer = net_take_string(&out);
+  k_release(&out);
   return 0;
 }
 

@@ -386,6 +386,11 @@ int net_admin(FILE_VAR * fvar, int op, const char * words, int wlen, DESCRIPTOR 
 int net_create_file(const char * server, int slen, const char * words, int wlen, DESCRIPTOR * result);
 int net_fcontrol(FILE_VAR * fvar, int key, const char * value, int vlen, DESCRIPTOR * result);
 int net_write_seqkey(FILE_VAR * fvar, STRING_CHUNK * rec, bool keep_lock, STRING_CHUNK ** id);
+/* S.73 item 3, D1 (21 Oct 26): the index QUERY statements of a remote file.  what: 1 INDICES(f), 2 INDICES(f, name), 3 SELECTINDEX name FROM f, 4 SELECTINDEX name, value FROM f, 5 SETLEFT, 6 SETRIGHT,
+   7 SELECTLEFT, 8 SELECTRIGHT; c is the name (4: the name, a field mark, the value).  Returns 0 or a negative status (always raised: the statements have no ON ERROR); *answer is a string chain the
+   caller owns, *server_st the server's STATUS() (0 done, 1 no such index or no further key).  store_select_list() makes a string of ids a select list (op_dio4.c). */
+int net_index_query(FILE_VAR * fvar, int what, const char * c, int clen, STRING_CHUNK ** answer, int * server_st);
+void store_select_list(int16_t list_no, STRING_CHUNK * head, int32_t record_count);
 int net_last_reply_status(void);
 int net_check_lock(FILE_VAR * fvar, char * id, int16_t id_len);
 void net_release(FILE_VAR * fvar, char * id, int16_t id_len);

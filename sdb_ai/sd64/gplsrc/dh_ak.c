@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 25 Oct 26 Windows port - from Linux 7fd83ad (21 Oct 26) S.73 item 3, D1 (the owner's "index query statements need no new gate"): INDICES (both forms), SELECTINDEX (both), SETLEFT,
+ *           SETRIGHT, SELECTLEFT and SELECTRIGHT work on a NET_FILE: net_index_query() (netfiles.c) asks the server through the handler and these turn the answer into the list, the key
+ *           variable and STATUS() a local file gives.  INDICES is the real list of the server's indices now, no longer the null string, so the query processor USES a remote file's
+ *           indices.  AKREAD, AKWRITE, AKDELETE, CLEAR.AK, AKENABLE and AKMAP still refuse.
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): CREATE.AK, DELETE.AK, CLEAR.AK and AKENABLE refuse an index of a file in the shared account
  *           (message 12519, Linux 11514) for anyone but the administrator, a $internal program included (op_createak and op_deleteak are given
  *           pathnames: path_resolved_in_shared; the other two a file variable: shared_structure_refusal).
@@ -109,6 +113,10 @@ Private int16_t find_ak_by_name(DESCRIPTOR *descr, DH_FILE *dh_file);
 Private void setakpos(bool right);
 
 Private void akscan(bool right);
+
+Private void net_selindex(bool with_value, int16_t list_no);
+Private void net_akscan(bool right, int16_t list_no);
+Private void net_split_scan(STRING_CHUNK *ans, STRING_CHUNK **key, STRING_CHUNK **ids, int32_t *count);
 
 Private int16_t create_ak(char *data_path, char *ak_path, char *ak_name, int16_t fno, u_int16_t flags, STRING_CHUNK *dict_rec, char *collation_map_name, char *collation_map);
 
@@ -826,8 +834,17 @@ void op_indices1() {
   descr = e_stack - 1;
   k_get_file(descr);
   fvar = descr->data.fvar;
-  /* 17 Oct 26 S.65 slice 3d: a NET_FILE has no index here (what the server holds is its own business), so INDICES(f) is the null string
-     through the default arm below, as for a directory file; slice 3c refused it, which stopped every query on a remote file. */
+  /* 21 Oct 26 S.73 item 3, D1: a NET_FILE answers with the list of the SERVER's indices (slice 3d made it the null string, so that the query processor would not meet one it could not use;
+     the statements it uses now work).  No ON ERROR: an error is raised.  The file variable is dismissed after the call, which may have moved the stack. */
+  if (fvar->type == NET_FILE) {
+    int net_st;
+
+    (void)net_index_query(fvar, 1, "", 0, &tgt, &net_st);
+    k_dismiss();
+    InitDescr(e_stack, STRING);
+    (e_stack++)->data.str.saddr = tgt;
+    return;
+  }
   k_dismiss();
 
   /* Extract AK data */
@@ -882,6 +899,7 @@ void op_indices2() {
   DH_FILE *dh_file;
   int16_t akno;
   char index_name[MAX_AK_NAME_LEN + 1];
+  STRING_CHUNK *tgt;
 
   /* Find file variable */
 
@@ -889,7 +907,23 @@ void op_indices2() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  /* 17 Oct 26 S.65 slice 3d: a NET_FILE has no index here: the null string through the arm below (see op_indices1) */
+  /* 21 Oct 26 S.73 item 3, D1: the server's own answer for the index (see op_indices1) */
+
+  if (fvar->type == NET_FILE) {
+    int net_st;
+    int nlen;
+
+    nlen = k_get_c_string(e_stack - 1, index_name, MAX_AK_NAME_LEN);
+    if (nlen < 0)
+      nlen = 0;
+    tgt = NULL;
+    (void)net_index_query(fvar, 2, index_name, nlen, &tgt, &net_st);
+    k_dismiss();
+    k_dismiss();
+    InitDescr(e_stack, STRING);
+    (e_stack++)->data.str.saddr = tgt;
+    return;
+  }
 
   if (fvar->type == DYNAMIC_FILE) {
     dh_file = fvar->access.dh.dh_file;
@@ -973,12 +1007,14 @@ void op_selindx() {
   if (InvalidSelectListNo(list_no))
     k_select_range_error();
 
-  /* 17 Oct 26 S.65: a remote file is refused before the list is emptied */
+  /* 21 Oct 26 S.73 item 3, D1: a remote file's index is the server's (before 17 Oct this was refused); the list is touched only after the server answered */
 
   descr = e_stack - 2;
   k_get_file(descr);
-  if (descr->data.fvar->type == NET_FILE)
-    net_refuse(descr->data.fvar, "SELECTINDEX");
+  if (descr->data.fvar->type == NET_FILE) {
+    net_selindex(FALSE, list_no);
+    return;
+  }
 
   if (select_ftype[list_no] != SEL_NONE)
     end_select(list_no);
@@ -1129,8 +1165,10 @@ void op_selindxv() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: before the list is emptied */
-    net_refuse(fvar, "SELECTINDEX");
+  if (fvar->type == NET_FILE) { /* 21 Oct 26 S.73 item 3, D1: the server's index; the list is touched only after it answered */
+    net_selindex(TRUE, list_no);
+    return;
+  }
 
   if (select_ftype[list_no] != SEL_NONE)
     end_select(list_no);
@@ -1267,12 +1305,14 @@ Private void akscan(bool right) {
   if (InvalidSelectListNo(list_no))
     k_select_range_error();
 
-  /* 17 Oct 26 S.65: a remote file is refused before the list and the key variable are touched */
+  /* 21 Oct 26 S.73 item 3, D1: a remote file's scan is the server's; the list and the key variable are touched only after it answered */
 
   descr = e_stack - 3;
   k_get_file(descr);
-  if (descr->data.fvar->type == NET_FILE)
-    net_refuse(descr->data.fvar, "SELECTRIGHT/SELECTLEFT");
+  if (descr->data.fvar->type == NET_FILE) {
+    net_akscan(right, list_no);
+    return;
+  }
 
   if (select_ftype[list_no] != SEL_NONE)
     end_select(list_no);
@@ -1558,6 +1598,202 @@ exit_akscan:
 
 /* ====================================================================== */
 
+/* ======================================================================
+   net_selindex()  -  SELECTINDEX of a remote file (S.73 item 3, D1).  with_value false is SELECTINDEX name FROM f (the indexed values), true SELECTINDEX name, value FROM f (the ids that hold
+   the value).  The stack is op_selindx()'s or op_selindxv()'s (top: the list number, then the file, then, with a value, the value, then the name) and is left as they leave it.  The list is
+   touched only after the server has answered (an error is raised before, as for SELECT); an index the server does not have is STATUS() 1 and an empty list, as for a local file.  The server
+   keeps the position for a scan after SELECTINDEX of a value.                                                                                                                        */
+
+Private void net_selindex(bool with_value, int16_t list_no) {
+  DESCRIPTOR *descr;
+  FILE_VAR *fvar;
+  STRING_CHUNK *ids = NULL;
+  STRING_CHUNK *c;
+  int32_t count = 0;
+  int16_t i;
+  int net_st = 1;
+  int nlen;
+  int vlen = 0;
+  int clen;
+  char cbuf[MAX_AK_NAME_LEN + 1 + MAX_KEY_LEN + 1];
+  char value[MAX_KEY_LEN + 1];
+
+  descr = e_stack - 2;
+  k_get_file(descr);
+  fvar = descr->data.fvar;
+
+  nlen = k_get_c_string(e_stack - (with_value ? 4 : 3), cbuf, MAX_AK_NAME_LEN);
+  if (nlen < 0)
+    nlen = 0;
+  clen = nlen;
+  if (with_value) {
+    vlen = k_get_c_string(e_stack - 3, value, MAX_KEY_LEN);
+    if (vlen >= 0) {
+      cbuf[clen++] = FIELD_MARK;
+      memcpy(cbuf + clen, value, vlen);
+      clen += vlen;
+    }
+  }
+
+  if (!with_value || (vlen >= 0)) { /* a value that cannot be indexed selects nothing, as it does locally */
+    (void)net_index_query(fvar, with_value ? 4 : 3, cbuf, clen, &ids, &net_st);
+    if ((net_st != 0) && (ids != NULL)) {
+      s_free(ids);
+      ids = NULL;
+    }
+    if (ids != NULL) {
+      count = 1;
+      for (c = ids; c != NULL; c = c->next) {
+        for (i = 0; i < c->bytes; i++) {
+          if (c->data[i] == FIELD_MARK)
+            count++;
+        }
+      }
+    }
+  }
+
+  if (select_ftype[list_no] != SEL_NONE)
+    end_select(list_no);
+  clear_select(list_no);
+  store_select_list(list_no, ids, count);
+  process.status = net_st;
+
+  k_pop(1);    /* List number */
+  k_dismiss(); /* File variable */
+  if (with_value)
+    k_dismiss(); /* Indexed value */
+  k_dismiss();   /* Index name */
+
+  /* Set selected record count to @SELECTED */
+
+  descr = Element(process.syscom, SYSCOM_SELECTED);
+  k_release(descr);
+  InitDescr(descr, INTEGER);
+  descr->data.value = count;
+}
+
+/* ======================================================================
+   net_split_scan()  -  The handler's answer to a scan of a remote index is the key, a field mark and the ids (field marks between).  *key and *ids are new string chains (NULL for a null
+   string) and *count is the number of ids.  ans is used up.                                                                                                                         */
+
+Private void net_split_scan(STRING_CHUNK *ans, STRING_CHUNK **key, STRING_CHUNK **ids, int32_t *count) {
+  STRING_CHUNK *c;
+  int16_t i;
+  int16_t start;
+  bool seen = FALSE;
+
+  *key = NULL;
+  *ids = NULL;
+  *count = 0;
+
+  ts_init(key, 64);
+  for (c = ans; (c != NULL) && !seen; c = c->next) {
+    for (i = 0; i < c->bytes; i++) {
+      if (c->data[i] == FIELD_MARK) {
+        seen = TRUE;
+        break;
+      }
+    }
+    if (i > 0)
+      ts_copy(c->data, i);
+  }
+  (void)ts_terminate();
+
+  seen = FALSE;
+  ts_init(ids, MAX_STRING_CHUNK_SIZE);
+  for (c = ans; c != NULL; c = c->next) {
+    start = 0;
+    if (!seen) {
+      for (i = 0; i < c->bytes; i++) {
+        if (c->data[i] == FIELD_MARK)
+          break;
+      }
+      if (i == c->bytes)
+        continue; /* still in the key */
+      seen = TRUE;
+      start = i + 1;
+    }
+    if (c->bytes > start)
+      ts_copy(c->data + start, c->bytes - start);
+  }
+  (void)ts_terminate();
+
+  if (*ids != NULL) {
+    *count = 1;
+    for (c = *ids; c != NULL; c = c->next) {
+      for (i = 0; i < c->bytes; i++) {
+        if (c->data[i] == FIELD_MARK)
+          (*count)++;
+      }
+    }
+  }
+  s_free(ans);
+}
+
+/* ======================================================================
+   net_akscan()  -  SELECTLEFT / SELECTRIGHT of a remote file (S.73 item 3, D1).  The stack is akscan()'s (top: the list number, then the address of the key variable or an unassigned value, then
+   the file, then the index name).  The server scans from the position it keeps for this open file: STATUS() 0 and the next key with its ids, or 1 and nothing at the end.  The list and the key
+   variable are touched only after the server has answered.                                                                                                                           */
+
+Private void net_akscan(bool right, int16_t list_no) {
+  DESCRIPTOR *descr;
+  DESCRIPTOR *key_descr;
+  FILE_VAR *fvar;
+  STRING_CHUNK *ans = NULL;
+  STRING_CHUNK *key = NULL;
+  STRING_CHUNK *ids = NULL;
+  int32_t count = 0;
+  int net_st = 1;
+  int nlen;
+  char name[MAX_AK_NAME_LEN + 1];
+
+  descr = e_stack - 3;
+  k_get_file(descr);
+  fvar = descr->data.fvar;
+  nlen = k_get_c_string(e_stack - 4, name, MAX_AK_NAME_LEN);
+  if (nlen < 0)
+    nlen = 0;
+
+  (void)net_index_query(fvar, right ? 8 : 7, name, nlen, &ans, &net_st);
+  if (ans != NULL) {
+    if (net_st == 0)
+      net_split_scan(ans, &key, &ids, &count);
+    else
+      s_free(ans);
+  }
+
+  if (select_ftype[list_no] != SEL_NONE)
+    end_select(list_no);
+  clear_select(list_no);
+
+  key_descr = e_stack - 2;
+  if (key_descr->type != UNASSIGNED) {
+    while (key_descr->type == ADDR)
+      key_descr = key_descr->data.d_addr;
+    k_release(key_descr);
+    InitDescr(key_descr, STRING);
+    key_descr->data.str.saddr = key; /* NULL when there is no key */
+    key = NULL;
+  }
+  if (key != NULL)
+    s_free(key);
+
+  store_select_list(list_no, ids, count);
+  process.status = net_st;
+
+  k_pop(1);    /* List number */
+  k_dismiss(); /* Key variable */
+  k_dismiss(); /* File variable */
+  k_dismiss(); /* Index name */
+
+  /* Set selected record count to @SELECTED */
+
+  descr = Element(process.syscom, SYSCOM_SELECTED);
+  k_release(descr);
+  InitDescr(descr, INTEGER);
+  descr->data.value = count;
+}
+
 void op_setright() {
   setakpos(TRUE);
 }
@@ -1601,8 +1837,23 @@ Private void setakpos(bool right) {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
-    net_refuse(fvar, right ? "SETRIGHT" : "SETLEFT");
+  if (fvar->type == NET_FILE) { /* 21 Oct 26 S.73 item 3, D1: the position is the server's (kept with the open file there) */
+    char net_name[MAX_AK_NAME_LEN + 1];
+    STRING_CHUNK *net_ans = NULL;
+    int net_st;
+    int net_len;
+
+    net_len = k_get_c_string(e_stack - 2, net_name, MAX_AK_NAME_LEN);
+    if (net_len < 0)
+      net_len = 0;
+    (void)net_index_query(fvar, right ? 6 : 5, net_name, net_len, &net_ans, &net_st);
+    if (net_ans != NULL)
+      s_free(net_ans);
+    process.status = net_st;
+    k_dismiss(); /* File variable */
+    k_dismiss(); /* Index name */
+    return;
+  }
 
   if (fvar->type != DYNAMIC_FILE)
     goto exit_setakpos; /* Not DH file */

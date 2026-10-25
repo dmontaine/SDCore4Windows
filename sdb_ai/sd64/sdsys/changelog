@@ -2,6 +2,28 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+21 Oct 26  THE STATEMENTS THAT QUERY AN INDEX NOW WORK ON A FILE ON ANOTHER SD SERVER (SDNET), AND A QUERY ON ONE USES THE OTHER MACHINE'S INDEX.
+
+             What        INDICES(f), INDICES(f, name), SELECTINDEX name FROM f, SELECTINDEX name, value FROM f, SETLEFT, SETRIGHT, SELECTLEFT
+                        and SELECTRIGHT used to be refused for a file reached through an N pointer (INDICES gave the null string). They now
+                        ask the other machine, one request each, and answer as they do for a local file: the names and the description of its
+                        indices, the indexed values, the ids that hold a value, and the keys one after another with their ids. STATUS() is 1
+                        for an index that is not there and when a scan has no further key. The other machine keeps the position of a scan
+                        for the open file, so SETLEFT then SELECTRIGHT walks the keys in order. Because INDICES now tells the truth, LIST,
+                        COUNT and SELECT with a WITH clause on a remote file use the other machine's index when the field has one: the
+                        ids of the value (or the keys in the range) are asked for and only those records are read, not every record.
+             Why it      A query on a big remote file read every record, one round trip each, even when the file had an index on the field
+             matters     in the WITH clause. A program that scans an index can now do it on the file where the index is.
+             Does not    There is no new permission: these statements change nothing, so a login that may open the file may use them,
+                        on a read definition as well as a write one and inside BEGIN TRANSACTION. It does not make AKREAD, AKWRITE,
+                        AKDELETE, CLEAR.AK, AKENABLE or AKMAP work on a remote file, nor OPENSEQ. A remote file with no index is read as
+                        before. Two faults of the server's own request handlers were found by measuring them and are fixed: SELECTRIGHT
+                        ran on into the next routine (mark mapping was switched on, and past the last key STATUS() was 0 instead of 1),
+                        and SELECTLEFT or SELECTRIGHT with a select list number outside 0 to 10 answered with an error text naming a line
+                        of the server's program; it is now the ordinary "Invalid select list number".
+
+                        statements that read or change the tree of an index (AKREAD, AKWRITE) work on a remote file, nor OPENSEQ. The audit lines of
+
 21 Oct 26  A FILE ON ANOTHER SD SERVER CAN NOW BE CONFIGURED, INDEXED, CREATED, DELETED AND GIVEN IDS BY ITS OWN COUNTER (SDNET), BEHIND A THIRD PERMISSION.
 
              What        The statements and verbs that used to be refused for a file on another SD server work, for a person whose remote

@@ -18,6 +18,8 @@
 *
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 7fd83ad (21 Oct 26) S.73 item 3, D1 (the index QUERY statements of a remote file): selectindexv(fno, name) (request 38) and selectindexk(fno, name, value)
+*               (request 39), which return the list at once; selectleft(), selectright(), setleft() and setright() honour quiet as the others do.  The $netfile handler uses all of them.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: fileadmin(op, fno, text) (request 70, a verb run on the server) and fcontrol(fno, key, value) (request 71); both need
 *               the server's sdfilesadmin.  text.request lets a caller that set quiet read the refusal instead of aborting.
 * 25 Oct 26 Windows port - from Linux b052346 (20 Oct 26) S.73 item 2 (the silent server): read.packet takes server.error and ServerStatus from the header only when the BODY has been
@@ -96,6 +98,8 @@
 * str = obj->selectright(fno, indexname, listno)
 * str = obj->getvar(name)
 * str = obj->indices(fno, indexname)
+* str = obj->selectindexv(fno, indexname)          (S.73 item 3, D1: request 38, the indexed values)
+* str = obj->selectindexk(fno, indexname, value)    (S.73 item 3, D1: request 39, the record ids that hold the value)
 * str = obj->revision()
 * str = obj->rtrans(filename, id, fieldname, action)
 * str = obj->system(key)
@@ -977,6 +981,18 @@ public function indices(fno, indexname)
    return text.request(if indexname = '' then SrvrIndices1 else SrvrIndices2, pkt, 'INDICES generated an abort event')
 end
 
+* SELECTINDEX, answered in one request (21 Oct 26 dm, S.73 item 3 D1).  selectindexv (request 38) returns the indexed VALUES of the index, field marks between (SELECTINDEX name FROM f);
+* selectindexk (request 39) returns the record ids that hold one value (SELECTINDEX name, value FROM f), field marks between.  Both leave the server's STATUS() in ServerStatus: 0, or 1
+* for an index that is not there.  Unlike request 26 the name and the value are NOT padded to a two byte boundary: the name is given its length and the value is the rest of the packet.
+public function selectindexv(fno, indexname)
+   return text.request(SrvrSelectIndexv, iconv(fno, 'ISL') : indexname, 'SELECTINDEX generated an abort event')
+end
+
+public function selectindexk(fno, indexname, indexvalue)
+   pkt = iconv(fno, 'ISL') : iconv(len(indexname), 'ISL') : indexname : indexvalue
+   return text.request(SrvrSelectIndexk, pkt, 'SELECTINDEX generated an abort event')
+end
+
 * The client's revision alone before a connection, then the client's and the server's as two values; a server that does
 * not know the request is reported as 0.0-0
 public function revision()
@@ -1130,7 +1146,7 @@ public function selectleft(fno, indexname, listno)
             case server.error = SV$OK
                reply = in.pkt
             case server.error = SV$ON.ERROR
-               abort 'SELECTLEFT generated an abort event'
+               if not(quiet) then abort 'SELECTLEFT generated an abort event'
          end case
       end      
    end
@@ -1151,7 +1167,7 @@ public function selectright(fno, indexname, listno)
             case server.error = SV$OK
                reply = in.pkt
             case server.error = SV$ON.ERROR
-               abort 'SELECTRIGHT generated an abort event'
+               if not(quiet) then abort 'SELECTRIGHT generated an abort event'
          end case
       end      
    end
@@ -1166,7 +1182,7 @@ public subroutine setleft(fno, indexname)
       pkt = iconv(fno, 'ISL')
       pkt := indexname
       if message.pair(SrvrSetLeft, pkt) then
-         if server.error = SV$ON.ERROR then
+         if server.error = SV$ON.ERROR and not(quiet) then
             abort 'SETLEFT generated an abort event'
          end
       end      
@@ -1181,7 +1197,7 @@ public subroutine setright(fno, indexname)
       pkt = iconv(fno, 'ISL')
       pkt := indexname
       if message.pair(SrvrSetRight, pkt) then
-         if server.error = SV$ON.ERROR then
+         if server.error = SV$ON.ERROR and not(quiet) then
             abort 'SETRIGHT generated an abort event'
          end
       end      

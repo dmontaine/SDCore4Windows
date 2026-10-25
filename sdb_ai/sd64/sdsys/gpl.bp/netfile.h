@@ -25,6 +25,8 @@
 *               netfiles.c mirrors them as NF_FILELOCK and NF_FILEUNLOCK.
 * 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): NF$ADMIN 20, NF$CREATEFILE 21, NF$FCONTROL 22 and NF$SEQKEY 23, the four operations that ADMINISTER a remote file (they need the
 *               definition's mode write AND, on the server, the group sdfilesadmin).  netfiles.c mirrors them as NF_ADMIN, NF_CREATEFILE, NF_FCONTROL and NF_SEQKEY.
+* 21 Oct 26 dm  S.73 item 3, D1: NF$INDEXQ 24, the eight index QUERY statements of a remote file (INDICES, SELECTINDEX in its two forms, SETLEFT, SETRIGHT, SELECTLEFT, SELECTRIGHT).  netfiles.c
+*               mirrors it as NF_INDEXQ.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -64,6 +66,10 @@
 *                                                            file's name.  The account must hold the NET gate, the server must be listed and its definition say write   (S.73 item 3)
 *    NF$FCONTROL  22    handle        key          qualifier        the function's result       request 71: FCONTROL(file, key, qualifier); rc<8> is what it left in STATUS()  (S.73 item 3)
 *    NF$SEQKEY    23    handle        0 or 1       the record       the id the file's counter gave  requests 68 and 69: WRITE (b = 0) or WRITEU (b = 1) ... CREATING.SEQKEY  (S.73 item 3)
+*    NF$INDEXQ    24    handle        what (1-8)   its argument  the answer                       the index QUERY statements (S.73 item 3, D1); they change nothing, so a read-mode handle may ask.
+*                                                            b = 1 INDICES(f); 2 INDICES(f, name) (c = name); 3 SELECTINDEX name FROM f, the indexed values (c = name); 4 SELECTINDEX name, value
+*                                                            FROM f, the ids (c = name, a field mark, value); 5 SETLEFT name; 6 SETRIGHT name; 7 SELECTLEFT name and 8 SELECTRIGHT name (c = name; out
+*                                                            = the key, a field mark, the ids).  rc<8> is the server's STATUS(): 0 done, 1 no such index (or, for 7 and 8, no further key)
 *    The six changing operations above (all but NF$RELEASE) are REFUSED (message 12506, nothing sent) for a handle whose server definition
 *    says mode read, which is the delivered default; only SDSYS makes a server write (set.server).  14, 15 and 16 are new in slice 3e.
 *    NF$STATE     13    -             -            -        counters and the connections      for tests; no network, no gate
@@ -104,6 +110,7 @@ $define NF$ADMIN          20       ;* S.73 item 3: a verb run on the server on t
 $define NF$CREATEFILE     21       ;* S.73 item 3: create.file on a server, no file yet (request 70, operation 8)
 $define NF$FCONTROL       22       ;* S.73 item 3: FCONTROL(file, key, qualifier) (request 71)
 $define NF$SEQKEY         23       ;* S.73 item 3: WRITE ... CREATING.SEQKEY (requests 68 and 69)
+$define NF$INDEXQ         24       ;* S.73 item 3, D1: the index QUERY statements (requests 35, 36, 38, 39, 42 to 45)
 
 $define NF$RC.OK           0
 $define NF$RC.ELSE         2
