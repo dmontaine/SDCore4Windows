@@ -1505,6 +1505,13 @@ def main():
                    # no account.  So assert-current watches it like the rest -
                    # do NOT add it to that script's $neverShipped list.
                    'attach-account.ps1',
+                   # 25 Oct 26 - RELEASE_1.1 170, S.66.  Makes the shared account
+                   # (and, with -Preflight, refuses an install over a foreign
+                   # account of that name); called from sd.iss at ssPostInstall
+                   # and, for the preflight, extracted by InitializeSetup (a
+                   # dontcopy entry beside ssh-preflight.ps1).  assert-current
+                   # watches it like the rest.
+                   'make-shared.ps1',
                    # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
                    # attach-account, finish-install and the three upgrade-*
                    # scripts, which write LOGIN's one-shot "sd -internal"

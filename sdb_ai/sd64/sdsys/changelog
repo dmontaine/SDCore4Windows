@@ -2,6 +2,65 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+25 Oct 26  THE SHARED ACCOUNT: FILES THAT EVERY ACCOUNT CAN OPEN BY NAME, WITHOUT LOGTO OR A POINTER (FROM SD CORE FOR LINUX, S.66).
+
+             What        The installer now makes a group account named shared (its directory is C:\ProgramData\SD\group_accounts\shared and
+                        its Windows group is sdg_shared).  The files in it can be opened by every account by file name: OPEN "inventory" in any
+                        account finds the file shared holds under that name when the account has no entry of its own for it.  The account's own
+                        VOC entry always wins, so a file the account already has under that name is the one it gets.  LIST, SORT, SELECT, COUNT
+                        and a BASIC program's OPEN all find it, and OPEN DICT opens its dictionary.  SDSYS puts files there by signing on to
+                        shared (logto shared) and making them as in any account.
+             Gates       Two new per-account switches, shown in the account's register record (fields 13 and 14).  shared.read is ON for every
+                        account, new and existing, until SDSYS turns it off with modify.account name shared-read-off: it is the one switch here
+                        that a blank means ON for, because the point of the account is files open to all.  shared.write is OFF until SDSYS turns
+                        it on with modify.account name shared-write-on.  The words shared-read-on and shared-write-off undo them.
+                        create.account user name shared-read-off shared-write-on sets them at creation; the report line is "Account fred has
+                        shared.read yes, shared.write no".  A group or other account takes the words as well.
+             What each   Reading a shared file needs shared.read.  A WRITE, DELETE, CLEARFILE or any verb that saves a record into a shared
+             allows      file needs shared.write.  A shared dictionary needs shared.write AND dict.edit (the switch of 23 Oct).  The structure of
+                        a shared file (making one by pathname, clear.file, configure.file, an index, a trigger, a resize, a rename or a delete) is
+                        changed only by SDSYS signed on at a terminal: it is refused by the kernel for everyone else, a program marked internal
+                        included, whatever the switches say.
+             Lookup      Only a file whose entry in shared's VOC is an ordinary file pointer is found, and only when it lies inside the shared
+             rules       directory.  Q pointers, N pointers, paths elsewhere, multifiles, a "name,component" request, the VOC and program files of
+                        shared, and its private catalogue are never reached from another account: its verbs, sentences and programs are not
+                        shared.  A name that begins with a symbol ($ & ! * _ %), and every name in the standard VOC, is never looked up, so
+                        $savedlists, $hold and the like stay each account's own.  A file's records are locked exactly as in any account, so two
+                        accounts see each other's locks.
+             Not looked  OPENSEQ, DELETESEQ and CALL "file prog" do not follow shared; the lookup is an OPEN, and an OPEN only.  The
+             up by       administrator's own OPEN does not follow it either: SDSYS reaches the files with logto shared.
+             Audit       The first open of each shared name in a session writes "shared open file=name" to the audit trail; a refused name writes
+                        nothing.  The administrator's words write the usual modify.account line.
+             list.shared A new verb, in SDSYS's set, lists the files of shared that an account with shared.read can open by name, one to a line,
+                        and a count.  With no shared account in service it says that.  It is not in the VOC of an ordinary account; if SDSYS puts
+                        it there, an account with shared.read off is told so and sees nothing.
+             Safer       There is no way into shared for an ordinary user except the lookup: the account's Windows group sdg_shared has no
+             design      members, so logto shared and a Q pointer to it are for an elevated administrator alone.  That is what makes taking
+                        shared.read away a real wall.  The directory and its files are open to the group sdusers with Modify (SYSTEM and
+                        Administrators keep Full control, nothing else is granted), so the kernel can read them for everyone and, with shared.write,
+                        write them.  Windows has no setgid and no file mode: the one access-control entry does what Linux's group sdusers and
+                        mode 2775 do.  Someone who is to look after shared is given membership of sdg_shared with modify.account shared add name,
+                        and shared-write-on on the account named shared.
+             Names       The name shared is reserved.  create.account refuses it (12521) and delete.account shared is refused (12522); the
+                        installer makes the account with a one-time marker that it removes, as it does for the installing user's account.  An
+                        installation that already has an account named shared that is not SD's own is stopped by the installer before it changes
+                        anything, with a message naming the register record to look at.
+             Upgrading   An existing account has no value in the new fields, which reads as shared.read yes and shared.write no, so no account
+                        loses or gains anything but the new read access; nothing is written to the existing accounts.  The installer creates shared
+                        when the install is made again and keeps it when the accounts are kept.  Removing SD with the data removes the group
+                        sdg_shared as well; keeping the data keeps it.
+             Cautions    A file is checked for shared.read when it is opened: a file already open stays usable after SDSYS withdraws the switch,
+                        until the person's next entry.  A program (a LIST, say) still writes the compiled form of a new I-type or A-type into a
+                        shared dictionary by itself, as it does into any dictionary, so a reader may cause that write; an account with sh or
+                        OS.EXECUTE on can reach the files at operating-system level like any other directory it can read.  Anything placed in
+                        shared can be read by every account, so put nothing there that is not meant for everyone.
+             Not done    The shared account is not replicated to other servers, and a catalogue of shared programs is not shared.  The API's
+                        sdsys login is not carried (the API is never open to SDSYS here).  SD Core Solo has one account and does not have it.
+             Tested      The decisions in the installer's two scripts were run against fixtures (the preflight, the access-control verdict entry by
+                        entry, the rule that keeps the re-stamp from undoing it).  NOTHING HAS RUN ON A REAL INSTALL: the account's creation by the
+                        installer, the lookup, the gates and the kernel's refusals have not been seen to work.
+             Messages    12518 to 12525 are new.
+
 23 Oct 26  THE EDIT GATES: VOC.EDIT, BP.EDIT AND DICT.EDIT (FROM SD CORE FOR LINUX).
 
              Gates       Three more per-account switches, beside the shell, OS.EXECUTE, SD.ACCOUNTS, ssh and the API, say whether the person who

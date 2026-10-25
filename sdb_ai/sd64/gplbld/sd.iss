@@ -577,6 +577,11 @@ Source: "{#Stage}\ProgramFiles\ssh-preflight.ps1"; Flags: dontcopy
 ; further up still the one an administrator re-runs by hand.
 Source: "{#Stage}\ProgramFiles\ssh-firewall.ps1"; Flags: dontcopy
 
+; 25 Oct 26 - RELEASE_1.1 170, S.66.  make-shared.ps1 -Preflight refuses the install, before one file is written, when an account named
+; shared already exists that is not SD's own.  Same shape as the two lines above: a second embedded copy for ExtractTemporaryFile, with the
+; {app} copy (stage.py ships it) the one that makes the account at ssPostInstall.
+Source: "{#Stage}\ProgramFiles\make-shared.ps1"; Flags: dontcopy
+
 ; 06 Oct 26 - RELEASE_1.1 121, owner: "ssh.server already answered use bundled MSI".  KEEP A COPY OF THE OpenSSH
 ; MSI IN THE INSTALL FOLDER when one is beside the installer - whether or not the ssh box is ticked, and on an
 ; upgrade too - so that the verb "ssh.server install", which can only see {app}, installs from it (seconds, no
@@ -1599,6 +1604,51 @@ begin
   Result := (PythonExePath <> '') and not PythonWasFound;
 end;
 
+(* 25 Oct 26 - THE SHARED ACCOUNT'S PREFLIGHT, RELEASE_1.1 170 (S.66).  Linux's
+   shared_preflight: an SD account named shared that is not SD's own (its register
+   record's line 1 is not group_accounts\shared, or its line 3 is not sdg_shared)
+   cannot become the shared account, and every account would be able to open its
+   files by name.  So the install stops BEFORE ANYTHING IS CHANGED.
+
+   THE CHECK IS make-shared.ps1 -Preflight, extracted like ssh-preflight.ps1, so
+   that it can be read and tested on its own; it exits 0 to go on and 4 for a
+   foreign account, with the register record named in the reason file.  A check
+   that did not run is NOT waved through.  The screen gives the result and the
+   record; what to do about it is in the installation documentation. *)
+function SharedPreflightOk: Boolean;
+var
+  Ps, Script, ReasonPath: String;
+  Reason: AnsiString;
+  Code: Integer;
+begin
+  Result := True;
+  ExtractTemporaryFile('make-shared.ps1');
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{tmp}\make-shared.ps1');
+  ReasonPath := ExpandConstant('{tmp}\make-shared-reason.txt');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script +
+                  '" -Preflight -DataDir "' + ExpandConstant('{#DataDir}') +
+                  '" -ReasonFile "' + ReasonPath + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Log('SD: refusing - make-shared.ps1 -Preflight could not be started.');
+    SuppressibleMsgBox('SD Core could not check for an existing account named shared, so it was not installed.',
+                       mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+  if Code <> 0 then
+  begin
+    Reason := '';
+    if FileExists(ReasonPath) then
+      LoadStringFromFile(ReasonPath, Reason);
+    Log('SD: refusing - make-shared.ps1 -Preflight exited ' + IntToStr(Code) + ': ' + String(Reason));
+    SuppressibleMsgBox('SD Core was not installed.' + #13#10#13#10 + String(Reason) + #13#10,
+                       mbError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
 function InitializeSetup: Boolean;
 var
   PreflightPs, PreflightScript, PreflightReasonPath: String;
@@ -1863,6 +1913,15 @@ begin
       'Remove the other ssh server, or return this computer''s ssh configuration ' +
       'to the way Windows shipped it, and run this installer again.',
       mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
+
+  { 25 Oct 26 - RELEASE_1.1 170, S.66.  The name shared belongs to SD's shared
+    account.  An account the administrator already made with that name stops the
+    install here, before one file is written. }
+  if not SharedPreflightOk then
+  begin
     Result := False;
     Exit;
   end;
@@ -3276,6 +3335,40 @@ begin
   Result := Code;
 end;
 
+(* 25 Oct 26 - THE SHARED ACCOUNT, RELEASE_1.1 170 (S.66).  A group account named
+   shared whose files every account with the shared.read gate opens by name.
+   make-shared.ps1 makes it through CREATE.ACCOUNT GROUP shared behind a one-shot
+   marker and judges the result on what the system holds (the register record,
+   the directory's ACL, the group's members), not on an exit code.  Its codes:
+   0 made, 2 already there and as designed, 3 SD would not start, 1 anything else.
+
+   AFTER AttachInstallerAccount, as Linux makes it after the installing user's
+   account, and BEFORE SecureAccountDirs, which also knows the name and keeps the
+   directory at sdusers Modify.  The returned text is EMPTY unless the account
+   could not be made: a healthy install says nothing about it here, and the
+   caveats live in the installation documentation, not on this page.
+
+   SW_HIDE, so everything it has to say goes to make-shared.log. *)
+function MakeSharedAccount: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\make-shared.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: make-shared.ps1 exited ' + IntToStr(Code));
+  if (Code = 0) or (Code = 2) then
+    Exit;
+  Result := 'The shared account was not created (code ' + IntToStr(Code) + '). See ' +
+            ExpandConstant('{#DataDir}') + '\make-shared.log' + #13#10#13#10;
+end;
+
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
   install, and nothing here asks for a password: there is no adopted account to
@@ -4227,6 +4320,7 @@ var
   PcodeMsg: String;
   SysdirMsg: String;
   AcctAclMsg: String;
+  SharedMsg: String;
   DictMsg: String;
   { 04 Sep 26 - PRE_RELEASE_FIXES 70.  Its own variable rather than folded into
     DictMsg, because the two steps fail independently and the cure is different:
@@ -4495,6 +4589,12 @@ begin
       administrator account is reported first - it is the one the machine
       cannot be managed without. }
     AttachCode := AttachInstallerAccount;
+
+    { 25 Oct 26 - AND THE SHARED ACCOUNT, RELEASE_1.1 170.  See MakeSharedAccount.
+      Before SecureAccountDirs below, so the directory it makes is stamped by
+      the same sweep that stamps every other group account (which knows the name
+      shared and grants sdusers rather than sdg_shared). }
+    SharedMsg := MakeSharedAccount;
 
     { AFTER adopt, so the register this reads is the finished one.  See the
       function: this is the step that undoes an uninstall having deleted
@@ -4787,6 +4887,8 @@ begin
            PcodeMsg +
            SysdirMsg +
            AcctAclMsg +
+           { Empty unless make-shared.ps1 could not make the shared account. }
+           SharedMsg +
            { Empty on every first install and on every upgrade that worked. }
            DictMsg +
            { And its pair, for the same reason.  PRE_RELEASE_FIXES 70: empty
@@ -5398,6 +5500,9 @@ var
 begin
   Net := ExpandConstant('{sys}\net.exe');
   Exec(Net, 'localgroup sdusers /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  { 25 Oct 26 - S.66, RELEASE_1.1 170: the shared account's group goes with the data tree it belonged to (Linux removes it on a full DELETE only).
+    It has no members, so nothing is lost. }
+  Exec(Net, 'localgroup sdg_shared /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 { THE TWO DESTRUCTIVE QUESTIONS ASK WITH LABELLED CHOICES, NOT Yes/No.

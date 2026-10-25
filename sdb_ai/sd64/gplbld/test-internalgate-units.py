@@ -230,6 +230,7 @@ print("== 2. every internal session start is a declared writer that really write
 
 WRITERS = {
     "attach-account.ps1": "Set-SdInternalMarker",
+    "make-shared.ps1": "Set-SdInternalMarker",
     "finish-install.ps1": "Set-SdInternalMarker",
     "upgrade-dicts.ps1": "Set-SdInternalMarker",
     "upgrade-gates.ps1": "Set-SdInternalMarker",
@@ -372,7 +373,7 @@ row(("messages" + chr(92) + "5024") in code_only and "$termText" in code_only an
 # the shipped scripts find the helper beside them: it must be staged with them
 stage = read(os.path.join(HERE, "stage.py"))
 row("'internal-marker.ps1'" in stage, "stage.py ships internal-marker.ps1 beside the scripts that dot-source it")
-for name in ("attach-account.ps1", "finish-install.ps1", "upgrade-dicts.ps1", "upgrade-gates.ps1", "upgrade-nocase.ps1", "upgrade-voc.ps1"):
+for name in ("attach-account.ps1", "make-shared.ps1", "finish-install.ps1", "upgrade-dicts.ps1", "upgrade-gates.ps1", "upgrade-nocase.ps1", "upgrade-voc.ps1"):
     row("internal-marker.ps1" in read(os.path.join(HERE, name)), "%s dot-sources internal-marker.ps1" % name)
 
 # ---------------------------------------------------------------------------

@@ -92,6 +92,13 @@ foreach ($d in $targets) {
     $name  = $d.Name
     $group = $GroupPrefix + $name
 
+    # 25 Oct 26 - RELEASE_1.1 170, S.66.  THE SHARED ACCOUNT'S DIRECTORY IS THE ONE EXCEPTION: every SD user's own process reads its files
+    # through the kernel, so the group it is stamped with is sdusers (Modify), not sdg_shared.  sdg_shared has NO members and is granted
+    # nothing on the directory; only an administrator enters the account.  create_account.secure.account.dir makes the same choice at
+    # create time (two copies, as the rest of this file; verify-accountacl.ps1 compares them).  Without this line the next install would
+    # stamp the directory for sdg_shared and lock every user out of the shared files.
+    if (($GroupPrefix -eq 'sdg_') -and ($name -ieq 'shared')) { $group = 'sdusers' }
+
     # 20 Oct 26 - RELEASE_1.1 161.  A REPAIR RUN BY A PRIVILEGED STEP MUST NOT BE
     # AIMED BY THE PEOPLE IT REPAIRS (Linux mail T1625).  Both roots let an SD
     # user add a subdirectory (secure-accounts.ps1: AD), so a junction named

@@ -1740,6 +1740,12 @@ bool net_path_permitted(char* path,     /* Absolute, as left by fullpath() */
 bool net_vocpath_permitted(char* path, bool for_write) {
   if (connection_type != CN_SOCKET)
     return TRUE;
+  /* 25 Oct 26 S.66: the shared account's files are opened BY NAME from every account that has shared.read, and _VOC_REF (!shared_ref) has already
+     vetted the pathname - but a network session is held by the kernel as well, and the shared directory is outside its own account.  So a session
+     with the shared.read gate on is let into the shared directory (and nowhere else here).  Writing is NOT decided here: a record write is refused
+     by edit_refusal_for_canon() without shared.write, and a structure change by shared_structure_refusal(). */
+  if (((my_uptr->gates & UG_SHARED_READ) != 0) && path_in_shared(path))
+    return TRUE;
   return net_path_permitted(path, for_write);
 }
 
