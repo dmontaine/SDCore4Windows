@@ -2,6 +2,24 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+25 Oct 26  THE INSTALLER CAN OPEN EVERY ACCESS GATE FOR THE INSTALLING USER'S OWN SD ACCOUNT, AND IT DOES NOT UNLESS YOU TICK IT.
+
+             What        A new SD account starts with every access gate closed - the shell, OS.EXECUTE, SD.ACCOUNTS, saving changes to a VOC,
+                        a program file or a dictionary, SDNet, and writing the shared account's files - and that includes the account the
+                        installer makes for the person running it. The tasks page of a first install now has one more box, unticked: "Open
+                        every access gate for your SD Core account" (on a silent install, /TASKS=opengates). Ticked, the installer gives the
+                        account sh-on, os-on, sd-on, voc-on, bp-on, dict-on, net-on, shared-write-on, files-on and files-write-on with
+                        modify.account once the account is made, then reads the register and the groups sdfiles and sdfileswrite back: the
+                        last screen says "Every access gate is open for <you>." only if every one is, and otherwise names the file that lists
+                        each gate that did not open and the word to give for it (C:\ProgramData\SD\attach-account.log). A refused word does
+                        not stop the install.
+             Why it      On a machine you are testing on, the installing user otherwise had to sign in as sdsys and type the commands before
+             matters    the API, ssh or the editors would answer.
+             Does not    The box is unticked, and an upgrade does not show it: the account already exists and keeps what it has. It opens the
+                        installing user's own account only. It does not turn on files-admin-on (the administration group stays off whatever
+                        the answer), and ssh and the API are not part of it - a new account has them already. SDSYS closes any gate again
+                        with modify.account <account> <word>-off.
+
 15 Oct 26  THE CLIENT LIBRARY MAY BE USED FROM SEVERAL THREADS.
 
              Until now the client library (sdclilib.dll) kept the current
