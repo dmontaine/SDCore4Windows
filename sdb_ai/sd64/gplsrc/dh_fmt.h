@@ -154,6 +154,10 @@ struct DH_HEADER {
   u_char hash;       /* Hash type */
   int32_t user_hash; /* Hash code */
   int32_t reserved1;
+  int32_t seq_key;   /* 15 Oct 26 dm - the NEXT record id WRITE ... CREATING.SEQKEY will hand out (QM4 gaps, sheet 441's
+                        QMWriteSeqKey).  Zero in a file made before it existed or never used: the next id is then 1.  The
+                        header block of a version 2 file is a whole group (1 KB at least), so the 4 bytes cost nothing, and an
+                        older SD reading such a file does not look at them. */
 
   /* All subsequent unused bytes in the header can be relied on as being
      zero. This can simplify later additions.                            */

@@ -14603,6 +14603,7 @@ st.write:
    opcode = OP.WRITE
 
 st.write.common:
+   write.seqkey = @false
    * Is this a reference to a file defined by a FILE statement?
 
    if look.ahead.token = TKN.NAME then
@@ -14641,13 +14642,28 @@ st.write.common:
       if opcode = OP.WRITE then gosub stdfil.fvar.test   ;* WRITE rec TO id: default file
       if stdfil.fvar then
          gosub simple.var.reference ; if err then return
-         gosub check.comma
+         * 15 Oct 26 dm - WRITE / WRITEU rec TO file CREATING.SEQKEY id.var: no comma, no id expression
+         if opcode = OP.WRITE and u.look.ahead.token.string = 'CREATING.SEQKEY' then
+            write.seqkey = @true
+         end else
+            gosub check.comma
+         end
       end else
          gosub stdfil.var.load
       end
    end
 
-   gosub exprf           ;* Get record id
+   if write.seqkey then
+      * The variable that is to be given the file's next sequential id goes where the id would, as an address; the operand is
+      * told so by P_SEQKEY (0x4000), which op_write reads.  It is a hashed file's own counter, so the id is not an expression.
+      gosub get.token                       ;* CREATING.SEQKEY
+      gosub simple.lvar.reference           ;* The id variable
+      if err then return
+      opcode.byte = OP.SETFLAGS ; gosub emit.simple
+      code.value = 0x4000 ; code.bytes = 2 ; gosub emit.multibyte.value
+   end else
+      gosub exprf           ;* Get record id
+   end
 
    if opcode = OP.WRITEV then
       gosub check.comma
@@ -16575,6 +16591,7 @@ stdfil.fvar.test:
             return
          case stdfil.depth = 0 and stdfil.t = TKN.NAME
             stdfil.s = upcase(token.strings(stdfil.i))
+            if stdfil.s = "CREATING.SEQKEY" then return   ;* WRITE rec TO file CREATING.SEQKEY id: the file is named
             if stdfil.s = "THEN" or stdfil.s = "ELSE" or stdfil.s = "ON" or stdfil.s = "LOCKED" then
                stdfil.fvar = @false
                return

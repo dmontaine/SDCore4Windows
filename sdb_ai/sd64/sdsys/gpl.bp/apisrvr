@@ -207,6 +207,9 @@ $define MAX.ARG.COUNT     255
 
 $define APILOGGING 0    ;* 0 = no log, 1 = log
 
+$define SEQ.BASE  10000 ;* A sequential file's number is this plus its slot, so it cannot be taken for a file of vb.open
+$define SEQ.MAX    1000 ;* Sequential files open at once in one session
+
 $internal
 program apisrvr
 $catalog $APISRVR
@@ -230,6 +233,7 @@ $include header.h
 
 $include err.h
 $include keys.h
+$include dictdict.h
 
 * 20240219 mab user must be member of sdusers
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
@@ -240,9 +244,12 @@ deffun apifilesok(action, entered, writeok) calling '!apifilesok'
 common /$APISRVR/ logged.in,          ;* Process is logged in
 files.only,         ;* 17 Oct 26 S.65 2c: this login is FILES ONLY (sdfiles route, not sdapi): set in vb.scram.final, never cleared
 files.write,        ;* 18 Oct 26 S.65: a files-only login that is also in the Windows group sdfileswrite: set with files.only, never cleared
-files(100),        ;* Array of file variables
+files(100),         ;* Array of file variables
 logging,            ;* Logging network traffic?
-master.login.done   ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
+master.login.done,  ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
+seqfiles(SEQ.MAX),  ;* Sequential files opened by vb.openseq, numbered SEQ.BASE + their index (sheet 441)
+seq.state(SEQ.MAX), ;* 1 while the slot holds an open sequential file
+seq.unbuf(SEQ.MAX)  ;* 1 when it was opened unbuffered: every line written is flushed
 
 * 19 Aug 26 Windows port - DECLARED HERE, NOT IN vb.login.  Both the old login
 *   and the SCRAM one screen the user name with it, and phase 5 of
@@ -593,6 +600,21 @@ loop
    vb.trans,          ;*  52   TRANS(), marks lowered (QMTrans)     sheet 499
    vb.rtrans,         ;*  53   TRANS() raw (QMRTrans)               sheet 499
    vb.txn,            ;*  54   Transaction start / commit / abort (QMTxn)   sheet 442
+   vb.evaluate,       ;*  55   Evaluate a dictionary item (QMEvaluate)      sheet 247
+   vb.evalconv,       ;*  56   The same, output conversion applied (QMEvalConv)
+   vb.iconv,          ;*  57   ICONV() (QMIConv)                            sheet 409
+   vb.oconv,          ;*  58   OCONV() (QMOConv)
+   vb.iconvs,         ;*  59   ICONVS() (QMIConvs)
+   vb.oconvs,         ;*  60   OCONVS() (QMOConvs)
+   vb.openseq,        ;*  61   Open a sequential file (QMOpenSeq)           sheet 441
+   vb.readseq,        ;*  62   Read a line (QMReadSeq)
+   vb.readblk,        ;*  63   Read bytes (QMReadBlk)
+   vb.writeseq,       ;*  64   Write a line (QMWriteSeq)
+   vb.writeblk,       ;*  65   Write bytes (QMWriteBlk)
+   vb.seek,           ;*  66   Position (QMSeek)
+   vb.weofseq,        ;*  67   Truncate at the position (QMWeofSeq)
+   vb.writeseqkey,    ;*  68   Write a record under the file's next sequential id (QMWriteSeqKey)
+   vb.writeuseqkey,   ;*  69   The same, keeping the update lock (QMWriteuSeqKey)
    vb.illegal.action
 
    st = status()
@@ -1086,6 +1108,24 @@ if not(master.login.done) then
    end
 end
 
+* 15 Oct 26 dm - sheet 170: the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session as CPROC runs it for an
+*   interactive or phantom one: once, when the session first enters an account, before that account's own LOGIN.  (Entering
+*   another account with LOGTO runs the new account's LOGIN only, as it does for a terminal session.)  There is no such
+*   paragraph unless the administrator wrote one.  It runs in the account just entered, under that account's switches.
+if not(master.login.done) then
+   master.login.done = @true
+   openpath @sdsys:@ds:'voc' to master.f on error null
+   then
+      read master.rec from master.f, 'MASTER.LOGIN' on error null
+      then
+         if upcase(master.rec[1,2]) = 'PA' then
+            execute field(master.rec, @fm, 2, 9999999) trapping aborts capturing master.out
+         end
+      end
+      close master.f
+   end
+end
+
 * Run the LOGIN paragraph, if it exists
 
 * 18 Aug 26 Windows port - AS TYPED, THEN LOWER, PROJECT_STATUS.md 5.12 (b).
@@ -1184,6 +1224,13 @@ end
 
 vb.close:
       fno = oconv(cmnd[1,2], 'ISL')
+      if fno > SEQ.BASE then            ;* a sequential file (sheet 441)
+         gosub check.seq
+         if err then return
+         closeseq seqfiles(si)
+         seq.state(si) = 0
+         return
+      end
       gosub check.file
       if err then return
 
@@ -2846,6 +2893,393 @@ begin case
       void kernel(K$NON.DURABLE.TXN, 1)
       transaction commit
 end case
+return
+
+* ======================================================================
+* Evaluate a dictionary item (QMEvaluate, QMEvalConv).   Sheets 247 (EvalConv) and 409
+* In:  file number of a DICTIONARY (short), name length (short), name(s) - several are separated by value marks -,
+*      data length (long), the data, the record id
+* Out: the value of each item, joined by item marks.  The data becomes @RECORD and the id @ID for the evaluation.
+* An item that is not in the dictionary is the ELSE case; one that is not a data defining item (type D, A, S, C or I) or does not
+* compile is an error.  QMEvalConv also applies the item's output conversion, to each value of a multivalued answer.  A correlative
+* or I-type that is not compiled is compiled for this call and the dictionary is NOT written to (a request that reads must not write).
+* No file number can exist when SDCLIENT is set or SDNet is in use (vb.open refuses), so no restricted session can reach this.
+
+vb.evaluate:
+ev.conv = @false
+goto evaluate.common
+
+vb.evalconv:
+ev.conv = @true
+
+evaluate.common:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.file
+if err then return
+
+ev.n = oconv(cmnd[3,2], 'ISL')
+ev.names = cmnd[5,ev.n]
+ev.p = 5 + ev.n
+ev.n = oconv(cmnd[ev.p,4], 'ILL')
+ev.data = cmnd[ev.p + 4,ev.n]
+ev.id = cmnd[ev.p + 4 + ev.n,len(cmnd)]
+
+response = ''
+ev.count = count(ev.names, @vm) + 1
+for ev.i = 1 to ev.count
+   ev.name = ev.names<1,ev.i>
+   gosub evaluate.item
+   if server.error # SV$OK then
+      response = ''
+      return
+   end
+   if ev.i > 1 then response := @im
+   response := ev.result
+next ev.i
+return
+
+* One item: ev.name evaluated against ev.data and ev.id; the answer in ev.result, or server.error and error.msg
+evaluate.item:
+ev.result = ''
+read ev.rec from files(fno), ev.name else
+   read ev.rec from files(fno), downcase(ev.name) else
+      read ev.rec from files(fno), upcase(ev.name) else
+         server.error = SV$ELSE
+         return
+      end
+   end
+end
+
+ev.type = upcase(ev.rec[1,1])
+if index('DASIC', ev.type, 1) = 0 or ev.type = '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12347, ev.name) ;* %1 is not a dictionary item that defines data
+   return
+end
+
+* Compile what is calculated and not yet compiled, the way the query processor decides it is (qproc: no object code, or the
+* checksum no longer matches the record)
+if ev.type = 'I' or ev.type = 'C' or ((ev.type = 'A' or ev.type = 'S') and ev.rec<DICT.A.CORRELATIVE> # '') then
+   if len(ev.rec<DICT.ITYPE.OBJECT>) = 0 ~
+   or checksum(replace(ev.rec, DICT.SYS.INFO, 1;'')) # ev.rec<DICT.SYS.INFO,1> then
+      call $dcomp(files(fno), ev.name, ev.rec, ev.z, ev.z, ev.z, ev.z, ev.z, 1)
+      if ev.rec<DICT.ITYPE.OBJECT> = '' then
+         server.error = SV$ERROR
+         error.msg = sysmsg(12346, ev.name) ;* %1 cannot be compiled
+         return
+      end
+   end
+end
+
+ev.saved.id = @id
+ev.saved.record = @record
+@id = ev.id
+@record = ev.data
+set.status 0
+ev.result = itype(ev.rec)
+ev.status = status()
+set.status 0                   ;* what the expression left behind is not the request's status; a conversion below sets it
+@id = ev.saved.id
+@record = ev.saved.record
+if ev.status = ER$INVA.ITYPE then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12347, ev.name) ;* %1 is not a dictionary item that defines data
+   ev.result = ''
+   return
+end
+
+if ev.conv then
+   if ev.type = 'A' or ev.type = 'S' then ev.cv = ev.rec<DICT.A.CONV> else ev.cv = ev.rec<DICT.CONV>
+   if ev.cv # '' then ev.result = oconvs(ev.result, ev.cv)
+end
+return
+
+* ======================================================================
+* ICONV(), OCONV(), ICONVS(), OCONVS() (QMIConv, QMOConv, QMIConvs, QMOConvs).   Sheet 409
+* In:  conversion code length (short), the code, the data
+* Out: the converted data; the STATUS() of the conversion goes back as the request's status, as ICONV and OCONV leave it
+* A conversion reads a file (T with a ;) or calls a program (U): where SDCLIENT is set or SDNet is in use, which refuse both
+* to the client, such a code is refused.
+
+vb.iconv:
+cv.mode = 1
+goto conv.common
+
+vb.oconv:
+cv.mode = 2
+goto conv.common
+
+vb.iconvs:
+cv.mode = 3
+goto conv.common
+
+vb.oconvs:
+cv.mode = 4
+
+conv.common:
+cv.n = oconv(cmnd[1,2], 'ISL')
+cv.code = cmnd[3,cv.n]
+cv.data = cmnd[3 + cv.n,len(cmnd)]
+
+if kernel(K$SDNET, -1) or config("SDCLIENT") # 0 then
+   cv.count = count(cv.code, @vm) + 1
+   for cv.i = 1 to cv.count
+      cv.seg = upcase(trimf(cv.code<1,cv.i>))
+      if cv.seg[1,1] = 'U' or (cv.seg[1,1] = 'T' and index(cv.seg, ';', 1)) then
+         server.error = SV$ERROR
+         error.msg = sysmsg(12348) ;* A conversion that reads a file or calls a program is not allowed here
+         return
+      end
+   next cv.i
+end
+
+begin case
+   case cv.mode = 1
+      response = iconv(cv.data, cv.code)
+   case cv.mode = 2
+      response = oconv(cv.data, cv.code)
+   case cv.mode = 3
+      response = iconvs(cv.data, cv.code)
+   case 1
+      response = oconvs(cv.data, cv.code)
+end case
+return
+
+* ======================================================================
+* Sequential files (QMOpenSeq, QMReadSeq, QMReadBlk, QMWriteSeq, QMWriteBlk, QMSeek, QMWeofSeq; closed by the ordinary close).
+* Sheet 441.  A sequential file's number is SEQ.BASE + its slot, apart from the files of vb.open.
+*
+* THE GATES.  The session may not open a sequential file when SDCLIENT is set or SDNet is in use (as for any file).  A file named
+* through the VOC (file name and record id) is an SD directory file, opened as OPENSEQ opens it for any program, and one flagged
+* trusted is refused.  A BARE PATHNAME (a null id) is an operating system file: this program is $internal, which the kernel
+* does not hold to the OS-access gate, so the gate is asked here, as the account's own programs are asked it by OPENSEQ -
+* without os-on the session reaches only its own account's directory.
+*
+* vb.openseq   In:  modes (long), name length (short), name, id (null: the name is a pathname)
+*                   modes: 2 give up with a locked answer if another process has the file (without it, wait), 16 read only,
+*                   256 append, 512 overwrite, 1024 flush every line written, 4096 shared (append, for several writers)
+*              Out: the file number, or the ELSE case with STATUS() saying why
+
+vb.openseq:
+if kernel(K$SDNET, -1) or config("SDCLIENT") # 0 then
+   abort.message = sysmsg(5262) ;* File access is disabled
+   server.error = SV$ON.ERROR
+   return
+end
+
+os.modes = oconv(cmnd[1,4], 'ILL')
+os.n = oconv(cmnd[5,2], 'ISL')
+os.name = cmnd[7,os.n]
+os.id = cmnd[7 + os.n,len(cmnd)]
+if os.name = '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12351) ;* A sequential file needs a name
+   return
+end
+
+os.slot = 0
+for os.i = 1 to SEQ.MAX
+   if not(seq.state(os.i)) then
+      os.slot = os.i
+      exit
+   end
+next os.i
+if os.slot = 0 then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12349) ;* Too many sequential files are open
+   return
+end
+
+if os.id = '' then
+   os.path = @true
+   if not(kernel(K$PATH.OK, os.name)) then
+      server.error = SV$ERROR
+      error.msg = sysmsg(12350, os.name) ;* %1 is not a file this account may open
+      return
+   end
+end else
+   os.path = @false
+   open os.name to os.tf else
+      server.error = SV$ELSE
+      return
+   end
+   os.trusted = bitand(fileinfo(os.tf, FL$FLAGS), FL$FLAGS.TRUSTED)
+   close os.tf
+   if os.trusted then
+      server.error = SV$ELSE
+      return
+   end
+end
+
+os.m = 0
+begin case
+   case bitand(os.modes, 16)   ; os.m = 1
+   case bitand(os.modes, 4096) ; os.m = 4
+   case bitand(os.modes, 512)  ; os.m = 3
+   case bitand(os.modes, 256)  ; os.m = 2
+end case
+
+loop
+   os.lk = 0
+   os.ex = 0
+   gosub seq.open.once
+until not(os.lk) or bitand(os.modes, 2)
+   nap 1000                                 ;* the lock is another process's: wait a second, as the mode asks (NAP, not SLEEP:
+                                            ;* test-failaudit-units.py holds the file to one SLEEP, the scram delay)
+repeat
+
+if os.lk then
+   server.error = SV$LOCKED
+   return
+end
+os.st = status()
+if not(os.ex) and os.st # 0 then            ;* neither there nor made: the open failed
+   server.error = SV$ELSE
+   return
+end
+
+seq.state(os.slot) = 1
+seq.unbuf(os.slot) = (bitand(os.modes, 1024) # 0)
+response = iconv(SEQ.BASE + os.slot, 'ISL')
+return
+
+* One try at the open: os.lk is set when the file is locked by another process, os.ex when it was there already
+seq.open.once:
+begin case
+   case os.path and os.m = 0
+      openseq os.name to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.path and os.m = 1
+      openseq os.name readonly to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.path and os.m = 2
+      openseq os.name append to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.path and os.m = 3
+      openseq os.name overwrite to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.path
+      openseq os.name shared to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.m = 0
+      openseq os.name, os.id to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.m = 1
+      openseq os.name, os.id readonly to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.m = 2
+      openseq os.name, os.id append to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case os.m = 3
+      openseq os.name, os.id overwrite to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+   case 1
+      openseq os.name, os.id shared to seqfiles(os.slot) locked os.lk = 1 then os.ex = 1 else os.ex = 0
+end case
+return
+
+* The file number of a request, as an index into the table: err is set, with the reply, for one that is not an open sequential file
+check.seq:
+err = @true
+si = fno - SEQ.BASE
+if si < 1 or si > SEQ.MAX then
+   server.error = SV$ERROR
+   error.msg = sysmsg(5268) ;* Invalid file number
+   return
+end
+if not(seq.state(si)) then
+   server.error = SV$ERROR
+   error.msg = sysmsg(5268)
+   return
+end
+err = @false
+return
+
+* ReadSeq.  In: fno (short).  Out: the next line without its terminator; the ELSE case at the end of the file
+vb.readseq:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+readseq rec from seqfiles(si) on error server.error = SV$ON.ERROR then response = rec else server.error = SV$ELSE
+return
+
+* ReadBlk.  In: fno (short), bytes (long).  Out: up to that many bytes; the ELSE case when there are none
+vb.readblk:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+rb.n = oconv(cmnd[3,4], 'ILL')
+if rb.n < 1 or rb.n > 100000000 then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12352) ;* The number of bytes to read is from 1 to 100000000
+   return
+end
+readblk rec from seqfiles(si), rb.n on error server.error = SV$ON.ERROR then response = rec else server.error = SV$ELSE
+return
+
+* WriteSeq.  In: fno (short), the line.  A file opened unbuffered is flushed after each line.
+vb.writeseq:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+ws.data = cmnd[3,len(cmnd)]
+if seq.unbuf(si) then
+   writeseqf ws.data to seqfiles(si) on error server.error = SV$ON.ERROR then null else server.error = SV$ELSE
+end else
+   writeseq ws.data to seqfiles(si) on error server.error = SV$ON.ERROR then null else server.error = SV$ELSE
+end
+return
+
+* WriteBlk.  In: fno (short), the bytes: written exactly as given, no terminator added
+vb.writeblk:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+ws.data = cmnd[3,len(cmnd)]
+writeblk ws.data to seqfiles(si) on error server.error = SV$ON.ERROR then null else server.error = SV$ELSE
+if seq.unbuf(si) then flush seqfiles(si) then null else null
+return
+
+* Seek.  In: fno (short), offset (signed long), relative to (short): 0 start, 1 here, 2 end
+vb.seek:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+sk.off = oconv(cmnd[3,4], 'ILL')
+if sk.off > 2147483647 then sk.off -= 4294967296
+sk.rel = oconv(cmnd[7,2], 'ISL')
+seek seqfiles(si), sk.off, sk.rel then null else server.error = SV$ELSE
+return
+
+* WeofSeq.  In: fno (short).  The file is cut off at the current position.
+vb.weofseq:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.seq
+if err then return
+weofseq seqfiles(si)
+return
+
+* ======================================================================
+* WRITE ... CREATING.SEQKEY (QMWriteSeqKey, QMWriteuSeqKey).   Sheet 441
+* In:  fileno (short integer), the record
+* Out: the id the file's counter gave it.  A hashed file only.  The update lock the write takes is released before the reply, or,
+*      for the writeu request, kept.
+
+vb.writeseqkey:
+wk.keep = @false
+goto writeseqkey.common
+
+vb.writeuseqkey:
+wk.keep = @true
+
+writeseqkey.common:
+fno = oconv(cmnd[1,2], 'ISL')
+gosub check.file
+if err then return
+if fileinfo(files(fno), FL$TYPE) # FL$TYPE.DH then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12353) ;* WRITE ... CREATING.SEQKEY needs a hashed file
+   return
+end
+wk.data = cmnd[3,len(cmnd)]
+wk.id = ''
+if wk.keep then
+   writeu wk.data to files(fno) creating.seqkey wk.id on error server.error = SV$ON.ERROR
+end else
+   write wk.data to files(fno) creating.seqkey wk.id on error server.error = SV$ON.ERROR
+end
+if server.error = SV$OK then response = wk.id
 return
 
 * ======================================================================

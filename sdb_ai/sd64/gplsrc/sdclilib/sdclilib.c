@@ -120,6 +120,7 @@
  * SDReadNext()
  * SDClearSelect()
  * SDRecordlock()
+ * SDRecordlocked()
  * SDMarkMapping()
  * SDIndices()
  * SDTrans()
@@ -131,6 +132,12 @@
  * SDGetVar()
  * SDSystem()
  * SDTxn()
+ * SDEvaluate()
+ * SDEvalConv()
+ * SDIConv()
+ * SDOConv()
+ * SDIConvs()
+ * SDOConvs()
  *
  *
  * Dynamic Array Handling
@@ -194,6 +201,8 @@
 #include <string.h>
 #include <ctype.h> /* toupper() in sysdir() */
 #include <fcntl.h>
+#include <signal.h>
+#include <time.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -412,7 +421,11 @@ Private FILE* srvr_debug = NULL;
 Private char *    CallArgArray[MAX_ARGS];          /* create an array of pointers, for string arguments (returned by Callx) not sure if this is correct */
 Private int       CallArgArraySz[MAX_ARGS];        /* and size of memory allocated for each  string length + terminator */
 
-#define MAX_SESSIONS 4
+
+/* 15 Oct 26 dm - was 4 (sheet 134: the QMClient API no longer limits the number of simultaneous connections).  The server's
+   own user table (USERPOOL, 1023 by default) is the real ceiling, so the client stops asking for a slot only above that; each
+   entry is under 1 KB.  A session index is an int16_t, which this stays far below.                                      */
+#define MAX_SESSIONS 1024
 Private struct {
   bool winsock_started;
   int16_t context;
@@ -459,6 +472,8 @@ Private char* SelectLeftRight(int16_t fno,
 Private void SetLeftRight(int16_t fno, char* index_name, int16_t mode);
 Private char* text_request(int16_t action, char* packet, int32_t bytes, char* abort_text);
 Private char* trans_request(int16_t action, char* file_name, char* id, char* field_name, char* action_text);
+Private char* evaluate_request(int16_t action, int fno, char* name, char* data, char* id);
+Private char* conv_request(int16_t action, char* data, char* code);
 Private bool context_error(int16_t expected);
 Private void delete_record(int16_t mode, int fno, char* id); 
 
@@ -1750,20 +1765,23 @@ DLLEntry  int SDConnected() {
    SDDcount()  -  Count fields, values or subvalues                       */
 DLLEntry  int SDDcount(char* src, char* delim_str) {
   int32_t src_len;
+  int32_t delim_len;
   char* p;
   int32_t ct = 0;
-  unsigned char delim;  /* note need unsigned char for memchr to work > 127 character, is this a c++ builder thing? */
 
   /* initialise_client();  */
-  if (strlen(delim_str) != 0) {
-	delim = *delim_str;
-	src_len = strlen(src);
-	if (src_len != 0) {
-	  ct = 1;
-	  while ((p = memchr(src, delim, src_len)) != NULL) {
-        src_len -= (1 + p - src);
-        src = p + 1;
-		ct++;
+
+  /* 15 Oct 26 dm - sheet 260: the delimiter may be more than one character (it was the first only).  Each occurrence of the
+     whole string counts once, non-overlapping from the left, as DCOUNT() counts them; no delimiter, or no string, is 0. */
+  delim_len = strlen(delim_str);
+  if (delim_len != 0) {
+    src_len = strlen(src);
+    if (src_len != 0) {
+      ct = 1;
+      while ((p = memstr(src, delim_str, src_len, delim_len)) != NULL) {
+        src_len -= (p - src) + delim_len;
+        src = p + delim_len;
+        ct++;
       }
 	}
   }
@@ -2853,6 +2871,233 @@ DLLEntry void SDRecordlock(int fno, char* id, int update_lock, int wait) {
   }
 }
 /* ======================================================================
+   SDRecordlocked()  -  Query the lock on a record (RECORDLOCKED())
+   Returns -3 another user holds a file lock, -2 another user holds an update lock, -1 another user holds a read lock, 0 not
+   locked, 1 this session holds a read lock, 2 this session holds an update lock, 3 this session holds a file lock.  The
+   server has answered request 34 for some time; there was no client function to send it (15 Oct 26 dm, sheet 262).  A
+   file number the session has not open, or a failure on the server, gives 0 with SDError() saying why.                */
+
+int DLLEntry SDRecordlocked(int fno, char* id) {
+  int id_len;
+  int32_t state = 0;
+  struct {
+    int16_t fno;
+    char id[MAX_ID_LEN];
+  } ALIGN2 packet;
+
+  if (context_error(CX_CONNECTED))
+    return 0;
+
+  id_len = strlen(id);
+  if (id_len > MAX_ID_LEN) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_IID;
+    return 0;
+  }
+  packet.fno = ShortInt(fno);
+  memcpy(packet.id, id, id_len);
+
+  if (message_pair(SrvrRecordlocked, (char*)&packet, id_len + 2)) {
+    switch (session[session_idx].server_error) {
+      case SV_OK:
+        if (buff_bytes - (int32_t)offsetof(INBUFF, data.text.text) >= 4) {
+          memcpy(&state, buff->data.text.text, 4);
+          state = LongInt(state);
+        }
+        break;
+
+      case SV_ON_ERROR:
+        Abort("Recordlocked generated an abort event", TRUE);
+        break;
+    }
+  }
+  return (int)state;
+}
+
+/* ======================================================================
+   Sequential files (sheet 441): SDOpenSeq, SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq; closed with
+   SDClose.  A sequential file's number is not one of SDOpen's (the server numbers them from 10001).  The functions follow the
+   QMClient manual.  SDWriteSeqKey and SDWriteuSeqKey, below, are not of this group: they write a record of a HASHED file.
+
+   seq_data_request()  -  A request whose answer is data that may hold any byte, so its length is returned too.  The answer
+   is a malloc()ed string with a terminator after the data; *status is the server's answer code (SV_OK, SV_ELSE ...).      */
+
+Private char* seq_data_request(int16_t action, char* packet, int32_t bytes, char* abort_text, int32_t* len, int* status) {
+  int32_t n = 0;
+  char* data;
+
+  if (!context_error(CX_CONNECTED)) {
+    if (message_pair(action, packet, bytes)) {
+      switch (session[session_idx].server_error) {
+        case SV_OK:
+          n = buff_bytes - (int32_t)offsetof(INBUFF, data.text.text);
+          break;
+
+        case SV_ON_ERROR:
+          Abort(abort_text, TRUE);
+          break;
+      }
+    }
+  }
+  if (status != NULL)
+    *status = session[session_idx].server_error;
+  if (n < 0)
+    n = 0;
+  data = malloc(n + 1);
+  if (n > 0)
+    memcpy(data, buff->data.text.text, n);
+  data[n] = '\0';
+  if (len != NULL)
+    *len = n;
+  return data;
+}
+
+/* A request of a file number and then bytes of data (a line, a block, a record); the answer, which may be nothing, is returned
+   as a malloc()ed string (a null pointer when the request could not be made) */
+Private char* seq_write_reply(int16_t action, int fno, char* data, int32_t bytes, char* abort_text) {
+  char* packet;
+  char* reply;
+  int16_t s = ShortInt((int16_t)fno);
+
+  if ((bytes < 0) || ((size_t)bytes > (size_t)SD_MAX_PACKET_BYTES - 64)) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+  packet = malloc(2 + bytes + 1);
+  memcpy(packet, &s, 2);
+  if (bytes > 0)
+    memcpy(packet + 2, data, bytes);
+  reply = seq_data_request(action, packet, 2 + bytes, abort_text, NULL, NULL);
+  free(packet);
+  return reply;
+}
+
+Private void seq_write_request(int16_t action, int fno, char* data, int32_t bytes, char* abort_text) {
+  free(seq_write_reply(action, fno, data, bytes, abort_text));
+}
+
+/* SDWriteSeqKey(), SDWriteuSeqKey()  -  Write a record to a HASHED file under the id the file's own counter gives it, and return
+   that id (a number as text; the null string, with SDStatus() and SDError(), if the write was refused).  The update lock the write
+   takes is released before the call returns, or for SDWriteuSeqKey kept.  This is WRITE / WRITEU ... CREATING.SEQKEY: the counter
+   starts at 1 and is set with CONFIGURE.FILE NEXT.  Not valid for a directory file.  The file is one SDOpen gave.             */
+char* DLLEntry SDWriteSeqKey(int fno, char* rec) {
+  return seq_write_reply(SrvrWriteSeqKey, fno, rec, (int32_t)strlen(rec), "WriteSeqKey generated an abort event");
+}
+
+char* DLLEntry SDWriteuSeqKey(int fno, char* rec) {
+  return seq_write_reply(SrvrWriteuSeqKey, fno, rec, (int32_t)strlen(rec), "WriteuSeqKey generated an abort event");
+}
+
+/* SDOpenSeq()  -  Open a sequential file.  filename is a VOC name and id the record in it, or with a null id filename is the
+   pathname of the file.  modes adds: 2 give up with SDStatus() ER$LOCKED if another process has it (otherwise wait), 16 read
+   only, 256 append, 512 overwrite, 1024 flush after every write, 4096 shared (append, for several writers).  Returns the file
+   number, or 0 with SDStatus() and SDError() saying why.  A file that is not there yet gets a number and is made by the first
+   write.  A pathname outside what the account may open is refused as OPENSEQ refuses it.                                   */
+int DLLEntry SDOpenSeq(char* filename, char* id, int modes) {
+  size_t nl = strlen(filename);
+  size_t il = strlen(id);
+  char* packet;
+  char* reply;
+  char* p;
+  int32_t len = 0;
+  int status = SV_ERROR;
+  int fno = 0;
+  int32_t m = LongInt(modes);
+  int16_t s;
+
+  if ((nl > 32000) || (il > 255)) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return 0;
+  }
+  packet = malloc(4 + 2 + nl + il + 1);
+  p = packet;
+  memcpy(p, &m, 4);
+  p += 4;
+  s = ShortInt((int16_t)nl);
+  memcpy(p, &s, 2);
+  p += 2;
+  memcpy(p, filename, nl);
+  p += nl;
+  memcpy(p, id, il);
+  p += il;
+  reply = seq_data_request(SrvrOpenSeq, packet, (int32_t)(p - packet), "OpenSeq generated an abort event", &len, &status);
+  if ((status == SV_OK) && (len >= 2)) {
+    memcpy(&s, reply, 2);
+    fno = ShortInt(s);
+  }
+  free(reply);
+  free(packet);
+  return fno;
+}
+
+/* SDReadSeq()  -  The next line of a sequential file without its terminator.  *err is the server's answer (SV_ELSE at the end
+   of the file); the string is empty then.  Free it with SDFree.                                                            */
+char* DLLEntry SDReadSeq(int fno, int* err) {
+  int16_t s = ShortInt((int16_t)fno);
+  int status = SV_OK;
+  char* data = seq_data_request(SrvrReadSeq, (char*)&s, 2, "ReadSeq generated an abort event", NULL, &status);
+
+  if (err != NULL)
+    *err = status;
+  return data;
+}
+
+/* SDReadBlk()  -  Up to that many bytes of a sequential file.  *actual is how many came back (0 with nothing left, and the
+   string is empty).  The data may hold any byte, so use *actual and not the terminator.                                  */
+char* DLLEntry SDReadBlk(int fno, int bytes, int* actual) {
+  struct {
+    int16_t fno;
+    int32_t bytes;
+  } ALIGN2 packet;
+  int32_t len = 0;
+  int status = SV_OK;
+  char* data;
+
+  packet.fno = ShortInt((int16_t)fno);
+  packet.bytes = LongInt(bytes);
+  data = seq_data_request(SrvrReadBlk, (char*)&packet, sizeof(packet), "ReadBlk generated an abort event", &len, &status);
+  if (actual != NULL)
+    *actual = len;
+  return data;
+}
+
+/* SDWriteSeq()  -  Write a line, and a terminator, to a sequential file */
+void DLLEntry SDWriteSeq(int fno, char* rec) {
+  seq_write_request(SrvrWriteSeq, fno, rec, (int32_t)strlen(rec), "WriteSeq generated an abort event");
+}
+
+/* SDWriteBlk()  -  Write that many bytes to a sequential file, exactly as they are */
+void DLLEntry SDWriteBlk(int fno, char* rec, int bytes) {
+  seq_write_request(SrvrWriteBlk, fno, rec, bytes, "WriteBlk generated an abort event");
+}
+
+/* SDSeek()  -  Position in a sequential file: relto 0 from the start, 1 from here, 2 from the end */
+void DLLEntry SDSeek(int fno, int offset, int relto) {
+  struct {
+    int16_t fno;
+    int32_t offset;
+    int16_t relto;
+  } ALIGN2 packet;
+  char* reply;
+
+  packet.fno = ShortInt((int16_t)fno);
+  packet.offset = LongInt(offset);
+  packet.relto = ShortInt((int16_t)relto);
+  reply = seq_data_request(SrvrSeek, (char*)&packet, sizeof(packet), "Seek generated an abort event", NULL, NULL);
+  free(reply);
+}
+
+/* SDWeofSeq()  -  Cut a sequential file off at the current position */
+void DLLEntry SDWeofSeq(int fno) {
+  int16_t s = ShortInt((int16_t)fno);
+  char* reply = seq_data_request(SrvrWeofSeq, (char*)&s, 2, "WeofSeq generated an abort event", NULL, NULL);
+
+  free(reply);
+}
+
+/* ======================================================================
    SDRelease()  -  Release lock                                           */
 DLLEntry void SDRelease(int fno, char* id) {
   int id_len;
@@ -3517,6 +3762,107 @@ void DLLEntry SDTxn(int mode) {
   packet.mode = ShortInt(mode);
   reply = text_request(SrvrTxn, (char*)&packet, sizeof(packet), "Txn generated an abort event");
   free(reply);
+}
+
+/* ======================================================================
+   SDEvaluate(), SDEvalConv()  -  Evaluate a dictionary item on the server against a record.
+   fno is the file number of the DICTIONARY (SDOpen("DICT name")), name the item or several separated by value marks, data
+   the record (it becomes @RECORD) and id its id (@ID).  The answers come back joined by item marks.  SDEvalConv also applies
+   the item's output conversion.  An item that is not there gives the null string with a server status of SV_ELSE; one that
+   is not a data item, or will not compile, SV_ERROR with SDError() saying so.                                          */
+
+char* DLLEntry SDEvaluate(int fno, char* name, char* data, char* id) {
+  return evaluate_request(SrvrEvaluate, fno, name, data, id);
+}
+
+char* DLLEntry SDEvalConv(int fno, char* name, char* data, char* id) {
+  return evaluate_request(SrvrEvalConv, fno, name, data, id);
+}
+
+Private char* evaluate_request(int16_t action, int fno, char* name, char* data, char* id) {
+  size_t nl = strlen(name);
+  size_t dl = strlen(data);
+  size_t il = strlen(id);
+  size_t total = 2 + 2 + nl + 4 + dl + il;
+  char* packet;
+  char* p;
+  char* result;
+  int16_t s;
+  int32_t l;
+
+  if ((nl > 32000) || (il > 255) || (total > (size_t)SD_MAX_PACKET_BYTES - 64)) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+
+  packet = malloc(total + 1);
+  p = packet;
+  s = ShortInt((int16_t)fno);
+  memcpy(p, &s, 2);
+  p += 2;
+  s = ShortInt((int16_t)nl);
+  memcpy(p, &s, 2);
+  p += 2;
+  memcpy(p, name, nl);
+  p += nl;
+  l = LongInt((int32_t)dl);
+  memcpy(p, &l, 4);
+  p += 4;
+  memcpy(p, data, dl);
+  p += dl;
+  memcpy(p, id, il);
+  p += il;
+
+  result = text_request(action, packet, (int32_t)(p - packet), "Evaluate generated an abort event");
+  free(packet);
+  return result;
+}
+
+/* ======================================================================
+   SDIConv(), SDOConv(), SDIConvs(), SDOConvs()  -  ICONV(), OCONV(), ICONVS() and OCONVS() on the server, which has every
+   conversion code.  The multivalued forms convert each element of a dynamic array in turn.  SDStatus() is the conversion's
+   own status: zero after a successful one, otherwise as ICONV() and OCONV() describe it.  A connection is needed.     */
+
+char* DLLEntry SDIConv(char* data, char* code) {
+  return conv_request(SrvrIConv, data, code);
+}
+
+char* DLLEntry SDOConv(char* data, char* code) {
+  return conv_request(SrvrOConv, data, code);
+}
+
+char* DLLEntry SDIConvs(char* data, char* code) {
+  return conv_request(SrvrIConvs, data, code);
+}
+
+char* DLLEntry SDOConvs(char* data, char* code) {
+  return conv_request(SrvrOConvs, data, code);
+}
+
+Private char* conv_request(int16_t action, char* data, char* code) {
+  size_t cl = strlen(code);
+  size_t dl = strlen(data);
+  size_t total = 2 + cl + dl;
+  char* packet;
+  char* result;
+  int16_t s;
+
+  if ((cl > 1000) || (total > (size_t)SD_MAX_PACKET_BYTES - 64)) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+
+  packet = malloc(total + 1);
+  s = ShortInt((int16_t)cl);
+  memcpy(packet, &s, 2);
+  memcpy(packet + 2, code, cl);
+  memcpy(packet + 2 + cl, data, dl);
+
+  result = text_request(action, packet, (int32_t)total, "Conv generated an abort event");
+  free(packet);
+  return result;
 }
 
 /* ======================================================================
@@ -4756,9 +5102,13 @@ Private void disconnect() {
   session[session_idx].context = CX_DISCONNECTED;
  /* I cannot find where the original transfer buffer "buff" is freed on exit
 	So look for connected session, if none, release buffer                */
+
+  /* 15 Oct 26 dm - was "== CX_CONNECTED": a session that is EXECUTING a command (waiting for input) is alive too, and the
+     buffer freed from under it made its next packet fail, and the next SDConnect, finding the buffer gone, re-initialised
+     every session including that one (sheet 281: a second connection could terminate abnormally).                      */
   for (i = 0; i < MAX_SESSIONS; i++) {
-	if (session[i].context != CX_DISCONNECTED)
-	  break;
+	  if (session[i].context != CX_DISCONNECTED)
+	    break;
   }
 
   if (i == MAX_SESSIONS) {

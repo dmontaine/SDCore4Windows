@@ -545,6 +545,8 @@
       $define FC$SPLIT.MERGE           5 ;* Force split/merge
       $define FC$NO.RESIZE             6 ;* Set DHF_NO_RESIZE flag
       $define FC$SET.MODE              7 ;* Set the permission bits of a record of a directory file: "id<FM>ooo" (15 Oct 26, Q-8)
+      $define FC$SET.SEQ.KEY           8 ;* Set the next id of WRITE ... CREATING.SEQKEY (hashed files only)
+      $define FC$GET.SEQ.KEY           9 ;* Take the next such id; a null string for a file that is not a hashed file
 
 
 

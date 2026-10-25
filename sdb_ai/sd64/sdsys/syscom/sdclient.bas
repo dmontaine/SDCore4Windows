@@ -37,6 +37,7 @@ Declare Function SDReadList Lib "SDClient.dll" (ByVal ListNo As Integer, ByRef E
 Declare Function SDReadNext Lib "SDClient.dll" (ByVal ListNo As Integer, ByRef ErrNo As Integer) As String
 Declare Function SDReadu Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Id As String, ByVal Wait As Boolean, ByRef ErrNo As Integer) As String
 Declare Sub SDRecordlock Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Id As String, ByVal UpdateLock as Integer, ByVal Wait as Integer)
+Declare Function SDRecordlocked Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Id As String) As Integer
 Declare Sub SDRelease Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Id As String)
 Declare Function SDReplace Lib "SDClient.dll" (ByVal Src As String, ByVal Fno As Integer, ByVal Vno As Integer, ByVal Svno As Integer, ByVal NewData As String) As String
 Declare Function SDRespond Lib "SDClient.dll" (ByVal Response As String, ByRef ErrNo As Integer) As String
@@ -50,6 +51,21 @@ Declare Function SDRevision Lib "SDClient.dll" () As String
 Declare Function SDRTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
 Declare Function SDSystem Lib "SDClient.dll" (ByVal Key As Integer) As String
 Declare Sub SDTxn Lib "SDClient.dll" (ByVal Mode As Integer)
+Declare Function SDEvaluate Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Name As String, ByVal Data As String, ByVal Id As String) As String
+Declare Function SDEvalConv Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Name As String, ByVal Data As String, ByVal Id As String) As String
+Declare Function SDIConv Lib "SDClient.dll" (ByVal Data As String, ByVal Code As String) As String
+Declare Function SDOConv Lib "SDClient.dll" (ByVal Data As String, ByVal Code As String) As String
+Declare Function SDIConvs Lib "SDClient.dll" (ByVal Data As String, ByVal Code As String) As String
+Declare Function SDOConvs Lib "SDClient.dll" (ByVal Data As String, ByVal Code As String) As String
+Declare Function SDOpenSeq Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal Modes As Integer) As Integer
+Declare Function SDReadSeq Lib "SDClient.dll" (ByVal FileNo As Integer, ByRef ErrNo As Integer) As String
+Declare Function SDReadBlk Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Bytes As Integer, ByRef ActualBytes As Integer) As String
+Declare Sub SDWriteSeq Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Rec As String)
+Declare Sub SDWriteBlk Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Rec As String, ByVal Bytes As Integer)
+Declare Sub SDSeek Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Offset As Integer, ByVal RelTo As Integer)
+Declare Sub SDWeofSeq Lib "SDClient.dll" (ByVal FileNo As Integer)
+Declare Function SDWriteSeqKey Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Rec As String) As String
+Declare Function SDWriteuSeqKey Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal Rec As String) As String
 Declare Function SDTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
 Declare Sub SDSetLeft Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)
 Declare Sub SDSetRight Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)

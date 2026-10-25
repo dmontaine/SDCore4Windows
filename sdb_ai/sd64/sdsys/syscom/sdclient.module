@@ -1,0 +1,98 @@
+' Gambas module file
+' SDClient.module
+' SD client API (sdclilib.so) function and constant definitions for Gambas 3.
+' From the Gambas3 definitions of the SD Core owner; 15 Oct 2026: SDGetVar, SDIndices, SDRecordlocked, SDOpenSeq, SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq, SDRevision, SDSystem, SDTrans,
+' SDRTrans, SDTxn, SDEvaluate, SDEvalConv, SDIConv, SDOConv, SDIConvs and SDOConvs added (the functions of the QMClient
+' API that SD Core for Linux took on).  The library's own signatures are in gplsrc/sdclilib/sdclilib.h and win over this file.
+'
+' Every function that returns a String returns memory the library allocated; Gambas does not free it (SDFree does).
+' SDReadList and SDReadNext take only the list number: the ErrNo argument declared here is ignored by the library.
+' SDCallx returns nothing: the arguments it was given are read back with SDGetArg.
+' SDOpenSeq returns a file number to give SDReadSeq, SDReadBlk, SDWriteSeq, SDWriteBlk, SDSeek, SDWeofSeq and SDClose.  The data
+' of SDReadBlk may hold any byte, including zero, which a Gambas String result ends at: read binary data by the count in ActualBytes.
+' SDExecute is Private here so a Gambas wrapper of your own can give it a friendlier form.
+' Change the Library path to wherever sdclilib.so is (the installed one is /usr/local/sdsys/bin/sdclilib.so).
+
+Library "./sdclilib"
+
+' Extern API declarations (sorted)
+Extern SDCall(Name As String, ArgCount As Integer, Optional ByRef a1 As String, Optional ByRef a2 As String, Optional ByRef a3 As String, Optional ByRef a4 As String, Optional ByRef a5 As String, Optional ByRef a6 As String, Optional ByRef a7 As String, Optional ByRef a8 As String, Optional ByRef a9 As String, Optional ByRef a10 As String, Optional ByRef a11 As String, Optional ByRef a12 As String, Optional ByRef a13 As String, Optional ByRef a14 As String, Optional ByRef a15 As String, Optional ByRef a16 As String, Optional ByRef a17 As String, Optional ByRef a18 As String, Optional ByRef a19 As String, Optional ByRef a20 As String)
+Extern SDCallx(Name As String, ArgCount As Integer, Optional a1 As String, Optional a2 As String, Optional a3 As String, Optional a4 As String, Optional a5 As String, Optional a6 As String, Optional a7 As String, Optional a8 As String, Optional a9 As String, Optional a10 As String, Optional a11 As String, Optional a12 As String, Optional a13 As String, Optional a14 As String, Optional a15 As String, Optional a16 As String, Optional a17 As String, Optional a18 As String, Optional a19 As String, Optional a20 As String)
+Extern SDChange(Str As String, OldStr As String, NewStr As String, Optional ByRef Occurances As Long, Optional ByRef Start As Long) As String
+Extern SDClearSelect(ListNo As Integer)
+Extern SDClose(FileNo As Integer)
+Extern SDConnect(Host As String, Port As Integer, UserName As String, Password As String, Account As String) As Boolean
+Extern SDConnected() As Boolean
+Extern SDConnectLocal(Account As String) As Boolean
+Extern SDDcount(Src As String, Delim As String) As Long
+Extern SDDebug(Mode As Boolean)
+Extern SDDel(Src As String, Fno As Integer, Vno As Integer, Svno As Integer) As String
+Extern SDDelete(FileNo As Integer, Id As String)
+Extern SDDeleteu(FileNo As Integer, Id As String)
+Extern SDDisconnect()
+Extern SDDisconnectAll()
+Extern SDEndCommand()
+Extern SDError() As String
+Extern SDEvalConv(FileNo As Integer, Name As String, Data As String, Id As String) As String
+Extern SDEvaluate(FileNo As Integer, Name As String, Data As String, Id As String) As String
+Private Extern SDExecute(Cmnd As String, ByRef ErrNo As Pointer) As String
+Extern SDExtract(Src As String, Fno As Integer, Vno As Integer, Svno As Integer) As String
+Extern SDField(Str As String, Delimited As String, Start As Long, Optional ByRef Occurrences As Long) As String
+Extern SDFree(Ptr As Pointer)
+Extern SDGetArg(ArgNo As Integer) As String
+Extern SDGetSession() As Integer
+Extern SDGetVar(Name As String) As String
+Extern SDIConv(Data As String, Code As String) As String
+Extern SDIConvs(Data As String, Code As String) As String
+Extern SDIndices(FileNo As Integer, IndexName As String) As String
+Extern SDIns(Src As String, Fno As Integer, Vno As Integer, Svno As Integer, NewData As String) As String
+Extern SDLocate(Item As String, Src As String, Fno As Integer, Vno As Integer, Svno As Integer, ByRef pos As Integer, Order As String) As Boolean
+Extern SDLogto(Cmnd As String) As Boolean
+Extern SDMarkMapping(FileNo As Integer, State As Integer)
+Extern SDMatch(Src As String, Template As String) As Boolean
+Extern SDMatchfield(Src As String, Template As String, Component As Integer) As String
+Extern SDOConv(Data As String, Code As String) As String
+Extern SDOConvs(Data As String, Code As String) As String
+Extern SDOpen(FileName As String) As Integer
+Extern SDOpenSeq(FileName As String, Id As String, Modes As Integer) As Integer
+Extern SDRead(FileNo As Integer, Id As String, ByRef Errno As Integer) As String
+Extern SDReadBlk(FileNo As Integer, Bytes As Integer, ByRef ActualBytes As Integer) As String
+Extern SDReadl(FileNo As Integer, Id As String, Wait As Boolean, ByRef ErrNo As Integer) As String
+Extern SDReadList(ListNo As Integer, ByRef ErrNo As Integer) As String
+Extern SDReadNext(ListNo As Integer, ByRef ErrNo As Integer) As String
+Extern SDReadSeq(FileNo As Integer, ByRef ErrNo As Integer) As String
+Extern SDReadu(FileNo As Integer, Id As String, Wait As Boolean, ByRef ErrNo As Integer) As String
+Extern SDRecordlock(FileNo As Integer, Id As String, UpdateLock As Integer, Wait As Integer)
+Extern SDRecordlocked(FileNo As Integer, Id As String) As Integer
+Extern SDRelease(FileNo As Integer, Id As String)
+Extern SDReplace(Src As String, Fno As Integer, Vno As Integer, Svno As Integer, NewData As String) As String
+Extern SDRespond(Response As String, ByRef ErrNo As Pointer) As String
+Extern SDRevision() As String
+Extern SDRTrans(FileName As String, Id As String, FieldName As String, Action As String) As String
+Extern SDSeek(FileNo As Integer, Offset As Integer, RelTo As Integer)
+Extern SDSelect(FileNo As Integer, ListNo As Integer)
+Extern SDSelectIndex(FileNo As Integer, IndexName As String, IndexValue As String, ListNo As Integer)
+Extern SDSelectLeft(FileNo As Integer, IndexName As String, ListNo As Integer) As String
+Extern SDSelectRight(FileNo As Integer, IndexName As String, ListNo As Integer) As String
+Extern SDSetLeft(FileNo As Integer, IndexName As String)
+Extern SDSetRight(FileNo As Integer, Indexname As String)
+Extern SDSetSession(Session As Integer) As Boolean
+Extern SDStatus() As Long
+Extern SDSystem(Key As Integer) As String
+Extern SDTrans(FileName As String, Id As String, FieldName As String, Action As String) As String
+Extern SDTxn(Mode As Integer)
+Extern SDWeofSeq(FileNo As Integer)
+Extern SDWrite(FileNo As Integer, Id As String, Data As String)
+Extern SDWriteBlk(FileNo As Integer, Rec As String, Bytes As Integer)
+Extern SDWriteSeq(FileNo As Integer, Rec As String)
+Extern SDWriteSeqKey(FileNo As Integer, Rec As String) As String
+Extern SDWriteu(FileNo As Integer, Id As String, Data As String)
+Extern SDWriteuSeqKey(FileNo As Integer, Rec As String) As String
+
+' Server status constants (sorted)
+Public Const SV_ELSE As Integer = 2
+Public Const SV_ERROR As Integer = 3
+Public Const SV_LOCKED As Integer = 4
+Public Const SV_OK As Integer = 0
+Public Const SV_ON_ERROR As Integer = 1
+Public Const SV_PROMPT As Integer = 5

@@ -2,6 +2,137 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+15 Oct 26  SEQUENTIAL FILES OVER THE API, AND WRITE ... CREATING.SEQKEY.
+
+             SEQUENTIAL FILES.  The client library (and the BASIC class
+             sdclient and the six language headers) can open, read, write and
+             position an operating system file, as OPENSEQ and its statements
+             do, over requests 61 to 67:
+             SDOpenSeq(file, id, modes)
+                        With an id, file is a directory file and id the item
+                        in it; with a null id, file is a pathname.  Returns a
+                        file number (they start at 10001, apart from SDOpen's)
+                        or 0 with SDStatus() and SDError().  modes adds up:
+                        2 give up if another process has it, 16 read only,
+                        256 append, 512 overwrite, 1024 flush after every
+                        write, 4096 shared.
+             SDReadSeq(fno, err)  SDReadBlk(fno, bytes, actual)
+             SDWriteSeq(fno, rec)  SDWriteBlk(fno, rec, bytes)
+             SDSeek(fno, offset, relto)  SDWeofSeq(fno)
+                        A line or a block read or written, a position, a
+                        truncation.  SDClose closes the file.
+             THE GATES.  A session restricted with SDCLIENT cannot open any
+             file.  A pathname outside the account's own directory is refused
+             unless the account holds os-on, as OPENSEQ refuses it to any
+             program: the API server is an internal program, which the kernel
+             does not hold to that gate, so it asks the gate itself.
+
+             WRITE / WRITEU ... CREATING.SEQKEY id.var.  A hashed file now
+             keeps a counter in its header (4 bytes in a header block that was
+             never full; older files hold zero, which reads as 1, and an older
+             SD ignores it).  The statement writes the record under the
+             counter's next value and gives that id, as text, to the
+             variable; the update lock is released after a WRITE and kept by a
+             WRITEU; in a transaction the id is taken at the WRITE.  A
+             directory file is refused.  CONFIGURE.FILE file NEXT n sets the
+             counter and NEXT QUERY shows it; FILEINFO(file, 1031) is the id
+             of the last record written this way; rebuilding a file with
+             CONFIGURE.FILE carries the counter over; sdconv reverses it.  As
+             in openQM, nothing checks that the id handed out is not already
+             in use, so a file should be written this way throughout.
+             SDWriteSeqKey(fno, rec) and SDWriteuSeqKey(fno, rec) do the same
+             over the API and return the id.  Not done: the CREATING.SEQKEY
+             option of the ED and SED editors, and sdfix's check of the
+             counter against the records.
+
+15 Oct 26  QMCLIENT: DICTIONARY ITEMS AND CONVERSIONS OVER THE API, SEVEN
+           FIXES, AND A HEADER FOR EACH OF SIX LANGUAGES.
+
+             NEW FUNCTIONS of the client library (and the BASIC class
+             sdclient), requests 55 to 60 of the protocol:
+             SDEvaluate(dictfno, names, data, id)
+                        Evaluates dictionary items on the server against a
+                        record you give it: data becomes @RECORD, id becomes
+                        @ID.  dictfno is the number SDOpen("DICT file") gave.
+                        Several names, separated by value marks, give their
+                        answers joined by item marks.  D, A, S, C and I items
+                        all work.  An I-type or a correlative that has not
+                        been compiled is compiled for the call; the dictionary
+                        is NOT written to.  An item that is not in the
+                        dictionary gives the null string; a phrase, or an
+                        expression that will not compile, gives the null
+                        string and SDError() says which.
+             SDEvalConv(dictfno, names, data, id)
+                        The same, and each item's output conversion is applied
+                        to every value of its answer.
+             SDIConv(data, code) SDOConv(data, code)
+                        ICONV() and OCONV() on the server, which has every
+                        conversion code.
+             SDIConvs(data, code) SDOConvs(data, code)
+                        ICONVS() and OCONVS(): each element of a dynamic array
+                        in turn.  After any of the four SDStatus() is the
+                        conversion's own status.
+             SDRecordlocked(fno, id)
+                        RECORDLOCKED(): -3 -2 -1 another user holds a file,
+                        update or read lock, 0 not locked, 1 2 3 this session
+                        holds a read, update or file lock.  (The server has
+                        answered this request for a long time; there was no
+                        client function to ask it.)
+             A session that the administrator has restricted with SDCLIENT
+             cannot open a file, so it cannot evaluate a dictionary item; and
+             it is refused a conversion code that reads a file (T with a file)
+             or calls a program (U).  Ordinary codes are not affected.
+
+             FIXES, each of them found by a test that failed first:
+             * More than four sessions.  A program could hold four at once and
+               the fifth SDConnect failed.  It is now 1024; the server's own
+               user table (USERPOOL, 1023) is the real limit.
+             * A session waiting for input was damaged when another session
+               of the same program connected and disconnected: the client
+               freed the buffer they share, and the answer to the prompt never
+               reached the command.
+             * A local session whose server had ended (AUTOLOGOUT ran out, or
+               it was killed) made the client wait for ever on its next
+               request, because the client kept the server's ends of its own
+               pipes open; and a write to it could end the program with
+               SIGPIPE.  The request now fails at once and says so.  AUTOLOGOUT
+               itself needed no change: an API session can run the command and
+               is logged out after the idle time, as a terminal is.
+             * SDDcount used only the first character of its delimiter.  A
+               delimiter of several characters is counted as DCOUNT() counts
+               it.
+             * The MASTER.LOGIN paragraph of the SDSYS VOC is now run for an
+               API session, once, when it first enters an account and before
+               that account's LOGIN, as for a terminal.  There is none unless
+               an administrator writes one.
+             * The BASIC class sdclient: a connect() that failed to reach the
+               server left error empty and ServerStatus unset.  ServerStatus
+               is now the status of the failed open and error names the host
+               and port.
+             * The PureBasic header declared SDMarkMapping and never defined
+               it, declared SDLocate as returning a string where the library
+               returns a number, and SDRevision could be called before the
+               library was open.
+             Checked and found right, with a test added so that they stay so:
+             SDChange on overlapping strings, and SDLogto's return value.
+
+             HEADERS.  sdsys/syscom now holds a header for each of six
+             languages, all declaring every function of the library:
+             sdclilib.h (C), sdclient.bas (Basic), sdclient.pb (PureBasic),
+             and new today sdclient.module (Gambas 3), sdclilibbind.pas (Free
+             Pascal and Lazarus; written out in full, with the routines that
+             load and release the library) and sdclient.py (Python 3, ctypes).
+             The C header was missing SDCallx, SDGetArg, SDDebug, SDLogto and
+             SDRecordlock, and the PureBasic header SDCallx0 to SDCallx20,
+             SDGetArg, SDLogto and SDDebug; they are there now.  None of them
+             declares SDConnectUDS (removed) or the two package functions
+             (not supported).  The Free Pascal unit has not been compiled, nor
+             the Gambas module loaded: neither compiler is on the machine they
+             were written on.
+
+             Windows port's client stops at 48.  (QMEvalConv and the
+             QMIConv / QMOConv family follow, in the entry above.)
+
              SDTxn(mode)    Starts (1), commits (2) or aborts (3) a transaction
                         on the server, or (4) commits one without making it
                         durable (below).  A commit or abort with no

@@ -85,6 +85,7 @@
 * str = obj->readnext(listno, err)
 * str = obj->readu(fno, id, wait, err)
 * obj->recordlock(fno, id, update, wait)
+* n = obj->recordlocked(fno, id)
 * obj->release(fno, id)
 * str = obj->respond(response, err)
 * obj->select(fno, listno)
@@ -98,6 +99,21 @@
 * str = obj->system(key)
 * str = obj->trans(filename, id, fieldname, action)
 * obj->txn(mode)
+* str = obj->evaluate(fno, name, data, id)
+* str = obj->evalconv(fno, name, data, id)
+* str = obj->iconv(data, code)
+* str = obj->oconv(data, code)
+* str = obj->iconvs(data, code)
+* str = obj->oconvs(data, code)
+* fno = obj->openseq(filename, id, modes)
+* str = obj->readseq(fno, err)
+* str = obj->readblk(fno, bytes, err)
+* obj->writeseq(fno, data)
+* obj->writeblk(fno, data)
+* obj->seek(fno, offset, relto)
+* obj->weofseq(fno)
+* id = obj->writeseqkey(fno, data)
+* id = obj->writeuseqkey(fno, data)
 * obj->setleft(fno, indexname)
 * obj->setright(fno, indexname)
 * obj->write(fno, id, data)
@@ -202,6 +218,21 @@ $define SrvrSystem       51    ;* SYSTEM()
 $define SrvrTrans        52    ;* TRANS(), marks lowered one level
 $define SrvrRTrans       53    ;* TRANS(), marks as they are
 $define SrvrTxn          54    ;* Transaction start, commit, abort or non-durable commit
+$define SrvrEvaluate     55    ;* Evaluate a dictionary item against a record
+$define SrvrEvalConv     56    ;* The same, with the item's output conversion
+$define SrvrIConv        57    ;* ICONV()
+$define SrvrOConv        58    ;* OCONV()
+$define SrvrIConvs       59    ;* ICONVS()
+$define SrvrOConvs       60    ;* OCONVS()
+$define SrvrOpenSeq      61    ;* Open a sequential file
+$define SrvrReadSeq      62    ;* Read a line
+$define SrvrReadBlk      63    ;* Read bytes
+$define SrvrWriteSeq     64    ;* Write a line
+$define SrvrWriteBlk     65    ;* Write bytes
+$define SrvrSeek         66    ;* Position
+$define SrvrWeofSeq      67    ;* Truncate at the position
+$define SrvrWriteSeqKey  68    ;* Write under the next sequential id
+$define SrvrWriteuSeqKey 69    ;* The same, keeping the update lock
 
 $define SV$OK             0    ;* Action successful
 $define SV$ON.ERROR       1    ;* Action took ON ERROR clause
@@ -217,6 +248,9 @@ $define NET.ACK.TRIES    16    ;* connect.keys: bytes to read looking for the Ac
 
 deffun text.request(code, pkt, abort.text) local
 deffun trans.packet(code, filename, id, fieldname, action) local
+deffun evaluate.packet(code, fno, name, data, id) local
+deffun conv.packet(code, data, cv) local
+deffun seq.read(code, pkt, abort.text, err) local
 deffun read.record(mode, fno, id, err) local
 deffun message.pair(pkt.type, pkt) local
 deffun get.response() local
@@ -378,7 +412,13 @@ public function connect(host, (port), username, password, account)
 *   every API connection through its TLS relay, and scram.login binds the login
 *   to this session.
    skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS)
-   if status() then return @false
+   if status() then
+*     15 Oct 26 dm - sheet 571: say why.  The caller was given false and nothing else: ServerStatus unset and no text.
+*     ServerStatus is the STATUS() of the failed open and error names the host and port.
+      ServerStatus = status()
+      error = 'Cannot connect to ' : host : ':' : port : ' (status ' : ServerStatus : ')'
+      return @false
+   end
 
    * Wait for an Ack to come back before continuing
    loop
@@ -960,6 +1000,99 @@ public subroutine txn(mode)
 end
 
 * ======================================================================
+* SEQUENTIAL FILES   (15 Oct 26 dm, sheet 441): openseq, readseq, readblk, writeseq, writeblk, seek, weofseq; close with close()
+* openseq(file, id, modes): file is a VOC name and id the item in it, or with a null id file is the pathname.  modes adds 2 give up
+* when another process has it, 16 read only, 256 append, 512 overwrite, 1024 flush every write, 4096 shared.  The file number, or 0
+* (ServerStatus and error say why).  err is the server's answer: 2 (SV$ELSE) at the end of the file.
+
+public function openseq(filename, id, modes)
+   reply = text.request(SrvrOpenSeq, iconv(modes, 'ILL') : iconv(len(filename), 'ISL') : filename : id, 'OPENSEQ generated an abort event')
+   if len(reply) < 2 then return 0
+   return oconv(reply[1,2], 'ISL')
+end
+
+public function readseq(fno, err)
+   return seq.read(SrvrReadSeq, iconv(fno, 'ISL'), 'READSEQ generated an abort event', err)
+end
+
+public function readblk(fno, bytes, err)
+   return seq.read(SrvrReadBlk, iconv(fno, 'ISL') : iconv(bytes, 'ILL'), 'READBLK generated an abort event', err)
+end
+
+public subroutine writeseq(fno, data)
+   void text.request(SrvrWriteSeq, iconv(fno, 'ISL') : data, 'WRITESEQ generated an abort event')
+end
+
+public subroutine writeblk(fno, data)
+   void text.request(SrvrWriteBlk, iconv(fno, 'ISL') : data, 'WRITEBLK generated an abort event')
+end
+
+* relto: 0 from the start, 1 from here, 2 from the end
+public subroutine seek(fno, offset, relto)
+   if offset < 0 then offset += 4294967296
+   void text.request(SrvrSeek, iconv(fno, 'ISL') : iconv(offset, 'ILL') : iconv(relto, 'ISL'), 'SEEK generated an abort event')
+end
+
+public subroutine weofseq(fno)
+   void text.request(SrvrWeofSeq, iconv(fno, 'ISL'), 'WEOFSEQ generated an abort event')
+end
+
+* WRITE / WRITEU ... CREATING.SEQKEY: the record goes into the hashed file fno under the id the file's own counter gives it, and
+* the id is returned.  writeuseqkey keeps the update lock the write takes.
+public function writeseqkey(fno, data)
+   return text.request(SrvrWriteSeqKey, iconv(fno, 'ISL') : data, 'WRITESEQKEY generated an abort event')
+end
+
+public function writeuseqkey(fno, data)
+   return text.request(SrvrWriteuSeqKey, iconv(fno, 'ISL') : data, 'WRITEUSEQKEY generated an abort event')
+end
+
+* ======================================================================
+* RECORDLOCKED   (15 Oct 26 dm, sheet 262)
+* -3 -2 -1 another user holds a file, update or read lock; 0 not locked; 1 2 3 this session holds a read, update or file lock.
+* The answer is a four byte integer on the wire; it is made signed here.
+
+public function recordlocked(fno, id)
+   reply = text.request(SrvrRecordlocked, iconv(fno, 'ISL') : id, 'RECORDLOCKED generated an abort event')
+   if len(reply) < 4 then return 0
+   n = oconv(reply[1,4], 'ILL')
+   if n > 2147483647 then n -= 4294967296
+   return n
+end
+
+* ======================================================================
+* EVALUATE, EVALCONV, ICONV, OCONV, ICONVS, OCONVS   (15 Oct 26 dm, QM4 gaps bundle C-1, sheets 247 and 409)
+
+* The dictionary item(s) named, several separated by value marks, evaluated on the server against data (@RECORD) and id (@ID);
+* fno is the file number of the DICTIONARY.  The answers are joined by item marks.  evalconv also applies each item's output
+* conversion.  A name that is not in the dictionary gives the null string with the server status left at the ELSE case.
+public function evaluate(fno, name, data, id)
+   return evaluate.packet(SrvrEvaluate, fno, name, data, id)
+end
+
+public function evalconv(fno, name, data, id)
+   return evaluate.packet(SrvrEvalConv, fno, name, data, id)
+end
+
+* The conversion codes run on the server, which has all of them.  ServerStatus is the conversion's own status after the call.
+public function iconv(data, code)
+   return conv.packet(SrvrIConv, data, code)
+end
+
+public function oconv(data, code)
+   return conv.packet(SrvrOConv, data, code)
+end
+
+* The same on each element of a dynamic array in turn
+public function iconvs(data, code)
+   return conv.packet(SrvrIConvs, data, code)
+end
+
+public function oconvs(data, code)
+   return conv.packet(SrvrOConvs, data, code)
+end
+
+* ======================================================================
 * SELECTLEFT
 
 public function selectleft(fno, indexname, listno)
@@ -1296,6 +1429,43 @@ local function scram.exchange(username, password, stored.salt, stored.iter, stor
    end
 
    return @true
+end
+
+* ======================================================================
+* The requests of evaluate and evalconv: the dictionary's file number, the name length and name, the data length and data,
+* then the id.  And of the four conversions: the code length and code, then the data.
+
+local function evaluate.packet(code, fno, name, data, id)
+   pkt = iconv(fno, 'ISL') : iconv(len(name), 'ISL') : name
+   pkt := iconv(len(data), 'ILL') : data
+   pkt := id
+   return text.request(code, pkt, 'EVALUATE generated an abort event')
+end
+
+local function conv.packet(code, data, cv)
+   pkt = iconv(len(cv), 'ISL') : cv : data
+   return text.request(code, pkt, 'CONV generated an abort event')
+end
+
+* ======================================================================
+* A request for data that may be missing: the data when the server says OK, the null string otherwise, and err the server's answer
+* (-1 when there is no connection).  Used by readseq and readblk.
+
+local function seq.read(code, pkt, abort.text, err)
+   reply = ''
+   err = -1
+   if not(context.error(CX.CONNECTED)) then
+      if message.pair(code, pkt) then
+         begin case
+            case server.error = SV$OK
+               reply = in.pkt
+            case server.error = SV$ON.ERROR
+               abort abort.text
+         end case
+         err = server.error
+      end
+   end
+   return reply
 end
 
 * ======================================================================

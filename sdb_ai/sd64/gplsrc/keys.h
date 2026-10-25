@@ -778,6 +778,8 @@
 #define FC_NO_RESIZE             6    /* Set DHF_NO_RESIZE flag */
 /* 7 is Linux's FC_SET_MODE (SET.MODE: the permission bits of a record of a directory file).  Not carried here: POSIX permission
    bits mean nothing on NTFS, and the verb hangs on the S.63 OS-access gate.  The number is left unused.                      */
+#define FC_SET_SEQ_KEY           8    /* Set the next id of WRITE ... CREATING.SEQKEY (hashed files; 15 Oct 26) */
+#define FC_GET_SEQ_KEY           9    /* Take the next such id (null string if the file is not a hashed file) */
 
 /* SD_ENCRYPT_SODIUM encryption decryption  */
 #define SD_EncodeHX     201  /* encode passed string as Hex String */

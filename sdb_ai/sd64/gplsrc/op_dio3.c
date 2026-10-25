@@ -1192,10 +1192,7 @@ void op_write() {
 
   process.status = 0;
 
-  /* Get record id */
-
   rid_descr = e_stack - 1;
-  id_len = k_get_c_string(rid_descr, id, sysseg->maxidlen);
 
   /* Find the file variable descriptor */
 
@@ -1256,6 +1253,49 @@ void op_write() {
       process.status = -ER_PERM;
       goto exit_op_write;
     }
+  }
+
+  if (op_flags & P_SEQKEY) {
+    /* 15 Oct 26 dm - WRITE ... CREATING.SEQKEY id.var.  The operand where the record id would be is the ADDRESS of the program's
+       id variable.  The id is the file's next sequential number, taken from the counter in the file header; it is put in the
+       variable, an update lock is taken on it (nobody can hold it, it is new, but a transaction and MUSTLOCK demand the lock and
+       a WRITEU keeps it), and the write goes on as any other.  In a transaction the id is taken now, not at the commit.  Only a
+       hashed file has the counter.                                                                                       */
+    DESCRIPTOR* id_target;
+    STRING_CHUNK* id_str = NULL;
+    int32_t seq_id;
+
+    if (fvar->type != DYNAMIC_FILE) {
+      process.status = -ER_NDYN;
+      goto exit_op_write;
+    }
+    seq_id = dh_seq_key(fvar->access.dh.dh_file, 0, 0);
+    if (seq_id < 0) {
+      process.status = -ER_IOE;
+      goto exit_op_write;
+    }
+    id_len = (int16_t)snprintf(id, sizeof(id), "%d", (int)seq_id);
+
+    id_target = rid_descr;
+    while (id_target->type == ADDR)
+      id_target = id_target->data.d_addr;
+    k_release(id_target);
+    ts_init(&id_str, 16);
+    ts_printf("%d", (int)seq_id);
+    ts_terminate();
+    InitDescr(id_target, STRING);
+    id_target->data.str.saddr = id_str;
+    rid_descr = id_target; /* what the trigger and the id checks below are given: the id as a string */
+
+    memcpy(lock_id, id, id_len);
+    if (lock_record(fvar, lock_id, id_len, TRUE, txn_id, FALSE) != 0) {
+      process.status = -ER_NOLOCK;
+      goto exit_op_write;
+    }
+  } else {
+    /* Get record id */
+
+    id_len = k_get_c_string(rid_descr, id, sysseg->maxidlen);
   }
 
   if ((sysseg->flags & SSF_SUSPEND) && (txn_id == 0))
@@ -1457,6 +1497,8 @@ exit_op_write:
    next reader knows it was seen rather than missed.                        */
     if (process.status == -ER_NOLOCK)
       k_error(sysmsg(10151), -process.status);
+    else if ((process.status == -ER_NDYN) && (op_flags & P_SEQKEY))
+      k_error(sysmsg(12353)); /* CREATING.SEQKEY needs a hashed file */
     else
       k_error(sysmsg(1407), -process.status, process.os_error);
   }

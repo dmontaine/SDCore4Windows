@@ -46,6 +46,47 @@
 #include "keys.h"
 
 /* ======================================================================
+   dh_seq_key()  -  The sequential record id counter of a hashed file     (15 Oct 26 dm, WRITE ... CREATING.SEQKEY)
+
+   The counter is the NEXT id to give out and lives in the header of the primary subfile, so it is read and written under the
+   header's group write lock and what every process sees is what is on the disk; a file with none yet, or made before there was
+   one, gives 1.
+     action 0  take the next id: it is returned and the counter moves on
+     action 1  set the next id to n (0 puts it back to 1)
+     action 2  look at the next id without taking it
+   Returns the id (the one the counter held, before it moved on), or -1 when the header cannot be read or written, -2 when the
+   counter has no further id to give.                                                                                   */
+
+int32_t dh_seq_key(DH_FILE* dh_file, int action, int32_t n) {
+  DH_HEADER header;
+  int16_t header_lock;
+  int32_t next;
+
+  header_lock = GetGroupWriteLock(dh_file, 0);
+  if (!dh_read_group(dh_file, PRIMARY_SUBFILE, 0, (char*)&header, DH_HEADER_SIZE)) {
+    FreeGroupWriteLock(header_lock);
+    return -1;
+  }
+
+  next = (header.seq_key > 0) ? header.seq_key : 1;
+  if ((action == 0) && (next == 0x7FFFFFFF)) {
+    FreeGroupWriteLock(header_lock);
+    return -2;
+  }
+  if (action == 0)
+    header.seq_key = next + 1;
+  else if (action == 1)
+    header.seq_key = (n > 0) ? n : 0;
+
+  if (action != 2) {
+    if (!dh_write_group(dh_file, PRIMARY_SUBFILE, 0, (char*)&header, DH_HEADER_SIZE))
+      next = -1;
+  }
+  FreeGroupWriteLock(header_lock);
+  return next;
+}
+
+/* ======================================================================
    op_fcontrol()  -  Miscellaneous file control functions                 */
 
 void op_fcontrol() {
@@ -181,6 +222,29 @@ void op_fcontrol() {
                           DH_HEADER_SIZE)) {
         process.status = ER_IOE;
         goto exit_op_fcontrol;
+      }
+      break;
+
+    case FC_SET_SEQ_KEY: /* Set the next id WRITE ... CREATING.SEQKEY gives out (a hashed file only; 1 if it was set) */
+      if (fvar->type == DYNAMIC_FILE) {
+        GetInt(descr);
+        if (dh_seq_key(dh_file, 1, descr->data.value) >= 0)
+          result.data.value = 1;
+        else
+          process.status = ER_IOE;
+      }
+      break;
+
+    case FC_GET_SEQ_KEY: /* Take the next id, as CREATING.SEQKEY does; a null string for a file that is not a hashed file */
+      if (fvar->type == DYNAMIC_FILE) {
+        result.data.value = dh_seq_key(dh_file, 0, 0);
+        if (result.data.value < 0) {
+          process.status = ER_IOE;
+          result.data.value = 0;
+        }
+      } else {
+        InitDescr(&result, STRING);
+        result.data.str.saddr = NULL;
       }
       break;
 
