@@ -18,6 +18,8 @@
  *
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - kill_process() releases the class objects held in named common before the e-stack is freed: their destroy code (S.65
+ *               $netfile's sdclient objects) ran on freed memory and the process died with a double free.
  * 17 Oct 26 dm  S.64: a process taking its user entry starts with the edit gates off (the user table's gates word).
  * 17 Oct 26 dm  k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
  *               can go on at the handler (k_can_resume(), k_resume_exception(); QM4 Fixes 354).
@@ -684,6 +686,38 @@ exit_kernel:
 }
 
 /* ======================================================================
+   release_array_objects()  -  Release the class objects in an array of descriptors, and in the arrays it holds (a named common block
+   keeps its variables in an array of arrays).  Each object is released and its slot made unassigned, so a later free_array() finds
+   nothing to destroy a second time.  Only objects: everything else stays where the program levels still point at it.                */
+
+Private void release_array_objects(ARRAY_HEADER* a_hdr) {
+  ARRAY_CHUNK* chunk;
+  DESCRIPTOR* d;
+  int16_t i;
+  int16_t j;
+
+  for (i = 0; i < a_hdr->num_chunks; i++) {
+    chunk = a_hdr->chunk[i];
+    if (chunk == NULL)
+      continue;
+    for (j = 0; j < chunk->num_descr; j++) {
+      d = &(chunk->descr[j]);
+      if (d->type == OBJ) {
+        k_release(d);
+        InitDescr(d, UNASSIGNED);
+      } else if ((d->type == ARRAY) && (d->data.ahdr_addr != NULL)) {
+        release_array_objects(d->data.ahdr_addr);
+      }
+    }
+  }
+}
+
+Private void release_common_objects(ARRAY_HEADER* chain) {
+  for (; chain != NULL; chain = chain->next_common)
+    release_array_objects(chain);
+}
+
+/* ======================================================================
    kill_process()  -  Remove process                                      */
 
 Private void kill_process() {
@@ -699,6 +733,12 @@ Private void kill_process() {
   /* Give away process resources */
 
   unwind_stack(); /* Release all e-stack variables */
+
+  /* Class objects held in named common go while there is still an e-stack and a program level to run on: releasing one runs its destroy
+     code, which is BASIC.  Left to free_common() below, after the e-stack was freed, the code ran on freed memory and ended with a second
+     kill_process() and a double free (found by the SDNet suite: $netfile keeps its sdclient objects in common).  Only the objects are
+     released here; the rest of common stays where the program levels still point at it until the levels have been unwound. */
+  release_common_objects(process.named_common);
 
   k_free(e_stack_base); /* Free e-stack memory */
 

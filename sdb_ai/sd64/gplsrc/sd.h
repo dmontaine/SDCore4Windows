@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): EDIT_SHARED_WRITE and EDIT_SHARED_STRUCT; prototypes of the shared-account tests (op_sh.c), of
  *               shared_structure_refusal() (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
  * 17 Oct 26 dm  S.64 part 2: edit_os_path_refusal() takes include_leaf (does the final component of the path count?); edit_leaf_counts().
  * 17 Oct 26 dm  S.64: prototypes of the edit gates (op_sh.c): edit_kind_of_path, edit_permitted, edit_ok_for_path, edit_os_path_refusal.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -311,10 +312,24 @@ char * sysmsg(int msg_no);
 char * sysmsg_arg1(int msg_no, const char * arg);
 int sysmsg_number_of(const char * p);
 
-/* NETFILES.C - REMOVED 18 Aug 2026.  SDNet (remote files over port 4245) is
-   gone; see PROJECT_STATUS.md section 8.  sdnet.h is NOT part of it and stays -
-   despite the name it is the socket/termios portability header that the client
-   library and terminal i/o both include.                                    */
+/* NETFILES.C - files on another SD server (SDNet, S.65 slice 3c).  Gone in plan G4, back in a new form: the kernel holds no socket code, it
+   calls the BASIC handler $netfile (sdsys/gpl.bp/netfile) as call_trigger() calls a trigger.  sdnet.h is a different file (the
+   socket/termios portability header) and stays.
+   net_open() returns 0 (fvar is now a NET_FILE), a positive status for the ELSE branch, or a negative one with net_message() set; it
+   never raises the error itself (open_file() does).  net_read(), net_readv(), net_fileinfo() and net_refuse() RAISE the error with the
+   handler's message, unless process.op_flags holds P_ON_ERROR at the call (they read nothing else of it and give it back as it was);
+   without ON ERROR they do not return on an error.  net_close() is for dio_close(): it talks to the server only for a CLOSE statement.
+   Every one of them that asks the handler runs BASIC, which can move the e-stack: find operands again by e_stack afterwards.
+   net_close_all() is for LOGTO (via a kernel key) and sends NF$CLOSEALL when this process ever opened a remote file.            */
+bool net_path_is_net(const char * path);
+int net_open(FILE_VAR * fvar, const char * encoded_path);
+void net_close(FILE_VAR * fvar);
+int net_read(FILE_VAR * fvar, char * id, int16_t id_len, STRING_CHUNK ** rec);
+int net_readv(FILE_VAR * fvar, char * id, int16_t id_len, int32_t field, STRING_CHUNK ** out);
+STRING_CHUNK * net_fileinfo(FILE_VAR * fvar, int key);
+int net_refuse(FILE_VAR * fvar, const char * what);
+void net_close_all(void);
+const char * net_message(void);
 
 /* OBJECT.C */
 void * load_object(char * name, bool abort_on_error);

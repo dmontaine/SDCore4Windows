@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux e7ea5f8 (17 Oct 26), S.65 slice 3c: a NET_FILE (a file on another SD server) is read by READ, MATREAD and READV through
+ *               net_read() and net_readv(); every other statement that can be given a file variable in this file (the locking forms of the reads,
+ *               WRITE, WRITEV, DELETE, CLEARFILE) refuses it with net_refuse() before it touches anything.
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): edit_refusal() asks edit_refusal_for_canon() (op_sh.c: the administrator, then shared.write for a
  *               file inside the shared account, then the S.64 kind) after its own HDR_INTERNAL and administrator returns; EDIT_REFUSED_MSG() is
  *               edit_refused_message() (12518 and 12519 as well as 12410-12412); shared_structure_refusal() (no HDR_INTERNAL exemption) is asked by
@@ -109,6 +112,15 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 
 #define MAX_T1_BUFFER_SIZE 31744
 
+/* 17 Oct 26 dm S.65 slice 3c: the NET_FILE entry points, as slice 3c declares them in sd.h (a second declaration is harmless).
+   net_read() and net_readv() return 0 with the record (or the field) in *rec / *out, a positive local status (ER_RNF) for the ELSE
+   branch, or a negative status for an error, and leave *rec / *out alone unless they return 0.  net_refuse() reports the refusal
+   of an operation (message 12506) and returns the negative status for ON ERROR.  All three raise the error themselves, with the
+   handler's message, unless process.op_flags holds P_ON_ERROR; the callers below set it for the call and clear it after.      */
+int net_read(FILE_VAR *fvar, char *id, int16_t id_len, STRING_CHUNK **rec);
+int net_readv(FILE_VAR *fvar, char *id, int16_t id_len, int32_t field, STRING_CHUNK **out);
+int net_refuse(FILE_VAR *fvar, const char *what);
+
 /* The modes of a directory file's trigger function (QM4 Fixes item 177): 0 if it has none */
 #define DirTrgModes(fvar) ((fvar)->access.dir.trg != NULL ? (fvar)->access.dir.trg->modes : 0)
 
@@ -136,6 +148,8 @@ Private int edit_refusal(FILE_VAR *fvar) {
   const char *path;
   int kind;
 
+  /* Only a hashed or a directory file has a pathname in the file table.  A NET_FILE (S.65) has no file table entry (file_id is -1),
+     so it is answered here and never reaches FPtr(): the NET refusals in the opcodes come before this call anyway. */
   if ((fvar == NULL) || ((fvar->type != DYNAMIC_FILE) && (fvar->type != DIRECTORY_FILE)))
     return EDIT_NONE;
   if (process.program.flags & HDR_INTERNAL)
@@ -153,6 +167,37 @@ Private int edit_refusal(FILE_VAR *fvar) {
 /* 18 Oct 26 S.66: the message for a refusing kind: 12410 the VOC, 12411 a dictionary, 12412 a program file, 12518 a shared file without
    shared.write, 12519 a structure change to a shared file (op_sh.c edit_refused_message) */
 #define EDIT_REFUSED_MSG(kind) edit_refused_message(kind)
+
+/* ======================================================================
+   refuse_net_file()  -  Is this a NET_FILE?  If so, refuse the operation.
+
+   17 Oct 26 dm, S.65 slice 3c.  A file on another SD server is read only in stage 1, and it has no file table entry, no lock, no
+   transaction cache and no trigger: file_id is -1, so any code that goes on to FPtr(fvar->file_id), lock_record() or
+   log_permissions_error() would read or WRITE memory in front of the file table.  Every statement of this file that is given a
+   file variable and is not a plain READ or READV of a NET_FILE calls this FIRST, before it takes a lock, a transaction cache entry
+   or an edit-gate decision.
+
+   Returns FALSE (and does nothing) for any other kind of file.  For a NET_FILE net_refuse() says the refusal (message 12506, with
+   the server and the operation) and, unless the statement has ON ERROR, does not return; if it does return, the statement has
+   ON ERROR and process.status is the negative status for the caller to put on the stack.  The test below the call is only the
+   safety net for a net_refuse() that came back with no ON ERROR: the statement still fails.                                  */
+
+Private bool refuse_net_file(FILE_VAR *fvar, u_int16_t op_flags, const char *what) {
+  int st;
+
+  if ((fvar == NULL) || (fvar->type != NET_FILE))
+    return FALSE;
+
+  process.op_flags = op_flags & P_ON_ERROR; /* net_refuse() reads it, and nothing else, to know whether to raise the error */
+  st = net_refuse(fvar, what);
+  process.op_flags = 0;
+  process.status = (st < 0) ? st : -ER_PERM;
+
+  if (!(op_flags & P_ON_ERROR))
+    k_error(sysmsg(12506), (fvar->voc_name != NULL) ? fvar->voc_name : "", what);
+
+  return TRUE;
+}
 
 /* ======================================================================
    shared_structure_refusal()  -  18 Oct 26 dm, S.66.  A STRUCTURE change (CLEARFILE, CONFIGURE.FILE, an index made or deleted, a
@@ -240,6 +285,15 @@ void op_clrfile() {
   fvar_descr = e_stack - 1;
   k_get_file(fvar_descr);
   fvar = fvar_descr->data.fvar;
+
+  /* 17 Oct 26 S.65 slice 3c: a file on another server is not cleared.  Before the file lock below, which writes the file table at
+     FPtr(file_id) and a NET_FILE has none. */
+  if (refuse_net_file(fvar, op_flags, "CLEARFILE")) {
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = process.status;
+    return;
+  }
 
   /* 18 Oct 26 S.66: CLEARFILE changes the STRUCTURE of a file in the shared account (it empties it): SDSYS's alone, and a $internal program is
      not exempt.  Before anything is taken or touched; shaped as the S.64 block below. */
@@ -466,6 +520,11 @@ void op_delete() {
   k_get_file(fvar_descr);
   fvar = fvar_descr->data.fvar;
   ProfFile(PROF_DELETE, fvar); /* the application event profiler (16 Oct 26) */
+
+  /* 17 Oct 26 S.65 slice 3c: a record of a file on another server is not deleted.  Before suspend_updates(), the RDONLY test (it
+     logs through FPtr(file_id)), the lock checks and the type switch, which has no arm for it and would report success. */
+  if (refuse_net_file(fvar, op_flags, "DELETE"))
+    goto exit_op_delete;
 
   txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
 
@@ -701,7 +760,65 @@ void op_readv() {
   ProfFile(PROF_READ, fvar); /* READV: the application event profiler (16 Oct 26) */
   txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
 
-  if (field_no != 0) {
+  if (fvar->type == NET_FILE) {
+    /* 17 Oct 26 S.65 slice 3c: a file on another SD server.  Not the recursive _readv, which would READ (and so call the handler)
+       and then cut the field in BASIC: net_readv() asks for the field, and for field 0 only whether the record exists.  READVU and
+       READVL are refused, nothing is locked on another server in stage 1.  The target is left alone by a refusal and cleared by a
+       read that fails, as a local READV does. */
+    DESCRIPTOR *net_tgt;
+    STRING_CHUNK *net_str = NULL;
+    int net_st;
+
+    rid_descr = e_stack - 2;
+    id_len = k_get_c_string(rid_descr, id, sysseg->maxidlen);
+
+    if (op_flags & P_REC_LOCKS) {
+      refuse_net_file(fvar, op_flags, (op_flags & P_ULOCK) ? "READVU" : "READVL");
+      status = process.status;
+    } else {
+      net_tgt = e_stack - 4;
+      do {
+        net_tgt = net_tgt->data.d_addr;
+      } while (net_tgt->type == ADDR);
+
+      if (!(op_flags & P_PICKREAD)) {
+        k_release(net_tgt);
+        InitDescr(net_tgt, STRING);
+        net_tgt->data.str.saddr = NULL;
+      }
+
+      if (id_len <= 0) {
+        status = process.status = ER_IID;
+      } else {
+        process.op_flags = op_flags & P_ON_ERROR;
+        net_st = net_readv(fvar, id, id_len, field_no, &net_str);
+        process.op_flags = 0;
+
+        /* The handler ran BASIC: take the operands from the stack again, it may have moved */
+        net_tgt = e_stack - 4;
+        do {
+          net_tgt = net_tgt->data.d_addr;
+        } while (net_tgt->type == ADDR);
+
+        status = net_st;
+        if (net_st != 0) {
+          process.status = net_st;
+        } else if (field_no == 0) {
+          k_release(net_tgt);
+          k_put_string(id, id_len, net_tgt);
+        } else {
+          k_release(net_tgt);
+          InitDescr(net_tgt, STRING);
+          net_tgt->data.str.saddr = net_str;
+        }
+      }
+    }
+
+    k_pop(1);    /* Dismiss field number */
+    k_dismiss(); /* Record id */
+    k_dismiss(); /* File var */
+    k_dismiss(); /* Target */
+  } else if (field_no != 0) {
     /* Reading a field of a local file */
 
     /* Push lock flag onto e-stack. This corresponds to the lock bits of
@@ -951,6 +1068,12 @@ void op_write() {
   ProfFile(PROF_WRITE, fvar); /* the application event profiler (16 Oct 26) */
 
   txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
+
+  /* 17 Oct 26 S.65 slice 3c: a record is not written to a file on another server.  First, before the edit gates, a CREATING.SEQKEY
+     id, the lock and transaction code, the read-only branches (they log through FPtr(file_id)) and the type switch, which has no
+     arm for it and would report success. */
+  if (refuse_net_file(fvar, op_flags, keep_lock ? "WRITEU" : "WRITE"))
+    goto exit_op_write;
 
   {
     /* 17 Oct 26 S.64: the edit gates.  Before anything is taken from the file. */
@@ -1217,6 +1340,17 @@ void op_writev() {
     int edit_kind;
 
     k_get_file(wv_fvar);
+
+    /* 17 Oct 26 S.65 slice 3c: a field is not written to a record of a file on another server.  Here, before the recursive _writev,
+       which would READ the record from the server and then WRITE. */
+    if (refuse_net_file(wv_fvar->data.fvar, op_flags, (op_flags & P_ULOCK) ? "WRITEVU" : "WRITEV")) {
+      k_dismiss();
+      k_dismiss();
+      k_dismiss();
+      k_dismiss();
+      goto exit_op_writev;
+    }
+
     edit_kind = edit_refusal(wv_fvar->data.fvar);
     if (edit_kind != EDIT_NONE) {
       if (!(op_flags & P_ON_ERROR))
@@ -1321,7 +1455,8 @@ Private void read_record(bool matread) {
   k_get_file(fvar_descr);
   fvar = fvar_descr->data.fvar;
   ProfFile(PROF_READ, fvar); /* READ, READU, READL and MATREAD: the application event profiler (16 Oct 26) */
-  txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
+  /* A NET_FILE (S.65 slice 3c) has no transaction cache and no file table entry: txn_read() would read FPtr(-1) */
+  txn_id = ((fvar->flags & FV_NON_TXN) || (fvar->type == NET_FILE)) ? 0 : process.txn_id;
 
   /* Get target descr */
 
@@ -1341,6 +1476,15 @@ Private void read_record(bool matread) {
     }
   } else {
     str_descr = tgt_descr;
+  }
+
+  /* 17 Oct 26 S.65 slice 3c: READU, READL, MATREADU and MATREADL of a file on another server are refused, before the lock code
+     below, which writes the lock table with file_id -1.  The target is left as it was.  A plain READ and MATREAD are served by
+     the NET_FILE case of the switch further down. */
+  if ((fvar->type == NET_FILE) && (op_flags & P_REC_LOCKS)) {
+    refuse_net_file(fvar, op_flags, matread ? ((op_flags & P_ULOCK) ? "MATREADU" : "MATREADL") : ((op_flags & P_ULOCK) ? "READU" : "READL"));
+    status = (int16_t)process.status;
+    goto exit_op_read;
   }
 
   /* 1.4-3  Moved to before all possible exit paths */
@@ -1577,6 +1721,38 @@ Private void read_record(bool matread) {
       }
       break;
 
+    case NET_FILE: {
+      /* 17 Oct 26 S.65 slice 3c: a file on another SD server (the locking forms were refused above).  net_read() runs the handler:
+         0 is the record in net_rec, a positive status takes the ELSE branch, a negative one is an error, which net_read() has
+         raised itself unless the statement has ON ERROR.  Like a local failure, a failed read leaves the target a null string.
+         The handler ran BASIC, so the descriptors on the e-stack are found again. */
+      STRING_CHUNK *net_rec = NULL;
+      int net_st;
+
+      process.op_flags = op_flags & P_ON_ERROR;
+      net_st = net_read(fvar, id, id_len, &net_rec);
+      process.op_flags = 0;
+
+      rid_descr = e_stack - 1;
+      fvar_descr = e_stack - 2;
+      tgt_descr = e_stack - 3;
+      do {
+        tgt_descr = tgt_descr->data.d_addr;
+      } while (tgt_descr->type == ADDR);
+      if (!matread)
+        str_descr = tgt_descr;
+
+      if (net_st == 0) {
+        if ((op_flags & P_PICKREAD)) {
+          k_release(str_descr);
+          InitDescr(str_descr, STRING);
+        }
+        str_descr->data.str.saddr = net_rec;
+      } else {
+        status = (int16_t)(process.status = net_st);
+      }
+      break;
+    }
   }
 
 exit_op_read:

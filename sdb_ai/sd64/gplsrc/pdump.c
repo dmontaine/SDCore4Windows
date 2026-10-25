@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Oct 26 dm  S.65 slice 3c: dump_variable() names a NET_FILE as a remote file instead of reading FPtr(-1)
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): An object variable is followed by the object's persistent
  *               variables, with their names where the class module's symbol
@@ -509,6 +510,11 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
 
     case FILE_REF:
       fvar = descr->data.fvar;
+      if (fvar->type == NET_FILE) { /* 17 Oct 26 S.65: a remote file has no file table entry (file_id is -1) */
+        fprintf(fu, "%s: File: %s (remote file)\n", s,
+                (fvar->voc_name != NULL) ? (fvar->voc_name) : "");
+        break;
+      }
       fprintf(fu, "%s: File: %s (%s)\n", s,
               (fvar->voc_name != NULL) ? (fvar->voc_name) : "",
               FPtr(fvar->file_id)->pathname);

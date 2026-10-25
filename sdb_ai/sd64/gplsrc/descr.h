@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Oct 26 dm S.65 slice 3c: NET_FILE (4) is back, for a file on another SD server (SDNet, stage 1); its member of the FILE_VAR union holds the
+ *           handle of the $netfile handler and the server name.  The file table entry of such a file variable is NOT a real one (file_id is -1).
  * 31 Dec 23 SD launch - prior history suppressed
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * 25 Aug 26 Windows port - NET_FILE removed.  Its last reader went with
@@ -332,6 +334,11 @@ struct DIR_TRIGGER {
   u_char modes;    /* TRG_x: the operations that call it */
 };
 
+/* NET_FILE: the longest server name (the shape set.server and $netfile hold: a lower case letter, then letters and digits) and the most
+   remote files one process may have open (NF$MAX.HANDLES in sdsys/gpl.bp/netfile.h - keep the two in step) */
+#define NET_SERVER_LEN 16
+#define NET_MAX_HANDLES 100
+
 /* File variable structure
    See !!FVAR_CREATE!! and !!FVAR_DESTROY!! */
 struct FILE_VAR {
@@ -344,6 +351,12 @@ struct FILE_VAR {
 #define DIRECTORY_FILE 1
 #define DYNAMIC_FILE 2
 #define SEQ_FILE 3
+/* 4 is NET_FILE again (17 Oct 26, S.65 slice 3c): a file on another SD server, reached through the $netfile handler (netfiles.c).
+   It has NO file table entry (file_id is -1), so nothing may reach FPtr(fvar->file_id) or fvar->access.dh / .dir for it:
+   every opcode that takes a file variable either supports it (OPEN, CLOSE, READ, READV, FILEINFO) or refuses it with net_refuse().
+   5 was VFS_FILE - the virtual file system scaffolding removed (plan G2); the slot is left unused rather than renumbering.
+   Neither value is persisted: fvar->type lives only in the runtime FILE_VAR. */
+#define NET_FILE 4
   /* Tokens also in BP DEBUG.H */
   u_char flags;
 #define FV_RDONLY 0x01  /* Read only file */
@@ -365,9 +378,15 @@ struct FILE_VAR {
       u_int16_t crlf : 3; /* CRLF_UNSET or CRLF_x */
       DIR_TRIGGER* trg;   /* The file's trigger function, or NULL */
     } dir;
+    /* NET_FILE (S.65 slice 3c).  The two pointer-sized words in front are zeroed by net_open() so that they read as a NULL
+       access.dir.trg, should any code that only expects a directory file look at one.  handle is the one $netfile gave (1 to
+       NET_MAX_HANDLES, 0 once closed); epoch is net_epoch when it was opened, and a handle from an earlier epoch (net_close_all(),
+       i.e. a LOGTO) is stale and is never sent; server is the server's name in lower case. */
     struct {
-      int file_no;
-      int16_t host_index;
+      void* zero[2];
+      int16_t handle;
+      u_int16_t epoch;
+      char server[NET_SERVER_LEN + 1];
     } net;
   } access;
 };

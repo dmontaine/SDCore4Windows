@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+17 Oct 26  SDNET, THIRD SLICE (C): A FILE ON ANOTHER SD SERVER CAN BE OPENED AND READ (S.65).
+
+             What        A VOC entry whose first field is N, with the server's name in field 2 and the file's name on that server in
+                        field 3, is a pointer to a file on another SD server defined with set.server.  OPEN by that name gives a file
+                        variable that READ, MATREAD, READV, FILEINFO and CLOSE work on; the records come from the other server over the
+                        TLS connection and the stored login of set.netlogin.  Nothing is sent before the NET switch, the server's
+                        accounts list, the stored login and the pinned key have been checked.
+             Not yet     It is read only.  WRITE, DELETE, CLEARFILE, locks, SELECT, transactions and the query verbs LIST, COUNT, SORT and
+                        SELECT on such a file stop with a message, and nothing is sent.  Only a test server has been used so far; no two
+                        machines have talked to each other.
+             A fix       A program that kept a class object in named common (the new remote-file code does) made the process end with a
+                        crash at logout, because the object's destroy code ran after the stack it needs had been freed.  The objects are
+                        now released first.  No program written so far was affected.
+
 17 Oct 26  SDNET, SECOND SLICE (C): A SECOND, NARROWER API ROUTE THAT REACHES FILES AND NOTHING ELSE (S.65).
 
              Why         Until now a person could log in to a server's API only as a member of the Windows group sdapi, and then the

@@ -19,6 +19,9 @@
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): dir_select() closes the oldest cached file and tries again when opendir() fails at the open-file limit (QM4 Fixes 279).
  * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_select() and op_selectv() refuse a NET_FILE (net_refuse) before the target list is touched
+ * 16 Oct 26 Windows port - from Linux e7ea5f8 - dir_select() closes the oldest cached file and tries again when opendir() fails at the open-file limit (QM4 Fixes 279).
+ * 15 Oct 26 Windows port - from Linux e7ea5f8 - $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
  *               default variable being an empty list
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE PICK.SELECT (QM4 gaps Q-16): op_selectv() moves an active list 0 to its target;
  *               transfer_list0() is the body of op_selecte(), which both now call
@@ -711,6 +714,16 @@ void op_select() {
   } else {
     fvar = descr->data.fvar;
 
+    if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: refused before the target list is emptied (slice 3d builds remote SELECT) */
+    {
+      if (!(op_flags & P_ON_ERROR))
+        net_refuse(fvar, "SELECT");
+      process.status = -ER_PERM;
+      k_pop(1);
+      k_dismiss();
+      goto select_status;
+    }
+
     end_select(list_no);
     clear_select(list_no); /* 0441 */
 
@@ -749,6 +762,7 @@ void op_select() {
     descr->data.value = record_count;
   }
 
+select_status:
   /* Set status code on stack */
 
   InitDescr(e_stack, INTEGER);
@@ -927,6 +941,16 @@ void op_selectv() {
     }
   } else {
     fvar = descr->data.fvar;
+
+    if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: refused before list 11 is used (slice 3d builds remote SELECT) */
+    {
+      if (!(op_flags & P_ON_ERROR))
+        net_refuse(fvar, "SELECTV");
+      process.status = -ER_PERM;
+      InitDescr(tgt_descr, SELLIST); /* the target is an empty list */
+      tgt_descr->data.str.saddr = NULL;
+      goto selectv_status;
+    }
 
     /* Do the select */
 

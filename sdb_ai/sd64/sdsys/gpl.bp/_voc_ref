@@ -23,6 +23,10 @@
 *               is asked whether the name is a file of the shared account; its answer is the pathname and the field 6 letters.  The own VOC (all
 *               three folds) and the PATH: / Account:File forms are tried first, so the account's own entry always wins.
 * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): A fourth argument returns field 6 of the F-type entry, in capitals, for the mode letters N (open
+* 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: a new VOC pointer type N, a file on another SD server (field 2 the server name, field 3 the file name there).
+*               The pathname returned is the encoded string char(1) 'N' char(1) server char(1) file, which no real path can equal; only
+*               open_file() recognises it (net_open() in netfiles.c).  A dictionary of such a file is refused, and so is a badly shaped name.
+* 12 Oct 26 Windows port - from Linux e7ea5f8 - A fourth argument returns field 6 of the F-type entry, in capitals, for the mode letters N (open
 *               non-transactionally) and R (read-only) that open_file() acts on (openQM items 380 and 197).  A
 *               Q-pointer gives the field 6 of the F-type entry it leads to.
 * 25 Aug 26 Windows port - removed the branch that skipped absolutising a
@@ -77,6 +81,7 @@ $include keys.h
    qroot = ''                                       ;* the directory of an account a Q-pointer was followed into
    cur.id = ''
    f.raw = ''
+   n.ok = @false                                    ;* the N pointer test (S.65 slice 3c)
 
    vflags = ''     ;* Field 6 of the F-type entry that names the file, upper case (open_file() in op_dio1.c)
    voc.id = field(filename, ',', 1)
@@ -376,6 +381,29 @@ parse.as.q.pointer:
             * Do not close the remote VOC as we may need it for a subsequent
             * chained Q-pointer that has field 2 null.
 
+* 17 Oct 26 dm - S.65 slice 3c.  An N pointer is a file on another SD server (SDNet): field 2 the server NAME, field 3 the file name on
+*   that server.  The "pathname" returned is NOT a path: char(1) 'N' char(1) server char(1) file.  A real path never holds char(1), so
+*   OPENSEQ, DELETESEQ, CALL "file" and every other user of this program finds no such path and refuses; only open_file() (OPEN by name)
+*   looks for it and hands it to net_open(), which asks the NET gate and the $netfile handler.  Nothing is asked here: the gate belongs to
+*   the session that opens the file, not to the account whose VOC holds the pointer (an N entry reached through a Q-pointer gives its
+*   user nothing that user was not granted).  A dictionary of a remote file is refused (ER$VNF), as is a name of the wrong shape (ER$NAM):
+*   the same shapes as !netdefs and $netfile, folded to lower case, so no name can exist in two casings.
+         case type = "N"
+            if fno = 3 then
+               set.status ER$VNF
+               return
+            end
+            n.srv = downcase(trim(voc.rec<2>))
+            n.file = downcase(trim(voc.rec<3>))
+            gosub check.n.pointer
+            if not(n.ok) then
+               set.status ER$NAM
+               return
+            end
+            pathname = char(1):'N':char(1):n.srv:char(1):n.file
+            set.status 0
+            return
+
          case 1
             set.status ER$VNF
             return
@@ -384,6 +412,28 @@ parse.as.q.pointer:
 
    set.status ER$VNF
 
+   return
+
+* ----------------------------------------------------------------------------------------------------------
+* 17 Oct 26 dm - S.65 slice 3c.  Is the N pointer well formed?  n.srv is a lower case letter and then up to 15 lower case letters or digits;
+* n.file is 1 to 63 lower case letters, digits and . _ - $ (no space, so no DICT form, no slash, so no pathname).  Sets n.ok.
+check.n.pointer:
+   n.ok = @true
+   n.letters = 'abcdefghijklmnopqrstuvwxyz'
+   n.digits = '0123456789'
+   if len(n.srv) < 1 or len(n.srv) > 16 then n.ok = @false
+   if len(n.file) < 1 or len(n.file) > 63 then n.ok = @false
+   if n.ok then
+      if index(n.letters, n.srv[1,1], 1) = 0 then n.ok = @false
+   end
+   if n.ok then
+      for n.k = 1 to len(n.srv)
+         if index(n.letters:n.digits, n.srv[n.k,1], 1) = 0 then n.ok = @false
+      next n.k
+      for n.k = 1 to len(n.file)
+         if index(n.letters:n.digits:'._-$', n.file[n.k,1], 1) = 0 then n.ok = @false
+      next n.k
+   end
    return
 
 * ----------------------------------------------------------------------------------------------------------

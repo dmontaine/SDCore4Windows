@@ -26,6 +26,21 @@
  *           file INSIDE a VOC, a dictionary, a program file or the private catalogue the session may not change (create_edit_refusal ->
  *           edit_os_path_refusal, final name not counted): -ER_PERM with the reason.  $internal programs (createf and the rest) are not
  *           asked.  Linux's OPENTEMP leg is not carried (this tree has no OPENTEMP yet); opentemp_edit_refused waits for it.
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_configfl() refuses a NET_FILE (net_refuse)
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: open_file() opens a file on another SD server when the VOC (N pointer, _voc_ref) gives it the encoded path
+ *           char(1) 'N' char(1) server char(1) file: net_open() (netfiles.c) BEFORE fullpath() and any file table lookup, and only for OPEN
+ *           (map_name), never OPENPATH or OPENTEMP.  dio_close() closes a NET_FILE through net_close().
+ * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.64 part 2 (review): the CREATE.FILE statement (op_create_dh, op_create_t1) and OPENTEMP refuse to make a file INSIDE
+ *           a VOC, a dictionary, a program file or the private catalogue the session may not change (create_edit_refusal ->
+ *           edit_os_path_refusal, final name not counted): -ER_PERM with the reason, or ER_PERM for OPENTEMP's ELSE. $internal
+ *           programs (createf and the rest) are not asked. The S.63 OS-access test on these routes is a separate gap, not added.
+ *  9 Sep 26 Linux port - SDNet removed (plan G4, UPSTREAM_FIXES SDNet entry).
+ *           The ';' network-file dispatch and net_open() call are gone from
+ *           op_open(), so a mapped name containing ';' now falls through to
+ *           fullpath() and fails like any other bad pathname; the NET_FILE
+ *           close arm went too. gplsrc/netfiles.c and the NET_FILE type are
+ *           deleted; NETFILES, USR_SDNET, K$SDNET, SrvrOpenSDNet and sdnet.h
+ *           (the socket/termios portability header - NOT SDNet) stay.
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux fca584f (12 Oct 26): open_file() acts on the NON.TRANSACTIONAL option of OPEN and OPENPATH (P_NON_TXN; item 64).
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): open_file() acts on the mode letters N and R in field 6 of the
@@ -196,6 +211,8 @@ void op_configfl() {
   /* 18 Oct 26 S.66: the structure of a file in the shared account is SDSYS's alone ($internal is not exempt); before anything is changed */
   if (shared_structure_refusal(fvar) != EDIT_NONE)
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
+  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file is not configured from here (it would be told "read only" or status 1 silently) */
+    net_refuse(fvar, "CONFIGURE.FILE");
 
   if (fvar->flags & FV_RDONLY)
     k_error(sysmsg(1400));
@@ -595,6 +612,12 @@ void dio_close(FILE_VAR* fvar) {
       close_seq(fvar);
       break;
 
+    case NET_FILE:
+      /* 17 Oct 26 S.65 slice 3c: file_id is -1, so nothing above ran.  net_close() tells the server only for a CLOSE statement
+         (explicit_close); a release during an unwind or at scope exit is queued, as the handler is BASIC and must not run here. */
+      net_close(fvar);
+      break;
+
   }
 
   if (fvar->voc_name != NULL)
@@ -718,6 +741,8 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   u_int32_t device = 0;
   u_int32_t inode = 0;
   bool temp_refused = opentemp_edit_refused; /* 17 Oct 26 S.64 part 2: OPENTEMP named a place inside a guarded file */
+  bool net_failed = FALSE;                   /* 17 Oct 26 S.65 slice 3c: net_open() failed with an error: its message is the one to give */
+  int net_status;
 
   opentemp_edit_refused = FALSE; /* taken here, so that no later OPEN can find it set */
   op_flags = process.op_flags;
@@ -796,17 +821,23 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
       goto exit_op_open;
     }
 
-    /* 18 Aug 26 Windows port - SDNET IS GONE.  A VOC file reference containing
-       a semicolon used to mean "server;remote_file" and was handed to
-       net_open(), which opened a socket to a remote SD server on port 4245
-       using credentials held in sd.conf under a substitution cipher.  Owner's
-       decision, 18 Aug 2026: remove it.  qmclient stays, because the API needs
-       it and is mitigated by requiring an ssh tunnel; qmnet has no such
-       mitigation and no off switch - the NETFILES parameter was never tested
-       anywhere.  PROJECT_STATUS.md section 8.
+    /* SDNet removed (plan G4): a name containing ';' is no longer a network
+       file reference. It falls through to fullpath() and fails like any other
+       bad pathname. */
 
-       Nothing replaces the branch: a name containing a semicolon now falls
-       through to fullpath() and fails to open like any other bad pathname. */
+    /* 17 Oct 26 S.65 slice 3c: an N pointer in the VOC (_voc_ref) is a file on another SD server.  It comes back as the encoded path
+       char(1) 'N' char(1) server char(1) file, which no real path holds.  Only an OPEN by name looks for it (map_name): OPENPATH and
+       OPENTEMP name a path directly, and a char(1) typed into one is just a path that does not exist.  net_open() asks the NET gate
+       first and then the $netfile handler; it makes no file table entry (file_id stays -1) and sets the type itself.  A positive
+       status is the ELSE branch, a negative one an error whose message net_message() holds (shown below unless ON ERROR). */
+    if (net_path_is_net(mapped_name)) {
+      net_status = net_open(fvar, mapped_name);
+      if (net_status == 0)
+        goto net_file_opened;
+      process.status = net_status;
+      net_failed = (net_status < 0);
+      goto exit_op_open;
+    }
   }
 
   fullpath(pathname, mapped_name);
@@ -1101,6 +1132,8 @@ opened_via_txn_cache:
 
   /* Set file variable */
 
+net_file_opened: /* 17 Oct 26 S.65 slice 3c: a NET_FILE has no mode letters to act on and no file table entry; net_open() set what it needs */
+
   InitDescr(fvar_descr, FILE_REF);
   fvar_descr->data.fvar = fvar;
 
@@ -1126,6 +1159,8 @@ exit_op_open:
   (e_stack++)->data.value = process.status;
 
   if ((process.status < 0) && !(op_flags & P_ON_ERROR)) {
+    if (net_failed)
+      k_error("%s", net_message()); /* the handler's own message (12465, 12466, 12501, 12502 ...), not "Error %d opening file" */
     k_error(sysmsg(1402), -process.status);
   }
 }
