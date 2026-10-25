@@ -70,7 +70,7 @@ $include syscom keys.h
    if all.keyword and except.list # '' then
       commons = list.common()
       for i = 1 to dcount(commons, @fm)
-         s = commons<i>
+         s = commons<i,1>     ;* 15 Oct 26 dm  list.common() gives name]creator
          if s[1,1] # '$' then
             locate upcase(s) in except.list<0> setting pos else
                delete.common s

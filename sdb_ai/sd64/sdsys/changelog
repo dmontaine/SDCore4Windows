@@ -2,6 +2,99 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+15 Oct 26  FCONTROL() FOR PROGRAMS, AND LIST.COMMON DETAIL.
+
+             FCONTROL(file.var, action {, qualifier}).  A program can now use
+             the openQM 4 function, with its action numbers (the FC$ tokens
+             are in keys.h):
+             2  FC$SET.SEQ.KEY n   the next id WRITE ... CREATING.SEQKEY gives
+                                    out; returns 1
+             3  FC$GET.SEQ.KEY     takes that id and moves the counter on, to
+                                    reserve an id without writing a record
+             5                      field access: always 1 (SD has no field
+                                    level encryption)
+             6  FC$VALID.ID id     1 if the id could be written to this file
+             7  FC$MINMOD n        the minimum modulus of a hashed file
+             2, 3 and 7 are refused on a file opened read only (STATUS()
+             3018, nothing changed) and on a file that is not hashed (3005).
+             FC$SYNC (1) and FC$CRLF (4) stop the program with a message:
+             SD has no forced-write mode and no line terminator modes, and an
+             answer that looked like success would be worse than no answer.
+             The function used inside SD for file control, also called
+             FCONTROL, is now FCONTROL.INT, and its FC$ tokens FCI$; programs
+             of your own never used it (it is for internal programs only).
+
+             LIST.COMMON DETAIL shows beside each named common block the name
+             of the program that created it.  What it does NOT do: the name is
+             that of the object file's program as SD records it, which is the
+             program that first ran the COMMON statement in the session.
+
+15 Oct 26  TWO FAULTS IN THE RESTRICTED CLIENT SESSION (SDCLIENT 1 AND 2).
+
+             - A client that asked SDExecute to run a command in a session
+               restricted with SDCLIENT 1 or 2 was refused, but the refusal
+               text was copied past the end of a one byte buffer in the
+               client library, which could end the client program with a
+               heap error.  SDExecute now copies only what the reply holds.
+             - With SDCLIENT 2 only subroutines flagged $sdcall may be called
+               from a client.  Any other subroutine was reported as refused
+               and still ran: the refusal was sent but the call went on.  It
+               now stops at the refusal.
+
+             What it does NOT do: SDCLIENT 0 (the default) is unchanged.
+
+15 Oct 26  ED AND SED TAKE CREATING.SEQKEY, AND THE RECORD-ID COUNTER NO
+           LONGER GIVES OUT AN ID TWICE.
+
+             ED and SED.  CREATING.SEQKEY can be given in place of a record
+             id: ED file CREATING.SEQKEY, SED DICT file CREATING.SEQKEY, or
+             typed at SED's Record name prompt.  The editor takes the file's
+             next sequential id - the counter WRITE ... CREATING.SEQKEY uses -
+             and shows it like any record id.  The id is taken when the edit
+             begins, so a record that is never filed leaves a gap in the
+             sequence, and an id already used by a record is skipped.  A file
+             that is not a hashed file, such as a directory file, is refused
+             with a message, as is a file opened read only.  CREATING.SEQKEY
+             in quotes is an ordinary record id.
+
+             The counter.  A file that gave out record ids with WRITE ...
+             CREATING.SEQKEY could lose its counter, and so hand out an id
+             that was already in use, when something else wrote the file's
+             header from a copy it had read earlier: closing, writing,
+             splitting or clearing the file, creating or deleting an index
+             (the long one), setting a journal or a trigger.  Those now write
+             back only the part of the header they own.  A header lock left
+             held on two failure paths of FCONTROL, which stalled the
+             CREATING.SEQKEY writes of that process, is released, and the
+             upgrade of a file's case handling now carries the counter into
+             the rebuilt file.  A refused write to a read-only file no longer
+             uses up an id.  sdfix's H command now
+             shows the next id the file will give out (Next seq id) and warns
+             if it is negative.
+
+             An id in use is skipped.  WRITE ... CREATING.SEQKEY (and the
+             editors, and SDWriteSeqKey over the API) now looks at the file
+             before it uses an id: if a record already has that id - a file
+             made by COPY or COPYP, whose counter starts at the first id even
+             when numeric-id records were copied in, or records written by a
+             program that chose its own numbers - the id is skipped and the
+             next one is tried, so the record is not overwritten.  openQM does
+             not look; this is a deliberate difference.  The skipped numbers
+             leave gaps.  CLEAR.FILE keeps the counter, so the ids carry on
+             after a clear (CONFIGURE.FILE file NEXT 1 starts them again).
+
+             What it does NOT do: it does not make a copy carry the source
+             file's counter, and a transaction looks only at the records
+             already committed to the file (an id this process took earlier is
+             never given out twice in any case).
+
+             CONFIGURE.FILE carries the counter over; sdconv reverses it.
+             (Unlike openQM, SD skips an id that already names a record - see
+             the entry above.)
+             over the API and return the id.  The CREATING.SEQKEY option of
+             the ED and SED editors is the entry above it; sdfix's check of
+             the counter against the records is not done.
+
 15 Oct 26  SEQUENTIAL FILES OVER THE API, AND WRITE ... CREATING.SEQKEY.
 
              SEQUENTIAL FILES.  The client library (and the BASIC class

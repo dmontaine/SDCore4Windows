@@ -77,6 +77,21 @@
  *
  *   Rem "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.38.33130\bin\Hostx64\x86\dumpbin.exe" /exports winSDclilib.dll
  *   To get listing of functions
+ * 15 Sep 26 Windows port - from Linux 400500c - - sysdir()'s SD_CONFIG literals are a DUPLICATE of sddefs.h's
+ *     SD_CONFIG_ENV / SD_CONFIG_DEFAULT; change them together.  The server
+ *     used to read SCARLET_CONFIG instead; it does not any more.
+ *
+ * 15 Oct 26 Windows port - from Linux 400500c - - sheet 456: THREAD SAFETY.  The current session, the transfer
+ *     buffer and the Callx argument buffers are per thread (__thread), the
+ *     table of sessions is shared and its slots are claimed under
+ *     session_lock, so threads work on different sessions at the same time
+ *     and each tracks its own current session (SDSetSession) as the manual
+ *     requires.  Two threads must still not use ONE session together.  A
+ *     connection that fails keeps its slot (CX_HELD) so that its owner can read
+ *     the error; gethostbyname / getpwnam are the reentrant forms, and the
+ *     child of SDConnectLocal does nothing but exec.
+ * 15 Oct 26 Windows port - from Linux 400500c - SDExecute copies reply_len bytes: an on-error reply
+ *     (SDCLIENT 1 or 2) overran a one byte allocation with strcpy.
  *
  * 20240305 mab add balance of functions to msvc port
  * 20260805 align write-size validation and error-response semantics with the
@@ -2085,6 +2100,9 @@ DLLEntry char*  SDExecute(char* cmnd, int* err) {
       break;
   }
 exit_sdexecute:
+  /* 15 Oct 26 dm  copy reply_len bytes, not a string: on an on-error reply
+     reply_len is 0 and the buffer holds the refusal text, which the strcpy
+     wrote past a one byte allocation. */
   reply = malloc(reply_len + 1);
   if (reply == NULL) {
     snprintf(session[session_idx].sderror,

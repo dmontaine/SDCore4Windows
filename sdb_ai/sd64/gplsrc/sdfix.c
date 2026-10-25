@@ -43,6 +43,9 @@
  * 19 Oct 26 Windows port - file_open_in_sd() attaches SD's table with shm_open()/mmap(), as sdidx.c does; the carried
  *           shmget() is SysV shared memory, which this runtime does not have without cygserver, so the check never ran.
  *           It ignores case in the path, as NTFS does, and compares the two paths as Windows spells them (sdsamepath.h).
+ * 15 Oct 26 Windows port - from Linux 400500c - - H shows the sequential id counter (seq_key) and warns when it is negative.
+ * 15 Sep 26 Windows port - from Linux 400500c - - read_sdconfig()'s path buffer is MAX_PATHNAME_LEN + 1, as
+ *           every other GetConfigPath() caller passes.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -774,6 +777,12 @@ void H_command() {
   emit("%04X: AK path       '%s'\n", offsetof(DH_HEADER, akpath), (header.akpath[0] == '\0') ? "" : header.akpath);
   emit("%04X: Creation time %d\n", offsetof(DH_HEADER, creation_timestamp), header.creation_timestamp);
   emit("%04X: Record count  x%s (actual count is one less)\n", offsetof(DH_HEADER, record_count), I64(header.record_count));
+  /* 15 Oct 26 dm - the counter of WRITE ... CREATING.SEQKEY: the NEXT id it gives out, 0 for none yet (the next is then 1).
+     It is an int32 that is never legitimately negative. */
+  emit("%04X: Next seq id   %d\n", offsetof(DH_HEADER, seq_key), (int)header.seq_key);
+  if (header.seq_key < 0) {
+    emit("      WARNING: the next seq id is negative (%d); the counter of CREATING.SEQKEY is damaged\n", (int)header.seq_key);
+  }
   emit("\n");
 
   if (subfile >= AK_BASE_SUBFILE) {

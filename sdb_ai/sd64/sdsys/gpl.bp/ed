@@ -78,6 +78,11 @@ $define COMMAND.STACK.DEPTH 99
    parser = "!PARSER"
    source.control = "SOURCE.CONTROL"
 
+* 15 Oct 26 dm  CREATING.SEQKEY on the command line goes into the list of ids as this word, which no id typed at a
+*   keyboard is, so that "CREATING.SEQKEY" in quotes (token type PARSER$STRING) is still the record of that name.
+   seq.mark = char(1) : 'SEQKEY'
+   seq.failed = @false
+
 * 21 Aug 26 Windows port - THE MINUS WAS MISSING.  gplsrc/err.h: commands set
 *   the arithmetic INVERSE of the err.h value into @SYSTEM.RETURN.CODE, and
 *   CREATEA:206 and DELACC:82 write this identical preset as -ER$ARGS.  Left
@@ -237,10 +242,21 @@ $define COMMAND.STACK.DEPTH 99
       begin case
          case keyword = KW$NO.QUERY
             no.query = @true
+         case token.type = PARSER$TOKEN and upcase(token) = 'CREATING.SEQKEY'
+            id.list<-1> = seq.mark  ;* (in quotes it is a record id like any other)
          case 1
             id.list<-1> = token
       end case
    repeat
+
+   * CREATING.SEQKEY needs a file that can give an id: say so before any record is edited
+   if index(id.list, seq.mark, 1) then
+      call $seqkey(file, @false, seq.id, seq.why)
+      if seq.why # '' then
+         @system.return.code = -ER$ARGS
+         stop seq.why
+      end
+   end
 
    if id.list # '' then
       if id.list = '*' then gosub edit.all
@@ -248,7 +264,9 @@ $define COMMAND.STACK.DEPTH 99
          edit.from.list = @false    ;* Not a select list
          loop
             record.name = remove(id.list, more.ids)
-            gosub edit
+            seq.failed = @false
+            if record.name = seq.mark then gosub next.seq.key
+            if not(seq.failed) then gosub edit
          while more.ids and not(input.ended)
          repeat
       end
@@ -292,12 +310,28 @@ $define COMMAND.STACK.DEPTH 99
                gosub edit.all
                exit
             end
-            gosub edit
+            seq.failed = @false
+            if upcase(record.name) = 'CREATING.SEQKEY' then gosub next.seq.key
+            if not(seq.failed) then gosub edit
             first.record = @false
          until input.ended      ;* (else the prompt for the next name would be shown once more, to an input that has ended)
          repeat
       end
    end
+
+   return
+
+*****************************************************************************
+* NEXT.SEQ.KEY  -  CREATING.SEQKEY was asked for in the place of a record id
+*
+* record.name becomes the file's next sequential id, taken now, as the edit begins.  If none can be given the reason is
+* displayed and seq.failed is set, so that the caller edits nothing.
+
+next.seq.key:
+   call $seqkey(file, @true, seq.id, seq.why)
+   seq.failed = (seq.why # '')
+   if seq.failed then display seq.why
+   else record.name = seq.id
 
    return
 

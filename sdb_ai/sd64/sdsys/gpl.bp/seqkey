@@ -1,0 +1,69 @@
+* SEQKEY
+* call $seqkey(file, take, id, why) - the next sequential record id of a hashed file, for the CREATING.SEQKEY of ED and SED.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 15 Oct 26 dm  New.  The editors take CREATING.SEQKEY in the place of a record id (openQM 4: "Use of CREATING.SEQKEY
+*               instead of a record id automatically generates the next sequential key for the file").  The counter is
+*               the one WRITE ... CREATING.SEQKEY uses (dh_seq_key(), the header of the primary subfile); FCONTROL is
+*               internal-only, so the editors, being system programs, ask it here.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $seqkey(file, take, id, why)
+*
+*   file   an open file variable (the data part, or the dictionary part opened with DICT)
+*   take   false: only say whether the file can give a sequential id (id is returned null)
+*          true:  take the next one
+*   id     the id taken, as a string; null when why is set, or when take is false
+*   why    null, or the reason in words: not a hashed file, a read-only file, or the counter could not be taken
+*
+*   An id that names a record that is already in the file is passed over and the next taken (the counter is moved
+*   past it): the editors ask for a NEW record, and WRITE ... CREATING.SEQKEY, which does not look, can overwrite.  A
+*   file whose numeric ids already run past the counter is walked past them one id at a time; CONFIGURE.FILE NEXT n
+*   moves the counter in one step.  An id taken is not given back: a record that is never filed leaves a gap.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine seqkey(f, take, id, why)
+$catalog $seqkey
+
+$include keys.h
+$include int$keys.h
+
+   id = ''
+   why = ''
+
+   begin case
+      case fileinfo(f, FL$TYPE) # FL$TYPE.DH
+         why = sysmsg(12357)        ;* The file is not a hashed file, so creating.seqkey cannot give it a record id
+      case fileinfo(f, FL$READONLY)
+         why = sysmsg(1431)         ;* File is read-only
+      case not(take)
+         null
+      case 1
+         loop
+            n = fcontrol.int(f, FCI$GET.SEQ.KEY, 0)
+            if n = '' then n = 0
+            if n < 1 then
+               why = sysmsg(12358)  ;* The next sequential record id of the file cannot be taken
+               exit
+            end
+            read dummy from f, n then
+               null                 ;* a record is there already: take the next id
+            end else
+               id = n : ''
+               exit
+            end
+         repeat
+   end case
+
+   return
+end
+
+* END-CODE

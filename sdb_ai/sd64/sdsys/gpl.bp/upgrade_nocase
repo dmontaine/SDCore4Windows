@@ -37,6 +37,25 @@
 *           and counted in 10183, and the walk goes on, instead of aborting with
 *           1402/3001 and leaving the rest unconverted.  Linux met this on a real
 *           install (its 11037); the port's cause would be a damaged or locked file.
+* 15 Oct 26 Windows port - from Linux 400500c - The rebuild carries the sequential id counter of WRITE ... CREATING.SEQKEY to the new file (audit of the counter).
+* 07 Oct 26 Windows port - from Linux 400500c - First COMPLETE install run (the owner's, of 40d0378): "Converted 2 of 3" and a
+*           10-file list that named voc.dic three times and the directory files syscom, newvoc,
+*           sd.voclib and the account's own directory.  A file is now judged once per account
+*           (real path), a path with no %0 (a directory file) is returned silently again, and
+*           a file named from outside is listed once.  Measured on that install: $hold.dic and
+*           voc were rebuilt as don:sdu_don, mode 664.
+* 07 Oct 26 Windows port - from Linux 400500c - First real install run (the owner's, of 5cb696b): "Error 3001 opening file".  The
+*           path is now judged BEFORE the file is opened (convert.one), so an SDSYS file or one
+*           outside the account is never touched; the opens that remain (a file, an account's VOC)
+*           are ON ERROR: reported (11037), counted in 10183, and the walk goes on.
+* 07 Oct 26 Windows port - from Linux 400500c - The Windows agent's review (mail T0639): hunk 4 is no longer silent, and the
+*           test is made on the real path of both sides (links resolved); files outside
+*           the account's own directory are left and named (LINUX 5).
+* 07 Oct 26 Windows port - from Linux 400500c - PAL-1 D2: ported for Linux from the port's 16 Sep 26 version.  The
+*           register walk converts each account as its owner (see LINUX above),
+*           SDSYS is skipped, cat/ names are made lower case, and the port's
+*           backslash folding of paths is gone (a backslash is a legal file name
+*           character here).
 * 16 Sep 26 Windows port - RELEASE_1.1 51.  $ipc is skipped like the live VOC.
 *           The service is started before this walk runs, holds $ipc open, and
 *           the walk therefore reported "1 file(s) could not be read or
@@ -420,6 +439,13 @@ convert.one:
    if trigger # '' then
       set.trigger new.fu, trigger, fileinfo(old.fu, FL$TRG.MODES)
    end
+
+   * 15 Oct 26 - the counter of WRITE ... CREATING.SEQKEY goes to the new file, as CONFIGURE.FILE's rebuild carries it (it
+   *   lives in the file's header, and the new file is a new file: its counter would have started again at 1 and the next
+   *   write would have been given the id of a record that is there).  FL$SEQ.KEY is the id last given out, 0 for none.
+   seq.last = fileinfo(old.fu, FL$SEQ.KEY)
+   if seq.last > 0 then void fcontrol.int(new.fu, FCI$SET.SEQ.KEY, seq.last + 1)
+
    close new.fu
    void ospath('', OS$FLUSH.CACHE)
 

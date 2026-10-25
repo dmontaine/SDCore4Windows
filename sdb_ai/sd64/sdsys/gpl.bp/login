@@ -1059,7 +1059,7 @@ deffun pw_complex(pw) calling '!pw_complex'
       recordlocku ipc.f,'P':@userno     ;* Phantom register
       delete ipc.f, 'P':@userno
 
-      void fcontrol(ipc.f, FC$NON.TXN, 0) ;* Set non-transactional
+      void fcontrol.int(ipc.f, FCI$NON.TXN, 0) ;* Set non-transactional
    end
 
    if not(is.phantom) and not(fileinfo(voc, FL$READONLY)) then

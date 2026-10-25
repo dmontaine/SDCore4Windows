@@ -1894,9 +1894,9 @@ Private int16_t create_ak(char *data_path,          /* Data file path name */
     } while (dict_rec_len != 0);
   }
 
-  /* Write modified primary header */
+  /* Write modified primary header (15 Oct 26: all but the sequential id counter, which is not ours - see DH_HEADER_SHARED_SIZE) */
 
-  if (!write_at(fu, (int64)0, (char *)&header, DH_HEADER_SIZE)) {
+  if (!write_at(fu, (int64)0, (char *)&header, DH_HEADER_SHARED_SIZE)) {
     goto exit_create_ak;
   }
 
@@ -1987,9 +1987,9 @@ Private bool delete_ak(char *pathname, /* File path name */
     header.akpath[0] = '\0';
   }
 
-  /* Write primary subfile header */
+  /* Write primary subfile header (15 Oct 26: all but the sequential id counter - see DH_HEADER_SHARED_SIZE) */
 
-  if (!write_at(fu, (int64)0, (char *)&header, DH_HEADER_SIZE)) {
+  if (!write_at(fu, (int64)0, (char *)&header, DH_HEADER_SHARED_SIZE)) {
     goto exit_delete_ak;
   }
 

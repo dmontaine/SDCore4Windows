@@ -687,6 +687,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "EXP"             ; intrinsic.opcodes<-1> = OP.EXP
    intrinsics<-1> = "EXPAND"          ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - linked data collections
    intrinsics<-1> = "EXTRACT"         ; intrinsic.opcodes<-1> = OP.EXTRACT
+   intrinsics<-1> = "FCONTROL"        ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - the public FCONTROL(fvar, action {, qualifier}), openQM numbers
    intrinsics<-1> = "FIELD"           ; intrinsic.opcodes<-1> = OP.FIELD
    intrinsics<-1> = "FIELDS"          ; intrinsic.opcodes<-1> = OP.FIELDS
    intrinsics<-1> = "FIELDSTORE"      ; intrinsic.opcodes<-1> = OP.FLDSTORF
@@ -887,7 +888,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    int.intrinsics<-1> = "DEBUG.INFO"      ; int.intrinsic.opcodes<-1> = OP.DBGINF
    int.intrinsics<-1> = "EVENTS"          ; int.intrinsic.opcodes<-1> = OP.EVENTS
    int.intrinsics<-1> = "EXPAND.HF"       ; int.intrinsic.opcodes<-1> = OP.EXPANDHF
-   int.intrinsics<-1> = "FCONTROL"        ; int.intrinsic.opcodes<-1> = OP.FCONTROL
+   int.intrinsics<-1> = "FCONTROL.INT"    ; int.intrinsic.opcodes<-1> = OP.FCONTROL   ;* 15 Oct 26 dm - was FCONTROL; the public FCONTROL has the openQM numbers (OP.XFUN)
    int.intrinsics<-1> = "FIND"            ; int.intrinsic.opcodes<-1> = OP.BTFIND
    int.intrinsics<-1> = "FORMCSV"         ; int.intrinsic.opcodes<-1> = OP.FORMCSV
    int.intrinsics<-1> = "GETLOCKS"        ; int.intrinsic.opcodes<-1> = OP.GETLOCKS
@@ -4291,7 +4292,7 @@ end
                                in.two,        ;* DEBUG.INFO
                                in.two,        ;* EVENTS
                                in.three,      ;* EXPANDHF
-                               in.three,      ;* FCONTROL
+                               in.three,      ;* FCONTROL.INT
                                in.two,        ;* FIND
                                in.one,        ;* FORMCSV
                                in.two,        ;* GETLOCKS
@@ -4396,6 +4397,7 @@ end
                       in.one,         ;* EXP
                       in.expand,      ;* EXPAND
                       in.extract,     ;* EXTRACT
+                      in.xfun,        ;* FCONTROL
                       in.field,       ;* FIELD
                       in.field,       ;* FIELDS
                       in.five,        ;* FIELDSTORE
@@ -4673,6 +4675,7 @@ xfun.table.load:
             xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"
             xfun.rows := @fm:"DIGEST,26,3,,0"   ;* 15 Oct 26 dm - QM4 gaps Q-13
             xfun.rows := @fm:"SWAPMARKS,28,1,,0" ;* 15 Oct 26 dm - QM4 gaps Q-1, sheet 238 (27 is SELECT.SOCKET, which has its own handler)
+            xfun.rows := @fm:"FCONTROL,29,2,0,0"  ;* 15 Oct 26 dm - FCONTROL(fvar, action {, qualifier}); the qualifier is 0 when left out
             xfun.rows := @fm:"SDSALT,37,0,,0":@fm:"SDKEY,38,2,,0":@fm:"SDRANDKEY,39,0,,0"   ;* 18 Oct 26 dm - encryption layer 2
             xfun.rows := @fm:"CSVPARSE,43,1,0|,0":@fm:"CSVBUILD,44,1,0|,0":@fm:"CSVOPEN,45,1,||,0":@fm:"JMERGE,46,2,,0":@fm:"JPATCH,47,2,,0":@fm:"JPATH,48,2,,0":@fm:"JVALIDATE,49,2,,0":@fm:"XPARSE,50,1,0,0":@fm:"XBUILD,51,1,0|,0":@fm:"XPATH,52,2,,0"   ;* 20 Oct 26 dm - CSV / JSON / XML task (40 to 42 are FORMCSV, CSVDQ and CSV.MODE's operands, emitted by their own handlers)
             for xf.j = 1 to dcount(xfun.rows, @fm)

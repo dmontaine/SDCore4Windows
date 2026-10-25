@@ -322,6 +322,7 @@
       $define SKT$INFO.FAMILY.IPV6     2    ;* Socket address family IPV6
       * 18 Oct 26 Windows port - from Linux cc03bed (15 Oct 26): - QM4 gaps Q-5, SELECT.SOCKET().  SKT$INFO.EVENTS is SD's own number; the events are openQM's.
       $define SKT$INFO.EVENTS          9    ;* SET.SOCKET.MODE: events to watch.  SOCKET.INFO: the letters last found
+      $define SKT$INFO.TRACE           10   ;* SET.SOCKET.MODE: pathname of a log of the data sent and received (null turns it off)
       $define SKT$READ.EVENT           1    ;* Data to read, a connection waiting on a server socket, or the peer closed
       $define SKT$WRITE.EVENT          2    ;* Data can be sent
       $define SKT$EXCEPTION.EVENT      4    ;* An exception condition
@@ -687,8 +688,7 @@
       $define ML$UNION        16    ;*   MERGELIST: the items in either list, once each
       $define ML$DIFF         24    ;*   MERGELIST: the items in the first list and not the second
       $define ML$UNSORTED     32    ;*   MERGELIST: the lists are not in order, so put them in order first
-* The FC$ tokens of the public FCONTROL() (Linux 400500c, held with the QMClient chain) and the OS$ tokens of OSPATH() for any
-* program (behind the S.63 gate) are NOT here.
+* The OS$ tokens of OSPATH() for any program (behind the S.63 gate) are NOT here.
 
 * 16 Oct 26 - VARTYPE() values
       $define VT$UNASSIGNED   0
@@ -712,3 +712,16 @@
       $define VT$COLLECTION   19
       $define VT$SORT         20
 
+* 15 Oct 26 dm - The actions of FCONTROL(), with the openQM 4 manual's numbers (action 5, the field access test, has no token
+* here: the manual's heading for it did not survive; use the number).  FC$SYNC and FC$CRLF are named so that a program
+* written for openQM compiles, and are refused when used - SD has no forced-write mode and no line terminator modes.
+      $define FC$SYNC         1     ;*   Forced writes (refused)
+      $define FC$SET.SEQ.KEY  2     ;*   Set the next id that WRITE ... CREATING.SEQKEY gives out
+      $define FC$GET.SEQ.KEY  3     ;*   Take the next such id
+      $define FC$CRLF         4     ;*   Line terminator mode (refused)
+      $define FC$VALID.ID     6     ;*   Is the qualifier a valid record id for the file?
+      $define FC$MINMOD       7     ;*   Set the minimum modulus of a hashed file
+      $define FC$CRLF.LF      0     ;*   The modes of FC$CRLF
+      $define FC$CRLF.CRLF    1
+      $define FC$CRLF.BOTH    2
+      $define FC$CRLF.NOCR    3

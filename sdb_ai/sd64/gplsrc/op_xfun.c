@@ -24,6 +24,9 @@
  *               any program, behind the S.63 gate) and XF_FCONTROL 29 (400500c) are NOT carried.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-1: CEIL FLOOR ROUNDUP ROUNDDOWN IS.* LEFT RIGHT LAST NV NS TRIMWS MATCHESS
+ * 15 Oct 26 Windows port - from Linux 400500c - XF_FCONTROL: the public FCONTROL() (pub_fcontrol(), dh_misc.c).
+ * 15 Oct 26 Windows port - from Linux 400500c - XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
+ * 15 Oct 26 Windows port - from Linux 400500c - Written for QM4 gaps bundle Q-1: CEIL FLOOR ROUNDUP ROUNDDOWN IS.* LEFT RIGHT LAST NV NS TRIMWS MATCHESS
  *               MATCHFIELDS.  One opcode (0xBB, a single byte, so that the multivalue wrappers MVDS, MVDSS and MVDSSS can
  *               take it as their base) with the function number pushed last, as OP_EPOCHCV does.
  * END-HISTORY
@@ -55,6 +58,9 @@
  *    XF_SDKEY       SDKEY(passphrase, salt)   a 44 character base64 key by argon2id (2 passes, 64 MiB; fixed, they are part of the
  *                   key's format).  A null string with STATUS() 10206 for a bad salt, 10207 for an empty or over-long passphrase
  *    XF_SDRANDKEY   SDRANDKEY()               a random 256 bit key, 44 base64 characters
+ *    XF_FCONTROL    FCONTROL(fvar, action {, qualifier})  the openQM function: 2 and 3 the CREATING.SEQKEY counter, 5 field access
+ *                   (always true), 6 a valid record id, 7 the minimum modulus; 1 and 4 (forced writes, line terminators) abort
+ *                   with a message, SD having neither
  *
  * END-DESCRIPTION
  *
@@ -99,9 +105,9 @@
 #define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
 #define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
 #define XF_SWAPMARKS 28 /* SWAPMARKS(string): the string as it is - SD has no ECS mode, where the marks would be exchanged; sheet 238 */
-/* 29 is Linux's XF_FCONTROL (the public FCONTROL, commit 400500c, which belongs to the held QMClient chain) and 31 its XF_OSPATH
-   (OSPATH for any program, behind the S.63 OS-access gate): neither is carried, and the numbers stay free. */
-#define XF_GET 30       /* GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}: op_get_device() in op_seqio.c (QM4 Fixes item 583) */
+#define XF_FCONTROL 29  /* FCONTROL(fvar, action, qualifier): the public one, openQM's numbers; pub_fcontrol() in dh_misc.c */
+/* 31 is Linux's XF_OSPATH (OSPATH for any program, behind the S.63 OS-access gate): not carried, and the number stays free. */
+#define XF_GET 30      /* GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}: op_get_device() in op_seqio.c (QM4 Fixes item 583) */
 #define XF_SORT 32      /* SORT(key.count, {MAT} flags) (QM4 Fixes item 371) */
 #define XF_SORTADD 33   /* SORTADD sortvar, {MAT} keys {, data} (QM4 Fixes item 371) */
 #define XF_SORTCLEAR 34 /* SORTCLEAR sortvar (QM4 Fixes item 371) */
@@ -147,6 +153,7 @@ void x_sortadd(void);
 void x_sortclear(void);
 void x_sortdata(void);
 void x_sortnext(void);
+void pub_fcontrol(void);
 
 void op_dcount(void);
 void op_field(void);
@@ -289,6 +296,9 @@ void op_xfun() {
     case XF_SWAPMARKS:
       /* openQM's SWAPMARKS exchanges the mark characters with accented letters on an ECS system and, since release 3.0-2,
          returns the data unchanged on any other.  SD has no ECS mode, so the argument is the result */
+      break;
+    case XF_FCONTROL:
+      pub_fcontrol();
       break;
     case XF_GET:
       op_get_device();

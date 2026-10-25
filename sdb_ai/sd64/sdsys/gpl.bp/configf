@@ -298,15 +298,15 @@ $include err.h
       * invalid actions
 
       if no.resize >= 0 then
-         void fcontrol(old.fu, FC$NO.RESIZE, no.resize)
+         void fcontrol.int(old.fu, FCI$NO.RESIZE, no.resize)
       end
 
       if immediate then  ;* Perform rehashing for IMMEDIATE option
-         if fcontrol(old.fu, FC$SPLIT.MERGE, 0) then
+         if fcontrol.int(old.fu, FCI$SPLIT.MERGE, 0) then
             display sysmsg(6203, trimf(dict.flag : ' ' : file.name)) ;* Resizing %1
             steps = 0
             loop
-            while fcontrol(old.fu, FC$SPLIT.MERGE, 0)
+            while fcontrol.int(old.fu, FCI$SPLIT.MERGE, 0)
                steps += 1
                if reporting and mod(steps, report.every) = 0 then display sysmsg(12392, steps) ;* %1 group moves so far
             repeat
@@ -324,7 +324,7 @@ $include err.h
       if fileinfo(old.fu, FL$TYPE) # FL$TYPE.DH then
          stop sysmsg(12355) ;* NEXT applies to a hashed file only
       end
-      if next.value >= 0 then void fcontrol(old.fu, FC$SET.SEQ.KEY, next.value)
+      if next.value >= 0 then void fcontrol.int(old.fu, FCI$SET.SEQ.KEY, next.value)
       if next.query then display sysmsg(12356, fileinfo(old.fu, FL$SEQ.KEY) + 1) ;* The next sequential record id is %1
    end
 
@@ -478,7 +478,7 @@ convert.file:
 
       * The counter of WRITE ... CREATING.SEQKEY goes to the new file (15 Oct 26): the next id is the last one used, and one more
       seq.last = fileinfo(old.fu, FL$SEQ.KEY)
-      if seq.last > 0 then void fcontrol(new.fu, FC$SET.SEQ.KEY, seq.last + 1)
+      if seq.last > 0 then void fcontrol.int(new.fu, FCI$SET.SEQ.KEY, seq.last + 1)
 
       close new.fu
       void ospath("", OS$FLUSH.CACHE)

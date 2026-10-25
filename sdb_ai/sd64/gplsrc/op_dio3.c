@@ -33,6 +33,10 @@
  *               VOC, a dictionary or a program file by a program that is not $internal and a session that has not the gate (voc.edit,
  *               dict.edit, bp.edit).  RELEASE_1.1 170.
  * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): Data collection files: text written to one is made into its collection before
+ * 15 Oct 26 Windows port - from Linux 400500c - WRITE ... CREATING.SEQKEY skips an id that already names a record (owner's choice, a difference from openQM).
+ * 15 Oct 26 Windows port - from Linux 400500c - WRITE ... CREATING.SEQKEY: a read-only file variable is refused, and a suspended system waited for, BEFORE an id is
+ *               taken from the file's counter (the audit of the counter: a refused write had moved it on).
+ * 11 Oct 26 Windows port - from Linux 400500c - Data collection files: text written to one is made into its collection before
  *               the pre-write trigger, so a trigger is always given a collection, and the
  *               post-write trigger is given the collection (call_trigger passed it as a string
  *               and the trigger stopped the process: Fault type 11).
@@ -1269,12 +1273,36 @@ void op_write() {
       process.status = -ER_NDYN;
       goto exit_op_write;
     }
-    seq_id = dh_seq_key(fvar->access.dh.dh_file, 0, 0);
-    if (seq_id < 0) {
-      process.status = -ER_IOE;
+
+    /* 15 Oct 26 dm - audit.  Taking an id writes the file's header, so the two refusals that cost nothing are made BEFORE it:
+       a read-only file variable is refused with its counter as it was (it was moved on, and the write then refused), and a
+       SUSPEND (sd -suspend) holds the write until sd -resume without the header having changed on disk meanwhile. */
+    if ((sysseg->flags & SSF_SUSPEND) && (txn_id == 0))
+      suspend_updates();
+
+    if (fvar->flags & FV_RDONLY) {
+      process.status = -ER_RDONLY;
+      log_permissions_error(fvar);
       goto exit_op_write;
     }
-    id_len = (int16_t)snprintf(id, sizeof(id), "%d", (int)seq_id);
+
+    /* 15 Oct 26 dm - an id that already names a record is skipped, so that records written some other way (a copy, a load, a
+       program that picked its own number) are not overwritten.  openQM does not look; the owner chose to (15 Oct 2026).  Only
+       the committed file is looked at: in a transaction an id taken earlier by this process is never given out twice anyway. */
+    for (;;) {
+      seq_id = dh_seq_key(fvar->access.dh.dh_file, 0, 0);
+      if (seq_id < 0) {
+        process.status = -ER_IOE;
+        goto exit_op_write;
+      }
+      id_len = (int16_t)snprintf(id, sizeof(id), "%d", (int)seq_id);
+      if (!dh_exists(fvar->access.dh.dh_file, id, id_len)) {
+        if (dh_err == DHE_RECORD_NOT_FOUND)
+          break;
+        process.status = -dh_err;
+        goto exit_op_write;
+      }
+    }
 
     id_target = rid_descr;
     while (id_target->type == ADDR)
