@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
+*               (12518, 12519).
 * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: X (delete the item shown) asks the kernel (K$EDIT.OK, K$EDIT.KIND) for the file it has
 *               open before it asks "Delete xx from xx (Y/N)?" and before it locks the record, and a session without the gate (voc.edit,
 *               dict.edit, bp.edit) is told why on the prompt line and nothing is deleted.  SP.VIEW is $internal, which the kernel's own test lets
@@ -46,6 +48,8 @@ $include err.h
 $include int$keys.h
 $include keys.h
 $include keyin.h
+
+   deffun edit_msg(emk) calling '!edit_msg'       ;* 18 Oct 26 dm, S.66
 
    parser = "!PARSER"
    prompt ''
@@ -318,8 +322,7 @@ delete.item:
    edit.p = fileinfo(data.f, FL$PATH)
    if not(kernel(K$EDIT.OK, edit.p)) then
       edit.kind = kernel(K$EDIT.KIND, edit.p)
-      if edit.kind < 1 or edit.kind > 3 then edit.kind = 1
-      prompt.text = sysmsg(12409 + edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+      prompt.text = edit_msg(edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
       display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
       c = keycode()
       return

@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  shared_root_get() (the account's directory from its register record, a hit
+ *           kept, a miss retried once a minute, SUSPENDED not looked at), path_in_shared(), path_resolved_in_shared(), shared_write_ok(),
+ *           edit_refusal_for_canon() and edit_refusal_for_name() (administrator, then shared.write, then the S.64 kind), shared_ref_ok()
+ *           (K_SHARED_REF), shared_once() (K_SHARED_ONCE) and edit_refused_message().  edit_ok_for_path() uses the name form.
  * 23 Oct 26 Windows port - from Linux d7cda81 and b6186cc (17 Oct 26), S.64, the edit gates: edit_kind_of_path(), edit_permitted(), edit_ok_for_path(),
  *           edit_os_path_refusal(name, include_leaf), edit_leaf_counts() and the private catalogue as a program file.  Linux resolves with
  *           getcwd / realpath and "/" only; here the name is resolved by fullpath() and folded by path_view_for_edit() / path_fold()
@@ -85,6 +89,7 @@
 #include "tio.h"
 #include "config.h"
 #include <signal.h>
+#include <time.h>
 
 #include <sys/wait.h>
 
@@ -474,10 +479,268 @@ bool edit_permitted(int kind) {
   return TRUE;
 }
 
-bool edit_ok_for_path(const char *path) {
-  int kind = edit_kind_of_path(path);
+/* ======================================================================
+   The SHARED ACCOUNT (18 Oct 26 dm, S.66).  A group account named "shared" whose files every account with the shared.read gate opens by
+   name (the BASIC lookup, GPL.BP/_VOC_REF and !SHARED_REF, decides that); the KERNEL's half is here: where the shared account is, whether a
+   path is inside it, what a session may do to a file inside it, and the acceptance test for a VOC entry that points into it.
 
-  return (kind == EDIT_NONE) || edit_permitted(kind);
+   The shared account's directory is found as LOGTO and path_in_enterable_account() find an account: line 1 of the register record
+   <sysdir>/accounts/shared, resolved with realpath().  A HIT is kept for the life of the process.  A MISS is not: a session that was
+   started before the installer made the account must begin enforcing when it appears, so the try is repeated, but no more often than
+   once a minute.  SUSPENDED is NOT looked at here: suspension withdraws the by-name lookup in BASIC and must never unprotect the files.  */
+
+#define SHARED_RETRY_SECONDS 60
+
+/* 25 Oct 26 Windows port: Linux resolved the root with realpath() and compared bytes after "/".  Here the register record holds a Windows
+   path (or @SDSYS<rest>), so the root is resolved as an open resolves it (fullpath) and FOLDED into the POSIX namespace (path_fold) once; a
+   candidate is folded the same way and compared case-insensitively on a component boundary, as path_within() in op_dio2.c does.  OUT has
+   MAX_PATHNAME_LEN + 1 bytes and receives the folded root.  */
+bool shared_root_get(char *out) {
+  static char root[MAX_PATHNAME_LEN + 1];
+  static bool have = FALSE;
+  static time_t last_try = 0;
+  char path[MAX_PATHNAME_LEN + 1];
+  char body[4096];
+  char line1[MAX_PATHNAME_LEN + 2];
+  char resolved[MAX_PATHNAME_LEN + 1];
+  char folded[MAX_PATHNAME_LEN + 1];
+  FILE *fp;
+  size_t got, n;
+  char *p;
+  time_t now;
+
+  if (have) {
+    strcpy(out, root);
+    return TRUE;
+  }
+  now = time(NULL);
+  if ((last_try != 0) && (now >= last_try) && ((now - last_try) < SHARED_RETRY_SECONDS))
+    return FALSE;
+  last_try = now;
+
+  if (snprintf(path, sizeof(path), "%s%caccounts%cshared", sysseg->sysdir, DS, DS) >= (int)sizeof(path))
+    return FALSE;
+  if ((fp = fopen(path, "r")) == NULL)
+    return FALSE;
+  got = fread(body, 1, sizeof(body) - 1, fp);
+  fclose(fp);
+  body[got] = '\0';
+  if ((p = strchr(body, '\n')) != NULL)
+    *p = '\0';
+  n = strlen(body);
+  while ((n > 0) && ((body[n - 1] == '\r') || (body[n - 1] == ' ')))
+    body[--n] = '\0';
+  if (n == 0)
+    return FALSE;
+  if (strncasecmp(body, "@SDSYS", 6) == 0) {
+    if (snprintf(line1, sizeof(line1), "%s%s", sysseg->sysdir, body + 6) >= (int)sizeof(line1))
+      return FALSE;
+  } else if (body[0] == '@') {
+    return FALSE; /* some other token: not expanded here, so not trusted */
+  } else {
+    if (n > MAX_PATHNAME_LEN)
+      return FALSE;
+    strcpy(line1, body);
+  }
+  if (!fullpath(resolved, line1) || !path_fold(resolved, folded))
+    return FALSE;
+  n = strlen(folded);
+  while ((n > 1) && (folded[n - 1] == '/'))
+    folded[--n] = '\0';
+  if (n <= 1)
+    return FALSE;
+
+  strcpy(root, folded);
+  have = TRUE;
+  strcpy(out, root);
+  return TRUE;
+}
+
+/* shared_within()  -  is the FOLDED pathname CAND at or below the folded ROOT (strictly below when STRICT)? */
+static bool shared_within(const char *cand, const char *root, bool strict) {
+  size_t len = strlen(root);
+
+  if (strncasecmp(cand, root, len) != 0)
+    return FALSE;
+  if (cand[len] == '\0')
+    return !strict;
+  return (cand[len] == '/') && (!strict || (cand[len + 1] != '\0'));
+}
+
+/* path_in_shared()  -  is this CANONICAL pathname (the pathname of an open file, as fullpath() left it) the shared account's directory
+   or below it?  No system call but the rare root lookup.  A path that cannot be folded is taken as inside (a gate that fails open on a path
+   it cannot read is decoration), once the root is known.  */
+bool path_in_shared(const char *canon) {
+  char root[MAX_PATHNAME_LEN + 1];
+  char folded[MAX_PATHNAME_LEN + 1];
+  char copy[MAX_PATHNAME_LEN + 1];
+
+  if ((canon == NULL) || !shared_root_get(root))
+    return FALSE;
+  if (strlen(canon) > MAX_PATHNAME_LEN)
+    return TRUE;
+  strcpy(copy, canon);
+  if (!path_fold(copy, folded))
+    return TRUE;
+  return shared_within(folded, root, FALSE);
+}
+
+/* path_resolved_in_shared()  -  the same for any name: resolved as an open resolves it first.  With the root known, a name that
+   cannot be resolved is taken as inside.  */
+bool path_resolved_in_shared(const char *name) {
+  char root[MAX_PATHNAME_LEN + 1];
+  char resolved[MAX_PATHNAME_LEN + 1];
+
+  if (!shared_root_get(root))
+    return FALSE;
+  if ((name == NULL) || (name[0] == '\0'))
+    return FALSE;
+  if (!fullpath(resolved, (char *)name))
+    return TRUE;
+  return path_in_shared(resolved);
+}
+
+/* shared_write_ok()  -  may this session save a change to a record of a file in the shared account? */
+bool shared_write_ok(void) {
+  return (my_uptr->flags & USR_ADMIN) || ((my_uptr->gates & UG_SHARED_WRITE) != 0);
+}
+
+/* edit_refusal_for_canon()  -  the kind that refuses THIS SESSION's write to a file with this canonical pathname, else EDIT_NONE.
+   The order matters: the administrator; then shared.write for anything inside the shared account; then the S.64 kind (VOC, dictionary,
+   program file).  So a write to a shared dictionary needs shared.write AND dict.edit, and the refusal names the first that is missing.  */
+int edit_refusal_for_canon(const char *canon) {
+  int kind;
+
+  if (my_uptr->flags & USR_ADMIN)
+    return EDIT_NONE;
+  if (path_in_shared(canon) && !shared_write_ok())
+    return EDIT_SHARED_WRITE;
+  kind = edit_kind_of_path(canon);
+  if ((kind != EDIT_NONE) && !edit_permitted(kind))
+    return kind;
+  return EDIT_NONE;
+}
+
+/* edit_refusal_for_name()  -  the same for a string from BASIC, which is resolved first. */
+int edit_refusal_for_name(const char *name) {
+  int kind;
+
+  if (my_uptr->flags & USR_ADMIN)
+    return EDIT_NONE;
+  if (path_resolved_in_shared(name) && !shared_write_ok())
+    return EDIT_SHARED_WRITE;
+  kind = edit_kind_of_path(name);
+  if ((kind != EDIT_NONE) && !edit_permitted(kind))
+    return kind;
+  return EDIT_NONE;
+}
+
+bool edit_ok_for_path(const char *path) {
+  return edit_refusal_for_name(path) == EDIT_NONE;
+}
+
+/* edit_refused_message()  -  the message number for a refusing kind (edit_refusal_for_*, create_edit_refusal, the structure refusals). */
+int edit_refused_message(int kind) {
+  switch (kind) {
+    case EDIT_VOC:
+    case EDIT_DICT:
+    case EDIT_PROG:
+      return 12409 + kind;
+    case EDIT_SHARED_WRITE:
+      return 12518;
+    case EDIT_SHARED_STRUCT:
+      return 12519;
+  }
+  return 12410;
+}
+
+/* shared_ref_ok()  -  K_SHARED_REF.  May the F-pointer target PATH (field FNO of a VOC entry of the shared account: 2 the data part, 3 the
+   dictionary part) be opened by name by another account?  Only a file that exists, strictly BELOW the shared directory, with no
+   component below it that is a VOC, a program file or the private catalogue, and no dictionary where a data file is wanted (a
+   dictionary only as the last component of field 3).  CATNAME is the shared account's own $PRIVATE.CATALOGUE value; edit_kind_of_path()
+   cannot see it, since it compares with the CALLER's catalogue.  No message.  */
+bool shared_ref_ok(const char *path, int fno, const char *catname) {
+  char root[MAX_PATHNAME_LEN + 1];
+  char absp[MAX_PATHNAME_LEN + 1];
+  char resolved[MAX_PATHNAME_LEN + 1];
+  char comp[MAX_PATHNAME_LEN + 1];
+  const char *cat_last;
+  const char *p;
+  const char *more;
+  size_t root_len, cat_n, n;
+  int kind;
+  bool is_last;
+
+  if ((fno != 2) && (fno != 3))
+    return FALSE;
+  /* 25 Oct 26 Windows port: the target is resolved as an open resolves it (fullpath) and folded into the root's namespace; it must exist */
+  if ((path == NULL) || (path[0] == '\0') || (strlen(path) > MAX_PATHNAME_LEN) || !shared_root_get(root))
+    return FALSE;
+  if (!fullpath(absp, (char *)path) || !path_fold(absp, resolved))
+    return FALSE;
+  if (access(absp, F_OK) != 0)
+    return FALSE;
+  root_len = strlen(root);
+  if (!shared_within(resolved, root, TRUE))
+    return FALSE;
+
+  cat_last = NULL;
+  cat_n = 0;
+  if ((catname != NULL) && (catname[0] != '\0'))
+    cat_last = last_component(catname, &cat_n);
+
+  for (p = resolved + root_len; *p != '\0';) {
+    while (*p == '/')
+      p++;
+    n = 0;
+    while ((p[n] != '\0') && (p[n] != '/'))
+      n++;
+    if (n == 0)
+      break;
+    more = p + n;
+    while (*more == '/')
+      more++;
+    is_last = (*more == '\0');
+    if (n >= sizeof(comp))
+      return FALSE;
+    memcpy(comp, p, n);
+    comp[n] = '\0';
+    kind = edit_kind_of_name(comp);
+    if ((fno == 3) && is_last) {
+      if (kind != EDIT_DICT)
+        return FALSE;
+    } else if (kind != EDIT_NONE) {
+      return FALSE;
+    }
+    if (strcasecmp(comp, "cat") == 0)
+      return FALSE;
+    if ((cat_last != NULL) && (cat_n == n) && (strncasecmp(comp, cat_last, n) == 0))
+      return FALSE;
+    p += n;
+  }
+  return TRUE;
+}
+
+/* shared_once()  -  K_SHARED_ONCE.  TRUE the first time this process asks about a name, FALSE afterwards.  64 names of up to 63
+   characters are remembered; when the table is full the answer is TRUE (more audit, never less).  */
+bool shared_once(const char *name) {
+  static char seen[64][64];
+  static int count = 0;
+  char key[64];
+  int i;
+
+  if ((name == NULL) || (name[0] == '\0'))
+    return TRUE;
+  strncpy(key, name, sizeof(key) - 1);
+  key[sizeof(key) - 1] = '\0';
+  for (i = 0; i < count; i++) {
+    if (strcasecmp(seen[i], key) == 0)
+      return FALSE;
+  }
+  if (count >= 64)
+    return TRUE;
+  strcpy(seen[count++], key);
+  return TRUE;
 }
 
 /* edit_os_path_refusal()  -  the OS-PATH routes to the same files: OPENSEQ, DELETESEQ, OSRENAME, a print file, OSCOPY.

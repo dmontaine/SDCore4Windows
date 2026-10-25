@@ -1,0 +1,64 @@
+* EDIT_MSG
+* The text SD gives when the edit gates or the shared account's rules refuse a change.
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New, S.66.  Nine programs (and the API server) each had the clamp "kind below 1 or above 3 is 1" and the sum 12409 + kind; the
+*               kinds 4 and 5 of the shared account could not be added in nine places, so the choice of text is made here, once.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    deffun edit_msg(kind) calling '!edit_msg'
+*    display edit_msg(kernel(K$EDIT.KIND, p))
+*
+* kind is what the kernel answered to K$EDIT.KIND (the EDIT_ numbers in sd.h):
+*
+*     1  the VOC                           12410
+*     2  a dictionary                      12411
+*     3  a program file                    12412
+*     4  a record of a shared file         12518  (the session has not shared.write)
+*     5  the structure of a shared file    12519  (SDSYS only; the kernel prints this one itself, a program only meets it when it is told)
+*     anything else                        12410  (as before: an answer that is not a known kind is taken to be the VOC)
+*
+* It returns the TEXT, as sysmsg() does, and changes nothing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function edit_msg(kind)
+$catalog !edit_msg
+
+   begin case
+      case kind = 1
+         return sysmsg(12410)
+      case kind = 2
+         return sysmsg(12411)
+      case kind = 3
+         return sysmsg(12412)
+      case kind = 4
+         return sysmsg(12518)
+      case kind = 5
+         return sysmsg(12519)
+   end case
+
+   return sysmsg(12410)
+end
+
+* END-CODE

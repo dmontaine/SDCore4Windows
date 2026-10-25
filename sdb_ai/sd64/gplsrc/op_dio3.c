@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): edit_refusal() asks edit_refusal_for_canon() (op_sh.c: the administrator, then shared.write for a
+ *               file inside the shared account, then the S.64 kind) after its own HDR_INTERNAL and administrator returns; EDIT_REFUSED_MSG() is
+ *               edit_refused_message() (12518 and 12519 as well as 12410-12412); shared_structure_refusal() (no HDR_INTERNAL exemption) is asked by
+ *               CLEARFILE before the read-only and S.64 tests, and by the structure ops of other files.
  * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64, the edit gates: edit_refusal() before a WRITE, WRITEV, DELETE or CLEARFILE of a
  *               VOC, a dictionary or a program file by a program that is not $internal and a session that has not the gate (voc.edit,
  *               dict.edit, bp.edit).  RELEASE_1.1 170.
@@ -139,15 +143,32 @@ Private int edit_refusal(FILE_VAR *fvar) {
   if (my_uptr->flags & USR_ADMIN)
     return EDIT_NONE;
 
-  /* The file table is shared memory; the name cannot change while this session holds the file open. */
+  /* The file table is shared memory; the name cannot change while this session holds the file open.  18 Oct 26 S.66: the order of
+     the tests (the shared account's shared.write, then the S.64 kind) is edit_refusal_for_canon()'s, op_sh.c. */
   path = (const char *)FPtr(fvar->file_id)->pathname;
-  kind = edit_kind_of_path(path);
-  if ((kind != EDIT_NONE) && !edit_permitted(kind))
-    return kind;
-  return EDIT_NONE;
+  kind = edit_refusal_for_canon(path);
+  return kind;
 }
 
-#define EDIT_REFUSED_MSG(kind) (12409 + (kind)) /* 12410 the VOC, 12411 a dictionary, 12412 a program file */
+/* 18 Oct 26 S.66: the message for a refusing kind: 12410 the VOC, 12411 a dictionary, 12412 a program file, 12518 a shared file without
+   shared.write, 12519 a structure change to a shared file (op_sh.c edit_refused_message) */
+#define EDIT_REFUSED_MSG(kind) edit_refused_message(kind)
+
+/* ======================================================================
+   shared_structure_refusal()  -  18 Oct 26 dm, S.66.  A STRUCTURE change (CLEARFILE, CONFIGURE.FILE, an index made or deleted, a
+   trigger set, a header setting) to a file inside the shared account's directory is SDSYS's alone, signed on at a terminal
+   (USR_ADMIN).  HDR_INTERNAL is NOT an exemption: no sanctioned internal path changes the structure of a shared file for anyone else.
+   EDIT_SHARED_STRUCT or EDIT_NONE.  A file that is not a hashed or a directory file has no pathname here and is none of them.      */
+
+int shared_structure_refusal(FILE_VAR *fvar) {
+  if ((fvar == NULL) || ((fvar->type != DYNAMIC_FILE) && (fvar->type != DIRECTORY_FILE)))
+    return EDIT_NONE;
+  if (my_uptr->flags & USR_ADMIN)
+    return EDIT_NONE;
+  if (path_in_shared((const char *)FPtr(fvar->file_id)->pathname))
+    return EDIT_SHARED_STRUCT;
+  return EDIT_NONE;
+}
 
 void op_write(void); /* Necessary for internal call */
 void op_dspnl(void);
@@ -219,6 +240,18 @@ void op_clrfile() {
   fvar_descr = e_stack - 1;
   k_get_file(fvar_descr);
   fvar = fvar_descr->data.fvar;
+
+  /* 18 Oct 26 S.66: CLEARFILE changes the STRUCTURE of a file in the shared account (it empties it): SDSYS's alone, and a $internal program is
+     not exempt.  Before anything is taken or touched; shaped as the S.64 block below. */
+  if (shared_structure_refusal(fvar) != EDIT_NONE) {
+    if (!(op_flags & P_ON_ERROR))
+      k_error(sysmsg(EDIT_REFUSED_MSG(EDIT_SHARED_STRUCT)));
+    process.status = -ER_PERM;
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = process.status;
+    return;
+  }
 
   if ((process.txn_id != 0) && !(fvar->flags & FV_NON_TXN))
     k_txn_error();

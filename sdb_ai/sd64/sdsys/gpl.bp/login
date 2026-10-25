@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ, K$SHARED.WRITE) are loaded at sign-on, account-scoped like
+*           SD.ACCOUNTS; read is on unless the record says no.
 * 23 Oct 26 Windows port - from Linux 215ce2c (S.63): K$SH / K$OS.EXEC are loaded from ACC$SH / ACC$OS.EXEC at sign-on.  RELEASE_1.1 170.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  A new session is refused (12286) while the administrator has logins
 *           inhibited, unless it is the administrator, the setter or the setter's phantom; !login_inhibit decides.
@@ -940,6 +942,10 @@ deffun pw_complex(pw) calling '!pw_complex'
    void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
    void kernel(K$SD.ACCOUNTS, upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
+* 18 Oct 26 dm - S.66: the shared-account gates are account-scoped like SD.ACCOUNTS, so CPROC's logto reloads and restores them.  Read is ON unless the
+*   record says 'no' (a BLANK field means on: the one gate that is open by default); write is OFF unless 'yes'.  The record always exists here.
+   void kernel(K$SHARED.READ,  upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO')      ;* blank = ON
+   void kernel(K$SHARED.WRITE, upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES')
 * 17 Oct 26 dm - S.64: the edit gates are loaded HERE ONLY, at sign-on, and CPROC's logto neither reloads nor restores them
 *   (owner, 17 Oct: the account the person signed on to decides, wherever they go with LOGTO).  Off unless 'yes'.
    void kernel(K$VOC.EDIT,  upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')

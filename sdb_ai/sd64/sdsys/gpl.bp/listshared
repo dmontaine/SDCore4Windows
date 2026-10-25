@@ -1,0 +1,108 @@
+* LISTSHARED
+* LIST.SHARED verb (S.66)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New, S.66 (the shared account).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LIST.SHARED
+*
+* The names of the files of the shared account that this session can open by name, one to a line, and a count.  A name is listed when
+* !shared_ref accepts it (an F entry in shared's own VOC that names a data file inside shared's directory), which is the test an OPEN makes,
+* so the list is what OPEN would find, apart from the names the account has of its own (those win and are not told here).
+*
+* An account whose shared.read gate is off is told so (12525) and sees nothing.  The administrator is not refused: it sees what the
+* accounts that hold the gate can reach (its own OPEN does not follow shared; SDSYS reaches the files with LOGTO shared).  If there is no
+* shared account, or it is suspended, 12523.  It changes nothing, takes no lock and writes no audit line.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program list.shared
+$catalog $listshared
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   deffun shared_ref(name, fno, quiet) calling '!shared_ref'
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   ids = ''
+   shown = 0
+
+   words = trim(@sentence)
+   if dcount(words, ' ') > 1 then
+      stop sysmsg(2018, field(words, ' ', 2)) ;* Unexpected token
+   end
+
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SHARED.READ, -1)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12525, @who) ;* Account %1 has shared.read off
+   end
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      @system.return.code = -ER$FNF
+      stop sysmsg(12523) ;* There is no shared account in service
+   end
+   read acc.rec from acc.f, 'shared' else
+      close acc.f
+      @system.return.code = -ER$FNF
+      stop sysmsg(12523)
+   end
+   close acc.f
+
+   spath = acc.rec<ACC$PATH>
+   if spath[1,1] = '@' then spath = parse.pathname.tokens(spath)    ;* 25 Oct 26 Windows port: the register may hold an @SDSYS token and a drive letter
+   if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' or len(spath) < 2 or not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X") then
+      @system.return.code = -ER$FNF
+      stop sysmsg(12523)
+   end
+
+   openpath spath:@ds:'voc' to svoc else
+      @system.return.code = -ER$FNF
+      stop sysmsg(12523)
+   end
+
+   sselect svoc to 9
+   readlist ids from 9 else ids = ''
+   close svoc
+
+   n.ids = dcount(ids, @fm)
+   if ids = '' then n.ids = 0
+   for i = 1 to n.ids
+*     quiet is not 0: no administrator test, no gate test, no audit line (see !shared_ref)
+      if shared_ref(ids<i>, 2, 1) # '' then
+         crt ids<i>
+         shown += 1
+      end
+   next i
+
+   crt sysmsg(12524, shown) ;* Files of the shared account that can be opened by name: %1
+
+   @system.return.code = 0
+
+end
+
+* END-CODE

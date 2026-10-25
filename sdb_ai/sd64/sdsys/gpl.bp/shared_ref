@@ -1,0 +1,158 @@
+* SHARED_REF
+* Is this name a file of the shared account that the session may open by name?
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a: "absolute" is _voc_ref's test (the separator, or a drive letter and colon) and an @SDSYS token in the
+*               register path is expanded; Linux tested for a leading "/".  The kernel's acceptance (K$SHARED.REF) resolves with fullpath.
+* 18 Oct 26 dm  New, S.66 (the shared account).  Called by _voc_ref when an OPEN of a name finds no entry in the account's own VOC, and by
+*               list.shared.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    deffun shared_ref(name, fno, quiet) calling '!shared_ref'
+*    ans = shared_ref(name, 2, @false)       ;* fno 2 the data file, 3 its dictionary
+*    if ans # '' then pathname = ans<1> ; vflags = ans<2>
+*
+* Answers the pathname of the file and field 6 of its VOC entry in capitals, separated by a field mark, or nothing.  Nothing is the answer
+* to every refusal; no message is given and no reason is told (a refused name is simply not there).
+*
+* THE ORDER OF THE CHECKS (each can only refuse):
+*    1  The session: not the administrator (SDSYS reaches the files with LOGTO shared; its own OPEN does not follow them) and the session's
+*       gate K$SHARED.READ is on.
+*    2  The shape of the name: 1 to 63 characters, the first a lower case letter or a digit (so no name that begins with $ & ! * _ or %, which
+*       keeps the system files $savedlists, $hold and the like, and every &...& file, out of reach), the rest lower case letters, digits
+*       and . _ - $ (no colon, comma or space).  The name is folded to lower case first.
+*    3  A name in the stock VOC (newvoc) is never looked up: md, sd.accounts and the like are the account's own.
+*    4  The register record of the account called shared: it exists, is not suspended, and holds an absolute path.
+*    5  The VOC of that account has the name (as given, lower case, upper case): an F entry, not a multifile.
+*    6  Field 2 (field 3 for the dictionary) is the pathname: no @ token, taken from the shared account's directory when it is not absolute.
+*    7  The name of shared's private catalogue directory.
+*    8  The kernel (K$SHARED.REF) accepts the path: it exists, is strictly below the shared account's directory, and no part of it is a VOC,
+*       a program file, a dictionary (except for the dictionary asked for) or the catalogue.
+*    9  The first answer for a name in a session is audited:  shared open file=<name>.  The audit is written after the acceptance.
+*
+* quiet: 0 for a lookup.  Not 0 for LIST.SHARED, which shows what the accounts that hold the gate can reach: it skips step 1 (the
+* administrator and the gate tests) and step 9 (the audit).  _voc_ref passes @false, so a lookup always makes the tests.
+*
+* It opens no file by name (only OPENPATH and a READ of what it opened), so it cannot call _voc_ref again.  Every file it opens is closed
+* before it returns.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function shared_ref(name, fno, quiet)
+$catalog !shared_ref
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   if not(quiet) then
+      if kernel(K$ADMINISTRATOR, -1) then return ''
+      if not(kernel(K$SHARED.READ, -1)) then return ''
+   end
+
+   if fno # 2 and fno # 3 then return ''
+
+*  The shape of the name
+   if len(name) < 1 or len(name) > 63 then return ''
+   lname = downcase(name)
+   letters = 'abcdefghijklmnopqrstuvwxyz'
+   digits = '0123456789'
+   if index(letters : digits, lname[1,1], 1) = 0 then return ''
+   shape.ok = @true
+   for ch = 2 to len(lname)
+      if index(letters : digits : '._-$', lname[ch,1], 1) = 0 then shape.ok = @false
+   next ch
+   if not(shape.ok) then return ''
+
+*  The stock names are never looked up
+   openpath @sdsys:@ds:'newvoc' to stock.f else return ''
+   read stock.rec from stock.f, lname then
+      close stock.f
+      return ''
+   end
+   close stock.f
+
+*  The register record of the shared account
+   openpath @sdsys:@ds:'accounts' to acc.f else return ''
+   read acc.rec from acc.f, 'shared' else
+      close acc.f
+      return ''
+   end
+   close acc.f
+   if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' then return ''
+   spath = acc.rec<ACC$PATH>
+*  25 Oct 26 Windows port: the register holds a Windows path (drive letter, or an @SDSYS token), not a path that begins with the separator;
+*  "absolute" is the test _voc_ref makes.
+   if spath[1,1] = '@' then spath = parse.pathname.tokens(spath)
+   if len(spath) < 2 then return ''
+   if not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X") then return ''
+
+*  The entry of shared's own VOC, and the name of its private catalogue; the same three folds as _voc_ref
+   openpath spath:@ds:'voc' to svoc else return ''
+   found = @false
+   rec = ''
+   read rec from svoc, name then
+      found = @true
+   end else
+      read rec from svoc, lname then
+         found = @true
+      end else
+         read rec from svoc, upcase(name) then
+            found = @true
+         end
+      end
+   end
+
+   catname = 'cat'
+   crec = ''
+   read crec from svoc, '$private.catalogue' else
+      read crec from svoc, '$PRIVATE.CATALOGUE' else crec = ''
+   end
+   close svoc
+   if upcase(crec[1,1]) = 'X' then catname = crec<2>
+   if catname = '' then catname = 'cat'
+
+   if not(found) then return ''
+   if upcase(rec[1,1]) # 'F' then return ''
+   if rec<4> # '' then return ''           ;* a multifile
+
+*  The path
+   p = rec<fno>
+   if p = '' then return ''
+   if p[1,1] = '@' then return ''          ;* no token expansion
+   if not(p matches "'":@ds:"'0X":@vm:"1A':\'0X") then p = spath : @ds : p     ;* 25 Oct 26 Windows port: as _voc_ref's "make pathname absolute"
+
+*  The kernel's acceptance: inside shared's directory, and no VOC, program file, dictionary (but the one asked for) or catalogue on the way
+   if not(kernel(K$SHARED.REF, p : @fm : fno : @fm : catname)) then return ''
+
+*  One audit line for each name in a session, after the name has been accepted
+   if not(quiet) then
+      if kernel(K$SHARED.ONCE, lname) then
+         void kernel(K$AUDIT, 'shared open file=' : lname)
+      end
+   end
+
+   return p : @fm : upcase(rec<6>)
+end
+
+* END-CODE

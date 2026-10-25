@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66), the shared account.  get_voc_file_reference() is a wrapper over get_voc_file_reference_ex(...,
+ *           allow_shared), which gives _voc_ref a FIFTH argument (k_recurse(pcode_voc_ref, 5)); only open_file()'s map_name call passes TRUE, so
+ *           OPENSEQ, DELETESEQ and CALL "file prog" never follow the shared account.  create_edit_refusal() refuses anything made INSIDE the shared
+ *           account to a non-administrator BEFORE its $internal exemption (EDIT_SHARED_STRUCT), and its two callers print edit_refused_message().
+ *           op_configfl() refuses a file of the shared account (shared_structure_refusal) for anyone but the administrator.
  * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2 (review): the CREATE.FILE statement (op_create_dh, op_create_t1) refuses to make a
  *           file INSIDE a VOC, a dictionary, a program file or the private catalogue the session may not change (create_edit_refusal ->
  *           edit_os_path_refusal, final name not counted): -ER_PERM with the reason.  $internal programs (createf and the rest) are not
@@ -85,8 +90,12 @@ Private void open_file(bool map_name);
    make one INSIDE a VOC, a dictionary, a program file or the private catalogue they may not change: a directory or a hashed file
    made there becomes content of it. The name made is the new file itself, so only what is ABOVE it is asked (include_leaf FALSE):
    CREATE.FILE of a new file called bp, x.bp or x.dic is what the verb makes without the gate, and a write into one is refused by
-   the kernel (op_dio3.c). Returns the kind refused, EDIT_NONE if the file may be made. The S.63 OS-access test is NOT added here. */
+   the kernel (op_dio3.c). Returns the kind refused, EDIT_NONE if the file may be made. The S.63 OS-access test is NOT added here.
+   18 Oct 26 S.66: making ANYTHING inside the shared account (a file, a directory, the account's own directory) is a structure change and
+   SDSYS's alone: tested BEFORE the $internal exemption, which does not apply (EDIT_SHARED_STRUCT, message 12519). */
 Private int create_edit_refusal(const char* path) {
+  if (!(my_uptr->flags & USR_ADMIN) && path_resolved_in_shared(path))
+    return EDIT_SHARED_STRUCT;
   if (process.program.flags & HDR_INTERNAL)
     return EDIT_NONE;
   return edit_os_path_refusal(path, FALSE);
@@ -183,6 +192,10 @@ void op_configfl() {
   descr = e_stack - 5;
   k_get_file(descr);
   fvar = descr->data.fvar;
+
+  /* 18 Oct 26 S.66: the structure of a file in the shared account is SDSYS's alone ($internal is not exempt); before anything is changed */
+  if (shared_structure_refusal(fvar) != EDIT_NONE)
+    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
 
   if (fvar->flags & FV_RDONLY)
     k_error(sysmsg(1400));
@@ -366,7 +379,7 @@ void op_create_dh() {
   if (edit_kind != EDIT_NONE) {
     process.status = -ER_PERM;
     if (!(op_flags & P_ON_ERROR))
-      k_error(sysmsg(12409 + edit_kind)); /* 12410 the VOC, 12411 a dictionary, 12412 a program file */
+      k_error(sysmsg(edit_refused_message(edit_kind))); /* 12410 the VOC, 12411 a dictionary, 12412 a program file, 12519 in the shared account */
     goto exit_op_create_dh;
   }
 
@@ -437,7 +450,7 @@ void op_create_t1() {
   if (edit_kind != EDIT_NONE) {
     process.status = -ER_PERM;
     if (!(op_flags & P_ON_ERROR))
-      k_error(sysmsg(12409 + edit_kind));
+      k_error(sysmsg(edit_refused_message(edit_kind)));
   } else if (!make_path(path_name)) {
     process.os_error = OSError;
     process.status = -ER_NOT_CREATED;
@@ -596,11 +609,24 @@ void dio_close(FILE_VAR* fvar) {
 /* ======================================================================
    Look up file in VOC                                                    */
 
+/* 18 Oct 26 dm - S.66.  The four-argument form NEVER follows the shared account: its callers (DELETESEQ, OPENSEQ, CALL "file prog")
+   are not an OPEN by name.  Only open_file() asks get_voc_file_reference_ex() with allow_shared TRUE, and then _voc_ref may fall back
+   to the shared account's VOC for a name the account's own VOC does not hold.  */
 bool get_voc_file_reference(
     char* voc_name,
     bool get_dict_name,
     char* path,    /* Can be same buffer as voc_name argument */
     char* vflags)  /* NULL, or room for VOC_FLAGS_LEN + 1: field 6 of the F-type entry, in capitals */
+{
+  return get_voc_file_reference_ex(voc_name, get_dict_name, path, vflags, FALSE);
+}
+
+bool get_voc_file_reference_ex(
+    char* voc_name,
+    bool get_dict_name,
+    char* path,    /* Can be same buffer as voc_name argument */
+    char* vflags,  /* NULL, or room for VOC_FLAGS_LEN + 1: field 6 of the F-type entry, in capitals */
+    bool allow_shared) /* S.66: may _voc_ref fall back to a file of the shared account? */
 {
   DESCRIPTOR pathname_descr;
   DESCRIPTOR flags_descr;
@@ -618,10 +644,13 @@ bool get_voc_file_reference(
   InitDescr(e_stack, ADDR); /* Field 6 of the F-type entry (output) */
   (e_stack++)->data.d_addr = &flags_descr;
 
+  InitDescr(e_stack, INTEGER); /* Fifth argument (S.66): may the shared account be looked in? */
+  (e_stack++)->data.value = allow_shared;
+
   pathname_descr.type = UNASSIGNED;
   flags_descr.type = UNASSIGNED;
 
-  k_recurse(pcode_voc_ref, 4); /* Execute recursive code */
+  k_recurse(pcode_voc_ref, 5); /* Execute recursive code */
 
   /* Extract result string */
   k_get_c_string(&pathname_descr, path, MAX_PATHNAME_LEN);
@@ -762,7 +791,7 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
 
     /* Map name via the VOC */
 
-    if (!get_voc_file_reference(voc_name, open_dict, mapped_name, vflags)) {
+    if (!get_voc_file_reference_ex(voc_name, open_dict, mapped_name, vflags, TRUE)) { /* 18 Oct 26 S.66: the only caller that may follow shared */
       /* process.status will have been set by recursive code */
       goto exit_op_open;
     }

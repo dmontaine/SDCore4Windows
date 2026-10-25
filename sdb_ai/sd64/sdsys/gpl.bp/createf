@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
+*               (12518, 12519).
 * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): COLLECTION makes a data collection file (the DHF_COLLECTION header bit):
 * 17 Oct 26 dm  S.64 part 2: naming a component of a file that already has a VOC record - turning a single file into a multifile (its
 *               %n parts move into a subdirectory and its pointer is rewritten) or adding a component to a multifile - changes an
@@ -72,6 +74,8 @@ $include int$keys.h
 $include parser.h
 $include keys.h
 $include err.h
+
+deffun edit_msg(emk) calling '!edit_msg'     ;* 18 Oct 26 dm, S.66
 
 $define default.merge.load 50
 $define default.split.load 80
@@ -600,9 +604,8 @@ edit.check.existing:
       if ek.path # '' then
          if not(kernel(K$EDIT.OK, ek.path)) then
             ek.kind = kernel(K$EDIT.KIND, ek.path)
-            if ek.kind < 1 or ek.kind > 3 then ek.kind = 1
             @system.return.code = -ER$PERM
-            stop sysmsg(12409 + ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+            stop edit_msg(ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
          end
       end
    next ek

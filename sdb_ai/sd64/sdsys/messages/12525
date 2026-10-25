@@ -1,0 +1,1 @@
+Account %1 has shared.read off, so it cannot open the files of the shared account by name (SDSYS can give it back: modify.account %1 shared-read-on)

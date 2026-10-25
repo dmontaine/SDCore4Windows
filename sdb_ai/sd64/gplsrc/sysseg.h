@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): UG_SHARED_READ (0x0010) and UG_SHARED_WRITE (0x0020) in the gates word, the shared-account gates.
+ *               No change of layout.
  * 17 Oct 26 dm  S.64: the user table gains a gates word (UG_VOC_EDIT, UG_BP_EDIT, UG_DICT_EDIT); the layout of the shared memory changes, so
  *               a running SD must be restarted after an upgrade (the installer does).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -249,7 +251,13 @@ struct USER_ENTRY
      #define UG_VOC_EDIT     0x0001 /* may save changes to a VOC */
      #define UG_BP_EDIT      0x0002 /* may save changes to a program file (source or object), and compile and catalogue */
      #define UG_DICT_EDIT    0x0004 /* may save changes to a dictionary */
-  u_int8_t grouped;             /* 15 Oct 26 dm - set by the parent (K_GROUP_PHANTOM) after PHANTOM GROUP; when the parent's
+     /* 18 Oct 26 dm - S.66.  Bits 0x0010 and 0x0020 are the shared-account gates, ACCOUNT-SCOPED like USR_SD_ACCOUNTS: loaded at sign-on
+        (LOGIN), at LOGTO (CPROC, restored when LOGTO returns) and by the API server.  The kernel never reads the register: the BASIC loaders
+        set the bits, and BLANK in the register means ON for shared.read only.  A process that never ran a loader has both OFF.  Bit 0x0008
+        is left for UG_NET (Linux S.65), which Windows does not carry yet.                                                              */
+     #define UG_SHARED_READ  0x0010 /* may open the files of the shared account by name (read: the BASIC lookup tests it at OPEN) */
+     #define UG_SHARED_WRITE 0x0020 /* may save a change to a record of a file in the shared account (tested at every write) */
+  u_int8_t grouped;            /* 15 Oct 26 dm - set by the parent (K_GROUP_PHANTOM) after PHANTOM GROUP; when the parent's
                                     entry is released, a phantom with this set and its puid is logged out. Zero for any other */
   struct FILESTATS ustats;       /* 15 Oct 26 dm - FSTAT.USER: this process's file activity (the counts of global_stats, by user);
                                     cleared as the process takes its entry */

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): OSPATH keys OS_DELETE, OS_MKDIR and OS_MKPATH, and OSRENAME (either name), do nothing and answer
+ *               false (STATUS() ER_PERM) for a path inside the shared account unless the session is the administrator, a $internal program included.
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): FILEINFO key 1021 is FL_WHO, the openQM form (a list of user numbers); the text form FL_HOLDERS that SD's
  *               messages use is key 1100 now (QM4 Fixes 62).
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): OSPATH key 15 (OS_OWNER) gives the owner's user name, for DIR_DICT's OWNER item (QM4 Fixes 181).
@@ -935,6 +937,14 @@ void op_ospath() {
       break;
   }
 
+  /* 18 Oct 26 S.66: deleting or making a file or directory inside the shared account is a structure change, SDSYS's alone; a $internal
+     program is not exempt.  Nothing is done; the answer is false (0) and STATUS() ER_PERM.  OS_CHOWN is not asked. */
+  if (((key == OS_DELETE) || (key == OS_MKDIR) || (key == OS_MKPATH)) && !(my_uptr->flags & USR_ADMIN) && path_resolved_in_shared(path)) {
+    process.status = ER_PERM;
+    status = 0;
+    goto set_status;
+  }
+
   switch (key) {
     case OS_PATHNAME: /* Test if valid pathname */
     {
@@ -1287,6 +1297,13 @@ void op_osrename() {
      back.                                                                 */
 
   if (!net_raw_permitted(old_path, TRUE) || !net_raw_permitted(new_path, TRUE)) {
+    process.status = ER_PERM;
+    goto exit_osrename;
+  }
+
+  /* 18 Oct 26 S.66: renaming into, out of or within the shared account changes its structure: SDSYS's alone, a $internal program included.
+     Nothing is done; the answer is 0 (ER_PERM).  */
+  if (!(my_uptr->flags & USR_ADMIN) && (path_resolved_in_shared(old_path) || path_resolved_in_shared(new_path))) {
     process.status = ER_PERM;
     goto exit_osrename;
   }

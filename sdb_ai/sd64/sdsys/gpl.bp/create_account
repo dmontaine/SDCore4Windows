@@ -18,6 +18,10 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  The name shared is reserved (12521) for every type unless the installer's
+*              marker is present for a GROUP from an -internal session; the gates ACC$SHARED.READ / ACC$SHARED.WRITE are written from
+*              CA$SHARED.READ.OFF / CA$SHARED.WRITE ('yes'/'no' explicit for a user, written only when asked otherwise), reported with 12520 after
+*              12414; secure.account.dir gives the shared directory the group sdusers (Modify) instead of its own group.
 * 02 Oct 26 Windows port - split out of CREATEA for RELEASE_1.1 116:
 *           RESTORE.ACCOUNT (shared with SD Core for Linux) creates an account
 *           that is missing, and must not parse a sentence to do it.  The
@@ -102,6 +106,23 @@ deffun ps_script(script) calling '!ps_script'
    if umask(002) then null
 
    acc.type = upcase(trim(acc.type))
+
+* 18 Oct 26 dm - S.66: THE NAME shared IS RESERVED for the shared account, which the installer makes.  Refused for every type, a user included
+*   (for a USER acc.name is the user name here), BEFORE any Linux user or group is made.  The one way through is the installer's: a GROUP
+*   account, from an -internal session, with the one-shot marker it wrote (as ATTACH's), which is consumed at once.  RESTORE.ACCOUNT and a
+*   hand-typed CREATE.ACCOUNT never have it.
+   acc.shared = (downcase(trim(acc.name)) = 'shared')
+   if acc.shared then
+      shared.marker = @sdsys:@ds:'$shared.make'
+      if acc.type = 'GROUP' and kernel(K$INTERNAL, -1) and ospath(shared.marker, OS$EXISTS) then
+         void ospath(shared.marker, OS$DELETE)
+      end else
+         @system.return.code = -ER$ARGS
+         err = 12521 ;* The account name shared is reserved for the shared account, which the installer makes
+         return
+      end
+   end
+
    acc.uname = ''
    group_name = ''
 
@@ -125,6 +146,10 @@ deffun ps_script(script) calling '!ps_script'
    edit.voc.want = (settings<CA$VOC.EDIT> = 1)
    edit.bp.want = (settings<CA$BP.EDIT> = 1)
    edit.dict.want = (settings<CA$DICT.EDIT> = 1)
+* 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
+*   Write is OFF by default: exactly 1 grants it.
+   shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
+   shared.write.want = (settings<CA$SHARED.WRITE> = 1)
 
 *  ATTACH, re-checked here: -internal and the one-shot marker for THIS account
 *  (RELEASE_1.1 66).  The verb refuses the word with 2018 when either gate is
@@ -917,12 +942,18 @@ PW.TRY.AGAIN:
       acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'
       acc.rec<ACC$BP.EDIT> = if edit.bp.want then 'yes' else 'no'
       acc.rec<ACC$DICT.EDIT> = if edit.dict.want then 'yes' else 'no'
+* 18 Oct 26 dm - S.66: the shared-account gates, written explicitly for a user account (read 'yes' unless withdrawn, write 'no' unless granted), so that a
+*   decided state can be told from a blank one.
+      acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'
+      acc.rec<ACC$SHARED.WRITE> = if shared.write.want then 'yes' else 'no'
    end else
 *     A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words
 *     are honoured here too: written only when asked (blank is off).
       if edit.voc.want then acc.rec<ACC$VOC.EDIT> = 'yes'
       if edit.bp.want then acc.rec<ACC$BP.EDIT> = 'yes'
       if edit.dict.want then acc.rec<ACC$DICT.EDIT> = 'yes'
+      if shared.read.off then acc.rec<ACC$SHARED.READ> = 'no'      ;* 18 Oct 26, S.66: blank stays the default (read on, write off)
+      if shared.write.want then acc.rec<ACC$SHARED.WRITE> = 'yes'
    end
    write acc.rec to acc.f, acc.name
    locked = @false
@@ -931,6 +962,7 @@ PW.TRY.AGAIN:
    if acc.type = "USER" then
       crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
       crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
+      crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
 
    gosub secure.account.dir
@@ -1045,6 +1077,12 @@ secure.account.dir:
    q = char(39)
    sad.path  = q : change(pathname,  q, q:q) : q
    sad.grant = q : change(sad.group, q, q:q) : ':(OI)(CI)(M)' : q
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66).  The directory of the shared account (and everything in it) belongs to the group sdusers, so that
+*   every SD user's own process can read its files through the kernel (and write them, with shared.write).  Linux does this with the directory's
+*   group and mode 2775; here it is the one ACE.  The register still names sdg_shared as the account's group, which has NO members and is granted
+*   nothing on the directory: only an administrator (SYSTEM and Administrators keep full control) enters the account, so only SDSYS does, and
+*   withdrawing shared.read is a wall.  gplbld/secure-account-dirs.ps1 skips this directory for the same reason (secure-shared.ps1 stamps it).
+   if downcase(trim(acc.name)) = 'shared' then sad.grant = q : 'sdusers:(OI)(CI)(M)' : q
 
    sad.ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
    sad.ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('

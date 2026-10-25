@@ -1,0 +1,1 @@
+A file in the shared account can only be changed by an account that has shared.write (SDSYS can give it: modify.account <account> shared-write-on)

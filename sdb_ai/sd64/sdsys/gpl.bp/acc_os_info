@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the manifest keys shared.read (1 unless ACC$SHARED.READ says no: a blank field means on) and
+*               shared.write (1 only if yes), USER arm only.
 * 23 Oct 26 Windows port - from Linux 215ce2c (S.63): os.sh and os.execute come from the register fields ACC$SH and ACC$OS.EXEC;
 *           the OS.USERS record is no longer read.  RELEASE_1.1 170.
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
@@ -143,6 +145,8 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'edit.voc: ' : (if upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.64 (Linux d7cda81)
       info<-1> = 'edit.bp: ' : (if upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES' then 1 else 0)
       info<-1> = 'edit.dict: ' : (if upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES' then 1 else 0)
+      info<-1> = 'shared.read: ':(if upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO' then 1 else 0)     ;* 18 Oct 26, S.66: BLANK MEANS ON, so only the word no gives 0
+      info<-1> = 'shared.write: ':(if upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES' then 1 else 0)
    end
 
    return

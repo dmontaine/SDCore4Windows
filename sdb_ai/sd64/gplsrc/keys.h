@@ -17,7 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
- * 31 Dec 23 SD launch - prior history suppressed 
+ * 25 Oct 26 Windows port - from Linux fc4030a (18 Oct 26) S.66: K_SHARED_READ, K_SHARED_WRITE, K_SHARED_REF and K_SHARED_ONCE (128-131), the shared
+ *           account's gates and lookup test.  Linux's 127 is K_NET (S.65), which Windows does not carry yet; 127 stays free.
+ * 31 Dec 23 SD launch - prior history suppressed
  * 28 Jul 24 mab SD_ENCRYPT_SODIUM encode types
  * 08 Aug 24 mab SDEXT keys for salt and key from password
  * 09 Aug 24 mab embedded python SDEXT keys
@@ -483,6 +485,20 @@
                   a print file): 1 if no component of it below the account's directory names a VOC, a dictionary or a program file
                   that THIS SESSION may not change (op_sh.c edit_os_path_refusal).  Not asked for reading. */
 #define K_EDIT_OS_OK         126
+/* 18 Oct 26 dm - S.66 (the shared account).  K_SHARED_READ and K_SHARED_WRITE: like K_SD_ACCOUNTS, 1 / 0 sets (only from a $internal program,
+   n >= 0), -1 asks; the answer is the bit as 1 / 0.  ACCOUNT-SCOPED: loaded at sign-on (LOGIN), at LOGTO (CPROC, restored when LOGTO returns)
+   and by the API server.  Each touches its own bit of the gates word and nothing else.  shared.read is tested by the
+   BASIC lookup at OPEN (GPL.BP/_VOC_REF, !SHARED_REF); shared.write by the kernel at every write to a file inside the shared account's
+   directory (op_sh.c edit_refusal_for_canon); the administrator is never refused.
+     K_SHARED_REF  the argument is  pathname <FM> fno <FM> catname  (FM = char 254): 1 if that F-pointer target is acceptable as a file of
+                   the shared account that other accounts may open by name (op_sh.c shared_ref_ok), else 0.  Reads only; any $internal caller.
+     K_SHARED_ONCE the argument is a file name: 1 the first time THIS PROCESS is asked about that name (case aside), 0 afterwards, so that the
+                   audit line is written once per name per session.  64 names are remembered; when full it answers 1.
+   GPL.BP/INT$KEYS.H carries the same numbers. */
+#define K_SHARED_READ        128
+#define K_SHARED_WRITE       129
+#define K_SHARED_REF         130
+#define K_SHARED_ONCE        131
 #define K_PROFILER           116
 #define K_PROFILER_USER      117
 /* 13 Oct 26 dm (Linux 7ff476f) - THE TERMINAL'S OWN SIZE.  kernel(K$WINSIZE, '') answers the terminal's width, a field mark and

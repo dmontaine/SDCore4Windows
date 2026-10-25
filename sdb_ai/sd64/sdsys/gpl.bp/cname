@@ -32,6 +32,8 @@
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
+*               (12518, 12519).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -64,6 +66,7 @@ $include parser.h
 $include dictdict.h
 
 deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
+deffun edit_msg(emk) calling '!edit_msg'     ;* 18 Oct 26 dm, S.66
 
    parser = "!PARSER"
 
@@ -189,8 +192,7 @@ rename.file:
          if not(kernel(K$EDIT.OK, ek.path)) then
             @system.return.code = -ER$PERM
             ek.kind = kernel(K$EDIT.KIND, ek.path)
-            if ek.kind < 1 or ek.kind > 3 then ek.kind = 1
-            stop sysmsg(12409 + ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file (Linux 11405-11407)
+            stop edit_msg(ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
          end
       end
    next ek

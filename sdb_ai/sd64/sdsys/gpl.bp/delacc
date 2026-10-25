@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): DELETE.ACCOUNT shared is refused (12522), after the SDSYS test and before anything else is
+*               read or asked.
 *  8 Oct 26 Windows port - RELEASE_1.1 130 (Linux T1420 item 1, owner's parity ruling
 *            8 Oct: Linux is the template): a Windows user SD did not create is KEPT, as
 *            before, but loses sdssh, sdapi and sdusers - Linux's PRE_RELEASE 28 / S.29.
@@ -154,6 +156,12 @@ deffun is_sd_user(username) calling '!is_sd_user'
       end else
          stop sysmsg(2018, token) ;* Unexpected token (xx)
       end
+   end
+
+* 18 Oct 26 dm - S.66: the shared account is part of the system, like SDSYS: the installer makes it and the remover takes it away.  Refused before the
+*   own-account test, the register is read, any prompt is shown or anything is removed.
+   if acc.name = 'shared' then
+      stop sysmsg(12522) ;* The shared account cannot be deleted
    end
 
    if acc.name = 'SDSYS' then

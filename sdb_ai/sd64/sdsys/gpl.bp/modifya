@@ -19,6 +19,10 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-ON / -OFF and SHARED-WRITE-ON / -OFF, the shared-account gates (register fields 13 and 14),
+*           through os.set; allowed on a group account (and on the account shared itself, which is not refused); reported with 12520.  SHARED-READ
+*           is the one gate whose blank field means ON, so os.set reads its "was" as "is not no" and writes 'yes' / 'no'.  Account-scoped: they take
+*           effect at the person's next account entry.
 * 23 Oct 26 Windows port - from Linux 215ce2c (S.63), owner's answer of 23 Oct: SH-ON, SH-OFF, OS-ON and OS-OFF write the register
 *           fields ACC$SH and ACC$OS.EXEC (os.set) and no longer the person's OS.USERS record; reported with 10102 as Linux does.
 *  7 Oct 26 Windows port - COMMAND WORDS LOWER CASE in every audit record this program
@@ -243,6 +247,7 @@ deffun ps_script(script) calling '!ps_script'
       crt '                  modify.account <account> os-on | os-off'
       crt '                  modify.account <account> sd-on | sd-off'
       crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
+      crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
       crt '                  modify.account <account> suspended | unsuspended'
       stop
    end
@@ -384,6 +389,26 @@ deffun ps_script(script) calling '!ps_script'
             os.field = ACC$DICT.EDIT
             os.want  = @false
             gosub os.set
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
+*   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
+*   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
+*   'no' (a decided state); read is ON when the field is blank, so SHARED-READ-OFF must write 'no' even to a blank record (os.set's os.was).
+         case upcase(action) = 'SHARED-READ-ON'
+            os.field = ACC$SHARED.READ
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'SHARED-READ-OFF'
+            os.field = ACC$SHARED.READ
+            os.want  = @false
+            gosub os.set
+         case upcase(action) = 'SHARED-WRITE-ON'
+            os.field = ACC$SHARED.WRITE
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'SHARED-WRITE-OFF'
+            os.field = ACC$SHARED.WRITE
+            os.want  = @false
+            gosub os.set
 
 * 27 Aug 26 Windows port - owner, 27 Aug 2026: a fourth state, SUSPENDED, "so
 *   that an account can be temporarily denied access".  RELEASE_1.1 64 keeps
@@ -515,6 +540,7 @@ deffun ps_script(script) calling '!ps_script'
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off,'
+         crt '   shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
@@ -725,13 +751,20 @@ route.apply:
 os.set:
 *   SD-ON / SD-OFF (the SD.ACCOUNTS gate, Linux 7ceb50d) are allowed on a GROUP account: what that gate opens is decided for
 *   each person by the groups they are in.
-   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT then
+   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
    end
 
-   os.was = (upcase(trim(acc.rec<os.field>)) = 'YES')
+*   18 Oct 26, S.66: shared.read is the one gate whose BLANK field means ON, so "was" is "not no" for it; for every other field it is "is yes".
+*   Without this, SHARED-READ-OFF on a blank record would find was = want = false, say "already" (10080) and write nothing, and the gate could never
+*   be withdrawn from an account whose field is blank.  SHARED-READ-ON on a blank record likewise says "already".
+   if os.field = ACC$SHARED.READ then
+      os.was = (upcase(trim(acc.rec<os.field>)) # 'NO')
+   end else
+      os.was = (upcase(trim(acc.rec<os.field>)) = 'YES')
+   end
    if os.was = os.want then
       crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
       return
@@ -756,6 +789,16 @@ os.set:
    osu.ex = 'no'
    if upcase(trim(acc.new<ACC$OS.EXEC>)) = 'YES' then osu.ex = 'yes'
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   if os.field = ACC$SHARED.READ or os.field = ACC$SHARED.WRITE then
+*     18 Oct 26, S.66: both shared fields, as for the edit gates: SHARED-READ-OFF says nothing about write.  Read is 'no' only when the field
+*     says NO (a blank field is on); write is 'yes' only when it says YES.
+      sh.read.now = 'yes'
+      if upcase(trim(acc.new<ACC$SHARED.READ>)) = 'NO' then sh.read.now = 'no'
+      sh.write.now = 'no'
+      if upcase(trim(acc.new<ACC$SHARED.WRITE>)) = 'YES' then sh.write.now = 'yes'
+      crt sysmsg(12520, acc.name, sh.read.now, sh.write.now)  ;* Account %1 has shared.read %2, shared.write %3
+      return
+   end
    if os.field = ACC$SD.ACCOUNTS then
       crt sysmsg(12390, acc.name, if upcase(trim(acc.new<ACC$SD.ACCOUNTS>)) = 'YES' then 'yes' else 'no')   ;* Account %1 has SD.ACCOUNTS %2
    end else

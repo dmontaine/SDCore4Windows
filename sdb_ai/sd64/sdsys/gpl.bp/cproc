@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ / .WRITE) are account-scoped like SD.ACCOUNTS: loaded at
+*           LOGTO from the new account's record (a path-attached account has none: both off), held in stk.shared.read / .write and restored by
+*           revert.account.  (acc.record was already cleared before the register read.)
 * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: the stack commands ask the voc.edit gate.  ".S name" may still make a NEW saved
 *           sentence or paragraph (a side effect of ordinary commands) but overwriting a VOC record that exists, and ".D name" deleting one, are refused
 *           with 12410 unless the session may save a change to its VOC (the administrator, or an account with voc.edit on).  This program is $internal,
@@ -659,6 +662,8 @@ restart.cproc:
          stk.sh = kernel(K$SH, -1)          ;* 23 Oct 26: the OS-access switches go back with the account (S.63; they were held)
          stk.os.exec = kernel(K$OS.EXEC, -1)
          stk.sd.accounts = kernel(K$SD.ACCOUNTS, -1)
+         stk.shared.read = kernel(K$SHARED.READ, -1)    ;* 18 Oct 26, S.66: the shared-account gates are account-scoped too
+         stk.shared.write = kernel(K$SHARED.WRITE, -1)
 
          pa.name = ""
          pa.rec = "PA" : @fm : xeq.command
@@ -3193,6 +3198,11 @@ int.logto:
    void kernel(K$SH,      upcase(trim(acc.record<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES')
    void kernel(K$SD.ACCOUNTS, upcase(trim(acc.record<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
+* 18 Oct 26 dm - S.66: the shared-account gates, account-scoped like SD.ACCOUNTS.  Read is ON unless the record says 'no' (a blank field is on), but ONLY
+*   for an account that has a register record: a path-attached LOGTO has none (acc.record is blank, so is its path field) and reads OFF, as does
+*   write.  Fail closed.  new.account cannot tell the two cases apart (it is reassigned from the path above); the record's path field can.
+   void kernel(K$SHARED.READ,  (acc.record<ACC$PATH> # '') and (upcase(trim(acc.record<ACC$SHARED.READ>)) # 'NO'))
+   void kernel(K$SHARED.WRITE, (acc.record<ACC$PATH> # '') and (upcase(trim(acc.record<ACC$SHARED.WRITE>)) = 'YES'))
 
    voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
@@ -3279,6 +3289,8 @@ revert.account:
    end
    void kernel(K$SH,      stk.sh)
    void kernel(K$OS.EXEC, stk.os.exec)
+   void kernel(K$SHARED.READ,  stk.shared.read)    ;* 18 Oct 26, S.66
+   void kernel(K$SHARED.WRITE, stk.shared.write)
    void kernel(K$SD.ACCOUNTS, stk.sd.accounts)
    void kernel(K$AUDIT, 'logto revert account=' : who)
    i = kernel(K$INVALIDATE.OBJECT, 0)

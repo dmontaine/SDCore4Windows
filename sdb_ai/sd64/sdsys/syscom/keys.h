@@ -3,6 +3,7 @@
       * Copyright (c) 2004, Ladybridge Systems, All Rights Reserved
       
       $list off
+      * 25 Oct 26 Windows port - from Linux fc4030a (S.66): ACC$SHARED.READ (13) and ACC$SHARED.WRITE (14), the shared-account gates.
       * 27 Aug 26 Windows port - corrected the ACC$PRIOR.TIER note: the equality
       *                      guard, not an inner test, is what keeps field 6
       *                      write-once (PRE_RELEASE 21)
@@ -396,6 +397,17 @@
       $define ACC$VOC.EDIT     10    ;* may save changes to a VOC (yes/no)
       $define ACC$BP.EDIT      11    ;* may save changes to a program file, and compile and catalogue (yes/no)
       $define ACC$DICT.EDIT    12    ;* may save changes to a dictionary (yes/no)
+      * 18 Oct 26 dm - FIELDS 13 AND 14: the shared-account gates (S.66; owner's rulings of 17 Oct).  Whether the account may open the
+      *   files of the group account named SHARED by file name, with no LOGTO and no Q-pointer (13), and whether it may write records in
+      *   them (14).  yes/no.  FIELD 13 IS THE ONE GATE WHOSE BLANK MEANS YES: only the word NO withdraws it, so every account that
+      *   exists when this ships can read shared and nothing has to be migrated.  Field 14 is like the gates above: BLANK MEANS NO.
+      *   A loader reads field 13 as UPCASE(TRIM(x)) # 'NO' and field 14 as = 'YES'.  ACCOUNT-SCOPED like ACC$SD.ACCOUNTS: loaded as
+      *   K$SHARED.READ / K$SHARED.WRITE at sign-on, at LOGTO (restored when LOGTO returns) and by the API server.  An account reached by
+      *   a path has no register record, so it has read OFF.  Either field may sit on a USER, GROUP or OTHER account.  SDSYS switches
+      *   them: MODIFY.ACCOUNT SHARED-READ-ON / SHARED-READ-OFF / SHARED-WRITE-ON / SHARED-WRITE-OFF; CREATE.ACCOUNT takes
+      *   SHARED-READ-OFF and SHARED-WRITE-ON.  (Windows has no ACC$NET at 15 yet; 15 stays free for it.)
+      $define ACC$SHARED.READ  13    ;* may open the files of the shared account by name (yes/no; BLANK = yes)
+      $define ACC$SHARED.WRITE 14    ;* may write records in the files of the shared account (yes/no; blank = no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

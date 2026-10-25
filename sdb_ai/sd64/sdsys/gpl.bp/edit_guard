@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
+*               (12518 a record of a shared file without shared.write, 12519 a structure change); the kernel's K$EDIT.OK / K$EDIT.KIND carry the
+*               shared rule.
 * 17 Oct 26 dm  New, S.64 (owner, 17 Oct 2026: the gates voc.edit, bp.edit and dict.edit).  The multi-user form of Linux Solo's
 *               !voc_guard, which asks for ADMIN; this asks the session's gates and does not look at the file itself.
 * END-HISTORY
@@ -38,7 +41,7 @@
 * The administrator is never refused.
 *
 * Returns @true when the change may go ahead.  On @false it has already said why (12410 the VOC, 12411 a dictionary, 12412 a program
-* file; 12415 when the file's pathname cannot be read, which is refused because a gate that fails open on a path it cannot read is
+* file, 12518 a file of the shared account without shared.write, 12519 a structure change of one; 12415 when the file's pathname cannot be read, which is refused because a gate that fails open on a path it cannot read is
 * decoration).
 *
 * END-DESCRIPTION
@@ -52,6 +55,8 @@ $catalog !edit_guard
 $include keys.h
 $include int$keys.h
 
+   deffun edit_msg(emk) calling '!edit_msg'       ;* 18 Oct 26 dm, S.66
+
    p = fileinfo(f, FL$PATH)
    if p = '' then
       if kernel(K$ADMINISTRATOR, -1) then return @true
@@ -62,8 +67,7 @@ $include int$keys.h
    if kernel(K$EDIT.OK, p) then return @true
 
    kind = kernel(K$EDIT.KIND, p)
-   if kind < 1 or kind > 3 then kind = 1
-   display sysmsg(12409 + kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+   display edit_msg(kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
    return @false
 end
 

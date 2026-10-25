@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K_SHARED_READ and K_SHARED_WRITE (the shared-account gates, set from $internal only), K_SHARED_REF
+ *               (the acceptance test for an F-pointer into the shared account) and K_SHARED_ONCE (the audit line once per name); K_EDIT_KIND answers
+ *               the REFUSING kind, 4 for shared.write (edit_refusal_for_name); K_EDIT_OK includes the shared.write rule.
  * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a
  *               directory or anything but a plain file (edit_leaf_counts); K_EDIT_KIND and K_EDIT_OK answer EDIT_PROG for the private catalogue directory.
  * 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3: K_SET_ACCOUNT (the account the session is in, set at sign-on,
@@ -959,7 +962,10 @@ void op_kernel() {
         else if (k_get_c_string(descr, edit_name, MAX_PATHNAME_LEN) > 0)
           result.data.value = edit_ok_for_path(edit_name) ? 1 : 0;
       } else if (k_get_c_string(descr, edit_name, MAX_PATHNAME_LEN) > 0) {
-        result.data.value = edit_kind_of_path(edit_name);
+        /* 18 Oct 26 S.66: after a refusal the answer is the REFUSING kind (4 for shared.write); a permitted file answers its raw kind */
+        result.data.value = edit_refusal_for_name(edit_name);
+        if (result.data.value == EDIT_NONE)
+          result.data.value = edit_kind_of_path(edit_name);
       }
     } break;
 
@@ -975,6 +981,56 @@ void op_kernel() {
         /* The target may be a directory the file is copied INTO (a program file, the private catalogue): its own name counts then
            (edit_leaf_counts); a plain file or a name not made yet is a record, and only what is above it is asked. */
         result.data.value = (edit_os_path_refusal(edit_os_name, edit_leaf_counts(edit_os_name)) == EDIT_NONE) ? 1 : 0;
+    } break;
+
+    /* 18 Oct 26 dm - S.66: the shared-account gates, set as K_NET is (only from a $internal program; -1 asks), each its own bit and nothing
+       else - no net_close_all().  Account-scoped: loaded at sign-on, at LOGTO and by the API server.  The kernel never reads the register;
+       "blank means on" for shared.read is the loaders' rule.                                                                         */
+    case K_SHARED_READ:
+    case K_SHARED_WRITE: {
+      u_int16_t shared_bit = (action == K_SHARED_READ) ? UG_SHARED_READ : UG_SHARED_WRITE;
+
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->gates |= shared_bit;
+          else
+            my_uptr->gates &= (u_int16_t)~shared_bit;
+        }
+      }
+      result.data.value = (my_uptr->gates & shared_bit) != 0;
+    } break;
+
+    /* K_SHARED_REF: "<pathname><FM><fno><FM><catname>" - is that F-pointer target acceptable as a file of the shared account that other
+       accounts may open by name?  Reads only.  An argument that does not split into three parts answers 0.  */
+    case K_SHARED_REF: {
+      char shared_buf[(3 * MAX_PATHNAME_LEN) + 4];
+      char *shared_fno;
+      char *shared_cat;
+
+      result.data.value = 0;
+      if (k_get_c_string(descr, shared_buf, (3 * MAX_PATHNAME_LEN) + 3) > 0) {
+        shared_fno = strchr(shared_buf, FIELD_MARK);
+        if (shared_fno != NULL) {
+          *shared_fno++ = '\0';
+          shared_cat = strchr(shared_fno, FIELD_MARK);
+          if (shared_cat != NULL) {
+            *shared_cat++ = '\0';
+            result.data.value = shared_ref_ok(shared_buf, atoi(shared_fno), shared_cat) ? 1 : 0;
+          }
+        }
+      }
+    } break;
+
+    /* K_SHARED_ONCE: 1 the first time this process is asked about a name, 0 afterwards (the audit line is written once per name) */
+    case K_SHARED_ONCE: {
+      char shared_name[MAX_PATHNAME_LEN + 1];
+
+      shared_name[0] = '\0';
+      (void)k_get_c_string(descr, shared_name, MAX_PATHNAME_LEN);
+      result.data.value = shared_once(shared_name) ? 1 : 0;
     } break;
 
     /* May THIS ACCOUNT open this pathname?  An $internal program is exempt from the gate itself (it has to

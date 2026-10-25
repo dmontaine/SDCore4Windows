@@ -18,6 +18,8 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the object file, once open, is asked of !edit_guard, so a source in the shared account cannot
+*               be compiled into a shared .out directory by a session without shared.write.
 * 18 Oct 26 Windows port - from Linux 1c94d00 (10 Oct 26), RELEASE_1.1 143: the
 *           NO.QUERY option (openQM ref 27), passed to CATALOGUE; BCOMP also
 *           hands it back from $CATALOGUE and $BASIC.OPTIONS in the catalogue
@@ -63,6 +65,8 @@ $include bcomp.h
 
 $include err.h
 $include keys.h
+
+deffun edit_guard(f) calling '!edit_guard'   ;* 18 Oct 26 dm, S.66
 
 $define max.levels   10
 
@@ -247,6 +251,19 @@ source.file.opened:
          display 'Created Q-pointer to ' : voc.rec<3> : ' in account ' : voc.rec<2>
       end else    ;* Should be impossible but we'll include a trap
          stop sysmsg(2805) ;* Source file VOC entry is incorrect
+      end
+   end
+
+* 18 Oct 26 dm - S.66.  The object file is opened by name, and a name can now be the shared account's (a user with bp.edit and shared.read opens a
+*   shared source, and so its .out directory).  This program is $internal, so the kernel lets its WRITE through; it asks for itself, as the other
+*   verbs that write a file the user named do (edit_guard says why on the screen).  An ordinary file, and the account's own bp.out for a user with
+*   bp.edit (checked above), pass as before.  The administrator is never refused (the kernel says so too), and is not asked at all: the bootstrap's
+*   SECOND.COMPILE runs this program as the administrator before !edit_guard has been compiled (only the programs of bbproc's list exist then), and
+*   a call to a program that is not catalogued ends the run.
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      if not(edit_guard(out.f)) then
+         @system.return.code = -ER$PERM
+         stop
       end
    end
 

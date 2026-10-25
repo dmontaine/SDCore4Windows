@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 	  * END-HISTORY
       *
@@ -227,7 +228,11 @@
       $define K$EDIT.KIND       125      ;* the same argument: 0 none of the three, 1 a VOC, 2 a dictionary, 3 a program file (for the message) (17 Oct 26, S.64)
       $define K$EDIT.OS.OK      126      ;* an OS pathname about to be written, created, deleted or copied into: 1 if no part of it below the account names a guarded file the session may not change (17 Oct 26, S.64)
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
-      $define K$PROFILER        116      ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
+      $define K$SHARED.READ     128     ;* may open the files of the shared account by name: account-scoped like K$SD.ACCOUNTS (set from $internal; -1 asks) (18 Oct 26, S.66)
+      $define K$SHARED.WRITE    129     ;* may write records in the files of the shared account (same rules) (18 Oct 26, S.66)
+      $define K$SHARED.REF      130     ;* argument pathname:@fm:fno:@fm:catname: 1 if that F-pointer target is acceptable as a shared file, else 0; reads only (18 Oct 26, S.66)
+      $define K$SHARED.ONCE     131     ;* a file name: 1 the first time this process is asked about it, 0 afterwards (the audit of a shared open) (18 Oct 26, S.66)
+      $define K$PROFILER        116     ;* n > 0 start the application event profiler (the events in n), 0 stop, -1 ask, -2 the table (16 Oct 26)
       $define K$PROFILER.USER   117      ;* user * 4096 + 2048 + n start it in another process, user * 4096 alone stop it and have it write F<user> to $ipc; administrator only
       $define K$IS.SDAPISRVR     25      ;* Is this process an API server?  (kernel.h K_IS_SDAPISRVR; named here 16 Oct 26)
       $define K$RESET.ALL       119      ;* LOGTO ... RESET ALL: with a command, keep it and return to the bottom command processor, which takes it back with a null argument; 1 accepted, 0 refused (an API session) (16 Oct 26, Fixes item 30)

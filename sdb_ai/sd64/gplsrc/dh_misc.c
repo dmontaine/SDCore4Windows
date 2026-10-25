@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux fc4030a (S.66): op_settrig() and the actions of op_fcontrol() that change a setting of the file refuse a
+ *           file in the shared account with message 12519 (Linux 11514) for anyone but the administrator, a $internal program included
+ *           (shared_structure_refusal).  Windows has no pub_fcontrol or FC$SYNC / FC$CRLF / FC$MINMOD, so Linux's hunk for those is not carried.
  * 14 Sep 26 Windows port - op_settrig stores the trigger name lower case
  *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -103,6 +106,20 @@ void op_fcontrol() {
 
   descr = e_stack - 1;
   k_get_value(descr);
+
+  /* 18 Oct 26 S.66: every action that CHANGES a setting of the file is a structure change, and for a file in the shared account it is
+     SDSYS's alone ($internal is not exempt).  Refused before anything is changed.  FC_SET_SEQ_KEY and FC_GET_SEQ_KEY are record level. */
+  switch (action) {
+    case FC_SET_JNL_FNO:
+    case FC_KILL_JNL:
+    case FC_SET_AKPATH:
+    case FC_NON_TXN:
+    case FC_SPLIT_MERGE:
+    case FC_NO_RESIZE:
+      if (shared_structure_refusal(fvar) != EDIT_NONE)
+        k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
+      break;
+  }
 
   switch (action) {
     case FC_SET_JNL_FNO: /* Set jnl_fno field of file header */
@@ -395,6 +412,11 @@ void op_settrig() {
   descr = e_stack - 3;
   k_get_file(descr);
   fvar = descr->data.fvar;
+
+  /* 18 Oct 26 S.66: a trigger is part of the STRUCTURE of a file; in the shared account it is SDSYS's alone ($internal is not exempt).
+     Before anything is read or written. */
+  if (shared_structure_refusal(fvar) != EDIT_NONE)
+    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
 
   /* 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26, QM4 Fixes item 177), the hunk the first carry lost: a directory file has
      no header to put the trigger in, so it goes into its %header% file.  Without it SET.TRIGGER on a directory file said ER_NDYN. */

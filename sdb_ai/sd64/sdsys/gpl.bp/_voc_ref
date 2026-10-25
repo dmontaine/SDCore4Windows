@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): a fifth argument, allow.shared (op_dio1.c get_voc_file_reference_ex).  When the caller sets it,
+*               the name is in no entry of the account's own VOC, there is no component and the session is not the administrator, !shared_ref
+*               is asked whether the name is a file of the shared account; its answer is the pathname and the field 6 letters.  The own VOC (all
+*               three folds) and the PATH: / Account:File forms are tried first, so the account's own entry always wins.
 * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): A fourth argument returns field 6 of the F-type entry, in capitals, for the mode letters N (open
 *               non-transactionally) and R (read-only) that open_file() acts on (openQM items 380 and 197).  A
 *               Q-pointer gives the field 6 of the F-type entry it leads to.
@@ -44,7 +48,7 @@ $no.symbols
 $no.xref
 $recursive
 
-subroutine voc_ref(filename, is.dict, pathname, vflags)
+subroutine voc_ref(filename, is.dict, pathname, vflags, allow.shared)
 
 $include syscom.h
 $include err.h
@@ -52,6 +56,7 @@ $include int$keys.h
 $include keys.h
 
    deffun is_grp_member(user,group) calling '!is_grp_member'
+   deffun shared_ref(name, fno, quiet) calling '!shared_ref'      ;* 18 Oct 26 dm, S.66
 
 * 13 Oct 26 dm - S.63, second sitting (owner: "try to make tighter ... q pointers should only be allowed into an
 *   account the user can logto in any case").  A VOC pointer is a way to name a file, and the first S.63 left
@@ -180,6 +185,25 @@ $include keys.h
                   goto parse.as.q.pointer
                end
          end case
+      end
+
+* 18 Oct 26 dm - S.66, the shared account.  The name is in no entry of the account's own VOC (the three folds above and the PATH: and
+*   Account:File forms have all been tried, so the account's own file always wins) - is it a file of the account called shared?  Only when the
+*   caller asked (allow.shared: open_file() in op_dio1.c for OPEN, OPEN DICT; OPENSEQ, DELETESEQ and CALL "file prog" pass FALSE and never
+*   follow shared), for a name with no component, and never for the administrator (SDSYS reaches the files with LOGTO shared).  The session's
+*   gate K$SHARED.READ is asked here and again inside !shared_ref; that program does the whole of the checking (an F entry of shared's own VOC
+*   only, the stock names, the shape of the name, the kernel's test of the path) and answers pathname<FM>vflags, or nothing.  None of
+*   check.f.path, qroot and check.q.hop is used: the answer is not a pointer this account made.
+      if allow.shared and component = '' and not(vr.admin) then
+         if kernel(K$SHARED.READ, -1) then
+            shared.ans = shared_ref(voc.id, fno, @false)
+            if shared.ans # '' then
+               pathname = shared.ans<1>
+               vflags = shared.ans<2>
+               set.status 0
+               return
+            end
+         end
       end
 
       set.status ER$NVR

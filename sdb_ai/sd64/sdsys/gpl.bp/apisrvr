@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ / .WRITE) are read from ACC$SHARED.READ / .WRITE and
+*           loaded at every entry to an account (read ON unless the record says no; both OFF for a path or an unreadable register).  Linux also
+*           gives an API session of the OS user sdsys both ON; the API is never open to SDSYS here, so that is not carried.  The refusal of a
+*           write to a guarded file takes its text from !edit_msg, which knows the kinds the kernel can now report.
 * 23 Oct 26 Windows port - from Linux d7cda81 and b6186cc (17 Oct 26), S.64: the three edit gates (voc.edit, bp.edit, dict.edit) are loaded at the FIRST entry to an
 *           account, and check.edit asks them for the client before WRITE, WRITEU, DELETE, DELETEU and CLEARFILE (this program is $internal, so the
 *           kernel never sees the test).  vb.clearfile cleared files(i), a stale variable, instead of files(fno).  RELEASE_1.1 170.
@@ -226,6 +230,8 @@ deffun valid_os_name(name) calling '!valid_os_name'
 *   EARLIER in the flow but LATER in the file - so leaving the declaration
 *   where it was would compile today and break the moment either routine moved.
 deffun is_grp_member(user,group) calling '!is_grp_member'
+* 18 Oct 26 dm - S.66: the text of an edit refusal for the kind the kernel reports (1 VOC, 2 dictionary, 3 program file, 4 shared file, 5 shared structure).
+deffun edit_msg(kind) calling '!edit_msg'
 
 * If this is the first time through, initialise various things in
 * the SYSCOM common block.
@@ -655,6 +661,8 @@ api.sd.grant = @false      ;* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate
 api.voc.grant = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): the edit gates; loaded at the FIRST entry only (below)
 api.bp.grant = @false
 api.dict.grant = @false
+api.shared.read.grant = @false    ;* 18 Oct 26, S.66: the shared-account gates; account-scoped, so loaded at every entry.  FAIL CLOSED: a name given as a path
+api.shared.write.grant = @false   ;*   or an unreadable register leaves both off (read is ON only when a record exists and does not say 'no')
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***EVERY REFUSAL HERE NAMES ITS
 *   BRANCH ON THE AUDIT TRAIL, AND THAT IS KEPT RATHER THAN REMOVED WITH THE
 *   DIAGNOSTICS IT ARRIVED WITH.***  All five refusals answer the caller with
@@ -677,6 +685,8 @@ openpath @sdsys:@ds:'accounts' to acc.f then
       api.voc.grant = (upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
       api.bp.grant = (upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
       api.dict.grant = (upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
+      api.shared.read.grant = (upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO')     ;* 18 Oct 26, S.66: blank = ON
+      api.shared.write.grant = (upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES')
    end
    close acc.f
 end
@@ -935,6 +945,8 @@ void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU
 void kernel(K$SH,      api.sh.grant)    ;* 23 Oct 26 - S.63, Linux abcda0c: see where they were read, above
 void kernel(K$OS.EXEC, api.os.grant)
 void kernel(K$SD.ACCOUNTS, api.sd.grant)
+void kernel(K$SHARED.READ,  api.shared.read.grant)    ;* 18 Oct 26, S.66: account-scoped, so every entry and every SDLogto loads them
+void kernel(K$SHARED.WRITE, api.shared.write.grant)
 * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates are the SIGN-ON account's (owner, 17 Oct), so they are loaded at the
 *   first entry to an account and never again; an SDLogto leaves them as they were.  master.login.done is set once, at that same first entry.
 *   (Linux's part 2 also gives an API session of the OS user sdsys entering the sdsys account all three; the API is never open to SDSYS here -
@@ -2639,9 +2651,8 @@ check.edit:
                                                                      end
                                                                      if not(kernel(K$EDIT.OK, ed.path)) then
                                                                         ed.kind = kernel(K$EDIT.KIND, ed.path)
-                                                                        if ed.kind < 1 or ed.kind > 3 then ed.kind = 1
                                                                         server.error = SV$ERROR
-                                                                        error.msg = sysmsg(12409 + ed.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+   error.msg = edit_msg(ed.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared file (18 Oct 26, S.66)
                                                                         return
                                                                      end
                                                                      err = @false

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-OFF and SHARED-WRITE-ON (the shared-account gates); CA$SHARED.READ.OFF and
+*           CA$SHARED.WRITE in createacc.h.
 *  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3: an account made
 *            writes 'CREATE.ACCOUNT account=<name> type=<USER|GROUP|OTHER>'
 *            (SD Core for Linux's words), and the syntax help lists the OTHER
@@ -558,9 +560,11 @@ deffun ps_script(script) calling '!ps_script'
 
    case 1
     crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on}'
-    crt '                  {no.query}'
+    crt '                  {shared-read-off} {shared-write-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, and no right to change'
-    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on);'
+    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on); it can open and read the files'
+    crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
+    crt '                  shared-write-on is typed;'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
     crt '                create.account group <group name> {no.query}'
     crt '                create.account other <account name> <pathname> {no.query}'
@@ -754,6 +758,13 @@ more.args:
             edit.bp = @true
          case upcase(token) = 'DICT-ON'
             edit.dict = @true
+
+* 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-OFF and SHARED-WRITE-ON, the shared-account gates.  Only the two words that differ from
+*   the delivered default (read ON, write OFF); MODIFY.ACCOUNT has all four.  Matched on token text.
+         case upcase(token) = 'SHARED-READ-OFF'
+            settings<CA$SHARED.READ.OFF> = 1
+         case upcase(token) = 'SHARED-WRITE-ON'
+            settings<CA$SHARED.WRITE> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:
