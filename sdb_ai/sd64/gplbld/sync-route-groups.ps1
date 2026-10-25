@@ -50,6 +50,13 @@ $ApiGroup    = 'sdapi'
 $SeedFrom    = 'sdusers'
 $SshComment  = 'SD accounts that may sign in over ssh'
 $ApiComment  = 'SD accounts that may use the API'
+# 25 Oct 26 - RELEASE_1.1 171 (Linux S.65).  The two groups of the files-only SDNet login route: sdfiles lets a person log in over the API to
+# files and nothing else, sdfileswrite adds the right to change them.  Created EMPTY and never seeded (core direction 1: off until an
+# administrator names a person, with modify.account files-on / files-write-on).  Like sdapi they carry no Windows right; SD reads them by name.
+$FilesGroup      = 'sdfiles'
+$FilesWriteGroup = 'sdfileswrite'
+$FilesComment      = 'SD accounts that may use the API for files only'
+$FilesWriteComment = 'SD accounts with files-only API access that may also change files'
 
 $failed = $false
 
@@ -98,6 +105,8 @@ function Get-Members([string]$name) {
 try {
     $sshIsNew = Ensure-Group $SshGroup $SshComment
     $null     = Ensure-Group $ApiGroup $ApiComment
+    $null     = Ensure-Group $FilesGroup $FilesComment
+    $null     = Ensure-Group $FilesWriteGroup $FilesWriteComment
 
     if (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"

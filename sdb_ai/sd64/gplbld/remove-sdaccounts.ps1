@@ -263,6 +263,20 @@ foreach ($name in $toRemove) {
         continue
     }
 
+    # 25 Oct 26 - RELEASE_1.1 171 (Linux 1daee9d: the uninstaller removes the stored SDNet logins).  The person's directory of stored server
+    # logins (set.netlogin keeps SCRAM-derived keys, never passwords, in C:\ProgramData\SD\sd-net\<name>) goes with the person: it is
+    # inert without the account but it is a credential store, and a left-over one outlives the thing that made it.  Administrators hold
+    # full control of it by the ACL secure-sdnet.ps1 sets, so this elevated script can remove it.
+    $netDir = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) ('SD\sd-net\' + $name)
+    if (Test-Path -LiteralPath $netDir) {
+        try {
+            Remove-Item -LiteralPath $netDir -Recurse -Force -ErrorAction Stop
+            Say '    server logins removed'
+        } catch {
+            Say ('    server logins NOT removed: ' + $_.Exception.Message)
+        }
+    }
+
     # ONE ATTEMPT THROUGH THE SUPPORTED API, AND THE TRUTH EITHER WAY.  This is
     # not a reimplementation of reclaim-profiles.ps1 - it is the ordinary case,
     # and a profile whose hive is still loaded is REPORTED rather than forced.
