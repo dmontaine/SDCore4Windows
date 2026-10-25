@@ -28,6 +28,10 @@
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): K_PHANTOM_USER: PHANTOM USER n takes the user number n from those PHANTOMS keeps (QM4 gaps).
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K_NET (the per-account NET gate for SDNet remote files, set from $internal only; does nothing yet).
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
+ * 18 Oct 26 Windows port - from Linux ee56aba - S.65: setting K_NET from a $internal program (sign-on, the API server, LOGTO going in and coming back) calls net_close_all():
+ *               the remote files and connections of the account scope that ended are dropped.
+ * 17 Oct 26 Windows port - from Linux ee56aba - S.65 slice 1: K_NET (the per-account NET gate for SDNet remote files, set from $internal only; does nothing yet).
+ * 17 Oct 26 Windows port - from Linux ee56aba - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
  *               anything but a plain file (edit_leaf_counts: !OSCOPY / !IOSCOPY can copy INTO a program file or the private
  *               catalogue); K_EDIT_KIND and K_EDIT_OK answer EDIT_PROG for the private catalogue directory (edit_kind_of_path).
  * 17 Oct 26 dm  S.64: K_VOC_EDIT, K_BP_EDIT, K_DICT_EDIT (the edit gates, set from $internal only), K_EDIT_OK and K_EDIT_KIND (a $internal
@@ -962,6 +966,15 @@ void op_kernel() {
             my_uptr->gates |= UG_NET;
           else
             my_uptr->gates &= (u_int16_t)~UG_NET;
+
+          /* 18 Oct 26 S.65: the gate is set when the account scope changes (sign-on, the API server's sign-on, LOGTO going in and
+             coming back), and the remote files and connections belong to the account that opened them: drop them all.  Nothing
+             happens unless this process ever opened one.  The handler is BASIC and moves the e-stack: nothing above is used after it. */
+          result.data.value = (my_uptr->gates & UG_NET) != 0;
+          n = process.status; /* the handler is BASIC and leaves its own STATUS() behind; the caller's is given back */
+          net_close_all();
+          process.status = n;
+          break;
         }
       }
       result.data.value = (my_uptr->gates & UG_NET) != 0;

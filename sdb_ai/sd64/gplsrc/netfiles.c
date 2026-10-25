@@ -78,6 +78,7 @@
  * START-CODE
  */
 
+#include <time.h>
 #include "sd.h"
 #include "header.h"
 
@@ -121,6 +122,98 @@ Private u_int16_t net_epoch = 0;            /* Moved on by net_close_all(); a NE
 Private bool net_used = FALSE;              /* This process has had a remote file open (so the handler holds something to close) */
 Private int16_t net_pending[NET_MAX_HANDLES]; /* Handles whose file variable went where BASIC could not be run: sent at the next call */
 Private int net_pending_ct = 0;
+
+/* ======================================================================
+   THE RECORD CACHE.  A query reads each record of a remote file several times (a LIST with a WITH clause three times, a SORT more), and every
+   read is a request.  The last NET_CACHE_SLOTS records READ from the file variables of this process are kept for NET_CACHE_TTL seconds, a
+   record the server said it does not have as well.  They are what a READ would have been given a moment ago, so they can be that many seconds
+   OUT OF DATE: a program that waits for another user's change to a remote record will see it up to NET_CACHE_TTL seconds late.  A record
+   over NET_CACHE_REC_MAX bytes is not kept.  The entries of a file variable go when it is closed, when it is SELECTed again (a new query is
+   a new look at the file) and when the connections are dropped (net_close_all()); a handle and an epoch name a file variable, so an entry
+   can never be given to another one.  READV is not cached.  This stage is read only; a stage that writes must clear an entry on its write.  */
+
+#define NET_CACHE_SLOTS 64
+#define NET_CACHE_TTL 2             /* seconds */
+#define NET_CACHE_REC_MAX 32768
+
+typedef struct {
+  bool used;
+  bool absent;                      /* the server has no such record */
+  int16_t handle;
+  u_int16_t epoch;
+  int16_t id_len;
+  char id[MAX_ID_LEN + 1];
+  STRING_CHUNK* rec;                /* NULL for a null record or an absent one */
+  time_t when;
+} NET_CACHE_ENTRY;
+
+Private NET_CACHE_ENTRY net_cache[NET_CACHE_SLOTS];
+Private int net_cache_next = 0;     /* the slot the next entry takes when none is free: the oldest, since they are taken in turn */
+
+Private void net_cache_free(NET_CACHE_ENTRY* e) {
+  if (e->rec != NULL)
+    s_free(e->rec);
+  e->rec = NULL;
+  e->used = FALSE;
+}
+
+/* every entry (handle 0) or those of one handle */
+Private void net_cache_drop(int handle) {
+  int i;
+
+  for (i = 0; i < NET_CACHE_SLOTS; i++) {
+    if (net_cache[i].used && ((handle == 0) || (net_cache[i].handle == handle)))
+      net_cache_free(&net_cache[i]);
+  }
+}
+
+/* The entry for this record of this file variable that is still fresh, or NULL.  An entry past its time goes. */
+Private NET_CACHE_ENTRY* net_cache_find(FILE_VAR* fvar, const char* id, int16_t id_len) {
+  int i;
+  time_t now = time(NULL);
+  NET_CACHE_ENTRY* e;
+
+  for (i = 0; i < NET_CACHE_SLOTS; i++) {
+    e = &net_cache[i];
+    if (!e->used)
+      continue;
+    if ((now < e->when) || ((now - e->when) > NET_CACHE_TTL)) { /* too old, or the clock went back */
+      net_cache_free(e);
+      continue;
+    }
+    if ((e->handle == fvar->access.net.handle) && (e->epoch == fvar->access.net.epoch) && (e->id_len == id_len) && (memcmp(e->id, id, id_len) == 0))
+      return e;
+  }
+  return NULL;
+}
+
+/* Keep this answer: REC is the record (a copy is kept), NULL for a null record, ABSENT for "no such record". */
+Private void net_cache_put(FILE_VAR* fvar, const char* id, int16_t id_len, STRING_CHUNK* rec, bool absent) {
+  int i;
+  NET_CACHE_ENTRY* e = NULL;
+
+  if ((id_len < 1) || (id_len > MAX_ID_LEN) || ((rec != NULL) && (rec->string_len > NET_CACHE_REC_MAX)))
+    return;
+  for (i = 0; i < NET_CACHE_SLOTS; i++) {
+    if (!net_cache[i].used) {
+      e = &net_cache[i];
+      break;
+    }
+  }
+  if (e == NULL) {
+    e = &net_cache[net_cache_next];
+    net_cache_next = (net_cache_next + 1) % NET_CACHE_SLOTS;
+    net_cache_free(e);
+  }
+  e->used = TRUE;
+  e->absent = absent;
+  e->handle = fvar->access.net.handle;
+  e->epoch = fvar->access.net.epoch;
+  e->id_len = id_len;
+  memcpy(e->id, id, id_len);
+  e->rec = (rec != NULL) ? k_copy_string(rec) : NULL;
+  e->when = time(NULL);
+}
 
 /* ======================================================================
    net_message()  -  The text of the last error of this module            */
@@ -542,6 +635,8 @@ void net_close(FILE_VAR* fvar) {
     return;
 
   handle = fvar->access.net.handle;
+  if (handle > 0)
+    net_cache_drop(handle);
   if (net_stale(fvar))
     return;
   fvar->access.net.handle = 0;
@@ -570,6 +665,7 @@ void net_close_all() {
 
   net_epoch++;
   net_pending_ct = 0;
+  net_cache_drop(0);
 
   if (!net_used)
     return;
@@ -593,15 +689,31 @@ int net_read(FILE_VAR* fvar, char* id, int16_t id_len, STRING_CHUNK** rec) {
   if (id_len < 1)
     return ER_IID; /* an empty or over-long id: the ELSE branch, as the handler would answer for an empty one */
 
+  /* A fresh answer to the same READ is kept (see THE RECORD CACHE).  A closed or stale file variable is not asked: net_op() says why. */
+  if (!net_stale(fvar)) {
+    NET_CACHE_ENTRY* hit = net_cache_find(fvar, id, id_len);
+
+    if (hit != NULL) {
+      if (hit->absent)
+        return ER_RNF;
+      *rec = (hit->rec != NULL) ? k_copy_string(hit->rec) : NULL;
+      return 0;
+    }
+  }
+
   status = net_op(fvar, NF_READ, id, id_len, "", 0, ER_RNF, &out);
   process.op_flags = entry;
   if (status < 0)
     return net_raise(status, entry);
-  if (status > 0)
+  if (status > 0) {
+    if (status == ER_RNF)
+      net_cache_put(fvar, id, id_len, NULL, TRUE);
     return status;
+  }
 
   *rec = net_take_string(&out);
   k_release(&out);
+  net_cache_put(fvar, id, id_len, *rec, FALSE);
   return 0;
 }
 
@@ -673,6 +785,8 @@ int net_select(FILE_VAR* fvar, STRING_CHUNK** ids, int32_t* count) {
   int32_t n = 0;
   int16_t i;
 
+  if (fvar->access.net.handle > 0) /* (0 would mean every entry) */
+    net_cache_drop(fvar->access.net.handle); /* a new query is a new look at the file */
   status = net_op(fvar, NF_SELECT, "", 0, "", 0, ER_FNF, &out);
   process.op_flags = entry;
   if (status < 0)
