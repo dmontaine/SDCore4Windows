@@ -70,6 +70,9 @@
 * rev 1.0-1  mab add back PROCREAD AND PROCWRITE
 * rev 1.0-1  3/17/2026 mab hot fix compiler mode bug
 * 13 Aug 26 Windows port - $internal needs SDSYS as well as internal mode
+* 11 Sep 26  An unterminated BEGIN TRANSACTION reports 2878 instead of
+*            hanging the compiler (port PRE_RELEASE_FIXES 114).
+* 19 Oct 26  SCREEN MENUBAR takes CLICK x (the menu under a click on the bar opens).
 * END-HISTORY
 *
 *
@@ -528,7 +531,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names = "MSGBOX"
    screen.defs = "!screen_msgbox":@vm:1:@vm:"TITLE:1":@sm:"BUTTONS:1":@sm:"DEFAULT:1":@sm:"AT:2"
    screen.names<-1> = "MENU"    ; screen.defs<-1> = "!screen_menu":@vm:1:@vm:"AT:2":@sm:"DEFAULT:1"
-   screen.names<-1> = "MENUBAR" ; screen.defs<-1> = "!screen_menubar":@vm:1:@vm:"ROW:1":@sm:"DRAW:F"
+   screen.names<-1> = "MENUBAR" ; screen.defs<-1> = "!screen_menubar":@vm:1:@vm:"ROW:1":@sm:"DRAW:F":@sm:"CLICK:1"
    screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
    screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F"
    screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"

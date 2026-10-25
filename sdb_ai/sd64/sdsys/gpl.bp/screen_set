@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - f{'quiet'} = 1 stops the redraw of the whole form after a set (for a program that draws the widget itself).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -108,7 +110,9 @@ $catalog !screen_set
       * a hidden widget is not drawn and takes no focus; the form is redrawn without it (or with it again)
       w{'hidden'} = if visible + 0 = 0 then 1 else 0
    end
-   if f{'shown'} and not(system(25)) then       ;* the form is on the screen (SCREEN WAIT): show the change
+   * 18 Oct 26: a program that sets f{'quiet'} to 1 draws what it changed itself (SCREEN SET drew the whole form each time, which the IDE saw as
+   *   a flash; two SETs for one record change were two whole screens)
+   if f{'shown'} and not(system(25)) and not(f{'quiet'} + 0) then       ;* the form is on the screen (SCREEN WAIT): show the change
       call $sl_scr('get', scr)
       call $sl_form('redraw', f, scr, '', r)
       call $sl_scr('put', scr)

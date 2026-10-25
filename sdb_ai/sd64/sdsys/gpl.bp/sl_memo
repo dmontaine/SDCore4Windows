@@ -6,6 +6,9 @@
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 749574b (13 Oct 26): Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -765,7 +768,7 @@ paint:
    next r
    if w{'focused'} then
       gosub row.of
-      display @(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top) :
+      call $sl_curat(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top)
    end
    return
 

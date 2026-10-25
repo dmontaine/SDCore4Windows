@@ -1,0 +1,63 @@
+* SL_HSCROLLBAR
+* Screen library: the characters of a horizontal scroll bar.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (the IDE's editor had no horizontal bar; the owner asked for one).  The sideways twin of $sl_scrollbar.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_hscrollbar(w, left, total, visible, bar)
+*
+*     w        the width of the bar in cells (a widget's columns)
+*     left     the number of the first column that is shown (from 1)
+*     total    how many columns there are (the length of the longest line)
+*     visible  how many of them the widget shows at a time
+*     bar      returned: w characters, one for each cell of the bar from the left.  < in the first cell, > in
+*              the last, a horizontal line for the track between and a block for the part of it that is showing:
+*              as long as visible is of total (at least one cell), and as far along as left is of the way to the
+*              end.  Nothing to scroll (total not above visible), or no room for a track (w under 3): the track
+*              only, without the thumb.
+*
+*   The routine draws nothing: the caller puts the string in the row under what scrolls.  The arrows are < and >
+*   on every terminal (the library has no line-drawing stand-in for a left or right arrow); the track and the
+*   thumb are the ones $sl_scrollbar uses, so that $sl_put draws them as ─ and █ on a terminal with line drawing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_hscrollbar(w, left, total, visible, bar)
+$catalog $sl_hscrollbar
+
+   bar = ''
+   if w < 1 then return
+
+   call $sl_line('h', '', ch.track)
+   call $sl_line('thumb', '', ch.thumb)
+   bar = str(ch.track, w)
+   bar[1, 1] = '<'
+   if w > 1 then bar[w, 1] = '>'
+
+   if w > 2 and total > visible and visible > 0 then
+      room = w - 2                                       ;* the cells of the track
+      tl = int(room * visible / total + 0.5)             ;* the thumb's length
+      if tl < 1 then tl = 1
+      if tl > room then tl = room
+      span = total - visible                             ;* how far the first column shown can go
+      t = left - 1
+      if t < 0 then t = 0
+      if t > span then t = span
+      ts = int((room - tl) * t / span + 0.5)             ;* the thumb's first cell, from 0
+      for c = 0 to tl - 1
+         bar[2 + ts + c, 1] = ch.thumb
+      next c
+   end
+
+   return
+end
+
+* END-CODE

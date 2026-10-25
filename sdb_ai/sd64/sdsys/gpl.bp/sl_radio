@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -153,9 +155,9 @@ paint:
    next i
    if w{'focused'} then
       if across then
-         display @(w{'ax'} + 1, w{'ay'}) :
+         call $sl_curat(w{'ax'} + 1, w{'ay'})
       end else
-         display @(w{'ax'} + 1, w{'ay'} + cur - 1) :
+         call $sl_curat(w{'ax'} + 1, w{'ay'} + cur - 1)
       end
    end
    return

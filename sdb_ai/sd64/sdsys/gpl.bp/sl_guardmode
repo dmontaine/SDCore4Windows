@@ -1,0 +1,48 @@
+* SL_GUARDMODE
+* Screen library: ask for the cursor lock for the program that reads its keys through the library.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (terminal 140 by 42, phase 3).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_guardmode(name, minw, minh)
+*
+*     name        what the program is called in the warning (IDE); null takes the lock off
+*     minw minh   the size the program is laid out for
+*
+*   SD's own full-screen programs that read their keys through the library (the IDE and CED) are laid out for 140 by 42 and show the
+*   upper left corner of the layout when the window is smaller.  So long as the cursor ($sl_curat) is in the part that shows that is
+*   safe; when it is not, $sl_key does not hand the program a key but takes the keyboard itself ($sl_guard: a warning in the upper
+*   left, every key dropped, Ctrl-Q the one way out) until the window is made bigger.  Ctrl-Q, then y, makes $sl_key hand back the
+*   key 'guardquit' from then on (and the dialogues of the library read it as Esc), which the program turns into leaving without
+*   saving.  SCREEN CLOSE and $sl_cleanup take the lock off, so it never reaches the next program; a user's SCREEN OPEN program does
+*   not ask for it, so SD imposes nothing on it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_guardmode(name, minw, minh)
+$catalog $sl_guardmode
+
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+
+   g.quit = 0
+   if name = '' then
+      g.on = 0
+   end else
+      g.on = 1
+      g.name = name
+      g.minw = minw
+      g.minh = minh
+   end
+
+   return
+end
+
+* END-CODE

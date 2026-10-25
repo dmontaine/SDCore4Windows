@@ -5,6 +5,10 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42, phase 3: for a program that asked for the cursor lock ($sl_guardmode), the cursor is looked at
+*               before a key is read; off the screen, $sl_guard takes the keyboard.  'guardquit' is the new key name; a lift
+*               of the lock is reported as 'resize', since the screen is the guard's and the program must draw it again.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -16,6 +20,8 @@
 *                up down left right home end pgup pgdn ins del bs tab btab enter esc
 *                f1 ... f12, ctrl-a ... ctrl-z (those with no name of their own),
 *                or the character itself for a printable character
+*                guardquit  (only for a program that asked for the cursor lock, $sl_guardmode) the user has chosen to leave from the
+*                           lock; it is returned by every later call, and the program leaves without saving
 *
 *   The decoding is KEYCODE()'s, i.e. the terminal's terminfo entry; a lone Esc is told from
 *   the start of a key sequence by KEYCODE()'s own short wait.
@@ -32,9 +38,21 @@ $include keyin.h
 $include err.h
 
    common /slsz/ sz.last, sz.has, sz.held
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+   common /slcur/ cu.has, cu.x, cu.y, cu.hid
 
    name = ''
    if system(25) then return              ;* a phantom has no keyboard: asking for a key would abort it
+
+   * The cursor lock of a program that asked for it ($sl_guardmode): where the cursor is, it is the window that decides whether
+   * the user can see what they type.  Once the user has chosen to leave, every call says so.
+   if g.on then
+      if not(g.quit) then gosub guard.cursor
+      if g.quit then
+         name = 'guardquit'
+         return
+      end
+   end
 
    * The terminal's size is checked on the way in and between one-second slices of the wait: a resize (SIGWINCH makes the
    * kernel change @crtwide and @crthigh; so does TERM w,h) is the key 'resize'.  A block starts as 0, so the first call only
@@ -113,6 +131,22 @@ $include err.h
       case 1 ; name = k
    end case
 
+   return
+
+* The program asked for the lock, and its cursor ($sl_curat) is off the screen: $sl_guard takes the keyboard.  It returns when the
+* window is big enough (the screen is then the guard's, not the program's: the size that was kept is forgotten, so that this call
+* goes on to report 'resize' and the program draws everything again) or when the user chose to leave.
+guard.cursor:
+   if not(cu.has) or cu.hid then return
+   call $sl_window(gw, gh)
+   if cu.x < gw and cu.y < gh then return
+   call $sl_guard(g.name, g.minw, g.minh, cu.x, cu.y, gres)
+   if gres = 'quit' then
+      g.quit = 1
+   end else
+      sz.last = 'x'
+      sz.has = 0
+   end
    return
 
 * The size of the terminal is not what it was: the key is 'resize'.  This routine does NOT draw anything: the live screen context

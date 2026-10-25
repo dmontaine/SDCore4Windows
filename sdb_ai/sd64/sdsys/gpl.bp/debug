@@ -19,6 +19,14 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The full-screen display is laid out for at least 140 by 42
+*               (lay.w, lay.h; a bigger window is used whole).  On a window smaller than that at the first stop the debugger says
+*               so (message 12607, $sl_need) and uses line mode for the session instead.  A window made smaller while the
+*               full-screen display is up shows the upper left corner of the layout (the library cuts what falls outside the
+*               window), the debugger lays out and draws again whenever the window changes (wait.key, relayout), and while the
+*               cursor on the command line is off the screen the keys are not the debugger's: $sl_guard takes the keyboard until
+*               the window is made bigger, or the user leaves with Ctrl-Q, y, which is F3 (Stop).
+* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
 *               with its styles and $sl_put, help is its message box, and the whole screen is the terminal's
 *               ALTERNATE screen, on any terminal that has one.  The AccuTerm code (screen images through the 'sreg'
 *               capability, its mouse and its key rebinding) is removed, on the owner's instruction.
@@ -53,17 +61,24 @@ $include syscom.h
 $include int$keys.h
 $include header.h
 $include sl.h
+$include err.h
 
 deffun atvar(name) calling "!atvar"
 deffun dbg.atvar(name) local
 deffun dbg.info(mode, qualifier) local
 
 $define SOURCE.AREA            1
+$define LAY.WIDTH            140       ;* what the full-screen display is laid out for (a bigger window is used whole)
+$define LAY.DEPTH             42
 
-   wm1 = @crtwide - 1
-   command.line = @crthigh - 1
-   data.area = command.line - DATA.AREA.LINES
-   source.area.lines = data.area -1 
+   gosub read.layout                    ;* lay.w by lay.h: the window, and never less than LAY.WIDTH by LAY.DEPTH
+   guard.left = @false                  ;* the user left from the cursor lock, in a place that cannot leave at once
+   wm1 = lay.w - 1
+   command.line = lay.h - 1
+   msg.prefix = ''
+   if data.lines < 5 then data.lines = DATA.AREA.LINES      ;* a common block starts at 0
+   data.area = command.line - data.lines
+   source.area.lines = data.area -1
    return.key = seq(pterm(PT$INEWLINE,''))
    phantom = bitand(event, 0x80000000) # 0
 
@@ -574,9 +589,16 @@ emit.msg:
          ct += 1
          if rem(ct, DATA.AREA.LINES) = 0 then
             gosub paint.data.area
-            call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
-            display @(len(sysmsg(6710)), command.line) :
-            s = upcase(keycode())
+            loop
+               call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
+               cur.x = len(sysmsg(6710))
+               gosub wait.key
+            while wk.relaid repeat
+            s = upcase(wk.c)
+            if key.quit then
+               s = 'Q'
+               guard.left = @true
+            end
             call $sl_put(scr, 0, command.line, space(wm1), command.attr)
             if s = 'Q' or s = char(27) then exit
             ct = 0
@@ -595,6 +617,145 @@ paint.data.area:
    for i = 1 to DATA.AREA.LINES
       call $sl_put(scr, 0, data.area + i - 1, fmt(debug.data.area(i), wm1 : 'L'), command.attr)
    next i
+   return
+
+* DISPLAY.ALL  -  /*  -  every variable of the program, locals first and then the common blocks it names, one to a line (a
+*                 matrix or a collection says what it is; /name goes into it).  Hidden names (*Arg1) are left out.
+display.all:
+   all.shown = 0
+   all.fields = dcount(symbols(idx), @fm)
+   for all.f = 1 to all.fields
+      all.values = dcount(symbols(idx)<all.f>, @vm)
+      all.first = 2                    ;* in a common block's field the first value is the number of its first variable
+      if all.f = 1 then all.first = 1
+      for all.v = all.first to all.values
+         all.subs = dcount(symbols(idx)<all.f, all.v>, @sm)
+         for all.s = 1 to all.subs
+            all.name = symbols(idx)<all.f, all.v, all.s>
+            if all.name # '' and all.name[1,1] # '*' then
+               var.name = all.name
+               msg.prefix = all.name : '  '
+               gosub display.variable
+               msg.prefix = ''
+               all.shown += 1
+            end
+         next all.s
+      next all.v
+   next all.f
+   if all.shown = 0 then
+      message = sysmsg(11391)         ;* There are no variables to show
+      gosub emit.msg
+   end
+   return
+
+* SHOW.NP  -  s as it is to be shown: a non-printing character is a ? or, after the ^ command, ^ and its decimal number  (16 Oct 26)
+show.np:
+   if expand.np then
+      np.t = ''
+      for np.i = 1 to len(s)
+         np.c = seq(s[np.i, 1])
+         if np.c < 32 or np.c = 127 then np.t := '^' : np.c else np.t := s[np.i, 1]
+      next np.i
+      s = np.t
+   end else
+      s = convert(banned, replacements, s)
+   end
+   return
+
+* The title bar, the source area, the data area and the command line, in the library's styles (the caller has the theme in)
+paint.layout:
+   call $sl_put(scr, 0, 0, space(lay.w), title.attr)
+   for i = SOURCE.AREA to data.area - 1
+      call $sl_put(scr, 0, i, space(lay.w), source.attr)
+   next i
+   for i = data.area to lay.h - 1
+      call $sl_put(scr, 0, i, space(lay.w - (i = lay.h - 1)), command.attr)
+   next i
+   return
+
+* READ.LAYOUT  -  lay.w by lay.h, the size the full-screen display is laid out for: the window, and never less than LAY.WIDTH by
+*                 LAY.DEPTH.  A window made smaller after the debugger started shows the upper left corner of the layout and the
+*                 library cuts what falls outside it.  win.w by win.h is the window as it was looked at (WAIT.KEY compares it).
+read.layout:
+   call $sl_window(win.w, win.h)
+   lay.w = win.w
+   lay.h = win.h
+   if lay.w < LAY.WIDTH then lay.w = LAY.WIDTH
+   if lay.h < LAY.DEPTH then lay.h = LAY.DEPTH
+   last.w = win.w
+   last.h = win.h
+   return
+
+* RELAYOUT  -  The window changed size (or the cursor lock was lifted, which leaves the screen the lock's): the layout is made
+*              again for the window and everything is drawn again.  The messages of the data area are kept.
+relayout:
+   * the prompt the debugger was waiting in may be a listing (emit.msg, show.call.stack) whose loops use s, n, i and j, which
+   * display.source uses too
+   if unassigned(s) then rl.s = '' else rl.s = s
+   if unassigned(n) then rl.n = '' else rl.n = n
+   if unassigned(i) then rl.i = '' else rl.i = i
+   if unassigned(j) then rl.j = '' else rl.j = j
+   gosub read.layout
+   wm1 = lay.w - 1
+   command.line = lay.h - 1
+   data.area = command.line - data.lines
+   source.area.lines = data.area - 1
+   gosub theme.in
+   display @(-1) :
+   gosub paint.layout
+   gosub theme.out
+   gosub paint.data.area
+   gosub display.source
+   s = rl.s ; n = rl.n ; i = rl.i ; j = rl.j
+   return
+
+* WAIT.KEY  -  One key from a full-screen prompt, in wk.c.  In: cur.x, the column the cursor is in (on the command line).  Out: key.quit, true
+*              if the user left from the cursor lock (Ctrl-Q, y) and wk.c is null; wk.relaid, true if the window had changed and
+*              the screen was laid out and drawn again (RELAYOUT wipes the prompt line): wk.c is null and the caller paints its
+*              prompt again and calls this again.
+*              While the cursor is off the screen the keys are not the debugger's: $sl_guard takes the keyboard until the window is
+*              made bigger.  Line mode just waits.
+wait.key:
+   key.quit = @false
+   wk.relaid = @false
+   wk.c = ''
+   if not(full.screen) then
+      wk.c = keycode()
+      return
+   end
+   loop
+      call $sl_window(win.w, win.h)
+      if win.w # last.w or win.h # last.h then
+         gosub relayout
+         wk.relaid = @true
+         return
+      end
+      if cur.x >= win.w or command.line >= win.h then
+         call $sl_guard('the debugger', LAY.WIDTH, LAY.DEPTH, cur.x, command.line, guard.result)
+         if guard.result = 'quit' then
+            key.quit = @true
+            return
+         end
+         last.w = -1                      ;* the screen is the lock's, not ours: it is laid out and drawn again at the top
+         continue
+      end
+      wk.c = keycode(1)
+      wk.st = status()
+      if wk.c # '' or wk.st # ER$TIMEOUT then exit
+   repeat
+   return
+
+* WINDOW n  -  the data area becomes n rows high (QM4 Fixes 193); the source area takes what is left
+new.window:
+   data.lines = new.lines + 0
+   data.area = command.line - data.lines
+   source.area.lines = data.area - 1
+   mat debug.data.area = ''
+   gosub theme.in
+   gosub paint.layout
+   gosub theme.out
+   gosub paint.data.area
+   gosub display.source
    return
 
 * ======================================================================
@@ -628,6 +789,32 @@ initialise:
 
    debug.command.stack = ''
    mat debug.data.area = ''
+
+   * 16 Oct 26 dm - QM4 Fixes 193: WINDOW n in the VOC record $DEBUG.OPTIONS sets the height of the data area (5 to 15 rows)
+   expand.np = @false
+   data.lines = DATA.AREA.LINES
+   read init.options from @voc, '$debug.options' then
+      init.options = upcase(init.options)
+      for i = 1 to dcount(init.options, @fm)
+         if field(trim(init.options<i>), ' ', 1) = 'WINDOW' then
+            n = field(trim(init.options<i>), ' ', 2)
+            if n matches '1N0N' and n >= 5 and n <= MAX.DATA.AREA.LINES then data.lines = n + 0
+         end
+      next i
+      data.area = command.line - data.lines
+      source.area.lines = data.area - 1
+   end
+
+   * A window smaller than the full-screen display is laid out for: the debugger says so and uses line mode for the session
+   * (the line mode is complete; the other full-screen programs of SD refuse, but the debugger is a tool for fixing a program and
+   * a small window is no reason to take that away)
+   if full.screen then
+      call $sl_need('The debugger', LAY.WIDTH, LAY.DEPTH, need.msg, 1)
+      if need.msg # '' then
+         full.screen = @false
+         display need.msg
+      end
+   end
 
    if full.screen then
       * Set up initial display and save screen image: the title bar, the source area, the data area and the
@@ -680,6 +867,11 @@ get.input:
    spos = 0               ;* Stack position
    command = ''
 
+   if guard.left then     ;* the user left from the cursor lock in a listing: that is Stop (F3)
+      guard.left = @false
+      command = char(K$F3)
+      goto exit.get.input
+   end
 
    prefix = '>'
    prefix.len = len(prefix)
@@ -708,7 +900,7 @@ get.input:
             * the whole command line, in the library's style, and the cursor in it
             i = prefix.len + x - command.pan
             call $sl_put(scr, 0, command.line, fmt(ss, wm1 : 'L'), command.attr)
-            display @(i, command.line) :
+            call $sl_curat(i, command.line)
          end else
             gosub zoned.update         ;* (it uses i: the cursor's place is worked out after it)
             i = prefix.len + x - command.pan
@@ -718,7 +910,20 @@ get.input:
             end
          end
 
-         c = keycode()
+         if full.screen then
+            * the window may change while the debugger waits, and the cursor may be off the screen: WAIT.KEY sees to both
+            cur.x = i
+            gosub wait.key
+            command.width = wm1 - prefix.len
+            if key.quit then
+               command = char(K$F3)               ;* the user left from the cursor lock: Stop
+               goto exit.get.input
+            end
+            if wk.relaid then continue            ;* the screen was drawn again: the command line is painted again from the top
+            c = wk.c
+         end else
+            c = keycode()
+         end
          n = seq(c)
 
          if first and n >= 32 and n < 128 then
@@ -1025,7 +1230,7 @@ display.source.and.name:
 display.source:
    n = len(lines(src.idx))
    line.no.fmt = n : "R"
-   src.width = @crtwide - (n + 3)
+   src.width = lay.w - (n + 3)
 
    if full.screen then
       s = program.name(src.idx) : " : "
@@ -1056,7 +1261,7 @@ display.source:
             tx = fmt(s<i>[1, src.width], src.width : 'L')
             call $sl_put(scr, 0, SOURCE.AREA + i - 1, numtxt : tx, str(numcode, len(numtxt)) : str(txtcode, src.width))
          end else
-            call $sl_put(scr, 0, SOURCE.AREA + i - 1, space(@crtwide), source.attr)
+            call $sl_put(scr, 0, SOURCE.AREA + i - 1, space(lay.w), source.attr)
          end
          n += 1
       next i
@@ -1799,10 +2004,14 @@ show.call.stack:
          case 1
             k = dcount(ss, @vm)
             for j = 2 to k
-               if rem(zz, DATA.AREA.LINES) = 0 then
-                  call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
-                  display @(len(sysmsg(6710)), command.line) :
-                  if upcase(keycode()) = 'Q' then return
+               if rem(zz, data.lines) = 0 then
+                  loop
+                     call $sl_put(scr, 0, command.line, fmt(sysmsg(6710), wm1 : 'L'), command.attr)  ;* ---more---
+                     cur.x = len(sysmsg(6710))
+                     gosub wait.key
+                  while wk.relaid repeat
+                  if key.quit then guard.left = @true
+                  if upcase(wk.c) = 'Q' or key.quit then return
                   call $sl_put(scr, 0, command.line, space(wm1), command.attr)
                end
                ln = ss<1,j,2>

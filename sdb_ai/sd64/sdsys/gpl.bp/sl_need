@@ -1,0 +1,51 @@
+* SL_NEED
+* Screen library: is the window as big as a full-screen program is laid out for?
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (terminal 140 by 42, phase 2).  One check and one message (12202) for every full-screen program of SD's
+*               own, so that the size they insist on is stated in one place: SED now; the IDE and CED when their phase comes.
+* 18 Oct 26 dm  Phase 3: the IDE and CED ask too; the fifth argument is for the debugger, which does without its full-screen
+*               display instead of refusing (message 12607).
+* 18 Oct 26 dm  Messages 12491 to 12493 became 12605 to 12607: 12485 to 12494 is the net slice's block (test-net-units W14).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_need(name, minw, minh, msg, fallback)
+*
+*     name        what the program is called in the message (SED)
+*     minw minh   the size the program is laid out for
+*     msg         returned: null when the window ($sl_window) is at least that big; else message 12202, "SED needs a window of
+*                 at least 140 columns by 42 lines; this one is 100 by 30".  The program prints it (or STOPs with it) and does
+*                 not start.
+*     fallback    1 for a program that does not refuse but does without (the debugger's full-screen display): the message is
+*                 12607, "the debugger's full-screen display needs a window of at least 140 columns by 42 lines; this one is
+*                 100 by 30, so it is using line mode".  Null for a program that refuses.
+*
+*   Only a program that is laid out for a size asks.  A user's SCREEN OPEN program asks for its own with MINSIZE w,h, and SD does
+*   not impose 140 by 42 on it; the debugger's full-screen display falls back to line mode instead of refusing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_need(name, minw, minh, msg, fallback)
+$catalog $sl_need
+
+   call $sl_window(w, h)
+   msg = ''
+   if w < minw or h < minh then
+      if fallback # '' and fallback # 0 then
+         msg = sysmsg(12607, name, minw, minh, w : ' by ' : h)    ;* %1 needs a window of at least %2 by %3 for its full-screen display; ... %4 ...
+      end else
+         msg = sysmsg(12202, name, minw, minh, w : ' by ' : h)    ;* %1 needs a window of at least %2 columns by %3 lines; this one is %4
+      end
+   end
+
+   return
+end
+
+* END-CODE

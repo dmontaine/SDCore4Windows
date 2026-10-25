@@ -1,0 +1,209 @@
+* CED
+* CED command - the data collection editor, for a record of a data collection file or a JSON
+* string in a record of an ordinary file (openQM CED, 1.2-0).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 12 Oct 26 dm  New.
+* 13 Oct 26 dm  The choice of a new record's kind is a dialogue of the screen library.
+* 18 Oct 26 dm  Terminal 140 by 42 (phase 3): a window under 140 by 42 is refused before any record is touched ($sl_need, 12202).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   CED {DICT} file.name {id...}
+*   CED {DICT} file.name *
+*
+*   The records named are edited one after another.  With no ids the active select list is
+*   used (the default list), and with none of that the ids are asked for until a null one is
+*   entered.  A record that does not exist is a new one: the user chooses between a collection
+*   and an array.  A record of a data collection file is a collection already; a record of an
+*   ordinary file is parsed as JSON, and one that is not a JSON object or array is left alone.
+*   The record is locked while it is edited.  The editor is gpl.bp/ced_edit.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $ced
+$catalog $ced
+
+$include parser.h
+$include syscom err.h
+$include syscom keys.h
+$include int$keys.h
+$include keyin.h
+
+   parser = '!PARSER'
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   * A window smaller than the editor is laid out for is refused before any record is touched (the library's one check and message;
+   * ced_edit asks again for a caller that does not come through here, !CED())
+   call $sl_need('CED', 140, 42, need.msg, '')
+   if need.msg # '' then stop need.msg
+
+   portion = ''
+   id.list = ''
+   stop.all = @false
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   * Get file name
+
+   call @parser(PARSER$MFILE, token.type, file.name, keyword)
+   if keyword = KW$DICT then
+      portion = 'DICT'
+      call @parser(PARSER$MFILE, token.type, file.name, keyword)
+   end
+
+   if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
+
+   * Open the file
+
+   open portion, file.name to file else
+      open portion, downcase(file.name) to file then
+         file.name = downcase(file.name)
+      end else
+         open portion, upcase(file.name) to file else
+            @system.return.code = -status()
+            stop sysmsg(2019) ;* File not found
+         end
+
+         file.name = upcase(file.name)
+      end
+   end
+
+   * The record ids
+
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   loop
+   until token.type = PARSER$END
+      id.list<-1> = token
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   repeat
+
+   coll.file = fileinfo(file, FL$COLLECTION)
+   ask = @false
+
+   begin case
+      case id.list = '*'
+         sselect file to 11
+         readlist id.list from 11 else id.list = ''
+
+      case id.list # ''
+         null
+
+      case selectinfo(0, SL$ACTIVE)
+         readlist id.list else id.list = ''
+
+      case 1
+         ask = @true
+   end case
+
+   prompt ''
+   loop
+      if ask then
+         display sysmsg(12162) : ': ' :
+         input rec.id
+         if rec.id = '' then exit
+      end else
+         rec.id = removef(id.list, 1)
+         if status() then exit
+      end
+      gosub edit.record
+   until stop.all
+   repeat
+
+   @system.return.code = 0
+
+   return
+
+* *****************************************************************************
+* edit.record  -  Edit the record rec.id
+
+edit.record:
+   if rec.id = '' then
+      display sysmsg(2107) ;* Null record name ignored
+      return
+   end
+
+   * Read it with a lock.  A file whose ids are case sensitive (a directory) is tried as typed,
+   * then in lower case, then in upper case, as the other commands do.
+
+   found = @false
+   tried = rec.id
+   for attempt = 1 to 3
+      begin case
+         case attempt = 1
+            try.id = rec.id
+         case attempt = 2
+            try.id = downcase(rec.id)
+         case 1
+            try.id = upcase(rec.id)
+      end case
+      if attempt > 1 then
+         if fileinfo(file, FL$NOCASE) or try.id = tried then continue
+         tried = try.id
+      end
+      readu rec from file, try.id locked
+         display sysmsg(1433, try.id, status()) ;* Record 'xx' is locked by user xx
+         return
+      end then
+         found = @true
+         rec.id = try.id
+         exit
+      end else
+         release file, try.id
+      end
+   next attempt
+
+   if found then
+      if coll.file then
+         c = rec
+      end else
+         c = jparse(rec)
+         if status() # 0 or (jtype(c) # 'collection' and jtype(c) # 'array') then
+            display sysmsg(12159, rec.id) ;* Record 'xx' is not a JSON object or array
+            release file, rec.id
+            return
+         end
+      end
+   end else
+      * A new record
+      readu dummy from file, rec.id locked
+         display sysmsg(1433, rec.id, status())
+         return
+      end then
+         null
+      end else
+         null
+      end
+      * A collection or an array?  A dialogue (the library's): C and A choose, Esc cancels.
+      nb = 0
+      screen msgbox sysmsg(12160, rec.id) buttons '&Collection,&Array' returning nb else nb = 0
+      begin case
+         case nb = 1
+            c = collection()
+         case nb = 2
+            c = mat()
+         case 1
+            release file, rec.id
+            return
+      end case
+   end
+
+   title = ''
+   if portion # '' then title = portion : ' '
+   title := file.name : ' ' : rec.id
+   call $cedit(c, file, rec.id, (if coll.file then 0 else 1), title, result)
+   release file, rec.id
+   if result<2> then stop.all = @true
+
+   return
+end
+
+* END-CODE

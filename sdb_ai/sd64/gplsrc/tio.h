@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 dm DEFAULT_WIDTH 140 and DEFAULT_DEPTH 42 (were 120 and 36), and linuxio.c and
+ *           op_tio.c tio_init() use them instead of literals.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -40,10 +42,10 @@
 
 /* The following are also defined in BP TERM */
 #define MIN_WIDTH        20
-#define DEFAULT_WIDTH   120
+#define DEFAULT_WIDTH   140
 #define MAX_WIDTH     32767
 #define MIN_DEPTH        10
-#define DEFAULT_DEPTH    36
+#define DEFAULT_DEPTH    42
 #define MAX_DEPTH     32767
 
 #define BACKSPACE_KEY 8

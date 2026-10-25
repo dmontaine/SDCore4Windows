@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - With CLEAR the context is marked SL.S.SYNC (the terminal matches the shadow), so that forms write only what changes.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -55,7 +57,10 @@ $include sl.h
    call $sl_theme('default', '', '', '', '', r)       ;* the site's theme (SCREENTHEME in sd.conf), unless a program asked for one
    call $sl_scr('open', scr)
    call $sl_line('on', (lines # ''), r)                ;* borders in line-drawing characters, if asked for
-   if clear # '' then call $sl_desktop(scr)
+   if clear # '' then
+      call $sl_desktop(scr)
+      scr<SL.S.SYNC> = 1                              ;* the terminal is cleared and the shadow is blank: a form may leave out what is shown already
+   end
    if nocursor # '' then scr<SL.S.CURON> = 0
    scr<SL.S.MOUSE> = 0
    if nomouse = '' then

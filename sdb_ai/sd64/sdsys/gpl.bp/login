@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fa1cd4c (18 Oct 26): the size a session with no tty takes is DEFAULT.WIDTH by DEFAULT.DEPTH, now 140 by 42 (int$keys.h), and the
+*           terminfo entries say the same; a real terminal still decides its own size.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is loaded at sign-on, account-scoped like SD.ACCOUNTS.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ, K$SHARED.WRITE) are loaded at sign-on, account-scoped like
 *           SD.ACCOUNTS; read is on unless the record says no.

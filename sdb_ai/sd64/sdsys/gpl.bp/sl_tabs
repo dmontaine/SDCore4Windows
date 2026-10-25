@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -125,7 +127,7 @@ paint:
       for i = 1 to cur - 1
          pos += len(items<1, i, 1>) + 3
       next i
-      display @(w{'ax'} + pos + 1, w{'ay'} + 0) :
+      call $sl_curat(w{'ax'} + pos + 1, w{'ay'} + 0)
    end
    return
 end

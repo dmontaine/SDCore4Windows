@@ -5,15 +5,17 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - CLICK x: the menu under a click on the bar that is not open opens, not the first (the IDE ignored such a click).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MENUBAR menus {ROW r} {DRAW} {RETURNING v} {THEN ... ELSE ...}
+*   SCREEN MENUBAR menus {ROW r} {DRAW} {CLICK x} {RETURNING v} {THEN ... ELSE ...}
 *
 *   is compiled into
 *
-*   call !screen_menubar(menus, row, draw, ret, status)
+*   call !screen_menubar(menus, row, draw, click, ret, status)
 *
 *     menus    one FIELD for each menu: its title (an & puts the letter after it first as the key
 *              that opens it), then its entries as values, each as for SCREEN MENU (label, shortcut,
@@ -23,8 +25,11 @@
 *              that title opens it beside the entry (Right or Return opens, Esc or Left closes).
 *     row      the row of the bar, from 0 (default 0)
 *     draw     only draw the bar and return; the program calls again without DRAW to use it
+*     click    a column of the bar's row where the mouse was pressed (SCREEN MOUSE says where): the menu whose title is
+*              there opens instead of the first.  A column with no title over it (the space to the right of the titles)
+*              opens nothing and the statement takes ELSE.  Left out, the first menu opens, as for F10.
 *     ret      the code of the entry chosen
-*     status   0 an entry was chosen; 1 Esc or the input ended, or DRAW was given (ELSE)
+*     status   0 an entry was chosen; 1 Esc or the input ended, or DRAW was given, or CLICK found no title (ELSE)
 *
 *   Without DRAW the first menu opens at once; left and right move to the next menu, up and down
 *   among the entries, Return chooses, Esc leaves, a letter chooses the entry that has it.  The bar
@@ -36,7 +41,7 @@
 * START-CODE
 
 $internal
-subroutine screen_menubar(menus, brow, draw, ret, status)
+subroutine screen_menubar(menus, brow, draw, click, ret, status)
 $catalog !screen_menubar
 
 $include sl.h
@@ -63,6 +68,14 @@ $include sl.h
 
    call $sl_menu('init', w, scr, '', r)
    call $sl_menu('draw', w, scr, '', r)
+   if draw = '' and click # '' then
+      call $sl_menu('hit', w, scr, click + 0, hm)      ;* the menu under the click
+      if hm = 0 then
+         call $sl_scr('put', scr)
+         return
+      end
+      w<SL.W.S1> = hm
+   end
    if draw = '' then
       call $sl_menu('run', w, scr, '', r)
       if r # '' then

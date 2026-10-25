@@ -2,6 +2,157 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+19 Oct 26  THE IDE SHOWS WHICH PANE IS ACTIVE WITH A [*] OR [-] IN ITS TOP RIGHT CORNER.
+
+             What        Each pane that can have the keyboard now carries a small mark in its top right corner: [*] on the one that has it and
+                        [-] on the other three. The four are the files (on the frame above the tree), the editor (on the frame above it), the tab
+                        strip (at the right end of the strip) and the messages (at the right end of their bar), and Tab moves the [*] round them
+                        in that order. Only the two marks that change are drawn again.
+             Why it      A keyboard user pressing Tab could not tell where the keys would go. The status line names the pane and the editor
+                        highlights its cursor, but a mark on the pane itself is what the eye finds first.
+             Does not    It is not clickable, and it does not change the Tab order or what any key does.
+
+19 Oct 26  THE IDE: CHOOSING A RECORD OR A FILE NO LONGER FLASHES THE WHOLE SCREEN, A CLICK ON THE MENU BAR OPENS THE MENU, THE PANE WITH THE FOCUS IS NAMED, AND THE EDITOR SHOWS ITS CURSOR.
+
+             What        Four reports from using the IDE. (1) Every choice in the tree wrote every widget again - a file wrote 3,078 characters to the
+                        terminal, a record 6,635 (a screen is 5,880), Down in the tree 1,026, the tree itself three times over - which showed as the
+                        whole screen flashing. The screen library now keeps in step with what the terminal shows, and a form that is drawn again
+                        writes only the text that changed: a file 570, a record 780, Down in the tree 54. (2) The menu bar is not a widget, so a click
+                        on it was dropped and the menu opened only after F10 or Esc. A click on a title now opens that menu, and a click on the
+                        bar beside the titles does nothing. (3) With the keyboard only there was no sign of which pane Tab had moved to: the
+                        status line now begins with the pane, [Files], [Tabs], [Editor] or [Messages]. (4) The editor now shows the character at
+                        its cursor in the highlight style while it has the focus, so the place shows on a terminal that draws its own cursor poorly
+                        or not at all. SCREEN MENUBAR takes CLICK x for a program that is told of a click on its bar: the menu whose title is over
+                        column x opens instead of the first.
+             Why it      The flash made the IDE look unfinished and tired the eye; the dropped click and the missing focus signs made it hard to use
+             matters    without remembering which key does what.
+             Does not    The saving is for forms (SCREEN FORM and what is on one) on a screen opened with SCREEN OPEN CLEAR. SCREEN TEXT, BOX, the
+                        dialogues, and any screen opened without CLEAR write what they are told, as before. A form that is drawn again does not
+                        repair what the program PRINTed over it; SCREEN REFRESH does that, as it always did. The Tab order is unchanged, and the
+                        terminal's own cursor is still put in the editor. A program compiled before today that uses SCREEN MENUBAR must be
+                        compiled again (the statement passes one more value).
+
+19 Oct 26  ED, THE CLASSIC LINE EDITOR, NO LONGER USES ALL OF A CPU FOR EVER WHEN ITS INPUT HAS ENDED.
+
+             What        An ED session whose input was a pipe (a script, a test, a login that was not a terminal) went on for as long as it was
+                        left once the pipe had ended, printing its ----: prompt without end and using all of a CPU: 6.1 seconds of CPU in 6.1
+                        seconds, and 8.0 in 8.0 on a private SD. ED took the empty line that an ended input gives for an empty command, which
+                        only means "show the next line", and asked again. It now leaves the record as Q does when it is answered Y, but asks
+                        nothing because nobody is there: the record is not written and its lock is given back. It does not go on to
+                        the next record of a list of names, a select list or a "Record name?" prompt. The line-number questions of LOAD and
+                        UNLOAD (start line, end line) cancel the command when the input ends. An UNLOAD used to take the whole record there
+                        and write it to the target record, with nobody to say so; a LOAD from a record with no lines could not be answered at
+                        all, so it asked for ever.
+             Why it      A session that spins holds a user slot, its record locks and a CPU until somebody kills it, and nothing on the screen
+             matters    says so. The questions that were not asked of the person (Overwrite? Are you sure you want to delete? OK to quit?) were
+                        already answered no, as Enter answers them, so the end of the input did not delete or file a record; a test holds the
+                        delete and the quit.
+             Does not    The end of the input is not an answer to "save the changes?": text typed into ED and not filed with FI is lost, as it is
+                        with Q answered Y. A script that wants its work kept ends with FI (or SAVE). Nothing changes for a person at a terminal:
+                        pressing Enter at the ----: prompt is still an empty command and shows the next line, because a terminal does not end
+                        like this. The UNLOAD end-line prompt still has no colon after it, unlike the start-line prompt and LOAD's (left as it
+                        was).
+
+                        itself, as CED does. (ED, the classic line editor, spun in the same way and was changed after this: see the entry
+                        above.)
+
+19 Oct 26  SED AND THE IDE NO LONGER USE ALL OF A CPU FOR EVER WHEN THEIR INPUT HAS ENDED, AND SCREEN WAIT TELLS THE END OF INPUT FROM THE TIME RUNNING OUT.
+
+             What        A SED or IDE session whose input was a pipe (a script, a test, a login that was not a terminal) went on for as long as
+                        it was left once the pipe had ended, using all of a CPU and drawing nothing new: 8.0 seconds of CPU in 8.3 seconds on a
+                        private SD. SED took the empty key that an ended input gives for "no key yet" and asked again. The screen library's SCREEN
+                        WAIT gave that empty key back as a timeout whenever the program had asked for a timeout, and the IDE asks for one every
+                        second. SED now ends as it does when its cursor lock is left: the record locks given back, the terminal's modes given
+                        back, the screen cleared, nothing asked, because nobody is there to answer. SCREEN WAIT now answers end, not timeout, so
+                        the IDE ends and so does a program that waits with a timeout and acts on the end event.
+             Why it      A session that spins holds a user slot, its record locks and a CPU until somebody kills it, and nothing on the screen
+             matters    says so.
+             Does not    The end of the input is not an answer to "save the changes?": text typed into SED and not saved is not saved, and the IDE
+                        leaves its unsaved text as it is. It does not change a wait that really times out (SCREEN WAIT still answers timeout
+                        when the time runs out), and SCREEN KEY still gives one empty answer for both the time running out and the input ending,
+                        as its documentation says, so a program that loops on SCREEN KEY with a timeout still has to count the empty answers
+                        itself, as CED does. ED, the classic line editor, is not changed and still spins in the same way.
+
+
+
+19 Oct 26  THE IDE CAN HAND A RECORD TO SED AND TAKE IT BACK (CTRL-E), SHOWS ITS CURSOR AT ONCE, NO LONGER REWRITES THE SCREEN FOR EVERY KEY, AND HAS A HORIZONTAL SCROLL BAR.
+
+             What        Ctrl-E in the IDE (or Go, Edit in SED) opens the record in SED.  SED edits the record on disk, so a record with unsaved
+                        changes is saved first: the IDE asks "Save them, then edit in SED?" and Cancel leaves everything as it was.  SED's first
+                        successful save ends the edit and the IDE comes back with the new text in the editor, the compile errors forgotten (they
+                        named lines of the old text) and "Back from SED: ... is saved" in the status bar; leaving SED with Ctrl-Q returns too, with
+                        the record as it was.  A record that someone else holds locked opens in SED read only, with SED's message, as it does
+                        from the command line.  Nothing else about SED changes: the IDE tells it by a flag in the process (a named common), not
+                        by a word on the command line.  The IDE's editor leaves Ctrl-E to the IDE (End is the key for the end of a row there).
+                        Three reports from the owner are fixed in the same sitting.  The cursor: the IDE showed none at the start because its
+                        status line, written ten times a second, left the cursor at the end of the bottom row; the cursor now stays where the
+                        widget with the focus put it.  The flash: choosing a record in the tree rewrote the whole screen two and a half times
+                        (about 15,000 cells; a 140 by 42 screen is 5,880) and an idle IDE rewrote its status line ten times a second; a record
+                        is now drawn by the widgets that changed (about 5,500 cells), a tab switch about 3,500, an idle IDE nothing, and an
+                        editor no longer repaints its whole area for a key it does not use (a function key).  The bar: the editor has a horizontal
+                        scroll bar in its last row, with arrows (a click scrolls 8 columns) and a thumb as long as the visible part is of the
+                        longest line; its text has one row less.  F3, Ctrl-L and a new record now show the focus at once.
+             Why it      Moving between the IDE and SED had meant leaving one and starting the other.  A cursor you cannot see, a screen that
+             matters    flashes at every record and a long line you cannot scroll to are what a person notices first in an editor.
+             Does not    Programs that use SCREEN MEMO are drawn exactly as before (the bar and the reserved key are options the IDE sets for itself),
+                        and nothing about a record changes unless SED saves it.
+
+19 Oct 26  THE IDE, CED AND THE DEBUGGER ARE LAID OUT FOR 140 BY 42, SURVIVE A WINDOW MADE SMALLER, AND DO NOT TAKE KEYS WHILE YOU CANNOT SEE THE CURSOR.
+
+             What        The IDE and CED are laid out for 140 columns by 42 lines (the IDE's floor was 60 by 16), and a window smaller than that is
+                        refused at the start in words ("IDE needs a window of at least 140 columns by 42 lines; this one is 100 by 30"), with nothing
+                        drawn; the debugger does not refuse, it says the same in one line and is line by line for the session.  A window made smaller
+                        while one of them runs shows the upper left corner of the layout and nothing past the edge, and while the cursor is off
+                        the screen the program takes no keys and shows a warning until the window is made bigger; Ctrl-Q, y there leaves, the IDE
+                        and CED without saving and the debugger as F3 does.  A message box, a menu and a question put up by those programs follow
+                        the same rule: the cursor goes to the selected button while a box is up, and a box in a part of the screen the window does not
+                        show is closed on the way out instead of being typed into blind.  A SCREEN OPEN program of your own is not held to any of
+                        this: it asks for the size it needs with minsize.
+             Why it      The same rule SED already had (below), applied to the rest of SD's own full-screen programs, with one refusal text.
+             matters
+             Does not    It does not ask your terminal to resize itself, and a window bigger than 140 by 42 shows the layout in its upper left.
+
+19 Oct 26  SED IS 140 BY 42, SURVIVES A WINDOW MADE SMALLER, AND DOES NOT TAKE KEYS WHILE YOU CANNOT SEE THE CURSOR.
+
+             What        SED is laid out for 140 columns by 42 lines, SD's new default terminal size (it was 120 by 36).  A window smaller than that
+                        when SED starts is refused in words ("SED needs a window of at least 140 columns by 42 lines; this one is 100 by 30") and SED
+                        draws nothing; ED is the editor for a small window.  If the window is made smaller while SED is running (a dragged corner, a
+                        tiling window manager), SED looks at it about once a second and every time it draws, clears the screen and draws the upper left
+                        corner of its layout, and nothing past the edge: nothing wraps and nothing lands on the wrong row.  Nothing pans; the upper
+                        left is always the anchor.  Make the window bigger and the whole layout is drawn again.  While the cursor is off the screen
+                        (on a line below the window, past its right edge, or at a search or line-number prompt on a row the window does not show) SED
+                        does not take keys, because you would be typing where you cannot see: it shows a warning in reverse video in the upper left
+                        corner and throws away every key and mouse click.  Make the window big enough to show the cursor and the warning goes by
+                        itself, with the cursor where it was.  Ctrl-Q is the one key that does anything: it asks "Leave? (changes are NOT saved) y/n"
+                        in the same box, and y leaves SED with the record unlocked and nothing saved.
+             Why it      The terminal default became 140 by 42 and SED, which had been the one program that did not follow a resized window, could
+             matters    draw off the edge of a smaller one and let you type blind.  The way out asks its question in its own box because SED's own
+                        questions may be on a row you cannot see.
+             Does not    It does not ask your terminal to resize itself.  A window bigger than 140 by 42 shows SED in its upper left corner with the
+                        rest blank.  A session with AUTOLOGOUT set waits for the keyboard alone so the time-out can still fire, so it notices a new
+                        window size at the next key rather than within a second.
+
+19 Oct 26  THE DEFAULT TERMINAL IS NOW 140 COLUMNS BY 42 LINES (it was 120 by 36).
+
+             What        A session that has no terminal to ask - a phantom, a piped script, a service, the API - now starts with a display 140
+                        columns wide and 42 lines deep, and a LIST fills 41 lines before it pauses instead of 35.  term default puts a session back to
+                        140 by 42 on any window.  The terminfo entries that named a width and depth (xterm, vt100, ansi, dumb and the rest) say 140
+                        and 42 now, and the term help text and the documentation say so.
+             Why it      The full-screen programs are being made for a larger window, and 120 by 36 was the size of a terminal from an earlier age.
+             matters
+             Does not    A real terminal still decides its own size: a window of 80 by 24 is an 80 by 24 display, and term w,h still sets any width
+                        from 20 to 32767 and any depth from 10 to 32767, exactly as typed.  LINES and COLUMNS in the environment still win over the
+                        terminfo entry for a session with no terminal.  The 132-column terminal types keep their own depth, and ms-vt100 keeps its
+                        25 lines.  To get the old default back for a session, type term 120,36.
+
+
+
+
+
+
+
+
+
 20 Oct 26  A SERVER ON ANOTHER SD MACHINE THAT GOES SILENT IS NOW GIVEN UP ON AT NETREPLY (AND NETWAIT FOR THE TLS HANDSHAKE), IN EVERY CASE WE KNOW OF.
 
              What        READ.SOCKET on a TLS socket (what SDNet uses to talk to another SD server) waited for the time it was given only while

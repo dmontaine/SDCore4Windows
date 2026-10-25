@@ -1,0 +1,1 @@
+F4               Next error or result\nF5               Run          F7  Compile\nF8               Compile and catalogue\nF9               Compile and debug\nCtrl-L           Go to a line\nF11              Find in the records of the file\nCtrl-E           Edit the record in SED (its save returns here)\n

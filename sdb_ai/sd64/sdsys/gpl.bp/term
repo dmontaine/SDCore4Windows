@@ -19,6 +19,8 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): 1.2-0 openQM 466: prt.cols and prt.lines set the default printer's
+* 18 Oct 26 Windows port - from Linux fa1cd4c - TERM DEFAULT gives 140 x 42 (DEFAULT.WIDTH and DEFAULT.DEPTH, were 120 x 36).
+* 12 Oct 26 Windows port - from Linux fa1cd4c - 1.2-0 openQM 466: prt.cols and prt.lines set the default printer's
 *               size; the depth check read MAX.WIDTH where it meant MAX.DEPTH.
 * 27 Aug 26 Windows port - TERM DEFAULT now sets DEFAULT.WIDTH / DEFAULT.DEPTH
 *           (120 x 36), not MIN.WIDTH and a hard-coded depth 24.  The verb is
@@ -38,7 +40,7 @@
 *    TERM {width} {, lines} {, prt.cols} {, prt.lines} { type}
 *                                    Set to given values
 *    TERM COLOUR {bgc}{,fgc}         Set display colour
-*    TERM DEFAULT                    Set to defaults (120 x 36; the printer is not touched)
+*    TERM DEFAULT                    Set to defaults (140 x 42; the printer is not touched)
 *    TERM DISPLAY                    Display terminfo bindings
 *
 * @SYSTEM.RETURN.CODE
@@ -169,7 +171,7 @@ $include syscom terminfo.h
          k = T$USER9                ; s = 'u9    : User 9  @(-109) (synchronous command)' ; gosub show
 
       case keyword = KW$DEFAULT                  ;* TERM DEFAULT
-*        120 x 36, the documented default - see START-HISTORY and UPSTREAM #24.
+*        140 x 42 (120 x 36 until 18 Oct 26, when the two constants changed), the documented default - see START-HISTORY and UPSTREAM #24.
          width = DEFAULT.WIDTH
          depth = DEFAULT.DEPTH
          call @parser(parser$get.token, token.type, token, keyword)

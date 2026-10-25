@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New (the loop of SCREEN REFRESH, which a change of theme needs as well).
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New (the loop of SCREEN REFRESH, which a change of theme needs as well).
+* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - Writes every row whatever SL.S.DIFF says, and sets SL.S.SYNC: the terminal matches the shadow when it has run.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -32,6 +34,8 @@ $include sl.h
    call $sl_sgr('n', sq)
    display sq : @(-1) :
 
+   diff.was = scr<SL.S.DIFF>
+   scr<SL.S.DIFF> = 0                                ;* the terminal was just cleared: every row of the shadow is to be written, not left out
    shadow = scr<SL.S.SHADOW>
    attrs = scr<SL.S.ATTRS>
    sw = scr<SL.S.W> + 0
@@ -48,6 +52,9 @@ $include sl.h
          call $sl_put(scr, 0, r, t, a)
       end
    next r
+
+   scr<SL.S.DIFF> = diff.was
+   scr<SL.S.SYNC> = 1                                ;* the terminal shows the shadow now (19 Oct 26): a form may leave out what is there already
 
    return
 end

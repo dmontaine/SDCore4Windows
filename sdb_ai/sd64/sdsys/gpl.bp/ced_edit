@@ -1,0 +1,930 @@
+* CED_EDIT
+* The data collection editor (openQM CED and !CED(), 1.2-0).  This is the editor itself; the
+* CED command (gpl.bp/ced) and the !CED() subroutine (gpl.bp/ced_sub) call it.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The editor is laid out for at least 140 by 42 and refuses a
+*               smaller window at the start with the library's one message ($sl_need, 12202; the result tells a caller with more
+*               records to stop).  A window made smaller after the start shows the upper left corner of the layout (read.layout:
+*               the layout never shrinks below 140 by 42), and while the selected row is off the screen $sl_key takes the keyboard
+*               ($sl_guardmode); Ctrl-Q, y there leaves without keeping anything (the key guardquit).
+* 18 Oct 26 dm  S.66: the refusal text comes from !edit_msg, which also knows the shared account's two refusals (12518, 12519).
+* 17 Oct 26 dm  S.64: save.record asks the kernel (K$EDIT.OK) before it writes into a VOC, a dictionary or a program file, and says why in
+*               the message line when the session has not the gate.
+* 12 Oct 26 dm  New.  Written from the openQM pages for CED and !CED(); the keys are theirs, the
+*               layout and the messages are SD's own.
+* 13 Oct 26 dm  On the screen library (owner: "use the TUI on ced and debugger"): the element list is a
+*               table widget, the questions are dialogues (SCREEN ASK, MSGBOX, MENU), the keys are the
+*               library's names.  What the editor does with the data is as it was.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $cedit(c, fv, id, ftype, title, result)
+*
+*     c       the collection or array to edit.  It is edited in place; if the changes are not
+*             kept it is put back as it was when the editor was called.
+*     fv      the file variable the record is to be saved to (any value when id is null)
+*     id      the record id; null for a plain variable, when Ctrl-S and a saving quit keep the
+*             changes in c and write nothing
+*     ftype   0 if the file is a data collection file (the collection is written), 1 if it is
+*             an ordinary file (the JSON text is written)
+*     title   what the top line says the editor is editing
+*     result  returned: <1> 1 if the record was saved (or c was kept), <2> 1 if the user asked
+*             to leave the editor altogether (Ctrl-Q) so a caller with more records stops
+*
+*   The caller has the record locked with READU when fv is a file; the editor saves with
+*   WRITEU and leaves the lock for the caller to release.
+*
+*   The screen: a title, the headings, one line for each element of the container being shown
+*   (its name - or its number, for an array - its type and its value) in a table, the path of
+*   the container, and a line for messages.  A '>' in the first column marks the selected element.
+*   Questions (a value, a name, a position, a type, "save changes?") are asked in dialogues
+*   over the list.  Without a terminal (a phantom) there is nothing to edit and the editor
+*   returns at once.  An element whose name is empty or holds a slash cannot be reached by a
+*   path, so it is shown and left alone; every other element can be edited.
+*
+*   A run time error would lose the user's work, so every name and position is checked before
+*   it is used in a path.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine ced_edit(c, fv, id, ftype, title, result)
+$catalog $cedit
+
+$include keyin.h
+$include syscom keys.h
+$include int$keys.h
+$include sl.h
+
+   deffun edit_msg(emk) calling '!edit_msg'       ;* 18 Oct 26 dm, S.66
+
+   LAYW = 140                         ;* what the screen is laid out for (a bigger window is used whole)
+   LAYH = 42
+   result = ''
+   kind = jtype(c)
+   if kind # 'collection' and kind # 'array' then return
+
+   * A window smaller than the layout is refused (the library's one check and message); the caller with more records stops
+   call $sl_need('CED', LAYW, LAYH, need.msg, '')
+   if need.msg # '' then
+      display need.msg
+      result<2> = @true
+      return
+   end
+
+   prompt ''
+   * Ctrl-C is a key here (copy), so neither the break key nor the terminal's break character may act on
+   * it; both are given back on the way out
+   saved.trap = pterm(PT$BREAK, -1)
+   void pterm(PT$BREAK, @false)
+   break off
+
+   * The library's screen.  A session with no terminal has nothing to show an editor on.
+   have.screen = @false
+   screen open clear then
+      have.screen = @true
+   end else
+      break on
+      void pterm(PT$BREAK, saved.trap)
+      return
+   end
+   call $sl_guardmode('CED', LAYW, LAYH)   ;* the cursor lock: the keys are not the editor's while its cursor is off the screen
+
+   gosub read.layout
+   gosub size.screen
+
+   * Characters shown as a dot: the control characters and the SD marks
+   bad.chars = ''
+   for j = 1 to 31
+      bad.chars := char(j)
+   next j
+   bad.chars := char(127) : char(248) : char(249) : char(250) : char(251) : char(252) : char(253) : char(254) : char(255)
+   bad.repl = str('.', len(bad.chars))
+
+   path = ''                         ;* names of the containers dived through, outermost first
+   hist.sel = ''                     ;* the selection in each of them, to come back to
+   hist.top = ''
+   clip.has = @false
+   clip = ''
+   clip.type = ''
+   clip.name = ''
+   dirty = @false
+   kept = @false
+   saved.text = jbuild(c)            ;* what the file, or the caller, has been given
+   quit.all = @false
+   message.text = ''
+   eof.count = 0
+   sel = 1
+   top = 1
+   done = @false
+
+   gosub resolve
+   gosub build.list
+
+   loop
+      gosub paint
+      screen key returning c.key else c.key = ''
+      gosub handle.key
+   until done
+   repeat
+
+   screen close
+   break on
+   void pterm(PT$BREAK, saved.trap)
+   result<1> = kept
+   result<2> = quit.all
+   return
+
+* ======================================================================
+* read.layout  -  w and h, the size the screen is laid out for: the window, and never less than LAYW by LAYH (a window made smaller
+*                 after the start shows the upper left corner of the layout; the library cuts what falls outside)
+
+read.layout:
+   call $sl_window(w, h)
+   if w < LAYW then w = LAYW
+   if h < LAYH then h = LAYH
+   return
+
+* ======================================================================
+* size.screen  -  The rows of the screen from w and h
+
+size.screen:
+   per.page = h - 5                 ;* element lines
+   first.row = 2
+   path.row = h - 2
+   msg.row = h - 1
+   return
+
+* ======================================================================
+* resolve  -  cur is the container the path names, ctype its type
+
+resolve:
+   cur = c
+   n.path = dcount(path, @fm)
+   if path = '' then n.path = 0
+   for j = 1 to n.path
+      comp = path<j>
+      cur = cur{comp}
+   next j
+   ctype = jtype(cur)
+   return
+
+* ======================================================================
+* build.list  -  The elements of cur: count, names (an object's, in order) and nw, the name column; the rows
+*                of the table
+
+build.list:
+   if ctype = 'array' then
+      count = inmat(cur)
+      names = ''
+      nw = len(count)
+   end else
+      names = enumerate(cur)
+      count = dcount(names, @fm)
+      if names = '' then count = 0
+      nw = 0
+      for j = 1 to count
+         if len(names<j>) > nw then nw = len(names<j>)
+      next j
+      if nw > 24 then nw = 24
+   end
+   if nw < len(sysmsg(12138)) then nw = len(sysmsg(12138))
+   vw = w - (nw + 15)               ;* what is left for the value: marker, 2 spaces, type column
+   if vw < 4 then vw = 4
+   gosub fix.window
+
+   * The table: its columns are as wide as the editor has always made them, its rows are the elements as the
+   * editor shows them
+   rows = ''
+   for i = 1 to count
+      gosub element.info
+      rows<i> = convert(bad.chars, bad.repl, nm) : @vm : et : @vm : vtext
+   next i
+   tbl = collection()
+   tbl{'id'} = 'ced'
+   tbl{'cols'} = sysmsg(12138) : @sm : nw : 'L' : @vm : sysmsg(12139) : @sm : '10L' : @vm : sysmsg(12140) : @sm : vw : 'L'
+   tbl{'rows'} = rows
+   tbl{'x'} = 0
+   tbl{'y'} = 1
+   tbl{'w'} = w
+   tbl{'h'} = per.page + 1
+   tbl{'marker'} = 1
+   tbl{'cur'} = sel
+   tbl{'focused'} = 1
+   call $sl_table('init', tbl, '', '', r)
+   tbl{'ax'} = 0
+   tbl{'ay'} = 1
+   return
+
+fix.window:
+   if sel > count then sel = count
+   if sel < 1 then sel = 1
+   if sel < top then top = sel
+   if sel >= top + per.page then top = sel - per.page + 1
+   if top < 1 then top = 1
+   return
+
+* ======================================================================
+* element.info  -  In: i.  Out: nm, addr.ok (the element can be reached by a path), et (its type)
+*                   and vtext (what the value column says)
+
+element.info:
+   if ctype = 'array' then nm = i else nm = names<i>
+   addr.ok = @true
+   if nm = '' or index(nm, '/', 1) then
+      addr.ok = @false
+      et = '?'
+      vtext = ''
+      return
+   end
+   et = jtype(cur{nm})
+   begin case
+      case et = 'collection'
+         x = cur{nm}
+         y = enumerate(x)
+         n = dcount(y, @fm)
+         if y = '' then n = 0
+         vtext = '{' : n : '}'
+      case et = 'array'
+         x = cur{nm}
+         vtext = '[' : inmat(x) : ']'
+      case et = 'boolean'
+         x = cur{nm}
+         vtext = if x then 'true' else 'false'
+      case et = 'null'
+         vtext = 'null'
+      case 1
+         x = cur{nm}
+         vtext = x
+   end case
+   vtext = convert(bad.chars, bad.repl, vtext)
+   return
+
+* ======================================================================
+* Painting
+
+paint:
+   call $sl_scr('get', scr)
+   ow = w
+   oh = h
+   gosub read.layout
+   if w # ow or h # oh then
+      * the terminal's window changed size: lay the screen out again
+      gosub size.screen
+      gosub build.list
+   end
+   call $sl_attr('bar', bc)
+   t = sysmsg(12137, title)
+   if dirty then t := ' *'
+   call $sl_put(scr, 0, 0, fmt(t[1, w - 1], (w - 1) : 'L'), bc)
+   tbl{'cur'} = sel
+   tbl{'top'} = top
+   call $sl_table('draw', tbl, scr, '', r)
+   t = sysmsg(12143, '/' : change(path, @fm, '/'))
+   call $sl_put(scr, 0, path.row, fmt(t[1, w - 1], (w - 1) : 'L'), 'n')
+   t = message.text
+   if t = '' then t = sysmsg(12144)
+   call $sl_put(scr, 0, msg.row, fmt(t[1, w - 1], (w - 1) : 'L'), 'n')
+   if count > 0 then
+      scr<SL.S.CUR> = 0 : @vm : (first.row + sel - top)
+   end else
+      scr<SL.S.CUR> = 0 : @vm : first.row
+   end
+   call $sl_scr('put', scr)
+   return
+
+* ======================================================================
+* handle.key  -  One key, in c.key (a name from the library: up, enter, f3, ctrl-s, or the character)
+
+handle.key:
+   if c.key = '' then
+      * End of input: the terminal has gone.  Give up without asking anything.
+      eof.count += 1
+      if eof.count > 20 then
+         gosub revert
+         quit.all = @true
+         done = @true
+      end
+      return
+   end
+   eof.count = 0
+   message.text = ''
+   uk = upcase(c.key)
+
+   begin case
+      case c.key = 'resize'
+         null                        ;* paint finds the new size and lays the screen out again
+      case c.key = 'guardquit'
+         gosub revert                ;* the user left from the cursor lock ($sl_guardmode): nothing is kept
+         quit.all = @true
+         done = @true
+      case c.key = 'up'
+         if sel > 1 then sel -= 1
+         gosub fix.window
+      case c.key = 'down'
+         if sel < count then sel += 1
+         gosub fix.window
+      case c.key = 'pgup'
+         * A page: the window and the selection both move by one, the selection keeping its place on the screen
+         if top > 1 then
+            top -= per.page
+            if top < 1 then top = 1
+            sel -= per.page
+            if sel < 1 then sel = 1
+         end else
+            sel = 1
+         end
+         gosub fix.window
+      case c.key = 'pgdn'
+         if top + per.page <= count then
+            top += per.page
+            sel += per.page
+            if sel > count then sel = count
+         end else
+            sel = count
+         end
+         gosub fix.window
+      case c.key = 'home'
+         sel = 1
+         gosub fix.window
+      case c.key = 'end'
+         sel = count
+         gosub fix.window
+      case c.key = 'enter'
+         gosub dive
+      case c.key = 'esc'
+         gosub go.up
+      case c.key = 'f1' or c.key = '?'
+         gosub show.help
+      case c.key = 'f3'
+         gosub rename.element
+      case c.key = 'f4'
+         gosub change.type
+      case c.key = 'f5' or c.key = 'ctrl-c'
+         gosub copy.element
+      case c.key = 'f6' or c.key = 'ctrl-x'
+         gosub cut.element
+      case c.key = 'f7' or c.key = 'ctrl-v'
+         gosub paste.element
+      case c.key = 'ins' or c.key = 'tab'       ;* Ctrl-I is the tab character
+         gosub insert.element
+      case c.key = 'del'
+         gosub delete.element
+      case c.key = 'ctrl-s'
+         gosub save.record
+      case c.key = 'ctrl-q'
+         q.all = @true
+         gosub quit.editor
+      case uk = 'Q' and path = ''
+         q.all = @false
+         gosub quit.editor
+      case 1
+         display @sys.bell :
+   end case
+   return
+
+* ======================================================================
+* Moving about
+
+dive:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   if et = 'collection' or et = 'array' then
+      path<-1> = nm
+      hist.sel<-1> = sel
+      hist.top<-1> = top
+      sel = 1
+      top = 1
+      gosub resolve
+      gosub build.list
+   end else
+      gosub edit.value
+   end
+   return
+
+go.up:
+   n.path = dcount(path, @fm)
+   if path = '' then n.path = 0
+   if n.path = 0 then
+      display @sys.bell :
+      return
+   end
+   del path<n.path>
+   sel = hist.sel<n.path>
+   top = hist.top<n.path>
+   del hist.sel<n.path>
+   del hist.top<n.path>
+   gosub resolve
+   gosub build.list
+   return
+
+* The help text, in a box over the list
+show.help:
+   s = convert(char(13), '', sysmsg(12141))       ;* (a carriage return in a box line would take the next cell to column 0)
+   s = change(s, char(10), @vm)
+   screen msgbox s returning b else b = 0
+   return
+
+* ======================================================================
+* A line of text, asked for in a dialogue.  In: pl.label, pl.text (the text to start from).
+* Out: pl.text and pl.key ('enter' to accept, 'esc' to cancel).
+
+prompt.line:
+   bw = w - 12
+   if bw > 60 then bw = 60
+   if bw < 10 then bw = 10
+   pl.in = pl.text
+   screen ask pl.label value pl.in width bw returning pl.out then
+      pl.text = pl.out
+      pl.key = 'enter'
+   end else
+      pl.key = 'esc'
+   end
+   return
+
+* ======================================================================
+* Changing the data
+
+* edit.value  -  The selected element is a string, a number or a boolean: change it
+
+edit.value:
+   if et = 'null' then
+      message.text = sysmsg(12163)
+      return
+   end
+   x = cur{nm}
+   if et = 'boolean' then pl.text = if x then 'true' else 'false'
+   else pl.text = x
+   loop
+      pl.label = sysmsg(12152)
+      gosub prompt.line
+      if pl.key = 'esc' then return
+      ok = @true
+      begin case
+         case et = 'number'
+            if pl.text = '' or not(num(pl.text)) then
+               ok = @false
+               message.text = sysmsg(12153)
+            end else
+               cur{nm} = pl.text + 0
+            end
+         case et = 'boolean'
+            b = upcase(pl.text)
+            if b = 'TRUE' or b = '1' then
+               cur{nm} = jboolean(1)
+            end else if b = 'FALSE' or b = '0' then
+               cur{nm} = jboolean(0)
+            end else
+               ok = @false
+               message.text = sysmsg(12154)
+            end
+         case 1
+            cur{nm} = pl.text
+      end case
+      if ok then
+         dirty = @true
+         gosub build.list
+         return
+      end
+      gosub show.error
+   repeat
+   return
+
+* show.error  -  message.text on the path line, where the prompt about to come back does not wipe it
+
+show.error:
+   t = message.text
+   call $sl_scr('get', scr)
+   call $sl_attr('bar', bc)
+   call $sl_put(scr, 0, path.row, fmt(t[1, w - 1], (w - 1) : 'L'), bc)
+   call $sl_scr('put', scr)
+   message.text = ''
+   return
+
+* new.name  -  Ask for an element name in an object.  In: pl.text (to start from).  Out: ok, nn.
+
+new.name:
+   ok = @false
+   pl.label = sysmsg(12145)
+   gosub prompt.line
+   if pl.key = 'esc' then return
+   nn = pl.text
+   if nn = '' or index(nn, '/', 1) then
+      message.text = sysmsg(12147)
+      return
+   end
+   locate nn in names<1> setting j then
+      message.text = sysmsg(12146)
+      return
+   end
+   ok = @true
+   return
+
+* new.position  -  Ask for a position in an array, 1 to count + 1.  In: pl.text.  Out: ok, np.
+
+new.position:
+   ok = @false
+   pl.label = sysmsg(12151, count + 1)
+   gosub prompt.line
+   if pl.key = 'esc' then return
+   np = pl.text
+   if not(np matches '1N0N') or np < 1 or np > count + 1 then
+      message.text = sysmsg(12151, count + 1)
+      return
+   end
+   np += 0
+   ok = @true
+   return
+
+rename.element:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   if ctype = 'array' then
+      message.text = sysmsg(12148)
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   old.name = nm
+   pl.text = old.name
+   gosub new.name
+   if not(ok) then return
+   x = cur{old.name}
+   del cur{old.name}
+   cur{nn} = x
+   dirty = @true
+   gosub reselect
+   return
+
+* reselect  -  The element called nn (or number np, in an array) is the selected one
+
+reselect:
+   gosub build.list
+   if ctype = 'array' then
+      sel = np
+   end else
+      locate nn in names<1> setting j then sel = j
+   end
+   gosub fix.window
+   gosub build.list
+   return
+
+delete.element:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   del cur{nm}
+   dirty = @true
+   gosub build.list
+   return
+
+copy.element:
+   gosub take.element
+   return
+
+cut.element:
+   gosub take.element
+   if clip.has and took then
+      del cur{nm}
+      dirty = @true
+      gosub build.list
+   end
+   return
+
+* take.element  -  Put a copy of the selected element in the clip.  Out: took
+
+take.element:
+   took = @false
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   x = cur{nm}
+   if et = 'collection' or et = 'array' then
+      clip = jparse(jbuild(x))
+   end else
+      clip = x
+   end
+   clip.type = et
+   clip.name = if ctype = 'array' then '' else nm
+   clip.has = @true
+   took = @true
+   return
+
+paste.element:
+   if not(clip.has) then
+      message.text = sysmsg(12155)
+      return
+   end
+   if clip.type = 'collection' or clip.type = 'array' then
+      v = jparse(jbuild(clip))
+   end else
+      v = clip
+   end
+   if ctype = 'array' then
+      pl.text = if count = 0 then 1 else sel
+      gosub new.position
+      if not(ok) then return
+      ins v as cur{np}
+   end else
+      pl.text = clip.name
+      gosub new.name
+      if not(ok) then return
+      cur{nn} = v
+   end
+   dirty = @true
+   gosub reselect
+   return
+
+* choose.type  -  A menu of the types in ct.allowed (a field mark list).  Out: ct.pick, null if cancelled.
+*                 Each entry's key is its number, as it has always been.
+
+choose.type:
+   ct.pick = ''
+   n.allowed = dcount(ct.allowed, @fm)
+   if ct.allowed = '' then n.allowed = 0
+   if n.allowed = 0 then
+      message.text = sysmsg(12150)
+      return
+   end
+   items = ''
+   for j = 1 to n.allowed
+      items<1, j> = '&' : j : ' ' : ct.allowed<j>
+   next j
+   screen menu items returning code then
+      if code >= 1 and code <= n.allowed then ct.pick = ct.allowed<code>
+   end
+   return
+
+change.type:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   x = cur{nm}
+   ct.allowed = ''
+   begin case
+      case et = 'string'
+         if x # '' and num(x) then ct.allowed<-1> = 'number'
+         if upcase(x) = 'TRUE' or upcase(x) = 'FALSE' then ct.allowed<-1> = 'boolean'
+         if x = '' then ct.allowed<-1> = 'null'
+         y = jparse(x)
+         if status() = 0 then
+            if jtype(y) = 'collection' then ct.allowed<-1> = 'collection'
+            if jtype(y) = 'array' then ct.allowed<-1> = 'array'
+         end
+      case et = 'number'
+         ct.allowed<-1> = 'string'
+         if x = 0 or x = 1 then ct.allowed<-1> = 'boolean'
+      case et = 'boolean'
+         ct.allowed<-1> = 'string'
+         ct.allowed<-1> = 'number'
+      case et = 'null'
+         ct.allowed<-1> = 'string'
+      case et = 'collection'
+         ct.allowed<-1> = 'string'
+         names2 = enumerate(x)
+         reachable = @true
+         for j = 1 to dcount(names2, @fm)
+            if names2<j> = '' or index(names2<j>, '/', 1) then reachable = @false
+         next j
+         if reachable then ct.allowed<-1> = 'array'
+      case et = 'array'
+         ct.allowed<-1> = 'string'
+         ct.allowed<-1> = 'collection'
+   end case
+   gosub choose.type
+   if ct.pick = '' then return
+   gosub apply.type
+   dirty = @true
+   gosub build.list
+   return
+
+* apply.type  -  Make the element nm of cur the type ct.pick; x is its value, et its type now
+
+apply.type:
+   begin case
+      case ct.pick = 'string'
+         begin case
+            case et = 'number'
+               v = x : ''
+            case et = 'boolean'
+               v = if x then 'true' else 'false'
+            case et = 'null'
+               v = ''
+            case 1
+               v = jbuild(x)
+         end case
+         cur{nm} = v
+      case ct.pick = 'number'
+         * (a boolean plus nothing is still a boolean, so a boolean is turned into 1 or 0 by hand)
+         if et = 'boolean' then v = if x then 1 else 0 else v = x + 0
+         cur{nm} = v
+      case ct.pick = 'boolean'
+         if et = 'string' then b = (upcase(x) = 'TRUE') else b = (x # 0)
+         v = jboolean(b)
+         cur{nm} = v
+      case ct.pick = 'null'
+         v = jnull()
+         cur{nm} = v
+      case ct.pick = 'collection'
+         if et = 'string' then
+            v = jparse(x)
+         end else
+            v = collection()
+            for j = 1 to inmat(x)
+               v{j} = x{j}
+            next j
+         end
+         cur{nm} = v
+      case ct.pick = 'array'
+         if et = 'string' then
+            v = jparse(x)
+         end else
+            v = mat()
+            names2 = enumerate(x)
+            for j = 1 to dcount(names2, @fm)
+               nm2 = names2<j>
+               ins x{nm2} as v{j}
+            next j
+         end
+         cur{nm} = v
+   end case
+   return
+
+insert.element:
+   if ctype = 'array' then
+      pl.text = count + 1
+      gosub new.position
+      if not(ok) then return
+   end else
+      pl.text = ''
+      gosub new.name
+      if not(ok) then return
+   end
+   ct.allowed = 'string' : @fm : 'number' : @fm : 'boolean' : @fm : 'null' : @fm : 'collection' : @fm : 'array'
+   gosub choose.type
+   if ct.pick = '' then return
+   begin case
+      case ct.pick = 'collection'
+         v = collection()
+      case ct.pick = 'array'
+         v = mat()
+      case ct.pick = 'null'
+         v = jnull()
+      case 1
+         loop
+            pl.label = sysmsg(12152)
+            pl.text = if ct.pick = 'boolean' then 'false' else ''
+            gosub prompt.line
+            if pl.key = 'esc' then return
+            ok = @true
+            begin case
+               case ct.pick = 'number'
+                  if pl.text = '' or not(num(pl.text)) then
+                     ok = @false
+                     message.text = sysmsg(12153)
+                  end else
+                     v = pl.text + 0
+                  end
+               case ct.pick = 'boolean'
+                  b = upcase(pl.text)
+                  if b = 'TRUE' or b = '1' then
+                     v = jboolean(1)
+                  end else if b = 'FALSE' or b = '0' then
+                     v = jboolean(0)
+                  end else
+                     ok = @false
+                     message.text = sysmsg(12154)
+                  end
+               case 1
+                  v = pl.text
+            end case
+            if ok then exit
+            gosub show.error
+         repeat
+   end case
+   if ctype = 'array' then
+      ins v as cur{np}
+   end else
+      cur{nn} = v
+   end
+   dirty = @true
+   gosub reselect
+   return
+
+* ======================================================================
+* Saving and leaving
+
+save.record:
+   save.ok = @true
+   save.status = 0
+*  17 Oct 26 dm - S.64: CED is $internal, so the kernel's own test of a WRITE to a VOC, a dictionary or a program file lets it through;
+*  it asks for itself, by the pathname of the open file.  The reason is the message (a DISPLAY would write over the screen).
+*  Only for a record of a file: !CED() on a VARIABLE has no id and no file (fileinfo is null, which the kernel refuses by design).
+   if id # '' then
+      edit.p = fileinfo(fv, FL$PATH)
+      if not(kernel(K$EDIT.OK, edit.p)) then
+         edit.kind = kernel(K$EDIT.KIND, edit.p)
+         message.text = edit_msg(edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
+         save.ok = @false
+         return
+      end
+   end
+   if id # '' then                   ;* (fv is a file variable, which cannot be compared with a string)
+      if ftype = 0 then
+         writeu c on fv, id on error
+            save.ok = @false
+            save.status = status()
+         end
+      end else
+         text = jbuild(c)
+         writeu text on fv, id on error
+            save.ok = @false
+            save.status = status()
+         end
+      end
+   end
+   if save.ok then
+      saved.text = jbuild(c)
+      dirty = @false
+      kept = @true
+      message.text = sysmsg(12157)
+   end else
+      message.text = sysmsg(12158, save.status)
+   end
+   return
+
+* revert  -  Put c back as it was when it was last saved (or when the editor was called)
+
+revert:
+   if dirty then
+      y = jparse(saved.text)
+      if status() = 0 then c = y
+      dirty = @false
+   end
+   return
+
+* quit.editor  -  Leave the editor; with changes unsaved the user is asked: Yes saves, No throws them away, Esc stays
+
+quit.editor:
+   if dirty then
+      qb = 0
+      screen msgbox sysmsg(12156) buttons '&Yes,&No,&Cancel' default 1 returning qb else qb = 0
+      * Esc, and the end of the input, leave the editor open (an input that has ended is given up on by the key loop)
+      begin case
+         case qb = 1
+            gosub save.record
+            if not(save.ok) then return
+         case qb = 2
+            gosub revert
+         case 1
+            return
+      end case
+   end
+   done = @true
+   if q.all then quit.all = @true
+   return
+
+end
+
+* END-CODE

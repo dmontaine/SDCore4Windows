@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - SL.S.DIFF (sl.h): text the terminal already shows in the same styles is not written again.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -22,7 +24,9 @@
 *   Anything outside the screen, or outside SL.S.CLIP if the context has one, is not drawn and not
 *   recorded.  The terminal is left in style n afterwards.  The cursor is left after the text, and
 *   the context's own cursor (SL.S.CUR) is not touched: that is the program's, and the commands put
-*   it back when they have finished.
+*   it back when they have finished.  When scr has SL.S.DIFF set (only $sl_form sets it, on a screen whose
+*   terminal is known to match the shadow) and the cells already hold this text in these styles, nothing is
+*   written at all and the cursor is where it was.
 *
 * END-DESCRIPTION
 *
@@ -74,6 +78,17 @@ $include sl.h
       cells = cells[1, n]
    end
    if n < 1 then return
+
+   * 19 Oct 26: a form is drawing on a screen whose terminal is known to match its shadow (SL.S.DIFF): the same text in the same styles
+   *   is already there, so nothing is written (the owner saw the whole screen flash each time a record or file was chosen: every widget
+   *   was written again, the tree three times, where a handful of its rows had changed).  COMPARE, not =, which would take 007 for 7.0.
+   if scr<SL.S.DIFF> then
+      row = scr<SL.S.SHADOW, y + 1>
+      ar = scr<SL.S.ATTRS, y + 1>
+      if len(row) >= x + n and len(ar) >= x + n then
+         if compare(row[x + 1, n], text) = 0 and compare(ar[x + 1, n], cells) = 0 then return
+      end
+   end
 
    * The shadow
    row = scr<SL.S.SHADOW, y + 1>

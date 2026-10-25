@@ -5,6 +5,9 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the prompt as Esc does; the cursor is
+*               placed through $sl_curat.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -73,7 +76,7 @@ $include sl.h
          gosub show
          loop
             call $sl_key('', key)
-            if key = '' then key = 'esc'
+            if key = '' or key = 'guardquit' then key = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
             gosub handle.key
             st = ret<1>
          until st # 'handled'
@@ -133,7 +136,7 @@ paint:
    w<SL.W.S2> = pan
    call $sl_attr('highlight', ha)
    call $sl_put(scr, 0, row, fmt(prompt : text[pan, fw], sw : 'L'), ha)
-   display @(len(prompt) + p - pan, row) :
+   call $sl_curat(len(prompt) + p - pan, row)
    return
 
 unpaint:

@@ -29,6 +29,17 @@
 *   SL.S.CURON       1 when the cursor is shown
 *   SL.S.OWNED       1 for the screen SCREEN OPEN made; 0 for a transient blank one
 *   SL.S.MOUSE       1 while SCREEN OPEN has switched mouse reporting on (SCREEN CLOSE switches it off)
+*   SL.S.BCLIP, SL.S.NARROW   while $sl_form has narrowed SL.S.CLIP to the visible part of a container for the
+*                    widget it is calling (18 Oct 26): NARROW is 1 and BCLIP is the clip that was in force before, the
+*                    program's own.  A widget that opens a pop-up (the combo box's list, the memo's find line) lifts
+*                    the clip to BCLIP while the pop-up is on the screen, so that it is not cut at the container's edge.
+*   SL.S.SYNC        1 when the terminal is KNOWN to show exactly what SHADOW and ATTRS say (19 Oct 26): SCREEN OPEN with CLEAR made it
+*                    so, and $sl_repaint makes it so again.  Null for a screen opened without CLEAR (the library believes it blank and
+*                    the terminal may not be: whatever the program printed earlier is there) and for SED's own.
+*   SL.S.DIFF        1 while $sl_form draws on a screen whose SYNC is 1 (it sets it on entry and clears it before it returns):
+*                    $sl_put then leaves out text the terminal already shows in the same styles, so that a form drawn again, or a
+*                    widget redrawn for a change that is in two of its rows, writes only what changed.  Every other statement
+*                    (SCREEN TEXT, BOX ...) writes what it is told, as before: a program may have printed over it.
 *
 * Everything the library draws goes through $sl_put, which writes this shadow as well as the terminal, so a
 * pop-up can save what is under it and put it back.
@@ -57,3 +68,7 @@ $define SL.S.CUR       7
 $define SL.S.CURON     8
 $define SL.S.OWNED     9
 $define SL.S.MOUSE     10
+$define SL.S.BCLIP     11
+$define SL.S.NARROW    12
+$define SL.S.SYNC      13
+$define SL.S.DIFF      14

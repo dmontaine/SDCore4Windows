@@ -1,0 +1,1435 @@
+* IDE
+* A development environment on the screen library: a tree of the account's files and their records, an editor
+* with syntax colour and line numbers (one tab for each record that is open), a table of the compiler's errors
+* or of search results, a menu bar and a status line.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  Part B of the 140x42 plan: Ctrl-E, and File / Edit in SED, hand the record to SED and take it back when SED saves it (do.sed;
+*               the editor's passkeys leave Ctrl-E to the IDE, so End is the key for the end of a row here).  Also the owner's three reports:
+*               the cursor is put back after the status line (and the line is written only when it changes), a record or a tab is drawn
+*               by its own widgets (redraw.editor, redraw.tree, focus.to; SCREEN FOCUS moves a pointer and draws nothing), and the editor
+*               has a horizontal scroll bar (hbar).
+* 18 Oct 26 dm  Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The IDE is laid out for at least 140 by 42 (it was 60 by 16) and
+*               refuses a smaller window at the start with the library's one message ($sl_need, 12202; 12203 is no longer used).
+*               A window of more than that is still used whole.  A window made smaller after the start shows the upper left corner
+*               of the layout (the layout stays 140 by 42, the library cuts what falls outside the window), and when the editor's
+*               or the tree's cursor is off the screen $sl_key takes the keyboard (the cursor lock, $sl_guardmode) until the window
+*               is made bigger; Ctrl-Q, y there makes $sl_key return guardquit, and the IDE leaves without saving.
+* 18 Oct 26 dm  S.66: the refusal text comes from !edit_msg, which also knows the shared account's two refusals (12518, 12519).
+* 17 Oct 26 dm  S.64, the edit gates: save, save as and new record ask the kernel (edit.check, K$EDIT.OK) before they write into a VOC, a
+*               dictionary or a program file, and say why in the message line.
+* 14 Oct 26 dm  New (owner: "go ahead and build the ide").  Stages 1 and 2 of the plan in screenlib-design.md
+*               together: the shell, open and save, compile with the error table that jumps, run, catalogue,
+*               debug, search in the records of a file, a tab for each open record, and a layout that follows
+*               the window.
+* 19 Oct 26 dm  A click on the menu bar opens the menu under it (SCREEN MENUBAR ... CLICK); it did nothing until Esc had opened the menu.
+* 19 Oct 26 dm  The pane that has the focus is named first on the status line (messages 12242-12245), and the editor highlights the character at
+*               its cursor while it has the focus (the memo's softcur), for a keyboard user whose terminal shows little else of where the focus is.
+* 19 Oct 26 dm  A [*] / [-] indicator in the top right corner of each pane that can have the focus (the owner's request): [*] on the one that has it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   IDE {file {record}}
+*
+*   The account is the project: the tree lists the files of the VOC (type F); Return on a file lists its
+*   records (up to 2000) and Return on a record opens it in the editor.  Everything the editor does with a
+*   record is the SCREEN MEMO's own; this program adds what a development environment needs around it.
+*
+*   Save writes the record, and asks first if somebody else changed it since it was read.  Compile saves,
+*   runs BASIC and shows the compiler's lines in the table at the bottom; Return on one goes to its line.
+*   Run, Catalogue and Debug compile first and do nothing if the compile failed.  Run and Debug give the
+*   terminal back to the program and return to the IDE afterwards.  Find searches every record of a file
+*   for a text and lists the lines in the same table.
+*
+*   Nothing here is privileged: the IDE reads and writes records and runs commands exactly as the account's
+*   user could from the command prompt, so the per-account gates apply to it as they do there.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $ide
+$catalog $ide
+
+$include keyin.h
+$include syscom keys.h
+$include int$keys.h
+$include sl.h
+
+   deffun edit_msg(kind) calling '!edit_msg'      ;* 18 Oct 26 dm, S.66
+
+   prompt ''
+   if system(25) then stop                 ;* a phantom has no terminal
+
+   MAXREC = 2000                           ;* records listed for a file
+   MAXHIT = 500                            ;* lines a search lists
+   LAYW = 140                              ;* what the layout is made for; a bigger window is used whole, a smaller one is refused at
+   LAYH = 42                               ;* the start and clipped (upper left corner) if it becomes smaller while the IDE runs
+
+   fn0 = field(@sentence, ' ', 2)
+   id0 = field(@sentence, ' ', 3)
+
+   * Ctrl-C and the terminal's break are keys of the editor; both are given back on the way out
+   saved.trap = pterm(PT$BREAK, -1)
+   void pterm(PT$BREAK, @false)
+   break off
+
+   * Line-drawing characters (the frame, the drop-downs, the scroll bars) when the terminal says it is UTF-8 -
+   * LC_ALL, then LC_CTYPE, then LANG as a shell resolves them - and + - | otherwise.  Only the borders change.
+   loc = env('LC_ALL')
+   if loc = '' then loc = env('LC_CTYPE')
+   if loc = '' then loc = env('LANG')
+   loc = upcase(loc)
+   utf8 = (index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0)
+
+   * A window smaller than the layout is refused before the screen is taken (the library's one check and message)
+   call $sl_need('IDE', LAYW, LAYH, need.msg, '')
+   if need.msg # '' then
+      break on
+      void pterm(PT$BREAK, saved.trap)
+      display need.msg
+      stop
+   end
+
+   gosub open.screen
+   if not(opened) then
+      break on
+      void pterm(PT$BREAK, saved.trap)
+      stop
+   end
+
+   call $sl_scr('get', scr)
+   w = scr<SL.S.W> + 0
+   h = scr<SL.S.H> + 0
+
+   * blue first: in classic the bar and the window are the same black on white, so the menu bar and its
+   * drop-downs do not stand out from the form under them
+   themes = 'blue' : @fm : 'classic' : @fm : 'dark' : @fm : 'light' : @fm : 'mono'
+   theme.n = 1
+   gosub apply.theme
+
+   * The menus: one message each, entries separated by | and the parts of an entry by ~
+   menus = ''
+   for j = 12230 to 12235
+      m = change(sysmsg(j), '|', @vm)
+      m = change(m, '~', @sm)
+      menus<-1> = m
+   next j
+
+   * State
+   nbuf = 0                          ;* the records open: bn (file), bi (record), bu (unique number) in step
+   cb = 0                            ;* the one in the editor
+   uid = 0
+   bn = ''
+   bi = ''
+   bu = ''
+   bx = collection()                 ;* s<uid> the text as it is on disk, t<uid> the text as it was left, c<uid> the cursor
+   fl = ''                           ;* the files of the VOC
+   lfiles = ''                       ;* the files whose records are listed in the tree
+   lrecs = ''                        ;* their record ids, as values, in step
+   cur.code = ''
+   err.rows = ''                     ;* the table at the bottom
+   err.lines = ''
+   sid = ''
+   sln = ''
+   out.kind = ''
+   out.file = ''
+   focus.id = 'tree'
+   msg = ''
+   sv.ok = @true
+   have.form = @false
+   done = @false
+
+   gosub build.files
+   if fn0 # '' then
+      lf.name = fn0
+      gosub load.file
+      cur.code = 'F:' : fn0
+   end
+
+   gosub new.form
+   if fn0 # '' and id0 # '' then
+      or.file = fn0
+      or.id = id0
+      gosub open.record
+      screen focus f, 'ed'
+      focus.id = 'ed'
+   end
+
+   menu.click = ''                          ;* the column of a click on the menu bar, while the menu it opens is being started
+   loop
+      gosub status.line
+      * A second of quiet is an event (timeout), so that the status line follows what is typed: the editor
+      * consumes its own keys and nothing else returns to this loop for them
+      screen wait f timeout 1 returning ev then
+         et = ev<1>
+         eid = ev<2>
+         edata = ev<3>
+         begin case
+            case et = 'activate'
+               msg = ''
+               focus.id = eid
+               gosub do.act
+            case et = 'focus'
+               focus.id = eid
+            case et = 'change'
+               if eid = 'tabs' then
+                  new.cb = edata + 0
+                  if new.cb >= 1 and new.cb <= nbuf and new.cb # cb then
+                     gosub switch.to
+                  end
+               end
+            case et = 'key'
+               gosub do.key
+            case et = 'resize'
+               gosub relayout
+         end case
+      end else
+         begin case
+            case ev<1> = 'end'
+               done = @true
+            case ev<1> = 'timeout'
+               null
+            case 1
+               cmd = 'menu'             ;* Esc
+               gosub run.cmd
+         end case
+      end
+   until done
+   repeat
+
+   screen close
+   break on
+   void pterm(PT$BREAK, saved.trap)
+   display @(-1) :
+   stop
+
+* ======================================================================
+* Themes
+
+apply.theme:
+   screen theme themes<theme.n> returning th else
+      th = ''
+   end
+   return
+
+* Out: opened.  The screen is taken, with line-drawing borders if the terminal is UTF-8
+open.screen:
+   opened = @false
+   if utf8 then
+      screen open clear lines then
+         opened = @true
+      end
+   end else
+      screen open clear then
+         opened = @true
+      end
+   end
+   * The cursor lock: when the cursor is off the screen the keys are not the IDE's (it is laid out for LAYW by LAYH)
+   if opened then call $sl_guardmode('IDE', LAYW, LAYH)
+   return
+
+* ======================================================================
+* The files of the account: the VOC entries of type F
+
+build.files:
+   fl = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      for i = 1 to n
+         read r from vocf, ids<i> then
+            * the first field is F, or a description that starts "File" (a file's description is kept there)
+            t1 = upcase(r<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then fl<-1> = ids<i>
+         end
+      next i
+   end
+   return
+
+* In: lf.name.  The records of the file go into lfiles / lrecs (or are replaced there)
+load.file:
+   open lf.name to fv else
+      msg = sysmsg(12205, lf.name)
+      return
+   end
+   sselect fv to 9
+   readlist ids from 9 else ids = ''
+   n = dcount(ids, @fm)
+   if ids = '' then n = 0
+   if n > MAXREC then
+      msg = sysmsg(12224, MAXREC, lf.name)
+      ids = field(ids, @fm, 1, MAXREC)
+   end
+   ids = convert(@fm, @vm, ids)
+   lp = 0
+   nl = dcount(lfiles, @fm)
+   if lfiles = '' then nl = 0
+   for q = 1 to nl
+      if lfiles<q> = lf.name then
+         lp = q
+         exit
+      end
+   next q
+   if lp = 0 then
+      lfiles<-1> = lf.name
+      lrecs<-1> = ids
+   end else
+      lrecs<lp> = ids
+   end
+   return
+
+* ======================================================================
+* The layout from w and h
+
+size.layout:
+   lw = w
+   lh = h
+   if lw < LAYW then lw = LAYW                 ;* the window is smaller only after the start: the layout keeps its size and the
+   if lh < LAYH then lh = LAYH                 ;* library cuts what falls outside (the upper left corner shows)
+   fw = lw
+   fh = lh - 2
+   iw = fw - 2
+   ih = fh - 2
+   tw = 28
+   if iw < 90 then tw = int(iw / 3)
+   if tw < 14 then tw = 14
+   eh = 7
+   if ih < 20 then eh = 4
+   ex = tw + 1
+   ew = iw - tw
+   mh = ih - 1 - eh
+   err.y = 2 + mh
+   return
+
+* The form and everything on it, from the state
+new.form:
+   last.status = char(1)                ;* the screen is made again: the status line has to be written (status.line writes only a changed text)
+   lc.nodraw = @false                   ;* see load.current
+   did.focus = @false
+   call $sl_scr('get', scr)
+   w = scr<SL.S.W> + 0
+   h = scr<SL.S.H> + 0
+   * 19 Oct 26 dm - the layout is made for the WINDOW as well as the display, like SED, CED and the debugger (a display of 200 by 60 typed with TERM on a
+   *   140 by 42 window made the IDE lay out 200 by 60, which scrolled and garbled the screen): the smaller of the two.
+   call $sl_window(ww0, wh0)
+   if ww0 < w then w = ww0
+   if wh0 < h then h = wh0
+   gosub size.layout
+   t = sysmsg(12204, @who)
+   screen form title t at 0,1 size fw,fh returning f
+   have.form = @true
+
+   gosub tree.nodes
+   screen tree f, 'tree', nodes at 1,1 size tw - 1,ih value cur.k
+
+   * A vertical line between the tree and the editor, from the top of the form to its bottom, in the colours of the
+   * form's own frame (a line-drawing character on a UTF-8 terminal, | otherwise)
+   call $sl_line('v', '', vch)
+   for r = 1 to ih
+      screen label f, 'sep' : r, vch at tw,r width 1 attr 'window'
+   next r
+
+   * The strip of tabs on a bar of its own, as wide as the editor
+   screen label f, 'tabbar', ' ' at ex,1 width ew attr 'tab'
+   gosub tab.labels
+   screen tabs f, 'tabs', labels at ex,1 value tab.n
+
+   ed.text = ''
+   ed.syn = ''
+   ed.ro = 1
+   if nbuf > 0 then
+      u = bu<cb>
+      k = 't' : u
+      ed.text = bx{k}
+      ed.ro = 0
+      sy.file = bn<cb>
+      sy.id = bi<cb>
+      gosub syntax.for
+      ed.syn = syn
+   end
+   if ed.ro then
+      screen memo f, 'ed', ed.text at ex,2 size ew,mh syntax ed.syn lnum readonly
+   end else
+      screen memo f, 'ed', ed.text at ex,2 size ew,mh syntax ed.syn lnum
+   end
+   * 18 Oct 26 dm - a horizontal scroll bar in the editor's last row (the owner: "there is no horizontal scroll bar"); the text has one row less
+   call $sl_form('find', f, '', 'ed', en)
+   mw = f{'widgets', en}
+   mw{'hbar'} = 1
+   mw{'passkeys'} = 'ctrl-e'                     ;* Ctrl-E hands the record to SED (the area's own meaning of it, end of row, is End)
+   mw{'softcur'} = 1                             ;* 19 Oct 26: the character under the cursor is highlighted while the editor has the focus
+
+   cols = sysmsg(12226) : @sm : '6R' : @vm : sysmsg(12227) : @sm : (ew - 11) : 'L'
+   * A bar of its own above the table: the table is drawn like the editor (the text style), and with nothing
+   * between them the messages read as the end of the editor
+   screen label f, 'errbar', sysmsg(12236) at ex,err.y width ew attr 'window'
+   screen table f, 'err', cols, err.rows at ex,err.y + 1 size ew,eh - 1
+   * Return in the tree and in the table is an event of its own (activate), not the press of a default button
+   f{'activate'} = 1
+   f{'bgclick'} = 1                     ;* a left click on no widget (the menu bar) comes back as the key mouse: the bar is the IDE's, not a widget
+
+   * 19 Oct 26 dm - the owner: "a small visual indicator in the top right corner of each pane to indicate that it is active, [-] for off, [*] for on".
+   *   One three-cell label to a pane that can have the focus, added last so that it is drawn over the pane's own top edge: the files on the form's top
+   *   border above the tree, the editor on the border above it, the tabs at the right end of their strip, the messages at the right end of their bar.
+   ind.ids = 'ixtree' : @fm : 'ixtabs' : @fm : 'ixed' : @fm : 'ixerr'
+   ind.panes = 'tree' : @fm : 'tabs' : @fm : 'ed' : @fm : 'err'
+   gosub indicator.texts
+   screen label f, 'ixtree', ind.want<1> at tw - 4,0 width 3 attr 'window'
+   screen label f, 'ixtabs', ind.want<2> at ex + ew - 3,1 width 3 attr 'tab'
+   screen label f, 'ixed', ind.want<3> at ex + ew - 4,0 width 3 attr 'window'
+   screen label f, 'ixerr', ind.want<4> at ex + ew - 3,err.y width 3 attr 'window'
+   ind.cur = ind.want
+
+   gosub tree.apply
+   if nbuf > 0 then gosub memo.cursor
+   screen focus f, focus.id
+   screen menubar menus row 0 draw else null
+   return
+
+* The nodes of the tree (a file, and under it the records of a file that is loaded), the numbers of the open ones
+* and the number of the node whose code is cur.code
+tree.nodes:
+   nodes = ''
+   open.list = ''
+   cur.k = 1
+   nn = 0
+   nf = dcount(fl, @fm)
+   if fl = '' then nf = 0
+   for i = 1 to nf
+      nm = fl<i>
+      nn += 1
+      nodes<-1> = nm : @sm : 1 : @sm : 'F:' : nm
+      if 'F:' : nm = cur.code then cur.k = nn
+      lp = 0
+      nl = dcount(lfiles, @fm)
+      if lfiles = '' then nl = 0
+      for q = 1 to nl
+         if lfiles<q> = nm then
+            lp = q
+            exit
+         end
+      next q
+      if lp then
+         open.list<1, -1> = nn
+         ids = lrecs<lp>
+         ni = dcount(ids, @vm)
+         if ids = '' then ni = 0
+         for j = 1 to ni
+            nn += 1
+            c2 = 'R:' : nm : ':' : ids<1, j>
+            nodes<-1> = ids<1, j> : @sm : 2 : @sm : c2
+            if c2 = cur.code then cur.k = nn
+         next j
+      end
+   next i
+   return
+
+* The tree widget takes the nodes again, keeping the current one
+tree.apply:
+   gosub tree.nodes
+   call $sl_form('find', f, '', 'tree', tn)
+   if tn = 0 then return
+   tr = f{'widgets', tn}
+   tr{'items'} = convert(@fm, @vm, nodes)
+   tr{'cur'} = cur.k
+   tr{'open'} = open.list
+   tr{'opened'} = 1
+   call $sl_widget_init(tr)
+   return
+
+tab.labels:
+   labels = ''
+   for i = 1 to nbuf
+      labels<1, i> = bi<i>
+   next i
+   if nbuf = 0 then labels = sysmsg(12225)
+   tab.n = cb
+   if tab.n < 1 then tab.n = 1
+   return
+
+* In: sy.file, sy.id.  Out: syn, the language the editor colours the record as ('' for none)
+syntax.for:
+   syn = ''
+   r = downcase(sy.id)
+   n = dcount(r, '.')
+   suffix = ''
+   if n > 1 then suffix = field(r, '.', n)
+   begin case
+      case suffix = 'json'
+         syn = 'json'
+      case suffix = 'c' or suffix = 'h'
+         syn = 'c'
+      case suffix = 'py'
+         syn = 'python'
+      case suffix = 'md'
+         syn = 'markdown'
+      case suffix = 'sh'
+         syn = 'sh'
+      case index(downcase(sy.file), 'bp', 1)
+         syn = 'sd.basic'
+   end case
+   return
+
+* ======================================================================
+* The editor and the buffers
+
+* Keep what the editor holds (text and cursor) with the record that is open
+stash.current:
+   if nbuf > 0 and have.form then
+      call $sl_form('find', f, '', 'ed', en)
+      mw = f{'widgets', en}
+      screen get f, 'ed' returning txt
+      u = bu<cb>
+      k = 't' : u
+      bx{k} = txt
+      k = 'c' : u
+      bx{k} = mw{'cx'} : @vm : mw{'cy'} : @vm : mw{'top'} : @vm : mw{'left'}
+   end
+   return
+
+* The editor shows the record cb: its text, its language, its cursor; the tab strip says which
+load.current:
+   gosub tab.labels
+   f{'quiet'} = 1                        ;* SCREEN SET draws the whole form after each set: the strip and the editor are drawn below, alone
+   screen set f, 'tabs' items labels
+   screen set f, 'tabs' value tab.n
+   f{'quiet'} = 0
+   call $sl_form('find', f, '', 'ed', en)
+   mw = f{'widgets', en}
+   if nbuf > 0 then
+      u = bu<cb>
+      k = 't' : u
+      mw{'value'} = bx{k}
+      sy.file = bn<cb>
+      sy.id = bi<cb>
+      gosub syntax.for
+      ro = 0
+   end else
+      mw{'value'} = ''
+      syn = ''
+      ro = 1
+   end
+   call $sl_widget_init(mw)
+   nl = 0
+   if syn # '' then call $sl_syntax('index', syn, '', '', '', nl)
+   mw{'synlang'} = nl + 0
+   mw{'readonly'} = ro
+   if nbuf > 0 then gosub memo.cursor
+   * 18 Oct 26 dm - only the tab strip and the editor have changed: drawing the whole form again wrote every cell of the screen, which the
+   *   owner saw as a flash each time a record was chosen ("flashes the whole screen").  A caller that is about to focus the editor (which
+   *   draws it) sets lc.nodraw and draws the tab strip itself.
+   if not(lc.nodraw) then gosub redraw.editor
+   return
+
+* The cursor of the record cb goes back where it was
+memo.cursor:
+   call $sl_form('find', f, '', 'ed', en)
+   mw = f{'widgets', en}
+   u = bu<cb>
+   k = 'c' : u
+   cc = bx{k}
+   if cc # '' then
+      k = 't' : u
+      nl = dcount(bx{k}, @fm)
+      if cc<1, 2> + 0 >= 1 and cc<1, 2> + 0 <= nl then
+         mw{'cx'} = cc<1, 1> + 0
+         mw{'cy'} = cc<1, 2> + 0
+         mw{'top'} = cc<1, 3> + 0
+         mw{'left'} = cc<1, 4> + 0
+         mw{'want'} = cc<1, 1> + 0
+      end
+   end
+   return
+
+redraw:
+   call $sl_scr('get', scr)
+   call $sl_form('redraw', f, scr, '', rr)
+   call $sl_scr('put', scr)
+   return
+
+* The tab strip and the editor only (a record chosen, a tab closed or switched); the rest of the screen is as it was
+redraw.editor:
+   call $sl_scr('get', scr)
+   call $sl_form('drawwidget', f, scr, 'tabbar', rr)       ;* the blank bar under the strip: a strip that got shorter leaves no label behind
+   call $sl_form('drawwidget', f, scr, 'tabs', rr)
+   call $sl_form('drawwidget', f, scr, 'ed', rr)
+   call $sl_scr('put', scr)
+   return
+
+* A file name and a record id for a command line: qp.file and qp.id in, qp.f and qp.i out, each in quotes when it holds a blank (the command
+* parser reads one word to a name otherwise, and the verifier's Ctrl-E on the record "my rec" opened a new record "my" in SED).  A name that
+* holds both kinds of quote is left as it is.
+quote.pair:
+   qp.f = qp.file
+   qp.i = qp.id
+   for qp.k = 1 to 2
+      qp.v = if qp.k = 1 then qp.file else qp.id
+      if index(qp.v, ' ', 1) or index(qp.v, '"', 1) or index(qp.v, "'", 1) then
+         if not(index(qp.v, '"', 1)) then
+            qp.v = '"' : qp.v : '"'
+         end else
+            if not(index(qp.v, "'", 1)) then qp.v = "'" : qp.v : "'"
+         end
+      end
+      if qp.k = 1 then qp.f = qp.v else qp.i = qp.v
+   next qp.k
+   return
+
+* The focus goes to widget ft.id and is shown there: the widget that had it and the one that has it are drawn, and the cursor goes to the new one
+focus.to:
+   focus.id = ft.id
+   call $sl_scr('get', scr)
+   call $sl_form('focus', f, scr, ft.id, rr)
+   call $sl_scr('put', scr)
+   return
+
+redraw.tabs:
+   call $sl_scr('get', scr)
+   call $sl_form('drawwidget', f, scr, 'tabbar', rr)
+   call $sl_form('drawwidget', f, scr, 'tabs', rr)
+   call $sl_scr('put', scr)
+   return
+
+* The tree only (a file opened or closed in it)
+redraw.tree:
+   call $sl_scr('get', scr)
+   call $sl_form('drawwidget', f, scr, 'tree', rr)
+   call $sl_scr('put', scr)
+   return
+
+* In: or.file, or.id.  Opens the record in a tab of its own, or goes to the tab it is already in
+open.record:
+   p = 0
+   for i = 1 to nbuf
+      if bn<i> = or.file and bi<i> = or.id then
+         p = i
+         exit
+      end
+   next i
+   if p then
+      new.cb = p
+      if new.cb # cb then gosub switch.to
+      return
+   end
+   open or.file to fv else
+      msg = sysmsg(12205, or.file)
+      return
+   end
+   read rec from fv, or.id else
+      msg = sysmsg(12206, or.id, or.file)
+      return
+   end
+   gosub stash.current
+   nbuf += 1
+   uid += 1
+   bn<nbuf> = or.file
+   bi<nbuf> = or.id
+   bu<nbuf> = uid
+   k = 's' : uid
+   bx{k} = rec
+   k = 't' : uid
+   bx{k} = rec
+   k = 'c' : uid
+   bx{k} = ''
+   cb = nbuf
+   gosub load.current
+   return
+
+* In: new.cb
+switch.to:
+   gosub stash.current
+   cb = new.cb
+   gosub load.current
+   return
+
+* Whether record i has changes: dirty
+is.dirty:
+   u = bu<i>
+   k = 't' : u
+   d1 = bx{k}
+   k = 's' : u
+   d2 = bx{k}
+   dirty = (d1 # d2)
+   return
+
+* ======================================================================
+* The pane indicators: [*] on the pane that has the focus (focus.id), [-] on the others
+
+* ind.want = the four texts, in the order of ind.panes
+indicator.texts:
+   ind.want = ''
+   for ix = 1 to 4
+      ind.want<ix> = if focus.id = ind.panes<ix> then '[*]' else '[-]'
+   next ix
+   return
+
+* The ones that changed are set and drawn again, alone: the form is not drawn again (f{'quiet'}), and a label that has not changed is not touched
+set.indicators:
+   gosub indicator.texts
+   if ind.want = ind.cur then return
+   f{'quiet'} = 1
+   for ix = 1 to 4
+      if ind.want<ix> # ind.cur<ix> then screen set f, ind.ids<ix> text ind.want<ix>
+   next ix
+   f{'quiet'} = 0
+   call $sl_scr('get', scr)
+   for ix = 1 to 4
+      if ind.want<ix> # ind.cur<ix> then call $sl_form('drawwidget', f, scr, ind.ids<ix>, rr)
+   next ix
+   call $sl_scr('put', scr)
+   ind.cur = ind.want
+   return
+
+* ======================================================================
+* The status line, and the bar
+
+status.line:
+   gosub set.indicators
+   t = ''
+   if nbuf > 0 then
+      gosub stash.current
+      i = cb
+      gosub is.dirty
+      call $sl_form('find', f, '', 'ed', en)
+      mw = f{'widgets', en}
+      t = bn<cb> : ' ' : bi<cb>
+      if dirty then t := ' *'
+      t := '   ' : sysmsg(12218, mw{'cy'}, mw{'cx'})
+   end
+   if msg # '' then t := '   ' : msg
+   * 18 Oct 26 dm - SCREEN TEXT leaves the cursor after the text, so the cursor stayed at the end of the status row and the editor showed none
+   *   (found by the owner: "no cursor when it is first started"; the loop writes this line once a second and on every key).  It is put back
+   *   where the widget with the focus had left it.
+   * The line is written only when its text has changed since it was last written: the loop comes here about ten times a second, and an idle IDE
+   *   wrote 140 cells each time (new.form, which makes the screen again, forgets the text so that the line is written then)
+   * 19 Oct 26 dm - which pane has the focus, first on the line (the owner, using the keyboard only: "no visible indication of which box is active"):
+   *   Tab moves the focus from the files to the tabs, the editor and the messages, and the terminal's own cursor is the only other sign of it
+   begin case
+      case focus.id = 'tree'
+         pn = sysmsg(12242)
+      case focus.id = 'tabs'
+         pn = sysmsg(12243)
+      case focus.id = 'ed'
+         pn = sysmsg(12244)
+      case focus.id = 'err'
+         pn = sysmsg(12245)
+      case 1
+         pn = ''
+   end case
+   if pn # '' then t = '[' : pn : ']' : (if t = '' then '' else '  ' : t)
+   t = fmt(t[1, lw], lw : 'L')
+   if t = last.status then return
+   last.status = t
+   keep.cur = ''
+   call $sl_curat('get', keep.cur)
+   screen text t at 0,lh - 1 attr 'reverse'     ;* the layout's last row: off the screen in a smaller window
+   call $sl_curat('back', keep.cur)
+   return
+
+* ======================================================================
+* Keys, the menu and the commands
+
+do.key:
+   msg = ''
+   cmd = ''
+   begin case
+      case edata = 'f1'
+         cmd = 'help'
+      case edata = 'f2' or edata = 'ctrl-s'
+         cmd = 'save'
+      case edata = 'f3'
+         cmd = 'tree'
+      case edata = 'f4'
+         cmd = 'nexterr'
+      case edata = 'f5'
+         cmd = 'run'
+      case edata = 'f6'
+         cmd = 'nexttab'
+      case edata = 'f7'
+         cmd = 'compile'
+      case edata = 'f8'
+         cmd = 'catalog'
+      case edata = 'f9'
+         cmd = 'debug'
+      case edata = 'f10'
+         cmd = 'menu'
+      case edata = 'ctrl-q'
+         cmd = 'quit'
+      case edata = 'ctrl-w'
+         cmd = 'writeas'                 ;* SED's write record
+      case edata = 'ctrl-e'
+         cmd = 'sed'                     ;* the record goes to SED and comes back (the editor leaves this key to the IDE: passkeys)
+      case edata = 'ctrl-l'
+         cmd = 'goto'
+      case edata = 'ctrl-r'
+         cmd = 'replace'                 ;* SED's replace
+      case edata = 'f11'
+         cmd = 'find'                    ;* in the records of the file
+      case edata = 'guardquit'
+         done = @true                    ;* the user left from the cursor lock ($sl_guardmode): nothing is saved
+      case edata = 'mouse'
+         * The bar is not a widget, so a click on it comes here as a key the form had no use for.  19 Oct 26 dm: the left button on the bar's
+         * row (0) opens the menu whose title is under it; the menu was opened only by F10 or Esc before, and a click did nothing until then.
+         call $sl_mouse('get', mev)
+         if mev<1> = 'press' and mev<2> = 1 and mev<4> = 0 then
+            menu.click = mev<3>
+            cmd = 'menu'
+         end
+   end case
+   if cmd # '' then gosub run.cmd
+   return
+
+run.cmd:
+   begin case
+      case cmd = 'menu'
+         mk = menu.click
+         menu.click = ''
+         if mk = '' then
+            screen menubar menus returning mc then
+               cmd = mc
+               gosub run.cmd
+            end
+         end else
+            screen menubar menus click mk returning mc then      ;* the menu under the click; the space beside the titles opens nothing
+               cmd = mc
+               gosub run.cmd
+            end
+         end
+      case cmd = 'help'
+         s = convert(char(13), '', sysmsg(12219) : sysmsg(12220) : sysmsg(12221))
+         s = change(s, char(10), @vm)
+         screen msgbox s returning b else b = 0
+      case cmd = 'save'
+         gosub save.current
+      case cmd = 'tree'
+         ft.id = 'tree'                    ;* SCREEN FOCUS moves the pointer and draws nothing: the form's own op shows the change
+         gosub focus.to
+      case cmd = 'nexterr'
+         gosub next.error
+      case cmd = 'nexttab'
+         if nbuf > 1 then
+            new.cb = cb + 1
+            if new.cb > nbuf then new.cb = 1
+            gosub switch.to
+         end
+      case cmd = 'compile'
+         c.opt = ''
+         gosub do.compile
+      case cmd = 'catalog'
+         c.opt = ''
+         gosub do.compile
+         if c.ok then
+            qp.file = c.file ; qp.id = c.id ; gosub quote.pair
+            execute 'catalog ' : qp.f : ' ' : qp.i capturing co
+            msg = sysmsg(12212, c.file, c.id)
+         end
+      case cmd = 'run'
+         c.opt = ''
+         gosub do.compile
+         if c.ok then
+            gosub leave.screen
+            qp.file = c.file ; qp.id = c.id ; gosub quote.pair
+            execute 'run ' : qp.f : ' ' : qp.i trapping aborts
+            gosub retake.screen
+         end
+      case cmd = 'debug'
+         c.opt = ' debugging'
+         gosub do.compile
+         if c.ok then
+            gosub leave.screen
+            qp.file = c.file ; qp.id = c.id ; gosub quote.pair
+            execute 'debug ' : qp.f : ' ' : qp.i trapping aborts
+            gosub retake.screen
+         end
+      case cmd = 'close'
+         gosub close.current
+      case cmd = 'sed'
+         gosub do.sed
+      case cmd = 'quit'
+         gosub do.quit
+      case cmd = 'goto'
+         if nbuf = 0 then
+            msg = sysmsg(12223)
+         end else
+            screen ask sysmsg(12214) returning gl.text then
+               if num(gl.text) and gl.text # '' then
+                  gl.n = gl.text + 0
+                  gosub goto.line
+               end
+            end
+         end
+      case cmd = 'find'
+         gosub do.find
+      case cmd = 'writeas'
+         gosub do.writeas
+      case cmd = 'replace'
+         gosub do.replace
+      case cmd = 'new'
+         gosub do.new
+      case cmd = 'theme'
+         theme.n += 1
+         if theme.n > dcount(themes, @fm) then theme.n = 1
+         gosub apply.theme
+         screen refresh
+         last.status = char(1)          ;* everything was drawn again, the status line too
+   end case
+   return
+
+* Return in the tree, the table or the tab strip (the form's default button)
+do.act:
+   did.focus = @false
+   begin case
+      case focus.id = 'tree'
+         screen get f, 'tree' returning code
+         begin case
+            case code[1, 2] = 'F:'
+               lf.name = code[3, 99]
+               lp = 0
+               nl = dcount(lfiles, @fm)
+               if lfiles = '' then nl = 0
+               for q = 1 to nl
+                  if lfiles<q> = lf.name then
+                     lp = q
+                     exit
+                  end
+               next q
+               if lp then
+                  del lfiles<lp>
+                  del lrecs<lp>
+               end else
+                  gosub load.file
+               end
+               cur.code = code
+               gosub tree.apply
+               gosub redraw.tree
+            case code[1, 2] = 'R:'
+               or.file = field(code, ':', 2)
+               or.id = code[len(or.file) + 4, 9999]
+               cur.code = code
+               * 18 Oct 26 dm - the editor is drawn once: by the focus that follows, not also by open.record (which drew the whole form, and then
+               *   again at the end of this routine).  SCREEN FOCUS only moves the form's pointer and draws nothing, so the focus goes through the
+               *   form's own op, which draws the widget that had it (the tree) and the one that has it (the editor, with the cursor in its text).
+               lc.nodraw = @true
+               gosub open.record
+               lc.nodraw = @false
+               if nbuf > 0 then
+                  ft.id = 'ed'
+                  gosub focus.to
+                  did.focus = @true
+                  gosub redraw.tabs
+               end
+         end case
+      case focus.id = 'err'
+         screen get f, 'err' returning rn
+         if rn # '' then
+            k2 = rn + 0
+            gosub act.error
+         end
+      case 1
+         null
+   end case
+   if not(did.focus) then screen focus f, focus.id
+   return
+
+* The row k2 of the table: go to what it names
+act.error:
+   if k2 < 1 or k2 > dcount(err.rows, @fm) then return
+   if out.kind = 'search' then
+      or.file = out.file
+      or.id = sid<k2>
+      gosub open.record
+      gl.n = sln<k2> + 0
+   end else
+      gl.n = err.lines<k2> + 0
+   end
+   if gl.n >= 1 and nbuf > 0 then
+      gosub goto.line
+   end
+   return
+
+* In: gl.n.  The cursor of the editor goes to that line, which is brought to the middle of the window
+goto.line:
+   call $sl_form('find', f, '', 'ed', en)
+   mw = f{'widgets', en}
+   nl = dcount(mw{'value'}, @fm)
+   if gl.n > nl then gl.n = nl
+   if gl.n < 1 then gl.n = 1
+   mw{'cy'} = gl.n
+   mw{'cx'} = 1
+   mw{'want'} = 1
+   mw{'left'} = 1
+   mw{'mx'} = 0
+   mw{'my'} = 0
+   tp = gl.n - int(mh / 2)
+   if tp < 1 then tp = 1
+   mw{'top'} = tp
+   ft.id = 'ed'                         ;* the widget that had the focus and the editor are drawn, the cursor in the editor
+   gosub focus.to
+   return
+
+* F4: the row after the current one of the table, and what it names
+next.error:
+   n = dcount(err.rows, @fm)
+   if err.rows = '' then n = 0
+   if n = 0 then
+      msg = sysmsg(12223)
+      return
+   end
+   screen get f, 'err' returning rn
+   k2 = rn + 1
+   if k2 > n then k2 = 1
+   gosub select.row
+   gosub act.error
+   return
+
+* The table's current row is k2, shown near the middle
+select.row:
+   call $sl_form('find', f, '', 'err', tn)
+   tt = f{'widgets', tn}
+   tt{'cur'} = k2
+   tt{'value'} = k2
+   tp = k2 - int((eh - 2) / 2)
+   if tp < 1 then tp = 1
+   tt{'top'} = tp
+   gosub redraw
+   return
+
+* The table shows err.rows
+err.load:
+   call $sl_form('find', f, '', 'err', tn)
+   tt = f{'widgets', tn}
+   tt{'rows'} = err.rows
+   tt{'top'} = 1
+   tt{'cur'} = 1
+   tt{'value'} = 1
+   tt{'picked'} = ''
+   call $sl_widget_init(tt)
+   gosub redraw
+   return
+
+* ======================================================================
+* Saving, closing, quitting
+
+* Save the record in the editor
+save.current:
+   if nbuf = 0 then
+      msg = sysmsg(12223)
+      sv.ok = @false
+      return
+   end
+   gosub stash.current
+   sv.i = cb
+   gosub save.one
+   return
+
+* edit.check  -  may this session save a change to the file in fv?  (17 Oct 26 dm, S.64)
+*   IDE is $internal, so the kernel's own test of a WRITE to a VOC, a dictionary or a program file lets it through; it asks for itself,
+*   by the pathname of the OPEN file (K$EDIT.OK).  The reason goes in msg, as every IDE complaint does (DISPLAY would write over the
+*   screen).  Out: edit.ok.
+edit.check:
+   edit.ok = @true
+   edit.p = fileinfo(fv, FL$PATH)
+   if kernel(K$EDIT.OK, edit.p) then return
+   edit.ok = @false
+   edit.kind = kernel(K$EDIT.KIND, edit.p)
+   msg = edit_msg(edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
+   return
+
+* In: sv.i.  Out: sv.ok
+save.one:
+   sv.ok = @false
+   u = bu<sv.i>
+   k = 't' : u
+   sv.text = bx{k}
+   k = 's' : u
+   sv.saved = bx{k}
+   if sv.text = sv.saved then
+      sv.ok = @true
+      return
+   end
+   open bn<sv.i> to fv else
+      msg = sysmsg(12205, bn<sv.i>)
+      return
+   end
+   gosub edit.check                  ;* 17 Oct 26 dm - S.64
+   if not(edit.ok) then return
+   read disk from fv, bi<sv.i> then
+      if disk # sv.saved then
+         screen msgbox sysmsg(12208, bn<sv.i>, bi<sv.i>) buttons 'Overwrite,Cancel' default 2 returning b else b = 0
+         if b # 1 then return
+      end
+   end else
+      null
+   end
+   write sv.text on fv, bi<sv.i>
+   k = 's' : u
+   bx{k} = sv.text
+   sv.ok = @true
+   msg = sysmsg(12207, bn<sv.i>, bi<sv.i>)
+   return
+
+close.current:
+   if nbuf = 0 then return
+   gosub stash.current
+   i = cb
+   gosub is.dirty
+   if dirty then
+      screen msgbox sysmsg(12209, bn<cb>, bi<cb>) buttons 'Save,Discard,Cancel' default 1 returning b else b = 3
+      begin case
+         case b = 1
+            sv.i = cb
+            gosub save.one
+            if not(sv.ok) then return
+         case b = 2
+            null
+         case 1
+            return
+      end case
+   end
+   del bn<cb>
+   del bi<cb>
+   del bu<cb>
+   nbuf -= 1
+   if cb > nbuf then cb = nbuf
+   if cb < 1 then cb = 1
+   gosub load.current
+   return
+
+do.quit:
+   gosub stash.current
+   abort = @false
+   for i = 1 to nbuf
+      gosub is.dirty
+      if dirty then
+         screen msgbox sysmsg(12209, bn<i>, bi<i>) buttons 'Save,Discard,Cancel' default 1 returning b else b = 3
+         begin case
+            case b = 1
+               sv.i = i
+               gosub save.one
+               if not(sv.ok) then abort = @true
+            case b = 2
+               null
+            case 1
+               abort = @true
+         end case
+      end
+   until abort
+   next i
+   if not(abort) then done = @true
+   return
+
+* ======================================================================
+* Building
+
+* In: c.opt ('' or ' debugging').  Out: c.ok, c.file, c.id; the table holds the compiler's lines
+do.compile:
+   c.ok = @false
+   if nbuf = 0 then
+      msg = sysmsg(12223)
+      return
+   end
+   gosub save.current
+   if not(sv.ok) then return
+   c.file = bn<cb>
+   c.id = bi<cb>
+   qp.file = c.file ; qp.id = c.id ; gosub quote.pair
+   execute 'basic ' : qp.f : ' ' : qp.i : c.opt capturing c.out
+   c.ok = (@system.return.code # 0)
+   err.rows = ''
+   err.lines = ''
+   nerr = 0
+   loop
+      z = remove(c.out, delim)
+      begin case
+         case z matches "1N...:..."
+            ln = matchfield(z, '0N0X', 1) + 0
+            tx = trimf(field(z, ':', 2, 999))
+            nerr += 1
+            err.rows<-1> = ln : @vm : tx
+            err.lines<-1> = ln
+         case z matches "'WARNING:'0X"
+            nerr += 1
+            err.rows<-1> = 0 : @vm : trimf(z)
+            err.lines<-1> = 0
+      end case
+   while delim
+   repeat
+   out.kind = 'errors'
+   out.file = c.file
+   gosub err.load
+   if c.ok then
+      msg = sysmsg(12210, c.file, c.id)
+   end else
+      msg = sysmsg(12211, nerr, c.file, c.id)
+      n = dcount(err.lines, @fm)
+      for q = 1 to n
+         if err.lines<q> + 0 > 0 then
+            k2 = q
+            gosub select.row
+            gosub act.error
+            exit
+         end
+      next q
+   end
+   return
+
+* The terminal goes back to the program being run, and comes back to the IDE after it
+leave.screen:
+   screen close
+   break on
+   void pterm(PT$BREAK, saved.trap)
+   display @(-1) :
+   return
+
+retake.screen:
+   display sysmsg(12228)
+   input junk
+* Without the pause (SED handed the record back and has nothing left to be read): the same, straight on
+retake.quiet:
+   void pterm(PT$BREAK, @false)
+   break off
+   gosub open.screen
+   gosub apply.theme
+   gosub new.form
+   return
+
+* ======================================================================
+* Ctrl-E, File / Edit in SED: the record goes to SED and comes back (Part B of the 140x42 plan).  SED edits the record ON DISK, so a changed
+* buffer is saved first (asked; Cancel leaves everything as it is).  SED ends its edit at its first successful save (it is told so by the
+* named common /sedide/, see gpl.bp/sed), or the user leaves it without saving; the IDE then reads the record again (the disk is the truth),
+* forgets the compile errors (they named lines of the old text), takes the screen back WITHOUT the "press Return" pause of Run, and says
+* which it was.  SED makes ide.call 2 once the record is open for editing: if it is still 1 on the way back SED stopped on a message of its
+* own (a record locked by another session, a refusal), and the IDE waits for a key so that the message can be read.
+do.sed:
+   common /sedide/ ide.call
+   if nbuf = 0 then
+      msg = sysmsg(12223)
+      return
+   end
+   gosub stash.current
+   i = cb
+   gosub is.dirty
+   if dirty then
+      screen msgbox sysmsg(12608, bn<cb>, bi<cb>) buttons 'Save,Cancel' default 1 returning b else b = 2
+      if b # 1 then return
+      sv.i = cb
+      gosub save.one
+      if not(sv.ok) then return
+   end
+   sd.file = bn<cb>
+   sd.id = bi<cb>
+   sd.u = bu<cb>
+   k = 's' : sd.u
+   sd.was = bx{k}
+   gosub leave.screen
+   ide.call = 1
+   qp.file = sd.file ; qp.id = sd.id ; gosub quote.pair
+   execute 'sed ' : qp.f : ' ' : qp.i trapping aborts
+   sd.used = (ide.call = 2)
+   ide.call = 0
+   disk = sd.was
+   open sd.file to fv then
+      read disk from fv, sd.id else disk = sd.was
+   end
+   k = 's' : sd.u
+   bx{k} = disk
+   k = 't' : sd.u
+   bx{k} = disk
+   err.rows = ''
+   err.lines = ''
+   out.kind = ''
+   if sd.used then gosub retake.quiet else gosub retake.screen
+   if disk # sd.was then msg = sysmsg(12609, sd.file, sd.id) else msg = sysmsg(12610, sd.file, sd.id)
+   return
+
+* The window changed size: the form is made again at the new size from the state
+relayout:
+   gosub stash.current
+   screen clear
+   gosub new.form
+   return
+
+* ======================================================================
+* Records: a new one, and a search
+
+* Out: ctx.file, the file the tree or the editor is on
+get.context:
+   ctx.file = ''
+   if focus.id = 'tree' or nbuf = 0 then
+      screen get f, 'tree' returning code
+      if code[1, 2] = 'F:' then ctx.file = code[3, 99]
+      if code[1, 2] = 'R:' then ctx.file = field(code, ':', 2)
+   end
+   if ctx.file = '' and nbuf > 0 then ctx.file = bn<cb>
+   return
+
+* Ctrl-W, as SED's: the text in the editor is written to a record of the file under another name and the editor goes on
+* with the record it had
+do.writeas:
+   if nbuf = 0 then
+      msg = sysmsg(12223)
+      return
+   end
+   gosub stash.current
+   u = bu<cb>
+   k = 't' : u
+   wa.text = bx{k}
+   wa.file = bn<cb>
+   screen ask sysmsg(12213) returning wa.id else return
+   wa.id = trim(wa.id)
+   if wa.id = '' then return
+   open wa.file to fv else
+      msg = sysmsg(12205, wa.file)
+      return
+   end
+   gosub edit.check                  ;* 17 Oct 26 dm - S.64
+   if not(edit.ok) then return
+   exists = @false
+   read x from fv, wa.id then exists = @true
+   if exists then
+      msg = sysmsg(12222, wa.id, wa.file)
+      return
+   end
+   write wa.text on fv, wa.id
+   lp = 0
+   nl = dcount(lfiles, @fm)
+   if lfiles = '' then nl = 0
+   for q = 1 to nl
+      if lfiles<q> = wa.file then
+         lp = q
+         exit
+      end
+   next q
+   if lp then
+      lf.name = wa.file
+      gosub load.file
+      gosub tree.apply
+      gosub redraw
+   end
+   msg = sysmsg(12207, wa.file, wa.id)
+   return
+
+* Ctrl-R, as SED's: a text is replaced by another all through the record in the editor (what undo remembered is lost:
+* the text area is given the new text)
+do.replace:
+   if nbuf = 0 then
+      msg = sysmsg(12223)
+      return
+   end
+   screen ask sysmsg(12237) returning rp.old else return
+   if rp.old = '' then return
+   screen ask sysmsg(12238) returning rp.new else return
+   gosub stash.current
+   u = bu<cb>
+   k = 't' : u
+   rp.text = bx{k}
+   rp.n = count(rp.text, rp.old)
+   if rp.n = 0 then
+      msg = sysmsg(12239, 0)
+      return
+   end
+   bx{k} = change(rp.text, rp.old, rp.new)
+   gosub load.current
+   msg = sysmsg(12239, rp.n)
+   return
+
+do.new:
+   gosub get.context
+   if ctx.file = '' then
+      msg = sysmsg(12217)
+      return
+   end
+   screen ask sysmsg(12213) returning nm else return
+   nm = trim(nm)
+   if nm = '' then return
+   open ctx.file to fv else
+      msg = sysmsg(12205, ctx.file)
+      return
+   end
+   gosub edit.check                  ;* 17 Oct 26 dm - S.64
+   if not(edit.ok) then return
+   exists = @false
+   read x from fv, nm then exists = @true
+   if exists then
+      msg = sysmsg(12222, nm, ctx.file)
+      return
+   end
+   write '' on fv, nm
+   lp = 0
+   nl = dcount(lfiles, @fm)
+   if lfiles = '' then nl = 0
+   for q = 1 to nl
+      if lfiles<q> = ctx.file then
+         lp = q
+         exit
+      end
+   next q
+   if lp then
+      lf.name = ctx.file
+      gosub load.file
+   end
+   cur.code = 'R:' : ctx.file : ':' : nm
+   or.file = ctx.file
+   or.id = nm
+   gosub open.record
+   gosub tree.apply
+   gosub redraw.tree
+   if nbuf > 0 then
+      ft.id = 'ed'
+      gosub focus.to
+   end
+   return
+
+do.find:
+   gosub get.context
+   if ctx.file = '' then
+      msg = sysmsg(12217)
+      return
+   end
+   screen ask sysmsg(12215, ctx.file) returning pat else return
+   if pat = '' then return
+   open ctx.file to fv else
+      msg = sysmsg(12205, ctx.file)
+      return
+   end
+   sselect fv to 9
+   readlist ids from 9 else ids = ''
+   n = dcount(ids, @fm)
+   if ids = '' then n = 0
+   if n > MAXREC then n = MAXREC
+   upat = upcase(pat)
+   hits = 0
+   err.rows = ''
+   err.lines = ''
+   sid = ''
+   sln = ''
+   for i = 1 to n
+      read r from fv, ids<i> then
+         nl = dcount(r, @fm)
+         for j = 1 to nl
+            if index(upcase(r<j>), upat, 1) then
+               hits += 1
+               err.rows<-1> = j : @vm : ids<i> : ': ' : trim(r<j>)
+               err.lines<-1> = j
+               sid<-1> = ids<i>
+               sln<-1> = j
+            end
+         until hits >= MAXHIT
+         next j
+      end
+   until hits >= MAXHIT
+   next i
+   out.kind = 'search'
+   out.file = ctx.file
+   gosub err.load
+   msg = sysmsg(12216, hits, ctx.file)
+   return
+
+* END-CODE

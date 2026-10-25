@@ -52,6 +52,7 @@ $include sl.h
          if ctx.open then
             if ctx<SL.S.W> # @crtwide or ctx<SL.S.H> # @crthigh then gosub resize
             scr = ctx
+            scr<SL.S.DIFF> = 0                  ;* only $sl_form turns it on, for the length of one of its calls
          end else
             gosub blank
             scr = blank.scr

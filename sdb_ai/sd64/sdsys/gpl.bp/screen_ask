@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the question as Esc does.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -79,7 +81,7 @@ $include sl.h
    call $sl_entry('focus', w, scr, 1, r)
    loop
       call $sl_key('', k)
-      if k = '' then k = 'esc'
+      if k = '' or k = 'guardquit' then k = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
       if k = 'mouse' then
          * a click in the field puts the cursor there; the rest is ignored
          r = 'handled'

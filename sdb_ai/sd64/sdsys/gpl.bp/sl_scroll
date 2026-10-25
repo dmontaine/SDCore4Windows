@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux b19ba09 (13 Oct 26): New.
+* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -167,7 +169,7 @@ paint:
          call $sl_put(scr, x, y + r, c, code)
       end
    next r
-   if w{'focused'} then display @(x, y) :
+   if w{'focused'} then call $sl_curat(x, y)
    return
 end
 

@@ -1,0 +1,41 @@
+* SL_WINDOW
+* Screen library: the part of the terminal a full-screen program can draw on.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (terminal 140 by 42, phase 2): the one place that says how big the window is.  $sl_need (the refusal)
+*               and $sl_guard (the cursor lock) ask it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_window(w, h)
+*
+*     w h   the size of the window a program can draw on, in cells: the display SD has (@CRTWIDE by @CRTHIGH, which the kernel
+*           keeps to the tty's own size and which TERM w,h sets by hand), or the tty's own size if that is smaller (TERM 200,60
+*           typed in an 80 by 24 window does not make the window bigger).  Read afresh each time: a resize changes it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_window(w, h)
+$catalog $sl_window
+
+$include keys.h
+$include int$keys.h
+
+   w = @crtwide + 0
+   h = @crthigh + 0
+   ws = kernel(K$WINSIZE, '')
+   if ws # '' then
+      if ws<1> + 0 < w then w = ws<1> + 0
+      if ws<2> + 0 < h then h = ws<2> + 0
+   end
+
+   return
+end
+
+* END-CODE

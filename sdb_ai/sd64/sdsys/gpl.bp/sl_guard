@@ -1,0 +1,122 @@
+* SL_GUARD
+* Screen library: the cursor lock of a full-screen program whose window is smaller than the layout it was drawn for.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (terminal 140 by 42, phase 4).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_guard(name, minw, minh, cx, cy, result)
+*
+*     name        what the program is called in the message (SED)
+*     minw minh   the size the program is laid out for
+*     cx cy       where the program's cursor is, in the layout's own cells from 0 as in @(x, y)
+*     result      returned: 'ok'    the cursor is on the screen (it was, or the window has been made bigger): the program draws
+*                                   its whole layout again, since the screen is not what it left
+*                           'quit'  the user chose to leave (Ctrl-Q, then y), or the input ended: the program ends the way
+*                                   its own Exit does, with its terminal modes given back and its record locks released
+*
+*   A full-screen program that is laid out for 140 by 42 and runs in a smaller window shows the upper left corner of the layout
+*   and nothing else.  That is safe so long as the cursor is in the part that shows.  When the cursor would be off the screen
+*   (a long line's end, a prompt on a row below the window) the program calls this BEFORE it reads a key, and while the cursor
+*   is off the screen the user types blind.  So: the screen is cleared, a warning is drawn in the upper left corner (reverse
+*   video, wrapped to the window), and every key and every mouse report is discarded.  The window is looked at about once a
+*   second (a session with AUTOLOGOUT set waits on the keyboard alone, so a resize is noticed at its next key); when it is big
+*   enough to show the cursor the routine returns 'ok'.  Ctrl-Q is the one key that does anything: it changes the warning to
+*   "Leave? (changes are NOT saved) y/n" in the same box, y leaves ('quit') and anything else goes back to the warning.  The
+*   way out is the routine's own, never the program's prompt, which may be on a row that cannot be seen.
+*
+*   Called by programs that read their keys themselves (SED).  Programs that read them through the screen library will get
+*   the same lock in $sl_key, when the IDE and CED are brought to the 140 by 42 rule.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_guard(name, minw, minh, cx, cy, result)
+$catalog $sl_guard
+
+$include keys.h
+$include int$keys.h
+$include err.h
+
+   equ BOX.WIDE to 70           ;* the warning's width, if the window is wider
+
+   result = 'ok'
+   call $sl_window(w, h)
+   if cx < w and cy < h then return
+
+   asking = @false
+   slice = (if kernel(K$AUTOLOGOUT, -1) then 0 else 1)   ;* seconds; 0 = wait for a key alone (AUTOLOGOUT must be able to fire)
+   gosub draw.box
+
+   loop
+      if slice then k = keyin(slice) else k = keyin()
+      kst = status()                                ;* before anything else is called: a timeout is not the end of the input
+
+      call $sl_window(w2, h2)
+      if w2 # w or h2 # h then
+         w = w2 ; h = h2
+         if cx < w and cy < h then return           ;* the cursor shows again
+         asking = @false
+         gosub draw.box
+      end
+
+      if k = '' then
+         if kst # ER$TIMEOUT then
+            result = 'quit'                         ;* the input has ended: nobody is there to make it larger
+            return
+         end
+      end else
+         begin case
+            case asking
+               if upcase(k) = 'Y' then
+                  result = 'quit'
+                  return
+               end
+               asking = @false
+               gosub draw.box
+            case k = char(17)
+               asking = @true
+               gosub draw.box
+         end case
+      end                                           ;* any other key, a mouse report: dropped
+   repeat
+
+* The warning, or the question, in reverse video from the top left, as wide as the window lets it be
+draw.box:
+   if asking then
+      text = sysmsg(12606)
+   end else
+      text = sysmsg(12605, w : ' by ' : h, name, minw : ' by ' : minh)
+   end
+   bw = w
+   if bw > BOX.WIDE then bw = BOX.WIDE
+   call $sl_sgr('r', rev)
+   call $sl_sgr('n', nor)
+   display nor : @(-1) :
+   r = 0
+   rest = text
+   loop while rest # '' and r < h do
+      if len(rest) <= bw then
+         ln = rest
+         rest = ''
+      end else
+         cut = bw
+         loop while cut > 1 and rest[cut + 1, 1] # ' ' do cut -= 1 repeat
+         if cut <= 1 then cut = bw                   ;* a word longer than the box is cut where it must be
+         ln = rest[1, cut]
+         rest = trimf(rest[cut + 1, len(rest)])
+      end
+      display rev : @(0, r) : (ln : space(bw))[1, bw] : nor :
+      r += 1
+   repeat
+   display @(0, 0) :
+   return
+end
+
+* END-CODE

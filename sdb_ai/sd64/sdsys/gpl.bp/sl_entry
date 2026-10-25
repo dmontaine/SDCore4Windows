@@ -6,6 +6,9 @@
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
 * 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): w is a data collection like every widget of a form ($sl_label describes the common elements).
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - w is a data collection like every widget of a form ($sl_label describes the common elements).
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -146,7 +149,7 @@ paint:
       call $sl_attr('field', code)
    end
    call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, vis, code)
-   if w{'focused'} then display @(w{'ax'} + p - pan, w{'ay'} + 0) :
+   if w{'focused'} then call $sl_curat(w{'ax'} + p - pan, w{'ay'} + 0)
    return
 end
 

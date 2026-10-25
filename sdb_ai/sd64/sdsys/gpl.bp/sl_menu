@@ -9,6 +9,8 @@
 *               fit were not drawn (SED on a 12-row terminal showed 10 of the 17 Edit items) though the cursor
 *               still moved over them.
 * 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the menu as Esc does; the cursor is
+*               placed through $sl_curat.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -133,7 +135,7 @@ $include sl.h
          loop
             gosub draw.drop
             call $sl_key('', key)
-            if key = '' then key = 'esc'
+            if key = '' or key = 'guardquit' then key = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
             if key = 'resize' then
                call $sl_resize(scr)                ;* the terminal's size changed: the menu is drawn again with the rest
                ret = 'handled'
@@ -497,7 +499,7 @@ draw.drop:
       gosub cut.marks
       call $sl_put(scr, dx, dy + i - 1, lab, a)
    next i
-   display @(dx + 1, dy + item - tp) :
+   call $sl_curat(dx + 1, dy + item - tp)
    return
 
 * A menu that scrolls: the last cell of its first row shows ^ when items are above it, of its last row v when items are below

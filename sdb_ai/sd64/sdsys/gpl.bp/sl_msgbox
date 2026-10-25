@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
+* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the box as Esc does.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -104,7 +106,7 @@ $include sl.h
          gosub show
          loop
             call $sl_key('', key)
-            if key = '' then key = 'esc'
+            if key = '' or key = 'guardquit' then key = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
             if key = 'resize' then
                call $sl_resize(scr)                ;* the terminal's size changed: the box is drawn again with the rest
                ret = 'handled'

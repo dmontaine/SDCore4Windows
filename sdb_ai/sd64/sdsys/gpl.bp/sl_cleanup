@@ -5,6 +5,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 7ff476f (13 Oct 26): New.
+* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
+* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Takes the cursor lock off ($sl_guardmode).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -35,6 +37,7 @@ $include sl.h
 
    if system(25) then return                  ;* a phantom has no terminal
 
+   call $sl_guardmode('', 0, 0)               ;* a program that stopped without SCREEN CLOSE leaves no cursor lock behind
    call $sl_scr('get', scr)
    if not(scr<SL.S.OWNED>) then return        ;* the library holds nothing
 

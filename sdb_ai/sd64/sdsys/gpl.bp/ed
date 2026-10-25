@@ -19,6 +19,12 @@
 * 
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-11: EV on a compound I-type no longer corrupts a quoted string (openQM item 268: the
+* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - The end of the input leaves ED.  INPUT gives '' with STATUS() = ER$EOF when the input is a pipe that has ended, and the
+*               command loop took that '' for an empty command and asked again for ever (6.1 s of CPU in 6.1 s of wall time, printing
+*               the prompt without end).  The command prompt now leaves the edit as X would, asking nothing and saving nothing, with
+*               the record's lock given back; the record-name prompt and the list of ids do not go on to another record; and the
+*               start-line and end-line prompts of LOAD and UNLOAD cancel (an UNLOAD took the default and wrote the whole record).
+*               Every other INPUT already ended on '' (the yes/no questions take N, the insert and the names stop on a null line).
 * 17 Oct 26 dm  S.64: SAVE (FI), UNLOAD, DELETE and FD into a VOC, a dictionary or a program file ask edit_guard (the reason is displayed).
 * 15 Oct 26 dm  CREATING.SEQKEY in the place of a record id (openQM 4): the editor takes the file's next sequential
 *               id (the counter WRITE ... CREATING.SEQKEY uses, through $seqkey) and edits a new record under it.
@@ -89,6 +95,7 @@ $define COMMAND.STACK.DEPTH 99
    no.query = @false
 
    terminate = @false              ;* Controls end of select list or prompt
+   input.ended = @false            ;* The input has ended (STATUS() = ER$EOF): nobody is there to answer, so no other record is begun
    a.text = ""                     ;* Default text for A command
    c.command = ""                  ;* Last change command
    f.text = ""                     ;* Default text and...
@@ -242,7 +249,7 @@ $define COMMAND.STACK.DEPTH 99
          loop
             record.name = remove(id.list, more.ids)
             gosub edit
-         while more.ids
+         while more.ids and not(input.ended)
          repeat
       end
    end else
@@ -287,6 +294,7 @@ $define COMMAND.STACK.DEPTH 99
             end
             gosub edit
             first.record = @false
+         until input.ended      ;* (else the prompt for the next name would be shown once more, to an input that has ended)
          repeat
       end
    end
@@ -447,6 +455,15 @@ end.prestored.sequence:
             if lines > 9999 then display str("-", len(lines)) : ": " :
             else display "----: ":
             input new.command
+* 19 Oct 26 dm - THE INPUT HAS ENDED.  On a pipe that has been used up INPUT gives '' with STATUS() = ER$EOF, and '' is an empty
+*   command, which only asks for the next line: the prompt was shown for ever (6.1 s of CPU in 6.1 s, measured).  Leave as X does
+*   with nothing asked and nothing saved (nobody is there to answer "OK to quit?"), the record's lock given back.  A terminal's
+*   Enter gives '' with STATUS() 0 and is an empty command as before; a terminal does not end like this.
+            if new.command = '' and status() = ER$EOF then
+               input.ended = @true
+               terminate = @true
+               goto edit.input.ended
+            end
          until convert(printing.chars, '', new.command) = ''
          until allow.non.printing
             display sysmsg(6507) ;* Command contains non-printing characters
@@ -969,6 +986,8 @@ parse.command:
       end
    repeat
 
+* 19 Oct 26: the command prompt jumps here when the input has ended; the record's lock is given back
+edit.input.ended:
    release file, record.name
 
    return
@@ -1842,9 +1861,12 @@ l:
 
          n.lines = dcount(s, @fm)
 
+* 19 Oct 26 dm - The end of the input cancels the LOAD (both prompts below).  Enter takes the default, and the end of the input is
+*   not an Enter; an empty source record (n.lines = 0) has no start line that is in range, so the loop could not end by itself.
          loop
             display sysmsg(6570) :  ;* Start line number (default 1)?
             input n
+            if n = '' and status() = ER$EOF then return
             if len(n) = 0 then n = 1
          while not(num(n)) or (n < 1) or (n > n.lines)
             display sysmsg(6571, n.lines) ;* Start line must be in range 1 to xx
@@ -1854,6 +1876,7 @@ l:
          loop
             display sysmsg(6572, n.lines) : ;* End line number (default xx)?
             input i
+            if i = '' and status() = ER$EOF then return
             if len(i) = 0 then i = n.lines
          while not(num(i)) or (i < n) or (i > n.lines)
             display sysmsg(6573, n, n.lines) ;* End line must be in range %1 to %2
@@ -2630,9 +2653,12 @@ u:
 *        17 Oct 26 dm - S.64: unloading into a VOC, a dictionary or a program file needs the gate (edit_guard has said why).
          if not(edit_guard(n.file)) then return
 
+* 19 Oct 26 dm - The end of the input cancels the UNLOAD (both prompts below): Enter takes the whole record, and an UNLOAD that
+*   went on at the end of the input wrote it to the target record with nobody there to say so.
          loop
             display sysmsg(6570) : ;* Start line number (default 1)?
             input n
+            if n = '' and status() = ER$EOF then return
             if len(n) = 0 then n = 1
          while not(num(n)) or (n < 1) or (n > lines)
             display sysmsg(6571, lines) ;* Start line must be in range 1 to xx
@@ -2645,6 +2671,7 @@ u:
          loop
             display sysmsg(6572, lines) ;* End line number (default xx)?
             input i
+            if i = '' and status() = ER$EOF then return
             if len(i) = 0 then i = lines
          while not(num(i)) or (i < n) or (i > lines)
             display sysmsg(6573, n, lines) ;* End line must be in range %1 to %2

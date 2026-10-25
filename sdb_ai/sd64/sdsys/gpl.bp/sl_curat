@@ -1,0 +1,68 @@
+* SL_CURAT
+* Screen library: put the terminal's cursor somewhere, and remember where, for the cursor lock.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 18 Oct 26 dm  New (terminal 140 by 42, phase 3).  The widgets used to write DISPLAY @(x, y) themselves; they call this instead,
+*               so that $sl_key can tell whether the cursor of a guarded program ($sl_guardmode) is on the screen.
+* 18 Oct 26 dm  The ops get and back, for a program that draws text while a widget has the cursor.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_curat(x, y)
+*
+*     x y    the cell, from 0 as in @(x, y).  The terminal's cursor is moved there when the cell is inside the display (@CRTWIDE by
+*            @CRTHIGH); a cell outside it is remembered and the cursor is NOT moved, since a terminal puts a cursor addressed past
+*            its edge on the last column or row, which is not where the widget means it to be.
+*
+*   call $sl_curat('off', '')    the widget hid the cursor (it is not in view, or is a container): the lock has nothing to ask
+*   call $sl_curat('on', '')     the cursor is shown again where it was
+*   call $sl_curat('get', st)    st = where the cursor was put last: has, x, y and hidden, as four values.  A program that draws text of
+*                                its own (the IDE's status line) takes this first ...
+*   call $sl_curat('back', st)   ... and gives it back afterwards, so that the cursor is where the widget with the focus left it
+*                                and not after the text just drawn.
+*
+*   Where the cursor was put last is the answer to "where would the user type?" for a library program: $sl_key asks it before it
+*   waits for a key, when the program has asked for the lock.  A program that has not (a user's SCREEN OPEN program) is not
+*   affected beyond the clamp described above.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_curat(x, y)
+$catalog $sl_curat
+
+   common /slcur/ cu.has, cu.x, cu.y, cu.hid
+
+   begin case
+      case x = 'off'
+         cu.hid = 1
+      case x = 'on'
+         cu.hid = 0
+      case x = 'get'
+         y = (cu.has + 0) : @vm : (cu.x + 0) : @vm : (cu.y + 0) : @vm : (cu.hid + 0)
+      case x = 'back'
+         * y is what 'get' returned: the cursor goes back where it was (and the lock is told), if a widget had put it anywhere
+         if y<1, 1> + 0 then
+            cu.has = 1
+            cu.x = y<1, 2> + 0
+            cu.y = y<1, 3> + 0
+            cu.hid = y<1, 4> + 0
+            if cu.x >= 0 and cu.y >= 0 and cu.x < @crtwide and cu.y < @crthigh then display @(cu.x, cu.y) :
+         end
+      case 1
+         cu.has = 1
+         cu.x = x + 0
+         cu.y = y + 0
+         cu.hid = 0
+         if cu.x >= 0 and cu.y >= 0 and cu.x < @crtwide and cu.y < @crthigh then display @(cu.x, cu.y) :
+   end case
+
+   return
+end
+
+* END-CODE
