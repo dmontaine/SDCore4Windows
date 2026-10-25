@@ -19,11 +19,14 @@
 * START-HISTORY:
 * 17 Oct 26 dm  S.65 slice 1: written.  The definition is stored and nothing connects to the server: no remote file can be opened
 *               yet; the gate (NET) and the definitions are in place for the slices that follow.
+* 17 Oct 26 dm  S.65 slice 2a: the fifth word may be CONNECT instead of the pin.  One TLS handshake is made (5 seconds to connect),
+*               the hash of the key the server presented is shown, and SDSYS is asked to trust it.  The audit line gains pin=typed
+*               or pin=confirmed.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SET.SERVER name host port account pin {READ | WRITE} {ACCOUNTS a,b,c} {NO.QUERY}
+*   SET.SERVER name host port account {pin | CONNECT} {READ | WRITE} {ACCOUNTS a,b,c} {NO.QUERY}
 *
 * Defines a server for SDNet, or replaces the definition of that name after a yes/no question (NO.QUERY goes ahead without
 * asking).  Administrator only.  The definition goes into the file netservers in the SDSYS directory (see !netdefs, which
@@ -36,15 +39,22 @@
 *    port      1 to 65535: the port of the server's API, chosen by whoever defines the server (4247 for a full SD Core,
 *              4249 for a Solo; not enforced)
 *    account   the account to enter on the remote server: 1 to 32 letters, digits, dots, underscores or hyphens, as typed
-*    pin       the SHA-256 hash of the server's public key (SPKI): exactly 64 hexadecimal digits (upper case is converted)
+*    pin       the SHA-256 hash of the server's public key (SPKI): exactly 64 hexadecimal digits (upper case is converted),
+*              or the word CONNECT (any case) to fetch it and confirm it
 *    READ / WRITE  what a program may do with the server's files; READ unless WRITE is given
 *    ACCOUNTS  the LOCAL accounts that may use the server, registered account names separated by commas with no space.
 *              Left out, NO account may use the server: that is the delivered default, SDSYS lists the accounts on purpose.
 *              An account also needs the NET gate (MODIFY.ACCOUNT name NET-ON).
 *
-* THE PIN IS GIVEN ON THE COMMAND LINE because this slice has no network client.  A later slice will connect to the server, show
-* the key hash it presented and ask the administrator to confirm it; until then take the hash from the other server's
-* administrator.  Nothing here connects to anything, and nothing opens a remote file yet.
+* THE PIN IS EITHER TYPED OR CONFIRMED.  Typed: the 64 digits from the other server's administrator, and nothing is dialled.
+* CONNECT: every other field is checked first (nothing is dialled for a definition that would be refused, and the question about
+* replacing an existing definition comes before the connection), then one TLS handshake is made to host:port (5 seconds to
+* connect), the hash of the public key the server presented is read with SOCKET.INFO(SKT$INFO.TLS.SPKI) and the socket is closed
+* at once: nothing is sent.  The hash is shown on a line of its own and SDSYS is asked "Trust this key (y/<n>)?".  y defines the
+* server with that hash; anything else, or input that ends, writes nothing.  THE KEY QUESTION IS ALWAYS ASKED: NO.QUERY skips
+* only the question about replacing a definition, never this one, because the answer is what makes the pin trustworthy.  A
+* connection that fails, a handshake that does not complete, or an empty hash writes nothing and has a message of its own.
+* The definitions stay locked while the connection is made and the question is open.  Nothing opens a remote file yet.
 *
 * The file never holds a secret: a name, an address, a port and the hash of a public key.
 *
@@ -57,8 +67,10 @@ program set.server
 $catalog $setserver
 
 $include int$keys.h
+$include keys.h
 $include err.h
 
+$define NET.CONNECT.SECS 5       ;* seconds to wait for the connection of CONNECT (the plan, 4.6)
 $define NET.MAX.SERVERS 10
 $define NET.MAX.ACCLIST 2000
 $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads, changes and writes the definitions
@@ -89,6 +101,12 @@ $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads,
    err = ''
    found = 0
    replaced = @false
+   connect.mode = @false
+   pin.how = 'typed'
+   skt = 0
+   st = 0
+   oserr = 0
+   spki = ''
 
    lc.set = 'abcdefghijklmnopqrstuvwxyz'    ;* not "lower": that is a BASIC function
    digits = '0123456789'
@@ -106,6 +124,10 @@ $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads,
    port = field(words, ' ', 4)
    account = field(words, ' ', 5)
    pin = downcase(field(words, ' ', 6))
+   if pin = 'connect' then
+      connect.mode = @true   ;* the pin is fetched below, after every other check; nothing is dialled before that
+      pin = ''
+   end
 
    i = 7
    loop while i <= n.words do
@@ -162,10 +184,12 @@ $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads,
       bad += 1
    end
 
-   chk.text = pin ; chk.set = digits:'abcdef' ; gosub check.chars
-   if len(pin) # 64 or not(chk.ok) then
-      display sysmsg(12423) ;* The pin is not valid: 64 hexadecimal digits
-      bad += 1
+   if not(connect.mode) then   ;* with CONNECT there is no typed pin to check
+      chk.text = pin ; chk.set = digits:'abcdef' ; gosub check.chars
+      if len(pin) # 64 or not(chk.ok) then
+         display sysmsg(12423) ;* The pin is not valid: 64 hexadecimal digits
+         bad += 1
+      end
    end
 
 *  mode is read or write by construction: the keyword scan above takes nothing else.
@@ -260,6 +284,13 @@ $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads,
       end
    end
 
+*  CONNECT: the last thing before the write, so that a definition that would be refused (a field, the limit of ten, a "no" to the
+*  replace question) is never dialled.  The key question is asked whatever NO.QUERY says.  Either way the lock is given back.
+   if connect.mode then
+      gosub connect.pin   ;* sets pin, or gives the lock back and stops with nothing written
+      pin.how = 'confirmed'
+   end
+
    d = date()
    created = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
    one = name:@vm:host:@vm:port:@vm:account:@vm:pin:@vm:mode:@vm:acc.clean:@vm:created
@@ -280,7 +311,7 @@ $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads,
 
 *  The words are lower case (PAL-24); the pin is not in the audit line, it is public but long.
    if replaced then rep.word = 'yes' else rep.word = 'no'
-   void kernel(K$AUDIT, 'set.server name=' : name : ' host=' : host : ' port=' : port : ' mode=' : mode : ' replaced=' : rep.word)
+   void kernel(K$AUDIT, 'set.server name=' : name : ' host=' : host : ' port=' : port : ' mode=' : mode : ' replaced=' : rep.word : ' pin=' : pin.how)
 
    @system.return.code = 0
    if replaced then
@@ -302,7 +333,52 @@ check.chars:
    return
 
 * ======================================================================
-* release.lock - give back the lock on the definitions and close the SDSYS directory.
+* connect.pin - one TLS handshake to host:port, show the hash of the key presented, ask whether to trust it.  Nothing is sent
+* over the connection and it is closed at once.  On trust it sets pin; on every other outcome it gives the lock back and stops
+* with nothing written.  An open.socket that fails with ER$CONNECT and an os.error of 0 is a handshake that did not complete (the
+* kernel sets the os error to 0 for that one case); a failure of the connection itself has the operating system's error.
+connect.pin:
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   st = status()
+   oserr = os.error()
+   if st # 0 then
+      gosub release.lock
+      @system.return.code = -ER$FAILED
+      if st = ER$CONNECT and oserr = 0 then stop sysmsg(12450, host, port) ;* The TLS handshake did not complete
+      stop sysmsg(12449, host, port, st, oserr) ;* Cannot connect
+   end
+
+   spki = downcase(trim(socket.info(skt, SKT$INFO.TLS.SPKI)))
+   close.socket skt
+
+   chk.text = spki ; chk.set = digits:'abcdef' ; gosub check.chars
+   if len(spki) # 64 or not(chk.ok) then
+      gosub release.lock
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12451, host, port) ;* The server gave no public key hash
+   end
+
+   display sysmsg(12445, host, port) ;* Connected (handshake only).  The server presented this hash:
+   display spki
+   display sysmsg(12446) ;* Compare it with the hash the other administrator gives you
+   loop
+      display sysmsg(12447) : ;* Trust this key (y/<n>)?
+      input yn
+      if yn = '' and status() = ER$EOF then yn = 'N'    ;* input that ends is a no
+      yn = upcase(yn[1, 1])
+      if yn = '' then yn = 'N'
+   until yn = 'Y' or yn = 'N'
+   repeat
+   if yn = 'N' then
+      gosub release.lock
+      @system.return.code = 0
+      stop sysmsg(12448, name) ;* The key was not trusted.  Nothing was written
+   end
+   pin = spki
+   return
+
+* ======================================================================
+* release.lock -give back the lock on the definitions and close the SDSYS directory.
 release.lock:
    release sys.f, NET.LOCK.ID
    close sys.f

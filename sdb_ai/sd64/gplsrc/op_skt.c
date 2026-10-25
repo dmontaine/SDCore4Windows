@@ -836,6 +836,20 @@ void op_sktinfo() {
       result_descr.data.value = (n != 0);
       break;
 
+    /* 25 Oct 26 Windows port - from Linux 6815cdc (17 Oct 26), S.65 slice 2: the hash of the server's public key, 64 lower case hex digits, "" without TLS or without a key. */
+    case SKT_INFO_TLS_SPKI: {
+      unsigned char spki[32];
+      char hex[65];
+      int i;
+
+      hex[0] = '\0';
+      if ((sockvar->tls != NULL) && sd_tls_client_peer_spki_sha256((SD_TLS_CLIENT*)sockvar->tls, spki)) {
+        for (i = 0; i < 32; i++)
+          sprintf(hex + (2 * i), "%02x", spki[i]);
+      }
+      k_put_c_string(hex, &result_descr);
+    } break;
+
     /* 15 Sep 26 Windows port - S.19/RELEASE_1.1 41: the SCRAM c= value for a
        socket opened with SKT$TLS - base64("p=tls-exporter,," + this end's
        binding) - and "" for any other socket.  !sdclient's login carries it. */

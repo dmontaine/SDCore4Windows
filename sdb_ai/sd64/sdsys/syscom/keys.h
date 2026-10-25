@@ -313,6 +313,9 @@
       *   c= value for a socket opened with SKT$TLS: base64("p=tls-exporter,," +
       *   binding); "" otherwise.
       $define SKT$INFO.TLS.CBIND       8    ;* SCRAM c= for this TLS session
+      * 17 Oct 26 dm - S.65 slice 2: SOCKET.INFO only.  The SHA-256 of the server certificate's public key (SubjectPublicKeyInfo) of a socket
+      *   opened with SKT$TLS, 64 lower case hex digits; "" otherwise.  What set.server pins.
+      $define SKT$INFO.TLS.SPKI        11   ;* hash of the server's public key
       $define SKT$INFO.FAMILY.IPV4     1    ;* Socket address family IPV4
       $define SKT$INFO.FAMILY.IPV6     2    ;* Socket address family IPV6
       * 18 Oct 26 Windows port - from Linux cc03bed (15 Oct 26): - QM4 gaps Q-5, SELECT.SOCKET().  SKT$INFO.EVENTS is SD's own number; the events are openQM's.

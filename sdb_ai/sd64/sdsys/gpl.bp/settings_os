@@ -19,6 +19,11 @@
 *
 * START-HISTORY:
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
+* 17 Oct 26 Windows port - from Linux 6815cdc - S.65 slice 2a: the [api] section also shows the hash of the certificate's public key (sd-elevate tls-key).
+* 01 Oct 26 Windows port - from Linux 6815cdc - Written for S.50 (per-OS helper; signature and the split of the
+*              report agreed with SD Core for Windows by mail, 2026-10-01T1210:
+*              the shared verb prints what SD holds, this prints what the OS
+*              holds, sd.conf included).
 * END-HISTORY
 *
 * START-DESCRIPTION:

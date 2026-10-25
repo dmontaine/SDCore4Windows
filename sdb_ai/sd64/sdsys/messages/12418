@@ -1,1 +1,1 @@
-The pin is the SHA-256 hash of the server's public key, 64 hexadecimal digits, from the other server's administrator.  Nothing connects to the server yet, so the hash cannot be shown here for confirmation.
+The pin is the server's public key hash: 64 hexadecimal digits from its administrator (nothing is dialled), or the word connect to see the hash the server presents and confirm it.  no.query never skips that question.

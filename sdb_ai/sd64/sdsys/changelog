@@ -2,6 +2,41 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+17 Oct 26  SDNET, SECOND SLICE (A): SET.SERVER CAN CONNECT ONCE AND SHOW YOU THE SERVER'S KEY HASH (S.65).
+
+             Why         A server definition pins the hash of the other server's public key, and until now SDSYS had to type those 64
+                        digits from a message, with nothing to say they were right.  set.server now takes the word connect in place of
+                        the pin: set.server name host port account connect {read | write} {accounts a,b,c} {no.query}.  Every other
+                        field is checked first, and nothing is dialled for a definition that would be refused.  SD then opens a TLS
+                        connection to the host and port, waiting at most 5 seconds, reads the hash of the public key the server
+                        presented and closes the connection at once.  It is a handshake only: nothing is sent to the server.  It shows
+                        you the hash on a line of its own, tells you to compare it with the hash the other server's administrator gives
+                        you by a way that does not use this network, and asks "Trust this key (y/n)?", which is no unless you answer y.
+                        On y the definition is written with that hash; on n, or when the input ends, nothing is written.  Typing the 64
+                        digits works as before and connects to nothing.
+             The question  It is ALWAYS asked.  no.query still skips the question about replacing a definition that exists, and
+                        only that one: a script that gives connect and no.query still has to answer whether the key is the right one,
+                        because that answer is the point of connecting.  A replacement with connect asks the replacement question
+                        first, before any connection, so answering no to it dials nothing.
+             The hash    It is the SHA-256 of the server's PUBLIC KEY, not of the certificate, so a certificate renewed over the same key
+                        has the same hash and the pin stays good.  The other server's administrator can read it from that server with
+                        SETTINGS.REPORT, which shows the line "public key sha256: " and the 64 digits in its [api] section beside the
+                        certificate's thumbprint (it reads only the public key, and says "certificate: not yet generated" when the
+                        server has taken no TLS connection yet).  The figure agrees with an independent computation (openssl) on
+                        test certificates of both key types.  The thumbprint changes at a renewal; this hash does not.
+             Failures    If the connection cannot be made (nothing listening, a wrong address, 5 seconds), if what answers does not
+                        complete a TLS handshake, or if no hash can be read, a message of its own says which and nothing is written.
+             Audit       The set.server line in the audit trail ends with pin=typed or pin=confirmed.  The hash itself is still not in it.
+             SOCKET.INFO One new key for programs, SKT$INFO.TLS.SPKI (11): for a socket opened with OPEN.SOCKET and the SKT$TLS flag, the
+                        same 64 lower case hex digits; a null string for any other socket.  Like the existing TLS key 8 it is SD's own.
+             Messages    12417 and 12418 are reworded; 12445 to 12451 are new.
+             Not there   Still no verb, statement or program connects to a server that is DEFINED; the connection above is the one
+                        SDSYS makes, once, for set.server.  No user name or password for the remote account is asked for or stored,
+                        there is no VOC pointer to a remote file, and the NET switch and the accounts list are still not consulted by
+                        anything.  Nothing checks a pin on a later connection, because there is none.
+             Documents   The Administrator guide's SDNet page describes the connect flow, its failure messages and the audit words, and
+                        the Sockets page lists key 11; the TCL syntax card shows {pin | connect}.
+
 17 Oct 26  SDNET, FIRST SLICE: THE NET SWITCH AND THE SERVER DEFINITIONS (S.65).  NOTHING CONNECTS YET.
 
              Why         SDNet, files on another SD server that a program opens and reads as if they were local, is being built in
@@ -34,8 +69,8 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                         name.  They are SDSYS's: they are in SDSYS's VOC and in no other account's, and each also refuses anybody but
                         the administrator.  Defining and deleting are written to the audit trail (set.server name=... and
                         delete.server name=..., without the pin).  Messages 12416 and 12417 to 12444 are new.
-             Not there   The connection; showing you the key hash a server presents and asking you to confirm it, so the pin is typed
-                        in and NOTHING CHECKS IT; the user name and password for the remote account; the VOC pointer to a remote
+             Not there   The connection (set.server can now connect once, to show you the key hash a server presents and ask you to
+                        confirm it: see the entry above); the user name and password for the remote account; the VOC pointer to a remote
                         file; and any check of the NET switch or the accounts list, because nothing yet asks them.  Writing to
                         a remote file is later again.  NETFILES in sd.conf still does nothing.
              Documents   The Administrator guide has a new page, SDNet, and the NET switch in Accounts and Security; the TCL syntax

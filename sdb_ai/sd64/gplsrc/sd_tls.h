@@ -97,6 +97,7 @@ int sd_tls_client_pending(SD_TLS_CLIENT* c);   /* decrypted bytes held */
 int sd_tls_client_write(SD_TLS_CLIENT* c, const void* buf, int len);
 const unsigned char* sd_tls_client_binding(SD_TLS_CLIENT* c);
 int sd_tls_client_peer_sha256(SD_TLS_CLIENT* c, unsigned char* out);
+int sd_tls_client_peer_spki_sha256(SD_TLS_CLIENT* c, unsigned char* out);   /* 17 Oct 26 S.65: the key, not the certificate */
 const char* sd_tls_client_version(SD_TLS_CLIENT* c);
 void sd_tls_client_end(SD_TLS_CLIENT* c);
 
