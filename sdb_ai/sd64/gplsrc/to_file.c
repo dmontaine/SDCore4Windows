@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux 27db277 (20 Oct 26): start_file(): the OS-access refusal (12185) names the account; it was printed with "%1" in it (sysmsg_arg1()).
  * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: start_file() asks about what is above the print file's own name only: a print file
  *               called x.dic or voc in an ordinary directory is a plain file, not a dictionary (edit_os_path_refusal include_leaf FALSE).
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): A mode 3 print unit takes an update lock on its record in $HOLD
@@ -269,7 +270,7 @@ Private void start_file(PRINT_UNIT* pu) {
        created a file outside the account before this.  The spooler's own directory and the aux port name
        jump to open_file below and are not asked.                                                            */
     if (!os_path_ok_for_account(fn)) {
-      k_error(sysmsg(12185), process.username);
+      k_error(sysmsg_arg1(12185, account()));
     }
     /* 17 Oct 26 dm - S.64 (the edit gates): a print file made in a program file, a dictionary or a VOC replaces what is there, which is
        a change to it; asked of the ACCOUNT for the same reason as above.  The spooler's own directory is not one of the three.

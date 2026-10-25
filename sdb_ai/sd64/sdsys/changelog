@@ -2,6 +2,18 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+25 Oct 26  THE REFUSAL "HAS NO OS ACCESS" FOR A PRINT FILE NAMES THE ACCOUNT INSTEAD OF PRINTING "%1" (FROM SD CORE FOR LINUX).
+
+             What        An account without the OS-access setting cannot make a print file outside its own directory: SETPU, SETPTR ... AS
+                        PATHNAME and a "$hold" print name that climbs out with ".." are all refused. The refusal itself was right but its
+                        message read "%1 has no OS access, so a file or directory outside its own account cannot be reached by pathname
+                        (SDSYS can give it: modify.account %1 os-on)", with the two %1 markers left in. It now reads the same with the
+                        account's name in both places, so the sentence can be followed as written.
+             Why it      The second half of the message is the instruction the administrator needs, and with the marker in it the
+             matters     account to give the access to had to be guessed.
+             Does not    It does not change who is refused or who is allowed: only the words. The same message raised by SD BASIC
+                        programs (OSCOPY, SELECT.DIR, SETPTR, the editor) already named the account.
+
 25 Oct 26  MODIFY.ACCOUNT CARRIES OUT SEVERAL ACTIONS IN ONE COMMAND; CREATE.ACCOUNT AUDITS THE GATES IT GRANTS (FROM SD CORE FOR LINUX).
 
              Several     modify.account name sh-on os-on voc-on bp-on does all four.  Every word is read first, and if any is refused nothing is

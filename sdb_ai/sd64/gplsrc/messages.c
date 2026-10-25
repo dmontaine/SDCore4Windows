@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux 27db277 (20 Oct 26): sysmsg_arg1(): a message written for BASIC (%1) can be raised from C (message 12185 printed "%1 has no OS access" literally).
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): sysmsg_number_of(): k_error() learns which message it was given (QM4 Fixes 354, SYS.* exceptions).
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.1 Mar 25 mab correct output of messages with embedded newline
@@ -338,6 +339,55 @@ char* sysmsg(int msg_no) {
    *and give you greif causing the system into run into max open files*/
   close(msg_rec);
 
+  return message;
+}
+
+/* ======================================================================
+   sysmsg_arg1()  -  The message with every "%1" replaced by arg.
+
+   Messages written for BASIC carry %1, %2 ... which the BASIC program fills
+   in; k_error() formats its first argument with vsnprintf(), which leaves
+   "%1" as it is, so such a message raised from C reached the user with the
+   marker in it (12185, found by the Windows port; Linux 27db277 as 11180).
+   The result is a format string k_error() can use as it is: a '%' in arg is
+   doubled.  It stays in sysmsg()'s own buffer, so sysmsg_number_of() still
+   knows the message, and like sysmsg()'s text it is good until the next call. */
+
+char* sysmsg_arg1(int msg_no, const char* arg) {
+  char* text = sysmsg(msg_no);
+  char out[1024];
+  size_t o = 0;
+  size_t n;
+  const char* p;
+  const char* a;
+  char* grown;
+
+  if (text != message) return text; /* one of sysmsg()'s static fallbacks: nothing to fill in */
+  if (arg == NULL) arg = "";
+
+  p = text;
+  while ((*p != '\0') && (o < sizeof(out) - 1)) {
+    if ((p[0] == '%') && (p[1] == '1')) {
+      for (a = arg; (*a != '\0') && (o + 2 < sizeof(out)); a++) {
+        if (*a == '%') out[o++] = '%';
+        out[o++] = *a;
+      }
+      p += 2;
+    } else {
+      out[o++] = *p++;
+    }
+  }
+  out[o] = '\0';
+
+  n = strlen(text);
+  if (o > n) { /* the account name is longer than "%1": the buffer must grow */
+    grown = (char*)k_alloc(82, (int)(o + 1));
+    if (grown == NULL) return text; /* the marker stays, which is the old behaviour */
+    k_free(message);
+    message = grown;
+    message_len = (int)o;
+  }
+  memcpy(message, out, o + 1);
   return message;
 }
 
