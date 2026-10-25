@@ -28,10 +28,8 @@
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the manifest key net (1 only if ACC$NET says yes), beside edit.voc, edit.bp and edit.dict; the NET gate does nothing yet.
 * 01 Oct 26 Windows port - from Linux 9d6f407 - Written for S.50 (per-OS helper; signature agreed with SD Core
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: the manifest key route.files (1 if the user is in the group sdfiles, the files-only SDNet login), beside route.ssh and
-*              route.api.  NOT `files`: the backup writes `files: N` (the file count) into the same section, and restorea reads it as that count.
-* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 1: the manifest key net (1 only if ACC$NET says yes), beside edit.voc, edit.bp and edit.dict; the NET gate does nothing yet.
-* 01 Oct 26 Windows port - from Linux 96d8be8 - Written for S.50 (per-OS helper; signature agreed with SD Core
-*              for Windows by mail, 2026-10-01T1030 and 1115).
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: the manifest key route.files.write (1 if the user is in the group sdfileswrite, which lets the files-only login change files), after route.files.
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: the manifest keys shared.read (1 unless ACC$SHARED.READ says no: a blank field means on) and shared.write (1 only if yes), USER arm only.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -54,7 +52,7 @@
 *    os.execute  the register's ACC$OS.EXEC "yes" -> 1, else 0  } os.users is retired)
 *    acc.name ''  - the system keys: product, host, accounts.root, sd.version.
 *    acc.name set - the account's keys, from its ACCOUNTS record (acc.rec):
-*                   type, os.user, os.group, route.ssh, route.api, route.files, os.sh,
+*                   type, os.user, os.group, route.ssh, route.api, route.files, route.files.write, os.sh,
 *                   os.execute, and for a GROUP account its members.
 *
 * WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
@@ -122,6 +120,7 @@ deffun os_group(action, group, member) calling '!os_group'
    ssh = 0
    api = 0
    files = 0
+   fwrite = 0
    if typ = 'USER' then
       m = is_grp_member(uname, 'sdssh')
       if status() then
@@ -139,10 +138,14 @@ deffun os_group(action, group, member) calling '!os_group'
 *     this release has no such group: that reads as "not a member", not as a failure, so BACKUP.ACCOUNT still works there.
       m = is_grp_member(uname, 'sdfiles')
       if m and status() = 0 then files = 1
+*     25 Oct 26 Windows port - from Linux 3fbfc0d (S.65 write group): and membership of sdfileswrite, only meaningful with sdfiles; same reading.
+      m = is_grp_member(uname, 'sdfileswrite')
+      if m and status() = 0 then fwrite = 1
    end
    info<-1> = 'route.ssh: ' : ssh
    info<-1> = 'route.api: ' : api
    info<-1> = 'route.files: ' : files     ;* NOT `files`: the backup writes `files: N` (the file count) into the same section
+   info<-1> = 'route.files.write: ' : fwrite
 
    if typ = 'GROUP' then
       members = ''

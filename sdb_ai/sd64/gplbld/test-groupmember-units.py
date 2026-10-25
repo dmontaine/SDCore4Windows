@@ -119,17 +119,30 @@ READS_STATUS = {
     ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfiles')"):
         "reused-user route removal for sdfiles: rm.told = status() on the next line; only a lookup that fails for a reason other than "
         "'no such group' stops the verb with 10081",
-    ("modifya", "has.files = is_grp_member(files.user, 'sdfiles')"):
-        "files-on / files-off: files.stat = status() on the next line; an unreadable group changes nothing and says 10081",
     ("modifya", "in.sdusers = is_grp_member(files.user, 'sdusers')"):
         "files-on: files.stat = status() on the next line; could-not-tell refuses",
-    ("modifya", "now.files = is_grp_member(files.user, 'sdfiles')"):
-        "files-on / files-off read-back: files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
+    # 25 Oct 26 - RELEASE_1.1 171 (Linux 3fbfc0d, S.65 write group): the same shapes for sdfileswrite, and set.files takes the group from files.grp.
+    ("acc_os_info", "m = is_grp_member(uname, 'sdfileswrite')"):
+        "backup manifest route.files.write: 'status() = 0' on the next line; a group that is missing reads as not a member",
+    ("apisrvr", "api.write.in = is_grp_member(logname, 'sdfileswrite')"):
+        "the serving session's own files.write: api.write.stat = status() on the next line; any doubt means no write (fail closed for write)",
+    ("apisrvr", "api.files.write = is_grp_member(scram.user, 'sdfileswrite')"):
+        "the front's audit of the write group: api.write.stat = status() on the next line; any doubt reads as no write",
+    ("modifya", "has.files = is_grp_member(files.user, files.grp)"):
+        "files-on / files-off / files-write-on / files-write-off: files.stat = status() on the next line; an unreadable group changes nothing and says 10081",
+    ("modifya", "in.files = is_grp_member(files.user, 'sdfiles')"):
+        "files-write-on: files.stat = status() on the next line; could-not-tell refuses with 10081",
+    ("modifya", "had.write = is_grp_member(files.user, 'sdfileswrite')"):
+        "files-off also leaves sdfileswrite (two sites, same line): checked with status() = 0 on the same statement; a group that cannot be read changes nothing",
+    ("modifya", "now.files = is_grp_member(files.user, files.grp)"):
+        "read-back after files-* : files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
 }
 FAIL_CLOSED = {
     # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).
     ("create_account", "files.now = is_grp_member(acc.uname, 'sdfiles')"):
         "the state line printed after the account is made: display only; a could-not-tell prints 'no' and nothing is granted by it",
+    ("create_account", "files.wnow = is_grp_member(acc.uname, 'sdfileswrite')"):
+        "the same state line for sdfileswrite: display only",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
     # 02 Oct 26 - these two moved with CREATEA's body into create_account

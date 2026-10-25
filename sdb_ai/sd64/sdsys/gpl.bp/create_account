@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 3fbfc0d (18 Oct 26) S.65 write group: CA$FILESWRITE joins the new user to the Windows group sdfileswrite after sdfiles; refused without CA$FILES (12528) and for a group or
+*              other account (10087, 10081 as CA$FILES); the group is looked for before anything is made; the state line 12527 is read off the group.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: the NET gate (SDNet remote files) ACC$NET is written from CA$NET: 'no' for a user account unless named,
 *              reported with 12416 after 12414.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  The name shared is reserved (12521) for every type unless the installer's
@@ -152,6 +154,10 @@ deffun ps_script(script) calling '!ps_script'
    net.want = (settings<CA$NET> = 1)
 * 17 Oct 26 dm - S.65 slice 2c: the files-only login (membership of sdfiles), the same rule: off unless named (FILES-ON), exactly 1 to be a request.
    files.want = (settings<CA$FILES> = 1)
+* 18 Oct 26 dm - S.65 write group: FILES-WRITE-ON, the same rule, and it needs FILES-ON.
+   files.write.want = (settings<CA$FILESWRITE> = 1)
+* 18 Oct 26 dm - S.65 write group: FILES-WRITE-ON, the same rule; it is a request only with FILES-ON (sdfileswrite alone gives nothing).
+   files.write.want = (settings<CA$FILESWRITE> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -205,6 +211,27 @@ deffun ps_script(script) calling '!ps_script'
        if not(files.found) then
          @system.return.code = -ER$FAILED
          err = 10024:@vm:'sdfiles' ;* %1 is not a valid Windows group
+         goto exit.create
+       end
+     end
+
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): FILES-WRITE-ON needs FILES-ON (12528), and the group sdfileswrite is looked for before anything is made, as sdfiles is.
+     if files.write.want then
+       if not(files.want) then
+         @system.return.code = -ER$ARGS
+         err = 12528:@vm:acc.name ;* %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
+         goto exit.create
+       end
+       files.found = is_group('sdfileswrite')
+       files.stat = status()
+       if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:files.stat ;* Unable to change remote access for %1
+         goto exit.create
+       end
+       if not(files.found) then
+         @system.return.code = -ER$FAILED
+         err = 10024:@vm:'sdfileswrite' ;* %1 is not a valid Windows group
          goto exit.create
        end
      end
@@ -568,7 +595,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: and no files-only login to give (10087; the group account is reached with logto).
-     if files.want then
+     if files.want or files.write.want then
        @system.return.code = -ER$ARGS
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
@@ -587,7 +614,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: nor a files-only login (10081 with status 2, as MODIFY.ACCOUNT says it for an account with no Windows user).
-     if files.want then
+     if files.want or files.write.want then
        @system.return.code = -ER$ARGS
        err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
        goto exit.create
@@ -1004,6 +1031,9 @@ PW.TRY.AGAIN:
 *     17 Oct 26, S.65 slice 2c: FILES is membership of sdfiles, so the line is read off the group, not off the request.
       files.now = is_grp_member(acc.uname, 'sdfiles')
       crt sysmsg(12487, acc.name, if files.now then 'yes' else 'no')  ;* Account %1 has FILES %2
+*     18 Oct 26, S.65 write group: the same, for sdfileswrite.
+      files.wnow = is_grp_member(acc.uname, 'sdfileswrite')
+      crt sysmsg(12527, acc.name, if files.wnow then 'yes' else 'no')  ;* Account %1 has FILES-WRITE %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
 
@@ -1569,6 +1599,15 @@ set.access:
 *   success: the state line (12487) is printed with the others after the register record is written.
    if files.want then
       stat = os_group("ADDMEM", "sdfiles", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): and the write group, after sdfiles, the same way (the group's existence was checked above).  The state line
+*   (12527) is printed with the others.
+   if files.write.want then
+      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)
       if stat # 0 then
          @system.return.code = -ER$FAILED
          err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

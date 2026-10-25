@@ -1,4 +1,4 @@
-* APIFILESOK(action, entered)
+* APIFILESOK(action, entered, writeok)
 * May a files-only API session make this request?
 * Copyright (c) String Database
 *
@@ -18,18 +18,27 @@
 *
 *
 * START-HISTORY:
+* 18 Oct 26 dm S.65 write group: a third argument, writeok (the login is also in the Linux group sdfileswrite).  The requests that change state or
+*           take a lock (7 to 10, 16 to 19, 30 to 33) are in the table as before but answer 0 unless writeok is true.
 * 17 Oct 26 dm S.65 slice 2c: written.  The one place that decides what a files-only session (a user in sdusers and sdfiles but not in
 *           sdapi; the SDNet login) may ask the API server for.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    ok = !apifilesok(action, entered)
+*    ok = !apifilesok(action, entered, writeok)
 *
 *    action  - the request number, the Srvr codes of sdclient and the dispatch table of apisrvr.
 *    entered - true when the session has already entered an account (apisrvr's master.login.done, set at the first
 *              successful vb.account).  Request 3 (set account) is allowed only while it is false: the first entry is the
 *              one after login; any later one would be an SDLogto, which a files-only session may not make.
+*    writeok - true when the login is also in the Linux group sdfileswrite (apisrvr's files.write, read at login).  Off
+*              unless the administrator of this server gave it (core direction 1).  The requests that change state or
+*              take a lock are refused to a login without it: 7 to 10 (the locking reads), 16 to 19 (write, writeu, delete,
+*              deleteu), 30 (lock record), 31 (clearfile), 32 (filelock) and 33 (fileunlock).  Reads, select, readv,
+*              fileinfo, the indices, recordlocked and release (15) need sdfiles alone.  FAIL CLOSED: only exactly 1 (@true) is
+*              "write"; empty, 0, 2 or text is "no write".  (Request 41, readv, is in the table for plain reads; its locking forms, flags 1, 2,
+*              5 and 6, cannot be told from here because only the number is passed: apisrvr's vb.readv refuses them itself.)
 *
 *    Returns 1 when the request is allowed and 0 when it is not.  PURE: it reads nothing and writes nothing, so a
 *    sandbox can ask it about every number.  FAIL CLOSED: a number not in the table below - empty, not a number, one
@@ -44,7 +53,7 @@
 * START-CODE
 
 $internal
-function apifilesok(action, entered)
+function apifilesok(action, entered, writeok)
 $catalog !apifilesok
 
 * THE ALLOW TABLE.  One request number per line, the request in the comment.  A comma on each side so that the test
@@ -92,6 +101,22 @@ files.ok := '45,'   ;* selectright
 files.ok := '46,'   ;* mark mapping
 files.ok := '49,'   ;* revision
 
+* THE CHANGE SET (18 Oct 26, S.65 write group): the numbers above that need writeok as well.  A subset of the table, by construction (the
+* test above comes first).  netfile never sends 7 to 10 (a plain read is request 6, a lock is request 30), so refusing them breaks no read.
+files.chg = ','
+files.chg := '7,'    ;* readl
+files.chg := '8,'    ;* readlw
+files.chg := '9,'    ;* readu
+files.chg := '10,'   ;* readuw
+files.chg := '16,'   ;* write
+files.chg := '17,'   ;* writeu
+files.chg := '18,'   ;* delete
+files.chg := '19,'   ;* deleteu
+files.chg := '30,'   ;* lock record
+files.chg := '31,'   ;* clearfile
+files.chg := '32,'   ;* filelock
+files.chg := '33,'   ;* fileunlock
+
 if action = '' then return 0
 if not(num(action)) then return 0
 
@@ -101,9 +126,17 @@ if action = 3 then
    return 1
 end
 
-if index(files.ok, ',' : action : ',', 1) then return 1
+if not(index(files.ok, ',' : action : ',', 1)) then return 0
 
-return 0
+* 18 Oct 26 dm - S.65 write group.  Allowed by the table, but a request that changes state or takes a lock needs the write group as well.
+*   The commas on each side again, so that 7 cannot match 17.  Same spelling as the table, so a number written another way ('16.0') was
+*   refused above and never gets here.
+*   FAIL CLOSED: only a writeok of exactly 1 (@true) lifts the change set; empty, 0, 2 and text all leave it refused.
+if writeok # 1 then
+   if index(files.chg, ',' : action : ',', 1) then return 0
+end
+
+return 1
 
 end
 

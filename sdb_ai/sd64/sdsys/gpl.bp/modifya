@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 3fbfc0d (18 Oct 26) S.65 write group: FILES-WRITE-ON / FILES-WRITE-OFF put the account's person in or out of the Windows group sdfileswrite, which lets a files-only
+*           (sdfiles) login CHANGE files on this server; set.files takes the group from files.grp.  FILES-WRITE-ON is refused for a person who is not in sdfiles (12528)
+*           and when the group does not exist (10024); FILES-OFF takes the person out of sdfileswrite as well, so a later files-on does not hand the write back.  Reported with 12527.
 * 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26) S.65 slice 2c: FILES-ON / FILES-OFF put the account's person in or out of the Windows group sdfiles (the files-only
 *           SDNet login route) through os_group, as the api word does for sdapi (set.files); refused for a group or other account; reported with 12487.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: NET-ON / NET-OFF, the NET gate for SDNet remote files (register field 15), through os.set;
@@ -439,9 +442,20 @@ do.action:
 *   not the register, so it needs a user account; sdapi, when the person is also in it, still gives the whole API.  Takes effect at the person's
 *   next login.
          case upcase(action) = 'FILES-ON'
+            files.grp = 'sdfiles'
             files.want = @true
             gosub set.files
          case upcase(action) = 'FILES-OFF'
+            files.grp = 'sdfiles'
+            files.want = @false
+            gosub set.files
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): the same routine, the group sdfileswrite.
+         case upcase(action) = 'FILES-WRITE-ON'
+            files.grp = 'sdfileswrite'
+            files.want = @true
+            gosub set.files
+         case upcase(action) = 'FILES-WRITE-OFF'
+            files.grp = 'sdfileswrite'
             files.want = @false
             gosub set.files
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
@@ -603,7 +617,7 @@ add.delete.arm:
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, net-on, net-off,'
-         crt '   files-on, files-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
+         crt '   files-on, files-off, files-write-on, files-write-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
@@ -627,7 +641,7 @@ show.usage:
    crt '                  modify.account <account> sd-on | sd-off'
    crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
    crt '                  modify.account <account> net-on | net-off'
-   crt '                  modify.account <account> files-on | files-off'
+   crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> suspended | unsuspended'
    crt '  Any of the actions except add and delete may be given together in one command, for example'
@@ -649,8 +663,8 @@ show.usage:
 *   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,SR,SR,SW,SW,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,FW,FW,SR,SR,SW,SW,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -836,7 +850,9 @@ route.set:
    return
 
 * ======================================================================
-* SET.FILES  -  MODIFY.ACCOUNT <account> FILES-ON | FILES-OFF
+* SET.FILES  -  MODIFY.ACCOUNT <account> FILES-ON | FILES-OFF | FILES-WRITE-ON | FILES-WRITE-OFF
+*
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d).  files.grp is set by the caller with files.want: 'sdfiles' for the first pair, 'sdfileswrite' for the second.
 *
 * 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c.  files.want is set by the caller.  Membership of the Windows group
 * sdfiles IS the files-only route (as sdapi is the API route), so nothing is written to the register.  Same call as route.apply: os_group.
@@ -871,7 +887,7 @@ set.files:
       return
    end
 
-   has.files = is_grp_member(files.user, 'sdfiles')
+   has.files = is_grp_member(files.user, files.grp)
    files.stat = status()
    if files.stat # 0 and not(files.want) then files.stat = 0   ;* no such group: nothing to take the person out of
    if files.stat = 0 and files.want then
@@ -879,15 +895,32 @@ set.files:
       files.stat = status()
       if files.stat = 0 and not(in.sdusers) then files.stat = 2
    end
-   if files.stat # 0 and files.want and not(is_group('sdfiles')) and status() = 0 then
+   if files.stat # 0 and files.want and not(is_group(files.grp)) and status() = 0 then
       @system.return.code = -ER$FAILED
-      crt sysmsg(10024, 'sdfiles')  ;* %1 is not a valid Windows group
+      crt sysmsg(10024, files.grp)  ;* %1 is not a valid Windows group
       return
    end
    if files.stat # 0 then
       @system.return.code = -ER$FAILED
       crt sysmsg(10081, acc.name, files.stat)
       return
+   end
+
+* 18 Oct 26 dm - S.65 write group: sdfileswrite on its own gives nothing (the login route needs sdfiles), so it is not handed out to a person without
+*   it.  Asked before the "already had it" answer so that the refusal is the same whatever the group holds now.
+   if files.grp = 'sdfileswrite' and files.want then
+      in.files = is_grp_member(files.user, 'sdfiles')
+      files.stat = status()
+      if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10081, acc.name, files.stat)
+         return
+      end
+      if not(in.files) then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(12528, acc.name)  ;* %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
+         return
+      end
    end
 
    if has.files = files.want then
@@ -897,7 +930,7 @@ set.files:
    end
 
    if files.want then
-      files.found = is_group('sdfiles')
+      files.found = is_group(files.grp)
       files.stat = status()
       if files.stat # 0 then
          @system.return.code = -ER$FAILED
@@ -906,15 +939,28 @@ set.files:
       end
       if not(files.found) then
          @system.return.code = -ER$FAILED
-         crt sysmsg(10024, 'sdfiles')  ;* %1 is not a valid Windows group
+         crt sysmsg(10024, files.grp)  ;* %1 is not a valid Windows group
          return
       end
-      files.stat = os_group("ADDMEM", 'sdfiles', files.user)
+      files.stat = os_group("ADDMEM", files.grp, files.user)
    end else
-      files.stat = os_group("DELMEM", 'sdfiles', files.user)
+      files.stat = os_group("DELMEM", files.grp, files.user)
+   end
+
+* 18 Oct 26 dm - S.65 write group: FILES-OFF takes the person out of sdfileswrite too, so that a later files-on does not hand the write back without the
+*   administrator saying so.  Read three-valued; a person who is not in it, or a machine with no such group (status 1 here), changes nothing.
+   if files.stat = 0 and files.grp = 'sdfiles' and not(files.want) then
+      had.write = is_grp_member(files.user, 'sdfileswrite')
+      if had.write and status() = 0 then
+         files.stat = os_group("DELMEM", 'sdfileswrite', files.user)
+         if files.stat = 0 then
+            had.write = is_grp_member(files.user, 'sdfileswrite')
+            if had.write and status() = 0 then files.stat = 2
+         end
+      end
    end
    if files.stat = 0 then
-      now.files = is_grp_member(files.user, 'sdfiles')
+      now.files = is_grp_member(files.user, files.grp)
       files.stat = status()
       if files.stat = 0 and now.files # files.want then files.stat = 2
    end
@@ -926,7 +972,11 @@ set.files:
 
    @system.return.code = 0
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
-   crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES %2
+   if files.grp = 'sdfileswrite' then
+      crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES-WRITE %2
+   end else
+      crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES %2
+   end
    return
 
 * ======================================================================

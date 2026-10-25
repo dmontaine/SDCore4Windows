@@ -218,6 +218,13 @@
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.64: VOC-ON, BP-ON and DICT-ON (the edit gates) beside SH-ON and OS-ON; CA$VOC.EDIT, CA$BP.EDIT and CA$DICT.EDIT in createacc.h.
 * 06 Oct 26 Windows port - from Linux 96d8be8 - PAL-15 (parity audit J-3): an account created is audited.
 * 01 Oct 26 Windows port - from Linux 96d8be8 - S.50: the verb is now the sentence parser only.  Everything from
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: FILES-WRITE-ON (joins sdfileswrite as well, with FILES-ON); CA$FILESWRITE in createacc.h.
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: SHARED-READ-OFF and SHARED-WRITE-ON (the shared-account gates); CA$SHARED.READ.OFF and CA$SHARED.WRITE in createacc.h.
+* 17 Oct 26 Windows port - from Linux 3fbfc0d - S.65 slice 2c: FILES-ON (joins the Linux group sdfiles, the files-only SDNet login route) beside the other switches; CA$FILES in createacc.h.
+* 17 Oct 26 Windows port - from Linux 3fbfc0d - S.65 slice 1: NET-ON (the SDNet NET gate) beside the other switches; CA$NET in createacc.h.  It does nothing yet.
+* 17 Oct 26 Windows port - from Linux 3fbfc0d - S.64: VOC-ON, BP-ON and DICT-ON (the edit gates) beside SH-ON and OS-ON; CA$VOC.EDIT, CA$BP.EDIT and CA$DICT.EDIT in createacc.h.
+* 06 Oct 26 Windows port - from Linux 3fbfc0d - PAL-15 (parity audit J-3): an account created is audited.
+* 01 Oct 26 Windows port - from Linux 3fbfc0d - S.50: the verb is now the sentence parser only.  Everything from
 *               the register check on moved to !create_account (gpl.bp
 *               create_account), which RESTORE.ACCOUNT calls with settings
 *               (createacc.h, agreed with SD Core for Windows).  The words
@@ -646,11 +653,11 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on}'
     crt '                  {shared-read-off} {shared-write-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
     crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
-    crt '                  (net-on), and no files-only login (files-on); it can open and read the files'
+    crt '                  (net-on), and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files'
     crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
     crt '                  shared-write-on is typed;'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
@@ -698,6 +705,7 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$DICT.EDIT> = 1 then gates<-1> = 'dict-on'
    if settings<CA$NET> = 1 then gates<-1> = 'net-on'
    if settings<CA$FILES> = 1 then gates<-1> = 'files-on'
+   if settings<CA$FILESWRITE> = 1 then gates<-1> = 'files-write-on'
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
@@ -881,6 +889,11 @@ more.args:
 *   route), off unless typed.  A GROUP or OTHER account given it is refused by !create_account.
          case upcase(token) = 'FILES-ON'
             settings<CA$FILES> = 1
+
+* 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): FILES-WRITE-ON, the person also joins sdfileswrite, so a files-only login may change files on this server.  Off
+*   unless typed.  !create_account refuses it without FILES-ON (12528), and for a GROUP or OTHER account as it refuses FILES-ON.
+         case upcase(token) = 'FILES-WRITE-ON'
+            settings<CA$FILESWRITE> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

@@ -10,8 +10,10 @@
 *              new password - owner's ruling that day); comment only.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): CA$SHARED.READ.OFF (37) and CA$SHARED.WRITE (38), the shared-account gates.
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: CA$NET (35), Linux only, the NET gate (as CA$VOC.EDIT etc. of S.64).
-* 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 1: CA$NET (35), Linux only, the NET gate (as CA$VOC.EDIT etc. of S.64).
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: CA$FILES (36), Linux only, membership of the group sdfiles.
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: CA$SHARED.READ.OFF (37) and CA$SHARED.WRITE (38), Linux only, the shared-account gates.  Windows ignores
+*              the Linux block (31-40) and defines neither; the mail to the Windows agent is deferred (sequential order of 11 Oct).
+* 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: CA$FILESWRITE (39), Linux only, membership of the group sdfileswrite (needs CA$FILES).  Same block, same deferral.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -64,5 +66,8 @@ $define CA$SHARED.WRITE    38    ;* 1 = the new account starts with ACC$SHARED.W
 * The gate takes effect for the remote-file slices that follow and does nothing yet.
 $define CA$NET            35     ;* ACC$NET 'yes'
 $define CA$FILES          36     ;* 1 = start in the group sdfiles, the SDNet files-only API route (Linux only; S.65 slice 2c)
+
+* Linux only (18 Oct 26, S.65 write group): 1 = also join the Linux group sdfileswrite, so a files-only login can change files on this server.  Needs CA$FILES.
+$define CA$FILESWRITE      39    ;* 1 = start in the group sdfileswrite (with CA$FILES; S.65 write group)
 
 * END-CODE

@@ -1,0 +1,1 @@
+Account %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
