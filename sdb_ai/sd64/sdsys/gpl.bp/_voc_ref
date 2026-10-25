@@ -386,13 +386,10 @@ parse.as.q.pointer:
 *   OPENSEQ, DELETESEQ, CALL "file" and every other user of this program finds no such path and refuses; only open_file() (OPEN by name)
 *   looks for it and hands it to net_open(), which asks the NET gate and the $netfile handler.  Nothing is asked here: the gate belongs to
 *   the session that opens the file, not to the account whose VOC holds the pointer (an N entry reached through a Q-pointer gives its
-*   user nothing that user was not granted).  A dictionary of a remote file is refused (ER$VNF), as is a name of the wrong shape (ER$NAM):
-*   the same shapes as !netdefs and $netfile, folded to lower case, so no name can exist in two casings.
+*   user nothing that user was not granted).  A name of the wrong shape is refused (ER$NAM): the same shapes as !netdefs and $netfile, folded to
+*   lower case, so no name can exist in two casings.  The dictionary of a remote file (fno 3, slice 3d) is the same pointer with 'dict ' in
+*   front of the file name, which is how the server opens a dictionary and the one form of a name with a space that $netfile accepts.
          case type = "N"
-            if fno = 3 then
-               set.status ER$VNF
-               return
-            end
             n.srv = downcase(trim(voc.rec<2>))
             n.file = downcase(trim(voc.rec<3>))
             gosub check.n.pointer
@@ -400,6 +397,7 @@ parse.as.q.pointer:
                set.status ER$NAM
                return
             end
+            if fno = 3 then n.file = 'dict ':n.file     ;* the dictionary: the server opens it as "dict <name>" (S.65 slice 3d)
             pathname = char(1):'N':char(1):n.srv:char(1):n.file
             set.status 0
             return

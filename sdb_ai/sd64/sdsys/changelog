@@ -2,6 +2,18 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+17 Oct 26  SDNET, FOURTH SLICE (D): LIST, COUNT, SORT AND SELECT WORK ON A FILE ON ANOTHER SD SERVER (S.65).
+
+             What        SELECT, SELECTV and SSELECT of the remote file give every record id the server holds as an ordinary select
+                        list.  OPEN 'DICT' of the VOC pointer opens the file's dictionary from the same server.  With those two, the
+                        query verbs LIST, COUNT, SORT, SELECT, LIST.ITEM and LIST DICT run on the VOC name, WITH clauses and BY included.
+                        FILEINFO(f, FL$TYPE) of a remote file is the new FL$TYPE.NET (7), and INDICES(f) is empty.
+             Cost        Each record a query needs is one request to the other server, and the whole list of ids comes in one reply.  A
+                        query that reads every record of a large remote file is slow because of that; an id given on the command line
+                        is read without a select.
+             Not yet     Writes, locks, transactions and the server's indices are still refused; LOGTO does not yet drop the connections.
+                        Only a test server has been used so far.
+
 17 Oct 26  SDNET, THIRD SLICE (C): A FILE ON ANOTHER SD SERVER CAN BE OPENED AND READ (S.65).
 
              What        A VOC entry whose first field is N, with the server's name in field 2 and the file's name on that server in

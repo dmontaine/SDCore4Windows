@@ -219,6 +219,19 @@ void op_fileinfo() {
           n = fvar->file_id;
           goto set_integer;
 
+        case FL_TYPE: /* 3  A file on another server: its own type, so that a query asking "is it a directory file?" gets a plain no */
+          n = FL_TYPE_NET;
+          goto set_integer;
+
+        case FL_COLLECTION: /* 1035  The query processor asks: a remote file is not read as a data collection (slice 3d) */
+          n = 0;
+          goto set_integer;
+
+        case FL_FLAGS: /* 10001  The query processor asks for the NOCASE bit: every hashed file is NOCASE since PAL-1 (slice 3d).  Restricted
+                          to $internal programs, as for a local file */
+          n = (process.program.flags & HDR_INTERNAL) ? DHF_NOCASE : 0;
+          goto set_integer;
+
         case FL_TXN_UPDATE:  /* 1038 */
         case FL_INDEX_SCAN:  /* 1030 */
         case FL_SETRDONLY:   /* 10005  It is read only already */

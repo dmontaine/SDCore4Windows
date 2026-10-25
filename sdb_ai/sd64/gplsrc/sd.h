@@ -327,6 +327,7 @@ void net_close(FILE_VAR * fvar);
 int net_read(FILE_VAR * fvar, char * id, int16_t id_len, STRING_CHUNK ** rec);
 int net_readv(FILE_VAR * fvar, char * id, int16_t id_len, int32_t field, STRING_CHUNK ** out);
 STRING_CHUNK * net_fileinfo(FILE_VAR * fvar, int key);
+int net_select(FILE_VAR * fvar, STRING_CHUNK ** ids, int32_t * count);
 int net_refuse(FILE_VAR * fvar, const char * what);
 void net_close_all(void);
 const char * net_message(void);

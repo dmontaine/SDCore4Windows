@@ -30,7 +30,8 @@
  *  net_read           READ, MATREAD
  *  net_readv          READV (and the record-exists test, field 0)
  *  net_fileinfo       FILEINFO() keys the file variable does not answer itself
- *  net_refuse         Any other statement given the file variable: message 12506
+ *  net_select         SELECT, SELECTV: every record id of the remote file in one string (slice 3d)
+ *  net_refuse        Any other statement given the file variable: message 12506
  *  net_close_all      LOGTO: every connection and every handle of the process
  *  net_message        The text of the last error
  *
@@ -85,6 +86,7 @@
 #define NF_CLOSE 2
 #define NF_READ 3
 #define NF_READV 4
+#define NF_SELECT 6
 #define NF_FILEINFO 7
 #define NF_CLOSEALL 8
 
@@ -105,6 +107,7 @@
 #define NET_ARG_MAX 120     /* Longest message argument kept (the handler cuts them at 100) */
 #define NET_RC_BUF 1024     /* Room for rc: six fields, three of them message arguments */
 #define NET_FILE_MAX 63     /* Longest remote file name (the shape _voc_ref, set.server and the handler agree on) */
+#define NET_FILE_NAME_MAX (NET_FILE_MAX + 5) /* The name in the pointer's path: the file name, or "dict " and the file name (slice 3d) */
 
 typedef struct {
   int result;                      /* NF_RC_x */
@@ -417,7 +420,7 @@ Private STRING_CHUNK* net_take_string(DESCRIPTOR* d) {
 
 Private int net_open_work(FILE_VAR* fvar, const char* encoded_path) {
   char server[NET_SERVER_LEN + 1];
-  char file[NET_FILE_MAX + 1];
+  char file[NET_FILE_NAME_MAX + 1];
   char safe[NET_SERVER_LEN + 1];
   char audit[96];
   const char* p;
@@ -455,7 +458,7 @@ Private int net_open_work(FILE_VAR* fvar, const char* encoded_path) {
   server[n] = '\0';
   p = q + 1;
   n = strlen(p);
-  if ((n < 1) || (n > NET_FILE_MAX) || (strchr(p, 1) != NULL)) {
+  if ((n < 1) || (n > NET_FILE_NAME_MAX) || (strchr(p, 1) != NULL)) {
     net_set_message(MSG_BAD_POINTER, "the file name is empty, too long or has a second separator", "", "");
     return -ER_NAM;
   }
@@ -653,6 +656,44 @@ STRING_CHUNK* net_fileinfo(FILE_VAR* fvar, int key) {
   s = net_take_string(&out);
   k_release(&out);
   return s;
+}
+
+/* ======================================================================
+   net_select()  -  SELECT / SELECTV of a remote file: every record id the server holds, in *ids (a string of ids with field marks between,
+   NULL for an empty file) and how many in *count.  0 on success, a positive status for the ELSE branch, a negative one for an error, raised
+   here unless the statement has ON ERROR (process.op_flags & P_ON_ERROR at the call, as for net_read()).  The whole list comes in one
+   piece, the way the server's own SELECT and READLIST give it; *ids and *count are set only on success.                                    */
+
+int net_select(FILE_VAR* fvar, STRING_CHUNK** ids, int32_t* count) {
+  u_int16_t entry = process.op_flags;
+  DESCRIPTOR out;
+  STRING_CHUNK* s;
+  STRING_CHUNK* c;
+  int status;
+  int32_t n = 0;
+  int16_t i;
+
+  status = net_op(fvar, NF_SELECT, "", 0, "", 0, ER_FNF, &out);
+  process.op_flags = entry;
+  if (status < 0)
+    return net_raise(status, entry);
+  if (status > 0)
+    return status;
+
+  s = net_take_string(&out);
+  k_release(&out);
+  if (s != NULL) {
+    n = 1;
+    for (c = s; c != NULL; c = c->next) {
+      for (i = 0; i < c->bytes; i++) {
+        if (c->data[i] == FIELD_MARK)
+          n++;
+      }
+    }
+  }
+  *ids = s;
+  *count = n;
+  return 0;
 }
 
 /* ======================================================================

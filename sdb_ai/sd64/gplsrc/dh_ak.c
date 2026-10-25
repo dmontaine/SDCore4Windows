@@ -33,6 +33,9 @@
  *           PRE_RELEASE_FIXES 100, UPSTREAM_FIXES 30.
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: AKDELETE, AKREAD, AKWRITE, CLEAR.AK, AKENABLE, AKMAP, INDICES (both), SELECTINDEX (both), SELECTRIGHT/LEFT and SETRIGHT/LEFT refuse a NET_FILE (net_refuse) before touching access.dh
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - create_ak() and delete_ak() write DH_HEADER_SHARED_SIZE bytes of the primary header, not the whole of it, so that
+ * 17 Oct 26 Windows port - from Linux 0a308d2 - S.65 slice 3d: INDICES (both forms) of a NET_FILE is the null string, no longer a refusal: the query processor asks it of every file.
+ * 17 Oct 26 Windows port - from Linux 0a308d2 - S.65 slice 3c: AKDELETE, AKREAD, AKWRITE, CLEAR.AK, AKENABLE, AKMAP, INDICES (both), SELECTINDEX (both), SELECTRIGHT/LEFT and SETRIGHT/LEFT refuse a NET_FILE (net_refuse) before touching access.dh
+ * 15 Oct 26 Windows port - from Linux 0a308d2 - create_ak() and delete_ak() write DH_HEADER_SHARED_SIZE bytes of the primary header, not the whole of it, so that
  *               they cannot put an old sequential id counter (CREATING.SEQKEY) over a newer one.
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
@@ -823,8 +826,8 @@ void op_indices1() {
   descr = e_stack - 1;
   k_get_file(descr);
   fvar = descr->data.fvar;
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: before the file variable is dismissed */
-    net_refuse(fvar, "INDICES");
+  /* 17 Oct 26 S.65 slice 3d: a NET_FILE has no index here (what the server holds is its own business), so INDICES(f) is the null string
+     through the default arm below, as for a directory file; slice 3c refused it, which stopped every query on a remote file. */
   k_dismiss();
 
   /* Extract AK data */
@@ -886,8 +889,7 @@ void op_indices2() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
-    net_refuse(fvar, "INDICES");
+  /* 17 Oct 26 S.65 slice 3d: a NET_FILE has no index here: the null string through the arm below (see op_indices1) */
 
   if (fvar->type == DYNAMIC_FILE) {
     dh_file = fvar->access.dh.dh_file;
