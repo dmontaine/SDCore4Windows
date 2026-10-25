@@ -19,6 +19,11 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux fccf976 (18 Oct 26) and 4f38ad4 (20 Oct 26): API request 29 (vb.open.sdnet) no longer opens any account's file for any login once NETFILES bit 2
+*           is set.  sdnet.account.check asks, before the process is marked as an SDNet user: a register record for the account named (a path names none), the rule request 3 asks
+*           (account.entry.check: this port's own tests moved out of vb.account unchanged in what they do - suspended, no group, SDSYS from this computer only, membership of the
+*           Windows group), and the account's NET gate (SDSYS in its own account excepted); the account's directory is taken from the record; and a VOC pointer that leads out of
+*           the account is refused (status 3035, audit reason=os gate off) unless the account has os-on.  Refusals are audited "api refused request=29 reason=...".  Not run.
 * 25 Oct 26 Windows port - from Linux 7fd83ad (21 Oct 26) S.73 item 3, D1 (the index QUERY requests of a remote file): vb.selectright had no RETURN and ran on into vb.mark.mapping (mark mapping
 *           switched on, STATUS() 0 past the last key); found by measuring request 45 on a real server.  vb.selectleft and vb.selectright now ask check.list (a list number outside 0 to 10 was a
 *           runtime error whose reply named a line of $apisrvr).
@@ -757,6 +762,128 @@ response = error.msg
 return
 
 * ======================================================================
+* account.entry.check  -  may this user enter this account?  ONE PLACE FOR THE RULE.
+* In:  ent.name       the account name, lower case, as asked for
+*      ent.rec        its register record
+*      ent.suspended  true if the record says SUSPENDED
+* Out: ent.refused    true if the user may not enter it: the refusal is on the audit trail and server.error, error.msg and
+*                     abort.message are set (the text is 10003 for every reason, so the caller cannot tell "no such account" from
+*                     "not a member" from "suspended")
+*
+* 18 Oct 26 dm - REFACTOR, BEHAVIOUR PRESERVED.  These two tests were written out in vb.account (SrvrAccount, request 3) and nowhere
+*   else, so request 29 (open an 'account;file' file) did not ask them at all and opened the file of an account the caller could not
+*   LOGTO.  Both requests call this now.  The text of the audit lines and of the refusal is as it was.
+*
+* 25 Oct 26 Windows port - from Linux fccf976.  THE BODY IS THIS PORT'S, MOVED OUT OF vb.account UNCHANGED IN WHAT IT DOES: a suspended account is
+*   refused (branch=2); an account with no ACC$GROUP is refused (branch=3); SDSYS is entered from this computer and from nowhere else (the transport
+*   is the gate: local.session, the process owner SDSYS and an elevated session); any other account needs membership of the Windows group its
+*   ACC$GROUP names, with "could not tell" distinguished from "no" and both refused (branch=4).  The long notes that explain each test stay at the
+*   call in vb.account, where they were written.  ent.name may be in either case (request 3 passes upper case, request 29 lower), so the SDSYS test
+*   upcases it; the audit lines carry it as given.  The caller is kernel(K$USERNAME, 0), the identity the audit trail uses.
+
+account.entry.check:
+ent.refused = @false
+
+if ent.suspended then
+   void kernel(K$AUDIT, 'account refused branch=2 suspended account=' : ent.name)
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   abort.message = error.msg
+   ent.refused = @true
+   return
+end
+
+ent.group = ent.rec<ACC$GROUP>
+if ent.group = '' then
+   void kernel(K$AUDIT, 'account refused branch=3 no.group.in.register account=' : ent.name)
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   abort.message = error.msg
+   ent.refused = @true
+   return
+end
+
+if upcase(ent.name) = 'SDSYS' then
+   ent.who = upcase(kernel(K$USERNAME, 0))
+   if index(ent.who, '\', 1) > 0 then ent.who = field(ent.who, '\', dcount(ent.who, '\'))
+   ent.member = local.session and (ent.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
+   ent.told = 0
+   if not(ent.member) then
+      void kernel(K$AUDIT, 'account refused branch=4 sdsys.not.local.elevated user=' : ent.who : ' local=' : local.session : ' account=' : ent.name)
+   end
+end else
+   ent.member = is_grp_member(kernel(K$USERNAME, 0), ent.group)
+   ent.told = status()
+end
+
+if ent.told # 0 then
+   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   abort.message = error.msg
+   ent.refused = @true
+   return
+end
+
+if not(ent.member) then
+   void kernel(K$AUDIT, 'account refused branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   server.error = SV$ERROR
+   error.msg = sysmsg(10003) ;* User not allowed in requested account
+   abort.message = error.msg
+   ent.refused = @true
+end
+return
+
+
+* ======================================================================
+* sdnet.account.check  -  request 29 (open an 'account;file' file): may THIS caller use THIS account's file?
+* In:  net.acct       the account named in the request, as typed
+* Out: net.refused    true if not allowed: server.error / status say so (set here)
+*      net.acc.path   the account's directory, from its register record, when allowed
+*
+* 18 Oct 26 dm - The request used to ask only bit 2 of NETFILES.  With the bit set, ANY API login could open the VOC-named file of ANY
+*   account (sandbox-req29.py reads it back from the disk: an account the caller is not a member of, a suspended one, one named by a
+*   path, one whose NET gate is off, and under SDCLIENT=1).  The caller must now be allowed to enter the account by the rule request 3
+*   applies (account.entry.check), the account must have a register record (a path names none, so nothing says who may enter it),
+*   and its NET gate must be on - the administrator's own account excepted, as at SrvrAccount.
+
+sdnet.account.check:
+net.refused = @true
+net.acc.path = ''
+net.acct = downcase(net.acct)
+net.rec = ''
+net.found = @false
+if net.acct # '' and index(net.acct, @ds, 1) = 0 then
+   openpath @sdsys:@ds:'accounts' to net.f then
+      read net.rec from net.f, net.acct then net.found = @true
+      close net.f
+   end
+end
+if not(net.found) then
+   void kernel(K$AUDIT, 'api refused request=29 reason=no register record user=' : @logname : ' account=' : net.acct)
+   set.status ER$XREMOTE
+   server.error = SV$ELSE
+   return
+end
+
+ent.name = net.acct
+ent.rec = net.rec
+ent.suspended = (upcase(trim(net.rec<ACC$SUSPENDED>)) = 'SUSPENDED')
+gosub account.entry.check
+if ent.refused then return
+
+if not(upcase(trim(net.rec<ACC$NET>)) = 'YES' or (downcase(@logname) = 'sdsys' and net.acct = 'sdsys')) then
+   void kernel(K$AUDIT, 'api refused request=29 reason=net gate off user=' : @logname : ' account=' : net.acct)
+   set.status ER$XREMOTE
+   server.error = SV$ELSE
+   return
+end
+
+net.acc.path = parse.pathname.tokens(net.rec<ACC$PATH>)
+net.refused = @false
+return
+
+* ======================================================================
 * SrvrAccount  -  Logto named account
 * In:  account name
 
@@ -862,12 +989,7 @@ end
 *
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
-if upcase(trim(acc.suspended, ' ', 'B')) = 'SUSPENDED' then
-   void kernel(K$AUDIT, 'account refused branch=2 suspended account=' : new.account)
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   goto revert.to.old.account
-end
+* [25 Oct 26: THE TEST ITSELF IS NOW IN account.entry.check, above, and is asked below; the notes stay here.]
 
 * rev 0.9.0 * is user member of account?
 * 13 Aug 26 Windows port - removed.  ACC$GROUP named a linux group.  Nothing
@@ -949,12 +1071,7 @@ end
 * 21 Aug 26 Windows port - the declaration that stood here moved to the top of
 *   the program; vb.scram.final needs it too now.  See the note beside it.
 
-if acc.group = '' then
-   void kernel(K$AUDIT, 'account refused branch=3 no.group.in.register account=' : new.account)
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   goto revert.to.old.account
-end
+* [25 Oct 26: THE EMPTY-GROUP REFUSAL (branch=3) IS IN account.entry.check too.]
 
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  ***"COULD NOT TELL" IS NOT "NO",
 *   AND READING IT AS ONE COST SEVEN RUNS.***  is_grp_member answers @false
@@ -1016,32 +1133,16 @@ end
 *   vb.scram.final, on the SCRAM path only, so a grant has no meaning here -
 *   which is what makes MODIFY.ACCOUNT's refusal of SDSYS (12001) consistent
 *   rather than contradictory: there is nothing for it to grant.
-if new.account = 'SDSYS' then
-   acc.who = upcase(kernel(K$USERNAME, 0))
-   if index(acc.who, '\', 1) > 0 then acc.who = field(acc.who, '\', dcount(acc.who, '\'))
-   acc.member = local.session and (acc.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
-   acc.told = 0
-   if not(acc.member) then
-      void kernel(K$AUDIT, 'account refused branch=4 sdsys.not.local.elevated user=' : acc.who : ' local=' : local.session : ' account=' : new.account)
-   end
-end else
-   acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)
-   acc.told = status()
-end
+* 18 Oct 26 dm - THE RULE FOR ENTERING AN ACCOUNT (a suspended account is not entered; the user must be a member of its group; every refusal
+*   is 10003 and audited) lives in account.entry.check, above, which request 29 asks as well.  Its comments are the old ones of this place.
+ent.name = new.account
+ent.rec = acc.rec
+ent.suspended = (upcase(trim(acc.suspended, ' ', 'B')) = 'SUSPENDED')
+gosub account.entry.check
+if ent.refused then goto revert.to.old.account
 
-if acc.told # 0 then
-   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   goto revert.to.old.account
-end
-
-if not(acc.member) then
-   void kernel(K$AUDIT, 'account refused branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : acc.group : ' account=' : new.account)
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   goto revert.to.old.account
-end
+* rev 0.9.0 * is user member of account?   
+* (done in account.entry.check, above)
 
 *   IT REUSES sysmsg(10003) LIKE EVERY OTHER REFUSAL IN THIS ROUTINE, which is
 *   the rule here and not laziness - a caller cannot tell "no such account"
@@ -2445,6 +2546,20 @@ vb.open.sdnet:
                            return
                         end
 
+                        * 18 Oct 26 dm - THE ACCOUNT RULES, asked BEFORE anything is marked or opened.  Bit 2 of NETFILES was the whole
+                        *   gate: with it set, any API login opened any account's file.  Now SDCLIENT refuses as it does request 4 (the
+                        *   5262 text), and sdnet.account.check asks what request 3 asks (a member of the account's group, the
+                        *   account not suspended), that the account has a register record (a path names none), and that its NET gate is
+                        *   on.  The default stays as secure as it was: bit 2 is 0, and the request is refused.
+                        if config('SDCLIENT') # 0 then
+                           abort.message = sysmsg(5262) ;* File access is disabled
+                           server.error = SV$ON.ERROR
+                           return
+                        end
+                        net.acct = field(cmnd, ';', 1)
+                        gosub sdnet.account.check
+                        if net.refused then return
+
                         * Use of this operation identifies the process as a SDNet user.
                         * Set the appropriate process flag so that LISTU etc show this.
 
@@ -2467,15 +2582,8 @@ vb.open.sdnet.continue:
 
                         * Open file to file table entry i
 
-                        acc = field(cmnd, ';', 1)   ;* Account name or path
+                        acc = net.acc.path          ;* The account's directory, from its register record (sdnet.account.check, above)
                         file = field(cmnd, ';', 1)  ;* File name
-
-                        openpath @sdsys:@ds:'accounts' to acc.f then
-                           read acc.rec from acc.f, acc then
-                              acc = parse.pathname.tokens(acc.rec<ACC$PATH>)
-                           end
-                           close acc.f
-                        end
 
                         qvoc.path = acc:@ds:'voc'
                         openpath qvoc.path to qvoc.f else
@@ -2512,6 +2620,25 @@ vb.open.sdnet.continue:
                                  if path[1,1] # @ds then
                                     * Convert voc item to absolute path
                                     path = acc : @ds : path
+                                 end
+
+                                 * 20 Oct 26 dm - THE OS SWITCH, ASKED OF A POINTER THAT LEADS OUT OF THE ACCOUNT (S.63 closed in this request; the owner delegated the
+                                 *   choice).  The file is opened below with openpath from an internal program, which the OS gate exempts, so an F-pointer in the account's
+                                 *   VOC at a directory outside the account (a path, a relative path that climbs out, a link, another account's directory, a system file)
+                                 *   was opened for any caller the NET gate admitted.  DIR, OPENSEQ, the OSCOPY verbs and every OPEN in a program ask the question, and now so
+                                 *   does this.  It is asked of the account NAMED, by its register record read a moment ago in sdnet.account.check, not of the account this
+                                 *   session is in: the pointer is that account's, and a caller who could LOGTO it and OPEN the name there is held to that account's switch.
+                                 *   An account with os on passes, and so does SDSYS in its own account; any other path must be inside the account's directory (K$PATH.IN is
+                                 *   the geometry alone, with ".." and links resolved, and a name that merely begins with the account's name is not inside).  _voc_ref lets a
+                                 *   restricted account follow the stock VOC's own pointers to system files; a remote caller needs none of those, so they are refused here.
+                                 net.free = (upcase(trim(net.rec<ACC$OS.EXEC>)) = 'YES' or (downcase(@logname) = 'sdsys' and net.acct = 'sdsys'))
+                                 if not(net.free) then
+                                    if not(kernel(K$PATH.IN, acc : @fm : path)) then
+                                       void kernel(K$AUDIT, 'api refused request=29 reason=os gate off user=' : @logname : ' account=' : net.acct : ' path=' : path)
+                                       set.status ER$PERM
+                                       server.error = SV$ELSE
+                                       return
+                                    end
                                  end
 
                                  openpath path to files(i)

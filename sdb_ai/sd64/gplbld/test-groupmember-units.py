@@ -83,8 +83,8 @@ USERS = "S-1-5-32-545"
 # reason says why that is acceptable THERE.  A site in neither fails, so a new
 # caller cannot be written without somebody deciding which it is.
 READS_STATUS = {
-    ("apisrvr", "acc.member = is_grp_member(kernel(K$USERNAME, 0), acc.group)"):
-        "vb.account: acc.told = status() on the next line; branch=4 splits "
+    ("apisrvr", "ent.member = is_grp_member(kernel(K$USERNAME, 0), ent.group)"):
+        "account.entry.check (requests 3 and 29; 25 Oct 26, Linux fccf976): ent.told = status() on the next line; branch=4 splits "
         "group.lookup.failed from not.in.group in the audit trail",
     ("acc_os_info", "m = is_grp_member(uname, 'sdssh')"):
         "backup manifest route.ssh (RELEASE_1.1 116): 'if status()' on the "

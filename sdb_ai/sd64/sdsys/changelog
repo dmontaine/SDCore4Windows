@@ -2,14 +2,54 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+20 Oct 26  THE API'S "OPEN AN SDNET FILE" REQUEST NO LONGER FOLLOWS A VOC POINTER OUT OF THE ACCOUNT UNLESS THE ACCOUNT HAS OS-ON.
+
+             What        API request 29 opens a file named in an account's VOC for a client that is not a person at a terminal. It is
+                        refused as delivered (the sd.conf setting NETFILES has to be turned on first), and when it is on it already asked
+                        whether the caller may enter the account and whether the account has net-on. It did not ask the operating-system
+                        question: a file pointer in that account's VOC at a directory OUTSIDE the account (an absolute path, a relative path
+                        that climbs out, a link, a directory next to the account, a system file) was opened and read. It now asks, as DIR,
+                        OPENSEQ, OPENPATH and the OSCOPY verbs do: the pointer must lead inside the account's own directory, unless the
+                        account has os-on (SDSYS in its own account is never refused). The question is put to the account named in the
+                        request, using its register record as it is at that moment, so os-off applies at once to a client that is already
+                        signed on. A refusal is status 3035, and the audit trail gets api refused request=29 reason=os gate off user=...
+                        account=... path=... . Both halves of a pointer are judged: a dictionary path that leads out is refused though the
+                        data path is inside.
+             Why it      An administrator who gave an account net-on, and turned NETFILES on for a client that uses request 29, was not
+             matters     told that the account's files outside its own directory were open to that client too. The wall for an operating-
+                        system path is os-on, in every other route; this was the one that skipped it.
+             Does not    It does not change who may use request 29 at all (NETFILES still has to be turned on, the account still needs
+                        net-on and a caller that could logto it), and it does not touch an SDNet file opened through an N pointer, which
+                        goes to another SD server's own API and is held by that server. One difference from a local open, on purpose:
+                        the pointers SD itself puts in every VOC (syscom, $map, sd.voclib, dict.dict, newvoc) lead out of the account
+                        and are refused here too, because a client of request 29 has no use for them. A pointer that was opened before
+                        and leads out of an account without os-on stops opening: give the account os-on (modify.account <name> os-on)
+                        if that was intended.
+
+18 Oct 26  THE API'S "OPEN AN SDNET FILE" REQUEST (NUMBER 29) NO LONGER OPENS ANY ACCOUNT'S FILE FOR ANY LOGIN, EVEN WITH NETFILES BIT 2 SET.
+
+             What        Request 29 is the old form of "open the file named account;file". It was refused unless bit 2 of NETFILES in sd.conf was set,
+                        and the bit was the ONLY test. With it set, any API login could open and read the VOC-named file of any account: one it was
+                        not allowed to enter with logto, a suspended one, one given as a path, one whose NET switch was off, and it ignored
+                        SDCLIENT. We ran it on a private SD and the planted record came back from the disk. It now asks the rules that logto
+                        asks (a member of the account's group, the account not suspended), wants a register record for the account (a path has
+                        none), wants the account's net-on switch on (SDSYS's own account is excepted), and refuses under SDCLIENT as request 4 does.
+                        Each refusal is on the audit trail as api refused request=29 reason=....
+             Why it      The bit looks like a switch for a feature; it was in fact the whole wall around every account's files for anyone with an
+             matters    API login. As delivered the bit is 0, so nothing was open on a delivered system; the hole was there for an
+                        administrator who set it, which is what the documentation told him not to do.
+             Does not    It does not change what is delivered (bit 2 stays 0 and the request is still refused), the other requests, or how a program
+                        opens a file on another SD server (the N pointer, the NET switch and set.server), which never used this request.
+
 25 Oct 26  THE INSTALLER CAN OPEN EVERY ACCESS GATE FOR THE INSTALLING USER'S OWN SD ACCOUNT, AND IT DOES NOT UNLESS YOU TICK IT.
 
-             What        A new SD account starts with every access gate closed - the shell, OS.EXECUTE, SD.ACCOUNTS, saving changes to a VOC,
-                        a program file or a dictionary, SDNet, and writing the shared account's files - and that includes the account the
-                        installer makes for the person running it. The tasks page of a first install now has one more box, unticked: "Open
-                        every access gate for your SD Core account" (on a silent install, /TASKS=opengates). Ticked, the installer gives the
-                        account sh-on, os-on, sd-on, voc-on, bp-on, dict-on, net-on, shared-write-on, files-on and files-write-on with
-                        modify.account once the account is made, then reads the register and the groups sdfiles and sdfileswrite back: the
+             What        A new SD account starts with every access gate closed - ssh, the API, the shell, OS.EXECUTE, SD.ACCOUNTS, saving
+                        changes to a VOC, a program file or a dictionary, SDNet, and writing the shared account's files - and that includes
+                        the account the installer makes for the person running it. The tasks page of a first install now has one more box,
+                        unticked: "Open every access gate for your SD Core account" (on a silent install, /TASKS=opengates). Ticked, the
+                        installer gives the account both, sh-on, os-on, sd-on, voc-on, bp-on, dict-on, net-on, shared-write-on, files-on and
+                        files-write-on with modify.account once the account is made, then reads the register and the groups sdssh, sdapi,
+                        sdfiles and sdfileswrite back: the
                         last screen says "Every access gate is open for <you>." only if every one is, and otherwise names the file that lists
                         each gate that did not open and the word to give for it (C:\ProgramData\SD\attach-account.log). A refused word does
                         not stop the install.
@@ -17,8 +57,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              matters    the API, ssh or the editors would answer.
              Does not    The box is unticked, and an upgrade does not show it: the account already exists and keeps what it has. It opens the
                         installing user's own account only. It does not turn on files-admin-on (the administration group stays off whatever
-                        the answer), and ssh and the API are not part of it - a new account has them already. SDSYS closes any gate again
-                        with modify.account <account> <word>-off.
+                        the answer). SDSYS closes any gate again with modify.account <account> <word>-off (none closes ssh and the API).
 
 15 Oct 26  THE CLIENT LIBRARY MAY BE USED FROM SEVERAL THREADS.
 

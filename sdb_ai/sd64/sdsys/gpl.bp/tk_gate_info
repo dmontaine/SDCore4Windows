@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - files-admin is "built" now: the group sdfilesadmin, files-admin-on / -off and the server side came with Linux ef9d594 (RELEASE_1.1 178).
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1).  Two differences: "Windows user" for "Linux user", and
 *           files-admin is "planned", not "built" (this tree has no sdfilesadmin group yet: RELEASE_1.1 178).
 * 22 Oct 26 dm  New (S.75, TK-0.2).
@@ -51,7 +52,7 @@ $include tk.h
    rows<-1> = "shared-write|Write shared|shared-write-on|shared-write-off|register|ACC$SHARED.WRITE||K$SHARED.WRITE|next account entry|off|SW|write records in the files of the shared account|read them, if shared-read is on|0|built"
    rows<-1> = "files|Files route|files-on|files-off|group||sdfiles||next login|off|F|log in over the files-only SDNet route and read the files of its account on this server|a login by the other routes it has|1|built"
    rows<-1> = "files-write|Files write|files-write-on|files-write-off|group||sdfileswrite||next login|off|FW|change files over the files-only route: write, delete, lock and clear|read files over that route|1|built"
-   rows<-1> = "files-admin|Files admin|files-admin-on|files-admin-off|group||sdfilesadmin||next login|off|FA|administer files over the files-only route: configure, analyse, index, create, delete and the file's counter|change records in files that already exist, if files-write is on|1|planned"
+   rows<-1> = "files-admin|Files admin|files-admin-on|files-admin-off|group||sdfilesadmin||next login|off|FA|administer files over the files-only route: configure, analyse, index, create, delete and the file's counter|change records in files that already exist, if files-write is on|1|built"
    rows<-1> = "sockets|Raw sockets||||||||off||open raw network connections from programs|use the SD socket verbs that every account has|1|planned"
 
    if id = 'list' then
