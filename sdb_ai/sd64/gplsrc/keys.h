@@ -20,6 +20,8 @@
  * 25 Oct 26 Windows port - from Linux fc4030a (18 Oct 26) S.66: K_SHARED_READ, K_SHARED_WRITE, K_SHARED_REF and K_SHARED_ONCE (128-131), the shared
  *           account's gates and lookup test.  Linux's 127 is K_NET (S.65), which Windows does not carry yet; 127 stays free.
  * 31 Dec 23 SD launch - prior history suppressed
+ * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K_NET (127), the per-account NET gate for SDNet remote files.
+ * 31 Dec 23 SD launch - prior history suppressed 
  * 28 Jul 24 mab SD_ENCRYPT_SODIUM encode types
  * 08 Aug 24 mab SDEXT keys for salt and key from password
  * 09 Aug 24 mab embedded python SDEXT keys
@@ -485,6 +487,11 @@
                   a print file): 1 if no component of it below the account's directory names a VOC, a dictionary or a program file
                   that THIS SESSION may not change (op_sh.c edit_os_path_refusal).  Not asked for reading. */
 #define K_EDIT_OS_OK         126
+/* 17 Oct 26 dm - S.65 slice 1 (SDNet, the NET gate).  K_NET: like K_SD_ACCOUNTS, 1 / 0 sets (only from a $internal program), -1 asks;
+   may the session open a file on another SD server.  ACCOUNT-SCOPED: loaded at sign-on (LOGIN), at LOGTO (CPROC, restored when LOGTO
+   returns) and by the API server, as K_SD_ACCOUNTS is.  The administrator is never refused.  The gate takes effect for the remote-file
+   slices that follow and does nothing yet.  GPL.BP/INT$KEYS.H carries the same number. */
+#define K_NET                127
 /* 18 Oct 26 dm - S.66 (the shared account).  K_SHARED_READ and K_SHARED_WRITE: like K_SD_ACCOUNTS, 1 / 0 sets (only from a $internal program,
    n >= 0), -1 asks; the answer is the bit as 1 / 0.  ACCOUNT-SCOPED: loaded at sign-on (LOGIN), at LOGTO (CPROC, restored when LOGTO returns)
    and by the API server.  Each touches its own bit of the gates word and nothing else.  shared.read is tested by the

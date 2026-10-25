@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is loaded at sign-on, account-scoped like SD.ACCOUNTS.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ, K$SHARED.WRITE) are loaded at sign-on, account-scoped like
 *           SD.ACCOUNTS; read is on unless the record says no.
 * 23 Oct 26 Windows port - from Linux 215ce2c (S.63): K$SH / K$OS.EXEC are loaded from ACC$SH / ACC$OS.EXEC at sign-on.  RELEASE_1.1 170.
@@ -942,6 +943,9 @@ deffun pw_complex(pw) calling '!pw_complex'
    void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
    void kernel(K$SD.ACCOUNTS, upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
+* 17 Oct 26 dm - S.65 slice 1: the NET gate (SDNet remote files) is account-scoped like SD.ACCOUNTS, so CPROC's logto reloads and restores it.  Off
+*   unless 'yes'.
+   void kernel(K$NET, upcase(trim(acc.rec<ACC$NET>)) = 'YES')
 * 18 Oct 26 dm - S.66: the shared-account gates are account-scoped like SD.ACCOUNTS, so CPROC's logto reloads and restores them.  Read is ON unless the
 *   record says 'no' (a BLANK field means on: the one gate that is open by default); write is OFF unless 'yes'.  The record always exists here.
    void kernel(K$SHARED.READ,  upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO')      ;* blank = ON

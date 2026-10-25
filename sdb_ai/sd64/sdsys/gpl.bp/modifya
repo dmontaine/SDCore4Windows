@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: NET-ON / NET-OFF, the NET gate for SDNet remote files (register field 15), through os.set;
+*           allowed on a group account as SD-ON is; reported with 12416; account-scoped, so it takes effect at the next account entry.
 * 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26) and 2287a0a (18 Oct 26): MORE THAN ONE ACTION IN A COMMAND (owner: "modify.account should be changed
 *           to handle more than one gate at a time").  Every word is read first (validate.actions: an unknown word 12795, two words setting one access to
 *           different states 12796, add or delete among other words or a word after the user name of ADD / DELETE 12719) and then ALL are carried out
@@ -420,6 +422,16 @@ do.action:
             os.field = ACC$DICT.EDIT
             os.want  = @false
             gosub os.set
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1 (SDNet): NET-ON / NET-OFF, the gate for opening a file on another SD server.  Allowed on
+*   a group account as SD-ON is.  Account-scoped: it takes effect at the person's next account entry (sign-on, LOGTO, the API server).
+         case upcase(action) = 'NET-ON'
+            os.field = ACC$NET
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'NET-OFF'
+            os.field = ACC$NET
+            os.want  = @false
+            gosub os.set
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
 *   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
 *   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
@@ -578,7 +590,7 @@ add.delete.arm:
          
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
-         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off,'
+         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, net-on, net-off,'
          crt '   shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   suspended or unsuspended'
       end
@@ -602,6 +614,7 @@ show.usage:
    crt '                  modify.account <account> os-on | os-off'
    crt '                  modify.account <account> sd-on | sd-off'
    crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
+   crt '                  modify.account <account> net-on | net-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> suspended | unsuspended'
    crt '  Any of the actions except add and delete may be given together in one command, for example'
@@ -623,8 +636,8 @@ show.usage:
 *   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,SR,SR,SW,SW,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,SR,SR,SW,SW,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -901,7 +914,7 @@ route.apply:
 os.set:
 *   SD-ON / SD-OFF (the SD.ACCOUNTS gate, Linux 7ceb50d) are allowed on a GROUP account: what that gate opens is decided for
 *   each person by the groups they are in.
-   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE then
+   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT and os.field # ACC$NET and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
@@ -960,7 +973,12 @@ os.set:
          if upcase(trim(acc.new<ACC$DICT.EDIT>)) = 'YES' then ed.dict = 'yes'
          crt sysmsg(12414, acc.name, ed.voc, ed.bp, ed.dict)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
       end else
-         crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+         if os.field = ACC$NET then
+*           17 Oct 26, S.65 slice 1: the NET gate has one field of its own, so the line names only it.
+            crt sysmsg(12416, acc.name, if upcase(trim(acc.new<ACC$NET>)) = 'YES' then 'yes' else 'no')   ;* Account %1 has NET %2
+         end else
+            crt sysmsg(10102, acc.name, osu.sh, osu.ex)  ;* Account %1 has SH %2, OS.EXECUTE %3
+         end
       end
    end
    return

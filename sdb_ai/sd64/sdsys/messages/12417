@@ -1,0 +1,1 @@
+Usage: set.server name host port account pin {read | write} {accounts a,b,c} {no.query}

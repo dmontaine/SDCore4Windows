@@ -1,0 +1,313 @@
+* SETSERVER
+* SET.SERVER verb (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 1: written.  The definition is stored and nothing connects to the server: no remote file can be opened
+*               yet; the gate (NET) and the definitions are in place for the slices that follow.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.SERVER name host port account pin {READ | WRITE} {ACCOUNTS a,b,c} {NO.QUERY}
+*
+* Defines a server for SDNet, or replaces the definition of that name after a yes/no question (NO.QUERY goes ahead without
+* asking).  Administrator only.  The definition goes into the file netservers in the SDSYS directory (see !netdefs, which
+* holds the layout), at most 10 of them.  EVERY field is checked before anything is written; each field that is wrong
+* gets a message of its own and a refusal writes nothing.
+*
+*    name      lower case letter, then up to 15 lower case letters or digits (upper case is converted)
+*    host      1 to 253 letters, digits, dots, hyphens or colons: a DNS name, an IPv4 address or an IPv6 literal;
+*              not starting with a hyphen or a dot (upper case is converted)
+*    port      1 to 65535: the port of the server's API, chosen by whoever defines the server (4247 for a full SD Core,
+*              4249 for a Solo; not enforced)
+*    account   the account to enter on the remote server: 1 to 32 letters, digits, dots, underscores or hyphens, as typed
+*    pin       the SHA-256 hash of the server's public key (SPKI): exactly 64 hexadecimal digits (upper case is converted)
+*    READ / WRITE  what a program may do with the server's files; READ unless WRITE is given
+*    ACCOUNTS  the LOCAL accounts that may use the server, registered account names separated by commas with no space.
+*              Left out, NO account may use the server: that is the delivered default, SDSYS lists the accounts on purpose.
+*              An account also needs the NET gate (MODIFY.ACCOUNT name NET-ON).
+*
+* THE PIN IS GIVEN ON THE COMMAND LINE because this slice has no network client.  A later slice will connect to the server, show
+* the key hash it presented and ask the administrator to confirm it; until then take the hash from the other server's
+* administrator.  Nothing here connects to anything, and nothing opens a remote file yet.
+*
+* The file never holds a secret: a name, an address, a port and the hash of a public key.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.server
+$catalog $setserver
+
+$include int$keys.h
+$include err.h
+
+$define NET.MAX.SERVERS 10
+$define NET.MAX.ACCLIST 2000
+$define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads, changes and writes the definitions
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   name = ''
+   host = ''
+   port = ''
+   account = ''
+   pin = ''
+   mode = 'read'
+   acc.list = ''
+   no.query = @false
+   mode.given = @false
+   acc.given = @false
+   bad = 0
+   chk.text = ''
+   chk.set = ''
+   chk.ok = @true
+   yn = ''
+   defs = ''
+   err = ''
+   found = 0
+   replaced = @false
+
+   lc.set = 'abcdefghijklmnopqrstuvwxyz'    ;* not "lower": that is a BASIC function
+   digits = '0123456789'
+
+   words = trim(@sentence)
+   n.words = dcount(words, ' ')
+   if n.words < 6 then
+      display sysmsg(12417) ;* usage
+      display sysmsg(12418) ;* the pin is given on the command line
+      stop
+   end
+
+   name = downcase(field(words, ' ', 2))
+   host = downcase(field(words, ' ', 3))
+   port = field(words, ' ', 4)
+   account = field(words, ' ', 5)
+   pin = downcase(field(words, ' ', 6))
+
+   i = 7
+   loop while i <= n.words do
+      w = field(words, ' ', i)
+      lw = downcase(w)
+      begin case
+         case (lw = 'read' or lw = 'write') and not(mode.given)
+            mode = lw
+            mode.given = @true
+         case lw = 'accounts' and not(acc.given) and i < n.words
+            i += 1
+            acc.list = downcase(field(words, ' ', i))
+            acc.given = @true
+         case lw = 'no.query'
+            no.query = @true
+         case i = 7 and not(mode.given)
+*           The first word after the pin is where the mode goes: say that the mode is the field that is wrong.
+            display sysmsg(12424, w) ;* Mode %1 is not valid: read or write
+            bad += 1
+            mode.given = @true
+         case 1
+            stop sysmsg(2018, w) ;* Unexpected token (xx)
+      end case
+      i += 1
+   repeat
+
+*  ---- Every field, before anything is written; one message for each that is wrong.
+   chk.text = name ; chk.set = lc.set:digits ; gosub check.chars
+   if len(name) < 1 or len(name) > 16 or not(chk.ok) or index(lc.set, name[1, 1], 1) = 0 then
+      display sysmsg(12419, name) ;* Server name %1 is not valid
+      bad += 1
+   end
+
+   chk.text = host ; chk.set = lc.set:digits:'.-:' ; gosub check.chars
+   if len(host) < 1 or len(host) > 253 or not(chk.ok) or host[1, 1] = '-' or host[1, 1] = '.' then
+      display sysmsg(12420, host) ;* Host %1 is not valid
+      bad += 1
+   end
+
+   port.ok = @false
+   if len(port) >= 1 and len(port) <= 5 and port matches '1N0N' then
+      if port + 0 >= 1 and port + 0 <= 65535 then port.ok = @true
+   end
+   if port.ok then
+      port = port + 0   ;* 04249 is 4249
+   end else
+      display sysmsg(12421, port) ;* Port %1 is not valid
+      bad += 1
+   end
+
+   chk.text = account ; chk.set = lc.set:upcase(lc.set):digits:'._-' ; gosub check.chars
+   if len(account) < 1 or len(account) > 32 or not(chk.ok) then
+      display sysmsg(12422, account) ;* Remote account %1 is not valid
+      bad += 1
+   end
+
+   chk.text = pin ; chk.set = digits:'abcdef' ; gosub check.chars
+   if len(pin) # 64 or not(chk.ok) then
+      display sysmsg(12423) ;* The pin is not valid: 64 hexadecimal digits
+      bad += 1
+   end
+
+*  mode is read or write by construction: the keyword scan above takes nothing else.
+
+*  The accounts: the form first (a name is a short run of the usual characters, no empty name), then the register.
+   acc.clean = ''
+   if acc.list # '' then
+      list.ok = (len(acc.list) <= NET.MAX.ACCLIST)
+      n.acc = dcount(acc.list, ',')
+      if list.ok then
+         for k = 1 to n.acc
+            a = field(acc.list, ',', k)
+            chk.text = a ; chk.set = lc.set:digits:'._-' ; gosub check.chars
+            if a = '' or len(a) > 32 or not(chk.ok) then list.ok = @false
+         next k
+      end
+      if not(list.ok) then
+         display sysmsg(12425) ;* The accounts list is not valid
+         bad += 1
+      end else
+         openpath @sdsys:@ds:'accounts' to acc.f else
+            stop sysmsg(6000) ;* Cannot open ACCOUNTS file in SDSYS account
+         end
+         for k = 1 to n.acc
+            a = field(acc.list, ',', k)
+            if index(',':acc.clean:',', ',':a:',', 1) = 0 then   ;* a name listed twice is kept once
+               read reg.rec from acc.f, a then
+                  if acc.clean = '' then acc.clean = a else acc.clean := ',':a
+               end else
+                  display sysmsg(12426, a) ;* Account %1 is not a registered account
+                  bad += 1
+               end
+            end
+         next k
+         close acc.f
+      end
+   end
+
+   if bad # 0 then stop   ;* @system.return.code is still -ER$ARGS
+
+*  ---- The definitions: lock, read, change, write.
+   openpath @sdsys to sys.f else
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12432, @sdsys, status()) ;* Cannot read %1 (status %2)
+   end
+
+   readu lock.rec from sys.f, NET.LOCK.ID locked
+      @system.return.code = -ER$LCK
+      stop sysmsg(12442) ;* Another session is changing the server definitions
+   end then
+      null
+   end else
+      null
+   end
+
+   call !netdefs('READ', defs, err)
+   if err # '' then
+      gosub release.lock
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+
+   n.defs = dcount(defs, @fm)
+   for i = 1 to n.defs
+      if dcount(defs<i>, @vm) # 8 then
+         gosub release.lock
+         @system.return.code = -ER$FAILED
+         stop sysmsg(12441, i) ;* Server definitions file: line %1 is not a definition
+      end
+      if defs<i,1> = name then found = i
+   next i
+
+   if found = 0 and n.defs >= NET.MAX.SERVERS then
+      gosub release.lock
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12427, NET.MAX.SERVERS) ;* At most %1 servers can be defined
+   end
+
+   if found # 0 and not(no.query) then
+      loop
+         display sysmsg(12428, name, defs<found,2>:':':defs<found,3>) : ;* Server %1 is already defined (%2). Replace it (y/<n>)?
+         input yn
+         if yn = '' and status() = ER$EOF then yn = 'N'    ;* input that ends is a no
+         yn = upcase(yn[1, 1])
+         if yn = '' then yn = 'N'
+      until yn = 'Y' or yn = 'N'
+      repeat
+      if yn = 'N' then
+         gosub release.lock
+         @system.return.code = 0
+         stop sysmsg(12431, name) ;* Server %1 was not changed
+      end
+   end
+
+   d = date()
+   created = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
+   one = name:@vm:host:@vm:port:@vm:account:@vm:pin:@vm:mode:@vm:acc.clean:@vm:created
+
+   if found # 0 then
+      defs<found> = one
+      replaced = @true
+   end else
+      defs<n.defs + 1> = one
+   end
+
+   call !netdefs('WRITE', defs, err)
+   gosub release.lock
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+
+*  The words are lower case (PAL-24); the pin is not in the audit line, it is public but long.
+   if replaced then rep.word = 'yes' else rep.word = 'no'
+   void kernel(K$AUDIT, 'set.server name=' : name : ' host=' : host : ' port=' : port : ' mode=' : mode : ' replaced=' : rep.word)
+
+   @system.return.code = 0
+   if replaced then
+      display sysmsg(12430, name, host, port) ;* Server %1 (%2:%3) was replaced
+   end else
+      display sysmsg(12429, name, host, port) ;* Server %1 (%2:%3) is defined
+   end
+   if acc.clean = '' then display sysmsg(12444, name) ;* No account is listed, so no account may use server %1 yet
+
+   stop
+
+* ======================================================================
+* check.chars - is every character of chk.text in chk.set?  Sets chk.ok.
+check.chars:
+   chk.ok = @true
+   for ck = 1 to len(chk.text)
+      if index(chk.set, chk.text[ck, 1], 1) = 0 then chk.ok = @false
+   next ck
+   return
+
+* ======================================================================
+* release.lock - give back the lock on the definitions and close the SDSYS directory.
+release.lock:
+   release sys.f, NET.LOCK.ID
+   close sys.f
+   return
+
+end
+
+* END-CODE

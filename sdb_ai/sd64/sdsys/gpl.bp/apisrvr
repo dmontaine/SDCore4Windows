@@ -31,6 +31,17 @@
 * 18 Oct 26 Windows port - RELEASE_1.1 142 (Linux 400500c, 15 Oct 26): vb.call returns after refusing a subroutine that is
 *           not flagged $sdcall (a $ name, or SDCLIENT 2): it was refused in the reply but still ran.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (12286) while the administrator has logins
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the NET gate (K$NET; SDNet remote files, does nothing yet) is loaded at every entry to an account, as SD.ACCOUNTS is,
+*           from ACC$NET; the OS user sdsys entering the sdsys account has it ON (the administrator passes).
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: an API session of SDSYS that enters the sdsys account loads the three edit gates ON.  An API session carries
+*           no administrator flag, and the sdsys register record has no edit fields (modify.account refuses sdsys), so SDSYS over the
+*           local door could not compile or save to a VOC, a dictionary or a program file.  Only for the OS user sdsys entering the sdsys
+*           account, the pair vb.account already exempts from the group test; every other account loads what its own record says.
+*           AND THE API SERVER ASKS THE GATES FOR ITS CLIENT: this program is $internal, so the kernel's edit test never saw its WRITE,
+*           WRITEU, DELETE, DELETEU, CLEARFILE or CREATING.SEQKEY write of a file the client opened (the plan's "refused by the same kernel
+*           test" was not so).  check.edit asks before each; an OPENSEQ of a VOC, a dictionary or a program file the session may not change
+*           is opened read only.  vb.clearfile cleared files(i), a stale variable, instead of files(fno).
+* 15 Oct 26 Windows port - from Linux 9d6f407 - QM4 gaps Q-8: INHIBIT.LOGIN.  An API session is refused (11281) while the administrator has logins
 *           inhibited, after the backup login hold and before any credential is looked at.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): Call names: the lower of 128 and MAXIDLEN (openQM item 241), 63 at the default.  Refused logins
 *           wait PWDELAY seconds (item 106), 3 by default.
@@ -658,6 +669,7 @@ acc.suspended = ''
 api.sh.grant = @false
 api.os.grant = @false
 api.sd.grant = @false      ;* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate
+api.net.grant = @false     ;* 25 Oct 26, Linux 9d6f407 (S.65 slice 1): the NET gate (SDNet remote files); account-scoped, so loaded at every entry
 api.voc.grant = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): the edit gates; loaded at the FIRST entry only (below)
 api.bp.grant = @false
 api.dict.grant = @false
@@ -682,6 +694,7 @@ openpath @sdsys:@ds:'accounts' to acc.f then
       api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
       api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')
       api.sd.grant = (upcase(trim(acc.rec<ACC$SD.ACCOUNTS>)) = 'YES')
+      api.net.grant = (upcase(trim(acc.rec<ACC$NET>)) = 'YES')
       api.voc.grant = (upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES')
       api.bp.grant = (upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
       api.dict.grant = (upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
@@ -945,6 +958,7 @@ void kernel(K$SET.ACCOUNT, who)   ;* 14 Oct 26 - the user table's account (LISTU
 void kernel(K$SH,      api.sh.grant)    ;* 23 Oct 26 - S.63, Linux abcda0c: see where they were read, above
 void kernel(K$OS.EXEC, api.os.grant)
 void kernel(K$SD.ACCOUNTS, api.sd.grant)
+void kernel(K$NET, api.net.grant)   ;* 25 Oct 26, Linux 9d6f407 (S.65 slice 1): account-scoped like SD.ACCOUNTS, so every entry and every SDLogto loads it
 void kernel(K$SHARED.READ,  api.shared.read.grant)    ;* 18 Oct 26, S.66: account-scoped, so every entry and every SDLogto loads them
 void kernel(K$SHARED.WRITE, api.shared.write.grant)
 * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates are the SIGN-ON account's (owner, 17 Oct), so they are loaded at the

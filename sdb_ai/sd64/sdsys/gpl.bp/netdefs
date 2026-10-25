@@ -1,0 +1,178 @@
+* NETDEFS
+* !netdefs  -  read and write the SDNet server definitions (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 1: written.  The one place that knows the layout of the server definitions file; set.server,
+*               delete.server and list.servers use it.  Nothing yet opens a remote file: the definitions are in place for
+*               the slices that follow.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !netdefs(mode, defs, err)
+*
+*    READ   defs is returned as a dynamic array, ONE DEFINITION PER ATTRIBUTE, the eight fields of a definition separated by
+*           value marks.  Nothing is validated beyond splitting the line at the vertical bars: a line that does not hold eight
+*           fields comes back as it is (the caller counts them), blank lines are dropped, and a mark byte found in a line is
+*           replaced by a question mark so that it cannot make a new attribute.  No file at all is an empty defs and no error.
+*           Anyone may call it; it takes no lock (the file is replaced whole, so a reader sees the old file or the new one).
+*    WRITE  administrator only (err 2001 otherwise).  Writes defs, in the same shape, as the whole new file: a copy under
+*           netservers.new, mode 644 (the umask is set to 022 for the creation and put back), then renamed over the old file, so
+*           the file is never half written.  A definition that is not eight fields, or a field with a vertical bar, a control
+*           character or a byte above 126, is refused (err 12441 with the number of the attribute) and nothing is written.
+*           THE CALLER TAKES THE LOCK across its read, change and write: readu on the id netservers.lock in @sdsys (no
+*           such record is ever made; the lock is the point), as set.server and delete.server do.
+*
+*    err is null or  message number : value mark : its arguments :  12432 cannot read the file, 12433 cannot write it,
+*    12441 a definition that cannot be written, 2001 not the administrator, 2018 an unknown mode.
+*
+* THE FILE:  netservers in the SDSYS directory (@sdsys), plain text, one definition per line, lines ending in a newline:
+*
+*    name|host|port|account|pin|mode|accounts|created
+*
+*    name      lower case letter then up to 15 lower case letters or digits
+*    host      DNS name, IPv4 address or IPv6 literal
+*    port      1 to 65535, the TARGET port, chosen by whoever defines the server
+*    account   the account to enter on the remote server
+*    pin       the SHA-256 hash of the server's public key (SPKI), 64 lower case hex digits
+*    mode      read or write
+*    accounts  the LOCAL accounts that may use the server, comma separated, null for none
+*    created   yyyy-mm-dd
+*
+* THE FILE MUST NEVER HOLD A SECRET.  It is readable by everybody (mode 644) and only the sdsys user writes it.  A name, an
+* address, a port and the hash of a PUBLIC key are not secrets; a password, a key or a token is not to be added to it, ever.
+* Credentials, when a later slice has them, live elsewhere, outside every account's directory, in a file only their owner can read.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine netdefs(mode, defs, err)
+$catalog !netdefs
+
+$include int$keys.h
+
+$define NETDEFS.FILE   'netservers'      ;* in the gcat directory of @sdsys (see below)
+$define NETDEFS.FIELDS 8
+
+   err = ''
+   mode = upcase(mode)
+*  25 Oct 26 Windows port - WHERE THE FILE LIVES.  On Linux the file is mode 644 in the SDSYS directory, which only the sdsys user can write.
+*  On Windows the SDSYS directory itself gives the group sdusers Modify (inherited), so a file made in it could be rewritten by any SD user
+*  with an operating system prompt.  The gcat directory under it is Administrators-only for writing (the installer's own ACL: sdusers read
+*  and execute only), so the definitions are kept there; the SDSYS session that defines a server is elevated and can write it.
+   path = @sdsys:@ds:'gcat':@ds:NETDEFS.FILE
+
+   begin case
+      case mode = 'READ'
+         defs = ''
+         if ospath(path, OS$EXISTS) then
+            openseq path to f else
+               err = 12432:@vm:path:@vm:status() ;* Cannot read %1 (status %2)
+               return
+            end
+            n = 0
+            loop
+               readseq line from f else exit
+               if trim(line) # '' then
+*                 A mark byte in a line would make a second attribute or field out of one: it cannot be one of ours.
+                  convert char(251):char(252):char(253):char(254):char(255) to '?????' in line
+                  convert '|' to @vm in line
+                  n += 1
+                  defs<n> = line
+               end
+            repeat
+            closeseq f
+         end
+
+      case mode = 'WRITE'
+         if not(kernel(K$ADMINISTRATOR, -1)) then
+            err = 2001 ;* Command requires administrator privileges
+            return
+         end
+
+*        Look at every definition before the first byte is written: a refusal leaves the file as it was.
+         n = dcount(defs, @fm)
+         for i = 1 to n
+            one = defs<i>
+            ok = (dcount(one, @vm) = NETDEFS.FIELDS)
+            if ok then
+               for j = 1 to len(one)
+                  c = seq(one[j, 1])
+                  if c # 253 and (c < 32 or c > 126 or c = 124) then ok = @false
+               next j
+            end
+            if not(ok) then
+               err = 12441:@vm:i ;* Server definitions file: line %1 is not a definition
+               return
+            end
+         next i
+
+         tmp = path : '.new'
+         if ospath(tmp, OS$EXISTS) then
+            if not(ospath(tmp, OS$DELETE)) then
+               err = 12433:@vm:tmp:@vm:status() ;* Cannot write %1 (status %2)
+               return
+            end
+         end
+
+*        Mode 644: the umask is 022 while the file is made, and is put back whatever happens.
+         old.umask = umask(-1)
+         void umask(18)
+         openseq tmp to tmp.f then
+            weofseq tmp.f
+            made = @true
+         end else
+            made = @true
+            create tmp.f else made = @false
+         end
+         void umask(old.umask)
+         if not(made) then
+            err = 12433:@vm:tmp:@vm:status()
+            return
+         end
+
+         for i = 1 to n
+            line = defs<i>
+            convert @vm to '|' in line
+            writeseq line to tmp.f else
+               err = 12433:@vm:tmp:@vm:status()
+               exit
+            end
+         next i
+         closeseq tmp.f
+
+         if err # '' then
+            void ospath(tmp, OS$DELETE)
+            return
+         end
+         if not(osrename(tmp, path)) then
+            err = 12433:@vm:path:@vm:status()
+            void ospath(tmp, OS$DELETE)
+         end
+
+      case 1
+         err = 2018:@vm:mode   ;* Unexpected token (xx)
+   end case
+
+   return
+
+end
+
+* END-CODE

@@ -1,0 +1,1 @@
+The pin is the SHA-256 hash of the server's public key, 64 hexadecimal digits, from the other server's administrator.  Nothing connects to the server yet, so the hash cannot be shown here for confirmation.

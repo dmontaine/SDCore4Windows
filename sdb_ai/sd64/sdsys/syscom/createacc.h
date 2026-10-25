@@ -9,6 +9,7 @@
 * 02 Oct 26 dm CA$REUSE.SD.USER is read by both ports (Windows reuses with a
 *              new password - owner's ruling that day); comment only.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): CA$SHARED.READ.OFF (37) and CA$SHARED.WRITE (38), the shared-account gates.
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: CA$NET (35), Linux only, the NET gate (as CA$VOC.EDIT etc. of S.64).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -57,5 +58,8 @@ $define CA$DICT.EDIT      34     ;* ACC$DICT.EDIT 'yes'
 * CA$SHARED.READ.OFF is INVERTED because the delivered default of shared.read is ON (a blank register field means yes).
 $define CA$SHARED.READ.OFF 37    ;* 1 = the new account starts with ACC$SHARED.READ 'no' (withdrawn)
 $define CA$SHARED.WRITE    38    ;* 1 = the new account starts with ACC$SHARED.WRITE 'yes'
+* Linux only (17 Oct 26, S.65 slice 1, the NET gate for SDNet): 1 = the new account starts with the gate on.  A blank or a 0 is off.
+* The gate takes effect for the remote-file slices that follow and does nothing yet.
+$define CA$NET            35     ;* ACC$NET 'yes'
 
 * END-CODE

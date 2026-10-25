@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: the NET gate (SDNet remote files) ACC$NET is written from CA$NET: 'no' for a user account unless named,
+*              reported with 12416 after 12414.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  The name shared is reserved (12521) for every type unless the installer's
 *              marker is present for a GROUP from an -internal session; the gates ACC$SHARED.READ / ACC$SHARED.WRITE are written from
 *              CA$SHARED.READ.OFF / CA$SHARED.WRITE ('yes'/'no' explicit for a user, written only when asked otherwise), reported with 12520 after
@@ -146,6 +148,8 @@ deffun ps_script(script) calling '!ps_script'
    edit.voc.want = (settings<CA$VOC.EDIT> = 1)
    edit.bp.want = (settings<CA$BP.EDIT> = 1)
    edit.dict.want = (settings<CA$DICT.EDIT> = 1)
+* 17 Oct 26 dm - S.65 slice 1: the NET gate (SDNet remote files), the same rule: off unless named (NET-ON), exactly 1 to be a request.
+   net.want = (settings<CA$NET> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -942,6 +946,8 @@ PW.TRY.AGAIN:
       acc.rec<ACC$VOC.EDIT> = if edit.voc.want then 'yes' else 'no'
       acc.rec<ACC$BP.EDIT> = if edit.bp.want then 'yes' else 'no'
       acc.rec<ACC$DICT.EDIT> = if edit.dict.want then 'yes' else 'no'
+* 17 Oct 26 dm - S.65 slice 1: the NET gate, written explicitly for a user account.
+      acc.rec<ACC$NET> = if net.want then 'yes' else 'no'
 * 18 Oct 26 dm - S.66: the shared-account gates, written explicitly for a user account (read 'yes' unless withdrawn, write 'no' unless granted), so that a
 *   decided state can be told from a blank one.
       acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'
@@ -952,6 +958,7 @@ PW.TRY.AGAIN:
       if edit.voc.want then acc.rec<ACC$VOC.EDIT> = 'yes'
       if edit.bp.want then acc.rec<ACC$BP.EDIT> = 'yes'
       if edit.dict.want then acc.rec<ACC$DICT.EDIT> = 'yes'
+      if net.want then acc.rec<ACC$NET> = 'yes'
       if shared.read.off then acc.rec<ACC$SHARED.READ> = 'no'      ;* 18 Oct 26, S.66: blank stays the default (read on, write off)
       if shared.write.want then acc.rec<ACC$SHARED.WRITE> = 'yes'
    end
@@ -962,6 +969,7 @@ PW.TRY.AGAIN:
    if acc.type = "USER" then
       crt sysmsg(10102, acc.name, acc.rec<ACC$SH>, acc.rec<ACC$OS.EXEC>)  ;* Account %1 has SH %2, OS.EXECUTE %3
       crt sysmsg(12414, acc.name, acc.rec<ACC$VOC.EDIT>, acc.rec<ACC$BP.EDIT>, acc.rec<ACC$DICT.EDIT>)  ;* Account %1 has VOC.EDIT %2, BP.EDIT %3, DICT.EDIT %4
+      crt sysmsg(12416, acc.name, acc.rec<ACC$NET>)  ;* Account %1 has NET %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
 

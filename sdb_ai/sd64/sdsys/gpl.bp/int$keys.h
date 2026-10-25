@@ -20,6 +20,8 @@
 	  * START-HISTORY:
 	  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
+	  * 29 Sep 26 Windows port - from Linux 9d6f407 - K$SET.LANGUAGE (38) retired: SD is English only.
+	  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K$NET (127), the per-account NET gate.
 	  * END-HISTORY
       *
       *  START-DESCRIPTION:
@@ -227,6 +229,7 @@
       $define K$EDIT.OK         124      ;* the pathname of an open file: 1 if THIS SESSION may save a change to it (17 Oct 26, S.64; ask before writing a file the user named)
       $define K$EDIT.KIND       125      ;* the same argument: 0 none of the three, 1 a VOC, 2 a dictionary, 3 a program file (for the message) (17 Oct 26, S.64)
       $define K$EDIT.OS.OK      126      ;* an OS pathname about to be written, created, deleted or copied into: 1 if no part of it below the account names a guarded file the session may not change (17 Oct 26, S.64)
+      $define K$NET             127     ;* may open a file on another SD server (SDNet): account-scoped like K$SD.ACCOUNTS (set from $internal; -1 asks); does nothing until the remote-file slices (17 Oct 26, S.65 slice 1)
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
       $define K$SHARED.READ     128     ;* may open the files of the shared account by name: account-scoped like K$SD.ACCOUNTS (set from $internal; -1 asks) (18 Oct 26, S.66)
       $define K$SHARED.WRITE    129     ;* may write records in the files of the shared account (same rules) (18 Oct 26, S.66)

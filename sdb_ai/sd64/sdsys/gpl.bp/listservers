@@ -1,0 +1,106 @@
+* LISTSERVERS
+* LIST.SERVERS verb (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 1: written.  Nothing yet opens a remote file; this shows the definitions the later slices will use.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LIST.SERVERS {name}
+*
+* One line for each server defined in the file netservers in the SDSYS directory (see !netdefs): the name, host:port, the
+* remote account and the mode (account/mode), the pin shortened to its first 16 hexadecimal digits and three dots, and the
+* local accounts that may use the server or the word none.  With a name, only that server, with the FULL pin and the date it
+* was made.  Administrator only.  It changes nothing and takes no lock.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program list.servers
+$catalog $listservers
+
+$include int$keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   defs = ''
+   err = ''
+   shown = 0
+
+   words = trim(@sentence)
+   n.words = dcount(words, ' ')
+   if n.words > 2 then
+      stop sysmsg(12437) ;* list.servers {name}
+   end
+   name = ''
+   if n.words = 2 then name = downcase(field(words, ' ', 2))
+
+   call !netdefs('READ', defs, err)
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+
+   n.defs = dcount(defs, @fm)
+   for i = 1 to n.defs
+      if dcount(defs<i>, @vm) # 8 then
+         @system.return.code = -ER$FAILED
+         stop sysmsg(12441, i) ;* Server definitions file: line %1 is not a definition
+      end
+   next i
+
+   if n.defs = 0 and name = '' then
+      @system.return.code = 0
+      crt sysmsg(12438) ;* No servers are defined
+      stop
+   end
+
+   for i = 1 to n.defs
+      if name = '' or defs<i,1> = name then
+         allowed = defs<i,7>
+         if allowed = '' then allowed = sysmsg(12443)   ;* none
+         if name = '' then
+            pin.text = defs<i,5>[1, 16] : '...'
+         end else
+            pin.text = defs<i,5>
+         end
+         crt sysmsg(12439, defs<i,1>, defs<i,2>:':':defs<i,3>, defs<i,4>:'/':defs<i,6>, pin.text:'  ':allowed)
+         if name # '' then crt sysmsg(12440, defs<i,8>) ;* Defined on %1
+         shown += 1
+      end
+   next i
+
+   if shown = 0 then
+      @system.return.code = -ER$FNF
+      stop sysmsg(12435, name) ;* No server is defined with the name %1
+   end
+
+   @system.return.code = 0
+
+end
+
+* END-CODE

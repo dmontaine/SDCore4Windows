@@ -26,6 +26,10 @@
  *               API sign-on and LOGTO either way) also empties the key ring of the XE conversion (kr_wipe, sd_keyring.c).  Linux does it in
  *               its K_NET set; this port has no K_NET (S.65), and K_SET_ACCOUNT is called at the same four places.
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): K_PHANTOM_USER: PHANTOM USER n takes the user number n from those PHANTOMS keeps (QM4 gaps).
+ * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K_NET (the per-account NET gate for SDNet remote files, set from $internal only; does nothing yet).
+ * 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
+ *               anything but a plain file (edit_leaf_counts: !OSCOPY / !IOSCOPY can copy INTO a program file or the private
+ *               catalogue); K_EDIT_KIND and K_EDIT_OK answer EDIT_PROG for the private catalogue directory (edit_kind_of_path).
  * 17 Oct 26 dm  S.64: K_VOC_EDIT, K_BP_EDIT, K_DICT_EDIT (the edit gates, set from $internal only), K_EDIT_OK and K_EDIT_KIND (a $internal
  *               program asks whether the session may save a change to an open file) and K_EDIT_OS_OK (the same for an OS pathname).
  * 16 Oct 26 dm  K_PHANTOM_USER: PHANTOM USER n takes the user number n from those PHANTOMS keeps (QM4 gaps).
@@ -945,6 +949,23 @@ void op_kernel() {
       }
       result.data.value = (my_uptr->gates & edit_bit) != 0;
     } break;
+
+    /* 17 Oct 26 dm - S.65 slice 1: the NET gate, set as K_SD_ACCOUNTS is (only from a $internal program; -1 asks).  Account-scoped:
+       loaded at sign-on, at LOGTO and by the API server.  It takes effect for the remote-file slices that follow and does nothing yet;
+       the administrator will need no grant (as edit_permitted() passes it).                                                        */
+    case K_NET:
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL) {
+          if (n > 0)
+            my_uptr->gates |= UG_NET;
+          else
+            my_uptr->gates &= (u_int16_t)~UG_NET;
+        }
+      }
+      result.data.value = (my_uptr->gates & UG_NET) != 0;
+      break;
 
     /* K_EDIT_OK / K_EDIT_KIND: the argument is the pathname of an open file.  An $internal program is exempt from the test in
        op_dio3.c, so one that writes a file the USER named asks here first (see keys.h).                                      */

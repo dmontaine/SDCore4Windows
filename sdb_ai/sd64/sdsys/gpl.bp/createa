@@ -209,6 +209,86 @@
 *           administrator account is never confined to ssh
 * 14 Aug 26 Windows port - single quote the pathname passed to OS.EXECUTE,
 *           now that !valid_os_path permits spaces
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: NET-ON (the SDNet NET gate) beside the other switches; CA$NET in createacc.h.  It does nothing yet.
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.64: VOC-ON, BP-ON and DICT-ON (the edit gates) beside SH-ON and OS-ON; CA$VOC.EDIT, CA$BP.EDIT and CA$DICT.EDIT in createacc.h.
+* 06 Oct 26 Windows port - from Linux 9d6f407 - PAL-15 (parity audit J-3): an account created is audited.
+* 01 Oct 26 Windows port - from Linux 9d6f407 - S.50: the verb is now the sentence parser only.  Everything from
+*               the register check on moved to !create_account (gpl.bp
+*               create_account), which RESTORE.ACCOUNT calls with settings
+*               (createacc.h, agreed with SD Core for Windows).  The words
+*               accepted and the messages shown are unchanged.
+* 19 Sep 26 Windows port - from Linux 9d6f407 - set.owner single-quotes what it hands the shell.  "$hold" in a
+*               path was expanded away, so a sdsys session's CREATE.ACCOUNT
+*               chowned the account directory itself and then could not create
+*               $hold.dic in it (the third cycle's witness, M2).
+* 19 Sep 26 Windows port - from Linux 9d6f407 - ADOPT IS RENAMED ATTACH, marker $attach.<name> (the Windows
+*               port's name, agreed by mail 19 Sep 00:10; its old $adopt
+*               markers can survive on Windows disks, so only the new name is
+*               safe in both trees).  AND THE ATTACHED ACCOUNT'S NAME IS FOLDED
+*               (the port's RELEASE_1.1 67, same fault here): the arm kept the
+*               Linux user's spelling, so a user "Don" got register key don but
+*               directory user_accounts/Don and group sdu_Don.  acc.uname stays
+*               the real Linux user (chown and membership need it); the account
+*               name, directory and sdu_ group are the lower-case name.
+* 18 Sep 26 Windows port - from Linux 9d6f407 - A4 (the first fresh cycle's witness run): set.owner goes through
+*               sd-elevate's chown-account when the session is not root.  The
+*               OS$CHOWN intrinsic needs root and the administrator is a local
+*               sdsys session (S.26), so every account created after an install
+*               came out sdsys:sdusers - "Unable change ownership of directory
+*               ... err: 1" (EPERM) - instead of <account>:sdu_<account>.
+* 18 Sep 26 Windows port - from Linux 9d6f407 - THE MISSING end IN make.account'S VOC LOOP.  The teardown flattened
+*               "if copy.it then / read ... then ... end / end" to a bare read and
+*               took BOTH ends with it, so createa stopped compiling - the ONLY
+*               program in gpl.bp with no object after the install's
+*               SECOND.COMPILE (202 objects for 202 programs, createa absent),
+*               and CPROC could not load $CREATEA (errlog 0000209A at cproc:1691)
+*               so the install died seeding the installing user's account.  The
+*               end below is the read's, as login's identical loop has it.
+* 18 Sep 26 Windows port - from Linux 9d6f407 - TEARDOWN (owner's 18 Sep 2026 decision).  The tier keywords, the
+*           OS-access keywords (SH-ON/OS-ON) and the API route words are gone
+*           from the grammar; no ACC$TIER/ACC$SH/ACC$OS.EXEC are written; the
+*           sdadmin and sdapi joins are gone (the groups no longer exist);
+*           make.account copies all of NEWVOC - one VOC layer, no filter and no
+*           administrator add layer (S.25).  ADOPT makes a plain account (S.26).
+* 14 Sep 26 Windows port - from Linux 9d6f407 - S.16: a USER account below ADMINISTRATOR must say API or NONE
+*               (10082), the port's rule; an administrator, or API, joins sdapi.
+*               SSH and BOTH are refused (10919); a group or other account
+*               given a route is refused (10087).
+* 13 Sep 26 Windows port - from Linux 9d6f407 - Tier policy lists read from sdsys/tier.policy, not NEWVOC (plan
+*               M / port a47526f): opens it fail-safe, the two copy-loop skip
+*               tests gone with the records.
+* 13 Sep 26 Windows port - from Linux 9d6f407 - Account names are lower case (plan M, owner): the register key
+*               is stored downcased, and a GROUP account's directory is too.
+* 13 Sep 26 Windows port - from Linux 9d6f407 - A new account's command-stack VOC record is $command.stack (plan
+*               M3, the $ records; the port's 69015c3).
+* 13 Sep 26 Windows port - from Linux 9d6f407 - A new account is made lower case on disk: voc, $hold, $hold.dic,
+*               $svlists, bp - the port's names - and its BASIC file's VOC id
+*               is bp (plan M3 D3).
+* 13 Sep 26 Windows port - from Linux 9d6f407 - Opens sdsys accounts, newvoc and voc_template by their lower-case
+*               names on disk (plan M3 D1).
+* 12 Sep 26 Windows port - from Linux 9d6f407 - A new account's hold-file VOC id is $hold (plan M3); the
+*               directory on disk is still $HOLD.
+* 12 Sep 26 Windows port - from Linux 9d6f407 - A new account's saved-list VOC id is $savedlists (plan M3,
+*               first rename); the directory on disk is still $SVLISTS.
+* 11 Sep 26 Windows port - from Linux 9d6f407 - ADOPT, and the refusal that makes it necessary (PORT_ADOPTION
+*               15, the port's of 14 and 21 Aug 2026).  A pre-existing Linux
+*               user is now REFUSED (10038) instead of silently taken over;
+*               ADOPT is the one sanctioned exception, needs -internal AND a
+*               one-shot marker written by installsdcore.sh, consumes the marker,
+*               and defaults the tier to ADMINISTRATOR.  NO.QUERY without a
+*               Linux user now says why (10039) instead of "Invalid user name".
+* 11 Sep 26 Windows port - from Linux 9d6f407 - A password that could not be set says why - 10120, 10909,
+*               10910, 10121 - and a refusal that a retry cannot fix offers
+*               no retry (port PRE_RELEASE_FIXES 22, adapted: passwd's 10
+*               covers both a mismatch and a policy refusal).
+* 10 Sep 26 Windows port - from Linux 9d6f407 - PARITY AUDIT: SH-ON / OS-ON at creation (port, 27 Aug 2026),
+*               recorded for a USER account below ADMINISTRATOR; messages
+*               10030/10031 renumbered to the port's 10033/10032; VOC records
+*               copied whole (port PRE_RELEASE_FIXES 136).
+* 09 Sep 26 Windows port - from Linux 9d6f407 - ADMINISTRATOR and PROGRAMMER keywords; the tier is written to
+*               ACCOUNTS field 5 (ACC$TIER).  PRE_RELEASE 18.  Nothing reads it
+*               yet - the gates are a separate change, and the per-tier VOC is
+*               SL1 and is not designed.
 * rev 1.0-1 Jan 26 group account now have linux group name written as lower case
 *           with "sdg_" prefix
 *           use "adduser" -p parameter when creating linux user account
@@ -561,10 +641,11 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on}'
     crt '                  {shared-read-off} {shared-write-on} {no.query}'
-    crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, and no right to change'
-    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on); it can open and read the files'
+    crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
+    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), and no files on other SD servers'
+    crt '                  (net-on); it can open and read the files'
     crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
     crt '                  shared-write-on is typed;'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
@@ -610,6 +691,7 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$VOC.EDIT> = 1 then gates<-1> = 'voc-on'
    if settings<CA$BP.EDIT> = 1 then gates<-1> = 'bp-on'
    if settings<CA$DICT.EDIT> = 1 then gates<-1> = 'dict-on'
+   if settings<CA$NET> = 1 then gates<-1> = 'net-on'
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
@@ -783,6 +865,11 @@ more.args:
             settings<CA$SHARED.READ.OFF> = 1
          case upcase(token) = 'SHARED-WRITE-ON'
             settings<CA$SHARED.WRITE> = 1
+
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: NET-ON, the gate for opening a file on another SD server (SDNet),
+*   account-scoped; off unless typed.
+         case upcase(token) = 'NET-ON'
+            settings<CA$NET> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

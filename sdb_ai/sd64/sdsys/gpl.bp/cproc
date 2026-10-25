@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
+*           the new account's record and restored when LOGTO returns (stk.net).
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ / .WRITE) are account-scoped like SD.ACCOUNTS: loaded at
 *           LOGTO from the new account's record (a path-attached account has none: both off), held in stk.shared.read / .write and restored by
 *           revert.account.  (acc.record was already cleared before the register read.)
@@ -662,6 +664,7 @@ restart.cproc:
          stk.sh = kernel(K$SH, -1)          ;* 23 Oct 26: the OS-access switches go back with the account (S.63; they were held)
          stk.os.exec = kernel(K$OS.EXEC, -1)
          stk.sd.accounts = kernel(K$SD.ACCOUNTS, -1)
+         stk.net = kernel(K$NET, -1)   ;* 17 Oct 26, S.65 slice 1: the NET gate is account-scoped, so it is held and given back with the rest
          stk.shared.read = kernel(K$SHARED.READ, -1)    ;* 18 Oct 26, S.66: the shared-account gates are account-scoped too
          stk.shared.write = kernel(K$SHARED.WRITE, -1)
 
@@ -3198,6 +3201,9 @@ int.logto:
    void kernel(K$SH,      upcase(trim(acc.record<ACC$SH>)) = 'YES')
    void kernel(K$OS.EXEC, upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES')
    void kernel(K$SD.ACCOUNTS, upcase(trim(acc.record<ACC$SD.ACCOUNTS>)) = 'YES')   ;* 16 Oct 26: the SD.ACCOUNTS gate, off unless 'yes'
+* 17 Oct 26 dm - S.65 slice 1: the NET gate (SDNet remote files) is account-scoped like SD.ACCOUNTS: reloaded here from the new account's own
+*   record, off unless 'yes' (a path-attached account has no record, so it reads off).
+   void kernel(K$NET, upcase(trim(acc.record<ACC$NET>)) = 'YES')
 * 18 Oct 26 dm - S.66: the shared-account gates, account-scoped like SD.ACCOUNTS.  Read is ON unless the record says 'no' (a blank field is on), but ONLY
 *   for an account that has a register record: a path-attached LOGTO has none (acc.record is blank, so is its path field) and reads OFF, as does
 *   write.  Fail closed.  new.account cannot tell the two cases apart (it is reassigned from the path above); the record's path field can.
@@ -3292,6 +3298,7 @@ revert.account:
    void kernel(K$SHARED.READ,  stk.shared.read)    ;* 18 Oct 26, S.66
    void kernel(K$SHARED.WRITE, stk.shared.write)
    void kernel(K$SD.ACCOUNTS, stk.sd.accounts)
+   void kernel(K$NET, stk.net)   ;* 17 Oct 26, S.65 slice 1
    void kernel(K$AUDIT, 'logto revert account=' : who)
    i = kernel(K$INVALIDATE.OBJECT, 0)
    gosub find.private.catalogue

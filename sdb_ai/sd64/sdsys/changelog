@@ -2,6 +2,45 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+17 Oct 26  SDNET, FIRST SLICE: THE NET SWITCH AND THE SERVER DEFINITIONS (S.65).  NOTHING CONNECTS YET.
+
+             Why         SDNet, files on another SD server that a program opens and reads as if they were local, is being built in
+                        slices.  This is the first.  It adds the permission an account will need and the list of servers SDSYS is
+                        willing to have called, and nothing else: no program, verb or statement in SD opens a connection to a server,
+                        and no remote file can be opened.  The switch and the definitions are in place, and can be set and listed, so
+                        that the slices that follow have something to rest on.  The SDNet that was removed in September (a "server;file"
+                        VOC entry, port 4245, passwords in sd.conf) is not back.
+             NET switch  One more per-account switch, beside the shell, OS.EXECUTE, SD.ACCOUNTS, the three edit switches, ssh and the
+                        API.  It is OFF for an account made from now on, and off for every account that already exists: nothing used
+                        it, so there is no upgrade step.  SDSYS gives and takes it with modify.account name net-on and net-off, and
+                        create.account user takes net-on.  After a change the command prints "Account fred has NET yes" (or no); if the
+                        switch already had the value asked for it says only that the account already had that access.  Like sd-on, and
+                        unlike the edit switches, it belongs to the account the person is IN: it is read at sign-on, again at logto
+                        and given back when logto returns, and by the API server at every entry to an account.  It may be set on a
+                        group account.  The administrator is never refused, and an SDSYS session over the local API is given it on.
+                        The account archive keeps it for a user account, and restore.account gives it back only to an account it has
+                        to create; an older archive restores the account with it off.  Today the switch changes nothing anyone can do.
+             Servers     SDSYS defines the servers an account may one day reach; no user can.  Each definition is one line of the file
+                        netservers in the SDSYS directory (mode 644): a name, a host, the PORT OF THE SERVER BEING DEFINED (chosen
+                        when it is defined: 4247 for a full SD Core, 4249 for a Solo), the account to enter there, the SHA-256 hash of
+                        the server's public key (the pin), a mode (read, unless write is given), the local accounts that may use it,
+                        and the date.  The list of accounts is EMPTY unless SDSYS names some, so nobody may use a new definition,
+                        and an account needs the NET switch as well.  The file is replaced whole, so it is never half written, at most
+                        ten servers can be defined, and it holds no secret: a password or a key is never put in it.
+             Verbs       set.server name host port account pin {read | write} {accounts a,b,c} {no.query} adds a definition, or
+                        replaces one after a question (a replacement is the whole definition, the accounts list included); every
+                        field is checked first and each wrong one has its own message, and a refusal writes nothing.  delete.server
+                        name removes one.  list.servers {name} shows them, the pin cut short, or the whole pin and the date with a
+                        name.  They are SDSYS's: they are in SDSYS's VOC and in no other account's, and each also refuses anybody but
+                        the administrator.  Defining and deleting are written to the audit trail (set.server name=... and
+                        delete.server name=..., without the pin).  Messages 12416 and 12417 to 12444 are new.
+             Not there   The connection; showing you the key hash a server presents and asking you to confirm it, so the pin is typed
+                        in and NOTHING CHECKS IT; the user name and password for the remote account; the VOC pointer to a remote
+                        file; and any check of the NET switch or the accounts list, because nothing yet asks them.  Writing to
+                        a remote file is later again.  NETFILES in sd.conf still does nothing.
+             Documents   The Administrator guide has a new page, SDNet, and the NET switch in Accounts and Security; the TCL syntax
+                        card has the three verbs and net-on / net-off.
+
 25 Oct 26  THE REFUSAL "HAS NO OS ACCESS" FOR A PRINT FILE NAMES THE ACCOUNT INSTEAD OF PRINTING "%1" (FROM SD CORE FOR LINUX).
 
              What        An account without the OS-access setting cannot make a print file outside its own directory: SETPU, SETPTR ... AS

@@ -11,6 +11,9 @@
       *                      fourth value of ACC$TIER.  See the ACCOUNTS block
       * 25 Aug 26 Windows port - removed FL$TYPE.VFS; FILEINFO never
       *                      returned it and VFS is gone from the C
+      * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: ACC$NET (15), the per-account NET gate.
+      * 09 Sep 26 Windows port - from Linux 9d6f407 - add ACC$TIER (5) and ACC$PRIOR.TIER (6), matching the
+      *               Windows port.  PRE_RELEASE 18.
       * rev 0.9-2 Mar 25 mab add sdpyobj
       * rev 0.9.0 Jan 25 mab with the change in ownership of group ACCOUNTS
       *                      add SYSTEM() keys
@@ -421,9 +424,15 @@
       *   K$SHARED.READ / K$SHARED.WRITE at sign-on, at LOGTO (restored when LOGTO returns) and by the API server.  An account reached by
       *   a path has no register record, so it has read OFF.  Either field may sit on a USER, GROUP or OTHER account.  SDSYS switches
       *   them: MODIFY.ACCOUNT SHARED-READ-ON / SHARED-READ-OFF / SHARED-WRITE-ON / SHARED-WRITE-OFF; CREATE.ACCOUNT takes
-      *   SHARED-READ-OFF and SHARED-WRITE-ON.  (Windows has no ACC$NET at 15 yet; 15 stays free for it.)
+      *   SHARED-READ-OFF and SHARED-WRITE-ON.
       $define ACC$SHARED.READ  13    ;* may open the files of the shared account by name (yes/no; BLANK = yes)
       $define ACC$SHARED.WRITE 14    ;* may write records in the files of the shared account (yes/no; blank = no)
+      * 17 Oct 26 dm - FIELD 15: the NET gate (S.65 slice 1, SDNet; owner's rulings of 17 Oct).  Whether the account may open a file on
+      *   another SD server.  yes/no; BLANK MEANS NO.  ACCOUNT-SCOPED like ACC$SD.ACCOUNTS: loaded as K$NET at sign-on, at LOGTO (restored
+      *   when LOGTO returns) and by the API server.  No upgrade walk: nothing existing used it, so every existing account stays off.
+      *   SDSYS switches it (MODIFY.ACCOUNT NET-ON / NET-OFF; CREATE.ACCOUNT takes NET-ON).  The gate takes effect for the remote-file
+      *   slices that follow and does nothing yet.  Fields 13 and 14 are the shared-account gates (S.66).
+      $define ACC$NET          15    ;* may open a file on another SD server (yes/no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

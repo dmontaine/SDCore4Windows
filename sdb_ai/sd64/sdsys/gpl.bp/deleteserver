@@ -1,0 +1,125 @@
+* DELETESERVER
+* DELETE.SERVER verb (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 1: written.  Nothing yet opens a remote file; this removes a definition from the file the later
+*               slices will read.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   DELETE.SERVER name
+*
+* Removes the definition of that name from the file netservers in the SDSYS directory (see !netdefs).  Administrator only.
+* Written as the whole new file, so it is never half done.  The name is converted to lower case.  It does not ask: the
+* definition is one line, and set.server makes it again.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program delete.server
+$catalog $deleteserver
+
+$include int$keys.h
+$include err.h
+
+$define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads, changes and writes the definitions
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   defs = ''
+   err = ''
+   found = 0
+
+   words = trim(@sentence)
+   if dcount(words, ' ') # 2 then
+      stop sysmsg(12434) ;* delete.server name
+   end
+   name = downcase(field(words, ' ', 2))
+
+   openpath @sdsys to sys.f else
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12432, @sdsys, status()) ;* Cannot read %1 (status %2)
+   end
+
+   readu lock.rec from sys.f, NET.LOCK.ID locked
+      @system.return.code = -ER$LCK
+      stop sysmsg(12442) ;* Another session is changing the server definitions
+   end then
+      null
+   end else
+      null
+   end
+
+   call !netdefs('READ', defs, err)
+   if err # '' then
+      gosub release.lock
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+
+   n.defs = dcount(defs, @fm)
+   for i = 1 to n.defs
+      if dcount(defs<i>, @vm) # 8 then
+         gosub release.lock
+         @system.return.code = -ER$FAILED
+         stop sysmsg(12441, i) ;* Server definitions file: line %1 is not a definition
+      end
+      if defs<i,1> = name then found = i
+   next i
+
+   if found = 0 then
+      gosub release.lock
+      @system.return.code = -ER$FNF
+      stop sysmsg(12435, name) ;* No server is defined with the name %1
+   end
+
+   host = defs<found,2>
+   port = defs<found,3>
+   del defs<found>
+
+   call !netdefs('WRITE', defs, err)
+   gosub release.lock
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+
+   void kernel(K$AUDIT, 'delete.server name=' : name : ' host=' : host : ' port=' : port)
+
+   @system.return.code = 0
+   crt sysmsg(12436, name) ;* Server %1 was deleted
+   stop
+
+* ======================================================================
+* release.lock - give back the lock on the definitions and close the SDSYS directory.
+release.lock:
+   release sys.f, NET.LOCK.ID
+   close sys.f
+   return
+
+end
+
+* END-CODE

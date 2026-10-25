@@ -25,6 +25,9 @@
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
 * 01 Oct 26 Windows port - USRDIR's backslashes are made @ds (which is "/")
 *           before the separators are counted; the count was always zero.
+* 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the manifest key net (1 only if ACC$NET says yes), beside edit.voc, edit.bp and edit.dict; the NET gate does nothing yet.
+* 01 Oct 26 Windows port - from Linux 9d6f407 - Written for S.50 (per-OS helper; signature agreed with SD Core
+*              for Windows by mail, 2026-10-01T1030 and 1115).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -147,6 +150,7 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'edit.dict: ' : (if upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES' then 1 else 0)
       info<-1> = 'shared.read: ':(if upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO' then 1 else 0)     ;* 18 Oct 26, S.66: BLANK MEANS ON, so only the word no gives 0
       info<-1> = 'shared.write: ':(if upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES' then 1 else 0)
+      info<-1> = 'net: ':(if upcase(trim(acc.rec<ACC$NET>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.65 slice 1: the NET gate (does nothing yet)
    end
 
    return
