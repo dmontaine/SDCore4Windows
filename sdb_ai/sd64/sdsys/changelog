@@ -2,6 +2,21 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+19 Oct 26  A REMOTE SELECT THAT THE OTHER SERVER ANSWERS WITH AN ERROR NO LONGER STOPS THE PROGRAM.
+
+             What        When a program makes a list of the records of a file on another SD server (SDNet) and the server answers either request of
+                        the SELECT - the SELECT itself or the read of the list - with an error of the kind that takes an ON ERROR clause, the program
+                        was stopped with "READLIST generated an abort event" (or "SELECT generated an abort event"), which an ON ERROR clause cannot
+                        trap. It now gets the same error as every other remote file statement: message 12505 with the server's own words, or "status 0"
+                        when the server sent none. The client class (the BASIC class that talks to an SD server) lets an object that has been made
+                        quiet carry on after such a reply, as it already did for a READ, a WRITE and a DELETE; the remote file handler is the one
+                        user that makes its object quiet.
+             Why it      A server that was broken, or that was not to be trusted, could end a client's program at will, and the reason for a refusal never
+             matters    reached the person.
+             Does not    An object that is not quiet - the default, and every program that uses the client class directly - is stopped exactly as
+                        before. It does not change which requests a server refuses or what it says. It was found by a test written for the case; no real
+                        server was seen to send this reply.
+
 19 Oct 26  A REMOTE FILE CHANGE THAT THE OTHER SERVER REFUSES NOW SHOWS WHY.
 
              What        When a program changes a file on another SD server (SDNet) and that server's answer to the change is an error, the error message
@@ -34,6 +49,10 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              matters    send the administrator to the right group.
              Does not    The wording of the other lines of modify.account is unchanged. files-write-on and files-write-off do what they did. The real
                         group changes were not run on Windows: they need an elevated SDSYS session and the groups made by the installer.
+             Afterwards  If the write group went and the next step then fails (the removal from sdfiles, or the add of sdfiles after a leftover write
+                        membership), the person has lost the write access, so the command says what did happen: it prints "Account <name> has
+                        files-write no" and writes the audit line "modify.account files-write-off account=<name>" for the removal that worked, then
+                        reports the failure.  The audit line for files-off or files-on itself is written only when the whole command worked.
 
 19 Oct 26  THE API'S FILE LOCK AND UNLOCK (REQUESTS 32 AND 33) ACT ON THE FILE THEY ARE ASKED ABOUT.
 
@@ -57,7 +76,17 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              Why it      A compromised or broken server can no longer hold a client for a long time with a bad length, and an administrator who has a
              matters    slow link or a slow server can say how long is too long.
              Does not    It does not cap the size of a legitimate record, and the setting is per computer, not per server definition. NETWAIT and
-                        NETREPLY have nothing to do with the QMClient programs.
+                        NETREPLY have nothing to do with the QMClient programs.  The ceiling is set after the login, not during it: the login
+                        exchange itself has no limit on the length a reply announces (only the test for a length under ten bytes), so a pinned
+                        server that is hostile can still announce a large length in a login reply and send slowly, for NETREPLY seconds a read.
+                        A server that completes the TLS handshake and then sends nothing at all, not even its acknowledgement byte, is NOT given up
+                        on after NETREPLY seconds: the client waits until the server sends something or closes the connection (the session tickets
+                        that TLS 1.3 sends after the handshake end the first read early, and the read that follows has no time limit).  A server that
+                        sends the acknowledgement and then goes silent IS given up on after NETREPLY seconds.  Both are Linux measurements; not
+                        measured on Windows.
+             Fixed       A value of 65541 (65536 + 5) for NETWAIT or NETREPLY in sd.conf was read into a 16 bit field, came out as 5 and passed the
+                        1 to 3600 test, so SD started with a 5 second wait instead of refusing the value; the fields are 32 bit now and SD does not
+                        start.  (PWDELAY and DHCACHE are read the same way and have the same fault; they are not changed here.)
 
 18 Oct 26  A WAY AROUND THE OS ACCESS GATES WAS CLOSED: A CONVERSION CODE (FROM SD CORE FOR LINUX).
 

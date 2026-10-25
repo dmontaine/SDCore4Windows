@@ -418,12 +418,12 @@ void op_pconfig() {
     GetInt(descr);
     if ((descr->data.value < 1) || (descr->data.value > 3600))
       goto exit_op_pconfig;
-    pcfg.netwait = (int16_t)(descr->data.value);
+    pcfg.netwait = descr->data.value;
   } else if (!strcmp(param, "NETREPLY")) {
     GetInt(descr);
     if ((descr->data.value < 1) || (descr->data.value > 3600))
       goto exit_op_pconfig;
-    pcfg.netreply = (int16_t)(descr->data.value);
+    pcfg.netreply = descr->data.value;
   } else if (!strcmp(param, "PWDELAY")) {
     GetInt(descr);
     if ((descr->data.value < 0) || (descr->data.value > 3600))

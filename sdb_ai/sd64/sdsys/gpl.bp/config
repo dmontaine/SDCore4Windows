@@ -26,6 +26,17 @@
 * 17 Aug 26 Windows port - APIPORT reported, for the API listener.
 * 06 Oct 26 Windows port - APILOGIN is no longer reported (the setting is retired,
 *           parity audit PAW-5), as CREATUSR was not on 16 Aug.
+* 14 Sep 26 Windows port - from Linux d93ea0d - S.18: APILOGIN no longer reported; the setting is retired.
+* 06 Oct 26 Windows port - from Linux d93ea0d - PAL-9 (parity audit): CREATUSR is no longer reported.  Nothing has
+*               read pcfg.create_user since the tier teardown (measured by grep:
+*               set in config.c, returned by op_config.c, printed here, used by no
+*               program), and the Windows port dropped it on 16 Aug.  The key is
+*               still ACCEPTED in sd.conf and config('CREATUSR') still answers, so
+*               an existing sd.conf keeps working.  STARTUP stays: it runs here
+*               (sysseg.c:400), which the Windows port could not do.  There is no
+*               APIPORT to report: the API port is fixed at 4247 and its on, local
+*               and off states are the firewall's, reported by REMOTE.API.
+* 19 Oct 26 Windows port - from Linux d93ea0d - K8d (S.65): the listing gains NETREPLY and NETWAIT, in seconds.  (This line was missing from the K8d change: a dated history line to each file changed.)
 * END-HISTORY
 *
 * START-DESCRIPTION:

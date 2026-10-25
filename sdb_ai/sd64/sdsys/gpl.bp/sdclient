@@ -29,6 +29,10 @@
 * 19 Oct 26 Windows port - from Linux 0bdc4bd - K8c: the length a reply announces is checked before its body is read.  read.packet fails the call, as a lost connection does and without touching server.error or
 *               ServerStatus, for a reply that announces less than its own header (a negative count is that too: the count is signed) and, when the new public property maxpacket
 *               is above 0, for one longer than that.  The default is 0, so other users of the class are unchanged except for the nonsense lengths below 10.  $netfile sets it.
+* 19 Oct 26 Windows port - from Linux d93ea0d - SDNet finish 2 (verifier): select() and readlist() honour quiet.  They aborted on a server ON ERROR reply even when the object was quiet, so the $netfile handler's own
+*               branch for that reply (act.select, which a remote SELECT passes through) could never run: a server that answered the READLIST with an ON ERROR stopped the client's
+*               program with "READLIST generated an abort event", which an ON ERROR clause cannot trap.  A quiet object now returns (err = 1 from readlist; LastError and LastText for both),
+*               as read(), write() and delete() do.  A non-quiet object, the default and everything but $netfile, aborts exactly as before.
 *               LastError is the kind of the last reply, LastText the text of an ON ERROR one); clearfile(fno) (request 31); recordlock's
 *               wait flag was the wrong way round (flag 2 is NO wait, apisrvr and the C client) and is fixed.  The remote file handler
 *               $netfile is the one user of all of these.  NOT YET COMPILED OR RUN.
@@ -38,6 +42,7 @@
 *               (connect.keys sets 30 seconds; connect() still waits for ever).  connect() is otherwise unchanged.
 * 02 Oct 26 Windows port - from Linux 96d8be8 - The default port is 4247 (owner: full products 4247, Solo 4249).
 * 14 Sep 26 Windows port - from Linux 96d8be8 - connect() speaks SCRAM-SHA-256 (requests 47 and 48) instead of
+*               (connect.keys sets NETREPLY seconds, 30 by default since K8d; connect() still waits for ever).  connect() is otherwise unchanged.
 *               the cleartext SrvrLogin, which APISRVR retired in the same
 *               change - the Windows port's SDCLIENT of 20 Aug 2026, adopted
 *               unchanged (W.4 SCRAM phase 5).  The class is $internal now,
@@ -88,7 +93,8 @@
 * str = obj->error
 * obj->quiet = state          (true: a server ON ERROR reply does not abort the program; default false)
 * n = obj->LastError          (the kind of the last reply: 0 OK, 1 ON ERROR, 2 ELSE, 3 ERROR, 4 LOCKED, 5 PROMPT; -1 no reply was read)
-* str = obj->LastText         (the payload of an ON ERROR reply, null otherwise; it can be stale or empty)
+* str = obj->LastText         (the payload of the last reply when that reply was an ON ERROR one, null for any other reply: message.pair empties it before every request, so it is never an earlier
+*                              reply's; empty too when the server's ON ERROR clause had nothing to say)
 * obj->maxpacket = n          (the longest reply in bytes, header included, that is read; a longer one, or one that announces less than its own header, fails the call
 *                              as a lost connection would; 0, the default, sets no ceiling)
 *
@@ -385,12 +391,14 @@ end
 * that command stored (base64 except the count), username the remote user name and pin the 64 hexadecimal digits of the server's
 * definition.  In this order, and nothing is sent before the third step:
 *   1. every argument is checked for shape, without touching the network;
-*   2. one TLS connection (5 seconds to connect), and the hash of the public key the server presents is compared with pin;
+*   2. one TLS connection (NETWAIT seconds to connect, 5 unless sd.conf says otherwise), and the hash of the public key the server presents is compared with pin;
 *   3. the Ack byte, then the SCRAM exchange of scram.login with the stored keys in place of the password - the salt and iteration
 *      count the server sends must EQUAL the stored ones, or the stored login is out of date or this is not the server it was made
 *      with, and the exchange stops with only the client-first message sent;
 *   4. the account is entered as connect() does, and a refusal fails the call.
-* Every wait for the server is bounded (30 seconds a read; settimeout() changes it once connected).  The arguments are passed by
+* Every wait for the server is bounded (NETREPLY seconds a read, 30 unless sd.conf says otherwise; settimeout() changes it).  THE LOGIN EXCHANGE HAS NO CEILING ON THE LENGTH A REPLY
+* ANNOUNCES (maxpacket is set by the caller after connect.keys returns; only the below-ten test applies here): a pinned server that is hostile can still announce a large length in a
+* login reply and send slowly, for NETREPLY seconds a read.  The arguments are passed by
 * value: the copies here are cleared as soon as they are spent, the caller's variables are the caller's to clear.
 * On false, error says why and the socket is closed; ServerStatus is meaningful only after a failed connection (the status of the
 * open) or a refusal the server itself reported.
@@ -679,8 +687,8 @@ public function readlist(listno, err)
          begin case
             case server.error = SV$OK
                list = in.pkt
-            case server.error = SV$ON.ERROR
-               abort 'READLIST generated an abort event'
+            case server.error = SV$ON.ERROR and not(quiet)
+               abort 'READLIST generated an abort event'   ;* 19 Oct 26: a quiet object returns err = 1 and LastError / LastText instead, as read() does
          end case
          err = server.error
       end
@@ -800,8 +808,8 @@ public subroutine select(fno, listno)
       pkt = iconv(fno, 'ISL')
       pkt := iconv(listno, 'ISL')
       if message.pair(SrvrSelect, pkt) then
-         if server.error = SV$ON.ERROR then
-            abort 'SELECT generated an abort event'
+         if server.error = SV$ON.ERROR and not(quiet) then
+            abort 'SELECT generated an abort event'   ;* 19 Oct 26: a quiet object returns, and LastError says the reply was an ON ERROR one (as delete() does)
          end
       end
    end

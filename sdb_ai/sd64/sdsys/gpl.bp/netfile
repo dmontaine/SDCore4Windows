@@ -17,6 +17,9 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  Finish 2 (verifier): act.select checks obj->LastError after the SELECT request too, and its READLIST branch for an ON ERROR reply can run now: the class aborted on that reply even
+*               when quiet, so a server that answered it with an ON ERROR stopped the client's program; the class honours quiet in select() and readlist() (gpl.bp/sdclient, same day).
+*               Comments that said 5 seconds to connect and 30 a reply now say NETWAIT and NETREPLY.
 * 19 Oct 26 dm  K8c and K8d: the class is given a ceiling for a reply (obj->maxpacket, NF$MAX.PACKET: a reply that announces more than the largest string SD holds, or less than its
 *               own header, is a lost connection and is not read), and the wait for each reply is the configuration parameter NETREPLY (30 seconds by default) instead of the
 *               constant NF$REQUEST.MS; a CLEARFILE waits the longer of 300 seconds and that.  The comments that said the handler was not compiled or run are corrected (K8b).
@@ -84,15 +87,15 @@
 * The server name, the handle table (handle -> server slot, file number on the server, remote file name, account) and the counters are
 * plain values in the same block, so what a handle meant can be told even when the object is gone.
 *
-* A LOST CONNECTION.  The class marks nothing itself: a request that gets no reply (peer gone, reset, 30 seconds with no data) returns its
+* A LOST CONNECTION.  The class marks nothing itself: a request that gets no reply (peer gone, reset, NETREPLY seconds with no data) returns its
 * failure value and leaves ServerStatus alone.  So ServerStatus is set to the mark NF$NOREPLY before every request, and a reply (any reply) overwrites
 * it with the status field of its header (a signed 32 bit value, so it CAN be negative: the loss is the mark still there, tested by equality, never by sign).  A reply
 * whose length is not a length (K8c) is the same loss: the class fails the call before it touches ServerStatus.  On a loss the object is
 * released (its destructor sends a quit down the dead socket and closes it), every handle on that server becomes "lost" (12500 on any
 * use; CLOSE of it still works and frees the entry), and the call answers 12502.  THERE IS NO RETRY AND NO RECONNECT INSIDE AN OPERATION.
 * The next NF$OPEN of that server dials again (a lost slot has been freed); an NF$OPEN on a connection that died without being noticed
-* fails once with 12502 and the one after it reconnects.  Timeouts: 5 seconds to connect (the class, connect.keys), then 30 seconds for each
-* read of a reply (NETREPLY, set with settimeout(); both from the configuration since 19 Oct 26).  A server that is merely slow past that is treated as lost.
+* fails once with 12502 and the one after it reconnects.  Timeouts: NETWAIT seconds to connect (the class, connect.keys; 5 unless sd.conf says otherwise), then NETREPLY seconds for each
+* read of a reply (30 unless sd.conf says otherwise; set with settimeout()).  Both come from the configuration since 19 Oct 26.  A server that is merely slow past that is treated as lost.
 *
 * WHAT THE CLASS DOES NOT DO, AND SO THIS PROGRAM DOES NOT: the class has no READV and no FILEINFO method.  NF$READV reads the whole
 * record and cuts the field out here.  NF$FILEINFO answers keys 0 (1), 1 (null, no VOC name) and 2 (null: a path on another machine is not
@@ -613,6 +616,13 @@ act.select:
       return
    end
    if rq.err then
+      gosub server.fail
+      return
+   end
+*  19 Oct 26 (verifier, finish 2): the SELECT proper answered with an ON ERROR is the server's refusal too.  The class used to ABORT on it even when quiet, so this branch could not run;
+*  select() honours quiet now and says what the reply was in obj->LastError.
+   if obj->LastError = NF$LE.ERROR then
+      gosub on.error.text
       gosub server.fail
       return
    end

@@ -17,10 +17,11 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  Finish 2 (verifier): the header says NETWAIT seconds to connect where it still said 5 (comment only).  sandbox-net.py section timeouts now times it.
 * 19 Oct 26 dm  K8d: CONNECT waits NETWAIT seconds (sd.conf, 5 by default) for the connection.
 * 17 Oct 26 dm  S.65 slice 1: written.  The definition is stored and nothing connects to the server: no remote file can be opened
 *               yet; the gate (NET) and the definitions are in place for the slices that follow.
-* 17 Oct 26 dm  S.65 slice 2a: the fifth word may be CONNECT instead of the pin.  One TLS handshake is made (5 seconds to connect),
+* 17 Oct 26 dm  S.65 slice 2a: the fifth word may be CONNECT instead of the pin.  One TLS handshake is made (NETWAIT seconds to connect since K8d),
 *               the hash of the key the server presented is shown, and SDSYS is asked to trust it.  The audit line gains pin=typed
 *               or pin=confirmed.
 * END-HISTORY
@@ -49,8 +50,8 @@
 *
 * THE PIN IS EITHER TYPED OR CONFIRMED.  Typed: the 64 digits from the other server's administrator, and nothing is dialled.
 * CONNECT: every other field is checked first (nothing is dialled for a definition that would be refused, and the question about
-* replacing an existing definition comes before the connection), then one TLS handshake is made to host:port (5 seconds to
-* connect), the hash of the public key the server presented is read with SOCKET.INFO(SKT$INFO.TLS.SPKI) and the socket is closed
+* replacing an existing definition comes before the connection), then one TLS handshake is made to host:port (NETWAIT seconds to
+* connect, 5 unless sd.conf says otherwise), the hash of the public key the server presented is read with SOCKET.INFO(SKT$INFO.TLS.SPKI) and the socket is closed
 * at once: nothing is sent.  The hash is shown on a line of its own and SDSYS is asked "Trust this key (y/<n>)?".  y defines the
 * server with that hash; anything else, or input that ends, writes nothing.  THE KEY QUESTION IS ALWAYS ASKED: NO.QUERY skips
 * only the question about replacing a definition, never this one, because the answer is what makes the pin trustworthy.  A

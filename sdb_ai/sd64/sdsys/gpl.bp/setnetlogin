@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  Finish 2 (verifier): the header says NETWAIT seconds to connect where it still said 5 (comment only).  sandbox-net.py section timeouts now times it.
 * 19 Oct 26 dm  K8d: the connection waits NETWAIT seconds (sd.conf, 5 by default).
 * 17 Oct 26 dm  S.65 slice 2b: written.  The person's login on a server SDSYS has defined: the SCRAM exchange is run once against the
 *               pinned server and the derived values are kept ($netcred).  Nothing yet uses the login to open a remote file.
@@ -40,6 +41,8 @@
 * directory (made by this program as the person under C:\ProgramData\SD\sd-net on Windows - sd-elevate netcred-dir on Linux - then
 * SD_FILE_PRIVATE on it).  Then the two prompts.  Then ONE TLS connection to the host and
 * port of the definition (5 seconds to connect).  THE KEY THE SERVER PRESENTS IS COMPARED WITH THE PIN OF THE DEFINITION BEFORE
+* directory (sd-elevate netcred-dir, then SD_FILE_PRIVATE on it).  Then the two prompts.  Then ONE TLS connection to the host and
+* port of the definition (NETWAIT seconds to connect, 5 unless sd.conf says otherwise).  THE KEY THE SERVER PRESENTS IS COMPARED WITH THE PIN OF THE DEFINITION BEFORE
 * ANYTHING IS SENT; a different key ends the command with nothing sent.  Then the Ack byte and the SCRAM exchange exactly as
 * !sdclient's scram.login makes it (packets 47 and 48, bound to the TLS session, the nonce, the iteration bounds and the server's
 * signature all checked).  NOTHING ELSE IS SENT: no account is entered, no quit.  On any failure nothing is written and an existing
