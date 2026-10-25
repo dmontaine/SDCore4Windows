@@ -109,6 +109,11 @@ Private bool journalled_txn; /* Journalled update in this txn? */
 
 int txn_depth = 0;           /* Also accessed by op_sys.c */
 
+/* 15 Oct 26 dm - QM4 gaps (NON.DURABLE.TXN, QMTxn mode 4; sheet 442).  Set by K_NON_DURABLE_TXN just before a COMMIT and
+   cleared by that COMMIT whether it used it or not: the COMMIT of a transaction that is nested in another then hands its
+   cached updates and its locks to the parent instead of applying them to the files.  Accessed by op_kernel.c. */
+int txn_nondurable = 0;
+
 /* 1 Sep 26 Windows port - THE COMMENT HERE SAID "Also needed by dh_jnl.c" AND
    THAT FILE DOES NOT EXIST IN THIS TREE.  Checked before relying on it, because
    the whole of PRE_RELEASE 102's lock fix turns on whether this variable's
@@ -179,6 +184,7 @@ Private TXN_UNDO* undo_head = NULL;
 Private TXN_CACHE* alloc_txn(int16_t id_len);
 Private void rollback(void);
 Private void end_txn_level(void);
+Private void merge_into_parent(void);
 Private void clear_parent(int16_t fno, char* id, int16_t id_len);
 Private void capture_undo(FILE_VAR* fvar, char* id, int16_t id_len);
 Private void replay_undo(void);
@@ -242,6 +248,22 @@ void op_txncmt() {
 
   commit_txn_id = process.txn_id;
   process.txn_id = 0;
+
+  /* A non-durable commit of a nested transaction: nothing is applied, the parent inherits it all */
+
+  if (txn_nondurable) {
+    txn_nondurable = 0;
+    if (txn_stack != NULL) {
+      merge_into_parent();
+      transfer_txn_locks(commit_txn_id, txn_stack->txn_id);
+      commit_txn_id = 0;
+      txn_head = NULL;
+      txn_tail = NULL;
+      end_txn_level();
+      process.status = 0;
+      return;
+    }
+  }
 
   /* Commit all actions */
 
@@ -1014,6 +1036,57 @@ Private void rollback() {
   /* Exit from this transaction */
 
   end_txn_level();
+}
+
+/* ======================================================================
+   merge_into_parent()  -  A non-durable commit: the cached actions of the
+   running transaction become actions of the one it is nested in.
+
+   Each action is placed after the parent's own, as if the parent had done it: a write or delete of a record the parent has
+   already cached replaces that entry (the later action wins, as txn_write() and txn_delete() make it win inside one
+   transaction), and a record the parent has not touched gets the child's entry, moved over whole.  A deferred close moves
+   over too.  Afterwards the child's list is empty (the caller clears it).  Nothing reaches a file.                     */
+
+Private void merge_into_parent() {
+  TXN_STACK* stk = txn_stack;
+  TXN_CACHE* txn;
+  TXN_CACHE* next;
+  TXN_CACHE* p;
+  STRING_CHUNK* str;
+  bool nocase;
+  bool found;
+
+  for (txn = txn_head; txn != NULL; txn = next) {
+    next = txn->next;
+    found = FALSE;
+
+    if (txn->mode != TXN_CLOSE) {
+      nocase = (FPtr(txn->fvar->file_id)->flags & DHF_NOCASE) != 0;
+      for (p = stk->txn_head; p != NULL; p = p->next) {
+        if ((p->mode != TXN_CLOSE) && (p->fvar->file_id == txn->fvar->file_id) && (p->id_len == txn->id_len) &&
+            (IdMatch(p->id, txn->id, txn->id_len))) {
+          /* The parent's entry takes the child's action and the child's data (its reference moves across) */
+          if ((p->mode == TXN_WRITE) && ((str = p->str) != NULL) && (--(str->ref_ct) == 0))
+            s_free(str);
+          p->mode = txn->mode;
+          p->str = (txn->mode == TXN_WRITE) ? txn->str : NULL;
+          found = TRUE;
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      k_free(txn);
+    } else {
+      txn->next = NULL;
+      if (stk->txn_head == NULL)
+        stk->txn_head = txn;
+      else
+        stk->txn_tail->next = txn;
+      stk->txn_tail = txn;
+    }
+  }
 }
 
 /* ======================================================================

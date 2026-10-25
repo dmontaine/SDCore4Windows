@@ -96,6 +96,7 @@
 #define SrvrSystem       51    /* SYSTEM() */
 #define SrvrTrans        52    /* TRANS(), marks lowered one level */
 #define SrvrRTrans       53    /* TRANS(), marks as they are */
+#define SrvrTxn          54    /* Transaction start, commit, abort or non-durable commit */
 
 /* Server error status values */
 #define SV_OK             0    /* Action successful                       */

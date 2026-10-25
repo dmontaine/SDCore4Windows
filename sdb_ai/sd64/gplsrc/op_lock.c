@@ -1928,6 +1928,34 @@ void unlock_txn(u_int32_t txn) {
 }
 
 /* ======================================================================
+   transfer_txn_locks()  -  The locks taken in transaction FROM now belong to
+   transaction TO.  Used when a non-durable child transaction commits into its
+   parent (txn.c): the child's locks are held until the parent ends, as the
+   locks of the parent's own work are.                                    */
+
+void transfer_txn_locks(u_int32_t from, u_int32_t to) {
+  FILE_ENTRY* fptr;
+  int16_t idx;
+  RLOCK_ENTRY* lptr;
+  int16_t i;
+
+  StartExclusive(REC_LOCK_SEM, 33);
+
+  for (idx = 1; idx <= sysseg->numlocks; idx++) {
+    lptr = RLPtr(idx);
+    if ((lptr->hash != 0) && (lptr->owner == process.user_no) && (lptr->txn_id == from))
+      lptr->txn_id = to;
+  }
+
+  for (i = 1, fptr = FPtr(1); i <= sysseg->used_files; i++, fptr++) {
+    if ((fptr->file_lock == process.user_no) && (fptr->txn_id == from))
+      fptr->txn_id = to;
+  }
+
+  EndExclusive(REC_LOCK_SEM);
+}
+
+/* ======================================================================
    clear_waiters()  -  Clear lock wait entries                            */
 
 void clear_waiters(int16_t idx) /* Lock cell index */

@@ -1,0 +1,1 @@
+Transaction mode must be 1 (start), 2 (commit), 3 (abort) or 4 (commit, non-durable), and 2 to 4 need a transaction to be running

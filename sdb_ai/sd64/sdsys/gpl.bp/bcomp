@@ -213,7 +213,7 @@ $define M2.TRAP.UNUSED.MAIN     5  ;* TRAP.UNUSED, for variables assigned in the
 $define M2.PICK.SELECT          6  ;* SELECTV moves an active default list to its target (P_PICK_SEL, op_selectv)
 $define M2.EXPLICIT             7  ;* a scalar must be named in a DIM statement before it is used (explicit.check, dim.declare.scalar)
 $define M2.DEFAULT.UNASS.ARGS   8  ;* an argument with a default value takes it when the caller passed it unassigned (arg.defaults.emit)
-*  bit 9 is Linux's M2.NON.DURABLE.TXN (QMClient SDTxn mode 4, held): left unused so the bit numbers agree
+$define M2.NON.DURABLE.TXN      9  ;* 15 Oct 26 dm - COMMIT of a nested transaction hands its updates to the parent (emit.txn.commit)
 $define M2.STDFIL.SHARED       10  ;* 16 Oct 26 dm - QM4 gap 225: the default file variable is one per command level (see stdfil.shared.make)
 $define M2.AUTOLOCK            12  ;* 16 Oct 26 dm - QM4 gap 213: WRITE, MATWRITE and DELETE lock a record they do not hold a lock on (P_AUTOLOCK, op_dio3.c)
 $define M2.DEBUG.EQUATES       11 ;* 16 Oct 26 dm - QM4 gap 218: a debug object also holds the equate and $DEFINE tokens (emit.equate.table)
@@ -266,7 +266,7 @@ mode.names<1,38> = "TRAP.UNUSED.MAIN"
 mode.names<1,39> = "PICK.SELECT"
 mode.names<1,40> = "EXPLICIT"
 mode.names<1,41> = "DEFAULT.UNASS.ARGS"
-*  position 42 is Linux's NON.DURABLE.TXN (held): left empty
+mode.names<1,42> = "NON.DURABLE.TXN"
 mode.names<1,43> = "STDFIL.SHARED"
 mode.names<1,44> = "DEBUG.EQUATES"
 mode.names<1,45> = "AUTOLOCK"
@@ -7616,10 +7616,24 @@ st.close.socket:
    return
 
 *****************************************************************************
+* EMIT.TXN.COMMIT  -  the opcode of a COMMIT (both forms of it), preceded under $MODE NON.DURABLE.TXN by the call that makes
+* this one non-durable: KERNEL(K$NON.DURABLE.TXN, 1), its result thrown away.  (15 Oct 26 dm, QM4 gaps Q-16)
+
+emit.txn.commit:
+   if bittest(mode2, M2.NON.DURABLE.TXN) then
+      n = K$NON.DURABLE.TXN ; gosub emit.numeric.load
+      n = 1 ; gosub emit.numeric.load
+      opcode.byte = OP.KERNEL ; gosub emit.simple
+      opcode.byte = OP.POP ; gosub emit.simple
+   end
+   opcode.byte = OP.TXNCMT ; gosub emit.simple
+   return
+
+*****************************************************************************
 * ST.COMMIT  -  COMMIT statement
 
 st.commit:
-   opcode.byte = OP.TXNCMT ; gosub emit.simple
+   gosub emit.txn.commit
 
    * Walk back down the jump stack to find the associated transaction
 
@@ -14211,7 +14225,7 @@ st.transaction:
          goto back.end
          
       case u.token.string = 'COMMIT'
-         opcode.byte = OP.TXNCMT ; gosub emit.simple
+         gosub emit.txn.commit
          opcode = OP.LD0
          ins '0' before onerror.stack<1>      ;* No ON ERROR clause
          ins '0' before testlock.stack<1>     ;* No LOCKED clause

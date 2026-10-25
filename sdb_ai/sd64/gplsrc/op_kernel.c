@@ -84,6 +84,8 @@
 
 void kr_wipe(void); /* sd_keyring.c: empty the key ring of the XE conversion */
 
+extern int txn_nondurable; /* txn.c: the next COMMIT is non-durable (K_NON_DURABLE_TXN) */
+
 #include <sys/wait.h>
 /* 16 Aug 26 Windows port - cygwin_conv_path(), for K_WINPATH.  sysseg.c
    includes this too, for CW_CYGWIN_PID_TO_WINPID.                        */
@@ -1225,6 +1227,12 @@ void op_kernel() {
         EndExclusive(SHORT_CODE);
       }
     } break;
+
+    case K_NON_DURABLE_TXN:
+      GetInt(descr);
+      txn_nondurable = (descr->data.value != 0);
+      result.data.value = txn_nondurable;
+      break;
 
     case K_USER_STATS: {
       int16_t us_i;

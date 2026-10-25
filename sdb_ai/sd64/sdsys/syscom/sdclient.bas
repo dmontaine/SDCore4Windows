@@ -49,6 +49,7 @@ Declare Function SDIndices Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal In
 Declare Function SDRevision Lib "SDClient.dll" () As String
 Declare Function SDRTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
 Declare Function SDSystem Lib "SDClient.dll" (ByVal Key As Integer) As String
+Declare Sub SDTxn Lib "SDClient.dll" (ByVal Mode As Integer)
 Declare Function SDTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
 Declare Sub SDSetLeft Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)
 Declare Sub SDSetRight Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)

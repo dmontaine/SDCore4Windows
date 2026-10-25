@@ -550,6 +550,7 @@ int16_t lock_record(FILE_VAR *, char * id, int16_t id_len, bool update,
 bool unlock_record(FILE_VAR *, char * id, int16_t id_len);
 char * deadlock_info_string(int * len);
 void unlock_txn(u_int32_t txn);
+void transfer_txn_locks(u_int32_t from, u_int32_t to); /* 15 Oct 26: a non-durable child commit hands its locks to the parent */
 void clear_lock_wait(void);
 void rebuild_llt(void);
 

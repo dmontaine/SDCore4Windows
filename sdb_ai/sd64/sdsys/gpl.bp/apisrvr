@@ -592,6 +592,7 @@ loop
    vb.system,         ;*  51   SYSTEM() (QMSystem)                  sheet 499
    vb.trans,          ;*  52   TRANS(), marks lowered (QMTrans)     sheet 499
    vb.rtrans,         ;*  53   TRANS() raw (QMRTrans)               sheet 499
+   vb.txn,            ;*  54   Transaction start / commit / abort (QMTxn)   sheet 442
    vb.illegal.action
 
    st = status()
@@ -2820,6 +2821,31 @@ return
 
 vb.system:
 response = system(oconv(cmnd[1,4], 'ILL'))
+return
+
+* ======================================================================
+* Transactions (QMTxn).   Sheet 442
+* In:  mode (short integer): 1 start, 2 commit, 3 abort, 4 commit non-durable (a nested transaction goes to its parent)
+* Commit and abort need a transaction to be running.
+
+vb.txn:
+tx.mode = oconv(cmnd[1,2], 'ISL')
+if tx.mode < 1 or tx.mode > 4 or (tx.mode > 1 and not(@transaction.id)) then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12345) ;* Transaction mode must be 1 to 4, and 2 to 4 need a transaction
+   return
+end
+begin case
+   case tx.mode = 1
+      transaction start
+   case tx.mode = 2
+      transaction commit
+   case tx.mode = 3
+      transaction abort
+   case 1
+      void kernel(K$NON.DURABLE.TXN, 1)
+      transaction commit
+end case
 return
 
 * ======================================================================

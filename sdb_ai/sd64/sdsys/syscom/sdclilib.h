@@ -59,6 +59,7 @@
    #define SDRTrans _SDRTrans
    #define SDSystem _SDSystem
    #define SDTrans _SDTrans
+   #define SDTxn _SDTxn
    #define SDSetLeft _SDSetLeft
    #define SDSetRight _SDSetRight
    #define SDSetSession _SDSetSession
@@ -117,6 +118,7 @@ DLLEntry char * SDRevision(void);
 DLLEntry char * SDRTrans(char * filename, char * id, char * fieldname, char * action);
 DLLEntry char * SDSystem(int key);
 DLLEntry char * SDTrans(char * filename, char * id, char * fieldname, char * action);
+DLLEntry void SDTxn(int mode);
 DLLEntry void SDSetLeft(int fno, char * indexname);
 DLLEntry void SDSetRight(int fno, char * indexname);
 DLLEntry int SDSetSession(int session);

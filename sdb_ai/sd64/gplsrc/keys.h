@@ -535,6 +535,11 @@
 #define K_OS_EXEC            94
 #define K_PATH_OK            95
 #define K_PATH_IN            96
+/* 15 Oct 26 dm - QM4 gaps Q-16 and sheet 442 (NON.DURABLE.TXN, QMTxn mode 4).
+     K_NON_DURABLE_TXN 1 makes the next COMMIT of this process non-durable: if the transaction is nested in another, its cached
+                       updates and its locks go to the parent instead of to the files.  The COMMIT clears it, used or not.
+                       A program compiled with $MODE NON.DURABLE.TXN sets it before each COMMIT. */
+#define K_NON_DURABLE_TXN    113
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

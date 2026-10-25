@@ -86,6 +86,7 @@ Declare.s SDRevision()
 Declare.s SDRTrans(FileName.s, Id.s, FieldName.s, Action.s)
 Declare.s SDSystem(Key.l)
 Declare.s SDTrans(FileName.s, Id.s, FieldName.s, Action.s)
+Declare SDTxn(Mode.l)
 Declare SDSetLeft(Fileno.l, IndexName.s)
 Declare SDSetRight(Fileno.l, IndexName.s)
 Declare.l SDSetSession(Idx.l)
@@ -680,6 +681,13 @@ Procedure.s SDTrans(FileName.s, Id.s, FieldName.s, Action.s)
       CallCFunction(SDLib, "SDFree", *String)
    EndIf
    ProcedureReturn String$
+EndProcedure
+
+
+;===== SDTxn: 1 start, 2 commit, 3 abort, 4 commit non-durable
+Procedure SDTxn(Mode.l)
+   CheckConnected()
+   CallCFunction(SDLib, "SDTxn", Mode)
 EndProcedure
 
 

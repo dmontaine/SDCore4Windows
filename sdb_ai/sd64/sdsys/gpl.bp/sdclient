@@ -97,6 +97,7 @@
 * str = obj->rtrans(filename, id, fieldname, action)
 * str = obj->system(key)
 * str = obj->trans(filename, id, fieldname, action)
+* obj->txn(mode)
 * obj->setleft(fno, indexname)
 * obj->setright(fno, indexname)
 * obj->write(fno, id, data)
@@ -200,6 +201,7 @@ $define SrvrGetVar       50    ;* Value of an @-variable
 $define SrvrSystem       51    ;* SYSTEM()
 $define SrvrTrans        52    ;* TRANS(), marks lowered one level
 $define SrvrRTrans       53    ;* TRANS(), marks as they are
+$define SrvrTxn          54    ;* Transaction start, commit, abort or non-durable commit
 
 $define SV$OK             0    ;* Action successful
 $define SV$ON.ERROR       1    ;* Action took ON ERROR clause
@@ -950,6 +952,11 @@ end
 
 public function rtrans(filename, id, fieldname, action)
    return trans.packet(SrvrRTrans, filename, id, fieldname, action)
+end
+
+* 1 start, 2 commit, 3 abort, 4 commit non-durable (a nested transaction goes to its parent)
+public subroutine txn(mode)
+   void text.request(SrvrTxn, iconv(mode, 'ISL'), 'TXN generated an abort event')
 end
 
 * ======================================================================

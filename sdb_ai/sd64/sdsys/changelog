@@ -2,6 +2,22 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+             SDTxn(mode)    Starts (1), commits (2) or aborts (3) a transaction
+                        on the server, or (4) commits one without making it
+                        durable (below).  A commit or abort with no
+                        transaction running, or a mode out of range, is
+                        refused with a message.
+             The new requests are numbers 49 to 54 of the protocol; the
+             NON-DURABLE TRANSACTIONS.  The COMMIT of a transaction nested in
+             another normally writes its updates to the files at once, and
+             they stay written if the outer transaction is rolled back.  With
+             $MODE NON.DURABLE.TXN in the program (or SDTxn mode 4) the
+             nested COMMIT writes nothing: its updates, deletes and locks pass
+             to the outer transaction, which writes them when it commits and
+             discards them if it is rolled back.  A later write of the same
+             record by the nested transaction replaces the outer one's.  A
+             COMMIT of a transaction that is not nested is unchanged.
+
 15 Oct 26  QMCLIENT: SIX MORE API FUNCTIONS.
 
              The client library (sdclilib.so, the BASIC class sdclient and the

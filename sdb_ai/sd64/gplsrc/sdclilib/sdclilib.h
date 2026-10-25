@@ -78,6 +78,7 @@ SD_API char *SDGetVar(char *name);
 SD_API char *SDSystem(int key);
 SD_API char *SDIndices(int fno, char *index_name);
 SD_API char *SDTrans(char *file_name, char *id, char *field_name, char *action);
+SD_API void SDTxn(int mode);
 SD_API char *SDRTrans(char *file_name, char *id, char *field_name, char *action);
 SD_API void SDSetLeft(int16_t fno, char *index_name);
 SD_API void SDSetRight(int16_t fno, char *index_name);
