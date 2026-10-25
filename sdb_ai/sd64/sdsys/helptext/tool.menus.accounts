@@ -1,0 +1,5 @@
+The accounts list
+01-accounts-and-security
+Every registered account except SDSYS, one to a row. Starts in is where a session in that account begins: menu is the home screen, terminal is the command prompt, and default (menu) or default (terminal) means the account has no setting of its own and follows the system default.
+Own says whether the account may add programs of its own to its home screen. Tiles off lists the tiles you have turned off for it; a plus sign at the end means the list is longer than the column.
+Select an account with the Up and Down keys or a click, then press Tab to change its settings. F1 or ? on any row of the Menu box explains that setting.

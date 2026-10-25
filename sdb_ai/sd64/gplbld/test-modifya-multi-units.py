@@ -93,6 +93,8 @@ def checks(src, msgs):
     by_slot = {}
     for w, s in zip(words, slots):
         gate = "SUSPEND" if w in ("SUSPENDED", "UNSUSPENDED") else re.sub(r"-(ON|OFF)$", "", w)   # the two suspension words are one gate
+        if w.startswith("START-"):
+            gate = "START"                                                                        # 25 Oct 26 (Linux 858d757): start-menu, start-terminal and start-default are one setting (slot ST)
         by_slot.setdefault(s, set()).add(gate if s != "R" else "R")
     ck("M2b ...and two different gates never share a slot (a shared slot would call sh-on with os-on a conflict)",
        all(len(v) == 1 for v in by_slot.values()), "%s" % {k: sorted(v) for k, v in by_slot.items() if len(v) > 1})
@@ -200,7 +202,9 @@ MUTANTS = [
     ("a word is missing from the word list", ",DICT-OFF,SHARED-READ-ON,", ",SHARED-READ-ON,"),
     ("the usage forgets a word", "voc-on | voc-off | bp-on | bp-off | dict-on | dict-off", "voc-on | voc-off | bp-on | dict-on | dict-off"),
     ("sh-on and os-on share a slot", "'R,R,R,R,SH,SH,OS,OS,", "'R,R,R,R,SH,SH,SH,SH,"),
-    ("the suspension runs first", "SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED'", "SHARED-WRITE-OFF,UNSUSPENDED,SUSPENDED'"),
+    ("the suspension runs first", "PINS-OFF,SUSPENDED,UNSUSPENDED'", "PINS-OFF,UNSUSPENDED,SUSPENDED'"),
+    ("the start and pins words run after the suspension (25 Oct 26, S.75)", "START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED'", "SUSPENDED,UNSUSPENDED,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF'"),
+    ("the pins words share the start slot (25 Oct 26, S.75)", "SW,SW,ST,ST,ST,PN,PN,S,S')", "SW,SW,ST,ST,ST,ST,ST,S,S')"),
     ("a case of do.action ends in stop", "            gosub os.set\n         case upcase(action) = 'SH-OFF'", "            gosub os.set\n            stop\n         case upcase(action) = 'SH-OFF'"),
     ("the account is not read again before each action", "      read acc.rec from acc.f, acc.name else null\n", ""),
     ("the code is not cleared before each action", "      @system.return.code = 0\n      gosub do.action\n", "      gosub do.action\n"),

@@ -1,0 +1,5 @@
+Programs of the account's own
+01-accounts-and-security
+Off as delivered. When you turn it on, the account's home screen gets a group My programs, and the person can add their own programs to it with the my.menu verb: a label, and the command they would type at their prompt.
+A program added this way runs exactly as if the person had typed it, so it adds no access: the account's own gates apply. The person manages only their own list, never the standard tiles.
+Turning it off hides the group and stops my.menu; the person's list stays in their file. The command it runs is modify.account with pins-on or pins-off.

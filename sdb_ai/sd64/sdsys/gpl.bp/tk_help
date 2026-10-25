@@ -1,0 +1,131 @@
+* TK_HELP
+* The full-screen toolkit, shared base: context help for one setting, the [?] button that asks for it, and the box that shows it.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 72e708e - the Documentation button is off (doc is set to null): there is no pdf verb in this tree yet (RELEASE_1.1 179).
+* 23 Oct 26 dm  New (S.75, plan section 14.5).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_help(op, a, b, c, d)         ALWAYS FIVE ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with 0, as $tk_keys is padded)
+*
+*     'text'  a = the key       b = the title, c = the text (one paragraph to a field), d = the name of a document (null if none)  - returned
+*     'box'   a = the key       b = a line for the status bar (null when the person only read it)  - returned.  Shows the help in a box with a
+*                               Close button, and a Documentation button when the record names a document; that button runs  pdf <name>  through
+*                               $tk_run and b is what it printed.  A session with no terminal gets nothing.
+*     'mark'  a = x, b = y      draws the [?] button
+*     'hit'   a = the event of SCREEN MOUSE, b = x, c = y     d = 1 when the event is a left press on the button drawn by 'mark' at x, y; else 0
+*
+*   THE KEY.  page.setting in lower case, a-z 0-9 dot dash underscore, up to 80 characters (tool.menus.starts-in, tool.menus.tile.terminal).  A key
+*   with any other character is not looked up at all.
+*
+*   THE STORE.  The record of that key in the file context.help of the shared account.  Field 1 is the title, field 2 the name of a documentation
+*   PDF (null for none), fields 3 onward the text, one paragraph to a field.  The file is found with !shared_ref asked QUIETLY, which skips the
+*   administrator and gate tests: SDSYS reaches it (its own OPEN does not follow shared) and so does an account whose shared.read was withdrawn,
+*   because this is the product's documentation of its own screens, not data.  It is opened by path and only read, from an $internal program; the
+*   caller supplies a key, never a path.  A missing file or record is answered in words (12835-12837), not with an error.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_help(op, a, b, c, d)
+$catalog $tk_help
+
+$include sl.h
+$include tk.h
+
+   deffun shared_ref(name, fno, quiet) calling '!shared_ref'
+
+   begin case
+      case op = 'text'
+         key = a
+         gosub lookup
+         b = hdr
+         c = lines
+         d = doc
+      case op = 'box'
+         key = a
+         b = ''
+         gosub show.box
+      case op = 'mark'
+         screen text '[?]' at a,b attr 'bold'
+      case op = 'hit'
+         d = 0
+         if a<1> = 'press' and a<2> = 1 and a<4> = c and a<3> >= b and a<3> <= b + 2 then d = 1
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the store
+
+lookup:
+   hdr = ''
+   lines = ''
+   doc = ''
+   k = downcase(trim(key))
+   ok = (len(k) >= 1 and len(k) <= 80)
+   if ok then
+      for ci = 1 to len(k)
+         if index('abcdefghijklmnopqrstuvwxyz0123456789._-', k[ci, 1], 1) = 0 then ok = 0
+      next ci
+   end
+   rec = ''
+   have.file = 0
+   if ok then
+      ans = shared_ref('context.help', 2, @true)
+      if ans # '' then
+         openpath ans<1> to hf then
+            have.file = 1
+            read rec from hf, k else rec = ''
+            close hf
+         end
+      end
+   end
+   if rec = '' then
+      hdr = sysmsg(12835)
+      lines = (if have.file or not(ok) then sysmsg(12836, k[1, 60]) else sysmsg(12837))
+   end else
+      hdr = rec<1>
+      doc = downcase(trim(rec<2>))
+      del rec<1>
+      del rec<1>
+      lines = rec
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the box
+
+show.box:
+   if system(25) then return
+   gosub lookup
+   call $sl_scr('get', scr)
+   wrapw = scr<SL.S.W> - 16
+   if wrapw > 100 then wrapw = 100
+   if wrapw < 20 then wrapw = 20
+   body = ''
+   for p = 1 to dcount(lines, @fm)
+      if p > 1 then body<-1> = ''
+      call $tk_wrap(lines<p>, wrapw, pieces)
+      body<-1> = pieces
+   next p
+   doc = ''      ;* 25 Oct 26 Windows port: there is no pdf verb here yet, so no Documentation button (RELEASE_1.1 179)
+   if doc # '' then
+      btn = '&Documentation,&Close'
+      dflt = 2
+   end else
+      btn = '&Close'
+      dflt = 1
+   end
+   screen msgbox body title hdr buttons btn default dflt returning bn else bn = 0
+   if doc # '' and bn = 1 then
+      call $tk_run('pdf', 'pdf ' : doc, out, st, err)
+      b = (if err # '' then err else trim(change(out, @fm, ' '))[1, 130])
+   end
+   return
+end
+
+* END-CODE

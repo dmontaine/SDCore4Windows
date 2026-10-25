@@ -1,0 +1,76 @@
+* HOME_PINS
+* The programs a person has added to their own home screen (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.3).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75; the owner: "users need to be able to add their own items to the full screen menu if allowed by the admin - not manage universal tiles, but just
+*               for their own programs").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !home_pins(account, on, items)
+*
+*     account  the account's name
+*     on       returned: 1 when the person may add their own programs to the home screen - the administrator always, anyone else only when field 18 of the account's register
+*              record says yes (MODIFY.ACCOUNT PINS-ON; delivered off) - else 0
+*     items    returned: when on, the items of the record HOME of the file &MENUS& in the current account's directory, one to a field; an item is its values, label, glyph,
+*              command and pause (1 to wait for Enter after the command prints, 0 not).  Empty when off, when there is no file or record, and for an item without a label or
+*              a command.  At most 100 items; the label is cut to 21 characters, the glyph to 3 (">>>" when empty), the command to 200, and every control character in them is
+*              made a blank, so a record edited by hand cannot send the terminal a sequence.
+*
+*   Read-only.  The record is the person's own file: what a person can put in it is what they could type at their prompt, so a tile adds no access; what the gate decides is
+*   whether the home screen shows such tiles and MY.MENU edits them.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine home_pins(acct, on, items)
+$catalog !home_pins
+
+$include keys.h
+$include int$keys.h
+
+   on = 0
+   items = ''
+   if kernel(K$ADMINISTRATOR, -1) then
+      on = 1
+   end else
+      openpath @sdsys : @ds : 'accounts' to af then
+         read arec from af, downcase(acct) then on = (upcase(trim(arec<ACC$PINS>)) = 'YES')
+         close af
+      end
+   end
+   if not(on) then return
+
+   ctl = ''
+   for j = 1 to 31
+      ctl := char(j)
+   next j
+   blanks = str(' ', 31)
+
+   open '&menus&' to f then
+      read rec from f, 'home' then
+         n = dcount(rec, @fm)
+         if n > 100 then n = 100
+         for i = 1 to n
+            label = trim(convert(ctl, blanks, rec<i, 1>))[1, 21]
+            glyph = convert(ctl, blanks, rec<i, 2>)[1, 3]
+            command = trim(convert(ctl, blanks, rec<i, 3>))[1, 200]
+            if label # '' and command # '' then
+               if trim(glyph) = '' then glyph = '>>>'
+               pause = (if downcase(trim(rec<i, 4>)) = 'n' then 0 else 1)
+               items<-1> = label : @vm : glyph : @vm : command : @vm : pause
+            end
+         next i
+      end
+      close f
+   end
+
+   return
+end
+
+* END-CODE

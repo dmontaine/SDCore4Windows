@@ -1,0 +1,275 @@
+* MYMENU
+* MY.MENU verb: add your own programs to your home screen (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.3).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75; the owner: "users need to be able to add their own items to the full screen menu if allowed by the admin - not manage universal tiles, but just
+*               for their own programs").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   MY.MENU
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the programs a person has added to their own home screen: the list of them, and
+*   F2 add, Enter change the one selected, F3 remove it, F4 move it up, F6 move it down, Ctrl-Q leave.  An item is a label (up to 21 characters), a command (what the
+*   person would type at their prompt) and, if they like, a three-character glyph and whether the screen waits for Enter after a command that only prints.  The
+*   items are the record HOME of the file &MENUS& in the person's own account.
+*
+*   ONLY WHEN THE ADMINISTRATOR HAS ALLOWED IT (MODIFY.ACCOUNT account PINS-ON; the administrator always may): otherwise it says so (12891) and draws nothing.  It changes
+*   no tile but the person's own: the standard tiles are the administrator's (MENU MANAGEMENT, tool.menus).  A tile of their own runs a command the person could type,
+*   so it adds no access: the gates apply as at the prompt.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $mymenu
+$catalog $mymenu
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   call !home_pins(@who, on, its)
+   if not(on) then
+      display sysmsg(12891)
+      stop
+   end
+
+   call $tk_open('my.menu', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'enter', 'change', 'change', '', 1)
+   call $tk_keys('add', keys, 'f2', 'add', 'add', '', 1)
+   call $tk_keys('add', keys, 'f3', 'remove', 'remove', '', 1)
+   call $tk_keys('add', keys, 'f4', 'up', 'up', '', 1)
+   call $tk_keys('add', keys, 'f6', 'down', 'down', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   VIS = 30
+   sel = 1
+   top = 0
+   gen = 0
+   done = 0
+   msg = 'F2 adds a program'
+
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, 'My programs', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            screen mouse returning mev else mev = ''
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- the page
+
+draw.all:
+   cw = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw,chh
+   screen box at 1,1 size 138,34 title 'My programs'
+   screen text fmt('Label', '23L') : fmt('Glyph', '7L') : fmt('Command', '84L') : 'Waits' at 3,2 attr 'header' width 134
+   n = dcount(its, @fm)
+   if sel < 1 then sel = 1
+   if sel > n then sel = n
+   if sel - 1 < top then top = sel - 1
+   if sel > top + VIS then top = sel - VIS
+   if top < 0 then top = 0
+   for r = 1 to VIS
+      k = top + r
+      s = ''
+      if k <= n then
+         s = fmt(its<k, 1>, '23L') : fmt((if its<k, 2> = '' then '>>>' else its<k, 2>), '7L') : fmt(its<k, 3>[1, 82], '84L') : (if its<k, 4> then 'yes' else 'no')
+      end
+      screen text s at 3,2 + r attr (if k = sel and k <= n then 'highlight' else 'normal') width 134
+   next r
+   if n = 0 then
+      screen text 'You have not added a program yet.  F2 adds one.' at 3,4 width 134
+      screen text 'A program here is a command you could type at your prompt.  It is started from your home screen.' at 3,5 attr 'disabled' width 134
+   end
+   screen text "The standard tiles of the home screen are the administrator's; this list is only yours." at 3,34 attr 'disabled' width 134
+   return
+
+* ------------------------------------------------------------------------------------------------- keys
+
+on.key:
+   msg = ''
+   n = dcount(its, @fm)
+   begin case
+      case nm = 'up'
+         if sel > 1 then
+            sel -= 1
+            gosub draw.all
+         end
+      case nm = 'down'
+         if sel < n then
+            sel += 1
+            gosub draw.all
+         end
+      case nm = 'home'
+         sel = 1
+         gosub draw.all
+      case nm = 'end'
+         sel = n
+         gosub draw.all
+      case nm = 'f2'
+         gosub add.item
+      case nm = 'enter' or nm = ' '
+         if n > 0 then gosub change.item
+      case nm = 'f3'
+         if n > 0 then gosub remove.item
+      case nm = 'f4'
+         if sel > 1 then
+            gosub swap.up
+         end
+      case nm = 'f6'
+         if sel < n then
+            gosub swap.down
+         end
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the items
+
+* A new item at the end
+add.item:
+   if dcount(its, @fm) >= 100 then
+      msg = 'a list holds 100 programs at most'
+      return
+   end
+   lab = ''
+   cmd = ''
+   gly = ''
+   pau = 'y'
+   gosub ask.item
+   if not(ok) then return
+   its<-1> = lab : @vm : gly : @vm : cmd : @vm : (if pau = 'n' then 0 else 1)
+   gosub save
+   sel = dcount(its, @fm)
+   gosub draw.all
+   if ok then msg = 'added ' : lab
+   return
+
+change.item:
+   lab = its<sel, 1>
+   gly = (if its<sel, 2> = '>>>' then '' else its<sel, 2>)
+   cmd = its<sel, 3>
+   pau = (if its<sel, 4> then 'y' else 'n')
+   gosub ask.item
+   if not(ok) then return
+   its<sel> = lab : @vm : gly : @vm : cmd : @vm : (if pau = 'n' then 0 else 1)
+   gosub save
+   gosub draw.all
+   if ok then msg = 'changed ' : lab
+   return
+
+* The four questions; ok is 1 when all were answered and the label and the command are not empty
+ask.item:
+   ok = 0
+   screen ask 'Label (up to 21 characters)' width 24 value lab title 'Add a program' returning a1 else return
+   screen ask 'Command, as you would type it at your prompt' width 100 value cmd title 'Add a program' returning a2 else return
+   screen ask 'Glyph (up to 3 characters, empty for >>>)' width 5 value gly title 'Add a program' returning a3 else return
+   screen ask 'Wait for Enter when the command has finished printing? (y/n)' width 3 value pau title 'Add a program' returning a4 else return
+   lab = trim(a1)[1, 21]
+   cmd = trim(a2)[1, 200]
+   gly = a3[1, 3]
+   pau = downcase(trim(a4))[1, 1]
+   if lab = '' or cmd = '' then
+      msg = 'a program needs a label and a command: nothing was saved'
+      return
+   end
+   if index(lab : cmd : gly, @fm, 1) or index(lab : cmd : gly, @vm, 1) then
+      msg = 'those characters cannot be used: nothing was saved'
+      return
+   end
+   ok = 1
+   return
+
+remove.item:
+   rtxt = 'Remove ' : its<sel, 1> : ' from your home screen?'
+   rbtn = '&Remove' : @vm : '&Cancel'
+   screen msgbox rtxt title 'Remove' buttons rbtn default 2 returning b else b = 0
+   if b # 1 then
+      msg = 'nothing was removed'
+      return
+   end
+   del its<sel>
+   gosub save
+   gosub draw.all
+   msg = 'removed'
+   return
+
+* Swap the selected item with the one above it; the selection follows it up
+swap.up:
+   keep = its<sel - 1>
+   its<sel - 1> = its<sel>
+   its<sel> = keep
+   sel -= 1
+   gosub save
+   gosub draw.all
+   return
+
+* Swap the selected item with the one below it; the selection follows it down
+swap.down:
+   keep = its<sel + 1>
+   its<sel + 1> = its<sel>
+   its<sel> = keep
+   sel += 1
+   gosub save
+   gosub draw.all
+   return
+
+* The list is the record HOME of the file &MENUS& in this account (made when the first item is saved)
+save:
+   open '&menus&' to f else
+      execute 'create.file &menus& dynamic' capturing mk
+      open '&menus&' to f else
+         msg = 'the file &menus& could not be made: nothing was saved'
+         ok = 0
+         return
+      end
+   end
+   writeok = @true
+   write its to f, 'home' on error writeok = @false
+   close f
+   if not(writeok) then
+      msg = 'the list could not be saved'
+      ok = 0
+   end
+   return
+
+end
+
+* END-CODE

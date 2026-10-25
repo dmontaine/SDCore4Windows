@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 858d757 and f047abc (22 Oct 26) S.75, the home screen: START-MENU / START-TERMINAL / START-DEFAULT (field 16, ACC$START; start.set;
+*           12873, 12874) and PINS-ON / PINS-OFF (field 18, ACC$PINS; 12890), any account type; the words are in the usage, the word list and the slot list (ST, PN).
 * 25 Oct 26 Windows port - from Linux d93ea0d (19 Oct 26) K4a, finish 2 (verifier).  When the removal from sdfileswrite worked and the next step (the removal from sdfiles, or the ADD of
 *           sdfiles after a stray write membership went) failed, the command now prints the write group's line (12527, write.removed.line, which the success path uses too) and writes an
 *           audit line for the removal that happened (modify.account files-write-off account=<name>) before the failure message.  The files-off / files-on audit line is still written only
@@ -503,6 +505,25 @@ do.action:
 *   there is no tier to move it to and no direction to move in; SUSPENDED is
 *   the only state change this verb still performs, and it keeps its name
 *   because it IS a state rather than a rank.
+* 25 Oct 26 Windows port - from Linux 858d757 / f047abc (22 Oct 26), S.75: where a session of the account starts (START-MENU / START-TERMINAL / START-DEFAULT, field 16) and
+*   whether the person may add their own programs to the home screen (PINS-ON / PINS-OFF, field 18, delivered off).  Any account type, as SD-ON.
+         case upcase(action) = 'START-MENU'
+            start.want = 'menu'
+            gosub start.set
+         case upcase(action) = 'START-TERMINAL'
+            start.want = 'terminal'
+            gosub start.set
+         case upcase(action) = 'START-DEFAULT'
+            start.want = ''
+            gosub start.set
+         case upcase(action) = 'PINS-ON'
+            os.field = ACC$PINS
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'PINS-OFF'
+            os.field = ACC$PINS
+            os.want  = @false
+            gosub os.set
          case upcase(action) = 'SUSPENDED'
             want.tier = 'SUSPENDED'
             gosub tier.set
@@ -626,6 +647,7 @@ add.delete.arm:
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, net-on, net-off,'
          crt '   files-on, files-off, files-write-on, files-write-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
+         crt '   start-menu, start-terminal, start-default, pins-on, pins-off,'
          crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
@@ -651,6 +673,8 @@ show.usage:
    crt '                  modify.account <account> net-on | net-off'
    crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
+   crt '                  modify.account <account> start-menu | start-terminal | start-default'
+   crt '                  modify.account <account> pins-on | pins-off'
    crt '                  modify.account <account> suspended | unsuspended'
    crt '  Any of the actions except add and delete may be given together in one command, for example'
    crt '                  modify.account <account> sh-on os-on voc-on bp-on'
@@ -671,8 +695,8 @@ show.usage:
 *   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,FW,FW,SR,SR,SW,SW,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,FW,FW,SR,SR,SW,SW,ST,ST,ST,PN,PN,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -1031,6 +1055,35 @@ set.files:
    return
 
 *****************************************************************************
+* START.SET  -  MODIFY.ACCOUNT <account> START-MENU | START-TERMINAL | START-DEFAULT
+*
+* 25 Oct 26 Windows port - from Linux 858d757 (22 Oct 26), S.75 (the home screen; owner: "terminal or menu determined by admin for each account (another gate) - default
+*   menu").  Field 16 of the register record (ACC$START): menu, terminal, or blank for "follow the system default" (SET.START.DEFAULT).  Any account type may have it, as
+*   SD-ON may.  It takes effect at the next sign-on, and at the next LOGTO into the account.  start.want carries the state; the state it already has is "already" (12874)
+*   and changes nothing.
+
+start.set:
+   start.was = downcase(trim(acc.rec<ACC$START>))
+   if start.was = start.want then
+      crt sysmsg(12874, acc.name)  ;* %1 already starts that way; nothing changed
+      return
+   end
+   readu acc.new from acc.f, acc.name else acc.new = acc.rec
+   acc.new<ACC$START> = start.want
+   acc.written = @true
+   write acc.new to acc.f, acc.name on error acc.written = @false
+   if not(acc.written) then
+      release acc.f, acc.name
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10114, acc.name)  ;* Unable to change the state of %1; its state in the register is unchanged
+      return
+   end
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   crt sysmsg(12873, acc.name, if start.want = '' then 'system default' else start.want)  ;* Account %1 starts at: %2
+   return
+
+*****************************************************************************
 * WRITE.REMOVED.LINE  -  the line for a write group that was taken away (FILES-OFF, or FILES-ON over a stray membership): 12527 with the state read back.  The success path and the
 * failure of the step after the removal print the same line (finish 2, Linux d93ea0d).
 
@@ -1149,7 +1202,7 @@ route.apply:
 os.set:
 *   SD-ON / SD-OFF (the SD.ACCOUNTS gate, Linux 7ceb50d) are allowed on a GROUP account: what that gate opens is decided for
 *   each person by the groups they are in.
-   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT and os.field # ACC$NET and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE then
+   if group.name[1,4] # 'sdu_' and os.field # ACC$SD.ACCOUNTS and os.field # ACC$VOC.EDIT and os.field # ACC$BP.EDIT and os.field # ACC$DICT.EDIT and os.field # ACC$NET and os.field # ACC$SHARED.READ and os.field # ACC$SHARED.WRITE and os.field # ACC$PINS then
       @system.return.code = -ER$FAILED
       crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       return
@@ -1195,6 +1248,11 @@ os.set:
       sh.write.now = 'no'
       if upcase(trim(acc.new<ACC$SHARED.WRITE>)) = 'YES' then sh.write.now = 'yes'
       crt sysmsg(12520, acc.name, sh.read.now, sh.write.now)  ;* Account %1 has shared.read %2, shared.write %3
+      return
+   end
+   if os.field = ACC$PINS then
+*     22 Oct 26 (Linux f047abc), S.75: one field of its own, so the line names only it.
+      crt sysmsg(12890, acc.name, if upcase(trim(acc.new<ACC$PINS>)) = 'YES' then 'yes' else 'no')   ;* Account %1 may add its own programs to the home screen: %2
       return
    end
    if os.field = ACC$SD.ACCOUNTS then

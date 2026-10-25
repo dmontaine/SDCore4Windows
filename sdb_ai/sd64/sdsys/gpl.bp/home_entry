@@ -1,0 +1,82 @@
+* HOME_ENTRY
+* Where a session of an account starts: the home screen or the command prompt (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75, H2; the owner: "terminal or menu determined by admin for each account (another gate) - default menu").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !home_entry(why)
+*
+*     why   signon (the main loop of the command processor is about to start) or logto (a LOGTO typed at the prompt has entered an account and run its LOGIN)
+*
+*   Starts the HOME verb when the account's setting says menu.  CPROC calls it from those two places and nowhere else, and only on a terminal.
+*
+*   The setting: field 16 of the account's register record (ACC$START) is menu or terminal; BLANK follows the system default, the one word in the file
+*   start.default in the sdsys directory (SET.START.DEFAULT writes it; menu when the file is absent or says anything else).  An account with no register
+*   record (one entered by a path) follows the default too.
+*
+*   It starts nothing when
+*     - the session has no terminal (@tty does not begin /dev/: piped input, a phantom, telnet and the rest), so no command is ever read as a key;
+*     - the process is an API server;
+*     - the LOGTO is run by the home screen itself (hlogto of the named common /TKHOME/), which shows the new account's screen itself;
+*     - why is logto and the command processor is not the bottom one (a LOGTO run by a program with EXECUTE);
+*     - the account's VOC has no HOME entry (an account not brought up to date).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine home_entry(why)
+$catalog !home_entry
+
+$include keys.h
+$include int$keys.h
+
+   common /tkhome/ hflag, hlogto
+
+   if @tty[1, 5] # '/dev/' then return
+   if kernel(K$IS.SDAPISRVR, 0) then return
+   if hlogto then return
+   if why = 'logto' then
+      if kernel(K$CPROC.LEVEL, 0) > 1 then return
+   end
+
+   start = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      read arec from acc.f, downcase(@who) then start = downcase(trim(arec<ACC$START>))
+      close acc.f
+   end
+   if start # 'menu' and start # 'terminal' then
+      start = 'menu'
+      openseq @sdsys : @ds : 'start.default' readonly to df then      ;* READONLY: without it an absent file is created by the open
+         readseq line from df then
+            if downcase(trim(line)) = 'terminal' then start = 'terminal'
+         end
+         closeseq df
+      end
+   end
+   if start # 'menu' then return
+
+   openpath 'voc' to vf else return
+   read vrec from vf, 'home' else vrec = ''
+   close vf
+   if vrec = '' then return
+
+   execute 'home'
+
+* An account whose Terminal tile the administrator has turned off is not given the prompt that the screen was the way out of: whatever ended the screen (a window too
+*   small, an error, the cursor lock), the person is signed out.  The prompt is the account's own choice only when it STARTS there (START-TERMINAL), and then we are not here.
+   call !home_off(@who, off)
+   if index(' ' : off : ' ', ' terminal ', 1) then
+      sleep 2
+      execute 'quit'
+   end
+   return
+end
+
+* END-CODE

@@ -20,6 +20,11 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
 * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: para.reset.environment asks the kernel to send the queued closes of remote files (the K$NET argument -2),
+* 22 Oct 26 Windows port - from Linux home-screen - S.75 (the home screen): !HOME_ENTRY is called, on a terminal only, at the start of the main loop (the sign-on) and at the end of int.logto, and starts HOME when the
+*           account's setting (register field 16, MODIFY.ACCOUNT START-MENU / START-TERMINAL, else the system default) says menu.
+* 18 Oct 26 Windows port - from Linux home-screen - S.66: the shared-account gates (K$SHARED.READ / .WRITE) are account-scoped like NET: loaded at LOGTO from the new account's record
+*           (a path-attached account has none: both off), held in stk.shared.read / .write and restored by revert.account.  acc.record is
+*           cleared before the register read so that a failed open cannot leave the previous LOGTO's record to be read.
 *               so that a record lock taken on a remote file does not outlive its file variable at the prompt.
 * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 1: the NET gate (K$NET, SDNet remote files; does nothing yet) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
 *           the new account's record and restored when LOGTO returns (stk.net).
@@ -755,6 +760,9 @@ terminate.phantom:
    * Main command processor loop
 
 connected.port:
+* 22 Oct 26 dm - S.75 (the home screen): an account whose setting says menu starts in the home screen; the command prompt is what is left when it returns.  Only on a
+*   terminal (a piped session never has its commands read as keys, and the bootstrap runs before the routine exists), and only here and after a LOGTO typed at the prompt.
+   if @tty[1, 5] = '/dev/' then call !home_entry('signon')
    loop
       gosub reset.environment
       gosub set.links             ;* Unsnap subroutine links
@@ -3256,6 +3264,10 @@ logto.unwind:
    end
 
    if logto.reset then goto restart.cproc
+
+* 22 Oct 26 dm - S.75: the account entered by a LOGTO typed at the prompt starts as its setting says (the home screen, or the prompt).  !HOME_ENTRY returns at once for a LOGTO run
+*   by a program (the command processor is not the bottom one) and for the one the home screen runs itself.
+   if @tty[1, 5] = '/dev/' then call !home_entry('logto')
 
    return
 

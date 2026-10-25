@@ -1,0 +1,4 @@
+Where an account with no setting starts
+01-accounts-and-security
+Applies to every account whose Starts in column says default. It is menu as delivered, so after an upgrade every account that has no setting of its own starts in the home screen; set it to terminal first to keep the old start for all of them.
+An account with its own setting (start-menu or start-terminal) is not changed by this. The command it runs is set.start.default.

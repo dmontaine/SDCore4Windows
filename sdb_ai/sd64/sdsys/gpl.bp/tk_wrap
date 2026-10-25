@@ -1,0 +1,50 @@
+* TK_WRAP
+* The full-screen toolkit, shared base: one sentence cut into pieces no wider than a box, at spaces.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 23 Oct 26 dm  New (S.75).  The loop was in $tk_confirm; the menu management page and the help box needed it too.  $tk_confirm calls this now.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_wrap(text, width, out)
+*
+*     text   the sentence
+*     width  the widest piece, in characters (at least 20: a smaller number is taken as 20)
+*     out    returned: the pieces, one to a field.  A piece ends at the last space that keeps it within width, the space stays on its end (a
+*            screen shows it as nothing), and a word longer than width is cut at width.  Null text gives null.
+*
+*   A SCREEN TEXT longer than its width is CUT, not wrapped (found 22 Oct 26: the text of a box was lost from its last words on), so a text that may
+*   be longer than the box it goes into is passed through here first.  Nothing is read or changed outside the three arguments.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_wrap(text, width, out)
+$catalog $tk_wrap
+
+   out = ''
+   wrapw = width
+   if wrapw < 20 then wrapw = 20
+   rest = text
+   loop while rest # '' do
+      if len(rest) <= wrapw then
+         piece = rest
+         rest = ''
+      end else
+         cut = wrapw
+         loop while cut > 1 and rest[cut, 1] # ' ' do cut -= 1 repeat
+         if cut <= 1 then cut = wrapw
+         piece = rest[1, cut]
+         rest = trimf(rest[cut + 1, 99999])
+      end
+      out<-1> = piece
+   repeat
+   return
+end
+
+* END-CODE

@@ -1,0 +1,126 @@
+* SETTILE
+* SET.TILE verb: turn a home screen tile off or on for one account (S.75, plan .claude/plan-fullscreen-toolkit.md section 13).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75; the owner: "if defined by the admin or the system, it should be able to be turned off by the admin", then "disabling tiles should be on a
+*               per account basis, by default they are on").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.TILE                          says which tiles are off, for each account that has any
+*   SET.TILE account tile on | off    turns the tile off or on for that account (field 17 of its register record)
+*
+*   The administrator's verb.  Tiles are ON as delivered and are turned off one account at a time; there is no setting for every account.  A tile that is off is
+*   not on the account's home screen, and its menu entry cannot be chosen.  The standard tiles are editor, ide, ced, terminal, keys, switch and signout; any other
+*   id is accepted (it applies to a tile of that name in a page record) and said not to be standard.
+*   SIGN OUT CANNOT BE TURNED OFF: a person must always be able to leave.  With TERMINAL off, an account that starts in the home screen is never given the
+*   command prompt: when the screen ends it signs the person out (see HOME and !HOME_ENTRY).  That is a wall only for the prompt the screen gives: the
+*   programs behind the other tiles are the account's own, and an account kept to the screen should have the editor and IDE tiles off as well.  An account that
+*   starts at the prompt (START-TERMINAL) has the prompt whatever tiles are off.  Takes effect when the home screen is next built (sign-on, F5, Switch account).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.tile
+$catalog $settile
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   standard = 'editor ide ced terminal keys switch signout'
+
+   words = trim(@sentence)
+   n.words = dcount(words, ' ')
+
+   if n.words = 1 then
+      gosub list.off
+      @system.return.code = 0
+      stop
+   end
+   if n.words # 4 then stop sysmsg(12879)               ;* set.tile account tile {on | off}
+
+   who = downcase(field(words, ' ', 2))
+   tile = downcase(field(words, ' ', 3))
+   state = downcase(field(words, ' ', 4))
+   if state # 'on' and state # 'off' then stop sysmsg(12879)
+   if tile = '' or len(tile) > 32 or trim(convert('abcdefghijklmnopqrstuvwxyz0123456789.-', ' ', tile)) # '' then
+      stop sysmsg(12886, tile)                          ;* not a tile name
+   end
+   if tile = 'signout' and state = 'off' then stop sysmsg(12883)
+
+   if who = 'sdsys' then stop sysmsg(2202)              ;* Account name is invalid
+   openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
+   readu acc.rec from acc.f, who else
+      release acc.f, who
+      close acc.f
+      stop sysmsg(6003)                                 ;* Account name is invalid
+   end
+   cur = downcase(trim(convert(',' : char(9), '  ', acc.rec<ACC$TILES.OFF>)))
+
+   is.off = (index(' ' : cur : ' ', ' ' : tile : ' ', 1) > 0)
+   if is.off = (state = 'off') then
+      release acc.f, who
+      close acc.f
+      @system.return.code = 0
+      display sysmsg(12882, tile, state, who)           ;* Tile %1 was already %2 for %3; nothing changed
+      stop
+   end
+
+   new.list = ''
+   for i = 1 to dcount(cur, ' ')
+      w = field(cur, ' ', i)
+      if w # tile then new.list := (if new.list = '' then '' else ' ') : w
+   next i
+   if state = 'off' then new.list := (if new.list = '' then '' else ' ') : tile
+
+   acc.rec<ACC$TILES.OFF> = new.list
+   ok = @true
+   write acc.rec to acc.f, who on error ok = @false
+   if not(ok) then release acc.f, who
+   close acc.f
+   if not(ok) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12889)                                ;* The tile list could not be written
+   end
+
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'set.tile ' : state : ' tile=' : tile : ' account=' : who)
+   display sysmsg((if state = 'off' then 12880 else 12881), tile, who)       ;* Tile %1 is now off / on for %2
+   if index(' ' : standard : ' ', ' ' : tile : ' ', 1) = 0 then display sysmsg(12888, tile)        ;* not a standard tile
+   stop
+
+* One line for each account that has a tile off, or a line saying every tile is on
+list.off:
+   found = 0
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      select acc.f to 11
+      loop
+         readnext aid from 11 else exit
+         read arec from acc.f, aid then
+            t = downcase(trim(convert(',' : char(9), '  ', arec<ACC$TILES.OFF>)))
+            if t # '' then
+               display sysmsg(12885, aid, t)            ;* Tiles off for %1: %2
+               found = 1
+            end
+         end
+      repeat
+      close acc.f
+   end
+   if not(found) then display sysmsg(12887)            ;* Every tile is on
+   return
+
+end
+
+* END-CODE

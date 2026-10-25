@@ -1,0 +1,552 @@
+* TOOL_MENUS
+* The administrator's menu management page (S.75, plan .claude/plan-fullscreen-toolkit.md section 13; owner, 22 Oct 2026: "the tile on/off process needs to be managed by a
+* 'menu management' admin page").  An administrator app.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New.
+* 23 Oct 26 dm  A [?] button on every setting (the rows of the Menu box, the system default, and the Accounts list), F1 and ? on the selected row: the help is the record
+*               of the file context.help of the shared account ($tk_help).  The line wrapping is $tk_wrap.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.MENUS
+*
+*   For the administrator only (it is refused, before anything is read, for anyone else; it is in SDSYS's VOC only).  A full-screen page, in the toolkit's frame
+*   (140 columns by 43 lines at least), for what each account's HOME SCREEN shows and where each account starts:
+*
+*     Accounts    every registered account but SDSYS, with where it starts (its own setting, or the system default) and the tiles turned off for it
+*     Menu        for the account selected: where it starts, and each standard tile of the home screen with its state, [x] on and [ ] off
+*     Default     where an account with no setting of its own starts
+*
+*   Keys: Up and Down move in the pane, Tab and Back-tab (or Left and Right) change pane, Enter or the space bar changes the setting under the cursor, F5 reads the
+*   register again, Ctrl-Q leaves.  A click selects a row.  F1 or ? on the selected row, or a click on the [?] at the end of a setting's row, shows what the
+*   setting means (keys tool.menus.accounts, tool.menus.starts-in, tool.menus.pins, tool.menus.tile.<id>, tool.menus.default; the text is in helptext/).
+*
+*   THE PAGE WRITES NOTHING ITSELF.  Every change is a command the administrator already has, shown with its effect in a box that is answered Run or Cancel (Cancel is the
+*   button Enter chooses), and then run by $tk_run: SET.TILE account tile on | off, MODIFY.ACCOUNT account START-MENU | START-TERMINAL | START-DEFAULT, SET.START.DEFAULT
+*   menu | terminal.  The line under the page after a change is the command's own answer, and the page is read from the register again.  Turning the Terminal tile
+*   OFF asks for the account's name to be typed: for an account that starts in the menu it removes the command prompt (the home screen signs the person out when it ends).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_menus
+$catalog $tool_menus
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'modify.account set.tile set.start.default'          ;* the commands this page may run
+
+   call $tk_open('tool.menus', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.menus')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'enter', 'change', 'change', '', 1)
+   call $tk_keys('add', keys, 'tab', 'pane', 'pane', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   tids = 'editor' : @fm : 'ide' : @fm : 'ced' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout'
+   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Record editor' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out'
+   pnames = 'Accounts' : @fm : 'Menu' : @fm : 'Default'
+
+   VIS = 26                                                      ;* account rows shown at a time (rows 3 to 28 of the Accounts box)
+   pane = 1
+   ai = 1                                                        ;* the account selected, a row of ids
+   si = 1                                                        ;* the row selected in the Menu pane: 1 is where the account starts, 2 to 8 the standard tiles
+   top = 0
+   gen = 0
+   msg = 'Tab changes pane, Enter changes the setting'
+   done = 0
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, pnames<pane>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)                          ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
+      nm = ''
+      screen key returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the register says
+
+* Every registered account but SDSYS, in order; where each starts and the tiles that are off for it; the system default
+read.all:
+   ids = ''
+   atype = ''
+   astart = ''
+   aoff = ''
+   asusp = ''
+   apins = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      select acc.f to 11
+      loop
+         readnext aid from 11 else exit
+         if downcase(aid) # 'sdsys' then
+            locate aid in ids<1> by 'AL' setting p else
+               ins aid before ids<p>
+            end
+         end
+      repeat
+      for i = 1 to dcount(ids, @fm)
+         read arec from acc.f, ids<i> then
+            gp = arec<ACC$GROUP>
+            begin case
+               case gp[1, 4] = 'sdu_'
+                  atype<i> = 'USER'
+               case gp[1, 4] = 'sdg_'
+                  atype<i> = 'GROUP'
+               case 1
+                  atype<i> = 'OTHER'
+            end case
+            astart<i> = downcase(trim(arec<ACC$START>))
+            aoff<i> = downcase(trim(convert(',' : char(9), '  ', arec<ACC$TILES.OFF>)))
+            asusp<i> = (if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then 1 else 0)
+            apins<i> = (if upcase(trim(arec<ACC$PINS>)) = 'YES' then 1 else 0)
+         end
+      next i
+      close acc.f
+   end
+   defword = 'menu'
+   openseq @sdsys : @ds : 'start.default' readonly to df then
+      readseq line from df then
+         if downcase(trim(line)) = 'terminal' then defword = 'terminal'
+      end
+      closeseq df
+   end
+   na = dcount(ids, @fm)
+   if ai > na then ai = na
+   if ai < 1 then ai = 1
+   return
+
+* Where account i starts, as it reads: its own word, or the default and a note
+start.text:
+   if astart<i> = 'menu' or astart<i> = 'terminal' then
+      stext = astart<i>
+   end else
+      stext = 'default (' : defword : ')'
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw,chh
+   screen box at 1,1 size 70,30 title 'Accounts'
+   screen box at 72,1 size 67,13 title 'Menu'
+   screen box at 72,14 size 67,17 title 'What this means'
+   screen box at 1,31 size 70,5 title 'System default'
+   screen box at 72,31 size 67,5 title 'Help'
+   gosub draw.accounts
+   gosub draw.menu
+   gosub draw.effect
+   gosub draw.default
+   gosub draw.help
+   return
+
+draw.accounts:
+   screen text fmt('Account', '14L') : fmt('Type', '10L') : fmt('Starts in', '19L') : fmt('Own', '5L') : 'Tiles off' at 3,2 attr 'header' width 66
+   if na = 0 then
+      screen text 'No account is registered.' at 3,4 width 66
+   end
+   if ai - 1 < top then top = ai - 1
+   if ai > top + VIS then top = ai - VIS
+   for r = 1 to VIS
+      k = top + r
+      s = ''
+      if k <= na then
+         i = k
+         gosub start.text
+         tf = aoff<k>
+         if len(tf) > 18 then tf = tf[1, 17] : '+'
+         s = fmt(ids<k>[1, 13], '14L') : fmt(atype<k> : (if asusp<k> then ' (s)' else ''), '10L') : fmt(stext, '19L') : fmt((if apins<k> then 'yes' else 'no'), '5L') : tf
+      end
+      screen text s at 3,2 + r attr (if k = ai and k <= na then (if pane = 1 then 'highlight' else 'bold') else 'normal') width 66
+   next r
+   call $tk_help('mark', 66, 2, 0, 0)                             ;* F1, ? or a click: what this box shows
+   return
+
+draw.menu:
+   if na = 0 then
+      for r = 1 to 10
+         screen text '' at 74,1 + r width 63
+      next r
+      return
+   end
+   i = ai
+   gosub start.text
+   for r = 1 to 9
+      begin case
+         case r = 1
+            s = fmt('Starts in', '28L') : stext
+         case r = 2
+            s = fmt('May add own programs', '28L') : (if apins<ai> then 'yes (shown as My programs)' else 'no (as delivered)')
+         case 1
+            t = r - 2
+            s = (if index(' ' : aoff<ai> : ' ', ' ' : tids<t> : ' ', 1) > 0 then '[ ]' else '[x]') : ' ' : fmt(tlabs<t>, '16L') : fmt(tids<t>, '10L') : (if tids<t> = 'signout' then 'cannot be turned off' else '')
+      end case
+      screen text s at 74,1 + r attr (if r = si then (if pane = 2 then 'highlight' else 'bold') else 'normal') width 59
+      call $tk_help('mark', 134, 1 + r, 0, 0)                     ;* the [?] button of the setting on this row
+   next r
+   screen text 'Enter changes the row.  [x] is on as delivered, [ ] is off.' at 74,12 attr 'disabled' width 63
+   return
+
+* What the account's settings mean, in plain sentences
+draw.effect:
+   lines = ''
+   if na > 0 then
+      i = ai
+      gosub start.text
+      eff = (if astart<ai> = 'menu' or astart<ai> = 'terminal' then astart<ai> else defword)
+      t.off = (index(' ' : aoff<ai> : ' ', ' terminal ', 1) > 0)
+      lines<-1> = ids<ai> : ' starts in the ' : (if eff = 'menu' then 'home screen' else 'command prompt') : ' (' : (if astart<ai> = 'menu' or astart<ai> = 'terminal' then 'its own setting' else 'the system default') : ').'
+      lines<-1> = (if aoff<ai> = '' then 'Every tile is on.' else 'Tiles off: ' : aoff<ai> : '.')
+      lines<-1> = (if apins<ai> then 'It may add its own programs to its home screen (My programs).' else 'It may not add programs of its own to its home screen.')
+      lines<-1> = ''
+      begin case
+         case t.off and eff = 'menu'
+            lines<-1> = 'THE PROMPT IS REMOVED FOR THIS ACCOUNT: it starts in the home screen and the Terminal tile is off,'
+            lines<-1> = 'so the screen signs the person out when it ends and never leaves them at the command prompt.'
+            lines<-1> = "The programs behind the other tiles are the account's own: turn the Editor and IDE tiles off"
+            lines<-1> = 'as well to keep the account to the tiles you give it.'
+         case t.off
+            lines<-1> = 'The Terminal tile is off, but this account starts at the command prompt, so it has the prompt.'
+         case eff = 'menu'
+            lines<-1> = 'The person gets the home screen, and its Terminal tile gives the command prompt.'
+         case 1
+            lines<-1> = 'The person gets the command prompt; HOME opens the home screen.'
+      end case
+      lines<-1> = ''
+      lines<-1> = 'A change reaches the person at their next sign-on (or F5 in the home screen).'
+   end
+   gosub wrap.lines
+   for r = 1 to 15
+      screen text lines<r> at 74,14 + r width 63
+   next r
+   return
+
+* Break each line of 'lines' at a space so that none is wider than the box (a SCREEN TEXT longer than its width is cut, not wrapped)
+wrap.lines:
+   wrapped = ''
+   for wi = 1 to dcount(lines, @fm)
+      call $tk_wrap(lines<wi>, 63, pieces)
+      wrapped<-1> = pieces
+   next wi
+   lines = wrapped
+   return
+
+draw.default:
+   screen text 'An account with no setting of its own starts in the' at 3,32 width 66
+   screen text (if defword = 'menu' then 'home screen (menu)' else 'command prompt (terminal)') at 3,33 attr (if pane = 3 then 'highlight' else 'bold') width 66
+   screen text 'Enter changes it for every account that follows the default.' at 3,34 attr 'disabled' width 66
+   call $tk_help('mark', 66, 32, 0, 0)
+   return
+
+draw.help:
+   screen text 'Up and Down move.  Tab changes pane.  Enter changes the setting.' at 74,32 width 63
+   screen text 'Each change is shown as its command; you answer Run or Cancel.' at 74,33 width 63
+   screen text 'F5 reads the register again.  Ctrl-Q leaves.' at 74,34 width 63
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and the mouse
+
+on.key:
+   msg = ''
+   begin case
+      case nm = 'up'
+         if pane = 1 and ai > 1 then
+            ai -= 1
+            gosub redraw.account
+         end
+         if pane = 2 and si > 1 then
+            si -= 1
+            gosub draw.menu
+         end
+      case nm = 'down'
+         if pane = 1 and ai < na then
+            ai += 1
+            gosub redraw.account
+         end
+         if pane = 2 and si < 9 then
+            si += 1
+            gosub draw.menu
+         end
+      case nm = 'pgup' and pane = 1
+         ai = ai - VIS
+         if ai < 1 then ai = 1
+         gosub redraw.account
+      case nm = 'pgdn' and pane = 1
+         ai = ai + VIS
+         if ai > na then ai = na
+         if ai < 1 then ai = 1
+         gosub redraw.account
+      case nm = 'tab' or nm = 'right'
+         pane = pane + 1
+         if pane > 3 then pane = 1
+         gosub redraw.panes
+      case nm = 'btab' or nm = 'left'
+         pane = pane - 1
+         if pane < 1 then pane = 3
+         gosub redraw.panes
+      case nm = 'enter' or nm = ' '
+         gosub change
+      case nm = 'f1' or nm = '?'
+         gosub help.here
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read the register again'
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+* A new account is selected: the Menu and the explanation change with it
+redraw.account:
+   gosub draw.accounts
+   gosub draw.menu
+   gosub draw.effect
+   return
+
+redraw.panes:
+   gosub draw.accounts
+   gosub draw.menu
+   gosub draw.default
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   gosub help.click
+   if clicked then return
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      begin case
+         case mx >= 2 and mx <= 69 and my >= 3 and my <= 2 + VIS
+            k = top + my - 2
+            if k <= na then
+               ai = k
+               pane = 1
+               gosub redraw.account
+               gosub redraw.panes
+            end
+         case mx >= 73 and mx <= 138 and my >= 2 and my <= 10
+            si = my - 1
+            pane = 2
+            gosub redraw.panes
+         case mx >= 2 and mx <= 69 and my >= 32 and my <= 34
+            pane = 3
+            gosub redraw.panes
+      end case
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- help: the [?] buttons, F1 and ?
+
+* The key of the help for what is selected: the Accounts list, the setting on the selected row of the Menu box, or the system default
+help.key:
+   hk = 'tool.menus.accounts'
+   if pane = 2 then
+      begin case
+         case si = 1
+            hk = 'tool.menus.starts-in'
+         case si = 2
+            hk = 'tool.menus.pins'
+         case 1
+            hk = 'tool.menus.tile.' : tids<si - 2>
+      end case
+   end
+   if pane = 3 then hk = 'tool.menus.default'
+   return
+
+help.here:
+   gosub help.key
+   call $tk_help('box', hk, hm, 0, 0)
+   if hm # '' then msg = hm
+   return
+
+* A left press on a [?]: that setting is selected and its help is shown
+help.click:
+   clicked = 0
+   hit.row = 0
+   if na > 0 then
+      for hr = 1 to 9
+         call $tk_help('hit', mev, 134, 1 + hr, hit.now)
+         if hit.now then hit.row = hr
+      next hr
+   end
+   call $tk_help('hit', mev, 66, 32, hit.default)
+   call $tk_help('hit', mev, 66, 2, hit.accounts)
+   begin case
+      case hit.row
+         si = hit.row
+         pane = 2
+         clicked = 1
+      case hit.default
+         pane = 3
+         clicked = 1
+      case hit.accounts
+         pane = 1
+         clicked = 1
+   end case
+   if clicked then
+      gosub redraw.panes
+      gosub help.here
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- changing something: the command, its effect, Run or Cancel, then the machine's answer
+
+change:
+   if na = 0 and pane # 3 then return
+   begin case
+      case pane = 1
+         pane = 2
+         gosub redraw.panes
+      case pane = 2
+         begin case
+            case si = 1
+               gosub change.start
+            case si = 2
+               gosub change.pins
+            case 1
+               gosub change.tile
+         end case
+      case pane = 3
+         gosub change.default
+   end case
+   return
+
+change.start:
+   acct = ids<ai>
+   items = 'menu (the home screen)' : @fm : 'terminal (the command prompt)' : @fm : 'the system default (' : defword : ')'
+   ttl = 'Where ' : acct : ' starts'
+   screen pick items title ttl returning pk else pk = 0
+   if pk = 0 then return
+   sent = 'modify.account ' : acct : ' ' : (if pk = 1 then 'start-menu' else (if pk = 2 then 'start-terminal' else 'start-default'))
+   el = ''
+   el<-1> = acct : ' will start ' : (if pk = 1 then 'in the home screen.' else (if pk = 2 then 'at the command prompt.' else 'wherever the system default says (' : defword : ').'))
+   if pk = 1 then el<-1> = 'The Terminal tile on that screen gives the command prompt unless it is off for this account.'
+   el<-1> = 'It takes effect at the next sign-on, and when the person types logto to enter the account.'
+   typed = ''
+   gosub confirm.run
+   return
+
+* Whether the person may add their own programs to their home screen (delivered off): PINS-ON or PINS-OFF
+change.pins:
+   acct = ids<ai>
+   want = (if apins<ai> then 'off' else 'on')
+   sent = 'modify.account ' : acct : ' pins-' : want
+   el = ''
+   if want = 'on' then
+      el<-1> = acct : ' will be able to add its own programs to its home screen (a group My programs, edited with MY.MENU).'
+      el<-1> = 'Each is a command the person could type at their prompt, so it adds no access: the gates apply as at the prompt.'
+      el<-1> = "The standard tiles stay the administrator's; the person manages only their own list."
+   end else
+      el<-1> = acct : "'s own programs stay in their file but are no longer shown, and MY.MENU says it is not allowed."
+   end
+   el<-1> = 'It takes effect at the next sign-on (or F5 in the home screen).'
+   typed = ''
+   gosub confirm.run
+   return
+
+change.tile:
+   acct = ids<ai>
+   t = si - 2
+   tid = tids<t>
+   if tid = 'signout' then
+      msg = 'Sign out cannot be turned off: a person must always be able to leave'
+      return
+   end
+   is.off = (index(' ' : aoff<ai> : ' ', ' ' : tid : ' ', 1) > 0)
+   want = (if is.off then 'on' else 'off')
+   sent = 'set.tile ' : acct : ' ' : tid : ' ' : want
+   el = ''
+   if want = 'off' then
+      el<-1> = 'The ' : tlabs<t> : ' tile will be left off ' : acct : "'s home screen, and its menu entry cannot be chosen."
+   end else
+      el<-1> = 'The ' : tlabs<t> : ' tile will be on ' : acct : "'s home screen again."
+   end
+   typed = ''
+   if tid = 'terminal' and want = 'off' then
+      el<-1> = 'WITH THIS TILE OFF an account that starts in the home screen is never given the command prompt:'
+      el<-1> = 'when the screen ends, the person is signed out.  An account that starts at the prompt keeps it.'
+      el<-1> = "The programs behind the other tiles are the account's own; turn the Editor and IDE tiles off too to keep it to the screen."
+      typed = acct
+   end
+   el<-1> = 'It takes effect at the next sign-on (or F5 in the home screen).'
+   gosub confirm.run
+   return
+
+change.default:
+   items = 'menu (the home screen)' : @fm : 'terminal (the command prompt)'
+   screen pick items title 'Where an account with no setting of its own starts' returning pk else pk = 0
+   if pk = 0 then return
+   word = (if pk = 1 then 'menu' else 'terminal')
+   sent = 'set.start.default ' : word
+   el = ''
+   el<-1> = 'Every account with no start setting of its own will start in the ' : (if pk = 1 then 'home screen' else 'command prompt') : ' at its next sign-on.'
+   el<-1> = 'An account with START-MENU or START-TERMINAL is not changed.'
+   typed = ''
+   gosub confirm.run
+   return
+
+* The command is shown with its effect and run only when Run is chosen; what the command printed is the line under the page, and the register is read again
+confirm.run:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, st, err)
+      if err # '' then
+         msg = err
+      end else
+         said = trim(change(out, @fm, ' '))
+         msg = (if said # '' then said[1, 130] else 'ran, status ' : st)
+      end
+      gosub read.all
+      gosub draw.all
+   end else
+      msg = cmsg
+   end
+   return
+
+end
+
+* END-CODE

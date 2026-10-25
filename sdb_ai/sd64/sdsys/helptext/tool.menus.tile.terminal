@@ -1,0 +1,5 @@
+The Terminal tile
+01-accounts-and-security
+Leaves the home screen for the ordinary command prompt. The verb menu (or exit) comes back to the home screen.
+With this tile OFF, an account that starts in the home screen is never left at the command prompt: when the screen ends for any reason the person is signed out. An account that starts at the prompt keeps it. You are asked to type the account's name before this is turned off.
+It is a wall only for the prompt the home screen gives. The editor, IDE and record editor tiles run the account's own programs, so to keep an account to the tiles you give it, turn those off too. A shell needs sh-on, which is off as delivered.

@@ -1,0 +1,4 @@
+The Keys tile
+29-sd-tcl-the-terminal-and-the-session
+Starts tool.keys, a diagnostic that shows which keys and mouse events the terminal sends and what SD makes of them. It changes nothing.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen.

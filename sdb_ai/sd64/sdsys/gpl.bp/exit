@@ -1,0 +1,36 @@
+* EXIT
+* EXIT verb: back to the home screen from the terminal that it gave (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.4).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75, H2; the owner: "a terminal session that can be ended with exit").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   EXIT
+*
+*   When the person left the home screen by its Terminal tile (the flag hflag of the named common /TKHOME/, set by HOME), starts HOME again: its Terminal tile
+*   brings them back to this prompt, and EXIT to the screen.  Otherwise it does what QUIT does and ends the session.  A command processor cannot be nested, so
+*   the terminal is the ordinary prompt and EXIT is the way back; the flag stays set for the rest of the session.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $exit
+$catalog $exit
+
+   common /tkhome/ hflag, hlogto
+
+   if hflag and @tty[1, 5] = '/dev/' then
+      execute 'home'
+   end else
+      execute 'quit'
+   end
+
+end
+
+* END-CODE

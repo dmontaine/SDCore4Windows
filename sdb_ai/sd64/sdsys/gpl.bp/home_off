@@ -1,0 +1,42 @@
+* HOME_OFF
+* The home screen's tiles that the administrator has turned off for an account (S.75, plan .claude/plan-fullscreen-toolkit.md section 13).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75; the owner: "if defined by the admin or the system, it should be able to be turned off by the admin", then "disabling tiles should be on a
+*               per account basis, by default they are on").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !home_off(account, off)
+*
+*     account  the account's name
+*     off      returned: the ids of the tiles that are off for it, in lower case, separated by single spaces (null when none): the words of field 17 of the account's
+*              register record (SET.TILE account tile off)
+*
+*   Tiles are ON as delivered and are turned off one account at a time; there is no list for every account.  Read-only, for the home screen (which leaves those
+*   tiles out), !HOME_ENTRY (an account whose Terminal tile is off is not given the prompt) and SET.TILE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine home_off(acct, off)
+$catalog !home_off
+
+$include keys.h
+
+   off = ''
+   openpath @sdsys : @ds : 'accounts' to af then
+      read arec from af, downcase(acct) then off = arec<ACC$TILES.OFF>
+      close af
+   end
+   off = downcase(trim(convert(',' : char(9), '  ', off)))
+
+   return
+end
+
+* END-CODE

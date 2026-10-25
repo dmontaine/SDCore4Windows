@@ -438,6 +438,23 @@
       *   SDSYS switches it (MODIFY.ACCOUNT NET-ON / NET-OFF; CREATE.ACCOUNT takes NET-ON).  The gate takes effect for the remote-file
       *   slices that follow and does nothing yet.  Fields 13 and 14 are the shared-account gates (S.66).
       $define ACC$NET          15    ;* may open a file on another SD server (yes/no)
+      * 22 Oct 26 dm - FIELD 16: where a session of the account starts (S.75, plan section 13.5; owner, 22 Oct: "terminal or menu determined by admin
+      *   for each account (another gate) - default menu"; "default for new accounts can be set by admin and then overridden for specific
+      *   accounts").  The word menu (the home screen) or terminal (the command prompt); BLANK MEANS FOLLOW THE SYSTEM DEFAULT, the one word in the
+      *   file start.default in the sdsys directory ("menu" when the file is absent), so a change of the default moves every account that has no
+      *   word of its own.  Not a wall: the home screen has a Terminal tile.  SDSYS sets it (MODIFY.ACCOUNT START-MENU / START-TERMINAL /
+      *   START-DEFAULT); !HOME_ENTRY reads it at sign-on and at LOGTO.  Any account type may have it.
+      $define ACC$START        16    ;* menu, terminal, or blank = the system default
+      * 22 Oct 26 dm - FIELD 17: the home screen's tiles the administrator has turned off for this account (S.75; owner, 22 Oct: "disabling tiles should be on a
+      *   per account basis, by default they are on").  Tile ids in lower case separated by spaces; blank means every tile is on, and there is no setting for every
+      *   account.  !HOME_OFF reads it.  With terminal among them an account that starts in the menu is never given the prompt (the home screen signs it out
+      *   instead).  SDSYS sets it (SET.TILE account tile on | off).  Any account type may have it.
+      $define ACC$TILES.OFF    17    ;* tile ids that are off for this account, separated by spaces
+      * 22 Oct 26 dm - FIELD 18: whether the person may add their OWN programs to the home screen (S.75; owner, 22 Oct: "users need to be able to add their own items to the
+      *   full screen menu if allowed by the admin - not manage universal tiles, but just for their own programs").  yes/no; BLANK MEANS NO (delivered off; SDSYS loosens it per
+      *   account).  The administrator always may.  A tile of their own runs a sentence the account could type at its prompt, so it adds no access; what the gate decides is whether
+      *   the screen shows such tiles and MY.MENU edits them.  SDSYS sets it (MODIFY.ACCOUNT PINS-ON / PINS-OFF).  Any account type may have it.
+      $define ACC$PINS         18    ;* may add its own programs to the home screen (yes/no; blank = no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

@@ -1,0 +1,150 @@
+* LOADHELP
+* LOAD.HELP verb: put the shipped context help into the file context.help of the shared account (S.75, plan .claude/plan-fullscreen-toolkit.md section 14.5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 23 Oct 26 dm  New (S.75; the owner: "Context help should be stored in the shared account as the file context.help, keyed using whatever id system you wish").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LOAD.HELP
+*
+*   The administrator's verb, run by the installer after the shared account exists and by hand after the text under helptext changes.  Every file of the
+*   helptext directory of the SD system directory (/usr/local/sdsys/helptext) is one record of the file context.help in the shared account: the FILE NAME is
+*   the record id (a-z 0-9 dot dash underscore, up to 80 characters), line 1 is the title, line 2 the name of a documentation PDF (blank for none), and each
+*   later line is one paragraph.  The file is made (dynamic, in the shared account) when it is not there.  A record that is already the same is not written;
+*   a record the administrator added under an id that is not shipped is kept.  The shipped records are replaced, so a change to a shipped record is made in
+*   helptext, not in the file.
+*
+*   It enters the shared account (as the administrator may, and as the installer does) and goes back to the account it began in.  A file that cannot be
+*   read, or that has no title or a name that is not a key, is skipped and named.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program load.help
+$catalog $loadhelp
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   keychars = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+
+   src = @sdsys : @ds : 'helptext'
+   entries = dir(src)
+   if entries = '' then stop sysmsg(12840, src)                  ;* The help text directory is missing or empty
+
+   openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
+   read arec from acc.f, 'shared' else
+      close acc.f
+      stop sysmsg(12841)                                         ;* There is no shared account
+   end
+   close acc.f
+
+   origin = @who
+   execute 'logto shared' capturing lt
+   if downcase(@who) # 'shared' then
+      if @who # origin then execute 'logto ' : origin capturing lt
+      stop sysmsg(12842)                                         ;* Could not enter the shared account
+   end
+
+   open 'context.help' to hf else
+      execute 'create.file context.help dynamic' capturing mk
+      open 'context.help' to hf else
+         execute 'logto ' : origin capturing lt
+         stop sysmsg(12843)                                      ;* Could not make the file context.help
+      end
+   end
+
+   shipped = ''
+   n.new = 0
+   n.changed = 0
+   n.same = 0
+   n.bad = 0
+   for i = 1 to dcount(entries, @fm)
+      name = entries<i, 1>
+      if entries<i, 2> # 'F' then continue
+      gosub load.one
+   next i
+
+   n.kept = 0
+   select hf to 12
+   loop
+      readnext rid from 12 else exit
+      locate rid in shipped<1> setting p else n.kept += 1
+   repeat
+   close hf
+
+   execute 'logto ' : origin capturing lt
+   void kernel(K$AUDIT, 'load.help new=' : n.new : ' changed=' : n.changed : ' same=' : n.same : ' skipped=' : n.bad)
+   display sysmsg(12844, n.new, n.changed, n.same, n.kept)           ;* SYSMSG takes four places
+   @system.return.code = (if n.bad then -ER$FAILED else 0)
+   stop
+
+* One file of the helptext directory
+load.one:
+   ok = (len(name) >= 1 and len(name) <= 80 and index('abcdefghijklmnopqrstuvwxyz0123456789', name[1, 1], 1) > 0)
+   if ok then
+      for ci = 2 to len(name)
+         if index(keychars, name[ci, 1], 1) = 0 then ok = 0
+      next ci
+   end
+   if not(ok) then
+      display sysmsg(12845, name, 'not a key')
+      n.bad += 1
+      return
+   end
+   rec = ''
+   nf = 0
+   got = 0
+   openseq src : @ds : name readonly to sf then
+      got = 1
+      loop
+         readseq ln from sf else exit
+         nf += 1
+         rec<nf> = trimb(ln)
+      repeat
+      closeseq sf
+   end
+   if not(got) then
+      display sysmsg(12845, name, 'cannot be read')
+      n.bad += 1
+      return
+   end
+   if rec<1> = '' then
+      display sysmsg(12845, name, 'has no title')
+      n.bad += 1
+      return
+   end
+   shipped<-1> = name
+   old = ''
+   read old from hf, name then
+      if old = rec then
+         n.same += 1
+         return
+      end
+      n.changed += 1
+   end else
+      n.new += 1
+   end
+   wok = @true
+   write rec to hf, name on error wok = @false
+   if not(wok) then
+      display sysmsg(12846, name)
+      n.bad += 1
+   end
+   return
+end
+
+* END-CODE

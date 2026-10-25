@@ -1,0 +1,922 @@
+* TOOL_HOME
+* The full-screen toolkit's front end: the home screen (S.75, plan .claude/plan-fullscreen-toolkit.md section 13, A10).  For everyone; the page differs for the administrator.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 72e708e - the tile "Bypass programs" (tool.viewers) is left out: the pdf verb, set.viewer and tool.viewers are not carried (RELEASE_1.1 179).
+* 22 Oct 26 dm  New (S.75, H1; the owner: "the display design is approved as drawn. Start home H0, then H1 and H2").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   HOME
+*
+*   A start screen of tiles, in the toolkit's frame (140 columns by 43 lines at least; a smaller window is refused).  The administrator's page and an account
+*   holder's page are built from one table and differ in what is in it; every tile starts a command exactly as the person would type it, so a tile adds no
+*   access (the gates apply as at the terminal).
+*
+*     Tools      the standard tools of every account: Editor (sed), IDE (ide), Record editor (ced)
+*     Everyone   Terminal (leaves the screen for the ordinary prompt; EXIT comes back), Keys (tool.keys)
+*     Header     who is signed on and when, Switch account (a pick list of the accounts this person may enter, then the screen of that account) and Sign out
+*
+*   The panel under the header scrolls: the page is laid out at its full height and the rows that fit are drawn, with a scroll bar in the last column.  Keys:
+*   the arrow keys move to the nearest tile, Tab and Back-tab go in reading order, Home and End to the first and last, Page Up and Page Down by group, a letter
+*   to the next tile that begins with it, Enter or the space bar starts the tile, F5 builds the page again, F10 opens the menu bar, Ctrl-Q signs out.  A click
+*   starts a tile, the wheel scrolls three rows.  The end of the input ends the program.
+*
+*   THE NAMED COMMON /TKHOME/: hflag is set when the person left by the Terminal tile (the EXIT verb then comes back to this screen); hlogto is set only
+*   while this program runs a LOGTO, so that the sign-on hook (!home_entry) does not start a second screen inside it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_home
+$catalog $tool_home
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+deffun is_grp_member(user, group) calling '!is_grp_member'
+
+$define HT.ID      1       ;* a tile is a field of tl, its values:  the id (for the key jump and the tests)
+$define HT.GROUP   2       ;* the group's number in gr
+$define HT.LABEL   3
+$define HT.GLYPH   4       ;* three cells of ASCII, so that any locale draws it
+$define HT.SUB     5       ;* the line under the label
+$define HT.ACT     6       ;* cmd:<sentence>, terminal, switch or signout
+$define HT.PAL     7       ;* the palette's name
+$define HT.SIZE    8       ;* n normal 21 by 5, w wide 43 by 5, s small 21 by 3
+$define HT.PAUSE   9       ;* 1 when the command prints lines: wait for a key before the screen comes back
+$define HT.WHY     10      ;* null, or why the tile is dimmed (a gate that is off)
+$define HT.X       11      ;* the cell of its top left corner: x; y is a row of the panel for a tile in a group and a row of the screen for a header tile
+$define HT.Y       12
+$define HT.W       13
+$define HT.H       14
+$define HT.FIXED   15      ;* 1 for a header tile (not scrolled)
+
+$define HG.NAME    1       ;* a group is a field of gr, its values
+$define HG.BAND    2       ;* the band it stands in: groups of one band stand side by side
+$define HG.COLS    3       ;* how many tile columns it is wide (2 or 6)
+$define HG.Y       4       ;* the panel row of its heading, set by the layout
+$define HG.X       5
+
+$define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 are the header)
+
+   common /tkhome/ hflag, hlogto
+
+   prompt ''
+
+   if @tty[1, 5] # '/dev/' then
+      display sysmsg(12868)                             ;* no terminal: nothing here could be read as keys
+      stop
+   end
+   hlogto = 0
+
+   call $tk_open('home', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   if is.admin then ctx<TK.C.AUD> = sysmsg(12808)
+
+   keys = ''
+   call $tk_keys('add', keys, 'enter', 'start', 'start', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'f10', 'menu', 'menu', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'sign out', 'signout', '', 1)
+
+   X.COL =3 : @fm : 25 : @fm : 49 : @fm : 71 : @fm : 95 : @fm : 117      ;* the x of the six tile columns (a group of two stands at columns 1-2, 3-4 or 5-6)
+   gen = 0
+   top = 0
+   fi = 1
+   msg = ''
+   outcome = ''
+   done = 0
+   lastmin = ''
+   keep.id = ''
+   keep.top = 0
+
+   gosub geometry
+   gosub build.page
+   gosub layout
+   gosub first.focus
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, 'Home', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)                  ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
+      nm = ''
+      screen key timeout 30 returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+            gosub draw.clock
+         case nm = 'guardquit'
+            exit                                          ;* the cursor lock's own way out
+         case nm = 'resize'
+            gosub relayout
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   gosub finish
+   stop
+
+* ------------------------------------------------------------------------------------------------- how the program ends
+
+finish:
+   begin case
+      case terminal.off and outcome # 'signout'
+         * the Terminal tile is off for this account: the screen is not left for the prompt, whatever ended it (the cursor lock, the end of the input, a window too small
+         * to take the screen again); the person is signed out
+         if outcome = 'closed' then
+            sleep 2                                       ;* the message that said why is on the screen; let it be read
+         end else
+            call $tk_close(ctx)
+         end
+         execute 'quit'
+      case outcome = 'closed'
+         null                                             ;* the screen was given back already (it could not be taken again)
+      case outcome = 'terminal'
+         call $tk_close(ctx)
+         hflag = 1                                        ;* EXIT comes back here
+         display sysmsg(12869)
+      case outcome = 'signout'
+         call $tk_close(ctx)
+         execute 'quit'
+      case 1
+         call $tk_close(ctx)
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the geometry and the page
+
+* The layout is the window when it is bigger than the minimum, the minimum when it is smaller (the frame's rule); the panel is the rows between the header and the hint line
+geometry:
+   lw = ctx<TK.C.W>
+   lh = ctx<TK.C.H>
+   py0 = PANEL.TOP
+   py1 = lh - 5                                           ;* the hint line is row lh-4, the status line lh-3
+   ph = py1 - py0 + 1
+   return
+
+* The tiles of this page.  The table is built for the audience (13.2): the administrator gets the administrator's, everyone else the holder's, and what a person may
+* not use is not in memory.  Later apps add their rows here, in the commit that builds them.
+build.page:
+   * the tiles the administrator has turned off for this account (SET.TILE): left out of the page, their menu entries cannot be chosen
+   call !home_off(@who, off.list)
+   off.set = ' ' : off.list : ' '
+   terminal.off = (index(off.set, ' terminal ', 1) > 0)
+   tl = ''
+   gr = ''
+   pal.tools = (if is.admin then 'plum' else 'green')
+   gname = (if is.admin then 'Tools' else 'My tools')
+   bnd = 0                                                ;* the groups stand one band under another; a group that is not there takes no band
+   g = 0
+   if is.admin then
+      * the administrator's own group: the page that manages what every account's home screen shows (it is in SDSYS's VOC only; an account holder's page has no such tile)
+      bnd += 1
+      g += 1
+      gr<g> = 'System' : @vm : bnd : @vm : 6
+      id = 'menus' ; grp = g ; label = 'Menu management' ; glyph = '[=]' ; sub = 'tiles and start' ; act = 'cmd:tool.menus' ; pal = 'rust' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+*     25 Oct 26 Windows port: Linux's "Bypass programs" tile (tool.viewers, the readers the pdf verb may start) is not here; the pdf mechanism is Linux's own (RELEASE_1.1 179).
+   end
+   bnd += 1
+   g += 1
+   gr<g> = gname : @vm : bnd : @vm : 6
+   id = 'editor' ; grp = g ; label = 'Editor' ; glyph = '[=]' ; sub = 'edit a record' ; act = 'cmd:sed' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'ide' ; grp = g ; label = 'IDE' ; glyph = '</>' ; sub = 'programs and files' ; act = 'cmd:ide' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'ced' ; grp = g ; label = 'Record editor' ; glyph = '[ ]' ; sub = 'fields of a record' ; act = 'cmd:ced' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   * the person's own programs (MY.MENU), when the administrator has allowed it (the administrator always may): a group of their own after the standard tools, with a tile that
+   * opens the list for changing.  They are only tiles that run what the person could type at their prompt.
+   call !home_pins(@who, pins.on, pins.items)
+   if pins.on then
+      bnd += 1
+      g += 1
+      gr<g> = 'My programs' : @vm : bnd : @vm : 6
+      id = 'mymenu' ; grp = g ; label = 'Add a program' ; glyph = '+  ' ; sub = 'change this list' ; act = 'cmd:my.menu' ; pal = 'teal' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      for pn = 1 to dcount(pins.items, @fm)
+         id = 'pin' : pn ; grp = g ; label = pins.items<pn, 1> ; glyph = pins.items<pn, 2> ; sub = pins.items<pn, 3>[1, 19] ; act = 'cmd:' : pins.items<pn, 3>
+         pal = 'teal' ; size = 'n' ; pause = pins.items<pn, 4> ; why = '' ; gosub add.tile
+      next pn
+   end
+   bnd += 1
+   g += 1
+   gr<g> = 'Everyone' : @vm : bnd : @vm : 6
+   id = 'terminal' ; grp = g ; label = 'Terminal' ; glyph = '>_ ' ; sub = 'type exit to come back' ; act = 'terminal' ; pal = 'gray' ; size = 'w' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'keys' ; grp = g ; label = 'Keys' ; glyph = '^K ' ; sub = 'test your keyboard' ; act = 'cmd:tool.keys' ; pal = 'gray' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   * the header: two small tiles at the right, on screen rows 1 to 3
+   hx = 95 ; hy = 1
+   id = 'switch' ; grp = 0 ; label = 'Switch account' ; glyph = '<> ' ; sub = '' ; act = 'switch' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
+   hx = 117 ; hy = 1
+   id = 'signout' ; grp = 0 ; label = 'Sign out' ; glyph = '-> ' ; sub = '' ; act = 'signout' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
+   gosub alloc.styles
+   gosub make.menus
+   return
+
+add.tile:
+   added = 0
+   if index(off.set, ' ' : id : ' ', 1) then return        ;* turned off by the administrator: not on the page at all
+   t = id : @vm : grp : @vm : label : @vm : glyph : @vm : sub : @vm : act : @vm : pal : @vm : size : @vm : pause : @vm : why
+   tl<-1> = t
+   nt = dcount(tl, @fm)
+   added = 1
+   return
+
+* A header tile: its place is fixed on the screen (hx, hy), and it does not scroll
+add.header:
+   gosub add.tile
+   if not(added) then return
+   tl<nt, HT.X> = hx
+   tl<nt, HT.Y> = hy
+   tl<nt, HT.W> = 21
+   tl<nt, HT.H> = 3
+   tl<nt, HT.FIXED> = 1
+   return
+
+* A style for each palette in use: the colours and the same reversed and bold for the tile that has the focus.  A terminal with no colour (the library says none) gets
+* the tiles in boxes, reverse video for the focus: nothing here depends on colour.
+alloc.styles:
+   colour = 1
+   pnames = ''
+   pcode = ''
+   pfocus = ''
+   for i = 1 to nt
+      p = tl<i, HT.PAL>
+      locate p in pnames<1> setting k else
+         pnames<-1> = p
+         gosub palette.colours
+         call $sl_theme('slot', pf, pb, '', '', c1)
+         call $sl_theme('slot', pf, pb, 'reverse bold', '', c2)
+         if c1 = 'none' or c1 = 'full' or c1 = 'bad' or c2 = 'none' or c2 = 'full' or c2 = 'bad' then
+            colour = 0                                    ;* one style missing: the whole page is drawn plain, boxed
+            c1 = 'normal'
+            c2 = 'reverse'
+         end
+         pcode<-1> = c1
+         pfocus<-1> = c2
+      end
+   next i
+   return
+
+* The eight colours of a terminal are all there are: the page's accents are the nearest of them
+palette.colours:
+   begin case
+      case p = 'amber'
+         pf = 'black' ; pb = 'brown'
+      case p = 'rust'
+         pf = 'white' ; pb = 'red'
+      case p = 'olive'
+         pf = 'black' ; pb = 'green'
+      case p = 'plum'
+         pf = 'white' ; pb = 'magenta'
+      case p = 'blue'
+         pf = 'white' ; pb = 'blue'
+      case p = 'teal'
+         pf = 'black' ; pb = 'cyan'
+      case p = 'green'
+         pf = 'black' ; pb = 'green'
+      case p = 'violet'
+         pf = 'white' ; pb = 'magenta'
+      case 1
+         pf = 'black' ; pb = 'white'                      ;* gray
+   end case
+   return
+
+* The panel's rows: bands one under another, the groups of a band side by side, the tiles of a group flowing left to right and wrapping.  The panel row 1 is the first
+* heading (row 6 of the screen).  ch is the height of the whole page.
+layout:
+   nb = 0
+   ng = dcount(gr, @fm)
+   for k = 1 to ng
+      if gr<k, HG.BAND> > nb then nb = gr<k, HG.BAND>
+   next k
+   ys = 1
+   for b = 1 to nb
+      c0 = 0
+      bandend = ys
+      for k = 1 to ng
+         gn.tiles = 0                                     ;* a group whose tiles are all off has no heading either
+         for i = 1 to nt
+            if tl<i, HT.GROUP> = k then gn.tiles += 1
+         next i
+         if gr<k, HG.BAND> = b and gn.tiles > 0 then
+            gcols = gr<k, HG.COLS>
+            gr<k, HG.Y> = ys
+            gr<k, HG.X> = X.COL<c0 + 1>
+            cc = 0
+            ry = ys + 1
+            rowh = 0
+            for i = 1 to nt
+               if tl<i, HT.GROUP> = k then
+                  tw = (if tl<i, HT.SIZE> = 'w' then 2 else 1)
+                  th = (if tl<i, HT.SIZE> = 's' then 3 else 5)
+                  if cc + tw > gcols then
+                     cc = 0
+                     ry += rowh + 1
+                     rowh = 0
+                  end
+                  tl<i, HT.X> = X.COL<c0 + cc + 1>
+                  tl<i, HT.Y> = ry
+                  tl<i, HT.W> = (if tw = 2 then 43 else 21)
+                  tl<i, HT.H> = th
+                  tl<i, HT.FIXED> = 0
+                  cc += tw
+                  if th > rowh then rowh = th
+               end
+            next i
+            if ry + rowh > bandend then bandend = ry + rowh
+            c0 += gcols
+         end
+      next k
+      ys = bandend + 1
+   next b
+   ch = ys
+   if top > ch - ph then top = ch - ph
+   if top < 0 then top = 0
+   return
+
+* fb: the first tile of a group (the first tile of the page when only the header has any)
+find.first:
+   fb = 1
+   for i = 1 to nt
+      if tl<i, HT.GROUP> > 0 then
+         fb = i
+         exit
+      end
+   next i
+   return
+
+first.focus:
+   gosub find.first
+   fi = fb
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   screen clear at 0,py0 size lw,ph
+   gosub draw.header
+   gosub draw.panel
+   screen menubar menus row 0 draw else null
+   screen text '' at 0,lh - 4 width lw
+   screen text 'arrows move  -  Enter starts  -  type to find  -  PgDn next group' at 3,lh - 4 attr 'disabled'
+   return
+
+draw.header:
+   if is.admin then
+      who.line = 'administrator'
+   end else
+      who.line = @logname : ' @ ' : @who
+   end
+   screen text fmt(who.line, '60L') at 3,2 attr 'bold'
+   gosub draw.clock
+   for i = 1 to nt
+      if tl<i, HT.FIXED> then
+         di = i
+         gosub draw.tile
+      end
+   next i
+   return
+
+* The date and the time, dim: written again when the minute changes (the key wait is 30 seconds)
+draw.clock:
+   mm = oconv(time(), 'MT')
+   if mm # lastmin then
+      lastmin = mm
+      wd = downcase(oconv(date(), 'DWA'))
+      wd[1, 1] = upcase(wd[1, 1])
+      dt = oconv(date(), 'D4DMY[,A3]')
+      mo = field(dt, ' ', 2)
+      mo = upcase(mo[1, 1]) : downcase(mo[2, 9])
+      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at 3,3 attr 'disabled'
+   end
+   return
+
+draw.panel:
+   for k = 1 to ng
+      gy = gr<k, HG.Y>
+      if gy # '' then
+         sy = py0 + gy - top
+         if sy >= py0 and sy <= py1 then
+            screen text fmt(gr<k, HG.NAME>, '40L') at gr<k, HG.X>,sy attr 'header' width 40
+         end
+      end
+   next k
+   for i = 1 to nt
+      if tl<i, HT.FIXED> = 0 then
+         di = i
+         gosub draw.tile
+      end
+   next i
+   gosub draw.scrollbar
+   return
+
+* One tile, row by row so that a tile only partly in the panel draws the rows that are
+draw.tile:
+   tx = tl<di, HT.X>
+   tw = tl<di, HT.W>
+   th = tl<di, HT.H>
+   ty = tl<di, HT.Y>
+   if tl<di, HT.FIXED> = 0 then ty = py0 + ty - top
+   focused = (di = fi)
+   p = tl<di, HT.PAL>
+   locate p in pnames<1> setting pk else pk = 1
+   begin case
+      case tl<di, HT.WHY> # ''
+         sty = 'disabled'
+      case colour and focused
+         sty = pfocus<pk>
+      case colour
+         sty = pcode<pk>
+      case focused
+         sty = 'reverse'
+      case 1
+         sty = 'normal'
+   end case
+   for r = 0 to th - 1
+      sy = ty + r
+      lo = (if tl<di, HT.FIXED> then 0 else py0)
+      hi = (if tl<di, HT.FIXED> then lh else py1)
+      if sy >= lo and sy <= hi then
+         if colour then
+            begin case
+               case th = 3
+                  s = (if r = 1 then '  ' : tl<di, HT.GLYPH> : '  ' : tl<di, HT.LABEL> else '')
+               case r = 1
+                  s = '  ' : tl<di, HT.GLYPH>
+               case r = 3
+                  s = '  ' : tl<di, HT.LABEL>
+               case r = 4
+                  s = '  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else tl<di, HT.SUB>)
+               case 1
+                  s = ''
+            end case
+         end else
+            call $sl_line('h', 0, hc)
+            call $sl_line('v', 0, vc)
+            begin case
+               case r = 0
+                  call $sl_line('tl', 0, c1)
+                  call $sl_line('tr', 0, c2)
+                  s = c1 : str(hc, tw - 2) : c2
+               case r = th - 1
+                  call $sl_line('bl', 0, c1)
+                  call $sl_line('br', 0, c2)
+                  s = c1 : str(hc, tw - 2) : c2
+               case th = 3
+                  s = vc : fmt('  ' : tl<di, HT.GLYPH> : '  ' : tl<di, HT.LABEL>, (tw - 2) : 'L') : vc
+               case r = 1
+                  s = vc : fmt('  ' : tl<di, HT.GLYPH>, (tw - 2) : 'L') : vc
+               case r = 2
+                  s = vc : fmt('  ' : tl<di, HT.LABEL>, (tw - 2) : 'L') : vc
+               case 1
+                  s = vc : fmt('  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else tl<di, HT.SUB>), (tw - 2) : 'L') : vc
+            end case
+         end
+         screen text s at tx,sy attr sty width tw
+      end
+   next r
+   return
+
+* The scroll bar in the last column, in the library's scroll style (dark grey in the colour themes), only when the page is taller than the panel
+draw.scrollbar:
+   if ch > ph then
+      call $sl_scrollbar(ph, top + 1, ch, ph, bar)
+      for r = 1 to ph
+         screen text bar[r, 1] at lw - 1,py0 + r - 1 attr 'scroll'
+      next r
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the focus
+
+* Move the focus to tile j, scroll to keep it in the panel, and draw what changed
+set.focus:
+   if j < 1 or j > nt then return
+   oldfi = fi
+   fi = j
+   oldtop = top
+   gosub scroll.into.view
+   if top # oldtop then
+      screen clear at 0,py0 size lw,ph
+      gosub draw.panel
+      di = fi
+      gosub draw.tile
+      if tl<oldfi, HT.FIXED> then
+         di = oldfi
+         gosub draw.tile
+      end
+   end else
+      di = oldfi
+      gosub draw.tile
+      di = fi
+      gosub draw.tile
+   end
+   return
+
+* The tile with its group's heading when it is the first row of its group
+scroll.into.view:
+   if tl<fi, HT.FIXED> then return
+   ty = tl<fi, HT.Y>
+   th = tl<fi, HT.H>
+   fg = tl<fi, HT.GROUP>
+   gy = gr<fg, HG.Y>
+   first.row = (ty = gy + 1)
+   want.top = (if first.row then ty - 2 else ty)       ;* the heading is the row above, with the blank row above that
+   if want.top < 0 then want.top = 0
+   if ty - (if first.row then 1 else 0) < top then
+      top = want.top
+   end else
+      if ty + th - 1 > top + ph - 1 then top = ty + th - ph
+   end
+   if top > ch - ph then top = ch - ph
+   if top < 0 then top = 0
+   return
+
+* The nearest tile in the direction dir: the distance along it, plus three times the distance across it
+move.focus:
+   best = 0
+   bests = 1000000
+   fx0 = tl<fi, HT.X>
+   fx1 = fx0 + tl<fi, HT.W> - 1
+   fy0 = tl<fi, HT.Y> - (if tl<fi, HT.FIXED> then py0 else 0)        ;* panel rows: a header tile is above the panel, so negative
+   fy1 = fy0 + tl<fi, HT.H> - 1
+   for j = 1 to nt
+      if j # fi then
+         jx0 = tl<j, HT.X>
+         jx1 = jx0 + tl<j, HT.W> - 1
+         jy0 = tl<j, HT.Y> - (if tl<j, HT.FIXED> then py0 else 0)
+         jy1 = jy0 + tl<j, HT.H> - 1
+         along = 0
+         across = 0
+         ov = 0
+         ok = 0
+         begin case
+            case dir = 'right' and jx0 > fx1
+               along = jx0 - fx1 ; across = abs(jy0 - fy0) ; ok = 1
+               ov = (jy0 <= fy1 and jy1 >= fy0)
+            case dir = 'left' and jx1 < fx0
+               along = fx0 - jx1 ; across = abs(jy0 - fy0) ; ok = 1
+               ov = (jy0 <= fy1 and jy1 >= fy0)
+            case dir = 'down' and jy0 > fy1
+               along = jy0 - fy1 ; across = abs(jx0 - fx0) ; ok = 1
+               ov = (jx0 <= fx1 and jx1 >= fx0)
+            case dir = 'up' and jy1 < fy0
+               along = fy0 - jy1 ; across = abs(jx0 - fx0) ; ok = 1
+               ov = (jx0 <= fx1 and jx1 >= fx0)
+         end case
+         if ok then
+            sc = along + across + (if ov then 0 else 1000)           ;* a tile that shares rows (or columns) with this one comes before any that does not
+            if sc < bests then
+               bests = sc
+               best = j
+            end
+         end
+      end
+   next j
+   if best > 0 then
+      j = best
+      gosub set.focus
+   end
+   return
+
+* The first tile of the next (dir = down) or previous group; a header tile has none
+move.group:
+   g = tl<fi, HT.GROUP>
+   if g = 0 then return
+   g += (if dir = 'down' then 1 else -1)
+   if g < 1 or g > ng then return
+   for j = 1 to nt
+      if tl<j, HT.GROUP> = g then
+         gosub set.focus
+         return
+      end
+   next j
+   return
+
+* Reading order: the header first, then the groups
+next.tile:
+   j = fi + dir
+   if j < 1 then j = nt
+   if j > nt then j = 1
+   gosub set.focus
+   return
+
+* A letter: the next tile, after this one, whose label begins with it
+jump.letter:
+   for n = 1 to nt
+      j = fi + n
+      if j > nt then j = j - nt
+      if upcase(tl<j, HT.LABEL>[1, 1]) = upcase(nm) then
+         gosub set.focus
+         return
+      end
+   next n
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and the mouse
+
+on.key:
+   msg = ''
+   begin case
+      case nm = 'up' or nm = 'down' or nm = 'left' or nm = 'right'
+         dir = nm
+         gosub move.focus
+      case nm = 'tab'
+         dir = 1
+         gosub next.tile
+      case nm = 'btab'
+         dir = -1
+         gosub next.tile
+      case nm = 'home'
+         gosub find.first
+         j = fb
+         gosub set.focus
+      case nm = 'end'
+         j = nt
+         for i = nt to 1 step -1
+            if tl<i, HT.GROUP> > 0 then
+               j = i
+               exit
+            end
+         next i
+         gosub set.focus
+      case nm = 'pgdn'
+         dir = 'down'
+         gosub move.group
+      case nm = 'pgup'
+         dir = 'up'
+         gosub move.group
+      case nm = 'enter' or nm = ' '
+         gosub start.tile
+      case nm = 'f5'
+         gosub rebuild
+      case nm = 'f10'
+         gosub run.menu
+      case nm = 'ctrl-q'
+         gosub do.signout
+      case len(nm) = 1 and nm > ' '
+         gosub jump.letter
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   kind = mev<1>
+   mx = mev<3>
+   my = mev<4>
+   begin case
+      case kind = 'wheel'
+         oldtop = top
+         top += (if mev<2> = 'up' then -3 else 3)
+         if top > ch - ph then top = ch - ph
+         if top < 0 then top = 0
+         if top # oldtop then
+            screen clear at 0,py0 size lw,ph
+            gosub draw.panel
+         end
+      case kind = 'press' and mev<2> = 1
+         if my = 0 then
+            screen menubar menus click mx returning mc then
+               cmd = mc
+               gosub run.cmd
+            end
+         end else
+            for j = 1 to nt
+               tx = tl<j, HT.X>
+               ty = tl<j, HT.Y>
+               if tl<j, HT.FIXED> = 0 then ty = py0 + ty - top
+               in.rows = (my >= ty and my < ty + tl<j, HT.H>)
+               if tl<j, HT.FIXED> = 0 then in.rows = (in.rows and my >= py0 and my <= py1)
+               if in.rows and mx >= tx and mx < tx + tl<j, HT.W> then
+                  gosub set.focus
+                  gosub start.tile
+                  exit
+               end
+            next j
+         end
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- what a tile does
+
+start.tile:
+   act = tl<fi, HT.ACT>
+   begin case
+      case act[1, 4] = 'cmd:'
+         sentence = act[5, 9999]
+         pause = tl<fi, HT.PAUSE>
+         gosub run.command
+      case act = 'terminal'
+         outcome = 'terminal'
+         done = 1
+      case act = 'switch'
+         gosub switch.account
+      case act = 'signout'
+         gosub do.signout
+   end case
+   return
+
+* The command is given the terminal: the screen is closed, the command runs as the person would have typed it, and the screen is taken again
+run.command:
+   keep.id = tl<fi, HT.ID>                               ;* the screen comes back with the same tile selected, scrolled as it was
+   keep.top = top
+   call $tk_close(ctx)
+   execute sentence
+   if pause then gosub wait.key
+   gosub reopen
+   keep.id = ''
+   return
+
+* The terminal is the ordinary one again here (the screen was closed), where a key is read when Enter is pressed: so the question is for Enter, and INPUT reads it
+wait.key:
+   crt
+   crt sysmsg(12870) :
+   input junk
+   return
+
+* Take the screen again after a command (or a LOGTO) and draw the page; the window may have changed, and the account may be another
+reopen:
+   call $tk_open('home', '', ctx, err)
+   if err # '' then
+      display err
+      outcome = 'closed'
+      done = 1
+      return
+   end
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   if is.admin then ctx<TK.C.AUD> = sysmsg(12808)
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   lastmin = ''
+   gosub geometry
+   gosub build.page
+   gosub layout
+   gosub first.focus
+   top = 0
+   if keep.id # '' then
+      for i = 1 to nt
+         if tl<i, HT.ID> = keep.id then
+            fi = i
+            top = keep.top
+         end
+      next i
+      if top > ch - ph then top = ch - ph
+      if top < 0 then top = 0
+   end
+   gosub draw.all
+   return
+
+* F5: the page again for what the session is now
+rebuild:
+   gosub build.page
+   gosub layout
+   gosub first.focus
+   top = 0
+   screen clear at 0,py0 size lw,ph
+   gosub draw.all
+   msg = 'page built again'
+   return
+
+* A resize: the screen was repainted under the frame
+relayout:
+   call $sl_window(w, h)
+   lw = w
+   lh = h
+   if lw < TK.MINW then lw = TK.MINW
+   if lh < TK.MINH then lh = TK.MINH
+   ctx<TK.C.W> = lw
+   ctx<TK.C.H> = lh
+   ctx<TK.C.YSTAT> = lh - 3
+   ctx<TK.C.YBORD> = lh - 2
+   ctx<TK.C.YKEYS> = lh - 1
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   lastmin = ''
+   gosub geometry
+   gosub layout
+   gosub draw.all
+   return
+
+* ------------------------------------------------------------------------------------------------- the menu bar
+
+make.menus:
+   menus = ''
+   m = '&File|&Sign out~^Q~signout'
+   gosub add.menu
+   tflag = (if terminal.off then 'D' else '')                ;* D: the entry cannot be chosen (a tile that is off has no menu entry either)
+   sflag = (if index(off.set, ' switch ', 1) then 'D' else '')
+   kflag = (if index(off.set, ' keys ', 1) then 'D' else '')
+   m = '&Go|&Terminal~~terminal~' : tflag : '|S&witch account~~switch~' : sflag
+   gosub add.menu
+   m = '&View|&Refresh~F5~refresh'
+   gosub add.menu
+   m = '&AI|AI is off~~ai~D'
+   gosub add.menu
+   m = '&Help|&Keys~~keys~' : kflag
+   gosub add.menu
+   return
+
+add.menu:
+   m = change(m, '|', @vm)
+   m = change(m, '~', @sm)
+   menus<-1> = m
+   return
+
+run.menu:
+   screen menubar menus returning mc then
+      cmd = mc
+      gosub run.cmd
+   end
+   return
+
+* A menu entry does what its tile does
+run.cmd:
+   begin case
+      case cmd = 'signout'
+         gosub do.signout
+      case cmd = 'terminal'
+         outcome = 'terminal'
+         done = 1
+      case cmd = 'switch'
+         gosub switch.account
+      case cmd = 'refresh'
+         gosub rebuild
+      case cmd = 'keys'
+         sentence = 'tool.keys'
+         pause = 0
+         gosub run.command
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- sign out and switch account
+
+do.signout:
+   so.text = sysmsg(12871)
+   so.btns = '&Sign out' : @vm : '&Cancel'                ;* Cancel is the one Enter chooses: a stray Enter never signs anyone out
+   screen msgbox so.text title 'Sign out' buttons so.btns default 2 returning b else b = 0
+   if b = 1 then
+      outcome = 'signout'
+      done = 1
+   end else
+      msg = ''
+   end
+   return
+
+* The accounts this person may enter, by the rule LOGTO applies (the administrator any, anyone else the account's group; a suspended account and SDSYS never), then
+* the screen of the one chosen.  The process cannot become another person: it runs as one Linux user (plan 13.4).
+switch.account:
+   alist = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      select acc.f to 11
+      loop
+         readnext aid from 11 else exit
+         read arec from acc.f, aid then
+            ok = (upcase(trim(arec<ACC$SUSPENDED>)) # 'SUSPENDED')
+            if downcase(aid) = 'sdsys' then ok = 0
+            if ok and not(is.admin) then ok = is_grp_member(@logname, arec<ACC$GROUP>)
+            if ok then
+               locate aid in alist<1> by 'AL' setting pos else
+                  ins aid before alist<pos>
+               end
+            end
+         end
+      repeat
+      close acc.f
+   end
+   if alist = '' then
+      msg = 'no account to switch to'
+      return
+   end
+   screen pick alist title 'Switch account' returning pk else pk = 0
+   if pk = 0 then return
+   acct = alist<pk>
+   if acct = @who then
+      msg = 'already in ' : acct
+      return
+   end
+   call $tk_close(ctx)
+   hlogto = 1
+   execute 'logto ' : acct
+   hlogto = 0
+   gosub reopen
+   if @who # acct then msg = sysmsg(12872, acct)
+   return
+
+end
+
+* END-CODE

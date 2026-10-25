@@ -1,0 +1,5 @@
+Where an account starts
+01-accounts-and-security
+Chooses what a person sees when they sign on to this account, and when they type logto to enter it: the home screen (menu), the ordinary command prompt (terminal), or whatever the system default says.
+It confines nobody on its own. The Terminal tile on the home screen still gives the command prompt unless you turn that tile off for the account.
+The change reaches the person at their next sign-on. The command it runs is modify.account with start-menu, start-terminal or start-default.

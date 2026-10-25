@@ -1,0 +1,79 @@
+* SETSTART
+* SET.START.DEFAULT verb: where an account with no setting of its own starts (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 22 Oct 26 dm  New (S.75, H2; the owner: "default for new accounts can be set by admin and then overridden for specific accounts").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.START.DEFAULT {menu | terminal}
+*
+*   The administrator's verb.  With a word, writes it to the file start.default in the sdsys directory; every account whose register record has no start
+*   setting of its own (MODIFY.ACCOUNT name START-DEFAULT, or one never told) starts there at its next sign-on.  Without a word, says what it is now.  The
+*   delivered default is menu (the file is absent).  An account that has START-MENU or START-TERMINAL is not touched.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.start.default
+$catalog $setstart
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   path = @sdsys : @ds : 'start.default'
+   cur = 'menu'
+   openseq path readonly to df then                   ;* READONLY: without it an absent file is created by the open (THEN means it existed)
+      readseq line from df then
+         if downcase(trim(line)) = 'terminal' then cur = 'terminal'
+      end
+      closeseq df
+   end
+
+   words = trim(@sentence)
+   want = downcase(field(words, ' ', 2))
+   if dcount(words, ' ') > 2 then want = '?'
+
+   begin case
+      case want = ''
+         @system.return.code = 0
+         display sysmsg(12876, cur)         ;* Accounts with no start setting of their own start at: %1
+      case want = 'menu' or want = 'terminal'
+         if want = cur then
+            @system.return.code = 0
+            display sysmsg(12878, cur)      ;* The system default start is already %1; nothing changed
+         end else
+            ok = @false
+            openseq path overwrite to df else null         ;* ELSE means the file did not exist and was created; only a status is a failure
+            if status() = 0 then
+               writeseq want to df then ok = @true
+               closeseq df
+            end
+            if ok then
+               @system.return.code = 0
+               void kernel(K$AUDIT, 'set.start.default ' : want)
+               display sysmsg(12876, want)
+            end else
+               @system.return.code = -ER$FAILED
+               display sysmsg(12877)        ;* The system default start could not be written
+            end
+         end
+      case 1
+         display sysmsg(12875)              ;* set.start.default {menu | terminal}
+   end case
+
+end
+
+* END-CODE

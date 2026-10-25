@@ -1,0 +1,4 @@
+The IDE tile
+29a-sd-tcl-the-home-screen
+Starts ide, the full-screen programming environment: the files and records of the account, an editor with tabs, compile with an error table, run, catalogue and debug.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type ide at a prompt they have; this setting only changes the home screen.

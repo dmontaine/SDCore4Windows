@@ -1,0 +1,4 @@
+The Editor tile
+29a-sd-tcl-the-home-screen
+Starts sed, the full-screen text and record editor; it asks which file and record. It runs the command exactly as the person would have typed it, so it adds no access.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type sed at a prompt they have: this setting only changes the home screen.

@@ -6,6 +6,8 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 22 Oct 26 dm  The scroll bar style (code B) is bold black in the blue and classic themes (dark grey on a terminal that makes bold bright): it was plain black on
+*               cyan or white, and the thumb looked like a hole to the black text area beside it (owner).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -186,7 +188,7 @@ set.theme:
          spec<-1> = 'gutter=cyan,blue,'
          spec<-1> = 'pane=black,white,'
          spec<-1> = 'tab=black,white,'
-         spec<-1> = 'scroll=black,white,'
+         spec<-1> = 'scroll=black,white,bold'     ;* 22 Oct 26: dark grey, as in blue
          gosub syntax.dark
       case nm = 'dark'
          * mono, and the syntax styles in colours that read on a dark terminal background
@@ -223,7 +225,7 @@ set.theme:
          spec<-1> = 'gutter=cyan,black,'
          spec<-1> = 'pane=white,black,'
          spec<-1> = 'tab=black,cyan,'
-         spec<-1> = 'scroll=black,cyan,'
+         spec<-1> = 'scroll=black,cyan,bold'      ;* 22 Oct 26: dark grey (bold black), not black - the thumb was the colour of the black text area beside it
          gosub syntax.dark
       case 1
          ret = 2

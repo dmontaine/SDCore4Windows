@@ -1,0 +1,4 @@
+The Switch account tile
+29a-sd-tcl-the-home-screen
+Lists the accounts the person may enter and shows the home screen of the one chosen. The rule is the one logto uses: an administrator may enter any account, anyone else the accounts of their own Linux group; never a suspended account and never SDSYS.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type logto at a prompt they have.

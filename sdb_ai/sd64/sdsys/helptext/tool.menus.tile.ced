@@ -1,0 +1,4 @@
+The Record editor tile
+27b-sd-tcl-ced
+Starts ced, the full-screen editor that shows a record by the field names of its dictionary and checks what is typed.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type ced at a prompt they have; this setting only changes the home screen.
