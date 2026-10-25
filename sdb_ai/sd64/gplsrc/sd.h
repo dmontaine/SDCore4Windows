@@ -271,6 +271,20 @@ bool coll_record_in(DESCRIPTOR * d);
 bool coll_record_text(DESCRIPTOR * d);
 void coll_debug_json(COLL_HEADER * h);
 COLL_ENTRY * coll_debug_find(COLL_HEADER * root, char * path, int32_t len);
+void csv_dequote(DESCRIPTOR * src_descr, char delim); /* op_csv.c: CSVDQ() of a comma (or other delimiter) separated line */
+/* 20 Oct 26 dm - op_coll.c's building blocks, for the format code (op_csv.c, op_json.c, op_xml.c): CSV, JSON merge / patch / path / schema, XML */
+COLL_HEADER * coll_new(bool is_array);
+COLL_HEADER * coll_copy(COLL_HEADER * src);
+void coll_insert(COLL_HEADER * h, int32_t pos);
+void coll_remove(COLL_HEADER * h, int32_t pos);
+bool coll_find(COLL_HEADER * h, char * name, int32_t len, int32_t * pos);
+DESCRIPTOR coll_str_descr(char * s, int32_t len);
+char * coll_chunks_to_buffer(STRING_CHUNK * s, int32_t * len);
+int32_t coll_number_len(unsigned char * s, int32_t len, bool * is_int);
+DESCRIPTOR coll_json_parse(char * text, int32_t len, int mode);
+DESCRIPTOR coll_json_build(COLL_HEADER * root, int mode);
+void coll_fill_entry(COLL_ENTRY * ent, DESCRIPTOR * v);
+DESCRIPTOR coll_value_of(COLL_ENTRY * e);
 int32_t url_encode_top(void);
 int32_t url_decode_top(void);
 int k_get_c_string(DESCRIPTOR * descr, char * s, int max_bytes);

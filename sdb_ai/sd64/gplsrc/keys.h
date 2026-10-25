@@ -729,6 +729,22 @@
 #define JB_NOQUOTE_VALUE         64   /* String values with no quotes */
 #define JB_PRETTY                128  /* SD's own: one element to a line, indented (used by CT) */
 
+/* CSVPARSE() and CSVBUILD() modes (20 Oct 26, the CSV / JSON / XML task).  Mirrored in sdsys/syscom/keys.h; SD's own values. */
+#define CSV_HEADER               1    /* First row names the columns (CSVPARSE); a header row is written (CSVBUILD) */
+#define CSV_NUMBER               2    /* CSVPARSE: a field that is a number becomes one */
+#define CSV_DYNAMIC              4    /* A dynamic array (rows by field mark, fields by value mark) in place of a data collection */
+#define CSV_KEEPBLANK            8    /* CSVPARSE: a blank line is a row of one empty field, not skipped */
+#define CSV_NOHEADER             16   /* CSVBUILD: no header row, even for rows that are named */
+#define CSV_CRLF                 32   /* CSVBUILD: lines end with carriage return and line feed */
+#define CSV_QUOTE2               64   /* CSVBUILD: enclose every field that is not a number (CSV.MODE 2) */
+#define CSV_QUOTE3               128  /* CSVBUILD: enclose every field (CSV.MODE 3) */
+
+/* XPARSE() and XBUILD() modes (20 Oct 26, the CSV / JSON / XML task).  Mirrored in sdsys/syscom/keys.h; SD's own values. */
+#define XML_TRIM                 1    /* XPARSE: white space taken off both ends of the text of an element */
+#define XML_DECL                 1    /* XBUILD: the XML declaration first */
+#define XML_PRETTY               2    /* XBUILD: one element to a line, indented */
+#define XML_NOCHECK              4    /* XBUILD: a prefix need not have been declared by an xmlns attribute */
+
 /* OBJINFO() keys */
 #define OI_ISOBJ      0  /* Is descriptor an object */
 #define OI_CLASS      1  /* Class name */

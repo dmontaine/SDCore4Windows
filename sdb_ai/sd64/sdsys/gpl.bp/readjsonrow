@@ -1,0 +1,54 @@
+* READJSONROW
+* The next object of a JSON Lines file, for READJSON
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 20 Oct 26 dm  Written for the CSV / JSON / XML task.  The compiler (bcomp, st.readjson) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* ok = !READJSONROW(c, f)
+*
+* Reads the next line of the sequential file F that is not blank, parses it as a JSON object or array and puts the data collection in C.
+* Gives 1 when it did, 0 at the end of the file (STATUS() 3006, C a null string) or when the line is not JSON (STATUS() 1020, INMAT() the
+* place in the line, C a null string).  A JSON Lines file has one value to a line, so a line is never joined to the next.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function readjsonrow(c, f)
+$catalog !readjsonrow
+
+   c = ''
+   loop
+      readseq line from f else
+         return 0
+      end
+   until trim(line) # '' repeat
+
+   c = jparse(line)
+   if status() then
+      c = ''
+      return 0
+   end
+   return 1
+end
+
+* END-CODE

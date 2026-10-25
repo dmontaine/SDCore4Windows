@@ -35,8 +35,17 @@
 * START-CODE
 
 $internal
-function matwritecsv(data, count, f, delim)
+function matwritecsv(data, count, f, delim, quote, esc)
 $catalog !matwritecsv
+
+   * 20 Oct 26 dm - DELIM, QUOTE and ESC are the statement's own delimiter, quote and escape character, a null string for any it did not
+   * name, which is the program's CSV.MODE setting.  They are made this call's CSV.MODE, which FORMCSV reads and which is undone when the
+   * function returns (the setting goes with the program).
+   if delim = '' then delim = system(1046)
+   if quote = '' then quote = system(1090)
+   if esc = '' then esc = system(1091)
+   delim = delim[1, 1]
+   csv.mode system(1043), delim, quote, esc
 
    * MATBUILD leaves the trailing null elements off, so the number of elements comes from the matrix's size (COUNT, what
    * INMAT(matrix) gives: the rows, or the rows and the columns joined by a value mark), not from the string

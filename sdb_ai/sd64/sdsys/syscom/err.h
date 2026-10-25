@@ -82,6 +82,8 @@ $define ER$BUILD.ERROR 1019    ;* JBUILD(): a value has no JSON form
 $define ER$PARSE.ERROR 1020    ;* JPARSE(): not a JSON object or array
 $define ER$ROLLBACK    1021    ;* STATUS() after END TRANSACTION: the transaction was rolled back
 $define ER$COMMIT.FAIL 1022    ;* STATUS() after END TRANSACTION: an error occurred during the commit (not produced: a failed commit aborts)
+$define ER$PATCH.ERROR 1023    ;* JPATCH(): an operation failed; INMAT() is its number (20 Oct 26)
+$define ER$QUERY.ERROR 1024    ;* JPATH(): the query is not well formed; INMAT() is the place (20 Oct 26)
 $define ER$MAX.STRING  1900    ;* Max String (record) Size
 
 * 20xx  Catalog management errors

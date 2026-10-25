@@ -87,6 +87,8 @@
 #define ER_PARSE_ERROR 1020    /* JPARSE(): not a JSON object or array */
 #define ER_ROLLBACK    1021    /* STATUS() after END TRANSACTION: the transaction was rolled back */
 #define ER_COMMIT_FAIL 1022    /* STATUS() after END TRANSACTION: an error occurred during the commit (not produced: a failed commit aborts) */
+#define ER_PATCH_ERROR 1023    /* JPATCH(): an operation failed; INMAT() is its number (20 Oct 26) */
+#define ER_QUERY_ERROR 1024    /* JPATH(): the query is not well formed; INMAT() is the place (20 Oct 26) */
 #define ER_MAX_STRING  1900    /* Max String (record) Size */
 
 /* 20xx  Catalog management errors */

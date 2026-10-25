@@ -364,6 +364,10 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    grand.total.text = ''         ;* GRAND.TOTAL text and...
    grand.total.control = ''      ;* ...control codes
    delimited.report = @false     ;* DELIMITER
+   json.report = @false          ;* JSON / JSON.LINES (20 Oct 26): set up as an XML report, written by show.json
+   json.lines = @false           ;* ...JSON Lines: one object to a line and no brackets
+   json.pending = ''             ;* ...the last record's line, held back until its comma is known
+   json.count = 0                ;* ...records so far
    xml.report = @false           ;* XML (16 Oct 26, QM4 gap 211): an XML report is a delimited report in how it is set up,
    xml.elements = @false         ;* ...ELEMENTS: each field an element, not an attribute
    xml.option = @false           ;* ...one of the options below was given (they need XML)
@@ -379,6 +383,13 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    overwrite.count = 0           ;* Records overwritten by REFORMAT
    csv.pathname = ''             ;* Pathname for DELIMITER/CSV output and...
    csv.append = @false            ;* ...append flag
+   csv.as.file = ''              ;* 20 Oct 26: AS file id - the directory file and...
+   csv.as.id = ''                ;* ...the record that receives the DELIMITER/CSV output
+   csv.out = @false              ;* ...either TO or AS was given: the report goes to the sequential file csv.f
+   csv.opened = @false           ;* ...and csv.f is open
+   csv.shown.name = ''           ;* ...what the overwrite question calls it
+   csv.lock.user = 0             ;* ...the user holding the record AS asked for
+   csv.split = @false            ;* ...the line being shown is a detail line, so a multivalued item is split over lines
 
    * Pan/scroll control data
 
@@ -711,7 +722,7 @@ parse.default.phrase:
 
    * Suppress heading, footing and styles in delimited reports
 
-   if delimited.report and csv.pathname = '' then
+   if delimited.report and not(csv.out) then
        hdr.sup = @true
        page.footing = NUL
        style.rec = ''
@@ -734,7 +745,7 @@ parse.default.phrase:
 
    * XML (16 Oct 26 dm, QM4 gap 211): its options need it, and the report has no breakpoints or arithmetic
 
-   if xml.option and not(xml.report) then
+   if xml.option and (not(xml.report) or json.report) then
       display sysmsg(12373) ;* The XML options need the xml keyword
       goto exit.qproc
    end
@@ -764,8 +775,8 @@ parse.default.phrase:
       end
    end
 
-   if csv.pathname then
-      if not(delimited.report) then
+   if csv.out then
+      if not(delimited.report) or xml.report then
          display sysmsg(7299)  ;* Output filename can only be specified in a delimited report
          goto exit.qproc
       end
@@ -775,44 +786,7 @@ parse.default.phrase:
          goto exit.qproc
       end
 
-* 17 Oct 26 dm - S.63 and S.64.  This program is $internal, so the kernel asks neither the OS-access gate nor the edit gates for the
-*   OPENSEQ below, and the report is written, or appended, wherever the name points.  Asked here, as the session, BEFORE the file is
-*   opened, so a refusal has created, truncated and locked nothing (the overwrite question below is only reached by a path that
-*   passed).  APPENDING is the same open, so it is covered by the same test.
-      if not(kernel(K$PATH.OK, csv.pathname)) then
-         @system.return.code = -ER$PERM
-         display sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached by pathname
-         goto exit.qproc
-      end
-      if not(kernel(K$EDIT.OS.OK, csv.pathname)) then
-         @system.return.code = -ER$PERM
-         eom.path = csv.pathname
-         gosub edit.os.message
-         display eom.text
-         goto exit.qproc
-      end
-
-      openseq csv.pathname to csv.f then
-         if not(csv.append) and not(csv.no.query) then
-            loop
-               display sysmsg(7305, csv.pathname) : ;* %1 already exists. Overwrite(y/<n>)?
-               input yn upcase
-* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
-*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N
-*   reaches the goto on the next line, so an empty answer leaves the existing
-*   file alone, which is the conservative half of an overwrite question.
-               if yn = '' then yn = 'N'
-               if yn = 'N' then goto exit.qproc
-            until yn = 'Y'
-               display sysmsg(7279) ;* Y or N required
-            repeat
-         end
-      end else
-         if status() then
-            display sysmsg(1427, csv.pathname)  ;* Cannot open %1
-            goto exit.qproc
-         end
-      end
+      if csv.as.file # '' then gosub open.csv.as else gosub open.csv.to
 
       if csv.append then
          seek csv.f, 0, 2 else null
@@ -1225,7 +1199,7 @@ template.found:
       if hdr.sup then page.heading = ''
 
       if page.heading # '' then
-         if csv.pathname # '' then
+         if csv.out then
             if trim(page.heading, ' ', 'B') # '' then
                writeseq page.heading to csv.f else null
             end
@@ -1321,7 +1295,7 @@ template.found:
          repeat
 
          begin case
-            case csv.pathname # ''
+            case csv.out
                if trim(column.headings, ' ', 'B') # '' then
                   writeseq column.headings to csv.f else null
                end
@@ -1378,9 +1352,13 @@ template.found:
 *-----------------------------------------------------------------------------
 * XML report: the declaration, the DTD and schema if asked for, and the root element (16 Oct 26 dm, QM4 gap 211)
 
-   if xml.report then
-      gosub xml.start
-      if xml.dtd = 2 or xml.schema = 2 then goto done   ;* DTD.ONLY or SCHEMA.ONLY: no data
+   if json.report then
+      gosub json.start
+   end else
+      if xml.report then
+         gosub xml.start
+         if xml.dtd = 2 or xml.schema = 2 then goto done   ;* DTD.ONLY or SCHEMA.ONLY: no data
+      end
    end
 
 *-----------------------------------------------------------------------------
@@ -2480,7 +2458,11 @@ done:
       write qdisp(QD$GETP) to pageseq.f, pageseq.id
    end
 
-   if xml.report then gosub xml.end
+   if json.report then
+      gosub json.end
+   end else
+      if xml.report then gosub xml.end
+   end
 
    qproc.record = ""           ;* Release memory in SYSCOM
    void qdisp(QD$END)
@@ -2492,6 +2474,11 @@ exit.qproc:
    @sys0 = 0
 
 qdisp.error:
+   if csv.opened then      ;* 20 Oct 26 dm - TO / AS: close the file now, which also gives back the record lock AS took
+      closeseq csv.f
+      csv.opened = @false
+   end
+
    begin case
       case @sys0 = 0     ;* Normal exit
          null
@@ -2863,6 +2850,22 @@ parse.command.options:
             xml.report = @true
             delimiter = ''
             count.sup = @true            ;* no "n record(s) listed" line inside the document
+
+* --- JSON and JSON.LINES (20 Oct 26 dm, the CSV / JSON / XML task): the XML report's way of working with a different output.  The report
+*     is set up as an XML one (the same dictionary reading, the same restrictions: no breakpoints or arithmetic, no headings) and
+*     json.report says which writer to use.
+         case (keyword = KW$JSON or keyword = KW$JSON.LINES) and report.command
+            if delimited.report then
+               display sysmsg(7290) ;* Multiple use of DELIMITER or CSV options
+               goto exit.qproc
+            end
+            delimited.report = @true
+            xml.report = @true
+            json.report = @true
+            json.lines = (keyword = KW$JSON.LINES)
+            delimiter = ''
+            count.sup = @true            ;* no "n record(s) listed" line inside the document
+
          case keyword = KW$ELEMENTS and report.command
             xml.elements = @true
             xml.option = @true
@@ -3377,7 +3380,7 @@ label.template.found:
             target.list = token + 0
 
          case keyword = KW$TO and (report.command)
-            if csv.pathname # '' then
+            if csv.out then
                display sysmsg(7294) ;* Multiple specification of output filename
                goto exit.qproc
             end
@@ -3391,15 +3394,36 @@ label.template.found:
                goto exit.qproc
             end
             csv.pathname = token
+            csv.out = @true
             hdr.sup = @true  ;* Cannot include as we don't use _HF to format
             no.page = @true
-            gosub get.token
+            gosub get.csv.out.options
+            continue           ;* Already read next token
 
-            begin case
-               case keyword = KW$APPENDING ; csv.append = @true
-               case keyword = KW$NO.QUERY  ; csv.no.query = @true
-               case 1                      ; continue
-            end case
+* --- AS file id  (20 Oct 26 dm, openQM 4: CSV and DELIMITER ... AS file id): the report as a record of a directory file.  A
+*     column heading's AS is read by check.field.modifiers, straight after the item it belongs to, so this one is the report's.
+         case keyword = KW$AS and report.command
+            if csv.out then
+               display sysmsg(7294) ;* Multiple specification of output filename
+               goto exit.qproc
+            end
+            gosub get.token
+            if token.type = PARSER$END then
+               display sysmsg(7295) ;* Output filename required
+               goto exit.qproc
+            end
+            csv.as.file = token
+            gosub get.token
+            if token.type = PARSER$END or (token.type = PARSER$TOKEN and (keyword = KW$APPENDING or keyword = KW$NO.QUERY)) then
+               display sysmsg(12857) ;* Output record id required
+               goto exit.qproc
+            end
+            csv.as.id = token
+            csv.out = @true
+            hdr.sup = @true
+            no.page = @true
+            gosub get.csv.out.options
+            continue           ;* Already read next token
 
          case keyword = KW$TO and reformat.command
             if reformat.filename # '' then
@@ -3605,6 +3629,130 @@ get.break.qualifier:
       if token # '' then breakpoint.string(no.of.breakpoints) = token
 
       gosub get.token
+   end
+   return
+
+* ======================================================================
+* GET.CSV.OUT.OPTIONS  -  The words after TO pathname or AS file id: APPENDING and NO.QUERY, in either order and not both (the
+* manual: "may not be used together").  Refused here, before anything has been opened, so a refusal touches no file.  The next
+* token has been read when this returns; the caller continues with it.
+
+get.csv.out.options:
+   loop
+      gosub get.token
+      begin case
+         case token.type # PARSER$TOKEN ; exit
+         case keyword = KW$APPENDING ; csv.append = @true
+         case keyword = KW$NO.QUERY ; csv.no.query = @true
+         case 1 ; exit
+      end case
+   repeat
+   if csv.append and csv.no.query then
+      display sysmsg(12855) ;* NO.QUERY and APPENDING cannot be used together
+      goto exit.qproc
+   end
+   return
+
+* ======================================================================
+* OPEN.CSV.TO  -  Open the operating system file named by TO for a delimited report.  Lands in csv.f, the file's existing text
+* still there; the caller truncates or goes to the end.
+
+open.csv.to:
+* 17 Oct 26 dm - S.63 and S.64.  This program is $internal, so the kernel asks neither the OS-access gate nor the edit gates for the
+*   OPENSEQ below, and the report is written, or appended, wherever the name points.  Asked here, as the session, BEFORE the file is
+*   opened, so a refusal has created, truncated and locked nothing (the overwrite question below is only reached by a path that
+*   passed).  APPENDING is the same open, so it is covered by the same test.
+   if not(kernel(K$PATH.OK, csv.pathname)) then
+      @system.return.code = -ER$PERM
+      display sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached by pathname
+      goto exit.qproc
+   end
+   if not(kernel(K$EDIT.OS.OK, csv.pathname)) then
+      @system.return.code = -ER$PERM
+      eom.path = csv.pathname
+      gosub edit.os.message
+      display eom.text
+      goto exit.qproc
+   end
+
+   openseq csv.pathname to csv.f then
+      csv.opened = @true
+      csv.shown.name = csv.pathname
+      gosub confirm.csv.overwrite
+   end else
+      if status() then
+         display sysmsg(1427, csv.pathname)  ;* Cannot open %1
+         goto exit.qproc
+      end
+      csv.opened = @true
+   end
+   return
+
+* ======================================================================
+* OPEN.CSV.AS  -  Open the record named by AS file id for a delimited report (20 Oct 26 dm, openQM 4: CSV and DELIMITER).  The file
+* is a directory file and the record is a file of it, so the report is written the way TO writes a file, with OPENSEQ.
+*   - The edit gates (S.64, with the shared account's rule of S.66) are asked of the file as OPENED, before the record is touched:
+*     this program is $internal, so the kernel would let the write through (the same test REFORMAT makes, edit_guard).
+*   - OPENSEQ takes the record's update lock, as any write does.  A record another session holds is not waited for: it is named
+*     with the holder (message 1433) and nothing is written.  The lock goes when the file is closed at the end of the command.
+*   - A record that is there asks first (7305), unless NO.QUERY or APPENDING was given.
+*   The OS-access gate (K$PATH.OK) is not asked: no pathname is involved, the file is one the account opened by name.
+
+open.csv.as:
+   csv.shown.name = csv.as.file : ' ' : csv.as.id
+   open csv.as.file to csv.as.f else
+      open downcase(csv.as.file) to csv.as.f else
+         open upcase(csv.as.file) to csv.as.f else
+            display sysmsg(1427, csv.as.file)  ;* Cannot open %1
+            goto exit.qproc
+         end
+      end
+   end
+   if fileinfo(csv.as.f, FL$TYPE) # FL$TYPE.DIR then
+      display sysmsg(12856, csv.as.file) ;* AS needs a directory file: %1 is not one
+      goto exit.qproc
+   end
+   if not(edit_guard(csv.as.f)) then
+      @system.return.code = -ER$PERM
+      goto exit.qproc
+   end
+
+   csv.lock.user = 0
+   openseq csv.as.file, csv.as.id to csv.f locked csv.lock.user = status() then
+      csv.opened = @true
+      gosub confirm.csv.overwrite
+   end else
+      if csv.lock.user = 0 then
+         if status() then
+            display sysmsg(1427, csv.shown.name)  ;* Cannot open %1
+            goto exit.qproc
+         end
+         csv.opened = @true
+      end
+   end
+   if csv.lock.user then
+      display sysmsg(1433, csv.as.id, csv.lock.user) ;* Record '%1' is locked by user %2
+      goto exit.qproc
+   end
+   return
+
+* ======================================================================
+* CONFIRM.CSV.OVERWRITE  -  The output is there already: ask, unless NO.QUERY or APPENDING was given.  N ends the command.
+
+confirm.csv.overwrite:
+   if not(csv.append) and not(csv.no.query) then
+      loop
+         display sysmsg(7305, csv.shown.name) : ;* %1 already exists. Overwrite(y/<n>)?
+         input yn upcase
+* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
+*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.  N
+*   reaches the goto on the next line, so an empty answer leaves the existing
+*   file alone, which is the conservative half of an overwrite question.
+         if yn = '' then yn = 'N'
+         if yn = 'N' then goto exit.qproc
+      until yn = 'Y'
+         display sysmsg(7279) ;* Y or N required
+      repeat
    end
    return
 
@@ -6718,6 +6866,7 @@ accumulate.null.item:
    * Display the record
 
    class = 'D'
+   csv.split = @true      ;* a delimited report splits a multivalued item over lines on a detail line only (show.delimited)
 
 report.record: ;* Enter here from SHOW.ACCUMULATIONS
    if reformat.command then
@@ -6764,7 +6913,9 @@ report.record: ;* Enter here from SHOW.ACCUMULATIONS
 
    * (RPT, 15 Oct 26 dm, QM4 gaps Q-20, asks for this for one item and is checked for each below)
 
-   if repeating or any.rpt then
+   * (a delimited report repeats them itself, where it splits the multivalued items over lines: show.delimited)
+
+   if (repeating or any.rpt) and (xml.report or not(delimited.report)) then
       if max.v > 1 then
          for list.index = 1 to no.of.list.items
             if list.item(list.index, ITEM.MODE) # REPORT.BREAK.SUP then
@@ -6778,6 +6929,8 @@ report.record: ;* Enter here from SHOW.ACCUMULATIONS
    end
 
    begin case
+      case json.report                       ;* ===== JSON report
+         gosub show.json
       case xml.report                        ;* ===== XML report
          gosub show.xml
       case delimited.report                  ;* ===== Delimited report
@@ -6890,6 +7043,87 @@ xml.start:
 
 xml.end:
    if xml.dtd # 2 and xml.schema # 2 then print on lptr '</ROOT>'
+   return
+
+* ======================================================================
+* JSON REPORT  (20 Oct 26 dm, the CSV / JSON / XML task)
+*
+* The fields are sorted as the XML report sorts them (xml.prepare): a single valued field is a member of the record's object, an
+* association is an array of objects, one for each row, named for the association, and a multivalued field that is in no association is
+* an array of its values.  Every value is a string - nothing is read as a number, so 007 stays 007 - and a field with no value is left
+* out.  The object is made as a data collection and written by JBUILD(), so the quoting is JSON's and a mark in the data is \u00XX.
+* The members of an object come in order of name.  JSON is an array, "[", the objects and "]" with a comma after each but the last;
+* JSON.LINES is the objects only, one to a line.
+
+json.start:
+   gosub xml.prepare
+   json.pending = ''
+   json.count = 0
+   if not(json.lines) then print on lptr '['
+   return
+
+json.end:
+   if json.pending # '' then print on lptr json.pending
+   if not(json.lines) then print on lptr ']'
+   return
+
+show.json:
+   json.c = collection()
+   for json.i = 1 to dcount(xml.single, @fm)
+      json.li = xml.single<json.i>
+      json.nm = xml.names<json.li>
+      json.v = disp.rec<json.li>
+      if json.v # '' then json.c{json.nm} = json.v
+   next json.i
+   for json.g = 1 to dcount(xml.groups, @fm)
+      json.items = xml.group.items<json.g>
+      json.gn = xml.groups<json.g>
+      json.rows = 0
+      for json.i = 1 to dcount(json.items, @vm)
+         json.li = json.items<1,json.i>
+         json.rows = max(json.rows, dcount(disp.rec<json.li>, @vm))
+      next json.i
+      json.n = 0
+      for json.r = 1 to json.rows
+         json.row = collection()
+         json.has = @false
+         for json.i = 1 to dcount(json.items, @vm)
+            json.li = json.items<1,json.i>
+            json.nm = xml.names<json.li>
+            json.v = disp.rec<json.li,json.r>
+            if json.v # '' then
+               json.row{json.nm} = json.v
+               json.has = @true
+            end
+         next json.i
+         if json.has then
+            if json.n = 0 then json.c{json.gn} = mat()
+            json.n += 1
+            json.c{json.gn, json.n} = json.row
+         end
+      next json.r
+   next json.g
+   for json.i = 1 to dcount(xml.mv, @fm)
+      json.li = xml.mv<json.i>
+      json.nm = xml.names<json.li>
+      json.n = 0
+      for json.r = 1 to dcount(disp.rec<json.li>, @vm)
+         json.v = disp.rec<json.li,json.r>
+         if json.v # '' then
+            if json.n = 0 then json.c{json.nm} = mat()
+            json.n += 1
+            json.c{json.nm, json.n} = json.v
+         end
+      next json.r
+   next json.i
+   json.line = jbuild(json.c)
+   if json.lines then
+      print on lptr json.line
+   end else
+      if json.pending # '' then print on lptr json.pending : ','
+      json.pending = json.line
+   end
+   json.count += 1
    return
 
 * XML.DTD.OUT  -  The declarations of the DTD
@@ -7101,37 +7335,63 @@ show.xml:
 * show.delimited  -  Emit record for delimited report
 
 show.delimited:
-   printline = ''
-   for list.index = 1 to no.of.list.items
-      if list.item(list.index, ITEM.MODE) = REPORT.BREAK.SUP then continue
-      if list.index > 1 then printline := delimiter
-      s = disp.rec<list.index>
-      if csv then  ;* Apply CSV rules
-         begin case
-            case csv = 1 ;* Standard rules (ftp://ftp.isi.edu/in-notes/rfc4180.txt)
-               if index(s, '"', 1) or index(s, delimiter, 1) then
-                  s = '"' : change(s, '"', '""') : '"'
-               end
-            case csv = 2 ;* Quote everything except numerics with no embedded commas
-               if convert('0123456789.-', '', s) # '' then
-                  s = '"' : change(s, '"', '""') : '"'
-               end
-            case csv = 3 ;* Quote everything, numbers too
-               s = '"' : change(s, '"', '""') : '"'
-         end case
-      end
-      printline := s
-   next list.index
-
-   if csv.pathname # '' then
-      writeseq printline to csv.f else
-         display sysmsg(1421, status()) ;* Error %d writing line to sequential file
-         goto exit.qproc
-      end
-   end else
-      * Do not use the display handler for delimited reports
-      print on lptr printline
+* 20 Oct 26 dm - "Multivalued items will be split over multiple lines of CSV output" (openQM 4, CSV and DELIMITER).  A detail line is
+*   one line for each value of its longest multivalued item; a multivalued item gives its n'th value on the n'th line, any other
+*   column is shown on the FIRST line and left blank on the others (the manual's example: LIST SALES ITEM.NO DELIMITER "," gives
+*   26832,176 then ,218 then ,398).  RPT and REPEATING repeat a single valued column on every line, as they do in the tabular report.
+*   An item that is single valued in the dictionary, or by SINGLE.VALUE, stays ONE element whatever its data holds: the value marks
+*   are data.  Totals and break lines are one line each, as they were (csv.split is only true on a detail line).
+   dl.lines = 1
+   if csv.split then
+      for list.index = 1 to no.of.list.items
+         if list.item(list.index, ITEM.MODE) = REPORT.BREAK.SUP then continue
+         if item.multivalued(list.item(list.index, ITEM.NO)) then dl.lines = max(dl.lines, dcount(disp.rec<list.index>, @vm))
+      next list.index
    end
+
+   for dl.line = 1 to dl.lines
+      printline = ''
+      for list.index = 1 to no.of.list.items
+         if list.item(list.index, ITEM.MODE) = REPORT.BREAK.SUP then continue
+         if list.index > 1 then printline := delimiter
+         item.to.list = list.item(list.index, ITEM.NO)
+         begin case
+            case csv.split and item.multivalued(item.to.list)
+               s = disp.rec<list.index, dl.line>
+            case dl.line = 1
+               s = disp.rec<list.index>
+            case repeating or bitand(item.flags(item.to.list), IFLG.RPT)
+               s = disp.rec<list.index>
+            case 1
+               s = ''
+         end case
+         if csv then  ;* Apply CSV rules
+            begin case
+               case csv = 1 ;* Standard rules (ftp://ftp.isi.edu/in-notes/rfc4180.txt)
+                  if index(s, '"', 1) or index(s, delimiter, 1) then
+                     s = '"' : change(s, '"', '""') : '"'
+                  end
+               case csv = 2 ;* Quote everything except numerics with no embedded commas
+                  if convert('0123456789.-', '', s) # '' then
+                     s = '"' : change(s, '"', '""') : '"'
+                  end
+               case csv = 3 ;* Quote everything, numbers too
+                  s = '"' : change(s, '"', '""') : '"'
+            end case
+         end
+         printline := s
+      next list.index
+
+      if csv.out then
+         writeseq printline to csv.f else
+            display sysmsg(1421, status()) ;* Error %d writing line to sequential file
+            goto exit.qproc
+         end
+      end else
+         * Do not use the display handler for delimited reports
+         print on lptr printline
+      end
+   next dl.line
 
    return
 
@@ -7486,6 +7746,7 @@ mode.of.list:
 show.accumulations:
    if accumulating and index(grand.total.control, 'L', 1) = 0 then
       class = 'T'
+      csv.split = @false
 
       for list.index = 1 to no.of.list.items
          item.to.list = list.item(list.index, ITEM.NO)
@@ -7592,6 +7853,7 @@ show.continue.no.conversion:
 
 show.breakpoint:
    class = if det.sup then 'D' else 'S'
+   csv.split = @false
    saved.data.rec = data.rec
    saved.disp.rec = disp.rec
 

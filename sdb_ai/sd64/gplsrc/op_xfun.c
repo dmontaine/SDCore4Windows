@@ -110,7 +110,34 @@
 #define XF_SDSALT 37    /* SDSALT(): a fresh random salt (sd_xf_salt in sd_encrypt_sodium.c; encryption layer 2) */
 #define XF_SDKEY 38     /* SDKEY(passphrase, salt): a key by argon2id (sd_xf_key) */
 #define XF_SDRANDKEY 39 /* SDRANDKEY(): a random 256 bit key (sd_xf_randkey) */
+#define XF_FORMCSVX 40  /* FORMCSV(item, delim, quote, esc): the statement's own CSV characters (x_formcsvx, op_csv.c); the compiler loads the four */
+#define XF_CSVDQX 41    /* CSVDQ(line, delim, quote, esc) (x_csvdqx) */
+#define XF_CSVQESC 42   /* CSV.MODE's third and fourth operands (x_csvqesc): leaves nothing */
+#define XF_CSVPARSE 43  /* CSVPARSE(text {, mode {, dialect}}): CSV text as a data collection or a dynamic array (x_csvparse) */
+#define XF_CSVBUILD 44  /* CSVBUILD(c {, mode {, dialect}}): a data collection or dynamic array as CSV text (x_csvbuild) */
+#define XF_CSVOPEN 45   /* CSVOPEN(line {, delim {, quote {, esc}}}): does the line end inside a quoted field (x_csvopen) */
+#define XF_JMERGE 46    /* JMERGE(target, patch): RFC 7396 (x_jmerge, op_json.c) */
+#define XF_JPATCH 47    /* JPATCH(c, ops): RFC 6902 (x_jpatch) */
+#define XF_JPATH 48     /* JPATH(c, query): JSONPath (x_jpath) */
+#define XF_JVALIDATE 49 /* JVALIDATE(c, schema): JSON Schema (x_jvalidate) */
+#define XF_XPARSE 50    /* XPARSE(text {, mode}): XML text as a data collection (x_xparse, op_xml.c) */
+#define XF_XBUILD 51    /* XBUILD(element {, mode {, indent}}): an XML element as text (x_xbuild) */
+#define XF_XPATH 52     /* XPATH(x, query): XPath 1.0 over an element (x_xpath) */
 
+void x_xparse(void);
+void x_xbuild(void);
+void x_xpath(void);
+
+void x_jmerge(void);
+void x_jpatch(void);
+void x_jpath(void);
+void x_jvalidate(void);
+void x_csvopen(void);
+void x_formcsvx(void);
+void x_csvdqx(void);
+void x_csvqesc(void);
+void x_csvparse(void);
+void x_csvbuild(void);
 void sd_xf_salt(void);
 void sd_xf_key(void);
 void sd_xf_randkey(void);
@@ -289,6 +316,45 @@ void op_xfun() {
       break;
     case XF_SDRANDKEY:
       sd_xf_randkey();
+      break;
+    case XF_FORMCSVX:
+      x_formcsvx();
+      break;
+    case XF_CSVDQX:
+      x_csvdqx();
+      break;
+    case XF_CSVQESC:
+      x_csvqesc();
+      break;
+    case XF_CSVPARSE:
+      x_csvparse();
+      break;
+    case XF_CSVBUILD:
+      x_csvbuild();
+      break;
+    case XF_CSVOPEN:
+      x_csvopen();
+      break;
+    case XF_JMERGE:
+      x_jmerge();
+      break;
+    case XF_JPATCH:
+      x_jpatch();
+      break;
+    case XF_JPATH:
+      x_jpath();
+      break;
+    case XF_JVALIDATE:
+      x_jvalidate();
+      break;
+    case XF_XPARSE:
+      x_xparse();
+      break;
+    case XF_XBUILD:
+      x_xbuild();
+      break;
+    case XF_XPATH:
+      x_xpath();
       break;
     default:
       k_error("Illegal XFUN function number %d", (int)fn); /* the compiler cannot have made this */

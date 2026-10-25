@@ -1,0 +1,49 @@
+* WRITEJSONROW
+* One data collection as a line of a JSON Lines file, for WRITEJSON
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 20 Oct 26 dm  Written for the CSV / JSON / XML task.  The compiler (bcomp, st.writejson) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* ok = !WRITEJSONROW(c, f)
+*
+* Writes the collection C as one line of compact JSON (JBUILD() writes a line feed inside a string as \n, so it is one line) to the
+* sequential file F with WRITESEQ.  Gives 1 if it was written; 0 if C is not an object or an array (STATUS() 1020, nothing written),
+* has no JSON form (STATUS() 1019, nothing written) or the write failed.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function writejsonrow(c, f)
+$catalog !writejsonrow
+
+   if jtype(c) # 'collection' and jtype(c) # 'array' then
+      * not a data collection: JBUILD would stop the program.  Parsing a null string sets STATUS() 1020 (not JSON), which is what ELSE shows.
+      x = jparse('')
+      return 0
+   end
+   line = jbuild(c)
+   if status() then return 0
+   writeseq line to f then return 1 else return 0
+end
+
+* END-CODE

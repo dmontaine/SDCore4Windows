@@ -1,0 +1,1 @@
+convert.data from.pathname to.pathname {csv | json | jsonl | xml} {header} {no.query}

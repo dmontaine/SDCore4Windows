@@ -1,0 +1,408 @@
+* CONVERTDATA
+* CONVERT.DATA: a CSV, JSON, JSON Lines or XML file written as another of them
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 20 Oct 26 dm  New.  The owner's CSV / JSON / XML task: "a format-to-format convert verb (CSV, JSON, XML)".
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   CONVERT.DATA from.pathname to.pathname {FROM format} {AS format} {HEADER} {NO.QUERY}
+*
+* The format of each file is what its name ends in (.csv, .json, .jsonl or .ndjson, .xml), or what FROM (for the file read) and AS (for the file
+* written) say: CSV, JSON, JSONL or XML.  The data is read into a data collection and written out again, so what carries over is what the
+* collection holds:
+*   a table  - the rows of a CSV file with a header row (HEADER), an array of JSON objects, a JSON Lines file, or the child elements of the
+*              root of an XML document (an element's attributes and the text of its child elements are its columns) - goes to any of the four.
+*              To CSV the columns are the names of the objects, in order of first appearance (each object lists its names in order of name; a
+*              CSV read with a header keeps its own order), and a value that is not text (a nested array or object) is refused.  To XML the
+*              table is <table>, a <row> for each row, a child for each column.  An XML document is always read as a table.
+*   an array of arrays (a CSV file without a header, or JSON that is one) goes to CSV, JSON and JSONL as it is and to XML as columns c1, c2, ....
+*   a JSON object (not an array) goes to JSON as it is, to XML only when it is an XML element as XPARSE() gives it (a name, attributes, text
+*   and children), and is refused for CSV and JSON Lines.
+* The pathnames go through the OS-access gate and the edit gates; a file that is there is asked about unless NO.QUERY.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $convertdata
+$catalog $convertdata
+
+$include err.h
+$include keys.h
+$include int$keys.h
+$include parser.h
+
+   parser = '!PARSER'
+   @system.return.code = -ER$ARGS
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)       ;* the verb
+
+   words = ''
+   header = @false ; noquery = @false
+   fmt.in = '' ; fmt.out = ''
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      u = upcase(token)
+      begin case
+         case token.type = PARSER$TOKEN and u = 'HEADER' ; header = @true
+         case token.type = PARSER$TOKEN and u = 'NO.QUERY' ; noquery = @true
+         case token.type = PARSER$TOKEN and u = 'FROM'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; fmt.in = upcase(token)
+         case token.type = PARSER$TOKEN and u = 'AS'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; fmt.out = upcase(token)
+         case 1
+            words<-1> = token
+      end case
+   repeat
+   if dcount(words, @fm) # 2 then
+      display sysmsg(12866)
+      return
+   end
+   inpath = words<1>
+   outpath = words<2>
+   if fmt.in = '' then
+      fp = inpath ; gosub file.format
+      fmt.in = ff
+   end
+   if fmt.out = '' then
+      fp = outpath ; gosub file.format
+      fmt.out = ff
+   end
+   if fmt.in = '' then
+      display sysmsg(12861, inpath)
+      return
+   end
+   if fmt.out = '' then
+      display sysmsg(12861, outpath)
+      return
+   end
+   if fmt.in = 'NDJSON' then fmt.in = 'JSONL'
+   if fmt.out = 'NDJSON' then fmt.out = 'JSONL'
+
+   * ---- the gates, before anything is read or made ----
+   for each p in inpath : @fm : outpath
+      if not(kernel(K$PATH.OK, p)) then
+         @system.return.code = -ER$PERM
+         display sysmsg(12185, @who)
+         return
+      end
+   next p
+   if not(kernel(K$EDIT.OS.OK, outpath)) then
+      @system.return.code = -ER$PERM
+      gosub edit.refused
+      return
+   end
+
+   osread text from inpath else
+      display sysmsg(1427, inpath)
+      @system.return.code = -ER$FNF
+      return
+   end
+
+   * ---- read: a data collection ----
+   model = ''
+   begin case
+      case fmt.in = 'CSV'
+         model = csvparse(text, (if header then csv$header else 0))
+         st = status()
+      case fmt.in = 'JSON'
+         model = jparse(text)
+         st = status()
+      case fmt.in = 'JSONL'
+         model = mat()
+         n = 0 ; st = 0
+         lines = change(change(text, char(13) : char(10), @fm), char(10), @fm)
+         for i = 1 to dcount(lines, @fm)
+            if trim(lines<i>) = '' then continue
+            one = jparse(lines<i>)
+            st = status()
+            if st then
+               at.pos = inmat()
+               exit
+            end
+            n += 1
+            model{n} = one
+         next i
+         if st then
+            display sysmsg(12860, inpath, 'JSON Lines (line ' : i : ')', st, at.pos)
+            return
+         end
+      case fmt.in = 'XML'
+         model = xparse(text)
+         st = status()
+      case 1
+         display sysmsg(12861, inpath)
+         return
+   end case
+   if st then
+      display sysmsg(12860, inpath, fmt.in, st, inmat())
+      @system.return.code = -ER$PARSE.ERROR
+      return
+   end
+
+   * ---- the table, if it is one: columns (field mark delimited, or null) and rows (an array) ----
+   rows = '' ; cols = '' ; is.table = @false ; is.grid = @false
+   gosub find.table
+
+   * ---- write: text ----
+   out.text = ''
+   fail = ''
+   begin case
+      case fmt.out = 'CSV'
+         if is.table or is.grid then
+            if is.table then
+               tb = collection()
+               tb{'columns'} = mat()
+               for c = 1 to dcount(cols, @fm)
+                  tb{'columns', c} = cols<c>
+               next c
+               tb{'rows'} = rows
+               out.text = csvbuild(tb)
+            end else
+               out.text = csvbuild(rows)
+            end
+            if status() then fail = 'a value is a collection, which a CSV field cannot hold'
+         end else
+            fail = 'it is not a table'
+         end
+      case fmt.out = 'JSON'
+         if is.table or is.grid then
+            out.text = jbuild(rows, jb$pretty)
+         end else
+            out.text = jbuild(model, jb$pretty)
+         end
+         if status() then fail = 'it has no JSON form'
+         out.text := char(10)
+      case fmt.out = 'JSONL'
+         if is.table or is.grid then
+            for i = 1 to inmat(rows)
+               out.text := jbuild(rows{i}) : char(10)
+               if status() then
+                  fail = 'a row has no JSON form'
+                  exit
+               end
+            next i
+         end else
+            fail = 'it is not a table'
+         end
+      case fmt.out = 'XML'
+         gosub build.xml
+      case 1
+         display sysmsg(12861, outpath)
+         return
+   end case
+   if fail # '' then
+      display sysmsg(12862, inpath, fmt.out, fail)
+      return
+   end
+
+   * ---- the file written ----
+   osread chk from outpath then
+      if not(noquery) then
+         loop
+            display sysmsg(7305, outpath) :
+            input yn upcase
+            if yn = '' then yn = 'N'
+            if yn = 'N' then return
+         until yn = 'Y'
+            display sysmsg(7279)
+         repeat
+      end
+   end
+   oswrite out.text to outpath
+   if status() then
+      display sysmsg(1427, outpath)
+      @system.return.code = -ER$PERM
+      return
+   end
+   @system.return.code = 0
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+
+* Why K$EDIT.OS.OK refused the output path: the first component that names a VOC, a dictionary or a program file the session may not change
+* (the same reading qproc's edit.os.message makes: 12410, 12411, 12412, and 12415 for a path it could not read)
+edit.refused:
+   eom.kind = 0
+   for eom.i = 1 to dcount(outpath, '/')
+      eom.k = kernel(K$EDIT.KIND, field(outpath, '/', eom.i))
+      if eom.kind = 0 and eom.k >= 1 and eom.k <= 3 then
+         begin case
+            case eom.k = 1 ; eom.gate = kernel(K$VOC.EDIT, -1)
+            case eom.k = 2 ; eom.gate = kernel(K$DICT.EDIT, -1)
+            case 1 ; eom.gate = kernel(K$BP.EDIT, -1)
+         end case
+         if not(eom.gate) then eom.kind = eom.k
+      end
+   next eom.i
+   eom.msg = 12415
+   if eom.kind then eom.msg = 12409 + eom.kind
+   display sysmsg(eom.msg)
+   return
+
+* fp -> ff, the format a name ends in: CSV, JSON, JSONL, XML or null
+file.format:
+   fe = downcase(field(fp, '.', dcount(fp, '.')))
+   begin case
+      case fe = 'csv' ; ff = 'CSV'
+      case fe = 'json' ; ff = 'JSON'
+      case fe = 'jsonl' or fe = 'ndjson' ; ff = 'JSONL'
+      case fe = 'xml' ; ff = 'XML'
+      case 1 ; ff = ''
+   end case
+   return
+
+* model -> rows, cols, is.table, is.grid
+find.table:
+   t = jtype(model)
+   if fmt.in = 'XML' then
+      * the child elements of the root are the rows; an element's attributes and the text of its child elements are its columns
+      is.table = @true
+      rows = mat()
+      cols = ''
+      nr = 0
+      if element.exists(model, 'children') then
+         for i = 1 to inmat(model{'children'})
+            el = model{'children', i}
+            r = collection()
+            if element.exists(el, 'attributes') then
+               an = enumerate(el{'attributes'})
+               for k = 1 to dcount(an, @fm)
+                  nm = an<k>
+                  r{nm} = el{'attributes', nm}
+                  locate nm in cols<1> setting cp else cols<cp> = nm
+               next k
+            end
+            if element.exists(el, 'children') then
+               for k = 1 to inmat(el{'children'})
+                  ec = el{'children', k}
+                  nm = ec{'name'}
+                  v = ''
+                  if element.exists(ec, 'text') then v = ec{'text'}
+                  r{nm} = v
+                  locate nm in cols<1> setting cp else cols<cp> = nm
+               next k
+            end
+            if element.exists(el, 'text') and not(element.exists(el, 'children')) then
+               r{'text'} = el{'text'}
+               locate 'text' in cols<1> setting cp else cols<cp> = 'text'
+            end
+            nr += 1
+            rows{nr} = r
+         next i
+      end
+      return
+   end
+   if fmt.in = 'CSV' and header then
+      is.table = @true
+      rows = model{'rows'}
+      for c = 1 to inmat(model{'columns'})
+         cols<c> = model{'columns', c}
+      next c
+      return
+   end
+   if t = 'array' then
+      rows = model
+      * an array of objects is a table, an array of arrays a grid
+      if inmat(model) > 0 and jtype(model{1}) = 'collection' then
+         is.table = @true
+         for i = 1 to inmat(model)
+            if jtype(model{i}) = 'collection' then
+               an = enumerate(model{i})
+               for k = 1 to dcount(an, @fm)
+                  nm = an<k>
+                  locate nm in cols<1> setting cp else cols<cp> = nm
+               next k
+            end
+         next i
+      end else
+         is.grid = (inmat(model) > 0 and jtype(model{1}) = 'array')
+         if inmat(model) = 0 then is.grid = @true
+      end
+   end
+   return
+
+* rows, cols -> out.text as an XML document, or fail
+build.xml:
+   if is.table or is.grid then
+      doc = collection()
+      doc{'name'} = 'table'
+      if inmat(rows) > 0 then doc{'children'} = mat()
+      for i = 1 to inmat(rows)
+         row = collection()
+         row{'name'} = 'row'
+         kids = mat()
+         nk = 0
+         if is.table then
+            for c = 1 to dcount(cols, @fm)
+               colname = cols<c>
+               if element.exists(rows{i}, colname) then
+                  nk += 1
+                  cel = collection()
+                  nm = colname ; gosub xml.safe
+                  cel{'name'} = nm
+                  v = rows{i, colname}
+                  if jtype(v) = 'collection' or jtype(v) = 'array' then
+                     fail = 'a value is a collection, which an XML text cannot hold'
+                     return
+                  end
+                  if v # '' then cel{'text'} = v
+                  kids{nk} = cel
+               end
+            next c
+         end else
+            for c = 1 to inmat(rows{i})
+               nk += 1
+               cel = collection()
+               cel{'name'} = 'c' : c
+               v = rows{i, c}
+               if v # '' then cel{'text'} = v
+               kids{nk} = cel
+            next c
+         end
+         if nk > 0 then row{'children'} = kids
+         doc{'children', i} = row
+      next i
+      out.text = xbuild(doc, xml$decl + xml$pretty)
+   end else
+      if fmt.in = 'XML' or (jtype(model) = 'collection' and element.exists(model, 'name')) then
+         out.text = xbuild(model, xml$decl + xml$pretty)
+      end else
+         fail = 'it is not a table, and not an XML element (a JSON object with a name)'
+         return
+      end
+   end
+   if status() then fail = 'a name or a prefix is not fit for XML'
+   return
+
+* nm -> a name fit to be an XML name
+xml.safe:
+   nm = trim(nm)
+   bad = convert('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-', '', nm)
+   if bad # '' then nm = convert(bad, str('_', len(bad)), nm)
+   if nm = '' then nm = '_'
+   if not(nm[1, 1] matches '1A' or nm[1, 1] = '_') then nm = '_' : nm
+   return
+end
+
+* END-CODE

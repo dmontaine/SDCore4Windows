@@ -1,0 +1,57 @@
+* READCSVROW
+* The next row of a CSV file, for READCSV and MATREADCSV
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 20 Oct 26 dm  Written for the CSV / JSON / XML task.  The compiler (bcomp, st.readcsv and st.matreadcsv) calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+* ok = !READCSVROW(f, delim, quote, esc, row)
+*
+* Reads the next line of the sequential file F into ROW.  A CSV field that is enclosed in quotes may hold a line break, so when the
+* line ends inside an enclosed field (CSVOPEN) the next line is read as well and joined on with a line feed, and so on until the
+* field is closed or the file ends.  DELIM, QUOTE and ESC are the characters of the dialect; a null string is a comma, a double
+* quote and no escape character.  Gives 1 when a row was read and 0 at the end of the file (ROW is a null string).  A file that
+* ends inside an enclosed field gives the row as far as it went.
+*
+* READCSV has never taken its rules from CSV.MODE; it still does not.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function readcsvrow(f, delim, quote, esc, row)
+$catalog !readcsvrow
+
+   readseq row from f else
+      row = ''
+      return 0
+   end
+
+   loop
+   while csvopen(row, delim, quote, esc)
+      readseq more from f else exit
+      row := char(10) : more
+   repeat
+
+   return 1
+end
+
+* END-CODE

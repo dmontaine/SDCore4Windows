@@ -98,9 +98,14 @@
 #define CF_JTYPE 17
 #define CF_SETOP 18
 #define CF_EXPAND 19
+#define CF_JBUILDI 20 /* JBUILD(c, mode, indent): the layout JB_PRETTY gives with the indent the program names (20 Oct 26) */
 
 #define COLL_ALLOC_TAG 160
 #define JSON_MAX_DEPTH 500
+
+/* The text put once for each level in front of an element of a JB_PRETTY layout: two spaces unless JBUILD(c, mode, indent) names another */
+Private char jb_indent[17] = "  ";
+Private int32_t jb_indent_len = 2;
 
 /* One name in a path, after splitting on slashes */
 typedef struct {
@@ -118,12 +123,12 @@ typedef struct {
   int32_t cap;
 } COLL_BUF;
 
-Private COLL_HEADER* coll_new(bool is_array);
-Private COLL_HEADER* coll_copy(COLL_HEADER* src);
+COLL_HEADER* coll_new(bool is_array); /* 20 Oct 26: public, with coll_copy, coll_find, coll_insert and coll_remove, for op_csv.c */
+COLL_HEADER* coll_copy(COLL_HEADER* src);
 Private void coll_free_entry(COLL_ENTRY* e);
-Private bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos);
-Private void coll_insert(COLL_HEADER* h, int32_t pos);
-Private void coll_remove(COLL_HEADER* h, int32_t pos);
+bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos);
+void coll_insert(COLL_HEADER* h, int32_t pos);
+void coll_remove(COLL_HEADER* h, int32_t pos);
 Private COLL_HEADER* need_coll(DESCRIPTOR* d);
 Private COLL_HEADER* need_array(DESCRIPTOR* d);
 Private char* chunks_to_buffer(STRING_CHUNK* s, int32_t* len);
@@ -463,6 +468,49 @@ void op_coll() {
       *(e_stack++) = result;
       break;
 
+    case CF_JBUILDI:
+      /* [coll, mode, indent]: the indent is up to 16 characters of white space (spaces and tabs); anything else, or a null string,
+         is the default two spaces.  The mode gets JB_PRETTY: naming an indent is asking for the layout. */
+      {
+        char ind[17];
+        int32_t il = 0;
+
+        descr = e_stack - 1;
+        k_get_string(descr);
+        if (descr->data.str.saddr != NULL) {
+          char* ib = chunks_to_buffer(descr->data.str.saddr, &il);
+          int32_t ix;
+
+          if (il > 16)
+            il = 0;
+          for (ix = 0; ix < il; ix++) {
+            if (ib[ix] != ' ' && ib[ix] != '\t') {
+              il = 0;
+              break;
+            }
+          }
+          if (il > 0)
+            memcpy(ind, ib, il);
+          k_free(ib);
+        }
+        k_dismiss();
+        descr = e_stack - 1;
+        GetInt(descr);
+        max = descr->data.value | JB_PRETTY_BIT;
+        if (il > 0) {
+          memcpy(jb_indent, ind, il);
+          jb_indent_len = il;
+        }
+        root = need_coll(e_stack - 2);
+        result = json_build(root, (int)max);
+        jb_indent[0] = jb_indent[1] = ' ';
+        jb_indent_len = 2;
+      }
+      k_pop(1);
+      k_dismiss();
+      *(e_stack++) = result;
+      break;
+
     case CF_JBUILD:
       descr = e_stack - 1;
       GetInt(descr);
@@ -735,7 +783,7 @@ Private bool matrix_span(DESCRIPTOR* d, ARRAY_HEADER** hdr, int32_t* first, int3
 /* ======================================================================
    coll_new() and coll_copy()                                             */
 
-Private COLL_HEADER* coll_new(bool is_array) {
+COLL_HEADER* coll_new(bool is_array) {
   COLL_HEADER* h;
 
   h = (COLL_HEADER*)k_alloc(COLL_ALLOC_TAG, sizeof(COLL_HEADER));
@@ -749,7 +797,7 @@ Private COLL_HEADER* coll_new(bool is_array) {
 
 /* A copy is independent: nested collections are copied too */
 
-Private COLL_HEADER* coll_copy(COLL_HEADER* src) {
+COLL_HEADER* coll_copy(COLL_HEADER* src) {
   COLL_HEADER* h;
   int32_t i;
   COLL_ENTRY* s;
@@ -795,7 +843,7 @@ Private void set_entry_name(COLL_ENTRY* ent, COLL_SEG* seg) {
 /* ======================================================================
    coll_find()  -  Binary search of an object's sorted names               */
 
-Private bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos) {
+bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos) {
   int32_t lo = 0;
   int32_t hi = h->count - 1;
   int32_t mid;
@@ -823,7 +871,7 @@ Private bool coll_find(COLL_HEADER* h, char* name, int32_t len, int32_t* pos) {
 
 /* Open a blank entry at pos */
 
-Private void coll_insert(COLL_HEADER* h, int32_t pos) {
+void coll_insert(COLL_HEADER* h, int32_t pos) {
   COLL_ENTRY* e;
 
   if (h->count >= h->alloc) {
@@ -844,7 +892,7 @@ Private void coll_insert(COLL_HEADER* h, int32_t pos) {
   h->e[pos].d.data.str.saddr = NULL;
 }
 
-Private void coll_remove(COLL_HEADER* h, int32_t pos) {
+void coll_remove(COLL_HEADER* h, int32_t pos) {
   coll_free_entry(&h->e[pos]);
   if (pos < h->count - 1)
     memmove(&h->e[pos], &h->e[pos + 1], (h->count - pos - 1) * sizeof(COLL_ENTRY));
@@ -1656,7 +1704,7 @@ Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth) {
         if (mode & JB_PRETTY_BIT) { /* One element to a line, two spaces for each level */
           buf_add(b, "\n", 1);
           for (n = 0; n <= depth; n++)
-            buf_add(b, "  ", 2);
+            buf_add(b, jb_indent, jb_indent_len);
         }
         if (!h->is_array) {
           jb_str(b, (unsigned char*)h->e[i].name, h->e[i].name_len, nq);
@@ -1668,7 +1716,7 @@ Private bool jb_value(COLL_BUF* b, COLL_ENTRY* e, int mode, int depth) {
       if ((mode & JB_PRETTY_BIT) && h->count) {
         buf_add(b, "\n", 1);
         for (n = 0; n < depth; n++)
-          buf_add(b, "  ", 2);
+          buf_add(b, jb_indent, jb_indent_len);
       }
       buf_add(b, h->is_array ? "]" : "}", 1);
       return TRUE;
@@ -1946,6 +1994,38 @@ int32_t url_decode_top() {
   k_dismiss();
   *(e_stack++) = result;
   return 0;
+}
+
+/* ======================================================================
+   The pieces other files build on (20 Oct 26: op_csv.c, and the JSON and XML code after it).  They are the same functions; the
+   collection's own representation stays in this file.                                                                      */
+
+DESCRIPTOR coll_str_descr(char* s, int32_t len) {
+  return str_descr(s, len);
+}
+
+char* coll_chunks_to_buffer(STRING_CHUNK* s, int32_t* len) {
+  return chunks_to_buffer(s, len);
+}
+
+int32_t coll_number_len(unsigned char* s, int32_t len, bool* is_int) {
+  return json_number_len(s, len, is_int);
+}
+
+DESCRIPTOR coll_json_parse(char* text, int32_t len, int mode) {
+  return json_parse(text, len, mode);
+}
+
+DESCRIPTOR coll_json_build(COLL_HEADER* root, int mode) {
+  return json_build(root, mode);
+}
+
+void coll_fill_entry(COLL_ENTRY* ent, DESCRIPTOR* v) {
+  fill_entry(ent, v);
+}
+
+DESCRIPTOR coll_value_of(COLL_ENTRY* e) {
+  return value_of(e);
 }
 
 /* END-CODE */

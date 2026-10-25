@@ -1,0 +1,1 @@
+%1 is not a collection file, and IMPORT.JSON writes each object as a record of one (CREATE.FILE name COLLECTION)

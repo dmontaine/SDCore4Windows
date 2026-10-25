@@ -124,6 +124,8 @@ struct PROGRAM {
   int16_t precision;
   int16_t csv_mode;  /* CSV.MODE 1 - 3 (14 Oct 26, openQM 173): copied to a called program, so it persists through calls */
   char csv_delim;    /* ... and its delimiter, a comma by default (openQM 200) */
+  char csv_quote;    /* ... its quote character, a double quote by default (20 Oct 26; CSV.MODE's third operand) */
+  char csv_esc;      /* ... and its escape character, none (0) by default (CSV.MODE's fourth operand) */
   char itrap_chars[17]; /* INPUTTRAP (14 Oct 26, openQM 408): the characters trapped when typed alone for INPUT @ or INPUTFIELD, "" for none */
   int16_t itrap_n;      /* ... how many labels the statement named (a character past the last label takes the last one) */
   int32_t itrap_stub;   /* ... the offset in the object code of the stub that jumps to the label; 0 for none */

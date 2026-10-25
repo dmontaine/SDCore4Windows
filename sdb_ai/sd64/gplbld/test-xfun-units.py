@@ -77,7 +77,8 @@ def parse(bcomp_text, c_text):
     rows_text = ""
     for m in re.finditer(r'(?m)^\s*xfun\.rows\s*:?=\s*(.*)$', bcomp_text):
         rows_text += m.group(1) + "\n"
-    for m in re.finditer(r'"([A-Z0-9.]+),(\d+),(\d+),(\d*),([01])"', rows_text):
+    # 20 Oct 26: the optional-argument field may hold several defaults separated by a bar ("0|": a mode of 0 and a null string)
+    for m in re.finditer(r'"([A-Z0-9.]+),(\d+),(\d+),([0-9|]*),([01])"', rows_text):
         d["rows"][m.group(1)] = (int(m.group(2)), int(m.group(3)), m.group(4), int(m.group(5)))
     # the numbers a handler of its own loads: the line that does it carries the constant's name in its comment
     d["own_loads"] = {}
@@ -120,7 +121,10 @@ def checks(d):
     sels = {sel for sel, _a, _o, _m in rows.values()}
     # XF_CASING (a statement) and XF_ARGPRESENT (ARG.PRESENT's own handler) are loaded by code of their own, not by a row
     own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27, "XF_GET": 30,
-             "XF_SORT": 32, "XF_SORTADD": 33, "XF_SORTCLEAR": 34, "XF_SORTDATA": 35, "XF_SORTNEXT": 36}   # 16 Oct 26 (Linux's XF_OSPATH 31 is not carried)
+             "XF_SORT": 32, "XF_SORTADD": 33, "XF_SORTCLEAR": 34, "XF_SORTDATA": 35, "XF_SORTNEXT": 36,   # 16 Oct 26 (Linux's XF_OSPATH 31 is not carried)
+             # 20 Oct 26: FORMCSV(item, delim, quote, esc) (PRINTCSV, WRITECSV), CSVDQ with a quote (CSVDQ, READCSV, MATREADCSV) and
+             # CSV.MODE's third and fourth operands: each loaded by the handler of the statement or function, not by a row
+             "XF_FORMCSVX": 40, "XF_CSVDQX": 41, "XF_CSVQESC": 42}
     defs = {v for k, v in d["xf_defs"].items() if k not in own_c}
     res.append(("5. every function number of xfun.rows is an XF_ constant of op_xfun.c and the reverse", sels == defs and len(defs) > 0,
                 "only one side: %s" % sorted(sels ^ defs)))

@@ -309,6 +309,8 @@ void op_execute() {
   process.program.flags |= IS_EXECUTE;
   process.program.csv_mode = 1; /* A new command processor level starts with the default CSV.MODE; the caller's is */
   process.program.csv_delim = ','; /* restored on return, the program struct being saved by k_call() (openQM 173) */
+  process.program.csv_quote = '"';
+  process.program.csv_esc = 0;
   if (!(flags & 0x01))
     process.program.flags |= IGNORE_ABORTS;
 

@@ -330,6 +330,22 @@
       $define JB$NOQUOTE.VALUE         64   ;* String values with no quotes
       $define JB$PRETTY                128  ;* SD's own: one element to a line, indented (used by CT)
 
+      * CSVPARSE() and CSVBUILD() modes (20 Oct 26, the CSV / JSON / XML task), mirrored from gplsrc/keys.h
+      $define CSV$HEADER               1    ;* First row names the columns (CSVPARSE); a header row is written (CSVBUILD)
+      $define CSV$NUMBER               2    ;* CSVPARSE: a field that is a number becomes one
+      $define CSV$DYNAMIC              4    ;* A dynamic array (rows by field mark, fields by value mark) in place of a data collection
+      $define CSV$KEEPBLANK            8    ;* CSVPARSE: a blank line is a row of one empty field, not skipped
+      $define CSV$NOHEADER             16   ;* CSVBUILD: no header row, even for rows that are named
+      $define CSV$CRLF                 32   ;* CSVBUILD: lines end with carriage return and line feed
+      $define CSV$QUOTE2               64   ;* CSVBUILD: enclose every field that is not a number (CSV.MODE 2)
+      $define CSV$QUOTE3               128  ;* CSVBUILD: enclose every field (CSV.MODE 3)
+
+      * XPARSE() and XBUILD() modes (20 Oct 26, the CSV / JSON / XML task), mirrored from gplsrc/keys.h
+      $define XML$TRIM                 1    ;* XPARSE: white space taken off both ends of the text of an element
+      $define XML$DECL                 1    ;* XBUILD: the XML declaration first
+      $define XML$PRETTY               2    ;* XBUILD: one element to a line, indented
+      $define XML$NOCHECK              4    ;* XBUILD: a prefix need not have been declared by an xmlns attribute
+
       * OBJINFO() keys
       $define OI$ISOBJ                 0    ;* Is descriptor an object
       $define OI$CLASS                 1    ;* Class name
@@ -557,6 +573,8 @@
       $define SYS$USERS         35  ;*   Current number of users
       $define SYS$CSV.MODE    1043  ;*   CSV.MODE setting, 1 - 3 (14 Oct 26)
       $define SYS$CSV.DELIM   1046  ;*   CSV delimiter (14 Oct 26)
+      $define SYS$CSV.QUOTE   1090  ;*   CSV quote character, a double quote by default (20 Oct 26)
+      $define SYS$CSV.ESC     1091  ;*   CSV escape character, a null string for none (20 Oct 26)
       $define SYS$START_TIME  1045  ;*   Time SD was started, Unix epoch
       $define SYS$GUID        1047  ;*   Globally unique identifier
       $define SYS$SYS_TYPE    9010  ;*   Return "SD"

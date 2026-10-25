@@ -30,7 +30,7 @@
  *    op_fconvert    CONVERT() function
  *    op_fldstor     FLDSTOR       Delimited substring assignment
  *    op_fldstorf    FLDSTORF      FIELDSTORE() function
- *    op_formcsv     FORMCSV() function
+ *    (op_formcsv, the FORMCSV() function, is in op_csv.c)
  *    op_listindx    LISTINDEX() function
  *    op_getrem      GETREM()
  *    op_ismv        ISMV() function
@@ -508,15 +508,7 @@ void op_csvdq() {
  */
 
   DESCRIPTOR* descr;
-  STRING_CHUNK* src;
-  STRING_CHUNK* result = NULL;
-  int16_t bytes;
-  char* p;
-  char c;
   char delimiter;
-  bool first;
-  bool quoted;
-  bool last_char_was_quote;
 
   descr = e_stack - 1;
   GetString(descr);
@@ -526,53 +518,8 @@ void op_csvdq() {
     delimiter = descr->data.str.saddr->data[0];
     k_dismiss();
 
-    descr = e_stack - 1;
-    GetString(descr);
-
-    if ((src = descr->data.str.saddr) != NULL) {
-      ts_init(&result, src->string_len); /* A good guess on the length */
-
-      first = TRUE;
-      quoted = FALSE;
-      last_char_was_quote = FALSE;
-      do {
-        bytes = src->bytes;
-        p = src->data;
-        while (bytes--) {
-          c = *(p++);
-          if (c == '"') {
-            if (first) {
-              quoted = TRUE;
-            } else if (last_char_was_quote) {
-              ts_copy_byte(c); /* "" becomes " */
-              last_char_was_quote = FALSE;
-            } else {
-              last_char_was_quote = TRUE; /* Remember but do not copy */
-            }
-            first = FALSE;
-          } else if (c == delimiter) {
-            if (quoted && !last_char_was_quote) {
-              ts_copy_byte(c);
-            } else {
-              ts_copy_byte(FIELD_MARK);
-              first = TRUE;
-              last_char_was_quote = FALSE;
-              quoted = FALSE;
-            }
-          } else {
-            last_char_was_quote = FALSE; /* Format error (e.g. "ab"cd") */
-            ts_copy_byte(c);
-            first = FALSE;
-          }
-        }
-      } while ((src = src->next) != NULL);
-
-      ts_terminate();
-
-      k_dismiss();
-      InitDescr(e_stack, STRING);
-      (e_stack++)->data.str.saddr = result;
-    }
+    /* 20 Oct 26 dm - the work is csv_dequote() in op_csv.c, which also serves CSVDQ(line, delim, quote, escape) */
+    csv_dequote(e_stack - 1, delimiter);
   }
 }
 
@@ -869,21 +816,8 @@ void op_fldstorf() {
   *(e_stack++) = tgt_descr;
 }
 
-/* ======================================================================
-   op_formcsv()  -  FORMCSV  -  Convert a string to CSV item format       */
-
-void op_formcsv() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  Source item                | CSV compliant string        |
-     |=============================|=============================|
- */
-
-  k_recurse(pcode_formcsv, 1);
-}
+/* op_formcsv() (FORMCSV) moved to op_csv.c on 20 Oct 26: the quoting rules are C now, and a statement can name its own
+   delimiter, quote and escape character. */
 
 /* ======================================================================
    op_getrem()  -  Return remove pointer offset                           */

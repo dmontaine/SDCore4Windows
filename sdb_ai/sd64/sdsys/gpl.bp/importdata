@@ -1,0 +1,436 @@
+* IMPORTDATA
+* IMPORT.CSV, IMPORT.JSON and IMPORT.XML: a CSV, JSON or XML file read into the records of an SD file
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 20 Oct 26 dm  New.  The owner's CSV / JSON / XML task: "a one-line import of a CSV file into an SD file" and "reading an XML document into a
+*               file's records (the reverse of the XML keyword)".  One program under three VOC verbs; the word typed says which.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   IMPORT.CSV  pathname file {HEADER} {DELIMITER x} {QUOTE x} {ESCAPE x} {ID column | GENERATE} {DICT} {OVERWRITING}
+*   IMPORT.JSON pathname collection.file {ID name | GENERATE} {OVERWRITING}
+*   IMPORT.XML  pathname file {ID name | GENERATE} {OVERWRITING}
+*
+* CSV: each row is a record, the columns in order in fields 1, 2, 3 ... except the id column (the first unless ID names another; GENERATE
+*   numbers the records 1, 2, 3 ... and leaves all the columns in the record).  HEADER says the first row names the columns and is not data;
+*   with DICT the names that have no item in the dictionary of the file get a D-type item pointing at the field of the column.
+* JSON: a JSON array of objects, or a JSON Lines file, one object to a line; each object is a record of a COLLECTION file, kept as it is.  The
+*   id is the member ID names (a string or a number), or GENERATE.
+* XML: the document in the shape of the XML keyword's report - the children of the root element are the records, a single valued field an
+*   attribute of one or (ELEMENTS) a child with text, an association row a child with attributes or children of its own, a multivalued field in no
+*   association a child called name_MV - read into the fields the dictionary of the file gives those names (a name is the item's id with
+*   what XML cannot have in a name made an underscore).  The id is the attribute or child ID names, or the record's number.
+*
+* A record that is already there is left alone and counted, unless OVERWRITING.  The pathname goes through the OS-access gate, and the file
+* through the edit gates (!edit_guard) and the record lock of each record written.  Nothing is changed by a file that cannot be read.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $importdata
+$catalog $importdata
+
+$include err.h
+$include keys.h
+$include int$keys.h
+$include parser.h
+
+   deffun edit_guard(f) calling '!edit_guard'
+   deffun readcsvrow(f, d, q, e, row) calling '!readcsvrow'
+
+   parser = '!PARSER'
+   @system.return.code = -ER$ARGS
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)       ;* the verb
+   verb = upcase(token)
+   begin case
+      case verb = 'IMPORT.CSV'
+         usage = 12863 ; kind = 'CSV'
+      case verb = 'IMPORT.JSON'
+         usage = 12864 ; kind = 'JSON'
+      case 1
+         usage = 12865 ; kind = 'XML'
+   end case
+   ok = @true
+
+   words = ''
+   header = @false ; dict = @false ; generate = @false ; overwriting = @false
+   delim = '' ; quote = '' ; esc = '' ; idspec = ''
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      u = upcase(token)
+      begin case
+         case token.type = PARSER$TOKEN and u = 'HEADER' and kind = 'CSV' ; header = @true
+         case token.type = PARSER$TOKEN and u = 'DICT' and kind = 'CSV' ; dict = @true
+         case token.type = PARSER$TOKEN and u = 'GENERATE' ; generate = @true
+         case token.type = PARSER$TOKEN and u = 'OVERWRITING' ; overwriting = @true
+         case token.type = PARSER$TOKEN and u = 'DELIMITER' and kind = 'CSV'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; delim = token
+         case token.type = PARSER$TOKEN and u = 'QUOTE' and kind = 'CSV'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; quote = token
+         case token.type = PARSER$TOKEN and u = 'ESCAPE' and kind = 'CSV'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; esc = token
+         case token.type = PARSER$TOKEN and u = 'ID'
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ; idspec = token
+         case 1
+            words<-1> = token
+      end case
+   repeat
+   if dcount(words, @fm) # 2 then
+      display sysmsg(usage)
+      return
+   end
+   path = words<1>
+   fname = words<2>
+
+   * ---- the file read, and the file written ----
+   if not(kernel(K$PATH.OK, path)) then
+      @system.return.code = -ER$PERM
+      display sysmsg(12185, @who)
+      return
+   end
+   open fname to out.f else
+      open downcase(fname) to out.f else
+         display sysmsg(1427, fname)
+         @system.return.code = -ER$FNF
+         return
+      end
+   end
+   if not(edit_guard(out.f)) then
+      @system.return.code = -ER$PERM
+      return
+   end
+   if kind = 'JSON' and not(fileinfo(out.f, FL$COLLECTION)) then
+      display sysmsg(12859, fname)
+      return
+   end
+
+   n.written = 0 ; n.skipped = 0 ; n.lost = 0
+   id.col = 1
+   if idspec # '' and kind = 'CSV' then
+      if idspec matches '1N0N' then id.col = idspec + 0 else id.col = 0
+   end
+   if kind = 'CSV' and not(generate) and id.col < 1 then
+      display sysmsg(12863)
+      return
+   end
+
+   begin case
+      case kind = 'CSV' ; gosub import.csv
+      case kind = 'JSON' ; gosub import.json
+      case 1 ; gosub import.xml
+   end case
+   if @system.return.code # -ER$ARGS then ok = @false     ;* a routine that failed set its own code
+   if ok then
+      display sysmsg(12858, fname, n.written, n.skipped)
+      if n.lost then display sysmsg(12867, fname, n.lost, fname)
+      @system.return.code = n.written
+   end
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+* put one record away: id and rec; counts it
+
+put.record:
+   busy = @false ; exists = @false
+   readu old from out.f, id locked busy = @true then exists = @true else exists = @false
+   if busy then
+      n.skipped += 1
+      return
+   end
+   if exists and not(overwriting) then
+      release out.f, id
+      n.skipped += 1
+      return
+   end
+   write rec on out.f, id
+   n.written += 1
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+
+import.csv:
+   openseq path readonly to in.f else
+      display sysmsg(1427, path)
+      @system.return.code = -ER$FNF
+      return
+   end
+   if delim = '' then delim = ','
+   row.no = 0 ; gen = 0 ; names = ''
+   loop
+      got = readcsvrow(in.f, delim, quote, esc, row)
+   while got
+      if row = '' then continue                          ;* a blank line is no row
+      row.no += 1
+      cols = csvdq(row, delim, quote, esc)
+      if header and row.no = 1 then
+         names = cols
+         if dict then gosub make.dict
+         continue
+      end
+      if generate then
+         gen += 1
+         id = gen
+         rec = cols
+      end else
+         id = cols<id.col>
+         rec = cols
+         del rec<id.col>
+      end
+      if id = '' then
+         n.skipped += 1
+         continue
+      end
+      gosub put.record
+   repeat
+   closeseq in.f
+   return
+
+* D-type items for the header names the dictionary does not have
+make.dict:
+   open 'DICT', fname to dict.f else
+      display sysmsg(1427, 'DICT ' : fname)
+      return
+   end
+   if not(edit_guard(dict.f)) then return
+   loc = 0
+   for c = 1 to dcount(names, @fm)
+      if not(generate) and c = id.col then continue
+      loc += 1
+      nm = names<c> ; gosub safe.name
+      if nm = '' then continue
+      read d.rec from dict.f, nm else
+         d.rec = 'D' : @fm : loc : @fm : '' : @fm : names<c> : @fm : '15L' : @fm : 'S'
+         write d.rec on dict.f, nm
+      end
+   next c
+   return
+
+* nm -> nm in lower case with what an item name cannot have made an underscore
+safe.name:
+   nm = downcase(trim(nm))
+   bad = convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', nm)
+   if bad # '' then nm = convert(bad, str('_', len(bad)), nm)
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+
+import.json:
+   osread text from path else
+      display sysmsg(1427, path)
+      @system.return.code = -ER$FNF
+      return
+   end
+   first = trim(text)[1, 1]
+   objs = collection()
+   if first = '[' then
+      objs = jparse(text)
+      if status() then
+         display sysmsg(12860, path, 'JSON', status(), inmat())
+         @system.return.code = -ER$PARSE.ERROR
+         return
+      end
+   end else
+      objs = mat()
+      cnt = 0
+      lines = change(change(text, char(13) : char(10), @fm), char(10), @fm)
+      for i = 1 to dcount(lines, @fm)
+         ln = lines<i>
+         if trim(ln) = '' then continue
+         one = jparse(ln)
+         if status() then
+            display sysmsg(12860, path, 'JSON Lines (line ' : i : ')', status(), inmat())
+            @system.return.code = -ER$PARSE.ERROR
+            return
+         end
+         cnt += 1
+         objs{cnt} = one
+      next i
+   end
+   n = inmat(objs)
+   gen = 0
+   for i = 1 to n
+      rec = objs{i}
+      if jtype(rec) # 'collection' then
+         n.skipped += 1
+         continue
+      end
+      if generate or idspec = '' then
+         gen += 1
+         id = gen
+      end else
+         if not(element.exists(rec, idspec)) then
+            n.skipped += 1
+            continue
+         end
+         id = rec{idspec}
+      end
+      if id = '' then
+         n.skipped += 1
+         continue
+      end
+      gosub put.record
+   next i
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------
+
+import.xml:
+   osread text from path else
+      display sysmsg(1427, path)
+      @system.return.code = -ER$FNF
+      return
+   end
+   x = xparse(text)
+   if status() then
+      display sysmsg(12860, path, 'XML', status(), inmat())
+      @system.return.code = -ER$PARSE.ERROR
+      return
+   end
+   * the fields of the dictionary: by XML name, the field number; by association name, the fields in it
+   open 'DICT', fname to dict.f else
+      display sysmsg(1427, 'DICT ' : fname)
+      @system.return.code = -ER$FNF
+      return
+   end
+   fmap = '' ; floc = '' ; rowname = '' ; rowcnt = ''
+   select dict.f to 9
+   loop
+      readnext did from 9 else exit
+      read d.rec from dict.f, did then
+         if upcase(d.rec[1, 1]) = 'D' and d.rec<2> matches '1N0N' and d.rec<2> > 0 then
+            nm = did ; gosub safe.name
+            fmap<-1> = nm
+            floc<-1> = d.rec<2>
+         end
+      end
+   repeat
+   kids = ''
+   if element.exists(x, 'children') then kids = x{'children'}
+   nrec = 0 ; gen = 0
+   if element.exists(x, 'children') then nrec = inmat(x{'children'})
+   for r = 1 to nrec
+      el = x{'children', r}
+      rec = '' ; id = ''
+      * single valued fields: attributes
+      if element.exists(el, 'attributes') then
+         names = enumerate(el{'attributes'})
+         for k = 1 to dcount(names, @fm)
+            an = names<k> ; v = el{'attributes', an}
+            gosub xml.field.set
+         next k
+      end
+      if element.exists(el, 'children') then
+         cn = inmat(el{'children'})
+         for k = 1 to cn
+            ch = el{'children', k}
+            ename = ch{'name'}
+            if element.exists(ch, 'attributes') or element.exists(ch, 'children') then
+               * an association row: its attributes and children are the fields; the row is the next place in each
+               locate ename in rowname<1> setting pr else
+                  rowname<pr> = ename
+                  rowcnt<pr> = 0
+               end
+               rowcnt<pr> = rowcnt<pr> + 1
+               rw = rowcnt<pr>
+               if element.exists(ch, 'attributes') then
+                  anames = enumerate(ch{'attributes'})
+                  for j = 1 to dcount(anames, @fm)
+                     an = anames<j> ; v = ch{'attributes', an}
+                     gosub xml.row.set
+                  next j
+               end
+               if element.exists(ch, 'children') then
+                  for j = 1 to inmat(ch{'children'})
+                     gc = ch{'children', j}
+                     an = gc{'name'}
+                     v = ''
+                     if element.exists(gc, 'text') then v = gc{'text'}
+                     gosub xml.row.set
+                  next j
+               end
+            end else
+               v = ''
+               if element.exists(ch, 'text') then v = ch{'text'}
+               an = ename
+               if len(an) > 3 and an[len(an) - 2, 3] = '_MV' then
+                  an = an[1, len(an) - 3]
+                  gosub xml.mv.set
+               end else
+                  gosub xml.field.set
+               end
+            end
+         next k
+      end
+      rowname = '' ; rowcnt = ''
+      if generate or idspec = '' then
+         gen += 1
+         id = gen
+      end
+      if id = '' then
+         n.skipped += 1
+         continue
+      end
+      gosub put.record
+   next r
+   return
+
+* an attribute or child an: its value v is a single valued field, or the id
+xml.field.set:
+   if not(generate) and idspec # '' and an = idspec then
+      id = v
+      return
+   end
+   nm = an ; gosub safe.name
+   locate nm in fmap<1> setting p then
+      fl = floc<p>
+      rec<fl> = v
+   end else
+      n.lost += 1
+   end
+   return
+
+* a value of a multivalued field in no association
+xml.mv.set:
+   nm = an ; gosub safe.name
+   locate nm in fmap<1> setting p then
+      fl = floc<p>
+      rec<fl, -1> = v
+   end else
+      n.lost += 1
+   end
+   return
+
+* the value of field an in row rw of an association
+xml.row.set:
+   nm = an ; gosub safe.name
+   locate nm in fmap<1> setting p then
+      fl = floc<p>
+      rec<fl, rw> = v
+   end else
+      n.lost += 1
+   end
+   return
+end
+
+* END-CODE

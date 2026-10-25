@@ -90,6 +90,8 @@
  *  1043   CSV.MODE (1, 2 or 3)
  *  1045   Time SD was started, Unix epoch
  *  1046   CSV delimiter
+ *  1090   CSV quote character (SD's own)
+ *  1091   CSV escape character, null for none (SD's own)
  *  1047  Globally unique identifier
  *  9010   Return "SD"
  *  9011   Return MAX_STRING_SIZE - max string / record lenght
@@ -508,6 +510,18 @@ void op_system() {
 
     case 1046: /* The CSV delimiter set by CSV.MODE, a comma by default (openQM item 200) */
       s[0] = process.program.csv_delim;
+      s[1] = '\0';
+      k_put_c_string(s, descr);
+      break;
+
+    case 1090: /* The CSV quote character set by CSV.MODE, a double quote by default (20 Oct 26, SD's own) */
+      s[0] = process.program.csv_quote;
+      s[1] = '\0';
+      k_put_c_string(s, descr);
+      break;
+
+    case 1091: /* The CSV escape character set by CSV.MODE, a null string when there is none (20 Oct 26, SD's own) */
+      s[0] = process.program.csv_esc;
       s[1] = '\0';
       k_put_c_string(s, descr);
       break;

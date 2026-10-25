@@ -202,6 +202,131 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                         once (where the comparison does not give one consistent order, so only the old tree gives the old order) is
                         sorted the old way and is not faster. It does not change the hash that places records in a file, nor SORTMEM.
 
+20 Oct 26  A CSV OR DELIMITER REPORT CAN BE WRITTEN AS A RECORD OF A DIRECTORY FILE (AS), AND A MULTIVALUED FIELD IS SPLIT OVER LINES.
+
+             What        Two changes to the reports made by the CSV and DELIMITER keywords of LIST, SORT and the other query verbs. (1)
+                        "AS file id" after CSV or DELIMITER (and their mode and delimiter) writes the report as the record "id" of the
+                        directory file "file", the way TO writes an operating system file: LIST SALES BY @ID NAME QTY CSV AS EXPORTS R1001
+                        NO.QUERY. A record that is there asks first (Enter is no) unless NO.QUERY is given; APPENDING adds to it. NO.QUERY
+                        and APPENDING may not be used together: the command says so (message 12855) and stops before it has opened
+                        anything, for TO as well. It is refused, without touching the record, for a hashed file (12856), a missing record id
+                        (12857), a report that is not CSV or DELIMITER, one with LPTR, and one that also has TO. (2) A multivalued field now
+                        gives one line for each value, in CSV and in DELIMITER reports alike: the first line has the record id and every
+                        other column, the lines after it have only the next value of each multivalued field and blank cells for the rest.
+                        A record has as many lines as its longest multivalued field has values. RPT after a field, or REPEATING, repeats
+                        a single valued column on every line, as in the ordinary report. A field that is single valued in the dictionary,
+                        or has SINGLE.VALUE after it, stays one cell, its value marks written as they are. Total and break lines stay one
+                        line each. The same two changes apply whether the report goes to the screen, to TO or to AS.
+             Why it     A multivalued field used to be written as one cell with raw value-mark characters inside it, which no spreadsheet
+             matters    or import program reads as separate values; the manual of openQM shows the split form. AS lets a program or a
+                        user keep a report inside SD's own file structure, with the record locked while it is written and the edit gates
+                        asked, instead of needing an operating system path and the OS-access switch.
+             Does not    It does not add the ENCODING clause (SD has no character sets). AS needs a directory file: a hashed file is
+                        refused. A record another session holds is not waited for: the command names the holder (message 1433) and
+                        writes nothing. A file that is a program file needs bp.edit on the account, as for any write; the OS-access
+                        switch is not involved because no path is. An XML report with TO or AS is now refused (it used to make an empty
+                        file); the delimited lines of break and total rows are not split. A report that was written before this change
+                        with a multivalued field has more lines now: that is the change.
+
+20 Oct 26  CSV IN BASIC: ANOTHER DELIMITER, QUOTE AND ESCAPE CHARACTER, A FIELD WITH A LINE BREAK, AND A WHOLE CSV TEXT IN ONE CALL.
+
+             What        READCSV, MATREADCSV, WRITECSV and MATWRITECSV take the clauses DELIMITER d, QUOTE q and ESCAPE e (in any order,
+                        after the file variable; the first character of each is used): READCSV FROM f DELIMITER ';' TO a, b, c. CSV.MODE
+                        takes a third and a fourth operand, the quote and the escape character, for the statements that write
+                        (WRITECSV, PRINTCSV, MATWRITECSV) and for FORMCSV(). READCSV and MATREADCSV now read a record whose quoted field
+                        holds a line break as ONE row (the quote that is still open makes the reader go on to the next line); before, it
+                        came back as two rows. A field that holds a line break is enclosed in quotes when written. CSVDQ() takes a quote and
+                        an escape character as a third and fourth argument. Four new functions: CSVPARSE(text {, mode {, dialect}}) reads a
+                        whole CSV text into a data collection (an array of rows; with CSV$HEADER the first row names the columns and each
+                        row is an object; CSV$NUMBER makes a field that is a number a number; CSV$DYNAMIC gives a dynamic array instead),
+                        CSVBUILD(collection {, mode {, dialect}}) writes one back (with a header row for rows that are objects, quoted as
+                        CSV.MODE 1, 2 or 3 would quote, with CRLF line ends if CSV$CRLF), CSVOPEN(line {, delimiter {, quote {, escape}}}) says
+                        whether a quoted field is still open at the end of a line (what READCSV uses to join lines), and "dialect" is a
+                        string of up to three characters: delimiter, quote and escape character. The constants are in keys.h (CSV$HEADER ... CSV$QUOTE3). A
+                        bad quote gives a null string and STATUS() 1020 with INMAT() the place. SYSTEM(1090) and SYSTEM(1091) give the
+                        CSV.MODE quote and escape characters.
+             Why it     A semicolon-separated file, a tab file or a file with a backslash escape could only be read by hand, and a quoted
+             matters    field with a line break in it came back as two broken rows; a program that wanted a CSV file as data had to
+                        write its own loop. It is the CSV part of the owner's CSV / JSON / XML list; the same rules (RFC 4180) now apply to
+                        the statements, to FORMCSV() and CSVDQ() and to the CSV and DELIMITER keywords of the query verbs.
+             Does not    It does not read a character set other than SD's own (no ENCODING), does not guess the delimiter, and does not
+                        make READCSV take its rules from CSV.MODE (it never did; the clauses are how a reader names its dialect). FORMCSV
+                        is still for programs only (no VOC verb). A program compiled before this change runs as it did: only a statement
+                        that now carries a new clause needs the new compiler. Mode 1 now also encloses a field that holds a line feed or a
+                        carriage return, which the old FORMCSV left bare.
+
+20 Oct 26  JSON: INDENT FOR JBUILD(), JSON LINES, MERGE, PATCH, PATH QUERIES, SCHEMA VALIDATION, AND A JSON KEYWORD FOR QUERIES.
+
+             What        JBUILD(c, mode, indent) with the pretty-print mode names the indent (up to 16 spaces or tabs); it was two spaces
+                        only. READJSON var FROM f THEN ... ELSE ... reads the next line of a sequential file as a JSON value into var (a blank
+                        line is skipped; ELSE is the end of the file or a line that is not JSON, and STATUS() says which: 3006 or 1020) and
+                        WRITEJSON c TO f writes the collection as one compact line: JSON Lines through OPENSEQ. JMERGE(target, patch) is
+                        RFC 7396 (null removes a name, an object merges, anything else replaces), JPATCH(c, ops) is RFC 6902 (add remove
+                        replace move copy test; all or nothing: a null string, STATUS() 1023 and INMAT() the number of the operation that
+                        failed), JPATH(c, query) is JSONPath (RFC 9535): names, *, .., indexes (from 0, as the RFC says; SD's own c{...}
+                        paths are from 1), slices, unions and filters such as $.items[?@.price < 10 && @.tag == 'x'], with the functions
+                        length(), count(), match() and search(); a malformed query gives a null string and STATUS() 1024. JVALIDATE(c,
+                        schema) checks a document against a JSON Schema (draft 2020-12, the usual keywords: type, enum, const, the
+                        number and string and array and object limits, properties, required, items, allOf, anyOf, oneOf, not, if / then /
+                        else, $ref into the same schema) and gives an array of the faults, each with its path, the keyword and a message:
+                        empty means valid. The query verbs LIST, SORT and the others take JSON (an array of objects) and JSON.LINES (one
+                        object to a line) beside CSV and XML: a single valued field is a member, a multivalued field in no association an
+                        array, and the multivalued fields of an association an array of row objects, as the XML keyword groups them. Like
+                        XML the report goes to the screen or the printer (not TO or AS) and the XML options (ELEMENTS, WITH.DTD ...) are
+                        refused with it.
+             Why it     JSON was only parse and build. These are the pieces that make it a data format a program can query, patch,
+                        merge and check, and the report keywords let a query go straight to a JSON consumer.
+             Does not    No $ref outside the schema, no remote schema, no format-assertion keywords (format is read and ignored); a path
+                        query or a patch reaches only the collection it is given, never a file, so no gate is involved. JPATH's numbering
+                        (0) differs from c{path} (1) on purpose: it is the RFC's. A collection file still keeps its elements as it did.
+
+20 Oct 26  XML IN BASIC: XPARSE(), XBUILD() AND XPATH().
+
+             What        XPARSE(text {, mode}) reads an XML document into a data collection: an object with name (the tag, prefix and all),
+                        attributes (an object; an xmlns attribute is an attribute like the rest), text (entities, character references and
+                        CDATA read; line ends made line feeds) and children (an array of the same); a member that would be empty is left
+                        out, white space between child elements is let go, a comment, a processing instruction, the declaration and a
+                        DOCTYPE are read past. A document that is not well formed (a mismatched tag, a repeated attribute, an unclosed
+                        element or section, two roots, text outside the root, an entity that is not one of the five) gives a null
+                        string with STATUS() 1020 and INMAT() the place. XML$TRIM takes white space off the ends of the text. XBUILD(
+                        element {, mode {, indent}}) writes the text back: the five characters XML reserves are escaped, an empty element is
+                        <b/>, XML$DECL puts the declaration first, XML$PRETTY puts one element to a line with the indent (two spaces, or
+                        the string given); a name that XML cannot have, a prefix no xmlns attribute declares (unless XML$NOCHECK) or a
+                        value that is not an element gives a null string and STATUS() 1019. XPATH(x, query) runs XPath 1.0 over such a
+                        collection: location paths with the child, descendant, parent, ancestor, sibling and attribute axes, predicates
+                        (position, last(), comparisons, and / or / not), the usual string and number functions, unions and arithmetic;
+                        the answer is an array of the nodes found (an element as its collection, an attribute or a text as a string) or the
+                        number, string or truth value the query is; a malformed query gives a null string and STATUS() 1024.
+             Why it     XML could only be written (the XML report keyword). A program can now read a document, look in it and write one
+                        again without a hand-made parser, and without any XML reading the network or a file.
+             Does not    No XSLT, XQuery or XML Schema validation (left out on purpose); no DTD is read, so an entity a DTD declares is an
+                        error and nothing a document says can make the parser read a file or grow without bound (depth 500). Namespaces are
+                        names and attributes, not resolved URIs: XPATH matches a prefix as written (local-name() ignores it).
+
+20 Oct 26  NEW VERBS: IMPORT.CSV, IMPORT.JSON, IMPORT.XML AND CONVERT.DATA.
+
+             What        IMPORT.CSV pathname file {HEADER} {DELIMITER x} {QUOTE x} {ESCAPE x} {ID column | GENERATE} {DICT} {OVERWRITING}
+                        reads a CSV file into the records of an SD file in one line: each row is a record, the id the first column (or the
+                        one ID names; GENERATE numbers 1, 2, 3 ...), the other columns the fields in order; with HEADER the first row names
+                        the columns, and with DICT the names with no dictionary item get a D item for their field. IMPORT.JSON pathname
+                        file reads a JSON array of objects or a JSON Lines file into a COLLECTION file, one record for each object (ID
+                        name or GENERATE). IMPORT.XML pathname file reads a document in the shape the XML keyword writes (also with
+                        ELEMENTS) back into the fields the dictionary of the file names, the association rows and the multivalued fields
+                        included. A record that is already there is left alone and counted unless OVERWRITING. The last line says "file: n
+                        record(s) written, m skipped". CONVERT.DATA from.pathname to.pathname {FROM format} {AS format} {HEADER} {NO.QUERY}
+                        writes a CSV, JSON, JSON Lines or XML file as another of them; the format is what the name ends in (.csv .json
+                        .jsonl .ndjson .xml) or what FROM and AS say. A table (CSV with a header, an array of objects, JSON Lines, the
+                        children of an XML root; an XML document is always read as a table) goes to any of the four; a JSON object that is not
+                        an array goes to JSON as it is, to XML only when it is an XML element (the form XPARSE() gives), and is refused for CSV
+                        and JSON Lines.
+                        A file that is there is asked about (Enter is no) unless NO.QUERY. Messages 12858 to 12867.
+             Why it     Moving data between SD and a spreadsheet or a web service meant a BASIC program each time.
+             Does not    The pathnames go through the OS-access gate and the file and its records through the edit gates, exactly as
+                        OSREAD, OSWRITE and WRITE do, so an account without them gets the refusal it gets there and nothing is read or
+                        written. No ENCODING; a CSV cell is a string (no typing on import); a value that is not text cannot become a CSV
+                        cell (CONVERT.DATA says so and writes nothing); IMPORT.XML reads the report shape, not any XML document (use
+                        XPARSE for that).
+
 20 Oct 26  ENCRYPTING A FIELD: AN ORDINARY PROGRAM CAN NOW MAKE A KEY, AND A LISTING CAN SHOW THE FIELD DECRYPTED FOR WHOEVER HOLDS IT (FROM SD CORE FOR LINUX).
 
              What        Three new BASIC functions, open to every program: SDSALT() gives a fresh random salt; SDKEY(passphrase, salt) gives the

@@ -331,6 +331,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * changes nothing: these are allowed whether or not it is given).  OSREAD is not a statement in SD.
    cond.statements := @fm:"MATREAD":@fm:"MATREADL":@fm:"MATREADU":@fm:"READCSV":@fm:"WRITEBLK":@fm:"WRITECSV":@fm:"WRITESEQ"
    cond.statements := @fm:"SEEK":@fm:"FILELOCK":@fm:"FILEUNLOCK":@fm:"FLUSH":@fm:"GETLIST":@fm:"LOCATE":@fm:"FIND":@fm:"FINDSTR":@fm:"SEND":@fm:"OSREAD"
+   cond.statements := @fm:"READJSON":@fm:"WRITEJSON"      ;* 20 Oct 26 dm - JSON Lines
    redim.stmt = @false
 
    * The AT.CONSTANTS list holds @ variables which are either constants or
@@ -482,6 +483,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"BSCAN":@fm:"KEY":@fm:"ROOT"                             ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
    statements := @fm:"SELECTLEFTV":@fm:"SELECTRIGHTV"                         ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291 (same)
    statements := @fm:"SORTADD":@fm:"SORTCLEAR"                                ;* 16 Oct 26 dm - QM4 Fixes item 371
+   statements := @fm:"READJSON":@fm:"WRITEJSON"                               ;* 20 Oct 26 dm - CSV / JSON / XML task: JSON Lines (same: at the end)
 
    * Statements which do not generate DEBUG calls when debugging
 
@@ -639,7 +641,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "COUNTS"          ; intrinsic.opcodes<-1> = OP.COUNTS
    intrinsics<-1> = "CREATE.SERVER.SOCKET" ; intrinsic.opcodes<-1> = OP.SRVRSKT
    intrinsics<-1> = "CROP"            ; intrinsic.opcodes<-1> = OP.CROP
+   intrinsics<-1> = "CSVBUILD"        ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV / JSON / XML task: a data collection as CSV text (see in.xfun)
    intrinsics<-1> = "CSVDQ"           ; intrinsic.opcodes<-1> = OP.CSVDQ
+   intrinsics<-1> = "CSVOPEN"         ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - does a CSV line end inside a quoted field? (READCSV's logical line)
+   intrinsics<-1> = "CSVPARSE"        ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV text as a data collection or a dynamic array
    intrinsics<-1> = "DATE"            ; intrinsic.opcodes<-1> = OP.DATE
    intrinsics<-1> = "DCOUNT"          ; intrinsic.opcodes<-1> = OP.DCOUNT
    intrinsics<-1> = "DELETE"          ; intrinsic.opcodes<-1> = OP.DEL
@@ -699,9 +704,13 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
    intrinsics<-1> = "JBOOLEAN"        ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
    intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL
+   intrinsics<-1> = "JMERGE"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV / JSON / XML task: RFC 7396 merge patch (see in.xfun)
    intrinsics<-1> = "JNULL"           ; intrinsic.opcodes<-1> = OP.COLL
    intrinsics<-1> = "JPARSE"          ; intrinsic.opcodes<-1> = OP.COLL
+   intrinsics<-1> = "JPATCH"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - RFC 6902 patch
+   intrinsics<-1> = "JPATH"           ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - JSONPath query
    intrinsics<-1> = "JTYPE"           ; intrinsic.opcodes<-1> = OP.COLL
+   intrinsics<-1> = "JVALIDATE"       ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - JSON Schema
    intrinsics<-1> = "KEYCODE"         ; intrinsic.opcodes<-1> = OP.KEYCODE
    intrinsics<-1> = "KEYIN"           ; intrinsic.opcodes<-1> = OP.KEYIN
    intrinsics<-1> = "KEYINC"          ; intrinsic.opcodes<-1> = OP.KEYINC
@@ -839,7 +848,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "VARTYPE"         ; intrinsic.opcodes<-1> = OP.VARTYPE
    intrinsics<-1> = "VSLICE"          ; intrinsic.opcodes<-1> = OP.VSLICE
    intrinsics<-1> = "WRITE.SOCKET"    ; intrinsic.opcodes<-1> = OP.WRITESKT
+   intrinsics<-1> = "XBUILD"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV / JSON / XML task: an XML element (a data collection) as text
    intrinsics<-1> = "XLATE"           ; intrinsic.opcodes<-1> = OP.TRANS
+   intrinsics<-1> = "XPARSE"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - XML text as a data collection
+   intrinsics<-1> = "XPATH"           ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - XPath over such a collection
    intrinsics<-1> = "XTD"             ; intrinsic.opcodes<-1> = OP.XTD
 
 
@@ -920,6 +932,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    formlistv.stmt = @false           ;* a FORMLISTV statement is being compiled as SELECTV (st.formlistv)
    xfun.names = ''                   ;* the table of the OP.XFUN functions, filled when the first is met (xfun.table.load)
    xfun.sel = '' ; xfun.argc = '' ; xfun.opt = '' ; xfun.mv = '' ; xfun.stack = ''
+   xfun.kst = '' ; xfun.hst = ''     ;* 20 Oct 26: the place in a row's several optional arguments, and whether they are still being given
    str.ovl.used = @false             ;* Set when one of the three overlap modes has been on in this program
    warnings.as.errors = @false
 
@@ -2525,7 +2538,9 @@ is.statement:
                  st.selectleftv,               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
                  st.selectrightv,              ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
                  st.sortadd,                   ;* 16 Oct 26 dm - QM4 Fixes item 371
-                 st.sortclear                  ;* 16 Oct 26 dm - QM4 Fixes item 371
+                 st.sortclear,                 ;* 16 Oct 26 dm - QM4 Fixes item 371
+                 st.readjson,                  ;* 20 Oct 26 dm - CSV / JSON / XML task
+                 st.writejson
          end else
             locate u.token.string in non.debug.statements<1> setting i then
                on i gosub st.class,      ;* CLASS
@@ -4335,7 +4350,10 @@ end
                       in.two,         ;* COUNTS
                       in.create.socket.server, ;* CREATE.SERVER.SOCKET
                       in.one,         ;* CROP
+                      in.xfun,        ;* CSVBUILD
                       in.csvdq,       ;* CSVDQ
+                      in.xfun,        ;* CSVOPEN
+                      in.xfun,        ;* CSVPARSE
                       in.none,        ;* DATE
                       in.two,         ;* DCOUNT
                       in.delete,      ;* DELETE
@@ -4395,9 +4413,13 @@ end
                       in.itype,       ;* ITYPE
                       in.jboolean,    ;* JBOOLEAN
                       in.jbuild,      ;* JBUILD
+                      in.xfun,        ;* JMERGE
                       in.jnull,       ;* JNULL
                       in.jparse,      ;* JPARSE
+                      in.xfun,        ;* JPATCH
+                      in.xfun,        ;* JPATH
                       in.jtype,       ;* JTYPE
+                      in.xfun,        ;* JVALIDATE
                       in.keyin,       ;* KEYCODE
                       in.keyin,       ;* KEYIN
                       in.keyin,       ;* KEYINC
@@ -4535,7 +4557,10 @@ end
                       in.one,         ;* VARTYPE
                       in.vslice,      ;* VSLICE
                       in.four,        ;* WRITE.SOCKET
+                      in.xfun,        ;* XBUILD
                       in.trans,       ;* XLATE
+                      in.xfun,        ;* XPARSE
+                      in.xfun,        ;* XPATH
                       in.one          ;* XTD
 
 in.one:
@@ -4566,14 +4591,19 @@ in.xfun:
             arg.count = xfun.argc<xf.i>
             if arg.count then gosub get.args   ;* 18 Oct 26 dm - SDSALT() and SDRANDKEY() write none (get.args reads at least one)
             xf.i = xfun.stack<1>
-            if xfun.opt<xf.i> # '' then          ;* an optional last argument
-               if look.ahead.token = TKN.COMMA then
-                  gosub get.token
-                  gosub exprf
-                  xf.i = xfun.stack<1>
+            if xfun.opt<xf.i> # '' then          ;* an optional last argument, or several
+               if index(xfun.opt<xf.i>, '|', 1) then
+                  gosub xfun.optional.args
                end else
-                  n = xfun.opt<xf.i> ; gosub emit.numeric.load
+                  if look.ahead.token = TKN.COMMA then
+                     gosub get.token
+                     gosub exprf
+                     xf.i = xfun.stack<1>
+                  end else
+                     n = xfun.opt<xf.i> ; gosub emit.numeric.load
+                  end
                end
+               xf.i = xfun.stack<1>
             end
             del xfun.stack<1>
             n = xfun.sel<xf.i> ; gosub emit.numeric.load
@@ -4586,6 +4616,32 @@ in.xfun:
             end
             goto intrinsic.common
 
+xfun.optional.args:
+            * 20 Oct 26 dm - several optional last arguments (CSVPARSE(text {, mode {, dialect}})): the row's defaults are separated by a
+            * bar, "0|" being a mode of 0 and a null string.  Once one is left out the ones after it are too.  The place we have got to and
+            * whether the arguments are still being given are kept on stacks, because an argument can be a call of one of these functions.
+            ins 1 before xfun.kst<1>
+            ins @true before xfun.hst<1>
+            loop
+            while xfun.kst<1> <= dcount(xfun.opt<xfun.stack<1>>, '|')
+               if xfun.hst<1> and look.ahead.token = TKN.COMMA then
+                  gosub get.token
+                  gosub exprf
+               end else
+                  xfun.hst<1> = @false
+                  xf.def = field(xfun.opt<xfun.stack<1>>, '|', xfun.kst<1>)
+                  if xf.def = '' then
+                     opcode.string = '' ; gosub emit.string.load
+                  end else
+                     n = xf.def ; gosub emit.numeric.load
+                  end
+               end
+               xfun.kst<1> += 1
+            repeat
+            del xfun.kst<1>
+            del xfun.hst<1>
+            return
+
 xfun.table.load:
             * name, function number, arguments written, optional last argument's default, multivalued (1) or not (0)
             xfun.rows = "CEIL,1,1,,0":@fm:"FLOOR,2,1,,0":@fm:"ROUNDUP,3,2,,0":@fm:"ROUNDDOWN,4,2,,0"
@@ -4597,6 +4653,7 @@ xfun.table.load:
             xfun.rows := @fm:"DIGEST,26,3,,0"   ;* 15 Oct 26 dm - QM4 gaps Q-13
             xfun.rows := @fm:"SWAPMARKS,28,1,,0" ;* 15 Oct 26 dm - QM4 gaps Q-1, sheet 238 (27 is SELECT.SOCKET, which has its own handler)
             xfun.rows := @fm:"SDSALT,37,0,,0":@fm:"SDKEY,38,2,,0":@fm:"SDRANDKEY,39,0,,0"   ;* 18 Oct 26 dm - encryption layer 2
+            xfun.rows := @fm:"CSVPARSE,43,1,0|,0":@fm:"CSVBUILD,44,1,0|,0":@fm:"CSVOPEN,45,1,||,0":@fm:"JMERGE,46,2,,0":@fm:"JPATCH,47,2,,0":@fm:"JPATH,48,2,,0":@fm:"JVALIDATE,49,2,,0":@fm:"XPARSE,50,1,0,0":@fm:"XBUILD,51,1,0|,0":@fm:"XPATH,52,2,,0"   ;* 20 Oct 26 dm - CSV / JSON / XML task (40 to 42 are FORMCSV, CSVDQ and CSV.MODE's operands, emitted by their own handlers)
             for xf.j = 1 to dcount(xfun.rows, @fm)
                xf.row = xfun.rows<xf.j>
                xfun.names<xf.j> = field(xf.row, ',', 1)
@@ -4796,6 +4853,12 @@ in.json:
             if look.ahead.token = TKN.COMMA then
                gosub get.token
                gosub exprf
+               if json.stack<1> = 14 and look.ahead.token = TKN.COMMA then
+                  * 20 Oct 26 dm - JBUILD(c, mode, indent): the pretty layout with the indent named (up to 16 spaces and tabs)
+                  gosub get.token
+                  gosub exprf
+                  json.stack<1> = 20             ;* CF_JBUILDI (op_coll.c)
+               end
             end else
                n = 0 ; gosub emit.numeric.load
             end
@@ -4907,6 +4970,19 @@ in.csvdq:
             if look.ahead.token = TKN.COMMA then
                gosub get.token
                gosub exprf
+               if look.ahead.token = TKN.COMMA then
+                  * 20 Oct 26 dm - CSVDQ(line, delimiter, quote {, escape}): the quote and escape characters of another dialect
+                  gosub get.token
+                  gosub exprf
+                  if look.ahead.token = TKN.COMMA then
+                     gosub get.token
+                     gosub exprf
+                  end else
+                     opcode.string = '' ; gosub emit.string.load
+                  end
+                  n = 41 ; gosub emit.numeric.load           ;* XF_CSVDQX (op_xfun.c)
+                  intrinsic.stack<1> = OP.XFUN
+               end
             end else
                opcode.string = ',' ; gosub emit.string.load
             end
@@ -6454,6 +6530,23 @@ st.csv.mode:
       opcode.string = '' ; gosub emit.string.load
    end
    opcode.byte = OP.CSVMODE ; gosub emit.simple
+   * 20 Oct 26 dm - CSV.MODE mode {, delimiter {, quote {, escape}}}.  The quote and escape characters are set by an operation of their own
+   * (XF_CSVQESC, 42) so that object code made before this stays as it was; left out they are the double quote and none, as a left out
+   * delimiter is a comma.
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub expr ; if err then return
+   end else
+      opcode.string = '' ; gosub emit.string.load
+   end
+   if look.ahead.token = TKN.COMMA then
+      gosub get.token
+      gosub expr ; if err then return
+   end else
+      opcode.string = '' ; gosub emit.string.load
+   end
+   n = 42 ; gosub emit.numeric.load      ;* XF_CSVQESC
+   opcode.byte = OP.XFUN ; gosub emit.simple
    return
 
 st.logmsg:
@@ -10062,6 +10155,40 @@ st.keepselect:
    return
 
 *****************************************************************************
+* ST.READJSON  -  READJSON var FROM file.var THEN / ELSE     (20 Oct 26 dm, the CSV / JSON / XML task)
+*
+* The next line of a JSON Lines file, taken as a data collection into VAR.  A call of the catalogued function !readjsonrow, whose 1 or 0
+* is what THEN and ELSE test: ELSE is the end of the file or a line that is not JSON (STATUS() tells which: 3006, 1020).  A blank line
+* is skipped.  WRITEJSON is the other way: the collection as one compact line.  The file was opened by OPENSEQ, where the OS-access
+* gate was asked.
+
+st.readjson:
+   s = '!readjsonrow'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub simple.lvar.reference ; if err then return        ;* The variable that receives the collection
+   if u.look.ahead.token.string # "FROM" then goto err.from
+   gosub get.token                      ;* FROM
+   gosub expr                           ;* The file variable
+   sys.call.n = 3                       ;* the return argument, the variable and the file
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
+
+st.writejson:
+   s = '!writejsonrow'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
+   gosub expr ; if err then return      ;* The collection
+   if (u.look.ahead.token.string # "TO") & (u.look.ahead.token.string # "ON") then goto err.to.on
+   gosub get.token                      ;* TO / ON
+   gosub expr                           ;* The file variable
+   sys.call.n = 3
+   gosub emit.sys.call.end
+   gosub emit.function.result.load
+   goto st.if.back.end
+
+*****************************************************************************
 * ST.MATWRITECSV  -  MATWRITECSV mat TO file.var THEN / ELSE     (15 Oct 26 dm, QM4 gaps Q-4)
 *
 * One CSV line of the matrix's elements, written with WRITESEQ to a file opened with OPENSEQ.  The elements are built onto
@@ -10091,8 +10218,13 @@ st.matwritecsv:
    if u.look.ahead.token.string # "TO" and u.look.ahead.token.string # "ON" then goto err.to.on
    gosub get.token                      ;* TO / ON
    gosub expr                           ;* The file variable
-   opcode.byte = OP.CSVDELIM ; gosub emit.simple
-   sys.call.n = 5                       ;* the return argument, the elements, their number, the file and the delimiter
+   * 20 Oct 26 dm - {DELIMITER d} {QUOTE q} {ESCAPE e} (csv.clauses): a null string for any left out, which !matwritecsv takes as the
+   * program's own CSV.MODE setting
+   gosub csv.clauses ; if err then return
+   n = 3 ; gosub emit.temp.ref
+   n = 4 ; gosub emit.temp.ref
+   n = 5 ; gosub emit.temp.ref
+   sys.call.n = 7                       ;* the return argument, the elements, their number, the file, the delimiter, the quote and the escape character
    gosub emit.sys.call.end
    gosub emit.function.result.load
    goto st.if.back.end
@@ -11576,22 +11708,33 @@ st.matreadcsv:
 
    gosub emit.var.load           ;* Emit LDLCL or LDCOM for target matrix
 
-   n = 1 ; gosub emit.temp.ref        ;* To receive raw input data
+   * 20 Oct 26 dm - MATREADCSV matrix FROM file.var {DELIMITER d} {QUOTE q} {ESCAPE e}: as READCSV (st.readcsv), the row in temporary 1
+   s = '!readcsvrow'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
 
    if u.look.ahead.token.string # "FROM" then goto err.from
    gosub get.token      ;* Skip FROM token
    gosub simple.var.reference ; if err then return
-
-   opcode.byte = OP.READSEQ ; gosub emit.simple
-   opcode.byte = OP.NOT ; gosub emit.simple      ;* TRUE/FALSE -> THEN/ELSE
+   gosub csv.clauses ; if err then return
+   n = 3 ; gosub emit.temp.ref
+   n = 4 ; gosub emit.temp.ref
+   n = 5 ; gosub emit.temp.ref
+   n = 1 ; gosub emit.temp.ref        ;* To receive raw input data
+   sys.call.n = 6
+   gosub emit.sys.call.end
+   gosub emit.function.result.load               ;* 1 a row was read, 0 the end of the file
    opcode.byte = OP.DUP ; gosub emit.simple
    label.name = '_':jump.no ; jump.no += 1
    opcode.byte = OP.JZE ; gosub emit.jump        ;* Skip parsing if error
    opcode.byte = OP.POP ; gosub emit.simple
 
    n = 1 ; gosub emit.temp.ref
-   opcode.string = ',' ; gosub emit.string.load  ;* Delimiter
-   opcode.byte = OP.CSVDQ ; gosub emit.simple
+   n = 3 ; gosub emit.temp.ref                   ;* Delimiter
+   n = 4 ; gosub emit.temp.ref                   ;* Quote
+   n = 5 ; gosub emit.temp.ref                   ;* Escape
+   n = 41 ; gosub emit.numeric.load              ;* XF_CSVDQX
+   opcode.byte = OP.XFUN ; gosub emit.simple
 
    opcode.string = @fm ; gosub emit.string.load
    opcode.byte = OP.MATPARSE ; gosub emit.simple
@@ -12151,6 +12294,7 @@ st.printcsv:
    end
 
    gosub emit.csv.list ; if err then return
+   gosub emit.csv.format                  ;* 20 Oct 26 dm - the list is made into the line here, see emit.csv.list
    if look.ahead.token = TKN.COLON then
       gosub get.token
       opcode.byte = OP.PRNT
@@ -12753,14 +12897,24 @@ st.read.common:
 * ST.READCSV  -  READCSV statement
 
 st.readcsv:
-   n = 2 ; gosub emit.temp.ref        ;* To receive raw input data
+   * 20 Oct 26 dm - READCSV FROM file.var {DELIMITER d} {QUOTE q} {ESCAPE e} TO var1, var2, ...  The row is read by !readcsvrow, which
+   * goes on to the next line while a quoted field is still open (a field may hold a line break), and is taken apart by CSVDQ with the
+   * three characters (temporaries 3, 4 and 5 - null for the defaults, a comma, a double quote and no escape character).
+   s = '!readcsvrow'
+   gosub emit.direct.call.reference
+   gosub emit.function.return.argument
 
    if u.look.ahead.token.string # "FROM" then goto err.from
    gosub get.token      ;* Skip FROM token
    gosub simple.var.reference ; if err then return
-
-   opcode.byte = OP.READSEQ ; gosub emit.simple
-   opcode.byte = OP.NOT ; gosub emit.simple      ;* TRUE/FALSE -> THEN/ELSE
+   gosub csv.clauses ; if err then return
+   n = 3 ; gosub emit.temp.ref
+   n = 4 ; gosub emit.temp.ref
+   n = 5 ; gosub emit.temp.ref
+   n = 2 ; gosub emit.temp.ref        ;* To receive raw input data
+   sys.call.n = 6                     ;* the return argument, the file, the three characters and the row
+   gosub emit.sys.call.end
+   gosub emit.function.result.load               ;* 1 a row was read, 0 the end of the file
    opcode.byte = OP.DUP ; gosub emit.simple      ;* Duplicate return status
    label.name = '_':jump.no ; jump.no += 1
    opcode.byte = OP.JZE ; gosub emit.jump        ;* Skip parsing if error
@@ -12770,8 +12924,11 @@ st.readcsv:
 
    n = 1 ; gosub emit.temp.ref                   ;* Variable for parsed data
    n = 2 ; gosub emit.temp.ref                   ;* Retrieve input data
-   opcode.string = ',' ; gosub emit.string.load  ;* Delimiter
-   opcode.byte = OP.CSVDQ ; gosub emit.simple
+   n = 3 ; gosub emit.temp.ref                   ;* Delimiter
+   n = 4 ; gosub emit.temp.ref                   ;* Quote
+   n = 5 ; gosub emit.temp.ref                   ;* Escape
+   n = 41 ; gosub emit.numeric.load              ;* XF_CSVDQX
+   opcode.byte = OP.XFUN ; gosub emit.simple
    opcode.byte = OP.STOR ; gosub emit.simple
 
    gosub st.dparse.input
@@ -14484,10 +14641,30 @@ st.writeblk:
    goto st.write.seq.common
 
 st.writecsv:
+   * 20 Oct 26 dm - WRITECSV list TO file.var {DELIMITER d} {QUOTE q} {ESCAPE e}.  The characters come AFTER the list and the file, so
+   * the list (temporary 6) and the file variable (temporary 7) wait for them, and the line is made at the end (see emit.csv.list).
+   n = 6 ; gosub emit.temp.ref
    gosub emit.csv.list
    if err then return
+   opcode.byte = OP.STOR ; gosub emit.simple
+   if (u.look.ahead.token.string # "TO") & (u.look.ahead.token.string # "ON") then goto err.to.on
+   gosub get.token        ;* Skip TO / ON
+   n = 7 ; gosub emit.temp.ref
+   gosub expr ; if err then return                 ;* The file variable
+   opcode.byte = OP.STOR ; gosub emit.simple
+   gosub csv.clauses ; if err then return
+   n = 6 ; gosub emit.temp.ref                     ;* The line
+   n = 3 ; gosub emit.temp.ref
+   n = 4 ; gosub emit.temp.ref
+   n = 5 ; gosub emit.temp.ref
+   n = 40 ; gosub emit.numeric.load                ;* XF_FORMCSVX
+   opcode.byte = OP.XFUN ; gosub emit.simple
+   n = 7 ; gosub emit.temp.ref                     ;* and the file
    opcode = OP.WRITESEQ
-   goto st.write.seq.common2
+   ins '1' before onerror.stack<1>      ;* Optional ON ERROR clause
+   ins '0' before testlock.stack<1>     ;* No LOCKED clause allowed
+   ins '1' before thenelse.stack<1>     ;* THEN / ELSE clause required
+   goto back.end
 
 st.writeseq:
    opcode = OP.WRITESEQ
@@ -15725,8 +15902,12 @@ emit.print.list:
    return
 
 *****************************************************************************
-* EMIT.CSV.LIST  -  Emit items for PRINTCSV and WRITECSV
+* EMIT.CSV.LIST  -  Emit the items of PRINTCSV and WRITECSV as one string, the items joined by field marks.
 *
+* 20 Oct 26 dm - The items used to be put through FORMCSV one at a time as they were met, with the delimiter between them.  A statement
+* can now name its own delimiter, quote and escape characters AFTER the list (WRITECSV a, b TO f DELIMITER ';'), so the formatting
+* waits: the list is built here, and EMIT.CSV.FORMAT, once the statement is read to its end, turns it into the line.  An item that
+* holds a field mark was always more than one cell, so nothing changes for it.
 emit.csv.list:
    first.csv.item = @true
    loop
@@ -15735,12 +15916,11 @@ emit.csv.list:
       end
 
       if not(first.csv.item) then
-         opcode.byte = OP.CSVDELIM ; gosub emit.simple     ;* 14 Oct 26: the delimiter CSV.MODE set, a comma as a rule
+         opcode.string = @fm ; gosub emit.string.load
          opcode.byte = OP.CAT ; gosub emit.simple
       end
 
       gosub expr ; if err then return
-      opcode.byte = OP.FORMCSV ; gosub emit.simple
 
       if not(first.csv.item) then
          opcode.byte = OP.CAT ; gosub emit.simple
@@ -15751,6 +15931,42 @@ emit.csv.list:
       gosub get.token
    repeat
 
+   return
+
+*****************************************************************************
+* EMIT.CSV.FORMAT  -  The list on the stack as a CSV line, by this program's CSV.MODE rules (PRINTCSV)
+emit.csv.format:
+   opcode.string = '' ; gosub emit.string.load      ;* delimiter, quote and escape: the program's own
+   opcode.string = '' ; gosub emit.string.load
+   opcode.string = '' ; gosub emit.string.load
+   n = 40 ; gosub emit.numeric.load                 ;* XF_FORMCSVX (op_xfun.c)
+   opcode.byte = OP.XFUN ; gosub emit.simple
+   return
+
+*****************************************************************************
+* CSV.CLAUSES  -  DELIMITER, QUOTE and ESCAPE, in any order, after a CSV statement's file variable.  Each takes an expression whose
+* first character is used.  The characters are kept in the compiler's temporaries 3 (delimiter), 4 (quote) and 5 (escape), each a null
+* string when left out: the program's own CSV.MODE setting for a statement that writes, a comma, a double quote and none for one
+* that reads (READCSV has never taken its rules from CSV.MODE).
+csv.clauses:
+   for csv.k = 3 to 5
+      n = csv.k ; gosub emit.temp.ref
+      opcode.string = '' ; gosub emit.string.load
+      opcode.byte = OP.STOR ; gosub emit.simple
+   next csv.k
+   loop
+      begin case
+         case u.look.ahead.token.string = "DELIMITER" ; csv.k = 3
+         case u.look.ahead.token.string = "QUOTE" ; csv.k = 4
+         case u.look.ahead.token.string = "ESCAPE" ; csv.k = 5
+         case 1 ; exit
+      end case
+      gosub get.token
+      csv.which = csv.k
+      n = csv.which ; gosub emit.temp.ref
+      gosub expr ; if err then return
+      opcode.byte = OP.STOR ; gosub emit.simple
+   repeat
    return
 
 **********************************************************************

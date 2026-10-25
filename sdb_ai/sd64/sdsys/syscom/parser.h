@@ -249,6 +249,8 @@ $define KW$MODE           233   ;* 16 Oct 26  QM4 gap 231 (report the most frequ
 $define KW$RANGE          234   ;* 16 Oct 26  QM4 gap 231 (report the difference between the largest and the smallest value)
 $define KW$IN             235   ;* 16 Oct 26  QM4 gap 94 (selection clause operator: field IN {NO.CASE} listname | "filename id")
 $define KW$NOT.IN         236   ;* 16 Oct 26  QM4 gap 94 (selection clause operator: field NOT.IN {NO.CASE} listname | "filename id")
+$define KW$JSON           237   ;* 20 Oct 26  CSV / JSON / XML task (the report as a JSON array of objects, one for each record)
+$define KW$JSON.LINES     238   ;* 20 Oct 26  ... the report as JSON Lines: one object to a line, no brackets
 
 * ----------------------------------------------------------------------
 * !PARSER action key values

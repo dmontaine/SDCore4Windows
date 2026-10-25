@@ -36,6 +36,9 @@ op_arith
 op_array
 op_btree
 op_coll
+op_csv
+op_json
+op_xml
 op_ccall
 op_chnge
 op_config
