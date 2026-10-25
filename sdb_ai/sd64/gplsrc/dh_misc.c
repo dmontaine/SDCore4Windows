@@ -19,7 +19,7 @@
  * START-HISTORY:
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): op_settrig() and the actions of op_fcontrol() that change a setting of the file refuse a
  *           file in the shared account with message 12519 (Linux 11514) for anyone but the administrator, a $internal program included
- *           (shared_structure_refusal).  Windows has no pub_fcontrol or FC$SYNC / FC$CRLF / FC$MINMOD, so Linux's hunk for those is not carried.
+ *           (shared_structure_refusal).  Windows had no pub_fcontrol when this was carried (it came later, with 400500c), and has no FC$SYNC / FC$CRLF / FC$MINMOD, so Linux's hunk for those is not carried.
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_fcontrol() and pub_fcontrol() refuse a NET_FILE (net_refuse)
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - pub_fcontrol(): the public FCONTROL() with openQM's action numbers (op_fcontrol is FCONTROL.INT).
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - Audit of the sequential id counter (CREATING.SEQKEY): dh_seq_key() writes only the counter's four bytes and
