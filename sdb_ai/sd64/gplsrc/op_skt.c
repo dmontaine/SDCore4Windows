@@ -17,6 +17,17 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 20 Oct 26 Windows port - from Linux b052346 - S.73 item 2, THE SILENT SERVER.  (1) READ.SOCKET on a TLS socket gave up after its timeout only while the descriptor held nothing: the session tickets a
+ *           TLS 1.3 server sends after the handshake, or half of a record, made the descriptor readable, and the blocking SSL_read behind it then waited for the rest with
+ *           no limit (5.0 s against a test server that closes a silent connection after 5, with NETREPLY=3).  The read is now non-blocking and the wait is on the
+ *           descriptor, for the time that is left of the caller's timeout (tls_read_by_deadline).  (2) The TLS handshake of OPEN.SOCKET was bound by 15 seconds fixed
+ *           (SD_TLS_HANDSHAKE_MS + 5000) whatever the fourth argument said; a server that accepts the connection and never answers the hello is now given up on after
+ *           that argument (NETWAIT, which every SDNet caller passes) when it is given, and after the 15 seconds when it is not.
+ * 17 Oct 26 Windows port - from Linux b052346 - S.64 part 2: SET.SOCKET.MODE SKT$INFO.TRACE refuses (ER_PERM) a log whose path runs through a VOC, a dictionary,
+ *           a program file or the private catalogue the session may not change (edit_os_path_refusal); it used to truncate a
+ *           program record.
+ * 08 Sep 26 SET.SOCKET.MODE could not turn keep-alive off; the caller's value
+ *           was read and then overwritten with TRUE.
  * rev 0.9-3 SIGPIPE Error in op_writeskt() (WRITE.SOCKET)  issue #89 / ScarletDME
  * 31 Dec 23 SD launch - prior history suppressed
  * 26 Aug 26 Windows port - SET.SOCKET.MODE's keep-alive case discarded the
@@ -99,6 +110,7 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <time.h>
 
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -111,6 +123,49 @@ Private char* skt_buff = NULL;
 Private int skt_buff_size = 0;
 
 bool socket_wait(SOCKET socket, bool read, int timeout);
+
+/* ======================================================================
+   tls_read_by_deadline()  -  S.73 item 2: one read of a TLS socket that cannot wait for ever.
+
+   The caller has already waited on the descriptor (or has decrypted bytes pending).  What arrived is not necessarily application data: the session tickets of a
+   TLS 1.3 server, or half of a record.  sd_tls_client_read_now() says so (SD_TLS_NOT_YET) instead of blocking, and this waits on the descriptor again for the
+   time that is LEFT of WAIT_MS, counted from START_MS: so the tickets cost what they have used and no more, and a server that sends them and then nothing
+   is given up on at the caller's timeout like any other.  WAIT_MS is in milliseconds, 0 for a read that must not wait (a non-blocking socket) and -1 for no limit
+   (events and the break key are still looked at, in socket_wait).  *GAVE_UP is set when the wait ended with nothing to read: process.status is ER_TIMEOUT
+   (set here, or in socket_wait, which also leaves it alone for the break key) and the caller returns an empty string.  Otherwise the bytes read, 0 for a
+   session the server closed, < 0 for an error, as sd_tls_client_read() answers.                                                                           */
+
+Private long net_now_ms(void) {
+  struct timespec ts;
+
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (long)ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
+Private int tls_read_by_deadline(SD_TLS_CLIENT* tls, SOCKET skt, char* buf, int len, int wait_ms, long start_ms, bool* gave_up) {
+  int n;
+  int left;
+
+  *gave_up = FALSE;
+  for (;;) {
+    n = sd_tls_client_read_now(tls, buf, len);
+    if (n != SD_TLS_NOT_YET)
+      return n;
+    left = wait_ms;
+    if (wait_ms > 0) {
+      left = (int)((start_ms + wait_ms) - net_now_ms());
+      if (left <= 0) {
+        process.status = ER_TIMEOUT;
+        *gave_up = TRUE;
+        return 0;
+      }
+    }
+    if (!socket_wait(skt, TRUE, left)) {
+      *gave_up = TRUE;
+      return 0;
+    }
+  }
+}
 
 int translate_sockerr(int errval) {
   /* simply translates Posix error constants to SD error
@@ -296,6 +351,50 @@ void op_closeskt() {
 }
 
 /* ======================================================================
+   connect_with_timeout()  -  connect(), giving up after a number of seconds
+
+   14 Oct 26 (openQM 174, Linux 474fa84).  The socket is made non-blocking for the connect and given back as it was.  Returns 0 connected, -1 failed with
+   errno set: ETIMEDOUT when the time ran out.                                       */
+
+Private int connect_with_timeout(SOCKET skt, const struct sockaddr* addr, socklen_t addrlen, int seconds) {
+  int old_flags;
+  int rc;
+  int so_err = 0;
+  socklen_t so_len = sizeof(so_err);
+  struct timeval tv;
+  fd_set writefds;
+
+  old_flags = fcntl(skt, F_GETFL, 0);
+  if (old_flags == -1 || fcntl(skt, F_SETFL, old_flags | O_NONBLOCK) == -1)
+    return connect(skt, addr, addrlen); /* Cannot change the mode: the plain connect */
+
+  rc = connect(skt, addr, addrlen);
+  if ((rc == -1) && (errno == EINPROGRESS)) {
+    tv.tv_sec = seconds;
+    tv.tv_usec = 0;
+    FD_ZERO(&writefds);
+    FD_SET(skt, &writefds);
+    rc = select(skt + 1, NULL, &writefds, NULL, &tv);
+    if (rc == 0) {
+      errno = ETIMEDOUT;
+      rc = -1;
+    } else if (rc > 0) {
+      if ((getsockopt(skt, SOL_SOCKET, SO_ERROR, &so_err, &so_len) == 0) && (so_err == 0)) {
+        rc = 0;
+      } else {
+        errno = so_err;
+        rc = -1;
+      }
+    }
+  }
+
+  so_err = errno; /* fcntl() below may change it */
+  fcntl(skt, F_SETFL, old_flags);
+  errno = so_err;
+  return rc;
+}
+
+/* ======================================================================
    op_openskt()  -  OPEN.SOCKET                                           */
 
 void op_openskt() {
@@ -320,6 +419,7 @@ void op_openskt() {
   DESCRIPTOR* descr;
   int flags;
   int port;
+  int connect_timeout;
   char server[80 + 1];
   char server_addr[80];
 
@@ -334,6 +434,13 @@ void op_openskt() {
   process.status = 0;
   InitDescr(&result_descr, INTEGER);
   result_descr.data.value = 0;
+
+  /* 25 Oct 26 Windows port - from Linux 474fa84 (14 Oct 26, openQM 174): the fourth argument was the unused security context (always zero); it is now the number of
+     seconds to wait for the connection, zero for no limit of SD's own */
+
+  descr = e_stack - 1;
+  GetInt(descr);
+  connect_timeout = (descr->data.value > 0) ? descr->data.value : 0;
 
   /* Get flags */
 
@@ -428,7 +535,13 @@ void op_openskt() {
       }
     }
   }
-  if (process.status == 0) {
+  /* 25 Oct 26 Windows port - from Linux 474fa84 (14 Oct 26, openQM 174): a connect timeout in seconds as the fourth argument, bounding both the connect and the TLS handshake. */
+  if ((process.status == 0) && (connect_timeout > 0) && !(flags & SKT_NON_BLOCKING)) {
+    if (connect_with_timeout(skt, res->ai_addr, res->ai_addrlen, connect_timeout) == -1) {
+      process.status = ER_CONNECT;
+      process.os_error = errno;
+    }
+  } else if (process.status == 0) {
     if (connect(skt, res->ai_addr, res->ai_addrlen) == -1) {
       if (errno == EINPROGRESS) {
         struct timeval tv;
@@ -505,7 +618,9 @@ void op_openskt() {
     if ((process.status == 0) && want_tls) {
       char tls_err[256];
 
-      sock->tls = sd_tls_client_start((int)skt, SD_TLS_HANDSHAKE_MS + 5000,
+      /* 20 Oct 26 dm - S.73 item 2: the fourth argument (seconds to wait for the connection; NETWAIT for every SDNet caller) bounds the
+         handshake too, as it was said to ("the connection"); it was 15 seconds fixed.  Without the argument it is still 15. */
+      sock->tls = sd_tls_client_start(skt, (connect_timeout > 0) ? (connect_timeout * 1000) : (SD_TLS_HANDSHAKE_MS + 5000),
                                       tls_err, sizeof(tls_err));
       if (sock->tls == NULL) {
         process.status = ER_CONNECT;
@@ -564,6 +679,7 @@ void op_readskt() {
   int rcvd_bytes;
   STRING_CHUNK* head = NULL;
   SOCKET skt;
+  long wait_start;
 
   process.status = 0;
 
@@ -625,21 +741,27 @@ void op_readskt() {
      already holds decrypted are invisible to select(), so a TLS socket with
      some pending does not wait for data it has. */
 
+  wait_start = net_now_ms();
   if ((sock->tls == NULL) ||
       (sd_tls_client_pending((SD_TLS_CLIENT*)sock->tls) <= 0)) {
     if (!socket_wait(skt, TRUE, (blocking) ? timeout : 0))
       goto exit_op_readskt;
   }
 
-  /* Read the data */
+  /* Read the data.  20 Oct 26 dm - S.73 item 2: a TLS socket is read without waiting, and waited for again on the descriptor, for the time that is left (see
+     tls_read_by_deadline: the session tickets, or half a record, made the descriptor readable and the blocking read behind it then waited with no limit). */
 
-  ts_init(&head, max_len);
+  if (sock->tls != NULL) {
+    bool gave_up;
 
-  if (sock->tls != NULL)
-    rcvd_bytes = sd_tls_client_read((SD_TLS_CLIENT*)sock->tls, skt_buff,
-                                    max_len);
-  else
+    rcvd_bytes = tls_read_by_deadline((SD_TLS_CLIENT*)sock->tls, skt, skt_buff, max_len, (blocking) ? timeout : 0, wait_start, &gave_up);
+    if (gave_up)
+      goto exit_op_readskt;
+    ts_init(&head, max_len);
+  } else {
+    ts_init(&head, max_len);
     rcvd_bytes = recv(skt, skt_buff, max_len, 0);
+  }
   if (rcvd_bytes <= 0) /* Lost connection */
   {
     process.status = (rcvd_bytes == 0) ? ER_SKT_CLOSED : ER_FAILED;

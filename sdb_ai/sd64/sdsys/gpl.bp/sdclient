@@ -18,6 +18,9 @@
 *
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux b052346 (20 Oct 26) S.73 item 2 (the silent server): read.packet takes server.error and ServerStatus from the header only when the BODY has been
+*               read as well.  A reply cut in the middle used to leave them set from the header it had read, so the $netfile handler saw an answer and kept a connection that was out of
+*               step; it is the same loss as a reply that never started now (message 12502, or 12514 for a change).
 * 01 Oct 26 Windows port - connect() defaults to port 4247, not 4243
 * 20 Aug 26 Windows port - connect() speaks SCRAM-SHA-256 (requests 47 and 48)
 *           instead of the cleartext SrvrLogin, which APISRVR retired in the
@@ -1317,14 +1320,16 @@ local function read.packet()
    if pkt.bytes < 10 then return @false
    if maxpacket > 0 and pkt.bytes > maxpacket then return @false
 
-   server.error = oconv(pkt.header[5,2], 'ISL')
-   ServerStatus = oconv(pkt.header[7,4], 'ILL')
+*  20 Oct 26 dm (S.73 item 2).  The header's error and status are KEPT APART until the body is in.  They were put into server.error and ServerStatus here, before the body was read, so a
+*   reply that stopped in the middle of its body left them set and the call false: the handler read that as an answer ('answer -1') and kept a connection whose stream was out of step.
+   hdr.error = oconv(pkt.header[5,2], 'ISL')
+   hdr.status = oconv(pkt.header[7,4], 'ILL')
 
    * Read packet data
 
    n = pkt.bytes - 10
    if debugging then
-      display 'Incoming packet: ' : n : ' data bytes. Error ' : server.error :', Status ' : ServerStatus
+      display 'Incoming packet: ' : n : ' data bytes. Error ' : hdr.error :', Status ' : hdr.status
    end
 
    in.pkt = ''
@@ -1339,6 +1344,8 @@ local function read.packet()
       n -= len(s)
    repeat
 
+   server.error = hdr.error
+   ServerStatus = hdr.status
    return @true
 end
 

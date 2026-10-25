@@ -93,6 +93,10 @@ typedef struct SD_TLS_CLIENT SD_TLS_CLIENT;
 SD_TLS_CLIENT* sd_tls_client_start(int fd, int timeout_ms,
                                    char* errmsg, size_t errlen);
 int sd_tls_client_read(SD_TLS_CLIENT* c, void* buf, int len);
+/* 20 Oct 26 S.73 item 2: a read that never waits.  > 0 bytes read, 0 the server closed the session, < 0 an error, SD_TLS_NOT_YET when what has
+   arrived does not yet hold application data (the session tickets, half of a record): the caller waits on the descriptor and asks again. */
+#define SD_TLS_NOT_YET (-2)
+int sd_tls_client_read_now(SD_TLS_CLIENT* c, void* buf, int len);
 int sd_tls_client_pending(SD_TLS_CLIENT* c);   /* decrypted bytes held */
 int sd_tls_client_write(SD_TLS_CLIENT* c, const void* buf, int len);
 const unsigned char* sd_tls_client_binding(SD_TLS_CLIENT* c);
