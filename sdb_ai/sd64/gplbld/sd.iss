@@ -970,6 +970,14 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-dumps.ps1"" -Path ""{#DataDir}\sdsys\dumps"""; \
     Flags: runhidden; StatusMsg: "Securing the process-dump directory..."
 
+; 25 Oct 26 - RELEASE_1.1 171 (Linux S.65 slice 2b).  The folder for the SDNet server logins each person keeps (set.netlogin):
+; an SD user may add a folder to it and owns what they add, and nothing inside it is given to sdusers.  AFTER the tree ACL
+; above, for the reason secure-audit.ps1 gives.  No exit code check: without this folder set.netlogin stops and says so, and
+; SD_FILE_PRIVATE refuses a folder whose ACL is not what it should be, so a failure here fails closed.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\secure-sdnet.ps1"" -Path ""{#DataDir}\sd-net"""; \
+    Flags: runhidden; StatusMsg: "Preparing the server login folder..."
+
 ; THE CREDENTIAL STORE IS NOT LOCKED HERE.  It is locked from the Code section,
 ; by SecureCredStore, called at ssPostInstall.  MOVED OUT OF THIS SECTION
 ; 17 Aug 2026 because a Run entry discards the exit code, and this is the one

@@ -21,6 +21,8 @@
  *           account's gates and lookup test.  Linux's 127 is K_NET (S.65), which Windows does not carry yet; 127 stays free.
  * 31 Dec 23 SD launch - prior history suppressed
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K_NET (127), the per-account NET gate for SDNet remote files.
+ * 17 Oct 26 Windows port - from Linux 71eb0aa - S.65 slice 2b: SD_FILE_PRIVATE (111), the SDEXT private-file test.
+ * 17 Oct 26 Windows port - from Linux 71eb0aa - S.65 slice 1: K_NET (127), the per-account NET gate for SDNet remote files.
  * 31 Dec 23 SD launch - prior history suppressed 
  * 28 Jul 24 mab SD_ENCRYPT_SODIUM encode types
  * 08 Aug 24 mab SDEXT keys for salt and key from password
@@ -801,11 +803,17 @@
    Linux (S.19) so the two ports' catalogued objects agree.  No arguments. */
 #define SD_TLS_CBIND    110  /* sd_tlssrv channel binding, 0 args */
 /* 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3.  The process-held key ring of the XE conversion
-   (sd_keyring.c).  Same number as Linux (120); 111 (SD_FILE_PRIVATE, S.65) is not carried.
+   (sd_keyring.c).  Same number as Linux (120).
    Args: the operation in lower case, then "set": name, base64 key (answers the key id as 8 hex digits); "clear": name or * for all
    (answers how many keys went); "list": none (answers one field per key: name, key id and 1 if it is the one new values are
    encrypted with, value-mark separated).  Mirrored in sdsys/syscom/keys.h. */
 #define SD_KEYRING      120  /* sd_keyring key ring: set, clear, list */
+/* 17 Oct 26 dm - S.65 slice 2b (Windows port 25 Oct 26: the same number).  Is a path a file or directory only the running
+   user can touch (on Windows: not a link, owned by the running user, and no ACE for anyone but that user, SYSTEM and Administrators,
+   a file's parent directory too)?
+   Args: path, FILE or DIR.  Answers "1" or "0"; every failure is "0".  Mirrored
+   in sdsys/syscom/keys.h. */
+#define SD_FILE_PRIVATE 111  /* op_sdext private-file test, 2 args: path, FILE|DIR */
 
 /* embedded python  */
 /* py  object types */

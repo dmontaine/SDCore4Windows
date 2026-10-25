@@ -1,0 +1,355 @@
+* NETCRED
+* $netcred  -  the one place that reads and writes a person's SDNet logins (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 2b: written.  set.netlogin and delete.netlogin use it; nothing yet reads a login to open a remote file.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call $netcred(action, server, record, pin, err)
+*
+* A LOGIN IS NOT A PASSWORD.  What is kept for one person on one server is the SCRAM-SHA-256 material derived from the password
+* (RFC 5802 / 7677): the salt and the iteration count the server gave, the ClientKey and the ServerKey.  That is enough to log in
+* to that one server as that one remote user; it is not enough to learn the password or to try it anywhere else.  THE PASSWORD IS
+* NEVER STORED OR PASSED HERE, and nothing but those derived values is ever written.
+*
+* WHERE.  C:\ProgramData\SD\sd-net\<windows user>\<server name> on Windows (Linux: /var/lib/sd-net/<linux user>/<server name>).  The directory
+* is made by set.netlogin as the person (so it is owned by the person and, by inheritance from sd-net, closed to everyone else but SYSTEM and
+* Administrators) and sits OUTSIDE every account directory, so an account program whose OS-access gate is off cannot reach it with OPENSEQ.
+* The user is the user the process runs as (kernel K$USERNAME).  An API session runs as a different identity with the user's name set on it,
+* so the ownership test below fails there: this is for a local session of the person who made the login.
+*
+* ONE LINE, mode 600:   v1|remote user|salt|iterations|ClientKey|ServerKey|pin|created
+*
+*    salt, ClientKey and ServerKey are base64 as the SDEXT SCRAM calls give them; pin is the SHA-256 hash of the server's public key
+*    that the definition held when the login was made (64 lower case hex digits); created is yyyy-mm-dd.
+*
+* TRUST.  EVERY USE of the file or of its directory is preceded by SD_FILE_PRIVATE (a C test: a plain file, not a link, owned by the
+* running user, an ACL that names nobody but the running user, SYSTEM and Administrators, in a directory that passes the same test -
+* what ssh's mode test is on Linux).  A file or directory that fails it is refused (err 12459) and nothing in it is used.
+*
+* HONEST LIMIT.  An account that holds the sh or os.execute gate can read anything its Linux user can read, this file included,
+* exactly as it can read ~/.ssh.
+*
+*    action  READ    record is returned as a dynamic array, one value to an attribute:
+*                       1 remote user  2 salt  3 iterations  4 ClientKey  5 ServerKey  6 pin  7 created
+*                    pin must be the pin of the definition as it stands now (64 hex digits); a login made for a different pin is
+*                    refused (err 12460) and record is null.
+*            WRITE   record is given in the same layout.  Attributes 1 to 5 are required; attribute 6 is ignored and the pin
+*                    ARGUMENT is what is stored; attribute 7 is the date or null for today.  The file is made with umask 077 under
+*                    the name <server>.new, tested, and renamed over the old one, so there is never a half written login and an
+*                    existing login is untouched by any failure.
+*            DELETE  removes the file.
+*            EXISTS  record is returned 1 when the login is there and trusted, 0 when it is not there (no error); a file that is
+*                    there but not trusted is err 12459 and record 0.
+*    server  lower case letter, then up to 15 lower case letters or digits (as !netdefs)
+*    pin     READ and WRITE only
+*
+*    err is null or  message number : value mark : its arguments :
+*       12457 server name not valid  12458 no login stored  12459 not trusted  12460 made for a different pin
+*       12461 damaged or unreadable  12462 could not be stored or removed  12463 no login can be kept for this user
+*       12464 the pin was not given  2018 unknown action
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine netcred(action, server, record, pin, err)
+$catalog $netcred
+
+$include int$keys.h
+$include keys.h
+
+*  25 Oct 26 Windows port - WHERE.  Linux keeps the logins in /var/lib/sd-net (root:root 755), a directory for each person made by sd-elevate
+*  netcred-dir.  Here the root is the directory sd-net beside the sdsys directory, under the SD data directory (C:\ProgramData\SD\sd-net),
+*  made by the installer with an ACL that lets an SD user create a subdirectory but gives the group sdusers nothing inside the ones others made:
+*  the creator owns the new directory and its ACL holds only that person, SYSTEM and Administrators (gplbld\secure-sdnet.ps1).  SD_FILE_PRIVATE
+*  reads that ACL on every use, so a directory that is not what it should be is refused.  A test points a COPY of this program at a scratch directory.
+$define NETCRED.DIRNAME 'sd-net'
+$define NETCRED.UMASK 63                   ;* 077: the file is private from its first byte (the ACL, not the mode, is what protects it here)
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   err = ''
+   act = upcase(trim(action))
+   lu = ''
+   cred.dir = ''
+   path = ''
+   tmp = ''
+   bad = ''
+   line = ''
+   one = ''
+   f = 0
+   tmp.f = 0
+   made = @false
+   old.umask = 0
+   d = 0
+   created = ''
+   chk.text = ''
+   chk.set = ''
+   chk.ok = @true
+   what = ''
+   pin.ok = @false
+   dir.there = @false
+   n = 0
+   i = 0
+   k = 0
+   root = ''
+   marks = char(251):char(252):char(253):char(254):char(255)
+   lc.set = 'abcdefghijklmnopqrstuvwxyz'
+   digits = '0123456789'
+   hex.set = digits:'abcdef'
+   b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':lc.set:digits:'+/='
+   os.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':lc.set:digits:'._-'
+
+   if act # 'READ' and act # 'WRITE' and act # 'DELETE' and act # 'EXISTS' then
+      err = 2018:@vm:action   ;* Unexpected token (xx)
+      return
+   end
+
+*  ---- The server name, and whose login it is.
+   chk.text = server ; chk.set = lc.set:digits ; gosub check.chars
+   if len(server) < 1 or len(server) > 16 or not(chk.ok) or index(lc.set, server[1, 1], 1) = 0 then
+      err = 12457:@vm:server
+      return
+   end
+
+   lu = kernel(K$USERNAME, 0)
+*  A Windows user name may hold a space; nothing that is a path separator, a drive or a wild card is let through (os.chars and the space).
+   chk.text = lu ; chk.set = os.chars : ' ' ; gosub check.chars
+   if lu = '' or lu = 'root' or lu = 'sdsys' or downcase(lu) = 'system' or len(lu) > MAX.USERNAME.LEN or not(chk.ok) or lu[1, 1] = '.' or lu[1, 1] = '-' or lu[1, 1] = ' ' or lu[len(lu), 1] = ' ' or lu[len(lu), 1] = '.' then
+      err = 12463:@vm:lu
+      return
+   end
+
+   root = convert('\', @ds, @sdsys)
+   loop while root[len(root), 1] = @ds and len(root) > 3
+      root = root[1, len(root) - 1]
+   repeat
+   root = root[1, index(root, @ds, count(root, @ds)) - 1] : @ds : NETCRED.DIRNAME
+   cred.dir = root : @ds : lu
+   path = cred.dir : @ds : server
+   tmp = path : '.new'
+
+   if act = 'EXISTS' then record = 0
+
+*  ---- The directory: it must be there (WRITE needs it made by sd-elevate netcred-dir) and private, before anything is looked for in it.
+   dir.there = ospath(cred.dir, OS$EXISTS)
+   if not(dir.there) and act # 'WRITE' then
+      if act = 'EXISTS' then return   ;* no directory, so no login: record is 0 and that is not an error
+      err = 12458:@vm:server
+      return
+   end
+   if not(dir.there) or SDEXT(cred.dir : @FM : 'DIR', @TRUE, SD_FILE_PRIVATE) # '1' then
+      err = 12459:@vm:server:@vm:cred.dir
+      return
+   end
+
+   begin case
+      case act = 'EXISTS'
+         if ospath(path, OS$EXISTS) then
+            if SDEXT(path : @FM : 'FILE', @TRUE, SD_FILE_PRIVATE) = '1' then
+               record = 1
+            end else
+               err = 12459:@vm:server:@vm:path
+            end
+         end
+
+      case act = 'READ'
+         record = ''
+         gosub check.pin
+         if not(pin.ok) then
+            err = 12464
+            return
+         end
+         if not(ospath(path, OS$EXISTS)) then
+            err = 12458:@vm:server
+            return
+         end
+         if SDEXT(path : @FM : 'FILE', @TRUE, SD_FILE_PRIVATE) # '1' then
+            err = 12459:@vm:server:@vm:path
+            return
+         end
+         line = ''
+         openseq path to f else
+            err = 12461:@vm:server:@vm:status()
+            return
+         end
+         readseq line from f else line = ''
+         closeseq f
+
+*        A mark byte would make a second attribute out of one value: a line that holds one is damaged.
+         if len(convert(marks, '', line)) # len(line) then
+            err = 12461:@vm:server:@vm:'marks'
+            return
+         end
+         convert '|' to @fm in line
+         if dcount(line, @fm) # 8 or line<1> # 'v1' then
+            err = 12461:@vm:server:@vm:'layout'
+            return
+         end
+         for i = 1 to 7
+            one<i> = line<i + 1>
+         next i
+         gosub check.record
+         if bad # '' then
+            err = 12461:@vm:server:@vm:bad
+            return
+         end
+         if one<6> # pin then
+            err = 12460:@vm:server
+            return
+         end
+         record = one
+
+      case act = 'WRITE'
+         gosub check.pin
+         if not(pin.ok) then
+            err = 12464
+            return
+         end
+         one = record
+         one<6> = pin
+         if one<7> = '' then
+            d = date()
+            one<7> = oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R')
+         end
+         gosub check.record
+         if bad # '' then
+            err = 12461:@vm:server:@vm:bad
+            return
+         end
+
+         line = 'v1'
+         for i = 1 to 7
+            line := '|' : one<i>
+         next i
+
+         if ospath(tmp, OS$EXISTS) then
+            if not(ospath(tmp, OS$DELETE)) then
+               err = 12462:@vm:server:@vm:tmp:@vm:status()
+               return
+            end
+         end
+
+*        Mode 600 from the first byte: the umask is 077 while the file is made, and is put back whatever happens.
+         old.umask = umask(-1)
+         void umask(NETCRED.UMASK)
+         openseq tmp to tmp.f then
+            weofseq tmp.f
+            made = @true
+         end else
+            made = @true
+            create tmp.f else made = @false
+         end
+         void umask(old.umask)
+         if not(made) then
+            err = 12462:@vm:server:@vm:tmp:@vm:status()
+            return
+         end
+
+         writeseq line to tmp.f else
+            err = 12462:@vm:server:@vm:tmp:@vm:status()
+         end
+         closeseq tmp.f
+         line = ''
+         one = ''
+
+         if err = '' then
+*           The new file is tested before it can replace anything: a file that did not come out private is not kept.
+            if SDEXT(tmp : @FM : 'FILE', @TRUE, SD_FILE_PRIVATE) # '1' then
+               err = 12459:@vm:server:@vm:tmp
+            end
+         end
+         if err = '' then
+            if not(osrename(tmp, path)) then
+               err = 12462:@vm:server:@vm:path:@vm:status()
+            end
+         end
+         if err # '' then void ospath(tmp, OS$DELETE)
+
+      case act = 'DELETE'
+         if not(ospath(path, OS$EXISTS)) then
+            err = 12458:@vm:server
+            return
+         end
+*        Only a plain private file is removed: a directory or a link with this name is not ours to remove with a recursive delete.
+         if SDEXT(path : @FM : 'FILE', @TRUE, SD_FILE_PRIVATE) # '1' then
+            err = 12459:@vm:server:@vm:path
+            return
+         end
+         if not(ospath(path, OS$DELETE)) then
+            err = 12462:@vm:server:@vm:path:@vm:status()
+         end
+   end case
+
+   return
+
+* ======================================================================
+* check.chars - is every character of chk.text in chk.set?  Sets chk.ok.
+check.chars:
+   chk.ok = @true
+   for k = 1 to len(chk.text)
+      if index(chk.set, chk.text[k, 1], 1) = 0 then chk.ok = @false
+   next k
+   return
+
+* ======================================================================
+* check.record - are the seven values of "one" the right shape?  Sets bad to the name of the first one that is not, or null.  A login
+* that was written by hand, damaged, or made for another purpose is not used: every value has the shape this program writes.
+check.record:
+   bad = ''
+   what = one<1>
+   chk.text = what ; chk.set = os.chars ; gosub check.chars
+   if what = '' or len(what) > MAX.USERNAME.LEN or not(chk.ok) then bad = 'remote user'
+   for i = 2 to 5
+      if i = 3 then
+         what = one<3>
+         if len(what) < 1 or len(what) > 8 or not(what matches '1N0N') then
+            bad = 'iterations'
+         end else
+            if what + 0 < SCRAM$MIN.ITER or what + 0 > SCRAM$MAX.ITER then bad = 'iterations'
+         end
+      end else
+         what = one<i>
+         chk.text = what ; chk.set = b64 ; gosub check.chars
+         if len(what) < 4 or len(what) > 128 or not(chk.ok) then
+            if i = 2 then bad = 'salt'
+            if i = 4 then bad = 'ClientKey'
+            if i = 5 then bad = 'ServerKey'
+         end
+      end
+   next i
+   what = one<6>
+   chk.text = what ; chk.set = hex.set ; gosub check.chars
+   if len(what) # 64 or not(chk.ok) then bad = 'pin'
+   what = one<7>
+   if not(what matches '4N"-"2N"-"2N') then bad = 'created'
+   return
+
+* ======================================================================
+* check.pin - is the pin argument the 64 lower case hexadecimal digits of a pin?  Sets pin.ok.
+check.pin:
+   chk.text = pin ; chk.set = hex.set ; gosub check.chars
+   pin.ok = (len(pin) = 64 and chk.ok)
+   return
+
+end
+
+* END-CODE

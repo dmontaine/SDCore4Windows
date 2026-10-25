@@ -1,0 +1,100 @@
+* DELETENETLOGIN
+* DELETE.NETLOGIN verb (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 2b: written.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   DELETE.NETLOGIN server
+*
+* Removes YOUR stored login on a server (the one set.netlogin made), and only yours: the file is under your own Linux user's
+* directory, which $netcred reaches by the name of the user the session runs as.  NO SECRET BUT THE DERIVED KEYS WAS EVER STORED, and
+* those are what goes; there is no password to remove.  The login is checked as private before it is removed (a file that is not
+* the plain, private file set.netlogin makes is refused and left where it is).  Nothing is sent to the server.
+*
+* No gate is asked: removing a login adds nothing to what an account may do.  The server's definition is not touched and an
+* account that has no login for the server is told so.
+*
+* AUDIT.  delete.netlogin server=<name>, on success only.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program delete.netlogin
+$catalog $deletenetlogin
+
+$include int$keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   name = ''
+   words = ''
+   rec = ''
+   err = ''
+   chk.text = ''
+   chk.ok = @true
+   k = 0
+   lc.set = 'abcdefghijklmnopqrstuvwxyz'    ;* not "lower": that is a BASIC function
+   digits = '0123456789'
+
+   words = trim(@sentence)
+   if dcount(words, ' ') # 2 then
+      stop sysmsg(12456) ;* Usage: delete.netlogin server
+   end
+   name = downcase(field(words, ' ', 2))
+
+   chk.text = name
+   for k = 1 to len(chk.text)
+      if index(lc.set : digits, chk.text[k, 1], 1) = 0 then chk.ok = @false
+   next k
+   if len(name) < 1 or len(name) > 16 or not(chk.ok) or index(lc.set, name[1, 1], 1) = 0 then
+      stop sysmsg(12457, name) ;* Server name %1 is not valid
+   end
+
+*  Is there one?  EXISTS answers 0 for none, with no error; a file that is there and not trusted is an error of its own.
+   call $netcred('EXISTS', name, rec, '', err)
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   end
+   if rec # 1 then
+      @system.return.code = -ER$FNF
+      stop sysmsg(12458, name) ;* There is no login stored for server %1
+   end
+
+   call $netcred('DELETE', name, rec, '', err)
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   end
+
+   void kernel(K$AUDIT, 'delete.netlogin server=' : name)
+
+   @system.return.code = 0
+   crt sysmsg(12483, name) ;* Your login on server %1 was deleted
+   stop
+
+end
+
+* END-CODE

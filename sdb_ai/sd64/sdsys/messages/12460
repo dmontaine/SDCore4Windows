@@ -1,0 +1,1 @@
+The stored login for server %1 was made for a different server key than the definition has now.  Run set.netlogin %1 again

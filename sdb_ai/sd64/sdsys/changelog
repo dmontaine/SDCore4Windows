@@ -2,7 +2,53 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
-17 Oct 26  SDNET, SECOND SLICE (A): SET.SERVER CAN CONNECT ONCE AND SHOW YOU THE SERVER'S KEY HASH (S.65).
+17 Oct 26  SDNET, SECOND SLICE (B): A PERSON'S OWN LOGIN ON A SERVER, KEPT AS DERIVED VALUES AND NEVER AS THE PASSWORD (S.65).
+
+             Why         To use a server SDSYS has defined, a person needs a login on it.  set.netlogin server asks for the user name
+                        and password the person has on that other server, makes ONE TLS connection to the server, runs the same
+                        SCRAM-SHA-256 login the API uses, and keeps the values that login derives.  delete.netlogin server removes
+                        them.  Both are in every account's VOC, because they are the person's own.  Nothing yet USES a stored
+                        login, and no remote file can be opened.
+             Not the     The password is typed hidden, worked into the derived values and cleared; it is never written, printed,
+             password   logged or audited.  What is kept is the salt and iteration count the server chose and the two keys derived
+                        from the password (ClientKey and ServerKey).  Be clear what that is: whoever reads the file can log in as
+                        that remote user to THAT ONE server, and can try passwords against the keys offline, as fast as the iteration
+                        count lets them; they cannot learn the password from the file and cannot use it on another server.  Use a
+                        strong remote password that is not used anywhere else.
+             Where       C:\ProgramData\SD\sd-net\<windows user>\<server>, one line, in a directory owned by the person whose access
+                        list names only that person, SYSTEM and the Administrators.  It is OUTSIDE every account directory, so an
+                        account program that has neither the sh nor the os.execute switch cannot read it with OPENSEQ.  AN ACCOUNT
+                        THAT HAS EITHER SWITCH CAN READ IT, because it can read anything its Windows user can.  Two accounts of one
+                        Windows user share the one file for a server.
+             Trust       Only an internal subroutine, $netcred, touches the file.  Before each use it asks a new C test, the SDEXT
+                        function SD_FILE_PRIVATE (key 111, internal programs only): a plain file and not a link, owned by the person
+                        running, with an access list that allows nobody but that person, SYSTEM and the Administrators, in a
+                        directory that passes the same test.  A file or directory that fails is never opened.  A login made
+                        for one server key is refused once the definition holds another.
+             The order   set.netlogin checks, asking for nothing: the NET switch (or the administrator), that the server is defined,
+                        that the account is in its accounts list, and that the directory is ready.  Then it asks for the two
+                        prompts.  Then it connects, and BEFORE IT SENDS ANYTHING compares the key the server presents with the pin
+                        in the definition: a different key ends the command with nothing sent and the password unspent.  Then the
+                        exchange, in which it also checks that the server's own signature is right.  Nothing else is sent: no
+                        account is entered on the other server.  On any failure nothing is stored and an older login is untouched; on
+                        success an older login for that server is replaced without a question.
+             Directory   The person's own directory is made by set.netlogin itself, as the person, inside C:\ProgramData\SD\sd-net, which
+                        the installer makes so that an SD user can add a directory to it and owns what they add (no other SD user is
+                        given anything inside it).  AN EXISTING INSTALLATION DOES NOT HAVE THAT FOLDER UNTIL THE INSTALLER IS RUN
+                        AGAIN; until then set.netlogin stops at the directory step and says so.
+             Limits      It works in a local session of an ordinary Windows user; the administrator (sdsys) has no login of its own to
+                        keep, and an API session does not pass the ownership test.  delete.server leaves people's login files, which
+                        are inert while the pin differs.  The remote user is the other server's ordinary API user: the server has no
+                        files-only login yet, so the stored values reach whatever that user reaches there.
+             Audit       set.netlogin server=name remote=user and delete.netlogin server=name, on success only, and never a password,
+                        key, salt or hash.
+             Tested      The BASIC programs and the C check were NOT COMPILED OR RUN on Windows (the C had a syntax check only): the
+                        exchange has not been seen to work against a live server.
+             Messages    12455 to 12484 are new.
+             Documents   The Administrator guide's SDNet page describes the credential model, what the file does and does not protect
+                        against, both verbs and the checks in order; the TCL syntax card lists both verbs.
+
+17 Oct 26  SDNET, SECOND SLICE (A):SET.SERVER CAN CONNECT ONCE AND SHOW YOU THE SERVER'S KEY HASH (S.65).
 
              Why         A server definition pins the hash of the other server's public key, and until now SDSYS had to type those 64
                         digits from a message, with nothing to say they were right.  set.server now takes the word connect in place of

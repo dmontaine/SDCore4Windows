@@ -470,6 +470,9 @@
       * 20 Oct 26 Windows port - from Linux 00a5888, mirrored from gplsrc/keys.h: encryption layer 3, the key ring of the XE conversion.
       *   Args: 'set', name, base64 key (answers the key id, 8 hex digits) / 'clear', name or * (answers how many) / 'list'.
       $define SD_KEYRING      120  ;* sd_keyring key ring: set, clear, list
+      * 25 Oct 26 Windows port - from Linux 71eb0aa (17 Oct 26), S.65 slice 2b, mirrored from gplsrc/keys.h: is a path a file or directory only the
+      *   running user can touch (Windows: owned by the running user, nobody else but SYSTEM and Administrators in its ACL).  Args: path, FILE or DIR.
+      $define SD_FILE_PRIVATE 111  ;* op_sdext private-file test, 2 args: path, FILE|DIR
 
       * 13 Aug 26 Windows port - embedded python keys removed with the
       *   interpreter.  See PROJECT_STATUS.md 5.15.

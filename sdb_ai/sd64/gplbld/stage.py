@@ -1534,6 +1534,10 @@ def main():
                    'secure-audit.ps1', 'secure-cred.ps1', 'secure-log.ps1',
                    'secure-psdir.ps1', 'secure-osusers.ps1',
                    'secure-gcat.ps1',
+                   # 25 Oct 26 - RELEASE_1.1 171 (Linux S.65 slice 2b).  Makes
+                   # {#DataDir}\sd-net, where each person's stored SDNet server
+                   # logins live; sd.iss runs it from {app}.
+                   'secure-sdnet.ps1',
                    # 15 Sep 26 - RELEASE_1.1 41 (Linux S.19).  The API's TLS
                    # relay keeps its server key in {#DataDir}\sd-tls; this
                    # locks that directory to SYSTEM and Administrators.  Ships

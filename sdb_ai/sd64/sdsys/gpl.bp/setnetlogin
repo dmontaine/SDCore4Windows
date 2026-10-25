@@ -1,0 +1,541 @@
+* SETNETLOGIN
+* SET.NETLOGIN verb (S.65)
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 17 Oct 26 dm  S.65 slice 2b: written.  The person's login on a server SDSYS has defined: the SCRAM exchange is run once against the
+*               pinned server and the derived values are kept ($netcred).  Nothing yet uses the login to open a remote file.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.NETLOGIN server
+*
+* Makes, or replaces, YOUR login on a server defined with SET.SERVER.  You are asked for the user name and the password you have
+* ON THE REMOTE SERVER (the password is typed hidden).  The session runs the SCRAM-SHA-256 exchange with that server once, and what
+* is kept is NOT THE PASSWORD: it is the salt and iteration count the server gave and the two keys derived from the password and
+* the salt (ClientKey, ServerKey), in a file only you can read, outside every account directory (see $netcred).  NO SECRET BUT THOSE
+* DERIVED KEYS IS EVER STORED.  The password is held in one variable, spent on the key derivation and cleared; it is not kept,
+* printed, logged, audited or written.
+*
+* Allowed to an account that holds the NET gate (modify.account name net-on) AND is in the server's accounts list, or to the
+* administrator (who is exempt from the list, but has no Linux login of its own to keep a login in: see message 12467).
+*
+* ORDER.  Every local check comes first and asks for nothing: the gate, the definition, the account list, the Linux user, the
+* directory (made by this program as the person under C:\ProgramData\SD\sd-net on Windows - sd-elevate netcred-dir on Linux - then
+* SD_FILE_PRIVATE on it).  Then the two prompts.  Then ONE TLS connection to the host and
+* port of the definition (5 seconds to connect).  THE KEY THE SERVER PRESENTS IS COMPARED WITH THE PIN OF THE DEFINITION BEFORE
+* ANYTHING IS SENT; a different key ends the command with nothing sent.  Then the Ack byte and the SCRAM exchange exactly as
+* !sdclient's scram.login makes it (packets 47 and 48, bound to the TLS session, the nonce, the iteration bounds and the server's
+* signature all checked).  NOTHING ELSE IS SENT: no account is entered, no quit.  On any failure nothing is written and an existing
+* login is untouched.
+*
+* AUDIT.  set.netlogin server=<name> remote=<remote user>, on success only.  No password, key or hash.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.netlogin
+$catalog $setnetlogin
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+$define NET.CONNECT.SECS 5        ;* seconds to wait for the connection
+$define NET.READ.MS      15000    ;* milliseconds to wait for each read or write of the exchange (the plan, 4.6)
+$define NET.MAX.PKT      8192     ;* the SCRAM messages are short: a longer packet is not one
+$define NET.ACK.TRIES    16
+$define SrvrScramFirst   47       ;* SCRAM client-first
+$define SrvrScramFinal   48       ;* SCRAM client-final
+$define SV$OK            0
+$define SV$ON.ERROR      1
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+*  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
+   name = ''
+   host = ''
+   port = ''
+   pin = ''
+   defs = ''
+   err = ''
+   found = 0
+   acc = ''
+   lu = ''
+   out = ''
+   stat = 0
+   cred.path = ''
+   cred.root = ''
+   is.admin = @false
+   ru = ''
+   pw = ''
+   skt = 0
+   skt.open = @false
+   st = 0
+   oserr = 0
+   spki = ''
+   b = ''
+   acked = @false
+   tries = 0
+   io.ok = @false
+   pk = ''
+   ptype = 0
+   pdata = ''
+   hdr = ''
+   s = ''
+   n = 0
+   pkt.bytes = 0
+   srv.err = 0
+   in.pkt = ''
+   cnonce = ''
+   cbind = ''
+   cfirst.bare = ''
+   sfirst = ''
+   sattr = ''
+   nonce = ''
+   salt = ''
+   iter = ''
+   salted = ''
+   client.key = ''
+   stored.key = ''
+   srvr.key = ''
+   cfinal.bare = ''
+   auth.msg = ''
+   client.sig = ''
+   proof = ''
+   expect.v = ''
+   rec = ''
+   txt = ''
+   out.txt = ''
+   reason = ''
+   fail.num = 0
+   fail.a1 = ''
+   fail.a2 = ''
+   fail.a3 = ''
+   fail.a4 = ''
+   chk.text = ''
+   chk.set = ''
+   chk.ok = @true
+   words = ''
+   i = 0
+   k = 0
+   c = 0
+
+   lc.set = 'abcdefghijklmnopqrstuvwxyz'    ;* not "lower": that is a BASIC function
+   digits = '0123456789'
+   os.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':lc.set:digits:'._-'
+   b64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ':lc.set:digits:'+/='
+
+   words = trim(@sentence)
+   if dcount(words, ' ') # 2 then
+      stop sysmsg(12455) ;* Usage: set.netlogin server
+   end
+   name = downcase(field(words, ' ', 2))
+   chk.text = name ; chk.set = lc.set:digits ; gosub check.chars
+   if len(name) < 1 or len(name) > 16 or not(chk.ok) or index(lc.set, name[1, 1], 1) = 0 then
+      stop sysmsg(12457, name) ;* Server name %1 is not valid
+   end
+
+*  ---- (a) The NET gate, or the administrator.
+   is.admin = kernel(K$ADMINISTRATOR, -1)
+   acc = downcase(@who)
+   if not(is.admin) and not(kernel(K$NET, -1)) then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12465, acc) ;* This account does not have the NET gate
+   end
+
+*  ---- (b) The definition, and whether this account may use the server.
+   call !netdefs('READ', defs, err)
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>)
+   end
+   n = dcount(defs, @fm)
+   for i = 1 to n
+      if dcount(defs<i>, @vm) = 8 and defs<i,1> = name then found = i
+   next i
+   if found = 0 then
+      @system.return.code = -ER$FNF
+      stop sysmsg(12435, name) ;* No server is defined with the name %1
+   end
+   host = defs<found,2>
+   port = defs<found,3>
+   pin = downcase(defs<found,5>)
+   chk.text = pin ; chk.set = digits:'abcdef' ; gosub check.chars
+   if len(pin) # 64 or not(chk.ok) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12441, found) ;* Server definitions file: line %1 is not a definition
+   end
+   if not(is.admin) then
+      if index(',':downcase(defs<found,7>):',', ',':acc:',', 1) = 0 then
+         @system.return.code = -ER$PERM
+         stop sysmsg(12466, acc, name) ;* Account %1 is not listed for server %2
+      end
+   end
+
+*  ---- (c) Whose login it is, and the directory it goes in.  The administrator runs as sdsys, which keeps no login (sd-elevate refuses it).
+   lu = kernel(K$USERNAME, 0)
+   if lu = '' or lu = 'sdsys' or lu = 'root' then
+      @system.return.code = -ER$PERM
+      stop sysmsg(12467) ;* The administrator has no Linux login of its own to keep a server login in
+   end
+
+*  25 Oct 26 Windows port - Linux asks "sudo sd-elevate netcred-dir" for the directory.  Here the person makes it themself: the installer made
+*  C:\ProgramData\SD\sd-net so that an SD user can create a subdirectory in it and owns what they create, and the ACL the new directory
+*  inherits holds only the owner, SYSTEM and Administrators.  Nothing is trusted on the way in: SD_FILE_PRIVATE reads the result.
+   chk.text = lu ; chk.set = os.chars : ' ' ; gosub check.chars
+   if not(chk.ok) or lu[1, 1] = '.' or lu[1, 1] = '-' or lu[1, 1] = ' ' or lu[len(lu), 1] = ' ' or lu[len(lu), 1] = '.' or len(lu) > MAX.USERNAME.LEN then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12468, lu) ;* The directory for your server logins is not ready or is not private
+   end
+   cred.root = convert('\', @ds, @sdsys)
+   loop while cred.root[len(cred.root), 1] = @ds and len(cred.root) > 3
+      cred.root = cred.root[1, len(cred.root) - 1]
+   repeat
+   cred.root = cred.root[1, index(cred.root, @ds, count(cred.root, @ds)) - 1] : @ds : 'sd-net'
+   cred.path = cred.root : @ds : lu
+   if not(ospath(cred.root, OS$EXISTS)) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12468, cred.root)
+   end
+   if not(ospath(cred.path, OS$EXISTS)) then
+      void ospath(cred.path, OS$MKDIR)
+   end
+   if not(ospath(cred.path, OS$EXISTS)) or SDEXT(cred.path : @FM : 'DIR', @TRUE, SD_FILE_PRIVATE) # '1' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12468, cred.path)
+   end
+
+*  ---- (d) The prompts: the remote user name, then the remote password (hidden).
+   crt sysmsg(12469, name, host, port) ;* Setting up your login on server %1 (%2:%3)
+   display sysmsg(12470) : ' ' : ;* Remote user:
+   input ru
+   ru = trim(ru)
+   chk.text = ru ; chk.set = os.chars ; gosub check.chars
+   if ru = '' or len(ru) > MAX.USERNAME.LEN or not(chk.ok) then
+      @system.return.code = -ER$ARGS
+      stop sysmsg(12472) ;* The remote user name is not valid
+   end
+
+   display sysmsg(12471) : ' ' : ;* Remote password:
+   input pw HIDDEN
+   display
+   if pw = '' then
+      @system.return.code = -ER$ARGS
+      stop sysmsg(12473) ;* A password is required
+   end
+
+*  ---- (e) One TLS connection.  The pin is tested before anything is sent.
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   st = status()
+   oserr = os.error()
+   if st # 0 then
+      if st = ER$CONNECT and oserr = 0 then
+         fail.num = 12475 ; fail.a1 = host ; fail.a2 = port   ;* The TLS handshake did not complete
+      end else
+         fail.num = 12474 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = st ; fail.a4 = oserr   ;* Cannot connect
+      end
+      gosub give.up
+   end
+   skt.open = @true
+
+   spki = downcase(trim(socket.info(skt, SKT$INFO.TLS.SPKI)))
+   chk.text = spki ; chk.set = digits:'abcdef' ; gosub check.chars
+   if len(spki) # 64 or not(chk.ok) then
+      fail.num = 12484 ; fail.a1 = host ; fail.a2 = port   ;* The server gave no public key hash
+      gosub give.up
+   end
+   if spki # pin then
+*     NOTHING HAS BEEN SENT: the socket is closed with the password still unspent.
+      fail.num = 12476 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = name   ;* The key is not the key in the definition
+      gosub give.up
+   end
+
+*  The Ack byte the server sends once the TLS session is up.
+   tries = 0
+   acked = @false
+   loop
+      tries += 1
+      b = read.socket(skt, 1, SKT$BLOCKING, NET.READ.MS)
+      if status() # 0 or b = '' then
+         fail.num = 12477 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = 'the start of the session'
+         gosub give.up
+      end
+      if b = char(6) then acked = @true
+   until acked or tries >= NET.ACK.TRIES
+   repeat
+   if not(acked) then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'no acknowledgement'
+      gosub give.up
+   end
+
+*  ---- The SCRAM-SHA-256 exchange: !sdclient's scram.login, step for step.
+*  Out 47   p=tls-exporter,,n=<user>,r=<client nonce>
+*  In       r=<combined nonce>,s=<salt>,i=<iterations>
+*  Out 48   c=<binding>,r=<combined nonce>,p=<ClientProof>
+*  In       v=<ServerSignature>
+   cnonce = SDEXT('18', @TRUE, SD_RANDBYTES)
+   if cnonce = '' then
+      fail.num = 12481 ; fail.a1 = 'no client nonce'
+      gosub give.up
+   end
+
+   cbind = socket.info(skt, SKT$INFO.TLS.CBIND)
+   if cbind = '' then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'the connection is not bound to the TLS session'
+      gosub give.up
+   end
+   cfirst.bare = 'n=' : ru : ',r=' : cnonce
+
+   ptype = SrvrScramFirst ; pdata = 'p=tls-exporter,,' : cfirst.bare ; gosub send.packet
+   if not(io.ok) then
+      fail.num = 12477 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = 'the first message'
+      gosub give.up
+   end
+   gosub read.packet
+   if not(io.ok) then
+      fail.num = 12477 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = "the server's first reply"
+      gosub give.up
+   end
+   if srv.err # SV$OK then gosub refused
+
+*  KEPT VERBATIM FOR AuthMessage, never rebuilt from the parsed parts.
+   sfirst = in.pkt
+   if count(sfirst, ',') # 2 then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'malformed'
+      gosub give.up
+   end
+   sattr = field(sfirst, ',', 1)
+   if sattr[1, 2] # 'r=' then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'malformed'
+      gosub give.up
+   end
+   nonce = sattr[3, 999999]
+   sattr = field(sfirst, ',', 2)
+   if sattr[1, 2] # 's=' then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'malformed'
+      gosub give.up
+   end
+   salt = sattr[3, 999999]
+   sattr = field(sfirst, ',', 3)
+   if sattr[1, 2] # 'i=' then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'malformed'
+      gosub give.up
+   end
+   iter = sattr[3, 999999]
+
+*  THE COMBINED NONCE MUST START WITH OURS.
+   if nonce[1, len(cnonce)] # cnonce or len(nonce) = len(cnonce) then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'the nonce does not extend ours'
+      gosub give.up
+   end
+
+*  A SERVER DOES NOT GET TO CHOOSE THIS CLIENT'S CPU COST: the same two bounds as !sdclient, and a whole number.
+   if len(iter) < 1 or len(iter) > 8 or not(iter matches '1N0N') then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'the iteration count is not a whole number'
+      gosub give.up
+   end
+   iter = iter + 0
+   if iter < SCRAM$MIN.ITER or iter > SCRAM$MAX.ITER then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'unacceptable iteration count'
+      gosub give.up
+   end
+
+*  The salt is kept as it came and has to be storable: base64, of a sane length.
+   chk.text = salt ; chk.set = b64 ; gosub check.chars
+   if len(salt) < 4 or len(salt) > 128 or not(chk.ok) then
+      fail.num = 12478 ; fail.a1 = 'first' ; fail.a2 = 'the salt is not valid'
+      gosub give.up
+   end
+
+   salted = SDEXT(pw : @FM : salt : @FM : iter : @FM : SCRAM$KEY.LEN, @TRUE, SD_PBKDF2)
+*  THE PASSWORD IS SPENT: nothing below needs it, and nothing below can print it.
+   pw = ''
+   if salted = '' then
+      fail.num = 12481 ; fail.a1 = 'salted password'
+      gosub give.up
+   end
+
+   client.key = SDEXT(salted : @FM : 'Client Key', @TRUE, SD_HMACSHA256)
+   stored.key = SDEXT(client.key, @TRUE, SD_SHA256)
+
+   cfinal.bare = 'c=' : cbind : ',r=' : nonce
+   auth.msg = cfirst.bare : ',' : sfirst : ',' : cfinal.bare
+
+   client.sig = SDEXT(stored.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
+   proof = SDEXT(client.key : @FM : client.sig, @TRUE, SD_XORBYTES)
+
+*  Computed before the salted password is dropped; ServerKey is both what is kept and what checks the reply.
+   srvr.key = SDEXT(salted : @FM : 'Server Key', @TRUE, SD_HMACSHA256)
+   expect.v = SDEXT(srvr.key : @FM : auth.msg, @TRUE, SD_HMACSHA256)
+   salted = ''
+   stored.key = ''
+   client.sig = ''
+
+   if client.key = '' or srvr.key = '' or proof = '' or expect.v = '' then
+      fail.num = 12481 ; fail.a1 = 'the proof'
+      gosub give.up
+   end
+
+   ptype = SrvrScramFinal ; pdata = cfinal.bare : ',p=' : proof ; gosub send.packet
+   proof = ''
+   if not(io.ok) then
+      fail.num = 12477 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = 'the final message'
+      gosub give.up
+   end
+   gosub read.packet
+   if not(io.ok) then
+      fail.num = 12477 ; fail.a1 = host ; fail.a2 = port ; fail.a3 = 'the final reply'
+      gosub give.up
+   end
+   if srv.err # SV$OK then gosub refused
+
+*  MUTUAL AUTHENTICATION: a missing or wrong v= ends the command.
+   if in.pkt[1, 2] # 'v=' then
+      fail.num = 12478 ; fail.a1 = 'final' ; fail.a2 = 'no server signature'
+      gosub give.up
+   end
+   if SDEXT(in.pkt[3, 999999] : @FM : expect.v, @TRUE, SD_CTEQUAL) # '1' then
+      fail.num = 12480
+      gosub give.up
+   end
+   expect.v = ''
+
+*  ---- (f) The server is who the definition says and knows the password.  Close, keep the derived values, say so.
+   close.socket skt
+   skt.open = @false
+
+   rec = ''
+   rec<1> = ru
+   rec<2> = salt
+   rec<3> = iter
+   rec<4> = client.key
+   rec<5> = srvr.key
+   client.key = ''
+   srvr.key = ''
+   call $netcred('WRITE', name, rec, pin, err)
+   rec = ''
+   if err # '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   end
+
+   void kernel(K$AUDIT, 'set.netlogin server=' : name : ' remote=' : ru)
+
+   @system.return.code = 0
+   crt sysmsg(12482, name, ru) ;* Your login on server %1 as %2 is stored.  The password is not stored
+   stop
+
+* ======================================================================
+* check.chars - is every character of chk.text in chk.set?  Sets chk.ok.
+check.chars:
+   chk.ok = @true
+   for k = 1 to len(chk.text)
+      if index(chk.set, chk.text[k, 1], 1) = 0 then chk.ok = @false
+   next k
+   return
+
+* ======================================================================
+* clean.text - txt as out.txt: printable ASCII only and at most 100 characters.  Text that came from the other machine, or from a
+* helper's output, is shown, never trusted to hold nothing a terminal would act on.
+clean.text:
+   out.txt = ''
+   if len(txt) > 100 then txt = txt[1, 100]
+   for k = 1 to len(txt)
+      c = seq(txt[k, 1])
+      if c >= 32 and c <= 126 then out.txt := txt[k, 1]
+   next k
+   return
+
+* ======================================================================
+* send.packet - one request packet: its length (the data and the 6 bytes of header), its type, then the data.  Sets io.ok.
+send.packet:
+   pk = iconv(len(pdata) + 6, 'ILL') : iconv(ptype, 'ISL') : pdata
+   void write.socket(skt, pk, SKT$BLOCKING, NET.READ.MS)
+   io.ok = (status() = 0)
+   pk = ''
+   return
+
+* ======================================================================
+* read.packet - one reply packet, each read waiting at most NET.READ.MS.  Sets io.ok, srv.err (its error field) and in.pkt (its data).
+* A short read that returns nothing is a timeout (the status is ER$TIMEOUT) and ends the command, as does a packet that is not
+* plausibly one of the exchange's.
+read.packet:
+   io.ok = @false
+   in.pkt = ''
+   hdr = ''
+   loop
+      n = 10 - len(hdr)
+   while n > 0 do
+      s = read.socket(skt, n, SKT$BLOCKING, NET.READ.MS)
+      if status() # 0 or s = '' then return
+      hdr := s
+   repeat
+   pkt.bytes = oconv(hdr[1, 4], 'ILL')
+   srv.err = oconv(hdr[5, 2], 'ISL')
+   if pkt.bytes < 10 or pkt.bytes > NET.MAX.PKT then return
+   n = pkt.bytes - 10
+   loop
+   while n > 0 do
+      s = read.socket(skt, n, SKT$BLOCKING, NET.READ.MS)
+      if status() # 0 or s = '' then return
+      in.pkt := s
+      n -= len(s)
+   repeat
+   io.ok = @true
+   return
+
+* ======================================================================
+* refused - the server answered 47 or 48 with an error.  Its text is shown when it came as an ON.ERROR answer; the other answer
+* (error text to be fetched) would need a third packet, which this command does not send.
+refused:
+   reason = ''
+   if srv.err = SV$ON.ERROR then
+      txt = in.pkt
+      gosub clean.text
+      if out.txt # '' then reason = ' (' : out.txt : ')'
+   end
+   fail.num = 12479 ; fail.a1 = reason
+   gosub give.up
+   return
+
+* ======================================================================
+* give.up - the one way out of a failure: the password and every derived value are cleared, the socket is closed, nothing has been
+* stored, and the message in fail.num is the last thing said.
+give.up:
+   pw = ''
+   salted = ''
+   client.key = ''
+   stored.key = ''
+   srvr.key = ''
+   expect.v = ''
+   proof = ''
+   rec = ''
+   if skt.open then
+      close.socket skt
+      skt.open = @false
+   end
+   @system.return.code = -ER$FAILED
+   stop sysmsg(fail.num, fail.a1, fail.a2, fail.a3, fail.a4)
+   return
+
+end
+
+* END-CODE
