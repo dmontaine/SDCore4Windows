@@ -19,6 +19,8 @@
 * START-HISTORY:
 * 17 Oct 26 dm  S.65 slice 3b: written.  The kernel (slice 3c) mirrors NF$ OPEN .. STATE and NF$RC.* in C, the way call_trigger() mirrors the
 *               trigger's arguments; keep the two in step, a number here is a number there.
+* 18 Oct 26 dm  S.65 slice 3e: NF$WRITE .. NF$LOCK are real for a write-mode handle; NF$WRITEU 14, NF$DELETEU 15, NF$RELEASE 16 and NF$RC.LOCKED 4
+*               added; rc<6> is signed; rc<7> reports the mode.  netfiles.c mirrors the new numbers as NF_WRITEU, NF_DELETEU, NF_RELEASE, NF_RC_LOCKED.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -35,16 +37,26 @@
 *    NF$SELECT     6    handle        -            -        every record id, field marks between
 *    NF$FILEINFO   7    handle        key          -        the value                         keys 0, 1, 2 only in stage 1
 *    NF$CLOSEALL   8    -             -            -        -                                 every connection of the process
-*    NF$WRITE      9 \
-*    NF$DELETE    10  \ handle ...                                                             REFUSED in stage 1: read only
-*    NF$CLEARFILE 11  /
-*    NF$LOCK      12 /
+*    NF$WRITE      9    handle        record id    record   -                                 releases the session's lock on the record
+*    NF$WRITEU    14    handle        record id    record   -                                 keeps the lock
+*    NF$DELETE    10    handle        record id    -        -                                 an absent record is OK; releases the lock
+*    NF$DELETEU   15    handle        record id    -        -                                 keeps the lock
+*    NF$CLEARFILE 11    handle        -            -        -
+*    NF$LOCK      12    handle        record id    l or u   -                                 l shared, u update; the no-wait form only.  The
+*                                                            caller loops if it wants to wait.  NF$RC.LOCKED when another user holds it
+*    NF$RELEASE   16    handle or 0   record id    -        -                                 b null = every lock on the file; a = 0 = every lock
+*                                                            of the session on every connected server that has a write-mode handle open
+*    The six changing operations above (all but NF$RELEASE) are REFUSED (message 12506, nothing sent) for a handle whose server definition
+*    says mode read, which is the delivered default; only SDSYS makes a server write (set.server).  14, 15 and 16 are new in slice 3e.
 *    NF$STATE     13    -             -            -        counters and the connections      for tests; no network, no gate
 *
-*    rc  is a dynamic array.  rc<1> is the result: NF$RC.OK (0), NF$RC.ELSE (2: the record or the file was not found, the ELSE branch)
-*        or NF$RC.ERROR (3: an error, ON ERROR).  rc<2> is the message number, rc<3> to rc<5> its arguments (sysmsg(rc<2>, rc<3>, rc<4>,
-*        rc<5>)); rc<6> is the remote STATUS() for NF$RC.ELSE (3000 empty id, 3003 file not found, 3006 record not found) and for an
-*        error the server itself reported.  All six arguments are always passed; a, b and c may be null.
+*    rc  is a dynamic array.  rc<1> is the result: NF$RC.OK (0), NF$RC.ELSE (2: the record or the file was not found, the ELSE branch),
+*        NF$RC.ERROR (3: an error, ON ERROR) or NF$RC.LOCKED (4: NF$LOCK only, the record is held by another user; rc<6> is the holder's user
+*        number, -1 for a full lock table, -2 for a deadlock).  rc<2> is the message number, rc<3> to rc<5> its arguments (sysmsg(rc<2>, rc<3>,
+*        rc<4>, rc<5>)); rc<6> is the remote STATUS() as a SIGNED whole number: for NF$RC.ELSE 3000 empty id, 3003 file not found, 3006 record
+*        not found, and for an error the status the server itself reported (-3023 for a record not locked under MUSTLOCK, -3018 for a file the
+*        server cannot write).  rc<7> is 1 on a successful NF$OPEN of a handle whose server is in write mode, and absent otherwise.  All six
+*        arguments are always passed; a, b and c may be null.
 *
 * END-DESCRIPTION
 *
@@ -63,10 +75,14 @@ $define NF$DELETE         10
 $define NF$CLEARFILE      11
 $define NF$LOCK           12
 $define NF$STATE          13
+$define NF$WRITEU         14       ;* slice 3e: 14 to 16 are new; 17 to 20 are not used (17 is kept for a possible combined lock-and-read)
+$define NF$DELETEU        15
+$define NF$RELEASE        16
 
 $define NF$RC.OK           0
 $define NF$RC.ELSE         2
 $define NF$RC.ERROR        3
+$define NF$RC.LOCKED       4       ;* NF$LOCK only: another user holds the record
 
 $define NF$MAX.SERVERS    10       ;* servers one process may hold a connection to (the plan, 4.6)
 $define NF$MAX.HANDLES   100       ;* remote files one process may have open at once

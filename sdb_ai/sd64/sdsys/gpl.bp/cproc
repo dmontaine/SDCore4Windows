@@ -19,6 +19,9 @@
 * 
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
+* 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: para.reset.environment asks the kernel to send the queued closes of remote files (the K$NET argument -2),
+*               so that a record lock taken on a remote file does not outlive its file variable at the prompt.
+* 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 1: the NET gate (K$NET, SDNet remote files; does nothing yet) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
 *           the new account's record and restored when LOGTO returns (stk.net).
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared-account gates (K$SHARED.READ / .WRITE) are account-scoped like SD.ACCOUNTS: loaded at
 *           LOGTO from the new account's record (a path-attached account has none: both off), held in stk.shared.read / .write and restored by
@@ -872,7 +875,8 @@ reset.environment:
 
 para.reset.environment:
    i = ospath("", os$flush.cache)
-   printer close on -3     ;* Close all printers at this or higher level
+   void kernel(K$NET, -2)   ;* 18 Oct 26, S.65 slice 3e: send the queued closes of remote files, so that a lock does not outlive its file variable at the prompt
+   printer close on -3    ;* Close all printers at this or higher level
    printer off
    heading ""              ;* Ensure no heading or...
    footing ""              ;* ...footing on default print unit

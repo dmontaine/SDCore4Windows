@@ -40,6 +40,7 @@ $include syscom.h
 
    subr.name = field(conv,'.',1)
 *  18 Oct 26 - a name beginning with $ is a program only internal code may CALL (object.c, op_jumps.c).  This routine is $internal, so a
+*  18 Oct 26 Windows port - from Linux 5315c65 - - a name beginning with $ is a program only internal code may CALL (object.c, op_jumps.c).  This routine is $internal, so a
 *  conversion code of an ORDINARY program ("U$name") reached any of them through the CALL below: refused as if it were not catalogued.
    if subr.name[1,1] = '$' or not(catalogued(subr.name)) then
       set.status 2

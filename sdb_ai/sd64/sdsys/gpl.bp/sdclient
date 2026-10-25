@@ -24,6 +24,11 @@
 *           same change.  docs/SCRAM_AUTH.md phase 5.  The class is $internal
 *           now, because the derivation needs SDEXT.
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 3a: connect.keys(), the login from the stored derived keys of set.netlogin (no password; the server's public
+* 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: the public properties quiet, LastError and LastText (a quiet object does not abort on a server ON ERROR reply;
+*               LastError is the kind of the last reply, LastText the text of an ON ERROR one); clearfile(fno) (request 31); recordlock's
+*               wait flag was the wrong way round (flag 2 is NO wait, apisrvr and the C client) and is fixed.  The remote file handler
+*               $netfile is the one user of all of these.  NOT YET COMPILED OR RUN.
+* 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3a: connect.keys(), the login from the stored derived keys of set.netlogin (no password; the server's public
 *               key is compared with a pin before a byte is sent; the salt and iteration count must be the stored ones).  scram.login is
 *               now a wrapper over scram.exchange, which both logins share; settimeout() and a bounded wait for the Ack and for each read
 *               (connect.keys sets 30 seconds; connect() still waits for ever).  connect() is otherwise unchanged.
@@ -44,6 +49,7 @@
 * bool = obj->connect.keys(host, port, username, salt, iterations, client.key, server.key, account, pin)
 * obj->settimeout(ms)
 * obj->call(subr{, args})
+* obj->clearfile(fno)
 * obj->clearselect(listno)
 * obj->close(fno)
 * bool = obj->connected
@@ -76,6 +82,9 @@
 * obj->ServerStatus
 * obj->debug = state
 * str = obj->error
+* obj->quiet = state          (true: a server ON ERROR reply does not abort the program; default false)
+* n = obj->LastError          (the kind of the last reply: 0 OK, 1 ON ERROR, 2 ELSE, 3 ERROR, 4 LOCKED, 5 PROMPT; -1 no reply was read)
+* str = obj->LastText         (the payload of an ON ERROR reply, null otherwise; it can be stale or empty)
 *
 * END-DESCRIPTION
 *
@@ -188,7 +197,10 @@ private context,        ;* State
 
 public debugging,       ;* Debug mode
        ServerStatus,    ;* Returned status from server
-       error            ;* Error text
+       error,           ;* Error text
+       quiet,           ;* True: a server ON ERROR reply does not abort the caller (18 Oct 26, S.65 slice 3e)
+       LastError,       ;* The kind of the last reply (SV$ code), -1 when no reply was read
+       LastText         ;* The payload of the last ON ERROR reply
 
 * ======================================================================
 
@@ -197,6 +209,9 @@ public subroutine create.object
    context = CX.DISCONNECTED
    debugging = @false
    io.ms = 0
+   quiet = @false
+   LastError = -1
+   LastText = ''
 end
 
 * ======================================================================
@@ -251,6 +266,20 @@ public subroutine call(subr, ...)
          if rem(n, 2) then n += 1
          in.pkt = in.pkt[7+n,999999]
       repeat
+   end
+end
+
+* ======================================================================
+* CLEARFILE(fno)   (18 Oct 26 dm, S.65 slice 3e) - request 31, the file number and nothing else
+
+public subroutine clearfile(fno)
+   if not(context.error(CX.CONNECTED)) then
+      pkt = iconv(fno, 'ISL')
+      if message.pair(SrvrClearfile, pkt) then
+         if server.error = SV$ON.ERROR and not(quiet) then
+            abort 'CLEARFILE generated an abort event'
+         end
+      end
    end
 end
 
@@ -496,12 +525,13 @@ public subroutine delete(fno, id)
       if len(id) < 1 or len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastError = SV$ON.ERROR   ;* a quiet caller reads this instead of the abort
       end else
          pkt := id
          if not(message.pair(SrvrDelete, pkt)) then return
       end
 
-      if server.error = SV$ON.ERROR then
+      if server.error = SV$ON.ERROR and not(quiet) then
          abort 'DELETE generated an abort event'
       end
    end
@@ -516,12 +546,13 @@ public subroutine deleteu(fno, id)
       if len(id) < 1 or len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastError = SV$ON.ERROR   ;* a quiet caller reads this instead of the abort
       end else
          pkt := id
          if not(message.pair(SrvrDeleteu, pkt)) then return
       end
 
-      if server.error = SV$ON.ERROR then
+      if server.error = SV$ON.ERROR and not(quiet) then
          abort 'DELETE generated an abort event'
       end
    end
@@ -685,9 +716,12 @@ public subroutine recordlock(fno, id, update, wait)
       if len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastError = SV$ON.ERROR   ;* a quiet caller reads this instead of the abort
       end else
          flags = if update then 1 else 0
-         if wait then flags += 2
+*        18 Oct 26 dm - S.65 slice 3e: flag 2 is NO wait (apisrvr; the C client sends if (!wait) flags |= 2).  This used to read
+*        the test was the other way round, which made every waiting lock a no-wait one and the reverse.
+         if not(wait) then flags += 2
          pkt = iconv(fno, 'ISL')
          pkt := iconv(flags, 'ISL')
          pkt := id
@@ -696,7 +730,7 @@ public subroutine recordlock(fno, id, update, wait)
          end
       end
 
-      if server.error = SV$ON.ERROR then
+      if server.error = SV$ON.ERROR and not(quiet) then
          abort 'RECORDLOCK generated an abort event'
       end
    end
@@ -712,13 +746,14 @@ public subroutine release(fno, id)
       else if len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastError = SV$ON.ERROR   ;* a quiet caller reads this instead of the abort
          goto release.error
       end
 
       if not(message.pair(SrvrRelease, pkt)) then return
 
 release.error:
-      if server.error = SV$ON.ERROR then
+      if server.error = SV$ON.ERROR and not(quiet) then
          abort 'RELEASE generated an abort event'
       end
    end
@@ -866,6 +901,11 @@ public subroutine write(fno, id, data)
       if len(id) < 1 or len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastText = ''
+         if quiet then
+            LastError = SV$ON.ERROR
+            return
+         end
          abort 'Illegal record id'
       end
 
@@ -874,7 +914,7 @@ public subroutine write(fno, id, data)
       pkt := id : data
 
       if message.pair(SrvrWrite, pkt) then
-         if server.error = SV$ON.ERROR then
+         if server.error = SV$ON.ERROR and not(quiet) then
             abort 'WRITE generated an abort event'
          end
       end
@@ -889,6 +929,11 @@ public subroutine writeu(fno, id, data)
       if len(id) < 1 or len(id) > MAX.ID.LEN then
          server.error = SV$ON.ERROR
          ServerStatus = ER$IID
+         LastText = ''
+         if quiet then
+            LastError = SV$ON.ERROR
+            return
+         end
          abort 'Illegal record id'
       end
 
@@ -897,7 +942,7 @@ public subroutine writeu(fno, id, data)
       pkt := id : data
 
       if message.pair(SrvrWriteu, pkt) then
-         if server.error = SV$ON.ERROR then
+         if server.error = SV$ON.ERROR and not(quiet) then
             abort 'WRITEU generated an abort event'
          end
       end
@@ -921,7 +966,7 @@ local function read.record(mode, fno, id, err)
          begin case
             case server.error = SV$OK
                rec = in.pkt
-            case server.error = SV$ON.ERROR
+            case server.error = SV$ON.ERROR and not(quiet)
                abort 'READ generated an abort event'
          end case
          err = server.error
@@ -1118,6 +1163,10 @@ end
 * ======================================================================
 
 local function message.pair(pkt.type, pkt)
+*  18 Oct 26 dm - S.65 slice 3e: the kind of the last reply, reset BEFORE anything is written so that a request that fails to send or
+*  to be answered leaves -1 (no reply read), never the previous request's answer.
+   LastError = -1
+   LastText = ''
    if (write.packet(pkt.type, pkt)) then
       return get.response()
    end
@@ -1128,6 +1177,10 @@ end
 
 local function get.response()
  if not(read.packet()) then return @false
+
+*  18 Oct 26 dm - S.65 slice 3e: the kind of this reply, kept for a caller whose object is quiet (an ERROR reply is 3 here too)
+ LastError = server.error
+ if server.error = SV$ON.ERROR then LastText = in.pkt
 
  if server.error = SV$ERROR then
     error = 'Unable to retrieve error text'

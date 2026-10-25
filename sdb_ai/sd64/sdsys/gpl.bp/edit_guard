@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 5315c65 (18 Oct 26) S.65 slice 3e: a file on another SD server (no pathname, FL$NETFILE 1) is asked of the kernel by its file variable, before the
+*               administrator test; a local file is unchanged.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
 *               (12518 a record of a shared file without shared.write, 12519 a structure change); the kernel's K$EDIT.OK / K$EDIT.KIND carry the
 *               shared rule.
@@ -59,6 +61,16 @@ $include int$keys.h
 
    p = fileinfo(f, FL$PATH)
    if p = '' then
+*     18 Oct 26 dm - S.65 slice 3e: a file on another SD server has no pathname here.  The kernel knows its S.64 kind from the NAME the
+*     remote file was opened by, so it is asked with the FILE VARIABLE (and it is the kernel that exempts the administrator).  A local
+*     file answers 0 to FL$NETFILE and takes the old path below.
+      if fileinfo(f, FL$NETFILE) then
+         if kernel(K$EDIT.OK, f) then return @true
+         kind = kernel(K$EDIT.KIND, f)
+         if kind < 1 or kind > 3 then kind = 1
+         display sysmsg(12409 + kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+         return @false
+      end
       if kernel(K$ADMINISTRATOR, -1) then return @true
       display sysmsg(12415) ;* The pathname of the file cannot be read, so a change to it is refused
       return @false

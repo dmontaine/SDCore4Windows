@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 18 Oct 26 dm  S.65 slice 3e: writes and locks on a file of a server whose definition says mode=write (stage 2): net_gate, net_write, net_delete,
+ *               net_clear, net_lock, net_lock_step, net_check_lock, net_release, net_release_all, net_flush_closes.  A read-mode handle is refused
+ *               exactly as in slice 3c.  The handler's answer 4 (the record is locked by someone else), a record passed to the handler as a
+ *               string chain (never flattened), the server's own statuses passed through for the new entry points, the record cache bypassed
+ *               by a write-mode handle and dropped around every change.
  * 17 Oct 26 dm  S.65 slice 3c: written.  The first netfiles.c (plan G4 removed it, 1,227 lines, ports and passwords of its own) is not this
  *               one: this holds NO socket code.  Every operation goes to the catalogued BASIC handler $netfile (sdsys/gpl.bp/netfile, slice
  *               3b), which holds the connections in named COMMON and speaks the API through the class !sdclient.
@@ -31,7 +36,17 @@
  *  net_readv          READV (and the record-exists test, field 0)
  *  net_fileinfo       FILEINFO() keys the file variable does not answer itself
  *  net_select         SELECT, SELECTV: every record id of the remote file in one string (slice 3d)
- *  net_refuse        Any other statement given the file variable: message 12506
+ *  net_refuse        Any other statement given the file variable: message 12506 (12516 for a write-mode file)
+ *  net_gate           May a changing or locking statement go on for this file variable? (slice 3e: mode, CREATING.SEQKEY, transaction, edit gate)
+ *  net_write          WRITE, WRITEU, MATWRITE (and so WRITEV): the record goes down as the string chain it is
+ *  net_delete         DELETE, DELETEU
+ *  net_clear          CLEARFILE
+ *  net_lock           One no-wait request for a record lock
+ *  net_lock_step      READU, READL, READVU, READVL, RECORDLOCKU/L, a $MODE AUTOLOCK write: the lock, or what to do when it is busy
+ *  net_check_lock     MUSTLOCK: does this session hold the update lock?
+ *  net_release        RELEASE of a record or of a file; never raises
+ *  net_release_all    RELEASE alone; never raises
+ *  net_flush_closes   Send the queued closes (so that a lock does not outlive its file variable)
  *  net_close_all      LOGTO: every connection and every handle of the process
  *  net_message        The text of the last error
  *
@@ -64,6 +79,13 @@
  * other error and for a refused statement; the ELSE branch is the remote STATUS() when the server sent one (3000, 3003, 3006), else
  * ER_RNF for a record and ER_FNF for a file.
  *
+ * WRITES AND LOCKS (slice 3e, .claude/s65-stage2-design.md).  Only for a server whose definition says mode=write: the handler reports it at OPEN in
+ * rc<7> and the NET_FILE keeps it (access.net.write); a read-mode file variable stays read only and refuses everything, as in slice 3c.
+ * net_gate() is asked first by every changing or locking statement.  A change is never repeated: no reply to it is the handler's message 12514
+ * ("not known whether the change was made") and the statement's error.  A lock is asked for with the no-wait request only; a busy record is
+ * waited for HERE, by running the opcode again every 250 ms (net_lock_step()), so that the break key works and no server-side wait can look like
+ * a lost connection.  The statuses a program sees after a success are set by the kernel (0), never taken from the server.
+ *
  * THE GATE.  net_open() asks, before the handler is loaded, whether the session is the administrator or holds the NET gate (K_NET); an
  * $internal program is NOT exempt (the S.63 lesson).  The handler asks again and repeats the rest (definition, accounts list, stored
  * credential and pin, limits): it is the one that can say why.
@@ -87,23 +109,38 @@
 #define NF_CLOSE 2
 #define NF_READ 3
 #define NF_READV 4
+#define NF_RECORDLOCKED 5
 #define NF_SELECT 6
 #define NF_FILEINFO 7
 #define NF_CLOSEALL 8
+#define NF_WRITE 9
+#define NF_DELETE 10
+#define NF_CLEARFILE 11
+#define NF_LOCK 12
+#define NF_WRITEU 14
+#define NF_DELETEU 15
+#define NF_RELEASE 16
 
 #define NF_RC_OK 0
 #define NF_RC_ELSE 2
 #define NF_RC_ERROR 3
+#define NF_RC_LOCKED 4      /* slice 3e: the record is locked by another user (rc<6> is the holder) */
 
 /* Messages 12465 and 12506 are the handler's own (gate, read only); 12499 is its "no remote file is open with handle %1".  12512 and
-   12513 are the kernel's. */
+   12513 are the kernel's.  Slice 3e: 12505 is "server answered with an error", whose rc<6> may be a status that is passed on;
+   12515 (a changing or locking statement in a transaction) and 12516 (not available for a file on a write-mode server) are the kernel's
+   as well, the texts are in sdsys/messages. */
 #define MSG_NO_GATE 12465
 #define MSG_NOT_LISTED 12466
 #define MSG_NO_CREDENTIAL 12501
 #define MSG_BAD_HANDLE 12499
+#define MSG_SERVER_ERROR 12505
 #define MSG_READ_ONLY 12506
+#define MSG_BAD_ID 12508
 #define MSG_HANDLER 12512
 #define MSG_BAD_POINTER 12513
+#define MSG_TXN 12515
+#define MSG_UNAVAILABLE 12516
 
 #define NET_ARG_MAX 120     /* Longest message argument kept (the handler cuts them at 100) */
 #define NET_RC_BUF 1024     /* Room for rc: six fields, three of them message arguments */
@@ -114,12 +151,15 @@ typedef struct {
   int result;                      /* NF_RC_x */
   int msg;                         /* rc<2> */
   char arg[3][NET_ARG_MAX + 1];    /* rc<3> to rc<5> */
-  int status;                      /* rc<6> */
+  int status;                      /* rc<6>, signed */
+  int mode_write;                  /* rc<7> = 1: the handle was opened in write mode (slice 3e); absent is read */
 } NET_RC;
 
 Private char net_msg[512] = "";
 Private u_int16_t net_epoch = 0;            /* Moved on by net_close_all(); a NET_FILE of another epoch is stale */
 Private bool net_used = FALSE;              /* This process has had a remote file open (so the handler holds something to close) */
+Private bool net_used_write = FALSE;        /* ... and one of them was opened in write mode: RELEASE alone has locks to let go (slice 3e) */
+Private bool net_was_locked = FALSE;        /* net_answer() saw the answer 4 (busy); read by net_change_op() */
 Private int16_t net_pending[NET_MAX_HANDLES]; /* Handles whose file variable went where BASIC could not be run: sent at the next call */
 Private int net_pending_ct = 0;
 
@@ -130,7 +170,10 @@ Private int net_pending_ct = 0;
    OUT OF DATE: a program that waits for another user's change to a remote record will see it up to NET_CACHE_TTL seconds late.  A record
    over NET_CACHE_REC_MAX bytes is not kept.  The entries of a file variable go when it is closed, when it is SELECTed again (a new query is
    a new look at the file) and when the connections are dropped (net_close_all()); a handle and an epoch name a file variable, so an entry
-   can never be given to another one.  READV is not cached.  This stage is read only; a stage that writes must clear an entry on its write.  */
+   can never be given to another one.  READV is not cached.  Slice 3e (writes): a file variable of a WRITE-mode server is never looked up in the
+   cache and never put into it (a second OPEN of the same remote file is another handle, so a write through one would be stale for NET_CACHE_TTL
+   seconds through the other, and a stale READ followed by a WRITE is a lost update), and every write, delete, clear and lock drops the handle's
+   entries before the request and again after the answer.  A READ-mode file variable can still show a record up to NET_CACHE_TTL seconds old.  */
 
 #define NET_CACHE_SLOTS 64
 #define NET_CACHE_TTL 2             /* seconds */
@@ -192,6 +235,8 @@ Private void net_cache_put(FILE_VAR* fvar, const char* id, int16_t id_len, STRIN
   int i;
   NET_CACHE_ENTRY* e = NULL;
 
+  if (fvar->access.net.write) /* slice 3e: a write-mode file variable is never cached */
+    return;
   if ((id_len < 1) || (id_len > MAX_ID_LEN) || ((rec != NULL) && (rec->string_len > NET_CACHE_REC_MAX)))
     return;
   for (i = 0; i < NET_CACHE_SLOTS; i++) {
@@ -330,7 +375,7 @@ Private bool net_parse_rc(DESCRIPTOR* rc_descr, NET_RC* rc) {
   if (net_field(buf, 1, num, sizeof(num)) == 0)
     return FALSE;
   rc->result = atoi(num);
-  if ((rc->result != NF_RC_OK) && (rc->result != NF_RC_ELSE) && (rc->result != NF_RC_ERROR))
+  if ((rc->result != NF_RC_OK) && (rc->result != NF_RC_ELSE) && (rc->result != NF_RC_ERROR) && (rc->result != NF_RC_LOCKED))
     return FALSE;
 
   (void)net_field(buf, 2, num, sizeof(num));
@@ -340,6 +385,8 @@ Private bool net_parse_rc(DESCRIPTOR* rc_descr, NET_RC* rc) {
   (void)net_field(buf, 5, rc->arg[2], sizeof(rc->arg[2]));
   (void)net_field(buf, 6, num, sizeof(num));
   rc->status = atoi(num);
+  (void)net_field(buf, 7, num, sizeof(num));
+  rc->mode_write = (atoi(num) == 1); /* only an exact 1 says write: anything else, and the field being absent, is read (fail closed) */
   return TRUE;
 }
 
@@ -348,7 +395,11 @@ Private bool net_parse_rc(DESCRIPTOR* rc_descr, NET_RC* rc) {
    *out for the caller, which must release it.  TRUE if the handler ran to its RETURN and gave an answer in *rc; otherwise FALSE with
    net_msg set (12512) and *out released.  Does not send the queued closes (net_call() does that first).                              */
 
-Private bool net_call_raw(int op, const char* a, int alen, const char* b, int blen, const char* c, int clen, NET_RC* rc, DESCRIPTOR* out) {
+/* 18 Oct 26, slice 3e: the fourth argument c is either the flat string (c, clen) or, when use_chain is set, the string chain cchain (NULL is the
+   null string).  A chain is pushed as a STRING descriptor with its reference count up, as call_trigger() pushes a record; the caller keeps
+   its own reference, and the record is never flattened (it may hold every byte, marks included, and be large). */
+Private bool net_call_core(int op, const char* a, int alen, const char* b, int blen, const char* c, int clen, STRING_CHUNK* cchain, bool use_chain,
+                           NET_RC* rc, DESCRIPTOR* out) {
   DESCRIPTOR rc_descr;
   OBJECT_HEADER* hdr;
   bool returned;
@@ -369,7 +420,14 @@ Private bool net_call_raw(int op, const char* a, int alen, const char* b, int bl
   (e_stack++)->data.value = op;
   net_push_string(a, alen);
   net_push_string(b, blen);
-  net_push_string(c, clen);
+  if (use_chain) {
+    InitDescr(e_stack, STRING);
+    (e_stack++)->data.str.saddr = cchain;
+    if (cchain != NULL)
+      (cchain->ref_ct)++;
+  } else {
+    net_push_string(c, clen);
+  }
   InitDescr(e_stack, ADDR); /* out */
   (e_stack++)->data.d_addr = out;
   InitDescr(e_stack, ADDR); /* rc */
@@ -400,6 +458,10 @@ Private bool net_call_raw(int op, const char* a, int alen, const char* b, int bl
   return TRUE;
 }
 
+Private bool net_call_raw(int op, const char* a, int alen, const char* b, int blen, const char* c, int clen, NET_RC* rc, DESCRIPTOR* out) {
+  return net_call_core(op, a, alen, b, blen, c, clen, NULL, FALSE, rc, out);
+}
+
 /* ======================================================================
    net_flush_pending()  -  Send NF$CLOSE for the handles whose file variable was released where BASIC could not be run.  Each handle comes
    off the queue before it is sent, so a failure part way loses at most that one; what the server says is of no interest.               */
@@ -428,21 +490,47 @@ Private bool net_stale(FILE_VAR* fvar) {
 /* ======================================================================
    net_error_status()  -  The negative status for an error the handler reported  */
 
-Private int net_error_status(const NET_RC* rc) {
+/* Slice 3e: with pass_status (the five entry points that change or lock) an error the SERVER answered (message 12505) whose own status is
+   one of these is passed on, negated, so that a program sees the status it would see for a local file.  Everything else is 7000, and a
+   server's edit-gate refusal (an SV$ERROR reply) is 7000 as well.  net_read(), net_readv(), net_fileinfo() and net_select() pass nothing:
+   their rows assert 7000. */
+Private int net_passed_status(int status) {
+  int s = (status < 0) ? -status : status;
+
+  switch (s) {
+    case ER_IID:
+    case ER_RDONLY:
+    case ER_TRIGGER:
+    case ER_NOLOCK:
+    case ER_PERM:
+    case ER_MAXRLOCK:
+      return -s;
+  }
+  return -ER_NETWORK;
+}
+
+Private int net_error_status(const NET_RC* rc, bool pass_status) {
   switch (rc->msg) {
     case MSG_NO_GATE:
     case MSG_NOT_LISTED:
     case MSG_NO_CREDENTIAL:
       return -ER_PERM;
+    case MSG_SERVER_ERROR:
+      if (pass_status)
+        return net_passed_status(rc->status);
+      break;
   }
   return -ER_NETWORK;
 }
 
 /* ======================================================================
    net_answer()  -  What the handler's answer means for the statement: 0 done (out holds the value; the caller releases it), a positive
-   status for the ELSE branch, a negative one for an error with net_msg set.  out is released unless 0 is returned.                  */
+   status for the ELSE branch, a negative one for an error with net_msg set.  out is released unless 0 is returned.
+   Slice 3e: the answer 4 (busy) is understood only when lock_ok is set (net_lock()): out is released, net_was_locked is set, process.status
+   is the holder (rc<6>: a user number, -1 the lock table is full, -2 a deadlock) and ER_LCK is returned; for any other statement it is an
+   answer that cannot be used.                                                                                                       */
 
-Private int net_answer(bool ran, const NET_RC* rc, int else_status, DESCRIPTOR* out) {
+Private int net_answer(bool ran, const NET_RC* rc, int else_status, DESCRIPTOR* out, bool lock_ok, bool pass_status) {
   if (!ran)
     return -ER_NETWORK; /* net_call_raw() set the message and released out */
 
@@ -453,6 +541,16 @@ Private int net_answer(bool ran, const NET_RC* rc, int else_status, DESCRIPTOR* 
     case NF_RC_ELSE:
       k_release(out);
       return (rc->status > 0) ? rc->status : else_status;
+
+    case NF_RC_LOCKED:
+      k_release(out);
+      if (!lock_ok) {
+        net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+        return -ER_NETWORK;
+      }
+      net_was_locked = TRUE;
+      process.status = rc->status;
+      return ER_LCK;
   }
 
   k_release(out);
@@ -460,14 +558,17 @@ Private int net_answer(bool ran, const NET_RC* rc, int else_status, DESCRIPTOR* 
     net_set_message(rc->msg, rc->arg[0], rc->arg[1], rc->arg[2]);
   else
     net_set_message(MSG_HANDLER, "it reported an error without a message", "", "");
-  return net_error_status(rc);
+  return net_error_status(rc, pass_status);
 }
 
 /* ======================================================================
    net_op()  -  An operation on the open remote file: NF$READ, NF$READV, NF$FILEINFO.  b and c are the handler's arguments (the handle
-   is a).  Returns as net_answer().  Leaves process.op_flags as it found it.                                                        */
+   is a).  Returns as net_answer().  Leaves process.op_flags as it found it.
+   Slice 3e: net_op_ex() is the whole of it; the fourth argument may be a string chain (the record of a write), lock_ok lets the answer 4
+   through (net_lock()) and pass_status passes the server's own status on (see net_error_status()).  net_op() is what the read side calls.  */
 
-Private int net_op(FILE_VAR* fvar, int op, const char* b, int blen, const char* c, int clen, int else_status, DESCRIPTOR* out) {
+Private int net_op_ex(FILE_VAR* fvar, int op, const char* b, int blen, const char* c, int clen, STRING_CHUNK* cchain, bool use_chain, int else_status,
+                      bool lock_ok, bool pass_status, DESCRIPTOR* out) {
   u_int16_t entry = process.op_flags;
   char hs[16];
   NET_RC rc;
@@ -484,10 +585,14 @@ Private int net_op(FILE_VAR* fvar, int op, const char* b, int blen, const char* 
   snprintf(hs, sizeof(hs), "%d", (int)fvar->access.net.handle);
 
   net_flush_pending();
-  ran = net_call_raw(op, hs, (int)strlen(hs), b, blen, c, clen, &rc, out);
+  ran = net_call_core(op, hs, (int)strlen(hs), b, blen, c, clen, cchain, use_chain, &rc, out);
   process.op_flags = entry;
-  status = net_answer(ran, &rc, else_status, out);
+  status = net_answer(ran, &rc, else_status, out, lock_ok, pass_status);
   return status;
+}
+
+Private int net_op(FILE_VAR* fvar, int op, const char* b, int blen, const char* c, int clen, int else_status, DESCRIPTOR* out) {
+  return net_op_ex(fvar, op, b, blen, c, clen, NULL, FALSE, else_status, FALSE, FALSE, out);
 }
 
 /* ======================================================================
@@ -576,7 +681,7 @@ Private int net_open_work(FILE_VAR* fvar, const char* encoded_path) {
   ran = net_call_raw(NF_OPEN, server, (int)strlen(server), file, (int)strlen(file), "", 0, &rc, &out);
   process.op_flags = entry;
 
-  status = net_answer(ran, &rc, ER_FNF, &out);
+  status = net_answer(ran, &rc, ER_FNF, &out, FALSE, FALSE);
   if (status != 0)
     return status;
 
@@ -596,16 +701,25 @@ Private int net_open_work(FILE_VAR* fvar, const char* encoded_path) {
     return -ER_NETWORK;
   }
 
-  /* A NET_FILE: no file table entry, no lock, no transaction.  The first two words of the union are zeroed so that they read as a NULL
-     access.dir.trg for any code that looks at a directory file's trigger without asking the type. */
+  /* A NET_FILE: no file table entry, no local lock, no transaction.  The first two words of the union are zeroed so that they read as a NULL
+     access.dir.trg for any code that looks at a directory file's trigger without asking the type.
+     Slice 3e: the handler says in rc<7> whether the handle is write-mode (the definition said mode=write when the file was opened).  Only
+     then is FV_RDONLY left off; a read-mode handle is read only exactly as in slice 3c.  edit_kind is the S.64 kind of the REMOTE file's name
+     ("dict " and all), worked out once here for net_gate(). */
   memset(&fvar->access, 0, sizeof(fvar->access));
   fvar->access.net.handle = (int16_t)handle;
   fvar->access.net.epoch = net_epoch;
   strcpy(fvar->access.net.server, server);
+  fvar->access.net.write = rc.mode_write ? 1 : 0;
+  fvar->access.net.edit_kind = (u_char)edit_kind_of_net_name(file);
   fvar->file_id = -1;
-  fvar->flags |= FV_RDONLY | FV_NON_TXN;
+  fvar->flags |= FV_NON_TXN;
+  if (!fvar->access.net.write)
+    fvar->flags |= FV_RDONLY;
   fvar->type = NET_FILE;
   net_used = TRUE;
+  if (fvar->access.net.write)
+    net_used_write = TRUE;
 
   return 0;
 }
@@ -671,6 +785,7 @@ void net_close_all() {
     return;
 
   net_used = FALSE; /* the next successful open makes it TRUE again */
+  net_used_write = FALSE;
   if (net_call_raw(NF_CLOSEALL, "", 0, "", 0, "", 0, &rc, &out))
     k_release(&out);
   process.op_flags = entry;
@@ -689,8 +804,9 @@ int net_read(FILE_VAR* fvar, char* id, int16_t id_len, STRING_CHUNK** rec) {
   if (id_len < 1)
     return ER_IID; /* an empty or over-long id: the ELSE branch, as the handler would answer for an empty one */
 
-  /* A fresh answer to the same READ is kept (see THE RECORD CACHE).  A closed or stale file variable is not asked: net_op() says why. */
-  if (!net_stale(fvar)) {
+  /* A fresh answer to the same READ is kept (see THE RECORD CACHE).  A closed or stale file variable is not asked: net_op() says why.
+     Slice 3e: a write-mode file variable neither looks in the cache nor puts into it (see the cache's comment). */
+  if (!net_stale(fvar) && !fvar->access.net.write) {
     NET_CACHE_ENTRY* hit = net_cache_find(fvar, id, id_len);
 
     if (hit != NULL) {
@@ -814,23 +930,315 @@ int net_select(FILE_VAR* fvar, STRING_CHUNK** ids, int32_t* count) {
    net_refuse()  -  Any statement but OPEN, CLOSE, READ, MATREAD, READV and FILEINFO, given a remote file: nothing is sent and nothing
    is touched.  Message 12506 names the server and the statement (in lower case, as the handler names them).  Returns the negative status
    (ER_NETWORK) if the statement has ON ERROR (process.op_flags & P_ON_ERROR at the call); without it the error is raised and this does
-   not return.  It runs no BASIC, so nothing on the e-stack moves.                                                                    */
+   not return.  It runs no BASIC, so nothing on the e-stack moves.
+   Slice 3e: the message is 12506 ("read only") for a file variable of a read-mode server, as before, and 12516 ("not available for a file on
+   server %1") for one of a write-mode server: the statements that stay refused there (FILELOCK, GETLOCKS, CONFIGURE.FILE, an index...)
+   are not refused for being read only.  net_refuse_with() is the shared body: the message number, the status and the ON ERROR the caller
+   gave.                                                                                                                              */
 
-int net_refuse(FILE_VAR* fvar, const char* what) {
+Private void net_lower_what(const char* what, char* op, size_t opsize) {
+  size_t i;
+
+  for (i = 0; (what != NULL) && (what[i] != '\0') && (i < opsize - 1); i++)
+    op[i] = ((what[i] >= 'A') && (what[i] <= 'Z')) ? (char)(what[i] - 'A' + 'a') : what[i];
+  op[i] = '\0';
+}
+
+Private int net_refuse_with(FILE_VAR* fvar, const char* what, int msg_no, int status) {
   u_int16_t entry = process.op_flags;
   char op[48];
-  size_t i;
   const char* server = "";
 
   if ((fvar != NULL) && (fvar->type == NET_FILE))
     server = fvar->access.net.server;
 
-  for (i = 0; (what != NULL) && (what[i] != '\0') && (i < sizeof(op) - 1); i++)
-    op[i] = ((what[i] >= 'A') && (what[i] <= 'Z')) ? (char)(what[i] - 'A' + 'a') : what[i];
-  op[i] = '\0';
+  net_lower_what(what, op, sizeof(op));
+  net_set_message(msg_no, server, op, "");
+  return net_raise(status, entry);
+}
 
-  net_set_message(MSG_READ_ONLY, server, op, "");
-  return net_raise(-ER_NETWORK, entry);
+int net_refuse(FILE_VAR* fvar, const char* what) {
+  bool write = (fvar != NULL) && (fvar->type == NET_FILE) && fvar->access.net.write;
+
+  return net_refuse_with(fvar, what, write ? MSG_UNAVAILABLE : MSG_READ_ONLY, -ER_NETWORK);
+}
+
+/* ======================================================================
+   net_gate()  -  MAY THIS CHANGING OR LOCKING STATEMENT GO ON FOR THIS REMOTE FILE?  Slice 3e.  fvar is a NET_FILE; kind is NETG_x.  op_flags
+   are the statement's own (P_ON_ERROR decides whether a refusal is raised, P_SEQKEY is looked at).  Returns 0 to go on, otherwise the
+   refusal has been made (message set; raised unless the statement has ON ERROR) and the negative status is returned.  It runs no BASIC and
+   sends nothing, so nothing on the e-stack moves and the CALLER's program flags are the ones tested.  THE ORDER IS BINDING:
+     1  a read-mode file variable (the server's definition said read, or the variable was made read only): message 12506, -7000, exactly
+        slice 3c.  Nothing below runs for it.
+     2  WRITE ... CREATING.SEQKEY: the counter is in the local file's header; message 12516, -7000.
+     3  a transaction (process.txn_id, NOT the local txn_id, which is 0 for every NET_FILE because of FV_NON_TXN): message 12515, -1010.
+        A remote change would never join the local COMMIT or ROLLBACK, so it is refused rather than allowed.
+     4  the S.64 edit gate of the REMOTE file's name (WRITE, DELETE and CLEARFILE only; locks are never asked): an $internal caller and the
+        administrator are exempt; otherwise the session's voc.edit, dict.edit or bp.edit decides: message 12410 to 12412, -3035.      */
+
+int net_gate(FILE_VAR* fvar, int kind, u_int16_t op_flags, const char* what) {
+  u_int16_t entry = process.op_flags;
+  int ek;
+  int st;
+
+  process.op_flags = op_flags & P_ON_ERROR; /* what net_raise() reads; given back as found */
+
+  if (!fvar->access.net.write || (fvar->flags & FV_RDONLY)) {
+    st = net_refuse_with(fvar, what, MSG_READ_ONLY, -ER_NETWORK);
+    process.status = st;
+    process.op_flags = entry;
+    return st;
+  }
+
+  if ((kind == NETG_WRITE) && (op_flags & P_SEQKEY)) {
+    st = net_refuse_with(fvar, "WRITE ... CREATING.SEQKEY", MSG_UNAVAILABLE, -ER_NETWORK);
+    process.status = st;
+    process.op_flags = entry;
+    return st;
+  }
+
+  if (process.txn_id != 0) {
+    st = net_refuse_with(fvar, what, MSG_TXN, -ER_TXN);
+    process.status = st;
+    process.op_flags = entry;
+    return st;
+  }
+
+  if ((kind == NETG_WRITE) || (kind == NETG_DELETE) || (kind == NETG_CLEAR)) {
+    ek = fvar->access.net.edit_kind;
+    if ((ek != EDIT_NONE) && !(process.program.flags & HDR_INTERNAL) && !(my_uptr->flags & USR_ADMIN) && !edit_permitted(ek)) {
+      net_set_message(12409 + ek, "", "", ""); /* 12410 voc, 12411 dictionary, 12412 program file: texts with no arguments */
+      st = net_raise(-ER_PERM, op_flags & P_ON_ERROR);
+      process.status = st;
+      process.op_flags = entry;
+      return st;
+    }
+  }
+
+  process.op_flags = entry;
+  return 0;
+}
+
+/* ======================================================================
+   net_change_op()  -  The body of net_write(), net_delete(), net_clear() and net_lock(): one request that changes the file or takes a lock.
+   The record cache of the handle is dropped BEFORE the request is sent and AGAIN after the answer, whatever it was (done, an error, or no
+   reply at all: it is not known then whether the change was made), and only then is the error raised: net_raise() longjmps, so a drop placed
+   after it would never run.  The drop is by handle, never the whole cache.  The request is never repeated: a lost connection after a change
+   is the handler's message 12514 and the caller's error.  Returns 0 done, ER_LCK busy (net_lock() only, process.status the holder), or a
+   negative status, already raised unless the statement has ON ERROR (process.op_flags at the call).  Sets process.status.                    */
+
+Private int net_change_op(FILE_VAR* fvar, int op, const char* b, int blen, const char* c, int clen, STRING_CHUNK* chain, bool use_chain, bool lock_op) {
+  u_int16_t entry = process.op_flags;
+  int handle = fvar->access.net.handle;
+  DESCRIPTOR out;
+  int status;
+  bool busy;
+
+  if (handle > 0)
+    net_cache_drop(handle);
+
+  net_was_locked = FALSE;
+  status = net_op_ex(fvar, op, b, blen, c, clen, chain, use_chain, 0, lock_op, TRUE, &out);
+  process.op_flags = entry;
+  busy = lock_op && net_was_locked;
+  net_was_locked = FALSE;
+
+  if ((status > 0) && !busy) { /* an ELSE answer to a statement that has none: not an answer that can be used */
+    net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+    status = -ER_NETWORK;
+  }
+  if (status == 0)
+    k_release(&out);
+
+  if (handle > 0)
+    net_cache_drop(handle);
+
+  if (status < 0)
+    return net_raise(status, entry); /* sets process.status; does not return without ON ERROR */
+  if (!busy)
+    process.status = 0; /* never the server's STATUS(): the handler is told only whether it worked */
+  return status;
+}
+
+/* An id the caller should have refused already (op_write(), op_delete()): the statement fails as an illegal id, nothing is sent. */
+
+Private int net_bad_id(FILE_VAR* fvar, int16_t id_len) {
+  u_int16_t entry = process.op_flags;
+
+  net_set_message(MSG_BAD_ID, fvar->access.net.server, (id_len < 1) ? "empty" : "too long", "");
+  return net_raise(-ER_IID, entry);
+}
+
+/* ======================================================================
+   net_write()  -  WRITE and WRITEU (MATWRITE, WRITEV and WRITEVU come through them).  rec is the record as the chain the program holds
+   (NULL for a null record); it is passed to the handler as that chain and never flattened.  keep_lock: WRITEU (the server keeps the lock);
+   a plain WRITE releases the session's lock on the record there.                                                                  */
+
+int net_write(FILE_VAR* fvar, char* id, int16_t id_len, STRING_CHUNK* rec, bool keep_lock) {
+  if ((id_len < 1) || (id_len > NET_ID_MAX))
+    return net_bad_id(fvar, id_len);
+  return net_change_op(fvar, keep_lock ? NF_WRITEU : NF_WRITE, id, id_len, "", 0, rec, TRUE, FALSE);
+}
+
+/* ======================================================================
+   net_delete()  -  DELETE and DELETEU.  A record that is not there is not an error (the server's DELETE says nothing).                   */
+
+int net_delete(FILE_VAR* fvar, char* id, int16_t id_len, bool keep_lock) {
+  if ((id_len < 1) || (id_len > NET_ID_MAX))
+    return net_bad_id(fvar, id_len);
+  return net_change_op(fvar, keep_lock ? NF_DELETEU : NF_DELETE, id, id_len, "", 0, NULL, FALSE, FALSE);
+}
+
+/* ======================================================================
+   net_clear()  -  CLEARFILE.  The handler waits up to five minutes for a slow clear before it calls the connection lost.                */
+
+int net_clear(FILE_VAR* fvar) {
+  return net_change_op(fvar, NF_CLEARFILE, "", 0, "", 0, NULL, FALSE, FALSE);
+}
+
+/* ======================================================================
+   net_lock()  -  One request for a record lock, the NO-WAIT form only (the handler never waits on a server: net_lock_step() polls).
+   update: an update lock (RECORDLOCKU, READU...), else a shared one.  0 the lock is held; ER_LCK it is held by another user and
+   process.status is that user's number (-1 the server's lock table is full, -2 a deadlock); negative an error.                           */
+
+int net_lock(FILE_VAR* fvar, char* id, int16_t id_len, bool update) {
+  if ((id_len < 1) || (id_len > NET_ID_MAX))
+    return net_bad_id(fvar, id_len);
+  return net_change_op(fvar, NF_LOCK, id, id_len, update ? "u" : "l", 1, NULL, FALSE, TRUE);
+}
+
+/* ======================================================================
+   net_lock_step()  -  The idiom of every locking statement of a remote file: ask for the lock once and say what the statement does next.
+   NET_LOCK_HELD   the lock is held; go on.
+   NET_LOCK_LOCKED the lock is busy and the statement has a LOCKED clause (P_LOCKED): process.status is the holder; the caller takes ER_LCK.
+   NET_LOCK_WAIT   the lock is busy and there is no LOCKED clause: the statement is to be run again.  Done here, as lock_record()'s callers
+                   do it: process.op_flags = op_flags, pc = retry_pc, the events are processed, the bell and a 250 millisecond sleep.  The
+                   CALLER RETURNS AT ONCE, leaving its operands on the stack.  retry_pc is op_pc as it was when the opcode began: the
+                   handler's own opcodes have overwritten op_pc, and k_return() restores pc but not op_pc.
+   negative        an error, raised unless op_flags has P_ON_ERROR; process.status is set.
+   process.op_flags is 0 on return except in the WAIT case.                                                                           */
+
+int net_lock_step(FILE_VAR* fvar, char* id, int16_t id_len, bool update, u_int16_t op_flags, u_char* retry_pc) {
+  int st;
+  int holder;
+
+  process.op_flags = op_flags & P_ON_ERROR;
+  st = net_lock(fvar, id, id_len, update);
+  process.op_flags = 0;
+
+  if (st == 0)
+    return NET_LOCK_HELD;
+  if (st != ER_LCK)
+    return st; /* an error: net_change_op() raised it (or ON ERROR holds it) and set process.status */
+
+  holder = process.status;
+  if (op_flags & P_LOCKED) {
+    process.status = holder;
+    return NET_LOCK_LOCKED;
+  }
+
+  pc = retry_pc;
+  process.op_flags = op_flags;
+  if (my_uptr->events)
+    process_events();
+  lock_beep();
+  Sleep(250);
+  return NET_LOCK_WAIT;
+}
+
+/* ======================================================================
+   net_check_lock()  -  MUSTLOCK: does this session hold the UPDATE lock on the record?  The server says (NF$RECORDLOCKED): -3 -2 -1 another
+   user holds the file, update or read lock; 0 nobody; 1 this session holds a read lock, 2 an update lock, 3 the file lock.  Returns 1 for 2
+   or 3, 0 for the rest, negative for an error (raised unless the statement has ON ERROR, as net_read() does).                              */
+
+int net_check_lock(FILE_VAR* fvar, char* id, int16_t id_len) {
+  u_int16_t entry = process.op_flags;
+  DESCRIPTOR out;
+  char buf[24];
+  int status;
+  int code = 0;
+
+  if ((id_len < 1) || (id_len > NET_ID_MAX))
+    return net_bad_id(fvar, id_len);
+
+  status = net_op_ex(fvar, NF_RECORDLOCKED, id, id_len, "", 0, NULL, FALSE, 0, FALSE, TRUE, &out);
+  process.op_flags = entry;
+  if (status > 0) {
+    net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+    status = -ER_NETWORK;
+  }
+  if (status < 0)
+    return net_raise(status, entry);
+
+  if ((out.type == STRING) || (out.type == INTEGER)) {
+    (void)k_get_c_string(&out, buf, sizeof(buf) - 1);
+    code = atoi(buf);
+  }
+  k_release(&out);
+  process.status = 0;
+  return ((code == 2) || (code == 3)) ? 1 : 0;
+}
+
+/* ======================================================================
+   net_release()  -  RELEASE f, id (id_len > 0) and RELEASE f (id_len 0, every lock this session holds on the file).  NEVER raises and ignores
+   the answer: releasing changes no data, and a lock that could not be let go of goes with the connection.  Leaves process.status,
+   process.op_flags and the last message as they were.                                                                                      */
+
+void net_release(FILE_VAR* fvar, char* id, int16_t id_len) {
+  u_int16_t entry = process.op_flags;
+  int32_t status_keep = process.status;
+  char msg_keep[sizeof(net_msg)];
+  DESCRIPTOR out;
+
+  if (id_len > NET_ID_MAX)
+    return; /* the server would refuse it, and no such lock can exist */
+
+  memcpy(msg_keep, net_msg, sizeof(msg_keep));
+  if (net_op_ex(fvar, NF_RELEASE, (id_len > 0) ? id : "", (id_len > 0) ? id_len : 0, "", 0, NULL, FALSE, 0, FALSE, FALSE, &out) == 0)
+    k_release(&out);
+  process.op_flags = entry;
+  process.status = status_keep;
+  memcpy(net_msg, msg_keep, sizeof(net_msg));
+}
+
+/* ======================================================================
+   net_release_all()  -  RELEASE alone: every lock this session holds on every server that has a write-mode file open of it (the handler is
+   given the handle 0).  Does nothing, and runs no BASIC, unless this process ever opened a write-mode remote file.  Never raises.        */
+
+void net_release_all() {
+  u_int16_t entry = process.op_flags;
+  int32_t status_keep = process.status;
+  char msg_keep[sizeof(net_msg)];
+  NET_RC rc;
+  DESCRIPTOR out;
+
+  if (!net_used_write)
+    return;
+
+  memcpy(msg_keep, net_msg, sizeof(msg_keep));
+  net_flush_pending();
+  if (net_call_raw(NF_RELEASE, "0", 1, "", 0, "", 0, &rc, &out))
+    k_release(&out);
+  process.op_flags = entry;
+  process.status = status_keep;
+  memcpy(net_msg, msg_keep, sizeof(net_msg));
+}
+
+/* ======================================================================
+   net_flush_closes()  -  Send the closes that were queued where BASIC could not be run (a file variable that went out of scope), so that
+   the locks taken through it end now and not at the next remote statement.  Nothing when none are queued.  Keeps process.status and
+   process.op_flags.                                                                                                                  */
+
+void net_flush_closes() {
+  u_int16_t entry = process.op_flags;
+  int32_t status_keep = process.status;
+
+  if (net_pending_ct == 0)
+    return;
+
+  net_flush_pending();
+  process.op_flags = entry;
+  process.status = status_keep;
 }
 
 /* END-CODE */

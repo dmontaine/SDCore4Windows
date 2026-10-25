@@ -29,6 +29,10 @@
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K_NET (the per-account NET gate for SDNet remote files, set from $internal only; does nothing yet).
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
  * 18 Oct 26 Windows port - from Linux ee56aba - S.65: setting K_NET from a $internal program (sign-on, the API server, LOGTO going in and coming back) calls net_close_all():
+ * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: K_EDIT_OK and K_EDIT_KIND accept the FILE VARIABLE of a file on another SD server (its edit kind was set at open from
+ *               the remote file's name; any other file variable is refused, the administrator excepted); kernel(K_NET, -2) from a $internal program
+ *               sends the queued closes of remote files (net_flush_closes).
+ * 18 Oct 26 Windows port - from Linux 5315c65 - S.65: setting K_NET from a $internal program (sign-on, the API server, LOGTO going in and coming back) calls net_close_all():
  *               the remote files and connections of the account scope that ended are dropped.
  * 17 Oct 26 Windows port - from Linux ee56aba - S.65 slice 1: K_NET (the per-account NET gate for SDNet remote files, set from $internal only; does nothing yet).
  * 17 Oct 26 Windows port - from Linux ee56aba - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
@@ -960,6 +964,18 @@ void op_kernel() {
     case K_NET:
       GetInt(descr);
       n = descr->data.value;
+
+      /* 18 Oct 26 S.65 slice 3e: -2 from a $internal program sends the closes that were queued for file variables that went out of scope
+         (CPROC does it at the prompt), so that a record lock taken through a remote file does not outlive its file variable.  The answer
+         is the gate, as for -1; the caller's STATUS() is given back (the handler is BASIC and leaves its own).  From a program that is not
+         $internal it is -1.                                                                                                         */
+      if ((n == -2) && (process.program.flags & HDR_INTERNAL)) {
+        n = process.status;
+        net_flush_closes();
+        process.status = n;
+        result.data.value = (my_uptr->gates & UG_NET) != 0;
+        break;
+      }
       if (n >= 0) {
         if (process.program.flags & HDR_INTERNAL) {
           if (n > 0)
@@ -990,6 +1006,24 @@ void op_kernel() {
          administrator is the one session that is never refused).                                                          */
       edit_name[0] = '\0';
       result.data.value = 0;
+
+      /* 18 Oct 26 S.65 slice 3e: the argument may be the FILE VARIABLE of a file on another SD server, which has no pathname here.  The
+         kind is the one worked out from the remote file's name when it was opened.  Any other file variable has no pathname to ask
+         about and is refused (fail closed; the administrator is never refused).  A string is handled as before. */
+      if (descr->type == FILE_REF) {
+        FILE_VAR *edit_fvar = descr->data.fvar;
+        int edit_fkind = (edit_fvar->type == NET_FILE) ? (int)edit_fvar->access.net.edit_kind : EDIT_NONE;
+
+        if (action == K_EDIT_OK) {
+          if (my_uptr->flags & USR_ADMIN)
+            result.data.value = 1;
+          else if (edit_fvar->type == NET_FILE)
+            result.data.value = ((edit_fkind == EDIT_NONE) || edit_permitted(edit_fkind)) ? 1 : 0;
+        } else
+          result.data.value = edit_fkind;
+        break;
+      }
+
       if (action == K_EDIT_OK) {
         if (my_uptr->flags & USR_ADMIN)
           result.data.value = 1;

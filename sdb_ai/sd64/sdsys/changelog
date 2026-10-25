@@ -2,6 +2,34 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+18 Oct 26  A WAY AROUND THE OS ACCESS GATES WAS CLOSED: A CONVERSION CODE (FROM SD CORE FOR LINUX).
+
+             Why         Found by an evaluation of the OpenQM 4 manual against SD and then reproduced on a private SD with an ordinary
+                        account that has SH and OS.EXECUTE off.  It needed neither a password nor an administrator.  (Linux found a
+                        second, in the start of the command a print job is handed to; SD on Windows prints through Windows and does not
+                        use that string, so there is nothing to close.)
+             1           OCONV and ICONV with a conversion code of "U" and a name call the catalogued subroutine of that name.  The routine
+                        that does it is internal, so a name beginning with a dollar sign, which only internal code may CALL, was reached
+                        by an ordinary program.  Such a name is now refused as a conversion code, the same way a name that is not
+                        catalogued is (status 2).  A user's own catalogued conversion subroutines work as before.
+             Not done   OPEN.SOCKET still connects from any account: whether a program may open a network connection by default is a
+                        decision for the owner and is recorded as a question.
+
+18 Oct 26  SDNET, FIFTH SLICE (E): FILES ON ANOTHER SD SERVER CAN BE WRITTEN AND LOCKED, FOR A SERVER DEFINED WITH WRITE (S.65).
+
+             What        For a server that SDSYS defined with the word write (set.server ... write), a file opened through an N pointer
+                        accepts WRITE, WRITEU, MATWRITE, WRITEV, DELETE, CLEARFILE, the locking reads (READU, READL, READVU, MATREADU
+                        and the rest), RECORDLOCKU and RECORDLOCKL and RELEASE.  A busy record takes the LOCKED branch, or the
+                        statement tries again every quarter of a second.  The delivered mode is read, and with read every one of
+                        these is refused exactly as before and nothing is sent: writing is something SDSYS turns on, per server.
+             Limits      The mode is the CLIENT's setting.  The server it points at is not told, and its files-only route lets a login
+                        write and delete whatever the mode says; its own voc.edit, dict.edit and bp.edit switches still apply, and the
+                        client's own switches apply by the remote file's name.  Nothing here stops a modified client.
+             Rules       A change or lock inside BEGIN TRANSACTION is refused (a remote change cannot be rolled back).  A change that gets
+                        no answer is never sent again: its outcome is not known, and the message says so.  FILELOCK, GETLOCKS, the
+                        index statements and CREATING.SEQKEY stay refused.  A write-mode file is never read from the record cache.
+             Not yet     Only a test server has been used; no two machines have talked to each other.
+
 18 Oct 26  SDNET: A SHORT RECORD CACHE FOR REMOTE FILES, AND LOGTO CLOSES THEIR CONNECTIONS (S.65).
 
              What        A process now keeps the last 64 records it READ from files on other SD servers for 2 seconds, and the fact that

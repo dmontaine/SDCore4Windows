@@ -48,6 +48,15 @@
  *           PROJECT_STATUS.md section 4 / section 7 step 7.
  * 17 Oct 26 dm S.64 part 2 (Linux): the private catalogue directory (the value of $PRIVATE.CATALOGUE, "cat" by default, resolved against
  *           the account directory, never by the bare name) is a PROGRAM FILE; edit_os_path_refusal() takes include_leaf.
+ * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: edit_kind_of_net_name(): which S.64 kind (VOC, dictionary, program file) the name of a file on another SD
+ *           server says it is; a "dict " prefix is a dictionary. net_gate() and K_EDIT_OK / K_EDIT_KIND use it through the file variable.
+ * 17 Oct 26 Windows port - from Linux 5315c65 - S.64 part 2: the private catalogue directory (the value of $PRIVATE.CATALOGUE, "cat" by default, resolved against
+ *           the account directory as the OS resolves it, never by the bare name) is a PROGRAM FILE: edit_kind_of_path() answers
+ *           EDIT_PROG for it and edit_os_path_refusal() for it and for anything below it. The scan of a last component moved to
+ *           edit_kind_of_name(), because edit_os_path_refusal() classifies bare components. edit_os_path_refusal() takes
+ *           include_leaf: OPENSEQ, DELETESEQ and a print file name a plain file as the final component, and that name is a
+ *           record, not a program file. edit_leaf_counts() decides it for OSCOPY's target and OSPATH's delete (a directory or
+ *           anything that is not a plain file counts).
  * 17 Oct 26 dm S.64: edit_kind_of_path(), edit_permitted() and edit_ok_for_path(): which of a VOC, a dictionary and a
  *           program file a pathname is, and whether the session may save a change to it (the gates voc.edit, dict.edit
  *           and bp.edit, loaded at sign-on into the user table's gates word). op_dio3.c asks them before a write, a
@@ -460,6 +469,18 @@ int edit_kind_of_path(const char *path) {
   if ((kind == EDIT_NONE) && path_is_private_catalogue(path))
     return EDIT_PROG;
   return kind;
+}
+
+/* ======================================================================
+   edit_kind_of_net_name()  -  The same question for the NAME of a file on another SD server (S.65 slice 3e), which is how a remote
+   file is told apart: "voc", "<name>.dic", "bp", "bp.out", "<name>.bp", "<name>.bp.out", or "dict <name>" for the dictionary part of
+   any file.  The name has no '/' (the handler refuses one), so edit_kind_of_name() sees all of it.  NOT edit_kind_of_path(): its
+   private catalogue test resolves a path against this process's directory, which says nothing about a name on another machine.  */
+
+int edit_kind_of_net_name(const char *name) {
+  if (strncasecmp(name, "dict ", 5) == 0)
+    return EDIT_DICT;
+  return edit_kind_of_name(name);
 }
 
 /* edit_permitted()  -  may THIS SESSION save a change to a file of that kind?  The administrator may always; anybody else

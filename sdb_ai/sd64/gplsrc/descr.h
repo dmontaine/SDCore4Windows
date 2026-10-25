@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 18 Oct 26 dm S.65 slice 3e: the NET member of the FILE_VAR union gains write (the handle was opened in write mode) and edit_kind (the S.64
+ *           kind of the remote file's name), after server; 16 + 2 + 2 + 17 + 2 = 39 bytes, within the union's 40.
  * 17 Oct 26 dm S.65 slice 3c: NET_FILE (4) is back, for a file on another SD server (SDNet, stage 1); its member of the FILE_VAR union holds the
  *           handle of the $netfile handler and the server name.  The file table entry of such a file variable is NOT a real one (file_id is -1).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -387,6 +389,8 @@ struct FILE_VAR {
       int16_t handle;
       u_int16_t epoch;
       char server[NET_SERVER_LEN + 1];
+      u_char write;     /* 18 Oct 26 S.65 slice 3e: 1 when the handle was opened in write mode (rc<7> of NF$OPEN), 0 for a read mode handle */
+      u_char edit_kind; /* 18 Oct 26 S.65 slice 3e: EDIT_NONE/EDIT_VOC/EDIT_DICT/EDIT_PROG of the REMOTE file's name (edit_kind_of_net_name) */
     } net;
   } access;
 };

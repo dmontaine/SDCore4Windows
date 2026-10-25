@@ -20,6 +20,9 @@
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): EDIT_SHARED_WRITE and EDIT_SHARED_STRUCT; prototypes of the shared-account tests (op_sh.c), of
  *               shared_structure_refusal() (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
+ * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: prototypes and constants of the write and lock entry points of netfiles.c (net_gate, net_write, net_delete, net_clear,
+ *               net_lock, net_lock_step, net_check_lock, net_release, net_release_all, net_flush_closes) and edit_kind_of_net_name().
+ * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
  * 17 Oct 26 dm  S.64 part 2: edit_os_path_refusal() takes include_leaf (does the final component of the path count?); edit_leaf_counts().
  * 17 Oct 26 dm  S.64: prototypes of the edit gates (op_sh.c): edit_kind_of_path, edit_permitted, edit_ok_for_path, edit_os_path_refusal.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -332,6 +335,38 @@ int net_refuse(FILE_VAR * fvar, const char * what);
 void net_close_all(void);
 const char * net_message(void);
 
+/* NETFILES.C, slice 3e (18 Oct 26): writes and locks on a file of a server whose definition says mode=write (.claude/s65-stage2-design.md, 5.1).
+   The same convention as net_read(): 0 is done, a negative status is an error that has ALREADY been raised unless the caller put P_ON_ERROR in
+   process.op_flags (net_gate() takes it from its op_flags argument).  Each sets process.status itself afterwards, gives process.op_flags back
+   as found, and runs BASIC (the handler) except net_gate(), net_check_lock() and net_refuse(): find operands again by e_stack afterwards.
+   net_gate() decides whether the statement may go on at all (a read-mode handle: message 12506, as before; CREATING.SEQKEY; a transaction;
+   the S.64 edit gate for the remote file's name) and sends nothing.  net_write() is given the record as a string chain and does not flatten
+   it.  net_lock() is the no-wait form only: 0 held, ER_LCK busy with process.status the holder's user number (-1 table full, -2 deadlock);
+   net_lock_step() is the READU / RECORDLOCKU idiom around it: NET_LOCK_WAIT means the caller has been set up to run the opcode again after
+   250 ms (process.op_flags = op_flags, pc = retry_pc) and must RETURN AT ONCE; NET_LOCK_LOCKED that the lock is busy and the statement has a
+   LOCKED clause (process.status = the holder).  retry_pc is op_pc as captured at the entry of the opcode, BEFORE the first net_ call: the
+   handler's own opcodes overwrite op_pc.  net_check_lock() answers 1 when this session holds the update lock on the record.  net_release() and
+   net_release_all() never raise and ignore the answer; net_release_all() does nothing unless this process opened a write-mode file.
+   net_flush_closes() sends the queued closes (the lock of a file variable that went out of scope ends with its handle).               */
+#define NETG_WRITE 1   /* WRITE WRITEU MATWRITE WRITEV WRITEVU */
+#define NETG_DELETE 2  /* DELETE */
+#define NETG_CLEAR 3   /* CLEARFILE */
+#define NETG_LOCK 4    /* READU READL MATREADU MATREADL READVU READVL RECORDLOCKU RECORDLOCKL */
+#define NET_LOCK_HELD 0
+#define NET_LOCK_WAIT 1
+#define NET_LOCK_LOCKED 2
+#define NET_ID_MAX 63  /* the server's limit for a record id (the class MAX.ID.LEN): a longer one is -ER_IID before anything is sent */
+int net_gate(FILE_VAR * fvar, int kind, u_int16_t op_flags, const char * what);
+int net_write(FILE_VAR * fvar, char * id, int16_t id_len, STRING_CHUNK * rec, bool keep_lock);
+int net_delete(FILE_VAR * fvar, char * id, int16_t id_len, bool keep_lock);
+int net_clear(FILE_VAR * fvar);
+int net_lock(FILE_VAR * fvar, char * id, int16_t id_len, bool update);
+int net_lock_step(FILE_VAR * fvar, char * id, int16_t id_len, bool update, u_int16_t op_flags, u_char * retry_pc);
+int net_check_lock(FILE_VAR * fvar, char * id, int16_t id_len);
+void net_release(FILE_VAR * fvar, char * id, int16_t id_len);
+void net_release_all(void);
+void net_flush_closes(void);
+
 /* OBJECT.C */
 void * load_object(char * name, bool abort_on_error);
 void unload_object(void * obj_hdr);
@@ -441,6 +476,7 @@ bool shared_once(const char * name);
 int edit_refused_message(int kind);
 int shared_structure_refusal(FILE_VAR * fvar);
 int edit_kind_of_path(const char * path);
+int edit_kind_of_net_name(const char * name); /* 18 Oct 26 S.65 slice 3e: the same, for the name of a file on another server ("dict " prefix and all); op_sh.c */
 bool edit_permitted(int kind);
 bool edit_ok_for_path(const char * path);
 int edit_os_path_refusal(const char * name, bool include_leaf);

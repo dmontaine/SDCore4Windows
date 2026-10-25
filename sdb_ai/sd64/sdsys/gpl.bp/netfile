@@ -1,5 +1,5 @@
 * NETFILE
-* $netfile  -  the handler for every operation on a remote file (S.65, stage 1: read only)
+* $netfile  -  the handler for every operation on a remote file (S.65; read only unless the server's mode is write)
 * Copyright (c) 2026 SD Core for Linux
 *
 * This program is free software; you can redistribute it and/or modify
@@ -19,14 +19,20 @@
 * START-HISTORY:
 * 17 Oct 26 dm  S.65 slice 3b: written.  No kernel code calls it yet (slice 3c will, as call_trigger() in op_dio3.c calls a trigger); it is
 *               driven by a test program against the fake server of gplbld/netfake.py.  NOT YET COMPILED OR RUN.
+* 18 Oct 26 dm  S.65 slice 3e: writes and locks.  NF$WRITE, NF$WRITEU, NF$DELETE, NF$DELETEU, NF$CLEARFILE and NF$LOCK are real for a handle
+*               whose server definition says mode write (act.change), NF$RELEASE is new (act.release); a read-mode handle is refused exactly as
+*               before (12506, nothing sent).  The mode is read at open and again at every change; a signed remote status; messages 12514-12517.
+*               NOT YET COMPILED OR RUN.  Needs the class changes of the same slice in gpl.bp/sdclient (quiet, LastError, clearfile, recordlock).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 *    call $netfile(op, a, b, c, out, rc)
 *
-* The operation codes, rc and the limits are in netfile.h; this text is what is behind them.  Nothing here writes to a remote server or
-* stores anything: stage 1 is READ ONLY, and a write, delete, clear or lock is refused (message 12506) without a byte being sent.
+* The operation codes, rc and the limits are in netfile.h; this text is what is behind them.  Nothing here stores anything locally.  A write,
+* delete, clear or lock is REFUSED (message 12506) without a byte being sent unless the definition of the server says mode write, which only
+* SDSYS can set (set.server): high security is delivered and the administrator loosens it.  The mode is read at NF$OPEN and kept per handle,
+* and the definition is read AGAIN at every change or lock, so a handle needs both to say write and the stricter wins.
 *
 * ORDER OF THE CHECKS ON NF$OPEN, every one of them local and BEFORE ANYTHING IS DIALLED (an internal program is exempt from the kernel's
 * gates, so the handler asks for itself - the S.63 lesson).  A refusal is audited as   netfile refused server=<name> reason=<why>:
@@ -34,17 +40,24 @@
 *     2  the server name is well formed and the server is DEFINED (!netdefs; 12457, 12435) and its definition
 *        can be used (host, port, account and key in the shape set.server stores; 12497)                     reason=server
 *     3  this ACCOUNT is in the definition's accounts list, case blind; the administrator is exempt (12466)  reason=list
-*     4  the mode: stage 1 is read only whatever the definition says (nothing to check; no handle ever writes)
+*     4  the mode: not a refusal.  The definition's mode (write exactly; anything else is read) is kept for the handle, reported to the kernel
+*        in rc<7> and audited (mode=write) on the open line
 *     5  a stored login exists for this person and was made for the definition's key ($netcred READ with the pin;
 *        its errors are given as they are, 12463 and 12464 as 12501)                                         reason=credential
 *     6  at most 10 servers per process and 100 remote files open (12498, 12510)                             reason=limit
 *     7  the remote file name is well formed (12496)                                                         reason=file
-* Only then:   netfile open server=<name> file=<remote file>   is audited, once, and the connection is made (a server this process is
+* Only then:   netfile open server=<name> file=<remote file>   (with  mode=write  added for a write-mode server) is audited, once, and the
+* connection is made (a server this process is
 * already connected to is reused: nothing is dialled, but all seven checks were made again).  No password, key or hash is ever audited,
 * printed or kept; the keys the login is made from are copied out of the credential, handed to the class and cleared at once.
 * Read, readv, recordlocked, select and fileinfo ask the gate again and want the handle to belong to THIS ACCOUNT, so a handle opened before
 * a LOGTO is no use after it (the kernel is to call NF$CLOSEALL at LOGTO as well).  CLOSE, CLOSEALL and the refused write operations
-* send nothing that needs the gate; the refused ones still want a handle of this account.
+* send nothing that needs the gate; the refused ones still want a handle of this account.  Write, delete, clear and lock ask the gate and the
+* mode again and then, in this order: that no transaction is open (12515), that the record id and the lock kind are well formed (12508, 12517),
+* the audit line (first write, first delete of a handle, every clear; locks are not audited; no id and no record is ever audited), and the
+* request.  A changing request that gets NO REPLY is never retried and is not known to have happened or not: 12514 and the audit line
+* netfile lost server=<name> op=<operation>.  A lock the server cannot give at once is NF$RC.LOCKED; THE KERNEL LOOPS to wait for it (this
+* program only ever sends the no-wait form, so that a wait never looks like a lost connection and the break key works).
 *
 * CONNECTIONS.  One object of the class !sdclient per server, in the named common block $netfile (so it lives for the process and is
 * released with it).  THE OBJECT IN COMMON IS NOT YET MEASURED.  What is expected from the kernel source: an object is a reference
@@ -70,11 +83,14 @@
 * WHAT THE CLASS DOES NOT DO, AND SO THIS PROGRAM DOES NOT: the class has no READV and no FILEINFO method.  NF$READV reads the whole
 * record and cuts the field out here.  NF$FILEINFO answers keys 0 (1), 1 (null, no VOC name) and 2 (null: a path on another machine is not
 * shown) without the server and refuses every other key (12507); a method on the class would let the rest through.  The class aborts the
-* calling program when the server answers a request with an ON ERROR reply (for READ, a lock wait that gave up, a corrupt record ...):
-* that abort cannot be caught here.
+* calling program when the server answers a request with an ON ERROR reply (for READ, a lock wait that gave up, a corrupt record ...), and
+* that abort cannot be caught here.  So since slice 3e the object is made QUIET (obj->quiet, set in connect.new): the class then keeps the
+* kind of the reply in obj->LastError (0 done, 1 ON ERROR, 2 ELSE, 3 error, 4 locked, -1 no reply read) and does not abort.  The text of an
+* ON ERROR reply (obj->LastText) is never shown, it can be stale.
 *
-* rc<1>: 0 done; 2 the ELSE branch (the file, record or id was not there; rc<6> has the remote STATUS()); 3 an error.  rc<2> is the message
-* number, rc<3> to rc<5> its arguments.  EVERY ERROR MESSAGE NAMES THE SERVER, except 12499 (a handle that names no server) and, for the
+* rc<1>: 0 done; 2 the ELSE branch (the file, record or id was not there; rc<6> has the remote STATUS()); 3 an error; 4 (NF$LOCK only) the
+* record is held by another user, rc<6> is its holder.  rc<2> is the message number, rc<3> to rc<5> its arguments.  rc<6> is a SIGNED whole
+* number.  rc<7> is 1 on a good NF$OPEN of a write-mode handle.  EVERY ERROR MESSAGE NAMES THE SERVER, except 12499 (a handle that names no server) and, for the
 * gate, 12465 (the server is then rc<4>, which the text does not print).
 *
 * END-DESCRIPTION
@@ -90,9 +106,13 @@ $include keys.h
 $include err.h
 $include netfile.h
 
-$define NF$NOREPLY    -1          ;* ServerStatus before a request: still this afterwards means no reply came
+$define NF$NOREPLY    -2000000001 ;* ServerStatus before a request: still this afterwards means no reply came (a value no STATUS() takes: a changing request can be answered with -3023 and the like)
 $define NF$REQUEST.MS 30000       ;* milliseconds to wait for each read of a reply (the plan, 4.6)
 $define NF$LIST       10          ;* the select list number used on the server (0 to 10 may be used by a client)
+$define NF$CLEAR.MS   300000      ;* milliseconds to wait for the reply to a CLEARFILE (a big file takes longer than 30 seconds; a false "lost" would drop the connection with the outcome unknown)
+$define NF$LE.OK      0           ;* obj->LastError: the kinds of reply (the server's SV$ codes); -1 is no reply read
+$define NF$LE.ERROR   1           ;*   the server took its ON ERROR clause
+$define NF$LE.LOCKED  4           ;*   the server took its LOCKED clause
 
 *  The block is made by the first call and lives for the process.  COMMON STARTS AS 0, NOT UNASSIGNED.  Nothing secret is kept in it
 *  (no key, no hash, no password); what the object itself holds is the class's business.
@@ -107,7 +127,9 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
                   nf.h.fno(NF$MAX.HANDLES),     ;* the file number the server gave
                   nf.h.srv(NF$MAX.HANDLES),     ;* the server's name (kept after the connection is gone)
                   nf.h.file(NF$MAX.HANDLES),    ;* the remote file name
-                  nf.h.acct(NF$MAX.HANDLES)     ;* the account that opened it
+                  nf.h.acct(NF$MAX.HANDLES),    ;* the account that opened it
+                  nf.h.mode(NF$MAX.HANDLES),    ;* write or read: the mode the server's definition had at the open (slice 3e)
+                  nf.h.aud(NF$MAX.HANDLES)      ;* letters of the audit lines already written for the handle: w write, d delete, r refused
 
 *  Assigned first for BCOMP: an "is not assigned a value" warning fails the bootstrap.
    out = ''
@@ -187,6 +209,14 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
    digits = '0123456789'
    hex.set = digits:'abcdef'
    marks = char(251):char(252):char(253):char(254):char(255)
+   fmode = 'read'
+   mode.ok = @false
+   changing = @false
+   upd = @false
+   lerr = 0
+   release.all = @false
+   aud.k = ''
+   aud.line = ''
 
    begin case
       case op = NF$OPEN          ; gosub act.open
@@ -197,8 +227,9 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
       case op = NF$SELECT        ; gosub act.select
       case op = NF$FILEINFO      ; gosub act.fileinfo
       case op = NF$CLOSEALL      ; gosub act.closeall
-      case op = NF$WRITE or op = NF$DELETE or op = NF$CLEARFILE or op = NF$LOCK
-         gosub act.refuse
+      case op = NF$WRITE or op = NF$WRITEU or op = NF$DELETE or op = NF$DELETEU or op = NF$CLEARFILE or op = NF$LOCK
+         gosub act.change
+      case op = NF$RELEASE       ; gosub act.release
       case op = NF$STATE         ; gosub act.state
       case 1
          txt = op ; gosub clean.text
@@ -268,7 +299,10 @@ act.open:
       end
    end
 
-*  (4) THE MODE: stage 1 is read only whatever the definition says.  Nothing to look at: NF$WRITE .. NF$LOCK are refused for every handle.
+*  (4) THE MODE: not a refusal.  The definition says write exactly, or the handle is read (anything else fails closed).  It is kept for the
+*      handle and told to the kernel in rc<7>; every change asks the definition again (mode.now).
+   fmode = 'read'
+   if defs<found,6> = 'write' then fmode = 'write'
 
 *  (5) THE STORED LOGIN, made for the key the definition holds now.  The remote user is attribute 1 of the credential, the account to enter
 *      on the remote server is the definition's.
@@ -315,7 +349,11 @@ act.open:
    end
 
 *  Everything local has been asked.  One line in the audit trail for the open, and only now anything is dialled.
-   void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname)
+   if fmode = 'write' then
+      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname : ' mode=write')
+   end else
+      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname)
+   end
 
    created = @false
    if slot > 0 then
@@ -377,8 +415,11 @@ act.open:
    nf.h.srv(hx) = srv
    nf.h.file(hx) = fname
    nf.h.acct(hx) = acc
+   nf.h.mode(hx) = fmode
+   nf.h.aud(hx) = ''
    nf.opens += 1
    out = hx
+   if fmode = 'write' then rc<7> = 1
    return
 
 * ======================================================================
@@ -417,6 +458,8 @@ connect.new:
       gosub fail
       return
    end
+*  QUIET: a reply of the ON ERROR kind must not abort this program (an abort cannot be caught here); obj->LastError says what the reply was.
+   obj->quiet = @true
    obj->settimeout(NF$REQUEST.MS)
 
 *  THE OBJECT GOES INTO COMMON.  It is looked at at once: if the block did not keep an object, nothing is left half done.
@@ -496,6 +539,10 @@ act.read:
       case e = 2
          rc.st = rq.st
          gosub rc.else
+      case e = 1
+*        The server took its ON ERROR clause (the object is quiet, so nothing was aborted).  Its text is not trusted: only the status is shown.
+         rq.txt = 'status ':rq.st
+         gosub server.fail
       case 1
          fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
          gosub fail
@@ -563,6 +610,11 @@ act.select:
       gosub server.fail
       return
    end
+   if e = 1 then
+      rq.txt = 'status ':rq.st
+      gosub server.fail
+      return
+   end
    if e # 0 then
       fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
       gosub fail
@@ -613,19 +665,216 @@ act.closeall:
    return
 
 * ======================================================================
-* act.refuse - NF$WRITE, NF$DELETE, NF$CLEARFILE, NF$LOCK: stage 1 is read only.  Nothing is sent.
-act.refuse:
+* act.change - NF$WRITE, NF$WRITEU, NF$DELETE, NF$DELETEU, NF$CLEARFILE and NF$LOCK.  a = handle, b = record id, c = the record (a write) or the
+* lock kind l / u (a lock).  THE ORDER OF THE CHECKS IS PART OF THE DESIGN:
+*     1  a handle of this account (a lost handle will do)  2  the operation's name  3  the handle's mode is not write: refused (12506), as
+*     before slice 3e  4  the handle again, with the gate and the connection (a lost handle: 12500)  5  the definition says write NOW
+*     6  no transaction is open (12515)  7  the id and the lock kind  8  the audit line  9  the request, always with the "no reply" mark
+*     10 the outcome.  A changing request is NEVER retried.  A lock is only ever asked for without waiting: the kernel waits, by asking again.
+act.change:
    need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
    gosub get.handle
    if failed then return
    begin case
       case op = NF$WRITE     ; opname = 'write'
+      case op = NF$WRITEU    ; opname = 'writeu'
       case op = NF$DELETE    ; opname = 'delete'
+      case op = NF$DELETEU   ; opname = 'deleteu'
       case op = NF$CLEARFILE ; opname = 'clear.file'
       case 1                 ; opname = 'lock'
    end case
+   changing = (op # NF$LOCK)
+
+*  A read-mode handle: the refusal of slice 3c, byte for byte, and nothing is sent.
+   if nf.h.mode(hx) # 'write' then
+      gosub act.refuse
+      return
+   end
+
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+
+*  The definition is read again: a server set back to read stops writes on handles that are already open.
+   gosub mode.now
+   if not(mode.ok) then
+      aud.k = 'r'
+      aud.line = 'netfile refused server=' : srvname : ' reason=mode'
+      gosub audit.once
+      gosub act.refuse
+      return
+   end
+
+*  A change on a remote file never joins a local transaction, so it is refused inside one (the kernel refuses first; this is for a direct caller).
+   if system(SYS$TRANS_LEVEL) # 0 then
+      fail.num = 12515 ; fail.a1 = srvname ; fail.a2 = opname
+      gosub fail
+      return
+   end
+
+   if op # NF$CLEARFILE then
+      gosub check.id.chg
+      if failed then return
+   end
+   if op = NF$LOCK then
+      if c # 'l' and c # 'u' then
+         txt = c ; gosub clean.text
+         fail.num = 12517 ; fail.a1 = srvname ; fail.a2 = out.txt
+         gosub fail
+         return
+      end
+      upd = (c = 'u')
+   end
+
+*  The audit line, before the request.  No id and no record data in it.  A lock is not audited.
+   begin case
+      case op = NF$WRITE or op = NF$WRITEU
+         aud.k = 'w'
+         aud.line = 'netfile write server=' : srvname : ' file=' : nf.h.file(hx)
+         gosub audit.once
+      case op = NF$DELETE or op = NF$DELETEU
+         aud.k = 'd'
+         aud.line = 'netfile delete server=' : srvname : ' file=' : nf.h.file(hx)
+         gosub audit.once
+      case op = NF$CLEARFILE
+         void kernel(K$AUDIT, 'netfile clear server=' : srvname : ' file=' : nf.h.file(hx))
+   end case
+
+*  The request.  The no-reply mark comes right before each one.
+   obj = nf.s.obj(slot)
+   begin case
+      case op = NF$WRITE
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->write(nf.h.fno(hx), id, c)
+      case op = NF$WRITEU
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->writeu(nf.h.fno(hx), id, c)
+      case op = NF$DELETE
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->delete(nf.h.fno(hx), id)
+      case op = NF$DELETEU
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->deleteu(nf.h.fno(hx), id)
+      case op = NF$CLEARFILE
+         obj->settimeout(NF$CLEAR.MS)
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->clearfile(nf.h.fno(hx))
+      case 1
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->recordlock(nf.h.fno(hx), id, upd, @false)
+   end case
+   lerr = obj->LastError
+   gosub after.rq
+   nf.requests += 1
+   if lerr = -1 then rq.lost = @true
+   if op = NF$CLEARFILE then
+      if not(rq.lost) then obj->settimeout(NF$REQUEST.MS)
+   end
+
+*  The outcome.
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   if lerr = NF$LE.OK then return
+   if op = NF$LOCK and lerr = NF$LE.LOCKED then
+      gosub rc.locked
+      return
+   end
+   if lerr = NF$LE.ERROR then
+*     The server took its ON ERROR clause.  Its text can be stale or empty and is not shown: the status is.
+      rq.txt = 'status ':rq.st
+      gosub server.fail
+      return
+   end
+   fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':lerr
+   gosub fail
+   return
+
+* ======================================================================
+* act.refuse - the refusal of a change or lock on a read-mode handle (or one whose definition says read now): 12506, naming the server and the
+* operation in opname.  Nothing is sent.
+act.refuse:
    fail.num = 12506 ; fail.a1 = srvname ; fail.a2 = opname
    gosub fail
+   return
+
+* ======================================================================
+* act.release - NF$RELEASE: a = handle, or 0 for every lock of the session on every connected server that has a write-mode handle open;
+* b = record id (null: every lock on the file).  Never refused for the mode or a transaction (releasing changes no data) and it never fails
+* because the server or the connection did: a lost connection has lost its locks with it.  Only a handle that is not this account's, or an id
+* over MAX.ID.LEN, is an error.  Not audited.
+act.release:
+   need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
+   opname = 'release'
+   release.all = @false
+   if a matches '1N0N' then
+      if len(a) <= 9 then release.all = (a + 0 = 0)
+   end
+   if release.all then
+      gosub release.every
+      return
+   end
+   gosub get.handle
+   if failed then return
+   if nf.h.state(hx) # 1 then return
+   id = b
+   if len(id) > MAX.ID.LEN then
+      fail.num = 12508 ; fail.a1 = srvname ; fail.a2 = 'too long'
+      gosub fail
+      return
+   end
+   if vartype(nf.s.obj(slot)) # V$OBJ then
+      gosub drop.conn
+      return
+   end
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   obj->release(nf.h.fno(hx), id)
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then gosub drop.conn
+   obj = 0
+   return
+
+* ======================================================================
+* release.every - one release-all request on each connected server that has a write-mode handle open.  A lost reply drops that connection
+* and goes on to the next.
+release.every:
+   for sx = 1 to NF$MAX.SERVERS
+      if nf.s.state(sx) = 1 then
+         n = 0
+         for hy = 1 to NF$MAX.HANDLES
+            if nf.h.state(hy) = 1 then
+               if nf.h.slot(hy) = sx and nf.h.mode(hy) = 'write' then n += 1
+            end
+         next hy
+         if n > 0 and vartype(nf.s.obj(sx)) = V$OBJ then
+            obj = nf.s.obj(sx)
+            obj->error = ''
+            obj->ServerStatus = NF$NOREPLY
+            obj->release(0, '')
+            gosub after.rq
+            nf.requests += 1
+            if rq.lost then
+               slot = sx
+               gosub drop.conn
+            end
+            obj = 0
+         end
+      end
+   next sx
    return
 
 * ======================================================================
@@ -733,6 +982,25 @@ check.id:
       failed = @true
       return
    end
+   gosub check.id.shape
+   return
+
+* ======================================================================
+* check.id.chg - the record id in b becomes id, for a write, delete or lock.  A write or delete has no ELSE branch, so an EMPTY id is an error
+* here (12508).  The kernel gives -ER$IID for an empty id before it calls, so this is the defence for a direct caller.
+check.id.chg:
+   id = b
+   if id = '' then
+      fail.num = 12508 ; fail.a1 = srvname ; fail.a2 = 'empty'
+      gosub fail
+      return
+   end
+   gosub check.id.shape
+   return
+
+* ======================================================================
+* check.id.shape - the id in id (not empty) is not longer than MAX.ID.LEN and holds no mark; failed, with rc, when it does.
+check.id.shape:
    if len(id) > MAX.ID.LEN then
       fail.num = 12508 ; fail.a1 = srvname ; fail.a2 = 'too long'
       gosub fail
@@ -847,7 +1115,13 @@ count.up:
 * STATUS() the server sent.
 after.rq:
    st = obj->ServerStatus
-   rq.lost = (st < 0)
+   rq.lost = (st = NF$NOREPLY)
+*  The class reads the status as a SIGNED 32 bit value (oconv 'ILL': -3023 arrives as -3023, measured 18 Oct 26), so a reply CAN be negative and
+*  the "lost" test is equality with the mark, not a sign test.  A status above 2147483647 (a class that read it unsigned) is made negative
+*  as well.  On a success the status is never read: apisrvr sends whatever the last statement left in STATUS().
+   if not(rq.lost) then
+      if st > 2147483647 then st -= 4294967296
+   end
    rq.st = st
    if rq.lost then rq.st = 0
    txt = obj->error
@@ -857,12 +1131,55 @@ after.rq:
    return
 
 * ======================================================================
-* lost.fail - the request named in opname got no reply: the connection is dropped, every handle on it is lost, the call answers 12502.
+* lost.fail - the request named in opname got no reply: the connection is dropped, every handle on it is lost, the call answers 12502.  For a
+* CHANGING request (write, writeu, delete, deleteu, clear.file: changing is set by act.change) it is not known whether the change was made, so
+* the answer is 12514 and the audit line  netfile lost server=<name> op=<operation>.  Nothing is retried, ever.
 lost.fail:
    srvname = nf.s.name(slot)
    gosub drop.conn
-   fail.num = 12502 ; fail.a1 = srvname ; fail.a2 = opname
+   if changing then
+      void kernel(K$AUDIT, 'netfile lost server=' : srvname : ' op=' : opname)
+      fail.num = 12514 ; fail.a1 = srvname ; fail.a2 = opname
+   end else
+      fail.num = 12502 ; fail.a1 = srvname ; fail.a2 = opname
+   end
    gosub fail
+   return
+
+* ======================================================================
+* rc.locked - rc as NF$RC.LOCKED: another user holds the record; rq.st is the holder's user number (-1 lock table full, -2 deadlock).  Not an
+* error: failed is not set.
+rc.locked:
+   rc = ''
+   rc<1> = NF$RC.LOCKED
+   rc<6> = rq.st
+   return
+
+* ======================================================================
+* mode.now - does the definition of the server of handle hx say write NOW?  Sets mode.ok.  A definition that cannot be read, or has gone, or is
+* not whole, or says anything but write, is read: fail closed.
+mode.now:
+   mode.ok = @false
+   defs = ''
+   err = ''
+   call !netdefs('READ', defs, err)
+   if err = '' then
+      n = dcount(defs, @fm)
+      for dx = 1 to n
+         if dcount(defs<dx>, @vm) = 8 and defs<dx,1> = nf.h.srv(hx) then
+            if defs<dx,6> = 'write' then mode.ok = @true
+         end
+      next dx
+   end
+   return
+
+* ======================================================================
+* audit.once - the audit line in aud.line, unless the letter aud.k has already been written for handle hx.  The letter is kept in nf.h.aud(hx).
+audit.once:
+   if index(nf.h.aud(hx), aud.k, 1) = 0 then
+      nf.h.aud(hx) = nf.h.aud(hx) : aud.k
+      void kernel(K$AUDIT, aud.line)
+   end
    return
 
 * ======================================================================
@@ -922,6 +1239,8 @@ clear.handle:
    nf.h.srv(hy) = ''
    nf.h.file(hy) = ''
    nf.h.acct(hy) = ''
+   nf.h.mode(hy) = ''
+   nf.h.aud(hy) = ''
    return
 
 * ======================================================================

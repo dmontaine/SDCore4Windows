@@ -27,6 +27,9 @@
  *           missed.  Now goes through lock_owner_name().
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: FILELOCK, FILEUNLOCK, GETLOCKS, RECORDLOCKU/L, RECORDLOCKED, RELEASE of a NET_FILE are refused (net_refuse); lock_record, check_lock, unlock_record guard NET_FILE
  * 16 Oct 26 Windows port - from Linux e7ea5f8 - OPTION COMMAND.LEVEL.LOCKS (QM4 gap 231): park_fvar(), release_parked_fvars()
+ * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: op_lockrec(), op_release(), op_rlsfile() and op_rlsall() act on a write mode NET_FILE (net_gate, net_lock_step, net_release, net_release_all); a read mode one is refused as before
+ * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3c: FILELOCK, FILEUNLOCK, GETLOCKS, RECORDLOCKU/L, RECORDLOCKED, RELEASE of a NET_FILE are refused (net_refuse); lock_record, check_lock, unlock_record guard NET_FILE
+ * 16 Oct 26 Windows port - from Linux 5315c65 - OPTION COMMAND.LEVEL.LOCKS (QM4 gap 231): park_fvar(), release_parked_fvars()
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): openQM items 487, 500 and 587: the time each record lock, file
  *               lock and lock wait began is kept and GETLOCKS() returns it as
@@ -539,6 +542,7 @@ void op_lockrec() {
   bool update;
   bool no_wait;
   u_int32_t txn_id;
+  u_char* retry_pc = op_pc; /* 18 Oct 26 S.65 slice 3e: taken before any net_ call; the handler's own opcodes overwrite op_pc */
 
   op_flags = process.op_flags;
   update = (op_flags & P_ULOCK) != 0;
@@ -559,14 +563,53 @@ void op_lockrec() {
 
   if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file takes no local lock; nothing has been touched yet */
   {
-    if (!(op_flags & P_ON_ERROR))
-      net_refuse(fvar, update ? "RECORDLOCKU" : "RECORDLOCKL");
+    if (!fvar->access.net.write || (fvar->flags & FV_RDONLY)) /* 18 Oct 26 S.65 slice 3e: a read mode handle is refused exactly as in slice 3c */
+    {
+      if (!(op_flags & P_ON_ERROR))
+        net_refuse(fvar, update ? "RECORDLOCKU" : "RECORDLOCKL");
+      process.op_flags = 0;
+      process.status = -ER_PERM;
+      k_dismiss();
+      k_dismiss();
+      InitDescr(e_stack, INTEGER);
+      (e_stack++)->data.value = process.status;
+      return;
+    }
+
+    /* A write mode handle.  net_gate() makes the mode, transaction and S.64 tests and raises the refusal unless the caller said ON ERROR;
+       net_lock_step() sends the no-wait lock request, and on a busy record without a LOCKED clause arranges the 250 ms re-execution of this
+       opcode (pc = retry_pc, operands left on the stack) and we return at once.  The handler runs BASIC, so find nothing by pointer after
+       either call: k_dismiss() works from e_stack.  The local pc-- is right only for a one byte opcode and is not used here. */
+
+    process.op_flags = op_flags & P_ON_ERROR;
+    status = net_gate(fvar, NETG_LOCK, op_flags, update ? "RECORDLOCKU" : "RECORDLOCKL");
     process.op_flags = 0;
-    process.status = -ER_PERM;
+    if (status != 0) {
+      process.status = status;
+    } else {
+      switch (status = net_lock_step(fvar, id, id_len, update, op_flags, retry_pc)) {
+        case NET_LOCK_HELD:
+          status = 0;
+          break;
+
+        case NET_LOCK_WAIT: /* the opcode will be run again; process.op_flags was left as it was found */
+          return;
+
+        case NET_LOCK_LOCKED: /* process.status is the holder's user number */
+          status = ER_LCK;
+          break;
+
+        default: /* an error; process.status is set and the error was raised unless ON ERROR */
+          status = (int16_t)process.status;
+          break;
+      }
+      process.op_flags = 0;
+    }
+
     k_dismiss();
     k_dismiss();
     InitDescr(e_stack, INTEGER);
-    (e_stack++)->data.value = process.status;
+    (e_stack++)->data.value = status;
     return;
   }
 
@@ -769,8 +812,24 @@ void op_release() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE)
-    net_refuse(fvar, "RELEASE"); /* 17 Oct 26 S.65: no lock can exist on a remote file; the census leaves a silent no-op as the owner's alternative */
+  if (fvar->type == NET_FILE) {
+    if (!fvar->access.net.write)
+      net_refuse(fvar, "RELEASE"); /* 17 Oct 26 S.65: a read mode handle can hold no lock; refused as in slice 3c */
+
+    /* 18 Oct 26 S.65 slice 3e: a write mode handle.  Inside a transaction, as locally, nothing is released (and nothing is sent); an empty
+       id releases nothing.  An id over the server's limit cannot be locked, so there is nothing to ask for.  net_release() never raises and
+       ignores every answer.  The handler runs BASIC: the operands are dismissed by e_stack below. */
+
+    if (process.txn_id == 0 && id_len > 0 && id_len <= NET_ID_MAX)
+      net_release(fvar, id, id_len);
+
+    k_dismiss();
+    k_dismiss();
+
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = 0;
+    return;
+  }
 
   txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
 
@@ -814,8 +873,21 @@ void op_rlsfile() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE)
-    net_refuse(fvar, "RELEASE"); /* 17 Oct 26 S.65, as op_release() */
+  if (fvar->type == NET_FILE) {
+    if (!fvar->access.net.write)
+      net_refuse(fvar, "RELEASE"); /* 17 Oct 26 S.65, as op_release() */
+
+    /* 18 Oct 26 S.65 slice 3e: a write mode handle; every lock this session holds through the file, nothing inside a transaction */
+
+    if (process.txn_id == 0)
+      net_release(fvar, NULL, 0);
+
+    k_dismiss();
+
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = 0;
+    return;
+  }
 
   txn_id = (fvar->flags & FV_NON_TXN) ? 0 : process.txn_id;
 
@@ -848,6 +920,7 @@ void op_rlsall() {
   process.op_flags = 0;
 
   if (process.txn_id == 0) {
+    net_release_all(); /* 18 Oct 26 S.65 slice 3e: returns at once unless this process opened a write mode remote file; never raises */
     (void)unlock_record(NULL, "", 0);
   }
 

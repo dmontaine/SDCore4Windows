@@ -32,6 +32,10 @@
  *           only the message, so a wrong AT name shows the user one sentence
  *           from Windows and one from SD, not PowerShell's six-line dump
  *           (seen on verify-print b177/b178).  Owner: "fix powershell dump".
+ * 18 Oct 26 Windows port - from Linux 5315c65 - spool_print_job(): a print unit's own SPOOLER string (SETPTR ... SPOOLER, SETPU PU$SPOOLER: any program can set it) is the start
+ *               of a shell command handed to system(), so it is used only by a session that holds the OS access gate (the administrator or
+ *               OS.EXECUTE, os_gate_open()); anyone else prints through the configured spooler or lp.  Found by the QM4 evaluation and
+ *               reproduced: an ordinary account with SH and OS.EXECUTE off ran "touch ...; true" through it.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
