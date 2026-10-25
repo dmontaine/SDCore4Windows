@@ -17,6 +17,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 20 Oct 26 dm  S.72b: act.recordlocked refuses a handle whose mode is not write (message 12506, `recordlocked`, nothing sent), before the connection is asked for, like act.fileunlock.  The
+*               server refuses request 34 to a login without sdfileswrite as well (!apifilesok).
 * 20 Oct 26 dm  S.72 (QMNet parity, tiers A and B): NF$FILELOCK 18 (a case of act.change: the no-wait request 32, the busy answer NF$RC.LOCKED, audited once for the handle as
 *               `netfile filelock server=<name> file=<f>`) and NF$FILEUNLOCK 19 (act.fileunlock: refused for a read-mode handle and in a transaction, the definition NOT read again,
 *               the answer of request 33 in rc<8>); NF$RECORDLOCKED also gives the reply STATUS() (the lock owner's number) in rc<8>.  Needs filelock() and fileunlock() of the class.
@@ -67,7 +69,7 @@
 * connection is made (a server this process is
 * already connected to is reused: nothing is dialled, but all seven checks were made again).  No password, key or hash is ever audited,
 * printed or kept; the keys the login is made from are copied out of the credential, handed to the class and cleared at once.
-* Read, readv, recordlocked, select and fileinfo ask the gate again and want the handle to belong to THIS ACCOUNT, so a handle opened before
+* Read, readv, recordlocked (a write-mode handle only), select and fileinfo ask the gate again and want the handle to belong to THIS ACCOUNT, so a handle opened before
 * a LOGTO is no use after it (the kernel is to call NF$CLOSEALL at LOGTO as well).  CLOSE, CLOSEALL and the refused write operations
 * send nothing that needs the gate; the refused ones still want a handle of this account.  Write, delete, clear and lock ask the gate and the
 * mode again and then, in this order: that no transaction is open (12515), that the record id and the lock kind are well formed (12508, 12517),
@@ -578,25 +580,47 @@ act.read:
 
 * ======================================================================
 * act.recordlocked - NF$RECORDLOCKED: a = handle, b = record id.  out is the class's code (0 not locked).
+* S.72b: only a write-mode handle may ask (the kernel refuses a read-mode one first, with the same message 12506; this is the same rule one layer down, asked before the
+* connection is, like act.fileunlock).  A transaction does not matter: it changes nothing.  The server's wall is request 34 in the change set of !apifilesok.
 act.recordlocked:
+   need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
+   gosub get.handle
+   if failed then return
+   opname = 'recordlocked'
+   if nf.h.mode(hx) # 'write' then
+      gosub act.refuse
+      return
+   end
    need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
    gosub get.handle
    if failed then return
    gosub check.id
    if failed then return
-   opname = 'recordlocked'
    obj = nf.s.obj(slot)
    obj->error = ''
    obj->ServerStatus = NF$NOREPLY
    lk = obj->recordlocked(nf.h.fno(hx), id)
+   lerr = obj->LastError
    gosub after.rq
    nf.requests += 1
+   if lerr = -1 then rq.lost = @true
    if rq.lost then
       gosub lost.fail
       return
    end
    if rq.err then
       gosub server.fail
+      return
+   end
+*  S.72b: the server REFUSED the request (a login without sdfileswrite: message 12526 as an ON ERROR reply); the class is quiet, so it returned 0 and said what the reply was.
+   if lerr = NF$LE.ERROR then
+      gosub on.error.text
+      gosub server.fail
+      return
+   end
+   if lerr # NF$LE.OK then
+      fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':lerr
+      gosub fail
       return
    end
    out = lk

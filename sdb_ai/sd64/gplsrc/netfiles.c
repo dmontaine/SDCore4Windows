@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 20 Oct 26 dm  S.72b (owner's decision of the same day): RECORDLOCKED() of a remote file is write-governed.  net_recordlocked asks net_gate(NETG_PEEK) first: a read-mode
+ *               handle is refused with message 12506 and nothing is sent; a transaction does not matter (it changes nothing).  The wall is the server's: request 34 joined the
+ *               change set of gpl.bp/apifilesok, so a login without sdfileswrite is refused with 12526 whatever this machine does.  net_check_lock (MUSTLOCK) is not gated.
  * 20 Oct 26 dm  S.72 (QMNet parity, tiers A and B): FILELOCK and FILEUNLOCK of a file on a write-mode server (net_filelock_step, net_fileunlock: net_gate first, the no-wait request
  *               32 only, the answer of request 33 read from rc<8>), RECORDLOCKED() on any remote file (net_recordlocked; net_check_lock and it share net_lock_code), and the tail of
  *               net_lock_step moved into net_lock_result so that both lock steps wait the same way.  GETLOCKS() of a remote file is op_lock.c's business (the local view, no call here).
@@ -988,7 +991,8 @@ int net_refuse(FILE_VAR* fvar, const char* what) {
      3  a transaction (process.txn_id, NOT the local txn_id, which is 0 for every NET_FILE because of FV_NON_TXN): message 12515, -1010.
         A remote change would never join the local COMMIT or ROLLBACK, so it is refused rather than allowed.
      4  the S.64 edit gate of the REMOTE file's name (WRITE, DELETE and CLEARFILE only; locks are never asked): an $internal caller and the
-        administrator are exempt; otherwise the session's voc.edit, dict.edit or bp.edit decides: message 12410 to 12412, -3035.      */
+        administrator are exempt; otherwise the session's voc.edit, dict.edit or bp.edit decides: message 12410 to 12412, -3035.
+   S.72b: NETG_PEEK (RECORDLOCKED()) runs step 1 only.  It changes nothing, so it is not asked for steps 2 to 4; a transaction does not stop it.                       */
 
 int net_gate(FILE_VAR* fvar, int kind, u_int16_t op_flags, const char* what) {
   u_int16_t entry = process.op_flags;
@@ -1002,6 +1006,11 @@ int net_gate(FILE_VAR* fvar, int kind, u_int16_t op_flags, const char* what) {
     process.status = st;
     process.op_flags = entry;
     return st;
+  }
+
+  if (kind == NETG_PEEK) { /* S.72b: RECORDLOCKED() changes nothing, so only a read-mode handle is refused (above): no SEQKEY, transaction or edit-gate test */
+    process.op_flags = entry;
+    return 0;
   }
 
   if ((kind == NETG_WRITE) && (op_flags & P_SEQKEY)) {
@@ -1281,15 +1290,18 @@ int net_check_lock(FILE_VAR* fvar, char* id, int16_t id_len) {
 
 /* ======================================================================
    net_recordlocked()  -  RECORDLOCKED(f, id) of a remote file (S.72, QMNet parity).  The code the server gives, -3 to 3, which is what a local file gives; STATUS() afterwards is the
-   user number of the lock's owner ON THE SERVER, as locally (0 when nothing is held; a number a user cannot have is taken as 0).  No net_gate(): it changes nothing, so a read-mode
-   handle and a transaction are not refused (a remote READ is served in both).  The function has no ON ERROR clause, so an error is always raised - process.op_flags is cleared first, so a
-   flag a previous statement left cannot swallow it.  A code outside -3 to 3 is not an answer.                                                                                          */
+   user number of the lock's owner ON THE SERVER, as locally (0 when nothing is held; a number a user cannot have is taken as 0).  S.72b: net_gate(NETG_PEEK) FIRST - a read-mode handle
+   is refused with message 12506 and nothing is sent (the server's wall is request 34 in the change set of gpl.bp/apifilesok; this is the clear text).  A transaction does not stop it: it
+   changes nothing.  The function has no ON ERROR clause, so an error is always raised - process.op_flags is cleared first, so a flag a previous statement left cannot swallow it.  A code
+   outside -3 to 3 is not an answer.  net_check_lock (MUSTLOCK) does not ask the gate: it is reached only from a write path that has passed net_gate.                              */
 
 int net_recordlocked(FILE_VAR* fvar, char* id, int16_t id_len) {
   int code;
   int owner;
 
   process.op_flags = 0;
+  if (net_gate(fvar, NETG_PEEK, 0, "RECORDLOCKED") != 0)
+    return 0; /* (not reached: with no ON ERROR the refusal was raised) */
   (void)net_lock_code(fvar, id, id_len, &code); /* an error does not return: it is raised */
   if ((code < -3) || (code > 3)) {
     net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");

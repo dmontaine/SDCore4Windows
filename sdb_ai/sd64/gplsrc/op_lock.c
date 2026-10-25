@@ -17,6 +17,13 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux eb9ef4a (20 Oct 26) S.72b: op_reclckd() of a NET_FILE is refused for a read mode one (message 12506, nothing sent) inside net_recordlocked; the server
+ *               refuses request 34 to a login without sdfileswrite.
+ * 25 Oct 26 Windows port - from Linux fc8e304 (20 Oct 26) S.72 (QMNet parity, tiers A and B): op_filelock() and op_flunlock() act on a write mode NET_FILE (net_filelock_step,
+ *               net_fileunlock; a read mode one is still refused with 12506), op_reclckd() asks the server for any NET_FILE (net_recordlocked) and op_getlocks() gives a NET_FILE
+ *               the local view - the counters and no lock line (NO_LOCAL_FILE).  LOCK.TRACER is not carried here.
+ * 25 Oct 26 Windows port - from Linux 5315c65 (18 Oct 26) S.65 slice 3e: op_lockrec(), op_release(), op_rlsfile() and op_rlsall() act on a write mode NET_FILE (net_gate, net_lock_step,
+ *               net_release, net_release_all); a read mode one is refused as in slice 3c.
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): OPTION COMMAND.LEVEL.LOCKS (QM4 gap 231): park_fvar(), release_parked_fvars()
  * 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 7.  op_getlocks() passed the
  *           result of UserPtr() straight into ts_printf() without testing it
@@ -759,7 +766,7 @@ void op_reclckd() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE) /* 20 Oct 26 S.72: the server says; STATUS() is the owner's user number on the server */
+  if (fvar->type == NET_FILE) /* 20 Oct 26 S.72: the server says; STATUS() is the owner's user number on the server.  S.72b: a read-mode handle is refused inside, nothing is sent */
   {
     status = (int16_t)net_recordlocked(fvar, id, id_len); /* an error is raised, always; the handler runs BASIC: the stack is found by e_stack from here on */
 

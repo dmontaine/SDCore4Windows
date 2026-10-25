@@ -28,6 +28,7 @@
 * 19 Oct 26 Windows port - from Linux 0bdc4bd - K8d: connect.keys waits NETWAIT seconds (5) for the connection and NETREPLY seconds (30) for each read, from the configuration (sd.conf) and no longer from two $defines.
 * 19 Oct 26 Windows port - from Linux 0bdc4bd - K8c: the length a reply announces is checked before its body is read.  read.packet fails the call, as a lost connection does and without touching server.error or
 * 20 Oct 26 Windows port - from Linux fc8e304 - S.72 (QMNet parity): filelock(fno, wait) (request 32) and fileunlock(fno) (request 33).  The two requests were in the table of codes and in apisrvr and had no method here.
+* 20 Oct 26 Windows port - from Linux eb9ef4a - S.72b: recordlocked() honours quiet (message.pair, not text.request): an ON ERROR reply aborts the caller only when quiet is not set.  A login without the server's sdfileswrite group is refused request 34 that way (12526).
 *               Like clearfile() and recordlock() they abort the caller on a server ON ERROR reply unless quiet is set.  The $netfile handler is the one user of them.
 *               ServerStatus, for a reply that announces less than its own header (a negative count is that too: the count is signed) and, when the new public property maxpacket
 *               is above 0, for one longer than that.  The default is 0, so other users of the class are unchanged except for the nonsense lengths below 10.  $netfile sets it.
@@ -73,6 +74,7 @@
 * obj->fileunlock(fno)
 * bool = obj->logto(acc)
 * obj->markmapping(fno, state)
+* n = obj->recordlocked(fno, id)
 * fno = obj->open(name)
 * str = obj->read(fno, id, err)
 * str = obj->readl(fnom id, wait, err)
@@ -650,6 +652,31 @@ public subroutine fileunlock(fno)
          end
       end
    end
+end
+
+* ======================================================================
+* RECORDLOCKED (request 34)
+*
+* 25 Oct 26 Windows port - from Linux eb9ef4a (S.72b, with fc8e304).  The $netfile handler's RECORDLOCKED needs it; the rest of Linux's "C-1" bundle (getvar, indices, revision, system,
+* trans, ...) is not carried here.  A login that is not in the server's sdfileswrite group is refused request 34 with an ON ERROR reply (message 12526); like filelock() and fileunlock() this
+* aborts the caller on that reply unless quiet is set, and with quiet it returns 0 (LastError / LastText say what the reply was).  The answer is the local code -3 to 3.
+
+public function recordlocked(fno, id)
+   reply = ''
+   if not(context.error(CX.CONNECTED)) then
+      if message.pair(SrvrRecordlocked, iconv(fno, 'ISL') : id) then
+         begin case
+            case server.error = SV$OK
+               reply = in.pkt
+            case server.error = SV$ON.ERROR
+               if not(quiet) then abort 'RECORDLOCKED generated an abort event'
+         end case
+      end
+   end
+   if len(reply) < 4 then return 0
+   n = oconv(reply[1,4], 'ILL')
+   if n > 2147483647 then n -= 4294967296
+   return n
 end
 
 * ======================================================================
