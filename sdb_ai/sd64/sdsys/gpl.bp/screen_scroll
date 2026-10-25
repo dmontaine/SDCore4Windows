@@ -1,0 +1,64 @@
+* SCREEN_SCROLL
+* The subroutine that SCREEN SCROLL calls: scroll a viewport from the program.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN SCROLL f, id {TO x,y} {BY dx,dy}
+*
+*   is compiled into
+*
+*   call !screen_scroll(f, id, x, y, dx, dy, ret, status)
+*
+*     f id      the form and the viewport's name in it
+*     x y       the first column and row of the sheet to show, from 0 (TO is done first)
+*     dx dy     columns and rows to move on from there, negative to go back
+*     ret       where it is now: the first column, a value mark, the first row.  The sheet is never moved past its edges,
+*               so this can differ from what was asked
+*     status    0; 1 if f is not a form, has no widget of that id, or it is not a viewport (ELSE)
+*
+*   If the form is on the screen (SCREEN WAIT put it there) the viewport and what is in it are drawn again.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_scroll(f, id, tx, ty, bx, by, ret, status)
+$catalog !screen_scroll
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   call $sl_form('find', f, '', id, n)
+   if n = 0 then return
+   w = f{'widgets', n}
+   if w{'type'} # 'viewport' then return
+   if (tx # '' and not(num(tx))) or (ty # '' and not(num(ty))) then return
+   if (bx # '' and not(num(bx))) or (by # '' and not(num(by))) then return
+
+   if tx # '' then w{'sx'} = tx + 0
+   if ty # '' then w{'sy'} = ty + 0
+   if bx # '' then w{'sx'} = w{'sx'} + bx
+   if by # '' then w{'sy'} = w{'sy'} + by
+
+   if f{'shown'} and not(system(25)) then
+      call $sl_scr('get', scr)
+      call $sl_form('scroll', f, scr, id, r)
+      call $sl_scr('put', scr)
+   end else
+      call $sl_form('scroll', f, '', id, r)
+   end
+   ret = r
+   status = 0
+
+   return
+end
+
+* END-CODE

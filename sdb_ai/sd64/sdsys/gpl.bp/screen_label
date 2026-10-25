@@ -4,16 +4,19 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 22 Oct 26 dm  A letter marked with & in the text is the label's Alt-letter (S.75 TK-0.12).
+* 22 Oct 26 dm  ... and is drawn in the hotkey style (apos, its place in the text; SCREEN SET ... TEXT clears it).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN LABEL f, id, text {AT x,y} {ATTR style} {WIDTH n}
+*   SCREEN LABEL f, id, text {AT x,y} {ATTR style} {WIDTH n} {COLOR fg,bg}
 *
 *   is compiled into
 *
-*   call !screen_label(f, id, text, x, y, attr, width, ret, status)
+*   call !screen_label(f, id, text, x, y, attr, width, fg, bg, ret, status)
 *
 *     f        the form (SCREEN FORM)       id    the widget's name in the form: not null, not used before
 *     text     one line                     x y   its place from the form's top left corner (0,0 is the
@@ -24,19 +27,35 @@
 *              text: a status line is a label with a width.
 *     status   0 added; 1 not (f is not a form, or the id is null or already used): ELSE
 *
+*   COLOR fg,bg gives the label its own colours (see SCREEN ENTRY); it wins over ATTR.
+*
+*   A letter in the text marked with & (&Name) is dropped from the text and is the label's Alt-letter: Alt+N moves the focus to the next control that can
+*   have it, which is how an entry or a list is given a letter (put the label just before it).  The letter is drawn in the hotkey style of the theme
+*   (underlined in mono).  Only the text given here is read for the &; SCREEN SET ... TEXT leaves an ampersand where it is and the letter is no longer
+*   drawn marked (the Alt-letter stays).
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_label(f, id, text, ax, ay, attr, width, ret, status)
+subroutine screen_label(f, id, text, ax, ay, attr, width, fg, bg, ret, status)
 $catalog !screen_label
 
    ret = ''
    status = 1
    w = collection()
    w{'id'} = id
-   w{'text'} = text
+   * a letter marked with & is the label's Alt-letter, which moves the focus to the next control (a label has none of its own); only here, not for
+   * SCREEN SET ... TEXT, so that a label that shows data does not lose an ampersand in it
+   t = text
+   p = index(t, '&', 1)
+   if p and p < len(t) then
+      w{'amn'} = upcase(t[p + 1, 1])
+      w{'apos'} = p                             ;* the p-th cell of the text once the & is out: draw underlines it
+      t = t[1, p - 1] : t[p + 1, 99999]
+   end
+   w{'text'} = t
    x = 1
    y = 1
    if ax # '' then x = ax + 0
@@ -46,6 +65,8 @@ $catalog !screen_label
    w{'attr'} = attr
    if width # '' then w{'width'} = width + 0
    call $sl_label('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

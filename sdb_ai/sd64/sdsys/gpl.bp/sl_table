@@ -4,11 +4,13 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1a73910 (13 Oct 26): Sorting, row marks (multi), horizontal scrolling by column, column width changes.
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - Sorting, row marks (multi), horizontal scrolling by column, column width changes.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 13 Oct 26 dm  Sorting, row marks (multi), horizontal scrolling by column, column width changes.
+* 18 Oct 26 dm  The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 22 Oct 26 dm  S.75 TK-0.5 (G3): rowstyle (a style for a row), the K column (a check cell), filter (the rows that hold a text) and the refresh op (new rows, the
+*               current row, the sort and the marks kept by a key column).  n is now the number of rows SHOWN and nr the number there are; the sort and the filter
+*               are one subroutine, order.rows.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -41,6 +43,18 @@
 *             to the next row whose first cell starts with it; f3 sorts by the current column - up, then down, then the
 *             order of rows again (numbers by value, other text without regard to case); < and > make the current
 *             column narrower or wider; with multi the space bar marks or unmarks the current row.  ret<1> is 'handled';
+*             (22 Oct 26, G3: the elements below are set by the program that owns the table; the table never changes them.)
+*             rowstyle: values, one for each row of rows (its number in rows, not its place on the screen): the name of a theme style ('disabled', 'error',
+*             'todo' ...) the row is drawn in when it is not the current row of a table that has the focus; null for the text style.
+*             A column given the letter K (as in '5K'; width 3 or the heading, whichever is wider, when no width is given) is a check cell: a cell holding a non-zero
+*             number is drawn [x], any other [ ].  The cells are not changed.
+*             filter: a text.  Only the rows that hold it in some cell, without regard to case, are shown, in the sort order; the current row stays if it still
+*             matches, else it is the first.  After the program changes filter it calls op 'filter'.  Marks on rows the filter hides are KEPT, so Return (multi) can
+*             answer rows that are not on the screen: a program that acts on them says so (nshown, below, is how many are shown).
+*             keycol: the number of a column whose cells are unique keys.  Op 'refresh' takes the new rows from the element newrows (and empties it), shows them in the
+*             sort and filter in force, and keeps the current row, the marks and the place of the current row in the window BY THE KEY (a current row that is gone
+*             falls to the same place, or the last row).  Without keycol, marks are dropped and the current row is kept by place.  The op ret is 'handled'.
+*             nshown (set by every op): the number of rows shown.  ret<1> is 'handled';
 *             'done' (Return, ret<2> the number of the current row, or with multi the numbers of those marked); 'cancel'
 *             (Esc); or 'unhandled' with ret<2> the key's name (tab, btab, a function key; and up on the first row, down
 *             on the last, left and right at the ends, so that a form can go on to the widget before or after)
@@ -63,12 +77,20 @@ $include sl.h
    nc = dcount(cols, @vm)
    if cols = '' then nc = 0
    rows = w{'rows'}
-   n = dcount(rows, @fm)
-   if rows = '' then n = 0
+   nr = dcount(rows, @fm)                            ;* the rows there are
+   if rows = '' then nr = 0
    cur = w{'cur'} + 0
    top = w{'top'} + 0
    multi = w{'multi'} + 0
    ord = w{'ord'}
+   filter = w{'filter'}
+   fon = w{'fon'} + 0                                ;* 1 when the order in ord was made with a filter (then ord is the rows shown, even when it is empty)
+   rowstyle = w{'rowstyle'}
+   n = nr                                            ;* the rows SHOWN
+   if ord # '' or fon then n = dcount(ord, @vm)
+   if ord = '' then
+      if fon then n = 0
+   end
    picked = w{'picked'}
    ccol = w{'ccol'} + 0
    hcol = w{'hcol'} + 0
@@ -81,8 +103,9 @@ $include sl.h
       case op = 'init'
          w{'type'} = 'table'
          w{'focusable'} = 1
-         ord = '' ; picked = '' ; cwid = '' ; ccol = 1 ; hcol = 1 ; sortcol = 0 ; sortdir = 0 ; colsel = 0
+         ord = '' ; picked = '' ; cwid = '' ; ccol = 1 ; hcol = 1 ; sortcol = 0 ; sortdir = 0 ; colsel = 0 ; fon = 0
          gosub widths
+         gosub order.rows                         ;* a filter the program set before init shows from the start
          if w{'w'} = '' or w{'w'} + 0 < 4 then w{'w'} = tot + 1       ;* the cells, and the scroll bar column
          if w{'h'} = '' or w{'h'} + 0 < 2 then
             bh = n
@@ -118,8 +141,100 @@ $include sl.h
          gosub widths
          th = w{'h'} + 0 - 1
          gosub click
+
+      case op = 'filter'                         ;* the program changed the element filter
+         gosub widths
+         th = w{'h'} + 0 - 1
+         gosub do.filter
+         ret = 'handled'
+
+      case op = 'refresh'                        ;* the program put new rows in the element newrows
+         gosub do.refresh
+         ret = 'handled'
    end case
 
+   return
+
+* The element filter has changed: the order is made again and the current row stays if it is still shown, else it is the first
+do.filter:
+   keep = 0
+   if cur >= 1 and cur <= n then
+      i = cur
+      gosub orig
+      keep = oi
+   end
+   gosub order.rows
+   cur = 1
+   if keep then
+      for r = 1 to n
+         i = r
+         gosub orig
+         if oi = keep then cur = r ; exit
+      next r
+   end
+   if n = 0 then cur = 0
+   top = 1
+   gosub scroll
+   gosub store
+   gosub paint
+   return
+
+* New rows in newrows.  With a key column (keycol) the current row, the marks and the current row's place in the window are kept by the key; the sort and
+* the filter in force are applied to the new rows.  Without one the marks go and the current row stays at its place (or the last row).
+do.refresh:
+   keycol = w{'keycol'} + 0
+   ck = ''
+   pk = ''
+   if keycol > 0 then
+      if cur >= 1 and cur <= n then
+         i = cur
+         gosub orig
+         ck = rows<oi, keycol>
+      end
+      np = dcount(picked, @vm)
+      if picked = '' then np = 0
+      for k = 1 to np
+         pk<1, -1> = rows<picked<1, k>, keycol>
+      next k
+   end
+   off = cur - top
+   if off < 0 then off = 0
+   rows = w{'newrows'}
+   w{'rows'} = rows
+   w{'newrows'} = ''
+   nr = dcount(rows, @fm)
+   if rows = '' then nr = 0
+   gosub widths
+   th = w{'h'} + 0 - 1
+   gosub order.rows
+   newcur = 0
+   if ck # '' then
+      for r = 1 to n
+         i = r
+         gosub orig
+         if rows<oi, keycol> = ck then newcur = r ; exit
+      next r
+   end
+   if newcur = 0 then
+      newcur = cur                                   ;* the current row is gone (or there is no key): the same place, or the last row
+      if newcur > n then newcur = n
+      if newcur < 1 and n > 0 then newcur = 1
+   end
+   cur = newcur
+   if n = 0 then cur = 0
+   picked = ''
+   if keycol > 0 and pk # '' then
+      for r = 1 to nr
+         v = rows<r, keycol>
+         locate v in pk<1, 1> setting at then picked<1, -1> = r
+      next r
+   end
+   top = cur - off                                   ;* the current row keeps its place in the window ...
+   if top > n - th + 1 then top = n - th + 1         ;* ... unless that would leave the window part empty when the rows could fill it
+   if top < 1 then top = 1
+   gosub scroll
+   gosub store
+   if not(w{'nopaint'} + 0) then gosub paint         ;* screen_set draws the whole form itself
    return
 
 * The number in rows of the row shown at place i
@@ -209,15 +324,19 @@ widths:
       al = 'L'
       if sp # '' then
          lst = sp[len(sp), 1]
-         if lst = 'L' or lst = 'R' or lst = 'C' then
+         if lst = 'L' or lst = 'R' or lst = 'C' or lst = 'K' then
             al = lst
             sp = sp[1, len(sp) - 1]
          end
       end
       wd = sp + 0
+      if wd < 1 and al = 'K' then
+         wd = len(hd)                                ;* a check cell is [x]: three cells at least
+         if wd < 3 then wd = 3
+      end
       if wd < 1 then
          wd = len(hd)
-         m = n
+         m = nr
          if m > 200 then m = 200
          for r = 1 to m
             if len(rows<r, c>) > wd then wd = len(rows<r, c>)
@@ -310,22 +429,33 @@ sort.column:
       sortcol = ccol
       sortdir = 1
    end
-   if sortdir = 0 then
-      ord = ''
-      sortcol = 0
-   end else
+   if sortdir = 0 then sortcol = 0
+   gosub order.rows
+   cur = 1
+   for r = 1 to n
+      i = r
+      gosub orig
+      if oi = keep then cur = r ; exit
+   next r
+   return
+
+* ord = the numbers of the rows in the order shown: sorted by sortcol and sortdir (the order of rows when sortdir is 0), then only the rows the filter lets
+* through.  n = how many are shown, fon = 1 when a filter made the order.
+order.rows:
+   ord = ''
+   if sortdir > 0 and sortcol >= 1 and sortcol <= nc and nr > 0 then
       * numbers by value when every cell of the column is a number, else the text without regard to case
       isnum = @true
-      for r = 1 to n
-         v = rows<r, ccol>
+      for r = 1 to nr
+         v = rows<r, sortcol>
          if v # '' and not(num(v)) then isnum = @false ; exit
       next r
       lb = 'AL'
       if isnum then lb = 'AR'
       skeys = ''
       order = ''
-      for r = 1 to n
-         v = rows<r, ccol>
+      for r = 1 to nr
+         v = rows<r, sortcol>
          if not(isnum) then v = upcase(v)
          locate v in skeys<1> by lb setting pos then
             pos += 1
@@ -333,21 +463,31 @@ sort.column:
          ins v before skeys<pos>
          ins r before order<pos>
       next r
-      ord = ''
       if sortdir = 1 then
          ord = convert(@fm, @vm, order)
       end else
-         for r = n to 1 step -1
+         for r = nr to 1 step -1
             ord<1, -1> = order<r>
          next r
       end
    end
-   cur = 1
-   for r = 1 to n
-      i = r
-      gosub orig
-      if oi = keep then cur = r ; exit
-   next r
+   fon = 0
+   if filter # '' then
+      fon = 1
+      uf = upcase(filter)
+      kept = ''
+      m = nr
+      if ord # '' then m = dcount(ord, @vm)
+      for k = 1 to m
+         r = k
+         if ord # '' then r = ord<1, k>
+         if index(upcase(rows<r>), uf, 1) then kept<1, -1> = r
+      next k
+      ord = kept
+   end
+   n = nr
+   if ord # '' or fon then n = dcount(ord, @vm)
+   if ord = '' and fon then n = 0
    return
 
 * Keep the current row inside the rows shown, and the current column inside the columns shown
@@ -383,6 +523,8 @@ store:
       if cur < 1 then w{'value'} = 0
    end
    w{'ord'} = ord
+   w{'fon'} = fon
+   w{'nshown'} = n
    w{'picked'} = picked
    w{'ccol'} = ccol
    w{'hcol'} = hcol
@@ -403,6 +545,7 @@ paint:
    focused = w{'focused'} + 0
 
    * the heading
+   isdata = 0
    line = ' '
    hatr = str(hc, tw)
    if hcol < 1 then hcol = 1
@@ -448,6 +591,7 @@ paint:
          end
          if i = cur and (not(focused) or w{'marker'} + 0) then lead = '>'     ;* marker 1: > on the current row always
          line = lead
+         isdata = 1
          for c = hcol to nc
             cell = rows<oi, c>
             gosub fit
@@ -456,6 +600,13 @@ paint:
          line = line[1, tw]
          line := space(tw - len(line))
          code = tc
+         if rowstyle # '' then
+            rs = rowstyle<1, oi>
+            if rs # '' then
+               call $sl_attr(rs, rc)
+               code = rc
+            end
+         end
          if i = cur and focused then code = ac
       end
       call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 1 + r, line : sbc[r + 1, 1], str(code, tw) : wc)
@@ -467,11 +618,12 @@ paint:
 fit:
    wd = cw<1, c> + 0
    cell = convert(@sm : @tm : char(9), '...', cell)
+   if isdata and ca<1, c> = 'K' then cell = (if num(cell) and cell # '' and cell + 0 # 0 then '[x]' else '[ ]')       ;* a check cell (isdata: not for the heading, fit is called for it too)
    cell = cell[1, wd]
    pad = wd - len(cell)
    begin case
       case ca<1, c> = 'R' ; cell = space(pad) : cell
-      case ca<1, c> = 'C' ; cell = space(int(pad / 2)) : cell : space(pad - int(pad / 2))
+      case ca<1, c> = 'C' or ca<1, c> = 'K' ; cell = space(int(pad / 2)) : cell : space(pad - int(pad / 2))
       case 1 ; cell := space(pad)
    end case
    return

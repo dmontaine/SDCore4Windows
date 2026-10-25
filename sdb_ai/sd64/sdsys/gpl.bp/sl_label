@@ -4,7 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 22 Oct 26 dm  draw: the letter marked with & (apos) is in the hotkey style (S.75 TK-0.12).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -56,9 +58,16 @@ $include sl.h
          lattr = w{'attr'}
          if lattr = '' then lattr = 'window'               ;* a label sits on a form: the form's own style unless it names one
          call $sl_attr(lattr, code)
+         if w{'ccode'} # '' then code = w{'ccode'}         ;* COLOR wins over ATTR
          t = w{'text'} : space(w{'w'})                 ;* as wide as the label is: a shorter text blanks the old one
          t = t[1, w{'w'}]
-         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, t, code)
+         cells = str(code, len(t))
+         * the letter marked with & (apos, set by SCREEN LABEL) in the hotkey style, if it is in the text and in the width and the label is not disabled
+         if w{'disabled'} + 0 = 0 and w{'apos'} + 0 > 0 and w{'apos'} + 0 <= len(w{'text'}) and w{'apos'} + 0 <= len(t) then
+            call $sl_attr('hotkey', hcode)
+            cells[w{'apos'} + 0, 1] = hcode
+         end
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, t, cells)
 
       case op = 'key'
          ret = 'unhandled' : @fm : key

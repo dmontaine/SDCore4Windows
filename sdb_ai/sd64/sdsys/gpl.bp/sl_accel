@@ -1,0 +1,51 @@
+* SL_ACCEL
+* Screen library, helper: the ACCEL clause of a control (S.75, TK-0.12; the owner asked for accelerator keys on all appropriate controls, 22 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 22 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_accel(w, accel, st)
+*
+*     w      the control (a collection)
+*     accel  the key as the program wrote it: f1 to f12, ctrl-a to ctrl-z or alt-a to alt-z and alt-0 to alt-9, in either case, with a - or a + between
+*            (Alt+S, alt-s and ALT-S are the same key); null: the control has no accelerator
+*     st     returned: 0 the control has its accelerator (w{'accel'} is the key's name as $sl_key reports it) or has none, 1 the key is not one the library
+*            can be told of and the statement takes its ELSE
+*
+*   Refused: ctrl-h, ctrl-i, ctrl-j and ctrl-m (the terminal sends them as Backspace, Tab and Return), a name that is none of the three forms, a number of
+*   a function key beyond 12.  Not refused but unreliable on some terminals: ctrl-c, ctrl-q, ctrl-s, ctrl-z (the terminal's own use) and alt-letters
+*   that a terminal or a window manager keeps for itself (see Docs, the SCREEN statement).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_accel(w, accel, st)
+$catalog $sl_accel
+
+   st = 0
+   if trim(accel) = '' then return
+   a = convert('+', '-', downcase(trim(accel)))
+   ok = 0
+   tail = a[2, 9]
+   begin case
+      case a[1, 1] = 'f' and tail # '' and num(tail)
+         if tail + 0 >= 1 and tail + 0 <= 12 and int(tail) = tail + 0 and len(tail) = len(tail + 0) then ok = 1
+      case len(a) = 6 and a[1, 5] = 'ctrl-'
+         if index('abcdefghijklmnopqrstuvwxyz', a[6, 1], 1) and index('hijm', a[6, 1], 1) = 0 then ok = 1
+      case len(a) = 5 and a[1, 4] = 'alt-'
+         if index('abcdefghijklmnopqrstuvwxyz0123456789', a[5, 1], 1) then ok = 1
+   end case
+   if ok then w{'accel'} = a else st = 1
+
+   return
+end
+
+* END-CODE

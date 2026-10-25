@@ -4,9 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): Saves the style of every cell (SL.S.ATTRS) when the context has them, and puts the
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 12 Oct 26 dm  Saves the style of every cell (SL.S.ATTRS) when the context has them, and puts the
 *               rectangle back through $sl_put so that the shadow follows.
-* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
 * END-HISTORY
 *
 * START-DESCRIPTION:

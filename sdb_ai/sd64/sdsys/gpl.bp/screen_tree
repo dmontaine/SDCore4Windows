@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux f3cdc9d (13 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 13 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN TREE f, id, nodes {AT x,y} {SIZE w,h} {VALUE n} {EXPANDED}
+*   SCREEN TREE f, id, nodes {AT x,y} {SIZE w,h} {VALUE n} {EXPANDED} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_tree(f, id, nodes, x, y, w, h, value, expanded, ret, status)
+*   call !screen_tree(f, id, nodes, x, y, w, h, value, expanded, accel, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     nodes     the nodes in the order they are shown with everything open, as values (a field mark does as well).
@@ -32,12 +33,15 @@
 *   starts with it; Return is a done event of the form that holds the tree.  SCREEN GET f, id answers the code of
 *   the current node; a change of the current node is a change event of SCREEN WAIT.
 *
+*   ACCEL key gives the tree a key that reaches it wherever the focus is: f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9 (see SCREEN ENTRY).  The tree
+*   takes the focus.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_tree(f, id, nodes, ax, ay, sw, sh, value, expanded, ret, status)
+subroutine screen_tree(f, id, nodes, ax, ay, sw, sh, value, expanded, accel, ret, status)
 $catalog !screen_tree
 
    ret = ''
@@ -73,6 +77,8 @@ $catalog !screen_tree
    w{'expanded'} = (expanded # '')
    w{'cur'} = value + 0
    call $sl_tree('init', w, '', '', r)
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

@@ -4,10 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The list of choices is drawn outside the narrow clip of a container (SL.S.BCLIP).
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the list as Esc does; the cursor is
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  The list of choices is drawn outside the narrow clip of a container (SL.S.BCLIP).
+* 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the list as Esc does; the cursor is
 *               placed through $sl_curat.
 * END-HISTORY
 *
@@ -83,7 +83,9 @@ $include sl.h
 
 arrow:
    call $sl_attr('window', code)
+   if w{'ccode'} # '' then code = w{'ccode'}
    if w{'focused'} then call $sl_attr('highlight', code)
+   if w{'focused'} and w{'cfocus'} # '' then code = w{'cfocus'}      ;* a coloured combo box keeps its colours while it has the focus, like an entry
    call $sl_put(scr, w{'ax'} + fw, w{'ay'} + 0, '[v]', code)
    if w{'focused'} then
       call $sl_curat(w{'ax'} + w{'pos'} - w{'pan'}, w{'ay'} + 0)
@@ -96,6 +98,11 @@ pick.item:
    n = dcount(items, @vm)
    if items = '' then n = 0
    if n = 0 then return
+
+   * 18 Oct 26: a combo box in a container is run with the clip narrowed to the container ($sl_form); its list is not
+   * part of the container, so it is drawn under the program's own clip (SL.S.BCLIP) and the narrow clip comes back after
+   pclip = scr<SL.S.CLIP>
+   if scr<SL.S.NARROW> then scr<SL.S.CLIP> = scr<SL.S.BCLIP>
 
    lh = n
    if lh > 6 then lh = 6
@@ -152,6 +159,7 @@ pick.item:
    repeat
 
    call $sl_region('restore', scr, bx, by, bw, bh, under)
+   scr<SL.S.CLIP> = pclip
    if st = 'done' then
       text = items<1, r<2>, 1>
       w{'value'} = text

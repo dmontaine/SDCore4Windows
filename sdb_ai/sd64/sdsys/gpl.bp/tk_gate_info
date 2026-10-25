@@ -1,0 +1,76 @@
+* TK_GATE_INFO
+* The full-screen toolkit, shared base: the one table that says what each per-account gate is (plan section 2.4).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1).  Two differences: "Windows user" for "Linux user", and
+*           files-admin is "planned", not "built" (this tree has no sdfilesadmin group yet: RELEASE_1.1 178).
+* 22 Oct 26 dm  New (S.75, TK-0.2).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_gate_info(id, info)
+*
+*     id    'list' returns the ids of every gate, built ones first, in the order modify.account carries its words out, one to a field
+*           a gate's id returns that gate (TK.G.* in tk.h), one value to a field; an id that is not in the table returns null
+*
+*   One row to a gate, fifteen values separated by a vertical bar, so that the text is the table: gplbld/test-tkgates-units.py reads these
+*   rows and holds every built gate against modifya (the word pair and the slot), keys.h (the register field), int$keys.h (the kernel key),
+*   createa and the Linux group names.  Adding a gate is one row here, and that check stays red until the verb, the field and the key agree.
+*   A planned gate has no words and shows as not yet built.  No sentence holds a vertical bar.
+*
+*   ssh and api share the route slot: modify.account's words ssh, api, both and none SET the route (ssh leaves api off), so the off word of
+*   each is none, which closes both; the sentences say so.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_gate_info(id, info)
+$catalog $tk_gate_info
+
+$include tk.h
+
+   info = ''
+   rows = ''
+
+* id|title|on|off|kind|field|group|key|when|default|slot|allows|still|beyond|status
+   rows<-1> = "ssh|Remote terminal|ssh|none|group||sdssh||next login|off|R|sign in to SD over ssh, as the account's Windows user|sign in at the machine's own keyboard|1|built"
+   rows<-1> = "api|API server|api|none|group||sdapi||next login|off|R|connect to the API server and run what the account may run|sign in at the keyboard or over ssh if it has that gate|1|built"
+   rows<-1> = "sh|Shell|sh-on|sh-off|register|ACC$SH||K$SH|next account entry|off|SH|use the SH verb and ! to run operating-system commands as the account's Windows user|everything inside SD, including the account's own files|1|built"
+   rows<-1> = "os|OS.EXECUTE|os-on|os-off|register|ACC$OS.EXEC||K$OS.EXEC|next account entry|off|OS|run OS.EXECUTE and reach operating-system paths outside the account|open and write files inside its own account directory|1|built"
+   rows<-1> = "sd|Other accounts|sd-on|sd-off|register|ACC$SD.ACCOUNTS||K$SD.ACCOUNTS|next account entry|off|SD|open files under the directory of any account its person could LOGTO, except that account's VOC|its own account and LOGTO to accounts it may enter|1|built"
+   rows<-1> = "voc|Save VOC|voc-on|voc-off|register|ACC$VOC.EDIT||K$VOC.EDIT|next sign-on only|off|VOC|save changes to a VOC|read the VOC and run its entries|0|built"
+   rows<-1> = "bp|Save programs|bp-on|bp-off|register|ACC$BP.EDIT||K$BP.EDIT|next sign-on only|off|BP|save changes to a program file, and use BASIC and CATALOG|run catalogued programs and read program source|0|built"
+   rows<-1> = "dict|Save dictionaries|dict-on|dict-off|register|ACC$DICT.EDIT||K$DICT.EDIT|next sign-on only|off|DICT|save changes to a dictionary|read dictionaries and use them in queries|0|built"
+   rows<-1> = "net|Remote files|net-on|net-off|register|ACC$NET||K$NET|next account entry|off|NET|open a file on another SD server through a server definition|every file on this server that its other gates allow|1|built"
+   rows<-1> = "shared-read|Read shared|shared-read-on|shared-read-off|register|ACC$SHARED.READ||K$SHARED.READ|next account entry|on|SR|open the files of the shared account by name, with no LOGTO|its own account, and the shared account by LOGTO if its person may enter it|0|built"
+   rows<-1> = "shared-write|Write shared|shared-write-on|shared-write-off|register|ACC$SHARED.WRITE||K$SHARED.WRITE|next account entry|off|SW|write records in the files of the shared account|read them, if shared-read is on|0|built"
+   rows<-1> = "files|Files route|files-on|files-off|group||sdfiles||next login|off|F|log in over the files-only SDNet route and read the files of its account on this server|a login by the other routes it has|1|built"
+   rows<-1> = "files-write|Files write|files-write-on|files-write-off|group||sdfileswrite||next login|off|FW|change files over the files-only route: write, delete, lock and clear|read files over that route|1|built"
+   rows<-1> = "files-admin|Files admin|files-admin-on|files-admin-off|group||sdfilesadmin||next login|off|FA|administer files over the files-only route: configure, analyse, index, create, delete and the file's counter|change records in files that already exist, if files-write is on|1|planned"
+   rows<-1> = "sockets|Raw sockets||||||||off||open raw network connections from programs|use the SD socket verbs that every account has|1|planned"
+
+   if id = 'list' then
+      n = dcount(rows, @fm)
+      for i = 1 to n
+         info<-1> = field(rows<i>, '|', 1)
+      next i
+      return
+   end
+
+   n = dcount(rows, @fm)
+   for i = 1 to n
+      if field(rows<i>, '|', 1) = id then
+         info = convert('|', @fm, rows<i>)
+         exit
+      end
+   next i
+
+   return
+end
+
+* END-CODE

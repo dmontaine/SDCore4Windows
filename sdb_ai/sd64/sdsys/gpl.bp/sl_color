@@ -1,0 +1,60 @@
+* SL_COLOR
+* Screen library, helper: give a control the colours its COLOR clause asked for (S.75, TK-0.10; the owner asked for a colour option on the controls, 22 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 22 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_color(w, fg, bg, st)
+*
+*     w    the control's collection, after its init (the type is known)
+*     fg   the foreground colour: black, blue, green, cyan, red, magenta, brown (or yellow), white; null for the terminal's own
+*     bg   the background colour, the same
+*     st   returned: 0 when the control may be added (the colours are given to it, or are ignored because the terminal cannot show colour), 1 when it may not
+*          (a colour it does not know, or all sixteen user styles are in use)
+*
+*   The control gets the element ccode, the code of a user style ($sl_theme 'slot') that holds the colours; one pair of colours is one style whoever asks, so a form
+*   whose controls all want black on green uses one.  An entry or a combo box also gets cfocus, the same colours underlined, which it draws while it has the focus: a
+*   coloured entry keeps its colours when it has the focus (the cursor and the underline show where it is).  Every other control draws its colours until it has the
+*   focus and then the focus style, as it always did.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_color(w, fg, bg, st)
+$catalog $sl_color
+
+   st = 0
+   if trim(fg) = '' and trim(bg) = '' then return
+
+   call $sl_theme('slot', fg, bg, '', '', c1)
+   begin case
+      case c1 = 'none'
+         return
+      case c1 = 'full' or c1 = 'bad'
+         st = 1
+         return
+   end case
+   w{'ccode'} = c1
+
+   t = w{'type'}
+   if t = 'entry' or t = 'combo' then
+      call $sl_theme('slot', fg, bg, 'underline', '', c2)
+      if c2 = 'full' or c2 = 'bad' then
+         st = 1
+         return
+      end
+      if c2 # 'none' then w{'cfocus'} = c2
+   end
+
+   return
+end
+
+* END-CODE

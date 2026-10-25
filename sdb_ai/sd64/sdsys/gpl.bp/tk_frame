@@ -1,0 +1,103 @@
+* TK_FRAME
+* The full-screen toolkit, shared base: the foot of the screen and the right end of row 0 (plan sections 2.1, 2.12).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* 22 Oct 26 dm  ctx<TK.C.GEN>: an app that has cleared or repainted the screen under the frame has all of it written again (TK-1, tool.keys).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_frame(ctx, keys, pane, msg)
+*
+*     keys   the app's key table      pane   the pane with the focus      msg   the message for the status line (null for none)
+*
+*   Draws, on the rows the layout gives (tk.h): the status line, in reverse video, with the pane in brackets first and the message after it; the border,
+*   one line across, in the library's own line character; the function-key row, in the bar's style, made by $tk_fkeys from the key table; and the app's name
+*   and the audience at the right end of row 0.  Each is written only when its text has changed since it was last written: an app calls this on every key
+*   and about once a second, and an idle app must not rewrite 140 cells each time.  The cursor is put back where the widget with the focus had left it
+*   (SCREEN TEXT leaves it after the text).  An app that has a menu bar draws the menu first; this writes only the right end of row 0.
+*
+*   The values it compares with are kept in a common block, so one app at a time: $tk_open starts a new app, and a changed layout (ctx) redraws the border.
+*   An app that has cleared or repainted the screen under the frame (it got the key resize) raises ctx<TK.C.GEN>, and the next call writes all four parts again.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_frame(ctx, keys, pane, msg)
+$catalog $tk_frame
+
+$include sl.h
+$include tk.h
+
+   common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen
+
+   lw = ctx<TK.C.W>
+   * the app raised ctx<TK.C.GEN>: the screen under the frame was cleared or repainted (a resize, the cursor lock lifted), so none of what was written is known to be there
+   if ctx<TK.C.GEN> # last.gen then
+      last.gen = ctx<TK.C.GEN>
+      last.stat = ''
+      last.keys = ''
+      last.bord = ''
+      last.top = ''
+   end
+   ystat = ctx<TK.C.YSTAT>
+   ybord = ctx<TK.C.YBORD>
+   ykeys = ctx<TK.C.YKEYS>
+
+   * the status line: the pane in brackets, then the message
+   t = ''
+   if pane # '' then t = '[' : pane : ']'
+   if msg # '' then t := (if t = '' then '' else '  ') : msg
+   t = fmt(t[1, lw], lw : 'L')
+   if t = last.stat then
+      null
+   end else
+      last.stat = t
+      keep.cur = ''
+      call $sl_curat('get', keep.cur)
+      screen text t at 0,ystat attr 'reverse'
+      call $sl_curat('back', keep.cur)
+   end
+
+   * the border, once for a layout
+   b = lw : '/' : ybord
+   if b # last.bord then
+      last.bord = b
+      call $sl_line('h', 0, hc)
+      keep.cur = ''
+      call $sl_curat('get', keep.cur)
+      screen text str(hc, lw) at 0,ybord
+      call $sl_curat('back', keep.cur)
+   end
+
+   * the function keys of the pane with the focus
+   call $tk_fkeys(ctx, keys, pane, ft)
+   if ft # last.keys then
+      last.keys = ft
+      keep.cur = ''
+      call $sl_curat('get', keep.cur)
+      screen text ft at 0,ykeys attr 'bar'
+      call $sl_curat('back', keep.cur)
+   end
+
+   * the app and the audience, at the right end of row 0
+   a = ctx<TK.C.APP> : '  ' : ctx<TK.C.AUD>
+   a = a : ' '
+   if a # last.top then
+      last.top = a
+      keep.cur = ''
+      call $sl_curat('get', keep.cur)
+      screen text a at lw - len(a),0 attr 'bar'
+      call $sl_curat('back', keep.cur)
+   end
+
+   return
+end
+
+* END-CODE

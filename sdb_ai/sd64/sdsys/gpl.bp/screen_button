@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN BUTTON f, id, text {AT x,y} {DEFAULT} {CANCEL}
+*   SCREEN BUTTON f, id, text {AT x,y} {DEFAULT} {CANCEL} {COLOR fg,bg} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_button(f, id, text, x, y, default, cancel, ret, status)
+*   call !screen_button(f, id, text, x, y, default, cancel, fg, bg, accel, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
 *     text     the caption; an & puts the letter after it first as the key that presses it (without
@@ -25,12 +26,18 @@
 *
 *   SCREEN RUN f answers the id of the button that ended the form.
 *
+*   COLOR fg,bg gives the button its own colours (see SCREEN ENTRY) until it has the focus; it is then in the focus style.
+*
+*   ACCEL key gives the button a key that reaches it wherever the focus is (see SCREEN ENTRY): f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9.  The key
+*   presses the button.  A letter marked with & in the text (&OK) is also its Alt-letter, and it still presses the button when a plain letter is typed and no
+*   field takes it.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_button(f, id, text, ax, ay, default, cancel, ret, status)
+subroutine screen_button(f, id, text, ax, ay, default, cancel, fg, bg, accel, ret, status)
 $catalog !screen_button
 
    ret = ''
@@ -47,6 +54,10 @@ $catalog !screen_button
    if default # '' then w{'default'} = 1
    if cancel # '' then w{'cancel'} = 1
    call $sl_button('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

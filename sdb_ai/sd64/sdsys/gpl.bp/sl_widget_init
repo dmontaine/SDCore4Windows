@@ -4,7 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  container and viewport.
+* 22 Oct 26 dm  selector (S.75, TK-0.10).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -27,6 +30,8 @@ $catalog $sl_widget_init
       case wt = 'entry' ; call $sl_entry('init', w, '', '', r)
       case wt = 'list' ; call $sl_list('init', w, '', '', r)
       case wt = 'check' ; call $sl_check('init', w, '', '', r)
+      case wt = 'slider' ; call $sl_slider('init', w, '', '', r)
+      case wt = 'selector' ; call $sl_selector('init', w, '', '', r)
       case wt = 'radio' ; call $sl_radio('init', w, '', '', r)
       case wt = 'button' ; call $sl_button('init', w, '', '', r)
       case wt = 'label' ; call $sl_label('init', w, '', '', r)
@@ -37,6 +42,7 @@ $catalog $sl_widget_init
       case wt = 'table' ; call $sl_table('init', w, '', '', r)
       case wt = 'tree' ; call $sl_tree('init', w, '', '', r)
       case wt = 'scroll' ; call $sl_scroll('init', w, '', '', r)
+      case wt = 'container' or wt = 'viewport' ; call $sl_viewport('init', w, '', '', r)
    end case
 
    return

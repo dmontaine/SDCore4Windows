@@ -1,0 +1,64 @@
+* SL_CAPTION
+* Screen library, helper: where a control and its label go (S.75, TK-0.9; the owner asked for a placement option, default left, 22 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 22 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_caption(place, cw, label, geom)
+*
+*     place   left (the default, and what anything not understood means), right, above or below: where the label is, in relation to the control
+*     cw      the width of the control in cells
+*     label   the label's text; null: there is no label and the rectangle is the control
+*     geom    returned, one value to a field (SL.CAP.* in sl.h): the width and the height of the rectangle that holds both, then the column and row of the control
+*             and of the label, from its top left cell.  left and right are one row high with a space between the two; above and below are two rows high and
+*             as wide as the wider of the two, both against the left edge.
+*
+*   The check box and the slider use it for their size, for drawing and for working out where a click fell.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_caption(place, cw, label, geom)
+$catalog $sl_caption
+
+   p = downcase(place)
+   lw = len(label)
+   gw = cw
+   gh = 1
+   cx = 0
+   cy = 0
+   lx = 0
+   ly = 0
+   if lw > 0 then
+      begin case
+         case p = 'right'
+            gw = cw + 1 + lw
+            lx = cw + 1
+         case p = 'above'
+            gw = cw
+            if lw > gw then gw = lw
+            gh = 2
+            cy = 1
+         case p = 'below'
+            gw = cw
+            if lw > gw then gw = lw
+            gh = 2
+            ly = 1
+         case 1
+            gw = lw + 1 + cw
+            cx = lw + 1
+      end case
+   end
+   geom = gw : @vm : gh : @vm : cx : @vm : cy : @vm : lx : @vm : ly
+   return
+end
+
+* END-CODE

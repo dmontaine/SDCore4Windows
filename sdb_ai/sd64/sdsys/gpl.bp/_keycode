@@ -28,6 +28,12 @@
 *           default of the day, vt100, said ^H, so the key did nothing out of
 *           the box.  The default is the windows type from 19 Aug; this stays,
 *           for a session that selects another one.
+* 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - kc.alt (BINDKEY action -7): an unbound Esc and one printable character come back as the two characters, an Alt-letter.
+* 12 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - ESC [ <(an xterm SGR mouse report) is bound to K$MOUSE.
+* 14 Sep 26 Windows port - from Linux 68d6c5e-04f1eaa - Both Ctrl-H (8) and DEL (127) are bound to K$BACKSPACE as
+*               defaults, before the terminfo binds so terminfo still overrides
+*               either - the Windows port's fix of 19 Aug 26 (PORT_ADOPTION 22,
+*               verify-keys).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -197,6 +203,13 @@ $include keycode.h
       if len(key.string) = 1 then
          if system(1001) then key.string = swapcase(key.string)
          return value key.string
+      end
+
+      * 22 Oct 26 dm - AN ALT-LETTER, FOR A PROGRAM THAT ASKED FOR IT (BINDKEY(, -7): the screen library's $sl_key does, for the one read).  A terminal
+      *   sends Alt+x as Esc and x.  Nothing is bound to that, so KEYCODE rang the bell and threw the two characters away.  With kc.alt set it
+      *   returns them, Esc first, for the caller to name.  A key that starts a bound sequence (Esc [ and Esc O) was read on above, so it is not this.
+      if kc.alt and len(key.string) = 2 and key.string[1,1] = char(27) then
+         if seq(key.string[2,1]) > 32 and seq(key.string[2,1]) < 127 then return value key.string
       end
 
       display @sys.bell :

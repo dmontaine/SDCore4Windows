@@ -4,9 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - With CLEAR the context is marked SL.S.SYNC (the terminal matches the shadow), so that forms write only what changes.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 19 Oct 26 dm  With CLEAR the context is marked SL.S.SYNC (the terminal matches the shadow), so that forms write only what changes.
 * END-HISTORY
 *
 * START-DESCRIPTION:

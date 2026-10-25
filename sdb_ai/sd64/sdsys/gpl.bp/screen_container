@@ -1,0 +1,65 @@
+* SCREEN_CONTAINER
+* The subroutine that SCREEN CONTAINER calls: add a bordered rectangle that holds other widgets to a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN CONTAINER f, id {AT x,y} {SIZE w,h} {TITLE t} {NOBORDER}
+*
+*   is compiled into
+*
+*   call !screen_container(f, id, x, y, w, h, title, noborder, ret, status)
+*
+*     f id      the form and the widget's name in it (as SCREEN LABEL)
+*     x y       the top left corner from the form's top left corner (from the inside of the container this one is in,
+*               if SCREEN IN has named one), default 1,1
+*     w h       its size, border included, default 20 by 6
+*     title     shown in its top border
+*     noborder  no border is drawn and the whole rectangle is the inside
+*     status    0 added; 1 not (ELSE)
+*
+*   The widgets added after SCREEN IN f, id are inside it: their AT is counted from the first cell inside the border
+*   (0,0 is the cell right of and under the corner), they move with it, they are hidden, disabled and deleted with it, and
+*   they are drawn, and take the mouse, only where they are inside it.  The container itself takes no focus.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_container(f, id, ax, ay, sw, sh, title, noborder, ret, status)
+$catalog !screen_container
+
+   ret = ''
+   status = 1
+   w = collection()
+   w{'id'} = id
+   w{'type'} = 'container'
+   w{'title'} = title
+   x = 1
+   y = 1
+   cw = 20
+   ch = 6
+   if ax # '' then x = ax + 0
+   if ay # '' then y = ay + 0
+   if sw # '' then cw = sw + 0
+   if sh # '' then ch = sh + 0
+   w{'x'} = x
+   w{'y'} = y
+   w{'w'} = cw
+   w{'h'} = ch
+   w{'border'} = if noborder # '' then 0 else 1
+   call $sl_viewport('init', w, '', '', r)
+   call $sl_wadd(f, w, ok)
+   if ok then status = 0
+
+   return
+end
+
+* END-CODE

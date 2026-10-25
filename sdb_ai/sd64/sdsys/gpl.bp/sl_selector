@@ -1,0 +1,201 @@
+* SL_SELECTOR
+* Screen library, widget: a choice of one of several words in a row, [blue | green | RED | black].
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 22 Oct 26 dm  New (S.75, TK-0.10; the owner asked for a multiple selection slider with a variable number of options whose choice is a one-based number,
+*               22 Oct 2026).  Like the slider it is drawn [word | WORD | word], the word in force in capitals and in the style attr; the slider's value is 0 or 1,
+*               this one's is the number of the word.
+* 22 Oct 26 dm  The letter marked with & in the label is drawn in the hotkey style while the control does not have the focus (apos; S.75 TK-0.12).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_selector(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   Elements:  id, text, x y, ax ay, items (the words, as values), value (the number of the word in force, 1 to start with), attr (the style of the word in
+*   force: any style of $sl_theme, bold when null; window leaves it as the form's own, so only the capitals show it), place (where the label is: left, right,
+*   above or below; left when null)
+*
+*     init    w and h from the words and the label (one row; two rows when the label is above or below); value is brought into range
+*     draw    the label and [blue | green | RED | black] (label on the left by default): the word in force is in capitals and in the style attr, the others in
+*             lower case.  While the control has the focus the whole of it, label included, is in reverse video (the capitals still show the choice) and the
+*             cursor is on the word in force
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key     Right and Left choose the next and the previous word and stop at the last and the first ('handled' either way), Home and End the first and the last,
+*             the space bar the next word and, after the last, the first.  Anything else is 'unhandled' with the key (Return, Tab, Up, Down ...) for the form
+*     mouse   a click on a word (or the space after it, or the bracket at either end) chooses it; a click on the label chooses the next word as the space bar does
+*     close   nothing to undo
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_selector(op, w, scr, key, ret)
+$catalog $sl_selector
+
+$include sl.h
+
+   ret = ''
+   items = w{'items'}
+   n = dcount(items, @vm)
+   if items = '' then n = 0
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'selector'
+         w{'focusable'} = 1
+         t = w{'text'}
+         p = index(t, '&', 1)
+         w{'amn'} = ''
+         w{'apos'} = 0
+         if p and p < len(t) then
+            w{'amn'} = upcase(t[p + 1, 1])      ;* the letter marked with & is its Alt-letter (the form acts on it)
+            w{'apos'} = p                       ;* and is the p-th cell of the label once the & is out: paint underlines it
+            t = t[1, p - 1] : t[p + 1, 99999]
+         end
+         w{'label'} = t
+         v = w{'value'} + 0
+         if v < 1 or v > n then v = 1
+         w{'value'} = v
+         if w{'attr'} = '' then w{'attr'} = 'bold'
+         gosub layout
+         call $sl_caption(w{'place'}, len(sw), t, geom)
+         w{'w'} = geom<1, SL.CAP.W>
+         w{'h'} = geom<1, SL.CAP.H>
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         v = w{'value'} + 0
+         begin case
+            case key = ' '
+               ret = 'handled'
+               gosub nextword
+               gosub paint
+            case key = 'right'
+               ret = 'handled'
+               if v < n then w{'value'} = v + 1
+               gosub paint
+            case key = 'left'
+               ret = 'handled'
+               if v > 1 then w{'value'} = v - 1
+               gosub paint
+            case key = 'home'
+               ret = 'handled'
+               w{'value'} = 1
+               gosub paint
+            case key = 'end'
+               ret = 'handled'
+               w{'value'} = n
+               gosub paint
+            case 1
+               ret = 'unhandled' : @fm : key
+         end case
+
+      case op = 'mouse'
+         ret = 'handled'
+         if key<1> = 'press' then
+            v = w{'value'} + 0
+            gosub layout
+            call $sl_caption(w{'place'}, len(sw), w{'label'}, geom)
+            rel = key<3> - w{'ax'} - geom<1, SL.CAP.CX>
+            rrow = key<4> - w{'ay'} - geom<1, SL.CAP.CY>
+            if rrow = 0 and rel >= 0 and rel < len(sw) then
+               chosen = n
+               for j = n to 1 step -1
+                  if rel <= lastc<j> + 1 then chosen = j
+               next j
+               w{'value'} = chosen
+            end else
+               gosub nextword
+            end
+            gosub paint
+         end
+   end case
+
+   return
+
+* the words as they are drawn: sw is the text, a0 and al the first cell (from 0) and the length of the word in force, lastc<j> the last cell of word j
+layout:
+   sw = '['
+   a0 = 1
+   al = 0
+   lastc = ''
+   for j = 1 to n
+      wd = items<1, j, 1>
+      if j = v then
+         wd = upcase(wd)
+         a0 = len(sw)
+         al = len(wd)
+      end else
+         wd = downcase(wd)
+      end
+      lastc<j> = len(sw) + len(wd) - 1
+      sw := wd
+      if j < n then sw := ' | '
+   next j
+   sw := ']'
+   return
+
+nextword:
+   v = w{'value'} + 0 + 1
+   if v > n then v = 1
+   w{'value'} = v
+   return
+
+paint:
+   call $sl_attr('window', code)
+   if w{'ccode'} # '' then code = w{'ccode'}
+   if w{'focused'} then call $sl_attr('highlight', code)
+   v = w{'value'} + 0
+   gosub layout
+   call $sl_caption(w{'place'}, len(sw), w{'label'}, geom)
+   gw = geom<1, SL.CAP.W>
+   gh = geom<1, SL.CAP.H>
+   cx = geom<1, SL.CAP.CX>
+   cy = geom<1, SL.CAP.CY>
+   lx = geom<1, SL.CAP.LX>
+   ly = geom<1, SL.CAP.LY>
+   gosub hotkey
+   for r = 0 to gh - 1
+      rowtext = space(gw)
+      cells = str(code, gw)
+      if r = cy then
+         rowtext[cx + 1, len(sw)] = sw
+         if not(w{'focused'}) then
+            call $sl_attr(w{'attr'}, ac)
+            for k = 1 to al
+               cells[cx + a0 + k, 1] = ac
+            next k
+         end
+      end
+      if r = ly and w{'label'} # '' then
+         rowtext[lx + 1, len(w{'label'})] = w{'label'}
+         if hk then cells[lx + w{'apos'}, 1] = hcode      ;* the marked letter of the label, in the hotkey style
+      end
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, rowtext, cells)
+   next r
+   if w{'focused'} then call $sl_curat(w{'ax'} + cx + a0, w{'ay'} + cy)
+   return
+
+* hk = 1 when the label's marked letter is to be drawn in the hotkey style (hcode): not while the control has the focus (the whole of it is in the focus
+* style then) and not when it is disabled (its Alt-letter does nothing)
+hotkey:
+   hk = 0
+   if not(w{'focused'}) and w{'disabled'} + 0 = 0 and w{'apos'} + 0 > 0 and w{'apos'} + 0 <= len(w{'label'}) then
+      hk = 1
+      call $sl_attr('hotkey', hcode)
+   end
+   return
+end
+
+* END-CODE

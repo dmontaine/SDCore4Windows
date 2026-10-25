@@ -4,11 +4,13 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 749574b (13 Oct 26): Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 13 Oct 26 Windows port - from Linux e4bc454-70aca05 - Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 13 Oct 26 dm  Word wrap (WRAP), a selection (mark, cut, copy, paste), undo and redo, find, word movement.
+* 18 Oct 26 dm  The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 18 Oct 26 dm  passkeys: key names the area leaves to the program.
+* 18 Oct 26 dm  hbar: an optional horizontal scroll bar in the last row of the area ($sl_hscrollbar), clicks on it, and one row less of text.
+* 19 Oct 26 dm  softcur: an optional highlighted character at the cursor while the area has the focus (the IDE).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -22,7 +24,12 @@
 *   ROW shown: a row is a line, or with wrap a part of one), left (the first column shown; 1 with wrap), want
 *   (the column in its row the cursor tries to keep when it moves up or down), mx and my (the mark: the
 *   other end of the selection, 0 when there is none), find (the text last searched for), undo and redo
-*   (what Ctrl-Z and Ctrl-Y go back to), lastop (what the last key did, so that a run of typing is one undo)
+*   (what Ctrl-Z and Ctrl-Y go back to), lastop (what the last key did, so that a run of typing is one undo), hbar
+*   (1: a horizontal scroll bar in the last row of the area, drawn by $sl_hscrollbar, and one row less of text; none
+*   when the text wraps; a click on its arrows scrolls 8 columns and on its track a page; set by the program, not by SCREEN MEMO), and
+*   passkeys (key names, as values, that the area leaves alone and answers 'unhandled': the program uses them itself), and
+*   softcur (1: while the area has the focus the character under the cursor is drawn in the highlight style, as well as the terminal's
+*   own cursor being put there; not in a readonly area; set by the program, not by SCREEN MEMO)
 *
 *     init    w and h from what was given (at least 3 by 1); a linefeed in the text is taken as the end of a
 *             line; the cursor goes to the start; no selection and nothing to undo
@@ -77,6 +84,14 @@ $include sl.h
    if mh < 1 then mh = 1
    ro = w{'readonly'} + 0
    wrap = w{'wrap'} + 0
+   * 18 Oct 26: hbar (1) puts a horizontal scroll bar in the last row of the area, and the text has one row less.  Opt in: a program that
+   * does not set it (SCREEN MEMO) is drawn as it always was.  There is none when the text wraps (nothing to scroll sideways) or the area is
+   * under three rows high.
+   hb = 0
+   if w{'hbar'} + 0 and not(wrap) and mh >= 3 then
+      hb = 1
+      mh -= 1
+   end
    lines = w{'value'}
    lnum = w{'lnum'} + 0                          ;* 13 Oct 26: line numbers down the left (gut cells: the digits and a blank)
    syl = w{'synlang'} + 0                        ;* 13 Oct 26: the number of the language the text is coloured as (0: none)
@@ -103,11 +118,12 @@ $include sl.h
          w{'type'} = 'memo'
          w{'focusable'} = 1
          w{'w'} = mw
-         w{'h'} = mh
+         w{'h'} = mh + hb
          lines = convert(char(10), @fm, lines)
          cx = 1 ; cy = 1 ; top = 1 ; left = 1 ; want = 1
          mx = 0 ; my = 0 ; undo = '' ; redo = ''
          w{'lastop'} = ''
+         w{'maxn'} = ''                               ;* the longest line is measured again (get.maxl)
          gosub store
 
       case op = 'draw'
@@ -135,6 +151,16 @@ $include sl.h
 click:
    ret = 'handled'
    w{'lastop'} = ''
+   if hb then
+      if key<1> # 'wheel' and key<4> = w{'ay'} + mh then
+         gosub hbar.click
+         gosub count
+         gosub scroll
+         gosub store
+         gosub paint
+         return
+      end
+   end
    if key<1> = 'wheel' then
       if key<2> = 'up' then top -= 3 else top += 3
       if top > nr - mh + 1 then top = nr - mh + 1
@@ -159,6 +185,58 @@ click:
    gosub scroll
    gosub store
    gosub paint
+   return
+
+* A click on the horizontal bar (hb): the left arrow scrolls 8 columns back, the right one 8 on, the track before the thumb a page back and
+* after it a page on; the thumb itself does nothing.  The cursor goes with the view if it would leave it, as it does for the wheel.
+hbar.click:
+   c = key<3> - w{'ax'} - gut                    ;* the cell of the bar, from 0
+   if c < 0 or c >= tw then return
+   gosub get.maxl
+   call $sl_hscrollbar(tw, left, maxl, tw, hbar)
+   call $sl_line('thumb', '', hth)
+   begin case
+      case c = 0
+         left -= 8
+      case c = tw - 1
+         left += 8
+      case hbar[c + 1, 1] = hth
+         null
+      case c + 1 < index(hbar, hth, 1)
+         left -= tw - 1
+      case 1
+         left += tw - 1
+   end case
+   if left > maxl - tw + 1 then left = maxl - tw + 1
+   if left < 1 then left = 1
+   gosub row.of
+   rr = dr
+   want = dcx
+   if want < left then want = left
+   if want > left + tw - 1 then want = left + tw - 1
+   gosub to.row
+   return
+
+* maxl = the length of the longest line, plus one: the width of the text the horizontal bar stands for.  Measuring it is O(the text), and a
+* bar that measured it at every paint made every key in a 30,000-line record cost 85 ms (the verifier: 3.5 s for 40 characters, 0.19 s without
+* the bar).  So it is kept in the widget (maxl, with the length of the whole text it was measured at, maxn) and measured again only when the
+* text has changed length by more than 200 characters since (a typed character moves it by one) or the line the cursor is on is longer than
+* it was.  After a short line is deleted the bar can be a few columns out until the next measure; that is all it costs.
+get.maxl:
+   tl = len(lines)
+   mn = w{'maxn'}
+   if mn = '' or abs(tl - mn) > 200 then
+      maxl = maximum(lens(lines)) + 1
+      w{'maxl'} = maxl
+      w{'maxn'} = tl
+   end else
+      maxl = w{'maxl'} + 0
+      cl = len(lines<cy>) + 1
+      if cl > maxl then
+         maxl = cl
+         w{'maxl'} = maxl
+      end
+   end
    return
 
 * n = the number of lines, nr the number of rows (the same without wrap); a text with nothing in it has one
@@ -478,6 +556,14 @@ handle.key:
    w{'lastop'} = ''
    kind = ''
    vert = @false
+   * 18 Oct 26: passkeys (values) are key names the program keeps for itself; the area does not use them (the IDE's Ctrl-E, which hands
+   *   the record to SED, is the end-of-row key here).  Nothing is changed or drawn for one.
+   if w{'passkeys'} # '' then
+      if index(@vm : w{'passkeys'} : @vm, @vm : key : @vm, 1) then
+         ret = 'unhandled' : @fm : key
+         return
+      end
+   end
    gosub sel.range
    begin case
       case key = 'esc'
@@ -707,6 +793,9 @@ handle.key:
          ret = 'unhandled' : @fm : key
    end case
    w{'lastop'} = kind
+   * 18 Oct 26: a key the area does not use (a function key, a Ctrl key the program keeps for itself, up on the first row) changed nothing, so
+   *   nothing is drawn again; the whole area was drawn again for it (the IDE's F6 wrote the editor twice)
+   if ret<1> = 'unhandled' then return
    gosub count
    if not(vert) and ret<1> = 'handled' then
       gosub row.of
@@ -724,6 +813,15 @@ paint:
    call $sl_attr('gutter', gc)                  ;* 14 Oct 26: was 'disabled', whose background is the window's, not the text's
    call $sl_scrollbar(mh, top, nr, mh, bar)
    gosub sel.range
+   * 19 Oct 26: softcur (1) draws the character under the cursor in the highlight style while the area has the focus, so that the place in the
+   * text shows on a terminal whose own cursor does not (the owner could not see it in the IDE, nor which pane had the focus).  Opt in.
+   sc.row = -1
+   sc.col = 0                                    ;* (both sides of an AND are evaluated: sc.col must have a value when sc.row is tested)
+   if w{'softcur'} + 0 and w{'focused'} and not(ro) then
+      gosub row.of
+      sc.row = dr - top
+      sc.col = dcx - left + 1
+   end
    sl.line = 0                                   ;* the line whose syntax styles are in sty (rows of a wrapped line share them)
    for r = 0 to mh - 1
       rr = top + r
@@ -758,6 +856,7 @@ paint:
             if inside then attrs[k, 1] = hc
          next k
       end
+      if r = sc.row and sc.col >= 1 and sc.col <= tw then attrs[sc.col, 1] = hc
       if gut then
          * The line numbers: on the first row of a line (a wrapped line's other rows, and the rows past the text, have none)
          gnum = space(gut)
@@ -766,6 +865,13 @@ paint:
       end
       call $sl_put(scr, w{'ax'} + gut, w{'ay'} + r, seg : bar[r + 1, 1], attrs : wc)
    next r
+   if hb then
+      * 18 Oct 26: the horizontal bar in the row under the text: the gutter blank, the bar as wide as the text, a blank under the vertical bar
+      gosub get.maxl
+      call $sl_hscrollbar(tw, left, maxl, tw, hrow)
+      if gut then call $sl_put(scr, w{'ax'}, w{'ay'} + mh, space(gut), str(gc, gut))
+      call $sl_put(scr, w{'ax'} + gut, w{'ay'} + mh, hrow : ' ', str(wc, tw + 1))
+   end
    if w{'focused'} then
       gosub row.of
       call $sl_curat(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top)

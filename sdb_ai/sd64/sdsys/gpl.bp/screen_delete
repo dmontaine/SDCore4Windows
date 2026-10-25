@@ -1,0 +1,54 @@
+* SCREEN_DELETE
+* The subroutine that SCREEN DELETE calls: take a widget out of a form.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN DELETE f, id
+*
+*   is compiled into
+*
+*   call !screen_delete(f, id, ret, status)
+*
+*     f id     the form and the widget's name in it
+*     ret      how many widgets were taken out: one, or the container and everything inside it
+*     status   0; 1 if f is not a form or has no widget of that id (ELSE)
+*
+*   A container takes what is inside it with it, however deeply it is nested.  The id can be used again afterwards.  If the
+*   widget had the focus it goes to the first widget that can have it.  If the form is on the screen (SCREEN WAIT put it
+*   there) it is drawn again at once.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_delete(f, id, ret, status)
+$catalog !screen_delete
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   call $sl_form('find', f, '', id, n)
+   if n = 0 then return
+
+   if f{'shown'} and not(system(25)) then
+      call $sl_scr('get', scr)
+      call $sl_form('delete', f, scr, id, r)
+      call $sl_scr('put', scr)
+   end else
+      call $sl_form('delete', f, '', id, r)
+   end
+   ret = r
+   status = 0
+
+   return
+end
+
+* END-CODE

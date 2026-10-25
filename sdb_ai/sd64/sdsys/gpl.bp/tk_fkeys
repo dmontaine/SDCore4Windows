@@ -1,0 +1,52 @@
+* TK_FKEYS
+* The full-screen toolkit, shared base: the text of the function-key row (plan section 2.1).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_fkeys(ctx, keys, pane, text)
+*
+*     keys   the app's key table (tk.h)
+*     pane   the pane that has the focus
+*     text   returned: the keys in force for that pane, in the order of the table, as "F1 help  F3 sort  ^Q quit", cut or padded to the
+*            layout's width.  A key is left out when its entry is switched off (TK.K.ON is 0) or when it names panes and the focused
+*            one is not among them.
+*
+*   The row is made from the same table the key loop reads, so a label cannot name a key the loop does not act on.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_fkeys(ctx, keys, pane, text)
+$catalog $tk_fkeys
+
+$include tk.h
+
+   lw = ctx<TK.C.W>
+   text = ''
+   n = dcount(keys, @fm)
+   for i = 1 to n
+      on = keys<i, TK.K.ON>
+      panes = keys<i, TK.K.PANES>
+      if on # '0' then
+         if panes = '' or index(@sm : panes : @sm, @sm : pane : @sm, 1) then
+            call $tk_keys('name', keys, keys<i, TK.K.KEY>, nm, '', '', '')
+            text := nm : ' ' : keys<i, TK.K.LABEL> : '  '
+         end
+      end
+   next i
+   text = trimb(text)
+   text = fmt(text[1, lw], lw : 'L')
+
+   return
+end
+
+* END-CODE

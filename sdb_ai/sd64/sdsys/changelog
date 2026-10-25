@@ -2,6 +2,138 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+22 Oct 26  THE ACCELERATOR LETTER IS SEEN: A LETTER MARKED WITH & IS DRAWN UNDERLINED ON A SCREEN.
+
+             What        The letter marked with & in the text of a SCREEN CHECK, SLIDER, SELECTOR, BUTTON or LABEL (&Shell) is now drawn
+                        in the hotkey style of the theme: underlined in the mono theme, a colour in the colour themes. It is the one cell
+                        of the label that is drawn so, wherever the label is (left, right, above or below the control; inside the
+                        brackets of a button, [ Go ]), and a COLOR or a word style the control was given still applies to the rest. While
+                        the control has the focus the whole of it is in the focus style, as before, and the letter is not drawn apart. A
+                        disabled control does not show it, since its Alt-letter does nothing. SCREEN SET ... TEXT on a label stops its
+                        letter being drawn marked (the Alt-letter stays); on the other controls the text is read for the & again.
+             Why it      A user can see which letter to press, without the program having to write the letter in the label in some other
+             matters     way.
+             Does not    It changes no key, event, statement or message, and a button's plain first-letter key is not drawn marked, since
+                        only a letter marked with & is an Alt-letter. A second control with the same marked letter is drawn marked too,
+                        though the first one added is the one that answers. The accelerator entry below, from the same release, says the
+                        letter is not drawn marked; that is no longer so.
+
+22 Oct 26  TOOL.KEYS: A FULL-SCREEN DIAGNOSTIC FOR THE TERMINAL AND THE KEYBOARD, FOR EVERYONE.
+
+             What        tool.keys shows the terminal type SD is using and the one in the environment, the window, the locale and
+                        whether the borders are line characters, whether the terminal can show colour, the theme and the mouse events that
+                        have arrived. Every key pressed goes to a list of the 25 newest with the name the screen library gives it (up, f5,
+                        ctrl-g, alt-s, mouse, or the character and its code), and is ticked in a grid of 52 keys: the arrows, home, end,
+                        paging, insert, delete, backspace, tab, Enter, Esc, the function keys, the control keys, an Alt-letter, a printable
+                        character and the mouse. Ctrl-R switches to raw bytes, the first eight bytes the terminal sent in hex with the
+                        characters beside them, for a key the terminal type does not name. The mouse box counts presses, releases, drags and
+                        wheel turns; a box shows the library's sixteen styles each in itself; Ctrl-T changes the theme (mono, classic, blue;
+                        a terminal with no colour keeps mono and says so), Ctrl-L clears and Ctrl-Q leaves. Every key is shown before the
+                        program acts on it. A window smaller than 140 by 43 is refused with the library's message, a window made smaller
+                        while it runs shows the cursor lock and the screen comes back when it is made larger, and the end of the input ends
+                        the program.
+             Why it      "The F5 key does nothing" and "the arrow prints ^[[A" are answered by looking: the key either has a name under
+             matters     this terminal type, or it does not and its bytes show what the terminfo entry would need. It is also the first
+                        program built on the full-screen toolkit's shared frame (status line, border, function-key row).
+             Does not    It changes nothing and reads nothing but the terminal type, window and locale the session already knows, so it
+                        is in every account's vocabulary and needs no gate. It cannot show the keys a terminal never sends (a key the
+                        window manager keeps for itself), and a key that ends the program (Ctrl-Q) can only be tested by leaving. An
+                        xterm's End sequence sent to a vt100 arrives as a stray ~, which is what a vt100 entry does with it.
+
+22 Oct 26  ACCELERATOR KEYS ON THE CONTROLS OF AN SD BASIC SCREEN, AND ALT-LETTERS FOR THE SCREEN LIBRARY.
+
+             What        An entry, combo box, check box, slider, selector, radio group, list, button, tab strip, memo, tree or table takes
+                        ACCEL key as a last clause: ACCEL 'alt-s', 'ctrl-g' or 'f5' (f1 to f12, ctrl-a to ctrl-z except ctrl-h, ctrl-i,
+                        ctrl-j and ctrl-m, alt-a to alt-z and alt-0 to alt-9; Alt+S, alt-s and ALT-S are one key; anything else makes the
+                        statement take its ELSE). The key reaches the control wherever the focus is, even inside a text field. A button is
+                        pressed; a check box is ticked or unticked, a slider slid and a selector moved to its next word, each with a change
+                        event; any other control takes the focus. The letter marked with & in the text of a button, check box, slider,
+                        selector or label (&Shell) is also that control's Alt-letter, and a label's Alt-letter takes the focus to the next
+                        control that can have it. A disabled control, or one on another tab's page, does not answer, and when two controls
+                        have the same key the first one added does. To make Alt-letters reach a program at all, KEYCODE() learned to
+                        return an Esc and one printable character that nothing is bound to as those two characters when BINDKEY(, -7) has
+                        asked for it (BINDKEY(, -8) switches it off; off is the default), and SCREEN KEY and SCREEN WAIT now report an
+                        Alt-letter as the key alt-x, in lower case, where the terminal used to ring the bell and drop it.
+             Why it      A full screen program can give its controls the shortcuts a user expects, and one that has a field in focus no
+             matters     longer has to leave it first.
+             Does not    It does not draw the letter underlined or in another style, so a program that wants it seen writes it in the
+                        label. It works only on a terminal that sends Alt+x as Esc and x (most do; macOS Terminal needs "Use Option as
+                        Meta key"), a terminal or window manager may keep some Alt-letters for itself, and an Esc followed by a letter
+                        within a fifth of a second is read as an Alt-letter. The command line and SED, which read raw keys, are not
+                        changed; the IDE, CED and the library's dialogs now receive an Alt-letter as a key they have no use for, where
+                        the terminal used to ring the bell.
+
+22 Oct 26  SCREEN SELECTOR: A CHOICE OF ONE WORD AMONG SEVERAL, [blue | green | RED | black], FOR SD BASIC SCREENS.
+
+             What        SCREEN SELECTOR f, id, text, words {AT x,y} {VALUE n} {ATTR style} {PLACE where} {COLOR fg,bg} adds a row of words
+                        to a form, one of them in force: the word is in capitals and in a style (bold unless ATTR names another), the others
+                        in lower case. The words are a dynamic array of any length (at least one; an empty list makes the statement take
+                        its ELSE). Left and Right choose the previous and the next word and stop at the ends, Home and End go to the first
+                        and the last, the space bar chooses the next word and, after the last, the first; a click on a word (or on the space
+                        after it, or on either bracket) chooses it and a click on the text chooses the next word. SCREEN GET answers the
+                        number of the word in force, counted from one (3 for RED), SCREEN SET f, id VALUE n chooses one (a number outside
+                        the words is brought into range), SCREEN SET ... ITEMS gives it other words (the first is chosen), and SCREEN WAIT
+                        reports a change event with the number. PLACE and COLOR work as for the check box and the slider.
+             Why it      A setting with more than two states (a colour, a mode, a size) can be shown as the whole row of its values with the
+             matters     one in force marked, where a radio group takes a column of the screen and a combo box hides the other choices.
+             Does not    It is not a list: all the words are always on the screen in one row, so it suits a few short words. A row wider
+                        than the form is cut off at the form's edge as any control is. The on / off SLIDER still gives 1 or 0.
+
+22 Oct 26  COLOR FG,BG ON THE CONTROLS OF AN SD BASIC SCREEN: BLACK TEXT ON GREEN, FOR EXAMPLE.
+
+             What        SCREEN LABEL, ENTRY, COMBO, CHECK, SLIDER, RADIO, LIST, BUTTON and PROGRESS take COLOR fg,bg as a last clause. The
+                        colours are black, blue, green, cyan, red, magenta, brown and white, either may be left out for the terminal's own.
+                        Each pair is one of sixteen spare styles that the program shares, however many controls use it; a seventeenth
+                        different pair, or a word that is no colour, makes the statement take its ELSE. The colours stay when the program
+                        changes the theme and go when the screen is closed. A coloured entry or combo box KEEPS its colours while it has the
+                        focus (the cursor and an underline show where it is); the other controls show their colours until they have the
+                        focus and then the focus style, as before. A label's COLOR wins over its ATTR.
+             Why it      A field that must stand out (an error, a required entry, a status) can have its own colours without a theme of its
+             matters     own, and a form can use a few colours consistently.
+             Does not    Memo, table, tree and the tab strip have no COLOR: they have their own styling. A terminal that cannot show colour
+                        ignores the clause and the control is drawn as it always was. The sixteen are shared by the whole program, so a
+                        screen that needs more than sixteen colour pairs cannot have them.
+
+22 Oct 26  SCREEN CHECK AND SCREEN SLIDER: THE LABEL GOES WHERE YOU SAY, AND ON THE LEFT BY DEFAULT.
+
+             What        Both statements take PLACE where: left, right, above or below. The label used to be after the check box ([x] text);
+                        it is now before it by default (text [x]) and PLACE 'right' gives the old look. ABOVE and BELOW make the control two
+                        rows high, the label on one row and the box or switch on the other, both against the left edge. A click on the label
+                        works the control (a check box is checked or unchecked, a switch slides the other way), the focus highlight covers
+                        label and control together, and the cursor sits on the box or on the word in force.
+             Why it      A column of controls can have their labels on the left, like the fields of a form, or above them, without a separate
+             matters     label statement and without the label and the control coming apart when a program moves or hides one of them.
+             Does not    It changes the look of a check box that did not say PLACE: a program written against the earlier build of the
+                        screen library, which drew [x] text, must say PLACE 'right' to keep it. No program shipped with SD uses SCREEN
+                        CHECK, so none changed. Radio groups, lists and the other controls have no PLACE.
+
+22 Oct 26  SCREEN SLIDER: AN ON / OFF SWITCH, [off | ON], WITH WORDS OF YOUR CHOICE, FOR SD BASIC SCREENS.
+
+             What        SCREEN SLIDER f, id, text {AT x,y} {VALUE v} {ATTR style} {WORDS w1,w2} adds a switch to a form. It is drawn
+                        [off | ON] text when it is on and [OFF | on] text when it is off: the word in force is in capitals and in a style
+                        (bold unless ATTR names another, a colour in a colour theme; ATTR window leaves it as the form's own so that only
+                        the capitals show). WORDS 'left','right' changes the words (the first is the off state, the second the on state):
+                        [left | RIGHT]. The space bar slides it the other way, Left sets it off, Right sets it on, a click on a word sets
+                        that state and a click on the text slides it the other way. SCREEN GET answers 1 or 0, SCREEN SET f, id VALUE v sets
+                        it (any value but 0 is on), and SCREEN WAIT reports a change event for it as it does for a check box.
+             Why it      An on / off choice in a full screen program (an access gate, a setting) can be shown as a switch that says in words
+             matters     what each state is, and Left and Right work on it directly, where a check box only has the space bar.
+                        by dragging with the mouse. A click on a switch that has not the focus gives it the focus and sets it, and the form
+                        reports the focus, not a change, as it does for a check box. The words are plain text for two states; they are not
+                        translated and a switch cannot have a third state.
+
+22 Oct 26  SCREEN SLIDER: AN ON / OFF SWITCH WITH A SLIDING KNOB FOR SD BASIC SCREENS.
+
+             What        SCREEN SLIDER f, id, text {AT x,y} {VALUE v} adds a switch to a form. It is drawn [O--] text when it is off and
+                        [==O] text when it is on. The space bar slides it the other way, Left slides it off, Right slides it on, and a
+                        click slides it the other way. SCREEN GET answers 1 or 0, SCREEN SET f, id VALUE v sets it (any value but 0 is on),
+                        and SCREEN WAIT reports a change event for it as it does for a check box.
+             Why it      An on / off choice in a full screen program (an access gate, a setting) can be shown as a switch, and Left and
+             matters     Right work on it directly, where a check box only has the space bar.
+             Does not    It is a different picture of the same two values as a check box, not a new kind of value, and it does not slide
+                        by dragging with the mouse: a click slides it the other way. A click on a switch that has not the focus gives it
+                        the focus and slides it, and the form reports the focus, not a change, as it does for a check box.
+
 19 Oct 26  THE IDE SHOWS WHICH PANE IS ACTIVE WITH A [*] OR [-] IN ITS TOP RIGHT CORNER.
 
              What        Each pane that can have the keyboard now carries a small mark in its top right corner: [*] on the one that has it and

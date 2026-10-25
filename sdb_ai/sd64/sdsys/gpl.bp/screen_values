@@ -4,7 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -38,7 +39,7 @@ $catalog !screen_values
    for i = 1 to nw
       w = f{'widgets', i}
       wt = w{'type'}
-      if wt = 'entry' or wt = 'check' or wt = 'radio' or wt = 'list' or wt = 'combo' or wt = 'progress' or wt = 'tabs' or wt = 'table' then
+      if wt = 'entry' or wt = 'check' or wt = 'slider' or wt = 'selector' or wt = 'radio' or wt = 'list' or wt = 'combo' or wt = 'progress' or wt = 'tabs' or wt = 'table' then
          k = w{'id'}
          c{k} = w{'value'}
       end

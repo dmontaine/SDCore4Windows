@@ -1,0 +1,87 @@
+* TK_RUN
+* The full-screen toolkit, shared base: the one place a tool runs a command (plan section 2.5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.2).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_run(allow, sentence, out, status, err)
+*
+*     allow     the commands this tool may run, lower case, separated by spaces: the list the tool declares at its top
+*     sentence  the command, built by the tool from values it has checked
+*     out       returned: what the command printed
+*     status    returned: the command's return code (@system.return.code), 0 when it was not run
+*     err       returned: null when the command was run; else the message that says why it was not (12809-12812).  Nothing ran.
+*
+*   Refused before anything runs: an empty sentence; a first word that is not in allow (so a defect in a tool cannot run sh); a word that holds
+*   any character but a-z, 0-9, dot, dash and underscore (so a name or a word cannot carry a second command, a quote, a mark or a control
+*   character); a sentence over 40 words or 500 characters.  The first word is compared as typed, in lower case.
+*
+*   It runs the command with EXECUTE, trapping aborts, so a command that aborts returns here.  The command's own checks, quoting, group handling
+*   and audit line are the authority for what it does: this routine writes no audit line and changes nothing itself.  A command that asks a
+*   question or a password is not run through here (the tool hands the terminal over for it).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_run(allow, sentence, out, status, err)
+$catalog $tk_run
+
+$include tk.h
+
+   err = ''
+   out = ''
+   status = 0
+
+   s = trim(sentence)
+   if s = '' then
+      err = sysmsg(12809)
+      return
+   end
+
+   if len(s) > 500 then
+      err = sysmsg(12812)
+      return
+   end
+   nw = dcount(s, ' ')
+   if nw > 40 then
+      err = sysmsg(12812)
+      return
+   end
+
+   verb = field(s, ' ', 1)
+   ok.verb = @false
+   na = dcount(allow, ' ')
+   for i = 1 to na
+      if field(allow, ' ', i) = verb and verb # '' then ok.verb = @true
+   next i
+   if not(ok.verb) then
+      err = sysmsg(12810, verb)
+      return
+   end
+
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for i = 1 to nw
+      w = field(s, ' ', i)
+      for j = 1 to len(w)
+         if index(good, w[j, 1], 1) = 0 then
+            err = sysmsg(12811, w)
+            return
+         end
+      next j
+   next i
+
+   execute s trapping aborts capturing out
+   status = @system.return.code
+
+   return
+end
+
+* END-CODE

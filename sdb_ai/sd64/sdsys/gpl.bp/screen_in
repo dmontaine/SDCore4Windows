@@ -1,0 +1,54 @@
+* SCREEN_IN
+* The subroutine that SCREEN IN calls: the widgets added next are inside a container.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN IN f, id
+*
+*   is compiled into
+*
+*   call !screen_in(f, id, ret, status)
+*
+*     f        the form (a collection from SCREEN FORM)
+*     id       the container or viewport (SCREEN CONTAINER, SCREEN VIEWPORT) the widgets added from now on are inside.
+*              A null id ends it: widgets added after that are in the form again.
+*     status   0; 1 if f is not a form, or id is not a container or viewport of it (ELSE; what was named before stays)
+*
+*   This is for the widgets what SCREEN PAGE is for tab pages, and works with it: a widget can be on a page and in a
+*   container.  A container named while another is current is inside that one: SCREEN IN f, 'outer' / SCREEN CONTAINER
+*   f, 'inner' / SCREEN IN f, 'inner' nests.  Name 'outer' again to go back to it, or null to end.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_in(f, id, ret, status)
+$catalog !screen_in
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   if id = '' then
+      f{'curparent'} = ''
+      status = 0
+      return
+   end
+   call $sl_form('find', f, '', id, n)
+   if n = 0 then return
+   w = f{'widgets', n}
+   if w{'type'} # 'container' and w{'type'} # 'viewport' then return
+   f{'curparent'} = id
+   status = 0
+
+   return
+end
+
+* END-CODE

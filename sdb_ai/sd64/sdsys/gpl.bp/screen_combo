@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN COMBO f, id, items {AT x,y} {WIDTH n} {VALUE v}
+*   SCREEN COMBO f, id, items {AT x,y} {WIDTH n} {VALUE v} {COLOR fg,bg} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_combo(f, id, items, x, y, width, value, ret, status)
+*   call !screen_combo(f, id, items, x, y, width, value, fg, bg, accel, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
 *     items    the choices, as values (a field mark does as well)
@@ -24,12 +25,17 @@
 *
 *   Typing edits the text as in an entry field; Down or F4 opens the list under it.  SCREEN GET f, id answers the text.
 *
+*   COLOR fg,bg gives the field and the [v] their own colours (see SCREEN ENTRY): kept while the combo box has the focus, underlined.
+*
+*   ACCEL key gives the combo box a key that reaches it wherever the focus is (see SCREEN ENTRY): f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9.
+*   The combo box takes the focus.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_combo(f, id, items, ax, ay, width, value, ret, status)
+subroutine screen_combo(f, id, items, ax, ay, width, value, fg, bg, accel, ret, status)
 $catalog !screen_combo
 
    ret = ''
@@ -48,6 +54,10 @@ $catalog !screen_combo
    w{'fw'} = fw
    w{'value'} = value
    call $sl_combo('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

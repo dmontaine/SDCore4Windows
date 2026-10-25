@@ -4,11 +4,12 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 3bca321 (12 Oct 26): The name now gives a one-character style CODE (the shadow keeps one per cell), and
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 12 Oct 26 dm  The name now gives a one-character style CODE (the shadow keeps one per cell), and
 *               $sl_sgr turns a code into the sequence to DISPLAY; before, the name gave the sequence.
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): The table is $sl_theme's: the codes are the same in every theme and the theme says what
+* 12 Oct 26 dm  The table is $sl_theme's: the codes are the same in every theme and the theme says what
 *               each looks like (colours as well as reverse video and underline).
-* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
 * END-HISTORY
 *
 * START-DESCRIPTION:

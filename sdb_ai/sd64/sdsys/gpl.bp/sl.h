@@ -56,7 +56,9 @@ $define SL.W.S2        9
 $define SL.W.D        10
 
 * The style codes, in the order of $sl_theme's list of names (a new style goes on the end of both)
-$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTB'
+* 22 Oct 26: the last sixteen (ACDEFHIJKLMNOQRS) are the USER styles user1 to user16, spare slots that $sl_theme('slot') hands to a control that asks for its own
+* colours (the COLOR clause); a theme leaves them plain and keeps what a control put in them
+$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTBACDEFHIJKLMNOQRS'
 
 $define SL.S.W         1
 $define SL.S.H         2
@@ -72,3 +74,11 @@ $define SL.S.BCLIP     11
 $define SL.S.NARROW    12
 $define SL.S.SYNC      13
 $define SL.S.DIFF      14
+*
+* The answer of $sl_caption (where a control and its label go inside the widget's rectangle), one value to a field (22 Oct 26)
+$define SL.CAP.W       1       ;* the width of the rectangle
+$define SL.CAP.H       2       ;* its height: 1, or 2 when the label is above or below the control
+$define SL.CAP.CX      3       ;* the column of the control, from the left of the rectangle
+$define SL.CAP.CY      4       ;* the row of the control
+$define SL.CAP.LX      5       ;* the column of the label
+$define SL.CAP.LY      6       ;* the row of the label

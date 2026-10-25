@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 22 Oct 26 dm  Actions -7 and -8: Alt-letters (kc.alt, see _keycode).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -33,6 +34,9 @@
 * action = -4   Restore key bindings (uses a previously saved binding set)
 * action = -5   Disable lone Esc handling of KEYCODE(). Returns old state.
 * action = -6   Enable lone Esc handling of KEYCODE(). Returns old state.
+* action = -7   KEYCODE() returns an Alt-letter (a terminal sends Alt+x as Esc and x, bound to nothing) as those two
+*               characters, Esc first, instead of ringing the bell and dropping them. Returns old state (1 or 0).
+* action = -8   Back to the bell and the drop (the default). Returns old state.
 *
 * STATUS() = 0     Success
 *          = 1     Invalid key string
@@ -131,6 +135,16 @@ $include keycode.h
       case action = -6        ;* Enable lone Esc handling of KEYCODE()
          n = not(kc.disable.esc)
          kc.disable.esc = @false
+         return value n
+
+      case action = -7        ;* Return an Alt-letter as Esc and the letter
+         n = kc.alt + 0
+         kc.alt = @true
+         return value n
+
+      case action = -8        ;* Ring the bell for an Alt-letter again (the default)
+         n = kc.alt + 0
+         kc.alt = @false
          return value n
    end case
 

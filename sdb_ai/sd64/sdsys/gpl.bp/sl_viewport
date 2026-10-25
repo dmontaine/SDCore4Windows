@@ -1,0 +1,308 @@
+* SL_VIEWPORT
+* Screen library, widget: a container that holds other widgets, and a viewport, a container that scrolls them.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_viewport(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   The container is a bordered rectangle that owns widgets: a widget added with SCREEN IN f, id has w{'parent'} = id,
+*   its x and y count from the first cell INSIDE the container's border (0,0 is the cell right of and under the
+*   corner), it moves with the container, it is hidden, disabled and deleted with it, and it is drawn and hit only
+*   where it is inside the container.  The viewport is a container whose inside is a window on a larger sheet: the
+*   children are placed on the sheet, which is cw by ch cells, and sx, sy say which cell of it is at the top left.
+*   $sl_form does the placing (layout), the clipping (call.widget) and the focus (a child that takes the focus is
+*   scrolled into view); this program is the container's own look and keys.
+*
+*   Elements:  type (container or viewport), id, x y w h (the whole rectangle, border included), border (1, or 0
+*   for none), title, focusable (1 for a viewport, 0 for a container), cw ch (the sheet, a viewport only; default
+*   what shows), sx sy (the first column and row of the sheet shown, from 0), and, worked out by init and draw:
+*   bw (1 with a border), needv needh (1 where a scroll bar is shown), visw vish (the size of what shows: the inside
+*   less the bars)
+*
+*     init    the type, border and sizes; a size under 3 (1 with no border) is made that
+*     geom    needv needh visw vish worked out from w h cw ch, and sx sy brought into range (no screen needed)
+*     draw    the border with the title, in the highlight style while it has the focus; the bars of a viewport that has
+*             more sheet than window: a vertical one in the right column and a horizontal one in the bottom row of
+*             the inside (the corner is left blank), thumb in the highlight style.  The inside is not blanked:
+*             the form does that, so that the children drawn before this one are not wiped
+*     focus   key = 1 gives it the focus (draws), key = 0 takes it away
+*     key     up and down move the sheet one row, left and right one column, pgup and pgdn a page less one, home and
+*             end go to the top and the bottom.  ret<1> is 'handled' (sx, sy are the new place; the form redraws the
+*             children), or 'unhandled' with the key when the move is not possible, so that the form can go on to
+*             the widget before or after
+*     mouse   key is the event.  The wheel moves three rows, with Shift three columns; a click on an arrow of a bar
+*             moves one, on the track either side of the thumb a page; a press on the thumb starts a drag (w{'drag'}
+*             is v or h, and the form sends the drag and release events to this widget until the release)
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_viewport(op, w, scr, key, ret)
+$catalog $sl_viewport
+
+$include sl.h
+
+   ret = ''
+   isvp = (w{'type'} = 'viewport')
+
+   begin case
+      case op = 'init'
+         if w{'type'} # 'container' then w{'type'} = 'viewport'
+         isvp = (w{'type'} = 'viewport')
+         w{'focusable'} = if isvp then 1 else 0
+         if w{'border'} = '' then w{'border'} = 1
+         w{'border'} = if w{'border'} + 0 # 0 then 1 else 0
+         mn = if w{'border'} then 3 else 1
+         if w{'w'} + 0 < mn then w{'w'} = mn
+         if w{'h'} + 0 < mn then w{'h'} = mn
+         if isvp then
+            if w{'cw'} = '' then w{'cw'} = w{'w'} - 2 * w{'border'}
+            if w{'ch'} = '' then w{'ch'} = w{'h'} - 2 * w{'border'}
+            w{'cw'} = w{'cw'} + 0
+            w{'ch'} = w{'ch'} + 0
+            w{'sx'} = w{'sx'} + 0
+            w{'sy'} = w{'sy'} + 0
+         end
+         gosub geom
+
+      case op = 'geom'
+         gosub geom
+
+      case op = 'draw'
+         gosub geom
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub geom
+         gosub paint
+
+      case op = 'key'
+         gosub geom
+         ret = 'handled'
+         if isvp = 0 then
+            ret = 'unhandled' : @fm : key
+         end else
+            pgy = vish - 1
+            if pgy < 1 then pgy = 1
+            pgx = visw - 1
+            if pgx < 1 then pgx = 1
+            begin case
+               case key = 'up'
+                  if sy > 0 then sy -= 1 else ret = 'unhandled' : @fm : key
+               case key = 'down'
+                  if sy < spany then sy += 1 else ret = 'unhandled' : @fm : key
+               case key = 'left'
+                  if sx > 0 then sx -= 1 else ret = 'unhandled' : @fm : key
+               case key = 'right'
+                  if sx < spanx then sx += 1 else ret = 'unhandled' : @fm : key
+               case key = 'pgup'
+                  if sy > 0 then sy -= pgy else ret = 'unhandled' : @fm : key
+               case key = 'pgdn'
+                  if sy < spany then sy += pgy else ret = 'unhandled' : @fm : key
+               case key = 'home'
+                  sy = 0
+               case key = 'end'
+                  sy = spany
+               case 1
+                  ret = 'unhandled' : @fm : key
+            end case
+            w{'sx'} = sx
+            w{'sy'} = sy
+            gosub geom
+         end
+
+      case op = 'mouse'
+         gosub geom
+         ret = 'handled'
+         kind = key<1>
+         mx = key<3> + 0
+         my = key<4> + 0
+         if isvp then
+            begin case
+               case kind = 'wheel'
+                  d = if key<2> = 'up' then -3 else 3
+                  if index(key<5>, 's', 1) then sx += d else sy += d
+               case kind = 'press' and key<2> = 1
+                  gosub press.bar
+               case kind = 'drag' and w{'drag'} # ''
+                  gosub drag.bar
+               case kind = 'release'
+                  w{'drag'} = ''
+            end case
+            w{'sx'} = sx
+            w{'sy'} = sy
+            gosub geom
+         end
+   end case
+
+   return
+
+* needv needh visw vish worked out, sx sy brought into range; the locals the rest of the program uses are set here
+geom:
+   isvp = (w{'type'} = 'viewport')
+   bw = if w{'border'} + 0 # 0 then 1 else 0
+   iw = w{'w'} - 2 * bw
+   ih = w{'h'} - 2 * bw
+   if iw < 0 then iw = 0
+   if ih < 0 then ih = 0
+   needv = 0 ; needh = 0
+   tw = iw ; th = ih
+   sx = 0 ; sy = 0
+   if isvp then
+      tw = w{'cw'} + 0
+      th = w{'ch'} + 0
+      needv = (th > ih)
+      needh = (tw > iw)
+      if needv and tw > iw - 1 then needh = 1
+      if needh and th > ih - 1 then needv = 1
+      sx = w{'sx'} + 0
+      sy = w{'sy'} + 0
+   end
+   visw = iw - needv
+   vish = ih - needh
+   if visw < 0 then visw = 0
+   if vish < 0 then vish = 0
+   spanx = tw - visw
+   spany = th - vish
+   if spanx < 0 then spanx = 0
+   if spany < 0 then spany = 0
+   if sx > spanx then sx = spanx
+   if sx < 0 then sx = 0
+   if sy > spany then sy = spany
+   if sy < 0 then sy = 0
+   w{'bw'} = bw
+   w{'needv'} = needv
+   w{'needh'} = needh
+   w{'visw'} = visw
+   w{'vish'} = vish
+   if isvp then
+      w{'sx'} = sx
+      w{'sy'} = sy
+   end
+   return
+
+* The border, in the highlight style while the container has the focus, and the bars
+paint:
+   if w{'focused'} then call $sl_attr('highlight', code) else call $sl_attr('window', code)
+   if bw then call $sl_frame(scr, w{'ax'} + 0, w{'ay'} + 0, w{'w'} + 0, w{'h'} + 0, w{'title'}, code, 0)
+   if isvp then gosub paint.bars
+   return
+
+* The scroll bars of a viewport that has more sheet than window
+paint.bars:
+   call $sl_attr('highlight', hl)
+   call $sl_attr('window', nl)
+   call $sl_line('thumb', '', tch)
+   if needv then
+      call $sl_scrollbar(vish, sy + 1, th, vish, bar)
+      x = w{'ax'} + bw + visw
+      y = w{'ay'} + bw
+      for r = 0 to vish - 1
+         c = bar[r + 1, 1]
+         code = if c = tch then hl else nl
+         call $sl_put(scr, x, y + r, c, code)
+      next r
+   end
+   if needh then
+      call $sl_scrollbar(visw, sx + 1, tw, visw, bar)
+      bar = convert(char(19) : char(20) : char(21) : char(22), '|#^v', bar)      ;* a horizontal bar keeps to ASCII (as $sl_scroll)
+      bar = convert('^v|', '<>-', bar)
+      x = w{'ax'} + bw
+      y = w{'ay'} + bw + vish
+      for r = 0 to visw - 1
+         c = bar[r + 1, 1]
+         code = if c = '#' then hl else nl
+         call $sl_put(scr, x + r, y, c, code)
+      next r
+   end
+   return
+
+* A press on a bar: an arrow moves one, the track a page, the thumb starts a drag.  Anywhere else it does nothing.
+press.bar:
+   bx = w{'ax'} + bw + visw
+   by = w{'ay'} + bw
+   if needv and mx = bx and my >= by and my < by + vish then
+      pos = my - by
+      blen = vish ; bval = sy + 1 ; btot = th ; bvis = vish
+      gosub bar.hit
+      if bthumb then
+         w{'drag'} = 'v' : @vm : bfirst : @vm : btl
+         w{'grab'} = pos - bfirst
+      end else
+         sy += bdelta
+      end
+      return
+   end
+   hx = w{'ax'} + bw
+   hy = w{'ay'} + bw + vish
+   if needh and my = hy and mx >= hx and mx < hx + visw then
+      pos = mx - hx
+      blen = visw ; bval = sx + 1 ; btot = tw ; bvis = visw
+      gosub bar.hit
+      if bthumb then
+         w{'drag'} = 'h' : @vm : bfirst : @vm : btl
+         w{'grab'} = pos - bfirst
+      end else
+         sx += bdelta
+      end
+   end
+   return
+
+* The mouse moves with the button down after a press on the thumb: the thumb follows, so the sheet is as far along as the
+* top of the thumb is along the track
+drag.bar:
+   dr = w{'drag'}
+   axis = dr<1, 1>
+   btl = dr<1, 3>
+   if axis = 'v' then
+      pos = my - (w{'ay'} + bw)
+      blen = vish ; span = spany
+   end else
+      pos = mx - (w{'ax'} + bw)
+      blen = visw ; span = spanx
+   end
+   room = blen - 2
+   rng = room - btl
+   if rng > 0 then
+      frac = (pos - w{'grab'} - 1) / rng
+      if frac < 0 then frac = 0
+      if frac > 1 then frac = 1
+      nv = int(frac * span + 0.5)
+      if axis = 'v' then sy = nv else sx = nv
+   end
+   return
+
+* What a press at cell pos of a bar blen long does: bdelta lines (an arrow, or a page either side of the thumb), or
+* bthumb = 1 when it is on the thumb (which starts at cell bfirst and is btl long)
+bar.hit:
+   call $sl_scrollbar(blen, bval, btot, bvis, bar)
+   call $sl_line('thumb', '', tch)
+   bfirst = index(bar, tch, 1) - 1
+   btl = 0
+   if bfirst >= 0 then
+      loop while bar[bfirst + btl + 1, 1] = tch do btl += 1 repeat
+   end
+   bdelta = 0 ; bthumb = 0
+   pgs = bvis - 1
+   if pgs < 1 then pgs = 1
+   begin case
+      case pos <= 0 ; bdelta = -1
+      case pos >= blen - 1 ; bdelta = 1
+      case bfirst >= 0 and pos < bfirst ; bdelta = -pgs
+      case bfirst >= 0 and pos >= bfirst + btl ; bdelta = pgs
+      case bfirst >= 0 ; bthumb = 1
+   end case
+   return
+end
+
+* END-CODE

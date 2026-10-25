@@ -166,6 +166,10 @@ FAIL_CLOSED = {
     ("granta", "if not(is_grp_member(user, grp)) then"):
         "revoke: a could-not-tell reports 'has not been granted', which the "
         "site's own comment already accepts for an orphaned SID",
+    ("tk_gates", "state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)"):
+        "tool.gates (S.75, carried 25 Oct 26 from Linux 04f1eaa): a display of the "
+        "gate matrix for an administrator; a could-not-tell shows the gate as off, "
+        "never as on, and nothing is granted or changed from it",
     ("login", "if not(is_grp_member(lgn.id,'sdusers')) then"):
         "the sdusers gate at LOGIN: an access check fails closed with 5009; "
         "the audit reason 'not a member of sdusers' does not tell a failed "

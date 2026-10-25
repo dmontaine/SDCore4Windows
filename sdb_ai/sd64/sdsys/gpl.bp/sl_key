@@ -4,11 +4,12 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42, phase 3: for a program that asked for the cursor lock ($sl_guardmode), the cursor is looked at
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  Terminal 140 by 42, phase 3: for a program that asked for the cursor lock ($sl_guardmode), the cursor is looked at
 *               before a key is read; off the screen, $sl_guard takes the keyboard.  'guardquit' is the new key name; a lift
 *               of the lock is reported as 'resize', since the screen is the guard's and the program must draw it again.
+* 22 Oct 26 dm  An Alt-letter is the key alt-x (KEYCODE is asked for it with BINDKEY(, -7) for the read; it used to ring the bell and drop it).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -19,6 +20,8 @@
 *     name     returned: null if the timeout ran out or the input has ended, else
 *                up down left right home end pgup pgdn ins del bs tab btab enter esc
 *                f1 ... f12, ctrl-a ... ctrl-z (those with no name of their own),
+*                alt-a ... alt-z, alt-0 ... alt-9 (and the other printable characters: a terminal sends Alt+x as Esc and x; the letter
+*                is lower case whichever case was typed),
 *                or the character itself for a printable character
 *                guardquit  (only for a program that asked for the cursor lock, $sl_guardmode) the user has chosen to leave from the
 *                           lock; it is returned by every later call, and the program leaves without saving
@@ -79,7 +82,11 @@ $include err.h
    if remain = 0 then remain = ''
    loop
    until k # '' do
+      alt.was = bindkey('', -7)           ;* an Alt-letter comes back as Esc and the letter, for this read only
       k = keycode(1)
+      kst = status()                      ;* BINDKEY clears STATUS(), and the loop below tells a timeout from an input that ended by it
+      if alt.was then x = bindkey('', -7) else x = bindkey('', -8)
+      set.status kst
       if k # '' then
          size.now = @crtwide : ',' : @crthigh
          if sz.last # size.now then          ;* the window was resized as this key came: 'resize' first, the key next time
@@ -106,6 +113,8 @@ $include err.h
    n = seq(k[1, 1])
 
    begin case
+      case len(k) = 2 and k[1,1] = char(27)
+         name = 'alt-' : downcase(k[2,1])      ;* an Alt-letter (or Alt-digit or Alt-sign): Alt+S and Alt+s are both alt-s
       case len(k) > 1
          name = k                     ;* A string a binding gave: handed back as it is
       case n = K$MOUSE

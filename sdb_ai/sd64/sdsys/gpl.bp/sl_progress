@@ -4,7 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -55,6 +56,7 @@ $include sl.h
          done = int(inner * v / 100 + 0.5)
          call $sl_attr('highlight', hl)
          call $sl_attr('window', nl)
+         if w{'ccode'} # '' then hl = w{'ccode'}          ;* the filled part in the colours the COLOR clause gave
          call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[', nl)
          if done > 0 then call $sl_put(scr, w{'ax'} + 1, w{'ay'} + 0, str('#', done), hl)
          if inner - done > 0 then call $sl_put(scr, w{'ax'} + 1 + done, w{'ay'} + 0, space(inner - done), nl)

@@ -1,0 +1,449 @@
+* SL_PICKWIN
+* Screen library, window: choose from a list of named entries by typing part of the name (S.75, G1).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 22 Oct 26 dm  New (S.75, TK-0.6).
+* 22 Oct 26 dm  The paged source (S.75, TK-0.7): src and opts, the record ids of an open file read a page at a time.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_pickwin(items, title, multi, default, ret, status, src, opts)
+*
+*     items    one entry to a field; in an entry, value 1 is the name, value 2 a one-line description shown beside it, value 3 the help for the entry
+*              (shown on the help line when the person presses ?; the description is shown when there is none).  Null when src is used.
+*     title    shown in the top border
+*     multi    1: several entries can be picked (space picks or unpicks); 0 or null: one
+*     default  the number of the entry the window starts on (the first); not used with src
+*     ret      the number of the entry chosen, IN ITEMS (not its place among the entries the filter shows); with multi the numbers picked, as values, in the
+*              order they were picked; if none was picked, the entry the person was on.  WITH src, the record id (or the ids, as values) in place of the number.
+*     status   0 Enter chose; 1 Esc, an input that ended, a session with no terminal, the user leaving from the cursor lock, a click outside the window,
+*              a list with no entry
+*     src      null, or an open file: the entries are its record ids (see below)
+*     opts     null for a list in items; for src a dynamic array: 1 the attribute of the record shown as the description (0 for none), 2 the page, how many
+*              entries a read adds (200), 3 the scan, how many ids one read looks at at most (100000), 4 the cache, how many entries are kept (20000)
+*
+*   The first line of the window is the filter: every printable character typed narrows the list to the entries that hold it in the name or the
+*   description, without regard to case; Backspace widens it; Ctrl-U empties it.  The entry the person was on stays current when it still matches.  Because
+*   typed characters are the filter, a letter does NOT jump to an entry; in a multi window the space bar picks, so a filter cannot hold a space there.  ?
+*   shows or hides the help line.  Up, down, home, end, page up and page down move among the entries shown.  The right end of the first line says how many entries
+*   are shown of how many there are, and how many are picked.  Picks are kept by the entry, so they stay when the filter hides the entry, and Enter answers
+*   them all.  A click on an entry makes it current (with multi it also picks or unpicks it), a second click on it is Enter, the wheel scrolls, a click outside the
+*   window is Esc.  The window keeps its size while the filter changes, and what was under it is put back when it closes.
+*
+*   THE PAGED SOURCE.  With src the window does not hold the file: it reads the record ids in order (SSELECT, on select list 10, which it clears) and keeps only
+*   those it has read, a page more whenever the cursor comes within a window's height of the end of them.  The filter is applied WHILE reading (an id, with the
+*   attribute shown when opts says so, holding the text), so a new filter starts the read again from the first id, and a record is read from the file only when a
+*   description is asked for.  The first line says "n shown" once every id has been looked at, and "n or more shown" while some have not; one read looks at the
+*   scan number of ids at most, so a filter that few ids match may show nothing yet: the first row then says how many ids have been searched and any key that moves
+*   down goes on searching.  End reads on until the cache is full or the file is done.  The picks and the answer are the record ids.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_pickwin(items, title, multi, default, ret, status, src, opts)
+$catalog $sl_pickwin
+
+$include sl.h
+
+   ret = ''
+   status = 1
+   if system(25) then return                  ;* a phantom has no terminal: nothing is drawn, nobody is waited for
+   fmode = 0
+   if opts # '' then fmode = 1
+   filt = ''
+   exhausted = 1
+   if fmode then
+      dfield = opts<1> + 0
+      page = opts<2> + 0
+      if page < 1 then page = 200
+      scancap = opts<3> + 0
+      if scancap < 1 then scancap = 100000
+      cachecap = opts<4> + 0
+      if cachecap < 1 then cachecap = 20000
+      items = ''
+      n = 0
+      searched = 0
+      gosub src.restart
+   end else
+      n = dcount(items, @fm)
+      if items = '' then n = 0
+   end
+   if n = 0 and exhausted then
+      if fmode then clearselect 10
+      return
+   end
+   call $sl_scr('get', scr)
+
+   * the columns: the name (at most 30 cells), then the description; the window is as wide as they need, 44 cells at least
+   nw = 4
+   dw = 0
+   for i = 1 to n
+      if len(items<i, 1>) > nw then nw = len(items<i, 1>)
+      if len(items<i, 2>) > dw then dw = len(items<i, 2>)
+   next i
+   if fmode then
+      if nw < 12 then nw = 12                 ;* the ids not read yet may be longer than these
+      if dfield > 0 and dw < 30 then dw = 30
+   end
+   if nw > 30 then nw = 30
+   lead = (if multi then 4 else 1)
+   maxh = scr<SL.S.H> - 8
+   if maxh < 3 then maxh = 3
+   lh = n
+   if not(exhausted) then lh = maxh            ;* more may come: the window is as high as it will be
+   if lh > maxh then lh = maxh
+   if lh < 3 then lh = 3
+   lw = lead + nw + 2 + dw + 1
+   if lw < 44 then lw = 44
+   if len(title) + 4 > lw then lw = len(title) + 4
+   if lw > scr<SL.S.W> - 4 then lw = scr<SL.S.W> - 4
+   bw = lw + 2
+   bh = lh + 4                                 ;* the border, the filter line, the rows, the help line
+   bx = int((scr<SL.S.W> - bw) / 2)
+   by = int((scr<SL.S.H> - bh) / 2)
+   if bx < 0 then bx = 0
+   if by < 0 then by = 0
+   x0 = bx + 1                                 ;* the inside
+   yf = by + 1                                 ;* the filter line
+   y1 = by + 2                                 ;* the first row
+   yh = by + 2 + lh                            ;* the help line
+
+   call $sl_region('save', scr, bx, by, bw, bh, under)
+   call $sl_attr('window', nl)
+   call $sl_frame(scr, bx, by, bw, bh, title, nl, 1)
+
+   vis = ''
+   fo = 0
+   nvis = n
+   picked = ''
+   helpon = 0
+   clk = 0
+   top = 1
+   cur = default + 0
+   if fmode then cur = 1
+   if cur < 1 or cur > n then cur = 1
+   if cur > lh then top = cur - lh + 1
+   gosub paint
+
+   loop
+      call $sl_key('', k)
+      if k = '' or k = 'guardquit' then k = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
+      st = ''
+      begin case
+         case k = 'mouse'
+            gosub mouse
+         case k = 'resize'
+            call $sl_resize(scr)                      ;* the terminal's size changed: the window is drawn again with the rest
+         case k = 'esc'
+            st = 'cancel'
+         case k = 'enter'
+            gosub answer
+         case k = 'down'
+            if fmode and cur >= n then gosub fetch
+            if cur < nvis then cur += 1
+         case k = 'up'
+            if cur > 1 then cur -= 1
+         case k = 'home'
+            if nvis > 0 then cur = 1
+         case k = 'end'
+            if fmode then
+               loop while not(exhausted) and n < cachecap do
+                  gosub fetch
+               repeat
+            end
+            cur = nvis
+         case k = 'pgdn'
+            if fmode and cur + lh - 1 > n then gosub fetch
+            cur += lh - 1
+            if cur > nvis then cur = nvis
+         case k = 'pgup'
+            cur -= lh - 1
+            if cur < 1 and nvis > 0 then cur = 1
+         case k = 'bs'
+            if filt # '' then
+               filt = filt[1, len(filt) - 1]
+               gosub refilter
+            end
+         case k = 'ctrl-u'
+            if filt # '' then
+               filt = ''
+               gosub refilter
+            end
+         case k = '?'
+            helpon = 1 - helpon
+         case k = ' ' and multi
+            gosub toggle
+         case len(k) = 1 and seq(k) >= 32 and seq(k) < 127
+            filt := k
+            gosub refilter
+      end case
+      if st = '' then
+         if fmode and not(exhausted) and cur > n - lh then gosub fetch      ;* the cursor is near the end of what has been read: read a page more
+         gosub scroll
+         gosub paint
+      end
+   until st = 'done' or st = 'cancel'
+   repeat
+
+   call $sl_region('restore', scr, bx, by, bw, bh, under)
+   call $sl_scr('put', scr)
+   if fmode then clearselect 10
+   if st = 'done' then status = 0
+
+   return
+
+* oi = the number in items of the entry shown at place i
+orig:
+   oi = i
+   if fo then oi = vis<1, i>
+   return
+
+* The filter has changed: the entries shown are those that hold it in the name or the description.  The current entry stays current when it still matches.
+refilter:
+   if fmode then
+      gosub file.refilter
+      return
+   end
+   keep = 0
+   if cur >= 1 and cur <= nvis then
+      i = cur
+      gosub orig
+      keep = oi
+   end
+   vis = ''
+   fo = 0
+   nvis = n
+   if filt # '' then
+      fo = 1
+      uf = upcase(filt)
+      for i = 1 to n
+         if index(upcase(items<i, 1> : ' ' : items<i, 2>), uf, 1) then vis<1, -1> = i
+      next i
+      nvis = dcount(vis, @vm)
+      if vis = '' then nvis = 0
+   end
+   cur = 1
+   if nvis = 0 then cur = 0
+   if keep then
+      for p = 1 to nvis
+         i = p
+         gosub orig
+         if oi = keep then cur = p ; exit
+      next p
+   end
+   top = 1
+   return
+
+* The paged source, a new filter: the ids are read again from the first, and the id the person was on stays current if it is read again in the first page
+file.refilter:
+   keepid = ''
+   if cur >= 1 and cur <= n then keepid = items<cur, 1>
+   gosub src.restart
+   cur = 1
+   if n = 0 then cur = 0
+   if keepid # '' then
+      for p = 1 to n
+         if items<p, 1> = keepid then cur = p ; exit
+      next p
+   end
+   top = 1
+   return
+
+* The paged source, from the first id: the ids in order on select list 10, nothing read, then the first page
+src.restart:
+   clearselect 10
+   sselect src to 10
+   items = ''
+   n = 0
+   exhausted = 0
+   searched = 0
+   nvis = 0
+   gosub fetch
+   return
+
+* The paged source: read ids until a page of entries that hold the filter has been added, the scan number of ids has been looked at, the cache is full or the
+* ids are done
+fetch:
+   if exhausted or n >= cachecap then return
+   got = 0
+   scanned = 0
+   uf = upcase(filt)
+   loop while got < page and scanned < scancap and n < cachecap do
+      readnext id from 10 else exhausted = 1 ; exit
+      scanned += 1
+      desc = ''
+      if dfield > 0 then
+         read rec from src, id then
+            desc = rec<dfield>
+         end else
+            desc = ''
+         end
+      end
+      keepit = 1
+      if filt # '' then keepit = index(upcase(id : ' ' : desc), uf, 1)
+      if keepit then
+         n += 1
+         items<n> = id : @vm : desc
+         got += 1
+      end
+   repeat
+   searched += scanned
+   nvis = n
+   return
+
+* Pick or unpick the current entry (by its number in items, or its id with src)
+toggle:
+   if cur >= 1 then
+      i = cur
+      gosub orig
+      pk = oi
+      if fmode then pk = items<oi, 1>
+      locate pk in picked<1, 1> setting at then
+         del picked<1, at>
+      end else
+         picked<1, -1> = pk
+      end
+   end
+   return
+
+* Enter: the entry (or the entries picked)
+answer:
+   if multi and picked # '' then
+      ret = picked
+      st = 'done'
+   end else
+      if cur >= 1 then
+         i = cur
+         gosub orig
+         ret = oi
+         if fmode then ret = items<oi, 1>
+         st = 'done'
+      end
+   end
+   return
+
+* Keep the current entry inside the rows shown
+scroll:
+   if cur < 1 then cur = (if nvis > 0 then 1 else 0)
+   if cur > nvis then cur = nvis
+   if cur >= 1 and cur < top then top = cur
+   if cur > top + lh - 1 then top = cur - lh + 1
+   if top < 1 then top = 1
+   return
+
+* A mouse event: a click on an entry makes it current (with multi it picks or unpicks it), a second click on it is Enter, the wheel scrolls, a click outside is Esc
+mouse:
+   call $sl_mouse('get', mev)
+   inrows = (mev<3> >= x0 and mev<3> < x0 + lw and mev<4> >= y1 and mev<4> < y1 + lh)
+   begin case
+      case mev<1> = 'wheel' and mev<3> >= bx and mev<3> < bx + bw and mev<4> >= by and mev<4> < by + bh
+         if mev<2> = 'up' then cur -= 3 else cur += 3
+         if cur > nvis then cur = nvis
+         if cur < 1 and nvis > 0 then cur = 1
+      case mev<1> = 'press' and mev<2> = 1
+         if inrows then
+            i = top + mev<4> - y1
+            if i >= 1 and i <= nvis then
+               if i = clk and not(multi) then
+                  cur = i
+                  gosub answer
+               end else
+                  cur = i
+                  clk = i
+                  if multi then gosub toggle
+               end
+            end
+         end else
+            if mev<3> < bx or mev<3> >= bx + bw or mev<4> < by or mev<4> >= by + bh then st = 'cancel'
+         end
+   end case
+   return
+
+paint:
+   call $sl_attr('highlight', hl)
+   call $sl_attr('field', fc)
+   tw = lw
+   bar = (nvis > lh)
+   if bar then
+      tw = lw - 1
+      call $sl_scrollbar(lh, top, nvis, lh, sbc)
+   end
+
+   * the filter line: the label, the text in the entry style, and at the right end how many entries are shown and picked
+   lab = sysmsg(12827) : ' '
+   cnt = sysmsg(12828, nvis, n)
+   if fmode then
+      cnt = sysmsg(12832, nvis)
+      if not(exhausted) then cnt = sysmsg(12833, nvis)
+   end
+   if multi and picked # '' then cnt = sysmsg(12829, dcount(picked, @vm)) : '  ' : cnt
+   fw = lw - len(lab) - len(cnt) - 2
+   if fw < 4 then fw = 4
+   ftxt = filt
+   if len(ftxt) > fw then ftxt = ftxt[len(ftxt) - fw + 1, fw]
+   line = ' ' : lab : ftxt : space(fw - len(ftxt)) : ' ' : cnt
+   line = line[1, lw]
+   line := space(lw - len(line))
+   code = str(nl, 1 + len(lab)) : str(fc, fw) : str(nl, lw - 1 - len(lab) - fw)
+   call $sl_put(scr, x0, yf, line, code)
+
+   * the rows
+   for r = 0 to lh - 1
+      i = top + r
+      if i > nvis then
+         line = space(tw)
+         code = str(nl, tw)
+      end else
+         gosub orig
+         if multi then
+            mark = '[ ] '
+            pk = oi
+            if fmode then pk = items<oi, 1>
+            locate pk in picked<1, 1> setting at else at = 0
+            if at then mark = '[x] '
+         end else
+            mark = ' '
+         end
+         nm = items<oi, 1>[1, nw]
+         line = mark : nm : space(nw - len(nm)) : '  ' : items<oi, 2>
+         line = line[1, tw]
+         line := space(tw - len(line))
+         code = str(nl, tw)
+         if i = cur then code = str(hl, tw)
+      end
+      if r = 0 and nvis = 0 then               ;* the filter left nothing: say so in the first row
+         tmp = ' ' : sysmsg(12831) : space(tw)
+         if fmode and not(exhausted) then tmp = ' ' : sysmsg(12834, searched) : space(tw)
+         line = tmp[1, tw]
+      end
+      if bar then
+         line := sbc[r + 1, 1]
+         code := nl
+      end
+      call $sl_put(scr, x0, y1 + r, line, code)
+   next r
+
+   * the help line: the help of the entry the person is on after ?, else the reminder that ? gives it
+   if helpon and cur >= 1 then
+      i = cur
+      gosub orig
+      htxt = items<oi, 3>
+      if htxt = '' then htxt = items<oi, 2>
+   end else
+      htxt = sysmsg(12830)
+   end
+   tmp = ' ' : htxt : space(lw)
+   line = tmp[1, lw]
+   call $sl_put(scr, x0, yh, line, str(nl, lw))
+
+   call $sl_curat(x0 + 1 + len(lab) + len(ftxt), yf)
+   return
+end
+
+* END-CODE

@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN TABLE f, id, columns, rows {AT x,y} {SIZE w,h} {VALUE n} {MULTI}
+*   SCREEN TABLE f, id, columns, rows {AT x,y} {SIZE w,h} {VALUE n} {MULTI} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_table(f, id, columns, rows, x, y, w, h, value, multi, ret, status)
+*   call !screen_table(f, id, columns, rows, x, y, w, h, value, multi, accel, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     columns   one value for each column: its heading, and as a subvalue what the column looks like: a width and
@@ -35,12 +36,15 @@
 *   it.  SCREEN GET f, id answers the number of the current row IN ROWS, whatever order it is shown in; SCREEN SET
 *   f, id ITEMS rows replaces the data (and puts the order of rows back).
 *
+*   ACCEL key gives the table a key that reaches it wherever the focus is: f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9 (see SCREEN ENTRY).  The table
+*   takes the focus.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_table(f, id, columns, rows, ax, ay, sw, sh, value, multi, ret, status)
+subroutine screen_table(f, id, columns, rows, ax, ay, sw, sh, value, multi, accel, ret, status)
 $catalog !screen_table
 
    ret = ''
@@ -60,6 +64,8 @@ $catalog !screen_table
    w{'cur'} = value + 0
    w{'multi'} = (multi # '')
    call $sl_table('init', w, '', '', r)
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

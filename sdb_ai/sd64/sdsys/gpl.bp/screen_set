@@ -4,9 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - f{'quiet'} = 1 stops the redraw of the whole form after a set (for a program that draws the widget itself).
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  f{'quiet'} = 1 stops the redraw of the whole form after a set (for a program that draws the widget itself).
+* 22 Oct 26 dm  VALUE on a selector is brought into range (1 to the number of words).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -55,10 +56,15 @@ $catalog !screen_set
             w{'value'} = value
             w{'pos'} = len(value) + 1
             w{'pan'} = 1
-         case wt = 'check'
+         case wt = 'check' or wt = 'slider'
             v = 0
             if value + 0 # 0 then v = 1
             w{'value'} = v
+         case wt = 'selector'
+            sv = value + 0
+            if sv > dcount(w{'items'}, @vm) then sv = dcount(w{'items'}, @vm)
+            if sv < 1 then sv = 1
+            w{'value'} = sv
          case wt = 'radio'
             w{'value'} = value + 0
             w{'cur'} = value + 0
@@ -80,19 +86,28 @@ $catalog !screen_set
    end
    if text # '' then
       w{'text'} = text
+      if wt = 'label' then w{'apos'} = 0       ;* a label's marked letter was a place in its old text: not drawn in the new (the Alt-letter stays)
       call $sl_widget_init(w)
    end
    if items # '' then
-      if wt = 'table' then
-         w{'rows'} = items                      ;* a table's rows are fields, their cells values: nothing is converted
+      if wt = 'table' and w{'keycol'} + 0 > 0 then
+         * 22 Oct 26, S.75 G3: a table with a key column keeps its current row, its marks, its sort and its filter across new rows, by the key
+         w{'newrows'} = items
+         w{'nopaint'} = 1                       ;* the form is drawn below, when it is on the screen
+         call $sl_table('refresh', w, '', '', r0)
+         w{'nopaint'} = 0
       end else
-         w{'items'} = convert(@fm, @vm, items)
+         if wt = 'table' then
+            w{'rows'} = items                   ;* a table's rows are fields, their cells values: nothing is converted
+         end else
+            w{'items'} = convert(@fm, @vm, items)
+         end
+         w{'picked'} = ''
+         w{'top'} = 1
+         w{'cur'} = 1
+         w{'value'} = 1
+         call $sl_widget_init(w)
       end
-      w{'picked'} = ''
-      w{'top'} = 1
-      w{'cur'} = 1
-      w{'value'} = 1
-      call $sl_widget_init(w)
    end
    if enabled # '' then
       if enabled + 0 = 0 then

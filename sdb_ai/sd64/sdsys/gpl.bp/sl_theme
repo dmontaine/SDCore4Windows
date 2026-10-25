@@ -4,7 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -88,6 +89,9 @@ $include sl.h
       th.names := @fm : 'gutter'                    ;* 14 Oct 26: the line numbers of a text area (code G: every letter was taken)
       th.names := @fm : 'pane'                      ;* 14 Oct 26: the body of a tree, so that it can differ from the window's frame (code P)
       th.names := @fm : 'tab' : @fm : 'scroll'      ;* 14 Oct 26: the strip of tabs (code T) and the scroll bar column of a list, text area, table or tree (code B)
+      for q = 1 to 16
+         th.names := @fm : 'user' : q                 ;* 22 Oct 26: the spare styles a control's COLOR clause takes (codes A C D E F H I J K L M N O Q R S)
+      next q
    end
    names = th.names
 
@@ -114,6 +118,13 @@ $include sl.h
          gosub set.style
          if ret = 0 then th.asked = 1
 
+      case op = 'slot'
+         * A control asks for its own colours (the COLOR clause): a = foreground, b = background, c = flags (bold dim reverse underline).  ret is the code of a
+         * USER style (user1 to user16) that holds exactly those, one already given to the same colours or the first free one; 'none' when the colours cannot
+         * be shown (a phantom, a terminal with no colour: the clause is then ignored); 'full' when all sixteen are in use; 'bad' for a colour or a flag
+         * it does not know.  A theme leaves the user styles as they are, so a colour survives SCREEN THEME; SCREEN CLOSE empties them.
+         gosub get.slot
+
       case op = 'default'
          * SCREEN OPEN: the theme the administrator chose for the site (SCREENTHEME in sd.conf), unless the program has
          * asked for one itself.  A name that is no theme, or a theme this terminal cannot show (no colour), is not an
@@ -128,6 +139,12 @@ $include sl.h
 
       case op = 'reset'
          * SCREEN CLOSE, and the clean-up after a program that did not: the next program starts from mono, having asked for nothing
+         if not(unassigned(th.defs)) then
+            ufirst = len(th.codes) - 15
+            for s = ufirst to len(th.codes)
+               th.defs<s> = ''                          ;* the user styles go with the program that asked for them
+            next s
+         end
          a = 'mono'
          gosub set.theme
          th.asked = 0
@@ -225,6 +242,11 @@ set.theme:
       end
    end
 
+   ufirst = len(th.codes) - 15                     ;* the user styles (COLOR clauses) are the program's, not the theme's: they are kept across the change
+   keepu = ''
+   for s = ufirst to len(th.codes)
+      keepu<s> = th.defs<s>
+   next s
    gosub clear.defs
    n = dcount(spec, @fm)
    for k = 1 to n
@@ -238,6 +260,9 @@ set.theme:
          gosub put.def
       end
    next k
+   for s = ufirst to len(th.codes)
+      if keepu<s> # '' then th.defs<s> = keepu<s>
+   next s
    gosub build.seqs
    th.name = nm
    ret = 0
@@ -308,6 +333,51 @@ set.style:
    if th.name = '' then gosub load.mono
    gosub put.def
    if ret = 0 then gosub build.seqs
+   return
+
+* A user style for the colours a (foreground), b (background) and the flags c: the one that already holds them (value 4 of its definition is the request, in
+* lower case), else the first free one.  ret is its code, or none, full or bad (see the slot op)
+get.slot:
+   ret = 'bad'
+   if th.name = '' then gosub load.mono
+   sfg = a
+   sbg = b
+   sfl = c
+   if trim(sfg) # '' or trim(sbg) # '' then
+      if system(25) then
+         ret = 'none'
+         return
+      end
+      if @(-37, 7) = '' or @(-38, 0) = '' then
+         ret = 'none'
+         return
+      end
+   end
+   skey = downcase(trim(sfg)) : '|' : downcase(trim(sbg)) : '|' : downcase(trim(convert('+,', '  ', sfl)))
+   ufirst = len(th.codes) - 15
+   have = 0
+   free = 0
+   for s = ufirst to len(th.codes)
+      if th.defs<s, 4> = skey and have = 0 then have = s
+      if th.defs<s, 4> = '' and free = 0 then free = s
+   next s
+   begin case
+      case have > 0
+         ret = th.codes[have, 1]
+      case free = 0
+         ret = 'full'
+      case 1
+         i = free
+         gosub put.def
+         if ret = 0 then
+            th.defs<i, 4> = skey
+            ucode = th.codes[i, 1]                    ;* before build.seqs, which loops on i
+            gosub build.seqs
+            ret = ucode
+         end else
+            ret = 'bad'
+         end
+   end case
    return
 
 * Style number i takes the colours sfg on sbg and the flags sfl; ret 0, or 3 for something it does not know

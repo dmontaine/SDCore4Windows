@@ -4,9 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New (the loop of SCREEN REFRESH, which a change of theme needs as well).
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New (the loop of SCREEN REFRESH, which a change of theme needs as well).
-* 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - Writes every row whatever SL.S.DIFF says, and sets SL.S.SYNC: the terminal matches the shadow when it has run.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New (the loop of SCREEN REFRESH, which a change of theme needs as well).
+* 19 Oct 26 dm  Writes every row whatever SL.S.DIFF says, and sets SL.S.SYNC: the terminal matches the shadow when it has run.
 * END-HISTORY
 *
 * START-DESCRIPTION:

@@ -4,7 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  A viewport answers where it is scrolled to.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -19,7 +21,8 @@
 *     ret      entry: the text.  check: 1 or 0.  radio: the number of the choice selected.  list: the number
 *              of the current item (with MULTI the numbers of those picked, as values).  combo: the text.
 *              tabs: the number of the chosen tab.  table: the number of the current row.  memo: the text,
-*              one line to a field.  label: its text.
+*              one line to a field.  label: its text.  viewport: the first column and row of the sheet shown, from 0,
+*              with a value mark between.
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
 * END-DESCRIPTION
@@ -37,11 +40,15 @@ $catalog !screen_get
    if n = 0 then return
 
    w = f{'widgets', n}
-   if w{'type'} = 'label' then
-      ret = w{'text'}
-   end else
-      ret = w{'value'}
-   end
+   begin case
+      case w{'type'} = 'label'
+         ret = w{'text'}
+      case w{'type'} = 'viewport'
+         call $sl_viewport('geom', w, '', '', r)         ;* the first column and row of the sheet shown, from 0
+         ret = w{'sx'} : @vm : w{'sy'}
+      case 1
+         ret = w{'value'}
+   end case
    status = 0
 
    return

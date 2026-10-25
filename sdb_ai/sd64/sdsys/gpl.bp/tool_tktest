@@ -1,0 +1,545 @@
+* TOOL_TKTEST
+* The full-screen toolkit: a THROW-AWAY app that exercises the shared base (S.75, TK-0.1).  It is not a verb of the product: no VOC entry ships for it, and
+* sandbox-tk-base.py makes the one it runs.  It goes when the first real app (tool.keys) can do its job.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   tktest {admin} {dialogs}      tktest table [N] [theme]      tktest pick [N] [page] [scan]      tktest slider
+*
+*   accel shows a form with controls that have accelerator keys (ACCEL, and the letter marked with & as an Alt-letter) and the log of what the keys did.
+*
+*   selector shows a form with four choices of one word among several (SCREEN SELECTOR: label left, right with ATTR window, above, and in colours) and a label
+*   that says their numbers and the last change; F2 sets them from the program (a number above the last is brought into range, new words choose the first).
+*
+*   slider [theme] shows a form with three sliders and a check box (the on / off switch, SCREEN SLIDER; the third has ATTR window, so only its capitals show the state, and the words left and right);
+*   a label under them shows their values and the last change.
+*
+*   dialogs starts on pane D, whose keys are F7 (a Run / Cancel box for create.file zztkdlg1 dynamic) and F8 (the same with the name zztkdlg2 to be typed): the
+*   confirm boxes of the base ($tk_explain, $tk_confirm, then $tk_run), exercised by sandbox-tk-base.py with the disk as evidence.
+*
+*   Two panes, A and B, one key table.  Tab moves the focus; F1 (every pane) says which pane has it; F3 (sort) is pane A's key and F5 (refresh) pane B's; Ctrl-S
+*   (save) is in the table but switched off, so the function-key row never shows it; Ctrl-Q leaves.  The word admin asks for the administrator audience.
+*   The loop ends when the input ends and when the cursor lock's own way out is taken.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_tktest
+$catalog $tool_tktest
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   aud = ''
+   if field(@sentence, ' ', 2) = 'admin' then aud = 'admin'
+
+   call $tk_open('tktest', aud, ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'f3', 'sort', 'sort', 'A', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', 'B', 1)
+   call $tk_keys('add', keys, 'f7', 'confirm', 'confirm', 'D', 1)
+   call $tk_keys('add', keys, 'f8', 'typed', 'typed', 'D', 1)
+   call $tk_keys('add', keys, 'f3', 'sort', 'tsort', 'T', 1)
+   call $tk_keys('add', keys, 'f4', 'filter', 'filter', 'T', 1)
+   call $tk_keys('add', keys, 'f6', 'refresh', 'trefresh', 'T', 1)
+   call $tk_keys('add', keys, 'f9', 'pick', 'pick', 'P', 1)
+   call $tk_keys('add', keys, 'f10', 'multi', 'pickm', 'P', 1)
+   call $tk_keys('add', keys, 'f11', 'file', 'pickf', 'P', 1)
+   call $tk_keys('add', keys, 'f12', 'files', 'pickfm', 'P', 1)
+   call $tk_keys('add', keys, 'ctrl-s', 'save', 'save', '', 0)
+   call $tk_keys('add', keys, 'tab', 'next', 'next', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   pane = 'A'
+   if field(@sentence, ' ', 2) = 'dialogs' or field(@sentence, ' ', 3) = 'dialogs' then pane = 'D'
+   msg = ''
+
+   * pane T: a table (sl_table, G3) of N rows (tktest table N, 12 by default) driven directly, with a filter (F4) and a refresh (F6) that changes the rows
+   if field(@sentence, ' ', 2) = 'table' then
+      pane = 'T'
+      tn = field(@sentence, ' ', 3) + 0
+      if tn < 1 then tn = 12
+      gosub t.build
+      call $sl_scr('get', scr)
+      th = field(@sentence, ' ', 4)                       ;* tktest table N classic: the mono theme draws every style but header and highlight as text
+      if th # '' then call $sl_theme('set', th, 'asked', '', '', tr)        ;* 'asked': the program wants this theme, not the site's default
+      w = collection()
+      w{'ax'} = 0
+      w{'ay'} = 1
+      w{'w'} = 70
+      w{'h'} = 20
+      w{'multi'} = 1
+      w{'keycol'} = 1
+      w{'cols'} = 'Name' : @sm : '14L' : @vm : 'Qty' : @sm : '6R' : @vm : 'On' : @sm : '4K' : @vm : 'City' : @sm : '10L'
+      w{'rows'} = trows
+      w{'rowstyle'} = tstyle
+      call $sl_table('init', w, scr, '', tr)
+      call $sl_table('focus', w, scr, 1, tr)
+      gosub t.state
+   end
+
+   * pane P: the pick window (sl_pickwin, G1) over N entries (tktest pick N, 12 by default): F9 picks one, F10 several; the status line says what was chosen
+   if field(@sentence, ' ', 2) = 'pick' then
+      pane = 'P'
+      pn = field(@sentence, ' ', 3) + 0
+      if pn < 1 then pn = 12
+      pg = field(@sentence, ' ', 4) + 0                  ;* tktest pick N page scan: the page and the scan of the paged source (the defaults when 0)
+      sc = field(@sentence, ' ', 5) + 0
+      gosub p.build
+      pkopen = 0
+      open 'zzpkfile' to pkf then
+         pkopen = 1
+      end else
+         pkopen = 0
+      end
+   end
+
+   * pane S: a form with two sliders (SCREEN SLIDER, TK-0.8) and a check box; the label shows their values and the last change; F2 sets them from the program
+   if field(@sentence, ' ', 2) = 'slider' then
+      pane = 'S'
+      th = field(@sentence, ' ', 3)                       ;* tktest slider classic: a colour theme, to see the style of the word in force
+      if th # '' then call $sl_theme('set', th, 'asked', '', '', tr)
+      gosub s.run
+   end
+
+   * pane S again: every place of the label (left, right, above, below, and none given, which is left) for a check box and a slider
+   if field(@sentence, ' ', 2) = 'place' then
+      pane = 'S'
+      gosub pl.run
+   end
+
+   * pane S again: the COLOR clause on every control that has one (tktest color); F2 changes the theme.  tktest colorfull fills the sixteen user styles
+   if field(@sentence, ' ', 2) = 'color' then
+      pane = 'S'
+      gosub c.run
+   end
+   if field(@sentence, ' ', 2) = 'colorfull' then
+      pane = 'S'
+      gosub cf.run
+   end
+
+   * pane S again: accelerator keys (tktest accel)
+   if field(@sentence, ' ', 2) = 'accel' then
+      pane = 'S'
+      gosub ac.run
+   end
+
+   * pane S again: SCREEN SELECTOR (tktest selector); F2 sets the choices from the program
+   if field(@sentence, ' ', 2) = 'selector' then
+      pane = 'S'
+      gosub sel.run
+   end
+
+   loop
+      call $tk_frame(ctx, keys, pane, msg)
+      screen key returning k
+      if k = '' and status() = ER$EOF then exit          ;* the input has ended (a pipe): no key will ever come
+      if k = 'guardquit' then exit                       ;* the cursor lock's own way out
+      call $tk_keys('action', keys, k, pane, act, '', '')
+      begin case
+         case act = 'quit'
+            exit
+         case act = 'next'
+            pane = (if pane = 'A' then 'B' else 'A')
+         case act = 'help'
+            msg = 'help for pane ' : pane
+         case act = 'sort'
+            msg = 'sorted'
+         case act = 'refresh'
+            msg = 'refreshed'
+         case act = 'confirm'
+            sent = 'create.file zztkdlg1 dynamic'
+            call $tk_explain('sh', 1, el, ty)
+            call $tk_confirm(sent, el, '', res, msg)
+            if res = 'run' then
+               call $tk_run('create.file', sent, out, st, err)
+               msg = (if err # '' then err else 'ran, status ' : st)
+            end
+         case act = 'typed'
+            sent = 'create.file zztkdlg2 dynamic'
+            call $tk_explain('net', 1, el, ty)
+            call $tk_confirm(sent, el, (if ty then 'zztkdlg2' else ''), res, msg)
+            if res = 'run' then
+               call $tk_run('create.file', sent, out, st, err)
+               msg = (if err # '' then err else 'ran, status ' : st)
+            end
+         case act = 'tsort'
+            call $sl_table('key', w, scr, 'f3', tr)
+         case act = 'filter'
+            ftxt = w{'filter'}
+            screen ask 'filter' width 20 value ftxt title 'Filter' returning ftxt then
+               w{'filter'} = ftxt
+               call $sl_table('filter', w, scr, '', tr)
+            end else null
+         case act = 'trefresh'
+            gosub t.refresh
+         case act = 'pickf'
+            if pkopen then
+               call $sl_pickwin('', 'Pick a record', 0, 0, pr, ps, pkf, '0' : @fm : pg : @fm : sc)
+               msg = (if ps then 'cancelled' else 'picked ' : pr)
+            end else
+               msg = 'no zzpkfile'
+            end
+         case act = 'pickfm'
+            if pkopen then
+               call $sl_pickwin('', 'Pick records', 1, 0, pr, ps, pkf, '1' : @fm : pg : @fm : sc)
+               msg = (if ps then 'cancelled' else 'picked ' : convert(@vm, ',', pr))
+            end else
+               msg = 'no zzpkfile'
+            end
+         case act = 'pick'
+            call $sl_pickwin(pitems, 'Pick a command', 0, 0, pr, ps, '', '')
+            msg = (if ps then 'cancelled' else 'picked ' : pr : ' (' : pitems<pr, 1> : ')')
+         case act = 'pickm'
+            call $sl_pickwin(pitems, 'Pick commands', 1, 0, pr, ps, '', '')
+            pnames = ''
+            for q = 1 to dcount(pr, @vm)
+               pnames<1, -1> = pitems<pr<1, q>, 1>
+            next q
+            msg = (if ps then 'cancelled' else 'picked ' : convert(@vm, ',', pr) : ' (' : convert(@vm, ',', pnames) : ')')
+         case pane = 'T' and act = ''
+            call $sl_table('key', w, scr, k, tr)
+      end case
+      if pane = 'T' then gosub t.state
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* the slider form: it stays on the screen between events; Enter on the button or Esc ends it and the status line says what the values were
+s.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Gates' at 40,6 size 52,17 returning sf
+   screen slider sf, 'sh', '&Shell (sh)' at 3,2 place 'right'
+   screen slider sf, 'os', '&OS.EXECUTE' at 3,4 value 1 place 'right'
+   screen slider sf, 'cap', 'capitals only' at 3,6 value 1 attr 'window' words 'left','right' place 'right'
+   screen check sf, 'chk', 'a plain check box' at 3,8 place 'right'
+   screen label sf, 'log', 'sh=0 os=1 chk=0 last=none n=0' at 3,10 width 46
+   screen button sf, 'ok', '&OK' at 20,14 default
+   slog = 'none'
+   schg = 0
+   spressed = 'end'
+   loop
+      screen wait sf returning ev then
+         if ev<1> = 'change' then slog = ev<2> : '=' : ev<3> ; schg += 1
+         if ev<1> = 'button' then
+            spressed = ev<2>
+            exit
+         end
+         if ev<1> = 'key' and ev<3> = 'f2' then
+            screen set sf, 'sh' value 5
+            screen set sf, 'os' value 0
+            slog = 'set'
+         end
+         screen get sf, 'sh' returning sv1
+         screen get sf, 'os' returning sv2
+         screen get sf, 'chk' returning sv3
+         screen set sf, 'log' text 'sh=' : sv1 : ' os=' : sv2 : ' chk=' : sv3 : ' last=' : slog : ' n=' : schg
+      end else
+         spressed = ev<1>
+         exit
+      end
+   repeat
+   screen get sf, 'sh' returning sv1
+   screen get sf, 'os' returning sv2
+   screen get sf, 'chk' returning sv3
+   screen hide sf
+   msg = 'sliders sh=' : sv1 : ' os=' : sv2 : ' chk=' : sv3 : ' pressed=' : spressed
+   return
+
+* the accelerator form (TK-0.12): a label whose letter takes the focus to the entry after it, an entry given Alt+M, check boxes, a slider and a selector with a letter
+* marked with &, a radio group on f5, a list on ctrl-g, a check box that is switched off, a button on &Go, and three accelerators that are refused; the label at the foot
+* says the values, the last event (kind:id:data) and how many events there were
+ac.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Accelerators' at 20,5 size 70,22 returning sf
+   screen label sf, 'nm', '&Name' at 3,2
+   screen entry sf, 'e1' at 12,2 width 20
+   screen entry sf, 'e2' at 12,4 width 20 accel 'Alt+M'
+   screen check sf, 'ck', '&Verbose' at 3,6
+   screen check sf, 'ck2', '&Verbose again' at 3,7
+   screen slider sf, 'sl', '&Switch' at 3,8
+   screen selector sf, 'se', '&Colour', 'red':@vm:'green':@vm:'blue' at 3,10
+   screen radio sf, 'rd', 'one':@vm:'two' at 3,12 accel 'f5'
+   screen list sf, 'ls', 'first':@vm:'second':@vm:'third' at 40,2 size 20,4 accel 'ctrl-g'
+   screen check sf, 'dim', '&Dim' at 3,15
+   screen set sf, 'dim' enabled 0
+   screen button sf, 'go', '&Go' at 3,17 default
+   qref = 0
+   screen entry sf, 'b1' at 40,8 accel 'ctrl-i' else qref += 1                   ;* ctrl-i is the Tab key: refused
+   screen entry sf, 'b2' at 40,9 accel 'f13' else qref += 1                      ;* there is no f13
+   screen entry sf, 'b3' at 40,10 accel 'banana' else qref += 1                  ;* not a key
+   screen label sf, 'log', 'ck=0 ck2=0 sl=0 se=1 last=none n=0' at 3,19 width 64
+   qlog = 'none'
+   qchg = 0
+   qpressed = 'end'
+   loop
+      screen wait sf returning ev then
+         qchg += 1
+         qlog = ev<1> : ':' : ev<2> : ':' : ev<3>
+         if ev<1> = 'button' then
+            qpressed = ev<2>
+            exit
+         end
+         screen get sf, 'ck' returning q1
+         screen get sf, 'ck2' returning q2
+         screen get sf, 'sl' returning q3
+         screen get sf, 'se' returning q4
+         screen set sf, 'log' text 'ck=' : q1 : ' ck2=' : q2 : ' sl=' : q3 : ' se=' : q4 : ' last=' : qlog : ' n=' : qchg
+      end else
+         qpressed = ev<1>
+         exit
+      end
+   repeat
+   screen get sf, 'ck' returning q1
+   screen get sf, 'dim' returning q5
+   screen get sf, 'e2' returning q6
+   screen hide sf
+   msg = 'accel ck=' : q1 : ' dim=' : q5 : ' e2=' : q6 : ' refused=' : qref : ' pressed=' : qpressed
+   return
+
+* the selector form: four SCREEN SELECTOR controls (label left, right with ATTR window, above, and in colours), a label that says their choices and the last change
+sel.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Choices' at 30,6 size 70,17 returning sf
+   screen selector sf, 'c', '&Colour', 'blue':@vm:'green':@vm:'red':@vm:'black' at 3,2 value 3
+   screen selector sf, 's', 'size', 'small':@vm:'medium':@vm:'large' at 3,4 value 2 attr 'window' place 'right'
+   screen selector sf, 'm', 'mode', 'fast':@vm:'slow':@vm:'exact' at 3,6 place 'above'
+   screen selector sf, 't', 'tint', 'ex':@vm:'why':@vm:'zed' at 3,9 color 'white','blue'
+   qref = 0
+   screen selector sf, 'nowords', 'no words', '' at 3,10 else qref += 1                  ;* no words: refused
+   screen selector sf, 'c', 'same id', 'x':@vm:'y' at 3,10 else qref += 1                 ;* an id in use: refused
+   screen label sf, 'log', 'c=3 s=2 m=1 t=1 last=none n=0' at 3,12 width 60
+   screen button sf, 'ok', '&OK' at 30,14 default
+   qlog = 'none'
+   qchg = 0
+   qpressed = 'end'
+   loop
+      screen wait sf returning ev then
+         if ev<1> = 'change' then qlog = ev<2> : '=' : ev<3> ; qchg += 1
+         if ev<1> = 'button' then
+            qpressed = ev<2>
+            exit
+         end
+         if ev<1> = 'key' and ev<3> = 'f2' then
+            screen set sf, 'c' value 9
+            screen set sf, 's' value 3
+            screen set sf, 'm' items 'one':@vm:'two'
+            qlog = 'set'
+         end
+         screen get sf, 'c' returning q1
+         screen get sf, 's' returning q2
+         screen get sf, 'm' returning q3
+         screen get sf, 't' returning q4
+         screen set sf, 'log' text 'c=' : q1 : ' s=' : q2 : ' m=' : q3 : ' t=' : q4 : ' last=' : qlog : ' n=' : qchg
+      end else
+         qpressed = ev<1>
+         exit
+      end
+   repeat
+   screen get sf, 'c' returning q1
+   screen get sf, 's' returning q2
+   screen get sf, 'm' returning q3
+   screen get sf, 't' returning q4
+   screen hide sf
+   msg = 'selectors c=' : q1 : ' s=' : q2 : ' m=' : q3 : ' t=' : q4 : ' refused=' : qref : ' pressed=' : qpressed
+   return
+
+* the colour form: a control of each kind in colours of its own, two of them in the same pair (black on green); the label at the right says the theme
+c.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Colours' at 10,3 size 100,24 returning sf
+   screen entry sf, 'e1' at 3,2 width 20 value 'black on green' color 'black','green'
+   screen entry sf, 'e2' at 3,4 width 20 value 'plain entry'
+   screen combo sf, 'cb', 'one':@vm:'two' at 3,6 width 20 color 'white','blue'
+   screen check sf, 'ck', 'colour check' at 3,8 color 'black','cyan'
+   screen slider sf, 'sl', 'colour slider' at 3,10 color 'white','red'
+   screen radio sf, 'rd', 'red choice':@vm:'blue choice' at 3,12 color 'black','brown'
+   screen button sf, 'bt', '&Go' at 3,15 color 'white','magenta'
+   screen list sf, 'ls', 'x':@vm:'y':@vm:'z' at 55,2 size 12,3 color 'black','green'
+   screen label sf, 'lb', 'coloured label' at 55,7 width 20 color 'red','white'
+   screen progress sf, 'pg' at 55,9 width 24 value 50 color 'black','cyan'
+   screen label sf, 'log', 'theme=mono' at 55,12 width 30
+   screen button sf, 'ok', '&OK' at 40,19 default
+   spressed = 'end'
+   loop
+      screen wait sf returning ev then
+         if ev<1> = 'button' then
+            spressed = ev<2>
+            exit
+         end
+         if ev<1> = 'key' and ev<3> = 'f2' then
+            screen theme 'classic' returning thn
+            screen set sf, 'log' text 'theme=' : thn
+         end
+      end else
+         spressed = ev<1>
+         exit
+      end
+   repeat
+   screen hide sf
+   msg = 'colours pressed=' : spressed
+   return
+
+* the colour pool: sixteen different pairs are taken, the first pair again (shared, taken), a seventeenth different pair (refused) and a name that is no colour (refused)
+cf.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Pool' at 10,3 size 60,6 returning sf
+   cl = 'black':@fm:'blue':@fm:'green':@fm:'cyan':@fm:'red':@fm:'magenta':@fm:'brown':@fm:'white'
+   o = ''
+   for i = 1 to 16
+      fgv = cl<mod(i, 8) + 1>
+      bgv = cl<int(i / 8) + 1>
+      o := 'a'
+      screen label sf, 'c' : i, 'x' at 2,2 color fgv,bgv else o[len(o), 1] = 'r'
+   next i
+   o := 'a'
+   screen label sf, 'cdup', 'x' at 2,3 color 'blue','black' else o[len(o), 1] = 'r'
+   o := 'a'
+   screen label sf, 'cfull', 'x' at 2,3 color 'blue','green' else o[len(o), 1] = 'r'
+   o := 'a'
+   screen label sf, 'cbad', 'x' at 2,3 color 'chartreuse','red' else o[len(o), 1] = 'r'
+   screen hide sf
+   msg = 'colours ' : o
+   return
+
+* the placement form: a check box (left column) and a slider (right column) for each place of the label; the label at the foot says the last change
+pl.run:
+   call $tk_frame(ctx, keys, pane, msg)
+   screen form title 'Placement' at 10,3 size 120,22 returning sf
+   screen check sf, 'cl', '&check left' at 3,2 place 'left'
+   screen check sf, 'cr', 'check right' at 3,4 place 'right'
+   screen check sf, 'ca', 'check above' at 3,6 place 'above'
+   screen check sf, 'cb', 'check below' at 3,9 place 'below'
+   screen check sf, 'cd', 'check default' at 3,12
+   screen slider sf, 'sl', 'slider left' at 62,2 place 'left'
+   screen slider sf, 'sr', 'slider right' at 62,4 place 'right'
+   screen slider sf, 'sa', 'slider above' at 62,6 place 'above'
+   screen slider sf, 'sb', 'slider below' at 62,9 place 'below'
+   screen slider sf, 'sd', 'slider default' at 62,12
+   screen label sf, 'log', 'last=none n=0' at 3,15 width 100
+   screen button sf, 'ok', '&OK' at 50,18 default
+   slog = 'none'
+   schg = 0
+   spressed = 'end'
+   loop
+      screen wait sf returning ev then
+         if ev<1> = 'change' then slog = ev<2> : '=' : ev<3> ; schg += 1
+         if ev<1> = 'button' then
+            spressed = ev<2>
+            exit
+         end
+         screen set sf, 'log' text 'last=' : slog : ' n=' : schg
+      end else
+         spressed = ev<1>
+         exit
+      end
+   repeat
+   screen hide sf
+   msg = 'placement pressed=' : spressed
+   return
+
+* the entries of the pick window: twelve commands with a description and a help, then item00013 and so on up to pn
+p.build:
+   pv = 'list,sort,count,copy,delete.file,create.file,modify.account,who,listu,logto,catalog,basic'
+   pd = 'show records of a file,show records in order,count the records,copy records to a file,remove a file,make a file,change an account,who is signed on,list the users,enter another account,make a program a command,compile a program'
+   ph = 'LIST shows the records of a file on the screen,SORT is LIST in the order of an attribute,COUNT says how many records match,COPY puts records into another file,DELETE.FILE removes a file and its dictionary,'
+   ph := 'CREATE.FILE makes a file and a dictionary for it,MODIFY.ACCOUNT changes the gates of an account,WHO says who is signed on and as whom,LISTU lists the users signed on,LOGTO enters another account,'
+   ph := 'CATALOG makes a program a command,BASIC compiles a program'
+   pitems = ''
+   for q = 1 to pn
+      if q <= 12 then
+         pitems<q> = field(pv, ',', q) : @vm : field(pd, ',', q) : @vm : field(ph, ',', q)
+      end else
+         pitems<q> = 'item' : str('0', 5 - len(q)) : q : @vm : 'the ' : q : 'th entry' : @vm : 'help for item ' : q
+      end
+   next q
+   return
+
+* the data: names, a quantity, a check, a city; a row in Elgin is drawn 'disabled' and one over 90 'error'
+t.build:
+   names = 'delta,alpha,echo,charlie,bravo,foxtrot,golf,hotel,india,juliet,kilo,lima'
+   cities = 'Albany,Boston,Chicago,Denver,Elgin,Fresno'
+   trows = ''
+   for r = 1 to tn
+      nm = 'row' : str('0', 5 - len(r)) : r
+      if r <= 12 then nm = field(names, ',', r)
+      trows<r> = nm : @vm : mod(r * 7, 100) : @vm : mod(r, 2) : @vm : field(cities, ',', mod(r, 6) + 1)
+   next r
+   gosub t.styles
+   return
+
+t.styles:
+   tstyle = ''
+   m = dcount(trows, @fm)
+   for r = 1 to m
+      sty = ''
+      if trows<r, 4> = 'Elgin' then
+         sty = 'disabled'
+      end else
+         if trows<r, 2> + 0 > 90 then sty = 'error'
+      end
+      tstyle<1, r> = sty
+   next r
+   return
+
+* new rows: bravo is gone, echo has a new quantity, mike is new, and the order of the old rows is reversed
+t.refresh:
+   nrw = 'mike' : @vm : '55' : @vm : '1' : @vm : 'Boston'
+   m = dcount(trows, @fm)
+   for r = m to 1 step -1
+      if trows<r, 1> # 'bravo' then
+         one = trows<r>
+         if one<1, 1> = 'echo' then one<1, 2> = 99
+         nrw<-1> = one
+      end
+   next r
+   trows = nrw
+   gosub t.styles
+   w{'newrows'} = trows
+   w{'rowstyle'} = tstyle
+   call $sl_table('refresh', w, scr, '', tr)
+   return
+
+* the status line says where the table is: the current row's name, how many rows are shown, the sort, the filter and the names marked
+t.state:
+   rws = w{'rows'}
+   cn = w{'cur'} + 0
+   cname = ''
+   if cn >= 1 then
+      oi = cn
+      if w{'ord'} # '' or w{'fon'} + 0 then oi = w{'ord'}<1, cn>
+      cname = rws<oi, 1>
+   end
+   mk = ''
+   pl = w{'picked'}
+   if pl # '' then
+      for q = 1 to dcount(pl, @vm)
+         mk<1, -1> = rws<pl<1, q>, 1>
+      next q
+   end
+   msg = 'cur=' : cname : ' shown=' : w{'nshown'} : ' sort=' : w{'sortcol'} : '/' : w{'sortdir'} : ' filter=[' : w{'filter'} : '] marks=' : convert(@vm, ',', mk)
+   return
+end
+
+* END-CODE

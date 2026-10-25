@@ -1,0 +1,142 @@
+* TK_GATES
+* The full-screen toolkit, shared base: every gate of one account, in one answer (plan section 2.3).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.3).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_gates(name, g, info, err)
+*
+*     name  a registered account, as the register holds it (lower case)
+*     g     returned: one field to a gate, in the order $tk_gate_info 'list' gives them; each field is the gate's id, a value mark, and its state:
+*             1 on, 0 off, 'na' a route gate on an account that has no person (a group or other account), null for a planned gate
+*     info  returned: field 1 the account's type (USER, GROUP or OTHER, from the register's Linux group as DELETE.ACCOUNT reads it), field 2 the
+*           suspension (1 or 0), field 3 the Linux user of a USER account
+*     err   returned: null when g and info are filled; else the message that says why not (12805 not the administrator, 12813, 12814)
+*
+*   THE ADMINISTRATOR IS ASKED OF THE KERNEL FIRST, BEFORE THE NAME IS LOOKED AT AND BEFORE THE REGISTER IS OPENED: the register holds every
+*   account's path, so a screen of an ordinary user must not be able to learn from this routine whether a name is registered.  The register is
+*   only read, never written, and is read afresh on every call (a screen refreshes by calling it again).  Nothing is probed: a gate is what the
+*   register field says, or membership of the Linux group in /etc/group, as acc_os_info and modify.account read them.
+*
+*   A gate whose delivered default is on (shared-read) is on unless the field says no; every other register gate is on only if the field says yes.
+*   The register field of each gate is the one tk_gate_info names; the case below is held against its rows by test-tkgates-units.py.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_gates(name, g, info, err)
+$catalog $tk_gates
+
+$include keys.h
+$include int$keys.h
+$include tk.h
+
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+   g = ''
+   info = ''
+   err = ''
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      err = sysmsg(12805, 'tk_gates')
+      return
+   end
+
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   if name = '' then
+      err = sysmsg(12813, name)
+      return
+   end
+   for j = 1 to len(name)
+      if index(good, name[j, 1], 1) = 0 then
+         err = sysmsg(12813, name)
+         return
+      end
+   next j
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      err = sysmsg(12814)
+      return
+   end
+   read rec from acc.f, name else
+      close acc.f
+      err = sysmsg(12813, name)
+      return
+   end
+   close acc.f
+
+   grp = rec<ACC$GROUP>
+   user = ''
+   begin case
+      case grp[1, 4] = 'sdu_'
+         atype = 'USER'
+         user = grp[5, 999]
+      case grp[1, 4] = 'sdg_'
+         atype = 'GROUP'
+      case 1
+         atype = 'OTHER'
+   end case
+   info<1> = atype
+   info<2> = (if upcase(trim(rec<ACC$SUSPENDED>)) = 'SUSPENDED' then 1 else 0)
+   info<3> = user
+
+   call $tk_gate_info('list', ids)
+   n = dcount(ids, @fm)
+   for i = 1 to n
+      id = ids<i>
+      call $tk_gate_info(id, gi)
+      state = ''
+      begin case
+         case gi<TK.G.STATUS> # 'built'
+            state = ''
+         case gi<TK.G.KIND> = 'group'
+            if atype = 'USER' then
+               state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)
+            end else
+               state = 'na'
+            end
+         case 1
+            begin case
+               case id = 'sh'
+                  raw = rec<ACC$SH>
+               case id = 'os'
+                  raw = rec<ACC$OS.EXEC>
+               case id = 'sd'
+                  raw = rec<ACC$SD.ACCOUNTS>
+               case id = 'voc'
+                  raw = rec<ACC$VOC.EDIT>
+               case id = 'bp'
+                  raw = rec<ACC$BP.EDIT>
+               case id = 'dict'
+                  raw = rec<ACC$DICT.EDIT>
+               case id = 'net'
+                  raw = rec<ACC$NET>
+               case id = 'shared-read'
+                  raw = rec<ACC$SHARED.READ>
+               case id = 'shared-write'
+                  raw = rec<ACC$SHARED.WRITE>
+               case 1
+                  raw = 'no'
+            end case
+            raw = upcase(trim(raw))
+            if gi<TK.G.DEFAULT> = 'on' then
+               state = (if raw # 'NO' then 1 else 0)
+            end else
+               state = (if raw = 'YES' then 1 else 0)
+            end
+      end case
+      g<-1> = id : @vm : state
+   next i
+
+   return
+end
+
+* END-CODE

@@ -4,17 +4,18 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux bc9ef2d (13 Oct 26): SYNTAX name (the text is coloured as that language) and LNUM (line numbers down the left).
-* 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 13 Oct 26 dm  SYNTAX name (the text is coloured as that language) and LNUM (line numbers down the left).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP} {SYNTAX name} {LNUM}
+*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP} {SYNTAX name} {LNUM} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, syntax, lnum, ret, status)
+*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, syntax, lnum, accel, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     text      what it starts with: one line to a field (a linefeed ends a line too).  Null for an empty area.
@@ -41,12 +42,15 @@
 *   SCREEN GET f, id answers the text, one line to a field, and SCREEN SET f, id VALUE t replaces it.
 *   SCREEN VALUES does not include a memo (it can be long): ask for it with SCREEN GET.
 *
+*   ACCEL key gives the memo a key that reaches it wherever the focus is, even in a field: f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9 (see SCREEN
+*   ENTRY).  The memo takes the focus.  Keep the ctrl-letters the memo itself uses (ctrl-a, ctrl-e and so on) for the memo's own use.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, syntax, lnum, ret, status)
+subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, syntax, lnum, accel, ret, status)
 $catalog !screen_memo
 
    ret = ''
@@ -85,6 +89,8 @@ $catalog !screen_memo
    if syntax # '' then call $sl_syntax('index', downcase(trim(syntax)), '', '', '', nl)
    w{'synlang'} = nl + 0
    call $sl_memo('init', w, '', '', r)
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

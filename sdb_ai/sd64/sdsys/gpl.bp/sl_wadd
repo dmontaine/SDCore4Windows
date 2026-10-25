@@ -4,7 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  SCREEN IN: a widget added while f{'curparent'} names a container or viewport is inside it (w{'parent'}, w{'pn'}).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -20,7 +22,7 @@
 *   The widget is put at the end of the form's array of widgets, so the focus ring goes round them in
 *   the order they were added and the last one added is drawn last.  If SCREEN PAGE has named a page
 *   (f{'curpage'}) the widget is given it (w{'page'}): the form shows the widget only while the chosen tab
-*   of its tab strip is that page.
+*   of its tab strip is that page.  If SCREEN IN has named a container (f{'curparent'}) the widget is put inside it.
 *
 * END-DESCRIPTION
 *
@@ -41,6 +43,17 @@ $catalog $sl_wadd
    if jtype(f{'widgets'}) # 'array' then f{'widgets'} = mat()
    n = inmat(f{'widgets'}) + 1
    if f{'curpage'} + 0 > 0 then w{'page'} = f{'curpage'} + 0      ;* SCREEN PAGE: the widget belongs to a tab's page
+   if f{'curparent'} # '' then
+      * SCREEN IN: the widget is inside a container, which must already be in the form (it comes first in the array)
+      call $sl_form('find', f, '', f{'curparent'}, pn)
+      if pn > 0 then
+         pw = f{'widgets', pn}
+         if pw{'type'} = 'container' or pw{'type'} = 'viewport' then
+            w{'parent'} = pw{'id'}
+            w{'pn'} = pn
+         end
+      end
+   end
    f{'widgets', n} = w
    ok = 1
 

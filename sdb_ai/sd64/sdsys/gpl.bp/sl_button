@@ -4,9 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 22 Oct 26 dm  The letter marked with & is drawn in the hotkey style while the button does not have the focus (apos; S.75 TK-0.12).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -44,8 +45,12 @@ $include sl.h
          w{'focusable'} = 1
          t = w{'text'}
          p = index(t, '&', 1)
+         w{'amn'} = ''
+         w{'apos'} = 0
          if p and p < len(t) then
             w{'mn'} = upcase(t[p + 1, 1])
+            w{'amn'} = w{'mn'}                  ;* only a letter marked with & is also an Alt-letter
+            w{'apos'} = p                       ;* and is the p-th cell of the label once the & is out: paint underlines it (the plain mnemonic is not drawn)
             t = t[1, p - 1] : t[p + 1, 99999]
          end else
             w{'mn'} = upcase(t[1, 1])
@@ -81,8 +86,16 @@ $include sl.h
 
 paint:
    call $sl_attr('window', code)
+   if w{'ccode'} # '' then code = w{'ccode'}
    if w{'focused'} then call $sl_attr('highlight', code)
-   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, '[ ' : w{'label'} : ' ]', code)
+   rowtext = '[ ' : w{'label'} : ' ]'
+   cells = str(code, len(rowtext))
+   * the marked letter of the label, in the hotkey style: not while the button has the focus, not when it is disabled.  The label starts after "[ ".
+   if not(w{'focused'}) and w{'disabled'} + 0 = 0 and w{'apos'} + 0 > 0 and w{'apos'} + 0 <= len(w{'label'}) then
+      call $sl_attr('hotkey', hcode)
+      cells[w{'apos'} + 2, 1] = hcode
+   end
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, rowtext, cells)
    if w{'focused'} then call $sl_curat(w{'ax'} + 2, w{'ay'} + 0)
    return
 end

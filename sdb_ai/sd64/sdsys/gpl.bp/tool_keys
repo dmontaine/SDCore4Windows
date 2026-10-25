@@ -1,0 +1,346 @@
+* TOOL_KEYS
+* The full-screen toolkit's first app: a terminal and keyboard diagnostic (S.75, TK-1, plan A1).  For everyone: it changes nothing and reads nothing private.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-1; the owner: "go tool.keys").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.KEYS
+*
+*   Shows what SD knows about the terminal and what a key does, on the toolkit's frame (140 columns by 43 lines at least; a smaller window is refused).
+*
+*     Terminal    the terminal type SD is using and the one in the environment, the window and the layout, the locale and whether the borders are line
+*                 characters, whether the terminal can show colour, the theme, the mouse events that have arrived, the way keys are being read, and how
+*                 many of the keys in the grid have been seen
+*     Last keys   the 25 newest keys, newest first.  Names mode (the start): the name the screen library reports for the key ($sl_key: up, f5, ctrl-g,
+*                 alt-s, mouse, or the character itself), and for a character its code.  Raw mode (Ctrl-R): the bytes the terminal sent, in hex, with
+*                 the characters beside them, for the keys the terminal type does not name
+*     Keys seen   the arrows, the twelve function keys, the control keys, an Alt-letter, a printable character and the mouse, each ticked when it has
+*                 been pressed (names mode)
+*     Mouse       the last mouse event and how many presses, releases, drags and wheel turns have come
+*     Styles      the library's sixteen styles, each drawn in itself, to see what the theme in force looks like on this terminal
+*     Box         the border characters the library draws with
+*
+*   Every key is shown BEFORE the program acts on it.  The keys the program uses are Ctrl-L (clear what has been seen), Ctrl-R (names or raw bytes),
+*   Ctrl-T (the next theme: mono, classic, blue) and Ctrl-Q (leave); a key that ends the program can only be tested by leaving.
+*
+*   A key that makes the terminal beep and shows nothing in names mode is one the terminal type does not give a name: press Ctrl-R and press it again to
+*   see its bytes.  An Alt-letter shows as alt-x on a terminal that sends Alt+x as Esc and x.  Make the window smaller to see the cursor lock, and larger
+*   again to leave it.  The end of the input ends the program.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_keys
+$catalog $tool_keys
+
+$include keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   call $tk_open('tool.keys', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'ctrl-l', 'clear', 'clear', '', 1)
+   call $tk_keys('add', keys, 'ctrl-r', 'raw/names', 'raw', '', 1)
+   call $tk_keys('add', keys, 'ctrl-t', 'theme', 'theme', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   LOGN = 25                                            ;* lines in Last keys
+   GRIDROWS = 13                                        ;* rows in a column of the grid (names are not case sensitive: no other variable may be called gridrows)
+   gnames = 'up' : @fm : 'down' : @fm : 'left' : @fm : 'right' : @fm : 'home' : @fm : 'end' : @fm : 'pgup' : @fm : 'pgdn' : @fm : 'ins' : @fm : 'del'
+   gnames := @fm : 'bs' : @fm : 'tab' : @fm : 'btab' : @fm : 'enter' : @fm : 'esc'
+   for i = 1 to 12
+      gnames := @fm : 'f' : i
+   next i
+   for i = 1 to 26
+      if i # 8 and i # 9 and i # 10 and i # 13 then gnames := @fm : 'ctrl-' : downcase(char(i + 64))     ;* ctrl-h, i, j and m arrive as bs, tab and enter
+   next i
+   gnames := @fm : 'alt-x' : @fm : 'char' : @fm : 'mouse'
+   gn = dcount(gnames, @fm)
+   themes = 'mono' : @fm : 'classic' : @fm : 'blue'
+   snames = 'normal' : @fm : 'reverse' : @fm : 'underline' : @fm : 'both' : @fm : 'bold' : @fm : 'window' : @fm : 'highlight' : @fm : 'bar'
+   snames := @fm : 'barsel' : @fm : 'hotkey' : @fm : 'hotkey.bar' : @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
+
+   * can this terminal show colour?  The library says 'none' for a colour it cannot make; asking for one pair costs a spare style that this app never uses
+   call $sl_theme('slot', 'white', 'black', '', '', cs)
+   colour = (if cs = 'none' then 'no' else 'yes')
+
+   rawmode = 0
+   pane = 'Keys'
+   msg = 'press any key'
+   logl = ''
+   seenf = ''
+   nkeys = 0
+   mp = 0 ; mr = 0 ; md = 0 ; mu = 0 ; mdn = 0          ;* the mouse events seen: press, release, drag, wheel up, wheel down
+   mlast = 'none yet - click, drag or turn the wheel'
+   lastsz = @crtwide : ',' : @crthigh
+   gen = 0
+
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, pane, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)                 ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
+      ended = 0
+      nm = ''
+      detail = ''
+      if rawmode then gosub read.raw else gosub read.names
+      if ended then exit
+      if nm = 'guardquit' then exit                      ;* the cursor lock's own way out
+      if nm = 'resize' then
+         gosub redraw.all                                ;* the screen was repainted under the frame (a resize, or the lock lifted)
+      end else
+         if nm # '' or detail # '' then
+            gosub record
+            call $tk_keys('action', keys, nm, pane, act, '', '')
+            begin case
+               case act = 'quit'
+                  exit
+               case act = 'clear'
+                  logl = ''
+                  seenf = ''
+                  nkeys = 0
+                  mp = 0 ; mr = 0 ; md = 0 ; mu = 0 ; mdn = 0
+                  mlast = 'none yet - click, drag or turn the wheel'
+                  msg = 'cleared'
+                  gosub draw.dynamic
+               case act = 'raw'
+                  rawmode = (if rawmode then 0 else 1)
+                  pane = (if rawmode then 'Raw' else 'Keys')
+                  msg = (if rawmode then 'raw bytes: what the terminal sent' else 'names: what the screen library reports')
+                  gosub draw.dynamic
+               case act = 'theme'
+                  call $sl_theme('name', '', '', '', '', thn)
+                  locate thn in themes<1> setting tk then
+                     null
+                  end else
+                     tk = 0
+                  end
+                  tk = tk + 1
+                  if tk > dcount(themes, @fm) then tk = 1
+                  screen theme themes<tk> returning thn else
+                     msg = 'this terminal cannot show colour: no theme but mono'
+                  end
+                  gosub redraw.all
+            end case
+         end
+      end
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* One key read the usual way: the name the screen library gives it, and what there is to say about it
+read.names:
+   screen key returning nm
+   if nm = '' then
+      if status() = ER$EOF then ended = 1
+      return
+   end
+   begin case
+      case nm = 'mouse'
+         screen mouse returning mev else mev = ''
+         detail = mev<1> : ' button ' : mev<2> : ' at ' : mev<3> : ',' : mev<4> : (if mev<5> # '' then ' (' : mev<5> : ')' else '')
+         begin case
+            case mev<1> = 'press' ; mp += 1
+            case mev<1> = 'release' ; mr += 1
+            case mev<1> = 'drag' ; md += 1
+            case mev<1> = 'wheel' and mev<2> = 'up' ; mu += 1
+            case mev<1> = 'wheel' ; mdn += 1
+         end case
+         mlast = detail
+      case len(nm) = 1
+         detail = 'code ' : seq(nm)
+      case nm[1, 4] = 'alt-'
+         detail = 'Esc then ' : nm[5, 99]
+   end case
+   return
+
+* One key read as bytes: the first byte, then the rest of what the terminal sent in one go.  The wait is a second at a time so that a change of the window is noticed.
+read.raw:
+   raw = ''
+   loop
+      c = keyin(1)
+      if c # '' then exit
+      if status() = ER$EOF then
+         ended = 1
+         exit
+      end
+      if @crtwide : ',' : @crthigh # lastsz then
+         screen key timeout 1 returning nm               ;* the library notices the new size and says resize (it also takes the keyboard if the cursor is off the window)
+         exit
+      end
+   repeat
+   if ended or nm = 'resize' or nm = 'guardquit' then return
+   raw = c
+   loop
+      c = keyin(0.05)
+   until c = '' do
+      raw := c
+   repeat
+   hx = ''
+   pr = ''
+   for i = 1 to len(raw)
+      n = seq(raw[i, 1])
+      hx := '0123456789abcdef'[int(n / 16) + 1, 1] : '0123456789abcdef'[mod(n, 16) + 1, 1] : ' '
+      pr := (if n >= 32 and n < 127 then raw[i, 1] else '.')
+   next i
+   detail = fmt(hx[1, 24], '24L') : ' ' : pr[1, 8]       ;* the first eight bytes: the line is 41 cells wide
+   nm = ''
+   if len(raw) = 1 then
+      n = seq(raw)
+      if n = 17 then nm = 'ctrl-q'
+      if n = 12 then nm = 'ctrl-l'
+      if n = 18 then nm = 'ctrl-r'
+      if n = 20 then nm = 'ctrl-t'
+   end
+   return
+
+* The key in nm / detail goes to the top of Last keys, and in names mode into the grid; the status line says the last one
+record:
+   nkeys += 1
+   if rawmode then
+      line = fmt(nkeys, '4R') : '  ' : detail
+      msg = 'raw ' : trim(detail[1, 30])
+   end else
+      line = fmt(nkeys, '4R') : '  ' : fmt(nm, '10L') : ' ' : detail
+      msg = 'key ' : nm
+      cell = nm
+      if len(nm) = 1 then cell = 'char'
+      if nm[1, 4] = 'alt-' then cell = 'alt-x'
+      locate cell in gnames<1> setting gk then
+         null
+      end else
+         gk = 0
+      end
+      if gk > 0 then
+         seenf<gk> = 1
+         gosub draw.cell
+      end
+   end
+   ins line before logl<1>
+   if dcount(logl, @fm) > LOGN then del logl<LOGN + 1>
+   gosub draw.log
+   gosub draw.info
+   gosub draw.mouse
+   return
+
+* The screen again, after the screen was cleared or repainted: the frame as well
+redraw.all:
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   return
+
+draw.all:
+   lastsz = @crtwide : ',' : @crthigh
+   screen box at 1,1 size 45,12 title 'Terminal'
+   screen box at 1,13 size 45,27 title 'Last keys'
+   screen box at 47,1 size 46,17 title 'Keys seen'
+   screen box at 94,1 size 45,10 title 'Mouse'
+   screen box at 94,11 size 45,14 title 'Box drawing'
+   screen box at 94,25 size 45,15 title 'Help'
+   screen box at 47,18 size 46,22 title 'Styles'
+   gosub draw.static
+   gosub draw.dynamic
+   return
+
+* What does not change while the program runs: the styles, the boxes to look at, the help
+draw.static:
+   for i = 1 to dcount(snames, @fm)
+      sn = snames<i>
+      screen text fmt(sn, '12L') : ' sample text 0123456789' at 49,18 + i attr sn width 42
+   next i
+   screen text 'A style is drawn in itself.' at 49,36
+   screen text 'The theme changes with Ctrl-T.' at 49,37
+   screen box at 96,13 size 20,6
+   screen box at 118,13 size 19,10 title 'x'
+   screen box at 98,19 size 14,4
+   screen text (if ctx<TK.C.UTF8> then 'The borders are line characters.' else 'The borders are + - | (not UTF-8).') at 96,23
+   helps = 'Press any key: its name is added to Last keys' : @fm : 'and ticked in Keys seen.' : @fm : ''
+   helps := @fm : 'A key that beeps and shows nothing is not named'
+   helps := @fm : 'by the terminal type: Ctrl-R, then press it again'
+   helps := @fm : 'to see the bytes the terminal sent.'
+   helps := @fm : ''
+   helps := @fm : 'Ctrl-L clears, Ctrl-R names or bytes,'
+   helps := @fm : 'Ctrl-T theme, Ctrl-Q leaves.'
+   helps := @fm : ''
+   helps := @fm : 'Make the window smaller to see the cursor'
+   helps := @fm : 'lock, larger again to leave it.'
+   for i = 1 to dcount(helps, @fm)
+      screen text helps<i> at 96,25 + i width 41
+   next i
+   return
+
+draw.dynamic:
+   gosub draw.info
+   gosub draw.log
+   gosub draw.mouse
+   for gk = 1 to gn
+      gosub draw.cell
+   next gk
+   return
+
+draw.info:
+   loc = env('LC_ALL')
+   if loc = '' then loc = env('LC_CTYPE')
+   if loc = '' then loc = env('LANG')
+   call $sl_theme('name', '', '', '', '', thn)
+   nseen = 0
+   for i = 1 to gn
+      if seenf<i> then nseen += 1
+   next i
+   il = 'TERM (SD)   ' : @term.type
+   il<-1> = 'TERM (env)  ' : env('TERM')
+   il<-1> = 'Window      ' : @crtwide : ' x ' : @crthigh : '  (layout ' : ctx<TK.C.W> : ' x ' : ctx<TK.C.H> : ')'
+   il<-1> = 'Locale      ' : (if loc = '' then '(none set)' else loc)
+   il<-1> = 'Borders     ' : (if ctx<TK.C.UTF8> then 'line characters (UTF-8)' else '+ - | (not UTF-8)')
+   il<-1> = 'Colour      ' : colour
+   il<-1> = 'Theme       ' : thn
+   il<-1> = 'Mouse       ' : (mp + mr + md + mu + mdn) : ' events'
+   il<-1> = 'Reading     ' : (if rawmode then 'raw bytes (KEYIN)' else 'names ($sl_key)')
+   il<-1> = 'Keys seen   ' : nseen : ' of ' : gn : ', ' : nkeys : ' pressed'
+   for i = 1 to dcount(il, @fm)
+      screen text il<i> at 3,1 + i width 41
+   next i
+   return
+
+draw.log:
+   for i = 1 to LOGN
+      screen text logl<i> at 3,13 + i width 41
+   next i
+   return
+
+* One cell of the grid, number gk: [x] name when seen, [ ] name when not
+draw.cell:
+   gx = int((gk - 1) / GRIDROWS)
+   gy = mod(gk - 1, GRIDROWS)
+   screen text (if seenf<gk> then '[x] ' else '[ ] ') : gnames<gk> at 49 + gx * 11,2 + gy width 10 attr (if seenf<gk> then 'bold' else 'normal')
+   return
+
+draw.mouse:
+   screen text 'Last   ' : mlast at 96,2 width 41
+   screen text 'Press ' : mp : '  release ' : mr at 96,4 width 41
+   screen text 'Drag  ' : md : '  wheel up ' : mu : '  down ' : mdn at 96,5 width 41
+   screen text 'Click, drag and turn the wheel in this window.' at 96,7 width 41
+   screen text 'In raw mode the reports show as Esc [ < ...' at 96,8 width 41
+   return
+
+end
+
+* END-CODE

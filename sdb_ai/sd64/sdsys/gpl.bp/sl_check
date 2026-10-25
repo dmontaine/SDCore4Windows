@@ -1,25 +1,28 @@
 * SL_CHECK
-* Screen library, widget: a check box in a form.
+* Screen library, widget: a check box.
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 22 Oct 26 dm  The label goes where place says (left by default, right, above, below), through $sl_caption.  The owner asked for a placement option with left as
+*               the default, 22 Oct 2026: a check box used to be [x] text.
+* 22 Oct 26 dm  The letter marked with & in the label is drawn in the hotkey style while the box does not have the focus (apos; S.75 TK-0.12).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 *   call $sl_check(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
 *
-*   Elements:  id, text, x y, ax ay, value (1 checked, 0 not)
+*   Elements:  id, text, x y, ax ay, value (1 checked, 0 not), place (where the label is: left, right, above or below; left when null)
 *
-*     init    w = the width of "[x] text", h = 1; value is made 0 or 1
-*     draw    [x] text or [ ] text, in reverse video while it has the focus
+*     init    w and h from the box and the label (3 cells and the text, one row; two rows when the label is above or below); value is made 0 or 1
+*     draw    the label and [x] or [ ] (the label is on the left of the box by default: text [x]), the whole of it in reverse video while it has the focus
 *     focus   key = 1 gives it the focus (draws), key = 0 takes it away (draws)
 *     key     the space bar checks or unchecks it ('handled').  Anything else is 'unhandled' with
 *             the key (Return, Tab, the arrows ...) for the form to act on.
+*     mouse   a click anywhere on it, the label included, checks or unchecks it
 *     close   nothing to undo
 *
 * END-DESCRIPTION
@@ -40,13 +43,20 @@ $include sl.h
          w{'focusable'} = 1
          t = w{'text'}
          p = index(t, '&', 1)
-         if p and p < len(t) then t = t[1, p - 1] : t[p + 1, 99999]
+         w{'amn'} = ''
+         w{'apos'} = 0
+         if p and p < len(t) then
+            w{'amn'} = upcase(t[p + 1, 1])      ;* the letter marked with & is its Alt-letter (the form acts on it)
+            w{'apos'} = p                       ;* and is the p-th cell of the label once the & is out: paint underlines it
+            t = t[1, p - 1] : t[p + 1, 99999]
+         end
          w{'label'} = t
          v = 0
          if w{'value'} + 0 # 0 then v = 1
          w{'value'} = v
-         w{'w'} = len(t) + 4
-         w{'h'} = 1
+         call $sl_caption(w{'place'}, 3, t, geom)
+         w{'w'} = geom<1, SL.CAP.W>
+         w{'h'} = geom<1, SL.CAP.H>
 
       case op = 'draw'
          gosub paint
@@ -68,7 +78,7 @@ $include sl.h
 
       case op = 'mouse'
          ret = 'handled'
-         if key<1> = 'press' then                  ;* a click on it ticks or unticks it
+         if key<1> = 'press' then                  ;* a click on it, or on its label, ticks or unticks it
             v = 1
             if w{'value'} then v = 0
             w{'value'} = v
@@ -80,11 +90,39 @@ $include sl.h
 
 paint:
    call $sl_attr('window', code)
+   if w{'ccode'} # '' then code = w{'ccode'}
    if w{'focused'} then call $sl_attr('highlight', code)
-   mark = '[ ] '
-   if w{'value'} then mark = '[x] '
-   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, mark : w{'label'}, code)
-   if w{'focused'} then call $sl_curat(w{'ax'} + 1, w{'ay'} + 0)
+   call $sl_caption(w{'place'}, 3, w{'label'}, geom)
+   gw = geom<1, SL.CAP.W>
+   gh = geom<1, SL.CAP.H>
+   cx = geom<1, SL.CAP.CX>
+   cy = geom<1, SL.CAP.CY>
+   lx = geom<1, SL.CAP.LX>
+   ly = geom<1, SL.CAP.LY>
+   mark = '[ ]'
+   if w{'value'} then mark = '[x]'
+   gosub hotkey
+   for r = 0 to gh - 1
+      rowtext = space(gw)
+      cells = str(code, gw)
+      if r = cy then rowtext[cx + 1, 3] = mark
+      if r = ly and w{'label'} # '' then
+         rowtext[lx + 1, len(w{'label'})] = w{'label'}
+         if hk then cells[lx + w{'apos'}, 1] = hcode      ;* the marked letter of the label, in the hotkey style
+      end
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, rowtext, cells)
+   next r
+   if w{'focused'} then call $sl_curat(w{'ax'} + cx + 1, w{'ay'} + cy)
+   return
+
+* hk = 1 when the label's marked letter is to be drawn in the hotkey style (hcode): not while the control has the focus (the whole of it is in the focus
+* style then) and not when it is disabled (its Alt-letter does nothing)
+hotkey:
+   hk = 0
+   if not(w{'focused'}) and w{'disabled'} + 0 = 0 and w{'apos'} + 0 > 0 and w{'apos'} + 0 <= len(w{'label'}) then
+      hk = 1
+      call $sl_attr('hotkey', hcode)
+   end
    return
 end
 

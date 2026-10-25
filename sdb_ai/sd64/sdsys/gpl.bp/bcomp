@@ -21,6 +21,16 @@
 * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): SDSALT(), SDKEY(passphrase, salt) and SDRANDKEY() (encryption layer 2): XFUN rows 37-39,
 *               the first to write no arguments (in.xfun skips get.args for a row whose count is 0).
 * 18 Oct 26 Windows port - from Linux 9fc1570 (12 Oct 26): The SCREEN statement (screen library, sd64/screenlib-design.md): SCREEN verb {values}
+* 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - ACCEL key (S.75 TK-0.12) on ENTRY, COMBO, CHECK, SLIDER, SELECTOR, RADIO, LIST, BUTTON, TABS, MEMO, TREE and TABLE: the keyword after the others.
+* 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN SELECTOR (a choice of one word among several, S.75 TK-0.10) in the SCREEN.VERBS table.
+* 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN SLIDER (an on / off switch, S.75 TK-0.8) in the SCREEN.VERBS table; PLACE on CHECK and SLIDER; COLOR on ENTRY, COMBO, CHECK, SLIDER, RADIO, LIST,
+*               BUTTON, LABEL and PROGRESS.
+* 18 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN CONTAINER, VIEWPORT, IN, MOVE, DELETE and SCROLL (screen library: containers and viewports) in the SCREEN.VERBS table.
+* 18 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SDSALT(), SDKEY(passphrase, salt) and SDRANDKEY() (encryption layer 2): XFUN rows 37-39, the first to write no
+*               arguments (in.xfun skips get.args for a row whose count is 0).
+* 15 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - $MODE SELECTV (openQM item 85): the list variable of SELECT / SELECTV / SSELECTV and the FROM list of READNEXT is
+*               optional, a hidden __SELLIST of the program (sellist.default.load); it and stdfil.var.load use the hidden.var.load of FOR EACH.
+* 12 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - The SCREEN statement (screen library, sd64/screenlib-design.md): SCREEN verb {values}
 *               {KEYWORD values} {RETURNING var} {THEN / ELSE}, compiled by ST.SCREEN from the
 *               SCREEN.VERBS table into a CALL of a catalogued library subroutine (no opcode).
 * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV (openQM item 85): the list variable of SELECT / SELECTV / SSELECTV and the FROM list of READNEXT is
@@ -535,13 +545,15 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
    screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F"
    screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"
-   screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1"
+   screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1":@sm:"COLOR:2"
    screen.names<-1> = "FRAME"   ; screen.defs<-1> = "!screen_frame":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1"
-   screen.names<-1> = "ENTRY"   ; screen.defs<-1> = "!screen_entry":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"MASK:F":@sm:"MAXLEN:1"
-   screen.names<-1> = "CHECK"   ; screen.defs<-1> = "!screen_check":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
-   screen.names<-1> = "RADIO"   ; screen.defs<-1> = "!screen_radio":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ACROSS:F"
-   screen.names<-1> = "LIST"    ; screen.defs<-1> = "!screen_list":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F"
-   screen.names<-1> = "BUTTON"  ; screen.defs<-1> = "!screen_button":@vm:3:@vm:"AT:2":@sm:"DEFAULT:F":@sm:"CANCEL:F"
+   screen.names<-1> = "ENTRY"   ; screen.defs<-1> = "!screen_entry":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"MASK:F":@sm:"MAXLEN:1":@sm:"COLOR:2":@sm:"ACCEL:1"
+   screen.names<-1> = "CHECK"   ; screen.defs<-1> = "!screen_check":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"PLACE:1":@sm:"COLOR:2":@sm:"ACCEL:1"
+   screen.names<-1> = "SLIDER"  ; screen.defs<-1> = "!screen_slider":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ATTR:1":@sm:"WORDS:2":@sm:"PLACE:1":@sm:"COLOR:2":@sm:"ACCEL:1"       ;* 22 Oct 26: an on / off switch (TK-0.8)
+   screen.names<-1> = "SELECTOR" ; screen.defs<-1> = "!screen_selector":@vm:4:@vm:"AT:2":@sm:"VALUE:1":@sm:"ATTR:1":@sm:"PLACE:1":@sm:"COLOR:2":@sm:"ACCEL:1"     ;* 22 Oct 26: a choice of one word among several (TK-0.10)
+   screen.names<-1> = "RADIO"   ; screen.defs<-1> = "!screen_radio":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ACROSS:F":@sm:"COLOR:2":@sm:"ACCEL:1"
+   screen.names<-1> = "LIST"    ; screen.defs<-1> = "!screen_list":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F":@sm:"COLOR:2":@sm:"ACCEL:1"
+   screen.names<-1> = "BUTTON"  ; screen.defs<-1> = "!screen_button":@vm:3:@vm:"AT:2":@sm:"DEFAULT:F":@sm:"CANCEL:F":@sm:"COLOR:2":@sm:"ACCEL:1"
    screen.names<-1> = "RUN"     ; screen.defs<-1> = "!screen_run":@vm:1
    screen.names<-1> = "GET"     ; screen.defs<-1> = "!screen_get":@vm:2
    screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1":@sm:"WRAP:1":@sm:"READONLY:1":@sm:"VISIBLE:1"
@@ -549,8 +561,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "VALUES"  ; screen.defs<-1> = "!screen_values":@vm:1
    screen.names<-1> = "WAIT"    ; screen.defs<-1> = "!screen_wait":@vm:1:@vm:"TIMEOUT:1"
    screen.names<-1> = "HIDE"    ; screen.defs<-1> = "!screen_hide":@vm:1
-   screen.names<-1> = "PROGRESS" ; screen.defs<-1> = "!screen_progress":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
-   screen.names<-1> = "COMBO"   ; screen.defs<-1> = "!screen_combo":@vm:3:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1"
+   screen.names<-1> = "PROGRESS" ; screen.defs<-1> = "!screen_progress":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"COLOR:2"
+   screen.names<-1> = "COMBO"   ; screen.defs<-1> = "!screen_combo":@vm:3:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"COLOR:2":@sm:"ACCEL:1"
    screen.names<-1> = "OPEN"   ; screen.defs<-1> = "!screen_open":@vm:0:@vm:"CLEAR:F":@sm:"NOCURSOR:F":@sm:"MINSIZE:2":@sm:"NOMOUSE:F":@sm:"LINES:F"
    screen.names<-1> = "CLOSE"   ; screen.defs<-1> = "!screen_close":@vm:0
    screen.names<-1> = "CLEAR"   ; screen.defs<-1> = "!screen_clear":@vm:0:@vm:"AT:2":@sm:"SIZE:2":@sm:"ATTR:1"
@@ -563,13 +575,19 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "MOUSE"   ; screen.defs<-1> = "!screen_mouse":@vm:0
    screen.names<-1> = "THEME"   ; screen.defs<-1> = "!screen_theme":@vm:1
    screen.names<-1> = "STYLE"   ; screen.defs<-1> = "!screen_style":@vm:4
-   screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1"
+   screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ACCEL:1"
    screen.names<-1> = "PAGE"    ; screen.defs<-1> = "!screen_page":@vm:2
-   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F":@sm:"SYNTAX:1":@sm:"LNUM:F"
+   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F":@sm:"SYNTAX:1":@sm:"LNUM:F":@sm:"ACCEL:1"
    screen.names<-1> = "CLIP"    ; screen.defs<-1> = "!screen_clip":@vm:0:@vm:"AT:2":@sm:"SIZE:2"
    screen.names<-1> = "SCROLLBAR" ; screen.defs<-1> = "!screen_scrollbar":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VISIBLE:1":@sm:"VALUE:1"
-   screen.names<-1> = "TREE"    ; screen.defs<-1> = "!screen_tree":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"EXPANDED:F"
-   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F"
+   screen.names<-1> = "TREE"    ; screen.defs<-1> = "!screen_tree":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"EXPANDED:F":@sm:"ACCEL:1"
+   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F":@sm:"ACCEL:1"
+   screen.names<-1> = "CONTAINER" ; screen.defs<-1> = "!screen_container":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1":@sm:"NOBORDER:F"
+   screen.names<-1> = "VIEWPORT" ; screen.defs<-1> = "!screen_viewport":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"CONTENT:2":@sm:"TITLE:1":@sm:"NOBORDER:F"
+   screen.names<-1> = "IN"      ; screen.defs<-1> = "!screen_in":@vm:2
+   screen.names<-1> = "MOVE"    ; screen.defs<-1> = "!screen_move":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"CONTENT:2"
+   screen.names<-1> = "DELETE"  ; screen.defs<-1> = "!screen_delete":@vm:2
+   screen.names<-1> = "SCROLL"  ; screen.defs<-1> = "!screen_scroll":@vm:2:@vm:"TO:2":@sm:"BY:2"
 
    * Reserved names
    * This list starts out as the list of names that are reserved in all

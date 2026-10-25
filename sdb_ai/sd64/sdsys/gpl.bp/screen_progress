@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN PROGRESS f, id {AT x,y} {WIDTH n} {VALUE v}
+*   SCREEN PROGRESS f, id {AT x,y} {WIDTH n} {VALUE v} {COLOR fg,bg}
 *
 *   is compiled into
 *
-*   call !screen_progress(f, id, x, y, width, value, ret, status)
+*   call !screen_progress(f, id, x, y, width, value, fg, bg, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
 *     x y      the place of the bar from the form's top left corner, default 1,1
@@ -24,12 +25,14 @@
 *   The bar cannot take the focus.  Change it with SCREEN SET f, id VALUE v: the bar is redrawn at once if the
 *   form is on the screen (a program that does a long job with a form shown by SCREEN WAIT).
 *
+*   COLOR fg,bg gives the filled part of the bar its own colours (see SCREEN ENTRY).
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_progress(f, id, ax, ay, width, value, ret, status)
+subroutine screen_progress(f, id, ax, ay, width, value, fg, bg, ret, status)
 $catalog !screen_progress
 
    ret = ''
@@ -45,6 +48,8 @@ $catalog !screen_progress
    if width # '' then w{'w'} = width + 0
    w{'value'} = value + 0
    call $sl_progress('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

@@ -1,0 +1,89 @@
+* TK_CONFIRM
+* The full-screen toolkit, shared base: the box that shows the exact command and asks whether to run it (plan sections 2.5 and G4).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.4).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_confirm(sentence, lines, typed, res, msg)
+*
+*     sentence  the command exactly as the tool will give it to $tk_run (the caller passes the same variable to both)
+*     lines     the explanation under it, one to a field ($tk_explain makes it); may be null
+*     typed     null for a Run / Cancel box; a name the person must type for a second step (an account's name, for a destructive action or a gate that
+*               reaches beyond SD)
+*     res       returned: 'run' only when Run was chosen and, when a name was asked for, the name was typed exactly; 'cancel' for Cancel, Esc, an input
+*               that ended, a session with no terminal; 'wrong' for a name that was not the one asked for
+*     msg       returned: null for 'run'; else the line for the status bar (12826 nothing was run, or 12815 naming the name asked for)
+*
+*   THE DEFAULT BUTTON IS CANCEL: Enter alone never runs a command.  Run is chosen by its letter (r) or by moving to it.  The sentence is shown wrapped at
+*   spaces, never cut, and never altered.  A session with no terminal cannot answer, so nothing runs ('cancel').  The typed name is compared as typed
+*   (with surrounding spaces taken off), exactly.  This routine runs nothing and changes nothing: the caller runs the command with $tk_run when
+*   res is 'run'.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_confirm(sentence, lines, typed, res, msg)
+$catalog $tk_confirm
+
+$include sl.h
+$include tk.h
+
+   res = 'cancel'
+   msg = sysmsg(12826)
+   if system(25) then return
+
+   call $sl_scr('get', scr)
+   wrapw = scr<SL.S.W> - 16
+   if wrapw > 100 then wrapw = 100
+   if wrapw < 20 then wrapw = 20
+
+   body = sysmsg(12816)
+   rest = sentence
+   loop while rest # '' do
+      if len(rest) <= wrapw then
+         piece = rest
+         rest = ''
+      end else
+         cut = wrapw
+         loop while cut > 1 and rest[cut, 1] # ' ' do cut -= 1 repeat
+         if cut <= 1 then cut = wrapw
+         piece = rest[1, cut]
+         rest = trimf(rest[cut + 1, 99999])
+      end
+      body<-1> = '  ' : piece
+   repeat
+   if lines # '' then
+      body<-1> = ''
+      body := @fm : lines
+   end
+
+   screen msgbox body title sysmsg(12817) buttons '&Run,&Cancel' default 2 returning b else b = 0
+   if b # 1 then return
+
+   if typed # '' then
+      fw = len(typed) + 4
+      pr = sysmsg(12818, typed)
+      tt = sysmsg(12817)
+      screen ask pr width fw title tt returning ans then got = 1 else got = 0
+      if not(got) then return
+      if trim(ans) # typed then
+         res = 'wrong'
+         msg = sysmsg(12815, typed)
+         return
+      end
+   end
+
+   res = 'run'
+   msg = ''
+   return
+end
+
+* END-CODE

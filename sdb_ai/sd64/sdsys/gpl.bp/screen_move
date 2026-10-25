@@ -1,0 +1,71 @@
+* SCREEN_MOVE
+* The subroutine that SCREEN MOVE calls: move a widget of a form, and resize a container.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 18 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SCREEN MOVE f, id {AT x,y} {SIZE w,h} {CONTENT cw,ch}
+*
+*   is compiled into
+*
+*   call !screen_move(f, id, x, y, w, h, cw, ch, ret, status)
+*
+*     f id      the form and the widget's name in it
+*     x y       the widget's new place, counted as it was when it was added (from the form's top left corner, or from
+*               the inside of its container).  What is inside a container moves with it
+*     w h       a new size: for a container, viewport or frame only
+*     cw ch     a new size of the sheet: for a viewport only
+*     status    0; 1 if f is not a form, it has no widget of that id, or a size is asked of a widget that cannot have one
+*               (ELSE; nothing is changed then)
+*
+*   A clause left out changes nothing.  If the form is on the screen (SCREEN WAIT put it there) it is drawn again at once,
+*   else the change shows the next time it is run or waited for.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine screen_move(f, id, ax, ay, sw, sh, cw, ch, ret, status)
+$catalog !screen_move
+
+   ret = ''
+   status = 1
+   if jtype(f) # 'collection' then return
+   call $sl_form('find', f, '', id, n)
+   if n = 0 then return
+
+   w = f{'widgets', n}
+   wt = w{'type'}
+   ctr = (wt = 'container' or wt = 'viewport')
+   if (sw # '' or sh # '') and not(ctr or wt = 'frame') then return
+   if (cw # '' or ch # '') and wt # 'viewport' then return
+   if (ax # '' and not(num(ax))) or (ay # '' and not(num(ay))) then return
+   if (sw # '' and not(num(sw))) or (sh # '' and not(num(sh))) then return
+   if (cw # '' and not(num(cw))) or (ch # '' and not(num(ch))) then return
+
+   if ax # '' then w{'x'} = ax + 0
+   if ay # '' then w{'y'} = ay + 0
+   if sw # '' then w{'w'} = sw + 0
+   if sh # '' then w{'h'} = sh + 0
+   if cw # '' then w{'cw'} = cw + 0
+   if ch # '' then w{'ch'} = ch + 0
+   if ctr then call $sl_viewport('init', w, '', '', r)
+
+   if f{'shown'} and not(system(25)) then
+      call $sl_scr('get', scr)
+      call $sl_form('redraw', f, scr, '', r)
+      call $sl_scr('put', scr)
+   end
+   status = 0
+
+   return
+end
+
+* END-CODE

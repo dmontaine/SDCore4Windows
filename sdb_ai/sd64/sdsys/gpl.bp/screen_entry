@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN ENTRY f, id {AT x,y} {WIDTH n} {VALUE v} {MASK} {MAXLEN n}
+*   SCREEN ENTRY f, id {AT x,y} {WIDTH n} {VALUE v} {MASK} {MAXLEN n} {COLOR fg,bg} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_entry(f, id, x, y, width, value, mask, maxlen, ret, status)
+*   call !screen_entry(f, id, x, y, width, value, mask, maxlen, fg, bg, accel, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
 *     x y      the first cell of the field from the form's top left corner, default 1,1
@@ -25,12 +26,19 @@
 *
 *   Read the text with SCREEN GET f, id; change it with SCREEN SET f, id VALUE v.
 *
+*   COLOR fg,bg gives the field its own colours (black, blue, green, cyan, red, magenta, brown, white; either may be left out for the terminal's own): one of sixteen
+*   user styles, a pair of colours being one style whoever asks.  A coloured entry KEEPS its colours while it has the focus (the cursor and an underline show it).  A terminal
+*   with no colour ignores the clause; a seventeenth pair of colours, or a name that is no colour, refuses the statement (ELSE).
+*
+*   ACCEL key gives the field a key that reaches it wherever the focus is, even in another text field: f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0
+*   to alt-9 (see SCREEN FORM; Alt+S, alt-s and ALT-S are one key).  A key that is none of those makes the statement take its ELSE.  The field takes the focus.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_entry(f, id, ax, ay, width, value, mask, maxlen, ret, status)
+subroutine screen_entry(f, id, ax, ay, width, value, mask, maxlen, fg, bg, accel, ret, status)
 $catalog !screen_entry
 
    ret = ''
@@ -50,6 +58,10 @@ $catalog !screen_entry
    if mask # '' then w{'mask'} = '*'
    if maxlen # '' then w{'maxlen'} = maxlen + 0
    call $sl_entry('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

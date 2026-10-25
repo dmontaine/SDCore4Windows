@@ -4,13 +4,16 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux bc9ef2d (13 Oct 26): A drop-down taller than the room under its bar scrolls: it shows the rows that fit, keeps the
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 13 Oct 26 dm  A drop-down taller than the room under its bar scrolls: it shows the rows that fit, keeps the
 *               current item in view, and marks the cut edges with ^ and v.  Before this the rows that did not
 *               fit were not drawn (SED on a 12-row terminal showed 10 of the 17 Edit items) though the cursor
 *               still moved over them.
-* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the menu as Esc does; the cursor is
+* 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the menu as Esc does; the cursor is
 *               placed through $sl_curat.
+* 19 Oct 26 dm  The op hit (which title is over a column), and title.at, which click.menu used inline: a click on a bar that is not open
+*               can start the menu under it (SCREEN MENUBAR ... CLICK; the IDE ignored a click on its bar until Esc had opened the menu).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -46,6 +49,9 @@
 *             ret<1> is 'handled', 'unhandled' (a key the menu has no use for), 'done' (an item
 *             was chosen; ret<2> is its code) or 'cancel'.  The caller then closes it.
 *     close   closes the drop-down if open (as focus 0)
+*     hit     key = a column of the bar's row (init has been done): ret is the number of the title that is over
+*             it, its label and the blank on each side, 0 for none (the space to the right of the titles).  A program
+*             that is told of a click on a bar that is not open uses it to start the menu under the click (SL.W.S1).
 *     run     all of the above in a loop: opens the menu, reads keys until one is chosen or the
 *             user leaves, closes it, draws the bar.  ret is the code, null if the user left.
 *
@@ -128,6 +134,11 @@ $include sl.h
 
       case op = 'key'
          gosub handle.key
+
+      case op = 'hit'
+         mx = key                              ;* a column of the bar's row: ret is the number of the title there, 0 for none
+         gosub title.at
+         ret = hitm
 
       case op = 'run'
          gosub open.menu
@@ -326,14 +337,7 @@ click.menu:
             gosub choose.item
          end
       case not(popup) and my = brow
-         hitm = 0
-         for m = 1 to nm
-            t = w<M.MENUS + m, 1>
-            if t[1, 1] = '>' then continue
-            gosub mnem
-            cx0 = w<M.TX, m> - 1                    ;* the column of the label's leading blank
-            if mx >= cx0 and mx < cx0 + len(plain) + 2 then hitm = m ; exit
-         next m
+         gosub title.at
          if hitm = 0 then
             ret = 'cancel'
          end else
@@ -347,6 +351,20 @@ click.menu:
       case 1
          ret = 'cancel'
    end case
+   return
+
+* hitm = the number of the title of the bar that is over the column mx (its label and the blank on each side), 0 for none: the space to the
+* right of the titles, or a submenu, which has no place on the bar.  A click on a title while a menu is open (click.menu above) and the
+* op hit, which a program uses to open the menu under a click on a bar that is not open (SCREEN MENUBAR ... CLICK), ask the same thing.
+title.at:
+   hitm = 0
+   for m = 1 to nm
+      t = w<M.MENUS + m, 1>
+      if t[1, 1] = '>' then continue
+      gosub mnem
+      cx0 = w<M.TX, m> - 1                    ;* the column of the label's leading blank
+      if mx >= cx0 and mx < cx0 + len(plain) + 2 then hitm = m ; exit
+   next m
    return
 
 * plain = t without its &, mn = the mnemonic letter in upper case, mp = its position in plain

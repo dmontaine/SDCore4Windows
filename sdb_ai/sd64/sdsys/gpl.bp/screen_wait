@@ -4,7 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 367841d (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -19,7 +20,7 @@
 *     timeout  seconds to wait for a key (each key resets it); left out, for ever
 *     ret      the event: field 1 the type, field 2 the widget's id, field 3 its data:
 *                button   the id of the button pressed (a cancel button is `cancel`, below)
-*                change   the id of a check box, radio group, list, combo box, tab strip or table whose value changed; data the new value
+*                change   the id of a check box, slider, selector, radio group, list, combo box, tab strip or table whose value changed; data the new value
 *                focus    the id the focus went to; data the id it left (validate the one it left with SCREEN GET)
 *                key      data the name of a key the form had no use for (a function key, a Ctrl key, an arrow no
 *                         widget wanted); no id

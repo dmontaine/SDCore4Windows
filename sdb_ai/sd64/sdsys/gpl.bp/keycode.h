@@ -35,6 +35,7 @@
                                     ;*   0    A normal key code
                                     ;*   1    A KEYEXIT code. LS byte = action
                                     ;*   2    A KEYTRAP code. LS byte = action
-                     kc.disable.esc ;* Disable lone Esc handling in KEYCODE()
+                     kc.disable.esc, ;* Disable lone Esc handling in KEYCODE()
+                     kc.alt         ;* Esc and one printable character, bound to nothing, are returned as those two characters (an Alt-letter)
 
 * END-CODE

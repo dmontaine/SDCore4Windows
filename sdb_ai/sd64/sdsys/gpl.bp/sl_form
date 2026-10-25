@@ -4,14 +4,21 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Containers and viewports ($sl_viewport): a widget may have a parent (w{'parent'} an id, w{'pn'} its
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  Containers and viewports ($sl_viewport): a widget may have a parent (w{'parent'} an id, w{'pn'} its
 *               number), laid out from it, clipped to it, hidden / disabled / deleted with it; the ops scroll and delete;
 *               the wheel, a drag on a bar's thumb, a child taking the focus scrolling into view, the hardware cursor
 *               hidden while the focused widget is not wholly in view.  A form with no parents is drawn as before.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42, phase 3: the cursor is hidden and shown through $sl_curat, which also tells the cursor lock;
+* 18 Oct 26 dm  Terminal 140 by 42, phase 3: the cursor is hidden and shown through $sl_curat, which also tells the cursor lock;
 *               the key guardquit is not a widget's, and a modal form reads it as Esc.
+* 18 Oct 26 dm  The op drawwidget: one widget drawn again, not the whole form (the IDE changing record rewrote the whole screen, which showed as a flash).
+* 19 Oct 26 dm  wait.event: a null key is a timeout only when STATUS() is ER$TIMEOUT; an input that has ended is end, with or without a timeout
+*               (the IDE's timeout 1 turned the end into timeouts for ever, at full CPU; sandbox-eofkeys.py).
+* 19 Oct 26 dm  f{'bgclick'} = 1: a press of the left button on no widget comes back as the key mouse (SCREEN MOUSE says where) instead of
+*               being ignored, so that the IDE can open its menu from a click on the bar.
+* 22 Oct 26 dm  selector (S.75, TK-0.10): dispatched like the slider, and a change of its value is a change event.
+* 22 Oct 26 dm  Accelerators (S.75, TK-0.12): find.accel and run.accel at the top of route.key; f{'achg'} makes the change event.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -25,8 +32,13 @@
 *     widgets  an array of widget collections ($sl_label describes the ones every widget has)
 *     focus    the number of the widget that has the focus (0 none)
 *     shown    1 while the form is on the screen
+*     curparent  the id SCREEN IN named: the widgets added now are inside that container (null: none)
+*     drag     the number of the viewport whose scroll bar thumb the mouse is dragging (0 none)
+*     scrolled the id of the viewport that was scrolled, then its sx, sy: WAIT turns it into a change event
+*     curhid   1 while the form has hidden the cursor because the focused widget is not wholly in view
 *
-*   A widget is any of: label frame entry check radio list combo button progress tabs memo table.  It has x y,
+*   A widget is any of: label frame entry check slider selector radio list combo button progress tabs memo table tree scroll
+*   container viewport.  It has x y,
 *   its place from the top left corner of the form (0,0 is the corner of the border), and w h, its size, once its
 *   own init has run.  disabled (1) takes it out of the focus ring.  page (a number, set by SCREEN PAGE through
 *   $sl_wadd) puts it on one page of the form's tab strip: it is drawn, can have the focus and gets keys only while
@@ -36,6 +48,8 @@
 *     init    fills in the form's own elements (and the size and place, if left out)
 *     find    key is a widget id; ret is its number, 0 if there is none
 *     draw    the frame, then every widget, the focused one last (it leaves the cursor in itself)
+*     drawwidget  key is a widget id: that one widget is drawn again, and the cursor goes back to the focused widget (no frame,
+*             no other widget; nothing if the form is not shown)
 *     focus   key is a widget id (or number); the focus goes there, both widgets redrawn
 *     key     one key goes to the widget that has the focus.  ret<1> is 'handled', 'done' or 'cancel'
 *             (ret<2> the id of the button that ended the form; for Esc, that of the form's cancel
@@ -43,12 +57,28 @@
 *     run     modal: saves what is under the form, draws it, reads keys until done or cancel, puts the
 *             screen back.  ret as for key.
 *     close   puts the screen back if the form is shown (run does this itself)
+*     scroll  key is a viewport's id: its sx, sy (set by the caller) are brought into range and, if the form is shown,
+*             the viewport and what is in it drawn again.  ret is sx, a value mark, sy; null if there is no such viewport
+*     delete  key is a widget id: the widget and, if it is a container, everything inside it are taken out of the form
+*             (drawn again if shown).  ret is how many were taken out
+*     layout  the widgets' places on the screen worked out again (a widget's ax, ay and, for the ones that have a
+*             container, the clip they are drawn and hit in)
+*
+*   A container's children are laid out from it: a child's place is the container's inner origin (the first cell inside
+*   its border, less the viewport's scroll) plus the child's x, y.  They come after it in the array, so the container is
+*   drawn first.  Whatever a child does is cut to the visible part of its container and of the containers outside that.
 *
 *   Keys the form acts on itself when the widget does not use them: Tab and Down go to the next widget
 *   that can have the focus, Shift-Tab and Up to the one before (round the ring); Return presses the
 *   form's default button wherever the focus is (it presses a button that has the focus whether or not it
 *   is the default), and without a default button goes to the next widget; Esc is cancel; a letter is the
 *   mnemonic of a button, which is pressed.
+*
+*   Accelerators (S.75 TK-0.12): a control given ACCEL 'alt-s' (or f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z, alt-0 to alt-9) gets that key wherever the
+*   focus is, even in a text field, before the focused control sees it.  An Alt-letter is also the letter marked with & in the text of a button, check
+*   box, slider, selector or label.  The first such control in the order they were added, on the page and not disabled, takes the key: a button is pressed,
+*   a check box, slider or selector is turned over (a selector goes to its next word; a change event is made), a label moves the focus to the next control
+*   that can have it, and any other control just takes the focus.
 *
 * END-DESCRIPTION
 *
@@ -59,9 +89,11 @@ subroutine sl_form(op, f, scr, key, ret)
 $catalog $sl_form
 
 $include sl.h
+$include err.h
 
    ret = ''
    wkey = ''                                 ;* the key handed to a widget: none for init, draw ...
+   scr<SL.S.DIFF> = scr<SL.S.SYNC> + 0       ;* 19 Oct 26: on a screen the terminal of which is known to match its shadow, $sl_put leaves out what is shown already
 
    begin case
       case op = 'init'
@@ -106,7 +138,47 @@ $include sl.h
             gosub layout
             gosub draw.all
          end
+
+      case op = 'drawwidget'
+         * 18 Oct 26: key is a widget id: that widget alone is drawn again (where it is, as the last layout left it), and the cursor
+         * goes back to the focused widget.  A program that changed one widget need not repaint the whole form (every cell of the
+         * screen written again is seen as a flash).  Nothing if the form is not shown or there is no such widget.
+         if f{'shown'} then
+            id = key
+            gosub find.widget
+            if fw > 0 then
+               di = fw
+               gosub draw.one
+               gosub park.cursor
+            end
+         end
+
+      case op = 'layout'
+         gosub init.page
+         gosub layout
+
+      case op = 'scroll'
+         id = key
+         gosub find.widget
+         if fw > 0 then
+            w = f{'widgets', fw}
+            if w{'type'} = 'viewport' then
+               call $sl_viewport('geom', w, scr, '', r)
+               ret = w{'sx'} : @vm : w{'sy'}
+               if f{'shown'} then
+                  vi = fw
+                  gosub redraw.vp
+               end
+            end
+         end
+
+      case op = 'delete'
+         id = key
+         gosub find.widget
+         if fw > 0 then gosub delete.widget
    end case
+
+   scr<SL.S.DIFF> = 0
 
    return
 
@@ -141,8 +213,10 @@ init.form:
       maxb = 3
       for i = 1 to nw
          w = f{'widgets', i}
-         if w{'x'} + w{'w'} + 2 > maxr then maxr = w{'x'} + w{'w'} + 2
-         if w{'y'} + w{'h'} + 2 > maxb then maxb = w{'y'} + w{'h'} + 2
+         if w{'pn'} + 0 = 0 then                 ;* a widget inside a container is placed in the container, not in the form
+            if w{'x'} + w{'w'} + 2 > maxr then maxr = w{'x'} + w{'w'} + 2
+            if w{'y'} + w{'h'} + 2 > maxb then maxb = w{'y'} + w{'h'} + 2
+         end
       next i
       if f{'w'} = '' then f{'w'} = maxr
       if f{'h'} = '' then f{'h'} = maxb
@@ -161,21 +235,86 @@ init.page:
    next i
    return
 
-* vis = 1 if widget w is on the page the form shows (a widget that has no page is on every page)
+* vis = 1 if widget w is on the page the form shows (a widget that has no page is on every page) and is not hidden;
+* ancdis = 1 if a container above it is disabled.  A container's page, hiding and disabling hold for what is in it.
 on.page:
    pg = w{'page'} + 0
    vis = (pg = 0 or f{'page'} = '' or pg = f{'page'} + 0)
    if w{'hidden'} + 0 then vis = 0            ;* SCREEN SET ... VISIBLE 0
+   ancdis = 0
+   pq = w{'pn'} + 0
+   for pk = 1 to 32
+      if pq = 0 then exit
+      pw = f{'widgets', pq}
+      pg = pw{'page'} + 0
+      if not(pg = 0 or f{'page'} = '' or pg = f{'page'} + 0) then vis = 0
+      if pw{'hidden'} + 0 then vis = 0
+      if pw{'disabled'} + 0 then ancdis = 1
+      pq = pw{'pn'} + 0
+   next pk
    return
 
-* Every widget's place on the screen
+* Every widget's place on the screen.  A widget in a container is placed from the container's inner origin (ox, oy: the
+* first cell inside its border, less a viewport's scroll) and cut to its visible part (clip: x0 y0 x1 y1 as values); a
+* container is laid out before what is in it because it comes first in the array.
 layout:
    nw = inmat(f{'widgets'})
-   for i = 1 to nw
-      w = f{'widgets', i}
-      w{'ax'} = f{'x'} + w{'x'}
-      w{'ay'} = f{'y'} + w{'y'}
-   next i
+   for li = 1 to nw
+      lw = f{'widgets', li}
+      lq = lw{'pn'} + 0
+      if lq > 0 then
+         lp = f{'widgets', lq}
+         lw{'ax'} = lp{'ox'} + lw{'x'}
+         lw{'ay'} = lp{'oy'} + lw{'y'}
+         lw{'clip'} = lp{'cl'}
+      end else
+         lw{'ax'} = f{'x'} + lw{'x'}
+         lw{'ay'} = f{'y'} + lw{'y'}
+         lw{'clip'} = ''
+      end
+      ltyp = lw{'type'}
+      if ltyp = 'container' or ltyp = 'viewport' then gosub layout.container
+   next li
+   return
+
+* The container lw (placed, with its own clip): the origin of what is in it, and the part of the inside that shows
+layout.container:
+   call $sl_viewport('geom', lw, scr, '', lr)
+   cb = lw{'bw'} + 0
+   cx0 = lw{'ax'} + cb
+   cy0 = lw{'ay'} + cb
+   lw{'ox'} = cx0 - lw{'sx'}
+   lw{'oy'} = cy0 - lw{'sy'}
+   cx1 = cx0 + lw{'visw'} - 1
+   cy1 = cy0 + lw{'vish'} - 1
+   lc = lw{'clip'}
+   if lc # '' then
+      if lc<1, 1> > cx0 then cx0 = lc<1, 1>
+      if lc<1, 2> > cy0 then cy0 = lc<1, 2>
+      if lc<1, 3> < cx1 then cx1 = lc<1, 3>
+      if lc<1, 4> < cy1 then cy1 = lc<1, 4>
+   end
+   lw{'cl'} = cx0 : @vm : cy0 : @vm : cx1 : @vm : cy1
+   return
+
+* outside = 1 if no cell of widget w is inside the clip it has from its containers
+clipped.out:
+   outside = 0
+   cc = w{'clip'}
+   if cc # '' then
+      if w{'ax'} > cc<1, 3> or w{'ax'} + w{'w'} - 1 < cc<1, 1> or w{'ay'} > cc<1, 4> or w{'ay'} + w{'h'} - 1 < cc<1, 2> then outside = 1
+   end
+   return
+
+* The inside of the container w is blanked in the form's style, within the part of it that shows
+blank.inside:
+   cc = w{'cl'}
+   if cc<1, 3> >= cc<1, 1> and cc<1, 4> >= cc<1, 2> then
+      call $sl_attr('window', bc)
+      for br = cc<1, 2> to cc<1, 4>
+         call $sl_put(scr, cc<1, 1> + 0, br, space(cc<1, 3> - cc<1, 1> + 1), bc)
+      next br
+   end
    return
 
 draw.all:
@@ -185,20 +324,27 @@ draw.all:
    fi = f{'focus'} + 0
    for i = 1 to nw
       if i # fi then
-         w = f{'widgets', i}
-         gosub on.page
-         if vis then
-            wt = w{'type'}
-            wop = 'draw'
-            gosub call.widget
-         end
+         di = i
+         gosub draw.one
       end
    next i
    if fi >= 1 and fi <= nw then
-      w = f{'widgets', fi}
-      gosub on.page
-      if vis then
+      di = fi
+      gosub draw.one
+   end
+   gosub park.cursor
+   return
+
+* Draw widget number di, if it is on the page and any of it is where it can be seen.  A container is blanked inside first
+* unless it has the focus (it is drawn last then, over what is in it).
+draw.one:
+   w = f{'widgets', di}
+   gosub on.page
+   if vis then
+      gosub clipped.out
+      if outside = 0 then
          wt = w{'type'}
+         if (wt = 'container' or wt = 'viewport') and di # f{'focus'} + 0 then gosub blank.inside
          wop = 'draw'
          gosub call.widget
       end
@@ -248,12 +394,36 @@ find.widget:
    return
 
 * Run one operation of one widget: wop, w (a widget collection), wt (its type), wkey.  wr is the answer.
+* A widget in a container is run with the clip narrowed to the part of the container that shows (the program's own clip
+* kept in SL.S.BCLIP, for the pop-ups a widget opens); vmoved is 1 afterwards if the widget was a viewport that scrolled.
 call.widget:
    wr = ''
+   vmoved = 0
+   wcl = w{'clip'}
+   nrw = (wcl # '')
+   if nrw then
+      sclip = scr<SL.S.CLIP>
+      nx0 = wcl<1, 1> ; ny0 = wcl<1, 2> ; nx1 = wcl<1, 3> ; ny1 = wcl<1, 4>
+      if sclip # '' then
+         if sclip<1, 1> > nx0 then nx0 = sclip<1, 1>
+         if sclip<1, 2> > ny0 then ny0 = sclip<1, 2>
+         if sclip<1, 3> < nx1 then nx1 = sclip<1, 3>
+         if sclip<1, 4> < ny1 then ny1 = sclip<1, 4>
+      end
+      scr<SL.S.BCLIP> = sclip
+      scr<SL.S.NARROW> = 1
+      scr<SL.S.CLIP> = nx0 : @vm : ny0 : @vm : nx1 : @vm : ny1
+   end
+   if wt = 'viewport' then
+      vsx0 = w{'sx'} + 0
+      vsy0 = w{'sy'} + 0
+   end
    begin case
       case wt = 'entry' ; call $sl_entry(wop, w, scr, wkey, wr)
       case wt = 'list' ; call $sl_list(wop, w, scr, wkey, wr)
       case wt = 'check' ; call $sl_check(wop, w, scr, wkey, wr)
+      case wt = 'slider' ; call $sl_slider(wop, w, scr, wkey, wr)
+      case wt = 'selector' ; call $sl_selector(wop, w, scr, wkey, wr)
       case wt = 'radio' ; call $sl_radio(wop, w, scr, wkey, wr)
       case wt = 'button' ; call $sl_button(wop, w, scr, wkey, wr)
       case wt = 'label' ; call $sl_label(wop, w, scr, wkey, wr)
@@ -264,6 +434,7 @@ call.widget:
       case wt = 'table' ; call $sl_table(wop, w, scr, wkey, wr)
       case wt = 'tree' ; call $sl_tree(wop, w, scr, wkey, wr)
       case wt = 'scroll' ; call $sl_scroll(wop, w, scr, wkey, wr)
+      case wt = 'container' or wt = 'viewport' ; call $sl_viewport(wop, w, scr, wkey, wr)
       case wt = 'frame'
          if wop = 'draw' then
             call $sl_attr('window', wc)
@@ -272,13 +443,21 @@ call.widget:
       case 1
          wr = 'unhandled' : @fm : wkey
    end case
+   if nrw then
+      scr<SL.S.CLIP> = sclip
+      scr<SL.S.BCLIP> = ''
+      scr<SL.S.NARROW> = 0
+   end
+   if wt = 'viewport' then
+      if w{'sx'} + 0 # vsx0 or w{'sy'} + 0 # vsy0 then vmoved = 1
+   end
    return
 
-* A widget can have the focus if it takes keys at all and is not disabled
+* A widget can have the focus if it takes keys at all and is not disabled (nor is a container it is in), and is on the page
 can.focus:
    w = f{'widgets', i}
    gosub on.page
-   cf = (w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 and vis)
+   cf = (w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 and ancdis = 0 and vis)
    return
 
 * The focus goes to widget number ni; the one that had it is redrawn without
@@ -292,9 +471,65 @@ set.focus:
    end
    f{'focus'} = ni
    w = f{'widgets', ni}
+   if w{'pn'} + 0 > 0 and f{'shown'} then
+      * a widget in a viewport comes into view; the viewports that moved are drawn again before the widget is
+      gosub reveal
+      if rvi > 0 then
+         vi = rvi
+         gosub redraw.vp
+         w = f{'widgets', ni}
+      end
+   end
    wt = w{'type'}
    wop = 'focus' ; wkey = 1
    gosub call.widget
+   gosub park.cursor
+   return
+
+* The widget w (number ni) is to be seen: every viewport it is in is scrolled just far enough that the widget is inside what
+* shows (a widget too big for the window has its top left corner shown).  rvi = the outermost viewport that moved, 0 if none.
+reveal:
+   rvi = 0
+   rvw = w
+   rpi = w{'pn'} + 0
+   for rk = 1 to 32
+      if rpi = 0 then exit
+      rvp = f{'widgets', rpi}
+      if rvp{'type'} = 'viewport' then
+         call $sl_viewport('geom', rvp, scr, '', rr)
+         tx = rvw{'ax'} - rvp{'ox'}
+         ty = rvw{'ay'} - rvp{'oy'}
+         tw = rvw{'w'} + 0
+         th = rvw{'h'} + 0
+         rsx = rvp{'sx'} + 0
+         rsy = rvp{'sy'} + 0
+         begin case
+            case tx < rsx
+               rsx = tx
+            case tx + tw > rsx + rvp{'visw'}
+               rsx = tx + tw - rvp{'visw'}
+               if rsx > tx then rsx = tx
+         end case
+         begin case
+            case ty < rsy
+               rsy = ty
+            case ty + th > rsy + rvp{'vish'}
+               rsy = ty + th - rvp{'vish'}
+               if rsy > ty then rsy = ty
+         end case
+         if rsx # rvp{'sx'} + 0 or rsy # rvp{'sy'} + 0 then
+            rvp{'sx'} = rsx
+            rvp{'sy'} = rsy
+            call $sl_viewport('geom', rvp, scr, '', rr)
+            rvi = rpi
+            gosub layout
+            w = f{'widgets', ni}
+            rvw = w
+         end
+      end
+      rpi = rvp{'pn'} + 0
+   next rk
+   w = f{'widgets', ni}
    return
 
 * Step round the ring of widgets that can have the focus: step is 1 or -1
@@ -340,7 +575,7 @@ default.action:
    for i = 1 to nw
       w = f{'widgets', i}
       gosub on.page
-      if w{'type'} = 'button' and w{'default'} + 0 and w{'disabled'} + 0 = 0 and vis then dflt = i ; exit
+      if w{'type'} = 'button' and w{'default'} + 0 and w{'disabled'} + 0 = 0 and ancdis = 0 and vis then dflt = i ; exit
    next i
    if dflt then
       w = f{'widgets', dflt}
@@ -385,7 +620,7 @@ other.key:
          for i = 1 to nw
             w = f{'widgets', i}
             gosub on.page
-            if w{'type'} = 'button' and w{'mn'} = uk and w{'disabled'} + 0 = 0 and vis then
+            if w{'type'} = 'button' and w{'mn'} = uk and w{'disabled'} + 0 = 0 and ancdis = 0 and vis then
                gosub press.button
                exit
             end
@@ -393,6 +628,60 @@ other.key:
       case 1
          ret = 'unhandled' : @fm : k2
    end case
+   return
+
+* The first control (in the order they were added) that is on the page, not disabled, and has this key as its ACCEL or, for an Alt-letter, as the letter
+* marked with & in its text.  A label has no focus of its own: its letter takes the focus to the next control that can have it.  ni = its number, 0 if none.
+find.accel:
+   ni = 0
+   nw = inmat(f{'widgets'})
+   for i = 1 to nw
+      w = f{'widgets', i}
+      gosub on.page
+      if vis and w{'disabled'} + 0 = 0 and ancdis = 0 and (w{'focusable'} + 0 = 1 or w{'type'} = 'label') then
+         if w{'accel'} = key then ni = i
+         if len(key) = 5 and key[1, 4] = 'alt-' and w{'amn'} # '' and w{'amn'} = upcase(key[5, 1]) then ni = i
+         if ni > 0 then exit
+      end
+   next i
+   if ni > 0 then
+      w = f{'widgets', ni}
+      if w{'type'} = 'label' then
+         lab = ni
+         ni = 0
+         for k = 1 to nw
+            lab += 1
+            if lab > nw then lab = 1
+            i = lab
+            gosub can.focus
+            if cf then ni = lab ; exit
+         next k
+         if ni = 0 then ni = -1                  ;* a label with no control to take the focus to: the key is used up, nothing happens
+      end
+   end
+   return
+
+* The accelerator found (find.accel: ni) is acted on: the control gets the focus, and then a button is pressed, a check box, slider or selector is
+* turned over / moved to its next word, and any other control just has the focus.  A change is a change event (f{'achg'}), not only the focus event.
+run.accel:
+   ret = 'handled'
+   if ni < 0 then return
+   hit = ni
+   if hit # f{'focus'} + 0 then gosub set.focus
+   wi = hit
+   w = f{'widgets', hit}
+   wt = w{'type'}
+   v1 = w{'value'}
+   begin case
+      case wt = 'button'
+         gosub press.button
+      case wt = 'check' or wt = 'slider' or wt = 'selector'
+         wop = 'key' ; wkey = ' '
+         gosub call.widget
+         gosub after.widget
+         if w{'value'} # v1 then f{'achg'} = hit
+   end case
+   gosub park.cursor
    return
 
 route.key:
@@ -404,13 +693,27 @@ route.key:
       * The terminal's size changed ($sl_key says so).  This form's screen context is the live one (the kept one is only
       * updated when the statement ends), so it is made the new size and drawn again here, form and all; the key is then
       * passed on as one nobody used, which WAIT turns into the event resize.
+      sw0 = scr<SL.S.W> ; sh0 = scr<SL.S.H>
       call $sl_resize(scr)
+      * 19 Oct 26: a resize key with the size unchanged is the lift of the cursor lock ($sl_guard cleared the terminal and drew its own
+      *   box): the terminal no longer matches the shadow, so the screen is drawn again from it, which also makes it match for what follows
+      if scr<SL.S.W> = sw0 and scr<SL.S.H> = sh0 and scr<SL.S.OWNED> then call $sl_repaint(scr)
       ret = 'unhandled' : @fm : key
       return
    end
    if key = 'guardquit' then
       ret = 'unhandled' : @fm : key               ;* the user left from the cursor lock ($sl_guardmode): no widget's key, the program's
       return
+   end
+   f{'achg'} = ''
+   * an accelerator (S.75 TK-0.12): the key a control was given with ACCEL, or an Alt-letter that is the & letter of a button, check box, slider,
+   * selector or label.  It goes to the control wherever the focus is, even in a text field, before the focused control sees the key.
+   if len(key) >= 2 and (key[1, 4] = 'alt-' or key[1, 5] = 'ctrl-' or (key[1, 1] = 'f' and len(key) <= 3 and num(key[2, 9]))) then
+      gosub find.accel
+      if ni > 0 then
+         gosub run.accel
+         return
+      end
    end
    nw = inmat(f{'widgets'})
    fi = f{'focus'} + 0
@@ -420,10 +723,12 @@ route.key:
       return
    end
    w = f{'widgets', fi}
+   wi = fi
    wt = w{'type'}
    wop = 'key' ; wkey = key
    gosub call.widget
    gosub after.widget
+   gosub park.cursor
    return
 
 * A mouse event ($sl_mouse has it): the press of the left button, or the wheel, over a widget that can have the
@@ -434,29 +739,84 @@ route.mouse:
    call $sl_mouse('get', mev)
    ret = 'handled'
    mk = mev<1>
-   if not((mk = 'press' and mev<2> = 1) or mk = 'wheel') then return
-   hit = 0
    nw = inmat(f{'widgets'})
+   * the drag and the release that follow a press on a viewport's thumb are the viewport's wherever the pointer is
+   dv = f{'drag'} + 0
+   if dv > 0 and (mk = 'drag' or mk = 'release') then
+      if dv <= nw then
+         w = f{'widgets', dv}
+         wi = dv
+         wt = w{'type'}
+         wop = 'mouse' ; wkey = mev
+         gosub call.widget
+         gosub after.widget
+         if mk = 'release' or w{'drag'} = '' then f{'drag'} = 0
+      end else
+         f{'drag'} = 0
+      end
+      return
+   end
+   if not((mk = 'press' and mev<2> = 1) or mk = 'wheel') then return
+   mx = mev<3> + 0
+   my = mev<4> + 0
+   hit = 0
    for i = nw to 1 step -1
       w = f{'widgets', i}
       gosub on.page
-      if vis and w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 then
-         if mev<3> >= w{'ax'} and mev<3> < w{'ax'} + w{'w'} and mev<4> >= w{'ay'} and mev<4> < w{'ay'} + w{'h'} then
-            hit = i
-            exit
+      if vis and w{'focusable'} + 0 = 1 and w{'disabled'} + 0 = 0 and ancdis = 0 then
+         if mx >= w{'ax'} and mx < w{'ax'} + w{'w'} and my >= w{'ay'} and my < w{'ay'} + w{'h'} then
+            cc = w{'clip'}
+            if cc = '' then
+               hit = i
+            end else
+               if mx >= cc<1, 1> and mx <= cc<1, 3> and my >= cc<1, 2> and my <= cc<1, 4> then hit = i
+            end
+            if hit then exit
          end
       end
    next i
-   if hit = 0 then return
-   if hit # f{'focus'} + 0 then
+   if hit = 0 then
+      * a press of the left button on nothing: ignored, unless the program asked for it (f{'bgclick'} = 1, the IDE: the menu bar is not a widget)
+      if mk = 'press' and f{'bgclick'} + 0 = 1 then ret = 'unhandled' : @fm : 'mouse'
+      return
+   end
+   keepf = 0
+   if mk = 'wheel' then gosub wheel.target
+   if hit # f{'focus'} + 0 and keepf = 0 then
       ni = hit
       gosub set.focus
    end
    w = f{'widgets', hit}
+   wi = hit
    wt = w{'type'}
    wop = 'mouse' ; wkey = mev
    gosub call.widget
    gosub after.widget
+   if wt = 'viewport' and w{'drag'} # '' then f{'drag'} = hit
+   gosub park.cursor
+   return
+
+* The wheel over a viewport, or over a widget in one that does not use the wheel itself (a list, memo, table, tree and
+* scroll bar do), goes to the nearest viewport round it, and the focus stays where it is
+wheel.target:
+   w = f{'widgets', hit}
+   wt = w{'type'}
+   if wt = 'viewport' then
+      keepf = 1
+      return
+   end
+   if wt = 'list' or wt = 'memo' or wt = 'table' or wt = 'tree' or wt = 'scroll' then return
+   wq = w{'pn'} + 0
+   for wk = 1 to 32
+      if wq = 0 then exit
+      wp = f{'widgets', wq}
+      if wp{'type'} = 'viewport' and wp{'disabled'} + 0 = 0 then
+         hit = wq
+         keepf = 1
+         exit
+      end
+      wq = wp{'pn'} + 0
+   next wk
    return
 
 * What the form does with the answer (wr) of the widget w, of type wt, to a key or a click
@@ -466,6 +826,10 @@ after.widget:
    if wt = 'tabs' and f{'page'} # w{'value'} then
       f{'page'} = w{'value'}                 ;* another tab was chosen: the form shows its page
       gosub draw.all
+   end
+   if wt = 'viewport' and vmoved then
+      vi = wi                                ;* a viewport scrolled: it and what is in it are drawn again
+      gosub redraw.vp
    end
    begin case
       case st = 'handled'
@@ -482,6 +846,148 @@ after.widget:
       case 1
          gosub other.key
    end case
+   return
+
+* The viewport number vi has scrolled (its sx, sy are new): the places are worked out again and its inside is blanked and
+* drawn again with what is in it, and with whatever was added after it that lies over it, the focused widget last.  The rest of
+* the form is not touched.  f{'scrolled'} tells WAIT.
+redraw.vp:
+   if unassigned(w) then svw = '' else svw = w
+   if unassigned(wt) then svt = '' else svt = wt
+   gosub layout
+   nw = inmat(f{'widgets'})
+   fi = f{'focus'} + 0
+   vw = f{'widgets', vi}
+   vx0 = vw{'ax'} + 0
+   vy0 = vw{'ay'} + 0
+   vx1 = vx0 + vw{'w'} - 1
+   vy1 = vy0 + vw{'h'} - 1
+   if vi = fi then
+      w = vw
+      gosub blank.inside
+   end else
+      di = vi
+      gosub draw.one
+   end
+   for rj = vi + 1 to nw
+      if rj # fi then
+         dj = rj
+         gosub redraw.member
+         if rin then
+            di = rj
+            gosub draw.one
+         end
+      end
+   next rj
+   if fi >= 1 and fi <= nw then
+      rin = 1
+      if fi > vi then
+         dj = fi
+         gosub redraw.member
+      end
+      if rin then
+         di = fi
+         gosub draw.one
+      end
+   end
+   gosub park.cursor
+   f{'scrolled'} = vw{'id'} : @fm : vw{'sx'} : @vm : vw{'sy'}
+   w = svw
+   wt = svt
+   return
+
+* rin = 1 if widget number dj is inside viewport vi, or lies over its rectangle (vx0, vy0, vx1, vy1)
+redraw.member:
+   rin = 0
+   gosub desc.of
+   if isdesc then
+      rin = 1
+   end else
+      mw = f{'widgets', dj}
+      if mw{'ax'} <= vx1 and mw{'ax'} + mw{'w'} - 1 >= vx0 and mw{'ay'} <= vy1 and mw{'ay'} + mw{'h'} - 1 >= vy0 then rin = 1
+   end
+   return
+
+* isdesc = 1 if widget number dj is inside widget number vi, at any depth
+desc.of:
+   isdesc = 0
+   dq = dj
+   for dk = 1 to 32
+      dw = f{'widgets', dq}
+      dq = dw{'pn'} + 0
+      if dq = 0 then exit
+      if dq = vi then
+         isdesc = 1
+         exit
+      end
+   next dk
+   return
+
+* Take widget number fw out of the form, and everything inside it.  ret = how many went.  The numbers of the widgets after
+* it change, so each one's pn (the number of its container) and the form's focus are made right.
+delete.widget:
+   nw = inmat(f{'widgets'})
+   dkill = ''
+   for j = 1 to nw
+      isk = 0
+      if j = fw then
+         isk = 1
+      end else
+         if j > fw then
+            dw = f{'widgets', j}
+            q = dw{'pn'} + 0
+            if q > 0 then isk = dkill<q>
+         end
+      end
+      dkill<j> = isk
+   next j
+   tmp = collection()
+   tmp{'widgets'} = mat()
+   newi = ''
+   nn = 0
+   gone = 0
+   for j = 1 to nw
+      if dkill<j> then
+         newi<j> = 0
+         gone += 1
+         dw = f{'widgets', j}
+         if dw{'id'} = f{'curparent'} then f{'curparent'} = ''
+      end else
+         nn += 1
+         newi<j> = nn
+         tmp{'widgets', nn} = f{'widgets', j}
+      end
+   next j
+   f{'widgets'} = tmp{'widgets'}
+   for j = 1 to nn
+      dw = f{'widgets', j}
+      q = dw{'pn'} + 0
+      if q > 0 then dw{'pn'} = newi<q>
+   next j
+   ofoc = f{'focus'} + 0
+   nf = 0
+   if ofoc >= 1 and ofoc <= nw then nf = newi<ofoc>
+   if nf = 0 then
+      * the focused widget went: the focus goes to the first that can have it
+      for i = 1 to nn
+         gosub can.focus
+         if cf then
+            nf = i
+            w = f{'widgets', i}
+            w{'focused'} = 1
+            exit
+         end
+      next i
+   end
+   f{'focus'} = nf
+   f{'drag'} = 0
+   nw = nn
+   ret = gone
+   if f{'shown'} then
+      gosub init.page
+      gosub layout
+      gosub draw.all
+   end
    return
 
 run.modal:
@@ -527,6 +1033,8 @@ show.form:
    if start then
       w = f{'widgets', start}
       w{'focused'} = 1
+      ni = start
+      if w{'pn'} + 0 > 0 then gosub reveal          ;* a widget in a viewport starts in view
    end
 
    gosub draw.all
@@ -535,9 +1043,10 @@ show.form:
 * One event: show the form if it is not shown, read keys until one of them means something to the program.
 * tmo = seconds to wait for a key (null: for ever).  ret = 'event' : evt : eid : edata where evt is
 *   button  (eid the button's id)           cancel  (Esc, eid null; or the form's cancel button, eid its id)
-*   change  (eid, edata the new value: a check box, radio group, list or combo changed)
+*   change  (eid, edata the new value: a check box, slider, selector, radio group, list or combo changed)
 *   focus   (eid the widget the focus went to, edata the one it left)
-*   key     (edata the key's name: one the form had no use for)    timeout    end (the input ended)
+*   key     (edata the key's name: one the form had no use for; also mouse, for a press of the left button on no widget, when the
+*           program has set f{'bgclick'} = 1)    timeout    end (the input ended)
 *   activate  (eid the tree's or table's id, edata its value: Return in one of them, only when the program has set
 *             f{'activate'} = 1 and the form has no default button; otherwise Return moves the focus on)
 wait.event:
@@ -545,11 +1054,16 @@ wait.event:
    evt = ''
    eid = ''
    edata = ''
+   f{'scrolled'} = ''
+   gosub park.cursor                         ;* the statement before this one gave the cursor back to the program
    loop
       call $sl_key(tmo, kk)
       if kk = '' then
          evt = 'end'
-         if tmo # '' then evt = 'timeout'
+         * 19 Oct 26: only the time running out is a timeout.  An input that has ended also gives a null key at once, and a
+         * program that waits with a timeout (the IDE waits a second at a time) took it for the time passing and went round
+         * again for ever, at full CPU.  $sl_key leaves STATUS() at ER$TIMEOUT when it was the time.
+         if tmo # '' and status() = ER$TIMEOUT then evt = 'timeout'
       end else
          nw = inmat(f{'widgets'})
          fi0 = f{'focus'} + 0
@@ -579,15 +1093,25 @@ wait.event:
                   evt = 'resize'                  ;* $sl_key has drawn the screen again at its new size
                   edata = @crtwide : @vm : @crthigh
                end
+            case f{'achg'} # ''
+               w = f{'widgets', f{'achg'}}              ;* an accelerator turned a check box, slider or selector over: a change, whether or not the focus moved
+               evt = 'change' ; eid = w{'id'} ; edata = w{'value'}
             case fi1 # fi0 and fi1 >= 1
                w = f{'widgets', fi1}
                evt = 'focus' ; eid = w{'id'} ; edata = id0
-            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo' or wt0 = 'tabs' or wt0 = 'table' or wt0 = 'tree' or wt0 = 'scroll')
+            case fi0 >= 1 and (wt0 = 'check' or wt0 = 'slider' or wt0 = 'selector' or wt0 = 'radio' or wt0 = 'list' or wt0 = 'combo' or wt0 = 'tabs' or wt0 = 'table' or wt0 = 'tree' or wt0 = 'scroll')
                w = f{'widgets', fi0}
                if w{'value'} # v0 then
                   evt = 'change' ; eid = id0 ; edata = w{'value'}
                end
          end case
+         * a viewport scrolled (a key, the wheel, a drag on its bar) and nothing else happened: that is a change, its value
+         * the first column and row shown from 0, with a value mark between
+         if evt = '' and f{'scrolled'} # '' then
+            sc = f{'scrolled'}
+            evt = 'change' ; eid = sc<1> ; edata = sc<2>
+         end
+         f{'scrolled'} = ''
       end
    until evt # ''
    repeat

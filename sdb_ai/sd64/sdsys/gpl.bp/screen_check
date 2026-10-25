@@ -4,31 +4,39 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 22 Oct 26 dm  PLACE: where the label is (left by default; it was on the right).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN CHECK f, id, text {AT x,y} {VALUE v}
+*   SCREEN CHECK f, id, text {AT x,y} {VALUE v} {PLACE where} {COLOR fg,bg} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_check(f, id, text, x, y, value, ret, status)
+*   call !screen_check(f, id, text, x, y, value, place, fg, bg, accel, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
-*     text     shown after [x] or [ ]
-*     x y      the place of the box from the form's top left corner, default 1,1
+*     text     the label, shown next to [x] or [ ]
+*     x y      the place of the box and its label from the form's top left corner, default 1,1
 *     value    1 to start checked (default 0)
+*     place    where the label is, in relation to the box: left (the default: text [x]), right ([x] text), above or below (two rows)
 *     status   0 added; 1 not (ELSE)
 *
-*   The space bar checks and unchecks it; SCREEN GET f, id answers 1 or 0.
+*   The space bar checks and unchecks it, and so does a click on the box or on the label; SCREEN GET f, id answers 1 or 0.
+*
+*   COLOR fg,bg gives the box and its label their own colours (see SCREEN ENTRY) until the check box has the focus; it is then in the focus style.
+*
+*   ACCEL key gives the check box a key that reaches it wherever the focus is (see SCREEN ENTRY): f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9.  The
+*   key takes the focus to the check box and ticks or unticks it (a change event).  A letter marked with & in the text (&Shell) is also its Alt-letter.
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_check(f, id, text, ax, ay, value, ret, status)
+subroutine screen_check(f, id, text, ax, ay, value, place, fg, bg, accel, ret, status)
 $catalog !screen_check
 
    ret = ''
@@ -43,7 +51,12 @@ $catalog !screen_check
    w{'x'} = x
    w{'y'} = y
    w{'value'} = value
+   w{'place'} = place
    call $sl_check('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

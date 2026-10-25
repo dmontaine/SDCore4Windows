@@ -1,0 +1,66 @@
+* TK_KEYS
+* The full-screen toolkit, shared base: the app's one key table (plan section 2.2).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_keys(op, keys, a, b, c, d, e)
+*
+*     op add     a = the key as $sl_key names it, b = the label, c = the action id, d = the panes that use it (sub-values; null is every pane),
+*                e = 0 to take the key out of the table's use, null or 1 to leave it in.  The key is added to the end of KEYS.
+*     op name    a = a key's name; b is returned: the name as the function-key row writes it (f1 is F1, ctrl-s is ^S, tab is Tab)
+*     op action  a = a key, b = the focused pane; c is returned: the action id of the first enabled entry for that key that the pane uses, or null
+*
+*   The table (tk.h) is one dynamic array, a key to a field.  The function-key row, the help and the key loop are all made from it, so the
+*   labels and the keys cannot disagree.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_keys(op, keys, a, b, c, d, e)
+$catalog $tk_keys
+
+$include tk.h
+
+   begin case
+      case op = 'add'
+         keys<-1> = a : @vm : b : @vm : c : @vm : d : @vm : e
+
+      case op = 'name'
+         k = a
+         begin case
+            case k[1, 5] = 'ctrl-'
+               b = '^' : upcase(k[6, 99])
+            case k[1, 1] = 'f' and k[2, 9] # '' and num(k[2, 9])
+               b = upcase(k)
+            case 1
+               b = upcase(k[1, 1]) : k[2, 99]
+         end case
+
+      case op = 'action'
+         pane = b
+         c = ''
+         n = dcount(keys, @fm)
+         for i = 1 to n
+            if keys<i, TK.K.KEY> = a and keys<i, TK.K.ON> # '0' then
+               panes = keys<i, TK.K.PANES>
+               if panes = '' or index(@sm : panes : @sm, @sm : pane : @sm, 1) then
+                  c = keys<i, TK.K.ACT>
+                  exit
+               end
+            end
+         next i
+   end case
+
+   return
+end
+
+* END-CODE

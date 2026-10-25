@@ -1,0 +1,115 @@
+* TK_OPEN
+* The full-screen toolkit, shared base: the start of an app (plan section 2.1).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_open(app, audience, ctx, err)
+*
+*     app       the app's name, for the messages and the right end of row 0
+*     audience  'admin' for an administrator app, null for a user app
+*     ctx       returned: the context (tk.h) every other routine of the base is given
+*     err       returned: null when the app may go on; else the message to print (the app prints it and stops).  Nothing has been
+*               drawn and no data has been read.
+*
+*   In this order, and each refusal returns: a phantom has no terminal; the window must be TK.MINW by TK.MINH (the library's one check,
+*   $sl_need, message 12202); an administrator app asks the kernel BEFORE the screen is taken and before any data is read; then the break
+*   setting is saved and the break key turned off (Ctrl-C and the terminal's break are keys of the app), the screen is taken with
+*   line-drawing borders when the terminal says UTF-8, and the cursor lock is asked for (the keys are not the app's while the cursor is off
+*   the screen).  $tk_close gives it all back.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_open(app, audience, ctx, err)
+$catalog $tk_open
+
+$include keys.h
+$include int$keys.h
+$include sl.h
+$include tk.h
+
+   err = ''
+   ctx = ''
+   is.admin = (audience = 'admin')
+
+   if system(25) then
+      err = sysmsg(12806, app)
+      return
+   end
+
+   call $sl_need(app, TK.MINW, TK.MINH, need.msg, '')
+   if need.msg # '' then
+      err = need.msg
+      return
+   end
+
+   if audience = 'admin' then
+      if not(kernel(K$ADMINISTRATOR, -1)) then
+         err = sysmsg(12805, app)
+         return
+      end
+   end
+
+   * Line-drawing characters when the terminal says it is UTF-8 - LC_ALL, then LC_CTYPE, then LANG as a shell resolves them
+   loc = env('LC_ALL')
+   if loc = '' then loc = env('LC_CTYPE')
+   if loc = '' then loc = env('LANG')
+   loc = upcase(loc)
+   utf8 = (index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0)
+
+   saved.trap = pterm(PT$BREAK, -1)
+   void pterm(PT$BREAK, @false)
+   break off
+
+   opened = @false
+   if utf8 then
+      screen open clear lines then
+         opened = @true
+      end
+   end else
+      screen open clear then
+         opened = @true
+      end
+   end
+   if not(opened) then
+      break on
+      void pterm(PT$BREAK, saved.trap)
+      err = sysmsg(12807, app)
+      return
+   end
+
+   call $sl_guardmode(app, TK.MINW, TK.MINH)
+
+   call $sl_window(w, h)
+   lw = w
+   lh = h
+   if lw < TK.MINW then lw = TK.MINW            ;* the window is smaller only after the start: the layout keeps its size and the
+   if lh < TK.MINH then lh = TK.MINH            ;* library cuts what falls outside (the upper left corner shows)
+
+   ctx<TK.C.W> = lw
+   ctx<TK.C.H> = lh
+   ctx<TK.C.UTF8> = (if utf8 then 1 else 0)
+   ctx<TK.C.TRAP> = saved.trap
+   ctx<TK.C.APP> = app
+   if is.admin then
+      ctx<TK.C.AUD> = sysmsg(12808)
+   end else
+      ctx<TK.C.AUD> = @logname : '@' : @who
+   end
+   ctx<TK.C.YSTAT> = lh - 3
+   ctx<TK.C.YBORD> = lh - 2
+   ctx<TK.C.YKEYS> = lh - 1
+
+   return
+end
+
+* END-CODE

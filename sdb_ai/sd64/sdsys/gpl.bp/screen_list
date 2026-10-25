@@ -4,16 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux 1e23a00 (12 Oct 26): New.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN LIST f, id, items {AT x,y} {SIZE w,h} {VALUE n} {MULTI}
+*   SCREEN LIST f, id, items {AT x,y} {SIZE w,h} {VALUE n} {MULTI} {COLOR fg,bg} {ACCEL key}
 *
 *   is compiled into
 *
-*   call !screen_list(f, id, items, x, y, w, h, value, multi, ret, status)
+*   call !screen_list(f, id, items, x, y, w, h, value, multi, fg, bg, accel, ret, status)
 *
 *     f id     the form and the widget's name in it (as SCREEN LABEL)
 *     items    the entries, as values (a field mark does as well)
@@ -27,12 +28,17 @@
 *
 *   SCREEN GET f, id answers the number of the current entry (with MULTI, the numbers picked, as values).
 *
+*   COLOR fg,bg gives the rows their own colours (see SCREEN ENTRY); the current row is still in the focus style while the list has the focus.
+*
+*   ACCEL key gives the list a key that reaches it wherever the focus is (see SCREEN ENTRY): f1 to f12, ctrl-a to ctrl-z, alt-a to alt-z or alt-0 to alt-9.  The list
+*   takes the focus.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine screen_list(f, id, items, ax, ay, sw, sh, value, multi, ret, status)
+subroutine screen_list(f, id, items, ax, ay, sw, sh, value, multi, fg, bg, accel, ret, status)
 $catalog !screen_list
 
    ret = ''
@@ -68,6 +74,10 @@ $catalog !screen_list
    w{'multi'} = (multi # '')
    w{'cur'} = value + 0
    call $sl_list('init', w, '', '', r)
+   call $sl_color(w, fg, bg, cst)
+   if cst # 0 then return
+   call $sl_accel(w, accel, ast)
+   if ast # 0 then return
    call $sl_wadd(f, w, ok)
    if ok then status = 0
 

@@ -1,0 +1,37 @@
+* TK_CLOSE
+* The full-screen toolkit, shared base: the end of an app (plan section 2.1).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.1).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_close(ctx)
+*
+*   Gives the terminal back: the screen first, then the break setting $tk_open saved, then the break key.  An app calls it on EVERY way out,
+*   the cursor lock's own (the key 'guardquit') and the end of its input included.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_close(ctx)
+$catalog $tk_close
+
+$include keys.h
+$include int$keys.h
+$include tk.h
+
+   screen close
+   void pterm(PT$BREAK, ctx<TK.C.TRAP>)
+   break on
+
+   return
+end
+
+* END-CODE

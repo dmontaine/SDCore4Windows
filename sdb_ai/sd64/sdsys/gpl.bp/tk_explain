@@ -1,0 +1,60 @@
+* TK_EXPLAIN
+* The full-screen toolkit, shared base: the words that explain turning one gate on or off (plan sections 2.4 and 2.5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 22 Oct 26 dm  New (S.75, TK-0.4).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_explain(id, on, lines, typed)
+*
+*     id     a gate of $tk_gate_info
+*     on     1 for turning it on, 0 for turning it off
+*     lines  returned: the lines the confirm box shows under the command, one to a field, made from the gate table alone: which gate and which way,
+*            what it allows (on) or still allows (off), when the change reaches a person, the core-direction line when a gate delivered off is
+*            being turned on (and the one for a gate delivered on being turned off), and the warning for a gate that reaches beyond SD.  Null for an
+*            id that is not in the table or a planned gate (nothing can be run for it).
+*     typed  returned: 1 when the person must type the account's name before the command runs (turning ON a gate that reaches beyond SD, the
+*            owner's D21), else 0.  The gate table marks beyond SD (TK.G.BEYOND); it marks files and files-admin as well as the gates D21 names,
+*            which asks for the name in MORE places, not fewer.
+*
+*   Nothing is read from the register or the machine and nothing is written: the screen of an app shows what it is about to do, and the verb is
+*   the authority for what it does.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_explain(id, on, lines, typed)
+$catalog $tk_explain
+
+$include tk.h
+
+   lines = ''
+   typed = 0
+
+   call $tk_gate_info(id, gi)
+   if gi = '' then return
+   if gi<TK.G.STATUS> # 'built' then return
+
+   lines<-1> = sysmsg(12825, gi<TK.G.TITLE>, id, (if on then 'on' else 'off'))
+   if on then
+      lines<-1> = sysmsg(12819, gi<TK.G.ALLOWS>)
+   end else
+      lines<-1> = sysmsg(12820, gi<TK.G.STILL>)
+   end
+   lines<-1> = sysmsg(12821, gi<TK.G.WHEN>)
+   if on and gi<TK.G.DEFAULT> = 'off' then lines<-1> = sysmsg(12822)
+   if not(on) and gi<TK.G.DEFAULT> = 'on' then lines<-1> = sysmsg(12823)
+   if gi<TK.G.BEYOND> = 1 then lines<-1> = sysmsg(12824)
+   if on and gi<TK.G.BEYOND> = 1 then typed = 1
+
+   return
+end
+
+* END-CODE

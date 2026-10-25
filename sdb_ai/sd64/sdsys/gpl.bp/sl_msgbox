@@ -4,9 +4,12 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 18 Oct 26 Windows port - from Linux c798144 (12 Oct 26): New.
-* 12 Oct 26 Windows port - from Linux e4bc454-70aca05 - New.
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the box as Esc does.
+* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 12 Oct 26 dm  New.
+* 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the box as Esc does.
+* 18 Oct 26 dm  For a program that asked for the cursor lock, the cursor is put on the selected button ($sl_curat) while the box is up and
+*               put back where it was when the box goes: a box in a part of the screen the window does not show is a question the
+*               user cannot read, and the keys are then taken by the lock.  A program that has not asked is not affected.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -43,6 +46,10 @@ $include sl.h
    equ B.SHOWN to 15       ;* 1 while the box is on the screen
    equ B.AX to 16          ;* the left column and top row asked for (null: centred)
    equ B.AY to 17
+   equ B.CURSAVE to 18     ;* where the cursor lock thought the cursor was before the box: has : x : y : hid (guarded programs only)
+
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+   common /slcur/ cu.has, cu.x, cu.y, cu.hid
 
    title = w<SL.W.D>
    nl = dcount(w<SL.W.D + 1>, @vm)
@@ -169,6 +176,7 @@ show:
       call $sl_region('save', scr, bx, by, bwid, bh, under)
       w<B.UNDER> = under
       w<B.SHOWN> = 1
+      w<B.CURSAVE> = cu.has : ':' : cu.x : ':' : cu.y : ':' : cu.hid
    end
 
 paint:
@@ -197,11 +205,15 @@ paint:
       ln = len(cap<b>)
       txt = txt[1, x - 1] : cap<b> : txt[x + ln, bwid]
       c = na
-      if b = sel then c = ha
+      if b = sel then
+         c = ha
+         sx = x
+      end
       atr = atr[1, x - 1] : str(c, ln) : atr[x + ln, bwid]
       x += ln + 2
    next b
    call $sl_put(scr, bx, by + nl + 2, txt, atr)
+   if g.on then call $sl_curat(bx + sx + 1, by + nl + 2)     ;* on the first letter of the selected button's caption, as a button widget has it
    return
 
 unpaint:
@@ -209,6 +221,14 @@ unpaint:
       under = w<B.UNDER>
       call $sl_region('restore', scr, bx, by, bwid, bh, under)
       w<B.SHOWN> = 0
+      if g.on then
+         * the cursor lock is told where the cursor was before the box, which is where the program leaves it
+         cs = w<B.CURSAVE>
+         cu.has = field(cs, ':', 1) + 0
+         cu.hid = field(cs, ':', 4) + 0
+         if cu.has then call $sl_curat(field(cs, ':', 2) + 0, field(cs, ':', 3) + 0)
+         if cu.hid then call $sl_curat('off', '')
+      end
    end
    return
 end
