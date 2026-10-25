@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 0bdc4bd (19 Oct 26) S.65 follow-ups (K1, K3, K8a).  (1) The message of an ON ERROR reply is emptied at the top of every request, so an ON ERROR clause
+*           that had nothing to say no longer sends the text of the last refusal; the SDNet client now shows an ON ERROR reply's text.  Message 12526 was shortened to 98
+*           characters, under the 100 the client shows.  (2) The refusal of a login that is in neither sdapi nor sdfiles is audited with the reason 'not a member of sdapi or
+*           sdfiles'.  (3) vb.filelock and vb.fileunlock used files(i), the scratch variable of the last open, instead of files(fno).
 * 25 Oct 26 Windows port - from Linux 3fbfc0d (18 Oct 26) S.65 write group: a files-only login may change state or take a lock only if the user is ALSO in the Windows group sdfileswrite
 *           (off for a new account; SDSYS gives it with modify.account files-write-on).  The serving session reads it (three-valued is not available on Windows: any
 *           doubt means no write); !apifilesok takes it as a third argument; a request refused for want of it is audited with write=off and answered with 12526.
@@ -470,6 +474,12 @@ scram.handoff = @false
 loop
    unload.object               ;* Unload inactive object code
 
+*  19 Oct 26 dm (K1): THE MESSAGE OF AN ON ERROR REPLY BELONGS TO THE REQUEST THAT GOT IT.  An SV$ON.ERROR reply carries @abort.message (return.status.set), which a
+*   refusal sets and nothing cleared, so an ON ERROR clause that had nothing to say (write ... on error server.error = SV$ON.ERROR) sent the text of the LAST refusal in
+*   the session: measured in sandbox-req29.py section G, a WRITE with an over-long id answered 'Invalid call name' after a call with no name.  The SDNet client now shows
+*   the text of an ON ERROR reply, so the text has to be this reply's.  A real abort sets the message itself, after this line.
+   abort.message = ''
+
    * Fetch new command
 
    cmnd = readpkt()
@@ -516,7 +526,7 @@ loop
 * 18 Oct 26 dm - S.65 write group: a request the files-only table ALLOWS but that changes state, refused for want of the group, has its own text.
 *   The test is the same call with the write flag made true: allowed then means the group is all that was missing.
          if not(files.write) and apifilesok(action, master.login.done, @true) then
-            abort.message = sysmsg(12526, action) ;* This login can read files but is not allowed to change them: request %1 is not allowed
+            abort.message = sysmsg(12526, action) ;* This login cannot change or lock files here: ask the administrator for files-write-on (request %1)
          end else
             abort.message = sysmsg(12485, action) ;* This login is for files only: request %1 is not allowed
          end
@@ -2017,7 +2027,8 @@ vb.scram.final:
                      * THE RECORD IS WRITTEN AT exit.vb.scram.fail LIKE EVERY OTHER
                      * REFUSAL NOW.  This used to call K$AUDIT here and was the only
                      * refusal that reached the trail at all.
-                     scram.refuse.reason = 'not in sdapi'
+*                    19 Oct 26 (K3, Linux 0bdc4bd): the decision is made on both groups, so the audit reason names both (it named sdapi only)
+                     scram.refuse.reason = 'not a member of sdapi or sdfiles'
                      abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
                      server.error = SV$ON.ERROR
                      goto exit.vb.scram.fail
@@ -2486,9 +2497,9 @@ vb.filelock:
                                              if err then return
 
                                              if wait then
-                                                filelock files(i)
+                                                filelock files(fno)   ;* 19 Oct 26 (K8a): was files(i), the stale loop variable of the last open, as vb.clearfile's was
                                              end else
-                                                filelock files(i) locked server.error = SV$LOCKED
+                                                filelock files(fno) locked server.error = SV$LOCKED
                                                 end
 
                                                 return
@@ -2503,7 +2514,7 @@ vb.fileunlock:
                                                 gosub check.file
                                                 if err then return
 
-                                                fileunlock files(i)
+                                                fileunlock files(fno)   ;* 19 Oct 26 (K8a): was files(i)
 
                                                 return
 
@@ -2638,7 +2649,7 @@ vb.readv:
                                                 if files.only and not(files.write) and flags # 0 then
                                                    void kernel(K$AUDIT, 'api refused request=41 route=sdfiles write=off user=' : @logname)
                                                    server.error = SV$ON.ERROR
-                                                   abort.message = sysmsg(12526, 41) ;* This login can read files but is not allowed to change them: request %1 is not allowed
+                                                   abort.message = sysmsg(12526, 41) ;* This login cannot change or lock files here: ask the administrator for files-write-on (request %1)
                                                    return
                                                 end
 

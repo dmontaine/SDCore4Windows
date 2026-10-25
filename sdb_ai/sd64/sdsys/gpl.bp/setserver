@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  K8d: CONNECT waits NETWAIT seconds (sd.conf, 5 by default) for the connection.
 * 17 Oct 26 dm  S.65 slice 1: written.  The definition is stored and nothing connects to the server: no remote file can be opened
 *               yet; the gate (NET) and the definitions are in place for the slices that follow.
 * 17 Oct 26 dm  S.65 slice 2a: the fifth word may be CONNECT instead of the pin.  One TLS handshake is made (5 seconds to connect),
@@ -70,7 +71,7 @@ $include int$keys.h
 $include keys.h
 $include err.h
 
-$define NET.CONNECT.SECS 5       ;* seconds to wait for the connection of CONNECT (the plan, 4.6)
+*  19 Oct 26 (K8d): the seconds to wait for the connection of CONNECT are the configuration parameter NETWAIT (5 by default), no longer a $define of 5.
 $define NET.MAX.SERVERS 10
 $define NET.MAX.ACCLIST 2000
 $define NET.LOCK.ID     'netservers.lock'   ;* in @sdsys: held by whoever reads, changes and writes the definitions
@@ -338,7 +339,7 @@ check.chars:
 * with nothing written.  An open.socket that fails with ER$CONNECT and an os.error of 0 is a handshake that did not complete (the
 * kernel sets the os error to 0 for that one case); a failure of the connection itself has the operating system's error.
 connect.pin:
-   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, config('NETWAIT'))
    st = status()
    oserr = os.error()
    if st # 0 then

@@ -18,6 +18,11 @@
  *
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
+ * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT and NETREPLY, the two SDNet timeouts (K8d): CONFIG() reads them and PCONFIG sets them for the process, 1 to 3600 seconds.
+ * 15 Oct 26 Windows port - from Linux 0bdc4bd - TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
+ * 10 Sep 26 Windows port - from Linux 0bdc4bd - Parity audit: CONFIG() with a name over eight characters
+ *               returns "" with ER_NOT_FOUND instead of an uninitialised
+ *               descriptor (the Windows port's fix; UPSTREAM_FIXES 18).
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab add CREATUSR allow create.account to create os user
  * 16 Aug 26 Windows port - CREATUSR removed.  config('CREATUSR') now takes
@@ -190,6 +195,10 @@ void op_config() {
     k_put_c_string((char*)(sysseg->netdirs), &result);
   else if (!strcmp(param, "NETFILES"))
     result.data.value = sysseg->netfiles;
+  else if (!strcmp(param, "NETWAIT"))
+    result.data.value = pcfg.netwait;
+  else if (!strcmp(param, "NETREPLY"))
+    result.data.value = pcfg.netreply;
   else if (!strcmp(param, "NUMFILES"))
     result.data.value = sysseg->numfiles;
   else if (!strcmp(param, "NUMLOCKS"))
@@ -405,6 +414,16 @@ void op_pconfig() {
     if (descr->data.value < 0)
       goto exit_op_pconfig;
     pcfg.objmem = descr->data.value * 1024L;
+  } else if (!strcmp(param, "NETWAIT")) {
+    GetInt(descr);
+    if ((descr->data.value < 1) || (descr->data.value > 3600))
+      goto exit_op_pconfig;
+    pcfg.netwait = (int16_t)(descr->data.value);
+  } else if (!strcmp(param, "NETREPLY")) {
+    GetInt(descr);
+    if ((descr->data.value < 1) || (descr->data.value > 3600))
+      goto exit_op_pconfig;
+    pcfg.netreply = (int16_t)(descr->data.value);
   } else if (!strcmp(param, "PWDELAY")) {
     GetInt(descr);
     if ((descr->data.value < 0) || (descr->data.value > 3600))

@@ -132,10 +132,11 @@ READS_STATUS = {
         "files-on / files-off / files-write-on / files-write-off: files.stat = status() on the next line; an unreadable group changes nothing and says 10081",
     ("modifya", "in.files = is_grp_member(files.user, 'sdfiles')"):
         "files-write-on: files.stat = status() on the next line; could-not-tell refuses with 10081",
-    ("modifya", "had.write = is_grp_member(files.user, 'sdfileswrite')"):
-        "files-off also leaves sdfileswrite (two sites, same line): checked with status() = 0 on the same statement; a group that cannot be read changes nothing",
-    ("modifya", "now.files = is_grp_member(files.user, files.grp)"):
-        "read-back after files-* : files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
+    ("modifya", "has.write = is_grp_member(files.user, 'sdfileswrite')"):
+        "files-on / files-off read the write group before they answer: files.stat = status() on the next line; a lookup that fails is followed by is_group() "
+        "(Windows cannot tell 'no such group' from 'could not read'), and only a group that is there and cannot be read stops the command with 10081",
+    ("modifya", "cg.now = is_grp_member(files.user, cg.group)"):
+        "change.files.group's read back after every change: files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
 }
 FAIL_CLOSED = {
     # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).

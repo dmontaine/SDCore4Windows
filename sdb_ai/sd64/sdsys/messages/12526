@@ -1,1 +1,1 @@
-This login can read files but is not allowed to change them (the administrator of this server can allow it: modify.account <account> files-write-on): request %1 is not allowed
+This login cannot change or lock files here: ask the administrator for files-write-on (request %1)

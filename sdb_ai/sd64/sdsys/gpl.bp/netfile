@@ -17,12 +17,23 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  K8c and K8d: the class is given a ceiling for a reply (obj->maxpacket, NF$MAX.PACKET: a reply that announces more than the largest string SD holds, or less than its
+*               own header, is a lost connection and is not read), and the wait for each reply is the configuration parameter NETREPLY (30 seconds by default) instead of the
+*               constant NF$REQUEST.MS; a CLEARFILE waits the longer of 300 seconds and that.  The comments that said the handler was not compiled or run are corrected (K8b).
+* 19 Oct 26 dm  K1: an ON ERROR reply shows its own text (the new routine on.error.text), or 'status <n>' when it has none.  The handler used to show 'status <n>' whatever the
+*               server had said, so the reason a files-only login without the write group is refused (12526) reached the person at the client as 'status 0'.  The three
+*               places that did it are one routine now; behaviour for a reply with no text is unchanged.  The header said the text could be stale: the server now empties
+*               its message at the top of each request (apisrvr, same day).
 * 17 Oct 26 dm  S.65 slice 3b: written.  No kernel code calls it yet (slice 3c will, as call_trigger() in op_dio3.c calls a trigger); it is
-*               driven by a test program against the fake server of gplbld/netfake.py.  NOT YET COMPILED OR RUN.
+*               driven by a test program against the fake server of gplbld/netfake.py.  (Compiled and run since, 19 Oct 26: every section of gplbld/sandbox-netfile.py
+*               drives it against that fake, and the VM witness of 18 Oct ran it on a real install over loopback, commits 5315c65 and c42aa13: the open, a remote LIST,
+*               COUNT, SORT and LIST DICT, a remote dictionary open, a write refused for want of the write group, the wrong pin.)
 * 18 Oct 26 dm  S.65 slice 3e: writes and locks.  NF$WRITE, NF$WRITEU, NF$DELETE, NF$DELETEU, NF$CLEARFILE and NF$LOCK are real for a handle
 *               whose server definition says mode write (act.change), NF$RELEASE is new (act.release); a read-mode handle is refused exactly as
 *               before (12506, nothing sent).  The mode is read at open and again at every change; a signed remote status; messages 12514-12517.
-*               NOT YET COMPILED OR RUN.  Needs the class changes of the same slice in gpl.bp/sdclient (quiet, LastError, clearfile, recordlock).
+*               Needs the class changes of the same slice in gpl.bp/sdclient (quiet, LastError, clearfile, recordlock).  (Compiled and run since, 19 Oct 26: sandbox-netfile.py
+*               sections hwrite, kwrite and wgroup; on the VM install c42aa13, 18 Oct, a WRITE was refused until files-write-on was given and then write, writeu, delete,
+*               readu, recordlocku, readvu and clearfile all succeeded on the server's file.  Not measured on a real install: MUSTLOCK, two machines, a record of many MB.)
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -60,7 +71,9 @@
 * program only ever sends the no-wait form, so that a wait never looks like a lost connection and the break key works).
 *
 * CONNECTIONS.  One object of the class !sdclient per server, in the named common block $netfile (so it lives for the process and is
-* released with it).  THE OBJECT IN COMMON IS NOT YET MEASURED.  What is expected from the kernel source: an object is a reference
+* released with it).  THE OBJECT IN COMMON HAS BEEN MEASURED (19 Oct 26): gplbld/sandbox-netfile.py reads NF$STATE after every connect and sees VARTYPE 15 (an object)
+* for the server's element, and every remote file open of the VM witness of 18 Oct lived on it.  Not measured: the whole of the kernel's release of it at the end of a
+* process other than by the rows that end a session.  What the kernel source says about it: an object is a reference
 * counted OBJDATA in a descriptor of type OBJ (VARTYPE 15); assigning it to an element of a common array copies the descriptor and counts a
 * reference, so it survives the end of this program (a common block is on process.named_common and is freed only by DELETE.COMMON
 * or at the end of the process).  What this program does about it, so that a failure is SAID and not covered over:
@@ -72,13 +85,14 @@
 * plain values in the same block, so what a handle meant can be told even when the object is gone.
 *
 * A LOST CONNECTION.  The class marks nothing itself: a request that gets no reply (peer gone, reset, 30 seconds with no data) returns its
-* failure value and leaves ServerStatus alone.  So ServerStatus is set to -1 before every request, and a reply (any reply) overwrites
-* it with the status field of its header, which is never negative: ServerStatus still -1 afterwards is the loss.  On a loss the object is
+* failure value and leaves ServerStatus alone.  So ServerStatus is set to the mark NF$NOREPLY before every request, and a reply (any reply) overwrites
+* it with the status field of its header (a signed 32 bit value, so it CAN be negative: the loss is the mark still there, tested by equality, never by sign).  A reply
+* whose length is not a length (K8c) is the same loss: the class fails the call before it touches ServerStatus.  On a loss the object is
 * released (its destructor sends a quit down the dead socket and closes it), every handle on that server becomes "lost" (12500 on any
 * use; CLOSE of it still works and frees the entry), and the call answers 12502.  THERE IS NO RETRY AND NO RECONNECT INSIDE AN OPERATION.
 * The next NF$OPEN of that server dials again (a lost slot has been freed); an NF$OPEN on a connection that died without being noticed
 * fails once with 12502 and the one after it reconnects.  Timeouts: 5 seconds to connect (the class, connect.keys), then 30 seconds for each
-* read of a reply (NF$REQUEST.MS, set with settimeout()).  A server that is merely slow past that is treated as lost.
+* read of a reply (NETREPLY, set with settimeout(); both from the configuration since 19 Oct 26).  A server that is merely slow past that is treated as lost.
 *
 * WHAT THE CLASS DOES NOT DO, AND SO THIS PROGRAM DOES NOT: the class has no READV and no FILEINFO method.  NF$READV reads the whole
 * record and cuts the field out here.  NF$FILEINFO answers keys 0 (1), 1 (null, no VOC name) and 2 (null: a path on another machine is not
@@ -86,7 +100,7 @@
 * calling program when the server answers a request with an ON ERROR reply (for READ, a lock wait that gave up, a corrupt record ...), and
 * that abort cannot be caught here.  So since slice 3e the object is made QUIET (obj->quiet, set in connect.new): the class then keeps the
 * kind of the reply in obj->LastError (0 done, 1 ON ERROR, 2 ELSE, 3 error, 4 locked, -1 no reply read) and does not abort.  The text of an
-* ON ERROR reply (obj->LastText) is never shown, it can be stale.
+* ON ERROR reply (obj->LastText, the payload of THIS reply) is shown, cleaned, by on.error.text, and a reply with no text shows 'status <n>' (19 Oct 26).
 *
 * rc<1>: 0 done; 2 the ELSE branch (the file, record or id was not there; rc<6> has the remote STATUS()); 3 an error; 4 (NF$LOCK only) the
 * record is held by another user, rc<6> is its holder.  rc<2> is the message number, rc<3> to rc<5> its arguments.  rc<6> is a SIGNED whole
@@ -107,9 +121,11 @@ $include err.h
 $include netfile.h
 
 $define NF$NOREPLY    -2000000001 ;* ServerStatus before a request: still this afterwards means no reply came (a value no STATUS() takes: a changing request can be answered with -3023 and the like)
-$define NF$REQUEST.MS 30000       ;* milliseconds to wait for each read of a reply (the plan, 4.6)
+*  19 Oct 26 (K8d): the wait for each read of a reply is the configuration parameter NETREPLY (30 seconds by default; the plan, 4.6), read by request.limits - it was NF$REQUEST.MS, 30000.
 $define NF$LIST       10          ;* the select list number used on the server (0 to 10 may be used by a client)
-$define NF$CLEAR.MS   300000      ;* milliseconds to wait for the reply to a CLEARFILE (a big file takes longer than 30 seconds; a false "lost" would drop the connection with the outcome unknown)
+$define NF$CLEAR.MIN.MS 300000    ;* milliseconds to wait for the reply to a CLEARFILE at the least (a big file takes longer than 30 seconds; a false "lost" would drop the connection with the outcome unknown); a longer NETREPLY wins
+$define NF$MAX.PACKET 1073741832  ;* the longest reply the class reads (obj->maxpacket, K8c): the largest string SD holds (MAX_STRING_SIZE, 1073741822) and the ten byte header.  A server that
+                                  ;* announces more, or less than a header, cannot be telling the truth, and the call is treated as a lost connection without reading its body
 $define NF$LE.OK      0           ;* obj->LastError: the kinds of reply (the server's SV$ codes); -1 is no reply read
 $define NF$LE.ERROR   1           ;*   the server took its ON ERROR clause
 $define NF$LE.LOCKED  4           ;*   the server took its LOCKED clause
@@ -189,6 +205,8 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
    rq.err = @false
    rq.st = 0
    rq.txt = ''
+   req.ms = 0
+   clear.ms = 0
    opname = ''
    need.gate = @false
    need.conn = @false
@@ -460,7 +478,9 @@ connect.new:
    end
 *  QUIET: a reply of the ON ERROR kind must not abort this program (an abort cannot be caught here); obj->LastError says what the reply was.
    obj->quiet = @true
-   obj->settimeout(NF$REQUEST.MS)
+   obj->maxpacket = NF$MAX.PACKET
+   gosub request.limits
+   obj->settimeout(req.ms)
 
 *  THE OBJECT GOES INTO COMMON.  It is looked at at once: if the block did not keep an object, nothing is left half done.
    nf.s.obj(slot) = obj
@@ -540,8 +560,8 @@ act.read:
          rc.st = rq.st
          gosub rc.else
       case e = 1
-*        The server took its ON ERROR clause (the object is quiet, so nothing was aborted).  Its text is not trusted: only the status is shown.
-         rq.txt = 'status ':rq.st
+*        The server took its ON ERROR clause or refused the request (the object is quiet, so nothing was aborted): its text, or the status when it sent none.
+         gosub on.error.text
          gosub server.fail
       case 1
          fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':e
@@ -611,7 +631,7 @@ act.select:
       return
    end
    if e = 1 then
-      rq.txt = 'status ':rq.st
+      gosub on.error.text
       gosub server.fail
       return
    end
@@ -760,7 +780,8 @@ act.change:
          obj->ServerStatus = NF$NOREPLY
          obj->deleteu(nf.h.fno(hx), id)
       case op = NF$CLEARFILE
-         obj->settimeout(NF$CLEAR.MS)
+         gosub request.limits
+         obj->settimeout(clear.ms)
          obj->error = ''
          obj->ServerStatus = NF$NOREPLY
          obj->clearfile(nf.h.fno(hx))
@@ -774,7 +795,7 @@ act.change:
    nf.requests += 1
    if lerr = -1 then rq.lost = @true
    if op = NF$CLEARFILE then
-      if not(rq.lost) then obj->settimeout(NF$REQUEST.MS)
+      if not(rq.lost) then obj->settimeout(req.ms)
    end
 
 *  The outcome.
@@ -792,8 +813,8 @@ act.change:
       return
    end
    if lerr = NF$LE.ERROR then
-*     The server took its ON ERROR clause.  Its text can be stale or empty and is not shown: the status is.
-      rq.txt = 'status ':rq.st
+*     The server took its ON ERROR clause or refused the request (the files-only login without the write group: 12526): its text, or the status when it sent none.
+      gosub on.error.text
       gosub server.fail
       return
    end
@@ -1128,6 +1149,31 @@ after.rq:
    rq.err = (txt # '')
    gosub clean.text
    rq.txt = out.txt
+   return
+
+* ======================================================================
+* request.limits - the waits for a reply, in milliseconds, from the configuration (K8d, 19 Oct 26): req.ms is NETREPLY seconds for each read of a reply (30 by default, 1 to 3600),
+* clear.ms the wait for the reply to a CLEARFILE, which is never less than NF$CLEAR.MIN.MS (a big file takes longer than a reply bound) and never less than req.ms.
+request.limits:
+   req.ms = config('NETREPLY') * 1000
+   clear.ms = NF$CLEAR.MIN.MS
+   if req.ms > clear.ms then clear.ms = req.ms
+   return
+
+* ======================================================================
+* on.error.text - the text of an ON ERROR reply (the kind the server's ON ERROR clause gives, and the kind it answers a refusal with), into rq.txt.  The class keeps the
+* payload of THIS reply in obj->LastText (message.pair empties it before every request, so it cannot be an earlier reply's), and the server empties its own message at the top
+* of every request, so an ON ERROR clause that had nothing to say sends no text and not the previous refusal's.  The text is cleaned here like any text that came from
+* another machine.  A reply with no text shows 'status <n>' (rq.st), which is also in rc<6>.  19 Oct 26, K1: this was three places that showed 'status <n>' whatever the
+* reply said, so the reason for a refusal (12526 for a files-only login without the write group) never reached the person at the client.
+on.error.text:
+   txt = obj->LastText
+   gosub clean.text
+   if out.txt = '' then
+      rq.txt = 'status ':rq.st
+   end else
+      rq.txt = out.txt
+   end
    return
 
 * ======================================================================

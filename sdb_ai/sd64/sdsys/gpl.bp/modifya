@@ -19,6 +19,10 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux 0bdc4bd (19 Oct 26) K4a (S.65 follow-up).  FILES-OFF and FILES-ON look at the write group too, BEFORE they answer "already had that access", and the write group
+*           is taken out FIRST: a person in sdfileswrite and not in sdfiles is no longer told "nothing changed" and left with the membership; each removal is read back (change.files.group)
+*           and one that did not happen stops the command with 10081 and the state as it was; FILES-ON removes a stray write membership BEFORE it adds sdfiles.  The line for the write
+*           group (12527) is printed first when it was taken away.  Message 12487 now reads "Account %1 has files %2" (lower case).
 * 25 Oct 26 Windows port - from Linux 3fbfc0d (18 Oct 26) S.65 write group: FILES-WRITE-ON / FILES-WRITE-OFF put the account's person in or out of the Windows group sdfileswrite, which lets a files-only
 *           (sdfiles) login CHANGE files on this server; set.files takes the group from files.grp.  FILES-WRITE-ON is refused for a person who is not in sdfiles (12528)
 *           and when the group does not exist (10024); FILES-OFF takes the person out of sdfileswrite as well, so a later files-on does not hand the write back.  Reported with 12527.
@@ -906,6 +910,28 @@ set.files:
       return
    end
 
+* 19 Oct 26 dm - K4a.  For FILES-ON and FILES-OFF the write group is read too, three-valued, BEFORE the "already had it" answer: a person can be in sdfileswrite and not in
+*   sdfiles (a removal that stopped half way, or a hand-made change), and that membership is inert until the next FILES-ON turns it into write access the administrator did not
+*   give.  So FILES-OFF has work to do for a person who is in either group, and FILES-ON takes a stray write membership away BEFORE it adds sdfiles.
+   has.write = @false
+   if files.grp = 'sdfiles' then
+      has.write = is_grp_member(files.user, 'sdfileswrite')
+      files.stat = status()
+      if files.stat # 0 then
+*        Windows cannot tell "no such group" from "could not read" (both status 1), and a machine from before this release has no sdfileswrite:
+*        so a lookup that failed is followed by asking whether the group exists, and only a group that is there and cannot be read stops the command.
+         has.write = @false
+         write.group.found = is_group('sdfileswrite')
+         write.group.stat = status()
+         if write.group.stat = 0 and not(write.group.found) then files.stat = 0
+      end
+      if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10081, acc.name, files.stat)
+         return
+      end
+   end
+
 * 18 Oct 26 dm - S.65 write group: sdfileswrite on its own gives nothing (the login route needs sdfiles), so it is not handed out to a person without
 *   it.  Asked before the "already had it" answer so that the refusal is the same whatever the group holds now.
    if files.grp = 'sdfileswrite' and files.want then
@@ -923,7 +949,14 @@ set.files:
       end
    end
 
-   if has.files = files.want then
+* Nothing to do: FILES-ON for a person who is in sdfiles already (whatever the write group holds: it was given on purpose), FILES-OFF for a person who is in neither group, and the
+* write words for a person who has the write group already, or has not.
+   if files.grp = 'sdfiles' and not(files.want) then
+      nothing.to.do = not(has.files) and not(has.write)
+   end else
+      nothing.to.do = (has.files = files.want)
+   end
+   if nothing.to.do then
       @system.return.code = 0
       crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
       return
@@ -942,27 +975,34 @@ set.files:
          crt sysmsg(10024, files.grp)  ;* %1 is not a valid Windows group
          return
       end
-      files.stat = os_group("ADDMEM", files.grp, files.user)
-   end else
-      files.stat = os_group("DELMEM", files.grp, files.user)
    end
 
-* 18 Oct 26 dm - S.65 write group: FILES-OFF takes the person out of sdfileswrite too, so that a later files-on does not hand the write back without the
-*   administrator saying so.  Read three-valued; a person who is not in it, or a machine with no such group (status 1 here), changes nothing.
-   if files.stat = 0 and files.grp = 'sdfiles' and not(files.want) then
-      had.write = is_grp_member(files.user, 'sdfileswrite')
-      if had.write and status() = 0 then
-         files.stat = os_group("DELMEM", 'sdfileswrite', files.user)
-         if files.stat = 0 then
-            had.write = is_grp_member(files.user, 'sdfileswrite')
-            if had.write and status() = 0 then files.stat = 2
-         end
+* 19 Oct 26 dm - K4a (Linux 0bdc4bd).  THE WRITE GROUP GOES FIRST, for FILES-OFF (so a failure of the second removal leaves the person with read access and no more, never write
+*   access without read: the orphan the 18 Oct build could leave) and for FILES-ON with a stray membership (so sdfiles is not added to a person who already holds write).  Each
+*   removal is read back by change.files.group before the next step, and a removal that did not happen stops everything with 10081 and the state as it was.
+   write.removed = @false
+   if files.grp = 'sdfiles' and has.write then
+      cg.group = 'sdfileswrite'
+      cg.want = @false
+      gosub change.files.group
+      if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10081, acc.name, files.stat)
+         return
       end
+      now.write = cg.now
+      write.removed = @true
    end
-   if files.stat = 0 then
-      now.files = is_grp_member(files.user, files.grp)
-      files.stat = status()
-      if files.stat = 0 and now.files # files.want then files.stat = 2
+
+* The group itself - except for a person who was in the write group only: there is nothing in sdfiles to take away.
+   if files.grp = 'sdfiles' and not(files.want) and not(has.files) then
+      now.files = @false
+      files.stat = 0
+   end else
+      cg.group = files.grp
+      cg.want = files.want
+      gosub change.files.group
+      now.files = cg.now
    end
    if files.stat # 0 then
       @system.return.code = -ER$FAILED
@@ -973,9 +1013,29 @@ set.files:
    @system.return.code = 0
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
    if files.grp = 'sdfileswrite' then
-      crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES-WRITE %2
+      crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files-write %2
    end else
-      crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has FILES %2
+      if write.removed then crt sysmsg(12527, acc.name, if now.write then 'yes' else 'no')  ;* the write group went too (or a stray one was taken away)
+      crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files %2
+   end
+   return
+
+*****************************************************************************
+* CHANGE.FILES.GROUP  -  put files.user in (cg.want true) or out of the Windows group cg.group through os_group, and read the membership back.
+* files.stat is 0 when the person is now in the state asked for; otherwise it is os_group's status, or 2 when the group still says something else (the call said yes and
+* changed nothing), or the status of a lookup that could not be answered.  19 Oct 26, K4a: this is the one place set.files changes a group, so every change is read back.
+
+change.files.group:
+   cg.now = @false          ;* assigned first: a call that failed leaves no read back, and the caller copies it
+   if cg.want then
+      files.stat = os_group("ADDMEM", cg.group, files.user)
+   end else
+      files.stat = os_group("DELMEM", cg.group, files.user)
+   end
+   if files.stat = 0 then
+      cg.now = is_grp_member(files.user, cg.group)
+      files.stat = status()
+      if files.stat = 0 and cg.now # cg.want then files.stat = 2
    end
    return
 

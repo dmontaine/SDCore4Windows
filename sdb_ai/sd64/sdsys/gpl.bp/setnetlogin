@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 19 Oct 26 dm  K8d: the connection waits NETWAIT seconds (sd.conf, 5 by default).
 * 17 Oct 26 dm  S.65 slice 2b: written.  The person's login on a server SDSYS has defined: the SCRAM exchange is run once against the
 *               pinned server and the derived values are kept ($netcred).  Nothing yet uses the login to open a remote file.
 * END-HISTORY
@@ -58,7 +59,8 @@ $include int$keys.h
 $include keys.h
 $include err.h
 
-$define NET.CONNECT.SECS 5        ;* seconds to wait for the connection
+*  19 Oct 26 (K8d): the seconds to wait for the connection are the configuration parameter NETWAIT (5 by default), no longer a $define of 5.  The 15 seconds for each read or
+*  write of the login exchange stay a constant: the exchange is two short packets, and NETREPLY is the wait of a file request.
 $define NET.READ.MS      15000    ;* milliseconds to wait for each read or write of the exchange (the plan, 4.6)
 $define NET.MAX.PKT      8192     ;* the SCRAM messages are short: a longer packet is not one
 $define NET.ACK.TRIES    16
@@ -243,7 +245,7 @@ $define SV$ON.ERROR      1
    end
 
 *  ---- (e) One TLS connection.  The pin is tested before anything is sent.
-   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, config('NETWAIT'))
    st = status()
    oserr = os.error()
    if st # 0 then

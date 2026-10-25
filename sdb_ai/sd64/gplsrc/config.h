@@ -121,6 +121,8 @@ struct PCFG  {
   bool must_lock;                       /* MUSTLOCK: Enforce locking rules */
   int16_t objects;                      /* OBJECTS:  Max loaded objects */
   int32_t objmem;                       /* OBJMEM:   Object size limit, zero = none */
+  int16_t netwait;                      /* NETWAIT:  Seconds to wait for a connection to a remote SDNet server, 1 to 3600 (19 Oct 26, K8d) */
+  int16_t netreply;                     /* NETREPLY: Seconds to wait for each reply of a remote SDNet server, 1 to 3600 (19 Oct 26, K8d; eight characters: CONFIG() reads no longer name) */
   int16_t pwdelay;                      /* PWDELAY:  Seconds paused after a failed network login */
   int16_t sdclient_mode;                /* SDCLIENT: 0 = any, 1 = no open/exec, 2 = restricted call */
   int16_t reccache;                     /* RECCACHE: Record cache size */

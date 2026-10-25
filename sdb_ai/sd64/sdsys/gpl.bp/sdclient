@@ -25,6 +25,10 @@
 *           now, because the derivation needs SDEXT.
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 3a: connect.keys(), the login from the stored derived keys of set.netlogin (no password; the server's public
 * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: the public properties quiet, LastError and LastText (a quiet object does not abort on a server ON ERROR reply;
+* 19 Oct 26 Windows port - from Linux 0bdc4bd - K8d: connect.keys waits NETWAIT seconds (5) for the connection and NETREPLY seconds (30) for each read, from the configuration (sd.conf) and no longer from two $defines.
+* 19 Oct 26 Windows port - from Linux 0bdc4bd - K8c: the length a reply announces is checked before its body is read.  read.packet fails the call, as a lost connection does and without touching server.error or
+*               ServerStatus, for a reply that announces less than its own header (a negative count is that too: the count is signed) and, when the new public property maxpacket
+*               is above 0, for one longer than that.  The default is 0, so other users of the class are unchanged except for the nonsense lengths below 10.  $netfile sets it.
 *               LastError is the kind of the last reply, LastText the text of an ON ERROR one); clearfile(fno) (request 31); recordlock's
 *               wait flag was the wrong way round (flag 2 is NO wait, apisrvr and the C client) and is fixed.  The remote file handler
 *               $netfile is the one user of all of these.  NOT YET COMPILED OR RUN.
@@ -85,6 +89,8 @@
 * obj->quiet = state          (true: a server ON ERROR reply does not abort the program; default false)
 * n = obj->LastError          (the kind of the last reply: 0 OK, 1 ON ERROR, 2 ELSE, 3 ERROR, 4 LOCKED, 5 PROMPT; -1 no reply was read)
 * str = obj->LastText         (the payload of an ON ERROR reply, null otherwise; it can be stale or empty)
+* obj->maxpacket = n          (the longest reply in bytes, header included, that is read; a longer one, or one that announces less than its own header, fails the call
+*                              as a lost connection would; 0, the default, sets no ceiling)
 *
 * END-DESCRIPTION
 *
@@ -176,8 +182,8 @@ $define SV$ERROR          3    ;* Action failed. Error text available
 $define SV$LOCKED         4    ;* Took locked clause
 $define SV$PROMPT         5    ;* Server requesting input
 
-$define NET.CONNECT.SECS  5    ;* connect.keys: seconds to wait for the connection (17 Oct 26, S.65)
-$define NET.READ.MS   30000    ;* connect.keys: milliseconds to wait for each read once connected (the plan, 4.6)
+*  19 Oct 26 (K8d): the connect timeout (5 seconds) and the wait for each reply (30 seconds) of connect.keys are the configuration parameters NETWAIT and NETREPLY, which the
+*  administrator sets in sd.conf (1 to 3600 seconds, these defaults); they were $defines of the same values.
 $define NET.ACK.TRIES    16    ;* connect.keys: bytes to read looking for the Ack
 
 
@@ -200,7 +206,8 @@ public debugging,       ;* Debug mode
        error,           ;* Error text
        quiet,           ;* True: a server ON ERROR reply does not abort the caller (18 Oct 26, S.65 slice 3e)
        LastError,       ;* The kind of the last reply (SV$ code), -1 when no reply was read
-       LastText         ;* The payload of the last ON ERROR reply
+       LastText,        ;* The payload of the last ON ERROR reply
+       maxpacket        ;* The longest reply, header included, this object will read: a longer one fails the call.  0 = no ceiling (the default).  19 Oct 26, K8c
 
 * ======================================================================
 
@@ -212,6 +219,7 @@ public subroutine create.object
    quiet = @false
    LastError = -1
    LastText = ''
+   maxpacket = 0
 end
 
 * ======================================================================
@@ -429,7 +437,7 @@ public function connect.keys(host, (port), username, (salt), (iterations), (clie
 
    if port = '' or port < 0 then port = 4247   ;* as connect()
 
-   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, NET.CONNECT.SECS)
+   skt = open.socket(host, port, SKT$BLOCKING + SKT$TLS, config('NETWAIT'))
    st = status()
    oserr = os.error()
    if st # 0 then
@@ -453,7 +461,7 @@ public function connect.keys(host, (port), username, (salt), (iterations), (clie
       goto keys.fail
    end
 
-   if io.ms = 0 then io.ms = NET.READ.MS
+   if io.ms = 0 then io.ms = config('NETREPLY') * 1000
    acked = @false
    tries = 0
    loop
@@ -1228,6 +1236,15 @@ local function read.packet()
    * Extract header data
 
    pkt.bytes = oconv(pkt.header[1,4], 'ILL')
+
+*  19 Oct 26 dm (K8c).  THE LENGTH THE SERVER ANNOUNCES IS CHECKED BEFORE ANYTHING ELSE IS TRUSTED OR READ.  A reply is at least its own ten byte header; the count is read as a
+*   SIGNED 32 bit value, so a length of 2 GB or more arrives negative; and the owner of this object may have set a ceiling (maxpacket, 0 = none).  A server that announces less than
+*   a header, or more than the ceiling, is answered as if the connection had failed: the call returns false, server.error and ServerStatus are NOT touched (a caller that marks
+*   ServerStatus before a request, as $netfile does, sees the mark still there: no reply), and no byte of the body is read.  Before this the body was read for as long as the
+*   server sent, and a negative count made the loop below ask for a negative number of bytes.
+   if pkt.bytes < 10 then return @false
+   if maxpacket > 0 and pkt.bytes > maxpacket then return @false
+
    server.error = oconv(pkt.header[5,2], 'ISL')
    ServerStatus = oconv(pkt.header[7,4], 'ILL')
 

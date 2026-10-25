@@ -23,6 +23,7 @@
  *           SET.BACKUP.DIRECTORY writes does not stop SD starting
  * 01 Oct 26 Windows port - APIPORT is an ON/OFF switch: any value above zero
  *           means the fixed port SD_API_PORT (owner's port ruling)
+ * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT (5) and NETREPLY (30): the two SDNet timeouts, seconds, 1 to 3600, per process (K8d, S.65).  Zero is refused (openQM's NETWAIT 0 means no limit).
  * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
  *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -51,6 +52,8 @@
  *  NETFILES=0    Allow remote files?
  *                  0x0001   Allow outgoing NFS
  *                  0x0002   Allow incoming Q_M_Net
+ *  NETWAIT=5     Seconds to wait for a connection to a remote SDNet server (1 to 3600)
+ *  NETREPLY=30   Seconds to wait for each reply of a remote SDNet server (1 to 3600)
  *  NUMFILES=n    Maximum number of files open (all users)
  *  NUMLOCKS=n    Maximum number of record locks
  *  OBJECTS=n     Limit on loaded object code count (0 = no limit)
@@ -141,6 +144,8 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.must_lock = FALSE;         /* MUSTLOCK: Enforce locking rules */
   pcfg.objects = 0;               /* OBJECTS:  Max loaded objects */
   pcfg.objmem = 0;                /* OBJMEM:   Max loaded object size */
+  pcfg.netwait = 5;               /* NETWAIT:  Seconds to wait for a connection to a remote SDNet server (19 Oct 26, K8d; the plan's 5) */
+  pcfg.netreply = 30;             /* NETREPLY: Seconds to wait for each reply of a remote SDNet server (the plan's 30) */
   pcfg.pwdelay = 3;               /* PWDELAY:  Seconds after a failed network login.  SD's own 3 (openQM's is 5) */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
   pcfg.reccache = 0;             /* RECCACHE: Record cache size */
@@ -327,6 +332,10 @@ struct CONFIG* read_config(char* errmsg) {
       }
       else if (sscanf(rec, "NETFILES=%d", &n) == 1)
         cfg->netfiles |= n;
+      else if (sscanf(rec, "NETWAIT=%d", &n) == 1)
+        pcfg.netwait = n;
+      else if (sscanf(rec, "NETREPLY=%d", &n) == 1)
+        pcfg.netreply = n;
       else if (sscanf(rec, "NUMFILES=%d", &n) == 1)
         cfg->numfiles = n;
       else if (sscanf(rec, "NUMLOCKS=%d", &n) == 1) {
@@ -546,6 +555,8 @@ struct CONFIG* read_config(char* errmsg) {
       !rangecheck("DHCACHE", pcfg.dhcache, 0, MAX_DH_CACHE_SIZE, errmsg) ||
       !rangecheck("LGNWAIT", cfg->lgnwait, 0, 32767, errmsg) ||
       !rangecheck("MAXRLOCK", pcfg.maxrlock, 0, 100000, errmsg) ||
+      !rangecheck("NETWAIT", pcfg.netwait, 1, 3600, errmsg) ||           /* 19 Oct 26, K8d: 0 (wait for ever) is refused, which is tighter than openQM's */
+      !rangecheck("NETREPLY", pcfg.netreply, 1, 3600, errmsg) ||
       !rangecheck("NUMLOCKS", numlocks_asked, 1, 32767, errmsg) ||        /* 16 Oct 26 (openQM 532): the table's cells are int16 */
       !rangecheck("PWDELAY", pcfg.pwdelay, 0, 3600, errmsg) ||
       !rangecheck("USERPOOL", cfg->userpool, 0, 16383, errmsg) ||

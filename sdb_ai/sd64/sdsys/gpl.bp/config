@@ -124,6 +124,8 @@ report.params:
    print 'MAXRLOCK  '        : config('MAXRLOCK')
    print 'MUSTLOCK  '        : config('MUSTLOCK')
    print 'NETFILES  '        : config('NETFILES')
+   print 'NETREPLY  '        : config('NETREPLY') : ' seconds'
+   print 'NETWAIT   '        : config('NETWAIT') : ' seconds'
    print 'NUMFILES  '        : config('NUMFILES')
    print 'NUMLOCKS  '        : config('NUMLOCKS')
    print 'NUMUSERS  '        : config('NUMUSERS')
