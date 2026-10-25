@@ -2,6 +2,37 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+20 Oct 26  FILELOCK, FILEUNLOCK, RECORDLOCKED() AND GETLOCKS() NOW WORK ON A FILE ON ANOTHER SD SERVER (SDNET).
+
+             What        A program that opens a remote file through a VOC pointer of type N could not use these four statements: each stopped
+                        with "not available" or "read only". RECORDLOCKED(f, id) now asks the other server and gives the code a local file
+                        gives (-3 -2 -1 another user holds a file, update or read lock, 0 nobody, 1 2 3 this session holds a read, update or
+                        file lock), and STATUS() afterwards is the lock owner's user number ON THAT SERVER. It works on a server defined
+                        read as well as one defined write, and inside BEGIN TRANSACTION (it changes nothing). GETLOCKS(f, user) of a remote
+                        file is the local view, as in openQM: the three counters of this machine's lock table and no lock line, because a
+                        remote lock lives on the server and never appears here; it asks the server nothing. FILELOCK f and FILEUNLOCK f work
+                        only for a server defined write AND a login that is in the other machine's sdfileswrite group, exactly as a remote
+                        WRITE does. FILELOCK takes the LOCKED clause when the file is busy (STATUS() is the holder's user number on the
+                        server), and with no LOCKED clause asks again every quarter of a second, like a record lock, so a wait never makes
+                        the other server block and the break key still works. FILEUNLOCK leaves STATUS() 0 (it was yours and is free), 3011
+                        (another user's, still held) or 3012 (nobody held it), the same as for a local file. A file lock belongs to the
+                        connection: FILEUNLOCK, closing the file variable (or, if it just goes out of scope, the next prompt), LOGTO and the
+                        end of the process all give it back, and RELEASE of the file (or a bare RELEASE) does too, as it does on the server's
+                        own files. The first FILELOCK through a file variable leaves one line in the audit trail:
+                        netfile filelock server=<name> file=<file>. Two things that take the file lock work on such a file because of it:
+                        the verb CLEAR.FILE (it stopped with "filelock is not available for a file on server ...") and the LOCKING
+                        keyword of LIST, SORT and the other query verbs.
+             Why it      A program written for openQM's QMNet can lock a whole remote file to read a consistent total, or ask whether a record
+             matters     is being edited, without being rewritten. A login that is not in sdfileswrite is still refused by the other
+                        server, with message 12526 and an audit line there (api refused request=32 route=sdfiles write=off ...).
+             Does not    It does not let a server defined read lock anything: FILELOCK and FILEUNLOCK on one still stop with "read only",
+                        and nothing is sent. A change or a lock inside BEGIN TRANSACTION is still refused (message 12515, for FILELOCK and
+                        FILEUNLOCK as for every other lock), because a remote change would never join a local rollback. It does not add
+                        remote locks to LIST.READU or to GETLOCKS: look at the other server for those. CONFIGURE.FILE, ANALYSE.FILE, FCONTROL,
+                        the index statements, OPENSEQ, creating or deleting a remote file and WRITE ... CREATING.SEQKEY stay refused. NOTE
+                        for the administrator of the other server: a login in sdfileswrite on a write server can now hold a whole file
+                        against everyone; list.readu shows the lock (type FX) and unlock file <n> filelock clears it.
+
 19 Oct 26  A REMOTE SELECT THAT THE OTHER SERVER ANSWERS WITH AN ERROR NO LONGER STOPS THE PROGRAM.
 
              What        When a program makes a list of the records of a file on another SD server (SDNet) and the server answers either request of

@@ -17,6 +17,9 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 20 Oct 26 dm  S.72 (QMNet parity, tiers A and B): NF$FILELOCK 18 (a case of act.change: the no-wait request 32, the busy answer NF$RC.LOCKED, audited once for the handle as
+*               `netfile filelock server=<name> file=<f>`) and NF$FILEUNLOCK 19 (act.fileunlock: refused for a read-mode handle and in a transaction, the definition NOT read again,
+*               the answer of request 33 in rc<8>); NF$RECORDLOCKED also gives the reply STATUS() (the lock owner's number) in rc<8>.  Needs filelock() and fileunlock() of the class.
 * 19 Oct 26 dm  Finish 2 (verifier): act.select checks obj->LastError after the SELECT request too, and its READLIST branch for an ON ERROR reply can run now: the class aborted on that reply even
 *               when quiet, so a server that answered it with an ON ERROR stopped the client's program; the class honours quiet in select() and readlist() (gpl.bp/sdclient, same day).
 *               Comments that said 5 seconds to connect and 30 a reply now say NETWAIT and NETREPLY.
@@ -248,9 +251,10 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
       case op = NF$SELECT        ; gosub act.select
       case op = NF$FILEINFO      ; gosub act.fileinfo
       case op = NF$CLOSEALL      ; gosub act.closeall
-      case op = NF$WRITE or op = NF$WRITEU or op = NF$DELETE or op = NF$DELETEU or op = NF$CLEARFILE or op = NF$LOCK
+      case op = NF$WRITE or op = NF$WRITEU or op = NF$DELETE or op = NF$DELETEU or op = NF$CLEARFILE or op = NF$LOCK or op = NF$FILELOCK
          gosub act.change
       case op = NF$RELEASE       ; gosub act.release
+      case op = NF$FILEUNLOCK    ; gosub act.fileunlock
       case op = NF$STATE         ; gosub act.state
       case 1
          txt = op ; gosub clean.text
@@ -596,6 +600,8 @@ act.recordlocked:
       return
    end
    out = lk
+*  S.72: the server leaves the user number of the lock's owner in STATUS() (apisrvr: set.status after recordlocked()); the kernel gives it to a RECORDLOCKED() as the status
+   rc<8> = rq.st
    return
 
 * ======================================================================
@@ -711,9 +717,10 @@ act.change:
       case op = NF$DELETE    ; opname = 'delete'
       case op = NF$DELETEU   ; opname = 'deleteu'
       case op = NF$CLEARFILE ; opname = 'clear.file'
+      case op = NF$FILELOCK  ; opname = 'filelock'
       case 1                 ; opname = 'lock'
    end case
-   changing = (op # NF$LOCK)
+   changing = (op # NF$LOCK and op # NF$FILELOCK)
 
 *  A read-mode handle: the refusal of slice 3c, byte for byte, and nothing is sent.
    if nf.h.mode(hx) # 'write' then
@@ -742,7 +749,7 @@ act.change:
       return
    end
 
-   if op # NF$CLEARFILE then
+   if op # NF$CLEARFILE and op # NF$FILELOCK then
       gosub check.id.chg
       if failed then return
    end
@@ -768,6 +775,11 @@ act.change:
          gosub audit.once
       case op = NF$CLEARFILE
          void kernel(K$AUDIT, 'netfile clear server=' : srvname : ' file=' : nf.h.file(hx))
+      case op = NF$FILELOCK
+*        S.72: a file lock held against everyone is audited, once for the handle (the wait is many requests); no id is involved
+         aud.k = 'f'
+         aud.line = 'netfile filelock server=' : srvname : ' file=' : nf.h.file(hx)
+         gosub audit.once
    end case
 
 *  The request.  The no-reply mark comes right before each one.
@@ -795,6 +807,11 @@ act.change:
          obj->error = ''
          obj->ServerStatus = NF$NOREPLY
          obj->clearfile(nf.h.fno(hx))
+      case op = NF$FILELOCK
+*        S.72: the wait flag is the literal @false - the server is never made to block; a busy file is asked for again by the kernel
+         obj->error = ''
+         obj->ServerStatus = NF$NOREPLY
+         obj->filelock(nf.h.fno(hx), @false)
       case 1
          obj->error = ''
          obj->ServerStatus = NF$NOREPLY
@@ -818,7 +835,7 @@ act.change:
       return
    end
    if lerr = NF$LE.OK then return
-   if op = NF$LOCK and lerr = NF$LE.LOCKED then
+   if (op = NF$LOCK or op = NF$FILELOCK) and lerr = NF$LE.LOCKED then
       gosub rc.locked
       return
    end
@@ -877,6 +894,58 @@ act.release:
    nf.requests += 1
    if rq.lost then gosub drop.conn
    obj = 0
+   return
+
+* ======================================================================
+* act.fileunlock - NF$FILEUNLOCK (S.72): a = handle.  Gives the file lock back.  THE ORDER: a handle of this account (a lost handle will do), a handle whose mode is not write is
+* refused (12506, nothing sent - it can hold no file lock), then the gate and the connection, no transaction (12515), and the request.  UNLIKE act.change THE DEFINITION IS NOT
+* READ AGAIN: a lock that is held must always be able to be given back, and giving it back changes no data (act.release is the same).  Not audited.  The answer is the reply STATUS()
+* of request 33 in rc<8>: 0 the lock was this session's and is free, 3011 (ER$LCK) another user's, still held, 3012 (ER$NLK) nobody's.  A lost reply is 12502 (a lock changes no data:
+* not 12514) and the connection is dropped; nothing is sent twice.
+act.fileunlock:
+   need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
+   gosub get.handle
+   if failed then return
+   opname = 'fileunlock'
+   if nf.h.mode(hx) # 'write' then
+      gosub act.refuse
+      return
+   end
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   if system(SYS$TRANS_LEVEL) # 0 then
+      fail.num = 12515 ; fail.a1 = srvname ; fail.a2 = opname
+      gosub fail
+      return
+   end
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   obj->fileunlock(nf.h.fno(hx))
+   lerr = obj->LastError
+   gosub after.rq
+   nf.requests += 1
+   if lerr = -1 then rq.lost = @true
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   if lerr = NF$LE.ERROR then
+      gosub on.error.text
+      gosub server.fail
+      return
+   end
+   if lerr # NF$LE.OK then
+      fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':lerr
+      gosub fail
+      return
+   end
+   rc<8> = rq.st
    return
 
 * ======================================================================

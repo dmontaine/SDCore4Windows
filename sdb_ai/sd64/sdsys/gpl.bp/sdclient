@@ -27,6 +27,8 @@
 * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: the public properties quiet, LastError and LastText (a quiet object does not abort on a server ON ERROR reply;
 * 19 Oct 26 Windows port - from Linux 0bdc4bd - K8d: connect.keys waits NETWAIT seconds (5) for the connection and NETREPLY seconds (30) for each read, from the configuration (sd.conf) and no longer from two $defines.
 * 19 Oct 26 Windows port - from Linux 0bdc4bd - K8c: the length a reply announces is checked before its body is read.  read.packet fails the call, as a lost connection does and without touching server.error or
+* 20 Oct 26 Windows port - from Linux fc8e304 - S.72 (QMNet parity): filelock(fno, wait) (request 32) and fileunlock(fno) (request 33).  The two requests were in the table of codes and in apisrvr and had no method here.
+*               Like clearfile() and recordlock() they abort the caller on a server ON ERROR reply unless quiet is set.  The $netfile handler is the one user of them.
 *               ServerStatus, for a reply that announces less than its own header (a negative count is that too: the count is signed) and, when the new public property maxpacket
 *               is above 0, for one longer than that.  The default is 0, so other users of the class are unchanged except for the nonsense lengths below 10.  $netfile sets it.
 * 19 Oct 26 Windows port - from Linux d93ea0d - SDNet finish 2 (verifier): select() and readlist() honour quiet.  They aborted on a server ON ERROR reply even when the object was quiet, so the $netfile handler's own
@@ -67,6 +69,8 @@
 * obj->disconnect
 * obj->endcommand
 * str = obj->execute(cmd)
+* obj->filelock(fno, wait)
+* obj->fileunlock(fno)
 * bool = obj->logto(acc)
 * obj->markmapping(fno, state)
 * fno = obj->open(name)
@@ -613,6 +617,39 @@ public function execute(cmd, err)
 
    err = server.error
    return reply
+end
+
+* ======================================================================
+* FILELOCK(fno, wait)   (20 Oct 26 dm, S.72) - request 32, the file number and the wait flag, two 16 bit numbers
+* wait true asks the server to hold the request until the lock is free (the server blocks); false asks for it at once and a busy file takes the LOCKED reply (LastError 4, ServerStatus
+* the holder's user number on the server).  The $netfile handler of a remote file only ever sends false.  A login that is not in the server's sdfileswrite group is refused with an ON
+* ERROR reply (message 12526).  Like recordlock(), it aborts the caller on an ON ERROR reply unless quiet is set.
+
+public subroutine filelock(fno, wait)
+   if not(context.error(CX.CONNECTED)) then
+      pkt = iconv(fno, 'ISL')
+      pkt := iconv(if wait then 1 else 0, 'ISL')
+      if message.pair(SrvrFilelock, pkt) then
+         if server.error = SV$ON.ERROR and not(quiet) then
+            abort 'FILELOCK generated an abort event'
+         end
+      end
+   end
+end
+
+* ======================================================================
+* FILEUNLOCK(fno)   (20 Oct 26 dm, S.72) - request 33, the file number only
+* The reply is OK and its status says what happened: ServerStatus 0 the lock was this session's and is free, 3011 (ER$LCK) another user holds it, 3012 (ER$NLK) nobody does.
+
+public subroutine fileunlock(fno)
+   if not(context.error(CX.CONNECTED)) then
+      pkt = iconv(fno, 'ISL')
+      if message.pair(SrvrFileunlock, pkt) then
+         if server.error = SV$ON.ERROR and not(quiet) then
+            abort 'FILEUNLOCK generated an abort event'
+         end
+      end
+   end
 end
 
 * ======================================================================

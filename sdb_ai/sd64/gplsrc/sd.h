@@ -21,6 +21,13 @@
  *               shared_structure_refusal() (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: prototypes and constants of the write and lock entry points of netfiles.c (net_gate, net_write, net_delete, net_clear,
+ * 19 Oct 26 Windows port - from Linux fc8e304 - S.67, the verifier's findings: masters_note_read, masters_cas_on and masters_cas_check (a save of a master record is judged against the record the
+ *               session read, and again inside the account's write).
+ * 19 Oct 26 Windows port - from Linux fc8e304 - S.67: prototypes of masters.c (stage 1: the hook and K_MASTERS; stage 2: masters_before_write, masters_before_delete,
+ *               masters_txn_refusal, masters_refusal_text, masters_fix_modes and the status DHE_MASTER_REFUSED).
+ * 18 Oct 26 Windows port - from Linux fc8e304 - S.66: EDIT_SHARED_WRITE and EDIT_SHARED_STRUCT; prototypes of the shared-account tests (op_sh.c), of shared_structure_refusal()
+ *               (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
+ * 20 Oct 26 Windows port - from Linux fc8e304 - S.72: prototypes of net_filelock_step, net_fileunlock and net_recordlocked (netfiles.c).
  *               net_lock, net_lock_step, net_check_lock, net_release, net_release_all, net_flush_closes) and edit_kind_of_net_name().
  * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
  * 17 Oct 26 dm  S.64 part 2: edit_os_path_refusal() takes include_leaf (does the final component of the path count?); edit_leaf_counts().
@@ -362,6 +369,12 @@ int net_delete(FILE_VAR * fvar, char * id, int16_t id_len, bool keep_lock);
 int net_clear(FILE_VAR * fvar);
 int net_lock(FILE_VAR * fvar, char * id, int16_t id_len, bool update);
 int net_lock_step(FILE_VAR * fvar, char * id, int16_t id_len, bool update, u_int16_t op_flags, u_char * retry_pc);
+/* S.72 (20 Oct 26, QMNet parity).  net_filelock_step() is FILELOCK as net_lock_step() is READU: net_gate() first (a refusal is returned at once), then the no-wait request 32 and
+   the same three answers.  net_fileunlock() gives 0, ER_LCK or ER_NLK (what a local FILEUNLOCK leaves in STATUS(), and process.status is it) or a negative status.  net_recordlocked()
+   gives the server's code -3 to 3 and leaves the lock owner's user number in process.status; it has no ON ERROR clause, so an error is raised, always, and it asks no gate (a read). */
+int net_filelock_step(FILE_VAR * fvar, u_int16_t op_flags, u_char * retry_pc);
+int net_fileunlock(FILE_VAR * fvar, u_int16_t op_flags);
+int net_recordlocked(FILE_VAR * fvar, char * id, int16_t id_len);
 int net_check_lock(FILE_VAR * fvar, char * id, int16_t id_len);
 void net_release(FILE_VAR * fvar, char * id, int16_t id_len);
 void net_release_all(void);

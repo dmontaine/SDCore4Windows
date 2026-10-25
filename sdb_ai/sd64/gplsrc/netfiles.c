@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 20 Oct 26 dm  S.72 (QMNet parity, tiers A and B): FILELOCK and FILEUNLOCK of a file on a write-mode server (net_filelock_step, net_fileunlock: net_gate first, the no-wait request
+ *               32 only, the answer of request 33 read from rc<8>), RECORDLOCKED() on any remote file (net_recordlocked; net_check_lock and it share net_lock_code), and the tail of
+ *               net_lock_step moved into net_lock_result so that both lock steps wait the same way.  GETLOCKS() of a remote file is op_lock.c's business (the local view, no call here).
  * 18 Oct 26 dm  S.65 slice 3e: writes and locks on a file of a server whose definition says mode=write (stage 2): net_gate, net_write, net_delete,
  *               net_clear, net_lock, net_lock_step, net_check_lock, net_release, net_release_all, net_flush_closes.  A read-mode handle is refused
  *               exactly as in slice 3c.  The handler's answer 4 (the record is locked by someone else), a record passed to the handler as a
@@ -43,6 +46,9 @@
  *  net_clear          CLEARFILE
  *  net_lock           One no-wait request for a record lock
  *  net_lock_step      READU, READL, READVU, READVL, RECORDLOCKU/L, a $MODE AUTOLOCK write: the lock, or what to do when it is busy
+ *  net_filelock_step  FILELOCK (S.72): the gate, then the file lock, or what to do when it is busy (the same three answers as net_lock_step)
+ *  net_fileunlock     FILEUNLOCK (S.72): the gate, then the request; 0, ER_LCK or ER_NLK as a local FILEUNLOCK leaves them in STATUS()
+ *  net_recordlocked   RECORDLOCKED() (S.72): the server's code -3 to 3 and, in STATUS(), the owner's user number on the server
  *  net_check_lock     MUSTLOCK: does this session hold the update lock?
  *  net_release        RELEASE of a record or of a file; never raises
  *  net_release_all    RELEASE alone; never raises
@@ -120,6 +126,8 @@
 #define NF_WRITEU 14
 #define NF_DELETEU 15
 #define NF_RELEASE 16
+#define NF_FILELOCK 18      /* S.72 (17 and 20 are not used) */
+#define NF_FILEUNLOCK 19
 
 #define NF_RC_OK 0
 #define NF_RC_ELSE 2
@@ -153,9 +161,11 @@ typedef struct {
   char arg[3][NET_ARG_MAX + 1];    /* rc<3> to rc<5> */
   int status;                      /* rc<6>, signed */
   int mode_write;                  /* rc<7> = 1: the handle was opened in write mode (slice 3e); absent is read */
+  int reply_status;                /* rc<8>: the server's reply STATUS(), meaningful for NF_RECORDLOCKED and NF_FILEUNLOCK only (S.72); absent is 0 */
 } NET_RC;
 
 Private char net_msg[512] = "";
+Private int net_reply_status = 0;           /* rc<8> of the last handler call (0 when it did not run); read by net_recordlocked() and net_fileunlock() right after their call (S.72) */
 Private u_int16_t net_epoch = 0;            /* Moved on by net_close_all(); a NET_FILE of another epoch is stale */
 Private bool net_used = FALSE;              /* This process has had a remote file open (so the handler holds something to close) */
 Private bool net_used_write = FALSE;        /* ... and one of them was opened in write mode: RELEASE alone has locks to let go (slice 3e) */
@@ -387,6 +397,8 @@ Private bool net_parse_rc(DESCRIPTOR* rc_descr, NET_RC* rc) {
   rc->status = atoi(num);
   (void)net_field(buf, 7, num, sizeof(num));
   rc->mode_write = (atoi(num) == 1); /* only an exact 1 says write: anything else, and the field being absent, is read (fail closed) */
+  (void)net_field(buf, 8, num, sizeof(num));
+  rc->reply_status = atoi(num); /* S.72: absent is 0; the two callers that read it test the value themselves */
   return TRUE;
 }
 
@@ -576,6 +588,7 @@ Private int net_op_ex(FILE_VAR* fvar, int op, const char* b, int blen, const cha
   int status;
 
   out->type = UNASSIGNED;
+  net_reply_status = 0;
 
   if (net_stale(fvar)) {
     snprintf(hs, sizeof(hs), "%d", (int)fvar->access.net.handle);
@@ -586,6 +599,7 @@ Private int net_op_ex(FILE_VAR* fvar, int op, const char* b, int blen, const cha
 
   net_flush_pending();
   ran = net_call_core(op, hs, (int)strlen(hs), b, blen, c, clen, cchain, use_chain, &rc, out);
+  net_reply_status = ran ? rc.reply_status : 0; /* S.72: read by the two statements whose answer is in it, straight after this call */
   process.op_flags = entry;
   status = net_answer(ran, &rc, else_status, out, lock_ok, pass_status);
   return status;
@@ -1118,13 +1132,11 @@ int net_lock(FILE_VAR* fvar, char* id, int16_t id_len, bool update) {
    negative        an error, raised unless op_flags has P_ON_ERROR; process.status is set.
    process.op_flags is 0 on return except in the WAIT case.                                                                           */
 
-int net_lock_step(FILE_VAR* fvar, char* id, int16_t id_len, bool update, u_int16_t op_flags, u_char* retry_pc) {
-  int st;
-  int holder;
+/* S.72, 20 Oct 26: what a lock statement does with the answer of its one no-wait request, the same for a record lock (net_lock_step) and the file lock (net_filelock_step) - this was the
+   tail of net_lock_step, moved out unchanged so that the two cannot wait differently.  st is net_change_op()'s answer: 0 held, ER_LCK busy (process.status the holder), negative an error. */
 
-  process.op_flags = op_flags & P_ON_ERROR;
-  st = net_lock(fvar, id, id_len, update);
-  process.op_flags = 0;
+Private int net_lock_result(int st, u_int16_t op_flags, u_char* retry_pc) {
+  int holder;
 
   if (st == 0)
     return NET_LOCK_HELD;
@@ -1146,18 +1158,93 @@ int net_lock_step(FILE_VAR* fvar, char* id, int16_t id_len, bool update, u_int16
   return NET_LOCK_WAIT;
 }
 
-/* ======================================================================
-   net_check_lock()  -  MUSTLOCK: does this session hold the UPDATE lock on the record?  The server says (NF$RECORDLOCKED): -3 -2 -1 another
-   user holds the file, update or read lock; 0 nobody; 1 this session holds a read lock, 2 an update lock, 3 the file lock.  Returns 1 for 2
-   or 3, 0 for the rest, negative for an error (raised unless the statement has ON ERROR, as net_read() does).                              */
+int net_lock_step(FILE_VAR* fvar, char* id, int16_t id_len, bool update, u_int16_t op_flags, u_char* retry_pc) {
+  int st;
 
-int net_check_lock(FILE_VAR* fvar, char* id, int16_t id_len) {
+  process.op_flags = op_flags & P_ON_ERROR;
+  st = net_lock(fvar, id, id_len, update);
+  process.op_flags = 0;
+  return net_lock_result(st, op_flags, retry_pc);
+}
+
+/* ======================================================================
+   net_filelock()  -  One request for the file lock, the NO-WAIT form only: the handler sends request 32 with the wait flag 0, so the server is never made to block and a
+   wait can neither look like a lost connection nor outlast the break key.  Answers as net_lock(): 0 held (or already ours), ER_LCK busy with process.status the holder's user
+   number on the server (another user's file lock, else the owner of a record lock in the file), negative an error.                                                    */
+
+Private int net_filelock(FILE_VAR* fvar) {
+  return net_change_op(fvar, NF_FILELOCK, "", 0, "", 0, NULL, FALSE, TRUE);
+}
+
+/* ======================================================================
+   net_filelock_step()  -  FILELOCK of a remote file (S.72).  net_gate() FIRST: a read-mode handle is 12506, a transaction 12515 (the S.64 edit gate is not asked of a lock); a refusal has
+   been made - raised unless the statement has ON ERROR - and is returned at once.  Then one no-wait request and the answers of net_lock_step(): NET_LOCK_HELD, NET_LOCK_LOCKED when the
+   file is busy and the statement has a LOCKED clause, NET_LOCK_WAIT when it has none (the opcode is run again in 250 ms; the CALLER RETURNS AT ONCE), or a negative status.
+   The server (apisrvr request 32) refuses a login that is not in sdfileswrite with message 12526 as an ON ERROR reply: that arrives here as an error like any other.          */
+
+int net_filelock_step(FILE_VAR* fvar, u_int16_t op_flags, u_char* retry_pc) {
+  int st;
+
+  st = net_gate(fvar, NETG_LOCK, op_flags, "FILELOCK");
+  if (st != 0)
+    return st; /* the refusal is made and process.status is st */
+
+  process.op_flags = op_flags & P_ON_ERROR;
+  st = net_filelock(fvar);
+  process.op_flags = 0;
+  return net_lock_result(st, op_flags, retry_pc);
+}
+
+/* ======================================================================
+   net_fileunlock()  -  FILEUNLOCK of a remote file (S.72).  net_gate() first, as for FILELOCK (a read-mode handle holds no file lock; a transaction is refused).  The server's own answer
+   is the reply STATUS() of request 33, which the handler gives in rc<8>: 0 the lock was this session's and is free now, ER_LCK another user's (left held), ER_NLK nobody's - the three
+   values a local FILEUNLOCK leaves in STATUS().  Anything else is not an answer this statement can use.  Returns that value (>= 0, and process.status is it), or a negative status for
+   an error (raised unless the statement has ON ERROR).  Never asks the definition's mode again: giving a lock back changes no data (net_release() is the same).                       */
+
+int net_fileunlock(FILE_VAR* fvar, u_int16_t op_flags) {
+  int st;
+  int answer;
+
+  st = net_gate(fvar, NETG_LOCK, op_flags, "FILEUNLOCK");
+  if (st != 0)
+    return st;
+
+  process.op_flags = op_flags & P_ON_ERROR;
+  st = net_change_op(fvar, NF_FILEUNLOCK, "", 0, "", 0, NULL, FALSE, FALSE);
+  process.op_flags = 0;
+  if (st < 0)
+    return st; /* raised by net_change_op() unless ON ERROR; process.status is set */
+
+  switch (net_reply_status) {
+    case 0:
+      answer = 0;
+      break;
+    case ER_LCK:
+      answer = ER_LCK;
+      break;
+    case ER_NLK:
+      answer = ER_NLK;
+      break;
+    default:
+      net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+      return net_raise(-ER_NETWORK, op_flags);
+  }
+  process.status = answer;
+  return answer;
+}
+
+/* ======================================================================
+   net_lock_code()  -  The request behind MUSTLOCK and RECORDLOCKED(): what the server says of a record (NF$RECORDLOCKED): -3 -2 -1 another user holds the file, update or read lock; 0
+   nobody; 1 this session holds a read lock, 2 an update lock, 3 the file lock.  0 with *code set, or a negative status (raised unless the statement has ON ERROR in process.op_flags,
+   as net_read() does).  The server's reply STATUS() - the user number of the owner of the lock it found - is left in net_reply_status for the caller.                              */
+
+Private int net_lock_code(FILE_VAR* fvar, char* id, int16_t id_len, int* code) {
   u_int16_t entry = process.op_flags;
   DESCRIPTOR out;
   char buf[24];
   int status;
-  int code = 0;
 
+  *code = 0;
   if ((id_len < 1) || (id_len > NET_ID_MAX))
     return net_bad_id(fvar, id_len);
 
@@ -1172,11 +1259,45 @@ int net_check_lock(FILE_VAR* fvar, char* id, int16_t id_len) {
 
   if ((out.type == STRING) || (out.type == INTEGER)) {
     (void)k_get_c_string(&out, buf, sizeof(buf) - 1);
-    code = atoi(buf);
+    *code = atoi(buf);
   }
   k_release(&out);
+  return 0;
+}
+
+/* ======================================================================
+   net_check_lock()  -  MUSTLOCK: does this session hold the UPDATE lock on the record?  Returns 1 for the codes 2 and 3, 0 for the rest, negative for an error (raised unless the
+   statement has ON ERROR, as net_read() does).                                                                                                                                  */
+
+int net_check_lock(FILE_VAR* fvar, char* id, int16_t id_len) {
+  int code;
+  int status = net_lock_code(fvar, id, id_len, &code);
+
+  if (status < 0)
+    return status;
   process.status = 0;
   return ((code == 2) || (code == 3)) ? 1 : 0;
+}
+
+/* ======================================================================
+   net_recordlocked()  -  RECORDLOCKED(f, id) of a remote file (S.72, QMNet parity).  The code the server gives, -3 to 3, which is what a local file gives; STATUS() afterwards is the
+   user number of the lock's owner ON THE SERVER, as locally (0 when nothing is held; a number a user cannot have is taken as 0).  No net_gate(): it changes nothing, so a read-mode
+   handle and a transaction are not refused (a remote READ is served in both).  The function has no ON ERROR clause, so an error is always raised - process.op_flags is cleared first, so a
+   flag a previous statement left cannot swallow it.  A code outside -3 to 3 is not an answer.                                                                                          */
+
+int net_recordlocked(FILE_VAR* fvar, char* id, int16_t id_len) {
+  int code;
+  int owner;
+
+  process.op_flags = 0;
+  (void)net_lock_code(fvar, id, id_len, &code); /* an error does not return: it is raised */
+  if ((code < -3) || (code > 3)) {
+    net_set_message(MSG_HANDLER, "it gave an answer that this statement cannot use", "", "");
+    (void)net_raise(-ER_NETWORK, 0);
+  }
+  owner = net_reply_status;
+  process.status = ((owner >= 0) && (owner <= 32767)) ? owner : 0;
+  return code;
 }
 
 /* ======================================================================

@@ -30,6 +30,8 @@
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: op_lockrec(), op_release(), op_rlsfile() and op_rlsall() act on a write mode NET_FILE (net_gate, net_lock_step, net_release, net_release_all); a read mode one is refused as before
  * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3c: FILELOCK, FILEUNLOCK, GETLOCKS, RECORDLOCKU/L, RECORDLOCKED, RELEASE of a NET_FILE are refused (net_refuse); lock_record, check_lock, unlock_record guard NET_FILE
  * 16 Oct 26 Windows port - from Linux 5315c65 - OPTION COMMAND.LEVEL.LOCKS (QM4 gap 231): park_fvar(), release_parked_fvars()
+ * 20 Oct 26 Windows port - from Linux fc8e304 - S.72 (QMNet parity, tiers A and B): op_filelock() and op_flunlock() act on a write mode NET_FILE (net_filelock_step, net_fileunlock; a read mode one is still refused with
+ *               12506), op_reclckd() asks the server for any NET_FILE (net_recordlocked) and op_getlocks() gives a NET_FILE the local view - the counters and no lock line (NO_LOCAL_FILE)
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): openQM items 487, 500 and 587: the time each record lock, file
  *               lock and lock wait began is kept and GETLOCKS() returns it as
@@ -80,6 +82,10 @@
 Private bool unlock_id(int16_t file_id, char* raw_id, int16_t id_len);
 Private char* lock_owner_name(int16_t user_no);
 
+/* 20 Oct 26 S.72 (Linux fc8e304): the file id GETLOCKS() is given for a file on another server.  File ids start at 1 (FPtr(1)), so no lock, file lock or waiter in this machine's tables carries it,
+   and -1 stays "every file". */
+#define NO_LOCAL_FILE 0
+
 /* ======================================================================
    op_filelock()  -  Set file lock                                        */
 
@@ -108,6 +114,7 @@ void op_filelock() {
   int16_t idx;
   int16_t file_id;
   FILE_VAR* fvar;
+  u_char* retry_pc = op_pc; /* 20 Oct 26 S.72: taken before any net_ call; the handler's own opcodes overwrite op_pc */
 
   op_flags = process.op_flags;
 
@@ -115,8 +122,35 @@ void op_filelock() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE)
-    net_refuse(fvar, "FILELOCK"); /* 17 Oct 26 S.65: a remote file has no entry in the file table; does not return */
+  if (fvar->type == NET_FILE) /* 20 Oct 26 S.72: a remote file has no entry in the file table; the lock is asked of the server (write-mode handle only) */
+  {
+    /* net_filelock_step() asks net_gate() first (a read-mode handle is refused with 12506, a transaction with 12515), then sends the no-wait request.  A busy file without a LOCKED
+       clause is asked for again in 250 ms: the step has set this opcode up to run again (pc = retry_pc) and we return at once, leaving the operand on the stack.  The handler runs
+       BASIC, so nothing may be found by a pointer taken before the call: k_dismiss() works from e_stack. */
+
+    switch (status = (int16_t)net_filelock_step(fvar, op_flags, retry_pc)) {
+      case NET_LOCK_HELD:
+        status = 0;
+        break;
+
+      case NET_LOCK_WAIT: /* the opcode will be run again; process.op_flags was left as it was found */
+        return;
+
+      case NET_LOCK_LOCKED: /* process.status is the holder's user number on the server */
+        status = ER_LCK;
+        break;
+
+      default: /* an error; process.status is set and the error was raised unless ON ERROR */
+        status = (int16_t)process.status;
+        break;
+    }
+
+    process.op_flags = 0;
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = status;
+    return;
+  }
 
   {
     file_id = fvar->file_id;
@@ -216,13 +250,22 @@ void op_flunlock() {
   FILE_ENTRY* fptr;
   int16_t lock_owner;
   int16_t file_id;
+  u_int16_t op_flags = process.op_flags; /* 20 Oct 26 S.72: P_ON_ERROR, for a remote file; a local FILEUNLOCK never took it */
 
   descr = e_stack - 1;
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE)
-    net_refuse(fvar, "FILEUNLOCK"); /* 17 Oct 26 S.65 */
+  if (fvar->type == NET_FILE) /* 20 Oct 26 S.72: net_fileunlock() asks the gate (12506, 12515) and then the server; it answers 0, ER_LCK or ER_NLK as a local FILEUNLOCK leaves them */
+  {
+    int net_status = net_fileunlock(fvar, op_flags); /* the handler runs BASIC: the stack is found by e_stack from here on */
+
+    process.op_flags = 0;
+    k_dismiss();
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = (int16_t)net_status;
+    return;
+  }
 
   {
     file_id = fvar->file_id;
@@ -324,10 +367,13 @@ void op_getlocks() {
   descr = e_stack - 2;
   k_get_value(descr);
   if (descr->type == FILE_REF) {
-    /* 17 Oct 26 S.65: file_id -1 means "all files" here, so a remote file would list every lock of every user */
+    /* 17 Oct 26 S.65: file_id -1 means "all files" here, so a remote file would list every lock of every user.
+       20 Oct 26 S.72 (QMNet parity): GETLOCKS() of a remote file is the LOCAL view, as openQM documents - the locks of a remote file are held on the server and never appear in this
+       machine's lock table - so it reports the counters of field 1 and no lock line, and asks the server nothing.  NO_LOCAL_FILE names no file, so the three loops below find nothing. */
     if (descr->data.fvar->type == NET_FILE)
-      net_refuse(descr->data.fvar, "GETLOCKS");
-    file_id = descr->data.fvar->file_id;
+      file_id = NO_LOCAL_FILE;
+    else
+      file_id = descr->data.fvar->file_id;
   } else {
     file_id = -1;
   }
@@ -386,7 +432,11 @@ void op_getlocks() {
 
   /* Lock waiters */
 
-  if (user == 0) {
+  if (file_id == NO_LOCAL_FILE) { /* 20 Oct 26 S.72: a file on another server: no session of this machine waits for it, and the user number asked for is nobody's business here -
+                                     it indexed UMap() unchecked, and an absurd number faulted the process (measured: getlocks(f, 12345) of a remote file, Fault type 11) */
+    lo = 1;
+    hi = 0;
+  } else if (user == 0) {
     lo = 1;
     hi = sysseg->max_users;
   } else {
@@ -709,8 +759,17 @@ void op_reclckd() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
-  if (fvar->type == NET_FILE)
-    net_refuse(fvar, "RECORDLOCKED"); /* 17 Oct 26 S.65 */
+  if (fvar->type == NET_FILE) /* 20 Oct 26 S.72: the server says; STATUS() is the owner's user number on the server */
+  {
+    status = (int16_t)net_recordlocked(fvar, id, id_len); /* an error is raised, always; the handler runs BASIC: the stack is found by e_stack from here on */
+
+    k_dismiss();
+    k_dismiss();
+
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = status;
+    return;
+  }
 
   {
     file_id = fvar->file_id;
