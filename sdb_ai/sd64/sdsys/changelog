@@ -2,6 +2,71 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+             Also        The Run / Cancel box cut a long explanation line at its edge, so the tail of a sentence never showed: the
+                         end of what the ai gate allows in tool.gates ("... leaves this machine for that provider"), and of the
+                         inhibit.login on explanation in tool.sessions. The box now wraps every line of its explanation the way it
+                         already wrapped the command, so every page that uses it shows whole sentences.
+
+24 Oct 26  THE ADMINISTRATOR HAS A SESSIONS AND LOCKS PAGE: TOOL.SESSIONS SHOWS WHO IS SIGNED ON AND WHAT IS LOCKED, AND LOGS A SESSION OUT, RELEASES A LOCK OR STOPS NEW
+           LOGINS THROUGH THE VERBS THAT ALREADY DO IT.
+
+             What        tool.sessions (SDSYS's VOC only; a full-screen page, 140 by 43 or more) lists every session - user number,
+                         process, when it signed on, its kind (user, phantom, API or SDNet), the login user, the account, where it
+                         came from, and whether it is yours or a logout is pending - and below it every lock: the user, the file,
+                         the type (a whole-file lock, read-and-update, read, or a session WAITING for a lock), the record id, since
+                         when, and whether a session with that user number is still signed on. Both lists are read again every
+                         three seconds without a key and on F5, and the cursor stays on the same user or lock, not the same row. A
+                         box explains the row under the cursor and shows the exact command its key would run. L logs the selected
+                         session out (the user number is typed again to confirm), U releases the selected lock, I stops or allows
+                         new sessions; each shows its command and what it does in a box answered Run or Cancel (Cancel is what Enter
+                         chooses) and runs the real logout, unlock or inhibit.login verb. The page offers L for any session but the
+                         one it runs in, and for a session whose process is gone L is the cure: the entry is cleared and every lock it
+                         held is released (the kernel does this before it signals anything). U refuses a waiting row, and a record id
+                         that has a character the page will not put in a command or is a word unlock reads as a keyword.
+             Why it      Ending a session and releasing a lock were three verbs and a listing to read by eye, with the user number
+             matters     copied between them. Logout and unlock write no audit line of their own, so ending someone's session or
+                         freeing their lock left no trace; the page writes one line for every command it ran (tool run
+                         app=tool.sessions command=... status=...), as well as the line that says it was started.
+             Does not    Change anything by itself, run any other command, or send a message to a user (not built). An ordinary
+                         account has no such page. The logout and unlock verbs still write no audit line when typed at the prompt:
+                         that is not changed here.
+
+             What        tool.gates (the administrator's gate matrix; a full-screen page, 140 by 43 or more) has one row for each
+                         SD and the live sessions of the account under the cursor. In any other account the same verb is
+                         the account holder's page, read only: every gate, ON or off for this session, how it is delivered,
+                         whether it reaches beyond SD, when a change reaches the person, and for the row under the cursor
+                         what ON lets you do, what you can still do with it off and the modify.account word the
+                         administrator would use. It asks the system what the session may do and changes nothing; the edit
+                         gates (voc, bp, dict) are read once at sign-on, so a change shows after the next sign-on.
+
+24 Oct 26  THE ADMINISTRATOR HAS A GATE MATRIX: TOOL.GATES SHOWS EVERY ACCOUNT AGAINST EVERY PER-ACCOUNT GATE AND CHANGES THEM
+           THROUGH MODIFY.ACCOUNT, NEVER BY ITSELF.
+
+             What        tool.gates (SDSYS's VOC only; a full-screen page, 140 by 43 or more) has one row for each
+                         registered account but SDSYS and one column for each gate - ssh, api, sh, os, sd, voc, bp, dict,
+                         net, shared-read, shared-write, files, files-write, files-admin, ai and (planned) sockets - each cell
+                         ON, off, a dash where the gate does not apply to a group or other account, or plan. A box says what
+                         the gate under the cursor is: its words, what ON allows, what OFF still allows, when a change reaches
+                         the person, whether it reaches beyond SD and what it is as delivered. Enter queues the opposite
+                         state for a cell (a star), R runs the queued changes of that account as ONE modify.account command
+                         shown with its effect and answered Run or Cancel, U drops them, T queues OFF for every gate that is
+                         off as delivered and on now, F chooses which accounts are shown, F5 reads the machine again. Turning
+                         ON a gate that is off as delivered says so and says that leaving it off is the tighter choice;
+                         turning ON one that reaches beyond SD asks for the account's name to be typed. ssh and api are one
+                         setting in the verb, so the page sends the one word that gives the pair you queued (ssh, api, both
+                         or none); files-write needs files and files-admin needs files-write, and a queue that breaks that is
+                         refused before the box opens. Other boxes list the accounts that have a gate on that reaches beyond
+                         SD and the live sessions of the account under the cursor.
+             Why it      Which account can reach the operating system, the network or other servers was a question for
+             matters     several commands; now it is one screen, and a change is the verb's own change with the verb's own
+                         audit line, not a second way to write the register.
+             Does not    Queue everything ON (there is no such key, and the installer's single question stays its own), turn
+                         a gate on for a running session (a change reaches the person at the next sign-on, account entry,
+                         login or request), or change sh or os for a group or other account (the verb refuses it in both
+                         directions and the page says so). The home screen's settings (pins-on, the start words) are not
+                         gates and stay on tool.menus. The route gates (ssh, api, files, ai) change Linux
+                         groups through sd-elevate, which a sandbox replaces with a stand-in: NOT SHOWN on a real install.
+
 23 Oct 26  MENU BRINGS UP THE FULL-SCREEN MENU, EVERY SETTING ON THE ADMINISTRATOR'S PAGES HAS A [?] THAT EXPLAINS IT, AND PDF SHOWS A DOCUMENT IN A
            PDF READER THE ADMINISTRATOR HAS ALLOWED - EVEN FOR AN ACCOUNT THAT MAY NOT RUN PROGRAMS. NO READER IS ALLOWED AS DELIVERED.
 

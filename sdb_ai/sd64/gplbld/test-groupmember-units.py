@@ -166,6 +166,9 @@ FAIL_CLOSED = {
     ("granta", "if not(is_grp_member(user, grp)) then"):
         "revoke: a could-not-tell reports 'has not been granted', which the "
         "site's own comment already accepts for an orphaned SID",
+    ("tool_mygates", "s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)"):
+        "tool.gates for the account holder (S.75, carried 25 Oct 26 from Linux c849346): a read-only page of the person's own route gates; "
+        "a could-not-tell shows the gate as off, never as on, and nothing is granted or changed from it",
     ("tool_home", "if ok and not(is.admin) then ok = is_grp_member(@logname, arec<ACC$GROUP>)"):
         "home screen (S.75, carried 25 Oct 26 from Linux 858d757): whether a tile for another account is offered; a could-not-tell "
         "leaves the tile out (ok is false), and the account is entered only through the usual LOGTO check, which fails closed",

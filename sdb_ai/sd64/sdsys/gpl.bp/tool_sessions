@@ -1,0 +1,663 @@
+* TOOL_SESSIONS
+* Sessions, locks and logout: the administrator's one screen for who is signed on, what they hold, and ending a session (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A4).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 24 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.SESSIONS      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), with two lists and a box that explains the row under the cursor.  The top list is every session
+*   (!LISTU: user number, process, login time, kind, login user, account, where it came from, and whether it is yours or a logout is pending); the lower list is every lock
+*   (GETLOCKS: user, file number, path, type, record id, since when, and whether the holder is still signed on).  Both are read again every three seconds and on F5, and a refresh
+*   keeps the cursor on the same user or the same lock, never on the same row number.  The state of INHIBIT.LOGIN is shown under the sessions.
+*
+*   THE PAGE CHANGES NOTHING ITSELF.  Three keys build a command from values the page has read and checked, show it in a box with what it does (Cancel is what Enter chooses) and run it
+*   through $tk_run, which allows only these three commands: LOGOUT n (the number typed again to confirm), UNLOCK FILE f USER u id (or FILELOCK) and INHIBIT.LOGIN ON / OFF.  Each verb
+*   asks for the administrator itself.  LOGOUT and UNLOCK write no audit line of their own, so the page writes one for every command it ran (tool run app=tool.sessions command=...), as well
+*   as the line that says it was started.  It does not offer LOGOUT for the session it runs in.  LOGOUT of a session whose process is already gone clears the entry and releases every lock
+*   it held (the kernel does that before it signals anything), so asking again for a session that shows (logout pending) is the cure for a dead one, and is offered.
+*
+*   Keys: Up, Down, PgUp, PgDn, Home, End move; Tab changes the list; L logs the session out; U releases the lock; I stops or allows new logins; F5 reads again; F1 or ? or a click on the
+*   [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_sessions
+$catalog $tool_sessions
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'logout unlock inhibit.login'                        ;* the commands this page may run
+   notyped = ''                                                 ;* the confirm box asks for no name to be typed
+
+   call $tk_open('tool.sessions', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.sessions')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'tab', 'list', 'switch', '', 1)
+   call $tk_keys('add', keys, 'l', 'logout', 'logout', 'Sessions', 1)
+   call $tk_keys('add', keys, 'u', 'unlock', 'unlock', 'Locks', 1)
+   call $tk_keys('add', keys, 'i', 'logins', 'inhibit', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   panes = 'Sessions' : @fm : 'Locks'
+
+   VS = 11                                                      ;* session rows on the screen
+   VL = 10                                                      ;* lock rows on the screen
+   hs = fmt('', '2L') : fmt('User', '5R') : '  ' : fmt('Pid', '8R') : '  ' : fmt('Logged in', '12L') : ' ' : fmt('Kind', '8L') : fmt('Login user', '15L') : fmt('Account', '20L') : fmt('Where from', '26L') : 'State'
+   hl = fmt('User', '5R') : '  ' : fmt('File', '5R') : '  ' : fmt('Path', '30L') : ' ' : fmt('Type', '5L') : fmt('Record id', '32L') : fmt('Since', '13L') : 'Holder'
+
+   pane = 1                                                     ;* 1 the sessions, 2 the locks
+   ns = 0 ; nl = 0
+   cs = 1 ; ta1 = 0                                             ;* the cursor row and the rows scrolled off, sessions
+   cl = 1 ; ta2 = 0                                             ;* the same, locks
+   udata = '' ; locks = '' ; lhdr = '' ; inh = ''
+   sig = ''
+   gen = 0
+   done = 0
+   msg = 'Tab changes the list; L logs a session out, U releases a lock, I stops or allows new logins'
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, panes<pane>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key timeout 3 returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+            gosub timed.refresh
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Read the sessions, the locks and the login inhibit again, and put each cursor back on the user or the lock it was on
+read.all:
+   sel.u = ''
+   if ns > 0 and cs >= 1 and cs <= ns then sel.u = udata<cs, 1>
+   sel.l = ''
+   if nl > 0 and cl >= 1 and cl <= nl then
+      lk = cl
+      gosub lock.key
+      sel.l = lkey
+   end
+   call !listu(udata)
+   ns = dcount(udata, @fm)
+   locks = getlocks('', 0)
+   lhdr = locks<1>
+   del locks<1>
+   nl = dcount(locks, @fm)
+   call !login_inhibit('STATE', inh, ierr)
+   if sel.u # '' then
+      for i = 1 to ns
+         if udata<i, 1> = sel.u then
+            cs = i
+            exit
+         end
+      next i
+   end
+   if sel.l # '' then
+      for lk = 1 to nl
+         gosub lock.key
+         if lkey = sel.l then
+            cl = lk
+            exit
+         end
+      next lk
+   end
+   if cs > ns then cs = ns
+   if cs < 1 then cs = 1
+   if cl > nl then cl = nl
+   if cl < 1 then cl = 1
+   sig = udata : @fm : locks : @fm : inh
+   return
+
+* The thing that tells one lock from another: file, user, type and record id
+lock.key:
+   lkey = locks<lk, 1> : '|' : locks<lk, 3> : '|' : locks<lk, 4> : '|' : locks<lk, 5>
+   return
+
+* Every three seconds: read again, and write the lists only when something moved
+timed.refresh:
+   old.sig = sig
+   gosub read.all
+   if sig # old.sig then
+      gosub draw.lists
+      gosub draw.row
+   end
+   return
+
+* The login time of a session or the time a lock was taken: day, month, hh:mm in the administrator's zone (as LIST.READU DETAIL does)
+stamp.of:
+   stampout = ''
+   if tsec > 0 then
+      loc = tsec + system(1019)
+      d = int(loc / 86400) + 732
+      stampout = oconv(d, 'DD') : ' ' : oconv(oconv(d, 'DMA'), 'MCT')[1, 3] : ' ' : oconv(rem(loc, 86400), 'MT')
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   screen box at 1,1 size 138,15 title 'Sessions'
+   screen box at 1,16 size 138,14 title 'Locks'
+   screen box at 1,30 size 138,10 title 'The row under the cursor'
+   gosub draw.lists
+   gosub draw.row
+   return
+
+draw.lists:
+   gosub draw.sessions
+   gosub draw.locks
+   return
+
+* One session as a line of text; i is its place in udata
+session.line:
+   v = udata<i>
+   flg = v<1, 4>
+   kind = 'user'
+   begin case
+      case bitand(flg, USR$SDNET)
+         kind = 'sdnet'
+      case bitand(flg, USR$SDVBSRVR)
+         kind = 'api'
+      case bitand(flg, USR$PHANTOM)
+         kind = 'phantom'
+   end case
+   stt = ''
+   if v<1, 1> = @userno then stt = 'you'
+   if bitand(flg, USR$LOGOUT) then stt := (if stt = '' then '' else ' ') : '(logout pending)'
+   tsec = v<1, 8>
+   gosub stamp.of
+   org = v<1, 3>
+   if v<1, 7> # '' then org := (if org = '' then '' else ' ') : v<1, 7>
+   sline = fmt((if v<1, 1> = @userno then '*' else ''), '2L') : fmt(v<1, 1>, '5R') : '  ' : fmt(v<1, 2>, '8R') : '  ' : fmt(stampout, '12L') : ' ' : fmt(kind, '8L')
+   sline := fmt(v<1, 6>, '15L') : fmt(v<1, 9>, '20L') : fmt(org[1, 25], '26L') : stt
+   return
+
+draw.sessions:
+   screen text hs at 3,2 attr 'header' width 134
+   if cs <= ta1 then ta1 = cs - 1
+   if cs > ta1 + VS then ta1 = cs - VS
+   if ta1 < 0 then ta1 = 0
+   for r = 1 to VS
+      kk = ta1 + r
+      s = ''
+      if kk <= ns then
+         i = kk
+         gosub session.line
+         s = sline
+      end
+      rat = 'normal'
+      if kk = cs and kk <= ns then rat = (if pane = 1 then 'highlight' else 'bold')
+      screen text s at 3,2 + r attr rat width 134
+   next r
+   n.usr = 0 ; n.ph = 0 ; n.api = 0
+   for i = 1 to ns
+      flg = udata<i, 4>
+      begin case
+         case bitand(flg, USR$SDNET) or bitand(flg, USR$SDVBSRVR)
+            n.api += 1
+         case bitand(flg, USR$PHANTOM)
+            n.ph += 1
+         case 1
+            n.usr += 1
+      end case
+   next i
+   s = ns : ' sessions: ' : n.usr : ' users, ' : n.ph : ' phantoms, ' : n.api : ' API.   '
+   if inh = '' then
+      s := sysmsg(12288)
+   end else
+      s := sysmsg(12289, inh<3>, inh<1>)
+   end
+   screen text s at 3,14 attr 'bold' width 134
+   call $tk_help('mark', 134, 2, 0, 0)
+   return
+
+draw.locks:
+   screen text hl at 3,17 attr 'header' width 134
+   if cl <= ta2 then ta2 = cl - 1
+   if cl > ta2 + VL then ta2 = cl - VL
+   if ta2 < 0 then ta2 = 0
+   for r = 1 to VL
+      kk = ta2 + r
+      s = ''
+      if kk <= nl then
+         lk = kk
+         gosub lock.line
+         s = lline
+      end
+      rat = 'normal'
+      if kk = cl and kk <= nl then rat = (if pane = 2 then 'highlight' else 'bold')
+      screen text s at 3,17 + r attr rat width 134
+   next r
+   if nl = 0 then screen text 'There are no active file, read or update locks held by any user' at 3,18 width 134
+   s = ''
+   if lhdr # '' then s = sysmsg(6453, lhdr<1, 1>, lhdr<1, 2>, lhdr<1, 3>)
+   screen text s at 3,28 attr 'bold' width 134
+   return
+
+* One lock as a line of text; lk is its place in locks
+lock.line:
+   path = locks<lk, 2>
+   if len(path) > 30 then path = '...' : path[len(path) - 26, 27]
+   tsec = locks<lk, 7>
+   gosub stamp.of
+   uid = locks<lk, 3>
+   gosub holder.of
+   lline = fmt(uid, '5R') : '  ' : fmt(locks<lk, 1>, '5R') : '  ' : fmt(path, '30L') : ' ' : fmt(locks<lk, 4>, '5L') : fmt(locks<lk, 5>[1, 31], '32L') : fmt(stampout, '13L') : holder
+   return
+
+* Is the holder of a lock signed on?  holder is 'signed on', or 'no session' (no session has that user number)
+holder.of:
+   holder = 'no session'
+   for hi = 1 to ns
+      if udata<hi, 1> = uid then
+         holder = 'signed on'
+         exit
+      end
+   next hi
+   return
+
+* In plain sentences, for the row under the cursor
+draw.row:
+   lines = ''
+   if pane = 1 then
+      gosub row.session
+   end else
+      gosub row.lock
+   end
+   gosub wrap.lines
+   for r = 1 to 7
+      screen text lines<r> at 3,30 + r width 134
+   next r
+   if pane = 1 then
+      s = 'L asks the selected session to end.  Tab changes to the locks.'
+   end else
+      s = 'U releases the selected lock.  Tab changes to the sessions.'
+   end
+   screen text s at 3,38 attr 'bold' width 134
+   return
+
+row.session:
+   if ns = 0 or cs < 1 or cs > ns then
+      lines<-1> = 'There is no session.'
+      return
+   end
+   v = udata<cs>
+   flg = v<1, 4>
+   uid = v<1, 1>
+   tsec = v<1, 8>
+   gosub stamp.of
+   lines<-1> = 'User ' : uid : ', process ' : v<1, 2> : ', login user ' : v<1, 6> : (if v<1, 9> = '' then ', not in an account yet' else ', in the account ' : v<1, 9>) : (if stampout = '' then '' else ', signed on ' : stampout) : '.'
+   begin case
+      case bitand(flg, USR$PHANTOM)
+         lines<-1> = 'A phantom, started by user ' : v<1, 5> : '.  It has no terminal.'
+      case bitand(flg, USR$SDNET)
+         lines<-1> = 'An SDNet connection from another server.'
+      case bitand(flg, USR$SDVBSRVR)
+         lines<-1> = 'An API session' : (if v<1, 3> = '' then '' else ' from ' : v<1, 3>) : '.'
+   end case
+   nlk = 0
+   for lk = 1 to nl
+      if locks<lk, 3> = uid and locks<lk, 4> # 'WAIT' then nlk += 1
+   next lk
+   lines<-1> = 'It holds ' : nlk : ' lock' : (if nlk = 1 then '' else 's') : ' (the list below shows them).'
+   begin case
+      case uid = @userno
+         lines<-1> = 'This is the session you are in: the page does not offer to log it out.  Ctrl-Q leaves the page and quit ends the session.'
+      case bitand(flg, USR$LOGOUT)
+         lines<-1> = 'A logout was asked for and the session has not gone.  Asking again with L is safe: if its process is dead the entry is cleared and its locks are released; if it is only busy it is signalled once more.  pstat ' : uid : ' says (Not responding) for a dead one.'
+      case 1
+         lines<-1> = 'L asks it to end: SD signals the process.  Work that session has not saved is lost and the locks it holds are released.  The command is: logout ' : uid : '.  You type the number again to confirm.'
+   end case
+   return
+
+row.lock:
+   if nl = 0 or cl < 1 or cl > nl then
+      lines<-1> = 'There are no locks.'
+      return
+   end
+   lk = cl
+   uid = locks<lk, 3>
+   typ = locks<lk, 4>
+   gosub holder.of
+   tsec = locks<lk, 7>
+   gosub stamp.of
+   begin case
+      case typ = 'WAIT'
+         lines<-1> = 'User ' : uid : ' is WAITING for a lock on record ' : locks<lk, 5> : ' in file ' : locks<lk, 1> : ' (' : locks<lk, 2> : ')' : (if stampout = '' then '' else ' since ' : stampout) : '.'
+         lines<-1> = 'A waiting row is not a lock: there is nothing to release.  The row below it or above it with the same record is the lock being waited for.'
+      case typ = 'FX' or typ = 'SX'
+         lines<-1> = 'User ' : uid : ' holds ' : (if typ = 'FX' then 'an exclusive' else 'a shared') : ' lock on the whole of file ' : locks<lk, 1> : ' (' : locks<lk, 2> : ')' : (if stampout = '' then '' else ', taken ' : stampout) : '.'
+      case 1
+         lines<-1> = 'User ' : uid : ' holds a ' : (if typ = 'RU' then 'read and update' else 'read') : ' lock on record ' : locks<lk, 5> : ' in file ' : locks<lk, 1> : ' (' : locks<lk, 2> : ')' : (if stampout = '' then '' else ', taken ' : stampout) : '.'
+   end case
+   if typ # 'WAIT' then
+      if holder = 'no session' then
+         lines<-1> = 'No session has the user number ' : uid : ' now, yet the lock is still in the table.  U releases it now.'
+      end else
+         lines<-1> = 'The holder is signed on.  Releasing its lock does not tell it: its next write to the record goes ahead without the lock.  If its process is dead, L on its row in the sessions list clears the entry and releases every lock it held; otherwise ask the person to finish, or log the session out with L, before you use U.'
+      end
+      gosub unlock.sentence
+      if usent # '' then
+         lines<-1> = 'The command is: ' : usent : '.'
+      end else
+         lines<-1> = uwhy
+      end
+   end
+   return
+
+* A long line is wrapped, not cut
+wrap.lines:
+   wrapped = ''
+   for wi = 1 to dcount(lines, @fm)
+      if lines<wi> = '' then
+         wrapped<-1> = ''
+      end else
+         call $tk_wrap(lines<wi>, 134, pieces)
+         wrapped<-1> = pieces
+      end
+   next wi
+   lines = wrapped
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         if pane = 1 then
+            if cs > 1 then cs -= 1
+         end else
+            if cl > 1 then cl -= 1
+         end
+         gosub redraw
+      case nm = 'down'
+         if pane = 1 then
+            if cs < ns then cs += 1
+         end else
+            if cl < nl then cl += 1
+         end
+         gosub redraw
+      case nm = 'pgup'
+         if pane = 1 then
+            cs -= VS
+            if cs < 1 then cs = 1
+         end else
+            cl -= VL
+            if cl < 1 then cl = 1
+         end
+         gosub redraw
+      case nm = 'pgdn'
+         if pane = 1 then
+            cs += VS
+            if cs > ns then cs = ns
+         end else
+            cl += VL
+            if cl > nl then cl = nl
+         end
+         gosub redraw
+      case nm = 'home'
+         if pane = 1 then cs = 1 else cl = 1
+         gosub redraw
+      case nm = 'end'
+         if pane = 1 then
+            if ns > 0 then cs = ns
+         end else
+            if nl > 0 then cl = nl
+         end
+         gosub redraw
+      case nm = 'tab' or nm = 'btab'
+         pane = (if pane = 1 then 2 else 1)
+         gosub redraw
+      case nm = 'l' and pane = 1
+         gosub do.logout
+      case nm = 'u' and pane = 2
+         gosub do.unlock
+      case nm = 'i'
+         gosub do.inhibit
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.sessions.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'asked the system again'
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+redraw:
+   gosub draw.lists
+   gosub draw.row
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   call $tk_help('hit', mev, 134, 2, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.sessions.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= 3 and mx <= 136 then
+         begin case
+            case my >= 3 and my <= 2 + VS
+               pane = 1
+               if ta1 + my - 2 <= ns then cs = ta1 + my - 2
+               gosub redraw
+            case my >= 18 and my <= 17 + VL
+               pane = 2
+               if ta2 + my - 17 <= nl then cl = ta2 + my - 17
+               gosub redraw
+         end case
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the three things the page can run
+
+* One audit line for a command the page ran: LOGOUT and UNLOCK write none of their own, and the words of the command are only letters, digits, dots, dashes and underscores ($tk_run saw to that)
+audit.run:
+   void kernel(K$AUDIT, 'tool run app=tool.sessions command=' : sent : ' status=' : stat)
+   return
+
+* The first non-empty line the command printed, for the status line (the one that matters: LOGOUT of a session that was not running prints a long message that starts with it)
+first.line:
+   said = ''
+   for oi = 1 to dcount(out, @fm)
+      if trim(out<oi>) # '' then
+         said = trim(out<oi>)
+         exit
+      end
+   next oi
+   return
+
+* LOGOUT n: the number is typed again to confirm
+do.logout:
+   if ns = 0 or cs < 1 or cs > ns then
+      msg = 'there is no session'
+      return
+   end
+   v = udata<cs>
+   uid = v<1, 1>
+   if uid = @userno then
+      msg = 'that is the session you are in; Ctrl-Q leaves the page'
+      return
+   end
+   sent = 'logout ' : uid
+   el = ''
+   el<-1> = 'User ' : uid : ' (login user ' : v<1, 6> : (if v<1, 9> = '' then '' else ', account ' : v<1, 9>) : ') is asked to end.  SD signals the process.'
+   el<-1> = 'Work that session has not saved is lost, and the record locks it holds are released.'
+   el<-1> = 'If its process is already gone, the entry is cleared instead and the locks it held are released.'
+   el<-1> = 'Type the number ' : uid : ' to be sure it is this session you mean.'
+   typed = uid
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, stat, err)
+      if err # '' then
+         msg = err
+      end else
+         gosub audit.run
+         gosub first.line
+         msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')
+      end
+      gosub read.all
+      gosub draw.all
+   end else
+      msg = cmsg
+   end
+   return
+
+* The UNLOCK command for the lock at lk, or null and the reason in uwhy
+unlock.sentence:
+   usent = '' ; uwhy = ''
+   ufile = locks<lk, 1>
+   uuser = locks<lk, 3>
+   utyp = locks<lk, 4>
+   uid2 = downcase(locks<lk, 5>)                                ;* the lock table keeps record ids in upper case; the verb folds case and $tk_run lets only lower case through
+   begin case
+      case utyp = 'WAIT'
+         uwhy = 'A waiting row is not a lock.'
+      case not(ufile matches '1-4N') or not(uuser matches '1-5N')
+         uwhy = 'This lock has no file number or user number the unlock verb takes.'
+      case utyp = 'FX' or utyp = 'SX'
+         usent = 'unlock file ' : ufile : ' user ' : uuser : ' filelock'
+      case 1
+         word = uid2
+         gosub plain.word
+         if plain then
+            usent = 'unlock file ' : ufile : ' user ' : uuser : ' ' : uid2
+         end else
+            uwhy = 'This record id has characters (or is a word) that this page will not put in a command; release it at the prompt with unlock.'
+         end
+   end case
+   return
+
+* Is word a safe single word for $tk_run and not a keyword of UNLOCK?  plain is 1 or 0
+plain.word:
+   plain = (word # '')
+   for pi = 1 to len(word)
+      if index('abcdefghijklmnopqrstuvwxyz0123456789.-_', word[pi, 1], 1) = 0 then plain = 0
+   next pi
+   if word = 'all' or word = 'file' or word = 'user' or word = 'filelock' or word = 'tasklock' then plain = 0
+   return
+
+do.unlock:
+   if nl = 0 or cl < 1 or cl > nl then
+      msg = 'there is no lock'
+      return
+   end
+   lk = cl
+   uid = locks<lk, 3>
+   gosub holder.of
+   gosub unlock.sentence
+   if usent = '' then
+      msg = uwhy
+      return
+   end
+   sent = usent
+   el = ''
+   el<-1> = 'The lock of user ' : uid : ' on ' : (if locks<lk, 4> = 'FX' or locks<lk, 4> = 'SX' then 'file ' : locks<lk, 1> else 'record ' : locks<lk, 5> : ' in file ' : locks<lk, 1>) : ' is taken out of the lock table now.'
+   if holder = 'no session' then
+      el<-1> = 'No session has that user number: the lock was left behind by a session that has gone.'
+   end else
+      el<-1> = 'The holder is signed on and is not told.  Its next write to the record goes ahead without the lock.'
+   end
+   call $tk_confirm(sent, el, notyped, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, stat, err)
+      if err # '' then
+         msg = err
+      end else
+         gosub audit.run
+         gosub first.line
+         msg = (if said # '' then said[1, 130] else 'released')
+      end
+      gosub read.all
+      gosub draw.all
+   end else
+      msg = cmsg
+   end
+   return
+
+* INHIBIT.LOGIN ON when logins are allowed, OFF when they are inhibited
+do.inhibit:
+   if inh = '' then
+      sent = 'inhibit.login on'
+      el = ''
+      el<-1> = 'No new session can sign in, here or through the API, until this is switched off or this session ends.'
+      el<-1> = 'Sessions already running are not touched, and neither are the phantoms this session starts.  You can always sign in as SDSYS to switch it off.'
+   end else
+      sent = 'inhibit.login off'
+      el = ''
+      el<-1> = 'New sessions may sign in again.  Logins were inhibited by ' : inh<3> : ' (user ' : inh<1> : ').'
+   end
+   call $tk_confirm(sent, el, notyped, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, stat, err)
+      if err # '' then
+         msg = err
+      end else
+         gosub audit.run
+         gosub first.line
+         msg = (if said # '' then said[1, 130] else 'done')
+      end
+      gosub read.all
+      gosub draw.all
+   end else
+      msg = cmsg
+   end
+   return
+
+end
+
+* END-CODE

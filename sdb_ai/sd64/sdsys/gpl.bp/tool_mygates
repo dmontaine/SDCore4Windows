@@ -1,0 +1,318 @@
+* TOOL_MYGATES
+* What this account may do and why: the account holder's read-only view of the gates (S.75, plan .claude/plan-fullscreen-toolkit.md sections 2.7 and 12, A2; owner, 22 Oct 2026:
+* "the read-only 'what my account may do and why' page for the holder is added to tool.gates").  A USER app: it is the program the verb TOOL.GATES runs in every account's VOC (newvoc);
+* SDSYS's own VOC (voc_template) runs the administrator's gate matrix, $tool_gates, under the same verb.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 24 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.GATES      (in an account's VOC; the administrator's is the gate matrix)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for ANY account.  It lists every gate the system has - the ones the administrator switches for an
+*   account - with whether it is ON or off FOR THIS SESSION, how it is delivered, whether it reaches beyond SD and when a change reaches you; the row under the cursor is explained in
+*   plain words: what ON lets you do, what you still can with it off, and the modify.account word the administrator would use.  THE PAGE CHANGES NOTHING AND HAS NO BUTTON THAT COULD: it
+*   asks the kernel what the session may do (kernel(K$..., -1), the same answer every gate gives) and the system which route groups the person is in; it writes no file, runs no
+*   command and writes no audit line.  Nothing is probed: it never tries an operation to learn whether it works.
+*
+*   Keys: Up and Down move, PgUp and PgDn and Home and End jump, F5 asks again, F1 or ? or a click on the [?] explains the page, Ctrl-Q leaves.
+*
+*   WHERE EACH STATE COMES FROM.  The gates of the register (sh, os, sd, voc, bp, dict, net, shared-read, shared-write) are what the SESSION holds: sh, os, sd, net and shared were
+*   loaded when it entered this account; voc, bp and dict at SIGN-ON only (LOGTO does not reload them), so an administrator's change shows after the next sign-on.  The route gates (ssh,
+*   api, files, files-write, files-admin, ai) are membership of Linux groups by the person's login name, read from the system.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_mygates
+$catalog $tool_mygates
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+   prompt ''
+
+   call $tk_open('tool.gates', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   VIS = 16                                                      ;* gate rows on the screen
+   call $tk_gate_info('list', gids)
+   NG = dcount(gids, @fm)
+   gti = '' ; gon = '' ; goff = '' ; gwhen = '' ; gdef = '' ; gall = '' ; gstill = '' ; gbey = '' ; gstat = '' ; gkind = '' ; ggrp = ''
+   for k = 1 to NG
+      call $tk_gate_info(gids<k>, gi)
+      gti<k> = gi<TK.G.TITLE>
+      gon<k> = gi<TK.G.ON>
+      goff<k> = gi<TK.G.OFF>
+      gwhen<k> = gi<TK.G.WHEN>
+      gdef<k> = gi<TK.G.DEFAULT>
+      gall<k> = gi<TK.G.ALLOWS>
+      gstill<k> = gi<TK.G.STILL>
+      gbey<k> = gi<TK.G.BEYOND>
+      gstat<k> = gi<TK.G.STATUS>
+      gkind<k> = gi<TK.G.KIND>
+      ggrp<k> = gi<TK.G.GROUP>
+   next k
+
+   ci = 1
+   ta = 0
+   gen = 0
+   msg = 'Up and Down move; this page only shows what you may do, it cannot change it'
+   done = 0
+   gst = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, 'My gates', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* The state of every gate FOR THIS SESSION: 1 on, 0 off, null for a gate that is only planned
+read.all:
+   gst = ''
+   for k = 1 to NG
+      gid = gids<k>
+      s = ''
+      begin case
+         case gstat<k> # 'built'
+            s = ''
+         case gkind<k> = 'group'
+            s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)
+         case gid = 'sh'
+            s = (if kernel(K$SH, -1) then 1 else 0)
+         case gid = 'os'
+            s = (if kernel(K$OS.EXEC, -1) then 1 else 0)
+         case gid = 'sd'
+            s = (if kernel(K$SD.ACCOUNTS, -1) then 1 else 0)
+         case gid = 'voc'
+            s = (if kernel(K$VOC.EDIT, -1) then 1 else 0)
+         case gid = 'bp'
+            s = (if kernel(K$BP.EDIT, -1) then 1 else 0)
+         case gid = 'dict'
+            s = (if kernel(K$DICT.EDIT, -1) then 1 else 0)
+         case gid = 'net'
+            s = (if kernel(K$NET, -1) then 1 else 0)
+         case gid = 'shared-read'
+            s = (if kernel(K$SHARED.READ, -1) then 1 else 0)
+         case gid = 'shared-write'
+            s = (if kernel(K$SHARED.WRITE, -1) then 1 else 0)
+      end case
+      gst<k> = s
+   next k
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   screen box at 1,1 size 138,21 title 'What this account may do'
+   screen box at 1,22 size 138,12 title 'The row under the cursor'
+   screen box at 1,34 size 138,6 title 'Where this comes from'
+   gosub draw.list
+   gosub draw.row
+   gosub draw.source
+   return
+
+draw.list:
+   screen text fmt('Gate', '24L') : fmt('Now', '6L') : fmt('As delivered', '14L') : fmt('Beyond SD', '11L') : 'A change reaches you' at 3,2 attr 'header' width 134
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VIS then ta = ci - VIS
+   if ta < 0 then ta = 0
+   for r = 1 to VIS
+      kk = ta + r
+      s = ''
+      if kk <= NG then
+         begin case
+            case gstat<kk> # 'built'
+               nowtxt = 'plan'
+            case gst<kk> = 1
+               nowtxt = 'ON'
+            case 1
+               nowtxt = 'off'
+         end case
+         s = fmt(gti<kk>, '24L') : fmt(nowtxt, '6L') : fmt(gdef<kk>, '14L') : fmt((if gbey<kk> = 1 then 'yes' else 'no'), '11L') : gwhen<kk>
+      end
+      screen text s at 3,2 + r attr (if kk = ci and kk <= NG then 'highlight' else 'normal') width 134
+   next r
+   n.on = 0
+   for k = 1 to NG
+      if gst<k> = 1 then n.on += 1
+   next k
+   s = 'Signed on as ' : @logname : ' in the account ' : @who : '.  ' : n.on : ' of ' : NG : ' gates are on for this session.'
+   screen text fmt(s, '134L') at 3,19 attr 'bold' width 134
+   screen text fmt('Only the administrator can change a gate (modify.account).  Nothing on this page can.', '134L') at 3,20 width 134
+   call $tk_help('mark', 134, 2, 0, 0)
+   return
+
+* In plain sentences, for the gate under the cursor
+draw.row:
+   lines = ''
+   k = ci
+   if k >= 1 and k <= NG then
+      begin case
+         case gstat<k> # 'built'
+            lines<-1> = gti<k> : ' is planned and not built yet: there is nothing to switch.'
+         case 1
+            if gst<k> = 1 then
+               lines<-1> = gti<k> : ' [' : gids<k> : ']  -  ON for you.  You can ' : gall<k> : '.'
+               lines<-1> = 'With it off you would still be able to ' : gstill<k> : '.'
+               lines<-1> = 'The administrator withdraws it with: modify.account ' : @who : ' ' : goff<k>
+            end else
+               lines<-1> = gti<k> : ' [' : gids<k> : ']  -  off for you.  You cannot ' : gall<k> : '.'
+               lines<-1> = 'What you can still do: ' : gstill<k> : '.'
+               lines<-1> = 'The administrator gives it with: modify.account ' : @who : ' ' : gon<k> : (if gbey<k> = 1 then '  (it reaches beyond SD, so the administrator is asked to type your account name)' else '')
+            end
+            lines<-1> = 'As delivered it is ' : gdef<k> : '.  A change reaches you: ' : gwhen<k> : '.'
+            if gkind<k> = 'group' then
+               lines<-1> = 'This one is about you as a person, not about the account: it is membership of the Windows group ' : ggrp<k> : ' by your login name, ' : @logname : '.'
+            end
+            if gids<k> = 'voc' or gids<k> = 'bp' or gids<k> = 'dict' then
+               lines<-1> = 'The edit gates are read ONCE when you sign on (LOGTO does not reload them): after the administrator changes one, sign off and on again to see it here.'
+            end
+      end case
+   end
+   gosub wrap.lines
+   for r = 1 to 10
+      screen text fmt(lines<r>, '134L') at 3,22 + r width 134
+   next r
+   return
+
+draw.source:
+   lines = ''
+   lines<-1> = "Gates are the administrator's: every account starts with them off except the right to read the shared account.  What you are told here is what this session holds right now, asked of the system - nothing is tried to find out."
+   lines<-1> = 'sh, os, sd, net and the shared account were loaded when you entered this account; voc, bp and dict when you signed on; the route gates (ssh, api, files, files-write, files-admin, ai) are read from the system each time.'
+   gosub wrap.lines
+   for r = 1 to 4
+      screen text fmt(lines<r>, '134L') at 3,34 + r width 134
+   next r
+   return
+
+* A SCREEN TEXT longer than its width is cut, not wrapped
+wrap.lines:
+   wrapped = ''
+   for wi = 1 to dcount(lines, @fm)
+      if lines<wi> = '' then
+         wrapped<-1> = ''
+      end else
+         call $tk_wrap(lines<wi>, 134, pieces)
+         wrapped<-1> = pieces
+      end
+   next wi
+   lines = wrapped
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   begin case
+      case nm = 'up'
+         if ci > 1 then
+            ci -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if ci < NG then
+            ci += 1
+            gosub redraw
+         end
+      case nm = 'pgup'
+         ci -= VIS
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VIS
+         if ci > NG then ci = NG
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         ci = NG
+         gosub redraw
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.gates.mine', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'asked the system again'
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+redraw:
+   gosub draw.list
+   gosub draw.row
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   call $tk_help('hit', mev, 134, 2, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.gates.mine', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if my >= 3 and my <= 2 + VIS and mx >= 3 and mx <= 136 then
+         if ta + my - 2 <= NG then
+            ci = ta + my - 2
+            gosub redraw
+         end
+      end
+   end
+   return
+
+end
+
+* END-CODE

@@ -1,0 +1,4 @@
+What this account may do
+29-sd-tcl-the-terminal-and-the-session
+Each row is a gate: something the administrator switches for an account. ON means this session holds it now; off means it does not. The row under the cursor is explained in plain words: what ON lets you do, what you can still do with it off, and the modify.account word the administrator would use. Nothing on this page can change a gate, and nothing is tried to find out: the page asks the system what the session may do.
+Some gates are about the account (sh, os, sd, net and the shared account, loaded when you entered it) and some about you as a person (ssh, api, files, ai: membership of a Linux group by your login name). The edit gates (voc, bp, dict) are read once when you sign on; after the administrator changes one, sign off and on again to see it here. Every account starts with every gate off except the right to read the shared account.

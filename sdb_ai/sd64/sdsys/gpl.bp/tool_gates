@@ -1,0 +1,683 @@
+* TOOL_GATES
+* The administrator's gate matrix (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A2): every registered account against every per-account gate.  An administrator app.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 24 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.GATES
+*
+*   For the administrator only (it is refused, before anything is read, for anyone else; it is in SDSYS's VOC only).  A full-screen page, in the toolkit's frame (140 columns by
+*   43 lines at least), with four boxes:
+*
+*     Gates by account      one row for each registered account (SDSYS is not one: modify.account refuses it), one column for each gate in $tk_gate_info's table, in the order
+*                           modify.account carries them out: ON, off, - (the gate does not apply to this kind of account) or plan (not built yet).  A * after a cell is a change
+*                           you have queued; the cell shows the state it would have.
+*     The cell              what the gate under the cursor is: its two words, what ON allows, what OFF still allows, when a change reaches the person, whether it reaches
+*                           beyond SD, and what it is as delivered
+*     Who can reach ...     the accounts that have a gate on which reaches beyond SD
+*     Sessions              the live sessions of the account under the cursor
+*
+*   Keys: arrows move over the cells, Enter or the space bar queues the opposite state for the cell (and again takes it back), R runs the queued changes of the account on the
+*   cursor's row, U drops them, T queues OFF for every gate of that account that is off as delivered and on now (it does not touch a gate whose delivered state is on), F
+*   changes which accounts are shown, F5 reads the machine again, F1 or ? or a click on a [?] explains the matrix, Ctrl-Q leaves.  There is NO key that queues everything ON.
+*
+*   THE PAGE WRITES NOTHING ITSELF.  The queued changes of one account become ONE command, MODIFY.ACCOUNT name word word ..., which validates every word before it changes anything
+*   (a conflict is refused whole), shown with its effect in a box answered Run or Cancel (Cancel is what Enter chooses) and run by $tk_run.  Turning ON a gate that reaches beyond
+*   SD asks for the account's name to be typed, as every such step does; a gate that is off as delivered says so, and says that leaving it off is the tighter choice.  The route
+*   gates ssh and api are one setting in modify.account (the words ssh, api, both and none SET it), so the page sends the one word that gives the pair of states you queued.
+*   files-write needs files, and files-admin needs files-write: the page refuses a queue that breaks that before it asks, and the verb refuses it again.  After the command it reads
+*   the machine again and shows the verb's own words; a cell is never changed on the page's say-so.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_gates
+$catalog $tool_gates
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'modify.account'                                      ;* the one command this page may run
+
+   call $tk_open('tool.gates', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.gates')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'enter', 'queue', 'queue', '', 1)
+   call $tk_keys('add', keys, 'r', 'run', 'run', '', 1)
+   call $tk_keys('add', keys, 'u', 'drop', 'drop', '', 1)
+   call $tk_keys('add', keys, 't', 'tighten', 'tighten', '', 1)
+   call $tk_keys('add', keys, 'f', 'filter', 'filter', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   VIS = 14                                                      ;* account rows on the screen
+   CW = 6                                                        ;* width of a gate's cell
+   X0 = 29                                                       ;* the column of the first cell (3 + the 26 of name and kind)
+   fnames = 'all accounts' : @fm : 'accounts of persons' : @fm : 'accounts with a gate on that reaches beyond SD'
+
+   ci = 1                                                        ;* the row under the cursor, among the rows shown
+   gc = 1                                                        ;* the column under the cursor
+   ta = 0                                                        ;* the rows scrolled off the top
+   flt = 0
+   gen = 0
+   msg = 'Enter queues the opposite state for the cell, R runs what is queued for the account'
+   done = 0
+
+   call $tk_gate_info('list', gids)
+   NG = dcount(gids, @fm)
+   gti = '' ; gon = '' ; goff = '' ; gwhen = '' ; gdef = '' ; gall = '' ; gstill = '' ; gbey = '' ; gstat = '' ; ghdr = ''
+   for k = 1 to NG
+      call $tk_gate_info(gids<k>, gi)
+      gti<k> = gi<TK.G.TITLE>
+      gon<k> = gi<TK.G.ON>
+      goff<k> = gi<TK.G.OFF>
+      gwhen<k> = gi<TK.G.WHEN>
+      gdef<k> = gi<TK.G.DEFAULT>
+      gall<k> = gi<TK.G.ALLOWS>
+      gstill<k> = gi<TK.G.STILL>
+      gbey<k> = gi<TK.G.BEYOND>
+      gstat<k> = gi<TK.G.STATUS>
+      gosub header.of
+      ghdr<k> = hd
+   next k
+
+   an = 0
+   anm = '' ; aty = '' ; asu = '' ; ast = '' ; aq = ''
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_frame(ctx, keys, 'Gates', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the machine says
+
+* The column heading of gate k: short, from the gate's id (a gate the page does not know by name is headed with the first five letters of its id)
+header.of:
+   gid = gids<k>
+   begin case
+      case gid = 'shared-read'
+         hd = 'sh-rd'
+      case gid = 'shared-write'
+         hd = 'sh-wr'
+      case gid = 'files-write'
+         hd = 'f-wr'
+      case gid = 'files-admin'
+         hd = 'f-adm'
+      case gid = 'sockets'
+         hd = 'sock'
+      case 1
+         hd = gid[1, 5]
+   end case
+   return
+
+* Every registered account but SDSYS, by name, each with its kind, its suspension and the state of every gate, read as $tk_gates reads them.  A queued change is kept
+* by account name through a refresh, and is dropped for an account that has gone.
+read.all:
+   old.names = anm
+   old.q = aq
+   names = ''
+   openpath @sdsys:@ds:'accounts' to acc.f then
+      select acc.f to 9
+      loop
+         readnext id from 9 else exit
+         if id # 'sdsys' then
+            locate id in names<1> by 'AL' setting lp else
+               ins id before names<lp>
+            end
+         end
+      repeat
+      close acc.f
+   end
+   an = 0
+   anm = '' ; aty = '' ; asu = '' ; ast = '' ; aq = ''
+   for i = 1 to dcount(names, @fm)
+      call $tk_gates(names<i>, g, ainfo, gerr)
+      if gerr = '' then
+         an += 1
+         anm<an> = names<i>
+         aty<an> = ainfo<1>
+         asu<an> = ainfo<2>
+         for j = 1 to dcount(g, @fm)
+            for k = 1 to NG
+               if gids<k> = g<j, 1> then ast<an, k> = g<j, 2>
+            next k
+         next j
+         locate anm<an> in old.names<1> setting op then
+            for k = 1 to NG
+               aq<an, k> = old.q<op, k>
+            next k
+         end
+      end
+   next i
+   gosub make.view
+   return
+
+* The rows shown: the indexes of the accounts the filter lets through, in name order
+make.view:
+   view = ''
+   nv = 0
+   for i = 1 to an
+      show = 1
+      if flt = 1 and aty<i> # 'USER' then show = 0
+      if flt = 2 then
+         show = 0
+         for k = 1 to NG
+            if gbey<k> = 1 and gstat<k> = 'built' and ast<i, k> = 1 then show = 1
+         next k
+      end
+      if show then
+         nv += 1
+         view<nv> = i
+      end
+   next i
+   if ci > nv then ci = nv
+   if ci < 1 then ci = 1
+   if gc > NG then gc = NG
+   if gc < 1 then gc = 1
+   return
+
+* The state account av will have once its queued changes are made: fin<k>, and the number of queued cells in qn
+final.of:
+   fin = ''
+   qn = 0
+   for k = 1 to NG
+      if aq<av, k> # '' then
+         fin<k> = aq<av, k>
+         qn += 1
+      end else
+         fin<k> = ast<av, k>
+      end
+   next k
+   return
+
+* The queued cells of every other account than av
+queued.elsewhere:
+   qe = 0
+   for i = 1 to an
+      if i # av then
+         for k = 1 to NG
+            if aq<i, k> # '' then qe += 1
+         next k
+      end
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   screen box at 1,1 size 138,19 title 'Gates by account'
+   screen box at 1,20 size 138,11 title 'The cell under the cursor'
+   screen box at 1,31 size 68,9 title 'Who can reach the operating system'
+   screen box at 70,31 size 69,9 title 'Sessions of the account under the cursor'
+   gosub draw.matrix
+   gosub draw.cell
+   gosub draw.who
+   gosub draw.sessions
+   return
+
+draw.matrix:
+   s = fmt('Account', '20L') : fmt('Kind', '6L')
+   for k = 1 to NG
+      s := fmt(ghdr<k>, CW : 'L')
+   next k
+   screen text s at 3,2 attr 'header' width 134
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VIS then ta = ci - VIS
+   if ta < 0 then ta = 0
+   for r = 1 to VIS
+      kk = ta + r
+      s = ''
+      if kk <= nv then
+         av = view<kk>
+         s = fmt(anm<av>, '20L') : fmt(downcase(aty<av>), '6L')
+         for k = 1 to NG
+            gosub cell.text
+            s := fmt(ct, CW : 'L')
+         next k
+         if asu<av> then s := ' suspended'
+      end
+      screen text s at 3,2 + r attr (if kk = ci and kk <= nv then 'bold' else 'normal') width 134
+   next r
+   if nv > 0 and ci <= nv then
+      av = view<ci>
+      k = gc
+      gosub cell.text
+      hx = X0 + (gc - 1) * CW
+      hy = 2 + ci - ta
+      screen text fmt(ct, CW : 'L') at hx,hy attr 'highlight' width CW
+   end
+   if nv = 0 then screen text 'No account is shown.  F changes which accounts are shown.' at 3,4 width 134
+   gosub draw.counts
+   call $tk_help('mark', 134, 2, 0, 0)
+   return
+
+* The text of the cell of account av, gate k: ON, off, a dash or plan, with a * when a change is queued
+cell.text:
+   s0 = ast<av, k>
+   begin case
+      case gstat<k> # 'built'
+         ct = 'plan'
+      case s0 = 'na'
+         ct = '-'
+      case 1
+         d = (if aq<av, k> # '' then aq<av, k> else s0)
+         ct = (if d = 1 then 'ON' else 'off') : (if aq<av, k> # '' then '*' else '')
+   end case
+   return
+
+draw.counts:
+   n.on = 0
+   for i = 1 to an
+      beyond.on = 0
+      for k = 1 to NG
+         if gbey<k> = 1 and gstat<k> = 'built' and ast<i, k> = 1 then beyond.on = 1
+      next k
+      n.on += beyond.on
+   next i
+   s = fnames<flt + 1> : ': ' : nv : ' of ' : an : ' account' : (if an = 1 then '' else 's') : '.  ' : n.on : ' with a gate on that reaches beyond SD.'
+   screen text fmt(s, '134L') at 3,17 attr 'bold' width 134
+   if nv > 0 and ci <= nv then
+      av = view<ci>
+      gosub final.of
+      gosub queued.elsewhere
+      if qn > 0 then
+         s = 'Queued for ' : anm<av> : ': ' : qn : ' change' : (if qn = 1 then '' else 's') : '.  R runs them as one command, U drops them.'
+      end else
+         s = 'Nothing queued for ' : anm<av> : '.'
+      end
+      if qe > 0 then s := '  Queued for other accounts: ' : qe : '.'
+   end else
+      s = ''
+   end
+   screen text fmt(s, '134L') at 3,18 width 134
+   return
+
+* In plain sentences, for the cell under the cursor
+draw.cell:
+   lines = ''
+   if nv > 0 and ci <= nv then
+      av = view<ci>
+      k = gc
+      s0 = ast<av, k>
+      lines<-1> = anm<av> : ' (' : downcase(aty<av>) : (if asu<av> then ', suspended' else '') : ')  -  ' : gti<k> : ' [' : gids<k> : ']'
+      begin case
+         case gstat<k> # 'built'
+            lines<-1> = 'This gate is planned and not built yet: it has no words and nothing to switch.'
+         case s0 = 'na'
+            lines<-1> = 'This gate does not apply to a ' : downcase(aty<av>) : ' account: it is a route for a person, and the account has no Windows user of its own.'
+         case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'
+            lines<-1> = 'Now: ' : (if s0 = 1 then 'ON' else 'off') : '.  A ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so a shell or OS.EXECUTE granted to it would be granted to all of them: modify.account refuses ' : gids<k> : ' for it, in either direction.'
+         case 1
+            lines<-1> = 'Now: ' : (if s0 = 1 then 'ON' else 'off') : '.  As delivered: ' : gdef<k> : '.  Words: ' : gon<k> : ' turns it on, ' : goff<k> : ' turns it off.' : (if aq<av, k> # '' then '  Queued: ' : (if aq<av, k> = 1 then 'ON' else 'off') : '.' else '')
+            lines<-1> = 'ON allows: ' : gall<k>
+            lines<-1> = 'OFF still allows: ' : gstill<k>
+            lines<-1> = 'A change reaches the person: ' : gwhen<k> : '.  It does not touch a session that is already running.' : (if gbey<k> = 1 then '  This gate reaches BEYOND SD.' else '')
+            if gids<k> = 'ssh' or gids<k> = 'api' then lines<-1> = 'ssh and api are ONE setting in modify.account (the words ssh, api, both and none set it): the page sends the one word that gives the pair you queue.'
+            if gids<k> = 'files-write' then lines<-1> = 'files-write needs files; files-off takes it away too.'
+            if gids<k> = 'files-admin' then lines<-1> = 'files-admin needs files-write; files-write-off and files-off take it away too.'
+      end case
+   end else
+      lines<-1> = 'There is no account under the cursor.'
+   end
+   gosub wrap.lines
+   for r = 1 to 9
+      screen text fmt(lines<r>, '134L') at 3,20 + r width 134
+   next r
+   return
+
+* A SCREEN TEXT longer than its width is cut, not wrapped
+wrap.lines:
+   wrapped = ''
+   for wi = 1 to dcount(lines, @fm)
+      if lines<wi> = '' then
+         wrapped<-1> = ''
+      end else
+         call $tk_wrap(lines<wi>, 134, pieces)
+         wrapped<-1> = pieces
+      end
+   next wi
+   lines = wrapped
+   return
+
+* Who can reach the operating system: the accounts with a gate on that reaches beyond SD, each with the gates
+draw.who:
+   n = 0
+   for r = 1 to 7
+      screen text space(64) at 3,31 + r width 64
+   next r
+   for i = 1 to an
+      w = ''
+      for k = 1 to NG
+         if gbey<k> = 1 and gstat<k> = 'built' and ast<i, k> = 1 then w := (if w = '' then '' else ' ') : gids<k>
+      next k
+      if w # '' then
+         n += 1
+         if n <= 6 then screen text fmt(fmt(anm<i>, '18L') : w, '64L') at 3,31 + n width 64
+         if n = 7 then screen text fmt('...', '64L') at 3,38 width 64
+      end
+   next i
+   if n = 0 then screen text fmt('No account has a gate on that reaches beyond SD.', '64L') at 3,32 width 64
+   return
+
+draw.sessions:
+   for r = 1 to 7
+      screen text space(65) at 72,31 + r width 65
+   next r
+   if nv > 0 and ci <= nv then
+      call !listu(udata)
+      av = view<ci>
+      n = 0
+      for i = 1 to dcount(udata, @fm)
+         v = udata<i>
+         if v<1, 9> = anm<av> then
+            n += 1
+            if n <= 6 then screen text fmt('user ' : v<1, 1> : '  ' : v<1, 6> : '  ' : v<1, 7>, '65L') at 72,31 + n width 65
+         end
+      next i
+      if n = 0 then screen text fmt('No session is in ' : anm<av> : ' now.', '65L') at 72,32 width 65
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         if ci > 1 then
+            ci -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if ci < nv then
+            ci += 1
+            gosub redraw
+         end
+      case nm = 'left' or nm = 'btab'
+         if gc > 1 then
+            gc -= 1
+            gosub redraw
+         end
+      case nm = 'right' or nm = 'tab'
+         if gc < NG then
+            gc += 1
+            gosub redraw
+         end
+      case nm = 'enter' or nm = ' '
+         gosub queue.cell
+      case nm = 'r'
+         gosub run.queue
+      case nm = 'u'
+         gosub drop.queue
+      case nm = 't'
+         gosub tighten
+      case nm = 'f'
+         flt = mod(flt + 1, 3)
+         ci = 1
+         ta = 0
+         gosub make.view
+         gosub draw.all
+         msg = 'showing ' : fnames<flt + 1>
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read the machine again'
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+redraw:
+   gosub draw.matrix
+   gosub draw.cell
+   gosub draw.sessions
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   call $tk_help('hit', mev, 134, 2, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if my >= 3 and my <= 2 + VIS and mx >= 3 and mx <= 136 then
+         if ta + my - 2 <= nv then
+            ci = ta + my - 2
+            if mx >= X0 and mx < X0 + NG * CW then gc = int((mx - X0) / CW) + 1
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- queueing and running
+
+* Enter on a cell: queue the opposite of what the cell will be, or take a queued change back
+queue.cell:
+   if nv = 0 then return
+   av = view<ci>
+   k = gc
+   s0 = ast<av, k>
+   begin case
+      case gstat<k> # 'built'
+         msg = gti<k> : ' is planned and not built yet'
+      case s0 = 'na'
+         msg = gti<k> : ' does not apply to a ' : downcase(aty<av>) : ' account'
+      case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'
+         msg = 'a ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so modify.account refuses' : gids<k> : ' for it'
+      case 1
+         d = (if aq<av, k> # '' then aq<av, k> else s0)
+         nw = (if d = 1 then 0 else 1)
+         aq<av, k> = (if nw = s0 then '' else nw)
+         gosub redraw
+   end case
+   return
+
+* U: drop the queue of the account on the cursor's row
+drop.queue:
+   if nv = 0 then return
+   av = view<ci>
+   gosub final.of
+   if qn = 0 then
+      msg = 'nothing is queued for ' : anm<av>
+      return
+   end
+   dropped = qn                                                  ;* the redraw below counts the queue again (now empty)
+   for k = 1 to NG
+      aq<av, k> = ''
+   next k
+   gosub redraw
+   msg = 'dropped the ' : dropped : ' queued change' : (if dropped = 1 then '' else 's') : ' of ' : anm<av>
+   return
+
+* T: queue OFF for every built gate that is off as delivered and on now, on the cursor's account.  A gate that is on as delivered is left alone.
+tighten:
+   if nv = 0 then return
+   av = view<ci>
+   n.q = 0
+   for k = 1 to NG
+      person.only = (gids<k> = 'sh' or gids<k> = 'os')
+      if gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1 and not(person.only and aty<av> # 'USER') then
+         aq<av, k> = 0
+         n.q += 1
+      end
+   next k
+   gosub redraw
+   msg = (if n.q = 0 then anm<av> : ' has no gate on that is off as delivered' else 'queued OFF for ' : n.q : ' gate' : (if n.q = 1 then '' else 's') : ' of ' : anm<av> : '; R runs them')
+   return
+
+* R: the queued changes of the account on the cursor's row, as one MODIFY.ACCOUNT command, its effect, Run or Cancel, then the machine's answer
+run.queue:
+   if nv = 0 then return
+   av = view<ci>
+   gosub final.of
+   if qn = 0 then
+      msg = 'nothing is queued for ' : anm<av>
+      return
+   end
+   gosub check.needs
+   if bad # '' then
+      msg = bad
+      return
+   end
+   gosub make.sentence
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, stat, err)
+      if err # '' then
+         msg = err
+      end else
+         said = ''                                               ;* the verb's last line: for several words it is the closing line (which were carried out)
+         for oi = dcount(out, @fm) to 1 step -1
+            if trim(out<oi>) # '' then
+               said = trim(out<oi>)
+               exit
+            end
+         next oi
+         msg = (if said # '' then said[1, 130] else 'ran, status ' : stat)
+      end
+      for k = 1 to NG
+         aq<av, k> = ''
+      next k
+      gosub read.all
+      gosub draw.all
+   end else
+      msg = cmsg
+   end
+   return
+
+* files-write needs files, and files-admin needs files-write: refuse a queue that breaks it, before asking (the verb refuses it again)
+check.needs:
+   bad = ''
+   fi = 0 ; fw = 0 ; fa = 0
+   for k = 1 to NG
+      if gids<k> = 'files' then fi = k
+      if gids<k> = 'files-write' then fw = k
+      if gids<k> = 'files-admin' then fa = k
+   next k
+   if fw > 0 and fi > 0 then
+      if fin<fw> = 1 and fin<fi> # 1 then bad = 'files-write needs files: queue files ON as well, or files-write OFF'
+   end
+   if fa > 0 and fw > 0 then
+      if fin<fa> = 1 and fin<fw> # 1 then bad = 'files-admin needs files-write: queue files-write ON as well, or files-admin OFF'
+   end
+   return
+
+* The sentence for account av from its queued cells (fin holds the states it will have), and its effect for the box
+make.sentence:
+   words = ''
+   rs = 0 ; ra = 0
+   for k = 1 to NG
+      if gids<k> = 'ssh' then rs = k
+      if gids<k> = 'api' then ra = k
+   next k
+   route.changed = 0
+   if rs > 0 then
+      if aq<av, rs> # '' then route.changed = 1
+   end
+   if ra > 0 then
+      if aq<av, ra> # '' then route.changed = 1
+   end
+   for k = 1 to NG
+      if aq<av, k> # '' and k # rs and k # ra then
+         words<-1> = (if aq<av, k> = 1 then gon<k> else goff<k>)
+      end
+   next k
+   rw = ''
+   if route.changed then
+      begin case
+         case fin<rs> = 1 and fin<ra> = 1
+            rw = 'both'
+         case fin<rs> = 1
+            rw = 'ssh'
+         case fin<ra> = 1
+            rw = 'api'
+         case 1
+            rw = 'none'
+      end case
+      words<-1> = rw
+   end
+   sent = 'modify.account ' : anm<av> : ' ' : trim(change(words, @fm, ' '))
+   el = ''
+   typed = ''
+   loosen = 0
+   beyond = 0
+   whens = ''
+   for k = 1 to NG
+      if aq<av, k> # '' then
+         if aq<av, k> = 1 then
+            el<-1> = 'ON  - ' : gti<k> : ': ' : gall<k>
+            if gdef<k> = 'off' then loosen = 1
+            if gbey<k> = 1 then beyond = 1
+         end else
+            el<-1> = 'off - ' : gti<k> : ': it will still be able to ' : gstill<k>
+         end
+         locate gwhen<k> in whens<1> setting wp else whens<-1> = gwhen<k>
+      end
+   next k
+   if route.changed then el<-1> = 'ssh and api are one setting: the word sent is ' : rw : ', which gives ssh ' : (if fin<rs> = 1 then 'ON' else 'off') : ' and api ' : (if fin<ra> = 1 then 'ON' else 'off') : '.'
+   if loosen then
+      el<-1> = 'A gate that is off as delivered is being turned ON.  Leaving it off is the tighter choice; you decide.'
+   end
+   if beyond then
+      el<-1> = 'A gate that reaches beyond SD is being turned ON, so the account name has to be typed.'
+      typed = anm<av>
+   end
+   el<-1> = 'A running session is not changed.  A change reaches the person: ' : change(whens, @fm, '; ') : '.'
+   return
+
+end
+
+* END-CODE

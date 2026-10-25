@@ -4,8 +4,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 25 Oct 26 Windows port - from Linux 9b1d04f - the confirm box wraps the lines of its explanation (S.75; includes the 72e708e change)
 * 22 Oct 26 dm  New (S.75, TK-0.4).
+* 23 Oct 26 dm  The wrapping loop is $tk_wrap now (the same algorithm, moved; the menu management page and the help box use it too).
+* 24 Oct 26 dm  The lines of the explanation are wrapped like the sentence: the box cut a line at its edge, and the tail of the ai gate's 150-character sentence (tool.gates) never showed.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -13,7 +15,7 @@
 *   call $tk_confirm(sentence, lines, typed, res, msg)
 *
 *     sentence  the command exactly as the tool will give it to $tk_run (the caller passes the same variable to both)
-*     lines     the explanation under it, one to a field ($tk_explain makes it); may be null
+*     lines     the explanation under it, one to a field ($tk_explain makes it); may be null.  A line longer than the box is wrapped at spaces; an empty line stays empty
 *     typed     null for a Run / Cancel box; a name the person must type for a second step (an account's name, for a destructive action or a gate that
 *               reaches beyond SD)
 *     res       returned: 'run' only when Run was chosen and, when a name was asked for, the name was typed exactly; 'cancel' for Cancel, Esc, an input
@@ -46,23 +48,23 @@ $include tk.h
    if wrapw < 20 then wrapw = 20
 
    body = sysmsg(12816)
-   rest = sentence
-   loop while rest # '' do
-      if len(rest) <= wrapw then
-         piece = rest
-         rest = ''
-      end else
-         cut = wrapw
-         loop while cut > 1 and rest[cut, 1] # ' ' do cut -= 1 repeat
-         if cut <= 1 then cut = wrapw
-         piece = rest[1, cut]
-         rest = trimf(rest[cut + 1, 99999])
-      end
-      body<-1> = '  ' : piece
-   repeat
+   call $tk_wrap(sentence, wrapw, pieces)
+   for p = 1 to dcount(pieces, @fm)
+      body<-1> = '  ' : pieces<p>
+   next p
    if lines # '' then
       body<-1> = ''
-      body := @fm : lines
+*     24 Oct 26: the box CUTS a line at its edge (the tail of a 150-character sentence never showed), so each line of the explanation is wrapped like the sentence
+      for li = 1 to dcount(lines, @fm)
+         if lines<li> = '' then
+            body<-1> = ''
+         end else
+            call $tk_wrap(lines<li>, wrapw, pieces)
+            for p = 1 to dcount(pieces, @fm)
+               body<-1> = pieces<p>
+            next p
+         end
+      next li
    end
 
    screen msgbox body title sysmsg(12817) buttons '&Run,&Cancel' default 2 returning b else b = 0
