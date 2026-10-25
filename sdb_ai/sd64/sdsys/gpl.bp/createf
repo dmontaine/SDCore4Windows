@@ -101,6 +101,8 @@ $define default.split.load 80
    using.dict = @false
    no.query = @false
    no.resize = @false
+   net.server = ''           ;* 21 Oct 26 dm, S.73 item 3: SERVER name - create the file on another SD server
+   net.as = ''               ;* ... AS name: its name there (the local name when left out)
 
    group.size.value = -1
    large.rec.size = -1
@@ -324,12 +326,28 @@ $define default.split.load 80
          case upcase(token) = 'MULTIFILE'     ;* 12 Oct 26 dm - openQM 522: the data portion is a multifile named for the file
             if component = '' then component = file.name
 
+         * ---------- SERVER name  /  AS name   (21 Oct 26 dm, S.73 item 3: the file is made on another SD server and the local pointer to it with it)
+         case upcase(token) = 'SERVER'
+            call @parser(PARSER$GET.TOKEN, token.type, net.server, keyword)
+            if token.type = PARSER$END or net.server = '' then stop sysmsg(12541) ;* A server name is required after SERVER
+
+         case upcase(token) = 'AS'
+            call @parser(PARSER$GET.TOKEN, token.type, net.as, keyword)
+            if token.type = PARSER$END or net.as = '' then stop sysmsg(12542) ;* A file name is required after AS
+
          case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
       end case
          
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    repeat
+
+*  21 Oct 26 dm - S.73 item 3: SERVER makes the file on another SD server and writes the N pointer to it in this account's VOC (see create.remote.file); AS without SERVER means nothing.
+   if net.server # '' then
+      gosub create.remote.file
+      stop
+   end
+   if net.as # '' then stop sysmsg(12543) ;* AS is for a file on another server: give SERVER as well
 
    * Check that no VOC entry already exists for this name
 
@@ -589,6 +607,74 @@ $define default.split.load 80
 
    @system.return.code = 0
 
+   return
+
+* ======================================================================
+* create.remote.file  -  CREATE.FILE name ... SERVER srv {AS remote}   (21 Oct 26 dm, S.73 item 3, the owner's rule: "the pointer should be created or deleted when the file is created or
+*   deleted. There should be no non-functional pointers")
+*   The file is made on the server (the server runs its own create.file for this login: the definition of the server must say write here, the login needs sdfileswrite and sdfilesadmin there) and
+*   the local N pointer is written ONLY AFTER the server has confirmed it - so there is never a pointer to a file that is not there.  Everything this machine can check is checked BEFORE anything is
+*   sent: the name is not already in the VOC, this session may change the VOC (edit gate), and nothing that has no meaning for a remote file was asked for.  If the pointer cannot be written after
+*   all, the verb says so and says the file now exists on the server; it is never deleted again behind the person's back.
+create.remote.file:
+   remote.what = ''
+   begin case
+      case not(create.dict and create.data)
+         remote.what = 'dict / data'
+      case dir.name # ''
+         remote.what = 'pathname'
+      case using.dict
+         remote.what = 'using dict'
+      case voc.comment # ''
+         remote.what = 'comment'
+      case component # ''
+         remote.what = 'multifile'
+      case keep.case
+         remote.what = 'case'
+   end case
+   if remote.what # '' then
+      @system.return.code = -ER$ARGS
+      stop sysmsg(12533, net.server, 'create.file ' : remote.what) ;* %2 is not available for a file on server %1
+   end
+
+   if net.as = '' then remote.name = file.name else remote.name = net.as
+
+   read voc.rec from voc.f, file.name then
+      @system.return.code = -ER$VNF
+      stop sysmsg(12544, file.name, net.server) ;* The name %1 is already in your VOC: nothing was created on server %2
+   end
+   vp = fileinfo(voc.f, FL$PATH)
+   if not(kernel(K$EDIT.OK, vp)) then
+      @system.return.code = -ER$PERM
+      stop edit_msg(kernel(K$EDIT.KIND, vp)) ;* the pointer could not be written afterwards, so the file is not made at all
+   end
+
+   remote.words = remote.name
+   if group.size.value # -1 then remote.words := ' GROUP.SIZE ' : group.size.value
+   if large.rec.size # -1 then remote.words := ' LARGE.RECORD ' : large.rec.size
+   if min.modulus.value # -1 then remote.words := ' MINIMUM.MODULUS ' : min.modulus.value
+   if merge.load.value # default.merge.load then remote.words := ' MERGE.LOAD ' : merge.load.value
+   if split.load.value # default.split.load then remote.words := ' SPLIT.LOAD ' : split.load.value
+   if version.value # -1 then remote.words := ' VERSION ' : version.value
+   if no.case then remote.words := ' NO.CASE'
+   if no.resize then remote.words := ' NO.RESIZE'
+   if collection.file then remote.words := ' COLLECTION'
+   if file.type = FL$TYPE.DIR then remote.words := ' DIRECTORY'      ;* the server takes DIRECTORY as the last word only
+
+   call !netadmin(voc.f, 8, net.server : @fm : remote.words, net.rc, @false)
+   if net.rc # 0 then
+      @system.return.code = net.rc
+      return
+   end
+
+   voc.rec = 'N' : @fm : downcase(net.server) : @fm : downcase(remote.name)
+   write voc.rec to voc.f, file.name on error
+      @system.return.code = -ER$PERM
+      display sysmsg(12534, remote.name, net.server, file.name) ;* The file %1 now exists on server %2, but the pointer %3 could not be written to your VOC
+      return
+   end
+   @system.return.code = 0
+   display sysmsg(12538, remote.name, net.server, file.name) ;* File %1 was created on server %2 and the pointer %3 was written to your VOC
    return
 
 * ======================================================================

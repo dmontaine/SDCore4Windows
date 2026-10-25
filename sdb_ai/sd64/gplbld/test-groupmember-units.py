@@ -128,13 +128,16 @@ READS_STATUS = {
         "the serving session's own files.write: api.write.stat = status() on the next line; any doubt means no write (fail closed for write)",
     ("apisrvr", "api.files.write = is_grp_member(scram.user, 'sdfileswrite')"):
         "the front's audit of the write group: api.write.stat = status() on the next line; any doubt reads as no write",
-    ("modifya", "has.files = is_grp_member(files.user, files.grp)"):
-        "files-on / files-off / files-write-on / files-write-off: files.stat = status() on the next line; an unreadable group changes nothing and says 10081",
-    ("modifya", "in.files = is_grp_member(files.user, 'sdfiles')"):
-        "files-write-on: files.stat = status() on the next line; could-not-tell refuses with 10081",
-    ("modifya", "has.write = is_grp_member(files.user, 'sdfileswrite')"):
-        "files-on / files-off read the write group before they answer: files.stat = status() on the next line; a lookup that fails is followed by is_group() "
-        "(Windows cannot tell 'no such group' from 'could not read'), and only a group that is there and cannot be read stops the command with 10081",
+    # 25 Oct 26 - Linux ef9d594 (S.73 item 3): set.files reads the three groups in one place (read.files.groups -> read.one.group), replacing the three reads that stood here.
+    ("modifya", "rg.is = is_grp_member(files.user, rg.group)"):
+        "files-on / -off / -write-on / -write-off / -admin-on / -admin-off read the three groups before they answer: rg.stat = status() on the next line; a lookup that fails "
+        "is followed by is_group() (Windows cannot tell 'no such group' from 'could not read'), and only a group that is there and cannot be read stops the command with 10081",
+    ("acc_os_info", "m = is_grp_member(uname, 'sdfilesadmin')"):
+        "backup manifest route.files.admin: 'status() = 0' on the next line; a group that is missing reads as not a member",
+    ("apisrvr", "api.admin.in = is_grp_member(logname, 'sdfilesadmin')"):
+        "the serving session's own files.admin: api.admin.stat = status() on the next line; any doubt means no administration (fail closed)",
+    ("apisrvr", "api.files.admin = is_grp_member(scram.user, 'sdfilesadmin')"):
+        "the front's audit of the administration group: api.admin.stat = status() on the next line; any doubt reads as no administration",
     ("modifya", "cg.now = is_grp_member(files.user, cg.group)"):
         "change.files.group's read back after every change: files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
 }
@@ -144,6 +147,8 @@ FAIL_CLOSED = {
         "the state line printed after the account is made: display only; a could-not-tell prints 'no' and nothing is granted by it",
     ("create_account", "files.wnow = is_grp_member(acc.uname, 'sdfileswrite')"):
         "the same state line for sdfileswrite: display only",
+    ("create_account", "files.anow = is_grp_member(acc.uname, 'sdfilesadmin')"):
+        "the same state line for sdfilesadmin: display only",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
     # 02 Oct 26 - these two moved with CREATEA's body into create_account

@@ -70,4 +70,7 @@ $define CA$FILES          36     ;* 1 = start in the group sdfiles, the SDNet fi
 * Linux only (18 Oct 26, S.65 write group): 1 = also join the Linux group sdfileswrite, so a files-only login can change files on this server.  Needs CA$FILES.
 $define CA$FILESWRITE      39    ;* 1 = start in the group sdfileswrite (with CA$FILES; S.65 write group)
 
+* Linux only (21 Oct 26, S.73 item 3): 1 = also join the Linux group sdfilesadmin, so a files-only login may administer files on this server.  Needs CA$FILES and CA$FILESWRITE.
+$define CA$FILESADMIN      40    ;* 1 = start in the group sdfilesadmin (with CA$FILES and CA$FILESWRITE; S.73 item 3)
+
 * END-CODE

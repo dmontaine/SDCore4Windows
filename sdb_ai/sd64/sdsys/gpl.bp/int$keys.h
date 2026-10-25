@@ -548,6 +548,8 @@
       $define FCI$SET.MODE             7 ;* Set the permission bits of a record of a directory file: "id<FM>ooo" (15 Oct 26, Q-8)
       $define FCI$SET.SEQ.KEY          8 ;* Set the next id of WRITE ... CREATING.SEQKEY (hashed files only)
       $define FCI$GET.SEQ.KEY          9 ;* Take the next such id; a null string for a file that is not a hashed file
+      $define FCI$NET.ADMIN           10 ;* 21 Oct 26, S.73 item 3: run a verb on the SERVER of an open remote file (NET_FILE): the qualifier is "operation<FM>words", the result what it printed, STATUS() its return code
+      $define FCI$NET.CREATE          11 ;* ... CREATE.FILE on a server, no file yet: "server<FM>words"; the file variable is any local file (the VOC the verb has open)
 
 
 

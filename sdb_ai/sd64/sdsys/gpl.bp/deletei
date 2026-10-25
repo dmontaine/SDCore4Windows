@@ -78,6 +78,14 @@ $include ak_info.h
       end
    end
 
+*  21 Oct 26 dm - S.73 item 3: a file on another SD server.  The server runs the verb for this login (this account needs the NET gate and a definition that says write, the login needs
+*  sdfileswrite and sdfilesadmin there); the rest of the command goes to it as it was typed.
+   if fileinfo(fu, FL$TYPE) = FL$TYPE.NET then
+      call !netadmin(fu, 5, '', net.rc, @true)
+      @system.return.code = net.rc
+      stop
+   end
+
    if fileinfo(fu, FL$TYPE) # FL$TYPE.DH then
       stop sysmsg(2020) ;* Dynamic file required
    end

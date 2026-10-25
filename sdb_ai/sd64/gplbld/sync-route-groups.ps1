@@ -57,6 +57,10 @@ $FilesGroup      = 'sdfiles'
 $FilesWriteGroup = 'sdfileswrite'
 $FilesComment      = 'SD accounts that may use the API for files only'
 $FilesWriteComment = 'SD accounts with files-only API access that may also change files'
+# 25 Oct 26 - Linux ef9d594 (S.73 item 3): the third level, sdfilesadmin, lets the files-only login ADMINISTER files on this server (configure, index, create,
+# delete, the file's counter).  Created EMPTY like the other two (modify.account files-admin-on names a person); it carries no Windows right.
+$FilesAdminGroup   = 'sdfilesadmin'
+$FilesAdminComment = 'SD accounts with files-only API access that may also administer files'
 
 $failed = $false
 
@@ -107,6 +111,7 @@ try {
     $null     = Ensure-Group $ApiGroup $ApiComment
     $null     = Ensure-Group $FilesGroup $FilesComment
     $null     = Ensure-Group $FilesWriteGroup $FilesWriteComment
+    $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment
 
     if (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"

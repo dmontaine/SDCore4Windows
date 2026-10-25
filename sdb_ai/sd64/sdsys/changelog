@@ -2,6 +2,29 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+21 Oct 26  A FILE ON ANOTHER SD SERVER CAN NOW BE CONFIGURED, INDEXED, CREATED, DELETED AND GIVEN IDS BY ITS OWN COUNTER (SDNET), BEHIND A THIRD PERMISSION.
+
+             What        The statements and verbs that used to be refused for a file on another SD server work, for a person whose remote
+                        login has been given the new Windows group "sdfilesadmin" on that server: WRITE and WRITEU ... CREATING.SEQKEY (the
+                        server's counter gives the id), FCONTROL, ANALYSE.FILE, CONFIGURE.FILE, CREATE.INDEX, BUILD.INDEX, DELETE.INDEX
+                        and DISABLE.INDEX on the VOC name of the file, CREATE.FILE name SERVER srv {AS remote} (the file is made there and,
+                        only after the server confirmed it, the pointer is written in your VOC) and DELETE.FILE of a pointer (the file is
+                        deleted there and the pointer goes in the same act; a pointer whose file has vanished is offered for removal).
+                        The verbs run ON the other server, for your remote login, and print what they printed there. The new group is
+                        given with MODIFY.ACCOUNT name FILES-ADMIN-ON (it needs FILES-ON and FILES-WRITE-ON first) or CREATE.ACCOUNT user
+                        ... FILES-ON FILES-WRITE-ON FILES-ADMIN-ON, and taken away with FILES-ADMIN-OFF. FILES-WRITE-OFF and FILES-OFF now
+                        take the groups away from the top (administration, write, files), each removal read back.
+             Why it      A program or an administrator working through an SDNet pointer had to log on to the other machine to make an index,
+             matters     change a file's modulus or create a file there. It is the remote administration QMNet has, behind a permission
+                        the administrator of the machine being reached gives one person at a time.
+             Does not    It is off for every account, and the installer's "open every access gate" answer does not turn it on. A login with
+                        the group but not the write group gets nothing. The verb is chosen by number and works on the file the pointer
+                        opened (a login cannot name another file); words with a path, FORCE, PATHNAME, LPTR or NO.QUERY, a slash or a
+                        quote are refused; the index verbs refuse when another process has the file open there. It does not make the
+                        statements that only READ an index (SELECTINDEX, AKREAD) work on a remote file, nor OPENSEQ. The audit lines of
+                        a files-only login gain a word: "api login route=sdfiles write=on admin=off user=name" (the refusals the same),
+                        and an act is written before the verb runs ("api admin request=70 op=create.index file=customers user=name").
+
 15 Oct 26  FCONTROL() FOR PROGRAMS, AND LIST.COMMON DETAIL.
 
              FCONTROL(file.var, action {, qualifier}).  A program can now use

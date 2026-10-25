@@ -17,6 +17,10 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): NF$ADMIN 20 (a verb run on the server on the open file: analyse, configure, index, delete a file), NF$CREATEFILE 21 (create.file on a server, no file
+*               yet), NF$FCONTROL 22 and NF$SEQKEY 23 (WRITE ... CREATING.SEQKEY), each audited as `netfile admin|fcontrol|write server=<name> file=<f> ...` and refused for a read-mode handle, in
+*               a transaction (not ANALYSE.FILE) and when the definition says read now; the server's groups sdfileswrite and sdfilesadmin are the wall (12526 / 12529).  REFACTORED while there: the
+*               checks of act.open that need no network are check.server, which act.createfile asks too.  Needs fileadmin() and fcontrol() of the class (and text.request honouring quiet).
 * 20 Oct 26 dm  S.72b: act.recordlocked refuses a handle whose mode is not write (message 12506, `recordlocked`, nothing sent), before the connection is asked for, like act.fileunlock.  The
 *               server refuses request 34 to a login without sdfileswrite as well (!apifilesok).
 * 20 Oct 26 dm  S.72 (QMNet parity, tiers A and B): NF$FILELOCK 18 (a case of act.change: the no-wait request 32, the busy answer NF$RC.LOCKED, audited once for the handle as
@@ -243,6 +247,8 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
    release.all = @false
    aud.k = ''
    aud.line = ''
+   opn = 0
+   res = ''
 
    begin case
       case op = NF$OPEN          ; gosub act.open
@@ -257,6 +263,10 @@ common /$netfile/ nf.opens,                     ;* remote files opened, in all
          gosub act.change
       case op = NF$RELEASE       ; gosub act.release
       case op = NF$FILEUNLOCK    ; gosub act.fileunlock
+      case op = NF$ADMIN         ; gosub act.admin
+      case op = NF$CREATEFILE    ; gosub act.createfile
+      case op = NF$FCONTROL      ; gosub act.fcontrol
+      case op = NF$SEQKEY        ; gosub act.seqkey
       case op = NF$STATE         ; gosub act.state
       case 1
          txt = op ; gosub clean.text
@@ -274,6 +284,100 @@ act.open:
    if name.ok then safe = srv
    srvname = safe
 
+*  (1) to (6): the checks that need no network (the gate, the server, this account listed, the mode, the stored login, the limits).  21 Oct 26, S.73 item 3: they are check.server now, which
+*  NF$CREATEFILE asks too; the file name (7) is this operation's alone.
+   gosub check.server
+   if failed then return
+
+*  (7) THE REMOTE FILE NAME
+   if not(fname.ok) then
+      cred = ''
+      txt = b ; gosub clean.text
+      fail.num = 12496 ; fail.a1 = srv ; fail.a2 = out.txt
+      refused.why = 'file' ; gosub refuse
+      return
+   end
+
+*  Everything local has been asked.  One line in the audit trail for the open, and only now anything is dialled.
+   if fmode = 'write' then
+      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname : ' mode=write')
+   end else
+      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname)
+   end
+
+   created = @false
+   if slot > 0 then
+      cred = ''
+      if vartype(nf.s.obj(slot)) # V$OBJ then
+         gosub drop.conn
+         fail.num = 12504 ; fail.a1 = srv
+         gosub fail
+         return
+      end
+   end else
+      gosub connect.new
+      if failed then return
+      created = @true
+   end
+
+*  The file.  The object is taken out of common into obj; obj->error is cleared and ServerStatus set to the "no reply" mark first.
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   fno = obj->open(fname)
+   opname = 'open'
+   gosub after.rq
+   nf.requests += 1
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub idle.release
+      gosub server.fail
+      return
+   end
+   if fno <= 0 then
+*     The ELSE branch: the server has no such file (STATUS() 3003 as a rule).  A connection made for this call and used for nothing is ended.
+      gosub idle.release
+      rc.st = rq.st
+      gosub rc.else
+      return
+   end
+
+   hx = 0
+   for hy = 1 to NF$MAX.HANDLES
+      if nf.h.state(hy) = 0 and hx = 0 then hx = hy
+   next hy
+   if hx = 0 then
+*     Not reachable after check 6, but the table is not trusted: give the file back.
+      obj->error = ''
+      obj->ServerStatus = NF$NOREPLY
+      obj->close(fno)
+      gosub idle.release
+      fail.num = 12510 ; fail.a1 = srv ; fail.a2 = NF$MAX.HANDLES
+      gosub fail
+      return
+   end
+   nf.h.state(hx) = 1
+   nf.h.slot(hx) = slot
+   nf.h.fno(hx) = fno
+   nf.h.srv(hx) = srv
+   nf.h.file(hx) = fname
+   nf.h.acct(hx) = acc
+   nf.h.mode(hx) = fmode
+   nf.h.aud(hx) = ''
+   nf.opens += 1
+   out = hx
+   if fmode = 'write' then rc<7> = 1
+   return
+
+* ======================================================================
+* check.server - the seven checks of NF$OPEN that need no network, in their order, for the server named in a (srv, srvname and safe are set by the caller after shape.names): (1) the gate,
+* (2) a server that is defined and whose definition can be used, (3) this account is listed for it, (4) the mode (fmode: not a refusal), (5) the stored login (cred), (6) the limits.
+* Sets failed, with rc and the audit line of a refusal, when one fails; otherwise host, port, racct, pin, fmode, cred and slot (the slot of a connection already held, or 0) are set.
+* 21 Oct 26, S.73 item 3: this was the first part of act.open, moved out unchanged so that NF$CREATEFILE asks the same questions.
+check.server:
 *  (1) THE GATE
    gosub check.gate
    if not(gate.ok) then
@@ -365,88 +469,6 @@ act.open:
       refused.why = 'limit' ; gosub refuse
       return
    end
-
-*  (7) THE REMOTE FILE NAME
-   if not(fname.ok) then
-      cred = ''
-      txt = b ; gosub clean.text
-      fail.num = 12496 ; fail.a1 = srv ; fail.a2 = out.txt
-      refused.why = 'file' ; gosub refuse
-      return
-   end
-
-*  Everything local has been asked.  One line in the audit trail for the open, and only now anything is dialled.
-   if fmode = 'write' then
-      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname : ' mode=write')
-   end else
-      void kernel(K$AUDIT, 'netfile open server=' : srv : ' file=' : fname)
-   end
-
-   created = @false
-   if slot > 0 then
-      cred = ''
-      if vartype(nf.s.obj(slot)) # V$OBJ then
-         gosub drop.conn
-         fail.num = 12504 ; fail.a1 = srv
-         gosub fail
-         return
-      end
-   end else
-      gosub connect.new
-      if failed then return
-      created = @true
-   end
-
-*  The file.  The object is taken out of common into obj; obj->error is cleared and ServerStatus set to the "no reply" mark first.
-   obj = nf.s.obj(slot)
-   obj->error = ''
-   obj->ServerStatus = NF$NOREPLY
-   fno = obj->open(fname)
-   opname = 'open'
-   gosub after.rq
-   nf.requests += 1
-   if rq.lost then
-      gosub lost.fail
-      return
-   end
-   if rq.err then
-      gosub idle.release
-      gosub server.fail
-      return
-   end
-   if fno <= 0 then
-*     The ELSE branch: the server has no such file (STATUS() 3003 as a rule).  A connection made for this call and used for nothing is ended.
-      gosub idle.release
-      rc.st = rq.st
-      gosub rc.else
-      return
-   end
-
-   hx = 0
-   for hy = 1 to NF$MAX.HANDLES
-      if nf.h.state(hy) = 0 and hx = 0 then hx = hy
-   next hy
-   if hx = 0 then
-*     Not reachable after check 6, but the table is not trusted: give the file back.
-      obj->error = ''
-      obj->ServerStatus = NF$NOREPLY
-      obj->close(fno)
-      gosub idle.release
-      fail.num = 12510 ; fail.a1 = srv ; fail.a2 = NF$MAX.HANDLES
-      gosub fail
-      return
-   end
-   nf.h.state(hx) = 1
-   nf.h.slot(hx) = slot
-   nf.h.fno(hx) = fno
-   nf.h.srv(hx) = srv
-   nf.h.file(hx) = fname
-   nf.h.acct(hx) = acc
-   nf.h.mode(hx) = fmode
-   nf.h.aud(hx) = ''
-   nf.opens += 1
-   out = hx
-   if fmode = 'write' then rc<7> = 1
    return
 
 * ======================================================================
@@ -970,6 +992,222 @@ act.fileunlock:
       return
    end
    rc<8> = rq.st
+   return
+
+* ======================================================================
+* S.73 item 3 (21 Oct 26), QMNet tiers C and D: the four operations that ADMINISTER a remote file.  Each needs a handle whose definition says write (now, not only at the open), no transaction
+* (but ANALYSE.FILE, which only reads), and - on the server - the groups sdfileswrite and sdfilesadmin: the server's refusal (12526 or 12529, an ON ERROR reply) is the one wall; everything
+* here is the clear text of it.  A change is never repeated: a lost reply is 12514 and the connection is dropped.  A verb can run for a long time (an index on a big file), so the wait for
+* the reply is never less than NF$CLEAR.MIN.MS, as for CLEAR.FILE.
+
+* admin.prepare - the checks the operations share, in the order of act.change: (1) a handle of this account (a lost handle will do), (2) the handle's mode is not write: refused (12506), nothing is
+* sent, (3) the handle again with the gate and the connection, (4) the definition says write NOW (mode.now), (5) no transaction is open when the operation changes the file (changing: 12515).
+* opname and changing are set by the caller.  Sets failed (with rc) when the operation may not go on; otherwise hx, slot and srvname are set.
+admin.prepare:
+   need.gate = @false ; need.conn = @false ; any.acct = @false ; allow.lost = @true
+   gosub get.handle
+   if failed then return
+   if nf.h.mode(hx) # 'write' then
+      gosub act.refuse
+      return
+   end
+   need.gate = @true ; need.conn = @true ; any.acct = @false ; allow.lost = @false
+   gosub get.handle
+   if failed then return
+   gosub mode.now
+   if not(mode.ok) then
+      aud.k = 'r'
+      aud.line = 'netfile refused server=' : srvname : ' reason=mode'
+      gosub audit.once
+      gosub act.refuse
+      return
+   end
+   if changing then
+      if system(SYS$TRANS_LEVEL) # 0 then
+         fail.num = 12515 ; fail.a1 = srvname ; fail.a2 = opname
+         gosub fail
+         return
+      end
+   end
+   return
+
+* admin.outcome - the answer to the request just made on obj (the caller cleared obj->error, set the "no reply" mark and called the method): lost (the connection is dropped), an error of the server,
+* the ON ERROR reply of a refusal (its text, or the status when it sent none), or done: rc<8> is the server's reply STATUS(), the verb's return code or what FCONTROL left.
+admin.outcome:
+   lerr = obj->LastError
+   gosub after.rq
+   nf.requests += 1
+   if lerr = -1 then rq.lost = @true
+   if rq.lost then
+      gosub lost.fail
+      return
+   end
+   if rq.err then
+      gosub server.fail
+      return
+   end
+   if lerr = NF$LE.ERROR then
+      gosub on.error.text
+      gosub server.fail
+      return
+   end
+   if lerr # NF$LE.OK then
+      fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'answer ':lerr
+      gosub fail
+      return
+   end
+   rc<8> = rq.st
+   return
+
+* act.admin - NF$ADMIN: a = handle, b = the operation (1 analyse.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index, 9 delete.file), c = the verb's words.  out is what the
+* verb printed.  The handle ends with a delete.file that was answered (the server closed the file to delete it).
+act.admin:
+   opn = -1
+   if b matches '1N0N' then
+      if len(b) <= 2 then opn = b + 0
+   end
+   opname = ''
+   if opn >= 1 and opn <= 9 and opn # 7 and opn # 8 then
+      opname = field('analyse.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', opn)
+   end
+   if opname = '' then
+      txt = b ; gosub clean.text
+      fail.num = 12495 ; fail.a1 = out.txt
+      gosub fail
+      return
+   end
+   changing = (opn # 1)
+   gosub admin.prepare
+   if failed then return
+
+   void kernel(K$AUDIT, 'netfile admin server=' : srvname : ' file=' : nf.h.file(hx) : ' op=' : opname)
+   obj = nf.s.obj(slot)
+   gosub request.limits
+   obj->settimeout(clear.ms)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   res = obj->fileadmin(opn, nf.h.fno(hx), c)
+   gosub admin.outcome
+   if not(rq.lost) then obj->settimeout(req.ms)
+   if failed then return
+   out = res
+   if opn = 9 then gosub free.handle
+   return
+
+* act.createfile - NF$CREATEFILE: a = the server's name, c = the words of create.file, the new file's name first.  There is no file yet, so no handle: the checks of NF$OPEN that need no network are
+* asked (check.server), the definition must say write (12506), no transaction (12515), then the connection (the one held, or a new one that is ended again afterwards) and request 70 operation 8.
+* out is what the verb printed.  The caller (the kernel) writes the local pointer only after this returned.
+act.createfile:
+   b = ''
+   gosub shape.names
+   safe = 'invalid'
+   if name.ok then safe = srv
+   srvname = safe
+   opname = 'create.file'
+   changing = @true
+   gosub check.server
+   if failed then return
+   if fmode # 'write' then
+      cred = ''
+      gosub act.refuse
+      return
+   end
+   if system(SYS$TRANS_LEVEL) # 0 then
+      cred = ''
+      fail.num = 12515 ; fail.a1 = srvname ; fail.a2 = opname
+      gosub fail
+      return
+   end
+
+   txt = field(c, ' ', 1) ; gosub clean.text
+   void kernel(K$AUDIT, 'netfile admin server=' : srv : ' file=' : out.txt : ' op=create.file')
+   created = @false
+   if slot > 0 then
+      cred = ''
+      if vartype(nf.s.obj(slot)) # V$OBJ then
+         gosub drop.conn
+         fail.num = 12504 ; fail.a1 = srv
+         gosub fail
+         return
+      end
+   end else
+      gosub connect.new
+      if failed then return
+      created = @true
+   end
+   obj = nf.s.obj(slot)
+   gosub request.limits
+   obj->settimeout(clear.ms)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   res = obj->fileadmin(8, 0, c)
+   gosub admin.outcome
+   if not(rq.lost) then
+      obj->settimeout(req.ms)
+      gosub idle.release
+   end
+   if failed then return
+   out = res
+   return
+
+* act.fcontrol - NF$FCONTROL: a = handle, b = the key, c = the qualifier as text (null for none).  out is what the server's FCONTROL() returned, rc<8> what it left in STATUS().  Key 6 (FC$VALID.ID) only
+* asks and changes nothing; every other key is a change.
+act.fcontrol:
+   opname = 'fcontrol'
+   fkey = -1
+   if b matches '1N0N' then
+      if len(b) <= 5 then fkey = b + 0
+   end
+   if fkey < 0 then
+      txt = b ; gosub clean.text
+      fail.num = 12495 ; fail.a1 = out.txt
+      gosub fail
+      return
+   end
+   changing = (fkey # 6)
+   gosub admin.prepare
+   if failed then return
+
+   void kernel(K$AUDIT, 'netfile fcontrol server=' : srvname : ' file=' : nf.h.file(hx) : ' key=' : fkey)
+   obj = nf.s.obj(slot)
+   obj->error = ''
+   obj->ServerStatus = NF$NOREPLY
+   res = obj->fcontrol(nf.h.fno(hx), fkey, c)
+   gosub admin.outcome
+   if failed then return
+   out = res
+   return
+
+* act.seqkey - NF$SEQKEY: a = handle, b = 0 for WRITE, 1 for WRITEU, c = the record.  out is the id the server's counter gave it (an update lock on it is held by this session on the server).  Audited as
+* a write, once for the handle.
+act.seqkey:
+   upd = (b = '1')
+   if upd then opname = 'writeu' else opname = 'write'
+   changing = @true
+   gosub admin.prepare
+   if failed then return
+
+   aud.k = 'w'
+   aud.line = 'netfile write server=' : srvname : ' file=' : nf.h.file(hx)
+   gosub audit.once
+   obj = nf.s.obj(slot)
+   if upd then
+      obj->error = ''
+      obj->ServerStatus = NF$NOREPLY
+      res = obj->writeuseqkey(nf.h.fno(hx), c)
+   end else
+      obj->error = ''
+      obj->ServerStatus = NF$NOREPLY
+      res = obj->writeseqkey(nf.h.fno(hx), c)
+   end
+   gosub admin.outcome
+   if failed then return
+   if res = '' then
+      fail.num = 12509 ; fail.a1 = srvname ; fail.a2 = opname ; fail.a3 = 'no id'
+      gosub fail
+      return
+   end
+   out = res
    return
 
 * ======================================================================

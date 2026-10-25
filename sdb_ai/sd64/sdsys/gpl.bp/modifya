@@ -19,6 +19,10 @@
 * 
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: FILES-ADMIN-ON / FILES-ADMIN-OFF put the account's person in or out of the Windows group sdfilesadmin, the right to ADMINISTER
+*           files over the files-only route.  Needs sdfiles and sdfileswrite first (12531); FILES-OFF and FILES-WRITE-OFF take it away first, top down, and files-admin-on conflicts with them
+*           in one command (12796; the files-off / files-write-on pair, which Linux had, is added too); the line printed is 12530.  set.files reads the three groups in read.files.groups and
+*           a failure after an earlier removal reports every removal that happened (report.removals).
 * 25 Oct 26 Windows port - from Linux 858d757 and f047abc (22 Oct 26) S.75, the home screen: START-MENU / START-TERMINAL / START-DEFAULT (field 16, ACC$START; start.set;
 *           12873, 12874) and PINS-ON / PINS-OFF (field 18, ACC$PINS; 12890), any account type; the words are in the usage, the word list and the slot list (ST, PN).
 * 25 Oct 26 Windows port - from Linux d93ea0d (19 Oct 26) K4a, finish 2 (verifier).  When the removal from sdfileswrite worked and the next step (the removal from sdfiles, or the ADD of
@@ -468,6 +472,15 @@ do.action:
             files.grp = 'sdfileswrite'
             files.want = @false
             gosub set.files
+* 21 Oct 26 dm - S.73 item 3 (Linux ef9d594): the same helper, the group sdfilesadmin.
+         case upcase(action) = 'FILES-ADMIN-ON'
+            files.grp = 'sdfilesadmin'
+            files.want = @true
+            gosub set.files
+         case upcase(action) = 'FILES-ADMIN-OFF'
+            files.grp = 'sdfilesadmin'
+            files.want = @false
+            gosub set.files
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
 *   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
 *   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
@@ -646,7 +659,7 @@ add.delete.arm:
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, net-on, net-off,'
-         crt '   files-on, files-off, files-write-on, files-write-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
+         crt '   files-on, files-off, files-write-on, files-write-off, files-admin-on, files-admin-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   start-menu, start-terminal, start-default, pins-on, pins-off,'
          crt '   suspended or unsuspended'
       end
@@ -671,7 +684,7 @@ show.usage:
    crt '                  modify.account <account> sd-on | sd-off'
    crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
    crt '                  modify.account <account> net-on | net-off'
-   crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off'
+   crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off | files-admin-on | files-admin-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> start-menu | start-terminal | start-default'
    crt '                  modify.account <account> pins-on | pins-off'
@@ -695,8 +708,8 @@ show.usage:
 *   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,FW,FW,SR,SR,SW,SW,ST,ST,ST,PN,PN,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,NET-ON,NET-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,NET,NET,F,F,FW,FW,FA,FA,SR,SR,SW,SW,ST,ST,ST,PN,PN,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -725,6 +738,25 @@ validate.actions:
          end
       next j
    next i
+* Linux 19 Oct 26: files-write-on asks for sdfiles, so files-off conflicts with it (they sit in different slots, which the test above cannot see).
+   locate 'FILES-WRITE-ON' in actions<1> setting p3 then
+      locate 'FILES-OFF' in actions<1> setting p1 then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12796, 'files-off', 'files-write-on')
+      end
+   end
+* 21 Oct 26 dm - S.73 item 3: files-admin-on asks for the groups below it, so it is refused with the word that takes one of them away (files-off takes all three, files-write-off the
+*   top two) - the same reasoning, one level up.
+   locate 'FILES-ADMIN-ON' in actions<1> setting p3 then
+      locate 'FILES-OFF' in actions<1> setting p1 then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12796, 'files-off', 'files-admin-on')
+      end
+      locate 'FILES-WRITE-OFF' in actions<1> setting p2 then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12796, 'files-write-off', 'files-admin-on')
+      end
+   end
    return
 
 *****************************************************************************
@@ -919,9 +951,9 @@ set.files:
       return
    end
 
-   has.files = is_grp_member(files.user, files.grp)
-   files.stat = status()
-   if files.stat # 0 and not(files.want) then files.stat = 0   ;* no such group: nothing to take the person out of
+   admin.removed = @false
+   write.removed = @false
+   gosub read.files.groups
    if files.stat = 0 and files.want then
       in.sdusers = is_grp_member(files.user, 'sdusers')
       files.stat = status()
@@ -934,61 +966,49 @@ set.files:
    end
    if files.stat # 0 then
       @system.return.code = -ER$FAILED
-      if write.removed then
-*        The write group HAS gone and the step after it failed: the person has lost the write access, and neither the screen nor the audit trail may say otherwise.  The audit
-*        line is the removal that happened (files-write-off), not the action asked for: files-off and files-on are written only when the whole command worked.
-         void kernel(K$AUDIT, 'modify.account files-write-off account=' : acc.name)
-         gosub write.removed.line
-      end
+*     A group above HAS gone and the step after it failed: the person has lost that access, and neither the screen nor the audit trail may say otherwise.  The audit
+*     lines are the removals that happened (files-admin-off, files-write-off), not the action asked for: files-off and files-on are written only when the whole command worked.
+      gosub report.removals
       crt sysmsg(10081, acc.name, files.stat)
       return
    end
 
-* 19 Oct 26 dm - K4a.  For FILES-ON and FILES-OFF the write group is read too, three-valued, BEFORE the "already had it" answer: a person can be in sdfileswrite and not in
+* 19 Oct 26 dm - K4a.  All three groups are read (read.files.groups), three-valued, BEFORE the "already had it" answer: a person can be in sdfileswrite and not in
 *   sdfiles (a removal that stopped half way, or a hand-made change), and that membership is inert until the next FILES-ON turns it into write access the administrator did not
 *   give.  So FILES-OFF has work to do for a person who is in either group, and FILES-ON takes a stray write membership away BEFORE it adds sdfiles.
-   has.write = @false
-   if files.grp = 'sdfiles' then
-      has.write = is_grp_member(files.user, 'sdfileswrite')
-      files.stat = status()
-      if files.stat # 0 then
-*        Windows cannot tell "no such group" from "could not read" (both status 1), and a machine from before this release has no sdfileswrite:
-*        so a lookup that failed is followed by asking whether the group exists, and only a group that is there and cannot be read stops the command.
-         has.write = @false
-         write.group.found = is_group('sdfileswrite')
-         write.group.stat = status()
-         if write.group.stat = 0 and not(write.group.found) then files.stat = 0
-      end
-      if files.stat # 0 then
-         @system.return.code = -ER$FAILED
-         crt sysmsg(10081, acc.name, files.stat)
-         return
-      end
-   end
+*   21 Oct 26 dm - S.73 item 3 (Linux ef9d594): the same holds one level up.  sdfilesadmin is the third level (files, files-write, files-admin): a group is never added to a person who
+*   holds a group ABOVE it, and a group above is taken away first, top down, so a leftover can never turn into access nobody gave.
 
 * 18 Oct 26 dm - S.65 write group: sdfileswrite on its own gives nothing (the login route needs sdfiles), so it is not handed out to a person without
 *   it.  Asked before the "already had it" answer so that the refusal is the same whatever the group holds now.
    if files.grp = 'sdfileswrite' and files.want then
-      in.files = is_grp_member(files.user, 'sdfiles')
-      files.stat = status()
-      if files.stat # 0 then
-         @system.return.code = -ER$FAILED
-         crt sysmsg(10081, acc.name, files.stat)
-         return
-      end
-      if not(in.files) then
+      if not(has.files) then
          @system.return.code = -ER$FAILED
          crt sysmsg(12528, acc.name)  ;* %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
          return
       end
    end
 
-* Nothing to do: FILES-ON for a person who is in sdfiles already (whatever the write group holds: it was given on purpose), FILES-OFF for a person who is in neither group, and the
-* write words for a person who has the write group already, or has not.
+* 21 Oct 26 dm - S.73 item 3: sdfilesadmin gives nothing without sdfiles AND sdfileswrite (the server asks for all three), so it is not handed out to a person without
+*   both.  One message for either lack: files-write-on is what to do first, and it says "use files-on first" itself when files access is what is missing.
+   if files.grp = 'sdfilesadmin' and files.want then
+      if not(has.files) or not(has.write) then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(12531, acc.name)  ;* %1 does not have files-write, so it cannot be given files-admin: use files-write-on first
+         return
+      end
+   end
+
+* Nothing to do: FILES-ON for a person who is in sdfiles already (whatever the groups above hold: they were given on purpose), FILES-OFF for a person who is in none of the three,
+* FILES-WRITE-OFF for a person who is in neither sdfileswrite nor sdfilesadmin, and FILES-WRITE-ON / the admin words for a person who has the group already, or has not.
    if files.grp = 'sdfiles' and not(files.want) then
-      nothing.to.do = not(has.files) and not(has.write)
+      nothing.to.do = not(has.files) and not(has.write) and not(has.admin)
    end else
-      nothing.to.do = (has.files = files.want)
+      if files.grp = 'sdfileswrite' and not(files.want) then
+         nothing.to.do = not(has.write) and not(has.admin)
+      end else
+         nothing.to.do = (has.target = files.want)
+      end
    end
    if nothing.to.do then
       @system.return.code = 0
@@ -1014,9 +1034,11 @@ set.files:
 * 19 Oct 26 dm - K4a (Linux 0bdc4bd).  THE WRITE GROUP GOES FIRST, for FILES-OFF (so a failure of the second removal leaves the person with read access and no more, never write
 *   access without read: the orphan the 18 Oct build could leave) and for FILES-ON with a stray membership (so sdfiles is not added to a person who already holds write).  Each
 *   removal is read back by change.files.group before the next step, and a removal that did not happen stops everything with 10081 and the state as it was.
-   write.removed = @false
-   if files.grp = 'sdfiles' and has.write then
-      cg.group = 'sdfileswrite'
+*   21 Oct 26 dm - S.73 item 3: the same for the third level, TOP DOWN: sdfilesadmin goes first, then sdfileswrite, then the group asked for.  A command on sdfiles (on over a
+*   stray membership, or off) takes whichever of the two the person holds; a command on sdfileswrite takes sdfilesadmin (write-off: it would be left without the write it needs;
+*   write-on: a stray one would become admin access nobody gave).  A step that fails after an earlier one went says what did happen (report.removals) before it says it failed.
+   if (files.grp = 'sdfiles' or files.grp = 'sdfileswrite') and has.admin then
+      cg.group = 'sdfilesadmin'
       cg.want = @false
       gosub change.files.group
       if files.stat # 0 then
@@ -1024,12 +1046,26 @@ set.files:
          crt sysmsg(10081, acc.name, files.stat)
          return
       end
+      now.admin = cg.now
+      admin.removed = @true
+   end
+   if files.grp = 'sdfiles' and has.write then
+      cg.group = 'sdfileswrite'
+      cg.want = @false
+      gosub change.files.group
+      if files.stat # 0 then
+         @system.return.code = -ER$FAILED
+         gosub report.removals  ;* sdfilesadmin may have gone before this step
+         crt sysmsg(10081, acc.name, files.stat)
+         return
+      end
       now.write = cg.now
       write.removed = @true
    end
 
-* The group itself - except for a person who was in the write group only: there is nothing in sdfiles to take away.
-   if files.grp = 'sdfiles' and not(files.want) and not(has.files) then
+* The group itself - except for a person who is not in it (FILES-OFF for one who was in a group above only, FILES-WRITE-OFF for one who held sdfilesadmin only): there is
+* nothing in it to take away.
+   if not(files.want) and not(has.target) then
       now.files = @false
       files.stat = 0
    end else
@@ -1040,18 +1076,23 @@ set.files:
    end
    if files.stat # 0 then
       @system.return.code = -ER$FAILED
+      gosub report.removals
       crt sysmsg(10081, acc.name, files.stat)
       return
    end
 
    @system.return.code = 0
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
-   if files.grp = 'sdfileswrite' then
-      crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files-write %2
-   end else
-      if write.removed then gosub write.removed.line  ;* the write group went too (or a stray one was taken away)
-      crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files %2
-   end
+   if admin.removed then gosub admin.removed.line  ;* sdfilesadmin went too (or a stray one was taken away)
+   begin case
+      case files.grp = 'sdfilesadmin'
+         crt sysmsg(12530, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files-admin %2
+      case files.grp = 'sdfileswrite'
+         crt sysmsg(12527, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files-write %2
+      case 1
+         if write.removed then gosub write.removed.line  ;* the write group went too (or a stray one was taken away)
+         crt sysmsg(12487, acc.name, if now.files then 'yes' else 'no')  ;* Account %1 has files %2
+   end case
    return
 
 *****************************************************************************
@@ -1089,6 +1130,71 @@ start.set:
 
 write.removed.line:
    crt sysmsg(12527, acc.name, if now.write then 'yes' else 'no')  ;* Account %1 has files-write %2
+   return
+
+*****************************************************************************
+* ADMIN.REMOVED.LINE  -  the same for sdfilesadmin (21 Oct 26, S.73 item 3): 12530 with the state read back from the group, printed before the line of the group below it.
+
+admin.removed.line:
+   crt sysmsg(12530, acc.name, if now.admin then 'yes' else 'no')  ;* Account %1 has files-admin %2
+   return
+
+*****************************************************************************
+* REPORT.REMOVALS  -  a step failed after a group above it had gone: the audit line and the state line of each removal that happened, top down (21 Oct 26, S.73 item 3; the
+* write group's part is the 19 Oct finish-2 rule, verifier finding).
+
+report.removals:
+   if admin.removed then
+      void kernel(K$AUDIT, 'modify.account files-admin-off account=' : acc.name)
+      gosub admin.removed.line
+   end
+   if write.removed then
+      void kernel(K$AUDIT, 'modify.account files-write-off account=' : acc.name)
+      gosub write.removed.line
+   end
+   return
+
+*****************************************************************************
+* READ.FILES.GROUPS  -  the person's membership of the three groups, each three-valued (21 Oct 26, S.73 item 3; the one place set.files reads them).
+* has.files, has.write and has.admin are the memberships of sdfiles, sdfileswrite and sdfilesadmin, has.target the one of files.grp.  files.stat is 0 when every lookup answered;
+* otherwise it is the status of the first that could not.  Windows cannot tell "no such group" from "could not read" (both status 1), and a machine from before the release that
+* made a group has not got it: so a lookup that failed is followed by asking whether the group exists; a group that is not there has nobody in it (and is a failure only when it is the
+* group to be joined, which set.files then names with 10024), and only a group that is there and cannot be read stops the command.
+
+read.files.groups:
+   files.stat = 0
+   rg.group = 'sdfiles'
+   gosub read.one.group
+   has.files = rg.is
+   rg.group = 'sdfileswrite'
+   gosub read.one.group
+   has.write = rg.is
+   rg.group = 'sdfilesadmin'
+   gosub read.one.group
+   has.admin = rg.is
+   begin case
+      case files.grp = 'sdfilesadmin'
+         has.target = has.admin
+      case files.grp = 'sdfileswrite'
+         has.target = has.write
+      case 1
+         has.target = has.files
+   end case
+   return
+
+read.one.group:
+   rg.is = is_grp_member(files.user, rg.group)
+   rg.stat = status()
+   if rg.stat # 0 then
+      rg.is = @false
+      rg.found = is_group(rg.group)
+      rg.istat = status()
+      if rg.istat = 0 and not(rg.found) then
+         rg.stat = 0
+         if files.want and rg.group = files.grp then rg.stat = 1
+      end
+   end
+   if rg.stat # 0 and files.stat = 0 then files.stat = rg.stat
    return
 
 *****************************************************************************

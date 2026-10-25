@@ -5467,6 +5467,7 @@ begin
   { 25 Oct 26 - RELEASE_1.1 171: the two groups of the files-only SDNet login route go with the others. }
   Exec(Net, 'localgroup sdfiles /delete',      '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdfileswrite /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec(Net, 'localgroup sdfilesadmin /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 

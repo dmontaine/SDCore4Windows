@@ -112,10 +112,13 @@ def checks(src, msgs):
 
     val = between(c, "\nvalidate.actions:\n", "\nrun.actions:\n")
     stops = [m.start() for m in re.finditer(r"stop sysmsg\(", val)]
-    ck("M5 validate.actions refuses with stop: ADD / DELETE 12719, an unknown word 12795, a conflict 12796 (a slot; Linux's files-off with files-write-on is not here)",
+    ck("M5 validate.actions refuses with stop: ADD / DELETE 12719, an unknown word 12795, a conflict 12796 (a slot, plus the files-off / files-write-on pair and the two files-admin-on pairs, which sit in different slots)",
        "stop sysmsg(12719, typed.list<i>)" in val and "stop sysmsg(12795, typed.list<i>)" in val
        and "stop sysmsg(12796, downcase(actions<i>), downcase(actions<j>))" in val
-       and len(stops) == 3)
+       and "stop sysmsg(12796, 'files-off', 'files-write-on')" in val
+       and "stop sysmsg(12796, 'files-off', 'files-admin-on')" in val
+       and "stop sysmsg(12796, 'files-write-off', 'files-admin-on')" in val
+       and len(stops) == 6)
     ck("M5b ...each refusal sets the failure code first, and the add / delete test comes before the word lookup, which comes before the conflict test",
        all(val[max(0, s - 60):s].count("@system.return.code = -ER$ARGS") == 1 for s in stops)
        and 0 < val.find("(w = 'ADD')") < val.find("locate w in word.arr<1>") < val.find("if slot.arr<pi> = slot.arr<pj> then"))

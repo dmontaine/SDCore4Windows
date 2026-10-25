@@ -1,0 +1,77 @@
+* NETADMIN
+* Run an administration verb on the SERVER of a remote file (QMNet tiers C and D).
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 21 Oct 26 dm  New, S.73 item 3.  The verbs ANALYSE.FILE, CONFIGURE.FILE, CREATE.INDEX, BUILD.INDEX, DELETE.INDEX, DISABLE.INDEX, CREATE.FILE and DELETE.FILE each ask this when the file they were
+*               given is a file on another SD server, instead of each carrying its own copy of the call, the printing of the answer and the return code.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !netadmin(fu, op, words, rc, from.parser)
+*
+*    from.parser  true: the verb is just after its file name, and the words are what it passed (null, or the one parameter it had already taken) followed by the REST of its command, taken
+*                 from the parser (!PARSER) here, which is left at the end; false: words is what the caller made (create.file builds them from what it parsed)
+*    fu     the open remote file (VARTYPE of a NET_FILE: FILEINFO(fu, FL$TYPE) = FL$TYPE.NET) - or, for op 8 only, ANY local file variable (the VOC the verb has open): there is no remote file yet
+*    op     the operation, the server's numbers (apisrvr vb.fileadmin): 1 analyse.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index, 8 create.file, 9 delete.file
+*    words  the verb's words as the SERVER's verb takes them, without the verb and without the file name (for op 8 the new file's name comes first); for op 8 the server's name goes in front,
+*           "server<FM>words"
+*    rc     the verb's return code on the server (0 done, negative an error); the verb's own words are shown here, a line at a time
+*
+* The kernel gates it (net_gate: the definition says write, no transaction, the edit gate of the remote file's name) and the server's groups sdfileswrite and sdfilesadmin are the wall: a refusal
+* ends the calling verb with its message (an error of a function is raised), as every refusal of a remote file does.  Nothing is sent for a local file: fcontrol.int answers ER$ARGS.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine netadmin(fu, op, words, rc, from.parser)
+$catalog !netadmin
+
+$include int$keys.h
+$include parser.h
+
+   if from.parser then
+      parser = '!PARSER'
+*     words is what the verb has already taken from the command (configure.file has fetched its first parameter by the time it opens the file; the others have taken none): the rest follows
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      loop
+      while token.type # PARSER$END
+         if words # '' then words := ' '
+         words := token
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      repeat
+   end
+
+   if op = 8 then
+      shown = fcontrol.int(fu, FCI$NET.CREATE, words)
+   end else
+      shown = fcontrol.int(fu, FCI$NET.ADMIN, op : @fm : words)
+   end
+   rc = status()
+
+*  What the verb printed on the server: its lines are field marks apart.
+   for i = 1 to dcount(shown, @fm)
+      display shown<i>
+   next i
+
+   return
+end
+
+* END-CODE

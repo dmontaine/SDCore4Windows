@@ -274,6 +274,12 @@ delete.file:
       end
    end
 
+*  21 Oct 26 dm - S.73 item 3: an N pointer is a file on another SD server.  The server deletes it for this login and the pointer goes with it (see delete.remote.file).
+   if upcase(voc.rec[1,1]) = "N" then
+      gosub delete.remote.file
+      return
+   end
+
    if upcase(voc.rec[1,1]) # "F" then
       @system.return.code = -ER$VNF
       stop sysmsg(2015, file.name) ;* VOC record xx is not a file
@@ -570,6 +576,86 @@ write.voc:
       display sysmsg(6144, file.name) ;* VOC entry 'xx' deleted
    end
 
+   return
+
+* ======================================================================
+* delete.remote.file  -  DELETE.FILE of an N pointer: the file on another SD server   (21 Oct 26 dm, S.73 item 3, the owner's rule: "the pointer should be created or deleted when the file is created
+*   or deleted. There should be no non-functional pointers")
+*   voc.rec is the pointer (field 2 the server, field 3 its name there) and its VOC record is locked (readu).  Asked first what this machine can ask: DICT and DATA mean nothing for a remote
+*   file, and this session must be allowed to change the VOC, because the pointer goes with the file.  Then the question, as a local delete asks it: Enter and the end of input are N.  The
+*   file is opened through the pointer: if the server says it is not there (someone removed it), the pointer is dangling, and the person is offered its removal - none is left unasked; a
+*   refusal of the open (the gate, the definition, the login) ends the verb with its own message and the pointer stays.  The server runs delete.file for this login (the definition must say write,
+*   the login needs sdfileswrite and sdfilesadmin there); when it did, the pointer is removed in the same act.  If the server refuses, the pointer stays: it still names a file.
+delete.remote.file:
+   net.server = voc.rec<2>
+   net.file = voc.rec<3>
+   if not(delete.dict and delete.data) then
+      release voc.f, file.name
+      @system.return.code = -ER$ARGS
+      stop sysmsg(12533, net.server, 'delete.file dict / data') ;* %2 is not available for a file on server %1
+   end
+   vp = fileinfo(voc.f, FL$PATH)
+   if not(kernel(K$EDIT.OK, vp)) then
+      release voc.f, file.name
+      @system.return.code = -ER$PERM
+      stop edit_msg(kernel(K$EDIT.KIND, vp))
+   end
+
+   if not(no.query) then
+      loop
+         display sysmsg(12532, net.server, net.file) :   ;* Delete file %2 on server %1 and everything in it (y/<n>)?
+         input yn
+         yn = upcase(yn[1,1])
+         if yn = '' then yn = 'N'
+      until yn = 'Y' or yn = 'N'
+      repeat
+      if yn = 'N' then
+         release voc.f, file.name
+         @system.return.code = -ER$STOPPED
+         return
+      end
+   end
+
+   open file.name to remote.f else
+      if status() = ER$FNF then
+*        The server has no such file: the pointer names nothing.
+         remove.it = no.query
+         if not(no.query) then
+            loop
+               display sysmsg(12539, net.server, net.file, file.name) :   ;* File %2 is not on server %1: remove the pointer %3 from your VOC (y/<n>)?
+               input yn
+               yn = upcase(yn[1,1])
+               if yn = '' then yn = 'N'
+            until yn = 'Y' or yn = 'N'
+            repeat
+            remove.it = (yn = 'Y')
+         end
+         if remove.it then
+            delete voc.f, file.name
+            @system.return.code = 0
+            display sysmsg(12540, file.name, net.file, net.server) ;* The pointer %1 was removed from your VOC; the file %2 was not on server %3
+         end else
+            release voc.f, file.name
+            @system.return.code = -ER$FNF
+         end
+      end else
+         release voc.f, file.name
+         @system.return.code = -status()
+      end
+      return
+   end
+
+   call !netadmin(remote.f, 9, '', net.rc, @false)
+   if net.rc # 0 then
+*     The server's verb did not delete the file (it said why, above): the pointer stays.
+      release voc.f, file.name
+      @system.return.code = net.rc
+      return
+   end
+
+   delete voc.f, file.name
+   @system.return.code = 0
+   display sysmsg(12537, net.file, net.server, file.name) ;* File %1 on server %2 was deleted and the pointer %3 was removed from your VOC
    return
 
 * ======================================================================

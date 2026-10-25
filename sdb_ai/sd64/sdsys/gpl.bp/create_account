@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: CA$FILESADMIN joins the new user to the Windows group sdfilesadmin after sdfileswrite; refused without CA$FILES and
+*              CA$FILESWRITE (12531) and for a group or other account (10087, 10081 as CA$FILES); the group is looked for before anything is made; the state line 12530 is read off the group.
+*              The look-up of a files group is the internal subroutine check.files.group (typed out twice, a third copy was due), the same refusals and messages as before.
 * 25 Oct 26 Windows port - from Linux 3fbfc0d (18 Oct 26) S.65 write group: CA$FILESWRITE joins the new user to the Windows group sdfileswrite after sdfiles; refused without CA$FILES (12528) and for a group or
 *              other account (10087, 10081 as CA$FILES); the group is looked for before anything is made; the state line 12527 is read off the group.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26) S.65 slice 1: the NET gate (SDNet remote files) ACC$NET is written from CA$NET: 'no' for a user account unless named,
@@ -158,6 +161,8 @@ deffun ps_script(script) calling '!ps_script'
    files.write.want = (settings<CA$FILESWRITE> = 1)
 * 18 Oct 26 dm - S.65 write group: FILES-WRITE-ON, the same rule; it is a request only with FILES-ON (sdfileswrite alone gives nothing).
    files.write.want = (settings<CA$FILESWRITE> = 1)
+* 21 Oct 26 dm - S.73 item 3: FILES-ADMIN-ON, the same rule; it is a request only with FILES-ON and FILES-WRITE-ON (sdfilesadmin alone gives nothing).
+   files.admin.want = (settings<CA$FILESADMIN> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -201,18 +206,9 @@ deffun ps_script(script) calling '!ps_script'
 * 17 Oct 26 dm - S.65 slice 2c (Windows port 25 Oct 26): the group sdfiles is looked for before anything is made, so FILES-ON on a machine without it (an
 *   install from before this release) creates nothing and names the group, instead of leaving a Windows user behind with the join failed.
      if files.want then
-       files.found = is_group('sdfiles')
-       files.stat = status()
-       if files.stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:files.stat ;* Unable to change remote access for %1
-         goto exit.create
-       end
-       if not(files.found) then
-         @system.return.code = -ER$FAILED
-         err = 10024:@vm:'sdfiles' ;* %1 is not a valid Windows group
-         goto exit.create
-       end
+       files.grp.name = 'sdfiles'
+       gosub check.files.group
+       if files.bad then goto exit.create
      end
 
 * 18 Oct 26 dm - S.65 write group (Linux 3fbfc0d): FILES-WRITE-ON needs FILES-ON (12528), and the group sdfileswrite is looked for before anything is made, as sdfiles is.
@@ -222,18 +218,21 @@ deffun ps_script(script) calling '!ps_script'
          err = 12528:@vm:acc.name ;* %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
          goto exit.create
        end
-       files.found = is_group('sdfileswrite')
-       files.stat = status()
-       if files.stat # 0 then
-         @system.return.code = -ER$FAILED
-         err = 10081:@vm:acc.uname:@vm:files.stat ;* Unable to change remote access for %1
+       files.grp.name = 'sdfileswrite'
+       gosub check.files.group
+       if files.bad then goto exit.create
+     end
+
+* 21 Oct 26 dm - S.73 item 3: FILES-ADMIN-ON needs FILES-ON and FILES-WRITE-ON (12531), and the group sdfilesadmin is looked for before anything is made, as the others are.
+     if files.admin.want then
+       if not(files.want) or not(files.write.want) then
+         @system.return.code = -ER$ARGS
+         err = 12531:@vm:acc.name ;* %1 does not have files-write, so it cannot be given files-admin: use files-write-on first
          goto exit.create
        end
-       if not(files.found) then
-         @system.return.code = -ER$FAILED
-         err = 10024:@vm:'sdfileswrite' ;* %1 is not a valid Windows group
-         goto exit.create
-       end
+       files.grp.name = 'sdfilesadmin'
+       gosub check.files.group
+       if files.bad then goto exit.create
      end
 
      * Is the user a valid os user?
@@ -595,7 +594,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: and no files-only login to give (10087; the group account is reached with logto).
-     if files.want or files.write.want then
+     if files.want or files.write.want or files.admin.want then
        @system.return.code = -ER$ARGS
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
@@ -614,7 +613,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: nor a files-only login (10081 with status 2, as MODIFY.ACCOUNT says it for an account with no Windows user).
-     if files.want or files.write.want then
+     if files.want or files.write.want or files.admin.want then
        @system.return.code = -ER$ARGS
        err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
        goto exit.create
@@ -1034,6 +1033,9 @@ PW.TRY.AGAIN:
 *     18 Oct 26, S.65 write group: the same, for sdfileswrite.
       files.wnow = is_grp_member(acc.uname, 'sdfileswrite')
       crt sysmsg(12527, acc.name, if files.wnow then 'yes' else 'no')  ;* Account %1 has FILES-WRITE %2
+*     21 Oct 26, S.73 item 3: and for sdfilesadmin.
+      files.anow = is_grp_member(acc.uname, 'sdfilesadmin')
+      crt sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')  ;* Account %1 has files-admin %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
 
@@ -1082,9 +1084,32 @@ exit.create:
    if acc.f.open then close acc.f
    return
 
+* ======================================================================
+* CHECK.FILES.GROUP  -  is the Windows group files.grp.name there?  (21 Oct 26, S.73 item 3, Linux ef9d594: it was typed out for sdfiles and for sdfileswrite, and a third copy was due.)
+* Looked for before anything is made, so FILES-ON on a machine without the group (an install from before the release that made it) creates nothing and names the group instead of
+* leaving a Windows user behind with the join failed.  files.bad is true, with the return code and err set, when the lookup could not answer (10081 with its status) or the group is
+* not there (10024).
+
+check.files.group:
+   files.bad = @false
+   files.found = is_group(files.grp.name)
+   files.stat = status()
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      err = 10081:@vm:acc.uname:@vm:files.stat ;* Unable to change remote access for %1
+      files.bad = @true
+   end else
+      if not(files.found) then
+         @system.return.code = -ER$FAILED
+         err = 10024:@vm:files.grp.name ;* %1 is not a valid Windows group
+         files.bad = @true
+      end
+   end
+   return
+
 
 * ======================================================================
-* secure.account.dir  -  lock this account's directory to its own group
+* secure.account.dir -  lock this account's directory to its own group
 *
 * 19 Aug 26 Windows port - PROJECT_STATUS.md section 8, "the B work".  The data
 *   tree grants sdusers Modify with (OI)(CI), so without this every account
@@ -1608,6 +1633,14 @@ set.access:
 *   (12527) is printed with the others.
    if files.write.want then
       stat = os_group("ADDMEM", "sdfileswrite", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
+* 21 Oct 26 dm - S.73 item 3: and the administration group, after sdfileswrite, the same way.  The state line (12530) is printed with the others.
+   if files.admin.want then
+      stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)
       if stat # 0 then
          @system.return.code = -ER$FAILED
          err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

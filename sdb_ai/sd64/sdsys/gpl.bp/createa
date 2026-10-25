@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: FILES-ADMIN-ON (joins sdfilesadmin as well, with FILES-ON and FILES-WRITE-ON); CA$FILESADMIN in createacc.h; the audit gates= list names it.
 * 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26): the audit line carries gates=, the words of the sentence that grant or withdraw an access
 *           (owner: "create-account should record what gates were granted"); the words up to type= are unchanged.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-OFF and SHARED-WRITE-ON (the shared-account gates); CA$SHARED.READ.OFF and
@@ -653,7 +654,7 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}'
     crt '                  {shared-read-off} {shared-write-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
     crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
@@ -706,6 +707,7 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$NET> = 1 then gates<-1> = 'net-on'
    if settings<CA$FILES> = 1 then gates<-1> = 'files-on'
    if settings<CA$FILESWRITE> = 1 then gates<-1> = 'files-write-on'
+   if settings<CA$FILESADMIN> = 1 then gates<-1> = 'files-admin-on'
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
@@ -894,6 +896,11 @@ more.args:
 *   unless typed.  !create_account refuses it without FILES-ON (12528), and for a GROUP or OTHER account as it refuses FILES-ON.
          case upcase(token) = 'FILES-WRITE-ON'
             settings<CA$FILESWRITE> = 1
+
+* 21 Oct 26 dm - S.73 item 3 (Linux ef9d594): FILES-ADMIN-ON, the person also joins sdfilesadmin, so a files-only login may administer files on this server.  Off unless typed.
+*   !create_account refuses it without FILES-ON and FILES-WRITE-ON (12531), and for a GROUP or OTHER account as it refuses FILES-ON.
+         case upcase(token) = 'FILES-ADMIN-ON'
+            settings<CA$FILESADMIN> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

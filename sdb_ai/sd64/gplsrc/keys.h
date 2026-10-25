@@ -780,6 +780,8 @@
    bits mean nothing on NTFS, and the verb hangs on the S.63 OS-access gate.  The number is left unused.                      */
 #define FC_SET_SEQ_KEY           8    /* Set the next id of WRITE ... CREATING.SEQKEY (hashed files; 15 Oct 26) */
 #define FC_GET_SEQ_KEY           9    /* Take the next such id (null string if the file is not a hashed file) */
+#define FC_NET_ADMIN           10    /* 21 Oct 26, S.73 item 3: run a server verb on the open remote file: "operation<FM>words"; the result is what it printed */
+#define FC_NET_CREATE           11    /* ... CREATE.FILE on a server, no file yet: "server<FM>words"; the file variable is any local one */
 
 /* SD_ENCRYPT_SODIUM encryption decryption  */
 #define SD_EncodeHX     201  /* encode passed string as Hex String */

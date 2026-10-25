@@ -81,6 +81,13 @@ $include err.h
       end
    end
 
+*  21 Oct 26 dm - S.73 item 3: a file on another SD server (see deletei).
+   if fileinfo(data.f, FL$TYPE) = FL$TYPE.NET then
+      call !netadmin(data.f, 3, '', net.rc, @true)
+      @system.return.code = net.rc
+      stop
+   end
+
    if fileinfo(data.f, FL$TYPE) # FL$TYPE.DH then stop sysmsg(2010)
 
    if dict.flag = '' then

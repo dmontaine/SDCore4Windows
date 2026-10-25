@@ -18,6 +18,8 @@
 *
 * 
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: fileadmin(op, fno, text) (request 70, a verb run on the server) and fcontrol(fno, key, value) (request 71); both need
+*               the server's sdfilesadmin.  text.request lets a caller that set quiet read the refusal instead of aborting.
 * 25 Oct 26 Windows port - from Linux b052346 (20 Oct 26) S.73 item 2 (the silent server): read.packet takes server.error and ServerStatus from the header only when the BODY has been
 *               read as well.  A reply cut in the middle used to leave them set from the header it had read, so the $netfile handler saw an answer and kept a connection that was out of
 *               step; it is the same loss as a reply that never started now (message 12502, or 12514 for a change).
@@ -112,6 +114,8 @@
 * obj->writeblk(fno, data)
 * obj->seek(fno, offset, relto)
 * obj->weofseq(fno)
+* str = obj->fileadmin(op, fno, text)       (S.73 item 3: request 70, a verb run on the server; needs the server's sdfilesadmin)
+* str = obj->fcontrol(fno, key, value)       (S.73 item 3: request 71)
 * id = obj->writeseqkey(fno, data)
 * id = obj->writeuseqkey(fno, data)
 * obj->setleft(fno, indexname)
@@ -233,6 +237,8 @@ $define SrvrSeek         66    ;* Position
 $define SrvrWeofSeq      67    ;* Truncate at the position
 $define SrvrWriteSeqKey  68    ;* Write under the next sequential id
 $define SrvrWriteuSeqKey 69    ;* The same, keeping the update lock
+$define SrvrFileadmin    70    ;* A verb run on the server for the login (analyse, configure, index, create or delete a file); needs sdfilesadmin   (S.73 item 3)
+$define SrvrFcontrol     71    ;* FCONTROL(file, key, value); needs sdfilesadmin   (S.73 item 3)
 
 $define SV$OK             0    ;* Action successful
 $define SV$ON.ERROR       1    ;* Action took ON ERROR clause
@@ -1048,6 +1054,24 @@ public function writeuseqkey(fno, data)
 end
 
 * ======================================================================
+* FILEADMIN(op, fno, text)   (21 Oct 26 dm, S.73 item 3) - request 70: a verb run ON THE SERVER for the login.  op is the operation (two bytes), fno the open file it works on (two bytes; 0 for
+* op 8, which names no open file) and text the verb's words.  The operations: 1 analyse.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index, 8 create.file,
+* 9 delete.file.  Returns what the verb printed; ServerStatus is the verb's return code there.  The server refuses a login that is not in sdfileswrite AND sdfilesadmin with an ON ERROR reply
+* (12526 or 12529), and a word that may not go to the verb with 12535: like recordlocked() this aborts the caller unless quiet is set.
+
+public function fileadmin(op, fno, text)
+   return text.request(SrvrFileadmin, iconv(op, 'ISL') : iconv(fno, 'ISL') : text, 'FILEADMIN generated an abort event')
+end
+
+* ======================================================================
+* FCONTROL(fno, key, value)   (21 Oct 26 dm, S.73 item 3) - request 71: the public FCONTROL of the open file on the server (the FC$ keys of keys.h).  The value is the qualifier as text (null for none).
+* Returns what the function returned; ServerStatus is what it left in STATUS().  Refused as fileadmin() is.
+
+public function fcontrol(fno, key, value)
+   return text.request(SrvrFcontrol, iconv(fno, 'ISL') : iconv(key, 'ISL') : value, 'FCONTROL generated an abort event')
+end
+
+* ======================================================================
 * RECORDLOCKED   (15 Oct 26 dm, sheet 262)
 * -3 -2 -1 another user holds a file, update or read lock; 0 not locked; 1 2 3 this session holds a read, update or file lock.
 * The answer is a four byte integer on the wire; it is made signed here.
@@ -1470,7 +1494,8 @@ end
 
 * ======================================================================
 * A request whose answer is one string: the answer when the server says OK, the null string otherwise (an abort on the
-* server aborts here too).  Used by getvar, indices, revision, rtrans, system and trans.
+* server aborts here too, unless quiet is set: then the caller gets the null string and LastError / LastText say what the reply was - 21 Oct 26, S.73 item 3).
+* Used by getvar, indices, revision, rtrans, system, trans, writeseqkey, writeuseqkey, fileadmin and fcontrol.
 
 local function text.request(code, pkt, abort.text)
    reply = ''
@@ -1480,7 +1505,7 @@ local function text.request(code, pkt, abort.text)
             case server.error = SV$OK
                reply = in.pkt
             case server.error = SV$ON.ERROR
-               abort abort.text
+               if not(quiet) then abort abort.text
          end case
       end
    end

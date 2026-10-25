@@ -1,0 +1,1 @@
+Account %1 does not have files-write, so it cannot be given files-admin: use files-write-on first

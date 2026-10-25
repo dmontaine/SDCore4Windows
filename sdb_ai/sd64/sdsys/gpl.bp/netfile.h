@@ -23,6 +23,8 @@
 *               added; rc<6> is signed; rc<7> reports the mode.  netfiles.c mirrors the new numbers as NF_WRITEU, NF_DELETEU, NF_RELEASE, NF_RC_LOCKED.
 * 20 Oct 26 dm  S.72: NF$FILELOCK 18 and NF$FILEUNLOCK 19 (QMNet parity, tier B); rc<8>, the server's reply STATUS() for NF$RECORDLOCKED and NF$FILEUNLOCK (tier A).
 *               netfiles.c mirrors them as NF_FILELOCK and NF_FILEUNLOCK.
+* 21 Oct 26 dm  S.73 item 3 (QMNet tiers C and D): NF$ADMIN 20, NF$CREATEFILE 21, NF$FCONTROL 22 and NF$SEQKEY 23, the four operations that ADMINISTER a remote file (they need the
+*               definition's mode write AND, on the server, the group sdfilesadmin).  netfiles.c mirrors them as NF_ADMIN, NF_CREATEFILE, NF_FCONTROL and NF_SEQKEY.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -54,6 +56,14 @@
 *    NF$FILEUNLOCK 19   handle        -            -        -                                 rc<8> is the server's answer: 0 the lock was this session's and is
 *                                                            free, 3011 (ER$LCK) another user's, still held, 3012 (ER$NLK) nobody's.  Refused for a read-mode
 *                                                            handle; never refused for the definition's mode read again (it changes no data), as NF$RELEASE   (S.72)
+*    NF$ADMIN     20    handle        operation    the verb's words  what the verb printed       request 70 on the open file: 1 analyse.file, 2 configure.file, 3 create.index,
+*                                                            4 build.index, 5 delete.index, 6 disable.index, 9 delete.file (the server's numbers: 7 is free, 8 is NF$CREATEFILE).
+*                                                            rc<8> is the verb's return code on the server.  Operation 9 ends the handle (the file is gone).  Refused like a change for a
+*                                                            read-mode handle; the server refuses a login without sdfileswrite AND sdfilesadmin with 12526 or 12529   (S.73 item 3)
+*    NF$CREATEFILE 21   server name   -            create.file words what the verb printed       request 70 operation 8: there is no file yet, so no handle; the words begin with the new
+*                                                            file's name.  The account must hold the NET gate, the server must be listed and its definition say write   (S.73 item 3)
+*    NF$FCONTROL  22    handle        key          qualifier        the function's result       request 71: FCONTROL(file, key, qualifier); rc<8> is what it left in STATUS()  (S.73 item 3)
+*    NF$SEQKEY    23    handle        0 or 1       the record       the id the file's counter gave  requests 68 and 69: WRITE (b = 0) or WRITEU (b = 1) ... CREATING.SEQKEY  (S.73 item 3)
 *    The six changing operations above (all but NF$RELEASE) are REFUSED (message 12506, nothing sent) for a handle whose server definition
 *    says mode read, which is the delivered default; only SDSYS makes a server write (set.server).  14, 15 and 16 are new in slice 3e.
 *    NF$STATE     13    -             -            -        counters and the connections      for tests; no network, no gate
@@ -85,11 +95,15 @@ $define NF$DELETE         10
 $define NF$CLEARFILE      11
 $define NF$LOCK           12
 $define NF$STATE          13
-$define NF$WRITEU         14       ;* slice 3e: 14 to 16 are new; 17 and 20 are not used (17 is kept for a possible combined lock-and-read)
+$define NF$WRITEU         14       ;* slice 3e: 14 to 16 are new; 17 is not used (kept for a possible combined lock-and-read; 20 is NF$ADMIN since S.73 item 3)
 $define NF$DELETEU        15
 $define NF$RELEASE        16
 $define NF$FILELOCK       18       ;* S.72: the file lock, no-wait only
 $define NF$FILEUNLOCK     19       ;* S.72: give the file lock back
+$define NF$ADMIN          20       ;* S.73 item 3: a verb run on the server on the open file (request 70)
+$define NF$CREATEFILE     21       ;* S.73 item 3: create.file on a server, no file yet (request 70, operation 8)
+$define NF$FCONTROL       22       ;* S.73 item 3: FCONTROL(file, key, qualifier) (request 71)
+$define NF$SEQKEY         23       ;* S.73 item 3: WRITE ... CREATING.SEQKEY (requests 68 and 69)
 
 $define NF$RC.OK           0
 $define NF$RC.ELSE         2

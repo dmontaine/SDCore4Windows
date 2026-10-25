@@ -150,6 +150,38 @@ void op_fcontrol() {
   descr = e_stack - 3;
   k_get_file(descr);
   fvar = descr->data.fvar;
+
+  /* 21 Oct 26 S.73 item 3: the two internal keys of the administration verbs of a remote file.  The qualifier is "operation<FM>words" (FC_NET_ADMIN, on the open remote file) or
+     "server<FM>words" (FC_NET_CREATE, for CREATE.FILE ... SERVER: there is no file yet, so the file variable is any local one and is not looked at).  The result is what the verb printed;
+     STATUS() afterwards is the verb's return code on the server.  An error is raised (there is no ON ERROR on a function). */
+  if ((action == FC_NET_ADMIN) || (action == FC_NET_CREATE)) {
+    char net_arg[512];
+    char* net_sep;
+    DESCRIPTOR net_out;
+    int net_len;
+    int net_st;
+
+    descr = e_stack - 1;
+    k_get_value(descr);
+    net_len = k_get_c_string(descr, net_arg, (int)sizeof(net_arg) - 1);
+    net_sep = (net_len > 0) ? strchr(net_arg, FIELD_MARK) : NULL;
+    if ((net_sep == NULL) || ((action == FC_NET_ADMIN) && (fvar->type != NET_FILE)) || ((action == FC_NET_CREATE) && (fvar->type == NET_FILE))) {
+      process.status = ER_ARGS;
+      goto exit_op_fcontrol;
+    }
+    *net_sep++ = '\0';
+    process.op_flags = 0;
+    if (action == FC_NET_CREATE)
+      net_st = net_create_file(net_arg, (int)strlen(net_arg), net_sep, (int)strlen(net_sep), &net_out);
+    else
+      net_st = net_admin(fvar, atoi(net_arg), net_sep, (int)strlen(net_sep), &net_out);
+    if (net_st == 0) {
+      result = net_out;
+      process.status = net_last_reply_status();
+    }
+    goto exit_op_fcontrol;
+  }
+
   if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file has no entry in the file table and no access.dh */
     net_refuse(fvar, "FCONTROL");
   fptr = FPtr(fvar->file_id);
@@ -371,6 +403,28 @@ void pub_fcontrol() {
   descr = e_stack - 3;
   k_get_file(descr);
   fvar = descr->data.fvar;
+
+  /* 21 Oct 26 S.73 item 3 (Linux ef9d594): FCONTROL of a remote file goes to the server (request 71), the key and the qualifier as they are: its own FCONTROL()
+     answers, and an unknown key is its answer too.  net_fcontrol() asks the read-mode test alone for FC$VALID.ID, which only asks, and the gate of a change for every
+     other key: a read-mode handle 12506, a transaction 12515, the edit gate of the file's name.  The server's wall is the group sdfilesadmin.  The result is what
+     its function returned; STATUS() is what it left. */
+  if (fvar->type == NET_FILE) {
+    char net_val[MAX_ID_LEN + 128];
+    DESCRIPTOR net_out;
+    int net_vlen;
+
+    descr = e_stack - 1;
+    k_get_value(descr);
+    net_vlen = k_get_c_string(descr, net_val, (int)sizeof(net_val) - 1);
+    if (net_vlen < 0)
+      net_vlen = 0;
+    process.op_flags = 0;
+    if (net_fcontrol(fvar, action, net_val, net_vlen, &net_out) == 0) {
+      result = net_out;
+      process.status = net_last_reply_status();
+    }
+    goto exit_pub_fcontrol;
+  }
   dh_file = fvar->access.dh.dh_file; /* only used for a hashed file */
 
   descr = e_stack - 1;
@@ -452,6 +506,7 @@ void pub_fcontrol() {
       k_error(sysmsg(12360));
   }
 
+exit_pub_fcontrol:
   k_dismiss();
   k_dismiss();
   k_dismiss();

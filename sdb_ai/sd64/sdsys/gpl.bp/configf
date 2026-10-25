@@ -122,6 +122,15 @@ $include err.h
       end
    end
 
+*  21 Oct 26 dm - S.73 item 3: a file on another SD server.  The server runs the verb for this login; the first parameter was fetched above and goes with the rest of the command.
+   if fileinfo(old.fu, FL$TYPE) = FL$TYPE.NET then
+      net.words = ''
+      if token.type # PARSER$END then net.words = token
+      call !netadmin(old.fu, 2, net.words, net.rc, @true)
+      @system.return.code = net.rc
+      stop
+   end
+
    if fileinfo(old.fu, FL$READONLY) then
       @system.return.code = -ER$RDONLY
       stop sysmsg(1431) ;* File is read-only

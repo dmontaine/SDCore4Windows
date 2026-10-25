@@ -19,6 +19,10 @@
 *
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3, QMNet tiers C and D: a files-only login may ADMINISTER files only if the person is ALSO in the Windows group
+*           sdfilesadmin (and sdfileswrite).  The session that serves the requests works it out for itself from the group (files.admin, in the common block with files.only and
+*           files.write); the front audits it.  !apifilesok takes it as a fourth argument; the login line and every refusal line gain admin=on|off after write=; a request refused for
+*           want of it is answered with 12529 (12526 when the write group is what is missing).  Requests 68 to 71 (CREATING.SEQKEY, a verb run on the server, FCONTROL) are served.
 * 25 Oct 26 Windows port - from Linux 0bdc4bd (19 Oct 26) S.65 follow-ups (K1, K3, K8a).  (1) The message of an ON ERROR reply is emptied at the top of every request, so an ON ERROR clause
 *           that had nothing to say no longer sends the text of the last refusal; the SDNet client now shows an ON ERROR reply's text.  Message 12526 was shortened to 98
 *           characters, under the 100 the client shows.  (2) The refusal of a login that is in neither sdapi nor sdfiles is audited with the reason 'not a member of sdapi or
@@ -238,13 +242,15 @@ $include dictdict.h
 * 20240219 mab user must be member of sdusers
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
 * 25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: the one place that decides what a files-only session may ask for (pure; see the program).
-deffun apifilesok(action, entered, writeok) calling '!apifilesok'
+deffun apifilesok(action, entered, writeok, adminok) calling '!apifilesok'
 
 
 common /$APISRVR/ logged.in,          ;* Process is logged in
 files.only,         ;* 17 Oct 26 S.65 2c: this login is FILES ONLY (sdfiles route, not sdapi): set in vb.scram.final, never cleared
 files.write,        ;* 18 Oct 26 S.65: a files-only login that is also in the Windows group sdfileswrite: set with files.only, never cleared
+files.admin,        ;* 21 Oct 26 S.73: a files-only login that is also in the Windows group sdfilesadmin: set with files.only, never cleared
 files(100),         ;* Array of file variables
+file.names,         ;* 21 Oct 26 S.73: the name each open file was opened under, field = file number (a dictionary as "dict name"); request 70 names its file by it
 logging,            ;* Logging network traffic?
 master.login.done,  ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
 seqfiles(SEQ.MAX),  ;* Sequential files opened by vb.openseq, numbered SEQ.BASE + their index (sheet 441)
@@ -367,6 +373,8 @@ if not(kernel(K$CPROC.LEVEL,0)) then
 *   plain variable would be false again after the first abort while the session stayed logged in: a files-only login with the whole API.
    files.only = @false
    files.write = @false       ;* 18 Oct 26, S.65: the same reason; false unless the group sdfileswrite is found (vb.scram.final, or the session's own test below)
+   files.admin = @false       ;* 21 Oct 26, S.73: the same reason; false unless the group sdfilesadmin is found (the session's own test below)
+   file.names = ''            ;* 21 Oct 26, S.73: no file is open yet
 * 25 Oct 26 Windows port - from Linux 96d8be8, S.65 slice 2c: ON WINDOWS THE SESSION THAT SERVES REQUESTS IS NOT THE PROCESS THAT RAN SCRAM.
 *   The front (LocalSystem) proves the password and hands the connection to a new pre-authenticated process (K$HANDOFF, above), which skips
 *   SCRAM; a mark set in the front's variables never reaches it, and a files-only login would have the whole API.  So THE SESSION WORKS OUT THE
@@ -395,6 +403,10 @@ if not(kernel(K$CPROC.LEVEL,0)) then
          api.write.in = is_grp_member(logname, 'sdfileswrite')
          api.write.stat = status()
          files.write = (api.write.in and api.write.stat = 0)
+*        21 Oct 26 S.73 item 3 (Linux ef9d594): the administration group, worked out the same way; a doubt is no administration.
+         api.admin.in = is_grp_member(logname, 'sdfilesadmin')
+         api.admin.stat = status()
+         files.admin = (api.admin.in and api.admin.stat = 0)
       end
    end
 
@@ -526,17 +538,25 @@ loop
 *   succeeded, so the first request 3 is allowed and a later one (an SDLogto) is not.  The SDCLIENT and SDNet tests in vb.open and
 *   the rest still apply to what is allowed through.
    if files.only then
-      if not(apifilesok(action, master.login.done, files.write)) then
+      if not(apifilesok(action, master.login.done, files.write, files.admin)) then
          if files.write then write.word = 'on' else write.word = 'off'
-         void kernel(K$AUDIT, 'api refused request=' : action : ' route=sdfiles write=' : write.word : ' user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
+         if files.admin then admin.word = 'on' else admin.word = 'off'
+         void kernel(K$AUDIT, 'api refused request=' : action : ' route=sdfiles write=' : write.word : ' admin=' : admin.word : ' user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
          server.error = SV$ON.ERROR
 * 18 Oct 26 dm - S.65 write group: a request the files-only table ALLOWS but that changes state, refused for want of the group, has its own text.
 *   The test is the same call with the write flag made true: allowed then means the group is all that was missing.
-         if not(files.write) and apifilesok(action, master.login.done, @true) then
-            abort.message = sysmsg(12526, action) ;* This login cannot change or lock files here: ask the administrator for files-write-on (request %1)
-         end else
-            abort.message = sysmsg(12485, action) ;* This login is for files only: request %1 is not allowed
-         end
+* 21 Oct 26 dm - S.73 item 3: the same for the administration group, tried in this order: write missing and the request allowed once it is given (12526); administration missing and the
+*   request allowed once it is given (12529); both missing and allowed once both are given (12529: it is the larger ask, and files-admin-on itself says "use files-write-on first").
+         begin case
+            case not(files.write) and apifilesok(action, master.login.done, @true, files.admin)
+               abort.message = sysmsg(12526, action) ;* This login cannot change or lock files here: ask the administrator for files-write-on (request %1)
+            case not(files.admin) and apifilesok(action, master.login.done, files.write, @true)
+               abort.message = sysmsg(12529, action) ;* This login cannot administer files here: ask the administrator for files-admin-on (request %1)
+            case not(files.write) and not(files.admin) and apifilesok(action, master.login.done, @true, @true)
+               abort.message = sysmsg(12529, action)
+            case 1
+               abort.message = sysmsg(12485, action) ;* This login is for files only: request %1 is not allowed
+         end case
          st = status()
          goto return.status.set
       end
@@ -615,6 +635,8 @@ loop
    vb.weofseq,        ;*  67   Truncate at the position (QMWeofSeq)
    vb.writeseqkey,    ;*  68   Write a record under the file's next sequential id (QMWriteSeqKey)
    vb.writeuseqkey,   ;*  69   The same, keeping the update lock (QMWriteuSeqKey)
+   vb.fileadmin,      ;*  70   A verb run on the server for the login: analyse, configure, index, create, delete (S.73 item 3)
+   vb.fcontrol,       ;*  71   FCONTROL(file, key, value) (S.73 item 3)
    vb.illegal.action
 
    st = status()
@@ -1214,6 +1236,8 @@ end else
    end
    else server.error = SV$ELSE
 end
+* 21 Oct 26 dm - S.73 item 3: the name the file was opened under, for request 70 (a verb run on the server names its file by it, never by what the caller sends).
+if server.error = SV$OK then file.names<i> = cmnd
 
       return
 
@@ -1235,6 +1259,7 @@ vb.close:
       if err then return
 
       close files(fno)   ;* 0346
+      file.names<fno> = ''   ;* 21 Oct 26, S.73 item 3
 
       return
 
@@ -2059,6 +2084,7 @@ vb.scram.final:
 *   initialised); this front only decides to let the login through, and audits the route.
                api.files.login = @false
                api.files.write = @false
+               api.files.admin = @false
                api.in.sdapi = is_grp_member(scram.user, 'sdapi')
                api.route.stat = status()
                if api.route.stat # 0 then
@@ -2095,6 +2121,11 @@ vb.scram.final:
                   api.files.write = is_grp_member(scram.user, 'sdfileswrite')
                   api.write.stat = status()
                   if api.write.stat # 0 then api.files.write = @false
+*
+* 21 Oct 26 dm - S.73 item 3 (Linux ef9d594, Windows port 25 Oct 26): THE ADMINISTRATION GROUP, read the same way and for the same reason (the session works it out again).
+                  api.files.admin = is_grp_member(scram.user, 'sdfilesadmin')
+                  api.admin.stat = status()
+                  if api.admin.stat # 0 then api.files.admin = @false
                end
 
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADMINISTRATOR REMOTE-API GATE
@@ -2199,7 +2230,8 @@ vb.scram.final:
 * 17 Oct 26 dm - S.65 slice 2c: the login is audited as a login by this route (Windows port 25 Oct 26: the mark itself is the session's to work out).
                if api.files.login then
                   if api.files.write then write.word = 'on' else write.word = 'off'
-                  void kernel(K$AUDIT, 'api login route=sdfiles write=' : write.word : ' user=' : scram.user)
+                  if api.files.admin then admin.word = 'on' else admin.word = 'off'
+                  void kernel(K$AUDIT, 'api login route=sdfiles write=' : write.word : ' admin=' : admin.word : ' user=' : scram.user)
                end
 
                response = 'v=' : scram.ssig
@@ -2700,7 +2732,8 @@ vb.readv:
 * 18 Oct 26 dm - S.65 write group: request 41 is allowed to a files-only login for a plain READV (flags 0), but flags 1, 2, 5 and 6 take a record lock, which
 *   is a change of state like requests 7 to 10 and 30.  !apifilesok sees only the number, so the flags are asked here, the same refusal, the same audit line.
                                                 if files.only and not(files.write) and flags # 0 then
-                                                   void kernel(K$AUDIT, 'api refused request=41 route=sdfiles write=off user=' : @logname)
+                                                   if files.admin then admin.word = 'on' else admin.word = 'off'  ;* 21 Oct 26, S.73 item 3: the same line shape as the gate's
+                                                   void kernel(K$AUDIT, 'api refused request=41 route=sdfiles write=off admin=' : admin.word : ' user=' : @logname)
                                                    server.error = SV$ON.ERROR
                                                    abort.message = sysmsg(12526, 41) ;* This login cannot change or lock files here: ask the administrator for files-write-on (request %1)
                                                    return
@@ -3280,6 +3313,133 @@ end else
    write wk.data to files(fno) creating.seqkey wk.id on error server.error = SV$ON.ERROR
 end
 if server.error = SV$OK then response = wk.id
+return
+
+* ======================================================================
+* FILEADMIN (request 70)  -  21 Oct 26, S.73 item 3.  A server verb run FOR THE LOGIN, built narrow because it is a new door for a files-only login.
+* In:  operation (short integer), file number (short integer; 0 for the operation that names no open file), the verb's words (text)
+* Out: what the verb printed (captured); an ON ERROR reply with its own text for a refusal
+*
+* THE VERB IS CHOSEN BY THE OPERATION NUMBER AND NEVER FROM THE TEXT: 1 analyse.file, 2 configure.file, 3 create.index, 4 build.index, 5 delete.index, 6 disable.index,
+* 8 create.file, 9 delete.file (7 is free: there is no enable.index, build.index switches an index on again).  The file an operation works on is NAMED BY THE OPEN FILE
+* (the name it was opened under, kept in file.names), so the caller cannot name a file it did not open; operation 8 names a NEW file, in the first word of the text.
+* The words are checked by fa.check.words before anything runs: letters, digits and . _ - only, single blanks, at most 200 characters, never PATHNAME, LPTR, FORCE or
+* NO.QUERY, and DIRECTORY only as the LAST word (it makes a directory file; a word after it would name a path).  A word the verb does not know is passed on as a name and
+* the verb refuses it.  The command runs as the login's own Linux user in the account the login entered, so that account's gates apply unchanged (voc.edit, bp.edit,
+* dict.edit through check.edit and the verb's own tests), the shared account's structure rule applies (a files-only login is never SDSYS), and so do the verb's own
+* refusals.  NO.QUERY is added for the two verbs that ask (create.file, delete.file).  The file is CLOSED here before the verb runs - the verbs need the file to themselves
+* and this process's handle would be one more opener - and opened again afterwards under the same file number, unless the file was deleted.  The audit line is written
+* BEFORE the command runs, so a command that is killed is still on the trail.
+
+vb.fileadmin:
+fa.op = oconv(cmnd[1,2], 'ISL')
+fno = oconv(cmnd[3,2], 'ISL')
+fa.text = cmnd[5,len(cmnd)]
+if config("SDCLIENT") # 0 or kernel(K$SDNET, -1) then
+   abort.message = sysmsg(5265) ;* Command execution is disabled
+   server.error = SV$ON.ERROR
+   return
+end
+fa.verb = ''
+if fa.op >= 1 and fa.op <= 9 then
+   fa.verb = field('analyse.file,configure.file,create.index,build.index,delete.index,disable.index,,create.file,delete.file', ',', fa.op)
+end
+if fa.verb = '' then
+   abort.message = sysmsg(12536, fa.op) ;* %1 is not a remote file administration operation
+   server.error = SV$ON.ERROR
+   return
+end
+fa.names.file = (fa.op # 8)
+fa.name = ''
+if fa.names.file then
+   gosub check.file
+   if err then return
+   fa.name = file.names<fno>
+   if fa.name = '' then
+      server.error = SV$ERROR
+      error.msg = sysmsg(5268) ;* Invalid file number
+      return
+   end
+   if fa.op # 1 then   ;* every operation but the report changes the file
+      gosub check.edit
+      if err then return
+   end
+end
+gosub fa.check.words
+if fa.bad # '' then
+   abort.message = sysmsg(12535, fa.bad) ;* "%1" is not accepted here: names, numbers and the verb's keywords only (no path, no quote)
+   server.error = SV$ON.ERROR
+   return
+end
+if fa.names.file then fa.shown = fa.name else fa.shown = field(fa.text, ' ', 1)
+void kernel(K$AUDIT, 'api admin request=70 op=' : fa.verb : ' file=' : fa.shown : ' user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
+fa.cmd = fa.verb
+if fa.names.file then fa.cmd := ' ' : fa.name
+if fa.text # '' then fa.cmd := ' ' : fa.text
+if fa.op = 8 or fa.op = 9 then fa.cmd := ' no.query'
+if fa.names.file then close files(fno)
+execute fa.cmd capturing response
+st = @system.return.code
+if fa.names.file then
+   if fa.op = 9 then
+      file.names<fno> = ''
+   end else
+      if upcase(fa.name[1,5]) = 'DICT ' then
+         open 'DICT', trim(fa.name[6,9999]) to files(fno) else file.names<fno> = ''
+      end else
+         open fa.name to files(fno) else file.names<fno> = ''
+      end
+   end
+end
+return to return.status.set
+
+* ---- FA.CHECK.WORDS  -  fa.bad is '' when every word of fa.text may go to the verb, otherwise the first word that may not (or a note for two blanks and a long text)
+fa.check.words:
+fa.bad = ''
+if len(fa.text) > 200 then
+   fa.bad = fa.text[1,20] : '...'
+   return
+end
+if fa.text = '' then return
+fa.allowed = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-'
+fa.n.words = dcount(fa.text, ' ')
+for fa.w = 1 to fa.n.words
+   fa.tok = field(fa.text, ' ', fa.w)
+   fa.tok.ok = (fa.tok # '')
+   for fa.c = 1 to len(fa.tok)
+      if index(fa.allowed, fa.tok[fa.c,1], 1) = 0 then fa.tok.ok = @false
+   next fa.c
+   if fa.tok.ok then
+      if index(',PATHNAME,LPTR,FORCE,NO.QUERY,', ',' : upcase(fa.tok) : ',', 1) then fa.tok.ok = @false
+      if upcase(fa.tok) = 'DIRECTORY' and fa.w # fa.n.words then fa.tok.ok = @false
+   end
+   if not(fa.tok.ok) and fa.bad = '' then
+      if fa.tok = '' then fa.bad = '(two blanks)' else fa.bad = fa.tok
+   end
+next fa.w
+return
+
+* ======================================================================
+* FCONTROL (request 71)  -  21 Oct 26, S.73 item 3.  The public FCONTROL(file, key {, value}) of an open file.
+* In:  fileno (short integer), key (short integer), the value (text; empty when the call had none)
+* Out: what the function returned.  The keys are the FC$ keys of keys.h; one the function does not know is its own error.
+* Every key but FC$VALID.ID (a question) changes the file or its counter, so check.edit asks the edit gates for the file's path first, as every other change does.
+
+vb.fcontrol:
+fno = oconv(cmnd[1,2], 'ISL')
+fc.key = oconv(cmnd[3,2], 'ISL')
+fc.value = cmnd[5,len(cmnd)]
+gosub check.file
+if err then return
+if fc.key # FC$VALID.ID then
+   gosub check.edit
+   if err then return
+end
+if fc.value = '' then
+   response = fcontrol(files(fno), fc.key)
+end else
+   response = fcontrol(files(fno), fc.key, fc.value)
+end
 return
 
 * ======================================================================

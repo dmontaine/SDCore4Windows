@@ -1,4 +1,4 @@
-* APIFILESOK(action, entered, writeok)
+* APIFILESOK(action, entered, writeok, adminok)
 * May a files-only API session make this request?
 * Copyright (c) String Database
 *
@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 21 Oct 26 dm S.73 item 3 (QMNet tiers C and D): a fourth argument, adminok (the login is also in the Linux group sdfilesadmin), and a second subset of the table, the ADMINISTRATION SET:
+*           68 and 69 (the write of a record under the file's own next sequential id: it moves the file's counter), 70 (a verb run on the server for the login: configure, index,
+*           create and delete a file) and 71 (fcontrol).  They are in the table, and need writeok AND adminok, each exactly 1.  Nothing else changes.
 * 20 Oct 26 dm S.72b: request 34 (recordlocked) joins the change set.  Until now any files login could ask who holds a lock on a record and was told
 *           the holder's user number on this server; now it needs the write group like the requests that take a lock (owner, 20 Oct 2026: the wall is here,
 *           the kernel's refusal of a read definition is only the clear text).  Message 12526 and the audit line "api refused request=34 ..." come from apisrvr.
@@ -29,7 +32,7 @@
 *
 * START-DESCRIPTION:
 *
-*    ok = !apifilesok(action, entered, writeok)
+*    ok = !apifilesok(action, entered, writeok, adminok)
 *
 *    action  - the request number, the Srvr codes of sdclient and the dispatch table of apisrvr.
 *    entered - true when the session has already entered an account (apisrvr's master.login.done, set at the first
@@ -43,6 +46,10 @@
 *              alone.  FAIL CLOSED: only exactly 1 (@true) is
 *              "write"; empty, 0, 2 or text is "no write".  (Request 41, readv, is in the table for plain reads; its locking forms, flags 1, 2,
 *              5 and 6, cannot be told from here because only the number is passed: apisrvr's vb.readv refuses them itself.)
+*    adminok - true when the login is also in the Linux group sdfilesadmin (apisrvr's files.admin, read at login).  Off unless the administrator
+*              of this server gave it (core direction 1; files-admin-on needs files-write-on first).  The requests that administer a file are
+*              refused to a login without it, and to one without writeok too: 68 and 69 (write under the file's next sequential id), 70 (a verb
+*              run on the server) and 71 (fcontrol).  FAIL CLOSED as writeok is: only exactly 1 counts.
 *
 *    Returns 1 when the request is allowed and 0 when it is not.  PURE: it reads nothing and writes nothing, so a
 *    sandbox can ask it about every number.  FAIL CLOSED: a number not in the table below - empty, not a number, one
@@ -57,14 +64,14 @@
 * START-CODE
 
 $internal
-function apifilesok(action, entered, writeok)
+function apifilesok(action, entered, writeok, adminok)
 $catalog !apifilesok
 
 * THE ALLOW TABLE.  One request number per line, the request in the comment.  A comma on each side so that the test
 * below cannot match part of a number.  NOT IN THE TABLE, ON PURPOSE (all refused): 0 (no such request), 20 call,
 * 21 execute, 22 respond, 23 end command, 24 and 25 the other logins, 27 and 28 (not supported), 29 open SDNet file,
 * 47 and 48 (the SCRAM login itself, only before logged.in), 50 getvar, 51 system, 52 and 53 trans, 54 transactions,
-* 55 to 60 evaluate and the conversions, 61 to 69 sequential files, and any number above 69.
+* 55 to 60 evaluate and the conversions, 61 to 67 sequential files, and any number above 71.
 files.ok = ','
 files.ok := '1,'    ;* quit
 files.ok := '2,'    ;* get extended error text
@@ -104,6 +111,10 @@ files.ok := '44,'   ;* selectleft
 files.ok := '45,'   ;* selectright
 files.ok := '46,'   ;* mark mapping
 files.ok := '49,'   ;* revision
+files.ok := '68,'   ;* writeseqkey (administration set, below)
+files.ok := '69,'   ;* writeuseqkey (administration set, below)
+files.ok := '70,'   ;* fileadmin: a verb run on the server for the login (administration set, below)
+files.ok := '71,'   ;* fcontrol (administration set, below)
 
 * THE CHANGE SET (18 Oct 26, S.65 write group): the numbers above that need writeok as well.  A subset of the table, by construction (the
 * test above comes first).  netfile never sends 7 to 10 (a plain read is request 6, a lock is request 30), so refusing them breaks no read.
@@ -123,6 +134,13 @@ files.chg := '32,'   ;* filelock
 files.chg := '33,'   ;* fileunlock
 files.chg := '34,'   ;* recordlocked (S.72b: the holder's user number is not for a login that cannot lock)
 
+* THE ADMINISTRATION SET (21 Oct 26, S.73 item 3): the numbers above that need adminok as well, and writeok too.  A subset of the table, by construction (the test above comes first).
+files.adm = ','
+files.adm := '68,'   ;* writeseqkey
+files.adm := '69,'   ;* writeuseqkey
+files.adm := '70,'   ;* fileadmin
+files.adm := '71,'   ;* fcontrol
+
 if action = '' then return 0
 if not(num(action)) then return 0
 
@@ -140,6 +158,13 @@ if not(index(files.ok, ',' : action : ',', 1)) then return 0
 *   FAIL CLOSED: only a writeok of exactly 1 (@true) lifts the change set; empty, 0, 2 and text all leave it refused.
 if writeok # 1 then
    if index(files.chg, ',' : action : ',', 1) then return 0
+end
+
+* 21 Oct 26 dm - S.73 item 3.  The administration set needs the write group AND the administration group, each exactly 1 (fail closed, as above).  Two tests, so that a login
+*   with the administration group and not the write group is refused too: the group alone gives nothing.  The same commas.
+if index(files.adm, ',' : action : ',', 1) then
+   if writeok # 1 then return 0
+   if adminok # 1 then return 0
 end
 
 return 1

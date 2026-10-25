@@ -361,6 +361,7 @@ const char * net_message(void);
 #define NETG_CLEAR 3   /* CLEARFILE */
 #define NETG_LOCK 4    /* READU READL MATREADU MATREADL READVU READVL RECORDLOCKU RECORDLOCKL */
 #define NETG_PEEK 5    /* RECORDLOCKED(): only the read-mode test of net_gate (S.72b) - it changes nothing, so a transaction does not matter */
+#define NETG_ADMIN 6   /* S.73 item 3: FCONTROL() and the administration verbs (configure, index, delete a file): read-mode, transaction and the edit gate of the remote file's name */
 #define NET_LOCK_HELD 0
 #define NET_LOCK_WAIT 1
 #define NET_LOCK_LOCKED 2
@@ -377,6 +378,15 @@ int net_lock_step(FILE_VAR * fvar, char * id, int16_t id_len, bool update, u_int
 int net_filelock_step(FILE_VAR * fvar, u_int16_t op_flags, u_char * retry_pc);
 int net_fileunlock(FILE_VAR * fvar, u_int16_t op_flags);
 int net_recordlocked(FILE_VAR * fvar, char * id, int16_t id_len);
+/* S.73 item 3 (21 Oct 26, QMNet tiers C and D).  Each returns 0 or a negative status (raised unless process.op_flags has P_ON_ERROR; the callers have none) and leaves the handler's answer in
+   *result (or *id) for the caller to release.  The server's reply STATUS() is net_reply_status.  net_admin() is request 70 on the open file (operation 1 analyse.file, 2 configure.file,
+   3 create.index, 4 build.index, 5 delete.index, 6 disable.index, 9 delete.file), net_create_file() request 70 operation 8 for a server (no file yet), net_fcontrol() request 71,
+   net_write_seqkey() requests 68 and 69.  net_admin() and net_fcontrol() ask net_gate() themselves; net_write_seqkey() is called after the write statement's net_gate(). */
+int net_admin(FILE_VAR * fvar, int op, const char * words, int wlen, DESCRIPTOR * result);
+int net_create_file(const char * server, int slen, const char * words, int wlen, DESCRIPTOR * result);
+int net_fcontrol(FILE_VAR * fvar, int key, const char * value, int vlen, DESCRIPTOR * result);
+int net_write_seqkey(FILE_VAR * fvar, STRING_CHUNK * rec, bool keep_lock, STRING_CHUNK ** id);
+int net_last_reply_status(void);
 int net_check_lock(FILE_VAR * fvar, char * id, int16_t id_len);
 void net_release(FILE_VAR * fvar, char * id, int16_t id_len);
 void net_release_all(void);

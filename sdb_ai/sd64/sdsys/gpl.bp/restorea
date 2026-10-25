@@ -3,6 +3,8 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: the manifest key route.files.admin (acc_os_info) is read and handed to !create_account (CA$FILESADMIN) when
+*              route.files and route.files.write are 1 too; a manifest that has none restores as not in sdfilesadmin.
 * 25 Oct 26 Windows port - from Linux 2287a0a (18 Oct 26): gcat.restore reads the global catalogue with the call name in LOWER case (it was upcase()d, so the
 *              lookup missed every entry, 13017 never fired and a different program already there was overwritten); the messages name the program in
 *              lower case.
@@ -436,6 +438,9 @@ restore.one:
 *     18 Oct 26, S.65 write group: sdfileswrite as it was, but only for an account that is in sdfiles (the group alone gives nothing, and !create_account
 *     refuses it): a manifest with none, or with write and no files, restores as not in the write group.
       if m.route.files = '1' and m.route.files.write = '1' then settings<CA$FILESWRITE> = 1
+*     21 Oct 26, S.73 item 3: sdfilesadmin as it was, but only for an account that is in both (the group alone gives nothing, and !create_account refuses it): a manifest with
+*     none, or with admin and no write, restores as not in the administration group.
+      if m.route.files = '1' and m.route.files.write = '1' and m.route.files.admin = '1' then settings<CA$FILESADMIN> = 1
       settings<CA$REUSE.SD.USER> = 1
       call !create_account(m.type, acc.name, settings, err)
       if err # '' then gosub show.err ; return
@@ -721,7 +726,7 @@ show.err:
 load.section:
    m.source.path = '' ; m.type = '' ; m.desc = '' ; m.ssh = '' ; m.api = ''
    m.members = '' ; m.suspended = '' ; m.os.sh = '' ; m.os.execute = ''
-   m.edit.voc = '' ; m.edit.bp = '' ; m.edit.dict = '' ; m.net = '' ; m.route.files = '' ; m.route.files.write = ''
+   m.edit.voc = '' ; m.edit.bp = '' ; m.edit.dict = '' ; m.net = '' ; m.route.files = '' ; m.route.files.write = '' ; m.route.files.admin = ''
    m.shared.read = '' ; m.shared.write = ''     ;* 18 Oct 26, S.66
    m.files = '' ; m.bytes = '' ; m.dirs = ''
    for kp = 1 to dcount(sec.keys<s.idx>, @vm)
@@ -744,6 +749,7 @@ load.section:
          case sec.keys<s.idx,kp> = 'net'         ; m.net = kv
          case sec.keys<s.idx,kp> = 'route.files' ; m.route.files = kv
          case sec.keys<s.idx,kp> = 'route.files.write' ; m.route.files.write = kv
+         case sec.keys<s.idx,kp> = 'route.files.admin' ; m.route.files.admin = kv
          case sec.keys<s.idx,kp> = 'files'       ; m.files = kv
          case sec.keys<s.idx,kp> = 'bytes'       ; m.bytes = kv
          case sec.keys<s.idx,kp> = 'dirs'        ; m.dirs = kv
