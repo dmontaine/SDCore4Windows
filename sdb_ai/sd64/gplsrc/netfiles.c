@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 24 Oct 26 dm  W.11 F9: the administrator and NET tests are MY_ADMIN() and MY_GATE() (the process's own words), not the user table entry.
  * 21 Oct 26 dm  S.73 item 3, D1: net_index_query() - INDICES, SELECTINDEX (both forms), SETLEFT, SETRIGHT, SELECTLEFT and SELECTRIGHT of a remote file go to the server through the handler's
  *               NF$INDEXQ.  They change nothing and ask no gate beyond the NET gate (the owner's "no new gate"): a read-mode handle may use them, and a transaction does not matter.  The
  *               statements themselves (dh_ak.c) turn the answer into a select list, a key variable and STATUS().
@@ -359,7 +360,7 @@ Private int net_raise(int status, u_int16_t entry) {
    net_gate_ok()  -  May this session open a file on another server?  The administrator, or an account holding the NET gate (K_NET).  */
 
 Private bool net_gate_ok() {
-  return ((my_uptr->flags & USR_ADMIN) != 0) || ((my_uptr->gates & UG_NET) != 0);
+  return MY_ADMIN() || MY_GATE(UG_NET);
 }
 
 /* ======================================================================
@@ -1045,7 +1046,7 @@ int net_gate(FILE_VAR* fvar, int kind, u_int16_t op_flags, const char* what) {
 
   if ((kind == NETG_WRITE) || (kind == NETG_DELETE) || (kind == NETG_CLEAR) || (kind == NETG_ADMIN)) {
     ek = fvar->access.net.edit_kind;
-    if ((ek != EDIT_NONE) && !(process.program.flags & HDR_INTERNAL) && !(my_uptr->flags & USR_ADMIN) && !edit_permitted(ek)) {
+    if ((ek != EDIT_NONE) && !(process.program.flags & HDR_INTERNAL) && !MY_ADMIN() && !edit_permitted(ek)) {
       net_set_message(12409 + ek, "", "", ""); /* 12410 voc, 12411 dictionary, 12412 program file: texts with no arguments */
       st = net_raise(-ER_PERM, op_flags & P_ON_ERROR);
       process.status = st;

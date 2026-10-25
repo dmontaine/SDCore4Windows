@@ -25,6 +25,7 @@
  *           means the fixed port SD_API_PORT (owner's port ruling)
  * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT (5) and NETREPLY (30): the two SDNet timeouts, seconds, 1 to 3600, per process (K8d, S.65).  Zero is refused (openQM's NETWAIT 0 means no limit).
  * 19 Oct 26 Windows port - from Linux d93ea0d - NETWAIT and NETREPLY are held in 32 bit fields (config.h): 65541 in sd.conf wrapped to 5 in the 16 bit field BEFORE rangecheck, so SD started with a 5 second wait instead of
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: sd_sysdir() and sd_sysdir_trust(), the system directory a process trusts, from this file and not from the shared segment.
  *               refusing the value.  (PWDELAY and DHCACHE are 16 bit fields read the same way and wrap the same way; they are not changed here.)
  * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
  *           (RELEASE_1.1 5 stage 3a)
@@ -623,6 +624,61 @@ Private bool rangecheck(char* param,
 
 Private bool ranges_overlap(int lo1, int count1, int lo2, int count2) {
   return (lo1 < lo2 + count2) && (lo2 < lo1 + count1);
+}
+
+/* ======================================================================
+   W.11 F9: the system directory this process TRUSTS
+
+   sysseg->sysdir is a copy of SDSYS= that the starter made, in a segment every member of sdusers can write, so no decision may rest on it.  The
+   trusted copy comes from the configuration file this process was told to use (SD_CONFIG, else /etc/sd.conf, which is root's on an install).
+   A session takes it when bind_sysseg() reads the whole file (sd_sysdir_trust()); a command that only attaches (sd -stop, -cleanup ...) asks
+   sd_sysdir() and gets a scan of that one line, so that a bad line elsewhere does not stop those commands.  It is "" when the file cannot be
+   read, and a path built from "" fails: an unreadable configuration ends badly, never in a directory the segment names.                    */
+
+Private char trusted_sysdir[MAX_PATHNAME_LEN + 1] = "";
+
+/* SDSYS= of the [sd] section: the last one, as read_config() takes it.  Writes nothing to out unless it finds one.  No other line is judged. */
+
+Private bool config_sysdir_scan(char *out) {
+  FILE* fu;
+  char rec[200 + 1];
+  char section[32 + 1] = "";
+  char* p;
+  bool found = FALSE;
+
+  if ((config_path[0] == '\0') || ((fu = fopen(config_path, "r")) == NULL))
+    return FALSE;
+
+  while (fgets(rec, sizeof(rec), fu) != NULL) {
+    if ((p = strchr(rec, '\n')) != NULL)
+      *p = '\0';
+    if ((rec[0] == '#') || (rec[0] == '\0'))
+      continue;
+    if (rec[0] == '[') {
+      p = strchr(rec, ']');
+      if (p != NULL)
+        *p = '\0';
+      strncpy(section, rec + 1, 32);
+      UpperCaseString(section);
+      continue;
+    }
+    if (!strcmp(section, "SD") && (strncmp(rec, "SDSYS=", 6) == 0)) {
+      snprintf(out, MAX_PATHNAME_LEN + 1, "%s", rec + 6);
+      found = TRUE;
+    }
+  }
+  fclose(fu);
+  return found;
+}
+
+const char* sd_sysdir(void) {
+  if (trusted_sysdir[0] == '\0')
+    (void)config_sysdir_scan(trusted_sysdir);
+  return trusted_sysdir;
+}
+
+void sd_sysdir_trust(const char* dir) {
+  snprintf(trusted_sysdir, sizeof(trusted_sysdir), "%s", dir);
 }
 
 /* END-CODE */

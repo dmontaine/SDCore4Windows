@@ -27,6 +27,14 @@
  * 15 Oct 26 Windows port - from Linux 400500c - XF_FCONTROL: the public FCONTROL() (pub_fcontrol(), dh_misc.c).
  * 15 Oct 26 Windows port - from Linux 400500c - XF_DIGEST for QM4 gaps bundle Q-13 (DIGEST()).
  * 15 Oct 26 Windows port - from Linux 400500c - Written for QM4 gaps bundle Q-1: CEIL FLOOR ROUNDUP ROUNDDOWN IS.* LEFT RIGHT LAST NV NS TRIMWS MATCHESS
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: SIGNAL's administrator test is MY_ADMIN() (the process's own word), not the user table entry.
+ * 19 Oct 26 Windows port - from Linux 2a68b2f - S.67 stage 1: x_ospath() key 5 (delete) calls masters_note_name() for the path it removed (journalled for the master files).
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - XF_SDSALT, XF_SDKEY, XF_SDRANDKEY: encryption layer 2, for any program (sd_encrypt_sodium.c).  The first XFUN
+ *               functions that take no arguments (bcomp's in.xfun skips get.args for a row that writes none).
+ * 17 Oct 26 Windows port - from Linux 2a68b2f - S.64 part 2: x_ospath() asks the edit gates (edit_os_path_refusal) before OSPATH key 5 (delete) and keys 13 and 14 (make a
+ *               directory, make the path): a path through a VOC, a dictionary, a program file or the private catalogue is refused.
+ * 16 Oct 26 Windows port - from Linux 2a68b2f - XF_OSPATH: OSPATH() for programs that are not internal, with openQM's key numbers (x_ospath(); Fixes item 233).
+ * 16 Oct 26 Windows port - from Linux 2a68b2f - XF_GET: the GET statement for devices opened by OPENSEQ (op_get_device(), op_seqio.c; Fixes item 583).
  *               MATCHFIELDS.  One opcode (0xBB, a single byte, so that the multivalue wrappers MVDS, MVDSS and MVDSSS can
  *               take it as their base) with the function number pushed last, as OP_EPOCHCV does.
  * END-HISTORY
@@ -388,7 +396,7 @@ Private int32_t x_signal(int32_t uid) {
   uptr = UserPtr(uid);
   if ((uptr == NULL) || (uptr->uid != uid))
     return 0;
-  if (!(my_uptr->flags & USR_ADMIN) && (strcmp((char*)(uptr->username), (char*)(my_uptr->username)) != 0))
+  if (!MY_ADMIN() && (strcmp((char*)(uptr->username), (char*)(my_uptr->username)) != 0))
     return 0;
   __atomic_fetch_or(&uptr->flags, (int16_t)USR_SIGNAL, __ATOMIC_SEQ_CST);
   return 1;

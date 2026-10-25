@@ -20,6 +20,19 @@
  * 25 Oct 26 Windows port - from Linux 5315c65 (18 Oct 26), S.65 slice 3e: WRITE, WRITEU, MATWRITE, WRITEV, DELETE and CLEARFILE of a NET_FILE of a write-mode
  *               server go to netfiles.c (net_write, net_delete, net_clear), and READU, READL, MATREADU, MATREADL, READVU and READVL take the record lock
  *               there first (net_lock_step), once refuse_net_file() has asked net_gate(); a read-mode file variable is refused as in slice 3c.  MUSTLOCK
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the administrator test is MY_ADMIN() (the process's own word), not the user table entry.
+ * 19 Oct 26 Windows port - from Linux 2a68b2f - S.67 (verifier F3): the read of a DYNAMIC file tells masters_note_read(), so that a save of a master record is judged against the record the
+ *               session read.
+ * 19 Oct 26 Windows port - from Linux 2a68b2f - S.67 stage 2: WRITE and DELETE of a record of voc_master or dict_master INSIDE A TRANSACTION are refused before they reach the
+ *               transaction's cache (masters_txn_refusal), and a refusal from the DH layer (DHE_MASTER_REFUSED, status -8910) is reported with its reason
+ *               in plain words (masters_refusal_text) in place of "Error 8910 writing record".
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.66: edit_refusal() asks edit_refusal_for_canon() (op_sh.c: the administrator, then shared.write for a file inside the shared
+ *               account, then the S.64 kind) after its own HDR_INTERNAL and administrator returns; EDIT_REFUSED_MSG() is edit_refused_message()
+ *               (11513 and 11514 as well as 11405-11407); shared_structure_refusal() (no HDR_INTERNAL exemption) is asked by CLEARFILE before the
+ *               read-only and S.64 tests, and by the structure ops of other files.
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.65 slice 3e: WRITE, WRITEU, MATWRITE, WRITEV, DELETE and CLEARFILE of a NET_FILE of a write-mode server go to netfiles.c
+ *               (net_write, net_delete, net_clear), and READU, READL, MATREADU, MATREADL, READVU and READVL take the record lock there first
+ *               (net_lock_step), once refuse_net_file() has asked net_gate(); a read-mode file variable is refused as in slice 3c.  MUSTLOCK
  *               and $MODE AUTOLOCK are honoured for a remote WRITE and DELETE (net_pre_change_lock).  Refactored: refuse_net_file() takes the
  *               kind of statement; net_reload_read_operands() is the operand lookup that read_record() needed twice.
  * 25 Oct 26 Windows port - from Linux e7ea5f8 (17 Oct 26), S.65 slice 3c: a NET_FILE (a file on another SD server) is read by READ, MATREAD and READV through
@@ -163,7 +176,7 @@ Private int edit_refusal(FILE_VAR *fvar) {
     return EDIT_NONE;
   if (process.program.flags & HDR_INTERNAL)
     return EDIT_NONE;
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return EDIT_NONE;
 
   /* The file table is shared memory; the name cannot change while this session holds the file open.  18 Oct 26 S.66: the order of
@@ -284,7 +297,7 @@ Private void net_reload_read_operands(DESCRIPTOR **rid_descr, DESCRIPTOR **fvar_
 int shared_structure_refusal(FILE_VAR *fvar) {
   if ((fvar == NULL) || ((fvar->type != DYNAMIC_FILE) && (fvar->type != DIRECTORY_FILE)))
     return EDIT_NONE;
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return EDIT_NONE;
   if (path_in_shared((const char *)FPtr(fvar->file_id)->pathname))
     return EDIT_SHARED_STRUCT;

@@ -689,7 +689,7 @@ void log_message(char* msg) {
   if (sysseg->errlog) {
     StartExclusive(ERRLOG_SEM, 71);
 
-    sprintf(buff, "%s%cerrlog", sysseg->sysdir, DS);
+    sprintf(buff, "%s%cerrlog", sysseg->sysdir, DS); /* 25 Oct 26 W.11 F9: NOT converted, as Linux's sdlnxd is not: this daemon maps the segment itself and never reads sd.conf, so sd_sysdir() is "" here (row 53) */
     errlog = open(buff, O_RDWR | O_CREAT | O_BINARY, 0777);
 
     /* Modified by Composer AI - 2026/06/10.

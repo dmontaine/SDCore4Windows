@@ -206,7 +206,7 @@ Private void start_file(PRINT_UNIT* pu) {
       pu->file.jobno = (sysseg->prtjob)++;
       EndExclusive(SHORT_CODE);
       /* convert to snprintf() -gwb 22Feb20 */
-      if (snprintf(fn, MAX_PATHNAME_LEN + 1, "%s/prt/p%d", sysseg->sysdir,
+      if (snprintf(fn, MAX_PATHNAME_LEN + 1, "%s/prt/p%d", sd_sysdir(),
                    pu->file.jobno) >= (MAX_PATHNAME_LEN + 1)) {
          /* TODO this should be logged to a file with more info */
          k_error("Overflowed path/filename buffer in start_file()!");

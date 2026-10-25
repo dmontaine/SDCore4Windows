@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - kill_process() releases the class objects held in named common before the e-stack is freed: their destroy code (S.65
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the process's own privilege words (my_priv_flags, my_priv_gates) are zeroed where the user table entry's flags and gates are.
  *               $netfile's sdclient objects) ran on freed memory and the process died with a double free.
  * 17 Oct 26 dm  S.64: a process taking its user entry starts with the edit gates off (the user table's gates word).
  * 17 Oct 26 dm  k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
@@ -182,6 +183,8 @@ retry_login:
     my_uptr->pid = GetCurrentProcessId();
     strcpy((char*)(my_uptr->ip_addr), ip_addr);
     my_uptr->events = 0;
+    my_priv_flags = 0; /* 24 Oct 26 W.11 F9: the privileges this process holds, which nothing in the segment can grant (sysseg.h) */
+    my_priv_gates = 0;
     my_uptr->flags = 0;
     my_uptr->gates = 0; /* 17 Oct 26 S.64: the edit gates start off; LOGIN or the API server loads them */
     memset((void*)&(my_uptr->ustats), 0, sizeof(struct FILESTATS)); /* FSTAT.USER */
@@ -338,7 +341,7 @@ retry_login:
 
     if (IsElevated(&why) && (connection_type != CN_SOCKET) &&
         IsInteractive(&why_desktop)) {
-      my_uptr->flags |= USR_ADMIN;
+      SET_MY_PRIV(USR_ADMIN, 1); /* 25 Oct 26 W.11 F9: the process's own word first (sysseg.h) */
     } else {
       /* WHICHEVER OF THE TWO COULD NOT ANSWER, and not just the first.  Two
          out-parameters rather than one, because && short-circuits: reusing a

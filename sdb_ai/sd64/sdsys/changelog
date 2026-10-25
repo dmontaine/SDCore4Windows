@@ -2,6 +2,28 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+24 Oct 26  WHAT A SESSION DECIDES ON IS NO LONGER READ FROM SD'S SHARED MEMORY: AN SD USER WITH A SHELL CAN NO LONGER CHANGE THE SYSTEM DIRECTORY, THE
+           P-CODE, THE SETTINGS OR A SESSION'S PRIVILEGES BY WRITING TO IT (SECURITY-MODEL EVALUATION, FINDING F9).
+
+             What        1. A session takes its system directory from SDSYS= in sd.conf, not from the shared memory. The global catalogue, the
+                         register, the messages, the audit trail and the error log are found under it. 2. A session reads bin/pcode itself, once, and
+                         refuses it if others or the group sdusers can write it; it used to run the copy the starter put in the shared memory. 3. A
+                         session reads sd.conf when it starts to get its own settings (SH, SPOOLER, USRDIR, GRPDIR, DUMPDIR, TEMPDIR and the rest of the
+                         per-session ones), instead of copying the template the starter left in the shared memory. 4. A session's administrator, sh,
+                         os.execute and sd.accounts bits, and its gates, are held in the process. The copy in the shared memory is only what LISTU shows.
+             Why it      The shared memory is mode 0660 group sdusers (the fix just below) and every SD user is in that group, so an SD user with a shell
+                         could attach it and write. A changed system directory or p-code ran in the next session of anybody, SDSYS included; a changed
+                         setting ran the SH command or the spooler of his choice; and setting the bits in a running session made an ordinary session an
+                         administrator or opened its gates. Measured on the tree before the change, in a private SD: writing the bits made a plain
+                         session say admin=1 sh=1 osx=1, and SH then ran a command it had been refused.
+             Does not    Stop an SD user with a shell from changing the lock table, the file table or the user table, which are still in the shared
+                         memory: he can release other people's locks, log other sessions out or fill the user table. That is damage and denial of
+                         service, not a privilege, and only a privileged process between the users and the tables would close it. It also changes how
+                         sd.conf behaves: every new session reads it, so an edit to SH, SPOOLER, USRDIR and the like reaches the sessions started
+                         after it without a restart, and a bad line in sd.conf stops new sessions from starting (with the message sd -start gives)
+                         until it is repaired. SD and the sessions already running are not affected. Every SD user's session opens sd.conf now, so it
+                         must stay readable by them (as installed: mode 0644, owned by root).
+
 20 Oct 26  THE API'S "OPEN AN SDNET FILE" REQUEST NO LONGER FOLLOWS A VOC POINTER OUT OF THE ACCOUNT UNLESS THE ACCOUNT HAS OS-ON.
 
              What        API request 29 opens a file named in an account's VOC for a client that is not a person at a terminal. It is

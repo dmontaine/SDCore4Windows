@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 25 Oct 26 Windows port - from Linux 2a68b2f (24 Oct 26) W.11 F9: every privilege and gate test reads the process's own words (MY_ADMIN, MY_PRIV, MY_GATE: sysseg.h), not the user
+ *           table entry; the register and the shared account are under sd_sysdir().
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  shared_root_get() (the account's directory from its register record, a hit
  *           kept, a miss retried once a minute, SUSPENDED not looked at), path_in_shared(), path_resolved_in_shared(), shared_write_ok(),
  *           edit_refusal_for_canon() and edit_refusal_for_name() (administrator, then shared.write, then the S.64 kind), shared_ref_ok()
@@ -299,7 +301,7 @@ Private bool os_user_permitted(PRIV_WHY* why) {
    a file by pathname) is exempt from the gate itself and must not become the way round it.                          */
 
 bool os_gate_open(void) {
-  return (my_uptr->flags & (USR_ADMIN | USR_OS_EXEC)) != 0;
+  return MY_PRIV(USR_ADMIN | USR_OS_EXEC);
 }
 
 /* os_path_ok_for_account()  -  may this account open this OS pathname?  Yes if it holds the OS gate; otherwise only
@@ -318,7 +320,7 @@ bool os_path_ok_for_account(const char *name) {
   if (account_path_permitted(resolved, TRUE))
     return TRUE;
   /* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate, between the own account and OS.EXECUTE (op_dio2.c) */
-  return ((my_uptr->flags & USR_SD_ACCOUNTS) != 0) && path_in_enterable_account(resolved);
+  return MY_PRIV(USR_SD_ACCOUNTS) && path_in_enterable_account(resolved);
 }
 
 /* os_path_open_ok()  -  the same for a caller: an $internal program is trusted, anyone else is asked. */
@@ -487,15 +489,15 @@ int edit_kind_of_net_name(const char *name) {
    needs the gate for the kind, loaded at sign-on (UG_x in the user table's gates word) from the register.            */
 
 bool edit_permitted(int kind) {
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return TRUE;
   switch (kind) {
     case EDIT_VOC:
-      return (my_uptr->gates & UG_VOC_EDIT) != 0;
+      return MY_GATE(UG_VOC_EDIT);
     case EDIT_DICT:
-      return (my_uptr->gates & UG_DICT_EDIT) != 0;
+      return MY_GATE(UG_DICT_EDIT);
     case EDIT_PROG:
-      return (my_uptr->gates & UG_BP_EDIT) != 0;
+      return MY_GATE(UG_BP_EDIT);
   }
   return TRUE;
 }
@@ -539,7 +541,7 @@ bool shared_root_get(char *out) {
     return FALSE;
   last_try = now;
 
-  if (snprintf(path, sizeof(path), "%s%caccounts%cshared", sysseg->sysdir, DS, DS) >= (int)sizeof(path))
+  if (snprintf(path, sizeof(path), "%s%caccounts%cshared", sd_sysdir(), DS, DS) >= (int)sizeof(path))
     return FALSE;
   if ((fp = fopen(path, "r")) == NULL)
     return FALSE;
@@ -554,7 +556,7 @@ bool shared_root_get(char *out) {
   if (n == 0)
     return FALSE;
   if (strncasecmp(body, "@SDSYS", 6) == 0) {
-    if (snprintf(line1, sizeof(line1), "%s%s", sysseg->sysdir, body + 6) >= (int)sizeof(line1))
+    if (snprintf(line1, sizeof(line1), "%s%s", sd_sysdir(), body + 6) >= (int)sizeof(line1))
       return FALSE;
   } else if (body[0] == '@') {
     return FALSE; /* some other token: not expanded here, so not trusted */
@@ -623,7 +625,7 @@ bool path_resolved_in_shared(const char *name) {
 
 /* shared_write_ok()  -  may this session save a change to a record of a file in the shared account? */
 bool shared_write_ok(void) {
-  return (my_uptr->flags & USR_ADMIN) || ((my_uptr->gates & UG_SHARED_WRITE) != 0);
+  return MY_ADMIN() || MY_GATE(UG_SHARED_WRITE);
 }
 
 /* edit_refusal_for_canon()  -  the kind that refuses THIS SESSION's write to a file with this canonical pathname, else EDIT_NONE.
@@ -632,7 +634,7 @@ bool shared_write_ok(void) {
 int edit_refusal_for_canon(const char *canon) {
   int kind;
 
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return EDIT_NONE;
   if (path_in_shared(canon) && !shared_write_ok())
     return EDIT_SHARED_WRITE;
@@ -646,7 +648,7 @@ int edit_refusal_for_canon(const char *canon) {
 int edit_refusal_for_name(const char *name) {
   int kind;
 
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return EDIT_NONE;
   if (path_resolved_in_shared(name) && !shared_write_ok())
     return EDIT_SHARED_WRITE;
@@ -801,7 +803,7 @@ int edit_os_path_refusal(const char *name, bool include_leaf) {
   int cat_pos;
   bool inside;
 
-  if (my_uptr->flags & USR_ADMIN)
+  if (MY_ADMIN())
     return EDIT_NONE;
   if ((name == NULL) || (name[0] == '\0'))
     return EDIT_NONE;
@@ -815,7 +817,7 @@ int edit_os_path_refusal(const char *name, bool include_leaf) {
 
   if (inside) {
     rel = relbuf; /* inside the account's own directory: look below it */
-  } else if (my_uptr->flags & USR_OS_EXEC) {
+  } else if (MY_PRIV(USR_OS_EXEC)) {
     return EDIT_NONE; /* OS.EXECUTE: the whole machine, and a shell; not covered */
   } else {
     rel = relbuf; /* another account's directory through SD.ACCOUNTS: the whole path */

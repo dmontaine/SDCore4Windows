@@ -22,6 +22,11 @@
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): FILEINFO key 1021 is FL_WHO, the openQM form (a list of user numbers); the text form FL_HOLDERS that SD's
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: FILEINFO of a NET_FILE (a file on another SD server) is answered before anything reads the file table
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: FILEINFO FL$READONLY of a NET_FILE answers the file variable's own read-only flag (1 for a file of a read-mode
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: SYSDIR answers sd_sysdir() (the configuration file's); the administrator tests are MY_ADMIN().
+ * 19 Oct 26 Windows port - from Linux 2a68b2f - S.67 stage 1: OSPATH OS_DELETE and OSRENAME call masters_note_name() for the paths they remove, move and make (a VOC or dictionary
+ *               file is journalled for the master files).
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.66: OSPATH keys OS_DELETE, OS_MKDIR and OS_MKPATH, and OSRENAME (either name), do nothing and answer false (STATUS() ER_PERM)
+ *               for a path inside the shared account unless the session is the administrator, a $internal program included.
  *               server, 0 for a write-mode one), and FL$SETRDONLY from a $internal program sets it, as for a local file.
  * 17 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3c: FILEINFO of a NET_FILE (a file on another SD server) is answered before anything reads the file table
  *               at FPtr(file_id), which it has not: the keys that are about the file variable are answered here, the 10000 range
@@ -843,7 +848,7 @@ void op_sysdir() {
      |================================|=============================|
 */
 
-  k_put_c_string((char*)(sysseg->sysdir), e_stack);
+  k_put_c_string((char*)sd_sysdir(), e_stack);
   e_stack++;
 }
 
@@ -1038,7 +1043,7 @@ void op_ospath() {
 
   /* 18 Oct 26 S.66: deleting or making a file or directory inside the shared account is a structure change, SDSYS's alone; a $internal
      program is not exempt.  Nothing is done; the answer is false (0) and STATUS() ER_PERM.  OS_CHOWN is not asked. */
-  if (((key == OS_DELETE) || (key == OS_MKDIR) || (key == OS_MKPATH)) && !(my_uptr->flags & USR_ADMIN) && path_resolved_in_shared(path)) {
+  if (((key == OS_DELETE) || (key == OS_MKDIR) || (key == OS_MKPATH)) && !MY_ADMIN() && path_resolved_in_shared(path)) {
     process.status = ER_PERM;
     status = 0;
     goto set_status;
@@ -1402,7 +1407,7 @@ void op_osrename() {
 
   /* 18 Oct 26 S.66: renaming into, out of or within the shared account changes its structure: SDSYS's alone, a $internal program included.
      Nothing is done; the answer is 0 (ER_PERM).  */
-  if (!(my_uptr->flags & USR_ADMIN) && (path_resolved_in_shared(old_path) || path_resolved_in_shared(new_path))) {
+  if (!MY_ADMIN() && (path_resolved_in_shared(old_path) || path_resolved_in_shared(new_path))) {
     process.status = ER_PERM;
     goto exit_osrename;
   }
@@ -1843,7 +1848,7 @@ bool net_vocpath_permitted(char* path, bool for_write) {
      vetted the pathname - but a network session is held by the kernel as well, and the shared directory is outside its own account.  So a session
      with the shared.read gate on is let into the shared directory (and nowhere else here).  Writing is NOT decided here: a record write is refused
      by edit_refusal_for_canon() without shared.write, and a structure change by shared_structure_refusal(). */
-  if (((my_uptr->gates & UG_SHARED_READ) != 0) && path_in_shared(path))
+  if (MY_GATE(UG_SHARED_READ) && path_in_shared(path))
     return TRUE;
   return net_path_permitted(path, for_write);
 }
@@ -1941,7 +1946,7 @@ bool path_in_enterable_account(char* resolved) /* Absolute, as left by fullpath(
 
   if (!net_normalise(resolved, cand) || has_parent_ref(cand))
     return FALSE;
-  if (snprintf(regdir, sizeof(regdir), "%s%caccounts", sysseg->sysdir, DS) >= (int)sizeof(regdir))
+  if (snprintf(regdir, sizeof(regdir), "%s%caccounts", sd_sysdir(), DS) >= (int)sizeof(regdir))
     return FALSE;
   if ((d = opendir(regdir)) == NULL)
     return FALSE;
@@ -1976,7 +1981,7 @@ bool path_in_enterable_account(char* resolved) /* Absolute, as left by fullpath(
     if (line[0][0] == '\0')
       continue;
     if (strncasecmp(line[0], "@SDSYS", 6) == 0) {
-      if (snprintf(acct, sizeof(acct), "%s%s", sysseg->sysdir, line[0] + 6) >= (int)sizeof(acct))
+      if (snprintf(acct, sizeof(acct), "%s%s", sd_sysdir(), line[0] + 6) >= (int)sizeof(acct))
         continue;
     } else if (line[0][0] == '@') {
       continue; /* some other token: not expanded here, so not trusted */
@@ -2051,7 +2056,7 @@ bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() *
 
   if (!for_write) {
     for (i = 0; net_sysdir_shared[i] != NULL; i++) {
-      if (snprintf(item, MAX_PATHNAME_LEN + 1, "%s%c%s", sysseg->sysdir, DS,
+      if (snprintf(item, MAX_PATHNAME_LEN + 1, "%s%c%s", sd_sysdir(), DS,
                    net_sysdir_shared[i]) >= (MAX_PATHNAME_LEN + 1))
         continue;
 

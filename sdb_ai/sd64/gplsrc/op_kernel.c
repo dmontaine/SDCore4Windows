@@ -30,6 +30,14 @@
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.64 part 2: K_EDIT_OS_OK asks edit_os_path_refusal() with the target's own name counted when it is a directory or
  * 18 Oct 26 Windows port - from Linux ee56aba - S.65: setting K_NET from a $internal program (sign-on, the API server, LOGTO going in and coming back) calls net_close_all():
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: K_EDIT_OK and K_EDIT_KIND accept the FILE VARIABLE of a file on another SD server (its edit kind was set at open from
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the privilege keys (administrator, SH, OS.EXEC, SD.ACCOUNTS, the edit, NET and shared gates) set and answer process-private
+ *               words (SET_MY_PRIV, MY_PRIV, SET_MY_GATE, MY_GATE: sysseg.h), not the user table entry; paths are under sd_sysdir().
+ * 19 Oct 26 Windows port - from Linux 2a68b2f - S.67 stage 1: K_MASTERS (150), the master files: one request string in, one answer string out (masters.c masters_request).
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.66: K_SHARED_READ and K_SHARED_WRITE (the shared-account gates, set from $internal only), K_SHARED_REF (the acceptance test for an
+ *               F-pointer into the shared account) and K_SHARED_ONCE (the audit line once per name); K_EDIT_KIND answers the REFUSING kind, 4 for
+ *               shared.write (edit_refusal_for_name); K_EDIT_OK includes the shared.write rule.
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - Encryption layer 3: the K_NET set that ends an account scope (sign-on, API sign-on, LOGTO) also empties the key ring of the XE
+ *               conversion (kr_wipe, sd_keyring.c).
  *               the remote file's name; any other file variable is refused, the administrator excepted); kernel(K_NET, -2) from a $internal program
  *               sends the queued closes of remote files (net_flush_closes).
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65: setting K_NET from a $internal program (sign-on, the API server, LOGTO going in and coming back) calls net_close_all():
@@ -648,14 +656,10 @@ void op_kernel() {
            caller that tried to grant itself rights is simply told it has
            none.  See PROJECT_STATUS.md section 5.6.                        */
 
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->flags |= USR_ADMIN;
-          else
-            my_uptr->flags &= ~USR_ADMIN;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_ADMIN, n > 0);
       }
-      result.data.value = (my_uptr->flags & USR_ADMIN) != 0;
+      result.data.value = MY_PRIV(USR_ADMIN);
       break;
 
     /* 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56, the owner's access model.
@@ -902,42 +906,30 @@ void op_kernel() {
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->flags |= USR_SH;
-          else
-            my_uptr->flags &= ~USR_SH;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_SH, n > 0);
       }
-      result.data.value = (my_uptr->flags & USR_SH) != 0;
+      result.data.value = MY_PRIV(USR_SH);
       break;
 
     case K_OS_EXEC:
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->flags |= USR_OS_EXEC;
-          else
-            my_uptr->flags &= ~USR_OS_EXEC;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_OS_EXEC, n > 0);
       }
-      result.data.value = (my_uptr->flags & USR_OS_EXEC) != 0;
+      result.data.value = MY_PRIV(USR_OS_EXEC);
       break;
 
     case K_SD_ACCOUNTS: /* 16 Oct 26, QM4 gap 22: the SD.ACCOUNTS gate, set as K_OS_EXEC is */
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->flags |= USR_SD_ACCOUNTS;
-          else
-            my_uptr->flags &= ~USR_SD_ACCOUNTS;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_SD_ACCOUNTS, n > 0);
       }
-      result.data.value = (my_uptr->flags & USR_SD_ACCOUNTS) != 0;
+      result.data.value = MY_PRIV(USR_SD_ACCOUNTS);
       break;
 
     /* 17 Oct 26 dm - S.64: the edit gates, set as K_SD_ACCOUNTS is (only from a $internal program; -1 asks).  Loaded at sign-on
@@ -950,14 +942,10 @@ void op_kernel() {
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->gates |= edit_bit;
-          else
-            my_uptr->gates &= (u_int16_t)~edit_bit;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_GATE(edit_bit, n > 0);
       }
-      result.data.value = (my_uptr->gates & edit_bit) != 0;
+      result.data.value = MY_GATE(edit_bit);
     } break;
 
     /* 17 Oct 26 dm - S.65 slice 1: the NET gate, set as K_SD_ACCOUNTS is (only from a $internal program; -1 asks).  Account-scoped:
@@ -975,27 +963,24 @@ void op_kernel() {
         n = process.status;
         net_flush_closes();
         process.status = n;
-        result.data.value = (my_uptr->gates & UG_NET) != 0;
+        result.data.value = MY_GATE(UG_NET);
         break;
       }
       if (n >= 0) {
         if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->gates |= UG_NET;
-          else
-            my_uptr->gates &= (u_int16_t)~UG_NET;
+          SET_MY_GATE(UG_NET, n > 0);
 
           /* 18 Oct 26 S.65: the gate is set when the account scope changes (sign-on, the API server's sign-on, LOGTO going in and
              coming back), and the remote files and connections belong to the account that opened them: drop them all.  Nothing
              happens unless this process ever opened one.  The handler is BASIC and moves the e-stack: nothing above is used after it. */
-          result.data.value = (my_uptr->gates & UG_NET) != 0;
+          result.data.value = MY_GATE(UG_NET);
           n = process.status; /* the handler is BASIC and leaves its own STATUS() behind; the caller's is given back */
           net_close_all();
           process.status = n;
           break;
         }
       }
-      result.data.value = (my_uptr->gates & UG_NET) != 0;
+      result.data.value = MY_GATE(UG_NET);
       break;
 
     /* K_EDIT_OK / K_EDIT_KIND: the argument is the pathname of an open file.  An $internal program is exempt from the test in
@@ -1017,7 +1002,7 @@ void op_kernel() {
         int edit_fkind = (edit_fvar->type == NET_FILE) ? (int)edit_fvar->access.net.edit_kind : EDIT_NONE;
 
         if (action == K_EDIT_OK) {
-          if (my_uptr->flags & USR_ADMIN)
+          if (MY_ADMIN())
             result.data.value = 1;
           else if (edit_fvar->type == NET_FILE)
             result.data.value = ((edit_fkind == EDIT_NONE) || edit_permitted(edit_fkind)) ? 1 : 0;
@@ -1027,7 +1012,7 @@ void op_kernel() {
       }
 
       if (action == K_EDIT_OK) {
-        if (my_uptr->flags & USR_ADMIN)
+        if (MY_ADMIN())
           result.data.value = 1;
         else if (k_get_c_string(descr, edit_name, MAX_PATHNAME_LEN) > 0)
           result.data.value = edit_ok_for_path(edit_name) ? 1 : 0;
@@ -1045,7 +1030,7 @@ void op_kernel() {
       char edit_os_name[MAX_PATHNAME_LEN + 1];
 
       result.data.value = 0;
-      if (my_uptr->flags & USR_ADMIN)
+      if (MY_ADMIN())
         result.data.value = 1;
       else if (k_get_c_string(descr, edit_os_name, MAX_PATHNAME_LEN) > 0)
         /* The target may be a directory the file is copied INTO (a program file, the private catalogue): its own name counts then
@@ -1063,14 +1048,10 @@ void op_kernel() {
       GetInt(descr);
       n = descr->data.value;
       if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL) {
-          if (n > 0)
-            my_uptr->gates |= shared_bit;
-          else
-            my_uptr->gates &= (u_int16_t)~shared_bit;
-        }
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_GATE(shared_bit, n > 0);
       }
-      result.data.value = (my_uptr->gates & shared_bit) != 0;
+      result.data.value = MY_GATE(shared_bit);
     } break;
 
     /* K_SHARED_REF: "<pathname><FM><fno><FM><catname>" - is that F-pointer target acceptable as a file of the shared account that other
@@ -1212,7 +1193,7 @@ void op_kernel() {
       pu_arg = descr->data.value;
       pu_user = (int16_t)(pu_arg / 4096);
       result.data.value = -1;
-      if ((my_uptr->flags & USR_ADMIN) && (pu_arg > 0)) {
+      if (MY_ADMIN() && (pu_arg > 0)) {
         result.data.value = 0;
         StartExclusive(SHORT_CODE, 66);
         for (pu_i = 1; pu_i <= sysseg->max_users; pu_i++) {

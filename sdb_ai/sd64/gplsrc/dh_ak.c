@@ -40,6 +40,14 @@
  * 17 Oct 26 Windows port - from Linux 0a308d2 - S.65 slice 3d: INDICES (both forms) of a NET_FILE is the null string, no longer a refusal: the query processor asks it of every file.
  * 17 Oct 26 Windows port - from Linux 0a308d2 - S.65 slice 3c: AKDELETE, AKREAD, AKWRITE, CLEAR.AK, AKENABLE, AKMAP, INDICES (both), SELECTINDEX (both), SELECTRIGHT/LEFT and SETRIGHT/LEFT refuse a NET_FILE (net_refuse) before touching access.dh
  * 15 Oct 26 Windows port - from Linux 0a308d2 - create_ak() and delete_ak() write DH_HEADER_SHARED_SIZE bytes of the primary header, not the whole of it, so that
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the administrator test is MY_ADMIN() (the process's own word), not the user table entry.
+ * 21 Oct 26 Windows port - from Linux 2a68b2f - S.73 item 3, D1 (the owner's "index query statements need no new gate"): INDICES (both forms), SELECTINDEX (both), SETLEFT, SETRIGHT, SELECTLEFT and SELECTRIGHT work on a NET_FILE:
+ *               net_index_query() (netfiles.c) asks the server through the handler and these turn the answer into the list, the key variable and STATUS() a local file gives.  INDICES is the
+ *               real list of the server's indices now, no longer the null string, so the query processor USES a remote file's indices (it asks INDICES of every file).  AKREAD, AKWRITE,
+ *               AKDELETE, CLEAR.AK, AKENABLE and AKMAP still refuse (they change or reach into the index).
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.66: CREATE.AK, DELETE.AK, CLEAR.AK and AKENABLE refuse an index of a file in the shared account (message 11514) for anyone but the
+ *               administrator, a $internal program included (op_createak and op_deleteak are given pathnames: path_resolved_in_shared; the other
+ *               two a file variable: shared_structure_refusal).  AKWRITE and AKDELETE, which maintain an index on every WRITE, are not asked.
  *               they cannot put an old sequential id counter (CREATING.SEQKEY) over a newer one.
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
@@ -730,7 +738,7 @@ void op_createak() {
   /* 18 Oct 26 S.66: an index of a file in the shared account is part of its STRUCTURE, SDSYS's alone ($internal is not exempt).  This op is
      given PATHNAMES, not a file variable: the file's and the index directory's.  Before anything is made.  (akwrite and akdelete, which
      maintain an index on every WRITE, are not asked.) */
-  if (!(my_uptr->flags & USR_ADMIN) && (path_resolved_in_shared(data_path) || path_resolved_in_shared(ak_path)))
+  if (!MY_ADMIN() && (path_resolved_in_shared(data_path) || path_resolved_in_shared(ak_path)))
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
 
   if (create_ak(data_path, ak_path, ak_name, fno, flags, dict_rec, collation_map_name, collation_map) == 0) {
@@ -790,7 +798,7 @@ void op_deleteak() {
   }
 
   /* 18 Oct 26 S.66: as op_createak(): the file's pathname is inside the shared account, so the index is part of its structure (SDSYS's alone) */
-  if (!(my_uptr->flags & USR_ADMIN) && path_resolved_in_shared(pathname))
+  if (!MY_ADMIN() && path_resolved_in_shared(pathname))
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
 
   if (!delete_ak(pathname, akno)) {

@@ -138,7 +138,7 @@ static int may_start_helper(PRIV_WHY* why) {
   if (why != NULL) *why = PRIV_ANSWERED;
   if (my_uptr == NULL)
     return 0;
-  if ((my_uptr->flags & USR_ADMIN) != 0)
+  if (MY_ADMIN())
     return 1;                          /* an administrator always may */
   return sd_os_permitted(why) ? 1 : 0;
 }

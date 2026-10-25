@@ -33,6 +33,7 @@
  *           session, not merely an administrator's account: check_admin()
  *           asks IsElevated(), and -CLEANUP, -D, -L, -M, -U, -SUSPEND and
  *           -RESUME now call it as -START, -STOP, -RESTART, -K and -I did
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: load_pcode() searches a copy of bin/pcode that this process read itself (read_pcode_image()), not the one in the shared segment.
  * 31 Dec 23 SD launch - prior history suppressed
  * 15 Jun 24 add bootstrap build option install option -I
  * 02 Jul 24 -i  typeo will hit bootstrap option
@@ -90,6 +91,7 @@
 #include <stdarg.h>
 /* 20240126 mab add syslog */
 #include <syslog.h>
+#include <grp.h>
 
 // #define DEBUG /* enables harcoded diagnostic output */
 
@@ -901,13 +903,67 @@ void check_admin() {
 
 /* ====================================================================== */
 
+/* 24 Oct 26 dm - W.11 F9.  The p-code every session runs used to be the copy the starter put in the shared segment, which any member of sdusers
+   can write: a changed byte there was code in the next session of anybody, SDSYS included.  A session now reads <sysdir>/bin/pcode itself, once, into
+   its own memory (30 KB), from the system directory its configuration names.  The file is held to the rule the global catalogue is (object.c,
+   gcat_object_writable()): refused when others, or the group sdusers, can write it, or when it cannot be examined.  The segment's copy is still made at
+   start (the layout is unchanged) and nothing runs from it.                                                                                         */
+
+Private u_char *pcode_image = NULL;
+Private int pcode_image_len = 0;
+
+Private bool read_pcode_image(void) {
+  char path[MAX_PATHNAME_LEN + 1];
+  struct stat st;
+  struct group *gr;
+  int fd;
+
+  if (sd_sysdir()[0] == '\0') {
+    fprintf(stderr, "Cannot read pcode file - no system directory (is the configuration file readable?)\n");
+    return FALSE;
+  }
+  if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cbin%cpcode", sd_sysdir(), DS, DS) >= (MAX_PATHNAME_LEN + 1)) {
+    fprintf(stderr, "Overflowed file/pathname length in read_pcode_image()!\n");
+    return FALSE;
+  }
+  if (((fd = open(path, O_RDONLY | O_BINARY)) < 0) || (fstat(fd, &st) != 0)) {
+    fprintf(stderr, "Cannot read pcode file - %s.\n", strerror(errno));
+    if (fd >= 0)
+      close(fd);
+    return FALSE;
+  }
+  gr = getgrnam("sdusers");
+  if ((st.st_mode & S_IWOTH) || ((st.st_mode & S_IWGRP) && (gr != NULL) && (st.st_gid == gr->gr_gid)) || !S_ISREG(st.st_mode) || (st.st_size <= 0)) {
+    fprintf(stderr, "The pcode file is not trusted (it is writable by others or by sdusers, or it is not a file).\n");
+    close(fd);
+    return FALSE;
+  }
+  pcode_image_len = (int)st.st_size;
+  if ((pcode_image = (u_char *)malloc(pcode_image_len)) == NULL) {
+    fprintf(stderr, "Cannot read pcode file - no memory.\n");
+    close(fd);
+    return FALSE;
+  }
+  if (read(fd, pcode_image, pcode_image_len) != pcode_image_len) {
+    fprintf(stderr, "Unable to load pcode [%d].\n", errno);
+    free(pcode_image);
+    pcode_image = NULL;
+    close(fd);
+    return FALSE;
+  }
+  close(fd);
+  return TRUE;
+}
+
 Private bool load_pcode(char *pname, u_char **ptr) {
   char u_pname[MAX_PROGRAM_NAME_LEN + 1];
   OBJECT_HEADER *obj;
   int i;
   u_char *pcode;
 
-  pcode = ((u_char *)sysseg) + sysseg->pcode_offset;
+  if ((pcode_image == NULL) && !read_pcode_image())
+    return FALSE;
+  pcode = pcode_image;
 
   /* Take a local copy of the pcode name and force it to lower case, the
      canonical case of every program name since RELEASE_1.1 5 stage 3a.  The
@@ -918,7 +974,7 @@ Private bool load_pcode(char *pname, u_char **ptr) {
   LowerCaseString(u_pname);
 
   /* Search for this item in the pcode library */
-  for (i = 0; i < sysseg->pcode_len; i += (obj->object_size + 3) & ~3) {
+  for (i = 0; i < pcode_image_len; i += (obj->object_size + 3) & ~3) {
     obj = (OBJECT_HEADER *)(pcode + i);
     if (obj->magic == HDR_MAGIC_INVERSE) {
       convert_object_header(obj);

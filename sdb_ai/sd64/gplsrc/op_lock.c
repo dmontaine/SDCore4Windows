@@ -1351,7 +1351,7 @@ Private void deadlock_save() {
   ssize_t w;
 
   if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%cdeadlock.%d",
-               (pcfg.dumpdir[0] != '\0') ? pcfg.dumpdir : (sysseg->sysdir), DS,
+               (pcfg.dumpdir[0] != '\0') ? pcfg.dumpdir : sd_sysdir(), DS,
                process.user_no) >= (MAX_PATHNAME_LEN + 1))
     return;
 

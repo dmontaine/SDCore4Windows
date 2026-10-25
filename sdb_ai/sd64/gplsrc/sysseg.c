@@ -29,6 +29,17 @@
  * 14 Aug 26 Windows port - the daemon is sdwind, not sdlnxd, and start_sd()
  *                      finds it beside the running executable rather than
  *                      under <sysdir>/bin, which no longer holds binaries
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: a session takes pcfg and the system directory from the configuration file (session_trust()), not from the segment's template
+ *               and sysdir; start_sd() asks sd_sysdir().  The segment still holds both, for display.
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F1: the shared segment is made 0660 and given to the group sdusers (create_shared_segment()), not 0666.
+ * 13 Sep 26 Windows port - from Linux 2a68b2f - The startup command runs in the sdsys account, its lower-case
+ *               name (plan M: account names are lower case).
+ * 11 Sep 26 Windows port - from Linux 2a68b2f - start_sd() rotates the audit trail, as the port's does
+ *               (PORT_ADOPTION 13).
+ * 10 Sep 26 Windows port - from Linux 2a68b2f - Parity audit: start_sd() reports a failed fork() instead of
+ *               claiming SD started (the Windows port's fix; UPSTREAM_FIXES 3).
+ * 08 Sep 26 "sd -stop" signalled unvalidated pids, so a stale entry with pid 0
+ *           made kill(0, SIGTERM) terminate the caller's whole process group.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -79,6 +90,7 @@ Private bool create_shared_segment(int32_t bytes,
    alone; munmap() must be told, so it is recorded at attach time.          */
 
 Private size_t sysseg_bytes = 0;
+Private bool session_trust(char* errmsg);
 
 /* ====================================================================== */
 
@@ -137,9 +149,16 @@ bool bind_sysseg(bool create, char* errmsg) {
       goto exit_bind_sysseg;
     }
 
-    /* Copy the template pcfg structure to our private version */
+    /* 24 Oct 26 dm - W.11 F9.  This process's configuration and system directory come from the configuration file, not from the template
+       and the directory the starter left in the segment: any member of sdusers can write those.  A failure RETURNS: exit_bind_sysseg
+       would run stop_sd(), which signals every process in the user table and removes the segment - a bad line in sd.conf must refuse a
+       new session, not end everybody's. */
 
-    memcpy(&pcfg, ((char*)sysseg) + sysseg->pcfg_offset, sizeof(struct PCFG));
+    if (!session_trust(errmsg)) {
+      unbind_sysseg();
+      sysseg = NULL;
+      return FALSE;
+    }
     status = TRUE;
     goto exit_bind_sysseg;
   }
@@ -156,6 +175,8 @@ bool bind_sysseg(bool create, char* errmsg) {
 
   if ((cfg = read_config(errmsg)) == NULL)
     goto exit_bind_sysseg;
+
+  sd_sysdir_trust(cfg->sysdir); /* W.11 F9: the starter's own copy, for sd_sysdir() below and in start_sd() */
 
   max_users = cfg->max_users;
 
@@ -361,6 +382,36 @@ Private bool create_shared_segment(int32_t bytes,
 
   sysseg_bytes = (size_t)bytes;
 
+  return TRUE;
+}
+
+/* ======================================================================
+   session_trust()  -  W.11 F9: a session's configuration and system directory
+
+   The process configuration (pcfg: SH, SPOOLER, USRDIR, GRPDIR, DUMPDIR, TEMPDIR ...) and the system directory used to be copied from what the starter
+   left in the segment.  A member of sdusers with a shell can write that, and the next session of anybody, SDSYS included, would have run his shell
+   command or loaded his global catalogue.  So a session reads the configuration file itself, with the same function the starter used (read_config()
+   fills pcfg), and keeps ITS system directory.  The segment's copy stays for display and is compared once: a difference is the segment having been
+   written, or this process having been pointed at another configuration, and goes to syslog; the file wins either way.
+
+   Behaviour this changes: sd.conf is read by every new session, so an edit of a path or a command (SH=, SPOOLER=, USRDIR= ...) reaches a session
+   started after it without a restart (the counters in the segment still need one), and a bad line in sd.conf refuses a new session with the message the
+   starter gives, until it is repaired.  A refusal returns to the caller with the segment detached; it does not touch the running SD.         */
+
+Private bool session_trust(char* errmsg) {
+  struct CONFIG* c;
+  char cfgerr[400 + 1];
+
+  cfgerr[0] = '\0';
+  memset(&pcfg, 0, sizeof(pcfg)); /* the template used to replace every byte of it */
+  if ((c = read_config(cfgerr)) == NULL) {
+    snprintf(errmsg, 80 + 1, "%.80s", cfgerr);
+    return FALSE;
+  }
+  sd_sysdir_trust(c->sysdir);
+  if (strcmp((const char *)(sysseg->sysdir), c->sysdir) != 0)
+    syslog(LOG_WARNING, "sd: the shared segment's system directory differs from the configuration file's (%s); the configuration file is used", c->sysdir);
+  k_free(c);
   return TRUE;
 }
 

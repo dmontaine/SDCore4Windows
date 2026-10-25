@@ -109,7 +109,7 @@ Private void open_file(bool map_name);
    18 Oct 26 S.66: making ANYTHING inside the shared account (a file, a directory, the account's own directory) is a structure change and
    SDSYS's alone: tested BEFORE the $internal exemption, which does not apply (EDIT_SHARED_STRUCT, message 12519). */
 Private int create_edit_refusal(const char* path) {
-  if (!(my_uptr->flags & USR_ADMIN) && path_resolved_in_shared(path))
+  if (!MY_ADMIN() && path_resolved_in_shared(path))
     return EDIT_SHARED_STRUCT;
   if (process.program.flags & HDR_INTERNAL)
     return EDIT_NONE;

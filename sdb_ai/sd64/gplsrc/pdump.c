@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Oct 26 dm  W.11 F9: a process dump with no DUMPDIR is written under sd_sysdir() (the configuration file's), not the segment's copy.
  * 17 Oct 26 dm  S.65 slice 3c: dump_variable() names a NET_FILE as a remote file instead of reading FPtr(-1)
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 916c2cd (12 Oct 26): An object variable is followed by the object's persistent
@@ -100,7 +101,7 @@ void pdump() {
   struct SYM* sym_new;
 /*  20240122  mab change sprintf to snprintf and test for buffer overflow */
   if (snprintf(path, MAX_PATHNAME_LEN + 1, "%s%csddump.%d",
-          (pcfg.dumpdir[0] != '\0') ? pcfg.dumpdir : (sysseg->sysdir), DS,
+          (pcfg.dumpdir[0] != '\0') ? pcfg.dumpdir : sd_sysdir(), DS,
           process.user_no) >= (MAX_PATHNAME_LEN + 1)){
           tio_printf("Overflowed directory/filename path length in pdump()."); 
           return;

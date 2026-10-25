@@ -20,6 +20,9 @@
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): UG_SHARED_READ (0x0010) and UG_SHARED_WRITE (0x0020) in the gates word, the shared-account gates.
  *               No change of layout.
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: UG_NET (0x0008) in the gates word, the NET gate.  No change of layout.
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: my_priv_flags, my_priv_gates and their macros (the session's privileges held by the process), sd_sysdir() and
+ *               sd_sysdir_trust().  No change of layout.
+ * 18 Oct 26 Windows port - from Linux 2a68b2f - S.66: UG_SHARED_READ (0x0010) and UG_SHARED_WRITE (0x0020) in the gates word, the shared-account gates.  No change of layout.
  * 17 Oct 26 dm  S.64: the user table gains a gates word (UG_VOC_EDIT, UG_BP_EDIT, UG_DICT_EDIT); the layout of the shared memory changes, so
  *               a running SD must be restarted after an upgrade (the installer does).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -307,5 +310,26 @@ struct USER_ENTRY
 #define UFMPtr(uptr,fno) ((u_int16_t *)&((uptr)->file_map[(fno)-1]))
 
 Public USER_ENTRY * my_uptr init(NULL);
+
+/* 24 Oct 26 dm - W.11 F9.  The segment is 0660 sdusers, and every SD user with an operating-system shell is in sdusers, so what a process
+   DECIDES on must not be read from it.  The session's own privilege bits and gates word are kept here, in memory only this process can change;
+   the user table entry still holds a copy (LISTU shows it) and nothing decides on that copy.  A decision reads MY_PRIV() / MY_GATE(); only the
+   kernel keys that load the grants (op_kernel.c) write them, through SET_MY_PRIV() / SET_MY_GATE(), the private word first.  Zeroed where
+   kernel.c zeroes the entry.  test-segtrust-units.py holds every source line to this.                                                        */
+Public u_int16_t my_priv_flags init(0);  /* USR_ADMIN | USR_SH | USR_OS_EXEC | USR_SD_ACCOUNTS, as this process holds them */
+Public u_int16_t my_priv_gates init(0);  /* UG_*, as this process holds them */
+
+#define MY_PRIV(bits)  ((my_priv_flags & (u_int16_t)(bits)) != 0)
+#define MY_ADMIN()     MY_PRIV(USR_ADMIN)
+#define MY_GATE(bit)   ((my_priv_gates & (u_int16_t)(bit)) != 0)
+#define SET_MY_PRIV(bits, on)  do { if (on) { my_priv_flags |= (u_int16_t)(bits); my_uptr->flags |= (bits); } \
+                                    else { my_priv_flags &= (u_int16_t)~(bits); my_uptr->flags &= ~(bits); } } while (0)
+#define SET_MY_GATE(bit, on)   do { if (on) { my_priv_gates |= (u_int16_t)(bit); my_uptr->gates |= (u_int16_t)(bit); } \
+                                    else { my_priv_gates &= (u_int16_t)~(bit); my_uptr->gates &= (u_int16_t)~(bit); } } while (0)
+
+/* The system directory this process TRUSTS: from the configuration file (config.c), never from sysseg->sysdir, which any member of sdusers can
+   change.  "" if the configuration file cannot be read.                                                                                   */
+const char *sd_sysdir(void);
+void sd_sysdir_trust(const char *dir);
 
 /* END-CODE */

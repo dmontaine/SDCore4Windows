@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 29 Sep 26 RELEASE_1.1 114 - a runfile name longer than the header's
  *           program_name is stored by its tail, bounded (from Solo's SOLO 12)
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the global catalogue directory is sd_sysdir() (the configuration file's), not the segment's copy; the administrator test is MY_ADMIN().
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 770050a (14 Oct 26): FORCE.RELOAD (openQM ref 37): stale_objects(),
  *               object_is_stale(), refresh_subr_object().
@@ -206,7 +207,7 @@ void* load_object(char* name, bool abort_on_error) {
       goto found;
   }
   /* converted to snprintf() -gwb 22Feb20 */
-  if (snprintf(obj_path, MAX_PATHNAME_LEN + 1, "%s%cgcat%c%s", sysseg->sysdir, 
+  if (snprintf(obj_path, MAX_PATHNAME_LEN + 1, "%s%cgcat%c%s", sd_sysdir(),
             DS, DS, mapped_name) >= (MAX_PATHNAME_LEN + 1)) {
      /* TODO: this should be sent to the system log. */          
      k_error("Overflowed directory/pathname length in load_object()!");
@@ -283,7 +284,7 @@ found:
      they like.  The bit is a flag in the object's own header, so for any other object it is the bit that was set by whoever wrote
      the file: a local or private catalogue entry, a runfile, a trigger.  It is cleared in this process's copy, before anything runs;
      the cache search above returns that copy.  The compiler itself only sets the bit in an internal-mode compile.               */
-  if ((obj->code.flags & HDR_INTERNAL) && !(flags & OBJ_GLOBAL) && !(my_uptr->flags & USR_ADMIN))
+  if ((obj->code.flags & HDR_INTERNAL) && !(flags & OBJ_GLOBAL) && !MY_ADMIN())
     obj->code.flags &= ~HDR_INTERNAL;
 
   obj->code.ext_hdr.prog.refs = 0;

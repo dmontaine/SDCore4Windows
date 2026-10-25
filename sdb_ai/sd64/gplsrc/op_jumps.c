@@ -18,6 +18,8 @@
  * 
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): CALL "file name", the Pick style call (QM4 Fixes 208; the owner's ruling: the file is a VOC name only,
+ * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: op_chkcat() looks in the global catalogue under sd_sysdir() (the configuration file's), not the segment's copy.
+ * 17 Oct 26 Windows port - from Linux 2a68b2f - CALL "file name", the Pick style call (QM4 Fixes 208; the owner's ruling: the file is a VOC name only,
  *           no operating system path): pick_style_runfile(); op_call() and op_callv() share call_name_to_load().
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): TRY / CATCH: exception GROUPS (a handler named a.b catches a.b.c, openQM manual "Exception Groups"), a
  *           transaction begun inside the TRY clause is rolled back when an exception is thrown out of it, and the kernel
@@ -458,7 +460,7 @@ void op_chkcat() {
       /* converted to snprintf() -gwb 22Feb20 */
       /* Fix for Issue #12 - 11Jan22*/
       if (snprintf(pathname, (MAX_PATHNAME_LEN + MAX_PROGRAM_NAME_LEN) + 1, "%s%cgcat%c%s",
-                   sysseg->sysdir, DS, DS,
+                   sd_sysdir(), DS, DS,
                    mapped_name) >= (MAX_PATHNAME_LEN + 1)) {
         /* TODO: this should also be logged with more detail */
         k_error("Overflowed path/filename length in op_chkcat()!");

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 24 Oct 26 dm  W.11 F9: the default terminfo directory is under sd_sysdir() (the configuration file's), not the segment's copy.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -156,7 +157,7 @@ bool tsettermtype(termname) char* termname;
 
   if (pcfg.terminfodir[0] == '\0') {
     /* converted to snprintf() -gwb 22Feb20 */
-    if (snprintf(filename, MAX_PATHNAME_LEN + 1, "%s%cterminfo", sysseg->sysdir,
+    if (snprintf(filename, MAX_PATHNAME_LEN + 1, "%s%cterminfo", sd_sysdir(),
                  DS) >= (MAX_PATHNAME_LEN + 1)) {
        /* TODO should log a detailed error here */
        k_error("Overflowed path/filename in tsettermtype()!");
