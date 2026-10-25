@@ -53,6 +53,12 @@
    #define SDSelectIndex _SDSelectIndex
    #define SDSelectLeft _SDSelectLeft
    #define SDSelectRight _SDSelectRight
+   #define SDGetVar _SDGetVar
+   #define SDIndices _SDIndices
+   #define SDRevision _SDRevision
+   #define SDRTrans _SDRTrans
+   #define SDSystem _SDSystem
+   #define SDTrans _SDTrans
    #define SDSetLeft _SDSetLeft
    #define SDSetRight _SDSetRight
    #define SDSetSession _SDSetSession
@@ -105,6 +111,12 @@ DLLEntry void SDSelect(int fno, int listno);
 DLLEntry void SDSelectIndex(int fno, char * indexname, char * indexvalue, int listno);
 DLLEntry char * SDSelectLeft(int fno, char * indexname, int listno);
 DLLEntry char * SDSelectRight(int fno, char * indexname, int listno);
+DLLEntry char * SDGetVar(char * name);
+DLLEntry char * SDIndices(int fno, char * indexname);
+DLLEntry char * SDRevision(void);
+DLLEntry char * SDRTrans(char * filename, char * id, char * fieldname, char * action);
+DLLEntry char * SDSystem(int key);
+DLLEntry char * SDTrans(char * filename, char * id, char * fieldname, char * action);
 DLLEntry void SDSetLeft(int fno, char * indexname);
 DLLEntry void SDSetRight(int fno, char * indexname);
 DLLEntry int SDSetSession(int session);

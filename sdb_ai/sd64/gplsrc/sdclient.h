@@ -85,6 +85,17 @@
 #define SrvrSelectLeft   44    /* Move index position to left */
 #define SrvrSelectRight  45    /* Move index position to right */
 #define SrvrMarkMapping  46    /* Enable/disable mark mapping */
+/* 14 Sep 26 dm - the Windows port's SCRAM requests (W.4 SCRAM phase 4).
+   APISRVR serves them since phase 3.                                        */
+#define SrvrScramFirst   47    /* SCRAM client-first  -> server-first */
+#define SrvrScramFinal   48    /* SCRAM client-final  -> server-final */
+/* 15 Oct 26 dm - QMClient functions of the QM4 gaps bundle C-1 (sheets 89, 195, 499).  49 to 53 are Linux Core's, ahead of
+   the Windows port (its sdclient.h ends at 48); they are the numbers to give it when the Linux side is stable.            */
+#define SrvrRevision     49    /* Server revision */
+#define SrvrGetVar       50    /* Value of an @-variable */
+#define SrvrSystem       51    /* SYSTEM() */
+#define SrvrTrans        52    /* TRANS(), marks lowered one level */
+#define SrvrRTrans       53    /* TRANS(), marks as they are */
 
 /* Server error status values */
 #define SV_OK             0    /* Action successful                       */

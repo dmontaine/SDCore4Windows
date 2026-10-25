@@ -80,6 +80,12 @@ Declare SDSelect(Fileno.l, Listno.l)
 Declare SDSelectIndex(Fileno.l, IndexName.s, IndexValue.s, Listno.l)
 Declare.s SDSelectLeft(Fileno.l, IndexName.s, Listno.l)
 Declare.s SDSelectRight(Fileno.l, IndexName.s, Listno.l)
+Declare.s SDGetVar(Name.s)
+Declare.s SDIndices(Fileno.l, IndexName.s)
+Declare.s SDRevision()
+Declare.s SDRTrans(FileName.s, Id.s, FieldName.s, Action.s)
+Declare.s SDSystem(Key.l)
+Declare.s SDTrans(FileName.s, Id.s, FieldName.s, Action.s)
 Declare SDSetLeft(Fileno.l, IndexName.s)
 Declare SDSetRight(Fileno.l, IndexName.s)
 Declare.l SDSetSession(Idx.l)
@@ -603,6 +609,72 @@ EndProcedure
 Procedure.s SDSelectRight(Fileno.l, IndexName.s, Listno.l)
    CheckConnected()
    *String = CallCFunction(SDLib, "SDSelectRight", Fileno, IndexName, Listno)
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+;===== SDGetVar, SDIndices, SDRevision, SDRTrans, SDSystem, SDTrans (15 Oct 26): each returns one string from the library
+Procedure.s SDGetVar(Name.s)
+   CheckConnected()
+   *String = CallCFunction(SDLib, "SDGetVar", Name)
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+Procedure.s SDIndices(Fileno.l, IndexName.s)
+   CheckConnected()
+   *String = CallCFunction(SDLib, "SDIndices", Fileno, IndexName)
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+Procedure.s SDRevision()
+   *String = CallCFunction(SDLib, "SDRevision")
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+Procedure.s SDRTrans(FileName.s, Id.s, FieldName.s, Action.s)
+   CheckConnected()
+   *String = CallCFunction(SDLib, "SDRTrans", FileName, Id, FieldName, Action)
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+Procedure.s SDSystem(Key.l)
+   CheckConnected()
+   *String = CallCFunction(SDLib, "SDSystem", Key)
+   If *string
+      String$ = PeekS(*String)
+      CallCFunction(SDLib, "SDFree", *String)
+   EndIf
+   ProcedureReturn String$
+EndProcedure
+
+
+Procedure.s SDTrans(FileName.s, Id.s, FieldName.s, Action.s)
+   CheckConnected()
+   *String = CallCFunction(SDLib, "SDTrans", FileName, Id, FieldName, Action)
    If *string
       String$ = PeekS(*String)
       CallCFunction(SDLib, "SDFree", *String)

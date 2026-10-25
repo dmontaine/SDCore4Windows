@@ -587,6 +587,11 @@ loop
    vb.mark.mapping,   ;*  46   Enable/disable mark mapping
    vb.scram.first,    ;*  47   SCRAM client-first
    vb.scram.final,    ;*  48   SCRAM client-final
+   vb.revision,       ;*  49   Server revision (QMRevision)         15 Oct 26 dm - QM4 gaps, sheet 89
+   vb.getvar,         ;*  50   Value of an @-variable (QMGetVar)    sheet 195
+   vb.system,         ;*  51   SYSTEM() (QMSystem)                  sheet 499
+   vb.trans,          ;*  52   TRANS(), marks lowered (QMTrans)     sheet 499
+   vb.rtrans,         ;*  53   TRANS() raw (QMRTrans)               sheet 499
    vb.illegal.action
 
    st = status()
@@ -2764,6 +2769,136 @@ vb.mark.mapping:
                                                                      mark.mapping files(fno), oconv(cmnd[3,2], 'ISL')
 
                                                                      return
+
+* ======================================================================
+* Revision of the server (QMRevision).   15 Oct 26 dm - QM4 gaps, sheet 89
+* In:
+* Out: the revision, in the form SYSTEM(1012) gives it
+
+vb.revision:
+response = system(1012)
+return
+
+* ======================================================================
+* Value of an @-variable (QMGetVar).   Sheet 195
+* In:  name, with or without the @, in either case
+* Out: the value as a string, or the null string for a name that is not one of those below.  The names are the ones a
+*      session can have a use for; each is something the account's own programs read as freely.
+
+vb.getvar:
+gv.name = upcase(trim(cmnd))
+if gv.name[1,1] = '@' then gv.name = gv.name[2,99]
+begin case
+   case gv.name = 'SELECTED'            ; response = @selected
+   case gv.name = 'LOGNAME' or gv.name = 'USER' ; response = @logname
+   case gv.name = 'WHO'                 ; response = @who
+   case gv.name = 'PATH'                ; response = @path
+   case gv.name = 'USERNO'              ; response = @userno
+   case gv.name = 'TTY'                 ; response = @tty
+   case gv.name = 'DS'                  ; response = @ds
+   case gv.name = 'SENTENCE'            ; response = @sentence
+   case gv.name = 'COMMAND'             ; response = @command
+   case gv.name = 'SYSTEM.RETURN.CODE'  ; response = @system.return.code
+   case gv.name = 'USER.RETURN.CODE'    ; response = @user.return.code
+   case gv.name = 'DATE'                ; response = @date
+   case gv.name = 'TIME'                ; response = @time
+   case gv.name = 'ID'                  ; response = @id
+   case gv.name = 'ANS'                 ; response = @ans
+   case gv.name = 'USER0' ; response = @user0
+   case gv.name = 'USER1' ; response = @user1
+   case gv.name = 'USER2' ; response = @user2
+   case gv.name = 'USER3' ; response = @user3
+   case gv.name = 'USER4' ; response = @user4
+   case 1                               ; response = ''
+end case
+return
+
+* ======================================================================
+* SYSTEM() (QMSystem).   Sheet 499
+* In:  key (long integer)
+* Out: the value as a string
+
+vb.system:
+response = system(oconv(cmnd[1,4], 'ILL'))
+return
+
+* ======================================================================
+* TRANS() (QMTrans, QMRTrans).   Sheet 499
+* In:  file name length (short), file name, field name length (short), field name, action length (short), action, record id
+* Out: the data; QMTrans lowers the mark characters one level, QMRTrans leaves them
+* Opened as vb.open opens a file: not at all for SDCLIENT or SDNet, and a file or dictionary flagged trusted is refused.
+* The B action (binary open) is not supported.
+
+vb.trans:
+tr.lower = @true
+goto trans.common
+
+vb.rtrans:
+tr.lower = @false
+
+trans.common:
+if kernel(K$SDNET, -1) or config("SDCLIENT") # 0 then
+   abort.message = sysmsg(5262) ;* File access is disabled
+   server.error = SV$ON.ERROR
+   return
+end
+
+tr.n = oconv(cmnd[1,2], 'ISL')
+tr.file = cmnd[3,tr.n]
+tr.p = 3 + tr.n
+tr.n = oconv(cmnd[tr.p,2], 'ISL')
+tr.field = cmnd[tr.p + 2,tr.n]
+tr.p = tr.p + 2 + tr.n
+tr.n = oconv(cmnd[tr.p,2], 'ISL')
+tr.action = upcase(cmnd[tr.p + 2,tr.n])
+tr.id = cmnd[tr.p + 2 + tr.n,999999]
+
+if tr.action = '' then tr.action = 'X'
+if tr.file = '' or convert('CX', '', tr.action) # '' then
+   server.error = SV$ERROR
+   error.msg = sysmsg(12344) ;* The action of Trans is C or X (the B action is not supported)
+   return
+end
+
+open tr.file to tr.f else
+   server.error = SV$ELSE
+   return
+end
+tr.trusted = bitand(fileinfo(tr.f, FL$FLAGS), FL$FLAGS.TRUSTED)
+close tr.f
+if tr.trusted then
+   server.error = SV$ELSE
+   return
+end
+
+if tr.field matches '1N0N' or tr.field = '-1' then
+   tr.field = tr.field + 0                      ;* a field position, or -1 for the whole record
+end else
+   open 'DICT', tr.file to tr.d else
+      server.error = SV$ELSE
+      return
+   end
+   tr.trusted = bitand(fileinfo(tr.d, FL$FLAGS), FL$FLAGS.TRUSTED)
+   close tr.d
+   if tr.trusted then
+      server.error = SV$ELSE
+      return
+   end
+end
+
+* SD's TRANS() lowers the marks of what it finds by one level (a record's field marks come back as value marks), because its
+* result is meant to sit inside a list.  QMRTrans wants the marks as they are, so each record's answer is raised again; the
+* answers of a list of ids are then joined with value marks: QMTrans lowers the marks of each record's data once and joins the
+* records with value marks, QMRTrans joins them as they are (so one multivalued field and several single valued ones look alike).
+response = ''
+tr.ids = count(tr.id, @vm) + 1
+for tr.i = 1 to tr.ids
+   tr.one = raise(trans(tr.file, tr.id<1, tr.i>, tr.field, tr.action))
+   if tr.lower then tr.one = lower(tr.one)
+   if tr.i > 1 then response := @vm
+   response := tr.one
+next tr.i
+return
 
                                                                      * ======================================================================
                                                                      * check.identity - has this session still got the caller's identity?

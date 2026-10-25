@@ -121,6 +121,15 @@
  * SDClearSelect()
  * SDRecordlock()
  * SDMarkMapping()
+ * SDIndices()
+ * SDTrans()
+ * SDRTrans()
+ *
+ * Server Information (15 Oct 26)
+ * ==============================
+ * SDRevision()
+ * SDGetVar()
+ * SDSystem()
  *
  *
  * Dynamic Array Handling
@@ -381,6 +390,9 @@ struct INBUFF {
         struct { /* SDSelectLeft, SDSelectRight */
             char key[1];
         } selectleft;
+        struct { /* SDRevision, SDGetVar, SDSystem, SDIndices, SDTrans, SDRTrans (15 Oct 26) */
+            char text[1];
+        } text;
     } data;
 };
 #pragma pack()
@@ -440,6 +452,8 @@ Private char* SelectLeftRight(int16_t fno,
                               int16_t listno,
                               int16_t mode);
 Private void SetLeftRight(int16_t fno, char* index_name, int16_t mode);
+Private char* text_request(int16_t action, char* packet, int32_t bytes, char* abort_text);
+Private char* trans_request(int16_t action, char* file_name, char* id, char* field_name, char* action_text);
 Private bool context_error(int16_t expected);
 Private void delete_record(int16_t mode, int fno, char* id); 
 
@@ -3321,12 +3335,179 @@ Private void SetLeftRight(int16_t fno, char* index_name, int16_t mode) {
 
 
 /* ======================================================================
+   text_request()  -  A request whose answer is one string.
+   Used by SDRevision, SDGetVar, SDSystem, SDIndices, SDTrans and SDRTrans.
+   Returns a malloc()ed string, null when the server answered with anything
+   but success or when there is no connection; an abort on the server is
+   reported as for the other functions.                                   */
+
+Private char* text_request(int16_t action, char* packet, int32_t bytes, char* abort_text) {
+  int32_t len = 0;
+  char* text;
+
+  if (!context_error(CX_CONNECTED)) {
+    if (message_pair(action, packet, bytes)) {
+      switch (session[session_idx].server_error) {
+        case SV_OK:
+          len = buff_bytes - offsetof(INBUFF, data.text.text);
+          break;
+
+        case SV_ON_ERROR:
+          Abort(abort_text, TRUE);
+          break;
+      }
+    }
+  }
+
+  text = malloc(len + 1);
+  if (len > 0)
+    memcpy(text, buff->data.text.text, len);
+  text[len] = '\0';
+  return text;
+}
+
+/* ======================================================================
+   SDRevision()  -  Revision of the client and, when connected, the server.
+   Without a connection the client's alone; with one, a value mark
+   delimited pair, client then server.  A server that does not know the
+   request (the Windows port before it adopts it) is reported as 0.0-0, as
+   openQM does for a server older than the function.                      */
+
+char* DLLEntry SDRevision(void) {
+  char* server;
+  char* result;
+
+  initialise_client();
+
+  if (session[session_idx].context == CX_DISCONNECTED) {
+    result = malloc(strlen(SD_REV_STAMP) + 1);
+    strcpy(result, SD_REV_STAMP);
+    return result;
+  }
+
+  server = text_request(SrvrRevision, NULL, 0, "Revision generated an abort event");
+  if (*server == '\0')
+    strcpy(server = realloc(server, 8), "0.0-0");
+
+  result = malloc(strlen(SD_REV_STAMP) + strlen(server) + 2);
+  sprintf(result, "%s%c%s", SD_REV_STAMP, U_VALUE_MARK, server);
+  free(server);
+  return result;
+}
+
+/* ======================================================================
+   SDGetVar()  -  Value of an @-variable on the server                    */
+
+char* DLLEntry SDGetVar(char* name) {
+  if (strlen(name) > 99) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+  return text_request(SrvrGetVar, name, strlen(name), "GetVar generated an abort event");
+}
+
+/* ======================================================================
+   SDSystem()  -  SYSTEM() on the server                                  */
+
+char* DLLEntry SDSystem(int key) {
+#pragma pack(2)
+  struct {
+    int32_t key;
+  } packet;
+#pragma pack()
+
+  packet.key = LongInt(key);
+  return text_request(SrvrSystem, (char*)&packet, sizeof(packet), "System generated an abort event");
+}
+
+/* ======================================================================
+   SDIndices()  -  INDICES() on the server: the index names of a file, or
+   with a name the details of that index                                  */
+
+char* DLLEntry SDIndices(int fno, char* index_name) {
+#pragma pack(2)
+  struct {
+    int16_t fno;
+    char index_name[99 + 1];
+  } packet;
+#pragma pack()
+  int32_t n = strlen(index_name);
+
+  if (n > 99) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+  packet.fno = ShortInt(fno);
+  memcpy(packet.index_name, index_name, n);
+  return text_request((n == 0) ? SrvrIndices1 : SrvrIndices2, (char*)&packet, offsetof(typeof(packet), index_name) + n,
+                      "Indices generated an abort event");
+}
+
+/* ======================================================================
+   SDTrans(), SDRTrans()  -  TRANS() on the server: the marks of the answer
+   lowered one level, or left as they are.  Action is C, X or null (X).   */
+
+char* DLLEntry SDTrans(char* file_name, char* id, char* field_name, char* action) {
+  return trans_request(SrvrTrans, file_name, id, field_name, action);
+}
+
+char* DLLEntry SDRTrans(char* file_name, char* id, char* field_name, char* action) {
+  return trans_request(SrvrRTrans, file_name, id, field_name, action);
+}
+
+Private char* trans_request(int16_t action, char* file_name, char* id, char* field_name, char* action_text) {
+  size_t fl = strlen(file_name);
+  size_t nl = strlen(field_name);
+  size_t al = strlen(action_text);
+  size_t il = strlen(id);
+  size_t total = 2 + fl + 2 + nl + 2 + al + il;
+  char* packet;
+  char* p;
+  char* result;
+  int16_t n;
+
+  if ((fl > 255) || (nl > 255) || (al > 8) || (total > 60000)) {
+    session[session_idx].server_error = SV_ELSE;
+    session[session_idx].sd_status = ER_BAD_NAME;
+    return NullString();
+  }
+
+  packet = malloc(total + 1);
+  p = packet;
+  n = ShortInt((int16_t)fl);
+  memcpy(p, &n, 2);
+  p += 2;
+  memcpy(p, file_name, fl);
+  p += fl;
+  n = ShortInt((int16_t)nl);
+  memcpy(p, &n, 2);
+  p += 2;
+  memcpy(p, field_name, nl);
+  p += nl;
+  n = ShortInt((int16_t)al);
+  memcpy(p, &n, 2);
+  p += 2;
+  memcpy(p, action_text, al);
+  p += al;
+  memcpy(p, id, il);
+  p += il;
+
+  result = text_request(action, packet, (int32_t)(p - packet), "Trans generated an abort event");
+  free(packet);
+  return result;
+}
+
+/* ======================================================================
    SDSetSession()  -  Set session index                                   */
-DLLEntry int SDSetSession(int idx) {
+
+int DLLEntry SDSetSession(int idx) {
   if ((idx < 0) || (idx >= MAX_SESSIONS) ||
       (session[idx].context == CX_DISCONNECTED)) {
     return FALSE;
   }
+
   session_idx = idx;
   return TRUE;
 }

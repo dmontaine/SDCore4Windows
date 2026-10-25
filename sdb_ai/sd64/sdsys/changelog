@@ -2,6 +2,39 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+15 Oct 26  QMCLIENT: SIX MORE API FUNCTIONS.
+
+             The client library (sdclilib.so, the BASIC class sdclient and the
+             Basic / PureBasic declarations) gains:
+             SDRevision()   Before a connection, the client's revision; once
+                        connected, the client's and the server's, as two
+                        values.  A server that does not know the request is
+                        reported as 0.0-0.
+             SDGetVar(name) The value of an @-variable of the session on the
+                        server, as a string; the @ may be left off.  Names the
+                        server knows: SELECTED, LOGNAME, USER, WHO, PATH,
+                        USERNO, TTY, DS, SENTENCE, COMMAND, SYSTEM.RETURN.CODE,
+                        USER.RETURN.CODE, DATE, TIME, ID, ANS and USER0 to
+                        USER4.  Any other name gives the null string.
+             SDSystem(key)  SYSTEM(key) on the server.
+             SDIndices(fno, name)
+                        INDICES() on the server: with a null name the index
+                        names of the file, otherwise the details of that index.
+             SDTrans(file, id, field, action) and SDRTrans(...)
+                        TRANS() on the server.  Field is a dictionary name, a
+                        field number or -1 for the whole record; action C
+                        (the id if there is no record) or X (null; the default).
+                        SDTrans lowers the marks of each record's answer one
+                        level and joins a list of ids' answers with value
+                        marks; SDRTrans leaves the marks as they are.  The file
+                        and its dictionary are opened as OPEN opens them for the
+                        API: not at all for an SDNet or SDCLIENT session, and
+                        a file marked trusted is refused.  The B action (open
+                        in binary) is not supported.
+             The new requests are numbers 49 to 53 of the protocol; the
+             Windows port's client stops at 48.  Not yet built: QMEvalConv and
+             the QMIConv / QMOConv family with their multivalued forms.
+
              Also        The Run / Cancel box cut a long explanation line at its edge, so the tail of a sentence never showed: the
                          end of what the ai gate allows in tool.gates ("... leaves this machine for that provider"), and of the
                          inhibit.login on explanation in tool.sessions. The box now wraps every line of its explanation the way it

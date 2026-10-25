@@ -91,6 +91,12 @@
 * obj->selectindex(fno, indexname, indexvalue, listno)
 * str = obj->selectleft(fno, indexname, listno)
 * str = obj->selectright(fno, indexname, listno)
+* str = obj->getvar(name)
+* str = obj->indices(fno, indexname)
+* str = obj->revision()
+* str = obj->rtrans(filename, id, fieldname, action)
+* str = obj->system(key)
+* str = obj->trans(filename, id, fieldname, action)
 * obj->setleft(fno, indexname)
 * obj->setright(fno, indexname)
 * obj->write(fno, id, data)
@@ -189,6 +195,11 @@ $define SrvrSelectRight  45    ;* Move index position to right
 $define SrvrMarkMapping  46    ;* Enable/disable mark mapping
 $define SrvrScramFirst   47    ;* SCRAM client-first
 $define SrvrScramFinal   48    ;* SCRAM client-final
+$define SrvrRevision     49    ;* Server revision                  15 Oct 26 dm - QM4 gaps C-1, as in gplsrc/sdclient.h
+$define SrvrGetVar       50    ;* Value of an @-variable
+$define SrvrSystem       51    ;* SYSTEM()
+$define SrvrTrans        52    ;* TRANS(), marks lowered one level
+$define SrvrRTrans       53    ;* TRANS(), marks as they are
 
 $define SV$OK             0    ;* Action successful
 $define SV$ON.ERROR       1    ;* Action took ON ERROR clause
@@ -202,6 +213,8 @@ $define SV$PROMPT         5    ;* Server requesting input
 $define NET.ACK.TRIES    16    ;* connect.keys: bytes to read looking for the Ack
 
 
+deffun text.request(code, pkt, abort.text) local
+deffun trans.packet(code, filename, id, fieldname, action) local
 deffun read.record(mode, fno, id, err) local
 deffun message.pair(pkt.type, pkt) local
 deffun get.response() local
@@ -905,6 +918,41 @@ public subroutine selectindex(fno, indexname, indexvalue, listno)
 end
 
 * ======================================================================
+* GETVAR, INDICES, REVISION, SYSTEM, TRANS, RTRANS   (15 Oct 26 dm, QM4 gaps bundle C-1)
+
+public function getvar(name)
+   return text.request(SrvrGetVar, name, 'GETVAR generated an abort event')
+end
+
+public function indices(fno, indexname)
+   pkt = iconv(fno, 'ISL') : indexname
+   return text.request(if indexname = '' then SrvrIndices1 else SrvrIndices2, pkt, 'INDICES generated an abort event')
+end
+
+* The client's revision alone before a connection, then the client's and the server's as two values; a server that does
+* not know the request is reported as 0.0-0
+public function revision()
+   mine = system(1012)
+   if context = CX.DISCONNECTED then return mine
+   theirs = text.request(SrvrRevision, '', 'REVISION generated an abort event')
+   if theirs = '' then theirs = '0.0-0'
+   return mine : @vm : theirs
+end
+
+public function system(key)
+   return text.request(SrvrSystem, iconv(key, 'ILL'), 'SYSTEM generated an abort event')
+end
+
+* TRANS() on the server.  action is C, X or null (X).  trans lowers the marks of the answer one level, rtrans leaves them.
+public function trans(filename, id, fieldname, action)
+   return trans.packet(SrvrTrans, filename, id, fieldname, action)
+end
+
+public function rtrans(filename, id, fieldname, action)
+   return trans.packet(SrvrRTrans, filename, id, fieldname, action)
+end
+
+* ======================================================================
 * SELECTLEFT
 
 public function selectleft(fno, indexname, listno)
@@ -1241,6 +1289,36 @@ local function scram.exchange(username, password, stored.salt, stored.iter, stor
    end
 
    return @true
+end
+
+* ======================================================================
+* A request whose answer is one string: the answer when the server says OK, the null string otherwise (an abort on the
+* server aborts here too).  Used by getvar, indices, revision, rtrans, system and trans.
+
+local function text.request(code, pkt, abort.text)
+   reply = ''
+   if not(context.error(CX.CONNECTED)) then
+      if message.pair(code, pkt) then
+         begin case
+            case server.error = SV$OK
+               reply = in.pkt
+            case server.error = SV$ON.ERROR
+               abort abort.text
+         end case
+      end
+   end
+   return reply
+end
+
+* ======================================================================
+* The request of trans and rtrans: three length-prefixed strings (file name, field name, action) and then the id
+
+local function trans.packet(code, filename, id, fieldname, action)
+   pkt = iconv(len(filename), 'ISL') : filename
+   pkt := iconv(len(fieldname), 'ISL') : fieldname
+   pkt := iconv(len(action), 'ISL') : action
+   pkt := id
+   return text.request(code, pkt, 'TRANS generated an abort event')
 end
 
 * ======================================================================

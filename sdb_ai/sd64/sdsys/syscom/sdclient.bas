@@ -44,6 +44,12 @@ Declare Sub SDSelect Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal ListNo A
 Declare Sub SDSelectIndex Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String, ByVal IndexValue as String, ByVal ListNo As Integer)
 Declare Function SDSelectLeft Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String, ByVal ListNo As Integer) as String
 Declare Function SDSelectRight Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String, ByVal ListNo As Integer) as String
+Declare Function SDGetVar Lib "SDClient.dll" (ByVal Name As String) As String
+Declare Function SDIndices Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName As String) As String
+Declare Function SDRevision Lib "SDClient.dll" () As String
+Declare Function SDRTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
+Declare Function SDSystem Lib "SDClient.dll" (ByVal Key As Integer) As String
+Declare Function SDTrans Lib "SDClient.dll" (ByVal FileName As String, ByVal Id As String, ByVal FieldName As String, ByVal Action As String) As String
 Declare Sub SDSetLeft Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)
 Declare Sub SDSetRight Lib "SDClient.dll" (ByVal FileNo As Integer, ByVal IndexName as String)
 Declare Function SDSetSession Lib "SDClient.dll" (ByVal Session as Integer) As Boolean
