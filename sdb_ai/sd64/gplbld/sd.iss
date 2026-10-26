@@ -3391,6 +3391,32 @@ begin
             ExpandConstant('{#DataDir}') + '\make-shared.log' + #13#10#13#10;
 end;
 
+(* 26 Oct 26 - THE CONTEXT HELP, RELEASE_1.1 184.  The [?] buttons of the toolkit
+   pages show records of the file context.help in the shared account; load-help.ps1
+   runs LOAD.HELP to fill it from sdsys\helptext, at install and at upgrade (it
+   replaces the shipped records and keeps the administrator's own).  Until this
+   release neither the text nor this step shipped.
+
+   IT NEVER STOPS THE INSTALL AND SAYS NOTHING ON THE INSTALLER'S SCREEN: a help box
+   that is empty is not worth a message here, and the caveats live in the
+   documentation.  The exit code goes to the setup log and the rest to
+   load-help.log.  Codes: 0 loaded, 2 nothing to load into, 3 SD would not start,
+   1 anything else. *)
+procedure LoadContextHelp;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\load-help.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: load-help.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\load-help.log');
+end;
+
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
   install, and nothing here asks for a password: there is no adopted account to
@@ -4644,6 +4670,11 @@ begin
     { AFTER Adopt, so the account it has just made is stamped on this very
       install rather than on the next one.  See SecureAccountDirs. }
     AcctAclMsg := SecureAccountDirs;
+
+    { 26 Oct 26 - THE CONTEXT HELP, RELEASE_1.1 184.  After SecureAccountDirs, so
+      the file it makes in the shared account is made under the account's final
+      permissions.  Never stops the install: see LoadContextHelp. }
+    LoadContextHelp;
 
     case SdsysCode of
       0: begin

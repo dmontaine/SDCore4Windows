@@ -321,6 +321,11 @@ SDSYS_SHIP = [
     # it would break the standing instruction's muscle memory for no gain.
     ('licence',       'GPL-3.0'),
     ('contrib',       'contributor list, reachable as CONFIG CONTRIB'),
+    # 26 Oct 26 - RELEASE_1.1 184.  The text LOAD.HELP puts into the shared account's
+    # file context.help, one file to a setting.  It was never shipped, so the [?]
+    # buttons of the toolkit pages had nothing to show.  Found by assert-current in a
+    # VM install: 14 source files "not in the install at all".
+    ('helptext',      'context help text for the [?] buttons; LOAD.HELP reads it'),
 ]
 
 # 21 Sep 26 - INPUTS TO THE BOOTSTRAP THAT MUST NOT REACH THE INSTALL.  Copied into
@@ -1512,6 +1517,11 @@ def main():
                    # dontcopy entry beside ssh-preflight.ps1).  assert-current
                    # watches it like the rest.
                    'make-shared.ps1',
+                   # 26 Oct 26 - RELEASE_1.1 184.  Loads the context help the [?]
+                   # buttons show (LOAD.HELP, from sdsys\helptext into the shared
+                   # account's file context.help); called from sd.iss right after
+                   # make-shared.ps1, at install and at upgrade.
+                   'load-help.ps1',
                    # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
                    # attach-account, finish-install and the three upgrade-*
                    # scripts, which write LOGIN's one-shot "sd -internal"
