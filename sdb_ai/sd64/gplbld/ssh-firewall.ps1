@@ -75,14 +75,10 @@ $ruleName = 'OpenSSH-Server-In-TCP'
 # RELEASE_1.1 109, 24 Sep 2026 - sd.iss's [Code] Exec calls capture only the
 # exit code, so a refusal's reason went nowhere.  Same log file install-ssh.ps1
 # and allow-ssh-groups.ps1 append to, so one install's ssh setup is one file.
-$LogPath = 'C:\ProgramData\SD\ssh-setup.log'
+# 26 Oct 26, RELEASE_1.1 109: no log file (see install-ssh.ps1); output stays on stdout only.
 function Write-Log {
     param([string]$Message)
     Write-Output $Message
-    try {
-        $line = (Get-Date -Format 's') + ' ' + $Message
-        Out-File -FilePath $LogPath -InputObject $line -Append -Encoding utf8 -ErrorAction Stop
-    } catch {}
 }
 
 # Returns the rule, or $null.

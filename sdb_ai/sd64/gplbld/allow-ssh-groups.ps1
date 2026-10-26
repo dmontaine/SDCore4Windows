@@ -189,13 +189,9 @@ $end     = '# --- END SD ssh-only model ---'
 # uses Write-Host instead of Write-Output for exactly this reason (see its own
 # comment), so it calls Append-Log alone, never Write-Log, or the fix here
 # would reintroduce the bug that comment describes.
-$LogPath = 'C:\ProgramData\SD\ssh-setup.log'
+# 26 Oct 26, RELEASE_1.1 109: no log file (see install-ssh.ps1); output stays on stdout only.
 function Append-Log {
     param([string]$Message)
-    try {
-        $line = (Get-Date -Format 's') + ' ' + $Message
-        Out-File -FilePath $LogPath -InputObject $line -Append -Encoding utf8 -ErrorAction Stop
-    } catch {}
 }
 function Write-Log {
     param([string]$Message)

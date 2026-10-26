@@ -83,13 +83,10 @@ if (($Msi -eq '') -or (-not (Test-Path -LiteralPath $Msi))) {
     if ($kept.Count -gt 0) { $Msi = $kept[0].FullName }
 }
 
-$LogPath = 'C:\ProgramData\SD\ssh-setup.log'
+# 26 Oct 26, RELEASE_1.1 109: the log file is gone (owner's delegation, most secure choice).  C:\ProgramData\SD is
+# writable by every SD user, so a file there could be read and forged by them.  Output stays on stdout only.
 function Append-Log {
     param([string]$Message)
-    try {
-        $line = (Get-Date -Format 's') + ' ' + $Message
-        Out-File -FilePath $LogPath -InputObject $line -Append -Encoding utf8 -ErrorAction Stop
-    } catch {}
 }
 function Write-Log {
     param([string]$Message)
@@ -148,11 +145,10 @@ try {
         # ADDLOCAL=Server: the server programs only.  The log is msiexec's own, kept beside ours.
         Write-Log ("install-ssh: installing OpenSSH Server from " + $Msi + " (no download)")
         Append-Log ('install-ssh: msi sha256 ' + (Get-FileHash -LiteralPath $Msi -Algorithm SHA256).Hash)
-        $msiLog = Join-Path (Split-Path -Parent $LogPath) 'ssh-msi.log'
         $p = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\msiexec.exe') `
-                -ArgumentList @('/i', ('"' + $Msi + '"'), '/qn', 'ADDLOCAL=Server', '/l*v', ('"' + $msiLog + '"')) `
+                -ArgumentList @('/i', ('"' + $Msi + '"'), '/qn', 'ADDLOCAL=Server') `
                 -Wait -PassThru
-        Append-Log ('install-ssh: msiexec exit ' + $p.ExitCode + '  (0 done, 3010 done and a restart wanted; log ' + $msiLog + ')')
+        Append-Log ('install-ssh: msiexec exit ' + $p.ExitCode + '  (0 done, 3010 done and a restart wanted)')
         if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
             Write-Log ('install-ssh: FAILED - the OpenSSH MSI exited ' + $p.ExitCode)
             exit 1
