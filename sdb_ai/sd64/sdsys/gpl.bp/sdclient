@@ -723,31 +723,6 @@ public subroutine fileunlock(fno)
 end
 
 * ======================================================================
-* RECORDLOCKED (request 34)
-*
-* 25 Oct 26 Windows port - from Linux eb9ef4a (S.72b, with fc8e304).  The $netfile handler's RECORDLOCKED needs it; the rest of Linux's "C-1" bundle (getvar, indices, revision, system,
-* trans, ...) is not carried here.  A login that is not in the server's sdfileswrite group is refused request 34 with an ON ERROR reply (message 12526); like filelock() and fileunlock() this
-* aborts the caller on that reply unless quiet is set, and with quiet it returns 0 (LastError / LastText say what the reply was).  The answer is the local code -3 to 3.
-
-public function recordlocked(fno, id)
-   reply = ''
-   if not(context.error(CX.CONNECTED)) then
-      if message.pair(SrvrRecordlocked, iconv(fno, 'ISL') : id) then
-         begin case
-            case server.error = SV$OK
-               reply = in.pkt
-            case server.error = SV$ON.ERROR
-               if not(quiet) then abort 'RECORDLOCKED generated an abort event'
-         end case
-      end
-   end
-   if len(reply) < 4 then return 0
-   n = oconv(reply[1,4], 'ILL')
-   if n > 2147483647 then n -= 4294967296
-   return n
-end
-
-* ======================================================================
 * LOGTO
 
 public function logto(acc)
@@ -1092,8 +1067,23 @@ end
 * -3 -2 -1 another user holds a file, update or read lock; 0 not locked; 1 2 3 this session holds a read, update or file lock.
 * The answer is a four byte integer on the wire; it is made signed here.
 
+* 25 Oct 26 Windows port - from Linux eb9ef4a (S.72b, with fc8e304): a login that is not in the server's sdfileswrite group is refused request 34 with an ON ERROR reply (message 12526).
+* Like filelock() and fileunlock() this aborts the caller on that reply unless quiet is set; with quiet it returns 0 and LastError / LastText say what the reply was (text.request ignored
+* quiet, which would have stopped the $netfile handler's own program instead of giving the person its message).  26 Oct 26: this was carried as a second function of the same name above
+* and the duplicate stopped sdclient compiling; there is one, here, as on Linux.
+
 public function recordlocked(fno, id)
-   reply = text.request(SrvrRecordlocked, iconv(fno, 'ISL') : id, 'RECORDLOCKED generated an abort event')
+   reply = ''
+   if not(context.error(CX.CONNECTED)) then
+      if message.pair(SrvrRecordlocked, iconv(fno, 'ISL') : id) then
+         begin case
+            case server.error = SV$OK
+               reply = in.pkt
+            case server.error = SV$ON.ERROR
+               if not(quiet) then abort 'RECORDLOCKED generated an abort event'
+         end case
+      end
+   end
    if len(reply) < 4 then return 0
    n = oconv(reply[1,4], 'ILL')
    if n > 2147483647 then n -= 4294967296

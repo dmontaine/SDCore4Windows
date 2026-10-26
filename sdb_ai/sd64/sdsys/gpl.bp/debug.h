@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 26 Oct 26 Windows port - from Linux fa146d9 (QM4 Fixes 193, 550): data.lines, expand.np and MAX.DATA.AREA.LINES.  The carry of `debug` in a8d06eb0 took the program and left this
+*           file out, so the bootstrap warned MAX.DATA.AREA.LINES and NEW.LINES "not assigned a value".
 * 25 Aug 26 Windows port - removed FVAR.NET, mirroring NET_FILE going from
 *           DESCR.H.  SDNet was removed on 18 Aug 26.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -41,9 +43,12 @@ $define INITIAL.PROGRAMS      10    ;* Initial size of program matrices
 $define INITIAL.CHUNKS        50    ;* Initial size of source chunk matrices
 $define CHUNK.LOAD           100    ;* Lines per chunk
 $define MAX.BREAKPOINTS       20    ;* Also in op_debug.c
-$define DATA.AREA.LINES        5
+$define DATA.AREA.LINES        5    ;* The data area's usual height; WINDOW n (5 to 15) changes it
+$define MAX.DATA.AREA.LINES   15
 
    common /$debug/ debug.initialised,
+                   data.lines,                 ;* Height of the data area in full screen mode (0 until the first entry)
+                   expand.np,                  ;* The ^ command: show non-printing characters as ^nnn
                    full.screen,                ;* Full screen mode?
                    title.attr,
                    source.attr,
@@ -53,7 +58,7 @@ $define DATA.AREA.LINES        5
                    debug.screen.image,
                    debug.command.stack,
                    debug.overlay,
-                   debug.data.area(DATA.AREA.LINES), ;* The data area
+                   debug.data.area(MAX.DATA.AREA.LINES), ;* The data area
 
                    array.name,
                    array.offset,               ;* Position of rolling display
