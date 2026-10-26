@@ -30,6 +30,8 @@
  *               150-230 s, now well under a second.  Same output, byte for byte: the order of equal keys (newest first), the
  *               work files and the merge are unchanged.  UNIQUE, COMPOUND and STRICT sorts, and any run in which a right
  *               justified level has met both numbers and text (where the comparison is not transitive), keep the classic insertion.
+ * 25 Oct 26 Windows port - from Linux 3d3890e: merge_sort_files(): a merged run takes the place in the queue of the files it replaces (the number of the last of them) and no longer goes to
+ *               the end.  A sort with more runs than SORTMRG put equal keys out in an order that depended on SORTMEM and SORTMRG, and a UNIQUE sort could keep a later record (RELEASE_1.1 181).
  * rev 0.9.0 Jan 25 mab catch null key id in op_sortdata()
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): Disk record lengths are 32 bits (item 455), fields padded to 4.
  * 31 Dec 23 SD launch - prior history suppressed
@@ -1903,6 +1905,7 @@ Private bool merge_sort_files(SORT_SESSION* sess) {
   int32_t outbuff_bytes;
 
   char pathname[MAX_PATHNAME_LEN + 1];
+  char merged_path[MAX_PATHNAME_LEN + 1];
   int16_t index;
   int16_t i;
   int d;
@@ -1941,8 +1944,9 @@ Private bool merge_sort_files(SORT_SESSION* sess) {
                                  &(buff_offset[i]), &(temp[i]));
     }
 
-    sess->sortwork++;
-    make_workfile_path(sess, (int)sess->sortwork, pathname, "merge_sort_files()");
+    /* 25 Oct 26  The merged run is written under the first number past the last file and, when the pass is over, takes the place in the queue of the
+       files it replaces (see below), so that the queue stays in the order the records ARRIVED in. */
+    make_workfile_path(sess, (int)sess->sortwork + 1, pathname, "merge_sort_files()");
     outfu = dio_open(pathname, DIO_REPLACE);
     if (!ValidFileHandle(outfu)) {
       status = FALSE;
@@ -2051,7 +2055,18 @@ Private bool merge_sort_files(SORT_SESSION* sess) {
       remove(pathname);
     }
 
-    lo_file += nstream;
+    /* 25 Oct 26  The merged file takes the number of the LAST file it replaced, so it stays at the front of the files not yet merged: files lo_file to
+       sess->sortwork are always the runs in the order they were written, the oldest first.  The merged file used to be added at the END, where the next
+       pass took it for the newest run: on equal keys it came out first, and a UNIQUE sort kept a later record than the first.  The result of a
+       sort with more runs than SORTMRG depended on SORTMEM and SORTMRG; it is now what the same sort in memory gives. */
+    make_workfile_path(sess, (int)sess->sortwork + 1, pathname, "merge_sort_files()");
+    make_workfile_path(sess, (int)lo_file + nstream - 1, merged_path, "merge_sort_files()");
+    if (rename(pathname, merged_path) != 0) {
+      process.os_error = errno;
+      goto exit_merge_sort_files;
+    }
+
+    lo_file += nstream - 1;
     num_files -= nstream - 1;
   }
 

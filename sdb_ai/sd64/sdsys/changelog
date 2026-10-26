@@ -2,6 +2,14 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+25 Oct 26  DELETING FROM A LARGE INDEX NO LONGER MAKES LIVE ENTRIES DISAPPEAR, AND A LARGE SORT GIVES THE SAME ORDER WHATEVER ITS MEMORY SETTINGS.
+
+             What        1. Removing the last entry under a branch of a large index no longer cuts the rest of that branch out of every lookup
+                         by key. 2. A sort that needs more work files than SORTMRG now puts records with equal keys in the order they arrived,
+                         and a UNIQUE sort keeps the first of them.
+             Who         Anyone with an index of three levels (some tens of thousands of distinct values) from which records have been deleted.
+                         Rebuild it with BUILD.INDEX once this version is installed.
+
 24 Oct 26  WHAT A SESSION DECIDES ON IS NO LONGER READ FROM SD'S SHARED MEMORY: AN SD USER WITH A SHELL CAN NO LONGER CHANGE THE SYSTEM DIRECTORY, THE
            P-CODE, THE SETTINGS OR A SESSION'S PRIVILEGES BY WRITING TO IT (SECURITY-MODEL EVALUATION, FINDING F9).
 
