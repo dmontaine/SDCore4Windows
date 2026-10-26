@@ -541,8 +541,11 @@ Name: "installpython"; Description: "Install Python for all users"; \
 ; MODIFY.ACCOUNT with every on-word after the account is made and reads the result back; files-admin-on is never among them.  The tasks page is
 ; skipped on an upgrade, where the account exists and nothing here applies, and /TASKS=opengates answers it on a silent run.  The text gives
 ; the option only; what each gate is and how to close one again is in the installation document.
+; 26 Oct 26 - NOT SHOWN IN THE WIZARD (owner, 26 Oct 2026, after the first VM install: the box did not say what an access gate is, sat below the fold of
+; the tasks page, and "not sure we even want it").  Check: WizardSilent leaves the task out of the wizard and keeps /TASKS=opengates for a silent
+; install, which is how the Linux installer's answer is still given.  An administrator opens a gate later with modify.account.
 Name: "opengates"; Description: "Open every access gate for your SD Core account"; \
-    GroupDescription: "5)  SD Core account:"; Flags: unchecked
+    GroupDescription: "5)  SD Core account:"; Flags: unchecked; Check: WizardSilent
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------

@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 26 Oct 26 Windows port - RELEASE_1.1 187: no LOGTO.  The file is made and opened by its pathname from the administrator's own session, because LOGTO to
+*               any account but SDSYS clears the administrator right here and the kernel then refused the file in the shared account.
 * 23 Oct 26 dm  New (S.75; the owner: "Context help should be stored in the shared account as the file context.help, keyed using whatever id system you wish").
 * END-HISTORY
 *
@@ -18,7 +20,7 @@
 *   a record the administrator added under an id that is not shipped is kept.  The shipped records are replaced, so a change to a shipped record is made in
 *   helptext, not in the file.
 *
-*   It enters the shared account (as the administrator may, and as the installer does) and goes back to the account it began in.  A file that cannot be
+*   It reaches the shared account's file by its pathname (it does not LOGTO, which on Windows ends the administrator right).  A file that cannot be
 *   read, or that has no title or a name that is not a key, is skipped and named.
 *
 * END-DESCRIPTION
@@ -52,18 +54,21 @@ $include err.h
    end
    close acc.f
 
-   origin = @who
-   execute 'logto shared' capturing lt
-   if downcase(@who) # 'shared' then
-      if @who # origin then execute 'logto ' : origin capturing lt
-      stop sysmsg(12842)                                         ;* Could not enter the shared account
-   end
+*  The file is reached by its pathname and the session never leaves SDSYS: on this port LOGTO to any account but SDSYS gives up the administrator right,
+*  and the structure of a file of the shared account is changed by the administrator alone (RELEASE_1.1 187).
+   shared.dir = arec<2>
+   if shared.dir[1, 1] # @ds and shared.dir[2, 1] # ':' then stop sysmsg(12842) ;* Could not enter the shared account
+   help.path = shared.dir : @ds : 'context.help'
 
-   open 'context.help' to hf else
-      execute 'create.file context.help dynamic' capturing mk
-      open 'context.help' to hf else
-         execute 'logto ' : origin capturing lt
-         stop sysmsg(12843)                                      ;* Could not make the file context.help
+   openpath help.path to hf else
+      execute 'create.file context.help dynamic directory ' : shared.dir capturing mk
+      openpath help.path to hf else stop sysmsg(12843)           ;* Could not make the file context.help
+*     CREATE.FILE also wrote a pointer to the new file in the VOC of the account that ran it; the shared account is reached by name, so it goes.
+      open 'VOC' to vf then
+         read vrec from vf, 'context.help' then
+            if vrec<1>[1, 1] = 'F' then delete vf, 'context.help'
+         end
+         close vf
       end
    end
 
@@ -86,7 +91,6 @@ $include err.h
    repeat
    close hf
 
-   execute 'logto ' : origin capturing lt
    void kernel(K$AUDIT, 'load.help new=' : n.new : ' changed=' : n.changed : ' same=' : n.same : ' skipped=' : n.bad)
    display sysmsg(12844, n.new, n.changed, n.same, n.kept)           ;* SYSMSG takes four places
    @system.return.code = (if n.bad then -ER$FAILED else 0)

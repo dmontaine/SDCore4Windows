@@ -124,6 +124,7 @@
         }
         'sys-b2' = @{
             '1024, 1027, 1028, 1034, 1036:'     = 'FILEINFO 1031 (CREATING.SEQKEY, Linux d6a86a7 and 400500c of the held QMClient chain) is not carried: the key answers a null string'
+            '1035 is the Unix epoch now'          = 'the probe wants SD started less than two hours ago (SYSTEM(1045)); the service had been up over three hours, and the zone half of the row passes (measured 26 Oct, guest: got 01). Passes on a freshly started service.'
             '1034, 1040, 1044, 1051, 1080:'       = 'SYSTEM(1040) answers 1 here: Windows file names are not case sensitive (deviation 8 of the areas 2-5 list)'
             'THE ZONE TOOK EFFECT'                = 'the MSYS2 runtime reads POSIX TZ strings (EST5EDT) and the Windows zone but not Olson names such as Asia/Kathmandu (measured 18 Oct: UTC)'
             '326: a catalogued $SYSTEM'           = 'the suite makes a GLOBAL catalogue entry (CATALOG ... GLOBAL $) from its own account and the subroutine was not called; global entries are an administrator''s'
