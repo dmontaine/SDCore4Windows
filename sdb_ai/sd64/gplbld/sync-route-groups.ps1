@@ -56,11 +56,12 @@ $ApiComment  = 'SD accounts that may use the API'
 $FilesGroup      = 'sdfiles'
 $FilesWriteGroup = 'sdfileswrite'
 $FilesComment      = 'SD accounts that may use the API for files only'
-$FilesWriteComment = 'SD accounts with files-only API access that may also change files'
+# New-LocalGroup caps -Description at 48 characters (RELEASE_1.1 186: the longer wording was refused and the group never made).
+$FilesWriteComment = 'SD files-only API accounts that may write files'
 # 25 Oct 26 - Linux ef9d594 (S.73 item 3): the third level, sdfilesadmin, lets the files-only login ADMINISTER files on this server (configure, index, create,
 # delete, the file's counter).  Created EMPTY like the other two (modify.account files-admin-on names a person); it carries no Windows right.
 $FilesAdminGroup   = 'sdfilesadmin'
-$FilesAdminComment = 'SD accounts with files-only API access that may also administer files'
+$FilesAdminComment = 'SD files-only API accounts that are file admins'
 
 $failed = $false
 
