@@ -148,6 +148,9 @@ read.all:
          if downcase(trim(line)) = 'terminal' then defword = 'terminal'
       end
       closeseq df
+   end else
+*     26 Oct 26: an absent file takes ELSE with the name still locked for the life of the session; close the variable (see home_entry)
+      if not(unassigned(df)) then closeseq df
    end
    na = dcount(ids, @fm)
    if ai > na then ai = na

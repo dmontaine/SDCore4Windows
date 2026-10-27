@@ -47,7 +47,11 @@ $catalog !osread
    osread.info = ''
    if path = '' then return 0
 
-   openseq path readonly to f then null else return 0
+   openseq path readonly to f then null else
+*     26 Oct 26: an absent file takes ELSE with its name still locked until the variable is closed (home_entry has the story); OSREAD of a file that is not there must not leave a lock behind
+      if not(unassigned(f)) then closeseq f
+      return 0
+   end
 
    total = 0
    loop

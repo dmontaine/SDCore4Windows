@@ -58,6 +58,11 @@ $include int$keys.h
             if downcase(trim(line)) = 'terminal' then start = 'terminal'
          end
          closeseq df
+      end else
+*        26 Oct 26 (found on the VM, S76-b2): THE DELIVERED STATE HAS NO start.default.  OPENSEQ of an absent file takes ELSE and still holds a lock on the name until the file variable is closed
+*        (which is how a program creates a file), so every session that started at the home screen kept an update lock on start.default for its whole life and the NEXT session waited at
+*        sign-on until the first one ended.  Close it here.
+         if not(unassigned(df)) then closeseq df
       end
    end
    if start # 'menu' then return

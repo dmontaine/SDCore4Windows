@@ -5654,8 +5654,10 @@ open.file:
          end
 
          openseq fpath to fpath.f else
+            if not(unassigned(fpath.f)) then closeseq fpath.f       ;* 26 Oct 26 - an OPENSEQ that took ELSE keeps the name locked until the variable is closed (see home_entry)
             fpath = upcase(fpath)
             openseq fpath to fpath.f else
+               if not(unassigned(fpath.f)) then closeseq fpath.f
                open.ok = @false
                return
             end
