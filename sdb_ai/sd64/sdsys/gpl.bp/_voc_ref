@@ -256,7 +256,10 @@ parse.as.q.pointer:
 
             * Make pathname absolute
 * 20240121 mab use @VM not hard coded hex fd 
-            if not(pathname matches "'":@ds:"'0X":@VM:"1A':\'0X") then
+* 26 Oct 26 (RELEASE_1.1 189, measured on the host: CREATE.FILE ... PATHNAME writes C:/... into the pointer, the old test took that for a relative
+*   name and put the account directory in front of it, so the new file "was not found" and CREATE.FILE itself said "Unable to open newly created
+*   dictionary").  A drive letter with either slash is absolute.
+            if not(pathname matches "'":@ds:"'0X":@VM:"1A':\'0X":@VM:"1A':/'0X") then
                pathname = dir : @ds : pathname
             end
 

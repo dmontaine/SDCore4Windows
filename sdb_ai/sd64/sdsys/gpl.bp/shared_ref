@@ -142,7 +142,7 @@ $include err.h
    p = rec<fno>
    if p = '' then return ''
    if p[1,1] = '@' then return ''          ;* no token expansion
-   if not(p matches "'":@ds:"'0X":@vm:"1A':\'0X") then p = spath : @ds : p     ;* 25 Oct 26 Windows port: as _voc_ref's "make pathname absolute"
+   if not(p matches "'":@ds:"'0X":@vm:"1A':\'0X":@vm:"1A':/'0X") then p = spath : @ds : p     ;* 25 Oct 26 Windows port: as _voc_ref's "make pathname absolute"
 
 *  The kernel's acceptance: inside shared's directory, and no VOC, program file, dictionary (but the one asked for) or catalogue on the way
    if not(kernel(K$SHARED.REF, p : @fm : fno : @fm : catname)) then return ''
