@@ -75,6 +75,18 @@ $include err.h
       end
    end
 
+*  26 Oct 26 (RELEASE_1.1 190, found by LIST.SHARED listing no file after the 18:07 install): the shared account's files are opened BY NAME through the pointers in the VOC of the shared
+*  account (shared_ref, tk_help), and the pointer CREATE.FILE wrote went to SDSYS's VOC and was removed above, so context.help had none where it is looked for.  Make sure the record is there,
+*  with the data path in backslash form (shared_ref makes a relative one absolute, and its test for absolute wants C:\).
+   svoc.path = convert('/', char(92), shared.dir) : char(92) : 'voc'
+   openpath svoc.path to svoc then
+      read vrec from svoc, 'context.help' else
+         vrec = 'F' : @fm : convert('/', char(92), help.path) : @fm : convert('/', char(92), help.path) : '.DIC'
+         write vrec to svoc, 'context.help'
+      end
+      close svoc
+   end
+
    shipped = ''
    n.new = 0
    n.changed = 0
