@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 26 Oct 26 Windows port - from Linux 6dc0e3e: UPDATE.ACCOUNTS (modes 2 and 4) updates the SDSYS account's own VOC from VOC_TEMPLATE, not NEWVOC (tool.gates is the
+*           administrator's page in one and the holder's page in the other).
 * 25 Oct 26 Windows port - from Linux fa1cd4c (18 Oct 26): the size a session with no tty takes is DEFAULT.WIDTH by DEFAULT.DEPTH, now 140 by 42 (int$keys.h), and the
 *           terminfo entries say the same; a real terminal still decides its own size.
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is loaded at sign-on, account-scoped like SD.ACCOUNTS.
@@ -362,6 +364,11 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   existing all-accounts path, not a new one", and two copies of "refresh
 *   every account" would drift apart at the first tier change.
          update.voc.f = voc
+* 26 Oct 26 Windows port - from Linux 6dc0e3e: THE SDSYS ACCOUNT'S OWN VOC IS UPDATED FROM VOC_TEMPLATE, NOT FROM NEWVOC.  The install builds it from the
+*   whole of VOC_TEMPLATE and NEWVOC is a smaller set for the other accounts; where the two hold the same id with different content (tool.gates: the
+*   matrix for the administrator, the holder's read-only page for everyone else) UPDATE.ACCOUNTS ALL, which the installer runs on every install,
+*   wrote the holder's page over the administrator's.
+         update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))
          gosub update.voc
          close update.voc.f
       end
@@ -425,6 +432,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   carelessness: they stopped a release update quietly stripping a suspended
 *   administrator's VOC to a standard one, after which lifting the suspension
 *   would not put it back.  There is no standard VOC to strip it to any more.
+                           update.sdsys.voc = 0             ;* 26 Oct 26 (Linux 6dc0e3e): the walk passes over the SDSYS account (its path is in voc.paths); every account here is NEWVOC's
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
@@ -1745,7 +1753,9 @@ update.voc:
    overridden.count = 0
    overridden.ids = ''
 
-   openpath @sdsys:@ds:"newvoc" to sdsys.file else
+   upd.source = "newvoc"
+   if update.sdsys.voc then upd.source = "voc_template"      ;* 26 Oct 26 - see the mode 2 / 4 test above
+   openpath @sdsys:@ds:upd.source to sdsys.file else
       display sysmsg(2210) ;* Cannot open SDSYS NEWVOC
       goto abort.login
    end
