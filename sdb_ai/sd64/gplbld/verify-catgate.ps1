@@ -430,7 +430,10 @@ $pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
 # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
 # (createa's keyword case, sysmsg 2018 - the whole command stops and no account
 # is made), so the access keyword is the whole of the line.
-$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' BOTH'), $pw, $pw)
+# 27 Oct 26 - BP-ON ON THE FIXTURE.  Every account starts with every gate closed (S.64), so the compile below was refused for want of bp.edit ("Programs can only be
+# compiled or catalogued by an account that has bp.edit", read from the transcript this verifier now prints) and ten rows failed for that, not for the
+# global-catalogue gate they test.  The account is ordinary (not an administrator) and holds bp.edit, which is exactly the case the gate has to refuse.
+$out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' BOTH BP-ON'), $pw, $pw)
 if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output '  --- SD said: ---'; Write-Output $out
     Write-Output '  CREATE.ACCOUNT produced no account directory'

@@ -542,7 +542,10 @@ try {
         Note 'CONTROL: the description is not "SD account"' $false `
              (((Get-LocalUser -Name $installUser -ErrorAction SilentlyContinue).Description) -ceq 'SD account')
         # 26 Oct 26 - NONE, as every account SD makes: silence is neither route (S.63) and the installer has no way to open a gate (owner, 26 Oct; Linux 945e766).
-        Note 'CONTROL: an attached account has NO routes (silence, S.63)' 'none' (Routes $installUser)
+        # 27 Oct 26 - NONE OR SSH, NEVER THE API.  The installer's "install OpenSSH server" box puts the installing user in sdssh (measured on the b305 install with the
+        # box ticked: routes were ssh), so 'none' is only the answer when that box was not ticked.  Silence must not hand out the API.
+        $instRoutes = Routes $installUser
+        Note 'CONTROL: an attached account has no API route by silence (none, or ssh from the installer box)' $true ($instRoutes -in @('none', 'ssh'))
         # 10040, not 10034: ATTACH must not put a borrowed login into sdsshonly.
         Note 'CONTROL: it kept its sign-in rights (10040)' $true `
              ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))

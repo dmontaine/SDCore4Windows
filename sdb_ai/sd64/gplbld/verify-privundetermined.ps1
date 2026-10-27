@@ -645,7 +645,8 @@ try {
     # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
     # (createa's keyword case, sysmsg 2018 - the whole command stops and no
     # account is made), so the access keyword is the whole of the line.
-    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix NONE", $winPw, $winPw)
+    # 27 Oct 26 - BP-ON: the probe is compiled in this account, and every account starts with bp.edit closed (S.64), so "probe compiled" failed on a real install.
+    $out = Invoke-SDSys @("CREATE.ACCOUNT USER $Prefix NONE BP-ON", $winPw, $winPw)
     $accRec = Join-Path $sysdir ('accounts\' + $Prefix.ToUpper())
     $made = Test-Path -LiteralPath $accRec
     Note 'accounts record created' $true $made
