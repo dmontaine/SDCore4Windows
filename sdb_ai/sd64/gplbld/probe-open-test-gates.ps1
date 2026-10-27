@@ -1,4 +1,5 @@
-# open-test-gates.ps1 - open the access gates the VERIFY SUITE'S unelevated half needs, for one account, on a TEST machine (RELEASE_1.1 192).
+# probe-open-test-gates.ps1 (named in the probe- family so assert-current treats it as harness: the first name, open-test-gates.ps1, was an unclassified source
+# file newer than the install, and every step of the suite refused with STALE) - open the access gates the VERIFY SUITE'S unelevated half needs, for one account, on a TEST machine (RELEASE_1.1 192).
 #
 #   powershell -ExecutionPolicy Bypass -File C:\...\gplbld\open-test-gates.ps1 [-User <windows user>]       ELEVATED PowerShell
 #
