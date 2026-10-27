@@ -30,13 +30,17 @@ function Note($check, $expected, $got) {
     Write-Host ("  [{0}] {1}: expected {2}, got {3}" -f $(if($pass){'PASS'}else{'FAIL'}), $check, $expected, $got)
 }
 
+# 26 Oct 26 - THE ACCOUNT IS THE USER'S OWN, NOT A NAME TYPED INTO THE SCRIPT.  It said DON, which is not an account on any machine but the developer's: on a guest whose user
+# was another name the control found no such account, never reached the prompt, and failed (first run on a real install, 26 Oct).  The installing user always has an account.
+$acct = $env:USERNAME.ToUpper()
+Write-Host "account under test: $acct"
 Write-Host "message 5276 reads: $msg"
 Write-Host ''
 
 # --- TREATMENT: a trailing token.  Nothing sensible is fed after it, because
 # --- the verb must refuse before it prompts for anything.
-Write-Host '== treatment: MODIFY.PASSWORD DON somethingextra'
-$t = Invoke-SD @('MODIFY.PASSWORD DON somethingextra')
+Write-Host "== treatment: MODIFY.PASSWORD $acct somethingextra"
+$t = Invoke-SD @("MODIFY.PASSWORD $acct somethingextra")
 Note 'refused with 5276'            $true ($t -match [regex]::Escape($msg))
 Note 'and did NOT reach the prompt' $false ($t -match 'New password|Current password|has no password set')
 
@@ -44,8 +48,8 @@ Note 'and did NOT reach the prompt' $false ($t -match 'New password|Current pass
 # --- A deliberately wrong current password ends the attempt without changing
 # --- anything; there is no lockout to trip (docs/SCRAM_AUTH.md, "Still open").
 Write-Host ''
-Write-Host '== control: MODIFY.PASSWORD DON  (reaches the prompt, then fails on a wrong current password)'
-$c = Invoke-SD @('MODIFY.PASSWORD DON', 'definitely-not-the-password', '', '')
+Write-Host "== control: MODIFY.PASSWORD $acct  (reaches the prompt, then fails on a wrong current password)"
+$c = Invoke-SD @("MODIFY.PASSWORD $acct", 'definitely-not-the-password', '', '')
 Note 'control reached the password prompt' $true ($c -match 'Current password|New password|has no password set')
 Note 'control NOT refused with 5276'       $false ($c -match [regex]::Escape($msg))
 

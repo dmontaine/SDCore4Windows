@@ -123,8 +123,12 @@ Write-Output '=== 2. The verbs are gone from SDSYS, and ordinary files still ope
 
 # LIST VOC reports a missing record as  'NAME' not found
 $out = Invoke-SD @("LIST VOC 'SET.SERVER' 'DELETE.SERVER' 'LIST.SERVERS' 'UNLOCK'")
+# 26 Oct 26 - THESE THREE ROWS ASSERTED ABSENCE AND ARE NOW THE OTHER WAY ROUND.  SDNet came back on 25 Oct as Linux S.65 (RELEASE_1.1 171): SET.SERVER,
+# DELETE.SERVER and LIST.SERVERS are in the VOC again, behind the NET gate and with the stored logins in sd-net, which is NOT the removed mechanism (no
+# "server;file" in a VOC path, no password in sd.conf).  The first run on a real install failed all three (26 Oct, guest b256), the stale expectation
+# found by running it.  The rows that the old mechanism's removal left standing (APISRVR, the catalogue, COUNT VOC, UNLOCK) are unchanged.
 foreach ($v in @('SET.SERVER', 'DELETE.SERVER', 'LIST.SERVERS')) {
-    Note "$v is not in the VOC" $true ($out -match ("'" + [regex]::Escape($v) + "' not found"))
+    Note "$v is in the VOC (SDNet's verbs came back with S.65)" $true (-not ($out -match ("'" + [regex]::Escape($v) + "' not found")))
 }
 
 # THE CONTROL for the same command: UNLOCK was in the same VOC and must remain.

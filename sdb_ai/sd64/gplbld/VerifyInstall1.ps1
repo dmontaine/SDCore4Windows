@@ -609,7 +609,9 @@ $steps = @(
     # OS.USERS.  So this runner is NOT unattended once it reaches this step.
     # It is second so that the prompt comes early rather than after five
     # silent minutes.
-    @{ Name = 'verify-osusers.ps1';     P = @{} },
+    # 26 Oct 26 - verify-osusers.ps1 IS OFF THIS LIST (RELEASE_1.1 175 and 188).  It proves @SDSYS/OS.USERS permits a shell, and since S.63 and S.64 the kernel
+    # does not read os.users: SH and OS.EXECUTE are per-account fields.  On the first run against a real install eleven of its rows failed for that reason, and
+    # a failed step stops this runner before the elevated half.  The file stays until row 175 retires os.users and replaces it with a check of the register fields.
     # 04 Sep 26 - PRE_RELEASE 66's standing guard: are the full-screen editors
     # BUNDLED, and does gpl.bp/edit's find.editor resolve the bundled copy
     # rather than whatever winget left on PATH?  No account, no prefix, no run

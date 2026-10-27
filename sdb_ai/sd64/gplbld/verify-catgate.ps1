@@ -144,7 +144,14 @@ function Note($check, $expected, $got) {
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
     $needsInternal = (@($commands | Where-Object { $_ -match '^\s*LOGTO\b' }).Count -gt 0)
-    return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal:$needsInternal)
+    $text = Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal:$needsInternal
+    # 26 Oct 26 - THE INSTRUMENT SHOWS WHAT SD SAID.  The 15:27 run failed ten rows in sections 2 to 5 and the transcript held nothing of what sd answered, so the
+    # cause could not be read afterwards.  Write-Host, not Write-Output: this function RETURNS the text, and printed output would fold into it.
+    if ($needsInternal) {
+        Write-Host ('    > ' + ($commands -join ' | '))
+        foreach ($l in (@($text -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 14)) { Write-Host ('    | ' + $l) }
+    }
+    return $text
 }
 
 # TWO TEARDOWNS, NOT ONE, AND THE SPLIT IS LOAD-BEARING.  The account debris and

@@ -338,7 +338,9 @@ try {
     Said "CREATE.ACCOUNT USER $noKw  (no keyword, matching passwords)" $out
     if (HasUser $noKw) { $script:madeUsers += $noKw }
     Note 'silence creates the account' 'register+directory+windows-user+sdu_group' (Traces $noKw)
-    Note 'silence means BOTH: routes are ssh and api' 'ssh+api' (Routes $noKw)
+    # 26 Oct 26 - SILENCE MEANS NEITHER SINCE S.63 (owner, 13 Oct 2026), NOT BOTH: a new account has no ssh and no API until an administrator says so.  This row said 'ssh+api'
+    # (the 68 reading) and failed on the first run against a real install (guest b256, 26 Oct: got none).
+    Note 'silence means NEITHER (S.63): routes are none' 'none' (Routes $noKw)
     Note 'message 10082 NOT shown (the refusal 68 withdrew)' $false (Shown $out 10082 @())
 
     # THE CONTROL: NONE IS STILL SAYABLE, and it is what tells "nobody said"
@@ -539,7 +541,8 @@ try {
         # user's description must not read as one SD created.
         Note 'CONTROL: the description is not "SD account"' $false `
              (((Get-LocalUser -Name $installUser -ErrorAction SilentlyContinue).Description) -ceq 'SD account')
-        Note 'CONTROL: an attached account has BOTH routes (silence, 68)' 'ssh+api' (Routes $installUser)
+        # 26 Oct 26 - NONE, as every account SD makes: silence is neither route (S.63) and the installer has no way to open a gate (owner, 26 Oct; Linux 945e766).
+        Note 'CONTROL: an attached account has NO routes (silence, S.63)' 'none' (Routes $installUser)
         # 10040, not 10034: ATTACH must not put a borrowed login into sdsshonly.
         Note 'CONTROL: it kept its sign-in rights (10040)' $true `
              ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))
