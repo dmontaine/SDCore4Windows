@@ -61,7 +61,7 @@ $include err.h
    help.path = shared.dir : @ds : 'context.help'
 
    openpath help.path to hf else
-      execute 'create.file context.help dynamic pathname ' : shared.dir capturing mk
+      execute 'create.file context.help dynamic pathname ' : shared.dir : ' no.query' capturing mk
       openpath help.path to hf else stop sysmsg(12843)           ;* Could not make the file context.help
 *     CREATE.FILE also wrote a pointer to the new file in the VOC of the account that ran it; the shared account is reached by name, so it goes.
       open 'VOC' to vf then
