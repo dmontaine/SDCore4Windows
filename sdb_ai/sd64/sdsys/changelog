@@ -2,6 +2,17 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+26 Oct 26  THE ELEVATED HELPER RUNS ONLY THE SCRIPTS SD WROTE FOR IT (THE WINDOWS READING OF LINUX FINDING F12).
+
+             What        When SDSYS signs in at the console, SD keeps one elevated helper per user, and SD's own verbs (CREATE.ACCOUNT, SET.PASSWORD and
+                         the like) hand it a script through a named pipe that only that user can open. The helper used to run any file path it was sent.
+                         It now runs only a file called $PS.TMP.<number> in the system directory's pstmp folder, which is where SD writes them, and refuses
+                         anything else (a path elsewhere, another name, a missing file, a folder or a link) with exit code 9 and a line in its log.
+             Why it      A process of that user that was not SD could ask the helper to run a script of its own from anywhere, as an administrator,
+             matters     without a second consent prompt.
+             Does not    Stop a process of the same user from putting a file of that name in pstmp: the user who gave the elevation is still the one whose
+                         processes may use it. It does not change what the helper does with a file it accepts.
+
 25 Oct 26  DELETING FROM A LARGE INDEX NO LONGER MAKES LIVE ENTRIES DISAPPEAR, AND A LARGE SORT GIVES THE SAME ORDER WHATEVER ITS MEMORY SETTINGS.
 
              What        1. Removing the last entry under a branch of a large index no longer cuts the rest of that branch out of every lookup

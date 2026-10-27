@@ -60,7 +60,9 @@ param(
     [Parameter(Mandatory = $true)][string]$PipeName,
     [int]$OwnerPid = 0,
     [string]$Script = '',
-    [string]$LogFile = ''
+    [string]$LogFile = '',
+    # -Start only: the helper runs any script path, not just SD's own $PS.TMP files.  For elevate-once.ps1 (the developer flow); never set by an SD session.
+    [switch]$AnyScript
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +152,7 @@ try {
                   '-File', "`"$helper`"", '-PipeName', $PipeName,
                   '-OwnerPid', $OwnerPid)
         if ($LogFile -ne '') { $args += @('-LogFile', "`"$LogFile`"") }
+        if ($AnyScript) { $args += '-AnyScript' }
 
         try {
             Start-Process powershell -Verb RunAs -WindowStyle Hidden `

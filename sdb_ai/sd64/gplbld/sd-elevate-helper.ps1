@@ -38,7 +38,10 @@
 param(
     [Parameter(Mandatory = $true)][string]$PipeName,
     [Parameter(Mandatory = $true)][int]$OwnerPid,
-    [string]$LogFile = ''
+    [string]$LogFile = '',
+    # The developer flow (elevate-once.ps1) hands this helper its own scripts, which are not $PS.TMP files.  Off for every helper an SD session
+    # starts, so what SD ships runs only what !ps_script wrote (RELEASE_1.1 191).  Set at -Start, where UAC prompts, and fixed for this helper's life.
+    [switch]$AnyScript
 )
 
 function Say($m) {
@@ -96,6 +99,39 @@ function Test-OwnerAlive {
     }
     return ($owners.Count -gt 0)
 }
+
+# 26 Oct 26 - RELEASE_1.1 191 (the Windows reading of Linux F12): THE HELPER RUNS ONLY A FILE SD WROTE FOR IT.  It used to run any path sent over the pipe, as an
+# administrator; the pipe is this user's alone, but a path on a share, in %TEMP% or in a folder the user can write was as good as SD's own script.  !ps_script is the
+# only sender and writes "$PS.TMP.<userno>" in the system directory's pstmp folder, so that is the only thing accepted: a file of that name in that folder, not a link.
+# (A process of THIS user can still put such a file there - sdusers may create in pstmp - which is the residual the pipe DACL already stood for: the user who gave the
+# elevation is the user whose processes may use it.)
+function Get-ScriptDir {
+    $sys = Join-Path $env:ProgramData 'SD\sdsys'
+    $conf = Join-Path $env:ProgramData 'SD\sd.conf'
+    try {
+        foreach ($l in [IO.File]::ReadAllLines($conf)) {
+            if ($l -match '^\s*SDSYS\s*=\s*(\S.*?)\s*$') { $sys = $Matches[1]; break }
+        }
+    } catch { }
+    return (Join-Path $sys 'pstmp')
+}
+
+function Test-ScriptRequest([string]$Path, [string]$Dir) {
+    # '' when the request may be run, otherwise why not.
+    if ([string]::IsNullOrWhiteSpace($Path)) { return 'empty path' }
+    try { $full = [IO.Path]::GetFullPath($Path) } catch { return 'not a path' }
+    $want = [IO.Path]::GetFullPath($Dir)
+    $parent = Split-Path -Parent $full
+    if ($parent -ine $want) { return "not in $want" }
+    if ((Split-Path -Leaf $full) -notmatch '^\$PS\.TMP\.[0-9]+$') { return 'not a $PS.TMP.<number> name' }
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return 'no such file' }
+    $item = Get-Item -LiteralPath $full -Force
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { return 'a link' }
+    return ''
+}
+
+$ScriptDir = Get-ScriptDir
+if ($AnyScript) { Say "serving ANY script path (-AnyScript: the developer flow)" } else { Say "serving scripts from $ScriptDir only" }
 
 try {
     while (Test-OwnerAlive) {
@@ -185,8 +221,14 @@ try {
         # which the installer has already restricted, and they are deleted by
         # the caller afterwards - see !ps_script, which is the only thing that
         # sends them.
-        if (-not (Test-Path -LiteralPath $req)) {
-            Say "no such script: $req"
+        $why = ''
+        if ($AnyScript) {
+            if (-not (Test-Path -LiteralPath $req)) { $why = 'no such script' }
+        } else {
+            $why = Test-ScriptRequest $req $ScriptDir
+        }
+        if ($why -ne '') {
+            Say "refused: $why ($req)"
             $writer.WriteLine('9')
             $server.Dispose()
             continue

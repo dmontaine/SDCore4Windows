@@ -159,10 +159,10 @@ function Start-SdElevationHelper {
     # before it runs.  A helper that did not start is diagnosed from this line.
     Write-Host ''
     Write-Host ('  *** ONE UAC PROMPT IS COMING, AND IT IS THE ONLY ONE ' + $Purpose + ' ASKS FOR.')
-    Write-Host ('      ' + $elev + ' -Start -PipeName ' + $pipe + ' -OwnerPid ' + $PID)
+    Write-Host ('      ' + $elev + ' -Start -AnyScript -PipeName ' + $pipe + ' -OwnerPid ' + $PID)
 
     try {
-        & $elev -Start -PipeName $pipe -OwnerPid $PID | Out-Null
+        & $elev -Start -AnyScript -PipeName $pipe -OwnerPid $PID | Out-Null
         $rc = $LASTEXITCODE
     } catch {
         $script:sdElev.Reason = ('sd-elevate.ps1 threw: ' + $_.Exception.Message)
