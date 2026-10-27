@@ -71,24 +71,6 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              Does not    It does not change what is delivered (bit 2 stays 0 and the request is still refused), the other requests, or how a program
                         opens a file on another SD server (the N pointer, the NET switch and set.server), which never used this request.
 
-25 Oct 26  THE INSTALLER CAN OPEN EVERY ACCESS GATE FOR THE INSTALLING USER'S OWN SD ACCOUNT, AND IT DOES NOT UNLESS YOU TICK IT.
-
-             What        A new SD account starts with every access gate closed - ssh, the API, the shell, OS.EXECUTE, SD.ACCOUNTS, saving
-                        changes to a VOC, a program file or a dictionary, SDNet, and writing the shared account's files - and that includes
-                        the account the installer makes for the person running it. The tasks page of a first install now has one more box,
-                        unticked: "Open every access gate for your SD Core account" (on a silent install, /TASKS=opengates). Ticked, the
-                        installer gives the account both, sh-on, os-on, sd-on, voc-on, bp-on, dict-on, net-on, shared-write-on, files-on and
-                        files-write-on with modify.account once the account is made, then reads the register and the groups sdssh, sdapi,
-                        sdfiles and sdfileswrite back: the
-                        last screen says "Every access gate is open for <you>." only if every one is, and otherwise names the file that lists
-                        each gate that did not open and the word to give for it (C:\ProgramData\SD\attach-account.log). A refused word does
-                        not stop the install.
-             Why it      On a machine you are testing on, the installing user otherwise had to sign in as sdsys and type the commands before
-             matters    the API, ssh or the editors would answer.
-             Does not    The box is unticked, and an upgrade does not show it: the account already exists and keeps what it has. It opens the
-                        installing user's own account only. It does not turn on files-admin-on (the administration group stays off whatever
-                        the answer). SDSYS closes any gate again with modify.account <account> <word>-off (none closes ssh and the API).
-
 15 Oct 26  THE CLIENT LIBRARY MAY BE USED FROM SEVERAL THREADS.
 
              Until now the client library (sdclilib.dll) kept the current
@@ -176,7 +158,7 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              Why it      A program or an administrator working through an SDNet pointer had to log on to the other machine to make an index,
              matters     change a file's modulus or create a file there. It is the remote administration QMNet has, behind a permission
                         the administrator of the machine being reached gives one person at a time.
-             Does not    It is off for every account, and the installer's "open every access gate" answer does not turn it on. A login with
+             Does not    It is off for every account, the installing user's included. A login with
                         the group but not the write group gets nothing. The verb is chosen by number and works on the file the pointer
                         opened (a login cannot name another file); words with a path, FORCE, PATHNAME, LPTR or NO.QUERY, a slash or a
                         quote are refused; the index verbs refuse when another process has the file open there. It does not make the

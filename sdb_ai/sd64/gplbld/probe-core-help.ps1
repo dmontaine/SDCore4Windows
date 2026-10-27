@@ -9,9 +9,9 @@ $sd = 'C:\Program Files\SD\usr\bin\sd.exe'
 "sd.exe  : $sd  exists=" + (Test-Path $sd)
 "elevated: " + ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not (Test-Path $sd)) { "REFUSED: no sd.exe"; exit 2 }
-$running = @(Get-Process sdwind -ErrorAction SilentlyContinue).Count
-"sdwind processes: $running"
-if ($running -eq 0) { "REFUSED: SD is not running; start it first (Start-Service SD)"; exit 2 }
+$svc = Get-Service -Name SD -ErrorAction SilentlyContinue
+"service SD: " + $(if ($svc) { $svc.Status } else { 'not found' })
+if (-not $svc -or $svc.Status -ne 'Running') { "REFUSED: the SD service is not running; start it first (Start-Service SD)"; exit 2 }
 foreach ($cmd in 'CT ACCOUNTS shared', 'LIST.SHARED', 'LOAD.HELP') {
   "=== $cmd"
   $null = Set-SdInternalMarker -SdsysDir (Join-Path $data 'sdsys') -Writer 'probe-core-help'

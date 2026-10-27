@@ -17,7 +17,7 @@
 # type.  See CREATEA's ATTACH case for the verb's half and its gating record.
 #
 # [25 Oct 26: THE NEXT PARAGRAPH IS HISTORY.  Since S.63 (owner, 13 Oct 2026) silence means NO ssh and NO API, and a new account is made with
-#  neither; -OpenGates gives both, with the other gates.]
+#  neither, and nothing here opens either.]
 # NO ROUTE KEYWORD IS PASSED, AND THAT IS A CHANGE - RELEASE_1.1 68, 19 Sep
 # 2026.  It used to pass BOTH because the keyword was REQUIRED (10082): the old
 # adopt call passed none and the 15:07:23 install measured what that cost - the
@@ -82,17 +82,11 @@
 #   2  the account was already there - the reinstall case, not a failure
 #   3  SD would not start, so the verb was never run
 #   1  the verb ran and refused, or something was missing
-#   4  the account was created, and -OpenGates was given, but not every access gate is open afterwards
 #
-# 25 Oct 26 Windows port - from Linux f811e1f (19 Oct 26): -OpenGates.  An SD account starts with every access gate closed (S.63, S.64, S.65,
-#   S.66), the installing user's too, and that stays the delivered state.  The installer asks once (the task "opengates", off unless ticked or
-#   /TASKS=opengates) and passes -OpenGates only after a yes.  It is MODIFY.ACCOUNT run the way CREATE.ACCOUNT is (sd -internal, behind the
-#   one-shot marker), NOT extra words on the create line: a word CREATE.ACCOUNT refuses would leave the person with no account at all, while a
-#   refused modify leaves the account and a warning naming the gate.  The words are both (ssh and the API: a new account starts with neither)
-#   and every on-word modify.account accepts for something that is not already on: shared-read-on is the default, files-admin-on is NOT in the
-#   list (Linux's rule: the administration group ships off whatever the answer), and the start and pins words are not gates.  The result is
-#   JUDGED ON WHAT THE SYSTEM HOLDS - register fields 7 to 12, 14 and 15, and the Windows groups sdssh, sdapi, sdfiles and sdfileswrite - never
-#   on sd's exit status, which says nothing about a refusal.  test-install-opengates-units.py holds the word list to modifya's on-words.
+# 26 Oct 26 Windows port - THE -OpenGates SWITCH IS GONE (owner, 26 Oct, via Linux 945e766: "you are right about looser default, no question,
+#   keep it closed").  An SD account starts with every access gate closed (S.63 to S.66), the installing user's too, and the installer has no
+#   way to open one; modify.account does it afterwards, a word at a time (SDCore4WindowsDocs, GettingStarted 01-installation.md).
+#   Exit code 4 went with it.
 #
 
 [CmdletBinding()]
@@ -113,10 +107,7 @@ param(
     # instead, where $PSScriptRoot is populated.
     [string] $AppDir = '',
 
-    [string] $DataDir = 'C:\ProgramData\SD',
-
-    # Open every access gate for the new account (see the 25 Oct 26 note in the header).  Off unless the installer was told yes.
-    [switch] $OpenGates
+    [string] $DataDir = 'C:\ProgramData\SD'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -229,72 +220,6 @@ function Wait-SdRunning {
     return (Test-SdRunning)
 }
 
-# --- every access gate, for -OpenGates ----------------------------------------
-
-# The words, in the order modify.account carries them out.  test-install-opengates-units.py holds this list to modifya's on-words.
-$GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on')
-
-# Register field (keys.h ACC$..., one line each in the record) -> the word that sets it.
-# PAIRS, NOT A DICTIONARY: an ordered dictionary indexed by an integer is indexed by POSITION, so $d[7] is the eighth value, not the one keyed 7
-# (found by test-install-opengates-units.py, which runs this code).
-$GateFields = @(@(7, 'sh-on'), @(8, 'os-on'), @(9, 'sd-on'), @(10, 'voc-on'), @(11, 'bp-on'), @(12, 'dict-on'), @(14, 'shared-write-on'), @(15, 'net-on'))
-
-# The Windows groups that are gates: membership of each is the gate.
-$GateGroups = [ordered]@{ 'sdssh' = 'both'; 'sdapi' = 'both'; 'sdfiles' = 'files-on'; 'sdfileswrite' = 'files-write-on' }
-
-function Get-ClosedGates {
-    <#
-      The words of the gates that are NOT open, read from the register record and the Windows groups.  An unreadable record or group counts
-      as closed: the install must not say "opened" for what it could not see.
-    #>
-    param([string] $WinUser)
-
-    $closed = New-Object System.Collections.ArrayList
-    $lines = @()
-    try { $lines = @([IO.File]::ReadAllText($record) -split "`r?`n") } catch { }
-    foreach ($p in $GateFields) {
-        $n = [int] $p[0]
-        $v = ''
-        if ($lines.Count -ge $n) { $v = $lines[$n - 1].Trim().ToLower() }
-        if ($v -ne 'yes') { $null = $closed.Add($p[1]) }
-    }
-    foreach ($g in $GateGroups.Keys) {
-        $in = $false
-        try {
-            $names = @(Get-LocalGroupMember -Group $g -ErrorAction Stop | ForEach-Object { ($_.Name -split '\\')[-1] })
-            $in = ($names -icontains $WinUser)
-        } catch { }
-        if ((-not $in) -and ($closed -notcontains $GateGroups[$g])) { $null = $closed.Add($GateGroups[$g]) }   # both is asked of two groups: once
-    }
-    return @($closed)
-}
-
-function Open-InstallerGates {
-    <#
-      Give the new account every gate modify.account can turn on, then read back what is open.  $script:GatesAllOpen is $true only when none
-      is closed.  One command carries all the words (modify.account takes several and attempts the rest after a refusal), run as
-      sd -internal behind Invoke-Sd's one-shot marker.
-
-      IT SETS A VARIABLE AND DOES NOT RETURN A VALUE, because Say writes with Write-Output: a function that prints and returns folds its
-      printed lines into its return value, and "-not (Open-InstallerGates ...)" is then False for every call (the PowerShell function
-      output trap, found by test-install-opengates-units.py, which runs this function).
-    #>
-    param([string] $Account, [string] $WinUser)
-
-    $script:GatesAllOpen = $false
-    Say "attach-account: opening every access gate for $Account ($($GateWords -join ' '))"
-    $r = Invoke-Sd (@('-internal', 'MODIFY.ACCOUNT', $Account) + $GateWords)
-    if ($r.Text) { Say $r.Text }
-    $closed = @(Get-ClosedGates -WinUser $WinUser)
-    if ($closed.Count -eq 0) {
-        Say "attach-account: every access gate is open for $Account, read back from the register and the groups"
-        $script:GatesAllOpen = $true
-        return
-    }
-    Say ("attach-account: WARNING these access gates are NOT open for {0}: {1}" -f $Account, ($closed -join ' '))
-    Say ("  Signed in as sdsys, give each one:  modify.account {0} {1}" -f $Account, ($closed -join ' '))
-}
-
 # --- the reinstall case, answered before anything is started ----------------
 #
 # Checked on disk rather than by running the verb, so a reinstall costs nothing
@@ -377,11 +302,6 @@ try {
             Say "attach-account: $User now has an SD account"
             if ($r.Text) { Say $r.Text }
             $result = 0
-            # Only after the installer was told yes; the account exists, so a failure here is a warning (4), never a missing account.
-            if ($OpenGates) {
-                Open-InstallerGates -Account $User.ToLower() -WinUser $User
-                if (-not $script:GatesAllOpen) { $result = 4 }
-            }
         }
         else {
             Say "attach-account: CREATE.ACCOUNT USER $User ATTACH did not create an account"
