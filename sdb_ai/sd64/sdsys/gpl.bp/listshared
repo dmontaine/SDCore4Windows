@@ -75,7 +75,7 @@ $include err.h
 
    spath = acc.rec<ACC$PATH>
    if spath[1,1] = '@' then spath = parse.pathname.tokens(spath)    ;* 25 Oct 26 Windows port: the register may hold an @SDSYS token and a drive letter
-   if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' or len(spath) < 2 or not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X") then
+   if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' or len(spath) < 2 or not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X":@vm:"1A':/'0X") then   ;* 26 Oct 26 RELEASE_1.1 189: C:/... is absolute too
       @system.return.code = -ER$FNF
       stop sysmsg(12523)
    end

@@ -58,8 +58,9 @@ $include err.h
 *  and the structure of a file of the shared account is changed by the administrator alone (RELEASE_1.1 187).
    shared.dir = arec<ACC$PATH>                                   ;* field 1; the register may hold an @SDSYS token and a drive letter
    if shared.dir[1, 1] = '@' then shared.dir = parse.pathname.tokens(shared.dir)
-   shared.dir = convert('/', @ds, shared.dir)                    ;* the register holds C:/ProgramData/SD/group_accounts/shared (forward slashes)
-   if len(shared.dir) < 2 or not(shared.dir matches "'":@ds:"'0X":@vm:"1A':\'0X") then stop sysmsg(12842) ;* Could not enter the shared account
+*  CREATE.ACCOUNT writes the register path with forward slashes (C:/ProgramData/SD/group_accounts/shared), which the pattern that _voc_ref and shared_ref use for
+*  "absolute" ("C:\...") does not match, so the test here is a drive letter and a colon, or the separator.
+   if len(shared.dir) < 2 or not(shared.dir[2, 1] = ':' or shared.dir[1, 1] = @ds) then stop sysmsg(12842) ;* Could not enter the shared account
    help.path = shared.dir : @ds : 'context.help'
 
    openpath help.path to hf else

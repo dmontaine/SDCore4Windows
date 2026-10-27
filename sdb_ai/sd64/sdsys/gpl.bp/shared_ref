@@ -105,7 +105,9 @@ $include err.h
 *  "absolute" is the test _voc_ref makes.
    if spath[1,1] = '@' then spath = parse.pathname.tokens(spath)
    if len(spath) < 2 then return ''
-   if not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X") then return ''
+*  26 Oct 26 RELEASE_1.1 189: CREATE.ACCOUNT writes the register path with forward slashes (C:/ProgramData/SD/group_accounts/shared), which the old test refused,
+*  so on a fresh install the shared account was in no session's reach and LIST.SHARED said there was none.  A drive letter with either slash is absolute.
+   if not(spath matches "'":@ds:"'0X":@vm:"1A':\'0X":@vm:"1A':/'0X") then return ''
 
 *  The entry of shared's own VOC, and the name of its private catalogue; the same three folds as _voc_ref
    openpath spath:@ds:'voc' to svoc else return ''
