@@ -382,10 +382,16 @@ function New-SdTestUserScript {
         SSH is the route - the account needs no API access to be driven here. #>
     param(
         [Parameter(Mandatory = $true)][string]$Name,
-        [Parameter(Mandatory = $true)][string]$Password
+        [Parameter(Mandatory = $true)][string]$Password,
+        # 27 Oct 26 - gate words for the account, off by default: every account starts with every gate closed (S.63 to S.66), so a verifier that compiles BASIC or
+        # writes a VOC in the account it signs on to has to ask for bp-on, voc-on and the rest here.  Only words createa accepts.
+        [string]$Gates = ''
     )
     Set-StrictMode -Version Latest
-    return @(('CREATE.ACCOUNT USER ' + $Name + ' SSH'), $Password, $Password)
+    if ($Gates -notmatch '^(\s*(sh-on|os-on|voc-on|bp-on|dict-on|net-on))*\s*$') {
+        throw ('New-SdTestUserScript: -Gates may hold only sh-on os-on voc-on bp-on dict-on net-on, not: ' + $Gates)
+    }
+    return @(('CREATE.ACCOUNT USER ' + $Name + ' SSH' + $(if ($Gates.Trim() -ne '') { ' ' + $Gates.Trim() } else { '' })), $Password, $Password)
 }
 
 function Remove-SdTestUserScript {

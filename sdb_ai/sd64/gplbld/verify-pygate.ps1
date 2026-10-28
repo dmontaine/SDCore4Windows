@@ -329,7 +329,9 @@ $wroteRecord = $false
 try {
     Write-Output '=== 1. a real non-administrator account ==========================='
 
-    $mk  = New-SdTestUserScript -Name $account -Password $password
+    # 27 Oct 26 - bp-on: the probe is compiled AS the account (signed on over ssh, so its own record's gates load), and every account starts with bp.edit closed
+    # (S.64); the b310 run stopped at "no object ... bp.out\PYGATE" for that reason.
+    $mk  = New-SdTestUserScript -Name $account -Password $password -Gates 'bp-on'
     $out = Invoke-SD $mk
     Write-Output '  --- CREATE.ACCOUNT said: ---'
     Write-Output $out

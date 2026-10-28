@@ -142,7 +142,20 @@ function Note($check, $expected, $got) {
 # A call that hits the timeout THROWS ("the task wrote no report within Ns") rather than
 # returning what SD had printed - recorded in RELEASE_1.1 76.
 . (Join-Path $PSScriptRoot 'sdsys-seat.ps1')
+. (Join-Path $PSScriptRoot 'sdtestuser.ps1')       # Invoke-SdAsTestUser: sign on as the fixture account over ssh (27 Oct 26)
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
+    # 27 Oct 26 - "LOGTO <the fixture account>" NOW MEANS SIGNING ON AS IT.  The edit gates (bp.edit, voc.edit, dict.edit) are loaded at sign-on and LOGTO neither
+    # reloads nor restores them (login:962, owner 17 Oct), so a LOGTO from the SDSYS seat kept SDSYS's closed gates and every compile was refused with "needs bp.edit"
+    # whatever the account was given (b256, b300, b305, b310).  Over ssh the account's own record decides, which is the case the global-catalogue gate is for.
+    if ($commands.Count -gt 0 -and $commands[0] -match '^\s*LOGTO\s+(\S+)\s*$' -and $Matches[1] -ieq $Account) {
+        $rest = @($commands | Select-Object -Skip 1)
+        $r = Invoke-SdAsTestUser -Name $Account.ToLower() -Password $script:pw -Commands $rest
+        $text = ($r.Out | Out-String)
+        if ($r.Err -ne '') { $text += "`n" + $r.Err }
+        Write-Host ('    > (signed on as ' + $Account + ' over ssh) ' + ($rest -join ' | '))
+        foreach ($l in (@($text -split "`r?`n") | Where-Object { $_.Trim() -ne '' } | Select-Object -Last 14)) { Write-Host ('    | ' + $l) }
+        return $text
+    }
     $needsInternal = (@($commands | Where-Object { $_ -match '^\s*LOGTO\b' }).Count -gt 0)
     $text = Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal:$needsInternal
     # 26 Oct 26 - THE INSTRUMENT SHOWS WHAT SD SAID.  The 15:27 run failed ten rows in sections 2 to 5 and the transcript held nothing of what sd answered, so the
