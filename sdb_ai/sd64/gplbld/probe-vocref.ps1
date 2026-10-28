@@ -11,11 +11,15 @@
 # ("N record(s) counted") and treats "File not found" and "Unable to open newly created dictionary" as disqualifiers, and prints sd's raw answer every time.
 # The account needs no gate for CREATE.FILE or COUNT; DELETE.FILE of the pointer needs none either when the file is deleted with it.  Exit 0 it opens, 1 it does not, 2 it could not run.
 
-param([string]$AppDir = (Join-Path $env:ProgramFiles 'SD'))
+param(
+    # Which product's sd to drive.  Core is the default; "-Product Solo" uses the signed-in user's SDCoreSolo (the install the Solo cycle makes under the user profile).
+    [ValidateSet('Core', 'Solo')][string]$Product = 'Core',
+    [string]$AppDir = (Join-Path $env:ProgramFiles 'SD')
+)
 $ErrorActionPreference = 'Continue'
-$sd = Join-Path $AppDir 'usr\bin\sd.exe'
-if (-not (Test-Path $sd)) { $sd = Join-Path $env:LOCALAPPDATA 'SDCoreSolo\usr\bin\sd-solo.exe' }
-if (-not (Test-Path $sd)) { $sd = Join-Path $env:USERPROFILE 'SDCoreSolo\usr\bin\sd-solo.exe' }
+if ($Product -eq 'Solo') { $sd = Join-Path $env:USERPROFILE 'SDCoreSolo\usr\bin\sd-solo.exe' }
+else { $sd = Join-Path $AppDir 'usr\bin\sd.exe' }
+Write-Output ("  product: $Product")
 Write-Output ("probe-vocref: " + (Get-Date -Format 's'))
 Write-Output ("  user : " + $env:USERNAME)
 Write-Output ("  sd   : $sd  exists=" + (Test-Path $sd))
@@ -28,6 +32,20 @@ New-Item -ItemType Directory -Force -Path $dir | Out-Null
 Write-Output "  dir  : $dir"
 $lines = @('TERM 200,9999', "CREATE.FILE zzvoc189 DYNAMIC PATHNAME $dir NO.QUERY", 'CT VOC zzvoc189', 'COUNT zzvoc189', 'DELETE.FILE zzvoc189', 'Y', 'Y', 'OFF')
 $body = "`n" + ($lines -join "`n") + "`n"
+# SOLO CANNOT BE MEASURED HERE, AND THE OBVIOUS SUBSTITUTE WOULD PASS FOR THE WRONG REASON.  Solo asks for the user's password at sign-on, which a piped session cannot
+# give ("Wrong password / Connection terminated"); and an -internal session (the installer's door) opens a PATHNAME file correctly on the OLD build too, because the bug
+# is in _voc_ref, which only an ordinary user's session goes through (the kernel opens for an administrator or internal session directly).  Measured 28 Oct 2026:
+# the -internal run printed "0 record(s) counted" on a Solo install built before the fix.  So Solo has to be done by hand, signed on as the user.
+if ($Product -eq 'Solo') {
+    Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output "`nprobe-vocref: COULD NOT RUN for Solo - it asks for a password at sign-on and an internal session would pass on the unfixed build too."
+    Write-Output '  By hand: start Solo, run sd-solo.exe in a console and sign on as yourself, then type, one line each:'
+    Write-Output '      CREATE.FILE zzvoc189 DYNAMIC PATHNAME C:\Users\<you>\AppData\Local\Temp NO.QUERY'
+    Write-Output '      COUNT zzvoc189'
+    Write-Output '      DELETE.FILE zzvoc189       (answer Y twice)'
+    Write-Output '  It passes when COUNT says "0 record(s) counted" and neither "File not found" nor "Unable to open newly created dictionary" appears.'
+    exit 2
+}
 $out = $body | & $sd 2>&1
 $text = (($out -replace ([char]27 + '\[[0-9]*[A-Za-z]'), '') -join "`n")
 Write-Output "`n--- what sd said (raw) ---"
@@ -37,6 +55,11 @@ Write-Output '--- end ---'
 if ($text -match 'SD has not been started') {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     Write-Output "`nprobe-vocref: COULD NOT RUN - SD is not started, so nothing was measured (Start-Service SD, or the Solo task, from an elevated shell)."
+    exit 2
+}
+if ($text -match 'Wrong password|Connection terminated') {
+    Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output "`nprobe-vocref: COULD NOT RUN - the session asked for a password, so nothing was measured."
     exit 2
 }
 $counted = ($text -match '\d+ record\(s\) counted')
