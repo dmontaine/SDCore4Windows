@@ -469,7 +469,9 @@ try {
     # Written at exit.vb.scram.fail and nowhere else.  A session that never reached the gate
     # cannot produce this line, and it NAMES THE USER, which is what ties it to leg B and not to
     # some other refusal on the machine.
-    $auditRefused = ($tail -match ('(?i)API REFUSED user=' + [regex]::Escape($sshAcct) + '\b.*reason=not in sdapi'))
+    # 27 Oct 26 - THE WORDING CHANGED WITH S.65: the reason is now "not a member of sdapi or sdfiles" (the files-only login route), where it used to read
+    # "not in sdapi".  Measured on the b310 install: the audit line carried the new text and this row failed on the old one.  Both are accepted.
+    $auditRefused = ($tail -match ('(?i)API REFUSED user=' + [regex]::Escape($sshAcct) + '\b.*reason=not (in sdapi|a member of sdapi)'))
     Note 'the audit records the SSH-only account''s refusal, with the reason (not in sdapi)' $true $auditRefused
     Note 'the audit has NO refusal for the API account' $false `
          ($tail -match ('(?i)API REFUSED user=' + [regex]::Escape($apiAcct) + '\b'))
