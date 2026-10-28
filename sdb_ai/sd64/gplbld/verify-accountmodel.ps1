@@ -142,7 +142,8 @@ function Get-ListedIds([string]$out) {
 # 20 Sep 26 - RELEASE_1.1 76, THE SDSYS SEAT.  See the header for why -Internal is needed.
 . (Join-Path $Gplbld 'sdsys-seat.ps1')
 function Invoke-SD([string[]]$commands, [switch]$Internal) {
-    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 120 -Internal:$Internal)
+    # 27 Oct 26 - 240 s (was 120): CREATE.ACCOUNT takes about 40 s on the test guest and this step was killed at the limit (b310, b313; see verify-createaccount).
+    return (Invoke-SdSeatText -Commands $commands -TimeoutSec 240 -Internal:$Internal)
 }
 
 # ---------------------------------------------------------------------------

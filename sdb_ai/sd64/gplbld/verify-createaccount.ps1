@@ -322,7 +322,10 @@ function Invoke-SD([string[]]$commands) {
     # there.  ***A SEAT THAT DID NOT RUN THROWS RATHER THAN RETURNING ''*** -
     # an empty string here would read as "SD printed nothing" and every check
     # below would then fail for a reason invisible in its own output.
-    $r = Invoke-SdViaSeat -Commands $commands
+    # 27 Oct 26 - 240 s, NOT THE SEAT'S 90.  CREATE.ACCOUNT takes about 40 s on the test guest (the audit trail times it: create.account 18:56:42 to 18:57:22 for another step's
+    # account, delete.account 16 s), and with the passwords and the checks that followed the step was killed at 90 s with "Received termination signal 15"
+    # (b310, b313) - a limit of the harness, while the Windows half itself took 0.0 s.
+    $r = Invoke-SdViaSeat -Commands $commands -TimeoutSec 240
     if (-not $r.Ok) { throw ('the SDSYS seat did not run: ' + $r.Why + '  [' + $r.Detail + ']') }
     return $r.Text
 }
