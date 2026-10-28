@@ -3,6 +3,9 @@
 #
 #   powershell -ExecutionPolicy Bypass -File secure-osusers.ps1 -Path "C:\ProgramData\SD\sdsys\os.users" ...
 #
+# 28 Oct 26 - RELEASE_1.1 175: os.users is RETIRED (owner 23 Oct; SH and OS.EXECUTE are fields of the account's register record), so the installer calls this
+# only for batch.jobs and batch.jobs.dic now (twice, from SecureBatchJobs).  The name is kept: it is shipped, staged and cited, and nothing in it is specific to os.users.
+#
 # 22 Aug 26 - IT SERVES TWO LISTS NOW, and the name is the older of them.  It
 # takes -Path and has nothing in it specific to os.users, so PROJECT_STATUS.md
 # 7 step 9 locks SDSYS batch.jobs - the commands each account may run from the

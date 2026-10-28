@@ -88,25 +88,8 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
       return
    end
 
-*  os.users - one line per record: user, SH, OS.EXECUTE.
-   openpath @sdsys : @ds : 'os.users' to osu.f then
-      sel.lines = ''
-      select osu.f to 11
-      loop
-         readnext id from 11 else exit
-         read rec from osu.f, id then
-            sel.lines<-1> = id : ': sh ' : rec<1> : ', os.execute ' : rec<2>
-         end
-      repeat
-      close osu.f
-      if sel.lines # '' then
-         lines<-1> = '[os.users]'
-         lines<-1> = sel.lines
-      end
-   end else
-      lines<-1> = '[os.users]'
-      lines<-1> = '(could not be read: os.users)'
-   end
+*  28 Oct 26 - RELEASE_1.1 175: no [os.users] section.  os.users is retired (owner 23 Oct): SH and OS.EXECUTE are fields of the account's register record now, and the
+*  report of an account's gates is LIST.ACCOUNTS / SHOW, not a file nothing reads.
 
    return
 end

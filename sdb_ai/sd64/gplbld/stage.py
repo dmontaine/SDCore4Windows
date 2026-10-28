@@ -382,23 +382,8 @@ SDSYS_EMPTY = [
     # A directory file, the same shape as accounts - an empty directory is
     # one.  secure-cred.ps1 locks it once the tree ACL is on.
     ('$cred',       'credential store: per-account salt and Argon2 verifier'),
-    # 17 Aug 26 - SHELL PERMISSION, PROJECT_STATUS.md 7 step 7.  Both are
-    # directory files and BOTH have to be here, because WRITE_INSTALL_DICTS
-    # OPENPATHs the dictionary rather than creating it - the bootstrap would
-    # skip the entries with "ERROR OPENING FILE" and the file would ship with
-    # no dictionary, so LIST and ED would not resolve a field.
-    #
-    # os.users SHIPS EMPTY AND THAT IS THE SAFE DIRECTION: no record means no
-    # account has shell access, which is the behaviour before this existed.
-    # It is the opposite of the tier lists, where a missing record means the
-    # FULL VOC (CREATEA) - do not copy that convention here.
-    #
-    # secure-osusers.ps1 locks it once the tree ACL is on, read-only to
-    # sdusers.  Without that lock any SD user could add their own name, and
-    # the file would be decoration rather than a control - which is exactly
-    # what happened to $cred above.
-    ('os.users',     'accounts permitted SH and/or OS.EXECUTE'),
-    ('os.users.dic', 'its dictionary; WRITE_INSTALL_DICTS fills it'),
+    # 28 Oct 26 - RELEASE_1.1 175: os.users and os.users.dic are NOT SHIPPED any more (retired, owner 23 Oct: SH and OS.EXECUTE are fields of the account's register
+    # record).  An upgraded machine keeps its old ones, unread, until upgrade_gates has copied them into the register.
     # 02 Sep 26 - PRE_RELEASE_FIXES.md 28.  pdump() writes here instead of into
     # sdsys itself, which grants sdusers Modify and so let every SD user read
     # every other user's dumped variable state (pdump.c:98 falls back to
@@ -571,9 +556,7 @@ SDSYS_PRESERVE = [
     ('$cred',          'the credential register - every account password'),
     ('accounts',       'the account register; ships with SDSYS and then grows'),
     ('cat',            'the private catalogue - what the user catalogued'),
-    ('os.users',       'SD account to Windows account links'),
-    ('os.users.dic',   'its dictionary; goes with the file it describes'),
-    ('batch.jobs',     'which commands each account may run'),
+    ('batch.jobs',    'which commands each account may run'),
     ('batch.jobs.dic', 'its dictionary; goes with the file it describes'),
     ('prt',            'the print queue'),
     ('$hold',          "the spooler hold file - the user's saved output"),

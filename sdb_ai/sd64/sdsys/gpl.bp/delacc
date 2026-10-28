@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 Windows port - RELEASE_1.1 175: os.users is retired (owner 23 Oct; the grant is the account's, S.63), so drop.os.access and its two callers are gone: the grant
+*           left with the register record, and the person's os.users record (an old install's, unread since S.63) is no longer touched here.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): DELETE.ACCOUNT shared is refused (12522), after the SDSYS test and before anything else is
 *               read or asked.
 *  8 Oct 26 Windows port - RELEASE_1.1 130 (Linux T1420 item 1, owner's parity ruling
@@ -444,7 +446,6 @@ deffun is_sd_user(username) calling '!is_sd_user'
                *   a permission away from - and a yes|yes keyed on a name Windows
                *   may one day reissue is the reason to take it away now.
                crt sysmsg(10037,os.user) ;* Windows account %1 does not exist
-               gosub drop.os.access
 
             case sd.made.it
 * 21 Aug 26 Windows port - THE Y/N PROMPT IS GONE.  Owner's decision, 21 Aug
@@ -545,7 +546,6 @@ deffun is_sd_user(username) calling '!is_sd_user'
                *   about the LOGIN.  login.gone is false only for status 1 and
                *   2, where the login is still there and its grant still has an
                *   owner.  PRE_RELEASE_FIXES.md 65.
-               if login.gone then gosub drop.os.access
 
             case 1
                * It exists and SD did not make it.  Not offered, not asked
@@ -601,35 +601,6 @@ deffun is_sd_user(username) calling '!is_sd_user'
    void kernel(K$AUDIT, 'delete.account account=' : acc.name)
 
    @system.return.code = 0
-   return
-
-* ======================================================================
-* drop.os.access  -  take away this person's operating-system grant
-*
-* 30 Aug 26 Windows port - PRE_RELEASE_FIXES.md 65.  Lifted out of the
-*   "case stat = 0" arm so that both callers reach it: the login SD has just
-*   deleted, and the login that had already gone before the verb ran.  One
-*   place and two callers, which is the shape entry 11 settled on after the
-*   opposite arrangement lost a transaction.
-*
-* THE RECORD IS KEYED BY THE PERSON AND NOT BY THE ACCOUNT, so this may only
-*   run where the Windows login itself is gone.  Both callers establish that
-*   before the gosub - one from !delete_user's own answer, one from
-*   !is_sd_user's lookup - and nothing here re-derives it.  Deleting the
-*   record for a login that still exists would take a permission away from
-*   somebody who still has a reason to hold it.
-*
-* A MISSING RECORD IS THE ORDINARY CASE, not an error: only an
-*   ADMINISTRATOR-tier USER account is ever given one (CREATEA,
-*   grant.os.access), and most accounts are not administrators.  Hence
-*   "on error null", and no message on either outcome.
-* ======================================================================
-
-drop.os.access:
-   openpath @sdsys : @ds : 'os.users' to osu.f then
-      delete osu.f, os.user on error null
-      close osu.f
-   end
    return
 
 * ======================================================================

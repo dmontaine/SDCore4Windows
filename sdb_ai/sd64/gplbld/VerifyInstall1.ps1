@@ -611,7 +611,8 @@ $steps = @(
     # silent minutes.
     # 26 Oct 26 - verify-osusers.ps1 IS OFF THIS LIST (RELEASE_1.1 175 and 188).  It proves @SDSYS/OS.USERS permits a shell, and since S.63 and S.64 the kernel
     # does not read os.users: SH and OS.EXECUTE are per-account fields.  On the first run against a real install eleven of its rows failed for that reason, and
-    # a failed step stops this runner before the elevated half.  The file stays until row 175 retires os.users and replaces it with a check of the register fields.
+    # a failed step stops this runner before the elevated half.  28 Oct 26: the file is DELETED (RELEASE_1.1 175); a check of the register fields is what verify-createaccount
+    # and verify-accountmodel already make.
     # 04 Sep 26 - PRE_RELEASE 66's standing guard: are the full-screen editors
     # BUNDLED, and does gpl.bp/edit's find.editor resolve the bundled copy
     # rather than whatever winget left on PATH?  No account, no prefix, no run
@@ -1268,7 +1269,7 @@ $needsTestUser = @('verify-nocase.ps1', 'verify-lineendings.ps1')
 # against the scripts' actual parameter blocks, in BOTH directions, so a script
 # that gains the parameter without joining this list - or joins it without
 # having the parameter - fails in a second instead of costing a run its prompts.
-$helperAware = @('verify-osusers.ps1', 'verify-batchjob.ps1',
+$helperAware = @('verify-batchjob.ps1',
                  'verify-doors-suite.ps1',
                  # 16 Sep 26 - its five LOGTO SDSYS legs run in an elevated
                  # re-entry since RELEASE_1.1 45 closed that door to an

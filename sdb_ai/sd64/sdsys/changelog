@@ -2,6 +2,15 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+28 Oct 26  THE FILE os.users IS GONE FROM A NEW INSTALL (THE SHELL AND OS.EXECUTE SETTINGS ARE THE ACCOUNT'S OWN).
+
+             What        Nothing has read os.users since the shell and os.execute settings moved into the account's own record (see the entry on sh-on and os-on). A new install now
+                         does not make the file or its dictionary, does not lock them, delete.account no longer looks for the person's record in it, and the settings report
+                         (settings.report) has no [os.users] section. An upgraded machine keeps its old file, unread: the upgrade copies what it said into the accounts once, as before.
+             Why it      Two lists decided the same thing for a time, one of which nothing read; the one that nothing read could be mistaken for the one that counts.
+             matters
+             Does not    Delete the old file from a machine that has it, or change what any account may do.
+
 28 Oct 26  A PHANTOM RUNS THE COMMAND IN ITS START-UP RECORDS ONLY IF THE PROCESS THAT STARTED IT SEALED THEM (SECURITY-MODEL EVALUATION, FINDING F10).
 
              What        $ipc is the one SD file that every user's process has to write, so an SD user with a shell can write it too. A new phantom used to read its start-up

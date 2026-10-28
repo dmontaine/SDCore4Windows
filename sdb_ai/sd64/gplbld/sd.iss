@@ -803,9 +803,9 @@ Name: "{#DataDir}\sdsys\$hold"; Flags: uninsneveruninstall
 ; the top level and deletes everything except that one name.  NEITHER reads the
 ; uninstall log, so the conclusion is unchanged - but a comment naming one call
 ; as THE path is how the next reader concludes the other one cannot exist.
+; 28 Oct 26 - RELEASE_1.1 175: no os.users and os.users.dic here any more (retired, owner 23 Oct).  A first install does not make them; an upgraded machine keeps its old
+; ones, unread, until upgrade_gates has copied them into the register.
 Name: "{#DataDir}\sdsys\$cred"; Flags: uninsneveruninstall
-Name: "{#DataDir}\sdsys\os.users"; Flags: uninsneveruninstall
-Name: "{#DataDir}\sdsys\os.users.dic"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\batch.jobs.dic"; Flags: uninsneveruninstall
 
 [Icons]
@@ -3569,34 +3569,16 @@ begin
     RunFinishingStep;
 end;
 
-{ LOCK THE SHELL PERMISSION LIST, and return what to tell the user if it did
-  not happen.  PROJECT_STATUS.md 7 step 7.
+{ 28 Oct 26 - RELEASE_1.1 175: SecureOsUsers is GONE, and so is the shell permission list it locked.  os.users is retired (owner 23 Oct; S.63): SH and OS.EXECUTE are fields of
+  the account's register record, which SDSYS's own ACL already protects.  An UPGRADED machine keeps its old sdsys\os.users, unread, and upgrade_gates copies it into the
+  register once.
 
-  WHAT IT PROTECTS.  SDSYS os.users names the accounts allowed SH, one record
-  per account.  CPROC reads it from the USER'S OWN process when they type SH,
-  so ordinary users must be able to READ it - which is the difference from the
-  credential store, where they get nothing at all.  What they must never have
-  is WRITE: a user who can add their own name grants themselves a shell.
-
-  SO THE ACL IS THE ENTIRE CONTROL, exactly as it is for $CRED, and it fails
-  the same way if this step does not run - silently, with the list writable by
-  the people it exists to restrain.  That is why this is here and not in [Run]:
-  the exit code is checked.
-
-  TWO OBJECTS, TWO CALLS.  The dictionary is locked as well.  It enforces
-  nothing - CPROC reads the flags positionally, rec<1> and rec<2> - but an
-  administrator reads the list THROUGH that dictionary, and a user able to
-  redefine SH to point at another field could make LIST OS.USERS show
-  something other than the truth.  Called once per path rather than passing
+  Locking one object with a given script.  Called once per path rather than passing
   both, because -File binds a comma-joined argument in ways that are worth not
-  depending on.
-
-  IT MUST RUN AFTER THE DATA-TREE icacls, like the credential store, and
-  ssPostInstall is after the whole [Run] section. }
-{ Locking one object, so SecureOsUsers can call it twice.  A separate function
-  because Inno's Pascal Script has NO NESTED FUNCTIONS - declaring one inside
-  another is "'BEGIN' expected" at the inner declaration, which does not name
-  the cause. }
+  depending on.  The name is historical - it was written for os.users and every
+  script that locks a path now goes through it.  A separate function because
+  Inno's Pascal Script has NO NESTED FUNCTIONS - declaring one inside another is
+  "'BEGIN' expected" at the inner declaration, which does not name the cause. }
 function LockOsUsersPath(Ps, Script, Target: String; var Code: Integer): Boolean;
 begin
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
@@ -3604,36 +3586,6 @@ begin
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Code := -1;
   Result := (Code = 0);
-end;
-
-function SecureOsUsers: String;
-var
-  Code: Integer;
-  Ps, Script, Store, Dict, Failed: String;
-begin
-  Result := '';
-  Code := 0;
-  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
-  Script := ExpandConstant('{app}\secure-osusers.ps1');
-  Store := ExpandConstant('{#DataDir}\sdsys\os.users');
-  Dict := ExpandConstant('{#DataDir}\sdsys\os.users.dic');
-
-  Failed := '';
-  if not LockOsUsersPath(Ps, Script, Store, Code) then
-    Failed := Store
-  else if not LockOsUsersPath(Ps, Script, Dict, Code) then
-    Failed := Dict;
-
-  if Failed = '' then
-    Exit;
-
-  { NAMED, NOT BURIED, for the same reason the credential store is: a list that
-    anyone can edit is not a permission list, and nothing else in the install
-    would reveal it. }
-  Result := 'The shell permission list was NOT locked (code ' + IntToStr(Code) + '). ' +
-            'Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Store + '"' + #13#10 +
-            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Dict + '"' + #13#10#13#10;
 end;
 
 { LOCK THE ACCOUNT DIRECTORIES.  PROJECT_STATUS.md section 8, "the B work".
@@ -4351,7 +4303,6 @@ var
   AttachMsg: String;
   CredMsg: String;
   DenyMsg: String;
-  OsuMsg: String;
   BjMsg: String;
   GcatMsg: String;
   PcodeMsg: String;
@@ -4396,13 +4347,9 @@ begin
       the Run section beyond being after it, which ssPostInstall guarantees. }
     CredMsg := SecureCredStore;
 
-    { Beside the credential store and for the same reason: both are ACLs that
-      are the whole of a control, and both fail silently if the step does not
-      run.  Order between them does not matter - different files, no shared
-      state - so it goes second simply because the escalation is the graver. }
-    OsuMsg := SecureOsUsers;
+    { 28 Oct 26 - RELEASE_1.1 175: the shell permission list (os.users) is retired, so there is no second ACL to set beside the credential store.
 
-    { Beside it, same control, different escalation: this one is the command
+      Beside the credential store, same control, different escalation: this one is the command
       line rather than the shell.  Order between them does not matter. }
     BjMsg := SecureBatchJobs;
 
@@ -4923,7 +4870,6 @@ begin
              is the one line in the box that reports a hole rather than a
              setting. }
            CredMsg +
-           OsuMsg +
            BjMsg +
            GcatMsg +
            PcodeMsg +
