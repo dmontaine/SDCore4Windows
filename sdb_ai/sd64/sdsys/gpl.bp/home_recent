@@ -1,0 +1,143 @@
+* HOME_RECENT
+* The Recent group of the home screen: the tiles a person started most recently (S.75, plan .claude/plan-fullscreen-toolkit.md section 13.3, "Recent").
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 Windows port - from Linux ec8459b - unchanged (it opens and makes &MENUS& the way MY.MENU does).
+* 26 Oct 26 dm  New (S.75, home): the list is kept in the person's own account, in the place their programs (HOME_PINS) are kept, as the record RECENT of the file &MENUS&.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !home_recent(op, a, b)
+*
+*     op GET    a returned: 1 when the person has turned the group on, else 0.  b returned: when on, the ids of the tiles, newest first, at most 6, each of lower case letters only
+*               and at most 20 long, no id twice.  Reads only; nothing is made.
+*     op ADD    a = the id of a tile that has just been started.  Puts it first in the list when the group is on, and does nothing at all when it is off, when the file or the
+*               record is not there, when the record is locked by another session, or when the id is not plain lower case letters.  Writes only the record RECENT.
+*     op ON     a returned: 1 when the group is on now.  Makes the file &MENUS& in the current account when it is not there (as MY.MENU does), then writes the record RECENT
+*               with the one word on.
+*     op OFF    a returned: 1.  Deletes the record RECENT: the group is off and the list is forgotten.  Nothing else in the file is touched.
+*
+*   THE GROUP IS OFF AS DELIVERED: the record is not there, and nothing is written until the person turns it on (HOME's View menu).  The record is field 1 on, then one id to a field.
+*   WHAT IS KEPT IS AN ID AND NEVER A COMMAND: the home screen builds each recent tile from its own table as it is now, so a list that was edited by hand can start nothing that
+*   the page does not offer, a tile the administrator has turned off is not offered, and the person's own programs (MY.MENU) are not kept here.  The administrator can turn the
+*   group off for an account with SET.TILE account recent off; the home screen then asks nothing of this routine at all.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine home_recent(op, a, b)
+$catalog !home_recent
+
+$define RC.MAX   6       ;* the list holds this many ids
+
+   begin case
+      case op = 'get'
+         gosub rc.get
+      case op = 'add'
+         gosub rc.add
+      case op = 'on'
+         gosub rc.on
+      case op = 'off'
+         gosub rc.off
+   end case
+
+   return
+
+* The state and the ids
+rc.get:
+   a = 0
+   b = ''
+   open '&menus&' to f else return
+   read rec from f, 'recent' else rec = ''
+   close f
+   if rec<1> # 'on' then return
+   a = 1
+   for i = 2 to dcount(rec, @fm)
+      id = trim(rec<i>)
+      gosub valid.id
+      if idok and dcount(b, @fm) < RC.MAX then
+         if index(@fm : b : @fm, @fm : id : @fm, 1) = 0 then b<-1> = id
+      end
+   next i
+   return
+
+* This id first, the others after it; nothing when the group is off
+rc.add:
+   id = a
+   gosub valid.id
+   if not(idok) then return
+   open '&menus&' to f else return
+   lk = 0
+   rec = ''
+   readu rec from f, 'recent' locked
+      lk = 1
+   end then
+      got = 1
+   end else
+      got = 0
+   end
+   if lk then
+      close f
+      return
+   end
+   if not(got) or rec<1> # 'on' then
+      release f, 'recent'
+      close f
+      return
+   end
+   newrec = 'on' : @fm : a
+   n = 1
+   for i = 2 to dcount(rec, @fm)
+      id = trim(rec<i>)
+      gosub valid.id
+      if idok and id # a and n < RC.MAX then
+         newrec<-1> = id
+         n += 1
+      end
+   next i
+   wok = @true
+   write newrec to f, 'recent' on error wok = @false
+   if not(wok) then release f, 'recent'
+   close f
+   return
+
+* Turn it on: the file is made when it is not there, as MY.MENU makes it
+rc.on:
+   a = 0
+   open '&menus&' to f else
+      execute 'create.file &menus& dynamic' capturing mk
+      open '&menus&' to f else return
+   end
+   read rec from f, 'recent' else rec = ''
+   if rec<1> = 'on' then
+      a = 1
+   end else
+      wok = @true
+      write 'on' to f, 'recent' on error wok = @false
+      if wok then a = 1
+   end
+   close f
+   return
+
+* Turn it off: nothing of the list is left
+rc.off:
+   a = 1
+   open '&menus&' to f else return
+   delete f, 'recent'
+   close f
+   return
+
+* An id is lower case letters, one to 20 of them
+valid.id:
+   okchars = 'abcdefghijklmnopqrstuvwxyz'
+   idok = (id # '' and len(id) <= 20 and index(id, ' ', 1) = 0 and trim(convert(okchars, str(' ', len(okchars)), id)) = '')       ;* the blank test first: the convert makes every letter a blank and TRIM would take the blanks of the id for its own
+   return
+
+end
+
+* END-CODE

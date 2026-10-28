@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: START-MENU / START-TERMINAL (where the account starts) and PINS-ON (the person may add programs of their own to their home screen), the words
+*           MODIFY.ACCOUNT takes that differ from the delivered state; CA$START and CA$PINS in createacc.h; two start words are refused (12796) before anything is made; the audit gates= list names pins-on
+*           and a start= tail is written when a start word was given.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: FILES-ADMIN-ON (joins sdfilesadmin as well, with FILES-ON and FILES-WRITE-ON); CA$FILESADMIN in createacc.h; the audit gates= list names it.
 * 25 Oct 26 Windows port - from Linux 1daee9d (19 Oct 26): the audit line carries gates=, the words of the sentence that grant or withdraw an access
 *           (owner: "create-account should record what gates were granted"); the words up to type= are unchanged.
@@ -409,11 +412,15 @@
 *
 * START-DESCRIPTION:
 *
-* CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {NO.QUERY}
+* CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {START-MENU | START-TERMINAL} {PINS-ON} {NO.QUERY}
 *                        - the route defaults to BOTH when nothing is said
 *                          (RELEASE_1.1 68); the tier words went with 64
 * CREATE.ACCOUNT GROUP <group name> {NO.QUERY}
 * CREATE.ACCOUNT OTHER <account name> <path name> {NO.QUERY}
+*
+* 28 Oct 26 Windows port - from Linux ec8459b.  START-MENU, START-TERMINAL (S.75) where the new account starts: in the home screen, or at the command prompt.  Not typed, the account follows
+*   the system default (SET.START.DEFAULT).  Both in one command are refused (12796) before anything is made.  PINS-ON the person may add programs of their own to their home screen (MY.MENU);
+*   off unless typed.  Any account type may have either.  MODIFY.ACCOUNT's START-DEFAULT and PINS-OFF restate what an account has when neither is typed here, so they are not accepted here.
 *
 * 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 4.  THIS BLOCK USED TO READ
 *   "CREATE.ACCOUNT account.name  path.name [NO.QUERY]", the pre-0.9.0 form,
@@ -655,15 +662,17 @@ deffun ps_script(script) calling '!ps_script'
 
    case 1
     crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}'
-    crt '                  {shared-read-off} {shared-write-on} {no.query}'
+    crt '                  {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
     crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
     crt '                  (net-on), and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files'
     crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
     crt '                  shared-write-on is typed;'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
-    crt '                create.account group <group name> {no.query}'
-    crt '                create.account other <account name> <pathname> {no.query}'
+    crt '                  It starts where the system default says (set.start.default) unless start-menu or start-terminal is typed,'
+    crt '                  and cannot add programs of its own to its home screen unless pins-on is typed.'
+    crt '                create.account group <group name> {start-menu | start-terminal} {pins-on} {no.query}'
+    crt '                create.account other <account name> <pathname> {start-menu | start-terminal} {pins-on} {no.query}'
     @system.return.code = -ER$ARGS
     stop
    end case
@@ -710,8 +719,13 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$FILESADMIN> = 1 then gates<-1> = 'files-admin-on'
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
+   if settings<CA$PINS> = 1 then gates<-1> = 'pins-on'
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
-   void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates)
+*  28 Oct 26 (from Linux ec8459b) - S.75, home: where the account was told to start is a tail of its own, only when a start word was typed (start=menu or start=terminal); an account that follows
+*    the system default has the line it always had.
+   start.audit = ''
+   if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)
+   void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)
 
    @system.return.code = 0
    stop
@@ -901,6 +915,17 @@ more.args:
 *   !create_account refuses it without FILES-ON and FILES-WRITE-ON (12531), and for a GROUP or OTHER account as it refuses FILES-ON.
          case upcase(token) = 'FILES-ADMIN-ON'
             settings<CA$FILESADMIN> = 1
+
+* 28 Oct 26 dm (from Linux ec8459b) - S.75, home: START-MENU and START-TERMINAL name where the new account starts; they are one setting, so the second of two different ones is refused with 12796 (the words
+*   MODIFY.ACCOUNT refuses the same pair with) before anything is made.  PINS-ON lets the person add programs of their own to their home screen; off unless typed.  START-DEFAULT and
+*   PINS-OFF restate the state an account has when neither is typed and are not accepted.  Matched on the token text.
+         case upcase(token) = 'START-MENU' or upcase(token) = 'START-TERMINAL'
+            if settings<CA$START> # '' and settings<CA$START> # downcase(token[7, 99]) then
+               stop sysmsg(12796, 'start-' : settings<CA$START>, downcase(token))
+            end
+            settings<CA$START> = downcase(token[7, 99])
+         case upcase(token) = 'PINS-ON'
+            settings<CA$PINS> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

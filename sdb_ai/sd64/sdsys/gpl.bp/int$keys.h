@@ -222,7 +222,7 @@
       $define K$CMDLOG.WRITE    109      ;* "origin<FM>command": one line in the command log if it is on (15 Oct 26, Q-8)
       $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
       $define K$FORM.QUEUE      111      ;* unit * 1000 + queue: SP.ASSIGN gave form queue 'queue' to print unit 'unit' (15 Oct 26, Q-9)
-      $define K$USER.STATS      112      ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
+      $define K$USER.STATS      112     ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
       $define K$NON.DURABLE.TXN 113      ;* 1: the next COMMIT is non-durable, a nested transaction goes to its parent (15 Oct 26, sheet 442; carried 25 Oct 26 with QMClient)
 *  115 is Linux's K$LOCK.TRACE (LOCK.TRACER, not carried): left unused.
       $define K$SD.ACCOUNTS     118      ;* may reach files under the directory of an account its user could LOGTO, except its VOC (set from $internal; -1 asks) (16 Oct 26, carried 23 Oct 26)
@@ -232,6 +232,7 @@
       $define K$EDIT.OK         124      ;* the pathname of an open file: 1 if THIS SESSION may save a change to it (17 Oct 26, S.64; ask before writing a file the user named)
       $define K$EDIT.KIND       125      ;* the same argument: 0 none of the three, 1 a VOC, 2 a dictionary, 3 a program file (for the message) (17 Oct 26, S.64)
       $define K$EDIT.OS.OK      126      ;* an OS pathname about to be written, created, deleted or copied into: 1 if no part of it below the account names a guarded file the session may not change (17 Oct 26, S.64)
+      $define K$PHANTOM.NONCE   144      ;* 'S':secret stages the secret the next phantom() gives the new process (its environment); 'G' answers the one this process was started with (26 Oct 26, W.11 F10)
       $define K$NET             127     ;* may open a file on another SD server (SDNet): account-scoped like K$SD.ACCOUNTS (set from $internal; -1 asks); does nothing until the remote-file slices (17 Oct 26, S.65 slice 1)
       $define K$PHANTOM.USER    114      ;* The next phantom() is to be this user number (one PHANTOMS keeps, not in use); 0 cancels (16 Oct 26, PHANTOM USER)
       $define K$SHARED.READ     128     ;* may open the files of the shared account by name: account-scoped like K$SD.ACCOUNTS (set from $internal; -1 asks) (18 Oct 26, S.66)

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: the Xn, Dn and Ln records are sealed with a secret that only the new process is given (its environment); CPROC runs them
+*               only if the seal checks.  $ipc is a file every SD user's process may write.
 * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): USER n: the phantom takes user number n, one of those the PHANTOMS parameter keeps (QM4 gaps).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -34,6 +36,12 @@
 *    command to be executed.
 * 4. The command is also written to the Xn record for access by the phantom as
 *    this process may have terminated by the time it gets off the ground.
+*    (W.11 F10: before step 1 this process makes a secret, and in step 2 it
+*    gives it to the new process in its environment, where only the same
+*    operating-system user can read it.  The Xn record, and the Dn and Ln
+*    records the options below may add, are written with a SEAL made with that
+*    secret over what they hold (!IPC_SEAL); $ipc itself is a file any SD
+*    user's process can write.)
 * 5. We release the $IPC file lock.
 * 6. The phantom gets the file lock on the $IPC file, possibly waiting for the
 *    parent to write the Xn record.
@@ -41,7 +49,9 @@
 *    locates the entry for its own process, setting the timestamp.  This record
 *    will not exist if the parent has terminated while the phantom was
 *    starting.
-* 8. The phantom retrieves the command from the Xn record, deleting the record.
+* 8. The phantom retrieves the command from the Xn record, deleting the record,
+*    and checks the seal on it and on the Dn and Ln records (CPROC,
+*    read.phantom.cargo).  If the seal does not check, nothing is run.
 * 9. The phantom process executes the command.
 *
 * END-DESCRIPTION
@@ -56,6 +66,8 @@ $include syscom.h
 $include syscom err.h
 $include syscom keys.h
 $include int$keys.h
+
+deffun ipc_seal(sl.mode, sl.key, sl.seal, sl.opts, sl.cmd, sl.data, sl.log) calling '!ipc_seal'     ;* 26 Oct 26 dm, W.11 F10
 
 $define default.como.dir "$COMO"
 $define como.dir.voc.name "$COMO"
@@ -130,11 +142,31 @@ $define como.dir.voc.name "$COMO"
          end
       end
 
+      * 26 Oct 26 dm - W.11 F10.  $ipc is a file every SD user's process may write, so what the new process takes from it is sealed: the
+      *   seal is made now, before anything is created, with a secret that is given to the new process in its environment and written
+      *   nowhere.  If the secret or the seal cannot be made, no process is started.  The values are exactly the ones written to the
+      *   records below - the option flags, the command, the DATA queue when it is passed, and the log file name - and CPROC
+      *   (read.phantom.cargo) makes the same seal from what it reads and runs nothing unless it is the same.
+      opt.s = if option(OPT.INHERIT) then kernel(K$GET.OPTIONS,0) else ''
+      dq = if pass.data then @data.pending else ''
+      nonce = SDEXT('24', @TRUE, SD_RANDBYTES)
+      seal = ipc_seal('make', nonce, '', opt.s, ph.command, dq, log.file)
+      if seal = '' then
+         @system.return.code = -ER$PROCESS
+         stop sysmsg(12951)
+      end
+
       * We hold the file lock on the $IPC file across process creation so
       * that we can enter the uid of the new process into the parent process
       * register entry and write a copy of the command in the Xn record.
 
       filelock ipc.f
+
+      if kernel(K$PHANTOM.NONCE, 'S':nonce) # 1 then   ;* the secret for this phantom() only
+         fileunlock ipc.f
+         @system.return.code = -ER$PROCESS
+         stop sysmsg(12951)
+      end
 
       if req.user # '' then void kernel(K$PHANTOM.USER, req.user)
 
@@ -164,14 +196,12 @@ $define como.dir.voc.name "$COMO"
       ipc.rec<3,pos> = ph.command          ;* Command to execute
       write ipc.rec to ipc.f, id
 
-      * Write phantom command to Xn record
+      * Write phantom command to Xn record: the seal, the option flags, then the command (26 Oct 26 F10: the seal is first)
 
-      s = if option(OPT.INHERIT) then kernel(K$GET.OPTIONS,0) else ''
-      write s:@fm:ph.command to ipc.f, 'X':uid
+      write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid
 
-      * The extras travel in their own records, read and deleted by the phantom (cproc)
+      * The extras travel in their own records, read and deleted by the phantom (cproc); the seal covers them
       if pass.data then
-         dq = @data.pending
          cleardata
          write dq to ipc.f, 'D':uid
       end

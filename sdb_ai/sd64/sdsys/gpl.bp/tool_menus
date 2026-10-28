@@ -8,6 +8,8 @@
 * 22 Oct 26 dm  New.
 * 23 Oct 26 dm  A [?] button on every setting (the rows of the Menu box, the system default, and the Accounts list), F1 and ? on the selected row: the help is the record
 *               of the file context.help of the shared account ($tk_help).  The line wrapping is $tk_wrap.
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: the Menu box lists the Recent group after the seven tiles it had, so it is 10 rows (the number is nmenu); the Menu box is taller, What this means
+*               moves down with it, and the box of key hints is one line under the system default.  (Linux also lists seven development tiles; this tree has none.)
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -18,7 +20,8 @@
 *   (140 columns by 43 lines at least), for what each account's HOME SCREEN shows and where each account starts:
 *
 *     Accounts    every registered account but SDSYS, with where it starts (its own setting, or the system default) and the tiles turned off for it
-*     Menu        for the account selected: where it starts, and each standard tile of the home screen with its state, [x] on and [ ] off
+*     Menu        for the account selected: where it starts, whether it may add its own programs, and each standard tile of the home screen (and the Recent group) with its
+*                 state, [x] on and [ ] off
 *     Default     where an account with no setting of its own starts
 *
 *   Keys: Up and Down move in the pane, Tab and Back-tab (or Left and Right) change pane, Enter or the space bar changes the setting under the cursor, F5 reads the
@@ -62,14 +65,15 @@ $include tk.h
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
 
-   tids = 'editor' : @fm : 'ide' : @fm : 'ced' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout'
-   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Record editor' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out'
+   tids = 'editor' : @fm : 'ide' : @fm : 'ced' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout' : @fm : 'recent'
+   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Record editor' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out' : @fm : 'Recent group'
    pnames = 'Accounts' : @fm : 'Menu' : @fm : 'Default'
+   nmenu = 2 + dcount(tids, @fm)                                 ;* the rows of the Menu box: where the account starts, its own programs, then a row for each standard tile
 
    VIS = 26                                                      ;* account rows shown at a time (rows 3 to 28 of the Accounts box)
    pane = 1
    ai = 1                                                        ;* the account selected, a row of ids
-   si = 1                                                        ;* the row selected in the Menu pane: 1 is where the account starts, 2 to 8 the standard tiles
+   si = 1                                                        ;* the row selected in the Menu pane: 1 is where the account starts, 2 its own programs, 3 to nmenu the standard tiles
    top = 0
    gen = 0
    msg = 'Tab changes pane, Enter changes the setting'
@@ -173,10 +177,10 @@ draw.all:
    chh = ctx<TK.C.H> - 5
    screen clear at 0,1 size cw,chh
    screen box at 1,1 size 70,30 title 'Accounts'
-   screen box at 72,1 size 67,13 title 'Menu'
-   screen box at 72,14 size 67,17 title 'What this means'
+   screen box at 72,1 size 67,nmenu + 4 title 'Menu'
+   screen box at 72,nmenu + 5 size 67,17 title 'What this means'
    screen box at 1,31 size 70,5 title 'System default'
-   screen box at 72,31 size 67,5 title 'Help'
+   screen box at 1,36 size 70,3 title 'Help'
    gosub draw.accounts
    gosub draw.menu
    gosub draw.effect
@@ -208,14 +212,14 @@ draw.accounts:
 
 draw.menu:
    if na = 0 then
-      for r = 1 to 10
+      for r = 1 to nmenu
          screen text '' at 74,1 + r width 63
       next r
       return
    end
    i = ai
    gosub start.text
-   for r = 1 to 9
+   for r = 1 to nmenu
       begin case
          case r = 1
             s = fmt('Starts in', '28L') : stext
@@ -228,7 +232,7 @@ draw.menu:
       screen text s at 74,1 + r attr (if r = si then (if pane = 2 then 'highlight' else 'bold') else 'normal') width 59
       call $tk_help('mark', 134, 1 + r, 0, 0)                     ;* the [?] button of the setting on this row
    next r
-   screen text 'Enter changes the row.  [x] is on as delivered, [ ] is off.' at 74,12 attr 'disabled' width 63
+   screen text 'Enter changes the row.  [x] is on as delivered, [ ] is off.' at 74,nmenu + 3 attr 'disabled' width 63
    return
 
 * What the account's settings mean, in plain sentences
@@ -261,7 +265,7 @@ draw.effect:
    end
    gosub wrap.lines
    for r = 1 to 15
-      screen text lines<r> at 74,14 + r width 63
+      screen text lines<r> at 74,nmenu + 5 + r width 63
    next r
    return
 
@@ -283,9 +287,7 @@ draw.default:
    return
 
 draw.help:
-   screen text 'Up and Down move.  Tab changes pane.  Enter changes the setting.' at 74,32 width 63
-   screen text 'Each change is shown as its command; you answer Run or Cancel.' at 74,33 width 63
-   screen text 'F5 reads the register again.  Ctrl-Q leaves.' at 74,34 width 63
+   screen text 'Arrows move, Tab changes pane, Enter changes (Run or Cancel).' at 3,37 width 66
    return
 
 * ------------------------------------------------------------------------------------------------- keys and the mouse
@@ -307,7 +309,7 @@ on.key:
             ai += 1
             gosub redraw.account
          end
-         if pane = 2 and si < 9 then
+         if pane = 2 and si < nmenu then
             si += 1
             gosub draw.menu
          end
@@ -371,7 +373,7 @@ on.mouse:
                gosub redraw.account
                gosub redraw.panes
             end
-         case mx >= 73 and mx <= 138 and my >= 2 and my <= 10
+         case mx >= 73 and mx <= 138 and my >= 2 and my <= 1 + nmenu
             si = my - 1
             pane = 2
             gosub redraw.panes
@@ -411,7 +413,7 @@ help.click:
    clicked = 0
    hit.row = 0
    if na > 0 then
-      for hr = 1 to 9
+      for hr = 1 to nmenu
          call $tk_help('hit', mev, 134, 1 + hr, hit.now)
          if hit.now then hit.row = hr
       next hr
@@ -503,11 +505,16 @@ change.tile:
    want = (if is.off then 'on' else 'off')
    sent = 'set.tile ' : acct : ' ' : tid : ' ' : want
    el = ''
-   if want = 'off' then
-      el<-1> = 'The ' : tlabs<t> : ' tile will be left off ' : acct : "'s home screen, and its menu entry cannot be chosen."
-   end else
-      el<-1> = 'The ' : tlabs<t> : ' tile will be on ' : acct : "'s home screen again."
-   end
+   begin case
+      case tid = 'recent' and want = 'off'
+         el<-1> = 'The Recent group will not be on ' : acct : "'s home screen, nothing will be read or written for it, and the person cannot turn it on."
+      case tid = 'recent'
+         el<-1> = 'The person may turn the Recent group on again in the View menu of ' : acct : "'s home screen (it is off until they do)."
+      case want = 'off'
+         el<-1> = 'The ' : tlabs<t> : ' tile will be left off ' : acct : "'s home screen, and its menu entry cannot be chosen."
+      case 1
+         el<-1> = 'The ' : tlabs<t> : ' tile will be on ' : acct : "'s home screen again."
+   end case
    typed = ''
    if tid = 'terminal' and want = 'off' then
       el<-1> = 'WITH THIS TILE OFF an account that starts in the home screen is never given the command prompt:'

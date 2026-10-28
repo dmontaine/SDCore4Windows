@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (menu, terminal or blank) is written to ACC$START and CA$PINS (exactly 1) to ACC$PINS 'yes', for every type of account, and said with 12873 and 12890;
+*              a start word that is neither is refused (2018) BEFORE the ATTACH marker, the Windows user and the password, so it creates nothing.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: CA$FILESADMIN joins the new user to the Windows group sdfilesadmin after sdfileswrite; refused without CA$FILES and
 *              CA$FILESWRITE (12531) and for a group or other account (10087, 10081 as CA$FILES); the group is looked for before anything is made; the state line 12530 is read off the group.
 *              The look-up of a files group is the internal subroutine check.files.group (typed out twice, a third copy was due), the same refusals and messages as before.
@@ -107,6 +109,18 @@ deffun ps_script(script) calling '!ps_script'
 
    if not(kernel(K$ADMINISTRATOR, -1)) then
       err = 2001  ;* Command requires administrator privileges
+      return
+   end
+
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: where the account starts (menu or terminal; blank follows the system default) and whether the person may add programs of their own to their
+*   home screen (exactly 1 to be a request, as the gates).  THE START WORD IS CHECKED HERE, BEFORE ANYTHING IS MADE - the shared account's marker, the ATTACH marker, the Windows user and the
+*   password come after - so a word that is neither creates nothing (2018, as an unknown token).  The verb refuses two different start words itself (12796); this routine is also
+*   called by RESTORE.ACCOUNT, which gives neither.
+   start.want = trim(settings<CA$START>)
+   pins.want = (settings<CA$PINS> = 1)
+   if start.want # '' and start.want # 'menu' and start.want # 'terminal' then
+      @system.return.code = -ER$ARGS
+      err = 2018:@vm:start.want ;* Unexpected token (xx)
       return
    end
 
@@ -1019,6 +1033,10 @@ PW.TRY.AGAIN:
       if shared.read.off then acc.rec<ACC$SHARED.READ> = 'no'      ;* 18 Oct 26, S.66: blank stays the default (read on, write off)
       if shared.write.want then acc.rec<ACC$SHARED.WRITE> = 'yes'
    end
+* 28 Oct 26 (from Linux ec8459b) - S.75, home: the start word and the permission to add programs, for any type of account (MODIFY.ACCOUNT allows them on any); written only when asked, so a blank
+*   stays the system default and 'no'.
+   if start.want # '' then acc.rec<ACC$START> = start.want
+   if pins.want then acc.rec<ACC$PINS> = 'yes'
    write acc.rec to acc.f, acc.name
    locked = @false
    close acc.f
@@ -1038,6 +1056,9 @@ PW.TRY.AGAIN:
       crt sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')  ;* Account %1 has files-admin %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
    end
+*  28 Oct 26, S.75, home: the two settings are said when they were asked for, in the words MODIFY.ACCOUNT says them with.
+   if start.want # '' then crt sysmsg(12873, acc.name, start.want)  ;* Account %1 starts at: %2
+   if pins.want then crt sysmsg(12890, acc.name, 'yes')  ;* Account %1 may add its own programs to the home screen: %2
 
    gosub secure.account.dir
 

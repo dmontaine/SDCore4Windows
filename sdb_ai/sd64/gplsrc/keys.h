@@ -453,6 +453,13 @@
 /* 115 is Linux's K_LOCK_TRACE (LOCK.TRACER).  Not carried here: the trace file lives in the system directory with mode 0620 and
    the directory's group so that every session can append, which an ordinary Windows user cannot do in SDSYS's directory (and
    loosening that is not a thing to do for a diagnostic).  The number is left unused.                                         */
+/* 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10 (the start-up records of a phantom are written to $ipc, a file every SD user's process may write).
+     K_PHANTOM_NONCE   'S' followed by 16 to 64 characters of the base64 alphabet: the secret the next phantom() of this process is to
+                       give the new process (in its environment, SD_PHANTOM_NONCE, which only the same operating-system user can read).
+                       Returns 1, or 0 and nothing staged if the text is not of that shape.  phantom() clears it, made or not.
+                       'G' answers the secret THIS process was started with, or the null string when it was not started by a phantom()
+                       that gave one (the environment variable is removed when the process starts, so nothing it runs inherits it). */
+#define K_PHANTOM_NONCE      144
 /* 16 Oct 26 dm - QM4 gaps (PROFILER).
      K_PROFILER        n > 0 starts the application event profiler in this process, logging the events whose PROF_x bits are in n (and
                        emptying the table); 0 stops it, leaving what was found; -1 asks which are being logged; -2 returns what was

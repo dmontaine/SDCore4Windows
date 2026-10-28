@@ -6,9 +6,14 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (TK-0.1: the frame, the key table and the function-key row).
+* 26 Oct 26 dm  faults: TK.MAXW and TK.MAXH, the largest window a page is given (a session at 200 by 9999 spent minutes opening the screen).
 * END-HISTORY
 *
 * THE MINIMUM WINDOW is 140 columns by 43 lines (the owner's ruling of 20 Oct 2026).  The 43rd line is the function-key row, outside the window below its border.
+* THE MAXIMUM WINDOW is 500 columns by 300 lines (26 Oct 2026, task faults).  The library keeps the screen as one value to a row of a single dynamic array, and every
+* row written copies the array, so opening a screen costs time that grows with the SQUARE of the height: measured on a closed pipe, tool.keys opened a 140 by 400 window
+* in 0.5 s, 140 by 1600 in 5.6 s, 140 by 3200 in 21.5 s and a 200 by 9999 window (what the sandbox suites' plain sessions set so that nothing pages) did not draw in 40 s
+* at full CPU.  $tk_open refuses a window above this size, before it takes the screen, in the words of message 11951; 500 by 300 opens in about a second.
 *
 * THE FOOT OF THE SCREEN, counted from the last row of the layout (the layout is the window when it is bigger than the minimum, the minimum when it is smaller):
 *      row H-1   the function keys      (YKEYS)
@@ -19,6 +24,8 @@
 * THE CONTEXT ctx is one dynamic array made by $tk_open and given to every other routine:
 $define TK.MINW        140
 $define TK.MINH        43
+$define TK.MAXW        500
+$define TK.MAXH        300
 $define TK.C.W         1       ;* the layout's width: the window's, or TK.MINW when it is smaller
 $define TK.C.H         2       ;* the layout's height
 $define TK.C.UTF8      3       ;* 1 when the terminal says UTF-8 (the screen was opened with line drawing)

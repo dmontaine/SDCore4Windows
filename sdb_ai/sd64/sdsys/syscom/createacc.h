@@ -14,6 +14,8 @@
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: CA$SHARED.READ.OFF (37) and CA$SHARED.WRITE (38), Linux only, the shared-account gates.  Windows ignores
 *              the Linux block (31-40) and defines neither; the mail to the Windows agent is deferred (sequential order of 11 Oct).
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: CA$FILESWRITE (39), Linux only, membership of the group sdfileswrite (needs CA$FILES).  Same block, same deferral.
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (42) and CA$PINS (43), where the new account starts and whether it may add programs of its own to its home screen.
+*              Both ports read them (the Linux block ran past 40 on 23 Oct and is 31-50 there).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -27,7 +29,7 @@
 *       1-8    shared
 *       9-20   reserved for future shared settings
 *       21-30  SD Core for Windows only
-*       31-40  SD Core for Linux only
+*       31-50  SD Core for Linux only (42 and 43 are read by this port too)
 *
 * END-DESCRIPTION
 *
@@ -72,5 +74,11 @@ $define CA$FILESWRITE      39    ;* 1 = start in the group sdfileswrite (with CA
 
 * Linux only (21 Oct 26, S.73 item 3): 1 = also join the Linux group sdfilesadmin, so a files-only login may administer files on this server.  Needs CA$FILES and CA$FILESWRITE.
 $define CA$FILESADMIN      40    ;* 1 = start in the group sdfilesadmin (with CA$FILES and CA$FILESWRITE; S.73 item 3)
+
+* READ BY BOTH PORTS (26 Oct 26, S.75, the home screen).  CA$START is a request only when it is exactly menu or terminal (lower case): the new account's ACC$START is that word; anything else
+* is refused before anything is made.  Blank leaves the account following the system default (SET.START.DEFAULT).  CA$PINS is a request only when exactly 1 (off unless named): the
+* new account's ACC$PINS is 'yes', the person may add programs of their own to their home screen (MY.MENU); blank or 0 leaves it off.
+$define CA$START           42    ;* menu / terminal; blank = follow the system default
+$define CA$PINS            43    ;* 1 = the new account starts with ACC$PINS 'yes'
 
 * END-CODE

@@ -2,6 +2,66 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+28 Oct 26  A PHANTOM RUNS THE COMMAND IN ITS START-UP RECORDS ONLY IF THE PROCESS THAT STARTED IT SEALED THEM (SECURITY-MODEL EVALUATION, FINDING F10).
+
+             What        $ipc is the one SD file that every user's process has to write, so an SD user with a shell can write it too. A new phantom used to read its start-up
+                         records from it and, as its own user, run the command in the Xn record, stack the DATA lines of the Dn record, open its como log in the directory file named in
+                         the Ln record and set the option flags of the Xn record, without any way to tell the records from ones another user had put there. The PHANTOM verb now makes a
+                         secret for each phantom (24 random bytes) before it creates anything, gives it to the new process in that process's environment (SD_PHANTOM_NONCE, which only the
+                         same Windows user can read; the process copies it as it starts and overwrites the string where it stood, and nothing the phantom runs inherits it) and puts an
+                         HMAC-SHA256 seal over the option flags, the command, the DATA queue and the log file name as the first field of the Xn record. The command processor of the new
+                         process reads the three records in one place, under the lock, makes the seal again from what it read and runs, stacks and sets nothing unless the two are the same.
+                         If they are not - a command changed after it was sealed, a Dn or Ln record the parent never made, a record sealed by someone else, one copied from another phantom,
+                         an old unsealed record, or none - the phantom ends at once, says so in its como log and to its parent (message 12952), and writes phantom refused phantom=<n> to
+                         the audit trail. The three records are taken out of $ipc whether or not they pass. New: kernel key 144 (K$PHANTOM.NONCE, for internal programs only), messages
+                         12951 and 12952, and the routine !ipc_seal.
+             Why it      Anyone who could write the file could put a command in the record of a phantom that was about to start and have it run as another user, in that user's account.
+             matters
+             Does not    Change who may start a phantom, what a phantom can do or which files it uses. It does not seal the other records in $ipc: messages, the phantom register that
+                         status shows and the tables that profiler, hsm and pstat ask another session for are only displayed, never run. THE CONVERSATION OF THE PHANTOM DEBUGGER (pdebug,
+                         for a phantom that reaches a DEBUG statement) IS STILL CARRIED IN $ipc AND IS TRUSTED AS THE SHARED MEMORY IS. That the environment of a process can be read only by
+                         the same Windows user is the operating system's rule; it has not been tested here with a second user.
+
+28 Oct 26  A TOOLKIT PAGE REFUSES A WINDOW OF MORE THAN 500 BY 300 INSTEAD OF SPENDING MINUTES OPENING IT, AND "PRESS ENTER TO RETURN" NO LONGER NAMES THE WRONG SCREEN.
+
+             What        Every page of the full-screen toolkit - tool.keys, the administrator's pages and the home screen, which opens the same way - now turns a window bigger than 500
+                         columns by 300 lines away before it takes the screen, with "tool.keys needs a window of at most 500 columns by 300 lines; this one is 200 by 9999" (a window
+                         under 140 by 43 is refused as before, and a person who may not run an administrator page is still told that first). The screen library keeps the screen as one
+                         value to a row of one array and copies the array for every row it writes, so opening a screen costs time that grows with the square of its height: a window of 200
+                         by 9999 - the size a script or a test harness sets so that nothing pages - did not draw in 40 seconds at full CPU. A page that hands the terminal to a command asks
+                         "Press Enter to return" - it used to say "to the home screen" - and Enter brings back the page. The box that asks before a command can now carry a title of its
+                         own, for the pages that write a record of their own and are no command; no page of this version uses it.
+             Why it      A session with a huge window - a script, a test, a mistyped TERM - sat at 100% CPU for minutes on any of these pages with nothing on the screen.
+             matters
+             Does not    Limit SED, the IDE, CED or a program of your own, which open the same kind of screen; change what any page writes; or give a page any new right. The limit is fixed in
+                         the program (tk.h), not a setting.
+
+28 Oct 26  THE HOME SCREEN CAN OPEN A PAGE OF TILES FROM A TILE AND CAN KEEP A GROUP OF THE TILES YOU STARTED LAST, AND CREATE.ACCOUNT SETS WHERE AN ACCOUNT STARTS (S.75, home).
+
+             What        Sub-menus. A tile of the home screen's table whose action is menu:<name> opens a page of its own: the groups of the table that belong to that menu. The new page has
+                         a Back tile at the left of the header (the name moves right to make room) and the status line shows the way in, Home > Develop. Esc, Backspace, the Back tile and
+                         the Back entry of the Go menu each go back one page, with the tile that was selected. Eight pages are the most, a page that is already open above cannot be opened
+                         again, and a menu none of whose tiles is on the page has no tile to open it. The Back tile cannot be turned off with set.tile (12967). The delivered page declares no
+                         sub-menu yet: this is the mechanism, in the page table of the home program, for a page that wants one.
+                         The Recent group. View > Recent group turns on, for the person who chooses it, a group at the top of their home screen with the tiles they started last, newest
+                         first, six at most, and the same entry turns it off. It is OFF as delivered. The list is the record recent of the file &menus& in the person's own account (the file
+                         is made as my.menu makes it), it holds tile ids and never a command - each recent tile is built from the page as it is now, so a tile the administrator turned off is
+                         not offered and a record edited by hand cannot start anything the page does not offer - and the person's own programs (my.menu) are not kept in it. Turning the
+                         group off forgets the list, and while it is off nothing is written. set.tile account recent off is the administrator's wall: the group is then not on the account's
+                         page, nothing is read or written for it and the View entry cannot be chosen. set.tile and the menu management page (tool.menus) know it as a standard id.
+                         create.account takes the home screen's words. start-menu or start-terminal says where the new account starts (without one it follows the system default) and pins-on
+                         lets the person add programs of their own to their home screen; any kind of account may have them. They are the words modify.account takes and the verb says them
+                         back the same way (Account fred starts at: menu). Two different start words in one command are refused (12796) and a start word that is neither is refused (2018)
+                         before anything is made, so a refused word makes no Windows user, no directory and no account. start-default and pins-off, which only restate what an account has
+                         when the words are left out, are not words of create.account. The audit line gains pins-on in its gates= list and, when a start word was typed, a tail start=menu or
+                         start=terminal.
+             Why it      An administrator could make an account and then had to remember a second and third command to say where it starts and whether it may add programs; and a person who
+             matters     works in several tools had to find each tile again every time.
+             Does not    Open a sub-menu from any tile of the delivered page (none is declared), keep a person's own programs or any command text in the Recent list, turn the Recent group on
+                         for anyone (only the person does that; the administrator can only forbid it), let create.account give an account a gate or a group, change what start-menu means
+                         (it confines nobody: the Terminal tile is there unless the administrator turns it off), or put the new words on restore.account (a restored account does not get its
+                         start setting, tiles or pins back; that was so before).
+
 26 Oct 26  THE ELEVATED HELPER RUNS ONLY THE SCRIPTS SD WROTE FOR IT (THE WINDOWS READING OF LINUX FINDING F12).
 
              What        When SDSYS signs in at the console, SD keeps one elevated helper per user, and SD's own verbs (CREATE.ACCOUNT, SET.PASSWORD and

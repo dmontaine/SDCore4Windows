@@ -8,11 +8,12 @@
 * 22 Oct 26 dm  New (S.75, TK-0.4).
 * 23 Oct 26 dm  The wrapping loop is $tk_wrap now (the same algorithm, moved; the menu management page and the help box use it too).
 * 24 Oct 26 dm  The lines of the explanation are wrapped like the sentence: the box cut a line at its edge, and the tail of the ai gate's 150-character sentence (tool.gates) never showed.
+* 28 Oct 26 Windows port - from Linux ec8459b - faults: an optional sixth argument, the title ("Run this command?" read over writes that are not commands); VAR.ARGS, so no existing call changes.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   call $tk_confirm(sentence, lines, typed, res, msg)
+*   call $tk_confirm(sentence, lines, typed, res, msg {, boxtitle})
 *
 *     sentence  the command exactly as the tool will give it to $tk_run (the caller passes the same variable to both)
 *     lines     the explanation under it, one to a field ($tk_explain makes it); may be null.  A line longer than the box is wrapped at spaces; an empty line stays empty
@@ -21,6 +22,8 @@
 *     res       returned: 'run' only when Run was chosen and, when a name was asked for, the name was typed exactly; 'cancel' for Cancel, Esc, an input
 *               that ended, a session with no terminal; 'wrong' for a name that was not the one asked for
 *     msg       returned: null for 'run'; else the line for the status bar (12826 nothing was run, or 12815 naming the name asked for)
+*     boxtitle  OPTIONAL (the routine is VAR.ARGS, so every call with five arguments is as it was): the title of the box and of the box that asks for the name.  Left out or null it is
+*               "Run this command?" (12817).  A page that is about to write or delete a record of its own, which is no command, gives a title that says so.
 *
 *   THE DEFAULT BUTTON IS CANCEL: Enter alone never runs a command.  Run is chosen by its letter (r) or by moving to it.  The sentence is shown wrapped at
 *   spaces, never cut, and never altered.  A session with no terminal cannot answer, so nothing runs ('cancel').  The typed name is compared as typed
@@ -32,7 +35,7 @@
 * START-CODE
 
 $internal
-subroutine tk_confirm(sentence, lines, typed, res, msg)
+subroutine tk_confirm(sentence, lines, typed, res, msg, boxtitle) var.args
 $catalog $tk_confirm
 
 $include sl.h
@@ -67,13 +70,20 @@ $include tk.h
       next li
    end
 
-   screen msgbox body title sysmsg(12817) buttons '&Run,&Cancel' default 2 returning b else b = 0
+*  28 Oct 26: the title is the sixth argument, which a caller may leave out (VAR.ARGS): "Run this command?" over a box that is about a command, and the caller's own title over one that is
+*  not (a record the page writes, a record it deletes).  An empty title is the default too.
+   ttl = sysmsg(12817)
+   if not(unassigned(boxtitle)) then
+      if boxtitle # '' then ttl = boxtitle
+   end
+
+   screen msgbox body title ttl buttons '&Run,&Cancel' default 2 returning b else b = 0
    if b # 1 then return
 
    if typed # '' then
       fw = len(typed) + 4
       pr = sysmsg(12818, typed)
-      tt = sysmsg(12817)
+      tt = ttl
       screen ask pr width fw title tt returning ans then got = 1 else got = 0
       if not(got) then return
       if trim(ans) # typed then

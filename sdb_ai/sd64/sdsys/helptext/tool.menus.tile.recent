@@ -1,0 +1,4 @@
+The Recent group
+29a-sd-tcl-the-home-screen
+Not a tile but a group: the tiles the person started last, newest first, at the top of the home screen. It is off as delivered; the person turns it on in the View menu of their home screen, and the list is kept in their own file &menus&, as an id for each tile and never a command.
+Turned off here, the group is not on the account's home screen, nothing is read or written for it, and the person cannot turn it on. The list the person kept stays in their file.

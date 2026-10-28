@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: a phantom reads its Xn, Dn and Ln records together (read.phantom.cargo) and runs, stacks or sets nothing from them unless
+*           the seal on them checks against the secret the process that started it gave it in its environment (K$PHANTOM.NONCE, !IPC_SEAL).
+*           $ipc is a file every SD user's process may write.  A refusal is shown in the phantom's COMO log, written to the audit trail (phantom
+*           refused) and sent to the parent (message 12952).
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1: the NET gate (K$NET, SDNet remote files) is account-scoped like SD.ACCOUNTS: loaded at LOGTO from
 * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: para.reset.environment asks the kernel to send the queued closes of remote files (the K$NET argument -2),
 * 22 Oct 26 Windows port - from Linux home-screen - S.75 (the home screen): !HOME_ENTRY is called, on a terminal only, at the start of the main loop (the sign-on) and at the end of int.logto, and starts HOME when the
@@ -284,6 +288,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun elevate(action,arg) calling '!elevate'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
+deffun ipc_seal(sl.mode, sl.key, sl.seal, sl.opts, sl.cmd, sl.data, sl.log) calling '!ipc_seal'     ;* 28 Oct 26 Windows port, W.11 F10 (from Linux ec8459b)
 
 $define max.elements 500
 
@@ -448,9 +453,11 @@ restart.cproc:
          s = oconv(idiv(z,86400), 'D2/DMY') : "_" : oconv(mod(z,86400), 'MTS')
 
          * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 364: PHANTOM LOG dirfile leaves the name of another directory file in the L record
+         * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10.  The Xn, Dn and Ln records are read together, here, and checked (read.phantom.cargo, below) before anything in
+         *   them is used: the log file name is the one the COMO below is told about, so it cannot be taken before the check.
          ph.log.file = ''
          filelock ipc.f
-         read ph.log.file from ipc.f, 'L':@userno then delete ipc.f, 'L':@userno else ph.log.file = ''
+         gosub read.phantom.cargo
          fileunlock ipc.f
          ph.log.file = trim(ph.log.file)
          if ph.log.file # '' then
@@ -467,8 +474,8 @@ restart.cproc:
 
          filelock ipc.f
 
-         * Update phantom register of the parent process
-         * and find our phantom command.
+         * Update phantom register of the parent process.  (The phantom command was fetched with the other start-up
+         * records, above; the lock is held here only to wait for the parent to have finished and to update the register.)
 
          n = kernel(K$PPID,0)
          if n then    ;* Parent still running
@@ -483,28 +490,25 @@ restart.cproc:
             end
          end
 
-         * Fetch the phantom command from the Xn record.  We need to look
-         * here rather than in the Pn record as the parent process may have
-         * terminated by now.
+         fileunlock ipc.f
 
-         x = 'X':@userno
-         read phantom.command from ipc.f, x then delete ipc.f, x
-
-         * Field 1 contains the option flags if these are to be inherited.
-
-         s = phantom.command<1>
-         if s # '' then void kernel(K$SET.OPTIONS, s)
-         del phantom.command<1>
-
-         * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 137: PHANTOM DATA left the parent's DATA queue in the D record; stack it here
-         read ph.data from ipc.f, 'D':@userno then
-            delete ipc.f, 'D':@userno
-            for ph.i = 1 to dcount(ph.data, @fm)
-               data ph.data<ph.i>
-            next ph.i
+         * 26 Oct 26 dm - W.11 F10.  The records were not the ones the process that started this phantom sealed: nothing in them is run, stacked
+         *   or set.  The phantom says so in its COMO log and the audit trail, and ends (terminate.phantom tells its parent).
+         if ph.refused then
+            message = sysmsg(12952, @userno)
+            display message
+            void kernel(K$AUDIT, 'phantom refused phantom=' : @userno : ' reason=start-up records not from the process that started it')
+            goto terminate.phantom
          end
 
-         fileunlock ipc.f
+         * The option flags of the parent, if these are to be inherited (field 2 of the Xn record, taken out by read.phantom.cargo).
+
+         if ph.opts # '' then void kernel(K$SET.OPTIONS, ph.opts)
+
+         * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 137: PHANTOM DATA left the parent's DATA queue in the D record; stack it here
+         for ph.i = 1 to dcount(ph.data, @fm)
+            data ph.data<ph.i>
+         next ph.i
       end
 
       * Look for a MASTER.LOGIN paragraph
@@ -2841,6 +2845,47 @@ int.status:
       next i
    end else
       display sysmsg(5121) ;* There are no phantom processes started by this process
+   end
+
+   return
+
+*****************************************************************************
+* READ.PHANTOM.CARGO  -  the Xn, Dn and Ln records a PHANTOM left for this process, read, deleted and checked
+*
+* 26 Oct 26 dm - W.11 F10.  $ipc is a file every SD user's process may write, so what is read from it here is run, stacked or set only if the
+*   process that started this phantom can be shown to have written it: PHANTOM (phantom) sealed the three records with a secret it gave only
+*   to the process it started, in its environment (K$PHANTOM.NONCE 'G' answers it here), and !IPC_SEAL makes the seal again from what was read.
+*   The Xn record holds the seal, the option flags and the command; the Dn record the parent's DATA queue and the Ln record the name of a
+*   directory file for the COMO log, each there only if the parent passed it.  The three are read and deleted whether or not they pass, so
+*   none stays for a later phantom with this number.  We look here rather than in the parent's Pn record because the parent may have
+*   terminated by now.  Called with the lock on $ipc held.
+*
+*   Out:  ph.opts, phantom.command, ph.data, ph.log.file - the option flags, the command, the DATA queue and the log file name, all four
+*         null when ph.refused.
+*         ph.refused - true when there was no Xn record, or the seal did not check.  A Dn or Ln record with no Xn record is refused too.
+
+read.phantom.cargo:
+   ph.refused = @false
+   ph.rec = ''
+   ph.data = ''
+   ph.log.file = ''
+   read ph.rec from ipc.f, 'X':@userno then delete ipc.f, 'X':@userno else ph.rec = ''
+   read ph.data from ipc.f, 'D':@userno then delete ipc.f, 'D':@userno else ph.data = ''
+   read ph.log.file from ipc.f, 'L':@userno then delete ipc.f, 'L':@userno else ph.log.file = ''
+
+   ph.opts = ph.rec<2>
+   phantom.command = field(ph.rec, @fm, 3, 999999)
+   if ph.rec = '' then
+      ph.refused = @true
+   end else
+      if not(ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>, ph.opts, phantom.command, ph.data, ph.log.file)) then ph.refused = @true
+   end
+
+   if ph.refused then
+      ph.opts = ''
+      phantom.command = ''
+      ph.data = ''
+      ph.log.file = ''
    end
 
    return

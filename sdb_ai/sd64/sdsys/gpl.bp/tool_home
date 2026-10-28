@@ -5,6 +5,10 @@
 *
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 72e708e - the tile "Bypass programs" (tool.viewers) is left out: the pdf verb, set.viewer and tool.viewers are not carried (RELEASE_1.1 179).
+* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: SUB-MENUS (a tile whose action is menu:<name> opens the groups of that menu as a page of its own, with a Back tile at the left of the header, Esc and
+*               Backspace going back one, the path on the status line, 8 levels at most and a menu already open refused), and the RECENT GROUP (the tiles the person started last, newest
+*               first, when they have turned it on in the View menu; kept by !home_recent in their own file; off as delivered).  The page is built in two steps now: the whole table,
+*               then pick.level keeps the groups of the menu being shown.  Behaviour-preserving while there: reopen and rebuild share enter.level; an empty band takes no room.
 * 22 Oct 26 dm  New (S.75, H1; the owner: "the display design is approved as drawn. Start home H0, then H1 and H2").
 * END-HISTORY
 *
@@ -19,6 +23,13 @@
 *     Tools      the standard tools of every account: Editor (sed), IDE (ide), Record editor (ced)
 *     Everyone   Terminal (leaves the screen for the ordinary prompt; EXIT comes back), Keys (tool.keys)
 *     Header     who is signed on and when, Switch account (a pick list of the accounts this person may enter, then the screen of that account) and Sign out
+*
+*   Recent     (only when the person has turned it on, View menu) the tiles started last, newest first, as the first group of the page
+*
+*   SUB-MENUS.  A tile whose action is menu:<name> opens a page of its own: the groups of the table that belong to the menu <name> (the sixth value of a group, HG.MENU; the top page's
+*   groups have none).  The page has a Back tile at the left of the header (the identity moves right), the status line shows the path (Home > Develop), Esc, Backspace and the Back tile go
+*   back one level and give the focus and the scroll back as they were, 8 levels are the most, and a menu that is already open above is refused (no page can open itself).  A menu with no
+*   tile (all turned off) has no folder tile.  No tile of the delivered page opens a sub-menu yet: a table that wants one declares a folder tile and gives its groups the menu name.
 *
 *   The panel under the header scrolls: the page is laid out at its full height and the rows that fit are drawn, with a scroll bar in the last column.  Keys:
 *   the arrow keys move to the nearest tile, Tab and Back-tab go in reading order, Home and End to the first and last, Page Up and Page Down by group, a letter
@@ -65,8 +76,10 @@ $define HG.BAND    2       ;* the band it stands in: groups of one band stand si
 $define HG.COLS    3       ;* how many tile columns it is wide (2 or 6)
 $define HG.Y       4       ;* the panel row of its heading, set by the layout
 $define HG.X       5
+$define HG.MENU    6       ;* null for a group of the top page, else the name of the menu (sub-menu page) it belongs to
 
 $define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 are the header)
+$define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep
 
    common /tkhome/ hflag, hlogto
 
@@ -87,11 +100,12 @@ $define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 
    is.admin = kernel(K$ADMINISTRATOR, -1)
    if is.admin then ctx<TK.C.AUD> = sysmsg(12808)
 
-   keys = ''
-   call $tk_keys('add', keys, 'enter', 'start', 'start', '', 1)
-   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
-   call $tk_keys('add', keys, 'f10', 'menu', 'menu', '', 1)
-   call $tk_keys('add', keys, 'ctrl-q', 'sign out', 'signout', '', 1)
+   cur.menu = ''                                          ;* the sub-menu page being shown (null: the top page); stk holds the pages left behind, crumb their names
+   stk = ''
+   crumb = ''
+   ttl = 'Home'
+   idx = 3                                                ;* the column of the identity (it moves right of the Back tile in a sub-menu)
+   gosub make.keys
 
    X.COL =3 : @fm : 25 : @fm : 49 : @fm : 71 : @fm : 95 : @fm : 117      ;* the x of the six tile columns (a group of two stands at columns 1-2, 3-4 or 5-6)
    gen = 0
@@ -103,6 +117,7 @@ $define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 
    lastmin = ''
    keep.id = ''
    keep.top = 0
+   rc.on = 0                                              ;* 1 when the Recent group is on for this page (set by add.recent)
 
    gosub geometry
    gosub build.page
@@ -111,7 +126,7 @@ $define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 
    gosub draw.all
 
    loop
-      call $tk_frame(ctx, keys, 'Home', msg)
+      call $tk_frame(ctx, keys, ttl, msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)                  ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
       nm = ''
       screen key timeout 30 returning nm
@@ -222,8 +237,95 @@ build.page:
    id = 'switch' ; grp = 0 ; label = 'Switch account' ; glyph = '<> ' ; sub = '' ; act = 'switch' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
    hx = 117 ; hy = 1
    id = 'signout' ; grp = 0 ; label = 'Sign out' ; glyph = '-> ' ; sub = '' ; act = 'signout' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
+   if cur.menu # '' then
+      * a sub-menu page: the way back, at the left end of the header, where the identity stood
+      hx = 3 ; hy = 1
+      id = 'back' ; grp = 0 ; label = 'Back' ; glyph = '<- ' ; sub = '' ; act = 'back' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
+   end
+   gosub add.recent
+   gosub pick.level
    gosub alloc.styles
    gosub make.menus
+   return
+
+* The Recent group (the first group of the top page): the tiles the person started last, newest first, when they have turned it on (View menu) and the administrator has not turned it
+* off for the account (SET.TILE account recent off: then nothing is read at all).  What the list keeps is an id: each recent tile is a copy of a tile of THIS table as it is now (a
+* tile that is off, or that this page does not offer, is not there), so the list can start nothing the page does not.  rc.on says whether the group is on.
+add.recent:
+   rc.on = 0
+   if index(off.set, ' recent ', 1) then return
+   call !home_recent('get', rc.on, rc.ids)
+   if not(rc.on) then return
+   rc.tiles = ''
+   for rk = 1 to dcount(rc.ids, @fm)
+      for ri = 1 to nt
+         if tl<ri, HT.ID> = rc.ids<rk> and tl<ri, HT.GROUP> > 0 and tl<ri, HT.ACT>[1, 4] = 'cmd:' then
+            t = tl<ri>
+            t<1, HT.ID> = 'r:' : tl<ri, HT.ID>
+            t<1, HT.GROUP> = 1
+            t<1, HT.SIZE> = 'n'
+            rc.tiles<-1> = t
+            exit
+         end
+      next ri
+   next rk
+   if rc.tiles = '' then return
+   for ri = 1 to nt
+      if tl<ri, HT.GROUP> > 0 then tl<ri, HT.GROUP> = tl<ri, HT.GROUP> + 1       ;* every group moves down one place; Recent is the first, in a band of its own before band 1
+   next ri
+   gr = 'Recent' : @vm : 0 : @vm : 6 : @fm : gr
+   tl = rc.tiles : @fm : tl
+   nt = dcount(tl, @fm)
+   return
+
+* Only the page being shown is kept.  A folder tile (action menu:<name>) whose menu holds no tile is left out first (leaving one out can empty the menu above it); then the groups
+* of the menu cur.menu and the tiles of those groups stay, with the header tiles, and the groups are numbered again.
+pick.level:
+   loop
+      dropped = 0
+      for pi = nt to 1 step -1
+         pa = tl<pi, HT.ACT>
+         if pa[1, 5] = 'menu:' then
+            pn = 0
+            for pj = 1 to nt
+               pg = tl<pj, HT.GROUP>
+               if pg > 0 then
+                  if gr<pg, HG.MENU> = pa[6, 99] then pn += 1
+               end
+            next pj
+            if pn = 0 then
+               del tl<pi>
+               nt -= 1
+               dropped = 1
+            end
+         end
+      next pi
+      if dropped = 0 then exit
+   repeat
+   gmap = ''
+   gr2 = ''
+   for pk = 1 to dcount(gr, @fm)
+      if gr<pk, HG.MENU> = cur.menu then
+         gr2<-1> = gr<pk>
+         gmap<pk> = dcount(gr2, @fm)
+      end
+   next pk
+   tl2 = ''
+   for pi = 1 to nt
+      pg = tl<pi, HT.GROUP>
+      if pg = 0 then
+         tl2<-1> = tl<pi>
+      end else
+         if gmap<pg> # '' then
+            t = tl<pi>
+            t<1, HT.GROUP> = gmap<pg>
+            tl2<-1> = t
+         end
+      end
+   next pi
+   tl = tl2
+   gr = gr2
+   nt = dcount(tl, @fm)
    return
 
 add.tile:
@@ -299,12 +401,14 @@ palette.colours:
 * heading (row 6 of the screen).  ch is the height of the whole page.
 layout:
    nb = 0
+   b0 = 1                                                 ;* the first band: 1, or 0 when the Recent group is on the page
    ng = dcount(gr, @fm)
    for k = 1 to ng
       if gr<k, HG.BAND> > nb then nb = gr<k, HG.BAND>
+      if gr<k, HG.BAND> < b0 then b0 = gr<k, HG.BAND>
    next k
    ys = 1
-   for b = 1 to nb
+   for b = b0 to nb
       c0 = 0
       bandend = ys
       for k = 1 to ng
@@ -341,7 +445,7 @@ layout:
             c0 += gcols
          end
       next k
-      ys = bandend + 1
+      if c0 > 0 then ys = bandend + 1                     ;* a band with no group (a sub-menu's groups start at a later band, or all of a band is off) takes no room
    next b
    ch = ys
    if top > ch - ph then top = ch - ph
@@ -376,12 +480,13 @@ draw.all:
    return
 
 draw.header:
+   screen clear at 0,1 size 94,3                          ;* the left of the header: the identity moves right of the Back tile and left again
    if is.admin then
       who.line = 'administrator'
    end else
       who.line = @logname : ' @ ' : @who
    end
-   screen text fmt(who.line, '60L') at 3,2 attr 'bold'
+   screen text fmt(who.line, '60L') at idx,2 attr 'bold'
    gosub draw.clock
    for i = 1 to nt
       if tl<i, HT.FIXED> then
@@ -401,7 +506,7 @@ draw.clock:
       dt = oconv(date(), 'D4DMY[,A3]')
       mo = field(dt, ' ', 2)
       mo = upcase(mo[1, 1]) : downcase(mo[2, 9])
-      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at 3,3 attr 'disabled'
+      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at idx,3 attr 'disabled'
    end
    return
 
@@ -662,6 +767,8 @@ on.key:
          gosub move.group
       case nm = 'enter' or nm = ' '
          gosub start.tile
+      case nm = 'esc' or nm = 'bs'
+         gosub close.menu                                  ;* back one page; on the top page there is nowhere to go and nothing happens
       case nm = 'f5'
          gosub rebuild
       case nm = 'f10'
@@ -720,7 +827,12 @@ start.tile:
       case act[1, 4] = 'cmd:'
          sentence = act[5, 9999]
          pause = tl<fi, HT.PAUSE>
+         gosub note.recent
          gosub run.command
+      case act[1, 5] = 'menu:'
+         gosub open.menu
+      case act = 'back'
+         gosub close.menu
       case act = 'terminal'
          outcome = 'terminal'
          done = 1
@@ -729,6 +841,16 @@ start.tile:
       case act = 'signout'
          gosub do.signout
    end case
+   return
+
+* The tile just started goes first in the Recent list, when the group is on for this page.  The id is what is kept (a recent tile's id is r: and the tile's own); the person's
+* own programs (pin1, pin2 ...) are their own list already and are not kept here.  When the group is off nothing is asked of the file at all.
+note.recent:
+   if not(rc.on) then return
+   rid = tl<fi, HT.ID>
+   if rid[1, 2] = 'r:' then rid = rid[3, 99]
+   if rid[1, 3] = 'pin' then return
+   call !home_recent('add', rid, '')
    return
 
 * The command is given the terminal: the screen is closed, the command runs as the person would have typed it, and the screen is taken again
@@ -764,32 +886,119 @@ reopen:
    ctx<TK.C.GEN> = gen
    lastmin = ''
    gosub geometry
-   gosub build.page
-   gosub layout
-   gosub first.focus
-   top = 0
-   if keep.id # '' then
-      for i = 1 to nt
-         if tl<i, HT.ID> = keep.id then
-            fi = i
-            top = keep.top
-         end
-      next i
-      if top > ch - ph then top = ch - ph
-      if top < 0 then top = 0
-   end
-   gosub draw.all
+   want.id = keep.id
+   want.top = keep.top
+   gosub enter.level
    return
 
 * F5: the page again for what the session is now
 rebuild:
+   want.id = ''
+   want.top = 0
+   gosub enter.level
+   msg = 'page built again'
+   return
+
+* The page of the menu being shown (cur.menu), built, laid out and drawn.  want.id (null for none) is the tile that has the focus and want.top how far the panel was scrolled when it
+* had it: the page comes back as it was left, scrolled further only when that tile is out of the panel (a Recent group may have appeared above it).
+enter.level:
+   gosub make.keys
+   gosub set.title
    gosub build.page
    gosub layout
    gosub first.focus
    top = 0
-   screen clear at 0,py0 size lw,ph
+   if want.id # '' then
+      for i = 1 to nt
+         if tl<i, HT.ID> = want.id then
+            fi = i
+            top = want.top
+         end
+      next i
+      if top > ch - ph then top = ch - ph
+      if top < 0 then top = 0
+      gosub scroll.into.view
+   end
    gosub draw.all
-   msg = 'page built again'
+   return
+
+* The key table: a sub-menu page also has Esc (back)
+make.keys:
+   keys = ''
+   call $tk_keys('add', keys, 'enter', 'start', 'start', '', 1)
+   if cur.menu # '' then call $tk_keys('add', keys, 'esc', 'back', 'back', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'f10', 'menu', 'menu', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'sign out', 'signout', '', 1)
+   return
+
+* The status line's pane is the path of the page (Home > Develop), and the identity stands right of the Back tile on a sub-menu page
+set.title:
+   ttl = 'Home'
+   for ck = 1 to dcount(crumb, @fm)
+      ttl := ' > ' : crumb<ck>
+   next ck
+   idx = (if cur.menu # '' then 25 else 3)
+   lastmin = ''                                          ;* the clock is written again where the identity now stands
+   return
+
+* ------------------------------------------------------------------------------------------------- sub-menus
+
+* A folder tile (action menu:<name>): the menu opens as a page of its own.  What is left behind - the menu, the tile that had the focus and the scroll - is kept to give back.
+* A menu that is already open above this one is refused (a page cannot open itself), and so is a ninth level.
+open.menu:
+   mname = act[6, 99]
+   dep = dcount(stk, @fm)
+   already = (mname = cur.menu or mname = '')
+   for sk = 1 to dep
+      if stk<sk, 1> = mname then already = 1
+   next sk
+   if already then
+      msg = sysmsg(12961, mname)
+      return
+   end
+   if dep >= HM.DEPTH then
+      msg = sysmsg(12962, HM.DEPTH)
+      return
+   end
+   stk<-1> = cur.menu : @vm : tl<fi, HT.ID> : @vm : top
+   crumb<-1> = tl<fi, HT.LABEL>
+   cur.menu = mname
+   want.id = ''
+   want.top = 0
+   gosub enter.level
+   return
+
+* Back one page: the page left is built again with the focus and the scroll it had.  On the top page there is nothing to go back to.
+close.menu:
+   dep = dcount(stk, @fm)
+   if dep = 0 then return
+   e = stk<dep>
+   cur.menu = e<1, 1>
+   want.id = e<1, 2>
+   want.top = e<1, 3>
+   del stk<dep>
+   del crumb<dep>
+   gosub enter.level
+   return
+
+* View > Recent group: the person turns the group on (the file is made when it is not there) or off (the list is forgotten).  The administrator's SET.TILE ... recent off wins.
+toggle.recent:
+   if index(off.set, ' recent ', 1) then
+      msg = sysmsg(12966)
+      return
+   end
+   junk = ''
+   rok = 0
+   if rc.on then
+      call !home_recent('off', rok, junk)
+      rmsg = 12964
+   end else
+      call !home_recent('on', rok, junk)
+      rmsg = (if rok then 12963 else 12965)
+   end
+   gosub rebuild
+   msg = sysmsg(rmsg)
    return
 
 * A resize: the screen was repainted under the frame
@@ -821,9 +1030,13 @@ make.menus:
    tflag = (if terminal.off then 'D' else '')                ;* D: the entry cannot be chosen (a tile that is off has no menu entry either)
    sflag = (if index(off.set, ' switch ', 1) then 'D' else '')
    kflag = (if index(off.set, ' keys ', 1) then 'D' else '')
+   bflag = (if cur.menu = '' then 'D' else '')               ;* Back: only on a sub-menu page
+   rflag = (if index(off.set, ' recent ', 1) then 'D' else '')
    m = '&Go|&Terminal~~terminal~' : tflag : '|S&witch account~~switch~' : sflag
+   m := '|&Back~Esc~back~' : bflag
    gosub add.menu
    m = '&View|&Refresh~F5~refresh'
+   m := '|Recent &group (' : (if rc.on then 'on' else 'off') : ')~~recent~' : rflag
    gosub add.menu
    m = '&AI|AI is off~~ai~D'
    gosub add.menu
@@ -856,6 +1069,10 @@ run.cmd:
          gosub switch.account
       case cmd = 'refresh'
          gosub rebuild
+      case cmd = 'back'
+         gosub close.menu
+      case cmd = 'recent'
+         gosub toggle.recent
       case cmd = 'keys'
          sentence = 'tool.keys'
          pause = 0
@@ -913,6 +1130,9 @@ switch.account:
    hlogto = 1
    execute 'logto ' : acct
    hlogto = 0
+   cur.menu = ''                                          ;* the screen of the new account starts at its top page
+   stk = ''
+   crumb = ''
    gosub reopen
    if @who # acct then msg = sysmsg(12872, acct)
    return

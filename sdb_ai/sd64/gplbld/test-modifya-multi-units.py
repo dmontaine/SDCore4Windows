@@ -171,9 +171,9 @@ def checks(src, msgs):
         except OSError:
             continue
         for n in ("12795", "12796", "12798", "12799"):
-            if "sysmsg(%s" % n in body:
+            if "sysmsg(%s" % n in body and not (n == "12796" and fn == "createa"):       # 28 Oct 26 (S.75, home, from Linux ec8459b): CREATE.ACCOUNT refuses START-MENU with START-TERMINAL in the words MODIFY.ACCOUNT uses (the same message)
                 cited.setdefault(n, []).append(fn)
-    ck("M10c ...and 12795, 12796, 12798 and 12799 are cited by modifya alone (no other program has taken the number)", not cited, "%s" % cited)
+    ck("M10c ...and 12795, 12796, 12798 and 12799 are cited by modifya alone (no other program has taken the number), except that createa says 12796 for two start words", not cited, "%s" % cited)
     return rows
 
 

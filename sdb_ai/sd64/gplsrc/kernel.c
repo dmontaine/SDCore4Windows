@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: a phantom takes the secret PHANTOM gave it out of its environment as it starts (phantom_nonce_import, op_kernel.c).
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - kill_process() releases the class objects held in named common before the e-stack is freed: their destroy code (S.65
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the process's own privilege words (my_priv_flags, my_priv_gates) are zeroed where the user table entry's flags and gates are.
@@ -97,6 +98,7 @@ typedef void (*signal_handler)();
 void fatal_signal_handler(int signum);
 void sigusr1_handler(int signum);
 void set_old_tty_modes(void);
+void phantom_nonce_import(void); /* op_kernel.c */
 
 /* ======================================================================
    init_kernel()  -  Kernel initialisation                                */
@@ -153,6 +155,12 @@ bool init_kernel() {
 
   if (!tio_init())
     goto exit_init_kernel;
+
+  /* 26 Oct 26 dm - W.11 F10.  A phantom was given a secret by the process that started it, in its environment; it is taken out of the
+     environment here, before anything the phantom runs can inherit it, and held for K_PHANTOM_NONCE 'G'.  Only a phantom looks.  */
+
+  if (is_phantom)
+    phantom_nonce_import();
 
   /* Perform licensing checks.
     For a terminal user, we are looking for a user table entry with a zero

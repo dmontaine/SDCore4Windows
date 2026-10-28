@@ -114,7 +114,8 @@ def checks(raw):
     for n in progs:
         cited |= set(int(x) for x in re.findall(r"sysmsg\((\d+)", code[n]))
     have = {int(f) for f in os.listdir(os.path.join(SDSYS, "messages")) if f.isdigit()}
-    add("T15", "the messages the base cites (%s) are all in the toolkit's block 12805 to 12854 and all exist" % sorted(cited), bool(cited) and all(12805 <= m <= 12854 and m in have for m in cited), sorted(m for m in cited if m not in have))
+    add("T15", "the messages the base cites (%s) are all in the toolkit's block 12805 to 12854 (or are 12956, the largest window $tk_open allows, 26 Oct 26) and all exist" % sorted(cited),
+        bool(cited) and all((12805 <= m <= 12854 or m == 12956) and m in have for m in cited), sorted(m for m in cited if m not in have))
     rn = sq.get("tk_run", "")
     optadd("tk_run", "T16", "ORDER in $tk_run: an empty sentence, a too long one, a first word outside the tool's list and a bad character are each refused (and return) BEFORE the one EXECUTE",
         ordered(rn, "sysmsg(12809)", "sysmsg(12812)", "if not(ok.verb) then err = sysmsg(12810, verb)", "if index(good, w[j, 1], 1) = 0 then err = sysmsg(12811, w)",

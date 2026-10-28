@@ -5,6 +5,7 @@
 *
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
+* 28 Oct 26 Windows port - from Linux ec8459b - faults: a window above TK.MAXW by TK.MAXH is refused (message 12956), after the audience check and before the screen.
 * 22 Oct 26 dm  New (S.75, TK-0.1).
 * END-HISTORY
 *
@@ -19,7 +20,8 @@
 *               drawn and no data has been read.
 *
 *   In this order, and each refusal returns: a phantom has no terminal; the window must be TK.MINW by TK.MINH (the library's one check,
-*   $sl_need, message 12202); an administrator app asks the kernel BEFORE the screen is taken and before any data is read; then the break
+*   $sl_need, message 12202); an administrator app asks the kernel BEFORE the screen is taken and before any data is read; the window must be no
+*   bigger than TK.MAXW by TK.MAXH (message 12956: the screen costs time as the square of the height); then the break
 *   setting is saved and the break key turned off (Ctrl-C and the terminal's break are keys of the app), the screen is taken with
 *   line-drawing borders when the terminal says UTF-8, and the cursor lock is asked for (the keys are not the app's while the cursor is off
 *   the screen).  $tk_close gives it all back.
@@ -57,6 +59,15 @@ $include tk.h
          err = sysmsg(12805, app)
          return
       end
+   end
+
+   * 28 Oct 26 (from Linux ec8459b, task faults): a window above TK.MAXW by TK.MAXH is turned away BEFORE the screen is taken.  Taking it costs time that grows with the square of the height (the
+   * library keeps one row to a value of one array); a session set to 200 by 9999 sat at full CPU for minutes and drew nothing, which looked like a page that never ends.  It stands
+   * AFTER the audience: a person who may not run an administrator page is told that, whatever the size of the window (the suites' plain sessions are 200 by 9999 and rely on it).
+   call $sl_window(win.w, win.h)
+   if win.w > TK.MAXW or win.h > TK.MAXH then
+      err = sysmsg(12956, app, TK.MAXW, TK.MAXH, win.w : ' by ' : win.h)
+      return
    end
 
    * Line-drawing characters when the terminal says it is UTF-8 - LC_ALL, then LC_CTYPE, then LANG as a shell resolves them
