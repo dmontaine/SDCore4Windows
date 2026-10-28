@@ -439,7 +439,9 @@ Add-Type -AssemblyName System.Web
 # digit AND symbol, and a bare GeneratePassword(24, 6) lacks a digit 5.7 % of the
 # time (measured, 20,000 samples) - SD then re-prompts, eats the next piped line
 # and spins at EOF: the run HANGS.  'aA1!' guarantees all four classes.
-$pw  = [System.Web.Security.Membership]::GeneratePassword(24, 6) + 'aA1!'
+# 27 Oct 26 - THE SAFE GENERATOR, because this account is now SIGNED ON AS over ssh (Invoke-Sd below) and ssh takes its password from a cmd.exe askpass batch, which eats % & ^ | and
+# the like: GeneratePassword's symbols made the b313 sign-on answer "Permission denied".  New-SdTestPassword draws from an alphabet that survives the batch and ends -Aa9 (all four classes).
+$pw  = New-SdTestPassword
 # 19 Sep 26 - RELEASE_1.1 64: PROGRAMMER is REFUSED at create time now
 # (createa's keyword case, sysmsg 2018 - the whole command stops and no account
 # is made), so the access keyword is the whole of the line.
