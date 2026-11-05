@@ -605,6 +605,23 @@ Step 2 "Staging and bootstrapping into $Stage"
 # a style choice: "sd -start" forks sdwind, which inherits whatever handles it
 # is given and holds them for life.  Start-Process -Wait -RedirectStandardOutput
 # never returns from it - PROJECT_STATUS.md section 6, and it cost a session.
+#
+# 4 Nov 26 - THE BOOTSTRAP'S /dev/shm MUST EXIST FIRST.  The staged etc\fstab
+# maps /dev/shm to C:\ProgramData\SD\shm (stage.py), so the bootstrap's
+# "sd -start" puts its shared memory in the LIVE data tree's folder.  On a
+# machine where SD has been installed that folder is there, which is why ACE
+# never needed this; on the second development machine, where SD had never been
+# installed, staged sd.exe warned "'/dev/shm' does not exists" - and without it
+# POSIX shared memory, the whole IPC layer, fails.  Created only when missing.
+# Harmless to the install: sd.iss decides fresh-or-upgrade on ...\SD\sdsys
+# alone (DataTreeWasAbsent), and step 6 deletes the whole data tree anyway.
+$shm = Join-Path $PdTree 'shm'
+if (-not (Test-Path -LiteralPath $shm)) {
+    $null = New-Item -ItemType Directory -Path $shm -Force
+    if (-not (Test-Path -LiteralPath $shm)) { Fail "could not create $shm, which the bootstrap's /dev/shm maps to" }
+    Write-Host "   created $shm - the bootstrap's /dev/shm (SD has not been installed on this machine)"
+}
+
 $cmd = "cd '$(ToMsys $Sd64)' && python3 gplbld/stage.py --stage '$(ToMsys $Stage)' --force --bootstrap"
 & $Bash -lc $cmd
 if ($LASTEXITCODE -ne 0) { Fail "stage.py exited $LASTEXITCODE - the staged tree is not usable" }

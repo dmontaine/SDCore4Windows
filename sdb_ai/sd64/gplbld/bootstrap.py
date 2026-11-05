@@ -147,6 +147,63 @@ def run(cmd, **kw):
     return r
 
 
+# 4 Nov 26 - THE STAGED sd.exe IS STARTED THROUGH cmd.exe, NOT DIRECTLY.
+#
+# It loads the msys-2.0.dll staged beside it, while this script runs under
+# MSYS2's own copy in C:\msys64.  On the second Windows development machine
+# (WIN, Windows 25H2 build 26200, MSYS2 runtime 3.6.12) an MSYS2 program that
+# starts a program loading a SECOND copy of the runtime gets exit 127 with no
+# output - so "sd -start" failed at once and cycle.ps1 stopped at step 2.  The
+# reference machine (ACE, 26H2 build 26300, runtime 3.6.9) does not.  Measured
+# on WIN with P:\setupdevbox\cross-root-test.ps1 (a copy of true.exe beside its
+# own msys-2.0.dll): 127 from MSYS2's bash in the Remote Desktop session AND in
+# session 0, 127 with runtime 3.6.9-2 as well as 3.6.12, 0 from Git Bash, from
+# PowerShell, and through cmd.exe.  The cause is not found; the Windows build
+# is the remaining difference.  A native program in between makes sd.exe a
+# fresh process, which is how the installed service starts it anyway, so the
+# hop is taken on every machine rather than only where it is needed.
+#
+# THE WORDS GO ON A cmd.exe COMMAND LINE, so each is held to characters cmd
+# gives no meaning to.  Every caller passes plain words (-start, -internal,
+# SECOND.COMPILE, gpl.bp ...); one that does not is refused by name rather than
+# quoted and hoped for.  SD_CONFIG is handed over in Windows form by this script
+# rather than left to MSYS2's guess at which variables are paths.
+_HOP_SAFE = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+                '0123456789:._-/' + chr(92))
+
+
+def _cygpath(flag, path):
+    r = subprocess.run(['cygpath', flag, path], stdout=subprocess.PIPE)
+    out = r.stdout.decode('latin-1').strip()
+    if r.returncode != 0 or not out:
+        die('cygpath %s %s failed (exit %d)' % (flag, path, r.returncode))
+    return out
+
+
+def native_hop(sdexe, env, args):
+    """The command and environment that start sd.exe through cmd.exe."""
+    if os.name == 'nt':
+        return [sdexe] + list(args), env
+    words = [_cygpath('-w', sdexe)] + list(args)
+    bad = [w for w in words if not w or set(w) - _HOP_SAFE]
+    if bad:
+        die('cannot pass %r through cmd.exe safely - it holds a character\n'
+            '  cmd.exe would interpret.  Every sd() caller passes plain words;\n'
+            '  see native_hop() before adding one that does not.' % bad[0])
+    env = dict(env)
+    if env.get('SD_CONFIG', '').startswith('/'):
+        env['SD_CONFIG'] = _cygpath('-w', env['SD_CONFIG'])
+    comspec = _cygpath('-u', os.path.join(
+        env.get('SYSTEMROOT') or env.get('SystemRoot') or 'C:' + chr(92) + 'Windows',
+        'System32', 'cmd.exe'))
+    # //d //c, NOT /d /c: MSYS2 rewrites a "/x" argument to a native program
+    # as a drive path, and a doubled slash is its documented escape.  With "/c"
+    # cmd.exe got no command, started interactively, read the "\n" sd() feeds,
+    # and exited 0 - sd.exe never ran and the exit code said success (found by
+    # the first test of this hop, 4 Nov 2026).
+    return [comspec, '//d', '//c'] + words, env
+
+
 def sd(sdexe, env, args, expect_fail=False):
     """Run one SD command.
 
@@ -156,8 +213,10 @@ def sd(sdexe, env, args, expect_fail=False):
     session must still be fed something and closed, or a prompt reached with no
     input left spins at full CPU for ever - also section 6.
     """
-    cmd = [sdexe] + args
-    print('    $ ' + ' '.join(cmd))
+    cmd, env = native_hop(sdexe, env, args)
+    print('    $ ' + ' '.join([sdexe] + args))
+    if cmd[0] != sdexe:
+        print('      (started as: %s)' % ' '.join(cmd))
     sys.stdout.flush()
 
     # RELEASE_1.1 82 (D2'): the one-shot marker LOGIN needs for an internal
