@@ -204,6 +204,72 @@ def native_hop(sdexe, env, args):
     return [comspec, '//d', '//c'] + words, env
 
 
+# 4 Nov 26 - RELEASE_1.1 193, PART 2: THE STAGED RUNTIME IS GIVEN "/c/..." FOR
+# THE BOOTSTRAP ONLY.  Started as a fresh process (native_hop), the staged
+# sd.exe builds its mount table from the STAGED etc/fstab, which has no cygdrive
+# line, so drives are /cygdrive/c/... there - and SDSYS in the bootstrap's
+# sd.conf, and field 1 of accounts/sdsys, say /c/Users/....  First cycle with
+# the hop: "Global catalogue missing or corrupt" (config.c, access() on
+# <sysdir>/gcat/$cproc, which existed).  Measured with a copy of the staged
+# runtime: "ls /c/..." not found, "/cygdrive/c/..." and "C:/..." found.
+# Started as MSYS2 python's child, as it was on ACE, it saw "/c/" paths, so
+# MSYS2's own cygdrive line is added for the bootstrap and the file is put back
+# byte for byte afterwards (created and removed where the tree ships none, as
+# Solo's does not): nothing the bootstrap writes changes, and the shipped
+# fstab - so the installed product - is untouched.
+CYGDRIVE_LINE = b'none / cygdrive binary,posix=0,noacl,user 0 0\n'
+
+
+def add_bootstrap_cygdrive(sdexe):
+    """Add MSYS2's cygdrive line to the staged fstab; return what undoes it."""
+    if os.name == 'nt':
+        return None
+    etc = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(sdexe))), 'etc')
+    fstab = os.path.join(etc, 'fstab')
+    made_etc = not os.path.isdir(etc)
+    original = None
+    if os.path.exists(fstab):
+        with open(fstab, 'rb') as f:
+            original = f.read()
+        if b' cygdrive ' in original:
+            print('  staged fstab already has a cygdrive line - left as it is')
+            return None
+    if made_etc:
+        os.makedirs(etc)
+    body = original or b''
+    if body and not body.endswith(b'\n'):
+        body += b'\n'
+    with open(fstab, 'wb') as f:
+        f.write(body + b'# bootstrap.py - for the bootstrap only, removed after\n'
+                + CYGDRIVE_LINE)
+    print('  staged fstab: cygdrive "/" added for the bootstrap (%s, %s)'
+          % (fstab, 'was %d bytes' % len(original) if original is not None
+             else 'created'))
+    return (fstab, original, etc if made_etc else None)
+
+
+def restore_bootstrap_fstab(undo):
+    """Put the staged fstab back exactly as it was, and prove it."""
+    if undo is None:
+        return
+    fstab, original, made_etc = undo
+    if original is None:
+        os.remove(fstab)
+        if made_etc:
+            os.rmdir(made_etc)
+        if os.path.exists(fstab):
+            die('could not remove the bootstrap-only %s' % fstab)
+        print('  staged fstab: removed again (the tree ships none)')
+        return
+    with open(fstab, 'wb') as f:
+        f.write(original)
+    with open(fstab, 'rb') as f:
+        if f.read() != original:
+            die('%s is not back to its original bytes - the staged tree\n'
+                '  would ship the bootstrap-only cygdrive line' % fstab)
+    print('  staged fstab: restored, %d bytes, identical' % len(original))
+
+
 def sd(sdexe, env, args, expect_fail=False):
     """Run one SD command.
 
@@ -311,6 +377,9 @@ def main():
             shutil.copy2(src, dst)
         placed.append(dstdir)
 
+    # RELEASE_1.1 193 part 2 - see CYGDRIVE_LINE.  Undone in the finally below.
+    fstab_undo = add_bootstrap_cygdrive(sdexe)
+
     try:
         print('  compiling the bootstrap compiler')
         bbcmp = os.path.join(here, 'bbcmp.py')
@@ -414,6 +483,9 @@ def main():
         # failed run cannot leave gplbld/ sitting in a data tree.
         for d in placed:
             shutil.rmtree(d, ignore_errors=True)
+        # Last, after the final "sd -stop", so no session of the bootstrap
+        # outlives the line it was started with.
+        restore_bootstrap_fstab(fstab_undo)
 
     print('bootstrapped %s' % sysdir)
     return 0
