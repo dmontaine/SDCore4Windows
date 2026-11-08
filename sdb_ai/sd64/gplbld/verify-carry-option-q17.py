@@ -9,6 +9,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 7: the KEEP.OLD.OBJECT and ASSOC.ALL legs are retired with the options.
 # 15 Oct 26 dm  Written.
 # END-HISTORY
 #
@@ -95,8 +96,6 @@ DTMP = ("   open 'zzqdtm' to f else stop 'no f'\n   write 'again' on f, 'r1'\n  
 DTMMK = ("   execute 'DELETE.FILE zzqdtm' capturing j\n   execute 'CREATE.FILE zzqdtm DIRECTORY' capturing j\n"
          "   open 'zzqdtm' to f else stop 'no f'\n   write 'first' on f, 'r1'\n   crt 'PATH[':fileinfo(f, 2):']'\nend\n")
 
-KEEPGOOD = "   crt 'OLD OBJECT RAN'\nend\n"
-KEEPBAD = "   x = = 1\nend\n"
 
 PHP_NOTIFY = "   crt 'a phantom'\nend\n"
 PHP_QUIET = "   execute 'OPTION NO.PHANTOM.NOTIFY ON'\n   crt 'a phantom'\nend\n"
@@ -105,14 +104,6 @@ PHDRIVER = ("   execute 'PHANTOM RUN bp zzqphn' capturing j\n   sleep 3\n   m = 
             "   crt 'END'\nend\n")
 
 SPOOLP = ("   execute 'SETPTR 0,80,60,0,1' capturing j\n   printer on\n   print 'hello'\n   printer close\n   crt 'END'\nend\n")
-
-ASSOCMK = ("   execute 'DELETE.FILE zzqaa' capturing j\n   execute 'CREATE.FILE zzqaa' capturing j\n"
-           "   open 'dict','zzqaa' to d else stop 'no dict'\n"
-           "   write 'D':@fm:1:@fm:'':@fm:'F1':@fm:'10L':@fm:'M':@fm:'X' on d, 'f1'\n"
-           "   write 'D':@fm:2:@fm:'':@fm:'F2':@fm:'10L':@fm:'M':@fm:'Y' on d, 'f2'\n"
-           "   open 'zzqaa' to f else stop 'no f'\n"
-           "   write 'A':@vm:'B':@vm:'C':@fm:'1':@vm:'2':@vm:'3' on f, 'r1'\n   crt 'MADE'\nend\n")
-
 
 # second sitting, 15 Oct 26: CORRELATIVE.NOCASE and CORRELATIVE.REUSE.  An I-type that compares F3 with "abc" over the record
 # whose F3 is ABC, and an I-type F1 + F2 over a record whose F1 has three values and F2 two (10, 20): without REUSE the missing third value of F2
@@ -149,11 +140,11 @@ def main():
     tool(box, "start")
 
     try:
-        progs = (("zzqgit", GITP), ("zzqdtmp", DTMP), ("zzqdtmk", DTMMK), ("zzqkg", KEEPGOOD), ("zzqkb", KEEPBAD), ("zzqphn", PHP_NOTIFY),
-                 ("zzqphq", PHP_QUIET), ("zzqphd", PHDRIVER), ("zzqspl", SPOOLP), ("zzqamk", ASSOCMK), ("zzqcmk", CORMK))
+        progs = (("zzqgit", GITP), ("zzqdtmp", DTMP), ("zzqdtmk", DTMMK), ("zzqphn", PHP_NOTIFY),
+                 ("zzqphq", PHP_QUIET), ("zzqphd", PHDRIVER), ("zzqspl", SPOOLP), ("zzqcmk", CORMK))
         for nm, text in progs:
             put(sysd, nm, text)
-        good = ("zzqgit", "zzqdtmp", "zzqdtmk", "zzqkg", "zzqphn", "zzqphq", "zzqphd", "zzqspl", "zzqamk", "zzqcmk")
+        good = ("zzqgit", "zzqdtmp", "zzqdtmk", "zzqphn", "zzqphq", "zzqphd", "zzqspl", "zzqcmk")
         out = sess(box, "BASIC bp " + " ".join(good))
         row("setup: the probes compile with no errors", "Compiled %d program(s) with no errors" % len(good) in out, out[-600:])
 
@@ -197,22 +188,6 @@ def main():
                 row("DIR.DTM on: replacing a record moves the folder's time to now", after > before and abs(after - time.time()) < 300,
                     "%s -> %s" % (before, after))
 
-        say("\n--- KEEP.OLD.OBJECT ---------------------------------------------------------------------")
-        for state in ("OFF", "ON"):
-            sess(box, "DELETE.CATALOG zzqk")
-            put(sysd, "zzqk", KEEPGOOD)
-            out = sess(box, "BASIC bp zzqk")
-            row("KEEP.OLD.OBJECT %s: the good program compiled" % state, "Compiled 1 program(s) with no errors" in out, out[-300:])
-            put(sysd, "zzqk", KEEPBAD)
-            out = sess(box, "OPTION KEEP.OLD.OBJECT " + state, "BASIC bp zzqk", "RUN bp zzqk")
-            failed_compile = "Compiled 1 program(s) with no errors" not in out
-            ran = "OLD OBJECT RAN" in out
-            row("KEEP.OLD.OBJECT %s: the bad source did not compile" % state, failed_compile, out[-400:])
-            if state == "OFF":
-                row("CONTROL (off): the old object is gone, so RUN cannot run it", not ran, out[-300:])
-            else:
-                row("KEEP.OLD.OBJECT on: the old object is still there and runs", ran, out[-300:])
-
         say("\n--- NO.PHANTOM.NOTIFY -------------------------------------------------------------------")
         out = sess(box, "RUN bp zzqphd")
         row("the run reached its end", re.search(r"(?m)^END\s*$", out) is not None, out[-400:])
@@ -234,19 +209,6 @@ def main():
                 else:
                     row("SPOOL.COMMAND on: the command that prints is shown before it runs", shown, out[-400:])
         restart(box)
-
-        say("\n--- ASSOC.ALL ---------------------------------------------------------------------------")
-        out = sess(box, "RUN bp zzqamk")
-        row("the fixture file was made", "MADE" in out, out[-300:])
-        for state in ("OFF", "ON"):
-            out = sess(box, "OPTION ASSOC.ALL " + state, "LIST zzqaa BY.EXP f1 f1 f2")
-            lines = [ln.split() for ln in out.splitlines() if re.match(r"^(r1\s|\s{10,}\S)", ln)]
-            say("    ASSOC.ALL %s: %s" % (state, lines))
-            if state == "OFF":
-                row("CONTROL (off): f2 is in another association, so every f1 line shows all of f2", len(lines) == 9, repr(lines))
-            else:
-                row("ASSOC.ALL on: f1 and f2 are one association, one f2 value to each f1 line", lines == [["r1", "A", "1"], ["r1", "B", "2"],
-                    ["r1", "C", "3"]], repr(lines))
 
         say("\n--- CORRELATIVE.NOCASE and CORRELATIVE.REUSE (second sitting) ---------------------------")
         out = sess(box, "RUN bp zzqcmk")

@@ -9,6 +9,7 @@
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 7: legs 1, 2 and 4 retired with the options QUERY.STRING.COMP, QUERY.STR.COMP.ALL and DEFAULT.MV.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-4.
 # END-HISTORY
 #
@@ -16,10 +17,9 @@
 # before the option and once after OPTION <name>, on data where the two must differ, so a row cannot pass
 # because the command printed nothing: the CONTROL is the first run.
 #
-#   1  QUERY.STRING.COMP (openQM ref 140)      4  DEFAULT.MV (205)
-#   2  QUERY.STR.COMP.ALL (299)                5  BACKSLASH.NOT.QUOTE (165)
-#   3  QUERY.SORT.NO.CASE (412)                6  CLEAR.SELECT (403)
-#   0  the six names are known to OPTION
+#   3  QUERY.SORT.NO.CASE (openQM ref 412)     5  BACKSLASH.NOT.QUOTE (165)
+#   6  CLEAR.SELECT (403)
+#   0  the three names are known to OPTION  (legs 1, 2 and 4 - QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV - were retired 27 Oct 26)
 
 import os
 import re
@@ -30,8 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOOL = os.path.join(HERE, "sandbox-fromtree.py")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 passed = failed = 0
-NAMES = ("QUERY.STRING.COMP", "QUERY.STR.COMP.ALL", "QUERY.SORT.NO.CASE", "BACKSLASH.NOT.QUOTE",
-         "DEFAULT.MV", "CLEAR.SELECT")
+NAMES = ("QUERY.SORT.NO.CASE", "BACKSLASH.NOT.QUOTE", "CLEAR.SELECT")
 
 
 def say(s=""):
@@ -146,24 +145,7 @@ def main():
         def names_in(seg):
             return [m for m in re.findall(r"(?m)^(Bob|alice|Carol|dave|ed|fay|a\\b)\s*$", seg or "")]
 
-        say("\n--- leg 1: QUERY.STRING.COMP (ref 140) -----------------------------------------------")
-        c = ['LIST zzo4 name WITH num = "1" ID.SUP', "OPTION QUERY.STRING.COMP", 'LIST zzo4 name WITH num = "1" ID.SUP ']
-        sg = segments(sess(box, *c), c)
-        a, b = names_in(sg.get(0)), names_in(sg.get(2))
-        row("CONTROL: numerically 1 = 1.0 = 01, so three records: Bob alice Carol", sorted(a) == ["Bob", "Carol", "alice"],
-            "got %r" % a)
-        row("THE ROW: as strings only '1' matches: Bob", b == ["Bob"], "got %r" % b)
-
-        say("\n--- leg 2: QUERY.STR.COMP.ALL (ref 299) ----------------------------------------------")
-        c = ['LIST zzo4 name WITH num > "20" ID.SUP', 'LIST zzo4 name WITH numl > "20" ID.SUP', "OPTION QUERY.STR.COMP.ALL",
-             'LIST zzo4 name WITH num > "20" ID.SUP ', 'LIST zzo4 name WITH numl > "20" ID.SUP ']
-        sg = segments(sess(box, *c), c)
-        c_num, c_numl, p_num, p_numl = (names_in(sg.get(i)) for i in (0, 1, 3, 4))
-        row("CONTROL: numeric > 20 on a right aligned item: only fay (100)", c_num == ["fay"], "got %r" % c_num)
-        row("THE ROW: as strings '9' > '20' and '5' > '20', '100' and '2' are not: ed a\\b", sorted(p_num) == sorted(["ed", "a\\b"]),
-            "got %r" % p_num)
-        row("CONTROL: a left aligned item is left alone by the option", c_numl == ["fay"] and p_numl == ["fay"],
-            "before %r, after %r" % (c_numl, p_numl))
+        say("\n--- legs 1, 2 and 4 (QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV) were retired on 27 Oct 26 with their options ---------")
 
         say("\n--- leg 3: QUERY.SORT.NO.CASE (ref 412) ----------------------------------------------")
         c = ["LIST zzo4 name BY name ID.SUP", "OPTION QUERY.SORT.NO.CASE", "LIST zzo4 name BY name ID.SUP "]
@@ -173,13 +155,6 @@ def main():
             a == ["Bob", "Carol", "a\\b", "alice", "dave", "ed", "fay"], "got %r" % a)
         row("THE ROW: upper-cased keys: alice (ALICE) a\\b (A\\B) Bob Carol dave ed fay",
             b == ["alice", "a\\b", "Bob", "Carol", "dave", "ed", "fay"], "got %r" % b)
-
-        say("\n--- leg 4: DEFAULT.MV (ref 205) ----------------------------------------------------")
-        c = ['LIST zzo4 name WITH mv = "y" ID.SUP', "OPTION DEFAULT.MV", 'LIST zzo4 name WITH mv = "y" ID.SUP ']
-        sg = segments(sess(box, *c), c)
-        a, b = names_in(sg.get(0)), names_in(sg.get(2))
-        row("CONTROL: a blank S/M flag is single valued, so 'y' is not the whole of x]y]z: no record", a == [], "got %r" % a)
-        row("THE ROW: with DEFAULT.MV it is multivalued and 'y' is one of its values: Bob", b == ["Bob"], "got %r" % b)
 
         say("\n--- leg 5: BACKSLASH.NOT.QUOTE (ref 165) -------------------------------------------")
         c = ["LIST zzo4 name WITH name = a\\b ID.SUP", "OPTION BACKSLASH.NOT.QUOTE", "LIST zzo4 name WITH name = a\\b ID.SUP "]

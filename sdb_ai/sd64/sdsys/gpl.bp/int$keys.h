@@ -479,35 +479,25 @@
       $define OPT.DIV.ZERO.WARNING     7 ;* Treat divide by zero as warning
       $define OPT.NON.NUMERIC.WARNING  8 ;* Treat non-numeric as warning
       $define OPT.NO.USER.ABORTS      11 ;* Suppress user options to abort
-      $define OPT.RUN.NO.PAGE         12 ;* RUN/DEBUG defaults to NO.PAGE
+      * 27 Oct 26 (S.87 batch 7): options 12, 34, 35, 38, 42, 43, 44, 47, 51, 54 and 57 are RETIRED too (entries A-020 to A-026, A-029, A-034, A-035 and A-037).
       $define OPT.SHOW.STACK.ON.ERROR 13 ;* Show stack on error
       $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
       $define OPT.NO.SEL.LIST.QUERY   21 ;* Don't query use of select list
       $define OPT.CHAIN.KEEP.COMMON   22 ;* Keep unnamed common on CHAIN
       $define OPT.INHERIT             26 ;* Phantom inherits options
-      $define OPT.QUERY.STRING.COMP   34 ;* QPROC: EQ and NE are string comparisons
-      $define OPT.QUERY.STR.COMP.ALL  35 ;* QPROC: all relations on right aligned data are string comparisons
       $define OPT.QUERY.SORT.NO.CASE  36 ;* QPROC: sorts are case insensitive
       $define OPT.BACKSLASH.NOT.QUOTE 37 ;* Command parser: backslash is not a quote
-      $define OPT.DEFAULT.MV          38 ;* QPROC: C, D, I items with blank S/M are multivalued
       $define OPT.CLEAR.SELECT        39 ;* Clear select list 0 after a command that did not make it
       $define OPT.CATALOGUE.LOCAL     40 ;* CATALOG and DELETE.CATALOG default to the local catalogue
       $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
-      $define OPT.PICK.ML.CONV.MASK   42 ;* ML and MR: ( starts a parenthesised format mask, not round bracket negatives (kernel)
-      $define OPT.CHAINED.SELECT      43 ;* A select that finds something executes the first command in the data queue (cproc)
-      $define OPT.PAGINATE.ON.HEADING 44 ;* With RUN.NO.PAGE, a heading or footing enables pagination (kernel)
-      $define OPT.QUERY.FOOTER.PAUSE  47 ;* Pause for RETURN at end of a report with a page footer
       $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
       $define OPT.INHERIT.MFILE.PATH  48 ;* CREATE.FILE puts a new subfile in the directory of the default subfile (createf)
       $define OPT.GIT                 49 ;* .gitignore and .gitattributes are not mapped in a directory file (kernel)
       $define OPT.DIR.DTM             50 ;* A write to a directory file moves the directory's date and time modified (kernel)
-      $define OPT.KEEP.OLD.OBJECT     51 ;* A failed compilation leaves the previous object code (basic)
       $define OPT.NO.PHANTOM.NOTIFY   52 ;* A phantom does not tell its parent when it ends (cproc)
       $define OPT.SPOOL.COMMAND       53 ;* Show the operating system command that prints (kernel)
-      $define OPT.ASSOC.ALL           54 ;* The query processor treats all fields as one association (qproc)
       $define OPT.CORRELATIVE.NOCASE  55 ;* String operations in a correlative or I-type are case blind (kernel)
       $define OPT.CORRELATIVE.REUSE   56 ;* Every operand of an array operation in a correlative or I-type is read as if REUSE() was applied (kernel)
-      $define OPT.QUERY.MERGE.PRINT   57 ;* A query to printer 0 leaves an already active printer on (qdisp)
       $define OPT.COMMAND.LEVEL.LOCKS 58 ;* A file variable that goes keeps its locks until the program returns to the command processor (kernel)
       $define OPT.STACKED.ACCOUNT     59 ;* An EXECUTE that changes account returns to the account it began in (cproc)
       $define OPT.INHERIT.OWNERSHIP   60 ;* CREATE.FILE gives a new file the account directory's owner and group (kernel)

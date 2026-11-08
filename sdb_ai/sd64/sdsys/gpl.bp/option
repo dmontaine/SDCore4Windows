@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87 batch 7: RUN.NO.PAGE, QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV, PICK.ML.CONV.MASK, CHAINED.SELECT, PAGINATE.ON.HEADING, QUERY.FOOTER.PAUSE, KEEP.OLD.OBJECT, ASSOC.ALL and QUERY.MERGE.PRINT retired (blank rows).
 * 27 Oct 26 dm  The options marked REMOVE in the owner's emulation survey are retired (blank rows keep the numbers) and the PICK shortcut goes.
 * REV 1.0-2 mAR 26 mab Restore pick compatibility options.
 * rev 0.9.0 Jan 25 mab remove pick compatibility options
@@ -65,7 +66,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 9  was ASSOC.UNASSOC.MV
    opt<-1> = '||'                                ;* 10 was PICK.BREAKPOINT.U
    opt<-1> = 'NO.USER.ABORTS||3111'
-   opt<-1> = 'RUN.NO.PAGE||3112'
+   opt<-1> = '||'                                ;* 12 was RUN.NO.PAGE
    opt<-1> = 'SHOW.STACK.ON.ERROR||3113'
    opt<-1> = '||'                                ;* 14 was CRDB.UPCASE
    opt<-1> = '||'                                ;* 15 was AMPM.UPCASE
@@ -88,36 +89,34 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 32 was PROC.A
    opt<-1> = '||'                                ;* 33 was SPACE.MCT
    * 10 Oct 26  1.2-0, openQM refs 140 299 412 165 205 403.  Same order as options.h.
-   opt<-1> = 'QUERY.STRING.COMP||12045'
-   opt<-1> = 'QUERY.STR.COMP.ALL||12046'
+   opt<-1> = '||'                                ;* 34 was QUERY.STRING.COMP
+   opt<-1> = '||'                                ;* 35 was QUERY.STR.COMP.ALL
    opt<-1> = 'QUERY.SORT.NO.CASE||12047'
    opt<-1> = 'BACKSLASH.NOT.QUOTE||12048'
-   opt<-1> = 'DEFAULT.MV||12049'
+   opt<-1> = '||'                                ;* 38 was DEFAULT.MV
    opt<-1> = 'CLEAR.SELECT||12050'
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
    opt<-1> = 'CATALOGUE.LOCAL||12080'
    opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
-   * 14 Oct 26  1.2-0, openQM ref 49.
-   opt<-1> = 'PICK.ML.CONV.MASK||12240'
-   * openQM refs 79 and 314.
-   opt<-1> = 'CHAINED.SELECT||12241'
+   opt<-1> = '||'                                ;* 42 was PICK.ML.CONV.MASK
+   opt<-1> = '||'                                ;* 43 was CHAINED.SELECT
    * 14 Oct 26  1.2-0, bundle A-4: the position in this list is the index in options.h (44 to 49), in this order
-   opt<-1> = 'PAGINATE.ON.HEADING||12256'        ;* 44, openQM ref 154
+   opt<-1> = '||'                                ;* 44 was PAGINATE.ON.HEADING
    opt<-1> = 'FORCE.RELOAD||12257'               ;* 45, openQM ref 37
    opt<-1> = 'NUMERIC.EXPONENT||12258'           ;* 46, openQM ref 404
-   opt<-1> = 'QUERY.FOOTER.PAUSE||12259'         ;* 47, openQM ref 429
+   opt<-1> = '||'                                ;* 47 was QUERY.FOOTER.PAUSE
    opt<-1> = 'INHERIT.MFILE.PATH||12260'         ;* 48, openQM ref 461
    * 15 Oct 26  Q-17 of the QM4 gaps tab: the position in this list is the index in options.h (49 to 54), in this order
    opt<-1> = 'GIT||12271'                        ;* 49
    opt<-1> = 'DIR.DTM||12272'                    ;* 50
-   opt<-1> = 'KEEP.OLD.OBJECT||12273'            ;* 51
+   opt<-1> = '||'                                ;* 51 was KEEP.OLD.OBJECT
    opt<-1> = 'NO.PHANTOM.NOTIFY||12274'          ;* 52
    opt<-1> = 'SPOOL.COMMAND||12275'              ;* 53
-   opt<-1> = 'ASSOC.ALL||12276'                  ;* 54
+   opt<-1> = '||'                                ;* 54 was ASSOC.ALL
    opt<-1> = 'CORRELATIVE.NOCASE||12283'         ;* 55
    opt<-1> = 'CORRELATIVE.REUSE||12284'          ;* 56
    * 15 Oct 26  openQM refs 57 and others of bundle Q-17 (57 on)
-   opt<-1> = 'QUERY.MERGE.PRINT||12325'          ;* 57, openQM ref 57
+   opt<-1> = '||'                                ;* 57 was QUERY.MERGE.PRINT
    opt<-1> = 'COMMAND.LEVEL.LOCKS||12372'        ;* 58, 16 Oct 26 QM4 gap 231
    opt<-1> = 'STACKED.ACCOUNT||12375'            ;* 59, 16 Oct 26 QM4 gap 248
    opt<-1> = 'INHERIT.OWNERSHIP||12389'          ;* 60, 16 Oct 26 QM4 gap 239

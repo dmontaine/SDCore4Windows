@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION RUN.NO.PAGE and CHAINED.SELECT are gone (a run is paginated as it was with RUN.NO.PAGE off;
+*           a select does not chain the data queue).
 * 8 Nov 26 Windows port - from Linux 36daf810 (S.87): a typed verb is no longer retried with its hyphens changed to dots (clear-select); the VOC records cleardata,
 *           clearinput, clearprompts, clearselect and cs are gone.
 * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: a phantom reads its Xn, Dn and Ln records together (read.phantom.cargo) and runs, stacks or sets nothing from them unless
@@ -1864,8 +1866,6 @@ reparse:
                   s = ''   ;* Allow unload of object code
 
                case dispatch.mode = "CS"  ;* Catalogued subroutine
-                  if option(OPT.RUN.NO.PAGE) then s = @(0,0)    ;* 0185 Inhibit pagination
-
                   * 14 Oct 26 (openQM 263): a locally catalogued subroutine is found by the name of its VOC entry, which is the
                   * name that was typed - but when the V entry was reached through a K entry (fields 3 onwards of the K), the
                   * name typed is the K entry's, and the object is not found.  Its field 3 is the pathname of the object code
@@ -2061,7 +2061,6 @@ reparse:
 
                if z # '' then
                   voc.rec = 'V':@fm:'CA':@fm:verb
-                  if option(OPT.RUN.NO.PAGE) then s = @(0,0)    ;* 0185 Inhibit pagination
                   gosub scan.catalogued.options                 ;* 14 Oct 26 - LPTR and NO.PAGE, as RUN does (item 146)
                   goto reparse
                end
@@ -2078,22 +2077,6 @@ reparse:
             unwinding = 2
             exit
       end case
-
-   * CHAINED.SELECT (14 Oct 26 dm, openQM refs 79 and 314): a GET.LIST, QSELECT, SEARCH, SELECT, SSELECT or SELECTINDEX
-   * that has made an active list executes the first command in the data queue, as the next command (it is chained
-   * in the way CHAIN chains); one that made no list leaves the queue empty.  Only when no CHAIN is already pending.
-   if option(OPT.CHAINED.SELECT) and xeq.command = '' and not(unwinding) then
-      if index(' GET.LIST QSELECT SEARCH SELECT SSELECT SELECTINDEX ', ' ' : upcase(verb) : ' ', 1) then
-         if selectinfo(0, SL$ACTIVE) then
-            if @data.pending then
-               input chained.cmd
-               xeq.command = chained.cmd
-            end
-         end else
-            cleardata
-         end
-      end
-   end
 
 exit.command:
    while len(xeq.command)
@@ -2544,8 +2527,6 @@ int.run.common:
       end case
    repeat
 
-   if option(OPT.RUN.NO.PAGE) then s = @(0,0)    ;* 0185 Inhibit pagination
-
    if index(run.file.name, ',', 1) then     ;* Multifile
       run.file.name.out = run.file.name[',', 1, 1] : '.OUT,' : run.file.name[',', 2, 999]
    end else                                 ;* Simple file
@@ -2627,7 +2608,7 @@ int.run.common:
    run.pathname = fileinfo(run.file, fl$path) : @ds : run.record.name
    close run.file
 
-   * PAGINATE.ON.HEADING: RUN ... NO.PAGE stops a heading enabling pagination.
+   * RUN ... NO.PAGE stops a heading enabling pagination.
    if run.no.page then i = kernel(K$PAGINATE, 2)
 
    run run.pathname

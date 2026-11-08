@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # sandbox-q4.py - QM4 gaps, the 15 Oct 26 third sitting: BLOCK.PRINT / BLOCK.TERM, FILE.STAT, BSCAN / ROOT / KEY,
-#                 SELECTLEFTV / SELECTRIGHTV, DISABLE.INDEX, SYSTEM(1071), OPTION QUERY.MERGE.PRINT, PHANTOM GROUP
+#                 SELECTLEFTV / SELECTRIGHTV, DISABLE.INDEX, SYSTEM(1071), a report closing printer 0, PHANTOM GROUP
 #                 (SYSTEM(1073), the G in LISTU), @PSTAT, SET.QUEUE / SP.ASSIGN and FSTAT.USER.  No install, no sudo.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-q4.py <dir> [--build]
@@ -10,6 +10,7 @@
 # absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 7: part H keeps the option-off case only (OPTION QUERY.MERGE.PRINT was removed).
 # 27 Oct 26 dm  S.87 batch 3: SWAPMARKS() (it returned its argument) was removed, with part F; the refusal is a row of sandbox-mode-q16.py.
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-8 (BLOCK.PRINT, BLOCK.TERM).
 # END-HISTORY
@@ -164,18 +165,15 @@ USER_PROGS = {
               "   osread d from 'nosuchfile.zz' then crt 'BADTHEN' else crt 'BAD[':system(1071):']'\n"
               "   osread d from 'zzosr.txt' then crt 'AGAIN[':(system(1071) # ''):']' else crt 'AGAIN ELSE'\n"
               "end\n"),
-    # H: OPTION QUERY.MERGE.PRINT.  The report goes to a print unit held in $HOLD (SETPTR mode 3).  Case A: option off, printer
-    # on before the report (control); B: option on, printer on before; C: option on, printer off before (control); D: option on
-    # and then off again, printer on before (control).  What is seen is the job record in $HOLD: the program prints BEFOREMARK,
-    # runs the report, prints AFTERMARK.  The report closes the print unit unless it merges, and a PRINT after a closed unit
-    # starts another job with the same record id, which replaces the first; so a job that holds all three was never closed.
+    # H: a report to printer 0 closes a print unit that was already on (OPTION QUERY.MERGE.PRINT, which could keep it on, was removed
+    # 27 Oct 26).  The report goes to a print unit held in $HOLD (SETPTR mode 3).  What is seen is the job record in $HOLD: the
+    # program prints BEFOREMARK, runs the report, prints AFTERMARK.  The report closes the print unit, and a PRINT after a closed unit
+    # starts another job with the same record id, which replaces the first; so a job that holds only AFTERMARK shows it was closed.
     # (SYSTEM(1) is not the test: closing the unit clears the printer flag only down to the command's own level, and the
     # program that said PRINTER ON is above it.)
     "zzmp": ("   c = field(@sentence, ' ', 4)\n"
              "   execute 'SETPTR 0,80,60,0,0,3,AS zzmp':c:',BRIEF' capturing j\n"
-             "   if c = 'B' or c = 'C' or c = 'D' then execute 'OPTION QUERY.MERGE.PRINT' capturing j\n"
-             "   if c = 'D' then execute 'OPTION QUERY.MERGE.PRINT OFF' capturing j\n"
-             "   if c = 'C' then printer off else printer on\n"
+             "   printer on\n"
              "   print 'BEFOREMARK'\n"
              "   execute 'LIST VOC WITH @ID = \"LIST\" LPTR' capturing j\n"
              "   print 'AFTERMARK'\n"
@@ -492,19 +490,11 @@ def main():
         row("G2: after an OSREAD that took ELSE it is null again", tag(out, "BAD") == [""], repr(out))
         row("G2: ... and a good OSREAD after that fills it once more", tag(out, "AGAIN") == ["1"], repr(out))
 
-        say("\n--- H. OPTION QUERY.MERGE.PRINT -------------------------------------------------------------------------------")
-        res = {}
-        for c in "ABCD":
-            res[c] = q3.adm(["RUN bp zzmp " + c])
+        say("\n--- H. a report closes a print unit that was already on ---------------------------------------------------------")
+        res = {"A": q3.adm(["RUN bp zzmp A"])}
         # JOB[x][abc]: a = the job holds BEFOREMARK, b = it holds the report, c = it holds AFTERMARK
-        row("H1: option on, printer on before the report: one job holds BEFOREMARK, the report and AFTERMARK (the report did not close it)",
-            tag(res["B"], "JOB") == ["B][111"], repr(tag(res["B"], "JOB")))
-        row("H1: CONTROL, option off, printer on before: the report closed the job; AFTERMARK started another that replaced it",
+        row("H1: printer on before the report: the report closed the job; AFTERMARK started another that replaced it",
             tag(res["A"], "JOB") == ["A][001"], repr(tag(res["A"], "JOB")))
-        row("H1: CONTROL, option on and then off again: as with the option never set",
-            tag(res["D"], "JOB") == ["D][001"], repr(tag(res["D"], "JOB")))
-        row("H1: CONTROL, option on, printer off before: nothing to merge into, the job is the report alone (the marks went to the screen)",
-            tag(res["C"], "JOB") == ["C][010"], repr(tag(res["C"], "JOB")))
 
         say("\n--- I. PHANTOM GROUP, SYSTEM(1073) and the G in LISTU --------------------------------------------------------")
         out = q3.adm(["RUN bp zzgp1"])

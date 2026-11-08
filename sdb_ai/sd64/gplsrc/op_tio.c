@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION RUN.NO.PAGE and PAGINATE.ON.HEADING are gone; hf_paginate() keeps the RUN ... NO.PAGE test only.
  * 20 Oct 26 Windows port - from Linux 1c2d0af (S.71), RELEASE_1.1 163: op_readpkt() and process_client_input() refuse a declared packet
  *           length they cannot accept (apipkt.h) and stop when read_socket() says the connection has gone
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): end_attribute(): @(-6), @(-12), @(-14) and @(-59) use eblink, edim, erev and ebold when the terminfo entry has them
@@ -667,16 +668,13 @@ void op_expandhf() {
    op_footing()  -  FOOTING opcode                                        */
 
 /* hf_paginate()  -  set or clear pagination after a heading / footing change.
-   On the display unit, with RUN.NO.PAGE and without PAGINATE.ON.HEADING, a
-   heading or footing does not turn pagination on; and RUN ... NO.PAGE
-   (PU_HF_NO_PAGE) stops it whatever the options.                        */
+   On the display unit RUN ... NO.PAGE (PU_HF_NO_PAGE) stops a heading or footing
+   from turning pagination on.                                           */
 
 Private void hf_paginate(PRINT_UNIT *pu) {
   if ((pu->heading != NULL) || (pu->footing != NULL)) {
     if (pu == &tio.dsp) {
       if (pu->flags & PU_HF_NO_PAGE)
-        return;
-      if (Option(OptRunNoPage) && !Option(OptPaginateOnHeading))
         return;
     }
     pu->flags |= PU_PAGINATE;

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 7: OPTION PICK.ML.CONV.MASK is gone; ML and MR read a left bracket as the round bracket negative style, as they did with it off.
  * 27 Oct 26 dm  S.87 batch 3: the conversions MCD, MCDX, MCX and MCXD (second spellings of MX) and conv_dtx() / conv_xtd() are gone.
  * 18 Oct 26 dm  The XE{;name} conversion: decrypt with a key in the process's key ring (xe_oconv(), sd_keyring.c).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -1514,7 +1515,6 @@ Private int32_t masked_decimal_conversion(char* p) {
   char* r;
   char delim;
   char* mask = NULL;
-  char paren_mask[64]; /* The fx element of a parenthesised mask (OPTION PICK.ML.CONV.MASK) */
 
   /* Modified by Composer AI - 2026/06/10. Fully zero z before any path uses it. */
   memset(z, 0, sizeof(z));
@@ -1712,12 +1712,6 @@ rescan:
         case '(':
         case 'C':
         case 'D':
-          /* 14 Oct 26 dm - OPTION PICK.ML.CONV.MASK (openQM item 49): a left bracket starts a parenthesised
-             format mask, so it is not the round bracket negative style */
-          if ((*p == '(') && Option(OptPickMLConvMask)) {
-            more = FALSE;
-            break;
-          }
           if (neg_seen) {
             more = FALSE;
             break;
@@ -1766,18 +1760,6 @@ rescan:
           break;
       }
     }
-  }
-
-  /* 14 Oct 26 dm - OPTION PICK.ML.CONV.MASK (openQM item 49): the fx element may be enclosed in round brackets.
-     The text between them is copied without the closing bracket and read as if it had stood there. */
-
-  if ((*p == '(') && Option(OptPickMLConvMask)) {
-    strncpy(paren_mask, p + 1, sizeof(paren_mask) - 1);
-    paren_mask[sizeof(paren_mask) - 1] = '\0';
-    q = strrchr(paren_mask, ')');
-    if (q != NULL)
-      *q = '\0';
-    p = paren_mask;
   }
 
   /* Field width */

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 7: OPTION PICK.ML.CONV.MASK is gone; a left bracket in an ML / MR conversion is a negative value action, as it was with the option off.
  * 27 Oct 26 dm  S.87 batch 3: the conversions MCD, MCDX, MCX and MCXD (second spellings of MX) are gone.
  * 18 Oct 26 dm  The XE{;name} conversion: encrypt with a key in the process's key ring (xe_iconv(), sd_keyring.c).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -998,21 +999,16 @@ Private int32_t masked_decimal_conversion(char* p) {
 
   /* Negative value action present? */
 
-  /* 14 Oct 26 dm - OPTION PICK.ML.CONV.MASK (openQM item 49): a left bracket starts a parenthesised format mask,
-     which is not a negative value action; the mask is read as if the bracket were not there */
-  if ((*p == '(') && Option(OptPickMLConvMask))
-    p++;
-  else
-    switch (UpperCase(*p)) {
-      case '+':
-      case '-':
-      case '<':
-      case '(':
-      case 'C':
-      case 'D':
-        p++;
-        break;
-    }
+  switch (UpperCase(*p)) {
+    case '+':
+    case '-':
+    case '<':
+    case '(':
+    case 'C':
+    case 'D':
+      p++;
+      break;
+  }
 
   /* Suppress scaling if decimal point present? */
 
