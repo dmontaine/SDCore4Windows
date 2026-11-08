@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e0e38810 (3 Nov 26, its _voc_ref hunk only): the Account:File form of file name is back, always on (owner: "Just
+*               add FILERULE back in without the on/off switch"): it is resolved as a Q-pointer, so it meets every Q-pointer check.  No FILERULE
+*               setting; the PATH:pathname form stays removed.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): S.87 C-020: the sd.voclib file (the ten ready-made list sentences) is gone; only the comment naming it as a stock pointer changed.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the System:Account:File name form (FILERULE bit 2) is gone, and a Q-pointer with a fourth
@@ -156,11 +159,18 @@ $include keys.h
          goto parse.as.q.pointer
       end
 
-      * 28 Oct 26 dm - S.87: FILERULE and its special forms of file name (account:file, path:pathname) are gone; a name that is in no VOC
-      *   entry is not found, except as the shared account's file below.
+      * 03 Nov 26 dm - the Account:File form of file name is back, always on (owner, 3 Nov 2026: "Just add FILERULE back in without the
+      *   on/off switch", for a production web server moved from openQM that opens other accounts' files by name).  A name in no VOC entry
+      *   with exactly one colon is read as a Q-pointer to that account and file and resolved by parse.as.q.pointer, so every check a Q-pointer
+      *   meets (a registered account the user may enter, not suspended, the file inside it) is met here too: the form reaches nothing a
+      *   Q-pointer written in the VOC could not.  The PATH:pathname form stays removed (S.87).
+      if dcount(voc.id, ':') = 2 and field(voc.id, ':', 1) # '' and field(voc.id, ':', 2) # '' then
+         voc.rec = 'Q' : @fm : field(voc.id, ':', 1) : @fm : field(voc.id, ':', 2)
+         goto parse.as.q.pointer
+      end
 
-* 18 Oct 26 dm - S.66, the shared account.  The name is in no entry of the account's own VOC (the three folds above and the PATH: and
-*   Account:File forms have all been tried, so the account's own file always wins) - is it a file of the account called shared?  Only when the
+* 18 Oct 26 dm - S.66, the shared account.  The name is in no entry of the account's own VOC (the three folds above and the
+*   Account:File form have all been tried, so the account's own file always wins) - is it a file of the account called shared?  Only when the
 *   caller asked (allow.shared: open_file() in op_dio1.c for OPEN, OPEN DICT; OPENSEQ, DELETESEQ and CALL "file prog" pass FALSE and never
 *   follow shared), for a name with no component, and never for the administrator (SDSYS reaches the files with LOGTO shared).  The session's
 *   gate K$SHARED.READ is asked here and again inside !shared_ref; that program does the whole of the checking (an F entry of shared's own VOC
