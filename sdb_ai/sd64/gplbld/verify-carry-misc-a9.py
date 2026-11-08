@@ -127,7 +127,7 @@ def main():
             f.write("alpha\nbeta\n")
         made.append("zza9r")
         with open(os.path.join(bp, "zza9i"), "w") as f:
-            f.write("I\nF1\n\nHEAD\n10L\nS\n")
+            f.write("I\n@RECORD<1>\n\nHEAD\n10L\nS\n")   # 27 Oct 26: an Fn name needs a D item now (S.87)
         made.append("zza9i")
         cmds = ["DELETE.FILE DICT zza9f", "DELETE.FILE zza9f", "CREATE.FILE zza9f", "COPY FROM BP TO zza9f zza9r,r1",
                 "COPY FROM BP TO DICT zza9f zza9i,ii", "LIST zza9f ii"]

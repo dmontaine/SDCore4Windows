@@ -318,7 +318,7 @@ case("TTYSET changes the modes, and TTYSET of the saved array changes them back"
      "t1 = ttyget()\nt2 = t1\nt2<6> = 1 - t1<6>\nt2<8> = 1 - t1<8>\nt2<3> = 2\nttyset t2\nt3 = ttyget()\nttyset t1\nt4 = ttyget()\n"
      "x = (t3<6> = t2<6>) : (t3<8> = t2<8>) : (t3<3> = 2) : (t3 # t1) : '/' : (t4 = t1)", "1111/1")
 case("TTYSET leaves a mode alone when its field is null", "t1 = ttyget()\nttyset ''\nttyset @fm : @fm\nx = (ttyget() = t1)", "1")
-case("TTYSET with the fields of the manual only (five of them) sets those", "t1 = ttyget()\nt2 = field(t1, @fm, 1, 5)\nt2<2> = 1 - t1<2>\nttyset t2\nt3 = ttyget()\nx = (t3<2> # t1<2>) : '/' : (t3<6,1> = t1<6,1>)\n"
+case("TTYSET with the fields of the manual only (five of them) sets those", "t1 = ttyget()\nt2 = field(t1, @fm, 1, 5)\nt2<1> = 1 - t1<1>\nttyset t2\nt3 = ttyget()\nx = (t3<1> # t1<1>) : '/' : (t3<6,1> = t1<6,1>)\n"
      "ttyset t1", "1/1")
 
 

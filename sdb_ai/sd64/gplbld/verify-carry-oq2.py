@@ -1407,7 +1407,8 @@ def run_verbs(box, sysd, bp):
                       "   write 'alpha':@fm:'beta' to slf, 'zzoq.tags'\n"
                       "   crt 'IN FILE MADE'\n"
                       "end\n"))
-        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        # 27 Oct 26: $SAVEDLISTS exists only after a SAVE.LIST, and the rows that made it (list.union and the others, removed in S.87) are gone: make it here
+        out = sess(box, "SELECT VOC SAMPLE 1", "SAVE.LIST zzoq.tmp", "BASIC bp zzoqp1", "RUN bp zzoqp1")
         row("94 CONTROL: test file and saved lists created", has(out, r"IN FILE MADE"), out[-200:])
         out = sess(box, "LIST zzoqin WITH color IN zzoq.colors @ID")
         row("94: field IN listname selects records whose field is in $SAVEDLISTS",

@@ -190,7 +190,7 @@ end
 P_WIDEKEY_ONLY = PROLOGUE % (1, 1) + """   modes(1) = 0
    sortinit 1, modes
    for i = 1 to 12
-      keys(1) = str('y', 35000):right('0':mod(i * 5, 13), 2)
+      keys(1) = str('y', 35000):('0':mod(i * 5, 13))[2]
       sortadd keys
    next i
    all = sortdata()
@@ -235,7 +235,7 @@ end
 P_UNIQUE = PROLOGUE % (1, 1) + """   modes(1) = 8 + 4
    sortinit 1, modes
    for i = 1 to 600
-      keys(1) = 'K':right('00':mod(i, 200), 3)
+      keys(1) = 'K':('00':mod(i, 200))[3]
       sortadd keys, 'D':i
    next i
    allk = ''; n = 0

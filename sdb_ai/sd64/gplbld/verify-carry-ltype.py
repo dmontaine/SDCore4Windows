@@ -74,6 +74,7 @@ SETUP = """\
    write 'D':@fm:'1':@fm:'':@fm:'XY':@fm:'4L':@fm:'S' to dbk, 'X%Y'
    write 'I':@fm:'X%Y':@fm:'':@fm:'XYT':@fm:'4L':@fm:'S' to dbk, 'XYT'
    write 'I':@fm:'NOSUCHFIELD + 1':@fm:'':@fm:'Undefined':@fm:'6R':@fm:'S' to dbk, 'UNDEF'
+   write 'D':@fm:'1':@fm:'':@fm:'F1':@fm:'6L':@fm:'S' to dbk, 'f1'      ;* 27 Oct 26 (S.87): an Fn name is a field only if the dictionary has a D item of that name
    write 'I':@fm:'F1 : "!"':@fm:'':@fm:'F1':@fm:'6L':@fm:'S' to dbk, 'FONE'
    write 'I':@fm:'TRANS("zzlta", FIELD(@ID, "-", 1), TITLE, "X")':@fm:'':@fm:'Trans':@fm:'20L':@fm:'S' to dbk, 'TRN'
    write 'L':@fm:'FIELD(@ID, "-", 1)':@fm:'zznosuch' to dbk, 'BADF'

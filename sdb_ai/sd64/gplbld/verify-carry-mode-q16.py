@@ -47,6 +47,8 @@ def aux(name, text, how):
 
 
 # ---- 27 Oct 26 (S.87 batch 17): the overlap modes and PICK.CONVERT are gone; the CONTROLS stay, and the names are refused ----
+# The manual's own examples, over nine a's.
+S9 = "'aaaaaaaaa'"
 case("CONTROL: CHANGE from the 3rd occurrence, overlapping occurrences are skipped one byte at a time",
      "x = change(%s, 'aa', 'xx', 0, 3)" % S9, "aaxxxxxxa")
 case("CONTROL: CHANGE, same string, no start argument (CHANGE replaces all)",

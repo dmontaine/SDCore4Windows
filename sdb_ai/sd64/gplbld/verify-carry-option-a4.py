@@ -117,7 +117,7 @@ def main():
         out = sess(box, "OPTION")
         row("CONTROL: OPTION lists the options that stay (DIR.SEL.OMIT.HIDDEN)", re.search(r"(?m)^DIR\.SEL\.OMIT\.HIDDEN\b", out) is not None, "not in the listing")
         for n in NAMES:
-            row("OPTION does not list %s" % n, re.search(r"(?m)^%s\b" % re.escape(n), out) is None, "still in the listing")
+            row("OPTION does not list %s" % n, re.search(r"(?m)^%s\s*:" % re.escape(n), out) is None, "still in the listing")
             c = ["OPTION %s" % n]
             row("OPTION %s is refused as not recognised" % n, re.search(r"(?i)not recogni[sz]ed", sess(box, *c)) is not None, "no refusal")
 

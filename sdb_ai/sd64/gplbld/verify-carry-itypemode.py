@@ -124,7 +124,7 @@ def main():
         "two": "$MODE NOCASE.STRINGS;$MODE TIME.MS;COUNT(F1,'AA')",
         "neg": "$MODE NOCASE.STRINGS,-NOCASE.STRINGS;COUNT(F1,'AA')",
         "bad": "$MODE UV.LOCATE;COUNT(F1,'aa')",
-        "nest": "TRANS(zzimf, @ID, idx1, 'X')",
+        "nest": "TRANS(zzimf, @ID, nc1, 'X')",
         "tms0": "TIME()*1000 - SYSTEM(1020)",
         "tms1": "$MODE TIME.MS;TIME()*1000 - SYSTEM(1020)",
     }

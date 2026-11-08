@@ -103,7 +103,7 @@ def main():
             prog("zzbv" + rid, "%s\n%s\n%s\n" % (n, num, g))
         for i, nm in ((1, "name"), (2, "num"), (3, "grp")):
             prog("zzbvd%d" % i, "D\n%d\n\n%s\n10L\nS\n" % (i, nm))
-        prog("zzbvit", "I\nif @nb = 0 then f1 else if @nb = 255 then 'Total' else 'P=' : @bpv\n\nbpv.t\n12L\nS\n")
+        prog("zzbvit", "I\nif @nb = 0 then name else if @nb = 255 then 'Total' else 'P=' : @bpv\n\nbpv.t\n12L\nS\n")
         cmds = ["DELETE.FILE DICT zzbv", "DELETE.FILE zzbv", "CREATE.FILE zzbv"]
         for rid, *_ in data:
             cmds.append("COPY FROM BP TO zzbv zzbv%s,%s" % (rid, rid))

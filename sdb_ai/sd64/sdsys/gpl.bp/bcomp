@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 3290fbd9: a class initialiser takes the first SEVEN at.constants as the constant @-variables (nine until @AM and
+*               @SVM went, which let @SDSYS and @USERNO through); and kernel(K$CASE.SENSITIVE, 0) is assigned, not voided, as bbcmp.py has no VOID.
 * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): twenty-two $MODE words of other products are retired (see "Values of mode"): the
 *               branches that chose the other opcode, and the 16 opcodes only they emitted, are gone.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): the statement KEEP.SELECT (name and handler row st.keepselect, and the program keepsel) is
@@ -1074,7 +1076,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    last.debug.line = -1
    errors = 0
    if is.ctype then header.flags = bitor(header.flags, HDR.CTYPE + HDR.ITYPE)
-   void kernel(K$CASE.SENSITIVE, 0)    ;* names are not case sensitive (the mode that made them so, CASE.SENSITIVE, is gone)
+   j = kernel(K$CASE.SENSITIVE, 0)     ;* (bbcmp.py has no VOID statement) names are not case sensitive (the mode that made them so, CASE.SENSITIVE, is gone)
 
    eof = @false
    line.no(1) = -auto.include.lines
@@ -5670,7 +5672,7 @@ gnc.again:
 * GET.CLASS.INIT.CONSTANT  -  Read an initialisation value for a class  (16 Oct 26 dm, QM4 Fixes items 356 and 565)
 *
 * PUBLIC x = 5, PRIVATE s = "text", CLASS c INHERITS other("RATE", 25): the value is a numeric constant (signed), a string,
-* CHAR() of a numeric constant, or one of the constant @-variables (@FM @VM @SM @TM @IM @AM @SVM @TRUE @FALSE).  It is NOT an
+* CHAR() of a numeric constant, or one of the constant @-variables (@FM @VM @SM @TM @IM @TRUE @FALSE).  It is NOT an
 * expression: it is applied when the object is created, before anything else of the object has run.
 *
 * Sets init.kind ('N' number, 'S' string, 'A' @-variable) and init.value; a string is kept as its hex image, so that a mark
@@ -5718,7 +5720,7 @@ get.class.init.constant:
          gosub get.token                         ;* The @
          gosub get.token                         ;* The name
          locate u.token.string in at.constants<1> setting i then
-            if i <= 9 then                       ;* The first nine are constants: the seven marks, FALSE and TRUE
+            if i <= 7 then                       ;* The first seven are constants: the five marks, FALSE and TRUE (nine until @AM and @SVM went, 27 Oct 26)
                init.kind = 'A'
                init.value = u.token.string
             end
