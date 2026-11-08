@@ -11,6 +11,8 @@
 #
 # START-HISTORY:
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-1, one leg per item as it was built.
+# 27 Oct 26 dm  S.87 batch 2: the IMPLIED.STOP mode was removed. Leg 1 is gone; legs 2 and 3, which showed a $MODE list by whether the subroutine stopped the program,
+#               show it by whether the compiler reports an unused variable (TRAP.UNUSED), and the "minus turns it off" row now turns it on first.
 # END-HISTORY
 #
 # THE INSTRUMENT IS WHAT THE COMPILED PROGRAM DID, not that the compiler said nothing: each row compiles a
@@ -19,7 +21,7 @@
 # a row cannot pass because the probe never reached the statement it is about.
 #
 # Legs and openQM reference numbers (column A of openQM-feature-evaluation_bp_261008.xlsx):
-#   1  IMPLIED.STOP mode, ref 81
+#   1  IMPLIED.STOP mode, ref 81 (the mode and its leg were removed on 27 Oct 26; legs 2 and 3 use TRAP.UNUSED since)
 #   2  $MODE with a comma separated list, ref 105
 #   3  $BASIC.OPTIONS MODE with a list and with a minus, refs 105 and 406
 #   4  @LINE, ref 211, and @BUILD.TIME, ref 506
@@ -101,55 +103,49 @@ def main():
         made.append(name)
 
     try:
-        # --- leg 1: IMPLIED.STOP -------------------------------------------------------------
-        say("\n--- leg 1: IMPLIED.STOP (ref 81) -----------------------------------------------")
-        prog("zza1s0", ["subroutine zza1s0", "   crt 'IN0'", "end"])
-        prog("zza1s1", ["$mode implied.stop", "subroutine zza1s1", "   crt 'IN1'", "end"])
-        prog("zza1m0", ["   call zza1s0", "   crt 'AFTER0'", "end"])
-        prog("zza1m1", ["   call zza1s1", "   crt 'AFTER1'", "end"])
-        out = sess(box, "BASIC bp zza1s0 zza1s1 zza1m0 zza1m1", "CATALOG bp zza1s0 LOCAL", "CATALOG bp zza1s1 LOCAL")
-        row("setup: the four programs compiled with no errors",
-            re.search(r"(?m)^Compiled 4 program\(s\) with no errors", out) is not None, "no success wording")
-        out = sess(box, "RUN bp zza1m0", "RUN bp zza1m1")
-        row("CONTROL: without the mode a subroutine that runs off its END returns (AFTER0 shown)",
-            re.search(r"(?m)^IN0\s*$", out) and re.search(r"(?m)^AFTER0\s*$", out), "no IN0/AFTER0")
-        row("THE ROW: with IMPLIED.STOP the same subroutine stops the program (IN1 shown, AFTER1 not)",
-            re.search(r"(?m)^IN1\s*$", out) and not re.search(r"(?m)^AFTER1\s*$", out), "IN1/AFTER1 lines wrong")
+        # --- leg 1: (IMPLIED.STOP, ref 81) ----------------------------------------------------------------
+        # The mode was removed on 27 Oct 26 (S.87 batch 2) and its leg with it; the refusal of the name is a row of sandbox-mode-q16.py.  Legs 2 and 3 need a mode whose effect
+        # shows, and used it: they use TRAP.UNUSED now, which makes the compiler warn that a variable "is assigned a value but never used" (message 2826) and does nothing else.
+        NEVER = "UU is assigned a value but never used"       # the compiler prints a variable's name in capitals: "WARNING: UU is assigned a value but never used"
+
+        def unused(name, lines):
+            """A subroutine that assigns a variable and never uses it, after the given directive lines."""
+            return lines + ["subroutine " + name, "   uu = 1", "end"]
 
         # --- leg 2: $MODE list --------------------------------------------------------------
         say("\n--- leg 2: $MODE name list (ref 105) -------------------------------------------")
-        prog("zza1l1", ["$mode implied.stop, pick.substr", "subroutine zza1l1", "   crt 'L1'", "end"])
-        prog("zza1l2", ["$mode pick.substr,-implied.stop", "subroutine zza1l2", "   crt 'L2'", "end"])
+        prog("zza1l0", unused("zza1l0", []))
+        prog("zza1l1", unused("zza1l1", ["$mode trap.unused, pick.substr"]))
+        prog("zza1l2", unused("zza1l2", ["$mode trap.unused,-trap.unused"]))
         prog("zza1l3", ["$mode pick.substr,no.such.mode", "subroutine zza1l3", "end"])
         # a trailing comma is a line continuation in SD source, so the next line holds the next name
-        prog("zza1l4", ["$mode pick.substr,", "   implied.stop", "subroutine zza1l4", "end"])
-        prog("zza1m2", ["   call zza1l2", "   crt 'AFTER2'", "end"])
+        prog("zza1l4", unused("zza1l4", ["$mode pick.substr,", "   trap.unused"]))
+        out = sess(box, "BASIC bp zza1l0")
+        row("CONTROL: with no $mode the compiler does not report the unused variable", re.search(OK, out) is not None and NEVER not in out, "no success wording, or the warning is there")
         out = sess(box, "BASIC bp zza1l1")
-        row("a two name list compiles with no errors", re.search(OK, out) is not None, "no success wording")
-        out = sess(box, "BASIC bp zza1l2", "CATALOG bp zza1l2 LOCAL", "BASIC bp zza1m2", "RUN bp zza1m2")
-        row("a list with -NAME second compiles, and the minus turned the mode OFF (AFTER2 shown)",
-            re.search(r"(?m)^L2\s*$", out) and re.search(r"(?m)^AFTER2\s*$", out), "L2/AFTER2 lines wrong")
+        row("a two name list compiles with no errors, and its first name turned TRAP.UNUSED on (the warning is shown)", re.search(OK, out) is not None and NEVER in out,
+            "no success wording, or no warning")
+        out = sess(box, "BASIC bp zza1l2")
+        row("a list with -NAME second compiles, and the minus turned the mode OFF again (no warning)", re.search(OK, out) is not None and NEVER not in out,
+            "no success wording, or the warning is there")
         out = sess(box, "BASIC bp zza1l3")
         row("a list with an unknown name is refused with 2842",
             re.search(OK, out) is None and re.search(r"(?i)unrecognised mode name", out) is not None, "no refusal")
         out = sess(box, "BASIC bp zza1l4")
-        row("a list continued onto the next line after a comma compiles with no errors",
-            re.search(OK, out) is not None, "no success wording")
+        row("a list continued onto the next line after a comma compiles, and the name on the next line was applied (the warning is shown)",
+            re.search(OK, out) is not None and NEVER in out, "no success wording, or no warning")
 
         # --- leg 3: $BASIC.OPTIONS ----------------------------------------------------------------
         say("\n--- leg 3: $BASIC.OPTIONS MODE (refs 105, 406) -----------------------------------")
         opt = os.path.join(bp, "$BASIC.OPTIONS")
-        prog("zza1o1", ["subroutine zza1o1", "   crt 'O1'", "end"])
-        prog("zza1m3", ["   call zza1o1", "   crt 'AFTER3'", "end"])
+        prog("zza1o1", unused("zza1o1", []))
         try:
-            write(opt, ["X", "MODE IMPLIED.STOP,PICK.SUBSTR"])
-            out = sess(box, "BASIC bp zza1o1", "CATALOG bp zza1o1 LOCAL", "BASIC bp zza1m3", "RUN bp zza1m3")
-            row("MODE a,b in $BASIC.OPTIONS turns IMPLIED.STOP on (O1 shown, AFTER3 not)",
-                re.search(r"(?m)^O1\s*$", out) and not re.search(r"(?m)^AFTER3\s*$", out), "lines wrong")
-            write(opt, ["X", "MODE IMPLIED.STOP", "MODE -IMPLIED.STOP"])
-            out = sess(box, "BASIC bp zza1o1", "CATALOG bp zza1o1 LOCAL", "RUN bp zza1m3")
-            row("a later MODE -IMPLIED.STOP turns it off again (AFTER3 shown)",
-                re.search(r"(?m)^O1\s*$", out) and re.search(r"(?m)^AFTER3\s*$", out), "lines wrong")
+            write(opt, ["X", "MODE TRAP.UNUSED,PICK.SUBSTR"])
+            out = sess(box, "BASIC bp zza1o1")
+            row("MODE a,b in $BASIC.OPTIONS turns TRAP.UNUSED on (the warning is shown)", re.search(OK, out) is not None and NEVER in out, "no success wording, or no warning")
+            write(opt, ["X", "MODE TRAP.UNUSED", "MODE -TRAP.UNUSED"])
+            out = sess(box, "BASIC bp zza1o1")
+            row("a later MODE -TRAP.UNUSED turns it off again (no warning)", re.search(OK, out) is not None and NEVER not in out, "no success wording, or the warning is there")
         finally:
             if os.path.exists(opt):
                 os.remove(opt)

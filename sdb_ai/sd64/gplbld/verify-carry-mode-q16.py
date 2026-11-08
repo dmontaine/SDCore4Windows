@@ -10,6 +10,8 @@
 # START-HISTORY:
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-16: CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP, PICK.CONVERT,
 #               CONDITIONAL.STATEMENTS, TRAP.UNUSED.MAIN.
+# 27 Oct 26 dm  S.87 batch 2: CONDITIONAL.STATEMENTS (a name that did nothing) and six other modes were removed; the row that said it was accepted is now seven rows
+#               that say the seven names are refused (2842).
 # END-HISTORY
 #
 # THE INSTRUMENT IS THE VALUE A BASIC PROGRAM PRINTED between brackets, value marks shown as |.  Every mode has its
@@ -182,9 +184,11 @@ case("Q-16 FINDSTR as the condition",
 LOCKF = "execute 'CREATE.FILE zzq16lf DYNAMIC' capturing junk\nopen 'zzq16lf' to lf else x = 'noopen'\n"
 case("Q-16 FILELOCK as the WHILE condition and FILEUNLOCK as the UNTIL condition",
      LOCKF + "n = 0\nloop\nwhile filelock lf do\n   n += 1\nuntil fileunlock lf\nrepeat\nx = n", "1")
-case("Q-16 $MODE CONDITIONAL.STATEMENTS is accepted (the statements above work without it)",
-     "$mode conditional.statements\nopenseq 'zzq16.seq' to f else create f else x = 'nocreate'\nweofseq f\nn = 0\nloop\nwhile writeseq 'z' to f do\n   n += 1\nuntil n >= 2\nrepeat\nx = n",
-     "2")
+# 27 Oct 26 (S.87 batch 2): the mode name CONDITIONAL.STATEMENTS, which was accepted and changed nothing, is gone with six others.  Each is REFUSED now, and the
+# statements above are allowed without any mode, as they always were.
+for _gone in ("conditional.statements", "prclose.default.0", "unassigned.common", "no.case.invert", "optional.then.else", "implied.stop", "exception.save.stack"):
+    case("27 Oct 26: $MODE %s was removed and is refused (2842), as any name the compiler does not know" % _gone.upper(),
+         "$mode %s\nx = 1" % _gone, None, has=["Unrecognised mode name"])
 
 # ---- default argument values and DEFAULT.UNASS.ARGS ----------------------------------------------------------------
 aux("zzq16da", "subroutine zzq16da(r, a, b = 7, c = 'xyz', d = -2, e = @true) var.args\n"

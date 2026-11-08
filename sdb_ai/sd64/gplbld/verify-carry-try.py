@@ -129,8 +129,6 @@ CASES = [
      "try\n   call zztxa('st', '')\ncatch st saving.stack\n   p1 = field(field(@exception.stack, @fm, 1), @vm, 1)\n"
      "   p2 = field(field(@exception.stack, @fm, 2), @vm, 1)\n   x = p1:'/':field(p2, '/', dcount(p2, '/'))\nend",
      "zztxa/{p}"),
-    ("$MODE EXCEPTION.SAVE.STACK does the same for every CATCH", {},
-     "$mode exception.save.stack\ntry\n   throw 'st'\ncatch st\n   x = (@exception.stack # '')\nend", "1"),
     ("qualifiers go with the name they follow: the other name in the list gets no stack", {},
      "try\n   throw 'b'\ncatch a saving.stack, b\n   x = '[':@exception.stack:']'\nend", "[]"),
     ("THROW after an earlier exception resets @EXCEPTION.STACK", {},
