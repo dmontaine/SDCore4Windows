@@ -276,8 +276,8 @@ def main():
         say("\n--- leg 5: %header% is not a record ------------------------------------------------------------------------")
         sess(box, "SET.TRIGGER zzdt zzdttrg PRE.CLEAR")
         head_before = readfile(hdr)
-        out = sess(box, "RUN bp zzdt_hide", "COUNT zzdt", "ANALYSE.FILE zzdt STATISTICS")
-        row("ANALYSE.FILE ... STATISTICS says 3 total records, not 4", os.path.exists(hdr) and re.search(r"Total records\s*:\s*3\b", out) is not None,
+        out = sess(box, "RUN bp zzdt_hide", "COUNT zzdt", "ANALYZE.FILE zzdt STATISTICS")
+        row("ANALYZE.FILE ... STATISTICS says 3 total records, not 4", os.path.exists(hdr) and re.search(r"Total records\s*:\s*3\b", out) is not None,
             out[-300:])
         row("SELECT gives the three records that were written (rec1, rec2 and one the program named %header%) and not the header file "
             "(that would make four); the instrument: the header IS in the directory", got(out, "SEL") == "3" and os.path.exists(hdr),

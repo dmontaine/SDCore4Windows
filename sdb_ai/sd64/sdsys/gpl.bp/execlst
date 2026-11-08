@@ -29,7 +29,7 @@
 * loop.  Commands are separated by semicolons.  With no active list nothing is run.
 *
 *    SELECT VOC WITH TYPE = 'F'
-*    EXECUTE.LIST ANALYSE.FILE () ; PAUSE
+*    EXECUTE.LIST ANALYZE.FILE () ; PAUSE
 *
 * END-DESCRIPTION
 *

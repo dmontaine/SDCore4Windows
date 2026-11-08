@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 36daf810 (S.87): request 70 operation 1 runs analyze.file (the VOC record analyse.file is gone); the operation's name in the audit line
+*           and on the wire is unchanged.
 * 25 Oct 26 Windows port - from Linux fccf976 (18 Oct 26) and 4f38ad4 (20 Oct 26): API request 29 (vb.open.sdnet) no longer opens any account's file for any login once NETFILES bit 2
 *           is set.  sdnet.account.check asks, before the process is marked as an SDNet user: a register record for the account named (a path names none), the rule request 3 asks
 *           (account.entry.check: this port's own tests moved out of vb.account unchanged in what they do - suspended, no group, SDSYS from this computer only, membership of the
@@ -3510,6 +3512,7 @@ end
 if fa.names.file then fa.shown = fa.name else fa.shown = field(fa.text, ' ', 1)
 void kernel(K$AUDIT, 'api admin request=70 op=' : fa.verb : ' file=' : fa.shown : ' user=' : @logname)  ;* @logname, not logname: a plain variable does not survive an abort
 fa.cmd = fa.verb
+if fa.op = 1 then fa.cmd = 'analyze.file'     ;* 27 Oct 26 (S.87): the VOC no longer has the British spelling; the audit line above keeps the operation's name
 if fa.names.file then fa.cmd := ' ' : fa.name
 if fa.text # '' then fa.cmd := ' ' : fa.text
 if fa.op = 8 or fa.op = 9 then fa.cmd := ' no.query'

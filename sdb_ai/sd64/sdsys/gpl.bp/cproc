@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 36daf810 (S.87): a typed verb is no longer retried with its hyphens changed to dots (clear-select); the VOC records cleardata,
+*           clearinput, clearprompts, clearselect and cs are gone.
 * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: a phantom reads its Xn, Dn and Ln records together (read.phantom.cargo) and runs, stacks or sets nothing from them unless
 *           the seal on them checks against the secret the process that started it gave it in its environment (K$PHANTOM.NONCE, !IPC_SEAL).
 *           $ipc is a file every SD user's process may write.  A refusal is shown in the phantom's COMO log, written to the audit trail (phantom
@@ -1706,13 +1708,8 @@ proc.sentence.common:      ;* (Note: return to here from int.if)
          * Try in lowercase
          read voc.rec from voc, downcase(verb) else
             * Try in uppercase
-            read voc.rec from voc, upcase(verb) else
-               * Try in uppercase with hyphens changed to dots
-               read voc.rec from voc, change(upcase(verb), '-', '.') else
-                  * and in lowercase with hyphens changed to dots
-                  read voc.rec from voc, change(downcase(verb), '-', '.') else null
-               end
-            end
+* 27 Oct 26 dm - S.87: THE HYPHEN FORM (clear-select for clear.select) IS REMOVED.  It was the Pick spelling of a dotted verb (survey C-013); nothing in SD types a hyphenated verb.
+            read voc.rec from voc, upcase(verb) else null
          end
       end
 
