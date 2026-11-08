@@ -1102,7 +1102,7 @@ add.item:
                   return
                end
 
-               execute "CD " : file.name : " " : option
+               execute "COMPILE.DICT " : file.name : " " : option
 
                if @system.return.code then
                   stop "Compilation error in I-type : " : option

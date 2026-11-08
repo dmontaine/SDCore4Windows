@@ -76,7 +76,7 @@ $include keys.h
 *        directory of an account a Q-pointer was followed into (rule 1), or hold os-on, or be what the
 *        STOCK VOC says: the record of the same id in SDSYS's NEWVOC names the same path.  The stock
 *        pointers ($map, syscom, sd.voclib, dict.dict, voc, newvoc, $acc) and the stock Q-pointers
-*        (sd.accounts, which leads into SDSYS - an account nobody may LOGTO - and md) need this last clause.
+*        (sd.accounts, which leads into SDSYS - an account nobody may LOGTO) need this last clause.
 *   Refusal is ER$PERM, 3035, as for OPENSEQ.
    vr.admin = kernel(K$ADMINISTRATOR, -1)
    vr.free = vr.admin or kernel(K$OS.EXEC, -1)      ;* SDSYS, or an account that holds os-on
@@ -469,7 +469,7 @@ check.q.hop:
    q.ok = @false
    gosub stock.record
    if stock.found and upcase(stock.rec[1,1]) = 'Q' and stock.rec<2> = q.named and stock.rec<3> = voc.rec<3> then
-      q.ok = @true                                  ;* a stock pointer: sd.accounts into SDSYS, md
+      q.ok = @true                                  ;* a stock pointer: sd.accounts into SDSYS
    end else
       if q.registered then
          * LOGTO's own test: not suspended, and a member of the account's group.  This is asked of an account that

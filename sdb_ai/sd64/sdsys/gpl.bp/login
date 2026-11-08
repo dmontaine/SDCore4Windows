@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 81d9599b (S.87 batch 14): update.voc's special case for the MD record and its label accept.without.query are gone.
 * 7 Nov 26 Windows port - from Linux 29c4a48f (27 Oct 26, S.87): the VOC deletion list.  update.voc ends with remove.listed.voc, which removes from the
 *           account's VOC the records listed in sdsys/voc_removed that are still the records SD shipped (!vocrmchk), saves a copy of each to
 *           sdsys/voc_removed.saved first (no copy, no deletion: 12909), reports the ones it kept and audits.  Messages 12905-12909 (Linux 11900-11904).
@@ -1934,16 +1935,8 @@ update.voc:
             old.type = upcase(old.rec[1,1])
             if old.type = 'P' then old.type = upcase(old.rec[1,2])
 
-            * Special case to avoid prompt for 2.4-15 change to MD item
-
-* 19 Aug 26 Windows port - UPCASE THE ID, PROJECT_STATUS.md 5.12 (b).  id comes
-*   from a READNEXT over the update VOC, whose record is 'md' from this release,
-*   so an exact comparison against 'MD' stopped matching and every account being
-*   updated would be asked about a type change it should never see.
-            if upcase(id) = 'MD' and (old.type = 'Q' or old.type = 'F') then
-               goto accept.without.query
-            end
-
+* 8 Nov 26 Windows port - from Linux 81d9599b (S.87 batch 14): the special case for the MD record (no prompt for its 2.4-15 type change) is
+*   gone with the record; an old account's md goes through the VOC deletion list.
             if new.type # old.type then
                if yn # 'A' then
                   display
@@ -1970,7 +1963,6 @@ update.voc:
             end
          end
 
-accept.without.query:
 * 02 Sep 26 Windows port - PRE_RELEASE_FIXES 136, AND THIS WAS THE THIRD SITE.
 *   Two lines used to stand here:
 *

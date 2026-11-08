@@ -393,7 +393,7 @@ end.program:
 * ---------------------------------------------------------------------------
 compile.record.query:
    if compiled.dict then
-      execute 'CD ' : in.file.name : ' ' : in.record.name
+      execute 'COMPILE.DICT ' : in.file.name : ' ' : in.record.name
       return
    end
 

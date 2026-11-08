@@ -198,8 +198,11 @@ try {
     # lookup from CD's own name lookup, which leg 2b takes.
     Write-Host ''
     Write-Host '--- leg 2a: CD xtype - the expression names F1 and F3 in upper case ----'
-    $cda = Invoke-SD @("CD $File xtype")
-    Show "CD $File xtype" $cda
+    # 8 Nov 26: the verb is typed COMPILE.DICT - its second name CD went with S.87
+    # batch 14 (Linux 81d9599b).  The program and its output are the same; "CD" in
+    # the rows below names that program.
+    $cda = Invoke-SD @("COMPILE.DICT $File xtype")
+    Show "COMPILE.DICT $File xtype" $cda
     $compiledA = ($cda.Text -cmatch '(?m)^Compiling xtype\s*$')
     Row "leg 2a: CD reached the compiler ('Compiling xtype')" $compiledA 'no Compiling line - nothing below would be measured'
     Row 'leg 2a: the expression''s F1 and F3 resolved to f1 and f3 (compiled, no error)' `
@@ -215,8 +218,8 @@ try {
     # showed one record, XTYPE, and 4 records in all.  Cosmetic: no twin, no
     # loss.  So the rows are the D2 ones: exactly one row that folds to xtype,
     # and the record count unchanged.
-    $cd = Invoke-SD @("CD $File XTYPE", "LIST DICT $File")
-    Show "CD $File XTYPE, LIST DICT $File" $cd
+    $cd = Invoke-SD @("COMPILE.DICT $File XTYPE", "LIST DICT $File")
+    Show "COMPILE.DICT $File XTYPE, LIST DICT $File" $cd
     Row 'leg 2b: CD found the item typed in upper case (no "not found")' ($cd.Text -notmatch "Source record 'XTYPE' not found") 'CD did not fold the name'
     Row "leg 2b: CD compiled it ('Compiling xtype' in any case, no error)" `
         (($cd.Text -match '(?m)^Compiling xtype\s*$') -and ($cd.Text -notmatch 'is not defined|Compilation error')) 'no clean Compiling line naming xtype'

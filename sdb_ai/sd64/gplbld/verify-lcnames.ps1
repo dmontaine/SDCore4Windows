@@ -516,8 +516,7 @@ try {
                  @{U='NEWVOC';      L='newvoc'},
                  @{U='SYSCOM';      L='syscom'},
                  @{U='DICT.DICT';   L='dict.dict'},
-                 @{U='MD';          L='md'},
-                 @{U='SD.ACCOUNTS'; L='sd.accounts'})
+                 @{U='SD.ACCOUNTS'; L='sd.accounts'})       # 8 Nov 26: md went with S.87 batch 14 (Linux 81d9599b)
     $ctFq = Invoke-SD (@($fqPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($fqPairs | ForEach-Object { $_.L })))
     Note-Pairs $ctFq $fqPairs ''
 
@@ -555,8 +554,8 @@ try {
     # with them.  SD.ACCOUNTS field 2 is an ACCOUNT name and stays upper - that
     # is the wide half of 5.12 and is out of scope, so it doubles as a control
     # on this pair: a sweep would have taken SDSYS down with it.
-    $ctQ = Invoke-SD @('CT VOC MD', 'CT VOC SD.ACCOUNTS')
-    Note 'MD field 3 names voc'              $true ($ctQ -cmatch '(?m)^\s*3:\s*voc\s*$')
+    # 8 Nov 26: MD, the other Q-pointer, went with S.87 batch 14 (Linux 81d9599b).
+    $ctQ = Invoke-SD @('CT VOC SD.ACCOUNTS')
     Note 'SD.ACCOUNTS field 3 names accounts' $true ($ctQ -cmatch '(?m)^\s*3:\s*accounts\s*$')
     Note 'control: SD.ACCOUNTS field 2 is still SDSYS' $true ($ctQ -cmatch '(?m)^\s*2:\s*SDSYS\s*$')
 

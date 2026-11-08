@@ -223,7 +223,7 @@ def main():
         out = sess(box, "LIST zzlbook TTL%TITLE")
         row("a query that names the link is compiled each time, so it follows the change at once",
             re.search(r"(?m)^T1-1\s+Moby Dick B\s*$", out) is not None, out[-300:].replace("\n", " | "))
-        out = sess(box, "CD zzlbook TT", "LIST zzlbook TT")
+        out = sess(box, "COMPILE.DICT zzlbook TT", "LIST zzlbook TT")
         row("CD compiles the I-type again and it follows the changed link",
             re.search(r"(?m)^Compiling TT", out) is not None and re.search(r"(?m)^T1-1\s+Moby Dick B\s*$", out) is not None,
             out[-300:].replace("\n", " | "))

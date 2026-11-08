@@ -1,5 +1,5 @@
 PA
-CD $map
-CD accounts
-CD dict.dict
-CD voc
+compile.dict $map
+compile.dict accounts
+compile.dict dict.dict
+compile.dict voc

@@ -38,7 +38,7 @@
 *    2  The shape of the name: 1 to 63 characters, the first a lower case letter or a digit (so no name that begins with $ & ! * _ or %, which
 *       keeps the system files $savedlists, $hold and the like, and every &...& file, out of reach), the rest lower case letters, digits
 *       and . _ - $ (no colon, comma or space).  The name is folded to lower case first.
-*    3  A name in the stock VOC (newvoc) is never looked up: md, sd.accounts and the like are the account's own.
+*    3  A name in the stock VOC (newvoc) is never looked up: syscom, sd.accounts and the like are the account's own.
 *    4  The register record of the account called shared: it exists, is not suspended, and holds an absolute path.
 *    5  The VOC of that account has the name (as given, lower case, upper case): an F entry, not a multifile.
 *    6  Field 2 (field 3 for the dictionary) is the pathname: no @ token, taken from the shared account's directory when it is not absolute.

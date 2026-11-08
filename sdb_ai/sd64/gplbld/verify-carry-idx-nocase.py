@@ -40,12 +40,13 @@ PROG = ("   for t = 1 to 3\n"
         "   next t\n"
         "   execute 'CREATE.INDEX zzic1 NAME NO.CASE' capturing o1\n"
         "   execute 'CREATE.INDEX zzic2 NAME' capturing o2\n"
-        "   execute 'MAKE.INDEX zzic3 NAME NO.CASE' capturing o3\n"
+        "   execute 'CREATE.INDEX zzic3 NAME NO.CASE' capturing o3\n"
         "   crt 'O1[':convert(o1, @fm, '|'):']'\n"
         "   crt 'O2[':convert(o2, @fm, '|'):']'\n"
         "   crt 'O3[':convert(o3, @fm, '|'):']'\n"
         "   execute 'BUILD.INDEX zzic1 NAME' capturing j\n"
         "   execute 'BUILD.INDEX zzic2 NAME' capturing j\n"
+        "   execute 'BUILD.INDEX zzic3 NAME' capturing j\n"
         "   for t = 1 to 3\n"
         "      open 'zzic':t to f else stop 'no f'\n"
         "      selectindex 'NAME', 'apple' from f to 1\n"
@@ -124,11 +125,11 @@ def main():
         say("    %s" % {t: tagged(out, t) for t in ("O1", "O2", "O3", "K1", "U1", "K2", "U2", "K3", "U3")})
         row("the run reached its end", "DONE54" in out, out[-500:])
         for t in ("O1", "O2", "O3"):
-            row("%s: CREATE.INDEX / MAKE.INDEX did not refuse its words" % t,
+            row("%s: CREATE.INDEX did not refuse its words" % t,
                 not re.search(r"(?i)unexpected|illegal|not found|syntax", tagged(out, t) or ""), tagged(out, t) or "")
         row("CONTROL: the plain index finds only 'apple' for 'apple' (r2)", tagged(out, "K2") == "r2", "got %r" % tagged(out, "K2"))
         row("CONTROL: ... and only 'APPLE' for 'APPLE' (r3)", tagged(out, "U2") == "r3", "got %r" % tagged(out, "U2"))
-        for t, how in (("1", "CREATE.INDEX NO.CASE"), ("3", "MAKE.INDEX NO.CASE")):
+        for t, how in (("1", "CREATE.INDEX NO.CASE"), ("3", "a second CREATE.INDEX NO.CASE (built by BUILD.INDEX)")):
             k, u = tagged(out, "K" + t), tagged(out, "U" + t)
             want = {"r1", "r2", "r3"}
             row("54: %s finds all three spellings for 'apple'" % how, k is not None and set(k.split()) == want, "got %r" % k)

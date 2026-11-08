@@ -1,5 +1,5 @@
 * MERGEKEYS
-* The merge of two select lists, for LIST.UNION, LIST.INTER, LIST.DIFF and MERGE.LIST
+* The merge of two select lists, for MERGE.LIST
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
