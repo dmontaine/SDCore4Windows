@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): emit.field.load no longer reads field 9998 as @NI and 9999 as the record length; only field 0 (the id) is special.
 * 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): QM4 Fixes 7: an L-type record can be used in an I-type, as link%item (link.reference; $linkref;
 *               the file expression of a link in in.trans; a link to a link in the dictionary of the file a
 *               TRANS() names).  Also: an undefined name that did not look like Fn stopped the compile with
@@ -713,13 +714,6 @@ emit.field.load:
    begin case
       case fno = 0
          n = SYSCOM.QPROC.ID      ; gosub emit.ldsys
-
-      case fno = 9998
-         n = SYSCOM.QPROC.NI      ; gosub emit.ldsys
-
-      case fno = 9999
-         n = SYSCOM.QPROC.RECORD  ; gosub emit.ldsys
-         opcode.byte = OP.LEN     ; gosub emit.simple
 
       case 1
          n = SYSCOM.QPROC.RECORD  ; gosub emit.ldsys

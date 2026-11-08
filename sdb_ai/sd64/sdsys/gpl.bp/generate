@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): field locations 9998 and 9999 are no longer skipped (they are ordinary numbers now); only location 0 is.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: $INCLUDE is found as either
 *           $INCLUDE or $include.
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
@@ -169,7 +170,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
             begin case
                case type = 'D'
                   fno = dict.rec<DICT.LOC>
-                  if num(fno) and fno # 0 and fno # 9998 and fno # 9999 then
+                  if num(fno) and fno # 0 then
                      if fno > hi.fno then hi.fno = fno
                      locate fno in loc<1> by 'AR' setting idx then
                         if not(duplicates.allowed) then continue
@@ -189,7 +190,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
                case (type = 'A' or type = 'S') and dict.rec<DICT.A.CORRELATIVE> = ''
                   fno = dict.rec<DICT.A.LOC>
-                  if num(fno) and fno # 0 and fno # 9998 and fno # 9999 then
+                  if num(fno) and fno # 0 then
                      if fno > hi.fno then hi.fno = fno
                      locate fno in loc<1> by 'AR' setting idx then
                         if not(duplicates.allowed) then continue

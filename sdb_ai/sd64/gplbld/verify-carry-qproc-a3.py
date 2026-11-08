@@ -9,6 +9,8 @@
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 4: leg 12 - the query keywords, the noise word THAN, ONLY before the file name, => =< >< and dictionary fields 9998 / 9999 that were
+#               removed that day are refused or read as ordinary, each beside its surviving spelling.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-3.
 # END-HISTORY
 #
@@ -27,6 +29,7 @@
 #   9  REPORTING (416)
 #  10  SELECT with a bare field name (39)
 #  11  REFORMAT with @RECORD (546)
+#  12  the removed second spellings of S.87 batch 4 (the VOC records, THAN, ONLY, => =< ><, fields 9998 and 9999)
 
 import os
 import re
@@ -222,6 +225,80 @@ def main():
         body = open(cp, "rb").read().decode("ascii", "replace").splitlines() if os.path.exists(cp) else None
         row("THE ROW: the first item is the new record's id (alpha); @RECORD supplies its fields: alpha 50 a",
             body == ["alpha", "50", "a"], "got %r" % (body,))
+
+        say("\n--- leg 12: 27 Oct 26 (S.87 batch 4) second spellings of keywords, THAN, ONLY before the file, => =< >< and fields 9998 / 9999 ---")
+        # A new account's VOC is the tree's NEWVOC, which no longer holds the fourteen records; the thirteen spellings that stay are all there.
+        # (THAN, the noise word, is NOT in this batch: removing it turned "greater than 25" into a sentence with two values, see the survey's D-010.)
+        gone = ["col.spcs", "display.name", "evaluate", "calculate", "intersection", "difference", "margin", "stats", "supp", "only",
+                "=>", "=<", "><"]
+        kept = ["col.spaces", "col.hdg", "eval", "calc", "intersect", "diff", "left.margin", "statistics", "hdr.sup", "id.only", "than", ">=", "<=", "<>"]
+        # A program reads each id from the VOC.  The record ids of the comparison symbols are the symbols themselves; only their FILE names in newvoc spell them %E%G (=>), %E%L (=<),
+        # %G%L (><), %G%E (>=), %L%E (<=) and %L%G (<>).  A COUNT sentence with the quoted file-name spelling found none of them, which would have passed the removed side for nothing.
+        prog("zzq3v", "   open 'VOC' to v else stop 'no voc'\n   ids = '" + "':@fm:'".join(gone + kept) + "'\n"
+             "   for i = 1 to dcount(ids, @fm)\n      read r from v, ids<i> then crt 'Y[':ids<i>:']' else crt 'N[':ids<i>:']'\n   next i\nend\n")
+        out = sess(box, "BASIC bp zzq3v", "RUN bp zzq3v", quiet=True)
+        found = re.findall(r"(?m)^Y\[(.*)\]\s*$", out)
+        absent = re.findall(r"(?m)^N\[(.*)\]\s*$", out)
+        row("CONTROL: the fourteen surviving spellings (THAN among them) are all in the VOC", sorted(found) == sorted(kept), "found %r" % found)
+        row("THE ROW: none of the thirteen removed records is", sorted(absent) == sorted(gone), "absent %r" % absent)
+
+        # sentences: each removed word beside the surviving one.  A sentence the query processor cannot read lists nothing.
+        names = lambda seg: re.findall(r"(?m)^(alpha|bravo|charlie|delta|echo)\b", seg)
+        pairs = [("GE 30", "=> 30", ["alpha", "bravo", "charlie"], "=>"),
+                 ("LE 30", "=< 30", ["charlie", "delta", "echo"], "=<"),
+                 ("NE 30", ">< 30", ["alpha", "bravo", "delta", "echo"], "><")]
+        sentences = []
+        for good, bad, _w, _n in pairs:
+            sentences += ["LIST zzq3 name WITH num %s ID.SUP" % good, "LIST zzq3 name WITH num %s ID.SUP" % bad]
+        sentences += ["LIST zzq3 name COL.SPACES 3 ID.SUP", "LIST zzq3 name COL.SPCS 3 ID.SUP", "LIST zzq3 name HDR.SUP ID.SUP", "LIST zzq3 name SUPP ID.SUP",
+                      "LIST zzq3 name COL.HDG \"Nm\" ID.SUP", "LIST zzq3 name DISPLAY.NAME \"Nm\" ID.SUP",
+                      "LIST zzq3 ID.ONLY", "LIST ID.ONLY zzq3", "LIST ONLY zzq3", "LIST zzq3 ONLY"]
+        out = sess(box, *sentences, quiet=True)
+        seg, pos = {}, 0
+        for s in sentences:
+            i = out.find(s, pos)
+            seg[s] = (i, None)
+            pos = i + len(s) if i >= 0 else pos
+        order = [(seg[s][0], s) for s in sentences]
+        text = {}
+        for k, (i, s) in enumerate(order):
+            j = order[k + 1][0] if k + 1 < len(order) else len(out)
+            text[s] = out[i:j] if i >= 0 else ""
+        for good, bad, want, nm in pairs:
+            g, bd = text["LIST zzq3 name WITH num %s ID.SUP" % good], text["LIST zzq3 name WITH num %s ID.SUP" % bad]
+            row("CONTROL: WITH num %s lists %s (in the file's order)" % (good, " ".join(want)), sorted(names(g)) == sorted(want), "got %r" % names(g))
+            row("THE ROW: WITH num %s lists nothing (%s is not a comparison any more)" % (bad, nm), names(bd) == [], "got %r" % names(bd))
+        for good, bad in (("COL.SPACES 3", "COL.SPCS 3"), ("HDR.SUP", "SUPP"), ("COL.HDG \"Nm\"", "DISPLAY.NAME \"Nm\"")):
+            g, bd = text["LIST zzq3 name %s ID.SUP" % good], text["LIST zzq3 name %s ID.SUP" % bad]
+            row("CONTROL: %s lists the five names" % good, len(names(g)) == 5, "got %r" % names(g))
+            row("THE ROW: %s lists nothing (it is not a keyword in a new account)" % bad, names(bd) == [], "got %r" % names(bd))
+        ctl = ids_in(text["LIST zzq3 ID.ONLY"])
+        row("CONTROL: LIST zzq3 ID.ONLY lists the five ids", sorted(ctl) == ["r1", "r2", "r3", "r4", "r5"], "got %r" % ctl)
+        for s in ("LIST ID.ONLY zzq3", "LIST ONLY zzq3", "LIST zzq3 ONLY"):
+            row("THE ROW: %s lists no record" % s, ids_in(text[s]) == [], "got %r" % ids_in(text[s]))
+
+        # THAN, measured: with the record there it is ignored; with the record taken out it is read as a value, so LESS THAN 25 means "less than THAN or less than 25".
+        # This is why D-010 was held back (the survey said the sentence would be an error).  Nothing puts the record back: the sandbox is disposable.
+        lt = "LIST zzq3 name WITH num LESS THAN 25 ID.SUP"
+        out = sess(box, lt, "DELETE VOC than", lt, quiet=True)
+        i1 = out.find(lt)
+        i2 = out.find("DELETE VOC than")
+        i3 = out.find(lt, i2)
+        with_than, without = names(out[i1:i2]), names(out[i3:])
+        row("CONTROL: with the than record LESS THAN 25 lists delta and echo", sorted(with_than) == ["delta", "echo"], "got %r" % with_than)
+        row("MEASURED: with the than record deleted LESS THAN 25 lists all five (than is a value)", sorted(without) == ["alpha", "bravo", "charlie", "delta", "echo"],
+            "got %r" % without)
+
+        # dictionary items whose field location is 9998 or 9999: an ordinary (empty) field now, not the item count and the record length
+        prog("zzq3d8", "D\n9998\n\nni9998\n10R\nS\n")
+        prog("zzq3d9", "D\n9999\n\nlen9999\n10R\nS\n")
+        out = sess(box, "COPY FROM BP TO DICT zzq3 zzq3d8,ni9998", "COPY FROM BP TO DICT zzq3 zzq3d9,len9999",
+                   "LIST zzq3 num ID.SUP", "LIST zzq3 ni9998 ID.SUP", "LIST zzq3 len9999 ID.SUP", quiet=True)
+        s1, s2, s3 = out.find("LIST zzq3 num ID.SUP"), out.find("LIST zzq3 ni9998 ID.SUP"), out.find("LIST zzq3 len9999 ID.SUP")
+        numbers = lambda seg: re.findall(r"(?m)^\s*(\d+)\s*$", seg)
+        row("CONTROL: the number column lists 50 40 30 20 10", sorted(numbers(out[s1:s2])) == ["10", "20", "30", "40", "50"], "got %r" % numbers(out[s1:s2]))
+        row("THE ROW: field 9998 is empty: no number is listed (it used to be the item count)", s2 > 0 and numbers(out[s2:s3]) == [], "got %r" % numbers(out[s2:s3]))
+        row("THE ROW: field 9999 is empty: no number is listed (it used to be the record length)", s3 > 0 and numbers(out[s3:]) == [], "got %r" % numbers(out[s3:]))
     finally:
         for n in made:
             for d in ("bp", "bp.out"):

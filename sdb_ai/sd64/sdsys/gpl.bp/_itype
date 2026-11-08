@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87 batch 4: field 9998 (the number of fields) and 9999 (the record length) are ordinary field numbers; only 0 (the id) is special.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -54,10 +55,6 @@ $include err.h
    begin case
       case fno = 0
          return value @id
-      case fno = 9998
-         return value dcount(@record, @fm)
-      case fno = 9999
-         return value len(@record)
       case 1
          return value @record<fno>
    end case

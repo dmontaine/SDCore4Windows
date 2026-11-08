@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 0ead4fa0 (27 Oct 26, S.87 batch 4): ID.ONLY / ONLY before the file name, and the field numbers 9998 (@NI) and 9999
+*               (record length) of a dictionary item are gone; the item types 5 and 6 and the labels that served them with them.  A removed VOC record (only,
+*               the mirrored => =< ><) no longer reaches here.  THAN (the filler word) was NOT removed: see the survey.
 * 7 Nov 26 Windows port - from Linux 398fb6a1 (27 Oct 26, S.87 batch 1): the options that imitated Pick are gone (the owner's emulation survey, A-001 to A-017):
 *               pick.wildcard, qualified.display, pick.breakpoint, pick.breakpoint.u, with.implies.or, assoc.unassoc.mv, pick.grand.total, pick.explode,
 *               pick.implied.eq, query.no.case and query.priority.and.  Every place that read one now does what it did with the option off; the qualified
@@ -125,16 +128,13 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
       equ FIELD.ITEM   to 2
       equ ITYPE.ITEM   to 3
       equ LITERAL.ITEM to 4
-      equ NI.ITEM      to 5          ;* Field 9998 => @NI
-      equ BYTES.ITEM   to 6          ;* Field 9999 => bytes in record
+      * 27 Oct 26 dm - S.87 batch 4: types 5 and 6 (field 9998 = @NI, field 9999 = bytes in the record) are gone; those are ordinary field numbers now
 
    dim item.detail(max.items)        ;* Item details
                                       * ID.ITEM      : Zero
                                       * FIELD.ITEM   : Field number
                                       * ITYPE.ITEM   : Object code
                                       * LITERAL.ITEM : Literal value
-                                      * NI.ITEM      : 9998 (unused)
-                                      * BYTES.ITEM   : 9999 (unused)
 
    dim item.expression(max.items)    ;* Expression for I-type item
    dim item.fmt(max.items)           ;* Item format code...
@@ -537,21 +537,12 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
 
    * Open the file
 
+   * 27 Oct 26 dm - S.87 batch 4: ID.ONLY / ONLY written before the file name is gone (write ID.ONLY after the file name).
    dict.flag = ''
    loop    ;* 0198
       call @parser(PARSER$MFILE, token.type, qproc.file.name, keyword)
    while keyword = KW$FILLER
    repeat
-
-   * Allow for ONLY keyword before the file name for Pick compatibility
-
-   if keyword = KW$ID.ONLY and (list.command or show.command) then
-      id.only = @true
-      loop
-         call @parser(PARSER$MFILE, token.type, qproc.file.name, keyword)
-      while keyword = KW$FILLER
-      repeat
-   end
 
    if keyword = KW$DICT then      ;* DICT keyword
       dict.flag = "DICT"
@@ -1901,9 +1892,7 @@ no.records:
                on item.type(pct.item) goto pct.id,
                                            pct.field,
                                            pct.itype,
-                                           pct.literal,
-                                           pct.ni,
-                                           pct.bytes
+                                           pct.literal
 
 pct.id:
 * 0079 Removed   if new.record then gosub read.record
@@ -1928,16 +1917,6 @@ pct.literal:
                s = item.detail(pct.item)  ;* Stupid but you never know!
                goto pct.sum
          
-pct.ni:
-               s = qproc.ni
-               goto pct.sum
-
-pct.bytes:
-               if new.record then gosub read.record
-               if not(record.found) then goto skip.record
-               s = len(qproc.view)
-               goto pct.sum
-
 pct.sum:
                if num(s) then list.item(pct.list.item, ITEM.TOTAL) += s
             next i
@@ -1953,9 +1932,7 @@ pct.sum:
                on item.type(sort.item) goto by.id,
                                             by.field,
                                             by.itype, 
-                                            by.literal,
-                                            by.ni,
-                                            by.bytes
+                                            by.literal
 
 by.id:
 * 0079 Removed   if new.record then gosub read.record
@@ -1980,14 +1957,6 @@ by.literal:
                by.item(i) = item.detail(sort.item)  ;* Stupid!
                continue
 
-by.ni:
-               by.item(i) = qproc.ni
-               continue
-
-by.bytes:
-               if new.record then gosub read.record
-               if not(record.found) then goto skip.record
-               by.item(i) = len(qproc.view)
             next i
 
             * If the QUERY.SORT.NO.CASE option is set, translate all sort keys
@@ -5904,10 +5873,6 @@ add.field:
             begin case
                case i = 0
                   item.type(item.index) = ID.ITEM   ;* Field location 0 is @id
-               case i = 9998
-                  item.type(item.index) = NI.ITEM
-               case i = 9999
-                  item.type(item.index) = BYTES.ITEM
                case 1
                   item.type(item.index) = FIELD.ITEM
             end case
@@ -5949,7 +5914,7 @@ add.field:
                display sysmsg(7269, token) ;* Dictionary entry for xx has non-numeric field location
                goto exit.qproc
             end
-            if coll.file and dict.rec<dict.loc> + 0 > 0 and dict.rec<dict.loc> + 0 < 9998 then
+            if coll.file and dict.rec<dict.loc> + 0 > 0 then
                display sysmsg(12133, token) ;* xx refers to a field number, which a data collection file does not have
                goto exit.qproc
             end
@@ -5976,10 +5941,6 @@ add.field:
             begin case
                case i = 0
                   item.type(item.index) = ID.ITEM   ;* Field location 0 is @id
-               case i = 9998
-                  item.type(item.index) = NI.ITEM
-               case i = 9999
-                  item.type(item.index) = BYTES.ITEM
                case 1
                   item.type(item.index) = FIELD.ITEM
             end case
@@ -6241,9 +6202,7 @@ get.item:
    on item.type(item.index) goto get.id,
                                  get.field,
                                  get.itype,
-                                 get.literal,
-                                 get.ni,
-                                 get.bytes
+                                 get.literal
 
 get.id:
 * 0079 Removed   if new.record then gosub read.record
@@ -6266,15 +6225,6 @@ get.literal:
    item = item.detail(item.index)
    return
 
-get.ni:
-   item = qproc.ni
-   return
-
-get.bytes:
-   if new.record then gosub read.record
-   item = len(qproc.view)
-   return
-
 * =============================================================================
 * SHOW.RECORD  -  Show a record for the LIST command
 
@@ -6292,9 +6242,7 @@ show.record:
       on item.type(item.to.list) goto list.id,
                                       list.field,
                                       list.itype,
-                                      list.literal,
-                                      list.ni,
-                                      list.bytes
+                                      list.literal
 
 list.id:
 * 0079 Removed   if new.record then gosub read.record
@@ -6335,16 +6283,6 @@ list.literal:
       record.found = @true
       continue
 
-list.ni:
-      data.rec<list.index> = qproc.ni
-      record.found = @true
-      continue
-
-list.bytes:
-      if new.record then gosub read.record
-      if not(record.found) then goto record.to.list.not.found
-      data.rec<list.index> = len(qproc.view)
-      record.found = @true
    next list.index
 
 
@@ -7950,8 +7888,6 @@ diagnostic:
          case item.type(i) = FIELD.ITEM   ; crt item.detail(i)[1,20]
          case item.type(i) = ITYPE.ITEM   ; crt
          case item.type(i) = LITERAL.ITEM ; crt item.detail(i)[1,20]
-         case item.type(i) = NI.ITEM      ; crt 9998
-         case item.type(i) = BYTES.ITEM   ; crt 9999
       end case
    next i
    crt
@@ -8292,12 +8228,6 @@ show.page:
 
             case type = LITERAL.ITEM
                data = item.detail(item.to.list)
-
-            case type = NI.ITEM
-               data = qproc.ni
-
-            case type = BYTES.ITEM
-               data = len(rec)
          end case
 
          conv = item.conv(item.to.list)
@@ -8605,10 +8535,6 @@ debug.selection.item:
          crt 'I-type ' :
       case item.type(j) = LITERAL.ITEM
          crt 'Literal "' : item.detail(j) : '"' :
-      case item.type(j) = NI.ITEM
-         crt 'F9998 ' :
-      case item.type(j) = BYTES.ITEM
-         crt 'F9999 ' :
    end case
    return
 
