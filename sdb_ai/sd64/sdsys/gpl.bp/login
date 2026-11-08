@@ -206,7 +206,7 @@ $flags trusted
 
 subroutine login(ok, mode)
 
-$catalogue $LOGIN
+$catalog $LOGIN
 
 $include revstamp.h
 

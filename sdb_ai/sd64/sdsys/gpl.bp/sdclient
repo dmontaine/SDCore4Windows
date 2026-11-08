@@ -162,7 +162,7 @@
 *   as APISRVR and the credential subroutines already did.
 $internal
 class sdclient
-$catalogue !sdclient
+$catalog !sdclient
 
 $include keys.h
 $include err.h

@@ -29,7 +29,7 @@
 
 $internal
 program autologout
-$catalogue $AUTOLGT
+$catalog $AUTOLGT
 
 $include syscom.h
 $include parser.h

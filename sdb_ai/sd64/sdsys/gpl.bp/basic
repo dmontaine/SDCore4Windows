@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 43527e34 (S.87 batch 13): the command it builds says CATALOG (the verb CATALOGUE is gone).
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION KEEP.OLD.OBJECT is gone; a failed compilation leaves no object code, as it did with the option off.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the object file, once open, is asked of !edit_guard, so a source in the shared account cannot
 *               be compiled into a shared .out directory by a session without shared.write.
@@ -33,7 +34,7 @@
 * 19 Aug 26 Windows port - the default source file is bp, 5.12 (b).
 * 17 Oct 26 dm  S.64: compiling needs bp.edit (SDSYS passes); message 12413.
 * 10 Oct 26 dm  1.2-0 bundle A-1: the NO.QUERY option (openQM ref 27), passed to
-*               CATALOGUE; BCOMP also hands it back from $CATALOGUE and
+*               CATALOG; BCOMP also hands it back from $CATALOG and
 *               $BASIC.OPTIONS in the catalogue mode (ref 191).
 * 13 Sep 26 dm  The object file is named from the VOC id that answered the open
 *               and its suffix follows that id's case, so BASIC bp X makes
@@ -394,8 +395,8 @@ compile:
       write object.code to out.f, record.name
 
       if catalogue.name # '' then
-         cat.cmd = 'CATALOGUE ' : source.file.name : ' ' : catalogue.name : ' ' : record.name : ' ' : catalogue.mode
-         * NO.QUERY on the BASIC command, or on the $CATALOGUE directive or
+         cat.cmd = 'CATALOG ' : source.file.name : ' ' : catalogue.name : ' ' : record.name : ' ' : catalogue.mode
+         * NO.QUERY on the BASIC command, or on the $CATALOG directive or
          * the CATALOGUE entry of $BASIC.OPTIONS (it is then in catalogue.mode)
          if no.query and not(index(upcase(catalogue.mode), 'NO.QUERY', 1)) then cat.cmd := ' NO.QUERY'
          execute cat.cmd

@@ -93,7 +93,7 @@
 
 $internal
 subroutine format(in.rec, out.rec, default.file, indent.step, case.option, errors)
-$catalogue !format
+$catalog !format
 equ MAX.INCLUDE to 20
 
    name.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$_%'

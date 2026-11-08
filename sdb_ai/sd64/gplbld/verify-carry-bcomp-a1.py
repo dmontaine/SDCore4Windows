@@ -220,7 +220,7 @@ def main():
             sorted(w.lower() for w in warns) == ["crt", "index"], "warned for: %r" % warns)
         row("and they are warnings, not errors (compiled with no errors)", re.search(OK, out) is not None, "no success wording")
 
-        # --- leg 7: NO.QUERY on $CATALOGUE, in $BASIC.OPTIONS and on the BASIC command ----------------
+        # --- leg 7: NO.QUERY on $CATALOG, in $BASIC.OPTIONS and on the BASIC command ----------------
         say("\n--- leg 7: NO.QUERY (refs 27, 191) --------------------------------------------")
         cat = os.path.join(sysd, "cat")
 
@@ -233,32 +233,32 @@ def main():
             prog(name, ([header] if header else []) + ["subroutine " + name, "   return", "end"])
 
         # control: with no NO.QUERY the compile asks, and answering N keeps the private entry
-        private_fixture("zza1q0", "$catalogue local")
+        private_fixture("zza1q0", "$catalog local")
         out = sess(box, "BASIC bp zza1q0", "N")
         row("CONTROL: without NO.QUERY the compiler asks 'Remove (y/<n>)?'",
             re.search(r"(?i)also in private catalogue", out) is not None, "no prompt")
         row("CONTROL: and answering N left the private entry in place",
             os.path.exists(os.path.join(cat, "zza1q0")), "entry gone")
 
-        # $CATALOGUE LOCAL NO.QUERY
-        private_fixture("zza1q1", "$catalogue local no.query")
+        # $CATALOG LOCAL NO.QUERY
+        private_fixture("zza1q1", "$catalog local no.query")
         out = sess(box, "BASIC bp zza1q1")
-        row("$CATALOGUE LOCAL NO.QUERY: compiled with no errors and no prompt",
+        row("$CATALOG LOCAL NO.QUERY: compiled with no errors and no prompt",
             re.search(OK, out) is not None and re.search(r"(?i)also in private catalogue", out) is None, "prompt or error")
-        row("$CATALOGUE LOCAL NO.QUERY: the private entry was removed without asking",
+        row("$CATALOG LOCAL NO.QUERY: the private entry was removed without asking",
             not os.path.exists(os.path.join(cat, "zza1q1")), "cat/zza1q1 still there")
-        row("$CATALOGUE LOCAL NO.QUERY: and the program is in the local catalogue",
+        row("$CATALOG LOCAL NO.QUERY: and the program is in the local catalogue",
             re.search(r"(?i)zza1q1 added to local catalogue", out) is not None, "no 'added to local catalogue'")
 
-        # $CATALOGUE NO.QUERY LOCAL (the other order, the first word a keyword)
-        private_fixture("zza1q2", "$catalogue no.query local")
+        # $CATALOG NO.QUERY LOCAL (the other order, the first word a keyword)
+        private_fixture("zza1q2", "$catalog no.query local")
         out = sess(box, "BASIC bp zza1q2")
-        row("$CATALOGUE NO.QUERY LOCAL: no prompt, private entry removed",
+        row("$CATALOG NO.QUERY LOCAL: no prompt, private entry removed",
             re.search(r"(?i)also in private catalogue", out) is None and not os.path.exists(os.path.join(cat, "zza1q2")),
             "prompt, or entry still there")
 
         # the BASIC command's NO.QUERY
-        private_fixture("zza1q3", "$catalogue local")
+        private_fixture("zza1q3", "$catalog local")
         out = sess(box, "BASIC bp zza1q3 NO.QUERY")
         row("BASIC ... NO.QUERY: no prompt, private entry removed",
             re.search(OK, out) is not None and re.search(r"(?i)also in private catalogue", out) is None
@@ -266,7 +266,7 @@ def main():
 
         # $BASIC.OPTIONS: CATALOGUE LOCAL NO.QUERY
         private_fixture("zza1q4", "")
-        write(opt, ["X", "CATALOGUE LOCAL NO.QUERY"])
+        write(opt, ["X", "CATALOG LOCAL NO.QUERY"])
         try:
             out = sess(box, "BASIC bp zza1q4")
         finally:

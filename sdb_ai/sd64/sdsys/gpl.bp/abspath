@@ -38,7 +38,7 @@ $no.symbols
 $no.xref
 
 function abspath((dir), rel)
-$catalogue !abspath
+$catalog !abspath
 
    * Modified by Composer AI - 2026/06/10.
    * Null relative path returns the directory root unchanged.

@@ -29,7 +29,7 @@
 
 $internal
 program listfl
-$catalogue $listfl
+$catalog $listfl
 
 $include int$keys.h
 $include err.h

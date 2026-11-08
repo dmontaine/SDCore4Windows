@@ -68,7 +68,7 @@
 
 $internal
 program pterm
-$catalogue $PTERM
+$catalog $PTERM
 
 $include parser.h
 $include int$keys.h

@@ -33,7 +33,7 @@
 
 $internal
 program alias
-$catalogue $ALIAS
+$catalog $ALIAS
 
 $include parser.h
 $include syscom.h

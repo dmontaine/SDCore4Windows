@@ -34,7 +34,7 @@
 
 $internal
 subroutine setacc((acc), err, msg)
-$catalogue $setacc
+$catalog $setacc
 
 $include syscom.h
 $include err.h

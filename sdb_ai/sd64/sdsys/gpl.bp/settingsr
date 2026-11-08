@@ -127,7 +127,7 @@ $include header.h
       loop
          readnext sid from 11 else exit
          read srec from src.f, sid else continue
-* $catalog and $catalogue both name the entry (pdebug says "$catalogue").
+* $catalog names the entry.
          findstr '$CATALOG' in upcase(srec) setting fpos else continue
          for l = 1 to dcount(srec, @fm)
             line = trim(srec<l>)

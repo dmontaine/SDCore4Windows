@@ -994,7 +994,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
       while len(voc.rec)
          s = upcase(field(voc.rec<1>, ' ', 1))
          begin case
-            case s = "CATALOGUE" or s = "CATALOG"
+            case s = "CATALOG"
                catalogue.name = '~'
                * LOCAL or GLOBAL, and NO.QUERY (ref 191), in either order
                for mk = 2 to 3
@@ -1061,7 +1061,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                   end
                next mk
 
-            case s = "NO.CATALOGUE" or s = "NO.CATALOG"
+            case s = "NO.CATALOG"
                catalogue.name = ''
 
             case s = "NOCASE.STRINGS"
@@ -3059,7 +3059,7 @@ proc.directive:
       begin case
       ************************ CATALOGUE ************************
 
-      case (u.token.string = "CATALOGUE" or u.token.string = "CATALOG") and not(is.ctype)
+      case u.token.string = "CATALOG" and not(is.ctype)
          begin case
 !            case catalogue.name # ''
 !               err.msg = sysmsg(3413, u.token.string) ;* Multiple use of $%1

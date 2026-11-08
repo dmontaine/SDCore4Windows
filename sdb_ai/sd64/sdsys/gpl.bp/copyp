@@ -61,7 +61,7 @@
 
 $internal
 program copyp
-$catalogue $copyp
+$catalog $copyp
 
 $include keys.h
 $include err.h

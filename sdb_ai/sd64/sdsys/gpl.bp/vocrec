@@ -30,7 +30,7 @@
 
 $internal
 subroutine vocrec(rec, (id))
-$catalogue !VOCREC
+$catalog !VOCREC
 
 $include err.h
 

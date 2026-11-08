@@ -37,7 +37,7 @@ subroutine dcomp(dict.f,      ;* Dictionary file variable
                  assoc,       ;* Out: Association of first item in I-type
                  constant,    ;* Out: I-type is constant?
                  depth)       ;* Recursion depth
-$catalogue $dcomp
+$catalog $dcomp
 
 $include dictdict.h
 $include bcomp.h

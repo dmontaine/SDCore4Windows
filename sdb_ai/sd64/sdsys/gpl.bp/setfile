@@ -38,7 +38,7 @@
 
 $internal
 program setfile
-$catalogue $setfile
+$catalog $setfile
 
 $include parser.h
 $include syscom err.h

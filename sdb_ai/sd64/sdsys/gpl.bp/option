@@ -43,7 +43,7 @@
 
 $internal
 program option
-$catalogue $option
+$catalog $option
 
 $include parser.h
 $include err.h

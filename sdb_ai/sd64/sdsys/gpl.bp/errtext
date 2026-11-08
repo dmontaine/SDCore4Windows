@@ -23,6 +23,7 @@
 * 13 Aug 26 Windows port - commented out the ERRGEN $execute, as CPROC and
 *               APISRVR already have for REVSTAMP, so compiling this does not
 *               need gplsrc in the data tree
+* 8 Nov 26 Windows port - from Linux 43527e34 (S.87 batch 13): $catalog, not $catalogue (the British form of the directive is gone).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -32,7 +33,7 @@
 * START-CODE
 
 subroutine errtext(expansion, errno)
-$catalogue !errtext
+$catalog !errtext
 * 13 Aug 26 Windows port - ERRGEN is a build tool.  It reads ./gplsrc/err.h and
 *   regenerates both gpl.bp/errtext.h and SYSCOM/ERR.H, so running it here made
 *   every compile of this program need C source in the data tree.  Worse, it

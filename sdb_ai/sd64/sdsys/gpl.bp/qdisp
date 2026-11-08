@@ -82,7 +82,7 @@
 
 $internal
 subroutine qdisp(err, mode, (text), class) var.args
-$catalogue $qdisp
+$catalog $qdisp
 
 $include keyin.h
 $include keys.h

@@ -29,7 +29,7 @@
 * START-CODE
 
 function pathtkn((path))
-$catalogue !pathtkn
+$catalog !pathtkn
 
    u.path = upcase(path)
    begin case

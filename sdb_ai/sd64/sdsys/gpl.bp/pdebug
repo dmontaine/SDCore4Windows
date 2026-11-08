@@ -30,7 +30,7 @@
 
 $internal
 program pdebug
-$catalogue $pdebug
+$catalog $pdebug
 
 $include syscom.h
 $include debug.h
