@@ -3,4 +3,4 @@ LIST VOC @ID COL.HDG "Phrase name" FMT "16L"_
 DESC FMT "28T"_
 F2 COL.HDG "Expansion" FMT "30T"_
 WITH TYPE = "PH" BY @ID ID.SUP_
-HEADER "Phrases defined in the VOC'G'Page 'SL'"
+HEADING "Phrases defined in the VOC'G'Page 'SL'"

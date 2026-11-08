@@ -758,7 +758,7 @@ def part2(box, ref):
         seen == order and seen != numeric, "saw %s, ciphertext order %s, numeric order %s" % (seen, order, numeric))
     # with
     o = plain("zzaa", ["RUN bp zzxeset", 'LIST zzenc WITH SALW = "41250" NAME', 'LIST zzenc WITH RAW = "%s" NAME' % t1, 'LIST zzenc WITH SALW = "" NAME',
-                       'COUNT zzenc WITH SALW # ""'])
+                       'COUNT zzenc WITH SALW NE ""'])
     blocks, cur_ids = [], []
     for ln in o:
         m = re.match(r"^(r\d)\s", ln)

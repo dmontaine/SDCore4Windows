@@ -5,4 +5,4 @@ DESC FMT "31L"_
 DATA.NAME FMT "23L"_
 DICT.NAME FMT "23L"_
 WITH TYPE = "F"_
-BY @ID ID.SUP HEADER "Files referenced by the VOC'G'Page 'SL'"
+BY @ID ID.SUP HEADING "Files referenced by the VOC'G'Page 'SL'"

@@ -124,7 +124,6 @@ def main():
         for n in (1, 2, 3, 5):
             prog("zzd2f%d" % n, "D\n%d\n\nF%d\n8R\nS\n" % (n, n))
         ditem("t48", "F1 / F2")
-        ditem("t547", "F4 * 2")
         ditem("tsub", "F1-F2")
         ditem("tctl", "IF F1 > 5 THEN 'big' ELSE 'small'")
         ditem("t182", "TRANS(zzd2b, F3, QA, 'X')")
@@ -145,7 +144,7 @@ def main():
                 "COPY FROM BP TO DICT zzd2b zzd2qa,qa", "COPY FROM BP TO DICT zzd2b zzd2qi,qi"]
         for n in (1, 2, 3):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2f%d,f%d" % (n, n))
-        for t in ("t48", "t547", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
+        for t in ("t48", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2%s,%s" % (t, t))
         out = sess(box, *cmds, quiet=True)
         copied = len(re.findall(r"(?m)^1 record\(s\) copied\.", out))
@@ -160,8 +159,7 @@ def main():
         say("\n--- leg 1: IF THEN ELSE (ref 36: IF without ELSE or THEN was retired 27 Oct 26, S.87 batch 10) ------------")
         check("CONTROL: IF THEN ELSE as before", "tctl", ("big", "small"))
 
-        say("\n--- leg 2: F4 names field 4 (ref 547) ---------------------------------------------")
-        check("THE ROW: F4 is not in the dictionary", "t547", ("14", "10"))
+        say("\n--- leg 2: (F4 naming field 4 with no D item, ref 547, was retired 27 Oct 26) ---------------------------")
 
         say("\n--- leg 3: (a value and a format string with no operator, ref 564, was retired 27 Oct 26) ---------------")
 

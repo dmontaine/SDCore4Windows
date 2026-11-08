@@ -788,7 +788,7 @@ $steps = @(
     # It sits HERE, beside verify-promptenter, for the same reason that one sits
     # beside verify-basicfuncs: it drives SD in the caller's own account,
     # unelevated, with no run token, no prefix and no Windows account, and it
-    # creates nothing - two LIST ONLY VOC sessions at TERM 80,12.  Nothing above
+    # creates nothing - two LIST VOC ONLY sessions at TERM 80,12.  Nothing above
     # or below it is disturbed.  About 10 seconds.
     #
     # ***ITS CONTROL IS NO.PAGE, AND THE PROMPT BEING REACHED IS DECISIVE.*** A

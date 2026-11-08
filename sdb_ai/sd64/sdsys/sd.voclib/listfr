@@ -6,4 +6,4 @@ DATA.NAME FMT "23L"_
 DICT.NAME FMT "23L"_
 WITH TYPE = "F" AND IS.REMOTE_
 BY @ID ID.SUP_
-HEADER "Remote files referenced by the VOC'G'Page 'SL'"
+HEADING "Remote files referenced by the VOC'G'Page 'SL'"

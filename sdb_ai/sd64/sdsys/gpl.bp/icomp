@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): a name that is F and a number is no longer the field of that number when no dictionary item
+*               has it (openQM ref 547); a field is named by a D-type item.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
 *               and @FILE.NAME stay).
 * 8 Nov 26 Windows port - from Linux 5441d157 (S.87 batch 10): three loose forms of a dictionary expression are gone: a hyphenated item name (CUST-NO,
@@ -1287,25 +1289,8 @@ if.then.else.expr.abort:
                            * L-type record in this dictionary points to.
                            if index(token.string, '%', 1) then goto link.reference
 
-                           * 10 Oct 26 dm, openQM ref 547: a name that is F and
-                           * a number, and that no dictionary item has, is the
-                           * field of that number.  17 Oct 26: the tests are
-                           * nested, because BASIC does not stop at the first
-                           * false one, and any other undefined name (F is only
-                           * the start of this one) stopped the compile with
-                           * "Non-numeric where numeric required" instead of
-                           * the message below.
-                           if len(u.token.string) > 1 and u.token.string[1,1] = 'F' then
-                              fn = u.token.string[2,99]
-                              if num(fn) then
-                                 if not(index(fn, '.', 1)) and fn + 0 > 0 then
-                                    field.rec = ''
-                                    field.rec<1> = 'D'
-                                    field.rec<dict.loc> = fn + 0
-                                    goto have.field.rec
-                                 end
-                              end
-                           end
+                           * (27 Oct 26: the rule that a name which is F and a number, and which no dictionary
+                           * item has, means that field was removed; a field is named by a D-type item.)
                            err.msg = sysmsg(2982, token.string) ;* Field 'xx' is not defined
                            goto error
                         end

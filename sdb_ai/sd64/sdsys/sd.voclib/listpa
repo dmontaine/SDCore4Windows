@@ -3,4 +3,4 @@ LIST VOC @ID COL.HDG "Paragraph name" FMT "25L"_
 DESC FMT "45T"_
 F2 COL.HDG "First command" FMT "47L"_
 WITH TYPE = "PA" BY @ID ID.SUP_
-HEADER "Paragraphs defined in the VOC'G'Page 'SL'"
+HEADING "Paragraphs defined in the VOC'G'Page 'SL'"

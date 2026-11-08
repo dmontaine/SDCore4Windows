@@ -13,7 +13,7 @@
 # 14 Oct 26 dm  Written for sheet 579 / 580.  DRAFT: not run (the design session could not start a sandbox).
 # END-HISTORY
 #
-# THE INSTRUMENT IS WHAT LIST ... VERT PRINTED for one record.  The colon is found by its column, so the
+# THE INSTRUMENT IS WHAT LIST ... VERTICALLY PRINTED for one record.  The colon is found by its column, so the
 # fill character of the name format does not matter.  Every row has a control: the same command with no
 # $VLIST record, or a $VLIST record that must be ignored.
 #
@@ -133,7 +133,7 @@ def main():
         row("setup: 4 dictionary items copied", len(re.findall(r"(?m)^1 record\(s\) copied\.", out)) == 4)
 
         say("\n--- leg 1: default format, and the separator (580) ----------------------------")
-        cmd = "LIST zzvl VERT name mv txt ID.SUP"
+        cmd = "LIST zzvl VERTICALLY name mv txt ID.SUP"
         lines = after(sess(box, cmd), cmd)
         row("CONTROL: the name column is 12 wide (colon at column 12)", colon_col(lines, "name") == 12, "got %r" % colon_col(lines, "name"))
         row("first value of mv is on the mv line", any(re.match(r"mv\S*\s* : one\s*$", l) for l in lines), "no mv : one line")
@@ -153,14 +153,14 @@ def main():
             not any(re.match(r"\s+: ", l) and "name" in l for l in lines))
 
         say("\n--- leg 3: a right justified item keeps its own format ----------------------------")
-        cmd3 = "LIST zzvl VERT longnamefield ID.SUP"
+        cmd3 = "LIST zzvl VERTICALLY longnamefield ID.SUP"
         lines = after(sess(box, cmd3), cmd3)
         row("the 5R item is still right justified under data format 20L (value after 4 pad spaces)",
             any(re.search(r":\s{5}7\s*$", l) for l in lines), "no ':     7' line")
 
         say("\n--- leg 4: FIT -----------------------------------------------------------------------")
         sess(box, "COPY FROM BP TO DICT zzvl zzvlF,$VLIST OVERWRITING", quiet=True)   # the 6.L record of leg 2 is still there
-        cmd4 = "LIST zzvl VERT name longnamefield ID.SUP"
+        cmd4 = "LIST zzvl VERTICALLY name longnamefield ID.SUP"
         lines = after(sess(box, cmd4), cmd4)
         row("THE ROW: the colon is at column 13, the length of longnamefield", colon_col(lines, "name") == 13,
             "got %r" % colon_col(lines, "name"))

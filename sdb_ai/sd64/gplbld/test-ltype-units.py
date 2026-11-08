@@ -78,11 +78,11 @@ def checks(src):
     i = src["icomp"]
     lookup = i.find("read field.rec from @voc, token.string else")
     link = i.find("if index(token.string, '%', 1) then goto link.reference")
-    ftest = i.find("if len(u.token.string) > 1 and u.token.string[1,1] = 'F' then")
-    res.append(("2a. link.reference is reached after the VOC read has failed and before the F-number test",
-                0 <= lookup < link < ftest, "positions: voc read %d, link %d, F test %d" % (lookup, link, ftest)))
-    res.append(("2b. the F-number test is nested: no condition tests a number and adds to it in the same AND",
-                ftest >= 0 and not re.search(r"u\.token\.string\[1,1\] = 'F'[^\n]*~", i), "the F test is a single condition again"))
+    ftest = i.find("err.msg = sysmsg(2982, token.string)")        # 27 Oct 26: the F-number rule (ref 547) was removed; the error follows the link test
+    res.append(("2a. link.reference is reached after the VOC read has failed and before the 'Field xx is not defined' error",
+                0 <= lookup < link < ftest, "positions: voc read %d, link %d, error %d" % (lookup, link, ftest)))
+    res.append(("2b. there is no F-number rule any more: an undefined name that is F and a number is an error like any other",
+                ftest >= 0 and "u.token.string[1,1] = 'F'" not in i, "the F rule is back"))
 
     lrb = between(i, r"(?m)^link\.reference:", r"(?m)^\* ={20,}\s*\n\* ERROR")
     nested = i.find("splice.nested.source:")
@@ -109,8 +109,8 @@ def selftest(src):
         ("qproc leaving status 5 unhandled", "qproc", q.replace("                  display sysmsg(7272, link.detail) ;* Link item xx not found\n", "                  null\n", 1), "1."),
         ("icomp reading the link before the VOC fallback", "icomp",
          i.replace("if index(token.string, '%', 1) then goto link.reference", "").replace("read field.rec from @voc, token.string else", "if index(token.string, '%', 1) then goto link.reference\n                     read field.rec from @voc, token.string else", 1), "2a."),
-        ("the F-number test written as one AND again", "icomp",
-         i.replace("u.token.string[1,1] = 'F' then", "u.token.string[1,1] = 'F' ~\n and num(u.token.string[2,99]) then", 1), "2b."),
+        ("the F-number rule back", "icomp",
+         i.replace("err.msg = sysmsg(2982, token.string)", "if u.token.string[1,1] = 'F' then null\n                           err.msg = sysmsg(2982, token.string)", 1), "2b."),
         ("link.reference not splicing", "icomp", i.replace("goto splice.nested.source\n\n* ====", "goto error\n\n* ====", 1), "3."),
         ("in.trans reading the file name before the pending dictionary", "icomp",
          i.replace("ins link.dict.pending before trans.stack<1>\n            link.dict.pending = ''\n            gosub expr", "gosub expr\n            ins link.dict.pending before trans.stack<1>\n            link.dict.pending = ''", 1), "4."),

@@ -18,6 +18,9 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): BREAK.ON "LU" - L is no longer ignored when U is also given (the two controls are
+*               independent); the query words avg, enum, vert, percent, pct, %, header, footer, first, # and & are gone (their VOC records; the long forms
+*               were always the ones this program reads).
 * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the dead block under #ifdef NEVER (column heading control codes) is deleted, as # no longer
 *               starts a directive.
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV and ASSOC.ALL are gone; EQ / NE compare as
@@ -2263,7 +2266,7 @@ skip.record:
                for breakpoint.index = no.of.breakpoints to 1 step -1  ;* 0212
                   bp.ctrl = breakpoint.control(breakpoint.index)
                   list.index = breakpoint.list.index(breakpoint.index)
-                  if (index(bp.ctrl, 'D', 1) = 0 or detail.lines > breakpoint.detail.count(breakpoint.index) + 1) and (index(bp.ctrl, 'L', 1) = 0 or index(bp.ctrl, 'U', 1)) then ;* 10 Oct 26 dm  L is ignored with U (openQM ref 40)
+                  if (index(bp.ctrl, 'D', 1) = 0 or detail.lines > breakpoint.detail.count(breakpoint.index) + 1) and index(bp.ctrl, 'L', 1) = 0 then ;* 27 Oct 26 dm  L and U are independent again (S.87; the openQM ref 40 rule is gone)
 !!                     last.breakpoint = (breakpoint.index = breakpoint.scan.index)
                      last.breakpoint = (breakpoint.index = 1)
                      gosub show.breakpoint
@@ -6287,7 +6290,7 @@ list.literal:
                for breakpoint.index = no.of.breakpoints to breakpoint.scan.index step -1
                   list.index = breakpoint.list.index(breakpoint.index)
                   bp.ctrl = breakpoint.control(breakpoint.index)
-                  if (index(bp.ctrl, 'D', 1) = 0 or detail.lines > breakpoint.detail.count(breakpoint.index) + 1) and (index(bp.ctrl, 'L', 1) = 0 or index(bp.ctrl, 'U', 1)) then ;* 10 Oct 26 dm  L is ignored with U (openQM ref 40)
+                  if (index(bp.ctrl, 'D', 1) = 0 or detail.lines > breakpoint.detail.count(breakpoint.index) + 1) and index(bp.ctrl, 'L', 1) = 0 then ;* 27 Oct 26 dm  L and U are independent again (S.87; the openQM ref 40 rule is gone)
                      last.breakpoint = (breakpoint.index = breakpoint.scan.index)
                      gosub show.breakpoint
                   end else
@@ -7705,7 +7708,7 @@ break.continue.no.conversion:
                case index(bp.ctrl, 'D', 1)
                   if detail.lines <= breakpoint.detail.count(breakpoint.index) + 1 then goto omit.breakpoint.line
 
-               case index(bp.ctrl, 'L', 1) and not(index(bp.ctrl, 'U', 1))   ;* 10 Oct 26 dm  ref 40
+               case index(bp.ctrl, 'L', 1)   ;* 27 Oct 26 dm  L and U are independent (S.87)
                   goto omit.breakpoint.line
 
                case index(bp.ctrl, 'V', 1)

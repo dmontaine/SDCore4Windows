@@ -23,7 +23,7 @@
 #   3  SORTED.SAMPLE (438), with SAMPLE as its control
 #   4  COL.HDR.SPACE (467)
 #   5  FROM NONE (378)
-#   6  BREAK.ON 'N' resets the page number (16), and 'L' with 'U' (40)
+#   6  BREAK.ON 'N' resets the page number (16) ('L' with 'U', 40, was removed on 27 Oct 26: the two are independent)
 #   7  NO.PAGE on SELECT (379)
 #   8  SEARCH FOR (190), SEARCH ALL (221)
 #   9  REPORTING (416)
