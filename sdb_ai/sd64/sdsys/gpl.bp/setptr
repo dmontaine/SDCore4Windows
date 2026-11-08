@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): QUOTE() in place of DQUOTE() (the second name is gone).
 * 14 Sep 26 Windows port - SYSCOM's $PCLDATA record is $pcldata (RELEASE_1.1 5).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
@@ -921,7 +922,7 @@ report.unit:
       args = ''
       if mode = 1 or mode = 6 then
          if printer.name # '' then
-            if index(printer.name, ' ', 1) then printer.name = dquote(printer.name)
+            if index(printer.name, ' ', 1) then printer.name = quote(printer.name)
             args<-1> = 'AT ' : printer.name
          end
       end
@@ -929,12 +930,12 @@ report.unit:
       if mode = 3 or mode = 6 then
          if downcase(file.name[1,6]) = '$hold ' then
             file.name = file.name[7,9999]
-            if index(file.name, ' ', 1) then file.name = dquote(file.name)
+            if index(file.name, ' ', 1) then file.name = quote(file.name)
             if bitand(flags, PU$FLG.NEXT) then args = 'AS NEXT ' : file.name
             else args<-1> = 'AS ' : file.name
          end else
             if file.name # '' then
-               if index(file.name, ' ', 1) then file.name = dquote(file.name)
+               if index(file.name, ' ', 1) then file.name = quote(file.name)
                args<-1> = 'AS PATHNAME ' : file.name
             end
          end

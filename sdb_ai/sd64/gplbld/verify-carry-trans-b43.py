@@ -35,7 +35,7 @@ PROG = ("   execute 'DELETE.FILE zzt43none' capturing j\n"
         "   crt 'M1'\n   x = trans('zzt43none', 'k1', 1, 'V') ; crt 'V[':x:']'\n"
         "   crt 'M2'\n   x = trans('zzt43none', 'k1', 1, 'C') ; crt 'C[':x:']'\n"
         "   crt 'M3'\n   x = trans('zzt43none', 'k1', 1, 'N') ; crt 'N[':x:']'\n"
-        "   crt 'M4'\n   x = xlate('zzt43none', 'k2', 1, 'C') ; crt 'XL[':x:']'\n"
+        "   crt 'M4'\n   x = trans('zzt43none', 'k2', 1, 'C') ; crt 'XL[':x:']'\n"
         "   crt 'M5'\n   x = rtrans('zzt43none', 'k3', 1, 'C') ; crt 'RT[':x:']'\n"
         "   crt 'M6'\n   x = trans('DICT zzt43none', 'k4', 1, 'C') ; crt 'DC[':x:']'\n"
         "   crt 'M7'\n   x = trans('zzt43none', 'k1', 1, 'X') ; crt 'XB[':x:']'\n"
@@ -128,7 +128,7 @@ def main():
         row("43: ... and says nothing", msg("M2", "M3") == "", "got %r" % msg("M2", "M3"))
         row("43: a code that is none of X, V, C is taken as X (null, silent)", tagged(out, "N") == "" and msg("M3", "M4") == "",
             "got %r / %r" % (tagged(out, "N"), msg("M3", "M4")))
-        row("43: XLATE with C gives the id", tagged(out, "XL") == "k2", "got %r" % tagged(out, "XL"))
+        row("43: a second TRANS with C gives the id (XLATE, a second name, was removed 27 Oct 26)", tagged(out, "XL") == "k2", "got %r" % tagged(out, "XL"))
         row("43: RTRANS with C gives the id", tagged(out, "RT") == "k3", "got %r" % tagged(out, "RT"))
         row("43: a DICT file that will not open follows the code too", tagged(out, "DC") == "k4", "got %r" % tagged(out, "DC"))
         row("43: the second call for the same missing file does not reuse a stale answer", tagged(out, "XB") == "", "got %r" % tagged(out, "XB"))

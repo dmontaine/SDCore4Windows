@@ -61,7 +61,7 @@
 *   carried verify-carry suites fcontrol and crlf are not run yet (row 148).
 * NOT.TESTED: FCONTROL
 * NOT.TESTED: FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
-* NOT.TESTED: TRANS RTRANS XLATE ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
+* NOT.TESTED: TRANS RTRANS ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
 *   session or host state
 * NOT.TESTED: DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
 * NOT.TESTED: SENTENCE ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
@@ -92,7 +92,11 @@
 *   CHANGE  was filed under "change the process" beside CHGPHANT and CONFIG.
 *           gplsrc/op_chnge.c:35 is "op_change() - Change substrings": a pure
 *           substring replace that touches no session state.  It is tested
-*           below, with SWAP, which BCOMP:592 maps to the SAME opcode.
+*           below.
+*
+* 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): DQUOTE, DQUOTES,
+*   SWAP and XLATE are no longer BASIC functions (QUOTE, QUOTES, CHANGE and TRANS
+*   are the one names), so their cases and XLATE's NOT.TESTED entry are gone.
 
 program basicfuncs
 
@@ -215,7 +219,6 @@ program basicfuncs
    n = 'CROP.trailing' ; g = crop('a':@vm:'b':@vm) ; w = 'a':@vm:'b' ; gosub check
    n = 'CROP.internal' ; g = crop('a':@vm:@vm:'b') ; w = 'a':@vm:@vm:'b' ; gosub check
    n = 'QUOTE' ; g = quote('ab')         ; w = '"ab"'   ; gosub check
-   n = 'DQUOTE' ; g = dquote('ab')       ; w = '"ab"'   ; gosub check
    n = 'SQUOTE' ; g = squote('ab')       ; w = "'ab'"   ; gosub check
    n = 'FOLD' ; g = fold('aaa bbb', 3)   ; w = 'aaa':@fm:'bbb' ; gosub check
    n = 'SOUNDEX' ; g = soundex('Robert') ; w = 'R163'   ; gosub check
@@ -233,11 +236,10 @@ program basicfuncs
    n = 'CSVDQ.quoted' ; g = csvdq('"a,b",c') ; w = 'a,b':@fm:'c' ; gosub check
    n = 'MATCHFIELD' ; g = matchfield('abc123', '3A3N', 1) ; w = 'abc' ; gosub check
 
-* CHANGE and SWAP - added 12 Sep 26, RELEASE_1.1_FIXES.md 17.  CHANGE was on
+* CHANGE - added 12 Sep 26, RELEASE_1.1_FIXES.md 17.  CHANGE was on
 * the not-tested list under "change the process"; op_chnge.c:35 is
-* "op_change() - Change substrings", a pure substring replace.  SWAP is the
-* same opcode (BCOMP:592 maps both to OP.CHANGE), so the pair is tested rather
-* than assumed equivalent.
+* "op_change() - Change substrings", a pure substring replace.  (Its second
+* name SWAP, the same opcode, was removed 8 Nov 26 with S.87 batch 11.)
 *
 * ***ARGUMENTS 4 AND 5 ARE THE REVERSE OF WHAT THE NAMES SUGGEST, AND THAT IS
 * WHY THEY ARE PINNED HERE.***  Read off this tree, not off the documentation:
@@ -255,8 +257,6 @@ program basicfuncs
    n = 'CHANGE.first' ; g = change('a-a-a', 'a', 'Z', 1, 2) ; w = 'a-Z-a' ; gosub check
 * op_chnge.c:97 clamps a start below 1 up to 1 rather than failing.
    n = 'CHANGE.first.0' ; g = change('a-a', 'a', 'Z', 1, 0) ; w = 'Z-a' ; gosub check
-   n = 'SWAP' ; g = swap('a-b-a', 'a', 'Z') ; w = 'Z-b-Z' ; gosub check
-   n = 'SWAP.first' ; g = swap('a-a-a', 'a', 'Z', 1, 3) ; w = 'a-a-Z' ; gosub check
 
 * ------------------------------------------------------------ dynamic arrays
 
@@ -440,7 +440,6 @@ program basicfuncs
    n = 'MULS' ; g = muls('2':@vm:'3', '5':@vm:'7')    ; w = '10':@vm:'21'  ; gosub check
    n = 'DIVS' ; g = divs('10':@vm:'20', '2':@vm:'5')  ; w = '5':@vm:'4'    ; gosub check
    n = 'QUOTES' ; g = quotes('a':@vm:'b')    ; w = '"a"':@vm:'"b"'         ; gosub check
-   n = 'DQUOTES' ; g = dquotes('a':@vm:'b')  ; w = '"a"':@vm:'"b"'         ; gosub check
    n = 'TRIMW' ; g = trimw(char(9):'  a':char(9):char(9):'b  ':char(10)) ; w = 'a b' ; gosub check
    n = 'TRIMW.none' ; g = trimw('abc')       ; w = 'abc'                   ; gosub check
    n = 'EREPLACE' ; g = ereplace('a-b-c-d', '-', '+')         ; w = 'a+b+c+d' ; gosub check

@@ -43,7 +43,7 @@ CASES = [
     ("CONTROL: the [d,i,n] form with a count of 2", "s = 'a*b*c*d'\n   x = s['*', 2, 2]", "b*c"),
     ("212 the [d,i,*] form takes everything from the occurrence", "s = 'a*b*c*d'\n   x = s['*', 2, *]", "b*c*d"),
     ("212 an asterisk in an expression is still a multiply", "x = field('a*b*c*d', '*', 2, 1 * 2)", "b*c"),
-    ("11 DQUOTES is the same", "x = change(dquotes('a':@vm:'b'), @vm, '|')", '"a"|"b"'),
+    ("11 QUOTES wraps each value in double quotes (DQUOTES, a second name, was removed 27 Oct 26)", "x = change(quotes('a':@vm:'b'), @vm, '|')", '"a"|"b"'),
 ]
 
 # 132 VSLICE of subvalues: every example on the openQM reference page (pasted by the owner, 13 Oct 26), over

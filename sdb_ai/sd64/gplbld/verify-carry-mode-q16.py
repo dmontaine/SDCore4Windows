@@ -51,10 +51,10 @@ case("CONTROL: CHANGE from the 3rd occurrence, overlapping occurrences are skipp
      "x = change(%s, 'aa', 'xx', 0, 3)" % S9, "aaxxxxxxa")
 case("Q-16 CHANGE.NO.OVERLAP: the two skipped occurrences are passed over whole",
      "$mode change.no.overlap\nx = change(%s, 'aa', 'xx', 0, 3)" % S9, "aaaaxxxxa")
-case("CONTROL: SWAP, same string, no start argument (SWAP replaces all)",
-     "x = swap(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
+case("CONTROL: CHANGE, same string, no start argument (CHANGE replaces all)",
+     "x = change(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
 case("Q-16 CHANGE.NO.OVERLAP leaves a replace-all alone (nothing is skipped)",
-     "$mode change.no.overlap\nx = swap(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
+     "$mode change.no.overlap\nx = change(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
 case("Q-16 CHANGE.NO.OVERLAP, one occurrence only (the 3rd, counting without overlap)",
      "$mode change.no.overlap\nx = change(%s, 'aa', 'xx', 1, 3)" % S9, "aaaaxxaaa")
 case("CONTROL: CHANGE.NO.OVERLAP on a pattern of one character is the same as without",

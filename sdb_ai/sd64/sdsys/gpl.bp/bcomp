@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): the second names DQUOTE, DQUOTES, SWAP and XLATE are gone (write QUOTE, QUOTES, CHANGE and
+*               TRANS); each was a row in the intrinsics and handler lists, no opcode.
 * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): the modes OPEN.FAIL.ZERO.FVAR, PICK.READNEXT and EXECUTE.CLEARLIST are gone (bits 26, 27 and
 *               28 reserved); OPEN, READNEXT and EXECUTE compile as they did without them.
 * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): emit.errmsg.args (Pick style STOP / ABORT arguments, called by nothing since the
@@ -680,8 +682,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "DIV"             ; intrinsic.opcodes<-1> = OP.QUOTIENT
    intrinsics<-1> = "DIVS"            ; intrinsic.opcodes<-1> = OP.DIVS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "DOWNCASE"        ; intrinsic.opcodes<-1> = OP.DNCASE
-   intrinsics<-1> = "DQUOTE"          ; intrinsic.opcodes<-1> = OP.QUOTE
-   intrinsics<-1> = "DQUOTES"         ; intrinsic.opcodes<-1> = OP.QUOTES   ;* 11 Oct 26 dm - openQM 11
    intrinsics<-1> = "DTX"             ; intrinsic.opcodes<-1> = OP.DTX
    intrinsics<-1> = "EBCDIC"          ; intrinsic.opcodes<-1> = OP.EBCDIC
    intrinsics<-1> = "ELEMENT.EXISTS"  ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - data collections
@@ -849,7 +849,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "SUBSTRINGS"      ; intrinsic.opcodes<-1> = OP.SUBSTRNG
    intrinsics<-1> = "SUM"             ; intrinsic.opcodes<-1> = OP.SUM
    intrinsics<-1> = "SUMMATION"       ; intrinsic.opcodes<-1> = OP.SUMMATION
-   intrinsics<-1> = "SWAP"            ; intrinsic.opcodes<-1> = OP.CHANGE
    intrinsics<-1> = "SWAPCASE"        ; intrinsic.opcodes<-1> = OP.SWAPCASE
    intrinsics<-1> = "SYSMSG"          ; intrinsic.opcodes<-1> = OP.SYSMSG
    intrinsics<-1> = "SYSTEM"          ; intrinsic.opcodes<-1> = OP.SYSTEM
@@ -873,7 +872,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "VSLICE"          ; intrinsic.opcodes<-1> = OP.VSLICE
    intrinsics<-1> = "WRITE.SOCKET"    ; intrinsic.opcodes<-1> = OP.WRITESKT
    intrinsics<-1> = "XBUILD"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV / JSON / XML task: an XML element (a data collection) as text
-   intrinsics<-1> = "XLATE"           ; intrinsic.opcodes<-1> = OP.TRANS
    intrinsics<-1> = "XPARSE"          ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - XML text as a data collection
    intrinsics<-1> = "XPATH"           ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - XPath over such a collection
    intrinsics<-1> = "XTD"             ; intrinsic.opcodes<-1> = OP.XTD
@@ -4373,8 +4371,6 @@ end
                       in.two,         ;* DIV
                       in.two,         ;* DIVS
                       in.one,         ;* DOWNCASE
-                      in.one,         ;* DQUOTE
-                      in.one,         ;* DQUOTES
                       in.dtx,         ;* DTX
                       in.one,         ;* EBCDIC
                       in.element.exists, ;* ELEMENT.EXISTS
@@ -4542,7 +4538,6 @@ end
                       in.three,       ;* SUBSTRINGS
                       in.one,         ;* SUM
                       in.one,         ;* SUMMATION
-                      in.change,      ;* SWAP
                       in.one,         ;* SWAPCASE
                       in.sysmsg,      ;* SYSMSG
                       in.one,         ;* SYSTEM
@@ -4566,7 +4561,6 @@ end
                       in.vslice,      ;* VSLICE
                       in.four,        ;* WRITE.SOCKET
                       in.xfun,        ;* XBUILD
-                      in.trans,       ;* XLATE
                       in.xfun,        ;* XPARSE
                       in.xfun,        ;* XPATH
                       in.one          ;* XTD
