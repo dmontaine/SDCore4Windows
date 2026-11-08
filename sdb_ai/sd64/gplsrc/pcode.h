@@ -39,7 +39,6 @@ Pcode(data)      /* DATA(STRING) */
 Pcode(dellist)   /* DELLIST(NAME) */
 Pcode(expand)    /* EXPAND(FILE.NAME, ID, FVAR) */
 Pcode(fold)      /* FOLD(STRING, WIDTH) */
-Pcode(formcsv)   /* FORMCSV(STR) */
 Pcode(formlst)   /* FORMLIST(SRC, LIST.NO) */
 Pcode(getlist)   /* DELLIST(NAME, LIST.NO) */
 Pcode(getmsg)    /* GETMSG() */
