@@ -2,6 +2,36 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   SECOND NAMES, OTHER PRODUCTS' MODES AND OPTIONS, AND DEAD FORMS ARE REMOVED FROM SD (THE OWNER'S EMULATION SURVEY, S.87; FROM SD CORE FOR LINUX).
+
+             What        Where SD had two ways to say one thing, or a switch that made it behave like another product, one way is kept: the default. Removed, with the way to say it now:
+                         TCL verbs and VOC words: analyse.file (analyze.file), delete.catalogue and catalogue (delete.catalog, catalog), cs, rename, cleardata, clearinput,
+                         clearprompts, clearselect (clear.select), sp.open, sp.close, cd (compile.dict), md, list.union / list.inter / list.diff (merge.list), make.index
+                         (create.index then build.index), copyp, copy.listp (copy, copy.list), set.queue, sp.assign, nano (edit or micro), the ! verb (sh), the ten list
+                         sentences listf, listfl, listfr, listk, listpa, listph, listq, listr, lists and listv (list voc with type = "F" and so on) and the file sd.voclib
+                         that held them, the query words avg, enum, vert, percent, pct, %, header, footer, first, #, &, caption, nopage, col.hdr.space, edit.list, listdict,
+                         colour, without, no.grand.total and the word forms equal, greater, less, before, after, matches, matching, not.matching and spoken.
+                         OPTION words (each now does what it did when off), among them run.no.page, query.string.comp, default.mv, keep.old.object, catalogue.local,
+                         unass.warning, div.zero.warning, non.numeric.warning, inherit, clear.select, numeric.exponent and stacked.account; OPTION shows their places as reserved.
+                         $MODE words of other products, among them pick.read, autolock, selectv, stdfil, case.sensitive, pick.matrix and time.ms.
+                         SD BASIC: GO / GO TO (goto), the # form of $ifdef / $define, ENTER, PERFORM, INCLUDE without the $, COM, DIMENSION, REMARK, SUB, CLOSESEQ (close),
+                         EQU (equate), INPUTCLEAR (clearinput), KEEP.SELECT, ROOT, KEY( and BSCAN, the Pick CALL "file name", the functions DQUOTE(S), SWAP, XLATE, ADDS, SUBS,
+                         MULS, DIVS, IS.*, LEFT, RIGHT, MD5 (digest), EREPLACE, SENTENCE(), SWAPMARKS, EXTRACT(), REPLACE(), INSERT(), DELETE(), SUBR(), PROCREAD, PROCWRITE,
+                         and the variables @AM, @SVM, @USER, @USER.NO, @FILENAME and @PIB / @SIB / @POB / @SOB (@FM, @SM, @LOGNAME, @USERNO, @FILE.NAME).
+                         Files and dictionaries: multifiles (CREATE.FILE name,part), the NO.CASE, CASE and VERSION words of CREATE.FILE, the A, S and C dictionary item types
+                         (write an I-type), the Fn name for a field that no dictionary item names, the PATH:pathname form of a file name, the VOC record type M.
+                         Terminal and printing: case inversion (PTERM CASE, INPUT ... NOCASEINVERT), print mode 5, the gdi / raw words of SETPTR, and 46 terminal entries of old
+                         hardware. sd.conf: APILOGIN, CODEPAGE, CREATUSR, EXCLREM, FILERULE, FIXUSERS, GDI, INVCASE, JNLDIR, JNLMODE, PORTMAP, RINGWAIT and TXCHAR, and sd -<n>.
+                         Kept after all, on the owner's word: the MCDX conversion (as a second name of MX), OPEN 'account:file' (always on, checked as a Q-pointer would be),
+                         and a verb typed with hyphens for dots (clear-select finds clear.select).
+                         The next VOC update takes each removed word out of an existing account: the VOC deletion list (sdsys\voc_removed) names it, the record is saved first
+                         (sdsys\voc_removed.saved), and an account's own record of the same name is left alone. The upgrade removes a retired setting's line from a kept
+                         sd.conf, because SD refuses to start on a setting it does not know.
+             Why it      One way to say a thing is one way to document, test and secure it. Each removed form was a second spelling, another product's behaviour behind a switch, or
+             matters     code nothing reached.
+             Does not    Change what the kept form does. A program compiled before this keeps its object code until it is compiled again; recompiling one that used a removed form
+                         stops with a compile error naming it. On Windows a backslash in a TCL sentence is still part of a path, never the start of a quoted string.
+
 28 Oct 26  THE FILE os.users IS GONE FROM A NEW INSTALL (THE SHELL AND OS.EXECUTE SETTINGS ARE THE ACCOUNT'S OWN).
 
              What        Nothing has read os.users since the shell and os.execute settings moved into the account's own record (see the entry on sh-on and os-on). A new install now
