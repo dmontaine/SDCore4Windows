@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  PARSER$MFILE (key 5) is retired - a caller asks for PARSER$GET.TOKEN - and a token is never merged with a comma and the next token (the account:file,subfile and file,part forms).
 * 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): OPTION BACKSLASH.NOT.QUOTE is gone.  Linux now always splits a token at a backslash;
 *            this port still never does (see the 22 Aug entry), so only the comment at the split changes.
 * 22 Aug 26 Windows port - A TOKEN IS NO LONGER SPLIT AT A BACKSLASH.  The
@@ -45,7 +46,7 @@
 *    2   PARSER$GET.REST   Fetch remainder of string
 *    3   PARSER$EXPAND     Insert STRING before remaining tokens
 *    4   PARSER$LOOK.AHEAD Preview next token
-*    5   PARSER$MFILE      Like GET.TOKEN but allows multifile syntax
+*    (5 was PARSER$MFILE, multifile syntax: retired, 28 Oct 26)
 *
 * Keyword returned as:
 *    n   Is keyword n
@@ -72,7 +73,7 @@ $include int$keys.h
    quote.char = ''
 
    begin case
-      case key = PARSER$GET.TOKEN or key = PARSER$MFILE ;* Return next token
+      case key = PARSER$GET.TOKEN ;* Return next token
          string = ''
 rescan:
          if len(parser.sentence) = 0 then
@@ -141,75 +142,16 @@ rescan:
                keyword = -1
 
                if len(string) <= MAX.ID.LEN then
-                  if count(string, ':') = 1 and parser.sentence[1, 1] = ',' then
-                     * Looks like an account:file,subfile type reference
-                     * The simplest way to validate this is to try to find
-                     * the VOC entry
-
-                     open string to temp.f then
-                        gosub merge.multifile.component
-                        close temp.f
-                     end else
-                        if status() = ER$CNF or status() = ER$MFC then
-                           gosub merge.multifile.component
-                        end else  ;* Try again with lower case, then upper
-                           open downcase(string) to temp.f then
-                              gosub merge.multifile.component
-                              close temp.f
-                           end else
-                              if status() = ER$CNF or status() = ER$MFC then
-                                 gosub merge.multifile.component
-                              end else
-                                 open upcase(string) to temp.f then
-                                    gosub merge.multifile.component
-                                    close temp.f
-                                 end else
-                                    if status() = ER$CNF or status() = ER$MFC then
-                                       gosub merge.multifile.component
-                                    end
-                                 end
-                              end
-                           end
-                        end
+                  read voc.rec from @voc, string else
+                     read voc.rec from @voc, downcase(string) else
+                        read voc.rec from @voc, upcase(string) else goto exit.parser
                      end
-                  end else
-                     read voc.rec from @voc, string else
-                        read voc.rec from @voc, downcase(string) else
-                           read voc.rec from @voc, upcase(string) else goto exit.parser
-                        end
-                     end
-
-                     keyword = -2
-
-                     voc.type = upcase(voc.rec[1, 1])
-                     begin case
-                        case voc.type = "K"
-                           keyword = voc.rec<2>
-* 0198                     if keyword = KW$FILLER then goto rescan
-
-                        case voc.type= 'F'
-                           if parser.sentence[1, 1] = ',' then
-                              if key = PARSER$MFILE then
-                                 if voc.rec<4> # '' then gosub merge.multifile.component
-                              end
-                           end
-
-                        case voc.type= 'Q'
-                           * This one is much more complex. To be thoroughly
-                           * correct, we must follow the Q-pointer to decide if
-                           * this is a multifile. This is not easy.
-                           * Take the easy way out and assume that it is a
-                           * multifile if the next token is a comma. In theory,
-                           * literal values that clash with VOC entries should
-                           * be quoted, so this is a safe assumption.
-
-                           if parser.sentence[1, 1] = ',' then
-                              if key = PARSER$MFILE then
-                                 gosub merge.multifile.component
-                              end
-                           end
-                     end case
                   end
+
+                  keyword = -2
+
+                  if upcase(voc.rec[1, 1]) = "K" then keyword = voc.rec<2>
+* 0198              if keyword = KW$FILLER then goto rescan
                end
          end case
 
@@ -312,37 +254,6 @@ rescan:
 exit.parser:
    return
 
-* ======================================================================
-
-merge.multifile.component:
-   * Merge with comma and next token
-   string := ','
-   parser.sentence = trimf(parser.sentence[2, 99999])
-
-   j = index(parser.sentence, ' ', 1)
-   if j = 0 then j = 999999
-
-   * If there is a comma or a right bracket before the next space, split
-   * the token at this character.
-
-   i = index(parser.sentence, ',', 1)
-   k = index(parser.sentence, ')', 1)
-   if k then
-      if i then
-         if k < i then i = k
-      end else i = k
-   end
-
-   if i and (i < j) then j = i
-   else
-      i = index(parser.sentence, ',', 1)
-      if i and (i < j) then j = i
-   end
-
-   string := parser.sentence[1, j - 1]
-   parser.sentence = trimf(parser.sentence[j, 999999])
-
-   return
 end
 
 * END-CODE

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 06 Oct 26 Windows port - Enter at "Use file 'xx'?" (2051) means N, and so does
 *            end of input, which re-asked for ever (the class of RELEASE_1.1 34,
 *            found at a prompt it never listed by SD Core for Linux, parity
@@ -56,16 +57,16 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    * Check for DATA or DICT keyword
 
    if keyword = KW$DATA then
       portion = ""
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end else if keyword = KW$DICT then
       portion = "DICT"
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end
 
    * Fetch file name
@@ -73,7 +74,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
    if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
 
    file.name = token
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    * Open the file
 

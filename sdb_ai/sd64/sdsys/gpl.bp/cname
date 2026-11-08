@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  The refusal "Renaming of multifiles is not supported" (6148) goes, and the parser key PARSER$MFILE is now PARSER$GET.TOKEN, so old,new always splits at the comma.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the dictionary's @ID record
 *           is updated whether it is @ID or @id.
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  Renaming a file: the old name folds,
@@ -78,11 +79,11 @@ deffun edit_msg(emk) calling '!edit_msg'     ;* 18 Oct 26 dm, S.66
 
    * Get file name and possible DICT flag
 
-   call @parser(PARSER$MFILE, token.type, old.file.name, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, old.file.name, keyword)
    if keyword = KW$DICT then
       dict.token = old.file.name  ;* Allow for words other than DICT
       dict.flag = 'DICT'
-      call @parser(PARSER$MFILE, token.type, old.file.name, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, old.file.name, keyword)
       full.name = 'DICT ' : old.file.name
    end else
       dict.flag = ''
@@ -112,10 +113,6 @@ rename.file:
 
    if dict.flag # '' then
       stop sysmsg(6147, dict.token) ;* xx not valid when renaming a file
-   end
-
-   if index(old.file.name, ',', 1) then
-      stop sysmsg(6148) ;* Renaming of multifiles is not supported at this release
    end
 
    call @parser(parser$get.token, token.type, new.file.name, keyword)

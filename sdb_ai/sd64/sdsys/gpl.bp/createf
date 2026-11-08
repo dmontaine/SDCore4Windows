@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  CREATE.FILE name,part and the MULTIFILE word are refused (a comma after the name is an unexpected token, 2018), a file that already has a data part is no longer converted or extended, field 4 of an existing record is ignored, and edit.check.existing and messages 6103, 6124, 6162, 6195, 6197 and 6201 go with them.  PARSER$MFILE is now PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VERSION keyword is gone (a file is made in the current format); its size check, remote word and message 6117 go with it.
 * 8 Nov 26 Windows port - from Linux 7de9f2c0 (S.87 batch 13): the words NO.CASE and CASE are gone; every file is made case insensitive (a case sensitive
 *               test fixture is a create.file statement with flags 4 in an internal session).
@@ -113,7 +114,7 @@ $define default.split.load 80
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
-   call @parser(PARSER$MFILE, token.type, token, keyword) ;* First argument
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* First argument
 
 
    * Check for DICT or DATA keyword
@@ -121,25 +122,22 @@ $define default.split.load 80
    begin case
       case keyword = KW$DICT      ;* DICT
          create.data = @false
-         call @parser(PARSER$MFILE, token.type, token, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
   
       case keyword = KW$DATA      ;* DATA
          create.dict = @false
-         call @parser(PARSER$MFILE, token.type, token, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end case
 
    * Fetch file name
 
    if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
 
-   file.name = field(token, ',', 1)
-   component = field(token, ',', 2)
+   * 28 Oct 26 dm - S.87: multifiles are gone, so name,part is no longer a form.  A comma after the name is a token the keyword loop
+   *   below refuses (2018); a comma inside a quoted name is part of the name, as any other character is.
+   file.name = token
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
-   if token.type = PARSER$COMMA then   ;* New multifile
-      call @parser(PARSER$GET.TOKEN, token.type, component, keyword)
-      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
-   end
 
    if file.name = '' then stop sysmsg(6100) ;* Illegal file name
 
@@ -154,8 +152,7 @@ $define default.split.load 80
 *   7 Nov 26 Windows port - from Linux 398fb6a1 (S.87 batch 1): the
 *   CREATE.FILE.CASE option, the way back to "exactly as typed", is gone (owner's
 *   emulation survey, A-039), so the name is always lower case.
-   file.name = downcase(file.name)
-   component = downcase(component)
+   file.name = downcase(file.name)          ;* 8 Nov 26: component (a multifile part) is gone, S.87 (Linux d241df26)
 
    * Check for file type keyword. We default to DYNAMIC
 
@@ -285,9 +282,6 @@ $define default.split.load 80
             call @parser(PARSER$GET.TOKEN, token.type, voc.comment, keyword)
             if token.type = PARSER$END or voc.comment = '' then stop sysmsg(12083) ;* Comment text required after COMMENT
 
-         case upcase(token) = 'MULTIFILE'     ;* 12 Oct 26 dm - openQM 522: the data portion is a multifile named for the file
-            if component = '' then component = file.name
-
          * ---------- SERVER name  /  AS name   (21 Oct 26 dm, S.73 item 3: the file is made on another SD server and the local pointer to it with it)
          case upcase(token) = 'SERVER'
             call @parser(PARSER$GET.TOKEN, token.type, net.server, keyword)
@@ -320,84 +314,9 @@ $define default.split.load 80
       end
 
       if create.data then
-         if component = '' and voc.rec<4> = '' then     ;* Creating simple file
-            if (voc.rec<2> # "") then
-               display sysmsg(6102) ;* DATA part of file already exists
-               create.data = @false
-            end
-         end else
-            if component = '' then component = file.name
-
-* 17 Oct 26 dm - S.64: from here the verb changes a file that already exists - it moves a single file's parts into a subdirectory and
-*   rewrites its pointer, or adds a component to its pointer - so a VOC, a dictionary or a program file is left alone unless the
-*   session may change it.  It is asked before the "Convert to multifile" question, since the answer would make no difference.
-            gosub edit.check.existing
-
-            if voc.rec<2> # '' and voc.rec<4> = '' then   ;* 0262
-               * We need to make this into a multifile.
-
-               * 0484 Check if we are trying to create the default subfile.
-
-               if file.name = component then   ;* 0484
-                  stop sysmsg(6201, component) ;* Subfile %1 would be created from the existing data element
-               end
-
-               if no.query then
-                  display sysmsg(6162, file.name, file.name)
-                     * Converting to multifile named "%1,%1"
-               end else
-                  display sysmsg(6103, file.name) ;* %1 already exists but not as a multifile
-                  loop
-                     display sysmsg(6195, file.name, file.name) :
-                        * Convert to multifile named "%1,%1" (Y/N)?
-                     input yn
-                     yn = upcase(yn)
-* 30 Aug 26 Windows port - Enter takes the default the prompt advertises, N.
-*   Owner's rule, 30 Aug 2026, "<y>/n or y/<n>".  PRE_RELEASE_FIXES 79.
-                     if yn = '' then yn = 'N'
-                  until yn = 'Y' or yn = 'N'
-                  repeat
-                  if yn = 'N' then stop
-               end
-
-               i = ospath("", os$flush.cache)
-
-               old.path = voc.rec<2>
-
-               * Transform invalid o/s names
-
-               os.name = ospath(file.name, OS$MAPPED.NAME)  ;* file.name already canonical - RELEASE_1.1 5
-               new.path = old.path : @ds : os.name
-
-               subfiles = dir(old.path)
-
-               * Create new subdirectory inside old file directory  
-
-               if not(ospath(new.path, OS$MKDIR)) then
-                  stop sysmsg(6196, new.path) ;* Unable to create %1
-               end
-* rev 0.9.0 *
-               * Move the %n components down into the new sub directory
-
-               for i = dcount(subfiles, @fm) to 1 step -1
-                  s = subfiles<i,1>
-                  if s[1,1] = '%' then
-                     if not(osrename(old.path:@ds:s, new.path:@ds:s)) then
-                        stop sysmsg(6197, status(), os.error(), old.path:@ds:s)
-                              * Error %1.%2 moving %3
-                     end
-                  end
-               next i
-
-               voc.rec<2> = new.path
-               voc.rec<4> = file.name
-               writeu voc.rec to voc.f, file.name
-            end
-
-            locate component in voc.rec<4,1> setting i then
-               display sysmsg(6102) ;* DATA part of file already exists
-               create.data = @false
-            end
+         if (voc.rec<2> # "") then
+            display sysmsg(6102) ;* DATA part of file already exists
+            create.data = @false
          end
       end
 
@@ -438,19 +357,6 @@ $define default.split.load 80
    end
 
    if create.data then
-      * If we are creating a multifile element, use the file name as the
-      * default directory under which to create the file.
-
-      if component # '' then
-         if dir.name = '' then
-            dir.name = file.name
-            dir.name.with.delimiter = dir.name
-            if dir.name.with.delimiter[1] # @ds then dir.name.with.delimiter := @ds
-         end
-
-         os.name = ospath(component, OS$MAPPED.NAME)  ;* component already canonical - RELEASE_1.1 5
-      end
-
       data.path = dir.name.with.delimiter : os.name
 
       if ospath(data.path, OS$EXISTS) then        ;* Already exists
@@ -481,23 +387,7 @@ $define default.split.load 80
    * Create data part
 
    if create.data then
-      * If we are creating a multifile element, use the file name as the
-      * default directory under which to create the file.
-
-      if component # '' then
-         if not(ospath(dir.name, OS$EXISTS)) then
-            if not(ospath(dir.name, OS$MKDIR)) then
-               stop sysmsg(6124, dir.name) ;* Unable to create directory xx
-            end
-         end
-      end
-
-      if component = '' then
-         voc.rec<2> = data.path
-      end else
-         voc.rec<2,-1> = data.path
-         voc.rec<4,-1> = component
-      end
+      voc.rec<2> = data.path
 
       file.flags = case.flags
       if no.resize then file.flags = bitor(file.flags, FL$FLAGS.NORESIZE)
@@ -558,8 +448,6 @@ create.remote.file:
          remote.what = 'using dict'
       case voc.comment # ''
          remote.what = 'comment'
-      case component # ''
-         remote.what = 'multifile'
    end case
    if remote.what # '' then
       @system.return.code = -ER$ARGS
@@ -604,25 +492,6 @@ create.remote.file:
    display sysmsg(12538, remote.name, net.server, file.name) ;* File %1 was created on server %2 and the pointer %3 was written to your VOC
    return
 
-* ======================================================================
-* edit.check.existing  -  may this session change the file that VOC.REC (an existing F record) describes?  (17 Oct 26 dm, S.64)
-*   The kernel decides by the last component of each data path of the record (K$EDIT.OK): voc, *.dic, bp, bp.out, *.bp, *.bp.out.
-*   The dictionary path (field 3) is not looked at: converting an ordinary file does not touch its dictionary, and it is the
-*   dictionary of a file called customers that is named customers.dic.  A refusal stops the verb with the reason and nothing has been
-*   changed (the VOC file is this program's own, so the record lock goes when it ends).
-
-edit.check.existing:
-   for ek = 1 to dcount(voc.rec<2>, @vm)
-      ek.path = voc.rec<2, ek>
-      if ek.path # '' then
-         if not(kernel(K$EDIT.OK, ek.path)) then
-            ek.kind = kernel(K$EDIT.KIND, ek.path)
-            @system.return.code = -ER$PERM
-            stop edit_msg(ek.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
-         end
-      end
-   next ek
-   return
 end
 
 * END-CODE

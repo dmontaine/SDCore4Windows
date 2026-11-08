@@ -569,16 +569,14 @@ def run_verbs(box, sysd, bp):
             not has(out, r"Dynamic file required") and has(out, r"(?m)^zzoqtd\s+zzoqtr\s+PRE\.WRITE"), out[-500:])
         sess(box, "DELETE.CATALOG zzoqtr LOCAL", "DELETE.FILE zzoqtd")
 
-        # --- CREATE.FILE COMMENT, MULTIFILE and a relative PATHNAME (383, 522, 278) ----------------------------
+        # --- CREATE.FILE COMMENT and a relative PATHNAME (383, 278); item 522, MULTIFILE, went with multifiles (28 Oct 26, S.87) ----
         os.makedirs(os.path.join(sysd, "zzoqreld"), exist_ok=True)
-        sess(box, "DELETE.FILE zzoqcm", "DELETE.FILE zzoqmf", "DELETE.FILE zzoqrp")
-        out = sess(box, 'CREATE.FILE zzoqcm COMMENT "Test file here"', "CT VOC zzoqcm", "CREATE.FILE zzoqmf MULTIFILE",
-                   "CT VOC zzoqmf", "CREATE.FILE zzoqrp PATHNAME zzoqreld", "CT VOC zzoqrp")
+        sess(box, "DELETE.FILE zzoqcm", "DELETE.FILE zzoqrp")
+        out = sess(box, 'CREATE.FILE zzoqcm COMMENT "Test file here"', "CT VOC zzoqcm",
+                   "CREATE.FILE zzoqrp PATHNAME zzoqreld", "CT VOC zzoqrp")
         row("383: CREATE.FILE ... COMMENT puts the text after the type code in the VOC record", has(out, r"^1: F Test file here"), out[-700:])
-        row("522: CREATE.FILE ... MULTIFILE makes the data portion a multifile named for the file",
-            has(out, r"^4: zzoqmf"), out[-700:])
         row("278: a relative PATHNAME stays relative in the VOC record", has(out, r"^2: zzoqreld/zzoqrp"), out[-700:])
-        sess(box, "DELETE.FILE zzoqcm", "DELETE.FILE zzoqmf", "DELETE.FILE zzoqrp")
+        sess(box, "DELETE.FILE zzoqcm", "DELETE.FILE zzoqrp")
         shutil.rmtree(os.path.join(sysd, "zzoqreld"), ignore_errors=True)
 
         # --- saved lists IN file (494), CREATE.INDEX DELETING and $INDEX.PATH (424, 184), LIST.INDEX LPTR (73) ----

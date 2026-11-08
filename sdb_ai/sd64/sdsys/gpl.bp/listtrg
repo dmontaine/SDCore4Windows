@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 18 Oct 26 Windows port - from Linux f0af637 (16 Oct 26): Directory files with a trigger are listed too (QM4 Fixes item 177).
 * 18 Oct 26 Windows port - from Linux 8d65796 (11 Oct 26): 1.2-0 bundle A-8 (openQM refs 74 and 187).
 * END-HISTORY
@@ -56,7 +57,7 @@ $include parser.h
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
    loop
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
          case keyword = KW$LPTR

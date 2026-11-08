@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): the C dictionary item type is gone from the compiler: the is.ctype argument of $BCOMP (callers: basic, bbproc, gplbld/COMP_PCODE), HDR.CTYPE, err.ctype and message 2994.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
 * 8 Nov 26 Windows port - from Linux 3290fbd9: a class initialiser takes the first SEVEN at.constants as the constant @-variables (nine until @AM and
 *               @SVM went, which let @SDSYS and @USERNO through); and kernel(K$CASE.SENSITIVE, 0) is assigned, not voided, as bbcmp.py has no VOID.
@@ -166,13 +167,12 @@
 * START-CODE
 
 $internal
-subroutine $bcomp(source.file.name,     ;* File name, null for C-type dict item
+subroutine $bcomp(source.file.name,     ;* File name
                   src.f,                ;* File var to source file
                   record.name,          ;* Record
-                  is.ctype,             ;* Is this a C-type?
                   prog.source,          ;* Source text to compile
                   output.file.name,     ;* Target file name
-                  listing.record.name,  ;* Listing record (null for C-type)
+                  listing.record.name,  ;* Listing record
                   compiler.flags,
                   compiler.depth,       ;* Recursive compilation depth
                   catalogue.name,       ;* Out: Catalogue under this name...
@@ -278,11 +278,7 @@ mode.names<1,44> = "DEBUG.EQUATES"
 mode.names<1,45> = ""                   ;* retired 27 Oct 26 (was AUTOLOCK)
 *****************************************************************************
 
-   * If this is a C-type, the {name} construct refers to the dictionary
-   * holding the source. Otherwise, the {name} construct is not available
-   * until the $DICT directive is used.
-
-   if is.ctype then dict.f = src.f
+   * The {name} construct is not available until the $DICT directive is used.
 
    object.code = ''
 
@@ -1067,7 +1063,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    last.debug.line = -1
    errors = 0
-   if is.ctype then header.flags = bitor(header.flags, HDR.CTYPE + HDR.ITYPE)
    j = kernel(K$CASE.SENSITIVE, 0)     ;* (bbcmp.py has no VOID statement) names are not case sensitive (the mode that made them so, CASE.SENSITIVE, is gone)
 
    eof = @false
@@ -1214,7 +1209,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    direct.calls = ""               ;* Subroutine names and...
    direct.call.vars = ""           ;* ...local variable number
 
-   * Embedded object code for C-types
+   * Embedded object code for the dictionary items named by {name}
 
    embedded.objects = ''           ;* Names of dictionary items and...
    embedded.object.vars = ''       ;* ...corresponding local variable number
@@ -1290,7 +1285,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
 
    * Check that final END was found
 
-   if not(final.end.seen) and not(is.ctype) then
+   if not(final.end.seen) then
       err.msg = sysmsg(2816)  ;* Final END statement is missing
       gosub warning
    end
@@ -1796,7 +1791,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
       end
    end
 
-   if not(is.ctype) then display sysmsg(2995, errors)    ;* %1 error(s)
+   display sysmsg(2995, errors)    ;* %1 error(s)
 
    if not(errors) then
       * Emit the cross-reference (line) table
@@ -1919,7 +1914,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
       i = events(-1, EVT$UNLOAD)
    end
 
-   if listing.used and not(is.ctype) then close list.f
+   if listing.used then close list.f
 
    return
 
@@ -1984,10 +1979,8 @@ get.line:
             if continues.on.next.line then src = src[1,len(src)-1]
 
             if not(rem(line.no(level), 10)) then
-               if not(is.ctype) then
-                  display "*":
-                  star.printed = @true
-               end
+               display "*":
+               star.printed = @true
             end
 
             * Check for preprocessor directives ($IFDEF, $IFNDEF, $ELSE, $ENDIF)
@@ -2977,7 +2970,7 @@ proc.directive:
       begin case
       ************************ CATALOGUE ************************
 
-      case u.token.string = "CATALOG" and not(is.ctype)
+      case u.token.string = "CATALOG"
          begin case
 !            case catalogue.name # ''
 !               err.msg = sysmsg(3413, u.token.string) ;* Multiple use of $%1
@@ -3041,7 +3034,7 @@ proc.directive:
 
       ************************** DEBUG **************************
 
-      case u.token.string = "DEBUG" and not(is.ctype)
+      case u.token.string = "DEBUG"
          if pc # start.pc then
             err.msg = sysmsg(2837, u.token.string) ;* $%1 must appear before any executable statements
             goto error
@@ -3126,7 +3119,7 @@ proc.directive:
 
       ************************** DICT **************************
 
-      case u.token.string = "DICT" and not(is.ctype)
+      case u.token.string = "DICT"
          if assigned(dict.f) then
             err.msg = sysmsg(3405) ;* $DICT can only appear once in a program
             gosub error
@@ -3206,22 +3199,20 @@ proc.directive:
       ************************** LIST ***************************
 
       case u.token.string = "LIST"
-         if not(is.ctype) then
-            begin case
-               case upcase(look.ahead.token.string) = "OFF"
-                  gosub get.token
-                  listing(level) = @false
+         begin case
+            case upcase(look.ahead.token.string) = "OFF"
+               gosub get.token
+               listing(level) = @false
 
-               case (upcase(look.ahead.token.string) = "ON") or (look.ahead.token = TKN.END)
-                  if look.ahead.token # TKN.END then gosub get.token
-                  listing(level) = listing(level - 1)
-                  if listing(level) then gosub start.listing
+            case (upcase(look.ahead.token.string) = "ON") or (look.ahead.token = TKN.END)
+               if look.ahead.token # TKN.END then gosub get.token
+               listing(level) = listing(level - 1)
+               if listing(level) then gosub start.listing
 
-               case 1
-                  err.msg = sysmsg(2840)  ;* Unexpected text after $LIST
-                  gosub error
-            end case
-         end
+            case 1
+               err.msg = sysmsg(2840)  ;* Unexpected text after $LIST
+               gosub error
+         end case
 
       ************************** MODE ***************************
 
@@ -3295,7 +3286,7 @@ proc.directive:
 
       ************************** SDCALL **************************
 
-      case u.token.string = "SDCALL" and not(is.ctype)
+      case u.token.string = "SDCALL"
          header.flags = bitor(header.flags, HDR.SDCALL.ALLOWED)
 
       ************************ RECURSIVE *************************
@@ -3339,8 +3330,8 @@ process.include:
          goto error
 
       case n = 2
-         * The files named by SEARCH in $BASIC.OPTIONS, in order; @ is the file the source is in (not for a C-type, which has
-         * none).  The default list is @, then SYSCOM.  All but the last that can be tried are allowed not to hold the record.
+         * The files named by SEARCH in $BASIC.OPTIONS, in order; @ is the file the source is in.
+         * The default list is @, then SYSCOM.  All but the last that can be tried are allowed not to hold the record.
          include.record.name = field(src, ' ', 2)
          search.list = if include.search = '' then '@,syscom' else include.search
          search.n = dcount(search.list, ',')
@@ -3349,7 +3340,6 @@ process.include:
          for si = 1 to search.n
             search.name = field(search.list, ',', si)
             if search.name = '@' then
-               if is.ctype then continue
                include.file.name = source.file.name
             end else
                include.file.name = search.name
@@ -7071,7 +7061,6 @@ st.chain:
 * ST.CLASS  -  CLASS statement
 
 st.class:
-   if is.ctype then goto err.ctype
    if name.set then goto err.name.set
 
    if pc # start.pc then
@@ -7688,8 +7677,6 @@ st.data:
 * ST.DEBUG.ON  -  DEBUG.ON statement (restricted)
 
 st.debug:
-   if is.ctype then goto err.ctype
-
    if not(debug) then
       err.msg = sysmsg(2893) ;* DEBUG statement ignored - not compiling in debug mode
       gosub warning
@@ -9457,7 +9444,6 @@ st.formlistv:
 * ST.FUNCTION  -  FUNCTION statement
 
 st.function:
-   if is.ctype then goto err.ctype
    if name.set then goto err.name.set
 
    if pc # start.pc then
@@ -12226,7 +12212,6 @@ st.private.common:
 * ST.PROGRAM  -  PROGRAM statement
 
 st.program:
-   if is.ctype then goto err.ctype
    if name.set then goto err.name.set
 
    if pc # start.pc then
@@ -13334,7 +13319,6 @@ st.stop.common:
 * ST.SUBROUTINE  -  SUBROUTINE statement
 
 st.subroutine:
-   if is.ctype then goto err.ctype
    if name.set then goto err.name.set
 
    if pc # start.pc then
@@ -14675,10 +14659,10 @@ if.then.else.expr.abort:
                   opcode.byte = OP.EXTRACT ; gosub emit.simple
                end
 
-            case z = 'C' or z = 'I' or ((z = 'A' or z = 'S') and dict.rec<8> = '')
-               * Unlike nested I-types, C-types that reference other
-               * compiled items do this as a run time subroutine call
+            case z = 'I' or ((z = 'A' or z = 'S') and dict.rec<8> = '')
+               * A compiled item is called at run time as a subroutine
                * using ITYPE() to execute embedded object code.
+               * 28 Oct 26 S.87: C items are gone; they fall to err.field.name.
 
                sys.chk.rec = dict.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
                if len(dict.rec<DICT.ITYPE.OBJECT>) = 0 ~
@@ -15247,7 +15231,7 @@ generate.debug:
 
 emit.skeleton.header:
    opcode.byte = 0
-   z = if is.ctype then itype.object.header.size else object.header.size
+   z = object.header.size
    loop
    until pc = z
       gosub emit
@@ -15344,10 +15328,8 @@ emit.final.header:
    * Compile time. 2 bytes
    code.image[HDR.COMPILE.TIME,4] = iconv(system(1005), 'IL')
 
-   if not(is.ctype) then
-      * Program name
-      code.image[HDR.PROGRAM.NAME, len(program.name)] = program.name
-   end
+   * Program name
+   code.image[HDR.PROGRAM.NAME, len(program.name)] = program.name
 
    return
 
@@ -15374,10 +15356,6 @@ err.class:
 
 err.comma:
    err.msg = sysmsg(2959) ;* Comma not found where expected
-   goto error
-
-err.ctype:
-   err.msg = sysmsg(2994) ;* Statement/function not allowed in a C-type record
    goto error
 
 err.field:
@@ -15457,11 +15435,9 @@ err.var:
 
 start.listing:
    if not(listing.used) then
-      if not(is.ctype) then
-         openseq output.file.name, listing.record.name to list.f else
-            if status() then
-               stop sysmsg(2971, status()) ;* "Error xx creating listing record
-            end
+      openseq output.file.name, listing.record.name to list.f else
+         if status() then
+            stop sysmsg(2971, status()) ;* "Error xx creating listing record
          end
       end
       listing.used = @true
@@ -15472,12 +15448,8 @@ start.listing:
 * ======================================================================
 
 emit.listing:
-   if is.ctype then
-      display list.rec
-   end else
-      writeseq list.pg:list.rec to list.f else null
-      list.pg = ''
-   end
+   writeseq list.pg:list.rec to list.f else null
+   list.pg = ''
    return
 
 

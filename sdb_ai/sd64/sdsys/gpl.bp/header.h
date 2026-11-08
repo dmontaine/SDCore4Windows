@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: hdr.ctype (0x4000, the C dictionary item type) is gone; the bit is reserved.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -83,13 +84,13 @@ $define hdr.nocase           0x0010  ;* Case insensitive string operations
 $define hdr.is.function      0x0020  ;* Basic function
 $define hdr.var.args         0x0040  ;* Variable arg count (hdr.args = max)
 $define hdr.recursive        0x0080  ;* Is a recursive program
-$define hdr.itype            0x0100  ;* Is an A/S/C/I-type
+$define hdr.itype            0x0100  ;* Is an A/S/I-type
 $define hdr.allow.break      0x0200  ;* Allow break in recursive
 $define hdr.is.trusted       0x0400  ;* Trusted program
 $define hdr.netfiles         0x0800  ;* Allow remote files by NFS
 $define hdr.case.sensitive   0x1000  ;* Program uses case sensitive names
 $define hdr.sdcall.allowed   0x2000  ;* Can be called using SDCall()
-$define hdr.ctype            0x4000  ;* Is a C-type
+* 0x4000 is reserved: it was HDR.CTYPE, the C dictionary item type (gone 28 Oct 26, S.87).  Do not reuse it.
 $define hdr.is.class         0x8000  ;* Is CLASS module
 
 * Flag bits not in header but in process.program.flags

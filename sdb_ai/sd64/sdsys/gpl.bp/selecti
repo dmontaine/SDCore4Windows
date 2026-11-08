@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 18 Oct 26 Windows port - from Linux ada8c02 (12 Oct 26): 1.2-0 bundle A-7 (openQM ref 119).
 * END-HISTORY
 *
@@ -59,10 +60,10 @@ $include syscom.h
 
    * The file
 
-   call @parser(PARSER$MFILE, token.type, filename, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, filename, keyword)
    if keyword = KW$DICT then
       dict.flag = 'DICT'
-      call @parser(PARSER$MFILE, token.type, filename, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, filename, keyword)
    end
    if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
 

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): S.87 C-020: the sd.voclib file (the ten ready-made list sentences) is gone; only the comment naming it as a stock pointer changed.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the System:Account:File name form (FILERULE bit 2) is gone, and a Q-pointer with a fourth
 *               field (another system) is refused (3003, as before) instead of building a path.
@@ -76,7 +77,7 @@ $include keys.h
 *     2. The file an F-pointer finally names must be inside the account's own directory, or inside the
 *        directory of an account a Q-pointer was followed into (rule 1), or hold os-on, or be what the
 *        STOCK VOC says: the record of the same id in SDSYS's NEWVOC names the same path.  The stock
-*        pointers ($map, syscom, sd.voclib, dict.dict, voc, newvoc, $acc) and the stock Q-pointers
+*        pointers ($map, syscom, dict.dict, voc, newvoc, $acc) and the stock Q-pointers
 *        (sd.accounts, which leads into SDSYS - an account nobody may LOGTO) need this last clause.
 *   Refusal is ER$PERM, 3035, as for OPENSEQ.
    vr.admin = kernel(K$ADMINISTRATOR, -1)
@@ -87,14 +88,12 @@ $include keys.h
    n.ok = @false                                    ;* the N pointer test (S.65 slice 3c)
 
    vflags = ''     ;* Field 6 of the F-type entry that names the file, upper case (open_file() in op_dio1.c)
-   voc.id = field(filename, ',', 1)
-   component = field(filename, ',', 2)
+   voc.id = filename         ;* 28 Oct 26 dm - S.87: a comma is part of the name now (multifiles are gone), so a name with one is in no VOC entry
 
    if is.dict then
       fno = 3
    end else if voc.id[1,5] = 'DICT ' then
       voc.id = voc.id[6,9999]
-      component = ''            ;* 0517
       fno = 3
    end else
       fno = 2
@@ -104,12 +103,8 @@ $include keys.h
    dir = @path
    qpath = ''
 
-   * If we end up following Q-pointer A that turns out to be a link to a
-   * multifile B, a file name of the form A,X must open part X whereas a
-   * filename that is simply A must open A,B (not A,A). To do this, set
-   * qfile to be the initial VOC name (in this example A) so that the
-   * multifile name is in the same variable as it will be if we go round
-   * the Q-pointer path.
+   * qfile is the name of the VOC record being followed; it starts as the
+   * initial VOC name and moves to the target of each Q-pointer.
 
    qfile = voc.id
 
@@ -155,8 +150,8 @@ $include keys.h
       end
 
       if fold.found then
-         * qfile is the multifile component default (see below) and was set from
-         * the name as typed, so it has to move to the name that actually matched.
+         * qfile was set from the name as typed, so it has to move to the name
+         * that actually matched.
          qfile = voc.id
          goto parse.as.q.pointer
       end
@@ -171,7 +166,7 @@ $include keys.h
 *   gate K$SHARED.READ is asked here and again inside !shared_ref; that program does the whole of the checking (an F entry of shared's own VOC
 *   only, the stock names, the shape of the name, the kernel's test of the path) and answers pathname<FM>vflags, or nothing.  None of
 *   check.f.path, qroot and check.q.hop is used: the answer is not a pointer this account made.
-      if allow.shared and component = '' and not(vr.admin) then
+      if allow.shared and not(vr.admin) then
          if kernel(K$SHARED.READ, -1) then
             shared.ans = shared_ref(voc.id, fno, @false)
             if shared.ans # '' then
@@ -197,27 +192,7 @@ parse.as.q.pointer:
             f.raw = pathname                                ;* as written, before @SDSYS and the like are expanded
             vflags = upcase(voc.rec<6>)
 
-            if fno = 2 then
-               if voc.rec<4> # '' then   ;* It's a multifile
-                  * If the filename does not include a component subfile
-                  * name, use the filename as the default.
-
-                  if component = '' then component = qfile
-
-                  * Try to find this component
-
-                  locate component in voc.rec<4,1> setting pos else
-                     set.status ER$CNF  ;* No reference to this component
-                     return
-                  end
-                  pathname = pathname<1,pos>
-               end else                    ;* It's a simple file
-                  if component # '' then   ;* 0376 Fail open if subfile given
-                     set.status ER$VNF
-                     return
-                  end
-               end
-            end
+            * 28 Oct 26 dm - S.87: field 4 of an F-pointer (the multifile component list) is ignored.
 
             if pathname = "" then
                set.status ER$NPN  ;* No pathname
@@ -260,11 +235,6 @@ parse.as.q.pointer:
             return
 
          case type = "Q"
-            if index(voc.rec<3>, ',', 1) and component = '' then
-               component = field(voc.rec<3>, ',', 2)
-               voc.rec<3> = field(voc.rec<3>, ',', 1)
-            end
-
             if voc.rec<4> # '' then     ;* 27 Oct 26 dm - a fourth field names another system; nothing here opens a file on one.  It came back as a path with semicolons and failed (3003); it is refused with the same status, and is NOT opened as a local file
                pathname = ''
                set.status ER$FNF

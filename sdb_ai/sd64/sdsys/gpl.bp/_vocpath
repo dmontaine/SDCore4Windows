@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the description no longer lists the name,subfile form.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM ref 86.  The syntax is SD's own: a subroutine.
 * END-HISTORY
@@ -23,7 +24,7 @@
 *   CALL !VOCPATH(name, path, status)
 *
 * Resolves NAME as OPEN would (an F-type VOC record, a Q-pointer followed to
-* the file it names, "DICT name" and "name,subfile") and returns the full pathname in
+* the file it names, and "DICT name") and returns the full pathname in
 * PATH.  STATUS is 0, or the error number OPEN would have given (PATH is null).
 *
 * END-DESCRIPTION
@@ -38,7 +39,7 @@ $catalog !VOCPATH
 $include syscom.h
 $include keys.h
 
-   * Opening the file is how SD resolves the name (VOC record, Q-pointers, subfile, DICT), so ask it to, then
+   * Opening the file is how SD resolves the name (VOC record, Q-pointers, DICT), so ask it to, then
    * read the path of what it opened.
 
    path = ''

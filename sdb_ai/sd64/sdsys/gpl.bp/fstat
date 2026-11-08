@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -65,12 +66,12 @@ $include int$keys.h
 
    dict.flag = ''
    loop
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
          case keyword = KW$DICT
             dict.flag = 'DICT '
-            call @parser(PARSER$MFILE, token.type, token, keyword)
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
             if token.type = PARSER$END then stop sysmsg(2102) ;* File name required
             goto check.filename
 

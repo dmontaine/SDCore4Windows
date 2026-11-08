@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): Written for QM4 gaps bundle Q-8 (ANALYSE.INDEX).
 * END-HISTORY
 *
@@ -51,7 +52,7 @@ $include err.h
    call !parser(PARSER$RESET, 0, @sentence, 0)
    call !parser(PARSER$GET.TOKEN, token.type, token, keyword)  ;* Verb
 
-   call !parser(PARSER$MFILE, token.type, filename, keyword)
+   call !parser(PARSER$GET.TOKEN, token.type, filename, keyword)
    if token.type = PARSER$END then stop sysmsg(2102)  ;* File name required
 
    open '', filename to data.f else

@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 43527e34 (S.87 batch 13): the command it builds says CATALOG (the verb CATALOGUE is gone).
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION KEEP.OLD.OBJECT is gone; a failed compilation leaves no object code, as it did with the option off.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the object file, once open, is asked of !edit_guard, so a source in the shared account cannot
@@ -98,7 +99,7 @@ $define max.levels   10
    compile.only.changed.records = @false
 
    loop
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
          case keyword = KW$CHANGED
@@ -382,7 +383,7 @@ compile:
    recordlocku out.f, listing.record.name
    delete out.f, listing.record.name
 
-   call $bcomp(source.file.name, src.f, record.name, @false, prog.source, 
+   call $bcomp(source.file.name, src.f, record.name, prog.source,
                output.file.name, listing.record.name,
                compiler.flags, 1,
                catalogue.name, catalogue.mode,

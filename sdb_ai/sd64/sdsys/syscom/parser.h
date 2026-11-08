@@ -256,7 +256,7 @@ $define PARSER$GET.TOKEN    1
 $define PARSER$GET.REST     2
 $define PARSER$EXPAND       3
 $define PARSER$LOOK.AHEAD   4
-$define PARSER$MFILE        5  ;* Like GET.TOKEN but allows multifile syntax
+* 5 was PARSER$MFILE (multifile syntax), retired 28 Oct 26 (S.87): do not recycle the number
 
 * !PARSER token type values
 

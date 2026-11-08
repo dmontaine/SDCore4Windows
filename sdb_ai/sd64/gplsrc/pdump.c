@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: a process dump no longer names the C-type header flag (HDR_CTYPE is gone).
  * 28 Oct 26 dm  S.87: the PMATRIX descriptor type and AH_PICK_STYLE are gone.
  * 24 Oct 26 dm  W.11 F9: a process dump with no DUMPDIR is written under sd_sysdir() (the configuration file's), not the segment's copy.
  * 17 Oct 26 dm  S.65 slice 3c: dump_variable() names a NET_FILE as a remote file instead of reading FPtr(-1)
@@ -276,7 +277,7 @@ void pdump() {
       if (pgm->flags & HDR_RECURSIVE)
         fprintf(fu, "    Recursive\n");
       if (pgm->flags & HDR_ITYPE)
-        fprintf(fu, "    I or C-type\n");
+        fprintf(fu, "    I-type or correlative\n");
       if (pgm->flags & HDR_ALLOW_BREAK)
         fprintf(fu, "    Allow break in recursive\n");
       if (pgm->flags & HDR_IS_TRUSTED)
@@ -287,8 +288,6 @@ void pdump() {
         fprintf(fu, "    Case sensitive names\n");
       if (pgm->flags & HDR_SDCALL_ALLOWED)
         fprintf(fu, "    SDCall allowed\n");
-      if (pgm->flags & HDR_CTYPE)
-        fprintf(fu, "    C-type\n");
       if (pgm->flags & HDR_IS_CLASS)
         fprintf(fu, "    Class module\n");
       fprintf(fu, "\n");

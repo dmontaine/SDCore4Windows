@@ -264,7 +264,7 @@ finally {
     Write-Host ''
     Write-Host '--- cleanup ----------------------------------------------------------'
     Remove-Fixtures
-    $left = Invoke-SD @("LISTF $File")
+    $left = Invoke-SD @("LIST VOC $File")      # 8 Nov 26: LISTF went with S.87 (Linux d241df26)
     Row 'cleanup: the file is gone from VOC' ($left.Text -match "'$File' not found") 'LISTF still lists it'
     Row 'cleanup: no zzdf directory is left' (@(Get-ChildItem -LiteralPath $AcctDir -Directory | Where-Object { $_.Name -match '(?i)^zzdf' }).Count -eq 0) 'a directory remains'
 }

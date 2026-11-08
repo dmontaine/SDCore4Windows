@@ -1,9 +1,0 @@
-Sentence to list local files
-LIST VOC @ID COL.HDG "File name" FMT "23L"_
-FTYPE FMT "12L"_
-DESC FMT "35L"_
-DATA.NAME FMT "23L"_
-DICT.NAME FMT "23L"_
-WITH TYPE = "F" AND IS.REMOTE = ''_
-BY @ID ID.SUP_
-HEADING "Files local to this account referenced by the VOC'G'Page 'SL'"

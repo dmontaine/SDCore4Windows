@@ -18,6 +18,7 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION QUERY.SORT.NO.CASE is gone; a sort key is compared as it is (SP.VIEW sorts
 *               case-blind by itself).
@@ -549,14 +550,14 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    * 27 Oct 26 dm - S.87 batch 4: ID.ONLY / ONLY written before the file name is gone (write ID.ONLY after the file name).
    dict.flag = ''
    loop    ;* 0198
-      call @parser(PARSER$MFILE, token.type, qproc.file.name, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, qproc.file.name, keyword)
    while keyword = KW$FILLER
    repeat
 
    if keyword = KW$DICT then      ;* DICT keyword
       dict.flag = "DICT"
       loop    ;* 0198
-         call @parser(PARSER$MFILE, token.type, qproc.file.name, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, qproc.file.name, keyword)
       while keyword = KW$FILLER
       repeat
    end
@@ -3393,10 +3394,10 @@ label.template.found:
 
 * --- USING
          case keyword = KW$USING
-            call @parser(PARSER$MFILE, token.type, token, keyword) ;* 0462
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* 0462
             if keyword = KW$DICT then
                using.dict = 'DICT'
-               call @parser(PARSER$MFILE, token.type, token, keyword) ;* 0462
+               call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* 0462
             end else
                using.dict = ''
             end

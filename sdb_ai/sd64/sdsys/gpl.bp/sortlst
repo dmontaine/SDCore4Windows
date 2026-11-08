@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 18 Oct 26 Windows port - from Linux e02672d (11 Oct 26): 1.2-0 bundle A-7 (openQM ref 158).
 * 17 Oct 26 dm  S.64 part 2: SORT.LIST ... FROM a VOC, a dictionary or a program file asks edit_guard before it reads or rewrites.
 * 11 Oct 26 dm  1.2-0 bundle A-7 (openQM ref 158).
@@ -63,7 +64,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64 part 2
    file.name = '$savedlists'
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    if keyword = KW$FROM then
-      call @parser(PARSER$MFILE, token.type, file.name, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, file.name, keyword)
       if token.type = PARSER$END then
          stop sysmsg(3242) ;* Source list file name not found where expected
       end

@@ -18,6 +18,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the description no longer lists a multifile name among the forms OPEN takes.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (VOCPATH), as a function in BASIC that bcomp knows by name.  It is called
 *               !vocpathfn because !VOCPATH is the catalogue name of the older subroutine in _vocpath (two programs under one
 *               name: the one the catalogue holds is the last compiled, which depends on the order of the directory).
@@ -28,7 +29,7 @@
 * VOCPATH(filename {, dict.flag})
 *
 * The operating system pathname of a file named through the VOC: the data part, or the dictionary part if DICT is written in front of
-* the name or the second argument is true.  The file is opened as OPEN opens it, so a Q-pointer, a multifile name and the other
+* the name or the second argument is true.  The file is opened as OPEN opens it, so a Q-pointer and the other
 * forms OPEN takes are resolved as OPEN resolves them, and the pathname is that of the file opened.  STATUS() is 0 if it was found
 * and the error of the open if not, in which case the value is a null string.
 *

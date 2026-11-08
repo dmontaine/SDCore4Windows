@@ -22,6 +22,10 @@
  * 30 Jul 24 mab add error codes for SD_ENCRYPT_SODIUM
  * rev 0.9.0 Jan 25 mab sdext_eguid_set error codes
  * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
+ * 8 Nov 26 Windows port - from Linux d241df26 (S.87): PAL-10 (parity audit): the Python error texts and two sdext_euid texts
+ *    are spelt and worded as the Windows port's (interpreter, initialised,
+ *    concatenate, process ...); no code or value changed.  SYSCOM ERR.H and
+ *    ERRTEXT.H are regenerated from this file by ERRGEN.
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
  * 14 Sep 26 Windows port - ER_TWIN 3042, RELEASE_1.1 5 D2
  * END-HISTORY
@@ -145,8 +149,8 @@
 #define ER_SQSEEK      3028    /* Seek to invalid offset in sequential file */
 #define ER_SQREL       3029    /* Invalid seek relto in sequential file */
 #define ER_EOF         3030    /* End of file */
-#define ER_CNF         3031    /* Multifile component not found */
-#define ER_MFC         3032    /* Multifile reference with no component name */
+/* 3031 and 3032 are RETIRED - do not recycle.  They were ER_CNF (multifile component not found) and ER_MFC (multifile reference
+   with no component name).  Multifiles were removed on 28 Oct 26 (S.87); the numbers stay claimed. */
 #define ER_PNF         3033    /* Port not found (os.error) */
 #define ER_BAD_DICT    3034    /* Bad dictionary entry */
 #define ER_PERM        3035    /* Permissions error (os.errno) */

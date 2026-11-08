@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: HDR_CTYPE (0x4000, the C dictionary item type) is gone; the bit is reserved.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -58,13 +59,13 @@ struct OBJECT_HEADER {
 #define HDR_IS_FUNCTION      0x0020  /* Is a basic function */
 #define HDR_VAR_ARGS         0x0040  /* Variable argument count (args = max) */
 #define HDR_RECURSIVE        0x0080  /* Is a recursive program */
-#define HDR_ITYPE            0x0100  /* Is an A/S/C/I-type */
+#define HDR_ITYPE            0x0100  /* Is an A/S/I-type */
 #define HDR_ALLOW_BREAK      0x0200  /* Allow break key in recursive */
 #define HDR_IS_TRUSTED       0x0400  /* Trusted program */
 #define HDR_NETFILES         0x0800  /* Allow remote files by NFS */
 #define HDR_CASE_SENSITIVE   0x1000  /* Program uses case sensitive names */
 #define HDR_SDCALL_ALLOWED   0x2000  /* Can be called via Q_M_Call() */
-#define HDR_CTYPE            0x4000  /* Is a C-type */
+/* 0x4000 is reserved: it was HDR_CTYPE, the C dictionary item type (gone 28 Oct 26, S.87).  Do not reuse it. */
 #define HDR_IS_CLASS         0x8000  /* Is CLASS module */
 
         int32_t compile_time;     /* Date * 86400 + time (UNIX Epoch time) */

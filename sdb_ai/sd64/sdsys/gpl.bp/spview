@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): BY field NO.CASE no longer switches on OPTION QUERY.SORT.NO.CASE (the option is gone);
 *               sort.list.no.case sorts the selected list again on the upper-cased value of the field.  Not run.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
@@ -78,7 +79,7 @@ $include keyin.h
    sort.dsnd = @false
 
    loop
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    until token.type = PARSER$END
       begin case
          case sort.state = 1 and keyword = KW$NO.CASE
@@ -101,7 +102,7 @@ $include keyin.h
             sort.state = 1
 
          case keyword = KW$DICT
-            call @parser(PARSER$MFILE, token.type, token, keyword)
+            call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
             if token.type = PARSER$END then stop 'File name required'
             file.name = 'DICT ' : token
 

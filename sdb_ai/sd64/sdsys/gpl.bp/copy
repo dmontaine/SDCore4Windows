@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 18 Oct 26 Windows port - from Linux 9f067b8 (11 Oct 26): A record of a data collection file is copied to a file that is not
 * 17 Oct 26 dm  S.64: copying INTO a VOC, a dictionary or a program file, and moving records OUT of one (DELETING), ask edit_guard.
@@ -93,13 +94,13 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* First argument
    if keyword # KW$FROM then stop sysmsg(6182) ;* FROM keyword required
 
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    * Check for DICT keyword
 
    if keyword = KW$DICT then     ;* DICT
       src.portion = "DICT"
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end
 
    * Fetch file name
@@ -124,13 +125,13 @@ retry.source.file.open:
 
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    if keyword = KW$TO then    ;* TO
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
       * Check for DICT keyword
 
       if keyword = KW$DICT then     ;* DICT
          tgt.portion = "DICT"
-         call @parser(PARSER$MFILE, token.type, token, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
       end
 
       * Fetch file name

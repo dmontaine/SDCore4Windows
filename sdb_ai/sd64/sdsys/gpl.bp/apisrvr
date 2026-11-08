@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): QMEvaluate and QMEvalConv refuse a C item with message 12347, whose text no longer lists C (the type list in vb.evaluate is DASI).
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 36daf810 (S.87): request 70 operation 1 runs analyze.file (the VOC record analyse.file is gone); the operation's name in the audit line
 *           and on the wire is unchanged.
@@ -3072,7 +3073,7 @@ return
 * In:  file number of a DICTIONARY (short), name length (short), name(s) - several are separated by value marks -,
 *      data length (long), the data, the record id
 * Out: the value of each item, joined by item marks.  The data becomes @RECORD and the id @ID for the evaluation.
-* An item that is not in the dictionary is the ELSE case; one that is not a data defining item (type D, A, S, C or I) or does not
+* An item that is not in the dictionary is the ELSE case; one that is not a data defining item (type D, A, S or I) or does not
 * compile is an error.  QMEvalConv also applies the item's output conversion, to each value of a multivalued answer.  A correlative
 * or I-type that is not compiled is compiled for this call and the dictionary is NOT written to (a request that reads must not write).
 * No file number can exist when SDCLIENT is set or SDNet is in use (vb.open refuses), so no restricted session can reach this.
@@ -3123,7 +3124,7 @@ read ev.rec from files(fno), ev.name else
 end
 
 ev.type = upcase(ev.rec[1,1])
-if index('DASIC', ev.type, 1) = 0 or ev.type = '' then
+if index('DASI', ev.type, 1) = 0 or ev.type = '' then
    server.error = SV$ERROR
    error.msg = sysmsg(12347, ev.name) ;* %1 is not a dictionary item that defines data
    return

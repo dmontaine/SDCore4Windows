@@ -116,7 +116,9 @@ $cmds = @(
     # LISTF, LISTQ and LIST.FILES replace them and were ISOLATED FIRST, which is
     # this file's standing rule: each run alone over the same pipe, 0.0s, present
     # in the VOC, 1809 / 1054 / 550 bytes returned.
-    'LISTF', 'DATE', 'WHERE', 'LISTQ', 'LIST.FILES',
+    # 8 Nov 26: LISTF and LISTQ went with S.87 (Linux d241df26); the queries they ran
+    # stand in for them (not isolated again).
+    'LIST VOC WITH TYPE = "F"', 'DATE', 'WHERE', 'LIST VOC WITH TYPE = "Q"', 'LIST.FILES',
     # 24 Aug 26 - EVERY VERB HERE WAS ISOLATED FIRST and returns over a pipe.
     # SETPTR is followed by 'Y': it asks "OK to set new parameters (Y/N)?"
     # (SETPTR:558) and hung until answered - measured, and answering it brought

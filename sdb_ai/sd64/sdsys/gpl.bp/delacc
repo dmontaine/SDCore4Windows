@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the cross-reference scan looks at the first value of field 2 of an F record and not at every value.
 * 28 Oct 26 Windows port - RELEASE_1.1 175: os.users is retired (owner 23 Oct; the grant is the account's, S.63), so drop.os.access and its two callers are gone: the grant
 *           left with the register record, and the person's os.users record (an old install's, unread since S.63) is no longer touched here.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): DELETE.ACCOUNT shared is refused (12522), after the SDSYS test and before anything else is
@@ -248,13 +249,10 @@ deffun is_sd_user(username) calling '!is_sd_user'
                         type = upcase(xvoc.rec[1,1])
                         begin case
                            case type = 'F'
-                              num.components = dcount(xvoc.rec<2>, @vm)
-                              for comp = 1 to num.components
-                                 fpath = ospath(xvoc.rec<2,comp>, OS$FULLPATH)
-                                 if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
-                                    gosub report.xref
-                                 end
-                              next comp
+                              fpath = ospath(xvoc.rec<2,1>, OS$FULLPATH)
+                              if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then
+                                 gosub report.xref
+                              end
 
                               fpath = ospath(xvoc.rec<3>, OS$FULLPATH)
                               if field(fpath, @ds, 1, dcount(fpath, @ds) - 1) = pathname then

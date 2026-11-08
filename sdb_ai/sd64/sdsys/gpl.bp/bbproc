@@ -25,6 +25,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): the call of $BCOMP no longer passes the is.ctype argument (the C dictionary item type is gone).
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): login_inhibit joins the bootstrap list: LOGIN calls it (QM4 gaps Q-8, INHIBIT.LOGIN).
 * 19 Aug 26 Windows port - $include gpl.bp, the VOC id having moved.  5.12 (b).
 * 19 Aug 26 Windows port - the bootstrap now CREATES the SDSYS files in lower
@@ -294,7 +295,7 @@ for pi = 1 to src.cnt
         listing.record.name = prg.name:'.LIS'
        
        
-        call $bcomp(source.file.name, src.f, prg.name, @false, prog.source,output.file.name, listing.record.name,compiler.flags, 1,catalogue.name, catalogue.mode,object.code, errors) 
+        call $bcomp(source.file.name, src.f, prg.name, prog.source,output.file.name, listing.record.name,compiler.flags, 1,catalogue.name, catalogue.mode,object.code, errors) 
         
         if errors = 0 then
            write object.code to out.f, prg.name

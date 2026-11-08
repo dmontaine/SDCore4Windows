@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 19 Aug 26 Windows port - the default source file is bp, not BP.  5.12 (b).
 * 17 Oct 26 dm  S.64 part 2: FORMAT writes the reformatted source back into the file it was given (bp unless named), so it asks edit_guard
 *               (voc.edit, dict.edit, bp.edit) once, right after the open and before it reads the select list or any record.  It is
@@ -70,7 +71,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
    * name.  If it is not a VOC F or Q type entry, leave it for processing
    * as a record id or option keyword and use the default name (BP).
 
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    if token.type # PARSER$END then
       fn = field(token, ',', 1)

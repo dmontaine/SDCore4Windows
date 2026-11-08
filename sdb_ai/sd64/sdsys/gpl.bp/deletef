@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  DELETE.FILE name,part is no longer a form (a comma after the name is an unexpected token, 2018), the question "Delete all data components of multifile?" (6133, with its C answer) and the removal of an emptied multifile directory (6137) are gone, and only the first value of field 2 is looked at.  6134 goes too.
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 33, owner's ruling: Enter at
 *            "Use active select list" (2050) means N, and "Delete all data
@@ -134,22 +135,20 @@ $define max.name.len 12
    delete.dict = @true
    delete.data = @true
    file.name = ''
-   component = ''
-   deleting.multifile.element = @false   ;* 0483
    force = @false
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    begin case
       case keyword = KW$DATA
          delete.dict = @false
-         call @parser(PARSER$MFILE, token.type, token, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
       case keyword = KW$DICT
          delete.data = @false
-         call @parser(PARSER$MFILE, token.type, token, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end case
 
    loop
@@ -166,8 +165,7 @@ $define max.name.len 12
                stop sysmsg(2018, token) ;* Unexpected token (xx)
             end
 
-            file.name = field(token, ',', 1)
-            component = field(token, ',', 2)
+            file.name = token
       end case
 
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
@@ -207,8 +205,6 @@ $define max.name.len 12
          @system.return.code = 0
 
          loop
-            component = ''
-            deleting.multifile.element = @false
             gosub delete.file
             readnext file.name else exit
          repeat
@@ -301,52 +297,16 @@ delete.upcased.file:
    dummy = ospath("", os$flush.cache)
 
    if delete.data then
-      if component = '' then
-         data.pathnames = voc.rec<2>
-         if dcount(data.pathnames, @vm) > 1 then
-            loop
-               display sysmsg(6133) :  ;* Delete all data components of multifile?
-               input yn
-               yn = upcase(yn)
-* 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 33, owner's ruling: "add a cancel
-*   answer".  N IS NOT THE SAFE ANSWER HERE - it goes to delete.dict, which
-*   still deletes the dictionary - so neither Y nor N leaves the file alone, and
-*   Enter could not simply mean N as it does at every other prompt in this file.
-*   C cancels: nothing is deleted, the VOC record is released untouched, and the
-*   status is ER$STOPPED, as when the 6131 question is declined.  Enter means C.
-*   Y and N keep exactly their old meaning.  Before this the loop re-asked for
-*   ever at end of input.  SD Core for Linux left its copy hanging.
-               if yn = '' then yn = 'C'
-               if yn[1,1] = 'C' then
-                  release voc.f, file.name
-                  @system.return.code = -ER$STOPPED
-                  return
-               end
-            until yn = 'Y'
-               if yn = 'N' then goto delete.dict
-            repeat
-         end
-         pos = 1
-      end else
-         locate component in voc.rec<4,1> setting pos else
-            u.voc.rec = upcase(voc.rec)
-            locate upcase(component) in u.voc.rec<4,1> setting pos else
-               stop sysmsg(6134) ;* Multifile component not found
-            end
-         end
-         data.pathnames = voc.rec<2,pos>
-         deleting.multifile.element = @true   ;* 0483
-       end
+      data.pathnames = voc.rec<2,1>      ;* 8 Nov 26 Windows port, from Linux d241df26 (S.87): one data part; a second value in an old multifile record is not looked at
 
-      if len(data.pathnames) then  ;* Multivalued if deleting all of multifile
+      if len(data.pathnames) then
          loop
             remove data.path from data.pathnames setting more
             if upcase(data.path[1,6]) = '@SDSYS' then
                part = 'data'
                gosub check.sdsys.file
                if skip.part then
-                  del voc.rec<2,pos>
-                  del voc.rec<4,pos>
+                  voc.rec<2> = ''        ;* 8 Nov 26 (S.87): one data part, no component list
 * 11 Sep 26 Windows port - RELEASE_1.1_FIXES.md 15.  "continue" DOES NOT TEST
 *   "while more" HERE, AND THIS FILE ALREADY SAYS SO FORTY LINES BELOW.  The
 *   20240121 note at the DATA prompt reads "using continue here will create
@@ -462,19 +422,7 @@ delete.upcased.file:
 
                display sysmsg(6136, data.path) ;* DATA portion 'xx' deleted
 
-               if voc.rec<4> # '' then  ;* It is a multifile
-                  parent.dir = field(data.path, @ds, 1, dcount(data.path, @ds)-1)
-                  if dir(parent.dir) = '' then
-                     * The directory is now empty. Delete it.
-
-                     if ospath(parent.dir, OS$DELETE) then
-                        display sysmsg(6137, parent.dir) ;* Multifile directory 'xx' deleted
-                     end
-                  end
-               end
-
-               del voc.rec<2,pos>
-               del voc.rec<4,pos>
+               voc.rec<2> = ''
             end else
                display sysmsg(6138, data.path) ;* Error deleting DATA portion 'xx'
                @system.return.code = -status()
@@ -490,7 +438,7 @@ more_test: *
 
 delete.dict:
 
-   if delete.dict and not(deleting.multifile.element) then  ;* 0483
+   if delete.dict then
       dict.path = voc.rec<3>
 
       if len(dict.path) then

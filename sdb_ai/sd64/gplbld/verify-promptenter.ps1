@@ -423,44 +423,10 @@ try {
 
     # --- LEG 8: RELEASE_1.1 33, DELETEF 6133 gains C to cancel, owner's ruling --
     #
-    # A multifile with two data components reaches 6133.  Captured 13 Sep 2026
-    # before the change: CREATE.FILE ZZPROMPTM,C1 then ,C2 makes it (field 4
-    # "c1<vm>c2"); N at 6133 deletes the DICTIONARY only; Y goes on to ask 6135
-    # for each component.  Now: Enter means C, and C deletes nothing.
-    Write-Host "--- leg 8: DELETEF 6133 on the multifile $MultiM ---------------------"
-    $mDir = Join-Path $acctDir $MultiM
-    $mDic = Join-Path $acctDir ($MultiM + '.DIC')
-    $null = Invoke-SD @("DELETE VOC $MultiM")
-    foreach ($p in @($mDir, $mDic)) { if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue } }
-    $mk8 = Invoke-SD @("CREATE.FILE $($MultiM.ToUpper()),C1", "CREATE.FILE $($MultiM.ToUpper()),C2", "CT VOC $MultiM")
-    Write-Host $mk8.Text
-    $multiOk = ($mk8.Text -match "Created DATA part as $MultiM/c2") -and (Test-Path -LiteralPath (Join-Path $mDir 'c1')) -and
-               (Test-Path -LiteralPath (Join-Path $mDir 'c2')) -and (Test-Path -LiteralPath $mDic)
-    Row "leg 8 precondition: $MultiM is a multifile with components c1 and c2 and a dictionary" $multiOk `
-        'the multifile was not built, so 6133 could not be reached'
-    if ($multiOk) {
-        foreach ($ans in @(@{ Label = 'ENTER'; Line = '' }, @{ Label = 'an explicit C'; Line = 'C' })) {
-            $r8 = Invoke-SD @("DELETE.FILE $MultiM", $ans.Line, 'WHO')
-            Write-Host $r8.Text
-            Row "leg 8 ($($ans.Label)): the run terminated" (-not $r8.Killed) "killed after ${TimeoutSeconds}s"
-            Row "leg 8 ($($ans.Label)): prompt 6133 was reached, showing (y/n/<c>)" `
-                ($r8.Text -match 'Delete all data components of multifile.*\(y/n/<c>\)\?') 'no 6133 prompt carrying (y/n/<c>)'
-            Row "leg 8 ($($ans.Label)): nothing was deleted" `
-                (($r8.Text -notmatch "portion '[^']*' deleted") -and ($r8.Text -notmatch "VOC entry '[^']*' deleted")) `
-                'a deletion was reported - cancel did not cancel'
-            Row "leg 8 ($($ans.Label)): both components and the dictionary survive on disk" `
-                ((Test-Path -LiteralPath (Join-Path $mDir 'c1')) -and (Test-Path -LiteralPath (Join-Path $mDir 'c2')) -and (Test-Path -LiteralPath $mDic)) `
-                'a part of the multifile is gone'
-            Row "leg 8 ($($ans.Label)): the session went on (WHO answered)" `
-                ($r8.Text -match "(?m)^\s*\d+\s+$([regex]::Escape($Account))\b") 'WHO did not answer - the prompt swallowed it'
-        }
-        # CONTROL: N keeps its old meaning - the dictionary goes, the data stays.
-        $n8 = Invoke-SD @("DELETE.FILE $MultiM", 'N')
-        Write-Host $n8.Text
-        Row "CONTROL leg 8: N deletes the dictionary only ('$MultiM.DIC' deleted)" `
-            (($n8.Text -match "DICT portion '$MultiM\.DIC' deleted") -and (-not (Test-Path -LiteralPath $mDic)) -and
-             (Test-Path -LiteralPath (Join-Path $mDir 'c1'))) 'N did not delete exactly the dictionary - the prompt is not driving the branch'
-    }
+    # LEG 8 - RETIRED 8 Nov 26.  It drove DELETE.FILE's 6133 prompt ("Delete all
+    # data components of multifile") on a two-component multifile; multifiles,
+    # and that prompt, went with S.87 (Linux d241df26).  The cleanup below still
+    # removes a zzpromptm left by an earlier run.
 }
 finally {
     $null = Invoke-SD @("DELETE.FILE $Probe", 'Y', 'Y', 'Y')

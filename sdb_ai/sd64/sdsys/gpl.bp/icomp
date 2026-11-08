@@ -1302,7 +1302,7 @@ have.field.rec:
                   opcode.byte = OP.COLL ; gosub emit.simple
 
                case type = 'A' or type = 'S'
-                  * A/S-type item with correlative or C-type
+                  * A/S-type item with correlative
                   * Unlike nested I-types, A/S-types that reference other
                   * compiled items do this as a run time subroutine call
                   * using ITYPE() to execute embedded object code.
@@ -2028,7 +2028,7 @@ parse.as.dictionary.name:
                      gosub emit.numeric.load
 
                   case trans.type = 'A' or trans.type = 'S'
-                     * 10 Oct 26 dm, openQM ref 182: an A, S or C item with an
+                     * 10 Oct 26 dm, openQM ref 182: an A or S item with an
                      * expression is compiled as the same object code an I-type
                      * gives, and evaluated against the record read by TRANS().
                      call $dcomp(trans.file.dict,   ;* File var of dictionary

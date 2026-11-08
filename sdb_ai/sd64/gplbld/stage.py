@@ -305,7 +305,8 @@ SDSYS_SHIP = [
     # installed system never opens it (createa's copy of it was deleted with the
     # tiers, RELEASE_1.1 64).  See SDSYS_BUILD_SEED.
     ('messages',      'sysmsg() text'),
-    ('sd.voclib',     'library routines'),
+    # 8 Nov 26 - sd.voclib IS NO LONGER SHIPPED (from Linux d241df26, S.87): its ten
+    # list sentences are on the VOC deletion list; see SDSYS_RETIRED.
     ('accounts',      'holds the SDSYS record; the bootstrap adds to it'),
     # 25 Aug 26 - bp IS NO LONGER ON THIS LIST.  SD ships NOTHING into SDSYS's
     # own BP now; see SDSYS_EMPTY and SDSYS_PRESERVE below.  The 24 Aug note
@@ -496,7 +497,6 @@ SDSYS_MIRROR = [
     # deleted it with the tiers; a mirror entry for a directory that no longer
     # ships would make "installed but not in source" mean the wrong thing.
     ('messages',     'sysmsg text'),
-    ('sd.voclib',    'library routines'),
     ('voc_removed',  'the VOC deletion list; nothing writes it at runtime (7 Nov 26)'),
     # 25 Aug 26 - bp IS NO LONGER A MIRROR, and it stopped qualifying the
     # moment SD stopped shipping into it.
@@ -530,6 +530,7 @@ SDSYS_MIRROR = [
 SDSYS_RETIRED = [
     ('changelog', 'moved to {app} on 25 Aug 26 - see the note on SDSYS_SHIP'),
     ('voc_template', 'build-time seed only from 21 Sep 26 - see SDSYS_BUILD_SEED'),
+    ('sd.voclib', 'the ten list sentences, removed 8 Nov 26 (S.87, Linux d241df26); their VOC records are on the deletion list'),
 ]
 
 # The same thing for C:\Program Files\SD.  A script this file used to copy

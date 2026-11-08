@@ -81,7 +81,9 @@ Assert-SdSeat -Label 'clean-deadvoc'
 Write-Output ('clean-deadvoc: sd.exe ' + $sdExe)
 Write-Output ''
 
-$before = Invoke-SdAdmin @('LISTF NO.PAGE')
+# 8 Nov 26: the sentence LISTF held, typed out - LISTF went with S.87 (Linux d241df26).
+$listfSentence = 'LIST VOC @ID FMT "18L" COL.HDG "File name" FTYPE FMT "12L" DESC FMT "31L" DATA.NAME FMT "23L" DICT.NAME FMT "23L" WITH TYPE = "F" BY @ID ID.SUP HEADING "Files referenced by the VOC''G''Page ''SL''" NO.PAGE'
+$before = Invoke-SdAdmin @($listfSentence)
 
 # REFUSE THE NULL CASE.  A LISTF that did not run would list nothing, and
 # "nothing to delete" would then read exactly like "already clean".
@@ -163,7 +165,7 @@ foreach ($l in ($out -split "`n")) { $t = $l.TrimEnd(); if ($t -ne '') { Write-O
 # ***THE CHECK IS A SECOND LISTF, NOT SD's WORDING.***  The instrument rule:
 # compare the state before and after, and do not anchor on a message that the
 # failure path may also print.
-$after = Invoke-SdAdmin @('LISTF NO.PAGE')
+$after = Invoke-SdAdmin @($listfSentence)
 if ($after -notmatch 'Files referenced by the VOC') {
     Write-Output ''
     Write-Output 'clean-deadvoc: the verifying LISTF did not run - the result above is unconfirmed.'

@@ -1,8 +1,0 @@
-Sentence to list files
-LIST VOC @ID FMT "18L" COL.HDG "File name"_
-FTYPE FMT "12L"_
-DESC FMT "31L"_
-DATA.NAME FMT "23L"_
-DICT.NAME FMT "23L"_
-WITH TYPE = "F"_
-BY @ID ID.SUP HEADING "Files referenced by the VOC'G'Page 'SL'"

@@ -607,9 +607,10 @@ if (-not $Keep) {
     foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $sdsys 'voc') -File -ErrorAction SilentlyContinue)) {
         $vocText += [System.Text.Encoding]::GetEncoding('iso-8859-1').GetString([System.IO.File]::ReadAllBytes($f.FullName))
     }
-    $vocReadable = $vocText.IndexOf('listf', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
-    Write-Output ("  SDSYS VOC scan: " + $vocText.Length + " bytes, control 'listf' found: " + $vocReadable)
-    Note 'cleanup: SDSYS VOC scan could read the VOC (control listf)' $true $vocReadable
+    # 8 Nov 26: the control is list.files - listf went with S.87 (Linux d241df26).
+    $vocReadable = $vocText.IndexOf('list.files', [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+    Write-Output ("  SDSYS VOC scan: " + $vocText.Length + " bytes, control 'list.files' found: " + $vocReadable)
+    Note 'cleanup: SDSYS VOC scan could read the VOC (control list.files)' $true $vocReadable
     if ($vocReadable) {
         Note ("cleanup: SDSYS VOC names nothing called " + $ctlFile + " in any case") $false `
              ($vocText.IndexOf($ctlFile, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)

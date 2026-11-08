@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -56,10 +57,10 @@ $include syscom keys.h
    * Get file name
 
    dict.flag = ""
-   call @parser(PARSER$MFILE, token.type, file.name, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, file.name, keyword)
    if keyword = KW$DICT then
       dict.flag = 'DICT'
-      call @parser(PARSER$MFILE, token.type, file.name, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, file.name, keyword)
    end
    if token.type # PARSER$TOKEN then stop sysmsg(2102) ;* File name required
 

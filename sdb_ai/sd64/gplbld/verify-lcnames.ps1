@@ -410,8 +410,9 @@ try {
     # SHIPPED FROM THE REPOSITORY (gplbld/stage.py SDSYS_SHIP and SDSYS_EMPTY).
     # 21 Sep 26 - voc_template is NOT here: it no longer ships (stage.py
     # SDSYS_BUILD_SEED); it is asserted ABSENT just below.
+    # 8 Nov 26: sd.voclib no longer ships (S.87, Linux d241df26).
     $shipped = @('gpl.bp', 'syscom', 'newvoc', 'messages',
-                 'sd.voclib', 'accounts', 'bp', 'gpl.bp.out', 'bp.out',
+                 'accounts', 'bp', 'gpl.bp.out', 'bp.out',
                  'pcode.out', '$hold', '$cred', 'os.users', 'os.users.dic')
     # MADE BY THE BOOTSTRAP: BBPROC's FILES_LIST, plus voc at BBPROC:158.
     $made    = @('voc', 'voc.dic', 'dict.dic', 'dir_dict', 'accounts.dic',
@@ -424,7 +425,7 @@ try {
              @($sysDisk | Where-Object { $_ -ceq $n }).Count
     }
     foreach ($n in @('GPL.BP', 'SYSCOM', 'NEWVOC', 'VOC_TEMPLATE', 'MESSAGES',
-                     'SD.VOCLIB', 'ACCOUNTS', 'BP', 'GPL.BP.OUT', 'BP.OUT',
+                     'ACCOUNTS', 'BP', 'GPL.BP.OUT', 'BP.OUT',
                      'PCODE.OUT', '$HOLD', '$CRED', 'OS.USERS', 'OS.USERS.DIC',
                      'VOC', 'VOC.DIC', 'DICT.DIC', 'DIR_DICT', 'ACCOUNTS.DIC',
                      '$HOLD.DIC', '$MAP', '$MAP.DIC', '$IPC', 'PSTMP')) {
@@ -1023,7 +1024,7 @@ end
     # LIKE's row shows it stored lower.  (An account made BEFORE the rename is
     # verify-tiers.ps1 section 5b's job, which needs an account of its own.)
     $p10 = @(@{U='$ACC'; L='$acc'}, @{U='$MAP'; L='$map'},
-             @{U='$RELEASE'; L='$release'}, @{U='SD.VOCLIB'; L='sd.voclib'})
+             @{U='$RELEASE'; L='$release'})            # 8 Nov 26: sd.voclib went with S.87 (Linux d241df26)
     $ct10 = Invoke-SD (@($p10 | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($p10 | ForEach-Object { $_.L })))
     Note-Pairs $ct10 $p10 ''
     Write-Output '  --- CT VOC said: ---'

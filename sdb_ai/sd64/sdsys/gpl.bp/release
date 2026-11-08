@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): @userno for the removed @user.no.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -50,15 +51,15 @@ $include int$keys.h
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
 
-   call @parser(PARSER$MFILE, token.type, token, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    if keyword = KW$FILELOCK then   ;* Releasing file lock
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
       gosub open.file
       release.lock file.id, @userno
    end else                        ;* Releasing record lock(s)
       gosub open.file
 
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
       if token.type = PARSER$END then stop sysmsg(1434) ;* Record id required
 
       loop
@@ -77,7 +78,7 @@ $include int$keys.h
 open.file:
    if token = 'DICT' then
       dict.flag = 'DICT'
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    end else
       dict.flag = ''
    end

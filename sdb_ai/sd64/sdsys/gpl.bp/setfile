@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 32: the target may be a Q-pointer (a chain).
 * 14 Sep 26 Windows port - RELEASE_1.1 5.  The pointer name is found in any
 *           case, and a new pointer is written lower case.  The target file
@@ -88,7 +89,7 @@ $include int$keys.h
 
    * File name
 
-   call @parser(PARSER$MFILE, token.type, filename, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, filename, keyword)
    prompting = (token.type = PARSER$END)
 
    loop

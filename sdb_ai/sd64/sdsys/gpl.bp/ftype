@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the Mult answer and the loop over subfiles (15 Oct 26) are removed, a path is always one file.
 * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): openQM item 3: a multifile gives one value per subfile (see below); file.type() is the single-file code, which
 *               the multifile loop calls for each subfile, and suffix.flags() takes the file variable as an argument.
 * 25 Aug 26 Windows port - dropped the VFS: pathname case.  Nothing in the
@@ -28,7 +29,6 @@
 *
 * START-DESCRIPTION:
 *
-* Mult   Multi-file: a value for each subfile, "Mult " and the type of the first, then the type of each other subfile
 * Err    Error
 * Dir    Directory file
 * DH     Dynamic hashed file
@@ -49,18 +49,6 @@ $include keys.h
    deffun file.type(path) local
    deffun suffix.flags(fu) local
 
-
-   * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): - openQM item 3: a multifile is "Mult" and then a line for each subfile.  The value for subfile n is that
-   * subfile's own type, so that LISTF, which shows the pathnames one to a line, has each type on the line of its pathname;
-   * the first value begins with "Mult" (the manual's Mult entry and the line for its first subfile are one line here).
-   n.sub = dcount(path, @vm)
-   if n.sub > 1 then
-      result = ''
-      for i = 1 to n.sub
-         result<1,i> = if i = 1 then 'Mult ' : file.type(path<1,i>) else file.type(path<1,i>)
-      next i
-      return (result)
-   end
 
    return (file.type(path))
 

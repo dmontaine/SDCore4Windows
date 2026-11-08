@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  The program file's name is always name.out (the file,part form is not split); PARSER$MFILE is now PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * and - are no longer global prefix characters (! $ and _ are).
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CATALOGUE.LOCAL is gone; CATALOG with no word catalogues privately, and LOCAL says local.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
@@ -126,7 +127,7 @@ $define CAT_PCODE  3
    global.prefix = ''            ;* 13 Oct 26 dm - openQM 210: GLOBAL c
    after.global = @false
    loop
-      call @parser(PARSER$MFILE, token.type, token, keyword)
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
 
    while token.type = parser$token
       was.global = after.global
@@ -253,11 +254,7 @@ $define CAT_PCODE  3
 
    * Open the object file
 
-   if index(file.name, ',', 1) then   ;* Multifile
-      file.name = file.name[',', 1, 1] : '.OUT,' : file.name[',', 2, 999]
-   end else                           ;* Simple file
-      file.name := '.OUT'
-   end
+   file.name := '.OUT'
 
    open file.name to object.file else
       open downcase(file.name) to object.file then

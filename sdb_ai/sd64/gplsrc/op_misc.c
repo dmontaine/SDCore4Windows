@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux d241df26 (S.87): op_itype no longer knows the C-type (HDR_CTYPE): it takes no C dictionary record and loads no @ANS.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_forloops and op_for1s ($MODE FOR.STORE.BEFORE.TEST) are gone: forloop() and
  *           for1() store the control variable only when the loop goes round again.
@@ -803,7 +804,6 @@ Private void itype() {
   int16_t i;
   int n;
   u_char type;
-  u_int16_t header_flags;
   OBJECT_HEADER* obj;
 
   /* Find I-type code.  An I-type must be referenced via an ADDR as we are
@@ -828,7 +828,7 @@ Private void itype() {
   p = str->data;
   type = UpperCase(*p);
 
-  if ((type == 'I') || (type == 'C') || (type == 'A') || (type == 'S')) {
+  if ((type == 'I') || (type == 'A') || (type == 'S')) {
     /* It's a complete dictionary record */
     for (i = 15; i--;) /* Skip 15 field marks */
     {
@@ -862,29 +862,16 @@ Private void itype() {
     n = str->bytes - (p - str->data);
     k_put_string(p, n, e_stack);
     obj = (OBJECT_HEADER*)((e_stack++)->data.str.saddr->data);
-    header_flags = obj->flags;
     k_recurse((u_char*)obj, 0);
-    if (header_flags & HDR_CTYPE) /* 0560 */
-    {
-      k_release(e_stack - 1);
-    } else {
-      k_release(e_stack - 2);
-      *(e_stack - 2) = *(e_stack - 1);
-    }
+    k_release(e_stack - 2);
+    *(e_stack - 2) = *(e_stack - 1);
     e_stack--;
   } else {
-    header_flags = ((OBJECT_HEADER*)p)->flags;
     k_recurse((u_char*)p, 0);
   }
 
-  /* If this is a C-type, load @ANS on to the stack */
-
-  if (header_flags & HDR_CTYPE) {
-    *e_stack = *(Element(process.syscom, SYSCOM_AT_ANS));
-    if (e_stack->type >= COMPLEX_DESCR)
-      k_incr_refct(e_stack);
-    e_stack++;
-  }
+  /* 28 Oct 26 S.87: the C-type (HDR_CTYPE) is gone, so the value is always
+     the one the I-type code left on the stack; there is no @ANS to load. */
 
   return;
 

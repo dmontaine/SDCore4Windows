@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): case inversion is gone from SD; SED no longer turns it off or converts typed keys, and the
 *            NO.INVERT option word is no longer known.
@@ -505,7 +506,7 @@ $include sl.h
 
    dict.flag = ""
 
-   call @parser(PARSER$MFILE, token.type, file.name, keyword)
+   call @parser(PARSER$GET.TOKEN, token.type, file.name, keyword)
    if file.name = "" then
       prompted.for.file.name = @true
       display sysmsg(6501) :  ;* File name?
@@ -521,7 +522,7 @@ $include sl.h
       prompted.for.file.name = @false
       if keyword = KW$DICT then
          dict.flag = "DICT"
-         call @parser(PARSER$MFILE, token.type, file.name, keyword)
+         call @parser(PARSER$GET.TOKEN, token.type, file.name, keyword)
       end
    end
 

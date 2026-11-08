@@ -182,7 +182,8 @@ try {
     Row (-not ($onDiskName -cmatch '[A-Z]')) 'the directory name carries no upper-case letter'
 
     # (2) THE VOC RECORD ID, as LISTF prints it (LISTF shows the id as stored).
-    $lf = Invoke-SD @("LISTF $lower")
+    # 8 Nov 26: LISTF went with S.87 (Linux d241df26); the same columns, typed out.
+    $lf = Invoke-SD @("LIST VOC $lower @ID FTYPE ID.SUP")
     Write-Output '  --- LISTF said: ---'
     Write-Output $lf
     # A table row for the lower id - not the echo, not the miss wording.
