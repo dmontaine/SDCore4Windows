@@ -41,17 +41,17 @@
    ProcA and SpaceMCT.  gpl.bp/option holds a blank row for each, in this order. */
 /* 27 Oct 26 (S.87 batch 7): 12, 34, 35, 38, 42, 43, 44, 47, 51, 54 and 57 are retired too: RunNoPage, QueryStringComp, QueryStrCompAll, DefaultMV, PickMLConvMask, ChainedSelect,
    PaginateOnHeading, QueryFooterPause, KeepOldObject, AssocAll and QueryMergePrint.  Blank rows again.
-   Batch 8: 21, 40, 48 and 55 as well: NoSelListQuery, CatalogueLocal, InheritMFilePath and CorrelativeNoCase. */
+   Batch 8: 21, 40, 48 and 55 as well: NoSelListQuery, CatalogueLocal, InheritMFilePath and CorrelativeNoCase.
+   Batch 12: 22, 37 and 56: ChainKeepCommon, BackslashNotQuote and CorrelativeReuse. */
 #define OptDumpOnError        6
 #define OptDivZeroWarning     7
 #define OptNonNumericWarning  8
 #define OptNoUserAborts      11
 #define OptShowStackOnError  13
 #define OptSuppressAbortMsg  18
-#define OptChainKeepCommon   22
 #define OptInherit           26
 #define OptQuerySortNoCase   36   /* 10 Oct 26  1.2-0 openQM refs 140, 299,  */
-#define OptBackslashNotQuote 37   /*            412, 165, 205, 403: every    */
+                                  /*            412, 165, 205, 403: every    */
 #define OptClearSelect       39   /*            new option is read by BASIC  */
                                   /*            only (gpl.bp/qproc, parser,  */
                                   /*            cproc), so the C side only   */
@@ -63,7 +63,6 @@
 #define OptDirDtm            50   /*            a write to a directory file moves the directory's date and time modified (dir_write() in op_dio3.c) */
 #define OptNoPhantomNotify   52   /*            a phantom does not send its parent the message when it ends (BASIC, cproc) */
 #define OptSpoolCommand      53   /*            show the operating system command that prints (kernel, the print start) */
-#define OptCorrelativeReuse  56   /*            every operand of an array operation in a correlative or I-type is read as if it had REUSE() (ReuseFlag below) */
 #define OptCommandLevelLocks 58   /* 16 Oct 26  openQM refs 231 / 428: a file variable that goes keeps its locks until the program returns to the command processor (park_fvar() in op_lock.c) */
 #define OptStackedAccount    59   /* 16 Oct 26  openQM ref 248: an EXECUTE that changes account reverts to the account it started in (BASIC, gpl.bp/cproc) */
 #define OptInheritOwnership  60   /* 16 Oct 26  openQM ref 239: CREATE.FILE gives a new file the account directory's owner and group (inherit_ownership_of() in op_dio1.c) */
@@ -74,9 +73,8 @@ Public char option_flags[NumOptions];
 #define Option(opt) (option_flags[(opt)])
 #define SetOption(opt, val) option_flags[(opt)] = (val);
 
-/* The REUSE flag of an operand of an array operation (DF_REUSE, or 0): the descriptor's own, or, in a correlative or I-type with
-   CORRELATIVE.REUSE on, always.  The option is read when the correlative runs, not when it was compiled. */
-#define ReuseFlag(d) \
-  (((d)->flags & DF_REUSE) | ((((process.program.flags & HDR_ITYPE) != 0) && Option(OptCorrelativeReuse)) ? DF_REUSE : 0))
+/* The REUSE flag of an operand of an array operation (DF_REUSE, or 0): the descriptor's own.  (OPTION CORRELATIVE.REUSE, which made it
+   always set in a correlative or I-type, was removed on 27 Oct 26: S.87 batch 12.) */
+#define ReuseFlag(d) ((d)->flags & DF_REUSE)
 
 /* END-CODE */

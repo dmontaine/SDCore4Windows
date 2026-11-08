@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): the statement INPUTCLEAR is gone (write CLEARINPUT; both compiled to the same code).
 * 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): the second names DQUOTE, DQUOTES, SWAP and XLATE are gone (write QUOTE, QUOTES, CHANGE and
 *               TRANS); each was a row in the intrinsics and handler lists, no opcode.
 * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): the modes OPEN.FAIL.ZERO.FVAR, PICK.READNEXT and EXECUTE.CLEARLIST are gone (bits 26, 27 and
@@ -458,7 +459,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"GETLIST":@fm:"GETLISTV":@fm:"GO":@fm:"GOSUB":@fm:"GOTO"   ;* GETLISTV: 15 Oct 26 dm - QM4 gaps Q-2
    statements := @fm:"HEADING":@fm:"HUSH"
    statements := @fm:"IF":@fm:"IN":@fm:"INHERIT"
-   statements := @fm:"INPUT":@fm:"INPUTCLEAR"
+   statements := @fm:"INPUT"
    statements := @fm:"INPUTCSV"
    statements := @fm:"INPUTERR":@fm:"INPUTFIELD":@fm:"INPUTIF":@fm:"INPUTNULL":@fm:"INPUTTRAP":@fm:"INS"   ;* INPUTIF: 14 Oct 26 dm - openQM 584; INPUTNULL, INPUTTRAP: openQM 408
    statements := @fm:"KEYEDIT":@fm:"KEYEXIT":@fm:"KEYTRAP"
@@ -2417,7 +2418,6 @@ is.statement:
                  st.in,
                  st.inherit,
                  st.input,
-                 st.clearinput,                ;* INPUTCLEAR
                  st.inputcsv,
                  st.inputerr,                  ;* INPUTERR
                  st.inputfield,

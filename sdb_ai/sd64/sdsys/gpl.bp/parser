@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): OPTION BACKSLASH.NOT.QUOTE is gone.  Linux now always splits a token at a backslash;
+*            this port still never does (see the 22 Aug entry), so only the comment at the split changes.
 * 22 Aug 26 Windows port - A TOKEN IS NO LONGER SPLIT AT A BACKSLASH.  The
 *            split is upstream's, guarded there by "if not(is.windows)"; the
 *            port kept the line and dropped the guard, which is the wrong arm
@@ -82,7 +84,7 @@ rescan:
          c = parser.sentence[1, 1]
 
          begin case
-            case (c = '"') or (c = "'") or (c = "\" and not(option(OPT.BACKSLASH.NOT.QUOTE)))      ;* Quoted string
+            case (c = '"') or (c = "'") or (c = "\")      ;* Quoted string
                j = index(parser.sentence, c, 2)
                if j = 0 then stop sysmsg(2055)  ;* Unpaired string quote
                type = PARSER$STRING
@@ -124,10 +126,10 @@ rescan:
                * NO BACKSLASH HERE, and it is not an omission.  On this
                * platform a backslash is a path separator, so splitting at one
                * truncates every native path typed at TCL - CREATE.ACCOUNT
-               * OTHER takes its pathname through this parser.  Linux splits
-               * at a backslash unless OPTION BACKSLASH.NOT.QUOTE is on
-               * (openQM ref 165); here the option is accepted and has no
-               * effect, because the answer is always "do not split".
+               * OTHER takes its pathname through this parser.  Linux always
+               * splits at a backslash (OPTION BACKSLASH.NOT.QUOTE, which could
+               * stop it, went in S.87 batch 12); this port never does - an OS
+               * reason, recorded with Linux.
 
 
                type = PARSER$TOKEN
@@ -241,7 +243,7 @@ rescan:
          c = parser.sentence[1, 1]
 
          begin case
-            case (c = '"') or (c = "'") or (c = "\" and not(option(OPT.BACKSLASH.NOT.QUOTE)))      ;* Quoted string
+            case (c = '"') or (c = "'") or (c = "\")      ;* Quoted string
                j = index(parser.sentence, c, 2)
                if j = 0 then stop sysmsg(2055)  ;* Unpaired string quote
 

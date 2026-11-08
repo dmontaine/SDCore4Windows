@@ -9,6 +9,7 @@
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 12: leg 5 keeps only the control (a backslash opens a quote); the option BACKSLASH.NOT.QUOTE is gone.
 # 27 Oct 26 dm  S.87 batch 7: legs 1, 2 and 4 retired with the options QUERY.STRING.COMP, QUERY.STR.COMP.ALL and DEFAULT.MV.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-4.
 # END-HISTORY
@@ -30,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOOL = os.path.join(HERE, "sandbox-fromtree.py")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 passed = failed = 0
-NAMES = ("QUERY.SORT.NO.CASE", "BACKSLASH.NOT.QUOTE", "CLEAR.SELECT")
+NAMES = ("QUERY.SORT.NO.CASE", "CLEAR.SELECT")
 
 
 def say(s=""):
@@ -156,13 +157,11 @@ def main():
         row("THE ROW: upper-cased keys: alice (ALICE) a\\b (A\\B) Bob Carol dave ed fay",
             b == ["alice", "a\\b", "Bob", "Carol", "dave", "ed", "fay"], "got %r" % b)
 
-        say("\n--- leg 5: BACKSLASH.NOT.QUOTE (ref 165) -------------------------------------------")
-        c = ["LIST zzo4 name WITH name = a\\b ID.SUP", "OPTION BACKSLASH.NOT.QUOTE", "LIST zzo4 name WITH name = a\\b ID.SUP "]
+        say("\n--- leg 5: a backslash opens a quoted string (OPTION BACKSLASH.NOT.QUOTE, ref 165, was removed 27 Oct 26) ----------")
+        c = ["LIST zzo4 name WITH name = a\\b ID.SUP"]
         sg = segments(sess(box, *c), c)
-        row("CONTROL: a backslash opens a quoted string and the line is refused",
+        row("a backslash opens a quoted string and the line is refused",
             re.search(r"(?i)unpaired", sg.get(0) or "") is not None and names_in(sg.get(0)) == [], "no 'unpaired' message, or a record was listed")
-        row("THE ROW: with the option it is an ordinary character: the record a\\b is listed", names_in(sg.get(2)) == ["a\\b"],
-            "got %r" % names_in(sg.get(2)))
 
         say("\n--- leg 6: CLEAR.SELECT (ref 403) ------------------------------------------------------")
         out = sess(box, "SELECT zzo4 WITH num > 1.5", "DATE", "LIST zzo4 name ID.SUP")

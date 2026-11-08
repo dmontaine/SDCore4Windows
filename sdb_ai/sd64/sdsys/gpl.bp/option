@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87 batch 12: CHAIN.KEEP.COMMON, BACKSLASH.NOT.QUOTE and CORRELATIVE.REUSE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 8: NO.SEL.LIST.QUERY, CATALOGUE.LOCAL, INHERIT.MFILE.PATH and CORRELATIVE.NOCASE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 7: RUN.NO.PAGE, QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV, PICK.ML.CONV.MASK, CHAINED.SELECT, PAGINATE.ON.HEADING, QUERY.FOOTER.PAUSE, KEEP.OLD.OBJECT, ASSOC.ALL and QUERY.MERGE.PRINT retired (blank rows).
 * 27 Oct 26 dm  The options marked REMOVE in the owner's emulation survey are retired (blank rows keep the numbers) and the PICK shortcut goes.
@@ -77,7 +78,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 19 was DEBUG.REBIND.KEYS
    opt<-1> = '||'                                ;* 20 was ED.NO.QUERY.FD
    opt<-1> = '||'                                ;* 21 was NO.SEL.LIST.QUERY
-   opt<-1> = 'CHAIN.KEEP.COMMON||3122'
+   opt<-1> = '||'                                ;* 22 was CHAIN.KEEP.COMMON
    opt<-1> = '||'                                ;* 23 was SELECT.KEEP.CASE
    opt<-1> = '||'                                ;* 24 was CREATE.FILE.UPCASE
    opt<-1> = '||'                                ;* 25 was PICK.EXPLODE
@@ -93,7 +94,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 34 was QUERY.STRING.COMP
    opt<-1> = '||'                                ;* 35 was QUERY.STR.COMP.ALL
    opt<-1> = 'QUERY.SORT.NO.CASE||12047'
-   opt<-1> = 'BACKSLASH.NOT.QUOTE||12048'
+   opt<-1> = '||'                                ;* 37 was BACKSLASH.NOT.QUOTE
    opt<-1> = '||'                                ;* 38 was DEFAULT.MV
    opt<-1> = 'CLEAR.SELECT||12050'
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
@@ -115,7 +116,7 @@ $include int$keys.h
    opt<-1> = 'SPOOL.COMMAND||12275'              ;* 53
    opt<-1> = '||'                                ;* 54 was ASSOC.ALL
    opt<-1> = '||'                                ;* 55 was CORRELATIVE.NOCASE
-   opt<-1> = 'CORRELATIVE.REUSE||12284'          ;* 56
+   opt<-1> = '||'                                ;* 56 was CORRELATIVE.REUSE
    * 15 Oct 26  openQM refs 57 and others of bundle Q-17 (57 on)
    opt<-1> = '||'                                ;* 57 was QUERY.MERGE.PRINT
    opt<-1> = 'COMMAND.LEVEL.LOCKS||12372'        ;* 58, 16 Oct 26 QM4 gap 231

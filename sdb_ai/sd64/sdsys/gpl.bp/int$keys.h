@@ -483,10 +483,9 @@
       $define OPT.SHOW.STACK.ON.ERROR 13 ;* Show stack on error
       $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
       * 27 Oct 26 (S.87 batch 8): options 21, 40, 48 and 55 are RETIRED too (entries A-019, A-033, A-036 and A-030).
-      $define OPT.CHAIN.KEEP.COMMON   22 ;* Keep unnamed common on CHAIN
+      * 27 Oct 26 (S.87 batch 12): options 22, 37 and 56 are RETIRED too (entries A-038, A-028 and A-031).
       $define OPT.INHERIT             26 ;* Phantom inherits options
       $define OPT.QUERY.SORT.NO.CASE  36 ;* QPROC: sorts are case insensitive
-      $define OPT.BACKSLASH.NOT.QUOTE 37 ;* Command parser: backslash is not a quote
       $define OPT.CLEAR.SELECT        39 ;* Clear select list 0 after a command that did not make it
       $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
       $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
@@ -494,7 +493,6 @@
       $define OPT.DIR.DTM             50 ;* A write to a directory file moves the directory's date and time modified (kernel)
       $define OPT.NO.PHANTOM.NOTIFY   52 ;* A phantom does not tell its parent when it ends (cproc)
       $define OPT.SPOOL.COMMAND       53 ;* Show the operating system command that prints (kernel)
-      $define OPT.CORRELATIVE.REUSE   56 ;* Every operand of an array operation in a correlative or I-type is read as if REUSE() was applied (kernel)
       $define OPT.COMMAND.LEVEL.LOCKS 58 ;* A file variable that goes keeps its locks until the program returns to the command processor (kernel)
       $define OPT.STACKED.ACCOUNT     59 ;* An EXECUTE that changes account returns to the account it began in (cproc)
       $define OPT.INHERIT.OWNERSHIP   60 ;* CREATE.FILE gives a new file the account directory's owner and group (kernel)

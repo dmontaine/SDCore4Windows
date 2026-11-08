@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): CLEARINPUT in place of INPUTCLEAR (the second name is gone).
 * 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): The AccuTerm screen-image code is gone (the box was drawn only where the terminal had the AccuTerm
 *               'sreg' capability, so on every other terminal a message was never shown).  Messages are now shown
 *               in the screen library's message box on the terminal's alternate screen (so the program's own
@@ -101,7 +102,7 @@ $include sl.h
                      crt s<i,1>[1, width]
                   next i
                   crt prc :
-                  inputclear
+                  clearinput
                   loop
                      i = seq(keyin())
                   until i = return.key

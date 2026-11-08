@@ -37,7 +37,7 @@
       $define FL$VOCNAME        1  ;* Get VOC name by which file was opened
       $define FL$PATH           2  ;* Get pathname of file
       $define FL$TYPE           3  ;* Return file type
-      $define FL$TYPE.SH        1  ;* SH file
+      * 1 was FL$TYPE.SH (a static hashed file SD never had), retired 27 Oct 26 (S.87 batch 12)
       $define FL$TYPE.DH        3  ;* DH file
       $define FL$TYPE.DIR       4  ;* Directory file
       $define FL$TYPE.SEQ       5  ;* Sequential file

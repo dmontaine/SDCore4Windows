@@ -9,6 +9,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 12: the CORRELATIVE.REUSE legs are retired; its off-state row stays as a plain row.
 # 27 Oct 26 dm  S.87 batch 8: the CORRELATIVE.NOCASE option legs are retired (the A;NOCASE; flag rows stay).
 # 27 Oct 26 dm  S.87 batch 7: the KEEP.OLD.OBJECT and ASSOC.ALL legs are retired with the options.
 # 15 Oct 26 dm  Written.
@@ -211,7 +212,7 @@ def main():
                     row("SPOOL.COMMAND on: the command that prints is shown before it runs", shown, out[-400:])
         restart(box)
 
-        say("\n--- the A;NOCASE; flag and CORRELATIVE.REUSE (second sitting; OPTION CORRELATIVE.NOCASE was removed 27 Oct 26) ---------")
+        say("\n--- the A;NOCASE; flag and the sum of arrays (second sitting; the options CORRELATIVE.NOCASE and CORRELATIVE.REUSE were removed 27 Oct 26) ---------")
         out = sess(box, "RUN bp zzqcmk")
         row("the fixture file was made", "MADE" in out, out[-300:])
         out = sess(box, "LIST zzqcc CASEX NO.PAGE")
@@ -224,14 +225,10 @@ def main():
         say("    A;NOCASE; and A; correlatives: %r" % (got,))
         row("QM4 Fixes 103: a correlative that begins A;NOCASE; finds ABC is abc", got is not None and got[0] == "same", repr(out[-300:]))
         row("CONTROL: the same correlative without NOCASE; finds them different", got is not None and got[1] == "diff", repr(out[-300:]))
-        for state in ("OFF", "ON"):
-            out = sess(box, "OPTION CORRELATIVE.REUSE " + state, "LIST zzqcc SUMX NO.PAGE")
-            nums = [t for ln in out.splitlines() if re.match(r"^(r1\s|\s{8,}\S)", ln) for t in ln.split() if t != "r1"]
-            say("    CORRELATIVE.REUSE %s: %r" % (state, nums))
-            if state == "OFF":
-                row("CONTROL (off): F1 + F2 takes the missing third value of F2 as zero: 11 22 3", nums == ["11", "22", "3"], repr(nums))
-            else:
-                row("CORRELATIVE.REUSE on: the last value of F2 is used again: 11 22 23", nums == ["11", "22", "23"], repr(nums))
+        out = sess(box, "LIST zzqcc SUMX NO.PAGE")
+        nums = [t for ln in out.splitlines() if re.match(r"^(r1\s|\s{8,}\S)", ln) for t in ln.split() if t != "r1"]
+        say("    F1 + F2 (OPTION CORRELATIVE.REUSE was removed 27 Oct 26): %r" % (nums,))
+        row("F1 + F2 takes the missing third value of F2 as zero: 11 22 3", nums == ["11", "22", "3"], repr(nums))
     finally:
         restart(box)
         for nm in set(made):

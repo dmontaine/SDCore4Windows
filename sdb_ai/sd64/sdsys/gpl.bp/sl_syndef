@@ -72,7 +72,7 @@ rules.sd.basic:
    r<-1> = 'words keyword closeseq close.socket commit continue convert create create.file crt data debug del delete deletelist'
    r<-1> = 'words keyword deleteseq deleteu dim disinherit display do dparse dparse.csv echo else end execute exit'
    r<-1> = 'words keyword file filelock fileunlock find findstr flush footing for formlist getlist go gosub goto heading hush if in'
-   r<-1> = 'words keyword inherit input inputclear inputcsv inputerr inputfield ins keyedit keyexit keytrap local locate'
+   r<-1> = 'words keyword inherit input inputcsv inputerr inputfield ins keyedit keyexit keytrap local locate'
    r<-1> = 'words keyword lock logmsg loop mark.mapping mat matbuild matparse matread matreadcsv matreadl matreadu matwrite'
    r<-1> = 'words keyword matwriteu nap next nobuf null on open openpath openseq os.execute page pause pdump phantom'
    r<-1> = 'words keyword precision print printer printcsv procread procwrite prompt randomize read readblk readcsv readl'

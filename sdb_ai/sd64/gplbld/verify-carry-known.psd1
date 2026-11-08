@@ -114,7 +114,7 @@
             '64: OPENPATH ... NON.TRANSACTIONAL'  = 'the probe opens the literal path /tmp, which is not a directory SD can open here'
         }
         'option-a4' = @{
-            'CONTROL: a backslash opens a quoted string' = 'OPTION BACKSLASH.NOT.QUOTE is accepted and does nothing here: a backslash is a path separator and the parser never splits at one (deviation 1 of the area 1 mail)'
+            'a backslash opens a quoted string and the line is refused' = 'a backslash is a path separator here and the parser never splits at one (deviation 1 of the area 1 mail; OPTION BACKSLASH.NOT.QUOTE itself went with S.87 batch 12, 8 Nov 26)'
         }
         'proc-a5' = @{
             'one user (this session)'             = 'counts every logged-in user: a phantom left by an earlier suite or a console session of the owner makes it 2; it passes when run alone'
