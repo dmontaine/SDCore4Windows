@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): the functions ADDS, SUBS, MULS, DIVS, IS.ALNUM .. IS.SPACE, LEFT, RIGHT and MD5 are gone (their
+*               name and handler rows, and XFUN rows 5 to 12).
 * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the statement GO / GO TO is gone (write GOTO; ON ... GOTO is the only form of ON), and # no
 *               longer starts a compiler directive (write $IFDEF, $DEFINE).
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
@@ -633,7 +635,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "ABSS"            ; intrinsic.opcodes<-1> = OP.ABSS
    intrinsics<-1> = "ACCEPT.SOCKET.CONNECTION" ; intrinsic.opcodes<-1> = OP.ACCPTSKT
    intrinsics<-1> = "ACOS"            ; intrinsic.opcodes<-1> = OP.ACOS
-   intrinsics<-1> = "ADDS"            ; intrinsic.opcodes<-1> = OP.ADDS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "ALPHA"           ; intrinsic.opcodes<-1> = OP.ALPHA
    intrinsics<-1> = "ANDS"            ; intrinsic.opcodes<-1> = OP.ANDS
    intrinsics<-1> = "ARG"             ; intrinsic.opcodes<-1> = OP.ARG
@@ -682,7 +683,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "DIGEST"          ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - QM4 gaps Q-13
    intrinsics<-1> = "DIR"             ; intrinsic.opcodes<-1> = OP.DIR
    intrinsics<-1> = "DIV"             ; intrinsic.opcodes<-1> = OP.QUOTIENT
-   intrinsics<-1> = "DIVS"            ; intrinsic.opcodes<-1> = OP.DIVS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "DOWNCASE"        ; intrinsic.opcodes<-1> = OP.DNCASE
    intrinsics<-1> = "DTX"             ; intrinsic.opcodes<-1> = OP.DTX
    intrinsics<-1> = "EBCDIC"          ; intrinsic.opcodes<-1> = OP.EBCDIC
@@ -723,13 +723,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "INPUTBLK"        ; intrinsic.opcodes<-1> = OP.INPUTBLK
    intrinsics<-1> = "INSERT"          ; intrinsic.opcodes<-1> = OP.INSERT
    intrinsics<-1> = "INT"             ; intrinsic.opcodes<-1> = OP.INT
-   intrinsics<-1> = "IS.ALNUM"        ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "IS.ALPHA"        ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "IS.DIGIT"        ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "IS.GRAPH"        ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "IS.MARK"         ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "IS.NULL"         ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "IS.SPACE"        ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
    intrinsics<-1> = "JBOOLEAN"        ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - JSON
    intrinsics<-1> = "JBUILD"          ; intrinsic.opcodes<-1> = OP.COLL
@@ -747,7 +741,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "KEYREADY"        ; intrinsic.opcodes<-1> = OP.KEYRDY
    intrinsics<-1> = "LAST"            ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "LASTS"           ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "LEFT"            ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "LEN"             ; intrinsic.opcodes<-1> = OP.LEN
    intrinsics<-1> = "LENS"            ; intrinsic.opcodes<-1> = OP.LENS
    intrinsics<-1> = "LES"             ; intrinsic.opcodes<-1> = OP.LES
@@ -763,12 +756,10 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "MATSTR"          ; intrinsic.opcodes<-1> = OP.MATSTR   ;* 12 Oct 26 dm - openQM 509
    intrinsics<-1> = "MAX"             ; intrinsic.opcodes<-1> = OP.MAX
    intrinsics<-1> = "MAXIMUM"         ; intrinsic.opcodes<-1> = OP.MAXIMUM
-   intrinsics<-1> = "MD5"             ; intrinsic.opcodes<-1> = OP.MD5   ;* 12 Oct 26 dm - openQM 63
    intrinsics<-1> = "MIN"             ; intrinsic.opcodes<-1> = OP.MIN
    intrinsics<-1> = "MINIMUM"         ; intrinsic.opcodes<-1> = OP.MINIMUM
    intrinsics<-1> = "MOD"             ; intrinsic.opcodes<-1> = OP.MOD
    intrinsics<-1> = "MODS"            ; intrinsic.opcodes<-1> = OP.MODS
-   intrinsics<-1> = "MULS"            ; intrinsic.opcodes<-1> = OP.MULS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "MVDATE"          ; intrinsic.opcodes<-1> = OP.EPOCHCV   ;* 14 Oct 26 dm - openQM 124 and the epoch family
    intrinsics<-1> = "MVDATE.TIME"     ; intrinsic.opcodes<-1> = OP.EPOCHCV
    intrinsics<-1> = "MVEPOCH"         ; intrinsic.opcodes<-1> = OP.EPOCHCV
@@ -805,7 +796,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "REPLACE"         ; intrinsic.opcodes<-1> = OP.REPLACE
    intrinsics<-1> = "REUSE"           ; intrinsic.opcodes<-1> = OP.REUSE
    intrinsics<-1> = "REUSING"         ; intrinsic.opcodes<-1> = OP.XFUN
-   intrinsics<-1> = "RIGHT"           ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "RMVD"            ; intrinsic.opcodes<-1> = OP.RMVD    ;* 15 Oct 26 dm - QM4 gaps Q-1
    intrinsics<-1> = "RND"             ; intrinsic.opcodes<-1> = OP.RND
    intrinsics<-1> = "ROUNDDOWN"       ; intrinsic.opcodes<-1> = OP.XFUN
@@ -846,7 +836,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "STR"             ; intrinsic.opcodes<-1> = OP.STR
    intrinsics<-1> = "STRS"            ; intrinsic.opcodes<-1> = OP.STRS
    intrinsics<-1> = "SUBR"            ; intrinsic.opcodes<-1> = ''
-   intrinsics<-1> = "SUBS"            ; intrinsic.opcodes<-1> = OP.SUBS   ;* 11 Oct 26 dm - openQM 207
    intrinsics<-1> = "SUBSTITUTE"      ; intrinsic.opcodes<-1> = OP.SUBST
    intrinsics<-1> = "SUBSTRINGS"      ; intrinsic.opcodes<-1> = OP.SUBSTRNG
    intrinsics<-1> = "SUM"             ; intrinsic.opcodes<-1> = OP.SUM
@@ -4320,7 +4309,6 @@ end
                       in.one,         ;* ABSS
                       in.two,         ;* ACCEPT.SOCKET.CONNECTION
                       in.one,         ;* ACOS
-                      in.two,         ;* ADDS
                       in.one,         ;* ALPHA
                       in.two,         ;* ANDS
                       in.one,         ;* ARG
@@ -4369,7 +4357,6 @@ end
                       in.xfun,        ;* DIGEST
                       in.one,         ;* DIR
                       in.two,         ;* DIV
-                      in.two,         ;* DIVS
                       in.one,         ;* DOWNCASE
                       in.dtx,         ;* DTX
                       in.one,         ;* EBCDIC
@@ -4410,13 +4397,7 @@ end
                       in.one,         ;* INPUTBLK
                       in.insert,      ;* INSERT
                       in.one,         ;* INT
-                      in.xfun,        ;* IS.ALNUM
-                      in.xfun,        ;* IS.ALPHA
-                      in.xfun,        ;* IS.DIGIT
-                      in.xfun,        ;* IS.GRAPH
-                      in.xfun,        ;* IS.MARK
                       in.xfun,        ;* IS.NULL
-                      in.xfun,        ;* IS.SPACE
                       in.itype,       ;* ITYPE
                       in.jboolean,    ;* JBOOLEAN
                       in.jbuild,      ;* JBUILD
@@ -4434,7 +4415,6 @@ end
                       in.none,        ;* KEYREADY
                       in.xfun,        ;* LAST
                       in.xfun,        ;* LASTS
-                      in.xfun,        ;* LEFT
                       in.one,         ;* LEN
                       in.one,         ;* LENS
                       in.two,         ;* LES
@@ -4450,12 +4430,10 @@ end
                       in.matstr,      ;* MATSTR
                       in.two,         ;* MAX
                       in.one,         ;* MAXIMUM
-                      in.one,         ;* MD5
                       in.two,         ;* MIN
                       in.one,         ;* MINIMUM
                       in.two,         ;* MOD
                       in.two,         ;* MODS
-                      in.two,         ;* MULS
                       in.mvdate,      ;* MVDATE
                       in.mvdatetime,  ;* MVDATE.TIME
                       in.mvepoch,     ;* MVEPOCH
@@ -4492,7 +4470,6 @@ end
                       in.replace,     ;* REPLACE
                       in.one,         ;* REUSE
                       in.reusing,     ;* REUSING
-                      in.xfun,        ;* RIGHT
                       in.remove,      ;* RMVD
                       in.one,         ;* RND
                       in.xfun,        ;* ROUNDDOWN
@@ -4533,7 +4510,6 @@ end
                       in.two,         ;* STR
                       in.two,         ;* STRS
                       in.subr,        ;* SUBR
-                      in.two,         ;* SUBS
                       in.subst,       ;* SUBSTITUTE
                       in.three,       ;* SUBSTRINGS
                       in.one,         ;* SUM
@@ -4577,7 +4553,7 @@ in.three:
             arg.count = 3 ; gosub get.args
             goto intrinsic.common
 
-*** The OP.XFUN functions (CEIL FLOOR ROUNDUP ROUNDDOWN IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.SPACE LEFT RIGHT LAST
+*** The OP.XFUN functions (CEIL FLOOR ROUNDUP ROUNDDOWN LAST
 *** LASTS NV NS TRIMWS MATCHESS MATCHFIELDS): one opcode, OP.XFUN, with the function number loaded after the arguments
 *** (op_xfun.c).  XFUN.ROWS gives for each name: its function number, the number of arguments the program must write, the
 *** value of one optional last argument that may be left out (blank for none), and whether it is a multivalued function, in
@@ -4647,8 +4623,7 @@ xfun.optional.args:
 xfun.table.load:
             * name, function number, arguments written, optional last argument's default, multivalued (1) or not (0)
             xfun.rows = "CEIL,1,1,,0":@fm:"FLOOR,2,1,,0":@fm:"ROUNDUP,3,2,,0":@fm:"ROUNDDOWN,4,2,,0"
-            xfun.rows := @fm:"IS.ALNUM,5,1,,0":@fm:"IS.ALPHA,6,1,,0":@fm:"IS.DIGIT,7,1,,0":@fm:"IS.GRAPH,8,1,,0"
-            xfun.rows := @fm:"IS.MARK,9,1,,0":@fm:"IS.SPACE,10,1,,0":@fm:"LEFT,11,2,,0":@fm:"RIGHT,12,2,,0"
+            * function numbers 5 to 12 (IS.ALNUM .. IS.SPACE, LEFT, RIGHT) are retired
             xfun.rows := @fm:"LAST,13,2,,0":@fm:"LASTS,13,2,,1":@fm:"NV,14,1,0,0":@fm:"NS,15,1,,0"
             xfun.rows := @fm:"TRIMWS,16,1,,1":@fm:"MATCHESS,17,2,,1":@fm:"MATCHFIELDS,18,3,,1"
             xfun.rows := @fm:"BOOL,21,1,,0":@fm:"IS.NULL,22,1,,0":@fm:"NUMERIC,23,1,,0":@fm:"SIGNAL,25,1,,0"

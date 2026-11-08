@@ -201,7 +201,7 @@ USER_PROGS = {
               "   for i = 1 to 5\n      crt 'V':i:'[':digest('abc', @false, modes<i>):'][':status():']'\n   next i\n"
               "   crt 'E[':digest('', @false, 'MD5'):']'\n"
               "   crt 'L[':digest('abc', @false, 'sha256'):']'\n"
-              "   crt 'M[':digest('x':@vm:'y':@fm:'z':@sm:'w', @false, 'MD5'):'][':md5('x':@vm:'y':@fm:'z':@sm:'w'):']'\n"
+              "   crt 'M[':digest('x':@vm:'y':@fm:'z':@sm:'w', @false, 'MD5'):']'\n"
               "   crt 'B4[':digest('abc', @false, 'MD4'):'][':status():']'\n"
               "   crt 'B5[':digest('abc', @false, 'ROT13'):'][':status():']'\n"
               "   crt 'B6[':digest('abc', @false, ''):'][':status():']'\n"
@@ -451,9 +451,8 @@ def main():
         row("A1: the empty string's MD5 (d41d8cd9...)", tag(out, "E") == ["d41d8cd98f00b204e9800998ecf8427e"], repr(tag(out, "E")))
         row("A1: the mode in lower case is the same mode", tag(out, "L") == [vec["SHA256"]], repr(tag(out, "L")))
         mm = tag(out, "M")
-        row("A1: CONTROL: a string with field, value and subvalue marks: DIGEST MD5 equals MD5()",
-            len(mm) == 1 and re.match(r"^[0-9a-f]{32}\]\[[0-9a-f]{32}$", mm[0]) is not None and mm[0].split("][")[0] == mm[0].split("][")[1],
-            repr(mm))
+        row("A1: CONTROL: a string with field, value and subvalue marks: DIGEST MD5 is the MD5 of its bytes (hashlib's)",
+            mm == [hashlib.md5(b"x\xfdy\xfez\xfcw").hexdigest()], repr(mm))
         row("A2: MD4 is refused: a null string and STATUS() 1", tag(out, "B4") == ["][1"], repr(tag(out, "B4")))
         row("A2: an unknown mode is refused the same way", tag(out, "B5") == ["][1"], repr(tag(out, "B5")))
         row("A2: so is a null mode", tag(out, "B6") == ["][1"], repr(tag(out, "B6")))

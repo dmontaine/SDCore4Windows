@@ -31,6 +31,7 @@
  * 06 Aug 24 mab remove PROCREAD op code, add SDEXT
  * 27 Oct 26 dm  S.87 batch 3: ENTER (0xCFB3) and EREPLACE (0xCFFB) removed.  The table is indexed by position, so each
  *                is an op_illegal row and the code stays reserved.
+ * 27 Oct 26 dm  S.87 batch 13: MD5 (0xCFF2) removed the same way (write DIGEST(string, 0, 'MD5')).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -614,7 +615,7 @@ _opc_(0xCFEF, OP_STROVL,   "STROVL",     op_strovl,    OPCODE_BYTE,        -1)  
 
 _opc_(0xCFF0, OP_TRIMW,    "TRIMW",      op_trimw,     OPCODE_BYTE,         0)
 _opc_(0xCFF1, OP_SSELECTM, "SSELECTM",   op_sselectm,  OPCODE_BYTE,        -2)
-_opc_(0xCFF2, OP_MD5,      "MD5",        op_md5,       OPCODE_BYTE,         0)
+_opc_(0xCFF2, OP_CFF2,     "OPCFF2",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCFF3, OP_CLRCOMN,  "CLRCOMN",    op_clrcomn,   OPCODE_BYTE,        -1)
 _opc_(0xCFF4, OP_PDUMP,    "PDUMP",      op_pdump,     OPCODE_BYTE,         0)
 _opc_(0xCFF5, OP_SADD,     "SADD",       op_sadd,      OPCODE_BYTE,        -1)

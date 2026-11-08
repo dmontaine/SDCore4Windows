@@ -9,6 +9,7 @@
 #
 # START-HISTORY:
 # 11 Oct 26 dm  Written for 1.2-0 bundle B-4: ADDS SUBS MULS DIVS (207), QUOTES DQUOTES (11).
+# 27 Oct 26 dm  S.87 batch 13: the rows for ADDS SUBS MULS DIVS are gone with the four functions (the operators + - * / on dynamic arrays do the same).
 # END-HISTORY
 #
 # THE INSTRUMENT IS THE VALUE A BASIC PROGRAM PRINTED between brackets, value marks shown as |.  Each new
@@ -27,13 +28,6 @@ passed = failed = 0
 # (label, BASIC statements one per line leaving the value in x, wanted)
 CASES = [
     ("CONTROL: MODS, an existing multivalued function, on two lists", "x = change(mods('7':@vm:'9', '4':@vm:'5'), @vm, '|')", "3|4"),
-    ("207 ADDS adds element by element", "x = change(adds('1':@vm:'2', '10':@vm:'20'), @vm, '|')", "11|22"),
-    ("207 SUBS subtracts element by element", "x = change(subs('10':@vm:'20', '1':@vm:'2'), @vm, '|')", "9|18"),
-    ("207 MULS multiplies element by element", "x = change(muls('2':@vm:'3', '5':@vm:'7'), @vm, '|')", "10|21"),
-    ("207 DIVS divides element by element", "x = change(divs('10':@vm:'20', '2':@vm:'5'), @vm, '|')", "5|4"),
-    ("207 ADDS with a shorter second list treats the missing element as zero",
-     "x = change(adds('1':@vm:'2':@vm:'3', '10'), @vm, '|')", "11|2|3"),
-    ("207 ADDS works on field marks too", "x = change(adds('1':@fm:'2', '5':@fm:'6'), @fm, '|')", "6|8"),
     ("CONTROL: QUOTE of one string uses double quotes", "x = quote('a')", '"a"'),
     ("11 QUOTES quotes every element", "x = change(quotes('a':@vm:'b'), @vm, '|')", '"a"|"b"'),
     ("CONTROL: FIELD with a count of 2 from occurrence 2", "x = field('a*b*c*d', '*', 2, 2)", "b*c"),

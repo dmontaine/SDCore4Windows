@@ -64,7 +64,7 @@
 * NOT.TESTED: TRANS RTRANS ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
 *   session or host state
 * NOT.TESTED: DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
-* NOT.TESTED: SENTENCE ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
+* NOT.TESTED: ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
 *   terminal or printer state
 * NOT.TESTED: TERMINFO SAVE.SCREEN GETPU PRINTER.SETTING BINDKEY
 * NOT.TESTED: GET.PORT.PARAMS SET.PORT.PARAMS GETNLS
@@ -79,9 +79,9 @@
 *   exercises yet are DIGEST, SWAPMARKS, SELECT.SOCKET, EPOCH, MVDATE, MVDATE.TIME, MVEPOCH, MVTIME, SORTDATA and SORTNEXT: only
 *   Linux's q4, stmt-q3, epoch, sortwide, oq2 and crlf suites reach them, and those cannot run in an ordinary account or print on
 *   the default printer (NotRun in verify-carry-known.psd1; crlf needs the public FCONTROL; RELEASE_1.1 148 holds the witness).
-* NOT.TESTED: ARG.PRESENT BOOL CEIL FLOOR ROUNDUP ROUNDDOWN LAST LASTS LEFT RIGHT NS NV
-* NOT.TESTED: IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.NULL IS.SPACE
-* NOT.TESTED: MATCHESS MATCHFIELDS NUMERIC REUSING RMVD SIGNAL SWAPMARKS TERMINFO.EX TRIMWS
+* NOT.TESTED: ARG.PRESENT BOOL CEIL FLOOR ROUNDUP ROUNDDOWN LAST LASTS NS NV
+* NOT.TESTED: IS.NULL
+* NOT.TESTED: MATCHESS MATCHFIELDS NUMERIC REUSING RMVD SIGNAL TRIMWS
 * NOT.TESTED: DIGEST SELECT.SOCKET
 * NOT.TESTED: EPOCH MVDATE MVDATE.TIME MVEPOCH MVTIME
 * NOT.TESTED: SORT SORTDATA SORTNEXT
@@ -97,6 +97,11 @@
 * 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): DQUOTE, DQUOTES,
 *   SWAP and XLATE are no longer BASIC functions (QUOTE, QUOTES, CHANGE and TRANS
 *   are the one names), so their cases and XLATE's NOT.TESTED entry are gone.
+* 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13 part 3): ADDS, SUBS,
+*   MULS, DIVS, MD5, LEFT, RIGHT and IS.ALNUM .. IS.SPACE are gone, and with them
+*   their cases and NOT.TESTED entries.  The same edit catches up batch 3
+*   (698fe22b, carried 7 Nov without this file): EREPLACE's cases and the
+*   SENTENCE, SWAPMARKS and TERMINFO.EX entries, names the compiler no longer knows.
 
 program basicfuncs
 
@@ -434,26 +439,14 @@ program basicfuncs
 * BCOMP; the carry's own steps (verify-carry) run the full Linux rows.
 * Multivalued results keep their marks: check converts both sides to F V S before comparing.
 
-   n = 'ADDS' ; g = adds('1':@vm:'2', '10':@vm:'20')  ; w = '11':@vm:'22'  ; gosub check
-   n = 'ADDS.short' ; g = adds('1':@vm:'2':@vm:'3', '10') ; w = '11':@vm:'2':@vm:'3' ; gosub check
-   n = 'SUBS' ; g = subs('10':@vm:'20', '1':@vm:'2')  ; w = '9':@vm:'18'   ; gosub check
-   n = 'MULS' ; g = muls('2':@vm:'3', '5':@vm:'7')    ; w = '10':@vm:'21'  ; gosub check
-   n = 'DIVS' ; g = divs('10':@vm:'20', '2':@vm:'5')  ; w = '5':@vm:'4'    ; gosub check
    n = 'QUOTES' ; g = quotes('a':@vm:'b')    ; w = '"a"':@vm:'"b"'         ; gosub check
    n = 'TRIMW' ; g = trimw(char(9):'  a':char(9):char(9):'b  ':char(10)) ; w = 'a b' ; gosub check
    n = 'TRIMW.none' ; g = trimw('abc')       ; w = 'abc'                   ; gosub check
-   n = 'EREPLACE' ; g = ereplace('a-b-c-d', '-', '+')         ; w = 'a+b+c+d' ; gosub check
-   n = 'EREPLACE.count' ; g = ereplace('a-b-c-d', '-', '+', 2) ; w = 'a+b+c-d' ; gosub check
-   n = 'EREPLACE.start' ; g = ereplace('a-b-c-d', '-', '+', 1, 3) ; w = 'a-b-c+d' ; gosub check
-   n = 'EREPLACE.delete' ; g = ereplace('a-b-c', '-', '')    ; w = 'abc'     ; gosub check
-   n = 'EREPLACE.front' ; g = ereplace('world', '', 'hello ') ; w = 'hello world' ; gosub check
    n = 'FIX' ; g = fix(37.73629273)           ; w = '37.7363'               ; gosub check
    n = 'FIX.2' ; g = fix(37.73629273, 2)      ; w = '37.74'                 ; gosub check
    n = 'FIX.cut' ; g = fix(37.73629273, 2, 1) ; w = '37.73'                 ; gosub check
    n = 'FIX.zeros' ; g = fix(37.5, 2)         ; w = '37.50'                 ; gosub check
    n = 'FIX.neg' ; g = fix(-2.675, 2) : '/' : fix(-2.675, 2, 1) ; w = '-2.68/-2.67' ; gosub check
-   n = 'MD5' ; g = md5('abc')                 ; w = '900150983cd24fb0d6963f7d28e17f72' ; gosub check
-   n = 'MD5.null' ; g = md5('')               ; w = 'd41d8cd98f00b204e9800998ecf8427e' ; gosub check
    n = 'REGEX' ; g = regex('hello world', 'wor') ; w = 1                    ; gosub check
    n = 'REGEX.anchor' ; g = regex('abc123', '^[a-z]+[0-9]+$') : regex('abc123x', '^[a-z]+[0-9]+$') ; w = '10' ; gosub check
    n = 'REGEX.case' ; g = regex('ABC', 'abc') : regex('ABC', '(?i)abc') ; w = '01' ; gosub check

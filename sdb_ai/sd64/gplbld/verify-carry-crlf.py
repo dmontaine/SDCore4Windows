@@ -182,11 +182,11 @@ def p_read(ids):
             "   ids = '%s'\n   n = dcount(ids, ',')\n"
             "   for i = 1 to n\n      id = field(ids, ',', i)\n"
             "      read r from f, id else r = '*NOREC*'\n"
-            "      crt 'RU ':id:' ':len(r):' ':md5(r)\n   next i\n"
+            "      crt 'RU ':id:' ':len(r):' ':digest(r, 0, 'MD5')\n   next i\n"
             "   for m = 0 to 3\n      void fcontrol(f, FC$CRLF, m)\n"
             "      for i = 1 to n\n         id = field(ids, ',', i)\n"
             "         read r from f, id else r = '*NOREC*'\n"
-            "         crt 'R':m:' ':id:' ':len(r):' ':md5(r)\n      next i\n   next m\nend\n" % ",".join(ids))
+            "         crt 'R':m:' ':id:' ':len(r):' ':digest(r, 0, 'MD5')\n      next i\n   next m\nend\n" % ",".join(ids))
 
 
 P_WRITE = """$include keys.h
@@ -297,7 +297,7 @@ P_IMAGE = """$include keys.h
       mark.mapping f, off
       write 'a':@fm:'b':char(13):char(10):'c' to f, 'im':m
       read r from f, 'imr' else r = '*NOREC*'
-      crt 'IM':m:' ':len(r):' ':md5(r)
+      crt 'IM':m:' ':len(r):' ':digest(r, 0, 'MD5')
       mark.mapping f, on
    next m
 end

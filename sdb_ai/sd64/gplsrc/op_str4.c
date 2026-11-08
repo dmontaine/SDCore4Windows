@@ -18,6 +18,8 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): op_md5() (MD5()) is gone, with the OpenSSL include only it used; its opcode is an op_illegal row
+ *           (write DIGEST(s, 0, 'MD5')).
  * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): op_ereplace() (EREPLACE) is gone; its opcode is an op_illegal row in opcodes.h.
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE COUNT.OVERLAP and INDEX.OVERLAP: count() and op_index() find overlapping occurrences (QM4 gaps Q-16)
  * 18 Oct 26 Windows port - from Linux e91ed09 (12 Oct 26): MATCHES and MATCHFIELD set INMAT() to the number of the template that matched (1.2-0, 315)
@@ -45,7 +47,6 @@
  * START-CODE
  */
 
-#include <openssl/evp.h>   /* before sd.h: descr.h defines OBJ, which turns OpenSSL's OBJ_dup into 15_dup */
 #include "sd.h"
 #include "header.h"
 
@@ -1176,61 +1177,6 @@ void op_trimw() {
 
 exit_trimw:
   return;
-}
-
-/* ======================================================================
-   op_md5()  -  MD5() function
-
-   12 Oct 26  openQM ref 63.  The MD5 message digest of the string, as 32
-   lower case hexadecimal characters (the owner supplied the openQM
-   description).  Uses OpenSSL's EVP interface.                           */
-
-void op_md5() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  Source string              |  Digest, 32 hex characters  |
-     |=============================|=============================|
- */
-
-  DESCRIPTOR *src_descr;
-  STRING_CHUNK *src_str;
-  EVP_MD_CTX *ctx;
-  unsigned char digest[EVP_MAX_MD_SIZE];
-  unsigned int digest_len = 0;
-  char hex[2 * EVP_MAX_MD_SIZE + 1];
-  unsigned int i;
-
-  src_descr = e_stack - 1;
-  k_get_string(src_descr);
-  src_str = src_descr->data.str.saddr;
-
-  ctx = EVP_MD_CTX_new();
-  if (ctx == NULL || EVP_DigestInit_ex(ctx, EVP_md5(), NULL) != 1) {
-    if (ctx != NULL)
-      EVP_MD_CTX_free(ctx);
-    k_error("MD5() is not available");
-    return;
-  }
-
-  while (src_str != NULL) {
-    if (src_str->bytes > 0)
-      EVP_DigestUpdate(ctx, src_str->data, (size_t)src_str->bytes);
-    src_str = src_str->next;
-  }
-
-  EVP_DigestFinal_ex(ctx, digest, &digest_len);
-  EVP_MD_CTX_free(ctx);
-
-  for (i = 0; i < digest_len; i++)
-    sprintf(hex + 2 * i, "%02x", digest[i]);
-  hex[2 * digest_len] = '\0';
-
-  k_dismiss();                      /* Dismiss the source string */
-  k_put_c_string(hex, e_stack);
-  e_stack++;
 }
 
 /* ======================================================================

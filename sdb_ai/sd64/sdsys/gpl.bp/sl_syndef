@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): the highlight list lost the functions adds, divs, muls, subs, md5 (and dquote, dquotes, swap, xlate
+*            of batch 11).
 * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the highlight list lost the statement go.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the highlight list lost @svm, @user and @filename.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
@@ -89,23 +91,23 @@ rules.sd.basic:
    r<-1> = 'words keyword then else and or not eq ne lt gt le ge matches match by step to setting from using returning locked'
    r<-1> = 'words keyword error each before after repeat while until do'
    * the intrinsic functions (bcomp: intrinsics)
-   r<-1> = 'words type abs abss accept.socket.connection acos adds akmap alpha analyse ands arg arg.count ascii asin assigned atan'
+   r<-1> = 'words type abs abss accept.socket.connection acos akmap alpha analyse ands arg arg.count ascii asin assigned atan'
    r<-1> = 'words type bindkey bitand bitnot bitor bitreset bitset bittest bitxor break.count btree catalogued cats caught ccall'
    r<-1> = 'words type change changed char checksum chgphant col1 col2 collection compare config convert cos count counts'
-   r<-1> = 'words type create.server.socket crop csvdq date dcount debug.info delete dir div divs downcase dquote dquotes dtx ebcdic'
+   r<-1> = 'words type create.server.socket crop csvdq date dcount debug.info delete dir div downcase dtx ebcdic'
    r<-1> = 'words type element.exists enumerate env eqs events exp expand expand.hf extract fcontrol field fields fieldstore'
    r<-1> = 'words type fileinfo find fix fmt fmts fold folds formcsv ges getlocks get.messages getnls get.port.params getpu getrem'
    r<-1> = 'words type grpstat gts iconv iconvs idiv ifs index indexs indices inmat inputblk insert int ismv is.subr itype jboolean'
    r<-1> = 'words type jbuild jnull jparse jtype kernel keycode keyin keyinc keyinr keyready len lens les list.common listindex ln'
-   r<-1> = 'words type loaded load.object locate login login.port logout lower lts mat matchfield matstr max maximum md5 min'
-   r<-1> = 'words type minimum mod mods muls neg negs nes not nots num nums object objinfo oconv oconvs open.socket option ors'
+   r<-1> = 'words type loaded load.object locate login login.port logout lower lts mat matchfield matstr max maximum min'
+   r<-1> = 'words type minimum mod mods neg negs nes not nots num nums object objinfo oconv oconvs open.socket option ors'
    r<-1> = 'words type os.error ospath osrename outerjoin pconfig phantom printer.setting prompt pterm pwcrypt pwr quote quotes'
    r<-1> = 'words type raise rdiv readpkt read.socket recordlocked regex rem remove removef replace reuse rnd rtrans sadd save.screen'
    r<-1> = 'words type scan scmp sddecrypt sdencrypt sdext sdiv sdkey sdpyobj sdrandkey sdsalt selectinfo seqserver.addr set.port.params'
    r<-1> = 'words type set.socket.mode shift sin smul socket.info sortdata sortnext soundex soundexs space spaces splice sqrt squote'
-   r<-1> = 'words type ssub status str strs subr subs substitute substrings sum summation swap swapcase sysmsg system tan terminfo'
+   r<-1> = 'words type ssub status str strs subr substitute substrings sum summation swapcase sysmsg system tan terminfo'
    r<-1> = 'words type testlock time timedate trans trim trimb trimbs trimf trimfs trims trimw umask unassigned upcase vartype'
-   r<-1> = 'words type vslice write.socket xlate xtd'
+   r<-1> = 'words type vslice write.socket xtd'
    * the @ variables
    r<-1> = 'words constant @fm @vm @sm @tm @im @true @false @id @record @data @date @time @day @month @year @userno'
    r<-1> = 'words constant @logname @account @path @sentence @parasentence @command @option @selected @who @tty @term.type'

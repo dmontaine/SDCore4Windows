@@ -45,7 +45,7 @@ case("SYSTEM(19) gives a different value every time, a letter on the end when th
 case("SYSTEM(21) is the date and a sequence number, the second call one more than the first",
      "a = system(21)\nb = system(21)\nx = len(a) : '/' : (a[1,5] = int(date())) : '/' : (b[6,5] + 0 = a[6,5] + 1) : '/' : (a[6,5] + 0 >= 1)", "10/1/1/1")
 case("SYSTEM(45) is the pathname of a program run from a source file, which ends in its name (a catalogued one gives its name)",
-     "p = system(45)\nx = (right(downcase(p), len('@NAME@')) = '@NAME@') : '/' : (p[1,1] = '/')", "1/1")
+     "p = system(45)\nx = ((downcase(p))[len('@NAME@')] = '@NAME@') : '/' : (p[1,1] = '/')", "1/1")
 case("SYSTEM(1048) is a sequence number: the second call is one more than the first",
      "a = system(1048)\nb = system(1048)\nx = (a >= 1) : '/' : (b = a + 1)", "1/1")
 case("SYSTEM(1049) is false by default, true under HUSH ON and false again after HUSH OFF",

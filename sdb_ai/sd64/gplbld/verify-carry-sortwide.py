@@ -130,7 +130,7 @@ P_SMALL = PROLOGUE % (1, 1) + """   modes(1) = 8
       all := d:@fm; allk := keys(1):@fm; n += 1
    repeat
    sortclear
-   crt '%s[=N=':n:' MD=':md5(all):' MK=':md5(allk):' MEM=':config('SORTMEM'):']'
+   crt '%s[=N=':n:' MD=':digest(all, 0, 'MD5'):' MK=':digest(allk, 0, 'MD5'):' MEM=':config('SORTMEM'):']'
 end
 """
 
@@ -138,7 +138,7 @@ end
 P_WIDEDATA = PROLOGUE % (1, 1) + """   modes(1) = 8
    sortinit 1, modes
    for i = 1 to 12
-      keys(1) = 'K':right('0':mod(i * 5, 13), 2)
+      keys(1) = 'K':('0':mod(i * 5, 13))[2]
       sortadd keys, str(char(64 + i), 40000 + 137 * i)
    next i
    all = ''; lens = ''; n = 0
@@ -148,7 +148,7 @@ P_WIDEDATA = PROLOGUE % (1, 1) + """   modes(1) = 8
       all := d:@fm; lens := len(d):','; n += 1
    repeat
    sortclear
-   crt '%s[=N=':n:' LENS=':lens:' MD=':md5(all):']'
+   crt '%s[=N=':n:' LENS=':lens:' MD=':digest(all, 0, 'MD5'):']'
 end
 """
 
@@ -157,7 +157,7 @@ P_WIDEKEY = PROLOGUE % (2, 2) + """   modes(1) = 8
    modes(2) = 0
    sortinit 2, modes
    for i = 1 to 12
-      keys(1) = str('x', 40000):right('0':mod(i * 5, 13), 2)
+      keys(1) = str('x', 40000):('0':mod(i * 5, 13))[2]
       keys(2) = 'z':i
       sortadd keys, 'W':i
    next i
@@ -168,7 +168,7 @@ P_WIDEKEY = PROLOGUE % (2, 2) + """   modes(1) = 8
       order := d:','; k1 := keys(1):@fm; k2 := keys(2):@fm; n += 1
    repeat
    sortclear
-   crt '%s[=N=':n:' ORDER=':order:' K1=':md5(k1):' K1LEN=':len(keys(1)):' K2=':md5(k2):']'
+   crt '%s[=N=':n:' ORDER=':order:' K1=':digest(k1, 0, 'MD5'):' K1LEN=':len(keys(1)):' K2=':digest(k2, 0, 'MD5'):']'
 end
 """
 
@@ -176,13 +176,13 @@ end
 P_WIDEDATA_ALL = PROLOGUE % (1, 1) + """   modes(1) = 8
    sortinit 1, modes
    for i = 1 to 12
-      keys(1) = 'K':right('0':mod(i * 5, 13), 2)
+      keys(1) = 'K':('0':mod(i * 5, 13))[2]
       sortadd keys, str(char(64 + i), 40000 + 137 * i)
    next i
    all = sortdata()
    n = status()
    sortclear
-   crt '%s[=N=':n:' LEN=':len(all):' MD=':md5(all):']'
+   crt '%s[=N=':n:' LEN=':len(all):' MD=':digest(all, 0, 'MD5'):']'
 end
 """
 
@@ -196,7 +196,7 @@ P_WIDEKEY_ONLY = PROLOGUE % (1, 1) + """   modes(1) = 0
    all = sortdata()
    n = status()
    sortclear
-   crt '%s[=N=':n:' LEN=':len(all):' MD=':md5(all):']'
+   crt '%s[=N=':n:' LEN=':len(all):' MD=':digest(all, 0, 'MD5'):']'
 end
 """
 
@@ -245,7 +245,7 @@ P_UNIQUE = PROLOGUE % (1, 1) + """   modes(1) = 8 + 4
       allk := keys(1):@fm; n += 1
    repeat
    sortclear
-   crt '%s[=N=':n:' MK=':md5(allk):']'
+   crt '%s[=N=':n:' MK=':digest(allk, 0, 'MD5'):']'
 end
 """
 

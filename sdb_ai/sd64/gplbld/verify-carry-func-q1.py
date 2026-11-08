@@ -64,30 +64,7 @@ case("ROUNDUP with a step of one is the value", "x = roundup(7, 1) : '/' : round
 case("ROUNDUP and ROUNDDOWN with a step under one give zero", "x = roundup(7, 0) : '/' : rounddown(7, 0) : '/' : roundup(7, -2)", "0/0/0")
 case("ROUNDUP of a fractional value", "x = roundup(7.2, 3) : '/' : rounddown(7.9, 3)", "9/6")
 
-# ---- IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.SPACE -------------------------------------------------------------
-for fn, yes, no in [("is.alpha", ["'a'", "'Z'", "'abc'", "'a1'"], ["'1'", "' '", "'_'", "'1a'", "''"]),
-                    ("is.digit", ["'7'", "'9a'"], ["'a'", "'a9'", "' '", "''"]),
-                    ("is.alnum", ["'z'", "'5'", "'a_'"], ["'_'", "' '", "'.'", "''"]),
-                    ("is.graph", ["'!'", "'a'", "'~'", "'0'"], ["' '", "''", "char(9)"]),
-                    ("is.space", ["' '", "'  '", "' x'"], ["char(9)", "'x'", "''"]),
-                    ("is.mark", ["@fm", "@vm", "@sm", "@tm", "@im"], ["'a'", "' '", "''", "'1'"])]:
-    for a in yes:
-        case("%s(%s) is true" % (fn.upper(), a), "x = %s(%s)" % (fn, a), "1")
-    for a in no:
-        case("%s(%s) is false" % (fn.upper(), a), "x = %s(%s)" % (fn, a), "0")
-case("IS.ALPHA in an IF", "if is.alpha('q') then x = 'yes' else x = 'no'", "yes")
-
-# ---- LEFT and RIGHT ------------------------------------------------------------------------------------------------
-case("CONTROL: the substring forms LEFT and RIGHT are said to equal", "a = 'ABCDEFGHIJK'\nx = a[1,3] : '/' : a[3]", "ABC/IJK")
-case("LEFT(string, 3), the manual's example", "x = left('ABCDEFGHIJK', 3)", "ABC")
-case("RIGHT(string, 3), the manual's example", "x = right('ABCDEFGHIJK', 3)", "IJK")
-case("LEFT of a string shorter than the length is all of it", "x = left('AB', 5)", "AB")
-case("RIGHT of a string shorter than the length is all of it", "x = right('AB', 5)", "AB")
-case("LEFT with a length under one is taken as one", "x = left('ABC', 0) : '/' : left('ABC', -2)", "A/A")
-case("RIGHT with a length under zero is taken as zero", "x = right('ABC', 0) : '/' : right('ABC', -1) : '/'", "//")
-case("LEFT and RIGHT of a null string", "x = left('', 3) : '/' : right('', 3) : '/'", "//")
-case("LEFT and RIGHT nest", "x = left(right('abcdef', 4), 2)", "cd")
-case("LEFT of a number", "x = left(123456, 2) + 1", "13")
+# (IS.ALNUM IS.ALPHA IS.DIGIT IS.GRAPH IS.MARK IS.SPACE, LEFT and RIGHT were removed on 27 Oct 26, S.87 batch 13)
 
 # ---- LAST and LASTS ----------------------------------------------------------------------------------------------------
 case("CONTROL: FIELD with DCOUNT, the older way to the final element", "s = '1*2*3*4*5'\nx = field(s, '*', dcount(s, '*'))", "5")
