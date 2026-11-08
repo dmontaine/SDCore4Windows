@@ -674,14 +674,19 @@ $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')) {
 # (commit c893308), so the old figures have read three high since the 17:21
 # cycle.  The thresholds below did not move and did not need to: they are set
 # far enough back to catch a bootstrap that failed, not to police a count.
-Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~100)" -f $nGcat, $nOut, $nTinfo)
+# 8 Nov 26 - terminfo floor 50 -> 30, "want ~100" -> "~37".  The S.87 carry
+# (RELEASE_1.1 197) removed 46 old terminal types (Data General, Prism, Prime,
+# Televideo, ADDS, HP, IBM, VT52 ...), leaving 37 compiled entries: windows,
+# xterm, vt100, ansi, the vt2xx-5xx family, wyse50/60 and the rest.  The first
+# -SkipInstall after the carry stopped here on 37, with the tree whole.
+Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~37)" -f $nGcat, $nOut, $nTinfo)
 Write-Host ("   `$cproc {0} bytes (want >0)   `$bcomp {1} (want ~88,000 - under 80,000 is bbcmp.py's seed, ~70,900)" -f $szCproc, $szBcomp)
 
 $faults = @()
 if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the bootstrap never reached the last step' }
 if ($nGcat   -lt 100) { $faults += "gcat holds $nGcat entries" }
 if ($nOut    -lt 150) { $faults += "gpl.bp.out holds $nOut objects" }
-if ($nTinfo  -lt 50)  { $faults += "terminfo holds $nTinfo entries - run 'make terminfo'; no terminal type would resolve" }
+if ($nTinfo  -lt 30)  { $faults += "terminfo holds $nTinfo entries - run 'make terminfo'; no terminal type would resolve" }
 # 14 Sep 26 - A THRESHOLD, NOT AN EXACT SIZE, AND THE EXACT SIZE HAD ALREADY GONE
 # BLIND.  This was "-eq 70697".  Measured this day by compiling HEAD's BCOMP with
 # HEAD's bbcmp.py in a scratch tree (3e237f6): the seed was 70,828 bytes, and
