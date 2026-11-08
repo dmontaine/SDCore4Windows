@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_forloops and op_for1s ($MODE FOR.STORE.BEFORE.TEST) are gone: forloop() and
+ *           for1() store the control variable only when the loop goes round again.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): op_epochcv converts in the TIMEZONE of the process when one was set (QM4 gaps Q-3, SET.TIMEZONE).
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): op_strovl and op_roll3 for the $MODE options of QM4 gaps bundle Q-16
  * 14 Sep 26 Windows port - op_procread looks for $proc, lower case
@@ -55,8 +57,6 @@
  *    op_csvmode        CSV.MODE
  *    op_csvdelim       Push the CSV delimiter
  *    op_epochcv        MVDATE() MVTIME() MVDATE.TIME() MVEPOCH()
- *    op_strovl         STROVL         $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP
- *    op_roll3          ROLL3          Third item of the stack to the top ($MODE PICK.CONVERT)
  *    op_precision     PRECISION
  *    op_procread()     PROCREAD
  *    op_rtrans()       RTRANS()
@@ -107,8 +107,8 @@ Private int32_t date_adjustment = 0;
 Private int16_t tbase; /* Base of TOTAL() accumulator array,
                                    zero if not to be used              */
 
-Private void for1(bool store_before_test);
-Private void forloop(bool store_before_test);
+Private void for1(void);
+Private void forloop(void);
 Private void itype(void);
 
 /* ======================================================================
@@ -418,18 +418,13 @@ void op_forinit() {
 }
 
 /* ======================================================================
-   op_forloop()  -  Increment and test FOR loop control variable
-   op_forloops() -  As OP_FORLOOP but store value before test             */
+   op_forloop()  -  Increment and test FOR loop control variable          */
 
 void op_forloop() {
-  forloop(FALSE);
+  forloop();
 }
 
-void op_forloops() {
-  forloop(TRUE);
-}
-
-Private void forloop(bool store_before_test) {
+Private void forloop(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -565,7 +560,7 @@ Private void forloop(bool store_before_test) {
       again = (fcontrol_value - pcfg.fltdiff <= flimit);
     else
       again = (fcontrol_value + pcfg.fltdiff >= flimit);
-    if (store_before_test || again) {
+    if (again) {
       Release(control_descr); /* Might have changed type inside loop! */
       InitDescr(control_descr, FLOATNUM);
       control_descr->data.float_value = fcontrol_value;
@@ -575,7 +570,7 @@ Private void forloop(bool store_before_test) {
       again = (control_value <= limit);
     else
       again = (control_value >= limit);
-    if (store_before_test || again) {
+    if (again) {
       Release(control_descr); /* Might have changed type inside loop! */
       InitDescr(control_descr, INTEGER);
       control_descr->data.value = control_value;
@@ -590,18 +585,13 @@ Private void forloop(bool store_before_test) {
 }
 
 /* ======================================================================
-   op_for1()  -  Increment and test FOR loop control variable
-   op_for1s   -  As FOR1 but store value before test                      */
+   op_for1()  -  Increment and test FOR loop control variable             */
 
 void op_for1() {
-  for1(FALSE);
+  for1();
 }
 
-void op_for1s() {
-  for1(TRUE);
-}
-
-Private void for1(bool store_before_test) {
+Private void for1(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -713,7 +703,7 @@ Private void for1(bool store_before_test) {
   if (is_float) {
     again = (fcontrol_value - pcfg.fltdiff <= flimit);
 
-    if (store_before_test || again) {
+    if (again) {
       Release(control_descr); /* Might have changed type inside loop! */
       InitDescr(control_descr, FLOATNUM);
       control_descr->data.float_value = fcontrol_value;
@@ -721,7 +711,7 @@ Private void for1(bool store_before_test) {
   } else {
     again = (control_value <= limit);
 
-    if (store_before_test || again) {
+    if (again) {
       Release(control_descr); /* Might have changed type inside loop! */
       InitDescr(control_descr, INTEGER);
       control_descr->data.value = control_value;
@@ -1227,40 +1217,6 @@ void op_csvdelim() {
   s[0] = process.program.csv_delim;
   s[1] = '\0';
   k_put_c_string(s, e_stack++);
-}
-
-/* ======================================================================
-   op_strovl()  -  STROVL  -  $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP   (15 Oct 26, QM4 gaps Q-16)
-
-   Stack:  mask  ->  (nothing).  The compiler pushes the SO_ bits that are in force at the call it is about to emit and
-   follows them with this opcode, so the argument list of CHANGE, SWAP, COUNT, COUNTS, INDEX or INDEXS is
-   untouched under the mask.  The bits live in the program's own frame (init_program() clears them for a called program
-   and the caller's copy comes back with its frame), so a subroutine compiled without the modes is not affected by its
-   caller's. */
-
-void op_strovl() {
-  DESCRIPTOR* descr;
-
-  descr = e_stack - 1;
-  GetInt(descr);
-  process.program.str_ovl = (u_char)descr->data.value;
-  k_pop(1);
-}
-
-/* ======================================================================
-   op_roll3()  -  ROLL3  -  Move the third item of the stack to the top   (15 Oct 26, QM4 gaps Q-16)
-
-   Stack:  a, b, c  ->  b, c, a   (c is on top before, a after).  The descriptors are moved, not copied, so no reference
-   count changes.  $MODE PICK.CONVERT evaluates CONVERT(source, from, to) and rolls the source to where the function
-   expects it, after the two character lists. */
-
-void op_roll3() {
-  DESCRIPTOR a;
-
-  a = *(e_stack - 3);
-  *(e_stack - 3) = *(e_stack - 2);
-  *(e_stack - 2) = *(e_stack - 1);
-  *(e_stack - 1) = a;
 }
 
 /* ======================================================================

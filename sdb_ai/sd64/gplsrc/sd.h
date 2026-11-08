@@ -422,7 +422,6 @@ void free_array(ARRAY_HEADER * hdr_addr);
 void delete_common(ARRAY_HEADER * ahdr);
 
 /* OP_EXEC.C */
-void stdfil_shared_restore(void);
 
 /* PROFILER.C: the application event profiler (16 Oct 26, QM4 gap 66) */
 #define PROF_CALL     0x0001

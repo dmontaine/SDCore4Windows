@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 17: op_locates (LOCATE with numeric data not special, $MODE STRING.LOCATE) is gone; its opcode is an op_illegal row.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -34,11 +35,6 @@ Private void locate(bool numeric_mode);
 
 /* ======================================================================
    op_locate()  -  Locate item in dynamic array                           */
-
-void op_locates() /* Numeric data not treated as special case */
-{
-  locate(FALSE);
-}
 
 void op_locate() /* Integer numeric data treated as special case */
 {

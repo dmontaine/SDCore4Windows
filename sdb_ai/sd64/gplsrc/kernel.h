@@ -17,7 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
- * 27 Oct 26 dm  S.87 batch 16: keep_select is gone (the KEEP.SELECT statement).
+ * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): has_stdfil and stdfil_saved are gone with $MODE STDFIL.SHARED.
+ * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): keep_select is gone (the KEEP.SELECT statement).
  * 14 Sep 26 Windows port - command_processor defaults to $cproc (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * 00 Jun 24 bootstrap flag
@@ -129,16 +130,10 @@ struct PROGRAM {
   int16_t itrap_n;      /* ... how many labels the statement named (a character past the last label takes the last one) */
   int32_t itrap_stub;   /* ... the offset in the object code of the stub that jumps to the label; 0 for none */
   int16_t itrap_hit;    /* ... set by _INPUTAT to the label number when a trapped character was typed, 0 for none */
-  u_char str_ovl;    /* $MODE CHANGE.NO.OVERLAP / COUNT.OVERLAP / INDEX.OVERLAP (15 Oct 26, QM4 gaps Q-16): SO_* bits set by OP_STROVL before the call */
-#define SO_CHANGE_NO_OVERLAP 0x01 /* CHANGE and SWAP skip a matched occurrence whole instead of one byte on */
-#define SO_COUNT_OVERLAP 0x02     /* COUNT and COUNTS find overlapping occurrences */
-#define SO_INDEX_OVERLAP 0x04     /* INDEX and INDEXS find overlapping occurrences */
   bool has_stacked;  /* EXECUTE ... STACKLIST: list 0 as it was is held here until the command returns (openQM 61) */
   DESCRIPTOR stacked_list;
   int32_t stacked_count;
   int32_t stacked_ptr; /* where READNEXT had got to in it: bytes from the start of the list string, -1 for not started */
-  bool has_stdfil;     /* EXECUTE: the $STDFIL common block's element (the @STDFIL of $MODE STDFIL.SHARED) is held here, and the command */
-  DESCRIPTOR stdfil_saved; /* ...runs with a fresh one; k_return() puts it back (16 Oct 26, QM4 gap 225) */
   u_char* saved_c_base;
   int32_t saved_pc_offset;
   char saved_prompt_char;
@@ -183,18 +178,15 @@ struct PROCESS {
 #define P_LLOCK 0x0004    /* LLOCK opcode executed       ** See int$keys.h */
 #define P_ULOCK 0x0008    /* ULOCK opcode executed       ** See int$keys.h */
 #define P_READONLY 0x0010 /* READONLY opcode executed */
-#define P_PICKREAD 0x0020 /* PICKREAD opcode executed */
 #define P_NON_TXN 0x0040  /* OPEN / OPENPATH ... NON.TRANSACTIONAL (openQM item 64) */
 #define P_TRAIL 0x0080    /* SUBSTRA is a trailing substring assignment, var[n] = expr (openQM item 41) */
 /* 27 Oct 26 (S.87 batch 9): 0x0100 (OPEN.FAIL.ZERO.FVAR) and the READNEXT use of 0x0200 (PICK.READNEXT) are retired; the compiler no longer emits them. */
 #define P_SYNC 0x0200      /* OPEN / OPENPATH ... SYNC: forced writes (QM4 Fixes item 102) */
-#define P_THEN_ELSE 0x0400 /* WRITE / DELETE has a THEN / ELSE clause under $MODE WRITE.DELETE.THEN.ELSE: a trigger failure takes ELSE (openQM items 368, 496) */
+/* 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): 0x0400 (P_THEN_ELSE, $MODE WRITE.DELETE.THEN.ELSE), the 0x2000 of $MODE PICK.SELECT,
+   0x8000 (P_AUTOLOCK and P_DEF_SELLIST, $MODE AUTOLOCK and SELECTV) and 0x0020 (P_PICKREAD) are retired; the compiler no longer emits them. */
 /* 0x0800 is Linux's P_TEMPFILE (OPENTEMP, held: it rests on the S.63 OS-access gate); left free so the values agree */
 #define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */
-#define P_PICK_SEL 0x2000 /* SELECTV under $MODE PICK.SELECT: an active list 0 is moved to the target variable (QM4 gaps Q-16) */
 #define P_SEQKEY 0x4000   /* WRITE ... CREATING.SEQKEY id.var: the "record id" operand is the address of a variable that is given the file's next sequential id (15 Oct 26) */
-#define P_DEF_SELLIST 0x8000 /* READNEXT under $MODE SELECTV with no FROM: the list is the program's default select list variable, and one that has never been given a list is an empty list (openQM item 85) */
-#define P_AUTOLOCK 0x8000 /* WRITE, MATWRITE or DELETE under $MODE AUTOLOCK: take an update lock on a record not locked (QM4 gap 213); the bit READNEXT uses for P_DEF_SELLIST, never both */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
   bool numeric_array_allowed;           /* Opcode allows numeric arrays? */
   int32_t status;                       /* Value from STATUS() function */

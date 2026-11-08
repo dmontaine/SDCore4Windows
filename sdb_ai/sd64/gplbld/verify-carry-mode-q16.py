@@ -8,6 +8,8 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 17: the overlap modes, PICK.CONVERT and PICK.SELECT are gone with twenty-two other modes; each of the 22 names is a refusal row now, and the CONTROL rows of the
+#               behaviour they changed stay.
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-16: CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP, PICK.CONVERT,
 #               CONDITIONAL.STATEMENTS, TRAP.UNUSED.MAIN.
 # 27 Oct 26 dm  S.87 batch 3: the rows for the second spellings and forms removed that day (a CONTROL that runs the surviving spellings, then one row per removed word that
@@ -44,95 +46,23 @@ def aux(name, text, how):
     AUX.append((name, text, how))
 
 
-# ---- the three overlap modes -----------------------------------------------------------------------------------
-# The manual's own examples, over nine a's.
-S9 = "'aaaaaaaaa'"
+# ---- 27 Oct 26 (S.87 batch 17): the overlap modes and PICK.CONVERT are gone; the CONTROLS stay, and the names are refused ----
 case("CONTROL: CHANGE from the 3rd occurrence, overlapping occurrences are skipped one byte at a time",
      "x = change(%s, 'aa', 'xx', 0, 3)" % S9, "aaxxxxxxa")
-case("Q-16 CHANGE.NO.OVERLAP: the two skipped occurrences are passed over whole",
-     "$mode change.no.overlap\nx = change(%s, 'aa', 'xx', 0, 3)" % S9, "aaaaxxxxa")
 case("CONTROL: CHANGE, same string, no start argument (CHANGE replaces all)",
      "x = change(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
-case("Q-16 CHANGE.NO.OVERLAP leaves a replace-all alone (nothing is skipped)",
-     "$mode change.no.overlap\nx = change(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
-case("Q-16 CHANGE.NO.OVERLAP, one occurrence only (the 3rd, counting without overlap)",
-     "$mode change.no.overlap\nx = change(%s, 'aa', 'xx', 1, 3)" % S9, "aaaaxxaaa")
-case("CONTROL: CHANGE.NO.OVERLAP on a pattern of one character is the same as without",
-     "$mode change.no.overlap\nx = change('abcabc', 'b', 'X', 0, 2)", "abcaXc")
-case("Q-16 CHANGE.NO.OVERLAP with a pattern that overlaps itself by one (aba in ababababa): 1-3 is skipped whole",
-     "$mode change.no.overlap\nx = change('ababababa', 'aba', 'X', 0, 2)", "ababXba")
+aux("zzq16sa", "subroutine zzq16sa(r)\n   r = index('aaaaaaaaa', 'aa', 3)\nreturn\nend\n", "sub")
 case("CONTROL: the same without the mode finds the 2nd occurrence at position 3",
      "x = change('ababababa', 'aba', 'X', 0, 2)", "abXbX")
-case("Q-16 CHANGE.NO.OVERLAP works with NOCASE.STRINGS (the skipped text keeps the source's case)",
-     "$nocase.strings\n$mode change.no.overlap\nx = change('AaAaAaAaA', 'aa', 'xx', 0, 3)", "AaAaxxxxA")
 case("CONTROL: COUNT of overlapping a's is 4 by default",
      "x = count(%s, 'aa')" % S9, "4")
-case("Q-16 COUNT.OVERLAP counts every position (8)",
-     "$mode count.overlap\nx = count(%s, 'aa')" % S9, "8")
-case("Q-16 COUNT.OVERLAP does not change DCOUNT (a delimiter, never overlapping)",
-     "$mode count.overlap\nx = dcount('a*b**c', '*')", "4")
 case("CONTROL: COUNTS is 4 and 1 by default",
      "x = change(counts(%s:@vm:'aaa', 'aa'), @vm, '|')" % S9, "4|1")
-case("Q-16 COUNT.OVERLAP reaches COUNTS (8 and 2)",
-     "$mode count.overlap\nx = change(counts(%s:@vm:'aaa', 'aa'), @vm, '|')" % S9, "8|2")
-case("Q-16 COUNT.OVERLAP leaves INDEX alone",
-     "$mode count.overlap\nx = index(%s, 'aa', 3)" % S9, "5")
 case("CONTROL: INDEX of the 3rd 'aa' is 5 by default",
      "x = index(%s, 'aa', 3)" % S9, "5")
-case("Q-16 INDEX.OVERLAP: the 3rd occurrence starts at 3",
-     "$mode index.overlap\nx = index(%s, 'aa', 3)" % S9, "3")
-case("Q-16 INDEX.OVERLAP: the 1st occurrence is where it always was",
-     "$mode index.overlap\nx = index(%s, 'aa', 1)" % S9, "1")
-case("Q-16 INDEX.OVERLAP: the 9th has no room, so zero (8 overlapping occurrences exist, not 9)",
-     "$mode index.overlap\nx = index(%s, 'aa', 9)" % S9, "0")
-case("Q-16 INDEX.OVERLAP: the 8th is at 8",
-     "$mode index.overlap\nx = index(%s, 'aa', 8)" % S9, "8")
 case("CONTROL: INDEXS with the 2nd occurrence is 3 and 0 by default",
      "x = change(indexs(%s:@vm:'aaa', 'aa', 2), @vm, '|')" % S9, "3|0")
-case("Q-16 INDEX.OVERLAP reaches INDEXS (2 and 2)",
-     "$mode index.overlap\nx = change(indexs(%s:@vm:'aaa', 'aa', 2), @vm, '|')" % S9, "2|2")
-case("Q-16 INDEX.OVERLAP leaves COUNT alone",
-     "$mode index.overlap\nx = count(%s, 'aa')" % S9, "4")
-case("Q-16 two modes together: CHANGE.NO.OVERLAP and INDEX.OVERLAP, one comma list",
-     "$mode change.no.overlap, index.overlap\nx = change(%s, 'aa', 'xx', 0, 3) : '/' : index(%s, 'aa', 3)" % (S9, S9),
-     "aaaaxxxxa/3")
-case("Q-16 $MODE -INDEX.OVERLAP turns it off from that line on",
-     "$mode index.overlap\ny = index(%s, 'aa', 3)\n$mode -index.overlap\nx = y : '/' : index(%s, 'aa', 3)" % (S9, S9), "3/5")
-case("Q-16 $MODE DEFAULT turns every overlap mode off",
-     "$mode index.overlap, count.overlap\n$mode default\nx = count(%s, 'aa') : '/' : index(%s, 'aa', 3)" % (S9, S9), "4/5")
-case("Q-16 the modes can come back on after being turned off",
-     "$mode index.overlap\n$mode -index.overlap\n$mode index.overlap\nx = index(%s, 'aa', 3)" % S9, "3")
-case("Q-16 a call before the directive in the source is not changed by it",
-     "y = index(%s, 'aa', 3)\n$mode index.overlap\nx = y : '/' : index(%s, 'aa', 3)" % (S9, S9), "5/3")
-case("Q-16 an unknown mode name is still refused",
-     "$mode index.overlapped\nx = 1", None, has=["Unrecognised mode name"])
-
-# The modes belong to the program that set them: a called subroutine is compiled on its own terms, and the caller's
-# modes come back when it returns.
-aux("zzq16sa", "subroutine zzq16sa(r)\n   r = index('aaaaaaaaa', 'aa', 3)\nreturn\nend\n", "sub")
-aux("zzq16sb", "$mode index.overlap\nsubroutine zzq16sb(r)\n   r = index('aaaaaaaaa', 'aa', 3)\nreturn\nend\n", "sub")
-case("Q-16 a subroutine compiled without the mode is not changed by its caller's",
-     "$mode index.overlap\ncall zzq16sa(r)\nx = r : '/' : index(%s, 'aa', 3)" % S9, "5/3")
-case("Q-16 a subroutine compiled with the mode does not change its caller, and the caller keeps its own after the call",
-     "call zzq16sb(r)\nx = r : '/' : index(%s, 'aa', 3)" % S9, "3/5")
-case("Q-16 the caller's mode is still there after a call to a subroutine that has none",
-     "$mode index.overlap\ncall zzq16sa(r)\ncall zzq16sa(r2)\nx = index(%s, 'aa', 3)" % S9, "3")
-
-# ---- PICK.CONVERT ------------------------------------------------------------------------------------------------
 case("CONTROL: CONVERT(from, to, string)", "x = convert('ab', 'xy', 'abcab')", "xycxy")
-case("Q-16 PICK.CONVERT: CONVERT(string, from, to)",
-     "$mode pick.convert\nx = convert('abcab', 'ab', 'xy')", "xycxy")
-case("Q-16 PICK.CONVERT: a shorter to-list deletes the characters it has no partner for",
-     "$mode pick.convert\nx = convert('abcab', 'ab', 'x')", "xcx")
-case("Q-16 PICK.CONVERT: calls nest, the string is the first argument at each level",
-     "$mode pick.convert\nx = convert(convert('abcab', 'a', 'z'), 'b', 'y')", "zycz" + "y")
-case("Q-16 PICK.CONVERT applies from its line on: $MODE -PICK.CONVERT brings the old order back",
-     "$mode pick.convert\ny = convert('abcab', 'ab', 'xy')\n$mode -pick.convert\nx = y : '/' : convert('ab', 'xy', 'abcab')",
-     "xycxy/xycxy")
-case("Q-16 PICK.CONVERT leaves the CONVERT statement alone",
-     "$mode pick.convert\ns = 'abcab'\nconvert 'ab' to 'xy' in s\nx = s", "xycxy")
-case("Q-16 PICK.CONVERT with a field mark in the string (the list of characters is not a pattern)",
-     "$mode pick.convert\nx = change(convert('a' : @fm : 'b', @fm, '/'), '/', '|')", "a|b")
 
 # ---- CONDITIONAL.STATEMENTS --------------------------------------------------------------------------------------
 # A file statement as the condition of WHILE or UNTIL: true when the THEN clause would run.  The rows write a sequential
@@ -226,6 +156,8 @@ _refused("DIMENSION (a long spelling of DIM)", "dimension a(3)\nx = 1")
 _refused("REDIMENSION (a long spelling of REDIM)", "@RAW@   subroutine zzq16bad(mat a)\n   dim a(1)\n   redimension a(10)\n   return\nend\n")
 _refused("ENTER (a second name for CALL)", "enter zzq16sa\nx = 1")
 case("27 Oct 26 (S.87 batch 3): $MODE PICK.ENTER was removed with ENTER and is refused (2842)", "$mode pick.enter\nx = 1", None, has=["Unrecognised mode name"])
+for _m in ['change.no.overlap', 'count.overlap', 'index.overlap', 'pick.convert', 'pick.select', 'string.locate', 'composite.readnext', 'selectv', 'for.store.before.test', 'case.sensitive', 'pick.matrix', 'pick.jump.range', 'pick.read', 'optional.final.end', 'pick.substr', 'pick.substr.assign', 'compatible.append', 'heading.no.eject', 'write.delete.then.else', 'stdfil', 'stdfil.shared', 'autolock']:
+    case("27 Oct 26 (S.87 batch 17): $MODE %s was removed and is refused (2842)" % _m, "$mode %s\nx = 1" % _m, None, has=["Unrecognised mode name"])
 _refused("PERFORM (a second name for EXECUTE)", "perform 'who' capturing y\nx = 1")
 _refused("PRINTERR (a second name for INPUTERR)", "printerr ''\nx = 1")
 _refused("REMARK (a second name for REM)", "remark a comment\nx = 1")
@@ -310,24 +242,11 @@ aux("zzq16sc", "$mode explicit\nsubroutine zzq16sc(r, s)\n   r = s + 1\nreturn\n
 case("Q-16 EXPLICIT: the arguments of a SUBROUTINE statement are declared by it",
      "call zzq16sc(r, 4)\nx = r", "5", lacks=["not been declared"])
 
-# ---- PICK.SELECT -------------------------------------------------------------------------------------------------
+# ---- 27 Oct 26 (S.87 batch 17): PICK.SELECT is gone; its CONTROL stays ----
 # List 0 is made with FORMLIST, two ids that are in no file; the file the SELECTV names is the VOC.
 PS = ("open 'VOC' to v else x = 'noopen'\nformlist 'k1':@fm:'k2'\n")
 case("CONTROL: SELECTV with list 0 active selects from the file as always; list 0 is left alone",
      PS + "selectv v to lst\nreadnext id1 from lst else id1 = 'none'\nx = (id1 # 'k1') : '/' : system(11)", "1/1")
-case("Q-16 PICK.SELECT: SELECTV moves list 0 to the variable, ignoring the file",
-     "$mode pick.select\n" + PS + "selectv v to lst\nreadnext id1 from lst else id1 = 'none'\nreadnext id2 from lst else id2 = 'none'\n"
-     "readnext id3 from lst else id3 = 'none'\nx = id1 : '/' : id2 : '/' : id3 : '/' : system(11)", "k1/k2/none/0")
-case("Q-16 PICK.SELECT: with no list 0 active SELECTV selects from the file",
-     "$mode pick.select\nopen 'VOC' to v else x = 'noopen'\nselectv v to lst\nreadnext id1 from lst else id1 = 'none'\n"
-     "x = (id1 # 'none') : '/' : system(11)", "1/0")
-case("Q-16 PICK.SELECT reaches SELECT when $MODE SELECTV makes it a SELECTV",
-     "$mode selectv, pick.select\n" + PS + "select v to lst\nreadnext id1 from lst else id1 = 'none'\nx = id1 : '/' : system(11)", "k1/0")
-case("Q-16 PICK.SELECT leaves a numbered SELECT alone (list 0 stays, the file is selected into list 3)",
-     "$mode pick.select\n" + PS + "select v to 3\nreadnext id1 from 3 else id1 = 'none'\nx = (id1 # 'k1') : '/' : system(11)", "1/1")
-case("Q-16 PICK.SELECT: $MODE -PICK.SELECT puts the old behaviour back",
-     "$mode pick.select\n$mode -pick.select\n" + PS + "selectv v to lst\nreadnext id1 from lst else id1 = 'none'\n"
-     "x = (id1 # 'k1') : '/' : system(11)", "1/1")
 
 # ---- TRAP.UNUSED.MAIN --------------------------------------------------------------------------------------------
 aux("zzq16inc", "   zzinc = 7\n", "include")

@@ -252,15 +252,12 @@ void op_index() {
           goto exit_op_index;
         }
 
-        /* $MODE INDEX.OVERLAP: the next occurrence may start inside this one, so the search goes on from the byte after
-           the start of the match, which is where the outer loop already points */
+        /* The next occurrence starts after this one (27 Oct 26: $MODE INDEX.OVERLAP, which let it start inside, is gone) */
 
-        if (!(process.program.str_ovl & SO_INDEX_OVERLAP)) {
-          src_bytes_remaining = isrc_bytes_remaining;
-          offset += ioffset;
-          src = isrc;
-          src_str = isrc_str;
-        }
+        src_bytes_remaining = isrc_bytes_remaining;
+        offset += ioffset;
+        src = isrc;
+        src_str = isrc_str;
       no_match:;
       } else /* Matching single character substring */
       {
@@ -1572,14 +1569,11 @@ Private void count(bool dcount) /* Doing DCOUNT? */
 
         ct++;
 
-        /* $MODE COUNT.OVERLAP (COUNT only, never DCOUNT): the next occurrence may start inside this one, so the search
-           goes on from the byte after the start of the match, where the outer loop already points */
+        /* The next occurrence starts after this one (27 Oct 26: $MODE COUNT.OVERLAP, which let it start inside, is gone) */
 
-        if (dcount || !(process.program.str_ovl & SO_COUNT_OVERLAP)) {
-          src_bytes_remaining = isrc_bytes_remaining;
-          src = isrc;
-          src_str = isrc_str;
-        }
+        src_bytes_remaining = isrc_bytes_remaining;
+        src = isrc;
+        src_str = isrc_str;
 
       no_match:;
       } else /* Matching single character substring */

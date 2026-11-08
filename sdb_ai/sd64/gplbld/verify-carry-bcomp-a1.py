@@ -10,6 +10,7 @@
 # Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 17: PICK.SUBSTR is gone, so the second mode in the $MODE lists is UV.LOCATE (a surviving mode that changes no run of these programs).
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-1, one leg per item as it was built.
 # 27 Oct 26 dm  S.87 batch 2: the IMPLIED.STOP mode was removed. Leg 1 is gone; legs 2 and 3, which showed a $MODE list by whether the subroutine stopped the program,
 #               show it by whether the compiler reports an unused variable (TRAP.UNUSED), and the "minus turns it off" row now turns it on first.
@@ -115,11 +116,11 @@ def main():
         # --- leg 2: $MODE list --------------------------------------------------------------
         say("\n--- leg 2: $MODE name list (ref 105) -------------------------------------------")
         prog("zza1l0", unused("zza1l0", []))
-        prog("zza1l1", unused("zza1l1", ["$mode trap.unused, pick.substr"]))
+        prog("zza1l1", unused("zza1l1", ["$mode trap.unused, uv.locate"]))
         prog("zza1l2", unused("zza1l2", ["$mode trap.unused,-trap.unused"]))
-        prog("zza1l3", ["$mode pick.substr,no.such.mode", "subroutine zza1l3", "end"])
+        prog("zza1l3", ["$mode uv.locate,no.such.mode", "subroutine zza1l3", "end"])
         # a trailing comma is a line continuation in SD source, so the next line holds the next name
-        prog("zza1l4", unused("zza1l4", ["$mode pick.substr,", "   trap.unused"]))
+        prog("zza1l4", unused("zza1l4", ["$mode uv.locate,", "   trap.unused"]))
         out = sess(box, "BASIC bp zza1l0")
         row("CONTROL: with no $mode the compiler does not report the unused variable", re.search(OK, out) is not None and NEVER not in out, "no success wording, or the warning is there")
         out = sess(box, "BASIC bp zza1l1")
@@ -140,7 +141,7 @@ def main():
         opt = os.path.join(bp, "$BASIC.OPTIONS")
         prog("zza1o1", unused("zza1o1", []))
         try:
-            write(opt, ["X", "MODE TRAP.UNUSED,PICK.SUBSTR"])
+            write(opt, ["X", "MODE TRAP.UNUSED,UV.LOCATE"])
             out = sess(box, "BASIC bp zza1o1")
             row("MODE a,b in $BASIC.OPTIONS turns TRAP.UNUSED on (the warning is shown)", re.search(OK, out) is not None and NEVER in out, "no success wording, or no warning")
             write(opt, ["X", "MODE TRAP.UNUSED", "MODE -TRAP.UNUSED"])

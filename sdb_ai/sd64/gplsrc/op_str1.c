@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 17: op_psubstra and op_psubstrb ($MODE PICK.SUBSTR, PICK.SUBSTR.ASSIGN: Pick style substring assignment that pads the target) are gone; substra() has no pick_style.
  * 31 Dec 23 SD launch - prior history suppressed
  * 02 Jul 24 mab max string size test in op_str, op_cat, op_append
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): op_rmvd (RMVD(): only the field, value and subvalue marks end an item) and op_revremove (REVREMOVE), QM4 gaps
@@ -50,7 +51,7 @@
 
 #include "sd.h"
 
-Private void substra(bool pick_style);
+Private void substra(void);
 Private void form_substr(int32_t substr_start, int32_t substr_len);
 Private STRING_CHUNK* copy_substr(STRING_CHUNK* src_str,
                                   STRING_CHUNK* tgt_chunk,
@@ -1138,14 +1139,10 @@ void op_substr() {
    op_substra()  -  Substring assignment                                  */
 
 void op_substra() {
-  substra(FALSE);
+  substra();
 }
 
-void op_psubstra() {
-  substra(TRUE);
-}
-
-Private void substra(bool pick_style) {
+Private void substra(void) {
   /* Stack:
 
      |==============================|=============================|
@@ -1249,30 +1246,19 @@ Private void substra(bool pick_style) {
     k_get_string(tgt_descr);
 
   tgt_hdr = tgt_descr->data.str.saddr;
-  if (tgt_hdr == NULL) {
-    if (!pick_style)
-      goto exit_op_substra;
-    tgt_len = 0;
-  } else {
-    tgt_len = tgt_hdr->string_len;
-  }
+  if (tgt_hdr == NULL)
+    goto exit_op_substra;
+  tgt_len = tgt_hdr->string_len;
 
-  /* For Pick style substring assignment, we may need to add space filled
-    chunks to the target string to bring it up to the correct size.      */
+  add_bytes = 0;
 
-  if (pick_style) {
-    add_bytes = substr_start + substr_len - tgt_len - 1; /* Size to add */
-  } else {
-    add_bytes = 0;
+  if (tgt_len <= substr_start)
+    goto exit_op_substra;
 
-    if (tgt_len <= substr_start)
-      goto exit_op_substra;
+  /* Truncate replacement length if it over-runs the target string */
 
-    /* Truncate replacement length if it over-runs the target string */
-
-    if (substr_len > tgt_len - substr_start) {
-      substr_len = tgt_len - substr_start;
-    }
+  if (substr_len > tgt_len - substr_start) {
+    substr_len = tgt_len - substr_start;
   }
 
   /* We now know that we are going to update the string. If the string has
@@ -1456,291 +1442,6 @@ Private void substra(bool pick_style) {
 
 exit_op_substra:
 
-  k_dismiss(); /* Replacement string */
-  k_pop(3);    /* Start offset, length, target string ADDR */
-}
-
-/* ======================================================================
-   Full D3 style Pick substring assignment                                */
-
-void op_psubstrb() {
-  /* Stack:
-
-     |==============================|=============================|
-     |            BEFORE            |           AFTER             |
-     |==============================|=============================|
- top |  Replacement substring       |                             |
-     |------------------------------|-----------------------------| 
-     |  Substring region length     |                             |
-     |------------------------------|-----------------------------| 
-     |  Substring region offset     |                             |
-     |------------------------------|-----------------------------| 
-     |  ADDR to string to overlay   |                             |
-     |==============================|=============================|
-
-     S[A,B] = C
- */
-
-  DESCRIPTOR* descr;
-
-  /* Substring region start (A) */
-  int32_t substr_start;
-
-  /* Substring region length (B) */
-  int32_t substr_len;
-
-  /* New substring (C) */
-  DESCRIPTOR* new_descr;
-  int32_t new_len;              /* Total length */
-  STRING_CHUNK* new_str;         /* Current chunk... */
-  char* newptr;                  /* ...position within it and... */
-  int16_t new_bytes_remaining; /* ...bytes left in chunk */
-
-  /* Source string (S) management */
-  DESCRIPTOR* src_descr;
-  STRING_CHUNK* src_hdr;
-  int32_t src_len;              /* Total length of original string */
-  STRING_CHUNK* src_str;         /* Current chunk... */
-  char* src;                     /* ...position within it and... */
-  int16_t src_bytes_remaining; /* ...bytes left in chunk */
-
-  /* Result string */
-  STRING_CHUNK* result;
-
-  int32_t bytes;
-  int16_t n;
-
-  /* Get new substring pointer (C) */
-
-  new_descr = e_stack - 1;
-  k_get_string(new_descr);
-  new_str = new_descr->data.str.saddr;
-  if (new_str != NULL) {
-    new_len = new_str->string_len;
-    newptr = new_str->data;
-    new_bytes_remaining = new_str->bytes;
-  } else {
-    new_len = 0;
-    newptr = NULL;
-    new_bytes_remaining = 0;
-  }
-
-  /* Get length (B) */
-
-  descr = e_stack - 2;
-  GetInt(descr);
-  substr_len = descr->data.value;
-  if (substr_len < 0)
-    substr_len = 0;
-
-  /* Get substring region start (A) */
-
-  descr = e_stack - 3;
-  GetInt(descr);
-  substr_start = descr->data.value;
-
-  /* Get source string (S). We do not want to copy it as this will bump the
-    reference count and makes our check for multiple references more
-    complicated. Instead, just follow the ADDR chain (it must be an
-    indirect reference) until we find the string itself.                */
-
-  src_descr = e_stack - 4;
-  do {
-    src_descr = src_descr->data.d_addr;
-  } while (src_descr->type == ADDR);
-  if (src_descr->type != STRING)
-    k_get_string(src_descr);
-
-  src_hdr = src_descr->data.str.saddr;
-  src_len = (src_hdr == NULL) ? 0 : (src_hdr->string_len);
-  src_str = src_hdr;
-
-  /* If our substitution is totally within the existing string and it
-    has a reference count of 1, we can optimise this by simply updating
-    the string in-situ.                                                  */
-
-  if ((substr_start > 0) && (substr_len != 0) && (substr_len == new_len) &&
-      ((substr_start + substr_len) <= src_len + 1) && (src_str != NULL) &&
-      (src_str->ref_ct == 1)) {
-    /* Easy - Do the substitution in-situ */
-
-    src_hdr->field = 0; /* Clear any hint */
-    src_descr->flags &= ~DF_CHANGE;
-
-    /* Find position for replacement */
-
-    while (substr_start > src_str->bytes) {
-      substr_start -= src_str->bytes;
-      src_str = src_str->next;
-    }
-
-    src_bytes_remaining = (int16_t)(src_str->bytes - substr_start - 1);
-    src = src_str->data + substr_start - 1;
-
-    /* Perform replacement */
-
-    if (substr_len == 1) /* Optimised path for single byte replacement */
-    {
-      *src = (newptr == NULL) ? ' ' : *newptr;
-      goto exit_op_substrb;
-    }
-
-    do {
-      bytes = min(new_bytes_remaining, src_bytes_remaining);
-      memcpy(newptr, src, bytes);
-
-      newptr += bytes;
-      new_bytes_remaining -= (int16_t)bytes;
-      if (new_bytes_remaining == 0) {
-        new_str = new_str->next;
-        if (new_str != NULL) {
-          newptr = new_str->data;
-          new_bytes_remaining = new_str->bytes;
-        }
-      }
-
-      src += bytes;
-      src_bytes_remaining -= (int16_t)bytes;
-      if (src_bytes_remaining == 0) {
-        src_str = src_str->next;
-        if (src_str != NULL) {
-          src = src_str->data;
-          src_bytes_remaining = src_str->bytes;
-        }
-      }
-
-      substr_len -= bytes;
-    } while (substr_len);
-  } else {
-    /* We need to build a new string */
-
-    if (src_str != NULL) {
-      src = src_str->data;
-      src_bytes_remaining = src_str->bytes;
-    }
-
-    ts_init(&result,
-            abs(substr_start) + max(src_len - substr_len, 0) + new_len);
-    result = NULL;
-
-    if (substr_start >= 0) {
-      /* Copy A-1 bytes */
-
-      bytes = substr_start - 1;
-      while ((src_str != NULL) && (bytes > 0)) {
-        n = (int16_t)min(src_bytes_remaining, bytes);
-        ts_copy(src, n);
-        src += n;
-        src_bytes_remaining -= n;
-        bytes -= n;
-
-        if (src_bytes_remaining == 0) /* Move to next chunk */
-        {
-          src_str = src_str->next;
-          if (src_str != NULL) {
-            src = src_str->data;
-            src_bytes_remaining = src_str->bytes;
-          }
-        }
-      }
-
-      /* Add spaces if we ran out of characters to copy */
-
-      if (bytes > 0)
-        ts_fill(' ', bytes);
-
-      /* Skip B characters from source */
-
-      bytes = substr_len;
-      while ((src_str != NULL) && (bytes > 0)) {
-        n = (int16_t)min(src_bytes_remaining, bytes);
-        src += n;
-        src_bytes_remaining -= n;
-        bytes -= n;
-
-        if (src_bytes_remaining == 0) /* Move to next chunk */
-        {
-          src_str = src_str->next;
-          if (src_str != NULL) {
-            src = src_str->data;
-            src_bytes_remaining = src_str->bytes;
-          }
-        }
-      }
-
-      /* Copy new data C */
-
-      while (new_str != NULL) {
-        ts_copy(new_str->data, new_str->bytes);
-        new_str = new_str->next;
-      }
-
-      /* Copy remainder of original string */
-
-      while (src_str != NULL) {
-        ts_copy(src, src_bytes_remaining);
-        src += src_bytes_remaining;
-
-        src_str = src_str->next;
-        if (src_str != NULL) {
-          src = src_str->data;
-          src_bytes_remaining = src_str->bytes;
-        }
-      }
-    } else /* A < 0 */
-    {
-      /* Copy new data C */
-
-      while (new_str != NULL) {
-        ts_copy(new_str->data, new_str->bytes);
-        new_str = new_str->next;
-      }
-
-      /* Insert abs(A) spaces */
-
-      ts_fill(' ', -substr_start);
-
-      /* Skip B characters from source */
-
-      bytes = substr_len;
-      while ((src_str != NULL) && (bytes > 0)) {
-        n = (int16_t)min(src_bytes_remaining, bytes);
-        src += n;
-        src_bytes_remaining -= n;
-        bytes -= n;
-
-        if (src_bytes_remaining == 0) /* Move to next chunk */
-        {
-          src_str = src_str->next;
-          if (src_str != NULL) {
-            src = src_str->data;
-            src_bytes_remaining = src_str->bytes;
-          }
-        }
-      }
-
-      /* Copy remainder of original string */
-
-      while ((src_str != NULL)) {
-        ts_copy(src, src_bytes_remaining);
-        src += src_bytes_remaining;
-
-        src_str = src_str->next;
-        if (src_str != NULL) {
-          src = src_str->data;
-          src_bytes_remaining = src_str->bytes;
-        }
-      }
-    }
-
-    ts_terminate();
-
-    if (src_hdr != NULL)
-      k_deref_string(src_hdr);
-    src_descr->data.str.saddr = result;
-  }
-
-exit_op_substrb:
   k_dismiss(); /* Replacement string */
   k_pop(3);    /* Start offset, length, target string ADDR */
 }

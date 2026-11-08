@@ -8,6 +8,7 @@
 # Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 17: the overlap modes and COMPATIBLE.APPEND are gone; rows for them are refusals, the rest use NOCASE.STRINGS and TIME.MS.
 # 16 Oct 26 dm  New.  gpl.bp/icomp: $MODE name{,name} ; in front of the expression.
 # END-HISTORY
 #
@@ -17,7 +18,7 @@
 # the same $MODE (an oracle program prints it), not one worked out here.
 #
 #   r1  F1 = aaaaaaaaa      r2  F1 = abababab
-#   INDEX.OVERLAP, COUNT.OVERLAP, CHANGE.NO.OVERLAP, NOCASE.STRINGS, TIME.MS (against SYSTEM(1020)), COMPATIBLE.APPEND (accepted),
+#   NOCASE.STRINGS, TIME.MS (against SYSTEM(1020)), the removed INDEX.OVERLAP, COUNT.OVERLAP, CHANGE.NO.OVERLAP and COMPATIBLE.APPEND (refused),
 #   a comma list, two $MODE statements, a mode turned off with a minus, a mode I-types cannot use (an error that names it), and an
 #   I-type used by another I-type (an error).
 
@@ -113,18 +114,15 @@ def main():
         prog("zzimd" + name, "I\n%s\n\n%s\n14L\nS\n" % (expr, name))
 
     items = {
-        "idx0": "INDEX(F1,'aa',3)",
-        "idx1": "$MODE INDEX.OVERLAP;INDEX(F1,'aa',3)",
         "cnt0": "COUNT(F1,'aa')",
-        "cnt1": "$MODE COUNT.OVERLAP;COUNT(F1,'aa')",
-        "chg0": "CHANGE(F1,'aa','xx',0,3)",
-        "chg1": "$MODE CHANGE.NO.OVERLAP;CHANGE(F1,'aa','xx',0,3)",
+        "gone1": "$MODE INDEX.OVERLAP;COUNT(F1,'aa')",
+        "gone2": "$MODE COUNT.OVERLAP;COUNT(F1,'aa')",
+        "gone3": "$MODE CHANGE.NO.OVERLAP;COUNT(F1,'aa')",
         "nc0": "INDEX(F1,'AA',1)",
         "nc1": "$MODE NOCASE.STRINGS;INDEX(F1,'AA',1)",
-        "both": "$MODE INDEX.OVERLAP,COUNT.OVERLAP;COUNT(F1,'aa')",
-        "two": "$MODE INDEX.OVERLAP;$MODE COUNT.OVERLAP;COUNT(F1,'aa')",
-        "neg": "$MODE COUNT.OVERLAP,-COUNT.OVERLAP;COUNT(F1,'aa')",
-        "compat": "$MODE COMPATIBLE.APPEND;COUNT(F1,'aa')",
+        "gone4": "$MODE COMPATIBLE.APPEND;COUNT(F1,'aa')",
+        "two": "$MODE NOCASE.STRINGS;$MODE TIME.MS;COUNT(F1,'AA')",
+        "neg": "$MODE NOCASE.STRINGS,-NOCASE.STRINGS;COUNT(F1,'AA')",
         "bad": "$MODE UV.LOCATE;COUNT(F1,'aa')",
         "nest": "TRANS(zzimf, @ID, idx1, 'X')",
         "tms0": "TIME()*1000 - SYSTEM(1020)",
@@ -139,15 +137,8 @@ def main():
         for n, e in items.items():
             ditem(n, e)
         # the oracle: the same expressions in a program with the same $MODE
-        oracles = {"idx1": ("INDEX.OVERLAP", "index('aaaaaaaaa', 'aa', 3)"), "cnt1": ("COUNT.OVERLAP", "count('aaaaaaaaa', 'aa')"),
-                   "chg1": ("CHANGE.NO.OVERLAP", "change('aaaaaaaaa', 'aa', 'xx', 0, 3)"),
-                   "chg0": ("DEFAULT", "change('aaaaaaaaa', 'aa', 'xx', 0, 3)"),
-                   "nc1": ("NOCASE.STRINGS", "index('aaaaaaaaa', 'AA', 1)")}
+        oracles = {"nc1": ("NOCASE.STRINGS", "index('aaaaaaaaa', 'AA', 1)")}
         # NOCASE.STRINGS is a directive in a program, not a $MODE name: the oracle uses it as one
-        prog("zzimo1", ORACLE % ("INDEX.OVERLAP", oracles["idx1"][1]))
-        prog("zzimo2", ORACLE % ("COUNT.OVERLAP", oracles["cnt1"][1]))
-        prog("zzimo3", ORACLE % ("CHANGE.NO.OVERLAP", oracles["chg1"][1]))
-        prog("zzimo4", "   x = %s\n   crt 'ORA[=':x:']'\nend\n" % oracles["chg0"][1])
         prog("zzimo5", "$nocase.strings\n   x = %s\n   crt 'ORA[=':x:']'\nend\n" % oracles["nc1"][1])
         cmds = ["DELETE.FILE DICT zzimf", "DELETE.FILE zzimf", "CREATE.FILE zzimf",
                 "COPY FROM BP TO zzimf zzimr1,r1", "COPY FROM BP TO zzimf zzimr2,r2", "COPY FROM BP TO DICT zzimf zzimf1,f1"]
@@ -156,42 +147,30 @@ def main():
         out = sess(box, *cmds, quiet=True)
         copied = len(re.findall(r"(?m)^1 record\(s\) copied\.", out))
         row("setup: all %d COPY commands each copied one record" % (len(cmds) - 3), copied == len(cmds) - 3, "copied lines: %d" % copied)
-        out = sess(box, *["BASIC bp zzimo%d" % i for i in range(1, 6)] + ["RUN bp zzimo%d" % i for i in range(1, 6)], quiet=True)
+        out = sess(box, "BASIC bp zzimo5", "RUN bp zzimo5", quiet=True)
         ora = re.findall(r"(?m)^ORA\[=(.*)\]\s*$", out)
-        row("the oracle programs ran (five values from programs with the same modes)", len(ora) == 5, "got %r" % ora)
-        o_idx, o_cnt, o_chg1, o_chg0, o_nc = ora if len(ora) == 5 else ("?",) * 5
-        say("    program values: INDEX.OVERLAP %s  COUNT.OVERLAP %s  CHANGE.NO.OVERLAP %s  CHANGE plain %s  NOCASE INDEX %s" %
-            (o_idx, o_cnt, o_chg1, o_chg0, o_nc))
+        row("the oracle program ran (one value from a program with the same directive)", len(ora) == 1, "got %r" % ora)
+        o_nc = ora[0] if len(ora) == 1 else "?"
+        say("    program value: NOCASE INDEX %s" % o_nc)
 
         def get(item):
             return values(sess(box, "LIST zzimf %s" % item))
 
-        say("\n--- the overlap modes, each against the same expression without it ---------------------------------------")
-        a, b = get("idx0"), get("idx1")
-        row("CONTROL  INDEX(F1,'aa',3) without the mode is not what the mode gives", a is not None and b is not None and a[0] != b[0], "%r %r" % (a, b))
-        row("489  $MODE INDEX.OVERLAP;INDEX(...) gives what a program with the mode gives (%s)" % o_idx, b is not None and b[0] == o_idx, "got %r" % b)
-        a, b = get("cnt0"), get("cnt1")
-        row("CONTROL  COUNT(F1,'aa') without the mode is not what the mode gives", a is not None and b is not None and a[0] != b[0], "%r %r" % (a, b))
-        row("489  $MODE COUNT.OVERLAP;COUNT(...) gives what a program with the mode gives (%s)" % o_cnt, b is not None and b[0] == o_cnt, "got %r" % b)
-        a, b = get("chg0"), get("chg1")
-        row("CONTROL  CHANGE without the mode gives what a program without it gives (%s)" % o_chg0, a is not None and a[0] == o_chg0, "got %r" % a)
-        row("489  $MODE CHANGE.NO.OVERLAP;CHANGE(...) gives what a program with the mode gives (%s), which is not the plain value" % o_chg1,
-            b is not None and b[0] == o_chg1 and o_chg1 != o_chg0, "got %r" % b)
+        say("\n--- the overlap modes and COMPATIBLE.APPEND were removed on 27 Oct 26 (S.87 batch 17): each is refused as a mode an I-type can use ----")
+        for n, w in (("gone1", "INDEX.OVERLAP"), ("gone2", "COUNT.OVERLAP"), ("gone3", "CHANGE.NO.OVERLAP"), ("gone4", "COMPATIBLE.APPEND")):
+            out = sess(box, "LIST zzimf %s" % n)
+            row("%s is refused: '%s is not a mode that an I-type can use'" % (w, w), ("%s is not a mode that an I-type can use" % w) in out, repr(out[-300:]))
 
         say("\n--- NOCASE.STRINGS, a list of modes, two statements, a minus -----------------------------------------------")
         a, b = get("nc0"), get("nc1")
         row("CONTROL  INDEX(F1,'AA',1) is case sensitive without the mode", a is not None and a[0] == "0", "got %r" % a)
         row("489  $MODE NOCASE.STRINGS;INDEX(F1,'AA',1) ignores case, as a program with the directive does (%s)" % o_nc,
             b is not None and b[0] == o_nc and o_nc != "0", "got %r" % b)
-        b = get("both")
-        row("489  two modes in one list: INDEX.OVERLAP,COUNT.OVERLAP", b is not None and b[0] == o_cnt, "got %r" % b)
-        b = get("two")
-        row("489  two $MODE statements, each ended by a semicolon", b is not None and b[0] == o_cnt, "got %r" % b)
         a = get("cnt0")
+        b = get("two")
+        row("489  two $MODE statements, each ended by a semicolon (NOCASE.STRINGS then TIME.MS)", b is not None and a is not None and b[0] == a[0], "got %r want %r" % (b, a))
         b = get("neg")
-        row("489  COUNT.OVERLAP,-COUNT.OVERLAP: a minus turns the mode off again", b is not None and a is not None and b[0] == a[0], "got %r want %r" % (b, a))
-        b = get("compat")
-        row("489  COMPATIBLE.APPEND is accepted (an I-type has no append to change)", b is not None and a is not None and b[0] == a[0], "got %r" % b)
+        row("489  NOCASE.STRINGS,-NOCASE.STRINGS: a minus turns the mode off again", b is not None and a is not None and b[0] == "0", "got %r want 0" % b)
 
         say("\n--- TIME.MS ---------------------------------------------------------------------------------------------------")
         best0 = best1 = None

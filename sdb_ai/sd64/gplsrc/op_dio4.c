@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_rdnxpos ($MODE COMPOSITE.READNEXT) is gone; readnext() mode 0 is no longer called.
  * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE PICK.READNEXT is gone; READNEXT stores the id and a READNEXT that takes its ELSE sets the
  *           target to the null string, as without the mode.
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the CASE_INSENSITIVE_FILE_SYSTEM block of op_dir() (upper-casing the names of a
@@ -261,28 +262,8 @@ void op_readlist() {
 }
 
 /* ======================================================================
-   op_rdnxpos()   Standard READNEXT, returning composite exploded list
    op_readnext()  Standard READNEXT, returning id only in exploded list
    op_rdnxexp()   Extended READNEXT, returning positional data            */
-
-void op_rdnxpos() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  Select list number         | Status 0=ok, >0 = ELSE      |
-     |                             |        <0 = ON ERROR        |
-     |-----------------------------|-----------------------------| 
-     |  ADDR to id target          |                             |
-     |=============================|=============================|
-                    
-    ON ERROR codes are only returned if ONERROR opcode executed prior to
-    call to READNEXT.
- */
-
-  readnext(0);
-}
 
 void op_readnext() {
   /* Stack:
@@ -416,14 +397,6 @@ Private void readnext(int16_t mode)
 
   descr = e_stack - 1;
   for (d = descr; d->type == ADDR; d = d->data.d_addr) {
-  }
-
-  /* 15 Oct 26 dm - $MODE SELECTV (openQM item 85): the list is the program's default select list variable. Until a
-     SELECT has given it a list there is no list, which is a list that is not active: take the ELSE clause. */
-  if ((op_flags & P_DEF_SELLIST) && d->type == UNASSIGNED) {
-    k_pop(1); /* The unassigned variable */
-    status = 1;
-    goto exit_readnext_null;
   }
 
   if (d->type == SELLIST) {
@@ -910,14 +883,6 @@ void op_selectv() {
   while (tgt_descr->type == ADDR)
     tgt_descr = tgt_descr->data.d_addr;
   k_release(tgt_descr);
-
-  /* $MODE PICK.SELECT: with the default list active, SELECTV moves it to the target and looks at nothing else, the file
-     variable included (15 Oct 26, QM4 gaps Q-16) */
-
-  if ((op_flags & P_PICK_SEL) && SelectList(0)->data.str.saddr != NULL) {
-    transfer_list0(tgt_descr);
-    goto selectv_status;
-  }
 
   /* Get file variable / dynamic array */
 

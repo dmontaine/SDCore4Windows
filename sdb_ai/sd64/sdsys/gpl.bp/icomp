@@ -367,8 +367,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    header.flags = HDR.ITYPE         ;* Option flags
    greatest.call.arg.count = 0
-   mode2 = 0                        ;* 16 Oct 26 (Fixes item 489): the string overlap modes in force, as bcomp's mode2 bits 0 to 2
-   str.ovl.used = @false            ;* ...and whether any of them has been named: then CHANGE, COUNT, INDEX and the like are preceded by OP.STROVL
    time.ms = @false                 ;* $MODE TIME.MS: TIME() to the millisecond
 
    * Expression processing
@@ -439,15 +437,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
          begin case
             case mnm = ''
                null
-            case mnm = 'CHANGE.NO.OVERLAP'
-               mode2 = if mneg then bitand(mode2, 6) else bitor(mode2, 1)
-               str.ovl.used = @true
-            case mnm = 'COUNT.OVERLAP'
-               mode2 = if mneg then bitand(mode2, 5) else bitor(mode2, 2)
-               str.ovl.used = @true
-            case mnm = 'INDEX.OVERLAP'
-               mode2 = if mneg then bitand(mode2, 3) else bitor(mode2, 4)
-               str.ovl.used = @true
             case mnm = 'NOCASE.STRINGS'
                if mneg then
                   if bitand(header.flags, HDR.NOCASE) then header.flags -= HDR.NOCASE
@@ -456,8 +445,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                end
             case mnm = 'TIME.MS'
                time.ms = not(mneg)
-            case mnm = 'COMPATIBLE.APPEND'
-               null                 ;* About appending to a dynamic array in an assignment: an I-type has none
             case 1
                err.msg = sysmsg(12400, mnm) ;* %1 is not a mode an I-type can use
                goto error
@@ -2138,16 +2125,8 @@ in.trim:
 
 in.none:
 intrinsic.common:
-         * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 489.  As in a program (bcomp, intrinsic.common): once an overlap mode has been named in this
-         * I-type, each call of the functions it touches is preceded by the modes then in force, a mask for OP.STROVL; and with
-         * $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000.
-         if str.ovl.used then
-            i = intrinsic.stack<1>
-            if i = op.change or i = op.count or i = op.counts or i = op.index or i = op.indexs then
-               n = bitand(mode2, 7) ; gosub emit.numeric.load
-               opcode.byte = op.strovl ; gosub emit.simple
-            end
-         end
+         * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 489.  With $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000.
+         * (8 Nov 26, from Linux 7416a68a: the overlap modes and their OP.STROVL mask are gone.)
          if time.ms and intrinsic.stack<1> = op.time then
             n = 1020 ; gosub emit.numeric.load
             opcode.byte = op.system ; gosub emit.simple

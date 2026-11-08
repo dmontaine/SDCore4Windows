@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 17: $MODE COMPATIBLE.APPEND is gone; op_compins, op_compinsrt, op_comprep and op_compreplc are deleted (their opcodes are op_illegal rows) and
+ *               rdi() and ins/insert/rep/replace lose the compatible argument: a mark is always added.
  * 31 Dec 23 SD launch - prior history suppressed
  * 05 Jul 24 mab max string size test in op_ins(ert) - insert, op_rep  
  * END-HISTORY
@@ -45,11 +47,11 @@
 #define DYN_INSERT 1
 #define DYN_DELETE 2
 
-Private void ins(bool compatible);
-Private void insert(bool compatible);
-Private void rep(bool compatible);
-Private void replace(bool compatible);
-Private void rdi(DESCRIPTOR *src_descr, int32_t field, int32_t value, int32_t subvalue, int16_t mode, DESCRIPTOR *new_descr, DESCRIPTOR *result_descr, bool compatible);
+Private void ins(void);
+Private void insert(void);
+Private void rep(void);
+Private void replace(void);
+Private void rdi(DESCRIPTOR *src_descr, int32_t field, int32_t value, int32_t subvalue, int16_t mode, DESCRIPTOR *new_descr, DESCRIPTOR *result_descr);
 
 /* ======================================================================
    op_col1()  -  Fetch COL1 value                                         */
@@ -115,7 +117,7 @@ void op_del() {
     k_dismiss();
     k_dismiss();
   } else {
-    rdi(src_descr, field, value, subvalue, DYN_DELETE, NULL, &result_descr, FALSE);
+    rdi(src_descr, field, value, subvalue, DYN_DELETE, NULL, &result_descr);
 
     k_dismiss();
     k_dismiss();
@@ -432,14 +434,10 @@ exit_op_field:
    op_ins()  -  Insert item in a string                                   */
 
 void op_ins() {
-  ins(FALSE);
+  ins();
 }
 
-void op_compins() {
-  ins(TRUE);
-}
-
-Private void ins(bool compatible) {
+Private void ins(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -491,7 +489,7 @@ Private void ins(bool compatible) {
   new_descr = e_stack - 1;
   k_get_string(new_descr);
 
-  rdi(tgt_descr, field, value, subvalue, DYN_INSERT, new_descr, &result_descr, compatible);
+  rdi(tgt_descr, field, value, subvalue, DYN_INSERT, new_descr, &result_descr);
 
   k_release(tgt_descr);
   *tgt_descr = result_descr;
@@ -503,14 +501,10 @@ Private void ins(bool compatible) {
    op_insert()  -  Insert item in a string leaving result on stack        */
 
 void op_insert() {
-  insert(FALSE);
+  insert();
 }
 
-void op_compinsrt() {
-  insert(TRUE);
-}
-
-Private void insert(bool compatible) {
+Private void insert(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -554,7 +548,7 @@ Private void insert(bool compatible) {
   src_descr = e_stack - 5;
   k_get_string(src_descr);
 
-  rdi(src_descr, field, value, subvalue, DYN_INSERT, new_descr, &result_descr, compatible);
+  rdi(src_descr, field, value, subvalue, DYN_INSERT, new_descr, &result_descr);
 
   k_dismiss(); /* Insertion string */
   k_pop(3);    /* Subvalue, value, field and ADDR to source */
@@ -583,14 +577,10 @@ void op_minimum() {
    op_rep()  -  Replace item in a string                                  */
 
 void op_rep() {
-  rep(FALSE);
+  rep();
 }
 
-void op_comprep() {
-  rep(TRUE);
-}
-
-Private void rep(bool compatible) {
+Private void rep(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -684,14 +674,9 @@ Private void rep(bool compatible) {
         str_hdr = str_hdr->next;
       }
 
-      /* We need to take into account the program's append mode. For
-        compatible style, if the last character of the existing string
-        is a field mark (i.e. the string ends with a null field), we
-        do not add a further field mark.                                */
-      /* 0407 Rearranged code so that mark length is only added if we
-        will be adding the mark.                                        */
+      /* A field mark is always added (27 Oct 26: $MODE COMPATIBLE.APPEND, which left it out after a null last field, is gone). */
 
-      add_fm = !compatible || (str_hdr->data[str_hdr->bytes - 1] != FIELD_MARK);
+      add_fm = TRUE;
       if (rep_str_hdr == NULL)
         rep_len = add_fm;
       else
@@ -761,7 +746,7 @@ Private void rep(bool compatible) {
     }
   }
 
-  rdi(str_descr, field, value, subvalue, DYN_REPLACE, rep_descr, &result_descr, compatible);
+  rdi(str_descr, field, value, subvalue, DYN_REPLACE, rep_descr, &result_descr);
   k_release(str_descr);
   InitDescr(str_descr, STRING);
   str_descr->data.str.saddr = result_descr.data.str.saddr;
@@ -846,14 +831,10 @@ void op_repdiv() {
    op_replace()  -  Replace item in a string leaving result on e-stack    */
 
 void op_replace() {
-  replace(FALSE);
+  replace();
 }
 
-void op_compreplc() {
-  replace(TRUE);
-}
-
-Private void replace(bool compatible) {
+Private void replace(void) {
   /* Stack:
 
      |=============================|=============================|
@@ -897,7 +878,7 @@ Private void replace(bool compatible) {
   src_descr = e_stack - 5;
   k_get_string(src_descr);
 
-  rdi(src_descr, field, value, subvalue, DYN_REPLACE, new_descr, &result_descr, compatible);
+  rdi(src_descr, field, value, subvalue, DYN_REPLACE, new_descr, &result_descr);
 
   k_dismiss();
   k_pop(3); /* subvalue, value and field positions */
@@ -1209,8 +1190,7 @@ Private void rdi(DESCRIPTOR *src_descr, /* Source string */
                  int32_t subvalue,
                  int16_t mode,
                  DESCRIPTOR *new_descr,    /* Replacement / insertion string */
-                 DESCRIPTOR *result_descr, /* Resultant string */
-                 bool compatible)          /* Append style ($MODE COMPATIBLE.APPEND) */
+                 DESCRIPTOR *result_descr) /* Resultant string */
 {
   int32_t f, v, sv;
   STRING_CHUNK *str_hdr;
@@ -1439,18 +1419,12 @@ found:
       if (result_descr->data.str.saddr != NULL) /* Not at start of string */
       {
         if (field < 0) {
-          if (compatible && last_char == FIELD_MARK) {
-            f = 1; /* Kill mark insertion */
-            field = 1;
-          } else {
-            field = f + 1; /* Insert a single field mark */
-          }
+          field = f + 1; /* Insert a single field mark */
           v = 1;
           sv = 1;
         } else if (value < 0) {
           if ((field != f)                 /* No mark if adding new field... */
-              || (last_char == FIELD_MARK) /* ... or at start of a field */
-              || (compatible && last_char == VALUE_MARK)) {
+              || (last_char == FIELD_MARK)) { /* ... or at start of a field */
             v = 1; /* 0222 Set both to one to kill mark insertion */
             value = 1;
           } else
@@ -1460,8 +1434,7 @@ found:
           if ((field != f)                 /* No mark if adding new field... */
               || (value != v)              /* ...or adding new value... */
               || (last_char == FIELD_MARK) /* ...or at start of a field... */
-              || (last_char == VALUE_MARK) /* ...or at start of a value */
-              || (compatible && last_char == SUBVALUE_MARK)) {
+              || (last_char == VALUE_MARK)) { /* ...or at start of a value */
             sv = 1; /* 0222 Set both to one to kill mark insertion */
             subvalue = 1;
           } else

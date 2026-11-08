@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 17: op_dimlclp ($MODE PICK.MATRIX) is gone and a_dimension() has no pick_style, so AH_PICK_STYLE is never set.  The PMATRIX descriptor type and op_pmatrix stay (unreachable: the compiler no longer emits OP_PMATRIX).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -63,7 +64,7 @@ void k_error(char msg[], ...) __attribute__((noreturn));
 Private bool creating_common; /* Most recent COMMON opcode created block? */
 Private bool initialise_zero;
 
-Private void a_dimension(bool pick_style, bool set_zero);
+Private void a_dimension(bool set_zero);
 
 /* ======================================================================
    op_common()  -  Link to common block                                   */
@@ -315,7 +316,7 @@ exit_op_delcom:
 
 void op_dimcom() {
   if (creating_common) {
-    a_dimension(FALSE, initialise_zero); /* 0270 */
+    a_dimension(initialise_zero); /* 0270 */
   } else {
     k_pop(3);
     process.inmat = 0;
@@ -324,7 +325,7 @@ void op_dimcom() {
 
 /* ======================================================================
    op_dimlcl()  -  DIMLCL   Set local array dimensions (Information style)
-   op_dimlclp() -  DIMLCLP  Set local array dimensions (Pick style)       */
+                                                                          */
 
 /* Stack:
 
@@ -342,11 +343,7 @@ void op_dimcom() {
  */
 
 void op_dimlcl() {
-  a_dimension(FALSE, FALSE);
-}
-
-void op_dimlclp() {
-  a_dimension(TRUE, FALSE);
+  a_dimension(FALSE);
 }
 
 /* ======================================================================
@@ -1146,7 +1143,7 @@ exit_a_alloc:
 /* ======================================================================
    a_dimension()  -  Common path for DIMLCL & DIMCOM                      */
 
-Private void a_dimension(bool pick_style, bool set_zero) {
+Private void a_dimension(bool set_zero) {
   /* Stack:
 
      |=============================|=============================|
@@ -1389,19 +1386,11 @@ Private void a_dimension(bool pick_style, bool set_zero) {
       k_error(sysmsg(1136)); /* Cannot redimension a Pick style matrix */
 
     default: /* Unassigned or converting some other type */
-      if (pick_style && (rows == 0) && (cols == 0)) /* 0390 */
-      {
-        k_error(sysmsg(
-            1139)); /* Pick style matrices must have at least one element */
-      }
-
       if ((a_hdr = a_alloc(rows, cols, set_zero)) != NULL) /* 0444 */
       { /* Only change descriptor after successful allocation */
         k_release(descr);
         descr->data.ahdr_addr = a_hdr;
         descr->type = ARRAY;
-        if (pick_style)
-          a_hdr->flags |= AH_PICK_STYLE;
       }
       break;
   }

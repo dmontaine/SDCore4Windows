@@ -83,15 +83,12 @@ void op_change() {
   int16_t i_len;
 
   bool nocase;
-  bool no_overlap; /* $MODE CHANGE.NO.OVERLAP: a skipped occurrence is passed over whole */
-  int32_t pass_through = 0; /* ... the bytes of it that are still to be copied unexamined */
 
   /* 020240714 mab Max String Size test */
   int32_t delta_len32;  /* net lenght change for each replacement              */
   int64_t chgd_len64;   /* what resulting string  length will be after change  */
 
   nocase = (process.program.flags & HDR_NOCASE) != 0;
-  no_overlap = (process.program.str_ovl & SO_CHANGE_NO_OVERLAP) != 0;
 
   /* Fetch start occurrence number */
 
@@ -168,16 +165,6 @@ void op_change() {
     src_bytes_remaining = src_hdr->bytes;
 
     while (src_bytes_remaining > 0) {
-      if (pass_through > 0) /* The rest of an occurrence that was skipped: it is not searched for another one */
-      {
-        n = (pass_through < src_bytes_remaining) ? (int16_t)pass_through : src_bytes_remaining;
-        ts_copy(src, n);
-        src += n;
-        src_bytes_remaining -= n;
-        pass_through -= n;
-        continue;
-      }
-
       if (nocase)
         p = (char*)memichr(src, *old_str, src_bytes_remaining);
       else
@@ -229,11 +216,8 @@ void op_change() {
 
         /* Match found  -  do we want this one? */
 
-        if (skip_count-- > 0) {
-          if (no_overlap)
-            pass_through = old_len - 1; /* Copy the whole of this occurrence, so the next one starts after it */
+        if (skip_count-- > 0)
           goto no_match;
-        }
 
         /* Insert replacement substring */
         /* 020240714 mab Max String Size test */
