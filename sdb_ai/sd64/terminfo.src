@@ -64,19 +64,6 @@
 # whenever the terminal type is changed.
 
 
-addsviewpoint|viewpoint|ADDS Viewpoint A2 (not enhanced),
-    bw, am, msgr, mc5i,
-    cols#140, lines#42, ma#1,
-    bel=^G, cr=\r, clear=\f, el=\EK, ed=\Ek,
-    cup=\EY%p1%'\ '%+%c%p2%'\ '%+%c, home=^A, cud1=\n, cub1=\b, cuf1=^F, cuu1=^Z, civis=^W, cnorm=^X,
-    blink=^N\E0B, dim=^N\E0A, invis=^N\E0d, rev=^N\E0P, smso=^N\E0P,
-    smul=^N\E0`, sgr0=^O, rmso=^O, rmul=^O,
-    kbs=\b, khome=^A, kcud1=\n, kcub1=^U, kcuf1=^F, kcuu1=^Z,
-    kf1=^B1\r, kf2=^B2\r, kf3=^B3\r, kf4=^B4\r, kf5=^B5\r, kf6=^B6\r, kf7=^B7\r, kf8=^B8\r,
-    hpa=^P%p1%{10}%/%{16}%*%p1%{10}%m%+%Pc%?%{17}%gc%=%{19}%gc%=%|%gc%!%|%t%{1}%gc%+%c%{8}%e%gc%;%c,
-    vpa=^K%p1%'\ '%+%c, ind=\n, mc4=\E4, mc5=\E3,
-    sgr=^N\E0'@'%?%p1%p3%|%t%{16}%+%;%?%p2%t%{32}%+%;%?%p4%t%{2}%+%;%?%p5%t%{1}%+%;%?%p7%t%{68}%+%;%c;
-
 ansi|ansi/pc-term compatible with color,
     am, mir, msgr, mc5i,
     cols#140, it#8, lines#42, colors#8, pairs#64, ncv#3,
@@ -96,28 +83,6 @@ ansi|ansi/pc-term compatible with color,
     rmpch=\E[10m,
     setf=\E[3%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m,
     setb=\E[4%?%p1%{1}%=%t4%e%p1%{3}%=%t6%e%p1%{4}%=%t1%e%p1%{6}%=%t3%e%p1%d%;m
-
-adds4000|ADDS 4000 (enhanced),
-    bw, am, hs, mir, msgr, xon, mc5i,
-    cols#140, lines#42, xmc#1, wsl#45, nlab#8, lh#1, lw#8,
-    bel=^G, cr=\r, clear=\f, el=\EK, ed=\Ek, cbt=\EI,
-    cup=\EY%p1%'\ '%+%c%p2%'\ '%+%c, home=^A, cud1=\n, cub1=\b, cuf1=^F, cuu1=^Z, civis=^W, cnorm=^X,
-    dch1=\EW, dl1=\El, ich1=\EQ, il1=\EM, smir=\Eq, rmir=\Er,
-    dsl=\EF\r, tsl=\EF, fsl=\r, smacs=\EcE, rmacs=\EcD, smcup=\Ew0, rmcup=\Ew1,
-    blink=\Eg2, dim=\Egp, invis=\Eg1, prot=\E), rev=\Eg4, smso=\Egt, smul=\Eg8,
-    sgr0=\E(\EH^C\Eg0\EcD, rmso=\Eg0, rmul=\Eg0,
-    flash=\E`8/>\E`9, 
-    is2=\EcD\E'\Er\EH^C\Ed/\EO\E`@\E`9\E`1^T,
-    is3=\Ew1, ip=,
-    kend=\ET, kcbt=\EO,
-    kbs=\b, khome=^A, kcud1=\n, kcub1=^U, kcuf1=^F, kcuu1=^Z, kpp=\EJ,
-    kdch1=\EW, kdl1=\El, kich1=\EQ, kil1=\EM, krpl=\Er, kich1=\Eq,
-    kf1=^B1\r, kf2=^B2\r, kf3=^B3\r, kf4=^B4\r, kf5=^B5\r, kf6=^B6\r, kf7=^B7\r, kf8=^B8\r,
-    kf9=^B9\r, kf10=^B:\r, kf11=^B;\r, kf12=^B<\r, kf13=^B=\r, kf14=^B>\r, kf15=^B/\r, kf16=^B0\r,
-    nel=\r\n, ind=\n, ri=\Ej, hts=\E1, ht=^I,
-    pfloc=\EZ2%p1%'?'%+%c%p2%s\177, pfx=\EZ1%p1%'?'%+%c%p2%s\177, pln=\Ez%p1%'/'%+%c%p2%s\r,
-    mc0=\EP, mc4=\E4, mc5=\E3, smln=\EA10, rmln=\EA11,
-    sgr=%?%p8%t\E)%e\E(%;%?%p9%t\EcE%e\EcD%;\Eg%'0'%?%p2%t%{8}%|%;%?%p1%p3%|%p6%|%t%{4}%|%;%?%p4%t%{2}%|%;%?%p1%p5%|%t%'@'%|%;%?%p7%t%{1}%|%;%c
 
 ansi-generic|generic ansi standard terminal,
     am, xon,
@@ -175,33 +140,6 @@ dumb|80-column dumb tty,
     am,
     cols#140,
     bel=^G, cr=\r, cud1=\n, ind=\n
-
-glasstty|classic glass tty interpreting ASCII control characters,
-    am,
-    cols#140,
-    bel=^G, cr=\r, clear=^L, cud1=\n, cub1=^H, kcud1=\n, kcub1=^H, nel=\r\n,
-    ht=^I
-
-hpgeneric|hp|hewlett-packard generic terminal,
-    am, xhp, da, db, mir,
-    cols#140, lines#42, lm#0, vt#6,
-    bel=^G, cr=\r, tbc=\E3, clear=\EH\EJ, el=\EK, ed=\EJ, hpa=\E&a%p1%dC,
-    cup=\E&a%p2%dc%p1%dY, cud1=\n, cub1=^H, cuf1=\EC, cuu1=\EA, dch1=\EP,
-    dl1=\EM, smir=\EQ, smso=\E&dJ, smul=\E&dD, sgr0=\E&d@, rmir=\ER, rmso=\E&d@,
-    rmul=\E&d@, il1=\EL, kbs=^H, vpa=\E&a%p1%dY, ind=\n, hts=\E1, ht=^I,
-    kcbt=\Ei
-
-ibm-pc|ibm5051|5051|IBM Personal Computer (no ANSI.SYS),
-    am,
-    cols#140, lines#42,
-    bel=^G, cr=\r^^, clear=^L^K, cud1=\n, home=^K, cub1=^], cuf1=^\, cuu1=^^,
-    kcud1=^_, ind=\n
-
-kermit|standard kermit,
-    cols#140, lines#42,
-    clear=\EE, el=\EK, ed=\EJ, cup=\EY%p1%' '%+%c%p2%' '%+%c, home=\EH, cub1=^H,
-    cuf1=\EC, cuu1=\EA, is2=K0 Standard Kermit  9-25-84\n, kcud1=\n, khome=^^,
-    kcub1=^H, kcuf1=^L, kcuu1=^K
 
 linux|linux console,
     am, xenl, eo, mir, msgr, xon, ccc, bce,
@@ -285,45 +223,6 @@ unknown|unknown terminal type,
     am, gn,
     cols#140,
     bel=^G, cr=\r, cud1=\n, ind=\n
-
-viewpoint60|vp60|ADDS Viewpoint 60,
-    bw, am, mc5i,
-    cols#140, lines#42, xmc#1,
-    bel=^G, cr=\r, clear=\f, el=\EK, ed=\Ek,
-    cup=\EY%p1%'\ '%+%c%p2%'\ '%+%c, home=^A, cud1=\n, cub1=\b, cuf1=^F, cuu1=^Z, civis=^W, cnorm=^X,
-    dch1=\EE, dl1=\El, ich1=\EF, il1=\EM,
-    blink=\E0B, dim=\E0A, invis=\E0d, rev=\E0P, smso=\E0P,
-    smul=\E0`, sgr0=\E0@, rmso=\E0@, rmul=\E0@,
-    kbs=\b, khome=^A, kcud1=\n, kcub1=^U, kcuf1=^F, kcuu1=^Z,
-    kdch1=\EW, kdl1=\El, kich1=\EQ, kil1=\EM,
-    kf1=^B1\r, kf2=^B2\r, kf3=^B3\r, kf4=^B4\r, kf5=^B5\r, kf6=^B6\r, kf7=^B7\r, kf8=^B8\r,
-    hpa=^P%p1%{10}%/%{16}%*%p1%{10}%m%+%Pc%?%{17}%gc%=%{19}%gc%=%|%gc%!%|%t%{1}%gc%+%c%{8}%e%gc%;%c,
-    vpa=^K%p1%'\ '%+%c, ind=\n, mc4=\E4, mc5=\E3,
-    sgr=\E0'@'%?%p1%p3%|%t%{16}%+%;%?%p2%t%{32}%+%;%?%p4%t%{2}%+%;%?%p5%t%{1}%+%;%?%p7%t%{68}%+%;%c;
-
-vp|vpa2|ADDS Viewpoint A2 Enhanced,
-    bw, am, msgr, mc5i,
-    cols#140, lines#42, ma#1,
-    bel=^G, cr=\r, clear=\f, el=\EK, ed=\Ek,
-    cup=\EY%p1%'\ '%+%c%p2%'\ '%+%c, home=^A, cud1=\n, cub1=\b, cuf1=^F, cuu1=^Z, civis=^W, cnorm=^X,
-    dch1=\EW, dl1=\El, ich1=\EQ, il1=\EM,
-    blink=^N\E0B, dim=^N\E0A, invis=^N\E0d, rev=^N\E0P, smso=^N\E0P,
-    smul=^N\E0`, sgr0=^O, rmso=^O, rmul=^O,
-    kbs=\b, khome=^A, kcud1=\n, kcub1=^U, kcuf1=^F, kcuu1=^Z, kpp=\EJ,
-    kdch1=\EW, kdl1=\El, kich1=\EQ, kil1=\EM,
-    kf1=^B1\r, kf2=^B2\r, kf3=^B3\r, kf4=^B4\r, kf5=^B5\r, kf6=^B6\r, kf7=^B7\r, kf8=^B8\r,
-    kf9=^B9\r, kf10=^B:\r, kf11=^B;\r, kf12=^B<\r, kf13=^B=\r, kf14=^B>\r, kf15=^B/\r, kf16=^B0\r,
-    hpa=^P%p1%{10}%/%{16}%*%p1%{10}%m%+%Pc%?%{17}%gc%=%{19}%gc%=%|%gc%!%|%t%{1}%gc%+%c%{8}%e%gc%;%c,
-    vpa=^K%p1%'\ '%+%c, ind=\n, mc4=\E4, mc5=\E3,
-    sgr=^N\E0'@'%?%p1%p3%|%t%{16}%+%;%?%p2%t%{32}%+%;%?%p4%t%{2}%+%;%?%p5%t%{1}%+%;%?%p7%t%{68}%+%;%c;
-    
-
-vt52|dec vt52,
-    cols#140, it#8, lines#42,
-    bel=^G, cr=\r, clear=\EH\EJ, el=\EK, ed=\EJ, cup=\EY%p1%' '%+%c%p2%' '%+%c,
-    cud1=\EB, home=\EH, cub1=\ED, cuf1=\EC, cuu1=\EA, smacs=\EF, rmacs=\EG,
-    kbs=^H, kcud1=\EB, kcub1=\ED, kcuf1=\EC, kcuu1=\EA, nel=\r\n, ind=\n,
-    ri=\EI, ht=^I
 
 vt100|vt100-am|dec vt100 (w/advanced video),
     am, xenl, msgr, xon,

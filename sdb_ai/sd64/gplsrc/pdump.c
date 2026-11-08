@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: the PMATRIX descriptor type and AH_PICK_STYLE are gone.
  * 24 Oct 26 dm  W.11 F9: a process dump with no DUMPDIR is written under sd_sysdir() (the configuration file's), not the segment's copy.
  * 17 Oct 26 dm  S.65 slice 3c: dump_variable() names a NET_FILE as a remote file instead of reading FPtr(-1)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -534,8 +535,7 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
       for (chnk = 0, base = 0; chnk < ahdr->num_chunks;
            base += achnk->num_descr, chnk++) {
         achnk = ahdr->chunk[chnk];
-        for (el = (ahdr->flags & AH_PICK_STYLE) ? 1 : 0; el < achnk->num_descr;
-             el++) {
+        for (el = 0; el < achnk->num_descr; el++) {
           if (el == 0) {
             strcpy(element, (two_d) ? "(0,0)" : "(0)");
           } else if (two_d) {
@@ -621,9 +621,6 @@ Private void dump_variable(DESCRIPTOR* descr, /* Descriptor to dump */
     case SELLIST:
       fprintf(fu, "%s: SelList: \"", s);
       print_string(descr->data.str.saddr);
-      break;
-
-    case PMATRIX:
       break;
 
     case SOCK:

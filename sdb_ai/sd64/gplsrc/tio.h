@@ -65,7 +65,7 @@ struct PRINT_UNIT {
 #define PRINT_TO_PRINTER  1
 #define PRINT_TO_FILE     3
 #define PRINT_TO_STDERR   4
-#define PRINT_TO_AUX_PORT 5
+/* print mode 5 (the terminal's auxiliary printer port) was removed 28 Oct 26, S.87: the number is reserved */
 #define PRINT_AND_HOLD    6
                    u_int32_t flags;
 #define PU_ACTIVE        0x00000001  /* Print unit is active */

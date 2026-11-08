@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type is gone.
  * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): XF 5 to 12 (IS.ALNUM, IS.ALPHA, IS.DIGIT, IS.GRAPH, IS.MARK, IS.SPACE, LEFT, RIGHT) are gone;
  *               the numbers stay reserved.
  * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): XF_SWAPMARKS (28), which returned its argument, is gone; the number stays reserved.
@@ -518,10 +519,8 @@ Private void x_digest() {
 Private void x_select_socket() {
   DESCRIPTOR* mat_descr;
   DESCRIPTOR* to_descr;
-  DESCRIPTOR* com_descr;
   DESCRIPTOR* d;
   ARRAY_HEADER* a_hdr = NULL;
-  PMATRIX_HEADER* pm_hdr;
   int32_t num_elements;
   int32_t first;
   int32_t i;
@@ -551,13 +550,6 @@ Private void x_select_socket() {
       a_hdr = mat_descr->data.ahdr_addr;
       num_elements = ((a_hdr->cols == 0) ? 1 : a_hdr->cols) * a_hdr->rows;
       first = 1;
-      break;
-    case PMATRIX:
-      pm_hdr = mat_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      num_elements = (pm_hdr->cols == 0) ? pm_hdr->rows : pm_hdr->cols * pm_hdr->rows;
-      a_hdr = com_descr->data.ahdr_addr;
-      first = pm_hdr->base_offset;
       break;
     default:
       k_error(sysmsg(1236)); /* Matrix required */

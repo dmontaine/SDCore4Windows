@@ -189,8 +189,9 @@ def main():
         text = open(TERMINFO, errors="replace").read()
         for name in ("adds4000", "adds4000-at"):
             m = re.search(r"(?ms)^%s\|.*?(?=^\S)" % re.escape(name), text)
-            row("545: the %s entry has xmc#1" % name, m is not None and re.search(r"\bxmc#1\b", m.group(0)) is not None,
-                "no entry" if m is None else "xmc#1 missing")
+            # 28 Oct 26, S.87: the ADDS terminal definitions were removed, so the entry that carried xmc#1 is absent on purpose
+            row("545: the %s entry is gone (the ADDS definitions were removed, S.87)" % name, m is None,
+                "the entry is still there" if m is not None else "")
         row("CONTROL: another entry already carrying xmc#1 is found by the same test",
             re.search(r"(?ms)^\S+\|.*?\bxmc#1\b", text) is not None)
     finally:

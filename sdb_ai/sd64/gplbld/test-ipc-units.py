@@ -195,10 +195,10 @@ def run():
     row("B1 the secret, then the seal, are made before the lock; the secret is staged under the lock; then phantom(); then the Xn record; then the unlock",
         ordered(ph, "SDEXT('24', @TRUE, SD_RANDBYTES)", "ipc_seal('make'", "if seal = '' then", "filelock ipc.f", "kernel(K$PHANTOM.NONCE, 'S':nonce)", "uid = phantom()",
                 "to ipc.f, 'X':uid") and ph.rfind("fileunlock ipc.f") > ph.find("to ipc.f, 'X':uid") > 0, "")
-    row("B2 the Xn record is the seal, the option flags and the command, in that order, and is the only record of that name PHANTOM writes",
-        "write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid" in ph and ph.count("to ipc.f, 'X':") == 1)
-    row("B3 the seal is made from exactly the values written: the flags, the command, the DATA queue and the log file name",
-        "seal = ipc_seal('make', nonce, '', opt.s, ph.command, dq, log.file)" in ph and "dq = if pass.data then @data.pending else ''" in ph
+    row("B2 the Xn record is the seal and the command, in that order, and is the only record of that name PHANTOM writes",
+        "write seal:@fm:ph.command to ipc.f, 'X':uid" in ph and ph.count("to ipc.f, 'X':") == 1)
+    row("B3 the seal is made from exactly the values written: the command, the DATA queue and the log file name",
+        "seal = ipc_seal('make', nonce, '', ph.command, dq, log.file)" in ph and "dq = if pass.data then @data.pending else ''" in ph
         and "write dq to ipc.f, 'D':uid" in ph and "write log.file to ipc.f, 'L':uid" in ph)
     lines = [ln.strip() for ln in ph.split("\n") if re.search(r"\bnonce\b", ln)]
     ok_lines = [l for l in lines if l.startswith(("nonce = SDEXT(", "seal = ipc_seal(", "if kernel(K$PHANTOM.NONCE, 'S':nonce)"))]
@@ -217,20 +217,20 @@ def run():
         sub.count("'X':@userno") == 2 and sub.count("'D':@userno") == 2 and sub.count("'L':@userno") == 2 and "'X':@userno" not in outside and "'D':@userno" not in outside and "'L':@userno" not in outside
         and "read phantom.command from ipc.f" not in cp and "read ph.data from ipc.f" not in outside)
     row("C2 the check is made with the secret THIS process was started with, over the values it read, and it is the only call",
-        "ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>, ph.opts, phantom.command, ph.data, ph.log.file)" in sub and cp.count("ipc_seal('") == 1
+        "ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>, phantom.command, ph.data, ph.log.file)" in sub and cp.count("ipc_seal('") == 1
         and cp.count("kernel(K$PHANTOM.NONCE") == 1)
     row("C3a an absent Xn record is refused, and so is a seal that does not check", bool(re.search(r"if ph\.rec = '' then\s*ph\.refused = @true\s*end else\s*if not\(ipc_seal\('check'.*\) then ph\.refused = @true", sub, re.S)), sub[:200])
     blk = sub[sub.find("if ph.refused then"):] if "if ph.refused then" in sub else ""
-    row("C3b a refusal blanks the option flags, the command, the DATA queue and the log file name", all(("%s = ''" % v) in blk for v in ("ph.opts", "phantom.command", "ph.data", "ph.log.file")), blk[:200])
+    row("C3b a refusal blanks the command, the DATA queue and the log file name", all(("%s = ''" % v) in blk for v in ("phantom.command", "ph.data", "ph.log.file")) and "ph.opts" not in blk, blk[:200])
     row("C4a the cargo is read under the lock and before the COMO log is opened (the log file name comes from it)",
         ordered(cp, "filelock ipc.f\n         gosub read.phantom.cargo\n         fileunlock ipc.f", 'execute "COMO ON PH"'), "")
-    row("C4b nothing is run, stacked or set before the refusal is looked at: the refusal, then the options, then the DATA lines, then the command",
-        ordered(cp, "if ph.refused then", "kernel(K$SET.OPTIONS, ph.opts)", "data ph.data<ph.i>", "at.command = phantom.command"))
-    ref = between(cp, "if ph.refused then\n            message", "if ph.opts # ''")
+    row("C4b nothing is run or stacked before the refusal is looked at: the refusal, then the DATA lines, then the command",
+        ordered(cp, "if ph.refused then", "data ph.data<ph.i>", "at.command = phantom.command"))
+    ref = between(cp, "if ph.refused then\n            message", "for ph.i = 1 to dcount(ph.data, @fm)")
     row("C5 a refusal says so (12952), writes 'phantom refused' to the audit trail and ends the phantom through terminate.phantom",
         "sysmsg(12952, @userno)" in ref and "kernel(K$AUDIT, 'phantom refused phantom=' : @userno" in ref and "goto terminate.phantom" in ref, ref[:200])
-    row("C6 the option flags come only from ph.opts, once, and a DATA line from ph.data (the other DATA statement is the command paragraph's own)",
-        cp.count("kernel(K$SET.OPTIONS") == 1 and "kernel(K$SET.OPTIONS, ph.opts)" in cp and sorted(re.findall(r"^\s*data\s+(\S+)", cp, re.M)) == ["ph.data<ph.i>", "s"])
+    row("C6 a phantom takes no option flags from the record (OPTION INHERIT is gone), and a DATA line comes from ph.data (the other DATA statement is the command paragraph's own)",
+        cp.count("kernel(K$SET.OPTIONS") == 0 and "ph.opts" not in cp and "opt.s" not in ph and sorted(re.findall(r"^\s*data\s+(\S+)", cp, re.M)) == ["ph.data<ph.i>", "s"])
     row("C7 the lock is on while the three are read", "ph.log.file = ''\n         filelock ipc.f\n         gosub read.phantom.cargo" in cp)
 
     # --- S -------------------------------------------------------------------------------------------------------------------
@@ -238,8 +238,8 @@ def run():
     raws = raw("sdsys/gpl.bp/ipc_seal")
     row("S0 NULL CASE: ipc_seal is read, internal, catalogued as !ipc_seal", "$internal" in sl and "$catalog !ipc_seal" in raws and "function ipc_seal(" in sl)
     row("S1 a secret shorter than 16 characters answers 0 for 'check' and the null string for 'make'", bool(re.search(r"if len\(nonce\) < 16 then\s*if checking then return 0\s*return ''\s*end", sl)))
-    row("S2 the signed text is the four values in hexadecimal, in the order flags, command, DATA, log file, joined by colons",
-        "signed = oconv(opt, 'MX0C') : ':' : oconv(cmd, 'MX0C') : ':' : oconv(dq, 'MX0C') : ':' : oconv(logf, 'MX0C')" in sl)
+    row("S2 the signed text is the three values in hexadecimal, in the order command, DATA, log file, joined by colons",
+        "signed = oconv(cmd, 'MX0C') : ':' : oconv(dq, 'MX0C') : ':' : oconv(logf, 'MX0C')" in sl)
     row("S3a the seal is HMAC-SHA256 keyed by the secret", "mac = SDEXT(nonce : @FM : signed, @TRUE, SD_HMACSHA256)" in sl)
     row("S3b 'check' answers 0 for a missing seal or mac, compares in constant time, and returns 1 only after that comparison",
         "if not(checking) then return mac" in sl and "if mac = '' or seal = '' then return 0" in sl and "if SDEXT(mac : @FM : seal, @TRUE, SD_CTEQUAL) = '1' then return 1" in sl
@@ -294,11 +294,11 @@ MUTANTS = [
     ("basic-reads-the-variable", "sdsys/gpl.bp/ipc_seal", "   set.status 0\n", "   set.status 0\n   zz = env('SD_PHANTOM_NONCE')\n", "K8"),
     # PHANTOM
     ("secret-is-constant", "sdsys/gpl.bp/phantom", "      nonce = SDEXT('24', @TRUE, SD_RANDBYTES)", "      nonce = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldY'", "B1"),
-    ("lock-taken-before-the-seal", "sdsys/gpl.bp/phantom", "      opt.s = ''", "      filelock ipc.f\n      opt.s = ''", "B1"),
-    ("record-carries-no-seal", "sdsys/gpl.bp/phantom", "write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid", "write opt.s:@fm:ph.command to ipc.f, 'X':uid", "B2"),
-    ("seal-without-the-data", "sdsys/gpl.bp/phantom", "seal = ipc_seal('make', nonce, '', opt.s, ph.command, dq, log.file)", "seal = ipc_seal('make', nonce, '', opt.s, ph.command, '', log.file)", "B3"),
+    ("lock-taken-before-the-seal", "sdsys/gpl.bp/phantom", "      dq = if pass.data then @data.pending else ''", "      filelock ipc.f\n      dq = if pass.data then @data.pending else ''", "B1"),
+    ("record-carries-no-seal", "sdsys/gpl.bp/phantom", "write seal:@fm:ph.command to ipc.f, 'X':uid", "write ph.command to ipc.f, 'X':uid", "B2"),
+    ("seal-without-the-data", "sdsys/gpl.bp/phantom", "seal = ipc_seal('make', nonce, '', ph.command, dq, log.file)", "seal = ipc_seal('make', nonce, '', ph.command, '', log.file)", "B3"),
     ("data-not-captured-before-the-lock", "sdsys/gpl.bp/phantom", "      dq = if pass.data then @data.pending else ''", "      dq = ''", "B3"),
-    ("secret-written-to-ipc", "sdsys/gpl.bp/phantom", "      write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid", "      write nonce to ipc.f, 'N':uid\n      write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid", "B4"),
+    ("secret-written-to-ipc", "sdsys/gpl.bp/phantom", "      write seal:@fm:ph.command to ipc.f, 'X':uid", "      write nonce to ipc.f, 'N':uid\n      write seal:@fm:ph.command to ipc.f, 'X':uid", "B4"),
     ("stage-refused-keeps-the-lock", "sdsys/gpl.bp/phantom", "         fileunlock ipc.f\n         @system.return.code = -ER$PROCESS\n         stop sysmsg(12951)\n      end\n\n      if req.user",
      "         @system.return.code = -ER$PROCESS\n         stop sysmsg(12951)\n      end\n\n      if req.user", "B5"),
     ("no-seal-still-starts", "sdsys/gpl.bp/phantom", "      if seal = '' then\n         @system.return.code = -ER$PROCESS\n         stop sysmsg(12951)\n      end", "      if 0 then\n         @system.return.code = -ER$PROCESS\n         stop sysmsg(12951)\n      end", "B6"),
@@ -306,22 +306,21 @@ MUTANTS = [
     # CPROC
     ("second-reader-of-the-record", "sdsys/gpl.bp/cproc", "         ph.log.file = trim(ph.log.file)\n", "         ph.log.file = trim(ph.log.file)\n         read zz from ipc.f, 'X':@userno else null\n", "C1"),
     ("check-uses-the-record-as-secret", "sdsys/gpl.bp/cproc", "ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>,", "ipc_seal('check', ph.rec<1>, ph.rec<1>,", "C2"),
-    ("check-over-fewer-values", "sdsys/gpl.bp/cproc", "ph.opts, phantom.command, ph.data, ph.log.file)) then ph.refused", "ph.opts, phantom.command, '', ph.log.file)) then ph.refused", "C2"),
+    ("check-over-fewer-values", "sdsys/gpl.bp/cproc", "phantom.command, ph.data, ph.log.file)) then ph.refused", "phantom.command, '', ph.log.file)) then ph.refused", "C2"),
     ("check-never-refuses", "sdsys/gpl.bp/cproc", "if not(ipc_seal('check',", "if 0 and not(ipc_seal('check',", "C3a"),
     ("absent-record-accepted", "sdsys/gpl.bp/cproc", "   if ph.rec = '' then\n      ph.refused = @true\n   end else", "   if ph.rec = '' then\n      null\n   end else", "C3a"),
-    ("refusal-keeps-the-options", "sdsys/gpl.bp/cproc", "      ph.opts = ''\n      phantom.command = ''\n", "      phantom.command = ''\n", "C3b"),
     ("refusal-keeps-the-command", "sdsys/gpl.bp/cproc", "      phantom.command = ''\n      ph.data = ''\n      ph.log.file = ''\n   end\n", "      ph.data = ''\n      ph.log.file = ''\n   end\n", "C3b"),
     ("refusal-keeps-the-data", "sdsys/gpl.bp/cproc", "      ph.data = ''\n      ph.log.file = ''\n   end\n\n   return", "      ph.log.file = ''\n   end\n\n   return", "C3b"),
     ("refusal-keeps-the-log-file", "sdsys/gpl.bp/cproc", "      ph.log.file = ''\n   end\n\n   return", "   end\n\n   return", "C3b"),
     ("cargo-read-after-the-como-log", "sdsys/gpl.bp/cproc", "         gosub read.phantom.cargo\n", "", "C4a"),
-    ("refusal-after-the-options", "sdsys/gpl.bp/cproc", "         if ph.refused then\n            message = sysmsg(12952, @userno)", "         if ph.opts # '' then void kernel(K$SET.OPTIONS, ph.opts)\n         if ph.refused then\n            message = sysmsg(12952, @userno)", "C4b"),
-    ("refusal-does-not-end-the-phantom", "sdsys/gpl.bp/cproc", "            goto terminate.phantom\n         end\n\n         * The option flags", "         end\n\n         * The option flags", "C5"),
+    ("refusal-after-the-options", "sdsys/gpl.bp/cproc", "         if ph.refused then\n            message = sysmsg(12952, @userno)", "         for ph.i = 1 to dcount(ph.data, @fm)\n            data ph.data<ph.i>\n         next ph.i\n         if ph.refused then\n            message = sysmsg(12952, @userno)", "C4b"),
+    ("refusal-does-not-end-the-phantom", "sdsys/gpl.bp/cproc", "start-up records not from the process that started it')\n            goto terminate.phantom\n", "start-up records not from the process that started it')\n", "C5"),
     ("refusal-not-audited", "sdsys/gpl.bp/cproc", "            void kernel(K$AUDIT, 'phantom refused phantom='", "            void kernel(K$AUDIT, 'phantom held phantom='", "C5"),
-    ("options-from-the-raw-record", "sdsys/gpl.bp/cproc", "if ph.opts # '' then void kernel(K$SET.OPTIONS, ph.opts)", "if ph.opts # '' then void kernel(K$SET.OPTIONS, ph.rec<2>)", "C6"),
+    ("options-set-from-the-record", "sdsys/gpl.bp/cproc", "         for ph.i = 1 to dcount(ph.data, @fm)", "         if ph.rec<2> # '' then void kernel(K$SET.OPTIONS, ph.rec<2>)\n         for ph.i = 1 to dcount(ph.data, @fm)", "C6"),
     ("cargo-read-without-the-lock", "sdsys/gpl.bp/cproc", "         ph.log.file = ''\n         filelock ipc.f\n         gosub read.phantom.cargo\n         fileunlock ipc.f", "         ph.log.file = ''\n         gosub read.phantom.cargo", "C7"),
     # !ipc_seal
     ("short-secret-accepted", "sdsys/gpl.bp/ipc_seal", "   if len(nonce) < 16 then", "   if len(nonce) < 0 then", "S1"),
-    ("values-in-another-order", "sdsys/gpl.bp/ipc_seal", "oconv(opt, 'MX0C') : ':' : oconv(cmd, 'MX0C')", "oconv(cmd, 'MX0C') : ':' : oconv(opt, 'MX0C')", "S2"),
+    ("values-in-another-order", "sdsys/gpl.bp/ipc_seal", "oconv(cmd, 'MX0C') : ':' : oconv(dq, 'MX0C')", "oconv(dq, 'MX0C') : ':' : oconv(cmd, 'MX0C')", "S2"),
     ("data-not-in-hexadecimal", "sdsys/gpl.bp/ipc_seal", "oconv(dq, 'MX0C')", "dq", "S2"),
     ("hash-without-the-key", "sdsys/gpl.bp/ipc_seal", "SD_HMACSHA256", "SD_SHA256", "S3a"),
     ("secret-not-the-key", "sdsys/gpl.bp/ipc_seal", "mac = SDEXT(nonce : @FM : signed,", "mac = SDEXT(signed : @FM : signed,", "S3a"),

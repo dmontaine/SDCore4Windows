@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type is gone (variable display, WATCH).
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): DEBUG.INFO() code 7: the equate and $DEFINE tokens of a $MODE DEBUG.EQUATES program (QM4 gap 218)
  * 14 Sep 26 Windows port - the debugger is $debug / $pdbg (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -440,11 +441,8 @@ Private void get_var_info(
   STRING_CHUNK* str;
   FILE_VAR* fvar;
   struct OBJECT_HEADER* obj_hdr;
-  PMATRIX_HEADER* pm_hdr;
-  DESCRIPTOR* com_descr;
   int32_t offset;
   STRING_CHUNK* current_chunk;
-  int n;
 
   while (var_descr->type == ADDR)
     var_descr = var_descr->data.d_addr;
@@ -536,17 +534,6 @@ Private void get_var_info(
     case BTREE:
       break;
 
-    case PMATRIX:
-      pm_hdr = var_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      array_offset = pm_hdr->base_offset - 1;
-      lo_index = 1;
-      n = pm_hdr->cols;
-      hi_index = ((n) ? n : 1) * pm_hdr->rows;
-      ahdr = com_descr->data.ahdr_addr;
-      ts_printf("%d%c%d", pm_hdr->rows, FIELD_MARK, pm_hdr->cols);
-      break;
-
     case SOCK:
       break;
 
@@ -599,7 +586,6 @@ void op_dbgwatch() {
   DESCRIPTOR* var_descr;
   int16_t n;
   ARRAY_HEADER* a_hdr;
-  PMATRIX_HEADER* pm_hdr;
 
   descr = e_stack - 1;
   GetInt(descr);
@@ -638,15 +624,6 @@ void op_dbgwatch() {
             k_error(sysmsg(1301));
           break;
 
-        case PMATRIX:
-          pm_hdr = var_descr->data.pmatrix;
-          n = max(pm_hdr->cols, 1) * pm_hdr->rows;
-          if ((qual > 0) && (qual <= n)) {
-            var_descr = Element(pm_hdr->com_descr->data.ahdr_addr,
-                                qual + pm_hdr->base_offset - 1);
-          } else
-            k_error(sysmsg(1301));
-          break;
       }
 
       var_descr->flags |= DF_WATCH;
@@ -681,7 +658,6 @@ void op_dbgset() {
   DESCRIPTOR* var_descr;
   int16_t n;
   ARRAY_HEADER* a_hdr;
-  PMATRIX_HEADER* pm_hdr;
 
   descr = e_stack - 2;
   GetInt(descr);
@@ -714,15 +690,6 @@ void op_dbgset() {
           k_error(sysmsg(1302));
         break;
 
-      case PMATRIX:
-        pm_hdr = var_descr->data.pmatrix;
-        n = max(pm_hdr->cols, 1) * pm_hdr->rows;
-        if ((qual > 0) && (qual <= n)) {
-          var_descr = Element(pm_hdr->com_descr->data.ahdr_addr,
-                              qual + pm_hdr->base_offset - 1);
-        } else
-          k_error(sysmsg(1302));
-        break;
     }
 
     k_release(var_descr);

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VOC record type M (menu) and process.menu are gone; the home screen is the menu system.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION CLEAR.SELECT and the KEEP.SELECT statement are gone: a select list left active is
 *           left for the next command (CLEARSELECT 0 clears it).  OPTION INHERIT is gone: the option flags field of the phantom's Xn record is always null.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): @logname for the removed @user.
@@ -279,7 +280,6 @@ $include debug.h
 $include err.h
 $include keys.h
 $include keyin.h
-$include menu.h
 $include keycode.h
 
 deffun errtext(err) calling '!errtext'
@@ -296,7 +296,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun elevate(action,arg) calling '!elevate'
 * rev 0.9.0 *
 * 13 Aug 26 Windows port - is_grp_member removed, no callers remain here
-deffun ipc_seal(sl.mode, sl.key, sl.seal, sl.opts, sl.cmd, sl.data, sl.log) calling '!ipc_seal'     ;* 28 Oct 26 Windows port, W.11 F10 (from Linux ec8459b)
+deffun ipc_seal(sl.mode, sl.key, sl.seal, sl.cmd, sl.data, sl.log) calling '!ipc_seal'     ;* 28 Oct 26 Windows port, W.11 F10 (from Linux ec8459b); no opts since 8 Nov 26 (fb98cfb5)
 
 $define max.elements 500
 
@@ -353,9 +353,6 @@ restart.cproc:
 
    sentence.stack = ""
 
-   * The MENU.STACK holds the VOC record name of each active menu.
-
-   menu.stack = ""
    is.phantom = kernel(K$IS.PHANTOM, 0)
 
    prompt "?"
@@ -507,10 +504,6 @@ restart.cproc:
             void kernel(K$AUDIT, 'phantom refused phantom=' : @userno : ' reason=start-up records not from the process that started it')
             goto terminate.phantom
          end
-
-         * The option flags of the parent, if these are to be inherited (field 2 of the Xn record, taken out by read.phantom.cargo).
-
-         if ph.opts # '' then void kernel(K$SET.OPTIONS, ph.opts)
 
          * 18 Oct 26 Windows port - from Linux 778b4d9 (12 Oct 26): - openQM 137: PHANTOM DATA left the parent's DATA queue in the D record; stack it here
          for ph.i = 1 to dcount(ph.data, @fm)
@@ -1668,10 +1661,6 @@ proc.sentence.common:      ;* (Note: return to here from int.if)
 
       if new.sentence = '*' or new.sentence[1,2] = '* ' then return
 
-      if new.sentence[1,1] = '!' and new.sentence[2,1] # ' ' then
-         new.sentence = '! ' : new.sentence[2,999999]
-      end
-
       call @parser(PARSER$RESET, 0, new.sentence, 0)
       call @parser(PARSER$GET.TOKEN, token.type, verb, keyword) ;* Verb
 
@@ -2023,12 +2012,6 @@ reparse:
                if unwinding then exit
             end
 
-         case voc.entry.type[1,1] = "M"                       ;* **** Menu
-            ins at.sentence before sentence.stack<1>
-            at.sentence = new.sentence
-            menu.rec = voc.rec
-            gosub process.menu
-
          case voc.entry.type[1,1] = "K" and len(trim(voc.rec<3>))
             voc.rec = field(voc.rec, @fm, 3, 99999)
             voc.via.k = @true      ;* 14 Oct 26 (openQM 263): the V entry below was reached through a K entry
@@ -2209,215 +2192,6 @@ execute.paragraph:
    if unwinding = 1 then unwinding = 0   ;* Just unwinding one level
 
    pa.depth -= 1
-   return
-
-*****************************************************************************
-* PROCESS.MENU
-*
-* Menu record is in MENU.REC on entry, its name is in VERB
-
-process.menu:
-   menu.rec<1> = verb  ;* Replace type (M) with menu name
-
-restart.menu:
-   access.sub = menu.rec<M$ACCESS.SUB>
-   if access.sub # '' then
-      if not(catalogued(access.sub)) then
-        display sysmsg(5060, access.sub, menu.rec<1>)
-        * Access control subroutine 'xx' for menu 'mm' is not catalogued
-        return
-      end
-   end
-
-   loop
-      crt @(IT$CS):
-
-      * Heading
-
-      s = menu.rec<M$TITLE>[1,@crtwide]
-      if len(s) then display @((@crtwide - len(s)) / 2, 0) : s :
-
-      * Display menu options
-
-      n = dcount(menu.rec<M$TEXT>, @vm)
-      col = 0
-      menu.map = ""
-      key = 0
-      prompt.line = 0
-
-      i = 0
-      line = 2
-      loop
-         i += 1
-
-         if line > @crthigh - 4 then
-            if col = 0 and maximum(lens(menu.rec<M$TEXT>)) <= @crtwide - 8 then
-               col = idiv(@crtwide, 2)
-               line = 2
-               prompt.line = @crthigh - 2
-            end else
-               exit
-            end
-         end
-
-      while i <= n
-         descr = menu.rec<M$TEXT, i>
-         action = menu.rec<M$ACTION, i>
-
-         * Check user is allowed this option
-
-         accessible = @true
-         if menu.rec<M$ACCESS.SUB> # '' then
-            access = menu.rec<M$ACCESS, i>
-            if access # '' then
-               call @access.sub(accessible, menu.name, access)
-               if not(accessible) then
-                   j = menu.rec<M$ACCESS.HIDE>
-                   if dcount(j, @vm) > 1 then  ;* One entry per option
-                      j = j<1,i>
-                   end
-                   if j then continue
-               end
-            end
-         end
-
-$ifdef FORMATTED.MENUS
-         if descr matches "'@('1N0N','1N0N')'0X" then  ;* Formatted option
-            col = matchfield(descr, "'@('0N','0N')'0X", 2)
-            line = matchfield(descr, "'@('0N','0N')'0X", 4)
-            descr = matchfield(descr, "'@('0N','0N')'0X", 6)
-         end
-$endif
-
-         crt @(col, line) :
-
-         if len(action) then  ;* This is a menu option
-            key += 1
-
-            if accessible then
-               crt fmt(key, "3R") : " = " :
-               menu.map<key> = i
-            end else
-               crt '(' : fmt(key, "2R") : ")= " :
-            end
-         end
-
-         crt descr
-
-         line += 1       ;* 0300 moved
-      repeat
-
-      * Display input prompt
-
-      line += 1
-      col = 0
-      descr = "Select option (1 - " : key : ") = "
-
-      if prompt.line then line = prompt.line
-
-      if len(menu.rec<M$PROMPT>) then
-         descr = menu.rec<M$PROMPT>
-$ifdef FORMATTED.MENUS
-         if descr matches "'@('1N0N','1N0N')'0X" then
-            col = matchfield(descr, "'@('0N','0N')'0X", 2)
-            line = matchfield(descr, "'@('0N','0N')'0X", 4)
-            descr = matchfield(descr, "'@('0N','0N')'0X", 6)
-         end
-$endif
-      end
-
-
-      * Get input
-
-      loop
-         crt @(col, line) : descr : @(IT$CLEOL) :
-         prompt ""
-         s = ''
-         input @(col + len(descr),line) : s,4_:
-
-         crt @(0,@crthigh-1) : @(IT$CLEOS) :          ;* Clear help text area
-
-         * Check for exit menu action
-
-         if menu.rec<M$EXITS> = '' then
-            if s = '' then
-               display @(IT$CS) :
-               return
-            end
-         end else
-            locate s in menu.rec<M$EXITS, 1> setting i then
-               display @(IT$CS) :
-               return
-            end
-         end
-
-         * Check for stop (terminate all menus) action
-
-         if menu.rec<M$STOPS> = '' then
-               if upcase(s) = 'Q' then
-               display @(IT$CS) :
-               menu.stack = ""
-               abort
-            end
-         end else
-            locate s in menu.rec<M$STOPS, 1> setting i then
-               display @(IT$CS) :
-               menu.stack = ""
-               abort
-            end
-         end
-
-         * Check for menu option number
-
-         if s matches '1-2N' then
-            n = s + 0
-            if n >= 1 and n <= key then
-               i = menu.map<n>
-               if i then
-                  new.sentence = menu.rec<M$ACTION,i>
-
-                  if new.sentence[1] = ';' then
-                     new.sentence = new.sentence[1,len(new.sentence)-1]
-                     menu.stack = 1 : @im : menu.rec : @im : menu.stack
-                  end else
-                     menu.stack = 0 : @im : menu.rec : @im : menu.stack
-                  end
-
-                  i = kernel(K$PAGINATE, @true)
-                  gosub proc.sentence
-                  gosub reset.environment
-
-                  if field(menu.stack, @im, 1) then
-                     display @(0) : sysmsg(5061) : @(-4) :  ;* Press return to continue'
-                     prompt ''
-                     input i
-                  end
-
-                  menu.rec = field(menu.stack, @im, 2)
-                  menu.stack = field(menu.stack, @im, 3, 9999)
-                  goto restart.menu   ;* Start again
-               end
-            end
-         end
-
-         * Check for help request
-
-         if s[1] = "?" then
-            s = s[1, len(s) - 1]
-            if len(s) and num(s) then
-               n = int(s)
-               if (n >= 1) and (n <= key) then
-                  i = menu.map<n>
-                  if i then
-                     crt @(0,@crthigh-1) : menu.rec<M$HELP,i>[1,@crtwide-1] :
-                  end
-               end
-            end
-            continue
-         end
-      repeat
-   repeat
-
    return
 
 *****************************************************************************
@@ -2819,12 +2593,12 @@ int.status:
 * 26 Oct 26 dm - W.11 F10.  $ipc is a file every SD user's process may write, so what is read from it here is run, stacked or set only if the
 *   process that started this phantom can be shown to have written it: PHANTOM (phantom) sealed the three records with a secret it gave only
 *   to the process it started, in its environment (K$PHANTOM.NONCE 'G' answers it here), and !IPC_SEAL makes the seal again from what was read.
-*   The Xn record holds the seal, the option flags and the command; the Dn record the parent's DATA queue and the Ln record the name of a
+*   The Xn record holds the seal and the command; the Dn record the parent's DATA queue and the Ln record the name of a
 *   directory file for the COMO log, each there only if the parent passed it.  The three are read and deleted whether or not they pass, so
 *   none stays for a later phantom with this number.  We look here rather than in the parent's Pn record because the parent may have
 *   terminated by now.  Called with the lock on $ipc held.
 *
-*   Out:  ph.opts, phantom.command, ph.data, ph.log.file - the option flags, the command, the DATA queue and the log file name, all four
+*   Out:  phantom.command, ph.data, ph.log.file - the command, the DATA queue and the log file name, all three
 *         null when ph.refused.
 *         ph.refused - true when there was no Xn record, or the seal did not check.  A Dn or Ln record with no Xn record is refused too.
 
@@ -2837,16 +2611,14 @@ read.phantom.cargo:
    read ph.data from ipc.f, 'D':@userno then delete ipc.f, 'D':@userno else ph.data = ''
    read ph.log.file from ipc.f, 'L':@userno then delete ipc.f, 'L':@userno else ph.log.file = ''
 
-   ph.opts = ph.rec<2>
-   phantom.command = field(ph.rec, @fm, 3, 999999)
+   phantom.command = field(ph.rec, @fm, 2, 999999)
    if ph.rec = '' then
       ph.refused = @true
    end else
-      if not(ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>, ph.opts, phantom.command, ph.data, ph.log.file)) then ph.refused = @true
+      if not(ipc_seal('check', kernel(K$PHANTOM.NONCE, 'G'), ph.rec<1>, phantom.command, ph.data, ph.log.file)) then ph.refused = @true
    end
 
    if ph.refused then
-      ph.opts = ''
       phantom.command = ''
       ph.data = ''
       ph.log.file = ''

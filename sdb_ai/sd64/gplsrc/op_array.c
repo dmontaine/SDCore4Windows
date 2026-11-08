@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: the PMATRIX descriptor type, op_pmatrix and AH_PICK_STYLE are gone: every matrix is an ARRAY with an element 0 (nothing made a Pick style matrix since $MODE PICK.MATRIX went).
  * 27 Oct 26 dm  S.87 batch 17: op_dimlclp ($MODE PICK.MATRIX) is gone and a_dimension() has no pick_style, so AH_PICK_STYLE is never set.  The PMATRIX descriptor type and op_pmatrix stay (unreachable: the compiler no longer emits OP_PMATRIX).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -34,7 +35,6 @@
  * op_inmata         INMATA
  * op_matcopy        MATCOPY
  * op_matfill        MATFILL
- * op_pmatrix        PMATRIX
  *
  * Other externally callable functions:
  * a_alloc           Allocate memory for array descriptors
@@ -363,7 +363,6 @@ void op_indx1() {
  */
 
   DESCRIPTOR* descr;
-  DESCRIPTOR* com_descr;
   int32_t indx;
   /* Modified by Composer AI - 2026/06/10.
      a_hdr was used uninitialized on the path where the switch default
@@ -373,7 +372,6 @@ void op_indx1() {
   ARRAY_HEADER* a_hdr = NULL;
   /* -------------------- */
   ARRAY_CHUNK* a_chunk;
-  PMATRIX_HEADER* pm_hdr;
 
   /* Get index */
 
@@ -391,27 +389,13 @@ void op_indx1() {
   switch (descr->type) {
     case ARRAY:
       a_hdr = descr->data.ahdr_addr;
-      if ((indx < 0) || (indx > a_hdr->rows) ||
-          (indx == 0 && (a_hdr->flags & AH_PICK_STYLE)))
+      if ((indx < 0) || (indx > a_hdr->rows))
         k_index_error(descr); /* 0207 */
 
       if (a_hdr->cols && (indx != 0)) /* 0432 It's a two dimensional matrix */
       {
         indx = (indx - 1) * a_hdr->cols + 1;
       }
-      break;
-
-    case PMATRIX:
-      pm_hdr = descr->data.pmatrix;
-      if ((indx < 1) || (indx > pm_hdr->rows))
-        k_index_error(descr);
-      if (pm_hdr->cols && (indx != 0)) /* 0432 It's a two dimensional matrix */
-      {
-        indx = (indx - 1) * pm_hdr->cols + 1;
-      }
-      com_descr = pm_hdr->com_descr;
-      indx += pm_hdr->base_offset - 1;
-      a_hdr = com_descr->data.ahdr_addr;
       break;
 
     default:
@@ -444,7 +428,6 @@ void op_indx2() {
  */
 
   DESCRIPTOR* descr;
-  DESCRIPTOR* com_descr;
   int32_t row;
   int32_t col;
   int32_t cols;
@@ -458,7 +441,6 @@ void op_indx2() {
   ARRAY_HEADER* a_hdr = NULL;
   /* -------------------- */
   ARRAY_CHUNK* a_chunk;
-  PMATRIX_HEADER* pm_hdr;
 
   /* Get column index */
 
@@ -486,8 +468,6 @@ void op_indx2() {
         cols = 1; /* 0207 Treat as two dim */
 
       if ((row == 0) || (col == 0)) {
-        if (a_hdr->flags & AH_PICK_STYLE)
-          k_index_error(descr);
         indx = 0;
       } else {
         if ((row <= 0) || (row > a_hdr->rows) /* 0207 */
@@ -498,22 +478,6 @@ void op_indx2() {
 
         indx = ((row - 1) * cols) + col;
       }
-      break;
-
-    case PMATRIX:
-      pm_hdr = descr->data.pmatrix;
-      cols = pm_hdr->cols;
-      if (cols == 0)
-        cols = 1;
-
-      if ((row <= 0) || (row > pm_hdr->rows) || (col <= 0) || (col > cols)) {
-        k_index_error(descr);
-      }
-
-      indx = pm_hdr->base_offset + ((row - 1) * cols) + col - 1;
-
-      com_descr = pm_hdr->com_descr;
-      a_hdr = com_descr->data.ahdr_addr;
       break;
 
     default:
@@ -564,7 +528,6 @@ void op_inmata() {
   DESCRIPTOR* descr;
   ARRAY_HEADER* a_hdr;
   STRING_CHUNK* s_hdr;
-  PMATRIX_HEADER* pm_hdr;
   int16_t s_len;
   char s[30];
   int16_t actual_size;
@@ -587,12 +550,6 @@ void op_inmata() {
       a_hdr = descr->data.ahdr_addr;
       rows = a_hdr->rows;
       cols = a_hdr->cols;
-      break;
-
-    case PMATRIX:
-      pm_hdr = descr->data.pmatrix;
-      rows = pm_hdr->rows;
-      cols = pm_hdr->cols;
       break;
 
     default:
@@ -769,9 +726,6 @@ void op_matcopy() {
                     
  */
 
-  PMATRIX_HEADER* pm_hdr;
-  DESCRIPTOR* com_descr; /* Common descriptor for PMATRIX */
-
   DESCRIPTOR* src_descr;   /* Source array or element descriptor */
   /* Modified by Composer AI - 2026/06/10.
      src_a_hdr was used uninitialized on the path where the switch
@@ -820,17 +774,6 @@ void op_matcopy() {
       src_indx = 0;
       break;
 
-    case PMATRIX:
-      pm_hdr = src_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      if (pm_hdr->cols == 0)
-        src_elements = pm_hdr->rows;
-      else
-        src_elements = pm_hdr->cols * pm_hdr->rows;
-      src_indx = pm_hdr->base_offset;
-      src_a_hdr = com_descr->data.ahdr_addr;
-      break;
-
     default:
       k_not_array_error(src_descr);
   }
@@ -843,31 +786,6 @@ void op_matcopy() {
       tgt_a_hdr = tgt_descr->data.ahdr_addr;
       tgt_elements = tgt_a_hdr->used_elements;
       tgt_indx = 0;
-
-      /* If the source is a PMATRIX rather than an ARRAY, advance the
-         target pointer to forget about the zero element.             */
-      if (src_descr->type == PMATRIX) {
-        tgt_indx++;
-        tgt_elements--;
-      }
-      break;
-
-    case PMATRIX:
-      pm_hdr = tgt_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      if (pm_hdr->cols == 0)
-        tgt_elements = pm_hdr->rows;
-      else
-        tgt_elements = pm_hdr->cols * pm_hdr->rows;
-      tgt_indx = pm_hdr->base_offset;
-      tgt_a_hdr = com_descr->data.ahdr_addr;
-
-      /* If the source is an ARRAY rather than a PMATRIX, advance the
-         source pointer to forget about the zero element.             */
-      if (src_descr->type == ARRAY) {
-        src_indx++;
-        src_elements--;
-      }
       break;
 
     default:
@@ -909,10 +827,8 @@ void op_matfill() {
 
   DESCRIPTOR* src_descr; /* Source descriptor */
   DESCRIPTOR* tgt_descr; /* Target array descriptor */
-  DESCRIPTOR* com_descr; /* Common descriptor for PMATRIX */
   ARRAY_HEADER* a_hdr;   /* Target array header */
   ARRAY_CHUNK* a_chunk;  /* Current chunk pointer */
-  PMATRIX_HEADER* pm_hdr;
   int16_t chunk;         /* Current chunk number */
   int32_t elements;       /* No of elements to set */
   int16_t start_element; /* First element to set in this chunk */
@@ -930,14 +846,12 @@ void op_matfill() {
     case ARRAY:
       a_hdr = tgt_descr->data.ahdr_addr;
 
-      if (!(a_hdr->flags & AH_PICK_STYLE)) {
-        /* Zero element is set to a null string */
+      /* Zero element is set to a null string */
 
-        p = &(a_hdr->chunk[0]->descr[0]);
-        Release(p);
-        InitDescr(p, STRING);
-        p->data.str.saddr = NULL;
-      }
+      p = &(a_hdr->chunk[0]->descr[0]);
+      Release(p);
+      InitDescr(p, STRING);
+      p->data.str.saddr = NULL;
 
       /* Remaining elements are copies of the source item */
 
@@ -956,27 +870,6 @@ void op_matfill() {
           IncrRefCt(p);
           p++;
         }
-      }
-      break;
-
-    case PMATRIX:
-      pm_hdr = tgt_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      if (pm_hdr->cols == 0)
-        elements = pm_hdr->rows;
-      else
-        elements = pm_hdr->cols * pm_hdr->rows;
-      n = pm_hdr->base_offset;
-
-      a_hdr = com_descr->data.ahdr_addr;
-      while (elements--) {
-        p = Element(a_hdr, n);
-        Release(p);
-
-        *p = *src_descr;
-        p->flags &= ~DF_CHANGE;
-        IncrRefCt(p);
-        n++;
       }
       break;
 
@@ -1216,13 +1109,6 @@ Private void a_dimension(bool set_zero) {
         else
           elements = (rows * cols) + 1; /* Two dimensions */
 
-        if ((a_hdr->flags & AH_PICK_STYLE) &&
-            elements == 1) /* 0390 Only a pseudo zero element */
-        {
-          k_error(sysmsg(
-              1139)); /* Pick style matrices must have at least one element */
-        }
-
         diff = elements - a_hdr->used_elements;
         if (diff < 0) /* Redimensioning smaller */
         {
@@ -1382,9 +1268,6 @@ Private void a_dimension(bool set_zero) {
       }
       break;
 
-    case PMATRIX:
-      k_error(sysmsg(1136)); /* Cannot redimension a Pick style matrix */
-
     default: /* Unassigned or converting some other type */
       if ((a_hdr = a_alloc(rows, cols, set_zero)) != NULL) /* 0444 */
       { /* Only change descriptor after successful allocation */
@@ -1399,56 +1282,6 @@ Private void a_dimension(bool set_zero) {
 
 exit_a_dimension:
   return;
-}
-
-/* ======================================================================
-   op_pmatrix()  -  Create a reference to a Pick matrix in common         */
-
-void op_pmatrix() {
-  /* The opcode is followed by
-    2 byte local var number to use as reference
-    2 byte common variable number
-    2 byte offset into common for base of matrix
-    2 byte row count
-    2 byte column count
-    All values are low byte first
- */
-
-  DESCRIPTOR* descr;
-  PMATRIX_HEADER* pm_hdr;
-
-  /* The local variable to become the PMATRIX descriptor is always an
-    uninitialised local variable so we can just initialise it without
-    needing to worry about releasing any previous value.               */
-
-  descr = process.program.vars + (*pc + (*(pc + 1) << 8));
-  pc += 2;
-
-  pm_hdr = (PMATRIX_HEADER*)k_alloc(85, sizeof(PMATRIX_HEADER));
-  InitDescr(descr, PMATRIX);
-  descr->data.pmatrix = pm_hdr;
-
-  /* Find corresponding COMMON descriptor */
-
-  /* Get common variable number */
-
-  pm_hdr->com_descr = process.program.vars + (*pc + (*(pc + 1) << 8));
-  pc += 2;
-
-  /* Get offset of first matrix element */
-
-  pm_hdr->base_offset = *pc + (*(pc + 1) << 8);
-  pc += 2;
-
-  /* Get row count */
-
-  pm_hdr->rows = *pc + (*(pc + 1) << 8);
-  pc += 2;
-
-  /* Get offset of column count */
-
-  pm_hdr->cols = *pc + (*(pc + 1) << 8);
-  pc += 2;
 }
 
 /* ======================================================================

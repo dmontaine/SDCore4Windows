@@ -3035,7 +3035,7 @@ proc.directive:
 
          if catalogue.name # '~' then
 !!CALLNAME!!
-            if len(catalogue.name) > 1 and index("*!_$-", catalogue.name[1,1], 1) then n = 2       ;* 16 Oct 26: the hyphen too (QM4 Fixes 217)
+            if len(catalogue.name) > 1 and index("!_$", catalogue.name[1,1], 1) then n = 2       ;* 28 Oct 26: S.87, * and - are no longer prefixes
             else n = 1
 
             * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM item 241: the lower of 128 and MAXIDLEN (63 unless raised), as in catalog and op_jumps.c
@@ -3487,7 +3487,7 @@ get.call.name:
 get.call.name.upper:
    s = ""
 
-   if look.ahead.token.string = '!' or look.ahead.token.string = '*' then
+   if look.ahead.token.string = '!' then
       s = look.ahead.token.string
       gosub get.token
       goto get.name.common.path

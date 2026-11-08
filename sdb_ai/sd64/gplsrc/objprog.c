@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): AH_PICK_STYLE is gone (no Pick style matrix is made any more): element 0 of a matrix is always valid.
  * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): A name map of 32 entries or more is looked up through a hash index (QM4 Fixes item 13): next_named_entry().
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): RESTRICTED names (QM4 gaps): find_name_map_entry() skips one the running object is not in the inheritance tree of.
  * 14 Sep 26 Windows port - op_object() lowers the class catalogue name, as
@@ -970,8 +971,7 @@ Private DESCRIPTOR* resolve_index(
     GetInt(index_descr);
 
     indx = index_descr->data.value;
-    if ((indx < 0) || (indx > ahdr->rows) ||
-        (indx == 0 && (ahdr->flags & AH_PICK_STYLE))) {
+    if ((indx < 0) || (indx > ahdr->rows)) {
       k_index_error(array_descr);
     }
   } else /* Two dimensional matrix */
@@ -984,8 +984,6 @@ Private DESCRIPTOR* resolve_index(
     row = index_descr->data.value;
 
     if ((row == 0) || (col == 0)) {
-      if (ahdr->flags & AH_PICK_STYLE)
-        k_index_error(array_descr);
       indx = 0;
     } else {
       if ((row <= 0) || (row > rows) || (col <= 0) || (col > cols)) {

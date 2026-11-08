@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VERSION keyword is gone (a file keeps the format it has); message 6117 goes with it.
 * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 172: REPORTING shows how far a type conversion and an IMMEDIATE resize have got (messages 12391, 12392).
 * 14 Sep 26 Windows port - RELEASE_1.1 5 D2.  The rebuild refuses a file that
 *           holds two ids differing only by case (10177) instead of silently
@@ -39,7 +40,6 @@
 *    LARGE.RECORD n
 *    SPLIT.LOAD n
 *    MERGE.LOAD n
-*    VERSION n              (Requires full restructure if changed)
 *    NO.CASE / CASE
 *    RESIZE / NO.RESIZE
 *    IMMEDIATE
@@ -245,14 +245,6 @@ $include err.h
             end
             merge.load.value = value + 0
    
-         case keyword = KW$VERSION
-            dh.parameters = @true
-            call @parser(parser$get.token, token.type, value, keyword)
-            if not(value matches '1N0N') or value < 0 or value > DH.VERSION then
-               stop sysmsg(6117) ;* Invalid file version
-            end
-            file.version = value + 0
-
          case keyword = KW$BINARY
             binary = @true
 

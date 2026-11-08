@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * is no longer a global prefix character.
  * 29 Sep 26 RELEASE_1.1 114 - a runfile name longer than the header's
  *           program_name is stored by its tail, bounded (from Solo's SOLO 12)
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the global catalogue directory is sd_sysdir() (the configuration file's), not the segment's copy; the administrator test is MY_ADMIN().
@@ -165,7 +166,7 @@ void* load_object(char* name, bool abort_on_error) {
 
   (void)map_t1_id(name, strlen(name), mapped_name);
 
-  if (strchr("*$!_", name[0]) == NULL) {
+  if (strchr("$!_", name[0]) == NULL) {
     /* Try local catalogue */
 
     /* Push arguments onto e-stack */
@@ -514,7 +515,7 @@ void invalidate_object() {
     next_object = obj->next;
 
     if (!(obj->flags & OBJ_GLOBAL) ||
-        (strchr("*$!_", obj->code.ext_hdr.prog.program_name[0]) == NULL)) {
+        (strchr("$!_", obj->code.ext_hdr.prog.program_name[0]) == NULL)) {
       obj->flags |= OBJ_INVALID;
     }
   }

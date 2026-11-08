@@ -451,13 +451,13 @@
       $define V$FILE.REF      6
       $define V$ARRAY         7
       ;* These tokens are from csrc descr.h
-      $define AH$PICK.STYLE  0x0001  ;* Pick style matrix
+      * AH$PICK.STYLE (0x0001, a Pick style matrix) was removed 28 Oct 26 (S.87): the bit stays reserved
       $define AH$AUTO.DELETE 0x0002  ;* Self-deleting common block
       $define V$COMMON        8
       $define V$IMAGE         9
       $define V$BTREE        10
       $define V$SELLIST      11
-      $define V$PMATRIX      12
+      * V$PMATRIX (12, a Pick style matrix in a common block) was removed 28 Oct 26 (S.87): the number stays reserved
       $define V$SOCK         13
       $define V$LOCALVARS    14
       $define V$OBJ          15

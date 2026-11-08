@@ -18,20 +18,21 @@
 *
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: the option flags are no longer in the phantom's start-up record or in the seal (OPTION INHERIT went on 27 Oct 26 and the field was always null).
 * 26 Oct 26 dm  New (W.11 F10, the use of the file $ipc).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    seal = !ipc_seal('make',  nonce, '',   opt, cmd, dq, log)
-*    ok   = !ipc_seal('check', nonce, seal, opt, cmd, dq, log)
+*    seal = !ipc_seal('make',  nonce, '',   cmd, dq, log)
+*    ok   = !ipc_seal('check', nonce, seal, cmd, dq, log)
 *
-*    $ipc is a file every SD user's process may write, so the records PHANTOM leaves in it for the new process (the option flags and the
+*    $ipc is a file every SD user's process may write, so the records PHANTOM leaves in it for the new process (the
 *    command in Xn, the DATA lines in Dn, the log file name in Ln) are not believed on their own.  PHANTOM seals them with a secret it
 *    gives only to the process it starts (K$PHANTOM.NONCE: the new process's environment, which only the same operating-system user can
 *    read), and the new process, CPROC, runs what they hold only if the seal checks.
 *
-*    The seal is HMAC-SHA256, keyed by the secret, over the four values, each turned into hexadecimal (so that no mark or other byte can
+*    The seal is HMAC-SHA256, keyed by the secret, over the three values, each turned into hexadecimal (so that no mark or other byte can
 *    move from one value to the next) and joined with colons.  'make' answers the seal (base64), the null string if it could not be made.
 *    'check' answers 1 only when the secret is present, the seal is present, and the seal given equals the one these values make
 *    (compared in constant time); 0 for anything else, including an SDEXT error.
@@ -41,7 +42,7 @@
 * START-CODE
 
 $internal
-function ipc_seal(mode, nonce, seal, opt, cmd, dq, logf)
+function ipc_seal(mode, nonce, seal, cmd, dq, logf)
 $catalog !ipc_seal
 
 $include keys.h
@@ -54,7 +55,7 @@ $include keys.h
       return ''
    end
 
-   signed = oconv(opt, 'MX0C') : ':' : oconv(cmd, 'MX0C') : ':' : oconv(dq, 'MX0C') : ':' : oconv(logf, 'MX0C')
+   signed = oconv(cmd, 'MX0C') : ':' : oconv(dq, 'MX0C') : ':' : oconv(logf, 'MX0C')
    mac = SDEXT(nonce : @FM : signed, @TRUE, SD_HMACSHA256)
 
    if not(checking) then return mac

@@ -31,6 +31,7 @@
  * 06 Aug 24 mab remove PROCREAD op code, add SDEXT
  * 27 Oct 26 dm  S.87 batch 3: ENTER (0xCFB3) and EREPLACE (0xCFFB) removed.  The table is indexed by position, so each
  *                is an op_illegal row and the code stays reserved.
+ * 28 Oct 26 dm  S.87: PMATRIX (0xCF96) removed the same way.
  * 27 Oct 26 dm  S.87 batch 13: MD5 (0xCFF2) removed the same way (write DIGEST(string, 0, 'MD5')).
  * 27 Oct 26 dm  S.87 batch 17: LOCATES, FORLOOPS, FOR1S, RDNXPOS, DIMLCLP, PICKREAD, ONGOTOP, ONGOSUBP, PSUBSTRA, PSUBSTRB, COMPREP, COMPINS, COMPINSRT,
  *                COMPREPLC, ROLL3 and STROVL (the opcodes of the removed $MODE words) removed the same way.
@@ -74,7 +75,6 @@
 #define MV_OPCODE         11
 #define ADDR_LIST         12  /* Single byte count followed by address list */
 #define SHORT_LOCAL       13  /* 1 byte local var number */
-#define PMATDATA          14  /* PMATRIX qualifiers */
 #define TWO_BYTE_VALUE    15  /* 2 byte value */
 #define LOCAL_DCL         16  /* Complex, declaring local variable pool */
 #define OBJMAP_DATA       17  /* Object maps */
@@ -514,7 +514,7 @@ _opc_(0xCF92, OP_SORTNEXT, "SORTNEXT",   op_sortnext,  OPCODE_BYTE,         0)
 _opc_(0xCF93, OP_SORTCLR,  "SORTCLR",    op_sortclr,   OPCODE_BYTE,         0)
 _opc_(0xCF94, OP_RLSFILE,  "RLSFILE",    op_rlsfile,   OPCODE_BYTE,        -1)
 _opc_(0xCF95, OP_DIR,      "DIR",        op_dir,       OPCODE_BYTE,         0)
-_opc_(0xCF96, OP_PMATRIX,  "PMATRIX",    op_pmatrix,   PMATDATA,            0)
+_opc_(0xCF96, OP_CF96,     "OPCF96",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCF97, OP_CF97,   "OPCF97",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCF98, OP_LOGMSG,   "LOGMSG",     op_logmsg,    OPCODE_BYTE,        -1)
 _opc_(0xCF99, OP_SHCAP,    "SHCAP",      op_shcap,     OPCODE_BYTE,        -1)

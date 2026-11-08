@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): net_pre_change_lock() can no longer ask a caller to wait (that was AUTOLOCK's): NETL_WAIT, its two arms and the retry_pc of op_write and op_delete are gone.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): $MODE PICK.READ (op_pickread, P_PICKREAD), AUTOLOCK (P_AUTOLOCK, also in
  *           net_pre_change_lock) and WRITE.DELETE.THEN.ELSE (P_THEN_ELSE) are gone: a read always releases its target first, a write or delete
  *           without the lock fails with ER_NOLOCK under MUSTLOCK or a transaction, and a trigger failure is an ordinary error.
@@ -234,17 +235,16 @@ Private bool refuse_net_file(FILE_VAR *fvar, u_int16_t op_flags, const char *wha
 
 /* ======================================================================
    net_pre_change_lock()  -  The lock rules of a WRITE or DELETE of a NET_FILE (slice 3e), which the local code applies with check_lock() and
-   lock_record() and a remote file has neither of.  $MODE AUTOLOCK: take the update lock now (waiting, by running the opcode again).  MUSTLOCK:
+   lock_record() and a remote file has neither of.  MUSTLOCK:
    the session must hold it already, as for a local file; without this a program under MUSTLOCK would write a record it had not locked,
    which the same program cannot do locally.  A plain WRITE or DELETE lets the server release the lock when it is done.
-   NETL_GO: carry on.  NETL_WAIT: the opcode is set up to run again; the caller RETURNS AT ONCE.  NETL_FAIL: process.status is the
+   NETL_GO: carry on.  NETL_FAIL: process.status is the
    negative status (already raised unless ON ERROR); the caller goes to its exit.                                                     */
 
 #define NETL_GO 0
-#define NETL_WAIT 1
 #define NETL_FAIL 2
 
-Private int net_pre_change_lock(FILE_VAR *fvar, char *id, int16_t id_len, u_int16_t op_flags, u_char *retry_pc) {
+Private int net_pre_change_lock(FILE_VAR *fvar, char *id, int16_t id_len, u_int16_t op_flags) {
   int st;
 
   if (pcfg.must_lock) {
@@ -589,7 +589,6 @@ void op_delete() {
   bool keep_lock;
   u_int32_t txn_id;
   struct stat statbuf;
-  u_char *retry_pc = op_pc; /* 18 Oct 26 slice 3e: where a remote lock that is busy runs this opcode again from, taken before any handler call */
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -631,12 +630,8 @@ void op_delete() {
       process.status = -ER_IID;
       goto exit_op_delete;
     }
-    switch (net_pre_change_lock(fvar, id, id_len, op_flags, retry_pc)) {
-      case NETL_WAIT:
-        return;
-      case NETL_FAIL:
-        goto exit_op_delete;
-    }
+    if (net_pre_change_lock(fvar, id, id_len, op_flags) == NETL_FAIL)
+      goto exit_op_delete;
     process.op_flags = op_flags & P_ON_ERROR;
     net_st = net_delete(fvar, id, id_len, keep_lock); /* the handler runs BASIC: the stack is found by e_stack from here on */
     process.op_flags = 0;
@@ -1175,7 +1170,6 @@ void op_write() {
   u_int32_t txn_id;
   bool coll_file;                 /* A data collection file */
   COLL_HEADER *coll_keep = NULL;  /* The collection being written, while src_descr holds its text */
-  u_char *retry_pc = op_pc;       /* 18 Oct 26 slice 3e: where a remote lock that is busy runs this opcode again from, taken before any handler call */
 
   op_flags = process.op_flags;
   process.op_flags = 0;
@@ -1246,12 +1240,8 @@ void op_write() {
     }
     memcpy(lock_id, id, id_len);
 
-    switch (net_pre_change_lock(fvar, id, id_len, op_flags, retry_pc)) {
-      case NETL_WAIT:
-        return;
-      case NETL_FAIL:
-        goto exit_op_write;
-    }
+    if (net_pre_change_lock(fvar, id, id_len, op_flags) == NETL_FAIL)
+      goto exit_op_write;
 
     process.op_flags = op_flags & P_ON_ERROR;
     net_st = net_write(fvar, id, id_len, src_descr->data.str.saddr, keep_lock); /* the handler runs BASIC: the stack is found by e_stack from here on */
@@ -1719,7 +1709,7 @@ Private void read_record(bool matread) {
     str_descr = &temp_descr;
 
     /* Check target is a matrix */
-    if ((tgt_descr->type != ARRAY) && (tgt_descr->type != PMATRIX)) /* 0369 */
+    if (tgt_descr->type != ARRAY) /* 0369 */
     {
       k_error(sysmsg(1232));
     }

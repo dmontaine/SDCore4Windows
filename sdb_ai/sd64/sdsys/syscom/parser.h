@@ -157,7 +157,7 @@ $define KW$COPIES         145
 $define KW$BANNER         146
 $define KW$NO.QUERY       147
 $define KW$BETWEEN        148
-$define KW$VERSION        149
+*  KW$VERSION 149 was removed 28 Oct 26 (S.87): the number is reserved
 $define KW$NODEFAULT      150
 $define KW$PORTRAIT       151
 $define KW$LANDSCAPE      152

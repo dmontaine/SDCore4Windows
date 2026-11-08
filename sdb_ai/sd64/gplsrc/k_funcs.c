@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type (Pick style matrices in a common block) is gone.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION UNASS.WARNING and NON.NUMERIC.WARNING are gone, so an unassigned variable and a
  *           non-numeric value are always errors; k_unass_zero(), k_unass_null() and k_non_numeric_zero() are deleted.
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_release() offers a file variable whose last reference has gone to park_fvar() (OPTION COMMAND.LEVEL.LOCKS)
@@ -647,7 +648,6 @@ void k_incr_refct(DESCRIPTOR* p) {
     case ADDR:
     case INTEGER:
     case FLOATNUM:
-    case PMATRIX:
     case OBJCD:
     case OBJCDX:
       break;
@@ -1282,10 +1282,6 @@ void k_release(DESCRIPTOR* p) {
           free_btree_element(btree->head, btree->keys);
         k_free(btree);
       }
-      break;
-
-    case PMATRIX:
-      k_free(p->data.pmatrix);
       break;
 
     case SOCK:

@@ -95,14 +95,6 @@
  *              variable type was introduced late in the life of SD, the
  *              numbered lists are handled differently.
  *
- * PMATRIX      Pick style systems use a different form of matrix than 
- *              Information style systems. Firstly, Pick matrices have no zero
- *              element. Secondly, a Pick matrix in a common block is just a
- *              list of simple data items. Both styles have their advantages
- *              and disadvantages. SD supports both, though the Information
- *              style is the default. The PMATRIX descriptor defines a Pick
- *              style matrix in a common block.
- *
  * SOCK         Socket.
  *
  * LOCALVARS    A local variable pool.
@@ -190,9 +182,6 @@ struct DESCRIPTOR {
     /* BTREE */
     BTREE_HEADER* btree;
 
-    /* PMATRIX */
-    PMATRIX_HEADER* pmatrix;
-
     /* SOCK */
     SOCKVAR* sock;
 
@@ -243,7 +232,7 @@ struct DESCRIPTOR {
 #define IMAGE 9
 #define BTREE 10
 #define SELLIST 11
-#define PMATRIX 12
+/* 12 was PMATRIX (a Pick style matrix in a common block), removed 28 Oct 26 (S.87): the number stays reserved */
 #define SOCK 13
 #define LOCALVARS 14
 #define OBJ 15
@@ -409,7 +398,7 @@ struct ARRAY_HEADER {
   int16_t ref_ct;
   u_int16_t flags;
 /* These tokens are also in BP INT$KEYS.H */
-#define AH_PICK_STYLE 0x0001  /* Pick style matrix */
+/* 0x0001 was AH_PICK_STYLE (a Pick style matrix), removed 28 Oct 26 (S.87): the bit stays reserved */
 #define AH_AUTO_DELETE 0x0002 /* Self-deleting common block */
   int32_t rows;
   int32_t cols;              /* Zero if one dimension */
@@ -468,15 +457,6 @@ struct BTREE_HEADER {
 #define BT_DESCENDING 0x02
 #define BT_UNIQUE 0x04
 #define BT_DATA 0x08 /* Has data element */
-};
-
-/* ---------------------- PMATRIX ------------------------ */
-
-struct PMATRIX_HEADER {
-  DESCRIPTOR* com_descr; /* Associated COMMON */
-  u_int16_t base_offset; /* Where is element 1 */
-  u_int16_t rows;
-  u_int16_t cols; /* Zero if one dimension */
 };
 
 /* ------------------------ SOCK ------------------------- */

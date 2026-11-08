@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: the PMATRIX descriptor type and AH_PICK_STYLE are gone: MATBUILD, MATSTR and MATPARSE have the one (zero element) style of matrix.
  * 31 Dec 23 SD launch - prior history suppressed
  * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): op_md5() (MD5()) is gone, with the OpenSSL include only it used; its opcode is an op_illegal row
  *           (write DIGEST(s, 0, 'MD5')).
@@ -308,11 +309,9 @@ void op_matbuild() {
  */
 
   DESCRIPTOR *mat_descr;
-  DESCRIPTOR *com_descr;
   DESCRIPTOR *descr; /* Various descriptors */
 
   STRING_CHUNK *delim_str;
-  PMATRIX_HEADER *pm_hdr;
 
   ARRAY_HEADER *a_hdr;
   int32_t num_elements;
@@ -361,20 +360,6 @@ void op_matbuild() {
       /* Excludes zero element */
       if ((end_index < 1) || (end_index > num_elements))
         end_index = num_elements;
-      break;
-
-    case PMATRIX:
-      pm_hdr = mat_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      if (pm_hdr->cols == 0)
-        num_elements = pm_hdr->rows;
-      else
-        num_elements = pm_hdr->cols * pm_hdr->rows;
-      if ((end_index < 1) || (end_index > num_elements))
-        end_index = num_elements;
-      start_index += pm_hdr->base_offset - 1;
-      end_index += pm_hdr->base_offset - 1;
-      a_hdr = com_descr->data.ahdr_addr;
       break;
 
     default:
@@ -433,7 +418,7 @@ void op_matbuild() {
   }
 
   zero_added = FALSE;
-  if ((mat_descr->type == ARRAY) && !(a_hdr->flags & AH_PICK_STYLE)) {
+  if (mat_descr->type == ARRAY) {
     /* Now add the zero element, if it is not null */
 
     a_chunk = a_hdr->chunk[0];
@@ -471,8 +456,6 @@ void op_matbuild() {
      was not null and so was added.                                                                                    */
   if (zero_added)
     process.inmat = 0;
-  else if (mat_descr->type == PMATRIX)
-    process.inmat = end_index - (pm_hdr->base_offset - 1);
   else
     process.inmat = end_index;
 
@@ -516,7 +499,6 @@ Private void matstr_element(ARRAY_HEADER* a_hdr, int32_t indx) {
 void op_matstr() {
   DESCRIPTOR* mat_descr;
   DESCRIPTOR* descr;
-  PMATRIX_HEADER* pm_hdr;
   ARRAY_HEADER* a_hdr;
   ARRAY_CHUNK* a_chunk;
   DESCRIPTOR tgt_descr;
@@ -537,14 +519,6 @@ void op_matstr() {
       a_hdr = mat_descr->data.ahdr_addr;
       rows = a_hdr->rows;
       cols = a_hdr->cols;
-      break;
-
-    case PMATRIX:
-      pm_hdr = mat_descr->data.pmatrix;
-      a_hdr = pm_hdr->com_descr->data.ahdr_addr;
-      rows = pm_hdr->rows;
-      cols = pm_hdr->cols;
-      base = pm_hdr->base_offset - 1;
       break;
 
     default:
@@ -637,7 +611,6 @@ void op_matparse() {
 
   DESCRIPTOR *array_descr; /* Target array */
   ARRAY_HEADER *a_hdr;
-  PMATRIX_HEADER *pm_hdr;
   int lo_index;
   int32_t hi_index; /* Index of last element */
   int32_t indx;     /* Current target element number */
@@ -650,11 +623,8 @@ void op_matparse() {
   STRING_CHUNK *tgt_str;
   u_int16_t last_char = 256;
 
-  DESCRIPTOR *com_descr;
   int rows;
   int cols;
-  bool pick_style;
-  int offset;
 
   register char c;
   int16_t i;
@@ -692,27 +662,15 @@ void op_matparse() {
   switch (array_descr->type) {
     case ARRAY:
       a_hdr = array_descr->data.ahdr_addr;
-      pick_style = a_hdr->flags & AH_PICK_STYLE;
       rows = a_hdr->rows;
       cols = a_hdr->cols;
-      offset = 0;
-      break;
-
-    case PMATRIX:
-      pick_style = TRUE;
-      pm_hdr = array_descr->data.pmatrix;
-      com_descr = pm_hdr->com_descr;
-      rows = pm_hdr->rows;
-      cols = pm_hdr->cols;
-      offset = pm_hdr->base_offset - 1; /* Allow pseudo zero element */
-      a_hdr = com_descr->data.ahdr_addr;
       break;
 
     default:
       k_not_array_error(array_descr);
   }
 
-  lo_index = (pick_style) ? 1 : 0;
+  lo_index = 0;
   if (cols == 0)
     cols = 1;
   hi_index = cols * rows;
@@ -720,7 +678,7 @@ void op_matparse() {
   /* Set all elements as null strings */
 
   for (indx = lo_index; indx <= hi_index; indx++) {
-    tgt_descr = Element(a_hdr, indx + offset);
+    tgt_descr = Element(a_hdr, indx);
     Release(tgt_descr);
     InitDescr(tgt_descr, STRING);
     tgt_descr->data.str.saddr = NULL;
@@ -759,15 +717,13 @@ void op_matparse() {
           continue;
 
         if (indx == hi_index) {
-          if (pick_style)
-            ts_copy_byte(c);
           goto assign_excess_data;
         }
 
         /* Terminate current element */
 
         ts_terminate();
-        Element(a_hdr, indx + offset)->data.str.saddr = tgt_str;
+        Element(a_hdr, indx)->data.str.saddr = tgt_str;
         indx++;
 
         /* Start new element */
@@ -788,7 +744,7 @@ void op_matparse() {
               goto assign_excess_data;
 
             ts_terminate();
-            Element(a_hdr, indx + offset)->data.str.saddr = tgt_str;
+            Element(a_hdr, indx)->data.str.saddr = tgt_str;
             indx++;
           }
 
@@ -809,11 +765,8 @@ void op_matparse() {
 
 assign_excess_data:
 
-  if ((!pick_style) || (src_str == NULL)) /* Nothing to append to final element */
-  {
-    ts_terminate(); /* Terminate final element */
-    Element(a_hdr, indx + offset)->data.str.saddr = tgt_str;
-  }
+  ts_terminate(); /* Terminate final element */
+  Element(a_hdr, indx)->data.str.saddr = tgt_str;
 
 no_elements:
   if (src_str == NULL) /* No text remains to be assigned */
@@ -823,11 +776,9 @@ no_elements:
   {
     process.inmat = 0;
 
-    if (!pick_style) {
-      indx = 0;
-      ts_init(&tgt_str, 32);
-      tgt_str = NULL;
-    }
+    indx = 0;
+    ts_init(&tgt_str, 32);
+    tgt_str = NULL;
 
     do {
       if (src_bytes_remaining)
@@ -839,7 +790,7 @@ no_elements:
     } while (src_str != NULL);
 
     ts_terminate();
-    Element(a_hdr, indx + offset)->data.str.saddr = tgt_str;
+    Element(a_hdr, indx)->data.str.saddr = tgt_str;
   }
 
 exit_op_matparse:

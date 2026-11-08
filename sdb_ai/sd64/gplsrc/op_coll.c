@@ -8,6 +8,7 @@
  * same collection and COLLECTION(c) makes an independent copy.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type and AH_PICK_STYLE are gone: matrix_span() has the one case.
  * 18 Oct 26 Windows port - from Linux 3d67141 (13 Oct 26): New. COLLECTION(), element get, set and delete, ELEMENT.EXISTS()
  *               and ENUMERATE().
  * 18 Oct 26 Windows port - from Linux 2e043bc (13 Oct 26): Arrays: MAT(), MAT(matrix {, max}), MAT target = MAT c{path},
@@ -756,25 +757,11 @@ Private COLL_HEADER* need_array(DESCRIPTOR* d) {
    row by row for a two dimensional one.  False if d is not a matrix.      */
 
 Private bool matrix_span(DESCRIPTOR* d, ARRAY_HEADER** hdr, int32_t* first, int32_t* count) {
-  PMATRIX_HEADER* pm;
-
   switch (d->type) {
     case ARRAY:
       *hdr = d->data.ahdr_addr;
-      if ((*hdr)->flags & AH_PICK_STYLE) {
-        *first = 0;
-        *count = (*hdr)->used_elements;
-      } else {
-        *first = 1; /* Element 0 is not part of the matrix */
-        *count = (*hdr)->used_elements - 1;
-      }
-      return TRUE;
-
-    case PMATRIX:
-      pm = d->data.pmatrix;
-      *hdr = pm->com_descr->data.ahdr_addr;
-      *first = pm->base_offset;
-      *count = (pm->cols == 0) ? pm->rows : pm->cols * pm->rows;
+      *first = 1; /* Element 0 is not part of the matrix */
+      *count = (*hdr)->used_elements - 1;
       return TRUE;
   }
   return FALSE;

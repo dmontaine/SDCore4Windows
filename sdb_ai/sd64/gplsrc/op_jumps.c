@@ -29,6 +29,7 @@
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): TRY / CATCH: exception GROUPS (a handler named a.b catches a.b.c, openQM manual "Exception Groups"), a
  *           transaction begun inside the TRY clause is rolled back when an exception is thrown out of it, and the kernel
  *           can throw the SYS.* exceptions (exc_sys_throw(), called by k_error()) - QM4 Fixes 354.
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * and - are no longer global prefixes (the hyphen rule of 16 Oct, QM4 Fixes 217, is gone); the prefixes are $ ! and _.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): op_chkcat(): a name beginning with a hyphen is global, like the other prefixes (QM4 Fixes 217).
  * 29 Sep 26 RELEASE_1.1 114 - op_run() takes a runfile path up to
  *           MAX_PATHNAME_LEN, not MAX_PROGRAM_NAME_LEN (from Solo's SOLO 12)
@@ -333,7 +334,7 @@ void op_chkcat() {
     LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
     (void)map_t1_id(call_name, strlen(call_name), mapped_name);
 
-    if (strchr("*$_!-", call_name[0]) == NULL) { /* No prefix (16 Oct 26: the hyphen is one, QM4 Fixes 217) */
+    if (strchr("$_!", call_name[0]) == NULL) { /* No prefix (28 Oct 26, S.87: * and - are no longer prefixes) */
       /* Try local catalogue (mode 1) */
 
       /* Push arguments onto e-stack */
@@ -898,7 +899,7 @@ bool valid_call_name(char* p) {
      and NTFS would otherwise hide it by opening gcat case-blind.  Refusing it
      makes such a site fail loudly as an illegal call name.                   */
   char valid_chars[] = "abcdefghijklmnopqrstuvwxyz0123456789.%$-_";
-  char leading_chars[] = "*$!_";
+  char leading_chars[] = "$!_"; /* 28 Oct 26 dm S.87: no * prefix */
 
   /* !!CALLNAME!! */
 

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * and - are no longer global prefix characters (! $ and _ are).
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CATALOGUE.LOCAL is gone; CATALOG with no word catalogues privately, and LOCAL says local.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
 * 17 Oct 26 dm  S.64: cataloguing needs bp.edit (SDSYS passes); message 12413.
@@ -105,7 +106,7 @@ $define CAT_PCODE  3
    no.xref = @false              ;* Not seen NOXREF option
    catalogue.all = @false        ;* Not using * tolen
    using.list = @false           ;* Not using a select list
-   prefix.chars = "*!_$-"          ;* 16 Oct 26 dm - QM4 Fixes 217: the hyphen is a global prefix too
+   prefix.chars = "!_$"           ;* 28 Oct 26 dm - S.87: * and - are no longer global prefixes (the _ is kept: it names a recursive pcode program)
    leading.chars = "abcdefghijklmnopqrstuvwxyz0123456789"         ;* 14 Sep 26 stage 3a: call names are lower
    following.chars = "abcdefghijklmnopqrstuvwxyz0123456789.%$-_"
 

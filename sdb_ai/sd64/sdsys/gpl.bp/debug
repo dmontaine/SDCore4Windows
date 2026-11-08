@@ -1516,7 +1516,7 @@ display.variable:
 
    if var.dim then
       var.flags = var.info<4>
-      if var.info<1> # V$ARRAY and var.info<1> # V$PMATRIX then
+      if var.info<1> # V$ARRAY then
          message = sysmsg(6719) ;* Index not allowed with scalar variable
          gosub emit.err.msg
          return
@@ -1530,8 +1530,7 @@ display.variable:
             gosub emit.err.msg
             return
          end
-         if var.row > rows ~
-         or (var.row = 0 and (var.type = V$PMATRIX or bitand(var.flags, AH$PICK.STYLE))) then
+         if var.row > rows then
             message = sysmsg(6725) ;* Index out of range
             gosub emit.err.msg
             return
@@ -1628,12 +1627,12 @@ display.data.common:
 
       case var.type = V$ARRAY
          var.flags = var.info<4>
-         message := if bitand(var.flags, AH$PICK.STYLE) then 'Matrix: ' else 'Array: '
+         message := 'Array: '
          rows = var.info<2> + 0
          cols = var.info<3> + 0
          if cols then message := 'Dim (' : rows : ',' : cols :')'
          else message := 'Dim (' : rows :')'
-         array.offset = if bitand(var.flags, AH$PICK.STYLE) then 1 else 0
+         array.offset = 0
          array.name = var.name
 
       case var.type = V$COMMON
@@ -1653,15 +1652,6 @@ display.data.common:
             gosub show.np
             message := 'Select list (' : var.info<2> : ' bytes): "' : s : '"'
          end
-
-      case var.type = V$PMATRIX
-         message := 'Matrix: '
-         rows = var.info<2> + 0
-         cols = var.info<3> + 0
-         if cols then message := 'Dim (' : rows : ',' : cols :')'
-         else message := 'Dim (' : rows :')'
-         array.offset = 1
-         array.name = var.name
 
       case var.type = V$SOCK
          message := 'Socket: '
@@ -1766,7 +1756,7 @@ watch:
    var.info = dbg.info(1, var.no)
 
    if var.dim then
-      if var.info<1> # V$ARRAY and var.info<1> # V$PMATRIX then
+      if var.info<1> # V$ARRAY then
          message = sysmsg(6719) ;* Index not allowed with scalar variable
          gosub emit.err.msg
          return
@@ -1968,7 +1958,7 @@ setvar:
    if var.dim then
       var.flags = var.info<4>
 
-      if var.type # V$ARRAY and var.type # V$PMATRIX then ;* 0530
+      if var.type # V$ARRAY then ;* 0530
          message = sysmsg(6719) ;* Index not allowed with scalar variable
          gosub emit.err.msg
          return
@@ -1982,8 +1972,7 @@ setvar:
             gosub emit.err.msg
             return
          end
-         if var.row > rows ~
-         or (var.row = 0 and (var.type = V$PMATRIX or bitand(var.flags, AH$PICK.STYLE))) then
+         if var.row > rows then
             message = sysmsg(6725)  ;* Index out of range
             gosub emit.err.msg
             return

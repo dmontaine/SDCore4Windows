@@ -333,7 +333,7 @@ void op_rdnxint() {
 }
 
 Private void readnext(int16_t mode)
-/* 0 = Standard READNEXT, returns composite exploded data */
+/* (mode 0, composite exploded data, went with $MODE COMPOSITE.READNEXT on 27 Oct 26) */
 /* 1 = Standard READNEXT, returns id only */
 /* 2 = Extended READNEXT, returns id and  positional data */
 /* 3 = Extended READNEXT, Mode 2 + internal data */
@@ -470,7 +470,7 @@ Private void readnext(int16_t mode)
     status = 0; /* Take THEN clause */
   }
 
-  if (mode) {
+  { /* (this block was `if (mode)` while mode 0 existed) */
     descr = e_stack - 1;
     str = descr->data.str.saddr;
 

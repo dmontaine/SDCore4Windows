@@ -85,7 +85,6 @@ typedef struct ARRAY_CHUNK ARRAY_CHUNK;
 typedef struct ARRAY_HEADER ARRAY_HEADER;
 typedef struct SCREEN_IMAGE SCREEN_IMAGE;
 typedef struct BTREE_HEADER BTREE_HEADER;
-typedef struct PMATRIX_HEADER PMATRIX_HEADER;
 typedef struct SOCKVAR SOCKVAR;
 typedef struct OBJDATA OBJDATA;
 typedef struct COLL_HEADER COLL_HEADER;

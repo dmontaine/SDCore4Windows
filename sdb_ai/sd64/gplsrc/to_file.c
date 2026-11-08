@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): print mode 5 (the terminal's auxiliary printer port) is gone.
  * 25 Oct 26 Windows port - from Linux 27db277 (20 Oct 26): start_file(): the OS-access refusal (12185) names the account; it was printed with "%1" in it (sysmsg_arg1()).
  * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: start_file() asks about what is above the print file's own name only: a print file
  *               called x.dic or voc in an ordinary directory is a plain file, not a dictionary (edit_os_path_refusal include_leaf FALSE).
@@ -214,12 +215,6 @@ Private void start_file(PRINT_UNIT* pu) {
       goto open_file;
     }
 
-    if (pu->mode == PRINT_TO_AUX_PORT) {
-      sprintf(fn, "$hold%c__Aux%d.%d", DS, (int)process.user_no,
-              (int)(pu->unit));
-      goto open_file;
-    }
-
     /* If we get here, this is either PRINT_TO_FILE or PRINT_AND_HOLD */
 
     /* Modified by Composer AI - 2026/08/18.
@@ -337,10 +332,6 @@ Private void start_file(PRINT_UNIT* pu) {
    end_file()  -  End output to file                                      */
 
 void end_file(PRINT_UNIT* pu) {
-#define AUX_BUFF_SIZE 1024
-  char buffer[AUX_BUFF_SIZE];
-  int bytes;
-
   if (pu->buff != NULL) {
     print_footer(pu);
 
@@ -369,15 +360,6 @@ void end_file(PRINT_UNIT* pu) {
     pu->buff = NULL;
   }
 
-  if (pu->mode == PRINT_TO_AUX_PORT) {
-    tio_write(sdtgetstr("mc5"));
-    lseek(pu->file.fu, 0, SEEK_SET);
-    while ((bytes = read(pu->file.fu, buffer, AUX_BUFF_SIZE)) > 0) {
-      tio_display_string(buffer, bytes, TRUE, FALSE);
-    }
-    tio_write(sdtgetstr("mc4"));
-  }
-
   CloseFile(pu->file.fu);
   pu->file.fu = INVALID_FILE_HANDLE;
   pu->flags &= ~(PU_ACTIVE | PU_OUTPUT);
@@ -386,8 +368,6 @@ void end_file(PRINT_UNIT* pu) {
   if (pu->mode == PRINT_TO_PRINTER) /* 0527 Never happens on Windows */
   {
     spool_print_job(pu);
-    remove(pu->file.pathname);
-  } else if (pu->mode == PRINT_TO_AUX_PORT) {
     remove(pu->file.pathname);
   } else if (pu->mode == PRINT_AND_HOLD) {
     /* We have generated the file, now print it */

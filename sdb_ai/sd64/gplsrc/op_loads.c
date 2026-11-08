@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: the PMATRIX descriptor type is gone.
  * 27 Oct 26 dm  S.87 batch 16: OPTION UNASS.WARNING is gone; storing an unassigned variable is always an error.
  * * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -1040,8 +1041,6 @@ Private void set_descr(DESCRIPTOR* p, u_char type) {
       } while (a_hdr != NULL);
       break;
 
-    case PMATRIX:
-      break;
   }
 }
 
