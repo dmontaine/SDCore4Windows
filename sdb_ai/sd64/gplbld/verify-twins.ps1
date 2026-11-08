@@ -14,10 +14,11 @@
 #   A. a fresh file is NOCASE            - CREATE.FILE zztwn, then WRITE 'jack'
 #                                          and 'JACK'; LIST shows ONE record,
 #                                          stored 'jack' (the first spelling).
-#   B. CASE is refused for a normal user - CREATE.FILE zzx CASE, not internal,
-#                                          answers 10176 and makes no file.
-#   C. an OLD case-sensitive file with a - built only by sd -internal (the one
-#      twin is refused by CONFIGURE.FILE   way to make a CASE file); two records
+#   B. CASE and NO.CASE are not words   - CREATE.FILE zzx CASE and ... NO.CASE
+#      of CREATE.FILE (8 Nov 26)           each make no file.
+#   C. an OLD case-sensitive file with a - built only by sd -internal (a
+#      twin is refused by CONFIGURE.FILE   create.file statement with flags 4,
+#                                          program zztwfix); two records
 #                                          'jack'/'JACK' planted; CONFIGURE.FILE
 #                                          NO.CASE answers 10177 / ER$TWIN and
 #                                          the file is LEFT case sensitive with
@@ -41,6 +42,12 @@
 # BOUNDED: every SD session is a task in the SDSYS seat (sdsys-seat.ps1), killed
 # after the timeout; it plants only zztw* names in SDSYS and deletes them, and
 # asserts none is left.  ***SDSYS MUST BE SIGNED IN*** (RELEASE_1.1 76).
+#
+# 8 Nov 26 - from Linux 7de9f2c0 (S.87 batch 13 part 6): CREATE.FILE lost the
+# words CASE and NO.CASE.  Leg B now asserts both make no file, and the
+# case-sensitive fixtures of C and D are made by bp zztwfix, a create.file
+# statement with flags 4 run in the internal session, as Linux's sandbox-nocase
+# now does.  Not run since the change.
 
 $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'assert-current.ps1')
@@ -91,18 +98,42 @@ function HasRow([string]$text, [string]$id) {
     return ($text -cmatch ('(?m)^' + [regex]::Escape($id) + '(\s{2,}|\s*$)'))
 }
 
-$names = @('zztwn', 'zztwc', 'zztwk', 'zzx', 'zztwe')
+$names = @('zztwn', 'zztwc', 'zztwk', 'zzx', 'zztwe', 'zztwc.dic', 'zztwk.dic', 'bp\zztwfix', 'bp.out\zztwfix')
 function Cleanup {
     $null = Invoke-SD @(
         'DELETE.FILE zztwn FORCE', 'DELETE.FILE zztwc FORCE',
         'DELETE.FILE zztwk FORCE', 'DELETE.FILE zzx FORCE',
         'DELETE.FILE zztwe FORCE')
+    foreach ($p in @('bp\zztwfix', 'bp.out\zztwfix')) {
+        $full = Join-Path $sdsys $p
+        if (Test-Path -LiteralPath $full) { Remove-Item -LiteralPath $full -Force -Confirm:$false }
+    }
     $left = @()
     foreach ($n in $names) {
         if (Test-Path -LiteralPath (Join-Path $sdsys $n)) { $left += $n }
     }
     return $left
 }
+
+# 8 Nov 26 - the fixture builder for legs C and D (from Linux 7de9f2c0): zztwc
+# holds jack and JACK, zztwk holds jack only; each has a dictionary and a VOC
+# record.  Run in the internal session, the only one whose KEEPCASE (flags 4)
+# the kernel honours.
+$fixLines = @(
+    "   nm = 'zztwc':@fm:'zztwk'",
+    "   for i = 1 to 2",
+    "      create.file nm<i> dynamic flags 4 on error crt 'FIX create failed ':nm<i> ; stop",
+    "      create.file nm<i>:'.dic' dynamic flags 4 on error crt 'FIX create failed dict ':nm<i> ; stop",
+    "   next i",
+    "   openpath 'zztwc' to f else crt 'FIX no zztwc' ; stop",
+    "   write 'x' to f, 'jack' ; write 'y' to f, 'JACK'",
+    "   openpath 'zztwk' to f else crt 'FIX no zztwk' ; stop",
+    "   write 'x' to f, 'jack'",
+    "   open 'voc' to v else crt 'FIX no voc' ; stop",
+    "   write 'F':@fm:'zztwc':@fm:'zztwc.dic' to v, 'zztwc'",
+    "   write 'F':@fm:'zztwk':@fm:'zztwk.dic' to v, 'zztwk'",
+    "   crt 'FIX done'",
+    "end")
 
 # 20 Sep 26 - RELEASE_1.1 76: PROVE BOTH SEAT DOORS BEFORE PLANTING ANYTHING, so a
 # missing SDSYS session is exit 2 ("could not run"), not a thrown error at the
@@ -138,23 +169,30 @@ try {
     $storedUpper = HasRow $a 'JACK'
     Row 'A: the surviving id is the first spelling, jack (not JACK)' ($storedLower -and -not $storedUpper) "jack=$storedLower JACK=$storedUpper"
 
-    # ---- B. CASE is refused for a normal (non-internal) session -----------
+    # ---- B. CASE and NO.CASE are not words of CREATE.FILE (8 Nov 26) ------
+    # The session must have answered something: an empty reply would pass the
+    # no-file rows having measured nothing.
     $b = Invoke-SD @('CREATE.FILE zzx CASE')
-    $bRefused = ($b -match '10176' -or $b -match 'case insensitive in every file')
-    $bNoFile = -not (Test-Path -LiteralPath (Join-Path $sdsys 'zzx'))
-    Row 'B: CREATE.FILE ... CASE is refused outside internal mode (10176)' $bRefused
-    Row 'B: and no file was created' $bNoFile
+    Row 'B: the session answered CREATE.FILE ... CASE' ($b.Trim().Length -gt 0) 'empty reply'
+    Row 'B: CREATE.FILE ... CASE makes no file' (-not (Test-Path -LiteralPath (Join-Path $sdsys 'zzx'))) "$b"
+    $b2 = Invoke-SD @('CREATE.FILE zzx NO.CASE')
+    Row 'B: the session answered CREATE.FILE ... NO.CASE' ($b2.Trim().Length -gt 0) 'empty reply'
+    Row 'B: CREATE.FILE ... NO.CASE makes no file either' (-not (Test-Path -LiteralPath (Join-Path $sdsys 'zzx'))) "$b2"
 
     # ---- C. an old CASE file with a twin: CONFIGURE.FILE refuses ----------
-    # sd -internal is the only maker of a CASE file, and the whole fixture -
-    # create AND both COPY plants - is done in that ONE session, which then
-    # ends, so nothing holds zztwc when CONFIGURE.FILE (a separate session)
-    # asks for exclusive access.
+    # The internal session is the only maker of a CASE file, and the whole
+    # fixture - both files and their records - is made by bp zztwfix in that ONE
+    # session, which then ends, so nothing holds zztwc when CONFIGURE.FILE (a
+    # separate session) asks for exclusive access.
+    $fixSrc = Join-Path $sdsys 'bp\zztwfix'
+    Write-Output ("  fixture program: " + $fixSrc)
+    [System.IO.File]::WriteAllText($fixSrc, (($fixLines -join "`n") + "`n"), (New-Object System.Text.ASCIIEncoding))
     $mk = Invoke-SDInternal @(
-        'CREATE.FILE zztwc CASE',
-        'COPY FROM VOC TO zztwc who,jack OVERWRITING',
-        'COPY FROM VOC TO zztwc who,JACK OVERWRITING',
+        'BASIC bp zztwfix',
+        'RUN bp zztwfix',
         'COUNT zztwc')
+    Write-Output $mk
+    Row 'C-setup: bp zztwfix ran to its end (FIX done)' ($mk -match 'FIX done') "$mk"
     $caseMade = (Test-Path -LiteralPath (Join-Path $sdsys 'zztwc'))
     Row 'C-setup: sd -internal built a case-sensitive file' $caseMade
     $planted = Listed $mk
@@ -169,10 +207,7 @@ try {
     Row 'C: the file is LEFT AS IT WAS - both records survive, nothing lost' $stillTwo "COUNT said $(Listed $after)"
 
     # ---- D. control: a single-spelling CASE file converts cleanly ---------
-    $mk2 = Invoke-SDInternal @(
-        'CREATE.FILE zztwk CASE',
-        'COPY FROM VOC TO zztwk who,jack OVERWRITING',
-        'COUNT zztwk')
+    # zztwk was made by bp zztwfix in leg C's setup.
     if (Test-Path -LiteralPath (Join-Path $sdsys 'zztwk')) {
         $conf2 = Invoke-SD @('CONFIGURE.FILE zztwk NO.CASE', 'COUNT zztwk')
         $ok = ((Listed $conf2) -eq 1) -and ($conf2 -notmatch '10177')
