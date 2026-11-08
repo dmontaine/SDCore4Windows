@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): the modes OPEN.FAIL.ZERO.FVAR, PICK.READNEXT and EXECUTE.CLEARLIST are gone (bits 26, 27 and
+*               28 reserved); OPEN, READNEXT and EXECUTE compile as they did without them.
 * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): emit.errmsg.args (Pick style STOP / ABORT arguments, called by nothing since the
 *               ERRMSG family went in 2024) and the label st.stopm are gone.
 * 7 Nov 26 Windows port - from Linux 698fe22b (27 Oct 26, S.87 batch 3): second spellings and forms gone (the owner's emulation survey): the statements
@@ -200,9 +202,7 @@ $define M.HEADING.NO.EJECT     18
 $define M.NO.ECHO.DATA         19
 $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
 $define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
-$define M.OPEN.FAIL.ZERO.FVAR  26  ;* 14 Oct 26 dm - openQM 514: a failed OPEN sets the file variable to 0, not unassigned
-$define M.PICK.READNEXT        27  ;* 14 Oct 26 dm - openQM 418: READNEXT leaves the id variable alone when it takes ELSE
-$define M.EXECUTE.CLEARLIST    28  ;* 14 Oct 26 dm - openQM 521: EXECUTE clears list 0 first, unless PASSLIST is given
+* 27 Oct 26 dm - bits 26, 27 and 28 (OPEN.FAIL.ZERO.FVAR, PICK.READNEXT, EXECUTE.CLEARLIST) are retired (S.87 batch 9): the positions stay RESERVED, blank in mode.names
 $define M.PARTIAL.EXPRESSIONS  29  ;* 14 Oct 26 dm - openQM 417: AND and OR stop evaluating when the result is known
 $define M.WRITE.DELETE.THEN.ELSE 30  ;* openQM 368 / 496: WRITE, WRITEU, MATWRITE, MATWRITEU and DELETE take THEN / ELSE; ELSE is a trigger failure
 $define M.STDFIL               31  ;* 14 Oct 26 dm - openQM 17: the default file variable (per program; see stdfil.var.load)
@@ -254,9 +254,9 @@ mode.names := @VM                    ;* 22, retired 27 Oct 26 (was IMPLIED.STOP)
 mode.names := @VM:"STRICT.EQUATE"
 mode.names := @VM:"TIME.MS"
 mode.names := @VM                    ;* 25, retired 27 Oct 26 (was EXCEPTION.SAVE.STACK)
-mode.names := @VM:"OPEN.FAIL.ZERO.FVAR"
-mode.names := @VM:"PICK.READNEXT"
-mode.names := @VM:"EXECUTE.CLEARLIST"
+mode.names := @VM                    ;* 26, retired 27 Oct 26 (was OPEN.FAIL.ZERO.FVAR)
+mode.names := @VM                    ;* 27, retired 27 Oct 26 (was PICK.READNEXT)
+mode.names := @VM                    ;* 28, retired 27 Oct 26 (was EXECUTE.CLEARLIST)
 mode.names := @VM:"PARTIAL.EXPRESSIONS"
 mode.names := @VM:"WRITE.DELETE.THEN.ELSE"
 * STDFIL is bit 31 and is set by index: any name for bits 22 to 30 must be
@@ -9003,18 +9003,6 @@ st.execute.options:
       gosub show.code
     end
 
-   * 18 Oct 26 Windows port - from Linux 745ea42 (14 Oct 26): - openQM 521: $MODE EXECUTE.CLEARLIST clears the default select list before the command runs,
-   * unless a PASSLIST clause was given (the stack is as it was after the two instructions).  With STACKLIST the
-   * kernel clears it after keeping its copy (flag 0x80), or the copy would be of an empty list.
-   if bittest(mode, M.EXECUTE.CLEARLIST) and not(passlist.any) then
-      if bitand(execute.flags, 0x40) then
-         execute.flags = bitor(execute.flags, 0x80)
-      end else
-         n = 0 ; gosub emit.numeric.load
-         opcode.byte = OP.CLEARSEL ; gosub emit.simple
-      end
-   end
-
    opcode.byte = OP.EXECUTE ; gosub emit
    opcode.byte = execute.flags ; gosub emit
 
@@ -12009,12 +11997,6 @@ open.common:
       end case
    repeat
 
-   * 18 Oct 26 Windows port - from Linux 84580cc (14 Oct 26): - openQM 514: $MODE OPEN.FAIL.ZERO.FVAR, for OPEN and OPENPATH
-   if bittest(mode, M.OPEN.FAIL.ZERO.FVAR) then
-      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
-      code.value = 0x100 ; code.bytes = 2 ; gosub emit.multibyte.value
-   end
-
    if u.look.ahead.token.string # "TO" then
       if bittest(mode, M.STDFIL) then
          * $MODE STDFIL: OPEN name {READONLY} opens the default file variable
@@ -12897,12 +12879,6 @@ st.readnext:
    if default.sellist then
       opcode.byte = OP.SETFLAGS  ; gosub emit.simple
       code.value = 0x8000 ; code.bytes = 2 ; gosub emit.multibyte.value
-   end
-
-   * 18 Oct 26 Windows port - from Linux 0eac1f0 (14 Oct 26): - openQM 418: $MODE PICK.READNEXT, for the READNEXT forms that return an id only
-   if bittest(mode, M.PICK.READNEXT) and (opcode = OP.READNEXT or opcode = OP.RDNXPOS) then
-      opcode.byte = OP.SETFLAGS  ; gosub emit.simple
-      code.value = 0x200 ; code.bytes = 2 ; gosub emit.multibyte.value
    end
 
    * Perform common back-end processing

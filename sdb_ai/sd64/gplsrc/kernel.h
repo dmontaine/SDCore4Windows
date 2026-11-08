@@ -187,9 +187,8 @@ struct PROCESS {
 #define P_PICKREAD 0x0020 /* PICKREAD opcode executed */
 #define P_NON_TXN 0x0040  /* OPEN / OPENPATH ... NON.TRANSACTIONAL (openQM item 64) */
 #define P_TRAIL 0x0080    /* SUBSTRA is a trailing substring assignment, var[n] = expr (openQM item 41) */
-#define P_OPEN_ZERO 0x0100 /* OPEN / OPENPATH under $MODE OPEN.FAIL.ZERO.FVAR: a failed open sets the file variable to 0 (item 514) */
-#define P_SYNC 0x0200      /* OPEN / OPENPATH ... SYNC: forced writes (QM4 Fixes item 102).  The bit READNEXT uses for P_PICK_RDNX; never both */
-#define P_PICK_RDNX 0x0200 /* READNEXT under $MODE PICK.READNEXT: the id variable is left alone when the ELSE clause is taken (item 418) */
+/* 27 Oct 26 (S.87 batch 9): 0x0100 (OPEN.FAIL.ZERO.FVAR) and the READNEXT use of 0x0200 (PICK.READNEXT) are retired; the compiler no longer emits them. */
+#define P_SYNC 0x0200      /* OPEN / OPENPATH ... SYNC: forced writes (QM4 Fixes item 102) */
 #define P_THEN_ELSE 0x0400 /* WRITE / DELETE has a THEN / ELSE clause under $MODE WRITE.DELETE.THEN.ELSE: a trigger failure takes ELSE (openQM items 368, 496) */
 /* 0x0800 is Linux's P_TEMPFILE (OPENTEMP, held: it rests on the S.63 OS-access gate); left free so the values agree */
 #define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */

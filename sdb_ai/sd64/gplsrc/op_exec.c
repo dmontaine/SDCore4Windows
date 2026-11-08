@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE EXECUTE.CLEARLIST is gone; flag 0x80 of EXECUTE (clear list 0 after STACKLIST kept its copy) is no longer used.
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): $MODE STDFIL.SHARED (QM4 gap 225): EXECUTE saves and clears the $STDFIL common element, k_return() restores it
  * 14 Sep 26 Windows port - EXECUTE calls $cproc, lower case (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
@@ -269,14 +270,6 @@ void op_execute() {
       process.program.stacked_count = SelectCount(0)->data.value;
     }
     process.program.has_stacked = TRUE;
-
-    if (flags & 0x80) /* $MODE EXECUTE.CLEARLIST as well: the command starts with an empty list 0 */
-    {
-      k_release(list0);
-      InitDescr(list0, STRING);
-      list0->data.str.saddr = NULL;
-      SelectCount(0)->data.value = 0;
-    }
   }
 
   if (flags & 0x02) /* CAPTURING */

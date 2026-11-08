@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE OPEN.FAIL.ZERO.FVAR is gone; the file variable of a failed open stays as the open left it (unassigned).
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the comment about a name containing ';' no longer being a network file reference
  *           is gone with the code it described (_voc_ref no longer builds such a name).
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66), the shared account.  get_voc_file_reference() is a wrapper over get_voc_file_reference_ex(...,
@@ -1141,14 +1142,6 @@ exit_op_open:
   {
     if (fvar != NULL)
       dio_close(fvar);
-
-    /* 14 Oct 26 dm - $MODE OPEN.FAIL.ZERO.FVAR (openQM item 514): the file variable of a failed open is the
-       integer 0 rather than unassigned */
-    if (op_flags & P_OPEN_ZERO) {
-      k_release(fvar_descr);
-      InitDescr(fvar_descr, INTEGER);
-      fvar_descr->data.value = 0;
-    }
   }
 
   /* Set status code on stack */
