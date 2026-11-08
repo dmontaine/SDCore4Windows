@@ -572,7 +572,6 @@
       $define SYS$CLIENT_IP    42  ;*   Client IP address
       $define SYS$WIN_OS       91  ;*   Windows? (see also 1006)
       $define SYS$IS_CAPTURE  1000  ;*   CAPTURING in effect?
-      $define SYS$IS_INV_CASE 1001  ;*   Case inversion on?
       $define SYS$CALL_STACK  1002  ;*   Call stack
       $define SYS$OPEN_FILES  1003  ;*   Return list of open files
       $define SYS$PEAK_FILES  1004  ;*   Peak number of open files

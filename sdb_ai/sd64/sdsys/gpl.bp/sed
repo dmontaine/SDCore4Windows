@@ -18,7 +18,9 @@
 * 
 * 
 * START-HISTORY:
-* 27 Oct 26 dm S.87 batch 13: @sm for the removed @svm.
+* 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): case inversion is gone from SD; SED no longer turns it off or converts typed keys, and the
+*            NO.INVERT option word is no longer known.
+* 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): @sm for the removed @svm.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 12 Oct 26 dm  Revived from SD 2.6.6 (removed from SD earlier), lower case, for the drop-down
 *               menu bar that shows each action's keyboard shortcut.
@@ -389,8 +391,6 @@ $include sl.h
 
    source.control.active = -1     ;* Not yet checked
 
-   no.invert = @false
-   keyin.case.conversion = @false
    syn.on = @false                    ;* read by get.set.term.state; the syntax colour block below sets the rest
    gosub get.set.term.state
 
@@ -606,9 +606,6 @@ $include sl.h
                   case token = 'LNUM'
                      lnum.all = @true
 
-                  case token = 'NO.INVERT'
-                     no.invert = @true
-                     keyin.case.conversion = @false
 
                   case token = 'OVERLAY'
                      overlay = @true
@@ -4779,13 +4776,6 @@ get.set.term.state:
    * tty.modes = ""
    execute "PTERM BREAK OFF"
 
-   if pterm(PT$INVERT, -1) and not(no.invert) then
-      execute 'PTERM CASE NOINVERT'
-      keyin.case.conversion = @true
-      keyin.from = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-      keyin.to = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-   end
-
    * 13 Oct 26: the theme syntax colour uses is put back when the terminal comes back to this program
    if syn.on then call $sl_theme('set', (if syn.light then 'light' else 'dark'), '', '', '', syn.r)
 
@@ -4843,7 +4833,6 @@ parse.key:
                action = F.MENU
                return
             end
-            if keyin.case.conversion then convert keyin.from to keyin.to in c
          end else
             gosub getch
          end
@@ -4896,7 +4885,6 @@ key.found:
          loop
             gosub getch
             if c = '' then exit
-            if keyin.case.conversion then convert keyin.to to keyin.from in c     ;* (a report is not typing: M is M and m is m)
             mouse.end = c
             if c = 'M' or c = 'm' then exit
             mouse.seq := c
@@ -4988,7 +4976,6 @@ getch:
       pending.char = pending.char[2,999999]
    end else
       gosub wait.key
-      if keyin.case.conversion then convert keyin.from to keyin.to in c
    end
    return
 

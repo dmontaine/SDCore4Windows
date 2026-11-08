@@ -94,9 +94,8 @@ end
 * --------------------
 
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo passwd " : username
-*   Ask here rather than letting the OS ask.  PT$INVERT off around the reads.
-   was.inverted = pterm(PT$INVERT, @false)
-
+*   Ask here rather than letting the OS ask.
+* 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): the PT$INVERT save and restore around the reads are gone with case inversion.
    display 'New Windows password for ' : username : ': ' :
    input pw1 HIDDEN
    display
@@ -104,8 +103,6 @@ end
    display 'Repeat password: ' :
    input pw2 HIDDEN
    display
-
-   void pterm(PT$INVERT, was.inverted)
 
    if pw1 = '' or pw1 # pw2 then
       set.status 3

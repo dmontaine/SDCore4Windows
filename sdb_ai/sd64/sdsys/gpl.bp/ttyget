@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): field 2 (case inversion) is always 0.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-7 (TTYGET).  The compiler (bcomp, builtin.functions.load) knows it by name.
 * END-HISTORY
 *
@@ -27,7 +28,7 @@
 * The terminal modes PTERM sets, as a field mark delimited array that TTYSET puts back.  Fields 1 to 5 are the manual's:
 *
 *     1  Is Ctrl-C treated as the break key?  (PTERM BREAK ON or OFF)            1 or 0
-*     2  Is case inversion on?  (PTERM CASE INVERT or NOINVERT)                   1 or 0
+*     2  Was case inversion on?  (removed 27 Oct 26: always 0, so the other fields keep their places)
 *     3  The break character, as a number: 3 for Ctrl-C  (PTERM BREAK n)
 *     4  The output newline sequence  (PTERM NEWLINE)                              the characters
 *     5  The input return key  (PTERM RETURN)                                      its character code
@@ -50,7 +51,7 @@ $include int$keys.h
 
    t = ''
    t<1> = (pterm(PT$BREAK, -1) # 0)
-   t<2> = (pterm(PT$INVERT, -1) # 0)
+   t<2> = 0                                  ;* was case inversion (removed 27 Oct 26); the positions of the other fields hold
    t<3> = pterm(PT$BRKCH, 0)
    t<4> = pterm(PT$ONEWLINE, '')
    s = pterm(PT$INEWLINE, '')

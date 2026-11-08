@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm S.87 batch 14: PTERM CASE INVERT / NOINVERT and the case inversion line of PTERM DISPLAY are gone.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -31,8 +32,6 @@
 *   PTERM BREAK ON         Enable break key
 *   PTERM BREAK c          Set break character
 *
-*   PTERM CASE INVERT      Enable case inversion
-*   PTERM CASE NOINVERT    Disable case inversion
 *   PTERM MARK ON          Typed ctrl-\ ctrl-] ctrl-^ become subvalue, value, field marks
 *   PTERM MARK OFF         ...and do not (the start-up state)
 *   PTERM MARK             Show which
@@ -90,9 +89,6 @@ $include syscom.h
             * Break trapping
             c = char(pterm(PT$BRKCH, 0) + 64)
             print if pterm(PT$BREAK, -1) then sysmsg(6830,c) else sysmsg(6831,c)
-
-            * Case inversion
-            print if pterm(PT$INVERT, -1) then sysmsg(6832) else sysmsg(6833)
 
             * Mark translation (12 Oct 26 dm, openQM 155)
             print if pterm(PT$MARK, -1) then sysmsg(12113) else sysmsg(12114)
@@ -199,20 +195,6 @@ $include syscom.h
                
                case 1
                   display sysmsg(2029, token) ;* Unrecognised option (xx)
-                  return
-            end case
-
-         case keyword = KW$CASE
-            call @parser(parser$get.token, token.type, token, keyword)
-            begin case
-               case keyword = KW$INVERT
-                  i = pterm(PT$INVERT, @true)
-
-               case keyword = KW$NOINVERT
-                  i = pterm(PT$INVERT, @false)
-
-               case 1
-                  display sysmsg(6842) ;* INVERT or NOINVERT required
                   return
             end case
 

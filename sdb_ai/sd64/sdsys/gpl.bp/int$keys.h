@@ -68,7 +68,6 @@
       $define IN$APPEND          0x00008000  ;* Append (used with IN$EDIT)
       $define IN$PANNING         0x00010000  ;* Panning input field
       $define IN$NO.ECHO.DATA    0x00020000  ;* Supress echo on input from DATA statements.
-      $define IN$NO.CASE.INVERT  0x00040000  ;* Disable PTERM CASE inversion for the input session
       $define IN$NO.ECHO         0x00080000  ;* NO.ECHO: no echo of typed characters (14 Oct 26, openQM 168)
       $define IN$IF              0x00100000  ;* INPUTIF: only if input is waiting (14 Oct 26, openQM 584)
       $define IN$FILL            0x00400000  ;* a fill string was given (K$INPUT.FILL.SET): fill the field with it (openQM 389)
@@ -262,7 +261,6 @@
 
       * PTERM() action keys
       $define PT$BREAK           1       ;* Trap break character as break?
-      $define PT$INVERT          2       ;* Case inversion
       $define PT$BRKCH           3       ;* Set break character
       $define PT$ONEWLINE        4       ;* Set output newline mode
       $define PT$INEWLINE        5       ;* Set input newline mode

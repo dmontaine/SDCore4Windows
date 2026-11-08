@@ -18,6 +18,7 @@
 	  * 
 	  * 
 	  * START-HISTORY:
+	  * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): INPUT ... NOCASEINVERT and the PTERM CASE save and restore are gone with case inversion.
 	  * 18 Oct 26 Windows port - from Linux 5f02bae (12 Oct 26): PTERM ERASE names the erase key (or none) and PTERM CTRL.FILTER discards
 	  *           control characters (openQM 253).
 	  * 22 Aug 26 Windows port - the erase is char(8), not @(IT$CUB).  cub1 came
@@ -58,7 +59,6 @@
       *   IN$TIMEOUT         Timeout supplied (else timeout value is 0 from kernel)
       *   IN$THENELSE        THEN/ELSE present - return status on stack
       *   IN$NO.ECHO.DATA    Supress character echo of input source is DATA
-      *   IN$NO.CASE.INVERT  Suppress case inversion regardless of PTERM status
 
       $include syscom.h
       $include int$keys.h
@@ -79,19 +79,6 @@
       raw = bitand(flags, IN$RAW)               ;* 14 Oct 26 dm - openQM 548, INPUT ... RAW (the compiler insists on a length)
       no.echo = bitand(flags, IN$NO.ECHO)       ;* 14 Oct 26 dm - openQM 168: no echo of typed characters;
                                                 ;* the new line at the end of the entry is still echoed
-      no.case.invert = bitand(flags, IN$NO.CASE.INVERT)
-
-      if pterm(PT$INVERT, -1) then
-         original.case.inversion = 1
-      end else
-         original.case.inversion = 0
-      end
-      if no.case.invert then
-         if original.case.inversion = 1 then
-            i = pterm(PT$INVERT, @false)
-         end
-      end
-      
       c = terminfo('kbs')    ;* 0402
 
 *     22 Aug 26 Windows port - BOTH ERASE BYTES, for the reason _KEYCODE gives.
@@ -279,16 +266,6 @@
       * Unless we timed out the input, update the caller's variable
 
       if then.else.flag then string.arg = string
-
-      * Restore the PTERM CASE inversion mode
-
-      if no.case.invert then
-         if original.case.inversion = 1 then
-            i = pterm(PT$INVERT, @true)
-         end else
-            i = pterm(PT$INVERT, @false)
-         end
-      end
 
       * If we have a THEN/ELSE clause, we need to leave a status on the stack
 

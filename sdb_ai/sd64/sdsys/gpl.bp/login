@@ -613,12 +613,13 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   "input" sites in gpl.bp upcase or fold their answer before comparing it;
 *   keyin() and keycode() were never inverted.  The C default is off as well
 *   (linuxio.c), so a session is not inverted before LOGIN runs either.
-*   PTERM CASE INVERT still turns it on for a user who wants it.
 *   MEASURED BEFORE THE REMOVAL, ON THE INSTALL THAT HAD THIS LINE: PTERM
 *   DISPLAY read "Case inversion: Off" piped, under sd -internal, and in an
 *   interactive session whose lower-case typing echoed lower.  On Windows the
 *   flag was already not in effect (cause untraced), so this removes a setting
 *   that did nothing rather than changing what anyone sees.
+*   8 Nov 26 (from Linux cf405b48, S.87 batch 14): case inversion has since been
+*   removed from SD altogether - PTERM CASE, INPUT ... NOCASEINVERT, INVCASE.
 
    * Determine account
 * 20240330 mab we no longer support forced accounts from $LOGINS

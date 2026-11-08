@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): SYSTEM(1001), case inversion on?, is no longer a key.
  * 25 Oct 26 Windows port - from Linux 2287a0a (18 Oct 26): SYSTEM(1057) tested the parent's user NUMBER against max_users, the count of user table
  *           cells; user numbers run to hi_user_no (USERPOOL), so a phantom whose parent had number 694 on 20 cells was told "no parent".
  * 17 Aug 26  SYSTEM(91) "Windows?" answers 1, not 0
@@ -58,7 +59,6 @@
  *    42   Client IP address
  *    91   Windows? (see also 1006)
  *  1000   CAPTURING in effect?
- *  1001   Case inversion on?
  *  1002   Call stack
  *  1003   Return list of open files
  *  1004   Peak number of open files
@@ -308,10 +308,6 @@ void op_system() {
 
     case 1000: /* CAPTURING in effect? */
       descr->data.value = capturing;
-      break;
-
-    case 1001: /* Case inversion on? */
-      descr->data.value = case_inversion;
       break;
 
     case 1002: /* Call stack */

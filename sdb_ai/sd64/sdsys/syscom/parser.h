@@ -125,8 +125,6 @@ $define KW$WHEN           109
 $define KW$PROMPT         110
 $define KW$BREAK          111
 $define KW$CASE           112
-$define KW$INVERT         113
-$define KW$NOINVERT       114
 $define KW$DISPLAY        115
 $define KW$STATISTICS     116
 $define KW$INFORM         117

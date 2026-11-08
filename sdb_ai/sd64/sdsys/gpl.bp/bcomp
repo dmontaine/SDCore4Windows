@@ -10503,7 +10503,7 @@ st.input.common:
       end
 
 * NJS use @VM
-      reserved.names<2> = "APPEND":@VM:"EDIT":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"OVERLAY":@VM:"PANNING":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"   ;* 27 Oct 26 dm - FOR and TIMEOUT (second spellings of WAITING) removed
+      reserved.names<2> = "APPEND":@VM:"EDIT":@VM:"HIDDEN":@VM:"NO.ECHO":@VM:"OVERLAY":@VM:"PANNING":@VM:"UPCASE":@VM:"WAITING"   ;* 27 Oct 26 dm - FOR and TIMEOUT (second spellings of WAITING) and NOCASEINVERT removed
 
       * Check for mask
 
@@ -10550,9 +10550,6 @@ st.input.common:
             case u.look.ahead.token.string = 'UPCASE'
                gosub get.token
                input.flags = bitor(input.flags, IN$UPCASE)
-            case u.look.ahead.token.string = 'NOCASEINVERT'
-               gosub get.token
-               input.flags = bitor(input.flags, IN$NO.CASE.INVERT)
 
             case 1
                exit
@@ -10567,7 +10564,7 @@ st.input.common:
       if err then return
 
   * NJS use @vm
-      reserved.names<2> = "HIDDEN":@VM:"NO.ECHO":@VM:"RAW":@VM:"UPCASE":@VM:"WAITING":@VM:"NOCASEINVERT"   ;* 27 Oct 26 dm - FOR and TIMEOUT removed
+      reserved.names<2> = "HIDDEN":@VM:"NO.ECHO":@VM:"RAW":@VM:"UPCASE":@VM:"WAITING"   ;* 27 Oct 26 dm - FOR, TIMEOUT and NOCASEINVERT removed
 
       * Emit maximum input string length
 
@@ -10626,9 +10623,6 @@ st.input.common:
                gosub get.token
                input.flags = bitor(input.flags, IN$TIMEOUT)
                gosub expr
-            case u.look.ahead.token.string = 'NOCASEINVERT'
-               gosub get.token
-               input.flags = bitor(input.flags, IN$NO.CASE.INVERT)
 
             case 1
                exit

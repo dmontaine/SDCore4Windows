@@ -15,7 +15,7 @@
 #               startup process's @TTY (91) and the call-name limit (241).  Rows that need a parameter in sd.conf
 #               stop the sandbox, rewrite the config below a marker line, start it again and say whether SD started.
 # 11 Oct 26 dm  Written for 1.2-0 bundle B-1: the INTPREC default 11 (6), SORTMEM default 4096 kb (535), the new
-#               INVCASE parameter (399) and `sd -status` (511).
+#               (the INVCASE parameter, 399, was removed 27 Oct 26) and `sd -status` (511).
 # END-HISTORY
 #
 # THE INSTRUMENT IS THE VALUE A BASIC PROGRAM PRINTED between brackets (CONFIG() reads), and, for -status, the
@@ -47,7 +47,6 @@ CASES = [
     ("CONTROL: FSYNC, an existing parameter, reads its default", "x = config('FSYNC')", "0"),
     ("6: INTPREC defaults to 11", "x = config('INTPREC')", "11"),
     ("535: SORTMEM defaults to 4096 (kb)", "x = config('SORTMEM')", "4096"),
-    ("399: INVCASE exists and defaults to 0", "x = config('INVCASE')", "0"),
     ("46: LGNWAIT defaults to 0 (no wait)", "x = config('LGNWAIT')", "0"),
     ("90: DHCACHE defaults to 10, the number that was fixed before", "x = config('DHCACHE')", "10"),
     ("106: PWDELAY defaults to 3 seconds", "x = config('PWDELAY')", "3"),

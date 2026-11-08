@@ -1029,21 +1029,9 @@ end
     Write-Output '  --- CT VOC said: ---'
     Write-Output $ct10
 
-    # 10b. CASE INVERSION - A CONTROL HERE, NOT THE WITNESS.  LOGIN turned it on
-    # at every login and linuxio.c at session start; the owner ruled both off.
-    # ***NOTHING CAN TELL THE OLD CODE FROM THE NEW***: measured 14 Sep 2026 on
-    # the install that still had both, inversion read Off piped, under
-    # sd -internal, and interactively (the owner) - on Windows it was already not
-    # in effect, cause untraced.  verify-createfilecase.ps1 holds the -internal
-    # reading as a regression guard.  What this section can still hold is that PTERM itself reports and
-    # sets the flag: Off, then On after PTERM CASE INVERT (sysmsg 6833 / 6832),
-    # then NOINVERT so the session ends as it began.
-    $pt10 = Invoke-SD @('PTERM DISPLAY', 'PTERM CASE INVERT', 'PTERM DISPLAY', 'PTERM CASE NOINVERT')
-    $readings = @([regex]::Matches($pt10, 'Case inversion: (On|Off)') | ForEach-Object { $_.Groups[1].Value })
-    Write-Output ('  PTERM DISPLAY readings, in order: ' + ($readings -join ', '))
-    Note 'PTERM DISPLAY was read twice'                          2     $readings.Count
-    Note 'control: a piped session reads case inversion Off'     'Off' $(if ($readings.Count -ge 1) { $readings[0] } else { '(none)' })
-    Note 'control: PTERM CASE INVERT then reads On'              'On'  $(if ($readings.Count -ge 2) { $readings[1] } else { '(none)' })
+    # 10b. CASE INVERSION - RETIRED 8 Nov 26.  It held that PTERM reported and set
+    # the inversion flag (PTERM CASE INVERT / NOINVERT); case inversion itself was
+    # removed from SD with S.87 batch 14 (Linux cf405b48), PTERM CASE with it.
 
     # 10c. THE SYSCOM INCLUDE RECORDS ARE LOWER CASE ON DISK.  Exact-case listing,
     # the section 2 instrument (Test-Path would match either).  Every shipped name

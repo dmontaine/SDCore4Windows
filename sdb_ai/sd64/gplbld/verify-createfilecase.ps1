@@ -232,10 +232,14 @@ try {
     if (-not $ptDone) { try { $pp.Kill() } catch { } }
     Write-Output '  --- sd -internal PTERM DISPLAY said: ---'
     Write-Output $ptText
+    # 8 Nov 26 - from Linux cf405b48 (S.87 batch 14): case inversion is removed
+    # from SD, and PTERM DISPLAY's "Case inversion" line with it.  The leg now
+    # holds that removal: the session ran and answered (the null case refused),
+    # and no case inversion line is printed.
     $ptRead = @([regex]::Matches("$ptText", 'Case inversion: (On|Off)') | ForEach-Object { $_.Groups[1].Value })
     Row $ptDone 'sd -internal PTERM DISPLAY finished within 60 s'
-    Row ($ptRead.Count -eq 1) 'PTERM DISPLAY printed exactly one case inversion line' ("got " + $ptRead.Count)
-    Row (($ptRead.Count -eq 1) -and ($ptRead[0] -eq 'Off')) 'a session LOGIN has set up reports case inversion Off' ($ptRead -join ',')
+    Row ("$ptText".Trim().Length -gt 0) 'and PTERM DISPLAY printed something (a silent session measures nothing)' 'empty output'
+    Row ($ptRead.Count -eq 0) 'PTERM DISPLAY prints no case inversion line (case inversion was removed, S.87 batch 14)' ("got " + ($ptRead -join ','))
 }
 finally {
     Write-Output ''

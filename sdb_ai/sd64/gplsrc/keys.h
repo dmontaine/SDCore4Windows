@@ -547,7 +547,7 @@
 
 /* PTERM() function action keys */
 #define PT_BREAK              1
-#define PT_INVERT             2
+/* 2 was PT_INVERT (case inversion, removed 27 Oct 26, S.87): the number stays reserved. */
 #define PT_BRKCH              3
 #define PT_ONEWLINE           4
 #define PT_INEWLINE           5

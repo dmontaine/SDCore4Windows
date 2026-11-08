@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): field 2 (case inversion) is ignored.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-7 (TTYSET).  The compiler (bcomp, st.ttyset) calls it for TTYSET settings.
 * END-HISTORY
 *
@@ -38,7 +39,7 @@ $catalog !ttyset
 $include int$keys.h
 
    v = settings<1> ; if v # '' then i = pterm(PT$BREAK, (v # 0))
-   v = settings<2> ; if v # '' then i = pterm(PT$INVERT, (v # 0))
+   * settings<2> was case inversion (removed 27 Oct 26, S.87 batch 14): TTYGET still leaves a 0 there so the positions hold, and it is ignored
    v = settings<3> ; if v # '' and v # 0 then i = pterm(PT$BRKCH, v)
    v = settings<4> ; if v # '' then i = pterm(PT$ONEWLINE, v)
    v = settings<5> ; if v # '' then i = pterm(PT$INEWLINE, char(v))
