@@ -14,6 +14,9 @@
 #   V3  the walk over the other accounts clears it (= 0) before ITS `gosub update.voc`, so a registered account never reads VOC_TEMPLATE
 #   V4  update.voc names its source: "newvoc" first, "voc_template" only under the flag, and opens `@sdsys:@ds:upd.source`
 #   V5  there are exactly two `gosub update.voc` and the flag is assigned before each (an unassigned variable stops the sign-on)
+#   V6  a refused write ends the ACCOUNT's update, not the command (26 Oct 26, witness-release-run.sh V10): `on error`, upd.denied, the lock released, exit; nothing more written in that account;
+#       both callers say 12988; the walk counts the account as denied, not updated; 12989 follows the count
+#   V7  messages 12988 and 12989 exist, say what they must, and are under the message limit
 import os
 import re
 import sys
@@ -28,6 +31,12 @@ TEMPLATE = os.environ.get("TEMPLATE_TG", os.path.join(SD64, "sdsys", "voc_templa
 def read(p):
     with open(p, encoding="latin-1") as f:
         return f.read()
+
+
+def MSG(n):
+    """the text of message n in sdsys/messages, without its line end ('' when there is no such file)"""
+    p = os.path.join(os.environ.get("MSGDIR", os.path.join(SD64, "sdsys", "messages")), n)
+    return read(p).rstrip("\n") if os.path.isfile(p) else ""
 
 
 def code_lines(text):
@@ -65,6 +74,31 @@ def checks(login, tg_new, tg_tpl):
 
     row("V5 exactly two `gosub update.voc`, each after an assignment of the flag (%s sets, %s gosubs)" % (len(sets), len(gosubs)),
         len(gosubs) == 2 and len(sets) == 2 and sets[0] < gosubs[0] < sets[1] < gosubs[1], "sets %s gosubs %s" % (sets, gosubs))
+
+    # V6 (26 Oct 26, found on a real install by witness-release-run.sh V10): an UPDATE.ACCOUNTS ALL run by SDSYS cannot write the VOC of a user account that has not switched sdsys on (F6), and the
+    # first refused write stopped the whole command with error 3018 and lost the count.  A refused write now ends that ACCOUNT's update, the caller says why (12988), the walk goes on and the number
+    # left alone (12989) follows the count (10171).
+    uv = [i for i, l in code_lines(login) if l.strip() == "update.voc:"]
+    init = [i for i, l in code_lines(login) if re.match(r"\s*upd\.denied = 0\b", l)]
+    wr = [i for i, l in code_lines(login) if l.strip() == "write rec to update.voc.f, id on error upd.wrote = @false"]
+    body = "\n".join(lines[wr[0]:wr[0] + 12]) if wr else ""
+    guard = [i for i, l in code_lines(login) if l.strip().startswith("if upd.denied then return")]
+    mods = [i for i, l in code_lines(login) if l.strip() == 'openpath @sdsys:@ds:"newvoc.mods" to mods.f then']
+    own = [i for i, l in code_lines(login) if l.strip() == "if upd.denied then display sysmsg(12988, @path : @ds : 'voc')"]
+    walk = "\n".join(lines[gosubs[1]:gosubs[1] + 12]) if len(gosubs) == 2 else ""
+    summ = [i for i, l in code_lines(login) if l.strip().startswith("if acc.denied then display sysmsg(12989, acc.denied)")]
+    ok6 = (len(uv) == 1 and len(init) == 1 and uv[0] < init[0] < (wr[0] if wr else -1)
+           and re.search(r"upd\.denied = 1\s*\n\s*release update\.voc\.f, id\s*\n\s*exit\b", body) is not None
+           and len(guard) == 1 and len(mods) == 1 and wr and wr[0] < guard[0] < mods[0]
+           and len(own) == 1 and "if upd.denied then" in walk and "sysmsg(12988, s)" in walk and "acc.denied += 1" in walk and "acc.updated += 1" in walk
+           and re.search(r"acc\.denied \+= 1\s*\n\s*end else\s*\n\s*acc\.updated \+= 1\s*\n\s*end", walk) is not None and len(summ) == 1)
+    row("V6 a refused write ends the account's update and not the command: upd.denied starts 0 (%s), the write has an on error (%s) and then upd.denied, release and exit, the return guard (%s) is before the newvoc.mods "
+        "writes (%s), both callers say 12988, the walk counts the account as denied and not updated, and 12989 follows the count (%s)" % (init and init[0] + 1, wr and wr[0] + 1, guard and guard[0] + 1, mods and mods[0] + 1, summ and summ[0] + 1),
+        ok6, "init %s write %s guard %s mods %s own %s summary %s body %r" % (init, wr, guard, mods, own, summ, body[:160]))
+    m1, m2 = MSG("12988"), MSG("12989")
+    # 7 Nov 26 Windows port: 12988 (Linux 11983) does not name 'sdsys-on' here - that is Linux's S.103 (the sdsys user's group), not on Windows.
+    row("V7 messages 12988 (names the account's VOC and the upgrade) and 12989 (a count) exist and are under the 231-character limit (%d, %d)" % (len(m1), len(m2)),
+        "%1" in m1 and "VOC" in m1 and "installer" in m1 and "sdsys-on" not in m1 and "%1" in m2 and 0 < len(m1) < 231 and 0 < len(m2) < 231, "%r %r" % (m1[:60], m2[:60]))
     return rows
 
 
@@ -125,6 +159,19 @@ def selftest():
     mutant("source-always-template", "V4", lambda s: s.replace('upd.source = "newvoc"\n', 'upd.source = "voc_template"\n', 1))
     mutant("opens-newvoc-directly", "V4", lambda s: s.replace("openpath @sdsys:@ds:upd.source to sdsys.file else", 'openpath @sdsys:@ds:"newvoc" to sdsys.file else', 1))
     mutant("third-gosub", "V5", lambda s: s.replace("      ok = @true\n      return\n   end\n", "      gosub update.voc\n      ok = @true\n      return\n   end\n", 1))
+    # V6 (26 Oct 26): a refused write must end the account's update, not the command
+    W = "            write rec to update.voc.f, id on error upd.wrote = @false\n"
+    mutant("write-without-on-error", "V6", lambda s: s.replace("write rec to update.voc.f, id on error upd.wrote = @false", "write rec to update.voc.f, id", 1))
+    mutant("denied-not-set", "V6", lambda s: s.replace("               upd.denied = 1\n", "", 1))
+    mutant("lock-not-released", "V6", lambda s: s.replace("               upd.denied = 1\n               release update.voc.f, id\n", "               upd.denied = 1\n", 1))
+    mutant("loop-goes-on-after-a-refusal", "V6", lambda s: s.replace("               release update.voc.f, id\n               exit\n", "               release update.voc.f, id\n", 1))
+    mutant("mods-written-after-a-refusal", "V6", lambda s: re.sub(r"\n   if upd\.denied then return[^\n]*\n", "\n", s, count=1))
+    mutant("denied-never-reset", "V6", lambda s: re.sub(r"\n   upd\.denied = 0[^\n]*\n", "\n", s, count=1))
+    mutant("walk-counts-a-denied-account-as-updated", "V6", lambda s: s.replace("                              acc.denied += 1\n                           end else\n                              acc.updated += 1\n                           end",
+                                                                               "                              acc.denied += 1\n                           end\n                           acc.updated += 1", 1))
+    mutant("walk-does-not-say-why", "V6", lambda s: s.replace("                              display sysmsg(12988, s)\n", "", 1))
+    mutant("own-account-does-not-say-why", "V6", lambda s: s.replace("         if upd.denied then display sysmsg(12988, @path : @ds : 'voc')\n", "", 1))
+    mutant("summary-gone", "V6", lambda s: re.sub(r"\n               if acc\.denied then display sysmsg\(12989, acc\.denied\)[^\n]*", "", s, count=1))
     mutant("premise-gone-newvoc", "V1", lambda s: s.replace("$tool_mygates", "$tool_gates"), which="new")
     mutant("premise-gone-template", "V1", lambda s: s.replace("$tool_gates", "$tool_mygates"), which="tpl")
     print("selftest: %d of %d mutants caught, %d missed" % (caught, caught + missed, missed))

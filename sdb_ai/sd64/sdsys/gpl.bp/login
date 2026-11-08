@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 69533c53 (26 Oct 26): a VOC write UPDATE.ACCOUNTS may not make ends that account's update, not the command
+*           (12988 names the account, 12989 counts those left as they were; update.voc sets upd.denied).
 * 26 Oct 26 Windows port - from Linux 6dc0e3e: UPDATE.ACCOUNTS (modes 2 and 4) updates the SDSYS account's own VOC from VOC_TEMPLATE, not NEWVOC (tool.gates is the
 *           administrator's page in one and the holder's page in the other).
 * 25 Oct 26 Windows port - from Linux fa1cd4c (18 Oct 26): the size a session with no tty takes is DEFAULT.WIDTH by DEFAULT.DEPTH, now 140 by 42 (int$keys.h), and the
@@ -370,6 +372,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   wrote the holder's page over the administrator's.
          update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))
          gosub update.voc
+         if upd.denied then display sysmsg(12988, @path : @ds : 'voc')
          close update.voc.f
       end
 
@@ -407,6 +410,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   where an account's VOC was actually WRITTEN, not where a register record
 *   was read.
             acc.updated = 0
+            acc.denied = 0
             voc.paths = @path
             openpath @sdsys:@ds:'accounts' to acc.f then
                select acc.f to 12
@@ -436,13 +440,19 @@ deffun pw_complex(pw) calling '!pw_complex'
                            gosub update.voc
                            close update.voc.f
                            voc.paths<-1> = acc.path
-                           acc.updated += 1
+                           if upd.denied then
+                              display sysmsg(12988, s)
+                              acc.denied += 1
+                           end else
+                              acc.updated += 1
+                           end
                         end
                      end
                   end
                repeat
                close acc.f
                display sysmsg(10171, acc.updated) ;* xx account(s) had their VOC updated
+               if acc.denied then display sysmsg(12989, acc.denied) ;* xx account(s) were left as they were
             end else
                display sysmsg(2200) ;* Cannot open accounts register
             end
@@ -1736,6 +1746,7 @@ batch.permitted:
 
 update.voc:
    yn = ''
+   upd.denied = 0                 ;* 7 Nov 26 (Linux 69533c53) - set when a write is refused (the session may not write this account's VOC); the callers say so and go on to the next account
 
 * 02 Sep 26 Windows port - PRE_RELEASE_FIXES 70.  The tally for the lock below.
 *   IT IS REPORTED WHETHER OR NOT ANYTHING ELSE HAPPENED: a site owns the
@@ -1982,9 +1993,20 @@ accept.without.query:
 *        is written under the new id and the old one deleted, even when the
 *        contents already match - the rename IS the change.
          if compare(old.rec, rec) or old.id # id then
-            write rec to update.voc.f, id
-            if old.id # id then delete update.voc.f, old.id
-            display '.' :
+* 7 Nov 26 Windows port - from Linux 69533c53 (26 Oct 26): A REFUSED WRITE ENDS THIS ACCOUNT'S UPDATE, NOT THE COMMAND.  A write the session may not
+*   make (an account folder whose ACL does not let this session write its VOC) used to stop the whole UPDATE.ACCOUNTS with "Error 3018 ... (Possible
+*   full disk?)" and the other accounts and the count were lost.  Now the account is left as it was, the caller says why (12988), the walk goes on and
+*   the count (10171) and the number left alone (12989) are printed.  The old upper-case id is deleted only after the new one is written.
+            upd.wrote = @true
+            write rec to update.voc.f, id on error upd.wrote = @false
+            if upd.wrote then
+               if old.id # id then delete update.voc.f, old.id
+               display '.' :
+            end else
+               upd.denied = 1
+               release update.voc.f, id
+               exit
+            end
          end else
             release update.voc.f, id
          end
@@ -2012,6 +2034,8 @@ accept.without.query:
    close sdsys.file
 *  18 Sep 26 Windows port - RELEASE_1.1 64: no tier.policy is opened in this
 *  routine any more, so there is nothing to close here.
+
+   if upd.denied then return      ;* 7 Nov 26 (Linux 69533c53) - the account could not be written: nothing more is tried in it (newvoc.mods included)
 
 * 18 Oct 26 Windows port - from Linux 0cbb8b9 (12 Oct 26): - openQM 501.  An optional SDSYS file, newvoc.mods, holds the administrator's changes to the standard
 *   VOC (a verb withdrawn, a Q-pointer to a shared file, a paragraph for every account).  Each record in it is written to
