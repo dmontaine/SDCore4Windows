@@ -71,7 +71,7 @@ CASES = [
     ("265 FORMLIST of data delimited with value marks does not end the program",
      "formlist 'a':@vm:'b' to 5\nx = 'ok'", "ok"),
     ("259 CONTROL: SEEK 0 from the start",
-     "openseq 'zzb9.txt' to f then null else null\nweofseq f\nwriteseq 'hello world' to f else null\ncloseseq f\n"
+     "openseq 'zzb9.txt' to f then null else null\nweofseq f\nwriteseq 'hello world' to f else null\nclose f\n"
      "openseq 'zzb9.txt' to f else null\nseek f, 0, 0 then x = 'ok' else x = 'err'", "ok"),
     ("259 THE ROW: SEEK -3 from the end (it gave error 3028) reads the last bytes",
      "openseq 'zzb9.txt' to f else null\nseek f, -3, 2 then ok = 1 else ok = 0\nreadseq a from f else a = 'none'\nx = ok:'/':a",

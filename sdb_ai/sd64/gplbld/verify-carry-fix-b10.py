@@ -192,8 +192,13 @@ def main():
             # 28 Oct 26, S.87: the ADDS terminal definitions were removed, so the entry that carried xmc#1 is absent on purpose
             row("545: the %s entry is gone (the ADDS definitions were removed, S.87)" % name, m is None,
                 "the entry is still there" if m is not None else "")
-        row("CONTROL: another entry already carrying xmc#1 is found by the same test",
-            re.search(r"(?ms)^\S+\|.*?\bxmc#1\b", text) is not None)
+        # 28 Oct 26, S.87: the only entries that carried xmc#1 were the ADDS ones, so no entry has it now; the control
+        # shows the same test still finds an entry by a capability that is there, and the row below that none carries xmc#1
+        row("CONTROL: the same test finds the ansi entry by a capability it carries (cols#)",
+            re.search(r"(?ms)^ansi\|.*?(?=^\S)", text) is not None and
+            re.search(r"(?ms)^ansi\|.*?\bcols#\d+", text) is not None)
+        row("545: no entry in terminfo.src carries xmc#1 any more (only the ADDS ones did)",
+            re.search(r"\bxmc#1\b", text) is None)
     finally:
         tool(box, "stop", timeout=120)
         for nm in made:

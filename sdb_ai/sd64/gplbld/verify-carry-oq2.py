@@ -39,8 +39,8 @@ CASES = [
     ("336: a name with two consecutive underscores", {}, "a__b = 7\nx = a__b", "7"),
     ("336: and three, mixed with digits", {}, "a1___b2 = 9\nx = a1___b2", "9"),
     ("581 CONTROL: TIME() is a whole number of seconds without the mode", {}, "t = time()\nx = (t = int(t))", "1"),
-    ("581 (28 Oct 26, S.87: the mode is gone): SYSTEM(1020)/1000 is seconds to the millisecond, within a second of TIME()",
-     {}, "t = time()\nx = (abs(t - system(1020) / 1000) < 1.5)", "1"),
+    ("581 (28 Oct 26, S.87: the mode is gone): SYSTEM(1020) is the UTC time of day in milliseconds, in range, and two reads a SLEEP 1 apart differ by 1.0 to 2.0 s",
+     {}, "a = system(1020)\nsleep 1\nb = system(1020)\nd = b - a\nif d < 0 then d += 86400000\nx = (a >= 0 and a < 86400000 and b >= 0 and b < 86400000 and d >= 1000 and d < 2000)", "1"),
     ("581: and it is not a whole number (tried three times; a whole second is one chance in a thousand)",
      {}, "x = 0\nfor i = 1 to 3\n   t = system(1020) / 1000\n   if t # int(t) then x = 1\n   sleep 1\nnext i", "1"),
     ("52 CONTROL: a named common block holds its value", {}, "common /zzcn/ a, b\ncommon /zzcm/ c\na = 5 ; b = 6 ; c = 7\nx = a + b + c", "18"),
@@ -335,26 +335,26 @@ def run_verbs(box, sysd, bp):
         write(gc, "   subroutine zzoqgp(r)\n   r = 'RAN_GP'\n   return\nend\n")
         write(gd, "   subroutine zzoqgq(r)\n   r = 'RAN_GQ'\n   return\nend\n")
         gdir = os.path.join(sysd, "gcat")
-        # the kernel stores a * in a file name as %A, so the global entry *zzoqgp is the file %Azzoqgp
-        gnames = ("zzoqgp", "%Azzoqgp", "$zzoqgp", "%Azzoqgq", "!zzoqgq", "%A$zzoqgp")
+        # 28 Oct 26, S.87: the * prefix is gone; only ! $ _ remain, so the rows use ! (the former * rows)
+        gnames = ("zzoqgp", "!zzoqgp", "$zzoqgp", "!zzoqgq", "!$zzoqgp")
         for g in gnames:
             if os.path.exists(os.path.join(gdir, g)):
                 os.remove(os.path.join(gdir, g))
         try:
             out = sess(box, "BASIC bp zzoqgp", "BASIC bp zzoqgq", "CATALOG bp zzoqgp GLOBAL")
             row("210 CONTROL: GLOBAL with no prefix catalogues under the bare name",
-                os.path.exists(os.path.join(gdir, "zzoqgp")) and not os.path.exists(os.path.join(gdir, "%Azzoqgp")), out[-300:])
+                os.path.exists(os.path.join(gdir, "zzoqgp")) and not os.path.exists(os.path.join(gdir, "!zzoqgp")), out[-300:])
             os.remove(os.path.join(gdir, "zzoqgp"))
-            out = sess(box, "CATALOG bp zzoqgp GLOBAL *")
-            row("210 GLOBAL * puts the prefix on a name that has none",
-                os.path.exists(os.path.join(gdir, "%Azzoqgp")) and not os.path.exists(os.path.join(gdir, "zzoqgp"))
+            out = sess(box, "CATALOG bp zzoqgp GLOBAL !")
+            row("210 GLOBAL ! puts the prefix on a name that has none",
+                os.path.exists(os.path.join(gdir, "!zzoqgp")) and not os.path.exists(os.path.join(gdir, "zzoqgp"))
                 and has(out, r"added to global catalogue"), out[-300:])
             out = sess(box, "CATALOG bp zzoqgp GLOBAL $")
             row("210 another prefix character, $", os.path.exists(os.path.join(gdir, "$zzoqgp")), out[-300:])
             os.remove(os.path.join(gdir, "$zzoqgp"))
-            out = sess(box, "CATALOG bp $zzoqgp GLOBAL *")
-            row("210 a name that already has a prefix keeps its own (no ** or *$)",
-                os.path.exists(os.path.join(gdir, "$zzoqgp")) and not os.path.exists(os.path.join(gdir, "%A$zzoqgp")) and not os.path.exists(os.path.join(gdir, "$$zzoqgp")), out[-300:])
+            out = sess(box, "CATALOG bp $zzoqgp GLOBAL !")
+            row("210 a name that already has a prefix keeps its own (no !$ or $$)",
+                os.path.exists(os.path.join(gdir, "$zzoqgp")) and not os.path.exists(os.path.join(gdir, "!$zzoqgp")) and not os.path.exists(os.path.join(gdir, "$$zzoqgp")), out[-300:])
             out = sess(box, "SELECT bp WITH @ID = 'zzoqgq'", "CATALOG bp GLOBAL !")
             row("210 with a select list the prefix is put on each program",
                 os.path.exists(os.path.join(gdir, "!zzoqgq")), out[-300:])

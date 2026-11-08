@@ -17,8 +17,9 @@
 # THE INSTRUMENT.  The reports are read as text, rows found by file name.  The report lists every F entry of the account's VOC, so
 # every row names the fixture it is about (zzlfm a multifile of a hashed and a directory subfile, zzlfs a plain hashed file, zzlfd a
 # plain directory file, zzlft a hashed file with a trigger) and looks for that name, not for a count.  Controls: the plain files
-# keep their own type words; LISTFL and LISTFR still run; WITHOUT ENCRYPTION and WITHOUT REPLICATION keep every file, which is
+# keep their own type words; LISTFL and LISTFR still run; WITH NO ENCRYPTION and WITH NO REPLICATION keep every file, which is
 # what proves WITH ENCRYPTION and WITH REPLICATION are empty because SD has neither and not because the clause matched nothing.
+# (28 Oct 26 dm  S.87: the query word WITHOUT was removed; the tests say WITH NO.)
 
 import os
 import re
@@ -137,15 +138,15 @@ def main():
         row("185: ... and not the one that has none", line_of(out, "zzlfs") is None and line_of(out, "zzlfm") is None, out[-400:])
         t = line_of(out, "zzlft")
         row("185: the type column of the file with the trigger carries T", t is not None and re.search(r"\bDH\b.*\bT\b", t) is not None, repr(t))
-        out = sess(box, "LISTF WITHOUT TRIGGER NO.PAGE")
-        row("185: WITHOUT TRIGGER lists the files with none", all(line_of(out, n) is not None for n in ("zzlfs", "zzlfd", "zzlfm")), out[-400:])
+        out = sess(box, "LISTF WITH NO TRIGGER NO.PAGE")
+        row("185: WITH NO TRIGGER lists the files with none", all(line_of(out, n) is not None for n in ("zzlfs", "zzlfd", "zzlfm")), out[-400:])
         row("185: ... and not the one with a trigger", line_of(out, "zzlft") is None, out[-400:])
         for word in ("ENCRYPTION", "REPLICATION"):
             out = sess(box, "LISTF WITH %s NO.PAGE" % word)
             row("185: WITH %s lists none of the files (SD has neither)" % word,
                 all(line_of(out, n) is None for n in ("zzlfs", "zzlfd", "zzlft", "zzlfm")), out[-400:])
-            out = sess(box, "LISTF WITHOUT %s NO.PAGE" % word)
-            row("185: WITHOUT %s lists all of them (so the empty WITH was not a failed clause)" % word,
+            out = sess(box, "LISTF WITH NO %s NO.PAGE" % word)
+            row("185: WITH NO %s lists all of them (so the empty WITH was not a failed clause)" % word,
                 all(line_of(out, n) is not None for n in ("zzlfs", "zzlfd", "zzlft", "zzlfm")), out[-400:])
 
         say("\n--- LISTFL and LISTFR still run, with the widened type column ------------------------")

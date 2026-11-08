@@ -263,14 +263,14 @@ def main():
 
         # THAN, measured: with the record there it is ignored; with the record taken out it is read as a value, so LESS THAN 25 means "less than THAN or less than 25".
         # This is why D-010 was held back (the survey said the sentence would be an error).  Nothing puts the record back: the sandbox is disposable.
-        lt = "LIST zzq3 name WITH num LESS THAN 25 ID.SUP"
+        lt = "LIST zzq3 name WITH num LT THAN 25 ID.SUP"   # 28 Oct 26: LESS was removed (S.87), LT is the word
         out = sess(box, lt, "DELETE VOC than", lt, quiet=True)
         i1 = out.find(lt)
         i2 = out.find("DELETE VOC than")
         i3 = out.find(lt, i2)
         with_than, without = names(out[i1:i2]), names(out[i3:])
-        row("CONTROL: with the than record LESS THAN 25 lists delta and echo", sorted(with_than) == ["delta", "echo"], "got %r" % with_than)
-        row("MEASURED: with the than record deleted LESS THAN 25 lists all five (than is a value)", sorted(without) == ["alpha", "bravo", "charlie", "delta", "echo"],
+        row("CONTROL: with the than record LT THAN 25 lists delta and echo", sorted(with_than) == ["delta", "echo"], "got %r" % with_than)
+        row("MEASURED: with the than record deleted LT THAN 25 lists all five (than is a value)", sorted(without) == ["alpha", "bravo", "charlie", "delta", "echo"],
             "got %r" % without)
 
         # dictionary items whose field location is 9998 or 9999: an ordinary (empty) field now, not the item count and the record length
