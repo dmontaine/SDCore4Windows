@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): 1.2-0 bundle A-11: EV on a compound I-type no longer corrupts a quoted string (openQM item 268: the
 * 19 Oct 26 Windows port - from Linux e4bc454-70aca05 - The end of the input leaves ED.  INPUT gives '' with STATUS() = ER$EOF when the input is a pipe that has ended, and the
 *               command loop took that '' for an empty command and asked again for ever (6.1 s of CPU in 6.1 s of wall time, printing
@@ -274,7 +275,7 @@ $define COMMAND.STACK.DEPTH 99
       readlist id.list then      ;* Edit using SELECT list
          edit.from.list = @true
          record.name = remove(id.list, more.ids)
-            if not(no.query) and not(option(OPT.NO.SEL.LIST.QUERY)) then
+            if not(no.query) then
                loop
                   display sysmsg(2050, record.name) :  ;* Use active select list (First item 'xx')?
                   prompt ""

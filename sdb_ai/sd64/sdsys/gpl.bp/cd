@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: an item named on the
 *           command line folds, and is written back under the id that matched.
 * 13 Sep 26 Windows port - Enter at "Use active select list" (2050) means N
@@ -210,7 +211,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
             case selectinfo(0, SL$ACTIVE)  ;* List 0 is active
                readnext itype.name then
-                  if not(no.query) and not(option(OPT.NO.SEL.LIST.QUERY)) then
+                  if not(no.query) then
                      loop
                         display sysmsg(2050, itype.name) :  ;* Use active select list (First item 'xx')?
                         prompt ""

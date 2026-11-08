@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 33, owner's ruling: Enter at
 *            "Use active select list" (2050) means N, and "Delete all data
 *            components of multifile" (6133) gains C to cancel, which is also
@@ -179,7 +180,7 @@ $define max.name.len 12
       end
 
       readnext file.name then
-         if not(no.query) and not(option(OPT.NO.SEL.LIST.QUERY)) then
+         if not(no.query) then
             loop
                display sysmsg(2050, file.name) :  ;* Use active select list (First item 'xx')?
                input yn

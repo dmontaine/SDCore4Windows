@@ -18,9 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CORRELATIVE.NOCASE is gone (see 18 Oct below: NOCASE; is now the only way).
 * 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): emit.field.load no longer reads field 9998 as @NI and 9999 as the record length; only field 0 (the id) is special.
 * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 103: an A or F correlative may begin NOCASE; (A;NOCASE;N(CODE) = 'AX'), which sets the object's case
-*               insensitive flag for that correlative alone, as OPTION CORRELATIVE.NOCASE does for all of them.
+*               insensitive flag for that correlative alone.  (OPTION CORRELATIVE.NOCASE, which did it for all of them, was removed 8 Nov 26.)
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: a {field} name folds.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY

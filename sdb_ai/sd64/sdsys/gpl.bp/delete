@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 06 Oct 26 Windows port - Enter at "Delete all records in xx?" (3220) means N,
 *            and so does end of input, which re-asked for ever (the class of
 *            RELEASE_1.1 34, found at a prompt it never listed by SD Core for
@@ -137,7 +138,7 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
       case selectinfo(0, sl$active)       ;* Delete using SELECT list
          readnext record.name then
-            if not(no.query) and not(option(OPT.NO.SEL.LIST.QUERY)) then
+            if not(no.query) then
                loop
                   display sysmsg(2050, record.name) :  ;* Use active select list (First item 'xx')?
                   prompt ""

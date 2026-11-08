@@ -10,6 +10,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 8: the three rows of item 288 (OPTION CATALOGUE.LOCAL) are replaced by one MAP LOCAL row.
 # 27 Oct 26 dm  S.87 batch 3: EREPLACE (item 472's first function) was removed, with its eight rows; FIX stays.  The refusal is a row of sandbox-mode-q16.py.
 # 18 Oct 26 dm  Row 56's mode 1 and mode 6 jobs name SPOOLER "true": they went to the machine's lp, and with a default printer set
 #               they printed on paper (the Windows agent's report; their printer printed pages).
@@ -328,11 +329,8 @@ def run_verbs(box, sysd, bp):
             has(read_voc, r"^1: V") and has(read_voc, r"^3: bp\.out/zzoqlr") and not has(read_voc, r"^3: /"), read_voc[-300:])
         row("131: and the program still runs through it", has(out, r"RAN_LR"), out[-200:])
         sess(box, "DELETE.CATALOG zzoqlc LOCAL", "DELETE.CATALOG zzoqlr LOCAL")
-        out = sess(box, "OPTION CATALOGUE.LOCAL", "CATALOG bp zzoqlc", "DELETE.CATALOG zzoqlc")
-        row("288: with OPTION CATALOGUE.LOCAL, CATALOG with no mode catalogues locally", has(out, r"added to local catalogue"), out[-300:])
-        row("288: and DELETE.CATALOG deletes the local entry by default", not has(out, r"not found|not in"), out[-300:])
         out = sess(box, "MAP LOCAL")
-        row("288: after that no local entry is left", not has(out, r"zzoqlc"), out[-200:])
+        row("287: after DELETE.CATALOG ... LOCAL no local entry is left (OPTION CATALOGUE.LOCAL, row 288, was removed 27 Oct 26)", not has(out, r"zzoqlc") and not has(out, r"zzoqlr"), out[-200:])
 
         # --- 210 CATALOG ... GLOBAL c: the prefix character for names that have none ------------------------
         gc = os.path.join(bp, "zzoqgp")

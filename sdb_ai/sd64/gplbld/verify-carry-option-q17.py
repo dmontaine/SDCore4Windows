@@ -9,6 +9,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 8: the CORRELATIVE.NOCASE option legs are retired (the A;NOCASE; flag rows stay).
 # 27 Oct 26 dm  S.87 batch 7: the KEEP.OLD.OBJECT and ASSOC.ALL legs are retired with the options.
 # 15 Oct 26 dm  Written.
 # END-HISTORY
@@ -210,23 +211,18 @@ def main():
                     row("SPOOL.COMMAND on: the command that prints is shown before it runs", shown, out[-400:])
         restart(box)
 
-        say("\n--- CORRELATIVE.NOCASE and CORRELATIVE.REUSE (second sitting) ---------------------------")
+        say("\n--- the A;NOCASE; flag and CORRELATIVE.REUSE (second sitting; OPTION CORRELATIVE.NOCASE was removed 27 Oct 26) ---------")
         out = sess(box, "RUN bp zzqcmk")
         row("the fixture file was made", "MADE" in out, out[-300:])
-        for state in ("OFF", "ON"):
-            out = sess(box, "OPTION CORRELATIVE.NOCASE " + state, "LIST zzqcc CASEX NO.PAGE")
-            m = re.search(r"(?m)^r1\s+(\S+)\s*$", out)
-            got = m.group(1) if m else None
-            say("    CORRELATIVE.NOCASE %s: %r" % (state, got))
-            if state == "OFF":
-                row("CONTROL (off): the I-type finds ABC is not abc", got == "diff", repr(out[-300:]))
-            else:
-                row("CORRELATIVE.NOCASE on: the same I-type, run now, finds ABC is abc", got == "same", repr(out[-300:]))
-        out = sess(box, "OPTION CORRELATIVE.NOCASE OFF", "LIST zzqcc CASEA CASEB NO.PAGE")
+        out = sess(box, "LIST zzqcc CASEX NO.PAGE")
+        m = re.search(r"(?m)^r1\s+(\S+)\s*$", out)
+        got = m.group(1) if m else None
+        row("CONTROL: the I-type finds ABC is not abc", got == "diff", repr(out[-300:]))
+        out = sess(box, "LIST zzqcc CASEA CASEB NO.PAGE")
         m = re.search(r"(?m)^r1\s+(\S+)\s+(\S+)\s*$", out)
         got = m.groups() if m else None
-        say("    A;NOCASE; and A; correlatives (the option off): %r" % (got,))
-        row("QM4 Fixes 103: a correlative that begins A;NOCASE; finds ABC is abc, with the option off", got is not None and got[0] == "same", repr(out[-300:]))
+        say("    A;NOCASE; and A; correlatives: %r" % (got,))
+        row("QM4 Fixes 103: a correlative that begins A;NOCASE; finds ABC is abc", got is not None and got[0] == "same", repr(out[-300:]))
         row("CONTROL: the same correlative without NOCASE; finds them different", got is not None and got[1] == "diff", repr(out[-300:]))
         for state in ("OFF", "ON"):
             out = sess(box, "OPTION CORRELATIVE.REUSE " + state, "LIST zzqcc SUMX NO.PAGE")

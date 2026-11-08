@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87 batch 8: NO.SEL.LIST.QUERY, CATALOGUE.LOCAL, INHERIT.MFILE.PATH and CORRELATIVE.NOCASE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 7: RUN.NO.PAGE, QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV, PICK.ML.CONV.MASK, CHAINED.SELECT, PAGINATE.ON.HEADING, QUERY.FOOTER.PAUSE, KEEP.OLD.OBJECT, ASSOC.ALL and QUERY.MERGE.PRINT retired (blank rows).
 * 27 Oct 26 dm  The options marked REMOVE in the owner's emulation survey are retired (blank rows keep the numbers) and the PICK shortcut goes.
 * REV 1.0-2 mAR 26 mab Restore pick compatibility options.
@@ -75,7 +76,7 @@ $include int$keys.h
    opt<-1> = 'SUPPRESS.ABORT.MSG||3118'
    opt<-1> = '||'                                ;* 19 was DEBUG.REBIND.KEYS
    opt<-1> = '||'                                ;* 20 was ED.NO.QUERY.FD
-   opt<-1> = 'NO.SEL.LIST.QUERY||3121'
+   opt<-1> = '||'                                ;* 21 was NO.SEL.LIST.QUERY
    opt<-1> = 'CHAIN.KEEP.COMMON||3122'
    opt<-1> = '||'                                ;* 23 was SELECT.KEEP.CASE
    opt<-1> = '||'                                ;* 24 was CREATE.FILE.UPCASE
@@ -96,7 +97,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 38 was DEFAULT.MV
    opt<-1> = 'CLEAR.SELECT||12050'
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
-   opt<-1> = 'CATALOGUE.LOCAL||12080'
+   opt<-1> = '||'                                ;* 40 was CATALOGUE.LOCAL
    opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
    opt<-1> = '||'                                ;* 42 was PICK.ML.CONV.MASK
    opt<-1> = '||'                                ;* 43 was CHAINED.SELECT
@@ -105,7 +106,7 @@ $include int$keys.h
    opt<-1> = 'FORCE.RELOAD||12257'               ;* 45, openQM ref 37
    opt<-1> = 'NUMERIC.EXPONENT||12258'           ;* 46, openQM ref 404
    opt<-1> = '||'                                ;* 47 was QUERY.FOOTER.PAUSE
-   opt<-1> = 'INHERIT.MFILE.PATH||12260'         ;* 48, openQM ref 461
+   opt<-1> = '||'                                ;* 48 was INHERIT.MFILE.PATH
    * 15 Oct 26  Q-17 of the QM4 gaps tab: the position in this list is the index in options.h (49 to 54), in this order
    opt<-1> = 'GIT||12271'                        ;* 49
    opt<-1> = 'DIR.DTM||12272'                    ;* 50
@@ -113,7 +114,7 @@ $include int$keys.h
    opt<-1> = 'NO.PHANTOM.NOTIFY||12274'          ;* 52
    opt<-1> = 'SPOOL.COMMAND||12275'              ;* 53
    opt<-1> = '||'                                ;* 54 was ASSOC.ALL
-   opt<-1> = 'CORRELATIVE.NOCASE||12283'         ;* 55
+   opt<-1> = '||'                                ;* 55 was CORRELATIVE.NOCASE
    opt<-1> = 'CORRELATIVE.REUSE||12284'          ;* 56
    * 15 Oct 26  openQM refs 57 and others of bundle Q-17 (57 on)
    opt<-1> = '||'                                ;* 57 was QUERY.MERGE.PRINT

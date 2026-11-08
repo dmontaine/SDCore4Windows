@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CATALOGUE.LOCAL is gone; CATALOG with no word catalogues privately, and LOCAL says local.
 * 18 Oct 26 Windows port - from Linux 1298f82 (12 Oct 26): openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
 * 17 Oct 26 dm  S.64: cataloguing needs bp.edit (SDSYS passes); message 12413.
 * 12 Oct 26 dm  openQM 241: the longest call name is the lower of 128 and MAXIDLEN (63 unless the
@@ -243,9 +244,6 @@ $define CAT_PCODE  3
 *   inherits the test rather than rediscovering this.  The keyword's own test is
 *   left where it is: it reports while parsing, before the object file is
 *   opened, which is the better message for the common mistake.
-
-   * 18 Oct 26 Windows port - from Linux dcd661f (12 Oct 26): - openQM 288: with OPTION CATALOGUE.LOCAL a name with no mode and no global prefix is local
-   if mode = 0 and option(OPT.CATALOGUE.LOCAL) then mode = CAT_LOCAL
 
    if mode = CAT_GLOBAL and not(kernel(K$ADMINISTRATOR, -1)) then
       stop sysmsg(2001)  ;* Command requires administrator privileges

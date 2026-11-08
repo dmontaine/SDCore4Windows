@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CATALOGUE.LOCAL is gone; DELETE.CATALOG with no word works on the private catalogue,
+*           and LOCAL says local.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 3a: catalogue names are lower
 *           case, and a local entry is found under its old upper-case VOC id too.
 * 17 Oct 26 dm  S.64: DELETE.CATALOGUE needs bp.edit (SDSYS passes); message 12413.
@@ -101,9 +103,6 @@ $include int$keys.h
    repeat
 
    if name.list = '' then stop sysmsg(3036) ;* Catalogue name required
-
-   * 18 Oct 26 Windows port - from Linux dcd661f (12 Oct 26): - openQM 288: OPTION CATALOGUE.LOCAL makes local the default
-   if not(local) and not(global) and option(OPT.CATALOGUE.LOCAL) then local = @true
 
    if local and global then
       stop sysmsg(3021) ;* Incompatible cataloguing modes specified
