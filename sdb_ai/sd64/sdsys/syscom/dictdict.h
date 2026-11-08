@@ -16,15 +16,4 @@ $define DICT.USER            8  ;* For user use - Not processed by SD
 $define DICT.SYS.INFO       15  ;* For internal use by SD
 $define DICT.ITYPE.OBJECT   16  ;* Compiled I-type code (multiple fields)
 
-
-* A and S type dictionary fields
-* SD compiles correlatives in the same way as I-types, leaving the object
-* code in field 16 onwards.
-
-$define DICT.A.LOC           2  ;* Field number
-$define DICT.A.DISPLAY.NAME  3  ;* Report column heading (optional)
-$define DICT.A.ASSOC         4  ;* Association
-$define DICT.A.CONV          7  ;* Conversion code (optional)
-$define DICT.A.CORRELATIVE   8  ;* Correlative code
-$define DICT.A.JUSTIFY       9  ;* Justification
-$define DICT.A.WIDTH        10  ;* Width
+* 31 Oct 26: the A and S type dictionary layouts (DICT.A.LOC, DICT.A.CORRELATIVE and the rest) are gone with the types.

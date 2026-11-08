@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone: SAVING takes the field number of a D item only.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 28 Aug 26 Windows port - sysmsg 3261 takes TWO arguments and was given one,
 *            so every successful QSELECT ended with a dangling "select list ".
@@ -147,8 +148,6 @@ $include int$keys.h
                   type = upcase(dict.rec[1,1])
                   begin case
                      case type = 'D'
-                        null
-                     case (type = 'A' or type = 'S') and dict.rec<DICT.A.CORRELATIVE> = ''
                         null
                      case 1
                         stop sysmsg(3285, token) ;* %1 is not of suitable type for this operation

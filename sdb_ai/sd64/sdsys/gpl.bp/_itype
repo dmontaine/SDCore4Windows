@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 31 Oct 26 dm  The A and S dictionary item types are gone: ITYPE() of one gives ER$INVA.ITYPE like any other type that is not D.
 * 27 Oct 26 dm  S.87 batch 4: field 9998 (the number of fields) and 9999 (the record length) are ordinary field numbers; only 0 (the id) is special.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -43,9 +44,6 @@ $include err.h
    begin case
       case type = 'D'
          fno = dict.rec<DICT.LOC>
-      case type = 'A' or type = 'S'
-         if dict.rec<DICT.A.CORRELATIVE> # '' then goto invalid
-         fno = dict.rec<DICT.A.LOC>
       case 1
          goto invalid
    end case

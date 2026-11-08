@@ -14642,7 +14642,7 @@ if.then.else.expr.abort:
 
          z = upcase(dict.rec[1,1])
          begin case
-            case z = 'D' or ((z = 'A' or z = 'S') and dict.rec<8> = '')
+            case z = 'D'
                if not(dict.rec<2> matches '1N0N') then
                   err.msg = sysmsg(3286, token.string)  ;* %1 dictionary item has no field number
                   gosub error
@@ -14659,10 +14659,11 @@ if.then.else.expr.abort:
                   opcode.byte = OP.EXTRACT ; gosub emit.simple
                end
 
-            case z = 'I' or ((z = 'A' or z = 'S') and dict.rec<8> = '')
+            case z = 'I'
                * A compiled item is called at run time as a subroutine
                * using ITYPE() to execute embedded object code.
                * 28 Oct 26 S.87: C items are gone; they fall to err.field.name.
+               * 31 Oct 26: so are A and S items.
 
                sys.chk.rec = dict.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
                if len(dict.rec<DICT.ITYPE.OBJECT>) = 0 ~
@@ -15605,15 +15606,8 @@ get.file.ref:
       case s = 'D'
          fno = dict.rec<2>
 
-      case s = 'A' or s = 'S'
-         if dict.rec<DICT.A.CORRELATIVE> # '' then
-            err.msg = sysmsg(3417, token.string) ;* %1 has a correlative expression
-            goto error
-         end
-         fno = dict.rec<2>
-
       case 1
-         err.msg = sysmsg(3416, token.string) ;* %1 is not a D, A or S-type dictionary item
+         err.msg = sysmsg(3416, token.string) ;* %1 is not a D-type dictionary item
          goto error
    end case
 

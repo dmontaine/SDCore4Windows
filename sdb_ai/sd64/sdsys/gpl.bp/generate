@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone: GENERATE makes constants from D items only.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): field locations 9998 and 9999 are no longer skipped (they are ordinary numbers now); only location 0 is.
@@ -184,26 +185,6 @@ deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
                      ins fno before loc<idx>
 
                      cnv = dict.rec<DICT.CONV>
-                     ins cnv before conv<idx>
-                     if cnv # '' then conversion.present = @true
- 
-                     ins dict.rec<DICT.TYPE>[2,9999] before comments<idx>
-                  end
-
-               case (type = 'A' or type = 'S') and dict.rec<DICT.A.CORRELATIVE> = ''
-                  fno = dict.rec<DICT.A.LOC>
-                  if num(fno) and fno # 0 then
-                     if fno > hi.fno then hi.fno = fno
-                     locate fno in loc<1> by 'AR' setting idx then
-                        if not(duplicates.allowed) then continue
-                     end
-
-                     ins id before names<idx>
-                     if len(id) > longest then longest = len(id)
-
-                     ins fno before loc<idx>
-
-                     cnv = dict.rec<DICT.A.CONV>
                      ins cnv before conv<idx>
                      if cnv # '' then conversion.present = @true
  

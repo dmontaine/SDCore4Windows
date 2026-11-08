@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # sandbox-ltype.py - 17 Oct 2026, QM4 Fixes 7: L-type dictionary records (links) in I-type expressions, links to links,
-#                    links to A, S and I items, a link's file expression, and what a link says when it is wrong.
+#                    links to D and I items (and the refusal of a link to an A item), a link's file expression, and what a link says when it is wrong.
 #                    No install, no sudo.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-ltype.py <dir> [--build]
@@ -11,6 +11,7 @@
 #
 # START-HISTORY:
 # 17 Oct 26 dm  Written.  The rows were first run on a sandbox built from the tree before the change.
+# 31 Oct 26 dm  The A and S dictionary item types are gone: the two rows that reached the A item ATTL through a link now expect the refusal "Link item ATTL is not of a suitable type".
 # END-HISTORY
 #
 # THE FILES.  zzlta (titles: TITLE, AUTHOR, YEAR) and zzltb (the same ids, other titles, the second of two files that
@@ -115,12 +116,12 @@ ROWS = [
     ("a link inside a function (UPCASE(TTL%AUTHOR))", "LIST zzlbook TU", [r"^T1-1\s+MELVILLE", r"^T2-1\s+AUSTEN"], [ERR]),
     ("a link in an expression with a field and a string", "LIST zzlbook TC", [r"^T1-1\s+x/Moby Dick", r"^T2-1\s+z/Emma"], [ERR]),
     ("a link to an I-type item, from an I-type", "LIST zzlbook TUP", [r"^T1-1\s+MELVILLE", r"^T2-1\s+AUSTEN"], [ERR]),
-    ("a link in a query reaches an A-type item (and takes its heading)", "LIST zzlbook TTL%ATTL",
-     [r"A-Title", r"^T1-1\s+Moby Dick", r"^T2-1\s+Emma"], [ERR]),
+    ("a link in a query to an A-type item is refused: SD no longer has that type (31 Oct 26)", "LIST zzlbook TTL%ATTL",
+     [r"Link item ATTL is not of a suitable type"], [r"A-Title", r"^T1-1\s+Moby Dick"]),
     ("a link to a link, in an I-type: OUT%TTL%TITLE, the loans are several ids", "LIST zzlrdr RT",
      [r"Loan titles", r"^R1\s+Moby Dick", r"^\s+Emma", r"^R2\s+Moby Dick"], [ERR]),
     ("a link to a link, in a query", "LIST zzlrdr OUT%TTL%TITLE", [r"^R1\s+Moby Dick", r"^\s+Emma", r"^R2\s+Moby Dick"], [ERR]),
-    ("a link to a link reaches an A-type item at the end", "LIST zzlrdr OUT%TTL%ATTL", [r"A-Title", r"^R1\s+Moby Dick", r"^\s+Emma"], [ERR]),
+    ("a link to a link that ends at an A-type item is refused the same way", "LIST zzlrdr OUT%TTL%ATTL", [r"Link item ATTL is not of a suitable type"], [r"A-Title", r"^R1\s+Moby Dick"]),
     ("the file expression of a link names the file read (zzltb for region b), the dictionary being zzlta's, in a query", "LIST zzlbook RG%TITLE",
      [r"^T1-1\s+Moby Dick B", r"^T1-2\s+Moby Dick\s*$", r"^T2-1\s+Emma\s*$"], [ERR]),
     ("...and in an I-type", "LIST zzlbook TRG", [r"Region title", r"^T1-1\s+Moby Dick B", r"^T1-2\s+Moby Dick\s*$"], [ERR]),

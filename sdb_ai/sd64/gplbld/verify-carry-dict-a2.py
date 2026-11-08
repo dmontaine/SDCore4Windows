@@ -10,6 +10,7 @@
 # 2 it could not run.
 #
 # START-HISTORY:
+# 31 Oct 26 dm  The A and S dictionary item types are gone: leg 5 (TRANS() of an A item, ref 182) keeps only its I-item control and leg 7 (an IF correlative in an A item, ref 104) is retired.
 # 27 Oct 26 dm  S.87 batch 10: legs 1 (IF without ELSE or THEN), 3 (format string with no operator) and 4 (hyphenated item names) keep only their controls; the three forms were removed from ICOMP.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-2.
 # END-HISTORY
@@ -24,7 +25,7 @@
 #   2  a field named by its number, F4 (547)
 #   3  a value followed by a format string with no operator (564)
 #   4  an item named with a hyphen (423), and A-B still a subtraction
-#   5  TRANS() of an A, S item (182)
+#   5  TRANS() of an I item (the A, S row of ref 182 was retired with the types, 31 Oct 26)
 #   6  divide by zero in a dictionary expression is zero (48) - the kernel's op_arith.c
 
 import os
@@ -126,25 +127,18 @@ def main():
         ditem("t48", "F1 / F2")
         ditem("tsub", "F1-F2")
         ditem("tctl", "IF F1 > 5 THEN 'big' ELSE 'small'")
-        ditem("t182", "TRANS(zzd2b, F3, QA, 'X')")
         ditem("t182c", "TRANS(zzd2b, F3, QI, 'X')")
-        # 16 Oct 26, ref 104: field 8 of an A item that begins IF is an implied A-correlative.  The control is the same
-        # expression with the type letter and a semicolon in front (it always worked); the third item is a plain conversion code.
-        prog("zzd2tia", "A\n1\n\ntia\n8L\nS\n\nIF 1 > \"5\" THEN \"big\" ELSE \"small\"\n")
-        prog("zzd2tib", "A\n1\n\ntib\n8L\nS\n\nA;IF 1 > \"5\" THEN \"big\" ELSE \"small\"\n")
-        prog("zzd2tic", "A\n3\n\ntic\n8L\nS\n\nMCU\n")
         prog("zzd2b1", "FOUND\n")
         prog("zzd2b2", "OTHER\n")
-        prog("zzd2qa", "A\n1\n\nQA\n8L\nS\n")             # A item, no correlative, field 1
         prog("zzd2qi", "I\n'<':@RECORD<1>:'>'\n\nQI\n12L\nS\n")   # I item (control)
         cmds = ["DELETE.FILE DICT zzd2a", "DELETE.FILE zzd2a", "DELETE.FILE DICT zzd2b", "DELETE.FILE zzd2b",
                 "CREATE.FILE zzd2a", "CREATE.FILE zzd2b",
                 "COPY FROM BP TO zzd2a zzd2r1,r1", "COPY FROM BP TO zzd2a zzd2r2,r2",
                 "COPY FROM BP TO zzd2b zzd2b1,abc", "COPY FROM BP TO zzd2b zzd2b2,xyz",
-                "COPY FROM BP TO DICT zzd2b zzd2qa,qa", "COPY FROM BP TO DICT zzd2b zzd2qi,qi"]
+                "COPY FROM BP TO DICT zzd2b zzd2qi,qi"]
         for n in (1, 2, 3):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2f%d,f%d" % (n, n))
-        for t in ("t48", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
+        for t in ("t48", "tsub", "tctl", "t182c"):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2%s,%s" % (t, t))
         out = sess(box, *cmds, quiet=True)
         copied = len(re.findall(r"(?m)^1 record\(s\) copied\.", out))
@@ -166,17 +160,11 @@ def main():
         say("\n--- leg 4: F1-F2 is a subtraction (hyphenated item names, ref 423, were retired 27 Oct 26) -----------------")
         check("CONTROL: F1-F2 is a subtraction", "tsub", ("10", "-1"))
 
-        say("\n--- leg 5: TRANS() of an A item (ref 182) ----------------------------------------------")
-        check("THE ROW: qa is an A item, field 1, no correlative", "t182", ("FOUND", "OTHER"))
+        say("\n--- leg 5: TRANS() of an I item (the A item row of ref 182 was retired with the A and S types) ----------")
         check("CONTROL: qi is an I item, as it always could be", "t182c", ("<FOUND>", "<OTHER>"))
 
         say("\n--- leg 6: divide by zero in a dictionary expression (ref 48, kernel op_arith.c) -----------")
         check("THE ROW: F1/F2 with F2 = 0 is zero; with F2 = 2 it is the quotient", "t48", ("0", "0.5"))
-
-        say("\n--- leg 7: an IF expression in field 8 of an A item is an implied A-correlative (ref 104) --------")
-        check("CONTROL: A;IF ... always worked", "tib", ("big", "small"))
-        check("THE ROW: IF ... with no A; in front gives the same", "tia", ("big", "small"))
-        check("CONTROL: a plain conversion code in field 8 is still a conversion code (MCU on field 3)", "tic", ("ABC", "XYZ"))
     finally:
         for n in made:
             for d in ("bp", "bp.out"):

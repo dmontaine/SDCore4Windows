@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone from the index builder: an A or S item is refused with message 12943, any other type that is not D or I ends the build
+*               with message 2613 and ER$BAD.DICT (it used to fall through to the "Internal error" stop), and an existing index of a type this program does not know is never
+*               taken for an equivalent of the new one.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone from the index builder.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the field named for a new
 *           index folds and the index takes the matched id; @ID or @id.
@@ -245,18 +248,12 @@ create.index:
       end
 
       begin case
-         case (type = 'A' or type = 'S') and dict.rec<DICT.A.CORRELATIVE> = ''
-            fno = trimb(dict.rec<DICT.A.LOC>)
-            if not(fno matches '1N0N') then
-               display sysmsg(2611, new.index.name)
-               err = ER$BAD.DICT
-               return 
-            end
+         case type = 'A' or type = 'S'
+            display sysmsg(12943, new.index.name)
+            err = ER$BAD.DICT
+            return
 
-            fno += 0
-            expr = ''
-
-         case type = 'A' or type = 'I' or type = 'S'
+         case type = 'I'
             call $dcomp(dict.f,          ;* File var to source file
                         new.index.name,  ;* Record name
                         dict.rec,        ;* Dictionary record
@@ -280,8 +277,7 @@ create.index:
             end
 
             fno = -1
-            if type = 'I' then expr = dict.rec<DICT.ITYPE.SOURCE>
-            else expr = dict.rec<DICT.A.CORRELATIVE>
+            expr = dict.rec<DICT.ITYPE.SOURCE>
 
          case type = 'D'
             * Field number
@@ -297,7 +293,9 @@ create.index:
             expr = ''
 
          case 1
-            display sysmsg(2613, new.index.name) ;* %1 is not a A, D, I or S-type dictionary item
+            display sysmsg(2613, new.index.name) ;* %1 is not a D or I-type dictionary item
+            err = ER$BAD.DICT
+            return
       end case
 
 have.index.type:
@@ -330,10 +328,6 @@ have.index.type:
                ak.flags = bitor(ak.flags, AK$MV)
             end
 
-         case type = 'A' or type = 'S'
-            right.justify = dict.rec<DICT.A.JUSTIFY> = 'R'
-            ak.flags = bitor(ak.flags, AK$MV)
-
          case 1
             stop 'Internal error - AK type is unrecognised (':type:')'
       end case
@@ -363,14 +357,8 @@ have.index.type:
                other.fno = -1
                other.expr = ak.data(j)<DICT.ITYPE.SOURCE>
 
-            case other.type = 'A' or other.type = 'S'
-               if ak.data(j)<DICT.A.CORRELATIVE> = '' then
-                  other.fno = ak.data(j)<DICT.A.LOC>
-                  other.expr = ''
-               end else
-                  other.fno = -1
-                  other.expr = ak.data(j)<DICT.A.CORRELATIVE>
-               end
+            case 1
+               continue      ;* a type this program does not know (an old A or S index) is never an equivalent
          end case
 
          other.fno = ak.data(j)<DICT.LOC>

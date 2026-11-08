@@ -248,7 +248,7 @@ display.record:
    * (DICT.ITYPE.OBJECT).  The default display leaves it out; HEX and BINARY
    * show the record as it is (11 Oct 26 dm, openQM ref 373).
 
-   if format = F.DEFAULT and index('ASCI', upcase(rec[1,1]), 1) and dcount(rec, @fm) > 15 then
+   if format = F.DEFAULT and upcase(rec[1,1]) = 'I' and dcount(rec, @fm) > 15 then      ;* 31 Oct 26: A, S and C items are gone
       if len(portion) and upcase(portion) = 'DICT' then rec = field(rec, @fm, 1, 15)
    end
 

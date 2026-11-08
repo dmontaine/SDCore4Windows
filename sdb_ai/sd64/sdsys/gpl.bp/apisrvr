@@ -3073,9 +3073,9 @@ return
 * In:  file number of a DICTIONARY (short), name length (short), name(s) - several are separated by value marks -,
 *      data length (long), the data, the record id
 * Out: the value of each item, joined by item marks.  The data becomes @RECORD and the id @ID for the evaluation.
-* An item that is not in the dictionary is the ELSE case; one that is not a data defining item (type D, A, S or I) or does not
-* compile is an error.  QMEvalConv also applies the item's output conversion, to each value of a multivalued answer.  A correlative
-* or I-type that is not compiled is compiled for this call and the dictionary is NOT written to (a request that reads must not write).
+* An item that is not in the dictionary is the ELSE case; one that is not a data defining item (type D or I) or does not
+* compile is an error.  QMEvalConv also applies the item's output conversion, to each value of a multivalued answer.  An
+* I-type that is not compiled is compiled for this call and the dictionary is NOT written to (a request that reads must not write).
 * No file number can exist when SDCLIENT is set or SDNet is in use (vb.open refuses), so no restricted session can reach this.
 
 vb.evaluate:
@@ -3124,7 +3124,7 @@ read ev.rec from files(fno), ev.name else
 end
 
 ev.type = upcase(ev.rec[1,1])
-if index('DASI', ev.type, 1) = 0 or ev.type = '' then
+if index('DI', ev.type, 1) = 0 or ev.type = '' then      ;* 31 Oct 26: the A and S item types are gone
    server.error = SV$ERROR
    error.msg = sysmsg(12347, ev.name) ;* %1 is not a dictionary item that defines data
    return
@@ -3132,7 +3132,7 @@ end
 
 * Compile what is calculated and not yet compiled, the way the query processor decides it is (qproc: no object code, or the
 * checksum no longer matches the record)
-if ev.type = 'I' or ((ev.type = 'A' or ev.type = 'S') and ev.rec<DICT.A.CORRELATIVE> # '') then
+if ev.type = 'I' then
    sys.chk.rec = ev.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
    if len(ev.rec<DICT.ITYPE.OBJECT>) = 0 ~
    or checksum(sys.chk.rec) # ev.rec<DICT.SYS.INFO,1> then
@@ -3163,7 +3163,7 @@ if ev.status = ER$INVA.ITYPE then
 end
 
 if ev.conv then
-   if ev.type = 'A' or ev.type = 'S' then ev.cv = ev.rec<DICT.A.CONV> else ev.cv = ev.rec<DICT.CONV>
+   ev.cv = ev.rec<DICT.CONV>
    if ev.cv # '' then ev.result = oconvs(ev.result, ev.cv)
 end
 return

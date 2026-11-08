@@ -9,6 +9,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 31 Oct 26 dm  The A and S dictionary item types are gone: the A;NOCASE; rows (QM4 Fixes 103) and their two A fixtures are retired; the I-type control and the array-sum row stay.
 # 27 Oct 26 dm  S.87 batch 12: the CORRELATIVE.REUSE legs are retired; its off-state row stays as a plain row.
 # 27 Oct 26 dm  S.87 batch 8: the CORRELATIVE.NOCASE option legs are retired (the A;NOCASE; flag rows stay).
 # 27 Oct 26 dm  S.87 batch 7: the KEEP.OLD.OBJECT and ASSOC.ALL legs are retired with the options.
@@ -117,8 +118,6 @@ CORMK = ("   execute 'DELETE.FILE zzqcc' capturing j\n   execute 'CREATE.FILE zz
          "   write 'D':@fm:3:@fm:'':@fm:'F3':@fm:'10L':@fm:'S' on d, 'f3'\n"
          "   write 'I':@fm:'IF F3 = \"abc\" THEN \"same\" ELSE \"diff\"':@fm:'':@fm:'CASEX':@fm:'8L':@fm:'S' on d, 'casex'\n"
          "   write 'I':@fm:'F1 + F2':@fm:'':@fm:'SUMX':@fm:'8R':@fm:'M' on d, 'sumx'\n"
-         "   write 'A':@fm:3:@fm:'':@fm:'CASEA':@fm:'8L':@fm:'S':@fm:'':@fm:'A;NOCASE;IF 3 = \"abc\" THEN \"same\" ELSE \"diff\"' on d, 'casea'\n"
-         "   write 'A':@fm:3:@fm:'':@fm:'CASEB':@fm:'8L':@fm:'S':@fm:'':@fm:'A;IF 3 = \"abc\" THEN \"same\" ELSE \"diff\"' on d, 'caseb'\n"
          "   open 'zzqcc' to f else stop 'no f'\n"
          "   write '1':@vm:'2':@vm:'3':@fm:'10':@vm:'20':@fm:'ABC' on f, 'r1'\n   crt 'MADE'\nend\n")
 
@@ -213,19 +212,13 @@ def main():
                     row("SPOOL.COMMAND on: the command that prints is shown before it runs", shown, out[-400:])
         restart(box)
 
-        say("\n--- the A;NOCASE; flag and the sum of arrays (second sitting; the options CORRELATIVE.NOCASE and CORRELATIVE.REUSE were removed 27 Oct 26) ---------")
+        say("\n--- the case of a comparison and the sum of arrays (second sitting; the options CORRELATIVE.NOCASE and CORRELATIVE.REUSE were removed 27 Oct 26, the A;NOCASE; rows with the A type 31 Oct 26) ---------")
         out = sess(box, "RUN bp zzqcmk")
         row("the fixture file was made", "MADE" in out, out[-300:])
         out = sess(box, "LIST zzqcc CASEX NO.PAGE")
         m = re.search(r"(?m)^r1\s+(\S+)\s*$", out)
         got = m.group(1) if m else None
         row("CONTROL: the I-type finds ABC is not abc", got == "diff", repr(out[-300:]))
-        out = sess(box, "LIST zzqcc CASEA CASEB NO.PAGE")
-        m = re.search(r"(?m)^r1\s+(\S+)\s+(\S+)\s*$", out)
-        got = m.groups() if m else None
-        say("    A;NOCASE; and A; correlatives: %r" % (got,))
-        row("QM4 Fixes 103: a correlative that begins A;NOCASE; finds ABC is abc", got is not None and got[0] == "same", repr(out[-300:]))
-        row("CONTROL: the same correlative without NOCASE; finds them different", got is not None and got[1] == "diff", repr(out[-300:]))
         out = sess(box, "LIST zzqcc SUMX NO.PAGE")
         nums = [t for ln in out.splitlines() if re.match(r"^(r1\s|\s{8,}\S)", ln) for t in ln.split() if t != "r1"]
         say("    F1 + F2 (OPTION CORRELATIVE.REUSE was removed 27 Oct 26): %r" % (nums,))

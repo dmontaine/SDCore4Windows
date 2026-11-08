@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone: a field or a TRANS() item of one is 'not defined' / 'not of valid type', as a C item is.  Nothing adds to
+*               embedded.objects any more, so the prelude that loads them (after the final return) can no longer run; it is left in place.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): a name that is F and a number is no longer the field of that number when no dictionary item
 *               has it (openQM ref 547); a field is named by a D-type item.
@@ -1283,7 +1285,7 @@ if.then.else.expr.abort:
 have.field.rec:
             type = upcase(field.rec[1,1])
             begin case
-               case type = 'D' or ((type = 'A' or type = 'S') and field.rec<dict.a.correlative> = '')
+               case type = 'D'
                   fno = field.rec<dict.loc>
                   if not(num(fno)) then
                      err.msg = sysmsg(2983, token.string) ;* Field 'xx' has a non-numeric location
@@ -1300,55 +1302,6 @@ have.field.rec:
                   n = 1 ; gosub emit.numeric.load       ;* One path component
                   n = 3 ; gosub emit.numeric.load       ;* Function: get
                   opcode.byte = OP.COLL ; gosub emit.simple
-
-               case type = 'A' or type = 'S'
-                  * A/S-type item with correlative
-                  * Unlike nested I-types, A/S-types that reference other
-                  * compiled items do this as a run time subroutine call
-                  * using ITYPE() to execute embedded object code.
-
-                  sys.chk.rec = field.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
-                  if len(field.rec<DICT.ITYPE.OBJECT>) = 0 ~
-                  or checksum(sys.chk.rec) # field.rec<DICT.SYS.INFO,1> then
-                     * Need to compile nested item
-
-                     if depth > 10 then
-                        err.msg = sysmsg(2998) ;* Compiled dictionary items nested too deeply
-                        goto error
-                     end
-
-                     call $dcomp(dict.file,       ;* File var to source file
-                                 token.string,    ;* Record name
-                                 field.rec,       ;* Record to compile
-                                 z,               ;* I-type format
-                                 z,               ;* I-type conversion
-                                 z,               ;* I-type S/M flag
-                                 z,               ;* I-type association
-                                 z,               ;* I-type is constant
-                                 depth + 1)       ;* Recursive compilation depth
-
-                     if field.rec<DICT.ITYPE.OBJECT> = '' then
-                        err.msg = sysmsg(2612, token.string) ;* Compilation error in %1
-                        goto error
-                     end
-
-                     write field.rec to dict.file, token.string
-                  end
-
-                  * Check to see if we have already loaded this object code.
-
-                  locate token.string in embedded.objects<1> setting i then
-                     n = embedded.object.vars<i> ;* Variable number
-                  end else
-                     embedded.objects<-1> = token.string
-                     embedded.object.vars<-1> = no.vars
-                     n = no.vars
-                     no.vars += 1
-                  end
-
-                  gosub emit.var.load
-                  opcode.byte = OP.ITYPE
-                  gosub emit.simple
 
                case type = "I"  ;* Nested I-type
                   nested.source = field.rec<2>
@@ -2019,33 +1972,6 @@ parse.as.dictionary.name:
                      * 18 Oct 26 Windows port - from Linux 7fb67a8 (13 Oct 26): - an E-type item of a data collection file: the third argument is a path,
                      * marked with a leading { so that _trans tells it from the object code of an I-type.
                      opcode.string = '{' : trans.dict.rec<2>
-                     gosub emit.string.load
-
-                  case (trans.type = 'A' or trans.type = 'S') and trans.dict.rec<dict.a.correlative> = ''
-                     * 10 Oct 26 dm, openQM ref 182: an A or S item with no
-                     * correlative is a field position, as a D-type is.
-                     n = trans.dict.rec<dict.loc>
-                     gosub emit.numeric.load
-
-                  case trans.type = 'A' or trans.type = 'S'
-                     * 10 Oct 26 dm, openQM ref 182: an A or S item with an
-                     * expression is compiled as the same object code an I-type
-                     * gives, and evaluated against the record read by TRANS().
-                     call $dcomp(trans.file.dict,   ;* File var of dictionary
-                                 token.string,      ;* Record name
-                                 trans.dict.rec,    ;* Record to compile
-                                 z,                 ;* I-type format
-                                 z,                 ;* I-type conversion
-                                 z,                 ;* I-type S/M flag
-                                 z,                 ;* I-type association
-                                 z,                 ;* I-type is constant
-                                 depth + 1)         ;* Recursive compilation depth
-                     if trans.dict.rec<DICT.ITYPE.OBJECT> = '' then
-                        err.msg = sysmsg(2612, token.string) ;* Compilation error in %1
-                        goto error
-                     end
-
-                     opcode.string = trans.dict.rec<DICT.ITYPE.OBJECT>
                      gosub emit.string.load
 
                   case trans.dict.rec[1,1] = 'I'

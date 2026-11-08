@@ -18,6 +18,7 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone: such an item is 'unexpected type' (7275) like a C one, and an index made from one is never used, so a query on its field scans.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION QUERY.SORT.NO.CASE is gone; a sort key is compared as it is (SP.VIEW sorts
@@ -5312,15 +5313,8 @@ case op = OP.WHEN ; null
             if item.multivalued(ak.field) # (index.data<6> = 'M') then continue  ;* Wrong S/M
             if ak.justification # index.data<5> then continue  ;* Wrong justification
 
-         case (ak.type = 'A' or ak.type = 'S') and index.data<DICT.A.CORRELATIVE> # ''
-            if item.type(ak.field) # ITYPE.ITEM then continue
-            if item.expression(ak.field) # index.data<dict.a.correlative> then continue  ;* Wrong expression
-            if ak.justification # index.data<DICT.A.JUSTIFY> then continue  ;* Wrong justification
-
-         case 1   ;* Non-correlative A/S type
-            if item.type(ak.field) # ID.ITEM and item.type(ak.field) # FIELD.ITEM then continue
-            if item.detail(ak.field) # index.data<2> then continue  ;* Wrong field
-            if ak.justification # index.data<DICT.A.JUSTIFY> then continue  ;* Wrong justification
+         case 1   ;* 31 Oct 26: a type this version does not know (an index made from an A or S item) is never used
+            continue
       end case
 
 
@@ -5533,10 +5527,8 @@ case op = OP.WHEN ; null
          if item.detail(k) # index.data<2> then return  ;* Wrong field
       case index.type = 'I'
          if item.expression(k) # index.data<dict.itype.source> then return  ;* Wrong expression
-      case (index.type = 'A' or index.type = 'S') and index.data<dict.a.correlative> = ''
-         if item.detail(k) # index.data<2> then return  ;* Wrong field
-      case index.type = 'A' or index.type = 'S'
-         if item.expression(k) # index.data<dict.a.correlative> then return  ;* Wrong expression
+      case 1   ;* 31 Oct 26: a type this version does not know (an index made from an A or S item) is never merged
+         return
    end case
 
    if item.multivalued(k) # (index.data<6> = 'M') then return  ;* Wrong S/M
@@ -5775,47 +5767,6 @@ add.field:
 
    if dict.rec # '' then
       begin case
-         case (type = "A" or type = "S") and dict.rec<DICT.A.CORRELATIVE> = ''
-            if not(dict.rec<dict.a.loc> matches '1N0N') then
-               display sysmsg(7269, token) ;* Dictionary entry for xx has non-numeric field location
-               goto exit.qproc
-            end
-
-            no.items += 1
-            item.index = no.items
-            item.name(item.index) = token
-
-            s = dict.rec<dict.a.display.name> ; gosub set.col.hdg
-            item.detail(item.index) = dict.rec<dict.a.loc> + 0
-            item.fmt(item.index) = dict.rec<dict.a.width>:dict.rec<dict.a.justify>
-            item.display.width(item.index) = dict.rec<dict.a.width>
-            item.justification(item.index) = dict.rec<dict.a.justify>
-            item.left.justified(item.index) = (dict.rec<dict.a.justify> # 'R')
-            item.conv(item.index) = dict.rec<dict.a.conv>
-
-            * Invent a pseudo association name for associated fields
-            s = dict.rec<dict.a.assoc>
-            begin case
-               case s matches '"D;"1N0X'
-                  s = '__' : matchfield(s, '"D;"0N0X', 2)
-               case s matches '"C;"1N0X'
-                  s = '__' : dict.rec<dict.a.loc>
-            end case
-            gosub add.item.association
-
-            item.multivalued(item.index) = @true
-            item.totals(item.index) = 0
-            item.breakpoint(item.index) = 0
-            item.flags(item.index) = 0
-
-            i = item.detail(item.index)
-            begin case
-               case i = 0
-                  item.type(item.index) = ID.ITEM   ;* Field location 0 is @id
-               case 1
-                  item.type(item.index) = FIELD.ITEM
-            end case
-
          case type = "E"
             * 18 Oct 26 Windows port - from Linux e876ab7 (13 Oct 26): - an element of a data collection.  Field 2 is the path (up to two asterisks give a
             * multivalued list).  It becomes a field of the view make.coll.view builds.
@@ -5881,41 +5832,19 @@ add.field:
                   item.type(item.index) = FIELD.ITEM
             end case
 
-         case type = 'I' or type = 'A' or type = 'S'
+         case type = 'I'
             no.items += 1
             item.index = no.items
             item.name(item.index) = token
 
             item.type(item.index) = ITYPE.ITEM
-            if type = 'I' then
-               item.expression(item.index) = trim(dict.rec<dict.itype.source>,' ', 'B')
-               s = dict.rec<dict.display.name> ; gosub set.col.hdg
-               item.fmt(item.index) = dict.rec<dict.format>
-               gosub get.width.and.justification
-               item.conv(item.index) = dict.rec<dict.conv>
-               s = dict.rec<dict.assoc> ; gosub add.item.association
-               item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M"
-            end else    ;* A/S type
-               item.expression(item.index) = dict.rec<dict.a.correlative>
-               s = dict.rec<dict.a.display.name> ; gosub set.col.hdg
-               item.fmt(item.index) = dict.rec<dict.a.width>:dict.rec<dict.a.justify>
-               item.display.width(item.index) = dict.rec<dict.a.width>
-               item.justification(item.index) = dict.rec<dict.a.justify>
-               item.left.justified(item.index) = (dict.rec<dict.a.justify> # 'R')
-               item.conv(item.index) = dict.rec<dict.a.conv>
-
-               * Invent a pseudo association name for associated fields
-               s = dict.rec<dict.a.assoc>
-               begin case
-                  case s matches '"D;"1N0X'
-                     s = '__' : matchfield(s, '"D;"0N0X', 2)
-                  case s matches '"C;"1N0X'
-                     s = '__' : dict.rec<dict.a.loc>
-               end case
-               gosub add.item.association
-
-               item.multivalued(item.index) = @true
-            end
+            item.expression(item.index) = trim(dict.rec<dict.itype.source>,' ', 'B')
+            s = dict.rec<dict.display.name> ; gosub set.col.hdg
+            item.fmt(item.index) = dict.rec<dict.format>
+            gosub get.width.and.justification
+            item.conv(item.index) = dict.rec<dict.conv>
+            s = dict.rec<dict.assoc> ; gosub add.item.association
+            item.multivalued(item.index) = dict.rec<dict.s.m>[1,1] = "M"
 
             * Check if item needs compiling
 

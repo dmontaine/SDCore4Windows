@@ -1,5 +1,5 @@
 I
-IF type='A' OR type='S' THEN a.conv ELSE cnv
+cnv
 
 CONV
 6L

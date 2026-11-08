@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 31 Oct 26 dm  The A and S dictionary item types are gone: an index whose type letter is still A or S is reported with the format and S/M fields like any other.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -88,12 +89,8 @@ $include dictdict.h
 
       result<1,7> = ak.data(akno, AKD$MAPNAME)
 
-      if type = 'A' or type = 'S' then
-         result<DICT.A.JUSTIFY> = if bitand(flags, AK$RIGHT) then 'R' else 'L'
-      end else
-         result<DICT.FORMAT> = if bitand(flags, AK$RIGHT) then 'R' else 'L'
-         result<DICT.S.M> = if bitand(flags, AK$MV) then 'M' else 'S'
-      end
+      result<DICT.FORMAT> = if bitand(flags, AK$RIGHT) then 'R' else 'L'
+      result<DICT.S.M> = if bitand(flags, AK$MV) then 'M' else 'S'
 
       * Value 8  -  Case insensitive?
 
