@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 93f422ed (S.87 batch 13): pick_style_runfile() (the Pick style CALL "file name") is gone; a call name with a space in it
+ *           is an illegal call name.
  * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): op_enter() (the Pick ENTER statement) is gone; its opcode is an op_illegal row in opcodes.h.
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): CALL "file name", the Pick style call (QM4 Fixes 208; the owner's ruling: the file is a VOC name only,
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: op_chkcat() looks in the global catalogue under sd_sysdir() (the configuration file's), not the segment's copy.
@@ -114,107 +116,18 @@ Private void refresh_link(int depth) {
 }
 
 /* ======================================================================
-   pick_style_runfile()  -  The Pick style CALL "file name" (17 Oct 26, QM4
-   Fixes 208; the owner's ruling: VOC file names only)
-
-   call_name is the lower-cased string of the CALL, "file name": the name of a
-   file as the VOC has it, a space, and the name of a compiled program in the
-   file's object directory, which is the file with .out added (.OUT if the
-   program was compiled from a file whose VOC id has capitals, as BASIC makes
-   it). The path of that directory comes from get_voc_file_reference(), the
-   lookup OPEN makes, so a file this account could not OPEN cannot be named
-   here, a Q-pointer follows the gates of S.63, and there is no operating
-   system path form. The result is the object's pathname, the kind of name
-   RUN gives k_call(); load_object() opens it. Returns FALSE when the string
-   is not of that form or names no such file.
-
-   The program name may not begin with one of the global catalogue prefixes
-   ($ ! * _): those names belong to the catalogue and its rules, not to a file.
-   STATUS() is left as it was.                                              */
-
-Private bool pick_style_runfile(char* call_name, char* runfile) {
-  char file[MAX_PROGRAM_NAME_LEN + 1];
-  char prog[MAX_PROGRAM_NAME_LEN + 1];
-  char mapped[2 * MAX_PROGRAM_NAME_LEN + 2];
-  char voc_name[MAX_PROGRAM_NAME_LEN + 8];
-  char path[MAX_PATHNAME_LEN + 1];
-  char* sp;
-  char* p;
-  int32_t saved_status;
-  size_t path_len;
-  int pass;
-  bool found = FALSE;
-
-  sp = strchr(call_name, ' ');
-  if (sp == NULL)
-    return FALSE;
-  *sp = '\0';
-  strcpy(file, call_name);
-  strcpy(prog, sp + 1);
-  *sp = ' ';
-
-  /* Exactly two names: no further spaces, no path separators, neither empty */
-
-  if ((file[0] == '\0') || (prog[0] == '\0') || (strchr(prog, ' ') != NULL))
-    return FALSE;
-  if ((strchr(file, DS) != NULL) || (strchr(prog, DS) != NULL))
-    return FALSE;
-  if (strchr("*$!_", prog[0]) != NULL)
-    return FALSE;
-  for (p = file; *p != '\0'; p++) {
-    if ((strchr("abcdefghijklmnopqrstuvwxyz0123456789.%$-_", *p) == NULL))
-      return FALSE;
-  }
-  if (!valid_call_name(prog))
-    return FALSE;
-
-  saved_status = process.status;
-
-  /* The object directory is the VOC entry file.out, or FILE.OUT when the file was named with capitals */
-
-  for (pass = 0; (pass < 2) && !found; pass++) {
-    strcpy(voc_name, file);
-    if (pass == 1)
-      UpperCaseString(voc_name);
-    strcat(voc_name, (pass == 0) ? ".out" : ".OUT");
-    path[0] = '\0';
-    found = get_voc_file_reference(voc_name, FALSE, path, NULL) && (path[0] != '\0');
-  }
-
-  process.status = saved_status;
-  if (!found)
-    return FALSE;
-
-  (void)map_t1_id(prog, (int16_t)strlen(prog), mapped);
-  path_len = strlen(path);
-  if (path_len + 1 + strlen(mapped) > MAX_PATHNAME_LEN)
-    return FALSE;
-  memcpy(runfile, path, path_len);
-  runfile[path_len] = DS;
-  strcpy(runfile + path_len + 1, mapped);
-  return TRUE;
-}
-
-/* ======================================================================
    call_name_to_load()  -  The name op_call() and op_callv() hand to k_call()
    for a CALL whose name is the string in descr.  call_name receives the
-   name as written, in lower case, for the profiler; runfile is room for a
-   pathname. A name with a space in it is the Pick style form; any other must
-   be a call name, and one beginning with $ only internal code may call.  An
-   illegal name aborts, as it always has.                                  */
+   name as written, in lower case, for the profiler.  It must be a call name,
+   and one beginning with $ only internal code may call.  An illegal name
+   aborts, as it always has.                                               */
 
-Private char* call_name_to_load(DESCRIPTOR* descr, char* call_name, char* runfile) {
+Private char* call_name_to_load(DESCRIPTOR* descr, char* call_name) {
   if (k_get_c_string(descr, call_name, MAX_PROGRAM_NAME_LEN) <= 0) {
     k_illegal_call_name();
   }
 
   LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
-
-  if (strchr(call_name, ' ') != NULL) {
-    if (!pick_style_runfile(call_name, runfile))
-      k_illegal_call_name();
-    return runfile;
-  }
 
   if (!valid_call_name(call_name))
     k_illegal_call_name();
@@ -235,7 +148,6 @@ void op_call() {
   DESCRIPTOR* descr;
   int16_t num_args;
   char call_name[MAX_PROGRAM_NAME_LEN + 1];
-  char runfile[MAX_PATHNAME_LEN + 1];
   char* load_name;
 
   num_args = *(pc++);
@@ -249,7 +161,7 @@ void op_call() {
 
   switch (descr->type) {
     case STRING:
-      load_name = call_name_to_load(descr, call_name, runfile);
+      load_name = call_name_to_load(descr, call_name);
       ProfEvent(PROF_CALL, call_name, (int)strlen(call_name)); /* the application event profiler (16 Oct 26) */
       k_call(load_name, num_args, NULL, 1);
 
@@ -309,7 +221,6 @@ void op_callv() {
   DESCRIPTOR* descr;
   int16_t num_args;
   char call_name[MAX_PROGRAM_NAME_LEN + 1];
-  char runfile[MAX_PATHNAME_LEN + 1];
   char* load_name;
   ARRAY_HEADER* ahdr;
   int16_t i;
@@ -361,7 +272,7 @@ void op_callv() {
 
   switch (subr_descr->type) {
     case STRING:
-      load_name = call_name_to_load(subr_descr, call_name, runfile);
+      load_name = call_name_to_load(subr_descr, call_name);
       ProfEvent(PROF_CALL, call_name, (int)strlen(call_name)); /* the application event profiler (16 Oct 26) */
       k_call(load_name, num_args, NULL, 0);
 

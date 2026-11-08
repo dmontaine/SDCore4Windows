@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 93f422ed (S.87 batch 13): the statements ROOT, KEY( and BSCAN (with the programs rootidx, keyop, bscan) and the Pick style
+*               CALL "file name" are gone.
 * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): the functions ADDS, SUBS, MULS, DIVS, IS.ALNUM .. IS.SPACE, LEFT, RIGHT and MD5 are gone (their
 *               name and handler rows, and XFUN rows 5 to 12).
 * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the statement GO / GO TO is gone (write GOTO; ON ... GOTO is the only form of ON), and # no
@@ -506,7 +508,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
    statements := @fm:"SET.TIMEZONE":@fm:"KEEP.SELECT":@fm:"MATWRITECSV"       ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-16, Q-4 (same)
    statements := @fm:"SELECTINDEXV"                                           ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
-   statements := @fm:"BSCAN":@fm:"KEY":@fm:"ROOT"                             ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
    statements := @fm:"SELECTLEFTV":@fm:"SELECTRIGHTV"                         ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291 (same)
    statements := @fm:"SORTADD":@fm:"SORTCLEAR"                                ;* 16 Oct 26 dm - QM4 Fixes item 371
    statements := @fm:"READJSON":@fm:"WRITEJSON"                               ;* 20 Oct 26 dm - CSV / JSON / XML task: JSON Lines (same: at the end)
@@ -2533,9 +2534,6 @@ is.statement:
                  st.keepselect,                ;* 15 Oct 26 dm - QM4 gaps Q-16
                  st.matwritecsv,               ;* 15 Oct 26 dm - QM4 gaps Q-4
                  st.selectindexv,              ;* 15 Oct 26 dm - QM4 gaps Q-2
-                 st.bscan,                     ;* 15 Oct 26 dm - QM4 gaps Q-2
-                 st.key,                       ;* 15 Oct 26 dm - QM4 gaps Q-2
-                 st.root,                      ;* 15 Oct 26 dm - QM4 gaps Q-2
                  st.selectleftv,               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
                  st.selectrightv,              ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
                  st.sortadd,                   ;* 16 Oct 26 dm - QM4 Fixes item 371
@@ -2614,11 +2612,6 @@ is.statement:
       if u.token.string = 'LOCATE' then goto is.statement
       if u.token.string = 'RANDOMIZE' then goto is.statement
       if u.token.string = 'SUBROUTINE' then goto is.statement   ;* 0243
-      if u.token.string = 'KEY' then                            ;* 15 Oct 26 dm - QM4 gaps Q-2: KEY(op, scan, key, id) is the
-         symbol.name = token.string                             ;* index scan statement unless the program has a matrix called KEY
-         gosub find.var
-         if symbol.var.no < 0 or symbol.dim = 0 then goto is.statement
-      end
       goto is.assignment
 
    case token = TKN.AT.NAME
@@ -7124,20 +7117,6 @@ st.call:
          gosub make.var
          gosub emit.var.load
       end
-   end
-   else if look.ahead.token = TKN.STRING then
-      * 17 Oct 26 dm, QM4 Fixes 208: the Pick style CALL "file name".  The string is the name of a file as the VOC has it, a
-      * space, and the name of a compiled program in the file's object directory (op_jumps.c pick_style_runfile()).  It is
-      * called like any direct call, through a variable that starts out holding the string; a string with no space in it is
-      * not this form and is refused as it always was.
-
-      gosub get.token
-      s = downcase(token.string)
-      if index(s, ' ', 1) = 0 then
-         err.msg = sysmsg(2883) ;* Expected direct or indirect subroutine reference
-         goto error
-      end
-      gosub emit.direct.call.reference
    end
    else if (look.ahead.token = TKN.NAME) or (look.ahead.token = TKN.NAME.LBR) or (look.ahead.token.string = '!')  or (look.ahead.token.string = '*') or (look.ahead.token = TKN.DOLLAR) then
       * Direct call
@@ -13381,113 +13360,6 @@ st.selectindexv:
    sys.call.n = 5
    gosub emit.sys.call.end
    return
-
-*****************************************************************************
-* ST.ROOT  -  ROOT file.name, index TO scan.var THEN / ELSE       (15 Oct 26 dm, QM4 gaps Q-2)
-* ST.KEY   -  KEY( operator, scan.var, index.key, item.id ) THEN / ELSE
-* ST.BSCAN -  BSCAN value {, ids} FROM file.var {, key} USING index {RESET} {BY A | D} THEN / ELSE
-*
-* The Pick style index scans.  Each is a call of a catalogued function (!rootidx, !keyop, !bscan), made of SETLEFT, SELECTINDEX,
-* SELECTLEFT and SELECTRIGHT, whose 1 or 0 the THEN and ELSE test, as OSREAD's does; the function leaves STATUS() as the manual
-* describes it (SET.STATUS just before it returns).  A scan variable is a string, the file name and the index name, so KEY
-* opens the file again each time.  The brackets of KEY are optional.  KEY( is a statement unless the program has a matrix
-* called KEY, which proc.statement checks before it gets here.
-
-st.root:
-   s = '!rootidx'
-   gosub emit.direct.call.reference
-   gosub emit.function.return.argument
-   gosub expr                           ;* The file name
-   gosub check.comma
-   gosub expr                           ;* The index
-   if u.look.ahead.token.string # 'TO' then goto err.to
-   gosub get.token
-   gosub simple.lvar.reference          ;* The scan variable
-   if err then return
-   sys.call.n = 4
-   gosub emit.sys.call.end
-   gosub emit.function.result.load
-   goto st.if.back.end
-
-st.key:
-   s = '!keyop'
-   gosub emit.direct.call.reference
-   gosub emit.function.return.argument
-   key.paren = @false
-   if look.ahead.token = TKN.LBR then
-      gosub get.token
-      key.paren = @true
-   end
-   gosub expr                           ;* The operator
-   gosub check.comma
-   gosub expr                           ;* The scan variable
-   gosub check.comma
-   gosub simple.lvar.reference          ;* The indexed value, in and out
-   if err then return
-   gosub check.comma
-   gosub simple.lvar.reference          ;* The record id, in and out
-   if err then return
-   if key.paren then
-      if look.ahead.token # TKN.RBR then goto err.rbr
-      gosub get.token
-   end
-   sys.call.n = 5
-   gosub emit.sys.call.end
-   gosub emit.function.result.load
-   goto st.if.back.end
-
-st.bscan:
-   s = '!bscan'
-   gosub emit.direct.call.reference
-   gosub emit.function.return.argument
-   gosub simple.lvar.reference          ;* The indexed value
-   if err then return
-   if look.ahead.token = TKN.COMMA then
-      gosub get.token
-      gosub simple.lvar.reference       ;* The list of ids
-      if err then return
-   end else
-      opcode.byte = OP.LDNULL ; gosub emit.simple    ;* none wanted: a constant takes the callee's assignment
-   end
-   if u.look.ahead.token.string # 'FROM' then goto err.from
-   gosub get.token
-   gosub convert.pick.file.reference
-   gosub simple.var.reference           ;* The file variable
-   if look.ahead.token = TKN.COMMA then
-      gosub get.token
-      gosub expr                        ;* The value to find
-      n = 1
-   end else
-      opcode.byte = OP.LDNULL ; gosub emit.simple
-      n = 0
-   end
-   gosub emit.numeric.load              ;* has.value
-   if u.look.ahead.token.string # 'USING' then goto err.syntax
-   gosub get.token
-   gosub expr                           ;* The index
-   n = 0
-   if u.look.ahead.token.string = 'RESET' then
-      gosub get.token
-      n = 1
-   end
-   gosub emit.numeric.load              ;* reset
-   opcode.string = 'A'
-   if u.look.ahead.token.string = 'BY' then
-      gosub get.token
-      if u.look.ahead.token.string = 'A' or u.look.ahead.token.string = 'D' then
-         gosub get.token
-         opcode.string = u.token.string
-         gosub emit.string.load
-      end else
-         gosub expr                     ;* a seq in a variable
-      end
-   end else
-      gosub emit.string.load
-   end
-   sys.call.n = 9
-   gosub emit.sys.call.end
-   gosub emit.function.result.load
-   goto st.if.back.end
 
 *****************************************************************************
 * ST.SELECTLEFTV   -  SELECTLEFTV index FROM file.var {SETTING key} TO list.var     (15 Oct 26 dm, QM4 gaps Q-2, sheet 291)

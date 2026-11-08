@@ -22,7 +22,7 @@
 #   A  BLOCK.TERM and BLOCK.PRINT: the seven rows of a letter, the blank row, the width, wrapping at a space and by force,
 #      lower case, the shapes and the question mark for what has none, no text, the printer's copy equal to the screen's
 #   B  FILE.STAT against FILEINFO (modulus, sizes, record count), the flags, a directory file, a name, a select list, DICT
-#   C  BSCAN, ROOT and KEY on an index of known values; D SELECTLEFTV / SELECTRIGHTV; E DISABLE.INDEX (updates, query, rebuild);
+#   C  an index of known values (BSCAN, ROOT and KEY were removed 27 Oct 26: what is left is its setup and the controls that KEY, ROOT and BSCAN are ordinary names); D SELECTLEFTV / SELECTRIGHTV; E DISABLE.INDEX (updates, query, rebuild);
 #   F  (SWAPMARKS, removed 27 Oct 26); G SYSTEM(1071) against STATUS; H QUERY.MERGE.PRINT read from the print job; I PHANTOM GROUP; J @PSTAT;
 #   K  SET.QUEUE / SP.ASSIGN; L  FSTAT.USER
 
@@ -62,52 +62,11 @@ USER_PROGS = {
               "fileinfo(f, FL$RECORD.COUNT):'][':fileinfo(f, FL$PRI.BYTES):'][':fileinfo(f, FL$OVF.BYTES):'][':fileinfo(f, FL$AK):']'\n"
               "   next n\n   crt 'FIDONE'\nend\n"),
     "zzfsl": "   formlist 'zzfs2' to 0\nend\n",
-    # C: BSCAN, ROOT and KEY on file zzaix: ten records, the city Paris in r1 to r5, Rome in r6 to r8, Oslo in r9, Lima in r10
+    # C: the fixture file zzaix (used by D): ten records, the city Paris in r1 to r5, Rome in r6 to r8, Oslo in r9, Lima in r10
     "zzaisu": ("   open 'zzaix' to f else stop 'no file'\n   open 'DICT zzaix' to d else stop 'no dict'\n"
                "   write 'D':@fm:'1':@fm:'':@fm:'City':@fm:'12L':@fm:'S' on d, 'CITY'\n"
                "   cities = 'Paris':@fm:'Paris':@fm:'Paris':@fm:'Paris':@fm:'Paris':@fm:'Rome':@fm:'Rome':@fm:'Rome':@fm:'Oslo':@fm:'Lima'\n"
                "   for i = 1 to 10\n      write cities<i> on f, 'r':i\n   next i\nend\n"),
-    "zzbs1": ("   open 'zzaix' to f else stop 'no file'\n"
-              "   bscan v, ids from f using 'CITY' reset then crt 'AF[':v:'][':change(ids, @fm, ','):'][':status():']' else crt 'AF ELSE'\n"
-              "   n = 0\n"
-              "   loop\n      bscan v, ids from f using 'CITY' then crt 'A[':v:'][':change(ids, @fm, ','):'][':status():']' else exit\n"
-              "      n += 1\n   until n > 20\n   repeat\n"
-              "   crt 'AEND[':v:'][':ids:'][':status():']'\n"
-              "   bscan v, ids from f using 'CITY' reset by d then crt 'D1[':v:']'\n"
-              "   loop\n      bscan v from f using 'CITY' by d then crt 'D[':v:'][':status():']' else exit\n"
-              "      n += 1\n   until n > 40\n   repeat\n"
-              "   crt 'DEND[':v:'][':status():']'\n"
-              "   bscan v, ids from f, 'Paris' using 'CITY' then crt 'V1[':v:'][':dcount(ids, @fm):'][':status():']' else crt 'V1 ELSE'\n"
-              "   bscan v, ids from f, 'Q' using 'CITY' then crt 'V2 THEN' else crt 'V2[':v:'][':change(ids, @fm, ','):'][':status():']'\n"
-              "   bscan v, ids from f, 'Pa' using 'CITY' by d then crt 'V3 THEN' else crt 'V3[':v:'][':status():']'\n"
-              "   bscan v, ids from f, 'Rome' using 'CITY' then crt 'V4[':v:']' else crt 'V4 ELSE'\n"
-              "   bscan v, ids from f using 'CITY' then crt 'V5[':v:']' else crt 'V5 ELSE'\n"
-              "   bscan v, ids from f using 'NOPE' then crt 'E1 THEN' else crt 'E1[':status():']'\n"
-              "   bscan v, ids from f using 'CITY' reset by 'X' then crt 'E2 THEN' else crt 'E2[':status():']'\n"
-              "   open 'zzfs2' to g else stop 'no zzfs2'\n"
-              "   bscan v, ids from g using 'CITY' then crt 'E3 THEN' else crt 'E3[':status():']'\n"
-              "   crt 'BSDONE'\nend\n"),
-    "zzky1": ("   root 'zzaix', 'CITY' to idx then crt 'ROOT[':status():']' else crt 'ROOT ELSE'\n"
-              "   v = '' ; id = ''\n   n = 0\n   seq = ''\n"
-              "   loop\n      key('N', idx, v, id) then seq<-1> = v:'/':id else exit\n      n += 1\n   until n > 30\n   repeat\n"
-              "   crt 'NSEQ[':change(seq, @fm, ' '):']'\n   crt 'NEND[':status():'][':v:'][':id:']'\n"
-              "   v = '' ; id = ''\n   seq = ''\n   key('L', idx, v, id) then crt 'L[':v:'][':id:']' else crt 'L ELSE'\n"
-              "   n = 0\n"
-              "   loop\n      seq<-1> = v:'/':id\n      key('P', idx, v, id) then null else exit\n      n += 1\n   until n > 30\n   repeat\n"
-              "   crt 'PSEQ[':change(seq, @fm, ' '):']'\n   crt 'PEND[':status():']'\n"
-              "   v = 'Pa' ; id = ''\n   key('C', idx, v, id) then crt 'C1[':v:'][':id:']' else crt 'C1 ELSE'\n"
-              "   v = 'Paris' ; id = ''\n   key('C', idx, v, id) then crt 'C2[':v:'][':id:']' else crt 'C2 ELSE'\n"
-              "   v = 'Z' ; id = ''\n   key('C', idx, v, id) then crt 'C3 THEN' else crt 'C3[':status():']'\n"
-              "   v = 'Rome' ; id = ''\n   key('R', idx, v, id) then crt 'R1[':v:'][':id:']' else crt 'R1 ELSE'\n"
-              "   v = 'Nowhere' ; id = ''\n   key('R', idx, v, id) then crt 'R2 THEN' else crt 'R2[':status():']'\n"
-              "   v = 'Paris' ; id = 'r2'\n   key('V', idx, v, id) then crt 'V1 THEN' else crt 'V1 ELSE'\n"
-              "   v = 'Paris' ; id = 'r9'\n   key('V', idx, v, id) then crt 'V2 THEN' else crt 'V2 ELSE[':status():']'\n"
-              "   v = 'Paris' ; id = ''\n   key('X', idx, v, id) then crt 'X[':dcount(id, @fm):'][':change(id, @fm, ','):']' else crt 'X ELSE'\n"
-              "   v = 'Rome' ; id = ''\n   key 'r', idx, v, id then crt 'LC[':id:']' else crt 'LC ELSE'\n"
-              "   v = 'Rome' ; id = ''\n   key('Q', idx, v, id) then crt 'Q THEN' else crt 'Q[':status():']'\n"
-              "   root 'zzaix', 'NOPE' to idx2 then crt 'RT2 THEN' else crt 'RT2[':status():']'\n"
-              "   root 'nofile', 'CITY' to idx3 then crt 'RT3 THEN' else crt 'RT3[':(status() # 0):']'\n"
-              "   crt 'KYDONE'\nend\n"),
     # D: SELECTLEFTV and SELECTRIGHTV on file zzaix of part C
     "zzlr1": ("   open 'zzaix' to f else stop 'no file'\n"
               "   selectindex 'CITY', 'Paris' from f to 10\n   clearselect 10\n"
@@ -358,72 +317,8 @@ def main():
         row("B9: an impossible print unit is refused (message 2053), nothing listed",
             not has(out, r"^zzfs"), repr(out[-2:]))
 
-        say("\n--- C. BSCAN, ROOT and KEY ------------------------------------------------------------------------------------")
+        say("\n--- C. the index fixture, and KEY, ROOT and BSCAN as ordinary names ----------------------------------------------")
         q3.plain("zzaa", ["CREATE.FILE zzaix DYNAMIC", "RUN bp zzaisu", "CREATE.INDEX zzaix CITY", "BUILD.INDEX zzaix CITY"])
-        ids_of = {"Lima": {"r10"}, "Oslo": {"r9"}, "Paris": {"r1", "r2", "r3", "r4", "r5"}, "Rome": {"r6", "r7", "r8"}}
-        order = ["Lima", "Oslo", "Paris", "Rome"]
-
-        def entry(s):
-            """'Paris][r1,r2][1' -> ('Paris', {'r1', 'r2'}, '1')"""
-            p = s.split("][")
-            return (p[0], set(p[1].split(",")) if len(p) > 1 and p[1] else set(), p[2] if len(p) > 2 else None)
-
-        out = q3.plain("zzaa", ["RUN bp zzbs1"])
-        row("C1: BSCAN ... RESET (ascending) returns the leftmost entry: Lima, its one id r10, STATUS() 1",
-            [entry(t) for t in tag(out, "AF")] == [("Lima", {"r10"}, "1")], repr(tag(out, "AF")))
-        a = [entry(t) for t in tag(out, "A")]
-        row("C1: ... and BSCAN with neither value nor RESET moves right through Oslo, Paris and Rome, with their ids",
-            [(v, i, s) for v, i, s in a] == [(c, ids_of[c], "1") for c in order[1:]], repr(tag(out, "A")))
-        row("C1: ... and at the end of the index the ELSE runs with STATUS() 0 and null value and ids", tag(out, "AEND") == ["][][0"],
-            repr(tag(out, "AEND")))
-        row("C2: BSCAN ... RESET BY D returns the rightmost entry (Rome) and BSCAN BY D then walks Paris, Oslo, Lima to the end",
-            tag(out, "D1") == ["Rome"] and tag(out, "D") == ["Paris][1", "Oslo][1", "Lima][1"] and tag(out, "DEND") == ["][0"],
-            repr((tag(out, "D1"), tag(out, "D"), tag(out, "DEND"))))
-        row("C3: BSCAN with a value that is in the index returns it: Paris, 5 ids, STATUS() 1", tag(out, "V1") == ["Paris][5][1"],
-            repr(tag(out, "V1")))
-        row("C3: ... a value that is not (Q) returns the nearest entry to the right, Rome, with STATUS() 2 through the ELSE",
-            [entry(t) for t in tag(out, "V2")] == [("Rome", ids_of["Rome"], "2")], repr(tag(out, "V2")))
-        row("C3: ... and with BY D the nearest to the left (Pa -> Oslo), STATUS() 2", tag(out, "V3") == ["Oslo][2"], repr(tag(out, "V3")))
-        row("C3: ... and the scan goes on from the entry found: after Rome, ascending, the next BSCAN is the end",
-            tag(out, "V4") == ["Rome"] and has(out, r"^V5 ELSE$"), repr((tag(out, "V4"), has(out, r"^V5 ELSE$"))))
-        row("C4: BSCAN refuses an index the file has not (STATUS() 4), a sequence that is not A or D (5) and a directory file (3)",
-            tag(out, "E1") == ["4"] and tag(out, "E2") == ["5"] and tag(out, "E3") == ["3"],
-            repr((tag(out, "E1"), tag(out, "E2"), tag(out, "E3"))))
-        row("C4: the probe ran to its end", has(out, r"^BSDONE$"), repr(out[-3:]))
-
-        out = q3.plain("zzaa", ["RUN bp zzky1"])
-        row("C5: ROOT of an existing index takes THEN with STATUS() 0", tag(out, "ROOT") == ["0"], repr(out[:4]))
-        nseq = (tag(out, "NSEQ") or [""])[0].split()
-        row("C5: KEY('N') from null/null walks every entry: Lima, Oslo, Paris x5, Rome x3, each id once and with its own value",
-            [p.split("/")[0] for p in nseq] == ["Lima", "Oslo"] + ["Paris"] * 5 + ["Rome"] * 3
-            and all(p.split("/")[1] in ids_of[p.split("/")[0]] for p in nseq) and len({p for p in nseq}) == 10, repr(nseq))
-        row("C5: ... and at the end the ELSE runs with STATUS() 3030", (tag(out, "NEND") or [""])[0].startswith("3030]"), repr(tag(out, "NEND")))
-        pseq = (tag(out, "PSEQ") or [""])[0].split()
-        row("C6: KEY('L') with a null key is the last entry (Rome and the last of its ids)",
-            tag(out, "L") and tag(out, "L")[0].split("][")[0] == "Rome" and nseq and tag(out, "L")[0] == nseq[-1].replace("/", "]["),
-            repr((tag(out, "L"), nseq[-1:])))
-        row("C6: ... and KEY('P') walks the same entries backwards: the P walk is the N walk reversed, ending with STATUS() 3030",
-            pseq == list(reversed(nseq)) and tag(out, "PEND") == ["3030"], repr((pseq, tag(out, "PEND"))))
-        first = {"Paris": "(no entry)", "Rome": "(no entry)"}      # a walk that found nothing fails its own row, not the run
-        for p in nseq:
-            first.pop(p.split("/")[0], None)
-        for p in nseq:
-            first.setdefault(p.split("/")[0], p.split("/")[1])
-        row("C7: KEY('C') from Pa gives Paris and its first id; from Paris the same; beyond the last value it fails with 3030",
-            tag(out, "C1") == ["Paris][" + first["Paris"]] and tag(out, "C2") == ["Paris][" + first["Paris"]] and tag(out, "C3") == ["3030"],
-            repr((tag(out, "C1"), tag(out, "C2"), tag(out, "C3"))))
-        row("C7: KEY('R') gives the first id of the value, and fails with STATUS() 1 when there is no such value",
-            tag(out, "R1") == ["Rome][" + first["Rome"]] and tag(out, "R2") == ["1"], repr((tag(out, "R1"), tag(out, "R2"))))
-        row("C7: KEY('V') takes THEN for a pair in the index (Paris r2) and ELSE for one that is not (Paris r9)",
-            has(out, r"^V1 THEN$") and has(out, r"^V2 ELSE\[1\]$"), repr(out))
-        xs = (tag(out, "X") or [""])[0].split("][")
-        row("C7: KEY('X') gives the five ids of Paris as a field mark delimited list",
-            len(xs) == 2 and xs[0] == "5" and set(xs[1].split(",")) == ids_of["Paris"], repr(tag(out, "X")))
-        row("C7: the operator in lower case works and the brackets are optional", tag(out, "LC") == [first["Rome"]], repr(tag(out, "LC")))
-        row("C7: an operator that is not one of the seven fails with STATUS() 2", tag(out, "Q") == ["2"], repr(tag(out, "Q")))
-        row("C8: ROOT of an index the file has not fails with 3019, of a file that is not there with a non-zero STATUS()",
-            tag(out, "RT2") == ["3019"] and tag(out, "RT3") == ["1"], repr((tag(out, "RT2"), tag(out, "RT3"))))
-        row("C8: the probe ran to its end", has(out, r"^KYDONE$"), repr(out[-3:]))
         out = q3.plain("zzaa", ["RUN bp zzlr1"])
         lt = tag(out, "L")
         row("D1: SELECTLEFTV from the position of Paris gives Oslo (r9) and then Lima (r10) as list variables, each with SETTING its value "
