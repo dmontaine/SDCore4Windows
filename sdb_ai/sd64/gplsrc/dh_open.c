@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): Linux removed the CASE_INSENSITIVE_FILE_SYSTEM block of a
+ *            directory file's entry (ext4 is case sensitive).  NOT taken here, an OS reason: NTFS is case blind, so the
+ *            unconditional DHF_NOCASE of 17 Aug 26 below stays.
  * 15 Sep 26  Open a subfile for update and fall back to read-only, rather than
  *            asking access(W_OK) first (RELEASE_1.1 46 - the noacl access() lie)
  * 14 Sep 26  A trigger name is loaded lower case (RELEASE_1.1 5 stage 3a)

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the five CASE_INSENSITIVE_FILE_SYSTEM blocks (op_ospath, op_osrename: upper-casing a
+ *               path) are gone; the macro was never defined in this tree either (dh_open.c makes directory files case blind instead).
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): OSPATH keys OS_DELETE, OS_MKDIR and OS_MKPATH, and OSRENAME (either name), do nothing and answer
  *               false (STATUS() ER_PERM) for a path inside the shared account unless the session is the administrator, a $internal program included.
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): FILEINFO key 1021 is FL_WHO, the openQM form (a list of user numbers); the text form FL_HOLDERS that SD's
@@ -958,10 +960,6 @@ void op_ospath() {
       goto set_status;
   }  
 
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-  UpperCaseString(path);
-#endif
-
   /* 21 Aug 26 Windows port - THE CONTAINMENT GATE FOR OSPATH.  Fifteen keys
      share one opcode and they do not all touch the filesystem, so the gate is
      applied to the ones that do and the rest are left alone:
@@ -1151,9 +1149,6 @@ void op_ospath() {
 
     case OS_CWD:
       (void)getcwd(name, MAX_PATHNAME_LEN);
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-      UpperCaseString(name);
-#endif
       k_put_c_string(name, e_stack);
       e_stack++;
       goto exit_op_pathinfo;
@@ -1231,9 +1226,6 @@ void op_ospath() {
             continue;
 
           strcpy(name + 1, dp->d_name);
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-          UpperCaseString(name + 1);
-#endif
           if (stat_buff.st_mode & S_IFDIR) {
             name[0] = 'D';
             if (head != NULL)
@@ -1366,9 +1358,6 @@ void op_osrename() {
     process.status = ER_INVAPATH;
     goto exit_osrename;
   }
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-  UpperCaseString(new_path);
-#endif
 
   /* Get old pathname */
 
@@ -1378,9 +1367,6 @@ void op_osrename() {
     process.status = ER_INVAPATH;
     goto exit_osrename;
   }
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-  UpperCaseString(old_path);
-#endif
 
   /* 21 Aug 26 Windows port - containment gate, and OSRENAME IS A SIXTH ENTRY
      POINT THAT THE WRITTEN SPEC DID NOT LIST.  It named open_file(), ospath(),

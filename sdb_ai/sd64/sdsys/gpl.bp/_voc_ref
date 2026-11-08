@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the System:Account:File name form (FILERULE bit 2) is gone, and a Q-pointer with a fourth
+*               field (another system) is refused (3003, as before) instead of building a path.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): a fifth argument, allow.shared (op_dio1.c get_voc_file_reference_ex).  When the caller sets it,
 *               the name is in no entry of the account's own VOC, there is no component and the session is not the administrator, !shared_ref
 *               is asked whether the name is a file of the shared account; its answer is the pathname and the field 6 letters.  The own VOC (all
@@ -184,11 +186,7 @@ $include keys.h
                   voc.rec = 'Q':@fm:x1:@fm:field(voc.id, ':', 2)
                   goto parse.as.q.pointer
                end
-            case n = 3                 ;* System:Account:File
-               if bitand(rules, 2) then
-                  voc.rec = 'Q':@fm:field(voc.id, ':', 2):@fm:field(voc.id, ':', 3):@fm:x1
-                  goto parse.as.q.pointer
-               end
+* 27 Oct 26 dm - S.87 batch 5: the System:Account:File form (FILERULE bit 2) is gone; it named a file on another system and nothing here reaches one.
          end case
       end
 
@@ -293,12 +291,9 @@ parse.as.q.pointer:
                voc.rec<3> = field(voc.rec<3>, ',', 1)
             end
 
-            pathname = voc.rec<4>
-            if pathname # '' then       ;* Networked file definition
-               pathname := ';':voc.rec<2>:';'
-               if fno = 3 then pathname := 'DICT '
-               pathname := voc.rec<3>
-               set.status 0
+            if voc.rec<4> # '' then     ;* 27 Oct 26 dm - a fourth field names another system; nothing here opens a file on one.  It came back as a path with semicolons and failed (3003); it is refused with the same status, and is NOT opened as a local file
+               pathname = ''
+               set.status ER$FNF
                return
             end
 

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the comment about a name containing ';' no longer being a network file reference
+ *           is gone with the code it described (_voc_ref no longer builds such a name).
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66), the shared account.  get_voc_file_reference() is a wrapper over get_voc_file_reference_ex(...,
  *           allow_shared), which gives _voc_ref a FIFTH argument (k_recurse(pcode_voc_ref, 5)); only open_file()'s map_name call passes TRUE, so
  *           OPENSEQ, DELETESEQ and CALL "file prog" never follow the shared account.  create_edit_refusal() refuses anything made INSIDE the shared
@@ -820,10 +822,6 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
       /* process.status will have been set by recursive code */
       goto exit_op_open;
     }
-
-    /* SDNet removed (plan G4): a name containing ';' is no longer a network
-       file reference. It falls through to fullpath() and fails like any other
-       bad pathname. */
 
     /* 17 Oct 26 S.65 slice 3c: an N pointer in the VOC (_voc_ref) is a file on another SD server.  It comes back as the encoded path
        char(1) 'N' char(1) server char(1) file, which no real path holds.  Only an OPEN by name looks for it (map_name): OPENPATH and

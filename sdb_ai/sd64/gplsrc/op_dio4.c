@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the CASE_INSENSITIVE_FILE_SYSTEM block of op_dir() (upper-casing the names of a
+ *           directory) is gone; the macro was never defined here, so DIR() already returned names as Windows stores them.
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): dir_select() closes the oldest cached file and tries again when opendir() fails at the open-file limit (QM4 Fixes 279).
  * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_select() and op_selectv() refuse a NET_FILE (net_refuse) before the target list is touched
@@ -1511,9 +1513,6 @@ void op_dir() {
           continue;
 
         strcpy(name, dp->d_name);
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-        UpperCaseString(name);
-#endif
         if (statbuf.st_mode & S_IFREG)
           mode = 'F';
         else if (statbuf.st_mode & S_IFDIR)

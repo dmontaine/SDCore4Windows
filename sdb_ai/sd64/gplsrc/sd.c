@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the -L option (apply a new licence: it set a flag nothing read) is gone; "sd -l"
+ *           is an unrecognised option like any other.
  * 14 Sep 26 Windows port - program names are canonical LOWER case: the
  *           bootstrap processor is $bbproc and load_pcode() looks for lower-
  *           case pcode names.  RELEASE_1.1_FIXES.md 5, stage 3a.
@@ -54,7 +56,6 @@
  *         -I            Bootstrap Install
  *         -K n          Kill user n
  *         -K ALL        Kill all users
- *         -L            Apply new licence
  *         -M            Dump shared memory
  *         -N            Network connection (SDClient or direct telnet)
  *         -Pn           Execute phantom command (command in $IPC)
@@ -429,11 +430,6 @@ Private bool comlin(int argc, char *argv[]) {
           fprintf(stderr, "User number, login name or ALL required\n");
           exit(1);
 
-        case 'L': /* Apply new licence */
-          check_admin();
-          command_options |= CMD_APPLY_LICENCE;
-          break;
-
         case 'M': /* Dump memory */
           check_admin();
           dump_sysseg(FALSE);
@@ -767,7 +763,6 @@ help:
           "elsewhere\n");
   fprintf(stderr, "      -k n        Kill (logout) user n\n");
   fprintf(stderr, "      -k all      Kill (logout) all users n\n");
-  fprintf(stderr, "      -l          Apply new licence\n");
   fprintf(stderr, "      -u          List current users\n");
   fprintf(stderr, "      -status     Show version, start time and process counts\n");
   fprintf(stderr, "      -quiet      Suppress all displays on entry\n");

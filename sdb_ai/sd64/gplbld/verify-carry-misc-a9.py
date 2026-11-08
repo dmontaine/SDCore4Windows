@@ -9,6 +9,9 @@
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): leg 4 - none of the 31 removed terminal names is listed, and
+#               ansi, xterm and dec-vt100 are.  The count stays "50 or more" (Linux expects exactly 51; this tree also has its
+#               windows entry).  Linux's leg 5 (LIST.COMMON DETAIL, item 362) is not carried: listcom has no DETAIL here.
 # 11 Oct 26 dm  Written for the small items of 1.2-0 bundles A-9 to A-14.
 # END-HISTORY
 #
@@ -156,6 +159,12 @@ def main():
             and re.search(r"\bdec-vt100\b", out) is not None, "no xterm or dec-vt100")
         m = re.search(r"(?m)^(\d+) terminal type\(s\)", out)
         row("and says how many: 50 or more", m is not None and int(m.group(1)) >= 50, "count line: %r" % (m.group(1) if m else None))
+        gone = ("dg210 dg-ansi dg-generic dg6053-old dg100 prism2 prism4 p4 prism5 p5 prism7 p7 prism8 p8 prism9 p9 prism12 p12 prism14 p14 "
+                "pt100 pt200 wren fenix pt100w pt200w wrenw fenixw pt250 pt250w tvi910").split()
+        words = set(re.findall(r"[A-Za-z0-9.-]+", out))
+        row("CONTROL: ansi, xterm and dec-vt100 (which replace them) are listed", {"ansi", "xterm", "dec-vt100"} <= words, "listed words: %d" % len(words))
+        row("THE ROW: none of the 31 removed Data General, MDC Prism, Prime and Televideo 910 names is listed (S.87 batch 5)", not (set(gone) & words),
+            "still listed: %r" % sorted(set(gone) & words))
     finally:
         for n in made:
             for d in ("bp", "bp.out"):

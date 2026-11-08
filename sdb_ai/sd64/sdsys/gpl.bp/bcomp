@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): emit.errmsg.args (Pick style STOP / ABORT arguments, called by nothing since the
+*               ERRMSG family went in 2024) and the label st.stopm are gone.
 * 7 Nov 26 Windows port - from Linux 698fe22b (27 Oct 26, S.87 batch 3): second spellings and forms gone (the owner's emulation survey): the statements
 *               $INSERT, INCLUDE (without the $), COM, DIMENSION, REDIMENSION, ENTER (with $MODE PICK.ENTER, bit 14 now reserved), PERFORM, PRINTERR, REMARK,
 *               RQM, SUB, TCLREAD; EXECUTE ... SETTING and PASSLIST with no variable; INPUT ... FOR and TIMEOUT (WAITING stays); the bracketed Pick form of
@@ -13892,7 +13894,6 @@ st.status:
 * ST.STOP -  STOP statement
 * 20240728 mab remove pick style messages 
 st.stop:
-st.stopm:
 st.stop.common:
 
    if recursive then goto err.recursive
@@ -14588,27 +14589,6 @@ st.write.seq.common2:
 *****************************************************************************
 *****           COMMON PATHS FOR STATEMENT PROCESSING ROUTINES          *****
 *****************************************************************************
-
-*****************************************************************************
-* Pick style errmsg argument processing for STOP and ABORT
-
-emit.errmsg.args:
-   if look.ahead.token = TKN.COMMA then
-      gosub get.token
-      gosub expr
-      loop
-      while look.ahead.token = TKN.COMMA
-         gosub get.token
-         opcode.string = @IM  ; gosub emit.string.load
-         opcode.byte = OP.CAT ; gosub emit.simple
-         gosub expr
-         opcode.byte = OP.CAT ; gosub emit.simple
-      repeat
-   end else
-      opcode.byte = OP.LDNULL ; gosub emit.simple
-   end
-
-   return
 
 *****************************************************************************
 * back.end  -  Common paths for ON ERROR / LOCKED / THEN / ELSE clauses

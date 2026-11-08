@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the CASE_INSENSITIVE_FILE_SYSTEM block of op_fcontrol() (upper-casing an alternate
+ *           key path) is gone; the macro was never defined here (dh_open.c makes a directory file's comparison case blind instead).
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): op_settrig() and the actions of op_fcontrol() that change a setting of the file refuse a
  *           file in the shared account with message 12519 (Linux 11514) for anyone but the administrator, a $internal program included
  *           (shared_structure_refusal).  Windows had no pub_fcontrol when this was carried (it came later, with 400500c), and has no FC$SYNC / FC$CRLF / FC$MINMOD, so Linux's hunk for those is not carried.
@@ -246,9 +248,6 @@ void op_fcontrol() {
       }
 
       k_get_c_string(descr, header.akpath, MAX_PATHNAME_LEN);
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-      UpperCaseString(header.akpath);
-#endif
 
       if (header.akpath[0] == '\0')
         dh_file->akpath = NULL;

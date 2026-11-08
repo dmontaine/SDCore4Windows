@@ -107,7 +107,7 @@ typedef struct COLL_ENTRY COLL_ENTRY;
    Command line items                                                     */
 
 Public int16_t command_options init(0);
-#define CMD_APPLY_LICENCE    0x0001      /* -l option */
+/* 0x0001 was CMD_APPLY_LICENCE (-l, which applied a licence SD does not have); removed 27 Oct 26 (S.87 batch 5) and not reused */
 #define CMD_QUERY_ACCOUNT    0x0002      /* -a option */
 #define CMD_INSTALL          0x0004      /* -i option */
 #define CMD_QUIET            0x0008      /* -quiet option */
