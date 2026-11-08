@@ -413,7 +413,7 @@ try {
     # 8 Nov 26: sd.voclib no longer ships (S.87, Linux d241df26).
     $shipped = @('gpl.bp', 'syscom', 'newvoc', 'messages',
                  'accounts', 'bp', 'gpl.bp.out', 'bp.out',
-                 'pcode.out', '$hold', '$cred', 'os.users', 'os.users.dic')
+                 'pcode.out', '$hold', '$cred')   # 8 Nov 26: os.users and os.users.dic no longer ship (RELEASE_1.1 175)
     # MADE BY THE BOOTSTRAP: BBPROC's FILES_LIST, plus voc at BBPROC:158.
     $made    = @('voc', 'voc.dic', 'dict.dic', 'dir_dict', 'accounts.dic',
                  '$hold.dic', '$map', '$map.dic', '$ipc')
@@ -523,8 +523,7 @@ try {
 
     $sysPairs = @(@{U='ACCOUNTS'; L='accounts'},
                   @{U='MESSAGES'; L='messages'},
-                  @{U='QFILE';    L='qfile'},
-                  @{U='OS.USERS'; L='os.users'})
+                  @{U='QFILE';    L='qfile'})           # 8 Nov 26: OS.USERS went with the file (RELEASE_1.1 175)
     # 16 Sep 26 - EVERY LOGTO SDSYS LEG IN THIS SCRIPT RUNS HERE, ONCE, ELEVATED
     # (RELEASE_1.1 45 refuses LOGTO SDSYS to a session that did not start
     # elevated - measured red on b171).  The command lists are unchanged; section

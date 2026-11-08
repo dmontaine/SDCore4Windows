@@ -106,6 +106,8 @@ OutputBaseFilename=sd-setup-{#AppVer}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; 8 Nov 26 - taller, so the tasks page shows every box without scrolling once the opengates box is back (RELEASE_1.1 185's stated remedy).
+WizardSizePercent=100,145
 
 ; 02 Sep 26 - WINDOWS 10 AND 11, NOTHING EARLIER.  Owner's ruling, 2 Sep 2026:
 ; "I don't believe in supporting versions no longer supported by the vendor",
@@ -535,9 +537,17 @@ Name: "apiremote\apinetwork"; Description: "Let other computers on your network 
 ; InstallPython.
 Name: "installpython"; Description: "Install Python for all users"; \
     GroupDescription: "4)  Python:"; Flags: unchecked; Check: PythonExeOffered
-; 26 Oct 26 - THE "OPEN EVERY ACCESS GATE" TASK IS GONE (Linux f811e1f carried 25 Oct; owner, 26 Oct, via Linux 945e766: "you are right about looser
-; default, no question, keep it closed").  The installing user's account starts with every access gate closed like every account SD makes, and the
-; installer has no way to open one; modify.account does it afterwards (the installation document lists the words).
+; 25 Oct 26 - Linux f811e1f (19 Oct 26): OPEN EVERY ACCESS GATE FOR THE INSTALLING USER'S ACCOUNT, OFF UNLESS TICKED.  An SD account starts with
+; every access gate closed (S.63, S.64, S.65, S.66), the installing user's too, and that stays the delivered state; the owner (on Linux, 19 Oct,
+; warned that opening is a looser default) chose a question whose answer is No unless given.  Ticked, attach-account.ps1 -OpenGates runs
+; MODIFY.ACCOUNT with every on-word after the account is made and reads the result back (8 Nov 26: files-admin-on and pins-on too).  The tasks page is
+; skipped on an upgrade, where the account exists and nothing here applies, and /TASKS=opengates answers it on a silent run.  The text gives
+; the option only; what each gate is and how to close one again is in the installation document.
+; 8 Nov 26 - SHOWN AGAIN, AND EVERY GATE (owner on Linux, 1 Nov 2026, bfca310a: "we need to add that back", "Every gate"; here, 8 Nov: all gates open if requested).  The 26 Oct removal and
+; the hiding before it are undone.  It had been hidden because the box did not say what an access gate is and sat below the fold: the text now names them and
+; the wizard is taller.  /TASKS=opengates still answers it on a silent install.  Left unticked the account starts closed, and an administrator opens a gate later with modify.account.
+Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files)"; \
+    GroupDescription: "5)  SD Core account:"; Flags: unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -1397,6 +1407,8 @@ var
     the paragraph above had to learn from a failed compile: what the wizard's
     last window needs has to outlive the step that learned it. }
   AttachCode: Integer;
+  { 25 Oct 26 - the opengates task's one result line (Linux f811e1f); empty unless the task was ticked and the account was just made. }
+  OpenGatesMsg: String;
   { 26 Sep 26 - python.org's installer beside this one ('' when absent), and
     whether a usable all-users Python was already here.  Sampled once in
     InitializeSetup: the [Tasks] Check reads them while the wizard is built,
@@ -3397,14 +3409,18 @@ end;
 function AttachInstallerAccount: Integer;
 var
   Code: Integer;
-  Ps: String;
+  Ps, Gates: String;
 begin
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Gates := '';
+  { 25 Oct 26 - the task "opengates" (Linux f811e1f): only a tick or /TASKS=opengates adds the switch. }
+  if WizardIsTaskSelected('opengates') then
+    Gates := ' -OpenGates';
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
                   ExpandConstant('{app}\attach-account.ps1') + '" -User "' +
                   ExpandConstant('{username}') + '" -AppDir "' +
                   ExpandConstant('{app}') + '" -DataDir "' +
-                  ExpandConstant('{#DataDir}') + '"',
+                  ExpandConstant('{#DataDir}') + '"' + Gates,
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
   begin
     { -1 means the process never started, which is not one of the script's own
@@ -4668,7 +4684,20 @@ begin
       cannot be managed without. }
     AttachCode := AttachInstallerAccount;
 
-    { 25 Oct 26 - THE SHARED ACCOUNT, RELEASE_1.1 170.  See MakeSharedAccount.
+    { 25 Oct 26 - THE OPENGATES TASK'S RESULT (Linux f811e1f).  attach-account.ps1 answers 4 for "the account was made, a gate was asked for and
+      not every one is open afterwards": the account exists, so everything after this reads it as 0 (finish-install.ps1 asks for its password
+      on 0 and 2 only), and the warning travels in OpenGatesMsg.  A 0 with the task ticked means the script read every gate back as open. }
+    OpenGatesMsg := '';
+    if AttachCode = 4 then
+    begin
+      AttachCode := 0;
+      OpenGatesMsg := 'Some access gates are NOT open for ' + Lowercase(ExpandConstant('{username}')) +
+                      '. Details: ' + ExpandConstant('{#DataDir}') + '\attach-account.log' + #13#10#13#10;
+    end
+    else if (AttachCode = 0) and WizardIsTaskSelected('opengates') then
+      OpenGatesMsg := 'Every access gate is open for ' + Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10;
+
+    { 25 Oct 26 - AND THE SHARED ACCOUNT, RELEASE_1.1 170.  See MakeSharedAccount.
       Before SecureAccountDirs below, so the directory it makes is stamped by
       the same sweep that stamps every other group account (which knows the name
       shared and grants sdusers rather than sdg_shared). }
@@ -5017,6 +5046,7 @@ begin
       are not failures and would otherwise print twice. }
     if IsFailureText(AccountMsg) then FinishReport := FinishReport + AccountMsg;
     if IsFailureText(AttachMsg) then FinishReport := FinishReport + AttachMsg;
+    if IsFailureText(OpenGatesMsg) then FinishReport := FinishReport + OpenGatesMsg;
 
     { 20 Sep 26 - THE THREE STATUS LINES, SHORT ONES ONLY.  His spec:
       "<SSH server status line>", then the ssh and the API "user
@@ -5069,6 +5099,9 @@ begin
         AccountsReport := 'One account exists: SDSYS.' + #13#10#13#10 +
           'The next screen will ask for its password.' + #13#10#13#10;
     end;
+    { 25 Oct 26 - the opengates task's result when it is good news (a warning went to FinishReport above). }
+    if not IsFailureText(OpenGatesMsg) then
+      AccountsReport := AccountsReport + OpenGatesMsg;
     { 20 Sep 26 - THE "TO GIVE SOMEBODY ELSE ACCESS" BLOCK THAT ENDED THIS BOX IS
       OUT, on the owner's rule that dialogs deal only with the installing task and
       that how-to-use text belongs in the installation documentation.  IT IS
