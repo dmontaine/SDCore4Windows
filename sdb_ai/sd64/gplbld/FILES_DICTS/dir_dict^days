@@ -1,5 +1,5 @@
 I Days since the record was modified
-SUBR("!dirinfo","days",@FILENAME,@ID)
+SUBR("!dirinfo","days",@FILE.NAME,@ID)
 
 Days
 6R

@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the highlight list lost @svm, @user and @filename.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
 * END-HISTORY
@@ -105,9 +106,9 @@ rules.sd.basic:
    r<-1> = 'words type testlock time timedate trans trim trimb trimbs trimf trimfs trims trimw umask unassigned upcase vartype'
    r<-1> = 'words type vslice write.socket xlate xtd'
    * the @ variables
-   r<-1> = 'words constant @fm @vm @sm @tm @im @svm @true @false @id @record @data @date @time @day @month @year @user @userno'
+   r<-1> = 'words constant @fm @vm @sm @tm @im @true @false @id @record @data @date @time @day @month @year @userno'
    r<-1> = 'words constant @logname @account @path @sentence @parasentence @command @option @selected @who @tty @term.type'
-   r<-1> = 'words constant @crthigh @crtwide @level @nv @ns @nd @ni @ans @lpv @file.name @filename @ds @conv @itype.mode'
+   r<-1> = 'words constant @crthigh @crtwide @level @nv @ns @nd @ni @ans @lpv @file.name @ds @conv @itype.mode'
    r<-1> = 'words constant @abort.code @abort.message @command.stack @data.pending @pib @sib @pob @sob @transaction.id @system.return.code'
    return
 

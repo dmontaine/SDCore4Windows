@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
+*               and @FILE.NAME stay).
 * 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): the statement INPUTCLEAR is gone (write CLEARINPUT; both compiled to the same code).
 * 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): the second names DQUOTE, DQUOTES, SWAP and XLATE are gone (write QUOTE, QUOTES, CHANGE and
 *               TRANS); each was a row in the intrinsics and handler lists, no opcode.
@@ -361,8 +363,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * have special code to produce the values.
 
 * !!ATVAR!!
-   at.constants = "FM":@fm:"VM":@fm:"SM":@fm:"TM":@fm:"IM":@fm:"AM":@fm:"SVM"
-   at.constants := @fm:"FALSE":@fm:"TRUE":@fm:"SDSYS":@fm:"USERNO":@fm:"USER.NO"
+   at.constants = "FM":@fm:"VM":@fm:"SM":@fm:"TM":@fm:"IM"
+   at.constants := @fm:"FALSE":@fm:"TRUE":@fm:"SDSYS":@fm:"USERNO"
    at.constants := @fm:"DAY":@fm:"MONTH":@fm:"YEAR":@fm:"YEAR4"
    at.constants := @fm:"LPTRHIGH":@fm:"LPTRWIDE":@fm:"CRTHIGH":@fm:"CRTWIDE"
    at.constants := @fm:"LEVEL":@fm:"TERM.TYPE":@fm:"TRANSACTION.ID"
@@ -390,7 +392,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.vars<-1> = "DATE"               ; at.syscom.offsets<-1> = SYSCOM.CPROC.DATE
    at.syscom.vars<-1> = "DS"                 ; at.syscom.offsets<-1> = SYSCOM.DS
    at.syscom.vars<-1> = "FILE.NAME"          ; at.syscom.offsets<-1> = SYSCOM.QPROC.FILE.NAME
-   at.syscom.vars<-1> = "FILENAME"           ; at.syscom.offsets<-1> = SYSCOM.QPROC.FILE.NAME
    at.syscom.vars<-1> = "ID"                 ; at.syscom.offsets<-1> = SYSCOM.QPROC.ID
    at.syscom.vars<-1> = "ITYPE.MODE"         ; at.syscom.offsets<-1> = SYSCOM.ITYPE.MODE
    at.syscom.vars<-1> = "LOGNAME"            ; at.syscom.offsets<-1> = SYSCOM.LOGNAME
@@ -417,7 +418,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.vars<-1> = "TTY"                ; at.syscom.offsets<-1> = SYSCOM.TTY
    at.syscom.vars<-1> = "TRIGGER.RETURN.CODE"; at.syscom.offsets<-1> = SYSCOM.TRIGGER.RETURN.CODE
    at.syscom.vars<-1> = "USER.RETURN.CODE"   ; at.syscom.offsets<-1> = SYSCOM.USER.RETURN.CODE
-   at.syscom.vars<-1> = "USER"               ; at.syscom.offsets<-1> = SYSCOM.LOGNAME
    at.syscom.vars<-1> = "USER0"              ; at.syscom.offsets<-1> = SYSCOM.USER0
    at.syscom.vars<-1> = "USER1"              ; at.syscom.offsets<-1> = SYSCOM.USER1
    at.syscom.vars<-1> = "USER2"              ; at.syscom.offsets<-1> = SYSCOM.USER2
@@ -5969,11 +5969,10 @@ emit.at.var.load:
    if u.token.string = "STDFIL" and bittest(mode, M.STDFIL) then goto stdfil.var.load  ;* @STDFIL
 
    locate u.token.string in at.constants<1> setting i then
-      on i goto at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,
+      on i goto at.mark,at.mark,at.mark,at.mark,at.mark,
            at.false,
            at.true,
            at.sdsys,
-           at.userno,
            at.userno,
            at.day,
            at.month,

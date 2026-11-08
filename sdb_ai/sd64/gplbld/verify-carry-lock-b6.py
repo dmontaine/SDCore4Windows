@@ -60,9 +60,9 @@ PROGS = {
                "   open 'zzb6lk' to f else stop 'no f'\n   open 'zzb6lk2' to g else stop 'no g'\n"
                "   readu r from f, 'k1' else null\n   readl r from f, 'k2' else null\n   filelock g\n"
                "   execute 'LIST.READU NO.PAGE' capturing out\n"
-               "   for i = 1 to dcount(out, @am)\n      crt 'LN:':out<i>\n   next i\n"
+               "   for i = 1 to dcount(out, @fm)\n      crt 'LN:':out<i>\n   next i\n"
                "   execute 'LIST.READU DETAIL NO.PAGE' capturing out\n"
-               "   for i = 1 to dcount(out, @am)\n      crt 'LR:':out<i>\n   next i\n"
+               "   for i = 1 to dcount(out, @fm)\n      crt 'LR:':out<i>\n   next i\n"
                "   crt 'LRDONE'\nend\n"),
     "zzb6wh": ("   execute 'DELETE.FILE zzb6wf' capturing j\n   execute 'CREATE.FILE zzb6wf' capturing j\n"
                "   open 'zzb6wf' to f else stop 'no f'\n   readu r from f, 'w1' else null\n   crt 'WH[':@userno:']'\n"
@@ -70,7 +70,7 @@ PROGS = {
     "zzb6ww": ("   open 'zzb6wf' to f else stop 'no f'\n   crt 'WW[':@userno:']'\n"
                "   readu r from f, 'w1' else null\n   crt 'WW DONE'\nend\n"),
     "zzb6obs": ("   execute 'LIST.READU WAIT DETAIL NO.PAGE' capturing out\n"
-                "   for i = 1 to dcount(out, @am)\n      crt 'WT:':out<i>\n   next i\n   crt 'WTDONE'\nend\n"),
+                "   for i = 1 to dcount(out, @fm)\n      crt 'WT:':out<i>\n   next i\n   crt 'WTDONE'\nend\n"),
     # 125: a class module with public and private variables, and a program that holds an object of it and dumps itself
     "zzb6cls": ("class zzb6cls\npublic pubvar\nprivate privvar, counter\npublic subroutine create.object\n"
                 "   pubvar = 'hello-public'\n   privvar = 'hello-private'\n   counter = 42\nend\n"

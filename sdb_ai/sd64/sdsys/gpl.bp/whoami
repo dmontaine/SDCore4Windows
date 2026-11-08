@@ -19,6 +19,7 @@
 * 
 *
 * START-HISTORY:
+* 27 Oct 26 dm S.87 batch 13: @logname for the removed @user.
 * rev 0.9.0 Jan 25 mab initial release
 * END-HISTORY
 *
@@ -40,7 +41,7 @@ $include int$keys.h
 *
 crt str("=",25):'Who Am I':str('=',25)
 
-crt 'User        : ':@user
+crt 'User        : ':@logname
 crt 'Account     : ':@who
 crt 'User Number : ':system(SYS$USER_NBR)
 crt 'Process UID : ':system(SYS$UNX_UID)

@@ -49,7 +49,7 @@ CASES = [
 # 132 VSLICE of subvalues: every example on the openQM reference page (pasted by the owner, 13 Oct 26), over
 # 1 FM 2 VM 3 SM 4 VM 5 FM 6 VM 7 SM 8 VM 9.  Marks are shown as F V S.  The first four are the two-argument form,
 # which already existed and are the controls.
-VS_SRC = "s = '1':@fm:'2':@vm:'3':@svm:'4':@vm:'5':@fm:'6':@vm:'7':@svm:'8':@vm:'9'"
+VS_SRC = "s = '1':@fm:'2':@vm:'3':@sm:'4':@vm:'5':@fm:'6':@vm:'7':@sm:'8':@vm:'9'"
 for _args, _want in [
     ("0", "1F2V3S4V5F6V7S8V9"), ("1", "1F2F6"), ("2", "F3S4F7S8"), ("3", "F5F9"),
     ("0, 1", "1F2V3V5F6V7V9"), ("0, 2", "FV4FV8"), ("0, 3", ""),
@@ -57,7 +57,7 @@ for _args, _want in [
     ("3, 1", "F5F9"), ("3, 2", ""), ("0, 0", "1F2V3S4V5F6V7S8V9"),
 ]:
     CASES.append(("132 VSLICE(s, %s)%s" % (_args, "" if "," in _args else " (control, two arguments)"),
-                  VS_SRC + "\n   x = change(change(change(vslice(s, %s), @fm, 'F'), @vm, 'V'), @svm, 'S')" % _args,
+                  VS_SRC + "\n   x = change(change(change(vslice(s, %s), @fm, 'F'), @vm, 'V'), @sm, 'S')" % _args,
                   _want))
 
 

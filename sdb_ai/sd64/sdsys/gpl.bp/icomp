@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
+*               and @FILE.NAME stay).
 * 8 Nov 26 Windows port - from Linux 5441d157 (S.87 batch 10): three loose forms of a dictionary expression are gone: a hyphenated item name (CUST-NO,
 *               join.hyphen.name; A-B is always a subtraction), IF with no THEN or no ELSE (refused again, messages 2950 and 2951) and a format string
 *               straight after a value (write the FMT operator or the format).
@@ -157,8 +159,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * have special code to produce the values.
 
 * !!ATVAR!!
-   at.constants = "FM":@fm:"VM":@fm:"SM":@fm:"TM":@fm:"IM":@fm:"AM":@fm:"SVM"
-   at.constants := @fm:"FALSE":@fm:"TRUE":@fm:"USERNO":@fm:"USER.NO"
+   at.constants = "FM":@fm:"VM":@fm:"SM":@fm:"TM":@fm:"IM"
+   at.constants := @fm:"FALSE":@fm:"TRUE":@fm:"USERNO"
    at.constants := @fm:"DAY":@fm:"MONTH":@fm:"YEAR":@fm:"YEAR4"
    at.constants := @fm:"TERM.TYPE":@fm:"TRANSACTION.ID":@fm:"TRANSACTION.LEVEL"
    at.constants := @fm:"IP.ADDR":@fm:"HOSTNAME":@fm:"GID":@fm:"UID"
@@ -182,7 +184,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.vars<-1> = "DATE"                ; at.offsets<-1> = -SYSCOM.CPROC.DATE
    at.vars<-1> = "DS"                  ; at.offsets<-1> = SYSCOM.DS
    at.vars<-1> = "FILE.NAME"           ; at.offsets<-1> = -SYSCOM.QPROC.FILE.NAME
-   at.vars<-1> = "FILENAME"            ; at.offsets<-1> = -SYSCOM.QPROC.FILE.NAME
    at.vars<-1> = "ID"                  ; at.offsets<-1> = SYSCOM.QPROC.ID
    at.vars<-1> = "ITYPE.MODE"          ; at.offsets<-1> = SYSCOM.ITYPE.MODE
    at.vars<-1> = "LOGNAME"             ; at.offsets<-1> = SYSCOM.LOGNAME
@@ -206,7 +207,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.vars<-1> = "TIME"                ; at.offsets<-1> = -SYSCOM.CPROC.TIME
    at.vars<-1> = "TRIGGER.RETURN.CODE" ; at.offsets<-1> = SYSCOM.TRIGGER.RETURN.CODE
    at.vars<-1> = "TTY"                 ; at.offsets<-1> = SYSCOM.TTY
-   at.vars<-1> = "USER"                ; at.offsets<-1> = SYSCOM.LOGNAME
    at.vars<-1> = "USER0"               ; at.offsets<-1> = SYSCOM.USER0
    at.vars<-1> = "USER1"               ; at.offsets<-1> = SYSCOM.USER1
    at.vars<-1> = "USER2"               ; at.offsets<-1> = SYSCOM.USER2
@@ -729,10 +729,9 @@ emit.at.var.load:
    gosub get.token
 
    locate u.token.string in at.constants<1> setting i then
-      on i goto at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,at.mark,
+      on i goto at.mark,at.mark,at.mark,at.mark,at.mark,
            at.false,
            at.true,
-           at.userno,
            at.userno,
            at.day,
            at.month,
@@ -746,7 +745,7 @@ emit.at.var.load:
            at.gid,
            at.uid
                
-at.mark:                                    ;* FM, VM, SM, TM, IM, AM, SVM
+at.mark:                                    ;* FM, VM, SM, TM, IM
       opcode.string = mark.chars[i,1] ; gosub emit.string.load
       return
 

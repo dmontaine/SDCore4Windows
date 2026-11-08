@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 27 Oct 26 dm S.87 batch 13: no cases for the removed names FILENAME, USER and USER.NO.
 * 19 Jan 24 0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -64,7 +65,6 @@ $include syscom.h
       case name = 'EXCEPTION.ORIGIN'   ; expansion = @EXCEPTION.ORIGIN
       case name = 'EXCEPTION.STACK'    ; expansion = @EXCEPTION.STACK
       case name = 'FILE.NAME'          ; expansion = @FILE.NAME
-      case name = 'FILENAME'           ; expansion = @FILENAME
       case name = 'GID'                ; expansion = @GID
       case name = 'HOSTNAME'           ; expansion = @HOSTNAME
       case name = 'ID'                 ; expansion = @ID
@@ -101,14 +101,12 @@ $include syscom.h
       case name = 'TRIGGER.RETURN.CODE'; expansion = @TRIGGER.RETURN.CODE
       case name = 'TTY'                ; expansion = @TTY
       case name = 'UID'                ; expansion = @UID
-      case name = 'USER'               ; expansion = @USER
       case name = 'USER0'              ; expansion = @USER0
       case name = 'USER1'              ; expansion = @USER1
       case name = 'USER2'              ; expansion = @USER2
       case name = 'USER3'              ; expansion = @USER3
       case name = 'USER4'              ; expansion = @USER4
       case name = 'USERNO'             ; expansion = @USERNO
-      case name = 'USER.NO'            ; expansion = @USER.NO
       case name = 'USER.RETURN.CODE'   ; expansion = @USER.RETURN.CODE
       case name = 'WHO'                ; expansion = @WHO
       case name = 'YEAR'               ; expansion = @YEAR

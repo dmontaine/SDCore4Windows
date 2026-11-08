@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm S.87 batch 13: @sm for the removed @svm.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * 12 Oct 26 dm  Revived from SD 2.6.6 (removed from SD earlier), lower case, for the drop-down
 *               menu bar that shows each action's keyboard shortcut.
@@ -1634,7 +1635,7 @@ a.goto.line:
 
    if svn = 1 then svx = 1
    else
-      svx = index(current.line<1,vn>, @svm, svn - 1)
+      svx = index(current.line<1,vn>, @sm, svn - 1)
       if svx then svx += 1
    end
 
@@ -1663,7 +1664,7 @@ a.goto.line:
 
       if svn = 1 then svx = 1
       else
-         svx = index(current.line<1,vn>, @svm, svn - 1)
+         svx = index(current.line<1,vn>, @sm, svn - 1)
          if svx then svx += 1
       end
    end

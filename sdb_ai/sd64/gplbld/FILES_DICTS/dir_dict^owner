@@ -1,5 +1,5 @@
 I User name that owns the record
-SUBR("!dirinfo","owner",@FILENAME,@ID)
+SUBR("!dirinfo","owner",@FILE.NAME,@ID)
 
 Owner
 12L

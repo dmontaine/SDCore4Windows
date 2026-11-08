@@ -50,9 +50,9 @@ for v, c, f in [("0", "0", "0"), ("3", "3", "3"), ("3.1", "4", "3"), ("3.7", "4"
     case("CEIL(%s)" % v, "x = ceil(%s)" % v, c)
     case("FLOOR(%s)" % v, "x = floor(%s)" % v, f)
 case("CEIL of an array is an array of the same shape",
-     "x = ceil('1.2':@vm:'3.5':@fm:'-1.2':@svm:'7')", "2V4F-1S7")
+     "x = ceil('1.2':@vm:'3.5':@fm:'-1.2':@sm:'7')", "2V4F-1S7")
 case("FLOOR of an array is an array of the same shape",
-     "x = floor('1.2':@vm:'3.5':@fm:'-1.2':@svm:'7')", "1V3F-2S7")
+     "x = floor('1.2':@vm:'3.5':@fm:'-1.2':@sm:'7')", "1V3F-2S7")
 case("CEIL of a numeric string", "x = ceil('2.000001')", "3")
 
 # ---- ROUNDUP and ROUNDDOWN: the manual's own table for steps of 3 ------------------------------------------------------
@@ -70,7 +70,7 @@ for fn, yes, no in [("is.alpha", ["'a'", "'Z'", "'abc'", "'a1'"], ["'1'", "' '",
                     ("is.alnum", ["'z'", "'5'", "'a_'"], ["'_'", "' '", "'.'", "''"]),
                     ("is.graph", ["'!'", "'a'", "'~'", "'0'"], ["' '", "''", "char(9)"]),
                     ("is.space", ["' '", "'  '", "' x'"], ["char(9)", "'x'", "''"]),
-                    ("is.mark", ["@fm", "@vm", "@svm", "@tm", "@im"], ["'a'", "' '", "''", "'1'"])]:
+                    ("is.mark", ["@fm", "@vm", "@sm", "@tm", "@im"], ["'a'", "' '", "''", "'1'"])]:
     for a in yes:
         case("%s(%s) is true" % (fn.upper(), a), "x = %s(%s)" % (fn, a), "1")
     for a in no:
@@ -100,7 +100,7 @@ case("LASTS, the manual's example", "x = lasts('1*2*3*4*5':@vm:'A*B*C', '*')", "
 case("LASTS keeps the structure of the array", "x = lasts('a*b':@fm:'c*d*e':@vm:'f', '*')", "bFeVf")
 
 # ---- NV and NS: the manual's examples over 111 VM 121 SM 122 SM 123 VM 131 SM 132 FM 211 SM 212 VM 221 ------------
-NVS = "s = '111':@vm:'121':@svm:'122':@svm:'123':@vm:'131':@svm:'132':@fm:'211':@svm:'212':@vm:'221'"
+NVS = "s = '111':@vm:'121':@sm:'122':@sm:'123':@vm:'131':@sm:'132':@fm:'211':@sm:'212':@vm:'221'"
 case("NV(s, 0), the manual's example", NVS + "\nx = nv(s, 0)", "1V2V3F1V2")
 case("NV(s, 1), the manual's example", NVS + "\nx = nv(s, 1)", "1V2S2S2V3S3F1S1V2")
 case("NS(s), the manual's example", NVS + "\nx = ns(s)", "1V1S2S3V1S2F1S2V1")
@@ -167,7 +167,7 @@ case("COMPARES with a justification, and I for case blind",
      "x = compares('9':@vm:'a', '10':@vm:'A', 'R') : '/' : compares('a':@vm:'b', 'A':@vm:'B', 'LI') : '/' : compares('a', 'A')", "-1V1/0V0/1")
 case("COMPARES where the arrays are not the same size compares the missing element as null",
      "x = compares('a':@vm:'b', 'a')", "0V1")
-case("COMPARES of subvalues", "x = compares('a':@svm:'z', 'b':@svm:'a')", "-1S1")
+case("COMPARES of subvalues", "x = compares('a':@sm:'z', 'b':@sm:'a')", "-1S1")
 ML = "$include syscom keys.h\nl1 = 'a':@fm:'b':@fm:'d':@fm:'f'\nl2 = 'b':@fm:'c':@fm:'d':@fm:'g'\n"
 case("MERGELIST ML$INTER, the items in both lists", ML + "x = change(mergelist(l1, l2, ML$INTER), @fm, ',')", "b,d")
 case("MERGELIST ML$UNION, the items in either, each once", ML + "x = change(mergelist(l1, l2, ML$UNION), @fm, ',')", "a,b,c,d,f,g")
@@ -228,7 +228,7 @@ case("CONTROL: REMOVE gives each item and the code of the mark after it", RM + "
      "x = r1 : '/' : d1 : '|' : r2 : '/' : d2 : '|' : r3 : '/' : d3", "a/2|b/3|c/0")
 case("RMVD gives the same as REMOVE for field, value and subvalue marks", RM + "r1 = rmvd(s, d1)\nr2 = rmvd(s, d2)\nr3 = rmvd(s, d3)\n"
      "x = r1 : '/' : d1 : '|' : r2 : '/' : d2 : '|' : r3 : '/' : d3", "a/2|b/3|c/0")
-case("RMVD takes a subvalue mark as the end of an item (code 4)", "s = 'p':@svm:'q'\nr1 = rmvd(s, d1)\nr2 = rmvd(s, d2)\nx = r1 : '/' : d1 : '|' : r2 : '/' : d2",
+case("RMVD takes a subvalue mark as the end of an item (code 4)", "s = 'p':@sm:'q'\nr1 = rmvd(s, d1)\nr2 = rmvd(s, d2)\nx = r1 : '/' : d1 : '|' : r2 : '/' : d2",
      "p/4|q/0")
 case("CONTROL: REMOVE ends an item at a text mark (code 5)", "s = 'a':@tm:'b':@fm:'c'\nr1 = remove(s, d1)\nx = r1 : '/' : d1", "a/5")
 case("RMVD leaves a text mark in the item: it is data", "s = 'a':@tm:'b':@fm:'c'\nr1 = rmvd(s, d1)\nx = change(r1, @tm, 'T') : '/' : d1", "aTb/2")
@@ -293,12 +293,12 @@ case("PARSE: either kind of quote makes a literal", "x = parse('a:b', \"1A':'1A\
 case("SYSTEM(1088) after MAXIMUM is the position of the greatest: the manual's example gives 2VM1VM1", "s = '61':@vm:'42':@fm:'71':@vm:'57'\nm = maximum(s)\n"
      "x = m : '/' : system(1088)", "71/2V1V1")
 case("SYSTEM(1088) after MINIMUM is the position of the least", "s = '61':@vm:'42':@fm:'71':@vm:'57'\nm = minimum(s)\nx = m : '/' : system(1088)", "42/1V2V1")
-case("SYSTEM(1088): the first of equal elements, and a subvalue", "s = '5':@fm:'9':@vm:'9':@svm:'9'\nm = maximum(s)\nx = m : '/' : system(1088)", "9/2V1V1")
-case("SYSTEM(1088): subvalue numbers count from 1 in each value", "s = 'a':@fm:'1':@vm:'2':@svm:'7':@svm:'3'\nm = maximum(s)\nx = m : '/' : system(1088)", "7/2V2V2")
+case("SYSTEM(1088): the first of equal elements, and a subvalue", "s = '5':@fm:'9':@vm:'9':@sm:'9'\nm = maximum(s)\nx = m : '/' : system(1088)", "9/2V1V1")
+case("SYSTEM(1088): subvalue numbers count from 1 in each value", "s = 'a':@fm:'1':@vm:'2':@sm:'7':@sm:'3'\nm = maximum(s)\nx = m : '/' : system(1088)", "7/2V2V2")
 case("SYSTEM(1088): text and null elements are not counted as the greatest, but are counted in the position",
      "s = 'x':@vm:'':@vm:'4':@vm:'abc':@vm:'6'\nm = maximum(s)\nx = m : '/' : system(1088)", "6/1V5V1")
 case("SYSTEM(1088) is null when the array is null, or has no number", "m = maximum('')\nx = system(1088) : '/' : (m = '')\nm = minimum('abc')\nx = x : '|' : system(1088) : '/' : (m = '')", "/1|/1")
-case("MAXIMUM and MINIMUM are the same as before: the values", "s = '3':@vm:'-2':@fm:'10':@svm:'x':@vm:'0.5'\nx = maximum(s) : '/' : minimum(s)", "10/-2")
+case("MAXIMUM and MINIMUM are the same as before: the values", "s = '3':@vm:'-2':@fm:'10':@sm:'x':@vm:'0.5'\nx = maximum(s) : '/' : minimum(s)", "10/-2")
 case("CHILD of this session's own number, of 0 and of a number nobody has is false, and of a null string", "x = child(@userno) : child(0) : child(32000) : child('')", "0000")
 case("SYSTEM(1062) is 0 until SIGNAL has been raised", "x = system(1062) : system(1062)", "00")
 case("SIGNAL of this session's own number is true, SYSTEM(1062) then reads it once and clears it", "x = signal(@userno) : '/' : system(1062) : system(1062)", "1/10")
@@ -381,7 +381,7 @@ def source(i, body):
     lines.append("   x = ''")
     lines += [("   " + ln) for ln in body.split("\n") if ln.lower() != "$nocase.strings"]
     # the marks of the answer are shown as letters, so a row is one line of plain text
-    lines.append("   x = change(change(change(x, @fm, 'F'), @vm, 'V'), @svm, 'S')")
+    lines.append("   x = change(change(change(x, @fm, 'F'), @vm, 'V'), @sm, 'S')")
     lines.append("   crt 'C%03d[':x:']'" % i)
     lines.append("end")
     return "\n".join(lines) + "\n"

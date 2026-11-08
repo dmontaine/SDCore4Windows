@@ -171,7 +171,7 @@ USER_PROGS = {
     "zzluu": ("   call !listu(d)\n   for i = 1 to dcount(d, @fm)\n"
               "      crt 'LU[':d<i,1>:'][':d<i,6>:'][':d<i,9>:'][':(bitand(d<i,4> + 0, 1) # 0):']'\n"
               "   next i\n   crt 'MY[':@userno:'][':@who:']'\n   crt 'LUDONE'\nend\n"),
-    "zzluc": ("   execute 'LISTU NO.PAGE' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LC:':out<i>\n   next i\n"
+    "zzluc": ("   execute 'LISTU NO.PAGE' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LC:':out<i>\n   next i\n"
               "   crt 'MY[':@userno:'][':@who:']'\n   crt 'LCDONE'\nend\n"),
     "zzlunap": "   for i = 1 to 120\n      nap 100\n   next i\n   crt 'NAPDONE'\nend\n",
     # 15 Oct 26, QM4 gaps Q-5: CHILD and SIGNAL.  The phantom waits for SYSTEM(1062), then leaves a word in a sequential file; the
@@ -192,15 +192,15 @@ USER_PROGS = {
                 "   loop\n      call !listu(d)\n      for i = 1 to dcount(d, @fm)\n"
                 "         if bitand(d<i,4> + 0, 1) # 0 then up = @true\n      next i\n"
                 "   until up or t >= 150\n      nap 100 ; t += 1\n   repeat\n   crt 'PHUP[':up:'][':t:']'\n"
-                "   execute 'LISTU DETAIL NO.PAGE' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LD:':out<i>\n   next i\n"
+                "   execute 'LISTU DETAIL NO.PAGE' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LD:':out<i>\n   next i\n"
                 "   c = system(1056)\n   crt 'C1056[':change(c, @fm, '/'):']'\n"
                 "   call !listu(d)\n   for i = 1 to dcount(d, @fm)\n"
                 "      crt 'LU[':d<i,1>:'][':d<i,6>:'][':d<i,9>:'][':(bitand(d<i,4> + 0, 1) # 0):']'\n   next i\n"
                 # 15 Oct 26, QM4 gaps Q-8: LIST.PHANTOMS, which lists the phantoms and no one else
-                "   execute 'LIST.PHANTOMS' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LP:':out<i>\n   next i\n"
-                "   execute 'LIST.PHANTOMS USER nobody.such' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LQ:':out<i>\n   next i\n"
-                "   execute 'LIST.PHANTOMS POOL x' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LR:':out<i>\n   next i\n"
-                "   execute 'LIST.PHANTOMS USER' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'LS:':out<i>\n   next i\n"
+                "   execute 'LIST.PHANTOMS' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LP:':out<i>\n   next i\n"
+                "   execute 'LIST.PHANTOMS USER nobody.such' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LQ:':out<i>\n   next i\n"
+                "   execute 'LIST.PHANTOMS POOL x' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LR:':out<i>\n   next i\n"
+                "   execute 'LIST.PHANTOMS USER' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'LS:':out<i>\n   next i\n"
                 "   crt 'LDDONE'\nend\n"),
     "zzlucnt": "   c = system(1056)\n   crt 'C1056[':change(c, @fm, '/'):']'\n   crt 'LCNTDONE'\nend\n",
     # the Hot Spot Monitor: one open, three writes and a WRITEV, three reads and two READVs, two deletes
@@ -209,7 +209,7 @@ USER_PROGS = {
               "   read x from f, 'k1' else null\n   read x from f, 'k2' else null\n   read x from f, 'k3' else null\n"
               "   readv y from f, 'k1', 1 else null\n   readv y from f, 'k2', 1 else null\n"
               "   writev 'z' to f, 'k1', 1\n   delete f, 'k1'\n   delete f, 'k2'\n   crt 'HSMDONE'\nend\n"),
-    "zzhsmd": ("   execute 'HSM DISPLAY' capturing out\n   for i = 1 to dcount(out, @am)\n      crt 'HD:':out<i>\n   next i\n"
+    "zzhsmd": ("   execute 'HSM DISPLAY' capturing out\n   for i = 1 to dcount(out, @fm)\n      crt 'HD:':out<i>\n   next i\n"
                "   crt 'HDDONE'\nend\n"),
     # a process blocked on a lock, a holder, and an observer that runs PSTAT for the waiter
     "zzluwh": ("   execute 'DELETE.FILE zzluwf' capturing j\n   execute 'CREATE.FILE zzluwf' capturing j\n"
