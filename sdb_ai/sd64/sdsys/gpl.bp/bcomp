@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the statement GO / GO TO is gone (write GOTO; ON ... GOTO is the only form of ON), and # no
+*               longer starts a compiler directive (write $IFDEF, $DEFINE).
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
 *               and @FILE.NAME stay).
 * 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): the statement INPUTCLEAR is gone (write CLEARINPUT; both compiled to the same code).
@@ -456,7 +458,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"FILE":@fm:"FILELOCK":@fm:"FILEUNLOCK":@fm:"FIND"
    statements := @fm:"FINDSTR":@fm:"FLUSH":@fm:"FLUSH.DH.CACHE":@fm:"FOOTING":@fm:"FOR"   ;* FLUSH.DH.CACHE: 14 Oct 26 dm - openQM 83, 123
    statements := @fm:"FORMLIST":@fm:"FORMLISTV"     ;* FORMLISTV: 15 Oct 26 dm - QM4 gaps Q-2
-   statements := @fm:"GETLIST":@fm:"GETLISTV":@fm:"GO":@fm:"GOSUB":@fm:"GOTO"   ;* GETLISTV: 15 Oct 26 dm - QM4 gaps Q-2
+   statements := @fm:"GETLIST":@fm:"GETLISTV":@fm:"GOSUB":@fm:"GOTO"   ;* GETLISTV: 15 Oct 26 dm - QM4 gaps Q-2
    statements := @fm:"HEADING":@fm:"HUSH"
    statements := @fm:"IF":@fm:"IN":@fm:"INHERIT"
    statements := @fm:"INPUT"
@@ -612,7 +614,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    reserved.names<1,-1> = "DO"
    reserved.names<1,-1> = "ELSE"
    reserved.names<1,-1> = "FROM"
-   reserved.names<1,-1> = "GO"
    reserved.names<1,-1> = "IN"
    reserved.names<1,-1> = "LOCKED"
    reserved.names<1,-1> = "NEXT"
@@ -2073,7 +2074,7 @@ get.line:
 
             ss = field(trim(src), ' ', 1)
             c = ss[1,1]
-            if c = '$' or c = '#' then
+            if c = '$' then
                ss = upcase(ss[2,99999])
                begin case
                   case ss ='IFDEF'
@@ -2409,7 +2410,6 @@ is.statement:
                  st.formlistv,                 ;* FORMLISTV: 15 Oct 26 dm - QM4 gaps Q-2
                  st.getlist,
                  st.getlistv,                  ;* 15 Oct 26 dm - QM4 gaps Q-2
-                 st.go,
                  st.gosub,
                  st.goto,
                  st.heading,
@@ -2647,7 +2647,7 @@ is.statement:
       goto proc.statement            ;* Start again for leading semicolon
 
    case 1
-      if (token.string = '$' or token.string = '#') and (token.index = 2) then
+      if token.string = '$' and token.index = 2 then
          gosub proc.directive
          return
       end
@@ -4088,7 +4088,7 @@ emit.var.reference.common:
          token.strings(token.index) = symbol.name
          tokens(token.index) = TKN.NAME
 
-         go to simple.var.reference.common
+         goto simple.var.reference.common
                 
 *gdw001  End of new logic for dynamic array field reference
     end case
@@ -9923,11 +9923,6 @@ st.gosub:
 *****************************************************************************
 * ST.GOTO  -  GOTO statement
 
-st.go:
-   if u.look.ahead.token.string = "TO" then
-      gosub get.token
-   end
-
 st.goto:
    gosub get.label.name
    if lsub.var.no >= 0 then label.name = lsub.name:label.name
@@ -11772,7 +11767,7 @@ st.on:
    * Emit value expression
 
    * NJS use @vm
-   reserved.names<2> = "GOSUB":@VM:"GOTO":@VM:"GO"  ;* 0265
+   reserved.names<2> = "GOSUB":@VM:"GOTO"  ;* 0265
    gosub exprf
    del reserved.names<2>
 
@@ -11787,14 +11782,8 @@ st.on:
          opcode.byte = if bittest(mode, M.PICK.JUMP.RANGE) then OP.ONGOTOP else OP.ONGOTO
          is.on.gosub = @false
 
-      case u.look.ahead.token.string = "GO"
-         gosub get.token
-         if u.look.ahead.token.string = "TO" then gosub get.token  ;* 0503
-         opcode.byte = if bittest(mode, M.PICK.JUMP.RANGE) then OP.ONGOTOP else OP.ONGOTO
-         is.on.gosub = @false
-
       case 1
-         err.msg = sysmsg(2935) ;* Expected GOSUB, GOTO or GO
+         err.msg = sysmsg(2935) ;* Expected GOSUB or GOTO
          goto error
    end case
 
@@ -11884,7 +11873,7 @@ emit.jump.table:
 
 st.inputtrap:
    * NJS use @vm
-   reserved.names<2> = "GOSUB":@VM:"GOTO":@VM:"GO"
+   reserved.names<2> = "GOSUB":@VM:"GOTO"
    gosub exprf
    del reserved.names<2>
 
@@ -11895,12 +11884,8 @@ st.inputtrap:
       case u.look.ahead.token.string = "GOTO"
          gosub get.token
          is.on.gosub = @false
-      case u.look.ahead.token.string = "GO"
-         gosub get.token
-         if u.look.ahead.token.string = "TO" then gosub get.token
-         is.on.gosub = @false
       case 1
-         err.msg = sysmsg(2935) ;* Expected GOSUB, GOTO or GO
+         err.msg = sysmsg(2935) ;* Expected GOSUB or GOTO
          goto error
    end case
 

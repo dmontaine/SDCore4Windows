@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the highlight list lost the statement go.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the highlight list lost @svm, @user and @filename.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
@@ -72,7 +73,7 @@ rules.sd.basic:
    r<-1> = 'words keyword abort begin break call case catch chain clear clearcommon cleardata clearfile clearinput clearselect close'
    r<-1> = 'words keyword closeseq close.socket commit continue convert create create.file crt data debug del delete deletelist'
    r<-1> = 'words keyword deleteseq deleteu dim disinherit display do dparse dparse.csv echo else end execute exit'
-   r<-1> = 'words keyword file filelock fileunlock find findstr flush footing for formlist getlist go gosub goto heading hush if in'
+   r<-1> = 'words keyword file filelock fileunlock find findstr flush footing for formlist getlist gosub goto heading hush if in'
    r<-1> = 'words keyword inherit input inputcsv inputerr inputfield ins keyedit keyexit keytrap local locate'
    r<-1> = 'words keyword lock logmsg loop mark.mapping mat matbuild matparse matread matreadcsv matreadl matreadu matwrite'
    r<-1> = 'words keyword matwriteu nap next nobuf null on open openpath openseq os.execute page pause pdump phantom'

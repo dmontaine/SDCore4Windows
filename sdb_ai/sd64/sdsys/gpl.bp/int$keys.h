@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): $define for OS$OPEN, as # no longer starts a directive.
 	  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 	  * 29 Sep 26 Windows port - from Linux 9d6f407 - K$SET.LANGUAGE (38) retired: SD is English only.
@@ -284,7 +285,7 @@
       $define OS$FLUSH.CACHE     8       ;* Flush DH file cache
       $define OS$CD              9       ;* Change working directory
       $define OS$MAPPED.NAME    10       ;* Map a directory file name
-      #define OS$OPEN           11       ;* Check if file is open by pathanme
+      $define OS$OPEN          11       ;* Check if file is open by pathanme
       $define OS$DIR            12       ;* Return content of directory
       $define OS$MKDIR          13       ;* Create a directory
       $define OS$MKPATH         14       ;* Create a directory path

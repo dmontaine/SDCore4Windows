@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): the dead block under #ifdef NEVER (column heading control codes) is deleted, as # no longer
+*               starts a directive.
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV and ASSOC.ALL are gone; EQ / NE compare as
 *               BASIC does, a blank S/M flag is single valued and the dictionary's associations are used, as with the options off.
 * 7 Nov 26 Windows port - from Linux 0ead4fa0 (27 Oct 26, S.87 batch 4): ID.ONLY / ONLY before the file name, and the field numbers 9998 (@NI) and 9999
@@ -1203,36 +1205,6 @@ template.found:
       * ========================================
       * Set up column headings
       * ========================================
-#ifdef NEVER
-      * Look for special control codes in column headings
-
-      for i = 1 to no.of.list.items
-         item.to.list = list.item(i, ITEM.NO)
-
-         s = item.display.name(item.to.list)
-         c = s[1,1]
-         if c = '"' or c = "'" then
-            if count(s, c) >= 2 then
-               x = field(s, c, 2)
-               if len(x) and convert('RX', '', x) = '' then
-                  * Looks hopeful. We have a leading non-null quoted string
-                  * that contains no characters other than our recognised
-                  * control codes.
-
-                  item.display.name(item.to.list) = field(s, c, 3, 99999)
-
-                  if index(s, 'R', 1) then  ;* Right aligned column heading
-                     item.flags(item.to.list) = bitor(item.flags(item.to.list), IFLG.RIGHT.COL.HDG)
-                  end
-
-                  if index(s, 'X', 1) then  ;* Suppress ... fillers
-                     item.flags(item.to.list) = bitor(item.flags(item.to.list), IFLG.DOTLESS.COL.HDG)
-                  end
-               end
-            end
-         end
-      next i
-#endif
       if not(vertical) and not(col.sup) then
          column.headings = ''
 
