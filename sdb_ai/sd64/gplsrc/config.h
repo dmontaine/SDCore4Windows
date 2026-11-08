@@ -99,7 +99,6 @@ struct PCFG  {
    JNLMODE, PORTMAP in the shared part) are gone. */
   int16_t dhcache;                      /* DHCACHE:  Closed dynamic files kept open for quick reopening */
   char dumpdir[MAX_PATHNAME_LEN+1];     /* DUMPDIR:  Directory for process dump files */
-  int16_t filerule;                     /* FILERULE: Rules for special filename formats */
   double fltdiff;                       /* FLTDIFF : Wide zero for float comparisons */
   int16_t fsync;                        /* FSYNC:    Controls when to do fsync() */
  /* 20240219 mab create-account based on type (user / group / other) */  

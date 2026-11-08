@@ -116,7 +116,8 @@ case("Q-16 FILELOCK as the WHILE condition and FILEUNLOCK as the UNTIL condition
      LOCKF + "n = 0\nloop\nwhile filelock lf do\n   n += 1\nuntil fileunlock lf\nrepeat\nx = n", "1")
 # 27 Oct 26 (S.87 batch 2): the mode name CONDITIONAL.STATEMENTS, which was accepted and changed nothing, is gone with six others.  Each is REFUSED now, and the
 # statements above are allowed without any mode, as they always were.
-for _gone in ("conditional.statements", "prclose.default.0", "unassigned.common", "no.case.invert", "optional.then.else", "implied.stop", "exception.save.stack"):
+for _gone in ("conditional.statements", "prclose.default.0", "unassigned.common", "no.case.invert", "optional.then.else", "implied.stop", "exception.save.stack",
+              "default.unass.args", "time.ms"):
     case("27 Oct 26: $MODE %s was removed and is refused (2842), as any name the compiler does not know" % _gone.upper(),
          "$mode %s\nx = 1" % _gone, None, has=["Unrecognised mode name"])
 
@@ -184,8 +185,6 @@ _refused("@SYSTEM.SET (an alias of @SYSTEM.RETURN.CODE)", "x = @system.set")
 aux("zzq16da", "subroutine zzq16da(r, a, b = 7, c = 'xyz', d = -2, e = @true) var.args\n"
     "   r = a : '/' : b : '/' : c : '/' : d : '/' : e : '/' : arg.count()\nreturn\nend\n", "sub")
 aux("zzq16fa", "function zzq16fa(p, q = 10) var.args\n   return p + q\nend\n", "sub")
-aux("zzq16db", "$mode default.unass.args\nsubroutine zzq16db(r, a = 3, b = 'k')\n   r = a : '/' : b\nreturn\nend\n", "sub")
-aux("zzq16dc", "$mode default.unass.args\nsubroutine zzq16dc(r, a = 3) var.args\n   r = a : '/' : arg.count()\nreturn\nend\n", "sub")
 case("Q-16 defaults: VAR.ARGS with only the first argument passed gives every default (negative number, string, @TRUE)",
      "call zzq16da(r, 1)\nx = r", "1/7/xyz/-2/1/2")
 case("Q-16 defaults: an argument that is passed keeps its value and the ones after it still default",
@@ -196,13 +195,7 @@ case("Q-16 defaults: ARG.COUNT is the number the caller passed, not what the def
      "call zzq16da(r, 1, 5, 'q')\nx = r", "1/5/q/-2/1/4")
 case("Q-16 defaults: a FUNCTION with a default (DEFFUN names VAR.ARGS)",
      "deffun zzq16fa(p, q) var.args\nx = zzq16fa(5) : '/' : zzq16fa(5, 1)", "15/6")
-case("Q-16 DEFAULT.UNASS.ARGS: an argument passed unassigned takes its default, one that is assigned keeps its value",
-     "v = 'given'\ncall zzq16db(r, u, v)\nx = r", "3/given")
-case("Q-16 DEFAULT.UNASS.ARGS: both unassigned",
-     "call zzq16db(r, u, w)\nx = r", "3/k")
-case("Q-16 DEFAULT.UNASS.ARGS with VAR.ARGS: an argument left out and one passed unassigned both default",
-     "call zzq16dc(r)\ny = r\ncall zzq16dc(r, u)\nx = y : '|' : r", "3/1|3/2")
-case("Q-16 defaults: a default without VAR.ARGS or the mode is refused",
+case("Q-16 defaults: a default without VAR.ARGS is refused (28 Oct 26: the mode that was the other way is gone)",
      "@RAW@subroutine zzq16bad(r, a = 1)\nreturn\nend\n", None, has=["Default argument values need the VAR.ARGS option"])
 case("Q-16 defaults: a default that is not a literal is refused",
      "@RAW@subroutine zzq16bad(r, a = r) var.args\nreturn\nend\n", None, has=["A default argument value must be a number"])

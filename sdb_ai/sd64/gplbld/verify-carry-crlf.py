@@ -224,7 +224,7 @@ P_FCON = """$include keys.h
    crt 'F11[':fcontrol(s, FC$CRLF, 0):'/':status():']'
    crt 'F12[':fcontrol(s, FC$CRLF, -1):'/':status():']'
    crt 'F13[':fcontrol(s, FC$CRLF, 7):'/':status():']'
-   closeseq s
+   close s
 end
 """
 
@@ -241,7 +241,7 @@ def p_readseq(ids):
             "         loop\n            readseq line from s else exit\n            k += 1\n"
             "            line = change(change(line, char(13), '<CR>'), char(10), '<LF>')\n"
             "            crt 'S':tag:' ':id:' ':k:' ':line\n         repeat\n"
-            "         crt 'SN':tag:' ':id:' ':k\n         closeseq s\n"
+            "         crt 'SN':tag:' ':id:' ':k\n         close s\n"
             "      next i\n   next m\nend\n" % ",".join(ids))
 
 
@@ -256,7 +256,7 @@ P_WRITESEQ = """$include keys.h
       writeseq 'one' to s else stop 'w1'
       writeseq '' to s else stop 'w2'
       writeseq 'three':char(13):'x' to s else stop 'w3'
-      closeseq s
+      close s
    next m
    crt 'WRITESEQ.DONE'
 end
@@ -278,7 +278,7 @@ P_VOCMODE = """$include keys.h
    weofseq s
    crt 'V2[':fcontrol(s, FC$CRLF, -1):']'
    writeseq 'k' to s else stop 'w'
-   closeseq s
+   close s
    write 'u':@fm:'v' to f, 'vocdir'
    crt 'V3 done'
 end

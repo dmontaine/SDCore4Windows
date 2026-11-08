@@ -3,6 +3,7 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: the manifest key route.files.admin (acc_os_info) is read and handed to !create_account (CA$FILESADMIN) when
 *              route.files and route.files.write are 1 too; a manifest that has none restores as not in sdfilesadmin.
 * 25 Oct 26 Windows port - from Linux 2287a0a (18 Oct 26): gcat.restore reads the global catalogue with the call name in LOWER case (it was upcase()d, so the
@@ -661,7 +662,7 @@ write.marker:
    d = date()
    writeseq oconv(d, 'D4Y'):'-':fmt(oconv(d, 'DM'), '2"0"R'):'-':fmt(oconv(d, 'DD'), '2"0"R'):' ':oconv(time(), 'MTS') to mk.f else null
    writeseq zip.path to mk.f else null
-   closeseq mk.f
+   close mk.f
    display sysmsg(13035, acc.name, restart) ;* restart SD to put it in place: %2
    one.ok = @true
    return

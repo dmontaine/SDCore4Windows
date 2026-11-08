@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 01 Oct 26 Windows port - written for RELEASE_1.1 116.
 * 17 Oct 26 Windows port - from Linux 6815cdc - S.65 slice 2a: the [api] section also shows the hash of the certificate's public key (sd-elevate tls-key).
 * 01 Oct 26 Windows port - from Linux 6815cdc - Written for S.50 (per-OS helper; signature and the split of the

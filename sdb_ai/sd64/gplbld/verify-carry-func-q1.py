@@ -283,7 +283,7 @@ case("SIGNAL twice is one signal", "x = signal(@userno) : signal(@userno) : '/' 
 case("SIGNAL of 0, a negative number, a number nobody has and a null string is false and raises nothing",
      "x = signal(0) : signal(-3) : signal(32000) : signal('') : '/' : system(1062)", "0000/0")
 OSQ = ("openseq 'zzq1send.txt' to f then null else\n   create f else stop 'no create'\nend\nweofseq f\n")
-OSR = ("closeseq f\nopenseq 'zzq1send.txt' to f else stop 'no reopen'\nreadblk b from f, 100 else b = 'none'\ncloseseq f\ndeleteseq 'zzq1send.txt' else null\n"
+OSR = ("close f\nopenseq 'zzq1send.txt' to f else stop 'no reopen'\nreadblk b from f, 100 else b = 'none'\ncloseseq f\ndeleteseq 'zzq1send.txt' else null\n"
        "x = x : change(b, char(10), 'N')\n")
 case("SEND writes the string and a newline, SEND with a colon writes the string alone", OSQ + "send 'one' to f then null else x = 'e1'\nsend 'two' : to f then null else x = 'e2'\n"
      "send 'three' to f else x = 'e3'\n" + OSR, "oneNtwothreeN")

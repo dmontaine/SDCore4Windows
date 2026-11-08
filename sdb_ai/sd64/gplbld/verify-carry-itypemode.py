@@ -121,12 +121,11 @@ def main():
         "nc0": "INDEX(F1,'AA',1)",
         "nc1": "$MODE NOCASE.STRINGS;INDEX(F1,'AA',1)",
         "gone4": "$MODE COMPATIBLE.APPEND;COUNT(F1,'aa')",
-        "two": "$MODE NOCASE.STRINGS;$MODE TIME.MS;COUNT(F1,'AA')",
+        "two": "$MODE NOCASE.STRINGS;$MODE NOCASE.STRINGS;COUNT(F1,'AA')",
         "neg": "$MODE NOCASE.STRINGS,-NOCASE.STRINGS;COUNT(F1,'AA')",
         "bad": "$MODE UV.LOCATE;COUNT(F1,'aa')",
         "nest": "TRANS(zzimf, @ID, nc1, 'X')",
-        "tms0": "TIME()*1000 - SYSTEM(1020)",
-        "tms1": "$MODE TIME.MS;TIME()*1000 - SYSTEM(1020)",
+        "gone5": "$MODE TIME.MS;TIME()",
     }
 
     try:
@@ -168,23 +167,14 @@ def main():
             b is not None and b[0] == o_nc and o_nc != "0", "got %r" % b)
         a = get("cnt0")
         b = get("two")
-        row("489  two $MODE statements, each ended by a semicolon (NOCASE.STRINGS then TIME.MS)", b is not None and a is not None and b[0] == a[0], "got %r want %r" % (b, a))
+        row("489  two $MODE statements, each ended by a semicolon (NOCASE.STRINGS twice)", b is not None and a is not None and b[0] == a[0], "got %r want %r" % (b, a))
         b = get("neg")
         row("489  NOCASE.STRINGS,-NOCASE.STRINGS: a minus turns the mode off again", b is not None and a is not None and b[0] == "0", "got %r want 0" % b)
 
-        say("\n--- TIME.MS ---------------------------------------------------------------------------------------------------")
-        best0 = best1 = None
-        for _ in range(3):
-            v0, v1 = get("tms0"), get("tms1")
-            if v0 and v1 and v0[0] and v1[0]:
-                x0, x1 = abs(float(v0[0])), abs(float(v1[0]))
-                best0 = x0 if best0 is None else max(best0, x0)
-                best1 = x1 if best1 is None else max(best1, x1)
-        say("    TIME()*1000 - SYSTEM(1020): without the mode up to %s ms off, with it up to %s" % (best0, best1))
-        row("CONTROL  plain TIME() is whole seconds: it differs from SYSTEM(1020) by the milliseconds (more than 5 at least once in 3 tries)",
-            best0 is not None and best0 > 5, "up to %r" % best0)
-        row("489  $MODE TIME.MS;TIME() is the time to the millisecond: within a few ms of SYSTEM(1020) every time",
-            best1 is not None and best1 <= 5, "up to %r" % best1)
+        say("\n--- TIME.MS (gone 28 Oct 26, S.87) -----------------------------------------------------------------------------")
+        out = sess(box, "LIST zzimf gone5")
+        row("489  $MODE TIME.MS is refused like any mode an I-type cannot use",
+            "TIME.MS is not a mode that an I-type can use" in out, repr(out[-300:]))
 
         say("\n--- what an I-type may not do ---------------------------------------------------------------------------------")
         out = sess(box, "LIST zzimf bad")

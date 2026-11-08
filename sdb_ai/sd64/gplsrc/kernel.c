@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION COMMAND.LEVEL.LOCKS is gone: k_return() releases no parked files.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): k_return() no longer gives back a caller's @STDFIL ($MODE STDFIL.SHARED is gone).
  * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CORRELATIVE.NOCASE is gone; a correlative is case blind only through its own A;NOCASE; flag or an I-type's $mode nocase.strings.
  * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: a phantom takes the secret PHANTOM gave it out of its environment as it starts (phantom_nonce_import, op_kernel.c).
@@ -982,9 +983,6 @@ void k_return() {
     op_sortclr();
   }
 
-  if (process.program.flags & HDR_IS_CPROC)
-    release_parked_fvars(cproc_level); /* back at the command processor: OPTION COMMAND.LEVEL.LOCKS lets its locks go (QM4 gap 231) */
-
   if (old_flags & IS_EXECUTE) {
     tio.prompt_char = process.program.saved_prompt_char;
   }
@@ -1355,8 +1353,6 @@ void process_events() {
 
   if (events & EVT_UNLOAD) /* Unload inactive cached object code */
   {
-    if (Option(OptForceReload)) /* openQM FORCE.RELOAD: links are reset too */
-      stale_objects();
     unload_all();
   }
 

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_forloops and op_for1s ($MODE FOR.STORE.BEFORE.TEST) are gone: forloop() and
  *           for1() store the control variable only when the loop goes round again.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): op_epochcv converts in the TIMEZONE of the process when one was set (QM4 gaps Q-3, SET.TIMEZONE).
@@ -58,7 +59,6 @@
  *    op_csvdelim       Push the CSV delimiter
  *    op_epochcv        MVDATE() MVTIME() MVDATE.TIME() MVEPOCH()
  *    op_precision     PRECISION
- *    op_procread()     PROCREAD
  *    op_rtrans()       RTRANS()
  *    op_saveaddr                       Save address descriptor
  *    op_sendmail       SENDMAIL()
@@ -1376,58 +1376,6 @@ void op_precision() {
 
   k_pop(1);
 }
-
-// rev 1.0-1 add back op_procread
-/* ======================================================================
-   op_procread()  -  Read data from PROC primary input buffer             */
-
-void op_procread() {
-  /* Stack:
-
-     |=============================|=============================|
-     |            BEFORE           |           AFTER             |
-     |=============================|=============================|
- top |  ADDR to target variable    | 0 = success, 1 = error      |
-     |=============================|=============================|
- */
-
-  DESCRIPTOR* descr;
-  DESCRIPTOR* ibuf_descr;
-  struct PROGRAM* pgm;
-  bool is_proc = FALSE;
-
-  /* The semantics of this statement require that we check that we are
-    in a PROC. The simplest thing to do is to wander down the call stack
-    looking for $PROC.                                                   */
-
-  for (pgm = process.program.prev; pgm != NULL; pgm = pgm->prev) {
-    if (!strcmp(
-            ((OBJECT_HEADER*)(pgm->saved_c_base))->ext_hdr.prog.program_name,
-            "$proc")) { /* RELEASE_1.1 5 stage 3a: names are lower case */
-      is_proc = TRUE;
-      break;
-    }
-  }
-
-  descr = e_stack - 1;
-  while (descr->type == ADDR)
-    descr = descr->data.d_addr;
-  Release(descr);
-
-  if (is_proc) {
-    ibuf_descr = Element(process.syscom, SYSCOM_PROC_IBUF);
-    *descr = *(Element(ibuf_descr->data.ahdr_addr, 0));
-    k_incr_refct(descr);
-  } else {
-    InitDescr(descr, STRING);
-    descr->data.str.saddr = NULL;
-  }
-
-  k_dismiss();
-  InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = !is_proc;
-}
-
 
 /* ======================================================================
    op_rtrans()  -  RTRANS function (Revelation style, no mark lowering)   */

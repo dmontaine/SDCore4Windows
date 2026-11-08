@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: csv_is_num() has no exponent form (OPTION NUMERIC.EXPONENT is gone).
  * 20 Oct 26 dm  New.  The owner's CSV / JSON / XML task.  FORMCSV() moves here from the BASIC program _formcsv (so that a statement can
  *               name its own delimiter, quote and escape characters, and so that a field holding a line break is enclosed);
  *               CSVDQ() takes a quote and an escape character; CSV.MODE keeps a quote and an escape character; CSVPARSE() reads a
@@ -157,27 +158,11 @@ Private bool csvd_from_string(CSVD* d, char* s, int32_t len) {
 Private bool csv_is_num(const char* s, int32_t len) {
   bool sign = FALSE, dp = FALSE, digit_seen = FALSE;
   int digits = 0;
-  int exp_state = 0;
-  bool exp_sign = FALSE;
-  int exp_val = 0;
   int32_t i;
   char c;
 
   for (i = 0; i < len; i++) {
     c = s[i];
-    if (exp_state) {
-      if (c >= '0' && c <= '9') {
-        exp_val = exp_val * 10 + (c - '0');
-        if (exp_val > 308)
-          return FALSE;
-        exp_state = 2;
-      } else if (exp_state == 1 && !exp_sign && (c == '+' || c == '-')) {
-        exp_sign = TRUE;
-      } else {
-        return FALSE;
-      }
-      continue;
-    }
     if (c >= '0' && c <= '9') {
       digit_seen = TRUE;
       if (!dp && ++digits > 15)
@@ -196,18 +181,12 @@ Private bool csv_is_num(const char* s, int32_t len) {
           dp = TRUE;
           digits++;
           break;
-        case 'E':
-        case 'e':
-          if (!Option(OptNumericExponent) || !digit_seen)
-            return FALSE;
-          exp_state = 1;
-          break;
         default:
           return FALSE;
       }
     }
   }
-  return digit_seen && exp_state != 1;
+  return digit_seen;
 }
 
 /* ----------------------------------------------------------------------

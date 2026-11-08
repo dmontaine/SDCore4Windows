@@ -115,7 +115,7 @@ def main():
     try:
         say("\n--- leg 0: the removed names are not options any more ------------------------------------")
         out = sess(box, "OPTION")
-        row("CONTROL: OPTION lists the options that stay (DIR.SEL.OMIT.HIDDEN)", re.search(r"(?m)^DIR\.SEL\.OMIT\.HIDDEN\b", out) is not None, "not in the listing")
+        row("CONTROL: OPTION lists the options that stay (GIT)", re.search(r"(?m)^GIT\b", out) is not None, "not in the listing")
         for n in NAMES:
             row("OPTION does not list %s" % n, re.search(r"(?m)^%s\s*:" % re.escape(n), out) is None, "still in the listing")
             c = ["OPTION %s" % n]

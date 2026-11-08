@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 20 Oct 26 dm  New.  The owner's CSV / JSON / XML task: "a one-line import of a CSV file into an SD file" and "reading an XML document into a
 *               file's records (the reverse of the XML keyword)".  One program under three VOC verbs; the word typed says which.
 * END-HISTORY
@@ -203,7 +204,7 @@ import.csv:
       end
       gosub put.record
    repeat
-   closeseq in.f
+   close in.f
    return
 
 * D-type items for the header names the dictionary does not have

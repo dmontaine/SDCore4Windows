@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the System:Account:File name form (FILERULE bit 2) is gone, and a Q-pointer with a fourth
 *               field (another system) is refused (3003, as before) instead of building a path.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): a fifth argument, allow.shared (op_dio1.c get_voc_file_reference_ex).  When the caller sets it,
@@ -160,35 +161,8 @@ $include keys.h
          goto parse.as.q.pointer
       end
 
-      * We haven't found the item as a VOC entry. Is it a special syntax for
-      * a remote file or a pathname
-
-      n = dcount(voc.id, ':')
-      if n > 1 then
-         rules = config('FILERULE')
-         x1 = field(voc.id, ':', 1)
-         begin case
-            case upcase(x1) = 'PATH'   ;* Could be a pathname
-               if bitand(rules, 4) then
-                  pathname = field(voc.id, ':', 2, 99) ;* Must allow PATH:C:/a/b
-* 13 Oct 26 dm - the administrator who turned this form on (FILERULE) did not turn off the OS gate: a path
-*   outside the account is still os-on's.
-                  if not(vr.free) and not(kernel(K$PATH.OK, pathname)) then
-                     pathname = ''
-                     set.status ER$PERM
-                     return
-                  end
-                  set.status 0
-                  return
-               end
-            case n = 2                 ;* Account:File
-               if bitand(rules, 1) then
-                  voc.rec = 'Q':@fm:x1:@fm:field(voc.id, ':', 2)
-                  goto parse.as.q.pointer
-               end
-* 27 Oct 26 dm - S.87 batch 5: the System:Account:File form (FILERULE bit 2) is gone; it named a file on another system and nothing here reaches one.
-         end case
-      end
+      * 28 Oct 26 dm - S.87: FILERULE and its special forms of file name (account:file, path:pathname) are gone; a name that is in no VOC
+      *   entry is not found, except as the shared account's file below.
 
 * 18 Oct 26 dm - S.66, the shared account.  The name is in no entry of the account's own VOC (the three folds above and the PATH: and
 *   Account:File forms have all been tried, so the account's own file always wins) - is it a file of the account called shared?  Only when the

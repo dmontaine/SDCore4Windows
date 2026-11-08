@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION FORCE.RELOAD is gone, and refresh_link() with it: a CALL never replaces a link variable's object.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_ongosubp and op_ongotop ($MODE PICK.JUMP.RANGE) are gone, and computed_jump() has
  *           no pick_style: an index out of range uses the nearest label.
  * 8 Nov 26 Windows port - from Linux 93f422ed (S.87 batch 13): pick_style_runfile() (the Pick style CALL "file name") is gone; a call name with a space in it
@@ -94,29 +95,6 @@ extern time_t clock_time;
 Private void computed_jump(bool save_link);
 
 /* ======================================================================
-   refresh_link()  -  FORCE.RELOAD: replace a superseded object in a link
-
-   depth is the position of the call name / link variable below the top of
-   the e-stack. The load may use the e-stack, so the descriptor is found
-   again before it is changed.                                            */
-
-Private void refresh_link(int depth) {
-  DESCRIPTOR* d;
-  void* obj;
-
-  d = e_stack - depth;
-  while (d->type == ADDR)
-    d = d->data.d_addr;
-  if (d->type == SUBR && object_is_stale(d->data.subr.object)) {
-    obj = refresh_subr_object(d->data.subr.object);
-    d = e_stack - depth;
-    while (d->type == ADDR)
-      d = d->data.d_addr;
-    d->data.subr.object = obj;
-  }
-}
-
-/* ======================================================================
    call_name_to_load()  -  The name op_call() and op_callv() hand to k_call()
    for a CALL whose name is the string in descr.  call_name receives the
    name as written, in lower case, for the profiler.  It must be a call name,
@@ -152,9 +130,6 @@ void op_call() {
   char* load_name;
 
   num_args = *(pc++);
-
-  if (Option(OptForceReload))
-    refresh_link(num_args + 1);
 
   descr = e_stack - (num_args + 1);
   while (descr->type == ADDR)
@@ -225,9 +200,6 @@ void op_callv() {
   char* load_name;
   ARRAY_HEADER* ahdr;
   int16_t i;
-
-  if (Option(OptForceReload))
-    refresh_link(3);
 
   /* Get array header address for argument matrix */
 

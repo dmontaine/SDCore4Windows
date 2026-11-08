@@ -1399,7 +1399,7 @@ internal.gate:
 *     Line 1 of the marker names who wrote it.  For the audit record only.
       openseq gate.marker to gate.mf then
          readseq gate.writer from gate.mf else gate.writer = ''
-         closeseq gate.mf
+         close gate.mf          ;* 8 Nov 26: CLOSE, not CLOSESEQ (gone with S.87, Linux 2930d92f)
       end else gate.writer = ''
       gate.writer = trim(gate.writer[1, 80])
 
@@ -1419,7 +1419,7 @@ internal.gate:
          create gate.sf else gate.sf = ''
       end
       if ospath(gate.stamp, OS$EXISTS) then
-         closeseq gate.sf
+         close gate.sf
          gate.now = ospath(gate.stamp, OS$DTM)
          if gate.now > 0 and gate.mtime > 0 then gate.age = gate.now - gate.mtime
       end

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): case inversion is gone from SD; SED no longer turns it off or converts typed keys, and the
 *            NO.INVERT option word is no longer known.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): @sm for the removed @svm.
@@ -143,123 +144,123 @@ $include sl.h
    source.control = "source.control"
 
 
-   equ MERGE.LOAD    to 50
-   equ IDEAL.LOAD    to 100
-   equ SPLIT.LOAD    to 200
+   equate MERGE.LOAD    to 50
+   equate IDEAL.LOAD    to 100
+   equate SPLIT.LOAD    to 200
 
-   equ MAX.BUFFERS   to 20
+   equate MAX.BUFFERS   to 20
 * Buffer table entry field positions.
-   equ BUFF.FILE.NAME   to  1  ;* Null if not associated with a file
-   equ BUFF.DICT.FLAG   to  2  ;* 'DICT' or null
-   equ BUFF.RECORD.NAME to  3
-   equ BUFF.UPDATED     to  4
-   equ BUFF.HEAD        to  5
-   equ BUFF.LINES       to  6
-   equ BUFF.LINE        to  7
-   equ BUFF.COL         to  8
-   equ BUFF.MARK.LINE   to  9
-   equ BUFF.MARK.COL    to 10 
-   equ BUFF.READ.ONLY   to 11
-   equ BUFF.TYPE        to 12
-   equ BUFF.LNUM        to 13  ;* Show line numbers?
-   equ BUFF.LOCKED      to 14  ;* Record in this buffer locked for update?
-   equ BUFF.UNAMES      to 15  ;* Map names to upper case?
-   equ BUFF.COMMENT     to 16  ;* Comment text to append to file name display
-   equ BUFF.TAG         to 17  ;* Unique tag for this buffer - never reused
-   equ BUFF.PARENT      to 18  ;* Parent buffer tag for EV mode
-   equ BUFF.ITYPE       to 19  ;* In EV mode, is this actually an I-type?
+   equate BUFF.FILE.NAME   to  1  ;* Null if not associated with a file
+   equate BUFF.DICT.FLAG   to  2  ;* 'DICT' or null
+   equate BUFF.RECORD.NAME to  3
+   equate BUFF.UPDATED     to  4
+   equate BUFF.HEAD        to  5
+   equate BUFF.LINES       to  6
+   equate BUFF.LINE        to  7
+   equate BUFF.COL         to  8
+   equate BUFF.MARK.LINE   to  9
+   equate BUFF.MARK.COL    to 10 
+   equate BUFF.READ.ONLY   to 11
+   equate BUFF.TYPE        to 12
+   equate BUFF.LNUM        to 13  ;* Show line numbers?
+   equate BUFF.LOCKED      to 14  ;* Record in this buffer locked for update?
+   equate BUFF.UNAMES      to 15  ;* Map names to upper case?
+   equate BUFF.COMMENT     to 16  ;* Comment text to append to file name display
+   equate BUFF.TAG         to 17  ;* Unique tag for this buffer - never reused
+   equate BUFF.PARENT      to 18  ;* Parent buffer tag for EV mode
+   equate BUFF.ITYPE       to 19  ;* In EV mode, is this actually an I-type?
 
-   equ BUFF.TYPE.DATA                to 1  ;* Normal data
-   equ BUFF.TYPE.EXPLORE             to 2  ;* Record level explore
-   equ BUFF.TYPE.FILE.LIST           to 3  ;* File level explore
-   equ BUFF.TYPE.EV.PARENT           to 4  ;* Data buffer during value edit
-   equ BUFF.TYPE.EV.READ.ONLY.PARENT to 5  ;* Data buffer during value edit
-   equ BUFF.TYPE.VALUES              to 6  ;* Value edit buffer
+   equate BUFF.TYPE.DATA                to 1  ;* Normal data
+   equate BUFF.TYPE.EXPLORE             to 2  ;* Record level explore
+   equate BUFF.TYPE.FILE.LIST           to 3  ;* File level explore
+   equate BUFF.TYPE.EV.PARENT           to 4  ;* Data buffer during value edit
+   equate BUFF.TYPE.EV.READ.ONLY.PARENT to 5  ;* Data buffer during value edit
+   equate BUFF.TYPE.VALUES              to 6  ;* Value edit buffer
 
-   equ PAN.INCREMENT    to 32
+   equate PAN.INCREMENT    to 32
 
 
 * Actions
 * This table must be kept in step with the prelude and action splits and the
 * table in set.default.bindings
 *
-   equ F.NEWLINE       to  1  ;* Insert newline at cursor
-   equ F.HOME          to  2  ;* Goto start of line
-   equ F.END           to  3  ;* Goto end of line
-   equ F.LEFT          to  4  ;* Cursor left
-   equ F.RIGHT         to  5  ;* Cursor right
-   equ F.UP            to  6  ;* Cursor up
-   equ F.DOWN          to  7  ;* Cursor down
-   equ F.TOP           to  8  ;* Goto top
-   equ F.BOTTOM        to  9  ;* Goto bottom
-   equ F.PAGE.UP       to 10  ;* Up by one page
-   equ F.PAGE.DOWN     to 11  ;* Down by one page
-   equ F.DELETE        to 12  ;* Delete character
-   equ F.BACKSPACE     to 13  ;* Backspace character
-   equ F.KILL.LINE     to 14  ;* Delete to end of line or wrap up
-   equ F.SAVE.RECORD   to 15  ;* Save record
-   equ F.QUIT          to 16  ;* Quit
-   equ F.OVERLAY       to 17  ;* Toggle overlay mode
-   equ F.TAB           to 18  ;* Advance to next tab position
-   equ F.GOTO.LINE     to 19  ;* Goto specific line
-   equ F.TOGGLE        to 20  ;* Toggle characters
-   equ F.FWD.SEARCH    to 21  ;* Forward search
-   equ F.REPLACE       to 22  ;* Replace
-   equ F.QREPLACE      to 23  ;* Query replace
-   equ F.SWAP.MARK     to 24  ;* Swap mark and cursor
-   equ F.EXECUTE       to 25  ;* Execute macro
-   equ F.NUDGE.DOWN    to 26  ;* Nudge down
-   equ F.NUDGE.UP      to 27  ;* Nudge up
-   equ F.MARK          to 28  ;* Set mark
-   equ F.KILL          to 29  ;* Kill region
-   equ F.COPY          to 30  ;* Copy region
-   equ F.YANK          to 31  ;* Yank kill buffer
-   equ F.FWD.WORD      to 32  ;* Forward word
-   equ F.DEL.WORD      to 33  ;* Delete word
-   equ F.IMPORT        to 34  ;* Import record
-   equ F.REV.SEARCH    to 35  ;* Reverse search
-   equ F.LOWER.CASE    to 36  ;* Lower case word
-   equ F.UPPER.CASE    to 37  ;* Upper case word
-   equ F.CAP.INIT      to 38  ;* Capital initial
-   equ F.BACK.WORD     to 39  ;* Backward word
-   equ F.DEL.BACK.WORD to 40  ;* Delete word
-   equ F.CLOSE.SPACES  to 41  ;* Close spaces
-   equ F.NEXT.BUFFER   to 42  ;* Select next buffer
-   equ F.PREV.BUFFER   to 43  ;* Select previous buffer
-   equ F.GOTO.BUFFER   to 44  ;* Select buffer
-   equ F.DELETE.BUFFER to 45  ;* Delete buffer
-   equ F.UP.TO.PARENT  to 46  ;* Up to explore list (etc)
-   equ F.REPEAT        to 47  ;* Repeat last function
-   equ F.REFRESH       to 48  ;* Refresh screen
-   equ F.QUOTE.CHAR    to 49  ;* Quote character
-   equ F.LIST.BUFFERS  to 50  ;* List buffers
-   equ F.FIND.RECORD   to 51  ;* Find record
-   equ F.WRITE.RECORD  to 52  ;* Write record
-   equ F.START.MACRO   to 53  ;* Start macro definition
-   equ F.END.MACRO     to 54  ;* End macro definition
-   equ F.EXPAND.CHAR   to 55  ;* Expand character
-   equ F.EXPLORE       to 56  ;* Explore
-   equ F.EXPORT        to 57  ;* Export
-   equ F.COMMAND       to 58  ;* Command
-   equ F.CANCEL        to 59  ;* Cancel
-   equ F.RUN           to 60  ;* Run extension
-   equ F.ALIGN         to 61  ;* Align text
-   equ F.UPCASE.REGION to 62  ;* Uppercase region
-   equ F.DNCASE.REGION to 63  ;* Lowercase region
-   equ F.UNSPLIT       to 64  ;* Remove split window
-   equ F.SPLIT         to 65  ;* Split window
-   equ F.TOGGLE.WINDOW to 66  ;* Toggle windows
-   equ F.DIVE          to 67  ;* Dive into include record
-   equ F.COMPRUN       to 68  ;* Compile and run
-   equ F.UNDO          to 69  ;* Undo the last change (13 Oct 26)
-   equ F.REDO          to 70  ;* Do again what was undone (13 Oct 26)
-   equ LAST.BINDABLE.ACTION to 70
+   equate F.NEWLINE       to  1  ;* Insert newline at cursor
+   equate F.HOME          to  2  ;* Goto start of line
+   equate F.END           to  3  ;* Goto end of line
+   equate F.LEFT          to  4  ;* Cursor left
+   equate F.RIGHT         to  5  ;* Cursor right
+   equate F.UP            to  6  ;* Cursor up
+   equate F.DOWN          to  7  ;* Cursor down
+   equate F.TOP           to  8  ;* Goto top
+   equate F.BOTTOM        to  9  ;* Goto bottom
+   equate F.PAGE.UP       to 10  ;* Up by one page
+   equate F.PAGE.DOWN     to 11  ;* Down by one page
+   equate F.DELETE        to 12  ;* Delete character
+   equate F.BACKSPACE     to 13  ;* Backspace character
+   equate F.KILL.LINE     to 14  ;* Delete to end of line or wrap up
+   equate F.SAVE.RECORD   to 15  ;* Save record
+   equate F.QUIT          to 16  ;* Quit
+   equate F.OVERLAY       to 17  ;* Toggle overlay mode
+   equate F.TAB           to 18  ;* Advance to next tab position
+   equate F.GOTO.LINE     to 19  ;* Goto specific line
+   equate F.TOGGLE        to 20  ;* Toggle characters
+   equate F.FWD.SEARCH    to 21  ;* Forward search
+   equate F.REPLACE       to 22  ;* Replace
+   equate F.QREPLACE      to 23  ;* Query replace
+   equate F.SWAP.MARK     to 24  ;* Swap mark and cursor
+   equate F.EXECUTE       to 25  ;* Execute macro
+   equate F.NUDGE.DOWN    to 26  ;* Nudge down
+   equate F.NUDGE.UP      to 27  ;* Nudge up
+   equate F.MARK          to 28  ;* Set mark
+   equate F.KILL          to 29  ;* Kill region
+   equate F.COPY          to 30  ;* Copy region
+   equate F.YANK          to 31  ;* Yank kill buffer
+   equate F.FWD.WORD      to 32  ;* Forward word
+   equate F.DEL.WORD      to 33  ;* Delete word
+   equate F.IMPORT        to 34  ;* Import record
+   equate F.REV.SEARCH    to 35  ;* Reverse search
+   equate F.LOWER.CASE    to 36  ;* Lower case word
+   equate F.UPPER.CASE    to 37  ;* Upper case word
+   equate F.CAP.INIT      to 38  ;* Capital initial
+   equate F.BACK.WORD     to 39  ;* Backward word
+   equate F.DEL.BACK.WORD to 40  ;* Delete word
+   equate F.CLOSE.SPACES  to 41  ;* Close spaces
+   equate F.NEXT.BUFFER   to 42  ;* Select next buffer
+   equate F.PREV.BUFFER   to 43  ;* Select previous buffer
+   equate F.GOTO.BUFFER   to 44  ;* Select buffer
+   equate F.DELETE.BUFFER to 45  ;* Delete buffer
+   equate F.UP.TO.PARENT  to 46  ;* Up to explore list (etc)
+   equate F.REPEAT        to 47  ;* Repeat last function
+   equate F.REFRESH       to 48  ;* Refresh screen
+   equate F.QUOTE.CHAR    to 49  ;* Quote character
+   equate F.LIST.BUFFERS  to 50  ;* List buffers
+   equate F.FIND.RECORD   to 51  ;* Find record
+   equate F.WRITE.RECORD  to 52  ;* Write record
+   equate F.START.MACRO   to 53  ;* Start macro definition
+   equate F.END.MACRO     to 54  ;* End macro definition
+   equate F.EXPAND.CHAR   to 55  ;* Expand character
+   equate F.EXPLORE       to 56  ;* Explore
+   equate F.EXPORT        to 57  ;* Export
+   equate F.COMMAND       to 58  ;* Command
+   equate F.CANCEL        to 59  ;* Cancel
+   equate F.RUN           to 60  ;* Run extension
+   equate F.ALIGN         to 61  ;* Align text
+   equate F.UPCASE.REGION to 62  ;* Uppercase region
+   equate F.DNCASE.REGION to 63  ;* Lowercase region
+   equate F.UNSPLIT       to 64  ;* Remove split window
+   equate F.SPLIT         to 65  ;* Split window
+   equate F.TOGGLE.WINDOW to 66  ;* Toggle windows
+   equate F.DIVE          to 67  ;* Dive into include record
+   equate F.COMPRUN       to 68  ;* Compile and run
+   equate F.UNDO          to 69  ;* Undo the last change (13 Oct 26)
+   equate F.REDO          to 70  ;* Do again what was undone (13 Oct 26)
+   equate LAST.BINDABLE.ACTION to 70
 * Actions after here are not bound to keys
-   equ F.INSERT        to 71  ;* Insert character
-   equ F.KEY.CODE      to 72  ;* Expand a key code
-   equ F.BOUND.EXT     to 73  ;* Run bound extension
-   equ F.MENU          to 74  ;* Open the menu bar (F10, or Esc on its own)
-   equ F.MOUSE         to 75  ;* A mouse report arrived (13 Oct 26)
+   equate F.INSERT        to 71  ;* Insert character
+   equate F.KEY.CODE      to 72  ;* Expand a key code
+   equate F.BOUND.EXT     to 73  ;* Run bound extension
+   equate F.MENU          to 74  ;* Open the menu bar (F10, or Esc on its own)
+   equate F.MOUSE         to 75  ;* A mouse report arrived (13 Oct 26)
 * !!BINDINGS!!
    * The following names are used as the comments in the key binding record.
    * They are also used with a dot prefix and embedded spaces replaced by dots
@@ -285,11 +286,11 @@ $include sl.h
 
    * Extension control
 
-   equ INITIAL.EXT.TABLE.SIZE to 25
-   equ EXT.TABLE.SIZE.INCREMENT to 10
-   equ MAX.EXT.DEPTH to 15              ;* Maximum nested extension depth
-   equ MAX.LCALL.DEPTH to 30            ;* Maximum nested local call depth
-   equ E.STACK.SIZE to 100
+   equate INITIAL.EXT.TABLE.SIZE to 25
+   equate EXT.TABLE.SIZE.INCREMENT to 10
+   equate MAX.EXT.DEPTH to 15              ;* Maximum nested extension depth
+   equate MAX.LCALL.DEPTH to 30            ;* Maximum nested local call depth
+   equate E.STACK.SIZE to 100
 
    * Compilation items
    ext.funcs = ''  ;* Extension function names - Built by extension compiler
@@ -333,8 +334,8 @@ $include sl.h
    * by clip.h is the part that shows, read again at every redraw and while SED waits for a key (read.window), and nothing is
    * drawn outside it (put.at, put.cursor, zoned.update).  While the cursor is off the screen the keys are ignored (wait.key,
    * $sl_guard).  A window bigger than the layout leaves the rest of it blank.
-   equ SED.COLS to 140
-   equ SED.ROWS to 42
+   equate SED.COLS to 140
+   equate SED.ROWS to 42
    call $sl_need('SED', SED.COLS, SED.ROWS, message, '')
    if message # '' then stop message
 
@@ -427,8 +428,8 @@ $include sl.h
    free.chain = 0
 
    terminate = 0
-   equ TERMINATE.CURRENT to 1       ;* Terminate edit and move to next record
-   equ TERMINATE.ALL     to 2       ;* Terminate all, abandoning select list
+   equate TERMINATE.CURRENT to 1       ;* Terminate edit and move to next record
+   equate TERMINATE.ALL     to 2       ;* Terminate all, abandoning select list
 
    * Screen attributes
 
@@ -461,8 +462,8 @@ $include sl.h
    sty = ''                           ;* the style codes of the line zoned.update is about to draw ('' = plain)
 
    * Undo and redo (13 Oct 26): see UNDO AND REDO, below.  The actions that leave the text as it is
-   equ UNDO.MAX to 100                ;* the most states kept
-   equ UNDO.BYTES to 8000000          ;* and about this many characters of them
+   equate UNDO.MAX to 100                ;* the most states kept
+   equate UNDO.BYTES to 8000000          ;* and about this many characters of them
    dim uj.text(UNDO.MAX + 2) ; mat uj.text = ''
    dim uj.line(UNDO.MAX + 2) ; mat uj.line = 0
    dim uj.col(UNDO.MAX + 2) ; mat uj.col = 0
@@ -551,11 +552,11 @@ $include sl.h
 
    * Set default search mode  -  Values are assumed in some places
 
-   equ CASE.SENSITIVE   to 1
-   equ CASE.INSENSITIVE to 2
-   equ WORD.SEARCH      to 3
-   equ BWORD.SEARCH     to 4
-   equ NUM.SEARCH.MODES to 4
+   equate CASE.SENSITIVE   to 1
+   equate CASE.INSENSITIVE to 2
+   equate WORD.SEARCH      to 3
+   equate BWORD.SEARCH     to 4
+   equate NUM.SEARCH.MODES to 4
    search.mode = CASE.SENSITIVE
    match.case = @true
    word.mode = @false
@@ -4028,9 +4029,9 @@ parse.search:
 *****************************************************************************
 * get.string  -  Prompt for a string
 
-   equ G.COMMAND to 1
-   equ G.FILE    to 2
-   equ G.SEARCH  to 3
+   equate G.COMMAND to 1
+   equate G.FILE    to 2
+   equate G.SEARCH  to 3
 
 get.command:
    get.mode = G.COMMAND
@@ -5642,10 +5643,10 @@ open.file:
          end
 
          openseq fpath to fpath.f else
-            if not(unassigned(fpath.f)) then closeseq fpath.f       ;* 26 Oct 26 - an OPENSEQ that took ELSE keeps the name locked until the variable is closed (see home_entry)
+            if not(unassigned(fpath.f)) then close fpath.f       ;* 26 Oct 26 - an OPENSEQ that took ELSE keeps the name locked until the variable is closed (see home_entry)
             fpath = upcase(fpath)
             openseq fpath to fpath.f else
-               if not(unassigned(fpath.f)) then closeseq fpath.f
+               if not(unassigned(fpath.f)) then close fpath.f
                open.ok = @false
                return
             end
@@ -5653,7 +5654,7 @@ open.file:
 
          * We have found it
 
-         closeseq fpath.f
+         close fpath.f
 
          fpath.components = dcount(fpath, @ds)
          fpath.record.id = field(fpath, @ds, fpath.components)
@@ -7935,36 +7936,36 @@ compile:
 *
 *     End marker (field mark)
 
-   equ EXT.HEADER.LEN to 5
+   equate EXT.HEADER.LEN to 5
 
-   equ EXT.JUMP.WIDTH to 5  ;* Digits in initial format of jump addresses
+   equate EXT.JUMP.WIDTH to 5  ;* Digits in initial format of jump addresses
 
-   equ TKN.END to 0
-   equ TKN.LBR to 1
-   equ TKN.RBR to 2
-   equ TKN.STR to 3
-   equ TKN.SYS to 4    ;* @var or %var
-   equ TKN.NAM to 5    ;* name
-   equ TKN.NUM to 6    ;* number
-   equ TKN.GVR to 7    ;* $name
-   equ TKN.COM to 8    ;* Comma
-   equ TKN.ERR to 99
+   equate TKN.END to 0
+   equate TKN.LBR to 1
+   equate TKN.RBR to 2
+   equate TKN.STR to 3
+   equate TKN.SYS to 4    ;* @var or %var
+   equate TKN.NAM to 5    ;* name
+   equate TKN.NUM to 6    ;* number
+   equate TKN.GVR to 7    ;* $name
+   equate TKN.COM to 8    ;* Comma
+   equate TKN.ERR to 99
 
-   equ OP.LDLIT to 1     ;* Load string literal
-   equ OP.LDVAR to 2     ;* Load user variable reference
-   equ OP.UPROC to 3     ;* Run user procedure
-   equ OP.UFUNC to 4     ;* Run user function
-   equ OP.JZE   to 5     ;* Jump if zero (or null)
-   equ OP.JNZ   to 6     ;* Jump if non-zero
-   equ OP.JMP   to 7     ;* Unconditional jump
-   equ OP.LDGVR to 8     ;* Load global variable
-   equ OP.SETGV to 9     ;* Set global variable
-   equ OP.JNE   to 10    ;* Jump if not equal
-   equ OP.POP   to 11    ;* Pop top stack item
-   equ OP.LDNUM to 12    ;* Load numeric literal
-   equ OP.LCALL to 13    ;* Local call
-   equ OP.LRETN to 14    ;* Local return
-   equ OP.FUNC  to 30    ;* Opcode for first built-in function
+   equate OP.LDLIT to 1     ;* Load string literal
+   equate OP.LDVAR to 2     ;* Load user variable reference
+   equate OP.UPROC to 3     ;* Run user procedure
+   equate OP.UFUNC to 4     ;* Run user function
+   equate OP.JZE   to 5     ;* Jump if zero (or null)
+   equate OP.JNZ   to 6     ;* Jump if non-zero
+   equate OP.JMP   to 7     ;* Unconditional jump
+   equate OP.LDGVR to 8     ;* Load global variable
+   equate OP.SETGV to 9     ;* Set global variable
+   equate OP.JNE   to 10    ;* Jump if not equal
+   equate OP.POP   to 11    ;* Pop top stack item
+   equate OP.LDNUM to 12    ;* Load numeric literal
+   equate OP.LCALL to 13    ;* Local call
+   equate OP.LRETN to 14    ;* Local return
+   equate OP.FUNC  to 30    ;* Opcode for first built-in function
 
    if len(ext.funcs) = 0 then  ;* Not yet built function tables
 
@@ -8082,11 +8083,11 @@ compile:
 
    lproc.no = 0
    local.procs = ''      ;* LPROC/LFUNC list.  Fields are...
-   equ LPROC.NAME to 1   ;* Local PROC/FUNC name
-   equ LPROC.FUNC to 2   ;* LFUNC?
-   equ LPROC.ARGS to 3   ;* Arg count
-   equ LPROC.ADDR to 4   ;* Start address
-   equ LPROC.USED to 5   ;* Referenced?
+   equate LPROC.NAME to 1   ;* Local PROC/FUNC name
+   equate LPROC.FUNC to 2   ;* LFUNC?
+   equate LPROC.ARGS to 3   ;* Arg count
+   equate LPROC.ADDR to 4   ;* Start address
+   equate LPROC.USED to 5   ;* Referenced?
 
    * Set up source indexing
 

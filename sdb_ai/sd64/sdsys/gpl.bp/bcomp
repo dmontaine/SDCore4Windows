@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
 * 8 Nov 26 Windows port - from Linux 3290fbd9: a class initialiser takes the first SEVEN at.constants as the constant @-variables (nine until @AM and
 *               @SVM went, which let @SDSYS and @USERNO through); and kernel(K$CASE.SENSITIVE, 0) is assigned, not voided, as bbcmp.py has no VOID.
 * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): twenty-two $MODE words of other products are retired (see "Values of mode"): the
@@ -209,7 +210,7 @@ $define M.TRAP.UNUSED          15
 ** Begin New Modes **
 $define M.NO.ECHO.DATA         19
 $define M.STRICT.EQUATE        23  ;* 10 Oct 26 dm
-$define M.TIME.MS              24  ;* 12 Oct 26 dm - openQM 581: TIME() returns seconds to the millisecond (a float)
+* 28 Oct 26 dm - bit 24 (TIME.MS) is retired (S.87): the position stays RESERVED, blank in mode.names
 * 27 Oct 26 dm - bits 26, 27 and 28 (OPEN.FAIL.ZERO.FVAR, PICK.READNEXT, EXECUTE.CLEARLIST) are retired (S.87 batch 9): the positions stay RESERVED, blank in mode.names
 $define M.PARTIAL.EXPRESSIONS  29  ;* 14 Oct 26 dm - openQM 417: AND and OR stop evaluating when the result is known
 ** End New Modes
@@ -219,7 +220,7 @@ $define M.PARTIAL.EXPRESSIONS  29  ;* 14 Oct 26 dm - openQM 417: AND and OR stop
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): - QM4 gaps bundle Q-16
 $define M2.TRAP.UNUSED.MAIN     5  ;* TRAP.UNUSED, for variables assigned in the program itself and not in an include record
 $define M2.EXPLICIT             7  ;* a scalar must be named in a DIM statement before it is used (explicit.check, dim.declare.scalar)
-$define M2.DEFAULT.UNASS.ARGS   8  ;* an argument with a default value takes it when the caller passed it unassigned (arg.defaults.emit)
+* 28 Oct 26 dm - mode2 bit 8 (DEFAULT.UNASS.ARGS) is retired (S.87): the position stays RESERVED, blank in mode.names
 $define M2.NON.DURABLE.TXN      9  ;* 15 Oct 26 dm - COMMIT of a nested transaction hands its updates to the parent (emit.txn.commit)
 $define M2.DEBUG.EQUATES       11 ;* 16 Oct 26 dm - QM4 gap 218: a debug object also holds the equate and $DEFINE tokens (emit.equate.table)
 
@@ -251,7 +252,7 @@ mode.names := @VM                    ;* 20, retired 27 Oct 26 (was NO.CASE.INVER
 mode.names := @VM                    ;* 21, retired 27 Oct 26 (was OPTIONAL.THEN.ELSE)
 mode.names := @VM                    ;* 22, retired 27 Oct 26 (was IMPLIED.STOP)
 mode.names := @VM:"STRICT.EQUATE"
-mode.names := @VM:"TIME.MS"
+mode.names := @VM                    ;* 24, retired 28 Oct 26 (was TIME.MS)
 mode.names := @VM                    ;* 25, retired 27 Oct 26 (was EXCEPTION.SAVE.STACK)
 mode.names := @VM                    ;* 26, retired 27 Oct 26 (was OPEN.FAIL.ZERO.FVAR)
 mode.names := @VM                    ;* 27, retired 27 Oct 26 (was PICK.READNEXT)
@@ -270,7 +271,7 @@ mode.names<1,37> = ""                   ;* mode2 bit 4, retired 27 Oct 26 (was C
 mode.names<1,38> = "TRAP.UNUSED.MAIN"
 mode.names<1,39> = ""                   ;* retired 27 Oct 26 (was PICK.SELECT)
 mode.names<1,40> = "EXPLICIT"
-mode.names<1,41> = "DEFAULT.UNASS.ARGS"
+mode.names<1,41> = ""                   ;* mode2 bit 8, retired 28 Oct 26 (was DEFAULT.UNASS.ARGS)
 mode.names<1,42> = "NON.DURABLE.TXN"
 mode.names<1,43> = ""                   ;* retired 27 Oct 26 (was STDFIL.SHARED)
 mode.names<1,44> = "DEBUG.EQUATES"
@@ -398,13 +399,9 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.vars<-1> = "PARASENTENCE"       ; at.syscom.offsets<-1> = SYSCOM.PARASENTENCE
    at.syscom.vars<-1> = "PATH"               ; at.syscom.offsets<-1> = SYSCOM.ACCOUNT.PATH
    at.syscom.vars<-1> = "PSTAT"              ; at.syscom.offsets<-1> = SYSCOM.AT.PSTAT     ;* 15 Oct 26 dm - sheet 492
-   at.syscom.vars<-1> = "PIB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.IBUF:'.0'
-   at.syscom.vars<-1> = "POB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.OBUF:'.0'
    at.syscom.vars<-1> = "RECORD"             ; at.syscom.offsets<-1> = SYSCOM.QPROC.RECORD
    at.syscom.vars<-1> = "SELECTED"           ; at.syscom.offsets<-1> = SYSCOM.SELECTED
    at.syscom.vars<-1> = "SENTENCE"           ; at.syscom.offsets<-1> = SYSCOM.SENTENCE
-   at.syscom.vars<-1> = "SIB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.IBUF:'.1'
-   at.syscom.vars<-1> = "SOB"                ; at.syscom.offsets<-1> = SYSCOM.PROC.OBUF:'.1'
    at.syscom.vars<-1> = "SYS.BELL"           ; at.syscom.offsets<-1> = SYSCOM.BELL
    at.syscom.vars<-1> = "SYS0"               ; at.syscom.offsets<-1> = SYSCOM.SYS0
    at.syscom.vars<-1> = "SYSTEM.RETURN.CODE" ; at.syscom.offsets<-1> = SYSCOM.SYSTEM.RETURN.CODE
@@ -427,7 +424,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.syscom.lvars = "USER.RETURN.CODE":@fm:"DATE":@fm:"TIME":@fm:"ID":@fm:"FILE.NAME"
    at.syscom.lvars := @fm:"RECORD":@fm:"SELECTED":@fm:"TRIGGER.RETURN.CODE"
    at.syscom.lvars := @fm:"USER0":@fm:"USER1":@fm:"USER2":@fm:"USER3":@fm:"USER4"
-   at.syscom.lvars := @fm:"ANS":@fm:"PIB":@fm:"SIB":@fm:"POB":@fm:"SOB"
+   at.syscom.lvars := @fm:"ANS"
    at.syscom.lvars := @fm:"PSTAT"                   ;* 15 Oct 26 dm - sheet 492: a program sets it for PSTAT to show
 
 * 20240728 mab remove ABORTE/M, ERRMSG, STOPE, STOPM, TTYSET
@@ -438,7 +435,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"CALL":@fm:"CASE":@fm:"CASING":@fm:"CATCH":@fm:"CHAIN"   ;* CASING: 15 Oct 26 dm - QM4 gaps Q-1
    statements := @fm:"CLEAR":@fm:"CLEARCOMMON"
    statements := @fm:"CLEARDATA":@fm:"CLEARFILE":@fm:"CLEARINPUT"
-   statements := @fm:"CLEARSELECT":@fm:"CLOSE":@fm:"CLOSESEQ":@fm:"CLOSE.SOCKET"
+   statements := @fm:"CLEARSELECT":@fm:"CLOSE":@fm:"CLOSE.SOCKET"
    statements := @fm:"COMMIT":@fm:"CONTINUE":@fm:"CONVERT":@fm:"CREATE"
    statements := @fm:"CREATE.FILE":@fm:"CRT":@fm:"CSV.MODE"       ;* CSV.MODE: 14 Oct 26 dm - openQM 173, 200
    statements := @fm:"DATA":@fm:"DEBUG":@fm:"DEL":@fm:"DELETE"
@@ -468,7 +465,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"PHANTOM":@fm:"PRECISION":@fm:"PRINT"
    statements := @fm:"PRINTER":@fm:"PRINTCSV"
    * rev 1.0-1
-   statements := @fm:"PROCREAD":@fm:"PROCWRITE":@fm:"PROMPT"
+   statements := @fm:"PROMPT"
    statements := @fm:"RANDOMIZE":@fm:"READ":@fm:"READBLK":@fm:"READCSV"
    statements := @fm:"READL":@fm:"READLIST":@fm:"READNEXT":@fm:"READSEQ"
    statements := @fm:"READU":@fm:"READV":@fm:"READVL":@fm:"READVU"
@@ -503,7 +500,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * Statements which do not generate DEBUG calls when debugging
 
    non.debug.statements = "CLASS":@fm:"COMMON":@fm:"DEFFUN"
-   non.debug.statements := @fm:"EQU":@fm:"EQUATE"
+   non.debug.statements := @fm:"EQUATE"
    non.debug.statements := @fm:"FUNCTION":@fm:"GET":@fm:"PRIVATE":@fm:"PROGRAM"
    non.debug.statements := @fm:"PUBLIC":@fm:"RESTRICTED":@fm:"SET":@fm:"SUBROUTINE"   ;* RESTRICTED 16 Oct 26 dm - QM4 gaps
 
@@ -668,7 +665,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "CSVPARSE"        ; intrinsic.opcodes<-1> = OP.XFUN     ;* 20 Oct 26 dm - CSV text as a data collection or a dynamic array
    intrinsics<-1> = "DATE"            ; intrinsic.opcodes<-1> = OP.DATE
    intrinsics<-1> = "DCOUNT"          ; intrinsic.opcodes<-1> = OP.DCOUNT
-   intrinsics<-1> = "DELETE"          ; intrinsic.opcodes<-1> = OP.DEL
    intrinsics<-1> = "DIGEST"          ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - QM4 gaps Q-13
    intrinsics<-1> = "DIR"             ; intrinsic.opcodes<-1> = OP.DIR
    intrinsics<-1> = "DIV"             ; intrinsic.opcodes<-1> = OP.QUOTIENT
@@ -682,7 +678,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "EQS"             ; intrinsic.opcodes<-1> = OP.EQS
    intrinsics<-1> = "EXP"             ; intrinsic.opcodes<-1> = OP.EXP
    intrinsics<-1> = "EXPAND"          ; intrinsic.opcodes<-1> = OP.COLL   ;* 13 Oct 26 dm - linked data collections
-   intrinsics<-1> = "EXTRACT"         ; intrinsic.opcodes<-1> = OP.EXTRACT
    intrinsics<-1> = "FCONTROL"        ; intrinsic.opcodes<-1> = OP.XFUN   ;* 15 Oct 26 dm - the public FCONTROL(fvar, action {, qualifier}), openQM numbers
    intrinsics<-1> = "FIELD"           ; intrinsic.opcodes<-1> = OP.FIELD
    intrinsics<-1> = "FIELDS"          ; intrinsic.opcodes<-1> = OP.FIELDS
@@ -710,7 +705,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "INDICES"         ; intrinsic.opcodes<-1> = OP.INDICES1
    intrinsics<-1> = "INMAT"           ; intrinsic.opcodes<-1> = OP.INMAT
    intrinsics<-1> = "INPUTBLK"        ; intrinsic.opcodes<-1> = OP.INPUTBLK
-   intrinsics<-1> = "INSERT"          ; intrinsic.opcodes<-1> = OP.INSERT
    intrinsics<-1> = "INT"             ; intrinsic.opcodes<-1> = OP.INT
    intrinsics<-1> = "IS.NULL"         ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "ITYPE"           ; intrinsic.opcodes<-1> = OP.ITYPE
@@ -782,7 +776,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "REGEX"           ; intrinsic.opcodes<-1> = OP.REGEX   ;* 12 Oct 26 dm - openQM 510
    intrinsics<-1> = "REM"             ; intrinsic.opcodes<-1> = OP.REM
    intrinsics<-1> = "REMOVE"          ; intrinsic.opcodes<-1> = OP.REMOVE
-   intrinsics<-1> = "REPLACE"         ; intrinsic.opcodes<-1> = OP.REPLACE
    intrinsics<-1> = "REUSE"           ; intrinsic.opcodes<-1> = OP.REUSE
    intrinsics<-1> = "REUSING"         ; intrinsic.opcodes<-1> = OP.XFUN
    intrinsics<-1> = "RMVD"            ; intrinsic.opcodes<-1> = OP.RMVD    ;* 15 Oct 26 dm - QM4 gaps Q-1
@@ -824,7 +817,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    intrinsics<-1> = "STATUS"          ; intrinsic.opcodes<-1> = OP.STATUS
    intrinsics<-1> = "STR"             ; intrinsic.opcodes<-1> = OP.STR
    intrinsics<-1> = "STRS"            ; intrinsic.opcodes<-1> = OP.STRS
-   intrinsics<-1> = "SUBR"            ; intrinsic.opcodes<-1> = ''
    intrinsics<-1> = "SUBSTITUTE"      ; intrinsic.opcodes<-1> = OP.SUBST
    intrinsics<-1> = "SUBSTRINGS"      ; intrinsic.opcodes<-1> = OP.SUBSTRNG
    intrinsics<-1> = "SUM"             ; intrinsic.opcodes<-1> = OP.SUM
@@ -1927,7 +1919,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
       i = events(-1, EVT$UNLOAD)
    end
 
-   if listing.used and not(is.ctype) then closeseq list.f
+   if listing.used and not(is.ctype) then close list.f
 
    return
 
@@ -2298,7 +2290,6 @@ is.statement:
                  st.clearinput,
                  st.clearselect,
                  st.close,
-                 st.close,                     ;* CLOSESEQ
                  st.close.socket,
                  st.commit,
                  st.continue,
@@ -2389,8 +2380,6 @@ is.statement:
                  st.printer,
                  st.printcsv,
 * rev 1.0-1
-                 st.procread,
-                 st.procwrite,				 
                  st.prompt,
                  st.randomize,
                  st.read,
@@ -2482,7 +2471,6 @@ is.statement:
                on i gosub st.class,      ;* CLASS
                           st.common,     ;* COMMON
                           st.deffun,
-                          st.equate,     ;* EQU
                           st.equate,
                           st.function,
                           st.get,
@@ -4269,7 +4257,6 @@ end
                       in.xfun,        ;* CSVPARSE
                       in.none,        ;* DATE
                       in.two,         ;* DCOUNT
-                      in.delete,      ;* DELETE
                       in.xfun,        ;* DIGEST
                       in.one,         ;* DIR
                       in.two,         ;* DIV
@@ -4283,7 +4270,6 @@ end
                       in.two,         ;* EQS
                       in.one,         ;* EXP
                       in.expand,      ;* EXPAND
-                      in.extract,     ;* EXTRACT
                       in.xfun,        ;* FCONTROL
                       in.field,       ;* FIELD
                       in.field,       ;* FIELDS
@@ -4311,7 +4297,6 @@ end
                       in.indices,     ;* INDICES
                       in.inmat,       ;* INMAT      (Special case for matrix name)
                       in.one,         ;* INPUTBLK
-                      in.insert,      ;* INSERT
                       in.one,         ;* INT
                       in.xfun,        ;* IS.NULL
                       in.itype,       ;* ITYPE
@@ -4383,7 +4368,6 @@ end
                       in.two,         ;* REGEX
                       in.two,         ;* REM
                       in.remove,      ;* REMOVE
-                      in.replace,     ;* REPLACE
                       in.one,         ;* REUSE
                       in.reusing,     ;* REUSING
                       in.remove,      ;* RMVD
@@ -4425,7 +4409,6 @@ end
                       in.none,        ;* STATUS
                       in.two,         ;* STR
                       in.two,         ;* STRS
-                      in.subr,        ;* SUBR
                       in.subst,       ;* SUBSTITUTE
                       in.three,       ;* SUBSTRINGS
                       in.one,         ;* SUM
@@ -4877,28 +4860,6 @@ in.csvdq:
             end
             goto intrinsic.common
 
-*** DELETE()   2, 3 or 4 arguments. Absent args default to zero
-*** EXTRACT()   2, 3 or 4 arguments. Absent args default to zero
-in.delete:
-in.extract:
-            arg.count = 2 ; gosub get.args
-
-            if look.ahead.token = TKN.COMMA then
-               gosub get.token
-               gosub exprf
-            end else
-               n = 0 ; gosub emit.numeric.load
-            end
-
-            if look.ahead.token = TKN.COMMA then
-               gosub get.token
-               gosub exprf
-            end else
-               n = 0 ; gosub emit.numeric.load
-            end
-
-            goto intrinsic.common
-
 *** DTX()  1 or 2 arguments. Second defaults to 0 if omitted.
 in.dtx:
             gosub expr        ;* Value to convert
@@ -5088,39 +5049,6 @@ in.removef:
             end
             goto intrinsic.common
 
-*** INSERT()  3, 4 or 5 args, args 2 and 4 default to zero
-*** REPLACE()  3, 4 or 5 args, args 2 and 4 default to zero
-***          final arg may have semicolon delimiter.
-in.insert:
-            goto in.ins.rep
-in.replace:
-in.ins.rep:
-            arg.count = 2       ;* Source string and field number
-            gosub get.args
-
-            if look.ahead.token = TKN.COMMA then    ;* Value number present
-               gosub get.token
-               gosub exprf
-            end else
-               n = 0 ; gosub emit.numeric.load
-            end
-
-            if look.ahead.token = TKN.COMMA then    ;* Subvalue number present
-               gosub get.token
-               gosub exprf
-            end else
-               n = 0 ; gosub emit.numeric.load
-            end
-
-            if (look.ahead.token # TKN.COMMA) and (look.ahead.token # TKN.SEMICOLON) then
-               err.msg = sysmsg(2861) ;* Expected comma or semicolon
-               goto error
-            end
-
-            gosub get.token
-            gosub exprf                ;* New string value
-            goto intrinsic.common
-
 *** LOCATE()  3, 4 or 5 args. Final arg may have semicolon delimiter.
 in.locate:
             arg.count = 3       ;* Search string, dynamic array, field pos
@@ -5288,39 +5216,6 @@ in.sortnext:
             intrinsic.stack<1> = OP.XFUN
             goto intrinsic.common
 
-*** SUBR(name [, arg1 [,arg2...]])
-in.subr:
-            gosub expr   ;* Subroutine name expression
-
-            gosub emit.function.return.argument  ;* Emit return argument
-
-            ins "1" before func.stack<1>  ;* Track arg count
-            loop
-            while look.ahead.token = TKN.COMMA
-               func.stack<1> = func.stack<1> + 1
-               gosub get.token  ;* Skip comma
-               gosub exprf
-               if err then
-                 del func.stack<1>
-                 return
-               end
-            repeat
-
-            * Emit call
-
-            func.arg.count = func.stack<1> + 0
-            del func.stack<1>
-
-            if print.code then
-               s = "CALL     (" : func.arg.count : " arguments)"
-               gosub show.code
-            end
-
-            opcode.byte = OP.CALL ; gosub emit
-            opcode.byte = func.arg.count ; gosub emit
-            gosub emit.function.result.load  ;* Load result
-            goto intrinsic.end
-
 *** SUBSTITUTE()   3 or 4 arguments, absent arg defaults to @vm
 in.subst:
             arg.count = 3 ; gosub get.args
@@ -5436,16 +5331,8 @@ in.trim:
             goto intrinsic.common
 
 in.time:
-            * 18 Oct 26 Windows port - from Linux a39719d (12 Oct 26): - openQM 581.  With $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000: seconds since midnight
-            * to the millisecond, as a floating point number.  Otherwise it is the plain TIME() opcode.
-            if bittest(mode, M.TIME.MS) then
-               n = 1020 ; gosub emit.numeric.load
-               opcode.byte = OP.SYSTEM ; gosub emit.simple
-               n = 1000 ; gosub emit.numeric.load
-               opcode.byte = OP.DIV ; gosub emit.simple
-               goto intrinsic.end
-            end
-            goto intrinsic.common               ;* The plain TIME() opcode
+            * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): $MODE TIME.MS is gone (write SYSTEM(1020) / 1000 for milliseconds); TIME() is the plain opcode.
+            goto intrinsic.common
 
 in.epoch:                       ;* EPOCH()  -  SYSTEM(1035), seconds since 1 Jan 1970 UTC
             n = 1035 ; gosub emit.numeric.load
@@ -7407,7 +7294,6 @@ st.clearselect:
 
 *****************************************************************************
 * ST.CLOSE      -  CLOSE statement
-* ST.CLOSESEQ   -  CLOSESEQ statement
 *
 
 st.close:
@@ -8258,9 +8144,8 @@ get.arg.default:
 
 * ARG.DEFAULTS.EMIT  -  At the end of a SUBROUTINE or FUNCTION statement: each default value read by GET.ARG.DEFAULT becomes
 * a line of source, IF ARG.COUNT() < n THEN name = value, queued in INJECT.LINES for GET.LINE to read ahead of the next line
-* of the program, so that the compiler reads it as if it had been written there.  With $MODE DEFAULT.UNASS.ARGS an argument
-* the caller passed unassigned gets its default as well.  A default needs one of the two: VAR.ARGS lets the caller leave the
-* argument out, the mode lets it pass nothing.  (The record of source lines cannot be added to: REMOVEF leaves the text alone
+* of the program, so that the compiler reads it as if it had been written there.  A default needs VAR.ARGS, which lets the
+* caller leave the argument out.  (The record of source lines cannot be added to: REMOVEF leaves the text alone
 * and moves a pointer, so assigning to it starts the reading again from the top.)
 arg.defaults.emit:
    if arg.defaults # '' then
@@ -8271,11 +8156,8 @@ arg.defaults.emit:
          dflt.text = arg.defaults<dflt.i,3>
          if bitand(header.flags, HDR.VAR.ARGS) # 0 then
             dflt.cond = 'ARG.COUNT() < ' : dflt.pos
-            if bittest(mode2, M2.DEFAULT.UNASS.ARGS) then dflt.cond := ' OR UNASSIGNED(' : dflt.name : ')'
-         end else if bittest(mode2, M2.DEFAULT.UNASS.ARGS) then
-            dflt.cond = 'UNASSIGNED(' : dflt.name : ')'
          end else
-            err.msg = sysmsg(12279)  ;* Default argument values need the VAR.ARGS option or $MODE DEFAULT.UNASS.ARGS
+            err.msg = sysmsg(12279)  ;* Default argument values need the VAR.ARGS option
             gosub error
             exit
          end
@@ -12340,31 +12222,6 @@ st.private.common:
 
    return
    
-* rev 1.0-1 add back PROCREAD and PROCWRITE
-*****************************************************************************
-* ST.PROCREAD  -  PROCREAD statement
-
-st.procread:
-   gosub simple.lvar.reference  ;* Emit target variable
-
-   * Perform common back-end processing
-
-   opcode = OP.PROCREAD
-   ins '0' before onerror.stack<1>        ;* No ON ERROR clause
-   ins '0' before testlock.stack<1>       ;* No LOCKED clause allowed
-   ins '1' before thenelse.stack<1>       ;* THEN / ELSE clause required
-   goto back.end
-
-*****************************************************************************
-* ST.PROCWRITE  -  PROCWRITE statement
-
-st.procwrite:
-   n = SYSCOM.PROC.IBUF:'.0' ; gosub emit.ldsys
-   gosub exprf
-   opcode.byte = OP.STOR ; gosub emit.simple
-   return
-   
-
 *****************************************************************************
 * ST.PROGRAM  -  PROGRAM statement
 
@@ -14823,8 +14680,9 @@ if.then.else.expr.abort:
                * compiled items do this as a run time subroutine call
                * using ITYPE() to execute embedded object code.
 
+               sys.chk.rec = dict.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
                if len(dict.rec<DICT.ITYPE.OBJECT>) = 0 ~
-               or checksum(replace(dict.rec, DICT.SYS.INFO, 1;'')) # dict.rec<DICT.SYS.INFO,1> then
+               or checksum(sys.chk.rec) # dict.rec<DICT.SYS.INFO,1> then
                   * Need to compile nested item
 
                   if compiler.depth > 10 then

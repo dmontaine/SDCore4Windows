@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: COMMAND.LEVEL.LOCKS, STACKED.ACCOUNT, FORCE.RELOAD retired (blank rows).
+* 28 Oct 26 dm  S.87: STACKED.ACCOUNT retired (blank row).
+* 28 Oct 26 dm  S.87: FORCE.RELOAD retired (blank row).
+* 28 Oct 26 dm  S.87: SUPPRESS.ABORT.MSG, DIR.SEL.OMIT.HIDDEN, NO.PHANTOM.NOTIFY and NUMERIC.EXPONENT retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 16: UNASS.WARNING, DIV.ZERO.WARNING, NON.NUMERIC.WARNING, INHERIT, QUERY.SORT.NO.CASE and CLEAR.SELECT retired (blank rows) and the SDBASIC.WARNINGS shortcut with them: the shortcut branch, the flag column and message 3202 are gone.
 * 27 Oct 26 dm  S.87 batch 12: CHAIN.KEEP.COMMON, BACKSLASH.NOT.QUOTE and CORRELATIVE.REUSE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 8: NO.SEL.LIST.QUERY, CATALOGUE.LOCAL, INHERIT.MFILE.PATH and CORRELATIVE.NOCASE retired (blank rows).
@@ -75,7 +79,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 15 was AMPM.UPCASE
    opt<-1> = '||'                                ;* 16 was PICK.NULL
    opt<-1> = '||'                                ;* 17 was PICK.GRAND.TOTAL
-   opt<-1> = 'SUPPRESS.ABORT.MSG||3118'
+   opt<-1> = '||'                                ;* 18 was SUPPRESS.ABORT.MSG
    opt<-1> = '||'                                ;* 19 was DEBUG.REBIND.KEYS
    opt<-1> = '||'                                ;* 20 was ED.NO.QUERY.FD
    opt<-1> = '||'                                ;* 21 was NO.SEL.LIST.QUERY
@@ -100,28 +104,28 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 39 was CLEAR.SELECT
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
    opt<-1> = '||'                                ;* 40 was CATALOGUE.LOCAL
-   opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
+   opt<-1> = '||'                                ;* 41 was DIR.SEL.OMIT.HIDDEN
    opt<-1> = '||'                                ;* 42 was PICK.ML.CONV.MASK
    opt<-1> = '||'                                ;* 43 was CHAINED.SELECT
    * 14 Oct 26  1.2-0, bundle A-4: the position in this list is the index in options.h (44 to 49), in this order
    opt<-1> = '||'                                ;* 44 was PAGINATE.ON.HEADING
-   opt<-1> = 'FORCE.RELOAD||12257'               ;* 45, openQM ref 37
-   opt<-1> = 'NUMERIC.EXPONENT||12258'           ;* 46, openQM ref 404
+   opt<-1> = '||'                                ;* 45 was FORCE.RELOAD
+   opt<-1> = '||'                                ;* 46 was NUMERIC.EXPONENT
    opt<-1> = '||'                                ;* 47 was QUERY.FOOTER.PAUSE
    opt<-1> = '||'                                ;* 48 was INHERIT.MFILE.PATH
    * 15 Oct 26  Q-17 of the QM4 gaps tab: the position in this list is the index in options.h (49 to 54), in this order
    opt<-1> = 'GIT||12271'                        ;* 49
    opt<-1> = 'DIR.DTM||12272'                    ;* 50
    opt<-1> = '||'                                ;* 51 was KEEP.OLD.OBJECT
-   opt<-1> = 'NO.PHANTOM.NOTIFY||12274'          ;* 52
+   opt<-1> = '||'                                ;* 52 was NO.PHANTOM.NOTIFY
    opt<-1> = 'SPOOL.COMMAND||12275'              ;* 53
    opt<-1> = '||'                                ;* 54 was ASSOC.ALL
    opt<-1> = '||'                                ;* 55 was CORRELATIVE.NOCASE
    opt<-1> = '||'                                ;* 56 was CORRELATIVE.REUSE
    * 15 Oct 26  openQM refs 57 and others of bundle Q-17 (57 on)
    opt<-1> = '||'                                ;* 57 was QUERY.MERGE.PRINT
-   opt<-1> = 'COMMAND.LEVEL.LOCKS||12372'        ;* 58, 16 Oct 26 QM4 gap 231
-   opt<-1> = 'STACKED.ACCOUNT||12375'            ;* 59, 16 Oct 26 QM4 gap 248
+   opt<-1> = '||'                                ;* 58 was COMMAND.LEVEL.LOCKS
+   opt<-1> = '||'                                ;* 59 was STACKED.ACCOUNT
    opt<-1> = 'INHERIT.OWNERSHIP||12389'          ;* 60, 16 Oct 26 QM4 gap 239
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 

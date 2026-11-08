@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 13 Oct 26 dm  A drop-down taller than the room under its bar scrolls: it shows the rows that fit, keeps the
@@ -65,17 +66,17 @@ $catalog $sl_menu
 
 $include sl.h
 
-   equ M.OPEN to 10        ;* 1 while a drop-down is shown
-   equ M.GEOM to 11        ;* dx : dy : dw : ni (the items) : nv (the rows shown) : tp (the item on the first row)
-   equ M.UNDER to 12       ;* the screen under the drop-down ($sl_region)
-   equ M.TX to 13          ;* value m: the column of title m
-   equ M.TM to 14          ;* value m: its mnemonic letter
-   equ M.POPUP to 15       ;* 1: a pop-up menu, not a bar (see below)
-   equ M.LVL to 16         ;* how many submenus are open (0 = the menu itself)
-   equ M.TOP to 17         ;* the menu of the bar that is open (the one a submenu hangs from)
-   equ M.MENUS to 19       ;* menu m is field 19 + m
-   equ M.PARENT to 110     ;* level l: the menu and item and geometry of the menu a submenu was opened from
-   equ M.PUNDER to 130     ;* level l: the screen under that menu's drop-down
+   equate M.OPEN to 10        ;* 1 while a drop-down is shown
+   equate M.GEOM to 11        ;* dx : dy : dw : ni (the items) : nv (the rows shown) : tp (the item on the first row)
+   equate M.UNDER to 12       ;* the screen under the drop-down ($sl_region)
+   equate M.TX to 13          ;* value m: the column of title m
+   equate M.TM to 14          ;* value m: its mnemonic letter
+   equate M.POPUP to 15       ;* 1: a pop-up menu, not a bar (see below)
+   equate M.LVL to 16         ;* how many submenus are open (0 = the menu itself)
+   equate M.TOP to 17         ;* the menu of the bar that is open (the one a submenu hangs from)
+   equate M.MENUS to 19       ;* menu m is field 19 + m
+   equate M.PARENT to 110     ;* level l: the menu and item and geometry of the menu a submenu was opened from
+   equate M.PUNDER to 130     ;* level l: the screen under that menu's drop-down
 
    ret = ''
    lvl = w<M.LVL> + 0

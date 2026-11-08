@@ -195,7 +195,7 @@ $prog = @'
       END
       WRITESEQ 'ONE' TO WF ELSE CRT 'WRITESEQ FAILED'
       WRITESEQ 'TWO' TO WF ELSE CRT 'WRITESEQ FAILED'
-      CLOSESEQ WF
+      CLOSE WF
 *
       OPENSEQ 'BP', 'ZZLEWCSV' OVERWRITE TO VF ELSE
          CRT 'OPENSEQ ZZLEWCSV FAILED'
@@ -203,7 +203,7 @@ $prog = @'
       END
       WRITECSV 'A1', 'B1' TO VF ELSE CRT 'WRITECSV FAILED'
       WRITECSV 'A2', 'B2' TO VF ELSE CRT 'WRITECSV FAILED'
-      CLOSESEQ VF
+      CLOSE VF
 *
 * A directory-file RECORD write: field marks become the newline on disk.
 *    WRITE takes ON ERROR, not ELSE - only the sequential statements take ELSE.
@@ -243,7 +243,7 @@ SEQ.TEST:
          IF LEN(L) THEN LC = SEQ(L[1]) ELSE LC = -1
          CRT 'SEQ ':LN:' LEN=':LEN(L):' LAST=':LC
       REPEAT
-      CLOSESEQ SF
+      CLOSE SF
       RETURN
 *
 STRD.TEST:
@@ -258,7 +258,7 @@ STRD.TEST:
          IF LEN(L) THEN LC = SEQ(L[1]) ELSE LC = -1
          CRT 'STRD ':LN:' LEN=':LEN(L):' LAST=':LC
       REPEAT
-      CLOSESEQ TF
+      CLOSE TF
       RETURN
 *
 CSV.TEST:
@@ -274,7 +274,7 @@ CSV.TEST:
          IF LEN(Q) THEN LQ = SEQ(Q[1]) ELSE LQ = -1
          CRT 'CSV ':LN:' PLEN=':LEN(P):' PLAST=':LP:' QLEN=':LEN(Q):' QLAST=':LQ
       REPEAT
-      CLOSESEQ XF
+      CLOSE XF
       RETURN
       END
 '@

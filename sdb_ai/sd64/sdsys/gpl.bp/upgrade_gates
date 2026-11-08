@@ -24,6 +24,7 @@
 * own when, and only when, the register holds what it should; the installer matches on that word and nothing else.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 24 Oct 26 Windows port - from Linux 2463bac: a field is filled only where it is BLANK, so a second walk (a lost marker) changes
 *               nothing and never undoes a 'no' or an administrator's later sh-off / os-on.  RELEASE_1.1 170.
 * 23 Oct 26 Windows port - from Linux 215ce2c: the source of the answer is os.users, not a blanket 'yes'.  RELEASE_1.1 170.
@@ -122,7 +123,7 @@ $include int$keys.h
       end
    end
    writeseq 'S.63: the OS-access gates were set for the existing accounts' to marker.f else null
-   closeseq marker.f
+   close marker.f
 
    crt 'COMPLETE'
    stop

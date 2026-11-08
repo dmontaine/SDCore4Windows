@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: OPTION SUPPRESS.ABORT.MSG is gone: ABORT always prints the line saying where it ran.
  * 31 Dec 23 SD launch - prior history suppressed
  * 11 Jun 24 mab remove pickmsg op_errmsg and pick style abort op_pabort
  * END-HISTORY
@@ -48,7 +49,7 @@ void op_abort() {
   InitDescr(msg_descr, STRING);
   msg_descr->data.str.saddr = NULL;
 
-  if ((process.program.flags & HDR_INTERNAL) || Option(OptSuppressAbortMsg)) {
+  if (process.program.flags & HDR_INTERNAL) {
     k_exit_cause = K_ABORT;
   } else
     k_error("Abort");
@@ -84,7 +85,7 @@ void op_abortmsg() {
   else
     k_dismiss();
 
-  if ((process.program.flags & HDR_INTERNAL) || Option(OptSuppressAbortMsg)) {
+  if (process.program.flags & HDR_INTERNAL) {
     k_exit_cause = K_ABORT;
   } else
     k_error("Abort");

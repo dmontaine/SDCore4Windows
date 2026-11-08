@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: an index's field is found in
 *           the dictionary in either case.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
@@ -229,7 +230,7 @@ not.all.keyword:
 
       type = ak.data[1, 1]
       begin case
-         case type = 'I' or type = 'C'
+         case type = 'I'
             * Single/multi value
 
             line[33, 1] = ak.data<DICT.S.M>

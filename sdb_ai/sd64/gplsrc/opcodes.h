@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
  * 24 Aug 26 Windows port - OPGEN, the BASIC generator that read this
  *           file, is deleted.  gplbld/gen_includes.py builds
  *           gpl.bp/opcodes.h from it now, and the description below
@@ -518,7 +519,7 @@ _opc_(0xCF96, OP_CF96,     "OPCF96",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCF97, OP_CF97,   "OPCF97",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCF98, OP_LOGMSG,   "LOGMSG",     op_logmsg,    OPCODE_BYTE,        -1)
 _opc_(0xCF99, OP_SHCAP,    "SHCAP",      op_shcap,     OPCODE_BYTE,        -1)
-_opc_(0xCF9A, OP_PROCREAD, "PROCREAD",   op_procread,  OPCODE_BYTE,         0)
+_opc_(0xCF9A, OP_CF9A, "OPCF9A", op_illegal, OPCODE_BYTE, 0)
 _opc_(0xCF9B, OP_DEREF,    "DEREF",      op_deref,     OPCODE_BYTE,        -1)
 _opc_(0xCF9C, OP_IADD,     "IADD",       op_iadd,      OPCODE_BYTE,        -1)
 _opc_(0xCF9D, OP_ISUB,     "ISUB",       op_isub,      OPCODE_BYTE,        -1)

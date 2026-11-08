@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION QUERY.MERGE.PRINT and QUERY.FOOTER.PAUSE are gone; a report to printer 0 closes the printer,
 *           and no pause follows a page footer, as with the options off.
 * 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): OPTION QUERY.MERGE.PRINT: a report to printer 0 does not close a printer that was already active (openQM ref 57).
@@ -1006,7 +1007,7 @@ map.keys:
 
 delete.scroll.data:
    if fileinfo(qd.image.f, FL$OPEN) then
-      closeseq qd.image.f
+      close qd.image.f
       void ospath(qd.scrollpath, OS$DELETE)
    end
 

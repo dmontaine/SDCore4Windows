@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION DIR.SEL.OMIT.HIDDEN is gone: a select of a directory file includes the names that begin with a dot.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_rdnxpos ($MODE COMPOSITE.READNEXT) is gone; readnext() mode 0 is no longer called.
  * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE PICK.READNEXT is gone; READNEXT stores the id and a READNEXT that takes its ELSE sets the
  *           target to the null string, as without the mode.
@@ -1256,10 +1257,6 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
          */
         break; /* TODO: Work out the correct way of exiting this function with an error */
       }
-      /* 12 Oct 26 (openQM item 445): OPTION DIR.SEL.OMIT.HIDDEN leaves out the names that begin with a dot */
-      if (Option(OptDirSelOmitHidden) && dp->d_name[0] == '.')
-        continue;
-
       /* 16 Oct 26 (QM4 Fixes item 177): %header% holds the directory file's trigger, and is not a record */
       if (is_dir_header(dp->d_name))
         continue;

@@ -71,7 +71,7 @@ def checks(programs):
                 continue
             for i in idx:
                 br = else_branch(lines, i)
-                closes = [] if br is None else [k for k, b in enumerate(br) if re.search(r"\bcloseseq\s+%s\b" % re.escape(v), b, re.I)]
+                closes = [] if br is None else [k for k, b in enumerate(br) if re.search(r"\bclose\s+%s\b" % re.escape(v), b, re.I)]      # CLOSESEQ is gone (S.87): CLOSE closes a sequential file variable
                 reopens = [] if br is None else [k for k, b in enumerate(br) if re.match(r"\s*openseq\b.*?\bto\s+%s\b" % re.escape(v), b, re.I)]
                 # the close comes BEFORE a second OPENSEQ into the same variable (SED retries with the name in upper case): the first lock is let go, not overwritten
                 ok = bool(closes) and (not reopens or closes[0] < reopens[0])
@@ -117,8 +117,8 @@ def selftest():
             print("  [MISSED] %s: failing rows %s" % (name, failing))
             missed += 1
 
-    mutant("sed first open", "sed", "            if not(unassigned(fpath.f)) then closeseq fpath.f ", "            if not(unassigned(fpath.f)) then null ")
-    mutant("sed second open", "sed", "               if not(unassigned(fpath.f)) then closeseq fpath.f\n               open.ok = @false", "               open.ok = @false")
+    mutant("sed first open", "sed", "            if not(unassigned(fpath.f)) then close fpath.f ", "            if not(unassigned(fpath.f)) then null ")
+    mutant("sed second open", "sed", "               if not(unassigned(fpath.f)) then close fpath.f\n               open.ok = @false", "               open.ok = @false")
     print("selftest: %d of %d mutants caught, %d missed" % (caught, caught + missed, missed))
     return 0 if missed == 0 else 1
 

@@ -178,13 +178,13 @@ USER_PROGS = {
     # session that started it waits for the phantom to be listed as its child, raises the signal and waits for it to end.
     "zzlusgp": ("   t = 0\n   loop\n   until system(1062) or t >= 150\n      nap 100 ; t += 1\n   repeat\n"
                 "   openseq 'zzlusg.txt' to f then null else create f else stop 'no create'\n   weofseq f\n"
-                "   writeseq (if t < 150 then 'SIGNALLED' else 'TIMEOUT') to f else null\n   closeseq f\nend\n"),
+                "   writeseq (if t < 150 then 'SIGNALLED' else 'TIMEOUT') to f else null\n   close f\nend\n"),
     "zzlusig": ("   deleteseq 'zzlusg.txt' else null\n   execute 'PHANTOM NO.MSG RUN bp zzlusgp' capturing j\n"
                 "   t = 0\n   loop\n      kids = system(1058)\n   until kids # '' or t >= 150\n      nap 100 ; t += 1\n   repeat\n"
                 "   uid = kids<1>\n   crt 'CH1[':child(uid):'/':child(0):'/':child(uid + 5000):'/':dcount(kids, @fm):']'\n"
                 "   nap 1500\n   r = signal(uid)\n"
                 "   t = 0\n   loop\n   until not(child(uid)) or t >= 200\n      nap 100 ; t += 1\n   repeat\n"
-                "   openseq 'zzlusg.txt' to f else f = ''\n   readseq a from f else a = 'NOFILE'\n   closeseq f\n"
+                "   openseq 'zzlusg.txt' to f else f = ''\n   readseq a from f else a = 'NOFILE'\n   close f\n"
                 "   crt 'SG[':r:'/':a:']'\n   crt 'CH2[':child(uid):']'\n   deleteseq 'zzlusg.txt' else null\n   crt 'SIGDONE'\nend\n"),
     # LISTU DETAIL and SYSTEM(1056) with a phantom alive
     # the phantom's cell is reserved at once but the phantom itself takes a moment to start: wait (up to 15 s) until the table says so

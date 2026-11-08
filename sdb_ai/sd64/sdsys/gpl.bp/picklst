@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -56,8 +57,8 @@ $include tty.h
 $include keys.h
 $include keyin.h
 
-equ KEY.WIDTH to 10
-equ KEY.FMT   to "10L"
+equate KEY.WIDTH to 10
+equate KEY.FMT   to "10L"
 
    value = ''
 

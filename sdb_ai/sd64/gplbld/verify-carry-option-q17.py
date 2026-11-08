@@ -196,7 +196,8 @@ def main():
         m1, m2 = tag(out, "MSGS1"), tag(out, "MSGS2")
         say("    messages: ordinary phantom %r; with the option %r" % (m1, m2))
         row("CONTROL: an ordinary phantom tells its parent when it ends", m1 is not None and "Normal termination" in m1, repr(m1))
-        row("NO.PHANTOM.NOTIFY: a phantom that sets it sends no message", m2 == "", repr(m2))
+        # 28 Oct 26, S.87: NO.PHANTOM.NOTIFY is gone, so asking for it changes nothing and the parent is told as before
+        row("NO.PHANTOM.NOTIFY is gone: a phantom that asks for it still tells its parent", m2 is not None and "Normal termination" in m2, repr(m2))
 
         say("\n--- SPOOL.COMMAND -----------------------------------------------------------------------")
         if not restart(box, "SPOOLER=true"):

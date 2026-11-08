@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer
+ *           strips the line from a kept sd.conf (sd.iss RemoveRetiredConf).
  * 06 Oct 26 Windows port - APILOGIN is retired: accepted and ignored, not
  *           stored (parity audit PAW-5; Linux's S.18)
  * 01 Oct 26 Windows port - BACKUPDIR is accepted (and not stored), so the line
@@ -121,7 +123,6 @@ struct CONFIG* read_config(char* errmsg) {
 
   pcfg.dhcache = 10;      /* DHCACHE:  Closed dynamic files kept open: the fixed 10 until 1.2-0 (openQM item 90) */
   pcfg.dumpdir[0] = '\0'; /* DUMPDIR:  Directory for process dump files */
-  pcfg.filerule = 0;      /* FILERULE: File name rules (special forms) */
   pcfg.fltdiff = 0.0000000000291; /* FLTDIFF: Wide zero for float eq test */
   pcfg.fsync = 0;                 /* FSYNC:    Controls when to do fsync() */
  /* 20240219 mab create-account based on type (user / group / other) */
@@ -250,8 +251,6 @@ struct CONFIG* read_config(char* errmsg) {
         cfg->errlog = n * 1024;
       else if (sscanf(rec, "FDS=%d", &n) == 1)
         cfg->fds_limit = n;
-      else if (sscanf(rec, "FILERULE=%d", &n) == 1)
-        pcfg.filerule |= n;
       else if (sscanf(rec, "FLTDIFF=%lf", &flt) == 1)
         pcfg.fltdiff = flt;
       else if (sscanf(rec, "FSYNC=%d", &n) == 1)

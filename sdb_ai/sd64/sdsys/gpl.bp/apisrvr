@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 36daf810 (S.87): request 70 operation 1 runs analyze.file (the VOC record analyse.file is gone); the operation's name in the audit line
 *           and on the wire is unchanged.
 * 25 Oct 26 Windows port - from Linux fccf976 (18 Oct 26) and 4f38ad4 (20 Oct 26): API request 29 (vb.open.sdnet) no longer opens any account's file for any login once NETFILES bit 2
@@ -1357,7 +1358,7 @@ vb.close:
       if fno > SEQ.BASE then            ;* a sequential file (sheet 441)
          gosub check.seq
          if err then return
-         closeseq seqfiles(si)
+         close seqfiles(si)
          seq.state(si) = 0
          return
       end
@@ -3130,9 +3131,10 @@ end
 
 * Compile what is calculated and not yet compiled, the way the query processor decides it is (qproc: no object code, or the
 * checksum no longer matches the record)
-if ev.type = 'I' or ev.type = 'C' or ((ev.type = 'A' or ev.type = 'S') and ev.rec<DICT.A.CORRELATIVE> # '') then
+if ev.type = 'I' or ((ev.type = 'A' or ev.type = 'S') and ev.rec<DICT.A.CORRELATIVE> # '') then
+   sys.chk.rec = ev.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
    if len(ev.rec<DICT.ITYPE.OBJECT>) = 0 ~
-   or checksum(replace(ev.rec, DICT.SYS.INFO, 1;'')) # ev.rec<DICT.SYS.INFO,1> then
+   or checksum(sys.chk.rec) # ev.rec<DICT.SYS.INFO,1> then
       call $dcomp(files(fno), ev.name, ev.rec, ev.z, ev.z, ev.z, ev.z, ev.z, 1)
       if ev.rec<DICT.ITYPE.OBJECT> = '' then
          server.error = SV$ERROR

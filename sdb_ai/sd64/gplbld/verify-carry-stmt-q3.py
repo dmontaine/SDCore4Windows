@@ -278,10 +278,10 @@ USER_PROGS = {
               "   matwritecsv m to f then crt 'M1[1]' else crt 'M1[0]'\n"
               "   matwritecsv v on f then crt 'M2[1]' else crt 'M2[0]'\n"
               "   matwritecsv w to f then crt 'M3[1]' else crt 'M3[0]'\n"
-              "   closeseq f\n"
+              "   close f\n"
               "   openseq 'zzmwc.csv' readonly to g else stop 'no readonly open'\n"
               "   matwritecsv v to g then crt 'M4[1]' else crt 'M4[0]'\n"
-              "   closeseq g\n   crt 'MWCDONE'\nend\n"),
+              "   close g\n   crt 'MWCDONE'\nend\n"),
     # J: SELECT.SOCKET.  One session is the server, the client and the accepted connection; the port is the fourth word of the
     # command.  Each line says what SELECT.SOCKET answered and what STATUS() was straight after it.
     "zzsks": ("$include keys.h\n"

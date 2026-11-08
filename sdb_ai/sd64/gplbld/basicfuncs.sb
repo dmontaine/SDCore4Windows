@@ -61,7 +61,7 @@
 *   carried verify-carry suites fcontrol and crlf are not run yet (row 148).
 * NOT.TESTED: FCONTROL
 * NOT.TESTED: FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
-* NOT.TESTED: TRANS RTRANS ITYPE OBJECT OBJINFO SUBR CCALL OUTERJOIN
+* NOT.TESTED: TRANS RTRANS ITYPE OBJECT OBJINFO CCALL OUTERJOIN
 *   session or host state
 * NOT.TESTED: DATE TIME TIMEDATE SYSTEM STATUS ENV OS.ERROR
 * NOT.TESTED: ARG ARG.COUNT COL1 COL2 GETREM INMAT RND
@@ -266,10 +266,8 @@ program basicfuncs
 * ------------------------------------------------------------ dynamic arrays
 
    r = 'a':@vm:'b':@vm:'c'
-   n = 'EXTRACT' ; g = extract(r, 1, 2, 0) ; w = 'b'    ; gosub check
-   n = 'REPLACE' ; g = replace(r, 1, 2, 0, 'Z') ; w = 'a':@vm:'Z':@vm:'c' ; gosub check
-   n = 'INSERT' ; g = insert(r, 1, 2, 0, 'Z') ; w = 'a':@vm:'Z':@vm:'b':@vm:'c' ; gosub check
-   n = 'DELETE.fn' ; g = delete(r, 1, 2, 0) ; w = 'a':@vm:'c' ; gosub check
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the function forms EXTRACT(), REPLACE(), INSERT(),
+*   DELETE() and SUBR() are gone (r<1,2> and the INS / DEL statements stay), so their four cases went.
 * LOCATE arr<1> SEARCHES FIELDS, NOT VALUES.  Two drafts fed it a value-marked
 * string and got the ELSE branch, which was the right answer to the wrong
 * question: with no @fm the whole string is field 1 and does not equal 'b'.

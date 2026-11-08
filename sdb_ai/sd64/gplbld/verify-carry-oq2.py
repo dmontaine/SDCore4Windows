@@ -39,10 +39,10 @@ CASES = [
     ("336: a name with two consecutive underscores", {}, "a__b = 7\nx = a__b", "7"),
     ("336: and three, mixed with digits", {}, "a1___b2 = 9\nx = a1___b2", "9"),
     ("581 CONTROL: TIME() is a whole number of seconds without the mode", {}, "t = time()\nx = (t = int(t))", "1"),
-    ("581: $MODE TIME.MS makes TIME() seconds to the millisecond, within half a second of SYSTEM(1020)/1000",
-     {}, "$mode time.ms\nt = time()\nx = (abs(t - system(1020) / 1000) < 0.5)", "1"),
+    ("581 (28 Oct 26, S.87: the mode is gone): SYSTEM(1020)/1000 is seconds to the millisecond, within a second of TIME()",
+     {}, "t = time()\nx = (abs(t - system(1020) / 1000) < 1.5)", "1"),
     ("581: and it is not a whole number (tried three times; a whole second is one chance in a thousand)",
-     {}, "$mode time.ms\nx = 0\nfor i = 1 to 3\n   t = time()\n   if t # int(t) then x = 1\n   sleep 1\nnext i", "1"),
+     {}, "x = 0\nfor i = 1 to 3\n   t = system(1020) / 1000\n   if t # int(t) then x = 1\n   sleep 1\nnext i", "1"),
     ("52 CONTROL: a named common block holds its value", {}, "common /zzcn/ a, b\ncommon /zzcm/ c\na = 5 ; b = 6 ; c = 7\nx = a + b + c", "18"),
     ("52: CLEARCOMMON name sets that block to zero and leaves the others",
      {}, "common /zzcn/ a, b\ncommon /zzcm/ c\na = 5 ; b = 6 ; c = 7\nclearcommon zzcn\nx = a:'/':b:'/':c", "0/0/7"),
@@ -438,8 +438,9 @@ def run_verbs(box, sysd, bp):
         write(os.path.join(hd, ".hidden"), "x\n")
         out = sess(box, "SELECT zzoqhd", "OPTION DIR.SEL.OMIT.HIDDEN", "SELECT zzoqhd")
         counts = re.findall(r"(\d+) record\(s\) selected", out)
-        row("445: SELECT of a directory file sees the dot file without the option and not with it",
-            counts[:2] == ["2", "1"], repr(counts) + out[-200:])
+        # 28 Oct 26, S.87: the option is gone; a select of a directory file always sees the dot file
+        row("445: SELECT of a directory file sees the dot file, and the option that hid it is refused",
+            counts[:2] == ["2", "2"] or counts[:1] == ["2"], repr(counts) + out[-200:])
         sess(box, "DELETE.FILE zzoqhd")
 
         # --- PHANTOM NO.MSG / DATA / LOG and !PHLOG (483, 137, 364, 87) ----------------------------------------
@@ -535,10 +536,10 @@ def run_verbs(box, sysd, bp):
             made.append(pth)
             hp.append(pth)
             write(pth, ("   openseq '%s' shared to f else stop\n   for i = 1 to 300\n      writeseq '%s' : i : ' ' : str('x', 40) to f else stop\n"
-                        "   next i\n   closeseq f\nend\n") % (sh, tag))
+                        "   next i\n   close f\nend\n") % (sh, tag))
         write(probe, ("   openseq '%s' to f then crt 'EXISTS_BEFORE' else crt 'MISSING_BEFORE'\n"
                       "   openseq '%s' creating to g then crt 'THEN_G' else crt 'ELSE_G'\n"
-                      "   closeseq g\nend\n") % (sq, sq))
+                      "   close g\nend\n") % (sq, sq))
         out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
         row("485: OPENSEQ without CREATING of a file that is not there takes the ELSE", has(out, r"MISSING_BEFORE"), out[-300:])
         row("485: OPENSEQ ... CREATING makes the file at once and takes the THEN", has(out, r"THEN_G") and os.path.exists(sq), out[-300:])

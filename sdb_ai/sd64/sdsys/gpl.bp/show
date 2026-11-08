@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: field names, @SHOW and @ID
 *           are found in the dictionary in either case.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
@@ -45,12 +46,12 @@ program show
 $include parser.h 
 $include dictdict.h
 
-   equ FILEINFO.KEY         to  1
-   equ PROMPT.CHAR          to ':'
+   equate FILEINFO.KEY         to  1
+   equate PROMPT.CHAR          to ':'
 
-   equ ITYPE.NAME to "__SHOW"
-   equ MAX.ITEMS to 10
-   equ MIN.WIDTH to 45
+   equate ITYPE.NAME to "__SHOW"
+   equate MAX.ITEMS to 10
+   equate MIN.WIDTH to 45
 
    prompt.string = ''
 

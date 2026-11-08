@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 22 Oct 26 dm  New.
 * 23 Oct 26 dm  A [?] button on every setting (the rows of the Menu box, the system default, and the Accounts list), F1 and ? on the selected row: the help is the record
 *               of the file context.help of the shared account ($tk_help).  The line wrapping is $tk_wrap.
@@ -151,10 +152,10 @@ read.all:
       readseq line from df then
          if downcase(trim(line)) = 'terminal' then defword = 'terminal'
       end
-      closeseq df
+      close df
    end else
 *     26 Oct 26: an absent file takes ELSE with the name still locked for the life of the session; close the variable (see home_entry)
-      if not(unassigned(df)) then closeseq df
+      if not(unassigned(df)) then close df
    end
    na = dcount(ids, @fm)
    if ai > na then ai = na

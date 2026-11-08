@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
  * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT and NETREPLY, the two SDNet timeouts (K8d): CONFIG() reads them and PCONFIG sets them for the process, 1 to 3600 seconds.
  * 15 Oct 26 Windows port - from Linux 0bdc4bd - TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
@@ -143,8 +144,6 @@ void op_config() {
     result.data.value = sysseg->errlog >> 10;
   else if (!strcmp(param, "FDS"))
     result.data.value = sysseg->fds_limit;
-  else if (!strcmp(param, "FILERULE"))
-    result.data.value = pcfg.filerule;
   else if (!strcmp(param, "FLTDIFF")) {
     sprintf(s, "%.14lf", pcfg.fltdiff);
     k_put_c_string(s, &result);
@@ -313,9 +312,6 @@ void op_pconfig() {
     if ((descr->data.value < 0) || (descr->data.value > MAX_DH_CACHE_SIZE))
       goto exit_op_pconfig;
     pcfg.dhcache = (int16_t)(descr->data.value);
-  } else if (!strcmp(param, "FILERULE")) {
-    GetInt(descr);
-    pcfg.filerule &= descr->data.value; /* Can only unset bits */
   } else if (!strcmp(param, "FLTDIFF")) {
     k_get_float(descr);
     if ((descr->data.float_value < 0) || (descr->data.float_value > 1))

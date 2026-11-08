@@ -103,10 +103,10 @@ PROGS = {
               "   weofseq f\n"
               "   writecsv 'a', '12', 'b|c' to f else stop 'no write'\n"
               "   writecsv 'x' : @fm : 'y,z', '' to f else stop 'no write'\n"
-              "   weofseq f\n   closeseq f\n"
+              "   weofseq f\n   close f\n"
               "   openseq 'zzcvout.txt' to f else stop 'no f2'\n"
               "   readseq l1 from f else l1 = 'none'\n   readseq l2 from f else l2 = 'none'\n"
-              "   crt 'WR1[':l1:']'\n   crt 'WR2[':l2:']'\n   closeseq f\n"
+              "   crt 'WR1[':l1:']'\n   crt 'WR2[':l2:']'\n   close f\n"
               "   csv.mode 1\n   crt 'DONE'\nend\n"),
     "zzcvbad": "   csv.mode\nend\n",
 }

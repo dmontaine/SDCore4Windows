@@ -18,6 +18,7 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION QUERY.SORT.NO.CASE is gone; a sort key is compared as it is (SP.VIEW sorts
 *               case-blind by itself).
 * 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): BREAK.ON "LU" - L is no longer ignored when U is also given (the two controls are
@@ -112,7 +113,7 @@ $include qdisp.h
 deffun edit_guard(f) calling '!edit_guard'   ;* 17 Oct 26 dm, S.64
 
 $define VLIST.NAME.FMT "12.L"
-equ NUL to char(0)
+equate NUL to char(0)
 
 *=============================================================================
 
@@ -133,10 +134,10 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
 
    dim item.name(max.items)          ;* Token
    dim item.type(max.items)
-      equ ID.ITEM      to 1          ;* Values are significant to ON GOTOs
-      equ FIELD.ITEM   to 2
-      equ ITYPE.ITEM   to 3
-      equ LITERAL.ITEM to 4
+      equate ID.ITEM      to 1          ;* Values are significant to ON GOTOs
+      equate FIELD.ITEM   to 2
+      equate ITYPE.ITEM   to 3
+      equate LITERAL.ITEM to 4
       * 27 Oct 26 dm - S.87 batch 4: types 5 and 6 (field 9998 = @NI, field 9999 = bytes in the record) are gone; those are ordinary field numbers now
 
    dim item.detail(max.items)        ;* Item details
@@ -168,35 +169,35 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    * Display tables. One entry for each item to be displayed. Includes items
    * for BREAK.SUP action.
 
-   equ ITEM.NO          to  1        ;* Corresponding entry in item.xxx tables
-   equ ITEM.HEADING     to  2        ;* Heading (for horizontal listing)
-   equ ITEM.WIDTH       to  3        ;* Width
-   equ ITEM.ACCUM.VALUE to  4        ;* Total value etc for accumulation
-   equ ITEM.LOCAL.VALUE to  5        ;* Total value etc since breakpoint for accumulation
-   equ ITEM.COUNT       to  6        ;* Total count of items, including multi-values
-   equ ITEM.LOCAL.COUNT to  7        ;* Total count of items since breakpoint (mv)
-   equ ITEM.MODE        to  8        ;* Reporting mode (see below)
+   equate ITEM.NO          to  1        ;* Corresponding entry in item.xxx tables
+   equate ITEM.HEADING     to  2        ;* Heading (for horizontal listing)
+   equate ITEM.WIDTH       to  3        ;* Width
+   equate ITEM.ACCUM.VALUE to  4        ;* Total value etc for accumulation
+   equate ITEM.LOCAL.VALUE to  5        ;* Total value etc since breakpoint for accumulation
+   equate ITEM.COUNT       to  6        ;* Total count of items, including multi-values
+   equate ITEM.LOCAL.COUNT to  7        ;* Total count of items since breakpoint (mv)
+   equate ITEM.MODE        to  8        ;* Reporting mode (see below)
       * Reporting modes (order known to ON GOSUB statements):
-      equ REPORT.ITEMS      to  0    ;* Normal item display only (Must be zero)
-      equ REPORT.TOTAL      to  1    ;* Accumulate total
-      equ REPORT.MAX        to  2    ;* Maximum value
-      equ REPORT.MIN        to  3    ;* Minimum value
-      equ REPORT.AVERAGE    to  4    ;* Average value
-      equ REPORT.NUMBER     to  5    ;* Enumerate values (includes multi-values)
-      equ REPORT.PERCENT    to  6    ;* Percentages
-      equ REPORT.CALC       to  7    ;* CALC keyword
-      equ REPORT.BREAK.SUP  to  8    ;* BREAK.SUP keyword
-      equ REPORT.CUMULATIVE to  9    ;* CUMULATIVE keyword
-      equ REPORT.MEDIAN     to 10    ;* MEDIAN keyword (15 Oct 26 dm, QM4 gaps Q-20)
-      equ REPORT.MODE       to 11    ;* MODE keyword (16 Oct 26 dm, sheet 231)
-      equ REPORT.RANGE      to 12    ;* RANGE keyword (16 Oct 26 dm, sheet 231)
+      equate REPORT.ITEMS      to  0    ;* Normal item display only (Must be zero)
+      equate REPORT.TOTAL      to  1    ;* Accumulate total
+      equate REPORT.MAX        to  2    ;* Maximum value
+      equate REPORT.MIN        to  3    ;* Minimum value
+      equate REPORT.AVERAGE    to  4    ;* Average value
+      equate REPORT.NUMBER     to  5    ;* Enumerate values (includes multi-values)
+      equate REPORT.PERCENT    to  6    ;* Percentages
+      equate REPORT.CALC       to  7    ;* CALC keyword
+      equate REPORT.BREAK.SUP  to  8    ;* BREAK.SUP keyword
+      equate REPORT.CUMULATIVE to  9    ;* CUMULATIVE keyword
+      equate REPORT.MEDIAN     to 10    ;* MEDIAN keyword (15 Oct 26 dm, QM4 gaps Q-20)
+      equate REPORT.MODE       to 11    ;* MODE keyword (16 Oct 26 dm, sheet 231)
+      equate REPORT.RANGE      to 12    ;* RANGE keyword (16 Oct 26 dm, sheet 231)
 
-      equ REPORT.MODE.MASK  to 15
-      equ REPORT.NO.NULLS   to 16    ;* Additive for NO.NULLS option
-   equ ITEM.TOTAL       to 9         ;* Total of all items (for PERCENT)
-   equ ITEM.INCLUDED    to 10        ;* Used to suppress with O breakpoint
-   equ ITEM.WORK        to 11
-   equ NO.OF.LIST.ITEM.ELEMENTS to 11
+      equate REPORT.MODE.MASK  to 15
+      equate REPORT.NO.NULLS   to 16    ;* Additive for NO.NULLS option
+   equate ITEM.TOTAL       to 9         ;* Total of all items (for PERCENT)
+   equate ITEM.INCLUDED    to 10        ;* Used to suppress with O breakpoint
+   equate ITEM.WORK        to 11
+   equate NO.OF.LIST.ITEM.ELEMENTS to 11
    no.of.list.items = 0              ;* Number of items in report
    max.list.items = 10               ;* Initial size of list tables
    dim list.item(max.list.items, NO.OF.LIST.ITEM.ELEMENTS)
@@ -272,11 +273,11 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    selection.field = 0           ;* Tracks last referenced field
 
    max.selection = 20            ;* Each test and logical operator counts
-   equ SEL.OP        to  1       ;* Opcode
-   equ SEL.ARG1      to  2       ;* First item index. Jump point for AND/OR
-   equ SEL.ARG2      to  3       ;* Second item index. () level, -1 if fixed up
-   equ SEL.ARG3      to  4       ;* Third item index for BETWEEN
-   equ SEL.COLS      to  4       ;* Columns in table
+   equate SEL.OP        to  1       ;* Opcode
+   equate SEL.ARG1      to  2       ;* First item index. Jump point for AND/OR
+   equate SEL.ARG2      to  3       ;* Second item index. () level, -1 if fixed up
+   equate SEL.ARG3      to  4       ;* Third item index for BETWEEN
+   equate SEL.COLS      to  4       ;* Columns in table
    dim selection(max.selection, SEL.COLS) ; mat selection = 0
    hi.sel = 0                    ;* Last used entry
    non.ak.selection.index = 1    ;* Start here for selection elements that
@@ -285,46 +286,46 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    * The EQ/NE, LIKE/UNLIKE, IN/NOT.IN and PEQ/PNE operator pairs must always be
    * adjacent number ranges as the translation between these relies on this.
    * OP.FIRST.MV must be a multiple of 4.
-   equ OP.WITH        to  1     ;* Clause is WITH (default for first clause)
-   equ OP.WHEN        to  2     ;* Next clause is WHEN
-   equ OP.NO          to  3     ;* NO - inverts test
-   equ OP.FIRST.MV    to  4
-   equ OP.FIRST.RELOP to  4
-   equ OP.EQ          to  4     ;* EQ        } EQ and NE must be adjacent
-   equ OP.NE          to  8     ;* NE        }
-   equ OP.LT          to 12     ;* LT        } Add one to opcode
-   equ OP.LE          to 16     ;* LE        } to apply test to
-   equ OP.GE          to 20     ;* GE        } every value in
-   equ OP.GT          to 24     ;* GT        } multi-valued
-   equ OP.LIKE        to 28     ;* LIKE      } field.
-   equ OP.UNLIKE      to 32     ;* UNLIKE    } (EVERY keyword)
-   equ OP.SAID        to 36     ;* SAID      }
-   equ OP.IN          to 40     ;* IN        } (16 Oct 26 dm, QM4 gap 94)
-   equ OP.NOT.IN      to 44     ;* NOT.IN    }
-   equ OP.LAST.RELOP  to 47
-   equ OP.NOT.NULL    to 48     ;* not null  }
-   equ OP.BETWEEN     to 52     ;* BETWEEN   }
-   equ OP.LAST.MV     to 55
-   equ OP.OR          to 56     ;* OR
-   equ OP.AND         to 57     ;* AND
-   equ OP.GELE        to 58     ;* } Special operators for AKs only. The
-   equ OP.GELT        to 59     ;* } actual value does not matter as these are
-   equ OP.GTLE        to 60     ;* } not used in ON GOTO statements.
-   equ OP.GTLT        to 61     ;* }
+   equate OP.WITH        to  1     ;* Clause is WITH (default for first clause)
+   equate OP.WHEN        to  2     ;* Next clause is WHEN
+   equate OP.NO          to  3     ;* NO - inverts test
+   equate OP.FIRST.MV    to  4
+   equate OP.FIRST.RELOP to  4
+   equate OP.EQ          to  4     ;* EQ        } EQ and NE must be adjacent
+   equate OP.NE          to  8     ;* NE        }
+   equate OP.LT          to 12     ;* LT        } Add one to opcode
+   equate OP.LE          to 16     ;* LE        } to apply test to
+   equate OP.GE          to 20     ;* GE        } every value in
+   equate OP.GT          to 24     ;* GT        } multi-valued
+   equate OP.LIKE        to 28     ;* LIKE      } field.
+   equate OP.UNLIKE      to 32     ;* UNLIKE    } (EVERY keyword)
+   equate OP.SAID        to 36     ;* SAID      }
+   equate OP.IN          to 40     ;* IN        } (16 Oct 26 dm, QM4 gap 94)
+   equate OP.NOT.IN      to 44     ;* NOT.IN    }
+   equate OP.LAST.RELOP  to 47
+   equate OP.NOT.NULL    to 48     ;* not null  }
+   equate OP.BETWEEN     to 52     ;* BETWEEN   }
+   equate OP.LAST.MV     to 55
+   equate OP.OR          to 56     ;* OR
+   equate OP.AND         to 57     ;* AND
+   equate OP.GELE        to 58     ;* } Special operators for AKs only. The
+   equate OP.GELT        to 59     ;* } actual value does not matter as these are
+   equate OP.GTLE        to 60     ;* } not used in ON GOTO statements.
+   equate OP.GTLT        to 61     ;* }
 
 * 27 Oct 26: operators 62 to 69 were the pseudo operators of the Pick style wildcards (OP.PEQ, OP.PNE); they are gone and the numbers are not reused.
 
-   equ opcode.names to 'WITH,WHEN,NO,EQ,E.EQ,EQNC,E.EQNE,NE,E.NE,NENC,E.NENC,LT,E.LT,LTNC,E.LTNC,LE,E.LE,LENC,E.LENC,GE,E.GE,GENC,E.GENC,GT,E.GT,GTNC,E.GTNC,LIKE,E.LIKE,LIKENC,E.LIKENC,UNLIKE,E.UNLIKE,UNLIKENC,E.UNLIKENC,SAID,E.SAID,SAIDNC,E.SAIDNC,IN,E.IN,INNC,E.INNC,NOT.IN,E.NOT.IN,NOT.INNC,E.NOT.INNC,NNULL,E.NNULL,NNULLNC,E.NNULLNC,BETWEEN,E.BETWEEN,BETWEENNC,E.BETWEENNC,OR,AND,GELE,GELT,GTLE,GTLT,PEQ,E.PEQ,PEQNC,E.PEQNC,PNE,E.PNE,PNENC,E.PNE.NC'
+   equate opcode.names to 'WITH,WHEN,NO,EQ,E.EQ,EQNC,E.EQNE,NE,E.NE,NENC,E.NENC,LT,E.LT,LTNC,E.LTNC,LE,E.LE,LENC,E.LENC,GE,E.GE,GENC,E.GENC,GT,E.GT,GTNC,E.GTNC,LIKE,E.LIKE,LIKENC,E.LIKENC,UNLIKE,E.UNLIKE,UNLIKENC,E.UNLIKENC,SAID,E.SAID,SAIDNC,E.SAIDNC,IN,E.IN,INNC,E.INNC,NOT.IN,E.NOT.IN,NOT.INNC,E.NOT.INNC,NNULL,E.NNULL,NNULLNC,E.NNULLNC,BETWEEN,E.BETWEEN,BETWEENNC,E.BETWEENNC,OR,AND,GELE,GELT,GTLE,GTLT,PEQ,E.PEQ,PEQNC,E.PEQNC,PNE,E.PNE,PNENC,E.PNE.NC'
 
    * Sort control
 
    no.of.sort.items = 0          ;* Number of sort fields...
    sort.item.list = ""           ;* ...list of item indicies...
    sort.mode = ""                ;* ...sort modes = BY
-      equ SORT.BY          to 1
-      equ SORT.BY.DSND     to 2
-      equ SORT.BY.EXP      to 3
-      equ SORT.BY.EXP.DSND to 4
+      equate SORT.BY          to 1
+      equate SORT.BY.DSND     to 2
+      equate SORT.BY.EXP      to 3
+      equate SORT.BY.EXP.DSND to 4
    exploded.sort = 0             ;* Sort table index for BY.EXP or BY.EXP.DSND
    exp.sort.list = ''            ;* Sort table index of every BY.EXP / BY.EXP.DSND
    explode = @false              ;* Read record is not to strip values
@@ -333,7 +334,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
 
    * Breakpoint control
 
-   equ MAX.BREAKPOINTS to 10
+   equate MAX.BREAKPOINTS to 10
    dim breakpoint.items(MAX.BREAKPOINTS)   ;* Item index for breakpoints
    dim breakpoint.list.index(MAX.BREAKPOINTS)   ;* list.item index for breakpoints
    dim breakpoint.string(MAX.BREAKPOINTS)  ;* Text with control codes removed
@@ -2409,7 +2410,7 @@ exit.qproc:
 
 qdisp.error:
    if csv.opened then      ;* 20 Oct 26 dm - TO / AS: close the file now, which also gives back the record lock AS took
-      closeseq csv.f
+      close csv.f
       csv.opened = @false
    end
 
@@ -5298,7 +5299,7 @@ case op = OP.WHEN ; null
             if item.multivalued(ak.field) # (index.data<6> = 'M') then continue  ;* Wrong S/M
             if ak.justification # index.data<5> then continue  ;* Wrong justification
 
-         case ak.type = 'I' or ak.type = 'C'
+         case ak.type = 'I'
             if coll.file and item.type(ak.field) = FIELD.ITEM then
                * 18 Oct 26 Windows port - from Linux d99019c (13 Oct 26): - an E-type item of a data collection file.  Its index is an I-type index whose
                * expression is the name of the item (mkindx), so it is the item of that name that this serves.
@@ -5529,7 +5530,7 @@ case op = OP.WHEN ; null
    begin case  ;* 0399 Reworked
       case index.type = 'D'
          if item.detail(k) # index.data<2> then return  ;* Wrong field
-      case index.type = 'C' or index.type = 'I'
+      case index.type = 'I'
          if item.expression(k) # index.data<dict.itype.source> then return  ;* Wrong expression
       case (index.type = 'A' or index.type = 'S') and index.data<dict.a.correlative> = ''
          if item.detail(k) # index.data<2> then return  ;* Wrong field
@@ -5879,13 +5880,13 @@ add.field:
                   item.type(item.index) = FIELD.ITEM
             end case
 
-         case type = 'I' or type = 'C' or type = 'A' or type = 'S'
+         case type = 'I' or type = 'A' or type = 'S'
             no.items += 1
             item.index = no.items
             item.name(item.index) = token
 
             item.type(item.index) = ITYPE.ITEM
-            if type = 'I' or type = 'C' then
+            if type = 'I' then
                item.expression(item.index) = trim(dict.rec<dict.itype.source>,' ', 'B')
                s = dict.rec<dict.display.name> ; gosub set.col.hdg
                item.fmt(item.index) = dict.rec<dict.format>
@@ -5917,8 +5918,9 @@ add.field:
 
             * Check if item needs compiling
 
+            sys.chk.rec = dict.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
             if len(dict.rec<dict.itype.object>) = 0 ~
-            or checksum(replace(dict.rec, DICT.SYS.INFO, 1;'')) # dict.rec<DICT.SYS.INFO,1> then
+            or checksum(sys.chk.rec) # dict.rec<DICT.SYS.INFO,1> then
                comp.f = if from.voc then @voc else dict.file   ;* 0316
                call $dcomp(comp.f,       ;* Dictionary file
                            token,        ;* Dictionary item id

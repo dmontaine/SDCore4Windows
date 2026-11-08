@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 18 Oct 26 Windows port - from Linux 79e3198 (12 Oct 26): 1.2-0 openQM ref 86.  The syntax is SD's own: a subroutine.
 * END-HISTORY
 *
@@ -22,8 +23,7 @@
 *   CALL !VOCPATH(name, path, status)
 *
 * Resolves NAME as OPEN would (an F-type VOC record, a Q-pointer followed to
-* the file it names, "DICT name", "name,subfile", and the Account:File and
-* PATH: forms the FILERULE setting allows) and returns the full pathname in
+* the file it names, "DICT name" and "name,subfile") and returns the full pathname in
 * PATH.  STATUS is 0, or the error number OPEN would have given (PATH is null).
 *
 * END-DESCRIPTION

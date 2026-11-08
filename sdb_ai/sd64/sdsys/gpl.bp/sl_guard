@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 18 Oct 26 dm  New (terminal 140 by 42, phase 4).
 * END-HISTORY
 *
@@ -44,7 +45,7 @@ $include keys.h
 $include int$keys.h
 $include err.h
 
-   equ BOX.WIDE to 70           ;* the warning's width, if the window is wider
+   equate BOX.WIDE to 70           ;* the warning's width, if the window is wider
 
    result = 'ok'
    call $sl_window(w, h)

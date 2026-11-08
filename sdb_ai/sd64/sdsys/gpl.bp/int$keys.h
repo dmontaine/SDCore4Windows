@@ -477,18 +477,12 @@
       $define OPT.NO.USER.ABORTS      11 ;* Suppress user options to abort
       * 27 Oct 26 (S.87 batch 7): options 12, 34, 35, 38, 42, 43, 44, 47, 51, 54 and 57 are RETIRED too (entries A-020 to A-026, A-029, A-034, A-035 and A-037).
       $define OPT.SHOW.STACK.ON.ERROR 13 ;* Show stack on error
-      $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
       * 27 Oct 26 (S.87 batch 8): options 21, 40, 48 and 55 are RETIRED too (entries A-019, A-033, A-036 and A-030).
       * 27 Oct 26 (S.87 batch 12): options 22, 37 and 56 are RETIRED too (entries A-038, A-028 and A-031).
       * 27 Oct 26 (S.87 batch 16): options 0, 7, 8, 26, 36 and 39 are RETIRED too (entries A-042, A-044, A-027 and A-032).
-      $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
-      $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
       $define OPT.GIT                 49 ;* .gitignore and .gitattributes are not mapped in a directory file (kernel)
       $define OPT.DIR.DTM             50 ;* A write to a directory file moves the directory's date and time modified (kernel)
-      $define OPT.NO.PHANTOM.NOTIFY   52 ;* A phantom does not tell its parent when it ends (cproc)
       $define OPT.SPOOL.COMMAND       53 ;* Show the operating system command that prints (kernel)
-      $define OPT.COMMAND.LEVEL.LOCKS 58 ;* A file variable that goes keeps its locks until the program returns to the command processor (kernel)
-      $define OPT.STACKED.ACCOUNT     59 ;* An EXECUTE that changes account returns to the account it began in (cproc)
       $define OPT.INHERIT.OWNERSHIP   60 ;* CREATE.FILE gives a new file the account directory's owner and group (kernel)
 
       * MKINDEX flag values (additive)

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): REPLACE() is gone: the checksum test uses a copy of the record with the SYS.INFO value cleared.
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CORRELATIVE.NOCASE is gone (see 18 Oct below: NOCASE; is now the only way).
 * 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): emit.field.load no longer reads field 9998 as @NI and 9999 as the record length; only field 0 (the id) is special.
 * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 103: an A or F correlative may begin NOCASE; (A;NOCASE;N(CODE) = 'AX'), which sets the object's case
@@ -1091,8 +1092,9 @@ if.then.else.expr.abort:
                      * compiled items do this as a run time subroutine call
                      * using ITYPE() to execute embedded object code.
 
+                     sys.chk.rec = field.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
                      if len(field.rec<DICT.ITYPE.OBJECT>) = 0 ~
-                     or checksum(replace(field.rec, DICT.SYS.INFO, 1;'')) # field.rec<DICT.SYS.INFO,1> then
+                     or checksum(sys.chk.rec) # field.rec<DICT.SYS.INFO,1> then
                         * Need to compile nested item
 
                         if depth > 10 then

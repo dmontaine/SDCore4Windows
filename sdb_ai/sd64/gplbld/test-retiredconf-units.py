@@ -21,9 +21,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ISS = os.path.join(HERE, "sd.iss")
 CONFIG_C = os.path.join(HERE, "..", "gplsrc", "config.c")
 
-# The parameters S.87 retired (Linux 843344ba and cf405b48).  A later retirement adds its name here and in sd.iss.
+# The parameters S.87 retired (Linux 843344ba, cf405b48 and 2930d92f).  A later retirement adds its name here and in sd.iss.
 RETIRED = {"INVCASE", "CODEPAGE", "EXCLREM", "RINGWAIT", "TXCHAR", "APILOGIN", "CREATUSR",
-           "JNLDIR", "JNLMODE", "GDI", "FIXUSERS", "PORTMAP"}
+           "JNLDIR", "JNLMODE", "GDI", "FIXUSERS", "PORTMAP", "FILERULE"}
 
 
 def read(p):
@@ -77,7 +77,7 @@ def selftest(iss, cfg):
         print("selftest: the real tree already fails")
         return 1
     mutants = [
-        ("a live parameter (NUMUSERS) added to the list", iss.replace("FIXUSERS PORTMAP'", "FIXUSERS PORTMAP NUMUSERS'"), cfg, "R1"),
+        ("a live parameter (NUMUSERS) added to the list", iss.replace("PORTMAP FILERULE'", "PORTMAP FILERULE NUMUSERS'"), cfg, "R1"),
         ("GDI left out of the list", iss.replace(" GDI ", " "), cfg, "R2"),
         ("the ssInstall call removed", iss.replace("if CurStep = ssInstall then\n    RemoveRetiredConf;", ""), cfg, "R3"),
         ("the space refusal removed", iss.replace("if Pos(' ', K) > 0 then", "if False then"), cfg, "R4"),

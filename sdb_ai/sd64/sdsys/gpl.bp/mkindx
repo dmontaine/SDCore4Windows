@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone from the index builder.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the field named for a new
 *           index folds and the index takes the matched id; @ID or @id.
 * 04 Sep 26 Windows port - PRE_RELEASE_FIXES 16.  The exclusive-access refusal
@@ -255,7 +256,7 @@ create.index:
             fno += 0
             expr = ''
 
-         case type = 'A' or type = 'C' or type = 'I' or type = 'S'
+         case type = 'A' or type = 'I' or type = 'S'
             call $dcomp(dict.f,          ;* File var to source file
                         new.index.name,  ;* Record name
                         dict.rec,        ;* Dictionary record
@@ -279,7 +280,7 @@ create.index:
             end
 
             fno = -1
-            if type = 'I' or type = 'C' then expr = dict.rec<DICT.ITYPE.SOURCE>
+            if type = 'I' then expr = dict.rec<DICT.ITYPE.SOURCE>
             else expr = dict.rec<DICT.A.CORRELATIVE>
 
          case type = 'D'
@@ -318,7 +319,7 @@ have.index.type:
       ak.flags = bitor(ak.flags, if right.justify then AK$RSORT else AK$LSORT)
 
       begin case
-         case type = 'D' or type = 'I' or type = 'C'
+         case type = 'D' or type = 'I'
             right.justify = @false
             fmt.code = dict.rec<DICT.FORMAT>
             gosub determine.justification
@@ -358,7 +359,7 @@ have.index.type:
                other.fno = ak.data(j)<DICT.LOC>
                other.expr = ''
 
-            case other.type = 'I' or other.type = 'C'
+            case other.type = 'I'
                other.fno = -1
                other.expr = ak.data(j)<DICT.ITYPE.SOURCE>
 
@@ -543,7 +544,7 @@ build.index:
             fno = -1
             itype.code = field(ak.info, @fm, DICT.ITYPE.OBJECT, 99999)
             mv = @true   ;* 0398
-         case ak.type = 'I' or ak.type = 'C'
+         case ak.type = 'I'
             fno = -1
             itype.code = field(ak.info, @fm, DICT.ITYPE.OBJECT, 99999)
             mv = ak.info<DICT.S.M> = 'M'

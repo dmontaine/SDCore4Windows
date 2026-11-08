@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 22 Oct 26 dm  New (S.75, H2; the owner: "default for new accounts can be set by admin and then overridden for specific accounts").
 * END-HISTORY
 *
@@ -39,10 +40,10 @@ $include err.h
       readseq line from df then
          if downcase(trim(line)) = 'terminal' then cur = 'terminal'
       end
-      closeseq df
+      close df
    end else
 *     26 Oct 26: an absent file takes ELSE with the name still locked; close the variable (see home_entry)
-      if not(unassigned(df)) then closeseq df
+      if not(unassigned(df)) then close df
    end
 
    words = trim(@sentence)
@@ -62,7 +63,7 @@ $include err.h
             openseq path overwrite to df else null         ;* ELSE means the file did not exist and was created; only a status is a failure
             if status() = 0 then
                writeseq want to df then ok = @true
-               closeseq df
+               close df
             end
             if ok then
                @system.return.code = 0

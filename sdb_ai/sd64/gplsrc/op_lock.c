@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION COMMAND.LEVEL.LOCKS is gone: park_fvar(), release_parked_fvars() and the parked-file list are removed; a file variable that goes closes its file and its locks.
  * 25 Oct 26 Windows port - from Linux eb9ef4a (20 Oct 26) S.72b: op_reclckd() of a NET_FILE is refused for a read mode one (message 12506, nothing sent) inside net_recordlocked; the server
  *               refuses request 34 to a login without sdfileswrite.
  * 25 Oct 26 Windows port - from Linux fc8e304 (20 Oct 26) S.72 (QMNet parity, tiers A and B): op_filelock() and op_flunlock() act on a write mode NET_FILE (net_filelock_step,
@@ -2068,76 +2069,6 @@ void rebuild_llt() {
         llt_head = llt;
         llt_count++;
       }
-    }
-  }
-}
-
-/* ======================================================================
-   OPTION COMMAND.LEVEL.LOCKS  (16 Oct 26, QM4 gap 231 / 428)
-
-   Without the option, a file variable that goes (a subroutine returns, or the variable is given another file) closes
-   its file and with it the locks taken through it.  With the option the locks belong to the command processor level
-   instead: park_fvar() keeps the file open, and the file is closed, with its locks, when the program that was running
-   at that level returns to the command processor (release_parked_fvars(), called by k_return()).  An explicit CLOSE is
-   still a close.                                                                                                      */
-
-typedef struct PARKED_FVAR PARKED_FVAR;
-struct PARKED_FVAR {
-  PARKED_FVAR* next;
-  FILE_VAR* fvar;
-  int16_t level; /* cproc_level when it was parked */
-};
-Private PARKED_FVAR* parked_fvars = NULL;
-
-/* fvar_holds_locks()  -  Does this process hold the file lock, or a record lock, taken through this file variable?  */
-
-Private bool fvar_holds_locks(FILE_VAR* fvar) {
-  FILE_ENTRY* fptr;
-  LLT_ENTRY* llt;
-
-  if (fvar->file_id <= 0)
-    return FALSE;
-  fptr = FPtr(fvar->file_id);
-  if ((abs(fptr->file_lock) == process.user_no) && (fptr->fvar_index == fvar->index))
-    return TRUE;
-  for (llt = llt_head; llt != NULL; llt = llt->next) {
-    if ((llt->fno == fvar->file_id) && (llt->fvar_index == fvar->index))
-      return TRUE;
-  }
-  return FALSE;
-}
-
-/* park_fvar()  -  k_release() found the last reference to a file variable gone.  True if the file was kept open for its
-   locks, in which case the caller must not close it.  */
-
-bool park_fvar(FILE_VAR* fvar) {
-  PARKED_FVAR* p;
-
-  if (!Option(OptCommandLevelLocks) || explicit_close || !fvar_holds_locks(fvar))
-    return FALSE;
-  p = (PARKED_FVAR*)k_alloc(124, sizeof(PARKED_FVAR));
-  if (p == NULL)
-    return FALSE;
-  p->fvar = fvar;
-  p->level = cproc_level;
-  p->next = parked_fvars;
-  parked_fvars = p;
-  return TRUE;
-}
-
-/* release_parked_fvars()  -  Close the files parked at this command processor level or above, which releases their locks.  */
-
-void release_parked_fvars(int16_t level) {
-  PARKED_FVAR** pp = &parked_fvars;
-  PARKED_FVAR* p;
-
-  while ((p = *pp) != NULL) {
-    if (p->level >= level) {
-      *pp = p->next;
-      dio_close(p->fvar);
-      k_free(p);
-    } else {
-      pp = &p->next;
     }
   }
 }

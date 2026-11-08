@@ -31,6 +31,7 @@
 * installer matches on that word and nothing else.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 23 Oct 26 Windows port - from Linux d7cda81: carried; the include is keys.h and the sdu_ test folds case.  Run by upgrade-gates.ps1 after
 *               upgrade_gates.  RELEASE_1.1 170.
 * 17 Oct 26 dm  S.64 part 2: the header says that group and other accounts are left off on purpose and what a direct sign-on to one gets,
@@ -108,7 +109,7 @@ $include int$keys.h
       end
    end
    writeseq 'S.64: the edit gates were set for the existing accounts' to marker.f else null
-   closeseq marker.f
+   close marker.f
 
    crt 'COMPLETE'
    stop

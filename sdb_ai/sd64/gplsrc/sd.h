@@ -395,9 +395,6 @@ void * load_object(char * name, bool abort_on_error);
 void unload_object(void * obj_hdr);
 void unload_all(void);
 bool is_global(void * obj_hdr);
-void stale_objects(void);
-bool object_is_stale(void * obj_hdr);
-void * refresh_subr_object(void * obj_hdr);
 void invalidate_object(void);
 void * find_object(int32_t id);
 STRING_CHUNK * hsm_dump(void);
@@ -445,9 +442,7 @@ void prof_dump(DESCRIPTOR* result);
 void prof_file_event(int16_t bit, FILE_VAR * fvar);
 
 /* OP_LOCK.C: OPTION COMMAND.LEVEL.LOCKS */
-Public bool explicit_close init(FALSE); /* op_close() is releasing the file variable: park_fvar() leaves it alone */
-bool park_fvar(FILE_VAR * fvar);
-void release_parked_fvars(int16_t level);
+Public bool explicit_close init(FALSE); /* op_close() is releasing the file variable (a remote file tells its server now) */
 
 /* OP_BTREE.C */
 bool bt_get_string(DESCRIPTOR * descr, char ** s);

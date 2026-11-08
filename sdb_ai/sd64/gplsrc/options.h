@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 28 Oct 26 dm  S.87: four more option numbers retired: 18, 41, 46, 52.
  * 31 Dec 23 SD Launch - Prior history suppressed
  * END-HISTORY
  *
@@ -42,20 +43,14 @@
    PaginateOnHeading, QueryFooterPause, KeepOldObject, AssocAll and QueryMergePrint.  Blank rows again.
    Batch 8: 21, 40, 48 and 55 as well: NoSelListQuery, CatalogueLocal, InheritMFilePath and CorrelativeNoCase.
    Batch 12: 22, 37 and 56: ChainKeepCommon, BackslashNotQuote and CorrelativeReuse.
-   Batch 16: 0, 7, 8, 26, 36 and 39: UnassignedWarning, DivZeroWarning, NonNumericWarning, Inherit, QuerySortNoCase and ClearSelect. */
+   Batch 16: 0, 7, 8, 26, 36 and 39: UnassignedWarning, DivZeroWarning, NonNumericWarning, Inherit, QuerySortNoCase and ClearSelect.
+   28 Oct 26 (S.87, the 83 open entries): 46 NumericExponent, 18 SuppressAbortMsg, 41 DirSelOmitHidden, 52 NoPhantomNotify, 45 ForceReload, 59 StackedAccount, 58 CommandLevelLocks. */
 #define OptDumpOnError        6
 #define OptNoUserAborts      11
 #define OptShowStackOnError  13
-#define OptSuppressAbortMsg  18
-#define OptDirSelOmitHidden  41   /* 12 Oct 26  openQM ref 445: DIR.SEL.OMIT.HIDDEN is read by dir_select() in op_dio4.c.  */
-#define OptForceReload      45   /* 14 Oct 26  openQM ref 37: read by process_events() in kernel.c; the CALL ops refresh a stale link */
-#define OptNumericExponent   46   /* 14 Oct 26  openQM ref 404: read by k_str_to_num() and k_is_num() in k_funcs.c */
 #define OptGit               49   /* 15 Oct 26  Q-17, the QM4 gaps: .gitignore and .gitattributes are not mapped in a directory file (map_t1_id() in op_dio3.c) */
 #define OptDirDtm            50   /*            a write to a directory file moves the directory's date and time modified (dir_write() in op_dio3.c) */
-#define OptNoPhantomNotify   52   /*            a phantom does not send its parent the message when it ends (BASIC, cproc) */
 #define OptSpoolCommand      53   /*            show the operating system command that prints (kernel, the print start) */
-#define OptCommandLevelLocks 58   /* 16 Oct 26  openQM refs 231 / 428: a file variable that goes keeps its locks until the program returns to the command processor (park_fvar() in op_lock.c) */
-#define OptStackedAccount    59   /* 16 Oct 26  openQM ref 248: an EXECUTE that changes account reverts to the account it started in (BASIC, gpl.bp/cproc) */
 #define OptInheritOwnership  60   /* 16 Oct 26  openQM ref 239: CREATE.FILE gives a new file the account directory's owner and group (inherit_ownership_of() in op_dio1.c) */
 #define NumOptions           61
 

@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 17 Oct 26 dm  S.65 slice 2b: written.  set.netlogin and delete.netlogin use it; nothing yet reads a login to open a remote file.
 * END-HISTORY
 *
@@ -190,7 +191,7 @@ $define NETCRED.UMASK 63                   ;* 077: the file is private from its 
             return
          end
          readseq line from f else line = ''
-         closeseq f
+         close f
 
 *        A mark byte would make a second attribute out of one value: a line that holds one is damaged.
          if len(convert(marks, '', line)) # len(line) then
@@ -265,7 +266,7 @@ $define NETCRED.UMASK 63                   ;* 077: the file is private from its 
          writeseq line to tmp.f else
             err = 12462:@vm:server:@vm:tmp:@vm:status()
          end
-         closeseq tmp.f
+         close tmp.f
          line = ''
          one = ''
 

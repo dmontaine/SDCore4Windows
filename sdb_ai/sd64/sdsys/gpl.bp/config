@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 28 Oct 26 dm  S.87: the contrib and licence pages are shown with sh less (the ! verb is gone).
 * 27 Oct 26 dm  S.87: CODEPAGE, EXCLREM, GDI, JNLDIR, JNLMODE, PORTMAP and RINGWAIT are no longer reported (they are no longer parameters); nor were APILOGIN or CREATUSR.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -116,7 +117,6 @@ report.params:
    print 'DUMPDIR   '        : config('DUMPDIR')
    print 'ERRLOG    '        : config('ERRLOG') : ' kb'
    n = config('FDS') ; if n < 32767 then print 'FDS  '        : n
-   print 'FILERULE  '        : config('FILERULE')
    print 'FLTDIFF   '        : config('FLTDIFF')
    print 'FSYNC     '        : config('FSYNC')
 * 20240219 mab create-account based on type (user / group / other)      

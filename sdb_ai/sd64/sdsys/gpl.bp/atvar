@@ -18,6 +18,7 @@
 * 
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
 * 27 Oct 26 dm S.87 batch 13: no cases for the removed names FILENAME, USER and USER.NO.
 * 19 Jan 24 0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -82,16 +83,12 @@ $include syscom.h
       case name = 'OPTION'             ; expansion = @OPTION
       case name = 'PARASENTENCE'       ; expansion = @PARASENTENCE
       case name = 'PATH'               ; expansion = @PATH
-      case name = 'PIB'                ; expansion = @PIB
-      case name = 'POB'                ; expansion = @POB
       case name = 'PSTAT'              ; expansion = @PSTAT
       case name = 'SDSYS'              ; expansion = @SDSYS
       case name = 'RECORD'             ; expansion = @RECORD
       case name = 'SELECTED'           ; expansion = @SELECTED
       case name = 'SENTENCE'           ; expansion = @SENTENCE
       case name = 'SEQNO'              ; expansion = @SEQNO
-      case name = 'SIB'                ; expansion = @SIB
-      case name = 'SOB'                ; expansion = @SOB
       case name = 'SYS.BELL'           ; expansion = @SYS.BELL
       case name = 'SYSTEM.RETURN.CODE' ; expansion = @SYSTEM.RETURN.CODE
       case name = 'TERM.TYPE'          ; expansion = @TERM.TYPE

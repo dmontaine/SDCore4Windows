@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the box as Esc does.
@@ -41,12 +42,12 @@ $catalog $sl_msgbox
 
 $include sl.h
 
-   equ B.GEOM to 13        ;* bx : by : w : h
-   equ B.UNDER to 14       ;* the screen under the box
-   equ B.SHOWN to 15       ;* 1 while the box is on the screen
-   equ B.AX to 16          ;* the left column and top row asked for (null: centred)
-   equ B.AY to 17
-   equ B.CURSAVE to 18     ;* where the cursor lock thought the cursor was before the box: has : x : y : hid (guarded programs only)
+   equate B.GEOM to 13        ;* bx : by : w : h
+   equate B.UNDER to 14       ;* the screen under the box
+   equate B.SHOWN to 15       ;* 1 while the box is on the screen
+   equate B.AX to 16          ;* the left column and top row asked for (null: centred)
+   equate B.AY to 17
+   equate B.CURSAVE to 18     ;* where the cursor lock thought the cursor was before the box: has : x : y : hid (guarded programs only)
 
    common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
    common /slcur/ cu.has, cu.x, cu.y, cu.hid

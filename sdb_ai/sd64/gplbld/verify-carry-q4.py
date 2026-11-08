@@ -113,11 +113,11 @@ USER_PROGS = {
     # G: SYSTEM(1071) after OSREAD.  The file is made with OPENSEQ; the STATUS array of the same file, read from an open
     # file variable, is the oracle for the fields OSREAD should hand over
     "zzosr": ("   openseq 'zzosr.txt' to f else create f else stop 'cannot create'\n   weofseq f\n"
-              "   writeseq 'twelve bytes' to f else null\n   closeseq f\n"
+              "   writeseq 'twelve bytes' to f else null\n   close f\n"
               "   crt 'BEFORE[':system(1071):']'\n"
               "   osread d from 'zzosr.txt' then crt 'READ[':len(d):']' else crt 'READ ELSE'\n"
               "   info = system(1071)\n"
-              "   openseq 'zzosr.txt' readonly to g else stop 'no open'\n   status st from g then null else null\n   closeseq g\n"
+              "   openseq 'zzosr.txt' readonly to g else stop 'no open'\n   status st from g then null else null\n   close g\n"
               "   crt 'SAME[':(info<5> = st<5>):(info<6> = st<6>):(info<7> = st<7>):(info<8> = st<8>):(info<10> = st<10>):"
               "(info<15> = st<15>):(info<16> = st<16>):(info<20> = st<20>):(info<21> = st<21>):(info<35> = st<35>):']'\n"
               "   crt 'SIZE[':info<6>:'][':info<20>[len(info<20>) - 8, 9]:'][':info<1>:info<2>:info<4>:']'\n"

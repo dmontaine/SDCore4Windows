@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION STACKED.ACCOUNT is gone, with revert.account and the stk.* variables that held the starting account: an EXECUTEd LOGTO stays in the account it went to.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VOC record type M (menu) and process.menu are gone; the home screen is the menu system.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION CLEAR.SELECT and the KEEP.SELECT statement are gone: a select list left active is
 *           left for the next command (CLEARSELECT 0 clears it).  OPTION INHERIT is gone: the option flags field of the phantom's Xn record is always null.
@@ -668,25 +669,12 @@ restart.cproc:
       if len(xeq.command) then
          * 0190 Reverted to pre-1.4-4 technique of building a paragraph.
 
-         * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): - OPTION STACKED.ACCOUNT (QM4 gap 248): the account this level started in, for revert.account.  What
-         *   is held is only what LOGTO changes: the working directory, the name, the VOC and the two OS-access switches.
-         stk.path = ospath("", os$cwd)
-         stk.account.path = account.path
-         stk.who = who
-         stk.sh = kernel(K$SH, -1)          ;* 23 Oct 26: the OS-access switches go back with the account (S.63; they were held)
-         stk.os.exec = kernel(K$OS.EXEC, -1)
-         stk.sd.accounts = kernel(K$SD.ACCOUNTS, -1)
-         stk.net = kernel(K$NET, -1)   ;* 17 Oct 26, S.65 slice 1: the NET gate is account-scoped, so it is held and given back with the rest
-         stk.shared.read = kernel(K$SHARED.READ, -1)    ;* 18 Oct 26, S.66: the shared-account gates are account-scoped too
-         stk.shared.write = kernel(K$SHARED.WRITE, -1)
-
          pa.name = ""
          pa.rec = "PA" : @fm : xeq.command
          xeq.command = ""
          unwinding = 0
          gosub execute.paragraph
          printer close on -3     ;* Close all printers at this or higher level
-         if option(OPT.STACKED.ACCOUNT) and ospath("", os$cwd) # stk.path then gosub revert.account
       end
 
       if kernel(K$FLAGS, HDR.IS.CPROC) then  ;* 0409 Not from a PROC
@@ -732,8 +720,7 @@ restart.cproc:
 
 terminate.phantom:
       n = kernel(K$PPID, 0)
-      * NO.PHANTOM.NOTIFY (15 Oct 26, openQM): a phantom that has set the option does not send the message
-      if n and fileinfo(ipc.f, FL$OPEN) and not(option(OPT.NO.PHANTOM.NOTIFY)) then
+      if n and fileinfo(ipc.f, FL$OPEN) then
          * Send message to parent process
 
          x = 'M':n
@@ -3050,55 +3037,6 @@ logto.unwind:
 *   by a program (the command processor is not the bottom one) and for the one the home screen runs itself.
    if @tty[1, 5] = '/dev/' then call !home_entry('logto')
 
-   return
-
-*****************************************************************************
-* REVERT.ACCOUNT  -  Go back to the account an EXECUTE began in  (16 Oct 26 dm, QM4 gap 248)
-*
-* OPTION STACKED.ACCOUNT: a command run with EXECUTE that did a LOGTO leaves the process in the account it began in.  This is
-* LOGTO's own change undone, from what was held when the level started, and it asks for nothing LOGTO asked for: the process
-* was in that account already, so it is no new entry (no membership test, no ON.LOGTO, no LOGIN), and the two OS-access
-* switches go back to what that account's entry had set, so the account the command visited keeps nothing it granted.
-
-revert.account:
-   if not(ospath(stk.path, OS$CD)) then
-      display sysmsg(5162) ;* Fatal error : Cannot return to previous account
-      return to abort.cproc
-   end
-   openpath "voc" to new.voc else
-      display sysmsg(5163) ;* Directory is not a SD account
-      display sysmsg(5162) ;* Fatal error : Cannot return to previous account
-      return to abort.cproc
-   end
-* 18 Oct 26 Windows port - THE LINUX BODY OF THIS PARAGRAPH IS ADAPTED, NOT COPIED (carry of b51c637).  Two things it did have no
-*   Windows counterpart: it put the effective user back to sdsys with !EUID_SET when the session was an administrator's (no
-*   effective-user drop exists here, see the 14 Aug 26 note at the top of this program), and it set the two OS-access switches
-*   back to what they were (K$SH and K$OS.EXEC are the S.63 gate, carried on 23 Oct 26 and restored at the foot of this paragraph).  What is Windows' own is the
-*   administrator state: LOGTO gives the rights up on the way out of SDSYS and releases the elevated helper with them, so a level
-*   that began in SDSYS and moved on has already lost them and nothing here can hand them back (that needs a fresh sign-in);
-*   a level that began outside SDSYS and reached SDSYS must not keep them, so the same release is made here.
-   i = ospath("", os$flush.cache)
-   account.path = stk.account.path
-   who = stk.who
-   void kernel(K$SET.ACCOUNT, who)
-   voc = new.voc ; new.voc = 0
-   if upcase(who) # 'SDSYS' then
-      was.admin = kernel(K$ADMINISTRATOR, -1)
-      void kernel(K$ADMINISTRATOR, 0)
-      if was.admin then
-         void elevate('STOP', '')
-         void kernel(K$AUDIT, 'elevation released account=' : who)
-      end
-   end
-   void kernel(K$SH,      stk.sh)
-   void kernel(K$OS.EXEC, stk.os.exec)
-   void kernel(K$SHARED.READ,  stk.shared.read)    ;* 18 Oct 26, S.66
-   void kernel(K$SHARED.WRITE, stk.shared.write)
-   void kernel(K$SD.ACCOUNTS, stk.sd.accounts)
-   void kernel(K$NET, stk.net)   ;* 17 Oct 26, S.65 slice 1
-   void kernel(K$AUDIT, 'logto revert account=' : who)
-   i = kernel(K$INVALIDATE.OBJECT, 0)
-   gosub find.private.catalogue
    return
 
 *****************************************************************************

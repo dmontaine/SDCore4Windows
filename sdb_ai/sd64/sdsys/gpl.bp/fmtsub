@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -94,7 +95,7 @@
 $internal
 subroutine format(in.rec, out.rec, default.file, indent.step, case.option, errors)
 $catalog !format
-equ MAX.INCLUDE to 20
+equate MAX.INCLUDE to 20
 
    name.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$_%'
 

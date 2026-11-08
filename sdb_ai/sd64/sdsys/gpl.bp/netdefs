@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 17 Oct 26 dm  S.65 slice 1: written.  The one place that knows the layout of the server definitions file; set.server,
 *               delete.server and list.servers use it.  Nothing yet opens a remote file: the definitions are in place for
 *               the slices that follow.
@@ -98,7 +99,7 @@ $define NETDEFS.FIELDS 8
                   defs<n> = line
                end
             repeat
-            closeseq f
+            close f
          end
 
       case mode = 'WRITE'
@@ -156,7 +157,7 @@ $define NETDEFS.FIELDS 8
                exit
             end
          next i
-         closeseq tmp.f
+         close tmp.f
 
          if err # '' then
             void ospath(tmp, OS$DELETE)

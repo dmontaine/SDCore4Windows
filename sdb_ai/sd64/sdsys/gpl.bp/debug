@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
 * 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The full-screen display is laid out for at least 140 by 42
 *               (lay.w, lay.h; a bigger window is used whole).  On a window smaller than that at the first stop the debugger says
@@ -1705,7 +1706,7 @@ display.data.common:
          end else
             message = sysmsg(1435, status(), os.error())   ;* Write error %1 (os.error %2)
          end
-         closeseq dump.f
+         close dump.f
       end
 
       if message # '' then gosub emit.err.msg

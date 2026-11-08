@@ -113,7 +113,7 @@ SEQ = """$include keys.h
    end
    weofseq s
    writeseq 'line' to s else stop 'ws'
-   closeseq s
+   close s
    crt 'STEP end'
 end
 """

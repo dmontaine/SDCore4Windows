@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 05 Oct 26 Windows port - MANIFEST mode, for RESTORE.ACCOUNT LATEST choosing the newest
 *           backup that HOLDS the account (owner, 5 Oct 2026; Linux's mail T1156).
 * 02 Oct 26 Windows port - every path is made a Windows path first (norm.path):

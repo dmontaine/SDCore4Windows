@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 01 Oct 26 Windows port - written, with SET.BACKUP.DIRECTORY (owner's ruling,
 *           1 Oct 2026).  Messages 12010 and 13046 (shared; Linux decided that
 *           a relative path is refused).

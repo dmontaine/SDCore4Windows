@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): a name that is F and a number is no longer the field of that number when no dictionary item
 *               has it (openQM ref 547); a field is named by a D-type item.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO
@@ -198,12 +199,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.vars<-1> = "SENTENCE"            ; at.offsets<-1> = SYSCOM.SENTENCE
    at.vars<-1> = "PARASENTENCE"        ; at.offsets<-1> = SYSCOM.PARASENTENCE
    at.vars<-1> = "PATH"                ; at.offsets<-1> = SYSCOM.ACCOUNT.PATH
-   at.vars<-1> = "PIB"                 ; at.offsets<-1> = SYSCOM.PROC.IBUF:'.0'
-   at.vars<-1> = "POB"                 ; at.offsets<-1> = SYSCOM.PROC.OBUF:'.0'
    at.vars<-1> = "RECORD"              ; at.offsets<-1> = SYSCOM.QPROC.RECORD
    at.vars<-1> = "SELECTED"            ; at.offsets<-1> = SYSCOM.SELECTED
-   at.vars<-1> = "SIB"                 ; at.offsets<-1> = SYSCOM.PROC.IBUF:'.1'
-   at.vars<-1> = "SOB"                 ; at.offsets<-1> = SYSCOM.PROC.OBUF:'.1'
    at.vars<-1> = "SYSTEM.RETURN.CODE"  ; at.offsets<-1> = SYSCOM.SYSTEM.RETURN.CODE
    at.vars<-1> = "SYS.BELL"            ; at.offsets<-1> = SYSCOM.BELL
    at.vars<-1> = "TIME"                ; at.offsets<-1> = -SYSCOM.CPROC.TIME
@@ -367,7 +364,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    header.flags = HDR.ITYPE         ;* Option flags
    greatest.call.arg.count = 0
-   time.ms = @false                 ;* $MODE TIME.MS: TIME() to the millisecond
 
    * Expression processing
 
@@ -443,8 +439,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
                end else
                   header.flags = bitor(header.flags, HDR.NOCASE)
                end
-            case mnm = 'TIME.MS'
-               time.ms = not(mneg)
             case 1
                err.msg = sysmsg(12400, mnm) ;* %1 is not a mode an I-type can use
                goto error
@@ -1307,14 +1301,15 @@ have.field.rec:
                   n = 3 ; gosub emit.numeric.load       ;* Function: get
                   opcode.byte = OP.COLL ; gosub emit.simple
 
-               case type = 'A' or type = 'S' or type = 'C'
+               case type = 'A' or type = 'S'
                   * A/S-type item with correlative or C-type
                   * Unlike nested I-types, A/S-types that reference other
                   * compiled items do this as a run time subroutine call
                   * using ITYPE() to execute embedded object code.
 
+                  sys.chk.rec = field.rec ; sys.chk.rec<DICT.SYS.INFO,1> = ''   ;* 28 Oct 26 S.87: REPLACE() is gone
                   if len(field.rec<DICT.ITYPE.OBJECT>) = 0 ~
-                  or checksum(replace(field.rec, DICT.SYS.INFO, 1;'')) # field.rec<DICT.SYS.INFO,1> then
+                  or checksum(sys.chk.rec) # field.rec<DICT.SYS.INFO,1> then
                      * Need to compile nested item
 
                      if depth > 10 then
@@ -2032,7 +2027,7 @@ parse.as.dictionary.name:
                      n = trans.dict.rec<dict.loc>
                      gosub emit.numeric.load
 
-                  case trans.type = 'A' or trans.type = 'S' or trans.type = 'C'
+                  case trans.type = 'A' or trans.type = 'S'
                      * 10 Oct 26 dm, openQM ref 182: an A, S or C item with an
                      * expression is compiled as the same object code an I-type
                      * gives, and evaluated against the record read by TRANS().
@@ -2125,15 +2120,7 @@ in.trim:
 
 in.none:
 intrinsic.common:
-         * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - Fixes item 489.  With $MODE TIME.MS, TIME() is SYSTEM(1020) / 1000.
-         * (8 Nov 26, from Linux 7416a68a: the overlap modes and their OP.STROVL mask are gone.)
-         if time.ms and intrinsic.stack<1> = op.time then
-            n = 1020 ; gosub emit.numeric.load
-            opcode.byte = op.system ; gosub emit.simple
-            n = 1000 ; gosub emit.numeric.load
-            opcode.byte = op.div ; gosub emit.simple
-            goto intrinsic.end
-         end
+         * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): $MODE TIME.MS is gone, so TIME() is always the plain opcode.
          opcode.byte = intrinsic.stack<1> ;gosub emit.simple
 
 intrinsic.end:

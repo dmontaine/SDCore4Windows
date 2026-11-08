@@ -2204,7 +2204,7 @@ end;
   written to the setup log, not to a screen. }
 function RetiredConfNames: String;
 begin
-  Result := 'INVCASE CODEPAGE EXCLREM RINGWAIT TXCHAR APILOGIN CREATUSR JNLDIR JNLMODE GDI FIXUSERS PORTMAP';
+  Result := 'INVCASE CODEPAGE EXCLREM RINGWAIT TXCHAR APILOGIN CREATUSR JNLDIR JNLMODE GDI FIXUSERS PORTMAP FILERULE';
 end;
 
 function IsRetiredConfLine(L: String): Boolean;

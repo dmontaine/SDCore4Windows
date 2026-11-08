@@ -85,8 +85,8 @@ def main():
 
     prog = lambda v: "   crt 'VALUE ':%s\nend\n" % v
     # records: the include record zzi.h exists in INC (value 11), and also in SRC with value 22 for the order rows
-    put("zzh_inc", "equ ZZVAL to 11\n")
-    put("zzh_src", "equ ZZVAL to 22\n")
+    put("zzh_inc", "equate ZZVAL to 11\n")
+    put("zzh_src", "equate ZZVAL to 22\n")
     put("zzp_use", "$include zzi.h\n" + prog("ZZVAL"))
     put("zzp_none", "$include zzi.nowhere\n" + prog("0"))
     put("zzo_inc", "X\nSEARCH %s\n" % INC)

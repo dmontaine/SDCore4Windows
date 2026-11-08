@@ -133,10 +133,10 @@ def main():
         "   end",
         "   weofseq sf",
         "   writeseq 'line1' to sf else crt 'MAIN writeseq failed'",
-        "   closeseq sf",
+        "   close sf",
         "   openseq 'bp', '%s' to sf then" % seq,
         "      readseq l from sf else crt 'MAIN readseq failed'",
-        "      closeseq sf",
+        "      close sf",
         "   end else crt 'MAIN openseq 2 failed'",
         "   execute 'WHO' capturing w",
         "   crt 'MAIN done'", "end", ""]))
