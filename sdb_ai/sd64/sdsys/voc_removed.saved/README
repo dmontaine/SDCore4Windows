@@ -1,0 +1,2 @@
+VOC records removed by an update, kept here so they can be put back.  One file per record: account*id*day.second.
+The update (login, UPDATE.ACCOUNTS) writes them; restore.voc reads them.  See Administrator: the VOC deletion list.

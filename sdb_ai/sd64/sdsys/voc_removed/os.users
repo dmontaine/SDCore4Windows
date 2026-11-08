@@ -1,0 +1,5 @@
+F
+os.users
+os.users.dic
+1.2-0
+modify.account <name> sh-on / os-on (the shell and OS.EXECUTE switches are the account's own)

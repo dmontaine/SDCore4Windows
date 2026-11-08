@@ -89,7 +89,7 @@ def checks(login, tg_new, tg_tpl):
     summ = [i for i, l in code_lines(login) if l.strip().startswith("if acc.denied then display sysmsg(12989, acc.denied)")]
     ok6 = (len(uv) == 1 and len(init) == 1 and uv[0] < init[0] < (wr[0] if wr else -1)
            and re.search(r"upd\.denied = 1\s*\n\s*release update\.voc\.f, id\s*\n\s*exit\b", body) is not None
-           and len(guard) == 1 and len(mods) == 1 and wr and wr[0] < guard[0] < mods[0]
+           and len(guard) == 2 and len(mods) == 1 and wr and wr[0] < guard[0] < guard[1] < mods[0]
            and len(own) == 1 and "if upd.denied then" in walk and "sysmsg(12988, s)" in walk and "acc.denied += 1" in walk and "acc.updated += 1" in walk
            and re.search(r"acc\.denied \+= 1\s*\n\s*end else\s*\n\s*acc\.updated \+= 1\s*\n\s*end", walk) is not None and len(summ) == 1)
     row("V6 a refused write ends the account's update and not the command: upd.denied starts 0 (%s), the write has an on error (%s) and then upd.denied, release and exit, the return guard (%s) is before the newvoc.mods "
@@ -150,11 +150,11 @@ def selftest():
 
     SET = "         update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))\n"
     mutant("flag-never-set", "V2", lambda s: s.replace(SET, "", 1))
-    mutant("flag-without-administrator", "V2", lambda s: s.replace(" and kernel(K$ADMINISTRATOR,-1))\n         gosub update.voc", ")\n         gosub update.voc", 1))
+    mutant("flag-without-administrator", "V2", lambda s: s.replace("update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))", "update.sdsys.voc = (@who = 'sdsys')", 1))
     mutant("flag-always-on", "V2", lambda s: s.replace(SET, "         update.sdsys.voc = 1\n", 1))
-    mutant("flag-set-after-gosub", "V2", lambda s: s.replace(SET + "         gosub update.voc\n", "         gosub update.voc\n" + SET, 1))
+    mutant("flag-set-after-gosub", "V2", lambda s: re.sub(r"(\n\s*update\.sdsys\.voc = \(@who[^\n]*)((?:\n\s*upd\.account[^\n]*)?)(\n\s*gosub update\.voc)", r"\2\3\1", s, count=1))
     mutant("walk-keeps-the-flag", "V3", lambda s: re.sub(r"\n\s*update\.sdsys\.voc = 0 [^\n]*", "", s, count=1))
-    mutant("walk-flag-after-gosub", "V3", lambda s: re.sub(r"(\n\s*)update\.sdsys\.voc = 0 [^\n]*(\n\s*gosub update\.voc)", r"\2\1update.sdsys.voc = 0", s, count=1))
+    mutant("walk-flag-after-gosub", "V3", lambda s: re.sub(r"(\n\s*)update\.sdsys\.voc = 0 [^\n]*((?:\n\s*upd\.account[^\n]*)?)(\n\s*gosub update\.voc)", r"\2\3\1update.sdsys.voc = 0", s, count=1))
     mutant("source-always-newvoc", "V4", lambda s: s.replace('then upd.source = "voc_template"', 'then upd.source = "newvoc"', 1))
     mutant("source-always-template", "V4", lambda s: s.replace('upd.source = "newvoc"\n', 'upd.source = "voc_template"\n', 1))
     mutant("opens-newvoc-directly", "V4", lambda s: s.replace("openpath @sdsys:@ds:upd.source to sdsys.file else", 'openpath @sdsys:@ds:"newvoc" to sdsys.file else', 1))

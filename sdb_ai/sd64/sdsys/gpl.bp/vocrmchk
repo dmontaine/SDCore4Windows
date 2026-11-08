@@ -1,0 +1,67 @@
+* VOCRMCHK
+* The test of the VOC deletion list: what to do with one account's VOC record of a name SD no longer ships.
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 27 Oct 26 dm  Written for the VOC deletion list (S.87): login's update.voc, list.voc.removed and restore.voc all ask this one routine.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !vocrmchk(sig, rec, verdict)
+*
+*    sig      a record of the shipped list (sdsys/voc_removed): field 1 the type of the record as SD shipped it (K, V, PA ...),
+*             field 2 and 3 the VOC fields 2 and 3 that identify it (a field left empty is not compared)
+*    rec      the account's VOC record of that name, or null when it has none
+*    verdict  absent     the account has no such record
+*             differs    it is not the record SD shipped (a person's own paragraph called margin, say): keep it
+*             locked     it is the shipped record and field 1 holds [locked], and it is not a verb: keep it
+*             overruled  it is the shipped record, a VERB, and field 1 holds [locked]: a verb does not honour the lock (the rule of
+*                        the VOC update), so it goes
+*             delete     it is the shipped record: it goes
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine vocrmchk(sig, rec, verdict)
+$catalog !vocrmchk
+
+   verdict = 'absent'
+   if rec = '' then return
+
+   rtype = upcase(rec[1,1])
+   if rtype = 'P' then rtype = upcase(rec[1,2])
+
+   same = (rtype = upcase(sig<1>))
+   if same and sig<2> # '' then same = (rec<2> = sig<2>)
+   if same and sig<3> # '' then same = (rec<3> = sig<3>)
+
+   begin case
+      case not(same)
+         verdict = 'differs'
+      case index(upcase(rec<1>), '[LOCKED]', 1)
+         verdict = if rtype = 'V' then 'overruled' else 'locked'
+      case 1
+         verdict = 'delete'
+   end case
+
+   return
+end
+
+* END-CODE

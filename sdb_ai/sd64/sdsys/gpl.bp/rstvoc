@@ -1,0 +1,138 @@
+* RSTVOC
+* RESTORE.VOC verb: put back a VOC record that the VOC update removed.
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 27 Oct 26 dm  Written for the VOC deletion list (S.87).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   RESTORE.VOC account id
+*   RESTORE.VOC account ALL
+*
+* The VOC update (UPDATE.ACCOUNTS, and the installer's walk) saves each record it removes to sdsys/voc_removed.saved under the key
+* account*id*day-second before it deletes it.  This puts the NEWEST saved copy of id back into the VOC of the account, or the newest
+* copy of every record saved for the account.  A record that the account holds now (it was made again, or put back already) is NOT
+* overwritten.  A write the session may not make is refused in words, as the update refuses it.  Every record put back is audited.
+*
+* To keep a record in EVERY account instead, put it in sdsys/newvoc.mods: it is written after the standard records and after the
+* removals, so it has the last word.
+*
+* Administrator only.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program restore.voc
+$catalog $rstvoc
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include keys.h
+
+deffun pathtkn(path) calling '!pathtkn'
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   call !parser(parser$get.token, token.type, token, keyword)
+   if token.type = PARSER$END then stop sysmsg(12919)
+   acct = downcase(token)
+   call !parser(parser$get.token, token.type, token, keyword)
+   if token.type = PARSER$END then stop sysmsg(12919)
+   want = token
+   all.ids = (upcase(want) = 'ALL')
+   call !parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END then stop sysmsg(2018, token)
+
+   openpath @sdsys:@ds:'accounts' to acc.f else stop sysmsg(2200) ;* Cannot open accounts register
+   read acc.rec from acc.f, acct else stop sysmsg(12917, acct)
+   close acc.f
+   openpath pathtkn(acc.rec<ACC$PATH>) : @ds : 'voc' to vf else stop sysmsg(12918, acct)
+
+   openpath @sdsys:@ds:'voc_removed.saved' to sv.f else stop sysmsg(12921, want, acct)
+
+   * The newest saved copy of each id for this account: the key is account*id*day-second
+   prefix = acct : '*'
+   newest.id = ''               ;* three parallel lists: the id, the key of its newest copy, and when that was saved
+   newest.key = ''
+   newest.at = ''
+   select sv.f to 11
+   loop
+      readnext key from 11 else exit
+      if key[1, len(prefix)] # prefix then continue
+      rest = key[len(prefix) + 1, 99999]
+      stamp = field(rest, '*', dcount(rest, '*'))
+      id = rest[1, len(rest) - len(stamp) - 1]
+      if id = '' then continue
+      at = (field(stamp, '-', 1) + 0) * 100000 + (field(stamp, '-', 2) + 0)
+      locate id in newest.id<1> setting p then
+         if at > newest.at<p> then
+            newest.key<p> = key
+            newest.at<p> = at
+         end
+      end else
+         newest.id<-1> = id
+         newest.key<-1> = key
+         newest.at<-1> = at
+      end
+   repeat
+
+   put.back = 0
+   found = 0
+   for p = 1 to dcount(newest.id, @fm)
+      id = newest.id<p>
+      if not(all.ids) and id # want then continue
+      found += 1
+      read saved from sv.f, newest.key<p> else continue
+      rec = field(saved, @fm, 6, 99999)
+      old = ''
+      readu old from vf, id else old = ''
+      if old # '' then
+         release vf, id
+         display sysmsg(12923, id, acct)
+         continue
+      end
+      done = @true
+      write rec to vf, id on error done = @false
+      if done then
+         put.back += 1
+         display sysmsg(12920, id, acct)
+         void kernel(K$AUDIT, 'voc restore account=' : acct : ' id=' : id)
+      end else
+         release vf, id
+         display sysmsg(12922, acct, id)
+         exit
+      end
+   next p
+
+   if found = 0 then stop sysmsg(12921, want, acct)
+   @system.return.code = put.back
+
+end
+
+* END-CODE

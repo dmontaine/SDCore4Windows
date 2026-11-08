@@ -808,6 +808,14 @@ Name: "{#DataDir}\sdsys\$hold"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\$cred"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\batch.jobs.dic"; Flags: uninsneveruninstall
 
+; 7 Nov 26 - RELEASE_1.1 197 (from Linux 29c4a48f, S.87): the copies of the VOC
+; records an update removed, which RESTORE.VOC puts back.  Created empty and
+; PRESERVED like the ten above, and here for 120's reason: an upgrade from a
+; release that had no such directory would otherwise never get one (upgrade.iss
+; touches only shipped names), and SecureSysdirs would then report it missing.
+; voc_removed itself SHIPS, so the upgrade replaces it and it needs no entry.
+Name: "{#DataDir}\sdsys\voc_removed.saved"; Flags: uninsneveruninstall
+
 [Icons]
 Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
 
@@ -3880,7 +3888,7 @@ function SecureSysdirs: String;
 var
   Code: Integer;
   Ps, Script, Failed: String;
-  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, Gplbp: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, Gplbp, VocRm, VocRmSaved: String;
 begin
   Result := '';
   Code := 0;
@@ -3916,6 +3924,21 @@ begin
   Voc      := ExpandConstant('{#DataDir}\sdsys\voc');
   Gplbp    := ExpandConstant('{#DataDir}\sdsys\gpl.bp');
 
+  { 7 Nov 26 - THE VOC DELETION LIST (from Linux 29c4a48f, S.87; RELEASE_1.1 197).
+    voc_removed is SD's own list of records it no longer ships; voc_removed.saved
+    holds the copies an update saved before it removed one, which the
+    administrator's RESTORE.VOC puts back into an account.  NEITHER MAY BE
+    WRITABLE BY AN ORDINARY SESSION: a user who could add a "saved copy" would
+    have the administrator restore a record of the user's choosing into another
+    account, and one who could edit the list would have every update delete
+    what it names.  On Linux both are the sdsys user's, mode 755, so only an
+    update run by sdsys saves a copy and removes a record; this is the same
+    rule.  An ordinary user's own VOC refresh then saves nothing and so removes
+    nothing (message 12909), and the installer's UPDATE.ACCOUNTS ALL, run
+    elevated, does the removals. }
+  VocRm      := ExpandConstant('{#DataDir}\sdsys\voc_removed');
+  VocRmSaved := ExpandConstant('{#DataDir}\sdsys\voc_removed.saved');
+
   Failed := '';
   if not LockOsUsersPath(Ps, Script, Accounts, Code) then
     Failed := Accounts
@@ -3934,15 +3957,20 @@ begin
   else if not LockOsUsersPath(Ps, Script, Voc, Code) then
     Failed := Voc
   else if not LockOsUsersPath(Ps, Script, Gplbp, Code) then
-    Failed := Gplbp;
+    Failed := Gplbp
+  else if not LockOsUsersPath(Ps, Script, VocRm, Code) then
+    Failed := VocRm
+  else if not LockOsUsersPath(Ps, Script, VocRmSaved, Code) then
+    Failed := VocRmSaved;
 
   if Failed = '' then
     Exit;
 
   { NAMED, NOT BURIED, like the global catalogue and the credential store: this
     ACL is the whole of a control and it fails silently if the step does not
-    run.  The path that failed is named because NINE were attempted (seven until
-    22 Sep 2026, then voc and gpl.bp - RELEASE_1.1 104) and the manual command
+    run.  The path that failed is named because ELEVEN were attempted (seven until
+    22 Sep 2026, then voc and gpl.bp - RELEASE_1.1 104; voc_removed and
+    voc_removed.saved from 7 Nov 2026 - RELEASE_1.1 197) and the manual command
     below is only worth anything if it says which one. }
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +

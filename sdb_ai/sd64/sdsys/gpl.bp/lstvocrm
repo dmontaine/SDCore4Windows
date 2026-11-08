@@ -1,0 +1,116 @@
+* LSTVOCRM
+* LIST.VOC.REMOVED verb: the VOC deletion list, and what it would do to one account.
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 27 Oct 26 dm  Written for the VOC deletion list (S.87).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LIST.VOC.REMOVED {account}
+*
+* Without an account, prints the shipped list (sdsys/voc_removed): every VOC record SD no longer ships, the release it went in
+* and what to use instead.  With an account, prints the same list with what the next VOC update would do in THAT account's VOC,
+* and changes nothing: absent, would be removed, kept (not the record SD shipped), kept (locked), or removed although locked
+* (a verb).  @SYSTEM.RETURN.CODE is the number of records that would be removed (the number listed, without an account).
+*
+* Administrator only.  See !vocrmchk for the rule and RESTORE.VOC for putting a record back.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program list.voc.removed
+$catalog $lstvocrm
+
+$include parser.h
+$include err.h
+$include int$keys.h
+$include keys.h
+
+deffun pathtkn(path) calling '!pathtkn'
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   call !parser(parser$reset, 0, @sentence, 0)
+   call !parser(parser$get.token, token.type, token, keyword) ;* Verb
+
+   acct = ''
+   call !parser(parser$get.token, token.type, token, keyword)
+   if token.type # PARSER$END then
+      acct = downcase(token)
+      call !parser(parser$get.token, token.type, token, keyword)
+      if token.type # PARSER$END then stop sysmsg(2018, token)
+   end
+
+   vf = ''
+   if acct # '' then
+      openpath @sdsys:@ds:'accounts' to acc.f else stop sysmsg(2200) ;* Cannot open accounts register
+      read acc.rec from acc.f, acct else stop sysmsg(12917, acct)
+      close acc.f
+      openpath pathtkn(acc.rec<ACC$PATH>) : @ds : 'voc' to vf else stop sysmsg(12918, acct)
+   end
+
+   openpath @sdsys:@ds:'voc_removed' to rm.f else
+      display sysmsg(12910, 0)
+      @system.return.code = 0
+      stop
+   end
+
+   sselect rm.f to 11
+   ids = ''
+   loop
+      readnext id from 11 else exit
+      ids<-1> = id
+   repeat
+
+   display sysmsg(12910, dcount(ids, @fm))
+   display sysmsg(12911) : (if acct # '' then '   ' : acct else '')
+
+   n.would = 0
+   for i = 1 to dcount(ids, @fm)
+      id = ids<i>
+      read sig from rm.f, id else continue
+      line = fmt(id, '30L') : fmt(sig<4>, '10L') : sig<5>
+      if acct # '' then
+         rec = ''
+         read rec from vf, id else rec = ''
+         call !vocrmchk(sig, rec, verdict)
+         begin case
+            case verdict = 'absent'    ; msg = 12912
+            case verdict = 'delete'    ; msg = 12913 ; n.would += 1
+            case verdict = 'differs'   ; msg = 12914
+            case verdict = 'locked'    ; msg = 12915
+            case 1                     ; msg = 12916 ; n.would += 1
+         end case
+         line := '   [' : sysmsg(msg) : ']'
+      end
+      display line
+   next i
+
+   if acct = '' then n.would = dcount(ids, @fm)
+   @system.return.code = n.would
+
+end
+
+* END-CODE
