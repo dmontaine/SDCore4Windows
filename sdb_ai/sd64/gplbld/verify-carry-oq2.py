@@ -10,6 +10,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 3: EREPLACE (item 472's first function) was removed, with its eight rows; FIX stays.  The refusal is a row of sandbox-mode-q16.py.
 # 18 Oct 26 dm  Row 56's mode 1 and mode 6 jobs name SPOOLER "true": they went to the machine's lp, and with a default printer set
 #               they printed on paper (the Windows agent's report; their printer printed pages).
 # 12 Oct 26 dm  Written: 336 names with two underscores, 407 INCLUDE in $BASIC.OPTIONS.
@@ -65,14 +66,6 @@ CASES = [
     ("468: SADD with decimals", {}, "x = sadd('0.1', '0.2')", "0.3"),
     ("468: SMUL with decimals", {}, "x = smul('1.5', '-2.25')", "-3.375"),
     ("468: SSUB with decimals of different lengths", {}, "x = ssub('10', '0.001')", "9.999"),
-    ("472: EREPLACE, the openQM example", {}, "x = ereplace('The quick brown fox jumps over the lazy dog.', 'fox', 'cat')",
-     "The quick brown cat jumps over the lazy dog."),
-    ("472: EREPLACE replaces every occurrence by default", {}, "x = ereplace('a-b-c-d', '-', '+')", "a+b+c+d"),
-    ("472: with an occurrence count", {}, "x = ereplace('a-b-c-d', '-', '+', 2)", "a+b+c-d"),
-    ("472: with a count and a start", {}, "x = ereplace('a-b-c-d', '-', '+', 1, 3)", "a-b-c+d"),
-    ("472: a count below 1 means all", {}, "x = ereplace('a-b-c-d', '-', '+', 0)", "a+b+c+d"),
-    ("472: a null NEW deletes", {}, "x = ereplace('a-b-c', '-', '')", "abc"),
-    ("472: a null OLD puts NEW in front of the string", {}, "x = ereplace('world', '', 'hello ')", "hello world"),
     ("472 FIX: the openQM example, default precision 4 rounds 37.73629273 to 37.7363", {}, "x = fix(37.73629273)", "37.7363"),
     ("472 FIX: precision 2 rounds up", {}, "x = fix(37.73629273, 2)", "37.74"),
     ("472 FIX: mode 1 truncates", {}, "x = fix(37.73629273, 2, 1)", "37.73"),
@@ -91,7 +84,6 @@ CASES = [
      "dim v(5)\nmat v = ''\nv(1) = 'a' ; v(2) = 'b' ; v(3) = 'c'\nmatbuild s from v\nx = change(s, @fm, '/')", "a/b/c"),
     ("509 MATSTR: the zero element of a one dimensional matrix is not used", {},
      "dim v(2)\nv(0) = 'zero' ; v(1) = 'a' ; v(2) = 'b'\nx = change(matstr(v), @fm, '/')", "a/b"),
-    ("472 CONTROL: CHANGE gives the same as EREPLACE for a non-null OLD", {}, "x = change('a-b-c-d', '-', '+', 2)", "a+b+c-d"),
     ("510: REGEX finds a match anywhere", {}, "x = regex('hello world', 'wor')", "1"),
     ("510: REGEX with an anchor and a class", {}, "x = regex('abc123', '^[a-z]+[0-9]+$'):regex('abc123x', '^[a-z]+[0-9]+$')", "10"),
     ("510: REGEX is case sensitive unless the pattern begins (?i)", {}, "x = regex('ABC', 'abc'):regex('ABC', '(?i)abc')", "01"),

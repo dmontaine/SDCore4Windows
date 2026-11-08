@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): op_enter() (the Pick ENTER statement) is gone; its opcode is an op_illegal row in opcodes.h.
  * 18 Oct 26 Windows port - from Linux a0a1ad6 (17 Oct 26): CALL "file name", the Pick style call (QM4 Fixes 208; the owner's ruling: the file is a VOC name only,
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: op_chkcat() looks in the global catalogue under sd_sysdir() (the configuration file's), not the segment's copy.
  * 17 Oct 26 Windows port - from Linux 2a68b2f - CALL "file name", the Pick style call (QM4 Fixes 208; the owner's ruling: the file is a VOC name only,
@@ -42,7 +43,6 @@
  * op_call()      CALL      Call catalogued subroutine
  * op_callv()     CALLV     Call catalogued subroutine, variable arg list
  * op_chkcat()    CHKCAT    Check catalogue for named subroutine
- * op_enter()     ENTER     Pick style ENTER
  * op_gosub()     GOSUB     Local subroutine call
  * op_jmp()       JMP       Unconditional jump
  * op_jng()       JNG       Jump if negative
@@ -475,77 +475,6 @@ void op_chkcat() {
 
   InitDescr(e_stack, INTEGER);
   (e_stack++)->data.value = mode;
-}
-
-/* ======================================================================
-   op_enter()  -  Pick style ENTER                                        */
-
-void op_enter() {
-  /* Stack:
-
-     |================================|=============================|
-     |            BEFORE              |           AFTER             |
-     |================================|=============================|
- top |  Program name or SUBR link     |                             |
-     |================================|=============================|
- */
-
-  DESCRIPTOR* descr;
-  char call_name[MAX_PROGRAM_NAME_LEN + 1];
-
-  descr = e_stack - 1;
-  k_get_value(descr);
-
-  switch (descr->type) {
-    case SUBR:
-      /* Convert SUBR reference back to a STRING */
-      InitDescr(descr, STRING);
-      --(((OBJECT_HEADER*)(descr->data.subr.object))->ext_hdr.prog.refs);
-      descr->data.str.saddr = descr->data.subr.saddr;
-
-      /* **** FALL THROUGH **** */
-      /* Modified by Composer AI - 2026/06/10.
-         Fall-through is intentional (see comment above); make it
-         explicit for the compiler. */
-      __attribute__((fallthrough));
-      /* -------------------- */
-
-    case STRING:
-      if (k_get_c_string(descr, call_name, MAX_PROGRAM_NAME_LEN) <= 0) {
-        k_illegal_call_name();
-      }
-      break;
-
-    default:
-      k_error(sysmsg(1129));
-  }
-
-  LowerCaseString(call_name); /* RELEASE_1.1 5 stage 3a: canonical case */
-
-  if (!valid_call_name(call_name))
-    k_illegal_call_name();
-  if (call_name[0] == '$') /* Only callable by internal mode code */
-  {
-    if (!(process.program.flags & HDR_INTERNAL))
-      k_illegal_call_name();
-  }
-
-  k_dismiss(); /* Dismiss call name */
-
-  if (my_uptr->lockwait_index)
-    clear_lockwait();
-
-  /* Cast off all programs down to but not including one with
-    the HDR_IS_CPROC flag set.                               */
-
-  while (!(process.program.flags & HDR_IS_CPROC)) {
-    k_return();
-  }
-
-  class_main_ok = TRUE; /* a class module is run through its MAIN subroutine (Fixes item 484) */
-  k_call(call_name, 0, NULL, 0);
-
-  return;
 }
 
 /* ======================================================================

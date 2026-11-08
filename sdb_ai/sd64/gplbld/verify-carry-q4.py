@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # sandbox-q4.py - QM4 gaps, the 15 Oct 26 third sitting: BLOCK.PRINT / BLOCK.TERM, FILE.STAT, BSCAN / ROOT / KEY,
-#                 SELECTLEFTV / SELECTRIGHTV, DISABLE.INDEX, SWAPMARKS, SYSTEM(1071), OPTION QUERY.MERGE.PRINT, PHANTOM GROUP
+#                 SELECTLEFTV / SELECTRIGHTV, DISABLE.INDEX, SYSTEM(1071), OPTION QUERY.MERGE.PRINT, PHANTOM GROUP
 #                 (SYSTEM(1073), the G in LISTU), @PSTAT, SET.QUEUE / SP.ASSIGN and FSTAT.USER.  No install, no sudo.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-q4.py <dir> [--build]
@@ -10,6 +10,7 @@
 # absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 3: SWAPMARKS() (it returned its argument) was removed, with part F; the refusal is a row of sandbox-mode-q16.py.
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-8 (BLOCK.PRINT, BLOCK.TERM).
 # END-HISTORY
 #
@@ -21,7 +22,7 @@
 #      lower case, the shapes and the question mark for what has none, no text, the printer's copy equal to the screen's
 #   B  FILE.STAT against FILEINFO (modulus, sizes, record count), the flags, a directory file, a name, a select list, DICT
 #   C  BSCAN, ROOT and KEY on an index of known values; D SELECTLEFTV / SELECTRIGHTV; E DISABLE.INDEX (updates, query, rebuild);
-#   F  SWAPMARKS; G SYSTEM(1071) against STATUS; H QUERY.MERGE.PRINT read from the print job; I PHANTOM GROUP; J @PSTAT;
+#   F  (SWAPMARKS, removed 27 Oct 26); G SYSTEM(1071) against STATUS; H QUERY.MERGE.PRINT read from the print job; I PHANTOM GROUP; J @PSTAT;
 #   K  SET.QUEUE / SP.ASSIGN; L  FSTAT.USER
 
 import importlib.util
@@ -149,10 +150,6 @@ USER_PROGS = {
     "zzdix2": ("   open 'zzdix' to f else stop 'no file'\n"
                "   execute 'DISABLE.INDEX zzdix CITY' capturing out\n   crt 'HELD[':(index(out, 'exclusive access', 1) > 0):']'\n"
                "   info = indices(f, 'CITY')\n   crt 'HELDSTILL[':(info<1,4> # ''):']'\nend\n"),
-    "zzswm": ("   a = 'x':@fm:'y':@vm:'z':@sm:'w':char(250):char(200):'end'\n"
-              "   crt 'SWAP[':(swapmarks(a) = a):'][':len(swapmarks(a)):'][':len(a):']'\n"
-              "   crt 'SWAPN[':swapmarks(12.5):'][':(swapmarks('') = ''):']'\n"
-              "end\n"),
     # G: SYSTEM(1071) after OSREAD.  The file is made with OPENSEQ; the STATUS array of the same file, read from an open
     # file variable, is the oracle for the fields OSREAD should hand over
     "zzosr": ("   openseq 'zzosr.txt' to f else create f else stop 'cannot create'\n   weofseq f\n"
@@ -484,12 +481,6 @@ def main():
         row("E7: ALL disables every index of the file", has(out, r"^Disabled index CITY$") and tag(again, "ALL") == ["1][0"], repr((out, again)))
         out = q3.plain("zzaa", ["DISABLE.INDEX zzdix"])
         row("E7: no index name and no ALL is refused", not has(out, r"^Disabled"), repr(out))
-
-        say("\n--- F. SWAPMARKS() --------------------------------------------------------------------------------------------")
-        out = q3.plain("zzaa", ["RUN bp zzswm"])
-        row("F1: SWAPMARKS() returns the data unchanged on a system without ECS: marks and all, the same length",
-            tag(out, "SWAP") and tag(out, "SWAP")[0].startswith("1][") and len(set(tag(out, "SWAP")[0].split("][")[1:])) == 1, repr(out))
-        row("F1: a number and the null string come back as they are", tag(out, "SWAPN") == ["12.5][1"], repr(out))
 
         say("\n--- G. SYSTEM(1071) after OSREAD ------------------------------------------------------------------------------")
         out = q3.plain("zzaa", ["RUN bp zzosr"])

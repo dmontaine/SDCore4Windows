@@ -17,8 +17,14 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 * 
 * START-HISTORY:
-* rev W1.1-0 15 Sep 26 Windows port - release string W1.1-0 (RELEASE_1.1);
-*            segment numerics left as W1.0-0 shipped them (see gplsrc/revstamp.h).
+* rev W1.2-0 26 Oct 26 Windows port - release string W1.2-0 (owner's instruction;
+*            the changelog's W1.2-0 section).  Segment numerics unchanged.
+* rev W1.1-3 01 Oct 26 Windows port - release string W1.1-3 (owner's instruction;
+*            the changelog's W1.1-3 section).  Segment numerics unchanged.
+* rev W1.1-0 15 Sep 26 Windows port - release string W1.1-0 (RELEASE_1.1).
+*            Segment numerics MAJOR/MINOR/BUILD left as they were, as W1.0-0
+*            itself shipped them out of step (BUILD 2); they are the segment
+*            identity in sysseg.c, not the release string.
 * rev W1.0-0 18 Aug 26 Windows port - SD release string is W1.0-0
 * rev 1.0-2 see sdsys/changelog
 * rev 1.0-1 Add back PROCREAD PROCWRITE

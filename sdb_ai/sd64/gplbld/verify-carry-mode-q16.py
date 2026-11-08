@@ -10,6 +10,8 @@
 # START-HISTORY:
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-16: CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP, PICK.CONVERT,
 #               CONDITIONAL.STATEMENTS, TRAP.UNUSED.MAIN.
+# 27 Oct 26 dm  S.87 batch 3: the rows for the second spellings and forms removed that day (a CONTROL that runs the surviving spellings, then one row per removed word that
+#               says the compiler REFUSES it, and the MCD / MCX conversions failing with STATUS 2); EREPLACE's two rows are gone with the function.
 # 27 Oct 26 dm  S.87 batch 2: CONDITIONAL.STATEMENTS (a name that did nothing) and six other modes were removed; the row that said it was accepted is now seven rows
 #               that say the seven names are refused (2842).
 # END-HISTORY
@@ -53,10 +55,6 @@ case("CONTROL: SWAP, same string, no start argument (SWAP replaces all)",
      "x = swap(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
 case("Q-16 CHANGE.NO.OVERLAP leaves a replace-all alone (nothing is skipped)",
      "$mode change.no.overlap\nx = swap(%s, 'aa', 'xx')" % S9, "xxxxxxxxa")
-case("CONTROL: EREPLACE from the 3rd occurrence",
-     "x = ereplace(%s, 'aa', 'xx', 0, 3)" % S9, "aaxxxxxxa")
-case("Q-16 CHANGE.NO.OVERLAP reaches EREPLACE",
-     "$mode change.no.overlap\nx = ereplace(%s, 'aa', 'xx', 0, 3)" % S9, "aaaaxxxxa")
 case("Q-16 CHANGE.NO.OVERLAP, one occurrence only (the 3rd, counting without overlap)",
      "$mode change.no.overlap\nx = change(%s, 'aa', 'xx', 1, 3)" % S9, "aaaaxxaaa")
 case("CONTROL: CHANGE.NO.OVERLAP on a pattern of one character is the same as without",
@@ -189,6 +187,64 @@ case("Q-16 FILELOCK as the WHILE condition and FILEUNLOCK as the UNTIL condition
 for _gone in ("conditional.statements", "prclose.default.0", "unassigned.common", "no.case.invert", "optional.then.else", "implied.stop", "exception.save.stack"):
     case("27 Oct 26: $MODE %s was removed and is refused (2842), as any name the compiler does not know" % _gone.upper(),
          "$mode %s\nx = 1" % _gone, None, has=["Unrecognised mode name"])
+
+# ---- 27 Oct 26 (S.87 batch 3): second spellings and forms that were removed ---------------------------------------------------------
+# One CONTROL row runs every spelling that stays, in the places the removed ones were written; then each removed word has a row that says the compiler REFUSES
+# it ("N error(s)", and not "0 error(s)").  A refusal row alone would pass for any typing mistake, which is why the control comes first.
+case("27 Oct 26 (S.87 batch 3) CONTROL: the spellings that stay - $INCLUDE, DIM, REM, SLEEP, CALL, EXECUTE ... RETURNING, @SENTENCE, LOCATE ... SETTING, "
+     "OCONV / ICONV MX - compile and run",
+     "$include bp zzq16inc\ndim a(5)\na(5) = 'k'\nrem a comment\nsleep 0\ncall zzq16sa(r)\nexecute 'who' capturing y returning z\n"
+     "t = @sentence\ns = 'a':@fm:'b'\nlocate 'b' in s<1> setting p else p = 0\n"
+     "x = zzinc : '/' : a(5) : '/' : r : '/' : (len(y) > 0) : '/' : assigned(z) : '/' : (len(t) >= 0) : '/' : p : '/' : oconv(255, 'MX') : '/' : iconv('FF', 'MX')",
+     "7/k/5/1/1/1/2/FF/255")
+case("27 Oct 26 (S.87 batch 3) CONTROL: a LOCAL SUBROUTINE written out compiles with no errors", "@RAW@   x = 1\nlocal subroutine zzl:\n   x = 2\nend\nend\n", None,
+     has=["0 error(s)"])
+# Every case is RUN after it is compiled, and an INPUT that ran would take the session's next line (the next row's BASIC command) as its answer, so this one is
+# compiled and never reached.
+case("27 Oct 26 (S.87 batch 3) CONTROL: INPUT ... WAITING compiles with no errors (it is behind an IF that is never true)",
+     "@RAW@   if @false then\n      input y waiting 5\n   end\nend\n", None, has=["0 error(s)"])
+case("27 Oct 26 (S.87 batch 3) CONTROL: OCONV MX gives hexadecimal and STATUS 0", "y = oconv(255, 'MX')\nx = status() : '/' : y", "0/FF")
+case("27 Oct 26 (S.87 batch 3) CONTROL: ICONV MX gives the number and STATUS 0", "y = iconv('FF', 'MX')\nx = status() : '/' : y", "0/255")
+for _mc in ("MCD", "MCDX", "MCX", "MCXD"):
+    case("27 Oct 26 (S.87 batch 3): OCONV %s (a second spelling of MX) was removed: an invalid conversion, STATUS 2" % _mc,
+         "y = oconv(255, '%s')\nx = status()" % _mc, "2")
+for _mc in ("MCD", "MCX"):
+    case("27 Oct 26 (S.87 batch 3): ICONV %s (a second spelling of MX) was removed: an invalid conversion, STATUS 2" % _mc,
+         "y = iconv('FF', '%s')\nx = status()" % _mc, "2")
+
+
+def _refused(label, body):
+    case("27 Oct 26 (S.87 batch 3): %s is refused by the compiler" % label, body, None, has=["error(s)"], lacks=["0 error(s)"])
+
+
+_refused("INPUT ... FOR (a second spelling of WAITING)", "@RAW@   if @false then\n      input y for 5\n   end\nend\n")
+_refused("INPUT ... TIMEOUT (a second spelling of WAITING)", "@RAW@   if @false then\n      input y timeout 5\n   end\nend\n")
+_refused("$INSERT (a second name for $INCLUDE)", "$insert bp zzq16inc\nx = 1")
+_refused("INCLUDE without the dollar sign", "include bp zzq16inc\nx = 1")
+_refused("COM (an abbreviation of COMMON)", "@RAW@   com zzcm\n   zzcm = 1\nend\n")
+_refused("DIMENSION (a long spelling of DIM)", "dimension a(3)\nx = 1")
+_refused("REDIMENSION (a long spelling of REDIM)", "@RAW@   subroutine zzq16bad(mat a)\n   dim a(1)\n   redimension a(10)\n   return\nend\n")
+_refused("ENTER (a second name for CALL)", "enter zzq16sa\nx = 1")
+case("27 Oct 26 (S.87 batch 3): $MODE PICK.ENTER was removed with ENTER and is refused (2842)", "$mode pick.enter\nx = 1", None, has=["Unrecognised mode name"])
+_refused("PERFORM (a second name for EXECUTE)", "perform 'who' capturing y\nx = 1")
+_refused("PRINTERR (a second name for INPUTERR)", "printerr ''\nx = 1")
+_refused("REMARK (a second name for REM)", "remark a comment\nx = 1")
+_refused("RQM (a second name for SLEEP)", "rqm 0\nx = 1")
+_refused("SUB (an abbreviation of SUBROUTINE)", "@RAW@sub zzq16bad(r)\nreturn\nend\n")
+_refused("LOCAL SUB (an abbreviation of LOCAL SUBROUTINE)", "@RAW@   x = 1\nlocal sub zzl:\n   x = 2\nend\nend\n")
+_refused("TCLREAD (a third way to read the command line)", "tclread t\nx = 1")
+_refused("EXECUTE ... SETTING (the second spelling of RETURNING)", "execute 'who' capturing y setting z\nx = 1")
+_refused("EXECUTE ... PASSLIST with no variable (a clause that did nothing)", "execute 'who' passlist\nx = 1")
+# ECS was a word that was read and ignored.  It is not a word any more, and BASIC reads one expression after another as a value and its format, so ECS after a path (or
+# alone) is a VARIABLE that nothing assigns: the compiler warns, and the program stops when it runs that line.
+case("27 Oct 26 (S.87 batch 3): OPENTEMP 'path' ECS - ECS is no longer a word, so it is read as a variable that is never assigned (the compiler says so and the line does not run)",
+     "opentemp 'zzq16tmp' ecs to f then null else null\nx = 1", None, has=["ECS is not assigned a value"])
+_refused("LOCATE(expr, array, f, v; position; order), the bracketed Pick form", "s = 'a':@fm:'b'\nlocate('b', s, 1; p) then null else null\nx = 1")
+_refused("EREPLACE() (a third name for CHANGE)", "x = ereplace('a-b', '-', '+')")
+_refused("SENTENCE() (a third way to read the command line)", "x = sentence()")
+_refused("SWAPMARKS() (it returned its argument)", "x = swapmarks('a')")
+_refused("TERMINFO.EX() (an alias of TERMINFO)", "x = terminfo.ex('cols')")
+_refused("@SYSTEM.SET (an alias of @SYSTEM.RETURN.CODE)", "x = @system.set")
 
 # ---- default argument values and DEFAULT.UNASS.ARGS ----------------------------------------------------------------
 aux("zzq16da", "subroutine zzq16da(r, a, b = 7, c = 'xyz', d = -2, e = @true) var.args\n"

@@ -198,7 +198,6 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    at.vars<-1> = "SIB"                 ; at.offsets<-1> = SYSCOM.PROC.IBUF:'.1'
    at.vars<-1> = "SOB"                 ; at.offsets<-1> = SYSCOM.PROC.OBUF:'.1'
    at.vars<-1> = "SYSTEM.RETURN.CODE"  ; at.offsets<-1> = SYSCOM.SYSTEM.RETURN.CODE
-   at.vars<-1> = "SYSTEM.SET"          ; at.offsets<-1> = SYSCOM.SYSTEM.RETURN.CODE
    at.vars<-1> = "SYS.BELL"            ; at.offsets<-1> = SYSCOM.BELL
    at.vars<-1> = "TIME"                ; at.offsets<-1> = -SYSCOM.CPROC.TIME
    at.vars<-1> = "TRIGGER.RETURN.CODE" ; at.offsets<-1> = SYSCOM.TRIGGER.RETURN.CODE

@@ -29,6 +29,8 @@
  *                ENCRYPT, DECRYPT - replace with SDENCRYTP, SDDECRYPT
  *                ENTER.PACKAGE, EXIT.PACKAGE, PACKAGE, TRACE
  * 06 Aug 24 mab remove PROCREAD op code, add SDEXT
+ * 27 Oct 26 dm  S.87 batch 3: ENTER (0xCFB3) and EREPLACE (0xCFFB) removed.  The table is indexed by position, so each
+ *                is an op_illegal row and the code stays reserved.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -540,7 +542,7 @@ _opc_(0xCFAF, OP_FCONTROL, "FCONTROL",   op_fcontrol,  OPCODE_BYTE,        -2)
 _opc_(0xCFB0, OP_GETPORT,  "GETPORT",    op_getport,   OPCODE_BYTE,         0)
 _opc_(0xCFB1, OP_SETPORT,  "SETPORT",    op_setport,   OPCODE_BYTE,        -1)
 _opc_(0xCFB2, OP_CCALL,    "CCALL",      op_ccall,     OPCODE_BYTE,        -1)
-_opc_(0xCFB3, OP_ENTER,    "ENTER",      op_enter,     OPCODE_BYTE,        -1)
+_opc_(0xCFB3, OP_CFB3,     "OPCFB3",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCFB4, OP_SETFLAGS, "SETFLAGS",   op_setflags,  TWO_BYTE_VALUE,      0)
 _opc_(0xCFB5, OP_GETMSG,   "GETMSG",     op_getmsg,    OPCODE_BYTE,         1)
 _opc_(0xCFB6, OP_CSVDQ,    "CSVDQ",      op_csvdq,     OPCODE_BYTE,        -1)
@@ -621,7 +623,7 @@ _opc_(0xCFF7, OP_SMUL,     "SMUL",       op_smul,      OPCODE_BYTE,        -1)
 _opc_(0xCFF8, OP_SDIV,     "SDIV",       op_sdiv,      OPCODE_BYTE,        -1)
 _opc_(0xCFF9, OP_SCMP,     "SCMP",       op_scmp,      OPCODE_BYTE,        -1)
 _opc_(0xCFFA, OP_REGEX,    "REGEX",      op_regex,     OPCODE_BYTE,        -1)
-_opc_(0xCFFB, OP_EREPLACE, "EREPLACE",   op_ereplace,  OPCODE_BYTE,        -4)
+_opc_(0xCFFB, OP_CFFB,     "OPCFFB",     op_illegal,   OPCODE_BYTE,         0)
 _opc_(0xCFFC, OP_FIX,      "FIX",        op_fix,       OPCODE_BYTE,        -2)
 _opc_(0xCFFD, OP_MATSTR,   "MATSTR",     op_matstr,    OPCODE_BYTE,         0)
 /* 13 Aug 26 Windows port - was OP_SDPYOBJ / op_sdpyobj, the embedded Python

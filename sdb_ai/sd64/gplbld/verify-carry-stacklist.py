@@ -9,6 +9,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 3: EXECUTE ... SETTING is refused now, so the row that used it says RETURNING.
 # 14 Oct 26 dm  Written for sheet 61.
 # END-HISTORY
 #
@@ -85,8 +86,8 @@ PROGS = {
              # STACKLIST
              "   select f1\n   execute 'CLEAR.SELECT':@fm:'SELECT zzsl2' capturing j stacklist\n"
              + DRAIN + "   crt 'S[':trim(ids):']'\n"
-             # STACKLIST first, then CAPTURING, and SETTING
-             "   select f1\n   execute 'CLEAR.SELECT':@fm:'SELECT zzsl2' stacklist capturing j setting st\n"
+             # STACKLIST first, then CAPTURING, and RETURNING (SETTING, its second spelling, was removed on 27 Oct 26)
+             "   select f1\n   execute 'CLEAR.SELECT':@fm:'SELECT zzsl2' stacklist capturing j returning st\n"
              + DRAIN + "   crt 'S2[':trim(ids):']'\n"
              # the remove pointer is part of the state
              "   select f1\n   readnext first.id else first.id = 'none'\n"

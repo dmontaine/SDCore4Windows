@@ -94,7 +94,6 @@ $include syscom.h
       case name = 'SOB'                ; expansion = @SOB
       case name = 'SYS.BELL'           ; expansion = @SYS.BELL
       case name = 'SYSTEM.RETURN.CODE' ; expansion = @SYSTEM.RETURN.CODE
-      case name = 'SYSTEM.SET'         ; expansion = @SYSTEM.SET
       case name = 'TERM.TYPE'          ; expansion = @TERM.TYPE
       case name = 'TIME'               ; expansion = @TIME
       case name = 'TRANSACTION.ID'     ; expansion = @TRANSACTION.ID

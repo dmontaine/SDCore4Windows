@@ -10,6 +10,7 @@
 # THIS tree (it must be empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 3: TERMINFO.EX (an alias of TERMINFO) was removed, with its two rows; the refusal is a row of sandbox-mode-q16.py.
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-1.
 # 15 Oct 26 dm  RMVD, REVREMOVE, GROUPSTORE and PARSE (the rest of Q-1), and TERMINFO.EX, TTYGET and TTYSET (Q-7).
 # END-HISTORY
@@ -333,10 +334,6 @@ case("VOCPATH with DICT in front, and with the second argument true, give the di
      "d1 = vocpath('DICT voc')\nd2 = vocpath('voc', @true)\nd3 = vocpath('voc', @false)\nd4 = vocpath('voc')\nx = (d1 # '') : (d1 = d2) : (d3 = d4) : (d1 # d4)", "1111")
 case("OSREAD without FROM is a compile error", "@RAW@   osread d 'x' then null\nend\n", None, lacks=["0 error(s)"])
 case("OSWRITE without TO is a compile error", "@RAW@   oswrite 'a' 'f'\nend\n", None, lacks=["0 error(s)"])
-case("TERMINFO.EX of a capability is what TERMINFO gives (SD holds one string for each, so there is one value)",
-     "x = (terminfo.ex('cols') = terminfo('cols')) : (terminfo.ex('bel') = terminfo('bel')) : (terminfo.ex('kcuu1') = terminfo('kcuu1'))"
-     " : (terminfo.ex('lines') = terminfo('lines')) : '/' : (terminfo.ex('bel') = char(7)) : (dcount(terminfo.ex('bel'), @vm) = 1)", "1111/11")
-case("TERMINFO.EX of a name that is not a capability is a null string", "x = terminfo.ex('zzzz') : '/' : len(terminfo.ex('zzzz'))", "/0")
 case("TTYGET gives eleven fields", "t = ttyget()\nx = dcount(t, @fm)", "11")
 case("TTYGET: the break and case inversion fields are 0 or 1", "t = ttyget()\nx = (t<1> = 0 or t<1> = 1) : '/' : (t<2> = 0 or t<2> = 1) : '/' : (t<3> > 0)", "1/1/1")
 case("TTYSET puts back what TTYGET gave", "t1 = ttyget()\nttyset t1\nt2 = ttyget()\nx = (t1 = t2)", "1")

@@ -8,6 +8,8 @@
 # or absent); without it <dir> must already be built.  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 3: PASSLIST with no variable (a clause that did nothing) is refused now, so the PASSLIST row passes a list variable (FORMLISTV ... TO pl,
+#               PASSLIST pl).  This suite goes with the mode itself in a later batch.
 # 14 Oct 26 dm  New.  bcomp (st.execute.options) emits CLEARSELECT 0 before the EXECUTE opcode under the mode, unless a
 #               PASSLIST clause (with or without a variable) was given.
 # END-HISTORY
@@ -78,7 +80,7 @@ def main():
         probe: "   crt 'ACTIVE=':selectinfo(0, 1)\nend\n",
         "zzxoff" + RUN: "   formlist 'x1':@fm:'x2' to 0\n   crt 'TAG=OFF'\n   execute 'RUN bp %s'\nend\n" % probe,
         "zzxon" + RUN: "$mode execute.clearlist\n   formlist 'x1':@fm:'x2' to 0\n   crt 'TAG=ON'\n   execute 'RUN bp %s'\nend\n" % probe,
-        "zzxpass" + RUN: "$mode execute.clearlist\n   formlist 'x1':@fm:'x2' to 0\n   crt 'TAG=PASS'\n   execute 'RUN bp %s' passlist\nend\n" % probe,
+        "zzxpass" + RUN: "$mode execute.clearlist\n   formlistv 'x1':@fm:'x2' to pl\n   crt 'TAG=PASS'\n   execute 'RUN bp %s' passlist pl\nend\n" % probe,
         "zzxcap" + RUN: ("$mode execute.clearlist\n   formlist 'x1':@fm:'x2' to 0\n   crt 'TAG=CAP'\n"
                          "   execute 'RUN bp %s' capturing out\n   crt 'CAPTURED ':trim(out)\nend\n" % probe),
     }

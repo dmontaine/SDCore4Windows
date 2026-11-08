@@ -2030,7 +2030,7 @@ check.debugable:
    ok = @false
    begin case
       case s = ''
-      case c = '*' or c = '!' or s = 'REM' or s = 'REMARK'
+      case c = '*' or c = '!' or s = 'REM'
       case s = '$'
       case s = 'PROGRAM' or s = 'SUBROUTINE' or s = 'FUNCTION'
       case s = 'EQU' or s = 'EQUATE'

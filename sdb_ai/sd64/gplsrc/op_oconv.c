@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 3: the conversions MCD, MCDX, MCX and MCXD (second spellings of MX) and conv_dtx() / conv_xtd() are gone.
  * 18 Oct 26 dm  The XE{;name} conversion: decrypt with a key in the process's key ring (xe_oconv(), sd_keyring.c).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -43,10 +44,8 @@
  *
  *    L[n[,m]]  String length checks
  *
- *    MCD[X]    Convert decimal to hexadecimal
  *    MCL       Convert to lower case
  *    MCU       Convert to upper case
- *    MCX[D]    Convert hexadecimal to decimal
  *
  *    MD        Masked decimal conversion
  *    ML        Masked decimal conversion, left justified
@@ -126,7 +125,6 @@ int32_t tens[] = {1,      10,      100,      1000,      10000,
 void op_extract(void);
 void op_substr(void);
 void op_substre(void);
-void op_xtd(void);
 
 void k_trace(void);
 STRING_CHUNK* b64encode(STRING_CHUNK* str);
@@ -134,8 +132,6 @@ int32_t xe_oconv(char* p); /* sd_keyring.c */
 
 /* Public local functions */
 int32_t concatenation_conversion(char* src_ptr);
-int32_t conv_dtx(char* p);
-int32_t conv_xtd(char* p);
 int32_t group_conversion(char* p);
 int32_t mc_conversion(char* p);
 int32_t pattern_match_conversion(char* src_ptr);
@@ -689,27 +685,14 @@ void op_oconv() {
           case 'C': /* Case conversion (plus oddments) */
             c = *(++p);
             switch (UpperCase(c)) {
-              case 'D': /* Decimal to hex */
-                c = UpperCase(*(++p));
-                if ((c != '\0') && (c != 'X'))
-                  goto bad_conv_string;
-                if (c == 'X')
-                  p++;
-                process.status = conv_dtx(p);
-                break;
+              case 'D': /* MCD, MCDX, MCX and MCXD (second spellings of MX) were removed on 27 Oct 26: invalid codes now */
+              case 'X':
+                goto bad_conv_string;
               case 'L':
                 set_case(FALSE);
                 break;
               case 'U':
                 set_case(TRUE);
-                break;
-              case 'X': /* Hex to decimal */
-                c = UpperCase(*(++p));
-                if ((c != '\0') && (c != 'D'))
-                  goto bad_conv_string;
-                if (c == 'D')
-                  p++;
-                process.status = conv_xtd(p);
                 break;
               default:
                 mc_conversion(p);
@@ -2809,41 +2792,6 @@ void op_setnls() {
 
   k_dismiss();
   k_pop(1);
-}
-
-/* ======================================================================
-   conv_dtx()  -  Convert decimal to hexadecimal                          */
-
-int32_t conv_dtx(char* p) {
-  DESCRIPTOR* descr;
-  char s[32 + 1];
-
-  if (*p != '\0')
-    return 2;
-
-  descr = e_stack - 1;
-
-  /* 0227  Return null for null input string */
-
-  if ((descr->type == STRING) && (descr->data.str.saddr == NULL)) {
-    return 0;
-  }
-
-  sprintf(s, "%u", GetUnsignedInt(descr)); /* 0291 */
-  k_put_c_string(s, descr);
-
-  return 0;
-}
-
-/* ======================================================================
-   conv_xtd()  -  Convert hexadecimal to decimal                          */
-
-int32_t conv_xtd(char* p) {
-  if (*p != '\0')
-    return 2;
-
-  op_xtd();
-  return 0;
 }
 
 /* ======================================================================

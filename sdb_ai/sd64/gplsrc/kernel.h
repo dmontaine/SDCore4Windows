@@ -131,7 +131,7 @@ struct PROGRAM {
   int32_t itrap_stub;   /* ... the offset in the object code of the stub that jumps to the label; 0 for none */
   int16_t itrap_hit;    /* ... set by _INPUTAT to the label number when a trapped character was typed, 0 for none */
   u_char str_ovl;    /* $MODE CHANGE.NO.OVERLAP / COUNT.OVERLAP / INDEX.OVERLAP (15 Oct 26, QM4 gaps Q-16): SO_* bits set by OP_STROVL before the call */
-#define SO_CHANGE_NO_OVERLAP 0x01 /* CHANGE, EREPLACE and SWAP skip a matched occurrence whole instead of one byte on */
+#define SO_CHANGE_NO_OVERLAP 0x01 /* CHANGE and SWAP skip a matched occurrence whole instead of one byte on */
 #define SO_COUNT_OVERLAP 0x02     /* COUNT and COUNTS find overlapping occurrences */
 #define SO_INDEX_OVERLAP 0x04     /* INDEX and INDEXS find overlapping occurrences */
   bool has_stacked;  /* EXECUTE ... STACKLIST: list 0 as it was is held here until the command returns (openQM 61) */

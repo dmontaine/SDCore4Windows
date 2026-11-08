@@ -1233,7 +1233,7 @@ void op_csvdelim() {
    op_strovl()  -  STROVL  -  $MODE CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP   (15 Oct 26, QM4 gaps Q-16)
 
    Stack:  mask  ->  (nothing).  The compiler pushes the SO_ bits that are in force at the call it is about to emit and
-   follows them with this opcode, so the argument list of CHANGE, SWAP, EREPLACE, COUNT, COUNTS, INDEX or INDEXS is
+   follows them with this opcode, so the argument list of CHANGE, SWAP, COUNT, COUNTS, INDEX or INDEXS is
    untouched under the mask.  The bits live in the program's own frame (init_program() clears them for a called program
    and the caller's copy comes back with its frame), so a subroutine compiled without the modes is not affected by its
    caller's. */

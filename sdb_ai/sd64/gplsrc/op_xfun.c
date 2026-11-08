@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): XF_SWAPMARKS (28), which returned its argument, is gone; the number stays reserved.
  * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): XF_SDSALT, XF_SDKEY, XF_SDRANDKEY: encryption layer 2, for any program
  *               (sd_encrypt_sodium.c).  The first XFUN functions that take no arguments (bcomp's in.xfun skips get.args for a row that
  *               writes none).
@@ -112,7 +113,7 @@
 #define XF_SIGNAL 25  /* SIGNAL(user.no), QM4 gaps Q-5 */
 #define XF_DIGEST 26  /* DIGEST(string, is.file, mode), QM4 gaps Q-13 */
 #define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
-#define XF_SWAPMARKS 28 /* SWAPMARKS(string): the string as it is - SD has no ECS mode, where the marks would be exchanged; sheet 238 */
+/* 28 was SWAPMARKS(string), which returned its argument (SD has no ECS mode); removed on 27 Oct 26 (S.87 batch 3), the number stays reserved */
 #define XF_FCONTROL 29  /* FCONTROL(fvar, action, qualifier): the public one, openQM's numbers; pub_fcontrol() in dh_misc.c */
 /* 31 is Linux's XF_OSPATH (OSPATH for any program, behind the S.63 OS-access gate): not carried, and the number stays free. */
 #define XF_GET 30      /* GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}: op_get_device() in op_seqio.c (QM4 Fixes item 583) */
@@ -300,10 +301,6 @@ void op_xfun() {
       break;
     case XF_SELSOCKET:
       x_select_socket();
-      break;
-    case XF_SWAPMARKS:
-      /* openQM's SWAPMARKS exchanges the mark characters with accented letters on an ECS system and, since release 3.0-2,
-         returns the data unchanged on any other.  SD has no ECS mode, so the argument is the result */
       break;
     case XF_FCONTROL:
       pub_fcontrol();

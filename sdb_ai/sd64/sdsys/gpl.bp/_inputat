@@ -41,7 +41,7 @@ subroutine inputat(x, y, string, max.input, mask, timeout, flags)
 *
 * Flags:
 *   IN$DISPLAY         Display existing field value (first colon used)
-*   IN$ERR.DISPLAYED   Error message (PRINTERR) is displayed
+*   IN$ERR.DISPLAYED   Error message (INPUTERR) is displayed
 *   IN$FIELD.MODE      Doing INPUTFIELD
 *   IN$NOLF            Suppress LF after CR (trailing colon used)
 *   IN$NOCRLF          Suppress automatic CR/LF (underscore used)
@@ -133,7 +133,7 @@ $include err.h
    * Perform input
 
    if len(data.queue) then       ;* Get text from DATA queue
-      if bitand(flags, IN$ERR.DISPLAYED) then printerr ''
+      if bitand(flags, IN$ERR.DISPLAYED) then inputerr ''
 
       string = field(data.queue, @im, 1, 1)
       if uppercase then string = upcase(string)
@@ -270,7 +270,7 @@ $include err.h
                case (n >= 128) and (n < 251)  ;* Some other special key but
                                                * not a mark character
                   if field.mode then
-                     if bitand(flags, IN$ERR.DISPLAYED) then printerr ''
+                     if bitand(flags, IN$ERR.DISPLAYED) then inputerr ''
                      set.status n
                      exit
                   end
@@ -425,7 +425,7 @@ return.key:
    end
 
    if field.mode then set.status 0
-   if bitand(flags, IN$ERR.DISPLAYED) then printerr ''
+   if bitand(flags, IN$ERR.DISPLAYED) then inputerr ''
 
    return
 
