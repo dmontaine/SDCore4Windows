@@ -406,7 +406,8 @@ Write-Output '=== PRE_RELEASE 13: QSELECT ends with the list number ============
 # and a preceding SELECT would print a "selected to select list" line of its own
 # - which is the wording under test.  The "*" form is self-contained and leaves
 # exactly one such line in the transcript.
-Show-SD 'entry 13' @('QSELECT VOC * SAVING 3', 'CLEARSELECT')
+# 8 Nov 26: CLEAR.SELECT - the second name CLEARSELECT went with S.87 batch 6 (Linux 36daf810).
+Show-SD 'entry 13' @('QSELECT VOC * SAVING 3', 'CLEAR.SELECT')
 $e13 = $lastSD
 
 Note 'entry 13: the message ends with a list NUMBER' $true `
