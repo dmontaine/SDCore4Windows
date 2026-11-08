@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux bfca310a (1 Nov 26, its cproc hunk only): the hyphen form is back (owner: "restore the hyphen option"): an unknown
+*           verb is retried with its hyphens changed to dots, lower case then upper case.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  A program file named in RUN is always name.out (the file,part form of the name is not split), and F4 of a file's VOC record is ignored.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION STACKED.ACCOUNT is gone, with revert.account and the stk.* variables that held the starting account: an EXECUTEd LOGTO stays in the account it went to.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VOC record type M (menu) and process.menu are gone; the home screen is the menu system.
@@ -1690,8 +1692,16 @@ proc.sentence.common:      ;* (Note: return to here from int.if)
          * Try in lowercase
          read voc.rec from voc, downcase(verb) else
             * Try in uppercase
-* 27 Oct 26 dm - S.87: THE HYPHEN FORM (clear-select for clear.select) IS REMOVED.  It was the Pick spelling of a dotted verb (survey C-013); nothing in SD types a hyphenated verb.
-            read voc.rec from voc, upcase(verb) else null
+* 27 Oct 26 dm - S.87 removed the hyphen form (survey C-013, which said nothing in SD typed a hyphenated verb; the installer did, create-account).
+* 1 Nov 26 dm - RESTORED (owner, 1 Nov 26: "restore the hyphen option"): a verb typed with hyphens where the name has dots (clear-select, create-account) is found
+*   as the dotted verb, last, after the three case attempts, in lower case first since the shipped ids are lower case.
+            read voc.rec from voc, upcase(verb) else
+               * and in lowercase with hyphens changed to dots
+               read voc.rec from voc, change(downcase(verb), '-', '.') else
+                  * and in uppercase with hyphens changed to dots
+                  read voc.rec from voc, change(upcase(verb), '-', '.') else null
+               end
+            end
          end
       end
 
