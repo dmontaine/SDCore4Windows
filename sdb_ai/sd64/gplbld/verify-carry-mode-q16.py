@@ -138,12 +138,18 @@ case("27 Oct 26 (S.87 batch 3) CONTROL: INPUT ... WAITING compiles with no error
      "@RAW@   if @false then\n      input y waiting 5\n   end\nend\n", None, has=["0 error(s)"])
 case("27 Oct 26 (S.87 batch 3) CONTROL: OCONV MX gives hexadecimal and STATUS 0", "y = oconv(255, 'MX')\nx = status() : '/' : y", "0/FF")
 case("27 Oct 26 (S.87 batch 3) CONTROL: ICONV MX gives the number and STATUS 0", "y = iconv('FF', 'MX')\nx = status() : '/' : y", "0/255")
-for _mc in ("MCD", "MCDX", "MCX", "MCXD"):
+for _mc in ("MCD", "MCX", "MCXD"):
     case("27 Oct 26 (S.87 batch 3): OCONV %s (a second spelling of MX) was removed: an invalid conversion, STATUS 2" % _mc,
          "y = oconv(255, '%s')\nx = status()" % _mc, "2")
 for _mc in ("MCD", "MCX"):
     case("27 Oct 26 (S.87 batch 3): ICONV %s (a second spelling of MX) was removed: an invalid conversion, STATUS 2" % _mc,
          "y = iconv('FF', '%s')\nx = status()" % _mc, "2")
+# 3 Nov 26: MCDX came back as MX for programs moved from openQM (owner: "Restore MCDX only"); lower case, 4096 and a text that is not hexadecimal too
+case("3 Nov 26: OCONV MCDX is MX again: hexadecimal and STATUS 0, in either case of letters",
+     "y = oconv(255, 'MCDX') : '/' : oconv(4096, 'mcdx')\nx = status() : '/' : y", "0/FF/1000")
+case("3 Nov 26: ICONV MCDX is MX again: the number and STATUS 0", "y = iconv('FF', 'MCDX')\nx = status() : '/' : y", "0/255")
+case("3 Nov 26: ICONV MCDX of a text that is not hexadecimal fails as ICONV MX does (the same STATUS)",
+     "a = iconv('ZZ', 'MX') ; sa = status()\nb = iconv('ZZ', 'MCDX') ; sb = status()\nx = (sa = sb) : '/' : (sa # 0)", "1/1")
 
 
 def _refused(label, body):

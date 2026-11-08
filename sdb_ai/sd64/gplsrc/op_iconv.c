@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 9b6fe5e1 (3 Nov 26): MCDX is back, as a second name of MX (owner: "Restore MCDX only", for programs moved from
+ *           openQM); MCD, MCX and MCXD stay invalid.
  * 27 Oct 26 dm  S.87 batch 7: OPTION PICK.ML.CONV.MASK is gone; a left bracket in an ML / MR conversion is a negative value action, as it was with the option off.
  * 27 Oct 26 dm  S.87 batch 3: the conversions MCD, MCDX, MCX and MCXD (second spellings of MX) are gone.
  * 18 Oct 26 dm  The XE{;name} conversion: encrypt with a key in the process's key ring (xe_iconv(), sd_keyring.c).
@@ -217,7 +219,12 @@ void op_iconv() {
 
           case 'C': /* Case conversion (plus oddments) */
             switch (UpperCase(*(++p))) {
-              case 'D': /* MCD, MCDX, MCX and MCXD (second spellings of MX) were removed on 27 Oct 26: invalid codes now */
+              case 'D': /* MCDX is MX, for programs moved from openQM (3 Nov 26); MCD, MCX and MCXD were removed on 27 Oct 26 */
+                if (UpperCase(*(p + 1)) == 'X') {
+                  process.status = radix_conversion(p + 2, 16);
+                  break;
+                }
+                goto bad_conv_string;
               case 'X':
                 goto bad_conv_string;
               case 'L':
