@@ -1334,20 +1334,6 @@ void op_kernel() {
       ts_terminate();
     } break;
 
-    case K_FORM_QUEUE: {
-      int32_t fq_unit, fq_queue;
-
-      GetInt(descr);
-      fq_unit = descr->data.value / 1000;
-      fq_queue = descr->data.value % 1000;
-      result.data.value = 0;
-      if ((descr->data.value >= 0) && (fq_unit <= HIGH_PRINT_UNIT)) {
-        form_queue_of[fq_unit] = (int16_t)fq_queue;
-        last_form_queue = (int16_t)fq_queue;
-        result.data.value = 1;
-      }
-    } break;
-
     case K_GROUP_PHANTOM: {
       /* PHANTOM GROUP: the phantom with this user number, if it is one this process started, is to be logged out when this
          process ends (ReleaseLicence).  Returns 1 if it was marked, 0 if not. */

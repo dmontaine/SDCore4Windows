@@ -663,10 +663,6 @@ void op_system() {
       }
       break;
 
-    case 1066: /* The last form queue number SP.ASSIGN assigned to any print unit; -1 if it has not been used */
-      descr->data.value = last_form_queue;
-      break;
-
     case 1053: /* Highest user number that can be assigned: the greater of USERPOOL and the licence's users */
       descr->data.value = sysseg->hi_user_no;
       break;

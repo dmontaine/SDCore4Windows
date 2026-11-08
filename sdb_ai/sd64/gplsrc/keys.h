@@ -435,10 +435,7 @@
                        logged out when this process ends.  1 if it was marked, 0 if the number is not one of this process's
                        phantoms.  SYSTEM(1073) lists the grouped ones; K_USERS reports the mark as USR_GROUPED in the flags. */
 #define K_GROUP_PHANTOM      110
-/* 15 Oct 26 dm - QM4 gaps Q-9 (SP.ASSIGN and SET.QUEUE).
-     K_FORM_QUEUE      unit * 1000 + queue: SP.ASSIGN has assigned form queue (0 to 999) to print unit (0 to 255).  GETPU(PU$FORM.QUEUE,
-                       unit) gives it back, SYSTEM(1066) gives the last one given to any unit.  Returns 1, or 0 for numbers out of range. */
-#define K_FORM_QUEUE         111
+/* 111 was K_FORM_QUEUE (SP.ASSIGN's form queues, removed 27 Oct 26, S.87 batch 14): the number stays reserved. */
 /* 15 Oct 26 dm - QM4 gaps Q-8 (FSTAT.USER).
      K_USER_STATS      the file activity counts of one user (the number) or of every user (0): a field for each, the user number,
                        then opens, reads, writes, deletes, clears, selects, AK reads, AK writes, AK deletes, splits, merges and
@@ -699,7 +696,7 @@
 #define PU_FILE_NAME          1018
 #define PU_SEQNO              1019
 /* 12 Oct 26 dm - the openQM 4 manual's GETPU() keys 1020 to 1025 (read only) */
-#define PU_FORM_QUEUE         1020  /* Last form queue assigned by SP.ASSIGN: SD has none, 0 */
+/* 1020 was PU_FORM_QUEUE (form queues, removed 27 Oct 26, S.87 batch 14): the number stays reserved. */
 #define PU_FORM_FEED          1021  /* The form feed string of this print unit */
 #define PU_ENCODING           1022  /* Character encoding: SD is English only, null */
 #define PU_FONT               1023  /* Font name: not used, null */

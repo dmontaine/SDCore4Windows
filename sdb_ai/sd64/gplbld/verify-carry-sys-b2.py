@@ -127,9 +127,9 @@ CASES += [
     ("...fields 13, 14 and 34 are the same for the access", FILES + "fi = fileinfo(f, FL$STATUS)\nlocal = (fi<14> - 732) * 86400 + fi<13>\n"
      "x = abs(local - (fi<34> + system(1019))) <= 1", r"1"),
     ("...a directory file's array says it is one (field 21 is 4)", FILES + "fi = fileinfo(d, FL$STATUS)\nx = fi<21>:'|':dcount(fi, @fm)", r"4\|35"),
-    ("1020-1025 (18): GETPU's form queue is 0 (SD has no SP.ASSIGN), the form feed is CR FF, the encoding and font are null, the font size 0",
-     "$include keys.h\nx = (getpu(PU$FORM.QUEUE, 0) = 0):(getpu(PU$FORM.FEED, 0) = char(13):char(12)):'[':getpu(PU$ENCODING, 0):getpu(PU$FONT, 0):']':getpu(PU$FONT.SIZE, 0)",
-     r"11\[\]0"),
+    ("1021-1025 (18): GETPU's form feed is CR FF, the encoding and font are null, the font size 0 (1020, the form queue, was removed 27 Oct 26)",
+     "$include keys.h\nx = (getpu(PU$FORM.FEED, 0) = char(13):char(12)):'[':getpu(PU$ENCODING, 0):getpu(PU$FONT, 0):']':getpu(PU$FONT.SIZE, 0)",
+     r"1\[\]0"),
     ("1024 (214): GETPU(PU$PATHNAME) is the file the print unit is writing while it is open, and null once it is closed",
      "$include keys.h\nexecute 'SETPTR 0,80,60,0,0,3,AS zzb2job,BRIEF' capturing j\nprinter on\nprint 'hello'\np = getpu(PU$PATHNAME, 0)\n"
      "printer close\nx = (index(p, 'zzb2job', 1) > 0):'|':getpu(PU$PATHNAME, 0)", r"1\|"),

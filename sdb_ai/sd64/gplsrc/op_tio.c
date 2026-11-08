@@ -1813,10 +1813,6 @@ void op_getpu() {
         break;
 
       /* 12 Oct 26: keys 1020 to 1025 of the openQM 4 manual */
-      case PU_FORM_QUEUE: /* The queue the last SP.ASSIGN for this unit named; 0 if there has been none */
-        result.data.value = ((pu->unit >= 0) && (pu->unit <= HIGH_PRINT_UNIT)) ? form_queue_of[pu->unit] : 0;
-        break;
-
       case PU_FONT_SIZE: /* GDI mode only */
         result.data.value = 0;
         break;

@@ -533,11 +533,10 @@ try {
     # the re-entry runs them through the SDSYS seat, whose session already IS
     # SDSYS, and 64 refuses the LOGTO outright (10002).  The rest of each list is
     # unchanged, so the judging below reads the same commands' output.
+    # 8 Nov 26: section 6's three legs (copypct, unknown, copyp) went with COPYP
+    # itself, S.87 batch 14 (Linux 904fadd3).
     $sdsysLegs = [ordered]@{
         sysct   = @($sysPairs | ForEach-Object { 'CT VOC ' + $_.U }) + @(Get-LikeQuery @($sysPairs | ForEach-Object { $_.L }))
-        copypct = @('CT VOC COPYP')
-        unknown = @('ZZNOSUCHVERB')
-        copyp   = @('COPYP')
     }
     Invoke-SDElevatedLegs $sdsysLegs          # fills $script:sdsysOut
     $ctSys = $script:sdsysOut['sysct']
@@ -671,12 +670,15 @@ end
     # tree instead.  What this check IS good for is CREATEA's rename: if the
     # directory were still $HOLD and the VOC said $hold, or either were missing,
     # nothing would arrive.
+    # 8 Nov 26 (S.87, Linux 36daf810 and 904fadd3): the record listed is COPY, as
+    # COPYP is gone; and SP.CLOSE, also gone, is not sent - it only cleared print
+    # unit 0's keep-open flag, which nothing here set, so the job on unit 1 closed
+    # at the end of the LIST either way.
     $spool = Invoke-SD @(('SETPTR 1,132,60,0,0,3,AS ' + $holdRec + ',BRIEF'),
-                         'LIST VOC COPYP LPTR 1 NO.PAGE',
-                         'SP.CLOSE 1')
+                         'LIST VOC COPY LPTR 1 NO.PAGE')
     Note 'printing to the hold file wrote into $hold' $true `
          (Test-Path -LiteralPath (Join-Path $acctDir ('$hold\' + $holdRec)))
-    Write-Output '  --- SETPTR/LIST/SP.CLOSE said: ---'
+    Write-Output '  --- SETPTR/LIST said: ---'
     Write-Output $spool
 
     Write-Output '  --- LISTF, for the record: ---'
@@ -721,9 +723,9 @@ end
             Where-Object { $_.Name -like ($nextRec + '_*') } |
             Remove-Item -Force -ErrorAction SilentlyContinue
 
+        # 8 Nov 26: COPY, not COPYP, and no SP.CLOSE - see section 4.
         $nxt = Invoke-SD @(('SETPTR 1,132,60,0,0,3,AS NEXT ' + $nextRec + ',BRIEF'),
-                           'LIST VOC COPYP LPTR 1 NO.PAGE',
-                           'SP.CLOSE 1')
+                           'LIST VOC COPY LPTR 1 NO.PAGE')
 
         $suffixed = @(Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
                       Where-Object { $_.Name -like ($nextRec + '_*') } |
@@ -739,7 +741,7 @@ end
              @($suffixed | Where-Object { $_ -match $rxOk }).Count
         Note 'and did not fall back to the unnumbered suffix' 0 `
              @($suffixed | Where-Object { $_ -ceq ($nextRec + '_0') }).Count
-        Write-Output '  --- SETPTR/LIST/SP.CLOSE said: ---'
+        Write-Output '  --- SETPTR/LIST said: ---'
         Write-Output $nxt
 
         Get-ChildItem -LiteralPath $holdDir[0].FullName -Force |
@@ -762,30 +764,10 @@ end
     $null = Invoke-SD @('COUNT VOC')
     Note 'the stack is saved with the shipped lower-case id' $true (Test-Path -LiteralPath $stkDir)
 
-    Write-Output '=== 6. COPYP, which rides this cycle and is unrelated ===================='
-    Write-Output '  VOC_TEMPLATE/COPYP field 1 held the description where the type code'
-    Write-Output '  belongs.  IT WAS NOT BROKEN BY IT - measured on the pre-change 18:54:10'
-    Write-Output '  install, COPYP already answered "File name required", because CPROC:1436'
-    Write-Output '  tests only voc.entry.type[1,1] and "Verb..." starts with V.  So the'
-    Write-Output '  behaviour checks below are CONTROLS against regression, not a repair.'
-    Write-Output '  They run as SDSYS, because VOC_TEMPLATE becomes SDSYS s own VOC - so these'
-    Write-Output '  three legs ran in section 3 s elevated re-entry, through the SDSYS seat.'
-
-    $ctc = $script:sdsysOut['copypct']
-    Note 'CT VOC COPYP shows a bare V type code' $true ($ctc -match '(?m)^\s*1:\s*V\s*$')
-    Note 'and no longer the description text'    $false ($ctc -match 'Verb for Pick style COPY')
-    Write-Output '  --- CT VOC COPYP said: ---'
-    Write-Output $ctc
-
-    # Relative, not against a hardcoded message: COPYP must not answer the way an
-    # unknown verb does, and must answer the way it did before the change.
-    $unknown = $script:sdsysOut['unknown']
-    $copyp   = $script:sdsysOut['copyp']
-    # Two empty answers would be "equal" and score the row below as a PASS
-    # having measured nothing; refuse that first.
-    Note 'COPYP and the unknown-verb control both answered' $true ($copyp -ne '' -and $unknown -ne '')
-    Note 'COPYP answers differently from an unknown verb' $false ($copyp -eq $unknown)
-    Note 'COPYP still reaches $COPYP itself' $true ($copyp -match 'File name required')
+    Write-Output '=== 6. COPYP - RETIRED 8 Nov 26 ============================================'
+    Write-Output '  COPYP, whose VOC_TEMPLATE record this section checked, was removed with'
+    Write-Output '  S.87 batch 14 (Linux 904fadd3).  Section 7 still measures the rule it'
+    Write-Output '  stood for, a descriptive type code, on a record it builds itself.'
 
     # -----------------------------------------------------------------------
     Write-Output ''
@@ -810,7 +792,7 @@ end
    open 'VOC' to voc.f else stop
    rec = 'Verb with a description where the bare code usually goes'
    rec<2> = 'CA'
-   rec<3> = '`$COPYP'
+   rec<3> = '`$listi'
    write rec to voc.f, 'ZZDESCV'
    print 'WROTE=OK'
 end
@@ -828,8 +810,9 @@ end
             Note 'the descriptive VOC record was written' $true $true
 
             # THE MEASUREMENT.  If a descriptive type code did NOT dispatch, this
-            # would answer the way an unknown verb does.  $COPYP with no argument
-            # says "File name required", which only a dispatched verb can produce.
+            # would answer the way an unknown verb does.  $listi (LIST.INDEX) with
+            # no argument says "File name required" (2102), which only a dispatched
+            # verb can produce.  8 Nov 26: it was $COPYP, removed with S.87 batch 14.
             $descOut    = Invoke-SD @('ZZDESCV')
             $unknownOut = Invoke-SD @('ZZNOSUCHVERBATALL')
             Note 'a descriptive type code still dispatches' $true `
@@ -874,7 +857,7 @@ end
    open 'VOC' to voc.f else stop
    rec = 'V'
    rec<2> = 'CA'
-   rec<3> = '$COPYP'
+   rec<3> = '$listi'
    write rec to voc.f, 'zzprobev'
 
    k = ''
@@ -902,7 +885,8 @@ end
         } else {
             Note 'the two lower-case probe records were written' $true $true
 
-            # THE VERB.  $COPYP with no argument says "File name required", which
+            # THE VERB.  $listi (LIST.INDEX; $COPYP until 8 Nov 26, removed with S.87
+            # batch 14) with no argument says "File name required", which
             # only a dispatched verb can produce, and an unknown verb says "is
             # not in your VOC" - two different answers, so this cannot pass by
             # accident.  The id is zzprobev and the name typed is ZZPROBEV.
@@ -926,8 +910,8 @@ end
             # suppresses the "n record(s) listed" line.  Typed as ZZPROBEK it can
             # only take effect if the keyword read folded downwards; if it did
             # not, QPROC treats the token as a RECORD ID instead and says so.
-            $kOn  = Invoke-SD @('LIST VOC COPYP NO.PAGE')
-            $kOff = Invoke-SD @('LIST VOC COPYP ZZPROBEK NO.PAGE')
+            $kOn  = Invoke-SD @('LIST VOC COPY NO.PAGE')
+            $kOff = Invoke-SD @('LIST VOC COPY ZZPROBEK NO.PAGE')
             Note 'without the keyword, the count line is printed' $true `
                  ($kOn  -match 'record\(s\) listed')
             Note 'a lower-case KEYWORD id works typed UPPER'      $false `

@@ -2,7 +2,7 @@
 #
 # sandbox-q4.py - QM4 gaps, the 15 Oct 26 third sitting: BLOCK.PRINT / BLOCK.TERM, FILE.STAT, BSCAN / ROOT / KEY,
 #                 SELECTLEFTV / SELECTRIGHTV, DISABLE.INDEX, SYSTEM(1071), a report closing printer 0, PHANTOM GROUP
-#                 (SYSTEM(1073), the G in LISTU), @PSTAT, SET.QUEUE / SP.ASSIGN and FSTAT.USER.  No install, no sudo.
+#                 (SYSTEM(1073), the G in LISTU), @PSTAT and FSTAT.USER (SET.QUEUE / SP.ASSIGN were removed 27 Oct 26).  No install, no sudo.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-q4.py <dir> [--build]
 #
@@ -24,7 +24,7 @@
 #   B  FILE.STAT against FILEINFO (modulus, sizes, record count), the flags, a directory file, a name, a select list, DICT
 #   C  an index of known values (BSCAN, ROOT and KEY were removed 27 Oct 26: what is left is its setup and the controls that KEY, ROOT and BSCAN are ordinary names); D SELECTLEFTV / SELECTRIGHTV; E DISABLE.INDEX (updates, query, rebuild);
 #   F  (SWAPMARKS, removed 27 Oct 26); G SYSTEM(1071) against STATUS; H QUERY.MERGE.PRINT read from the print job; I PHANTOM GROUP; J @PSTAT;
-#   K  SET.QUEUE / SP.ASSIGN; L  FSTAT.USER
+#   K  (removed: SET.QUEUE / SP.ASSIGN); L  FSTAT.USER
 
 import importlib.util
 import os
@@ -159,14 +159,6 @@ USER_PROGS = {
     "zzps": ("   @pstat = 'app status 42 of 90':@vm:'then more':@fm:'and a field mark'\n   crt 'PS[':@userno:']'\n   sleep 25\n   crt 'PSDONE'\nend\n"),
     "zzps0": ("   crt 'PS0[':@userno:']'\n   sleep 25\n   crt 'PS0DONE'\nend\n"),
     "zzps1": ("   @pstat = 77\n   crt 'PS1[':@userno:']'\n   sleep 25\n   crt 'PS1DONE'\nend\n"),
-    # K: SET.QUEUE and SP.ASSIGN.  zzfq says what the print units hold; zzfq2 prints a line through unit 0 and reads the hold record
-    "zzfq": ("$include keys.h\n   u = field(@sentence, ' ', 4) + 0\n"
-             "   crt 'U[':u:'][':getpu(PU$MODE, u):'][':getpu(PU$WIDTH, u):'][':getpu(PU$LENGTH, u):'][':getpu(PU$TOPMARGIN, u):'][':"
-             "getpu(PU$BOTMARGIN, u):'][':getpu(PU$COPIES, u):'][':getpu(PU$FORM.QUEUE, u):'][':system(1066):']'\n"
-             "end\n"),
-    "zzfq2": ("   printer on\n   print 'form queue line'\n   printer close\n"
-              "   open '$hold' to h else stop 'no hold'\n   read r from h, field(@sentence, ' ', 4) else r = ''\n"
-              "   crt 'HOLD[':(index(r, 'form queue line', 1) > 0):']'\nend\n"),
     # L: FSTAT.USER.  zzfu does 100 writes, 50 reads and 7 deletes between two reports on itself and two on the idle session whose
     # user number is its argument; zzfui is that idle session
     "zzfu": ("   open 'zzfuf' to f else stop 'no file'\n   idle = field(@sentence, ' ', 4)\n"
@@ -457,51 +449,6 @@ def main():
             row("J2: @PSTAT set to a number shows the number", has(on, r"^\s+77$"), repr(on))
         for l in lv.values():
             l.kill()
-
-        say("\n--- K. SET.QUEUE and SP.ASSIGN ---------------------------------------------------------------------------------")
-        out = q3.adm(["RUN bp zzfq 0"])
-        first_out = out
-        row("K0: before any SP.ASSIGN print unit 0 has form queue 0 and SYSTEM(1066) is -1",
-            tag(out, "U") and tag(out, "U")[0].endswith("][0][-1"), repr(out))
-        out = q3.adm(["SET.QUEUE 3,80,66,3,3,3,AS formjob3", "SET.QUEUE 7,90,60,0,2,1,AS q7job,COPIES 2", "SET.QUEUE 3", "SET.QUEUE DISPLAY"])
-        row("K1: SET.QUEUE with only the queue reports it: width 80, depth 66, margins 3 and 3, mode 3, the options as typed",
-            has(out, r"^\s+3\s+80\s+66\s+3\s+3\s+3\s+AS formjob3$"), repr(out))
-        row("K1: SET.QUEUE DISPLAY lists both queues in numeric order",
-            [ln.split()[0] for ln in out if re.match(r"^\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s", ln)][-2:] == ["3", "7"], repr(out))
-        out = q3.adm(["SP.ASSIGN F3", "RUN bp zzfq 0", "RUN bp zzfq2 formjob3"])
-        row("K2: SP.ASSIGN F3 sets print unit 0 from queue 3: mode 3, width 80, depth 66, margins 3 and 3, form queue 3 (also SYSTEM(1066))",
-            tag(out, "U") == ["0][3][80][66][3][3][1][3][3"], repr(out))
-        row("K2: ... and the output reaches the hold record the queue named (AS formjob3)", tag(out, "HOLD") == ["1"], repr(out))
-        out = q3.adm(["SP.ASSIGN 2R4F3", "RUN bp zzfq 4", "RUN bp zzfq 0"])
-        base0 = (tag(first_out, "U") or ["?"])[0]
-        row("K3: SP.ASSIGN 2R4F3 sets print unit 4, with 2 copies and form queue 3, and leaves unit 0 as a new session has it "
-            "(SYSTEM(1066) is the last queue given to any unit: 3)",
-            len(tag(out, "U")) == 2 and tag(out, "U")[0] == "4][3][80][66][3][3][2][3][3"
-            and tag(out, "U")[1] == base0[:-2] + "3", repr((out, base0)))
-        out = q3.adm(["SP.ASSIGN F7", "RUN bp zzfq 0"])
-        row("K4: queue 7 is mode 1 with an AS option, which is for a hold file and is left out: SETPTR takes it and unit 0 is mode 1",
-            len(tag(out, "U")) == 1 and tag(out, "U")[0].startswith("0][1][90][60][0][2][2][7]"), repr(out))
-        out = q3.adm(["SP.ASSIGN HSF7", "RUN bp zzfq 0", "RUN bp zzfq2 q7job"])
-        row("K4: HS makes it mode 3 and then the AS option stays: the line goes to the hold record q7job",
-            tag(out, "U")[:1] == ["0][3][90][60][0][2][2][7][7"] and tag(out, "HOLD") == ["1"], repr(out))
-        out = q3.adm(["SP.ASSIGN"])
-        row("K5: CONTROL: in a new session SP.ASSIGN with nothing says print unit 0 uses form queue 0", has(out, r"^Print unit 0 uses form queue 0$"),
-            repr(out))
-        out = q3.adm(["SP.ASSIGN F7", "SP.ASSIGN"])
-        row("K5: after SP.ASSIGN F7, SP.ASSIGN with nothing says print unit 0 uses form queue 7, and SETPTR's report follows",
-            has(out, r"^Print unit 0 uses form queue 7$") and has(out, r"^\s+0\s+90\s+60\s+0\s+2\s+1\b"), repr(out))
-        bad = {"SP.ASSIGN F999": r"Form queue 999 is not defined", "SP.ASSIGN S": r"The S option of SP.ASSIGN",
-               "SP.ASSIGN X": r"SP.ASSIGN option X is not understood", "SP.ASSIGN R300F3": r"Print unit 300 is not valid",
-               "SET.QUEUE 1000,80,66,0,0,3": r"form queue number is a whole number from 0 to 999",
-               "SET.QUEUE 8,80,66,0,0,2": r"Mode 2 is not a printing mode", "SET.QUEUE 8,0,66,0,0,3": r"Width must be a whole number from 1 to 999",
-               "SET.QUEUE 8,80,66": r"^SET.QUEUE queue, width", "SET.QUEUE 9": r"Form queue 9 is not defined"}
-        for cmd, pat in bad.items():
-            out = q3.adm([cmd])
-            row("K6: %s is refused: %s" % (cmd, pat), has(out, pat), repr(out))
-        out = q3.adm(["SET.QUEUE DELETING 3", "SET.QUEUE DELETING 7", "SET.QUEUE DISPLAY", "SP.ASSIGN F3"])
-        row("K7: SET.QUEUE DELETING removes a queue, DISPLAY then says none is defined and SP.ASSIGN F3 cannot find it",
-            has(out, r"^Deleted form queue 3$") and has(out, r"^Deleted form queue 7$") and has(out, r"^No form queues are defined$")
-            and has(out, r"Form queue 3 is not defined"), repr(out))
 
         say("\n--- L. FSTAT.USER ---------------------------------------------------------------------------------------------")
         q3.adm(["CREATE.FILE zzfuf DYNAMIC"])

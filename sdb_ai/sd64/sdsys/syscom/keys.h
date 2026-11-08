@@ -262,7 +262,6 @@
       $define PU$PRINTER.NAME       1017
       $define PU$FILE.NAME          1018
       $define PU$SEQNO              1019
-      $define PU$FORM.QUEUE         1020
       $define PU$FORM.FEED          1021
       $define PU$ENCODING           1022
       $define PU$FONT               1023
@@ -643,7 +642,6 @@
       $define SYS$CHILDREN    1058  ;*   Direct child phantoms' user numbers
       $define SYS$GROUPED.CHILDREN 1073 ;* Those grouped with this process (PHANTOM GROUP): logged out when it ends
       $define SYS$TXN_CACHE   1065  ;*   The transaction cache
-      $define SYS$FORM.QUEUE  1066  ;*   The last form queue SP.ASSIGN gave to a print unit, -1 if none (15 Oct 26)
       $define SYS$PRECISION   1070  ;*   The PRECISION setting
       $define SYS$OSREAD.INFO 1071  ;*   STATUS array of the file the last OSREAD read (15 Oct 26, _system)
       $define SYS$CALL_DEPTH  1076  ;*   Current CALL depth

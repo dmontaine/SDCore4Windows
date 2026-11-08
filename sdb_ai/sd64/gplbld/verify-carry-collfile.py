@@ -249,24 +249,6 @@ def main():
         out = sess(box, "BASIC bp %s" % PX, "RUN bp %s" % PX, "COMPARE.FILES %s %s DETAIL" % (A, O))
         row("a record changed in the collection file is reported as differing", "Records in both that differ: 1" in out and "Records that are the same: 1" in out, out[-400:])
 
-        say("\n--- COPYP and COPY.LISTP (the Pick style copy: the same program, the destination asked at 'To:') ----")
-        out = sess(box, "COPYP %s r1 (T" % A)
-        row("COPYP ... (T shows a collection record as its JSON, a line to an element, numbered (it stopped with 'Data cannot be converted')",
-            re.search(r'(?m)^0002\s+"city": "Berlin",\s*$', out) is not None and "cannot be converted" not in out, out[-300:])
-        out = sess(box, "COPYP %s r3" % A, "(%s" % O, "CT %s r3" % O)
-        row("COPYP from a collection file to an ordinary file copies the record as its compact JSON text",
-            "1 record(s) copied." in out and re.search(r'(?m)^1: \{"city":"Oslo","n":7,"tags":\["a","b"\]\}\s*$', out) is not None, out[-400:])
-        out = sess(box, "COPYP %s good2" % O, "(%s" % B, "CT %s good2" % B)
-        row("COPYP from an ordinary file to a collection file: text that is a JSON object becomes a collection",
-            "1 record(s) copied." in out and re.search(r'(?m)^  "second": "text"\s*$', out) is not None, out[-400:])
-        out = sess(box, "COPYP %s bad1 (D" % O, "(%s" % B, "COUNT %s" % B, "CT %s bad1" % O)
-        row("...text that is not JSON is refused (error 1020) and COPYP stops", "Error 1020 writing record 'bad1'" in out, out[-300:])
-        row("...D did not delete the source record that was not copied", re.search(r'(?m)^1: this is not json\s*$', out) is not None, out[-300:])
-        row("...and no record 'bad1' was made in the collection file", "3 record(s) counted" in out, out[-300:])
-        out = sess(box, "COPYP %s r2" % A, "(%s" % B, "CT %s r2" % B)
-        row("CONTROL: COPYP between two collection files", "1 record(s) copied." in out and re.search(r'(?m)^  "city": "Lyon"|^  "city": "Rome"', out) is not None, out[-300:])
-        out = sess(box, "COPYP %s good1" % O, "good1x", "CT %s good1x" % O)
-        row("CONTROL: COPYP between ordinary files (a new id in the same file)", "1 record(s) copied." in out and re.search(r'(?m)^1: \{"copied":"from text"\}', out) is not None, out[-300:])
 
         say("\n--- a collection file and a directory file (records that are files on disk) -------------------------")
         out = sess(box, "CREATE.FILE %s DIRECTORY" % DR, "COPY FROM %s TO %s r2" % (A, DR))

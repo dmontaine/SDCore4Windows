@@ -194,10 +194,6 @@ Public int16_t erase_key init(0);      /* PTERM ERASE: 0 default, 1-255 a charac
 Public char ctrl_filter[64];           /* PTERM CTRL.FILTER, indexed by command processor level (12 Oct 26) */
 Public char maxmin_pos[64];            /* The position MAXIMUM() or MINIMUM() found, for SYSTEM(1088) (15 Oct 26, Q-18) */
 Public bool trap_break_char; /* Treat break_char as a break request? */
-/* 15 Oct 26 dm - QM4 gaps Q-9 (SP.ASSIGN).  The form queue number each print unit was last assigned (GETPU key PU$FORM.QUEUE),
-   and the last one assigned to any unit (SYSTEM(1066)), -1 until SP.ASSIGN has been used.  Set by K_FORM_QUEUE. */
-Public int16_t form_queue_of[HIGH_PRINT_UNIT + 1];
-Public int16_t last_form_queue init(-1);
 
 /* OP_TIO.C */
 void emit_header_footer(PRINT_UNIT * pu, bool is_heading);

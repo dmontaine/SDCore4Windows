@@ -33,7 +33,7 @@
 *    if not(edit_guard(file.var)) then stop
 *
 * op_dio3.c refuses a user program's own WRITE, WRITEV, DELETE or CLEARFILE of a VOC, a dictionary or a program file when the session
-* has not the gate for it.  The verbs that edit a file the USER names (ED, SED, CED, IDE, EDIT, COPY, COPYP, DELETE, CLEAR.FILE,
+* has not the gate for it.  The verbs that edit a file the USER names (ED, SED, CED, IDE, EDIT, COPY, DELETE, CLEAR.FILE,
 * CNAME, DELETE.FILE) are $internal, which the C test lets through because they have to be able to do their work, so each asks this
 * before it changes a file it was given.  The verbs that keep the account's own records as a side effect of a command (CREATE.FILE's
 * pointer, a saved sentence, the command stack, a compiled I-type) do not ask: the rule is DIRECT edits only.
