@@ -86,7 +86,7 @@ CASES = [
      "read r1 from fv, 'abc' then null else r1 = 'none'\nwrite 'two' on fv, 'abc'\n"
      "read r2 from fv, 'ABC' then null else r2 = 'none'\nx = r1:'/':r2", "one/two"),
     ("526 RETURNING of EXECUTE and CSVDQ in one module keeps the return code",
-     "execute 'LIST.TERM.TYPES NOPAGE' capturing junk returning rc\ny = csvdq('a,b')\nx = (rc = @system.return.code)", "1"),
+     "execute 'LIST.TERM.TYPES NO.PAGE' capturing junk returning rc\ny = csvdq('a,b')\nx = (rc = @system.return.code)", "1"),
     ("559 READV of a field beyond the end of the record, and of field 2",
      "open 'zzb9f' to vv else null\nwrite 'a':@fm:'b' on vv, 'r1'\nreadv v from vv, 'r1', 7 then null else v = 'none'\n"
      "readv w from vv, 'r1', 2 then null else w = 'none'\nx = v:'/':w", "/b"),

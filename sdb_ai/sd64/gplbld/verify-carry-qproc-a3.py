@@ -150,23 +150,7 @@ def main():
         row("CONTROL: SAMPLE 2 takes the first two records and then sorts them: r2 r1", a == ["r2", "r1"], "got %r" % a)
         row("THE ROW: SORTED.SAMPLE 2 sorts and then takes two: r5 r4", b == ["r5", "r4"], "got %r" % b)
 
-        say("\n--- leg 4: COL.HDR.SPACE (ref 467) -----------------------------------------------")
-        out = sess(box, "LIST zzq3 name ID.SUP", "LIST zzq3 name ID.SUP COL.HDR.SPACE")
-        parts = re.split(r"(?m)^LIST zzq3 name ID\.SUP COL\.HDR\.SPACE", out)
-
-        def gap(text):
-            lines = text.splitlines()
-            for i, ln in enumerate(lines):
-                if ln.strip().upper().startswith("NAME.."):
-                    return i, lines
-            return None, lines
-        i0, l0 = gap(parts[0])
-        i1, l1 = gap(parts[1]) if len(parts) > 1 else (None, [])
-        row("CONTROL: with no keyword the first data row follows the headings directly",
-            i0 is not None and l0[i0 + 1].strip() == "alpha", "line after heading: %r" % (l0[i0 + 1] if i0 is not None else None))
-        row("THE ROW: with COL.HDR.SPACE there is a blank line between them",
-            i1 is not None and l1[i1 + 1].strip() == "" and l1[i1 + 2].strip() == "alpha",
-            "lines after heading: %r" % (l1[i1 + 1:i1 + 3] if i1 is not None else None))
+        say("\n--- leg 4: (COL.HDR.SPACE, ref 467, was retired 27 Oct 26 - S.87 batch 10) ---------")
 
         say("\n--- leg 5: FROM NONE (ref 378) ------------------------------------------------")
         out = sess(box, "SELECT zzq3 WITH num > 25", "LIST zzq3 name ID.SUP FROM NONE")

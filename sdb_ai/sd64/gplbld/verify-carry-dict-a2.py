@@ -10,6 +10,7 @@
 # 2 it could not run.
 #
 # START-HISTORY:
+# 27 Oct 26 dm  S.87 batch 10: legs 1 (IF without ELSE or THEN), 3 (format string with no operator) and 4 (hyphenated item names) keep only their controls; the three forms were removed from ICOMP.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-2.
 # END-HISTORY
 #
@@ -122,13 +123,8 @@ def main():
         prog("zzd2r2", "1\n2\nxyz\n5\n4\n")
         for n in (1, 2, 3, 5):
             prog("zzd2f%d" % n, "D\n%d\n\nF%d\n8R\nS\n" % (n, n))
-        prog("zzd2hy", "D\n5\n\nHY-X\n8R\nS\n")           # a D item whose id has a hyphen, field 5
-        ditem("t36a", "IF F1 > 5 THEN 'big'")
-        ditem("t36b", "IF F1 > 5 ELSE 'small'")
         ditem("t48", "F1 / F2")
         ditem("t547", "F4 * 2")
-        ditem("t564", "F1 '6\"0\"R'")
-        ditem("thy", "HY-X + 1")
         ditem("tsub", "F1-F2")
         ditem("tctl", "IF F1 > 5 THEN 'big' ELSE 'small'")
         ditem("t182", "TRANS(zzd2b, F3, QA, 'X')")
@@ -149,8 +145,7 @@ def main():
                 "COPY FROM BP TO DICT zzd2b zzd2qa,qa", "COPY FROM BP TO DICT zzd2b zzd2qi,qi"]
         for n in (1, 2, 3):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2f%d,f%d" % (n, n))
-        cmds.append("COPY FROM BP TO DICT zzd2a zzd2hy,hy-x")
-        for t in ("t36a", "t36b", "t48", "t547", "t564", "thy", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
+        for t in ("t48", "t547", "tsub", "tctl", "t182", "t182c", "tia", "tib", "tic"):
             cmds.append("COPY FROM BP TO DICT zzd2a zzd2%s,%s" % (t, t))
         out = sess(box, *cmds, quiet=True)
         copied = len(re.findall(r"(?m)^1 record\(s\) copied\.", out))
@@ -162,20 +157,16 @@ def main():
             got = values(out, item)
             row("%s: %s gives %r, %r" % (label, item, want[0], want[1]), got == list(want), "got %r" % got)
 
-        say("\n--- leg 1: IF without ELSE, and without THEN (ref 36) -------------------------------")
+        say("\n--- leg 1: IF THEN ELSE (ref 36: IF without ELSE or THEN was retired 27 Oct 26, S.87 batch 10) ------------")
         check("CONTROL: IF THEN ELSE as before", "tctl", ("big", "small"))
-        check("THE ROW: no ELSE gives a null string", "t36a", ("big", ""))
-        check("THE ROW: no THEN gives a null string", "t36b", ("", "small"))
 
         say("\n--- leg 2: F4 names field 4 (ref 547) ---------------------------------------------")
         check("THE ROW: F4 is not in the dictionary", "t547", ("14", "10"))
 
-        say("\n--- leg 3: a value and a format string, no operator (ref 564) -----------------------")
-        check("THE ROW: F1 followed by a zero-fill format string", "t564", ("000010", "000001"))
+        say("\n--- leg 3: (a value and a format string with no operator, ref 564, was retired 27 Oct 26) ---------------")
 
-        say("\n--- leg 4: a hyphenated item name (ref 423) --------------------------------------------")
-        check("THE ROW: HY-X + 1, HY-X being field 5", "thy", ("4", "5"))
-        check("CONTROL: F1-F2 with no item of that name is still a subtraction", "tsub", ("10", "-1"))
+        say("\n--- leg 4: F1-F2 is a subtraction (hyphenated item names, ref 423, were retired 27 Oct 26) -----------------")
+        check("CONTROL: F1-F2 is a subtraction", "tsub", ("10", "-1"))
 
         say("\n--- leg 5: TRANS() of an A item (ref 182) ----------------------------------------------")
         check("THE ROW: qa is an A item, field 1, no correlative", "t182", ("FOUND", "OTHER"))

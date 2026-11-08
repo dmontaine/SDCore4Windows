@@ -1156,23 +1156,12 @@ def run_verbs(box, sysd, bp):
                       "   write 'X':@fm:'a comment' on f, 'note'\n"
                       "end\n"))
         sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
+        # (the LISTDICT paragraph was removed 27 Oct 26, S.87 batch 10: LIST DICT file is the way)
         out = sess(box, "LISTDICT zzoqld")
         full = sess(box, "LIST DICT zzoqld")
-        row("10: LISTDICT lists an A-type record with its field number and conversion", has(out, r"^price\s+A\s+3\s+MD2\s+Price"), out[-400:])
-        row("75: ...and D-type records", has(out, r"^name\s+D\s+1\s+Name\s+10L\s+S") and has(out, r"^qty\s+D\s+2\s+MD0\s+Qty"), out[-400:])
-        row("75: ...and an I-type record with its expression", has(out, r"^total\s+I\s+QTY \* PRICE\s+Total"), out[-400:])
-        row("10: ...and an S-type record", has(out, r"^code\s+S\s+4\s+Code"), out[-400:])
-        row("10: ...and no phrase and no other type", not has(out, r"^short\s") and not has(out, r"^note\s"), out[-400:])
-        row("10 CONTROL: LIST DICT of the same file does show the phrase and the other type",
-            has(full, r"^short\s+PH") and has(full, r"^note\s+X"), full[-400:])
-        row("10: the A, D, I and S records come to six with the dictionary's own @id", has(out, r"6 record\(s\) listed"), out[-300:])
-        row("10: the records come in the order A, D, I, S",
-            re.search(r"(?s)^price\s+A.*^name\s+D.*^total\s+I.*^code\s+S", out, re.M) is not None, out[-400:])
-        row("10: an upper case file name works", has(sess(box, "LISTDICT ZZOQLD"), r"^price\s+A\s+3"), "")
-        row("10: a file that does not exist is reported", has(sess(box, "LISTDICT zzoqnone"), r"File not found"), "")
-        out = sess(box, "LISTDICT zzoqld LPTR")
-        row("10: LPTR sends the listing to the printer: nothing of it on the screen, and no complaint about the word",
-            not has(out, r"^price\s") and not has(out, r"record\(s\) listed") and not has(out, r"(?i)unrecognised|illegal|not found"), out[-300:])
+        row("10: LISTDICT is no longer a command", has(out, r"LISTDICT is not in your VOC"), out[-300:])
+        row("10 CONTROL: LIST DICT of the same file lists the A, D, I and S items and the phrase and the other type",
+            has(full, r"^short\s+PH") and has(full, r"^note\s+X") and has(full, r"^price\s+A"), full[-400:])
 
         # --- COPY.LISTP (72): COPYP with the source file defaulting to $savedlists ----------------------------
         out = sess(box, 'SELECT VOC WITH @ID = "copyp" "list" "sort"', "SAVE.LIST zzoqla",

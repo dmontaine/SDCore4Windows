@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 5441d157 (S.87 batch 10): three loose forms of a dictionary expression are gone: a hyphenated item name (CUST-NO,
+*               join.hyphen.name; A-B is always a subtraction), IF with no THEN or no ELSE (refused again, messages 2950 and 2951) and a format string
+*               straight after a value (write the FMT operator or the format).
 * 7 Nov 26 Windows port - from Linux 0ead4fa0 (S.87 batch 4): emit.field.load no longer reads field 9998 as @NI and 9999 as the record length; only field 0 (the id) is special.
 * 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): QM4 Fixes 7: an L-type record can be used in an I-type, as link%item (link.reference; $linkref;
 *               the file expression of a link in in.trans; a link to a link in the dictionary of the file a
@@ -671,42 +674,6 @@ get.token:
    return
 
 * ======================================================================
-* JOIN.HYPHEN.NAME  -  A name, then - and another name or a number, that
-* together are the id of a dictionary item is one name (10 Oct 26 dm, openQM
-* ref 423).  TOKEN.STRING holds the name on entry; on exit it holds the joined
-* name and the tokens that made it up have been consumed.  If no item has the
-* joined id the expression is left alone, so A-B is still a subtraction.
-
-join.hyphen.name:
-   loop
-      jh.found = @false
-      if look.ahead.token = tkn.minus then
-         jh.next = tokens(token.index + 1)
-         if jh.next = tkn.name or jh.next = tkn.num then
-            jh.cand = token.string : '-' : token.strings(token.index + 1)
-            read jh.rec from dict.file, jh.cand then jh.found = @true
-            else
-               read jh.rec from dict.file, downcase(jh.cand) then
-                  jh.found = @true
-                  jh.cand = downcase(jh.cand)
-               end else
-                  read jh.rec from dict.file, upcase(jh.cand) then
-                     jh.found = @true
-                     jh.cand = upcase(jh.cand)
-                  end
-               end
-            end
-         end
-      end
-   while jh.found
-      gosub get.token         ;* The minus
-      gosub get.token         ;* The name or number
-      token.string = jh.cand
-      u.token.string = upcase(jh.cand)
-   repeat
-   return
-
-* ======================================================================
 * EMIT.FIELD.LOAD  -  Load a field from the current record
 * fno = field number
 
@@ -1203,25 +1170,6 @@ expr:
    loop
       gosub get.expr.item
 
-      * A format string directly after a value, with no operator between them,
-      * is a format operation as it is in BASIC (10 Oct 26 dm, openQM ref 564).
-      * Insert the FMT operator that is not in the source.
-
-      if look.ahead.token = tkn.string then
-         priority = op.priority(tkn.fmt)
-         loop
-         while priority >= priority.stack(op.stack.depth)
-            opcode.byte = operator.stack(op.stack.depth)
-            gosub emit.simple
-            op.stack.depth -= 1
-         repeat
-         op.stack.depth += 1
-         operator.stack(op.stack.depth) = op(tkn.fmt)
-         priority.stack(op.stack.depth) = priority
-         gosub get.token              ;* The format string becomes the operand
-         continue
-      end
-
       * Check for operator using look ahead
 
    until look.ahead.token < tkn.low.operator
@@ -1280,23 +1228,16 @@ get.expr.item.again:
             opcode.byte = op.jfalse    ;* 0253
             gosub emit.jump
 
-            * Emit THEN clause.  10 Oct 26 dm (openQM ref 36): a THEN or an
-            * ELSE that is not there gives a null string, as in other
-            * multivalue systems, instead of a compile error.  (IF c ELSE x
-            * has no THEN part; IF c THEN x has no ELSE part.)
+            * Emit THEN clause
 
-            begin case
-               case u.look.ahead.token.string = "THEN"
-                  gosub get.token
-                  gosub expr          ;* Process THEN clause
+            if u.look.ahead.token.string # "THEN" then
+               err.msg = sysmsg(2950) ;* THEN not found where expected in conditional expression
+               goto error
+            end
 
-               case u.look.ahead.token.string = "ELSE"
-                  opcode.byte = op.ldnull ; gosub emit.simple
+            gosub get.token
 
-               case 1
-                  err.msg = sysmsg(2950) ;* THEN not found where expected in conditional expression
-                  goto error
-            end case
+            gosub expr          ;* Process THEN clause
 
             * Emit jump to exit label
 
@@ -1309,15 +1250,13 @@ get.expr.item.again:
             label.name = "_":jump.stack<1>:"E"
             gosub set.label
 
-            if u.look.ahead.token.string = "ELSE" then
-               gosub get.token
-
-               gosub expr          ;* Process ELSE clause
-            end else
-               * No ELSE part: the value is the null string.  (A construct with
-               * neither THEN nor ELSE was refused above, with 2950.)
-               opcode.byte = op.ldnull ; gosub emit.simple
+            if u.look.ahead.token.string # "ELSE" then
+               err.msg = sysmsg(2951) ;* ELSE not found where expected in conditional expression
+               goto error
             end
+            gosub get.token
+
+            gosub expr          ;* Process ELSE clause
 
             * Emit exit label
             label.name = "_":jump.stack<1>:"X"
@@ -1334,7 +1273,6 @@ if.then.else.expr.abort:
 *           then upper; token.string becomes the id that matched, because it is
 *           written back and recorded as an embedded object name below.  The
 *           VOC fallback after it is unchanged.
-            gosub join.hyphen.name   ;* 10 Oct 26 dm, openQM ref 423
             read field.rec from dict.file, token.string else
                read field.rec from dict.file, downcase(token.string) then
                   token.string = downcase(token.string)

@@ -231,7 +231,6 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    search.ids = @false           ;* SEARCH ... ALL: search the record id too
    search.display = @false       ;* SEARCH ... DISPLAY: show the lines that hold a string
    absent.ignore = @false        ;* ABSENT.IGNORE
-   col.hdr.space = @false        ;* COL.HDR.SPACE
    sorted.sample = @false        ;* SORTED.SAMPLE n: after the sort...
    sorted.sample.count = 0       ;* ...this many records...
    sorted.sample.done = 0        ;* ...and this many so far
@@ -1300,8 +1299,6 @@ template.found:
 
                print on lptr column.headings
             case 1
-               * COL.HDR.SPACE: one more, empty, line under the headings
-               if col.hdr.space then column.headings := "'L' "
                void qdisp(QD$CHDR, column.headings)
          end case
       end
@@ -2625,10 +2622,6 @@ parse.command.options:
 * --- ABSENT.IGNORE (10 Oct 26 dm, openQM ref 25)
          case keyword = KW$ABSENT.IGNORE
             absent.ignore = @true
-
-* --- COL.HDR.SPACE (10 Oct 26 dm, openQM ref 467)
-         case keyword = KW$COL.HDR.SPACE and report.command
-            col.hdr.space = @true
 
 * --- SORTED.SAMPLE (10 Oct 26 dm, openQM ref 438): as SAMPLE, but the
 * records counted are those that are left after the sort.
