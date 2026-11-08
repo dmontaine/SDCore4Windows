@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 843344ba (S.87 batch 15): the GDI sd.conf parameter is gone, so flags always carry PU$FLG.RAW (it was set
+*            whenever GDI was 0, the default, and nothing on Windows read the flag).
 * 8 Nov 26 Windows port - from Linux 4f3a191b (S.87 batch 11): QUOTE() in place of DQUOTE() (the second name is gone).
 * 14 Sep 26 Windows port - SYSCOM's $PCLDATA record is $pcldata (RELEASE_1.1 5).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
@@ -41,6 +43,7 @@
 *
 * Options:               Win  Win  Lnx  Action
 *                        Raw  GDI
+*   (the GDI and RAW options are gone: 27 Oct 26, S.87)
 *   AS {NEXT} name       Y    Y    Y   Set name for mode 3 file
 *   AS PATHNAME path     Y    Y    Y   Set pathname for mode 3 file
 *   AT printer.name      Y    Y    Y   Set printer name
@@ -54,7 +57,6 @@
 *    field 2 for mode 1, field 4 for mode 3 ... field mode + 1; the command's own options override)
 *   FORM x               Y    Y    Y   Form type
 *   FORM.FEED FF/CRFF    Y    Y    Y   Form feed sequence between pages (default CRFF)
-*   GDI                                Use Windows GDI mode API calls
 *   KEEP.OPEN            Y    Y    Y   Keep print unit open
 *   INFORM                         Y   Y   Say the output file's name when the job starts (modes 3 and 6)
 *   EJECT                Y    Y    Y   End the job with a form feed
@@ -71,7 +73,6 @@
 *   PORTRAIT             Y             Set portrait orientation
 *   POSTSCRIPT     
 *   PREFIX               Y         Y   Set prefix string
-*   RAW                                Use Windows non-GDI mode API calls
 *   SPOOLER                        Y   Set spooler name
 *   STYLE                Y    Y    Y   Set report style
 *   SYMBOL.SET x         Y         Y   PCL symbol set
@@ -125,7 +126,7 @@ restart:
    left.margin = 0
    mode = 1
    flags = 0
-   if not(config("GDI")) then flags = bitor(flags, PU$FLG.RAW)
+   flags = bitor(flags, PU$FLG.RAW)
    copies = 1
    file.name = ''
    printer.name = ''

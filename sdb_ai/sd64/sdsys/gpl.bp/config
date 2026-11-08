@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87: CODEPAGE, EXCLREM, GDI, JNLDIR, JNLMODE, PORTMAP and RINGWAIT are no longer reported (they are no longer parameters); nor were APILOGIN or CREATUSR.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * rev 0.9.0 Jan 25 mab add CREATUSR config parameter
 * 16 Aug 26 Windows port - CREATUSR is no longer reported.  op_config() has
@@ -108,24 +109,19 @@ report.params:
    print 'APIPORT   '        : config('APIPORT')
    print 'CLEANUP   '        : config('CLEANUP') : ' seconds'
    print 'CMDSTACK  '        : config('CMDSTACK')
-   n = config('CODEPAGE') ; if n then print 'CODEPAGE  '        : n
    print 'DEADLOCK  '        : config('DEADLOCK')
    n = config('DEBUG') ; if n then print 'DEBUG     '        : n
    print 'DHCACHE   '        : config('DHCACHE')
    print 'DUMPDIR   '        : config('DUMPDIR')
    print 'ERRLOG    '        : config('ERRLOG') : ' kb'
-   print 'EXCLREM   '        : config('EXCLREM')
    n = config('FDS') ; if n < 32767 then print 'FDS  '        : n
    print 'FILERULE  '        : config('FILERULE')
    print 'FLTDIFF   '        : config('FLTDIFF')
    print 'FSYNC     '        : config('FSYNC')
-   print 'GDI       '        : config('GDI')
 * 20240219 mab create-account based on type (user / group / other)      
    print 'GRPDIR    '        : config('GRPDIR')
    print 'GRPSIZE   '        : config('GRPSIZE')
    print 'INTPREC   '        : config('INTPREC')
-   print 'JNLMODE   '        : config('JNLMODE')
-   print 'JNLDIR    '        : config('JNLDIR')
    print 'LGNWAIT   '        : config('LGNWAIT')
    print 'LPTRHIGH  '        : config('LPTRHIGH')
    print 'LPTRWIDE  '        : config('LPTRWIDE')
@@ -145,11 +141,9 @@ report.params:
    print 'OBJMEM    '        : if n then n : ' kb' else '0  [':sysmsg(3067):']'
    print 'PDUMP     '        : config('PDUMP')
    s = config('PHANTOMS') ; if s # '' then print 'PHANTOMS  '        : s
-   s = config('PORTMAP') ; if s # '' then print 'PORTMAP   '        : s
    print 'PWDELAY   '        : config('PWDELAY')
 
    print 'RECCACHE  '        : config('RECCACHE')
-   print 'RINGWAIT  '        : config('RINGWAIT')
    print 'SAFEDIR   '        : config('SAFEDIR')
    print 'SCREENTHEME '      : config('SCREENTHEME')
    print 'SDCLIENT  '        : config('SDCLIENT')

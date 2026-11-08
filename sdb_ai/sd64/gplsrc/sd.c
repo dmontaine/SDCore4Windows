@@ -343,12 +343,8 @@ Private bool comlin(int argc, char *argv[]) {
   int TxPipe;
 
   for (arg = 1; (arg < argc) && (argv[arg][0] == '-'); arg++) {
-    if (IsDigit(*(argv[arg] + 1))) {
-      /* Modified by Composer AI - 2026/06/10. atoi -> strtol (no overflow UB). */
-      /* forced_user_no = atoi(argv[arg] + 1); */
-      forced_user_no = (int)strtol(argv[arg] + 1, NULL, 10);
-      /* -------------------- */
-    } else if (!stricmp(argv[arg], "-CLEANUP")) {
+    /* 8 Nov 26 Windows port - from Linux 843344ba (S.87 batch 15): sd -<n>, the forced user number, is gone with FIXUSERS / PORTMAP. */
+    if (!stricmp(argv[arg], "-CLEANUP")) {
 /* 15 Aug 26 Windows port - the administrative switches all take the elevation
    gate now, not just the three that had it.  Each of them either changes the
    state of the server or reports on everybody's sessions; see check_admin(). */

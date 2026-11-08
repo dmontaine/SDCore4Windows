@@ -2192,6 +2192,67 @@ begin
     Result := ApiConfHasListener;
 end;
 
+{ 8 Nov 26 - RELEASE_1.1 197, from Linux 843344ba (S.87 batch 15) and its installer's
+  RETIRED-CONF block.  PARAMETERS SD NO LONGER HAS ARE TAKEN OUT OF A KEPT sd.conf.
+  config.c refuses an unrecognised parameter and SD then does not start, and sd.conf
+  is onlyifdoesntexist, so an upgrade keeps a file written while a parameter existed.
+  Only a line that BEGINS with the exact name and an equals sign is removed (a comment,
+  or another name that merely starts the same way, is left alone) - Linux's rule.  The
+  list is the parameters config.c no longer reads; test-retiredconf-units holds it to
+  config.c.  Run at ssInstall: before the file copy and before every [Run] entry, any
+  of which may start SD.  The file is rewritten only when a line goes, and what went is
+  written to the setup log, not to a screen. }
+function RetiredConfNames: String;
+begin
+  Result := 'INVCASE CODEPAGE EXCLREM RINGWAIT TXCHAR APILOGIN CREATUSR JNLDIR JNLMODE GDI FIXUSERS PORTMAP';
+end;
+
+function IsRetiredConfLine(L: String): Boolean;
+var
+  Eq: Integer;
+  K: String;
+begin
+  Result := False;
+  Eq := Pos('=', L);
+  if Eq < 2 then
+    Exit;
+  K := Copy(L, 1, Eq - 1);
+  if Pos(' ', K) > 0 then
+    Exit;
+  Result := Pos(' ' + K + ' ', ' ' + RetiredConfNames + ' ') > 0;
+end;
+
+procedure RemoveRetiredConf;
+var
+  Lines, Kept: TArrayOfString;
+  I, N: Integer;
+  Conf, Removed: String;
+begin
+  Conf := ExpandConstant('{#DataDir}\sd.conf');
+  if not LoadStringsFromFile(Conf, Lines) then
+    Exit;
+  SetArrayLength(Kept, GetArrayLength(Lines));
+  N := 0;
+  Removed := '';
+  for I := 0 to GetArrayLength(Lines) - 1 do
+  begin
+    if IsRetiredConfLine(Lines[I]) then
+      Removed := Removed + ' ' + Copy(Lines[I], 1, Pos('=', Lines[I]) - 1)
+    else
+    begin
+      Kept[N] := Lines[I];
+      N := N + 1;
+    end;
+  end;
+  if Removed = '' then
+    Exit;
+  SetArrayLength(Kept, N);
+  if SaveStringsToFile(Conf, Kept, False) then
+    Log('RetiredConf: removed from sd.conf:' + Removed)
+  else
+    Log('RetiredConf: COULD NOT rewrite sd.conf, which still names:' + Removed);
+end;
+
 { 30 Aug 26 - MAY OTHER COMPUTERS REACH IT?  PRE_RELEASE_FIXES 75.
 
   SEPARATE FROM ApiWanted ON PURPOSE, and the two answer different questions:
@@ -4365,6 +4426,11 @@ var
   { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
   PyMsg: String;
 begin
+  { 8 Nov 26 - RELEASE_1.1 197: a kept sd.conf loses its retired parameters before
+    anything can start SD (see RemoveRetiredConf). }
+  if CurStep = ssInstall then
+    RemoveRetiredConf;
+
   if CurStep = ssPostInstall then
   begin
     { THE CREDENTIAL STORE GOES FIRST, ahead of even the firewall.  It is the

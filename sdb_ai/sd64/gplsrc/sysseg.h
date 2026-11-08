@@ -70,8 +70,6 @@ struct SYSSEG {
    int errlog;                   /* ERRLOG: Max size of errlog in bytes */
    int16_t fds_limit;
    int32_t fds_rotate;
-   int16_t fixusers_base;      /* FIXUSERS: First user number and... */
-   int16_t fixusers_range;     /*          ...Number of ports/users */
    int16_t maxidlen;           /* MAXIDLEN: Max record id length */
    /* 21 Aug 26 Windows port - NETDIRS.  It lives here rather than in PCFG
       because net_path_permitted() is consulted on every OPEN in a network
@@ -89,9 +87,7 @@ struct SYSSEG {
    int16_t netfiles;           /* NETFILES: 0x0001   Allow outgoing NFS
                                               0x0002   Allow incoming SDNet */
    int16_t pdump;              /* PDUMP:    0x0001   Ban dump of other username */
-   int16_t portmap_base_port;  /* PORTMAP: First port number ... */
-   int16_t portmap_base_user;  /*          ...First user number... */
-   int16_t portmap_range;      /*          ...Number of ports/users */
+   /* 8 Nov 26 Windows port - PORTMAP's three fields and JNLDIR are gone (S.87 batch 15, Linux 843344ba). */
    /* 17 Aug 26 Windows port - APIPORT.  It lives here rather than in PCFG
       because sdwind is what reads it, and sdwind has the segment but runs no
       BASIC and loads no per-process config.
@@ -117,10 +113,8 @@ struct SYSSEG {
    struct FILESTATS global_stats; /* Global file stats (see DH_STAT.H) */
    unsigned long next_txn_id;    /* Next transaction id */
    int32_t prtjob;              /* Print job number (SHORT_CODE semaphore) */
-   int16_t jnlmode;            /* JNLMODE: Journal mode */
    int jnlseq;                   /* Journal file sequence no. 0 = inactive.
                                     Protected by JNL_SEM */
-   char jnldir[MAX_PATHNAME_LEN+1]; /* JNLDIR: Journal file directory */
    /* Group lock counters (Protected by GROUP_LOCK_SEM) */
    u_int32_t gl_count;   /* Number of group locks obtained */
    u_int32_t gl_wait;    /* Group locks blocked on first attempt */

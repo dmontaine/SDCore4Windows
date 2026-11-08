@@ -23,8 +23,7 @@
 #   B  PHANTOMS and PHANTOM USER n: the parameter's value and what it refuses; a phantom started with USER gets that user
 #      number; a number already in use, outside the kept numbers or not a number is refused with its own message and no
 #      phantom is made; a session or a phantom started WITHOUT USER never takes a kept number (and does take it when nothing
-#      is kept: the control); two kept blocks side by side are both skipped (FIXUSERS then PORTMAP: the old code stopped on
-#      the second)
+#      is kept: the control); FIXUSERS and PORTMAP, removed on 27 Oct 26 (S.87), stop SD from starting like any unknown name
 #   C  LOCK.TRACER: off by default (no file), ON makes locktrace (mode 0620), the eight lock actions of a probe in the log in order
 #      with their record ids and source line numbers (the raw file is the oracle), an ordinary session logged too, the report and
 #      its USER / error forms, a program's own release at its end, a refused lock not logged, OFF stops it, ON again empties it,
@@ -285,25 +284,16 @@ def main():
             out = q3.adm(["RUN bp zzq5pu PHANTOM NO.MSG USER 3 RUN bp zzq5pd"])
             row("B7: ... and USER 3 still gives a phantom user number 3 (the kept numbers are for it)",
                 tag(out, "PHUNO") == ["3"] and tag(out, "PHRC") == ["3"], repr(out[-4:]))
-        # two kept blocks side by side: FIXUSERS 2-3 and PORTMAP 4-5.  The old code skipped the first and handed out 4.
-        if started_with("USERPOOL=0", "FIXUSERS=2,2", "PORTMAP=9990,4,2"):
-            first, un, phun = second_session()
-            row("B8: FIXUSERS=2,2 and PORTMAP=9990,4,2 side by side: with user %s held, the next session is 6, not 4" % first,
-                first == "1" and un == ["6"], "%r %r %r" % (first, un, phun))
-        if started_with("USERPOOL=0", "FIXUSERS=2,2", "PHANTOMS=4,2"):
-            first, un, phun = second_session()
-            row("B8: FIXUSERS=2,2 and PHANTOMS=4,2 side by side: the next session is 6", first == "1" and un == ["6"],
-                "%r %r %r" % (first, un, phun))
+        # 27 Oct 26, S.87: FIXUSERS and PORTMAP are gone, and with them the "two kept blocks side by side" rows (B8): PHANTOMS is the only block.
 
         # what read_config refuses
         for bad, why in ((("PHANTOMS=0,3",), r"PHANTOMS user numbers must lie between 1 and"),
                          (("PHANTOMS=5,0",), r"PHANTOMS user numbers must lie between 1 and"),
                          (("PHANTOMS=30000,5",), r"PHANTOMS user numbers must lie between 1 and"),
-                         (("FIXUSERS=10,5", "PHANTOMS=12,3"), r"PHANTOMS and FIXUSERS user numbers overlap"),
-                         (("PORTMAP=9990,10,5", "PHANTOMS=12,3"), r"PHANTOMS and PORTMAP user numbers overlap")):
+                         (("FIXUSERS=10,5",), r"Unrecognised configuration parameter"),
+                         (("PORTMAP=9990,10,5",), r"Unrecognised configuration parameter")):
             ok, log = refused(why, *bad)
             row("B9: sd.conf %s: SD does not start and says why" % " ".join(bad), ok, log)
-        row("B9: PHANTOMS=900,4 beside FIXUSERS=10,5 (no overlap) starts", started_with("PHANTOMS=900,4", "FIXUSERS=10,5"))
         # USPLIT ignores the kept numbers, but USER n still takes a free one of PHANTOMS' numbers
         if started_with("PHANTOMS=900,4", "USPLIT=1"):
             out = q3.adm(["RUN bp zzq5pu PHANTOM NO.MSG USER 901 RUN bp zzq5pd"])

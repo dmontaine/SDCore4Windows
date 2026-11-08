@@ -30,12 +30,15 @@
  * 14 Sep 26 Windows port - the global catalogue check names gcat/$cproc
  *           (RELEASE_1.1 5 stage 3a)
  * 31 Dec 23 SD launch - prior history suppressed
- * rev 0.9.0 Jan 25 mab add CREATUSR - allow create.account to create os user
+ * 8 Nov 26 Windows port - from Linux 843344ba (S.87 batch 15): the parameters CODEPAGE, CREATUSR, EXCLREM, GDI, RINGWAIT, TXCHAR, APILOGIN,
+ *           FIXUSERS, JNLDIR, JNLMODE, PORTMAP (and INVCASE, batch 14) are no longer read; a line naming one stops SD, so the installer
+ *           removes them from a kept sd.conf.  APILOGIN and CREATUSR were accepted and ignored here; now they are unknown like the rest.
+ * rev 0.9.0 Jan 25 mab add CREATUSR - allow create.account to create os user (removed 8 Nov 26)
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): NUMLOCKS is range checked, 1 to 32767 (QM4 Fixes 532): the lock table's cells and counts are int16, so a bigger value wrapped.
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): CLEANUP (seconds between scans for lost processes) and PHANTOMS (user numbers reserved for PHANTOM USER n), QM4 gaps.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): USPLIT (QM4 gaps Q-19): interactive users take the lowest user number, other processes the highest.
- * 16 Aug 26 Windows port - CREATUSR is gone.  The line is still accepted and
- *           discarded, deliberately - see the parser below.
+ * 16 Aug 26 Windows port - CREATUSR is gone.  The line was accepted and
+ *           discarded until 8 Nov 26 (see the top line).
  * START-DESCRIPTION:
  *
  * Handles parsing of the configuration file.
@@ -46,7 +49,6 @@
  *  DEBUG=n       Debug features enabled? (bit flags)
  *  FDS=n         Set FDS limit (default is no limit)
  *  FLTDIFF=f     Wide zero value
- *  GDI=n         Select default API calls for printing
  *  GRPSIZE=n     Default group size when creating a dynamic file
  *  MAXIDLEN=63   Maximum record id len
  *  MUSTLOCK=1    Must hold update or file lock to write or delete record
@@ -69,7 +71,6 @@
  *  STARTUP=cmd   (REMOVED 6 Oct 2026 - refused by name if present)
  *  TEMPDIR=path  Pathname of temporary directory
  *  TERMINFO=path Pathname of terminfo directory
- *  TXCHAR=1      Enable ansi/oem character translation (default = 1)
  *  YEARBASE=n    Two digit year base (default = 1930)
  *
  *
@@ -89,7 +90,6 @@ Private bool rangecheck(char* param,
                         int min_val,
                         int max_val,
                         char* errmsg);
-Private bool ranges_overlap(int lo1, int count1, int lo2, int count2);
 
 /* ====================================================================== */
 
@@ -105,7 +105,6 @@ struct CONFIG* read_config(char* errmsg) {
   int numlocks_asked = 100; /* NUMLOCKS as written: cfg->numlocks is int16 and would wrap before it was checked */
   bool status = FALSE;
   int n2;
-  int n3;
   int hi_user;
   struct stat statbuf;
 
@@ -120,14 +119,11 @@ struct CONFIG* read_config(char* errmsg) {
   /* Set defaults for private configuration parameters */
   /* !!CONFIG!! */
 
-  pcfg.codepage = 0;      /* CODEPAGE: Console code page */
   pcfg.dhcache = 10;      /* DHCACHE:  Closed dynamic files kept open: the fixed 10 until 1.2-0 (openQM item 90) */
   pcfg.dumpdir[0] = '\0'; /* DUMPDIR:  Directory for process dump files */
-  pcfg.exclrem = 0;       /* EXCLREM:  Exclude remote files in ACCOUNT.SAVE? */
   pcfg.filerule = 0;      /* FILERULE: File name rules (special forms) */
   pcfg.fltdiff = 0.0000000000291; /* FLTDIFF: Wide zero for float eq test */
   pcfg.fsync = 0;                 /* FSYNC:    Controls when to do fsync() */
-  pcfg.gdi = 0;                   /* GDI:      Default GDI spool API? */
  /* 20240219 mab create-account based on type (user / group / other) */
  /* 13 Aug 26 Windows port - accounts live beside the rest of SD's data under
     C:\ProgramData\SD.  /home/sd was the right place while an SD account was
@@ -149,8 +145,7 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.netreply = 30;             /* NETREPLY: Seconds to wait for each reply of a remote SDNet server (the plan's 30) */
   pcfg.pwdelay = 3;               /* PWDELAY:  Seconds after a failed network login.  SD's own 3 (openQM's is 5) */
   pcfg.sdclient_mode = 0;         /* SDCLIENT: Client capabilities */
-  pcfg.reccache = 0;             /* RECCACHE: Record cache size */
-  pcfg.ringwait = TRUE;           /* RINGWAIT: Wait if ring buffer full */
+  pcfg.reccache = 0;              /* RECCACHE: Record cache size */
   pcfg.safedir = FALSE;       /* SAFE_DIR: User careful update to dir files */
   pcfg.sh[0] = '\0';          /* SH:       Command to run interactive shell */
   pcfg.sh1[0] = '\0';         /* SH1:      Command to run single shell */
@@ -162,7 +157,6 @@ struct CONFIG* read_config(char* errmsg) {
   pcfg.spooler[0] = '\0';     /* SPOOLER:  Default spooler name */
   pcfg.terminfodir[0] = '\0'; /* TERMINFO: Use default location */
   pcfg.timezone[0] = '\0';    /* TIMEZONE: the epoch functions use the process's own TZ (15 Oct 26, QM4 gaps Q-3) */
-  pcfg.txchar = TRUE;         /* TXCHAR:   Enable ansi/oem translation */
 /* 20240219 mab create-account based on type (user / group / other) */
 /* 13 Aug 26 Windows port - see the note on grpdir above.                   */
   strncpy(pcfg.usrdir,"C:\\ProgramData\\SD\\user_accounts",MAX_PATHNAME_LEN+1);  /* USRDIR: user accounts parent dir */
@@ -224,21 +218,10 @@ struct CONFIG* read_config(char* errmsg) {
       /* !!CONFIG!! */
       else if (sscanf(rec, "CMDSTACK=%d", &n) == 1)
         cfg->cmdstack = n;
-      else if (sscanf(rec, "CODEPAGE=%d", &n) == 1)
-        pcfg.codepage = n;
-      /* 16 Aug 26 Windows port - CREATUSR IS OBSOLETE AND IS ACCEPTED HERE
-         ONLY SO THAT A CONFIGURATION FILE CARRYING IT STILL LOADS.  SD has
-         accounts, not accounts and users, so CREATE.ACCOUNT creates the
-         operating system account always and there is nothing to opt in to;
-         the gate went on 14 Aug 26 and struct PCFG no longer holds a value
-         for it.  The branch is NOT simply deleted, because the chain below
-         ends in "Unrecognised configuration parameter", which aborts
-         read_config() and stops SD starting - and upstream sdb64 still
-         parses CREATUSR, so a file copied from a Linux install can have it.
-         Removing this branch would turn tidying-up into a failure to start. */
-      else if (sscanf(rec, "CREATUSR=%d", &n) == 1) {
-        /* accepted and discarded */
-      }
+      /* 8 Nov 26 Windows port - from Linux 843344ba (S.87 batch 15): CODEPAGE and
+         CREATUSR are gone.  CREATUSR was accepted and discarded here so that a
+         file carrying it still loaded; now, as on Linux, the installer removes a
+         retired parameter's line from a kept sd.conf (sd.iss, RetiredConf). */
       /* 01 Oct 26 Windows port - BACKUPDIR, THE DIRECTORY BACKUP.ACCOUNT AND
          RESTORE.ACCOUNT USE WHEN THEY ARE NOT GIVEN ONE.  SET.BACKUP.DIRECTORY
          writes this line; the CHAIN BELOW ENDS IN "Unrecognised configuration
@@ -265,21 +248,14 @@ struct CONFIG* read_config(char* errmsg) {
         strcpy(pcfg.dumpdir, rec + 8);
       else if (sscanf(rec, "ERRLOG=%d", &n) == 1)
         cfg->errlog = n * 1024;
-      else if (sscanf(rec, "EXCLREM=%d", &n) == 1)
-        pcfg.exclrem = (n != 0);
       else if (sscanf(rec, "FDS=%d", &n) == 1)
         cfg->fds_limit = n;
       else if (sscanf(rec, "FILERULE=%d", &n) == 1)
         pcfg.filerule |= n;
-      else if (sscanf(rec, "FIXUSERS=%d,%d", &n, &n2) == 2) {
-        cfg->fixusers_base = n;
-        cfg->fixusers_range = n2;
-      } else if (sscanf(rec, "FLTDIFF=%lf", &flt) == 1)
+      else if (sscanf(rec, "FLTDIFF=%lf", &flt) == 1)
         pcfg.fltdiff = flt;
       else if (sscanf(rec, "FSYNC=%d", &n) == 1)
         pcfg.fsync |= n;
-      else if (sscanf(rec, "GDI=%d", &n) == 1)
-        pcfg.gdi = (n != 0);
       else if (sscanf(rec, "GRPSIZE=%d", &n) == 1)
         pcfg.grpsize = n;
 /* 20240219 mab create-account based on type (user / group / other) */          
@@ -287,10 +263,6 @@ struct CONFIG* read_config(char* errmsg) {
         strncpy(pcfg.grpdir, rec + 7,MAX_PATHNAME_LEN+1); 
       else if (sscanf(rec, "INTPREC=%d", &n) == 1)
         pcfg.intprec = n;
-      else if (strncmp(rec, "JNLDIR=", 7) == 0)
-        strcpy(cfg->jnldir, rec + 7);
-      else if (sscanf(rec, "JNLMODE=%d", &n) == 1)
-        cfg->jnlmode = n;
       else if (sscanf(rec, "LGNWAIT=%d", &n) == 1)
         cfg->lgnwait = n;
       else if (sscanf(rec, "LPTRHIGH=%d", &n) == 1)
@@ -347,26 +319,12 @@ struct CONFIG* read_config(char* errmsg) {
         pcfg.objmem = n * 1024L;
       else if (sscanf(rec, "PDUMP=%d", &n) == 1)
         cfg->pdump |= n;
-      else if (sscanf(rec, "PORTMAP=%d,%d,%d", &n, &n2, &n3) == 3) {
-        cfg->portmap_base_port = n;
-        cfg->portmap_base_user = n2;
-        cfg->portmap_range = n3;
-      } 
       else if (sscanf(rec, "PWDELAY=%d", &n) == 1)
         pcfg.pwdelay = n;
       else if (sscanf(rec, "SDCLIENT=%d", &n) == 1)
         pcfg.sdclient_mode |= n;
-/* 06 Oct 26 Windows port - APILOGIN IS RETIRED (parity audit PAW-5; SD Core for
-   Linux retired it on 14 Sep, S.18).  It chose between two paths of login_user(),
-   which is gone, and LOGIN() now fails closed; the API logs in by SCRAM only
-   and APISRVR takes the proven name unconditionally.  Nothing read the value
-   but a dead block in op_login.  The line is still ACCEPTED and ignored, not
-   stored, for the reason CREATUSR is: an unrecognised parameter is fatal just
-   below, and an sd.conf kept across an upgrade, or copied from an older
-   install, can carry it.  CONFIG() no longer reports it. */
-      else if (sscanf(rec, "APILOGIN=%d", &n) == 1) {
-        /* accepted and ignored */
-      }
+/* 8 Nov 26 Windows port - APILOGIN (accepted and ignored since 6 Oct 26) is gone with
+   S.87 batch 15 (Linux 843344ba); the installer removes its line from a kept sd.conf. */
 /* 17 Aug 26 Windows port - APIPORT, whether sdwind listens for API
    connections.  There is no default: the struct is memset to zero above, zero
    means no listener, and the listener has to be asked for.  Opening one is a
@@ -387,8 +345,6 @@ struct CONFIG* read_config(char* errmsg) {
       }
        else if (sscanf(rec, "RECCACHE=%d", &n) == 1)
         pcfg.reccache = n;
-      else if (sscanf(rec, "RINGWAIT=%d", &n) == 1)
-        pcfg.ringwait = (n != 0);
       else if (sscanf(rec, "SAFEDIR=%d", &n) == 1)
         pcfg.safedir = (n != 0);
       /* 14 Aug 26 Windows port - bounds checked.  These were plain strcpy
@@ -435,8 +391,6 @@ struct CONFIG* read_config(char* errmsg) {
         strcpy(pcfg.tempdir, rec + 8);
       else if (strncmp(rec, "TERMINFO=", 9) == 0)
         strcpy(pcfg.terminfodir, rec + 9);
-      else if (sscanf(rec, "TXCHAR=%d", &n) == 1)
-        pcfg.txchar = (n != 0);
       else if (sscanf(rec, "USERPOOL=%d", &n) == 1)
         cfg->userpool = n;
       else if (sscanf(rec, "USPLIT=%d", &n) == 1)
@@ -444,7 +398,7 @@ struct CONFIG* read_config(char* errmsg) {
       else if (sscanf(rec, "CLEANUP=%d", &n) == 1)
         cfg->cleanup = n;               /* 30 to 3600: rangecheck below (16 Oct 26) */
       else if (sscanf(rec, "PHANTOMS=%d,%d", &n, &n2) == 2) {
-        cfg->phantoms_base = n;         /* checked against the highest user number and FIXUSERS / PORTMAP below */
+        cfg->phantoms_base = n;         /* checked against the highest user number below */
         cfg->phantoms_range = n2;
       }
  /* 20240219 mab create-account based on type (user / group / other) */
@@ -499,48 +453,12 @@ struct CONFIG* read_config(char* errmsg) {
 
   hi_user = max(cfg->max_users, cfg->userpool);
 
-  if ((cfg->portmap_range) &&
-      (cfg->portmap_base_user + cfg->portmap_range - 1 > hi_user)) {
-    sprintf(errmsg, "PORTMAP user numbers extend beyond %d.", hi_user);
-    goto exit_read_config;
-  }
-
-  if (cfg->fixusers_base) {
-    if (cfg->fixusers_base + cfg->fixusers_range - 1 > hi_user) {
-      sprintf(errmsg, "FIXUSERS user numbers extend beyond %d.", hi_user);
-      goto exit_read_config;
-    }
-
-    if (cfg->portmap_range) /* Both PORTMAP and FIXUSERS - Check overlap */
-    {
-      if (((cfg->portmap_base_user >= cfg->fixusers_base) &&
-           (cfg->portmap_base_user <
-            cfg->fixusers_base + cfg->fixusers_range)) ||
-          ((cfg->fixusers_base >= cfg->portmap_base_user) &&
-           (cfg->fixusers_base <
-            cfg->portmap_base_user + cfg->portmap_range))) {
-        sprintf(errmsg, "PORTMAP and FIXUSERS user numbers overlap.");
-        goto exit_read_config;
-      }
-    }
-  }
-
-  /* PHANTOMS (16 Oct 26): the user numbers PHANTOM ... USER n may take must exist and must not be numbers FIXUSERS or PORTMAP reserve */
+  /* PHANTOMS (16 Oct 26): the user numbers PHANTOM ... USER n may take must exist */
 
   if (cfg->phantoms_base || cfg->phantoms_range) {
     if ((cfg->phantoms_base < 1) || (cfg->phantoms_range < 1) ||
         (cfg->phantoms_base + cfg->phantoms_range - 1 > hi_user)) {
       sprintf(errmsg, "PHANTOMS user numbers must lie between 1 and %d.", hi_user);
-      goto exit_read_config;
-    }
-    if (cfg->fixusers_base &&
-        ranges_overlap(cfg->phantoms_base, cfg->phantoms_range, cfg->fixusers_base, cfg->fixusers_range)) {
-      sprintf(errmsg, "PHANTOMS and FIXUSERS user numbers overlap.");
-      goto exit_read_config;
-    }
-    if (cfg->portmap_range &&
-        ranges_overlap(cfg->phantoms_base, cfg->phantoms_range, cfg->portmap_base_user, cfg->portmap_range)) {
-      sprintf(errmsg, "PHANTOMS and PORTMAP user numbers overlap.");
       goto exit_read_config;
     }
   }
@@ -613,13 +531,6 @@ Private bool rangecheck(char* param,
   }
 
   return TRUE;
-}
-
-/* ======================================================================
-   ranges_overlap()  -  Do two runs of user numbers (first number, how many) share a number?  (16 Oct 26, PHANTOMS) */
-
-Private bool ranges_overlap(int lo1, int count1, int lo2, int count2) {
-  return (lo1 < lo2 + count2) && (lo2 < lo1 + count1);
 }
 
 /* ======================================================================

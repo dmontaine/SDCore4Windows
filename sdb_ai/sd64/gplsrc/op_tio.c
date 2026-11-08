@@ -3474,8 +3474,7 @@ PRINT_UNIT *tio_set_printer(int16_t unit, int16_t mode, int16_t lines_per_page, 
     /* !!PU!! */
     p->mode = mode;
     p->flags = 0;
-    if (!(pcfg.gdi))
-      p->flags |= PU_RAW;
+    p->flags |= PU_RAW;
     p->width = width;
     p->lines_per_page = lines_per_page;
     p->top_margin = top_margin;

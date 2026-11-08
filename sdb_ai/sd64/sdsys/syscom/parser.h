@@ -141,7 +141,6 @@ $define KW$ASSOC.WITH     127
 $define KW$DISPLAY.LIKE   128
 $define KW$NFMT           129
 $define KW$NEXT           130
-$define KW$RAW            131
 $define KW$LABEL          132
 $define KW$NO.DEFAULT     133
 $define KW$CURRENCY       134
@@ -152,7 +151,6 @@ $define KW$REQUIRE.INDEX  138
 $define KW$NO.INDEX       139
 $define KW$LEVEL          140
 $define KW$CLEAR          141
-$define KW$GDI            142
 $define KW$DELIMITER      143
 $define KW$TASKLOCK       144
 $define KW$COPIES         145
