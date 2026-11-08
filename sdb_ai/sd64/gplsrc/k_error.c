@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): k_unassigned_zero/_null, k_div_zero_warning and k_non_numeric_warning (messages 1109 to
+ *           1112) are gone with OPTION UNASS.WARNING, DIV.ZERO.WARNING and NON.NUMERIC.WARNING: an unassigned variable, a divide by zero and a
+ *           non-numeric value are always errors.
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_error(): an error with a row in sys_exc_table is thrown as a SYS.* exception when a TRY handler can
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: log_permissions_error() does not read the file table for a NET_FILE
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - k_error(): an error with a row in sys_exc_table is thrown as a SYS.* exception when a TRY handler can
@@ -287,13 +290,9 @@ DescrError(1100, k_index_error) DescrError(1101, k_dh_error)
         DescrError(1104, k_non_numeric_error) DescrError(1105, k_unassigned)
             DescrError(1106, k_null_id) DescrError(1107, k_illegal_id)
                 DescrError(1108, k_div_zero_error)
-                    DescrError(1109, k_unassigned_zero)
-                        DescrError(1110, k_unassigned_null)
-                            DescrError(1111, k_div_zero_warning)
-                                DescrError(1112, k_non_numeric_warning)
-                                    DescrError(1113, k_data_type)
-                                        DescrError(1137, k_strnum_len)
-                                            DescrError(1138, k_not_socket)
+                    DescrError(1113, k_data_type)
+                        DescrError(1137, k_strnum_len)
+                            DescrError(1138, k_not_socket)
 
                                                 Private
     void k_descr_error(int16_t msg_no, DESCRIPTOR* descr) {

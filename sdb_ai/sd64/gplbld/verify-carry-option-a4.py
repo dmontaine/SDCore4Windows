@@ -18,9 +18,8 @@
 # before the option and once after OPTION <name>, on data where the two must differ, so a row cannot pass
 # because the command printed nothing: the CONTROL is the first run.
 #
-#   3  QUERY.SORT.NO.CASE (openQM ref 412)     5  BACKSLASH.NOT.QUOTE (165)
-#   6  CLEAR.SELECT (403)
-#   0  the three names are known to OPTION  (legs 1, 2 and 4 - QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV - were retired 27 Oct 26)
+#   3, 5, 6  controls only now: QUERY.SORT.NO.CASE (412), BACKSLASH.NOT.QUOTE (165) and CLEAR.SELECT (403) are gone (27 Oct 26, S.87)
+#   0  the removed names are not options and OPTION refuses them  (legs 1, 2 and 4 - QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV - were retired 27 Oct 26 too)
 
 import os
 import re
@@ -31,7 +30,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOOL = os.path.join(HERE, "sandbox-fromtree.py")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 passed = failed = 0
-NAMES = ("QUERY.SORT.NO.CASE", "CLEAR.SELECT")
+NAMES = ("QUERY.SORT.NO.CASE", "CLEAR.SELECT", "UNASS.WARNING", "DIV.ZERO.WARNING", "NON.NUMERIC.WARNING", "INHERIT", "SDBASIC.WARNINGS")   # all removed 27 Oct 26 (S.87 batch 16)
 
 
 def say(s=""):
@@ -114,10 +113,13 @@ def main():
         made.append(name)
 
     try:
-        say("\n--- leg 0: the names ------------------------------------------------------------")
+        say("\n--- leg 0: the removed names are not options any more ------------------------------------")
         out = sess(box, "OPTION")
+        row("CONTROL: OPTION lists the options that stay (DIR.SEL.OMIT.HIDDEN)", re.search(r"(?m)^DIR\.SEL\.OMIT\.HIDDEN\b", out) is not None, "not in the listing")
         for n in NAMES:
-            row("OPTION lists %s" % n, re.search(r"(?m)^%s\b" % re.escape(n), out) is not None, "not in the listing")
+            row("OPTION does not list %s" % n, re.search(r"(?m)^%s\b" % re.escape(n), out) is None, "still in the listing")
+            c = ["OPTION %s" % n]
+            row("OPTION %s is refused as not recognised" % n, re.search(r"(?i)not recogni[sz]ed", sess(box, *c)) is not None, "no refusal")
 
         say("\n--- setup ---------------------------------------------------------------------")
         # name, num, mv field (value marks), zzo4 ids r1..r6
@@ -148,14 +150,11 @@ def main():
 
         say("\n--- legs 1, 2 and 4 (QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV) were retired on 27 Oct 26 with their options ---------")
 
-        say("\n--- leg 3: QUERY.SORT.NO.CASE (ref 412) ----------------------------------------------")
-        c = ["LIST zzo4 name BY name ID.SUP", "OPTION QUERY.SORT.NO.CASE", "LIST zzo4 name BY name ID.SUP "]
-        sg = segments(sess(box, *c), c)
-        a, b = names_in(sg.get(0)), names_in(sg.get(2))
-        row("CONTROL: ASCII order, capitals first: Bob Carol a\\b alice dave ed fay",
+        say("\n--- leg 3 (QUERY.SORT.NO.CASE) was retired on 27 Oct 26; the control stays: a sort is by ASCII, capitals first -----------")
+        c = ["LIST zzo4 name BY name ID.SUP"]
+        a = names_in(segments(sess(box, *c), c).get(0))
+        row("a sort is ASCII, capitals first: Bob Carol a\\b alice dave ed fay",
             a == ["Bob", "Carol", "a\\b", "alice", "dave", "ed", "fay"], "got %r" % a)
-        row("THE ROW: upper-cased keys: alice (ALICE) a\\b (A\\B) Bob Carol dave ed fay",
-            b == ["alice", "a\\b", "Bob", "Carol", "dave", "ed", "fay"], "got %r" % b)
 
         say("\n--- leg 5: a backslash opens a quoted string (OPTION BACKSLASH.NOT.QUOTE, ref 165, was removed 27 Oct 26) ----------")
         c = ["LIST zzo4 name WITH name = a\\b ID.SUP"]
@@ -163,14 +162,10 @@ def main():
         row("a backslash opens a quoted string and the line is refused",
             re.search(r"(?i)unpaired", sg.get(0) or "") is not None and names_in(sg.get(0)) == [], "no 'unpaired' message, or a record was listed")
 
-        say("\n--- leg 6: CLEAR.SELECT (ref 403) ------------------------------------------------------")
+        say("\n--- leg 6 (CLEAR.SELECT) was retired on 27 Oct 26; the control stays: a waiting list survives the next command --------")
         out = sess(box, "SELECT zzo4 WITH num > 1.5", "DATE", "LIST zzo4 name ID.SUP")
         a = names_in(segments(out, ["SELECT zzo4 WITH num > 1.5", "DATE", "LIST zzo4 name ID.SUP"]).get(2))
-        c = ["OPTION CLEAR.SELECT", "SELECT zzo4 WITH num > 1.5", "DATE", "LIST zzo4 name ID.SUP"]
-        b = names_in(segments(sess(box, *c), c).get(3))
-        row("CONTROL: the list survives DATE and LIST uses it: 4 records", len(a) == 4, "got %r" % a)
-        row("THE ROW: with CLEAR.SELECT the waiting list is cleared by DATE, so LIST gets all 7 records", len(b) == 7,
-            "got %r" % b)
+        row("the list survives DATE and LIST uses it: 4 records", len(a) == 4, "got %r" % a)
     finally:
         for n in made:
             for d in ("bp", "bp.out"):

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  S.87 batch 16: UNASS.WARNING, DIV.ZERO.WARNING, NON.NUMERIC.WARNING, INHERIT, QUERY.SORT.NO.CASE and CLEAR.SELECT retired (blank rows) and the SDBASIC.WARNINGS shortcut with them: the shortcut branch, the flag column and message 3202 are gone.
 * 27 Oct 26 dm  S.87 batch 12: CHAIN.KEEP.COMMON, BACKSLASH.NOT.QUOTE and CORRELATIVE.REUSE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 8: NO.SEL.LIST.QUERY, CATALOGUE.LOCAL, INHERIT.MFILE.PATH and CORRELATIVE.NOCASE retired (blank rows).
 * 27 Oct 26 dm  S.87 batch 7: RUN.NO.PAGE, QUERY.STRING.COMP, QUERY.STR.COMP.ALL, DEFAULT.MV, PICK.ML.CONV.MASK, CHAINED.SELECT, PAGINATE.ON.HEADING, QUERY.FOOTER.PAUSE, KEEP.OLD.OBJECT, ASSOC.ALL and QUERY.MERGE.PRINT retired (blank rows).
@@ -54,7 +55,7 @@ $include int$keys.h
    * where the first entry is option zero.
 
    opt = ''
-   opt<-1> = 'UNASS.WARNING|W|3100'
+   opt<-1> = '||'                                ;* 0  was UNASS.WARNING
    opt<-1> = '$QUERY.DEBUG||3101'
    * 27 Oct 26  The options marked REMOVE in the owner's emulation survey (A-001 to A-018 and A-039 to A-041) are retired.  Each keeps its row, BLANK, so that
    *            the position of every later option - its index in options.h and in the flag string a phantom is given - does not move.
@@ -63,8 +64,8 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 4  was PICK.BREAKPOINT
    opt<-1> = '||'                                ;* 5  was WITH.IMPLIES.OR
    opt<-1> = 'DUMP.ON.ERROR||3106'
-   opt<-1> = 'DIV.ZERO.WARNING|W|3107'
-   opt<-1> = 'NON.NUMERIC.WARNING|W|3108'
+   opt<-1> = '||'                                ;* 7  was DIV.ZERO.WARNING
+   opt<-1> = '||'                                ;* 8  was NON.NUMERIC.WARNING
    opt<-1> = '||'                                ;* 9  was ASSOC.UNASSOC.MV
    opt<-1> = '||'                                ;* 10 was PICK.BREAKPOINT.U
    opt<-1> = 'NO.USER.ABORTS||3111'
@@ -82,7 +83,7 @@ $include int$keys.h
    opt<-1> = '||'                                ;* 23 was SELECT.KEEP.CASE
    opt<-1> = '||'                                ;* 24 was CREATE.FILE.UPCASE
    opt<-1> = '||'                                ;* 25 was PICK.EXPLODE
-   opt<-1> = 'INHERIT||3126'
+   opt<-1> = '||'                                ;* 26 was INHERIT
    opt<-1> = '||'                                ;* 27 was QUERY.NO.CASE
    opt<-1> = '||'                                ;* 28 was LOCK.BEEP
    opt<-1> = '||'                                ;* 29 was PICK.IMPLIED.EQ
@@ -93,10 +94,10 @@ $include int$keys.h
    * 10 Oct 26  1.2-0, openQM refs 140 299 412 165 205 403.  Same order as options.h.
    opt<-1> = '||'                                ;* 34 was QUERY.STRING.COMP
    opt<-1> = '||'                                ;* 35 was QUERY.STR.COMP.ALL
-   opt<-1> = 'QUERY.SORT.NO.CASE||12047'
+   opt<-1> = '||'                                ;* 36 was QUERY.SORT.NO.CASE
    opt<-1> = '||'                                ;* 37 was BACKSLASH.NOT.QUOTE
    opt<-1> = '||'                                ;* 38 was DEFAULT.MV
-   opt<-1> = 'CLEAR.SELECT||12050'
+   opt<-1> = '||'                                ;* 39 was CLEAR.SELECT
    * 12 Oct 26  1.2-0, openQM refs 288 and 445.
    opt<-1> = '||'                                ;* 40 was CATALOGUE.LOCAL
    opt<-1> = 'DIR.SEL.OMIT.HIDDEN||12081'
@@ -124,14 +125,9 @@ $include int$keys.h
    opt<-1> = 'INHERIT.OWNERSHIP||12389'          ;* 60, 16 Oct 26 QM4 gap 239
    *         'xxxxxxxxxxxxxxxxxxx'    Option name limit = 19 characters
 
-   * Shortcuts
-   shortcuts = ''
-   * 27 Oct 26: the PICK shortcut (a master switch for nine options) is gone with the nine
-   shortcuts<1,-1> = 'SDBASIC.WARNINGS' ; shortcuts<2,-1> = 'W'
-
+   * 27 Oct 26: the shortcut options (PICK, a master switch for nine options, and SDBASIC.WARNINGS, for three) are gone with the options they set
 
    options = fields(opt, '|', 1)
-   flags = fields(opt, '|', 2)
    desc.msgs = fields(opt, '|', 3)
    lptr = -1
 
@@ -175,28 +171,7 @@ $include int$keys.h
          * Look up option name
 
          locate option.name in options<1> setting i else
-            locate option.name in shortcuts<1,1> setting i else
-               stop sysmsg(3201) ;* Option name not recognised
-            end
-
-            * It's a shortcut option.
-
-            call !parser(PARSER$GET.TOKEN, token.type, token, keyword)
-            if token.type # PARSER$END then
-               stop sysmsg(3202) ;* This option cannot take a qualifying keyword
-            end
-
-            shortcut.flag = shortcuts<2,i>
-            num.options = dcount(options, @fm)
-            for i = 1 to num.options
-               if index(flags<i>, shortcut.flag, 1) then
-                  option.flags = kernel(K$GET.OPTIONS, 0)
-                  option.flags[i,1] = '1'
-                  void kernel(K$SET.OPTIONS, option.flags)
-               end
-            next i
-
-            goto done
+            stop sysmsg(3201) ;* Option name not recognised
          end
 
          * Get action

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 27 Oct 26 dm  S.87 batch 16: OPTION DIV.ZERO.WARNING is gone; a divide by zero in a program (op_div, op_idiv, op_quotient) is always an error.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -436,13 +437,7 @@ div_zero:
     (e_stack++)->data.value = 0;
     return;
   }
-  if (!Option(OptDivZeroWarning))
-    k_div_zero_error(arg1);
-  k_div_zero_warning(arg1);
-  k_dismiss();
-  k_dismiss();
-  InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = 0;
+  k_div_zero_error(arg1); /* fatal: it does not return */
 }
 
 /* ======================================================================
@@ -654,13 +649,7 @@ div_zero:
     (e_stack++)->data.value = 0;
     return;
   }
-  if (!Option(OptDivZeroWarning))
-    k_div_zero_error(arg1);
-  k_div_zero_warning(arg1);
-  k_dismiss();
-  k_dismiss();
-  InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = 0;
+  k_div_zero_error(arg1); /* fatal: it does not return */
 }
 
 /* ======================================================================
@@ -1261,13 +1250,7 @@ div_zero:
     (e_stack++)->data.value = 0;
     return;
   }
-  if (!Option(OptDivZeroWarning))
-    k_div_zero_error(arg1);
-  k_div_zero_warning(arg1);
-  k_dismiss();
-  k_dismiss();
-  InitDescr(e_stack, INTEGER);
-  (e_stack++)->data.value = 0;
+  k_div_zero_error(arg1); /* fatal: it does not return */
 }
 
 /* ======================================================================

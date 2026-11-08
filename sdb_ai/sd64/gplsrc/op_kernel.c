@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone with the KEEP.SELECT statement and OPTION CLEAR.SELECT; the
+ *           number stays reserved.
  * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: K_PHANTOM_NONCE (144), the secret a phantom() hands the new process in its environment (SD_PHANTOM_NONCE) so that the
  *               start-up records PHANTOM leaves in $ipc can be shown to come from the process that started it; phantom_nonce_import() takes
  *               it out of the environment as the phantom starts.
@@ -1430,15 +1432,6 @@ void op_kernel() {
         }
       }
     } break;
-
-    /* 15 Oct 26 dm - QM4 gaps Q-16.  The KEEP.SELECT flag: set by the statement (!keepselect), cleared and read by CPROC. */
-    case K_KEEP_SELECT:
-      GetInt(descr);
-      n = descr->data.value;
-      result.data.value = keep_select ? 1 : 0;
-      if (n >= 0)
-        keep_select = (n != 0);
-      break;
 
     case K_OBJKEY:
       result.data.value = object_key;

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION UNASS.WARNING and NON.NUMERIC.WARNING are gone, so an unassigned variable and a
+ *           non-numeric value are always errors; k_unass_zero(), k_unass_null() and k_non_numeric_zero() are deleted.
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_release() offers a file variable whose last reference has gone to park_fvar() (OPTION COMMAND.LEVEL.LOCKS)
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -74,8 +76,6 @@ double rounding[14] = {0.5,
                        0.000000000005,
                        0.0000000000005,
                        0.00000000000005};
-
-Private void k_non_numeric_zero(DESCRIPTOR* original, DESCRIPTOR* dereferenced);
 
 /* ======================================================================
    k_blank_string()  -  Check for blank string                            */
@@ -325,14 +325,12 @@ void k_get_bool(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
-      result = (p->data.value != 0);
+      k_unassigned(descr); /* fatal: it does not return */
+      result = FALSE;
       break;
 
     default:
-      k_non_numeric_zero(descr, p);
+      k_non_numeric_error(descr);
       result = (p->data.value != 0);
       break;
   }
@@ -411,7 +409,7 @@ void k_get_float(DESCRIPTOR* p) {
     case STRING:
     case SELLIST:
       if (!k_str_to_num(p))
-        k_non_numeric_zero(descr, p);
+        k_non_numeric_error(descr);
       if (p->type == INTEGER) {
         InitDescr(p, FLOATNUM);
         p->data.float_value = (double)(p->data.value);
@@ -419,15 +417,11 @@ void k_get_float(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
-      InitDescr(p, FLOATNUM);
-      p->data.float_value = 0;
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
-      k_non_numeric_zero(descr, p);
+      k_non_numeric_error(descr);
       InitDescr(p, FLOATNUM);
       p->data.float_value = (double)(p->data.value);
       break;
@@ -469,7 +463,7 @@ void k_get_int(DESCRIPTOR* p) {
     case STRING:
     case SELLIST:
       if (!k_str_to_num(p))
-        k_non_numeric_zero(descr, p);
+        k_non_numeric_error(descr);
       if (p->type == FLOATNUM) {
         if (fabs(p->data.float_value) > INT32_MAX) {
           k_error(sysmsg(1220));
@@ -480,13 +474,11 @@ void k_get_int(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
-      k_non_numeric_zero(descr, p);
+      k_non_numeric_error(descr);
   }
 
   process.numeric_array_allowed = FALSE;
@@ -522,7 +514,7 @@ void k_get_int32(DESCRIPTOR* p) {
     case STRING:
     case SELLIST:
       if (!k_str_to_num(p))
-        k_non_numeric_zero(descr, p);
+        k_non_numeric_error(descr);
       if (p->type == FLOATNUM) {
         InitDescr(p, INTEGER);
         p->data.value = (int32_t)p->data.float_value;
@@ -530,13 +522,11 @@ void k_get_int32(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
-      k_non_numeric_zero(descr, p);
+      k_non_numeric_error(descr);
   }
 
   process.numeric_array_allowed = FALSE;
@@ -559,17 +549,15 @@ void k_get_num(DESCRIPTOR* p) {
 
     case STRING:
       if (!k_str_to_num(p))
-        k_non_numeric_zero(descr, p);
+        k_non_numeric_error(descr);
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
-      k_non_numeric_zero(descr, p);
+      k_non_numeric_error(descr);
   }
 
   process.numeric_array_allowed = FALSE;
@@ -606,9 +594,7 @@ void k_get_string(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_null(descr, p);
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
@@ -640,9 +626,7 @@ void k_get_value(DESCRIPTOR* p) {
       break;
 
     case UNASSIGNED:
-      if (!Option(OptUnassignedWarning))
-        k_unassigned(descr);
-      k_unass_zero(descr, p);
+      k_unassigned(descr); /* fatal: it does not return */
       break;
 
     default:
@@ -1720,39 +1704,8 @@ u_int32_t GetUnsignedInt(DESCRIPTOR* descr) {
   }
 
 non_numeric:
-  k_non_numeric_zero(descr, q);
+  k_non_numeric_error(descr);
   return 0;
-}
-
-/* ======================================================================
-   k_non_numeric_zero()  -  Substitue zero for non-numeric variable       */
-
-Private void k_non_numeric_zero(DESCRIPTOR* original,
-                                DESCRIPTOR* dereferenced) {
-  if (!Option(OptNonNumericWarning))
-    k_non_numeric_error(original);
-  k_non_numeric_warning(original);
-  k_release(dereferenced);
-  InitDescr(dereferenced, INTEGER);
-  dereferenced->data.value = 0;
-}
-
-/* ======================================================================
-   k_unass_zero()  -  Substitue zero for unassigned variable              */
-
-void k_unass_zero(DESCRIPTOR* original, DESCRIPTOR* dereferenced) {
-  InitDescr(dereferenced, INTEGER);
-  dereferenced->data.value = 0;
-  k_unassigned_zero(original);
-}
-
-/* ======================================================================
-   k_unass_null()  -  Substitute null for unassigned variable             */
-
-void k_unass_null(DESCRIPTOR* original, DESCRIPTOR* dereferenced) {
-  InitDescr(dereferenced, STRING);
-  dereferenced->data.str.saddr = NULL;
-  k_unassigned_null(original);
 }
 
 /* END-CODE */

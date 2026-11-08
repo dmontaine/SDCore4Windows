@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION CLEAR.SELECT and the KEEP.SELECT statement are gone: a select list left active is
+*           left for the next command (CLEARSELECT 0 clears it).  OPTION INHERIT is gone: the option flags field of the phantom's Xn record is always null.
 * 8 Nov 26 Windows port - from Linux 9e3a3de3 (S.87 batch 13): @logname for the removed @user.
 * 8 Nov 26 Windows port - from Linux 88caab4f (S.87 batch 12): OPTION CHAIN.KEEP.COMMON is gone; CHAIN always deletes the unnamed common, as it did with the option off.
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION RUN.NO.PAGE and CHAINED.SELECT are gone (a run is paginated as it was with RUN.NO.PAGE off;
@@ -345,8 +347,7 @@ restart.cproc:
    pa.line = 0
    dim pa.save(5)
    pa.depth = 0
-   cs.depth = 0                  ;* CLEAR.SELECT: command nesting depth...
-   cs.was.active = @false        ;* ...and was list 0 active before it
+   cs.depth = 0                  ;* command nesting depth
    unwinding = 0   ;* 1 = unwind current paragraph, 2 = unwind all
    echo.paragraph = @false
 
@@ -1744,16 +1745,10 @@ execute.command:
       cproc.date = date()
       cproc.time = time()
 
-      * CLEAR.SELECT (10 Oct 26 dm, openQM ref 403): note whether list 0 is
-      * active before the command, so that a list the command makes is kept.
-      * Only the outermost command counts; a command that is left by a path
-      * that does not return through the end of this routine leaves the depth
-      * raised and so never clears anything, which is the safe way to fail.
+      * The depth of command nesting: cmd.origin below tells an inner command from the outer one.  (27 Oct 26: it also served OPTION
+      * CLEAR.SELECT, which is gone.)  A command that is left by a path that does not return through the end of this routine leaves the
+      * depth raised, so that a later command is called 'Exec'.
       cs.depth += 1
-      if cs.depth = 1 then
-         cs.was.active = selectinfo(0, 1)
-         void kernel(K$KEEP.SELECT, 0)    ;* KEEP.SELECT belongs to this command (15 Oct 26, QM4 gaps Q-16)
-      end
       voc.via.k = @false      ;* Set by a K entry that hands over to the V entry in its fields 3 onwards (openQM 263)
 
       * COMMAND.LOGGING (15 Oct 26 dm, QM4 gaps Q-8): when this session has it on, the command and where it came from go to
@@ -2095,17 +2090,8 @@ exit.command:
       end
    repeat
 
-   * CLEAR.SELECT: the command has finished.  If a select list was waiting
-   * for it, it has had its chance, so clear it.
-
    cs.depth -= 1
-   if cs.depth <= 0 then
-      cs.depth = 0
-      * KEEP.SELECT (15 Oct 26 dm, QM4 gaps Q-16): a program that meant to leave the list says so, and it is left
-      if cs.was.active and option(OPT.CLEAR.SELECT) and not(kernel(K$KEEP.SELECT, -1)) then clearselect 0
-      void kernel(K$KEEP.SELECT, 0)
-      cs.was.active = @false
-   end
+   if cs.depth <= 0 then cs.depth = 0
 
    at.sentence = sentence.stack<1>
    del sentence.stack<1>

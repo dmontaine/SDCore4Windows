@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): the statement KEEP.SELECT (name and handler row st.keepselect, and the program keepsel) is
+*               gone with OPTION CLEAR.SELECT, which was all it served.
 * 8 Nov 26 Windows port - from Linux 93f422ed (S.87 batch 13): the statements ROOT, KEY( and BSCAN (with the programs rootidx, keyop, bscan) and the Pick style
 *               CALL "file name" are gone.
 * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): the functions ADDS, SUBS, MULS, DIVS, IS.ALNUM .. IS.SPACE, LEFT, RIGHT and MD5 are gone (their
@@ -506,7 +508,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"WRITELIST":@fm:"MOVELIST":@fm:"MOVELISTV"   ;* 15 Oct 26 dm - QM4 gaps Q-2 (at the end, so that no other entry moves)
    statements := @fm:"REVREMOVE":@fm:"GROUPSTORE":@fm:"TTYSET":@fm:"SEND"    ;* 15 Oct 26 dm - QM4 gaps Q-1, Q-5, Q-7 (same)
    statements := @fm:"OSREAD":@fm:"OSWRITE":@fm:"OSDELETE"                    ;* 15 Oct 26 dm - QM4 gaps Q-4 (same)
-   statements := @fm:"SET.TIMEZONE":@fm:"KEEP.SELECT":@fm:"MATWRITECSV"       ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-16, Q-4 (same)
+   statements := @fm:"SET.TIMEZONE":@fm:"MATWRITECSV"                         ;* 15 Oct 26 dm - QM4 gaps Q-3, Q-4 (same; KEEP.SELECT, Q-16, went on 27 Oct 26)
    statements := @fm:"SELECTINDEXV"                                           ;* 15 Oct 26 dm - QM4 gaps Q-2 (same)
    statements := @fm:"SELECTLEFTV":@fm:"SELECTRIGHTV"                         ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291 (same)
    statements := @fm:"SORTADD":@fm:"SORTCLEAR"                                ;* 16 Oct 26 dm - QM4 Fixes item 371
@@ -2531,7 +2533,6 @@ is.statement:
                  st.oswrite,
                  st.osdelete,
                  st.settimezone,               ;* 15 Oct 26 dm - QM4 gaps Q-3
-                 st.keepselect,                ;* 15 Oct 26 dm - QM4 gaps Q-16
                  st.matwritecsv,               ;* 15 Oct 26 dm - QM4 gaps Q-4
                  st.selectindexv,              ;* 15 Oct 26 dm - QM4 gaps Q-2
                  st.selectleftv,               ;* 15 Oct 26 dm - QM4 gaps Q-2, sheet 291
@@ -10051,19 +10052,6 @@ st.settimezone:
    gosub emit.direct.call.reference
    gosub expr                           ;* The zone name
    sys.call.n = 1
-   gosub emit.sys.call.end
-   return
-
-*****************************************************************************
-* ST.KEEPSELECT  -  KEEP.SELECT     (15 Oct 26 dm, QM4 gaps Q-16)
-*
-* A call of the catalogued subroutine !keepselect, which tells the command processor that the list this program leaves in
-* list 0 is meant to be left: with OPTION CLEAR.SELECT the processor then does not clear it when the command ends.
-
-st.keepselect:
-   s = '!keepselect'
-   gosub emit.direct.call.reference
-   sys.call.n = 0
    gosub emit.sys.call.end
    return
 

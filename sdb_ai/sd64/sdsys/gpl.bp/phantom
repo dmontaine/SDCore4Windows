@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION INHERIT is gone; a phantom starts with every option off, as it did unless the
+*            parent had INHERIT on.
 * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: the Xn, Dn and Ln records are sealed with a secret that only the new process is given (its environment); CPROC runs them
 *               only if the seal checks.  $ipc is a file every SD user's process may write.
 * 18 Oct 26 Windows port - from Linux 7f7a4fd (16 Oct 26): USER n: the phantom takes user number n, one of those the PHANTOMS parameter keeps (QM4 gaps).
@@ -147,7 +149,7 @@ $define como.dir.voc.name "$COMO"
       *   nowhere.  If the secret or the seal cannot be made, no process is started.  The values are exactly the ones written to the
       *   records below - the option flags, the command, the DATA queue when it is passed, and the log file name - and CPROC
       *   (read.phantom.cargo) makes the same seal from what it reads and runs nothing unless it is the same.
-      opt.s = if option(OPT.INHERIT) then kernel(K$GET.OPTIONS,0) else ''
+      opt.s = ''     ;* 27 Oct 26: OPTION INHERIT is gone, so a phantom starts with every option off.  The field stays in the Xn record and the seal, always null.
       dq = if pass.data then @data.pending else ''
       nonce = SDEXT('24', @TRUE, SD_RANDBYTES)
       seal = ipc_seal('make', nonce, '', opt.s, ph.command, dq, log.file)

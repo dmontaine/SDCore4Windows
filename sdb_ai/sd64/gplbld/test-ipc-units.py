@@ -294,7 +294,7 @@ MUTANTS = [
     ("basic-reads-the-variable", "sdsys/gpl.bp/ipc_seal", "   set.status 0\n", "   set.status 0\n   zz = env('SD_PHANTOM_NONCE')\n", "K8"),
     # PHANTOM
     ("secret-is-constant", "sdsys/gpl.bp/phantom", "      nonce = SDEXT('24', @TRUE, SD_RANDBYTES)", "      nonce = 'QUJDREVGR0hJSktMTU5PUFFSU1RVVldY'", "B1"),
-    ("lock-taken-before-the-seal", "sdsys/gpl.bp/phantom", "      opt.s = if option(OPT.INHERIT)", "      filelock ipc.f\n      opt.s = if option(OPT.INHERIT)", "B1"),
+    ("lock-taken-before-the-seal", "sdsys/gpl.bp/phantom", "      opt.s = ''", "      filelock ipc.f\n      opt.s = ''", "B1"),
     ("record-carries-no-seal", "sdsys/gpl.bp/phantom", "write seal:@fm:opt.s:@fm:ph.command to ipc.f, 'X':uid", "write opt.s:@fm:ph.command to ipc.f, 'X':uid", "B2"),
     ("seal-without-the-data", "sdsys/gpl.bp/phantom", "seal = ipc_seal('make', nonce, '', opt.s, ph.command, dq, log.file)", "seal = ipc_seal('make', nonce, '', opt.s, ph.command, '', log.file)", "B3"),
     ("data-not-captured-before-the-lock", "sdsys/gpl.bp/phantom", "      dq = if pass.data then @data.pending else ''", "      dq = ''", "B3"),

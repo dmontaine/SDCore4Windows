@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): BY field NO.CASE no longer switches on OPTION QUERY.SORT.NO.CASE (the option is gone);
+*               sort.list.no.case sorts the selected list again on the upper-cased value of the field.  Not run.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
 *               (12518, 12519).
 * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: X (delete the item shown) asks the kernel (K$EDIT.OK, K$EDIT.KIND) for the file it has
@@ -71,7 +73,9 @@ $include keyin.h
    numbering = @false
    sort.clause = ''              ;* 13 Oct 26 dm - openQM 'SP.VIEW file BY field'
    sort.state = 0                ;* 1 = a field name must follow BY, 2 = NO.CASE may follow it
-   sort.no.case = @false         ;* The NO.CASE qualifier: SELECT has no such word, so OPTION QUERY.SORT.NO.CASE does it
+   sort.no.case = @false         ;* The NO.CASE qualifier: SELECT has no such word, so the list is sorted again here (27 Oct 26: OPTION QUERY.SORT.NO.CASE is gone)
+   sort.field = ''
+   sort.dsnd = @false
 
    loop
       call @parser(PARSER$MFILE, token.type, token, keyword)
@@ -82,6 +86,7 @@ $include keyin.h
 
          case sort.state = 1
             sort.clause := ' ' : token
+            sort.field = token
             sort.state = 2
 
          case sort.state = 2 and keyword = KW$NO.CASE
@@ -91,6 +96,7 @@ $include keyin.h
          case keyword = KW$BY or keyword = KW$BY.DSND
             if sort.clause # '' then stop sysmsg(2018, token) ;* Unexpected token (xx)
             by.token = token
+            sort.dsnd = (keyword = KW$BY.DSND)
             sort.clause = ' ' : token
             sort.state = 1
 
@@ -176,10 +182,7 @@ $include keyin.h
       end else
          * 18 Oct 26 Windows port - from Linux ab4dab3 (13 Oct 26): - openQM: the sort clause has the form of a query processor BY / BY.DSND clause.
          * Like openQM's, it makes the default select list and so replaces any that was active.
-         turn.off = sort.no.case and not(option(OPT.QUERY.SORT.NO.CASE))
-         if turn.off then execute 'OPTION QUERY.SORT.NO.CASE ON' capturing junk
          execute 'SELECT ' : file.name : sort.clause capturing sort.output
-         if turn.off then execute 'OPTION QUERY.SORT.NO.CASE OFF' capturing junk
          readlist item.list from 0 else
             item.list = ''
             if not(index(sort.output, 'selected', 1)) then   ;* Not the 'n record(s) selected' line: an error
@@ -187,6 +190,7 @@ $include keyin.h
                stop
             end
          end
+         if sort.no.case and item.list # '' then gosub sort.list.no.case
       end
       if sort.clause = '' then readlist item.list from 11 else null
       pick.pos = ''
@@ -221,6 +225,38 @@ $include keyin.h
 
    i = bindkey(saved.key.bindings, -4)
 
+   return
+
+* ======================================================================
+* sort.list.no.case  -  BY / BY.DSND field NO.CASE (27 Oct 26: the query processor's option QUERY.SORT.NO.CASE is gone, so the list is
+* sorted again here).  SELECT has sorted item.list with case counting; each id is now put in order of the upper-cased value of the field
+* (TRANS reads it through the dictionary), the id breaking ties.  A field whose values are all numbers, or null, was ordered by value
+* already and is left as it is.
+
+sort.list.no.case:
+   n.ids = dcount(item.list, @fm)
+   sort.keys = ''
+   all.numeric = @true
+   for ix = 1 to n.ids
+      sort.key = upcase(trans(file.name, item.list<ix>, sort.field, 'X'))
+      if sort.key # '' and not(num(sort.key)) then all.numeric = @false
+      sort.keys<ix> = sort.key
+   next ix
+   if all.numeric then return
+
+   ordered.keys = ''
+   ordered.ids = ''
+   for ix = 1 to n.ids
+      composite = sort.keys<ix> : char(1) : item.list<ix>
+      if sort.dsnd then
+         locate composite in ordered.keys<1> by 'DL' setting pos else null
+      end else
+         locate composite in ordered.keys<1> by 'AL' setting pos else null
+      end
+      ins composite before ordered.keys<pos>
+      ins item.list<ix> before ordered.ids<pos>
+   next ix
+   item.list = ordered.ids
    return
 
 * ======================================================================

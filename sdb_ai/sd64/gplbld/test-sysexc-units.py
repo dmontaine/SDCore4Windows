@@ -187,11 +187,15 @@ def checks(src, msg_exists, msg_fatal):
     return res
 
 
-def run(src, label_ok=True):
+def run(src, label_ok=True, warn=()):
+    """warn: message numbers to treat as '!' messages that exist (the shipped messages hold none since 27 Oct 26, when 1109 to 1112 went),
+    so that the mutant "a warning message in the table" has something to put in the table."""
     def exists(n):
-        return os.path.isfile(os.path.join(MSGDIR, str(n)))
+        return n in warn or os.path.isfile(os.path.join(MSGDIR, str(n)))
 
     def fatal(n):
+        if n in warn:
+            return False
         try:
             return not read(os.path.join(MSGDIR, str(n))).startswith("!")
         except OSError:
@@ -225,7 +229,7 @@ def selftest(src):
             continue
         s2 = dict(src)
         s2[key] = text
-        fails = [name.split(" ")[0] for name, ok, _ in run(s2) if not ok]
+        fails = [name.split(" ")[0] for name, ok, _ in run(s2, warn=(1109,) if "warning ('!')" in label else ())]
         got = want in fails
         row("selftest: %s is caught by check %s" % (label, want), got, "failed checks: %s" % fails)
         ok_all = ok_all and got

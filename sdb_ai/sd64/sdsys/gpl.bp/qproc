@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): OPTION QUERY.SORT.NO.CASE is gone; a sort key is compared as it is (SP.VIEW sorts
+*               case-blind by itself).
 * 8 Nov 26 Windows port - from Linux 980652fd (S.87 batch 15): BREAK.ON "LU" - L is no longer ignored when U is also given (the two controls are
 *               independent); the query words avg, enum, vert, percent, pct, %, header, footer, first, # and & are gone (their VOC records; the long forms
 *               were always the ones this program reads).
@@ -1932,15 +1934,6 @@ by.literal:
                continue
 
             next i
-
-            * If the QUERY.SORT.NO.CASE option is set, translate all sort keys
-            * to uppercase
-
-            if option(OPT.QUERY.SORT.NO.CASE) then
-               for i = 1 to no.of.sort.items
-                  by.item(i) = upcase(by.item(i))
-               next i
-            end
 
             * If there is a SAVING clause, extract the data to be saved
 

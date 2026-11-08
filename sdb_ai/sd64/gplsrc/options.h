@@ -32,7 +32,6 @@
    accommodate larger numbers of option flags.
    NOTE: This list is known by the BP OPTION program and BP INT$KEYS.H.   */
 
-#define OptUnassignedWarning  0
 #define OptQueryDebug         1
 /* 27 Oct 26: the options marked REMOVE in the owner's emulation survey are gone.  Their numbers stay RESERVED (the later options keep theirs, and the option
    flags travel as a string in a phantom's cargo); 2, 3, 4, 5, 9, 10, 14, 15, 16, 17, 19, 20, 23, 24, 25, 27, 28, 29, 30, 31, 32 and 33 are retired:
@@ -42,20 +41,12 @@
 /* 27 Oct 26 (S.87 batch 7): 12, 34, 35, 38, 42, 43, 44, 47, 51, 54 and 57 are retired too: RunNoPage, QueryStringComp, QueryStrCompAll, DefaultMV, PickMLConvMask, ChainedSelect,
    PaginateOnHeading, QueryFooterPause, KeepOldObject, AssocAll and QueryMergePrint.  Blank rows again.
    Batch 8: 21, 40, 48 and 55 as well: NoSelListQuery, CatalogueLocal, InheritMFilePath and CorrelativeNoCase.
-   Batch 12: 22, 37 and 56: ChainKeepCommon, BackslashNotQuote and CorrelativeReuse. */
+   Batch 12: 22, 37 and 56: ChainKeepCommon, BackslashNotQuote and CorrelativeReuse.
+   Batch 16: 0, 7, 8, 26, 36 and 39: UnassignedWarning, DivZeroWarning, NonNumericWarning, Inherit, QuerySortNoCase and ClearSelect. */
 #define OptDumpOnError        6
-#define OptDivZeroWarning     7
-#define OptNonNumericWarning  8
 #define OptNoUserAborts      11
 #define OptShowStackOnError  13
 #define OptSuppressAbortMsg  18
-#define OptInherit           26
-#define OptQuerySortNoCase   36   /* 10 Oct 26  1.2-0 openQM refs 140, 299,  */
-                                  /*            412, 165, 205, 403: every    */
-#define OptClearSelect       39   /*            new option is read by BASIC  */
-                                  /*            only (gpl.bp/qproc, parser,  */
-                                  /*            cproc), so the C side only   */
-                                  /*            needs room for the flags.    */
 #define OptDirSelOmitHidden  41   /* 12 Oct 26  openQM ref 445: DIR.SEL.OMIT.HIDDEN is read by dir_select() in op_dio4.c.  */
 #define OptForceReload      45   /* 14 Oct 26  openQM ref 37: read by process_events() in kernel.c; the CALL ops refresh a stale link */
 #define OptNumericExponent   46   /* 14 Oct 26  openQM ref 404: read by k_str_to_num() and k_is_num() in k_funcs.c */

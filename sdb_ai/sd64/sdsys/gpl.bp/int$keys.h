@@ -218,7 +218,7 @@
       $define K$INPUT.TRAP.HIT  104      ;* the stub of INPUTTRAP: which label, and forget it
       $define K$MAXMIN.POS.SET  105      ;* _MAXIMUM and _MINIMUM leave the position they found, for SYSTEM(1088) (15 Oct 26, Q-18)
       $define K$PID.ALIVE       106      ;* 1 if the process with this id exists, 0 if not (15 Oct 26, Q-8, !login_inhibit)
-      $define K$KEEP.SELECT     107      ;* KEEP.SELECT flag of the running command: 1 set, 0 clear, -1 ask; the old value returns (15 Oct 26, Q-16)
+      * 107 was K$KEEP.SELECT (KEEP.SELECT, removed 27 Oct 26, S.87 batch 16): the number stays reserved.
       $define K$CMDLOG          108      ;* COMMAND.LOGGING: 1 on, 0 off, -1 ask; the log's pathname when it is on, else null (15 Oct 26, Q-8)
       $define K$CMDLOG.WRITE    109      ;* "origin<FM>command": one line in the command log if it is on (15 Oct 26, Q-8)
       $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
@@ -470,22 +470,17 @@
       $define V$JSON.NULL    21
 
       * Option flags (see also csrc options.h)
-      $define OPT.UNASS.WARNING        0 ;* Treat unassigned variable as warning
       $define OPT.QUERY.DEBUG          1 ;* QPROC debugging (restricted)
       * 27 Oct 26: options 2, 3, 4, 5, 9, 10, 14, 15, 16, 17, 19, 20, 23, 24, 25 and 27 to 33 are RETIRED (the owner's emulation survey, entries A-001 to A-018 and
       * A-039 to A-041).  Their numbers stay reserved so that the later options keep theirs; see gplsrc/options.h.
       $define OPT.DUMP.ON.ERROR        6 ;* Dump process on error
-      $define OPT.DIV.ZERO.WARNING     7 ;* Treat divide by zero as warning
-      $define OPT.NON.NUMERIC.WARNING  8 ;* Treat non-numeric as warning
       $define OPT.NO.USER.ABORTS      11 ;* Suppress user options to abort
       * 27 Oct 26 (S.87 batch 7): options 12, 34, 35, 38, 42, 43, 44, 47, 51, 54 and 57 are RETIRED too (entries A-020 to A-026, A-029, A-034, A-035 and A-037).
       $define OPT.SHOW.STACK.ON.ERROR 13 ;* Show stack on error
       $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
       * 27 Oct 26 (S.87 batch 8): options 21, 40, 48 and 55 are RETIRED too (entries A-019, A-033, A-036 and A-030).
       * 27 Oct 26 (S.87 batch 12): options 22, 37 and 56 are RETIRED too (entries A-038, A-028 and A-031).
-      $define OPT.INHERIT             26 ;* Phantom inherits options
-      $define OPT.QUERY.SORT.NO.CASE  36 ;* QPROC: sorts are case insensitive
-      $define OPT.CLEAR.SELECT        39 ;* Clear select list 0 after a command that did not make it
+      * 27 Oct 26 (S.87 batch 16): options 0, 7, 8, 26, 36 and 39 are RETIRED too (entries A-042, A-044, A-027 and A-032).
       $define OPT.DIR.SEL.OMIT.HIDDEN 41 ;* Select of a directory file leaves out names that begin with a dot (kernel)
       $define OPT.FORCE.RELOAD        45 ;* An unload event also resets subroutine link variables (kernel)
       $define OPT.GIT                 49 ;* .gitignore and .gitattributes are not mapped in a directory file (kernel)

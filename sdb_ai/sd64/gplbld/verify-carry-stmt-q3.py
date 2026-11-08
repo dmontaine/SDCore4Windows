@@ -11,6 +11,7 @@
 #
 # START-HISTORY:
 # 15 Oct 26 dm  Written for QM4 gaps bundles Q-13 (DIGEST), Q-3 / Q-19 (SET.TIMEZONE, TIMEZONE) and Q-2 (KEEP.SELECT).
+# 27 Oct 26 dm  S.87 batch 16: KEEP.SELECT and OPTION CLEAR.SELECT are gone; section C is one control row and zzp2 is deleted.
 # END-HISTORY
 #
 # THE INSTRUMENT.  Sessions are real: bin/sd with a pipe on stdin, ordinary ones in a fixture account (no -internal,
@@ -24,8 +25,7 @@
 #      and a 3 MB file, the administrator reading the file the account cannot, 2000 calls in a loop
 #   B  SET.TIMEZONE / CONFIG TIMEZONE: the epoch functions in two zones against zoneinfo, MVEPOCH as the inverse, DATE() and
 #      TIME() not moved, a refused name leaves the setting, the null string goes back, the CONFIG verb sets it
-#   C  KEEP.SELECT: with OPTION CLEAR.SELECT a program that leaves list 0 active has it cleared at the end of its command;
-#      with KEEP.SELECT it is left; without CLEAR.SELECT it is left either way; the flag belongs to one command
+#   C  (KEEP.SELECT and OPTION CLEAR.SELECT were removed 27 Oct 26) a program that leaves list 0 active leaves it for the next command
 #   E  FIND.FILE and FIND.PROGRAM against FILEINFO and !PROG_INFO, which read the same things by another road
 #   F  COMMAND.LOGGING: the file's mode, owner and lines, the origins, a link left in its place, TEMPDIR
 #   G  ANALYSE.INDEX against the figures of a file whose index values are known, and against LIST.INDEX
@@ -321,10 +321,9 @@ USER_PROGS = {
               "   selectindexv 'CITY' from f to lv3\n   crt 'LIST10[':selectinfo(10, 1):']'\n"
               "   selectindexv 'NOSUCH' from f to lv4\n   st = status()\n   crt 'BAD[':st:']'\n"
               "   crt 'SIVDONE'\nend\n"),
-    # C: KEEP.SELECT.  zzmk makes list 0 (a, b, c); zzp1 takes one id; zzp2 takes one and says KEEP.SELECT; zzdr drains list 0
+    # C: zzmk makes list 0 (a, b, c); zzp1 takes one id; zzdr drains list 0
     "zzmk": "   formlist 'a':@fm:'b':@fm:'c' to 0\nend\n",
     "zzp1": "   readnext x from 0 else x = 'NONE'\n   crt 'P1[':x:']'\nend\n",
-    "zzp2": "   readnext x from 0 else x = 'NONE'\n   crt 'P2[':x:']'\n   keep.select\nend\n",
     "zzdr": ("   ids = ''\n   loop\n      readnext id from 0 else exit\n      ids<-1> = id\n   repeat\n"
              "   crt 'LEFT[':change(ids, @fm, ','):']'\nend\n"),
 }
@@ -547,24 +546,10 @@ def main():
         row("B11: the CONFIG listing shows the TIMEZONE line", has(out, r"^TIMEZONE\s+Asia/Kathmandu$"), repr([l for l in out if "TIME" in l]))
 
         # -------------------------------------------------------------------------------------------------------------
-        say("\n--- C. KEEP.SELECT -------------------------------------------------------------------------------------------")
+        say("\n--- C. (KEEP.SELECT and OPTION CLEAR.SELECT were removed 27 Oct 26, S.87 batch 16; the control stays) ---------------")
         out = plain("zzaa", ["RUN bp zzmk", "RUN bp zzp1", "RUN bp zzdr"])
-        row("C0: CONTROL: with no OPTION, a program that takes one id and ends leaves the rest: list 0 holds b, c",
+        row("C0: a program that takes one id and ends leaves the rest: list 0 holds b, c",
             tag(out, "P1") == ["a"] and tag(out, "LEFT") == ["b,c"], repr(out[-5:]))
-        out = plain("zzaa", ["OPTION CLEAR.SELECT", "RUN bp zzmk", "RUN bp zzp1", "RUN bp zzdr"])
-        row("C1: THE ROW: with OPTION CLEAR.SELECT the same program's command ends with list 0 cleared", tag(out, "P1") == ["a"] and
-            tag(out, "LEFT") == [""], repr(out[-5:]))
-        out = plain("zzaa", ["OPTION CLEAR.SELECT", "RUN bp zzmk", "RUN bp zzp2", "RUN bp zzdr"])
-        row("C2: ... and when the program says KEEP.SELECT the list is left: b, c", tag(out, "P2") == ["a"] and
-            tag(out, "LEFT") == ["b,c"], repr(out[-5:]))
-        out = plain("zzaa", ["RUN bp zzmk", "RUN bp zzp2", "RUN bp zzdr"])
-        row("C3: without CLEAR.SELECT, KEEP.SELECT does nothing the list was not already doing: b, c", tag(out, "LEFT") == ["b,c"], repr(out[-5:]))
-        out = plain("zzaa", ["OPTION CLEAR.SELECT", "RUN bp zzmk", "RUN bp zzp2", "RUN bp zzp1", "RUN bp zzdr"])
-        row("C4: the flag belongs to one command: a KEEP.SELECT in one command does not protect the list from the next "
-            "(b is taken by the second program, which does not keep it, and c is cleared)",
-            tag(out, "P2") == ["a"] and tag(out, "P1") == ["b"] and tag(out, "LEFT") == [""], repr(out[-6:]))
-        out = plain("zzaa", ["OPTION CLEAR.SELECT", "RUN bp zzmk", "RUN bp zzdr"])
-        row("C5: CONTROL: a list the command made itself is kept by CLEAR.SELECT, as ever (a, b, c)", tag(out, "LEFT") == ["a,b,c"], repr(out[-4:]))
 
         # -------------------------------------------------------------------------------------------------------------
         say("\n--- E. FIND.FILE and FIND.PROGRAM -----------------------------------------------------------------------------")
