@@ -822,7 +822,6 @@ Private void openseq(bool map_name) {
         if (my_uptr->events)
           process_events();
         pc -= 2; /* Two byte opcodes for OPENSEQ and OPENSEQP */
-        lock_beep();
         Sleep(250);
         return;
     }

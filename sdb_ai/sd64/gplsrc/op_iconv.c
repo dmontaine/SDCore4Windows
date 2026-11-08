@@ -611,8 +611,6 @@ Private int32_t date_conversion(char* p) {
   days += month_offsets[month - 1];
 
   if (day > days_in_month[month - 1]) {
-    if (Option(OptNoDateWrapping))
-      goto exit_date_conversion;
     status = 3;
   } else {
     status = 0;

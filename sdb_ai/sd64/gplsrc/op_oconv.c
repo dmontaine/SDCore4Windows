@@ -365,17 +365,6 @@ end_conversion:
 
       if ((dp >= 0) || null_zero || commas) /* Numeric type option present */
       {
-        if ((src_descr->data.str.saddr == NULL) && Option(OptPickNull)) {
-          /* Null string with PICK.NULL option set. Process as a string */
-          dp = -1;
-          null_zero = FALSE;
-          commas = FALSE;
-          if ((s_len = k_get_c_string(src_descr, s, MAX_DATA_STRING_LEN)) < 0) {
-            goto exit_op_fmt;
-          }
-          break;
-        }
-
         /* Try to convert the string to a number */
 
         if (!k_str_to_num(src_descr)) /* Failed - Process as a string */
@@ -482,22 +471,13 @@ end_conversion:
         case '\0':
           break;
         case 'B':
-          if (Option(OptCRDBUpcase))
-            strcat(s, (is_negative) ? "DB" : "  ");
-          else
-            strcat(s, (is_negative) ? "db" : "  ");
+          strcat(s, (is_negative) ? "db" : "  ");
           break;
         case 'C':
-          if (Option(OptCRDBUpcase))
-            strcat(s, (is_negative) ? "CR" : "  ");
-          else
-            strcat(s, (is_negative) ? "cr" : "  ");
+          strcat(s, (is_negative) ? "cr" : "  ");
           break;
         case 'D':
-          if (Option(OptCRDBUpcase))
-            strcat(s, (is_negative) ? "  " : "DB");
-          else
-            strcat(s, (is_negative) ? "  " : "db");
+          strcat(s, (is_negative) ? "  " : "db");
           break;
         case 'E':
           strcat(s, (is_negative) ? ">" : " ");
@@ -1568,7 +1548,7 @@ Private int32_t masked_decimal_conversion(char* p) {
   /* 0227 Return null string for null data */
 
   if ((src_descr->type == STRING) && (src_descr->data.str.saddr == NULL)) {
-    if ((mode == 'D') || Option(OptPickNull))
+    if (mode == 'D')
       return 0;
   }
 
@@ -1957,10 +1937,7 @@ rescan:
         q += strlen(prefix);
       }
       strcpy(q, s);
-      if (Option(OptCRDBUpcase))
-        strcat(q, (is_negative) ? "CR" : "  ");
-      else
-        strcat(q, (is_negative) ? "cr" : "  ");
+      strcat(q, (is_negative) ? "cr" : "  ");
       break;
 
     case TRAILING_DB:
@@ -1969,10 +1946,7 @@ rescan:
         q += strlen(prefix);
       }
       strcpy(q, s);
-      if (Option(OptCRDBUpcase))
-        strcat(q, (is_negative) ? "DB" : "  ");
-      else
-        strcat(q, (is_negative) ? "db" : "  ");
+      strcat(q, (is_negative) ? "db" : "  ");
       break;
   }
 
@@ -2151,30 +2125,18 @@ int32_t mc_conversion(char* p) {
         break;
 
       case 5: /* Capital intial */
-        if (Option(OptSpaceMCT)) {
-          while (bytes--) {
-            c = *(p++);
+        while (bytes--) {
+          c = *(p++);
+          if (IsAlpha(c)) {
             if (upcase_next)
               c = UpperCase(c);
             else
               c = LowerCase(c);
-            upcase_next = (c == ' ');
-            ts_copy_byte(c);
+            upcase_next = FALSE;
+          } else {
+            upcase_next = TRUE;
           }
-        } else {
-          while (bytes--) {
-            c = *(p++);
-            if (IsAlpha(c)) {
-              if (upcase_next)
-                c = UpperCase(c);
-              else
-                c = LowerCase(c);
-              upcase_next = FALSE;
-            } else {
-              upcase_next = TRUE;
-            }
-            ts_copy_byte(c);
-          }
+          ts_copy_byte(c);
         }
         break;
 
@@ -2644,10 +2606,7 @@ Private int32_t time_conversion(char* p) {
   sprintf(s, (include_seconds) ? "%02d%c%02d%c%02d" : "%02d%c%02d", (int)hours,
           separator, (int)mins, separator, (int)secs);
   if (am_pm) {
-    if (Option(OptAMPMUpcase))
-      strcat(s, (am) ? "AM" : "PM");
-    else
-      strcat(s, (am) ? "am" : "pm");
+    strcat(s, (am) ? "am" : "pm");
   }
 
 exit_time_conversion_ok:

@@ -4098,23 +4098,4 @@ Private void printer_on() {
   }
 }
 
-/* ======================================================================
-   lock_beep()  -  Beep on lock wait                                      */
-
-void lock_beep() {
-  bool saved_suppress_como;
-
-/* 20240219 mab rebrand VBSRVR to APISRVR */
-  if (!is_phantom && !is_sdApiSrvr) {
-    if (Option(OptLockBeep)) {
-      if ((++lock_beep_timer % 4) == 0) {
-        saved_suppress_como = tio.suppress_como;
-        tio.suppress_como = TRUE;
-        squeek();
-        tio.suppress_como = saved_suppress_como;
-      }
-    }
-  }
-}
-
 /* END-CODE */

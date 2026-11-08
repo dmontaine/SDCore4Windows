@@ -34,38 +34,21 @@
 
 #define OptUnassignedWarning  0
 #define OptQueryDebug         1
-#define OptPickWildcard       2
-#define OptQualDisplay        3
-#define OptPickBreakpoint     4
-#define OptWithImpliesOr      5
+/* 27 Oct 26: the options marked REMOVE in the owner's emulation survey are gone.  Their numbers stay RESERVED (the later options keep theirs, and the option
+   flags travel as a string in a phantom's cargo); 2, 3, 4, 5, 9, 10, 14, 15, 16, 17, 19, 20, 23, 24, 25, 27, 28, 29, 30, 31, 32 and 33 are retired:
+   PickWildcard, QualDisplay, PickBreakpoint, WithImpliesOr, AssocUnassocMV, PickBreakpointU, CRDBUpcase, AMPMUpcase, PickNull, PickGrandTotal,
+   DebugRebindKeys, EDNoQueryFD, SelectKeepCase, CreateFileCase, PickExplode, QueryNoCase, LockBeep, PickImpliedEQ, QueryPriorityAnd, NoDateWrapping,
+   ProcA and SpaceMCT.  gpl.bp/option holds a blank row for each, in this order. */
 #define OptDumpOnError        6
 #define OptDivZeroWarning     7
 #define OptNonNumericWarning  8
-#define OptAssocUnassocMV     9
-#define OptPickBreakpointU   10
 #define OptNoUserAborts      11
 #define OptRunNoPage         12
 #define OptShowStackOnError  13
-#define OptCRDBUpcase        14
-#define OptAMPMUpcase        15
-#define OptPickNull          16
-#define OptPickGrandTotal    17
 #define OptSuppressAbortMsg  18
-#define OptDebugRebindKeys   19   /* reserved: it rebound AccuTerm keys; no code uses it (13 Oct 26) */
-#define OptEDNoQueryFD       20
 #define OptNoSelListQuery    21
 #define OptChainKeepCommon   22
-#define OptSelectKeepCase    23
-#define OptCreateFileCase    24
-#define OptPickExplode       25
 #define OptInherit           26
-#define OptQueryNoCase       27
-#define OptLockBeep          28
-#define OptPickImpliedEQ     29
-#define OptQueryPriorityAnd  30
-#define OptNoDateWrapping    31
-#define OptProcA             32
-#define OptSpaceMCT          33
 #define OptQueryStringComp   34   /* 10 Oct 26  1.2-0 openQM refs 140, 299,  */
 #define OptQueryStrCompAll   35   /*            412, 165, 205, 403: every    */
 #define OptQuerySortNoCase   36   /*            new option is read by BASIC  */

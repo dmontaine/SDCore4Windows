@@ -473,38 +473,18 @@
       * Option flags (see also csrc options.h)
       $define OPT.UNASS.WARNING        0 ;* Treat unassigned variable as warning
       $define OPT.QUERY.DEBUG          1 ;* QPROC debugging (restricted)
-      $define OPT.PICK.WILDCARD        2 ;* QPROC supports Pick wildcards
-      $define OPT.QUAL.DISPLAY         3 ;* QPROC supports qualified display clauses
-      $define OPT.PICK.BREAKPOINT      4 ;* QPROC Pick placement of breakpoint text
-      $define OPT.WITH.IMPLIES.OR      5 ;* QPROC Pick WITH ... (OR) WITH ...
+      * 27 Oct 26: options 2, 3, 4, 5, 9, 10, 14, 15, 16, 17, 19, 20, 23, 24, 25 and 27 to 33 are RETIRED (the owner's emulation survey, entries A-001 to A-018 and
+      * A-039 to A-041).  Their numbers stay reserved so that the later options keep theirs; see gplsrc/options.h.
       $define OPT.DUMP.ON.ERROR        6 ;* Dump process on error
       $define OPT.DIV.ZERO.WARNING     7 ;* Treat divide by zero as warning
       $define OPT.NON.NUMERIC.WARNING  8 ;* Treat non-numeric as warning
-      $define OPT.ASSOC.UNASSOC.MV     9 ;* Associate unassociated MV fields
-      $define OPT.PICK.BREAKPOINT.U   10 ;* QPROC Use Pick meaning of U breakpoint
       $define OPT.NO.USER.ABORTS      11 ;* Suppress user options to abort
       $define OPT.RUN.NO.PAGE         12 ;* RUN/DEBUG defaults to NO.PAGE
       $define OPT.SHOW.STACK.ON.ERROR 13 ;* Show stack on error
-      $define OPT.CRDB.UPCASE         14 ;* Show CR/DB in OCONV MD in uppercase?
-      $define OPT.AMPM.UPCASE         15 ;* Show AM/PM in OCONV MTH in uppercase?
-      $define OPT.PICK.NULL           16 ;* Return null for null data in ML, MR and FMT()
-      $define OPT.PICK.GRAND.TOTAL    17 ;* GRAND.TOTAL text on same line as values
       $define OPT.SUPPRESS.ABORT.MSG  18 ;* Suppress program details on abort
-      $define OPT.DEBUG.REBIND.KEYS   19 ;* Reserved: no effect (it rebound AccuTerm keys on entry to the debugger)
-      $define OPT.ED.NO.QUERY.FD      20 ;* Don't ask for confirmation on FD command in ED
       $define OPT.NO.SEL.LIST.QUERY   21 ;* Don't query use of select list
       $define OPT.CHAIN.KEEP.COMMON   22 ;* Keep unnamed common on CHAIN
-      $define OPT.SELECT.KEEP.CASE    23 ;* Keep case in Windows dir file select
-      $define OPT.CREATE.FILE.CASE    24 ;* Keep operating system file name case in CREATE.FILE
-      $define OPT.PICK.EXPLODE        25 ;* Pick style processing of single value item in BY.EXP
       $define OPT.INHERIT             26 ;* Phantom inherits options
-      $define OPT.QUERY.NO.CASE       27 ;* Case insensitive query processor selection operators
-      $define OPT.LOCKBEEP            28 ;* Beep on wait for record lock
-      $define OPT.PICK.IMPLIED.EQ     29 ;* Implied EQ between field and literal in query
-      $define OPT.QUERY.PRIORITY.AND  30 ;* AND has priority over OR operator in query processor
-      $define OPT.NO.DATE.WRAPPING    31 ;* Don't roll overlarge day number into next month
-      $define OPT.PROC.A              32 ;* Treat Proc A command as in D3
-      $define OPT.SPACE.MCT           33 ;* Spaces in MCT conversion (kernel)
       $define OPT.QUERY.STRING.COMP   34 ;* QPROC: EQ and NE are string comparisons
       $define OPT.QUERY.STR.COMP.ALL  35 ;* QPROC: all relations on right aligned data are string comparisons
       $define OPT.QUERY.SORT.NO.CASE  36 ;* QPROC: sorts are case insensitive

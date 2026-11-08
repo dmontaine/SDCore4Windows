@@ -1238,11 +1238,9 @@ d:
 *        17 Oct 26 dm - S.64: deleting a record of a VOC, a dictionary or a program file needs the gate.
          if not(edit_guard(file)) then return
 
-         if not(option(OPT.ED.NO.QUERY.FD)) then
-            display sysmsg(6555) : ;* Are you sure you want to delete the entire record?
-            gosub yes.no
-            if no then return
-         end
+         display sysmsg(6555) : ;* Are you sure you want to delete the entire record?
+         gosub yes.no
+         if no then return
 
          delete file, record.name
          done = @true
@@ -1446,11 +1444,9 @@ f:
 *        17 Oct 26 dm - S.64: as for DELETE above.
          if not(edit_guard(file)) then return
 
-         if not(option(OPT.ED.NO.QUERY.FD)) then
-            display sysmsg(6558) :  ;* Are you sure you want to delete the entire record?
-            gosub yes.no
-            if no then return
-         end
+         display sysmsg(6558) :  ;* Are you sure you want to delete the entire record?
+         gosub yes.no
+         if no then return
          delete file, record.name
          done = @true
 

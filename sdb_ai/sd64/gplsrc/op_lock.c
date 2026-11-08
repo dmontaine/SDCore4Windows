@@ -217,7 +217,6 @@ void op_filelock() {
       if (my_uptr->events)
         process_events();
       pc--; /* Back up to repeat opcode */
-      lock_beep();
       Sleep(250);
       return;
     }
@@ -499,12 +498,6 @@ void op_getlocks() {
 
 void op_llock() {
   process.op_flags |= P_LLOCK;
-
-  /* Set the lock_beep_timer back to zero so that we always wait one
-    second before the first beep. This ensures that "normal" short
-    waits do not beep.                                              */
-
-  lock_beep_timer = 0;
 }
 
 /* ======================================================================
@@ -700,7 +693,6 @@ void op_lockrec() {
         if (my_uptr->events)
           process_events();
         pc--;
-        lock_beep();
         Sleep(250);
         return;
       }
@@ -999,12 +991,6 @@ void op_rlsall() {
 
 void op_ulock() {
   process.op_flags |= P_ULOCK;
-
-  /* Set the lock_beep_timer back to zero so that we always wait one
-    second before the first beep. This ensures that "normal" short
-    waits do not beep.                                              */
-
-  lock_beep_timer = 0;
 }
 
 /* ======================================================================

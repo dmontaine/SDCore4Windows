@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 27 Oct 26 dm  The options marked REMOVE in the owner's emulation survey are retired (blank rows keep the numbers) and the PICK shortcut goes.
 * REV 1.0-2 mAR 26 mab Restore pick compatibility options.
 * rev 0.9.0 Jan 25 mab remove pick compatibility options
 *                  note - did not remove references from gpl.bp/int$keys.h, gplsrc/options.h
@@ -52,42 +53,40 @@ $include int$keys.h
    opt = ''
    opt<-1> = 'UNASS.WARNING|W|3100'
    opt<-1> = '$QUERY.DEBUG||3101'
-   * rev 1.0-2
-   opt<-1> = 'PICK.WILDCARD|P|3102'
-   opt<-1> = 'QUALIFIED.DISPLAY|P|3103'
-   opt<-1> = 'PICK.BREAKPOINT|P|3104'
-   opt<-1> = 'WITH.IMPLIES.OR|P|3105'
+   * 27 Oct 26  The options marked REMOVE in the owner's emulation survey (A-001 to A-018 and A-039 to A-041) are retired.  Each keeps its row, BLANK, so that
+   *            the position of every later option - its index in options.h and in the flag string a phantom is given - does not move.
+   opt<-1> = '||'                                ;* 2  was PICK.WILDCARD
+   opt<-1> = '||'                                ;* 3  was QUALIFIED.DISPLAY
+   opt<-1> = '||'                                ;* 4  was PICK.BREAKPOINT
+   opt<-1> = '||'                                ;* 5  was WITH.IMPLIES.OR
    opt<-1> = 'DUMP.ON.ERROR||3106'
    opt<-1> = 'DIV.ZERO.WARNING|W|3107'
    opt<-1> = 'NON.NUMERIC.WARNING|W|3108'
-   opt<-1> = 'ASSOC.UNASSOC.MV|P|3109'
-   * rev 1.0-2
-   opt<-1> = 'PICK.BREAKPOINT.U|P|3110'
+   opt<-1> = '||'                                ;* 9  was ASSOC.UNASSOC.MV
+   opt<-1> = '||'                                ;* 10 was PICK.BREAKPOINT.U
    opt<-1> = 'NO.USER.ABORTS||3111'
    opt<-1> = 'RUN.NO.PAGE||3112'
    opt<-1> = 'SHOW.STACK.ON.ERROR||3113'
-   opt<-1> = 'CRDB.UPCASE||3114'
-   opt<-1> = 'AMPM.UPCASE||3115'
-   * rev 1.0-2
-   opt<-1> = 'PICK.NULL|P|3116'
-   opt<-1> = 'PICK.GRAND.TOTAL|P|3117'
+   opt<-1> = '||'                                ;* 14 was CRDB.UPCASE
+   opt<-1> = '||'                                ;* 15 was AMPM.UPCASE
+   opt<-1> = '||'                                ;* 16 was PICK.NULL
+   opt<-1> = '||'                                ;* 17 was PICK.GRAND.TOTAL
    opt<-1> = 'SUPPRESS.ABORT.MSG||3118'
-   opt<-1> = 'DEBUG.REBIND.KEYS||3119'
-   opt<-1> = 'ED.NO.QUERY.FD||3120'
+   opt<-1> = '||'                                ;* 19 was DEBUG.REBIND.KEYS
+   opt<-1> = '||'                                ;* 20 was ED.NO.QUERY.FD
    opt<-1> = 'NO.SEL.LIST.QUERY||3121'
    opt<-1> = 'CHAIN.KEEP.COMMON||3122'
-   opt<-1> = 'SELECT.KEEP.CASE||3123'
-   opt<-1> = 'CREATE.FILE.UPCASE||3124'
-   * rev 1.0-2
-   opt<-1> = 'PICK.EXPLODE|P|3125'
+   opt<-1> = '||'                                ;* 23 was SELECT.KEEP.CASE
+   opt<-1> = '||'                                ;* 24 was CREATE.FILE.UPCASE
+   opt<-1> = '||'                                ;* 25 was PICK.EXPLODE
    opt<-1> = 'INHERIT||3126'
-   opt<-1> = 'QUERY.NO.CASE||3127'
-   opt<-1> = 'LOCK.BEEP||3128'
-   opt<-1> = 'PICK.IMPLIED.EQ||3129'
-   opt<-1> = 'QUERY.PRIORITY.AND||3130'
-   opt<-1> = 'NO.DATE.WRAPPING||3131'
-   opt<-1> = 'PROC.A||3132'
-   opt<-1> = 'SPACE.MCT||3133'
+   opt<-1> = '||'                                ;* 27 was QUERY.NO.CASE
+   opt<-1> = '||'                                ;* 28 was LOCK.BEEP
+   opt<-1> = '||'                                ;* 29 was PICK.IMPLIED.EQ
+   opt<-1> = '||'                                ;* 30 was QUERY.PRIORITY.AND
+   opt<-1> = '||'                                ;* 31 was NO.DATE.WRAPPING
+   opt<-1> = '||'                                ;* 32 was PROC.A
+   opt<-1> = '||'                                ;* 33 was SPACE.MCT
    * 10 Oct 26  1.2-0, openQM refs 140 299 412 165 205 403.  Same order as options.h.
    opt<-1> = 'QUERY.STRING.COMP||12045'
    opt<-1> = 'QUERY.STR.COMP.ALL||12046'
@@ -126,8 +125,7 @@ $include int$keys.h
 
    * Shortcuts
    shortcuts = ''
-*  rev 1.0-2
-   shortcuts<1,-1> = 'PICK'             ; shortcuts<2,-1> = 'P'
+   * 27 Oct 26: the PICK shortcut (a master switch for nine options) is gone with the nine
    shortcuts<1,-1> = 'SDBASIC.WARNINGS' ; shortcuts<2,-1> = 'W'
 
 

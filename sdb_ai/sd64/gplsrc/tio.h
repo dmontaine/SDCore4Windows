@@ -182,8 +182,6 @@ Public bool telnet_binary_mode_out init(FALSE);  /* Server -> client */
 Public bool telnet_negotiation init(TRUE);       /* Watch for TN_IAC */
 
 
-Public int16_t lock_beep_timer;
-
 /* EXECUTE CAPTURING data */
 
 Public bool capturing init(FALSE);             /* Active? */

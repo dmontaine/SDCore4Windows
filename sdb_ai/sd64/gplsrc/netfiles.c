@@ -1338,7 +1338,6 @@ Private int net_lock_result(int st, u_int16_t op_flags, u_char* retry_pc) {
   process.op_flags = op_flags;
   if (my_uptr->events)
     process_events();
-  lock_beep();
   Sleep(250);
   return NET_LOCK_WAIT;
 }

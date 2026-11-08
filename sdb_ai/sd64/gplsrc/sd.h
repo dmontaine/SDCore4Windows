@@ -622,7 +622,6 @@ bool keyready(void);
 int32_t type_ahead_count(void);
 bool write_socket(char * str, int bytes, bool flush);
 bool to_outbuf(char * str, int bytes);
-void lock_beep(void);
 
 /* PDUMP.C */
 void pdump(void);

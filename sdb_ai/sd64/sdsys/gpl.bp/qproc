@@ -18,6 +18,10 @@
 * 
 *  
 * START-HISTORY:
+* 7 Nov 26 Windows port - from Linux 398fb6a1 (27 Oct 26, S.87 batch 1): the options that imitated Pick are gone (the owner's emulation survey, A-001 to A-017):
+*               pick.wildcard, qualified.display, pick.breakpoint, pick.breakpoint.u, with.implies.or, assoc.unassoc.mv, pick.grand.total, pick.explode,
+*               pick.implied.eq, query.no.case and query.priority.and.  Every place that read one now does what it did with the option off; the qualified
+*               display clause, the Pick wildcard conversion, the OP.PEQ / OP.PNE pseudo operators and the Pick breakpoint layout are removed with them.
 * 18 Oct 26 Windows port - from Linux 15e0f1c (17 Oct 26): L-type links in a query (link%item) go through $linkref and $icomp, so they reach A, S and E items and
 * 17 Oct 26 dm  S.64 part 2 (the edit gates): this program is $internal, so the kernel's own test lets its writes through, and it
 *               asks for itself before it changes a file the user named.  REFORMAT and SREFORMAT ask edit_guard for the TO file
@@ -300,10 +304,7 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    equ OP.GTLE        to 60     ;* } not used in ON GOTO statements.
    equ OP.GTLT        to 61     ;* }
 
-* Pseudo operators for Pick style wildcards, substituted during parsing.
-* These use the same EVERY and NO.CASE additives as the main operator set.
-   equ OP.PEQ         to 62     ;* 
-   equ OP.PNE         to 66     ;* 
+* 27 Oct 26: operators 62 to 69 were the pseudo operators of the Pick style wildcards (OP.PEQ, OP.PNE); they are gone and the numbers are not reused.
 
    equ opcode.names to 'WITH,WHEN,NO,EQ,E.EQ,EQNC,E.EQNE,NE,E.NE,NENC,E.NENC,LT,E.LT,LTNC,E.LTNC,LE,E.LE,LENC,E.LENC,GE,E.GE,GENC,E.GENC,GT,E.GT,GTNC,E.GTNC,LIKE,E.LIKE,LIKENC,E.LIKENC,UNLIKE,E.UNLIKE,UNLIKENC,E.UNLIKENC,SAID,E.SAID,SAIDNC,E.SAIDNC,IN,E.IN,INNC,E.INNC,NOT.IN,E.NOT.IN,NOT.INNC,E.NOT.INNC,NNULL,E.NNULL,NNULLNC,E.NNULLNC,BETWEEN,E.BETWEEN,BETWEENNC,E.BETWEENNC,OR,AND,GELE,GELT,GTLE,GTLT,PEQ,E.PEQ,PEQNC,E.PEQNC,PNE,E.PNE,PNENC,E.PNE.NC'
 
@@ -320,7 +321,6 @@ $define MAX.STRINGS    100          ;* For SEARCH command (was 20 until STRINGS 
    exp.sort.list = ''            ;* Sort table index of every BY.EXP / BY.EXP.DSND
    explode = @false              ;* Read record is not to strip values
    exploded.assoc = 0            ;* Exploded association name index
-   explosion.associated.in.dictionary = @true
    exploded.item.count = 0       ;* Number of records exploded
 
    * Breakpoint control
@@ -1520,7 +1520,6 @@ template.found:
          exploded.fno = if item.type(i) = ITYPE.ITEM then -1 else item.detail(i)
 
          if not(item.assoc(i)) then
-            explosion.associated.in.dictionary = @false
             num.associations += 1
             dim when.op(num.associations)
             dim when.mask(num.associations)
@@ -1991,10 +1990,10 @@ by.bytes:
                by.item(i) = len(qproc.view)
             next i
 
-            * If the QUERY.NO.CASE option is set, translate all sort keys
+            * If the QUERY.SORT.NO.CASE option is set, translate all sort keys
             * to uppercase
 
-            if option(OPT.QUERY.NO.CASE) or option(OPT.QUERY.SORT.NO.CASE) then
+            if option(OPT.QUERY.SORT.NO.CASE) then
                for i = 1 to no.of.sort.items
                   by.item(i) = upcase(by.item(i))
                next i
@@ -2280,7 +2279,6 @@ skip.record:
                               if exploded.assoc = 0 then ;* Item is not associated
                                  * Create a new association with just this
                                  * one item
-                                 explosion.associated.in.dictionary = @false
                                  num.associations += 1
                                  dim when.op(num.associations)
                                  dim when.mask(num.associations)
@@ -2688,7 +2686,7 @@ parse.command.options:
             no.of.breakpoints += 1
 
             gosub get.token
-            if not(option(OPT.PICK.BREAKPOINT)) then gosub get.break.qualifier
+            gosub get.break.qualifier
 
             item.report.mode = if break.on then 0 else REPORT.BREAK.SUP
             gosub add.display.item
@@ -2696,8 +2694,6 @@ parse.command.options:
             breakpoint.list.index(no.of.breakpoints) = no.of.list.items
             breakpoint.items(no.of.breakpoints) = no.items
             item.breakpoint(no.items) = no.of.breakpoints
-
-            if option(OPT.PICK.BREAKPOINT) then gosub get.break.qualifier
 
             i = index(breakpoint.control(no.of.breakpoints), 'B', 1)
             if i then
@@ -3621,9 +3617,7 @@ get.break.qualifier:
       breakpoint.control(no.of.breakpoints) = s
 
       * The D option suppress the ** default marker (1.4-11)
-      if not(option(OPT.PICK.BREAKPOINT)) then
-         if index(s, 'D', 1) then breakpoint.string(no.of.breakpoints) = ''
-      end
+      if index(s, 'D', 1) then breakpoint.string(no.of.breakpoints) = ''
 
       * Anything that is left replaces the default ** marker
       if token # '' then breakpoint.string(no.of.breakpoints) = token
@@ -3795,7 +3789,6 @@ parse.delimiter:
 *    when.clause = Doing WHEN (rather than WITH)
 
 implicit.selection.clause:
-   is.qualified.display.clause = @false
    * This is a query such as
    *   LIST VOC LIKE "A..."
    * where there is no WITH keyword before the conditional element.
@@ -3807,7 +3800,6 @@ implicit.selection.clause:
    gosub add.field.by.name
    keyword = implicit.keyword
 
-qualified.display.clause:       ;* Enter here for Pick style qualified display
    when.clause = @false
    gosub start.selection.clause
 
@@ -3819,7 +3811,6 @@ qualified.display.clause:       ;* Enter here for Pick style qualified display
    goto process.operator   
 
 process.selection.clause:
-   is.qualified.display.clause = @false
    gosub start.selection.clause
 
    gosub get.token
@@ -3913,20 +3904,6 @@ get.first.field:
       gosub get.token
       selection(hi.sel,SEL.ARG1) = item.index
 
-      * Check for implied EQ in Pick style WITH FLD "value"
-
-      if token.type = PARSER$STRING and quote.char = '"' then
-         if option(OPT.PICK.IMPLIED.EQ) then
-            op = OP.EQ
-            if every then op += 1
-            if option(OPT.QUERY.NO.CASE) then op += 2
-            selection(hi.sel,SEL.OP) = op
-            last.op = op
-            between = 0
-            goto implied.equals
-         end
-      end
-
 !!      if emitting.when.clause then
 !!         if when.assoc = '__UNSET__' then
 !!            when.assoc = item.assoc(item.index)
@@ -3957,7 +3934,6 @@ process.operator:
       end case
 
       if every then op += 1
-      if option(OPT.QUERY.NO.CASE) then op += 2
       selection(hi.sel,SEL.OP) = op
       last.op = op
 
@@ -3977,7 +3953,6 @@ process.operator:
             gosub get.token
          end
 
-implied.equals:
 between.op2:
 using.last.op:
          if op >= OP.IN and op <= OP.NOT.IN + 3 then
@@ -4051,48 +4026,6 @@ using.last.op:
                      null
 
                   case 1
-                     if option(OPT.PICK.WILDCARD) then
-                        * 0106 Allow for Pick wildcard in implicit OR. The
-                        * operator will have been changed to OP.PEQ or OP.PNE.
-                        * These need to be preserved into the later conditions
-                        * synonyms for OP.LIKE and OP.UNLIKE
-
-                        if (op >= OP.EQ and op <= op.NE + 3) or (op >= OP.PEQ and op <= OP.PNE + 3) then 
-                           s = item.detail(item.index)
-                           if s[1,1] = '[' or index(s, '^', 1) or s[1] = ']' then
-                              * It's a Pick wildcard. Convert to a LIKE/UNLIKE.
-                              begin case
-                                 case index(s, '"', 1) = 0 ; c = '"'
-                                 case index(s, "'", 1) = 0 ; c = "'"
-                                 case 1
-                                    display 'Pick wildcard cannot be converted to LIKE/UNLIKE'
-                                    goto exit.qproc
-                              end case
-
-                              if s[1,1] = '[' then
-                                 x = '...' : c
-                                 s = s[2,9999]
-                              end else
-                                 x = c
-                              end
-
-                              if s[1] = ']' then
-                                 x := s[1,len(s)-1] : c : '...'
-                              end else
-                                 x := s : c
-                              end
-
-                              item.detail(item.index) = change(x, '^', c:'1X':c)
-
-                              if op < OP.PEQ then   ;* Must be EQ or NE variants
-                                 op += OP.PEQ - OP.EQ
-                              end
-                              selection(hi.sel,SEL.OP) = op
-                              last.op = op
-                           end
-                        end
-                     end
-
                      * A conversion code on the selection field requires that we
                      * convert the literal value to the internal form of the data.
 
@@ -4134,20 +4067,14 @@ check.and.or:
       repeat
 
       begin case
-         case is.qualified.display.clause
-            exit
-
          case keyword = KW$OR
             gosub fix.up.jumps
-            if option(OPT.QUERY.PRIORITY.AND) then parenthesis.level -= 1
 
             hi.sel += 1 ; if hi.sel > max.selection then gosub extend.selection.table
             selection(hi.sel,SEL.OP) = OP.OR
             selection(hi.sel,SEL.ARG2) = parenthesis.level
             gosub get.token
             if keyword = KW$WITH then gosub get.token
-
-            if option(OPT.QUERY.PRIORITY.AND) then parenthesis.level += 1
 
             if token.type = PARSER$LBR then
                parenthesis.level += 1
@@ -4206,15 +4133,6 @@ check.and.or:
 
    gosub fix.up.jumps
 
-   * 0106 Change any condition using OP.PEQ/OP.PNE to OP.LIKE/OP.UNLIKE
-
-   for i = 1 to hi.sel
-      op = selection(i,SEL.OP)
-      if op >= OP.PEQ and op <= OP.PNE + 3 then
-         selection(i,SEL.OP) -= OP.PEQ - OP.LIKE
-      end
-   next i
-
    return
 
 * --------------------------------------------------
@@ -4222,8 +4140,7 @@ check.and.or:
 start.selection.clause:
    if not(first.selection) then
       hi.sel += 1 ; if hi.sel > max.selection then gosub extend.selection.table
-      if option(OPT.WITH.IMPLIES.OR) then selection(hi.sel,SEL.OP) = OP.OR
-      else selection(hi.sel,SEL.OP) = OP.AND
+      selection(hi.sel,SEL.OP) = OP.AND
       selection(hi.sel,SEL.ARG2) = 0
    end
    if when.clause # emitting.when.clause then
@@ -4315,32 +4232,6 @@ add.display.item:
 
    gosub get.token
 
-   if option(OPT.QUAL.DISPLAY) then
-      * Check for qualified display clause
-      begin case
-         case keyword < 0         ; goto not.qualified
-         case keyword = KW$EQ
-         case keyword = KW$NE
-         case keyword = KW$LT
-         case keyword = KW$LE
-         case keyword = KW$GT
-         case keyword = KW$GE
-         case keyword = KW$LIKE
-         case keyword = KW$UNLIKE
-         case keyword = KW$SAID
-         case keyword = KW$IN
-         case keyword = KW$NOT.IN
-         case 1                   ; goto not.qualified
-      end case
-
-      * Looks like a qualified display clause
-
-      qual.item.index = item.index
-      is.qualified.display.clause = @true
-      gosub qualified.display.clause
-      item.index = qual.item.index
-   end
-not.qualified:
 
    return
 
@@ -4459,12 +4350,6 @@ check.field.modifiers:
                         item.totals(item.index) = 0
                         item.breakpoint(item.index) = 0
                         item.flags(item.index) = 0
-
-                        if option(OPT.ASSOC.UNASSOC.MV) then
-                           if item.multivalued(item.index) and item.assoc(item.index) = 0 then
-                              s = '__QPROC.ASSOC__' ; gosub add.item.association
-                           end
-                        end
 
                      case dict.rec # ''
                         display sysmsg(7264, token) ;* xx is not a D or I-type dictionary item
@@ -5919,11 +5804,6 @@ add.field:
       item.totals(item.index) = 0
       item.breakpoint(item.index) = 0
       item.flags(item.index) = 0
-      if option(OPT.ASSOC.UNASSOC.MV) then
-         if item.multivalued(item.index) then
-            s = '__QPROC.ASSOC__' ; gosub add.item.association
-         end
-      end
       item.type(item.index) = FIELD.ITEM
       item.ok = @true
       return
@@ -5977,12 +5857,6 @@ add.field:
 
          item.detail(item.index) = itype(item.detail(item.index))
          item.type(item.index) = LITERAL.ITEM
-      end else
-         if option(OPT.ASSOC.UNASSOC.MV) then
-            if item.multivalued(item.index) and item.assoc(item.index) = 0 then
-               s = '__QPROC.ASSOC__' ; gosub add.item.association
-            end
-         end
       end
 
       item.ok = @true
@@ -6025,12 +5899,6 @@ add.field:
             item.totals(item.index) = 0
             item.breakpoint(item.index) = 0
             item.flags(item.index) = 0
-            if option(OPT.ASSOC.UNASSOC.MV) then
-               if item.multivalued(item.index) and not(item.assoc(item.index)) then
- explosion.associated.in.dictionary = @false
-                  s = '__QPROC.ASSOC__' ; gosub add.item.association
-               end
-            end
 
             i = item.detail(item.index)
             begin case
@@ -6074,11 +5942,6 @@ add.field:
             item.totals(item.index) = 0
             item.breakpoint(item.index) = 0
             item.flags(item.index) = 0
-            if option(OPT.ASSOC.UNASSOC.MV) then
-               if item.multivalued(item.index) and not(item.assoc(item.index)) then
-                  s = '__QPROC.ASSOC__' ; gosub add.item.association
-               end
-            end
             item.type(item.index) = FIELD.ITEM
 
          case type = "D"
@@ -6108,11 +5971,6 @@ add.field:
             item.totals(item.index) = 0
             item.breakpoint(item.index) = 0
             item.flags(item.index) = 0
-            if option(OPT.ASSOC.UNASSOC.MV) then
-               if item.multivalued(item.index) and not(item.assoc(item.index)) then
-                  s = '__QPROC.ASSOC__' ; gosub add.item.association
-               end
-            end
 
             i = item.detail(item.index)
             begin case
@@ -6163,12 +6021,6 @@ add.field:
                gosub add.item.association
 
                item.multivalued(item.index) = @true
-            end
-
-            if option(OPT.ASSOC.UNASSOC.MV) then
-               if item.multivalued(item.index) and not(item.assoc(item.index)) then
-                  s = '__QPROC.ASSOC__' ; gosub add.item.association
-               end
             end
 
             * Check if item needs compiling
@@ -6254,12 +6106,6 @@ add.field:
             item.totals(item.index) = seq(item.detail(item.index)[HDR.TOTALS,1])
             item.breakpoint(item.index) = 0
             item.flags(item.index) = 0
-
-            if option(OPT.ASSOC.UNASSOC.MV) then
-               if item.multivalued(item.index) and not(item.assoc(item.index)) then
-                  s = '__QPROC.ASSOC__' ; gosub add.item.association
-               end
-            end
 
             item.ok = @true
 
@@ -6464,15 +6310,8 @@ list.field:
       s = qproc.view<item.detail(item.to.list)>
       if explode then
          if (item.assoc(item.to.list) = exploded.assoc and exploded.assoc) ~
-         or (not(exploded.assoc) ~
-             and (item.assoc(item.to.list) or option(OPT.PICK.EXPLODE))) then
-            if option(OPT.PICK.EXPLODE) then
-               if ismv(s) or explosion.associated.in.dictionary then
-                  s = s<1, exp.v, exp.sv>
-               end
-            end else
-               s = s<1, exp.v, exp.sv>
-            end
+         or (not(exploded.assoc) and item.assoc(item.to.list)) then
+            s = s<1, exp.v, exp.sv>
          end
       end
       data.rec<list.index> = s
@@ -6484,15 +6323,8 @@ list.itype:
       s = itype(item.detail(item.to.list), item.tbase(item.to.list))
       if explode then
          if (item.assoc(item.to.list) = exploded.assoc and exploded.assoc) ~
-         or (not(exploded.assoc) ~
-             and (item.assoc(item.to.list) or option(OPT.PICK.EXPLODE))) then
-            if option(OPT.PICK.EXPLODE) then
-               if ismv(s) or explosion.associated.in.dictionary then
-                  s = s<1, exp.v, exp.sv>
-               end
-            end else
-               s = s<1, exp.v, exp.sv>
-            end
+         or (not(exploded.assoc) and item.assoc(item.to.list)) then
+            s = s<1, exp.v, exp.sv>
          end
       end
       data.rec<list.index> = s
@@ -7825,18 +7657,11 @@ show.continue.no.conversion:
                disp.rec<list.index> = str("=", item.display.width(item.to.list)) : @tm : s
             end
          end else
-            if option(OPT.PICK.GRAND.TOTAL) and list.index = 1 then
-               disp.rec<list.index> = @tm : grand.total.text
-            end else
-               disp.rec<list.index> = ""
-            end
+            disp.rec<list.index> = ""
          end
       next list.index
 
-      if not(option(OPT.PICK.GRAND.TOTAL)) then is.grand.total = @true
-      else if index(grand.total.control, 'P', 1) then
-          if qdisp(QD$PAGE) then goto qdisp.error
-      end
+      is.grand.total = @true
       gosub report.record
    end
 
@@ -7848,8 +7673,8 @@ show.continue.no.conversion:
 * On entry:
 *   breakpoint.index = index to current breakpoint item
 *
-* This routine prints the breakpoint line and the subtotal line (subject to
-* the setting of the PICK.BREAKPOINT.U option).
+* This routine prints the breakpoint line and the subtotal line (a U in the
+* breakpoint's control codes leaves out the line of hyphens above the subtotal).
 
 show.breakpoint:
    class = if det.sup then 'D' else 'S'
@@ -7858,8 +7683,7 @@ show.breakpoint:
    saved.disp.rec = disp.rec
 
    bp.ctrl = breakpoint.control(breakpoint.index) ;* Breakpoint codes
-   suppress.subtotal.underline = (index(bp.ctrl, 'U', 1) = 0) = option(OPT.PICK.BREAKPOINT.U)
-   subtotal.blankline = suppress.subtotal.underline and not(vertical) and not(det.sup) and option(OPT.PICK.BREAKPOINT) and index(bp.ctrl, 'L', 1)
+   suppress.subtotal.underline = (index(bp.ctrl, 'U', 1) # 0)
 
    qproc.break.level = no.of.breakpoints - breakpoint.index + 1
 
@@ -7952,9 +7776,7 @@ break.continue.no.conversion:
             disp.rec<list.index> = s
          end else
             s = fmt(s, item.fmt(item.to.list))
-            if subtotal.blankline then
-               disp.rec<list.index> = @tm : s
-            end else if vertical or det.sup or suppress.subtotal.underline then
+            if vertical or det.sup or suppress.subtotal.underline then
                disp.rec<list.index> = s
             end else
                disp.rec<list.index> = str("-", item.display.width(item.to.list)) : @tm : s
@@ -7963,7 +7785,7 @@ break.continue.no.conversion:
       end else if bpi then
          * This field has a breakpoint
 
-         if bpi = breakpoint.index or (bpi < breakpoint.index and not(option(OPT.PICK.BREAKPOINT))) then
+         if bpi <= breakpoint.index then
             * Include breakpoint value in report column
 
             bp.data = bp.rec<list.index>   ;* Data for field
@@ -7983,9 +7805,7 @@ break.continue.no.conversion:
                end
             end
 
-            if subtotal.blankline then
-               disp.rec<list.index> = @tm : bp.data
-            end else if det.sup or suppress.subtotal.underline then
+            if det.sup or suppress.subtotal.underline then
                disp.rec<list.index> = bp.data
             end else
                disp.rec<list.index> = @tm : bp.data
@@ -8008,21 +7828,6 @@ break.continue.no.conversion:
                case det.sup or reformat.command
                   * Suppressing detail lines. Print the subtotal only
                   disp.rec<list.index> = bp.data
-
-               case option(OPT.PICK.BREAKPOINT)
-                  if index(bp.ctrl, 'D', 1) and detail.lines <= breakpoint.detail.count(breakpoint.index) + 1 then
-                     goto omit.breakpoint.line
-                  end
-                  if index(bp.ctrl, 'V', 1) then
-                     bp.text = change(bp.text, @im, trimf(bp.data.conv))[1, item.display.width(item.to.list)]
-                  end
-                  if item.justification(item.to.list) # "U" and item.display.width(item.to.list) then
-                     bp.text = fmt(bp.text, item.fmt(item.to.list))
-                  end
-                  if subtotal.blankline or (accumulating and not(suppress.subtotal.underline)) then
-                     bp.text = @tm : bp.text
-                  end
-                  disp.rec<list.index> = bp.text
 
                case index(bp.ctrl, 'D', 1)
                   if detail.lines <= breakpoint.detail.count(breakpoint.index) + 1 then goto omit.breakpoint.line
@@ -8857,9 +8662,7 @@ apply.when.filter:
          item1 = item
 
          if explode then
-            if not(option(OPT.PICK.EXPLODE)) or ismv(item1) then
-               item1 = item1<1, exp.v, exp.sv>
-            end
+            item1 = item1<1, exp.v, exp.sv>
          end
 
          op  = selection(sel.idx,SEL.OP)

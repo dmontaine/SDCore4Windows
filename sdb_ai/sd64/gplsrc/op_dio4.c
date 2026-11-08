@@ -1313,10 +1313,6 @@ Private bool dir_select(FILE_VAR* fvar, int16_t list_no) {
 
       if (statbuf.st_mode & S_IFREG) {
         strcpy(name, dp->d_name);
-#ifdef CASE_INSENSITIVE_FILE_SYSTEM
-        if (!Option(OptSelectKeepCase))
-          UpperCaseString(name);
-#endif
 
         if (map_dir_ids && (strchr(name, '%') != NULL)) /* Mapped name */
         {

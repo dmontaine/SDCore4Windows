@@ -153,13 +153,11 @@ $define default.split.load 80
 *   names the file in upper case keeps working; only the STORED case changes.
 *   downcase() is the established idiom here (CREATEA:521).  Owner's ruling,
 *   13 Sep 2026: lower case ids in SD system files, never in user data files.
-*   OPT.CREATE.FILE.CASE is the escape hatch - it preserves the name exactly as
-*   typed - and once it is honoured here, os.name below follows file.name in
-*   both cases, so the two upcase() branches it used to need are gone.
-   if not(option(OPT.CREATE.FILE.CASE)) then
-      file.name = downcase(file.name)
-      if component # '' then component = downcase(component)
-   end
+*   7 Nov 26 Windows port - from Linux 398fb6a1 (S.87 batch 1): the
+*   CREATE.FILE.CASE option, the way back to "exactly as typed", is gone (owner's
+*   emulation survey, A-039), so the name is always lower case.
+   file.name = downcase(file.name)
+   component = downcase(component)
 
    * Check for file type keyword. We default to DYNAMIC
 
