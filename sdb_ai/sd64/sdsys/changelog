@@ -2,6 +2,16 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   CODE THAT NOTHING COULD RUN IS REMOVED FROM THE C SOURCE, INCLUDING SDCONV'S OLD HASHED-FILE CONVERTER (FROM SD CORE FOR LINUX).
+
+             What        - Unused C functions are gone: a few error helpers, wrappers and a memory-dump routine, and the seven
+                           functions (545 lines) that converted hashed files between byte orders, which sdconv has not been able to
+                           call since it began refusing hashed files.
+             Why         - Code that cannot run still has to be read, reviewed and kept compiling. The hashed-file converter also
+                           read past the end of an array, a fault that could never show only because the code never ran.
+             Does NOT    - Change anything SD does. sdconv still converts compiled programs and still refuses a hashed file with the
+                           same message.
+
 8 Nov 26   FOUR KERNEL FAULTS ARE FIXED (FROM SD CORE FOR LINUX).
 
              What        - GETLOCKS(file, user) with a user number nobody holds, or one out of range, gives no lock line for it; it used

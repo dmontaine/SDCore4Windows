@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): is_global() is gone; nothing called it.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION FORCE.RELOAD is gone: stale_objects(), object_is_stale(), refresh_subr_object() and OBJ_STALE are removed.
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * is no longer a global prefix character.
  * 29 Sep 26 RELEASE_1.1 114 - a runfile name longer than the header's
@@ -366,13 +367,6 @@ exit_op_loaded:
 
 void op_unload() {
   unload_all();
-}
-
-/* ======================================================================
-   is_global() - Is object code from global catalogue?                    */
-
-bool is_global(void* obj_hdr) {
-  return (((OBJECT*)(((char*)obj_hdr) - OBJHDRSIZE))->flags & OBJ_GLOBAL) != 0;
 }
 
 /* ======================================================================

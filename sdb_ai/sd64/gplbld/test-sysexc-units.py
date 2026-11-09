@@ -14,6 +14,8 @@
 #               message files or to the names the openQM manual lists: a message number typed wrong names another error's
 #               exception, a name typed wrong can never be caught by the handler the application wrote, and neither
 #               gives any message.
+# 06 Nov 26 dm  S.152: 4c finds k_descr_error with "Private" on the same line (k_error.c's DescrError block was laid out
+#               again when three of its helpers were removed; the stray line break before "void" went with it).
 # END-HISTORY
 #
 # WHAT IT CHECKS
@@ -144,7 +146,7 @@ def checks(src, msg_exists, msg_fatal):
                 0 <= i_can < i_rlt, "can_catch at %d, terminal reset at %d" % (i_can, i_rlt)))
     res.append(("4b. ...and throws before it writes or logs the message",
                 0 <= i_throw < i_write and i_throw < i_log, "throw at %d, write at %d, log at %d" % (i_throw, i_write, i_log)))
-    db = func_body(ke, r"(?m)^\s*void k_descr_error\(int16_t msg_no, DESCRIPTOR\* descr\) \{")
+    db = func_body(ke, r"(?m)^\s*(?:Private\s+)?void k_descr_error\(int16_t msg_no, DESCRIPTOR\* descr\) \{")
     res.append(("4c. k_descr_error() names its message before it calls k_error()",
                 0 <= db.find("descr_msg_no = msg_no") < db.find("k_error(message"), "k_descr_error: %s" % db[:80].replace("\n", " ")))
 

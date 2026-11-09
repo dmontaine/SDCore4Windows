@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): the prototypes of the functions it removed are gone.
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): EDIT_SHARED_WRITE and EDIT_SHARED_STRUCT; prototypes of the shared-account tests (op_sh.c), of
  *               shared_structure_refusal() (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: prototypes of netfiles.c (net_open, net_close, net_read, net_readv, net_fileinfo, net_refuse, net_close_all, net_message).
@@ -152,8 +153,6 @@ Public char * CRLF init("\r\n");
    Internal function definitions                                          */
 
 /* SD.C */
-void fatal(void);
-void dump(u_char * addr, int32_t bytes);
 void set_console_title(void);
 
 /* ANALYSE.C */
@@ -223,7 +222,6 @@ void ReleaseLicence(USER_ENTRY * uptr);
 /* K_ERROR.C */
 void k_data_type(DESCRIPTOR * descr);
 void k_deadlock(void);
-void k_dh_error(DESCRIPTOR * descr);
 void k_div_zero_error(DESCRIPTOR * descr);
 void k_illegal_call_name(void);
 void k_index_error(DESCRIPTOR * descr);
@@ -231,9 +229,7 @@ void k_not_array_error(DESCRIPTOR * descr);
 void k_value_error(DESCRIPTOR * descr);
 void k_non_numeric_error(DESCRIPTOR * descr);
 void k_unassigned(DESCRIPTOR * descr);
-void k_strnum_len(DESCRIPTOR * descr);
 void k_not_socket(DESCRIPTOR * descr);
-void k_null_id(DESCRIPTOR * descr);
 void k_illegal_id(DESCRIPTOR * descr);
 void k_inva_task_lock_error(void);
 void k_nary_length_error(void);
@@ -289,9 +285,6 @@ DESCRIPTOR coll_str_descr(char * s, int32_t len);
 char * coll_chunks_to_buffer(STRING_CHUNK * s, int32_t * len);
 int32_t coll_number_len(unsigned char * s, int32_t len, bool * is_int);
 DESCRIPTOR coll_json_parse(char * text, int32_t len, int mode);
-DESCRIPTOR coll_json_build(COLL_HEADER * root, int mode);
-void coll_fill_entry(COLL_ENTRY * ent, DESCRIPTOR * v);
-DESCRIPTOR coll_value_of(COLL_ENTRY * e);
 int32_t url_encode_top(void);
 int32_t url_decode_top(void);
 int k_get_c_string(DESCRIPTOR * descr, char * s, int max_bytes);
@@ -394,7 +387,6 @@ void net_flush_closes(void);
 void * load_object(char * name, bool abort_on_error);
 void unload_object(void * obj_hdr);
 void unload_all(void);
-bool is_global(void * obj_hdr);
 void invalidate_object(void);
 void * find_object(int32_t id);
 STRING_CHUNK * hsm_dump(void);
