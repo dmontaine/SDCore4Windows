@@ -755,7 +755,8 @@ $steps = @(
     # piece of shared state it touches, it is named after its own -Prefix, and
     # it refuses to start if a record of that name is already there rather than
     # overwriting somebody's decision on the list that grants shells.
-    @{ Name = 'verify-privundetermined.ps1'; P = @{ Prefix = $PrivPrefix } },
+    # 9 Nov 26 (RELEASE_1.1 188): verify-privundetermined.ps1 IS OFF THIS LIST and deleted.  It varied the os.users record;
+    # since S.63 the gate reads nothing from disk (op_sh.c os_user_permitted), so every "could not tell" leg has nothing to reach.
     # 22 Aug 26 - !valid_os_name on the API login path, and the audit trail.
     # SECOND of the API steps and deliberately before the three that rewrite
     # sd.conf: it is the only one that does NOT touch the file, so it measures

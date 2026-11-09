@@ -98,7 +98,6 @@ $ErrorActionPreference = 'Stop'
 $sdExe   = Join-Path $env:ProgramFiles 'SD\usr\bin\sd.exe'
 $sdpyExe = Join-Path $env:ProgramFiles 'SD\usr\bin\sdpy.exe'
 $sysdir  = Join-Path $env:ProgramData  'SD\sdsys'
-$osUsers = Join-Path $sysdir 'os.users'
 $errlog  = Join-Path $sysdir 'errlog'
 
 # ------------------------------------------------------------- the reporter
@@ -150,14 +149,20 @@ if ($Prefix -cnotmatch '^[a-z][a-z0-9_]*$') {
 }
 
 $account = $Prefix.ToLower()
-$record  = Join-Path $osUsers $account
+# 9 Nov 26 (RELEASE_1.1 188): os.users is retired.  The grant is field 8 (ACC$OS.EXEC) of the account's register record,
+# loaded at sign-on, and the kernel reads nothing from disk to answer, so the old malformed-record leg has nothing to reach.
+$record  = Join-Path (Join-Path $sysdir 'accounts') $account
+function Test-OsOn {
+    if (-not (Test-Path -LiteralPath $record)) { return $false }
+    $l = @(Get-Content -LiteralPath $record)
+    return (($l.Count -ge 8) -and ($l[7].Trim() -ieq 'yes'))
+}
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $pr = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $pr.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Output 'verify-pygate: this needs an ELEVATED session and this one is not.'
-    Write-Output '  It creates and removes an account through an SDSYS session, and writes'
-    Write-Output '  under sdsys\os.users, which is writable only by administrators.'
+    Write-Output '  It creates and removes an account through an SDSYS session.'
     Write-Output '  Run it from VerifyInstall2, or from an ELEVATED PowerShell.'
     exit 2
 }
@@ -170,7 +175,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 2
 }
 
-foreach ($p in @($sdExe, $osUsers)) {
+foreach ($p in @($sdExe)) {
     if (-not (Test-Path -LiteralPath $p)) {
         Write-Output ("verify-pygate: {0} does not exist - nothing could be measured." -f $p)
         exit 2
@@ -208,7 +213,7 @@ if (Test-Path -LiteralPath $record) {
 Write-Output ("verify-pygate: as {0}, ELEVATED" -f $id.Name)
 Write-Output ("  sd       {0}" -f $sdExe)
 Write-Output ("  sdpy     {0}   ({1} bytes)" -f $sdpyExe, (Get-Item -LiteralPath $sdpyExe).Length)
-Write-Output ("  os.users {0}" -f $osUsers)
+Write-Output ("  register {0}" -f $record)
 Write-Output ("  errlog   {0}" -f $errlog)
 Write-Output ("  account  {0}   (from -Prefix '{1}')" -f $account, $Prefix)
 Write-Output ("  record   {0}" -f $record)
@@ -376,12 +381,12 @@ try {
     # ADMINISTRATOR-tier account (PRE_RELEASE 2) ... this one is PROGRAMMER".
     # RELEASE_1.1 64 abolished the tiers and refuses both keywords; the premise
     # is unchanged and its REASON is now the keyword, not the level.
-    $recordAfterCreate = (Test-Path -LiteralPath $record)
-    Note 'CREATE.ACCOUNT with no SH-ON/OS-ON wrote NO os.users record (leg A''s premise)' $false $recordAfterCreate $true
+    $recordAfterCreate = (Test-OsOn)
+    Note 'CREATE.ACCOUNT with no OS-ON left OS.EXECUTE off (leg A''s premise)' $false $recordAfterCreate $true
     if ($recordAfterCreate) {
-        Write-Output ("verify-pygate: {0} exists straight after CREATE.ACCOUNT." -f $record)
-        Write-Output '  CREATEA writes one only where SH-ON or OS-ON was asked for, and this'
-        Write-Output '  account was created with neither.  CREATEA has changed.'
+        Write-Output ("verify-pygate: field 8 of {0} is yes straight after CREATE.ACCOUNT." -f $record)
+        Write-Output '  CREATEA sets it only where OS-ON was asked for, and this'
+        Write-Output '  account was created without it.  CREATEA has changed.'
         Write-Output '  Leg A cannot be measured on this premise, so nothing below runs.'
         exit 2
     }
@@ -478,7 +483,7 @@ try {
     # --------------------------------------------------------- leg A
 
     Write-Output '=== 3. leg A - record ABSENT: refused, -12041 ======================'
-    Note 'leg A: the os.users record is absent' $false (Test-Path -LiteralPath $record) $true
+    Note 'leg A: the account does not have OS.EXECUTE' $false (Test-OsOn) $true
     Invoke-Leg 'leg A'
     $a = $script:legText
     if ($null -eq $a) { exit 2 }
@@ -507,52 +512,15 @@ try {
     # --------------------------------------------------------- leg B
 
     Write-Output '=== 4. leg B - record MALFORMED: refused, -12042, and LOGGED ========'
-    # One field and no newline, which op_sh.c reads as PRIV_MALFORMED ("the
-    # os.users record has no second field").  NOT "yes<LF>" - that has a
-    # second field which is empty, and empty is an ANSWERED no (-12041).
-    [System.IO.File]::WriteAllText($record, 'yes', [System.Text.Encoding]::GetEncoding('iso-8859-1'))
-    $wroteRecord = $true
-    $bytesB = (Get-Item -LiteralPath $record).Length
-    Write-Output ("  wrote {0}: 'yes' with no newline ({1} bytes)" -f $record, $bytesB)
-    Note 'leg B: the malformed record is in place (3 bytes)' 3 $bytesB $true
-
-    $logBefore = Get-ErrlogText
-    Write-Output ("  errlog is {0} bytes before" -f $logBefore.Length)
-
-    Invoke-Leg 'leg B'
-    $b = $script:legText
-    if ($null -eq $b) { exit 2 }
-
-    Note 'leg B: PY_INITIALIZE = -12042 (permission undetermined)'  $true ($b -match 'PYGATE-INIT=-12042')  $true
-    Note 'leg B: the second PY_INITIALIZE gave the SAME answer (21)' $true ($b -match 'PYGATE-INIT2=-12042') $true
-    Note 'leg B: SDPY-42 does NOT appear'                           $false ($b -match 'SDPY-42')            $true
-    Note 'leg B: no -12041 anywhere (it is undetermined, not a no)' $false ($b -match '-12041')             $true
-    Note 'leg B: no -12040 anywhere'                                $false ($b -match '-12040')             $true
-
-    # THE LOG.  PRE_RELEASE 96: an undetermined answer refuses but must not be
-    # silent.  Same helper as OS.EXECUTE's line, so the wording is
-    # priv_why_text(PRIV_MALFORMED) exactly.
-    $delta = Get-ErrlogDelta $logBefore
-    if ($delta.Ok) {
-        Write-Output ("  errlog grew by {0} bytes" -f $delta.Text.Length)
-        foreach ($l in ($delta.Text -split "`n")) {
-            if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
-        }
-        Note 'leg B: errlog carries "PRIVILEGE CHECK UNDETERMINED Python helper start"' $true `
-             ($delta.Text -match 'PRIVILEGE CHECK UNDETERMINED Python helper start: the os\.users record has no second field') $true
-    } else {
-        Write-Output '  errlog ROTATED under the measurement - the delta cannot be read.'
-        Note 'leg B: errlog delta was readable (not rotated)' $true $false $true
-    }
+    Write-Output '  RETIRED 9 Nov 26: the gate reads nothing from disk now, so a malformed record has nothing to reach.'
     Write-Output ''
 
     # --------------------------------------------------------- leg C
 
-    Write-Output '=== 5. leg C - record "yes","yes": admitted, SDPY-42 comes home ===='
-    [System.IO.File]::WriteAllText($record, "yes`nyes`n", [System.Text.Encoding]::GetEncoding('iso-8859-1'))
-    $bytesC = (Get-Item -LiteralPath $record).Length
-    Write-Output ("  wrote {0}: yes<LF>yes<LF> ({1} bytes)" -f $record, $bytesC)
-    Note 'leg C: the permitting record is in place (8 bytes)' 8 $bytesC $true
+    Write-Output '=== 5. leg C - the account given OS.EXECUTE: admitted, SDPY-42 comes home ===='
+    $g = Invoke-SD @("MODIFY.ACCOUNT $($account.ToUpper()) OS-ON")
+    Write-Output $g
+    Note 'leg C: the account now has OS.EXECUTE' $true (Test-OsOn) $true
 
     Invoke-Leg 'leg C'
     $c = $script:legText
@@ -579,35 +547,10 @@ try {
         Write-Output '  *** account''s PATH, or CreateProcess - and is a NEW entry, not a gate'
         Write-Output '  *** failure.  The header predicted this as the one falsifier.'
     }
-    if ($c -match 'PYGATE-INIT=-12042') {
-        Write-Output ''
-        Write-Output '  *** -12042 ON THE PERMITTED LEG: THE RECORD COULD NOT BE READ AS THIS'
-        Write-Output '  *** USER (the errlog line names which call).  secure-osusers.ps1 grants'
-        Write-Output '  *** sdusers RX and CREATEA joins the account to sdusers - one of those'
-        Write-Output '  *** did not hold.  A finding about the ACL, not the gate.'
-        $late = Get-ErrlogDelta $logBefore
-        if ($late.Ok) {
-            foreach ($l in ($late.Text -split "`n")) {
-                if ($l.Trim() -ne '') { Write-Output ('  | ' + $l.TrimEnd()) }
-            }
-        }
-    }
 
 } finally {
     Write-Output ''
     Write-Output '=== 6. cleanup ======================================================'
-    if ($wroteRecord) {
-        try {
-            if (Test-Path -LiteralPath $record) { Remove-Item -LiteralPath $record -Force }
-        } catch {
-            Write-Output ('  could not remove the os.users record - ' + $_.Exception.Message)
-        }
-        if (Test-Path -LiteralPath $record) {
-            Write-Output ("  *** THE RECORD {0} IS STILL THERE - remove it before the next run." -f $record)
-        } else {
-            Write-Output ("  os.users record removed: {0}" -f $record)
-        }
-    }
     if ($created) {
         try {
             $rmOut = Invoke-SD (Remove-SdTestUserScript -Name $account)
@@ -641,7 +584,7 @@ Write-Output ("verify-pygate: {0} decisive check(s), {1} failed." -f $decisive.C
 # controls, 3 probe rows, then 10 + 9 + 12 across the legs.  A row added or
 # removed without this number moving is refused loudly here rather than
 # passing by a count nobody re-derived.
-$roster = 40
+$roster = 31      # 9 Nov 26: leg B's 9 rows retired with the os.users record
 if ($decisive.Count -ne $roster) {
     Write-Output ("verify-pygate: {0} decisive check(s) ran and the roster is {1} - the legs did not all run, or a row moved.  Not a pass." -f $decisive.Count, $roster)
     exit 2

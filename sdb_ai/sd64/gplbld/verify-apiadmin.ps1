@@ -298,11 +298,9 @@ Assert-SdSeat -Label 'verify-apiadmin' -Internal
 # not the product's.  Owner approved planting it for that one leg (21 Sep 2026); it is
 # planted immediately before the local run and removed immediately after, with a
 # `finally` backstop below.  A record that is already there is refused, not reused.
-$osUsersDir = Join-Path $env:ProgramData 'SD\sdsys\os.users'
-if (Test-Path -LiteralPath (Join-Path $osUsersDir 'SDSYS')) {
-    Refuse "os.users\SDSYS already exists - a run or a person left it.  Remove it or read it first; this script will not overwrite a permission record."
-}
-$plantedOsUsers = $false
+# 9 Nov 26 (RELEASE_1.1 188): os.users is retired.  The grant the control needs is now the throwaway account's own OS.EXECUTE,
+# given with MODIFY.ACCOUNT just before the local run and taken away just after.
+$grantedOs = $false
 
 $restoreNeeded = $false
 $madeAccount   = $false
@@ -420,7 +418,29 @@ try {
     # "10 error(s)" - there is no word boundary between two digits - so the
     # positive and negative terms cannot both be satisfied by one line.
     $probes   = @('APIADMINPROBE', 'APIOSEXECPROBE')
-    $out      = Invoke-SDIn $Prefix.ToUpper() @($probes | ForEach-Object { "BASIC BP $_" })
+    # 9 Nov 26 (RELEASE_1.1 188): compiled as the administrator and the objects handed to the account.  A LOGTO'd session does not
+    # load the account's bp.edit (only sign-on does, S.64), so BASIC would refuse it here.
+    $sysBp  = Join-Path $env:ProgramData 'SD\sdsys\bp'
+    $sysObj = Join-Path $env:ProgramData 'SD\sdsys\bp.out'
+    $acctObj = Join-Path $acctDir 'bp.out'
+    # BASIC makes bp.out and its VOC entry the first time it compiles; it has not run here, so this does the same.
+    $mkObj = Invoke-SDIn $Prefix.ToUpper() @('CREATE.FILE DATA bp.out DIRECTORY')
+    if (-not (Test-Path -LiteralPath $acctObj)) { Write-Host $mkObj; Refuse 'CREATE.FILE made no bp.out in the account.' }
+    foreach ($p in $probes) { Copy-Item -LiteralPath (Join-Path $bpDir $p) -Destination (Join-Path $sysBp $p) -Force }
+    try {
+        $out = Invoke-SDSys @($probes | ForEach-Object { "BASIC bp $_" })
+        foreach ($p in $probes) {
+            $o = @(Get-ChildItem -LiteralPath $sysObj -File | Where-Object { $_.Name -ieq $p })
+            if ($o.Count -eq 1) { Copy-Item -LiteralPath $o[0].FullName -Destination (Join-Path $acctObj $p) -Force }
+        }
+    } finally {
+        foreach ($p in $probes) {
+            foreach ($d in @($sysBp, $sysObj)) {
+                @(Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $p }) |
+                    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+            }
+        }
+    }
     Write-Host $out
     $okCount  = ([regex]::Matches($out, '\b0 error\(s\)')).Count
     $errSeen  = ($out -match '[1-9][0-9]* error')
@@ -436,34 +456,34 @@ try {
     # WITHOUT THIS THE TEST IS VACUOUS.  This session genuinely is elevated, so
     # it MUST reach the store.  A probe that answered "no" whatever happened
     # would pass every assertion in step 7 while measuring nothing at all.
-    $localOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIADMINPROBE')
-    Write-Host $localOut
-
-    # Separate run, because this one may abort - see the note in step 4.
     #
-    # 21 Sep 26 - RELEASE_1.1 76: PLANTED IMMEDIATELY BEFORE AND REMOVED IMMEDIATELY
-    # AFTER (see the note at $osUsersDir).  Printed either way, so a record left
-    # behind is visible in the run's own output.
+    # Two runs, because the second may abort - see the note in step 4.
+    #
+    # 9 Nov 26 - GIVEN IMMEDIATELY BEFORE AND TAKEN AWAY IMMEDIATELY AFTER, AROUND BOTH.  $cred is outside the account, and since
+    # S.63 a session without OS.EXECUTE is held to its own account before Windows is asked.  Printed either way.
     if ($NoFixture) {
-        Write-Host '   -NoFixture: os.users\SDSYS deliberately NOT planted for this run.' -ForegroundColor Yellow
-        Note 'falsification: os.users\SDSYS left unplanted, by request' $true $true
+        Write-Host '   -NoFixture: OS.EXECUTE deliberately NOT given to the account for this run.' -ForegroundColor Yellow
+        Note 'falsification: OS.EXECUTE left off, by request' $true $true
+        $localOut   = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIADMINPROBE')
         $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
     } else {
-        $plant = Set-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
-        Write-Host ("   os.users\SDSYS planted for the local OS.EXECUTE control: ok={0} {1}" -f $plant.Ok, $plant.Why)
-        Note 'fixture: os.users\SDSYS planted' $true $plant.Ok
-        if (-not $plant.Ok) { Refuse ('could not plant os.users\SDSYS: ' + $plant.Why) }
-        $plantedOsUsers = $true
+        $g = Invoke-SDSys @("MODIFY.ACCOUNT $($Prefix.ToUpper()) OS-ON")
+        Write-Host $g
+        $grantedOs = ($g -match 'OS\.EXECUTE yes')
+        Note 'fixture: the account was given OS.EXECUTE' $true $grantedOs
+        if (-not $grantedOs) { Refuse 'MODIFY.ACCOUNT did not give the account OS.EXECUTE.' }
         try {
+            $localOut   = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIADMINPROBE')
             $localOsOut = Invoke-SDIn $Prefix.ToUpper() @('RUN BP APIOSEXECPROBE')
         }
         finally {
-            $unplant = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
-            Write-Host ("   os.users\SDSYS removed: ok={0} {1}" -f $unplant.Ok, $unplant.Why)
-            if ($unplant.Ok) { $plantedOsUsers = $false }
+            $g = Invoke-SDSys @("MODIFY.ACCOUNT $($Prefix.ToUpper()) OS-OFF")
+            Write-Host $g
+            if ($g -match 'OS\.EXECUTE no') { $grantedOs = $false }
         }
-        Note 'fixture: os.users\SDSYS removed after the control' $true (-not $plantedOsUsers)
+        Note 'fixture: OS.EXECUTE taken away after the control' $true (-not $grantedOs)
     }
+    Write-Host $localOut
     Write-Host $localOsOut
 
     $localAcct  = Get-Marker $localOut 'ACCOUNT'
@@ -840,15 +860,6 @@ finally {
         Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
         Write-Host '   sd.conf restored'
         if (Stop-SD) { $null = Start-SD }
-    }
-
-    # 21 Sep 26 - RELEASE_1.1 76: THE BACKSTOP for the os.users\SDSYS record planted for
-    # the local control.  Removed only if it is the one this run wrote (the helper
-    # refuses to touch any other) and said so out loud, because a permission record
-    # left on the list that grants shells is worse than a name in a register.
-    if ($plantedOsUsers) {
-        $r = Remove-SeatOsUsersRecord -OsUsersDir $osUsersDir -Account 'SDSYS'
-        Write-Host ("   backstop: os.users\SDSYS removed: ok={0} {1}" -f $r.Ok, $r.Why) -ForegroundColor Yellow
     }
 
     # The probe writes a namespaced record and deletes it again, but a run that

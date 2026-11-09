@@ -440,6 +440,13 @@ try {
     $made = $true
     Write-Host "   account $Prefix created"
 
+    # 9 Nov 26 (RELEASE_1.1 188): the ALLOW and DENY fixtures sit outside the account, and since S.63 a session without OS.EXECUTE
+    # is held to its own account before Windows is asked.  This test is about what WINDOWS decides for the user, so the account
+    # is given OS.EXECUTE and the file's own permissions are what remain to refuse or admit it.
+    $osOn = Invoke-SDSys @("MODIFY.ACCOUNT $($Prefix.ToUpper()) OS-ON")
+    if ($osOn -notmatch 'OS\.EXECUTE yes') { Write-Host $osOn; Refuse 'MODIFY.ACCOUNT did not give the account OS.EXECUTE.' }
+    Write-Host "   account $Prefix given OS.EXECUTE"
+
     # SUCCESS ANCHOR IS 'Password accepted.' - the wording set_acc_password prints
     # on the positive path (set_acc_password:375, reworded 21 Sep 2026 from
     # 'Password set for account %1').  The old 'Password set' matched the
@@ -678,8 +685,29 @@ try {
     # identity stays SDSYS through the LOGTO - so ZZLOCAL is owned by the
     # SDSYS-side identity, and Step 5's ownership control compares that against
     # the API session's own (the throwaway user).
+    #
+    # 9 Nov 26 (RELEASE_1.1 188): THE POINTERS GO INTO VOC FROM THE ADMINISTRATOR'S OWN SESSION.  A LOGTO'd session does not
+    # load the account's voc.edit (only sign-on does, S.64), so COPY TO VOC writes nothing from here.  The ZZLOCAL copy below
+    # is an ordinary file, not a VOC, so it stays in the LOGTO'd session where the ownership control needs it.
+    $sysBp  = Join-Path $env:ProgramData 'SD\sdsys\bp'
+    $sysObj = Join-Path $env:ProgramData 'SD\sdsys\bp.out'
+    $accFwd = $accPath -replace '\\', '/'
+    $vpSrc  = "program zzvp34`nopenpath '$accFwd/ZZIDSRC' to s else stop 'VP=NOSRC'`nopenpath '$accFwd/voc' to v else stop 'VP=NOVOC'`n"
+    foreach ($f in $fixtures) { $vpSrc += "read r from s, '$($f.Name)' else stop 'VP=NOREC $($f.Name)'`nwrite r to v, '$($f.Name)'`n" }
+    $vpSrc += "crt 'VP=OK'`nend`n"
+    [IO.File]::WriteAllText((Join-Path $sysBp 'ZZVP34'), $vpSrc, [Text.Encoding]::GetEncoding('iso-8859-1'))
+    try {
+        $vp = Invoke-SDSys @('BASIC bp ZZVP34', 'RUN bp ZZVP34')
+    } finally {
+        foreach ($d in @($sysBp, $sysObj)) {
+            @(Get-ChildItem -LiteralPath $d -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'ZZVP34' }) |
+                ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    if ($vp -notmatch '(?m)^\s*VP=OK\s*$') { ($vp -split "`r?`n") | ForEach-Object { Write-Host ('   | ' + $_) }; Fail 'the VOC pointers could not be written by the administrator.' }
+    Write-Host '   the administrator wrote the VOC pointers'
+
     $out2 = Invoke-SDIn $acct (@('WHO') +
-                       @($fixtures | ForEach-Object { "COPY FROM ZZIDSRC TO VOC $($_.Name) OVERWRITING" }) +
                        @($fixtures | ForEach-Object { "CT VOC $($_.Name)" }) +
                        @('COPY FROM ZZIDSRC TO ZZIDOWN ZZIDALLOW,ZZLOCAL OVERWRITING', 'WHO'))
     Write-Host '   --- raw seat output for Step 3d (copy) ---'
@@ -700,9 +728,9 @@ try {
     # once per command WITH THE COUNT, so a copy that did nothing says
     # "0 record(s) copied." and cannot match this.
     $copied = @([regex]::Matches($out2, '(?im)^\s*1 record\(s\) copied')).Count
-    if ($copied -lt ($fixtures.Count + 1)) {
-        Fail ("COPY reported '1 record(s) copied' $copied time(s), expected $($fixtures.Count + 1) " +
-              '(one per VOC pointer, plus the ZZLOCAL ownership control).  ' +
+    if ($copied -lt 1) {
+        Fail ("COPY reported '1 record(s) copied' $copied time(s), expected 1 " +
+              '(the ZZLOCAL ownership control).  ' +
               'A "0 record(s) copied" line means the source record was not found in ZZIDSRC.')
     }
     $hit2 = @(@('Null source', 'Null target', 'not copied', 'Error ', 'Unable to') |
