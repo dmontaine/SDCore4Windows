@@ -309,31 +309,12 @@ try {
     Row 'leg 9: refused with 6151' ($r.Text -cmatch "(?m)^$N is already defined in your VOC") 'no 6151'
     Row "leg 9: the record '$N' survives, and only it" (Is-Exactly $famN $N) "got $(Fmt $famN)"
 
-    # --- leg 10: CNAME of an upper-case id to its own lower spelling ---------
-    # OPTION CREATE.FILE.UPCASE keeps the case typed (verify-promptenter's
-    # fixture route), so this is an old-style upper id with upper directories.
-    # 14 Sep 26 - RETIRED AS A RENAME, OWNER'S RULING (retire and replace).  It
-    # asserted the recase; on b161 CNAME refused it with 6151, because under D2
-    # the new name's NOCASE read finds the old record itself - the leg 9 guard.
-    # A recase could not be done by write-then-delete on a NOCASE VOC anyway:
-    # measured 14 Sep, writing 'type' then deleting 'TYPE' deletes the one
-    # record.  So the leg now asserts the refusal is SAFE - nothing is lost.
-    Write-Host ''
-    Write-Host '--- leg 10: CNAME an upper-case id to its own lower spelling is refused, nothing lost ---'
-    $UU = $U.ToUpper()
-    $mk = Invoke-SD @('OPTION CREATE.FILE.UPCASE', "CREATE.FILE $UU")
-    $famU = Get-Family 'zzvidu'
-    if (-not (Is-Exactly $famU $UU)) { Show 'CREATE.FILE (upper)' $mk; Bail 2 "could not make an upper-case id $UU (got $(Fmt $famU)) - setup failed." }
-    Row "leg 10 precondition: '$UU' is stored upper case" $true ''
-    $r = Invoke-SD @("CNAME $UU TO $U")
-    Show "CNAME $UU TO $U" $r
-    $famU = Get-Family 'zzvidu'; $dirsU = Get-Dirs 'zzvidu'
-    Write-Host "  stored ids: $(Fmt $famU);  on disk: $($dirsU -join ', ')"
-    Row 'leg 10: refused with 6151 (its own name in another case)' ($r.Text -match "(?m)^$U is already defined in your VOC") 'no 6151'
-    Row "leg 10: the record survives, still exactly '$UU'" (Is-Exactly $famU $UU) "got $(Fmt $famU)"
-    Row "leg 10: on disk still exactly '$UU' and '$UU.DIC'" `
-        ((@($dirsU | Where-Object { $_ -ceq $UU }).Count -eq 1) -and (@($dirsU | Where-Object { $_ -ceq "$UU.DIC" }).Count -eq 1) -and ($dirsU.Count -eq 2)) `
-        "on disk: $($dirsU -join ', ')"
+    # LEG 10 - RETIRED 9 Nov 26 (RELEASE_1.1 198).  It renamed an upper-case id to
+    # its own lower spelling and asserted the refusal was safe.  Its fixture came
+    # from OPTION CREATE.FILE.UPCASE, which went with S.87 (RELEASE_1.1 197), and
+    # CREATE.FILE now always stores a lower-case id, so that record can no longer
+    # be made.  Leg 9 still proves a rename to the same name in another case
+    # keeps the record.
 }
 finally {
     Write-Host ''

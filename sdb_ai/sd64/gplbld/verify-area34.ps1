@@ -182,6 +182,25 @@ if ($Half -eq 'User') {
         Remove-Item -LiteralPath $victim -Force -ErrorAction SilentlyContinue
     }
     Write-Output ''
+
+    # RELEASE_1.1 195, OpenQM 82: DIR() hands back a Windows file name exactly as it is on the disk.
+    Write-Output '=== 6. DIR() keeps a mixed-case file name ==='
+    $dd = Join-Path $acctDir 'zzdir34'
+    try {
+        $null = New-Item -ItemType Directory -Path $dd -Force
+        [IO.File]::WriteAllText((Join-Path $dd 'Report.txt'), 'x')
+        [IO.File]::WriteAllText((Join-Path $dd 'lower.txt'), 'x')
+        Put-Source $bp 'ZZDI34' "program zzdi34`nl = dir('zzdir34')`nfor i = 1 to dcount(l, @fm)`n   crt 'DIR=' : l<i, 1>`nnext i`ncrt 'DIR.END'`nend`n"
+        $r = Invoke-SD @('BASIC bp ZZDI34', 'RUN bp ZZDI34')
+        Show 'ZZDI34' $r.Text
+        Row 'the program reached its end' ($r.Text -match '(?m)^\s*DIR\.END\s*$') 'it did not run to its last line'
+        Row 'CONTROL: a lower-case name comes back' ($r.Text -cmatch '(?m)^\s*DIR=lower\.txt\s*$') 'no DIR=lower.txt'
+        Row 'THE ROW: Report.txt comes back with its capital' ($r.Text -cmatch '(?m)^\s*DIR=Report\.txt\s*$') 'no DIR=Report.txt, exact case'
+    } finally {
+        Remove-Named $bp @('ZZDI34'); Remove-Named $bpo @('ZZDI34')
+        if (Test-Path -LiteralPath $dd) { Remove-Item -LiteralPath $dd -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+    Write-Output ''
 }
 
 # ----------------------------------------------------------------------------------------------------------------

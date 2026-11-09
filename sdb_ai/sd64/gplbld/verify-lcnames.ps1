@@ -682,7 +682,7 @@ end
     Write-Output $spool
 
     Write-Output '  --- LISTF, for the record: ---'
-    Write-Output (Invoke-SD @('LISTF NO.PAGE'))
+    Write-Output (Invoke-SD @('LIST VOC WITH TYPE = "F" NO.PAGE'))   # 9 Nov 26: LISTF went with S.87
 
     # -----------------------------------------------------------------------
     Write-Output ''
