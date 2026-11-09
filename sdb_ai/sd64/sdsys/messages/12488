@@ -1,0 +1,1 @@
+set.batch {add | remove} account command; set.batch alone says which commands each account may run from the command line

@@ -1,0 +1,171 @@
+* SET_BATCH
+* SET.BATCH verb: which commands an account may run from the command line (the batch gate, S.40), the first stage of the scheduled-jobs page (S.102).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 2 Nov 26 dm  New (S.102 stage 1; the owner, 1 Nov: "a cron management admin pane - so that cron can be managed from within SD").  Until now the administrator
+*              edited @SDSYS/batch.jobs by hand (login, batch.permitted: "there is no verb to edit it with").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.BATCH                           says which commands each account may run from the command line
+*   SET.BATCH ADD account command       allows the command in that account
+*   SET.BATCH REMOVE account command    stops allowing it
+*
+*   The administrator's verb.  NOTHING IS ALLOWED AS DELIVERED: a session started with a command on the command line (sd -aACCOUNT 'command', as a scheduled job
+*   starts one) is refused unless the command is on the account's list in @SDSYS/batch.jobs, or the session is the administrator's.  A command is added only if
+*   it is a paragraph or a sentence in that account's VOC, the same test the login makes each time; it takes no arguments, so a listed name cannot be turned into
+*   something else.  The administrator's own account has no list.  Takes effect at the next such session.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.batch
+$catalog $set_batch
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   words = trim(@sentence)
+   n.words = dcount(words, ' ')
+
+   if n.words = 1 then
+      gosub list.all
+      @system.return.code = 0
+      stop
+   end
+   if n.words # 4 then stop sysmsg(12488)                        ;* set.batch {add | remove} account command
+
+   action = downcase(field(words, ' ', 2))
+   acct = downcase(field(words, ' ', 3))
+   cmd = field(words, ' ', 4)
+   if action # 'add' and action # 'remove' then stop sysmsg(12488)
+   if acct = 'sdsys' then stop sysmsg(12490)                     ;* the administrator's account runs any command and has no list
+
+   openpath @sdsys:@ds:'accounts' to acc.f else stop sysmsg(12489, acct[1, 40])
+   read acc.rec from acc.f, acct else
+      close acc.f
+      stop sysmsg(12489, acct[1, 40])                            ;* %1 is not a registered account
+   end
+   close acc.f
+
+   openpath @sdsys:@ds:'batch.jobs' to batch.f else
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12802)                                         ;* The list of batch commands could not be written
+   end
+   read batch.rec from batch.f, acct else batch.rec = ''
+   gosub find.on.list
+
+   if action = 'add' then
+      if there then
+         close batch.f
+         @system.return.code = 0
+         stop sysmsg(12494, cmd, acct)                           ;* %1 was already allowed in account %2; nothing changed
+      end
+      gosub voc.type
+      if not(runnable) then
+         close batch.f
+         stop sysmsg(12491, cmd[1, 40], acct)                    ;* %1 is not a paragraph or a sentence in account %2
+      end
+      batch.rec<-1> = downcase(cmd)
+   end else
+      if not(there) then
+         close batch.f
+         @system.return.code = 0
+         stop sysmsg(12801, cmd[1, 40], acct)                    ;* %1 was not allowed in account %2; nothing changed
+      end
+      gosub drop.from.list
+   end
+
+   wrote = @true
+   if batch.rec = '' then
+      delete batch.f, acct on error wrote = @false               ;* an empty list leaves no record behind
+   end else
+      write batch.rec to batch.f, acct on error wrote = @false
+   end
+   close batch.f
+   if not(wrote) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12802)
+   end
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'set.batch ' : action : ' account=' : acct : ' command=' : downcase(cmd))
+   display sysmsg((if action = 'add' then 12492 else 12493), downcase(cmd), acct)
+   stop
+
+* Is the command on the list?  The list is read as the login reads it: lines (field marks) and values alike, compared without case
+find.on.list:
+   there = 0
+   lst = change(batch.rec, @vm, @fm)
+   for i = 1 to dcount(lst, @fm)
+      if downcase(trim(lst<i>)) = downcase(cmd) then there = 1
+   next i
+   return
+
+* Every entry that names the command goes; the list is written back one command a line
+drop.from.list:
+   lst = change(batch.rec, @vm, @fm)
+   batch.rec = ''
+   for i = 1 to dcount(lst, @fm)
+      ent = trim(lst<i>)
+      if ent # '' and downcase(ent) # downcase(cmd) then batch.rec<-1> = ent
+   next i
+   return
+
+* The login's own test (batch.permitted): the VOC record read as typed, then lower, then upper case, and field 1 starting PA or S
+voc.type:
+   runnable = 0
+   apath = acc.rec<1>
+   if apath = '' then return
+   openpath apath:@ds:'voc' to voc.f else return
+   read vrec from voc.f, cmd else
+      read vrec from voc.f, downcase(cmd) else
+         read vrec from voc.f, upcase(cmd) else vrec = ''
+      end
+   end
+   close voc.f
+   vtype = upcase(trim(vrec<1>))
+   if vrec # '' and (vtype[1, 2] = 'PA' or vtype[1, 1] = 'S') then runnable = 1
+   return
+
+list.all:
+   found = 0
+   openpath @sdsys:@ds:'batch.jobs' to batch.f else
+      display sysmsg(12804)                                      ;* No account may run a command from the command line
+      return
+   end
+   select batch.f to 9
+   ids = ''
+   loop
+      readnext id from 9 else exit
+      locate id in ids<1> by 'AL' setting lp else ins id before ids<lp>
+   repeat
+   for i = 1 to dcount(ids, @fm)
+      read batch.rec from batch.f, ids<i> then
+         lst = change(batch.rec, @vm, @fm)
+         for j = 1 to dcount(lst, @fm)
+            if trim(lst<j>) # '' then
+               display sysmsg(12803, ids<i>, downcase(trim(lst<j>)))  ;* Account %1 may run from the command line: %2
+               found = 1
+            end
+         next j
+      end
+   next i
+   close batch.f
+   if not(found) then display sysmsg(12804)
+   return
+
+end
+
+* END-CODE

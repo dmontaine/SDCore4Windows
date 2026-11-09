@@ -2,6 +2,15 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+9 Nov 26   SET.BATCH: WHICH COMMANDS AN ACCOUNT MAY RUN FROM THE COMMAND LINE (FROM SD CORE FOR LINUX).
+
+             What        - SET.BATCH ADD account command and SET.BATCH REMOVE account command change the list in @SDSYS/batch.jobs that a
+                           scheduled job needs to be on, and SET.BATCH alone shows every account's list. A command is added only if it is
+                           a paragraph or a sentence in that account's VOC. Each change is audited.
+             Why         - The list could only be edited by hand.
+             Does NOT    - Allow anything by itself: nothing is allowed as delivered. It is the administrator's verb, and the check at
+                           run time is the same as before.
+
 8 Nov 26   FIVE SMALLER FIXES (FROM SD CORE FOR LINUX).
 
              What        - ENCRYPT.KEY SET refuses a passphrase of fewer than 12 characters and sets no key. SH with no command starts
