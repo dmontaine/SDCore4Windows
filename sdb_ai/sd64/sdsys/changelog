@@ -718,32 +718,21 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
                          gates and stay on tool.menus. The route gates (ssh, api, files, ai) change Linux
                          groups through sd-elevate, which a sandbox replaces with a stand-in: NOT SHOWN on a real install.
 
-23 Oct 26  MENU BRINGS UP THE FULL-SCREEN MENU, EVERY SETTING ON THE ADMINISTRATOR'S PAGES HAS A [?] THAT EXPLAINS IT, AND PDF SHOWS A DOCUMENT IN A
-           PDF READER THE ADMINISTRATOR HAS ALLOWED - EVEN FOR AN ACCOUNT THAT MAY NOT RUN PROGRAMS. NO READER IS ALLOWED AS DELIVERED.
+23 Oct 26  MENU BRINGS UP THE FULL-SCREEN MENU, AND EVERY SETTING ON THE ADMINISTRATOR'S PAGES HAS A [?] THAT EXPLAINS IT. (THIS VERSION HAS NO PDF
+           VERB: SEE "DOES NOT".)
 
              What        MENU (a new verb, in every account) opens the home screen, at the prompt or in the terminal the screen gave you; HOME and EXIT
                         stay. On the menu management page, TOOL.MENUS, each setting has a [?] at the end of its row (and the accounts list and the
                         system default have one): F1, ? or a click opens a box that says what the setting means, with a Documentation button and a Close
-                        button (the one Enter chooses). The text is kept in the file CONTEXT.HELP of the SHARED account, one record to a setting, loaded
-                        from the text under helptext in the SD system directory by the installer and by LOAD.HELP (SDSYS's verb: it writes the records
-                        that differ and keeps ones the administrator added). PDF lists the documents, and PDF name shows one in the PDF reader of the
-                        computer you are sitting at - in ANY account, because the program it starts is one the administrator named for this one purpose:
-                        SET.VIEWER ADD PDF reader (SDSYS's verb) or the new page TOOL.VIEWERS ("Bypass programs", a tile on the administrator's home
-                        screen), which shows the list, the readers found on the machine and whether each still passes the test, and changes the list only
-                        through the same Run / Cancel box, asking for the reader's name to be typed before it allows one. The documents are the PDF
-                        files of the pdf directory of the shared account; DOCS.INSTALL directory copies them in (the PDFs are generated from the
-                        documentation and are not part of the source). The installer makes the pdf directory (owner sdsys, mode 755: no SD user can add a
-                        document) and, if it finds a known reader, asks once whether to allow it.
-             Why it      A person can ask for the full-screen menu by name, every setting says what it does where it is changed, and the documentation
-             matters     can be read on screen by an account that is not allowed to run programs.
-             Does not    NO READER IS ALLOWED AS DELIVERED: the installer's question is answered No unless y is typed, and PDF says that no viewer has been
-                        allowed until SDSYS names one. The bypass is narrow: the program is the first on the administrator's list that passes the
-                        test AGAIN each time (an absolute path of a regular file owned by root, not writable by group or others, executable by
-                        everyone, not under a place users can write), the document is a lower case regular file of the pdf directory named by the
-                        caller without a path, the program is given that one file, a session with no graphical display (plain ssh) is told so, and one
-                        audit line is written. A graphical reader can still open other files its user may read and follow links, so naming one is the
-                        administrator's judgement. [?] is on the menu management and Bypass programs pages only; a general HELP clause for the SCREEN
-                        statement is not built. The AI verb and the AI line are not built.
+                        button (the one Enter chooses; the Documentation button is not shown in this version). The text is kept in the file CONTEXT.HELP
+                        of the SHARED account, one record to a setting, loaded from the text under helptext in the SD system directory by the installer
+                        and by LOAD.HELP (SDSYS's verb: it writes the records that differ and keeps ones the administrator added).
+             Why it      A person can ask for the full-screen menu by name, and every setting says what it does where it is changed.
+             matters
+             Does not    THERE IS NO PDF VERB, NO SET.VIEWER, NO TOOL.VIEWERS PAGE AND NO DOCS.INSTALL: the way Linux starts a PDF reader for an account that may
+                        not run programs does not exist in this version, so an account with its os switch off cannot read a documentation PDF from SD. The
+                        documentation is read outside SD. [?] is on the menu management page only; a general HELP clause for the SCREEN statement is not
+                        built. The AI verb and the AI line are not built.
 
 22 Oct 26  THE ADMINISTRATOR CHOOSES THE HOME SCREEN'S TILES FOR EACH ACCOUNT, AND MAY LET AN ACCOUNT ADD ITS OWN PROGRAMS TO IT. BOTH ARE
            OFF AS DELIVERED: EVERY TILE IS ON, AND NOBODY MAY ADD PROGRAMS UNTIL THE ADMINISTRATOR SAYS SO.
