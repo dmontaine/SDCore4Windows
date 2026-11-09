@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux d049d8bb (S.96 security fix): op_common refuses a named common whose name starts with $ or _ to a program that is not internal (message 12603; Linux 11598).
+ *              The compiler takes those names only in internal mode (bcomp get.name), so the system's blocks - RUN.IN's /$runin/, whose ri.sw the abort
+ *              branch of CPROC restores as gate switches - could still be joined by a hand-made object; S.64 already strips HDR_INTERNAL from such an object.
  * 28 Oct 26 dm  S.87: the PMATRIX descriptor type, op_pmatrix and AH_PICK_STYLE are gone: every matrix is an ARRAY with an element 0 (nothing made a Pick style matrix since $MODE PICK.MATRIX went).
  * 27 Oct 26 dm  S.87 batch 17: op_dimlclp ($MODE PICK.MATRIX) is gone and a_dimension() has no pick_style, so AH_PICK_STYLE is never set.  The PMATRIX descriptor type and op_pmatrix stay (unreachable: the compiler no longer emits OP_PMATRIX).
  * 31 Dec 23 SD launch - prior history suppressed
@@ -119,6 +122,11 @@ void op_common() {
   pc += name_len;
 
   creating_common = TRUE;
+
+  /* The system's blocks ($ and _ names; the unnamed common is the one-byte "$") belong to internal programs only */
+  if ((name_len > 1) && ((*block_name == '$') || (*block_name == '_')) &&
+      !(process.program.flags & HDR_INTERNAL))
+    k_error(sysmsg(12603));
 
   if ((name_len == 1) && (*block_name == '$')) {
     name_len = sprintf(block_name, "$%d", (int)cproc_level);

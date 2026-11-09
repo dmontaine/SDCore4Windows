@@ -22,6 +22,7 @@
  * 05 Sep 26 Windows port - IsInteractive() added beside both.  How the session
  *           arrived, where the other two ask who and what.  PRE_RELEASE 167.
  * 8 Nov 26 Windows port - from Linux 71d8550b (S.159): sdrealpath() reads a link's target as part of the path, with a drive letter counted as a root here.
+ * 8 Nov 26 Windows port - sdrealpath() keeps resolving past a component that does not exist, as Linux does (RELEASE_1.1 200).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -532,24 +533,16 @@ char* sdrealpath(char* inpath,  /* Supplied path */
         if (errno != ENOENT)
           return NULL;
 
-        /* Simply glue unrecognised component(s) on the end so that we
-          return a fully resolved path of what we might be trying to
-          create.                                                      */
-
-        /* Modified by Composer AI - 2026/06/10.
-           Cast the (always non-negative) pointer difference so the
-           comparison is not done between signed and unsigned types. */
-        /* if ((p - inpath) <= strlen(inpath)) { */
-        /* 8 Nov 26 (S.159): asks q, not p - inpath: after a link p points into pending, and p is q + 1 only when q is not the end */
-        if (*q != '\0') {
-        /* -------------------- */
-          if (tgt + strlen(p) + 1 >= outpath + PATH_MAX)
-            return NULL; /* Too long */
-
-          *(tgt++) = '/';
-          strcpy(tgt, p);
-        }
-        return outpath;
+        /* 8 Nov 26 Windows port - from Linux (its parity audit of 10 Sep 26): KEEP RESOLVING.
+           This glued the rest of the input on the end unprocessed and returned, so any
+           "." or ".." after the first component that does not exist survived, two
+           spellings of one file compared unequal, and a "resolve, then check it is under
+           the root" test was defeated by one made-up name.  The component does not exist,
+           so there is no link to follow: carry on with the next one.  p IS RESET TO q
+           FIRST: it was set to q + 1 above, which for the last component is one past the
+           terminator, and continue skips the "p = q" at the bottom of the loop. */
+        p = q;
+        continue;
       }
 
       if (S_ISLNK(st.st_mode)) {

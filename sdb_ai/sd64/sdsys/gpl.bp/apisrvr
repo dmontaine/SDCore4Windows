@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 7c910a16 (S.169): findings of a BASIC review.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): QMEvaluate and QMEvalConv refuse a C item with message 12347, whose text no longer lists C (the type list in vb.evaluate is DASI).
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
 * 8 Nov 26 Windows port - from Linux 36daf810 (S.87): request 70 operation 1 runs analyze.file (the VOC record analyse.file is gone); the operation's name in the audit line
@@ -3522,15 +3523,13 @@ if fa.op = 8 or fa.op = 9 then fa.cmd := ' no.query'
 if fa.names.file then close files(fno)
 execute fa.cmd capturing response
 st = @system.return.code
+* 8 Nov 26: ONE reopen for every operation.  A delete that worked leaves nothing to open, so the number is forgotten; a delete the verb refused leaves the file,
+*   which opens again under the same number, and the client's handle stays good.
 if fa.names.file then
-   if fa.op = 9 then
-      file.names<fno> = ''
+   if upcase(fa.name[1,5]) = 'DICT ' then
+      open 'DICT', trim(fa.name[6,9999]) to files(fno) else file.names<fno> = ''
    end else
-      if upcase(fa.name[1,5]) = 'DICT ' then
-         open 'DICT', trim(fa.name[6,9999]) to files(fno) else file.names<fno> = ''
-      end else
-         open fa.name to files(fno) else file.names<fno> = ''
-      end
+      open fa.name to files(fno) else file.names<fno> = ''
    end
 end
 return to return.status.set

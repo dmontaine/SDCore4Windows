@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux e9f4d42e (S.156): SH with no command starts the interactive shell again.
 * 8 Nov 26 Windows port - from Linux bfca310a (1 Nov 26, its cproc hunk only): the hyphen form is back (owner: "restore the hyphen option"): an unknown
 *           verb is retried with its hyphens changed to dots, lower case then upper case.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  A program file named in RUN is always name.out (the file,part form of the name is not split), and F4 of a file's VOC record is ignored.
@@ -3928,9 +3929,12 @@ os.command:
 *   24 Oct 26 - ***THE LIFT ABOVE IS WITHDRAWN.***  Linux (mail T0100, 24 Oct): the filter for everyone is the template and this
 *   rule predates 13 Oct, so "high security wins" (the core direction).  valid_shell_cmd now refuses pipes, redirection and chaining
 *   for every account, an sh-on account and an elevated session included.  The 17 Aug ruling stands in history only.
-   if not(valid_shell_cmd(os.command.text)) then
-      display sysmsg(5240, 2) ;* Error xx executing operating system command
-      return
+* 8 Nov 26 Windows port - from Linux e9f4d42e (S.156): an empty command is the interactive shell (op_sh.c).  The filter refuses an empty one, which had made a bare SH fail for everybody.
+   if os.command.text # '' then
+      if not(valid_shell_cmd(os.command.text)) then
+         display sysmsg(5240, 2) ;* Error xx executing operating system command
+         return
+      end
    end
 
    os.execute os.command.text

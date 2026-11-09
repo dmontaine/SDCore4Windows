@@ -858,10 +858,20 @@ def part2(box, ref):
     row("G6: CONFIRM with two different passphrases sets no key", q3.has(o, r"The two passphrases are different") and q3.has(o, r"^The key ring is empty\."), repr(o))
     o = plain("zzaa", ["encrypt.key set a %s" % SALT, "", "encrypt.key list"])
     row("G7: an empty passphrase sets no key", q3.has(o, r"No passphrase was typed") and q3.has(o, r"^The key ring is empty\."), repr(o))
-    o = plain("zzaa", ["encrypt.key set a %s" % SALT, "first", "encrypt.key set a %s" % SALT, "second", "encrypt.key set b %s" % SALT, "third",
+    # 30 Oct 26 (Opus's decision 10a): the verb wants at least 12 characters; sdkey() itself does not
+    o = plain("zzaa", ["encrypt.key set a %s" % SALT, "elevenchars", "encrypt.key list"])
+    row("G7b: a passphrase of 11 characters sets no key: message 11994 names the 12, and the ring stays empty",
+        q3.has(o, r"The passphrase has fewer than 12 characters") and q3.has(o, r"^The key ring is empty\.") and not q3.has(o, r"is set \(key id"), repr(o))
+    o = plain("zzaa", ["encrypt.key set a %s" % SALT, "twelve chars", "encrypt.key list"])
+    row("G7c: ...and one of exactly 12 sets it (the control: the refusal above is the length and nothing else)",
+        q3.has(o, r"Key a is set \(key id [0-9a-f]{8}\)") and not q3.has(o, r"fewer than 12 characters") and not q3.has(o, r"^The key ring is empty\."), repr(o))
+    o = plain("zzaa", ["encrypt.key set a %s confirm" % SALT, "elevenchars", "twelve chars", "encrypt.key list"])
+    row("G7d: two different short ones say they are different (the confirm test comes first) and set no key",
+        q3.has(o, r"The two passphrases are different") and not q3.has(o, r"fewer than 12 characters") and q3.has(o, r"^The key ring is empty\."), repr(o))
+    o = plain("zzaa", ["encrypt.key set a %s" % SALT, "first passphrase", "encrypt.key set a %s" % SALT, "second passphrase", "encrypt.key set b %s" % SALT, "third passphrase",
                        "encrypt.key list", "encrypt.key clear a", "encrypt.key list", "encrypt.key clear", "encrypt.key list"])
     txt = "\n".join(o)
-    k1_, k2_, k3_ = (key_id(pwhash_key(p_, REF_SALT)).hex() for p_ in (b"first", b"second", b"third"))
+    k1_, k2_, k3_ = (key_id(pwhash_key(p_, REF_SALT)).hex() for p_ in (b"first passphrase", b"second passphrase", b"third passphrase"))
     lists = [(n_, i_, bool(c_)) for n_, i_, c_ in re.findall(r"(?m)^(\w+)\s+key id ([0-9a-f]{8})(\s+\(new values.*\))?\s*$", txt)]
     row("G8: two keys under a name and one under another: the first list shows all three, the newer of a name marked; CLEAR a takes the two "
         "(2 key(s)); CLEAR with no name takes the rest; the last list is empty",

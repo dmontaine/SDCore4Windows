@@ -18,6 +18,7 @@
 *
 * START-HISTORY:
 * 18 Oct 26 dm  Written: encryption layer 3 (the XE conversion; gplsrc/sd_keyring.c).
+* 8 Nov 26 Windows port - from Linux c2e55449: SET refuses a passphrase of fewer than 12 characters (message 12999; Linux 11994; Opus's decision 10a, the tighter default).  sdkey() itself is unchanged: a program that wants a shorter one calls it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -48,6 +49,8 @@ $catalog $encryptkey
 
 $include err.h
 $include int$keys.h
+
+   equate MIN.PASSPHRASE to 12         ;* characters; the tighter default (30 Oct 26)
 
    @system.return.code = -ER$ARGS      ;* Preset for command format errors
 
@@ -115,6 +118,10 @@ set.key:
          stop sysmsg(12708)
       end
       pw2 = ''
+   end
+   if len(pw) < MIN.PASSPHRASE then                     ;* 30 Oct 26: after the mismatch test, so that two different short ones still say they are different
+      pw = ''
+      stop sysmsg(12999, MIN.PASSPHRASE)
    end
 
    key = sdkey(pw, salt)

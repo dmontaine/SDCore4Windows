@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 8 Nov 26 Windows port - from Linux 7c910a16 (S.169): a refused delete.file no longer says 0 was deleted.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  DELETE.FILE name,part is no longer a form (a comma after the name is an unexpected token, 2018), the question "Delete all data components of multifile?" (6133, with its C answer) and the removal of an emptied multifile directory (6137) are gone, and only the first value of field 2 is looked at.  6134 goes too.
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION NO.SEL.LIST.QUERY is gone; the question "Use active select list?" is skipped by NO.QUERY alone.
 * 13 Sep 26 Windows port - RELEASE_1.1_FIXES.md 33, owner's ruling: Enter at
@@ -390,6 +391,7 @@ delete.upcased.file:
             gosub edit.check.path
 
             if ospath(data.path, OS$OPEN) then
+               @system.return.code = -ER$EXCLUSIVE
                stop sysmsg(6198, data.path) ;* Cannot delete file - Data part %1 is open
             end
 
@@ -487,6 +489,7 @@ delete.dict:
          end
 
          if ospath(dict.path, OS$OPEN) then
+            @system.return.code = -ER$EXCLUSIVE
             stop sysmsg(6199, dict.path) ;* Cannot delete file - Dictionary part %1 is open
          end
 

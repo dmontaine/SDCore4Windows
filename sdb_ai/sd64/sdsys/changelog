@@ -2,6 +2,20 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   FIVE SMALLER FIXES (FROM SD CORE FOR LINUX).
+
+             What        - ENCRYPT.KEY SET refuses a passphrase of fewer than 12 characters and sets no key. SH with no command starts
+                           the interactive shell again; the check for shell metacharacters had made it fail for everybody. A common
+                           block whose name starts with $ or _ is the system's, and the kernel now refuses one to any program that is
+                           not a system program. A client's DELETE.FILE through the API that the verb refused (the file open in
+                           another session, say) leaves the file number good and reports the verb's status, not 0; DELETE.FILE itself
+                           returns that code when it stops because a part is open. A path with a folder that does not exist, followed
+                           by "..", now resolves to the right place instead of keeping the ".." in it.
+             Why         - A short passphrase is a weak key. A program could otherwise join a system common by a hand-made object. A
+                           client had to reopen a file that had not gone. Two spellings of one path could compare unequal.
+             Does NOT    - Change a passphrase of 12 or more, an SH with a command, a program that uses ordinary common blocks, or a
+                           delete that works.
+
 8 Nov 26   DELETING A TREE NO LONGER FOLLOWS A LINK INSIDE IT, AND LONG PATH NAMES CANNOT OVERRUN THEIR BUFFERS (FROM SD CORE FOR LINUX).
 
              What        - A symbolic link inside a tree being deleted (DELETE.ACCOUNT, DELETE.FILE and the rest) is removed as a link.
