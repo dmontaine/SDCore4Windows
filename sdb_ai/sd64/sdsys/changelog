@@ -2,6 +2,14 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   FOUR KERNEL FAULTS ARE FIXED (FROM SD CORE FOR LINUX).
+
+             What        - GETLOCKS(file, user) with a user number nobody holds, or one out of range, gives no lock line for it; it used
+                           to read outside the user table. A time conversion with negative parts or long hours no longer overruns its
+                           buffer. A prefix strip in a conversion no longer copies over itself. A refused socket connect with SOCKET
+                           debugging on no longer relies on code a compiler is entitled to drop.
+             Does NOT    - Change a GETLOCKS, a conversion or a connect that was working.
+
 8 Nov 26   EXECUTE AND OS.EXECUTE TAKE SILENT (FROM SD CORE FOR LINUX).
 
              What        - EXECUTE command SILENT, PHANTOM command SILENT and OS.EXECUTE command SILENT run the command and throw

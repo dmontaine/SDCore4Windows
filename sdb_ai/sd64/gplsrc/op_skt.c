@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux 8048c3a3 (S.125): the noreturn redeclaration of k_error() is gone; k_error() RETURNS for a message beginning '!', and an optimising compiler would drop the code after those calls.
  * 20 Oct 26 Windows port - from Linux b052346 - S.73 item 2, THE SILENT SERVER.  (1) READ.SOCKET on a TLS socket gave up after its timeout only while the descriptor held nothing: the session tickets a
  *           TLS 1.3 server sends after the handshake, or half of a record, made the descriptor readable, and the blocking SSL_read behind it then waited for the rest with
  *           no limit (5.0 s against a test server that closes a silent connection after 5, with NETREPLY=3).  The read is now non-blocking and the wait is on the
@@ -95,11 +96,8 @@
  * START-CODE
  */
 
-/* Modified by Composer AI - 2026/06/10.
-   k_error() never returns, but the analyzer cannot see that across
-   translation units. */
-void k_error(char msg[], ...) __attribute__((noreturn));
-/* -------------------- */
+/* 07 Nov 26 (S.125): NO noreturn redeclaration of k_error() here.  This file calls it with '!' messages, which
+   return; see the history above and gplbld/test-noreturn-units.py. */
 
 #include "sd.h"
 #include "header.h" /* HDR_INTERNAL: the edit gates of SKT$INFO.TRACE (17 Oct 26, S.64) */
@@ -423,7 +421,7 @@ void op_openskt() {
   char server[80 + 1];
   char server_addr[80];
 
-  SOCKET skt;
+  SOCKET skt = -1; /* 07 Nov 26 (S.125): set before every use; -1 tells -O2's flow analysis so (closesocket below) */
   DESCRIPTOR result_descr;
   SOCKVAR* sock;
 

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): faults that optimisation exposed.
  * 25 Oct 26 Windows port - from Linux 3d3890e: update_internal_node(): removing the LAST child of an internal node that has others left no longer takes the node out of its parent too (a live
  *           subtree went missing from every lookup); the parent is given the node's new maximum key, and a terminal node moved over its parent has its two neighbours pointed at the new node
  *           number (relink_term_neighbours()).  Only this fix is carried; Linux's right justified total order (AK_V2) and 4 KB group size are built there and untested (RELEASE_1.1 181).
@@ -1991,7 +1992,11 @@ Private int16_t create_ak(char *data_path,          /* Data file path name */
   /* Open primary subfile.  We do this outside of the file sharing mechanism
      to guarantee that we are the only user of the file.                     */
 /* rev 0.9.0 */
-  sprintf(path, "%s%c%%0", data_path, DS);
+  if (snprintf(path, sizeof(path), "%s%c%%0", data_path, DS) >= (int)sizeof(path)) {
+    dh_err = DHE_FILE_NOT_FOUND; /* 06 Nov 26 S.125: the name would not fit; it used to overrun path */
+    process.os_error = ENAMETOOLONG;
+    goto exit_create_ak;
+  }
   fu = dio_open(path, DIO_UPDATE);
   if (!ValidFileHandle(fu)) {
     dh_err = DHE_FILE_NOT_FOUND;
@@ -2190,7 +2195,11 @@ Private bool delete_ak(char *pathname, /* File path name */
   /* Open primary subfile.  We do this outside of the file sharing mechanism
      to guarantee that we are the only user of the file.                     */
 /* rev 0.9.0 */
-  sprintf(path, "%s%c%%0", pathname, DS);
+  if (snprintf(path, sizeof(path), "%s%c%%0", pathname, DS) >= (int)sizeof(path)) {
+    dh_err = DHE_FILE_NOT_FOUND; /* 06 Nov 26 S.125: the name would not fit; it used to overrun path */
+    process.os_error = ENAMETOOLONG;
+    goto exit_delete_ak;
+  }
   fu = dio_open(path, DIO_UPDATE);
   if (!ValidFileHandle(fu)) {
     dh_err = DHE_FILE_NOT_FOUND;

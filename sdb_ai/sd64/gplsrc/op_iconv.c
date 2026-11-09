@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): an overlapping strcpy() is a memmove().
  * 8 Nov 26 Windows port - from Linux 9b6fe5e1 (3 Nov 26): MCDX is back, as a second name of MX (owner: "Restore MCDX only", for programs moved from
  *           openQM); MCD, MCX and MCXD stay invalid.
  * 27 Oct 26 dm  S.87 batch 7: OPTION PICK.ML.CONV.MASK is gone; a left bracket in an ML / MR conversion is a negative value action, as it was with the option off.
@@ -1054,7 +1055,7 @@ Private int32_t masked_decimal_conversion(char* p) {
   /* Strip prefix string */
 
   if ((prefix[0] != '\0') && ((r = strstr(s, prefix)) != NULL)) {
-    strcpy(r, r + strlen(prefix));
+    memmove(r, r + strlen(prefix), strlen(r + strlen(prefix)) + 1); /* overlapping: not strcpy */
   }
 
   /* Copy string to z, removing any further padding characters, spaces and

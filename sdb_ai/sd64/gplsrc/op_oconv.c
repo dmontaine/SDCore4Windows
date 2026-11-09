@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): the time buffer is large enough for negative parts and long hours.
  * 8 Nov 26 Windows port - from Linux 9b6fe5e1 (3 Nov 26): MCDX is back, as a second name of MX (owner: "Restore MCDX only", for programs moved from
  *           openQM); MCD, MCX and MCXD stay invalid.
  * 27 Oct 26 dm  S.87 batch 7: OPTION PICK.ML.CONV.MASK is gone; ML and MR read a left bracket as the round bracket negative style, as they did with it off.
@@ -2498,7 +2499,7 @@ Private int32_t time_conversion(char* p) {
   int16_t hours;
   int16_t mins;
   int32_t secs;
-  char s[11 + 1];
+  char s[40]; /* 06 Nov 26 S.125: hours, minutes and seconds may each be negative and hours up to 6 characters */
 
   s[0] = '\0';
 
