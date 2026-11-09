@@ -56,7 +56,8 @@ void* w32sem_open(const char* name);
 
 void w32sem_close(void* handle);
 
-/* Non-blocking acquire.  Non-zero if it was taken.                          */
+/* Non-blocking acquire.  1 taken, 0 busy, -1 the wait failed (see
+   w32sem_last_error).                                                       */
 int w32sem_trywait(void* handle);
 
 void w32sem_post(void* handle);

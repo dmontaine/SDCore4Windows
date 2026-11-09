@@ -15,6 +15,7 @@
  * START-HISTORY:
  * 16 Aug 26 Windows port - written.  POSIX sem_open() cannot be used in
  *           session 0, so SD could not run as a service.
+ * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): w32sem_trywait tells "busy" (0) from a wait that failed (-1).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -170,7 +171,11 @@ void w32sem_close(void* handle) {
 }
 
 int w32sem_trywait(void* handle) {
-  return (WaitForSingleObject((HANDLE)handle, 0) == WAIT_OBJECT_0);
+  DWORD result = WaitForSingleObject((HANDLE)handle, 0);
+
+  if (result == WAIT_OBJECT_0)
+    return 1;
+  return (result == WAIT_TIMEOUT) ? 0 : -1;
 }
 
 void w32sem_post(void* handle) {

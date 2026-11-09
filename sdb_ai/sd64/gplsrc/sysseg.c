@@ -40,6 +40,10 @@
  *               claiming SD started (the Windows port's fix; UPSTREAM_FIXES 3).
  * 08 Sep 26 "sd -stop" signalled unvalidated pids, so a stale entry with pid 0
  *           made kill(0, SIGTERM) terminate the caller's whole process group.
+ * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): stop_sd_ex(kill_survivors) - "sd -stop" and "sd -restart" end with SIGKILL any SD
+ *           process still running ten seconds after SIGTERM (end_attached_survivors), before the segment and the semaphores go.  Linux proves
+ *           a process is SD's by the segment key in /proc/<pid>/maps; the MSYS2 runtime's maps have no such key, so here it is the user table
+ *           (or the daemon's pid) AND the program's folder matching this one's.  bind_sysseg()'s failure path keeps plain stop_sd().
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -807,10 +811,109 @@ bool start_sd() {
    stop_sd()                                                              */
 
 bool stop_sd() {
+  return stop_sd_ex(FALSE);
+}
+
+/* 9 Nov 26 Windows port - from Linux 2e0d2a97, S.177.  A session waiting at its
+   prompt need not leave on SIGTERM (signal_handler, linuxio.c, only raises an
+   event).  One that outlives the stop keeps its handles, so the semaphores
+   outlive it too and the next sd -start refuses.  So an explicit "sd -stop" or
+   "sd -restart" (kill_survivors TRUE) ends, with SIGKILL, what is STILL RUNNING
+   after the wait, and only that.  A table entry can be stale and its pid reused,
+   so a pid is ended only if its program is in the same folder as this one, read
+   at the moment of the kill; a process whose program cannot be read is left
+   alone.  The failure path of bind_sysseg() calls plain stop_sd().          */
+
+/* The folder part of /proc/<who>/exename, FALSE if it cannot be read. */
+
+static bool program_folder(const char* who, char* folder, size_t size) {
+  char path[64];
+  FILE* fp;
+  char* slash;
+  bool ok;
+
+  snprintf(path, sizeof(path), "/proc/%s/exename", who);
+  if ((fp = fopen(path, "r")) == NULL)
+    return FALSE;
+  ok = (fgets(folder, (int)size, fp) != NULL);
+  fclose(fp);
+  if (!ok || ((slash = strrchr(folder, '/')) == NULL))
+    return FALSE;
+  *slash = '\0';
+  return TRUE;
+}
+
+static bool end_if_sd_process(int pid) {
+  char mine[MAX_PATHNAME_LEN + 1];
+  char theirs[MAX_PATHNAME_LEN + 1];
+  char who[24];
+
+  if ((pid <= 0) || (pid == (int)getpid()) || kill(pid, 0))
+    return FALSE;
+
+  snprintf(who, sizeof(who), "%d", pid);
+  if (!program_folder("self", mine, sizeof(mine)) ||
+      !program_folder(who, theirs, sizeof(theirs)) ||
+      (strcasecmp(mine, theirs) != 0)) /* NTFS: case is not significant */
+    return FALSE;
+
+  if (kill(pid, SIGKILL))
+    return FALSE;
+  syslog(LOG_WARNING, "sd -stop: process %d was still running after SIGTERM and was ended with SIGKILL", pid);
+  return TRUE;
+}
+
+static int end_attached_survivors(int daemon_pid) {
   int16_t i;
   USER_ENTRY* uptr;
-  int16_t retry;
+  int ended = 0;
+
+  for (i = 1; i <= sysseg->max_users; i++) {
+    uptr = UPtr(i);
+    if (uptr->uid && end_if_sd_process(uptr->pid))
+      ended++;
+  }
+
+  if (end_if_sd_process(daemon_pid))
+    ended++;
+
+  return ended;
+}
+
+/* Wait up to secs seconds for every process in the user table, and the daemon
+   if it was signalled (daemon_pid non-zero), to go.                         */
+
+static void wait_for_exit(int secs, int daemon_pid) {
+  int16_t i;
+  USER_ENTRY* uptr;
   int active;
+
+  for (; secs; secs--) {
+    active = 0;
+
+    for (i = 1; i <= sysseg->max_users; i++) {
+      uptr = UPtr(i);
+      if (uptr->uid && uptr->pid > 0 && kill(uptr->pid, 0) == 0)
+        active++;
+    }
+
+    /* The daemon was never counted here, which is the other half of why
+       nothing noticed it surviving: this poll walks the user table only,
+       and sdwind is not in it.                                           */
+
+    if (daemon_pid && !kill(daemon_pid, 0))
+      active++;
+
+    if (active == 0)
+      break; /* Everyone has gone */
+
+    sleep(1);
+  }
+}
+
+bool stop_sd_ex(bool kill_survivors) {
+  int16_t i;
+  USER_ENTRY* uptr;
   int daemon_pid = 0;            /* Daemon named in the segment, 0 if none */
   bool daemon_signalled = FALSE; /* SIGTERM was accepted, so wait for it */
   bool daemon_refused = FALSE;   /* Alive, and not this session's to signal */
@@ -870,26 +973,14 @@ bool stop_sd() {
        delivering anything, and so reports whether a pid is still live even if
        the process died without clearing its own table entry.               */
 
-    for (retry = 10; retry; retry--) {
-      active = 0;
+    wait_for_exit(10, daemon_signalled ? daemon_pid : 0);
 
-      for (i = 1; i <= sysseg->max_users; i++) {
-        uptr = UPtr(i);
-        if (uptr->uid && uptr->pid > 0 && kill(uptr->pid, 0) == 0)
-          active++;
+    if (kill_survivors) {
+      int ended = end_attached_survivors(daemon_signalled ? daemon_pid : 0);
+      if (ended) {
+        printf("%d process(es) still running after ten seconds were ended with SIGKILL\n", ended);
+        wait_for_exit(5, daemon_signalled ? daemon_pid : 0);
       }
-
-      /* The daemon was never counted here, which is the other half of why
-         nothing noticed it surviving: this poll walks the user table only,
-         and sdwind is not in it.                                           */
-
-      if (daemon_signalled && !kill(daemon_pid, 0))
-        active++;
-
-      if (active == 0)
-        break; /* Everyone has gone */
-
-      sleep(1);
     }
 
     if (daemon_signalled && !kill(daemon_pid, 0))

@@ -649,6 +649,7 @@ bool attach_shared_memory(void);
 void unbind_sysseg(void);
 bool start_sd(void);
 bool stop_sd(void);
+bool stop_sd_ex(bool kill_survivors); /* 9 Nov 26 S.177: TRUE for sd -stop / -restart - SIGKILL the SD processes still running after the wait */
 
 
 /* WIN.C / LINUXIO.C */

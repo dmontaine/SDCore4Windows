@@ -42,7 +42,8 @@
  * 02 Jul 24 -i  typeo will hit bootstrap option
  * 08 Aug 24 mab add code to embedded python if EMBED_PYTHON defined 
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): A phantom that finds SD suspended gives back its user table cell (QM4 Fixes 280).
- * rev 0.9.1 Mar 25 return to single rev track 
+ * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): -stop and -restart call stop_sd_ex(TRUE), which ends with SIGKILL what is still running after the wait.
+ * rev 0.9.1 Mar 25 return to single rev track
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -505,7 +506,7 @@ Private bool comlin(int argc, char *argv[]) {
 
           if (stricmp(argv[arg], "-RESTART") == 0) {
             check_admin();
-            if (stop_sd() && start_sd()) {
+            if (stop_sd_ex(TRUE) && start_sd()) {
               printf("SD has been restarted\n");
               exit(0);
             }
@@ -537,7 +538,7 @@ Private bool comlin(int argc, char *argv[]) {
 
           if (stricmp(argv[arg], "-STOP") == 0) {
             check_admin();
-            if (stop_sd()) {
+            if (stop_sd_ex(TRUE)) {
               printf("SD (%s) has been shut down\n", BUILD_TARGET);
               exit(0);
             }

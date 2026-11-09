@@ -29,6 +29,8 @@
  * 16 Aug 26 Windows port - POSIX named semaphores replaced by native Win32
  *           ones in the Global namespace.  sem_open() cannot be used in
  *           session 0 and SD has to run as a service.
+ * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): LockSemaphore retries only while the semaphore is busy; a wait that FAILS ends the
+ *           process with a syslog line (semaphores_gone) instead of spinning for ever.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -85,6 +87,7 @@
 #include "sd.h"
 #include <errno.h>
 #include <sched.h>
+#include <syslog.h>
 
 #include "win32sem.h"
 
@@ -217,9 +220,33 @@ void delete_semaphores() {
 /* ======================================================================
    Variants on StartExclusive and EndExclusive for use with no shared mem */
 
+/* 9 Nov 26 Windows port - from Linux 2e0d2a97, S.177.  The loop below retried
+   on every answer that was not "taken", and a failed wait is one of those.  On
+   Linux a stop removed the set under a live session, and four sessions spun at
+   84-92% of a processor for hours.  A Win32 semaphore cannot be removed while
+   this process holds a handle, so here a failure needs a handle that is NULL or
+   invalid; the loop is put right anyway, because if that ever happens waiting
+   cannot clear it.  The process says why and ends at once (_exit: no exit
+   handler may take a lock).  semaphores_gone() never returns.               */
+
+static void semaphores_gone(int semno, unsigned long err) {
+  char msg[160];
+
+  snprintf(msg, sizeof(msg),
+           "SD process %d ended: its semaphores are no longer usable (semaphore %d, error %lu) - SD was stopped while it ran",
+           (int)getpid(), semno, err);
+  syslog(LOG_ERR, "%s", msg);
+  fprintf(stderr, "\r\n%s\r\n", msg);
+  _exit(3);
+}
+
 void LockSemaphore(int semno) {
+  int got;
+
 // rev 0.9.0
-  while (!w32sem_trywait(sd_sem[semno])) {
+  while ((got = w32sem_trywait(sd_sem[semno])) <= 0) {
+    if (got < 0)
+      semaphores_gone(semno, w32sem_last_error());
 // rev 0.9.0
   	RelinquishTimeslice;
   }
