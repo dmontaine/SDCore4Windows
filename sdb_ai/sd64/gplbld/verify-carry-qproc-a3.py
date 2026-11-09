@@ -9,6 +9,7 @@
 # empty or absent).  Exit 0 every row passed, 1 a row failed, 2 it could not run.
 #
 # START-HISTORY:
+# 03 Nov 26 dm  Opus 10c: leg 13 - LIST / SELECT ... BY tie on the record id (ascending, also under BY.DSND); SORT and SAVING UNIQUE are the controls.
 # 27 Oct 26 dm  S.87 batch 4: leg 12 - the query keywords, the noise word THAN, ONLY before the file name, => =< >< and dictionary fields 9998 / 9999 that were
 #               removed that day are refused or read as ordinary, each beside its surviving spelling.
 # 10 Oct 26 dm  Written for 1.2-0 bundle A-3.
@@ -30,6 +31,7 @@
 #  10  SELECT with a bare field name (39)
 #  11  REFORMAT with @RECORD (546)
 #  12  the removed second spellings of S.87 batch 4 (the VOC records, THAN, ONLY, => =< ><, fields 9998 and 9999)
+#  13  BY ties on the record id, ascending, as SORT does (Opus 10c; run after leg 10, whose zzq3ls it uses)
 
 import os
 import re
@@ -200,6 +202,30 @@ def main():
         got = re.findall(r"(?m)^L\[(.*)\]\s*$", parts[-1])
         row("CONTROL: a plain SELECT leaves the record ids on the list: r1 r2 r3", ctl == ["r1", "r2", "r3"], "got %r" % ctl)
         row("THE ROW: SELECT ... name leaves the values of name: alpha bravo charlie", got == ["alpha", "bravo", "charlie"], "got %r" % got)
+
+        say("\n--- leg 13: BY ties on the record id, ascending, as SORT does (Opus 10c, 3 Nov 26) ------------------")
+        # grp is a for r1 r2 and b for r3 r4 r5, so every BY grp has ties.  The sort put equal keys newest first before,
+        # so the old order within a group was the file's order turned over (r2 r1 / r5 r4 r3 when the file gives r1..r5).
+        cmds = ["LIST zzq3 BY grp", "LIST zzq3 BY.DSND grp", "SORT zzq3 BY grp",
+                "SELECT zzq3 BY grp", "RUN bp zzq3ls", "SELECT zzq3 BY grp SAVING UNIQUE grp", "RUN bp zzq3ls"]
+        out = sess(box, *cmds)
+        seg, pos = {}, 0
+        for c in cmds:
+            i = out.find(c, pos)
+            seg[c] = i
+            pos = i + len(c) if i >= 0 else pos
+        cut = lambda k: out[seg[cmds[k]]:(seg[cmds[k + 1]] if k + 1 < len(cmds) else len(out))] if seg[cmds[k]] >= 0 else ""
+        lst = lambda seg_: re.findall(r"(?m)^L\[(.*)\]\s*$", seg_)
+        row("CONTROL: SORT zzq3 BY grp always tied on the id: r1 r2 r3 r4 r5", ids_in(cut(2)) == ["r1", "r2", "r3", "r4", "r5"], "got %r" % ids_in(cut(2)))
+        row("THE ROW: LIST zzq3 BY grp ties on the id: r1 r2 r3 r4 r5", ids_in(cut(0)) == ["r1", "r2", "r3", "r4", "r5"], "got %r" % ids_in(cut(0)))
+        row("THE ROW: LIST zzq3 BY.DSND grp turns the groups over, the id inside each stays ascending: r3 r4 r5 r1 r2",
+            ids_in(cut(1)) == ["r3", "r4", "r5", "r1", "r2"], "got %r" % ids_in(cut(1)))
+        # the RUN after a SELECT is not echoed (the prompt is the select-list one), so the list lines are cut at the SELECTs
+        i3 = out.find(cmds[3], seg[cmds[2]]) if seg[cmds[2]] >= 0 else -1
+        i5 = out.find(cmds[5], i3) if i3 >= 0 else -1
+        sel, uniq = (out[i3:i5], out[i5:]) if i5 > i3 >= 0 else ("", "")
+        row("THE ROW: SELECT zzq3 BY grp leaves r1 r2 r3 r4 r5 on the list", lst(sel) == ["r1", "r2", "r3", "r4", "r5"], "got %r" % lst(sel))
+        row("CONTROL: SELECT ... BY grp SAVING UNIQUE grp is not tied on the id: the two values, a b", lst(uniq) == ["a", "b"], "got %r" % lst(uniq))
 
         say("\n--- leg 11: REFORMAT with @RECORD (ref 546) -------------------------------------------")
         out = sess(box, "CREATE.FILE zzq3o", "REFORMAT zzq3 name @RECORD TO zzq3o",

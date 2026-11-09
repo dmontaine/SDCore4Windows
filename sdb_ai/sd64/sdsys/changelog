@@ -2,6 +2,29 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   EXECUTE AND OS.EXECUTE TAKE SILENT (FROM SD CORE FOR LINUX).
+
+             What        - EXECUTE command SILENT, PHANTOM command SILENT and OS.EXECUTE command SILENT run the command and throw
+                           its output away, so nothing of it reaches the terminal. SILENT goes with the other EXECUTE clauses
+                           (RETURNING, PASSLIST, RTNLIST, STACKLIST, TRAPPING ABORTS) but not with CAPTURING, which it is a form of:
+                           the two together are refused with "Multiple instances of CAPTURING clause".
+             Why         - Programs moved from openQM write SILENT. SD read the word as a format of the command, compiled the
+                           program with only a warning and stopped it at run time with "Unassigned variable SILENT".
+             Does NOT    - Change what CAPTURING does. A variable called silent still works anywhere except directly after the
+                           command of an EXECUTE, PHANTOM or OS.EXECUTE.
+
+8 Nov 26   SELECT, LIST AND THE OTHER QUERY VERBS PUT RECORDS WITH EQUAL SORT KEYS IN RECORD-ID ORDER (FROM SD CORE FOR LINUX).
+
+             What        - A BY or BY.DSND clause on SELECT, LIST, COUNT, SUM, REFORMAT and the label verbs now ends with the record
+                           id as one more sort key, ascending, as SORT, SSELECT and the other S verbs always had it. Records whose BY
+                           values are equal come out in record-id order (r1 r2 r3), also under BY.DSND, where only the BY values are
+                           turned over. Before, they came out in an order that depended on where the records sat in the file.
+             Why         - The same sentence could give a different order on two systems holding the same data, or on one system
+                           after a file was resized, and a program that read a select list made with BY could not rely on it.
+             Does NOT    - Change a sort whose keys differ, the S verbs (already in this order), or a SELECT with SAVING UNIQUE, whose
+                           last key stays the field being made unique. A sentence with no BY is not sorted at all, as before. It
+                           costs one more key per record in the sort.
+
 8 Nov 26   SECOND NAMES, OTHER PRODUCTS' MODES AND OPTIONS, AND DEAD FORMS ARE REMOVED FROM SD (THE OWNER'S EMULATION SURVEY, S.87; FROM SD CORE FOR LINUX).
 
              What        Where SD had two ways to say one thing, or a switch that made it behave like another product, one way is kept: the default. Removed, with the way to say it now:

@@ -1433,13 +1433,20 @@ template.found:
 
    if show.command and no.of.sort.items = 0 and not(sort.sup) then implicit.id.sort = @true
 
+* 03 Nov 26 (Opus 10c): a BY clause on SELECT, LIST and the other verbs
+* ties on the record id, ascending, as SORT always has (the block below).
+* Not with SAVING UNIQUE: BT.UNIQUE goes on the LAST key, which must stay
+* the field being made unique.
+
+   if len(sort.item.list) and not(saving.unique) then implicit.id.sort = @true
+
 * 0080 Moved the following code from inside the if len(sort.item.list)
 * block just below. Previously, SORT with an active select list did not
 * end up doing the id sort.
 
    if implicit.id.sort then
-      * Doing a SORT or SSELECT verb. Add the record id to the end of the
-      * sort list.
+      * Doing a SORT or SSELECT verb, or a BY clause (above). Add the
+      * record id to the end of the sort list.
 
       token = "@ID"
       gosub add.field.by.name

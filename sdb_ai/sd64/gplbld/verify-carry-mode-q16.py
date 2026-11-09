@@ -38,8 +38,9 @@ CASES = []   # (label, BASIC lines, wanted value or None for "must not compile",
 AUX = []     # (record name in bp, text, how): "include" is only written; "sub" is compiled and catalogued first
 
 
-def case(label, body, want, has=(), lacks=()):
-    CASES.append((label, body, want, tuple(has), tuple(lacks)))
+def case(label, body, want, has=(), lacks=(), run_has=(), run_lacks=()):
+    # run_has / run_lacks: words the RUN's own output (between ":RUN bp <name>" and the C<nn>[ line) must have / must not
+    CASES.append((label, body, want, tuple(has), tuple(lacks), tuple(run_has), tuple(run_lacks)))
 
 
 def aux(name, text, how):
@@ -148,6 +149,23 @@ for _mc in ("MCD", "MCX"):
 case("3 Nov 26: OCONV MCDX is MX again: hexadecimal and STATUS 0, in either case of letters",
      "y = oconv(255, 'MCDX') : '/' : oconv(4096, 'mcdx')\nx = status() : '/' : y", "0/FF/1000")
 case("3 Nov 26: ICONV MCDX is MX again: the number and STATUS 0", "y = iconv('FF', 'MCDX')\nx = status() : '/' : y", "0/255")
+# 3 Nov 26: EXECUTE / OS.EXECUTE ... SILENT (owner: "Accept SILENT too"): the command runs and its output is not shown.  The token is printed
+# by a helper program (or echo); the CONTROL rows show the same commands print it without SILENT, so a row that lacks it measured something.
+aux("zzq16pr", "crt 'ZZQ16TOKP'\nend\n", "prog")
+case("3 Nov 26 CONTROL: EXECUTE of a program that prints a token, without SILENT, shows the token",
+     "execute 'RUN bp zzq16pr'\nx = 'ran'", "ran", run_has=["ZZQ16TOKP"])
+case("3 Nov 26: EXECUTE ... SILENT runs the command and shows nothing of its output",
+     "execute 'RUN bp zzq16pr' silent\nx = 'ran'", "ran", run_lacks=["ZZQ16TOKP"])
+case("3 Nov 26: EXECUTE ... SILENT RETURNING r still sets r (the clauses go together)",
+     "execute 'RUN bp zzq16pr' silent returning r\nx = assigned(r)", "1", run_lacks=["ZZQ16TOKP"])
+case("3 Nov 26: EXECUTE ... SILENT with CAPTURING is refused (SILENT is a CAPTURING clause)",
+     "execute 'RUN bp zzq16pr' silent capturing y\nx = 1", None, has=["Multiple instances of CAPTURING clause"])
+case("3 Nov 26 CONTROL: OS.EXECUTE of echo, without SILENT, shows the token",
+     "os.execute 'echo ZZQ16TOKO'\nx = 'ran'", "ran", run_has=["ZZQ16TOKO"])
+case("3 Nov 26: OS.EXECUTE ... SILENT runs the command and shows nothing of its output",
+     "os.execute 'echo ZZQ16TOKS' silent\nx = 'ran'", "ran", run_lacks=["ZZQ16TOKS"])
+case("3 Nov 26 CONTROL: a variable called silent is still an ordinary variable outside EXECUTE",
+     "silent = 7\nx = silent * 2", "14")
 case("3 Nov 26: ICONV MCDX of a text that is not hexadecimal fails as ICONV MX does (the same STATUS)",
      "a = iconv('ZZ', 'MX') ; sa = status()\nb = iconv('ZZ', 'MCDX') ; sb = status()\nx = (sa = sb) : '/' : (sa # 0)", "1/1")
 
@@ -333,7 +351,9 @@ def main():
             f.write(text)
         if how == "sub":
             cmds += ["BASIC bp %s" % name, "CATALOG bp %s" % name]
-    for i, (_label, body, _w, _h, _l) in enumerate(CASES):
+        elif how == "prog":                   # 3 Nov 26: a program a row runs by EXECUTE 'RUN bp <name>'
+            cmds += ["BASIC bp %s" % name]
+    for i, (_label, body, _w, _h, _l, _rh, _rl) in enumerate(CASES):
         nm = "zzq16%02d" % i
         names.append(nm)
         with open(os.path.join(sysd, "bp", nm), "w") as f:
@@ -344,18 +364,21 @@ def main():
         if os.environ.get("SDSUITE_RAW"):
             say(out)
         say("\n--- the modes -----------------------------------------------------------------------")
-        for i, (label, _body, want, has, lacks) in enumerate(CASES):
+        for i, (label, _body, want, has, lacks, run_has, run_lacks) in enumerate(CASES):
             # the compiler's output is what the session printed between this row's BASIC and RUN commands (each command
             # is echoed after the colon prompt, so the anchors are the echoes)
             m = re.search(r"(?s):BASIC bp zzq16%02d\b(.*?):RUN bp zzq16%02d\b" % (i, i), out)
             seg = m.group(1) if m else ""
             m = re.search(r"(?m)^C%02d\[(.*)\]\s*$" % i, out)
             got = m.group(1).replace("\xfd", "|") if m else None
+            m = re.search(r"(?sm):RUN bp zzq16%02d\b(.*?)^C%02d\[" % (i, i), out)
+            runseg = m.group(1) if m else ""
             ok = (got == want) if want is not None else (got is None)
             ok = ok and all(w in seg for w in has) and not any(w in seg for w in lacks)
+            ok = ok and all(w in runseg for w in run_has) and not any(w in runseg for w in run_lacks)
             say_want = "must not run" if want is None else repr(want)
             row("%s: wanted %s%s" % (label, say_want, "".join(", compile says %r" % w for w in has)), ok,
-                "got %r, compiler said %r" % (got, " ".join(seg.split())[:300]))
+                "got %r, compiler said %r, the run printed %r" % (got, " ".join(seg.split())[:300], " ".join(runseg.split())[:200]))
     finally:
         for nm in names:
             for d in ("bp", "bp.out"):

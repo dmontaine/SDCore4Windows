@@ -8541,6 +8541,7 @@ st.equate:
 * ST.EXECUTE  -  EXECUTE statement
 * EXECUTE xxx {TRAPPING ABORTS}        Options may be in any order
 *             {CAPTURING var}
+*             {SILENT}                   (3 Nov 26: CAPTURING into a temporary that is then cleared; not with CAPTURING)
 *             {PASSLIST var}
 *             {RTNLIST var}
 *             {RETURNING var}
@@ -8552,7 +8553,7 @@ st.equate:
 st.phantom:
    n = syscom.xeq.command
    gosub emit.ldsys
-   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
+   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL":@VM:"SILENT"
    opcode.string = 'PHANTOM ' ; gosub emit.string.load
    gosub exprf
    opcode.byte = OP.CAT ; gosub emit.simple
@@ -8565,7 +8566,7 @@ st.execute:
 
    * 0265 Add local reserved names
    * NJS use @VM
-   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL"
+   reserved.names<2> = "CAPTURING":@VM:"PASSLIST":@VM:"RETURNING":@VM:"RTNLIST":@VM:"STACKLIST":@VM:"TRAPPING":@VM:"CURRENT.LEVEL":@VM:"SILENT"
 
    gosub exprf
    opcode.byte = OP.STOR ; gosub emit.simple
@@ -8573,6 +8574,7 @@ st.execute:
 st.execute.options:
    execute.flags = 0
    passlist.any = @false          ;* 14 Oct 26 dm - openQM 521: a PASSLIST clause, with or without a variable
+   execute.silent = @false        ;* 3 Nov 26 dm - SILENT: CAPTURING into __silent, cleared after the command
 
    * Look for options
 
@@ -8606,17 +8608,18 @@ st.execute.options:
 
             gosub get.token
             gosub simple.lvar.reference   ;* Emit LDLCL etc for target
-            opcode.byte = OP.DUP ; gosub emit.simple
-            opcode.byte = OP.LDNULL ; gosub emit.simple
-            opcode.byte = OP.STOR ; gosub emit.simple
-            execute.flags = bitor(execute.flags, 2)
+            gosub execute.capture.target
 
-            if bitand(execute.flags, 4) then
-               * We have found a CAPTURING after a RTNLIST. The addresses
-               * on the stack must be swapped to be in the order that
-               * op_execute() expects them.
-               opcode.byte = OP.SWAP ; gosub emit.simple
+         case u.look.ahead.token.string = "SILENT"   ;* 3 Nov 26 dm - a CAPTURING whose text nobody keeps
+            if bitand(execute.flags, 2) then
+               err.msg = sysmsg(2911) ;* Multiple instances of CAPTURING clause (SILENT is one)
+               goto error
             end
+
+            gosub get.token
+            n = 'silent' ; gosub emit.temp.ref
+            gosub execute.capture.target
+            execute.silent = @true
 
          case u.look.ahead.token.string = "PASSLIST"
             * 27 Oct 26 dm - S.87 batch 3: PASSLIST names a variable, always.  It used to be accepted with no name and then ignored
@@ -8697,12 +8700,35 @@ st.execute.options:
       opcode.byte = OP.CAPTURE ; gosub emit.simple
    end
 
+   if execute.silent then            ;* SILENT: the captured text is not kept
+      n = 'silent' ; gosub execute.clear.temp
+   end
+
    if bitand(execute.flags, 16) then  ;* Transfer @system.return.code
       n = 1 ; gosub emit.temp.ref
-      n = syscom.system.return.code ; gosub emit.ldsys      
+      n = syscom.system.return.code ; gosub emit.ldsys
       opcode.byte = OP.STOR ; gosub emit.simple
    end
 
+   return
+
+* EXECUTE.CAPTURE.TARGET  -  the address of the capture variable is on the stack: clear it, keep one copy for OP.CAPTURE,
+* and put it below an RTNLIST address if one came first, which is the order op_execute() expects.  CAPTURING and SILENT.
+execute.capture.target:
+   opcode.byte = OP.DUP ; gosub emit.simple
+   opcode.byte = OP.LDNULL ; gosub emit.simple
+   opcode.byte = OP.STOR ; gosub emit.simple
+   execute.flags = bitor(execute.flags, 2)
+   if bitand(execute.flags, 4) then
+      opcode.byte = OP.SWAP ; gosub emit.simple
+   end
+   return
+
+* EXECUTE.CLEAR.TEMP  -  set the temporary named by N to the null string (SILENT's captured text is not kept)
+execute.clear.temp:
+   gosub emit.temp.ref
+   opcode.byte = OP.LDNULL ; gosub emit.simple
+   opcode.byte = OP.STOR ; gosub emit.simple
    return
 
 *****************************************************************************
@@ -11696,17 +11722,22 @@ st.openseq:
 * ST.OS.EXECUTE      -  OS.EXECUTE statement
 
 st.os.execute:
-   * Add local reserved name
-   reserved.names<2> = "CAPTURING"
+   * Add local reserved names
+   reserved.names<2> = "CAPTURING":@VM:"SILENT"
    gosub exprf
    del reserved.names<2>
 
-   * Look for CAPTURING option
+   * Look for CAPTURING or SILENT (3 Nov 26 dm: SILENT captures into __silent, then clears it)
 
    if u.look.ahead.token.string = "CAPTURING" then
       gosub get.token
       gosub simple.lvar.reference   ;* Emit LDLCL etc for target
       opcode.byte = OP.SHCAP ; gosub emit.simple
+   end else if u.look.ahead.token.string = "SILENT" then
+      gosub get.token
+      n = 'silent' ; gosub emit.temp.ref
+      opcode.byte = OP.SHCAP ; gosub emit.simple
+      n = 'silent' ; gosub execute.clear.temp
    end else
       opcode.byte = OP.SH ; gosub emit.simple
    end
