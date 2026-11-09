@@ -213,7 +213,7 @@ def main():
                     out = sess(box, "BASIC bp %s" % nm, "CATALOG bp %s" % nm)
                     if not has(out, r"Compiled 1 program\(s\) with no errors|compiled 1 program"):
                         say("  [note] %s: %s" % (nm, out[-200:].replace("\n", " | ")))
-                    catalogued.append(nm)
+                    cataloged.append(nm)
             prog = "zztx%02d" % i
             p = os.path.join(bp, prog)
             write(p, source(i, body))
