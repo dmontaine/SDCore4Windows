@@ -92,12 +92,21 @@ if (Test-Path -LiteralPath $KnownFile) {
     if ($kd.ContainsKey('NotRun')) { $NotRun = $kd['NotRun'] }
 }
 
+# 9 Nov 26 (owner: "have the suites been optimized for speed"): a log of the whole run, kept, and the time it took.  The run printed
+# to the console only, so nothing could be read afterwards and nobody knew how long it took; the per-suite Secs column was lost with it.
+$whole = [System.Diagnostics.Stopwatch]::StartNew()
+$carryLog = Join-Path (Join-Path $env:LOCALAPPDATA 'SD-verify') ('verify-carry-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.log')
+$null = New-Item -ItemType Directory -Path (Split-Path -Parent $carryLog) -Force -ErrorAction SilentlyContinue
+try { $null = Start-Transcript -Path $carryLog -Force } catch { $carryLog = '(no log: ' + $_.Exception.Message + ')' }
+
 function Say([string]$m) { Write-Host $m }
 function Bail([int]$code, [string]$why) {
     Say ''
     if ($code -eq 0) { Say "verify-carry: PASSED - $why" }
     elseif ($code -eq 1) { Say "verify-carry: FAILED - $why" }
     else { Say "verify-carry: COULD NOT RUN - $why" }
+    Say ("verify-carry: took {0:N0} s; log {1}" -f $whole.Elapsed.TotalSeconds, $carryLog)
+    try { $null = Stop-Transcript } catch { }
     exit $code
 }
 
@@ -201,6 +210,12 @@ try {
 
 Say '--- summary --------------------------------------------------------'
 $rows | Format-Table Suite, Rows, Pass, Fail, NA, Exit, Secs, Verdict -AutoSize | Out-String -Width 200 | ForEach-Object { Say $_.TrimEnd() }
+Say ''
+Say 'slowest suites (seconds), for deciding what to speed up or split:'
+$rows | Where-Object { $_.Verdict -ne 'NOT RUN' } | Sort-Object Secs -Descending | Select-Object -First 10 |
+    ForEach-Object { Say ('  {0,5}  {1}' -f $_.Secs, $_.Suite) }
+Say ('suites together: {0:N0} s of the run''s {1:N0} s' -f (($rows | Measure-Object Secs -Sum).Sum), $whole.Elapsed.TotalSeconds)
+Say ''
 $totR = ($rows | Measure-Object Rows -Sum).Sum
 $totF = ($rows | Measure-Object Fail -Sum).Sum
 $totN = ($rows | Measure-Object NA -Sum).Sum
