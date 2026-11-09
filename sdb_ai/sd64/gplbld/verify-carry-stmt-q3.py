@@ -585,7 +585,7 @@ def main():
         row("E6: setup: the subroutine is cataloged and !PROG_INFO reads its date, time and object size (the oracle)",
             mp is not None, repr(pi) + repr(out[-8:]))
         row("E6: FIND.PROGRAM of it: 'Program is in the private catalog', 'Subroutine with 2 arguments'",
-            has(out, r"^Program is in the private catalogue$") and has(out, r"^\s+Subroutine with 2 arguments$"), repr(out[-8:]))
+            has(out, r"^Program is in the private catalog$") and has(out, r"^\s+Subroutine with 2 arguments$"), repr(out[-8:]))
         if mp:
             dt, tm, size = mp.groups()
             # !PROG_INFO gives the time as 12 hour "08:56pm"; FIND.PROGRAM gives hours, minutes and seconds on a 24 hour clock
@@ -606,12 +606,12 @@ def main():
             places == ["Program is in the local catalog", "Program is in the private catalog"], repr(places) + repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM !acc_hold", "FIND.PROGRAM !ftype"])
         row("E9: a global program: !acc_hold is in the global catalog and has three arguments",
-            has(out, r"^Program is in the global catalogue$") and has(out, r"^\s+Subroutine with 3 arguments$"), repr(out[-8:]))
+            has(out, r"^Program is in the global catalog$") and has(out, r"^\s+Subroutine with 3 arguments$"), repr(out[-8:]))
         row("E9: ... and !ftype is a function of one argument", has(out, r"^\s+Function with 1 arguments$"), repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM !acc_hold DETAIL"])
         row("E9: DETAIL shows the flags: !acc_hold is an internal program", has(out, r"^\s+Flags: .*internal"), repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM zznosuchprog"])
-        row("E10: a name that is cataloged nowhere is said so (zznosuchprog is not cataloged)", has(out, r"^zznosuchprog is not catalogued$"), repr(out[-3:]))
+        row("E10: a name that is cataloged nowhere is said so (zznosuchprog is not cataloged)", has(out, r"^zznosuchprog is not cataloged$"), repr(out[-3:]))
 
         # -------------------------------------------------------------------------------------------------------------
         say("\n--- J. SELECT.SOCKET -----------------------------------------------------------------------------------------")
