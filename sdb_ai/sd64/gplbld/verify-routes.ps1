@@ -371,8 +371,8 @@ try {
     # 18 Sep 26, RELEASE_1.1 64.  ADMINISTRATOR was the lever that made the old
     # control account, and 64 took the tiers it named: there is one
     # administrator, SDSYS, and it is not created by a verb.  The keyword is
-    # refused in createa's more.args with 2018 - the unrecognised-token
-    # message, re-used deliberately because the token now IS unrecognised -
+    # refused in createa's more.args with 2018 - the unrecognized-token
+    # message, re-used deliberately because the token now IS unrecognized -
     # BEFORE any Windows account, group or register record exists, so the
     # machine is untouched by the refusal.  The three rows below say exactly
     # that: refused, and nothing left behind.
@@ -407,7 +407,7 @@ try {
     Step 4 "MODIFY.ACCOUNT is ABSOLUTE: the keyword says what the access IS"
 
     # THE CHECK THIS STEP EXISTS FOR IS THE SECOND LINE, not the first.  An
-    # additive implementation - the pre-21-Aug behaviour - also puts the account
+    # additive implementation - the pre-21-Aug behavior - also puts the account
     # in sdapi and would pass "routes include api".  What tells the two apart is
     # that ssh is GONE afterwards, on an account created with SSH one step ago.
     $out = Invoke-SD @("MODIFY.ACCOUNT $stdAcc API")

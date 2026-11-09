@@ -257,7 +257,7 @@ function LogonResult($user, $pass, $type) {
     return ("refused " + $rc)
 }
 
-# ssh takes no password on the command line but honours SSH_ASKPASS with
+# ssh takes no password on the command line but honors SSH_ASKPASS with
 # SSH_ASKPASS_REQUIRE=force.  The secret goes in an environment variable, never
 # in the helper file, and is cleared in the finally block.
 function SshPassword($pass) {
@@ -350,7 +350,7 @@ function Remove-Made {
     }
     # 26 Aug 26 - REMOVE THE PROFILE, NOT THE DIRECTORY.  Deleting
     # C:\Users\<name> leaves the ProfileList registry entry behind, and Windows
-    # then honours that entry when an account of the same name next appears, by
+    # then honors that entry when an account of the same name next appears, by
     # creating the profile at C:\Users\<name>.<COMPUTERNAME>.  That is where
     # sdacct19.GITORLI, sdacct20.GITORLI and sdacct27.GITORLI came from - THIS
     # script's own prefix, so this line is where they came from too.

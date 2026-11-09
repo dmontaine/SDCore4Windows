@@ -333,7 +333,7 @@ function SshVerdict {
 
 # THE TEST THAT MATTERS, and it is automated rather than typed.
 #
-# ssh takes no password on the command line, by design.  It does however honour
+# ssh takes no password on the command line, by design.  It does however honor
 # SSH_ASKPASS with SSH_ASKPASS_REQUIRE=force - measured on this client,
 # OpenSSH_for_Windows_9.5, 14 Aug 2026 - so the password can be handed over by
 # a helper program instead of by a person.  That matters for more than
@@ -563,7 +563,7 @@ try {
     # outside sdusers cannot reach SD at all, even over ssh" is a real property
     # of the product with a real failure mode - an account created by hand,
     # given ssh access, and left out of sdusers looks completely set up and
-    # cannot run SD.  The message it produces is the one to recognise.
+    # cannot run SD.  The message it produces is the one to recognize.
     if (-not (Get-LocalGroup -Name $SshGroup -ErrorAction SilentlyContinue)) {
         # NOT a failure of 5.6.2 - the group is the installer's to create, so a
         # missing one means the test cannot be run rather than that the design

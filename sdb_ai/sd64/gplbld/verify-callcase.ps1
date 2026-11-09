@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Program and catalogue names are LOWER case - what SD produces, read back
+    Program and catalog names are LOWER case - what SD produces, read back
     case-sensitively.  ***AN ORDINARY UNELEVATED PROMPT.***
 
 .DESCRIPTION
@@ -13,15 +13,15 @@
     ***WHY THIS READS NAMES INSTEAD OF CHECKING THAT THINGS RUN.***  On NTFS a
     gcat file opens under any case (measured 14 Sep: openseq on
     gcat/!username found !USERNAME).  So a site that missed the flip still runs,
-    and a suite that only checks behaviour stays green over it.  Every decisive
+    and a suite that only checks behavior stays green over it.  Every decisive
     row here reads a stored or printed NAME with -cmatch / -ceq:
       A. the gcat directory listing           - no entry with an upper-case letter
       B. the bin\pcode library's header names - every item lower
       C. the runtime's own error text         - "Unable to load '!zznosuchsub3a'"
-      D. CATALOG into the private catalogue   - 3031 names zzcc3ap; cat\ holds it
+      D. CATALOG into the private catalog   - 3031 names zzcc3ap; cat\ holds it
       E. CATALOG LOCAL                        - 3029 names zzcl3a; VOC id lower
       F. the local entry, called and re-      - a call typed ZZCL3A finds it; a
-         catalogued                              second CATALOG LOCAL leaves ONE
+         cataloged                              second CATALOG LOCAL leaves ONE
                                                  entry, stored zzcl3a
       G. DELETE.CATALOG                       - 3042 / 3040 name the lower id
 
@@ -158,14 +158,14 @@ Write-Host '--- sweep leftovers ------------------------------------------------
 Remove-Fixtures
 
 try {
-    # --- A. the global catalogue listing -------------------------------------
+    # --- A. the global catalog listing -------------------------------------
     Write-Host ''
     Write-Host '--- A. gcat listing ----------------------------------------------------'
     $names = @(Get-ChildItem -LiteralPath $gcat -File | ForEach-Object { $_.Name })
     $upper = @($names | Where-Object { $_ -cmatch '[A-Z]' })
     Write-Host ("  entries: {0}; with an upper-case letter: {1}" -f $names.Count, $upper.Count)
     if ($upper.Count) { Write-Host ("  first upper-case entries: " + (($upper | Select-Object -First 10) -join ' ')) }
-    Row 'CONTROL A: gcat holds a full catalogue (100 or more entries)' ($names.Count -ge 100) "entries: $($names.Count)"
+    Row 'CONTROL A: gcat holds a full catalog (100 or more entries)' ($names.Count -ge 100) "entries: $($names.Count)"
     Row "A: gcat holds `$cproc under that exact name, non-empty" ((@($names | Where-Object { $_ -ceq '$cproc' }).Count -eq 1) -and ((Get-Item -LiteralPath (Join-Path $gcat '$cproc')).Length -gt 0)) 'no entry named exactly $cproc'
     Row 'A: no gcat entry name carries an upper-case letter' (($names.Count -gt 0) -and ($upper.Count -eq 0)) ("upper-case entries: " + (($upper | Select-Object -First 10) -join ' '))
 
@@ -197,7 +197,7 @@ try {
     # --- fixtures: four programs in bp -----------------------------------------
     Write-Host ''
     Write-Host '--- the stored-id matcher, on known text ---------------------------------'
-    $probe = "zzcl3a added to local catalogue`nZZCL3A deleted from the local catalogue`n:LIST VOC WITH @ID = `"zzcl3a`"`nZZCL3A               `nzzcl3a"
+    $probe = "zzcl3a added to local catalog`nZZCL3A deleted from the local catalog`n:LIST VOC WITH @ID = `"zzcl3a`"`nZZCL3A               `nzzcl3a"
     $hit = @(Get-StoredVocIds $probe 'zzcl3a')
     Write-Host ("  matched: " + ($hit -join ' '))
     Row 'CONTROL: the matcher takes LIST rows and ignores 3029/3040 message lines' (($hit.Count -eq 2) -and ($hit[0] -ceq 'ZZCL3A') -and ($hit[1] -ceq 'zzcl3a')) ("matched: " + ($hit -join ' '))
@@ -216,25 +216,25 @@ try {
     Row "setup: all $($Progs.Count) fixture programs compiled with no errors" ($clean -eq $Progs.Count) "clean compiles: $clean of $($Progs.Count)"
     if ($clean -ne $Progs.Count) { Bail 2 'the fixtures did not compile - nothing below would measure the names.' }
 
-    # --- C, D. private catalogue and the runtime's own spelling -----------------
+    # --- C, D. private catalog and the runtime's own spelling -----------------
     Write-Host ''
-    Write-Host '--- C, D. CATALOG into the private catalogue; the runtime error text --'
+    Write-Host '--- C, D. CATALOG into the private catalog; the runtime error text --'
     $pv = Invoke-SD @('CATALOG bp ZZCC3AP', 'RUN bp zzrn3a')
     Show 'CATALOG bp ZZCC3AP / RUN bp zzrn3a' $pv
     $catNames = @(Get-ChildItem -LiteralPath $CatDir -File -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
     Write-Host ("  cat\ holds: " + ($catNames -join ' '))
-    Row "D: CATALOG said 'zzcc3ap added to private catalogue' (3031, lower case)" ($pv.Text -cmatch '(?m)^zzcc3ap added to private catalogue') 'no 3031 line naming zzcc3ap in lower case'
-    Row "D: the private catalogue file is named exactly 'zzcc3ap'" ((@($catNames | Where-Object { $_ -ceq 'zzcc3ap' }).Count -eq 1) -and (@($catNames | Where-Object { $_ -ieq 'zzcc3ap' }).Count -eq 1)) ("cat\ holds: " + ($catNames -join ' '))
+    Row "D: CATALOG said 'zzcc3ap added to private catalog' (3031, lower case)" ($pv.Text -cmatch '(?m)^zzcc3ap added to private catalog') 'no 3031 line naming zzcc3ap in lower case'
+    Row "D: the private catalog file is named exactly 'zzcc3ap'" ((@($catNames | Where-Object { $_ -ceq 'zzcc3ap' }).Count -eq 1) -and (@($catNames | Where-Object { $_ -ieq 'zzcc3ap' }).Count -eq 1)) ("cat\ holds: " + ($catNames -join ' '))
     Row 'CONTROL C: !USERNAME (typed upper) still answers' ($pv.Text -match '(?m)^CTL3A \[\S+\]') 'no CTL3A line with a value'
     Row 'D: the private entry answers a call typed ZZCC3AP' ($pv.Text -match '(?m)^PRIV3A \[ok3a\]') 'no PRIV3A [ok3a] line'
     Row "C: the runtime names a missing call '!zznosuchsub3a' - lower case" ($pv.Text -cmatch "Unable to load '!zznosuchsub3a'") "no load error naming '!zznosuchsub3a' in lower case"
 
-    # --- E, F. local catalogue: new entry, then one planted the old way ---------
+    # --- E, F. local catalog: new entry, then one planted the old way ---------
     Write-Host ''
-    Write-Host '--- E, F. CATALOG LOCAL, and an entry catalogued before stage 3a -------'
+    Write-Host '--- E, F. CATALOG LOCAL, and an entry cataloged before stage 3a -------'
     $lc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'CATALOG LOCAL' $lc
-    Row "E: CATALOG said 'zzcl3a added to local catalogue' (3029, lower case)" ($lc.Text -cmatch '(?m)^zzcl3a added to local catalogue') 'no 3029 line naming zzcl3a in lower case'
+    Row "E: CATALOG said 'zzcl3a added to local catalog' (3029, lower case)" ($lc.Text -cmatch '(?m)^zzcl3a added to local catalog') 'no 3029 line naming zzcl3a in lower case'
     # @() because PowerShell unrolls a one-element result to a bare string, and
     # $ids[0] would then be its first character.
     $ids = @(Get-StoredVocIds $lc.Text 'zzcl3a')
@@ -243,7 +243,7 @@ try {
     # 14 Sep 26 - F's PLANT IS RETIRED (see the header).  zzmv3a wrote ZZCL3A
     # and deleted zzcl3a; under D2 that delete removed the one record (b161:
     # "PLANTED3A V CS", then "'zzcl3a' not found" and "Unable to load 'zzcl3a'").
-    # F now calls the entry E made, typed upper, and re-catalogues over it.
+    # F now calls the entry E made, typed upper, and re-catalogs over it.
     $pl = Invoke-SD @('RUN bp zzlc3a')
     Show 'call the local entry typed ZZCL3A' $pl
     Row 'F: a call typed ZZCL3A finds the local entry' ($pl.Text -match '(?m)^LOCAL3A \[ok3a\]') 'no LOCAL3A [ok3a] line'
@@ -251,17 +251,17 @@ try {
     $rc = Invoke-SD @('CATALOG bp zzcl3a zzcc3ap LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'CATALOG LOCAL over the existing entry' $rc
     $ids = @(Get-StoredVocIds $rc.Text 'zzcl3a')
-    Row "F: re-cataloguing left exactly one entry, stored 'zzcl3a'" ((@($ids).Count -eq 1) -and ($ids[0] -ceq 'zzcl3a')) ("stored: " + ($ids -join ' '))
+    Row "F: re-cataloging left exactly one entry, stored 'zzcl3a'" ((@($ids).Count -eq 1) -and ($ids[0] -ceq 'zzcl3a')) ("stored: " + ($ids -join ' '))
 
-    # --- G. DELETE.CATALOG, both catalogues ---------------------------------
+    # --- G. DELETE.CATALOG, both catalogs ---------------------------------
     Write-Host ''
     Write-Host '--- G. DELETE.CATALOG ---------------------------------------------------'
     $dc = Invoke-SD @('DELETE.CATALOG ZZCC3AP', 'DELETE.CATALOG ZZCL3A LOCAL', 'LIST VOC WITH @ID LIKE "zzcl..."')
     Show 'DELETE.CATALOG' $dc
-    Row "G: 3042 names 'zzcc3ap' deleted from the private catalogue" ($dc.Text -cmatch '(?m)^zzcc3ap deleted from the private catalogue') 'no 3042 line naming zzcc3ap'
-    Row "G: 3040 names 'zzcl3a' deleted from the local catalogue, typed ZZCL3A" ($dc.Text -cmatch '(?m)^zzcl3a deleted from the local catalogue') 'no 3040 line naming zzcl3a'
+    Row "G: 3042 names 'zzcc3ap' deleted from the private catalog" ($dc.Text -cmatch '(?m)^zzcc3ap deleted from the private catalog') 'no 3042 line naming zzcc3ap'
+    Row "G: 3040 names 'zzcl3a' deleted from the local catalog, typed ZZCL3A" ($dc.Text -cmatch '(?m)^zzcl3a deleted from the local catalog') 'no 3040 line naming zzcl3a'
     Row 'G: no zzcl3a entry is stored in any case' (@(Get-StoredVocIds $dc.Text 'zzcl3a').Count -eq 0) 'a VOC entry remains'
-    Row 'G: cat\ no longer holds zzcc3ap' (@(Get-ChildItem -LiteralPath $CatDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'zzcc3ap' }).Count -eq 0) 'the private catalogue file remains'
+    Row 'G: cat\ no longer holds zzcc3ap' (@(Get-ChildItem -LiteralPath $CatDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq 'zzcc3ap' }).Count -eq 0) 'the private catalog file remains'
 }
 finally {
     Write-Host ''
@@ -279,4 +279,4 @@ Write-Host ''
 Write-Host "verify-callcase: $pass passed, $fail failed"
 if (($pass + $fail) -eq 0) { Bail 2 'no check ran - a broken test, not a pass.' }
 if ($fail -gt 0) { Bail 1 "$fail check(s) failed." }
-Bail 0 'program and catalogue names are produced and stored in lower case.'
+Bail 0 'program and catalog names are produced and stored in lower case.'

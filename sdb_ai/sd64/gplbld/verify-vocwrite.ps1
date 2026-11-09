@@ -15,7 +15,7 @@
     SD opens without asking `access()` - wrote fine on the identical ACL.
 
     THE FIX (a).  dh_open.c now opens the subfile for update and drops to
-    read-only only if that open fails, honouring the real DACL, which grants the
+    read-only only if that open fails, honoring the real DACL, which grants the
     account's group Modify.
 
     WHAT THIS MEASURES, as the account's own user over a real API session:

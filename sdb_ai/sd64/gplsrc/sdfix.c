@@ -594,7 +594,7 @@ int process_file() {
 
   /* !!FILE_VERSION!! */
   if (header.file_version > DH_VERSION) {
-    emit("Unrecognised file version (%d)\n", (int)header.file_version);
+    emit("Unrecognized file version (%d)\n", (int)header.file_version);
     if (!interactive)
       goto exit_process_file;
   }
@@ -688,7 +688,7 @@ int process_file() {
         emit("Z          show statistic counters\n");
         emit("n          show window from given hex address\n");
       } else {
-        emit("Unrecognised command. Enter ? for help\n");
+        emit("Unrecognized command. Enter ? for help\n");
       }
     } while (!done);
   } else /* Automatic mode */
@@ -1290,7 +1290,7 @@ bool check_file() {
             ebuff->block_type = DHT_DATA;
           }
 
-          emit("   Corrected by initialising %d groups starting at %d\n", grp - released_group, released_group);
+          emit("   Corrected by initializing %d groups starting at %d\n", grp - released_group, released_group);
 
           while (released_group < grp) {
             write_block(PRIMARY_SUBFILE, (((int64)(released_group - 1)) * group_bytes) + header_bytes, group_bytes, (char *)ebuff);
@@ -2194,7 +2194,7 @@ Private void show_node(int32_t group) {
       break;
 
     default:
-      emit("Unrecognised node type (%d)\n", (int)((DH_INT_NODE *)&buffer)->node_type);
+      emit("Unrecognized node type (%d)\n", (int)((DH_INT_NODE *)&buffer)->node_type);
   }
 
   emit("\n");

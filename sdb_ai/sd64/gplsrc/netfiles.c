@@ -448,7 +448,7 @@ Private bool net_call_core(int op, const char* a, int alen, const char* b, int b
   /* The program is looked for first so that a tree that has not catalogued it says so, rather than stopping the process with "cannot
      find program".  load_object() finds it in its list after the first time. */
   if (load_object("$netfile", FALSE) == NULL) {
-    net_set_message(MSG_HANDLER, "the program $netfile is not in the global catalogue", "", "");
+    net_set_message(MSG_HANDLER, "the program $netfile is not in the global catalog", "", "");
     return FALSE;
   }
 

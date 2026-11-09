@@ -81,7 +81,7 @@ function Note($check, $expected, $got) {
 }
 
 # BOUNDED, BECAUSE A TEST HARNESS THAT CAN HANG IS A BAD HARNESS.  SD prompts
-# from places a script cannot predict - CATALOG's "also in private catalogue.
+# from places a script cannot predict - CATALOG's "also in private catalog.
 # Remove?", DELETEF's per-part confirmations, and DELETEF:152's "Use file 'xx'?"
 # which FORCE does NOT suppress - and every one of them sits in an unbounded
 # "until yn = 'Y' or 'N'" loop.  Piped input runs out, the loop keeps reading,

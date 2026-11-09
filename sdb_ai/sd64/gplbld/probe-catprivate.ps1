@@ -12,7 +12,7 @@
 # so this is a probe, not a verifier that joins the suite.
 #
 # THE SUCCESS ANCHOR IS THE WORDING CATALOG PRINTS ON THE POSITIVE PRIVATE
-# PATH, "%1 added to private catalogue" (sysmsg 3031, CATALOG:426).  It does
+# PATH, "%1 added to private catalog" (sysmsg 3031, CATALOG:426).  It does
 # not appear on any failure path: the two "added to ..." siblings are 3029
 # (local) and 3030 (global), the "cannot open" refusal is 3023, the admin
 # gate is 2001, and CREATE.FILE / BASIC print their own separate wording if
@@ -236,15 +236,15 @@ Write-Output $out
 Write-Output '  --- end SD ---'
 
 # ANCHOR: sysmsg 3031's positive wording.  Substituting %1 gives "<name>
-# added to private catalogue".  Match on the fixed tail to sidestep any
+# added to private catalog".  Match on the fixed tail to sidestep any
 # case-folding of the call name.
-$anchor = ($out -match 'added to private catalogue')
+$anchor = ($out -match 'added to private catalog')
 
 # DISQUALIFIERS: any of these appearing rules the run out, even if the
 # anchor also matched (which should be impossible on the positive path).
 $disqualifiers = @(
-    'Cannot open private catalogue directory',
-    'Cannot open global catalogue directory',
+    'Cannot open private catalog directory',
+    'Cannot open global catalog directory',
     'Command requires administrator privileges',
     'Permission denied',
     'Access is denied',

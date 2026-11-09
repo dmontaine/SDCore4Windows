@@ -418,7 +418,7 @@ static const char* relay_exit_text(int code) {
     case SD_RELAY_EXIT_USAGE:
       return "was started wrongly (a bug in sd, not the peer)";
     case (int)0xC0000142:
-      return "could not initialise (0xC0000142: a DLL it needs is missing)";
+      return "could not initialize (0xC0000142: a DLL it needs is missing)";
     default:
       return "exited with an unexpected code";
   }

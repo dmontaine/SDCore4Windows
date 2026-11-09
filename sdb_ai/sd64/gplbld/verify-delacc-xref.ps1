@@ -96,7 +96,7 @@ function Invoke-SD([string[]]$commands) {
 }
 
 # The account directory (field 1 of the ACCOUNTS record), read from the
-# register with forward slashes normalised - the same read verify-apiidentity
+# register with forward slashes normalized - the same read verify-apiidentity
 # uses.  Empty if the record is absent.
 function Get-AccountDir([string]$upperName) {
     $rec = Join-Path $accts $upperName

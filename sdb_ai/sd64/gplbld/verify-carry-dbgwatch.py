@@ -148,7 +148,7 @@ def main():
             ok = got == want and "after the debugger" in out
             row(label, ok, "wanted %s, got %s, ran to the end: %s" % (want, got, "after the debugger" in out))
         out = sess(box, "RUN bp %s" % PROG, "W n ~~ 3", "R")
-        row("45: the refusal is the debugger's 'Unrecognised command'", "Unrecognised command" in out.replace("\x07", ""), out[-300:])
+        row("45: the refusal is the debugger's 'Unrecognized command'", "Unrecognized command" in out.replace("\x07", ""), out[-300:])
     finally:
         for p in (os.path.join(sysd, "bp", PROG), os.path.join(sysd, "bp.out", PROG)):
             if os.path.exists(p):

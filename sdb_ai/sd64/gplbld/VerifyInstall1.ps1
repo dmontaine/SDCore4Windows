@@ -438,7 +438,7 @@ if (-not $Yes) {
     Write-Output '  VerifyInstall2 for the ones that need an administrator.  Together they'
     Write-Output '  exercise account creation and deletion, the account and group'
     Write-Output '  model, the file'
-    Write-Output '  and catalogue ACLs, ssh and API logins, and the audit trail.'
+    Write-Output '  and catalog ACLs, ssh and API logins, and the audit trail.'
     Write-Output ''
     Write-Output '  BEFORE YOU SAY YES, it will:'
     Write-Output '    * take several minutes, and look idle for stretches of it'
@@ -776,7 +776,7 @@ $steps = @(
     # 13 Sep 26 - NOW FIVE LEGS AND 38 ROWS: leg 3 witnesses RELEASE_1.1 27, and
     # legs 4-5 press Enter at DELETEF 6135/6140 and CATALOG 3033/3034 (RELEASE_1.1
     # 6).  Still unelevated, still no token and no Windows account; it creates
-    # and removes a file, a VOC pointer and a catalogued program in the caller's
+    # and removes a file, a VOC pointer and a cataloged program in the caller's
     # own account.  Measured 38 of 38 on the 18:41:41 install before this note.
     @{ Name = 'verify-promptenter.ps1'; P = @{} },
     # 13 Sep 26 - RELEASE_1.1_FIXES.md 28, owner's instruction ("add
@@ -831,10 +831,10 @@ $steps = @(
     # code because COPY carries a compiled object across; each no-error row now
     # requires the "Compiling xtype" line.
     @{ Name = 'verify-dictfold.ps1'; P = @{} },
-    # 14 Sep 26 - RELEASE_1.1 5 stage 3a.  Program and catalogue names are lower
+    # 14 Sep 26 - RELEASE_1.1 5 stage 3a.  Program and catalog names are lower
     # case.  NTFS opens gcat under any case, so this reads NAMES - the gcat
     # listing, bin\pcode's headers, the runtime's error text, CATALOG's and
-    # DELETE.CATALOG's messages, the stored local-catalogue VOC id - rather than
+    # DELETE.CATALOG's messages, the stored local-catalog VOC id - rather than
     # whether calls work.  Same neighbourhood and reasons as verify-dictfold:
     # own account, unelevated, no token, bounded per session.  Measured before
     # being wired in: RED on the b158 install on 13 decisive rows, controls
@@ -1455,7 +1455,7 @@ foreach ($s in $steps) {
 
     if ($code -ne 0) { $failed++ }
     # 03 Sep 26 - PRE_RELEASE 152.  2 is the convention's "could not be run"
-    # (entry 151 made the six API verifiers honour it).  The row is annotated
+    # (entry 151 made the six API verifiers honor it).  The row is annotated
     # so the summary FILE carries the distinction too, not just the console.
     if ($code -eq 2) { $refused++ }
     $lines += ('{0,-28} {1,5:N1}s  exit {2}{3}' -f $s.Name, $sw.Elapsed.TotalSeconds, $code,

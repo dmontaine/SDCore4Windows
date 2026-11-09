@@ -17,7 +17,7 @@
 # THE INSTRUMENT.  Probe programs are compiled and run in the sandbox's SDSYS account; every value they print is tagged
 # NAME[value] and read from the start of a line, because a session echoes what it was given.  The expected values come from the
 # openQM manual's text for each statement (written beside each row), not from what the build printed.  Each item has a
-# control: the behaviour that must NOT have changed (COMPARE without an I, a plain =, PRECISION with a number, a matrix whose
+# control: the behavior that must NOT have changed (COMPARE without an I, a plain =, PRECISION with a number, a matrix whose
 # zero element is null, and a ~ that is not part of ~=).
 
 import os

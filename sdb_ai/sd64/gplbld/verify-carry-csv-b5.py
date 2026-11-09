@@ -17,7 +17,7 @@
 #
 # THE INSTRUMENT.  Every value is printed in a tag, name[value], and read from the session output, anchored to the start of a
 # line.  Expected strings are the examples of the openQM V4 manual (CSV.MODE) and the mode 1 output before this change is the
-# control: the default behaviour must be what it was.
+# control: the default behavior must be what it was.
 
 import os
 import re

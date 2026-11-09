@@ -101,14 +101,14 @@ T 'e14 6146 absent: defect'          $true  (Test-Say $bad14 'Delete the file fr
 T 'e14 voc deleted'                  $true  (Test-Say $fix14 ("VOC entry '" + [regex]::Escape($sysPtr) + "' deleted"))
 
 # ---- entry 15 ------------------------------------------------------------
-$fix15 = @('Unrecognised index name (zzprfnope)', 'Deleted index F1', 'File has no indices') -join "`n"
-$bad15 = @('Unrecognised index name (zzprfnope)', 'Unrecognised index name (f1)', 'Number of indices = 1') -join "`n"
-T 'e15 control as typed'             $true  (Test-Say $fix15 ('Unrecognised index name \(' + [regex]::Escape($Prefix + 'nope') + '\)'))
-T 'e15 control not upcased'          $false (Test-Say $fix15 ('Unrecognised index name \(' + [regex]::Escape(($Prefix + 'nope').ToUpper()) + '\)'))
+$fix15 = @('Unrecognized index name (zzprfnope)', 'Deleted index F1', 'File has no indices') -join "`n"
+$bad15 = @('Unrecognized index name (zzprfnope)', 'Unrecognized index name (f1)', 'Number of indices = 1') -join "`n"
+T 'e15 control as typed'             $true  (Test-Say $fix15 ('Unrecognized index name \(' + [regex]::Escape($Prefix + 'nope') + '\)'))
+T 'e15 control not upcased'          $false (Test-Say $fix15 ('Unrecognized index name \(' + [regex]::Escape(($Prefix + 'nope').ToUpper()) + '\)'))
 T 'e15 deleted: fixed'               $true  (Test-Say $fix15 'Deleted index F1')
 T 'e15 deleted: defect'              $false (Test-Say $bad15 'Deleted index F1')
-T 'e15 disqualifier: fixed'          $false (Test-Say $fix15 'Unrecognised index name \(f1\)')
-T 'e15 disqualifier: defect'         $true  (Test-Say $bad15 'Unrecognised index name \(f1\)')
+T 'e15 disqualifier: fixed'          $false (Test-Say $fix15 'Unrecognized index name \(f1\)')
+T 'e15 disqualifier: defect'         $true  (Test-Say $bad15 'Unrecognized index name \(f1\)')
 T 'e15 after-state: fixed'           $true  (Test-Say $fix15 'File has no indices')
 T 'e15 after-state: defect'          $false (Test-Say $bad15 'File has no indices')
 

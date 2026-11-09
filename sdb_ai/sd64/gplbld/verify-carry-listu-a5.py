@@ -163,7 +163,7 @@ def near_now(stamp, fmt, seconds=120):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# The probes.  User programs go in the fixture accounts' bp directories; the two that must be $internal are catalogued.
+# The probes.  User programs go in the fixture accounts' bp directories; the two that must be $internal are cataloged.
 
 USER_PROGS = {
     # every user of the table, with its login name, its account, and whether it is a phantom - from !LISTU, as any program
@@ -236,7 +236,7 @@ GPL_PROGS = {
 
 def prepare():
     """A CPROC that is not the install build (so the sandbox user is the administrator only when SDTEST_ADMIN=1), the
-    internal probes, catalogued."""
+    internal probes, cataloged."""
     path = os.path.join(SYS, "gpl.bp", "cproc")
     with open(path, encoding="utf-8", errors="replace") as f:
         text = f.read()
@@ -259,7 +259,7 @@ def prepare():
 
 
 def build_account(name):
-    """A directory with a VOC made from NEWVOC, a bp directory with the user probes in it, VOC verbs for the catalogued
+    """A directory with a VOC made from NEWVOC, a bp directory with the user probes in it, VOC verbs for the cataloged
     internal probes, and a register record whose group is the sandbox user's own (so that LOGTO passes its membership test)."""
     path = os.path.join(BOX, "user_accounts", name)
     if os.path.isdir(path):

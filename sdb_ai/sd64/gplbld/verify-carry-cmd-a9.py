@@ -2,7 +2,7 @@
 #
 # sandbox-cmd-a9.py - 1.2-0 bundles A-7, A-9, A-10 and A-11, the second sitting (14 Oct 26): the command line, select lists
 #                     and the ED editor.  Sheet items 449 (SHOW.LIST), 146 (LPTR and NO.PAGE on a program run by its
-#                     catalogue name), 296 (.C- in the command stack editor), 396 (the command stack is kept in the account
+#                     catalog name), 296 (.C- in the command stack editor), 396 (the command stack is kept in the account
 #                     the user entered), 490 (CATALOG ... LOCAL asks before it overwrites a pointer to a different object
 #                     file), 268 (ED's EV on a compound I-type) and 320 (ED takes text, subvalue and value marks as typed).
 #                     No install, no sudo.
@@ -26,7 +26,7 @@
 #   A  449  SHOW.LIST: its first page, T N P Q QC and ?, S and C with numbers, ranges, lists, VISIBLE and ALL, a numbered
 #           list other than 0, a list that is not active, a bad number, a bad item (and the list unchanged after it)
 #   B  296  .C- undoes the .C before it; .L and .? may come between; a command run, or another dot command, ends the chance
-#   C  146  a catalogued program run by its catalogue name takes LPTR (output to printer 0) and NO.PAGE; a quoted LPTR is not one
+#   C  146  a cataloged program run by its catalog name takes LPTR (output to printer 0) and NO.PAGE; a quoted LPTR is not one
 #   D  396  the command stack is saved in the account the user ENTERED, not the one he LOGTO'd to
 #   E  490  CATALOG ... LOCAL over a pointer to another object file asks (N is the default); Y replaces; NO.QUERY does not
 #           ask; the same file again does not ask
@@ -269,12 +269,12 @@ def main():
         has(out, r"^02  WHO$") and has(out, r"^01  DATE$"), repr(out[-5:]))
 
     # -------------------------------------------------------------------------------------------------------------
-    say("\n--- C. 146: a catalogued program run by its catalogue name ------------------------------------------------")
+    say("\n--- C. 146: a cataloged program run by its catalog name ------------------------------------------------")
     out = sd(["CATALOG bp zzcatp", "CATALOG bp zzcatn"])
-    row("setup: both programs are in the private catalogue",
-        has(out, r"^zzcatp added to private catalogue") and has(out, r"^zzcatn added to private catalogue"), repr(out[-3:]))
+    row("setup: both programs are in the private catalog",
+        has(out, r"^zzcatp added to private catalog") and has(out, r"^zzcatn added to private catalog"), repr(out[-3:]))
     out = sd(["zzcatp"])
-    row("CONTROL: run by its catalogue name it prints on the screen", has(out, r"^CATP-OUT$"), repr(out[-3:]))
+    row("CONTROL: run by its catalog name it prints on the screen", has(out, r"^CATP-OUT$"), repr(out[-3:]))
     out = sd(["SETPTR 0,80,60,0,0,3,AS zzcatout,BRIEF", "zzcatp LPTR", "RUN bp zzholdrd"])
     row("LPTR: the output went to printer 0 (the $HOLD entry), not the screen",
         not has(out, r"^CATP-OUT$") and tagged(out, "HOLD") is not None and "CATP-OUT" in tagged(out, "HOLD"), repr(out[-4:]))
@@ -316,21 +316,21 @@ def main():
     bp1 = os.path.join(SYS, "bp.out", "zzcl1")
     bp2 = os.path.join(SYS, "bp2.out", "zzcl1")
     out = sd(["DELETE.CATALOG zzcl1", "CATALOG bp zzcl1 LOCAL", "RUN bp zzclrd"])
-    row("setup: the first CATALOG LOCAL makes the pointer to bp.out", has(out, r"^zzcl1 added to local catalogue") and (tagged(out, "CLREC") or "").endswith("bp.out/zzcl1"),
+    row("setup: the first CATALOG LOCAL makes the pointer to bp.out", has(out, r"^zzcl1 added to local catalog") and (tagged(out, "CLREC") or "").endswith("bp.out/zzcl1"),
         repr(tagged(out, "CLREC")))
     out = sd(["CATALOG bp zzcl1 LOCAL", "CATALOG bp zzcl1 LOCAL", "RUN bp zzclrd"])
-    row("CONTROL: the same object file again does not ask, and says it is added", not has(out, r"Replace it") and has(out, r"^zzcl1 added to local catalogue"), repr(out[-4:]))
+    row("CONTROL: the same object file again does not ask, and says it is added", not has(out, r"Replace it") and has(out, r"^zzcl1 added to local catalog"), repr(out[-4:]))
     sd(["CATALOG bp zzcl1 LOCAL"])
     out = sd(["CATALOG bp2 zzcl1 LOCAL", "", "RUN bp zzclrd"])
     row("490: another object file asks, naming the pointer's path, and Return (N) leaves the pointer alone",
-        has(out, r"^Local catalogue entry zzcl1 is for .*bp\.out/zzcl1\.\s+Replace it \(y/<n>\)\?") and not has(out, r"^zzcl1 added to local catalogue")
+        has(out, r"^Local catalog entry zzcl1 is for .*bp\.out/zzcl1\.\s+Replace it \(y/<n>\)\?") and not has(out, r"^zzcl1 added to local catalog")
         and (tagged(out, "CLREC") or "").endswith("bp.out/zzcl1"), repr(out[-5:]))
     sd(["CATALOG bp zzcl1 LOCAL"])
     out = sd(["CATALOG bp2 zzcl1 LOCAL", "N", "RUN bp zzclrd"])
     row("... and N the same", (tagged(out, "CLREC") or "").endswith("bp.out/zzcl1") and not has(out, r"^zzcl1 added"), repr(out[-4:]))
     sd(["CATALOG bp zzcl1 LOCAL"])
     out = sd(["CATALOG bp2 zzcl1 LOCAL", "Y", "RUN bp zzclrd"])
-    row("... Y replaces it: the pointer is to bp2.out and the entry is added", has(out, r"^zzcl1 added to local catalogue") and (tagged(out, "CLREC") or "").endswith("bp2.out/zzcl1"),
+    row("... Y replaces it: the pointer is to bp2.out and the entry is added", has(out, r"^zzcl1 added to local catalog") and (tagged(out, "CLREC") or "").endswith("bp2.out/zzcl1"),
         repr(out[-4:]))
     sd(["CATALOG bp zzcl1 LOCAL"])
     out = sd(["CATALOG bp2 zzcl1 LOCAL NO.QUERY", "RUN bp zzclrd"])

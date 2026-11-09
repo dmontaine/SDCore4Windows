@@ -207,7 +207,7 @@ $src = @(
     "   lg = PY_LISTGETS('zz_list')"
     "   crt 'PYPRB-LGET=[':lg:']'"
     # 15 Sep 26 - NOT "lt": LT is BASIC's less-than operator, so "lt = ..." is
-    # "Unrecognised statement" and the whole probe failed to compile (b164).
+    # "Unrecognized statement" and the whole probe failed to compile (b164).
     "   lty = PY_OBJTYPE('zz_list')"
     "   crt 'PYPRB-LTYPE=':lty"
     # 07 Oct 26 - the alias, driven exactly as PY_LISTCREATE is: create, append, read back.
@@ -339,10 +339,10 @@ if ($incBuilt) {
     Write-Output '  --- SD said: ---'
     Write-Output $incRun
     Row ($incRun -match 'PYINC-INIT=0') `
-        'a program using the documented include runs and initialises'
+        'a program using the documented include runs and initializes'
 }
 
-# Disqualifiers: the helper-missing code and the not-initialised code must not
+# Disqualifiers: the helper-missing code and the not-initialized code must not
 # appear anywhere.  -12040 is SD_PyErr_NoHelper.
 Row (-not ($run -match '-12040')) 'no -12040 (helper would not start) anywhere in the transcript'
 # 12 Sep 26 - RELEASE_1.1 21 split the two permission refusals out of -12040.
@@ -352,7 +352,7 @@ Row (-not ($run -match '-12040')) 'no -12040 (helper would not start) anywhere i
 # refusing an administrator, which is a product change nobody asked for.
 Row (-not ($run -match '-12041')) 'no -12041 (session not permitted to use the OS) anywhere'
 Row (-not ($run -match '-12042')) 'no -12042 (OS permission undetermined) anywhere'
-Row (-not ($run -match '-12001')) 'no -12001 (interpreter not initialised) anywhere'
+Row (-not ($run -match '-12001')) 'no -12001 (interpreter not initialized) anywhere'
 
 # --- cleanup --------------------------------------------------------------
 Write-Output ''

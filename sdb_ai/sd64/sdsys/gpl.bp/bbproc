@@ -214,8 +214,8 @@ end
 *  note all files must be opend via openpath, open depends on pcode!
 
 openpath @sdsys:@ds:'gcat' to gcat.f else
-  crt 'Cannot open global catalogue directory! ABORT'
-  if logging then writeseq 'Cannot open global catalogue directory! ABORT' to log.f else null
+  crt 'Cannot open global catalog directory! ABORT'
+  if logging then writeseq 'Cannot open global catalog directory! ABORT' to log.f else null
   goto abort.bbproc
 end
    

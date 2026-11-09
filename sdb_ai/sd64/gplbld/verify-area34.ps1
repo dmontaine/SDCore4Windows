@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    The behaviour carried from Linux in catch-up areas 3 and 4 and set.batch (RELEASE_1.1 197, 200), on the installed SD.
+    The behavior carried from Linux in catch-up areas 3 and 4 and set.batch (RELEASE_1.1 197, 200), on the installed SD.
 
 .DESCRIPTION
     TWO HALVES, BECAUSE ONE PROCESS CANNOT BE BOTH.
@@ -207,7 +207,7 @@ if ($Half -eq 'User') {
 if ($Half -eq 'Admin') {
     . (Join-Path $Gplbld 'sdsys-seat.ps1')
     function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 180) { return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec) }
-    # $internal is honoured only in an internal-mode session, as well as SDSYS (bcomp, "INTERNAL").
+    # $internal is honored only in an internal-mode session, as well as SDSYS (bcomp, "INTERNAL").
     function Invoke-SDInternal([string[]]$commands, [int]$TimeoutSec = 180) { return (Invoke-SdSeatText -Commands $commands -TimeoutSec $TimeoutSec -Internal) }
     Assert-SdSeat -Label 'verify-area34'
     Assert-SdSeat -Label 'verify-area34' -Internal

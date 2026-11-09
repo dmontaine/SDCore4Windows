@@ -21,7 +21,7 @@
 
     and asserts A is byte-identical to S.  ONE directory rather than two, so
     the group name, the machine name and the SIDs are the same in both
-    readings and equality can be exact instead of normalised.
+    readings and equality can be exact instead of normalized.
 
     R IS WHY THIS TEST MEANS ANYTHING, AND WITHOUT IT THE RUN WOULD BE A LIE.
     Both halves are idempotent.  Running the script over a directory
@@ -535,7 +535,7 @@ finally {
             }
             # 26 Aug 26 - REMOVE THE PROFILE, NOT THE DIRECTORY.  Deleting
             # C:\Users\<name> leaves the ProfileList registry entry standing,
-            # and Windows honours that entry the next time an account of the
+            # and Windows honors that entry the next time an account of the
             # same name appears - by putting the profile at
             # C:\Users\<name>.<COMPUTERNAME> instead.  That is where
             # sdacct19.GITORLI and its three siblings came from;

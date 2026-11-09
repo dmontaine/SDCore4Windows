@@ -17,7 +17,7 @@
 # Unverified.  Everything here is about not corrupting the file: the block
 # lands before the first Match block rather than inside it, re-running replaces
 # rather than stacks, removal is an exact inverse, and somebody else's
-# AllowUsers is recognised and left alone.
+# AllowUsers is recognized and left alone.
 #
 # IT TESTS THE SHIPPED FILE, NOT A COPY OF IT.  The functions are lifted out of
 # allow-ssh-groups.ps1 by parsing it, so this cannot drift away from the code it
@@ -132,7 +132,7 @@ Show 'three applies then remove, likewise'     'yes' $(if (((Remove-OurBlock $cy
 Show 'no marker survives'                      0     ((Remove-OurBlock $cycle) | Select-String -Pattern 'SD ssh-only model').Count
 
 Write-Output ""
-Write-Output "=== somebody else's policy is recognised and left alone ================"
+Write-Output "=== somebody else's policy is recognized and left alone ================"
 Show 'our own block does not read as theirs' 0 (Get-ExistingRestrictions $new).Count
 foreach ($d in @('AllowUsers alice', '  DenyGroups contractors', 'AllowGroups sshusers', 'DenyUsers bob')) {
     Show ("refuses on: " + $d.Trim()) 1 (Get-ExistingRestrictions (@($d) + $default)).Count

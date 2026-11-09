@@ -484,7 +484,7 @@ void op_objref() {
        reference this.                                                  */
 
     if (!find_undefined_name_handler(mode, objdata, name, TRUE)) {
-      k_error("Unrecognised property/method name (%s).", name);
+      k_error("Unrecognized property/method name (%s).", name);
     }
   }
 

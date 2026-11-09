@@ -610,7 +610,7 @@ end
 
     # -----------------------------------------------------------------------
     Write-Output ''
-    Write-Output '=== 4. behaviour, not just names ========================================='
+    Write-Output '=== 4. behavior, not just names ========================================='
     Write-Output '  A name that is only cosmetically right would pass sections 2 and 3 and'
     Write-Output '  still have broken every file the account owns.'
 
@@ -694,7 +694,7 @@ end
     Write-Output '  $command.stack missing from the account this runs in (put back by'
     Write-Output '  hand 14 Sep 2026).  A lower/upper pair cannot exist under D2, and'
     Write-Output '  section 4 already reaches the one record typed either way.  What is'
-    Write-Output '  kept is behaviour on the SHIPPED ids: _NEXTPTR (5a), the stack (5b).'
+    Write-Output '  kept is behavior on the SHIPPED ids: _NEXTPTR (5a), the stack (5b).'
     # ***DO NOT BRING A TOGGLE BACK.***  Writing one spelling and deleting another
     # on a case-insensitive file deletes the record - measured 14 Sep 2026 on a
     # scratch file (write TYPE, write type, delete TYPE: 0 records).  This test

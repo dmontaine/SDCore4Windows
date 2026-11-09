@@ -436,22 +436,22 @@ def main():
             if not restart(box, *([limit] if limit else [])):
                 row("241: SD starts (%s)" % (limit or "as built"), False, "did not start")
                 continue
-            # an entry left by an earlier phase or run would let a name that cannot be catalogued pass for one that can
+            # an entry left by an earlier phase or run would let a name that cannot be cataloged pass for one that can
             sess(box, *["DELETE.CATALOG " + n for n in (n63, n100, n129)])
             out = sess(box, "BASIC bp " + n63, "CATALOG bp " + n63, "BASIC bp zzb1c63", "RUN bp zzb1c63",
                        "BASIC bp zzb1nc80", "RUN bp zzb1nc80")
-            row("241: CONTROL (%s): a %d character name catalogues and is called" % (limit or "as built", len(n63)),
+            row("241: CONTROL (%s): a %d character name catalogs and is called" % (limit or "as built", len(n63)),
                 tagged(out, "CALL") == str(len(n63)), "got %r" % tagged(out, "CALL"))
             long_err = re.search(r"Illegal call name", out.split("RUN bp zzb1nc80", 1)[-1]) is not None
             if not limit:
                 row("241: as built, calling a computed 80 character name is 'Illegal call name'", long_err,
                     out.split("RUN bp zzb1nc80", 1)[-1][-200:])
             else:
-                row("241: MAXIDLEN=200, calling a computed 80 character name gets past the name test (it is not catalogued)",
+                row("241: MAXIDLEN=200, calling a computed 80 character name gets past the name test (it is not cataloged)",
                     (not long_err) and "NEVER" not in out, out.split("RUN bp zzb1nc80", 1)[-1][-200:])
                 out = sess(box, "BASIC bp " + n100, "CATALOG bp " + n100, "BASIC bp zzb1c100", "RUN bp zzb1c100",
                            "BASIC bp " + n129, "CATALOG bp " + n129)
-                row("241: MAXIDLEN=200, a 100 character name catalogues and is called", tagged(out, "CALL") == "100",
+                row("241: MAXIDLEN=200, a 100 character name catalogs and is called", tagged(out, "CALL") == "100",
                     "got %r" % tagged(out, "CALL"))
                 row("241: MAXIDLEN=200, a 129 character name is refused: the limit is the lower of 128 and MAXIDLEN",
                     re.search(r"(?m)^Illegal call name \(zzc", out) is not None, out[-300:])

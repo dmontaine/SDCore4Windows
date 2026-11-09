@@ -134,7 +134,7 @@ $include tk.h
                   tk = tk + 1
                   if tk > dcount(themes, @fm) then tk = 1
                   screen theme themes<tk> returning thn else
-                     msg = 'this terminal cannot show colour: no theme but mono'
+                     msg = 'this terminal cannot show color: no theme but mono'
                   end
                   gosub redraw.all
             end case
@@ -310,7 +310,7 @@ draw.info:
    il<-1> = 'Window      ' : @crtwide : ' x ' : @crthigh : '  (layout ' : ctx<TK.C.W> : ' x ' : ctx<TK.C.H> : ')'
    il<-1> = 'Locale      ' : (if loc = '' then '(none set)' else loc)
    il<-1> = 'Borders     ' : (if ctx<TK.C.UTF8> then 'line characters (UTF-8)' else '+ - | (not UTF-8)')
-   il<-1> = 'Colour      ' : colour
+   il<-1> = 'Color      ' : colour
    il<-1> = 'Theme       ' : thn
    il<-1> = 'Mouse       ' : (mp + mr + md + mu + mdn) : ' events'
    il<-1> = 'Reading     ' : (if rawmode then 'raw bytes (KEYIN)' else 'names ($sl_key)')

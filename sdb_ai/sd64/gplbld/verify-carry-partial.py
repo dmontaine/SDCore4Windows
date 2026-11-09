@@ -131,8 +131,8 @@ end
     for name, text in progs.items():
         with open(os.path.join(sysd, "bp", name), "w") as fh:
             fh.write(text)
-    # the side effect program calls the function by its catalogued name bump
-    # (the function is catalogued under that name below)
+    # the side effect program calls the function by its cataloged name bump
+    # (the function is cataloged under that name below)
     with open(os.path.join(sysd, "bp", side_on), "w") as fh:
         fh.write(progs[side_on].replace("bump()", "%s()" % bump))
     with open(os.path.join(sysd, "bp", side_off), "w") as fh:

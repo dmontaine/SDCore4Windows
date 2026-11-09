@@ -22,6 +22,8 @@
 * 30 Jul 24 mab add error codes for SD_ENCRYPT_SODIUM
 * rev 0.9.0 Jan 25 mab sdext_eguid_set error codes
 * rev 0.9-2 Mar 25 mab add sdext_pyobj direct control of python dictionary object
+* 9 Nov 26 Windows port - from Linux ad4a2cf6 (S.186): US spelling of the error texts (catalog, cataloged, Unrecognized, initializing, initialized);
+*    no code or value changed.  SYSCOM ERR.H and ERRTEXT.H are regenerated from this file.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): PAL-10 (parity audit): the Python error texts and two sdext_euid texts
 *    are spelt and worded as the Windows port's (interpreter, initialised,
 *    concatenate, process ...); no code or value changed.  SYSCOM ERR.H and
@@ -53,7 +55,7 @@ $define ER$NO.DIR         5    ;* Directory not found
 $define ER$NOT.CREATED    6    ;* Unable to create directory
 $define ER$STOPPED        7    ;* Processing terminated by user action
 $define ER$INVA.PATH      8    ;* Invalid pathname
-$define ER$NOT.CAT        9    ;* Item not in catalogue
+$define ER$NOT.CAT        9    ;* Item not in catalog
 $define ER$PROCESS       10    ;* Unable to start new process
 $define ER$USER.EXISTS   11    ;* User name already in register
 $define ER$UNSUPPORTED   12    ;* This operation is not supported on this platform
@@ -93,7 +95,7 @@ $define ER$MAX.STRING  1900    ;* Max String (record) Size
 * 20xx  Catalog management errors
 
 $define ER$INVA.OBJ    2000    ;* Invalid object code
-$define ER$CFNF        2001    ;* Catalogued function not found
+$define ER$CFNF        2001    ;* Cataloged function not found
 
 * 21xx  Terminfo errors
 
@@ -233,7 +235,7 @@ $define DHE$AK.NOT.FOUND         8109 ;* Cannot open AK subfile
 $define DHE$AK.HDR.READ.ERROR    8110 ;* Error reading AK header
 $define DHE$AK.HDR.FAULT         8111 ;* AK subfile header format error
 $define DHE$AK.ITYPE.ERROR       8112 ;* Format error in AK I-type code
-$define DHE$AK.NODE.ERROR        8113 ;* Unrecognised node type
+$define DHE$AK.NODE.ERROR        8113 ;* Unrecognized node type
 $define DHE$NO.SUCH.AK           8114 ;* Reference to non-existant AK
 $define DHE$AK.DELETE.ERROR      8115 ;* Error deleting AK subfile
 $define DHE$EXCLUSIVE            8116 ;* File is open for exclusive access
@@ -252,7 +254,7 @@ $define DHE$CREATE.DIR.ERR       8207 ;* Cannot create directory (os.error)
 $define DHE$CREATE0.ERR          8208 ;* Cannot create primary subfile (os.error)
 $define DHE$CREATE1.ERR          8209 ;* Cannot create overflow subfile (os.error)
 $define DHE$PSFH.WRITE.ERROR     8210 ;* Failure writing primary subfile header (os.error)
-$define DHE$INIT.DATA.ERROR      8211 ;* Failure initialising data bucket (os.error)
+$define DHE$INIT.DATA.ERROR      8211 ;* Failure initializing data bucket (os.error)
 $define DHE$ILLEGAL.HASH         8212 ;* Invalid hashing algorithm
 $define DHE$OSFH.WRITE.ERROR     8213 ;* Failure writing overflow subfile header (os.error)
 $define DHE$RECORD.NOT.FOUND     8301 ;* Record not in file
@@ -326,7 +328,7 @@ $define SD$SCRAM.ERR   -10303  ;* sd.scram.c primitive failed or was given bad i
 * because every PY_* documents "status() - 0 on success, error code as defined
 * in ERR.H" - reusing them means the documented contract survives the change
 * of mechanism, and renumbering would have broken it for no gain.
-$define SD$PyEr.NotInit    -12001  ;* interpreter not initialised
+$define SD$PyEr.NotInit    -12001  ;* interpreter not initialized
 $define SD$PyEr.Dict       -12002  ;* PyDict.New() failed
 $define SD$PyEr.Builtin    -12003  ;* failed to link ..builtins.. into the scope
 $define SD$PyEr.Excpt      -12004  ;* exception while running code

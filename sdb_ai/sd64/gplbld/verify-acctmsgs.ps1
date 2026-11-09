@@ -290,7 +290,7 @@ function Get-PasswordPolicy {
         try { $na = (& net accounts | Out-String) } catch { }
         $ErrorActionPreference = $prev
         if ($na -match '(?m):\s*(\d+)\s*$' -and $na -match 'assword') {
-            # Deliberately weak, and labelled so: this only fires when secedit
+            # Deliberately weak, and labeled so: this only fires when secedit
             # gave nothing, and it is why the source is reported on its own row.
             if ($na -match '(?im)^.*password length.*?(\d+)\s*$') {
                 $out.MinLength = [int]$Matches[1]; $out.Source = 'net accounts'

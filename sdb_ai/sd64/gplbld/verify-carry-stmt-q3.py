@@ -250,7 +250,7 @@ USER_PROGS = {
     "zzspl": ("   a = system(20)\n   execute 'SETPTR 0,80,60,0,1' capturing j\n   printer on\n   print 'hello'\n   printer close\n"
               "   b = system(20)\n   crt 'JOBS[':a:'][':b:']'\n   crt 'END'\nend\n"),
     # E: FIND.FILE and FIND.PROGRAM.  zzfi: what FILEINFO says of a file and its dictionary (the oracle for FIND.FILE); zzfps: a
-    # subroutine of two arguments to catalogue; zzfpi: what !PROG_INFO (older, used by other verbs) reads from its object
+    # subroutine of two arguments to catalog; zzfpi: what !PROG_INFO (older, used by other verbs) reads from its object
     "zzfi": ("   open 'zzefdyn' to f else stop 'no f'\n"
              "   crt 'FI[':fileinfo(f, 7):'][':fileinfo(f, 5):'][':fileinfo(f, 2):'][':fileinfo(f, 1008):']'\n"
              "   open 'DICT', 'zzefdyn' to d else stop 'no d'\n   crt 'FD[':fileinfo(d, 2):']'\nend\n"),
@@ -582,9 +582,9 @@ def main():
         pi = tag(out, "PI")
         # PI[date][time][size][err] comes back as "date][time][size][" from tag(): err is null
         mp = re.match(r"^([^\]]+)\]\[([^\]]+)\]\[(\d+)\]\[$", pi[0]) if len(pi) == 1 else None
-        row("E6: setup: the subroutine is catalogued and !PROG_INFO reads its date, time and object size (the oracle)",
+        row("E6: setup: the subroutine is cataloged and !PROG_INFO reads its date, time and object size (the oracle)",
             mp is not None, repr(pi) + repr(out[-8:]))
-        row("E6: FIND.PROGRAM of it: 'Program is in the private catalogue', 'Subroutine with 2 arguments'",
+        row("E6: FIND.PROGRAM of it: 'Program is in the private catalog', 'Subroutine with 2 arguments'",
             has(out, r"^Program is in the private catalogue$") and has(out, r"^\s+Subroutine with 2 arguments$"), repr(out[-8:]))
         if mp:
             dt, tm, size = mp.groups()
@@ -602,16 +602,16 @@ def main():
         # CATALOG ... LOCAL asks whether to remove the private entry: N keeps it, and the next line is the FIND.PROGRAM
         out = plain("zzaa", ["CATALOG bp zzfps LOCAL", "N", "FIND.PROGRAM zzfps"])
         places = [l for l in out if l.startswith("Program is in the ")]
-        row("E8: catalogued locally as well, it is shown twice, in the order a program is loaded: local, then private",
-            places == ["Program is in the local catalogue", "Program is in the private catalogue"], repr(places) + repr(out[-8:]))
+        row("E8: cataloged locally as well, it is shown twice, in the order a program is loaded: local, then private",
+            places == ["Program is in the local catalog", "Program is in the private catalog"], repr(places) + repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM !acc_hold", "FIND.PROGRAM !ftype"])
-        row("E9: a global program: !acc_hold is in the global catalogue and has three arguments",
+        row("E9: a global program: !acc_hold is in the global catalog and has three arguments",
             has(out, r"^Program is in the global catalogue$") and has(out, r"^\s+Subroutine with 3 arguments$"), repr(out[-8:]))
         row("E9: ... and !ftype is a function of one argument", has(out, r"^\s+Function with 1 arguments$"), repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM !acc_hold DETAIL"])
         row("E9: DETAIL shows the flags: !acc_hold is an internal program", has(out, r"^\s+Flags: .*internal"), repr(out[-8:]))
         out = plain("zzaa", ["FIND.PROGRAM zznosuchprog"])
-        row("E10: a name that is catalogued nowhere is said so (zznosuchprog is not catalogued)", has(out, r"^zznosuchprog is not catalogued$"), repr(out[-3:]))
+        row("E10: a name that is cataloged nowhere is said so (zznosuchprog is not cataloged)", has(out, r"^zznosuchprog is not catalogued$"), repr(out[-3:]))
 
         # -------------------------------------------------------------------------------------------------------------
         say("\n--- J. SELECT.SOCKET -----------------------------------------------------------------------------------------")
@@ -763,7 +763,7 @@ def main():
         out = plain("zzaa", ["ANALYSE.INDEX zzaix city NO.PAGE"])
         row("G5: the index name is taken in any case, and NO.PAGE is accepted", has(out, r"^\s+10\s+4\s+1\s+2\.5\s+5$"), repr(out[-6:]))
         out = plain("zzaa", ["ANALYSE.INDEX zzaix NOSUCH"])
-        row("G6: an index the file does not have is refused (Unrecognised index name (NOSUCH))", has(out, r"Unrecognised index name \(NOSUCH\)"), repr(out[-3:]))
+        row("G6: an index the file does not have is refused (Unrecognized index name (NOSUCH))", has(out, r"Unrecognized index name \(NOSUCH\)"), repr(out[-3:]))
         out = plain("zzaa", ["ANALYSE.INDEX zznosuchfile"])
         row("G6: a file that is not there is refused (File not found)", has(out, r"File not found"), repr(out[-3:]))
         out = plain("zzaa", ["ANALYSE.INDEX"])

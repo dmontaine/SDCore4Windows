@@ -317,7 +317,7 @@ def run_verbs(box, sysd, bp):
         write(lc, "   crt 'RAN_LC'\nend\n")
         write(lr, "   crt 'RAN_LR'\nend\n")
         out = sess(box, "BASIC bp zzoqlc", "BASIC bp zzoqlr", "CATALOG bp zzoqlc LOCAL", "MAP LOCAL NO.PAGE")
-        row("287: MAP LOCAL lists the locally catalogued programs", has(out, r"^L\s+zzoqlc") and not has(out, r"^\*"), out[-300:])
+        row("287: MAP LOCAL lists the locally cataloged programs", has(out, r"^L\s+zzoqlc") and not has(out, r"^\*"), out[-300:])
         row("153: MAP ... NO.PAGE runs and still ends with its total", has(out, r"Total:"), out[-300:])
         out = sess(box, "CATALOG bp zzoqlr LOCAL RELATIVE", "ZZOQLR")
         read_voc = sess(box, "CT VOC zzoqlr")
@@ -342,13 +342,13 @@ def run_verbs(box, sysd, bp):
                 os.remove(os.path.join(gdir, g))
         try:
             out = sess(box, "BASIC bp zzoqgp", "BASIC bp zzoqgq", "CATALOG bp zzoqgp GLOBAL")
-            row("210 CONTROL: GLOBAL with no prefix catalogues under the bare name",
+            row("210 CONTROL: GLOBAL with no prefix catalogs under the bare name",
                 os.path.exists(os.path.join(gdir, "zzoqgp")) and not os.path.exists(os.path.join(gdir, "!zzoqgp")), out[-300:])
             os.remove(os.path.join(gdir, "zzoqgp"))
             out = sess(box, "CATALOG bp zzoqgp GLOBAL !")
             row("210 GLOBAL ! puts the prefix on a name that has none",
                 os.path.exists(os.path.join(gdir, "!zzoqgp")) and not os.path.exists(os.path.join(gdir, "zzoqgp"))
-                and has(out, r"added to global catalogue"), out[-300:])
+                and has(out, r"added to global catalog"), out[-300:])
             out = sess(box, "CATALOG bp zzoqgp GLOBAL $")
             row("210 another prefix character, $", os.path.exists(os.path.join(gdir, "$zzoqgp")), out[-300:])
             os.remove(os.path.join(gdir, "$zzoqgp"))
@@ -359,10 +359,10 @@ def run_verbs(box, sysd, bp):
             row("210 with a select list the prefix is put on each program",
                 os.path.exists(os.path.join(gdir, "!zzoqgq")), out[-300:])
             out = sess(box, "CATALOG bp zzoqgq GLOBAL ?")
-            row("210 a character that is not a prefix is refused and nothing is catalogued",
+            row("210 a character that is not a prefix is refused and nothing is cataloged",
                 not os.path.exists(os.path.join(gdir, "?zzoqgq")) and not os.path.exists(os.path.join(gdir, "zzoqgq")), out[-300:])
             out = sess(box, "CATALOG bp zzoqgp LOCAL *")
-            row("210 a prefix without GLOBAL is refused", not has(out, r"added to local catalogue"), out[-300:])
+            row("210 a prefix without GLOBAL is refused", not has(out, r"added to local catalog"), out[-300:])
             sess(box, "DELETE.CATALOG zzoqgp LOCAL")
         finally:
             for g in gnames:
@@ -784,7 +784,7 @@ def run_verbs(box, sysd, bp):
         row("56: a plain printer job does not", not has(t, r"^LOG\[") and has(t, r"JOB DONE"), t[-400:])
         sess(box, "DELETE.CATALOG hold.file.logger LOCAL")
         t = sess(box, "SETPTR 0,80,60,0,0,3,AS zzoqlg,BRIEF", "RUN bp zzoqp1")
-        row("56 CONTROL: with no such subroutine catalogued the job simply runs", not has(t, r"^LOG\[") and has(t, r"JOB DONE"), t[-400:])
+        row("56 CONTROL: with no such subroutine cataloged the job simply runs", not has(t, r"^LOG\[") and has(t, r"JOB DONE"), t[-400:])
         for nm in ("zzoqlg", "zzoqlg6"):
             if os.path.exists(os.path.join(hold, nm)):
                 os.remove(os.path.join(hold, nm))
@@ -839,7 +839,7 @@ def run_verbs(box, sysd, bp):
         t = sess(box, "PTERM DISPLAY")
         row("155: PTERM DISPLAY reports it too", has(t, r"Mark translation: Off"), t[-300:])
         t = sess(box, "PTERM MARK SIDEWAYS")
-        row("155: any other word is refused", has(t, r"Unrecognised option \(SIDEWAYS\)"), t[-300:])
+        row("155: any other word is refused", has(t, r"Unrecognized option \(SIDEWAYS\)"), t[-300:])
         write(probe, "   input s\n   crt 'IN[':change(change(change(s, @sm, '<SM>'), @vm, '<VM>'), @fm, '<FM>'):']'\nend\n")
         t = sess(box, "PTERM MARK ON", "BASIC bp zzoqp1", "RUN bp zzoqp1", "a\x1cb\x1dc\x1ed")
         row("155: INPUT receives the marks as well", has(t, r"IN\[a<SM>b<VM>c<FM>d\]"), t[-300:])
@@ -884,7 +884,7 @@ def run_verbs(box, sysd, bp):
         t = sess(box, "PTERM ERASE ^~")
         row("253: ...so is a ^ key that is not a control key", has(t, r"Invalid erase key"), t[-300:])
         t = sess(box, "PTERM ERASE SIDEWAYS")
-        row("253: ...and any other word", has(t, r"Unrecognised option \(SIDEWAYS\)"), t[-300:])
+        row("253: ...and any other word", has(t, r"Unrecognized option \(SIDEWAYS\)"), t[-300:])
         t = sess(box, "PTERM ERASE 127", "PTERM CTRL.FILTER ON", "PTERM DISPLAY")
         row("253: PTERM DISPLAY reports the erase key and the control filter", has(t, r"Erase key: character 127") and has(t, r"Control character filter: On"), t[-600:])
 
@@ -1163,13 +1163,13 @@ def run_verbs(box, sysd, bp):
         write(probe, ("   execute 'CREATE.FILE zzoqix' capturing j1\n"
                       "   open 'zzoqix' to f else stop 'no file'\n"
                       "   open 'DICT', 'zzoqix' to df else stop 'no dict'\n"
-                      "   write 'D':@fm:1:@fm:'':@fm:'Colour':@fm:'10L':@fm:'S' on df, 'colour'\n"
+                      "   write 'D':@fm:1:@fm:'':@fm:'Color':@fm:'10L':@fm:'S' on df, 'color'\n"
                       "   write 'red' on f, 'a'\n   write 'blue' on f, 'b'\n   write 'red' on f, 'c'\n   write 'green' on f, 'd'\n"
                       "   crt 'IX FILE MADE'\n"
                       "end\n"))
-        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1", "CREATE.INDEX zzoqix colour", "BUILD.INDEX zzoqix colour")
+        out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1", "CREATE.INDEX zzoqix color", "BUILD.INDEX zzoqix color")
         row("119 CONTROL: the file and its index were made and built",
-            has(out, r"IX FILE MADE") and has(out, r"Added index for colour") and has(out, r"4 records processed"), out[-300:])
+            has(out, r"IX FILE MADE") and has(out, r"Added index for color") and has(out, r"4 records processed"), out[-300:])
 
         def listed(no, *cmds):
             """Run the commands, then show select list no as ITEMS[a,b,c]; returns (text, set of items or None)."""
@@ -1180,30 +1180,30 @@ def run_verbs(box, sysd, bp):
             m = re.search(r"(?m)^ITEMS\[(.*)\]\s*$", text)
             return text, (set(m.group(1).split(",")) - {""} if m else None)
 
-        text, items = listed(0, "SELECTINDEX zzoqix colour")
+        text, items = listed(0, "SELECTINDEX zzoqix color")
         row("119: SELECTINDEX file index gives the values held in the index", items == {"red", "blue", "green"}, "%r %s" % (items, text[-300:]))
         row("119: ...and says how many", has(text, r"3 record\(s\) selected to select list 0"), text[-300:])
-        text, items = listed(0, "SELECTINDEX zzoqix colour red")
+        text, items = listed(0, "SELECTINDEX zzoqix color red")
         row("119: with a value it gives the ids of the records that have it", items == {"a", "c"}, "%r %s" % (items, text[-300:]))
         row("119: ...and says how many", has(text, r"2 record\(s\) selected to select list 0"), text[-300:])
-        text, items = listed(0, "SELECTINDEX zzoqix colour purple")
+        text, items = listed(0, "SELECTINDEX zzoqix color purple")
         row("119: a value no record has gives no list (READLIST finds none) and the count says 0",
             items == {"NONE"} and has(text, r"0 record\(s\) selected to select list 0"), "%r %s" % (items, text[-300:]))
-        text, items = listed(0, "SELECTINDEX ZZOQIX COLOUR red")
+        text, items = listed(0, "SELECTINDEX ZZOQIX COLOR red")
         row("119: the file and index names are found in whichever case", items == {"a", "c"}, "%r %s" % (items, text[-300:]))
-        text, items = listed(1, "SELECTINDEX zzoqix colour blue TO 1")
+        text, items = listed(1, "SELECTINDEX zzoqix color blue TO 1")
         row("119: TO n builds that list instead", items == {"b"} and has(text, r"1 record\(s\) selected to select list 1"), "%r %s" % (items, text[-300:]))
         text = sess(box, "SELECTINDEX zzoqix nosuchindex")
-        row("119: an index that does not exist is reported", has(text, r"Unrecognised index name \(nosuchindex\)"), text[-300:])
-        text = sess(box, "SELECTINDEX zzoqnone colour")
+        row("119: an index that does not exist is reported", has(text, r"Unrecognized index name \(nosuchindex\)"), text[-300:])
+        text = sess(box, "SELECTINDEX zzoqnone color")
         row("119: a file that does not exist is reported", has(text, r"File not found"), text[-300:])
         text = sess(box, "SELECTINDEX zzoqix")
         row("119: no index name is reported", has(text, r"Index name required"), text[-300:])
         text = sess(box, "SELECTINDEX")
         row("119: no file name is reported", has(text, r"File name required"), text[-300:])
-        text = sess(box, "SELECTINDEX zzoqix colour red TO")
+        text = sess(box, "SELECTINDEX zzoqix color red TO")
         row("119: TO with no number is reported", has(text, r"Select list number missing or invalid"), text[-300:])
-        text = sess(box, "SELECTINDEX zzoqix colour red blue")
+        text = sess(box, "SELECTINDEX zzoqix color red blue")
         row("119: a further word is reported", has(text, r"Unexpected token \(blue\)"), text[-300:])
         text = sess(box, "SELECT.DIR /tmp TO", "GET.LIST zzoqnone TO")
         row("119 (found on the way): SELECT.DIR and GET.LIST said 'Error writing saved list record' for a missing list number; they say what 3271 says",
@@ -1248,9 +1248,9 @@ def run_verbs(box, sysd, bp):
         text = sess(box, "TERM 100,30,90,40,5")
         row("466: a fifth number is an unexpected token", has(text, r"Unexpected token"), text[-300:])
         text = sess(box, "TERM ,,100,40 zznosuchterm")
-        row("466: a terminal type after four numbers is still read", has(text, r"Unrecognised terminal name"), text[-300:])
+        row("466: a terminal type after four numbers is still read", has(text, r"Unrecognized terminal name"), text[-300:])
         text = sess(box, "TERM 120,36 zznosuchterm")
-        row("466 CONTROL: ...and after two", has(text, r"Unrecognised terminal name"), text[-300:])
+        row("466 CONTROL: ...and after two", has(text, r"Unrecognized terminal name"), text[-300:])
 
         # --- SP.VIEW: X deletes the item shown (450) ---------------------------------------------------------
         write(probe, ("   execute 'CREATE.FILE zzoqsv' capturing j1\n"
@@ -1512,7 +1512,7 @@ def run_verbs(box, sysd, bp):
         out = sess(box, "BASIC bp zzoqp1", "RUN bp zzoqp1")
         row("371: SORTCLEAR empties a sort and it can be used again", has(out, r"CLR=\[\]/0/y,z"), out[-300:])
         # The BTREE statements are internal-only, so these programs are compiled and run by `sd -internal` (the first version of this
-        # row used an ordinary session, got "Unrecognised statement" and tested nothing).  A real BTree is the control for each
+        # row used an ordinary session, got "Unrecognized statement" and tested nothing).  A real BTree is the control for each
         # statement: it must not be refused, or a refusal of the sort variable proves only that the statement was wrong.
         # (label, the statement, what a real BTree needs first).  MODIFY works on the current element, so its control finds one first;
         # the sort variable gets the bare statement, which the guard refuses before anything else is looked at.

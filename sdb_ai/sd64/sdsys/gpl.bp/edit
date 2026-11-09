@@ -431,7 +431,7 @@ compile.record.query:
       case response = 'G'
          execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' GLOBAL'
       case response = 'N'
-         crt in.file.name : ' ' : in.record.name : ' not catalogued'
+         crt in.file.name : ' ' : in.record.name : ' not cataloged'
    end case
 return
 

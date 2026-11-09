@@ -12,8 +12,8 @@
 # 11 Oct 26 dm  Written for 1.2-0 bundle A-8.
 # END-HISTORY
 #
-# The trigger function is a catalogued BASIC subroutine; SET.TRIGGER refuses a name that is not catalogued
-# (3003), so the fixture compiles and catalogues one.  The instrument is what SET.TRIGGER and LIST.TRIGGERS
+# The trigger function is a cataloged BASIC subroutine; SET.TRIGGER refuses a name that is not cataloged
+# (3003), so the fixture compiles and catalogs one.  The instrument is what SET.TRIGGER and LIST.TRIGGERS
 # print; the CONTROL for ALL is the same command with an explicit mode, which must give a smaller list.
 #
 #   1  SET.TRIGGER file name ALL (openQM ref 388)

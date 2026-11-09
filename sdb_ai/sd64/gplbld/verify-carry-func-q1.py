@@ -31,7 +31,7 @@ passed = failed = 0
 
 # (label, BASIC statements one per line leaving the value in x, wanted)
 CASES = []
-AUX = []   # (record name in bp, text): a subroutine, compiled and catalogued before the rows run
+AUX = []   # (record name in bp, text): a subroutine, compiled and cataloged before the rows run
 
 
 def case(label, body, want, has=(), lacks=()):

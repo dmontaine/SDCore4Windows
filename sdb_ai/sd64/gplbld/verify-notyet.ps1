@@ -341,7 +341,7 @@ try {
         exit 2
     }
 
-    # The tree has to match source: this asserts a SHIPPED script's behaviour,
+    # The tree has to match source: this asserts a SHIPPED script's behavior,
     # so a stale check-install.ps1 would answer for a version nobody has.
     & (Join-Path $PSScriptRoot 'assert-current.ps1')
     if ($LASTEXITCODE -ne 0) {
@@ -453,9 +453,9 @@ try {
     # The reason the third outcome exists at all.
     Note 'a [not yet] is not a failure - exit code' 0 $stale.Code
 
-    # The tree is unreadable on this token, so the catalogue count cannot be
+    # The tree is unreadable on this token, so the catalog count cannot be
     # answered either.  It must defer, not accuse.
-    Note 'the catalogue check defers rather than accusing' $true `
+    Note 'the catalog check defers rather than accusing' $true `
         (($t -match (Wrapped '[not yet]')) -and -not ($t -match (Wrapped '[PROBLEM]')))
 
     Write-Output ""

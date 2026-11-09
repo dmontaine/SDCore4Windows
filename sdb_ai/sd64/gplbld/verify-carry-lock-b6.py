@@ -202,10 +202,10 @@ def compile_all(box, sysd):
     n = len(re.findall(r"(?m)^Compiled 1 program\(s\) with no errors", out))
     if n != len(PROGS):
         bail("%d of %d programs compiled:\n%s" % (n, len(PROGS), out[-1500:]))
-    # the class is called by its catalogued name; an entry left by an earlier run is removed first
+    # the class is called by its cataloged name; an entry left by an earlier run is removed first
     out = sess(box, "DELETE.CATALOG zzb6cls", "CATALOG bp zzb6cls")
-    if re.search(r"(?m)^zzb6cls added to private catalogue", out) is None:
-        bail("the class module was not catalogued:\n" + out[-600:])
+    if re.search(r"(?m)^zzb6cls added to private catalog", out) is None:
+        bail("the class module was not cataloged:\n" + out[-600:])
 
 
 def deadlock_run(box, with_query=True):

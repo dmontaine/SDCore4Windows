@@ -329,7 +329,7 @@ have.index.type:
             end
 
          case 1
-            stop 'Internal error - AK type is unrecognised (':type:')'
+            stop 'Internal error - AK type is unrecognized (':type:')'
       end case
 
       if right.justify then ak.flags = bitor(ak.flags, AK$RIGHT)
@@ -537,7 +537,7 @@ build.index:
             itype.code = field(ak.info, @fm, DICT.ITYPE.OBJECT, 99999)
             mv = ak.info<DICT.S.M> = 'M'
          case 1
-            stop 'Internal error: AK type not recognised (:'ak.type:')'
+            stop 'Internal error: AK type not recognized (:'ak.type:')'
       end case
 
       index.nulls = not(ak.info<1,3>)

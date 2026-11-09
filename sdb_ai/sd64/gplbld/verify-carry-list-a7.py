@@ -13,7 +13,7 @@
 # END-HISTORY
 #
 # THE INSTRUMENT IS THE LIST ITSELF: a BASIC program reads select list 0 or 1 and prints each id, so a row
-# says what the list holds and not what a command said about it.  Each leg has a CONTROL of the old behaviour.
+# says what the list holds and not what a command said about it.  Each leg has a CONTROL of the old behavior.
 #
 #   1  SAVE.LIST KEEP (openQM ref 387), COUNT.SUP (2)
 #   2  GET.LIST DELETING (384), COUNT.SUP (2)

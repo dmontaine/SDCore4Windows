@@ -27,7 +27,7 @@
 #   4  a mode subset, and the default (pre-write and pre-delete)
 #   5  %header% is not a record: SELECT, COUNT and CLEAR.FILE leave it out; the id %header% does not reach it
 #   6  what does not call the trigger: WRITESEQ
-#   7  a header naming a function that is not catalogued, one with a name no function can have, no header, and removing a trigger
+#   7  a header naming a function that is not cataloged, one with a name no function can have, no header, and removing a trigger
 
 import os
 import re
@@ -306,7 +306,7 @@ def main():
         with open(hdr, "wb") as f:
             f.write(b"trigger=zznosuch\nmodes=1\n")
         out = sess(box, "RUN bp zzdt_wr")
-        row("a header that names a function that is not catalogued: the first call that needs it says so (message 1409)",
+        row("a header that names a function that is not cataloged: the first call that needs it says so (message 1409)",
             "not loaded for" in out and "zznosuch" in out, out[-300:])
         for text, label in ((b"trigger=Bad Name!\nmodes=3\n", "a name no function can have"), (b"garbage\n", "text that is not a header"),
                             (b"", "an empty header")):

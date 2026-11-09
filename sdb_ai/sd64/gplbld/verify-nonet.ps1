@@ -15,7 +15,7 @@
 # stay protected by requiring an ssh tunnel.
 #
 # THE CONTROLS ARE THE POINT OF THIS SCRIPT.  Proving three verbs are absent is
-# easy and proves little - a botched removal that took APISRVR or the catalogue
+# easy and proves little - a botched removal that took APISRVR or the catalog
 # with it would pass every "is it gone?" check ever written.  So the file layer
 # is asked what SURVIVED as well as what went.
 #
@@ -25,7 +25,7 @@
 # and writing one through SD needs ED, which is interactive and cannot be driven
 # down a pipe (see verify-fold.ps1's header for what that costs).  The branch
 # that read the semicolon is deleted outright rather than disabled, so what is
-# checked here is that the programs and catalogue entries behind it are gone and
+# checked here is that the programs and catalog entries behind it are gone and
 # that ordinary file access is untouched.
 #
 # UNLOCK RIDES ALONG because it shipped in the same cycle, not because it is
@@ -111,7 +111,7 @@ foreach ($n in @('DELSRVR', 'SETSRVR', 'LISTSRVR')) {
 Note 'gcat still has $APISRVR'     $true (Test-Path -LiteralPath (Join-Path $gcat '$APISRVR'))
 Note 'gpl.bp.out still has APISRVR' $true (Test-Path -LiteralPath (Join-Path $bpout 'APISRVR'))
 
-# And the catalogue as a whole is still populated - a removal that emptied it
+# And the catalog as a whole is still populated - a removal that emptied it
 # would also pass "is DELSRVR absent?".
 $gcatCount = @(Get-ChildItem -LiteralPath $gcat -File -ErrorAction SilentlyContinue).Count
 Write-Output ("  gcat holds $gcatCount entries")
@@ -126,7 +126,7 @@ $out = Invoke-SD @("LIST VOC 'SET.SERVER' 'DELETE.SERVER' 'LIST.SERVERS' 'UNLOCK
 # 26 Oct 26 - THESE THREE ROWS ASSERTED ABSENCE AND ARE NOW THE OTHER WAY ROUND.  SDNet came back on 25 Oct as Linux S.65 (RELEASE_1.1 171): SET.SERVER,
 # DELETE.SERVER and LIST.SERVERS are in the VOC again, behind the NET gate and with the stored logins in sd-net, which is NOT the removed mechanism (no
 # "server;file" in a VOC path, no password in sd.conf).  The first run on a real install failed all three (26 Oct, guest b256), the stale expectation
-# found by running it.  The rows that the old mechanism's removal left standing (APISRVR, the catalogue, COUNT VOC, UNLOCK) are unchanged.
+# found by running it.  The rows that the old mechanism's removal left standing (APISRVR, the catalog, COUNT VOC, UNLOCK) are unchanged.
 foreach ($v in @('SET.SERVER', 'DELETE.SERVER', 'LIST.SERVERS')) {
     Note "$v is in the VOC (SDNet's verbs came back with S.65)" $true (-not ($out -match ("'" + [regex]::Escape($v) + "' not found")))
 }
@@ -166,7 +166,7 @@ Note 'and no longer the description text' $false ($out -match 'Verb to unlock re
 Write-Output '  --- CT VOC UNLOCK said: ---'
 Write-Output $out
 
-# Behaviour, relative rather than against a hardcoded message: an unknown verb
+# Behavior, relative rather than against a hardcoded message: an unknown verb
 # and UNLOCK must not produce the same answer.
 $unknown = Invoke-SD @('ZZNOSUCHVERB')
 $unlock  = Invoke-SD @('UNLOCK')

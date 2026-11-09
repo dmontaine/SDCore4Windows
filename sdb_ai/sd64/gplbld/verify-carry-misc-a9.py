@@ -121,7 +121,7 @@ def main():
         sess(box, "BASIC bp zza9dc", "CATALOG bp zza9dc LOCAL", "DECATALOG zza9dc", quiet=True)
         sg = segments(out, c)
         row("THE ROW: DECATALOG says the local entry is deleted",
-            re.search(r"zza9dc deleted from the local catalogue", sg.get(2, "")) is not None, "got %r" % sg.get(2))
+            re.search(r"zza9dc deleted from the local catalog", sg.get(2, "")) is not None, "got %r" % sg.get(2))
         row("THE ROW: and the object code is gone as well", not os.path.exists(obj), "bp.out/zza9dc still there")
 
         say("\n--- legs 2 and 3: CT (refs 242, 373) --------------------------------------------")

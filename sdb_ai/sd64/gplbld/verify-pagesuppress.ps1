@@ -24,7 +24,7 @@
     prompt, and the control fixes that one heading is what NO.PAGE draws.
 
     ***TWO LEGS, AND THE FIRST IS THE CONTROL.***  Leg A lists with NO.PAGE,
-    which is the behaviour S is meant to reproduce, and fixes the expected
+    which is the behavior S is meant to reproduce, and fixes the expected
     counts from the install itself rather than from a number typed here.  Leg B
     lists without it and answers the first prompt with S.  A leg B that never
     reached a prompt would pass every "no more headings" row by default, so
@@ -179,7 +179,7 @@ Row 'leg B listed every record the control listed' ($b.Listed -eq $a.Listed) `
 # The control is what says a heading should appear once: NO.PAGE's whole listing
 # carries exactly the one heading page 1 has.
 Row 'the control: NO.PAGE draws the heading once' ($a.Headings -eq 1) `
-    "NO.PAGE drew $($a.Headings) headings - the behaviour S is compared against is not what this test assumes"
+    "NO.PAGE drew $($a.Headings) headings - the behavior S is compared against is not what this test assumes"
 Row 'leg B drew page 1 (its heading precedes the prompt)' (($b.Headings - $b.HeadingsAfter) -eq 1) `
     "$($b.Headings - $b.HeadingsAfter) heading(s) before the prompt"
 Row 'after S, no further page headings' ($b.HeadingsAfter -eq 0) `

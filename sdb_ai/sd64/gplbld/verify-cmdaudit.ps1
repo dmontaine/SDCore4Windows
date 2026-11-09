@@ -11,7 +11,7 @@
 # batch.command = ''", with batch.command HOISTED out of the batch gate below
 # it so both tests can see it.  The hoist is the fragile part: move it back, or
 # drop it, and batch.command is empty at the password test for every session,
-# which silently restores the behaviour the ruling removed.
+# which silently restores the behavior the ruling removed.
 #
 # ***WHAT IT PROVES, AND WHAT IT DOES NOT.***  It proves the GATE'S INPUT: that
 # LOGIN computed a non-empty batch.command for "sd <command>" and an empty one

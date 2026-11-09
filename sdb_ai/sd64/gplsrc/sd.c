@@ -740,7 +740,7 @@ Private bool comlin(int argc, char *argv[]) {
   return TRUE;
 
 unrecognised:
-  fprintf(stderr, "Unrecognised argument '%s'\n", argv[arg]);
+  fprintf(stderr, "Unrecognized argument '%s'\n", argv[arg]);
 help:
   fprintf(stderr, "\nUsage:\n");
   fprintf(stderr, "   sd xxx\n");

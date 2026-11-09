@@ -122,7 +122,7 @@
     branches on which state it actually reached - both halves gone, or both
     halves kept and RECORDED under ProgramData\SD\profile-reclaim - and asserts
     the right thing in each.  A single "the entry is gone" would now score the
-    correct keep-both behaviour as a failure.
+    correct keep-both behavior as a failure.
 
     22 Sep 26 - STEP 7 PINS <prefix>d's ACCOUNT DIRECTORY OPEN, NOT ITS
     PROFILE - the fourth subject, and a different fix from step 6's.
@@ -779,7 +779,7 @@ try {
         Skip 'message 10075 NOT shown'    'no profile was made, so nothing could be left behind'
     } else {
         # BOTH HALVES.  Removing the directory alone leaves the ProfileList
-        # entry, and Windows then honours it the next time an account of that
+        # entry, and Windows then honors it the next time an account of that
         # name appears by putting the new profile at C:\Users\<name>.<COMPUTER>.
         # That is where the four .GITORLI profiles in DELETE_USER's history
         # came from, so the registry entry is the half worth asserting on.

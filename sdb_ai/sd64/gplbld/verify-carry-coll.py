@@ -344,7 +344,7 @@ CASES = [
     ("ERR: nor can JSON that is only a number", OPENF + "write '5' on f, 'bad'", "ERR:writing record"),
     # This row said the write must fail ("ERR:writing record").  The manual says an element a file cannot hold is stored
     # as an SQL style null (collection files); it is the 12 Oct change to coll_record_text(), and the whole-set run
-    # found this row still asserting the old behaviour.
+    # found this row still asserting the old behavior.
     ("a collection with something in it that has no JSON form is written, the element as a null",
      OPENF + "c = collection()\n   c{'f'} = f\n   write c on f, 'bad'\n   read r from f, 'bad' then x = jbuild(r):'|':status() else x = 'missing'",
      "{\"f\":null}|0"),
@@ -360,7 +360,7 @@ CASES = [
 ]
 
 
-# Subroutines the cases above call.  Each is written, compiled and catalogued LOCAL before the cases run.
+# Subroutines the cases above call.  Each is written, compiled and cataloged LOCAL before the cases run.
 SUBS = {
     "zzcsub1": "   subroutine zzcsub1(c)\n   c{'k'} = 'set by sub'\n   return\nend\n",
     "zzcsub2": "   subroutine zzcsub2(out)\n   out = collection()\n   out{'a'} = 1\n   return\nend\n",

@@ -879,7 +879,7 @@ int16_t lookup(char* id, char* names[], int16_t ct) {
   for (i = 0; i < ct; i++)
     if (strcmp(id, names[i]) == 0)
       return i;
-  err("Unrecognised capability name '%s'\n", id);
+  err("Unrecognized capability name '%s'\n", id);
   errors++;
   return -1;
 }

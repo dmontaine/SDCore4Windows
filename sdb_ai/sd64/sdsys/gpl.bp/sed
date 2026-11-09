@@ -7113,7 +7113,7 @@ build.menu.defs:
    mf = (if indent then 'C' else '') ; ml = '&Indent mode' ; mc = 'c:INDENT' ; gosub add.item
    mf = (if read.only then 'D' else '') ; ml = 'E&xpand tabs' ; mc = 'c:EXPAND.TABS' ; gosub add.item
    ml = '&Stamp' ; mc = 'c:STAMP' ; gosub add.item
-   mf = (if syn.on then 'C' else '') ; ml = 'Syntax &colour' ; mc = 'c:SYNTAX' ; gosub add.item
+   mf = (if syn.on then 'C' else '') ; ml = 'Syntax &color' ; mc = 'c:SYNTAX' ; gosub add.item
    mf = (if mouse.want then 'C' else '') ; ml = 'M&ouse' ; mc = 'c:MOUSE' ; gosub add.item
    ml = 'Release &lock' ; mc = 'c:RELEASE' ; gosub add.item
    ml = '&Keys in use' ; mc = 'c:KEYS' ; gosub add.item
@@ -8258,7 +8258,7 @@ compile:
                      continue  ;* Already got next token
 
                   case 1
-                     message = 'Unrecognised option : ' : token
+                     message = 'Unrecognized option : ' : token
                      goto ext.error
                end case
                gosub get.ext.token

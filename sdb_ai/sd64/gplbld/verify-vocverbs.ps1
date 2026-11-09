@@ -37,7 +37,7 @@
 #       6146 with N reaches the same skip.part, so 10117 alone does not
 #       separate fix from defect - the disqualifier is the whole check.
 #   15  2627 "Deleted index F1" - the UPPER-case real name, from a verb typed
-#       in lower case.  Disqualifier 2604 "Unrecognised index name (f1)".
+#       in lower case.  Disqualifier 2604 "Unrecognized index name (f1)".
 #   26  6136/6141/6144, and the ABSENCE of 6135 and 6140.
 #
 # ***ENTRY 26 IS NOT TESTED THE WAY START HERE SUGGESTS.***  That box says
@@ -49,7 +49,7 @@
 # what runs here.
 #
 # ***MATCHING IS CASE-SENSITIVE, AND THAT IS THE POINT.***  Three of the five
-# fixes ARE case behaviour, so IgnoreCase would make the disqualifiers match
+# fixes ARE case behavior, so IgnoreCase would make the disqualifiers match
 # their own success wording - "'ZZPRFD' not found" would match the lower-case
 # line the fix DOES print, and the run would fail a working build.  Test-Say
 # passes Multiline only.  Every pattern below is therefore written in the exact
@@ -538,15 +538,15 @@ $e15c = $lastSD
 # CONTROL: a name that really is unknown is reported AS TYPED, not upcased.  The
 # fold must correct names that match something, and only those.
 Note 'entry 15 control: an unknown name is echoed as typed' $true `
-     (Test-Say $e15c ('Unrecognised index name \(' + [regex]::Escape($Prefix + 'nope') + '\)')) $true
+     (Test-Say $e15c ('Unrecognized index name \(' + [regex]::Escape($Prefix + 'nope') + '\)')) $true
 Note 'entry 15 control: it was NOT upcased on the way out' $false `
-     (Test-Say $e15c ('Unrecognised index name \(' + [regex]::Escape(($Prefix + 'nope').ToUpper()) + '\)')) $true
+     (Test-Say $e15c ('Unrecognized index name \(' + [regex]::Escape(($Prefix + 'nope').ToUpper()) + '\)')) $true
 
 # DECISIVE: lower case in, the real UPPER-case name back out of 2627.
 Note 'entry 15: "delete.index ... f1" deleted index F1' $true `
      (Test-Say $e15c 'Deleted index F1') $true
-Note 'entry 15: f1 was NOT reported unrecognised' $false `
-     (Test-Say $e15c 'Unrecognised index name \(f1\)') $true
+Note 'entry 15: f1 was NOT reported unrecognized' $false `
+     (Test-Say $e15c 'Unrecognized index name \(f1\)') $true
 Note 'entry 15: the file has no indices afterwards' $true `
      (Test-Say $e15c 'File has no indices') $true
 

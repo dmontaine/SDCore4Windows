@@ -157,8 +157,8 @@ $include syscom terminfo.h
          k = T$PRTR.ON              ; s = 'mc5   : Turn printer on' ; gosub show
          k = T$SCROLL.FORWARD       ; s = 'ind   : Scroll forward' ; gosub show
          k = T$SCROLL.BACK          ; s = 'ri    : Scroll backward' ; gosub show
-         k = T$SET.FOREGROUND       ; s = 'setf  : Set foreground colour attribute' ; gosub show
-         k = T$SET.BACKGROUND       ; s = 'setb  : Set background colour attribute' ; gosub show
+         k = T$SET.FOREGROUND       ; s = 'setf  : Set foreground color attribute' ; gosub show
+         k = T$SET.BACKGROUND       ; s = 'setb  : Set background color attribute' ; gosub show
          k = T$USER0                ; s = 'u0    : User 0  @(-100)' ; gosub show
          k = T$USER1                ; s = 'u1    : User 1  @(-101)' ; gosub show
          k = T$USER2                ; s = 'u2    : User 2  @(-102)' ; gosub show

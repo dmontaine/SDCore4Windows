@@ -21,7 +21,7 @@
 # The modes (openQM manual, "Line Terminator Selection"):
 #   0 LF    LF ends a line, CR is data.                         1 CRLF  CR LF ends a line; a lone CR or LF is data.
 #   2 BOTH  CR LF or LF ends a line; a lone CR is data.         3 NOCR  LF ends a line; every CR is thrown away.
-# Not set at all (no FCONTROL, no letter) is the old behaviour: a directory file READ is mode 0, WRITE ends a line with LF, and
+# Not set at all (no FCONTROL, no letter) is the old behavior: a directory file READ is mode 0, WRITE ends a line with LF, and
 # READSEQ is mode 2.  The last line end of a record is not a field mark ("a" + terminator reads as "a").
 #
 #   1  FCONTROL(fvar, FC$CRLF, ...): the mode it was in, -1 asks, a value outside 0-3 is STATUS 1 and changes nothing, a hashed file

@@ -1,4 +1,4 @@
-# verify-catgate.ps1 - prove that reaching the GLOBAL catalogue requires
+# verify-catgate.ps1 - prove that reaching the GLOBAL catalog requires
 # administrator rights by every route, and that nothing else moved.
 # PROJECT_STATUS.md section 8, UPSTREAM_FIXES.md 7.
 #
@@ -8,7 +8,7 @@
 #
 # Exit 0 all checks passed, 1 a check failed, 2 the test could not be run.
 #
-# WHAT WAS WRONG.  CATALOG chooses the global catalogue two ways: the GLOBAL
+# WHAT WAS WRONG.  CATALOG chooses the global catalog two ways: the GLOBAL
 # keyword, which has always tested K$ADMINISTRATOR, and a call name beginning
 # with one of "*!_$", which set the same mode in three places and tested
 # nothing.  So "CATALOG BP MYPROG GLOBAL" was refused and "CATALOG BP $MYPROG"
@@ -28,7 +28,7 @@
 #
 # A CONSEQUENCE WORTH KNOWING: only SDSYS is administrator.  CPROC sets the flag
 # for SDSYS and clears it for everything else, so an ADMINISTRATOR-tier account
-# cannot catalogue globally either while it is standing in its own account.
+# cannot catalog globally either while it is standing in its own account.
 # That is why the control below is run in SDSYS and not in a third tier.
 #
 # THE EVIDENCE IS THE FILESYSTEM, NOT THE MESSAGE.  gcat and the account's cat
@@ -85,8 +85,8 @@ $ctlFile   = $Account.ToUpper() + 'BP'
 $ctlDir    = Join-Path $sdsys $ctlFile
 $ctlName   = $Account.ToUpper() + 'G'
 # 13 Sep 26 - RELEASE_1.1 6, CATALOG prompt 3035.  An UNPREFIXED call name
-# catalogued with the GLOBAL keyword, so a private catalogue of the same name
-# meets "Program is also in global catalogue".  Per-run, for the reason above.
+# cataloged with the GLOBAL keyword, so a private catalog of the same name
+# meets "Program is also in global catalog".  Per-run, for the reason above.
 $gpName    = $Account.ToUpper() + 'U'
 $sysCat    = Join-Path $sdsys 'cat'
 $userName  = 'SDGATE2'
@@ -124,13 +124,13 @@ function Note($check, $expected, $got) {
 # itself LOGTOs.
 #
 # ***READ THE REFUSAL ROWS ON THE FIRST RUN BEFORE BELIEVING ANY OF THEM.***
-# -Internal adds K$INTERNAL to a session whose whole subject is who may catalogue
+# -Internal adds K$INTERNAL to a session whose whole subject is who may catalog
 # globally.  CPROC clears K$ADMINISTRATOR on the way out of SDSYS, so the unprivileged
 # leg should still be refused - but the process-wide internal_mode stays set, and if
-# some gate honours it these rows will FAIL, not pass.  THAT DIRECTION IS LOUD, and
+# some gate honors it these rows will FAIL, not pass.  THAT DIRECTION IS LOUD, and
 # this is what it rests on, read from the rows rather than assumed: every refusal row
 # REQUIRES the refusal message ('administrator privileges'), which an ADMITTED
-# catalogue call does not print; and the three destructive ones (section 4) also
+# catalog call does not print; and the three destructive ones (section 4) also
 # require gcat to be unchanged, which the message cannot fake.  ONE ROW IS
 # MESSAGE-ONLY - section 3's "refused by the pre-existing GLOBAL gate" checks no file -
 # so if the door admits that call it fails on the missing message AND leaves a
@@ -146,7 +146,7 @@ function Note($check, $expected, $got) {
 function Invoke-SD([string[]]$commands, [int]$TimeoutSec = 90) {
     # 27 Oct 26 - "LOGTO <the fixture account>" NOW MEANS SIGNING ON AS IT.  The edit gates (bp.edit, voc.edit, dict.edit) are loaded at sign-on and LOGTO neither
     # reloads nor restores them (login:962, owner 17 Oct), so a LOGTO from the SDSYS seat kept SDSYS's closed gates and every compile was refused with "needs bp.edit"
-    # whatever the account was given (b256, b300, b305, b310).  Over ssh the account's own record decides, which is the case the global-catalogue gate is for.
+    # whatever the account was given (b256, b300, b305, b310).  Over ssh the account's own record decides, which is the case the global-catalog gate is for.
     if ($commands.Count -gt 0 -and $commands[0] -match '^\s*LOGTO\s+(\S+)\s*$' -and $Matches[1] -ieq $Account) {
         $rest = @($commands | Select-Object -Skip 1)
         $r = Invoke-SdAsTestUser -Name $Account.ToLower() -Password $script:pw -Commands $rest
@@ -289,7 +289,7 @@ Assert-SdSeat -Label 'verify-catgate'
 Assert-SdSeat -Label 'verify-catgate' -Internal
 
 # The program both halves compile.  Trivial on purpose: this tests who may
-# catalogue, not what the compiler does.
+# catalog, not what the compiler does.
 $src = @(
     '* Created by verify-catgate.ps1 - safe to delete'
     "   crt 'SDGATE OK'"
@@ -311,7 +311,7 @@ $loginBefore = (Get-Item -LiteralPath $loginPath).Length
 
 # ---------------------------------------------------------------------------
 Write-Output ''
-Write-Output '=== 1. An administrator can still catalogue globally (the control) ========'
+Write-Output '=== 1. An administrator can still catalog globally (the control) ========'
 
 # Without this the whole test passes on a gate that refuses everybody, which
 # would be a regression dressed as a fix.
@@ -352,7 +352,7 @@ if (-not (Test-Path -LiteralPath (Join-Path ($ctlDir + '.OUT') $ctlName))) {
 }
 
 $out = Invoke-SD @("CATALOG $ctlFile `$$ctlName")
-Note "SDSYS: `$$ctlName added to global catalogue" $true ($out -match 'added to global catalogue')
+Note "SDSYS: `$$ctlName added to global catalog" $true ($out -match 'added to global catalog')
 Note "SDSYS: gcat gained `$$ctlName"               $true (Test-Path -LiteralPath (Join-Path $gcat ('$' + $ctlName)))
 if (-not (Test-Path -LiteralPath (Join-Path $gcat ('$' + $ctlName)))) {
     Write-Output '  --- SD said: ---'; Write-Output $out
@@ -378,30 +378,30 @@ $gpGcat = Join-Path $gcat $gpName
 $gpPriv = Join-Path $sysCat $gpName
 $out = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName GLOBAL")
 Write-Output '  --- SD said: ---'; Write-Output $out
-$gpOk = ($out -match "$gpName added to global catalogue") -and (Test-Path -LiteralPath $gpGcat)
-Note "3035 fixture: $gpName (unprefixed) is in the global catalogue" $true $gpOk
+$gpOk = ($out -match "$gpName added to global catalog") -and (Test-Path -LiteralPath $gpGcat)
+Note "3035 fixture: $gpName (unprefixed) is in the global catalog" $true $gpOk
 if ($gpOk) {
     $e35 = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName", '')
     Write-Output '  --- SD said (Enter): ---'; Write-Output $e35
-    Note '3035: the private catalogue was written'                 $true ($e35 -match "$gpName added to private catalogue")
-    Note '3035: the prompt was reached, showing (y/<n>)'           $true ($e35 -match 'Program is also in global catalogue\. Remove \(y/<n>\)\?')
+    Note '3035: the private catalog was written'                 $true ($e35 -match "$gpName added to private catalog")
+    Note '3035: the prompt was reached, showing (y/<n>)'           $true ($e35 -match 'Program is also in global catalog\. Remove \(y/<n>\)\?')
     Note '3035: ENTER kept the global entry'                       $true (Test-Path -LiteralPath $gpGcat)
     Note '3035: the session finished (no runaway loop)'            $false ($e35 -match 'did not finish in')
 
     $y35 = Invoke-SD @("CATALOG $ctlFile $gpName $ctlName", 'Y')
     Write-Output '  --- SD said (Y): ---'; Write-Output $y35
-    Note 'CONTROL 3035: the prompt was reached again'              $true ($y35 -match 'Program is also in global catalogue')
+    Note 'CONTROL 3035: the prompt was reached again'              $true ($y35 -match 'Program is also in global catalog')
     Note 'CONTROL 3035: Y removed the global entry'                $false (Test-Path -LiteralPath $gpGcat)
 }
 # The private entry this section made in SDSYS, and a global one a failed Y
 # left behind.  Remove-Fixtures repeats both, so an early exit does not strand
 # them.  DELCAT asks nothing (no "input" in it); an unprefixed name without the
-# keyword is deleted from the PRIVATE catalogue, and GLOBAL takes the global one.
+# keyword is deleted from the PRIVATE catalog, and GLOBAL takes the global one.
 $null = Invoke-SD @("DELETE.CATALOG $gpName", "DELETE.CATALOG $gpName GLOBAL")
 foreach ($p in @($gpGcat, $gpPriv)) {
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue }
 }
-Note "3035 cleanup: no $gpName left in gcat or SDSYS's private catalogue" $false `
+Note "3035 cleanup: no $gpName left in gcat or SDSYS's private catalog" $false `
      ((Test-Path -LiteralPath $gpGcat) -or (Test-Path -LiteralPath $gpPriv))
 
 # ---------------------------------------------------------------------------
@@ -446,8 +446,8 @@ $pw  = New-SdTestPassword
 # (createa's keyword case, sysmsg 2018 - the whole command stops and no account
 # is made), so the access keyword is the whole of the line.
 # 27 Oct 26 - BP-ON ON THE FIXTURE.  Every account starts with every gate closed (S.64), so the compile below was refused for want of bp.edit ("Programs can only be
-# compiled or catalogued by an account that has bp.edit", read from the transcript this verifier now prints) and ten rows failed for that, not for the
-# global-catalogue gate they test.  The account is ordinary (not an administrator) and holds bp.edit, which is exactly the case the gate has to refuse.
+# compiled or cataloged by an account that has bp.edit", read from the transcript this verifier now prints) and ten rows failed for that, not for the
+# global-catalog gate they test.  The account is ordinary (not an administrator) and holds bp.edit, which is exactly the case the gate has to refuse.
 $out = Invoke-SD @(('CREATE.ACCOUNT USER ' + $Account + ' BOTH BP-ON'), $pw, $pw)
 if (-not (Test-Path -LiteralPath $acctDir)) {
     Write-Output '  --- SD said: ---'; Write-Output $out
@@ -458,7 +458,7 @@ Write-Output ("  created " + $Account + " (an ordinary account)")
 
 # Seed and compile the programs inside the account, so the refusals below fail
 # on the privilege test and not on a missing object.  TWO of them, for the
-# reason given at the local-catalogue check in section 5.
+# reason given at the local-catalog check in section 5.
 Set-Content -LiteralPath (Join-Path $acctDir ('BP\' + $userName))  -Value $src -Encoding Ascii
 Set-Content -LiteralPath (Join-Path $acctDir ('BP\' + $localName)) -Value $src -Encoding Ascii
 $acct = $Account.ToUpper()
@@ -489,7 +489,7 @@ Note 'account: refused by the pre-existing GLOBAL gate' $true ($out -match 'admi
 
 # ---------------------------------------------------------------------------
 Write-Output ''
-Write-Output '=== 4. THE FIX: global catalogue work is refused ==========================='
+Write-Output '=== 4. THE FIX: global catalog work is refused ==========================='
 
 $out = Invoke-SD @("LOGTO $acct", "CATALOG BP `$$userName")
 Note 'CATALOG BP $SDGATE2 refused'      $true ($out -match 'administrator privileges')
@@ -511,25 +511,25 @@ Note "and `$$ctlName survives in gcat"        $true (Test-Path -LiteralPath (Joi
 Write-Output ''
 Write-Output '=== 5. AND NOTHING ELSE MOVED: local and private still work ==============='
 
-# The owner asked for this explicitly: a programmer must keep cataloguing in
+# The owner asked for this explicitly: a programmer must keep cataloging in
 # any account they can LOGTO into.  Private is the default mode and writes the
 # account's own cat; LOCAL writes the account's own VOC.  Neither touches gcat.
 $out = Invoke-SD @("LOGTO $acct", "CATALOG BP $userName")
-Note 'CATALOG BP SDGATE2 (private) accepted' $true ($out -match 'added to private catalogue')
+Note 'CATALOG BP SDGATE2 (private) accepted' $true ($out -match 'added to private catalog')
 Note 'account cat gained SDGATE2'            $true (Test-Path -LiteralPath (Join-Path $acctDir ('cat\' + $userName)))
 
 # A DIFFERENT PROGRAM FOR THE LOCAL CATALOGUE, AND THAT IS NOT TIDINESS - IT IS
-# WHAT STOPS THIS SCRIPT HANGING.  Cataloguing the SAME name locally after
+# WHAT STOPS THIS SCRIPT HANGING.  Cataloging the SAME name locally after
 # privately makes CATALOG's check.private (CATALOG:463) find the private entry
-# and ask "Program is also in private catalogue. Remove?" inside an unbounded
+# and ask "Program is also in private catalog. Remove?" inside an unbounded
 # "loop ... until yn = 'Y' or yn = 'N' repeat".  Driving SD down a pipe there is
 # fatal: on the 11:27:32 install the prompt swallowed the remaining commands as
 # answers, neither was Y or N, and the run stopped dead at this line - no
 # sections 6 or 7, no summary, no exit code.  Two names means neither
-# cross-catalogue check ever fires.  NO.QUERY would also silence it, but it
+# cross-catalog check ever fires.  NO.QUERY would also silence it, but it
 # silences by DELETING the other entry, which is not what this is testing.
 $out = Invoke-SD @("LOGTO $acct", "CATALOG BP $localName LOCAL", "CT VOC $localName")
-Note 'CATALOG BP SDGATE3 LOCAL accepted'  $true ($out -match 'added to local catalogue')
+Note 'CATALOG BP SDGATE3 LOCAL accepted'  $true ($out -match 'added to local catalog')
 Note "account VOC holds $localName"       $false ($out -match ("'" + $localName + "' not found"))
 
 # ---------------------------------------------------------------------------
@@ -582,7 +582,7 @@ Write-Output ''
 Write-Output '=== 7. An administrator can still DELETE globally (the second control) ===='
 
 $out = Invoke-SD @("DELETE.CATALOG `$$ctlName")
-Note "SDSYS: `$$ctlName deleted from the global catalogue" $true ($out -match 'deleted from the global catalogue')
+Note "SDSYS: `$$ctlName deleted from the global catalog" $true ($out -match 'deleted from the global catalog')
 Note "SDSYS: gcat lost `$$ctlName"                         $false (Test-Path -LiteralPath (Join-Path $gcat ('$' + $ctlName)))
 
 # ---------------------------------------------------------------------------

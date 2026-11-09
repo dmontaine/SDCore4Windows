@@ -584,7 +584,7 @@ try {
         Fail "Step 3a expected two WHO reports; got $($whos.Count).  Session state cannot be trusted."
     }
     if ($whos[0] -ne $acct -or $whos[-1] -ne $acct) {
-        Fail ("LOGTO $acct was not honoured.  WHO before the creates said '$($whos[0])', WHO after said '$($whos[-1])'.  " +
+        Fail ("LOGTO $acct was not honored.  WHO before the creates said '$($whos[0])', WHO after said '$($whos[-1])'.  " +
               'CREATE.FILE therefore wrote into the WRONG account.')
     }
 
@@ -720,7 +720,7 @@ try {
         Fail "Step 3d expected two WHO reports; got $($whos2.Count) ($($whos2 -join ', ')).  Session state cannot be trusted."
     }
     if ($whos2[0] -ne $acct -or $whos2[-1] -ne $acct) {
-        Fail ("LOGTO $acct was not honoured in Step 3d.  WHO before the copies said '$($whos2[0])', WHO after said '$($whos2[-1])'.  " +
+        Fail ("LOGTO $acct was not honored in Step 3d.  WHO before the copies said '$($whos2[0])', WHO after said '$($whos2[-1])'.  " +
               'COPY would have written into the wrong VOC.')
     }
 

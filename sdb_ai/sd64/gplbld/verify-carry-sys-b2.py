@@ -13,7 +13,7 @@
 #               The 1053 row compares it with that, and with USERPOOL read through config().
 # 12 Oct 26 dm  Part 2: FILEINFO keys 1022-1040 as the manual numbers them (FL$COLLECTION moved from 1022 to 1035) and
 #               SYSTEM keys 33, 1019, 1033-1035, 1037, 1038, 1040, 1044, 1051-1054, 1057, 1058, 1065, 1070, 1076-1078,
-#               1080-1082.  A helper subroutine is catalogued for the keys that need a caller.
+#               1080-1082.  A helper subroutine is cataloged for the keys that need a caller.
 # 11 Oct 26 dm  Written for 1.2-0 bundle B-2: SYSTEM(35) users, SYSTEM(1016) users available, SYSTEM(1045) start
 #               time as a Unix epoch value, SYSTEM(1047) a GUID.
 # END-HISTORY
@@ -188,15 +188,15 @@ CASES.append(
 )
 
 CASES.append(
-    ("326: a catalogued $SYSTEM subroutine answers a key SD does not know, and is given the key as the number it was; known keys still answer themselves",
+    ("326: a cataloged $SYSTEM subroutine answers a key SD does not know, and is given the key as the number it was; known keys still answer themselves",
      "x = system(7001):'|':system(7002):'|':(system(1013) > 0):'|':system(32773)", r"K7001\|K7002\|1\|K32773"),
 )
 
 # A subroutine the cases call: who called it, and how deep in the CALL chain it is.  And the user-added SYSTEM() key
 # handler, which answers 'K' and the key it was given.
 SUBS = {"zzb2s1": "   subroutine zzb2s1(a, d)\n   a = system(33)\n   d = system(1076)\n   return\nend\n"}
-# The handler is catalogued globally under the name $system - the source record is "system" and the $ is the global
-# catalogue prefix (CATALOG bp system GLOBAL $); a $ in a SUBROUTINE name does not compile, and LOCAL refuses the prefix.
+# The handler is cataloged globally under the name $system - the source record is "system" and the $ is the global
+# catalog prefix (CATALOG bp system GLOBAL $); a $ in a SUBROUTINE name does not compile, and LOCAL refuses the prefix.
 GLOBAL_SUBS = {"system": "   subroutine zzb2usr(result, key)\n   result = 'K':key\n   return\nend\n"}
 # A program a phantom runs: it says what it sees of its parent, then lives for a few seconds.
 PHANTOM_PROGS = {"zzb2ph": "   open 'zzb2p' to p else stop\n   write system(1057):'|':system(1052) on p, 'ph'\n   sleep 6\nend\n",

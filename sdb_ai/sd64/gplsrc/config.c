@@ -406,7 +406,7 @@ struct CONFIG* read_config(char* errmsg) {
       else if (sscanf(rec, "YEARBASE=%d", &n) == 1)
         pcfg.yearbase = n;
       else {
-        sprintf(errmsg, "Unrecognised configuration parameter '%s'", rec);
+        sprintf(errmsg, "Unrecognized configuration parameter '%s'", rec);
         goto exit_read_config;
       }
     }
@@ -499,7 +499,7 @@ struct CONFIG* read_config(char* errmsg) {
       goto exit_read_config;
   }
   if (access(path, 0)) {
-    sprintf(errmsg, "Global catalogue missing or corrupt.");
+    sprintf(errmsg, "Global catalog missing or corrupt.");
     goto exit_read_config;
   }
 

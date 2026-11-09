@@ -515,7 +515,7 @@ try {
 
     # Each is its own probe run on its own connection: a refused exchange sets
     # done and the server drops the link, which is itself part of the
-    # behaviour.  Each message is wrong in EXACTLY ONE WAY.
+    # behavior.  Each message is wrong in EXACTLY ONE WAY.
 
     # Wrong password.  Everything else about the message is correct, so this
     # isolates the proof.

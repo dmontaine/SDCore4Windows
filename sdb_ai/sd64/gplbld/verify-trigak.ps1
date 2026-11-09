@@ -17,7 +17,7 @@
          A2  a SEPARATE session reads the trigger back from the file header
          A3  the same name typed in UPPER case is accepted, and is STORED lower
          A4  a name with an illegal character is still refused (3002)
-         A5  a legal name nobody catalogued reaches the catalogue test (3003)
+         A5  a legal name nobody cataloged reaches the catalog test (3003)
 
     B. RELEASE_1.1 138 (Linux mail T2330).  dh_write.c and dh_del.c gave the index
        routine the record id UPPER-cased on a NOCASE file, which is every hashed
@@ -37,7 +37,7 @@
     session's text is shown.  The control rows come first and a failing control
     ends the run with exit 2 and no verdict: S0 (an index BUILT from three
     lower-case ids must give exactly those), the fixture compiles, the trigger
-    subroutine is catalogued, the file exists.
+    subroutine is cataloged, the file exists.
 
     NOT COVERED: a trigger actually FIRING on a write (this step only sets and
     reads the name), and a transaction commit through a real program (txn.c
@@ -70,7 +70,7 @@ $CatDir  = Join-Path $AcctDir 'cat'
 
 # Fixture names, all lower case, all swept before and after.
 $TrgFile = 'zztf137'      # the file the trigger is set on
-$TrgSub  = 'zztrg137'     # the catalogued subroutine named as its trigger
+$TrgSub  = 'zztrg137'     # the cataloged subroutine named as its trigger
 $AkFile  = 'zzak138'      # the file with the index
 $PgmW    = 'zzak138w'     # writes the dictionary item and three records
 $PgmS    = 'zzak138s'     # the steps S0..S5
@@ -201,7 +201,7 @@ try {
     # A. RELEASE_1.1 137 - SET.TRIGGER with a lower-case name
     # =========================================================================
     Write-Host ''
-    Write-Host '--- A. fixture: a dynamic file and a catalogued subroutine -----------------'
+    Write-Host '--- A. fixture: a dynamic file and a cataloged subroutine -----------------'
     Write-Source (Join-Path $BpDir $TrgSub) @"
 subroutine $TrgSub
    return
@@ -211,7 +211,7 @@ end
     Show "CREATE.FILE / BASIC / CATALOG" $mk
     $failBefore = $fail     # a setup is judged on ITS rows, not on earlier verdict rows
     Row "setup: the trigger subroutine compiled with no errors" ($mk.Text -cmatch '(?m)^Compiled 1 program\(s\) with no errors') 'no clean-compile line'
-    Row "setup: CATALOG said '$TrgSub added to private catalogue' (3031)" ($mk.Text -cmatch ('(?m)^' + $TrgSub + ' added to private catalogue')) 'no 3031 line naming the subroutine'
+    Row "setup: CATALOG said '$TrgSub added to private catalog' (3031)" ($mk.Text -cmatch ('(?m)^' + $TrgSub + ' added to private catalog')) 'no 3031 line naming the subroutine'
     Row "setup: the file $TrgFile exists on disk" (Test-Path -LiteralPath (Join-Path $AcctDir $TrgFile)) 'no directory for the file'
     if ($fail -gt $failBefore) { Bail 2 'the A fixture did not build - nothing below would measure SET.TRIGGER.' }
 
@@ -221,7 +221,7 @@ end
     Show "SET.TRIGGER $TrgFile $TrgSub PRE.WRITE" $s1
     $s2 = Invoke-SD @("SET.TRIGGER $TrgFile")
     Show "SET.TRIGGER $TrgFile  (read back, a new session)" $s2
-    if ($s1.Text -match 'is not catalogued') { Bail 2 "SET.TRIGGER reached the catalogue test and did not find $TrgSub - the fixture, not the fix." }
+    if ($s1.Text -match 'is not cataloged') { Bail 2 "SET.TRIGGER reached the catalog test and did not find $TrgSub - the fixture, not the fix." }
     Row 'A1: 3002 "Illegal trigger function name" is NOT printed for a lower-case name' ($s1.Text -notmatch 'Illegal trigger function name') '3002 printed: SET.TRIGGER refuses a name that starts with a letter (RELEASE_1.1 137)'
     Row "A1: 3005 names the trigger '$TrgSub'" ($s1.Text -cmatch ('(?m)^Trigger function: ' + $TrgSub + '\s*$')) 'no 3005 line naming the trigger'
     Row 'A1: 3006 lists the mode PRE.WRITE' ($s1.Text -cmatch '(?m)^Modes: PRE\.WRITE\s*$') 'no 3006 line with PRE.WRITE'
@@ -252,7 +252,7 @@ end
     $s6 = Invoke-SD @("SET.TRIGGER $TrgFile $nosuch PRE.WRITE")
     Show "SET.TRIGGER $TrgFile $nosuch PRE.WRITE" $s6
     Row 'A4 (control): a name with an illegal character is refused with 3002' ($s5.Text -cmatch 'Illegal trigger function name') 'no 3002 - the name check is gone, or the parser changed the token'
-    Row 'A5: a legal name nobody catalogued is refused with 3003, past the name check' (($s6.Text -cmatch 'Trigger function is not catalogued') -and ($s6.Text -notmatch 'Illegal trigger function name')) 'no 3003, or 3002 printed first'
+    Row 'A5: a legal name nobody cataloged is refused with 3003, past the name check' (($s6.Text -cmatch 'Trigger function is not cataloged') -and ($s6.Text -notmatch 'Illegal trigger function name')) 'no 3003, or 3002 printed first'
 
     # =========================================================================
     # B. RELEASE_1.1 138 - the index holds the ids as the file stores them

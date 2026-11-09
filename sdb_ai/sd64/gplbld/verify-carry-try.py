@@ -12,7 +12,7 @@
 # 12 Oct 26 dm  Written.
 # END-HISTORY
 #
-# Each case is (label, subs, body, wanted).  subs = {name: source} are catalogued subroutines (lower case names) made
+# Each case is (label, subs, body, wanted).  subs = {name: source} are cataloged subroutines (lower case names) made
 # first; the body is compiled as program zztxNN and the value it leaves in x is printed between brackets.  {p} in a
 # wanted value is the program's name.  The rows after the cases are special: compile errors, an unhandled exception,
 # DUMPING, an exception that must not cross EXECUTE.
@@ -201,12 +201,12 @@ def main():
     subprocess.run([sys.executable, TOOL, box, "start"], capture_output=True, text=True, errors="replace", timeout=120)
 
     made = []
-    catalogued = []
+    cataloged = []
     try:
         say("\n--- the construct -------------------------------------------------------------")
         for i, (label, subs, body, want) in enumerate(CASES):
             for nm, text in subs.items():
-                if nm not in catalogued:
+                if nm not in cataloged:
                     p = os.path.join(bp, nm)
                     write(p, text)
                     made.append(p)
@@ -280,7 +280,7 @@ def main():
         row("an exception thrown inside an EXECUTEd program is not caught by a TRY around the EXECUTE",
             has(out, r"Unhandled exception across: execute") and not has(out, r"WRONGLY_CAUGHT"), out[-300:].replace("\n", " | "))
     finally:
-        sess(box, *["DELETE.CATALOG %s" % nm for nm in catalogued])
+        sess(box, *["DELETE.CATALOG %s" % nm for nm in cataloged])
         for p in made:
             if os.path.exists(p):
                 os.remove(p)

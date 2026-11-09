@@ -370,7 +370,7 @@ try {
     # silent-fallback case it was written for: the server now refuses request
     # 24, so a fallback would fail loudly rather than pass every check above.
     # What survives is the positive half - that 47 and 48 are what the client
-    # sent - and the password search below, which the server's behaviour has
+    # sent - and the password search below, which the server's behavior has
     # never had any bearing on.
     if (Test-Path -LiteralPath $pktLog) {
         $types = @(Select-String -Path $pktLog -Pattern 'Type (\d+)' -AllMatches |

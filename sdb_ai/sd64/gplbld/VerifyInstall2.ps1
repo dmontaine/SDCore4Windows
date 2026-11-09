@@ -535,7 +535,7 @@ $steps = @(
     # row and says why rather than passing.  It was in neither runner until now.
     @{ Name = 'verify-elevdoor.ps1';      P = @{} },
     @{ Name = 'verify-fold.ps1';          P = @{} },
-    # 22 Aug 26 - SDNet is gone and its neighbours are not.  EARLY (first until
+    # 22 Aug 26 - SDNet is gone and its neighbors are not.  EARLY (first until
     # verify-elevdoor took the slot, 16 Sep 26) BECAUSE IT IS
     # CHEAP AND STATIC: it creates no account, needs no prefix and reads the
     # installed tree, so if the tree is not what the cycle left it says so
@@ -597,7 +597,7 @@ $steps = @(
     # evidence.  "-Only verify-tierchange" was handed over as PRE_RELEASE 100's
     # deciding step because of a claim in this very block, ran green at 28 of 28,
     # and drove no index at all.
-    # 22 Aug 26 - the global catalogue gate (UPSTREAM_FIXES 7).  It drives
+    # 22 Aug 26 - the global catalog gate (UPSTREAM_FIXES 7).  It drives
     # CREATE.ACCOUNT, so it belongs BEFORE verify-peerlog for the error-log
     # reason the routes/rules comment below spells out.
     #
@@ -697,7 +697,7 @@ $steps = @(
     #
     # IT IS THE ONE STEP THAT DOES NOT CALL assert-current, and that is
     # deliberate rather than an omission - CLAUDE.md exempts it and
-    # verify-allowgroups because they test WINDOWS behaviour rather than SD's.
+    # verify-allowgroups because they test WINDOWS behavior rather than SD's.
     # So it proves nothing about whether the tree is current; the steps around
     # it do that.
     #
@@ -1240,7 +1240,7 @@ foreach ($s in $steps) {
         Write-Host ' OK' -ForegroundColor Green
     } elseif ($code -eq 2 -and $fails.Count -eq 0) {
         # 03 Sep 26 - PRE_RELEASE_FIXES.md 152.  STILL COUNTED IN $failed, and
-        # still not a pass - it is coloured and worded differently because it
+        # still not a pass - it is colored and worded differently because it
         # sends the reader somewhere else: to the environment, not the product.
         $failed++
         $refused++

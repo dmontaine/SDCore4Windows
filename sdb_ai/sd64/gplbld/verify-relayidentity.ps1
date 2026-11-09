@@ -277,7 +277,7 @@ try {
     try { $modules = @($proc.Modules | Select-Object -ExpandProperty ModuleName) } catch { Write-Host "  (modules unreadable: $($_.Exception.Message))" }
     Write-Host ("  {0} modules loaded" -f $modules.Count)
     # user32 as well as msys-*: the relay's second cycle died 0xC0000142 because
-    # the static OpenSSL imported USER32, whose initialisation needs a desktop
+    # the static OpenSSL imported USER32, whose initialization needs a desktop
     # the bare account cannot reach (probe-user32desk.c).  Stubs removed it.
     Note 'relay loads no msys-* or user32 DLL (native, desktopless)' '' (($modules | Where-Object { $_ -like 'msys-*' -or $_ -like 'user32*' }) -join ',')
     Note 'control: the module list was readable at all' $true ($modules.Count -gt 0)

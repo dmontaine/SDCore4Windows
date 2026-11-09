@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# sandbox-edext.py - ED external commands: catalogued subroutines named in $ED.OPTIONS (QM4 Fixes items 305 and 331).  No install,
+# sandbox-edext.py - ED external commands: cataloged subroutines named in $ED.OPTIONS (QM4 Fixes items 305 and 331).  No install,
 # no sudo.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/sandbox-edext.py <dir> [--build]
@@ -159,10 +159,10 @@ def main():
             bail("the programs did not compile:\n" + out[-1200:])
 
         say("\n--- CONTROL: no $ED.OPTIONS record ------------------------------------------------------------------------------")
-        # An unrecognised line is followed by "Did you mean to insert this text (y/<n>)?", which loops until it has Y, N or an empty
+        # An unrecognized line is followed by "Did you mean to insert this text (y/<n>)?", which loops until it has Y, N or an empty
         # answer: without the N the session never ends (it did not, 16 Oct 26, 20 minutes).
         out = sess(box, "RUN bp zzedvd", "ED bp zzedr", "WHERE", "N", "Q")
-        row("CONTROL  without the option WHERE is not an ED command: 'Unrecognised command'", "Unrecognised command" in out and "X[file=" not in out,
+        row("CONTROL  without the option WHERE is not an ED command: 'Unrecognized command'", "Unrecognized command" in out and "X[file=" not in out,
             repr(out[-400:]))
 
         say("\n--- the external commands ----------------------------------------------------------------------------------------")

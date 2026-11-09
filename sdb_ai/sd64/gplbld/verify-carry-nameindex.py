@@ -140,8 +140,8 @@ def main():
             tag(out, "F1") == ["10"] and tag(out, "F2") == [str(NF // 2 * 10)] and tag(out, "F3") == [str(NF * 10)]
             and has(out, r"^N3DONE$"), repr(out[-5:]))
         out = q3.adm(["RUN bp zzn4"])
-        row("a name the big class does not have is refused: 'Unrecognised property/method name (NOSUCHNAME)'",
-            has(out, r"Unrecognised property/method name \(NOSUCHNAME\)") and not has(out, r"NOT REFUSED"), repr(out[-3:]))
+        row("a name the big class does not have is refused: 'Unrecognized property/method name (NOSUCHNAME)'",
+            has(out, r"Unrecognized property/method name \(NOSUCHNAME\)") and not has(out, r"NOT REFUSED"), repr(out[-3:]))
         out = q3.adm(["RUN bp zzn5"])
         row("a child with a few names reaches the big parent's last name, its function and its own names",
             tag(out, "I1") == ["inh"] and tag(out, "I2") == ["own"] and tag(out, "I3") == [str(NF * 10)] and tag(out, "I4") == ["G1"]
@@ -156,7 +156,7 @@ def main():
             and has(out, r"^N8DONE$"), repr(out[-4:]))
         out = q3.adm(["RUN bp zzn9"])
         row("a RESTRICTED name of a big class is not there for the main program",
-            has(out, r"Unrecognised property/method name \(SECRET\)") and not has(out, r"NOT REFUSED"), repr(out[-3:]))
+            has(out, r"Unrecognized property/method name \(SECRET\)") and not has(out, r"NOT REFUSED"), repr(out[-3:]))
 
         say("\n--- time: 400000 references to the first name and to the last name of a class of %d names ---------------------" % NP)
         t1, o1 = timed("RUN bp zzt1")

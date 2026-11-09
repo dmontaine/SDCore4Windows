@@ -291,7 +291,7 @@ Assert-SdSeat -Label 'verify-apiadmin' -Internal
 # THE LOCAL OS.EXECUTE CONTROL NEEDS A TEMPORARY os.users\SDSYS RECORD, AND THIS SCRIPT
 # MUST NOT OVERWRITE SOMEBODY ELSE'S.  Read from source, NOT RUN: the seat's LOGTO into
 # the throwaway account clears USR_ADMIN (cproc calls kernel(K$ADMINISTRATOR, 0);
-# op_kernel.c:587-592, honoured only for a $internal program), so os_permitted() falls
+# op_kernel.c:587-592, honored only for a $internal program), so os_permitted() falls
 # through to os.users\<login name> = os.users\SDSYS, and the live os.users held ZERO
 # records on 21 Sep 2026 - so without a record the control's OS.EXECUTE is refused and
 # its row ("the probe CAN see OS.EXECUTE run") FAILS for a reason that is the fixture's,
@@ -799,7 +799,7 @@ try {
         # confirms the fixture is doing real work; a FAIL (ran anyway) means
         # USR_ADMIN, or something else, survives the seat's LOGTO under
         # -Internal and the fixture is unneeded - read it as a finding about
-        # the seat or the -Internal door, not as licence to just delete the
+        # the seat or the -Internal door, not as license to just delete the
         # fixture (see PROJECT_STATUS.md entry 76).
         if ($localTriedOsExec) {
             Note 'falsification: WITHOUT the fixture, the control is refused' $true (-not $localRanOsExec)

@@ -9,7 +9,7 @@
 #
 # START-HISTORY:
 # 27 Oct 26 dm  S.87 batch 17: the overlap modes, PICK.CONVERT and PICK.SELECT are gone with twenty-two other modes; each of the 22 names is a refusal row now, and the CONTROL rows of the
-#               behaviour they changed stay.
+#               behavior they changed stay.
 # 15 Oct 26 dm  Written for QM4 gaps bundle Q-16: CHANGE.NO.OVERLAP, COUNT.OVERLAP, INDEX.OVERLAP, PICK.CONVERT,
 #               CONDITIONAL.STATEMENTS, TRAP.UNUSED.MAIN.
 # 27 Oct 26 dm  S.87 batch 3: the rows for the second spellings and forms removed that day (a CONTROL that runs the surviving spellings, then one row per removed word that
@@ -35,7 +35,7 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 passed = failed = 0
 
 CASES = []   # (label, BASIC lines, wanted value or None for "must not compile", words the compile output must have, words it must not)
-AUX = []     # (record name in bp, text, how): "include" is only written; "sub" is compiled and catalogued first
+AUX = []     # (record name in bp, text, how): "include" is only written; "sub" is compiled and cataloged first
 
 
 def case(label, body, want, has=(), lacks=(), run_has=(), run_lacks=()):
@@ -120,7 +120,7 @@ case("Q-16 FILELOCK as the WHILE condition and FILEUNLOCK as the UNTIL condition
 for _gone in ("conditional.statements", "prclose.default.0", "unassigned.common", "no.case.invert", "optional.then.else", "implied.stop", "exception.save.stack",
               "default.unass.args", "time.ms"):
     case("27 Oct 26: $MODE %s was removed and is refused (2842), as any name the compiler does not know" % _gone.upper(),
-         "$mode %s\nx = 1" % _gone, None, has=["Unrecognised mode name"])
+         "$mode %s\nx = 1" % _gone, None, has=["Unrecognized mode name"])
 
 # ---- 27 Oct 26 (S.87 batch 3): second spellings and forms that were removed ---------------------------------------------------------
 # One CONTROL row runs every spelling that stays, in the places the removed ones were written; then each removed word has a row that says the compiler REFUSES
@@ -182,9 +182,9 @@ _refused("COM (an abbreviation of COMMON)", "@RAW@   com zzcm\n   zzcm = 1\nend\
 _refused("DIMENSION (a long spelling of DIM)", "dimension a(3)\nx = 1")
 _refused("REDIMENSION (a long spelling of REDIM)", "@RAW@   subroutine zzq16bad(mat a)\n   dim a(1)\n   redimension a(10)\n   return\nend\n")
 _refused("ENTER (a second name for CALL)", "enter zzq16sa\nx = 1")
-case("27 Oct 26 (S.87 batch 3): $MODE PICK.ENTER was removed with ENTER and is refused (2842)", "$mode pick.enter\nx = 1", None, has=["Unrecognised mode name"])
+case("27 Oct 26 (S.87 batch 3): $MODE PICK.ENTER was removed with ENTER and is refused (2842)", "$mode pick.enter\nx = 1", None, has=["Unrecognized mode name"])
 for _m in ['change.no.overlap', 'count.overlap', 'index.overlap', 'pick.convert', 'pick.select', 'string.locate', 'composite.readnext', 'selectv', 'for.store.before.test', 'case.sensitive', 'pick.matrix', 'pick.jump.range', 'pick.read', 'optional.final.end', 'pick.substr', 'pick.substr.assign', 'compatible.append', 'heading.no.eject', 'write.delete.then.else', 'stdfil', 'stdfil.shared', 'autolock']:
-    case("27 Oct 26 (S.87 batch 17): $MODE %s was removed and is refused (2842)" % _m, "$mode %s\nx = 1" % _m, None, has=["Unrecognised mode name"])
+    case("27 Oct 26 (S.87 batch 17): $MODE %s was removed and is refused (2842)" % _m, "$mode %s\nx = 1" % _m, None, has=["Unrecognized mode name"])
 _refused("PERFORM (a second name for EXECUTE)", "perform 'who' capturing y\nx = 1")
 _refused("PRINTERR (a second name for INPUTERR)", "printerr ''\nx = 1")
 _refused("REMARK (a second name for REM)", "remark a comment\nx = 1")

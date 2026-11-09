@@ -18,7 +18,7 @@
 #
 # THE INSTRUMENT IS WHAT THE COMPILED PROGRAM DID, not that the compiler said nothing: each row compiles a
 # probe (and demands the compiler's own success wording, which is printed only when it compiled) and RUNS it,
-# and each feature has a CONTROL (the same program without the feature) that must show the OLD behaviour, so
+# and each feature has a CONTROL (the same program without the feature) that must show the OLD behavior, so
 # a row cannot pass because the probe never reached the statement it is about.
 #
 # Legs and openQM reference numbers (column A of openQM-feature-evaluation_bp_261008.xlsx):
@@ -131,7 +131,7 @@ def main():
             "no success wording, or the warning is there")
         out = sess(box, "BASIC bp zza1l3")
         row("a list with an unknown name is refused with 2842",
-            re.search(OK, out) is None and re.search(r"(?i)unrecognised mode name", out) is not None, "no refusal")
+            re.search(OK, out) is None and re.search(r"(?i)unrecognized mode name", out) is not None, "no refusal")
         out = sess(box, "BASIC bp zza1l4")
         row("a list continued onto the next line after a comma compiles, and the name on the next line was applied (the warning is shown)",
             re.search(OK, out) is not None and NEVER in out, "no success wording, or no warning")
@@ -226,10 +226,10 @@ def main():
         cat = os.path.join(sysd, "cat")
 
         def private_fixture(name, header):
-            """A program with <header> as its first line, already in the PRIVATE catalogue."""
+            """A program with <header> as its first line, already in the PRIVATE catalog."""
             prog(name, ["subroutine " + name, "   return", "end"])
             sess(box, "BASIC bp " + name, "CATALOG bp " + name)
-            row("setup: %s is in the private catalogue" % name, os.path.exists(os.path.join(cat, name)),
+            row("setup: %s is in the private catalog" % name, os.path.exists(os.path.join(cat, name)),
                 "no cat/%s" % name)
             prog(name, ([header] if header else []) + ["subroutine " + name, "   return", "end"])
 
@@ -237,7 +237,7 @@ def main():
         private_fixture("zza1q0", "$catalog local")
         out = sess(box, "BASIC bp zza1q0", "N")
         row("CONTROL: without NO.QUERY the compiler asks 'Remove (y/<n>)?'",
-            re.search(r"(?i)also in private catalogue", out) is not None, "no prompt")
+            re.search(r"(?i)also in private catalog", out) is not None, "no prompt")
         row("CONTROL: and answering N left the private entry in place",
             os.path.exists(os.path.join(cat, "zza1q0")), "entry gone")
 
@@ -245,24 +245,24 @@ def main():
         private_fixture("zza1q1", "$catalog local no.query")
         out = sess(box, "BASIC bp zza1q1")
         row("$CATALOG LOCAL NO.QUERY: compiled with no errors and no prompt",
-            re.search(OK, out) is not None and re.search(r"(?i)also in private catalogue", out) is None, "prompt or error")
+            re.search(OK, out) is not None and re.search(r"(?i)also in private catalog", out) is None, "prompt or error")
         row("$CATALOG LOCAL NO.QUERY: the private entry was removed without asking",
             not os.path.exists(os.path.join(cat, "zza1q1")), "cat/zza1q1 still there")
-        row("$CATALOG LOCAL NO.QUERY: and the program is in the local catalogue",
-            re.search(r"(?i)zza1q1 added to local catalogue", out) is not None, "no 'added to local catalogue'")
+        row("$CATALOG LOCAL NO.QUERY: and the program is in the local catalog",
+            re.search(r"(?i)zza1q1 added to local catalog", out) is not None, "no 'added to local catalog'")
 
         # $CATALOG NO.QUERY LOCAL (the other order, the first word a keyword)
         private_fixture("zza1q2", "$catalog no.query local")
         out = sess(box, "BASIC bp zza1q2")
         row("$CATALOG NO.QUERY LOCAL: no prompt, private entry removed",
-            re.search(r"(?i)also in private catalogue", out) is None and not os.path.exists(os.path.join(cat, "zza1q2")),
+            re.search(r"(?i)also in private catalog", out) is None and not os.path.exists(os.path.join(cat, "zza1q2")),
             "prompt, or entry still there")
 
         # the BASIC command's NO.QUERY
         private_fixture("zza1q3", "$catalog local")
         out = sess(box, "BASIC bp zza1q3 NO.QUERY")
         row("BASIC ... NO.QUERY: no prompt, private entry removed",
-            re.search(OK, out) is not None and re.search(r"(?i)also in private catalogue", out) is None
+            re.search(OK, out) is not None and re.search(r"(?i)also in private catalog", out) is None
             and not os.path.exists(os.path.join(cat, "zza1q3")), "prompt, error, or entry still there")
 
         # $BASIC.OPTIONS: CATALOGUE LOCAL NO.QUERY
@@ -272,9 +272,9 @@ def main():
             out = sess(box, "BASIC bp zza1q4")
         finally:
             os.remove(opt)
-        row("$BASIC.OPTIONS CATALOGUE LOCAL NO.QUERY: no prompt, private entry removed, cataloguing local",
-            re.search(r"(?i)also in private catalogue", out) is None and not os.path.exists(os.path.join(cat, "zza1q4"))
-            and re.search(r"(?i)zza1q4 added to local catalogue", out) is not None, "prompt, entry present, or not local")
+        row("$BASIC.OPTIONS CATALOGUE LOCAL NO.QUERY: no prompt, private entry removed, cataloging local",
+            re.search(r"(?i)also in private catalog", out) is None and not os.path.exists(os.path.join(cat, "zza1q4"))
+            and re.search(r"(?i)zza1q4 added to local catalog", out) is not None, "prompt, entry present, or not local")
     finally:
         for n in made:
             for d in ("bp", "bp.out"):

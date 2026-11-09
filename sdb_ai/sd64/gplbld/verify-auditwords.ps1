@@ -8,7 +8,7 @@
 #
 # Exit 0 every line since -Since has no upper-case letter before its first "=", 1 at least one has,
 # 2 the test could not be run (not elevated, no file, an empty file, a file in a shape this does not
-# recognise).
+# recognize).
 #
 # WHY IT EXISTS.  Owner's rule, 7 Oct 2026 via Linux T1830: every word an audit line writes before
 # its first "=" is lower case, event names included.  The programs were changed on 8 Oct and the
@@ -20,7 +20,7 @@
 #
 # WHAT IS DECISIVE: (1) the file parsed to at least one audit line since -Since (the null case is
 # refused, exit 2, never a pass), (2) the control - at least one "login" event - is present, so a
-# reader that recognises nothing cannot pass, (3) ZERO lines carry an upper-case letter before the
+# reader that recognizes nothing cannot pass, (3) ZERO lines carry an upper-case letter before the
 # first "=" (checked CASE-SENSITIVELY: Regex -cmatch), and (4) NO line failed to parse (Linux T1140: an
 # unparsed line means reader and writer disagree).  The table of events is READ FROM gpl.bp's
 # kernel(K$AUDIT, ...) literals, printed with a count each and "NOT SEEN" where nothing in this run wrote
@@ -257,7 +257,7 @@ foreach ($g in ($parsed | Group-Object { ($_.Head -split '\s+')[0] } | Sort-Obje
 Write-Output ''
 Write-Output '=== decisive checks ====================================================================='
 $login = Measure-EventWord $parsed '^login'
-Note 'CONTROL: the reader recognises this file (at least one "login" event)' $true ($login -gt 0)
+Note 'CONTROL: the reader recognizes this file (at least one "login" event)' $true ($login -gt 0)
 Note 'the table was read from gpl.bp (at least one event head found)' $true ($heads.Count -gt @($script:CEvents).Count)
 # Linux T1140 item 1: a line the reader cannot parse means reader and writer disagree, so it is a failure.
 Note 'every line of the file parsed (no unparsed line)' 0 $unparsed.Count

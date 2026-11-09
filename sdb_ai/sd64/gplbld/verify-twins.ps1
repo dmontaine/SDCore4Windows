@@ -27,9 +27,9 @@
 #      file converts cleanly              holding only 'jack' succeeds and the
 #                                          record survives.
 #
-# ***WHY IT MUST BE ELEVATED AND WHY IT IS NOT verify-callcase's neighbour.***
+# ***WHY IT MUST BE ELEVATED AND WHY IT IS NOT verify-callcase's neighbor.***
 # The design named VerifyInstall1, but building a case-sensitive fixture is the
-# one thing only sd -internal can do (op_dio1.c honours KEEPCASE in internal
+# one thing only sd -internal can do (op_dio1.c honors KEEPCASE in internal
 # mode alone), and sd -internal needs elevation (check_admin).  So it runs in
 # VerifyInstall2, elevated, where verify-dictrename already drives sd -internal.
 #
@@ -118,7 +118,7 @@ function Cleanup {
 # 8 Nov 26 - the fixture builder for legs C and D (from Linux 7de9f2c0): zztwc
 # holds jack and JACK, zztwk holds jack only; each has a dictionary and a VOC
 # record.  Run in the internal session, the only one whose KEEPCASE (flags 4)
-# the kernel honours.
+# the kernel honors.
 $fixLines = @(
     "   nm = 'zztwc':@fm:'zztwk'",
     "   for i = 1 to 2",

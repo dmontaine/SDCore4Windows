@@ -20,7 +20,7 @@
 #        matrices.  A value that is not a constant is a compile error (11394).
 #   356  CLASS c INHERITS other(values) and INHERITS other AS name(values): the values reach the inherited class's CREATE.OBJECT as
 #        its arguments.  CONTROL: INHERITS with no values, as before; more than 32 values is a compile error (11393).
-#   484  a class with a MAIN subroutine is run by RUN and by its catalogue name: CREATE.OBJECT, then MAIN, then the object goes and
+#   484  a class with a MAIN subroutine is run by RUN and by its catalog name: CREATE.OBJECT, then MAIN, then the object goes and
 #        DESTROY.OBJECT runs.  A class without MAIN gets the object reference's message for MAIN.  A CALL of a class is still
 #        refused (3450).
 
@@ -137,10 +137,10 @@ def main():
         row("565  a private variable", tag(out, "P") == ["10/priv"], repr(out[-14:]))
         row("565  a matrix given a value: every element has it", tag(out, "M") == ["000XX"] and tag(out, "M1") == ["0"], repr(out[-14:]))
         out = q3.adm(["BASIC bp zzcie1 zzcie2 zzcie3"])
-        row("565  a value that is not a constant (a variable name) is a compile error", has(out, r"initialisation value must be a numeric"), repr(out[:10]))
-        row("565  nor is a changing @-variable (@USERNO)", len([l for l in out if "initialisation value must be a numeric" in l]) >= 2, repr(out[:12]))
+        row("565  a value that is not a constant (a variable name) is a compile error", has(out, r"initialization value must be a numeric"), repr(out[:10]))
+        row("565  nor is a changing @-variable (@USERNO)", len([l for l in out if "initialization value must be a numeric" in l]) >= 2, repr(out[:12]))
         row("565  nor is an expression: after the constant 5 the + 1 is not a statement (a compile error; the old compiler refused the whole line)",
-            has(out, r"^2: Unrecognised statement$") and has(out, r"^   zzcie3$"), repr(out[:14]))
+            has(out, r"^2: Unrecognized statement$") and has(out, r"^   zzcie3$"), repr(out[:14]))
 
         say("\n--- 356: values for the inherited classes ----------------------------------------------------------------------")
         out = q3.adm(["RUN bp zzci2r"])
@@ -150,17 +150,17 @@ def main():
         row("356  @VM and @TRUE", tag(out, "I6") == ["FD/1"], repr(out[-14:]))
         row("CONTROL  INHERITS with no values still works", tag(out, "I8") == ["NOARGS"] and has(out, r"^R2DONE$"), repr(out[-14:]))
         out = q3.adm(["BASIC bp zzcie4"])
-        row("356  more than 32 values is a compile error", has(out, r"At most 32 initialisation values"), repr(out[:8]))
+        row("356  more than 32 values is a compile error", has(out, r"At most 32 initialization values"), repr(out[:8]))
 
         say("\n--- 484: running a class module -----------------------------------------------------------------------------")
         out = q3.adm(["RUN bp zzcm1"])
         row("484  RUN bp zzcm1: CREATE.OBJECT, then MAIN, then the object goes (DESTROY.OBJECT)",
             [l for l in out if l in ("CREATED n=3", "MAIN RAN n=3", "DESTROYED")] == ["CREATED n=3", "MAIN RAN n=3", "DESTROYED"], repr(out[-8:]))
         out = q3.adm(["zzcm1"])
-        row("484  the catalogue name does the same", [l for l in out if l in ("CREATED n=3", "MAIN RAN n=3", "DESTROYED")] == ["CREATED n=3", "MAIN RAN n=3", "DESTROYED"], repr(out[-8:]))
+        row("484  the catalog name does the same", [l for l in out if l in ("CREATED n=3", "MAIN RAN n=3", "DESTROYED")] == ["CREATED n=3", "MAIN RAN n=3", "DESTROYED"], repr(out[-8:]))
         out = q3.adm(["RUN bp zzcm2"])
         row("484  a class with no MAIN: CREATE.OBJECT ran and the reference to MAIN is refused",
-            has(out, r"^CREATED2$") and has(out, r"Unrecognised property/method name \(MAIN\)"), repr(out[-6:]))
+            has(out, r"^CREATED2$") and has(out, r"Unrecognized property/method name \(MAIN\)"), repr(out[-6:]))
         out = q3.adm(["BASIC bp zzcmcall", "RUN bp zzcmcall"])
         row("CONTROL  a CALL of a class is still refused: 'A CLASS routine may not be used in this way'",
             has(out, r"A CLASS routine may not be used in this way") and not has(out, r"NOT REFUSED"), repr(out[-6:]))

@@ -29,7 +29,7 @@
 # that has itself been DENIED prints nothing and reads as "(none)", which
 # scored a false clean on 24 Aug 2026.  So this asks the filesystem the
 # question an attacker would ask, and the listing is reported only as
-# diagnosis - labelled "not readable" rather than blank when icacls is refused.
+# diagnosis - labeled "not readable" rather than blank when icacls is refused.
 #
 # AND THE READ IS CHECKED TOO, WHICH IS NOT PADDING.  secure-sysdirs.ps1 grants
 # sdusers (RX) rather than removing them, deliberately: sd.conf is read at

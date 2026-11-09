@@ -306,7 +306,7 @@ Write-Output '=== door 2: logto - CPROC:3776 -> 10107 ==========================
 # ***THE MEASUREMENT IS THE HELPER'S ssh SESSION, NOT THIS ONE.***  PRE_RELEASE
 # 44: this process's token was built at logon and cannot carry `sdu_<acct>`,
 # which was created minutes ago, so its chdir into the account is denied with
-# 5161 no matter what SD authorises.  The helper signs in fresh and its token
+# 5161 no matter what SD authorizes.  The helper signs in fresh and its token
 # carries the group.  Both are run, and only the helper's is decisive - the
 # local one stays as a NON-DECISIVE witness of 44 in the same transcript, so
 # the reason the door needs two accounts is visible rather than remembered.
@@ -421,14 +421,14 @@ Write-Output ''
 # 5234-5267): in the Refused phase this session's own LOGTO prints "Account
 # <acct> is suspended" and WHO answers "210 DON" (it did not enter); in the
 # Control phase it still reports 5161.  Two rows printed [FAIL] in every run
-# since 18 Sep, because they asserted the old Refused-phase behaviour.
+# since 18 Sep, because they asserted the old Refused-phase behavior.
 #
 # ***THIS IS NOT A FLIP OF $true TO $false ON THE SAME OBSERVATION.***  The
 # Control phase keeps its 5161 row as it was; the Refused phase now measures
 # the refusal 64 made reachable for this caller, with the old 5161 claim as its
 # disqualifier (a 5161 there would mean the token stopped it before the
 # suspension did, the false pass the decisive row above rules out on the
-# helper).  Non-decisive like their neighbours: this session is the witness and
+# helper).  Non-decisive like their neighbors: this session is the witness and
 # the helper is the measurement.
 if ($Phase -eq 'Control') {
     Note ('PRE_RELEASE 44: this session''s own LOGTO reports 5161') $true `

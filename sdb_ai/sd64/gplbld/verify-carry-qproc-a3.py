@@ -16,7 +16,7 @@
 # END-HISTORY
 #
 # THE INSTRUMENT IS WHAT LIST/SELECT PRINTED for a file of five records whose values are known.  Each leg
-# has a CONTROL that shows the old behaviour (or the neighbouring keyword's), so a row cannot pass because
+# has a CONTROL that shows the old behavior (or the neighbouring keyword's), so a row cannot pass because
 # the command printed nothing.
 #
 #   1  CSV 3 quotes every item (ref 26)

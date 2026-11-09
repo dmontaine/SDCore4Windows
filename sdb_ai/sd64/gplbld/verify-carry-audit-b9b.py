@@ -157,19 +157,19 @@ def main():
                 tag(out, "TAG") == "basetag", "WHO=%r TAG=%r %s" % (tag(out, "WHO"), tag(out, "TAG"), out[-300:]))
 
         out = session(box, "BASIC bp zzabtrg zzabtu", "CATALOG bp zzabtrg LOCAL")
-        row("317: the locally catalogued trigger and its driver compile", "Compiled 2 program(s) with no errors" in out, out[-500:])
+        row("317: the locally cataloged trigger and its driver compile", "Compiled 2 program(s) with no errors" in out, out[-500:])
         out = session(box, "RUN bp zzabtu")
-        row("317: a read trigger that is catalogued LOCAL runs when a record is read (no fatal error)",
+        row("317: a read trigger that is cataloged LOCAL runs when a record is read (no fatal error)",
             re.search(r"(?m)^END\s*$", out) is not None and tag(out, "GOT") == "hello" and tag(out, "TRG") is not None,
             "SET=%r GOT=%r TRG=%r %s" % (tag(out, "SET"), tag(out, "GOT"), tag(out, "TRG"), out[-300:]))
 
         out = session(box, "BASIC bp zzabkrun zzabkmk", "CATALOG bp zzabkrun LOCAL", "RUN bp zzabkmk")
-        row("263: a locally catalogued program is entered in the VOC and a K entry is built over it",
+        row("263: a locally cataloged program is entered in the VOC and a K entry is built over it",
             "MADE" in out and tag(out, "ENTRY") is not None, out[-500:])
         out2 = session(box, "zzabkrun")
-        row("CONTROL: the locally catalogued program runs by its own name", tag(out2, "KRAN") == "ok" or "KRAN[ok]" in out2, out2[-300:])
+        row("CONTROL: the locally cataloged program runs by its own name", tag(out2, "KRAN") == "ok" or "KRAN[ok]" in out2, out2[-300:])
         out3 = session(box, "zzabkv")
-        row("263: a K entry whose fields 3 onwards are a V entry for a locally catalogued program runs it", "KRAN[ok]" in out3,
+        row("263: a K entry whose fields 3 onwards are a V entry for a locally cataloged program runs it", "KRAN[ok]" in out3,
             "entry %r; %s" % (tag(out, "ENTRY"), out3[-300:]))
     finally:
         for nm in made:

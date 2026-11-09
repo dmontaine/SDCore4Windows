@@ -22,7 +22,7 @@
 # 328: ITYPE of a string that is not object code stops the program with an ordinary run-time error (op_misc.c
 # `inva_i_type`), no crash; no row, because a stopped program prints nothing for a row to read.
 # 528: SD stops the program with run-time error 000000E2 (illegal record id), so the id IS trapped; no row.
-# 557: SD returns the empty trailing elements as delimiters ("x/y///"); a row records the present behaviour.
+# 557: SD returns the empty trailing elements as delimiters ("x/y///"); a row records the present behavior.
 # Not testable here: 249 (sockets), 263, 266, 275, 279, 280, 317, 338, 342, 382, 525, 542 (no encodings), 590.
 
 import os
@@ -58,7 +58,7 @@ CASES = [
      "n = str('9', 400)\ns = '1':@fm:'2'\nlocate n in s<0> by 'AR' setting p else null\nx = p", "3"),
     ("557 CONTROL: MATBUILD of a full matrix",
      "dim a(3)\na(1) = 'x'\na(2) = 'y'\na(3) = 'z'\nmatbuild s from a\nx = change(s, @fm, '/')", "x/y/z"),
-    ("557 the present behaviour: trailing unassigned elements come out as empty fields",
+    ("557 the present behavior: trailing unassigned elements come out as empty fields",
      "dim a(5)\na(1) = 'x'\na(2) = 'y'\nmatbuild s from a\nx = change(s, @fm, '/')", "x/y///"),
     ("562 CONTROL: MATCHFIELD with a plain pattern",
      "x = matchfield('ab12', '2A2N', 1)", "ab"),

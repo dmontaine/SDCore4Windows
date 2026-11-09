@@ -149,7 +149,7 @@ $PRESERVE = @('$cred', 'accounts', 'cat', 'os.users', 'os.users.dic',
 # 21 Sep 26 - voc_template is NOT here any more: it no longer ships, and the
 # upgrade REMOVES it (SDSYS_RETIRED) - see [S3] and [5] below.
 $REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'messages',              # 8 Nov 26: sd.voclib no longer ships (S.87)
-              'licence', 'contrib', 'gpl.bp.out', 'gcat',
+              'license', 'contrib', 'gpl.bp.out', 'gcat',
               'pcode.out', 'bin', 'terminfo', 'terminfo.src')
 
 # Named by NO ship list, and protected by that alone.  voc is a dynamic file

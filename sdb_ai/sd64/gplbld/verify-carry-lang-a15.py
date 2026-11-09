@@ -63,7 +63,7 @@ PROGS = {
               "   n = 4 ; s = 'abcdefgh' ; s[n + 1] = '12345' ; crt 'T8[':s:']'\n"
               "   s = 'abcdefgh' ; s[3, 2] = 'XY' ; crt 'T9[':s:']'\n"
               "   crt 'L41DONE'\nend\n"),
-    # 215 and 44/519: the subroutines are catalogued locally
+    # 215 and 44/519: the subroutines are cataloged locally
     "zzl215s": ("   subroutine zzl215s(mat a)\n   dim a(1)\n   a(3) = 'changed'\n   redim a(10)\n   a(8) = 'eight'\n   return\nend\n"),
     "zzl215": ("   dim a(5)\n   for i = 1 to 5 ; a(i) = i ; next i\n   call zzl215s(mat a)\n"
                "   crt 'R1[':a(3):']'\n   crt 'R2[':a(8):']'\n   crt 'L215DONE'\nend\n"),

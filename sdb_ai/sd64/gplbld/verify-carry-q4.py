@@ -354,7 +354,7 @@ def main():
         row("E5: BUILD.INDEX switches it on again and the index is right: enabled, Paris 4, Rio 1, Kyiv 1, Nice 1, query 4",
             tag(rebuilt, "REB") == ["0][1"] and tag(rebuilt, "REBAK") == ["4,1,1,1"] and tag(rebuilt, "REBQP") == ["4"], repr(rebuilt))
         out = q3.plain("zzaa", ["DISABLE.INDEX zzdix NOPE"])
-        row("E6: an index the file has not is reported by name and nothing is disabled", has(out, r"Unrecognised index name \(NOPE\)")
+        row("E6: an index the file has not is reported by name and nothing is disabled", has(out, r"Unrecognized index name \(NOPE\)")
             and not has(out, r"^Disabled"), repr(out))
         out = q3.plain("zzaa", ["DISABLE.INDEX zzfs1 ALL"])
         row("E6: a file without indices is told so", has(out, r"File has no indices"), repr(out))

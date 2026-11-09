@@ -55,7 +55,7 @@
 #
 # THE LOCK COLLISION IS THE CONSEQUENCE, NOT THE CHANGE, and is not tested
 # here.  Whether a READU on sue blocks a READU on SUE is downstream of this
-# flag through op_lock.c, which has honoured DHF_NOCASE since long before this
+# flag through op_lock.c, which has honored DHF_NOCASE since long before this
 # port.  What this port changed is whether the flag is SET, and that is what
 # this measures.  A two-session lock test is still worth having one day; it is
 # not what proves this change.

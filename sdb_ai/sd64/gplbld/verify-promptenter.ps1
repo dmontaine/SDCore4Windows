@@ -42,10 +42,10 @@
     verifier.  Leg 4 is DELETEF's 6135 and 6140: a second VOC pointer made with
     COPY (zzpromptx -> zzpromptd) is a file whose stored paths differ from its
     own name, which is the branch that asks - a plain DELETE.FILE asks nothing.
-    Leg 5 is CATALOG's 3033 and 3034: a program catalogued LOCAL then private
+    Leg 5 is CATALOG's 3033 and 3034: a program cataloged LOCAL then private
     meets 3033, and LOCAL again meets 3034.  Every leg has its Y control, and
-    every behaviour was captured from a real session before these were written.
-    3035 is NOT here and cannot be: it needs a matching GLOBAL catalogue entry,
+    every behavior was captured from a real session before these were written.
+    3035 is NOT here and cannot be: it needs a matching GLOBAL catalog entry,
     every gcat name carries a $ ! * prefix (152 of 152, measured) that a private
     or local name cannot, and writing gcat is administrator-only.
 
@@ -95,7 +95,7 @@ $Probe  = 'ZZPROMPTE'
 $ProbeL = 'ZZPROMPTL'   # leg 3: created the ordinary way, so stored as zzpromptl
 $FileD  = 'zzpromptd'   # leg 4: the real file
 $FileX  = 'zzpromptx'   # leg 4: a second VOC pointer to it, so its paths differ from its name
-$ProgP  = 'ZZPROMPTP'   # leg 5: a program catalogued LOCAL and private in turn
+$ProgP  = 'ZZPROMPTP'   # leg 5: a program cataloged LOCAL and private in turn
 $SentV  = 'zzpromptv'   # leg 6: a sentence saved with .S, for CPROC's .D prompt 5040
 $MultiM = 'zzpromptm'   # leg 8: a two-component multifile, for DELETEF's 6133
 
@@ -265,8 +265,8 @@ try {
 
     # --- LEG 5: RELEASE_1.1 6, CATALOG 3033 and 3034 ----------------------------
     #
-    # LOCAL then private meets 3033 ("also in local catalogue"); LOCAL again
-    # meets 3034 ("also in private catalogue").  Enter keeps each entry; Y
+    # LOCAL then private meets 3033 ("also in local catalog"); LOCAL again
+    # meets 3034 ("also in private catalog").  Enter keeps each entry; Y
     # removes it.  Local is a VOC record (V / CS); private is a record in the
     # account's cat directory.  Captured 13 Sep 2026 before writing this.
     Write-Host "--- leg 5: CATALOG 3033 + 3034 on $ProgP ------------------------------"
@@ -277,38 +277,38 @@ try {
         [System.Text.Encoding]::GetEncoding('iso-8859-1'))
     $mk5 = Invoke-SD @("BASIC BP $ProgP", "CATALOG BP $ProgP LOCAL", "CT VOC $ProgP")
     Write-Host $mk5.Text
-    $localOk = ($mk5.Text -match "$ProgP added to local catalogue") -and ($mk5.Text -cmatch '(?m)^\s*2: CS\s*$')
-    Row "leg 5 precondition: $ProgP compiled and is in the LOCAL catalogue (V / CS)" $localOk `
-        'the program is not locally catalogued, so 3033 could not be reached'
+    $localOk = ($mk5.Text -match "$ProgP added to local catalog") -and ($mk5.Text -cmatch '(?m)^\s*2: CS\s*$')
+    Row "leg 5 precondition: $ProgP compiled and is in the LOCAL catalog (V / CS)" $localOk `
+        'the program is not locally cataloged, so 3033 could not be reached'
     if ($localOk) {
-        # 3033: catalogue privately while the local entry exists; Enter.
+        # 3033: catalog privately while the local entry exists; Enter.
         $e33 = Invoke-SD @("CATALOG BP $ProgP", '', "CT VOC $ProgP")
         Write-Host $e33.Text
         Row 'leg 5: the 3033 run terminated' (-not $e33.Killed) "killed after ${TimeoutSeconds}s"
         Row 'leg 5: prompt 3033 was reached, showing (y/<n>)' `
-            ($e33.Text -match 'Program is also in local catalogue\. Remove \(y/<n>\)\?') 'no 3033 prompt'
+            ($e33.Text -match 'Program is also in local catalog\. Remove \(y/<n>\)\?') 'no 3033 prompt'
         Row 'leg 5: ENTER at 3033 kept the LOCAL entry (V / CS still there)' `
             ($e33.Text -cmatch '(?m)^\s*2: CS\s*$') 'the VOC V/CS record is gone after Enter'
         Row "leg 5: and the private entry was written ($catRec)" (Test-Path -LiteralPath $catRec) `
-            'no private catalogue record, so 3034 below could not be reached'
+            'no private catalog record, so 3034 below could not be reached'
 
-        # 3034: catalogue LOCAL while the private entry exists; Enter.
+        # 3034: catalog LOCAL while the private entry exists; Enter.
         $e34 = Invoke-SD @("CATALOG BP $ProgP LOCAL", '')
         Write-Host $e34.Text
         Row 'leg 5: the 3034 run terminated' (-not $e34.Killed) "killed after ${TimeoutSeconds}s"
         Row 'leg 5: prompt 3034 was reached, showing (y/<n>)' `
-            ($e34.Text -match 'Program is also in private catalogue\. Remove \(y/<n>\)\?') 'no 3034 prompt'
+            ($e34.Text -match 'Program is also in private catalog\. Remove \(y/<n>\)\?') 'no 3034 prompt'
         Row 'leg 5: ENTER at 3034 kept the private entry' (Test-Path -LiteralPath $catRec) `
-            'the private catalogue record is gone after Enter'
+            'the private catalog record is gone after Enter'
 
         # CONTROLS: Y removes each.
         $y34 = Invoke-SD @("CATALOG BP $ProgP LOCAL", 'Y')
         Row 'CONTROL leg 5: Y at 3034 removes the private entry' `
-            (($y34.Text -match 'Program is also in private catalogue') -and -not (Test-Path -LiteralPath $catRec)) `
+            (($y34.Text -match 'Program is also in private catalog') -and -not (Test-Path -LiteralPath $catRec)) `
             'the private record survived an explicit Y, or the prompt did not appear'
         $y33 = Invoke-SD @("CATALOG BP $ProgP", 'Y', "CT VOC $ProgP")
         Row 'CONTROL leg 5: Y at 3033 removes the LOCAL entry' `
-            (($y33.Text -match 'Program is also in local catalogue') -and ($y33.Text -match "Record '$ProgP' not found")) `
+            (($y33.Text -match 'Program is also in local catalog') -and ($y33.Text -match "Record '$ProgP' not found")) `
             'the VOC V/CS record survived an explicit Y, or the prompt did not appear'
     }
     Write-Host ''
@@ -420,7 +420,7 @@ finally {
                    (Join-Path (Join-Path $acctForClean 'cat') $ProgP), (Join-Path $bpDir $ProgP),
                    (Join-Path $acctForClean $MultiM), (Join-Path $acctForClean ($MultiM + '.DIC'))) |
                  Where-Object { Test-Path -LiteralPath $_ }
-    Row 'cleanup: no leg 4/5/8 file, catalogue record or source is left' ($leftFiles.Count -eq 0) ($leftFiles -join ', ')
+    Row 'cleanup: no leg 4/5/8 file, catalog record or source is left' ($leftFiles.Count -eq 0) ($leftFiles -join ', ')
 }
 
 Write-Host ''

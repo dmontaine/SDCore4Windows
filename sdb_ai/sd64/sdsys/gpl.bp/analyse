@@ -194,7 +194,7 @@ $include int$keys.h
          case keyword = KW$LPTR
             lptr = @true
          case 1
-            stop "Unrecognised keyword '" : token : "'"
+            stop "Unrecognized keyword '" : token : "'"
       end case
       call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
    repeat

@@ -22,7 +22,7 @@
 # proved from an unelevated token before secure-pcode.ps1 existed.
 #
 # IT IS THE SAME CONTROL AS verify-catgate AT ONE LEVEL DOWN.  gcat decides
-# WHICH catalogued program runs; this decides what the interpreter running it
+# WHICH cataloged program runs; this decides what the interpreter running it
 # IS.  Locking one and leaving the other is most of a control.
 #
 # THE DECISIVE CHECK IS THE WRITE, NOT THE ACL LISTING - verify-credacl.ps1's

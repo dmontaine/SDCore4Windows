@@ -114,7 +114,7 @@ def main():
         cmds += ["BASIC bp %s" % n, "CATALOG bp %s LOCAL" % n]
     cmds += ["BASIC bp %s" % n for n in good[5:]]
     out = sess(box, *cmds)
-    row("setup: eight programs compiled with no errors, the classes catalogued",
+    row("setup: eight programs compiled with no errors, the classes cataloged",
         out.count("Compiled 1 program(s) with no errors") == 8, out[-800:])
 
     o = sess(box, "RUN bp %s" % t_def)
