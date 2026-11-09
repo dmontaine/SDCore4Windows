@@ -254,7 +254,8 @@ if ($Action -eq 'Create' -and $Sweep) {
 }
 
 if ($Action -eq 'Create') {
-    $lines = New-SdTestUserScript -Name $Name -Password $Password
+    # 8 Nov 26 - bp-on: verify-lineendings and verify-nocase compile a probe as this account, and every account starts with bp.edit closed (S.64).
+    $lines = New-SdTestUserScript -Name $Name -Password $Password -Gates 'bp-on'
 } else {
     $lines = Remove-SdTestUserScript -Name $Name
 }
