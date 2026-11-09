@@ -108,13 +108,14 @@ function Measure-Report([string]$label, [string[]]$lines) {
     # AFTER the prompt rather than comparing totals with the control.
     #
     # THE HEADING PATTERN.  A page heading repeats the whole sentence, so the
-    # control's reads "LIST VOC ONLY NO.PAGE ... Page 1" - the first version of
+    # control's reads "LIST VOC ID.ONLY NO.PAGE ... Page 1" - the first version of
     # this pattern had no room for the keyword and counted 0 there.  The gap
     # before "Page" is spaces only, so the echoed command line, which ends at a
     # newline, cannot match.
-    # 8 Nov 26: LIST VOC ONLY - ONLY before the file name went with S.87 batch 4
-    # (Linux 0ead4fa0); the sentence, and so the heading, changed with it.
-    $Heading = 'LIST VOC ONLY(?: NO\.PAGE)? {2,}Page +\d+'
+    # 8 Nov 26: LIST VOC ID.ONLY - the word before the file name went with S.87
+    # batch 4 (Linux 0ead4fa0) and the second spelling ONLY with its VOC record
+    # (sdsys/voc_removed/only); the sentence, and so the heading, changed with them.
+    $Heading = 'LIST VOC ID\.ONLY(?: NO\.PAGE)? {2,}Page +\d+'
     $pi = $t.IndexOf($Prompt)
     $tail = if ($pi -ge 0) { $t.Substring($pi) } else { '' }
     $o = [pscustomobject]@{
@@ -147,7 +148,7 @@ if ($LASTEXITCODE -ne 0) { Bail 2 'assert-current refuses - the installed tree d
 Write-Host ''
 
 # --- leg A: the control, NO.PAGE -----------------------------------------------
-$a = Measure-Report 'leg A (control): LIST VOC ONLY NO.PAGE' @('TERM 80,12', 'LIST VOC ONLY NO.PAGE')
+$a = Measure-Report 'leg A (control): LIST VOC ID.ONLY NO.PAGE' @('TERM 80,12', 'LIST VOC ID.ONLY NO.PAGE')
 if ($a.Killed -or $a.Listed -le 0) {
     Bail 2 "the control did not complete a listing - nothing to compare against.`n$($a.Text)"
 }
@@ -164,7 +165,7 @@ Write-Host ''
 # --- leg B: page prompt answered S ----------------------------------------------
 # keycode() reads one byte, so the S is taken from the pipe at the first prompt;
 # the newline after it reaches TCL as an empty command, which is harmless.
-$b = Measure-Report 'leg B: LIST VOC ONLY, first page prompt answered S' @('TERM 80,12', 'LIST VOC ONLY', 'S')
+$b = Measure-Report 'leg B: LIST VOC ID.ONLY, first page prompt answered S' @('TERM 80,12', 'LIST VOC ID.ONLY', 'S')
 Write-Host ''
 
 Row 'leg B terminated (no hang at a later prompt)' (-not $b.Killed) `
