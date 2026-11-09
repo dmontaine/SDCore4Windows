@@ -494,6 +494,7 @@ bool edit_leaf_counts(const char * name);
 /* OP_DIO2.C */
 bool delete_path(char * path);
 bool fullpath(char * path, char * name);
+bool fullpath_n(char * path, char * name, size_t size); /* 7 Nov 26 S.159 */
 bool make_path(char * tgt);
 /* 21 Aug 26 Windows port - the containment gate for a network session.  Call
    it with an ABSOLUTE path, i.e. after fullpath(): it compares against @PATH

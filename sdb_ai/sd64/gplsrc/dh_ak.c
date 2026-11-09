@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 8 Nov 26 Windows port - from Linux 71d8550b (S.159): delete_ak() tests the index map with & after a range check, and clears the bit.
  * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): faults that optimisation exposed.
  * 25 Oct 26 Windows port - from Linux 3d3890e: update_internal_node(): removing the LAST child of an internal node that has others left no longer takes the node out of its parent too (a live
  *           subtree went missing from every lookup); the parent is given the node's new maximum key, and a terminal node moved over its parent has its two neighbours pointed at the new node
@@ -2214,23 +2215,19 @@ Private bool delete_ak(char *pathname, /* File path name */
   }
 
   /* Check this AK exists */
-  /* the (1 << akno) code in the if statement below is triggering a warning
-   * "warning: ‘<<’ in boolean context, did you mean ‘<’ ? [-Wint-in-bool-context]"
-   * Based on how it's used later (header.ak_map ^= (1 << akno)) in the code, it's
-   * my belief that the code is correct as written.  As such, I'm going to turn off
-   * the warning for this single instance.  -gwb 22Feb20
-   */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wint-in-bool-context"
-  if ((header.ak_map && (1 << akno)) == 0) {
-#pragma GCC diagnostic pop
+  /* 7 Nov 26 S.159 (Kimi review, finding 7): the test was written with && and
+     a pragma silenced the compiler's "<< in boolean context" warning, which was
+     right: while the file had ANY index the test passed for every number, and
+     with a stale subfile for a number whose bit was clear the ^= below SET that
+     bit.  A bitwise test, the number checked first, and the bit cleared.    */
+  if ((akno < 0) || (akno >= MAX_INDICES) || ((header.ak_map & (1u << akno)) == 0)) {
     dh_err = DHE_NO_SUCH_AK;
     goto exit_delete_ak;
   }
 
   /* Clear AK map flag */
 
-  header.ak_map ^= (1 << akno);
+  header.ak_map &= ~(1u << akno);
 
   /* Does this file use relocated indices? */
 

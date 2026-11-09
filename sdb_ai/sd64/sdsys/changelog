@@ -2,6 +2,16 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+8 Nov 26   DELETING A TREE NO LONGER FOLLOWS A LINK INSIDE IT, AND LONG PATH NAMES CANNOT OVERRUN THEIR BUFFERS (FROM SD CORE FOR LINUX).
+
+             What        - A symbolic link inside a tree being deleted (DELETE.ACCOUNT, DELETE.FILE and the rest) is removed as a link.
+                           Its target is left alone; before, a link to a directory was walked and everything under the target deleted.
+                           A pathname that resolves to more than 255 characters gives an empty name and a failure instead of writing
+                           past its buffer, and CREATE of a very long path stops cleanly. A link in the middle of a path is now followed
+                           properly, including a link inside its target.
+             Why         - A link planted in an account could turn an administrator's DELETE.ACCOUNT onto files elsewhere.
+             Does NOT    - Change a path with no link in it, or a name that fits.
+
 8 Nov 26   CODE THAT NOTHING COULD RUN IS REMOVED FROM THE C SOURCE, INCLUDING SDCONV'S OLD HASHED-FILE CONVERTER (FROM SD CORE FOR LINUX).
 
              What        - Unused C functions are gone: a few error helpers, wrappers and a memory-dump routine, and the seven

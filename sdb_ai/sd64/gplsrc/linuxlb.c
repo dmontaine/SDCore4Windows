@@ -21,6 +21,7 @@
  * 14 Aug 26 Windows port - IsElevated() added beside IsAdmin()
  * 05 Sep 26 Windows port - IsInteractive() added beside both.  How the session
  *           arrived, where the other two ask who and what.  PRE_RELEASE 167.
+ * 8 Nov 26 Windows port - from Linux 71d8550b (S.159): sdrealpath() reads a link's target as part of the path, with a drive letter counted as a root here.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -427,6 +428,10 @@ char* sdrealpath(char* inpath,  /* Supplied path */
 /* 13 Aug 26 Windows port - see the note below */
   char path[PATH_MAX + 1];
   int root_len;
+  /* 8 Nov 26 (S.159): what is still to be read once a link has been met - its target, then the rest of the input */
+  char pending[2 * PATH_MAX + 2];
+  char splice[2 * PATH_MAX + 2];
+  size_t rest_len;
 
   /* 13 Aug 26 Windows port - accept the Windows spellings of a path.
 
@@ -535,7 +540,8 @@ char* sdrealpath(char* inpath,  /* Supplied path */
            Cast the (always non-negative) pointer difference so the
            comparison is not done between signed and unsigned types. */
         /* if ((p - inpath) <= strlen(inpath)) { */
-        if ((size_t)(p - inpath) <= strlen(inpath)) {
+        /* 8 Nov 26 (S.159): asks q, not p - inpath: after a link p points into pending, and p is q + 1 only when q is not the end */
+        if (*q != '\0') {
         /* -------------------- */
           if (tgt + strlen(p) + 1 >= outpath + PATH_MAX)
             return NULL; /* Too long */
@@ -556,23 +562,48 @@ char* sdrealpath(char* inpath,  /* Supplied path */
 
         link_buf[n] = '\0';
 
-        if (link_buf[0] == '/') /* It's an absolute symlink */
+        /* 8 Nov 26 Windows port - from Linux 71d8550b (S.159): the target was
+           copied into the result as it stood and never read again, so
+           a/link -> ../outside came back as .../a/../outside, and a link inside
+           the target was not followed.  The target is now put in front of what
+           is left of the input (q: the terminator or "/rest") and read like any
+           other part.  Windows: backslashes fold and a drive letter is a root,
+           as for the input at the top of this function. */
+        rest_len = strlen(q);
+        if ((size_t)n + rest_len + 1 > sizeof(splice))
+          return NULL;
+        memcpy(splice, link_buf, n);
+        memcpy(splice + n, q, rest_len + 1); /* q may point into pending */
+        memcpy(pending, splice, n + rest_len + 1);
+        for (p = pending; *p != '\0'; p++) {
+          if (*p == '\\')
+            *p = '/';
+        }
+        p = pending;
+
+        if (pending[0] == '/') /* It's an absolute symlink: start again at the root */
         {
-          strcpy(outpath, link_buf);
-          tgt = outpath + n;
+          outpath[0] = '/';
+          tgt = outpath + 1;
           root_len = 1; /* 13 Aug 26 - back to a POSIX root */
+        } else if (((((pending[0] >= 'A') && (pending[0] <= 'Z')) ||
+                     ((pending[0] >= 'a') && (pending[0] <= 'z')))) &&
+                   (pending[1] == ':')) /* A drive letter: that drive is the root */
+        {
+          outpath[0] = pending[0];
+          outpath[1] = ':';
+          outpath[2] = '/';
+          tgt = outpath + 3;
+          root_len = 3;
+          p = pending + 2;
         } else {
-          /* Back up one level unless already at root directory */
+          /* Take the link's own name off again; its target is relative to its directory */
           if (tgt > outpath + root_len)
             while (*((--tgt) - 1) != '/') {
             }
-
-          if (tgt + n - outpath >= PATH_MAX)
-            return NULL;
-
-          strcpy(tgt, link_buf);
-          tgt += n;
         }
+        *tgt = '\0';
+        continue;
       }
     }
 
