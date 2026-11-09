@@ -461,7 +461,9 @@ function Test-InGroup([string]$group, [string]$name) {
 # is the same record and must not be reported as an absence.  That is the
 # opposite of the rule this tree uses for hashes, and it is written down so
 # nobody tightens it to -ceq and turns a found record into a clean bill.
-$osuDir = Join-Path $env:ProgramData 'SD\sdsys\os.users'
+# 9 Nov 26 (RELEASE_1.1 188): os.users is retired.  The grant is fields 7 (SH) and 8 (OS.EXECUTE) of the account's
+# register record, so these two helpers read that record; the checks below ask the same questions of it.
+$osuDir = Join-Path $env:ProgramData 'SD\sdsys\accounts'
 function Get-OsUsersRecord([string]$name) {
     if (-not (Test-Path -LiteralPath $osuDir)) { return $null }
     $f = @(Get-ChildItem -LiteralPath $osuDir -File -ErrorAction SilentlyContinue |
@@ -475,7 +477,9 @@ function Get-OsUsersRecord([string]$name) {
 # on the live os.users\don.
 function Get-OsUsersFields($rec) {
     if (-not $rec) { return @() }
-    return @(Get-Content -LiteralPath $rec.FullName -ErrorAction SilentlyContinue)
+    $lines = @(Get-Content -LiteralPath $rec.FullName -ErrorAction SilentlyContinue)
+    return @($(if ($lines.Count -ge 7) { $lines[6].Trim().ToLower() } else { '' }),
+             $(if ($lines.Count -ge 8) { $lines[7].Trim().ToLower() } else { '' }))
 }
 
 # ---------------------------------------------------------------------------
@@ -565,7 +569,7 @@ foreach ($a in @($sdAcc, $borrowAcc, $heldAcc, $dirHeldAcc)) {
     # record an earlier run left, which is the very leak this leg measures.
     $stale = Get-OsUsersRecord $a
     if ($stale) {
-        Fail ("os.users\" + $stale.Name + ' is still there from an earlier run - ' +
+        Fail ("accounts\" + $stale.Name + ' is still there from an earlier run - ' +
               'use a fresh -Prefix.  Step 1 has to watch the verb WRITE this record, ' +
               'so a leftover would make the whole leg vacuous.')
     }
@@ -682,18 +686,18 @@ try {
     # what is checked.  (Field 5 of ACCOUNTS is not a tier any more either -
     # RELEASE_1.1 64 gave the slot to ACC$SUSPENDED.)
     $osuRec = Get-OsUsersRecord $sdAcc
-    Note 'CREATE.ACCOUNT wrote an os.users record' $true ([bool]$osuRec)
+    Note 'CREATE.ACCOUNT wrote the register record' $true ([bool]$osuRec)
     if ($osuRec) {
         $osuF = Get-OsUsersFields $osuRec
-        Write-Host ("   os.users\{0}: {1}" -f $osuRec.Name, ($osuF -join ' | '))
+        Write-Host ("   accounts\{0}, fields 7 and 8: {1}" -f $osuRec.Name, ($osuF -join ' | '))
         # BOTH fields, because grant.os.access writes both even when one was
         # asked for and both gates read them positionally.  Field 2 is the one
         # that matters - OS.EXECUTE - and a one-field record would leave it to
         # a later reader to guess at.
-        Note 'os.users field 1 (SH) is yes'         'yes' ($osuF[0])
-        Note 'os.users field 2 (OS.EXECUTE) is yes' 'yes' ($osuF[1])
+        Note 'register field 7 (SH) is yes'         'yes' ($osuF[0])
+        Note 'register field 8 (OS.EXECUTE) is yes' 'yes' ($osuF[1])
     } else {
-        Fail ("CREATE.ACCOUNT USER $sdAcc SH-ON OS-ON made no os.users record.  " +
+        Fail ("CREATE.ACCOUNT USER $sdAcc SH-ON OS-ON made no register record.  " +
               'Step 3 cannot measure that the record goes when there was none to go, ' +
               'so this stops rather than reporting a green leg that tested nothing.')
     }
@@ -764,10 +768,10 @@ try {
     # different findings and only the second names the exposure.
     $osuAfter = Get-OsUsersRecord $sdAcc
     if ($osuAfter) {
-        Write-Host ("   os.users\{0} SURVIVED the delete: {1}" -f
+        Write-Host ("   accounts\{0} SURVIVED the delete: {1}" -f
                     $osuAfter.Name, ((Get-OsUsersFields $osuAfter) -join ' | ')) -ForegroundColor Yellow
     }
-    Note 'os.users record is gone'      $false ([bool]$osuAfter)
+    Note 'register record is gone'      $false ([bool]$osuAfter)
 
     if ($sdProf -eq '') {
         Skip 'ProfileList entry is gone'  'no profile was made - see step 2'
@@ -996,13 +1000,13 @@ try {
     # The same null-case guard step 1 carries: the preflight required this record
     # ABSENT, so a pass here is the verb writing it and nothing else.
     $hOsu = Get-OsUsersRecord $heldAcc
-    Note 'CREATE.ACCOUNT wrote its os.users record' $true ([bool]$hOsu)
+    Note 'CREATE.ACCOUNT wrote its register record' $true ([bool]$hOsu)
     if (-not $hOsu) {
-        Fail ("CREATE.ACCOUNT USER $heldAcc SH-ON OS-ON made no os.users record.  " +
+        Fail ("CREATE.ACCOUNT USER $heldAcc SH-ON OS-ON made no register record.  " +
               'This leg exists to watch that record go, so it stops rather than ' +
               'reporting a green branch that measured nothing.')
     }
-    Write-Host ("   os.users\{0}: {1}" -f $hOsu.Name, ((Get-OsUsersFields $hOsu) -join ' | '))
+    Write-Host ("   accounts\{0}, fields 7 and 8: {1}" -f $hOsu.Name, ((Get-OsUsersFields $hOsu) -join ' | '))
 
     $hSid  = Get-Sid $heldAcc
     $hProf = New-TestProfile $heldAcc $hpw
@@ -1050,7 +1054,7 @@ try {
                     'returned 0 and this leg measured the same arm as step 3.') -ForegroundColor Red
     } else {
         Note 'the pin blocked the profile removal (this leg is decisive)' $true $true
-        Write-Host '   65: status 6/7/8 - the os.users check below is DECISIVE' -ForegroundColor Cyan
+        Write-Host '   65: status 6/7/8 - the register check below is DECISIVE' -ForegroundColor Cyan
 
         # 36's contract, and this is the first time any run has been in a
         # position to assert it: the entry is kept WITH the directory, because
@@ -1078,10 +1082,10 @@ try {
     # alike.
     $hOsuAfter = Get-OsUsersRecord $heldAcc
     if ($hOsuAfter) {
-        Write-Host ("   os.users\{0} SURVIVED the delete: {1}" -f $hOsuAfter.Name,
+        Write-Host ("   accounts\{0} SURVIVED the delete: {1}" -f $hOsuAfter.Name,
                     ((Get-OsUsersFields $hOsuAfter) -join ' | ')) -ForegroundColor Yellow
     }
-    Note 'os.users record is gone (the DECISIVE one)' $false ([bool]$hOsuAfter)
+    Note 'register record is gone (the DECISIVE one)' $false ([bool]$hOsuAfter)
 
     Write-Host ''
     Write-Host ('   LEFT BEHIND ON PURPOSE: ' + $hProf + ' and its ProfileList entry.') -ForegroundColor Yellow
