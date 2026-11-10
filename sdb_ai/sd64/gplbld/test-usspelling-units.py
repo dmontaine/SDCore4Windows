@@ -104,11 +104,43 @@ def md_prose(src):
     return "\n".join(out)
 
 
+def ps_literals(text):
+    """The quoted texts of a PowerShell installer script: both quote styles, nothing on a comment line.  (Windows port, RELEASE_1.1 205.)"""
+    out = []
+    for line in text.split("\n"):
+        st = line.lstrip()
+        if st.startswith("#") or st.startswith("<#") or st.startswith("*>"):
+            continue
+        out.extend(m.group(1) for m in re.finditer(r"'((?:[^']|'')*)'", line))
+        out.extend(m.group(1) for m in re.finditer(r'"((?:[^"`]|`.)*)"', line))
+    return out
+
+
+def iss_literals(text):
+    """The quoted texts of an Inno Setup script: ( * * ) and { } comments are removed first, then lines starting ; or //."""
+    text = re.sub(r"\(\*.*?\*\)", " ", text, flags=re.S)
+    text = re.sub(r"\{[^}]*\}", " ", text, flags=re.S)
+    out = []
+    for line in text.split("\n"):
+        st = line.lstrip()
+        if st.startswith(";") or st.startswith("//"):
+            continue
+        if st.count("'") % 2 == 0:
+            line = re.sub(r"//.*$", "", line)
+        out.extend(m.group(1) for m in re.finditer(r"'((?:[^']|'')*)'", line))
+        out.extend(m.group(1) for m in re.finditer(r'"([^"]*)"', line))
+    return out
+
+
 def scan(files):
-    """files: {label: (kind, text)} where kind is text, basic, c or md.  Returns [(label, line number or '', word, context)]."""
+    """files: {label: (kind, text)} where kind is text, basic, c, md, ps1 or iss.  Returns [(label, line number or '', word, context)]."""
     found = []
     for label, (kind, text) in sorted(files.items()):
-        if kind == "basic":
+        if kind in ("ps1", "iss"):
+            for lit in (ps_literals(text) if kind == "ps1" else iss_literals(text)):
+                for w in hits_in(lit):
+                    found.append((label, "", w, lit[:80]))
+        elif kind == "basic":
             for n, line in enumerate(text.split("\n"), 1):
                 for lit in basic_literals(line):
                     for w in hits_in(lit):
@@ -147,6 +179,14 @@ def read_tree():
     guide = os.path.join(SD64, "agent-pack", "guide", "sd-basic-guide.md")
     if os.path.isfile(guide):
         add(guide, "md", "agent-pack/guide/sd-basic-guide.md")
+    # Windows port (RELEASE_1.1 205): what the INSTALLER and its scripts print.  Every .ps1 and .iss of gplbld except the suites, probes and test tools,
+    # which hold expectations of SD's wording (checked by test-identtwins-units.py and the verifiers' own runs), not text a person reads.
+    gb = os.path.join(SD64, "gplbld")
+    for nm in sorted(os.listdir(gb)):
+        if re.match(r"(verify-|VerifyInstall|test-|probe-|sandbox-|check-free)", nm):
+            continue
+        if nm.endswith(".ps1") or nm.endswith(".iss"):
+            add(os.path.join(gb, nm), "ps1" if nm.endswith(".ps1") else "iss", "gplbld/" + nm)
     return files
 
 
@@ -155,10 +195,11 @@ def judge(files, quiet=False):
     kinds = {}
     for label, (kind, _t) in files.items():
         kinds[kind] = kinds.get(kind, 0) + 1
-    ok0 = kinds.get("text", 0) > 1000 and kinds.get("basic", 0) > 300 and kinds.get("c", 0) > 20
+    ok0 = (kinds.get("text", 0) > 1000 and kinds.get("basic", 0) > 300 and kinds.get("c", 0) > 20
+           and kinds.get("ps1", 0) > 10 and kinds.get("iss", 0) >= 1)
     if not quiet:
         row("U0 the texts were read (not a run on nothing): %s" % ", ".join("%d %s" % (v, k) for k, v in sorted(kinds.items())), ok0, repr(kinds))
-        row("U1 no British spelling in what SD prints: messages, help, program texts, C strings, the guide's prose", not found,
+        row("U1 no British spelling in what SD prints: messages, help, program texts, C strings, the guide's prose, the installer scripts' texts", not found,
             "; ".join("%s:%s %s (%s)" % f for f in found[:12]) + (" ... and %d more" % (len(found) - 12) if len(found) > 12 else ""))
     return ok0, found
 
@@ -176,6 +217,13 @@ def selftest():
         ("CONTROL: a keyword in capitals", ("messages/99996", ("text", "CATALOGUE is not a verb")), False),
         ("CONTROL: a key table row's action id", ("gpl.bp/zzx", ("basic", "   call $tk_keys('add', keys, 'a', 'analyze', 'analyse', '', 1)\n")), False),
         ("CONTROL: the terminfo capability colourmap", ("gplsrc/zy.c", ("c", 'x = sdtgetstr("colourmap");')), False),
+        ("an installer script says catalogue in a PowerShell string", ("gplbld/zz1.ps1", ("ps1", "Ok 'the program catalogue is present'\n")), True),
+        ("an installer script says colour in a double quoted string", ("gplbld/zz2.ps1", ("ps1", 'Write-Host "the colour of $x"\n')), True),
+        ("an Inno Setup [Code] string says licence", ("gplbld/zz3.iss", ("iss", "  Result := 'Accept the licence?';\n")), True),
+        ("an Inno Setup [Tasks] description says catalogue", ("gplbld/zz4.iss", ("iss", 'Name: "x"; Description: "Load the catalogue"\n')), True),
+        ("CONTROL: a PowerShell comment line", ("gplbld/zz5.ps1", ("ps1", "# the catalogue of colours\n$x = 1\n")), False),
+        ("CONTROL: an Inno Setup brace comment", ("gplbld/zz6.iss", ("iss", "  { the catalogue is not printed }\n  x := 1;\n")), False),
+        ("CONTROL: a file name in a string (licence\\ is a name)", ("gplbld/zz7.ps1", ("ps1", "$p = 'C:\\\\SD\\\\licence\\\\gpl.txt'\n")), False),
     ]
     for name, (label, fk), want in cases:
         f = dict(files)
