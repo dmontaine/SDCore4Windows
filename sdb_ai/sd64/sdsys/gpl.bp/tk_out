@@ -1,0 +1,176 @@
+* TK_OUT
+* The full-screen toolkit, shared base: the output pane of a page (S.88 phase 5, F0b; the library widget is $sl_out, S.88 3.10B).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 29 Oct 26 dm  The last argument may be unassigned on entry (a page's `oc` is never set before its first call): `tot = c` stopped with "Unassigned variable" at Ctrl-O.
+*              Found by sandbox-tk-widgets.py's first probe (run by hand).
+* 30 Oct 26 dm  New (S.88 F0b).
+* 9 Nov 26 dm  S.186 (Fable's review: "the output pane as a toolkit service on every page that runs a command"): the log of commands, ops log and loglines.
+*              $tk_run and $tk_runx log every command they run or refuse, with what it printed or why; $tk_std 'output' shows it on Ctrl-O on a page that has
+*              no output pane of its own.  It is kept apart from the pane (no page's pane gets an entry twice) and in memory, for the page that is open.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_out(op, ctx, a, b, c)        ALWAYS FIVE ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   A THIN FACADE over $sl_out, so that a page never names the library.  What a command printed, a refusal and a result are kept here, newest first, and shown in a pane of
+*   the page's own layout (a LAYOUT PANE, not an overlay: the sessions and audit pages draw again every three seconds).  The pane is CLOSED unless the page opens it.  The
+*   history is in MEMORY only (the library writes no file), and it is the history of this open of the app: it starts empty for each $tk_open (the epoch, ctx<TK.C.EPOCH>) and
+*   there is one app at a time.
+*
+*     add     (ctx, kind, text)         kind is ok, refuse, out or info (anything else is out); the text is cleaned by the library; the pane is not redrawn (the page's next draw does)
+*     open    (ctx)                     the pane is shown the next time the page draws it.  The page also declares the layout that gives the pane its rows ($tk_layout 'declare')
+*     close   (ctx)                     the pane is not drawn.  The history is kept
+*     toggle  (ctx -> c)                open becomes close and the other way round; c is 1 when it is open now
+*     state   (ctx -> c)                1 when it is open
+*     draw    (ctx, pane -> c)          draws the pane in the rectangle $tk_layout 'pane' gives for the pane id (null: output) when it is open and the layout shows it; c is 1 when drawn
+*     key     (ctx, nm -> c)            a key for the pane while it is open: up, down, pgup, pgdn, home, end scroll it and c is 'handled'; every other key, Esc included, is 'unhandled':
+*                                       THE PANE NEVER CLOSES ITSELF, the page's Esc rule does
+*     mouse   (ctx, mev -> c)           the wheel scrolls the pane; c is 'handled' or 'unhandled'
+*     focus   (ctx, on)                 gives the pane the focus (1) or takes it away (0)
+*     progress (ctx, text, n, total)    the progress line ($sl_out 'progress'); a null text takes it away.  Shown at once
+*     poll    (ctx -> c)                1 when Esc was pressed since the last poll (reads only keys already waiting)
+*     clear   (ctx)                     the history and the progress line are emptied
+*     log     ('', kind, text)          9 Nov 26: $tk_run's and $tk_runx's call: kind ok or refuse, text the sentence then (fields) what it printed or why.  Kept for the
+*                                       open of the app that is in force ($tk_open's count), newest first, cleaned (a control character is ?), at most 2000 lines
+*     loglines (ctx -> c)               the log of this open of the app, one line to a field, null when nothing was run
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_out(op, ctx, a, b, c)
+$catalog $tk_out
+
+$include sl.h
+$include tk.h
+
+   common /tkout/ out.w, out.epoch               ;* the pane of the app that is open: the library's collection, and the open (TK.C.EPOCH) it belongs to
+   common /tkepoch/ ep.next, ep.drawn            ;* 9 Nov 26 (S.186): $tk_open's count of opens, which the log of commands is kept for
+   common /tkrunlog/ rl.text, rl.epoch, rl.n     ;* 9 Nov 26 (S.186): the log of commands $tk_run and $tk_runx ran, newest first, one line to a field, for the open rl.epoch
+
+   * 9 Nov 26 (S.186): the log of commands.  Kept apart from the pane, and BEFORE the pane's epoch test below, because $tk_run has no context to give
+   if op = 'log' or op = 'loglines' then
+      if rl.epoch # ep.next + 0 then
+         rl.text = ''
+         rl.epoch = ep.next + 0
+         rl.n = 0
+      end
+      if op = 'log' then
+         gosub log.add
+      end else
+         c = (if ctx<TK.C.EPOCH> + 0 = rl.epoch then rl.text else '')
+      end
+      return
+   end
+
+   if unassigned(c) then tot = '' else tot = c   ;* 'progress' is given the total in c; every other operation is given a variable the caller never set (29 Oct 26: "Unassigned variable" at Ctrl-O)
+   c = ''
+   if system(25) then return                     ;* a phantom has no screen to show a pane on, and no history is worth keeping
+   if out.epoch # ctx<TK.C.EPOCH> + 0 or jtype(out.w) # 'collection' then
+      out.w = collection()                       ;* another open of an app than the history belongs to: it starts empty and closed
+      out.epoch = ctx<TK.C.EPOCH> + 0
+   end
+
+   begin case
+      case op = 'add'
+         call $sl_out('add', out.w, '', a : @fm : b, r)
+      case op = 'open'
+         call $sl_out('open', out.w, '', '', r)
+      case op = 'close'
+         call $sl_out('close', out.w, '', '', r)
+      case op = 'toggle'
+         if out.w{'open'} + 0 then call $sl_out('close', out.w, '', '', r) else call $sl_out('open', out.w, '', '', r)
+         c = out.w{'open'} + 0
+      case op = 'state'
+         c = out.w{'open'} + 0
+      case op = 'draw'
+         if out.w{'open'} + 0 then
+            pid = a
+            if pid = '' then pid = 'output'
+            call $tk_layout('pane', ctx, pid, rc)
+            if rc<1, 5> + 0 then
+               if out.w{'ax'} # rc<1, 1> + 0 or out.w{'ay'} # rc<1, 2> + 0 or out.w{'w'} # rc<1, 3> + 0 or out.w{'h'} # rc<1, 4> + 0 or out.w{'type'} = '' then
+                  out.w{'ax'} = rc<1, 1> + 0
+                  out.w{'ay'} = rc<1, 2> + 0
+                  out.w{'w'} = rc<1, 3> + 0
+                  out.w{'h'} = rc<1, 4> + 0
+                  call $sl_scr('get', scr)
+                  call $sl_out('init', out.w, scr, '', r)
+                  call $sl_scr('put', scr)
+               end
+               call $sl_scr('get', scr)
+               call $sl_out('draw', out.w, scr, '', r)
+               call $sl_scr('put', scr)
+               c = 1
+            end
+         end
+      case op = 'key'
+         c = 'unhandled'
+         if out.w{'open'} + 0 then
+            call $sl_scr('get', scr)
+            call $sl_out('key', out.w, scr, a, r)
+            call $sl_scr('put', scr)
+            if r<1> = 'handled' then c = 'handled'
+         end
+      case op = 'mouse'
+         c = 'unhandled'
+         if out.w{'open'} + 0 then
+            call $sl_scr('get', scr)
+            call $sl_out('mouse', out.w, scr, a, r)
+            call $sl_scr('put', scr)
+            if r<1> = 'handled' then c = 'handled'
+         end
+      case op = 'focus'
+         if out.w{'open'} + 0 then
+            call $sl_scr('get', scr)
+            call $sl_out('focus', out.w, scr, a + 0, r)
+            call $sl_scr('put', scr)
+         end
+      case op = 'progress'
+         call $sl_scr('get', scr)
+         call $sl_out('progress', out.w, scr, (if a = '' then '' else a : @fm : b : @fm : tot), r)
+         call $sl_scr('put', scr)
+      case op = 'poll'
+         call $sl_scr('get', scr)
+         call $sl_out('poll', out.w, scr, '', r)
+         call $sl_scr('put', scr)
+         c = r + 0
+      case op = 'clear'
+         call $sl_out('clear', out.w, '', '', r)
+   end case
+   return
+
+* 9 Nov 26 (S.186): a = ok or refuse, b = the sentence, then (fields) what it printed or why it was refused.  One entry: a line 'ok  sentence' or '!!  sentence',
+*   the lines under it indented, a blank line; put first.  A control character becomes ? and a mark is shown as ] | [, so nothing in the log is sent to the
+*   terminal as a sequence.  At most 200 lines an entry and 2000 in the log: the oldest go.
+log.add:
+   lg.e = ''
+   lg.n = dcount(b, @fm)
+   if lg.n > 201 then lg.n = 201
+   for lg.i = 1 to lg.n
+      lg.l = b<lg.i>
+      lg.l = convert(@vm : @sm : @tm, ']|[', lg.l)
+      lg.c = ''
+      for lg.j = 1 to len(lg.l)
+         lg.q = seq(lg.l[lg.j, 1])
+         if lg.q < 32 or lg.q = 127 then lg.c := '?' else lg.c := lg.l[lg.j, 1]
+      next lg.j
+      if lg.i = 1 then
+         lg.e = (if a = 'refuse' then '!!  ' else 'ok  ') : lg.c
+      end else
+         lg.e<-1> = '    ' : lg.c
+      end
+   next lg.i
+   lg.e<-1> = ''
+   if rl.text = '' then rl.text = lg.e else rl.text = lg.e : @fm : rl.text
+   rl.n += 1
+   if dcount(rl.text, @fm) > 2000 then rl.text = field(rl.text, @fm, 1, 2000)
+   return
+end
+
+* END-CODE

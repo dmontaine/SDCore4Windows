@@ -1,0 +1,1 @@
+The name of an operating system file is its full path: it starts with a slash and has no . or .. and no doubled slash, and no control characters (%1)

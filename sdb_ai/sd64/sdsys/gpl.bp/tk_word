@@ -1,0 +1,71 @@
+* TK_WORD
+* The full-screen toolkit, shared base: may this name be given to a command as a name? (the S.88 plan 2.3, defect S4)
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  New (S.88 phase 2, S4).  TOOL.DICT's check.word, with its two halves, moved here so that TOOL.VOC and TOOL.FILES ask the same question of the name they build a
+*               command from.
+* 9 Nov 26 dm  S.186: why names the character that is wrong (15040 with $tk_badch); 12811 is left for a name that is empty or longer than 63.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_word(name, ok, why)
+*
+*     name   the word a page is about to put in a sentence as the NAME of a record, an item, a file or an index
+*     ok     returned: 1 when the page may give it to a command, else 0
+*     why    returned: null when ok; else the sentence that says why not (12811 or 12760)
+*
+*   Two questions, in this order.  (1) Is it only the characters $tk_run lets through (a-z, 0-9, dot, dash and underscore, 1 to 63 of them)?  $tk_run refuses the rest as well; the test
+*   is here too so that a page can say so before it shows a box.  (2) Does the VOC of the account hold an entry of that name whose type is K (a keyword)?  A keyword is read by the
+*   verb as the keyword and not as a name, whoever's record or file it was meant to be: DELETE VOC ALL asks "Delete all records in VOC?" and DELETE DICT file ALL and DELETE.INDEX
+*   file ALL do the same for every item and every index, and the question goes to the output the page captures, so that nobody reads it.  A VOC entry is looked up the way a verb
+*   looks it up (the VOC folds case), so a name in capitals is the same word.  Nothing is changed.
+*
+*   WHAT IT DOES NOT DO.  It does not say that the name exists or that the person may change it: the verb and the kernel's edit gates decide that.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_word(name, ok, why)
+$catalog $tk_word
+
+   ok = (len(name) > 0 and len(name) <= 63)
+   why = ''
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for q = 1 to len(name)
+      if index(good, name[q, 1], 1) = 0 then ok = @false
+   next q
+   if not(ok) then
+      * the name is what a person or a record gave: it is shown as printable ASCII only, a control or high byte as ?
+      shown = ''
+      nq = len(name)
+      if nq > 40 then nq = 40
+      for q = 1 to nq
+         sq = seq(name[q, 1])
+         if sq >= 32 and sq <= 126 then shown := name[q, 1] else shown := '?'
+      next q
+      call $tk_badch(name, bad.ch)                     ;* 9 Nov 26 (S.186): which character, in words
+      if bad.ch = '' then
+         why = sysmsg(12811, shown)                    ;* the length is what is wrong (none, or over 63)
+      end else
+         why = sysmsg(15040, shown, bad.ch)
+      end
+      return
+   end
+
+   open 'VOC' to kwf then
+      read kwr from kwf, name then
+         if upcase(kwr<1>[1, 1]) = 'K' then ok = @false
+      end
+      close kwf
+   end
+   if not(ok) then why = sysmsg(12760, name)
+
+   return
+end
+
+* END-CODE

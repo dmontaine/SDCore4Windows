@@ -1,0 +1,52 @@
+* TK_BADCH
+* The full-screen toolkit, shared base: which character of a word is the one a command may not have, said in words.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 9 Nov 26 dm  New (S.186, Fable's review of the TUI: "the status line should say why (a capital, an &) each time").  $tk_run, $tk_word and the pages
+*              that keep a name out of a command named no character, so the person had to find it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_badch(word, desc)
+*
+*     word   a word a page or $tk_run would put in a command
+*     desc   returned: null when every character is one a command word may have (a-z, 0-9, dot, dash, underscore); else the FIRST one that is not, in
+*            words: "a capital letter (A)", "a space", "a control character", "a character above 127", or "the character &".  A control character or a
+*            byte above 127 is never shown itself: it is named, so nothing reaches the terminal.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_badch(word, desc)
+$catalog $tk_badch
+
+   desc = ''
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for bc.i = 1 to len(word)
+      bc.c = word[bc.i, 1]
+      if index(good, bc.c, 1) = 0 then
+         bc.n = seq(bc.c)
+         begin case
+            case bc.n >= 65 and bc.n <= 90
+               desc = 'a capital letter (' : bc.c : ')'
+            case bc.n = 32
+               desc = 'a space'
+            case bc.n < 32 or bc.n = 127
+               desc = 'a control character'
+            case bc.n > 127
+               desc = 'a character above 127'
+            case 1
+               desc = 'the character ' : bc.c
+         end case
+         return
+      end
+   next bc.i
+   return
+end
+
+* END-CODE

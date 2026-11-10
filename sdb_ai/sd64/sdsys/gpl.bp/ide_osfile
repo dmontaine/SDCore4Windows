@@ -1,0 +1,455 @@
+* IDE_OSFILE
+* The IDE's operating system files: opened, read again and written in place, under the kernel's own gates for the account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 02 Nov 26 dm  S.88 A3: the kernel now makes the file of 'create' only once the SD lock on its name is held, so 'locked' means nothing was made.  S.88 A5: 'list' gives the
+*               STATUS() and OS.ERROR() of a DIR() refused with ER.PERM (info<6>, info<7>), which is the OS gate OR a directory the operating system will not open.
+* 30 Oct 26 dm  S.88 A3 (the second E2 review): 'create' says 'cantmade' for an ON ERROR clause (the file may be there, empty).  This program is not $internal and cannot ask
+*               kernel(): the IDE (os.create) tells the OS gate from an edit gate when it gets 'gate'.
+* 30 Oct 26 dm  S.88 stage E2: 'create' (an exclusive create, then the same write and read-back as 'save') and 'list' (the one DIR() of the IDE); write.file is split into make.data and put.data.
+* 28 Oct 26 dm  New (S.88 stage E).  The IDE opens and saves a file of the operating system by its path.  THIS PROGRAM IS NOT $internal ON PURPOSE: the kernel trusts a $internal
+*               program with an OPENSEQ by pathname (it asks neither the account's OS gate nor the edit gates), so the IDE, which is $internal, would have been the only guard.
+*               Here the OPENSEQ is asked as the account is: inside the account's directory, or the account holds os-on (or is SDSYS); a path in a VOC, a dictionary, a
+*               program file or the shared account that the account may not change opens READ-ONLY.  A name that starts with a dollar sign is for internal programs only (the compiler refuses it here), so this is a !-routine that any program can call: it can do nothing the
+*               caller's own OPENSEQ, READBLK, WRITEBLK and WEOFSEQ could not, under the same gates.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !ide_osfile(op, path, f, text, info, why)
+*
+*     op     'check'   is PATH written in the form the IDE takes? (why 'name' when not; nothing is opened or touched, F TEXT and INFO are not used)
+*            'open'    open PATH (it must be there), keep the file variable F and give its text; the file is opened for reading and writing without truncation (or
+*                      for reading only when the account may not change it) and the SD record lock on it is taken, which F keeps until the caller closes F
+*            'reread'  read F again from the start (the caller keeps F): TEXT and INFO as for 'open'; the IDE compares them with what it read before it writes.  The buffer of F is
+*                      thrown away first, so that a change made by another program is seen; why 'gone' when nothing links to the file F holds any more (it was removed, or replaced
+*                      by another file renamed over it: a write would go into a file nobody can reach)
+*            'save'    write TEXT over the file F is open on, in place (SEEK 0, WRITEBLK, then WEOFSEQ at the new length), with the line ends INFO<1> and INFO<2> say; the file is then
+*                      READ BACK and must be the bytes meant (why 'io' if not), and TEXT and INFO come back as the next 'reread' would give them (so the caller's baseline is what
+*                      the disk gives, not what was typed)
+*            'create'  (30 Oct 26, stage E2) make PATH with TEXT in it: the kernel creates it exclusively and the PARENT DIRECTORY MUST BE THERE; TEXT is checked (bytes, size) first;
+*                      an existing file is filled only when it is empty (a file with content is why 'exists', and is never changed); F is open afterwards with the SD lock, as after 'open',
+*                      and TEXT and INFO come back as the next 'reread' would give them.  INFO<1> and INFO<2> are IN.  A failed write leaves the empty file that was made (why 'io')
+*            'list'    (30 Oct 26, stage E2) the entries of the directory PATH ('/' too): TEXT has one field for each, name, value mark, D or F, value mark, size - the directories first,
+*                      then the files, each in the order of the names; INFO<4> is how many, INFO<5> how many were left out (a name the IDE cannot show, or more than 1000); the only DIR() of the IDE
+*     path   the full name of the file, as the IDE has checked it (absolute, no . or .., no doubled slash)
+*     f      the file variable (out for 'open'; in for 'reread' and 'save')
+*     text   the lines of the file as a record: the lines separated by field marks (out for 'open' and 'reread'; in AND out for 'save')
+*     info   one field mark between the parts:
+*              <1> 1 when every line ended with CR LF (they are taken off, and put back by 'save'); 0 for LF, and a CR in a line is then just a character
+*              <2> 1 when the last line ended with its line end (it is not in TEXT, and 'save' puts it back)
+*              <3> 1 when the file was opened read-only ('open' only)
+*              <4> the size in bytes (of the file read, or of the file written by 'save'; of the file or text found too large)
+*              <6> the STATUS() of an OPENSEQ that failed in a way nothing below names ('cant'), or of the SEEK, WRITEBLK or WEOFSEQ of a 'save' that failed ('io')
+*            for 'save', INFO<1> and INFO<2> are IN.  NOTHING IS CONVERTED OR GUESSED ABOUT THE BYTES: a file is its bytes, split into lines at the line end it uses.
+*     why    '' for success, else:
+*              'name'    the path is not absolute, or has a . or .. component, a doubled or final slash, or a control character
+*              'none'    no file of that name                        'gate'   the account may not reach that path (the OS gate)
+*              'dir'     not a plain file: a directory, a socket     'special'  a device, a pipe or a port (the file is closed again before it is read)
+*              'exists'  'create' only: the name is taken by a file with content, a link or something made meanwhile (nothing was changed)
+*              'locked'  another session holds the file's SD lock ('create': nothing was made)   'big'    more than 2 MB (2,097,152 bytes); INFO<4> is its size
+*              'bytes'   a NUL, or a byte from 248 to 255 (SD's marks): not text this editor can keep as it is
+*              'io'      reading, positioning, writing or cutting the file failed, the bytes read back after a write are not the bytes written, or the file is not the size it was a moment ago
+*              'gone'    'reread' only: nothing links to the file F holds (removed, or replaced by a rename)
+*              'ro'      'save' on a file opened read-only (no write was tried)   'cant'  an OPENSEQ that failed: INFO<6> is its STATUS()   'op'  an unknown OP
+*              'cantmade'  'create' only (30 Oct 26): the OPENSEQ ... CREATING took its ON ERROR clause, so the file MAY have been made (empty) first: INFO<6> is the STATUS()
+*     A file that is NOT open (a failure of 'open') is closed here: an OPENSEQ that took its ELSE keeps the name locked until the variable is closed.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+subroutine ide_osfile(op, path, f, text, info, why)
+$catalog !ide_osfile
+
+$include syscom keys.h
+
+   ER.NSEQ = 3013                          ;* gplsrc/err.h ER_NSEQ: not a sequential file (a directory, a socket)
+   ER.PERM = 3035                          ;* ER_PERM: the OS gate, or an edit gate for a file that does not exist yet, refused
+   ER.FNF = 3003                           ;* ER_FNF: DIR() of a directory that is not there
+   ER.EXISTS = 6032                        ;* ER_EXISTS: OPENSEQ ... CREATING found the name taken (exclusive since 30 Oct 26)
+   OSF.LIST = 1000                         ;* the most entries 'list' gives back
+   OSF.MAX = 2097152                       ;* the largest file the IDE opens, and the largest it writes
+   OSF.BLK = 32768                         ;* bytes to a READBLK
+   cr.c = char(13)
+   lf.c = char(10)
+   nope = char(0)                          ;* the bytes that are not text for this editor: NUL, and 248 to 255, which are SD's own marks (the line end of a record is 254)
+   for j = 248 to 255
+      nope := char(j)
+   next j
+
+   ctl = char(127)                         ;* and the control characters: a path with one in it is refused (the screen would show it as a letter and the person could not tell it from another name)
+   for j = 0 to 31
+      ctl := char(j)
+   next j
+   for j = 248 to 255                      ;* and SD's marks: a path holding one would split the IDE's tab arrays (review of 28 Oct 26, finding 10)
+      ctl := char(j)
+   next j
+
+   why = ''
+   rr.again = 0
+   begin case
+      case op = 'check'
+         gosub check.name
+      case op = 'open'
+         gosub open.file
+      case op = 'reread'
+         rr.again = 1
+         gosub read.file
+      case op = 'save'
+         gosub write.file
+      case op = 'create'
+         gosub create.file
+      case op = 'list'
+         gosub list.dir
+      case 1
+         why = 'op'
+   end case
+   return
+
+* In: path.  Out: why, 'name' when the path is not written in the one form the IDE takes: absolute, with no . or .. component, no doubled slash, no slash at the end and
+*   no control character.  One spelling for one file, so that the tab that holds a file is found again (the kernel resolves links and .. for its gate, and does not for the tab).
+check.name:
+   p.n = len(path)
+   if p.n < 2 or p.n > 1000 or path[1, 1] # '/' or path[p.n, 1] = '/' or convert(ctl, '', path) # path then
+      why = 'name'
+      return
+   end
+   if index(path, '//', 1) or index(path, '/./', 1) or index(path, '/../', 1) or path[p.n - 1, 2] = '/.' or path[p.n - 2, 3] = '/..' then why = 'name'
+   return
+
+* In: path.  Out: f (open) with the lock, text, info, why.  The file is closed again when why is not ''.
+open.file:
+   text = ''
+   info = ''
+   gosub check.name
+   if why # '' then return
+   * THE CLAUSES END THE STATEMENT: after ON ERROR or LOCKED the program goes to what follows the whole OPENSEQ, not to THEN or ELSE (review of 28 Oct 26, finding 1: the ELSE was
+   *   assumed to run after LOCKED, and the next statement asked FILEINFO of a file variable that was never assigned, which stops the program).  So ON ERROR returns itself, and the
+   *   LOCKED flag is tested after the statement.  ON ERROR is there for -ER_MAXRLOCK, which stops a program that has no such clause.
+   lk.user = 0
+   openseq path to f on error
+      op.st = status()
+      if not(unassigned(f)) then close f
+      why = 'cant'
+      info<6> = op.st
+      return
+   end locked
+      lk.user = 1
+   end then
+      null
+   end else
+      op.st = status()
+      if not(unassigned(f)) then close f
+      begin case
+         case op.st = 0
+            why = 'none'
+         case op.st = ER.PERM
+            why = 'gate'
+         case op.st = ER.NSEQ
+            why = 'dir'
+         case 1
+            why = 'cant'
+            info<6> = op.st
+      end case
+      return
+   end
+   if lk.user then
+      why = 'locked'
+      return
+   end
+   if (fileinfo(f, FL$SEQTYPE) + 0) # 0 then
+      close f
+      why = 'special'
+      return
+   end
+   ro = fileinfo(f, FL$READONLY) + 0
+   gosub read.file
+   if why # '' then
+      close f
+      return
+   end
+   info<3> = ro
+   return
+
+* In: f (open).  Out: text, info, why
+read.file:
+   text = ''
+   info = ''
+   * A second look (the IDE reads the file once more before it writes) must see the disk as it is NOW.  A SEEK keeps the file variable's one block buffer, and a READBLK of the
+   *   block the buffer holds does not read the disk, so a change of the same size made by another program was read back as the old text (review of 28 Oct 26, finding 2b);
+   *   a WRITEBLK of nothing is the one statement that throws the buffer away and writes no byte.  And a file that was REPLACED (written elsewhere and renamed over this one, as vim,
+   *   sed -i and git do) or removed leaves the tab holding an inode that nothing links to: STATUS of the variable is an fstat, and its link count (field 7) is then 0.
+   if rr.again then
+      if not(fileinfo(f, FL$READONLY)) then writeblk '' to f else null
+   end
+   gosub read.all
+   if why # '' then return
+   gosub parse.raw
+   if why # '' then return
+   if rr.again then
+      status st.f from f then null else st.f = ''
+      if st.f = '' then
+         why = 'io'
+      end else
+         if (st.f<7> + 0) = 0 then why = 'gone'
+      end
+   end
+   return
+
+* In: f.  Out: raw, why.  The size is asked first (SEEK to the end), so that a large file is refused without being read, and the bytes read must come to that size: the
+*   kernel's READBLK reports a read error as the end of the file, and a text that is short is never offered for saving.
+read.all:
+   raw = ''
+   seek f, 0, 2 else why = 'io'
+   if why # '' then return
+   fsize = fileinfo(f, FL$SEQPOS) + 0
+   if fsize > OSF.MAX then
+      why = 'big'
+      info<4> = fsize
+      return
+   end
+   seek f, 0, 0 else why = 'io'
+   if why # '' then return
+   loop
+      readblk blk from f, OSF.BLK else exit
+      raw := blk
+   repeat
+   if len(raw) # fsize then why = 'io'
+   return
+
+* In: raw.  Out: text, info<1>, info<2>, info<4>, why
+parse.raw:
+   if convert(nope, '', raw) # raw then
+      why = 'bytes'
+      return
+   end
+   n.lf = count(raw, lf.c)
+   crlf = 0
+   if n.lf > 0 then
+      if count(raw, cr.c) = n.lf and count(raw, cr.c : lf.c) = n.lf then crlf = 1
+   end
+   eol = lf.c
+   if crlf then eol = cr.c : lf.c
+   fin = 0
+   body = raw
+   if len(raw) >= len(eol) then
+      if raw[len(raw) - len(eol) + 1, len(eol)] = eol then
+         fin = 1
+         body = raw[1, len(raw) - len(eol)]
+      end
+   end
+   text = change(body, eol, @fm)
+   info<1> = crlf
+   info<2> = fin
+   info<4> = len(raw)
+   return
+
+* In: f (open), text, info<1>, info<2>.  The file is written where it is, so its owner, mode, inode and links stay: a new file renamed over it would change all four.
+write.file:
+   if fileinfo(f, FL$READONLY) then
+      why = 'ro'
+      return
+   end
+   gosub make.data
+   if why # '' then return
+   gosub put.data
+   return
+
+* In: text, info<1>, info<2>.  Out: data (the bytes to write), why 'bytes' (a NUL, or a byte from 248 to 255 in the text) or 'big' (more than 2 MB; info<4> is the size)
+make.data:
+   flat = convert(@fm, '', text)
+   if convert(nope, '', flat) # flat then
+      why = 'bytes'
+      return
+   end
+   eol = lf.c
+   if info<1> then eol = cr.c : lf.c
+   data = change(text, @fm, eol)
+   if info<2> then data := eol
+   if len(data) > OSF.MAX then
+      why = 'big'
+      info<4> = len(data)
+   end
+   return
+
+* In: f (open for writing), data.  Out: why, text and info as 'reread' would give them.  The file is written where it is, cut at the new length, and read back.
+put.data:
+   seek f, 0, 0 else why = 'io'
+   if why # '' then
+      info<6> = status()
+      return
+   end
+   writeblk data to f else why = 'io'
+   if why # '' then
+      info<6> = status()                  ;* what was written so far stays: the caller says the file may be partly written
+      return
+   end
+   weofseq f on error
+      why = 'io'
+      info<6> = status()
+   end
+   if why # '' then return
+   * What is on the disk is read back and must be what was meant: the kernel counts a short WRITEBLK (a full disk, a quota) as written whole, and WEOFSEQ then cuts the file to the
+   *   length it thinks it wrote, which pads a short file with NUL bytes (review of 28 Oct 26, finding 4).  The file's text is then given back as the next 'reread' would give it
+   *   (TEXT and INFO are in and out here): a file "a" + LF + "b" with "b" deleted is written "a" + LF, which reads back as the one line "a" with its end, so the caller keeps THAT
+   *   as what the disk holds, and a text that is not what a reread gives is not taken for a change of the disk (finding 9).
+   gosub read.all
+   if why # '' then
+      info<6> = status()
+      return
+   end
+   if len(raw) # len(data) or raw # data then
+      why = 'io'
+      return
+   end
+   gosub parse.raw
+   return
+
+* In: path, text (the lines, field marks between them), info<1> and info<2> (the line ends, as for 'save').  Out: f (open, with the SD record lock), text and info as 'reread' would give
+*   them, why.  The file is made EXCLUSIVELY by the kernel (OPENSEQ ... CREATING is O_CREAT | O_EXCL since 30 Oct 26): a name that something has taken in the meantime, or a dangling link, is
+*   ER.EXISTS and nothing is created, and the parent directories are NOT made (the kernel does not).  A name that is already a file is opened by the same statement (it is not truncated); it
+*   is filled only when it is empty and a plain file the account may change, and any other is 'exists' (or 'special', 'ro', 'locked'), closed again with nothing written.  The text is
+*   checked (bytes, size) BEFORE any file is touched.  A failed write leaves the (empty) file that was made, and why is 'io'.
+create.file:
+   gosub check.name
+   if why # '' then return
+   gosub make.data
+   if why # '' then return
+   lk.user = 0
+   openseq path creating to f on error
+      op.st = status()
+      if not(unassigned(f)) then close f
+      why = 'cantmade'                      ;* 30 Oct 26 (S.88 A3): an ON ERROR clause ends the statement, and the file may have been made (empty) before the error: the IDE says so
+      info<6> = op.st
+      return
+   end locked
+      lk.user = 1
+   end then
+      null
+   end else
+      op.st = status()
+      if not(unassigned(f)) then close f
+      begin case
+         case op.st = ER.EXISTS
+            why = 'exists'
+         case op.st = ER.PERM
+            why = 'gate'
+         case op.st = ER.NSEQ
+            why = 'dir'
+         case 1
+            why = 'cant'
+            info<6> = op.st
+      end case
+      return
+   end
+   if lk.user then
+      why = 'locked'
+      return
+   end
+   if (fileinfo(f, FL$SEQTYPE) + 0) # 0 then
+      close f
+      why = 'special'
+      return
+   end
+   if fileinfo(f, FL$READONLY) then
+      close f
+      why = 'ro'
+      return
+   end
+   seek f, 0, 2 else why = 'io'
+   if why = '' then
+      if (fileinfo(f, FL$SEQPOS) + 0) # 0 then why = 'exists'      ;* a file with content is never replaced
+   end
+   if why # '' then
+      close f
+      return
+   end
+   gosub put.data
+   if why # '' then
+      info<6> = status()
+      close f
+      return
+   end
+   info<3> = 0
+   return
+
+* In: path, a directory ('/' too).  Out: text, one field for each entry: the name, a value mark, D or F, a value mark, the size in bytes - the directories first, then the files, each in
+*   the order of the names; info<4> the number of entries found, info<5> how many were left out (a name with a control character or one of SD's marks, which the IDE could not show or put in a
+*   path; or more than OSF.LIST of them), why.  DIR() is asked here and nowhere else of the IDE: it is the helper's own call, so the kernel asks the account's OS gate (-ER.PERM: 'gate').
+*   DIR() gives the same ER.PERM for a directory the operating system will not open (EACCES): for 'gate', info<6> is the STATUS() and info<7> the OS.ERROR() of the DIR(), and the IDE,
+*   which may ask kernel(K$PATH.OK), tells the two apart (02 Nov 26, S.88 A5).
+*   A socket, a device and a pipe are not listed (DIR() lists a plain file F and a directory D only).
+list.dir:
+   text = ''
+   info = ''
+   if path # '/' then
+      gosub check.name
+      if why # '' then return
+   end
+   ld.raw = dir(path)
+   ld.st = status()
+   ld.oserr = os.error()
+   begin case
+      case ld.st = ER.PERM
+         why = 'gate'
+         info<6> = ld.st
+         info<7> = ld.oserr                    ;* 02 Nov 26 (S.88 A5): DIR() says ER.PERM for the OS gate AND for a directory the OS will not open; the IDE tells them apart
+         return
+      case ld.st = 0 or ld.st = ER.FNF
+         if ld.st # 0 then
+            why = 'none'
+            return
+         end
+      case 1
+         why = 'cant'
+         info<6> = ld.st
+         return
+   end case
+   ld.dnames = ''
+   ld.fnames = ''
+   ld.fsizes = ''
+   ld.n = dcount(ld.raw, @fm)
+   if ld.raw = '' then ld.n = 0
+   ld.skip = 0
+   ld.kept = 0
+   for ld.j = 1 to ld.n
+      ld.e = ld.raw<ld.j>
+      ld.name = ld.e<1, 1>
+      ld.type = ld.e<1, 2>
+      if ld.name = '' or convert(ctl, '', ld.name) # ld.name or ld.name = '.' or ld.name = '..' or index(ld.name, '/', 1) then
+         ld.skip += 1
+      end else
+         if ld.kept >= OSF.LIST then
+            ld.skip += 1
+         end else
+            ld.kept += 1
+            if ld.type = 'D' then
+               locate ld.name in ld.dnames<1> by 'AL' setting ld.pos else null
+               ins ld.name before ld.dnames<ld.pos>
+            end else
+               locate ld.name in ld.fnames<1> by 'AL' setting ld.pos else null
+               ins ld.name before ld.fnames<ld.pos>
+               ins ld.e<1, 3> before ld.fsizes<ld.pos>
+            end
+         end
+      end
+   next ld.j
+   ld.nd = dcount(ld.dnames, @fm)
+   if ld.dnames = '' then ld.nd = 0
+   for ld.j = 1 to ld.nd
+      text<-1> = ld.dnames<ld.j> : @vm : 'D' : @vm : 0
+   next ld.j
+   ld.nf = dcount(ld.fnames, @fm)
+   if ld.fnames = '' then ld.nf = 0
+   for ld.j = 1 to ld.nf
+      text<-1> = ld.fnames<ld.j> : @vm : 'F' : @vm : ld.fsizes<ld.j>
+   next ld.j
+   info<4> = ld.kept
+   info<5> = ld.skip
+   return
+end
+
+* END-CODE

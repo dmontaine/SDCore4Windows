@@ -84,6 +84,8 @@ $define K$SHIFT.F10            173
 $define K$SHIFT.F11            174
 $define K$SHIFT.F12            175
 $define K$MOUSE                200
+$define K$PASTE.START          201
+$define K$PASTE.END            202
 $define K$LEFT                 203
 $define K$RIGHT                204
 $define K$UP                   205

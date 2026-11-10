@@ -27,6 +27,12 @@
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - kill_process() releases the class objects held in named common before the e-stack is freed: their destroy code (S.65
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: the process's own privilege words (my_priv_flags, my_priv_gates) are zeroed where the user table entry's flags and gates are.
+ * 28 Oct 26 dm  S.88 phase 2 review: dump_status() (the record PSTAT prints) writes another session's text - its last command,
+ *               program names, the path and record id it waits for, its account - through ev_safe(), the shared rule of
+ *               op_lock.c (show_unsafe_byte(): 0-31, 127, 128-159, 248-255 as '?'); @PSTAT keeps its marks as spaces and
+ *               shows the other bytes of the rule as '?'.  ev_printf() formats numbers only, through vsnprintf(); ev_copy()
+ *               no longer counts a full chunk's bytes twice in string_len when it starts the next (a record of more than one
+ *               chunk was written with the wrong length).
  *               $netfile's sdclient objects) ran on freed memory and the process died with a double free.
  * 17 Oct 26 dm  S.64: a process taking its user entry starts with the edit gates off (the user table's gates word).
  * 17 Oct 26 dm  k_run_program() keeps a resume point so that an error k_error() turns into a SYS.* exception
@@ -1522,6 +1528,8 @@ void show_stack() {
 */
 
 Private void ev_printf(char* template_string, ...);
+Private void ev_copy(const char* p, int len);
+Private void ev_safe(const char* s, int len);
 Private STRING_CHUNK* ev_head;
 Private STRING_CHUNK* ev_tail;
 
@@ -1562,9 +1570,10 @@ Private void dump_status() {
 
   /* Field 2  -  Command */
 
+  /* 28 Oct 26 S.88 phase 2 review: PSTAT prints this on the asker's terminal (the administrator's too): ev_safe() */
   str = Element(process.syscom, SYSCOM_LAST_COMMAND)->data.str.saddr;
   while (str != NULL) {
-    ev_printf("%.*s", (int)(str->bytes), str->data);
+    ev_safe(str->data, (int)(str->bytes));
     str = str->next;
   }
   ev_printf("%c", FIELD_MARK);
@@ -1581,7 +1590,8 @@ Private void dump_status() {
 
     offset = pc - c_base - 1;
     do {
-      ev_printf("%s%c%d%c%d", ProgramName(prg->saved_c_base), SUBVALUE_MARK,
+      ev_safe(ProgramName(prg->saved_c_base), -1); /* 28 Oct 26 S.88 review: a name is text too */
+      ev_printf("%c%d%c%d", SUBVALUE_MARK,
                 offset, TEXT_MARK, k_line_no(offset, prg->saved_c_base));
 
       /* Local gosub return pointers
@@ -1605,18 +1615,21 @@ Private void dump_status() {
 
   /* Field 4  -  Lock wait data */
 
+  /* 28 Oct 26 S.88 phase 2 review: the path and the record id (another session may have chosen it) go through ev_safe() */
   if ((i = my_uptr->lockwait_index) != 0) {
     if (i > 0) /* Waiting for record lock */
     {
       lptr = RLPtr(i);
-      ev_printf("%d%c%s%c%.*s", lptr->owner, VALUE_MARK,
-                FPtr(lptr->file_id)->pathname, VALUE_MARK, lptr->id_len,
-                lptr->id);
+      ev_printf("%d%c", lptr->owner, VALUE_MARK);
+      ev_safe((const char*)(FPtr(lptr->file_id)->pathname), -1);
+      ev_printf("%c", VALUE_MARK);
+      ev_safe(lptr->id, lptr->id_len);
     } else /* Waiting for file lock */
     {
       fptr = FPtr(-i);
-      ev_printf("%d%c%s%c", abs(fptr->file_lock), VALUE_MARK, fptr->pathname,
-                VALUE_MARK);
+      ev_printf("%d%c", abs(fptr->file_lock), VALUE_MARK);
+      ev_safe((const char*)(fptr->pathname), -1);
+      ev_printf("%c", VALUE_MARK);
     }
     /* 14 Oct 26 dm - sheet item 577: value 4, when the wait began (seconds since 1 Jan 1970 UTC), for PSTAT */
     ev_printf("%c%d", VALUE_MARK, (int)(my_uptr->lockwait_time));
@@ -1624,11 +1637,15 @@ Private void dump_status() {
 
   /* Field 5  -  Account name */
 
-  ev_printf("%c%s", FIELD_MARK, account());
+  ev_printf("%c", FIELD_MARK);
+  ev_safe(account(), -1);
 
   /* Field 6  -  @PSTAT, the text the application left for PSTAT (15 Oct 26 dm, sheet 492).  A string, or a number; the
      marks in it become spaces so that it cannot disturb the fields of this record.  A common block starts as zeros, and
-     a zero is no text.                                                                                                  */
+     a zero is no text.
+     28 Oct 26 S.88 phase 2 review: every other byte of the shared rule (0-31, 127, 128-159) becomes '?', so an application
+     cannot put a terminal sequence on the screen of whoever runs PSTAT.  The marks stay spaces (sheet 492's behaviour,
+     sandbox-q4.py J1).                                                                                                  */
 
   ev_printf("%c", FIELD_MARK);
   {
@@ -1645,7 +1662,11 @@ Private void dump_status() {
 
         for (pi = 0; (pi < str->bytes) && (pcount < 4000); pi++, pcount++) {
           pc = str->data[pi];
-          ev_printf("%c", ((u_char)pc >= 248) ? ' ' : pc);
+          if ((u_char)pc >= 248)
+            pc = ' ';
+          else if (show_unsafe_byte((u_char)pc))
+            pc = '?';
+          ev_copy(&pc, 1);
         }
       }
     } else if ((ps->type == INTEGER) && (ps->data.value != 0)) {
@@ -1663,13 +1684,15 @@ Private void dump_status() {
   s_free(ev_head);
 }
 
-Private void ev_printf(char* template_string, ...) {
-  char s[500];
-  va_list arg_ptr;
-  int16_t len;
+/* 28 Oct 26 dm - S.88 phase 2 review: ev_printf() formats NUMBERS and marks only; text goes through ev_safe() (another
+   session's text, made safe by the shared rule) and both append through ev_copy().  The old ev_printf() put text through a
+   500 byte vsprintf() buffer (a command chunk is longer than that) and, when it started a second chunk, added the first
+   chunk's bytes to string_len a second time (every byte is already counted as it is moved), so a status record of more than
+   one chunk - a long command, a long @PSTAT - was written with the wrong length.                                          */
+
+Private void ev_copy(const char* p, int len) {
   int16_t bytes_to_move;
   int16_t bytes_remaining;
-  char* p;
 
   if (ev_head == NULL) /* First call */
   {
@@ -1680,22 +1703,17 @@ Private void ev_printf(char* template_string, ...) {
   } else
     bytes_remaining = ev_tail->alloc_size - ev_tail->bytes;
 
-  va_start(arg_ptr, template_string);
-
-  len = vsprintf(s, template_string, arg_ptr);
-  p = s;
   while (len > 0) {
     /* Allocate new chunk if the current one is full */
 
     if (bytes_remaining == 0) {
-      ev_head->string_len += ev_tail->bytes;
       ev_tail->next = s_alloc(512, &bytes_remaining);
       ev_tail = ev_tail->next;
     }
 
     /* Copy what will fit into current chunk */
 
-    bytes_to_move = min(bytes_remaining, len);
+    bytes_to_move = (int16_t)min(bytes_remaining, len);
     memcpy(ev_tail->data + ev_tail->bytes, p, bytes_to_move);
     p += bytes_to_move;
     ev_tail->bytes += bytes_to_move;
@@ -1703,8 +1721,44 @@ Private void ev_printf(char* template_string, ...) {
     len -= bytes_to_move;
     bytes_remaining -= bytes_to_move;
   }
+}
 
+Private void ev_printf(char* template_string, ...) {
+  char s[500];
+  va_list arg_ptr;
+  int len;
+
+  va_start(arg_ptr, template_string);
+  len = vsnprintf(s, sizeof(s), template_string, arg_ptr);
   va_end(arg_ptr);
+  if (len < 0)
+    return;
+  if (len > (int)sizeof(s) - 1)
+    len = (int)sizeof(s) - 1;
+  ev_copy(s, len);
+}
+
+/* Another session's text into the status record: every byte show_unsafe_byte() names (0-31, 127, 128-159, 248-255) is '?',
+   the rule GETLOCKS() uses (op_lock.c).  A negative len means "up to the nul"; NULL adds nothing.                          */
+
+Private void ev_safe(const char* s, int len) {
+  char buf[256];
+  int n = 0;
+  int i;
+
+  if (s == NULL)
+    return;
+  if (len < 0)
+    len = (int)strlen(s);
+  for (i = 0; i < len; i++) {
+    buf[n++] = show_unsafe_byte((u_char)(s[i])) ? '?' : s[i];
+    if (n == (int)sizeof(buf)) {
+      ev_copy(buf, n);
+      n = 0;
+    }
+  }
+  if (n > 0)
+    ev_copy(buf, n);
 }
 
 /* ======================================================================

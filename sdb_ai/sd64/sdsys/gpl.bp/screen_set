@@ -8,6 +8,8 @@
 * 12 Oct 26 dm  New.
 * 18 Oct 26 dm  f{'quiet'} = 1 stops the redraw of the whole form after a set (for a program that draws the widget itself).
 * 22 Oct 26 dm  VALUE on a selector is brought into range (1 to the number of words).
+* 29 Oct 26 dm  S.88 3.5: the 10th argument is the compiler's presence mask; a written VALUE / TEXT / ITEMS '' now sets.
+* 30 Oct 26 dm  S.88 p3.6: a quiet form is told to 'recheck' its focus after ENABLED, VISIBLE or a tab strip's VALUE (the form that is not quiet does it in 'redraw').
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -16,7 +18,7 @@
 *
 *   is compiled into
 *
-*   call !screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, ret, status)
+*   call !screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, given, ret, status)
 *
 *     f id     the form and the widget's name in it
 *     value    entry: the text (the cursor goes to its end).  check: 1 or 0.  radio: the choice.  list: the
@@ -31,7 +33,13 @@
 *     visible  0 hides the widget (it is not drawn and takes no focus), 1 shows it again
 *     status   0; 1 if f is not a form or has no widget of that id (ELSE)
 *
-*   A clause left out changes nothing.  The change is made in the form; if the form is on the screen (SCREEN
+*     given    the compiler's presence mask: VALUE 1, TEXT 2, ITEMS 4, ENABLED 8, WRAP 16, READONLY 32, VISIBLE 64
+*
+*   A clause left out changes nothing.  A VALUE, TEXT or ITEMS clause that is WRITTEN sets the property even
+*   to '' (VALUE '' empties an entry or memo, and counts as 0 on a check, slider, radio or list; TEXT '' empties
+*   a label; ITEMS '' empties a list, radio or table).  A written '' on ENABLED, WRAP, READONLY or VISIBLE
+*   changes nothing, as before (READONLY '' must not make a viewer writable).  Programs compiled before 29 Oct 26
+*   pass 11 arguments and must be recompiled.  The change is made in the form; if the form is on the screen (SCREEN
 *   WAIT put it there) the form is redrawn at once, else it shows the next time the form is run or waited for.
 *
 * END-DESCRIPTION
@@ -39,7 +47,7 @@
 * START-CODE
 
 $internal
-subroutine screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, ret, status)
+subroutine screen_set(f, id, value, text, items, enabled, wrap, readonly, visible, given, ret, status)
 $catalog !screen_set
 
    ret = ''
@@ -50,7 +58,7 @@ $catalog !screen_set
 
    w = f{'widgets', n}
    wt = w{'type'}
-   if value # '' then
+   if bitand(given, 1) then
       begin case
          case wt = 'entry'
             w{'value'} = value
@@ -84,12 +92,12 @@ $catalog !screen_set
             w{'value'} = value
       end case
    end
-   if text # '' then
+   if bitand(given, 2) then
       w{'text'} = text
       if wt = 'label' then w{'apos'} = 0       ;* a label's marked letter was a place in its old text: not drawn in the new (the Alt-letter stays)
       call $sl_widget_init(w)
    end
-   if items # '' then
+   if bitand(given, 4) then
       if wt = 'table' and w{'keycol'} + 0 > 0 then
          * 22 Oct 26, S.75 G3: a table with a key column keeps its current row, its marks, its sort and its filter across new rows, by the key
          w{'newrows'} = items
@@ -109,19 +117,19 @@ $catalog !screen_set
          call $sl_widget_init(w)
       end
    end
-   if enabled # '' then
+   if bitand(given, 8) and enabled # '' then      ;* a written '' on the four flags changes nothing (owner, 29 Oct 26)
       if enabled + 0 = 0 then
          w{'disabled'} = 1
       end else
          w{'disabled'} = 0
       end
    end
-   if wrap # '' and wt = 'memo' then
+   if bitand(given, 16) and wrap # '' and wt = 'memo' then
       w{'wrap'} = if wrap + 0 # 0 then 1 else 0
       w{'left'} = 1
    end
-   if readonly # '' and wt = 'memo' then w{'readonly'} = if readonly + 0 # 0 then 1 else 0
-   if visible # '' then
+   if bitand(given, 32) and readonly # '' and wt = 'memo' then w{'readonly'} = if readonly + 0 # 0 then 1 else 0
+   if bitand(given, 64) and visible # '' then
       * a hidden widget is not drawn and takes no focus; the form is redrawn without it (or with it again)
       w{'hidden'} = if visible + 0 = 0 then 1 else 0
    end
@@ -130,6 +138,13 @@ $catalog !screen_set
    if f{'shown'} and not(system(25)) and not(f{'quiet'} + 0) then       ;* the form is on the screen (SCREEN WAIT): show the change
       call $sl_scr('get', scr)
       call $sl_form('redraw', f, scr, '', r)
+      call $sl_scr('put', scr)
+   end
+   * 30 Oct 26 (S.88 p3.6): a quiet form is not drawn here, but a change that can take the focus from its widget (ENABLED, VISIBLE, the tab strip's VALUE) must still
+   *   move it to one that can have it; the form draws the two widgets it moves between and nothing else ('recheck').  The redraw above does the same for a form that is not quiet.
+   if f{'shown'} and not(system(25)) and f{'quiet'} + 0 and (bitand(given, 72) or (wt = 'tabs' and bitand(given, 1))) then
+      call $sl_scr('get', scr)
+      call $sl_form('recheck', f, scr, '', r)
       call $sl_scr('put', scr)
    end
    status = 0

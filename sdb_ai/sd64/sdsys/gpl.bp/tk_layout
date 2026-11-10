@@ -1,0 +1,612 @@
+* TK_LAYOUT
+* The full-screen toolkit, shared base: the layout service (S.88 L1; ~/Documents/Audits/TUI/Opus_TUI_Plan.txt 3.1, 5.5 and section 12).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  New (S.88 L1): the frame, the body and the panes of a page made from the window and the app's floor, and made again after a
+*               resize ('refresh'); the cursor lock armed in its layout mode (decided by the window against the floor, never by the cursor).
+* 1 Nov 26 dm  S.97 stage 1: THE AI LINE'S ROW.  A page that has given the AI line a row (ctx<TK.C.AIROW>, set by $tk_aipage 'init' only when the AI is usable for the account) has a
+*               body one row shorter, the last one, which is YSTAT - 1 where $tk_ai draws the line; the panes that stretch give the row up (the shrinking below), so no page declares
+*               it.  A page that has not is laid out exactly as before.  A pane that stretches and declared no least height may give that one row ('normalise'), else the row would
+*               have come out of the pane that does not stretch.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_layout(op, ctx, arg, ret)          ctx is the context $tk_open made (tk.h); arg and ret may be left out where they are not used (VAR.ARGS)
+*
+*     'open'     $tk_open's own call, after the screen is taken: as 'refresh', and ret is 1.
+*     'refresh'  after the key resize: the frame, the body and every declared pane are worked out again from the window ($sl_window) and the app's
+*                floor (ctx<TK.C.FLOORW>, ctx<TK.C.FLOORH>), and the cursor lock is armed again with them.  ret (and ctx<TK.C.CHANGED>) is 1 when
+*                the layout's size, the body or a pane's rectangle changed, else 0.  The page then raises ctx<TK.C.GEN> and draws everything again.
+*     'declare'  arg is the page's pane declaration: a FIELD to a pane, its VALUES the attributes TK.P.* of tk.h (id, band, column, height, width,
+*                gap, vertical kind and weight, horizontal kind and weight, least height, least width, collapse priority), every size the pane's
+*                size in the REFERENCE layout, 140 by 43 (body 138 by 39).  It is checked (message 12546 names the pane and the attribute that is
+*                wrong; 12547 says the panes do not fit the reference body), kept in ctx<TK.C.PANES> and laid out at once.  ret is null, or the
+*                refusal (also in ctx<TK.C.PANEERR>; the context then holds no panes).  Declaring again replaces the declaration.
+*     'pane'     arg is a pane's id: ret is its rectangle, x, y, w, h and shown as five VALUES (shown 0 for a pane collapsed in a small layout, whose
+*                x, y, w and h are 0); null when there is no such pane.
+*     'body'     ret is the body: XBODY, YBODY, BODYW, BODYH as four values.
+*
+*   THE FRAME.  W is the window's width, or the floor's when the window is narrower, and never more than TK.MAXW; H likewise.  YSTAT = H - 3,
+*   YBORD = H - 2, YKEYS = H - 1, YMENU = 0: the four frame rows are always on the layout.  At 140 by 43 that is 40, 41 and 42, as $tk_open
+*   has always made it.
+*
+*   THE BODY.  XBODY = TK.XBODY (1) and YBODY = TK.YBODY (1), each ONE number in tk.h; BODYW = W - 2 * XBODY; BODYH = YSTAT - YBODY.  At 140 by 43
+*   the body is 138 by 39 at 1,1: the rows and columns every page has drawn its boxes in.  MODE is full when the body is at least the reference
+*   body in both directions, compact when it is smaller (an app whose floor is under 140 by 43).
+*
+*   THE PANES.  The body is split into BANDS stacked from the top; a band into COLUMNS side by side; a column into the panes of that band and column,
+*   stacked in the order they were declared.  A column is as wide as its widest pane and starts its GAP of columns after the column before it (or
+*   the body's left edge); a band is as tall as its tallest column; a pane is as wide as its column.
+*     GROWTH IS COUNTED FROM THE REFERENCE: the columns BODYW - 138 and the rows BODYH - 39 are shared, by weight, among the columns and bands
+*     that stretch (each given idiv(amount * weight, total), and what is left one at a time from the first); inside a band, the rows the band
+*     grew by go to the stretching panes of each column.  Space a page leaves empty at 140 by 43 stays empty at every size, and AT 140 BY 43
+*     NOTHING GROWS: every pane has exactly the size it was declared with, at the place the declaration puts it.
+*     SHRINKING (a body smaller than the declaration needs): rows or columns are taken from the stretching ones, the last first, down to their
+*     least size, then from the fixed ones the same way; if that is not enough the pane with the highest collapse priority (the last declared of
+*     equals) is collapsed and the whole is worked out again; when nothing can collapse, whatever passes the body's edge is cut.
+*
+*   EXAMPLE (tool.files, whose boxes are "at 1,1 size 138,22" and "at 1,23 size 138,17"):
+*
+*      d = ''
+*      d<1> = 'list'   : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+*      d<2> = 'detail' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : ''        : @vm : '' : @vm : 'stretch' : @vm : 1
+*      call $tk_layout('declare', ctx, d, perr)
+*      call $tk_layout('pane', ctx, 'list', r)       ;* 1, 1, 138, 22, 1 at 140 by 43; 1, 1, 178, 34, 1 at 180 by 55
+*      screen box at r<1,1>,r<1,2> size r<1,3>,r<1,4> title ttl
+*
+*   and on the key resize:   call $tk_layout('refresh', ctx, '', chg) ; gen += 1 ; ctx<TK.C.GEN> = gen ; gosub draw.all
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_layout(op, ctx, arg, ret) var.args
+$catalog $tk_layout
+
+$include tk.h
+
+   ret = ''
+   rbw = TK.MINW - 2 * TK.XBODY                 ;* the reference body (140 by 43): what every declaration is written for
+   rbh = TK.MINH - 3 - TK.YBODY
+
+   begin case
+      case op = 'open' or op = 'refresh'
+         gosub geometry.key
+         old.key = gk
+         gosub frame
+         gosub lay.panes
+         gosub arm.lock
+         gosub geometry.key
+         chg = 0
+         if gk # old.key then chg = 1
+         if op = 'open' then chg = 1
+         ctx<TK.C.CHANGED> = chg
+         ret = chg
+
+      case op = 'declare'
+         gosub geometry.key
+         old.key = gk
+         if ctx<TK.C.BODYW> = '' then gosub body               ;* a context made before the service: its frame is there, its body is not
+         gosub check.decl
+         ctx<TK.C.PANEERR> = perr
+         if perr # '' then
+            ctx<TK.C.PANES> = ''
+            ctx<TK.C.RECTS> = ''
+         end
+         gosub lay.panes
+         gosub geometry.key
+         chg = 0
+         if gk # old.key then chg = 1
+         ctx<TK.C.CHANGED> = chg
+         ret = perr
+
+      case op = 'pane'
+         pd = ctx<TK.C.PANES>
+         np = dcount(pd, @vm)
+         for i = 1 to np
+            if pd<1, i, TK.P.ID> = arg then
+               ret = convert(@sm, @vm, ctx<TK.C.RECTS, i>)
+               exit
+            end
+         next i
+
+      case op = 'body'
+         ret = ctx<TK.C.XBODY> : @vm : ctx<TK.C.YBODY> : @vm : ctx<TK.C.BODYW> : @vm : ctx<TK.C.BODYH>
+   end case
+
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------------- the frame
+frame:
+   call $sl_window(win.w, win.h)
+   fw = ctx<TK.C.FLOORW> + 0
+   fh = ctx<TK.C.FLOORH> + 0
+   if fw < 1 then fw = TK.MINW                  ;* a context made before the floor existed has the old minimum
+   if fh < 1 then fh = TK.MINH
+   lw = win.w + 0
+   lh = win.h + 0
+   if lw < fw then lw = fw                      ;* a window smaller than the floor: the layout keeps the floor's size and the library cuts what
+   if lh < fh then lh = fh                      ;* falls outside (the cursor lock then has the keyboard until the window is big enough)
+   if lw > TK.MAXW then lw = TK.MAXW
+   if lh > TK.MAXH then lh = TK.MAXH
+   ctx<TK.C.FLOORW> = fw
+   ctx<TK.C.FLOORH> = fh
+   ctx<TK.C.WINW> = win.w + 0
+   ctx<TK.C.WINH> = win.h + 0
+   ctx<TK.C.W> = lw
+   ctx<TK.C.H> = lh
+   ctx<TK.C.YMENU> = 0
+   ctx<TK.C.YSTAT> = lh - 3
+   ctx<TK.C.YBORD> = lh - 2
+   ctx<TK.C.YKEYS> = lh - 1
+   gosub body
+   return
+
+body:
+   ctx<TK.C.XBODY> = TK.XBODY
+   ctx<TK.C.YBODY> = TK.YBODY
+   ctx<TK.C.BODYW> = ctx<TK.C.W> - 2 * TK.XBODY
+   ctx<TK.C.BODYH> = ctx<TK.C.YSTAT> - TK.YBODY - (if ctx<TK.C.AIROW> then 1 else 0)     ;* S.97 stage 1: a page that gave the AI line a row has one row less, and only then
+   return
+
+* The cursor lock in its layout mode: the keys are not the page's while the window is smaller than the floor, wherever the cursor is
+* (R-b).  A context with no app name (a caller's own, made by hand) never arms it: a null name would take the lock OFF.
+arm.lock:
+   if ctx<TK.C.APP> # '' then
+      call $sl_guardmode(ctx<TK.C.APP>, ctx<TK.C.FLOORW>, ctx<TK.C.FLOORH>, 'layout', ctx<TK.C.W>, ctx<TK.C.H>)
+   end
+   return
+
+geometry.key:
+   gk = ctx<TK.C.W> : '/' : ctx<TK.C.H> : '/' : ctx<TK.C.BODYW> : '/' : ctx<TK.C.BODYH> : '/' : ctx<TK.C.MODE> : '/' : ctx<TK.C.RECTS>
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------------- the declaration
+* arg: a field to a pane, a value to an attribute.  perr returns null, or message 12546 (the pane and what is wrong with it) or 12547 (the panes
+* do not fit the reference body).  When it is null the declaration is in ctx<TK.C.PANES>, a value to a pane and a subvalue to an attribute.
+check.decl:
+   perr = ''
+   app = ctx<TK.C.APP>
+   nd = dcount(arg, @fm)
+   if nd < 1 then
+      perr = sysmsg(12546, app, 0, 'no pane')
+      return
+   end
+   ids = ''
+   for i = 1 to nd
+      pa = arg<i>
+      why = ''
+      pid = pa<1, TK.P.ID>
+      if pid = '' then why = 'id'
+      if why = '' then
+         if convert(' ' : @sm : @tm, '', pid) # pid then why = 'id'
+      end
+      if why = '' then
+         if index(@vm : ids : @vm, @vm : pid : @vm, 1) then why = 'id twice'
+      end
+      iv = pa<1, TK.P.BAND> ; ilo = 1 ; inull = 0 ; wd = 'band' ; gosub int.check
+      iv = pa<1, TK.P.COL> ; ilo = 1 ; inull = 1 ; wd = 'column' ; gosub int.check
+      iv = pa<1, TK.P.H> ; ilo = 1 ; inull = 0 ; wd = 'height' ; gosub int.check
+      iv = pa<1, TK.P.W> ; ilo = 1 ; inull = 0 ; wd = 'width' ; gosub int.check
+      iv = pa<1, TK.P.GAP> ; ilo = 0 ; inull = 1 ; wd = 'gap' ; gosub int.check
+      iv = pa<1, TK.P.VWT> ; ilo = 1 ; inull = 1 ; wd = 'vertical weight' ; gosub int.check
+      iv = pa<1, TK.P.HWT> ; ilo = 1 ; inull = 1 ; wd = 'horizontal weight' ; gosub int.check
+      iv = pa<1, TK.P.MINH> ; ilo = 1 ; inull = 1 ; wd = 'least height' ; gosub int.check
+      iv = pa<1, TK.P.MINW> ; ilo = 1 ; inull = 1 ; wd = 'least width' ; gosub int.check
+      iv = pa<1, TK.P.PRIO> ; ilo = 0 ; inull = 1 ; wd = 'priority' ; gosub int.check
+      kd = pa<1, TK.P.VKIND>
+      if kd # '' and kd # 'fixed' and kd # 'stretch' then
+         if why = '' then why = 'vertical kind'
+      end
+      kd = pa<1, TK.P.HKIND>
+      if kd # '' and kd # 'fixed' and kd # 'stretch' then
+         if why = '' then why = 'horizontal kind'
+      end
+      if why = '' then
+         if pa<1, TK.P.MINH> # '' and pa<1, TK.P.MINH> > pa<1, TK.P.H> then why = 'least height'
+      end
+      if why = '' then
+         if pa<1, TK.P.MINW> # '' and pa<1, TK.P.MINW> > pa<1, TK.P.W> then why = 'least width'
+      end
+      if why # '' then
+         perr = sysmsg(12546, app, i : ' (' : pid : ')', why)
+         return
+      end
+      if ids = '' then ids = pid else ids = ids : @vm : pid
+   next i
+
+   * kept, then checked against the reference body: every pane shown, the needs of each band's width and of the bands' heights
+   ctx<TK.C.PANES> = lower(arg)
+   gosub normalise
+   gosub structure
+   for bi = 1 to nb
+      need = 0
+      ncol = dcount(cl<bi>, @vm)
+      for ci = 1 to ncol
+         need += cg<bi, ci> + cbw<bi, ci>
+      next ci
+      if need > rbw then perr = sysmsg(12547, app, TK.MINW, TK.MINH)
+   next bi
+   need = 0
+   for bi = 1 to nb
+      need += bbh<1, bi>
+   next bi
+   if need > rbh then perr = sysmsg(12547, app, TK.MINW, TK.MINH)
+   return
+
+* iv the value, ilo the least it may be, inull 1 when null is allowed, wd the attribute's name for the refusal; why keeps the first reason found
+int.check:
+   if why # '' then return
+   if iv = '' then
+      if not(inull) then why = wd
+      return
+   end
+   if not(num(iv)) then
+      why = wd
+      return
+   end
+   if iv # int(iv) or iv < ilo then why = wd
+   return
+
+* ---------------------------------------------------------------------------------------------------------------------------- the panes laid out
+lay.panes:
+   bw = ctx<TK.C.BODYW> + 0
+   bh = ctx<TK.C.BODYH> + 0
+   xb = ctx<TK.C.XBODY> + 0
+   yb = ctx<TK.C.YBODY> + 0
+   if bw >= rbw and bh >= rbh - (if ctx<TK.C.AIROW> then 1 else 0) then ctx<TK.C.MODE> = 'full' else ctx<TK.C.MODE> = 'compact'     ;* the AI line's row is not a row the reference body lacks
+   pd = ctx<TK.C.PANES>
+   np = dcount(pd, @vm)
+   if np = 0 then
+      ctx<TK.C.RECTS> = ''
+      return
+   end
+   gosub normalise
+
+   * fit, collapsing one pane at a time until it does or nothing more can collapse
+   loop
+      gosub structure
+      gosub fit.width
+      gosub fit.height
+      best = 0
+      if hfail # '' or vfail then
+         bestp = 0
+         for i = 1 to np
+            if shown<i> and ppr<i> > 0 then
+               can = vfail
+               if not(can) then
+                  if index(@vm : hfail : @vm, @vm : pb<i> : @vm, 1) then can = 1
+               end
+               if can then
+                  if ppr<i> >= bestp then
+                     best = i
+                     bestp = ppr<i>
+                  end
+               end
+            end
+         next i
+         if best then shown<best> = 0
+      end
+   until not(best) do
+   repeat
+
+   * the rectangles: a collapsed pane is 0, 0, 0, 0, 0
+   rects = ''
+   for i = 1 to np
+      rects<1, i> = 0 : @sm : 0 : @sm : 0 : @sm : 0 : @sm : 0
+   next i
+   y = yb
+   for bi = 1 to nb
+      hb = bhs<1, bi>
+      x = xb
+      ncol = dcount(cl<bi>, @vm)
+      for ci = 1 to ncol
+         x += cg<bi, ci>
+         wcol = cws<bi, ci>
+         cells = cc<bi, ci>
+         nc = dcount(cells, @sm)
+         ch = ''
+         cwt = ''
+         cmn = ''
+         for k = 1 to nc
+            i = cells<1, 1, k>
+            ch<1, k> = ph<i>
+            cwt<1, k> = pvs<i>
+            cmn<1, k> = pmh<i>
+         next k
+         if hb >= bbh<1, bi> then
+            sh.amt = hb - bbh<1, bi>
+            sh.wt = cwt
+            gosub share
+            for k = 1 to nc
+               ch<1, k> = ch<1, k> + sh.out<1, k>
+            next k
+         end else
+            if cbh<bi, ci> > hb then
+               s.size = ch
+               s.min = cmn
+               s.wt = cwt
+               s.d = cbh<bi, ci> - hb
+               gosub shrink
+               ch = s.size
+            end
+         end
+         cy = y
+         for k = 1 to nc
+            i = cells<1, 1, k>
+            rx = x
+            ry = cy
+            rw = wcol
+            rh = ch<1, k>
+            cy += rh
+            gosub cut
+            rects<1, i> = rx : @sm : ry : @sm : rw : @sm : rh : @sm : rs
+         next k
+         x += wcol
+      next ci
+      y += hb
+   next bi
+   ctx<TK.C.RECTS> = rects
+   return
+
+* the edges of the body, and the foot of the pane's band, cut a rectangle that passes them (only when nothing more could collapse); a pane with no
+* cell left is not shown
+cut:
+   if rx + rw > xb + bw then rw = xb + bw - rx
+   if ry + rh > y + hb then rh = y + hb - ry
+   if ry + rh > yb + bh then rh = yb + bh - ry
+   if rw < 0 then rw = 0
+   if rh < 0 then rh = 0
+   rs = 1
+   if rw < 1 or rh < 1 then rs = 0
+   return
+
+* the declaration as numbers, a value to a pane: pb band, pc column, ph pw height and width, pg gap, pvs phs the weights (0 for fixed),
+* pmh pmw the least sizes, ppr the priority; every pane shown
+normalise:
+   pd = ctx<TK.C.PANES>
+   np = dcount(pd, @vm)
+   pb = '' ; pc = '' ; ph = '' ; pw = '' ; pg = '' ; pvs = '' ; phs = '' ; pmh = '' ; pmw = '' ; ppr = '' ; shown = ''
+   for i = 1 to np
+      pb<i> = pd<1, i, TK.P.BAND> + 0
+      v = pd<1, i, TK.P.COL>
+      if v = '' then v = 1
+      pc<i> = v + 0
+      ph<i> = pd<1, i, TK.P.H> + 0
+      pw<i> = pd<1, i, TK.P.W> + 0
+      pg<i> = pd<1, i, TK.P.GAP> + 0
+      v = 0
+      if pd<1, i, TK.P.VKIND> = 'stretch' then
+         v = pd<1, i, TK.P.VWT>
+         if v = '' then v = 1
+      end
+      pvs<i> = v + 0
+      v = 0
+      if pd<1, i, TK.P.HKIND> = 'stretch' then
+         v = pd<1, i, TK.P.HWT>
+         if v = '' then v = 1
+      end
+      phs<i> = v + 0
+      v = pd<1, i, TK.P.MINH>
+      if v = '' then
+         v = ph<i>
+         if ctx<TK.C.AIROW> and pvs<i> > 0 and v > 1 then v -= 1          ;* S.97 stage 1: the AI line's row is given up by a pane that stretches, though its page declared no least height
+      end
+      pmh<i> = v + 0
+      v = pd<1, i, TK.P.MINW>
+      if v = '' then v = pw<i>
+      pmw<i> = v + 0
+      pr = pd<1, i, TK.P.PRIO>
+      pr = pr + 0
+      ppr<i> = pr
+      shown<i> = 1
+   next i
+   return
+
+* the bands, columns and cells of the panes shown, and their sizes in the reference layout:
+*   bl the band numbers, ascending (values); cl<bi> a band's column numbers, ascending; cc<bi, ci> the panes of a column (subvalues, in the order declared)
+*   cbw cmw cg chs cbh cmh  a column's width, least width, gap, horizontal weight, height (its panes' sum) and least height, at <bi, ci>
+*   bbh bmh bvs             a band's height (its tallest column), least height and vertical weight, values at <1, bi>
+structure:
+   bl = ''
+   for i = 1 to np
+      if shown<i> then
+         sl = bl ; sv = pb<i> ; gosub ins.sorted ; bl = sl
+      end
+   next i
+   nb = dcount(bl, @vm)
+   cl = '' ; cc = ''
+   for i = 1 to np
+      if shown<i> then
+         sl = bl ; sv = pb<i> ; gosub find.pos ; bi = fp
+         sl = cl<bi> ; sv = pc<i> ; gosub ins.sorted ; cl<bi> = sl
+      end
+   next i
+   for i = 1 to np
+      if shown<i> then
+         sl = bl ; sv = pb<i> ; gosub find.pos ; bi = fp
+         sl = cl<bi> ; sv = pc<i> ; gosub find.pos ; ci = fp
+         if cc<bi, ci> = '' then cc<bi, ci> = i else cc<bi, ci> = cc<bi, ci> : @sm : i
+      end
+   next i
+   cbw = '' ; cmw = '' ; cg = '' ; chs = '' ; cbh = '' ; cmh = '' ; bbh = '' ; bmh = '' ; bvs = ''
+   for bi = 1 to nb
+      ncol = dcount(cl<bi>, @vm)
+      b.h = 0 ; b.m = 0 ; b.v = 0
+      for ci = 1 to ncol
+         cells = cc<bi, ci>
+         nc = dcount(cells, @sm)
+         c.w = 0 ; c.mw = 0 ; c.hs = 0 ; c.h = 0 ; c.mh = 0
+         i = cells<1, 1, 1>
+         cg<bi, ci> = pg<i>
+         for k = 1 to nc
+            i = cells<1, 1, k>
+            if pw<i> > c.w then c.w = pw<i>
+            if pmw<i> > c.mw then c.mw = pmw<i>
+            if phs<i> > c.hs then c.hs = phs<i>
+            if pvs<i> > b.v then b.v = pvs<i>
+            c.h += ph<i>
+            c.mh += pmh<i>
+         next k
+         cbw<bi, ci> = c.w ; cmw<bi, ci> = c.mw ; chs<bi, ci> = c.hs ; cbh<bi, ci> = c.h ; cmh<bi, ci> = c.mh
+         if c.h > b.h then b.h = c.h
+         if c.mh > b.m then b.m = c.mh
+      next ci
+      bbh<1, bi> = b.h ; bmh<1, bi> = b.m ; bvs<1, bi> = b.v
+   next bi
+   return
+
+* each band's columns across the body: cws<bi, ci> the widths; hfail the band numbers that do not fit even at their least widths
+fit.width:
+   hfail = ''
+   cws = ''
+   for bi = 1 to nb
+      ncol = dcount(cl<bi>, @vm)
+      need = 0
+      szs = '' ; mns = '' ; wts = ''
+      for ci = 1 to ncol
+         need += cg<bi, ci> + cbw<bi, ci>
+         szs<1, ci> = cbw<bi, ci>
+         mns<1, ci> = cmw<bi, ci>
+         wts<1, ci> = chs<bi, ci>
+      next ci
+      if need > bw then
+         s.size = szs ; s.min = mns ; s.wt = wts ; s.d = need - bw
+         gosub shrink
+         szs = s.size
+         if s.d > 0 then
+            if hfail = '' then hfail = bl<1, bi> else hfail = hfail : @vm : bl<1, bi>
+         end
+      end else
+         sh.amt = bw - rbw
+         sh.wt = wts
+         gosub share
+         for ci = 1 to ncol
+            szs<1, ci> = szs<1, ci> + sh.out<1, ci>
+         next ci
+      end
+      cws<bi> = szs
+   next bi
+   return
+
+* the bands down the body: bhs<1, bi> the heights; vfail 1 when they do not fit even at their least heights
+fit.height:
+   vfail = 0
+   need = 0
+   for bi = 1 to nb
+      need += bbh<1, bi>
+   next bi
+   bhs = bbh
+   if need > bh then
+      s.size = bbh ; s.min = bmh ; s.wt = bvs ; s.d = need - bh
+      gosub shrink
+      bhs = s.size
+      if s.d > 0 then vfail = 1
+   end else
+      sh.amt = bh - rbh
+      sh.wt = bvs
+      gosub share
+      for bi = 1 to nb
+         bhs<1, bi> = bhs<1, bi> + sh.out<1, bi>
+      next bi
+   end
+   return
+
+* sh.amt shared by the weights sh.wt (values): sh.out<1, k> = idiv(sh.amt * weight, total), then what is left one at a time from the first
+* weighted item; nothing for a weight of 0, and nothing at all for an amount of 0 or less
+share:
+   sh.n = dcount(sh.wt, @vm)
+   sh.out = ''
+   sh.tot = 0
+   for sh.k = 1 to sh.n
+      sh.out<1, sh.k> = 0
+      sh.tot += sh.wt<1, sh.k>
+   next sh.k
+   if sh.amt <= 0 or sh.tot <= 0 then return
+   sh.given = 0
+   for sh.k = 1 to sh.n
+      sh.out<1, sh.k> = idiv(sh.amt * sh.wt<1, sh.k>, sh.tot)
+      sh.given += sh.out<1, sh.k>
+   next sh.k
+   sh.rem = sh.amt - sh.given
+   sh.k = 1
+   loop while sh.rem > 0 do
+      if sh.wt<1, sh.k> > 0 then
+         sh.out<1, sh.k> = sh.out<1, sh.k> + 1
+         sh.rem -= 1
+      end
+      sh.k += 1
+      if sh.k > sh.n then sh.k = 1
+   repeat
+   return
+
+* s.d taken from the sizes s.size (values) down to s.min: the stretching ones (s.wt > 0) first, the last first, then the fixed ones the same
+* way; s.d returns what could not be taken
+shrink:
+   s.n = dcount(s.size, @vm)
+   for s.pass = 1 to 2
+      s.k = s.n
+      loop while s.k >= 1 and s.d > 0 do
+         s.str = 0
+         if s.wt<1, s.k> > 0 then s.str = 1
+         s.go = 0
+         if s.pass = 1 and s.str then s.go = 1
+         if s.pass = 2 and not(s.str) then s.go = 1
+         if s.go then
+            s.take = s.size<1, s.k> - s.min<1, s.k>
+            if s.take > s.d then s.take = s.d
+            if s.take > 0 then
+               s.size<1, s.k> = s.size<1, s.k> - s.take
+               s.d -= s.take
+            end
+         end
+         s.k -= 1
+      repeat
+   next s.pass
+   return
+
+* sl a value list in ascending order, sv a number: sv is put in its place unless it is there
+ins.sorted:
+   sn = dcount(sl, @vm)
+   spos = sn + 1
+   sfound = 0
+   for sk = 1 to sn
+      if sl<1, sk> = sv then
+         sfound = 1
+         exit
+      end
+      if sl<1, sk> > sv then
+         spos = sk
+         exit
+      end
+   next sk
+   if sfound then return
+   if sn = 0 then
+      sl = sv
+   end else
+      if spos > sn then
+         sl = sl : @vm : sv
+      end else
+         ins sv before sl<1, spos>
+      end
+   end
+   return
+
+* fp the place of sv in the value list sl (0 when it is not there)
+find.pos:
+   fp = 0
+   sn = dcount(sl, @vm)
+   for sk = 1 to sn
+      if sl<1, sk> = sv then
+         fp = sk
+         exit
+      end
+   next sk
+   return
+end
+
+* END-CODE

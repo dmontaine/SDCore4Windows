@@ -1,0 +1,29 @@
+* TKCONFIRM
+* The public full-screen toolkit (S.130): the box that shows a sentence and asks Run or Cancel.  A wrapper over $tk_confirm.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkconfirm(sentence, lines, typed, res, msg, boxtitle, btns)       ALWAYS SEVEN ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   As $tk_confirm: the sentence wrapped at spaces and never altered, the explanation under it, a name to type when typed is not null, res 'run', 'cancel' or 'wrong'.
+*   THE DEFAULT BUTTON IS CANCEL.  It runs nothing and changes nothing: the program runs its own command when res is 'run'.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkconfirm(sentence, lines, typed, res, msg, boxtitle, btns)
+$catalog !tkconfirm
+
+   call $tk_confirm(sentence, lines, typed, res, msg, boxtitle, btns)
+   return
+end
+
+* END-CODE

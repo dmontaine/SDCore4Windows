@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.2).
+* 9 Nov 26 dm  S.186: a refused word says which character is wrong (15040 with $tk_badch: a capital letter, a space, the character &), not only the word.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -43,17 +44,17 @@ $include tk.h
    s = trim(sentence)
    if s = '' then
       err = sysmsg(12809)
-      return
+      goto run.done
    end
 
    if len(s) > 500 then
       err = sysmsg(12812)
-      return
+      goto run.done
    end
    nw = dcount(s, ' ')
    if nw > 40 then
       err = sysmsg(12812)
-      return
+      goto run.done
    end
 
    verb = field(s, ' ', 1)
@@ -64,7 +65,7 @@ $include tk.h
    next i
    if not(ok.verb) then
       err = sysmsg(12810, verb)
-      return
+      goto run.done
    end
 
    good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
@@ -72,8 +73,9 @@ $include tk.h
       w = field(s, ' ', i)
       for j = 1 to len(w)
          if index(good, w[j, 1], 1) = 0 then
-            err = sysmsg(12811, w)
-            return
+            call $tk_badch(w[j, 1], bad.ch)            ;* 9 Nov 26 (S.186): the character, in words (a capital, a space, &), not only the word
+            err = sysmsg(15040, w, bad.ch)
+            goto run.done
          end
       next j
    next i
@@ -81,6 +83,11 @@ $include tk.h
    execute s trapping aborts capturing out
    status = @system.return.code
 
+* 9 Nov 26 (S.186): every command run or refused here goes into the page's log of commands, which Ctrl-O shows on a page that has no output pane of its own ($tk_std)
+run.done:
+   lg.kind = (if err # '' then 'refuse' else 'ok')
+   lg.text = s : @fm : (if err # '' then err else out)
+   call $tk_out('log', '', lg.kind, lg.text, '')
    return
 end
 

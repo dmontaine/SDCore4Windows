@@ -1,0 +1,1 @@
+%1 %2 was not saved: its text holds a NUL or a byte from 248 to 255, or is over 2 MB, and the IDE does not write that to a file.  The text is still in the editor.

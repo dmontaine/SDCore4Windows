@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux bcf43131 (S.88 phase 1, K1-K3, K6): every terminal's keys in both cursor-key modes, the bracketed paste
+*           (K$PASTE.START / K$PASTE.END), and an unbound control sequence read whole to its final byte (decoded for the screen library).
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): ESC [ < (an xterm SGR mouse report) is bound to K$MOUSE.
 * 02 Oct 26 Windows port - RELEASE_1.1 120.  F1-F5, Home and End as xterm spells
 *           them (ESC O P-S, ESC [ 1 5 ~, ESC [ H, ESC [ F) are bound as defaults,
@@ -100,6 +102,8 @@ $include keycode.h
 
 * 02 Oct 26 Windows port - RELEASE_1.1 120.  THE XTERM SPELLINGS OF F1-F5, HOME
 *   AND END, BOUND THE SAME WAY AND FOR THE SAME REASON AS BACKSPACE ABOVE.
+*   10 Nov 26: LINUX'S S.88 K1/K2 TABLE BELOW BINDS ALL SEVEN (ESC O P-S, ESC [ 15 ~ IN ITS F5-F12
+*   LOOP, ESC [ H AND ESC [ F IN BOTH CURSOR-KEY MODES), SO THIS PORT'S OWN SEVEN LINES ARE GONE.
 *
 *   MEASURED 2 Oct 2026 with gplbld/probe-keys.ps1 in the owner's console (the
 *   window was not named): F1-F4 send ESC O P, ESC O Q, ESC O R, ESC O S, F5 sends
@@ -117,15 +121,57 @@ $include keycode.h
 *   lookup that used to find nothing and now finds something.  F6-F12 are not
 *   here because the windows type already binds the ESC [ nn ~ forms xterm sends
 *   (not measured; the probe was asked for F1-F5, Home and End only).
-      code = K$F1         ; key.string = char(27) : 'OP'        ; gosub bind
-      code = K$F2         ; key.string = char(27) : 'OQ'        ; gosub bind
-      code = K$F3         ; key.string = char(27) : 'OR'        ; gosub bind
-      code = K$F4         ; key.string = char(27) : 'OS'        ; gosub bind
-      code = K$F5         ; key.string = char(27) : '[15~'      ; gosub bind
-      code = K$HOME       ; key.string = char(27) : '[H'        ; gosub bind
-      code = K$END        ; key.string = char(27) : '[F'        ; gosub bind
 
-      code = K$F1         ; key.string = tinfo<T$KEY.F1>        ; gosub bind
+* 28 Oct 26 dm - S.88 PHASE 1, K1/K2: THE KEYS OF EVERY TERMINAL IN BOTH CURSOR-KEY MODES, BOUND BEFORE TERMINFO SO TERMINFO STILL WINS.
+*   The type in force was linux (LOGIN's paragraph forced it) or xterm, and a real xterm-family emulator (GNOME Terminal, Konsole, xterm) matches neither entry whole: in its default
+*   normal mode it sends ESC [ A for Up and ESC O P for F1, while terminfo's linux entry has ESC [ [ A for F1 and its xterm entry has ESC O A for Up (the mode SD never switches on:
+*   nothing sends smkx).  Measured on the owner's own GNOME Terminal 28 Oct 26: F1 arrived as alt-o then P, F2 as alt-o then Q, F5 as ~ and Home as nothing.  The strings below are what
+*   xterm, VTE, Konsole, the Linux console, rxvt and a multiplexer send, in the normal and the application mode, and none of them is another key's string, so binding them all
+*   changes no lookup that already succeeds.  smkx is NOT sent: its second half (ESC =, application keypad) would turn the numeric keypad into sequences nothing binds.
+      for pm = 1 to 2
+         pf = char(27) : '['
+         if pm = 2 then pf = char(27) : 'O'
+         code = K$UP    ; key.string = pf : 'A' ; gosub bind
+         code = K$DOWN  ; key.string = pf : 'B' ; gosub bind
+         code = K$RIGHT ; key.string = pf : 'C' ; gosub bind
+         code = K$LEFT  ; key.string = pf : 'D' ; gosub bind
+         code = K$HOME  ; key.string = pf : 'H' ; gosub bind
+         code = K$END   ; key.string = pf : 'F' ; gosub bind
+      next pm
+      pf = char(27) : '['
+      code = K$HOME      ; key.string = pf : '1~'  ; gosub bind
+      code = K$HOME      ; key.string = pf : '7~'  ; gosub bind
+      code = K$INSERT    ; key.string = pf : '2~'  ; gosub bind
+      code = K$DELETE    ; key.string = pf : '3~'  ; gosub bind
+      code = K$END       ; key.string = pf : '4~'  ; gosub bind
+      code = K$END       ; key.string = pf : '8~'  ; gosub bind
+      code = K$PAGE.UP   ; key.string = pf : '5~'  ; gosub bind
+      code = K$PAGE.DOWN ; key.string = pf : '6~'  ; gosub bind
+      code = K$CTRL.TAB  ; key.string = pf : 'Z'   ; gosub bind
+*   F1 to F4: ESC O P, Q, R, S, and ESC [ 11~ to 14~
+      code = K$F1 ; key.string = char(27) : 'OP' ; gosub bind
+      code = K$F2 ; key.string = char(27) : 'OQ' ; gosub bind
+      code = K$F3 ; key.string = char(27) : 'OR' ; gosub bind
+      code = K$F4 ; key.string = char(27) : 'OS' ; gosub bind
+*   F1 to F5 of the Linux console (ESC [ [ A to E): a console reached through a terminal of another type still has working keys
+      code = K$F1 ; key.string = pf : '[A' ; gosub bind
+      code = K$F2 ; key.string = pf : '[B' ; gosub bind
+      code = K$F3 ; key.string = pf : '[C' ; gosub bind
+      code = K$F4 ; key.string = pf : '[D' ; gosub bind
+      code = K$F5 ; key.string = pf : '[E' ; gosub bind
+      code = K$F1 ; key.string = pf : '11~' ; gosub bind
+      code = K$F2 ; key.string = pf : '12~' ; gosub bind
+      code = K$F3 ; key.string = pf : '13~' ; gosub bind
+      code = K$F4 ; key.string = pf : '14~' ; gosub bind
+      fkn = '15' : @fm : '17' : @fm : '18' : @fm : '19' : @fm : '20' : @fm : '21' : @fm : '23' : @fm : '24'
+      for fk = 1 to 8
+         code = K$F5 + fk - 1 ; key.string = pf : fkn<fk> : '~' ; gosub bind
+      next fk
+*   A bracketed paste (the screen library asks the terminal for it): ESC [ 200 ~ ... ESC [ 201 ~ around the pasted text.
+      code = K$PASTE.START ; key.string = pf : '200~' ; gosub bind
+      code = K$PASTE.END   ; key.string = pf : '201~' ; gosub bind
+
+      code = K$F1        ; key.string = tinfo<T$KEY.F1>        ; gosub bind
       code = K$F2         ; key.string = tinfo<T$KEY.F2>        ; gosub bind
       code = K$F3         ; key.string = tinfo<T$KEY.F3>        ; gosub bind
       code = K$F4         ; key.string = tinfo<T$KEY.F4>        ; gosub bind
@@ -200,9 +246,27 @@ $include keycode.h
          key.string := c
       repeat
 
+* 28 Oct 26 dm - S.88 PHASE 1, K3 AND K6: A SEQUENCE NOBODY BOUND IS TAKEN WHOLE, NOT CUT OFF.  ESC [ 1 ; 5 C (Ctrl+Right) read ESC [ 1 as the start of Home (ESC [ 1 ~), met the ;,
+*   rang the bell and threw those four characters away - and the 5 and the C that were still to come were then TYPED.  A control sequence ends at its final byte (0x40 to 0x7E, after
+*   parameter and intermediate bytes 0x20 to 0x3F), so the rest is read up to it.  For a program that asked for it (the screen library) the modifier is decoded: ESC [ 1 ; m X, ESC [ n ; m ~
+*   come back as ESC, char(2) and the name (ctrl-right, shift-up, ctrl-pgup ...); a sequence with no name comes back as ESC, char(2) alone, which means "ignore it"; anyone else gets
+*   the bell, as before, and still nothing typed.  An unbound ESC O x is whole at three characters and is ignored the same way.
+      got = ''
+      if key.string[1, 2] = char(27) : '[' and len(key.string) >= 3 then gosub csi.rest
+      if key.string[1, 2] = char(27) : 'O' and len(key.string) = 3 and kc.alt then got = char(27) : char(2)
+      if got # '' then return value got
+
+      dropped = @false
       if len(key.string) = 1 then
-         if system(1001) then key.string = swapcase(key.string)
-         return value key.string
+* 28 Oct 26 dm - S.88 PHASE 1, K4: A BYTE OF 128 OR MORE IS NEVER A COMMAND.  An unbound single byte came back as itself, and $sl_key reads a character by its value, so a pasted UTF-8
+*   bullet (E2 80 A2) was F1 (the IDE's help) and 0xC8 was the mouse key, which ended the IDE.  The keys that ARE bound return char(code) before this point and are not touched.  English
+*   only: the byte is dropped, nothing is inserted.  Only for the screen library's read (kc.alt); a command line still gets what was typed.
+         if kc.alt and seq(key.string) >= 128 then
+            dropped = @true
+         end else
+            if system(1001) then key.string = swapcase(key.string)
+            return value key.string
+         end
       end
 
       * 22 Oct 26 dm - AN ALT-LETTER, FOR A PROGRAM THAT ASKED FOR IT (BINDKEY(, -7): the screen library's $sl_key does, for the one read).  A terminal
@@ -212,9 +276,73 @@ $include keycode.h
          if seq(key.string[2,1]) > 32 and seq(key.string[2,1]) < 127 then return value key.string
       end
 
-      display @sys.bell :
+      if not(dropped) then display @sys.bell :
       key.string = ''
    repeat
+
+* ======================================================================
+*  csi.rest  -  an unbound ESC [ sequence: read it to its final byte, and name it for the screen library (see above)
+
+csi.rest:
+   got = ''
+   n = 0
+   loop
+      b = seq(key.string[len(key.string), 1])
+   while b >= 32 and b <= 63 and n < 24 do
+      c = keyin(0.2)
+      set.status 0
+      if c = '' then
+         n = 99
+      end else
+         key.string := c
+      end
+      n += 1
+   repeat
+   if not(kc.alt) then return
+   got = char(27) : char(2)
+   fin = key.string[len(key.string), 1]
+   pstr = key.string[3, len(key.string) - 3]
+   base = ''
+   p1 = field(pstr, ';', 1)
+   md = field(pstr, ';', 2) + 0
+   begin case
+      case fin = 'A' ; base = 'up'
+      case fin = 'B' ; base = 'down'
+      case fin = 'C' ; base = 'right'
+      case fin = 'D' ; base = 'left'
+      case fin = 'H' ; base = 'home'
+      case fin = 'F' ; base = 'end'
+      case fin = 'P' ; base = 'f1'
+      case fin = 'Q' ; base = 'f2'
+      case fin = 'R' ; base = 'f3'
+      case fin = 'S' ; base = 'f4'
+      case fin = '~'
+         begin case
+            case p1 = 1 or p1 = 7 ; base = 'home'
+            case p1 = 2 ; base = 'ins'
+            case p1 = 3 ; base = 'del'
+            case p1 = 4 or p1 = 8 ; base = 'end'
+            case p1 = 5 ; base = 'pgup'
+            case p1 = 6 ; base = 'pgdn'
+            case p1 >= 11 and p1 <= 14 ; base = 'f' : (p1 - 10)
+            case p1 = 15 ; base = 'f5'
+            case p1 = 17 ; base = 'f6'
+            case p1 = 18 ; base = 'f7'
+            case p1 = 19 ; base = 'f8'
+            case p1 = 20 ; base = 'f9'
+            case p1 = 21 ; base = 'f10'
+            case p1 = 23 ; base = 'f11'
+            case p1 = 24 ; base = 'f12'
+         end case
+   end case
+   if base # '' and md >= 2 and md <= 8 then
+      pre = ''
+      if bitand(md - 1, 4) then pre := 'ctrl-'
+      if bitand(md - 1, 2) then pre := 'alt-'
+      if bitand(md - 1, 1) then pre := 'shift-'
+      got = char(27) : char(2) : pre : base
+   end
+   return
 
 
 * ======================================================================

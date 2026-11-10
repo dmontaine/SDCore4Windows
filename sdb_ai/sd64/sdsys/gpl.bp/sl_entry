@@ -126,6 +126,15 @@ handle.key:
             text = text[1, p - 1] : key : text[p, 99999]
             p += 1
          end
+      case key = 'paste'
+         * 28 Oct 26 (S.88 phase 1): a bracketed paste puts its FIRST line in at the cursor, as far as the field's length allows (a field has one line)
+         call $sl_mouse('paste.get', pt)
+         pt = field(pt, @fm, 1)
+         if maxlen > 0 then pt = pt[1, max(maxlen - len(text), 0)]
+         if pt # '' then
+            text = text[1, p - 1] : pt : text[p, 99999]
+            p += len(pt)
+         end
       case 1
          ret = 'unhandled' : @fm : key
    end case

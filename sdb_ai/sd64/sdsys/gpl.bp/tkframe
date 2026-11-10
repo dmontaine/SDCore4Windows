@@ -1,0 +1,35 @@
+* TKFRAME
+* The public full-screen toolkit (S.130): the status line, the border, the function-key row and the focus marks.  A wrapper over $tk_frame.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkframe(ctx, keys, pane, msg)
+*
+*     keys   the program's key table      pane   the pane with the focus      msg   the message for the status line (null for none)
+*
+*   Draws the foot of the screen and the right end of row 0 as $tk_frame does, each only when its text has changed.  The slots of the context that belong to the AI
+*   line are cleared first, so that a program cannot make the library draw one.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkframe(ctx, keys, pane, msg)
+$catalog !tkframe
+
+$include tk.h
+
+   ctx<TK.C.AI> = ''
+   ctx<TK.C.AIROW> = ''
+   call $tk_frame(ctx, keys, pane, msg)
+   return
+end
+
+* END-CODE

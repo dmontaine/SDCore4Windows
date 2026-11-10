@@ -1,0 +1,114 @@
+* SL_PALETTE
+* Screen library, window: the action palette - every entry of a menu bar's menus in one filtered list (S.88 3.10A).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 29 Oct 26 dm  New (S.88 3.10A).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_palette(menus, title, ret, status, reason)
+*
+*     menus    the array a menu bar is given ($sl_menu, SCREEN MENUBAR): a field to a menu, value 1 its title, each later value an item, whose subvalues are
+*              1 the label, 2 the shortcut as it is shown, 3 the code, 4 the flags (D disabled, C checked) and, new, 5 a reason (shown when a disabled entry
+*              is chosen).  A label of - is a separator and is left out.  A menu whose title begins with > is a submenu, reached by the item whose code is
+*              that title; it is followed to a depth of three.  The entries are listed menu by menu, the submenus' entries after the menus' own.
+*     title    shown in the top border; null for the library's own ("Actions")
+*     ret      the CODE of the entry chosen, exactly the code the menu itself returns, so the caller runs it as it runs a menu's: the palette is ADVISORY
+*     status   0 an entry that is available was chosen (ret is its code); 1 Esc, a session with no terminal, nothing to choose from;
+*              2 an entry that is disabled was chosen: ret is null and reason holds its reason (subvalue 5, else message 12180)
+*     reason   see status 2
+*
+*   Each entry is shown as "Menu > Label", with its shortcut, and "(not now)" after the shortcut of a disabled one.  The window is $sl_pickwin, so the
+*   person types part of a name to narrow the list.  THE PALETTE RUNS NOTHING: it answers a code, the page's own handler runs the action and keeps its own
+*   gates, and a disabled entry never answers a code.  It reads and writes no file.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_palette(menus, title, ret, status, reason)
+$catalog $sl_palette
+
+   equate PAL.DEPTH to 3                      ;* menu, submenu, submenu of a submenu
+
+   ret = ''
+   status = 1
+   reason = ''
+   if system(25) then return                  ;* a phantom has no terminal
+
+   items = ''
+   codes = ''
+   dis = ''
+   why = ''
+   n = 0
+   nm = dcount(menus, @fm)
+   if menus = '' then nm = 0
+
+   * the work list: a menu of the bar, with the text its entries' names begin with and how deep it is; a submenu is added to the end when its item is met
+   todo = ''
+   for m = 1 to nm
+      if menus<m, 1>[1, 1] # '>' then
+         todo<-1> = m : @vm : change(menus<m, 1>, '&', '') : ' > ' : @vm : 1
+      end
+   next m
+
+   qi = 1
+   loop while todo<qi> # '' do
+      m = todo<qi, 1>
+      prefix = todo<qi, 2>
+      depth = todo<qi, 3> + 0
+      nv = dcount(menus<m>, @vm)
+      for v = 2 to nv
+         label = menus<m, v, 1>
+         if label = '-' or label = '' then continue
+         plain = change(label, '&', '')
+         code = menus<m, v, 3>
+         if code[1, 1] = '>' then
+            if depth < PAL.DEPTH then
+               for s = 1 to nm
+                  if menus<s, 1> = code then
+                     todo<-1> = s : @vm : prefix : plain : ' > ' : @vm : depth + 1
+                     exit
+                  end
+               next s
+            end
+            continue
+         end
+         isdis = (index(upcase(menus<m, v, 4>), 'D', 1) > 0)
+         n += 1
+         shortcut = menus<m, v, 2>
+         if isdis then shortcut = trim(shortcut : '  ' : sysmsg(12179))
+         items<n, 1> = prefix : plain
+         items<n, 2> = shortcut
+         items<n, 3> = (if menus<m, v, 5> # '' then menus<m, v, 5> else plain)
+         codes<n> = code
+         dis<n> = (if isdis then 1 else 0)
+         why<n> = menus<m, v, 5>
+      next v
+      qi += 1
+   repeat
+
+   if n = 0 then return
+
+   ttl = title
+   if ttl = '' then ttl = sysmsg(12178)
+   call $sl_pickwin(items, ttl, 0, 0, pr, ps, '', '')
+   if ps # 0 then return                      ;* Esc or no terminal: status 1
+
+   if dis<pr> then
+      status = 2                              ;* a disabled entry is never answered with its code
+      reason = why<pr>
+      if reason = '' then reason = sysmsg(12180)
+   end else
+      ret = codes<pr>
+      status = 0
+   end
+
+   return
+end
+
+* END-CODE

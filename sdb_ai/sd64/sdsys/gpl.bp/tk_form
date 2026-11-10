@@ -1,0 +1,176 @@
+* TK_FORM
+* The full-screen toolkit, shared base: one labelled form that asks for several things at once, and keeps its place when the page refuses an answer (S.88 phase 5, F0b).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 30 Oct 26 dm  New (S.88 F0b).  Modelled on $ide_name (two entries, a message area, a refusal said in the form); this one is made of SCREEN FORM and its controls, so the
+*               focus ring, Tab and the mouse are the library's, and a refusal moves the focus with SCREEN FOCUS (the focus service, S.88 p3.6).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_form(op, ctx, a, b, c)       ALWAYS FIVE ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   A page that asks several questions in a row asks them on this one form, with the answers in view and a refusal said under them.  THE FORM VALIDATES NOTHING: the page does,
+*   with its own gates, between 'run' and 'close', and tells the form what it found with 'say'; a refusal leaves the form where it is.  One form at a time.
+*
+*     open   (ctx, spec, vals -> c)   draws the form centred and returns at once.  spec is a dynamic array: <1> the title, <2> the label of the default button, with a & mark ('&Create';
+*                                     it stands for what the form will do), <3> the hint line (null: message 12253), then one FIELD for each entry, whose values are: 1 its id (a plain word,
+*                                     unique), 2 its label, 3 its width in cells (null: as wide as the form allows), 4 its longest text (null: 300), 5 1 for a masked entry (a password, shown as *).
+*                                     vals is the entries' starting texts, one to a field of the same order (null for none).  c is null, or 'no' when nothing was drawn (a session with no
+*                                     terminal, no entry, or a window too small for the form).
+*     run    (ctx -> a, b, c)         the person fills the form in until the default button (Return in an entry presses it) or Cancel (Esc) ends it.  a is 'ok' or 'cancel' (also an input that
+*                                     ended), b the texts of the entries as typed, one to a field, c the id of the entry that has the focus.  The form stays on the screen.
+*     say    (ctx, text, id)          the page's refusal or note, wrapped into the three rows under the entries (null empties them), and the focus goes to the entry id (null: it stays).
+*     close  (ctx)                    the screen is put back as it was under the form
+*
+*   Leave the form with 'close' on EVERY way out, as with $tk_close.  The default button is the effect; Cancel is always the second button and Esc is cancel.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_form(op, ctx, a, b, c)
+$catalog $tk_form
+
+$include sl.h
+$include tk.h
+
+   common /tkform/ tf.f, tf.n, tf.ids, tf.msgw, tf.open        ;* the form on the screen: its collection, the number of entries and their ids (values), the message width, 1 while it is shown
+
+   begin case
+      case op = 'open'
+         gosub open.form
+      case op = 'run'
+         gosub run.form
+      case op = 'say'
+         gosub say.text
+      case op = 'close'
+         gosub close.form
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- open
+
+open.form:
+   c = 'no'
+   if system(25) then return                         ;* a phantom has no terminal
+   if tf.open + 0 then gosub close.form              ;* one form at a time: one left open is put away first
+   spec = a
+   ttl = spec<1>
+   eff = spec<2>
+   hint = spec<3>
+   if hint = '' then hint = sysmsg(12253)
+   nf = dcount(spec, @fm) - 3
+   if nf < 1 then return
+   call $sl_scr('get', scr)
+   sw = scr<SL.S.W> + 0
+   sh = scr<SL.S.H> + 0
+   bw = 66
+   if bw > sw - 4 then bw = sw - 4
+   bh = nf + 10                                      ;* border, blank, the entries, blank, three message rows, blank, the buttons, the hint, border
+   if bw < 40 or bh > sh - 2 then return
+   labw = 12
+   for i = 1 to nf
+      fd = spec<3 + i>
+      if len(fd<1, 2>) + 2 > labw then labw = len(fd<1, 2>) + 2
+   next i
+   if labw > 30 then labw = 30
+   fw = bw - labw - 6                                ;* the widest an entry can be
+   bx = int((sw - bw) / 2)
+   by = int((sh - bh) / 2)
+   tf.msgw = bw - 4
+   tf.ids = ''
+   tf.n = nf
+   screen form title ttl at bx,by size bw,bh returning tf.f
+   for i = 1 to nf
+      fd = spec<3 + i>
+      id = fd<1, 1>
+      tf.ids<1, i> = id
+      ini = b<i>
+      wd = fd<1, 3> + 0
+      if wd < 1 or wd > fw then wd = fw
+      ml = fd<1, 4> + 0
+      if ml < 1 then ml = 300
+      screen label tf.f, 'l' : i, fd<1, 2>[1, labw - 2] at 2,1 + i width labw - 2
+      if fd<1, 5> + 0 = 1 then
+         screen entry tf.f, id at 2 + labw,1 + i width wd value ini mask maxlen ml
+      end else
+         screen entry tf.f, id at 2 + labw,1 + i width wd value ini maxlen ml
+      end
+   next i
+   for j = 1 to 3
+      screen label tf.f, 'm' : j, '' at 2,nf + 2 + j width tf.msgw
+   next j
+   screen button tf.f, 'ok', eff at 2,nf + 6 default
+   screen button tf.f, 'cancel', sysmsg(12254) at 2 + len(eff) + 6,nf + 6 cancel
+   screen label tf.f, 'hint', hint[1, tf.msgw] at 2,nf + 7 width tf.msgw
+   tf.open = 1
+   c = ''
+   return
+
+* ------------------------------------------------------------------------------------------------- run
+
+run.form:
+   a = 'cancel'
+   b = ''
+   c = ''
+   if not(tf.open + 0) then return
+   last = tf.ids<1, 1>
+   res = 'cancel'
+   loop
+      screen wait tf.f returning ev then
+         begin case
+            case ev<1> = 'focus'
+               null
+            case ev<1> = 'button'
+               res = (if ev<2> = 'ok' then 'ok' else 'cancel')
+               exit
+            case ev<1> = 'cancel'
+               res = 'cancel'
+               exit
+         end case
+      end else
+         res = 'cancel'                              ;* the input ended
+         exit
+      end
+   repeat
+   for i = 1 to tf.n
+      screen get tf.f, tf.ids<1, i> returning v
+      b<i> = v
+   next i
+   a = res
+   fx = tf.f{'focus'} + 0                          ;* the form's own pointer: a focus moved by 'say' makes no event
+   c = last
+   if fx >= 1 then
+      fw = tf.f{'widgets', fx}
+      if index(@vm : tf.ids : @vm, @vm : fw{'id'} : @vm, 1) > 0 then c = fw{'id'}
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- say
+
+say.text:
+   if not(tf.open + 0) then return
+   call $tk_wrap(a, tf.msgw, pieces)
+   for j = 1 to 3
+      screen set tf.f, 'm' : j text pieces<j>[1, tf.msgw]
+   next j
+   if b # '' then
+      screen focus tf.f, b else null
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- close
+
+close.form:
+   if tf.open + 0 then
+      screen hide tf.f
+      tf.open = 0
+   end
+   return
+end
+
+* END-CODE

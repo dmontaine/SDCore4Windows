@@ -4,8 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 30 Oct 26 dm  S.88 U4: a menu bar made from the key table ($tk_menubar); the keys are Ctrl-N, Del, U and D in place of F2, F3, F4 and F6 (owner answer 20); no key hint in the first message.
 * 22 Oct 26 dm  New (S.75; the owner: "users need to be able to add their own items to the full screen menu if allowed by the admin - not manage universal tiles, but just
 *               for their own programs").
+* 1 Nov 26 dm  S.97 stage 3: the AI line ($tk_aipage): F6 or AI > Ask the AI; it answers questions and is offered no action (every key of the page changes the list).
+* 2 Nov 26 dm  S.88 U4 (the L2 half): the box is a pane of the layout service ($tk_layout), declared at its old size (1,1 138 by 34): at 140 by 43 exactly the box the page has always
+*               drawn, in a bigger window it is taller (more rows of the list) and wider (a wider command column); a resize is $tk_layout 'refresh' and all of it drawn again.  F1, ? or a
+*               click on the [?] at the end of the header row explains the page ($tk_help, the record tool.menus.mine; Help > Help on this page).
+* 8 Nov 26 dm  S.179: F5 draws the page again (View > Refresh), Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask theAI is a menu entry of its own.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+*              '/' finds a program by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -13,7 +22,8 @@
 *   MY.MENU
 *
 *   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the programs a person has added to their own home screen: the list of them, and
-*   F2 add, Enter change the one selected, F3 remove it, F4 move it up, F6 move it down, Ctrl-Q leave.  An item is a label (up to 21 characters), a command (what the
+*   Ctrl-N add, Enter change the one selected, Del remove it, U move it up, D move it down, F1 or ? help, Ctrl-Q leave; Esc or F10 opens the menu bar (the owner's answer 20 of 29 Oct 2026: the
+*   function keys F2, F3, F4 and F6 gave way, F2 and F6 being the toolkit's find-an-action and next-pane keys).  An item is a label (up to 21 characters), a command (what the
 *   person would type at their prompt) and, if they like, a three-character glyph and whether the screen waits for Enter after a command that only prints.  The
 *   items are the record HOME of the file &MENUS& in the person's own account.
 *
@@ -51,37 +61,87 @@ $include tk.h
 
    keys = ''
    call $tk_keys('add', keys, 'enter', 'change', 'change', '', 1)
-   call $tk_keys('add', keys, 'f2', 'add', 'add', '', 1)
-   call $tk_keys('add', keys, 'f3', 'remove', 'remove', '', 1)
-   call $tk_keys('add', keys, 'f4', 'up', 'up', '', 1)
-   call $tk_keys('add', keys, 'f6', 'down', 'down', '', 1)
+   call $tk_keys('add', keys, 'ctrl-n', 'add', 'add', '', 1)
+   call $tk_keys('add', keys, 'del', 'remove', 'remove', '', 1)
+   call $tk_keys('add', keys, 'u', 'up', 'up', '', 1)
+   call $tk_keys('add', keys, 'd', 'down', 'down', '', 1)
+   call $tk_keys('add', keys, '/', 'find', 'find', '', 1)                  ;* 9 Nov 26 (S.186): '/' finds a program by typing (letters are this page's commands)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)                 ;* 2 Nov 26 (S.88 U4): the page's help ($tk_help)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U4: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)           ;* S.179: F5 draws the page again, as on every page
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'find', '&View', '&Find a program', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   call $tk_keys('menu', keys, 'add', '&Program', '&Add a program', '', '')
+   call $tk_keys('menu', keys, 'change', '&Program', '&Change it', '', '')
+   call $tk_keys('menu', keys, 'remove', '&Program', '&Remove it', '', '')
+   call $tk_keys('menu', keys, 'up', '&Program', 'Move it &up', '', '')
+   call $tk_keys('menu', keys, 'down', '&Program', 'Move it &down', '', '')
+   * S.97 stage 3: the AI line.  Every key of this page changes the person's list, so NO action is offered to the AI: the line answers questions only.  The box ends on
+   * row 34, so the line's row (the one above the status line) is free and nothing moves.  Where the AI is not usable nothing here adds a key, a row or a line.
+   call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   VIS = 30
+   VIS = 30                                                     ;* rows of the list on the screen (the pane's height less 4: set by get.rects)
+   gosub declare.layout
    sel = 1
    top = 0
+   find.last = ''                                               ;* 9 Nov 26 (S.186): the text '/' asked for last
    gen = 0
    done = 0
-   msg = 'F2 adds a program'
+   msg = ''
 
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, 'My programs', '', '', mr)        ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, 'My programs', msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)
       nm = ''
       screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'My programs', nm, ao)       ;* S.97 stage 3: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* (nothing is offered here, so the library never replays a key)
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'My programs', nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar
+      if mr<1> # '' then nm = mr<4>
+      if len(nm) = 1 then nm = downcase(nm)                          ;* U and u are one key
       begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
          case nm = ''
             if status() = ER$EOF then exit
          case nm = 'guardquit'
             exit
          case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
             gen += 1
             ctx<TK.C.GEN> = gen
             gosub draw.all
          case nm = 'mouse'
             screen mouse returning mev else mev = ''
+            mr = ''
+            call $tk_menubar('click', ctx, keys, 'My programs', mev, '', mr)         ;* a click on the bar on row 0
+            if mr<1> # '' then
+               nm = mr<4>
+               if nm # '' then gosub on.key                   ;* a bar left with nothing chosen has no name: the status message stays
+            end else
+               call $tk_aipage('mouse', ctx, keys, 'My programs', mev, ap)         ;* S.97 stage 3: a click on the AI line gives it the focus
+               if ap # '' then msg = ap
+               call $tk_help('hit', mev, l.x + l.w - 5, l.y + 1, hit.m)           ;* 2 Nov 26 (S.88 U4): a click on the [?] explains the page
+               if hit.m then
+                  call $tk_help('box', 'tool.menus.mine', hm, 0, 0)
+                  if hm # '' then msg = hm
+               end
+            end
          case 1
             gosub on.key
       end case
@@ -93,13 +153,36 @@ $include tk.h
 
 * ------------------------------------------------------------------------------------------------- the page
 
+* The layout (S.88 U4, 2 Nov 26).  The one box is a pane of the layout service, declared in the size of the reference layout (140 by 43, the body 138 by 39): it takes the rows and the
+* columns a bigger window has beyond the reference.  The row the AI line takes (when it is usable) is below the box at 140 by 43, so nothing moves there.
+* Out: l.x l.y l.w l.h (the box), l.tw (the text width), cmdw (the width of the command column), VIS.
+declare.layout:
+   d = ''
+   d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 34 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'list', rc)
+   l.x = rc<1, 1> ; l.y = rc<1, 2> ; l.w = rc<1, 3> ; l.h = rc<1, 4>
+   l.tw = l.w - 4                                                ;* 134 at the reference
+   cmdw = l.tw - 50                                              ;* the label 23, the glyph 7, the waits 5 and the margin: 84 at the reference
+   VIS = l.h - 4                                                 ;* the border, the header row, the blank row and the note on the bottom row: 30 rows of 34
+   if VIS < 1 then VIS = 1
+   return
+
 draw.all:
-   cw = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
-   screen clear at 0,1 size cw,chh
-   screen box at 1,1 size 138,34 title 'My programs'
-   screen text fmt('Label', '23L') : fmt('Glyph', '7L') : fmt('Command', '84L') : 'Waits' at 3,2 attr 'header' width 134
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   screen box at l.x,l.y size l.w,l.h title 'My programs'
+   screen text fmt('Label', '23L') : fmt('Glyph', '7L') : fmt('Command', cmdw : 'L') : 'Waits' at l.x + 2,l.y + 1 attr 'header' width l.tw
+   call $tk_help('mark', l.x + l.w - 5, l.y + 1, 0, 0)
    n = dcount(its, @fm)
+   if its = '' then n = 0
+   for ak = 1 to 4                                              ;* an empty list has nothing to change, remove or move: the bar shows those entries off, with the reason
+      aid = field('change,remove,up,down', ',', ak)
+      call $tk_keys('why', keys, aid, (if n = 0 then 'no program in the list yet' else ''), '', '', '')
+   next ak
    if sel < 1 then sel = 1
    if sel > n then sel = n
    if sel - 1 < top then top = sel - 1
@@ -109,15 +192,15 @@ draw.all:
       k = top + r
       s = ''
       if k <= n then
-         s = fmt(its<k, 1>, '23L') : fmt((if its<k, 2> = '' then '>>>' else its<k, 2>), '7L') : fmt(its<k, 3>[1, 82], '84L') : (if its<k, 4> then 'yes' else 'no')
+         s = fmt(its<k, 1>, '23L') : fmt((if its<k, 2> = '' then '>>>' else its<k, 2>), '7L') : fmt(its<k, 3>[1, cmdw - 2], cmdw : 'L') : (if its<k, 4> then 'yes' else 'no')
       end
-      screen text s at 3,2 + r attr (if k = sel and k <= n then 'highlight' else 'normal') width 134
+      screen text s at l.x + 2,l.y + 1 + r attr (if k = sel and k <= n then 'highlight' else 'normal') width l.tw
    next r
    if n = 0 then
-      screen text 'You have not added a program yet.  F2 adds one.' at 3,4 width 134
-      screen text 'A program here is a command you could type at your prompt.  It is started from your home screen.' at 3,5 attr 'disabled' width 134
+      screen text 'You have not added a program yet.  Ctrl-N adds one.' at l.x + 2,l.y + 3 width l.tw
+      screen text 'A program here is a command you could type at your prompt.  It is started from your home screen.' at l.x + 2,l.y + 4 attr 'disabled' width l.tw
    end
-   screen text "The standard tiles of the home screen are the administrator's; this list is only yours." at 3,34 attr 'disabled' width 134
+   screen text "The standard tiles of the home screen are the administrator's; this list is only yours." at l.x + 2,l.y + l.h - 1 attr 'disabled' width l.tw
    return
 
 * ------------------------------------------------------------------------------------------------- keys
@@ -136,26 +219,52 @@ on.key:
             sel += 1
             gosub draw.all
          end
+      case nm = '/'                         ;* S.186: the next program of the list that holds the text typed ($tk_findrow)
+         call $tk_findrow(convert(@vm : @sm, '  ', its), sel, find.last, fpos)
+         if fpos < 0 then msg = sysmsg(15045, find.last)
+         if fpos > 0 then sel = fpos
+         gosub draw.all
       case nm = 'home'
          sel = 1
          gosub draw.all
       case nm = 'end'
          sel = n
          gosub draw.all
-      case nm = 'f2'
+      case nm = 'ctrl-n'
          gosub add.item
       case nm = 'enter' or nm = ' '
          if n > 0 then gosub change.item
-      case nm = 'f3'
+      case nm = 'del'
          if n > 0 then gosub remove.item
-      case nm = 'f4'
+      case nm = 'u'
          if sel > 1 then
             gosub swap.up
          end
-      case nm = 'f6'
+      case nm = 'd'
          if sel < n then
             gosub swap.down
          end
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.menus.mine', hm, 0, 0)                  ;* 2 Nov 26 (S.88 U4): the page's help
+         if hm # '' then msg = hm
+      case nm = 'f5'                        ;* S.179: draw the page again, as on every page
+         gen += 1
+         ctx<TK.C.GEN> = gen
+         gosub draw.all
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'My programs', std.r)
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
       case nm = 'ctrl-q'
          done = 1
    end case
@@ -198,22 +307,41 @@ change.item:
 * The four questions; ok is 1 when all were answered and the label and the command are not empty
 ask.item:
    ok = 0
-   screen ask 'Label (up to 21 characters)' width 24 value lab title 'Add a program' returning a1 else return
-   screen ask 'Command, as you would type it at your prompt' width 100 value cmd title 'Add a program' returning a2 else return
-   screen ask 'Glyph (up to 3 characters, empty for >>>)' width 5 value gly title 'Add a program' returning a3 else return
-   screen ask 'Wait for Enter when the command has finished printing? (y/n)' width 3 value pau title 'Add a program' returning a4 else return
-   lab = trim(a1)[1, 21]
-   cmd = trim(a2)[1, 200]
-   gly = a3[1, 3]
-   pau = downcase(trim(a4))[1, 1]
-   if lab = '' or cmd = '' then
-      msg = 'a program needs a label and a command: nothing was saved'
+   spec = 'Add a program' : @fm : '&Save' : @fm : ''
+   spec<-1> = 'label' : @vm : 'Label (21 characters)' : @vm : 24 : @vm : 21
+   spec<-1> = 'command' : @vm : 'Command, as you type it' : @vm : 100 : @vm : 200
+   spec<-1> = 'glyph' : @vm : 'Glyph (3, empty for >>>)' : @vm : 5 : @vm : 3
+   spec<-1> = 'wait' : @vm : 'Wait for Enter? (y/n)' : @vm : 3 : @vm : 3
+   fv = lab : @fm : cmd : @fm : gly : @fm : pau
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window: nothing was saved'
       return
    end
-   if index(lab : cmd : gly, @fm, 1) or index(lab : cmd : gly, @vm, 1) then
-      msg = 'those characters cannot be used: nothing was saved'
-      return
-   end
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         return
+      end
+      lab = trim(fv<1>)[1, 21]
+      cmd = trim(fv<2>)[1, 200]
+      gly = fv<3>[1, 3]
+      pau = downcase(trim(fv<4>))[1, 1]
+      fbad = ''
+      fid = ''
+      begin case
+         case lab = ''
+            fbad = 'a program needs a label' ; fid = 'label'
+         case cmd = ''
+            fbad = 'a program needs a command' ; fid = 'command'
+         case index(lab : cmd : gly, @fm, 1) or index(lab : cmd : gly, @vm, 1)
+            fbad = 'those characters cannot be used' ; fid = 'label'
+      end case
+      if fbad = '' then exit
+      call $tk_form('say', ctx, fbad, fid, '')
+   repeat
+   call $tk_form('close', ctx, '', '', '')
    ok = 1
    return
 

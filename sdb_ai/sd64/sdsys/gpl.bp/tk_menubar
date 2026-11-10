@@ -1,0 +1,358 @@
+* TK_MENUBAR
+* The full-screen toolkit, shared base: the menu bar of a page, made from the page's key table (S.88 phase 5, F0a; plan section 2.2 and the owner's decisions of 29 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 30 Oct 26 dm  New (S.88 F0a).
+* 3 Nov 26 dm  S.88 K7 and K8 (owner, "Build now"; keys "Tab panes, F2 finder"): F2 opens the palette of every action of the bar ($sl_palette) and Shift-F10 or a right click
+*              opens a context menu of the actions the focused pane uses (!screen_menu at the pointer).  Both answer exactly as the bar does (out), so every page on the bar
+*              has them with no change of its own, and both RUN NOTHING: a disabled entry is never answered, and the page's own case for the key does the work with its gates.
+* 3 Nov 26 dm  The owner's answer "Move focus first": a right click on a box that can take the focus and has not got it moves the focus there (the page's own left press)
+*              and opens THAT box's menu on the next draw; the choice reaches the page as the key of its next SCREEN KEY.  A right click outside every such box, and
+*              Shift-F10, are as before (the focused box's menu).
+* 9 Nov 26 dm  S.186: the context menu leaves out the page-wide View switches the base adds to every page (std.mouse, std.output): they name no pane, so every
+*              pane "used" them, and View > Mouse took the M of a pane's own &Mark (sandbox-tool-query Q14e2).  They stay on the bar and in the finder.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_menubar(op, ctx, keys, pane, a, b, c)       ALWAYS SEVEN ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   The bar is not written anywhere: it is made from the key table ($tk_keys 'menus': an entry per action that has a menu and an entry text, the key it shows derived from the
+*   table, an entry the pane does not use or that has a reason shown disabled), so the bar, the function-key row and the keys cannot disagree.  ***IT RUNS NOTHING.*** Choosing an
+*   entry returns the action's id and the key that action is bound to in this pane; the page does what it does for that key, in its own handler, so its own gates decide.
+*
+*     draw   (ctx, keys, pane)               draws the bar on the menu row (TK.C.YMENU, row 0), blank across the width with the titles on it.  It draws again only when the width, the
+*                                            generation, the epoch, the pane or the menus differ from what it drew last (ctx<TK.C.BAR>), so a page may call it on every pass of its
+*                                            loop.  Row 0 is written whole, which erases the right end that $tk_frame wrote (the app's name and the audience): the bar sets that
+*                                            part of the frame's cache to forgotten, so the next $tk_frame writes it again.  Call this BEFORE $tk_frame.  A page with no menu rows draws nothing.
+*     key    (ctx, keys, pane, nm, busy -> out)   nm = a key name from $sl_key.  F10 opens the first menu; Alt and a letter opens the menu whose marked letter it is; Esc opens the first menu whose first entry is not Quit (so Esc then Enter cannot leave the page)
+*                                            when busy is 0 - busy is 1 while the page has something that Esc closes first (a filter, a sub-view, an output pane): THE ESC RULE, a page closes
+*                                            its own state first, else the bar opens.  Any other key, and any of these in a page with no menu rows, is not the bar's (out null).
+*     click  (ctx, keys, pane, mev -> out)   mev = the event of SCREEN MOUSE.  A left press on the menu row opens the menu under it; one with no title under it is used up (out 'none').
+*                                            Any other event is not the bar's.
+*     open   (ctx, keys, pane, n -> out)     opens menu number n (null: the first), for a page that has its own key for it.
+*     palette (ctx, keys, pane, '' -> out)   THE FINDER (S.88 K7): every entry of the bar's menus in one list ($sl_palette: "Menu > Entry", its key, "(not now)" after one that cannot be
+*                                            used); typing narrows it, Enter chooses.  The key op opens it for F2.  An entry that cannot be used is never answered: its reason is shown
+*                                            in a box and nothing is chosen.
+*     context (ctx, keys, pane, mev -> out)  THE CONTEXT MENU (S.88 K8): a pop-up of the actions the focused pane itself uses (the entries of every menu but File and Help whose action
+*                                            the pane is named for, or that every pane uses, dimmed when it cannot be used now), then a line and "Find an action..." (F2).  It opens at
+*                                            the pointer of the event mev (a right click), or in the middle when mev is null (Shift-F10 from the key op).  The click op opens it for a
+*                                            right press anywhere on the screen.  A RIGHT PRESS ON A BOX THAT CAN TAKE THE FOCUS AND HAS NOT GOT IT (ctx<TK.C.FOCI>; the owner,
+*                                            3 Nov 2026: "Move focus first") is first the page's own left press there - the click op changes the event in place and takes nothing, so
+*                                            the page moves its focus as a click does - and the next 'draw', with the box's pane, opens that box's menu at the pointer; what is
+*                                            chosen is given to the page by its next SCREEN KEY (common /$slkpush/, !screen_key) as the key it is bound to in that pane.
+*
+*   F2 and Shift-F10 are the bar's only when the page binds no action of its own to them in this pane (as for F10 and Esc); test-tk-keys-units.py keeps every page off F2.
+*
+*   out is a dynamic array, null when the bar did not take the key or the click: <1> 'none' (the bar took it and nothing was chosen: the person left, or clicked beside the titles) or
+*   'act' (an entry was chosen); <2> the action's id; <3> the key the action is bound to for this pane (the page replays it through its own dispatch), null for an action with no key
+*   (a page that offers one handles <2>); <4> THE NAME THE PAGE DISPATCHES ON: the key when the action has one, 'act:' and the action's id when it has none, NULL when nothing was chosen -
+*   so a page takes a bar answer with  if out<1> # '' then nm = out<4>  and its own case runs as for the key itself (a null name is the loop's "no key" case, which leaves the status
+*   message alone; a click handler calls its key handler only for a name, because that handler begins by clearing the message; 'act:...' is a name no case has).  An entry that is shown
+*   disabled can not be chosen, so an action that comes back is one the page's key table would also give for its key.
+*
+*   THE ORDER OF THE MENUS is the table's, except that a menu called File (with or without its & mark) comes first and one called Help last.
+*
+*   After a run the bar is on the screen again as it was drawn and ctx<TK.C.BAR> says so.  An app that clears or repaints the screen raises ctx<TK.C.GEN>, as it does for $tk_frame.
+*   A session with no terminal gets nothing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_menubar(op, ctx, keys, pane, a, b, c)
+$catalog $tk_menubar
+
+$include sl.h
+$include tk.h
+
+   common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen, last.geo      ;* $tk_frame's cache: only last.top is touched, to have the right end of row 0 written again
+   common /tkrclick/ rc.state, rc.x, rc.y, rc.epoch    ;* 3 Nov 26: a right click on a box that has not the focus, waiting for the page to move the focus there (rc.state 'ctx')
+   common /$slkpush/ kp.name                           ;* 3 Nov 26: a name the page's next SCREEN KEY gives ('kp:' and the name; !screen_key)
+
+   c = ''
+   if system(25) then return                           ;* a phantom has no terminal
+   gosub make.menus
+   if nmenu = 0 then return                            ;* a page with no menu rows has no bar and takes nothing
+
+   begin case
+      case op = 'draw'
+         gosub paint.bar
+         * 3 Nov 26 (owner: "Move focus first"): the right click of the last pass was turned into the page's own left press, which moved the focus to the box under it; the pane
+         *   drawn now is that box's, and its menu opens where the click was.  A choice is the key it is bound to in that pane, given by the page's next SCREEN KEY, so the page's
+         *   own case runs it exactly as when the key is pressed.
+         if rc.state = 'ctx' and rc.epoch = ctx<TK.C.EPOCH> then
+            rc.state = ''
+            cx = rc.x ; cy = rc.y
+            gosub run.context
+            if c<1> = 'act' and c<4> # '' then kp.name = 'kp:' : c<4>
+            c = ''
+         end
+      case op = 'key'
+         nm = a
+         busy = b
+         start = 0
+         begin case
+            case nm = 'f10'
+               start = 1
+            case nm = 'esc'
+               if not(busy) then
+                  start = 1
+                  gosub skip.quit
+               end
+            case len(nm) = 5 and nm[1, 4] = 'alt-'
+               gosub find.title
+            case nm = 'f2'
+               start = -1                              ;* S.88 K7: the finder
+            case nm = 'shift-f10'
+               start = -2                              ;* S.88 K8: the context menu, from the keyboard
+         end case
+         if start # 0 then
+            * a key the page binds to an action of its own in this pane (not the Esc row's 'menu') is the page's
+            call $tk_keys('action', keys, nm, pane, pa, '', '')
+            if pa # '' and pa # 'menu' then start = 0
+         end
+         begin case
+            case start > 0
+               gosub run.bar
+            case start = -1
+               gosub run.palette
+            case start = -2
+               cx = '' ; cy = ''
+               gosub run.context
+         end case
+      case op = 'palette'
+         gosub run.palette
+      case op = 'context'
+         cx = '' ; cy = ''
+         if a<1> # '' then
+            cx = a<3> + 0 ; cy = a<4> + 0
+         end
+         gosub run.context
+      case op = 'click' and a<1> = 'press' and a<2> = 3
+         cx = a<3> + 0 ; cy = a<4> + 0                 ;* S.88 K8: a right press anywhere opens the context menu at the pointer
+         gosub box.at
+         if bx.name # '' and bx.name # pane then
+            * 3 Nov 26 (owner: "Move focus first"): a right press on a box that can take the focus and has not got it is handed back to the page as ITS OWN LEFT PRESS
+            *   (the event is changed in place, the bar takes nothing), so the page moves the focus as a click does; the menu of that box opens on the page's next 'draw'
+            rc.state = 'ctx' ; rc.x = cx ; rc.y = cy ; rc.epoch = ctx<TK.C.EPOCH>
+            a<2> = 1
+         end else
+            gosub run.context
+         end
+      case op = 'click'
+         if a<1> = 'press' and a<2> = 1 and a<4> + 0 = ctx<TK.C.YMENU> + 0 then
+            gosub build.widget
+            call $sl_scr('get', scr)
+            call $sl_menu('init', w, scr, '', r)
+            call $sl_menu('hit', w, scr, a<3> + 0, start)
+            call $sl_scr('put', scr)
+            if start > 0 then gosub run.bar else gosub no.answer
+         end
+      case op = 'open'
+         start = a + 0
+         if start < 1 or start > nmenu then start = 1
+         gosub run.bar
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the menus
+
+* The menus for the pane, from the table: menus = the array SCREEN MENUBAR takes (a field a menu), nmenu = how many
+make.menus:
+   menus = ''
+   call $tk_keys('menus', keys, '', menus, pane, '', '')
+   nmenu = dcount(menus, @fm)
+   if menus = '' then nmenu = 0
+   if nmenu > 1 then
+      * the usual order: File first, Help last, the others as the table gives them
+      mn.first = '' ; mn.mid = '' ; mn.last = ''
+      for k = 1 to nmenu
+         tt = change(menus<k, 1>, '&', '')
+         begin case
+            case tt = 'File'
+               mn.first<-1> = menus<k>
+            case tt = 'Help'
+               mn.last<-1> = menus<k>
+            case 1
+               mn.mid<-1> = menus<k>
+         end case
+      next k
+      menus = mn.first
+      if mn.mid # '' then menus<-1> = mn.mid
+      if mn.last # '' then menus<-1> = mn.last
+   end
+   return
+
+* The widget $sl_menu takes: the bar's row and width, and the menus from field 20
+build.widget:
+   w = ''
+   w<SL.W.Y> = ctx<TK.C.YMENU> + 0
+   w<SL.W.W> = ctx<TK.C.W> + 0
+   for k = 1 to nmenu
+      w<19 + k> = menus<k>
+   next k
+   return
+
+* What the bar looks like now, to know whether it needs drawing
+bar.sig:
+   sig = ctx<TK.C.W> : '/' : ctx<TK.C.GEN> : '/' : ctx<TK.C.EPOCH> : '/' : convert(@fm : @vm : @sm, '|~^', menus)      ;* no marks: ctx is a dynamic array (the pane's effect is in the D flags of menus)
+   return
+
+* The bar drawn on row 0, if it is not already
+paint.bar:
+   gosub bar.sig
+   if sig = ctx<TK.C.BAR> then return
+   gosub build.widget
+   call $sl_scr('get', scr)
+   call $sl_menu('init', w, scr, '', r)
+   call $sl_menu('draw', w, scr, '', r)
+   call $sl_scr('put', scr)
+   ctx<TK.C.BAR> = sig
+   last.top = ''                                       ;* row 0 was written whole: the app's name and the audience at its right end are written again by the next $tk_frame
+   return
+
+* Esc must not land on Quit: a stray Esc then Enter would leave the page (and drop what it holds) without a word.  The first menu whose first entry is not Quit is opened instead;
+* F10, Alt and a click still open File.  A bar whose menus all begin with Quit opens the first.
+skip.quit:
+   for k = 1 to nmenu
+      if menus<k, 2, 3> # 'quit' then
+         start = k
+         exit
+      end
+   next k
+   return
+
+* Alt and a letter: start = the number of the menu whose marked letter it is, 0 if none (a title that begins with > is a submenu, not on the bar)
+find.title:
+   start = 0
+   want = upcase(nm[5, 1])
+   for k = 1 to nmenu
+      t = menus<k, 1>
+      if t[1, 1] # '>' then
+         p = index(t, '&', 1)
+         if p > 0 then mn = t[p + 1, 1] else mn = t[1, 1]
+         if upcase(mn) = want then
+            start = k
+            exit
+         end
+      end
+   next k
+   return
+
+* The menu number start is opened over the pane, one entry is chosen or the person leaves; the bar is drawn again (the run does it); out says which
+run.bar:
+   gosub build.widget
+   call $sl_scr('get', scr)
+   call $sl_menu('init', w, scr, '', r)
+   call $sl_menu('draw', w, scr, '', r)
+   w<SL.W.S1> = start
+   call $sl_menu('run', w, scr, '', r)
+   call $sl_scr('put', scr)
+   gosub bar.sig
+   ctx<TK.C.BAR> = sig
+   last.top = ''
+   if r # '' then
+      call $tk_keys('keyof', keys, r, pane, kn, '', '')
+      c = 'act' : @fm : r : @fm : kn : @fm : (if kn = '' then 'act:' : r else kn)
+   end else
+      gosub no.answer
+   end
+   return
+
+* Nothing was chosen: the bar took the key or the click
+no.answer:
+   c = 'none' : @fm : @fm : @fm
+   return
+
+* An action was chosen (pr, its id): out is what the bar answers for it, the key the page replays
+answer.act:
+   call $tk_keys('keyof', keys, pr, pane, kn, '', '')
+   c = 'act' : @fm : pr : @fm : kn : @fm : (if kn = '' then 'act:' : pr else kn)
+   return
+
+* S.88 K7, F2: the finder.  Every entry of the bar in one list; an entry that cannot be used now says why in a box and answers nothing
+run.palette:
+   call $sl_palette(menus, sysmsg(15000), pr, ps, pw)
+   begin case
+      case ps = 0 and pr # ''
+         gosub answer.act
+      case ps = 2
+         screen msgbox pw returning bn else bn = 0
+         gosub no.answer
+      case 1
+         gosub no.answer
+   end case
+   return
+
+* S.88 K8, Shift-F10 or a right press: the context menu of the pane.  Its entries are the bar's entries (every menu but File and Help) whose action the pane uses - a binding of the
+* action names this pane, or names none (every pane) - with the bar's own flags, so one that cannot be used is dimmed and cannot be chosen; then a line and the finder.  cx, cy: where
+* it opens (null: in the middle)
+run.context:
+   citems = ''
+   for k = 1 to nmenu
+      tt = change(menus<k, 1>, '&', '')
+      if tt = 'File' or tt = 'Help' or tt[1, 1] = '>' then continue
+      nv = dcount(menus<k>, @vm)
+      for v = 2 to nv
+         fa = menus<k, v, 3>
+         if fa = '' or fa[1, 1] = '>' or menus<k, v, 1> = '-' then continue
+         if fa = 'std.mouse' or fa = 'std.output' then continue    ;* page-wide switches, not a pane's action (S.186)
+         gosub pane.uses
+         if uses then citems<1, -1> = menus<k, v, 1> : @sm : menus<k, v, 2> : @sm : fa : @sm : menus<k, v, 4>
+      next v
+   next k
+   if citems # '' then citems<1, -1> = '-'
+   citems<1, -1> = sysmsg(15001) : @sm : 'F2' : @sm : 'tk:palette'          ;* not '>...': $sl_menu takes a code that begins with > for a submenu (found by sandbox-tool-query Q14f2)
+   call !screen_menu(citems, cx, cy, '', pr, ps)
+   begin case
+      case ps # 0 or pr = ''
+         gosub no.answer
+      case pr = 'tk:palette'
+         gosub run.palette
+      case 1
+         gosub answer.act
+   end case
+   return
+
+* bx.name: the name the page gives the box under the cell cx, cy among the boxes that can take the focus (ctx<TK.C.FOCI>, the layout's rectangles), null when none or the
+* page names none.  A collapsed box (shown 0) is never under the pointer.
+box.at:
+   bx.name = ''
+   fo = ctx<TK.C.FOCI>
+   if fo = '' then return
+   pd = ctx<TK.C.PANES>
+   for fi = 1 to dcount(fo, @vm)
+      for pk = 1 to dcount(pd, @vm)
+         if pd<1, pk, TK.P.ID> = fo<1, fi, 1> then
+            rr = ctx<TK.C.RECTS, pk>
+            if rr<1, 1, 5> and cx >= rr<1, 1, 1> and cx < rr<1, 1, 1> + rr<1, 1, 3> and cy >= rr<1, 1, 2> and cy < rr<1, 1, 2> + rr<1, 1, 4> then
+               bx.name = fo<1, fi, 2>
+               return
+            end
+            exit
+         end
+      next pk
+   next fi
+   return
+
+* uses: 1 when a binding of the action fa names the pane, or names no pane (every pane uses it); the key table's own rule (TK.K.PANES)
+pane.uses:
+   uses = 0
+   nk = dcount(keys, @fm)
+   for j = 1 to nk
+      if keys<j, TK.K.ACT> = fa then
+         pl = keys<j, TK.K.PANES>
+         if pl = '' or index(@sm : pl : @sm, @sm : pane : @sm, 1) then
+            uses = 1
+            exit
+         end
+      end
+   next j
+   return
+end
+
+* END-CODE

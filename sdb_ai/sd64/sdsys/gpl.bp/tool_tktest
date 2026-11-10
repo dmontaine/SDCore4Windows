@@ -7,6 +7,12 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.1).
+* 28 Oct 26 dm  S.88 L2: a resize is $tk_layout 'refresh' and the frame written again (the status line, the border and the key row used to stay on the rows of the window the app was
+*               opened in).  THE PANES ARE NOT DECLARED, on purpose: this app has no boxes - its table (pane T) stands at column 0, which the body (it starts at column 1) cannot give, and its
+*               forms and pick windows stand at the literal places sandbox-tk-base.py measures the library at; a declaration would move what the suite is there to measure.
+* 29 Oct 26 dm  S.88 phase 3.9 (S2): the PILOT of the action registry, only for `tktest menubar`: a menu bar on row 0 made by $tk_keys 'menus' from the key table, Esc opens it in panes A and B,
+*               and Save as is an action with no key and a reason, so the bar lists it disabled and nothing can run it.  A menu answer is put in ACT and goes through the SAME case as a key.
+* 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -23,6 +29,9 @@
 *
 *   dialogs starts on pane D, whose keys are F7 (a Run / Cancel box for create.file zztkdlg1 dynamic) and F8 (the same with the name zztkdlg2 to be typed): the
 *   confirm boxes of the base ($tk_explain, $tk_confirm, then $tk_run), exercised by sandbox-tk-base.py with the disk as evidence.
+*
+*   menubar (the registry pilot, S.88 3.9) draws a menu bar on row 0 from the key table: the menu Actions holds Sort (pane A's key), Refresh (pane B's), Save as (no key, and a
+*   reason: it is shown disabled and nothing runs it) and Quit; Esc opens the bar in panes A and B and a chosen entry is handled by the same case as its key.
 *
 *   Two panes, A and B, one key table.  Tab moves the focus; F1 (every pane) says which pane has it; F3 (sort) is pane A's key and F5 (refresh) pane B's; Ctrl-S
 *   (save) is in the table but switched off, so the function-key row never shows it; Ctrl-Q leaves.  The word admin asks for the administrator audience.
@@ -70,9 +79,29 @@ $include tk.h
    call $tk_keys('add', keys, 'tab', 'next', 'next', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
 
+   * the pilot of the action registry (tktest menubar): Esc opens the bar (on no function-key row: ROW is 0), Save as has no key and a reason
+   pilot = (if index(' ' : @sentence : ' ', ' menubar ', 1) then 1 else 0)
+   if pilot then
+      call $tk_keys('add', keys, 'esc', 'menu', 'menu', 'A' : @sm : 'B', 1)
+      nk = dcount(keys, @fm)
+      keys<nk, TK.K.ROW> = 0
+      call $tk_keys('add', keys, '', 'save as', 'saveas', 'A' : @sm : 'B', 1)
+      call $tk_keys('menu', keys, 'sort', '&Actions', '&Sort', '', '')
+      call $tk_keys('menu', keys, 'refresh', '&Actions', '&Refresh', '', '')
+      call $tk_keys('menu', keys, 'saveas', '&Actions', 'Save &as', '', '')
+      call $tk_keys('menu', keys, 'quit', '&Actions', '&Quit', '', '')
+      call $tk_keys('why', keys, 'saveas', sysmsg(12194), '', '', '')
+   end
+   menus = ''
+   barpane = '?'
+   bargen = -1
+   bardirty = 1
+   nsave = 0
+
    pane = 'A'
    if field(@sentence, ' ', 2) = 'dialogs' or field(@sentence, ' ', 3) = 'dialogs' then pane = 'D'
    msg = ''
+   tgen = 0                                                ;* the frame's generation: raised on a resize, so that $tk_frame writes all of it again
 
    * pane T: a table (sl_table, G3) of N rows (tktest table N, 12 by default) driven directly, with a filter (F4) and a refresh (F6) that changes the rows
    if field(@sentence, ' ', 2) = 'table' then
@@ -151,11 +180,25 @@ $include tk.h
    end
 
    loop
+      if pilot and (bardirty or pane # barpane or tgen # bargen) then gosub bar.draw       ;* a resize raises tgen: the bar is made and drawn again
       call $tk_frame(ctx, keys, pane, msg)
       screen key returning k
       if k = '' and status() = ER$EOF then exit          ;* the input has ended (a pipe): no key will ever come
       if k = 'guardquit' then exit                       ;* the cursor lock's own way out
+      if k = 'resize' then
+         call $tk_layout('refresh', ctx, '', chg)        ;* the frame from the window as it is now (S.88 L2); the body holds no pane of this app
+         tgen += 1
+         ctx<TK.C.GEN> = tgen
+      end
       call $tk_keys('action', keys, k, pane, act, '', '')
+      * a choice from the menu bar is put in ACT, and goes through the same case below as the key of that action would: the registry runs nothing itself
+      if act = 'menu' then
+         act = ''
+         screen menubar menus returning mc then
+            act = mc
+         end else null
+         bardirty = 1
+      end
       begin case
          case act = 'quit'
             exit
@@ -167,6 +210,9 @@ $include tk.h
             msg = 'sorted'
          case act = 'refresh'
             msg = 'refreshed'
+         case act = 'saveas'
+            nsave += 1                                     ;* never reached while the action has its reason: the bar shows it disabled and the table does not return it
+            msg = 'saved as ' : nsave
          case act = 'confirm'
             sent = 'create.file zztkdlg1 dynamic'
             call $tk_explain('sh', 1, el, ty)
@@ -196,27 +242,27 @@ $include tk.h
          case act = 'pickf'
             if pkopen then
                call $sl_pickwin('', 'Pick a record', 0, 0, pr, ps, pkf, '0' : @fm : pg : @fm : sc)
-               msg = (if ps then 'cancelled' else 'picked ' : pr)
+               msg = (if ps then 'canceled' else 'picked ' : pr)
             end else
                msg = 'no zzpkfile'
             end
          case act = 'pickfm'
             if pkopen then
                call $sl_pickwin('', 'Pick records', 1, 0, pr, ps, pkf, '1' : @fm : pg : @fm : sc)
-               msg = (if ps then 'cancelled' else 'picked ' : convert(@vm, ',', pr))
+               msg = (if ps then 'canceled' else 'picked ' : convert(@vm, ',', pr))
             end else
                msg = 'no zzpkfile'
             end
          case act = 'pick'
             call $sl_pickwin(pitems, 'Pick a command', 0, 0, pr, ps, '', '')
-            msg = (if ps then 'cancelled' else 'picked ' : pr : ' (' : pitems<pr, 1> : ')')
+            msg = (if ps then 'canceled' else 'picked ' : pr : ' (' : pitems<pr, 1> : ')')
          case act = 'pickm'
             call $sl_pickwin(pitems, 'Pick commands', 1, 0, pr, ps, '', '')
             pnames = ''
             for q = 1 to dcount(pr, @vm)
                pnames<1, -1> = pitems<pr<1, q>, 1>
             next q
-            msg = (if ps then 'cancelled' else 'picked ' : convert(@vm, ',', pr) : ' (' : convert(@vm, ',', pnames) : ')')
+            msg = (if ps then 'canceled' else 'picked ' : convert(@vm, ',', pr) : ' (' : convert(@vm, ',', pnames) : ')')
          case pane = 'T' and act = ''
             call $sl_table('key', w, scr, k, tr)
       end case
@@ -225,6 +271,19 @@ $include tk.h
 
    call $tk_close(ctx)
    stop
+
+* the pilot's menu bar: made from the key table for the pane that has the focus (an entry the pane does not use is shown disabled), drawn on row 0 and the frame written again
+bar.draw:
+   if pane = 'A' or pane = 'B' then
+      call $tk_keys('menus', keys, '', menus, pane, '', '')
+      screen menubar menus row 0 draw else null
+      tgen += 1
+      ctx<TK.C.GEN> = tgen
+   end
+   barpane = pane
+   bargen = tgen
+   bardirty = 0
+   return
 
 * the slider form: it stays on the screen between events; Enter on the button or Esc ends it and the status line says what the values were
 s.run:
@@ -279,7 +338,7 @@ ac.run:
    screen check sf, 'ck', '&Verbose' at 3,6
    screen check sf, 'ck2', '&Verbose again' at 3,7
    screen slider sf, 'sl', '&Switch' at 3,8
-   screen selector sf, 'se', '&Colour', 'red':@vm:'green':@vm:'blue' at 3,10
+   screen selector sf, 'se', '&Color', 'red':@vm:'green':@vm:'blue' at 3,10
    screen radio sf, 'rd', 'one':@vm:'two' at 3,12 accel 'f5'
    screen list sf, 'ls', 'first':@vm:'second':@vm:'third' at 40,2 size 20,4 accel 'ctrl-g'
    screen check sf, 'dim', '&Dim' at 3,15
@@ -322,7 +381,7 @@ ac.run:
 sel.run:
    call $tk_frame(ctx, keys, pane, msg)
    screen form title 'Choices' at 30,6 size 70,17 returning sf
-   screen selector sf, 'c', '&Colour', 'blue':@vm:'green':@vm:'red':@vm:'black' at 3,2 value 3
+   screen selector sf, 'c', '&Color', 'blue':@vm:'green':@vm:'red':@vm:'black' at 3,2 value 3
    screen selector sf, 's', 'size', 'small':@vm:'medium':@vm:'large' at 3,4 value 2 attr 'window' place 'right'
    screen selector sf, 'm', 'mode', 'fast':@vm:'slow':@vm:'exact' at 3,6 place 'above'
    screen selector sf, 't', 'tint', 'ex':@vm:'why':@vm:'zed' at 3,9 color 'white','blue'
@@ -368,16 +427,16 @@ sel.run:
 * the colour form: a control of each kind in colours of its own, two of them in the same pair (black on green); the label at the right says the theme
 c.run:
    call $tk_frame(ctx, keys, pane, msg)
-   screen form title 'Colours' at 10,3 size 100,24 returning sf
+   screen form title 'Colors' at 10,3 size 100,24 returning sf
    screen entry sf, 'e1' at 3,2 width 20 value 'black on green' color 'black','green'
    screen entry sf, 'e2' at 3,4 width 20 value 'plain entry'
    screen combo sf, 'cb', 'one':@vm:'two' at 3,6 width 20 color 'white','blue'
-   screen check sf, 'ck', 'colour check' at 3,8 color 'black','cyan'
-   screen slider sf, 'sl', 'colour slider' at 3,10 color 'white','red'
+   screen check sf, 'ck', 'color check' at 3,8 color 'black','cyan'
+   screen slider sf, 'sl', 'color slider' at 3,10 color 'white','red'
    screen radio sf, 'rd', 'red choice':@vm:'blue choice' at 3,12 color 'black','brown'
    screen button sf, 'bt', '&Go' at 3,15 color 'white','magenta'
    screen list sf, 'ls', 'x':@vm:'y':@vm:'z' at 55,2 size 12,3 color 'black','green'
-   screen label sf, 'lb', 'coloured label' at 55,7 width 20 color 'red','white'
+   screen label sf, 'lb', 'colored label' at 55,7 width 20 color 'red','white'
    screen progress sf, 'pg' at 55,9 width 24 value 50 color 'black','cyan'
    screen label sf, 'log', 'theme=mono' at 55,12 width 30
    screen button sf, 'ok', '&OK' at 40,19 default
@@ -398,7 +457,7 @@ c.run:
       end
    repeat
    screen hide sf
-   msg = 'colours pressed=' : spressed
+   msg = 'colors pressed=' : spressed
    return
 
 * the colour pool: sixteen different pairs are taken, the first pair again (shared, taken), a seventeenth different pair (refused) and a name that is no colour (refused)
@@ -420,7 +479,7 @@ cf.run:
    o := 'a'
    screen label sf, 'cbad', 'x' at 2,3 color 'chartreuse','red' else o[len(o), 1] = 'r'
    screen hide sf
-   msg = 'colours ' : o
+   msg = 'colors ' : o
    return
 
 * the placement form: a check box (left column) and a slider (right column) for each place of the label; the label at the foot says the last change

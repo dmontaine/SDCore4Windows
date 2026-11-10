@@ -6,11 +6,14 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
+* 3 Nov 26 dm  S.113: the optional mode 'defer' (the kept context of a page of the toolkit: no repaint here); SL.S.TK and SL.S.SYNC are carried; the
+*              terminal's picture of the new size is blank (what a terminal shows after a resize is not known: it may cut, pad or reflow it).
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 *   call $sl_resize(scr)
+*   call $sl_resize(scr, 'defer')
 *
 *     scr   the screen context (sl.h) of a screen the library owns (SL.S.OWNED: SED's own context, and the blank one
 *           of a dialogue before SCREEN OPEN, are left alone), changed in place.  If its size is not
@@ -19,6 +22,9 @@
 *           and its style, the rest of a bigger screen is blank in style n, the clip rectangle is dropped, the cursor
 *           is kept inside the new screen, and the terminal is cleared and drawn again from it ($sl_repaint).
 *           Nothing is done if the size is the same.
+*     defer (S.113) the context is made the new size and NOT drawn: $sl_scr does it for a page of the toolkit, which draws its whole layout
+*           again for the key resize and marks the screen unsynced, so that its next flush repaints it once.  The context's own state
+*           (SL.S.TK, SL.S.SYNC among it) is carried as it is; the caller says that the terminal is not known.
 *
 *   The routine that holds the live context calls it when $sl_key says resize: a dialogue draws into
 *   its own copy of the context, which only becomes the kept one when the statement ends, so the kept
@@ -29,11 +35,13 @@
 * START-CODE
 
 $internal
-subroutine sl_resize(scr)
+subroutine sl_resize(scr, mode) var.args
 $catalog $sl_resize
 
 $include sl.h
 
+   rmode = ''
+   if not(unassigned(mode)) then rmode = mode
    sw = @crtwide + 0
    sh = @crthigh + 0
    if scr<SL.S.W> = sw and scr<SL.S.H> = sh then return
@@ -46,7 +54,11 @@ $include sl.h
    nscr<SL.S.CURON> = old<SL.S.CURON>
    nscr<SL.S.OWNED> = old<SL.S.OWNED>
    nscr<SL.S.MOUSE> = old<SL.S.MOUSE>
+   nscr<SL.S.TK> = old<SL.S.TK>
+   nscr<SL.S.SYNC> = old<SL.S.SYNC>
    for r = 0 to sh - 1
+      nscr<SL.S.TERM, r + 1> = space(sw)                ;* S.113: the terminal's picture of the new size; $sl_repaint below, or the caller's flush, makes it true
+      nscr<SL.S.TATTR, r + 1> = str('n', sw)
       if r < old<SL.S.H> then
          t = old<SL.S.SHADOW, r + 1> : space(sw)
          a = old<SL.S.ATTRS, r + 1> : str('n', sw)
@@ -65,6 +77,7 @@ $include sl.h
    nscr<SL.S.CUR> = cx : @vm : cy
 
    scr = nscr
+   if rmode = 'defer' then return
    call $sl_repaint(scr)
 
    return

@@ -1,11 +1,17 @@
 * TK_KEYS
-* The full-screen toolkit, shared base: the app's one key table (plan section 2.2).
+* The full-screen toolkit, shared base: the app's one key table, and the registry of its actions (plan section 2.2; S.88 phase 3.9).
 * Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.1).
+* 29 Oct 26 dm  S.88 phase 3.9 (S0 to S2): the table grows four values (tk.h: MENU, ENTRY, WHY, ROW) and the ops menu, why, menus, keyof and keylist; 'name' knows PgUp, PgDn
+*               and the Shift- and Alt- forms; 'action' no longer matches an empty key and skips an action that has a reason.  The call still has seven arguments and no
+*               existing 'add' line changes.  THE REGISTRY HOLDS NO CODE: it lists and names actions and returns an action's id; the page's own handler does the work, so
+*               every gate stays with the handler (owner answer 25; test-tk-keys-units.py holds this as text).
+* 1 Nov 26 dm  S.97 stage 1: the ops 'ai' (an action may be offered to the AI) and 'aiacts' (what is offered now), and the tenth value TK.K.AI.  Still no code: both only list.
+* 1 Nov 26 dm  S.97 stage 4: 'ai' with b = 'edit' (TK.K.AI 2, an action that makes or compiles something); 'aiacts' returns those ids in c.  Still no code: both only list.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -13,12 +19,28 @@
 *   call $tk_keys(op, keys, a, b, c, d, e)
 *
 *     op add     a = the key as $sl_key names it, b = the label, c = the action id, d = the panes that use it (sub-values; null is every pane),
-*                e = 0 to take the key out of the table's use, null or 1 to leave it in.  The key is added to the end of KEYS.
-*     op name    a = a key's name; b is returned: the name as the function-key row writes it (f1 is F1, ctrl-s is ^S, tab is Tab)
-*     op action  a = a key, b = the focused pane; c is returned: the action id of the first enabled entry for that key that the pane uses, or null
+*                e = 0 to take the key out of the table's use, null or 1 to leave it in.  The key is added to the end of KEYS.  An empty key is a legal row: an action
+*                with no key (a menu-only action).
+*     op name    a = a key's name; b is returned: the name as the function-key row writes it (f1 is F1, ctrl-s is ^S, tab is Tab, ctrl-pgdn is ^PgDn, shift-f6 is Shift-F6)
+*     op action  a = a key, b = the focused pane; c is returned: the action id of the first enabled entry for that key that the pane uses, or null.  An empty key
+*                matches nothing, and an action that has a reason (op why) is not enabled.
+*     op menu    a = an action id, b = the menu title with its & mark, c = the entry text with its & mark: every row of that action is put in that menu.  The key an
+*                entry shows is derived from the table, never typed.
+*     op why     a = an action id, b = why it is not available now (the action is taken out of use, as with e = 0), or null to give it back (only an action that
+*                had a reason is given back).
+*     op menus   a = the order of the menu titles (an @fm list; a title not in it follows in the order of the table), b is returned: the array that SCREEN MENUBAR takes,
+*                one field a menu (value 1 its title, then an entry a value, each entry's sub-values label, key as shown, action id, flags), c = the focused pane.
+*                The flag D stands on an entry whose action is switched off, has a reason, or is not used by that pane, so the bar keeps its shape.
+*     op keyof   a = an action id, b = the focused pane; c is returned: the key of the first binding that is enabled for that pane, or null.  A page that dispatches
+*                by key takes a menu answer by replaying this key through its own handler.
+*     op keylist a = the focused pane; b is returned: one line a keyed action that the pane uses, "^S  Save", the reason after it when it is not available (@fm list).
+*     op ai      a = an action id: the action may be offered to the AI (TK.K.AI on every row of it).  Off unless the page says so, action by action.  b = 'edit': the action does more
+*                than navigate (TK.K.AI 2): a proposal of it defaults to Reject and its argument reaches the page.
+*     op aiacts  a = the focused pane; b is returned: the actions offered to the AI that are available now, as VALUES of 'id:what it does' (the entry's text, else the label);
+*                c is returned: the ids among them marked 'edit', as VALUES.
 *
-*   The table (tk.h) is one dynamic array, a key to a field.  The function-key row, the help and the key loop are all made from it, so the
-*   labels and the keys cannot disagree.
+*   The table (tk.h) is one dynamic array, a key to a field.  The function-key row, the help, the menus and the key loop are all made from it, so the labels and the keys
+*   cannot disagree.  ***The registry runs nothing***: no op performs an action, opens a file or writes to the screen; a handler is the page's own case on the action id.
 *
 * END-DESCRIPTION
 *
@@ -35,22 +57,16 @@ $include tk.h
          keys<-1> = a : @vm : b : @vm : c : @vm : d : @vm : e
 
       case op = 'name'
-         k = a
-         begin case
-            case k[1, 5] = 'ctrl-'
-               b = '^' : upcase(k[6, 99])
-            case k[1, 1] = 'f' and k[2, 9] # '' and num(k[2, 9])
-               b = upcase(k)
-            case 1
-               b = upcase(k[1, 1]) : k[2, 99]
-         end case
+         kn = a
+         gosub key.name
+         b = kt
 
       case op = 'action'
          pane = b
          c = ''
          n = dcount(keys, @fm)
          for i = 1 to n
-            if keys<i, TK.K.KEY> = a and keys<i, TK.K.ON> # '0' then
+            if a # '' and keys<i, TK.K.KEY> = a and keys<i, TK.K.ON> # '0' and keys<i, TK.K.WHY> = '' then
                panes = keys<i, TK.K.PANES>
                if panes = '' or index(@sm : panes : @sm, @sm : pane : @sm, 1) then
                   c = keys<i, TK.K.ACT>
@@ -58,9 +74,188 @@ $include tk.h
                end
             end
          next i
+
+      case op = 'menu'
+         n = dcount(keys, @fm)
+         for i = 1 to n
+            if keys<i, TK.K.ACT> = a then
+               keys<i, TK.K.MENU> = b
+               keys<i, TK.K.ENTRY> = c
+            end
+         next i
+
+      case op = 'why'
+         n = dcount(keys, @fm)
+         for i = 1 to n
+            if keys<i, TK.K.ACT> = a then
+               if b # '' then
+                  keys<i, TK.K.ON> = 0
+                  keys<i, TK.K.WHY> = b
+               end else
+                  if keys<i, TK.K.WHY> # '' then
+                     keys<i, TK.K.WHY> = ''
+                     keys<i, TK.K.ON> = ''
+                  end
+               end
+            end
+         next i
+
+      case op = 'menus'
+         pane = c
+         titles = a
+         b = ''
+         n = dcount(keys, @fm)
+         for i = 1 to n
+            t = keys<i, TK.K.MENU>
+            if t # '' and keys<i, TK.K.ENTRY> # '' then
+               if index(@fm : titles : @fm, @fm : t : @fm, 1) = 0 then titles<-1> = t
+            end
+         next i
+         nt = dcount(titles, @fm)
+         for ti = 1 to nt
+            t = titles<ti>
+            m = t
+            qent = ''
+            seen = @fm
+            for i = 1 to n
+               if keys<i, TK.K.MENU> = t and keys<i, TK.K.ENTRY> # '' then
+                  fa = keys<i, TK.K.ACT>
+                  if index(seen, @fm : fa : @fm, 1) = 0 then
+                     seen := fa : @fm
+                     gosub act.state
+                     fl = (if ia then '' else 'D')
+                     ent = keys<i, TK.K.ENTRY> : @sm : ik : @sm : fa : @sm : fl
+                     if fa = 'quit' then qent = ent else m<1, -1> = ent
+                  end
+               end
+            next i
+            if qent # '' then m<1, -1> = qent                    ;* Quit is the last entry of its menu: Esc and Enter must not leave a page, with what it holds, without a word
+            if dcount(m, @vm) > 1 then b<-1> = m
+         next ti
+
+      case op = 'keyof'
+         pane = b
+         fa = a
+         n = dcount(keys, @fm)
+         gosub act.state
+         c = ikf
+
+      case op = 'keylist'
+         pane = a
+         b = ''
+         n = dcount(keys, @fm)
+         seen = @fm
+         for i = 1 to n
+            fa = keys<i, TK.K.ACT>
+            if keys<i, TK.K.KEY> # '' and index(seen, @fm : fa : @fm, 1) = 0 then
+               seen := fa : @fm
+               gosub act.state
+               if isc then
+                  lab = change(keys<i, TK.K.ENTRY>, '&', '')
+                  if lab = '' then lab = keys<i, TK.K.LABEL>
+                  ln = ik : '  ' : lab
+                  if not(ia) and iw # '' then ln := '  (' : sysmsg(12193, iw) : ')'
+                  b<-1> = ln
+               end
+            end
+         next i
+
+      case op = 'ai'
+         * S.97 stage 1: the action a may be OFFERED to the AI.  Off for every action unless the page says so, row by row (the owner's rule: opt-in, default nothing).
+         * S.97 stage 4: b = 'edit' marks an action that does more than navigate (it makes or compiles something): its proposal defaults to Reject and may carry an argument.
+         n = dcount(keys, @fm)
+         for i = 1 to n
+            if keys<i, TK.K.ACT> = a then keys<i, TK.K.AI> = (if b = 'edit' then 2 else 1)
+         next i
+
+      case op = 'aiacts'
+         * S.97 stage 1: what the page offers the AI, as VALUES of 'id:what it does': the actions the page opted in that are available now for the pane a and have a key to press
+         * (the proposal is carried out by the page's own handler for that key, so a confirm box or a gate of the page applies as it does when a person presses the key).
+         * S.97 stage 4: c is returned too, the ids among them that do more than navigate (marked 'edit'), as VALUES.
+         pane = a
+         b = ''
+         c = ''
+         n = dcount(keys, @fm)
+         seen = @fm
+         for i = 1 to n
+            fa = keys<i, TK.K.ACT>
+            if (keys<i, TK.K.AI> = 1 or keys<i, TK.K.AI> = 2) and fa # '' and index(seen, @fm : fa : @fm, 1) = 0 then
+               seen := fa : @fm
+               gosub act.state
+               if ia and ikf # '' then
+                  lab = change(keys<i, TK.K.ENTRY>, '&', '')
+                  if lab = '' then lab = keys<i, TK.K.LABEL>
+                  b<1, -1> = fa : ':' : lab
+                  if keys<i, TK.K.AI> = 2 then c<1, -1> = fa
+               end
+            end
+         next i
    end case
 
    return
+
+* the state of the action FA for the pane PANE, over the N rows of the table: IA 1 if a binding is enabled and used by the pane, ISC 1 if the pane uses it at all, IKF the key of the first
+* enabled binding, IKA the first key it has, IW the reason, IK the key as it is shown (the enabled binding's, else the first)
+act.state:
+   ia = 0
+   isc = 0
+   ikf = ''
+   ika = ''
+   iw = ''
+   for j = 1 to n
+      if keys<j, TK.K.ACT> = fa then
+         kj = keys<j, TK.K.KEY>
+         if ika = '' then ika = kj
+         if iw = '' then iw = keys<j, TK.K.WHY>
+         panes = keys<j, TK.K.PANES>
+         if panes = '' or index(@sm : panes : @sm, @sm : pane : @sm, 1) then
+            isc = 1
+            if keys<j, TK.K.ON> # '0' and keys<j, TK.K.WHY> = '' then
+               ia = 1
+               if ikf = '' then ikf = kj
+            end
+         end
+      end
+   next j
+   kn = ikf
+   if kn = '' then kn = ika
+   ik = ''
+   if kn # '' then
+      gosub key.name
+      ik = kt
+   end
+   return
+
+* the name of the key KN as the function-key row and the menus write it, in KT
+key.name:
+   pre = ''
+   kb = kn
+   begin case
+      case kn[1, 5] = 'ctrl-'
+         pre = '^'
+         kb = kn[6, 99]
+      case kn[1, 6] = 'shift-'
+         pre = 'Shift-'
+         kb = kn[7, 99]
+      case kn[1, 4] = 'alt-'
+         pre = 'Alt-'
+         kb = kn[5, 99]
+   end case
+   begin case
+      case kb = 'pgup'
+         kt = 'PgUp'
+      case kb = 'pgdn'
+         kt = 'PgDn'
+      case kb[1, 1] = 'f' and kb[2, 9] # '' and num(kb[2, 9])
+         kt = upcase(kb)
+      case pre = '^' or pre = 'Alt-'
+         kt = upcase(kb)
+      case 1
+         kt = upcase(kb[1, 1]) : kb[2, 99]
+   end case
+   kt = pre : kt
+   return
+
 end
 
 * END-CODE

@@ -1,0 +1,181 @@
+* TK_AIPAGE
+* The full-screen toolkit, shared base: the AI line on a page (S.97 stage 1; the owner's answers of 1 Nov 2026: F6 and one menu item AI > Ask the AI on every page,
+* an action offered to the model only when the page opted it in, every proposal carried out by the page's own handler).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 1 Nov 26 dm  New (S.97 stage 1).
+* 1 Nov 26 dm  S.97 stage 2: the op 'keys', for a page that makes its key table anew (tool.bulk): the line's two rows are put back when the page has a line; the rows are one
+*              internal subroutine, add.rows, which 'init' calls too.
+* 1 Nov 26 dm  S.97 stage 4 (the owner's editing actions): the ids a page marked 'edit' go to $tk_ai in actx<12> (Enter alone rejects them) and a replay carries the argument in out<5>.
+* 8 Nov 26 dm  S.176 (the owner, 8 Nov 26: one key moves between the boxes on every page, "F6 for boxes is fine"): the op 'ring', F6 / Shift-F6 round a page's boxes with
+*              the AI line as the stop after the last; 'key' leaves F6 and Shift-F6 to the page while the line has the focus; the rows are a menu-only AI > Ask the AI (the
+*              page sees it as act:ai) and an F6 'box' row for a page that has no F6 row of its own ($tk_fkeys shows a key once).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_aipage(op, ctx, keys, pane, a, out)          ALWAYS SIX ARGUMENTS: pad with ''.  ctx is the page's context and keys its key table; both may be changed.
+*
+*   init   (ctx, keys -> out)   after $tk_open and the page's own key rows: asks the helper whether the AI is usable for this account ($tk_ai 'init': the gate is on and a provider, a
+*                               model and a key are set).  ONLY THEN the page has an AI line: ctx<TK.C.AIROW> is set, the layout gives the line the last row of the body ($tk_layout
+*                               'refresh'; the stretching panes give the row up), the key F6 and the menu entry AI > Ask the AI are added to the table, and out is 1 (the layout changed).
+*                               Else nothing is added, nothing is drawn and the page is laid out exactly as it was: out is 0.  $tk_frame draws the line.
+*   again  (ctx, keys -> out)   the same for a context made anew by $tk_open after the page handed the terminal over (the key table is kept, so no row is added again).
+*   keys   (ctx, keys)          a page that made its key table anew: F6 and AI > Ask the AI are added again when the page has a line (nothing is asked, nothing laid out).
+*   key    (ctx, keys, pane, a -> out)   a = the key name.  Call it for every key BEFORE the menu bar sees it.  While the line has the focus it takes the keys: the person's text goes
+*                               into the line, Esc, Tab, Back-tab, Up and Down give the focus back, and Enter on a request asks; F6 and Shift-F6 are the page's (its ring
+*                               gives the focus on).  out is null when the key is not the line's;
+*                               'taken' (the line used it) with <3> 1 when the screen was covered (the preview, the wait and the answer) and the page must draw all of itself again,
+*                               and <4> a message for the status line; 'replay' when the AI proposed an action: <2> is the key of that action in this pane, and the page runs its own
+*                               handler for that key exactly as if the person had pressed it; <5> the argument the model gave with it (S.97 stage 4), which the page may offer as the
+*                               DEFAULT of its own prompt (the person still answers that prompt, and every box after it).
+*   open  (ctx, keys, pane -> out)   the line takes the focus; out is the message for the status line.  Nothing when there is no line.
+*   ring  (ctx, keys, pane, a -> out)   S.176, the page's case on F6, Shift-F6 and act:ai (the menu entry AI > Ask the AI).  pane = the NUMBER of the box that has the focus;
+*                               a<1> = the key, a<2> = how many boxes the page (or its view) has.  The boxes and then the AI line, where the page has one, are a ring: F6 is the
+*                               next stop, Shift-F6 the one before, act:ai the line itself.  The line is focused or given up here; out<1> is the box that is to have the focus
+*                               (0: the line has it) and out<2> the status line's message.  A page with one box and no line gets its own box back.
+*   mouse  (ctx, keys, pane, a -> out)   a = the event of SCREEN MOUSE: a left press on the line gives it the focus; out is then its message, else null.
+*
+*   WHAT IS OFFERED TO THE MODEL is the page's key table, not a list typed again: the actions the page opted in ($tk_keys 'ai') that are available now for the pane and have a key.  The
+*   model can only name one of those ids (the library refuses any other), and an accepted proposal is run as the page's own key, so every confirm box, gate and $tk_run path of the
+*   page applies unchanged.  Stage 1 offers actions that navigate (the owner: opt-in, off by default): the proposal is accepted by Enter alone, as a delivered tile is on the home screen.
+*   S.97 stage 4: an action the page marked 'edit' ($tk_keys 'ai' with b = 'edit': it makes or compiles something) is sent in actx<12>, so Enter alone REJECTS its proposal.
+*   No command is run from here (the library is told there is nowhere to run one); the argument is handed to the page in out<5> and nothing else is done with it.  ***This program runs nothing
+*   and writes nothing.***  No text of any file is sent: the page tells what it is and what it offers, never a record or a value.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_aipage(op, ctx, keys, pane, a, out)
+$catalog $tk_aipage
+
+$include tk.h
+
+   out = ''
+
+   begin case
+      case op = 'init' or op = 'again'
+         out = 0
+         call $tk_ai('init', ctx, '', '')
+         ctx<TK.C.AIROW> = ''
+         if ctx<TK.C.AI> then
+            ctx<TK.C.AIROW> = 1
+            if op = 'init' then gosub add.rows                            ;* 'again' is for a context made anew ($tk_open after a hand-over): the key table already has the rows
+            call $tk_layout('refresh', ctx, '', chg)
+            out = chg
+         end
+
+      case op = 'keys'
+         * S.97 stage 2: a page that makes its key table anew (tool.bulk's build.keys) has the line's rows put back; nothing is asked of the helper and nothing is laid out again
+         if ctx<TK.C.AIROW> then gosub add.rows
+
+      case op = 'open'
+         if ctx<TK.C.AIROW> and ctx<TK.C.AI> then
+            call $tk_ai('focus', ctx, 1, '')
+            out = sysmsg(12643)
+         end
+
+      case op = 'ring'
+         gosub ring
+
+      case op = 'mouse'
+         if ctx<TK.C.AIROW> and ctx<TK.C.AI> then
+            call $tk_ai('mouse', ctx, a, mo)
+            if mo = 'focus' then
+               call $tk_ai('focus', ctx, 1, '')
+               out = sysmsg(12643)
+            end
+         end
+
+      case op = 'key'
+         nm = a
+         foc = 0
+         if ctx<TK.C.AIROW> and ctx<TK.C.AI> then call $tk_ai('focused', ctx, foc, '')
+         * a key that is not a key of the line (the end of the input, a resize, the mouse, the cursor lock's guard) is the page's whatever the focus
+         if foc and nm # '' and nm # 'resize' and nm # 'mouse' and nm # 'guardquit' and nm # 'f6' and nm # 'shift-f6' then     ;* S.176: F6 / Shift-F6 go to the page's ring
+            call $tk_ai('key', ctx, nm, ko)
+            out = 'taken' : @fm : '' : @fm : '' : @fm : sysmsg(12643)          ;* the status line keeps saying how to use the line while it has the focus
+            begin case
+               case ko = 'ask'
+                  gosub ask
+               case ko = 'leave' or ko = 'tab' or ko = 'btab' or ko = 'up' or ko = 'down'
+                  out<4> = ''                                                 ;* the focus is back with the page: the message goes
+            end case
+         end
+   end case
+
+   return
+
+* The request in the line goes to $tk_ai with what this page offers: the actions its key table opted in, each as 'id:what it does'.  The answer is an action to carry out, by the page's
+* own key, once the person has chosen Accept (Enter), or words to show.  The preview, the wait and the answer covered the page, so out says it is to be drawn again.
+ask:
+   ai.edits = ''
+   call $tk_keys('aiacts', keys, pane, acts, ai.edits, '', '')
+   app = ctx<TK.C.APP>
+   txt = 'This is the page ' : app : ' of the SD database system, a full-screen page of the toolkit.'
+   txt := @vm : 'Each action presses the key of that action on the page, exactly as the person could.'
+   txt := @vm : 'The person is ' : (if ctx<TK.C.AUD> = 'administrator' then 'the administrator.' else 'an account holder.')     ;* the lines of the page's text are VALUES
+   actx = app : @fm : 'page' : @fm : txt : @fm : acts : @fm : 1               ;* <5> 1: the actions only navigate, so Enter alone accepts a proposal
+   actx<11> = 'nocmd'                                                         ;* a page has no command prompt: a command from the model is ignored
+   actx<13> = 'none'                                                          ;* the page sends no text of any file (the AI's wall asks every app where its text comes from)
+   actx<12> = ai.edits                                                        ;* S.97 stage 4: the actions that make or compile something: Enter alone rejects a proposal of one of them
+   call $tk_ai('ask', ctx, actx, res)
+   call $tk_ai('clear', ctx, '', '')
+   call $tk_ai('focus', ctx, 0, '')                                           ;* the line gives the focus back to the page
+   out = 'taken' : @fm : '' : @fm : 1 : @fm : res<5>
+   if res<1> = 'action' then
+      call $tk_keys('keyof', keys, res<2>, pane, kk, '', '')
+      if kk # '' then
+         out = 'replay' : @fm : kk : @fm : 1 : @fm : res<5> : @fm : res<3>      ;* <5> (S.97 stage 4): the argument, already cleaned by $tk_ai; the page offers it as the default of its OWN prompt
+      end else
+         out<4> = sysmsg(12949, res<2>)
+      end
+   end
+   return
+
+* S.176: F6 / Shift-F6 round the page's boxes (1 to rg.n) and the line (rg.n + 1, when the page has one); act:ai to the line.  In: pane (the box with the focus), a.
+ring:
+   rg.n = a<2> + 0
+   if rg.n < 1 then rg.n = 1
+   rg.at = pane + 0
+   if rg.at < 1 or rg.at > rg.n then rg.at = 1
+   rg.line = 0
+   if ctx<TK.C.AIROW> and ctx<TK.C.AI> then rg.line = 1
+   rg.foc = 0
+   if rg.line then call $tk_ai('focused', ctx, rg.foc, '')
+   if rg.foc then rg.at = rg.n + 1                                          ;* the line is the stop after the last box
+   rg.stops = rg.n + rg.line
+   begin case
+      case a<1> = 'act:ai'
+         rg.to = (if rg.line then rg.n + 1 else rg.at)
+      case a<1> = 'shift-f6'
+         rg.to = rg.at - 1
+         if rg.to < 1 then rg.to = rg.stops
+      case 1
+         rg.to = rg.at + 1
+         if rg.to > rg.stops then rg.to = 1
+   end case
+   if rg.line and rg.to = rg.n + 1 then
+      if not(rg.foc) then call $tk_ai('focus', ctx, 1, '')
+      out = 0 : @fm : sysmsg(12643)
+   end else
+      if rg.foc then call $tk_ai('focus', ctx, 0, '')
+      out = rg.to : @fm : ''
+   end
+   return
+
+* The line's own rows in the key table: the menu entry AI > Ask the AI, an action with no key (the page sees act:ai), and F6 for a page that has no F6 row of its own
+*   (S.176: F6 is the box key of every page, the line one of its stops; a page's own F6 row comes first and $tk_fkeys shows a key once)
+add.rows:
+   call $tk_keys('add', keys, '', 'ask ai', 'ai', '', 1)
+   call $tk_keys('menu', keys, 'ai', '&AI', '&Ask the AI', '', '')
+   call $tk_keys('add', keys, 'f6', 'box', 'nextpane', '', 1)
+   return
+
+end
+
+* END-CODE

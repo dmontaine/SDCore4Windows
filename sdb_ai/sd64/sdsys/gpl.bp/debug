@@ -18,11 +18,38 @@
 * 
 * 
 * START-HISTORY:
-* 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b): the messages to and from the debugged phantom go through dbg.store (made by PDEBUG with
-*           !pdbg_store, the user's private directory), not $ipc.
-* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
-* 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
-* 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The full-screen display is laid out for at least 140 by 42
+* 10 Nov 26 Windows port - level with Linux e3490a7f (S.98 H1-H3, S.179/S.180, S.186; the AI command is there and finds the AI unusable: no helper, RELEASE_1.1 173).
+*               The Windows carries of 18 Oct (81ad297, e4bc454-70aca05), 8 Nov (2930d92f) and 9 Nov (debd0698) are the Linux lines below.
+* 9 Nov 26 dm  S.186 (the owner: "QM compatibility is not a focus, consistency within SD is"): in the full screen F2 is Find an action (dbg.find, the
+*               finder every page has, over the menu bar's entries; Help > Find an action) and Ctrl-Q stops the program and leaves, as F3; Abort keeps the
+*               Run menu and the finder and has no key there.  Line mode, which has no menu bar, keeps F2 as Abort.  dbg.menu's dispatch is dbg.code, shared.
+* 8 Nov 26 dm  S.179 / S.180 (the owner: the same keys on every page, the theme under View, every feature on a menu): F5 draws the screen again and F9
+*               runs (F5 ran); Ctrl-T the theme ($tk_theme, kept for the person; the debugger starts in $sl_theme 'site'), Ctrl-K the keys in use, Ctrl-L a
+*               redraw; the command line's delete-to-end and swap are Esc K and Esc T (Alt-K, Alt-T).  A menu bar on the top row (dbg.bar: Run, View,
+*               Help), opened by Esc alone or F10 (dbg.menu), whose function-key items go back to the command loop as the key.  Message 6712 says so.
+* 2 Nov 26 dm  S.98 H3: the full-screen display on a terminal with no alternate screen (the Linux console, vt100, vt220, ansi ...): full.screen needs cup and clear, not smcup and rmcup
+*               (alt.able says which); the main screen is taken at a stop that is shown (take.main) and given back as the program had it (give.main: an owned library screen drawn
+*               again from its shadow, else a clear screen), F4 / V repaint an owned screen or say there is none (message 12602), and LINE.MODE in $debug.options keeps line mode.
+* 2 Nov 26 dm  S.98 H2: a run the IDE armed starts the debugger afresh (debug.initialised cleared, as CPROC does before each TCL command): in an IDE session the second and later
+*               runs skipped initialise and a breakpoint set by the run-on never stopped the program.
+* 1 Nov 26 dm  S.98 H2 (the IDE hands its breakpoints over): when the IDE armed the named common /idebrk/ (idebrk.h) for this run and the first program stopped in is the one it compiled (the same source
+*               path: the directory exactly, the record id in either case), the debugger clears its breakpoints (both lists: the kernel's, which holds 20 and was never emptied between runs of one session, and its
+*               own text), sets the lines the editor marked that begin a statement (the kernel says so: BREAKPOINT 7 leaves STATUS() 1 or 0), and with ibk.go runs on to the first of them without showing anything
+*               (the same silent run-on as a WATCH whose condition is not met); a line already stopped on stays.  The lines that have a breakpoint go back to the IDE (ibk.out) after every command, when the
+*               program is aborted or stopped and before the silent run-on; it does nothing for a phantom or when the paths differ.  The alternate screen is recorded in ibk.alt so that the IDE can give it
+*               back if this program dies.  The tables of programs are made bigger together (program.name, program.src, lines and program.flags were not).
+* 1 Nov 26 dm  S.98 H1 (the debugger in the IDE's style): the full-screen display is laid out for 140 by 43 and has the toolkit's frame - the bar with the app name and the audience at the right of
+*               row 0, the source with a gutter (a mark for a breakpoint or the line about to run, the line number) and the syntax colour of SD BASIC, an Autos pane at the right (the variables
+*               the line about to run uses, then the line last stopped at, the watched variable and the locals, one to a row, never empty while the program has a variable), the messages
+*               under a rule, the command line, and below it the status line, the border and a function-key row made from the key table by $tk_keys and $tk_fkeys.  The keys and the
+*               commands are as they were.  It takes the site's theme when the program asked for none (classic when the site names none).  Resize and WINDOW n no longer
+*               call the theme.in / theme.out pair (read from the code, the pair reset dbg.themed and would have left the debugger's theme in force at exit; not measured): they use
+*               scr.in, which takes only the library's context and the styles.  get.source.line is fetch.source.lines for any program.
+* 31 Oct 26 dm  W.11 F10b: the messages to and from the debugged phantom go through dbg.store (made by PDEBUG with !pdbg_store, the user's private directory), not $ipc.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
+* 24 Oct 26 dm  AI line stage 3: the command AI (or AI and a question) in the full-screen display when the AI is usable for the account; the model is told where the program has
+*               stopped, the call stack and the source round the stop; it answers in words, nothing is changed ($tk_ai).
+* 18 Oct 26 dm  Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The full-screen display is laid out for at least 140 by 42
 *               (lay.w, lay.h; a bigger window is used whole).  On a window smaller than that at the first stop the debugger says
 *               so (message 12607, $sl_need) and uses line mode for the session instead.  A window made smaller while the
 *               full-screen display is up shows the upper left corner of the layout (the library cuts what falls outside the
@@ -59,11 +86,13 @@ $flags debugger
 $include keys.h
 $include keyin.h
 $include debug.h
+$include idebrk.h
 $include syscom.h
 
 $include int$keys.h
 $include header.h
 $include sl.h
+$include tk.h
 $include err.h
 
 deffun atvar(name) calling "!atvar"
@@ -72,29 +101,34 @@ deffun dbg.info(mode, qualifier) local
 
 $define SOURCE.AREA            1
 $define LAY.WIDTH            140       ;* what the full-screen display is laid out for (a bigger window is used whole)
-$define LAY.DEPTH             42
+$define LAY.DEPTH             43       ;* 1 Nov 26 (S.98): the toolkit's floor; the foot (status line, border, key row) is three rows below the command line
+$define AUTO.WIDTH            48       ;* the Autos pane's width; a window wider than 140 gives the source the rest
+$define GUTTER.W               2       ;* the source's gutter: a mark (* a breakpoint, > the line about to run) and a blank, before the line number
 
    gosub read.layout                    ;* lay.w by lay.h: the window, and never less than LAY.WIDTH by LAY.DEPTH
    guard.left = @false                  ;* the user left from the cursor lock, in a place that cannot leave at once
-   wm1 = lay.w - 1
-   command.line = lay.h - 1
    msg.prefix = ''
    if data.lines < 5 then data.lines = DATA.AREA.LINES      ;* a common block starts at 0
-   data.area = command.line - data.lines
-   source.area.lines = data.area -1
+   gosub set.geometry
    return.key = seq(pterm(PT$INEWLINE,''))
    phantom = bitand(event, 0x80000000) # 0
 
    * On a terminal that has an ALTERNATE screen the debugger takes the whole of it: the program's own screen is kept
    * by the terminal and comes back when the debugger lets go.  alt.on is true between the two (initialise enters it
    * itself the first time, to paint on it).  A terminal without one, or a session with no terminal, gets line mode.
+   * 2 Nov 26 (S.98 H3): a terminal with none but with cup and clear gets the same display on the MAIN screen (main.on between take.main and give.main): the program's own text is
+   *   cleared when the debugger comes up and what the screen library knows of the program's screen is drawn again when it lets go.  The screen is taken only once this stop is known
+   *   to be shown (after the IDE's hand-over and a conditional WATCH may have sent the program straight on).
    alt.on = @false
+   main.on = @false
+   if ibk.mode + 0 = IBK.K.ARMED then debug.initialised = @false     ;* 2 Nov 26 (S.98 H2): CPROC does this before each command; an IDE session never passes through it, and a run-on in the 2nd run of a session ran to the end
    if not(debug.initialised) then gosub initialise
 
-   alt.screen = full.screen and not(phantom)
+   alt.screen = full.screen and not(phantom) and alt.able
    if alt.screen and not(alt.on) then
       display terminfo('smcup') : @(-1) :
       alt.on = @true
+      ibk.alt = 1                              ;* S.98 H2: the IDE gives the main screen back if this program dies before it does
    end
 
    * Find program details
@@ -108,8 +142,21 @@ $define LAY.DEPTH             42
 found.program:
    case.sensitive = bitand(program.flags(idx), HDR.CASE.SENSITIVE)
 
-   if full.screen then gosub theme.in          ;* the library's styles for what follows (given back at exit.debug)
-   if alt.screen then gosub paint.data.area    ;* a fresh alternate screen: the messages of the last stop are shown again
+   * S.98 H2: the breakpoints the IDE handed over (idebrk.h), at the first stop of the run it armed.  Before the theme and the layout; nothing in it can stop the program (every value is tested before it is
+   * used: a fault here would leave the terminal on the alternate screen, which ibk.alt lets the IDE repair only after the fact)
+   ib.msgs = ''
+   ib.run = @false
+   gosub ibk.armed                              ;* ib.on: this run was armed by the IDE and this is the debugger of a session with a terminal
+   if ib.on then
+      gosub ibk.apply
+      if ib.run then goto exit.debug            ;* the run goes on to the first breakpoint without showing anything, as a WATCH whose condition is not met does
+   end
+
+   if alt.screen then gosub theme.in           ;* the library's styles for what follows (given back at exit.debug)
+   if alt.screen then                         ;* a fresh alternate screen: the frame is drawn and the messages of the last stop are shown again
+      gosub paint.layout
+      gosub paint.data.area
+   end
 
    * A WATCH with a condition (WATCH var op value, 14 Oct 26, openQM 45): the variable was assigned, but if the new value is not
    * one the condition wants the program goes straight on, as the RUN command would, without showing anything
@@ -122,12 +169,23 @@ found.program:
       end
    end
 
+   if full.screen and not(alt.able) then       ;* S.98 H3: this stop is to be shown: the main screen is taken (the library's styles after it, so that the program's are still the ones in force when it reads them)
+      gosub take.main
+      gosub theme.in
+      gosub paint.layout
+      gosub paint.data.area
+   end
+
    * ------------------------------------------------------------
    * Display source program window
 
    src.idx = idx
    src.line = line
+   auto.prev = auto.here                       ;* the Autos pane: the line the debugger last stopped at, and this one
+   auto.here = idx : ':' : line
    gosub display.source
+   if full.screen then gosub refresh.panes
+   gosub ibk.say                               ;* S.98 H2: what the hand-over did (null when it was not asked for)
 
    if bitand(event, DE$WATCH) then
       message = sysmsg(6700, watch.var.name) ;* Watched variable %1 has changed
@@ -199,7 +257,10 @@ found.program:
                case n = K$F4 and full.screen and not(phantom)  ;* Show user screen
                   gosub view
 
-               case n = K$F5             ;* Free run
+               case n = K$F5 and full.screen   ;* Refresh (8 Nov 26, S.179: F5 refreshes on every page; run is F9)
+                  gosub relayout
+
+               case n = K$F9             ;* Free run (F5 until 8 Nov 26, S.179)
                   gosub dbg.breakpoint(BRK$RUN, 0)
                   done = @true
 
@@ -297,6 +358,9 @@ found.program:
                         var.name = last.display
                         gosub display.variable
                   end case
+
+               case action = 'AI' and ai.ok
+                  gosub ai.run
 
                case action = "ABORT" or action = "Q" or action = "QUIT"
                   gosub abort.debug
@@ -547,12 +611,14 @@ error:
             end case
          end
       end
+      gosub ibk.sync                                            ;* S.98 H2: the lines that have a breakpoint now go back to the IDE (a command may have set or cleared one)
+      if full.screen and not(done) then gosub refresh.panes     ;* what the command changed: the Autos pane's values, the breakpoint count
    until done
    repeat
 
 exit.debug:
    if full.screen then gosub theme.out
-   gosub leave.alt
+   gosub leave.screen
 
 exit.loop:
    return to exit.loop
@@ -568,9 +634,18 @@ theme.in:
    call $sl_theme('name', '', '', '', '', dbg.theme)
    dbg.themed = @false
    if dbg.theme = '' or dbg.theme = 'mono' then
-      call $sl_theme('set', 'classic', '', '', '', dbg.r)
+      * S.98: the site's theme (SCREENTHEME of sd.conf), as the IDE and the pages have, else the classic one; a name that is no theme, or one this terminal cannot show, leaves classic
+      call $sl_theme('site', '', '', '', '', dbg.site)     ;* 8 Nov 26 (S.179): the person's own theme first, then SCREENTHEME
+      dbg.r = 2
+      if dbg.site # '' and dbg.site # 'mono' then call $sl_theme('set', dbg.site, '', '', '', dbg.r)
+      if dbg.r # 0 then call $sl_theme('set', 'classic', '', '', '', dbg.r)
       if dbg.r = 0 then dbg.themed = @true       ;* refused on a terminal with no colour: mono it stays
    end
+   gosub scr.in
+   return
+
+* SCR.IN  -  The library's context of the debugger's own screen, and the style codes of what is drawn on it (the theme is in force already)
+scr.in:
    call $sl_scr('get', scr)
    scr<SL.S.CLIP> = ''                           ;* a clip the program set is not the debugger's
    title.attr = 'a'                              ;* bar: the title and the command line
@@ -578,6 +653,13 @@ theme.in:
    source.attr = 't'                             ;* text: the source
    highlight.source.attr = 'h'                   ;* highlight: the line about to run
    breakpoint.source.attr = 'k'                  ;* hotkey: a line with a breakpoint (underlined in mono)
+   call $sl_theme('code', 'reverse', '', '', '', rev.attr)      ;* the status line
+   call $sl_theme('code', 'gutter', '', '', '', num.attr)       ;* the line numbers
+   call $sl_theme('code', 'header', '', '', '', head.attr)      ;* the Autos pane's title
+   data.attr = source.attr                       ;* the messages and the Autos rows are text on the same ground as the source
+   auto.attr = source.attr
+   call $sl_theme('name', '', '', '', '', syn.th)
+   syn.on = (syn.th # 'classic' and syn.th # 'mono')     ;* the colours of the language were chosen for the ground of blue, dark and light; classic's text ground is blue, which they do not carry
    return
 
 * LEAVE.ALT  -  Give the terminal's main screen back (the program's), if the debugger was on the alternate one
@@ -585,6 +667,41 @@ leave.alt:
    if alt.on then
       display terminfo('rmcup') :
       alt.on = @false
+      ibk.alt = 0
+   end
+   return
+
+* ----------------------------------------------------------------------
+* LEAVE.SCREEN  -  give the terminal back: the alternate screen, or the main screen as the program had it (S.98 H3).  After theme.out, so that the program's theme is the one in force
+* when its screen is drawn again.
+
+leave.screen:
+   gosub leave.alt
+   if main.on then gosub give.main
+   return
+
+* TAKE.MAIN  -  a terminal with no alternate screen: the main screen is cleared for the debugger.  Nothing of the program's is lost that the screen library holds: the debugger draws
+* on a copy of the library's context (scr.in) and never writes it back, so the program's shadow, cursor, theme and mouse are as they were when give.main reads them again.  What the
+* program PRINTed, and what was on the screen before, is not held by anyone, and goes.
+take.main:
+   main.on = @true
+   call $sl_sgr('n', sq)
+   display sq : @(-1) :
+   return
+
+* GIVE.MAIN  -  the screen of a program that owns the library's screen is drawn again from its shadow ($sl_repaint clears first and sets SL.S.SYNC, so that the program's next form
+* writes what it believes is not shown), and the context is put back (that places the cursor, shown or hidden as the program left it).  Any other program gets a clear screen with the
+* cursor on and the plain style: its PRINT output cannot be asked of the terminal.  The kept context is read again here, not remembered from take.main: the window may have been
+* resized while the debugger was up.
+give.main:
+   main.on = @false
+   call $sl_scr('get', ps)
+   if ps<SL.S.OWNED> then
+      call $sl_repaint(ps)
+      call $sl_scr('put', ps)
+   end else
+      call $sl_sgr('n', sq)
+      display @(-31) : sq : @(-1) :
    end
    return
 
@@ -644,7 +761,7 @@ emit.msg:
 
 paint.data.area:
    for i = 1 to data.lines
-      call $sl_put(scr, 0, data.area + i - 1, fmt(debug.data.area(i), wm1 : 'L'), command.attr)
+      call $sl_put(scr, 0, data.area + i - 1, fmt(debug.data.area(i), lay.w : 'L'), data.attr)
    next i
    return
 
@@ -691,15 +808,204 @@ show.np:
    end
    return
 
-* The title bar, the source area, the data area and the command line, in the library's styles (the caller has the theme in)
+* SET.GEOMETRY  -  The rows and columns of the display from lay.w, lay.h and data.lines (S.98): the bar on row 0; the source and, at its right, the Autos pane, down to
+*                  the rule above the messages; the messages (the data area); the command line; and the foot, three rows (status line, border, function keys).
+set.geometry:
+   wm1 = lay.w - 1
+   key.line = lay.h - 1
+   border.line = lay.h - 2
+   status.line = lay.h - 3
+   command.line = lay.h - 4
+   data.area = command.line - data.lines
+   source.area.lines = data.area - 2             ;* the row above the messages is their rule
+   auto.x = lay.w - AUTO.WIDTH                   ;* the Autos pane's first column
+   src.cols = auto.x - 1                         ;* the source's width: the column before the Autos pane is the rule between them
+   return
+
+* The bar, the source and Autos areas, the messages, the command line and the foot, in the library's styles (the caller has the theme in)
 paint.layout:
    call $sl_put(scr, 0, 0, space(lay.w), title.attr)
-   for i = SOURCE.AREA to data.area - 1
-      call $sl_put(scr, 0, i, space(lay.w), source.attr)
+   call $sl_line('v', 0, vc)
+   call $sl_line('h', 0, hc)
+   for i = SOURCE.AREA to SOURCE.AREA + source.area.lines - 1
+      call $sl_put(scr, 0, i, space(src.cols), source.attr)
+      call $sl_put(scr, src.cols, i, vc, source.attr)             ;* the rule between the source and the Autos pane
+      call $sl_put(scr, auto.x, i, space(lay.w - auto.x), auto.attr)
    next i
-   for i = data.area to lay.h - 1
-      call $sl_put(scr, 0, i, space(lay.w - (i = lay.h - 1)), command.attr)
+   call $sl_put(scr, 0, data.area - 1, str(hc, lay.w), source.attr)   ;* the rule above the messages
+   for i = data.area to command.line - 1
+      call $sl_put(scr, 0, i, space(lay.w), data.attr)
    next i
+   call $sl_put(scr, 0, command.line, space(lay.w), command.attr)
+   gosub paint.foot
+   return
+
+* PAINT.FOOT  -  The status line (reverse), the border and the function-key row, as the toolkit's pages have them: the key row is made from a key table by $tk_keys and $tk_fkeys,
+*                and the status line says what the display cannot show beside the source, how many breakpoints there are and which variable is watched.
+paint.foot:
+   fo.n = 0
+   for fo.i = 1 to dcount(breakpoints, @fm)
+      if breakpoints<fo.i> matches '1N0N"."1N0N' then fo.n += 1
+   next fo.i
+   fo.t = '[Command]  breakpoints ' : fo.n
+   if watch.var.name # '' and watch.var.name # 0 then fo.t := '  watching ' : watch.var.name
+   call $sl_put(scr, 0, status.line, fmt(fo.t[1, lay.w], lay.w : 'L'), rev.attr)
+   call $sl_line('h', 0, hc)
+   call $sl_put(scr, 0, border.line, str(hc, lay.w), source.attr)
+   gosub key.text
+   call $sl_put(scr, 0, key.line, key.row, title.attr)
+   return
+
+* KEY.TEXT  -  The text of the function-key row in key.row.  Its table lists the keys the command loop acts on (the case n = K$... lines of the loop); a label cannot name a key the loop ignores.
+key.text:
+   kr.keys = ''
+   call $tk_keys('add', kr.keys, 'f1', 'help', 'help', '', '')
+   call $tk_keys('add', kr.keys, 'f2', 'find', 'find', '', '')          ;* 9 Nov 26 (S.186): Find an action, as on every page (Abort is on the Run menu)
+   call $tk_keys('add', kr.keys, 'f3', 'stop', 'stop', '', '')
+   call $tk_keys('add', kr.keys, 'f4', 'screen', 'screen', '', '')
+   call $tk_keys('add', kr.keys, 'f5', 'refresh', 'refresh', '', '')     ;* 8 Nov 26 (S.179): F5 refreshes on every page; run is F9
+   call $tk_keys('add', kr.keys, 'f7', 'step', 'step', '', '')
+   call $tk_keys('add', kr.keys, 'f8', 'line', 'line', '', '')
+   call $tk_keys('add', kr.keys, 'f9', 'run', 'run', '', '')
+   call $tk_keys('add', kr.keys, 'f10', 'menu', 'menu', '', '')
+   call $tk_keys('add', kr.keys, 'ctrl-f7', 'parent', 'parent', '', '')
+   call $tk_keys('add', kr.keys, 'ctrl-f8', 'program', 'program', '', '')
+   kr.ctx = ''
+   kr.ctx<TK.C.W> = lay.w
+   call $tk_fkeys(kr.ctx, kr.keys, '', key.row)
+   return
+
+* REFRESH.PANES  -  What changes with the program's variables and the commands: the Autos pane and the status line.  The source and the messages are drawn by their own routines.
+refresh.panes:
+   gosub paint.autos
+   gosub paint.foot
+   return
+
+* PAINT.AUTOS  -  The Autos pane (S.98): the variables the line about to run uses, then those of the line the debugger last stopped at (the same program only: a variable number is the
+*                 running frame's), the watched variable, and then the locals in the order the program declares them until the pane is full - one row each, name = value.  The pane is
+*                 therefore empty only for a program that has no variable.  A row costs one dbg.info call; the drawing stops when a key is waiting.  The names on a line are the words
+*                 outside strings and comments that are in the program's symbol table; a name the debugger does not know (a function, a label, a statement) is not there.
+paint.autos:
+   au.rows = source.area.lines - 1                  ;* the first row of the pane is its title
+   au.w = lay.w - auto.x
+   call $sl_put(scr, auto.x, SOURCE.AREA, fmt('Autos', au.w : 'L'), head.attr)
+   au.names = ''                                    ;* the names, an @FM list, and in step with it au.nums, the variable numbers
+   au.nums = ''
+   for au.k = 1 to 2
+      au.at = (if au.k = 1 then auto.here else auto.prev)
+      if au.at # 0 and field(au.at, ':', 1) + 0 = idx and (au.k = 1 or au.at # auto.here) then
+         gl.idx = idx
+         gl.n = field(au.at, ':', 2) + 0
+         gosub fetch.source.lines
+         au.t = gl.s<1>
+         gosub auto.words
+         for au.wi = 1 to dcount(au.words, @fm)
+            au.word = au.words<au.wi>
+            gosub auto.add.word
+         next au.wi
+      end
+   next au.k
+   if watch.var.name # '' and watch.var.name # 0 then
+      au.word = watch.var.name
+      gosub auto.add.word
+   end
+   au.nv = dcount(symbols(idx)<1>, @vm)             ;* then the locals, in the order the program declares them
+   for au.v = 1 to au.nv
+   until dcount(au.names, @fm) >= au.rows
+      au.nm = symbols(idx)<1, au.v, 1>
+      if au.nm # '' and au.nm[1, 1] # '*' then
+         locate au.nm in au.names<1> setting au.pos else
+            au.names<-1> = au.nm
+            au.nums<-1> = au.v - 1
+         end
+      end
+   next au.v
+   au.n = dcount(au.names, @fm)
+   for au.k = 1 to au.rows
+   until keyready()
+      au.txt = ''
+      if au.k <= au.n then
+         au.vn = au.nums<au.k>
+         gosub auto.value
+         au.txt = au.names<au.k> : ' = ' : au.val
+      end
+      call $sl_put(scr, auto.x, SOURCE.AREA + au.k, fmt(au.txt[1, au.w], au.w : 'L'), auto.attr)
+   next au.k
+   return
+
+* AUTO.WORDS  -  In: au.t, a line of source.  Out: au.words, an @FM list of the words in it that are outside a string and a comment.  A line that is a comment gives none.
+auto.words:
+   au.words = ''
+   au.q = ''                                        ;* the quote of the string the scan is in
+   au.word = ''
+   au.tt = trimf(au.t)
+   if au.tt[1, 1] = '*' or au.tt[1, 1] = '!' or upcase(au.tt[1, 4]) = 'REM ' then return
+   for au.c = 1 to len(au.t) + 1
+      au.ch = au.t[au.c, 1]                         ;* null past the end, which ends the last word
+      if au.q # '' then
+         if au.ch = au.q then au.q = ''
+      end else
+         if au.ch # '' and index(basic.chars, au.ch, 1) then
+            au.word := au.ch
+         end else
+            if au.word # '' and not(au.word[1, 1] matches '1N0X') then au.words<-1> = au.word
+            au.word = ''
+            if au.ch = "'" or au.ch = '"' then au.q = au.ch
+            if au.ch = ';' and (au.t[au.c + 1, 1] = '*' or au.t[au.c + 1, 1] = '!') then exit    ;* a comment to the end of the line
+         end
+      end
+   next au.c
+   return
+
+* AUTO.ADD.WORD  -  In: au.word.  If it names a variable of the program and is not in the pane yet it is added (au.names, au.nums).  The variable number is worked out as display.variable does.
+auto.add.word:
+   au.nm = au.word
+   if not(case.sensitive) then au.nm = upcase(au.nm)
+   locate au.nm in au.names<1> setting au.pos then return
+   find au.nm in symbols(idx) setting au.f, au.v, au.sv else return
+   if au.f = 1 then
+      au.vn = au.v - 1
+   end else
+      au.vn = symbols(idx)<au.f, 1> + shift(au.sv, -16)
+   end
+   au.names<-1> = au.nm
+   au.nums<-1> = au.vn
+   return
+
+* AUTO.VALUE  -  In: au.vn, a variable number.  Out: au.val, its value on one line, as display.variable words it but short (a string is cut, a matrix or a collection says what it is).
+auto.value:
+   au.info = dbg.info(1, au.vn)
+   au.type = au.info<1> + 0
+   begin case
+      case len(au.info) = 0
+         au.val = '?'
+      case au.type = V$UNASSIGNED
+         au.val = 'Unassigned'
+      case au.type = V$INTEGER or au.type = V$FLOATNUM
+         au.val = au.info<2>
+      case au.type = V$STRING
+         au.s = field(au.info, @fm, 3, 9999999)
+         au.val = '"' : convert(banned, replacements, au.s[1, 200]) : '"'
+      case au.type = V$ARRAY
+         au.val = 'Dim (' : (au.info<2> + 0) : (if au.info<3> + 0 then ',' : (au.info<3> + 0) else '') : ')'
+      case au.type = V$COLL
+         au.cn = au.info<3> + 0
+         au.val = (if au.info<2> = 'A' then 'Array' else 'Collection') : ' (' : au.cn : ' element' : (if au.cn = 1 then '' else 's') : ')'
+      case au.type = V$FILE.REF
+         au.val = 'File: ' : au.info<3>
+      case au.type = V$SELLIST
+         au.val = 'Select list (' : au.info<2> : ' bytes)'
+      case au.type = V$OBJ
+         au.val = 'Object: ' : au.info<2>
+      case au.type = V$JSON.BOOLEAN
+         au.val = 'Boolean: ' : au.info<2>
+      case au.type = V$JSON.NULL
+         au.val = 'Null'
+      case au.type = V$SUBR
+         au.val = 'Subr: ' : au.info<2>
+      case 1
+         au.val = '(not shown)'                     ;* a common block, an image, a socket ...: /name shows what the debugger can say of it
+   end case
    return
 
 * READ.LAYOUT  -  lay.w by lay.h, the size the full-screen display is laid out for: the window, and never less than LAY.WIDTH by
@@ -725,16 +1031,13 @@ relayout:
    if unassigned(i) then rl.i = '' else rl.i = i
    if unassigned(j) then rl.j = '' else rl.j = j
    gosub read.layout
-   wm1 = lay.w - 1
-   command.line = lay.h - 1
-   data.area = command.line - data.lines
-   source.area.lines = data.area - 1
-   gosub theme.in
+   gosub set.geometry
+   gosub scr.in                          ;* the theme is the debugger's already (S.98: theme.in / theme.out here lost the program's theme at exit)
    display @(-1) :
    gosub paint.layout
-   gosub theme.out
    gosub paint.data.area
    gosub display.source
+   gosub refresh.panes
    s = rl.s ; n = rl.n ; i = rl.i ; j = rl.j
    return
 
@@ -777,12 +1080,9 @@ wait.key:
 * WINDOW n  -  the data area becomes n rows high (QM4 Fixes 193); the source area takes what is left
 new.window:
    data.lines = new.lines + 0
-   data.area = command.line - data.lines
-   source.area.lines = data.area - 1
+   gosub set.geometry
    mat debug.data.area = ''
-   gosub theme.in
    gosub paint.layout
-   gosub theme.out
    gosub paint.data.area
    gosub display.source
    return
@@ -794,9 +1094,16 @@ initialise:
    * Full screen: a real terminal (the kernel can read its window size) that has an alternate screen.  (Until
    * 13 Oct 26 it was a terminal with the AccuTerm 'sreg' capability, which kept screen images, a mouse and key
    * rebinding of its own; all of that has been removed.)
+   * 2 Nov 26 (S.98 H3): any terminal that can address a cell and clear itself, not only one with an alternate screen.  With an alternate screen (alt.able) the program's own screen
+   *   is kept by the terminal and comes back; without one (the Linux console, vt100, vt220, ansi, ...) the debugger takes the main screen for the length of a stop, and what the
+   *   library knows of the program's screen is drawn again when it lets go (take.main, give.main).  dumb, unknown and null have no cup and stay in line mode.
    full.screen = @false
+   alt.able = @false
    if not(phantom) then
-      if kernel(K$WINSIZE, '') # '' and terminfo('smcup') # '' and terminfo('rmcup') # '' then full.screen = @true
+      if kernel(K$WINSIZE, '') # '' and terminfo('cup') # '' and terminfo('clear') # '' then
+         full.screen = @true
+         alt.able = (terminfo('smcup') # '' and terminfo('rmcup') # '')
+      end
    end
 
    * Display attributes: the style codes of the screen library (set at every entry, theme.in, because the theme
@@ -806,6 +1113,13 @@ initialise:
    highlight.source.attr = 'n'
    breakpoint.source.attr = 'n'
    command.attr = 'a'
+   data.attr = 'n'
+   auto.attr = 'n'
+   rev.attr = 'r'
+   num.attr = 'n'
+   head.attr = 'a'
+   auto.here = 0                                 ;* the stops the Autos pane keys on (idx:line), none yet
+   auto.prev = 0
 
    basic.chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789$.%@"
 
@@ -829,9 +1143,9 @@ initialise:
             n = field(trim(init.options<i>), ' ', 2)
             if n matches '1N0N' and n >= 5 and n <= MAX.DATA.AREA.LINES then data.lines = n + 0
          end
+         if field(trim(init.options<i>), ' ', 1) = 'LINE.MODE' then full.screen = @false     ;* 2 Nov 26 (S.98 H3): the way back to line mode on a terminal that would otherwise get the full screen
       next i
-      data.area = command.line - data.lines
-      source.area.lines = data.area - 1
+      gosub set.geometry
    end
 
    * A window smaller than the full-screen display is laid out for: the debugger says so and uses line mode for the session
@@ -845,13 +1159,18 @@ initialise:
       end
    end
 
-   if full.screen then
+   * 24 Oct 26: the AI command (AI, or AI and a question) only in the full-screen display, and only when the AI is usable for the account
+   ai.ok = 0
+   if full.screen then call $tk_ai('usable', '', ai.ok, ai.pm)
+
+   if full.screen and alt.able then
       * Set up initial display and save screen image: the title bar, the source area, the data area and the
-      * command line, in the library's styles
+      * command line, in the library's styles.  (S.98 H3: only on an alternate screen; on the main screen the entry takes the screen and paints, once it is known that this stop is to be shown)
       gosub theme.in
       if not(phantom) then
          display terminfo('smcup') :             ;* the alternate screen, before anything is drawn
          alt.on = @true
+         ibk.alt = 1                             ;* S.98 H2 (see the entry)
       end
       display @(-1) :
       call $sl_put(scr, 0, 0, space(@crtwide), title.attr)
@@ -986,13 +1305,37 @@ get.input:
                   command = command[1, x - 1] : command[x + 1, 999]
                end
 
-            case n = 11      ;* Ctrl-K
-               command = command[1, x - 1]
+            * 8 Nov 26 (S.179, the owner: the same keys on every page): Ctrl-K the keys in use, Ctrl-T the theme, Ctrl-L a redraw, Esc alone or
+            * F10 the menu bar.  Delete to the end of the line and swap two characters, which had Ctrl-K and Ctrl-T, are Esc K and Esc T (Alt-K,
+            * Alt-T: a terminal sends Esc and the letter).
+            case n = 11      ;* Ctrl-K: the keys in use
+               gosub dbg.keys
 
-            case n = 20      ;* Ctrl-T
-               if x > 1 and x < len(command) then
-                  command[x-1,2] = command[x,1]:command[x-1,1]
-               end
+            case n = 20 and full.screen      ;* Ctrl-T: the theme
+               gosub dbg.theme
+
+            case n = 12 and full.screen      ;* Ctrl-L: a redraw
+               gosub relayout
+
+            case n = 27 or n = K$F10
+               dk.c = ''
+               if n = 27 then dk.c = keyin(0.4)     ;* a letter at once is Alt-letter; nothing is Esc on its own
+               begin case
+                  case upcase(dk.c) = 'K'           ;* Esc K: delete to the end of the line
+                     command = command[1, x - 1]
+                  case upcase(dk.c) = 'T'           ;* Esc T: swap the two characters before the cursor
+                     if x > 1 and x < len(command) then
+                        command[x-1,2] = command[x,1]:command[x-1,1]
+                     end
+                  case dk.c = '' and full.screen    ;* Esc on its own, or F10: the menu bar
+                     gosub dbg.menu
+                     if dm.cmd # '' then
+                        command = dm.cmd
+                        goto exit.get.input
+                     end
+                  case 1
+                     display @sys.bell :
+               end case
 
             case n = K$RETURN
                command = trim(command, ' ', 'B')
@@ -1028,6 +1371,19 @@ get.input:
             case n = 21         ;* Ctrl-U
                command = upcase(command)
 
+
+            * 9 Nov 26 (S.186, the owner: "consistency within SD"): F2 is Find an action and Ctrl-Q leaves (Stop, as F3), as on every page, in the full screen.
+            *   Abort is on the Run menu and in the finder.  In line mode, which has no menu bar, F2 is still Abort.
+            case n = K$F2 and full.screen and len(command) = 0
+               gosub dbg.find
+               if dm.cmd # '' then
+                  command = dm.cmd
+                  goto exit.get.input
+               end
+
+            case n = 17 and full.screen and len(command) = 0      ;* Ctrl-Q: stop the program and leave, as F3
+               command = char(K$F3)
+               goto exit.get.input
 
             case len(command) = 0 and n > 127
                command = c
@@ -1090,19 +1446,27 @@ zoned.update:
 *   s = source line group starting at line n
 
 get.source.line:
-   if n > lines(src.idx) then
-      s = ''
+   gl.idx = src.idx
+   gl.n = n
+   gosub fetch.source.lines
+   s = gl.s
+   return
+
+* FETCH.SOURCE.LINES  -  In: gl.idx, a program; gl.n, a line number.  Out: gl.s, the source from that line on (the rest of its chunk and the next chunk: a caller takes the lines it wants).
+fetch.source.lines:
+   if gl.n > lines(gl.idx) then
+      gl.s = ''
    end else
-      nn = n
-      j = head(src.idx)
+      gl.nn = gl.n
+      gl.j = head(gl.idx)
       loop
-         nn -= CHUNK.LOAD
-      while nn > 0
-         j = next.chunk(j)
+         gl.nn -= CHUNK.LOAD
+      while gl.nn > 0
+         gl.j = next.chunk(gl.j)
       repeat
 
-      s = field(chunk(j), @fm, mod(n - 1, CHUNK.LOAD) + 1, 9999)
-      if next.chunk(j) >= 0 then s := @fm : chunk(next.chunk(j))
+      gl.s = field(chunk(gl.j), @fm, mod(gl.n - 1, CHUNK.LOAD) + 1, 9999)
+      if next.chunk(gl.j) >= 0 then gl.s := @fm : chunk(next.chunk(gl.j))
    end
 
    return
@@ -1184,6 +1548,10 @@ found.source.record:
       dim head(new.table.size)
       dim symbols(new.table.size)
       dim equates(new.table.size)
+      dim program.name(new.table.size)         ;* 1 Nov 26 (S.98 H2): these four were left at INITIAL.PROGRAMS, and an IDE session that debugs a program many times (each F7 compiles a new object) filled the table
+      dim program.src(new.table.size)
+      dim lines(new.table.size)
+      dim program.flags(new.table.size)
 
       for idx = last.program to new.table.size
          program.id(idx) = 0
@@ -1199,6 +1567,7 @@ found.spare.entry:
    symbols(idx) = field(s, @vm, 2, 9999999)
    equates(idx) = dbg.info(7,0)   ;* Equate and $DEFINE tokens, only in a $MODE DEBUG.EQUATES program (16 Oct 26)
    program.name(idx) = s<1,1>
+   program.src(idx) = source.path                          ;* 1 Nov 26: for the AI's wall (set by allocate.new.program above)
    program.flags(idx) = dbg.info(5,0)
 
    * Load source record to memory chain
@@ -1259,13 +1628,24 @@ display.source.and.name:
 display.source:
    n = len(lines(src.idx))
    line.no.fmt = n : "R"
-   src.width = lay.w - (n + 3)
+   src.width = src.cols - (GUTTER.W + n + 2)     ;* what is left of the source pane for the text: less the gutter, the number and its ': '
 
    if full.screen then
+      * the bar: the program and its line, and at the right end the app and the audience, as the pages have them
       s = program.name(src.idx) : " : "
       if src.idx = idx then s := src.line : "." : sub.ref
       else s := src.line
-      call $sl_put(scr, 0, 0, fmt(s, wm1 : 'L'), title.attr)
+      if kernel(K$ADMINISTRATOR, -1) then ds.aud = sysmsg(12808) else ds.aud = @logname : '@' : @who
+      ds.app = 'debugger  ' : ds.aud : ' '
+      * 8 Nov 26 (S.180): the menu bar's titles first (Run View Help: Esc or F10 opens it), then the program and its line
+      gosub dbg.bar
+      call $sl_menu('init', dm.bar, scr, '', dm.r)
+      call $sl_menu('draw', dm.bar, scr, '', dm.r)
+      ds.w = lay.w - len(ds.app) - dm.tw
+      if ds.w > 1 then call $sl_put(scr, dm.tw, 0, fmt(s[1, ds.w - 1], ds.w : 'L'), title.attr)
+      call $sl_put(scr, lay.w - len(ds.app), 0, ds.app, title.attr)
+
+      if unassigned(syn.lang) then call $sl_syntax('index', 'sd.basic', '', '', '', syn.lang)     ;* the colour of SD BASIC; 0 if the library has no such language
 
       n = src.line - idiv(source.area.lines, 2) ;* First line to display
       if n < 1 then n = 1
@@ -1275,22 +1655,41 @@ display.source:
 *       convert "	" to "   " in s  charactes where hex "A8" x 3
       convert char(9):Char(27) to char(168):char(168):char(168) in s
 
-      * One row of the source area for each line: its number (in the breakpoint style when it has a breakpoint)
-      * and its text (in the highlight style when it is the line about to run), padded to the width of the screen
+      * One row of the source pane for each line: the gutter (* a breakpoint, > the line about to run, in their styles), the number (in the breakpoint style when it has a
+      * breakpoint) and the text, in the highlight style when it is the line about to run, else in the colours of the language; padded to the width of the pane
       for i = 1 to source.area.lines
       until keyready()
          if n <= lines(src.idx) then
-            numcode = source.attr
+            ds.mark = ' '
+            ds.mc = source.attr
+            numcode = num.attr
+            ds.cur = (n = line and src.idx = idx)
             locate src.idx:'.':n in breakpoints<1> setting pos then
                numcode = breakpoint.source.attr
+               ds.mark = '*'
+               ds.mc = breakpoint.source.attr
+            end else
+               if ds.cur then
+                  ds.mark = '>'
+                  ds.mc = highlight.source.attr
+               end
             end
             numtxt = fmt(n, line.no.fmt) : ': '
-            txtcode = source.attr
-            if n = line and src.idx = idx then txtcode = highlight.source.attr
             tx = fmt(s<i>[1, src.width], src.width : 'L')
-            call $sl_put(scr, 0, SOURCE.AREA + i - 1, numtxt : tx, str(numcode, len(numtxt)) : str(txtcode, src.width))
+            if ds.cur then
+               txtcode = str(highlight.source.attr, src.width)
+            end else
+               txtcode = ''
+               if syn.lang and syn.on then
+                  call $sl_syntax('line', syn.lang, s<i>, 0, ds.st2, ds.sty)
+                  convert 'n' to source.attr in ds.sty          ;* what the language leaves plain is the pane's text, not the terminal's own ground
+                  txtcode = ds.sty[1, src.width]
+               end
+               txtcode := str(source.attr, src.width - len(txtcode))
+            end
+            call $sl_put(scr, 0, SOURCE.AREA + i - 1, ds.mark : ' ' : numtxt : tx, ds.mc : source.attr : str(numcode, len(numtxt)) : txtcode)
          end else
-            call $sl_put(scr, 0, SOURCE.AREA + i - 1, space(lay.w), source.attr)
+            call $sl_put(scr, 0, SOURCE.AREA + i - 1, space(src.cols), source.attr)
          end
          n += 1
       next i
@@ -1303,6 +1702,52 @@ display.source:
       display fmt(src.line, line.no.fmt) : ": " : s<1>
    end
 
+   return
+
+* ======================================================================
+* AI  (AI line stage 3, 24 Oct 26)  -  AI, or AI and a question, at the debugger's prompt, in the full-screen display when the AI is usable for the account.  The model is told where the
+* program has stopped, the call stack and the source lines round the stop.  Nothing is sent until the person has seen EVERYTHING that is sent and chosen Send ($tk_ai 'ask'); the answer is
+* words only (there is no text here to edit and a command is ignored); nothing in the program or the debugger is changed.
+
+ai.run:
+   ai.req = trim(command[3, 99999])
+   if ai.req = '' then ai.req = sysmsg(12686)
+   ai.page = 'This is the debugger of SD Core. The program is stopped.'
+   ai.page<1, -1> = 'Program ' : program.name(src.idx) : ', line ' : src.line : '.'
+   ai.st = system(1002)
+   ai.stk = ''
+   for ai.i = 2 to dcount(ai.st, @fm)
+      ai.ss = ai.st<ai.i>
+      ai.nm = ai.ss<1, 1>
+      if ai.nm = '$cproc' then ai.nm = 'Command processor'
+      ai.stk := (if ai.stk = '' then '' else '; ') : ai.nm
+      for ai.j = 2 to dcount(ai.ss, @vm)
+         if ai.ss<1, ai.j, 2> then ai.stk := ' @ ' : ai.ss<1, ai.j, 2>
+      next ai.j
+   next ai.i
+   if ai.stk # '' then ai.page<1, -1> = 'The call stack, the innermost first: ' : ai.stk[1, 600]
+   ai.page<1, -1> = 'The source around the stop (line number, then the text; > marks the line about to run):'
+   ai.first = src.line - 25
+   if ai.first < 1 then ai.first = 1
+   ai.last = src.line + 25
+   if ai.last > lines(src.idx) then ai.last = lines(src.idx)
+   for ai.q = ai.first to ai.last
+      n = ai.q
+      gosub get.source.line
+      ai.page<1, -1> = (if ai.q = src.line then '>' else ' ') : fmt(ai.q, '6R') : ' ' : s<1>[1, 120]
+   next ai.q
+   * 1 Nov 26: the page text above holds the program's source, so its origin is the source record's pathname (the wall refuses the source of a program of SD itself, and a source it cannot place)
+   ai.org = 'path' : @vm : '' : @vm : program.src(src.idx)
+   ai.actx = 'debugger' : @fm : 'debugger' : @fm : ai.page : @fm : '' : @fm : 0 : @fm : ai.req : @fm : command.line : @fm : '' : @fm : 1 : @fm : '' : @fm : 'nocmd' : @fm : '' : @fm : ai.org
+   ai.ctx = ''
+   ai.ctx<1> = lay.w                                       ;* TK.C.W
+   ai.res = ''
+   call $tk_ai('ask', ai.ctx, ai.actx, ai.res)
+   gosub relayout                                          ;* the library put plain blanks back where its boxes were: the whole display is drawn again
+   if ai.res<5> # '' then
+      message = ai.res<5>
+      gosub emit.msg
+   end
    return
 
 * ======================================================================
@@ -1326,6 +1771,121 @@ help:
    return
 
 * ======================================================================
+* 8 Nov 26 (S.179, S.180): the menu bar, the theme and the keys in use.  The owner: "all features available on a page need to appear somewhere on
+* the menus"; the theme "should appear in the menu under view".  The bar is drawn on the top row by display.source; the menus hold every key the
+* command loop acts on.  A menu's code is a key: a function key goes back to the command loop as if it had been pressed (dm.cmd), the others
+* are done here.
+
+* DBG.BAR  -  The menu bar widget (sl.h): Run, View and Help.  dm.tw = the width of the titles, where the program's name starts.
+dbg.bar:
+   dm.bar = ''
+   dm.bar<SL.W.Y> = 0
+   dm.bar<SL.W.W> = lay.w
+   dm.m = '&Run'
+   dm.m<1, -1> = '&Run to a breakpoint' : @sm : 'F9' : @sm : 'f9'
+   dm.m<1, -1> = '&Step' : @sm : 'F7' : @sm : 'f7'
+   dm.m<1, -1> = 'Step a &line' : @sm : 'F8' : @sm : 'f8'
+   dm.m<1, -1> = 'Run to the &parent' : @sm : 'Ctrl-F7' : @sm : 'cf7'
+   dm.m<1, -1> = 'Run to the parent pr&ogram' : @sm : 'Ctrl-F8' : @sm : 'cf8'
+   dm.m<1, -1> = '-'
+   dm.m<1, -1> = 'S&top the program' : @sm : 'F3 / Ctrl-Q' : @sm : 'f3'
+   dm.m<1, -1> = '&Abort' : @sm : '' : @sm : 'f2'     ;* 9 Nov 26 (S.186): no key in the full screen (F2 is Find an action, as on every page); still F2 in line mode
+   dm.bar<20> = dm.m
+   dm.m = '&View'
+   dm.m<1, -1> = 'The program''s &screen' : @sm : 'F4' : @sm : 'f4'
+   dm.m<1, -1> = '&Theme' : @sm : 'Ctrl-T' : @sm : 'theme'
+   dm.m<1, -1> = '&Refresh' : @sm : 'F5' : @sm : 'f5'
+   dm.bar<21> = dm.m
+   dm.m = '&Help'
+   dm.m<1, -1> = '&Help' : @sm : 'F1' : @sm : 'f1'
+   dm.m<1, -1> = '&Keys' : @sm : 'Ctrl-K' : @sm : 'keys'
+   dm.m<1, -1> = '&Find an action' : @sm : 'F2' : @sm : 'find'
+   dm.bar<22> = dm.m
+   dm.tw = 0
+   for dm.i = 20 to 22
+      dm.t = dm.bar<dm.i, 1>
+      dm.tw += len(convert('&', '', dm.t)) + 2
+   next dm.i
+   return
+
+* DBG.MENU  -  Esc on its own or F10: the menu bar.  dm.cmd returned: the key a chosen function-key item stands for, else null.
+dbg.menu:
+   dm.cmd = ''
+   gosub dbg.bar
+   call $sl_menu('init', dm.bar, scr, '', dm.r)
+   call $sl_menu('run', dm.bar, scr, '', dm.code)
+   gosub dbg.code
+   gosub display.source                ;* the bar, with the program's name after the titles
+   return
+
+* DBG.FIND  -  F2, Help > Find an action (9 Nov 26, S.186: the finder every page has on F2): every entry of the menu bar in one list ($sl_palette), typed to narrow
+*   it; the entry chosen is run as the menu runs it (dm.cmd, dbg.code).  The palette draws with the library's context, which is the PROGRAM's while it is debugged: the
+*   debugger's own (scr) is put in its place for the palette and the program's given back after, as the theme does.
+dbg.find:
+   dm.cmd = ''
+   gosub dbg.bar
+   pal.m = dm.bar<20> : @fm : dm.bar<21> : @fm : dm.bar<22>
+   call $sl_scr('get', pal.keep)
+   call $sl_scr('put', scr)
+   call $sl_palette(pal.m, '', dm.code, pal.s, pal.why)
+   call $sl_scr('get', scr)
+   call $sl_scr('put', pal.keep)
+   begin case
+      case pal.s = 0
+         gosub dbg.code
+      case pal.s = 2
+         message = pal.why
+         gosub emit.msg
+   end case
+   gosub display.source
+   return
+
+* DBG.CODE  -  dm.code, an entry of the menu bar or the finder: dm.cmd the key it stands for, or the action done here
+dbg.code:
+   begin case
+      case dm.code = 'f9' ; dm.cmd = char(K$F9)
+      case dm.code = 'f7' ; dm.cmd = char(K$F7)
+      case dm.code = 'f8' ; dm.cmd = char(K$F8)
+      case dm.code = 'cf7' ; dm.cmd = char(K$CTRL.F7)
+      case dm.code = 'cf8' ; dm.cmd = char(K$CTRL.F8)
+      case dm.code = 'f3' ; dm.cmd = char(K$F3)
+      case dm.code = 'f2' ; dm.cmd = char(K$F2)
+      case dm.code = 'f4' ; dm.cmd = char(K$F4)
+      case dm.code = 'f5' ; dm.cmd = char(K$F5)
+      case dm.code = 'f1' ; dm.cmd = char(K$F1)
+      case dm.code = 'theme' ; gosub dbg.theme
+      case dm.code = 'keys' ; gosub dbg.keys
+      case dm.code = 'find' ; gosub dbg.find
+   end case
+   return
+
+* DBG.THEME  -  Ctrl-T, View > Theme: the next theme, kept for the person ($tk_theme, as every page has it), the debugger drawn whole in it.
+*   The theme in force belongs to the debugged program; theme.out gives the program back its own when the debugger leaves.
+dbg.theme:
+   dbg.themed = @true                  ;* dbg.theme (theme.in) is the program's: theme.out puts it back
+   call $tk_theme(0, dt.chg, dt.msg)   ;* 0: the debugger draws itself (the library's context is the program's)
+   if dt.chg then gosub relayout
+   message = dt.msg
+   gosub emit.msg
+   return
+
+* DBG.KEYS  -  Ctrl-K, Help > Keys: every key the debugger acts on, in the messages.
+dbg.keys:
+   gosub key.text
+   call $tk_keys('keylist', kr.keys, '', dk.list, '', '', '')
+   dk.list<-1> = '^T  theme'
+   dk.list<-1> = '^K  keys in use'
+   dk.list<-1> = '^L  redraw'
+   dk.list<-1> = '^Q  stop the program and leave'
+   dk.list<-1> = 'Esc / F10  the menu bar'
+   dk.list<-1> = 'Alt-K  delete to the end of the line;  Alt-T  swap two characters'
+   for dk.i = 1 to dcount(dk.list, @fm)
+      message = dk.list<dk.i>
+      gosub emit.msg
+   next dk.i
+   return
+
+* ======================================================================
 * VIEW
 
 view:
@@ -1336,9 +1896,30 @@ view:
       display terminfo('smcup') : @(-1) :
       call $sl_scr('get', scr)
       scr<SL.S.CLIP> = ''
+      gosub paint.layout
       gosub paint.data.area
       src.line = line
       gosub display.source
+      gosub refresh.panes
+   end
+   if main.on then
+      * S.98 H3: there is no second screen.  A program that owns the library's screen has it drawn again from its shadow, in its own theme, until a key; any other program's screen is not
+      * kept by anybody, and the debugger says so.
+      call $sl_scr('get', ps)
+      if ps<SL.S.OWNED> then
+         gosub theme.out
+         call $sl_repaint(ps)
+         s = keycode()
+         gosub theme.in
+         gosub paint.layout
+         gosub paint.data.area
+         src.line = line
+         gosub display.source
+         gosub refresh.panes
+      end else
+         message = sysmsg(12602)
+         gosub emit.msg
+      end
    end
    return
 
@@ -1346,8 +1927,9 @@ view:
 * ABORT.DEBUG:
 
 abort.debug:
+   gosub ibk.sync                       ;* S.98 H2: these two end the program and never reach the loop's end
    if full.screen then gosub theme.out
-   gosub leave.alt
+   gosub leave.screen
    gosub dbg.stop(6716) ;* ABORT : Debugging terminated
    return
 
@@ -1355,8 +1937,9 @@ abort.debug:
 * STOP.DEBUG:
 
 stop.debug:
+   gosub ibk.sync
    if full.screen then gosub theme.out
-   gosub leave.alt
+   gosub leave.screen
    gosub dbg.stop(6715) ;* STOP : Debugging terminated
    return
 
@@ -2030,6 +2613,157 @@ check.debugable:
          ok = @true
    end case
 
+   return
+
+* ======================================================================
+* THE IDE'S BREAKPOINTS  (S.98 H2, idebrk.h)
+*
+* The IDE arms the named common /idebrk/ before it runs "debug file record" (F7): the pathname of the source record it compiled (ibk.path), the lines the person marked (ibk.in) and whether to
+* run on to the first of them (ibk.go).  At the FIRST stop of that run this program checks that the program it stopped in is the one named, clears both lists of breakpoints, sets the lines the
+* kernel says begin a statement and, with ibk.go, runs on without showing anything.  It writes the lines that have a breakpoint back to ibk.out as the person works and when the program is aborted
+* or stopped; when it dies on the way the IDE finds ibk.mode still LIVE and takes what was last written.  Nothing is opened, run or sent anywhere with any of it: the values are compared and counted.
+* Every value is tested before it is used (the first of this runs after the alternate screen was entered, and nothing may stop the program there).
+
+* Out: ib.on, true when the IDE armed this run and the debugger is the one of a session with a terminal (a phantom is never handed anything)
+ibk.armed:
+   ib.on = @false
+   if not(phantom) then
+      if ibk.mode matches '1N' then
+         if ibk.mode = IBK.K.ARMED then ib.on = @true
+      end
+   end
+   return
+
+* In: ib.pa, ib.pb (two source pathnames: a directory, the separator, the record id).  Out: ib.eq, true when the directories are the same text and the record ids are the same in either case.
+* The directory is compared as it is (a file of another directory is another program whatever its name); the id folds, as the compiler is given it as typed and the file may fold names.
+ibk.same:
+   ib.eq = @false
+   ib.pa := ''
+   ib.pb := ''
+   ib.ca = count(ib.pa, @ds)
+   ib.cb = count(ib.pb, @ds)
+   if ib.ca > 0 and ib.ca = ib.cb then
+      if (field(ib.pa, @ds, 1, ib.ca) : '|') = (field(ib.pb, @ds, 1, ib.cb) : '|') then
+         ib.eq = ((downcase(field(ib.pa, @ds, ib.ca + 1)) : '|') = (downcase(field(ib.pb, @ds, ib.cb + 1)) : '|'))
+      end
+   end
+   return
+
+* The hand-over at the first stop.  In: idx, line, event (this program's arguments).  Out: ib.run, true when the program is to go on to its first breakpoint; ib.msgs, what to say if it is not.
+ibk.apply:
+   ibk.mode = IBK.K.LIVE                         ;* taken: a later stop of this run does not apply it again
+   ibk.out = ''
+   ibk.bad = ''
+   ib.pa = program.src(idx)
+   ib.pb = ibk.path
+   gosub ibk.same
+   if not(ib.eq) then
+      * not the program the editor compiled: nothing is touched, so that a session that debugs another program (or a program that runs a debugger of its own) keeps what it has
+      ibk.mode = IBK.K.IDLE
+      ib.msgs<-1> = sysmsg(12722, convert(banned, replacements, ib.pa), convert(banned, replacements, ib.pb))
+      return
+   end
+   gosub dbg.breakpoint(BRK$CLEAR, 0)            ;* the kernel's list holds 20 and was never emptied between the runs of one session; the text of this program is the other list
+   breakpoints = ''
+   ib.in = ibk.in : ''
+   ib.cnt = dcount(ib.in, @fm)
+   if ib.in = '' then ib.cnt = 0
+   ib.good = ''
+   ib.badl = ''
+   for ib.i = 1 to ib.cnt
+      ib.n = trim(ib.in<ib.i>)
+      if ib.n matches '1N0N' then               ;* the same test the BRK command makes: a whole number, from 1 to the last line of the source
+         ib.n += 0
+         ib.set = @false
+         begin case
+            case ib.n < 1 or ib.n > lines(idx)
+            case dcount(ib.good, @fm) >= MAX.BREAKPOINTS
+            case 1
+               locate ib.n in ib.good<1> setting ib.at then
+                  ib.set = @true                ;* a line given twice
+               end else
+                  n = ib.n
+                  src.idx = idx
+                  gosub check.debugable         ;* the BRK command's own test of a line
+                  if ok then
+                     gosub dbg.breakpoint(BRK$ADD.LINE, ib.n)
+                     if status() then           ;* the kernel found a statement that begins on that line; if not the breakpoint could never be reached
+                        ib.good<-1> = ib.n
+                        breakpoints<-1> = idx : '.' : ib.n
+                        ib.set = @true
+                     end else
+                        gosub dbg.breakpoint(BRK$CLR.LINE, ib.n)
+                     end
+                  end
+               end
+         end case
+         if not(ib.set) then ib.badl<-1> = ib.n
+      end
+   next ib.i
+   ibk.bad = ib.badl
+   ib.nset = dcount(ib.good, @fm)
+   if ib.good = '' then ib.nset = 0
+   gosub ibk.sync
+   if ibk.go matches '1N' then
+      if ibk.go # 0 and ib.nset > 0 and bitand(event, 3) = 0 then
+         * a line the program is stopped on stays: the kernel looks at the DEBUG opcodes still to come, and a run on from here would never see it
+         locate line in ib.good<1> setting ib.at else
+            gosub dbg.breakpoint(BRK$RUN, 0)
+            ib.run = @true
+         end
+      end
+   end
+   if not(ib.run) then
+      if ib.nset > 0 then ib.msgs<-1> = sysmsg(12720, ib.nset)
+      if ib.badl # '' then ib.msgs<-1> = sysmsg(12721, change(ib.badl, @fm, ' '))
+   end
+   return
+
+* The lines that have a breakpoint now, ascending, in ibk.out: from the text list, and only those of the program the IDE named
+ibk.sync:
+   if ibk.mode matches '1N' then
+      if ibk.mode = IBK.K.LIVE then
+         ib.o = ''
+         for ib.i = 1 to dcount(breakpoints, @fm)
+            ib.b = breakpoints<ib.i>
+            if ib.b matches '1N0N"."1N0N' then
+               ib.x = field(ib.b, '.', 1) + 0
+               ib.l = field(ib.b, '.', 2) + 0
+               if ib.x >= 0 and ib.x <= last.program then
+                  ib.pa = program.src(ib.x)
+                  ib.pb = ibk.path
+                  gosub ibk.same
+                  if ib.eq then
+                     ib.at = 0
+                     for ib.j = 1 to dcount(ib.o, @fm)
+                        if ib.o<ib.j> + 0 >= ib.l then
+                           ib.at = ib.j
+                           exit
+                        end
+                     next ib.j
+                     begin case
+                        case ib.at = 0
+                           ib.o<-1> = ib.l
+                        case ib.o<ib.at> + 0 = ib.l
+                        case 1
+                           ins ib.l before ib.o<ib.at>
+                     end case
+                  end
+               end
+            end
+         next ib.i
+         ibk.out = ib.o
+      end
+   end
+   return
+
+* What the hand-over did, said in the messages area once the source is shown
+ibk.say:
+   for ib.i = 1 to dcount(ib.msgs, @fm)
+      message = ib.msgs<ib.i>
+      gosub emit.msg
+   next ib.i
+   ib.msgs = ''
    return
 
 * ======================================================================

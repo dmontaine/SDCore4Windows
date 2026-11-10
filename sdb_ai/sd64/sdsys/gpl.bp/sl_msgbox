@@ -4,13 +4,17 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
-* 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
+* 10 Nov 26 Windows port - level with Linux e3490a7f (the 2 Nov scrolling box); the 25 Oct (04f1eaa) and 8 Nov (2930d92f) carries are in the lines below.
+* 2 Nov 26 dm  The box is never taller than the screen: lines beyond what fits scroll with PgUp / PgDn / Home / End, the bottom border says
+*              "lines a-b of n".  The console witness of 2 Nov showed the AI preview (documentation passages included) running off the
+*              screen with its request and its Send / Cancel buttons.  A box whose lines fit is drawn exactly as before.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 12 Oct 26 dm  New.
 * 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the box as Esc does.
 * 18 Oct 26 dm  For a program that asked for the cursor lock, the cursor is put on the selected button ($sl_curat) while the box is up and
 *               put back where it was when the box goes: a box in a part of the screen the window does not show is a question the
 *               user cannot read, and the keys are then taken by the lock.  A program that has not asked is not affected.
+* 28 Oct 26 dm  S.88 L1: the common block /slguard/ has the lock's mode and layout size at its end, as $sl_guardmode and $sl_key declare it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -48,8 +52,9 @@ $include sl.h
    equate B.AX to 16          ;* the left column and top row asked for (null: centred)
    equate B.AY to 17
    equate B.CURSAVE to 18     ;* where the cursor lock thought the cursor was before the box: has : x : y : hid (guarded programs only)
+   equate B.TOP to 19         ;* 2 Nov 26: the first message line shown, less one, when the lines are more than the screen holds
 
-   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit, g.mode, g.lw, g.lh
    common /slcur/ cu.has, cu.x, cu.y, cu.hid
 
    title = w<SL.W.D>
@@ -80,7 +85,21 @@ $include sl.h
    if len(title) + 6 > bwid then bwid = len(title) + 6
    bwid += 2
    if bwid > scr<SL.S.W> then bwid = scr<SL.S.W>
-   bh = nl + 5
+   * 2 Nov 26: the box never grows past the screen.  Lines beyond what fits are scrolled with PgUp / PgDn (Home / End); the bottom border says
+   * which lines are shown.  Before, a long message (the AI preview with documentation passages) ran off the screen with its buttons.
+   vis = nl
+   maxvis = scr<SL.S.H> - 6
+   if maxvis < 1 then maxvis = 1
+   if vis > maxvis then vis = maxvis
+   top = w<B.TOP> + 0
+   if top > nl - vis then top = nl - vis
+   if top < 0 then top = 0
+   if nl > vis then                              ;* wide enough for the bottom border's 'lines a-b of n, PgUp PgDn'
+      minw = len(' lines ' : nl : '-' : nl : ' of ' : nl : ', PgUp PgDn ') + 4
+      if bwid < minw then bwid = minw
+      if bwid > scr<SL.S.W> then bwid = scr<SL.S.W>
+   end
+   bh = vis + 5
    bx = int((scr<SL.S.W> - bwid) / 2)
    by = int((scr<SL.S.H> - bh) / 2)
    if by < 1 then by = 1
@@ -145,7 +164,7 @@ handle.key:
       case key = 'mouse'
          * a click on a button chooses it; a click anywhere else is ignored
          call $sl_mouse('get', mev)
-         if mev<1> = 'press' and mev<2> = 1 and mev<4> = by + nl + 2 then
+         if mev<1> = 'press' and mev<2> = 1 and mev<4> = by + vis + 2 then
             x = int((bwid - bw) / 2) + 2         ;* the string position of the first button, as paint has it
             for b = 1 to nb
                ln = len(cap<b>)
@@ -155,6 +174,25 @@ handle.key:
                end
                x += ln + 2
             next b
+         end
+      case key = 'pgdn' or key = 'pgup' or key = 'home' or key = 'end'
+         * the message lines scroll; a box whose lines all fit has nothing to scroll and leaves the key to its caller
+         if nl > vis then
+            begin case
+               case key = 'pgdn'
+                  top += vis
+               case key = 'pgup'
+                  top -= vis
+               case key = 'home'
+                  top = 0
+               case 1
+                  top = nl - vis
+            end case
+            if top > nl - vis then top = nl - vis
+            if top < 0 then top = 0
+            w<B.TOP> = top
+         end else
+            ret = 'unhandled'
          end
       case len(key) = 1
          ret = 'unhandled'
@@ -192,12 +230,17 @@ paint:
    topl = ctl : str(chh, bwid - 2) : ctr
    if title # '' then topl = ctl : chh : ' ' : title : ' ' : str(chh, bwid - 5 - len(title)) : ctr
    call $sl_put(scr, bx, by, topl[1, bwid], na)
-   for l = 1 to nl
-      call $sl_put(scr, bx, by + l, fmt(cvv : ' ' : w<SL.W.D + 1, l>, (bwid - 1) : 'L') : cvv, na)
+   for l = 1 to vis
+      call $sl_put(scr, bx, by + l, fmt(cvv : ' ' : w<SL.W.D + 1, top + l>, (bwid - 1) : 'L') : cvv, na)
    next l
-   call $sl_put(scr, bx, by + nl + 1, cvv : space(bwid - 2) : cvv, na)
-   call $sl_put(scr, bx, by + nl + 3, cvv : space(bwid - 2) : cvv, na)
-   call $sl_put(scr, bx, by + nl + 4, cbl : str(chh, bwid - 2) : cbr, na)
+   call $sl_put(scr, bx, by + vis + 1, cvv : space(bwid - 2) : cvv, na)
+   call $sl_put(scr, bx, by + vis + 3, cvv : space(bwid - 2) : cvv, na)
+   botl = cbl : str(chh, bwid - 2) : cbr
+   if nl > vis then              ;* 2 Nov 26: which lines are shown, and how to see the others
+      mark = ' lines ' : (top + 1) : '-' : (top + vis) : ' of ' : nl : ', PgUp PgDn '
+      if len(mark) + 4 <= bwid then botl = cbl : chh : mark : str(chh, bwid - 3 - len(mark)) : cbr
+   end
+   call $sl_put(scr, bx, by + vis + 4, botl[1, bwid], na)
    * The button row: the buttons are laid over the blank box row, the selected one in highlight
    txt = cvv : space(bwid - 2) : cvv
    atr = str(na, bwid)
@@ -213,8 +256,8 @@ paint:
       atr = atr[1, x - 1] : str(c, ln) : atr[x + ln, bwid]
       x += ln + 2
    next b
-   call $sl_put(scr, bx, by + nl + 2, txt, atr)
-   if g.on then call $sl_curat(bx + sx + 1, by + nl + 2)     ;* on the first letter of the selected button's caption, as a button widget has it
+   call $sl_put(scr, bx, by + vis + 2, txt, atr)
+   if g.on then call $sl_curat(bx + sx + 1, by + vis + 2)     ;* on the first letter of the selected button's caption, as a button widget has it
    return
 
 unpaint:

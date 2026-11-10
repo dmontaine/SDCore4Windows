@@ -1,0 +1,35 @@
+* TKOPEN
+* The public full-screen toolkit (S.130): takes the screen for a user program's page.  A wrapper over $tk_open; the library is described in tkpub.h.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130; the owner: "Public wrapper library").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkopen(app, ctx, err, floorw, floorh)           ALWAYS FIVE ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*     app       the program's name, for the messages and the right end of row 0
+*     ctx       returned: the context (tkpub.h) every other !tk routine is given
+*     err       returned: null when the program may go on; else the message to print (the program prints it and stops).  Nothing has been drawn
+*     floorw floorh   the smallest window the program is laid out for; null for 140 by 43, the smallest a floor may be is 100 by 30
+*
+*   THE AUDIENCE IS ALWAYS THE USER'S: $tk_open is asked for a page of the person's own (the right end of row 0 says "name@account") and never for an administrator page, so
+*   this library cannot open one.  It runs with the rights and the gates of the session that calls it: it adds none, and every file the program opens is opened by the program.
+*   Give the screen back with !tkclose on EVERY way out.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkopen(app, ctx, err, floorw, floorh)
+$catalog !tkopen
+
+   call $tk_open(app, '', ctx, err, floorw, floorh)
+   return
+end
+
+* END-CODE

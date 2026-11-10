@@ -1,0 +1,72 @@
+* TK_BRK
+* The full-screen toolkit, shared base: remember the break setting an app took, and give it back on any way out (the S.88 plan 2.6, defect D4)
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  New (S.88 phase 2, D4).  Description: CED now calls it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_brk(op, trap)
+*
+*     save   trap is the setting the app has just read with pterm(PT$BREAK, -1) and is about to turn off.  It is kept unless a setting is held already (an app that was aborted
+*            and never gave its setting back: the first one is the person's own, the later ones are what that app left).
+*     close  the app's own closing routine ($tk_close): trap is what the app read when it started.  The setting is put back and BREAK turned ON, and nothing is held any more - but if
+*            a setting was held from before that start (a nested start after an app that was aborted), THAT one is put back, not trap, which is only what the aborted app left.
+*     clear  the app could not take the screen and has given the setting back itself ($tk_open): nothing is held any more.
+*     give   if a setting is held, put it back (pterm(PT$BREAK, kept) and BREAK ON) and hold nothing.  Where nothing is held it does nothing.
+*
+*   WHY IT EXISTS.  An app that turns Ctrl-C and the terminal's break into keys of its own saves the person's setting and gives it back in its closing routine.  An abort inside the app
+*   (a statement the program cannot go on after, a refused write) skips that routine, and the person is left at the TCL prompt with the break key dead.  The kept setting is in a named
+*   common block, which outlives the program that made it, and $sl_cleanup - called where the command processor is about to prompt and by any page that traps an abort - gives it
+*   back, so the app does not have to be the one that remembers.
+*
+*   WHO CALLS IT.  $tk_open (save, and clear when the screen cannot be taken), $tk_close (close), $sl_cleanup (give) and SED, which takes the
+*   setting with PTERM and has no $tk_open (save, and give where it hands the terminal back).  CED (ced_edit) calls save, and close at both its exits.  The IDE keeps its own copy of the setting (ide) and is not covered until it calls save and close too.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_brk(op, trap)
+$catalog $tk_brk
+
+$include int$keys.h
+
+   common /tkbrk/ brk.held, brk.kept
+
+   if unassigned(brk.held) then brk.held = 0
+   if unassigned(brk.kept) then brk.kept = 0
+
+   begin case
+      case op = 'save'
+         if not(brk.held) then
+            brk.kept = (if trap then 1 else 0)
+            brk.held = 1
+         end
+
+      case op = 'clear'
+         brk.held = 0
+
+      case op = 'close'                       ;* the app's own closing routine: what it read when it started, unless an earlier app left its own setting held
+         tv = trap
+         if brk.held then tv = brk.kept
+         void pterm(PT$BREAK, (if tv then 1 else 0))
+         break on
+         brk.held = 0
+
+      case op = 'give'
+         if brk.held then
+            void pterm(PT$BREAK, brk.kept)
+            break on
+            brk.held = 0
+         end
+   end case
+
+   return
+end
+
+* END-CODE

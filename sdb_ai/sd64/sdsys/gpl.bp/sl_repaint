@@ -7,6 +7,7 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New (the loop of SCREEN REFRESH, which a change of theme needs as well).
 * 19 Oct 26 dm  Writes every row whatever SL.S.DIFF says, and sets SL.S.SYNC: the terminal matches the shadow when it has run.
+* 3 Nov 26 dm  S.113: the terminal's picture (SL.S.TERM, SL.S.TATTR) is blanked with the terminal, then kept by the rows written.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -33,6 +34,13 @@ $include sl.h
 
    call $sl_sgr('n', sq)
    display sq : @(-1) :
+   * S.113: the terminal is blank now, and so is the library's picture of it (on a screen the library owns); the rows written below keep it
+   if scr<SL.S.ATTRS> # '' then
+      for r = 0 to scr<SL.S.H> - 1
+         scr<SL.S.TERM, r + 1> = space(scr<SL.S.W> + 0)
+         scr<SL.S.TATTR, r + 1> = str('n', scr<SL.S.W> + 0)
+      next r
+   end
 
    diff.was = scr<SL.S.DIFF>
    scr<SL.S.DIFF> = 0                                ;* the terminal was just cleared: every row of the shadow is to be written, not left out

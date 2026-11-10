@@ -6,6 +6,9 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.1).
+* 28 Oct 26 dm  S.88 phase 2 (D4): the break setting is given back through $tk_brk, which also forgets what $sl_cleanup would have given back.
+* 28 Oct 26 dm  S.88 L1 (F1): the frame cache's epoch is cleared, in the common block and in ctx, so that $tk_frame writes the whole frame for the next open.
+* 30 Oct 26 dm  S.88 F0a: the key table $tk_frame kept for F1's list of keys (common /tkreg/) is cleared too.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -13,7 +16,8 @@
 *   call $tk_close(ctx)
 *
 *   Gives the terminal back: the screen first, then the break setting $tk_open saved, then the break key.  An app calls it on EVERY way out,
-*   the cursor lock's own (the key 'guardquit') and the end of its input included.
+*   the cursor lock's own (the key 'guardquit') and the end of its input included.  The frame cache's epoch is cleared last: what $tk_frame
+*   wrote is gone with the screen.
 *
 * END-DESCRIPTION
 *
@@ -27,9 +31,16 @@ $include keys.h
 $include int$keys.h
 $include tk.h
 
+   common /tkepoch/ ep.next, ep.drawn             ;* the frame cache's epoch ($tk_open counts, $tk_frame compares)
+   common /tkreg/ reg.keys, reg.pane, reg.epoch   ;* the key table of the app that was drawing ($tk_frame keeps it for $tk_help)
+
    screen close
-   void pterm(PT$BREAK, ctx<TK.C.TRAP>)
-   break on
+   call $tk_brk('close', ctx<TK.C.TRAP>)          ;* the break setting back (the one kept at the start of the first app, if an earlier one was aborted), and BREAK ON
+   ep.drawn = ''                                  ;* F1: nothing of the frame is on a screen any more
+   reg.keys = ''                                  ;* F0a: and no app has keys to list
+   reg.pane = ''
+   reg.epoch = ''
+   ctx<TK.C.EPOCH> = ''
 
    return
 end

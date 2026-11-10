@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 30 Oct 26 dm  S.88 p3.6: on a shown form the focus moves through $sl_form 'focus' (both widgets drawn, the page and the ancestors tested), the same widget being no move.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -21,6 +22,9 @@
 *              (a label, a frame, one that is disabled) (ELSE)
 *
 *   The form is not shown by this; the next SCREEN RUN starts with the focus on that widget.
+*   (30 Oct 26) When the form IS on the screen (between SCREEN WAITs) the focus moves for real: the widget that had it and the one that has it are drawn and the cursor goes to
+*   the new one.  The widget must be on the page the form shows, not hidden and not in a container that is hidden or disabled; if it is not, status is 1 (ELSE) and nothing moves.
+*   The widget that already has the focus is no move and draws nothing.
 *
 * END-DESCRIPTION
 *
@@ -37,6 +41,19 @@ $catalog !screen_focus
    if n = 0 then return
    w = f{'widgets', n}
    if w{'focusable'} + 0 # 1 or w{'disabled'} + 0 # 0 then return
+   if f{'shown'} and not(system(25)) then
+      * 30 Oct 26 (S.88 p3.6): on a form that is on the screen the focus is a real move - the widget that had it and the one that has it are drawn, the cursor goes to the new
+      *   one - and the target must be on the page, visible and not inside what is disabled (status 1, ELSE, if it is not).  The same widget is no move at all and draws nothing.
+      if f{'focus'} + 0 = n then
+         status = 0
+         return
+      end
+      call $sl_scr('get', scr)
+      call $sl_form('focus', f, scr, id, r)
+      call $sl_scr('put', scr)
+      status = r + 0
+      return
+   end
    f{'focus'} = n
    status = 0
 

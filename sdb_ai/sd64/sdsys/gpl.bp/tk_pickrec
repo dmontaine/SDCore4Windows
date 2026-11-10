@@ -1,0 +1,45 @@
+* TK_PICKREC
+* The full-screen toolkit, shared base: pick a file of the account and a record in it, READ ONLY (S.88 phase 5, F0b; the library window is $sl_picker, S.88 3.10A).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 30 Oct 26 dm  New (S.88 F0b).
+* 2 Nov 26 dm  S.88 U9: mode 'list', a pick from a list the page gives ($sl_pickwin, the same window), for the home screen's type-to-find of a tile.
+* 3 Nov 26 dm  The picker extended (owner, 2 Nov: "Extend the picker"): mode 'list' moved into $sl_picker, so that this is the library and nothing else again; the list
+*              gains optional columns and an optional delete action that the PAGE confirms (mode<2> to mode<4>, res 'delete').
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_pickrec(ctx, mode, file, id, res, newtext)
+*
+*   A THIN FACADE over $sl_picker, so that a page never names the library.  mode null: the person picks a file and then a record in it; 'file': only a file (id is null);
+*   'record': file is given and only the record is picked.  res is 'ok' (file and id are the answer, with mode 'file' only file), 'new' (Ctrl-N in the list of records: file is the
+*   file and newtext what had been typed into the filter; the page runs ITS OWN new-record path, with its own gates) or 'cancel' (Esc, a session with no terminal, no file to pick
+*   from, or a file that cannot be opened).  THE PICKER NEVER WRITES: it opens the file for reading, takes no lock and creates, changes and deletes nothing; what the page does with
+*   the answer, and whether it may, is the page's.  The window puts the screen back under it, so the page needs no redraw of its own.
+*
+*   mode 'list' (field 1; S.88 U9): a pick from a LIST THE PAGE GIVES, not from a file.  file = the entries, one to a field (value 1 the name, value 2 a description shown beside it,
+*   value 3 the help shown on ?); id = the window's title on the way in and the number of the entry chosen (in file) on the way out; newtext = the number of the entry the window
+*   starts on, on the way in, and null on the way out.  res is 'ok' (Enter chose) or 'cancel' (Esc, a session with no terminal, an empty list).  Typing narrows the list to the
+*   entries that hold the text in the name, the description or a column.  Nothing is opened, read or written.  OPTIONAL (3 Nov 26, "Extend the picker"):
+*     mode<2>  the column headings as values, the first for the name; an entry's value 2 then holds its column texts as subvalues
+*     mode<3>  the column widths, as values, the same way
+*     mode<4>  'delete': Del on an entry answers res 'delete' and id its number.  THE PICKER DELETES NOTHING: the page asks its own question (its box with the name typed,
+*              Cancel the default) and deletes only on that answer.
+*   The window is $sl_pickwin's; a page that passes none of mode<2> to mode<4> gets the window it always had.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_pickrec(ctx, mode, file, id, res, newtext)
+$catalog $tk_pickrec
+
+   call $sl_picker(mode, file, id, res, newtext)
+   return
+end
+
+* END-CODE

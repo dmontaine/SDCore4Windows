@@ -1,0 +1,34 @@
+* TKKEYS
+* The public full-screen toolkit (S.130): the key table.  A wrapper over $tk_keys.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkkeys(op, keys, a, b, c, d, e)         ALWAYS SEVEN ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   The ops are $tk_keys's: add, name, action, menu, why, menus, keyof and keylist.  The table runs nothing: a handler is the program's own CASE on the action id.
+*   The two ops that offer an action to the AI (ai, aiacts) do nothing here: the AI line is not part of this library, and aiacts answers nothing.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkkeys(op, keys, a, b, c, d, e)
+$catalog !tkkeys
+
+   if op = 'aiacts' then
+      b = ''
+      c = ''
+   end else
+      if op # 'ai' then call $tk_keys(op, keys, a, b, c, d, e)
+   end
+   return
+end
+
+* END-CODE

@@ -75,32 +75,35 @@ def checks(raw):
     add("T1", "tk.h fixes the minimum at 140 by 43 and names the chrome rows", re.search(r"\$define TK\.MINW\s+140\b", h) is not None and re.search(r"\$define TK\.MINH\s+43\b", h) is not None
         and "TK.C.YSTAT" in h and "TK.C.YBORD" in h and "TK.C.YKEYS" in h, "")
     op = sq["tk_open"]
-    add("T2", "ORDER in $tk_open: a phantom is turned away, then the size is asked, then the audience, and only then the screen is taken, then the cursor lock",
-        ordered(op, "system(25)", "call $sl_need(", "K$ADMINISTRATOR", "screen open", "call $sl_guardmode("), "")
-    add("T3", "the size asked is TK.MINW by TK.MINH (never a number typed in the program) and so is the cursor lock's",
-        "call $sl_need(app, TK.MINW, TK.MINH," in op and "call $sl_guardmode(app, TK.MINW, TK.MINH)" in op and not re.search(r"\b(140|42|43)\b", op), "")
+    # 28 Oct 26 (S.88 L1): the size asked is the app's FLOOR (TK.MINW by TK.MINH unless the app declares another), and the cursor lock is armed by $tk_layout 'open' with it
+    # (test-tklayout-units.py W3 and W4 hold the rest)
+    add("T2", "ORDER in $tk_open: a phantom is turned away, then the size is asked, then the audience, and only then the screen is taken, then the layout and its cursor lock",
+        ordered(op, "system(25)", "call $sl_need(", "K$ADMINISTRATOR", "screen open", "call $tk_layout('open'") and "err = sysmsg(12806, app) return" in op, "")
+    add("T3", "the size asked is the floor, TK.MINW by TK.MINH unless the app declares another (never a number typed in the program), and the layout is made from the same floor",
+        "call $sl_need(app, floor.w, floor.h," in op and "floor.w = TK.MINW" in op and "floor.h = TK.MINH" in op and "ctx<TK.C.FLOORW> = floor.w" in op
+        and "call $tk_layout('open', ctx," in op and not re.search(r"\b(140|42|43)\b", op), "")
     before = op.split("screen open", 1)[0]
     add("T4", "EVERY REFUSAL RETURNS before the screen is opened: the phantom, the size and the audience each set err and return",
         before.count("return") >= 3 and "err = " in before, "returns before screen open: %d" % before.count("return"))
     add("T5", "the audience test is asked of the kernel (K$ADMINISTRATOR, -1) and only for the administrator audience, before any data is read",
         re.search(r"audience = 'admin' then if not\(kernel\(K\$ADMINISTRATOR, -1\)\)", op) is not None, "")
-    add("T6", "the break setting is saved before it is changed, and the screen is opened with line drawing only when the terminal says UTF-8",
+    add("T6", "the break setting is saved before it is changed, and the screen is opened with line drawing only when the terminal says UTF-8",      # (28 Oct 26: and kept by $tk_brk for $sl_cleanup)
         ordered(op, "pterm(PT$BREAK, -1)", "pterm(PT$BREAK, @false)", "screen open") and "screen open clear lines" in op and "UTF-8" in op, "")
     cl = sq["tk_close"]
-    add("T7", "$tk_close gives the screen back, then the break setting it saved, then the break key", ordered(cl, "screen close", "pterm(PT$BREAK,", "break on"), "")
+    add("T7", "$tk_close gives the screen back, then the break setting it saved, then the break key", ordered(cl, "screen close", "call $tk_brk('close', ctx<TK.C.TRAP>)"), "")      # 28 Oct 26 (S.88 phase 2, D4): the setting and BREAK ON go back through $tk_brk 'close' (test-tkguards-units.py holds that routine)
     fr = sq["tk_frame"]
     add("T8", "$tk_frame writes the status line in reverse video, only when its text changed since it was last written, and keeps the cursor where the widget left it",
         "attr 'reverse'" in fr and "if t = last.stat then" in fr and "call $sl_curat('get'" in fr and re.search(r"attr 'reverse' call \$sl_curat\('back'", fr) is not None, "")
     add("T9", "$tk_frame draws the border with the library's own line character ($sl_line 'h') and the function keys from $tk_fkeys, on rows the layout gives (never a literal row number)",
-        "call $sl_line('h'," in fr and "call $tk_fkeys(" in fr and not re.search(r"\bat \d+,\d+\b", fr) and "TK.C.YKEYS" in fr and "TK.C.YBORD" in fr and "TK.C.YSTAT" in fr
+        "call $sl_line('h', 0, hc)" in fr and "call $tk_fkeys(" in fr and not re.search(r"\bat \d+,\d+\b", fr) and "TK.C.YKEYS" in fr and "TK.C.YBORD" in fr and "TK.C.YSTAT" in fr
         and "if ft # last.keys then" in fr and "if b # last.bord then" in fr
         and re.search(r"at 0,ybord call \$sl_curat\('back'", fr) is not None and re.search(r"at 0,ykeys attr 'bar' call \$sl_curat\('back'", fr) is not None, "")
     fk = sq["tk_fkeys"]
     add("T10", "the function-key row shows a key only if it is enabled and the focused pane uses it (a null pane list means every pane), in the order of the key table",
         "TK.K.PANES" in fk and "TK.K.ON" in fk and ("pane" in fk) and re.search(r"index\(@sm : .* : @sm, @sm : pane : @sm, 1\)", fk) is not None, "")
     ky = sq["tk_keys"]
-    add("T11", "the key table has an add, a name and an action operation, and an action is looked up by key AND pane",
-        all(("op = '%s'" % o) in ky for o in ("add", "name", "action")) and "TK.K.ACT" in ky and "pane" in ky, "")
+    add("T11", "the key table has an add, a name and an action operation (and, since 29 Oct 26, menu, why, menus, keyof and keylist), and an action is looked up by key AND pane, never by an empty key",
+        all(("op = '%s'" % o) in ky for o in ("add", "name", "action", "menu", "why", "menus", "keyof", "keylist")) and "TK.K.ACT" in ky and "pane" in ky and "if a # '' and keys<i, TK.K.KEY> = a" in ky, "")
     anycode = "\n".join(code[n] for n in progs)
     add("T12", "no program writes a raw escape sequence or a cursor code: the library's styles and line characters only",
         "char(27)" not in anycode.lower() and "@(-" not in anycode and "\\x1b" not in anycode and "crt @(" not in anycode, "")
@@ -114,13 +117,22 @@ def checks(raw):
     for n in progs:
         cited |= set(int(x) for x in re.findall(r"sysmsg\((\d+)", code[n]))
     have = {int(f) for f in os.listdir(os.path.join(SDSYS, "messages")) if f.isdigit()}
-    add("T15", "the messages the base cites (%s) are all in the toolkit's block 12805 to 12854 (or are 12956, the largest window $tk_open allows, 26 Oct 26) and all exist" % sorted(cited),
-        bool(cited) and all((12805 <= m <= 12854 or m == 12956) and m in have for m in cited), sorted(m for m in cited if m not in have))
+    add("T15", "the messages the base cites (%s) are all in the toolkit's block 12805 to 12854 (or are 12956, the largest window $tk_open allows, 26 Oct 26; or 12191 to 12194, the action registry's, 29 Oct 26; "
+        "or 15038 to 15042, S.186's mouse, refusal and command-log texts, 9 Nov 26; or 15046, $tk_help's line naming the PDF since its Documentation button went with the pdf verb, "
+        "9 Nov 26, S.187) and all exist" % sorted(cited),
+        bool(cited) and all((12805 <= m <= 12854 or m == 12956 or 12191 <= m <= 12194 or 15038 <= m <= 15042 or m == 15046) and m in have for m in cited), sorted(m for m in cited if m not in have))
     rn = sq.get("tk_run", "")
-    optadd("tk_run", "T16", "ORDER in $tk_run: an empty sentence, a too long one, a first word outside the tool's list and a bad character are each refused (and return) BEFORE the one EXECUTE",
-        ordered(rn, "sysmsg(12809)", "sysmsg(12812)", "if not(ok.verb) then err = sysmsg(12810, verb)", "if index(good, w[j, 1], 1) = 0 then err = sysmsg(12811, w)",
-                "execute s trapping aborts capturing out")
-        and all(re.search(r"err = sysmsg\(%d[^)]*\) return" % m, rn) for m in (12809, 12810, 12811, 12812)), "")
+    # 9 Nov 26 (S.186): a bad character is named ($tk_badch of that character, message 15040), and each refusal goes to run.done, which logs it for Ctrl-O and returns:
+    # still BEFORE the one EXECUTE, which run.done follows
+    BADCH = "if index(good, w[j, 1], 1) = 0 then call $tk_badch(w[j, 1], bad.ch) err = sysmsg(15040, w, bad.ch)"
+
+    def refuses_then_logs(src):
+        return (all(re.search(r"err = sysmsg\(%d[^)]*\) goto run\.done" % m, src) for m in (12809, 12810, 12812)) and "err = sysmsg(15040, w, bad.ch) goto run.done" in src
+                and 0 <= src.find("execute s trapping aborts capturing out") < src.find("run.done:") < src.find("call $tk_out('log', '', lg.kind, lg.text, '') return"))
+    optadd("tk_run", "T16", "ORDER in $tk_run: an empty sentence, a too long one, a first word outside the tool's list and a bad character (named) are each refused BEFORE the one EXECUTE; "
+           "every way out logs the command and returns (run.done)",
+        ordered(rn, "sysmsg(12809)", "sysmsg(12812)", "if not(ok.verb) then err = sysmsg(12810, verb)", BADCH, "execute s trapping aborts capturing out")
+        and refuses_then_logs(rn), "")
     optadd("tk_run", "T17", "$tk_run runs only the sentence it checked (s), traps aborts, hands back the return code, and writes no audit line and no screen text",
         rn.count("execute ") == 1 and "execute sentence" not in rn and "status = @system.return.code" in rn and "K$AUDIT" not in rn and not re.search(r"\b(crt|display|print|screen)\b", rn), "")
     optadd("tk_run", "T18", "$tk_run allows exactly a-z, 0-9, dot, dash and underscore in a word, and the first word is compared whole against the tool's list, in lower case as typed",
@@ -128,8 +140,8 @@ def checks(raw):
     rx = sq.get("tk_runx", "")
     optadd("tk_runx", "T18b", "$tk_runx (23 Oct 26, tool.ai) is $tk_run for a verb that checks its own words: the same ORDER (an empty sentence, a too long one, a first word outside the tool's list and a bad character are each "
            "refused and return BEFORE the one EXECUTE of the checked sentence), the same trap and return code, no audit line and no screen text, and a word may hold a-z, A-Z, 0-9 and . _ : / @ + , - and nothing more",
-        ordered(rx, "sysmsg(12809)", "sysmsg(12812)", "if not(ok.verb) then err = sysmsg(12810, verb)", "if index(good, w[j, 1], 1) = 0 then err = sysmsg(12811, w)", "execute s trapping aborts capturing out")
-        and all(re.search(r"err = sysmsg\(%d[^)]*\) return" % m, rx) for m in (12809, 12810, 12811, 12812)) and rx.count("execute ") == 1 and "execute sentence" not in rx
+        ordered(rx, "sysmsg(12809)", "sysmsg(12812)", "if not(ok.verb) then err = sysmsg(12810, verb)", BADCH, "execute s trapping aborts capturing out")
+        and refuses_then_logs(rx) and rx.count("execute ") == 1 and "execute sentence" not in rx
         and "status = @system.return.code" in rx and "K$AUDIT" not in rx and not re.search(r"\b(crt|display|print|screen)\b", rx)
         and "good = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/@+,-'" in rx and "field(allow, ' ', i) = verb and verb # ''" in rx, "")
     gi = sq.get("tk_gate_info", "")
@@ -147,8 +159,8 @@ def checks(raw):
         "if gi<TK.G.DEFAULT> = 'on' then state = (if raw # 'NO' then 1 else 0) end else state = (if raw = 'YES' then 1 else 0) end" in tg
         and "if atype = 'USER' then state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0) end else state = 'na' end" in tg, "")
     cf = sq.get("tk_confirm", "")
-    optadd("tk_confirm", "T23", "ORDER in $tk_confirm: the answer starts as 'cancel' and a session with no terminal returns at once; the box starts on Cancel (default 2); anything but Run returns BEFORE the name is asked for; a name that is not the one asked for, or an Esc at the name, never reaches 'run'; 'run' is set last",
-        ordered(cf, "res = 'cancel'", "if system(25) then return", "default 2 returning b else b = 0", "if b # 1 then return", "returning ans then got = 1 else got = 0", "if not(got) then return",
+    optadd("tk_confirm", "T23", "ORDER in $tk_confirm: the answer starts as 'cancel' and a session with no terminal returns at once; the box starts on Cancel (the LAST button: default 2 of Run / Cancel, and of a caller's own list since 2 Nov 26, S.88 P10); anything but Run returns BEFORE the name is asked for; a name that is not the one asked for, or an Esc at the name, never reaches 'run'; 'run' is set last",
+        ordered(cf, "res = 'cancel'", "if system(25) then return", "bl = '&Run,&Cancel'", "nb = dcount(bl, ',')", "default nb returning b else b = 0", "if b # 1 then return", "returning ans then got = 1 else got = 0", "if not(got) then return",
                 "if trim(ans) # typed then res = 'wrong'", "res = 'run'") and cf.count("res = 'run'") == 1, "")
     optadd("tk_confirm", "T24", "$tk_confirm shows the sentence wrapped at spaces but whole (a hard cut only when a word is longer than the line), wraps the lines the caller gave the same way (24 Oct 26: the box cut a long line at its edge; an empty line stays empty), and runs, reads and writes nothing",
         "wrapw" in cf and "call $tk_wrap(sentence, wrapw, pieces)" in cf and "body<-1> = ' ' : pieces<p>" in cf and "call $tk_wrap(lines<li>, wrapw, pieces)" in cf and "body := @fm : lines" not in cf and "rest[cut" not in cf and not re.search(r"\b(execute|write|writev|readu|delete|kernel|os\.execute|crt|display)\b", cf), "")
@@ -175,7 +187,7 @@ def checks(raw):
         and "ret = cur" not in pw and "picked<1, -1> = cur" not in pw, "")
     add("T28", "$sl_pickwin filters on the name and the description together, without regard to case; Backspace and Ctrl-U widen it; ? is the help line and is never part of the filter; "
         "in a multi window the space picks; a printable character is added to the filter only after those cases",
-        "if index(upcase(items<i, 1> : ' ' : items<i, 2>), uf, 1) then vis<1, -1> = i" in pw and pw.count("uf = upcase(filt)") == 2
+        "if index(upcase(items<i, 1> : ' ' : convert(@sm, ' ', items<i, 2>)), uf, 1) then vis<1, -1> = i" in pw and pw.count("uf = upcase(filt)") == 2      # 3 Nov 26: the columns (subvalues of the description) are matched too
         and ordered(pw, "case k = 'bs'", "case k = 'ctrl-u'", "case k = '?'", "case k = ' ' and multi", "case len(k) = 1 and seq(k) >= 32 and seq(k) < 127"), "")
     add("T29", "$sl_pickwin only draws and reads keys, and with a file reads ids and records: it runs, writes, locks and opens nothing",
         not re.search(r"\b(execute|write|writev|readu|delete|openpath|open|kernel|os\.execute|crt|display)\b", re.sub(r"'[^']*'", "''", pw)) and pw.count("read rec from src, id then") == 1
@@ -212,9 +224,9 @@ def checks(raw):
     th, sh = squeeze(strip_bas(raw["sl_theme"])), raw["sl.h"]
     codes = re.search(r"\$define SL\.CODES\s+'([^']+)'", sh)
     codes = codes.group(1) if codes else ""
-    add("T35", "the colour slots: SL.CODES has 46 different letters, the last sixteen (ACDEFHIJKLMNOQRS) being the user styles; $sl_theme names them user1 to user16 after the thirty styles it had, "
+    add("T35", "the colour slots: SL.CODES has 51 different letters (29 Oct 26: the five roles UVWXY come before the user styles), the last sixteen (ACDEFHIJKLMNOQRS) being the user styles; $sl_theme names them user1 to user16 after the thirty-five styles it has, "
         "keeps them across a theme change (saved before clear.defs, put back before the sequences are built), empties them at SCREEN CLOSE, and gives out the slot that already holds a pair or the first free one, refusing when none is",
-        len(codes) == 46 and len(set(codes)) == 46 and codes.endswith("ACDEFHIJKLMNOQRS") and "for q = 1 to 16 th.names := @fm : 'user' : q next q" in th
+        len(codes) == 51 and len(set(codes)) == 51 and codes.endswith("UVWXYACDEFHIJKLMNOQRS") and "for q = 1 to 16 th.names := @fm : 'user' : q next q" in th
         and "keepu<s> = th.defs<s>" in th and ordered(th, "keepu = ''", "gosub clear.defs", "if keepu<s> # '' then th.defs<s> = keepu<s>", "gosub build.seqs")
         and "th.defs<s> = ''" in th and ordered(th, "case op = 'reset'", "th.defs<s> = ''", "gosub set.theme")
         and "if th.defs<s, 4> = skey and have = 0 then have = s" in th and "if th.defs<s, 4> = '' and free = 0 then free = s" in th and "case free = 0 ret = 'full'" in th
@@ -266,7 +278,7 @@ def checks(raw):
         "clears kc.alt and each answers the old state; kc.alt is in the common block",
         "alt.was = bindkey('', -7) k = keycode(1) kst = status() if alt.was then x = bindkey('', -7) else x = bindkey('', -8) set.status kst" in kk
         and ordered(kk, "case len(k) = 2 and k[1,1] = char(27) name = 'alt-' : downcase(k[2,1])", "case len(k) > 1 name = k")
-        and "if kc.alt and len(key.string) = 2 and key.string[1,1] = char(27) then if seq(key.string[2,1]) > 32 and seq(key.string[2,1]) < 127 then return value key.string end display @sys.bell" in kc
+        and "if kc.alt and len(key.string) = 2 and key.string[1,1] = char(27) then alt.c = seq(key.string[2,1]) if (alt.c >= 32 and alt.c <= 127) or alt.c = 8 then return value key.string end if not(dropped) then display @sys.bell" in kc  # 9 Nov 26 (S.184 stage 2): a blank, DEL and ^H too
         and "case action = -7 n = kc.alt + 0 kc.alt = @true return value n case action = -8 n = kc.alt + 0 kc.alt = @false return value n" in kb
         and "kc.alt" in raw["keycode.h"], "")
     fm = squeeze(strip_bas(raw["sl_form"]))
@@ -285,13 +297,13 @@ def checks(raw):
         and all("w{'amn'} = upcase(t[p + 1, 1])" in squeeze(strip_bas(raw[n])) for n in ("sl_check", "sl_slider", "sl_selector", "screen_label")) and squeeze(strip_bas(raw["sl_button"])).count("w{'amn'} = w{'mn'}") == 1 and "w{'amn'} = '' w{'apos'} = 0 if p and p < len(t) then w{'mn'} = upcase(t[p + 1, 1]) w{'amn'} = w{'mn'}" in squeeze(strip_bas(raw["sl_button"]))
         and "amn" not in raw["sl_label"] and "p = index(t, '&', 1)" in squeeze(strip_bas(raw["screen_label"])), "")
     tk = sq["tool_keys"]
-    add("T40", "tool.keys (TK-1): an app for everyone (audience null), that opens the base first and prints what it refuses; its keys are Ctrl-L, Ctrl-R, Ctrl-T and Ctrl-Q; every key is recorded BEFORE the table acts on it; "
+    add("T40", "tool.keys (TK-1): an app for everyone (audience null), that opens the base first and prints what it refuses; its keys are Ctrl-L (clear), Ctrl-R, Ctrl-T, Ctrl-K and Ctrl-Q; every key is recorded BEFORE the table acts on it; "
         "the end of the input and the cursor lock's own way out end it, in both reading modes, and every way out is $tk_close; names mode reads with SCREEN KEY, raw mode with KEYIN (a second at a time, a burst at 0.05) "
         "and asks the library for the size when the window changed; the cursor waits at the start of the status line (so a smaller window shows the lock); a resize raises the frame's generation; "
         "the grid is 52 keys (ctrl-h, i, j and m are other keys); it reads and writes no file, runs no command and asks no gate",
         "call $tk_open('tool.keys', '', ctx, err) if err # '' then display err stop end" in tk
         and ordered(tk, "call $tk_keys('add', keys, 'ctrl-l', 'clear', 'clear', '', 1)", "call $tk_keys('add', keys, 'ctrl-r', 'raw/names', 'raw', '', 1)", "call $tk_keys('add', keys, 'ctrl-t', 'theme', 'theme', '', 1)",
-                "call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)") and tk.count("call $tk_keys('add'") == 4
+                "call $tk_keys('add', keys, 'ctrl-k', 'keys', 'keys', '', 1)", "call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)") and tk.count("call $tk_keys('add'") == 5   # 8 Nov 26 (S.179): Ctrl-K the keys (clear stays Ctrl-L: a key tester takes no function key)
         and "gosub record call $tk_keys('action', keys, nm, pane, act, '', '')" in tk
         and "repeat call $tk_close(ctx) stop" in tk and "if ended then exit if nm = 'guardquit' then exit" in tk
         and tk.count("if status() = ER$EOF then") == 2 and "if status() = ER$EOF then ended = 1 exit end" in tk
@@ -299,7 +311,7 @@ def checks(raw):
         and "c = keyin(1)" in tk and "loop c = keyin(0.05) until c = '' do raw := c repeat" in tk
         and "if @crtwide : ',' : @crthigh # lastsz then screen key timeout 1 returning nm exit end" in tk
         and "call $sl_curat(0, ctx<TK.C.YSTAT>)" in tk
-        and "if nm = 'resize' then gosub redraw.all" in tk and "redraw.all: gen += 1 ctx<TK.C.GEN> = gen gosub draw.all return" in tk
+        and "if nm = 'resize' then call $tk_layout('refresh', ctx, '', chg) gosub get.rects gosub redraw.all" in tk and "redraw.all: gen += 1 ctx<TK.C.GEN> = gen gosub draw.all return" in tk
         and "if i # 8 and i # 9 and i # 10 and i # 13 then gnames := @fm : 'ctrl-' : downcase(char(i + 64))" in tk and "gnames := @fm : 'alt-x' : @fm : 'char' : @fm : 'mouse'" in tk
         and "if len(nm) = 1 then cell = 'char' if nm[1, 4] = 'alt-' then cell = 'alt-x'" in tk
         and "case mev<1> = 'wheel' and mev<2> = 'up' ; mu += 1 case mev<1> = 'wheel' ; mdn += 1" in tk
@@ -356,10 +368,10 @@ def run(raw, quiet=False):
 MUT = [
     ("tk_open", "the audience is tested after the screen is taken", "audience = 'admin' then", "audience = 'admin' and 0 then"),
     ("tk_open", "a refusal does not return", "err = sysmsg(12806, app)\n      return", "err = sysmsg(12806, app)"),
-    ("tk_open", "the size is typed into the program", "call $sl_need(app, TK.MINW, TK.MINH,", "call $sl_need(app, 140, 42,"),
-    ("tk_open", "the cursor lock is not asked for", "call $sl_guardmode(app, TK.MINW, TK.MINH)", "null"),
+    ("tk_open", "the size is typed into the program", "call $sl_need(app, floor.w, floor.h,", "call $sl_need(app, 140, 42,"),
+    ("tk_open", "the cursor lock is not asked for", "call $tk_layout('open', ctx, '', lay.chg)", "null"),
     ("tk_open", "the break setting is changed before it is saved", "saved.trap = pterm(PT$BREAK, -1)", "saved.trap = 1"),
-    ("tk_close", "the break setting is not given back", "void pterm(PT$BREAK, ctx<TK.C.TRAP>)", "null"),
+    ("tk_close", "the break setting is not given back", "call $tk_brk('close', ctx<TK.C.TRAP>)", "null"),
     ("tk_frame", "the status line is written every time", "if t = last.stat then", "if 0 then"),
     ("tk_frame", "the status line moves the cursor", "screen text t at 0,ystat attr 'reverse'\n      call $sl_curat('back', keep.cur)", "screen text t at 0,ystat attr 'reverse'"),
     ("tk_frame", "the function keys are redrawn on every call", "if ft # last.keys then", "if 1 then"),
@@ -367,13 +379,15 @@ MUT = [
     ("tk_frame", "the border is a typed character", "call $sl_line('h', 0, hc)", "hc = '-'"),
     ("tk_fkeys", "a key is shown on every pane", "index(@sm : panes : @sm, @sm : pane : @sm, 1)", "1"),
     ("tk_keys", "an action is looked up by key alone", "op = 'action'", "op = 'actionx'"),
+    ("tk_keys", "an empty key matches a key-less row", "if a # '' and keys<i, TK.K.KEY> = a", "if keys<i, TK.K.KEY> = a"),
+    ("tk_keys", "the registry has no menus operation", "case op = 'menus'", "case op = 'menusx'"),
     ("tool_tktest", "end of input is taken for an empty key", "ER$EOF", "ER$XXX"),
     ("tk_open", "an escape sequence is written", "screen open clear lines", "crt char(27) : '[2J' ; screen open clear lines"),
     ("tk_run", "the tool's list is not asked", "if not(ok.verb) then", "if 0 then"),
     ("tk_run", "the characters of a word are not checked", "if index(good, w[j, 1], 1) = 0 then", "if 0 then"),
     ("tk_run", "the raw sentence is run, not the checked one", "execute s trapping aborts capturing out", "execute sentence trapping aborts capturing out"),
     ("tk_run", "aborts are not trapped", "execute s trapping aborts capturing out", "execute s capturing out"),
-    ("tk_run", "a refused sentence does not return", "err = sysmsg(12810, verb)\n      return", "err = sysmsg(12810, verb)"),
+    ("tk_run", "a refused sentence does not return", "err = sysmsg(12810, verb)\n      goto run.done", "err = sysmsg(12810, verb)"),
     ("tk_run", "an extra character is allowed (the semicolon)", "0123456789._-'", "0123456789._-;'"),
     ("tk_run", "the first word is matched as a prefix", "field(allow, ' ', i) = verb and verb # ''", "field(allow, ' ', i)[1, len(verb)] = verb"),
     # 23 Oct 26: $tk_runx, the wider word set of tool.ai
@@ -382,7 +396,7 @@ MUT = [
     ("tk_runx", "the raw sentence is run, not the checked one", "execute s trapping aborts capturing out", "execute sentence trapping aborts capturing out"),
     ("tk_runx", "a semicolon is allowed in a word", "0123456789._:/@+,-'", "0123456789._:/@+,-;'"),
     ("tk_runx", "a space is allowed in a word", "0123456789._:/@+,-'", "0123456789._:/@+,- '"),
-    ("tk_runx", "a refused sentence does not return", "err = sysmsg(12811, w)\n            return", "err = sysmsg(12811, w)"),
+    ("tk_runx", "a refused sentence does not return", "err = sysmsg(15040, w, bad.ch)\n            goto run.done", "err = sysmsg(15040, w, bad.ch)"),
     ("tk_gates", "the administrator is not asked", "if not(kernel(K$ADMINISTRATOR, -1)) then", "if 0 then"),
     ("tk_gates", "the administrator refusal does not return", "err = sysmsg(12805, 'tk_gates')\n      return", "err = sysmsg(12805, 'tk_gates')"),
     ("tk_gates", "the name is not checked", "if index(good, name[j, 1], 1) = 0 then", "if 0 then"),
@@ -393,7 +407,7 @@ MUT = [
     ("tk_gates", "the register is written", "   close acc.f\n\n   grp = rec<ACC$GROUP>", "   close acc.f\n   write rec to acc.f, name\n\n   grp = rec<ACC$GROUP>"),
     ("tk_confirm", "the answer starts as run", "   res = 'cancel'\n   msg = sysmsg(12826)", "   res = 'run'\n   msg = sysmsg(12826)"),
     ("tk_confirm", "a session with no terminal is asked", "if system(25) then return", "if 0 then return"),
-    ("tk_confirm", "the box starts on Run", "default 2 returning b else b = 0", "default 1 returning b else b = 0"),
+    ("tk_confirm", "the box starts on Run", "default nb returning b else b = 0", "default 1 returning b else b = 0"),
     ("tk_confirm", "Cancel does not return", "if b # 1 then return", "if 0 then return"),
     ("tk_confirm", "an Esc at the name goes on", "if not(got) then return", "if 0 then return"),
     ("tk_confirm", "the name is not compared", "if trim(ans) # typed then", "if 0 then"),
@@ -412,7 +426,7 @@ MUT = [
     ("sl_pickwin", "Esc does not cancel", "         case k = 'esc'\n            st = 'cancel'", "         case k = 'esc'\n            st = ''"),
     ("sl_pickwin", "Enter answers the place", "         ret = oi\n         if fmode then ret = items<oi, 1>", "         ret = cur\n         if fmode then ret = items<oi, 1>"),
     ("sl_pickwin", "a pick is kept by place", "         picked<1, -1> = pk\n      end\n   end\n   return", "         picked<1, -1> = cur\n      end\n   end\n   return"),
-    ("sl_pickwin", "the filter ignores the description", "upcase(items<i, 1> : ' ' : items<i, 2>)", "upcase(items<i, 1>)"),
+    ("sl_pickwin", "the filter ignores the description", "upcase(items<i, 1> : ' ' : convert(@sm, ' ', items<i, 2>))", "upcase(items<i, 1>)"),
     ("sl_pickwin", "the filter is case sensitive", "      uf = upcase(filt)\n      for i = 1 to n", "      uf = filt\n      for i = 1 to n"),
     ("sl_pickwin", "the paged filter is case sensitive", "   uf = upcase(filt)\n   loop while got < page", "   uf = filt\n   loop while got < page"),
     ("sl_pickwin", "a read ignores the scan number", "loop while got < page and scanned < scancap and n < cachecap do", "loop while got < page and n < cachecap do"),

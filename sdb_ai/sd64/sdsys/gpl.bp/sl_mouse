@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - level with Linux e3490a7f (S.88 phase 1: bracketed paste) LESS S.94's gpm hunk: the gpm console mouse daemon is Linux's (carry area 18),
+*               there is no K$GPM here, and a Windows console takes the xterm mouse sequences itself.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * END-HISTORY
@@ -30,10 +32,18 @@
 $internal
 subroutine sl_mouse(op, a)
 $catalog $sl_mouse
+$include int$keys.h
 
-   common /slmse/ ms.event
+   common /slmse/ ms.event, ms.paste
 
    begin case
+      case op = 'paste.set'                    ;* 28 Oct 26 (S.88 phase 1): the text of the bracketed paste $sl_key has just reported as the key 'paste'
+         ms.paste = 'P' : a                   ;* (a block starts as 0, so the text carries a marker: a one-character paste of 0 is not "nothing")
+      case op = 'paste.get'
+         a = ''
+         if not(unassigned(ms.paste)) then
+            if len(ms.paste) > 1 and ms.paste[1, 1] = 'P' then a = ms.paste[2, 99999]
+         end
       case op = 'set'
          ms.event = a
       case op = 'get'
@@ -43,8 +53,10 @@ $catalog $sl_mouse
          end
       case op = 'on'
          a = char(27) : '[?1000h' : char(27) : '[?1002h' : char(27) : '[?1006h'
+         a := char(27) : '[?2004h'            ;* 28 Oct 26 (S.88 phase 1): bracketed paste, on and off with the mouse (SCREEN OPEN ... NOMOUSE leaves a paste as keys, which phase 1 made harmless)
       case op = 'off'
-         a = char(27) : '[?1006l' : char(27) : '[?1002l' : char(27) : '[?1000l'
+         a = char(27) : '[?2004l'
+         a := char(27) : '[?1006l' : char(27) : '[?1002l' : char(27) : '[?1000l'
    end case
 
    return

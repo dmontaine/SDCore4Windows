@@ -4,12 +4,57 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 25 Oct 26 Windows port - from Linux 72e708e - the tile "Bypass programs" (tool.viewers) is left out: the pdf verb, set.viewer and tool.viewers are not carried (RELEASE_1.1 179).
-* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: SUB-MENUS (a tile whose action is menu:<name> opens the groups of that menu as a page of its own, with a Back tile at the left of the header, Esc and
-*               Backspace going back one, the path on the status line, 8 levels at most and a menu already open refused), and the RECENT GROUP (the tiles the person started last, newest
-*               first, when they have turned it on in the View menu; kept by !home_recent in their own file; off as delivered).  The page is built in two steps now: the whole table,
-*               then pick.level keeps the groups of the menu being shown.  Behaviour-preserving while there: reopen and rebuild share enter.level; an empty band takes no room.
+* 10 Nov 26 Windows port - Linux e3490a7f taken whole (messages renumbered): Windows' earlier changes were the 28 Oct carry of ec8459b and the dropped
+*               Bypass programs tile, and Linux has both now (S.187).  Tiles for pages this tree does not carry yet run a verb SD does not know; HOME traps it.
 * 22 Oct 26 dm  New (S.75, H1; the owner: "the display design is approved as drawn. Start home H0, then H1 and H2").
+* 23 Oct 26 dm  The AI line (AI line stage 1; $tk_ai): when the AI is on for the account it takes the hint row, is the last stop of the Tab ring, and turns a request into one of
+*               the page's tiles or a command to run.  Without the AI there is no change at all.
+* 25 Oct 26 dm  The administrator's page has a tile for every administrator page (plan 13.2: a new app adds its row in the commit that builds it): System gains Audit trail and
+*               Configuration; People and access (Accounts, Sessions and locks, Gates) and Data, network and AI (Backups, Master files, Remote servers, AI) are new groups, all three
+*               side by side in one band so that Tools and Everyone stay on the first screen.  Tiles may carry a live line (accounts, sessions, master files) read when the page is
+*               built and every 30 seconds.  The development apps have a group Develop under Everyone (Files, Vocabulary, Dictionary, Queries, Bulk update, Programs, Tests).
+* 26 Oct 26 dm  S.75, home: SUB-MENUS (a tile whose action is menu:<name> opens the groups of that menu as a page of their own, with a Back tile at the left of the header, Esc and
+*               Backspace going back one, the path on the status line, 8 levels at most and a menu already open refused), and the RECENT GROUP (the tiles the person started last, newest
+*               first, when they have turned it on in the View menu; kept by !home_recent in their own file &menus&; off as delivered).  The page is built in two steps now: the whole table,
+*               then pick.level keeps the groups of the menu being shown.  Behaviour-preserving while there: reopen and rebuild share enter.level; an empty band takes no room.
+* 28 Oct 26 dm  S.88 phase 2: a tile's command and a LOGTO are run TRAPPING ABORTS and followed by $sl_cleanup (a refusal no longer ends HOME; the screen and the break key an aborted app held
+*               are given back before the page is taken again); the AI's "only navigates" flag is 0 while a pin or the Terminal tile is offered (S6: Enter alone no longer runs a pinned command the model chose).
+* 28 Oct 26 dm  S.88 handoff step 2 (the owner's approval of Opus's proposal): the AI's default is decided PER PROPOSAL, not per page: ask.ai names the offered actions that do more than navigate
+*               (pins, the Terminal tile) in actx<12> and $tk_ai makes Reject the default for those only, so a delivered tile is accepted by Enter again (the owner's 23 Oct answer) while pins
+*               are offered; a command keeps Cancel.
+* 28 Oct 26 dm  TUI phase 2 review: a command that aborts waits for a key before the page is drawn again (the abort message was overwritten); with the Terminal tile off for the account the AI
+*               line is told 'nocmd' and a command answer is refused (the AI was a way to a command prompt).
+* 28 Oct 26 dm  S.88 L2: the page is laid out by the layout service ($tk_layout): three panes (the header, the panel of tiles, the hint row) declared at their 140 by 43 sizes,
+*               the tile columns worked out from the panel's width (more columns, and the tiles a little wider, in a wider window; the six of 140 by 43 exactly as they were),
+*               the header tiles on the last two columns, and the resize made by $tk_layout 'refresh' in place of the page's own copy of the frame's rules.  At 140 by 43
+*               every cell is where it was.
+* 29 Oct 26 dm  S.88 g-P1: the Record editor tile (ced) is gone with the verb; the fields of a record are the IDE's F12.  The Tools group keeps Editor and IDE.
+* 02 Nov 26 dm  S.102: a Scheduled jobs tile (tool.jobs) in People and access, the fourth there, so the band keeps its two rows (test-home-units H28).
+* 02 Nov 26 dm  S.96 M6: the master-file copies (S.67) are retired.  The Master files tile opens tool.entries (every account's entries by pointer), in place of
+*               tool.masters, and has no live line (it asked the kernel's master-file journal, which is gone).
+* 2 Nov 26 dm  S.88 U9: the menu bar is the toolkit's ($tk_menubar), made from the page's key table (/tkreg/) like every other page's: the page no longer builds a SCREEN MENUBAR
+*               array of its own, so the bar, the function-key row and F1's list of keys cannot disagree.  Every menu entry has a key and is the same action as the key (the bar runs
+*               nothing; the page's own case does): Ctrl-T Terminal, Ctrl-W Switch account, Ctrl-R Recent group, Ctrl-K Keys, F6 the AI line (the owner's rule: F6 reaches the AI line
+*               on every page), Backspace back - off the function-key row, shown in the menus and in F1's list.  F10 and Alt and a letter are the bar's (the F10 row is gone), Esc on
+*               the top page opens the bar (the Esc rule), a click on row 0 opens the menu under it.  An entry whose tile is off is dimmed with the reason.  Type-to-find: / opens
+*               a pick window of the page's tiles ($tk_pickrec 'list'); typing narrows it and Enter moves the focus to the tile chosen.
+* 03 Nov 26 dm  The hint row and the date line are drawn in the role desktop, the page's own, not disabled: the blue theme's disabled paints the
+*               palette's blue behind the text, which a terminal palette may show light (the owner's GNOME Terminal: pale text on light blue, "unreadable").
+* 7 Nov 26 dm   S.164: /tkhome/ gains hrefused, set when $tk_open refuses at the start, so !home_entry signs the session out.  A window made too small during a
+*               command is NOT signed out: the reopen holds it behind $sl_guard's size lock until it is big enough (the owner: "lock user input until it is the right size").
+* 8 Nov 26 dm   S.172: in the themes paper and night the tiles are boxed in the window colours, the focus in highlight (alloc.styles), not coloured blocks.  A boxed
+*               row (boxed.line) is the bar, one space and the text cut to tw - 3 inside the box: two spaces and fmt(.., 'nL') overran the tile and the cut lost the
+*               right bar ("Switch accou.", owner on sdtest).  Three captions shortened to fit 18: who may do what, edit many records, run, judge tests.
+* 8 Nov 26 dm  S.176 (the owner: one box key on every page, "F6 for boxes is fine"): F6 and Shift-F6 go from the tiles to the AI line and back (ai.key); Tab and
+*               Back-tab go round the tiles only and no longer step onto the line.
+* 8 Nov 26 dm  S.179 (the owner: "The commands need to be consistent across all pages"): Ctrl-T is the theme and Ctrl-K the keys of this page, through $tk_std as on every
+*               page (View > Theme, Help > Keys); the Terminal moves to Alt-T and Sign out to Alt-X (Ctrl-X is cut wherever there is text); the Keys tile still
+*               opens tool.keys.  A new theme builds the page again (rebuild), since the tiles take their colours from it.
+* 9 Nov 26 dm  S.186: the description's keys follow S.179 (Ctrl-Q leaves or signs out, Alt-T the Terminal); it still said Ctrl-Q signs out, Ctrl-T the Terminal.
+*               View > Mouse and Ctrl-O, as on every page (act:std.mouse, ctrl-o, $tk_std).
+* 9 Nov 26 dm  S.187: the Bypass programs tile is gone with tool.viewers and the pdf verb (owner, 9 Nov 2026: "remove").
+* 9 Nov 26 dm  S.136 (owner, 9 Nov: "your decision, should only appear once"): the hint row says only the keys the key row does not - arrows, a letter,
+*               PgDn; Enter and / are on the key row alone.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -20,7 +65,10 @@
 *   holder's page are built from one table and differ in what is in it; every tile starts a command exactly as the person would type it, so a tile adds no
 *   access (the gates apply as at the terminal).
 *
-*     Tools      the standard tools of every account: Editor (sed), IDE (ide), Record editor (ced)
+*     System     (the administrator only) Menu management, Bypass programs, Audit trail, Configuration
+*     People and access, Data network and AI     (the administrator only) Accounts, Sessions and locks, Gates; Backups, Master files, Remote servers, AI.  Each tile starts the page's verb.
+*     Develop    the development apps, for every account: Files (tool.files), Vocabulary (tool.voc), Dictionary (tool.dict), Queries (tool.query), Bulk update (tool.bulk), Programs (tool.catalog), Tests (tool.test)
+*     Tools      the standard tools of every account: Editor (sed), IDE (ide)
 *     Everyone   Terminal (leaves the screen for the ordinary prompt; EXIT comes back), Keys (tool.keys)
 *     Header     who is signed on and when, Switch account (a pick list of the accounts this person may enter, then the screen of that account) and Sign out
 *
@@ -31,10 +79,24 @@
 *   back one level and give the focus and the scroll back as they were, 8 levels are the most, and a menu that is already open above is refused (no page can open itself).  A menu with no
 *   tile (all turned off) has no folder tile.  No tile of the delivered page opens a sub-menu yet: a table that wants one declares a folder tile and gives its groups the menu name.
 *
+*   THE LAYOUT (S.88 L2) is the toolkit's layout service: three panes, the header (rows 1 to 4 at 140 by 43), the panel of tiles (rows 5 to 38) and the hint row (39, the AI line's
+*   when the AI is on), declared at their 140 by 43 sizes; a bigger window gives the panel every row and column it has beyond that, and the header and the hint row every column.
+*   The tile columns are worked out from the panel's width: two columns to a pair, one column between the two of a pair and three between pairs, as many as fit, and the columns
+*   left over widen every tile alike (at 140 by 43 six columns of 21, at x 3 25 49 71 95 117).  A band with one group spreads it over every column; the groups of a band of several
+*   share the columns beyond their own in whole pairs.  The header tiles stand on the last two columns, the Back tile on the first.  A resize is $tk_layout 'refresh', then all of it again.
+*
 *   The panel under the header scrolls: the page is laid out at its full height and the rows that fit are drawn, with a scroll bar in the last column.  Keys:
 *   the arrow keys move to the nearest tile, Tab and Back-tab go in reading order, Home and End to the first and last, Page Up and Page Down by group, a letter
-*   to the next tile that begins with it, Enter or the space bar starts the tile, F5 builds the page again, F10 opens the menu bar, Ctrl-Q signs out.  A click
-*   starts a tile, the wheel scrolls three rows.  The end of the input ends the program.
+*   to the next tile that begins with it, / a window that finds a tile by any part of its name (typing narrows the list; Enter moves the focus to the tile), Enter or the space
+*   bar starts the tile, F5 builds the page again, F6 the AI line, Ctrl-Q leaves to the prompt (signs out in a menu session or when the Terminal tile is off), Alt-T the Terminal (S.179; Ctrl-T is the theme), Ctrl-W Switch account, Ctrl-R the Recent group on or off, Ctrl-K Keys.
+*   THE MENU BAR is the toolkit's ($tk_menubar): it is made from the key table (make.keys, then make.menus), so every entry is a key's action and runs through the key's case;
+*   F10, Alt and a title's letter, a click on row 0, and Esc on the top page (the Esc rule: in a sub-menu Esc goes back) open it.  A click starts a tile, the wheel scrolls three
+*   rows.  The end of the input ends the program.
+*
+*   THE AI LINE (only when the AI is on for the account: the gate, a provider, a model and a key; else there is no row and nothing below applies).  It takes the row that holds the
+*   hint, after the last tile in the Tab ring (Tab from the last tile, Back-tab from the first), or a click.  Enter on a request shows everything that will be sent and sends nothing
+*   until Send; the answer comes in a popup and may propose ONE of this page's tiles (Accept starts it as a click would; Enter alone accepts a tile that only opens a tool) or ONE
+*   command (shown; it runs only on Run, as the Terminal would run it).  Sign out and Switch account are never offered.  The model sees the tile names, nothing of the account's data.
 *
 *   THE NAMED COMMON /TKHOME/: hflag is set when the person left by the Terminal tile (the EXIT verb then comes back to this screen); hlogto is set only
 *   while this program runs a LOGTO, so that the sign-on hook (!home_entry) does not start a second screen inside it.
@@ -62,26 +124,34 @@ $define HT.GLYPH   4       ;* three cells of ASCII, so that any locale draws it
 $define HT.SUB     5       ;* the line under the label
 $define HT.ACT     6       ;* cmd:<sentence>, terminal, switch or signout
 $define HT.PAL     7       ;* the palette's name
-$define HT.SIZE    8       ;* n normal 21 by 5, w wide 43 by 5, s small 21 by 3
+$define HT.SIZE    8       ;* n normal 21 by 5, w wide 43 by 5, s small 21 by 3 (the widths at 140 by 43: one column, two columns and the gap between them, one column)
 $define HT.PAUSE   9       ;* 1 when the command prints lines: wait for a key before the screen comes back
 $define HT.WHY     10      ;* null, or why the tile is dimmed (a gate that is off)
-$define HT.X       11      ;* the cell of its top left corner: x; y is a row of the panel for a tile in a group and a row of the screen for a header tile
+$define HT.X       11      ;* the cell of its top left corner: x; y is a row of the panel for a tile in a group and a row of the screen for a header tile (both set by the layout)
 $define HT.Y       12
 $define HT.W       13
 $define HT.H       14
 $define HT.FIXED   15      ;* 1 for a header tile (not scrolled)
+$define HT.LIVE    16      ;* null, or the live line shown in place of the sub line (read again when the page opens, on F5 and every 30 seconds)
 
 $define HG.NAME    1       ;* a group is a field of gr, its values
 $define HG.BAND    2       ;* the band it stands in: groups of one band stand side by side
-$define HG.COLS    3       ;* how many tile columns it is wide (2 or 6)
+$define HG.COLS    3       ;* how many tile columns it is wide at 140 by 43 (2 or 6); a wider panel gives it more (band.cols)
 $define HG.Y       4       ;* the panel row of its heading, set by the layout
 $define HG.X       5
 $define HG.MENU    6       ;* null for a group of the top page, else the name of the menu (sub-menu page) it belongs to
 
-$define PANEL.TOP  5       ;* the first row of the scrolling panel (rows 1 to 3 are the header)
-$define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep
+$define HT.TW      21      ;* a tile's width in the narrowest panel (138 columns); a wider panel widens every tile by what is left over after the columns that fit
+$define HT.GAP     1       ;* the columns between the two tiles of a pair of columns
+$define HT.PGAP    3       ;* the columns between two pairs
+$define HT.BASECOLS 6      ;* the tile columns of the 140 by 43 panel: a panel with no more than these gives every group exactly its HG.COLS (band.cols), as the page was drawn before the service
+$define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep (MAX.DEPTH is int$keys.h's)
 
-   common /tkhome/ hflag, hlogto
+$define H.TILE.OFF 'turned off for this account by the administrator'     ;* why a key and its menu entry cannot be used when the tile is off (S.88 U9)
+$define H.AI.OFF   'the AI is not on for this account'                    ;* why F6 and AI > Ask the AI do nothing here
+$define H.TOP.PAGE 'this is the top page'                                 ;* why Go > Back cannot be chosen on the top page
+
+   common /tkhome/ hflag, hlogto, hstart, hrefused     ;* S.164: hrefused is set when the screen could not open, for !home_entry to sign the session out
 
    prompt ''
 
@@ -90,10 +160,19 @@ $define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep
       stop
    end
    hlogto = 0
+   menu.session = hstart + 0                           ;* 3 Nov 26: 1 when !home_entry (the account starts in the menu) or EXIT (back from the Terminal tile) started this screen, 0 when the person typed HOME at the prompt
+   hstart = 0                                           ;* taken: a later HOME typed at the prompt the screen gave is typed
 
    call $tk_open('home', '', ctx, err)
    if err # '' then
+      hrefused = 1                                      ;* S.164: read by !home_entry after the EXECUTE
       display err
+      stop
+   end
+   gosub declare.panes
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
       stop
    end
 
@@ -103,11 +182,14 @@ $define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep
    cur.menu = ''                                          ;* the sub-menu page being shown (null: the top page); stk holds the pages left behind, crumb their names
    stk = ''
    crumb = ''
-   ttl = 'Home'
-   idx = 3                                                ;* the column of the identity (it moves right of the Back tile in a sub-menu)
+   gosub geometry
+   gosub set.title                                        ;* the path, and the column of the identity (it moves right of the Back tile in a sub-menu)
+   * 3 Nov 26 (owner: "make ctrl+q leave for the prompt when you typed home"): a screen typed at the prompt is left for the prompt by Ctrl-Q, and Sign out moves to Ctrl-X, the menu and the tile;
+   * a screen the session started in (or came back to by EXIT) keeps Ctrl-Q as Sign out.  An account whose Terminal tile is off has no prompt to leave for: Ctrl-Q signs out, as before.
+   call !home_off(@who, off.list)
+   leave.ok = (not(menu.session) and not(index(' ' : off.list : ' ', ' terminal ', 1)))
    gosub make.keys
 
-   X.COL =3 : @fm : 25 : @fm : 49 : @fm : 71 : @fm : 95 : @fm : 117      ;* the x of the six tile columns (a group of two stands at columns 1-2, 3-4 or 5-6)
    gen = 0
    top = 0
    fi = 1
@@ -119,21 +201,35 @@ $define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep
    keep.top = 0
    rc.on = 0                                              ;* 1 when the Recent group is on for this page (set by add.recent)
 
-   gosub geometry
+   aif = 0                                                ;* 1 while the AI line has the focus
+   call $tk_ai('init', ctx, '', '')
+
    gosub build.page
    gosub layout
    gosub first.focus
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, ttl, '', '', mr)  ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, ttl, msg)
-      call $sl_curat(0, ctx<TK.C.YSTAT>)                  ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
+      if aif then
+         call $tk_ai('draw', ctx, 1, '')                     ;* the cursor is in the AI line while it has the focus
+      end else
+         call $sl_curat(0, ctx<TK.C.YSTAT>)                  ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
+      end
       nm = ''
       screen key timeout 30 returning nm
+      mr = ''
+      if nm # '' and not(aif) then
+         busy = (cur.menu # '')                           ;* the Esc rule: in a sub-menu Esc is the page's (back one page; the key table binds it), on the top page the bar's
+         call $tk_menubar('key', ctx, keys, ttl, nm, busy, mr)     ;* F10, Alt and a letter, Esc on the top page: the bar; a choice comes back as the key it has
+      end
+      if mr<1> # '' then nm = mr<4>
       begin case
          case nm = ''
             if status() = ER$EOF then exit
             gosub draw.clock
+            gosub live.draw
          case nm = 'guardquit'
             exit                                          ;* the cursor lock's own way out
          case nm = 'resize'
@@ -171,6 +267,8 @@ finish:
       case outcome = 'signout'
          call $tk_close(ctx)
          execute 'quit'
+      case outcome = 'leave'
+         call $tk_close(ctx)                              ;* typed at the prompt, so the prompt it was typed at is where Ctrl-Q goes back to (hflag stays as it was: EXIT still ends the session)
       case 1
          call $tk_close(ctx)
    end case
@@ -178,13 +276,57 @@ finish:
 
 * ------------------------------------------------------------------------------------------------- the geometry and the page
 
-* The layout is the window when it is bigger than the minimum, the minimum when it is smaller (the frame's rule); the panel is the rows between the header and the hint line
+* The page as panes of the layout service ($tk_layout, S.88 L2), each at its size in the 140 by 43 layout (body 138 by 39 at 1,1): the header (rows 1 to 4: the identity, the
+* clock and the header tiles on rows 1 to 3), the panel of tiles (rows 5 to 38) and the hint row (39, YSTAT - 1: the AI line's row when the AI is on).  The panel takes every row
+* and column a bigger window has beyond that; the header and the hint row take every column.  perr returns null, or why the service refused the declaration.
+declare.panes:
+   pd = ''
+   pd<1> = 'header' : @vm : 1 : @vm : 1 : @vm : 4 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   pd<2> = 'panel' : @vm : 2 : @vm : 1 : @vm : 34 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   pd<3> = 'hint' : @vm : 3 : @vm : 1 : @vm : 1 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   perr = ''
+   call $tk_layout('declare', ctx, pd, perr)
+   return
+
+* The rectangles the layout service gives the three panes now (the layout is the window when it is bigger than the floor, the floor when it is smaller), and the tile columns
+* of the panel's width.  lw and lh are the layout's; py0 to py1 are the panel's rows (ph of them); the hint row is hny.
 geometry:
    lw = ctx<TK.C.W>
    lh = ctx<TK.C.H>
-   py0 = PANEL.TOP
-   py1 = lh - 5                                           ;* the hint line is row lh-4, the status line lh-3
-   ph = py1 - py0 + 1
+   call $tk_layout('pane', ctx, 'header', prect)
+   hdx = prect<1, 1>
+   hdy = prect<1, 2>
+   hdw = prect<1, 3>
+   call $tk_layout('pane', ctx, 'panel', prect)
+   pnx = prect<1, 1>
+   py0 = prect<1, 2>
+   pnw = prect<1, 3>
+   ph = prect<1, 4>
+   py1 = py0 + ph - 1
+   call $tk_layout('pane', ctx, 'hint', prect)
+   hnx = prect<1, 1>
+   hny = prect<1, 2>
+   gosub columns
+   return
+
+* The tile columns of a panel pnw wide: the first two columns in from the panel's left edge, two columns to a pair with HT.GAP between them and HT.PGAP between pairs, as many as
+* fit with the last one ending a column short of the panel's right edge (the scroll bar is the column after the panel), and the columns left over shared out to every tile alike
+* (tw.n wide).  At 140 by 43 (panel 138) that is six columns of 21 at x 3 25 49 71 95 117: the page as it was drawn before the service.
+columns:
+   avail = pnw - 3
+   ncol = 1
+   loop
+      nx = ncol + 1
+      need = nx * HT.TW + (nx - 1) * HT.GAP + idiv(nx - 1, 2) * (HT.PGAP - HT.GAP)
+   while need <= avail do
+      ncol = nx
+   repeat
+   used = ncol * HT.TW + (ncol - 1) * HT.GAP + idiv(ncol - 1, 2) * (HT.PGAP - HT.GAP)
+   tw.n = HT.TW + idiv(avail - used, ncol)
+   xcol = ''
+   for k = 1 to ncol
+      xcol<k> = pnx + 2 + (k - 1) * (tw.n + HT.GAP) + idiv(k - 1, 2) * (HT.PGAP - HT.GAP)
+   next k
    return
 
 * The tiles of this page.  The table is built for the audience (13.2): the administrator gets the administrator's, everyone else the holder's, and what a person may
@@ -204,16 +346,30 @@ build.page:
       * the administrator's own group: the page that manages what every account's home screen shows (it is in SDSYS's VOC only; an account holder's page has no such tile)
       bnd += 1
       g += 1
-      gr<g> = 'System' : @vm : bnd : @vm : 6
+      gr<g> = 'System' : @vm : bnd : @vm : 2                 ;* the administrator's three groups stand side by side in one band, two tiles wide each, so that the page needs no scrolling
       id = 'menus' ; grp = g ; label = 'Menu management' ; glyph = '[=]' ; sub = 'tiles and start' ; act = 'cmd:tool.menus' ; pal = 'rust' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
-*     25 Oct 26 Windows port: Linux's "Bypass programs" tile (tool.viewers, the readers the pdf verb may start) is not here; the pdf mechanism is Linux's own (RELEASE_1.1 179).
+      id = 'audit' ; grp = g ; label = 'Audit trail' ; glyph = '[*]' ; sub = 'who did what' ; act = 'cmd:tool.audit' ; pal = 'rust' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'config' ; grp = g ; label = 'Configuration' ; glyph = '[%]' ; sub = 'sd.conf and SD' ; act = 'cmd:tool.config' ; pal = 'rust' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      * who may do what, and who is on: the people and access group
+      g += 1
+      gr<g> = 'People and access' : @vm : bnd : @vm : 2
+      id = 'accounts' ; grp = g ; label = 'Accounts' ; glyph = '(@)' ; sub = 'create and manage' ; act = 'cmd:tool.accounts' ; pal = 'amber' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'sessions' ; grp = g ; label = 'Sessions and locks' ; glyph = '[~]' ; sub = 'who is on' ; act = 'cmd:tool.sessions' ; pal = 'amber' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'gates' ; grp = g ; label = 'Gates' ; glyph = '[#]' ; sub = 'who may do what' ; act = 'cmd:tool.gates' ; pal = 'amber' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'jobs' ; grp = g ; label = 'Scheduled jobs' ; glyph = '[:]' ; sub = 'what runs when' ; act = 'cmd:tool.jobs' ; pal = 'amber' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      * the data copies, the doors to other machines, and the AI
+      g += 1
+      gr<g> = 'Data, network and AI' : @vm : bnd : @vm : 2
+      id = 'backups' ; grp = g ; label = 'Backups' ; glyph = '[<]' ; sub = 'save and restore' ; act = 'cmd:tool.backups' ; pal = 'blue' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'entries' ; grp = g ; label = 'Master files' ; glyph = '[M]' ; sub = 'every account' ; act = 'cmd:tool.entries' ; pal = 'blue' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'remote' ; grp = g ; label = 'Remote servers' ; glyph = '[>]' ; sub = 'doors and files' ; act = 'cmd:tool.remote' ; pal = 'blue' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+      id = 'ai' ; grp = g ; label = 'AI' ; glyph = '(*)' ; sub = 'model and key' ; act = 'cmd:tool.ai' ; pal = 'violet' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
    end
    bnd += 1
    g += 1
    gr<g> = gname : @vm : bnd : @vm : 6
    id = 'editor' ; grp = g ; label = 'Editor' ; glyph = '[=]' ; sub = 'edit a record' ; act = 'cmd:sed' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
    id = 'ide' ; grp = g ; label = 'IDE' ; glyph = '</>' ; sub = 'programs and files' ; act = 'cmd:ide' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
-   id = 'ced' ; grp = g ; label = 'Record editor' ; glyph = '[ ]' ; sub = 'fields of a record' ; act = 'cmd:ced' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
    * the person's own programs (MY.MENU), when the administrator has allowed it (the administrator always may): a group of their own after the standard tools, with a tile that
    * opens the list for changing.  They are only tiles that run what the person could type at their prompt.
    call !home_pins(@who, pins.on, pins.items)
@@ -232,18 +388,27 @@ build.page:
    gr<g> = 'Everyone' : @vm : bnd : @vm : 6
    id = 'terminal' ; grp = g ; label = 'Terminal' ; glyph = '>_ ' ; sub = 'type exit to come back' ; act = 'terminal' ; pal = 'gray' ; size = 'w' ; pause = 0 ; why = '' ; gosub add.tile
    id = 'keys' ; grp = g ; label = 'Keys' ; glyph = '^K ' ; sub = 'test your keyboard' ; act = 'cmd:tool.keys' ; pal = 'gray' ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
-   * the header: two small tiles at the right, on screen rows 1 to 3
-   hx = 95 ; hy = 1
+   * the development tools, for every account in the account the person is in (plan 13.2: each app adds its tile in the commit that builds it); the last group, so that the others stay where they were
+   bnd += 1
+   g += 1
+   gr<g> = 'Develop' : @vm : bnd : @vm : 6
+   id = 'files' ; grp = g ; label = 'Files' ; glyph = '[F]' ; sub = 'files and indices' ; act = 'cmd:tool.files' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'voc' ; grp = g ; label = 'Vocabulary' ; glyph = '[V]' ; sub = 'verbs and pointers' ; act = 'cmd:tool.voc' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'dict' ; grp = g ; label = 'Dictionary' ; glyph = '[D]' ; sub = 'items and indices' ; act = 'cmd:tool.dict' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'query' ; grp = g ; label = 'Queries' ; glyph = '[Q]' ; sub = 'build a report' ; act = 'cmd:tool.query' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'bulk' ; grp = g ; label = 'Bulk update' ; glyph = '[B]' ; sub = 'edit many records' ; act = 'cmd:tool.bulk' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'catalog' ; grp = g ; label = 'Programs' ; glyph = '[P]' ; sub = 'compile, catalog' ; act = 'cmd:tool.catalog' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   id = 'test' ; grp = g ; label = 'Tests' ; glyph = '[T]' ; sub = 'run, judge tests' ; act = 'cmd:tool.test' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   * the header: two small tiles at the right, on the header's first three rows (place.header puts them on the last two tile columns)
    id = 'switch' ; grp = 0 ; label = 'Switch account' ; glyph = '<> ' ; sub = '' ; act = 'switch' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
-   hx = 117 ; hy = 1
    id = 'signout' ; grp = 0 ; label = 'Sign out' ; glyph = '-> ' ; sub = '' ; act = 'signout' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
    if cur.menu # '' then
-      * a sub-menu page: the way back, at the left end of the header, where the identity stood
-      hx = 3 ; hy = 1
+      * a sub-menu page: the way back, at the left end of the header (the first tile column), where the identity stood
       id = 'back' ; grp = 0 ; label = 'Back' ; glyph = '<- ' ; sub = '' ; act = 'back' ; pal = 'gray' ; size = 's' ; pause = 0 ; why = '' ; gosub add.header
    end
    gosub add.recent
    gosub pick.level
+   gosub live.read
    gosub alloc.styles
    gosub make.menus
    return
@@ -337,15 +502,31 @@ add.tile:
    added = 1
    return
 
-* A header tile: its place is fixed on the screen (hx, hy), and it does not scroll
+* A header tile: its place is fixed on the screen (place.header), and it does not scroll
 add.header:
    gosub add.tile
    if not(added) then return
-   tl<nt, HT.X> = hx
-   tl<nt, HT.Y> = hy
-   tl<nt, HT.W> = 21
    tl<nt, HT.H> = 3
    tl<nt, HT.FIXED> = 1
+   return
+
+* The header tiles' places, from the header's rectangle and the tile columns: Switch account and Sign out on the last two columns, Back on the first, all on the header's first
+* row and as wide as a tile.  At 140 by 43: 95, 117 and 3 on row 1, 21 wide.
+place.header:
+   for i = 1 to nt
+      if tl<i, HT.FIXED> then
+         begin case
+            case tl<i, HT.ID> = 'switch'
+               tl<i, HT.X> = xcol<ncol - 1>
+            case tl<i, HT.ID> = 'signout'
+               tl<i, HT.X> = xcol<ncol>
+            case 1
+               tl<i, HT.X> = xcol<1>                      ;* back
+         end case
+         tl<i, HT.Y> = hdy
+         tl<i, HT.W> = tw.n
+      end
+   next i
    return
 
 * A style for each palette in use: the colours and the same reversed and bold for the tile that has the focus.  A terminal with no colour (the library says none) gets
@@ -355,6 +536,17 @@ alloc.styles:
    pnames = ''
    pcode = ''
    pfocus = ''
+   tile.plain = 'normal'
+   tile.focus = 'reverse'
+   * 8 Nov 26 (S.172): the near-monochrome themes paper and night have no coloured tiles: every tile is boxed in the theme's window colours and the one with the
+   * focus in its highlight, so that all text is the theme's own high-contrast pair
+   call $sl_theme('name', '', '', '', '', thn)
+   if thn = 'paper' or thn = 'night' then
+      colour = 0
+      tile.plain = 'window'
+      tile.focus = 'highlight'
+      return
+   end
    for i = 1 to nt
       p = tl<i, HT.PAL>
       locate p in pnames<1> setting k else
@@ -398,8 +590,9 @@ palette.colours:
    return
 
 * The panel's rows: bands one under another, the groups of a band side by side, the tiles of a group flowing left to right and wrapping.  The panel row 1 is the first
-* heading (row 6 of the screen).  ch is the height of the whole page.
+* heading (the panel's first row, 5 at 140 by 43).  ch is the height of the whole page.  The header tiles are placed first.
 layout:
+   gosub place.header
    nb = 0
    b0 = 1                                                 ;* the first band: 1, or 0 when the Recent group is on the page
    ng = dcount(gr, @fm)
@@ -407,19 +600,25 @@ layout:
       if gr<k, HG.BAND> > nb then nb = gr<k, HG.BAND>
       if gr<k, HG.BAND> < b0 then b0 = gr<k, HG.BAND>
    next k
+   gcw = ''                                               ;* the columns each group is given (band.cols)
+   gtiles = ''                                            ;* the tiles of each group: a group whose tiles are all off has no heading either
+   for k = 1 to ng
+      gtiles<k> = 0
+   next k
+   for i = 1 to nt
+      gk = tl<i, HT.GROUP>
+      if gk > 0 then gtiles<gk> = gtiles<gk> + 1
+   next i
    ys = 1
    for b = b0 to nb
       c0 = 0
       bandend = ys
+      gosub band.cols
       for k = 1 to ng
-         gn.tiles = 0                                     ;* a group whose tiles are all off has no heading either
-         for i = 1 to nt
-            if tl<i, HT.GROUP> = k then gn.tiles += 1
-         next i
-         if gr<k, HG.BAND> = b and gn.tiles > 0 then
-            gcols = gr<k, HG.COLS>
+         if gr<k, HG.BAND> = b and gtiles<k> > 0 then
+            gcols = gcw<k>
             gr<k, HG.Y> = ys
-            gr<k, HG.X> = X.COL<c0 + 1>
+            gr<k, HG.X> = xcol<c0 + 1>
             cc = 0
             ry = ys + 1
             rowh = 0
@@ -432,9 +631,10 @@ layout:
                      ry += rowh + 1
                      rowh = 0
                   end
-                  tl<i, HT.X> = X.COL<c0 + cc + 1>
+                  tl<i, HT.X> = xcol<c0 + cc + 1>
                   tl<i, HT.Y> = ry
-                  tl<i, HT.W> = (if tw = 2 then 43 else 21)
+                  tl<i, HT.W> = tw.n                      ;* a wide tile takes two columns and what is between them
+                  if tw = 2 then tl<i, HT.W> = xcol<c0 + cc + 2> + tw.n - xcol<c0 + cc + 1>
                   tl<i, HT.H> = th
                   tl<i, HT.FIXED> = 0
                   cc += tw
@@ -450,6 +650,45 @@ layout:
    ch = ys
    if top > ch - ph then top = ch - ph
    if top < 0 then top = 0
+   return
+
+* The columns each group of band b is given (gcw<k>): its HG.COLS, and the columns the panel has beyond the band's sum shared among the band's groups by those same numbers -
+* all of them to a band's one group, in whole pairs to the groups of a band of several (so that each still starts on the first column of a pair, after the wider gap), what
+* is left one (pair) at a time from the first.  A panel of HT.BASECOLS columns or fewer (140 by 43 is six) shares nothing out: every group has exactly its HG.COLS, whichever
+* groups of its band have no tiles on (a band of one group with tiles must stay as wide as the page was drawn before the service).
+band.cols:
+   bsum = 0
+   nbg = 0
+   for k = 1 to ng
+      gcw<k> = gr<k, HG.COLS>
+      if gr<k, HG.BAND> = b and gtiles<k> > 0 then
+         bsum += gr<k, HG.COLS>
+         nbg += 1
+      end
+   next k
+   if bsum < 1 then return
+   if ncol <= HT.BASECOLS then return
+   unit = 1
+   if nbg > 1 then unit = 2
+   bx = idiv(ncol - bsum, unit)
+   if bx < 1 then return
+   given = 0
+   for k = 1 to ng
+      if gr<k, HG.BAND> = b and gtiles<k> > 0 then
+         gadd = idiv(bx * gr<k, HG.COLS>, bsum)
+         gcw<k> = gcw<k> + gadd * unit
+         given += gadd
+      end
+   next k
+   rest = bx - given
+   loop while rest > 0 do
+      for k = 1 to ng
+         if rest > 0 and gr<k, HG.BAND> = b and gtiles<k> > 0 then
+            gcw<k> = gcw<k> + unit
+            rest -= 1
+         end
+      next k
+   repeat
    return
 
 * fb: the first tile of a group (the first tile of the page when only the header has any)
@@ -474,19 +713,23 @@ draw.all:
    screen clear at 0,py0 size lw,ph
    gosub draw.header
    gosub draw.panel
-   screen menubar menus row 0 draw else null
-   screen text '' at 0,lh - 4 width lw
-   screen text 'arrows move  -  Enter starts  -  type to find  -  PgDn next group' at 3,lh - 4 attr 'disabled'
+   ctx<TK.C.BAR> = ''                                     ;* the menu bar is drawn again by the loop's $tk_menubar 'draw' (its menus may have changed with the page)
+   if ctx<TK.C.AI> then
+      call $tk_ai('draw', ctx, aif, '')
+   end else
+      screen text '' at 0,hny width lw
+      screen text 'arrows move  -  a letter jumps  -  PgDn next group' at hnx + 2,hny attr 'desktop'      ;* S.136: Enter and / are on the key row; each is said once
+   end
    return
 
 draw.header:
-   screen clear at 0,1 size 94,3                          ;* the left of the header: the identity moves right of the Back tile and left again
+   screen clear at 0,hdy size xcol<ncol - 1> - 1,3        ;* the left of the header, up to the Switch account tile: the identity moves right of the Back tile and left again
    if is.admin then
       who.line = 'administrator'
    end else
       who.line = @logname : ' @ ' : @who
    end
-   screen text fmt(who.line, '60L') at idx,2 attr 'bold'
+   screen text fmt(who.line, '60L') at idx,hdy + 1 attr 'bold'
    gosub draw.clock
    for i = 1 to nt
       if tl<i, HT.FIXED> then
@@ -506,8 +749,63 @@ draw.clock:
       dt = oconv(date(), 'D4DMY[,A3]')
       mo = field(dt, ' ', 2)
       mo = upcase(mo[1, 1]) : downcase(mo[2, 9])
-      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at idx,3 attr 'disabled'
+      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at idx,hdy + 2 attr 'desktop'
    end
+   return
+
+* ------------------------------------------------------------------------------------------------- live lines
+
+* A tile may carry one short live line in place of its sub line (plan 13.1).  Only the administrator's page has any: how many accounts there are, how many sessions are
+* signed on.  Each is a question the page could ask on its own screen and each only reads.  They are read when the page is built
+* (the first time and on F5) and when the key wait runs out (30 seconds); live.chg holds the tiles whose line is not the one it was.
+live.read:
+   live.chg = ''
+   if not(is.admin) then return
+   for i = 1 to nt
+      lid = tl<i, HT.ID>
+      if lid[1, 2] = 'r:' then lid = lid[3, 99]              ;* a recent tile is a copy and shows the live line of the tile it copies
+      txt = ''
+      begin case
+         case lid = 'accounts'
+            gosub live.accounts
+         case lid = 'sessions'
+            gosub live.sessions
+      end case
+      if txt # tl<i, HT.LIVE> then
+         tl<i, HT.LIVE> = txt
+         live.chg<-1> = i
+      end
+   next i
+   return
+
+live.accounts:
+   n = 0
+   openpath @sdsys : @ds : 'accounts' to lf then
+      select lf to 9
+      loop
+         readnext lacc from 9 else exit
+         if lacc # 'sdsys' then n += 1
+      repeat
+      close lf
+      txt = n : (if n = 1 then ' account' else ' accounts')
+   end
+   return
+
+live.sessions:
+   call !listu(ludata)
+   n = dcount(ludata, @fm)
+   txt = n : ' signed on'
+   call !sdsysn(sdn, sdids, sdmine, sdtty)                      ;* S.76: SDSYS on a terminal in more than one place is said on the tile (the tile is 19 characters wide)
+   if sdn > 1 then txt = n : ' signed, ' : sdn : ' sdsys'
+   return
+
+* The key wait ran out: read the lines again and draw only the tiles whose line changed
+live.draw:
+   gosub live.read
+   for k = 1 to dcount(live.chg, @fm)
+      di = live.chg<k>
+      gosub draw.tile
+   next k
    return
 
 draw.panel:
@@ -537,6 +835,7 @@ draw.tile:
    ty = tl<di, HT.Y>
    if tl<di, HT.FIXED> = 0 then ty = py0 + ty - top
    focused = (di = fi)
+   if aif then focused = 0                               ;* the AI line has the focus: no tile does
    p = tl<di, HT.PAL>
    locate p in pnames<1> setting pk else pk = 1
    begin case
@@ -547,9 +846,9 @@ draw.tile:
       case colour
          sty = pcode<pk>
       case focused
-         sty = 'reverse'
+         sty = tile.focus
       case 1
-         sty = 'normal'
+         sty = tile.plain
    end case
    for r = 0 to th - 1
       sy = ty + r
@@ -565,7 +864,7 @@ draw.tile:
                case r = 3
                   s = '  ' : tl<di, HT.LABEL>
                case r = 4
-                  s = '  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else tl<di, HT.SUB>)
+                  s = '  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else (if tl<di, HT.LIVE> # '' then tl<di, HT.LIVE> else tl<di, HT.SUB>))
                case 1
                   s = ''
             end case
@@ -582,18 +881,29 @@ draw.tile:
                   call $sl_line('br', 0, c2)
                   s = c1 : str(hc, tw - 2) : c2
                case th = 3
-                  s = vc : fmt('  ' : tl<di, HT.GLYPH> : '  ' : tl<di, HT.LABEL>, (tw - 2) : 'L') : vc
+                  btxt = tl<di, HT.GLYPH> : tl<di, HT.LABEL>      ;* the glyph keeps its own trailing space: " <> Switch account" is 18
+                  gosub boxed.line
                case r = 1
-                  s = vc : fmt('  ' : tl<di, HT.GLYPH>, (tw - 2) : 'L') : vc
+                  btxt = tl<di, HT.GLYPH>
+                  gosub boxed.line
                case r = 2
-                  s = vc : fmt('  ' : tl<di, HT.LABEL>, (tw - 2) : 'L') : vc
+                  btxt = tl<di, HT.LABEL>
+                  gosub boxed.line
                case 1
-                  s = vc : fmt('  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else tl<di, HT.SUB>), (tw - 2) : 'L') : vc
+                  btxt = (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else (if tl<di, HT.LIVE> # '' then tl<di, HT.LIVE> else tl<di, HT.SUB>))
+                  gosub boxed.line
             end case
          end
          screen text s at tx,sy attr sty width tw
       end
    next r
+   return
+
+* One text row of a boxed tile: s = the bar, one space, btxt cut to what fits (tw - 3), padded, the bar.  8 Nov 26 (S.172): it was two spaces and fmt(.., 'nL'),
+* which does not cut a longer text: the row ran past the tile and the screen's cut took the right bar and ended the caption in '.' ("Switch accou.").
+boxed.line:
+   btxt = btxt[1, tw - 3]
+   s = vc : ' ' : btxt : space(tw - 3 - len(btxt)) : vc
    return
 
 * The scroll bar in the last column, in the library's scroll style (dark grey in the colour themes), only when the page is taller than the panel
@@ -736,13 +1046,17 @@ jump.letter:
 
 on.key:
    msg = ''
+   if aif then
+      gosub ai.key
+      return
+   end
    begin case
       case nm = 'up' or nm = 'down' or nm = 'left' or nm = 'right'
          dir = nm
          gosub move.focus
       case nm = 'tab'
          dir = 1
-         gosub next.tile
+         gosub next.tile                                   ;* S.176: round the tiles only; F6 is the way to the AI line, as on every page
       case nm = 'btab'
          dir = -1
          gosub next.tile
@@ -768,13 +1082,51 @@ on.key:
       case nm = 'enter' or nm = ' '
          gosub start.tile
       case nm = 'esc' or nm = 'bs'
-         gosub close.menu                                  ;* back one page; on the top page there is nowhere to go and nothing happens
+         gosub close.menu                                  ;* back one page (S.88 U9, the Esc rule: on the top page the bar takes Esc and opens; Backspace there does nothing)
+      case nm = 'f1'
+         call $tk_help('box', 'tool.home.page', hm, 0, 0)
+         if hm # '' then msg = hm
       case nm = 'f5'
          gosub rebuild
-      case nm = 'f10'
-         gosub run.menu
+      case nm = 'f6' or nm = 'shift-f6'
+         if ctx<TK.C.AI> then
+            gosub ai.focus.on                              ;* F6, Shift-F6 or AI > Ask the AI: the focus goes to the line (S.176: the tiles and the line are the two stops of the box ring)
+         end else
+            msg = H.AI.OFF
+         end
       case nm = 'ctrl-q'
+         if leave.ok then
+            outcome = 'leave'
+            done = 1
+         end else
+            gosub do.signout
+         end
+      case nm = 'alt-x' and leave.ok                       ;* S.179: Alt-X (Ctrl-X is cut wherever there is text)
          gosub do.signout
+      case nm = 'ctrl-t'                                   ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub rebuild                    ;* the tiles' colours come from the theme (alloc.styles): the page is made again
+         msg = std.r<2>
+      case nm = 'act:std.mouse'                            ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                                   ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'alt-t'                                    ;* S.179: the Terminal (it had Ctrl-T)
+         if terminal.off then
+            msg = H.TILE.OFF                               ;* the Terminal tile is off for this account: its key and its menu entry are too
+         end else
+            outcome = 'terminal'
+            done = 1
+         end
+      case nm = 'ctrl-w'
+         if index(off.set, ' switch ', 1) then msg = H.TILE.OFF else gosub switch.account
+      case nm = 'ctrl-r'
+         gosub toggle.recent                               ;* it refuses itself when the administrator has turned the group off (12966)
+      case nm = 'ctrl-k'                                   ;* S.179: the keys of this page, as on every page (the Keys tile still opens tool.keys)
+         call $tk_std('keylist', ctx, keys, ttl, std.r)
+      case nm = '/'
+         gosub find.tile
       case len(nm) = 1 and nm > ' '
          gosub jump.letter
    end case
@@ -783,6 +1135,16 @@ on.key:
 on.mouse:
    screen mouse returning mev else mev = ''
    if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, ttl, mev, '', mr)        ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then                                     ;* a bar left with nothing chosen has no name: the status message stays
+         if aif then gosub ai.leave
+         gosub on.key
+      end
+      return
+   end
    kind = mev<1>
    mx = mev<3>
    my = mev<4>
@@ -796,26 +1158,126 @@ on.mouse:
             screen clear at 0,py0 size lw,ph
             gosub draw.panel
          end
+      case kind = 'press' and mev<2> = 1 and ctx<TK.C.AI> and my = hny
+         gosub ai.focus.on                                 ;* a click on the AI line gives it the focus
       case kind = 'press' and mev<2> = 1
-         if my = 0 then
-            screen menubar menus click mx returning mc then
-               cmd = mc
-               gosub run.cmd
+         for j = 1 to nt
+            tx = tl<j, HT.X>
+            ty = tl<j, HT.Y>
+            if tl<j, HT.FIXED> = 0 then ty = py0 + ty - top
+            in.rows = (my >= ty and my < ty + tl<j, HT.H>)
+            if tl<j, HT.FIXED> = 0 then in.rows = (in.rows and my >= py0 and my <= py1)
+            if in.rows and mx >= tx and mx < tx + tl<j, HT.W> then
+               gosub set.focus
+               gosub start.tile
+               exit
             end
-         end else
-            for j = 1 to nt
-               tx = tl<j, HT.X>
-               ty = tl<j, HT.Y>
-               if tl<j, HT.FIXED> = 0 then ty = py0 + ty - top
-               in.rows = (my >= ty and my < ty + tl<j, HT.H>)
-               if tl<j, HT.FIXED> = 0 then in.rows = (in.rows and my >= py0 and my <= py1)
-               if in.rows and mx >= tx and mx < tx + tl<j, HT.W> then
-                  gosub set.focus
-                  gosub start.tile
-                  exit
-               end
-            next j
+         next j
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the AI line
+
+ai.focus.on:
+   aif = 1
+   di = fi
+   gosub draw.tile                                       ;* the tile that had the focus is drawn without it
+   call $tk_ai('focus', ctx, 1, '')
+   msg = sysmsg(12643)
+   return
+
+* The tile that had the focus before the AI line took it has it again
+ai.tile.back:
+   di = fi
+   gosub draw.tile
+   return
+
+* The AI line gives the focus up because the person chose something on the menu bar with the mouse: the key that entry stands for is then the page's, not the line's
+ai.leave:
+   aif = 0
+   call $tk_ai('focus', ctx, 0, '')
+   gosub ai.tile.back
+   return
+
+* A key while the AI line has the focus: the line edits it; Esc, Tab, Back-tab, Up and Down give the focus back, and Enter on a request asks
+* S.176: F6 and Shift-F6 give it back too, to the tile that had it (the line and the tiles are the box ring of every page)
+ai.key:
+   if nm = 'f6' or nm = 'shift-f6' then
+      gosub ai.leave
+      msg = ''
+      return
+   end
+   call $tk_ai('key', ctx, nm, out)
+   begin case
+      case out = 'leave'
+         aif = 0
+         msg = ''
+         gosub ai.tile.back
+      case out = 'tab'
+         aif = 0
+         j = 1                                            ;* round the ring: the first tile
+         gosub set.focus
+      case out = 'btab' or out = 'up'
+         aif = 0
+         j = nt                                           ;* back to the last tile
+         gosub set.focus
+      case out = 'down'
+         aif = 0
+         gosub ai.tile.back
+      case out = 'ask'
+         gosub ask.ai
+   end case
+   return
+
+* The request in the line goes to $tk_ai with what this page can do: the tiles that start a tool (never Sign out or Switch account).  The answer is a tile to start or a command
+* to run, each only after the person has chosen Accept or Run; both are done exactly as a click on a tile or the Terminal tile's prompt would do them.
+ask.ai:
+   acts = ''
+   ai.nav = 1                                             ;* the actions offered open a tool, except those named in ai.more (S.88 phase 2, S6; per proposal since handoff step 2)
+   ai.more = ''                                           ;* the ids of the offered actions that do more than open a tool: the person's own programs and the Terminal tile
+   for i = 1 to nt
+      ta = tl<i, HT.ACT>
+      if ta[1, 4] = 'cmd:' or ta = 'terminal' then
+         if tl<i, HT.ID>[1, 2] # 'r:' then                ;* a recent tile is a copy of one that is offered already
+            acts<1, -1> = tl<i, HT.ID> : ':' : tl<i, HT.LABEL> : ' - ' : (if tl<i, HT.SUB> = '' then 'starts ' : ta else tl<i, HT.SUB>)
+            * the person's own programs (pin1, pin2 ...) run a command the person wrote, and the Terminal tile leaves the toolkit for the prompt: neither only NAVIGATES, so when the AI
+            * proposes one of THESE Enter alone must reject the proposal and not accept it (a pin the model chose would run on one stray Enter); a delivered tile, which only opens a tool
+            * the person could open anyway, keeps Accept as its default (the owner's answer of 23 Oct) even while pins are offered
+            if tl<i, HT.ID>[1, 3] = 'pin' or ta = 'terminal' then ai.more<1, -1> = tl<i, HT.ID>
          end
+      end
+   next i
+   ctxt = 'This is the home screen of the SD database system, a page of tiles.' : @vm : 'Each action starts the tool of that tile, exactly as the person could by choosing the tile.'
+   ctxt := @vm : 'The person is ' : (if is.admin then 'the administrator.' else 'an account holder.')     ;* the lines of the page's text are VALUES (a field mark would move the fields after it)
+   actx = 'home' : @fm : 'home' : @fm : ctxt : @fm : acts : @fm : ai.nav
+   actx<12> = ai.more                                     ;* the library's default is Reject for a proposal of one of these
+   actx<13> = 'none'                                      ;* 1 Nov 26: the home screen sends no text of any file (the AI's wall asks every app where its text comes from)
+   * The Terminal tile turned off for the account means no command prompt through the AI either: the library is told there is nowhere to run a command (<11> 'nocmd') and ignores one
+   if terminal.off then actx<11> = 'nocmd'
+   call $tk_ai('ask', ctx, actx, res)
+   call $tk_ai('clear', ctx, '', '')
+   aif = 0
+   msg = res<5>
+   begin case
+      case res<1> = 'action'
+         found = 0
+         for i = 1 to nt
+            if tl<i, HT.ID> = res<2> then found = i
+         next i
+         if found then
+            j = found
+            gosub set.focus
+            gosub start.tile
+         end
+      case res<1> = 'command' and terminal.off
+         msg = 'the Terminal is turned off for this account'      ;* defence in depth: the library was told 'nocmd' and should never return one
+      case res<1> = 'command'
+         sentence = res<2>
+         pause = 1
+         keep.id = tl<fi, HT.ID>
+         keep.top = top
+         gosub run.command
+         keep.id = ''
    end case
    return
 
@@ -858,10 +1320,32 @@ run.command:
    keep.id = tl<fi, HT.ID>                               ;* the screen comes back with the same tile selected, scrolled as it was
    keep.top = top
    call $tk_close(ctx)
-   execute sentence
-   if pause then gosub wait.key
+   * 28 Oct 26 (S.88 phase 2, plan 2.5): TRAPPING ABORTS - a command that is refused (a verb that aborts, a program that stops with an error) comes back here and the page is taken again,
+   * where it used to end HOME and leave the person at the prompt of a session that had been in the toolkit.  An app the command started and that was aborted may still hold the screen and
+   * the break setting: $sl_cleanup gives both back (it writes nothing where the library holds nothing), and reopen takes the screen again.
+   * An abort prints its message on the ordinary terminal and the page then draws over it, so the person never read why the tile failed (every delivered tile has pause = 0).  EXECUTE ... TRAPPING ABORTS
+   * reports an abort only through @abort.message (@abort.code is back to 0 when the command processor returns): a sentinel message is set first, as tool.test does, and an aborted command is the
+   * one that leaves a different message.  The key is waited for as for a tile with a pause, before the screen is taken again.
+   gosub set.sentinel
+   execute sentence trapping aborts
+   aborted = (@abort.message # sentinel)                  ;* read before $sl_cleanup
+   call $sl_cleanup
+   if pause or aborted then gosub wait.key
    gosub reopen
    keep.id = ''
+   return
+
+* The system keeps the message of the last abort (and of an exception that was caught), which a command that ends normally does not touch: a message of the page's own is set first
+set.sentinel:
+   zero = 0
+   sentv = 0
+   sentinel = ''
+   try
+      sentv = 1 / zero
+   catch sys.program.div_zero
+      sentinel = @abort.message
+   end
+   if sentv # 0 then sentinel = ''
    return
 
 * The terminal is the ordinary one again here (the screen was closed), where a key is read when Enter is pressed: so the question is for Enter, and INPUT reads it
@@ -873,8 +1357,23 @@ wait.key:
 
 * Take the screen again after a command (or a LOGTO) and draw the page; the window may have changed, and the account may be another
 reopen:
+* S.164 (the owner, 7 Nov 26: "if the window is shrunk the default is to show only a portion of the home screen and lock user input until it is the right size, not
+*   log the person out"): a window made too small during a command is held behind the library's size lock, as a window shrunk with the screen up is, until it is big
+*   enough again.  Only Ctrl-Q then y in the lock (or input that ended) leaves: a session's own screen signs out, a screen typed at the prompt goes back to it.
+   loop
+      call $sl_need('home', TK.MINW, TK.MINH, need.msg, '')
+   while need.msg # '' do
+      call $sl_guard('home', TK.MINW, TK.MINH, TK.MINW - 1, TK.MINH - 1, guard.res, 'layout')
+      if guard.res = 'quit' then
+         if menu.session then hrefused = 1
+         outcome = 'closed'
+         done = 1
+         return
+      end
+   repeat
    call $tk_open('home', '', ctx, err)
    if err # '' then
+      if menu.session then hrefused = 1                 ;* S.164: a session's own screen that cannot open again is not a way to the prompt
       display err
       outcome = 'closed'
       done = 1
@@ -885,6 +1384,16 @@ reopen:
    gen += 1
    ctx<TK.C.GEN> = gen
    lastmin = ''
+   aif = 0
+   call $tk_ai('init', ctx, '', '')                       ;* the account may be another, and the window another size
+   gosub declare.panes
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
+      outcome = 'closed'
+      done = 1
+      return
+   end
    gosub geometry
    want.id = keep.id
    want.top = keep.top
@@ -893,6 +1402,8 @@ reopen:
 
 * F5: the page again for what the session is now
 rebuild:
+   aif = 0
+   call $tk_ai('init', ctx, '', '')                       ;* F5 also reads whether the AI is on now
    want.id = ''
    want.top = 0
    gosub enter.level
@@ -902,6 +1413,7 @@ rebuild:
 * The page of the menu being shown (cur.menu), built, laid out and drawn.  want.id (null for none) is the tile that has the focus and want.top how far the panel was scrolled when it
 * had it: the page comes back as it was left, scrolled further only when that tile is out of the panel (a Recent group may have appeared above it).
 enter.level:
+   aif = 0
    gosub make.keys
    gosub set.title
    gosub build.page
@@ -922,14 +1434,39 @@ enter.level:
    gosub draw.all
    return
 
-* The key table: a sub-menu page also has Esc (back)
+* The key table (the registry, /tkreg/ once $tk_frame has drawn it): the function-key row, F1's list of keys and the menu bar are all made from it.  A sub-menu page also has
+* Esc (back).  Every action on the menu bar has a key, so the bar's answer is replayed through the page's own case for that key; the keys that are not on the function-key row
+* (off.row: the row would be too long to read) are in the menus and in F1's list.  F10 and Alt and a letter are the bar's own and have no row.
 make.keys:
    keys = ''
    call $tk_keys('add', keys, 'enter', 'start', 'start', '', 1)
    if cur.menu # '' then call $tk_keys('add', keys, 'esc', 'back', 'back', '', 1)
+   call $tk_keys('add', keys, 'bs', 'back', 'back', '', 1)
+   gosub off.row
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
-   call $tk_keys('add', keys, 'f10', 'menu', 'menu', '', 1)
-   call $tk_keys('add', keys, 'ctrl-q', 'sign out', 'signout', '', 1)
+   if leave.ok then
+      call $tk_keys('add', keys, 'ctrl-q', 'prompt', 'leave', '', 1)
+   end else
+      call $tk_keys('add', keys, 'ctrl-q', 'sign out', 'signout', '', 1)
+   end
+   call $tk_keys('add', keys, 'alt-t', 'terminal', 'terminal', '', 1)      ;* S.179: Alt-T (Ctrl-T is the theme on every page)
+   gosub off.row
+   call $tk_keys('add', keys, 'ctrl-w', 'switch', 'switch', '', 1)
+   gosub off.row
+   call $tk_keys('add', keys, '/', 'find', 'find', '', 1)
+   call $tk_keys('add', keys, 'ctrl-r', 'recent', 'recent', '', 1)
+   gosub off.row
+   call $tk_keys('add', keys, 'f6', 'ai', 'ai', '', 1)
+   if leave.ok then
+      call $tk_keys('add', keys, 'alt-x', 'sign out', 'signout', '', 1)        ;* Ctrl-Q left the screen for the prompt: Sign out has this key (the menu and the tile as well); S.179: Alt-X (Ctrl-X is cut wherever there is text)
+      gosub off.row
+   end
+   return
+
+* The row just added stays bound and in the menus, but is not written on the function-key row
+off.row:
+   keys<dcount(keys, @fm), TK.K.ROW> = 0
    return
 
 * The status line's pane is the path of the page (Home > Develop), and the identity stands right of the Back tile on a sub-menu page
@@ -938,7 +1475,7 @@ set.title:
    for ck = 1 to dcount(crumb, @fm)
       ttl := ' > ' : crumb<ck>
    next ck
-   idx = (if cur.menu # '' then 25 else 3)
+   idx = (if cur.menu # '' then xcol<2> else xcol<1>)     ;* 25 or 3 at 140 by 43
    lastmin = ''                                          ;* the clock is written again where the identity now stands
    return
 
@@ -982,7 +1519,7 @@ close.menu:
    gosub enter.level
    return
 
-* View > Recent group: the person turns the group on (the file is made when it is not there) or off (the list is forgotten).  The administrator's SET.TILE ... recent off wins.
+* View > Recent group: the person turns the group on (the file &menus& is made when it is not there) or off (the list is forgotten).  The administrator's SET.TILE ... recent off wins.
 toggle.recent:
    if index(off.set, ' recent ', 1) then
       msg = sysmsg(12966)
@@ -1001,83 +1538,71 @@ toggle.recent:
    msg = sysmsg(rmsg)
    return
 
-* A resize: the screen was repainted under the frame
+* A resize: the layout service makes the frame, the body and the three panes the window's again ($tk_layout 'refresh', which also arms the cursor lock with them), and the page
+* is laid out and drawn again from the new rectangles - the tile columns, the header tiles, the panel, the hint row.  The screen kept the old page's cells where they still fit and
+* the header tiles move with the columns, so the rows above the status line are cleared first; the frame is written again whole (the generation).
 relayout:
-   call $sl_window(w, h)
-   lw = w
-   lh = h
-   if lw < TK.MINW then lw = TK.MINW
-   if lh < TK.MINH then lh = TK.MINH
-   ctx<TK.C.W> = lw
-   ctx<TK.C.H> = lh
-   ctx<TK.C.YSTAT> = lh - 3
-   ctx<TK.C.YBORD> = lh - 2
-   ctx<TK.C.YKEYS> = lh - 1
+   call $tk_layout('refresh', ctx, '', lay.chg)
    gen += 1
    ctx<TK.C.GEN> = gen
    lastmin = ''
+   call $tk_ai('move', ctx, '', '')                       ;* the rows moved: the line is put where they are now; the request typed in it and its focus (aif) are kept
    gosub geometry
+   gosub set.title                                        ;* the identity's column is a tile column's
    gosub layout
+   screen clear at 0,hdy size lw,ctx<TK.C.YSTAT> - hdy
    gosub draw.all
    return
 
 * ------------------------------------------------------------------------------------------------- the menu bar
 
+* The menus, put into the key table (S.88 U9: $tk_menubar draws and runs the bar from it; the page builds no menu array of its own).  The key an entry shows is the table's.
+* An action that cannot be used now is given a reason ($tk_keys 'why'): its entry is dimmed and cannot be chosen, and its key is out of the row - a tile the administrator
+* turned off for this account has no entry that can be chosen either, Back is only on a sub-menu page (on the top page Esc opens this bar, so the dimmed entry shows no key),
+* and Ask the AI follows the AI (the line works when the provider is on).  Called last by build.page, after make.keys, so F5 and Switch account see a change.
 make.menus:
-   menus = ''
-   m = '&File|&Sign out~^Q~signout'
-   gosub add.menu
-   tflag = (if terminal.off then 'D' else '')                ;* D: the entry cannot be chosen (a tile that is off has no menu entry either)
-   sflag = (if index(off.set, ' switch ', 1) then 'D' else '')
-   kflag = (if index(off.set, ' keys ', 1) then 'D' else '')
-   bflag = (if cur.menu = '' then 'D' else '')               ;* Back: only on a sub-menu page
-   rflag = (if index(off.set, ' recent ', 1) then 'D' else '')
-   m = '&Go|&Terminal~~terminal~' : tflag : '|S&witch account~~switch~' : sflag
-   m := '|&Back~Esc~back~' : bflag
-   gosub add.menu
-   m = '&View|&Refresh~F5~refresh'
-   m := '|Recent &group (' : (if rc.on then 'on' else 'off') : ')~~recent~' : rflag
-   gosub add.menu
-   m = '&AI|AI is off~~ai~D'
-   gosub add.menu
-   m = '&Help|&Keys~~keys~' : kflag
-   gosub add.menu
+   if leave.ok then call $tk_keys('menu', keys, 'leave', '&File', '&Back to the prompt', '', '')
+   call $tk_keys('menu', keys, 'signout', '&File', '&Sign out', '', '')
+   call $tk_keys('menu', keys, 'back', '&Go', '&Back', '', '')
+   call $tk_keys('menu', keys, 'terminal', '&Go', '&Terminal', '', '')
+   call $tk_keys('menu', keys, 'switch', '&Go', 'S&witch account', '', '')
+   call $tk_keys('menu', keys, 'find', '&Go', '&Find a tile', '', '')
+   call $tk_keys('menu', keys, 'start', '&Go', '&Start the tile', '', '')   ;* S.180: every key's action is on a menu (Enter)
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'recent', '&View', 'Recent &group on or off', '', '')     ;* a literal, as every registry entry is (test-tk-keys-units regmenu); the status line says which it became
+   call $tk_keys('menu', keys, 'ai', '&AI', '&Ask the AI', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme (View > Theme), Ctrl-K the keys of this page (Help > Keys), as on every page
+   if terminal.off then call $tk_keys('why', keys, 'terminal', H.TILE.OFF, '', '', '')
+   if index(off.set, ' switch ', 1) then call $tk_keys('why', keys, 'switch', H.TILE.OFF, '', '', '')
+   if index(off.set, ' recent ', 1) then call $tk_keys('why', keys, 'recent', H.TILE.OFF, '', '', '')
+   if cur.menu = '' then call $tk_keys('why', keys, 'back', H.TOP.PAGE, '', '', '')
+   if not(ctx<TK.C.AI>) then call $tk_keys('why', keys, 'ai', H.AI.OFF, '', '', '')
    return
 
-add.menu:
-   m = change(m, '|', @vm)
-   m = change(m, '~', @sm)
-   menus<-1> = m
-   return
-
-run.menu:
-   screen menubar menus returning mc then
-      cmd = mc
-      gosub run.cmd
+* / (or Go > Find a tile): a window of the page's tiles ($tk_pickrec 'list', the toolkit's pick window): typing narrows the list to the tiles that hold the text in their name or
+* their group, Enter moves the focus to the tile chosen (it does not start it: Enter on the page does), Esc leaves the focus where it was.  A Recent copy is not listed twice.
+find.tile:
+   fitems = ''
+   fmap = ''
+   fdef = 1
+   for i = 1 to nt
+      if tl<i, HT.ID>[1, 2] # 'r:' then
+         fg = tl<i, HT.GROUP>
+         fitems<-1> = tl<i, HT.LABEL> : @vm : (if fg > 0 then gr<fg, HG.NAME> else 'header')
+         fmap<-1> = i
+         if i = fi then fdef = dcount(fmap, @fm)
+      end
+   next i
+   fsel = 'Find a tile'                                    ;* in: the window's title; out: the number of the entry chosen
+   fstart = fdef                                           ;* in: the entry the window starts on (the tile that has the focus)
+   call $tk_pickrec(ctx, 'list', fitems, fsel, fres, fstart)
+   if fres = 'ok' then
+      j = fmap<fsel>
+      if aif then gosub ai.leave
+      gosub set.focus
+      msg = tl<fi, HT.LABEL> : ': Enter starts it'
    end
-   return
-
-* A menu entry does what its tile does
-run.cmd:
-   begin case
-      case cmd = 'signout'
-         gosub do.signout
-      case cmd = 'terminal'
-         outcome = 'terminal'
-         done = 1
-      case cmd = 'switch'
-         gosub switch.account
-      case cmd = 'refresh'
-         gosub rebuild
-      case cmd = 'back'
-         gosub close.menu
-      case cmd = 'recent'
-         gosub toggle.recent
-      case cmd = 'keys'
-         sentence = 'tool.keys'
-         pause = 0
-         gosub run.command
-   end case
    return
 
 * ------------------------------------------------------------------------------------------------- sign out and switch account
@@ -1128,8 +1653,9 @@ switch.account:
    end
    call $tk_close(ctx)
    hlogto = 1
-   execute 'logto ' : acct
+   execute 'logto ' : acct trapping aborts              ;* 28 Oct 26 (S.88 phase 2): a LOGTO that aborts comes back here too; the screen is taken again below, in whichever account the session is in
    hlogto = 0
+   call $sl_cleanup
    cur.menu = ''                                          ;* the screen of the new account starts at its top page
    stk = ''
    crumb = ''

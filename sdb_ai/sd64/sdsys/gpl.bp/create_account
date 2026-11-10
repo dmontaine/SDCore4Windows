@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): CA$RECOVERY (exactly 1) writes ACC$RECOVERY 'yes' for a user account ('no' otherwise,
+*              written explicitly like the gates) and is said with 12775; a group or other account is refused (12776) before anything is made.
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (menu, terminal or blank) is written to ACC$START and CA$PINS (exactly 1) to ACC$PINS 'yes', for every type of account, and said with 12873 and 12890;
 *              a start word that is neither is refused (2018) BEFORE the ATTACH marker, the Windows user and the password, so it creates nothing.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: CA$FILESADMIN joins the new user to the Windows group sdfilesadmin after sdfileswrite; refused without CA$FILES and
@@ -177,6 +179,9 @@ deffun ps_script(script) calling '!ps_script'
    files.write.want = (settings<CA$FILESWRITE> = 1)
 * 21 Oct 26 dm - S.73 item 3: FILES-ADMIN-ON, the same rule; it is a request only with FILES-ON and FILES-WRITE-ON (sdfilesadmin alone gives nothing).
    files.admin.want = (settings<CA$FILESADMIN> = 1)
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON, the account's editors keep a recovery copy of unsaved text; the same rule,
+*   exactly 1 to be a request; a user account only.
+   recovery.want = (settings<CA$RECOVERY> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -613,6 +618,12 @@ PW.TRY.AGAIN:
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
      end
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): nor a recovery copy: it is kept in the account's directory, where every member can rename entries (12776).
+     if recovery.want then
+       @system.return.code = -ER$ARGS
+       err = 12776:@vm:acc.name ;* %1 is not a user account, and a recovery copy is kept only in a user account, for its own person; nothing was changed
+       goto exit.create
+     end
 
    case acc.type = 'OTHER'
 *    CREATE.ACCOUNT OTHER <account name> <pathname>, the path in CA$PATH
@@ -630,6 +641,12 @@ PW.TRY.AGAIN:
      if files.want or files.write.want or files.admin.want then
        @system.return.code = -ER$ARGS
        err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
+       goto exit.create
+     end
+* 28 Oct 26 dm - S.88 plan 2.9 (D2): nor a recovery copy (12776), as for a group account.
+     if recovery.want then
+       @system.return.code = -ER$ARGS
+       err = 12776:@vm:acc.name ;* %1 is not a user account, and a recovery copy is kept only in a user account, for its own person; nothing was changed
        goto exit.create
      end
      pathname = trim(settings<CA$PATH>)
@@ -1023,6 +1040,8 @@ PW.TRY.AGAIN:
 *   decided state can be told from a blank one.
       acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'
       acc.rec<ACC$SHARED.WRITE> = if shared.write.want then 'yes' else 'no'
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): the recovery copy, written explicitly for a user account ('no' unless asked).
+      acc.rec<ACC$RECOVERY> = if recovery.want then 'yes' else 'no'
    end else
 *     A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words
 *     are honoured here too: written only when asked (blank is off).
@@ -1055,6 +1074,8 @@ PW.TRY.AGAIN:
       files.anow = is_grp_member(acc.uname, 'sdfilesadmin')
       crt sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')  ;* Account %1 has files-admin %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
+*     10 Nov 26 (from Linux 44807a43, S.88 plan 2.9, D2): the recovery copy, in the words MODIFY.ACCOUNT says it with.
+      crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
    end
 *  28 Oct 26, S.75, home: the two settings are said when they were asked for, in the words MODIFY.ACCOUNT says them with.
    if start.want # '' then crt sysmsg(12873, acc.name, start.want)  ;* Account %1 starts at: %2

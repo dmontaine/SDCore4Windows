@@ -1,1 +1,1 @@
-&Go|Go to &line~^L~goto|&Next error~F4~nexterr|Next &tab~F6~nexttab|&Files and records~F3~tree|&Edit in SED~^E~sed
+&Go|Go to &line~Alt-G~goto|&Next error~F4~nexterr|Next &tab~^PgDn~nexttab|Pre&vious tab~^PgUp~prevtab|&Files and records~~tree|Next &pane~F6~nextpane|Previous p&ane~Shift-F6~prevpane|&Open the include~~include|&Zoom the editor~^E~zoom|Edit as f&ields~F12~fields|Dictionary item as for&m~~dform|Next &record from the list~~nextsel|Filter the r&ecords~~filter

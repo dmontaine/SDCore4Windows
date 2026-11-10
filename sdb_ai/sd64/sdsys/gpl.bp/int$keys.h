@@ -247,6 +247,12 @@
       * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
       *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
       $define K$WINSIZE          92      ;* The terminal's size from the tty
+      * 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's four keys, so the AI routines carry unchanged.  Windows has no helper yet
+      *   (RELEASE_1.1 173): its kernel answers each as Linux's does when no helper is running (op_kernel.c), so the AI is never usable.  Must match gplsrc/keys.h.
+      $define K$AI.START        160     ;* system:@fm:maxtokens:@fm:prompt, answered 'OK' or 'ERR':@fm:why (Windows: 'ERR':@fm:'nohelper')
+      $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
+      $define K$AI.CANCEL       162     ;* give the request up ('OK')
+      $define K$AI.STATUS       163     ;* the helper's status line, 'D':@fm:json, or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  K$REAL.USER 90 and K$LOGIN.UID 91 are Linux's own and are not carried.
 * 13 Oct 26 dm - S.63.  The per-account OS-access gates are back (see gplsrc/keys.h): K$SH and
 *   K$OS.EXEC, at 93 and 94 now.  Settable only from $internal, like K$ADMINISTRATOR; LOGIN and CPROC

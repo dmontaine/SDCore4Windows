@@ -543,6 +543,13 @@
                        updates and its locks go to the parent instead of to the files.  The COMMIT clears it, used or not.
                        A program compiled with $MODE NON.DURABLE.TXN sets it before each COMMIT. */
 #define K_NON_DURABLE_TXN    113
+/* 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's keys, so the screen library's AI routines ($tk_ai) carry
+   unchanged.  Windows has no helper yet (RELEASE_1.1 173): op_kernel.c answers each as Linux's op_ai.c does when no helper is
+   running - START 'ERR' FM 'nohelper', POLL and STATUS 'E' FM 'nohelper', CANCEL 'OK' - so the AI is never usable and nothing is sent. */
+#define K_AI_START           160
+#define K_AI_POLL            161
+#define K_AI_CANCEL          162
+#define K_AI_STATUS          163
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

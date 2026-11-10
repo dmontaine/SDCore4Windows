@@ -7,6 +7,7 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
 * 18 Oct 26 dm  Takes the cursor lock off ($sl_guardmode).
+* 28 Oct 26 dm  S.88 phase 2 (D4): gives back the break setting an app took ($tk_brk 'give'), before the test of whether the library holds the screen.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -38,6 +39,7 @@ $include sl.h
    if system(25) then return                  ;* a phantom has no terminal
 
    call $sl_guardmode('', 0, 0)               ;* a program that stopped without SCREEN CLOSE leaves no cursor lock behind
+   call $tk_brk('give', '')                   ;* ... nor a dead break key: the setting an app of the toolkit took and did not give back (28 Oct 26, D4); nothing is written
    call $sl_scr('get', scr)
    if not(scr<SL.S.OWNED>) then return        ;* the library holds nothing
 

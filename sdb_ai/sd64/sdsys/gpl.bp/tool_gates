@@ -5,6 +5,25 @@
 *
 * START-HISTORY:
 * 24 Oct 26 dm  New.
+* 28 Oct 26 dm  S.88 L2: the four boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the matrix shows more accounts and the
+*               two lists under the cell more rows, every box wider, and the sentences about the cell are wrapped at the width of their box.  The resize key makes the layout again.
+* 1 Nov 26 dm  A (all on) and N (all off) for the cursor's account, in the Gates menu too (owner: "buttons for All gates off and All Gates On"; warned once that all-on was
+*              the one key this page never had, then: "just a convenience feature ... set all on, and then turn some off").  They QUEUE; R's box is still the question.  The
+*              test of whether a cell can be queued is now one routine, cell.why, used by Enter, A and N.
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the filter and refresh are offered to the model, nothing that changes a gate.
+* 2 Nov 26 dm  S.88 p5-U2b P10: Ctrl-Q (and File > Quit, which the bar gives as Ctrl-Q) dropped every queued change without a word.  With anything queued it now asks first, in
+*              $tk_confirm's box: Run the changes (each account's queue goes the way R takes it, its own box and, where a gate reaches beyond SD, the name typed; the page closes only
+*              when nothing is left), Leave without them, or Cancel (the default: Enter alone never leaves).  With nothing queued it leaves at once, as before.  R's handler now
+*              names the account (av) before run.queue, so that the leave question can run the queue of an account that is not under the cursor.
+*              After the review: run.queue says whether its command ran without a refusal or an error (rq.ok); Run the changes keeps the page open and shows the
+*              failing account's message when any did not succeed (run.queue clears a queue once the box said Run, so "nothing left" alone was not success).
+* 7 Nov 26 dm  S.166: the home gate is a column (ON the home screen, off the command prompt; words start-menu and start-terminal).  A and N leave it alone: which of the two is
+*              the tighter is not "off", so "all on" and "all off" do not decide where a person starts.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the matrix to the AI line and back; AI > Ask the AI is a menu entry of its own.
+*              Tab and Shift-Tab still move between the columns, the matrix's own use of them.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+*              '/' finds an account on show by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -24,7 +43,9 @@
 *
 *   Keys: arrows move over the cells, Enter or the space bar queues the opposite state for the cell (and again takes it back), R runs the queued changes of the account on the
 *   cursor's row, U drops them, T queues OFF for every gate of that account that is off as delivered and on now (it does not touch a gate whose delivered state is on), F
-*   changes which accounts are shown, F5 reads the machine again, F1 or ? or a click on a [?] explains the matrix, Ctrl-Q leaves.  There is NO key that queues everything ON.
+*   changes which accounts are shown, F5 reads the machine again, F1 or ? or a click on a [?] explains the matrix, Ctrl-Q leaves (asking first when anything is queued: run the
+*   changes, leave without them, or cancel, which is the default).  A (all on) and N (all off) queue every gate
+*   of the cursor's account that can change to end ON or off (the owner's convenience, 1 Nov 2026: set all on, then turn some off); they only queue, as Enter does.
 *
 *   THE PAGE WRITES NOTHING ITSELF.  The queued changes of one account become ONE command, MODIFY.ACCOUNT name word word ..., which validates every word before it changes anything
 *   (a conflict is refused whole), shown with its effect in a box answered Run or Cancel (Cancel is what Enter chooses) and run by $tk_run.  Turning ON a gate that reaches beyond
@@ -57,6 +78,7 @@ $include tk.h
       stop
    end
    void kernel(K$AUDIT, 'tool start app=tool.gates')
+   gosub declare.layout
 
    keys = ''
    call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
@@ -64,21 +86,43 @@ $include tk.h
    call $tk_keys('add', keys, 'r', 'run', 'run', '', 1)
    call $tk_keys('add', keys, 'u', 'drop', 'drop', '', 1)
    call $tk_keys('add', keys, 't', 'tighten', 'tighten', '', 1)
+   call $tk_keys('add', keys, 'a', 'all on', 'allon', '', 1)
+   call $tk_keys('add', keys, 'n', 'all off', 'alloff', '', 1)
    call $tk_keys('add', keys, 'f', 'filter', 'filter', '', 1)
+   call $tk_keys('add', keys, '/', 'find', 'find', '', 1)                  ;* 9 Nov 26 (S.186): '/' finds an account by typing (letters are this page's commands)
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U2: Esc takes the filter off first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'queue', '&Gates', '&Queue the cell', '', '')
+   call $tk_keys('menu', keys, 'run', '&Gates', '&Run the queue', '', '')
+   call $tk_keys('menu', keys, 'drop', '&Gates', '&Drop the queue', '', '')
+   call $tk_keys('menu', keys, 'tighten', '&Gates', '&Tighten the account', '', '')
+   call $tk_keys('menu', keys, 'allon', '&Gates', '&All gates on', '', '')
+   call $tk_keys('menu', keys, 'alloff', '&Gates', 'All gates o&ff', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter the accounts', '', '')
+   call $tk_keys('menu', keys, 'find', '&View', 'Find an &account', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only the filter and refresh (the gate matrix: queuing, tightening, dropping and running a change are NOT
+   * offered without the owner's word); a proposal is carried out by the page's own key.  This page laid itself out first, so a line that took a row has the panes
+   * declared again.
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+   if aout then gosub declare.layout
 
-   VIS = 14                                                      ;* account rows on the screen
-   CW = 6                                                        ;* width of a gate's cell
-   X0 = 29                                                       ;* the column of the first cell (3 + the 26 of name and kind)
+   CW = 6                                                        ;* width of a gate's cell (VIS, the account rows on the screen, and X0, the column of the first cell, come from the layout)
    fnames = 'all accounts' : @fm : 'accounts of persons' : @fm : 'accounts with a gate on that reaches beyond SD'
 
    ci = 1                                                        ;* the row under the cursor, among the rows shown
    gc = 1                                                        ;* the column under the cursor
+   find.last = ''                                                ;* 9 Nov 26 (S.186): the text '/' asked for last
    ta = 0                                                        ;* the rows scrolled off the top
    flt = 0
    gen = 0
-   msg = 'Enter queues the opposite state for the cell, R runs what is queued for the account'
+   msg = ''
    done = 0
 
    call $tk_gate_info('list', gids)
@@ -105,16 +149,34 @@ $include tk.h
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, 'Gates', '', '', mr)              ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, 'Gates', msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)
       nm = ''
       screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'Gates', nm, ao)             ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      busy = (if flt # 0 then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'Gates', nm, busy, mr)       ;* the Esc rule: a filter is taken off before the bar opens
+      if mr<1> # '' then nm = mr<4>
       begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
          case nm = ''
             if status() = ER$EOF then exit
          case nm = 'guardquit'
             exit
          case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lchg)
+            gosub get.rects
+            gosub keep.in.view
             gen += 1
             ctx<TK.C.GEN> = gen
             gosub draw.all
@@ -244,14 +306,59 @@ queued.elsewhere:
 
 * ------------------------------------------------------------------------------------------------- drawing
 
+* The layout (S.88 L2).  The four boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the matrix takes twice the rows
+* the two lists under the cell take (the cell box stays as high as it is), and the two lists share the columns equally.  The page never hands the terminal over, so the declaration is
+* made once, after the open, and the rectangles are fetched again after each 'refresh'.
+* Out: mat (the matrix), cel (the cell), rea (who can reach the operating system), ses (the sessions), each .x .y .w .h; mtw, ctw, rtw, stw (the text width of each box); VIS (the
+* account rows), CL (the lines about the cell), RW (the rows of each of the two lists), X0 (the column of the first cell).
+declare.layout:
+   ld = ''
+   ld<1> = 'matrix' : @vm : 1 : @vm : 1 : @vm : 19 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 2 : @vm : 'stretch' : @vm : 1
+   ld<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 11 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   ld<3> = 'reach' : @vm : 3 : @vm : 1 : @vm : 9 : @vm : 68 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   ld<4> = 'sessions' : @vm : 3 : @vm : 2 : @vm : 9 : @vm : 69 : @vm : 1 : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, ld, perr)
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
+      stop
+   end
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'matrix', lrc)
+   mat.x = lrc<1, 1> ; mat.y = lrc<1, 2> ; mat.w = lrc<1, 3> ; mat.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'cell', lrc)
+   cel.x = lrc<1, 1> ; cel.y = lrc<1, 2> ; cel.w = lrc<1, 3> ; cel.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'reach', lrc)
+   rea.x = lrc<1, 1> ; rea.y = lrc<1, 2> ; rea.w = lrc<1, 3> ; rea.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'sessions', lrc)
+   ses.x = lrc<1, 1> ; ses.y = lrc<1, 2> ; ses.w = lrc<1, 3> ; ses.h = lrc<1, 4>
+   mtw = mat.w - 4
+   ctw = cel.w - 4
+   rtw = rea.w - 4
+   stw = ses.w - 4
+   VIS = mat.h - 5                                               ;* the heading, the account rows, the two lines of counts and the border: 14 rows of 19
+   CL = cel.h - 2                                                ;* the lines about the cell: 9 rows of 11
+   RW = rea.h - 2                                                ;* the rows of each list under the cell: 7 of 9 (the last of them holds the "..." of the first list)
+   X0 = mat.x + 28                                               ;* the column of the first cell (2 inside the box + the 26 of name and kind)
+   return
+
+* After a resize the rows scrolled off the top are not more than the accounts shown less the rows that fit
+keep.in.view:
+   if ta > nv - VIS then ta = nv - VIS
+   if ta < 0 then ta = 0
+   return
+
 draw.all:
    cw2 = ctx<TK.C.W>
    chh = ctx<TK.C.H> - 5
    screen clear at 0,1 size cw2,chh
-   screen box at 1,1 size 138,19 title 'Gates by account'
-   screen box at 1,20 size 138,11 title 'The cell under the cursor'
-   screen box at 1,31 size 68,9 title 'Who can reach the operating system'
-   screen box at 70,31 size 69,9 title 'Sessions of the account under the cursor'
+   screen box at mat.x,mat.y size mat.w,mat.h title 'Gates by account'
+   screen box at cel.x,cel.y size cel.w,cel.h title 'The cell under the cursor'
+   screen box at rea.x,rea.y size rea.w,rea.h title 'Who can reach the operating system'
+   screen box at ses.x,ses.y size ses.w,ses.h title 'Sessions of the account under the cursor'
    gosub draw.matrix
    gosub draw.cell
    gosub draw.who
@@ -263,7 +370,7 @@ draw.matrix:
    for k = 1 to NG
       s := fmt(ghdr<k>, CW : 'L')
    next k
-   screen text s at 3,2 attr 'header' width 134
+   screen text s at mat.x + 2,mat.y + 1 attr 'header' width mtw
    if ci <= ta then ta = ci - 1
    if ci > ta + VIS then ta = ci - VIS
    if ta < 0 then ta = 0
@@ -277,21 +384,21 @@ draw.matrix:
             gosub cell.text
             s := fmt(ct, CW : 'L')
          next k
-         if asu<av> then s := ' suspended'
+         if asu<av> then s := ' susp'                    ;* S.166: seventeen cells leave five columns (the cell box below says "suspended" in full)
       end
-      screen text s at 3,2 + r attr (if kk = ci and kk <= nv then 'bold' else 'normal') width 134
+      screen text s at mat.x + 2,mat.y + 1 + r attr (if kk = ci and kk <= nv then 'bold' else 'normal') width mtw
    next r
    if nv > 0 and ci <= nv then
       av = view<ci>
       k = gc
       gosub cell.text
       hx = X0 + (gc - 1) * CW
-      hy = 2 + ci - ta
+      hy = mat.y + 1 + ci - ta
       screen text fmt(ct, CW : 'L') at hx,hy attr 'highlight' width CW
    end
-   if nv = 0 then screen text 'No account is shown.  F changes which accounts are shown.' at 3,4 width 134
+   if nv = 0 then screen text 'No account is shown.  F changes which accounts are shown.' at mat.x + 2,mat.y + 3 width mtw
    gosub draw.counts
-   call $tk_help('mark', 134, 2, 0, 0)
+   call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)
    return
 
 * The text of the cell of account av, gate k: ON, off, a dash or plan, with a * when a change is queued
@@ -318,7 +425,7 @@ draw.counts:
       n.on += beyond.on
    next i
    s = fnames<flt + 1> : ': ' : nv : ' of ' : an : ' account' : (if an = 1 then '' else 's') : '.  ' : n.on : ' with a gate on that reaches beyond SD.'
-   screen text fmt(s, '134L') at 3,17 attr 'bold' width 134
+   screen text fmt(s, mtw : 'L') at mat.x + 2,mat.y + mat.h - 3 attr 'bold' width mtw
    if nv > 0 and ci <= nv then
       av = view<ci>
       gosub final.of
@@ -332,7 +439,7 @@ draw.counts:
    end else
       s = ''
    end
-   screen text fmt(s, '134L') at 3,18 width 134
+   screen text fmt(s, mtw : 'L') at mat.x + 2,mat.y + mat.h - 2 width mtw
    return
 
 * In plain sentences, for the cell under the cursor
@@ -363,8 +470,8 @@ draw.cell:
       lines<-1> = 'There is no account under the cursor.'
    end
    gosub wrap.lines
-   for r = 1 to 9
-      screen text fmt(lines<r>, '134L') at 3,20 + r width 134
+   for r = 1 to CL
+      screen text fmt(lines<r>, ctw : 'L') at cel.x + 2,cel.y + r width ctw
    next r
    return
 
@@ -375,7 +482,7 @@ wrap.lines:
       if lines<wi> = '' then
          wrapped<-1> = ''
       end else
-         call $tk_wrap(lines<wi>, 134, pieces)
+         call $tk_wrap(lines<wi>, ctw, pieces)
          wrapped<-1> = pieces
       end
    next wi
@@ -385,8 +492,8 @@ wrap.lines:
 * Who can reach the operating system: the accounts with a gate on that reaches beyond SD, each with the gates
 draw.who:
    n = 0
-   for r = 1 to 7
-      screen text space(64) at 3,31 + r width 64
+   for r = 1 to RW
+      screen text space(rtw) at rea.x + 2,rea.y + r width rtw
    next r
    for i = 1 to an
       w = ''
@@ -395,16 +502,16 @@ draw.who:
       next k
       if w # '' then
          n += 1
-         if n <= 6 then screen text fmt(fmt(anm<i>, '18L') : w, '64L') at 3,31 + n width 64
-         if n = 7 then screen text fmt('...', '64L') at 3,38 width 64
+         if n < RW then screen text fmt(fmt(anm<i>, '18L') : w, rtw : 'L') at rea.x + 2,rea.y + n width rtw
+         if n = RW then screen text fmt('...', rtw : 'L') at rea.x + 2,rea.y + RW width rtw
       end
    next i
-   if n = 0 then screen text fmt('No account has a gate on that reaches beyond SD.', '64L') at 3,32 width 64
+   if n = 0 then screen text fmt('No account has a gate on that reaches beyond SD.', rtw : 'L') at rea.x + 2,rea.y + 1 width rtw
    return
 
 draw.sessions:
-   for r = 1 to 7
-      screen text space(65) at 72,31 + r width 65
+   for r = 1 to RW
+      screen text space(stw) at ses.x + 2,ses.y + r width stw
    next r
    if nv > 0 and ci <= nv then
       call !listu(udata)
@@ -414,10 +521,10 @@ draw.sessions:
          v = udata<i>
          if v<1, 9> = anm<av> then
             n += 1
-            if n <= 6 then screen text fmt('user ' : v<1, 1> : '  ' : v<1, 6> : '  ' : v<1, 7>, '65L') at 72,31 + n width 65
+            if n < RW then screen text fmt('user ' : v<1, 1> : '  ' : v<1, 6> : '  ' : v<1, 7>, stw : 'L') at ses.x + 2,ses.y + n width stw
          end
       next i
-      if n = 0 then screen text fmt('No session is in ' : anm<av> : ' now.', '65L') at 72,32 width 65
+      if n = 0 then screen text fmt('No session is in ' : anm<av> : ' now.', stw : 'L') at ses.x + 2,ses.y + 1 width stw
    end
    return
 
@@ -450,11 +557,29 @@ on.key:
       case nm = 'enter' or nm = ' '
          gosub queue.cell
       case nm = 'r'
-         gosub run.queue
+         if nv > 0 then
+            av = view<ci>
+            gosub run.queue
+         end
       case nm = 'u'
          gosub drop.queue
       case nm = 't'
          gosub tighten
+      case nm = 'a'
+         tv = 1
+         gosub queue.all
+      case nm = 'n'
+         tv = 0
+         gosub queue.all
+      case nm = '/'                         ;* S.186: the next account on show whose name holds the text typed ($tk_findrow)
+         fr.rows = ''
+         for fr.r = 1 to nv
+            fr.rows<fr.r> = anm<view<fr.r>>
+         next fr.r
+         call $tk_findrow(fr.rows, ci, find.last, fpos)
+         if fpos < 0 then msg = sysmsg(15045, find.last)
+         if fpos > 0 then ci = fpos
+         gosub draw.all
       case nm = 'f'
          flt = mod(flt + 1, 3)
          ci = 1
@@ -465,12 +590,35 @@ on.key:
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)
          if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'Gates', std.r)
       case nm = 'f5'
          gosub read.all
          gosub draw.all
          msg = 'read the machine again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here: Tab keeps moving the columns) and the AI line
+         msg = ap<2>
       case nm = 'ctrl-q'
-         done = 1
+         gosub leave.ask
+      case nm = 'esc'
+         if flt # 0 then
+            flt = 0
+            ci = 1
+            ta = 0
+            gosub make.view
+            gosub draw.all
+            msg = 'showing ' : fnames<flt + 1>
+         end
    end case
    return
 
@@ -483,7 +631,19 @@ redraw:
 on.mouse:
    screen mouse returning mev else mev = ''
    if mev = '' then return
-   call $tk_help('hit', mev, 134, 2, hit.m)
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'Gates', mev, '', mr)                     ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'Gates', mev, ap)                            ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, mat.x + mat.w - 5, mat.y + 1, hit.m)
    if hit.m then
       call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)
       if hm # '' then msg = hm
@@ -492,9 +652,9 @@ on.mouse:
    if mev<1> = 'press' and mev<2> = 1 then
       mx = mev<3>
       my = mev<4>
-      if my >= 3 and my <= 2 + VIS and mx >= 3 and mx <= 136 then
-         if ta + my - 2 <= nv then
-            ci = ta + my - 2
+      if my >= mat.y + 2 and my <= mat.y + 1 + VIS and mx >= mat.x + 2 and mx <= mat.x + mat.w - 3 then
+         if ta + my - mat.y - 1 <= nv then
+            ci = ta + my - mat.y - 1
             if mx >= X0 and mx < X0 + NG * CW then gc = int((mx - X0) / CW) + 1
             gosub redraw
          end
@@ -510,19 +670,48 @@ queue.cell:
    av = view<ci>
    k = gc
    s0 = ast<av, k>
+   gosub cell.why
+   if why # '' then
+      msg = why
+      return
+   end
+   d = (if aq<av, k> # '' then aq<av, k> else s0)
+   nw = (if d = 1 then 0 else 1)
+   aq<av, k> = (if nw = s0 then '' else nw)
+   gosub redraw
+   return
+
+* Can gate k of account av be queued?  why is null when it can, else the reason (one test for Enter, A and N)
+cell.why:
+   why = ''
    begin case
       case gstat<k> # 'built'
-         msg = gti<k> : ' is planned and not built yet'
-      case s0 = 'na'
-         msg = gti<k> : ' does not apply to a ' : downcase(aty<av>) : ' account'
+         why = gti<k> : ' is planned and not built yet'
+      case ast<av, k> = 'na'
+         why = gti<k> : ' does not apply to a ' : downcase(aty<av>) : ' account'
       case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'
-         msg = 'a ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so modify.account refuses' : gids<k> : ' for it'
-      case 1
-         d = (if aq<av, k> # '' then aq<av, k> else s0)
-         nw = (if d = 1 then 0 else 1)
-         aq<av, k> = (if nw = s0 then '' else nw)
-         gosub redraw
+         why = 'a ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so modify.account refuses ' : gids<k> : ' for it'
    end case
+   return
+
+* A (tv = 1) and N (tv = 0): every gate of the cursor's account that can be queued is queued to END in state tv; a gate already in it has its queue taken back.  The
+* owner's convenience (1 Nov 2026: "any admin would set all on, and then turn some off"): nothing is changed here, R shows the one command in its box (a gate that reaches
+* beyond SD still wants the account's name typed) and Enter on a cell takes a single gate back out first.
+queue.all:
+   if nv = 0 then return
+   av = view<ci>
+   n.q = 0
+   for k = 1 to NG
+      gosub cell.why
+      if gids<k> = 'home' then why = 'where the account starts is not changed by all on or all off'     ;* S.166
+      if why = '' then
+         aq<av, k> = (if ast<av, k> = tv then '' else tv)
+         if aq<av, k> # '' then n.q += 1
+      end
+   next k
+   gosub redraw
+   w.st = (if tv = 1 then 'ON' else 'OFF')
+   msg = (if n.q = 0 then 'every gate of ' : anm<av> : ' that can change is ' : w.st : ' already' else 'queued ' : w.st : ' for ' : n.q : ' gate' : (if n.q = 1 then '' else 's') : ' of ' : anm<av> : '; Enter on a cell takes one back, R runs them')
    return
 
 * U: drop the queue of the account on the cursor's row
@@ -558,10 +747,11 @@ tighten:
    msg = (if n.q = 0 then anm<av> : ' has no gate on that is off as delivered' else 'queued OFF for ' : n.q : ' gate' : (if n.q = 1 then '' else 's') : ' of ' : anm<av> : '; R runs them')
    return
 
-* R: the queued changes of the account on the cursor's row, as one MODIFY.ACCOUNT command, its effect, Run or Cancel, then the machine's answer
+* R: the queued changes of account av (R's handler gives the cursor's row; run.all gives each account in turn), as one MODIFY.ACCOUNT command, its effect, Run or Cancel, then the
+* machine's answer
 run.queue:
-   if nv = 0 then return
-   av = view<ci>
+   rq.ok = 0                                                     ;* 2 Nov 26 (review): 1 only when the box said Run and the command ran without a refusal or an error
+   rq.ran = 0
    gosub final.of
    if qn = 0 then
       msg = 'nothing is queued for ' : anm<av>
@@ -576,6 +766,8 @@ run.queue:
    call $tk_confirm(sent, el, typed, res, cmsg)
    if res = 'run' then
       call $tk_run(allow, sent, out, stat, err)
+      rq.ran = 1
+      rq.ok = (err = '' and stat >= 0)                           ;* modify.account's failures are negative codes ($tk_run: the command's @system.return.code)
       if err # '' then
          msg = err
       end else
@@ -635,19 +827,19 @@ make.sentence:
          words<-1> = (if aq<av, k> = 1 then gon<k> else goff<k>)
       end
    next k
-   rw = ''
+   rword = ''                                                    ;* NOT rw: names are case-insensitive and RW is the rows of each list (get.rects); rw overwrote it and the page stopped in draw.who
    if route.changed then
       begin case
          case fin<rs> = 1 and fin<ra> = 1
-            rw = 'both'
+            rword = 'both'
          case fin<rs> = 1
-            rw = 'ssh'
+            rword = 'ssh'
          case fin<ra> = 1
-            rw = 'api'
+            rword = 'api'
          case 1
-            rw = 'none'
+            rword = 'none'
       end case
-      words<-1> = rw
+      words<-1> = rword
    end
    sent = 'modify.account ' : anm<av> : ' ' : trim(change(words, @fm, ' '))
    el = ''
@@ -667,7 +859,7 @@ make.sentence:
          locate gwhen<k> in whens<1> setting wp else whens<-1> = gwhen<k>
       end
    next k
-   if route.changed then el<-1> = 'ssh and api are one setting: the word sent is ' : rw : ', which gives ssh ' : (if fin<rs> = 1 then 'ON' else 'off') : ' and api ' : (if fin<ra> = 1 then 'ON' else 'off') : '.'
+   if route.changed then el<-1> = 'ssh and api are one setting: the word sent is ' : rword : ', which gives ssh ' : (if fin<rs> = 1 then 'ON' else 'off') : ' and api ' : (if fin<ra> = 1 then 'ON' else 'off') : '.'
    if loosen then
       el<-1> = 'A gate that is off as delivered is being turned ON.  Leaving it off is the tighter choice; you decide.'
    end
@@ -676,6 +868,82 @@ make.sentence:
       typed = anm<av>
    end
    el<-1> = 'A running session is not changed.  A change reaches the person: ' : change(whens, @fm, '; ') : '.'
+   return
+
+* ------------------------------------------------------------------------------------------------- leaving
+
+* Ctrl-Q, and File > Quit (the bar gives its quit entry as ctrl-q): the page leaves at once when no account has anything queued.  When one has, $tk_confirm asks first (S.88 p5-U2b
+* P10, 2 Nov 26; until then the queue was dropped without a word): Run the changes, Leave without them, or Cancel, which is the last button and so the default (Enter alone never
+* leaves and never runs).  The box shows the command each account's queue would be; nothing is run here: Run the changes is run.all, which is R for each account in turn.
+leave.ask:
+   lq.sent = ''
+   lq.n = 0
+   lq.cells = 0
+   for av = 1 to an
+      gosub final.of
+      if qn > 0 then
+         lq.n += 1
+         lq.cells += qn
+         gosub make.sentence
+         lq.sent<-1> = sent
+      end
+   next av
+   if lq.n = 0 then
+      done = 1
+      return
+   end
+   lq.lines = lq.cells : ' queued change' : (if lq.cells = 1 then '' else 's') : ' of ' : lq.n : ' account' : (if lq.n = 1 then '' else 's') : ' not run yet.  Leaving the page drops them.'
+   lq.lines<-1> = 'Run the changes shows the box R shows for each account in turn (its command, and its name to type where a gate reaches beyond SD); the page closes only when nothing is left.'
+   lq.lines<-1> = 'Leave without them closes the page and changes nothing.  Cancel goes back to the page.'
+   call $tk_confirm(change(lq.sent, @fm, '; '), lq.lines, '', lq.res, lq.msg, 'Leave the gate matrix?', '&Run the changes,&Leave without them,&Cancel')
+   begin case
+      case lq.res = 'alt'
+         done = 1
+      case lq.res = 'run'
+         gosub run.all
+      case 1
+         msg = 'nothing was run; the queued changes are still here'
+   end case
+   return
+
+* Run the changes: each account with a queue goes through run.queue once (its own box; a Cancel or a refusal there leaves its queue), found again by name after every command,
+* since run.queue reads the machine again.  The page leaves only when no queue is left.
+run.all:
+   lq.tried = ''
+   lq.fail = 0 ; lq.failmsg = ''                                 ;* 2 Nov 26 (review): a refused or failed command keeps the page open and its message is shown
+   loop
+      lq.av = 0
+      for lq.i = 1 to an
+         if lq.av = 0 then
+            locate anm<lq.i> in lq.tried<1> setting lq.p else
+               av = lq.i
+               gosub final.of
+               if qn > 0 then lq.av = lq.i
+            end
+         end
+      next lq.i
+   while lq.av > 0 do
+      av = lq.av
+      lq.tried<-1> = anm<av>
+      gosub run.queue
+      if rq.ran and not(rq.ok) then
+         lq.fail += 1
+         lq.failmsg = anm<av> : ': ' : msg
+      end
+   repeat
+   lq.left = 0
+   for av = 1 to an
+      gosub final.of
+      lq.left += qn
+   next av
+   begin case
+      case lq.fail > 0
+         msg = lq.fail : ' command' : (if lq.fail = 1 then '' else 's') : ' did not succeed, so the page stays: ' : lq.failmsg
+      case lq.left = 0
+         done = 1
+      case 1
+         msg = lq.left : ' queued change' : (if lq.left = 1 then '' else 's') : ' not run, so the page stays: ' : msg
+   end case
    return
 
 end

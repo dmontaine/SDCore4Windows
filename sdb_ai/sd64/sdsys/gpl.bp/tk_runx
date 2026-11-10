@@ -1,0 +1,85 @@
+* TK_RUNX
+* The full-screen toolkit, shared base: $tk_run for a verb that checks every word of its own sentence itself (S.69 step 2, tool.ai).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 23 Oct 26 dm  New.  tool.ai passes set.ai an https address, a model name that may have capitals and a certificate file: words that $tk_run refuses.
+* 9 Nov 26 dm  S.186: a refused word says which character is wrong (15040 with $tk_badch), as $tk_run does.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_runx(allow, sentence, out, status, err)
+*
+*   Exactly $tk_run, with one difference: a word may hold, besides a-z, 0-9, dot, dash and underscore, the capital letters A-Z and the six characters : / @ + , -
+*   which is the list SET.AI itself allows in a word (setai: okc) and nothing more.  There is still no space inside a word, no quote, no semicolon, no dollar, no
+*   backquote, no bar, no ampersand, no angle bracket, no backslash, no mark and no control character, so a word cannot carry a second command or a quote.
+*   The first word is compared whole against the tool's list, in lower case as typed, as in $tk_run.  A tool uses this only for a verb whose own program refuses a word
+*   that has anything else; $tk_run stays the routine for every other command.
+*
+*     allow     the commands this tool may run, lower case, separated by spaces
+*     sentence  the command, built by the tool from values it has checked
+*     out       returned: what the command printed
+*     status    returned: the command's return code (@system.return.code), 0 when it was not run
+*     err       returned: null when the command was run; else the message that says why it was not (12809-12812).  Nothing ran.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_runx(allow, sentence, out, status, err)
+$catalog $tk_runx
+
+$include tk.h
+
+   err = ''
+   out = ''
+   status = 0
+   s = trim(sentence)
+   if s = '' then
+      err = sysmsg(12809)
+      goto run.done
+   end
+   if len(s) > 500 then
+      err = sysmsg(12812)
+      goto run.done
+   end
+   nw = dcount(s, ' ')
+   if nw > 40 then
+      err = sysmsg(12812)
+      goto run.done
+   end
+   verb = field(s, ' ', 1)
+   ok.verb = @false
+   na = dcount(allow, ' ')
+   for i = 1 to na
+      if field(allow, ' ', i) = verb and verb # '' then ok.verb = @true
+   next i
+   if not(ok.verb) then
+      err = sysmsg(12810, verb)
+      goto run.done
+   end
+   good = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/@+,-'
+   for i = 1 to nw
+      w = field(s, ' ', i)
+      for j = 1 to len(w)
+         if index(good, w[j, 1], 1) = 0 then
+            call $tk_badch(w[j, 1], bad.ch)            ;* 9 Nov 26 (S.186): the character, in words, as $tk_run says it (this one only: capitals pass here)
+            err = sysmsg(15040, w, bad.ch)
+            goto run.done
+         end
+      next j
+   next i
+   execute s trapping aborts capturing out
+   status = @system.return.code
+* 9 Nov 26 (S.186): into the page's log of commands, as $tk_run
+run.done:
+   lg.kind = (if err # '' then 'refuse' else 'ok')
+   lg.text = s : @fm : (if err # '' then err else out)
+   call $tk_out('log', '', lg.kind, lg.text, '')
+   return
+end
+
+* END-CODE

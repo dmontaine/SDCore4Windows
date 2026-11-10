@@ -7,11 +7,27 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 22 Oct 26 dm  New (S.75, TK-0.6).
 * 22 Oct 26 dm  The paged source (S.75, TK-0.7): src and opts, the record ids of an open file read a page at a time.
+* 29 Oct 26 dm  S.88 3.10A: the optional arguments hot and filtout (var.args, as $sl_guard): keys that end the window with status 2, and the filter text.
+* 3 Nov 26 dm  The picker extended (owner, 2 Nov: "Extend the picker"): the optional arguments cols (columns with headings and widths, for a list in items) and hotcur
+*              (the entry the cursor was on when a hot key ended the window), so that a caller can offer a key such as Del on the entry and keep its own confirmation.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
 *   call $sl_pickwin(items, title, multi, default, ret, status, src, opts)
+*   call $sl_pickwin(items, title, multi, default, ret, status, src, opts, hot, filtout)
+*   call $sl_pickwin(items, title, multi, default, ret, status, src, opts, hot, filtout, cols, hotcur)
+*
+*     hot      (optional) key names, as values: a key named here ends the window with status 2 and ret the key's name, before the key is looked at for anything else
+*              (but after a mouse event or a resize).  Null or left out: none.  The caller decides what the key means; the window does nothing with it.
+*     filtout  (optional) set to the filter text as it stood when the window closed, whatever ended it (a caller that ends on Ctrl-N takes what was typed)
+*     cols     (optional, a list in items only: not used with src) the columns: field 1 the headings, field 2 the widths, one value to a column, the first value for the
+*              name and the others for the column texts, which an entry then holds as SUBVALUES of its value 2 (value 1 is still the name and value 3 the help).  At most
+*              PW.MAXCOL columns besides the name.  A heading row is drawn under the filter line, each text is cut at its column's width, two spaces between columns,
+*              and the filter matches the name and every column.  Null or left out: the window is as it always was.
+*     hotcur   (optional) set when a hot key ended the window: the number in items of the entry the cursor was on (with src its record id); 0 when the list showed none.
+*              What the key means for that entry is the caller's: THE WINDOW CHANGES NOTHING, it only says which entry it was.
+*     status   gains 2: a hot key ended the window.  The other arguments, and the 8-argument form, are as below.
 *
 *     items    one entry to a field; in an entry, value 1 is the name, value 2 a one-line description shown beside it, value 3 the help for the entry
 *              (shown on the help line when the person presses ?; the description is shown when there is none).  Null when src is used.
@@ -46,16 +62,25 @@
 * START-CODE
 
 $internal
-subroutine sl_pickwin(items, title, multi, default, ret, status, src, opts)
+subroutine sl_pickwin(items, title, multi, default, ret, status, src, opts, hot, filtout, cols, hotcur) var.args
 $catalog $sl_pickwin
 
 $include sl.h
 
+   equate PW.MAXCOL to 6                       ;* the column texts an entry may have beside its name
+
    ret = ''
    status = 1
+   filtout = ''
+   hotcur = ''
+   hotl = ''
+   if not(unassigned(hot)) then hotl = hot
+   colv = ''
+   if not(unassigned(cols)) then colv = cols   ;* BASIC does not short-circuit: cols is read only when it was given
    if system(25) then return                  ;* a phantom has no terminal: nothing is drawn, nobody is waited for
    fmode = 0
    if opts # '' then fmode = 1
+   gosub col.setup
    filt = ''
    exhausted = 1
    if fmode then
@@ -92,8 +117,16 @@ $include sl.h
       if dfield > 0 and dw < 30 then dw = 30
    end
    if nw > 30 then nw = 30
+   if ncol > 0 then                           ;* the caller's columns: the widths it gave, the name's included
+      nw = cw<1>
+      dw = 0
+      for c = 2 to ncol
+         dw += cw<c> + 2
+      next c
+      if dw > 0 then dw -= 2
+   end
    lead = (if multi then 4 else 1)
-   maxh = scr<SL.S.H> - 8
+   maxh = scr<SL.S.H> - 8 - hdr
    if maxh < 3 then maxh = 3
    lh = n
    if not(exhausted) then lh = maxh            ;* more may come: the window is as high as it will be
@@ -104,15 +137,16 @@ $include sl.h
    if len(title) + 4 > lw then lw = len(title) + 4
    if lw > scr<SL.S.W> - 4 then lw = scr<SL.S.W> - 4
    bw = lw + 2
-   bh = lh + 4                                 ;* the border, the filter line, the rows, the help line
+   bh = lh + 4 + hdr                           ;* the border, the filter line, the heading row (with columns), the rows, the help line
    bx = int((scr<SL.S.W> - bw) / 2)
    by = int((scr<SL.S.H> - bh) / 2)
    if bx < 0 then bx = 0
    if by < 0 then by = 0
    x0 = bx + 1                                 ;* the inside
    yf = by + 1                                 ;* the filter line
-   y1 = by + 2                                 ;* the first row
-   yh = by + 2 + lh                            ;* the help line
+   yc = by + 2                                 ;* the heading row, when there are columns
+   y1 = by + 2 + hdr                           ;* the first row
+   yh = by + 2 + hdr + lh                      ;* the help line
 
    call $sl_region('save', scr, bx, by, bw, bh, under)
    call $sl_attr('window', nl)
@@ -140,6 +174,10 @@ $include sl.h
             gosub mouse
          case k = 'resize'
             call $sl_resize(scr)                      ;* the terminal's size changed: the window is drawn again with the rest
+         case hotl # '' and index(@vm : hotl : @vm, @vm : k : @vm, 1) > 0
+            ret = k                                   ;* a key the caller asked for: the window ends and the caller decides (status 2)
+            st = 'hot'
+            gosub hot.entry
          case k = 'esc'
             st = 'cancel'
          case k = 'enter'
@@ -188,14 +226,58 @@ $include sl.h
          gosub scroll
          gosub paint
       end
-   until st = 'done' or st = 'cancel'
+   until st = 'done' or st = 'cancel' or st = 'hot'
    repeat
 
    call $sl_region('restore', scr, bx, by, bw, bh, under)
    call $sl_scr('put', scr)
    if fmode then clearselect 10
    if st = 'done' then status = 0
+   if st = 'hot' then status = 2
+   filtout = filt
 
+   return
+
+* The caller's columns (colv): ncol columns, the name's included (0: none), their headings ch and widths cw (one to a field), hdr 1 when a heading row is drawn.
+* Not with the paged source, whose description is the one attribute opts names.
+col.setup:
+   ncol = 0
+   ch = ''
+   cw = ''
+   hdr = 0
+   if colv = '' or fmode then return
+   ncol = dcount(colv<1>, @vm)
+   if ncol > PW.MAXCOL + 1 then ncol = PW.MAXCOL + 1
+   for c = 1 to ncol
+      ch<c> = colv<1, c>
+      w = colv<2, c>
+      if not(num(w)) or w = '' then w = 12
+      w = int(w)
+      if w < 1 then w = 1
+      if w > 80 then w = 80
+      cw<c> = w
+   next c
+   if ncol > 0 then hdr = 1
+   return
+
+* An entry's columns, each cut and padded to its width, two spaces before each: ctext.  In: oi.
+col.text:
+   ctext = ''
+   for c = 2 to ncol
+      ct = items<oi, 2, c - 1>[1, cw<c>]
+      ctext := '  ' : ct : space(cw<c> - len(ct))
+   next c
+   return
+
+* A hot key ended the window: hotcur is the entry the cursor was on (its number in items, with src its id), 0 when none is shown.  Nothing is done to it here.
+hot.entry:
+   hotcur = 0
+   if cur >= 1 and cur <= nvis then
+      i = cur
+      gosub orig
+      hotcur = oi
+      if fmode then hotcur = items<oi, 1>
+   end
    return
 
 * oi = the number in items of the entry shown at place i
@@ -223,7 +305,7 @@ refilter:
       fo = 1
       uf = upcase(filt)
       for i = 1 to n
-         if index(upcase(items<i, 1> : ' ' : items<i, 2>), uf, 1) then vis<1, -1> = i
+         if index(upcase(items<i, 1> : ' ' : convert(@sm, ' ', items<i, 2>)), uf, 1) then vis<1, -1> = i      ;* the columns are subvalues: each is matched as text
       next i
       nvis = dcount(vis, @vm)
       if vis = '' then nvis = 0
@@ -393,6 +475,19 @@ paint:
    code = str(nl, 1 + len(lab)) : str(fc, fw) : str(nl, lw - 1 - len(lab) - fw)
    call $sl_put(scr, x0, yf, line, code)
 
+   * the heading row of the caller's columns, in the header style, laid out as the rows are
+   if hdr then
+      call $sl_attr('header', hc)
+      line = space(lead) : ch<1>[1, nw] : space(nw - len(ch<1>[1, nw]))
+      for c = 2 to ncol
+         ct = ch<c>[1, cw<c>]
+         line := '  ' : ct : space(cw<c> - len(ct))
+      next c
+      line = line[1, lw]
+      line := space(lw - len(line))
+      call $sl_put(scr, x0, yc, line, str(hc, lw))
+   end
+
    * the rows
    for r = 0 to lh - 1
       i = top + r
@@ -411,7 +506,12 @@ paint:
             mark = ' '
          end
          nm = items<oi, 1>[1, nw]
-         line = mark : nm : space(nw - len(nm)) : '  ' : items<oi, 2>
+         if ncol > 0 then
+            gosub col.text
+            line = mark : nm : space(nw - len(nm)) : ctext
+         end else
+            line = mark : nm : space(nw - len(nm)) : '  ' : items<oi, 2>
+         end
          line = line[1, tw]
          line := space(tw - len(line))
          code = str(nl, tw)
@@ -434,7 +534,7 @@ paint:
       i = cur
       gosub orig
       htxt = items<oi, 3>
-      if htxt = '' then htxt = items<oi, 2>
+      if htxt = '' then htxt = convert(@sm, ' ', items<oi, 2>)
    end else
       htxt = sysmsg(12830)
    end

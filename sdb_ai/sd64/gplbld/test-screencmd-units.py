@@ -17,6 +17,7 @@
 #
 # START-HISTORY:
 # 12 Oct 26 dm  Written with stage 1 of the screen library.
+# 29 Oct 26 dm  S.88 3.5: the presence mask (SET's 12th argument), the bit order, and the owner's rule that a written '' on a flag changes nothing.
 # END-HISTORY
 
 import os
@@ -45,12 +46,17 @@ def parse_table(src):
         routine = toks[0].strip('"')
         npos = int(toks[2]) if len(toks) > 2 and toks[1] == "@vm" else -1
         kws = []
-        for t in (toks[4:] if len(toks) > 3 and toks[3] == "@vm" else []):
+        pres = False
+        rest = toks[4:] if len(toks) > 3 and toks[3] == "@vm" else []
+        for i, t in enumerate(rest):
             if t == "@sm":
                 continue
+            if t == "@vm":                      # field 4 of the row: "P" = a presence mask follows the keyword slots
+                pres = rest[i + 1:i + 2] == ['"P"']
+                break
             k, n = t.strip('"').split(":")
             kws.append((k, n))
-        out.append((verb, routine, npos, kws))
+        out.append((verb, routine, npos, kws, pres))
     return out
 
 
@@ -74,7 +80,26 @@ def check(gpl):
     row("verb names are unique and upper case", len(set(verbs)) == len(verbs) and all(v == v.upper() for v in verbs), repr(verbs))
     row("SCREEN is in the statements list, and st.screen is in the ON GOSUB list right after SAVELIST / st.savelist",
         re.search(r'"SAVELIST":@fm:"SCREEN":@fm:"SEEK"', bsrc) is not None and re.search(r'st\.savelist,\s*\n\s*st\.screen,', bsrc) is not None, "")
-    for verb, routine, npos, kws in table:
+    # the presence mask (S.88 3.5): only SET asks for one, with the bits in table order
+    set_rows = [t for t in table if t[0] == "SET"]
+    row("SET is the one verb whose row asks for a presence mask (field 4 \"P\"), and its keywords are in the order the mask bits assume (VALUE 1 TEXT 2 ITEMS 4 ENABLED 8 WRAP 16 READONLY 32 VISIBLE 64)",
+        len(set_rows) == 1 and [t[0] for t in table if t[4]] == ["SET"]
+        and [k for k, _ in set_rows[0][3]] == ["VALUE", "TEXT", "ITEMS", "ENABLED", "WRAP", "READONLY", "VISIBLE"], repr([t[0] for t in table if t[4]]))
+    row("st.screen adds the presence mask to the argument count and loads it as one constant",
+        re.search(r'scr\.argc = scr\.npos \+ scr\.nslots \+ scr\.presence \+ 2', bsrc) is not None
+        and re.search(r'scr\.def<1,4> = "P"', bsrc) is not None and re.search(r'if scr\.given<scr\.k> then scr\.mask \+= scr\.bit', bsrc) is not None
+        and re.search(r'scr\.bit \+= scr\.bit', bsrc) is not None and re.search(r'n = scr\.mask ; gosub emit\.numeric\.load', bsrc) is not None, "")
+    sset = os.path.join(gpl, "screen_set")
+    if os.path.isfile(sset):
+        ssrc = open(sset, encoding="latin-1").read()
+        code = "\n".join(l for l in ssrc.splitlines() if not l.lstrip().startswith("*"))
+        row("screen_set tests VALUE, TEXT and ITEMS by their mask bits (1, 2, 4) and not by '' (a written '' sets)",
+            all(re.search(r'(?m)^\s*if bitand\(given, %d\) then\s*$' % b, code) is not None for b in (1, 2, 4))
+            and re.search(r"(?m)^\s*if (value|text|items) # ''", code) is None, "")
+        row("screen_set keeps '' = no change for ENABLED, WRAP, READONLY and VISIBLE: each is tested by its bit AND by # '' (a mutant that counts '' as 0 would make a viewer memo writable)",
+            all(re.search(r"(?m)^\s*if bitand\(given, %d\) and %s # ''" % (b, nm), code) is not None
+                for b, nm in ((8, "enabled"), (16, "wrap"), (32, "readonly"), (64, "visible"))), "")
+    for verb, routine, npos, kws, pres in table:
         name = routine.lstrip("!")
         row("%s: the subroutine is !screen_%s" % (verb, verb.lower()), routine == "!screen_" + verb.lower(), routine)
         path = os.path.join(gpl, name)
@@ -85,8 +110,8 @@ def check(gpl):
         m = re.search(r'(?im)^subroutine\s+%s\s*\(([^)]*)\)' % re.escape(name), src)
         params = [p.strip() for p in m.group(1).split(",")] if m else []
         slots = sum(1 if n == "F" else int(n) for _, n in kws)
-        want = npos + slots + 2
-        row("%s: the subroutine takes %d arguments (%d values + %d keyword slots + ret + status)" % (verb, want, npos, slots),
+        want = npos + slots + (1 if pres else 0) + 2
+        row("%s: the subroutine takes %d arguments (%d values + %d keyword slots%s + ret + status)" % (verb, want, npos, slots, " + presence mask" if pres else ""),
             m is not None and len(params) == want, "found %d: %s" % (len(params), params))
         row("%s: the last two arguments are ret and status" % verb, params[-2:] == ["ret", "status"], repr(params[-2:]))
         row("%s: it is catalogued as %s" % (verb, routine), re.search(r'(?im)^\$catalog\s+%s\s*$' % re.escape(routine), src) is not None, "no $catalog line")
@@ -114,6 +139,17 @@ def selftest():
         ("a keyword missing from a routine's documented form", "screen_box",
          "SCREEN BOX {AT x,y} {SIZE w,h} {TITLE t} {ATTR style} {FILL}", "SCREEN BOX {AT x,y} {SIZE w,h} {TITLE t} {ATTR style}"),
         ("a row pointing at a routine that is not there", "bcomp", '"!screen_size":@vm:0', '"!screen_sizes":@vm:0'),
+        ("the SET row loses its presence field", "bcomp", '"VISIBLE:1":@vm:"P"', '"VISIBLE:1"'),
+        ("the argument count forgets the presence mask", "bcomp", "scr.npos + scr.nslots + scr.presence + 2", "scr.npos + scr.nslots + 2"),
+        ("screen_set tests VALUE by '' again", "screen_set", "if bitand(given, 1) then", "if value # '' then"),
+        ("screen_set tests TEXT by '' again", "screen_set", "if bitand(given, 2) then", "if text # '' then"),
+        ("screen_set tests ITEMS by '' again", "screen_set", "if bitand(given, 4) then", "if items # '' then"),
+        ("a written '' on READONLY counts as 0 (a viewer memo would become writable)", "screen_set",
+         "if bitand(given, 32) and readonly # '' and wt = 'memo' then", "if bitand(given, 32) and wt = 'memo' then"),
+        ("a written '' on ENABLED counts as 0", "screen_set", "if bitand(given, 8) and enabled # '' then", "if bitand(given, 8) then"),
+        ("a written '' on WRAP counts as 0", "screen_set", "if bitand(given, 16) and wrap # '' and wt = 'memo' then", "if bitand(given, 16) and wt = 'memo' then"),
+        ("a written '' on VISIBLE counts as 0", "screen_set", "if bitand(given, 64) and visible # '' then", "if bitand(given, 64) then"),
+        ("the mask bits out of table order", "bcomp", "scr.bit += scr.bit", "scr.bit += 1"),
     ]
     bad = 0
     tmp = tempfile.mkdtemp(prefix="screencmd.")

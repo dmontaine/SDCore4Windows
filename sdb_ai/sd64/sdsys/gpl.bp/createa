@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON (CA$RECOVERY), in the syntax line, the usage and the audit gates= list.
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: START-MENU / START-TERMINAL (where the account starts) and PINS-ON (the person may add programs of their own to their home screen), the words
 *           MODIFY.ACCOUNT takes that differ from the delivered state; CA$START and CA$PINS in createacc.h; two start words are refused (12796) before anything is made; the audit gates= list names pins-on
 *           and a start= tail is written when a start word was given.
@@ -412,7 +413,9 @@
 *
 * START-DESCRIPTION:
 *
-* CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {START-MENU | START-TERMINAL} {PINS-ON} {NO.QUERY}
+* CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {START-MENU | START-TERMINAL} {PINS-ON} {RECOVERY-ON} {NO.QUERY}
+*   RECOVERY-ON (10 Nov 26, from Linux S.88 plan 2.9) the account's editors keep a recovery copy of text that was not saved, so a hang-up or an abort does not
+*               lose it.  Off unless typed.  A user account only (12776).  RECOVERY-OFF restates the default and is not accepted here.
 *                        - the route defaults to BOTH when nothing is said
 *                          (RELEASE_1.1 68); the tier words went with 64
 * CREATE.ACCOUNT GROUP <group name> {NO.QUERY}
@@ -662,7 +665,7 @@ deffun ps_script(script) calling '!ps_script'
 
    case 1
     crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}'
-    crt '                  {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {no.query}'
+    crt '                  {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
     crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
     crt '                  (net-on), and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files'
@@ -671,6 +674,7 @@ deffun ps_script(script) calling '!ps_script'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
     crt '                  It starts where the system default says (set.start.default) unless start-menu or start-terminal is typed,'
     crt '                  and cannot add programs of its own to its home screen unless pins-on is typed.'
+    crt '                  Its editors keep no recovery copy of unsaved text unless recovery-on is typed (a user account only).'
     crt '                create.account group <group name> {start-menu | start-terminal} {pins-on} {no.query}'
     crt '                create.account other <account name> <pathname> {start-menu | start-terminal} {pins-on} {no.query}'
     @system.return.code = -ER$ARGS
@@ -720,6 +724,7 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
    if settings<CA$PINS> = 1 then gates<-1> = 'pins-on'
+   if settings<CA$RECOVERY> = 1 then gates<-1> = 'recovery-on'     ;* 10 Nov 26 (Linux 44807a43, S.88 plan 2.9, D2)
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
 *  28 Oct 26 (from Linux ec8459b) - S.75, home: where the account was told to start is a tail of its own, only when a start word was typed (start=menu or start=terminal); an account that follows
 *    the system default has the line it always had.
@@ -926,6 +931,11 @@ more.args:
             settings<CA$START> = downcase(token[7, 99])
          case upcase(token) = 'PINS-ON'
             settings<CA$PINS> = 1
+
+* 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON, the account's editors keep a recovery copy of unsaved text; off unless typed.
+*   !create_account refuses it for a group or other account (12776) before anything is made.  RECOVERY-OFF restates the default and is not accepted.
+         case upcase(token) = 'RECOVERY-ON'
+            settings<CA$RECOVERY> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

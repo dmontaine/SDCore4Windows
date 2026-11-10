@@ -1,0 +1,29 @@
+* TKWRAP
+* The public full-screen toolkit (S.130): a sentence cut into pieces that fit a width.  A wrapper over $tk_wrap.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkwrap(text, width, out)
+*
+*   As $tk_wrap: out is the pieces, one to a field, each ending at the last space that keeps it within width (at least 20).  A SCREEN TEXT longer than its width is cut,
+*   not wrapped, so a text that may be longer than its box goes through here first.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkwrap(text, width, out)
+$catalog !tkwrap
+
+   call $tk_wrap(text, width, out)
+   return
+end
+
+* END-CODE

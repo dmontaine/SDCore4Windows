@@ -5,6 +5,21 @@
 *
 * START-HISTORY:
 * 24 Oct 26 dm  New.
+* 26 Oct 26 dm  S.76 (the owner's decision of 26 Oct 2026): when SDSYS has more than one session on a terminal, each of those rows says "sdsys xN" in the State column, the counts line says
+*               "SDSYS in N places" and the row under the cursor says so.  !SDSYSN is the one definition of such a session.
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the two lists show more rows
+*               and every box is wider, and the sentences about the row are wrapped at the width of their box.  The resize key makes the layout again.
+* 1 Nov 26 dm  S.99 (look only): names its focus boxes (ctx<TK.C.FOCI>), so $tk_frame marks the one with the focus [*] and the other [-], as the IDE does.
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the list switch, the output pane and refresh are offered; no logout,
+*              unlock or inhibit.
+* 3 Nov 26 dm  S.137: the login time was read as a lock time (UTC seconds since 1970), but it is the kernel's sdtime(), local seconds from SD's day 0: the zone offset and the
+*              732 days were added to it again, and a session that signed on at 22:44 on 2 Nov showed "03 Nov 14:44" (two years on, the year not shown).  login.stamp.of
+*              formats it as it is; both feed one routine, stamp.local.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring', the AI line one of the stops); Tab and Shift-Tab no longer switch the lists.
+*              AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse, the same on every page (the case act:std.mouse, through $tk_std); '/' finds a row of the list in focus by typing
+*              ($tk_findrow; the owner: "Letters stay, '/' finds").
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -50,20 +65,42 @@ $include tk.h
       stop
    end
    void kernel(K$AUDIT, 'tool start app=tool.sessions')
+   outopen = 0                                                  ;* the output pane (Ctrl-O): closed until asked for
+   find.last = ''                                               ;* 9 Nov 26 (S.186): the text '/' asked for last
+   gosub declare.layout
 
    keys = ''
    call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
-   call $tk_keys('add', keys, 'tab', 'list', 'switch', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'switch', '', 1)               ;* S.176: F6 / Shift-F6 move between the boxes on every page (Tab does not)
    call $tk_keys('add', keys, 'l', 'logout', 'logout', 'Sessions', 1)
    call $tk_keys('add', keys, 'u', 'unlock', 'unlock', 'Locks', 1)
    call $tk_keys('add', keys, 'i', 'logins', 'inhibit', '', 1)
+   call $tk_keys('add', keys, '/', 'find', 'find', '', 1)                  ;* 9 Nov 26 (S.186): '/' finds a row by typing (letters are this page's commands)
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-o', 'output', 'output', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U2: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'logout', '&Sessions', '&Log out the session', '', '')
+   call $tk_keys('menu', keys, 'unlock', '&Sessions', '&Unlock the lock', '', '')
+   call $tk_keys('menu', keys, 'inhibit', '&Sessions', '&Inhibit or allow logins', '', '')
+   call $tk_keys('menu', keys, 'switch', '&View', '&Switch list', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'find', '&View', '&Find a row', '', '')
+   call $tk_keys('menu', keys, 'output', '&View', '&Output of the commands (Ctrl-PgUp, Ctrl-PgDn scroll)', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
    panes = 'Sessions' : @fm : 'Locks'
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only the switch between the lists, the output pane and refresh (logout, unlock and inhibiting logins are
+   * NOT offered without the owner's word); a proposal is carried out by the page's own key.  This page laid itself out first, so a line that took a row has the panes
+   * declared again.
+   call $tk_keys('ai', keys, 'switch', '', '', '', '')
+   call $tk_keys('ai', keys, 'output', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+   if aout then gosub declare.layout
 
-   VS = 11                                                      ;* session rows on the screen
-   VL = 10                                                      ;* lock rows on the screen
-   hs = fmt('', '2L') : fmt('User', '5R') : '  ' : fmt('Pid', '8R') : '  ' : fmt('Logged in', '12L') : ' ' : fmt('Kind', '8L') : fmt('Login user', '15L') : fmt('Account', '20L') : fmt('Where from', '26L') : 'State'
+   hs =fmt('', '2L') : fmt('User', '5R') : '  ' : fmt('Pid', '8R') : '  ' : fmt('Logged in', '12L') : ' ' : fmt('Kind', '8L') : fmt('Login user', '15L') : fmt('Account', '20L') : fmt('Where from', '26L') : 'State'
    hl = fmt('User', '5R') : '  ' : fmt('File', '5R') : '  ' : fmt('Path', '30L') : ' ' : fmt('Type', '5L') : fmt('Record id', '32L') : fmt('Since', '13L') : 'Holder'
 
    pane = 1                                                     ;* 1 the sessions, 2 the locks
@@ -74,23 +111,40 @@ $include tk.h
    sig = ''
    gen = 0
    done = 0
-   msg = 'Tab changes the list; L logs a session out, U releases a lock, I stops or allows new logins'
+   msg = ''
 
    gosub read.all
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, panes<pane>, '', '', mr)          ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, panes<pane>, msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)
       nm = ''
       screen key timeout 3 returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, panes<pane>, nm, ao)         ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, panes<pane>, nm, outopen, mr)       ;* F10, Alt and a letter, and Esc (the Esc rule: the output pane, when open, is closed first)
+      if mr<1> # '' then nm = mr<4>
       begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
          case nm = ''
             if status() = ER$EOF then exit
             gosub timed.refresh
          case nm = 'guardquit'
             exit
          case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lchg)
+            gosub get.rects
+            gosub keep.in.view
             gen += 1
             ctx<TK.C.GEN> = gen
             gosub draw.all
@@ -118,6 +172,7 @@ read.all:
       sel.l = lkey
    end
    call !listu(udata)
+   call !sdsysn(nsd, sduids, sdmine, sdtty)                     ;* SDSYS on a terminal in more than one place: the rows say so
    ns = dcount(udata, @fm)
    locks = getlocks('', 0)
    lhdr = locks<1>
@@ -163,27 +218,103 @@ timed.refresh:
    end
    return
 
-* The login time of a session or the time a lock was taken: day, month, hh:mm in the administrator's zone (as LIST.READU DETAIL does)
+* The time a lock was taken (GETLOCKS: seconds since 1 Jan 1970 UTC): day, month, hh:mm in the administrator's zone (as LIST.READU DETAIL does)
 stamp.of:
+   sdsec = ''
+   if tsec > 0 then sdsec = tsec + system(1019) + 732 * 86400
+   gosub stamp.local
+   return
+
+* The login time of a session (!listu value 8, the kernel's sdtime(): seconds of LOCAL time from SD's day 0, 31 Dec 1967, as LISTU shows it): no zone or day offset to add
+login.stamp.of:
+   sdsec = tsec
+   gosub stamp.local
+   return
+
+* sdsec, seconds of local time from SD's day 0, as day, month, hh:mm
+stamp.local:
    stampout = ''
-   if tsec > 0 then
-      loc = tsec + system(1019)
-      d = int(loc / 86400) + 732
-      stampout = oconv(d, 'DD') : ' ' : oconv(oconv(d, 'DMA'), 'MCT')[1, 3] : ' ' : oconv(rem(loc, 86400), 'MT')
+   if sdsec > 0 then
+      d = int(sdsec / 86400)
+      stampout = oconv(d, 'DD') : ' ' : oconv(oconv(d, 'DMA'), 'MCT')[1, 3] : ' ' : oconv(rem(sdsec, 86400), 'MT')
    end
    return
 
 * ------------------------------------------------------------------------------------------------- drawing
 
+* The layout (S.88 L2).  The three boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the two lists share the rows a
+* bigger window gives, equally, and the box under them stays as high as it is.  The page never hands the terminal over, so the declaration is made once, after the open, and the
+* rectangles are fetched again after each 'refresh'.
+* Out: ssn (the sessions), lck (the locks), rwb (the row under the cursor), each .x .y .w .h; stw, ltw, rtw (the text width of each box); VS and VL (the session and lock rows on
+* the screen) and VR (the lines about the row under the cursor).
+declare.layout:
+   ld = ''
+   ld<1> = 'sessions' : @vm : 1 : @vm : 1 : @vm : 15 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 14 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   ld<3> = 'row' : @vm : 3 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   if outopen then
+      * the output pane is open: the sessions 2 rows and the locks 4 rows shorter, and the output pane, 6 rows, between the row box and the foot (rows named lo, not ld: the closed layout above is the page's own)
+      lo = ''
+      lo<1> = 'sessions' : @vm : 1 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+      lo<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+      lo<3> = 'row' : @vm : 3 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+      lo<4> = 'output' : @vm : 4 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+      ld = lo
+   end
+   ctx<TK.C.FOCI> = 'sessions' : @sm : 'Sessions' : @vm : 'locks' : @sm : 'Locks'        ;* S.99: the boxes that take the focus, for $tk_frame's [*] / [-]
+   call $tk_layout('declare', ctx, ld, perr)
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
+      stop
+   end
+   gosub get.rects
+   return
+
+* Ctrl-O or View > Output, and Esc while it is open: the pane is shown or put away, the layout is declared again and all of it drawn
+toggle.out:
+   call $tk_out('toggle', ctx, '', '', oc)
+   outopen = oc
+   gosub declare.layout
+   gosub keep.in.view
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'sessions', lrc)
+   ssn.x = lrc<1, 1> ; ssn.y = lrc<1, 2> ; ssn.w = lrc<1, 3> ; ssn.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'locks', lrc)
+   lck.x = lrc<1, 1> ; lck.y = lrc<1, 2> ; lck.w = lrc<1, 3> ; lck.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'row', lrc)
+   rwb.x = lrc<1, 1> ; rwb.y = lrc<1, 2> ; rwb.w = lrc<1, 3> ; rwb.h = lrc<1, 4>
+   stw = ssn.w - 4
+   ltw = lck.w - 4
+   rtw = rwb.w - 4
+   VS = ssn.h - 4                                               ;* the heading, the session rows, the line of counts and the border: 11 rows of 15
+   VL = lck.h - 4                                               ;* the heading, the lock rows, the lock limit and the border: 10 rows of 14
+   VR = rwb.h - 3                                               ;* the lines about the row, the hint and the border: 7 rows of 10
+   return
+
+* After a resize the rows scrolled off the top are not more than the rows listed less the rows that fit
+keep.in.view:
+   if ta1 > ns - VS then ta1 = ns - VS
+   if ta1 < 0 then ta1 = 0
+   if ta2 > nl - VL then ta2 = nl - VL
+   if ta2 < 0 then ta2 = 0
+   return
+
 draw.all:
    cw2 = ctx<TK.C.W>
    chh = ctx<TK.C.H> - 5
    screen clear at 0,1 size cw2,chh
-   screen box at 1,1 size 138,15 title 'Sessions'
-   screen box at 1,16 size 138,14 title 'Locks'
-   screen box at 1,30 size 138,10 title 'The row under the cursor'
+   screen box at ssn.x,ssn.y size ssn.w,ssn.h title 'Sessions'
+   screen box at lck.x,lck.y size lck.w,lck.h title 'Locks'
+   screen box at rwb.x,rwb.y size rwb.w,rwb.h title 'The row under the cursor'
    gosub draw.lists
    gosub draw.row
+   if outopen then call $tk_out('draw', ctx, 'output', '', oc)   ;* the output pane, in the rectangle the open layout gives it
    return
 
 draw.lists:
@@ -206,9 +337,10 @@ session.line:
    end case
    stt = ''
    if v<1, 1> = @userno then stt = 'you'
+   if nsd > 1 and index(@fm : sduids : @fm, @fm : v<1, 1> : @fm, 1) > 0 then stt := (if stt = '' then '' else ' ') : 'sdsys x' : nsd
    if bitand(flg, USR$LOGOUT) then stt := (if stt = '' then '' else ' ') : '(logout pending)'
    tsec = v<1, 8>
-   gosub stamp.of
+   gosub login.stamp.of
    org = v<1, 3>
    if v<1, 7> # '' then org := (if org = '' then '' else ' ') : v<1, 7>
    sline = fmt((if v<1, 1> = @userno then '*' else ''), '2L') : fmt(v<1, 1>, '5R') : '  ' : fmt(v<1, 2>, '8R') : '  ' : fmt(stampout, '12L') : ' ' : fmt(kind, '8L')
@@ -216,7 +348,7 @@ session.line:
    return
 
 draw.sessions:
-   screen text hs at 3,2 attr 'header' width 134
+   screen text hs at ssn.x + 2,ssn.y + 1 attr 'header' width stw
    if cs <= ta1 then ta1 = cs - 1
    if cs > ta1 + VS then ta1 = cs - VS
    if ta1 < 0 then ta1 = 0
@@ -230,7 +362,7 @@ draw.sessions:
       end
       rat = 'normal'
       if kk = cs and kk <= ns then rat = (if pane = 1 then 'highlight' else 'bold')
-      screen text s at 3,2 + r attr rat width 134
+      screen text s at ssn.x + 2,ssn.y + 1 + r attr rat width stw
    next r
    n.usr = 0 ; n.ph = 0 ; n.api = 0
    for i = 1 to ns
@@ -245,17 +377,18 @@ draw.sessions:
       end case
    next i
    s = ns : ' sessions: ' : n.usr : ' users, ' : n.ph : ' phantoms, ' : n.api : ' API.   '
+   if nsd > 1 then s := 'SDSYS in ' : nsd : ' places.   '
    if inh = '' then
       s := sysmsg(12288)
    end else
       s := sysmsg(12289, inh<3>, inh<1>)
    end
-   screen text s at 3,14 attr 'bold' width 134
-   call $tk_help('mark', 134, 2, 0, 0)
+   screen text s at ssn.x + 2,ssn.y + ssn.h - 2 attr 'bold' width stw
+   call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)
    return
 
 draw.locks:
-   screen text hl at 3,17 attr 'header' width 134
+   screen text hl at lck.x + 2,lck.y + 1 attr 'header' width ltw
    if cl <= ta2 then ta2 = cl - 1
    if cl > ta2 + VL then ta2 = cl - VL
    if ta2 < 0 then ta2 = 0
@@ -269,12 +402,12 @@ draw.locks:
       end
       rat = 'normal'
       if kk = cl and kk <= nl then rat = (if pane = 2 then 'highlight' else 'bold')
-      screen text s at 3,17 + r attr rat width 134
+      screen text s at lck.x + 2,lck.y + 1 + r attr rat width ltw
    next r
-   if nl = 0 then screen text 'There are no active file, read or update locks held by any user' at 3,18 width 134
+   if nl = 0 then screen text 'There are no active file, read or update locks held by any user' at lck.x + 2,lck.y + 2 width ltw
    s = ''
    if lhdr # '' then s = sysmsg(6453, lhdr<1, 1>, lhdr<1, 2>, lhdr<1, 3>)
-   screen text s at 3,28 attr 'bold' width 134
+   screen text s at lck.x + 2,lck.y + lck.h - 2 attr 'bold' width ltw
    return
 
 * One lock as a line of text; lk is its place in locks
@@ -308,15 +441,15 @@ draw.row:
       gosub row.lock
    end
    gosub wrap.lines
-   for r = 1 to 7
-      screen text lines<r> at 3,30 + r width 134
+   for r = 1 to VR
+      screen text lines<r> at rwb.x + 2,rwb.y + r width rtw
    next r
    if pane = 1 then
       s = 'L asks the selected session to end.  Tab changes to the locks.'
    end else
       s = 'U releases the selected lock.  Tab changes to the sessions.'
    end
-   screen text s at 3,38 attr 'bold' width 134
+   screen text s at rwb.x + 2,rwb.y + rwb.h - 2 attr 'bold' width rtw
    return
 
 row.session:
@@ -328,7 +461,7 @@ row.session:
    flg = v<1, 4>
    uid = v<1, 1>
    tsec = v<1, 8>
-   gosub stamp.of
+   gosub login.stamp.of
    lines<-1> = 'User ' : uid : ', process ' : v<1, 2> : ', login user ' : v<1, 6> : (if v<1, 9> = '' then ', not in an account yet' else ', in the account ' : v<1, 9>) : (if stampout = '' then '' else ', signed on ' : stampout) : '.'
    begin case
       case bitand(flg, USR$PHANTOM)
@@ -338,6 +471,7 @@ row.session:
       case bitand(flg, USR$SDVBSRVR)
          lines<-1> = 'An API session' : (if v<1, 3> = '' then '' else ' from ' : v<1, 3>) : '.'
    end case
+   if nsd > 1 and index(@fm : sduids : @fm, @fm : uid : @fm, 1) > 0 then lines<-1> = 'One of ' : nsd : ' sessions of SDSYS on a terminal.  The audit trail has a line "sdsys second session" for each one that signed on while another was there.'
    nlk = 0
    for lk = 1 to nl
       if locks<lk, 3> = uid and locks<lk, 4> # 'WAIT' then nlk += 1
@@ -395,7 +529,7 @@ wrap.lines:
       if lines<wi> = '' then
          wrapped<-1> = ''
       end else
-         call $tk_wrap(lines<wi>, 134, pieces)
+         call $tk_wrap(lines<wi>, rtw, pieces)
          wrapped<-1> = pieces
       end
    next wi
@@ -421,6 +555,15 @@ on.key:
          end else
             if cl < nl then cl += 1
          end
+         gosub redraw
+      case nm = '/'                         ;* S.186: the next session (or lock, in the locks) that holds the text typed ($tk_findrow)
+         fr.rows = (if pane = 1 then udata else locks)
+         fr.rows = convert(@vm : @sm, '  ', fr.rows)
+         call $tk_findrow(fr.rows, (if pane = 1 then cs else cl), find.last, fpos)
+         if fpos > 0 then
+            if pane = 1 then cs = fpos else cl = fpos
+         end
+         if fpos < 0 then msg = sysmsg(15045, find.last)
          gosub redraw
       case nm = 'pgup'
          if pane = 1 then
@@ -450,9 +593,6 @@ on.key:
             if nl > 0 then cl = nl
          end
          gosub redraw
-      case nm = 'tab' or nm = 'btab'
-         pane = (if pane = 1 then 2 else 1)
-         gosub redraw
       case nm = 'l' and pane = 1
          gosub do.logout
       case nm = 'u' and pane = 2
@@ -462,12 +602,36 @@ on.key:
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.sessions.page', hm, 0, 0)
          if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, panes<pane>, std.r)
       case nm = 'f5'
          gosub read.all
          gosub draw.all
          msg = 'asked the system again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, pane, nm : @fm : 2, ap)         ;* S.176: F6 / Shift-F6 go round the two lists and the AI line (Tab no longer switches); AI > Ask the AI goes to the line
+         if ap<1> > 0 and ap<1> # pane then
+            pane = ap<1>
+            gosub redraw
+         end
+         msg = ap<2>
       case nm = 'ctrl-q'
          done = 1
+      case nm = 'ctrl-o'
+         gosub toggle.out
+      case nm = 'esc'
+         if outopen then gosub toggle.out                       ;* the Esc rule: what the page has open is closed first; with nothing open the bar took the key
+      case (nm = 'ctrl-pgup' or nm = 'ctrl-pgdn') and outopen
+         okey = nm[6, 4]
+         call $tk_out('key', ctx, okey, '', oc)                 ;* the output pane scrolls (pgup / pgdn)
+         call $tk_out('draw', ctx, 'output', '', oc)
    end case
    return
 
@@ -479,24 +643,43 @@ redraw:
 on.mouse:
    screen mouse returning mev else mev = ''
    if mev = '' then return
-   call $tk_help('hit', mev, 134, 2, hit.m)
+   mr = ''
+   call $tk_menubar('click', ctx, keys, panes<pane>, mev, '', mr)                 ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, panes<pane>, mev, ap)                        ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, ssn.x + ssn.w - 5, ssn.y + 1, hit.m)
    if hit.m then
       call $tk_help('box', 'tool.sessions.page', hm, 0, 0)
       if hm # '' then msg = hm
       return
    end
+   if outopen then
+      call $tk_out('mouse', ctx, mev, '', oc)                  ;* the wheel over the output pane scrolls it
+      if oc = 'handled' then
+         call $tk_out('draw', ctx, 'output', '', oc)
+         return
+      end
+   end
    if mev<1> = 'press' and mev<2> = 1 then
       mx = mev<3>
       my = mev<4>
-      if mx >= 3 and mx <= 136 then
+      if mx >= ssn.x + 2 and mx <= ssn.x + ssn.w - 3 then
          begin case
-            case my >= 3 and my <= 2 + VS
+            case my >= ssn.y + 2 and my <= ssn.y + 1 + VS
                pane = 1
-               if ta1 + my - 2 <= ns then cs = ta1 + my - 2
+               if ta1 + my - ssn.y - 1 <= ns then cs = ta1 + my - ssn.y - 1
                gosub redraw
-            case my >= 18 and my <= 17 + VL
+            case my >= lck.y + 2 and my <= lck.y + 1 + VL
                pane = 2
-               if ta2 + my - 17 <= nl then cl = ta2 + my - 17
+               if ta2 + my - lck.y - 1 <= nl then cl = ta2 + my - lck.y - 1
                gosub redraw
          end case
       end
@@ -545,9 +728,13 @@ do.logout:
       call $tk_run(allow, sent, out, stat, err)
       if err # '' then
          msg = err
+         call $tk_out('add', ctx, 'refuse', sent : '  ' : err, '')           ;* what the command answered stays in the output pane, whether or not it is open
       end else
          gosub audit.run
          gosub first.line
+         otext = said
+         if otext = '' then otext = 'ran'
+         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')
          msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')
       end
       gosub read.all
@@ -617,9 +804,13 @@ do.unlock:
       call $tk_run(allow, sent, out, stat, err)
       if err # '' then
          msg = err
+         call $tk_out('add', ctx, 'refuse', sent : '  ' : err, '')           ;* what the command answered stays in the output pane, whether or not it is open
       end else
          gosub audit.run
          gosub first.line
+         otext = said
+         if otext = '' then otext = 'ran'
+         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')
          msg = (if said # '' then said[1, 130] else 'released')
       end
       gosub read.all
@@ -646,9 +837,13 @@ do.inhibit:
       call $tk_run(allow, sent, out, stat, err)
       if err # '' then
          msg = err
+         call $tk_out('add', ctx, 'refuse', sent : '  ' : err, '')           ;* what the command answered stays in the output pane, whether or not it is open
       end else
          gosub audit.run
          gosub first.line
+         otext = said
+         if otext = '' then otext = 'ran'
+         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')
          msg = (if said # '' then said[1, 130] else 'done')
       end
       gosub read.all

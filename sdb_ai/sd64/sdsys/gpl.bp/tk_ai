@@ -1,0 +1,1099 @@
+* TK_AI
+* The full-screen toolkit, shared base: the AI line, the preview, the wait and the answer (S.69, plan .claude/plan-fullscreen-toolkit.md 2.9 and
+* .claude/ai-integration-evaluation.md 5B; the owner's D4a answer of 20 Oct 2026: "a one line ai entry field at the bottom of each form with the response in a
+* popup window", and of 23 Oct: the AI line turns a request into one of the page's own actions).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 23 Oct 26 dm  New (AI line stage 1: the library routine and the home screen).
+* 28 Oct 26 dm  S.88 phase 2 (S5): every line of the preview, the diff and the command is shown whole, in rows, not cut at the box (wrap.exact); a diff counts its rows towards the 30.
+* 28 Oct 26 dm  S.88 handoff step 2 (the owner's approval of Opus's proposal): actx<12>, the ids of the offered actions that do more than navigate; the default of an action proposal
+*               is Accept only when <5> says the actions navigate and the one proposed is not in <12>, so a delivered tile is accepted by Enter as the owner answered on 23 Oct
+*               and a pin or the Terminal tile is rejected by Enter, whatever else the page offered (it was: any pin or the Terminal tile on the page turned Accept off for all).
+* 29 Oct 26 dm  'select': the first line of a selection is taken to its end whatever its length (it was cut at 99,999 characters; Export the selection in the IDE reads it too).
+* 29 Oct 26 dm  S.88 p3.3a: the 'move' op (a resize keeps the request typed in the home screen's line: place.widget is shared with make.widget).
+* 1 Nov 26 dm   THE WALL (S.97 stage 0; the owner: the AI field never reaches the C and GPL.BP code or any other system information, and no system-development question is taken to it from
+*               inside SD, for every provider): 'ask' first screens the typed request ($tk_aiwall 'request') and then asks where the text comes from (actx<13>, $tk_aiwall 'origin'), and sends
+*               nothing, not even a preview, when the request names SD's own code or build, when the text is of SD's own files, or when its origin cannot be told.  Every app now passes <13>.
+* 1 Nov 26 dm   S.97 stage 1: the ops 'show' (the line drawn by $tk_frame on a page that has given it a row, written only when it changed) and 'focused'.
+* 2 Nov 26 dm   The preview's documentation line (12925) is wrapped through $tk_wrap: at 140 columns it ran over the box's right border (console witness).
+*               The box itself now scrolls when the preview is taller than the screen ($sl_msgbox).
+* 3 Nov 26 dm   S.97, the dictionary form: actx<14>, the FIELDS of a form the app offers the model to fill.  The keys and what each holds are in the instruction, the prompt and the
+*               preview; the answer may carry "fields", an object of those keys and text values, which is SHOWN in full in the popup (Reject is the default) and handed back as
+*               res<1> 'fields', res<2> the keys and res<3> the values, as values.  The library fills nothing and checks no value against the form's rules: the app does both, and
+*               saves nothing.  A name the model gave that was not offered, or a value that is not text, is left out and said.  An app that passes no <14> sees no change.
+* 3 Nov 26 dm   FOLLOW-UP QUESTIONS (the owner: "Add, shown in preview").  The answer's box has a Follow up button; choosing it keeps that question and the answer for the NEXT
+*               request of the same app only (res<1> 'follow'; the library's line says "AI follow-up>").  That request's preview shows the earlier exchanges in full and counts them;
+*               their questions pass the wall's screen again before the preview; they go to the helper as earlier messages (K$AI.START maxtokens VM n).  Dropped: at 'init', on any
+*               ask (a follow-up is used once), after 10 minutes, when the account or the app changes.  At most the last 3 exchanges are carried.  An ordinary request carries nothing.
+* 3 Nov 26 dm  S.123: the form proposal's box text, the Follow up status and the "left out" note are messages 15008-15010
+*               (Linux's second block); what is SENT to the model stays literal, as the form's field text does.
+* 03 Nov 26 dm  The AI row's label (unfocused) and its hint are drawn in the role desktop, the page's own, not disabled: the blue theme's disabled
+*               paints the palette's blue behind the text, which a terminal palette may show light (the owner's GNOME Terminal: unreadable).
+* 7 Nov 26 dm  S.160, THE STANDING TEXT: 'ask' reads the helper's standing text (the administrator's, set by tool.ai's T / SET.AI CONTEXT, or the shipped default) at each
+*              request, puts it to the wall's screen like a typed request (a text naming SD's own code sends nothing: 15013), sends it FIRST in the system text, and leaves
+*              it OUT of the preview (the owner: "The prefixed text ought to be invisible to the user"); the preview's size counts it.  None is sent when the helper has none or
+*              gives one it cannot use.
+* 8 Nov 26 dm   S.175 (the owner: "it is showing the standard prefix text, it is not supposed to"): the preview no longer shows SD's own text (the fixed instruction,
+*               the actions, the form's fields, the page's description, the documentation passages); the size still counts it; the person's data and request are shown.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_ai(op, ctx, a, b)
+*
+*   init    (ctx)              asks the helper (KERNEL K$AI.STATUS) whether the AI is usable for this account: the gate is on and a provider, a model and a key are
+*                              set.  Sets ctx<TK.C.AI> to 1 when it is and makes the line; else the line is NOT DRAWN AT ALL (the owner, 20 Oct: an account without the AI
+*                              sees no AI bar).  The app calls it after $tk_open and again when the account changes.
+*   move    (ctx)              the window changed size: puts the line where the new ctx<TK.C.W> and ctx<TK.C.YSTAT> say, and nothing else.  The request typed in it, the cursor in
+*                              it and its focus are kept; the status is not read again (init does all of that anew).  It draws nothing: the next draw does.
+*   draw    (ctx, focused)     draws the line on row YSTAT - 1: the label, then the entry; empty and not focused it shows a dim hint.
+*   show    (ctx)              (S.97 stage 1) what $tk_frame calls on a page of the toolkit: draws the line, with the focus it has, only when something it shows has changed.  focused (-> a)
+*                              is 1 when the line is on and has the focus.
+*   key     (ctx, nm -> out)   a key for the line while it has the focus: Esc gives the focus back (out 'leave'); Tab, Shift-Tab, Up and Down also give it back and come back
+*                              as out 'tab' 'btab' 'up' 'down' for the app to move its own focus; Enter on a non-empty line is out 'ask'; any other key edits the line (the
+*                              library's entry widget: left, right, home, end, delete, ctrl-u ...).
+*   focus   (ctx, on)          gives the line the focus (1) or takes it away (0) and draws it.
+*   mouse   (ctx, mev -> out)  out 'focus' when a press of the left button lands on the line.
+*   text    (ctx -> out)       the line's text.
+*   clear   (ctx)              empties the line.
+*   usable  (-> a, b)          for an app that has no line of its own on the toolkit's frame (the IDE puts an entry in its own form): a is 1 when the AI is usable for this account
+*                              (the same four tests as init), and b is the provider and the model, as two fields.
+*   ask     (ctx, actx -> res) THE WHOLE SEQUENCE for the request in the line: the preview (everything that will leave the machine, Send or Cancel, Cancel is the
+*                              default), the sending, the wait (Esc gives it up), the answer, the proposal and Accept / Reject.  Nothing is sent unless Send is chosen.
+*                              An app without the line passes the request in actx<6>, and ctx needs only TK.C.W.
+*
+*   actx is what the app tells the model, one dynamic array: <1> the app's name; <2> the kind (a word for the prompt); <3> text about the page, its lines separated by VALUE marks (the app
+*   decides; no data values); <4> the actions the app offers, VALUES of 'id:what it does'; <5> 1 when the actions only NAVIGATE (open a tool the person could open anyway), in which
+*   case Enter alone accepts the proposal (the owner's answer of 23 Oct), else 0 and Enter alone rejects; <12> (28 Oct 26, with <5> = 1) the ids, as VALUES, of the offered actions that do
+*   MORE than navigate - a program the person wrote, the command prompt: when the AI proposes one of those the default is Reject, whatever else the page offered.  res is: <1> 'none', 'action' or 'command'; <2> the action's id or the command;
+*   <3> the action's argument (letters, digits and . _ : / space - only); <4> what the AI said; <5> a line for the app's status bar (a failure, or that it was given up).
+*
+*   FOR AN APP THAT WORKS ON TEXT (the IDE; stage 2, 23 Oct 26) actx has more: <6> the request, when the app has no line to take it from; <7> the screen row on which the wait is written; <8> THE TEXT
+*   being worked on, its lines joined with a line feed (at most 24000 bytes: the app cuts it); <9> the number of its first line; <10> the SELECTED text, lines joined with a line feed;
+*   <11> 'nocmd' when the app has nowhere to run a command, which makes the library ignore one.  The text is sent as it is, a byte that is not plain ASCII shown to the model as ?
+*   (one for one, so a position in what it saw is a position in the original).  The model may then answer with "edits": a list of {"old", "new"}.  Each old must be in the text EXACTLY ONCE,
+*   in whole lines or not, the edits must not overlap, there are at most 8 and the original must really hold what the model was shown at that place.  A set that does not meet that is ignored
+*   whole and said so (12665).  A set that is accepted is SHOWN as a diff in full - the line numbers, the old lines with -, the new lines with + - and a diff of more than 30 rows (a line wider than the box goes on in the
+*   rows below it, never cut) is not offered (12664), so that nobody accepts what they could not read.  The default button is Reject.  res is then <1> 'edit', <2> the edits, as values of  position SM length SM new text
+*   (positions in the text of actx<8>, in the order they appear), <4> what the AI said.  THE LIBRARY CHANGES NOTHING: the app applies an accepted set to its own buffer, through its own
+*   undo, and saves nothing.
+*
+*   FOR AN APP THAT IS A FORM (the dictionary item form; S.97, 3 Nov 26) actx<14> is the form's fields, VALUES of 'key: what it holds'.  The model may then answer with "fields": an object
+*   whose names are some of those keys and whose values are text (a number is taken as its text; a line feed is kept, a byte that is not plain ASCII is dropped; 2000 characters at most).
+*   Every value is shown in full; Reject is the default.  res is then <1> 'fields', <2> the keys and <3> their values, each as values in the same order, <4> what the AI said.  THE LIBRARY
+*   CHECKS NO VALUE AND FILLS NOTHING: the app puts each value to its own rules before it fills a row, and saves nothing.
+*
+*   A FOLLOW-UP (3 Nov 26).  Every answer's box has a Follow up button besides its own.  It applies nothing; res<1> is 'follow' and res<5> says what happens next.  The NEXT 'ask' of the same
+*   app (actx<1>), in the same account and within 10 minutes, carries that question and the AI's answer (and up to two exchanges before it, when the request was itself a follow-up), shows
+*   them in full in its preview, and sends them as the earlier messages of a conversation.  Any 'ask' uses the follow-up up, whether it is sent or not; 'init' drops it.
+*
+*   <13> THE ORIGIN of any text of a file that the app puts in the request (the text in <8> and <10>, or source or records in the page text <3>): kind VM file VM id VM dictionary flag, the kinds
+*   being none, untitled, record and path ($tk_aiwall describes them).  An app that sends no such text says none.  It is NOT optional: an app that gives a text in <8> or <10> and no origin is
+*   refused, and a text of SD's own files is refused whatever the app says it is, because the wall asks WHERE THE FILE IS.  The refusal is a message in words (12945, 12946, 12947) on res<5>, one audit
+*   line (`ai refused why=... app=...`, never the text), and nothing else: no preview, no provider.
+*
+*   WHAT THE MODEL CAN CAUSE.  It returns text.  The text is read as ONE JSON object: say (shown), action (used only if it is exactly one of the ids the app offered), arg (cleaned) and
+*   command (printable ASCII, 200 characters, shown for the person to run or reject; this routine never runs it).  Anything else is ignored and said so.  The app performs an accepted
+*   action itself, through its own code, so its own gates decide.  The audit line is the kernel's, written before the request goes (K$AI.START): program tk_ai.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_ai(op, ctx, a, b)
+$catalog $tk_ai
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   common /tkai/ ai.on, ai.w, ai.focus, ai.prov, ai.model, ai.line, ai.sig, ai.fq, ai.fa, ai.fapp, ai.ft, ai.fwho
+
+   if unassigned(ai.on) then
+      ai.on = 0
+      ai.w = ''
+      ai.focus = 0
+      ai.prov = ''
+      ai.model = ''
+      ai.line = 0
+      ai.sig = ''
+   end
+   if unassigned(ai.fq) then gosub follow.drop       ;* 3 Nov 26: the follow-up kept for the next request (the questions and the answers, as fields; the app, the time, the account)
+
+   begin case
+      case op = 'usable'
+         gosub read.status
+         ai.line = 0                                      ;* this app draws no line of the library's (a line left by an earlier app of the session is not this app's)
+         a = ai.on
+         b = ai.prov : @fm : ai.model
+      case op = 'init'
+         gosub read.status
+         gosub follow.drop                                ;* a page made anew carries no follow-up of an earlier one
+         ai.line = ai.on
+         ai.focus = 0
+         ai.sig = ''
+         ctx<TK.C.AI> = (if ai.on then 1 else '')
+         ai.w = collection()
+         if ai.on then gosub make.widget
+      case op = 'move'
+         if ai.on then gosub place.widget                 ;* a resize: the line stands where the new window puts it; its text, cursor, pan and focus are kept (no read of the status, no init)
+      case op = 'draw'
+         ai.focus = (a = 1)
+         if ai.on then gosub paint
+      case op = 'show'
+         * S.97 stage 1: the line on a page of the toolkit, drawn by $tk_frame with the focus the line has now.  Written only when something it shows has changed since it was last
+         * written (the window, the frame's generation and epoch, the focus, the text, the cursor or the pan): the frame is called on every key and about once a second.
+         if ai.on and ai.line then
+            sg = ctx<TK.C.W> : '/' : ctx<TK.C.YSTAT> : '/' : ctx<TK.C.GEN> : '/' : ctx<TK.C.EPOCH> : '/' : ai.focus : '/' : ai.w{'value'} : '/' : ai.w{'pos'} : '/' : ai.w{'pan'} : '/' : (ai.fq # '')     ;* (3 Nov 26: and whether a follow-up is kept: the label says so)
+            if sg # ai.sig then
+               ai.sig = sg
+               gosub place.widget                             ;* the window may be another size
+               gosub paint
+            end
+         end
+      case op = 'focused'
+         a = (if ai.on and ai.line and ai.focus then 1 else 0)
+      case op = 'focus'
+         ai.focus = (a = 1)
+         if ai.on then gosub paint
+      case op = 'key'
+         b = ''
+         if ai.on then
+            nm = a
+            gosub on.key
+         end
+      case op = 'mouse'
+         b = ''
+         if ai.on then
+            if a<1> = 'press' and a<2> = 1 and a<4> = ctx<TK.C.YSTAT> - 1 then b = 'focus'
+         end
+      case op = 'text'
+         a = ''
+         if ai.on then a = ai.w{'value'}
+      case op = 'clear'
+         if ai.on then
+            ai.w{'value'} = ''
+            ai.w{'pos'} = 1
+            ai.w{'pan'} = 1
+            gosub paint
+         end
+      case op = 'ask'
+         b = 'none'
+         if ai.on then gosub run.ask
+      case op = 'select'
+         gosub make.select
+      case op = 'window'
+         gosub make.window
+      case op = 'splice'
+         gosub splice.edits
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the text window and the accepted edits (shared by every editor)
+
+* In: ctx = the lines of the text, joined with field marks; a = the mark's line, the mark's column, the cursor's line and the cursor's column, as values.  Out: b = the text between the
+* mark and the cursor (the earlier end first; the character under the later end is not in it), its lines joined with a line feed <1>, and the number of its first line <2> and of its last <3>;
+* null when there is no mark or nothing between.
+make.select:
+   t.my = a<1, 1> + 0
+   t.mx = a<1, 2> + 0
+   t.cy = a<1, 3> + 0
+   t.cx = a<1, 4> + 0
+   b = ''
+   if t.my < 1 or t.mx < 1 then return
+   if t.my < t.cy or (t.my = t.cy and t.mx <= t.cx) then
+      t.y1 = t.my ; t.x1 = t.mx ; t.y2 = t.cy ; t.x2 = t.cx
+   end else
+      t.y1 = t.cy ; t.x1 = t.cx ; t.y2 = t.my ; t.x2 = t.mx
+   end
+   t.sel = ''
+   for t.q = t.y1 to t.y2
+      t.ln = ctx<t.q>
+      begin case
+         case t.y1 = t.y2
+            t.part = t.ln[t.x1, t.x2 - t.x1]
+         case t.q = t.y1
+            t.part = t.ln[t.x1, len(t.ln)]
+         case t.q = t.y2
+            t.part = t.ln[1, t.x2 - 1]
+         case 1
+            t.part = t.ln
+      end case
+      t.sel := (if t.q = t.y1 then '' else char(10)) : t.part
+   next t.q
+   if t.sel = '' then return
+   b = t.sel : @fm : t.y1 : @fm : t.y2
+   return
+
+* In: ctx = the lines of the text, joined with field marks; a = the cursor's line.  Out: b = the first line of the window <1>, the last <2>, the number of characters before the window in
+* the whole text (a line feed after each line) <3> and the window's text, its lines joined with a line feed and a mark in a line shown as ? <4>.  The whole text when it is under 24000
+* bytes, else the lines round the cursor.
+make.window:
+   w.lines = ctx
+   w.cy = a + 0
+   w.total = dcount(w.lines, @fm)
+   w.first = 1
+   w.last = w.total
+   if len(w.lines) > 24000 then
+      w.first = w.cy - 150
+      if w.first < 1 then w.first = 1
+      w.last = w.first
+      w.size = 0
+      loop
+      while w.last <= w.total and w.size + len(w.lines<w.last>) + 1 <= 24000
+         w.size += len(w.lines<w.last>) + 1
+         w.last += 1
+      repeat
+      w.last -= 1
+      if w.last < w.first then w.last = w.first
+   end
+   w.off = 0
+   for w.q = 1 to w.first - 1
+      w.off += len(w.lines<w.q>) + 1
+   next w.q
+   w.win = ''
+   for w.q = w.first to w.last
+      w.win := (if w.q = w.first then '' else char(10)) : w.lines<w.q>
+   next w.q
+   w.win = convert(@vm : @sm : @tm, '???', w.win)
+   b = w.first : @fm : w.last : @fm : w.off : @fm : w.win[1, 24000]
+   return
+
+* In: ctx = the text now, its lines joined with a line feed; a = the window as make.window gave it (<1> to <4>) and <5> the accepted edits, as res<2> of 'ask' has them (values of
+* position SM length SM new text, positions in the window).  Out: b = the new text <1>, the number of the first line changed <2> and the number of edits <3>; null when the text no longer
+* holds, at every place, exactly what the model was shown (the person changed it while the AI answered): then nothing is to be applied.  The caller puts b<1> in its buffer.
+splice.edits:
+   s.now = ctx
+   s.off = a<3> + 0
+   s.win = a<4>
+   s.ed = a<5>
+   s.n = dcount(s.ed, @vm)
+   s.fits = (s.n > 0)
+   for s.k = 1 to s.n
+      s.p = s.ed<1, s.k, 1> + 0
+      s.l = s.ed<1, s.k, 2> + 0
+      if s.now[s.off + s.p, s.l] # s.win[s.p, s.l] then s.fits = 0
+   next s.k
+   b = ''
+   if not(s.fits) then return
+   s.new = s.now
+   for s.k = s.n to 1 step -1
+      s.p = s.ed<1, s.k, 1> + 0
+      s.l = s.ed<1, s.k, 2> + 0
+      s.new = s.new[1, s.off + s.p - 1] : s.ed<1, s.k, 3> : s.new[s.off + s.p + s.l, 99999999]
+   next s.k
+   s.p1 = s.ed<1, 1, 1> + 0
+   s.line1 = 1
+   if s.off + s.p1 > 1 then s.line1 = count(s.now[1, s.off + s.p1 - 1], char(10)) + 1
+   b = s.new : @fm : s.line1 : @fm : s.n
+   return
+
+* ------------------------------------------------------------------------------------------------- whether the AI is usable, and the line
+
+* The helper's status line: usable only when the gate is on for this account and a provider, a model and a key are set.  Any doubt is "not usable": the line is not drawn.
+read.status:
+   ai.on = 0
+   ai.prov = ''
+   ai.model = ''
+   if system(25) then return
+   rp = kernel(K$AI.STATUS, 0)
+   if rp<1> # 'D' then return
+   hj = jparse(rp<2>)
+   if status() then return
+   if hj{'t'} # 'status' then return
+   if not(hj{'gate'}) then return
+   if hj{'provider'} = '' or hj{'model'} = '' then return
+   if not(hj{'key'}) then return
+   ai.prov = hj{'provider'}
+   ai.model = hj{'model'}
+   ai.on = 1
+   return
+
+make.widget:
+   gosub place.widget
+   ai.w{'maxlen'} = 300
+   ai.w{'value'} = ''
+   call $sl_entry('init', ai.w, '', '', r)
+   return
+
+* Where the entry stands: its column, its row and its width.  Shared by make.widget and the 'move' op, so a line that moved stands where a line made new would.
+place.widget:
+   lw = ctx<TK.C.W>
+   gosub label.text
+   ai.w{'ax'} = 3 + len(ai.label)
+   ai.w{'ay'} = ctx<TK.C.YSTAT> - 1
+   ai.w{'w'} = lw - 3 - len(ai.label) - 3
+   return
+
+* The line's label: AI>, or (3 Nov 26) AI follow-up> while a follow-up is kept for the next request
+label.text:
+   ai.label = (if ai.fq # '' then 'AI follow-up>' else sysmsg(12641)) : ' '
+   return
+
+paint:
+   gosub place.widget                                     ;* (3 Nov 26) the label is longer while a follow-up is kept: the entry stands after it
+   lw = ctx<TK.C.W>
+   y = ctx<TK.C.YSTAT> - 1
+   keep.cur = ''
+   call $sl_curat('get', keep.cur)
+   screen text '' at 0,y width lw
+   screen text ai.label at 3,y attr (if ai.focus then 'bold' else 'desktop')
+   if ai.w{'value'} = '' and not(ai.focus) then
+      screen text sysmsg((if ctx<TK.C.AIROW> then 12948 else 12642))[1, lw - 3 - len(ai.label) - 3] at ai.w{'ax'},y attr 'desktop'     ;* a page of the toolkit has no Tab ring: its hint says F6 (S.97 stage 1)
+   end else
+      ai.w{'focused'} = (if ai.focus then 1 else 0)
+      call $sl_scr('get', scr)
+      call $sl_entry('draw', ai.w, scr, '', r)
+      call $sl_scr('put', scr)
+   end
+   if not(ai.focus) then call $sl_curat('back', keep.cur)
+   return
+
+on.key:
+   begin case
+      case nm = 'esc'
+         ai.focus = 0
+         gosub paint
+         b = 'leave'
+      case nm = 'tab' or nm = 'btab' or nm = 'up' or nm = 'down'
+         ai.focus = 0
+         gosub paint
+         b = nm
+      case nm = 'enter'
+         if trim(ai.w{'value'}) # '' then b = 'ask'
+      case 1
+         ai.w{'focused'} = 1
+         call $sl_scr('get', scr)
+         call $sl_entry('key', ai.w, scr, nm, r)
+         call $sl_scr('put', scr)
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the whole sequence
+
+run.ask:
+   lw = ctx<TK.C.W>
+   y = ctx<TK.C.YSTAT> - 1
+   if a<7> # '' then y = a<7> + 0
+   if a<6> # '' then
+      raw = a<6>                                          ;* an app without the line passes the request
+   end else
+      raw = ai.w{'value'}
+   end
+   gosub clean
+   req = trim(clean.out)
+   if req = '' then return
+   app = a<1>
+   no.cmd = (a<11> = 'nocmd')
+   * A FOLLOW-UP (3 Nov 26): the exchanges the person chose to carry, only for this app, in this account and within 10 minutes.  Used once: whatever happens to this request, it is dropped now.
+   h.q = '' ; h.a = '' ; h.n = 0
+   if ai.fq # '' then
+      if ai.fapp = app and ai.fwho = @who and (date() * 86400 + time()) - ai.ft <= 600 then
+         h.q = ai.fq
+         h.a = ai.fa
+         h.n = dcount(h.q, @fm)
+      end
+      gosub follow.drop
+   end
+
+   * THE WALL (S.97 stage 0, 1 Nov 26; $tk_aiwall has the rule and its limits).  Before anything is built for the preview and before any provider is addressed, whichever provider it is.
+   *   First the TYPED request: a question about SD's own code or build is not taken to the AI from inside SD (a screen, said to be one).  Then the ORIGIN of the text the app puts in the
+   *   request (actx<13>): a text of SD's own files is never sent, and a text whose origin cannot be told is not sent either.  The audit line says that a request was refused and why, never what it said.
+   call $tk_aiwall('request', req, why)
+   if why # '' then
+      void kernel(K$AUDIT, 'ai refused why=request app=' : downcase(app) : ' name=' : why)
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12946, why)
+      return
+   end
+   origin = a<13>
+   if origin = '' and (a<8> # '' or a<10> # '') then origin = 'unknown'     ;* an app that sends a text of a file and does not say where it is from
+   call $tk_aiwall('origin', origin, why)
+   if why # '' then
+      void kernel(K$AUDIT, 'ai refused why=origin app=' : downcase(app) : ' kind=' : origin<1, 1> : ' reason=' : why)
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : (if why = 'system' then sysmsg(12945) else sysmsg(12947))
+      return
+   end
+   * a follow-up's earlier questions are screened again, as typed requests (they were when they were asked; the answers are the model's own words, and no text of a file is in them
+   *   that was not sent before under its origin)
+   for hi = 1 to h.n
+      call $tk_aiwall('request', h.q<hi>, why)
+      if why # '' then
+         void kernel(K$AUDIT, 'ai refused why=request app=' : downcase(app) : ' name=' : why : ' followup=' : hi)
+         b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12946, why)          ;* the same refusal as the typed request's
+         return
+      end
+   next hi
+   * S.160 (7 Nov 26): THE STANDING TEXT, the administrator's (or the shipped default), read from the helper at each request, so that what goes is the text in use now.  It is put
+   *   to the wall's screen as a typed request is, with the other screens and before anything else is read for the request: SET.AI refuses to keep one that names SD's own code,
+   *   and a text that does so all the same is not sent - nor is the request.
+   cx.text = ''
+   cx.from = ''
+   rp = kernel(K$AI.STATUS, 0)
+   if rp<1> = 'D' then
+      cxj = jparse(rp<2>)
+      if not(status()) then
+         if cxj{'t'} = 'status' then
+            cx.text = cxj{'context'}
+            cx.from = cxj{'context-from'}
+         end
+      end
+   end
+   if cx.text # '' then
+      raw = cx.text
+      gosub clean.nl
+      cx.text = trimb(trimf(clean.out))
+      call $tk_aiwall('request', cx.text, why)
+      if why # '' then
+         void kernel(K$AUDIT, 'ai refused why=context app=' : downcase(app) : ' name=' : why)
+         b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(15013, why)
+         return
+      end
+   end
+   * the text being worked on, as the model will see it: a byte that is not plain ASCII (the line feed excepted) becomes ?, ONE FOR ONE, so a position in it is a position in the original
+   tb.raw = a<8>[1, 24000]
+   tb.first = a<9> + 0
+   if tb.first < 1 then tb.first = 1
+   raw = tb.raw
+   gosub map1
+   tbm = map.out
+   raw = a<10>[1, 24000]
+   gosub map1
+   selm = map.out
+   acts = ''
+   for i = 1 to dcount(a<4>, @vm)
+      raw = a<4, i>                                       ;* the app's own words, cleaned all the same: a label may be text a person typed
+      gosub clean
+      acts<1, i> = trim(clean.out)[1, 120]
+   next i
+   nav = a<5>
+   nav.not = a<12>                                         ;* the ids of the actions that do more than navigate (the app's own programs, the prompt): Enter alone never accepts one of these
+   n.acts = dcount(acts, @vm)
+   * S.97 (3 Nov 26): the fields of a form the app offers the model to fill (actx<14>), cleaned as the actions are
+   flds = ''
+   for i = 1 to dcount(a<14>, @vm)
+      raw = a<14, i>
+      gosub clean
+      flds<1, i> = trim(clean.out)[1, 120]
+   next i
+   n.flds = dcount(flds, @vm)
+   * the follow-up's size: what goes besides the request, shown and counted in the preview
+   h.bytes = 0
+   for i = 1 to h.n
+      h.bytes += len(h.q<i>) + len(h.a<i>)
+   next i
+
+   * the documentation passages (S.100): the few sections of SD's own pages that match the typed request, chosen HERE so that the preview can show them.  The administrator's pages are
+   *   the administrator's alone ($tk_aidocs asks).  The request screen above has already run, so a request that names SD's own code never gets here.
+   call $tk_aidocs('find', req, dres)
+   n.doc = dres<1> + 0
+   doc.bytes = 0
+   for i = 1 to n.doc
+      doc.bytes += len(dres<4, i>)
+   next i
+
+   * what will leave the machine: the standing text, the fixed instruction, the list of the page's actions, what the page tells about itself, and the request
+   sysx = sysmsg(12640, app)
+   cx.send = ''                                            ;* what goes before the instruction: the standing text with a line that says whose it is
+   if cx.text # '' then cx.send = 'Standing information from the administrator of this SD system:' : char(10) : cx.text : char(10) : char(10)
+   if tbm # '' then sysx := ' ' : sysmsg(12658)             ;* the model may answer with edits, only when there is a text to edit
+   if n.doc > 0 then sysx := ' ' : sysmsg(12927)
+   * S.97 (3 Nov 26): a form's fields.  A literal, as the dictionary form's own text is: no number of this port's message block was free when it was written
+   if n.flds > 0 then
+      sysx := ' This page is a form. You may propose values for its fields as "fields": an object whose names are field keys from the list in the prompt and whose values are text,'
+      sysx := ' for example "fields": {"type": "D", "loc": "3"}. Give only the fields the request needs. The form checks every value by its own rules and nothing is saved until the person saves the form.'
+   end
+   nl = char(10)
+   alist = ''
+   for i = 1 to n.acts
+      alist := nl : '  ' : acts<1, i>
+   next i
+   flist = ''
+   for i = 1 to n.flds
+      flist := nl : '  ' : flds<1, i>
+   next i
+   raw = change(a<3>, @vm, nl)
+   gosub clean
+   ptext = clean.out
+   prompt = 'Actions this page offers (id: what it does):' : alist : nl : nl
+   if n.flds > 0 then prompt := 'Fields of this form (key: what it holds):' : flist : nl : nl
+   prompt := 'What this page tells you about itself:' : nl : ptext
+   if tbm # '' then prompt := nl : nl : 'The text being worked on (it starts at line ' : tb.first : '):' : nl : tbm
+   if selm # '' then prompt := nl : nl : 'The selected text:' : nl : selm
+   for i = 1 to n.doc
+      prompt := nl : nl : 'Documentation passage [' : dres<2, i> : '] ' : dres<3, i> : ':' : nl : dres<4, i>
+   next i
+   prompt := nl : nl : 'Request: ' : req
+   size = len(cx.send) + len(sysx) + len(prompt) + h.bytes
+
+   * the preview: everything, then Send or Cancel; Cancel is what Enter chooses
+   call $sl_scr('get', scr)
+   wrapw = scr<SL.S.W> - 16
+   if wrapw > 100 then wrapw = 100
+   if wrapw < 20 then wrapw = 20
+   body = sysmsg(12633, ai.prov, ai.model, size)
+   body<-1> = ''
+   * S.160: the standing text is NOT in the preview (the owner, 7 Nov 26: "The prefixed text ought to be invisible to the user, the admin knows that it is there and can edit
+   *   it, but it does nothing to change the user").  The administrator sees and edits it on tool.ai (T).  The size on the first line is still the size of all that is sent.
+   * S.175 (the owner, 8 Nov 26: "When i sent a AI request it is showing the standard prefix text, it is not supposed to", with a picture of the IDE's preview):
+   *   NONE OF SD'S OWN TEXT IS SHOWN - the fixed instruction, the page's actions, the form's fields, what the page says about itself, the documentation passages.
+   *   It is all still sent, and the size on the first line counts it.  What is shown is the person's: the rows and selection the page sends, the earlier
+   *   exchanges of a follow-up, the request.  show.sd puts SD's text back (0 as delivered; kept for a reader of this code who wants to see it).
+   show.sd = 0
+   * 28 Oct 26 (S5): a line that is wider than the box goes on in the next rows (wrap.exact), not cut: what is shown is all of it
+   wr.w = wrapw - 2
+   wr.p1 = '  ' ; wr.p2 = '  '
+   if show.sd then
+      body<-1> = sysmsg(12645, len(sysx))
+      call $tk_wrap(sysx, wrapw, pieces)
+      for p = 1 to dcount(pieces, @fm)
+         body<-1> = '  ' : pieces<p>
+      next p
+      body<-1> = sysmsg(12646, n.acts, len(alist))
+      for i = 1 to n.acts
+         wr.text = acts<1, i>
+         gosub wrap.exact
+         body<-1> = wr.out
+      next i
+      if n.flds > 0 then
+         body<-1> = "The form's fields (" : n.flds : ', ' : len(flist) : ' bytes):'
+         for i = 1 to n.flds
+            wr.text = flds<1, i>
+            gosub wrap.exact
+            body<-1> = wr.out
+         next i
+      end
+      body<-1> = sysmsg(12647, len(ptext))
+      n.shown = dcount(ptext, nl)
+      for p = 1 to n.shown
+         if p <= 8 then
+            wr.text = field(ptext, nl, p)
+            gosub wrap.exact
+            body<-1> = wr.out
+         end
+      next p
+      if n.shown > 8 then body<-1> = '  ' : sysmsg(12649, n.shown - 8)
+   end
+   if tbm # '' then
+      n.tb = dcount(tbm, nl)
+      body<-1> = sysmsg(12673, n.tb, len(tbm), tb.first)
+      for p = 1 to n.tb
+         if p <= 6 then
+            wr.text = field(tbm, nl, p)
+            gosub wrap.exact
+            body<-1> = wr.out
+         end
+      next p
+      if n.tb > 6 then body<-1> = '  ' : sysmsg(12649, n.tb - 6)
+   end
+   if selm # '' then
+      n.sel = dcount(selm, nl)
+      body<-1> = sysmsg(12674, len(selm))
+      for p = 1 to n.sel
+         if p <= 6 then
+            wr.text = field(selm, nl, p)
+            gosub wrap.exact
+            body<-1> = wr.out
+         end
+      next p
+      if n.sel > 6 then body<-1> = '  ' : sysmsg(12649, n.sel - 6)
+   end
+   if show.sd and n.doc > 0 then
+      call $tk_wrap(sysmsg(12925, n.doc, doc.bytes), wrapw, pieces)   ;* 2 Nov 26: wrapped (it ran over the box's right border at 140 columns)
+      for p = 1 to dcount(pieces, @fm)
+         body<-1> = pieces<p>
+      next p
+      for i = 1 to n.doc
+         body<-1> = sysmsg(12926, dres<2, i>, len(dres<4, i>) : ' bytes')
+         n.dl = dcount(dres<4, i>, nl)
+         for p = 1 to n.dl
+            if p <= 4 then
+               wr.text = field(dres<4, i>, nl, p)
+               gosub wrap.exact
+               body<-1> = wr.out
+            end
+         next p
+         if n.dl > 4 then body<-1> = '  ' : sysmsg(12649, n.dl - 4)
+      next i
+   end
+   if h.n > 0 then
+      * A FOLLOW-UP (3 Nov 26): every earlier question and answer that goes with this request, in full (the owner: "shown in preview")
+      call $tk_wrap('A follow-up: ' : h.n : ' earlier exchange' : (if h.n = 1 then '' else 's') : ' of ' : h.bytes : ' bytes go with this request, before it, as you chose:', wrapw, pieces)
+      body<-1> = pieces
+      wr.w = wrapw - 4
+      wr.p1 = '    ' ; wr.p2 = '    '
+      for i = 1 to h.n
+         body<-1> = '  Earlier question ' : i : ':'
+         wr.text = h.q<i>
+         gosub wrap.exact
+         body<-1> = wr.out
+         body<-1> = "  The AI's answer to it:"
+         wr.text = h.a<i>
+         gosub wrap.exact
+         body<-1> = wr.out
+      next i
+      wr.w = wrapw - 2
+      wr.p1 = '  ' ; wr.p2 = '  '
+   end
+   body<-1> = sysmsg(12648, len(req))
+   call $tk_wrap(req, wrapw, pieces)
+   for p = 1 to dcount(pieces, @fm)
+      body<-1> = '  ' : pieces<p>
+   next p
+   screen msgbox body title sysmsg(12644) buttons '&Send,&Cancel' default 2 returning bn else bn = 0
+   if bn # 1 then
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12635)
+      return
+   end
+
+   * the request goes: the kernel writes the audit line first, then connects.  A follow-up (3 Nov 26) is  maxtokens VM n, then n questions and n answers, each a field, before the
+   *   prompt, which stays last (they hold no mark: each was cleaned)
+   ks = cx.send : sysx : @fm : 600                         ;* S.160: the standing text goes first in the system text
+   if h.n > 0 then
+      ks := @vm : h.n
+      for i = 1 to h.n
+         ks := @fm : h.q<i> : @fm : h.a<i>
+      next i
+   end
+   ks := @fm : prompt
+   rq = kernel(K$AI.START, ks)
+   if rq<1> # 'OK' then
+      note = (if rq<2> = 'nohelper' then sysmsg(12612) else sysmsg(12632, rq<2>, ''))
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : note
+      return
+   end
+
+   * the wait: Esc gives it up, so does an input that has ended or the cursor lock's own way out
+   loop
+      rp = kernel(K$AI.POLL, 0)
+      if rp<1> # 'W' then exit
+      screen text sysmsg(12650) at 3,y attr 'bold' width lw - 6
+      nm = ''
+      screen key timeout 1 returning nm
+      gave.up = 0
+      if nm = 'esc' or nm = 'guardquit' then gave.up = 1
+      if nm = '' then
+         if status() = ER$EOF then gave.up = 1
+      end
+      if gave.up then
+         void kernel(K$AI.CANCEL, 0)
+         b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12651)
+         if ai.line then gosub paint
+         return
+      end
+   repeat
+   if ai.line then gosub paint
+
+   * the answer: the helper's line, then the model's text as ONE JSON object
+   if rp<1> # 'D' then
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12632, rp<2>, '')
+      return
+   end
+   hj = jparse(rp<2>)
+   if status() then
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12632, 'badreply', '')
+      return
+   end
+   if hj{'t'} # 'ok' then
+      code = hj{'code'}
+      begin case
+         case code = 'disabled'
+            note = sysmsg(12629)
+         case code = 'nogate'
+            note = sysmsg(12630, @who)
+         case code = 'nomodel'
+            note = sysmsg(12631, ai.prov, 'model')
+         case code = 'nokey'
+            note = sysmsg(12631, ai.prov, 'key')
+         case 1
+            raw = hj{'msg'}
+            gosub clean
+            note = sysmsg(12632, code, clean.out[1, 100])
+      end case
+      b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : note
+      return
+   end
+   raw = hj{'text'}
+   gosub clean
+   atext = clean.out
+   tok.in = hj{'in'}
+   tok.out = hj{'out'}
+   gosub read.proposal
+
+   * the popup: what the AI said, the proposal if there is one, and Accept / Reject
+   call $tk_wrap(say, wrapw, pieces)
+   body = ''
+   for p = 1 to dcount(pieces, @fm)
+      body<-1> = pieces<p>
+   next p
+   if note.p # '' then
+      body<-1> = ''
+      body<-1> = note.p
+   end
+   begin case
+      case pk = 'edit'
+         body<-1> = ''
+         body<-1> = sysmsg(12670)
+         body<-1> = diff.lines
+         btn = '&Accept,&Reject'
+         dflt = 2                                         ;* a change to a text is never accepted by Enter alone
+      case pk = 'action'
+         body<-1> = ''
+         call $tk_wrap(sysmsg(12652, plabel : (if parg # '' then ' (' : parg : ')' else '')), wrapw, pieces)      ;* (S5) a label and an argument can be wider than the box: wrapped, not cut
+         body<-1> = pieces
+         btn = '&Accept,&Reject'
+         * Accept is what Enter chooses only for a proposal that just opens a tool: the app said every action navigates (nav) and this one is not among those it named as doing more
+         *   (nav.not).  A proposal of a program the person wrote or of the command prompt has Reject as its default, whatever else the page offered (28 Oct 26, handoff step 2).
+         dflt = (if nav and index(@vm : nav.not : @vm, @vm : pid : @vm, 1) = 0 then 1 else 2)
+      case pk = 'fields'
+         * S.97 (3 Nov 26): every proposed value in full, a key to a row and its value in rows of exactly its characters under it; the app checks each by its own rules before it fills
+         *   a row, and saves nothing
+         body<-1> = ''
+         call $tk_wrap(sysmsg(15008), wrapw, pieces)    ;* 3 Nov 26 (S.123): a message
+         body<-1> = pieces
+         wr.w = wrapw - 6
+         wr.p1 = '    ' ; wr.p2 = '    '
+         for i = 1 to fl.n
+            fv = fl.vals<1, i>
+            body<-1> = '  ' : fl.keys<1, i> : ':' : (if fv = '' then ' (empty)' else '')
+            for j = 1 to dcount(fv, nl)
+               wr.text = field(fv, nl, j)
+               gosub wrap.exact
+               body<-1> = wr.out
+            next j
+         next i
+         btn = '&Accept,&Reject'
+         dflt = 2                                         ;* a form is never filled by Enter alone
+      case pk = 'command'
+         body<-1> = ''
+         body<-1> = sysmsg(12653)
+         * (S5) the command is shown WHOLE, in rows of exactly its characters, because Run runs all of it; it is 200 characters at most
+         wr.w = wrapw - 4
+         wr.p1 = '  ' ; wr.p2 = '  '
+         wr.text = pcmd
+         gosub wrap.exact
+         body<-1> = wr.out
+         btn = '&Run,&Cancel'                            ;* (not Reject: its letter would be Run's)
+         dflt = 2
+      case 1
+         btn = '&Close'
+         dflt = 1
+   end case
+   body<-1> = ''
+   body<-1> = sysmsg(12639, tok.in, tok.out, ai.prov)
+   * 3 Nov 26: Follow up, the last button of every answer's box and never its default: the person's choice, each time
+   fu.bn = dcount(btn, ',') + 1
+   btn := ',&Follow up'
+   screen msgbox body title sysmsg(12644) buttons btn default dflt returning bn else bn = 0
+   begin case
+      case bn = fu.bn
+         gosub follow.keep
+         b = 'follow' : @fm : '' : @fm : '' : @fm : say : @fm : sysmsg(15009)
+      case pk = 'fields' and bn = 1
+         b = 'fields' : @fm : fl.keys : @fm : fl.vals : @fm : say : @fm : ''
+      case pk # '' and bn = 1
+         b = pk : @fm : (if pk = 'action' then pid else (if pk = 'edit' then ed.list else pcmd)) : @fm : parg : @fm : say : @fm : ''
+      case 1
+         b = 'none' : @fm : '' : @fm : '' : @fm : say : @fm : ''
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the follow-up (3 Nov 26)
+
+* Follow up was chosen: this request and the AI's answer are kept for the next request of this app, after the exchanges this one carried, the last 3 at most.  The answer is the
+* model's text as it came (cleaned to plain ASCII, 2000 characters at most), so that the next request shows the person, and the model, what was said.
+follow.keep:
+   nq = h.q ; na = h.a
+   nq<h.n + 1> = req
+   na<h.n + 1> = atext[1, 2000]
+   loop
+   while dcount(nq, @fm) > 3
+      nq = field(nq, @fm, 2, 999)
+      na = field(na, @fm, 2, 999)
+   repeat
+   ai.fq = nq
+   ai.fa = na
+   ai.fapp = app
+   ai.ft = date() * 86400 + time()
+   ai.fwho = @who
+   return
+
+follow.drop:
+   ai.fq = ''
+   ai.fa = ''
+   ai.fapp = ''
+   ai.ft = 0
+   ai.fwho = ''
+   return
+
+* 28 Oct 26 (S5): wr.text cut into rows of EXACTLY wr.w characters at most, no character lost and none added, so that what is shown is all of what is sent, applied or run.  The first row
+* begins wr.p1 and the others wr.p2.  Out: wr.out, the rows as fields (an empty text is the one row wr.p1).  wr.w is at least 14 (wrapw is at least 20).
+wrap.exact:
+   wr.out = ''
+   wr.len = len(wr.text)
+   if wr.len = 0 then
+      wr.out = wr.p1
+      return
+   end
+   for wr.k = 1 to wr.len step wr.w
+      wr.out<-1> = (if wr.k = 1 then wr.p1 else wr.p2) : wr.text[wr.k, wr.w]
+   next wr.k
+   return
+
+* The model's text to a proposal.  The text is read as ONE JSON object (a first { to the last }, so a code fence round it does no harm); if it is not, it is shown as it is and nothing is
+* proposed.  An action is used only if it is exactly one of the ids the app offered; its argument and a command are cleaned; the command is shown, never run here.
+read.proposal:
+   pk = '' ; pid = '' ; plabel = '' ; parg = '' ; pcmd = '' ; note.p = '' ; say = ''
+   f1 = index(atext, '{', 1)
+   l1 = 0
+   for ci = len(atext) to 1 step -1
+      if atext[ci, 1] = '}' then
+         l1 = ci
+         exit
+      end
+   next ci
+   obj.ok = 0                                              ;* (a collection cannot be compared with a string: the flag says whether obj holds one)
+   if f1 > 0 and l1 > f1 then
+      obj = jparse(atext[f1, l1 - f1 + 1])
+      if not(status()) then obj.ok = 1
+   end
+   if not(obj.ok) then
+      say = atext[1, 600]
+      note.p = sysmsg(12656)
+      return
+   end
+   raw = obj{'say'}
+   gosub clean
+   say = clean.out[1, 600]
+   if say = '' then say = ' '
+   act = trim(obj{'action'})
+   if act # '' and downcase(act) # 'none' then
+      found = 0
+      for i = 1 to n.acts
+         if field(acts<1, i>, ':', 1) = act then
+            found = i
+            exit
+         end
+      next i
+      if found then
+         pk = 'action'
+         pid = act
+         plabel = trim(acts<1, found>[index(acts<1, found>, ':', 1) + 1, 999])
+         raw = obj{'arg'}
+         gosub clean
+         parg = trim(clean.out)[1, 100]
+         if trim(convert('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/- ', space(65), parg)) # '' then parg = ''
+      end else
+         note.p = sysmsg(12654, act[1, 40])
+      end
+   end
+   if pk = '' and tbm # '' then gosub read.edits
+   if pk = '' and n.flds > 0 then gosub read.fields         ;* S.97 (3 Nov 26): values for a form, only when the app offered its fields
+   if pk = '' and not(no.cmd) then
+      raw = obj{'command'}
+      gosub clean
+      c = trim(clean.out)
+      if c # '' then
+         if len(c) > 200 or c # raw then
+            note.p = sysmsg(12655)
+         end else
+            pk = 'command'
+            pcmd = c
+         end
+      end
+   end
+   return
+
+* S.97 (3 Nov 26): "fields", an object of field keys and text values for a form (actx<14>).  A name that is not one of the keys offered, a value that is not text or a number, and a
+* second value for the same key are left out and said; each value is cleaned to plain ASCII with its line feeds (clean.nl) and cut at 2000 characters.  Out: fl.n, fl.keys and fl.vals (as
+* values, in the order the model gave them), pk 'fields' when there is at least one.  Nothing is checked against the form's rules here: the app does that before it fills a row.
+read.fields:
+   if jtype(obj{'fields'}) # 'collection' then return
+   fo = obj{'fields'}
+   fnames = enumerate(fo)
+   if fnames = '' then return
+   fl.n = 0 ; fl.keys = '' ; fl.vals = '' ; fl.skip = ''
+   for fi = 1 to dcount(fnames, @fm)
+      fnm = fnames<fi>
+      raw = fnm
+      gosub clean
+      fk = trim(clean.out)[1, 40]
+      offered = 0
+      for j = 1 to n.flds
+         if trim(field(flds<1, j>, ':', 1)) = fk then
+            offered = 1
+            exit
+         end
+      next j
+      if offered and fk = fnm then
+         if index(@vm : fl.keys : @vm, @vm : fk : @vm, 1) then offered = 0     ;* a key given twice: the first value stands
+      end else
+         offered = 0                                       ;* (a name that the cleaning changed is not a key that was offered)
+      end
+      ft = ''
+      if offered then ft = jtype(fo{fnm})
+      if ft = 'string' or ft = 'number' then
+         raw = fo{fnm}
+         gosub clean.nl
+         fl.n += 1
+         fl.keys<1, fl.n> = fk
+         fl.vals<1, fl.n> = clean.out[1, 2000]
+      end else
+         fl.skip<1, -1> = fk[1, 20]
+      end
+   next fi
+   if fl.skip # '' then note.p = sysmsg(15010, change(fl.skip, @vm, ', ')[1, 200])
+   if fl.n > 0 then pk = 'fields'
+   return
+
+* "edits": a list of {"old", "new"} against the text the model was shown (tbm; tb.raw is the original).  All or none: a set with a single edit that does not fit is ignored whole and
+* said so.  What is shown to the person is a diff of EVERY edit in full, and a diff of more than 30 lines is not offered.
+read.edits:
+   if jtype(obj{'edits'}) # 'array' then return
+   epos = '' ; elen = '' ; enew = '' ; ed.n = 0 ; bad.why = ''
+   if jtype(obj{'edits/9'}) = 'collection' then bad.why = 'more than 8 edits'      ;* (a collection is never compared with a string; jtype() says 'collection' for an object)
+   for ei = 1 to 8
+      if bad.why # '' then exit
+      if jtype(obj{'edits/' : ei}) # 'collection' then exit
+      raw = obj{'edits/' : ei : '/old'}
+      gosub clean.nl
+      eo = clean.out
+      raw = obj{'edits/' : ei : '/new'}
+      gosub clean.nl
+      en = clean.out
+      begin case
+         case eo = ''
+            bad.why = 'an empty old text'
+         case len(en) > 4000
+            bad.why = 'a new text over 4000 bytes'
+         case 1
+            ep = index(tbm, eo, 1)
+            begin case
+               case ep = 0
+                  bad.why = 'old text not found'
+               case index(tbm, eo, 2) > 0
+                  bad.why = 'old text found more than once'
+               case tb.raw[ep, len(eo)] # eo
+                  bad.why = 'the text there is not what the model was shown'
+               case 1
+                  ed.n += 1
+                  epos<ed.n> = ep
+                  elen<ed.n> = len(eo)
+                  enew<ed.n> = en
+            end case
+      end case
+   next ei
+   if bad.why = '' and ed.n = 0 then return                  ;* "edits": [] - nothing is proposed, nothing is wrong
+   * ascending by position, and no two edits overlap
+   if bad.why = '' then
+      for i = 1 to ed.n - 1
+         for j = i + 1 to ed.n
+            if epos<j> < epos<i> then
+               t = epos<i> ; epos<i> = epos<j> ; epos<j> = t
+               t = elen<i> ; elen<i> = elen<j> ; elen<j> = t
+               t = enew<i> ; enew<i> = enew<j> ; enew<j> = t
+            end
+         next j
+      next i
+      for i = 1 to ed.n - 1
+         if epos<i> + elen<i> > epos<i + 1> then bad.why = 'two edits overlap'
+      next i
+   end
+   if bad.why # '' then
+      note.p = sysmsg(12665, bad.why)
+      return
+   end
+   * the diff, in full
+   diff.lines = ''
+   ed.list = ''
+   dl = 0
+   for k = 1 to ed.n
+      ep = epos<k>
+      line.no = tb.first
+      if ep > 1 then line.no = tb.first + count(tb.raw[1, ep - 1], nl)
+      diff.lines<-1> = sysmsg(12663, k, ed.n, line.no)
+      * 28 Oct 26 (S5): a long line is shown whole, in rows (a hanging indent after the sign), and every row counts towards the 30: the person is shown all that Accept would apply, or the
+      *   proposal is not offered.  (It used to be cut at the box and applied whole.)
+      wr.w = wrapw - 6
+      eo = tb.raw[ep, elen<k>]
+      wr.p1 = '- ' ; wr.p2 = '  '
+      for j = 1 to dcount(eo, nl)
+         wr.text = field(eo, nl, j)
+         gosub wrap.exact
+         diff.lines<-1> = wr.out
+         dl += dcount(wr.out, @fm)
+      next j
+      en = enew<k>
+      if en # '' then
+         wr.p1 = '+ ' ; wr.p2 = '  '
+         for j = 1 to dcount(en, nl)
+            wr.text = field(en, nl, j)
+            gosub wrap.exact
+            diff.lines<-1> = wr.out
+            dl += dcount(wr.out, @fm)
+         next j
+      end
+      ed.list<1, -1> = ep : @sm : elen<k> : @sm : en
+   next k
+   if dl > 30 then
+      note.p = sysmsg(12664, dl)
+      return
+   end
+   pk = 'edit'
+   return
+
+* The text as the model is shown it, ONE BYTE FOR ONE: plain ASCII and the line feed as they are, a tab as a blank, anything else as ?
+map1:
+   map.out = ''
+   for ci = 1 to len(raw)
+      ch = raw[ci, 1]
+      sq = seq(ch)
+      begin case
+         case sq >= 32 and sq <= 126
+            map.out := ch
+         case sq = 10
+            map.out := ch
+         case sq = 9
+            map.out := ' '
+         case 1
+            map.out := '?'
+      end case
+   next ci
+   return
+
+* The model's text for an edit: plain ASCII and the line feed; a tab or a return becomes a blank; anything else is dropped
+clean.nl:
+   clean.out = ''
+   for ci = 1 to len(raw)
+      sq = seq(raw[ci, 1])
+      begin case
+         case sq >= 32 and sq <= 126
+            clean.out := raw[ci, 1]
+         case sq = 10
+            clean.out := raw[ci, 1]
+         case sq = 9 or sq = 13
+            clean.out := ' '
+      end case
+   next ci
+   return
+
+* Plain ASCII only: a control character, a mark or a byte above 126 is dropped (a line feed, a return or a tab becomes a space)
+clean:
+   clean.out = ''
+   for ci = 1 to len(raw)
+      sq = seq(raw[ci, 1])
+      if sq >= 32 and sq <= 126 then
+         clean.out := raw[ci, 1]
+      end else
+         if sq = 10 or sq = 13 or sq = 9 then clean.out := ' '
+      end
+   next ci
+   return
+
+end
+
+* END-CODE

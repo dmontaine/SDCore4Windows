@@ -1,0 +1,1 @@
+%1 %2 is read-only here: user %3 holds its lock, so it cannot be changed or saved.  Close the tab and open the record again when the lock is free; Write a copy keeps the text under another name.

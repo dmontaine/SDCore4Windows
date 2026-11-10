@@ -6,32 +6,45 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 28 Oct 26 Windows port - from Linux ec8459b - faults: a window above TK.MAXW by TK.MAXH is refused (message 12956), after the audience check and before the screen.
+* 10 Nov 26 Windows port - level with Linux e3490a7f (S.88 D4 and L1, S.113, S.186).
 * 22 Oct 26 dm  New (S.75, TK-0.1).
+* 26 Oct 26 dm  faults: a window above TK.MAXW by TK.MAXH is refused (message 12956), after the audience check and before the screen.
+* 28 Oct 26 dm  S.88 phase 2 (D4): the break setting is also kept by $tk_brk, so that $sl_cleanup can give it back when the app is aborted before $tk_close.
+* 28 Oct 26 dm  S.88 L1: VAR.ARGS, the app's floor as the optional fifth and sixth arguments (TK.MINW by TK.MINH when left out, so every existing call is
+*               unchanged); the frame, the body and the cursor lock come from $tk_layout 'open'; a new frame-cache epoch for $tk_frame (F1).
+* 3 Nov 26 dm  S.113 (owner: "All pages"): the screen it takes is marked the toolkit's ($sl_scr 'toolkit'): every page draws by difference.
+* 9 Nov 26 dm  S.186: after SCREEN OPEN, $tk_std 'apply' switches the mouse off again when the person chose View > Mouse off on an earlier page.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   call $tk_open(app, audience, ctx, err)
+*   call $tk_open(app, audience, ctx, err {, floorw, floorh})
 *
 *     app       the app's name, for the messages and the right end of row 0
 *     audience  'admin' for an administrator app, null for a user app
 *     ctx       returned: the context (tk.h) every other routine of the base is given
 *     err       returned: null when the app may go on; else the message to print (the app prints it and stops).  Nothing has been
 *               drawn and no data has been read.
+*     floorw floorh   optional: the smallest window the app is laid out for (its floor).  Left out or null, TK.MINW by TK.MINH, the owner's
+*               140 by 43.  A floor is never under TK.LEASTW by TK.LEASTH (100 by 30) nor over TK.MAXW by TK.MAXH.  An app keeps 140 by 43 until
+*               its own suite proves it works smaller (plan section 12); no shipped app declares another.
 *
-*   In this order, and each refusal returns: a phantom has no terminal; the window must be TK.MINW by TK.MINH (the library's one check,
+*   In this order, and each refusal returns: a phantom has no terminal; the window must be at least the floor (the library's one check,
 *   $sl_need, message 12202); an administrator app asks the kernel BEFORE the screen is taken and before any data is read; the window must be no
 *   bigger than TK.MAXW by TK.MAXH (message 12956: the screen costs time as the square of the height); then the break
 *   setting is saved and the break key turned off (Ctrl-C and the terminal's break are keys of the app), the screen is taken with
-*   line-drawing borders when the terminal says UTF-8, and the cursor lock is asked for (the keys are not the app's while the cursor is off
-*   the screen).  $tk_close gives it all back.
+*   line-drawing borders when the terminal says UTF-8, and $tk_layout 'open' lays out the frame and the body and asks for the cursor lock in
+*   its layout mode (the keys are not the app's while the window is smaller than the floor).  $tk_close gives it all back.
+*
+*   The screen is marked the toolkit's (S.113, $sl_scr 'toolkit'): SCREEN TEXT, BOX and CLEAR on it write only the cells the terminal does
+*   not already show, a cleared rectangle reaches the terminal at the page's next wait, and F5, Ctrl-L and a resize repaint it whole once.
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine tk_open(app, audience, ctx, err)
+subroutine tk_open(app, audience, ctx, err, floorw, floorh) var.args
 $catalog $tk_open
 
 $include keys.h
@@ -39,16 +52,36 @@ $include int$keys.h
 $include sl.h
 $include tk.h
 
+   common /tkepoch/ ep.next, ep.drawn             ;* the frame cache's epoch: $tk_open counts, $tk_frame compares, $tk_close clears
+
    err = ''
    ctx = ''
    is.admin = (audience = 'admin')
+
+   * The app's floor: the two optional arguments are read only after UNASSIGNED() has been asked (BASIC does not short-circuit)
+   floor.w = TK.MINW
+   floor.h = TK.MINH
+   if not(unassigned(floorw)) then
+      if floorw # '' then floor.w = floorw
+   end
+   if not(unassigned(floorh)) then
+      if floorh # '' then floor.h = floorh
+   end
+   if not(num(floor.w)) then floor.w = TK.MINW
+   if not(num(floor.h)) then floor.h = TK.MINH
+   floor.w = int(floor.w)
+   floor.h = int(floor.h)
+   if floor.w < TK.LEASTW then floor.w = TK.LEASTW
+   if floor.h < TK.LEASTH then floor.h = TK.LEASTH
+   if floor.w > TK.MAXW then floor.w = TK.MAXW
+   if floor.h > TK.MAXH then floor.h = TK.MAXH
 
    if system(25) then
       err = sysmsg(12806, app)
       return
    end
 
-   call $sl_need(app, TK.MINW, TK.MINH, need.msg, '')
+   call $sl_need(app, floor.w, floor.h, need.msg, '')
    if need.msg # '' then
       err = need.msg
       return
@@ -78,6 +111,7 @@ $include tk.h
    utf8 = (index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0)
 
    saved.trap = pterm(PT$BREAK, -1)
+   call $tk_brk('save', saved.trap)                 ;* kept where $sl_cleanup can find it if the app is aborted (28 Oct 26, D4)
    void pterm(PT$BREAK, @false)
    break off
 
@@ -92,22 +126,13 @@ $include tk.h
       end
    end
    if not(opened) then
-      break on
-      void pterm(PT$BREAK, saved.trap)
+      call $tk_brk('close', saved.trap)
       err = sysmsg(12807, app)
       return
    end
+   call $sl_scr('toolkit', '')                      ;* S.113: the page draws by difference (SCREEN TEXT, BOX, CLEAR write only what changed) and its waits flush
+   call $tk_std('apply', ctx, '', '', std.r)          ;* 9 Nov 26 (S.186): View > Mouse switched off on an earlier page stays off (SCREEN OPEN switched it on)
 
-   call $sl_guardmode(app, TK.MINW, TK.MINH)
-
-   call $sl_window(w, h)
-   lw = w
-   lh = h
-   if lw < TK.MINW then lw = TK.MINW            ;* the window is smaller only after the start: the layout keeps its size and the
-   if lh < TK.MINH then lh = TK.MINH            ;* library cuts what falls outside (the upper left corner shows)
-
-   ctx<TK.C.W> = lw
-   ctx<TK.C.H> = lh
    ctx<TK.C.UTF8> = (if utf8 then 1 else 0)
    ctx<TK.C.TRAP> = saved.trap
    ctx<TK.C.APP> = app
@@ -116,9 +141,15 @@ $include tk.h
    end else
       ctx<TK.C.AUD> = @logname : '@' : @who
    end
-   ctx<TK.C.YSTAT> = lh - 3
-   ctx<TK.C.YBORD> = lh - 2
-   ctx<TK.C.YKEYS> = lh - 1
+   ctx<TK.C.FLOORW> = floor.w
+   ctx<TK.C.FLOORH> = floor.h
+
+   * F1 (28 Oct 26): every open is a new epoch, so the frame cache of an app opened before (the same process, the same common block) is not taken for this screen's
+   ep.next += 1
+   ctx<TK.C.EPOCH> = ep.next
+
+   * The frame (W, H, YSTAT, YBORD, YKEYS), the body and the cursor lock, from the window and the floor: at 140 by 43 exactly what this routine made before the service
+   call $tk_layout('open', ctx, '', lay.chg)
 
    return
 end

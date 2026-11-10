@@ -1,0 +1,28 @@
+* TKOUT
+* The public full-screen toolkit (S.130): the output pane, the history of what a program printed and refused.  A wrapper over $tk_out.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkout(op, ctx, a, b, c)             ALWAYS FIVE ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   The ops are $tk_out's: add, open, close, toggle, state, draw, key, mouse, focus, progress, poll and clear.  The history is kept in memory for this open of the program.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkout(op, ctx, a, b, c)
+$catalog !tkout
+
+   call $tk_out(op, ctx, a, b, c)
+   return
+end
+
+* END-CODE

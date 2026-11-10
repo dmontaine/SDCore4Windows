@@ -1,0 +1,69 @@
+* TK_THEME
+* The full-screen toolkit, shared base: Ctrl-T and View > Theme, the same on every page, the IDE, SED and the debugger.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 8 Nov 26 dm  New (S.179).  The owner, 8 Nov: "the theme switching capability should be available on every page using the same methodology and
+*              should appear in the menu under view"; Ctrl-T everywhere, the choice kept for the person ("Inside SD (tighter)").
+* 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_theme(own, changed, msg)
+*
+*     The next theme in the library's one order (blue classic dark light mono night paper) that THIS terminal can show is put in force
+*     (as a program's own choice, as SCREEN THEME does) and kept for the person ($sl_theme 'save': the record theme.<login name> of
+*     &menus& in the session's account), so the next page, program and session start in it.
+*
+*     own      1: the caller's screen is the library's (a toolkit page, the IDE): it is drawn again from the library's shadow here, since
+*              the library sends only what changed and a style's code does not change with the theme.  0: the caller draws its own
+*              screen whole itself (SED; the debugger, inside which the library's context is the debugged program's).
+*     changed  returned: 1 a new theme is in force (a page whose own colours depend on the theme makes them again and draws its page,
+*              as after a resize); 0 nothing changed.
+*     msg      returned: one line for the status line - the theme now in force and whether it was kept.
+*
+*   A terminal with no colour can show mono only: nothing changes and msg says so.  The routine runs no command but the CREATE.FILE that
+*   'save' may need, and draws nothing but the repaint asked for by own.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+$internal
+subroutine tk_theme(own, changed, msg)
+$catalog $tk_theme
+$include sl.h
+
+   changed = 0
+   msg = ''
+   call $sl_theme('name', '', '', '', '', now)
+   call $sl_theme('next', now, '', '', '', want)
+   if want = now then
+      msg = 'This terminal cannot show color: the theme stays ' : now : '.'
+      return
+   end
+   call $sl_theme('set', want, 'asked', '', '', setr)
+   if setr then
+      msg = 'The theme ' : want : ' cannot be shown here: it stays ' : now : '.'
+      return
+   end
+   now = want
+   changed = 1
+   if own then
+      call $sl_scr('get', scr)
+      if scr<SL.S.OWNED> then
+         call $sl_repaint(scr)
+         call $sl_scr('put', scr)
+      end
+   end
+   call $sl_theme('save', now, '', '', '', kept)
+   if kept = 0 then
+      msg = 'Theme: ' : now : ' (kept for your next sessions in this account).'
+   end else
+      msg = 'Theme: ' : now : ' (for this session only: it could not be kept in this account).'
+   end
+   return
+end
+
+* END-CODE

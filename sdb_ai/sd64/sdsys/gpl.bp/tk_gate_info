@@ -4,10 +4,15 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - level with Linux e3490a7f: the home gate (S.166) is in; the ai gate's row stays out until the AI helper is built (RELEASE_1.1 173).
 * 25 Oct 26 Windows port - files-admin is "built" now: the group sdfilesadmin, files-admin-on / -off and the server side came with Linux ef9d594 (RELEASE_1.1 178).
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1).  Two differences: "Windows user" for "Linux user", and
 *           files-admin is "planned", not "built" (this tree has no sdfilesadmin group yet: RELEASE_1.1 178).
 * 22 Oct 26 dm  New (S.75, TK-0.2).
+* 7 Nov 26 dm   S.166: the home gate, a third kind ('start'): the register field ACC$START (menu, terminal, or blank for the system's default), no kernel key; ON is the home
+*               screen and off the command prompt (the owner: "on means home display off means tcl").  Its delivered state is the installer's answer, said as on (the
+*               question's default).  $tk_startof reads it.
+* 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -53,6 +58,7 @@ $include tk.h
    rows<-1> = "files|Files route|files-on|files-off|group||sdfiles||next login|off|F|log in over the files-only SDNet route and read the files of its account on this server|a login by the other routes it has|1|built"
    rows<-1> = "files-write|Files write|files-write-on|files-write-off|group||sdfileswrite||next login|off|FW|change files over the files-only route: write, delete, lock and clear|read files over that route|1|built"
    rows<-1> = "files-admin|Files admin|files-admin-on|files-admin-off|group||sdfilesadmin||next login|off|FA|administer files over the files-only route: configure, analyze, index, create, delete and the file's counter|change records in files that already exist, if files-write is on|1|built"
+   rows<-1> = "home|Home screen|start-menu|start-terminal|start|ACC$START|||next sign-on|on|ST|start each session at the home screen of tiles, where the account's Terminal tile decides whether the prompt can be reached|start at the command prompt|0|built"
    rows<-1> = "sockets|Raw sockets||||||||off||open raw network connections from programs|use the SD socket verbs that every account has|1|planned"
 
    if id = 'list' then

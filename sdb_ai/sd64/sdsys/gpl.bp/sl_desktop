@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 3 Nov 26 dm  S.113: the terminal's picture (SL.S.TERM, SL.S.TATTR) is blanked with the terminal.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -37,9 +38,14 @@ $include sl.h
 
    sw = scr<SL.S.W> + 0
    sh = scr<SL.S.H> + 0
+   keep.term = (scr<SL.S.TATTR> # '')                 ;* S.113: a screen the library owns keeps the terminal's picture, which the clear blanks too
    for r = 0 to sh - 1
       scr<SL.S.SHADOW, r + 1> = space(sw)
       scr<SL.S.ATTRS, r + 1> = str('n', sw)
+      if keep.term then
+         scr<SL.S.TERM, r + 1> = space(sw)
+         scr<SL.S.TATTR, r + 1> = str('n', sw)
+      end
    next r
 
    if dc # 'n' then

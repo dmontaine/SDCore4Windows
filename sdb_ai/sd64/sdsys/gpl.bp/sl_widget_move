@@ -1,0 +1,87 @@
+* SL_WIDGET_MOVE
+* Screen library: move a widget of a form and give it a new size, keeping everything it holds.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 2 Nov 26 dm  New (S.88 p3.3a).  A program that follows the window (the IDE) moved its widgets by making the whole form again, and a text area made
+*              again has lost its undo and redo steps, its selection, its find text and its view; a table its row and a tree its open nodes.  This
+*              routine changes the place and the size of the widget the form already has.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_widget_move(f, id, x, y, sz, ret)
+*
+*     f id   the form and the widget's name in it
+*     x y    the widget's new place, counted as it was when it was added (from the form's top left corner, or from the inside
+*            of its container); '' leaves that one as it is
+*     sz     the new size: the width, a value mark, the height ('' leaves either as it is; sz = '' changes no size).  A memo (a
+*            text area), a table and a tree are given it through their own op 'size', which keeps what they hold (the text, the
+*            cursor, the selection, the find text, the undo and redo steps; the rows, the current row, the sort and the marks;
+*            the nodes that are open) and brings the cursor into the new view.  A label and an entry field take a new width
+*            (their height is 1, so a height other than 1 is refused).  Any other kind takes no size here (a container,
+*            viewport or frame is SCREEN MOVE's)
+*     ret    0 done; 1 refused and NOTHING changed: f is not a form, it has no widget of that id, a place or a size is not a
+*            number, or the widget's kind takes no size
+*
+*   The kind's 'init' is never called (it would start the widget again).  Nothing is drawn: when the form is on the screen the
+*   caller draws it ($sl_form 'redraw', or SCREEN WAIT after taking it off: f{'shown'} = 0).  A program that moves many widgets
+*   at once takes the form off the screen first, so that it is drawn once.  SCREEN MOVE is not changed: it still takes a size
+*   for a container, viewport or frame only, and a label asked for one there answers ELSE.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_widget_move(f, id, x, y, sz, ret)
+$catalog $sl_widget_move
+
+   ret = 1
+   if jtype(f) # 'collection' then return
+   call $sl_form('find', f, '', id, n)
+   if n = 0 then return
+
+   w = f{'widgets', n}
+   wt = w{'type'}
+   sw = sz<1, 1>
+   sh = sz<1, 2>
+   if (x # '' and not(num(x))) or (y # '' and not(num(y))) then return
+   if (sw # '' and not(num(sw))) or (sh # '' and not(num(sh))) then return
+
+   * Decide everything before anything changes: a refusal leaves the widget as it was
+   kind.op = ''
+   if sw # '' or sh # '' then
+      begin case
+         case wt = 'memo' or wt = 'table' or wt = 'tree'
+            kind.op = wt
+         case wt = 'label' or (wt = 'entry' and w{'fw'} = '')
+            if sh # '' and sh + 0 # 1 then return
+            kind.op = 'width'
+         case 1
+            return
+      end case
+   end
+
+   if x # '' then w{'x'} = x + 0
+   if y # '' then w{'y'} = y + 0
+   begin case
+      case kind.op = 'memo'
+         call $sl_memo('size', w, '', sw : @fm : sh, r)
+      case kind.op = 'table'
+         call $sl_table('size', w, '', sw : @fm : sh, r)
+      case kind.op = 'tree'
+         call $sl_tree('size', w, '', sw : @fm : sh, r)
+      case kind.op = 'width'
+         if sw # '' then
+            w{'w'} = sw + 0
+            if wt = 'label' then w{'width'} = sw + 0          ;* a label's own init reads its width there
+         end
+   end case
+   ret = 0
+
+   return
+end
+
+* END-CODE

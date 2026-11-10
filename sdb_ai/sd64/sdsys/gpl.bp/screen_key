@@ -6,6 +6,12 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 28 Oct 26 dm  S.88 L1 (R-a): a resize that a dialogue read (and the program never saw) is the key this statement gives first, before it waits;
+*               a resize it reads itself clears the note, so that it is given once.
+* 3 Nov 26 dm  A key name the toolkit's menu bar left for the program (common /$slkpush/: the choice made in a box's right-click menu that opened after the click moved the
+*               focus, $tk_menubar) is given first, once, before any pending resize and before the keyboard is read.  It is a name the program would get for that key.
+* 3 Nov 26 dm  S.113: the screen is flushed before the keyboard is read ($sl_scr 'flush'); F5 and Ctrl-L mark a page of the toolkit for a whole repaint at its
+*               next wait ($sl_scr 'refresh'); after a resize the kept picture is taken with peek, so that a page is repainted once, after it has drawn its new layout.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -21,8 +27,13 @@
 *              f1 to f12, ctrl-a to ctrl-z (those with no name of their own), or the character itself.
 *              The terminal's own terminfo entry decides what a sequence means ($sl_key).  A report of the
 *              mouse (once SCREEN OPEN has switched reporting on) is the name mouse: SCREEN MOUSE then says
-*              what it was.
+*              what it was.  resize when the terminal's size changed - also when it changed while a dialogue (a menu,
+*              a message box, SCREEN ASK ...) was open, which then had the key: the program is given it at its next
+*              SCREEN KEY, at once and before any key typed since.
 *     status   0 a key; 1 the time ran out or the input has ended (ELSE)
+*
+*   Before it waits, what the program drew is brought onto the terminal ($sl_scr 'flush').  On a screen that $tk_open took, F5 and Ctrl-L
+*   are given to the program as always and also make its next wait repaint the whole screen from the library's picture (S.113).
 *
 * END-DESCRIPTION
 *
@@ -32,10 +43,26 @@ $internal
 subroutine screen_key(timeout, ret, status)
 $catalog !screen_key
 
+   common /$slkpush/ kp.name                       ;* 3 Nov 26: a $ name, so no user program can declare it (CLAUDE.md: a common SD trusts has a $ name); 'kp:' and a key name the toolkit's menu bar left for this wait (a common starts as 0, so the prefix marks a real one)
+
    ret = ''
-   call $sl_key(timeout, ret)
+   if kp.name[1, 3] = 'kp:' then
+      ret = kp.name[4, 999]
+      kp.name = ''
+      status = 0
+      return
+   end
+   call $sl_scr('pending', pend)                   ;* a resize a dialogue read and the program did not see (R-a): it is the key, first
+   if pend then
+      ret = 'resize'
+   end else
+      call $sl_scr('flush', '')                    ;* S.113: what the program drew since its last wait is on the terminal before it waits (a page of the toolkit draws by difference)
+      call $sl_key(timeout, ret)
+      if ret = 'resize' then call $sl_scr('pending', pend)    ;* delivered here: the note is not left for the next call
+      if ret = 'f5' or ret = 'ctrl-l' then call $sl_scr('refresh', '')    ;* S.113: on a page of the toolkit the refresh keys repaint the whole screen at the next wait
+   end
    if ret = 'resize' then
-      call $sl_scr('get', scr)                 ;* makes the kept picture the terminal's size and draws it again
+      call $sl_scr('peek', scr)                ;* makes the kept picture the terminal's size and draws it again (a page of the toolkit: at its next flush, after it has drawn its layout)
       call $sl_scr('put', scr)
    end
    status = if ret = '' then 1 else 0

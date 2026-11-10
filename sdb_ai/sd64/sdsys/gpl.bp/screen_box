@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 3 Nov 26 dm  S.113: the context is taken with $sl_scr 'draw'; on a page of the toolkit the box goes to the shadow only, until the next flush (any other program as before).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -38,7 +39,8 @@ $include sl.h
    ret = ''
    status = 1
    if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
-   call $sl_scr('get', scr)
+   call $sl_scr('draw', scr)                  ;* S.113: on a page of the toolkit the box goes to the shadow; the next flush writes the cells that differ
+   if scr<SL.S.DIFF> = 1 then scr<SL.S.DIFF> = 2    ;* a page draws its boxes again for every key, and the frame puts its focus marks back over the top border after: written now, both would flash
 
    if x = '' then x = 0
    if y = '' then y = 0

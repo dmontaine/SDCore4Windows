@@ -1,0 +1,29 @@
+* TKCLOSE
+* The public full-screen toolkit (S.130): gives the screen back.  A wrapper over $tk_close.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkclose(ctx)
+*
+*   Gives the terminal back: the screen first, then the break setting !tkopen saved.  Call it on EVERY way out, the cursor lock's own key ('guardquit') and the end
+*   of the input included.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkclose(ctx)
+$catalog !tkclose
+
+   call $tk_close(ctx)
+   return
+end
+
+* END-CODE

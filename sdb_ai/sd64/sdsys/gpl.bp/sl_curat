@@ -7,6 +7,7 @@
 * 18 Oct 26 dm  New (terminal 140 by 42, phase 3).  The widgets used to write DISPLAY @(x, y) themselves; they call this instead,
 *               so that $sl_key can tell whether the cursor of a guarded program ($sl_guardmode) is on the screen.
 * 18 Oct 26 dm  The ops get and back, for a program that draws text while a widget has the cursor.
+* 3 Nov 26 dm  S.113: when it moves the terminal's cursor it says so in common /slcurq/ (cq.last 'curat', nothing owed), which $sl_scr's flush reads.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -37,6 +38,7 @@ subroutine sl_curat(x, y)
 $catalog $sl_curat
 
    common /slcur/ cu.has, cu.x, cu.y, cu.hid
+   common /slcurq/ cq.last, cq.owed               ;* S.113: who placed the terminal's cursor last ('put' of $sl_scr or 'curat'), and whether a put left it owed
 
    begin case
       case x = 'off'
@@ -53,6 +55,8 @@ $catalog $sl_curat
             cu.y = y<1, 3> + 0
             cu.hid = y<1, 4> + 0
             if cu.x >= 0 and cu.y >= 0 and cu.x < @crtwide and cu.y < @crthigh then display @(cu.x, cu.y) :
+            cq.last = 'curat'
+            cq.owed = 0
          end
       case 1
          cu.has = 1
@@ -60,6 +64,8 @@ $catalog $sl_curat
          cu.y = y + 0
          cu.hid = 0
          if cu.x >= 0 and cu.y >= 0 and cu.x < @crtwide and cu.y < @crthigh then display @(cu.x, cu.y) :
+         cq.last = 'curat'
+         cq.owed = 0
    end case
 
    return

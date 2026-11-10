@@ -16,6 +16,7 @@
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: CA$FILESWRITE (39), Linux only, membership of the group sdfileswrite (needs CA$FILES).  Same block, same deferral.
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (42) and CA$PINS (43), where the new account starts and whether it may add programs of its own to its home screen.
 *              Both ports read them (the Linux block ran past 40 on 23 Oct and is 31-50 there).
+* 28 Oct 26 dm S.88 plan 2.9 (D2): CA$RECOVERY (44), Linux only, whether a new user account's editors keep a recovery copy of unsaved text.  Same block, same deferral.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -80,5 +81,9 @@ $define CA$FILESADMIN      40    ;* 1 = start in the group sdfilesadmin (with CA
 * new account's ACC$PINS is 'yes', the person may add programs of their own to their home screen (MY.MENU); blank or 0 leaves it off.
 $define CA$START           42    ;* menu / terminal; blank = follow the system default
 $define CA$PINS            43    ;* 1 = the new account starts with ACC$PINS 'yes'
+
+* Linux only (28 Oct 26, S.88 plan 2.9, D2): 1 = the new USER account starts with ACC$RECOVERY 'yes' (its editors keep a recovery copy of unsaved text).  Blank or 0 leaves it off.
+*   Refused for a group or other account (12776).
+$define CA$RECOVERY        44    ;* 1 = the new account starts with ACC$RECOVERY 'yes'
 
 * END-CODE

@@ -5,12 +5,22 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the five boxes are panes of the layout service ($tk_layout), in two columns: drawn exactly as before at 140 by 43, and in a larger window the Accounts box takes the extra
+*               rows (it shows more accounts) and What this means takes them on the right, both columns are as wide as the window allows, and the explanation wraps at its box's width.
+*               The rows, widths, hit tests and the [?] buttons are counted from the pane rectangles.
 * 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 22 Oct 26 dm  New.
 * 23 Oct 26 dm  A [?] button on every setting (the rows of the Menu box, the system default, and the Accounts list), F1 and ? on the selected row: the help is the record
 *               of the file context.help of the shared account ($tk_help).  The line wrapping is $tk_wrap.
-* 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: the Menu box lists the Recent group after the seven tiles it had, so it is 10 rows (the number is nmenu); the Menu box is taller, What this means
-*               moves down with it, and the box of key hints is one line under the system default.  (Linux also lists seven development tiles; this tree has none.)
+* 26 Oct 26 dm  S.75, home: the Menu box lists the seven development tiles (Files, Vocabulary, Dictionary, Queries, Bulk update, Programs, Tests) and the Recent group after the seven
+*               it had, so it is 17 rows (the number is nmenu); the Menu box is taller, What this means moves down with it, and the box of key hints is one line under the system default.
+* 29 Oct 26 dm  S.88 g-P1: the Record editor entry (ced) is gone with the verb, so the Menu box is 16 rows (nmenu is counted from tids).
+* 1 Nov 26 dm  S.99 (look only): names its focus boxes (ctx<TK.C.FOCI>), so $tk_frame marks the one with the focus [*] and the others [-], as the IDE does.
+* 1 Nov 26 dm  S.97 stage 3: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the pane switch and refresh are offered, none of the settings.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring', the AI line one of the stops); Tab and Shift-Tab no longer switch the boxes
+*              (Left and Right still do).  AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -62,38 +72,66 @@ $include tk.h
    keys = ''
    call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
    call $tk_keys('add', keys, 'enter', 'change', 'change', '', 1)
-   call $tk_keys('add', keys, 'tab', 'pane', 'pane', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'pane', '', 1)                 ;* S.176: F6 / Shift-F6 move between the boxes on every page (Tab does not)
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U4: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'change', '&Setting', '&Change the setting', '', '')
+   call $tk_keys('menu', keys, 'pane', '&View', '&Next pane', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this setting', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 3: the AI line.  The page offers the AI only the pane switch and refresh (changing where an account starts or which tiles it has is NOT offered without the
+   * owner's word); a proposal is carried out by the page's own key.  Where the AI is not usable nothing here adds a key, a row or a line.
+   call $tk_keys('ai', keys, 'pane', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   tids = 'editor' : @fm : 'ide' : @fm : 'ced' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout' : @fm : 'recent'
-   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Record editor' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out' : @fm : 'Recent group'
+   tids = 'editor' : @fm : 'ide' : @fm : 'terminal' : @fm : 'keys' : @fm : 'switch' : @fm : 'signout' : @fm : 'files' : @fm : 'voc' : @fm : 'dict' : @fm : 'query' : @fm : 'bulk' : @fm : 'catalog' : @fm : 'test' : @fm : 'recent'
+   tlabs = 'Editor' : @fm : 'IDE' : @fm : 'Terminal' : @fm : 'Keys' : @fm : 'Switch account' : @fm : 'Sign out' : @fm : 'Files' : @fm : 'Vocabulary' : @fm : 'Dictionary' : @fm : 'Queries' : @fm : 'Bulk update' : @fm : 'Programs' : @fm : 'Tests' : @fm : 'Recent group'
    pnames = 'Accounts' : @fm : 'Menu' : @fm : 'Default'
    nmenu = 2 + dcount(tids, @fm)                                 ;* the rows of the Menu box: where the account starts, its own programs, then a row for each standard tile
 
-   VIS = 26                                                      ;* account rows shown at a time (rows 3 to 28 of the Accounts box)
+   gosub lay.declare                                             ;* the panes; VIS (the account rows shown at a time: 26 at 140 by 43) and WV (the explanation rows) come from them
    pane = 1
    ai = 1                                                        ;* the account selected, a row of ids
    si = 1                                                        ;* the row selected in the Menu pane: 1 is where the account starts, 2 its own programs, 3 to nmenu the standard tiles
    top = 0
    gen = 0
-   msg = 'Tab changes pane, Enter changes the setting'
+   msg = ''
    done = 0
 
    gosub read.all
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, pnames<pane>, '', '', mr)         ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, pnames<pane>, msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)                          ;* the cursor waits at the start of the status line: in a window made smaller it is off the screen, and the library's cursor lock takes the keyboard
       nm = ''
       screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, pnames<pane>, nm, ao)        ;* S.97 stage 3: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, pnames<pane>, nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar
+      if mr<1> # '' then nm = mr<4>
       begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
          case nm = ''
             if status() = ER$EOF then exit
          case nm = 'guardquit'
             exit
          case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lay.chg)
+            gosub lay.get
             gen += 1
             ctx<TK.C.GEN> = gen
             gosub draw.all
@@ -171,17 +209,75 @@ start.text:
    end
    return
 
+* ------------------------------------------------------------------------------------------------- the layout (S.88 L2)
+
+* The page's five boxes as panes of $tk_layout, in two columns of one band: each size is the box drawn at 140 by 43 (the body is 138 by 39), so at that size nothing moves.  In a larger
+* window the Accounts box and What this means stretch (a table shows more rows; the Menu box is 17 fixed rows) and the two columns share the width.  The first pane of the right column
+* says the one column of gap between them.
+lay.declare:
+   d = ''
+   d<1> = 'accounts' : @vm : 1 : @vm : 1 : @vm : 30 : @vm : 70 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'default' : @vm : 1 : @vm : 1 : @vm : 5 : @vm : 70 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<3> = 'help' : @vm : 1 : @vm : 1 : @vm : 3 : @vm : 70 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<4> = 'menu' : @vm : 1 : @vm : 2 : @vm : 21 : @vm : 67 : @vm : 1 : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<5> = 'what' : @vm : 1 : @vm : 2 : @vm : 17 : @vm : 67 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   ctx<TK.C.FOCI> = 'accounts' : @sm : 'Accounts' : @vm : 'menu' : @sm : 'Menu' : @vm : 'default' : @sm : 'Default'        ;* S.99: the boxes that take the focus, for $tk_frame's [*] / [-]
+   call $tk_layout('declare', ctx, d, lay.err)
+   gosub lay.get
+   return
+
+* The rectangles of the five panes, and what is counted from them: aw and mw the width of a text line inside the Accounts and the Menu boxes (66 and 63 at 140 by 43), VIS the account rows,
+* WV the rows of What this means, and the places of the [?] buttons (the right end of the first row of the Accounts and System default boxes; the Menu box has one on each row)
+lay.get:
+   lay.id = 'accounts'
+   gosub lay.rect
+   acl.x = lay.x ; acl.y = lay.y ; acl.w = lay.w ; acl.h = lay.h
+   lay.id = 'menu'
+   gosub lay.rect
+   mnu.x = lay.x ; mnu.y = lay.y ; mnu.w = lay.w ; mnu.h = lay.h
+   lay.id = 'what'
+   gosub lay.rect
+   wat.x = lay.x ; wat.y = lay.y ; wat.w = lay.w ; wat.h = lay.h
+   lay.id = 'default'
+   gosub lay.rect
+   dfl.x = lay.x ; dfl.y = lay.y ; dfl.w = lay.w ; dfl.h = lay.h
+   lay.id = 'help'
+   gosub lay.rect
+   hlp.x = lay.x ; hlp.y = lay.y ; hlp.w = lay.w ; hlp.h = lay.h
+   body.y = ctx<TK.C.YBODY>
+   aw = acl.w - 4
+   mw = mnu.w - 4
+   ww = wat.w - 4
+   dw = dfl.w - 4
+   hw = hlp.w - 4
+   VIS = acl.h - 4
+   WV = wat.h - 2
+   mk.acx = acl.x + acl.w - 5
+   mk.acy = acl.y + 1
+   mk.mx = mnu.x + mnu.w - 5
+   mk.dx = dfl.x + dfl.w - 5
+   mk.dy = dfl.y + 1
+   return
+
+lay.rect:
+   call $tk_layout('pane', ctx, lay.id, lay.r)
+   lay.x = lay.r<1, 1>
+   lay.y = lay.r<1, 2>
+   lay.w = lay.r<1, 3>
+   lay.h = lay.r<1, 4>
+   return
+
 * ------------------------------------------------------------------------------------------------- drawing
 
 draw.all:
    cw = ctx<TK.C.W>
    chh = ctx<TK.C.H> - 5
-   screen clear at 0,1 size cw,chh
-   screen box at 1,1 size 70,30 title 'Accounts'
-   screen box at 72,1 size 67,nmenu + 4 title 'Menu'
-   screen box at 72,nmenu + 5 size 67,17 title 'What this means'
-   screen box at 1,31 size 70,5 title 'System default'
-   screen box at 1,36 size 70,3 title 'Help'
+   screen clear at 0,body.y size cw,chh
+   screen box at acl.x,acl.y size acl.w,acl.h title 'Accounts'
+   screen box at mnu.x,mnu.y size mnu.w,mnu.h title 'Menu'
+   screen box at wat.x,wat.y size wat.w,wat.h title 'What this means'
+   screen box at dfl.x,dfl.y size dfl.w,dfl.h title 'System default'
+   screen box at hlp.x,hlp.y size hlp.w,hlp.h title 'Help'
    gosub draw.accounts
    gosub draw.menu
    gosub draw.effect
@@ -190,9 +286,9 @@ draw.all:
    return
 
 draw.accounts:
-   screen text fmt('Account', '14L') : fmt('Type', '10L') : fmt('Starts in', '19L') : fmt('Own', '5L') : 'Tiles off' at 3,2 attr 'header' width 66
+   screen text fmt('Account', '14L') : fmt('Type', '10L') : fmt('Starts in', '19L') : fmt('Own', '5L') : 'Tiles off' at acl.x + 2,acl.y + 1 attr 'header' width aw
    if na = 0 then
-      screen text 'No account is registered.' at 3,4 width 66
+      screen text 'No account is registered.' at acl.x + 2,acl.y + 3 width aw
    end
    if ai - 1 < top then top = ai - 1
    if ai > top + VIS then top = ai - VIS
@@ -203,18 +299,19 @@ draw.accounts:
          i = k
          gosub start.text
          tf = aoff<k>
-         if len(tf) > 18 then tf = tf[1, 17] : '+'
+         tfw = aw - 48                                             ;* what is left of the line after the four columns (18 at 140 by 43)
+         if len(tf) > tfw then tf = tf[1, tfw - 1] : '+'
          s = fmt(ids<k>[1, 13], '14L') : fmt(atype<k> : (if asusp<k> then ' (s)' else ''), '10L') : fmt(stext, '19L') : fmt((if apins<k> then 'yes' else 'no'), '5L') : tf
       end
-      screen text s at 3,2 + r attr (if k = ai and k <= na then (if pane = 1 then 'highlight' else 'bold') else 'normal') width 66
+      screen text s at acl.x + 2,acl.y + 1 + r attr (if k = ai and k <= na then (if pane = 1 then 'highlight' else 'bold') else 'normal') width aw      ;* row 1 is under the header, as the hit test at the click counts it
    next r
-   call $tk_help('mark', 66, 2, 0, 0)                             ;* F1, ? or a click: what this box shows
+   call $tk_help('mark', mk.acx, mk.acy, 0, 0)                    ;* F1, ? or a click: what this box shows
    return
 
 draw.menu:
    if na = 0 then
       for r = 1 to nmenu
-         screen text '' at 74,1 + r width 63
+         screen text '' at mnu.x + 2,mnu.y + r width mw
       next r
       return
    end
@@ -230,10 +327,10 @@ draw.menu:
             t = r - 2
             s = (if index(' ' : aoff<ai> : ' ', ' ' : tids<t> : ' ', 1) > 0 then '[ ]' else '[x]') : ' ' : fmt(tlabs<t>, '16L') : fmt(tids<t>, '10L') : (if tids<t> = 'signout' then 'cannot be turned off' else '')
       end case
-      screen text s at 74,1 + r attr (if r = si then (if pane = 2 then 'highlight' else 'bold') else 'normal') width 59
-      call $tk_help('mark', 134, 1 + r, 0, 0)                     ;* the [?] button of the setting on this row
+      screen text s at mnu.x + 2,mnu.y + r attr (if r = si then (if pane = 2 then 'highlight' else 'bold') else 'normal') width mw - 4      ;* 4 less: the [?] is at the right end
+      call $tk_help('mark', mk.mx, mnu.y + r, 0, 0)               ;* the [?] button of the setting on this row
    next r
-   screen text 'Enter changes the row.  [x] is on as delivered, [ ] is off.' at 74,nmenu + 3 attr 'disabled' width 63
+   screen text 'Enter changes the row.  [x] is on as delivered, [ ] is off.' at mnu.x + 2,mnu.y + nmenu + 2 attr 'disabled' width mw
    return
 
 * What the account's settings mean, in plain sentences
@@ -265,8 +362,8 @@ draw.effect:
       lines<-1> = 'A change reaches the person at their next sign-on (or F5 in the home screen).'
    end
    gosub wrap.lines
-   for r = 1 to 15
-      screen text lines<r> at 74,nmenu + 5 + r width 63
+   for r = 1 to WV
+      screen text lines<r> at wat.x + 2,wat.y + r width ww
    next r
    return
 
@@ -274,21 +371,21 @@ draw.effect:
 wrap.lines:
    wrapped = ''
    for wi = 1 to dcount(lines, @fm)
-      call $tk_wrap(lines<wi>, 63, pieces)
+      call $tk_wrap(lines<wi>, ww, pieces)
       wrapped<-1> = pieces
    next wi
    lines = wrapped
    return
 
 draw.default:
-   screen text 'An account with no setting of its own starts in the' at 3,32 width 66
-   screen text (if defword = 'menu' then 'home screen (menu)' else 'command prompt (terminal)') at 3,33 attr (if pane = 3 then 'highlight' else 'bold') width 66
-   screen text 'Enter changes it for every account that follows the default.' at 3,34 attr 'disabled' width 66
-   call $tk_help('mark', 66, 32, 0, 0)
+   screen text 'An account with no setting of its own starts in the' at dfl.x + 2,dfl.y + 1 width dw
+   screen text (if defword = 'menu' then 'home screen (menu)' else 'command prompt (terminal)') at dfl.x + 2,dfl.y + 2 attr (if pane = 3 then 'highlight' else 'bold') width dw
+   screen text 'Enter changes it for every account that follows the default.' at dfl.x + 2,dfl.y + 3 attr 'disabled' width dw
+   call $tk_help('mark', mk.dx, mk.dy, 0, 0)
    return
 
 draw.help:
-   screen text 'Arrows move, Tab changes pane, Enter changes (Run or Cancel).' at 3,37 width 66
+   screen text 'Arrows move, Tab changes pane, Enter changes (Run or Cancel).' at hlp.x + 2,hlp.y + 1 width hw
    return
 
 * ------------------------------------------------------------------------------------------------- keys and the mouse
@@ -323,11 +420,11 @@ on.key:
          if ai > na then ai = na
          if ai < 1 then ai = 1
          gosub redraw.account
-      case nm = 'tab' or nm = 'right'
+      case nm = 'right'
          pane = pane + 1
          if pane > 3 then pane = 1
          gosub redraw.panes
-      case nm = 'btab' or nm = 'left'
+      case nm = 'left'
          pane = pane - 1
          if pane < 1 then pane = 3
          gosub redraw.panes
@@ -335,10 +432,28 @@ on.key:
          gosub change
       case nm = 'f1' or nm = '?'
          gosub help.here
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, pnames<pane>, std.r)
       case nm = 'f5'
          gosub read.all
          gosub draw.all
          msg = 'read the register again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, pane, nm : @fm : 3, ap)         ;* S.176: F6 / Shift-F6 go round the three boxes and the AI line; AI > Ask the AI goes to the line
+         if ap<1> > 0 and ap<1> # pane then
+            pane = ap<1>
+            gosub redraw.panes
+         end
+         msg = ap<2>
       case nm = 'ctrl-q'
          done = 1
    end case
@@ -360,25 +475,37 @@ redraw.panes:
 on.mouse:
    screen mouse returning mev else mev = ''
    if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, pnames<pane>, mev, '', mr)                ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, pnames<pane>, mev, ap)                       ;* S.97 stage 3: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
    gosub help.click
    if clicked then return
    if mev<1> = 'press' and mev<2> = 1 then
       mx = mev<3>
       my = mev<4>
       begin case
-         case mx >= 2 and mx <= 69 and my >= 3 and my <= 2 + VIS
-            k = top + my - 2
+         case mx >= acl.x + 1 and mx <= acl.x + acl.w - 2 and my >= acl.y + 2 and my <= acl.y + 1 + VIS
+            k = top + my - (acl.y + 1)
             if k <= na then
                ai = k
                pane = 1
                gosub redraw.account
                gosub redraw.panes
             end
-         case mx >= 73 and mx <= 138 and my >= 2 and my <= 1 + nmenu
-            si = my - 1
+         case mx >= mnu.x + 1 and mx <= mnu.x + mnu.w - 1 and my >= mnu.y + 1 and my <= mnu.y + nmenu
+            si = my - mnu.y
             pane = 2
             gosub redraw.panes
-         case mx >= 2 and mx <= 69 and my >= 32 and my <= 34
+         case mx >= dfl.x + 1 and mx <= dfl.x + dfl.w - 2 and my >= dfl.y + 1 and my <= dfl.y + 3
             pane = 3
             gosub redraw.panes
       end case
@@ -415,12 +542,12 @@ help.click:
    hit.row = 0
    if na > 0 then
       for hr = 1 to nmenu
-         call $tk_help('hit', mev, 134, 1 + hr, hit.now)
+         call $tk_help('hit', mev, mk.mx, mnu.y + hr, hit.now)
          if hit.now then hit.row = hr
       next hr
    end
-   call $tk_help('hit', mev, 66, 32, hit.default)
-   call $tk_help('hit', mev, 66, 2, hit.accounts)
+   call $tk_help('hit', mev, mk.dx, mk.dy, hit.default)
+   call $tk_help('hit', mev, mk.acx, mk.acy, hit.accounts)
    begin case
       case hit.row
          si = hit.row

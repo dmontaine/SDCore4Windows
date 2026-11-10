@@ -7,6 +7,13 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 19 Oct 26 dm  SL.S.DIFF (sl.h): text the terminal already shows in the same styles is not written again.
+* 28 Oct 26 dm  S.88 phase 2 (S1): a control character in the text is never sent to the terminal (see the description).
+* 28 Oct 26 dm  S.88 phase 2 (S1, review): the C1 controls too - bytes 128 to 159 on a terminal that is not in UTF-8 mode, C2 80 to C2 9F in UTF-8 mode.
+* 3 Nov 26 dm  S.113 (owner: "All pages"): every write keeps the terminal's picture (SL.S.TERM, SL.S.TATTR); DIFF 1 compares against it and writes only the runs of
+*              cells that differ; DIFF 2 changes the shadow alone (the next flush writes it).  The shadow is changed first, whatever is written.
+* 9 Nov 26 dm  S.186 (Fable's review; the owner: "the most reliable experience for the user"): on a UTF-8 terminal a whole character of two to four bytes is
+*              written with blanks after it for the cells it does not fill (utf8.pad), so that it takes as many cells as the shadow gives it - one to a byte - and
+*              columns stay in line and a write by difference stays true.  The text, the shadow and LEN() are unchanged.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -17,16 +24,33 @@
 *            to match what is drawn, so scr must be the caller's own variable: it is changed in place.
 *     x y    the cell of the first character, from 0 as in @(x, y)
 *     text   one line.  A mark character (field mark and the like) is shown as a dot: the shadow is
-*            a dynamic array.
+*            a dynamic array.  A CONTROL CHARACTER is never sent to the terminal (28 Oct 26, S.88 phase 2, S1: text that
+*            comes from data - a record, a record id, a lock id, a file name, an answer of the AI, a help page - can hold an
+*            escape sequence, and sent raw it retitles the window, wipes the screen or types into the terminal): a tab is
+*            shown as a blank, DEL as ?, and every other character below a blank as the letter that is 64 above it (ESC as [,
+*            NUL as @, return as M) in the reverse style, ONE CELL for ONE CHARACTER, so the widths a caller worked out stay
+*            right.  The shadow holds what is shown, not the control character.  THE C1 CONTROLS (28 Oct 26, review): 0x9B is CSI
+*            on a terminal that is not in UTF-8 mode.  The terminal is taken as UTF-8 when LC_ALL, else LC_CTYPE, else LANG says
+*            UTF-8 (UTF-8 or UTF8, as the IDE decides), or when the program opened the screen with LINES.  Not UTF-8: the bytes
+*            128 to 159 are shown like the other controls, as the character 64 below (0x9B as [), reverse, one cell each.  UTF-8: the
+*            two-byte form C2 80 to C2 9F is shown as a dot and that letter, reverse, two cells for the two bytes (the shadow counts
+*            bytes); every other sequence, a curly quote E2 80 9C included, and the bytes 160 up outside UTF-8 mode, pass.  IN UTF-8 MODE A WHOLE
+*            SEQUENCE IS FOLLOWED BY BLANKS (9 Nov 26): the bytes less the cells the terminal gives it (one, two for a wide East Asian character), so that
+*            every character takes as many cells as it has bytes, as the shadow counts them.
+*            What passes unchanged: every printable
+*            ASCII character, the other bytes from 128 up (UTF-8 text, and the bytes of the glyphs a program writes itself) and the
+*            nine stand-ins of $sl_line, CHAR(14) to CHAR(22), which this routine turns into line-drawing characters
+*            below: they are the library's own glyph path, and are harmless as data (they become a line character).
 *     attr   either one style code (n r u x, see $sl_attr) for all of text, or a string as long as
 *            text with one code per character
 *
 *   Anything outside the screen, or outside SL.S.CLIP if the context has one, is not drawn and not
 *   recorded.  The terminal is left in style n afterwards.  The cursor is left after the text, and
 *   the context's own cursor (SL.S.CUR) is not touched: that is the program's, and the commands put
-*   it back when they have finished.  When scr has SL.S.DIFF set (only $sl_form sets it, on a screen whose
-*   terminal is known to match the shadow) and the cells already hold this text in these styles, nothing is
-*   written at all and the cursor is where it was.
+*   it back when they have finished.  SL.S.DIFF (sl.h) 1, on a screen whose terminal is known to match the library's picture of it:
+*   only the runs of cells the terminal does not already show in these styles are written, and when there are none nothing is written
+*   and the cursor is where it was.  SL.S.DIFF 2: only the shadow changes; the next flush ($sl_scr) writes it.  Every write keeps the
+*   terminal's picture (SL.S.TERM, SL.S.TATTR) of a screen the library owns, so that what is compared is what the terminal shows.
 *
 * END-DESCRIPTION
 *
@@ -39,6 +63,57 @@ $catalog $sl_put
 $include sl.h
 
    common /sllin/ ln.on
+   common /slctl/ ctl.from, ctl.to, loc.mode, c1.from, c1.to
+   common /slu8/ u8.lead                                  ;* 9 Nov 26 (S.186): the lead bytes of a UTF-8 sequence
+
+   * 28 Oct 26 (S1, C1 controls): is the terminal in UTF-8 mode?  Resolved once per process from LC_ALL, then LC_CTYPE, then LANG, as a shell does and as the IDE and $tk_open do (1 = UTF-8, 2 = not).
+   *   A program that opened the screen with LINES has said so itself ($sl_line 'on'), and that counts as UTF-8 too.  A block of COMMON starts as 0 in every variable, or unassigned.
+   if unassigned(loc.mode) then loc.mode = 0
+   if loc.mode # 1 and loc.mode # 2 then
+      loc = env('LC_ALL')
+      if loc = '' then loc = env('LC_CTYPE')
+      if loc = '' then loc = env('LANG')
+      loc = upcase(loc)
+      loc.mode = 2
+      if index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0 then loc.mode = 1
+   end
+
+   * 28 Oct 26 (S1): the control characters and what each is shown as; made once per process.  The stand-ins CHAR(14) to CHAR(22) are not in the list (the library's glyphs, below)
+   *   and the tab is dealt with before it (a blank).  A block of COMMON starts as 0 in every variable, or unassigned.
+   if unassigned(ctl.from) then ctl.from = ''
+   if unassigned(ctl.to) then ctl.to = ''
+   if len(ctl.from) < 20 then
+      ctl.from = ''
+      ctl.to = ''
+      for ci = 0 to 31
+         if ci # 9 and (ci < 14 or ci > 22) then
+            ctl.from := char(ci)
+            ctl.to := char(ci + 64)
+         end
+      next ci
+      ctl.from := char(127)
+      ctl.to := '?'
+   end
+   * The C1 controls, bytes 128 to 159 (0x9B is CSI on a terminal that is not in UTF-8 mode): each is shown as the character 64 below it (0x9B as [), as the C0 controls are 64 above
+   if unassigned(c1.from) then c1.from = ''
+   if unassigned(c1.to) then c1.to = ''
+   if len(c1.from) < 32 then
+      c1.from = ''
+      c1.to = ''
+      for ci = 128 to 159
+         c1.from := char(ci)
+         c1.to := char(ci - 64)
+      next ci
+   end
+
+   * 9 Nov 26 (S.186): the lead bytes of a UTF-8 sequence (194 to 244), for utf8.pad's quick test; made once per process
+   if unassigned(u8.lead) then u8.lead = ''
+   if len(u8.lead) # 51 then
+      u8.lead = ''
+      for ci = 194 to 244
+         u8.lead := char(ci)
+      next ci
+   end
 
    n = len(text)
    if n = 0 then return
@@ -56,6 +131,35 @@ $include sl.h
       cells = cells[1, n]
    end
    text = convert(@fm : @vm : @sm : @tm : char(255), '.....', text)
+
+   * 28 Oct 26 (S1): a control character in the text is shown, not sent.  One cell for one character, so n and the cells are as they were; the character's cell is drawn in reverse.
+   *   (COMPARE, not =, as below.)
+   text = convert(char(9), ' ', text)
+   safe = convert(ctl.from, ctl.to, text)
+   * The C1 controls.  Not UTF-8: the bytes 128 to 159, one for one.  UTF-8: only the two-byte form C2 80 to C2 9F (a lead byte can only be C2 there; the bytes 128 to 191 inside a
+   *   well-formed sequence, as in a curly quote E2 80 9C, are left alone), shown as '.' and the letter, two cells for the two bytes, as the shadow counts bytes.
+   if loc.mode = 1 or ln.on = 1 then
+      k = 1
+      loop
+         p = index(safe, char(194), k)
+      while p > 0 do
+         c2 = 0
+         if p < n then c2 = seq(safe[p + 1, 1])
+         if c2 >= 128 and c2 <= 159 then
+            safe = safe[1, p - 1] : '.' : char(c2 - 64) : safe[p + 2, n]
+         end else
+            k += 1
+         end
+      repeat
+   end else
+      safe = convert(c1.from, c1.to, safe)
+   end
+   if compare(safe, text) # 0 then
+      for ci = 1 to n
+         if compare(safe[ci, 1], text[ci, 1]) # 0 then cells = cells[1, ci - 1] : 'r' : cells[ci + 1, n]
+      next ci
+      text = safe
+   end
 
    * Clip to the screen and to the clip rectangle
    x0 = 0 ; x1 = sw - 1
@@ -79,18 +183,7 @@ $include sl.h
    end
    if n < 1 then return
 
-   * 19 Oct 26: a form is drawing on a screen whose terminal is known to match its shadow (SL.S.DIFF): the same text in the same styles
-   *   is already there, so nothing is written (the owner saw the whole screen flash each time a record or file was chosen: every widget
-   *   was written again, the tree three times, where a handful of its rows had changed).  COMPARE, not =, which would take 007 for 7.0.
-   if scr<SL.S.DIFF> then
-      row = scr<SL.S.SHADOW, y + 1>
-      ar = scr<SL.S.ATTRS, y + 1>
-      if len(row) >= x + n and len(ar) >= x + n then
-         if compare(row[x + 1, n], text) = 0 and compare(ar[x + 1, n], cells) = 0 then return
-      end
-   end
-
-   * The shadow
+   * The shadow: what the program has drawn, whatever reaches the terminal below
    row = scr<SL.S.SHADOW, y + 1>
    if len(row) < sw then row := space(sw - len(row))
    scr<SL.S.SHADOW, y + 1> = row[1, x] : text : row[x + n + 1, sw]
@@ -100,16 +193,91 @@ $include sl.h
       scr<SL.S.ATTRS, y + 1> = ar[1, x] : cells : ar[x + n + 1, sw]
    end
 
-   * The terminal: the cell, then each run of one style
-   out = @(x, y)
+   * S.113 (3 Nov 26): the terminal's own picture of this row (TERM, TATTR), kept on a screen the library owns
+   has.term = (scr<SL.S.TATTR, y + 1> # '')
+   dmode = scr<SL.S.DIFF> + 0
+   if dmode = 2 then return                         ;* the screen is being drawn again for a flush that repaints or compares it: nothing is written now
+
+   * 19 Oct 26: a form is drawing on a screen whose terminal is known to match (SL.S.DIFF 1): the same text in the same styles is already there,
+   *   so it is not written again (the owner saw the whole screen flash each time a record or file was chosen: every widget was written again,
+   *   the tree three times, where a handful of its rows had changed).  S.113 (3 Nov 26, owner: "All pages"): judged against the TERMINAL's
+   *   picture, not the shadow, and cell by cell: only the runs of cells that differ are written, two runs being one when fewer than eight
+   *   cells that agree lie between them (a cursor position costs about that).  A page of the toolkit that draws its whole body again for a
+   *   cursor key writes the two rows that changed.  COMPARE, not =, which would take 007 for 7.0.
+   runs = 1 : @sm : n
+   if dmode = 1 and has.term then
+      tr = scr<SL.S.TERM, y + 1>
+      ta = scr<SL.S.TATTR, y + 1>
+      if len(tr) >= x + n and len(ta) >= x + n then
+         ot = tr[x + 1, n]
+         oa = ta[x + 1, n]
+         if compare(ot, text) = 0 and compare(oa, cells) = 0 then return
+         gosub diff.runs
+      end
+   end
+
+   * The terminal: for each run, the cell, then each run of one style
+   out = ''
+   for rk = 1 to dcount(runs, @vm)
+      r0 = runs<1, rk, 1>
+      r1 = runs<1, rk, 2>
+      out := @(x + r0 - 1, y)
+      gosub emit.run
+   next rk
+   display out :
+   gosub keep.term                                    ;* MUTANT-POINT term
+   return
+
+* The runs of cells, r0 to r1 (from 1), whose text or style is not what the terminal shows (ot, oa); runs closer than eight cells are one
+diff.runs:
+   runs = ''
+   di = 1
+   loop while di <= n do
+      if compare(ot[di, 1], text[di, 1]) = 0 and compare(oa[di, 1], cells[di, 1]) = 0 then
+         di += 1
+      end else
+         dj = di
+         dgap = 0
+         dk = di + 1
+         loop while dk <= n do
+            if compare(ot[dk, 1], text[dk, 1]) = 0 and compare(oa[dk, 1], cells[dk, 1]) = 0 then
+               dgap += 1
+               if dgap >= 8 then exit
+            end else
+               dj = dk
+               dgap = 0
+            end
+            dk += 1
+         repeat
+         runs<1, -1> = di : @sm : dj
+         di = dj + 1
+      end
+   repeat
+   return
+
+* The terminal shows text and cells from x on now (the cells of them that were not written showed them already)
+keep.term:
+   if has.term then
+      tr = scr<SL.S.TERM, y + 1>
+      if len(tr) < sw then tr := space(sw - len(tr))
+      scr<SL.S.TERM, y + 1> = tr[1, x] : text : tr[x + n + 1, sw]
+      ta = scr<SL.S.TATTR, y + 1>
+      if len(ta) < sw then ta := str('n', sw - len(ta))
+      scr<SL.S.TATTR, y + 1> = ta[1, x] : cells : ta[x + n + 1, sw]
+   end
+   return
+
+* One run, cells r0 to r1 of text: each part of one style, in its own style, and the style n after it
+emit.run:
    last = 'n'
-   i = 1
-   loop while i <= n do
+   i = r0
+   loop while i <= r1 do
       c = cells[i, 1]
       j = i
-      loop while j < n and cells[j + 1, 1] = c do j += 1 repeat
+      loop while j < r1 and cells[j + 1, 1] = c do j += 1 repeat
       call $sl_sgr(c, sq)
       seg = text[i, j - i + 1]
+      if loc.mode = 1 or ln.on = 1 then gosub utf8.pad       ;* 9 Nov 26 (S.186): a character of several bytes keeps as many cells as it has bytes
       * the stand-ins of $sl_line become the bytes of a line-drawing character (or + - | if that is off)
       if convert(lc.all, str(' ', 9), seg) # seg then
          if ln.on = 1 then
@@ -134,8 +302,62 @@ $include sl.h
       call $sl_sgr('n', sq)
       out := sq
    end
-   display out :
+   return
 
+* 9 Nov 26 (S.186, Fable's review; the owner: "the most reliable experience for the user").  THE SHADOW COUNTS BYTES: every widget works out its widths with
+*   LEN() and the library keeps one byte to a cell, so a character of two, three or four bytes that a UTF-8 terminal draws in ONE cell (two for the wide East
+*   Asian ones) would pull the rest of the row to the left of where the library believes it is - columns out of line, and stale cells, since a write by
+*   difference compares the shadow with what is not there.  So the terminal is made to match the shadow, not the other way round: a WHOLE, well-formed
+*   sequence in seg is written followed by blanks for the cells it does not fill (bytes less its width).  A byte that is not part of one (a lone lead or
+*   continuation byte, the bytes 248 to 255) is written as it is: the terminal shows it as one replacement cell, which is one cell for one byte already.  The
+*   text, the shadow and LEN() are unchanged: SD still stores and compares bytes (the owner, 30 Oct 26).  Not UTF-8 mode: nothing to do, a byte is a cell.
+utf8.pad:
+   if convert(u8.lead, '', seg) = seg then return            ;* no lead byte of a sequence: nothing to pad
+   u8.out = ''
+   u8.n = len(seg)
+   u8.i = 1
+   loop while u8.i <= u8.n do
+      u8.b = seq(seg[u8.i, 1])
+      u8.k = 0
+      begin case
+         case u8.b >= 194 and u8.b <= 223 ; u8.k = 2 ; u8.cp = u8.b - 192
+         case u8.b >= 224 and u8.b <= 239 ; u8.k = 3 ; u8.cp = u8.b - 224
+         case u8.b >= 240 and u8.b <= 244 ; u8.k = 4 ; u8.cp = u8.b - 240
+      end case
+      if u8.k > 0 and u8.i + u8.k - 1 <= u8.n then
+         for u8.j = 1 to u8.k - 1
+            u8.c = seq(seg[u8.i + u8.j, 1])
+            if u8.c < 128 or u8.c > 191 then
+               u8.k = 0
+               exit
+            end
+            u8.cp = u8.cp * 64 + (u8.c - 128)
+         next u8.j
+      end else
+         u8.k = 0
+      end
+      if u8.k = 0 then
+         u8.out := seg[u8.i, 1]
+         u8.i += 1
+      end else
+         u8.w = 1
+         begin case
+            case u8.cp >= 4352 and u8.cp <= 4447 ; u8.w = 2          ;* Hangul Jamo
+            case u8.cp >= 12909 and u8.cp <= 42191 and u8.cp # 12351 ; u8.w = 2      ;* CJK radicals to Yi
+            case u8.cp >= 44032 and u8.cp <= 55203 ; u8.w = 2        ;* Hangul syllables
+            case u8.cp >= 63744 and u8.cp <= 64255 ; u8.w = 2        ;* CJK compatibility ideographs
+            case u8.cp >= 65040 and u8.cp <= 65049 ; u8.w = 2        ;* vertical forms
+            case u8.cp >= 65072 and u8.cp <= 65103 ; u8.w = 2        ;* CJK compatibility forms
+            case u8.cp >= 65280 and u8.cp <= 65376 ; u8.w = 2        ;* fullwidth forms
+            case u8.cp >= 65504 and u8.cp <= 65510 ; u8.w = 2
+            case u8.cp >= 127744 and u8.cp <= 129791 ; u8.w = 2      ;* pictographs and emoji
+            case u8.cp >= 131072 and u8.cp <= 262141 ; u8.w = 2      ;* CJK extension planes
+         end case
+         u8.out := seg[u8.i, u8.k] : space(u8.k - u8.w)
+         u8.i += u8.k
+      end
+   repeat
+   seg = u8.out
    return
 end
 

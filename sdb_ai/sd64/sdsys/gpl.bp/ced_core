@@ -1,0 +1,1211 @@
+* CED_CORE
+* The engine of the data collection editor (openQM CED and !CED(), 1.2-0): what the editor does with the data, with no screen of its own.  gpl.bp/ced_edit
+* (the CED command and !CED()) is the full-screen host that paints, reads the keys and writes the record; the IDE is the second host (the one-editor plan, S.86).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public
+* License, version 3 or later.
+*
+* START-HISTORY:
+* 30 Oct 26 dm  Written (the one-editor plan, stage 1, no change in what the editor does): the code that ced_edit held between its key loop and its painting, taken
+*               out of it unchanged except where a label wrote the file or painted.  The state lives in a collection, so that a host can hold more than one editor.
+* 31 Oct 26 dm  S.86 stage 4: the ops 'ai.request' and 'ai.explain' (the IDE's AI line in the fields view), and Ctrl-T / F4 on the empty top level asks collection or array (G3, the old CED's
+*               choice for a new record).
+* 9 Nov 26 dm  S.181 (the owner lifted CED's freeze, 9 Nov: "lift the freeze so it uses the shared keys"): F5, F6 and F7 no longer copy, cut and paste (Ctrl-C, X, V do,
+*               as in the IDE); Alt-T changes the type as F4 does.  The shared keys themselves (Ctrl-T, Ctrl-K, F5) are the host's: ced_edit and the IDE.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $ced_core(op, st, a, out)
+*
+*     op   what to do (below)
+*     st   the editor's state, a collection the caller makes with COLLECTION() and keeps.  The caller sets these before 'init' (and may change them later):
+*            c        the collection or array being edited (edited in place; a revert or an accepted AI edit puts a different one in st{'c'}: read it back)
+*            ftype    0 data collection file, 1 ordinary file (JSON text), 2 the data mode (c is a record as $recarr makes it)
+*            title    the record's name, for the AI's page
+*            w, h     the size the editor is laid out for (never below 140 by 42: the host sees to that)
+*            ai.ok    1 when the AI is usable for the account (F2), else 0
+*          and the engine keeps, for the host to read: path (field-mark list of the containers dived through), sel, top, count, tbl (the table widget's collection,
+*          rows in it), dirty, msg (the message line), done, quit.all, kept, req ('save' when the host is to write the record: it then calls 'saved'), first.row,
+*          path.row, msg.row, per.page, clip (has, type, name, value: a copy of an element cut or copied).
+*     a    the key (op 'key'), the size w : @fm : h (op 'layout'), the outcome of a write (op 'saved'), a message (op 'message')
+*     out  not used yet
+*
+*   ops:  init     build the lists from st (set the defaults first)
+*         layout   the window changed size: a = w : @fm : h
+*         key      one key as the library names it (up, enter, f3, ctrl-s, a character, resize, guardquit); every dialogue the key needs is asked here
+*         prep.save  before the host writes: st{'ok'} 1 and st{'text'} the record text (data mode: from $recarr, which may refuse - message 12993; ftype 1: the JSON)
+*         saved    the host has written (or tried): a = 1 : @fm : 0 written, 0 : @fm : status the write failed, -1 refused before the write (the message is set)
+*         message  a is put on the message line
+*         ai.request  the AI line (the IDE's entry): a is the request, the whole record is the text; what is accepted is put in st{'c'} (the host sees it change)
+*         ai.explain  the AI line, the selected element explained
+*         abandon  put c back as it was last saved, and leave without a question (the terminal is gone)
+*
+*   THE ENGINE NEVER OPENS OR CLOSES THE SCREEN AND NEVER WRITES A FILE.  It asks its questions with SCREEN ASK, MENU and MSGBOX on the screen the host has open.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine ced_core(op, st, a, out)
+$catalog $ced_core
+
+$include keyin.h
+$include syscom keys.h
+$include int$keys.h
+$include sl.h
+
+   out = ''
+
+   gosub load.state
+
+   begin case
+      case op = 'init'
+         gosub op.init
+      case op = 'layout'
+         w = a<1>
+         h = a<2>
+         gosub size.screen
+         gosub build.list
+      case op = 'key'
+         c.key = a
+         gosub handle.key
+      case op = 'prep.save'
+         gosub op.prep.save
+      case op = 'saved'
+         gosub op.saved
+      case op = 'message'
+         message.text = a
+      case op = 'ai.request'
+         ai.req = a
+         ai.sel = ''
+         ai.note = ''
+         gosub ai.go
+      case op = 'ai.explain'
+         gosub ai.explain
+      case op = 'abandon'
+         gosub revert
+         quit.all = @true
+         done = @true
+   end case
+
+   gosub store.state
+   return
+
+* ======================================================================
+* The state: what survives from one call to the next.  The collection holds the references to c and the table, so nothing is copied but strings.
+
+load.state:
+   c = st{'c'}
+   ftype = st{'ftype'}
+   title = st{'title'}
+   w = st{'w'}
+   h = st{'h'}
+   ai.ok = st{'ai.ok'}
+   ai.undo = st{'ai.undo'}
+   path = st{'path'}
+   hist.sel = st{'hist.sel'}
+   hist.top = st{'hist.top'}
+   sel = st{'sel'}
+   top = st{'top'}
+   count = st{'count'}
+   names = st{'names'}
+   nw = st{'nw'}
+   vw = st{'vw'}
+   tbl = st{'tbl'}
+   per.page = st{'per.page'}
+   first.row = st{'first.row'}
+   path.row = st{'path.row'}
+   msg.row = st{'msg.row'}
+   dirty = st{'dirty'}
+   kept = st{'kept'}
+   saved.text = st{'saved.text'}
+   message.text = st{'msg'}
+   done = st{'done'}
+   quit.all = st{'quit.all'}
+   q.all = st{'q.all'}
+   pend.quit = st{'pend.quit'}
+   req = ''
+   clip.has = st{'clip.has'}
+   clip = st{'clip'}
+   clip.type = st{'clip.type'}
+   clip.name = st{'clip.name'}
+
+   * Characters shown as a dot: the control characters and the SD marks
+   bad.chars = ''
+   for j = 1 to 31
+      bad.chars := char(j)
+   next j
+   bad.chars := char(127) : char(248) : char(249) : char(250) : char(251) : char(252) : char(253) : char(254) : char(255)
+   bad.repl = str('.', len(bad.chars))
+
+   gosub resolve
+   return
+
+store.state:
+   st{'c'} = c
+   st{'ftype'} = ftype
+   st{'title'} = title
+   st{'w'} = w
+   st{'h'} = h
+   st{'ai.ok'} = ai.ok
+   st{'ai.undo'} = ai.undo
+   st{'path'} = path
+   st{'hist.sel'} = hist.sel
+   st{'hist.top'} = hist.top
+   st{'sel'} = sel
+   st{'top'} = top
+   st{'count'} = count
+   st{'names'} = names
+   st{'nw'} = nw
+   st{'vw'} = vw
+   st{'tbl'} = tbl
+   st{'per.page'} = per.page
+   st{'first.row'} = first.row
+   st{'path.row'} = path.row
+   st{'msg.row'} = msg.row
+   st{'dirty'} = dirty
+   st{'kept'} = kept
+   st{'saved.text'} = saved.text
+   st{'msg'} = message.text
+   st{'done'} = done
+   st{'quit.all'} = quit.all
+   st{'q.all'} = q.all
+   st{'pend.quit'} = pend.quit
+   st{'req'} = req
+   st{'clip.has'} = clip.has
+   st{'clip'} = clip
+   st{'clip.type'} = clip.type
+   st{'clip.name'} = clip.name
+   return
+
+* op.init  -  The defaults, then the lists
+
+op.init:
+   path = ''                         ;* names of the containers dived through, outermost first
+   hist.sel = ''                     ;* the selection in each of them, to come back to
+   hist.top = ''
+   clip.has = @false
+   clip = ''
+   clip.type = ''
+   clip.name = ''
+   ai.undo = ''                      ;* the record as it was before the AI's last change (one level)
+   dirty = @false
+   kept = @false
+   saved.text = jbuild(c)            ;* what the file, or the caller, has been given
+   quit.all = @false
+   q.all = @false
+   pend.quit = @false
+   message.text = ''
+   sel = 1
+   top = 1
+   done = @false
+   gosub size.screen
+   gosub resolve
+   gosub build.list
+   return
+
+* ======================================================================
+* size.screen  -  The rows of the screen from w and h
+
+size.screen:
+   per.page = h - 5                 ;* element lines
+   first.row = 2
+   path.row = h - 2
+   msg.row = h - 1
+   return
+
+* ======================================================================
+* resolve  -  cur is the container the path names, ctype its type
+
+resolve:
+   cur = c
+   n.path = dcount(path, @fm)
+   if path = '' then n.path = 0
+   for j = 1 to n.path
+      comp = path<j>
+      cur = cur{comp}
+   next j
+   ctype = jtype(cur)
+   return
+
+* ======================================================================
+* build.list  -  The elements of cur: count, names (an object's, in order) and nw, the name column; the rows
+*                of the table
+
+build.list:
+   if ctype = 'array' then
+      count = inmat(cur)
+      names = ''
+      nw = len(count)
+   end else
+      names = enumerate(cur)
+      count = dcount(names, @fm)
+      if names = '' then count = 0
+      nw = 0
+      for j = 1 to count
+         if len(names<j>) > nw then nw = len(names<j>)
+      next j
+      if nw > 24 then nw = 24
+   end
+   if nw < len(sysmsg(12138)) then nw = len(sysmsg(12138))
+   vw = w - (nw + 15)               ;* what is left for the value: marker, 2 spaces, type column
+   if vw < 4 then vw = 4
+   gosub fix.window
+
+   * The table: its columns are as wide as the editor has always made them, its rows are the elements as the
+   * editor shows them
+   rows = ''
+   for i = 1 to count
+      gosub element.info
+      rows<i> = convert(bad.chars, bad.repl, nm) : @vm : et : @vm : vtext
+   next i
+   tbl = collection()
+   tbl{'id'} = 'ced'
+   tbl{'cols'} = sysmsg(12138) : @sm : nw : 'L' : @vm : sysmsg(12139) : @sm : '10L' : @vm : sysmsg(12140) : @sm : vw : 'L'
+   tbl{'rows'} = rows
+   tbl{'x'} = 0
+   tbl{'y'} = 1
+   tbl{'w'} = w
+   tbl{'h'} = per.page + 1
+   tbl{'marker'} = 1
+   tbl{'cur'} = sel
+   tbl{'focused'} = 1
+   call $sl_table('init', tbl, '', '', r)
+   tbl{'ax'} = 0
+   tbl{'ay'} = 1
+   return
+
+fix.window:
+   if sel > count then sel = count
+   if sel < 1 then sel = 1
+   if sel < top then top = sel
+   if sel >= top + per.page then top = sel - per.page + 1
+   if top < 1 then top = 1
+   return
+
+* ======================================================================
+* element.info  -  In: i.  Out: nm, addr.ok (the element can be reached by a path), et (its type)
+*                   and vtext (what the value column says)
+
+element.info:
+   if ctype = 'array' then nm = i else nm = names<i>
+   addr.ok = @true
+   if nm = '' or index(nm, '/', 1) then
+      addr.ok = @false
+      et = '?'
+      vtext = ''
+      return
+   end
+   et = jtype(cur{nm})
+   begin case
+      case et = 'collection'
+         x = cur{nm}
+         y = enumerate(x)
+         n = dcount(y, @fm)
+         if y = '' then n = 0
+         vtext = '{' : n : '}'
+      case et = 'array'
+         x = cur{nm}
+         vtext = '[' : inmat(x) : ']'
+      case et = 'boolean'
+         x = cur{nm}
+         vtext = if x then 'true' else 'false'
+      case et = 'null'
+         vtext = 'null'
+      case 1
+         x = cur{nm}
+         vtext = x
+   end case
+   vtext = convert(bad.chars, bad.repl, vtext)
+   return
+
+* ======================================================================
+* handle.key  -  One key, in c.key (a name from the library: up, enter, f3, ctrl-s, or the character)
+
+handle.key:
+   if c.key = '' then return               ;* (the host counts these and ends the editor with 'abandon')
+   message.text = ''
+   uk = upcase(c.key)
+
+   begin case
+      case c.key = 'resize'
+         null                        ;* the host finds the new size and lays the screen out again
+      case c.key = 'guardquit'
+         gosub revert                ;* the user left from the cursor lock ($sl_guardmode): nothing is kept
+         quit.all = @true
+         done = @true
+      case c.key = 'up'
+         if sel > 1 then sel -= 1
+         gosub fix.window
+      case c.key = 'down'
+         if sel < count then sel += 1
+         gosub fix.window
+      case c.key = 'pgup'
+         * A page: the window and the selection both move by one, the selection keeping its place on the screen
+         if top > 1 then
+            top -= per.page
+            if top < 1 then top = 1
+            sel -= per.page
+            if sel < 1 then sel = 1
+         end else
+            sel = 1
+         end
+         gosub fix.window
+      case c.key = 'pgdn'
+         if top + per.page <= count then
+            top += per.page
+            sel += per.page
+            if sel > count then sel = count
+         end else
+            sel = count
+         end
+         gosub fix.window
+      case c.key = 'home'
+         sel = 1
+         gosub fix.window
+      case c.key = 'end'
+         sel = count
+         gosub fix.window
+      case c.key = 'enter'
+         gosub dive
+      case c.key = 'esc'
+         gosub go.up
+      case c.key = 'f1' or c.key = '?'
+         gosub show.help
+      case c.key = 'f2' and ai.ok
+         gosub ai.menu
+      case c.key = 'f3'
+         gosub rename.element
+      case c.key = 'f4' or c.key = 'alt-t'
+         gosub change.type
+      case c.key = 'ctrl-c'                     ;* 9 Nov 26 (S.181): copy, cut and paste are Ctrl-C, X and V only; F5 and F6 are refresh and the boxes on every page
+         gosub copy.element
+      case c.key = 'ctrl-x'
+         gosub cut.element
+      case c.key = 'ctrl-v'
+         gosub paste.element
+      case c.key = 'ins' or c.key = 'tab'       ;* Ctrl-I is the tab character
+         gosub insert.element
+      case c.key = 'del'
+         gosub delete.element
+      case c.key = 'ctrl-s'
+         req = 'save'                ;* the host writes the record and tells us ('saved')
+      case c.key = 'ctrl-q'
+         q.all = @true
+         gosub quit.editor
+      case uk = 'Q' and path = ''
+         q.all = @false
+         gosub quit.editor
+      case 1
+         display @sys.bell :
+   end case
+   return
+
+* ======================================================================
+* Moving about
+
+dive:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   if et = 'collection' or et = 'array' then
+      path<-1> = nm
+      hist.sel<-1> = sel
+      hist.top<-1> = top
+      sel = 1
+      top = 1
+      gosub resolve
+      gosub build.list
+   end else
+      gosub edit.value
+   end
+   return
+
+go.up:
+   n.path = dcount(path, @fm)
+   if path = '' then n.path = 0
+   if n.path = 0 then
+      display @sys.bell :
+      return
+   end
+   del path<n.path>
+   sel = hist.sel<n.path>
+   top = hist.top<n.path>
+   del hist.sel<n.path>
+   del hist.top<n.path>
+   gosub resolve
+   gosub build.list
+   return
+
+* The help text, in a box over the list
+show.help:
+   s = convert(char(13), '', sysmsg(12141))       ;* (a carriage return in a box line would take the next cell to column 0)
+   s = change(s, char(10), @vm)
+   screen msgbox s returning b else b = 0
+   return
+
+* ======================================================================
+* A line of text, asked for in a dialogue.  In: pl.label, pl.text (the text to start from).
+* Out: pl.text and pl.key ('enter' to accept, 'esc' to cancel).
+
+prompt.line:
+   bw = w - 12
+   if bw > 60 then bw = 60
+   if bw < 10 then bw = 10
+   pl.in = pl.text
+   screen ask pl.label value pl.in width bw returning pl.out then
+      pl.text = pl.out
+      pl.key = 'enter'
+   end else
+      pl.key = 'esc'
+   end
+   return
+
+* ======================================================================
+* Changing the data
+
+* edit.value  -  The selected element is a string, a number or a boolean: change it
+
+edit.value:
+   if et = 'null' then
+      message.text = sysmsg(12163)
+      return
+   end
+   x = cur{nm}
+   if et = 'boolean' then pl.text = if x then 'true' else 'false'
+   else pl.text = x
+   loop
+      pl.label = sysmsg(12152)
+      gosub prompt.line
+      if pl.key = 'esc' then return
+      ok = @true
+      begin case
+         case et = 'number'
+            if pl.text = '' or not(num(pl.text)) then
+               ok = @false
+               message.text = sysmsg(12153)
+            end else
+               cur{nm} = pl.text + 0
+            end
+         case et = 'boolean'
+            b = upcase(pl.text)
+            if b = 'TRUE' or b = '1' then
+               cur{nm} = jboolean(1)
+            end else if b = 'FALSE' or b = '0' then
+               cur{nm} = jboolean(0)
+            end else
+               ok = @false
+               message.text = sysmsg(12154)
+            end
+         case 1
+            cur{nm} = pl.text
+      end case
+      if ok then
+         dirty = @true
+         gosub build.list
+         return
+      end
+      gosub show.error
+   repeat
+   return
+
+* show.error  -  message.text on the path line, where the prompt about to come back does not wipe it
+
+show.error:
+   t = message.text
+   call $sl_scr('get', scr)
+   call $sl_attr('bar', bc)
+   call $sl_put(scr, 0, path.row, fmt(t[1, w - 1], (w - 1) : 'L'), bc)
+   call $sl_scr('put', scr)
+   message.text = ''
+   return
+
+* new.name  -  Ask for an element name in an object.  In: pl.text (to start from).  Out: ok, nn.
+
+new.name:
+   ok = @false
+   pl.label = sysmsg(12145)
+   gosub prompt.line
+   if pl.key = 'esc' then return
+   nn = pl.text
+   if nn = '' or index(nn, '/', 1) then
+      message.text = sysmsg(12147)
+      return
+   end
+   locate nn in names<1> setting j then
+      message.text = sysmsg(12146)
+      return
+   end
+   ok = @true
+   return
+
+* new.position  -  Ask for a position in an array, 1 to count + 1.  In: pl.text.  Out: ok, np.
+
+new.position:
+   ok = @false
+   pl.label = sysmsg(12151, count + 1)
+   gosub prompt.line
+   if pl.key = 'esc' then return
+   np = pl.text
+   if not(np matches '1N0N') or np < 1 or np > count + 1 then
+      message.text = sysmsg(12151, count + 1)
+      return
+   end
+   np += 0
+   ok = @true
+   return
+
+rename.element:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   if ctype = 'array' then
+      message.text = sysmsg(12148)
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   old.name = nm
+   pl.text = old.name
+   gosub new.name
+   if not(ok) then return
+   x = cur{old.name}
+   del cur{old.name}
+   cur{nn} = x
+   dirty = @true
+   gosub reselect
+   return
+
+* reselect  -  The element called nn (or number np, in an array) is the selected one
+
+reselect:
+   gosub build.list
+   if ctype = 'array' then
+      sel = np
+   end else
+      locate nn in names<1> setting j then sel = j
+   end
+   gosub fix.window
+   gosub build.list
+   return
+
+delete.element:
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   del cur{nm}
+   dirty = @true
+   gosub build.list
+   return
+
+copy.element:
+   gosub take.element
+   return
+
+cut.element:
+   gosub take.element
+   if clip.has and took then
+      del cur{nm}
+      dirty = @true
+      gosub build.list
+   end
+   return
+
+* take.element  -  Put a copy of the selected element in the clip.  Out: took
+
+take.element:
+   took = @false
+   if count = 0 then
+      display @sys.bell :
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   x = cur{nm}
+   if et = 'collection' or et = 'array' then
+      clip = jparse(jbuild(x))
+   end else
+      clip = x
+   end
+   clip.type = et
+   clip.name = if ctype = 'array' then '' else nm
+   clip.has = @true
+   took = @true
+   return
+
+paste.element:
+   if not(clip.has) then
+      message.text = sysmsg(12155)
+      return
+   end
+   if clip.type = 'collection' or clip.type = 'array' then
+      v = jparse(jbuild(clip))
+   end else
+      v = clip
+   end
+   if ftype = 2 then
+      gosub data.fits
+      if not(fits) then
+         message.text = sysmsg(12993)
+         return
+      end
+   end
+   if ctype = 'array' then
+      pl.text = if count = 0 then 1 else sel
+      gosub new.position
+      if not(ok) then return
+      ins v as cur{np}
+   end else
+      pl.text = clip.name
+      gosub new.name
+      if not(ok) then return
+      cur{nn} = v
+   end
+   dirty = @true
+   gosub reselect
+   return
+
+* choose.type  -  A menu of the types in ct.allowed (a field mark list).  Out: ct.pick, null if cancelled.
+*                 Each entry's key is its number, as it has always been.
+
+choose.type:
+   ct.pick = ''
+   n.allowed = dcount(ct.allowed, @fm)
+   if ct.allowed = '' then n.allowed = 0
+   if n.allowed = 0 then
+      message.text = sysmsg(12150)
+      return
+   end
+   items = ''
+   for j = 1 to n.allowed
+      items<1, j> = '&' : j : ' ' : ct.allowed<j>
+   next j
+   screen menu items returning code then
+      if code >= 1 and code <= n.allowed then ct.pick = ct.allowed<code>
+   end
+   return
+
+change.type:
+   if count = 0 then
+      * 31 Oct 26 (S.86 stage 4, the old CED's choice of a new record's kind, G3): the top level of a record that is empty is a collection or an array, whichever the person says; the
+      *   data mode (ftype 2) is always an array of fields and has nothing to choose
+      if path = '' and ftype # 2 then
+         gosub choose.top
+      end else
+         display @sys.bell :
+      end
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   x = cur{nm}
+   ct.allowed = ''
+   begin case
+      case ftype = 2
+         gosub data.types
+      case et = 'string'
+         if x # '' and num(x) then ct.allowed<-1> = 'number'
+         if upcase(x) = 'TRUE' or upcase(x) = 'FALSE' then ct.allowed<-1> = 'boolean'
+         if x = '' then ct.allowed<-1> = 'null'
+         y = jparse(x)
+         if status() = 0 then
+            if jtype(y) = 'collection' then ct.allowed<-1> = 'collection'
+            if jtype(y) = 'array' then ct.allowed<-1> = 'array'
+         end
+      case et = 'number'
+         ct.allowed<-1> = 'string'
+         if x = 0 or x = 1 then ct.allowed<-1> = 'boolean'
+      case et = 'boolean'
+         ct.allowed<-1> = 'string'
+         ct.allowed<-1> = 'number'
+      case et = 'null'
+         ct.allowed<-1> = 'string'
+      case et = 'collection'
+         ct.allowed<-1> = 'string'
+         names2 = enumerate(x)
+         reachable = @true
+         for j = 1 to dcount(names2, @fm)
+            if names2<j> = '' or index(names2<j>, '/', 1) then reachable = @false
+         next j
+         if reachable then ct.allowed<-1> = 'array'
+      case et = 'array'
+         ct.allowed<-1> = 'string'
+         ct.allowed<-1> = 'collection'
+   end case
+   gosub choose.type
+   if ct.pick = '' then return
+   gosub apply.type
+   dirty = @true
+   gosub build.list
+   return
+
+* choose.top  -  The top level of an empty record: a dialogue asks collection or array (12160; Esc leaves it as it is).  The choice is a change only when it is the other kind.
+choose.top:
+   nb = 0
+   screen msgbox sysmsg(12160, title) buttons '&Collection,&Array' returning nb else nb = 0
+   want = ''
+   begin case
+      case nb = 1
+         want = 'collection'
+      case nb = 2
+         want = 'array'
+   end case
+   if want = '' or want = jtype(c) then return
+   if want = 'collection' then c = collection() else c = mat()
+   dirty = (jbuild(c) # saved.text)
+   gosub resolve
+   gosub build.list
+   return
+
+* data.types  -  The data mode (ftype 2): what the element may become.  In: et, x, n.path.  Out: ct.allowed.  A string becomes a list of one value
+*                where a list may be (the first two levels), a list becomes a string when it holds no more than one string.
+
+data.types:
+   begin case
+      case et = 'string'
+         if n.path < 2 then ct.allowed<-1> = 'array'
+      case et = 'array'
+         if inmat(x) = 0 then
+            ct.allowed<-1> = 'string'
+         end else
+            if inmat(x) = 1 then
+               if jtype(x{1}) = 'string' then ct.allowed<-1> = 'string'
+            end
+         end
+   end case
+   return
+
+* data.fits  -  Could v be an element of cur in a record?  In: v, n.path.  Out: fits.  v is put inside as many arrays as cur is deep and given to
+*               $recarr, which is the one that decides what a record is.
+
+data.fits:
+   if jtype(v) = 'string' then fit.w = v else fit.w = jparse(jbuild(v))
+   for fit.j = 0 to n.path
+      fit.a = mat()
+      fit.a{1} = fit.w
+      fit.w = fit.a
+   next fit.j
+   call $recarr('from', fit.w, fit.t, fits)
+   return
+
+* apply.type  -  Make the element nm of cur the type ct.pick; x is its value, et its type now
+
+apply.type:
+   if ftype = 2 then
+      if ct.pick = 'array' then
+         v = mat()
+         v{1} = x
+      end else
+         if inmat(x) = 0 then v = '' else v = x{1}
+      end
+      cur{nm} = v
+      return
+   end
+   begin case
+      case ct.pick = 'string'
+         begin case
+            case et = 'number'
+               v = x : ''
+            case et = 'boolean'
+               v = if x then 'true' else 'false'
+            case et = 'null'
+               v = ''
+            case 1
+               v = jbuild(x)
+         end case
+         cur{nm} = v
+      case ct.pick = 'number'
+         * (a boolean plus nothing is still a boolean, so a boolean is turned into 1 or 0 by hand)
+         if et = 'boolean' then v = if x then 1 else 0 else v = x + 0
+         cur{nm} = v
+      case ct.pick = 'boolean'
+         if et = 'string' then b = (upcase(x) = 'TRUE') else b = (x # 0)
+         v = jboolean(b)
+         cur{nm} = v
+      case ct.pick = 'null'
+         v = jnull()
+         cur{nm} = v
+      case ct.pick = 'collection'
+         if et = 'string' then
+            v = jparse(x)
+         end else
+            v = collection()
+            for j = 1 to inmat(x)
+               v{j} = x{j}
+            next j
+         end
+         cur{nm} = v
+      case ct.pick = 'array'
+         if et = 'string' then
+            v = jparse(x)
+         end else
+            v = mat()
+            names2 = enumerate(x)
+            for j = 1 to dcount(names2, @fm)
+               nm2 = names2<j>
+               ins x{nm2} as v{j}
+            next j
+         end
+         cur{nm} = v
+   end case
+   return
+
+insert.element:
+   if ctype = 'array' then
+      pl.text = count + 1
+      gosub new.position
+      if not(ok) then return
+   end else
+      pl.text = ''
+      gosub new.name
+      if not(ok) then return
+   end
+   if ftype = 2 then
+      ct.allowed = 'string'
+      if n.path < 2 then ct.allowed<-1> = 'array'
+   end else
+      ct.allowed = 'string' : @fm : 'number' : @fm : 'boolean' : @fm : 'null' : @fm : 'collection' : @fm : 'array'
+   end
+   gosub choose.type
+   if ct.pick = '' then return
+   begin case
+      case ct.pick = 'collection'
+         v = collection()
+      case ct.pick = 'array'
+         v = mat()
+      case ct.pick = 'null'
+         v = jnull()
+      case 1
+         loop
+            pl.label = sysmsg(12152)
+            pl.text = if ct.pick = 'boolean' then 'false' else ''
+            gosub prompt.line
+            if pl.key = 'esc' then return
+            ok = @true
+            begin case
+               case ct.pick = 'number'
+                  if pl.text = '' or not(num(pl.text)) then
+                     ok = @false
+                     message.text = sysmsg(12153)
+                  end else
+                     v = pl.text + 0
+                  end
+               case ct.pick = 'boolean'
+                  b = upcase(pl.text)
+                  if b = 'TRUE' or b = '1' then
+                     v = jboolean(1)
+                  end else if b = 'FALSE' or b = '0' then
+                     v = jboolean(0)
+                  end else
+                     ok = @false
+                     message.text = sysmsg(12154)
+                  end
+               case 1
+                  v = pl.text
+            end case
+            if ok then exit
+            gosub show.error
+         repeat
+   end case
+   if ctype = 'array' then
+      ins v as cur{np}
+   end else
+      cur{nn} = v
+   end
+   dirty = @true
+   gosub reselect
+   return
+
+* ======================================================================
+* Saving and leaving.  The host writes; the engine says what is to be written and takes the outcome.
+
+* op.prep.save  -  Out (in st): ok, text.  26 Oct 26 dm - the data mode: the record text comes from $recarr, which refuses an array that is not a record's (nothing
+*                  is written or kept then, and the message says so).  The ordinary file gets the JSON text; a data collection file is given c itself.
+
+op.prep.save:
+   st{'ok'} = @true
+   st{'text'} = ''
+   begin case
+      case ftype = 2
+         call $recarr('from', c, rec.text, rec.ok)
+         if not(rec.ok) then
+            message.text = sysmsg(12993)
+            pend.quit = @false
+            st{'ok'} = @false
+         end else
+            st{'text'} = rec.text
+         end
+      case ftype = 1
+         st{'text'} = jbuild(c)
+   end case
+   return
+
+* op.saved  -  In a: <1> 1 the record was written (or kept: there was nothing to write to), 0 the write failed (<2> its status), -1 refused before the write (the message
+*              is already set).  A quit that waited for the write (the Yes of the quit question) goes on when it was kept.
+
+op.saved:
+   begin case
+      case a<1> = 1
+         saved.text = jbuild(c)
+         dirty = @false
+         kept = @true
+         message.text = sysmsg(12157)
+         if pend.quit then
+            done = @true
+            if q.all then quit.all = @true
+         end
+      case a<1> = 0
+         message.text = sysmsg(12158, a<2>)
+   end case
+   pend.quit = @false
+   return
+
+* ======================================================================
+* THE AI (AI line stage 3, 24 Oct 26).  F2, when the AI is usable for the account, opens a menu: explain the selected element, ask about the record, undo the AI's last change.
+* Nothing is sent until the person has seen EVERYTHING that is sent and chosen Send ($tk_ai 'ask').  The text the model sees is the record as indented JSON, one element to a line;
+* edits it proposes are edits of that text, shown as a diff, and an accepted set must make valid JSON again, else it is ignored.  Accept changes c (and marks it changed) and nothing
+* is saved: Ctrl-S, the quit question and the edit gates are as ever.  A command in the answer is ignored.
+
+ai.menu:
+   items = sysmsg(12677) : @vm : sysmsg(12678) : @vm : sysmsg(12679)
+   code = 0
+   screen menu items returning code else code = 0
+   begin case
+      case code = 1
+         gosub ai.explain
+      case code = 2
+         gosub ai.ask
+      case code = 3
+         gosub ai.undo.run
+   end case
+   return
+
+ai.explain:
+   if count = 0 then
+      message.text = sysmsg(12680)
+      return
+   end
+   i = sel
+   gosub element.info
+   if not(addr.ok) then
+      message.text = sysmsg(12161)
+      return
+   end
+   ai.where = '/' : change(path, @fm, '/') : (if path = '' then '' else '/') : nm
+   if et = 'collection' or et = 'array' then
+      pj.in = jbuild(cur{nm})
+      gosub pretty
+      ai.sel = pj.out
+   end else
+      x = cur{nm}
+      ai.sel = (if et = 'boolean' then (if x then 'true' else 'false') else (if et = 'null' then 'null' else x))
+   end
+   ai.req = sysmsg(12683, ai.where)
+   ai.note = 'The selected element is ' : ai.where : ' (' : et : ').'
+   gosub ai.go
+   return
+
+ai.ask:
+   pl.label = sysmsg(12641)
+   pl.text = ''
+   gosub prompt.line
+   if pl.key = 'esc' or trim(pl.text) = '' then return
+   ai.req = trim(pl.text)
+   ai.sel = ''
+   ai.note = ''
+   gosub ai.go
+   return
+
+* The record as indented text (pj.in compact JSON in, pj.out out): a line feed and two blanks a level after { [ and a comma, before } ], a blank after a colon.  Strings are left alone.
+pretty:
+   pj.out = ''
+   pj.ind = 0
+   pj.str = 0
+   pj.esc = 0
+   pj.skip = 0
+   pj.n = len(pj.in)
+   for pj.i = 1 to pj.n
+      if pj.skip then
+         pj.skip = 0
+      end else
+         pj.ch = pj.in[pj.i, 1]
+         pj.nx = pj.in[pj.i + 1, 1]
+         begin case
+            case pj.str
+               pj.out := pj.ch
+               begin case
+                  case pj.esc
+                     pj.esc = 0
+                  case pj.ch = '\'
+                     pj.esc = 1
+                  case pj.ch = '"'
+                     pj.str = 0
+               end case
+            case pj.ch = '"'
+               pj.str = 1
+               pj.out := pj.ch
+            case (pj.ch = '{' and pj.nx = '}') or (pj.ch = '[' and pj.nx = ']')
+               pj.out := pj.ch : pj.nx                            ;* an empty container stays on its line
+               pj.skip = 1
+            case pj.ch = '{' or pj.ch = '['
+               pj.ind += 1
+               pj.out := pj.ch : char(10) : space(pj.ind * 2)
+            case pj.ch = '}' or pj.ch = ']'
+               pj.ind -= 1
+               pj.out := char(10) : space(pj.ind * 2) : pj.ch
+            case pj.ch = ','
+               pj.out := ',' : char(10) : space(pj.ind * 2)
+            case pj.ch = ':'
+               pj.out := ': '
+            case 1
+               pj.out := pj.ch
+         end case
+      end
+   next pj.i
+   return
+
+* In: ai.req, ai.note, ai.sel (the selected element's text, or null).  The text is the whole record; the model is told which element is selected in ai.note.
+ai.go:
+   pj.in = jbuild(c)
+   gosub pretty
+   ai.text = pj.out
+   ai.lines = change(ai.text, char(10), @fm)
+   ai.total = dcount(ai.lines, @fm)
+   call $tk_ai('window', ai.lines, 1, ai.wspec)
+   ai.first = ai.wspec<1>
+   ai.last = ai.wspec<2>
+   ai.page = 'This is CED, the collection editor: the record is JSON, shown here as indented text.'
+   ai.page<1, -1> = 'File ' : title : '.'
+   ai.page<1, -1> = 'The cursor is on the container /' : change(path, @fm, '/') : '.'
+   if ai.note # '' then ai.page<1, -1> = ai.note
+   if ai.first > 1 or ai.last < ai.total then ai.page<1, -1> = sysmsg(12672, ai.first, ai.last - ai.first + 1)
+   ai.actx = 'CED' : @fm : 'ced' : @fm : ai.page : @fm : '' : @fm : 0 : @fm : ai.req : @fm : msg.row : @fm : ai.wspec<4> : @fm : ai.first : @fm : ai.sel : @fm : 'nocmd' : @fm : '' : @fm : st{'origin'}     ;* <13>: where the record comes from (the host sets it: the IDE's tab, or none for the collection a program holds)
+   ai.ctx = ''
+   ai.ctx<1> = w                                           ;* TK.C.W
+   ai.res = ''
+   call $tk_ai('ask', ai.ctx, ai.actx, ai.res)
+   if ai.res<1> = 'edit' then
+      gosub ai.apply
+   end else
+      if ai.res<5> # '' then message.text = ai.res<5>
+   end
+   return
+
+* The accepted edits go into c if the record is still, at each place, what the model was shown and the result is JSON.  One level of undo is kept.
+ai.apply:
+   pj.in = jbuild(c)
+   gosub pretty
+   ai.wspec<5> = ai.res<2>
+   call $tk_ai('splice', pj.out, ai.wspec, ai.sp)
+   if ai.sp = '' then
+      message.text = sysmsg(12671)
+      return
+   end
+   ai.y = jparse(ai.sp<1>)
+   ai.bad = (status() # 0)
+   if not(ai.bad) then
+      ai.k = jtype(ai.y)
+      if ai.k # 'collection' and ai.k # 'array' then ai.bad = @true
+   end
+   if ai.bad then
+      message.text = sysmsg(12682)
+      return
+   end
+   ai.undo = jbuild(c)
+   c = ai.y
+   dirty = @true
+   path = ''                                               ;* the container the person was in may not be there any more: back to the top
+   hist.sel = ''
+   hist.top = ''
+   sel = 1
+   top = 1
+   gosub resolve
+   gosub build.list
+   message.text = sysmsg(12681, ai.sp<3>)
+   return
+
+ai.undo.run:
+   if ai.undo = '' then
+      message.text = sysmsg(12684)
+      return
+   end
+   ai.y = jparse(ai.undo)
+   if status() = 0 then
+      c = ai.y
+      ai.undo = ''
+      dirty = (jbuild(c) # saved.text)
+      path = ''
+      hist.sel = ''
+      hist.top = ''
+      sel = 1
+      top = 1
+      gosub resolve
+      gosub build.list
+      message.text = sysmsg(12685)
+   end
+   return
+
+* revert  -  Put c back as it was when it was last saved (or when the editor was called)
+
+revert:
+   if dirty then
+      y = jparse(saved.text)
+      if status() = 0 then c = y
+      dirty = @false
+   end
+   return
+
+* quit.editor  -  Leave the editor; with changes unsaved the user is asked: Yes saves, No throws them away, Esc stays.  Yes asks the host to write (req 'save', pend.quit):
+*                 the quit goes on in 'saved' when the record was kept, and does not when it was not.
+
+quit.editor:
+   if dirty then
+      qb = 0
+      screen msgbox sysmsg(12156) buttons '&Yes,&No,&Cancel' default 1 returning qb else qb = 0
+      * Esc, and the end of the input, leave the editor open (an input that has ended is given up on by the key loop)
+      begin case
+         case qb = 1
+            req = 'save'
+            pend.quit = @true
+            return
+         case qb = 2
+            gosub revert
+         case 1
+            return
+      end case
+   end
+   done = @true
+   if q.all then quit.all = @true
+   return
+
+end
+
+* END-CODE

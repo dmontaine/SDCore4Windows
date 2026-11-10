@@ -1,0 +1,1 @@
+%1 %2 is not a JSON object or array (it holds a plain value, or something with no JSON form), so the IDE does not open it

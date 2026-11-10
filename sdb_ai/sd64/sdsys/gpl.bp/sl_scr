@@ -7,6 +7,12 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New (the spike: SCREEN MSGBOX).
 * 12 Oct 26 dm  The owned screen: open / put / close, per-cell styles, the cursor.
+* 28 Oct 26 dm  S.88 L1 (R-a): the op pending, the program's own wait asking whether a resize was read by a dialogue and not delivered (the note
+*               $sl_key keeps in common /slpend/); open and close forget the note.  The block /slscr/ is unchanged (CPROC declares it too).
+* 3 Nov 26 dm  S.113 (owner: "All pages"): the ops draw, peek, flush, unsync, refresh and toolkit; the kept context has the terminal's picture
+*               (SL.S.TERM, SL.S.TATTR); get flushes a page of the toolkit; a page that is resized is unsynced and repainted once, at its next flush.
+*               The note that the terminal is not known is in a block of its own, /slsync/, so that /slscr/ is unchanged.  put does not write the
+*               cursor for a statement that drew by difference and wrote nothing (it is owed to the next flush, /slcurq/, shared with $sl_curat).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -14,22 +20,46 @@
 *   call $sl_scr(op, scr)
 *
 *     resized  scr returns 1 if the kept context has been made a new size (the terminal was resized, or TERM w,h
-*            typed) since this was last asked, else 0, and the flag is cleared
+*            typed) since this was last asked, else 0, and the flag is cleared (SCREEN REFRESH's RETURNING)
+*     pending  scr returns 1 if $sl_key has handed out the key resize since the program's own wait (SCREEN KEY, SCREEN WAIT) last
+*            delivered one, else 0, and the note is cleared.  The wait asks it before it reads a key and delivers resize first: a
+*            resize read by a dialogue (a menu, a message box, SCREEN ASK, a pick window, the toolkit's confirm and AI boxes, the
+*            IDE's name box) redraws the dialogue and was never the program's, which went on with the old geometry (R-a, 28 Oct 2026).
+*            The wait that delivers a resize it read itself asks it too, so that the note is not delivered a second time.
 *     get    scr is the screen context (sl.h) the library is to use.  If the library owns the screen and the
 *            terminal is no longer the size the kept context was made for, the context is first made the new
-*            size, keeping every cell that still fits, and the screen drawn again from it.  Until SCREEN OPEN has been done
+*            size, keeping every cell that still fits, and the screen drawn again from it (a page of the toolkit: at its next flush).
+*            On a screen the toolkit took (SL.S.TK) the terminal is first brought up to the shadow (flush, below), so that a dialogue or a
+*            widget that draws now starts from a terminal that shows the page.  Until SCREEN OPEN has been done
 *            it is a blank one of the terminal's size, made afresh on every call and not kept
 *            (SL.S.OWNED 0): a pop-up such as a message box can then put back only blanks, where the
 *            program had text.  After SCREEN OPEN it is the kept one (SL.S.OWNED 1).
+*     peek   (S.113) as get, without the flush: SCREEN KEY after a resize, SCREEN CLOSE.
+*     draw   (S.113) as peek, for SCREEN TEXT, SCREEN BOX and SCREEN CLEAR: on a screen the toolkit took, scr<SL.S.DIFF> is 1 (only the cells
+*            that differ from what the terminal shows are written; a clear is not written at all) or 2 while the terminal is not known (nothing
+*            is written; the next flush repaints).  Everywhere else 0, as get: a user's own program may have printed over its text.
 *     put    stores scr back as the kept context if there is one, and puts the terminal's cursor where
 *            the context says it is (SL.S.CUR), shown or hidden as SL.S.CURON says.  Nothing to do
-*            for a transient context.
+*            for a transient context.  (S.113) A context taken with draw whose statement wrote nothing did not move the terminal's
+*            cursor: the cursor is then owed (common /slcurq/) and the next flush places it, unless $sl_curat has placed it since.
+*     flush  (S.113) the program's own wait (SCREEN KEY, SCREEN WAIT) calls it before it reads a key.  When the terminal is not known
+*            (unsync, below) the whole screen is cleared and written again from the shadow ($sl_repaint), once.  Else, on a screen the
+*            toolkit took, every row whose shadow is not what the terminal shows has the cells that differ written.  The cursor is put
+*            back where the program left it.
+*     unsync (S.113) the terminal may not show what the library believes (the cursor lock's warning was drawn over it): the next flush
+*            repaints.  Nothing for a screen that is not open.
+*     refresh (S.113) Ctrl-L or F5 was read on a page of the toolkit: as unsync, on a screen the toolkit took; nothing on any other.
+*     toolkit (S.113) $tk_open marks the screen it took (SL.S.TK).
 *     open   makes the kept context: the terminal's size, every cell blank and style n, the cursor at
-*            0,0 and shown.  scr returns it.  The terminal is not touched.
+*            0,0 and shown, the terminal's picture blank.  scr returns it.  The terminal is not touched.
 *     close  forgets it.
 *
 *   The routines of the SCREEN statement ask for the context here and hand it back with put, so
 *   the program never handles one.  SED builds its own and calls the widget routines directly.
+*
+*   WHY THE FLUSH IS ONLY AT THE PROGRAM'S OWN WAIT AND IN GET.  A dialogue takes a COPY of the kept context with get and hands it back with
+*   put when it ends.  A flush while such a copy is out would write the page over the dialogue, and the copy would then be put back
+*   believing the dialogue is still shown.  The program's wait and a get are where no copy is out.
 *
 * END-DESCRIPTION
 *
@@ -42,18 +72,27 @@ $catalog $sl_scr
 $include sl.h
 
    common /slscr/ ctx, ctx.open, ctx.resized
+   common /slpend/ rz.pending                     ;* $sl_key's note of a resize handed out and not yet delivered by the program's wait
+   common /slsync/ ss.lost                        ;* S.113: 1 when the terminal may not show the kept context (the next flush repaints); a block starts as 0
+   common /slcurq/ cq.last, cq.owed               ;* S.113: who placed the terminal's cursor last ('put' or 'curat', $sl_curat), and whether a put left it owed
 
    if unassigned(ctx.open) then
       ctx = ''
       ctx.open = 0
    end
+   if unassigned(ss.lost) then ss.lost = 0
 
    begin case
-      case op = 'get'
+      case op = 'get' or op = 'peek' or op = 'draw'
          if ctx.open then
             if ctx<SL.S.W> # @crtwide or ctx<SL.S.H> # @crthigh then gosub resize
+            if op = 'get' and ctx<SL.S.TK> then gosub flush
             scr = ctx
-            scr<SL.S.DIFF> = 0                  ;* only $sl_form turns it on, for the length of one of its calls
+            if ss.lost then scr<SL.S.SYNC> = 0
+            scr<SL.S.DIFF> = 0                  ;* $sl_form turns it on for the length of one of its calls; draw, on a page of the toolkit, below
+            if op = 'draw' and ctx<SL.S.TK> then
+               scr<SL.S.DIFF> = (if scr<SL.S.SYNC> = 1 then 1 else 2)
+            end
          end else
             gosub blank
             scr = blank.scr
@@ -62,29 +101,69 @@ $include sl.h
       case op = 'put'
          if ctx.open then
             if scr<SL.S.W> # ctx<SL.S.W> or scr<SL.S.H> # ctx<SL.S.H> then ctx.resized = 1   ;* a dialogue was resized under it
+            * S.113: a statement that drew by difference and wrote nothing (its terminal picture is as it was) did not move the terminal's cursor; the
+            *   cursor it would place now is owed, and placed by the next flush unless $sl_curat places it first (a page writes about 90 statements a key)
+            put.skip = 0
+            if scr<SL.S.DIFF> + 0 >= 1 then
+               if compare(scr<SL.S.TERM>, ctx<SL.S.TERM>) = 0 and compare(scr<SL.S.TATTR>, ctx<SL.S.TATTR>) = 0 then put.skip = 1
+            end
             ctx = scr
-            if scr<SL.S.CURON> then
-               display @(-31) : @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) :
+            ctx<SL.S.DIFF> = 0
+            cq.last = 'put'
+            if put.skip then
+               cq.owed = 1
             end else
-               display @(scr<SL.S.CUR, 1>, scr<SL.S.CUR, 2>) : @(-32) :
+               cq.owed = 0
+               gosub put.cursor
             end
          end
+
+      case op = 'flush'
+         if ctx.open then gosub flush
+
+      case op = 'unsync'
+         if ctx.open then
+            ss.lost = 1
+            ctx<SL.S.SYNC> = 0
+         end
+
+      case op = 'refresh'
+         if ctx.open and ctx<SL.S.TK> then
+            ss.lost = 1
+            ctx<SL.S.SYNC> = 0
+         end
+
+      case op = 'toolkit'
+         if ctx.open then ctx<SL.S.TK> = 1
 
       case op = 'open'
          gosub blank
          blank.scr<SL.S.OWNED> = 1
+         for r = 0 to @crthigh - 1
+            blank.scr<SL.S.TERM, r + 1> = space(@crtwide)       ;* S.113: the terminal's picture; SL.S.SYNC says whether it can be believed
+            blank.scr<SL.S.TATTR, r + 1> = str('n', @crtwide)
+         next r
          ctx = blank.scr
          ctx.open = 1
          scr = ctx
+         rz.pending = 0                         ;* a resize from before this screen is not this program's
+         ss.lost = 0
 
       case op = 'resized'
          scr = ctx.resized + 0                  ;* 1 if the context has been made a new size since this was last asked
          ctx.resized = 0
 
+      case op = 'pending'
+         scr = 0
+         if rz.pending then scr = 1             ;* a resize handed out by $sl_key and not yet delivered by the program's wait
+         rz.pending = 0
+
       case op = 'close'
          ctx = ''
          ctx.open = 0
          ctx.resized = 0
+         rz.pending = 0
+         ss.lost = 0
    end case
 
    return
@@ -92,9 +171,74 @@ $include sl.h
 * The terminal is not the size the kept context was made for (the window was resized, or TERM w,h was typed): $sl_resize
 * makes it the new size, keeping every cell that still fits, and draws the screen again from it.  What was drawn with PRINT
 * or CRT is not in the shadow, and goes, as for SCREEN REFRESH.
+* S.113: a page of the toolkit draws its whole layout again for the key resize, so its screen is not drawn here as well: the context is
+* made the new size, what the terminal shows is not known (a terminal may cut, pad or reflow it), and the next flush repaints it once.
 resize:
-   call $sl_resize(ctx)
+   if ctx<SL.S.TK> then
+      call $sl_resize(ctx, 'defer')
+      ctx<SL.S.SYNC> = 0 ; ss.lost = 1           ;* MUTANT-POINT resize
+   end else
+      call $sl_resize(ctx)
+   end
    ctx.resized = 1
+   return
+
+* S.113: the terminal is brought up to the kept context.  Not known: cleared and drawn whole from the shadow, once.  Known, on a page of the
+* toolkit: the rows whose shadow is not what the terminal shows (a SCREEN CLEAR that nothing has been drawn over since) have the cells that
+* differ written.  The clip is lifted for it (the whole screen is the terminal's), and the cursor is put back where the program left it.
+flush:
+   if not(ctx<SL.S.OWNED>) then return
+   fl.all = ss.lost
+   if ctx<SL.S.TK> and ctx<SL.S.SYNC> # 1 then fl.all = 1
+   if not(fl.all) and not(ctx<SL.S.TK>) then return
+   fl.cur = ''
+   call $sl_curat('get', fl.cur)
+   fl.clip = ctx<SL.S.CLIP>
+   ctx<SL.S.CLIP> = ''
+   fl.wrote = 0
+   if fl.all then
+      ctx<SL.S.DIFF> = 0
+      call $sl_repaint(ctx)                     ;* sets SL.S.SYNC and the terminal's picture
+      ss.lost = 0
+      fl.wrote = 1
+   end else
+      fl.w = ctx<SL.S.W> + 0
+      fl.last = ctx<SL.S.H> - 1
+      ctx<SL.S.DIFF> = 1
+      for fr = 0 to fl.last
+         ft = ctx<SL.S.SHADOW, fr + 1>
+         fa = ctx<SL.S.ATTRS, fr + 1>
+         if compare(ft, ctx<SL.S.TERM, fr + 1>) # 0 or compare(fa, ctx<SL.S.TATTR, fr + 1>) # 0 then
+            if fr = fl.last and not(terminfo('xenl')) then
+               ft = ft[1, fl.w - 1]             ;* the corner cell would scroll the terminal
+               fa = fa[1, fl.w - 1]
+            end
+            call $sl_put(ctx, 0, fr, ft, fa)
+            fl.wrote = 1
+         end
+      next fr
+      ctx<SL.S.DIFF> = 0
+   end
+   ctx<SL.S.CLIP> = fl.clip
+   * the cursor where the last to place it wanted it: a put (its own, or one that was owed) or $sl_curat
+   if fl.wrote or cq.owed then
+      if cq.last = 'curat' and fl.cur<1, 1> + 0 then
+         call $sl_curat('back', fl.cur)
+      end else
+         gosub put.cursor
+         cq.last = 'put'
+      end
+      cq.owed = 0
+   end
+   return
+
+* The terminal's cursor where the context says, shown or hidden as it says (what put has always written)
+put.cursor:
+   if ctx<SL.S.CURON> then
+      display @(-31) : @(ctx<SL.S.CUR, 1>, ctx<SL.S.CUR, 2>) :
+   end else
+      display @(ctx<SL.S.CUR, 1>, ctx<SL.S.CUR, 2>) : @(-32) :
+   end
    return
 
 blank:

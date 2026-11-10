@@ -1,0 +1,377 @@
+* SL_OUT
+* Screen library, widget: an output pane - the lines a program or a command has produced, newest first, with an optional progress line.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 29 Oct 26 dm  New (S.88 phase 3.10, widget A).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_out(op, w, scr, key, ret)      the widget contract; w is a collection (see $sl_label)
+*
+*   WHAT IT IS FOR.  A page that runs a command shows what came back - the result, a refusal, the lines the command printed - in one
+*   place that stays on the screen, instead of the status line that the next key erases.  The pane keeps the history; the page decides
+*   what it means and when to leave.  THE PANE NEVER CLOSES ITSELF: Esc and every key it does not scroll with is answered 'unhandled'.
+*
+*   MEMORY ONLY.  The history lives in w and nowhere else.  This program writes no file, opens none and runs no operating system
+*   verb: what a command printed may be something its user should not be able to read again later.  It draws ONLY through $sl_put,
+*   which shows a control character as a harmless letter, so what is stored can be drawn as it is.
+*
+*   Elements:  id, ax ay (the top left cell), w h (columns and rows, the first row being the title; at least 24 by 3, the page decides, 6 is
+*   usual), entries (one value per entry, NEWEST FIRST: kind, a subvalue mark, the text; the kinds are ok, refuse, out and info, anything else
+*   is out), top (the first row shown, from 1; 1 is the newest), earlier (how many of the oldest entries the cap has dropped), prog
+*   (the progress line: text, a subvalue mark, 0 to 100; null for none), dropped (how many keys 'poll' has thrown away), open (1 shown, 0 not)
+*
+*     init      w, h from what was given; the history is KEPT if there is one (a resize calls it again), open is 1
+*     draw      the title row ('Output', and 'Esc cancels' on its right while a progress line is on), then the rows, then the
+*               progress line on the last row.  Each entry is wrapped to the width at draw time with $tk_wrap, so a refusal is
+*               never cut at any width and a resize costs nothing; the wrapped rows are kept until the width or the history changes.
+*               The first row of an entry starts with its kind in letters ('ok ', '!! ', or three blanks) so that a terminal with
+*               no colours reads it; the next rows are indented three.  A refusal is in the bold style.  A scroll bar is in the
+*               last column when the rows do not fit.  Closed, or in a phantom: nothing is drawn.
+*     focus     key = 1 gives it the focus (draws), key = 0 takes it away (draws)
+*     key       up, down, pgup, pgdn, home (the newest) and end (the oldest) scroll and are 'handled'; every other key, Esc included,
+*               is 'unhandled' with ret<2> the key's name.  A closed pane answers 'unhandled' to every key.
+*     mouse     the wheel scrolls three rows; a press is 'handled'
+*     close     open = 0
+*     open      open = 1
+*     add       key = kind, a field mark, the text.  The text is cleaned before it is kept: a return is removed, a tab becomes blanks up to
+*               the next stop of eight, and the field, value, subvalue and text marks are shown as ^ ] | and [.  A line feed
+*               ends a line of the entry.  More than 500 entries drop the OLDEST, counted in earlier and shown as one last row.
+*               The pane is not redrawn: the page's next draw shows it.
+*     progress  key = text, a field mark, n, a field mark, total: the line shows n of total as 0 to 100 percent (total 0 or null:
+*               n is taken as the percent), and it is DRAWN AT ONCE, so a page that is blocked in a long command still shows it.
+*               A null key takes the progress line away.
+*     poll      ret = 1 when Esc has been pressed since the last poll, else 0.  It reads only keys that are already waiting
+*               (KEYREADY() before $sl_key, so it never waits), so a page can call it between the units of a long job.  Any other key
+*               waiting is thrown away and counted in dropped.  A phantom has no keyboard: 0.
+*     clear     the history, earlier and the progress line are emptied
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_out(op, w, scr, key, ret)
+$catalog $sl_out
+
+$include sl.h
+
+$define OUT.CAP 500                              ;* entries kept; the oldest go
+
+   ret = ''
+   gosub geom
+
+   begin case
+      case op = 'init'
+         w{'type'} = 'output'
+         w{'focusable'} = 1
+         w{'w'} = ow
+         w{'h'} = oh
+         w{'open'} = 1
+         w{'ver'} = w{'ver'} + 1
+         if w{'top'} + 0 < 1 then w{'top'} = 1
+         w{'earlier'} = w{'earlier'} + 0
+         w{'dropped'} = w{'dropped'} + 0
+         isopen = 1
+         gosub geom.rows
+
+      case op = 'draw'
+         gosub paint
+
+      case op = 'focus'
+         w{'focused'} = if key then 1 else 0
+         gosub paint
+
+      case op = 'key'
+         gosub handle.key
+
+      case op = 'mouse'
+         gosub click
+
+      case op = 'close'
+         w{'open'} = 0
+
+      case op = 'open'
+         w{'open'} = 1
+
+      case op = 'add'
+         gosub add.entry
+
+      case op = 'progress'
+         gosub set.progress
+
+      case op = 'poll'
+         gosub poll.keys
+
+      case op = 'clear'
+         w{'entries'} = ''
+         w{'earlier'} = 0
+         w{'top'} = 1
+         w{'prog'} = ''
+         w{'ver'} = w{'ver'} + 1
+   end case
+
+   return
+
+* The size and the state, taken from w every time: ow oh the size, prog the progress line, bh the rows for entries, isopen, top
+geom:
+   ow = w{'w'} + 0
+   if ow < 24 then ow = 24
+   oh = w{'h'} + 0
+   if oh < 3 then oh = 3
+   isopen = w{'open'} + 0
+geom.rows:
+   prog = w{'prog'}
+   bh = oh - 1
+   if prog # '' then bh -= 1
+   top = w{'top'} + 0
+   if top < 1 then top = 1
+   return
+
+* Make the text of a new entry safe to keep and to draw.  txt in, txt out.
+scrub:
+   txt = change(txt, char(13), '')
+   tp = index(txt, char(9), 1)
+   loop while tp > 0 do
+      txt = txt[1, tp - 1] : space(8 - mod(tp - 1, 8)) : txt[tp + 1, 999999]
+      tp = index(txt, char(9), 1)
+   repeat
+   txt = convert(@fm : @vm : @sm : @tm, '^]|[', txt)
+   return
+
+* key = kind, a field mark, the text (the text may hold anything, so it is cut off by position and not read as a field)
+add.entry:
+   kind = field(key, @fm, 1)
+   txt = key[len(kind) + 2, 999999]
+   if kind # 'ok' and kind # 'refuse' and kind # 'info' then kind = 'out'
+   gosub scrub
+   if txt = '' then txt = ' '
+   ents = w{'entries'}
+   if ents = '' then
+      ents = kind : @sm : txt
+   end else
+      ents = kind : @sm : txt : @vm : ents
+   end
+   n = dcount(ents, @vm)
+   loop while n > OUT.CAP do
+      del ents<1, n>
+      n -= 1
+      w{'earlier'} = w{'earlier'} + 1
+   repeat
+   w{'entries'} = ents
+   w{'ver'} = w{'ver'} + 1
+   w{'top'} = 1
+   return
+
+* key = text, a field mark, n, a field mark, total.  Drawn at once.
+set.progress:
+   had = (w{'prog'} # '')
+   if key = '' then
+      w{'prog'} = ''
+      gosub geom.rows
+      gosub paint
+      return
+   end
+   txt = field(key, @fm, 1)
+   gosub scrub
+   txt = change(txt, char(10), ' ')
+   pn = field(key, @fm, 2) + 0
+   pt = field(key, @fm, 3) + 0
+   pv = pn
+   if pt > 0 then pv = int(pn * 100 / pt)
+   if pv < 0 then pv = 0
+   if pv > 100 then pv = 100
+   w{'prog'} = txt : @sm : pv
+   gosub geom.rows
+   if had then gosub paint.prog else gosub paint
+   return
+
+* Only the keys that are already waiting are read; Esc is the answer, anything else is thrown away and counted
+poll.keys:
+   ret = 0
+   if system(25) then return
+   cnt = 0
+   loop while keyready() and cnt < 50 do
+      call $sl_key(1, pk)
+      cnt += 1
+      if pk = '' then exit
+      if pk = 'esc' then
+         ret = 1
+      end else
+         w{'dropped'} = w{'dropped'} + 1
+      end
+   repeat
+   return
+
+* The wheel scrolls three rows; any press is taken (the form has already given the pane the focus)
+click:
+   ret = 'unhandled'
+   if not(isopen) then return
+   ret = 'handled'
+   if key<1> = 'wheel' then
+      gosub get.rows
+      if key<2> = 'up' then top -= 3 else top += 3
+      gosub clamp.top
+      gosub paint
+   end
+   return
+
+handle.key:
+   if not(isopen) then
+      ret = 'unhandled' : @fm : key
+      return
+   end
+   gosub get.rows
+   step = bh - 1
+   if step < 1 then step = 1
+   ret = 'handled'
+   begin case
+      case key = 'up'
+         top -= 1
+      case key = 'down'
+         top += 1
+      case key = 'pgup'
+         top -= step
+      case key = 'pgdn'
+         top += step
+      case key = 'home'
+         top = 1
+      case key = 'end'
+         top = nrows
+      case 1
+         ret = 'unhandled' : @fm : key
+         return
+   end case
+   gosub clamp.top
+   gosub paint
+   return
+
+* top brought into 1 to the last position that still fills the rows; the new top is kept in w
+clamp.top:
+   maxtop = nrows - bh + 1
+   if maxtop < 1 then maxtop = 1
+   if top > maxtop then top = maxtop
+   if top < 1 then top = 1
+   w{'top'} = top
+   return
+
+* rows = the wrapped rows, one to a field: a letter for the kind (o r i t), then the text with its three-letter lead.  nrows = how many.
+get.rows:
+   ww = ow - 4                                    ;* the scroll bar's column and the lead's three
+   ck = ww : '/' : w{'ver'}
+   if w{'ckey'} = ck then
+      rows = w{'rowcache'}
+   end else
+      gosub build.rows
+      w{'rowcache'} = rows
+      w{'ckey'} = ck
+   end
+   nrows = dcount(rows, @fm)
+   if rows = '' then nrows = 0
+   return
+
+build.rows:
+   rows = ''
+   ents = w{'entries'}
+   n = dcount(ents, @vm)
+   if ents = '' then n = 0
+   lead.ok = (sysmsg(12189) : '  ')[1, 2] : ' '
+   lead.bad = (sysmsg(12190) : '  ')[1, 2] : ' '
+   for bi = 1 to n
+      kind = ents<1, bi, 1>
+      txt = ents<1, bi, 2>
+      kl = 't'
+      lead1 = '   '
+      if kind = 'ok' then
+         kl = 'o'
+         lead1 = lead.ok
+      end
+      if kind = 'refuse' then
+         kl = 'r'
+         lead1 = lead.bad
+      end
+      if kind = 'info' then kl = 'i'
+      nln = dcount(txt, char(10))
+      for li = 1 to nln
+         call $tk_wrap(field(txt, char(10), li), ww, pcs)
+         if pcs = '' then pcs = ' '
+         np = dcount(pcs, @fm)
+         for pj = 1 to np
+            lead = '   '
+            if li = 1 and pj = 1 then lead = lead1
+            rows<-1> = kl : lead : trimb(pcs<pj>)
+         next pj
+      next li
+   next bi
+   if w{'earlier'} + 0 > 0 then rows<-1> = 'i' : '   ' : sysmsg(12188, w{'earlier'} + 0)
+   return
+
+paint:
+   if system(25) then return
+   if not(isopen) then return
+   gosub get.rows
+   gosub clamp.top
+   call $sl_attr('window', nl)
+   call $sl_attr('highlight', hl)
+   call $sl_attr('bold', bd)
+   call $sl_attr('header', hd)
+   focused = w{'focused'} + 0
+   * the title row; Esc cancels is told while a progress line is on
+   hint = ''
+   if prog # '' then hint = sysmsg(12187) : ' '
+   line = (' ' : sysmsg(12184) : space(ow))[1, ow - len(hint)] : hint
+   code = hd
+   if focused then code = hl
+   call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 0, line, code)
+   * the rows
+   bar = (nrows > bh)
+   sbc = ''
+   if bar then call $sl_scrollbar(bh, top, nrows, bh, sbc)
+   for r = 0 to bh - 1
+      i = top + r
+      code = nl
+      line = ''
+      if i > nrows then
+         if nrows = 0 and r = 0 then line = ' ' : sysmsg(12186)
+      end else
+         rw = rows<i>
+         line = rw[2, 999999]
+         if rw[1, 1] = 'r' then code = bd
+      end
+      line = (line : space(ow))[1, ow - 1]
+      cc = ' '
+      if bar then cc = sbc[r + 1, 1]
+      line := cc
+      code = str(code, ow - 1) : nl
+      call $sl_put(scr, w{'ax'} + 0, w{'ay'} + 1 + r, line, code)
+   next r
+   if prog # '' then gosub paint.prog
+   return
+
+* The progress line: its text on the left, the bar of $sl_progress on the right, on the last row
+paint.prog:
+   if system(25) then return
+   if not(isopen) then return
+   if prog = '' then return
+   call $sl_attr('window', nl)
+   pc = ow - 24
+   if pc < 0 then pc = 0
+   py = w{'ay'} + oh - 1
+   if pc > 0 then
+      line = (' ' : prog<1, 1, 1> : space(ow))[1, pc]
+      call $sl_put(scr, w{'ax'} + 0, py, line, nl)
+   end
+   pw = ''
+   pw{'ax'} = w{'ax'} + pc
+   pw{'ay'} = py
+   pw{'w'} = ow - pc
+   pw{'value'} = prog<1, 1, 2>
+   call $sl_progress('init', pw, scr, '', pr)
+   call $sl_progress('draw', pw, scr, '', pr)
+   return
+end
+
+* END-CODE

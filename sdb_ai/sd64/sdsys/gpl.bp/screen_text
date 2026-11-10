@@ -6,6 +6,8 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 28 Oct 26 dm  S.88 phase 2 (S1): a control character in the string is shown (reverse, one cell), never sent: $sl_put does it.
+* 3 Nov 26 dm  S.113: the context is taken with $sl_scr 'draw' (a page of the toolkit draws by difference; any other program as before).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -16,7 +18,8 @@
 *
 *   call !screen_text(string, x, y, attr, width, ret, status)
 *
-*     string   one line; a mark character shows as a dot
+*     string   one line; a mark character shows as a dot, and a control character (an escape sequence in a record, a lock id or
+*              a file name) as the letter 64 above it in reverse, ESC as [, one cell each, never as the control itself ($sl_put)
 *     x y      the cell of its first character, from 0.  Left out, the text goes where the library's
 *              cursor is (after the last SCREEN TEXT, or where SCREEN CURSOR AT put it)
 *     attr     a style: normal, reverse, underline, bold, window, highlight ... (see $sl_theme); default
@@ -39,7 +42,7 @@ $include sl.h
    ret = ''
    status = 1
    if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
-   call $sl_scr('get', scr)
+   call $sl_scr('draw', scr)                  ;* S.113: on a page of the toolkit only the cells the terminal does not show already are written
 
    if x = '' then x = scr<SL.S.CUR, 1>
    if y = '' then y = scr<SL.S.CUR, 2>

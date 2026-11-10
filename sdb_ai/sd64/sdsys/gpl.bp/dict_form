@@ -1,0 +1,597 @@
+* DICT_FORM
+* A dictionary item as a full-screen form: a label and an entry for each field its type has (S.90).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+* START-HISTORY:
+* 3 Nov 26 dm   S.123: the AI line's hint and the "no Type" refusal are messages 15006 and 15007 (Linux's second block).
+* 3 Nov 26 dm   S.97, THE FORM'S AI LINE (the owner's D4a of 20 Oct: "a one line ai entry field at the bottom of each form"; 1 Nov: build dictionary items from a prompt): when the AI is
+*               usable for the account ($tk_ai 'usable') the form has an AI> row at its foot, reached by F6, Tab or a click; Return in it asks $tk_ai, which shows everything that
+*               will be sent first (Cancel the default).  The model is offered the form's fields (actx<14>) and may propose values; they are shown in full with Accept and Reject
+*               (Reject the default), and only what passes this form's own rules (!dict_item) goes into the rows.  NOTHING IS SAVED: Accept of the form and the IDE's own save do that.
+*               The item's values go in the request, so the caller says where the item is (the new argument org, actx<13>), and the AI's wall refuses an item of SD's own files.
+* 1 Nov 26 dm   A Type typed over an existing item's blanked the form: type.left read the Type into cv, then collect (which reads every row into cv) ran before vals{'type'} = cv, so the
+*               new type was the last row's value and the form was made again with no type.  The typed Type is kept in tl.ty across the collect (sandbox-dictform.py DF5a).
+* 31 Oct 26 dm  THE LAYOUT THE OWNER SPECIFIED (his message of 31 Oct, after seeing the first build): Type is an ENTRY, typed, and the rows of that type appear when it has been entered
+*               (a new item shows only Type until then); no row numbers; the labels Field #, Conversion Cd, Column Heading and ONE row Len & Just (30 L, 12 R 2) in place of
+*               Width, Justification and Decimals; the buttons are Accept and Cancel and nothing else (Edit as text is gone: Cancel leaves the item as text in its tab).  The first
+*               build had a radio row for the Type, numbered rows, three format rows and a third button.
+* 31 Oct 26 dm  New (S.90, plan .claude/plan-s90-dict-form.md).  The rules are !dict_item's; this program is the screen.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 go from the rows to the AI line and back (the box keys of every page); Tab still moves from row to row.
+* 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*   call $dict_form(rec, title, newrec, res, org)
+*     rec     the dictionary record as it is ('' for a new item)
+*     title   what the form's border says (the file and the item)
+*     org     where the item is, for the AI's wall (3 Nov 26): record VM file VM id VM 1, as $tk_ai's actx<13> wants it.  A caller that gives none has an AI line that sends nothing
+*             (the wall refuses a text whose origin cannot be told)
+*     newrec  the record the form built, when res is save; the reason in words when res is cannot; else rec
+*     res     save    Accept was pressed and every field passed: newrec is the record
+*             cancel  Esc or Cancel (after the question when something was changed): nothing is returned
+*             cannot  the form cannot show the item (a type it does not know, a format that is not a width, L R T or C and decimals, text with
+*                     characters it cannot hold): newrec says why in words and the caller shows the item as text
+*   A FULL-SCREEN FORM, 140 by 43 (the window is at least that: the IDE refuses a smaller one).  The first row is the Type, an entry: D, E, I, L, PH or X is typed and checked as the
+*   focus leaves it, and the rows of that type appear (a new item shows nothing else until then; an existing item shows its rows with its values in them, to be edited).  Typing
+*   another type makes the form again with the rows of that type and keeps what was typed for the rows the two types share.  Each other row is a label and an entry; a phrase or a text is
+*   a text area; the format is ONE row, Len & Just, read as a width, a letter and optional decimals.  A value is checked as the focus leaves it, with the reason on the line near the foot, and
+*   once more when Accept is pressed, which names the row and puts the focus there; nothing is returned while a row is refused.  The rules are those of !dict_item.
+*   This program WRITES NOTHING: it opens no file and runs no command.  The caller (the IDE) puts the record in the tab and saves it with its own save.
+*   THE AI LINE (3 Nov 26), only when the AI is usable for the account: the last row of the form, AI>.  Return in it asks the AI ($tk_ai 'ask': the preview of everything sent, Cancel
+*   the default); the request carries what the form is, the item's values as they are on the screen and the form's fields (actx<14>); the model may propose values, which are shown in
+*   full (Reject the default); Accept puts into the rows each value that passes !dict_item's own check, and says which did not.  The form then waits as before: Accept of the form and
+*   the IDE's save are still the person's.  Follow up (on the answer's box) keeps the exchange for the next request typed here.
+* END-DESCRIPTION
+* START-CODE
+
+$internal
+subroutine dict_form(rec, title, newrec, res, org)
+$catalog $dict_form
+
+$include sl.h
+$include tk.h
+
+   * the AI line (3 Nov 26): only when the AI is usable for the account (the gate, a provider, a model and a key)
+   call $tk_ai('usable', '', ai.on, ai.pm)
+   ai.keep = ''                            ;* the request typed in the line, kept across a form made again
+   fm.note = ''                            ;* what the AI line has to say on the err row of the next form made
+   fm.lastrow = ''                         ;* S.176: the row that had the focus before F6 took it to the AI line
+   hn = ''                                 ;* the row with the focus (F6 may come before the first focus event)
+
+   * the foot's keys: the form's own, as the IDE and the pages name theirs (the row is made by $tk_fkeys from this table)
+   fm.keys = ''
+   call $tk_keys('add', fm.keys, 'enter', 'accept', 'accept', '', 1)
+   call $tk_keys('add', fm.keys, 'esc', 'cancel', 'cancel', '', 1)
+   call $tk_keys('add', fm.keys, 'tab', 'next row', 'next', '', 1)
+   call $tk_keys('add', fm.keys, 'shift-tab', 'previous row', 'previous', '', 1)
+   if ai.on then call $tk_keys('add', fm.keys, 'f6', 'box', 'nextpane', '', 1)    ;* S.176: the rows and the AI line, F6 / Shift-F6 as on every page
+
+   res = 'cancel'
+   newrec = rec
+   if rec = '' then
+      call !dict_item('parse', 'D', vals, '', pd)
+      vals{'type'} = ''                    ;* a new item has no type until one is typed
+      vals{'width'} = '10'
+      vals{'just'} = 'L'
+      vals{'sm'} = 'S'
+      is.new = 1
+   end else
+      call !dict_item('parse', rec, vals, '', pd)
+      is.new = 0
+      if pd # '' then
+         res = 'cannot'
+         begin case
+            case pd = 'type'
+               newrec = 'its type is not D, E, I, L, PH or X'
+            case pd = 'format'
+               newrec = 'its format is not a width, L, R, T or C, and decimals'
+            case 1
+               newrec = 'its text has characters the form cannot hold'
+         end case
+         return
+      end
+   end
+   fmt.err = ''
+   focus.first = 0
+   focus.ai = 0
+
+   loop
+      gosub make.form
+      gosub run.form
+   until act # 'type' and act # 'ai' repeat
+   return
+
+* ======================================================================
+* In: vals (the values).  Out: the form f, shown by the first screen wait
+make.form:
+   ty = vals{'type'}
+   if ty = '' then
+      rows = 'type' : @vm : 'Type' : @vm : 'type' : @vm : '' : @vm : '' : @vm : 0
+   end else
+      call !dict_item('layout', ty, rows, '', xd)
+      gosub fold.format
+   end
+   nrows = dcount(rows, @fm)
+   * the body of the screen as the IDE lays it out (row 0 the bar, the form from row 1, then the status line, the border and the keys on the last three rows), so the form sits in
+   * the same frame as the IDE and the pages and covers none of it: the window is never under 140 by 43 (the IDE refuses a smaller one)
+   call $sl_window(win.w, win.h)
+   fm.w = win.w
+   if fm.w < 140 then fm.w = 140
+   fm.h = win.h
+   if fm.h < 43 then fm.h = 43
+   ystat = fm.h - 3
+   fh = ystat - 1
+   y.hint = fh - 9
+   y.err = fh - 7
+   y.btn = fh - 4
+   y.ai = fh - 2
+   screen form title title : (if is.new then '  (new item)' else '') at 0,1 size fm.w,fh returning f
+   screen label f, 'ttl', 'Type D, E, I, L, PH or X and press Tab: the rows of that type appear.  Tab and Down: next row.  Return: Accept.  Esc: leave.' at 2,1 width fm.w - 6
+   y = 3
+   for rp = 1 to nrows
+      key = rows<rp, 1>
+      screen label f, 'l.' : key, ' ' at 2,y width 22
+      screen set f, 'l.' : key text rows<rp, 2> : ':'          ;* SET TEXT, not the label's own text: SCREEN LABEL takes the first & of its text for a hot key and drops it, and Len & Just has one
+      begin case
+         case key = 'type'
+            screen entry f, 'type' at 26,y width 6 value vals{'type'} maxlen 2
+         case rows<rp, 3> = 'memo'
+            screen memo f, key, convert(char(10), @fm, vals{key}) at 26,y size 106,14
+            y += 13
+         case key = 'fmt'
+            call !dict_item('fmtshow', vals, fx, '', xd)
+            screen entry f, 'fmt' at 26,y width 14 value fx maxlen 12
+         case 1
+            gosub entry.size
+            screen entry f, key at 26,y width ew value vals{key} maxlen em
+      end case
+      y += 2
+   next rp
+   screen label f, 'hint', ' ' at 2,y.hint width fm.w - 6
+   screen label f, 'err', ' ' at 2,y.err width fm.w - 6
+   screen button f, 'accept', '&Accept' at 26,y.btn default
+   screen button f, 'cancel', '&Cancel' at 40,y.btn cancel
+   if ai.on then
+      * 3 Nov 26 (S.97): the AI line, the form's last row; Return in it asks the AI (on.button sees where the focus was), F6 puts the focus there
+      screen label f, 'ailab', sysmsg(12641) at 2,y.ai width 22
+      screen entry f, 'ai' at 26,y.ai width fm.w - 32 value ai.keep maxlen 300
+   end
+   if focus.first then
+      if nrows >= 2 then screen focus f, rows<2, 1> else null
+      focus.first = 0
+   end
+   if focus.ai then
+      screen focus f, 'ai' else null
+      focus.ai = 0
+   end
+   if fm.note # '' then
+      screen set f, 'err' text fm.note[1, fm.w - 6]
+      fm.note = ''
+   end
+   gosub draw.foot
+   return
+
+* The bar on row 0 (the form's name and the app's, as the pages' bar names the app at its right end) and the status line, the border and the row of keys on the last three rows: the
+* frame of the IDE and the pages.  Written once for each form that is made; the cursor is put back where the focus left it (SCREEN TEXT leaves it after the text)
+draw.foot:
+   keep.cur = ''
+   call $sl_curat('get', keep.cur)
+   bar.r = 'dict.form'
+   bar.t = ' Dictionary item ' : title : (if is.new then '  (new item)' else '')
+   bar.t = fmt(bar.t[1, fm.w - len(bar.r) - 2], (fm.w - len(bar.r) - 1) : 'L') : bar.r : ' '
+   screen text bar.t at 0,0 attr 'bar'
+   st.t = '[Form]  ' : title : '   The rows are checked as you leave them.  Accept writes nothing itself: the IDE saves.'
+   screen text fmt(st.t[1, fm.w], fm.w : 'L') at 0,ystat attr 'reverse'
+   call $sl_line('h', 0, fk.hc)
+   screen text str(fk.hc, fm.w) at 0,ystat + 1
+   fk.ctx = ''
+   fk.ctx<TK.C.W> = fm.w
+   call $tk_fkeys(fk.ctx, fm.keys, '', fk.text)
+   screen text fk.text at 0,ystat + 2 attr 'bar'
+   call $sl_curat('back', keep.cur)
+   return
+
+* The engine's Width, Justification and Decimals rows are ONE row on the form, Len & Just (key fmt)
+fold.format:
+   nr2 = ''
+   for rp = 1 to dcount(rows, @fm)
+      k = rows<rp, 1>
+      begin case
+         case k = 'width'
+            nr2<-1> = 'fmt' : @vm : 'Len & Just' : @vm : 'fmt' : @vm : '' : @vm : '' : @vm : 1
+         case k = 'just' or k = 'dec'
+            null
+         case 1
+            nr2<-1> = rows<rp>
+      end case
+   next rp
+   rows = nr2
+   return
+
+* In: key.  Out: ew (the width of its entry), em (the longest text it takes)
+entry.size:
+   ew = 100
+   em = 300
+   begin case
+      case key = 'loc'
+         ew = 8 ; em = 5
+      case key = 'sm'
+         ew = 4 ; em = 1
+      case key = 'conv'
+         ew = 40 ; em = 40
+      case key = 'head'
+         ew = 44 ; em = 40
+      case key = 'assoc'
+         ew = 34 ; em = 30
+      case key = 'file'
+         ew = 40 ; em = 63
+   end case
+   return
+
+* ======================================================================
+* The form is on the screen between waits.  Out: act ('type': make the form again, 'done'), and res, newrec
+run.form:
+   act = ''
+   loop
+      screen wait f returning ev then
+         begin case
+            case ev<1> = 'focus'
+               gosub on.focus
+            case ev<1> = 'button'
+               gosub on.button
+            case ev<1> = 'key' and (ev<3> = 'f6' or ev<3> = 'shift-f6') and ai.on
+               * S.176: F6 / Shift-F6 are the box keys of every page: the form's rows are one box and the AI line the other (a move the program makes is no
+               *   focus event, so hn is set here); Tab still goes from row to row
+               if hn = 'ai' then
+                  if fm.lastrow = '' then fm.lastrow = 'type'
+                  screen focus f, fm.lastrow else null
+                  hn = fm.lastrow
+               end else
+                  screen focus f, 'ai' else null
+                  hn = 'ai'
+               end
+               hint = ''
+               gosub hint.for
+               screen set f, 'hint' text hint
+         end case
+      end else
+         if ev<1> = 'cancel' then gosub ask.discard
+         if act = '' then
+            if ev<1> # 'cancel' then
+               res = 'cancel'
+               act = 'done'
+            end
+         end
+      end
+      if act # '' then exit
+   repeat
+   screen hide f
+   return
+
+* The values of the rows on the form, into vals (the Type is vals{'type'} already).  Len & Just is split into width, justification and decimals; what is wrong with it is in fmt.err
+collect:
+   fmt.err = ''
+   for rp = 1 to nrows
+      key = rows<rp, 1>
+      if key # 'type' then
+         screen get f, key returning cv
+         if rows<rp, 3> = 'memo' then cv = convert(@fm, char(10), cv)
+         if key = 'fmt' then
+            call !dict_item('fmtsplit', cv, fw, '', fe)
+            if fe = '' then
+               vals{'width'} = fw{'width'}
+               vals{'just'} = fw{'just'}
+               vals{'dec'} = fw{'dec'}
+            end else
+               fmt.err = fe
+            end
+         end else
+            vals{key} = cv
+         end
+      end
+   next rp
+   return
+
+* Esc or Cancel: nothing to ask when nothing was changed (or no Type was ever entered), else Discard or Keep editing.  Sets act and res when the form ends
+ask.discard:
+   if ty = '' then
+      res = 'cancel'
+      act = 'done'
+      return
+   end
+   gosub collect
+   call !dict_item('build', vals, rec, nr, be)
+   if be = '' and nr = rec then
+      res = 'cancel'
+      act = 'done'
+      return
+   end
+   screen msgbox 'Leave without saving the changes?' title 'Dictionary item' buttons '&Discard,&Keep editing' default 2 returning bq else bq = 1
+   if bq = 1 then
+      res = 'cancel'
+      act = 'done'
+   end
+   return
+
+* The focus moved: the row it left is checked and the hint of the row it went to is shown.  In: ev (the widget it went to, then the one it left)
+on.focus:
+   lfk = ev<3>
+   hn = ev<2>
+   if hn # 'ai' then fm.lastrow = hn                 ;* S.176: the row F6 comes back to from the AI line
+   if lfk = 'type' then
+      gosub type.left
+   end else
+      gosub row.left
+   end
+   if act = '' then
+      hint = ''
+      gosub hint.for
+      screen set f, 'hint' text hint
+   end
+   return
+
+* The Type entry was left (or Accept was pressed with a Type typed): a good type that is not the one on the form makes the form again with that type's rows, the focus on the first of them
+type.left:
+   screen get f, 'type' returning cv
+   call !dict_item('check', 'D', 'type', cv, ce)
+   if ce = '' then
+      screen set f, 'type' value cv
+      screen set f, 'err' text ' '
+      if cv # ty then
+         tl.ty = cv                         ;* collect reads every row into cv, so the Type typed is kept apart
+         gosub collect
+         vals{'type'} = tl.ty
+         focus.first = 1
+         act = 'type'
+      end
+   end else
+      screen set f, 'err' text '! Type: ' : ce
+      screen focus f, 'type' else null
+   end
+   return
+
+* A row other than the Type was left: it is checked, and a good value is put back in its normal form
+row.left:
+   for rp = 1 to nrows
+      if rows<rp, 1> = lfk and rows<rp, 3> # 'memo' then
+         screen get f, lfk returning cv
+         if lfk = 'fmt' then
+            call !dict_item('fmtsplit', cv, fw, '', ce)
+            if ce = '' then
+               call !dict_item('fmtshow', fw, fx, '', xd)
+               screen set f, 'fmt' value fx
+            end
+         end else
+            call !dict_item('check', ty, lfk, cv, ce)
+            if ce = '' then screen set f, lfk value cv
+         end
+         if ce = '' then
+            screen set f, 'err' text ' '
+         end else
+            screen set f, 'err' text '! ' : rows<rp, 2> : ': ' : ce
+         end
+         exit
+      end
+   next rp
+   return
+
+* In: hn (a row key).  Out: hint
+hint.for:
+   begin case
+      case hn = 'type'
+         hint = 'D a data field, E an element of a collection, I a computed value, L a link to another file, PH a phrase, X text.  Type one and press Tab.'
+      case hn = 'loc'
+         hint = 'A whole number from 0 to 9999: the field of the record this item shows.  0 is the record id.'
+      case hn = 'path'
+         hint = 'The element of a collection record: names and array positions separated by /'
+      case hn = 'expr'
+         hint = 'One expression in SD BASIC, for example AMT * 2 or UPCASE(NAME)'
+      case hn = 'idexpr'
+         hint = 'An expression that gives the id of the record in the other file.  One expression, no semicolon.'
+      case hn = 'file'
+         hint = 'The file whose dictionary the linked names are looked up in'
+      case hn = 'fexpr'
+         hint = 'Optional: an expression that gives the name of the file actually read'
+      case hn = 'conv'
+         hint = 'Optional: a conversion for display, for example D2 for a date or MD2 for two decimals'
+      case hn = 'head'
+         hint = 'Optional: the column heading, up to 40 characters.  A backslash prints none.'
+      case hn = 'fmt'
+         hint = 'The width of the column, then L left, R right, T text that wraps or C centered, then decimals if any: 30 L or 12 R 2'
+      case hn = 'sm'
+         hint = 'S for one value in the field, M for many values (multivalued)'
+      case hn = 'assoc'
+         hint = 'Optional, used only when Single/Multi is M: a name shared by multivalued items whose values line up'
+      case hn = 'user'
+         hint = 'Optional: free for your application.  SD does not read it.'
+      case hn = 'text'
+         hint = 'The text, one line to a field.  A phrase is one line.'
+      case hn = 'ai'
+         hint = sysmsg(15006)                          ;* 3 Nov 26 (S.123): the form's AI hint, a message
+   end case
+   return
+
+* A button: Accept builds the record from the rows; a row that fails is named in the err line and takes the focus; nothing ends the form while one fails
+on.button:
+   bt = ev<2>
+   if bt = 'accept' and ai.on then
+      * 3 Nov 26: Return while the AI line has the focus presses the form's default button; it is the AI's request, not the form's Accept (a click on Accept moves the focus to it first)
+      fq.i = f{'focus'} + 0
+      if fq.i > 0 then
+         fq.w = f{'widgets', fq.i}
+         if fq.w{'id'} = 'ai' then
+            gosub ask.ai
+            return
+         end
+      end
+   end
+   if bt = 'accept' then
+      gosub type.left
+      if act # '' then return
+      if ty = '' then
+         screen set f, 'err' text '! Type: D, E, I, L, PH or X'
+         screen focus f, 'type' else null
+         return
+      end
+      gosub collect
+      if fmt.err # '' then
+         screen set f, 'err' text '! Len & Just: ' : fmt.err
+         screen focus f, 'fmt' else null
+         return
+      end
+      call !dict_item('build', vals, rec, nr, be)
+      if be = '' then
+         newrec = nr
+         res = 'save'
+         act = 'done'
+      end else
+         fk = be<1>
+         if fk = 'width' or fk = 'just' or fk = 'dec' then fk = 'fmt'
+         screen set f, 'err' text '! ' : be<2>
+         screen focus f, fk else null
+      end
+   end
+   return
+
+* ======================================================================
+* THE AI LINE (3 Nov 26, S.97).  $tk_ai does the asking (the wall, the preview of everything sent with Cancel the default, the wait, the answer and Accept or Reject); this form says
+* what it is, the item's values as they are on the screen and the fields the model may fill, and puts into its rows only what passes its own rules.  It writes nothing.  The form is
+* made again afterwards (act 'ai'), because the boxes were drawn over it; what was typed in the rows is kept (collect), and the focus goes back to the line.
+ask.ai:
+   screen get f, 'ai' returning ai.req
+   ai.keep = ai.req
+   if trim(ai.req) = '' then return
+   gosub collect
+   ty.now = vals{'type'}
+   page = 'This is the dictionary item form of SD Core for Linux: one item of the dictionary of a file, a row for each field its type has.'
+   page<1, -1> = 'The item: ' : title : (if is.new then ' (a new item, not saved yet)' else '') : '.'
+   if ty.now = '' then
+      page<1, -1> = 'No Type has been entered yet: the form shows only the Type row.'
+   end else
+      page<1, -1> = 'Its Type is ' : ty.now : '.  What its rows hold now:'
+      for rp = 1 to nrows
+         key = rows<rp, 1>
+         if key # 'type' then
+            if key = 'fmt' then
+               call !dict_item('fmtshow', vals, cv, '', xd)
+            end else
+               cv = vals{key}
+            end
+            page<1, -1> = '  ' : key : ' (' : rows<rp, 2> : '): ' : (if cv = '' then '(empty)' else change(cv, char(10), ' / '))
+         end
+      next rp
+   end
+   page<1, -1> = "A value the person accepts is put into the row only if it passes the form's own check; the person then accepts the form and the IDE saves it."
+   flds = 'type: D a data field, E an element of a collection record, I a computed value, L a link to another file, PH a phrase, X text'
+   flds<1, -1> = 'loc: Field # (D), a whole number from 0 to 9999; 0 is the record id'
+   flds<1, -1> = 'path: Element Path (E), names and array positions separated by /'
+   flds<1, -1> = 'expr: Expression (I), one SD BASIC expression'
+   flds<1, -1> = 'idexpr: Id Expression (L), one expression that gives the id of the record in the other file'
+   flds<1, -1> = 'file: File (L), the file whose dictionary the linked names are looked up in'
+   flds<1, -1> = 'fexpr: File Expression (L), optional, an expression that gives the name of the file read'
+   flds<1, -1> = 'conv: Conversion Cd (D E I), optional, for example D2 for a date or MD2 for two decimals'
+   flds<1, -1> = 'head: Column Heading (D E I), optional, up to 40 characters'
+   flds<1, -1> = 'fmt: Len & Just (D E I), the width, then L R T or C, then decimals if any: 30 L or 12 R 2'
+   flds<1, -1> = 'sm: Single/Multi (D E I), S or M'
+   flds<1, -1> = 'assoc: Association (D E I), only when Single/Multi is M, up to 30 letters, digits, dots and dashes'
+   flds<1, -1> = 'user: User, optional, free for the application'
+   flds<1, -1> = 'text: the Phrase (PH, one line) or the Text (X, lines separated by line feeds)'
+   ai.org = org
+   if ai.org = '' then ai.org = 'unknown'                  ;* the item's values are in the request: with no origin the wall refuses (fail shut)
+   actx = 'dict.form' : @fm : 'form' : @fm : page : @fm : '' : @fm : 0 : @fm : ai.req : @fm : ystat
+   actx<11> = 'nocmd'                                      ;* the form has nowhere to run a command: one from the model is ignored
+   actx<13> = ai.org
+   actx<14> = flds
+   ai.ctx = ''
+   ai.ctx<TK.C.W> = fm.w
+   ai.res = ''
+   call $tk_ai('ask', ai.ctx, actx, ai.res)
+   fm.note = ai.res<5>
+   begin case
+      case ai.res<1> = 'fields'
+         gosub apply.fields
+         ai.keep = ''
+      case ai.res<1> = 'follow'
+         ai.keep = ''                                      ;* the line is empty for the follow-up question
+   end case
+   focus.ai = 1
+   act = 'ai'
+   return
+
+* The values the person accepted (ai.res<2> the keys, ai.res<3> the values, as values) go into vals, each only if it passes !dict_item: the Type first (a good Type that differs
+* makes the form of that type, as typing it does), then every other key that is a row of the item's type.  What is left out, and why, is said on the err row.
+apply.fields:
+   ak = ai.res<2>
+   av = ai.res<3>
+   an = dcount(ak, @vm)
+   a.bad = ''
+   a.ok = 0
+   ty.new = vals{'type'}
+   for i = 1 to an
+      if ak<1, i> = 'type' then
+         cv = trim(av<1, i>)
+         call !dict_item('check', 'D', 'type', cv, ce)
+         if ce = '' then
+            ty.new = cv
+            a.ok += 1
+         end else
+            a.bad<-1> = 'Type: ' : ce
+         end
+      end
+   next i
+   if ty.new = '' then
+      if an > a.ok then a.bad<-1> = sysmsg(15007)
+   end else
+      call !dict_item('layout', ty.new, lr, '', xd)
+      for i = 1 to an
+         key = ak<1, i>
+         cv = av<1, i>
+         lp = -1                                           ;* the Type was taken above
+         if key # 'type' then gosub apply.one
+      next i
+   end
+   vals{'type'} = ty.new
+   fm.note = 'The AI filled ' : a.ok : ' row' : (if a.ok = 1 then '' else 's') : '; check them, then Accept: nothing is saved until the IDE saves.'
+   if a.bad # '' then fm.note := '  Not filled: ' : change(a.bad, @fm, '; ')
+   return
+
+* One key and its value (key, cv) against the rows of the type (lr): into vals when it passes, else a reason in a.bad
+apply.one:
+   lp = 0
+   for rp = 1 to dcount(lr, @fm)
+      if lr<rp, 1> = key or (key = 'fmt' and lr<rp, 1> = 'width') then
+         lp = rp
+         exit
+      end
+   next rp
+   begin case
+      case lp = 0 or key = 'width' or key = 'just' or key = 'dec'
+         a.bad<-1> = key : ' is not a row of a ' : ty.new : ' item'
+      case key = 'fmt'
+         call !dict_item('fmtsplit', cv, fw, '', ce)
+         if ce = '' then
+            vals{'width'} = fw{'width'}
+            vals{'just'} = fw{'just'}
+            vals{'dec'} = fw{'dec'}
+            a.ok += 1
+         end else
+            a.bad<-1> = 'Len & Just: ' : ce
+         end
+      case lr<lp, 3> = 'memo'
+         vals{key} = cv                                    ;* a text area: its lines are kept; Accept of the form checks it with the rest
+         a.ok += 1
+      case index(cv, char(10), 1)
+         a.bad<-1> = lr<lp, 2> : ': one line only'
+      case 1
+         call !dict_item('check', ty.new, key, cv, ce)
+         if ce = '' then
+            vals{key} = cv
+            a.ok += 1
+         end else
+            a.bad<-1> = lr<lp, 2> : ': ' : ce
+         end
+   end case
+   return
+end
+
+* END-CODE

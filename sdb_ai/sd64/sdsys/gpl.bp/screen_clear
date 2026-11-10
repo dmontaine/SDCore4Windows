@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
+* 3 Nov 26 dm  S.113: the context is taken with $sl_scr 'draw'; on a page of the toolkit a cleared rectangle goes to the shadow only, until the next flush.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -24,6 +25,10 @@
 *
 *   The shadow is made to match.  The cursor is left where it was, except in the whole-screen form.
 *
+*   On a screen $tk_open took (S.113), a rectangle is cleared in the shadow only: a page that clears its body and draws it again for a
+*   cursor key then writes only the cells that changed, and the cells that nothing was drawn over are written blank before the program
+*   next waits for a key ($sl_scr 'flush').
+*
 * END-DESCRIPTION
 *
 * START-CODE
@@ -37,7 +42,7 @@ $include sl.h
    ret = ''
    status = 1
    if system(25) then return                  ;* a phantom has no terminal: nothing is drawn
-   call $sl_scr('get', scr)
+   call $sl_scr('draw', scr)                  ;* S.113: on a page of the toolkit a cleared rectangle is not written now; what is drawn over it is compared with the terminal
 
    if x = '' and y = '' and w = '' and h = '' then
       call $sl_desktop(scr)
@@ -48,6 +53,7 @@ $include sl.h
       if h = '' then h = scr<SL.S.H> - y
       if attr = '' then attr = 'desktop'
       call $sl_attr(attr, code)
+      if scr<SL.S.DIFF> = 1 then scr<SL.S.DIFF> = 2                ;* the shadow only: the program's own wait ($sl_scr 'flush') writes what nothing has covered since
       for r = 0 to h - 1
          call $sl_put(scr, x + 0, y + r, space(w), code)
       next r

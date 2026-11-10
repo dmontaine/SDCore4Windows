@@ -4,8 +4,16 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - level with Linux e3490a7f (S.88 L2, S.179, S.186).
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-1; the owner: "go tool.keys").
+* 28 Oct 26 dm  S.88 L2: the seven boxes are panes of the layout service ($tk_layout), three columns side by side: at 140 by 43 exactly the boxes the page has always drawn, in a bigger
+*               window every column is wider, Last keys, Styles and Help are taller (Last keys holds as many keys as it has rows), and a resize is $tk_layout 'refresh' and all of it
+*               drawn again from the new rectangles (it cleared nothing before: the old boxes stayed where they were).
+* 8 Nov 26 dm  S.179: Ctrl-T is the routine every page uses ($tk_std: kept for the person); Ctrl-K the keys of the page.  Clear stays Ctrl-L (it clears and
+*               draws the page again, as Ctrl-L does on every page): a key tester takes no function key for itself, or that key could not be tested.
+* 29 Oct 26 dm  S.88 3.7a: Ctrl-T takes the library's list of themes ($sl_theme 'next': blue classic dark light mono, the ones this terminal can show) in place of its own mono classic blue.
+* 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -26,8 +34,9 @@
 *     Styles      the library's sixteen styles, each drawn in itself, to see what the theme in force looks like on this terminal
 *     Box         the border characters the library draws with
 *
-*   Every key is shown BEFORE the program acts on it.  The keys the program uses are Ctrl-L (clear what has been seen), Ctrl-R (names or raw bytes),
-*   Ctrl-T (the next theme: mono, classic, blue) and Ctrl-Q (leave); a key that ends the program can only be tested by leaving.
+*   Every key is shown BEFORE the program acts on it.  The keys the program uses are Ctrl-L (clear what has been seen, and draw the page again), Ctrl-R (names or raw
+*   bytes), Ctrl-T (the next theme, kept for the person, as on every page), Ctrl-K (the keys of the page) and Ctrl-Q (leave); a key that ends the program can only be
+*   tested by leaving.
 *
 *   A key that makes the terminal beep and shows nothing in names mode is one the terminal type does not give a name: press Ctrl-R and press it again to
 *   see its bytes.  An Alt-letter shows as alt-x on a terminal that sends Alt+x as Esc and x.  Make the window smaller to see the cursor lock, and larger
@@ -55,12 +64,13 @@ $include tk.h
    end
 
    keys = ''
-   call $tk_keys('add', keys, 'ctrl-l', 'clear', 'clear', '', 1)
+   call $tk_keys('add', keys, 'ctrl-l', 'clear', 'clear', '', 1)          ;* S.179: Ctrl-L, which clears and redraws here; a key tester takes no function key for itself
    call $tk_keys('add', keys, 'ctrl-r', 'raw/names', 'raw', '', 1)
    call $tk_keys('add', keys, 'ctrl-t', 'theme', 'theme', '', 1)
+   call $tk_keys('add', keys, 'ctrl-k', 'keys', 'keys', '', 1)            ;* S.179: the keys of this page, as on every page
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
 
-   LOGN = 25                                            ;* lines in Last keys
+   LOGN = 25                                            ;* lines in Last keys (the pane's height less 2: set by get.rects)
    GRIDROWS = 13                                        ;* rows in a column of the grid (names are not case sensitive: no other variable may be called gridrows)
    gnames = 'up' : @fm : 'down' : @fm : 'left' : @fm : 'right' : @fm : 'home' : @fm : 'end' : @fm : 'pgup' : @fm : 'pgdn' : @fm : 'ins' : @fm : 'del'
    gnames := @fm : 'bs' : @fm : 'tab' : @fm : 'btab' : @fm : 'enter' : @fm : 'esc'
@@ -72,7 +82,6 @@ $include tk.h
    next i
    gnames := @fm : 'alt-x' : @fm : 'char' : @fm : 'mouse'
    gn = dcount(gnames, @fm)
-   themes = 'mono' : @fm : 'classic' : @fm : 'blue'
    snames = 'normal' : @fm : 'reverse' : @fm : 'underline' : @fm : 'both' : @fm : 'bold' : @fm : 'window' : @fm : 'highlight' : @fm : 'bar'
    snames := @fm : 'barsel' : @fm : 'hotkey' : @fm : 'hotkey.bar' : @fm : 'field' : @fm : 'disabled' : @fm : 'desktop' : @fm : 'text' : @fm : 'header'
 
@@ -91,6 +100,8 @@ $include tk.h
    lastsz = @crtwide : ',' : @crthigh
    gen = 0
 
+   perr = ''
+   gosub declare.layout
    gosub draw.all
 
    loop
@@ -103,6 +114,8 @@ $include tk.h
       if ended then exit
       if nm = 'guardquit' then exit                      ;* the cursor lock's own way out
       if nm = 'resize' then
+         call $tk_layout('refresh', ctx, '', chg)         ;* the frame, the body and the seven panes from the window as it is now
+         gosub get.rects
          gosub redraw.all                                ;* the screen was repainted under the frame (a resize, or the lock lifted)
       end else
          if nm # '' or detail # '' then
@@ -125,18 +138,12 @@ $include tk.h
                   msg = (if rawmode then 'raw bytes: what the terminal sent' else 'names: what the screen library reports')
                   gosub draw.dynamic
                case act = 'theme'
-                  call $sl_theme('name', '', '', '', '', thn)
-                  locate thn in themes<1> setting tk then
-                     null
-                  end else
-                     tk = 0
-                  end
-                  tk = tk + 1
-                  if tk > dcount(themes, @fm) then tk = 1
-                  screen theme themes<tk> returning thn else
-                     msg = 'this terminal cannot show color: no theme but mono'
-                  end
+                  * 8 Nov 26 (S.179): the routine every page uses - the library's one list and order, only the themes this terminal can show, and the choice kept for the person
+                  call $tk_std('theme', ctx, keys, '', std.r)
+                  msg = std.r<2>
                   gosub redraw.all
+               case act = 'keys'
+                  call $tk_std('keylist', ctx, keys, pane, std.r)          ;* S.179: the keys of this page, as on every page
             end case
          end
       end
@@ -208,6 +215,7 @@ read.raw:
       if n = 12 then nm = 'ctrl-l'
       if n = 18 then nm = 'ctrl-r'
       if n = 20 then nm = 'ctrl-t'
+      if n = 11 then nm = 'ctrl-k'
    end
    return
 
@@ -247,15 +255,58 @@ redraw.all:
    gosub draw.all
    return
 
+* The layout (S.88 L2).  The seven boxes are panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): three columns in one band, Terminal
+* over Last keys, Keys seen over Styles, Mouse over Box drawing over Help.  A bigger window gives each column a third of the extra columns, and the extra rows to Last keys, Styles and Help.
+* Out: t.x t.y t.w t.h (Terminal), k.* (Last keys), s.* (Keys seen), st.* (Styles), mo.* (Mouse), bx.* (Box drawing), hp.* (Help), each with .tw, the text width (the box less 4), and LOGN.
+declare.layout:
+   d = ''
+   d<1> = 'terminal' : @vm : 1 : @vm : 1 : @vm : 12 : @vm : 45 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<2> = 'lastkeys' : @vm : 1 : @vm : 1 : @vm : 27 : @vm : 45 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<3> = 'seen' : @vm : 1 : @vm : 2 : @vm : 17 : @vm : 46 : @vm : 1 : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<4> = 'styles' : @vm : 1 : @vm : 2 : @vm : 22 : @vm : 46 : @vm : 1 : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<5> = 'mouse' : @vm : 1 : @vm : 3 : @vm : 10 : @vm : 45 : @vm : 1 : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<6> = 'boxes' : @vm : 1 : @vm : 3 : @vm : 14 : @vm : 45 : @vm : 1 : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<7> = 'help' : @vm : 1 : @vm : 3 : @vm : 15 : @vm : 45 : @vm : 1 : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'terminal', rc)
+   t.x = rc<1, 1> ; t.y = rc<1, 2> ; t.w = rc<1, 3> ; t.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'lastkeys', rc)
+   k.x = rc<1, 1> ; k.y = rc<1, 2> ; k.w = rc<1, 3> ; k.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'seen', rc)
+   s.x = rc<1, 1> ; s.y = rc<1, 2> ; s.w = rc<1, 3> ; s.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'styles', rc)
+   st.x = rc<1, 1> ; st.y = rc<1, 2> ; st.w = rc<1, 3> ; st.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'mouse', rc)
+   mo.x = rc<1, 1> ; mo.y = rc<1, 2> ; mo.w = rc<1, 3> ; mo.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'boxes', rc)
+   bx.x = rc<1, 1> ; bx.y = rc<1, 2> ; bx.w = rc<1, 3> ; bx.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'help', rc)
+   hp.x = rc<1, 1> ; hp.y = rc<1, 2> ; hp.w = rc<1, 3> ; hp.h = rc<1, 4>
+   t.tw = t.w - 4
+   k.tw = k.w - 4
+   st.tw = st.w - 4
+   mo.tw = mo.w - 4
+   hp.tw = hp.w - 4
+   LOGN = k.h - 2                                       ;* a key to a row of Last keys; the list is cut to it when the window gets smaller
+   loop while dcount(logl, @fm) > LOGN do
+      del logl<LOGN + 1>
+   repeat
+   return
+
 draw.all:
    lastsz = @crtwide : ',' : @crthigh
-   screen box at 1,1 size 45,12 title 'Terminal'
-   screen box at 1,13 size 45,27 title 'Last keys'
-   screen box at 47,1 size 46,17 title 'Keys seen'
-   screen box at 94,1 size 45,10 title 'Mouse'
-   screen box at 94,11 size 45,14 title 'Box drawing'
-   screen box at 94,25 size 45,15 title 'Help'
-   screen box at 47,18 size 46,22 title 'Styles'
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   screen box at t.x,t.y size t.w,t.h title 'Terminal'
+   screen box at k.x,k.y size k.w,k.h title 'Last keys'
+   screen box at s.x,s.y size s.w,s.h title 'Keys seen'
+   screen box at mo.x,mo.y size mo.w,mo.h title 'Mouse'
+   screen box at bx.x,bx.y size bx.w,bx.h title 'Box drawing'
+   screen box at hp.x,hp.y size hp.w,hp.h title 'Help'
+   screen box at st.x,st.y size st.w,st.h title 'Styles'
    gosub draw.static
    gosub draw.dynamic
    return
@@ -264,26 +315,26 @@ draw.all:
 draw.static:
    for i = 1 to dcount(snames, @fm)
       sn = snames<i>
-      screen text fmt(sn, '12L') : ' sample text 0123456789' at 49,18 + i attr sn width 42
+      screen text fmt(sn, '12L') : ' sample text 0123456789' at st.x + 2,st.y + i attr sn width st.tw
    next i
-   screen text 'A style is drawn in itself.' at 49,36
-   screen text 'The theme changes with Ctrl-T.' at 49,37
-   screen box at 96,13 size 20,6
-   screen box at 118,13 size 19,10 title 'x'
-   screen box at 98,19 size 14,4
-   screen text (if ctx<TK.C.UTF8> then 'The borders are line characters.' else 'The borders are + - | (not UTF-8).') at 96,23
+   screen text 'A style is drawn in itself.' at st.x + 2,st.y + 18
+   screen text 'The theme changes with Ctrl-T.' at st.x + 2,st.y + 19
+   screen box at bx.x + 2,bx.y + 2 size 20,6
+   screen box at bx.x + 24,bx.y + 2 size 19,10 title 'x'
+   screen box at bx.x + 4,bx.y + 8 size 14,4
+   screen text (if ctx<TK.C.UTF8> then 'The borders are line characters.' else 'The borders are + - | (not UTF-8).') at bx.x + 2,bx.y + 12
    helps = 'Press any key: its name is added to Last keys' : @fm : 'and ticked in Keys seen.' : @fm : ''
    helps := @fm : 'A key that beeps and shows nothing is not named'
    helps := @fm : 'by the terminal type: Ctrl-R, then press it again'
    helps := @fm : 'to see the bytes the terminal sent.'
    helps := @fm : ''
-   helps := @fm : 'Ctrl-L clears, Ctrl-R names or bytes,'
-   helps := @fm : 'Ctrl-T theme, Ctrl-Q leaves.'
+   helps := @fm : 'Ctrl-L clears, Ctrl-R names or bytes, Ctrl-T'
+   helps := @fm : 'theme, Ctrl-K keys, Ctrl-Q leaves.'
    helps := @fm : ''
    helps := @fm : 'Make the window smaller to see the cursor'
    helps := @fm : 'lock, larger again to leave it.'
    for i = 1 to dcount(helps, @fm)
-      screen text helps<i> at 96,25 + i width 41
+      screen text helps<i> at hp.x + 2,hp.y + i width hp.tw
    next i
    return
 
@@ -310,19 +361,19 @@ draw.info:
    il<-1> = 'Window      ' : @crtwide : ' x ' : @crthigh : '  (layout ' : ctx<TK.C.W> : ' x ' : ctx<TK.C.H> : ')'
    il<-1> = 'Locale      ' : (if loc = '' then '(none set)' else loc)
    il<-1> = 'Borders     ' : (if ctx<TK.C.UTF8> then 'line characters (UTF-8)' else '+ - | (not UTF-8)')
-   il<-1> = 'Color      ' : colour
+   il<-1> = 'Color       ' : colour
    il<-1> = 'Theme       ' : thn
    il<-1> = 'Mouse       ' : (mp + mr + md + mu + mdn) : ' events'
    il<-1> = 'Reading     ' : (if rawmode then 'raw bytes (KEYIN)' else 'names ($sl_key)')
    il<-1> = 'Keys seen   ' : nseen : ' of ' : gn : ', ' : nkeys : ' pressed'
    for i = 1 to dcount(il, @fm)
-      screen text il<i> at 3,1 + i width 41
+      screen text il<i> at t.x + 2,t.y + i width t.tw
    next i
    return
 
 draw.log:
    for i = 1 to LOGN
-      screen text logl<i> at 3,13 + i width 41
+      screen text logl<i> at k.x + 2,k.y + i width k.tw
    next i
    return
 
@@ -330,15 +381,15 @@ draw.log:
 draw.cell:
    gx = int((gk - 1) / GRIDROWS)
    gy = mod(gk - 1, GRIDROWS)
-   screen text (if seenf<gk> then '[x] ' else '[ ] ') : gnames<gk> at 49 + gx * 11,2 + gy width 10 attr (if seenf<gk> then 'bold' else 'normal')
+   screen text (if seenf<gk> then '[x] ' else '[ ] ') : gnames<gk> at s.x + 2 + gx * 11,s.y + 1 + gy width 10 attr (if seenf<gk> then 'bold' else 'normal')
    return
 
 draw.mouse:
-   screen text 'Last   ' : mlast at 96,2 width 41
-   screen text 'Press ' : mp : '  release ' : mr at 96,4 width 41
-   screen text 'Drag  ' : md : '  wheel up ' : mu : '  down ' : mdn at 96,5 width 41
-   screen text 'Click, drag and turn the wheel in this window.' at 96,7 width 41
-   screen text 'In raw mode the reports show as Esc [ < ...' at 96,8 width 41
+   screen text 'Last   ' : mlast at mo.x + 2,mo.y + 1 width mo.tw
+   screen text 'Press ' : mp : '  release ' : mr at mo.x + 2,mo.y + 3 width mo.tw
+   screen text 'Drag  ' : md : '  wheel up ' : mu : '  down ' : mdn at mo.x + 2,mo.y + 4 width mo.tw
+   screen text 'Click, drag and turn the wheel in this window.' at mo.x + 2,mo.y + 6 width mo.tw
+   screen text 'In raw mode the reports show as Esc [ < ...' at mo.x + 2,mo.y + 7 width mo.tw
    return
 
 end

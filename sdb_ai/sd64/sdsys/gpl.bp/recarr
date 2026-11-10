@@ -1,0 +1,277 @@
+* RECARR
+* A record as a nested array, and back (the one-editor plan, stage 1, 26 Oct 2026): the way a multivalue record is shown and edited by CED in its data mode (ced_edit,
+* ftype 2), so that nobody types a value or a subvalue mark.  And, the same day, the TOKEN FORM: a record as text in which the marks are written as @vm, @sm and @tm.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 26 Oct 26 dm  New.
+* 26 Oct 26 dm  'totext' and 'fromtext': the token form (owner: "just change them to @VM @SVM @TM for editing and then back again when saved ... Don:@VM:Henry:@VM:June";
+*               he chose @sm, lower case).  The IDE shows a record that holds marks this way.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $recarr(op, a, b, ok)
+*
+*     op = 'to'    a = a record (fields separated by field marks, values by value marks, subvalues by subvalue marks)
+*                  b = out: an array of the fields.  ok = 1.
+*     op = 'from'  a = such an array
+*                  b = out: the record.  ok = 1, or 0 when the array holds something that is not a record's shape (see below); b is then null.
+*
+*   THE CANONICAL FORM, which is what makes the round trip exact:
+*     - a field is a STRING unless it holds a value mark or a subvalue mark, when it is an array of its values;
+*     - a value is a STRING unless it holds a subvalue mark, when it is an array of its subvalues;
+*     - a subvalue is always a string.
+*   So the record 'a]b\c' (] a value mark, \ a subvalue mark) is the array ['a'], then ['b' and 'c' as an array]: field 1 is an array of two values, value 2 of which is an
+*   array of two subvalues.  A record with no fields (the null string) is the empty array; the array of one empty string is the same record, the null string.
+*
+*   Elements are numbered from 1 with no gaps (an array of a collection is), so field n of the record is element n.  A text with other marks in it (the text mark, the item
+*   mark) is just text.  'from' puts the marks back from the shape alone, so an edit that adds a value, removes a subvalue or changes a text comes out as that edit; what the
+*   editor can make is limited by the data mode of CED (a string or an array, an array nowhere below the third level).  An array deeper than a record can be, or a number,
+*   a boolean, a null or a collection where a string or an array should be, is refused (ok = 0): nothing is guessed.
+*
+*     op = 'totext'    a = a record; b = out: the TOKEN FORM of it.  ok = 1, or 0 when the record cannot be shown so (see below); b is then the NUMBER of the first field that cannot.
+*     op = 'fromtext'  a = text in the token form (a record's own text is fine too); b = out: the record.  ok = 1 always: any text can be read.
+*
+*   THE TOKEN FORM.  The fields stay the lines of the text (field marks).  Inside a line each value mark is written @vm, each subvalue mark @sm and each text mark @tm, and the
+*   pieces of the line are joined by a colon, as in BASIC: the field  Don]Henry]June  is  Don:@vm:Henry:@vm:June ; a mark at the start or the end has no text beside it
+*   (@vm:Henry  and  Don:@vm), and two marks together are  a:@vm:@vm:b .  A text that is empty is left out; a text may hold colons ("10:30" is  10:30:@vm:x ).  Reading accepts
+*   upper case (@VM) and writes lower case.  A token is a word @vm, @sm or @tm that is at the start of the line or after a colon AND at the end of the line or before a colon;
+*   "x@vm" is text.  A colon that follows a token is its separator and is not part of the text that comes next.
+*   'totext' checks its own work: the text it makes is read back and must be the record, field by field.  A field that holds the TEXT of a token - for example a field that is
+*   just @vm - would be read back as a mark, so the record is REFUSED (ok = 0, b = the field's number) and nothing is guessed: whoever called shows the record as it is.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine recarr(op, a, b, ok)
+$catalog $recarr
+
+   ok = 1
+   begin case
+      case op = 'to'
+         gosub to.array
+      case op = 'from'
+         gosub from.array
+      case op = 'totext'
+         gosub to.text
+      case op = 'fromtext'
+         gosub from.text
+      case 1
+         b = ''
+         ok = 0
+   end case
+   return
+
+* ----------------------------------------------------------------------
+* The record in a as the array b
+
+to.array:
+   b = jparse('[]')
+   n.f = dcount(a, @fm)
+   for f.i = 1 to n.f
+      f.t = a<f.i>
+      if index(f.t, @vm, 1) or index(f.t, @sm, 1) then
+         b{f.i} = mat()
+         f.a = b{f.i}
+         n.v = dcount(f.t, @vm)
+         for v.i = 1 to n.v
+            v.t = f.t<1, v.i>
+            if index(v.t, @sm, 1) then
+               f.a{v.i} = mat()
+               v.a = f.a{v.i}
+               n.s = dcount(v.t, @sm)
+               for s.i = 1 to n.s
+                  v.a{s.i} = v.t<1, 1, s.i>
+               next s.i
+            end else
+               f.a{v.i} = v.t
+            end
+         next v.i
+      end else
+         b{f.i} = f.t
+      end
+   next f.i
+   return
+
+* ----------------------------------------------------------------------
+* The array in a as the record b.  The text is put together with the marks by hand, not by assigning to <f, v, s>, so that an empty value or a trailing mark is kept.
+
+from.array:
+   b = ''
+   if jtype(a) # 'array' then
+      ok = 0
+      return
+   end
+   n.f = inmat(a)
+   for f.i = 1 to n.f
+      if f.i > 1 then b := @fm
+      f.e = a{f.i}
+      f.k = jtype(f.e)
+      begin case
+         case f.k = 'string'
+            b := f.e
+         case f.k = 'array'
+            n.v = inmat(f.e)
+            for v.i = 1 to n.v
+               if v.i > 1 then b := @vm
+               v.e = f.e{v.i}
+               v.k = jtype(v.e)
+               begin case
+                  case v.k = 'string'
+                     b := v.e
+                  case v.k = 'array'
+                     n.s = inmat(v.e)
+                     for s.i = 1 to n.s
+                        if s.i > 1 then b := @sm
+                        s.e = v.e{s.i}
+                        if jtype(s.e) = 'string' then b := s.e else ok = 0
+                     next s.i
+                  case 1
+                     ok = 0
+               end case
+            next v.i
+         case 1
+            ok = 0
+      end case
+   next f.i
+   if not(ok) then b = ''
+   return
+
+* ----------------------------------------------------------------------
+* The record in a as text in the token form b.  Each field is made into a line and read back at once (field.from.text): a line that does not give the field again is refused.
+
+to.text:
+   t.all = ''
+   n.f = dcount(a, @fm)
+   for f.i = 1 to n.f
+      f.t = a<f.i>
+      gosub field.to.text
+      ln = t.line
+      gosub field.from.text
+      if r.line # f.t then
+         b = f.i
+         ok = 0
+         return
+      end
+      if f.i > 1 then t.all := @fm
+      t.all := t.line
+   next f.i
+   b = t.all
+   return
+
+* In: f.t, a field.  Out: t.line, the field in the token form.  The text pieces and the tokens are joined by a colon; an empty text is left out.
+field.to.text:
+   t.line = ''
+   rest = f.t
+   need.sep = @false
+   loop
+      p1 = index(rest, @vm, 1)
+      p2 = index(rest, @sm, 1)
+      p3 = index(rest, @tm, 1)
+      pos = 0
+      tok = ''
+      if p1 then
+         pos = p1
+         tok = '@vm'
+      end
+      if p2 and (pos = 0 or p2 < pos) then
+         pos = p2
+         tok = '@sm'
+      end
+      if p3 and (pos = 0 or p3 < pos) then
+         pos = p3
+         tok = '@tm'
+      end
+   while pos do
+      seg = rest[1, pos - 1]
+      rest = rest[pos + 1, len(rest)]
+      if seg # '' then
+         if need.sep then t.line := ':'
+         t.line := seg
+         need.sep = @true
+      end
+      if need.sep then t.line := ':'
+      t.line := tok
+      need.sep = @true
+   repeat
+   if rest # '' then
+      if need.sep then t.line := ':'
+      t.line := rest
+   end
+   return
+
+* ----------------------------------------------------------------------
+* The text in a, in the token form, as the record b
+
+from.text:
+   b = ''
+   n.f = dcount(a, @fm)
+   for f.i = 1 to n.f
+      ln = a<f.i>
+      gosub field.from.text
+      if f.i > 1 then b := @fm
+      b := r.line
+   next f.i
+   return
+
+* In: ln, one line.  Out: r.line, the field.  A token is @vm, @sm or @tm (any case) that starts the line or follows a colon, and ends the line or is followed by a colon.  The
+* text before a token loses the colon that joined it to the token; the colon after a token is its separator, and the text goes on after it.
+field.from.text:
+   r.line = ''
+   n.l = len(ln)
+   if index(ln, '@', 1) = 0 then
+      r.line = ln
+      return
+   end
+   lc = downcase(ln)
+   p = 1
+   done = @false
+   loop
+      found = @false
+      scan = p
+      loop
+         k = index(lc[scan, n.l], '@', 1)
+      while k do
+         q = scan + k - 1
+         nm = lc[q, 3]
+         if nm = '@vm' or nm = '@sm' or nm = '@tm' then
+            pre.ok = (q = p)
+            if not(pre.ok) then pre.ok = (lc[q - 1, 1] = ':')
+            post.ok = (q + 3 > n.l)
+            if not(post.ok) then post.ok = (lc[q + 3, 1] = ':')
+            if pre.ok and post.ok then
+               found = @true
+               exit
+            end
+         end
+         scan = q + 1
+      repeat
+      if found then
+         if q > p then r.line := ln[p, q - p - 1]
+         begin case
+            case nm = '@vm'
+               r.line := @vm
+            case nm = '@sm'
+               r.line := @sm
+            case 1
+               r.line := @tm
+         end case
+         p = q + 3
+         if p <= n.l then
+            if lc[p, 1] = ':' then p += 1
+         end
+      end else
+         r.line := ln[p, n.l]
+         done = @true
+      end
+   until done
+   repeat
+   return
+
+end
+
+* END-CODE

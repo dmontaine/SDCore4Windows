@@ -1,0 +1,48 @@
+* TK_STARTOF
+* The full-screen toolkit, shared base: does an account start at the home screen?  The state of the home gate (S.166).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 7 Nov 26 dm   New (S.166; the owner: "make home vs TCL a gate that can be selected on the gates pane on means home display off means tcl.  What the installer chooses during the
+*               install should be set as the default for all the affected accounts").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_startof(word, st)
+*     word  the account's register field ACC$START as it is stored: menu, terminal, or blank
+*     st    returned: 1 when a session of the account starts at the home screen (the gate is ON), 0 when it starts at the command prompt
+*   menu is 1 and terminal is 0.  Blank follows the system's default, the file start.default in the SDSYS directory that the installer writes from its question (Start new
+*   sessions at the home screen or at the command prompt?) and set.start.default changes: terminal there is 0, anything else or no file is 1.  The same rule !home_entry
+*   applies at sign-on.  It only reads.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_startof(word, st)
+$catalog $tk_startof
+
+   st = 1
+   w = downcase(trim(word))
+   if w = 'terminal' then
+      st = 0
+      return
+   end
+   if w = 'menu' then return
+
+   openseq @sdsys : @ds : 'start.default' readonly to df then      ;* READONLY: without it an absent file is created by the open
+      readseq line from df then
+         if downcase(trim(line)) = 'terminal' then st = 0
+      end
+      close df
+   end else
+      if not(unassigned(df)) then close df                         ;* an absent file keeps a lock on the name until the variable is closed (!home_entry, 26 Oct 26)
+   end
+
+   return
+end
+
+* END-CODE

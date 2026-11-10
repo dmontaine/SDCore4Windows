@@ -4,6 +4,12 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 7 Nov 26 dm   S.168 (the owner: "sdsys should start at the prompt always"): the administrator returns before the start setting is read, so it always starts at
+*               the prompt; S.167's exemption inside the sign-out block (the same administrator, a window too small) is folded into it.
+* 7 Nov 26 dm   S.167 (the owner: "Exempt sdsys"): the administrator is left at the prompt when the home screen could not open, not signed out.
+* 7 Nov 26 dm   S.164 (the owner: "where the default is to open an account in home, the user should not be able to get to the TCL prompt by just having a window
+*               that is too small"; asked whether to sign out even when the Terminal tile is on: "Yes, always sign out"): when the home screen could not OPEN
+*               (hrefused, set by tool_home: a window too small, or no screen), the session is signed out with message 15015 whatever the tiles say.
 * 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 22 Oct 26 dm  New (S.75, H2; the owner: "terminal or menu determined by admin for each account (another gate) - default menu").
 * END-HISTORY
@@ -38,7 +44,7 @@ $catalog !home_entry
 $include keys.h
 $include int$keys.h
 
-   common /tkhome/ hflag, hlogto
+   common /tkhome/ hflag, hlogto, hstart, hrefused
 
    if @tty[1, 5] # '/dev/' then return
    if kernel(K$IS.SDAPISRVR, 0) then return
@@ -46,6 +52,9 @@ $include int$keys.h
    if why = 'logto' then
       if kernel(K$CPROC.LEVEL, 0) > 1 then return
    end
+* S.168 (the owner, 7 Nov 26: "sdsys should start at the prompt always"): the administrator never starts at the home screen, at sign-on or after a LOGTO, whatever
+*   the system's default; HOME typed at the prompt still opens it.  This also covers S.167's case (a window too small): there is no screen to refuse.
+   if kernel(K$ADMINISTRATOR, -1) then return
 
    start = ''
    openpath @sdsys : @ds : 'accounts' to acc.f then
@@ -73,7 +82,17 @@ $include int$keys.h
    close vf
    if vrec = '' then return
 
+   hrefused = 0
+   hstart = 1                                  ;* 3 Nov 26: this screen is the session's own (the account starts in the menu), not one typed at the prompt: Ctrl-Q signs out
    execute 'home'
+
+* S.164: a screen that could not OPEN (a window too small, no screen) is never the way to the prompt for an account that starts in the menu, whatever its tiles:
+*   the person is signed out, and says so.  Only the opening counts: what ends a screen that did open is decided below, by the Terminal tile, as before.
+   if hrefused then
+      display sysmsg(15015)                    ;* This account starts at the home screen, which could not open, so the session is signed out
+      sleep 2
+      execute 'quit'
+   end
 
 * An account whose Terminal tile the administrator has turned off is not given the prompt that the screen was the way out of: whatever ended the screen (a window too
 *   small, an error, the cursor lock), the person is signed out.  The prompt is the account's own choice only when it STARTS there (START-TERMINAL), and then we are not here.

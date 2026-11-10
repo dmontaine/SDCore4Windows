@@ -1,0 +1,1 @@
+%1 %2 was not saved whole: writing it failed (error %3), and the file may be partly written.  The text is still in the editor.

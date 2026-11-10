@@ -1,0 +1,319 @@
+* IDE_NAME
+* The IDE's one form that names a record: the file and the record id, for a new record, for the first save of an untitled buffer, for Save as and for Write a copy.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 9 Nov 26 dm  S.184 stage 3 (SED's file and record history, sed:624-632): in Open's form Up and Down bring back the files (in the file entry) and the records (in the record
+*              entry) opened in the IDE this session, newest first, from the named common /idehist/ that the IDE keeps; Down past the newest gives back what was typed.
+*              An entry with nothing kept, and every other mode, move between the entries on Up and Down as before.
+* 30 Oct 26 dm  S.88 stage E2: every mode takes path:/full/name now. 'open' is as before; New, 'save', 'saveas' and 'copy' name an operating system file to MAKE, and the form asks the
+*               account's OS gate and edit gates for it (K$PATH.OK, K$EDIT.OS.OK) and stays open on a refusal; whether the name is free is the create's to say (!ide_osfile 'create').
+* 28 Oct 26 dm  S.88 stage E: Open takes path:/full/name in the file entry (or path: there and the full name in the record entry) and returns file 'path:' and the name as it was typed;
+*               the spelling is checked by !ide_osfile 'check' and the form stays open on a bad one; every other mode refuses a path: name (12732).  Nothing else is asked here.
+* 28 Oct 26 dm  New (S.88 Phase 4, plan 4.2).  The IDE asked for a record id alone and took the file from the tree's current node, which on a bare start is the account
+*               directory; it wrote an empty record at once.  Now the file is on the form, and a refusal stays on it.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $ide_name(mode, file, id, res)
+*
+*     mode   'new' (New record), 'save' (the first save of an untitled buffer), 'saveas' or 'copy' (Save as, Write a copy): only the title of the box differs.
+*            'open' (Open a record, Ctrl-O): the other way round - the record must EXIST, and the account's edit gate is not asked (reading needs none)
+*     file   in: the file the form starts with; out: the file typed, when res is 'ok' - or 'path:' when an operating system file was named (every mode since 30 Oct 26), in which
+*            case ID is its full name as typed, not folded to lower case, and no record or file was looked at (for a mode that makes one, only the account's gates were asked)
+*     id     in: the record id the form starts with (null for a new one); out: the id typed, when res is 'ok'
+*     res    'ok' or 'cancel' (Esc, or an input that ended, or a session with no terminal)
+*
+*   The form holds two entries and a message area.  Return asks the questions the IDE has always asked before it writes, in this order, and the first
+*   that fails is SAID IN THE FORM, which stays open for the person to correct it: the id is not empty, the file opens, the account may change that file
+*   (the kernel's K$EDIT.OK, the gate of the account: bp.edit, dict.edit, voc.edit, shared.write; the reason is !edit_msg's) and no record of that id is there.
+*   Nothing is written here.  Tab, Down, Up and Shift-Tab move between the entries; the focus starts on the record id, the file is already filled in.
+*   In 'open' (9 Nov 26), Up and Down in an entry bring back the files or the records opened in the IDE this session (the named common /idehist/, newest first), and move
+*   between the entries only when there is nothing to bring back; Tab and Shift-Tab always move.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine ide_name(mode, file, id, res)
+$catalog $ide_name
+
+$include syscom keys.h
+$include int$keys.h
+$include sl.h
+
+   deffun edit_msg(kind) calling '!edit_msg'
+
+   common /idehist/ ih.on, ih.files, ih.recs, ih.cmds        ;* 9 Nov 26 (S.184 stage 3): the IDE's files and records of this session (gpl.bp/ide, hist.push); read only here
+
+   res = 'cancel'
+   if system(25) then return                  ;* a phantom has no terminal
+
+   call $sl_scr('get', scr)
+   sw = scr<SL.S.W> + 0
+   sh = scr<SL.S.H> + 0
+   bw = 66
+   if bw > sw - 4 then bw = sw - 4
+   bh = 11                                    ;* border, blank, two entries, a blank, four message rows, the hint, border
+   if bw < 40 or sh < bh then return
+
+   begin case
+      case mode = 'save'
+         title = sysmsg(12970)
+      case mode = 'saveas'
+         title = sysmsg(12971)
+      case mode = 'copy'
+         title = sysmsg(12972)
+      case mode = 'open'
+         title = sysmsg(12687)
+      case 1
+         title = sysmsg(12969)
+   end case
+
+   bx = int((sw - bw) / 2)
+   by = int((sh - bh) / 2)
+   labw = 26                                  ;* "Name of the new record:" and a blank
+   fw = bw - labw - 3
+   msgw = bw - 4
+   msg = ''
+   nrows = 4                                  ;* the rows reserved for what the form says: the box does not change size
+
+   call $sl_region('save', scr, bx, by, bw, bh, under)
+   call $sl_attr('window', nc)
+   call $sl_frame(scr, bx, by, bw, bh, title, nc, 1)
+   call $sl_put(scr, bx + 2, by + 2, fmt(sysmsg(12973), labw : 'L'), nc)
+   call $sl_put(scr, bx + 2, by + 3, fmt(sysmsg(12213), labw : 'L'), nc)
+   call $sl_put(scr, bx + 2, by + bh - 2, sysmsg(12974)[1, msgw], nc)
+
+   w1 = collection()                          ;* the file
+   w1{'ax'} = bx + 2 + labw
+   w1{'ay'} = by + 2
+   w1{'w'} = fw
+   w1{'value'} = file
+   call $sl_entry('init', w1, scr, '', r)
+   w2 = collection()                          ;* the record id
+   w2{'ax'} = bx + 2 + labw
+   w2{'ay'} = by + 3
+   w2{'w'} = fw
+   w2{'value'} = id
+   call $sl_entry('init', w2, scr, '', r)
+   call $sl_entry('draw', w1, scr, '', r)
+   focus = 2
+   call $sl_entry('focus', w2, scr, 1, r)
+   h1.at = 0                                  ;* 9 Nov 26 (S.184 stage 3): the place in the history of each entry (0: what was typed, kept in h1.typed / h2.typed)
+   h2.at = 0
+   h1.typed = ''
+   h2.typed = ''
+
+   fin = @false
+   loop
+      call $sl_key('', k)
+      if k = '' or k = 'guardquit' then k = 'esc'      ;* the input ended, or the cursor lock was left
+      r = 'handled'
+      begin case
+         case k = 'mouse'
+            call $sl_mouse('get', mev)                ;* a click is read and dropped: the keys are the form's
+         case k = 'resize'
+            call $sl_resize(scr)
+         case 1
+            if focus = 1 then
+               call $sl_entry('key', w1, scr, k, r)
+            end else
+               call $sl_entry('key', w2, scr, k, r)
+            end
+      end case
+      st = r<1>
+      begin case
+         case st = 'cancel'
+            fin = @true
+         case st = 'unhandled'
+            nk = r<2>
+            begin case
+               case (nk = 'up' or nk = 'down') and mode = 'open'
+                  gosub hist.recall                     ;* 9 Nov 26 (S.184 stage 3)
+               case nk = 'tab' or nk = 'down' or nk = 'btab' or nk = 'up'
+                  gosub swap.focus
+            end case
+         case st = 'done'
+            gosub try.accept
+            if res = 'ok' then fin = @true
+      end case
+   until fin
+   repeat
+
+   call $sl_region('restore', scr, bx, by, bw, bh, under)
+   call $sl_scr('put', scr)
+   return
+
+* The focus goes to the other entry
+swap.focus:
+   if focus = 1 then
+      call $sl_entry('focus', w1, scr, 0, r)
+      focus = 2
+      call $sl_entry('focus', w2, scr, 1, r)
+   end else
+      call $sl_entry('focus', w2, scr, 0, r)
+      focus = 1
+      call $sl_entry('focus', w1, scr, 1, r)
+   end
+   return
+
+* 9 Nov 26 (S.184 stage 3) - Up or Down (nk) in an entry of Open's form: the entry shows the next older (Up) or newer (Down) name the IDE kept, and what was typed when Down
+*   comes back past the newest.  Nothing kept for the entry: the focus moves, as Up and Down always did.  Only the entry's text changes; nothing is opened or read.
+hist.recall:
+   hr.list = ''
+   if ih.on + 0 = 1 then
+      if focus = 1 then hr.list = ih.files else hr.list = ih.recs
+   end
+   hr.n = dcount(hr.list, @fm)
+   if hr.n = 0 then
+      gosub swap.focus
+      return
+   end
+   if focus = 1 then hr.at = h1.at else hr.at = h2.at
+   if hr.at = 0 then                          ;* leaving what was typed: it is kept, to come back to
+      if focus = 1 then h1.typed = w1{'value'} else h2.typed = w2{'value'}
+   end
+   if nk = 'up' then hr.at += 1 else hr.at -= 1
+   if hr.at > hr.n then hr.at = hr.n
+   if hr.at < 0 then hr.at = 0
+   if hr.at = 0 then
+      if focus = 1 then hr.text = h1.typed else hr.text = h2.typed
+   end else
+      hr.text = hr.list<hr.at>
+   end
+   if focus = 1 then
+      h1.at = hr.at
+      w1{'value'} = hr.text
+      call $sl_entry('init', w1, scr, '', r)
+      call $sl_entry('focus', w1, scr, 1, r)
+   end else
+      h2.at = hr.at
+      w2{'value'} = hr.text
+      call $sl_entry('init', w2, scr, '', r)
+      call $sl_entry('focus', w2, scr, 1, r)
+   end
+   return
+
+* Return: the questions, in order.  The first that fails is said in the form and the form stays; all passed: file, id and res are returned
+try.accept:
+   pw = trimf(trimb(w1{'value'}))             ;* (the ends only: TRIM squeezes blanks inside a name) as typed: a path: name is NEVER folded (the fold below is for SD file names), so the name checked is the name opened
+   ff = downcase(pw)                          ;* file names are lower case everywhere SD writes them (the owner's rule), so the IDE's comparisons with its tabs and tree agree
+   ii = trim(w2{'value'})
+   msg = ''
+   begin case
+      case ff = ''
+         msg = sysmsg(12980)
+         if focus = 2 then gosub swap.focus
+      case ff[1, 5] = 'path:'
+         * 28 Oct 26 (S.88 stage E): path:/full/name in the file entry, or path: in it and the full name in the record entry, names an operating system file, for Open only.
+         *   The form checks the spelling (!ide_osfile 'check') and nothing else: whether the account may reach the file, and whether it is there, are asked by the IDE and the
+         *   kernel when it is opened.  The other modes make records, and an operating system file is not one yet.
+         op.path = trimf(trimb(pw[6, 9999]))
+         if op.path = '' then op.path = trimf(trimb(w2{'value'}))
+         * 30 Oct 26 (S.88 stage E2): the other modes name a file to MAKE (New, the first save of an untitled buffer, Save as, Write a copy): the spelling is checked, and the account's OS gate
+         *   (K$PATH.OK) and edit gates (K$EDIT.OS.OK: nothing below the account in a VOC, a dictionary, a program file, the shared account or the private catalogue that the account
+         *   may not change) are asked HERE, so that a refusal is said in the form and the form stays open.  Whether the name is free, and its directory there, is the create's to say.
+         op.why = ''
+         call !ide_osfile('check', op.path, op.f, op.text, op.info, op.why)
+         begin case
+            case op.why # ''
+               msg = sysmsg(12733, op.path)
+            case mode = 'open'
+               file = 'path:'
+               id = op.path
+               res = 'ok'
+            case not(kernel(K$PATH.OK, op.path))
+               msg = sysmsg(12185, @who)
+            case not(kernel(K$EDIT.OS.OK, op.path))
+               * K$EDIT.KIND names the kind by the LAST component only, which for a file to MAKE is the new file's name and answers 0 (and !edit_msg(0) says the VOC's words, which would send the
+               *   administrator to the wrong gate): the kind is asked of each directory above it, from the parent up, and the first that is a guarded place gives the reason
+               ek = kernel(K$EDIT.KIND, op.path)
+               ep = op.path
+               loop
+               while ek = 0 and len(ep) > 1
+                  ex = len(ep)
+                  loop
+                  while ex > 1 and ep[ex, 1] # '/'
+                     ex -= 1
+                  repeat
+                  ep = ep[1, ex - 1]
+                  if ep # '' then ek = kernel(K$EDIT.KIND, ep)
+               repeat
+               if ek = 0 then
+                  msg = sysmsg(12768, op.path, 3035)           ;* no gate to name: the kernel refused (ER_PERM)
+               end else
+                  msg = edit_msg(ek)
+               end
+            case 1
+               file = 'path:'
+               id = op.path
+               res = 'ok'
+         end case
+         if res # 'ok' and focus = 2 then gosub swap.focus
+      case ii = ''
+         msg = sysmsg(12975)
+         if focus = 1 then gosub swap.focus
+      case ff[1, 1] = '$'
+         * 28 Oct 26 (Opus's review): the tree no longer offers $acc and the other $ entries, and a typed one is refused too - a record made in $acc is a file in the account directory (defect 5a by another route)
+         msg = sysmsg(12688, ff)
+         if focus = 2 then gosub swap.focus
+      case mode = 'open'
+         open ff to fv then
+            read x from fv, ii then
+               file = ff
+               id = ii
+               res = 'ok'
+            end else
+               msg = sysmsg(12206, ii, ff)
+            end
+         end else
+            msg = sysmsg(12205, ff)
+            if focus = 2 then gosub swap.focus
+         end
+      case 1
+         open ff to fv then
+            ep = fileinfo(fv, FL$PATH)
+            if kernel(K$EDIT.OK, ep) then
+               read x from fv, ii then
+                  msg = sysmsg(12222, ii, ff)
+               end else
+                  if mode # 'new' and (fileinfo(fv, FL$COLLECTION) + 0) # 0 then
+                     msg = sysmsg(12750, ff)          ;* 29 Oct 26 (stage F): a text is not saved into a collection file under a new name; New record makes a record of it, an empty collection
+                  end else
+                     file = ff
+                     id = ii
+                     res = 'ok'
+                  end
+               end
+            end else
+               msg = edit_msg(kernel(K$EDIT.KIND, ep))
+               if focus = 2 then gosub swap.focus        ;* the file is what is wrong
+            end
+         end else
+            msg = sysmsg(12205, ff)
+            if focus = 2 then gosub swap.focus
+         end
+   end case
+   if res # 'ok' then gosub show.msg
+   return
+
+* The message, wrapped to the box, in the rows reserved for it
+show.msg:
+   call $tk_wrap(msg, msgw, pieces)
+   for j = 1 to nrows
+      call $sl_put(scr, bx + 2, by + 4 + j, fmt(pieces<j>, msgw : 'L'), nc)
+   next j
+   * the cursor goes back to the entry that has the focus
+   if focus = 1 then
+      call $sl_entry('focus', w1, scr, 1, r)
+   end else
+      call $sl_entry('focus', w2, scr, 1, r)
+   end
+   return
+end
+
+* END-CODE

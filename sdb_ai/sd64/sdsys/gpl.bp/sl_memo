@@ -11,6 +11,24 @@
 * 18 Oct 26 dm  passkeys: key names the area leaves to the program.
 * 18 Oct 26 dm  hbar: an optional horizontal scroll bar in the last row of the area ($sl_hscrollbar), clicks on it, and one row less of text.
 * 19 Oct 26 dm  softcur: an optional highlighted character at the cursor while the area has the focus (the IDE).
+* 28 Oct 26 dm  The owner's key decisions of 20 Oct (D31, S.88 Phase 4): ctrl-a selects all (home keeps the start of the row), ctrl-o is no longer a copy alias, f3 finds the next (ctrl-n did; it is New in
+*               the programs that have one), ctrl-d duplicates the line (del joins lines) and ctrl-k cuts the whole line into the clipboard.  A change to a widget user programs also use.
+* 28 Oct 26 dm  stay (S.88 Phase 4, I3): an optional flag; Up on the first row and Down on the last stay in the area instead of moving the focus to the widget before or after.
+* 28 Oct 26 dm  S.88 phase 2 (D3): the undo and redo steps are kept as they are, an entry each in the widget (see snap.push), so a record whose lines hold value, subvalue or text marks comes back from an undo unchanged.
+* 28 Oct 26 dm  tabindent (the owner's approval of 28 Oct: Tab indents in the IDE's editor): an optional width; Tab puts blanks in to the next stop, or indents
+*               the selected lines, and Shift-Tab takes them out, each one undo step.  Opt in: an area without it answers Tab 'unhandled' as before, so the
+*               forms of user programs (SCREEN MEMO) keep Tab for moving between their controls.
+* 2 Nov 26 dm  bpon (S.98 H2: breakpoints in the IDE's editor): an optional mark cell in front of the gutter, the lines in w{'bp'}, ops bptoggle, bpclear and bpfollow, and a click in the
+*               gutter toggles the line's mark; the marks follow the text when a key or a click changes the number of lines (bp.follow).  Opt in: SCREEN MEMO never sets it.
+* 2 Nov 26 dm  S.88 p3.3a: the op 'size' (a new width and height for the area, everything it holds kept), for $sl_widget_move; the rectangle is worked out in one
+*              place (geom), read at every call as before and again by 'size'.
+* 8 Nov 26 dm  S.179: Alt-K cuts the line as Ctrl-K does, for a program that keeps Ctrl-K for itself (the IDE: the keys list on every page).
+* 9 Nov 26 dm  S.184 stage 2 (SED retired into the IDE): SED's editing commands in the area - Alt-Backspace and Alt-D delete a word, Alt-E cuts to the end of the
+*              line, Alt-T swaps two characters, Alt-U / Alt-L / Alt-C the word's case, Alt-Space closes a run of blanks, Alt-A aligns with the line above, Alt-M
+*              swaps the cursor and the selection's other end, Ctrl-Up / Ctrl-Down nudge the view (sed.edit, sed.move).
+* 09 Nov 26 dm S.184 stage 7: for long records, syntax colour keeps a checkpoint every 100 lines instead of running through every line above the top on each paint, and undo
+*              holds 8,000,000 characters (it held 1,000,000: one step above about 500 KB).
+* 09 Nov 26 dm S.184 stage 5: keyboard macros, SED's: Alt-R starts and ends the recording of the keys the area acts on, Alt-P plays them (macro.key).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -29,7 +47,18 @@
 *   when the text wraps; a click on its arrows scrolls 8 columns and on its track a page; set by the program, not by SCREEN MEMO), and
 *   passkeys (key names, as values, that the area leaves alone and answers 'unhandled': the program uses them itself), and
 *   softcur (1: while the area has the focus the character under the cursor is drawn in the highlight style, as well as the terminal's
-*   own cursor being put there; not in a readonly area; set by the program, not by SCREEN MEMO)
+*   own cursor being put there; not in a readonly area; set by the program, not by SCREEN MEMO), and
+*   stay (1: Up on the first row and Down on the last do nothing instead of answering 'unhandled', so the form does not move the focus; set by the program), and
+*   edkeys (1, the IDE's, 29 Oct 26: Ctrl-Home and Ctrl-End go to the start and the end of the text, Ctrl-Left and Ctrl-Right a word back and on, Ctrl-Del deletes the word at the
+*   cursor (or the selection; at the end of a line it joins the next one) as one undo step 'delword'; without it these keys are 'unhandled'; set by the program, not by SCREEN MEMO), and
+*   tabindent (a width, the IDE's 3: Tab and Shift-Tab indent and outdent - below - instead of answering 'unhandled'; not in a readonly area; set by the program,
+*   not by SCREEN MEMO, so a user program's form keeps Tab for moving between its controls), and
+*   bpon (1, the IDE's, 2 Nov 26: a mark cell in front of the gutter, one cell wider; a line in w{'bp'} (line numbers, ascending, field marks between them) shows a * in the hotkey style
+*   there; a click in the gutter toggles the line; w{'bpmax'}, when above 0, is the most marks there can be; the marks move with the text when a key or a click changes the number
+*   of lines; set by the program, not by SCREEN MEMO; needs 12 columns), and the ops
+*     bptoggle  key<1> a line (0: the cursor's); ret is set, cleared, full (bpmax marks already) or none (not a line, or no bpon)
+*     bpclear   takes every mark away
+*     bpfollow  key is the text the marks were made for (lines with field marks between them): they are moved to the text now in w{'value'}; nothing is drawn, scr may be ''
 *
 *     init    w and h from what was given (at least 3 by 1); a linefeed in the text is taken as the end of a
 *             line; the cursor goes to the start; no selection and nothing to undo
@@ -38,26 +67,36 @@
 *             the text does not move when it is needed)
 *     focus   key = 1 gives it the focus (draws, with the cursor in the text), key = 0 takes it away
 *     key     left, right (past the end of a line to the next, and back), up, down (a row at a time: with wrap
-*             a line is several rows), home / ctrl-a and end / ctrl-e (the row's ends), ctrl-p and ctrl-u
+*             a line is several rows), home and end / ctrl-e (the row's ends), ctrl-p and ctrl-u
 *             (a word back and on; ctrl-b and ctrl-f were these until 14 Oct 26, and are SED's find keys now), pgup and pgdn (scroll a page less one row and the cursor keeps its row on
-*             the screen) move; a printable character, Return (splits the line), bs, del / ctrl-d (join lines
-*             at the ends) and ctrl-k (cuts to the end of the line) edit.
+*             the screen) move; a printable character, Return (splits the line), bs, del (joins lines at the ends),
+*             ctrl-d (duplicates the line) and ctrl-k (cuts the whole line into the clipboard) edit.
 *
-*             The selection runs from the mark to the cursor.  ctrl-g sets the mark where the cursor is (and
-*             takes it away again); ctrl-x cuts the selection, ctrl-c or ctrl-o copies it, ctrl-v puts what was
+*             The selection runs from the mark to the cursor.  ctrl-a selects all; ctrl-g sets the mark where the cursor is (and
+*             takes it away again); ctrl-x cuts the selection, ctrl-c copies it, ctrl-v puts what was
 *             cut or copied in at the cursor (the clipboard is the library's, so it passes from one text area
 *             to another); typing, Return, bs and del on a selection replace or delete it.  ctrl-z undoes and
 *             ctrl-y does again (a run of typed characters, or of bs or del, is one step; there are 100 steps).
 *             ctrl-f (or ctrl-t) asks for text on the bottom row of the area and finds it, ctrl-b asks and finds
-*             it backwards from the cursor, ctrl-n finds the next one forwards (and a Return on the question,
+*             it backwards from the cursor, f3 finds the next one forwards (and a Return on the question,
 *             which starts with the last text, repeats a find); the
 *             search ignores case, goes on past the end of the text to its start, and selects what it found
 *             (a bell if there is none).  A viewer can select, copy and find, and nothing else.
+*
+*             With tabindent set (28 Oct 26): tab puts blanks in at the cursor to the next stop (a multiple of the width, counted from the
+*             first column), or with a selection puts the width's blanks before each selected line that holds something (a selection that ends
+*             at the start of a line leaves that line out); btab takes out the blanks before the cursor's line, or before each selected line,
+*             back to the stop before (at most the width, never anything but blanks).  Never a tab character; each press is one undo step, and a
+*             btab that has nothing to take out changes nothing and makes no step.  The selection stays.
 *
 *             ret<1> is 'handled'; 'cancel' (Esc); or 'unhandled' with ret<2> the key's name: tab, btab, a
 *             function key, and up on the first row and down on the last, so that a form can go on to the
 *             widget before or after.  A readonly area moves: Return and every character are 'unhandled'.
 *     mouse   a click puts the cursor on the character under it, the wheel scrolls three rows
+*     size    key<1> a new width, key<2> a new height ('' keeps one; 2 Nov 26, for $sl_widget_move): the text, the cursor, the selection, the find text and the undo
+*             and redo steps are kept, the view follows the cursor; nothing is drawn, scr may be ''
+*     snap    the text and the cursor as they are go on the undo steps as a step of their own, and redo is forgotten; for a program that is
+*             about to change the value itself (28 Oct 26).  The steps are kept as they are: lines holding value, subvalue or text marks come back from an undo whole.
 *     close   nothing to undo: the caller repaints what is under it
 *
 *   Wrapping breaks a line after the last blank that fits, or in the middle of a word that is longer than
@@ -78,29 +117,20 @@ $include sl.h
    common /slclip/ clip.has, clip.text
 
    ret = ''
-   mw = w{'w'} + 0
-   mh = w{'h'} + 0
-   if mw < 3 then mw = 3
-   if mh < 1 then mh = 1
+   pr.kind = ''                                  ;* paint.plan: every paint draws the whole area unless macro.key says otherwise
    ro = w{'readonly'} + 0
+   ti = w{'tabindent'} + 0                       ;* 28 Oct 26: the indent width Tab and Shift-Tab use (0: they are not the area's keys)
+   if ti < 0 then ti = 0
+   ek = w{'edkeys'} + 0                          ;* 29 Oct 26 (S.88 D2): the editor's keys Ctrl-Home, Ctrl-End, Ctrl-Left, Ctrl-Right and Ctrl-Del (an opt-in of the program; 0: they are 'unhandled')
+   ov = w{'over'} + 0                            ;* 29 Oct 26 (S.88 D2): overwrite mode (with edkeys, Ins toggles it; the program reads w{'over'} to show it): a typed character replaces the one under the cursor
+   ai = w{'autoindent'} + 0                      ;* 29 Oct 26 (S.88 D2): Return copies the blanks the line begins with (up to the cursor) onto the new line; set by the program
    wrap = w{'wrap'} + 0
-   * 18 Oct 26: hbar (1) puts a horizontal scroll bar in the last row of the area, and the text has one row less.  Opt in: a program that
-   * does not set it (SCREEN MEMO) is drawn as it always was.  There is none when the text wraps (nothing to scroll sideways) or the area is
-   * under three rows high.
-   hb = 0
-   if w{'hbar'} + 0 and not(wrap) and mh >= 3 then
-      hb = 1
-      mh -= 1
-   end
    lines = w{'value'}
    lnum = w{'lnum'} + 0                          ;* 13 Oct 26: line numbers down the left (gut cells: the digits and a blank)
    syl = w{'synlang'} + 0                        ;* 13 Oct 26: the number of the language the text is coloured as (0: none)
-   gut = 0
-   if lnum then
-      gut = len(max(dcount(lines, @fm), 1)) + 1
-      if gut > mw - 4 then gut = 0               ;* an area too narrow for them has none
-   end
-   tw = mw - 1 - gut                             ;* the width of the text: the last column is the scroll bar
+   bpl = w{'bp'}
+   ob0 = lines                                   ;* the text the marks are kept for: store moves them when the number of lines is not the same as at the end of this call
+   gosub geom
    cx = w{'cx'} + 0
    cy = w{'cy'} + 0
    top = w{'top'} + 0
@@ -109,8 +139,10 @@ $include sl.h
    mx = w{'mx'} + 0
    my = w{'my'} + 0
    fnd = w{'find'}
-   undo = w{'undo'}
-   redo = w{'redo'}
+   * 28 Oct 26 (S.88 phase 2, D3): the undo and redo steps are an entry each in the widget (see snap.push), not one string cut at marks: here only the counts are read
+   uk.b = w{'ukb'} + 0 ; uk.n = w{'ukn'} + 0 ; uk.t = w{'ukt'} + 0
+   rk.b = w{'rkb'} + 0 ; rk.n = w{'rkn'} + 0 ; rk.t = w{'rkt'} + 0
+   if w{'undo'} # '' then gosub snap.legacy
    if wrap then left = 1
 
    begin case
@@ -121,9 +153,16 @@ $include sl.h
          w{'h'} = mh + hb
          lines = convert(char(10), @fm, lines)
          cx = 1 ; cy = 1 ; top = 1 ; left = 1 ; want = 1
-         mx = 0 ; my = 0 ; undo = '' ; redo = ''
+         mx = 0 ; my = 0
+         gosub snap.clear                             ;* nothing to undo or redo
          w{'lastop'} = ''
          w{'maxn'} = ''                               ;* the longest line is measured again (get.maxl)
+         gosub store
+
+      case op = 'snap'
+         * 28 Oct 26: the text and the cursor as they are now go on the undo steps as one step of their own and redo is forgotten (a program that is about to change w{'value'} itself, as the IDE does for an AI edit)
+         kind = 'snap' ; k0 = ''
+         gosub snap.push
          gosub store
 
       case op = 'draw'
@@ -137,13 +176,74 @@ $include sl.h
 
       case op = 'key'
          gosub count
-         gosub handle.key
+         gosub macro.key
 
       case op = 'mouse'
          gosub count
          gosub click
+
+      case op = 'size'
+         * 2 Nov 26 (S.88 p3.3a): key<1> the new width, key<2> the new height ('' keeps one), from $sl_widget_move.  The text, the cursor, the selection, the find
+         * text and the undo and redo steps stay as they are; the view follows the cursor into the new rectangle.  Nothing is drawn and init is not run.
+         if key<1> # '' then w{'w'} = key<1> + 0
+         if key<2> # '' then w{'h'} = key<2> + 0
+         gosub geom
+         w{'w'} = mw
+         w{'h'} = mh + hb
+         gosub count
+         gosub scroll
+         gosub store
+         ret = 'handled'
+
+      case op = 'bptoggle'
+         gosub count
+         bl = key<1> + 0
+         if bl = 0 then bl = cy
+         gosub bp.toggle
+         if ret # 'none' and scr # '' then gosub paint       ;* a program that draws the widget itself (the IDE) gives scr as ''
+
+      case op = 'bpclear'
+         ret = 'none'
+         if bpon then
+            w{'bp'} = ''
+            ret = 'cleared'
+            gosub count
+            if scr # '' then gosub paint
+         end
+
+      case op = 'bpfollow'
+         ob0 = key                                 ;* the text the marks were made for
+         gosub bp.follow
    end case
 
+   return
+
+* The area's rectangle from w{'w'} and w{'h'} (2 Nov 26: one place, read at every call and again by 'size'): mw mh (the text's rows), hb (the horizontal bar), gut (the
+* gutter: the line numbers gn and the mark cell of bpon) and tw (the width of the text).  In: wrap, lnum, lines.
+geom:
+   mw = w{'w'} + 0
+   mh = w{'h'} + 0
+   if mw < 3 then mw = 3
+   if mh < 1 then mh = 1
+   * 18 Oct 26: hbar (1) puts a horizontal scroll bar in the last row of the area, and the text has one row less.  Opt in: a program that
+   * does not set it (SCREEN MEMO) is drawn as it always was.  There is none when the text wraps (nothing to scroll sideways) or the area is
+   * under three rows high.
+   hb = 0
+   if w{'hbar'} + 0 and not(wrap) and mh >= 3 then
+      hb = 1
+      mh -= 1
+   end
+   gut = 0
+   if lnum then
+      gosub line.count
+      gut = len(max(lc, 1)) + 1
+      if gut > mw - 4 then gut = 0               ;* an area too narrow for them has none
+   end
+   gn = gut                                      ;* 2 Nov 26 (S.98 H2): the width of the line numbers; the mark cell of bpon is in front of them
+   bpon = w{'bpon'} + 0
+   if mw < 12 then bpon = 0
+   if bpon then gut += 1
+   tw = mw - 1 - gut                            ;* the width of the text: the last column is the scroll bar
    return
 
 * A click puts the cursor on the character under it (after the last one of a shorter row, on the last row if it
@@ -157,6 +257,19 @@ click:
          gosub count
          gosub scroll
          gosub store
+         gosub paint
+         return
+      end
+   end
+   if bpon then
+      if key<1> # 'wheel' and key<3> - w{'ax'} < gut then
+         * 2 Nov 26 (S.98 H2): a click in the gutter toggles the mark of the line clicked (the first row of a wrapped line is the line's; the cursor, the selection and the view stay)
+         rr = top + key<4> - w{'ay'}
+         if rr > nr then rr = nr
+         if rr < 1 then rr = 1
+         gosub row.text
+         bl = rline
+         gosub bp.toggle
          gosub paint
          return
       end
@@ -241,7 +354,8 @@ get.maxl:
 
 * n = the number of lines, nr the number of rows (the same without wrap); a text with nothing in it has one
 count:
-   n = dcount(lines, @fm)
+   gosub line.count
+   n = lc
    if n < 1 then n = 1
    if cy < 1 then cy = 1
    if cy > n then cy = n
@@ -253,6 +367,19 @@ count:
       gosub build.map
    end else
       nr = n
+   end
+   return
+
+* lc = the number of lines.  Counting them runs over the whole text, three times a key, so the count is kept with the text it was made from (9 Nov 26, S.184 stage 7; the length alone
+*   would not do: a program can put in a text of the same length with other lines).  Comparing is far cheaper than counting.  A typed character (macro.key) keeps the count.
+line.count:
+   lc.t = w{'nct'}
+   if len(lc.t) > 0 and lc.t = lines then
+      lc = w{'nc'} + 0
+   end else
+      lc = dcount(lines, @fm)
+      w{'nc'} = lc
+      w{'nct'} = lines
    end
    return
 
@@ -350,7 +477,89 @@ to.row:
    cx = rstart + dc - 1
    return
 
+* The marks (bpon).  bp.toggle: In: bl (a line), bpl; Out: ret (set, cleared, full, none) and w{'bp'}.  The marks are line numbers, ascending, one to a field.
+bp.toggle:
+   ret = 'none'
+   if bpon then
+      nl = dcount(lines, @fm)
+      if nl < 1 then nl = 1
+      if bl >= 1 and bl <= nl then
+         bp.n = dcount(bpl, @fm)
+         if bpl = '' then bp.n = 0
+         bp.at = 0
+         for bi = 1 to bp.n
+            if bpl<bi> + 0 >= bl then
+               bp.at = bi
+               exit
+            end
+         next bi
+         bp.max = w{'bpmax'} + 0
+         begin case
+            case bp.at > 0 and bpl<bp.at> + 0 = bl
+               del bpl<bp.at>
+               ret = 'cleared'
+            case bp.max > 0 and bp.n >= bp.max
+               ret = 'full'
+            case bp.at = 0
+               bpl<-1> = bl
+               ret = 'set'
+            case 1
+               ins bl before bpl<bp.at>
+               ret = 'set'
+         end case
+         w{'bp'} = bpl
+      end
+   end
+   return
+
+* bp.follow: In: ob0 (the text the marks were made for), lines (the text now), bpl.  When the number of lines is not the same, the lines the two texts share at the start (bp.p) and at the end
+* (bp.s) are found: a mark in the first part stays, one in the last part moves by the difference, one in what was replaced stays only if it is still inside what replaced it.
+bp.follow:
+   if bpl # '' then
+      bp.oc = dcount(ob0, @fm)
+      bp.nc = dcount(lines, @fm)
+      if bp.oc < 1 then bp.oc = 1
+      if bp.nc < 1 then bp.nc = 1
+      if bp.oc # bp.nc then
+         bp.lo = bp.oc
+         if bp.nc < bp.lo then bp.lo = bp.nc
+         bp.p = 0
+         for bi = 1 to bp.lo
+            if ob0<bi> # lines<bi> then exit
+            bp.p = bi
+         next bi
+         bp.s = 0
+         for bi = 1 to bp.lo - bp.p
+            bp.ox = bp.oc - bi + 1
+            bp.nx = bp.nc - bi + 1
+            if ob0<bp.ox> # lines<bp.nx> then exit
+            bp.s = bi
+         next bi
+         bp.new = ''
+         for bi = 1 to dcount(bpl, @fm)
+            bp.m = bpl<bi> + 0
+            begin case
+               case bp.m <= bp.p
+               case bp.m > bp.oc - bp.s
+                  bp.m += bp.nc - bp.oc
+               case bp.m > bp.nc - bp.s
+                  bp.m = 0
+            end case
+            if bp.m >= 1 and bp.m <= bp.nc then bp.new<-1> = bp.m
+         next bi
+         bpl = bp.new
+         w{'bp'} = bpl
+      end
+   end
+   return
+
 store:
+   if bpl # '' then
+      if lines # ob0 then
+         gosub bp.follow
+         ob0 = lines
+      end
+   end
    w{'value'} = lines
    w{'cx'} = cx
    w{'cy'} = cy
@@ -360,8 +569,8 @@ store:
    w{'mx'} = mx
    w{'my'} = my
    w{'find'} = fnd
-   w{'undo'} = undo
-   w{'redo'} = redo
+   w{'ukb'} = uk.b ; w{'ukn'} = uk.n ; w{'ukt'} = uk.t
+   w{'rkb'} = rk.b ; w{'rkn'} = rk.n ; w{'rkt'} = rk.t
    return
 
 * Keep the cursor inside the rows and columns shown
@@ -377,6 +586,199 @@ scroll:
    end
    if top < 1 then top = 1
    if left < 1 then left = 1
+   return
+
+* ======================================================================
+* 9 Nov 26 (S.184 stage 2) - SED's editing commands (the owner, 9 Nov: SED and CED are retired once the IDE has all their features).  One undo step each.
+*   alt-bs  delete the word before the cursor (the blanks before it and the word), or the selection; at the start of a line join it to the line above
+*   alt-d   delete the word at the cursor, as Ctrl-Del does in an area with edkeys
+*   alt-e   cut from the cursor to the end of the line into the clipboard; at the end of a line join the next line to it
+*   alt-t   swap the character before the cursor with the one at it (at the end of a line, the last two), and move on
+*   alt-u, alt-l, alt-c   the word at or after the cursor in capitals, in small letters, or with a capital initial; the cursor goes to its end
+*   alt-    (Alt and the space bar) a run of blanks at the cursor becomes one blank
+*   alt-a   the line is indented as the line above it is
+* A key that has nothing to act on (no word, one character) rings the bell and changes nothing.
+
+sed.edit:
+   ln = lines<cy>
+   begin case
+      case key = 'alt-bs'
+         kind = 'delword'
+         gosub snap.push
+         if has.sel then
+            gosub del.sel
+         end else
+            if cx > 1 then
+               cb = cx - 1
+               loop
+               while cb >= 1 and ln[cb, 1] = ' '
+                  cb -= 1
+               repeat
+               loop
+               while cb >= 1 and ln[cb, 1] # ' '
+                  cb -= 1
+               repeat
+               lines<cy> = ln[1, cb] : ln[cx, len(ln)]
+               cx = cb + 1
+            end else
+               if cy > 1 then
+                  cx = len(lines<cy - 1>) + 1
+                  lines<cy - 1> = lines<cy - 1> : ln
+                  del lines<cy>
+                  cy -= 1
+               end
+            end
+         end
+      case key = 'alt-d'
+         kind = 'delword'
+         gosub snap.push
+         if has.sel then
+            gosub del.sel
+         end else
+            if cx <= len(ln) then
+               ce = cx
+               loop
+               while ce <= len(ln) and ln[ce, 1] = ' '
+                  ce += 1
+               repeat
+               loop
+               while ce <= len(ln) and ln[ce, 1] # ' '
+                  ce += 1
+               repeat
+               lines<cy> = ln[1, cx - 1] : ln[ce, len(ln)]
+            end else
+               if cy < n then
+                  lines<cy> = ln : lines<cy + 1>
+                  del lines<cy + 1>
+               end
+            end
+         end
+      case key = 'alt-e'
+         kind = 'killend'
+         gosub snap.push
+         if cx <= len(ln) then
+            clip.text = ln[cx, len(ln)]
+            clip.has = 1
+            lines<cy> = ln[1, cx - 1]
+         end else
+            if cy < n then
+               lines<cy> = ln : lines<cy + 1>
+               del lines<cy + 1>
+            end
+         end
+      case key = 'alt-t'
+         if len(ln) < 2 then
+            gosub ring.bell
+         end else
+            p = cx
+            if p > len(ln) then p = len(ln)
+            if p < 2 then p = 2
+            kind = 'transpose'
+            gosub snap.push
+            lines<cy> = ln[1, p - 2] : ln[p, 1] : ln[p - 1, 1] : ln[p + 1, len(ln)]
+            cx = p + 1
+         end
+      case key = 'alt-u' or key = 'alt-l' or key = 'alt-c'
+         ws = cx
+         loop
+         while ws <= len(ln) and not(ln[ws, 1] matches '1A' or ln[ws, 1] matches '1N')
+            ws += 1
+         repeat
+         we = ws
+         loop
+         while we <= len(ln) and (ln[we, 1] matches '1A' or ln[we, 1] matches '1N')
+            we += 1
+         repeat
+         if we = ws then
+            gosub ring.bell
+         end else
+            kind = 'wordcase'
+            gosub snap.push
+            wd = ln[ws, we - ws]
+            begin case
+               case key = 'alt-u'
+                  wd = upcase(wd)
+               case key = 'alt-l'
+                  wd = downcase(wd)
+               case 1
+                  wd = upcase(wd[1, 1]) : downcase(wd[2, len(wd)])
+            end case
+            lines<cy> = ln[1, ws - 1] : wd : ln[we, len(ln)]
+            cx = we
+         end
+      case key = 'alt- '
+         cs = cx
+         loop
+         while cs > 1 and ln[cs - 1, 1] = ' '
+            cs -= 1
+         repeat
+         ce = cx
+         loop
+         while ce <= len(ln) and ln[ce, 1] = ' '
+            ce += 1
+         repeat
+         if ce - cs < 2 then
+            gosub ring.bell              ;* no run of two blanks here
+         end else
+            kind = 'closesp'
+            gosub snap.push
+            lines<cy> = ln[1, cs - 1] : ' ' : ln[ce, len(ln)]
+            cx = cs + 1
+         end
+      case key = 'alt-a'
+         if cy < 2 then
+            gosub ring.bell
+         end else
+            pl = lines<cy - 1>
+            al.p = len(pl) - len(trimf(pl))
+            if trim(pl) = '' then al.p = 0
+            al.c = len(ln) - len(trimf(ln))
+            if trim(ln) = '' then al.c = len(ln)
+            kind = 'align'
+            gosub snap.push
+            lines<cy> = space(al.p) : ln[al.c + 1, len(ln)]
+            cx += al.p - al.c
+            if cx < al.p + 1 then cx = al.p + 1
+         end
+   end case
+   if cx < 1 then cx = 1
+   want = cx
+   my = 0 ; mx = 0
+   return
+
+* alt-m swaps the cursor and the other end of the selection (SED's swap mark); ctrl-up / ctrl-down move the view a line up or down, the cursor staying on its line while
+*   that line can be seen (SED's nudge).  Neither changes the text.
+sed.move:
+   begin case
+      case key = 'alt-m'
+         if my > 0 and my <= n then
+            sw.y = my ; sw.x = mx
+            my = cy ; mx = cx
+            cy = sw.y ; cx = sw.x
+            want = cx
+         end else
+            gosub ring.bell
+         end
+      case key = 'ctrl-down'
+         if top + mh - 1 < n then
+            top += 1
+            if cy < top then cy = top
+         end
+         vert = @true
+      case key = 'ctrl-up'
+         if top > 1 then
+            top -= 1
+            if cy > top + mh - 1 then cy = top + mh - 1
+         end
+         vert = @true
+   end case
+   ln = lines<cy>
+   if cx > len(ln) + 1 then cx = len(ln) + 1
+   return
+
+* The bell, for a key that has nothing to act on: the memo's one place that rings it
+ring.bell:
+   display char(7) :
    return
 
 * has.sel = a selection exists: it runs from (sy, sx) to (ey, ex), the end not included
@@ -409,10 +811,20 @@ sel.text:
 del.sel:
    head = lines<sy>[1, sx - 1]
    tail = lines<ey>[ex, 999999]
-   lines<sy> = head : tail
-   for i = ey to sy + 1 step -1
-      del lines<i>
-   next i
+   if ey - sy > 100 then
+      * 29 Oct 26 (S.88 D2): a long selection is cut out once (the lines before, the joined line, the lines after); a DEL for each of thousands of lines is quadratic
+      nn = dcount(lines, @fm)
+      nl = ''
+      if sy > 1 then nl = field(lines, @fm, 1, sy - 1) : @fm
+      nl := head : tail
+      if ey < nn then nl := @fm : field(lines, @fm, ey + 1, 99999999)
+      lines = nl
+   end else
+      lines<sy> = head : tail
+      for i = ey to sy + 1 step -1
+         del lines<i>
+      next i
+   end
    cy = sy
    cx = sx
    want = cx
@@ -421,33 +833,111 @@ del.sel:
 
 * Before an edit, kind says what it is: remember the text so that it can be undone.  A run of typing, of bs or of del
 * is one step (k0 is what the key before did).
+* 28 Oct 26 (S.88 phase 2, D3): THE STEPS ARE KEPT AS THEY ARE.  Until then the whole stack was one string: a step's lines had their field marks turned into value marks and the stack was
+*   cut at field marks and the step at text marks, so a record whose lines held a value, subvalue or text mark came back from an undo changed (a value mark became a line end, a text mark cut
+*   the text short).  Now a step is a string of its own in the widget, w{'u' : n} for undo and w{'r' : n} for redo, n running from the base + 1 to the base + the count (the base moves up when
+*   the oldest step is dropped): the cursor's line, a blank, the cursor's place, a blank, then the lines VERBATIM.  Nothing is searched for in the lines: the two blanks are found from the front.
+*   The last step is the one to go back to.  The counts are uk.b uk.n uk.t (base, steps, characters) and rk.b rk.n rk.t for redo.
 snap.push:
    if kind = k0 and (kind = 'type' or kind = 'bs' or kind = 'del') then return
    gosub snap.make
-   undo = snap : @fm : undo
-   if dcount(undo, @fm) > 100 then undo = field(undo, @fm, 1, 100)
+   gosub snap.add
+   gosub snap.redo.clear
+   return
+
+* snap goes on the end of the undo steps; at most 100 steps and 8,000,000 characters (SED's limit, 9 Nov 26), the oldest going first (the newest is always kept)
+snap.add:
+   uk.n += 1
+   uk.t += len(snap)
+   w{'u' : (uk.b + uk.n)} = snap
    loop
-   while len(undo) > 1000000 and dcount(undo, @fm) > 1
-      undo = field(undo, @fm, 1, dcount(undo, @fm) - 1)
+   while uk.n > 100 or (uk.t > 8000000 and uk.n > 1)
+      uk.t -= len(w{'u' : (uk.b + 1)})
+      w{'u' : (uk.b + 1)} = ''
+      uk.b += 1
+      uk.n -= 1
    repeat
-   redo = ''
    return
 
-* snap = the text and the cursor as one field
+* a new edit ends the redo list
+snap.redo.clear:
+   for sn.i = rk.b + 1 to rk.b + rk.n
+      w{'r' : sn.i} = ''
+   next sn.i
+   rk.b = 0 ; rk.n = 0 ; rk.t = 0
+   return
+
+* A program that put a step on the key the memo used before 28 Oct 26 (the IDE did, for the change an AI edit makes) is still understood: the old form was fields cut at field marks, each
+* the cursor's line, a text mark, its place, a text mark and the lines with value marks for the ends of lines (newest first).  They are made steps as they come; redo is forgotten, as the writer meant.
+snap.legacy:
+   sn.lg = w{'undo'}
+   w{'undo'} = ''
+   w{'redo'} = ''
+   for sn.k = dcount(sn.lg, @fm) to 1 step -1
+      sn.s = sn.lg<sn.k>
+      if sn.s # '' then
+         snap = field(sn.s, @tm, 1) : ' ' : field(sn.s, @tm, 2) : ' ' : convert(@vm, @fm, field(sn.s, @tm, 3, 99999))
+         gosub snap.add
+      end
+   next sn.k
+   gosub snap.redo.clear
+   w{'ukb'} = uk.b ; w{'ukn'} = uk.n ; w{'ukt'} = uk.t
+   w{'rkb'} = rk.b ; w{'rkn'} = rk.n ; w{'rkt'} = rk.t
+   return
+
+* snap = the text and the cursor as one string: line, blank, place, blank, the lines as they are
 snap.make:
-   snap = cy : @tm : cx : @tm : convert(@fm, @vm, lines)
+   snap = cy : ' ' : cx : ' ' : lines
    return
 
-* Take a step back (src = undo, dst = redo) or on (the other way round): the first field of the stack is what it goes to
-snap.restore:
-   cur = field(src, @fm, 1)
+* Nothing to undo and nothing to redo: the steps still in the widget are blanked
+snap.clear:
+   for sn.i = uk.b + 1 to uk.b + uk.n
+      w{'u' : sn.i} = ''
+   next sn.i
+   for sn.i = rk.b + 1 to rk.b + rk.n
+      w{'r' : sn.i} = ''
+   next sn.i
+   uk.b = 0 ; uk.n = 0 ; uk.t = 0
+   rk.b = 0 ; rk.n = 0 ; rk.t = 0
+   return
+
+* Ctrl-Z: back to the last undo step; what the text is now goes on the redo list
+undo.step:
+   if uk.n < 1 then return
+   cur = w{'u' : (uk.b + uk.n)}
    if cur = '' then return
-   src = if dcount(src, @fm) > 1 then field(src, @fm, 2, 99999) else ''
+   w{'u' : (uk.b + uk.n)} = ''
+   uk.t -= len(cur)
+   uk.n -= 1
    gosub snap.make
-   dst = snap : @fm : dst
-   lines = convert(@vm, @fm, field(cur, @tm, 3, 99999))
-   cy = field(cur, @tm, 1) + 0
-   cx = field(cur, @tm, 2) + 0
+   rk.n += 1
+   rk.t += len(snap)
+   w{'r' : (rk.b + rk.n)} = snap
+   gosub snap.apply
+   return
+
+* Ctrl-Y: on again, the other way round
+redo.step:
+   if rk.n < 1 then return
+   cur = w{'r' : (rk.b + rk.n)}
+   if cur = '' then return
+   w{'r' : (rk.b + rk.n)} = ''
+   rk.t -= len(cur)
+   rk.n -= 1
+   gosub snap.make
+   uk.n += 1
+   uk.t += len(snap)
+   w{'u' : (uk.b + uk.n)} = snap
+   gosub snap.apply
+   return
+
+* cur = a step: the text and the cursor become what it holds
+snap.apply:
+   sn.p = index(cur, ' ', 2)                     ;* the second blank: what follows is the lines, as they were
+   lines = cur[sn.p + 1, len(cur)]
+   cy = field(cur, ' ', 1) + 0
+   cx = field(cur, ' ', 2) + 0
    want = cx
    my = 0 ; mx = 0
    return
@@ -455,6 +945,7 @@ snap.restore:
 * Put the clipboard in at the cursor
 paste:
    t = clip.text
+paste.t:
    ln = lines<cy>
    nt = dcount(t, @fm)
    if nt <= 1 then
@@ -463,11 +954,21 @@ paste:
    end else
       head = ln[1, cx - 1]
       tail = ln[cx, 999999]
-      lines<cy> = head : t<1>
-      for i = 2 to nt - 1
-         ins t<i> before lines<cy + i - 1>
-      next i
-      ins t<nt> : tail before lines<cy + nt - 1>
+      if nt > 100 then
+         * 29 Oct 26 (S.88 D2): a long paste is put together once (the lines before, the pasted lines, the lines after); an INS for each of thousands of lines is quadratic
+         nn = dcount(lines, @fm)
+         nl = ''
+         if cy > 1 then nl = field(lines, @fm, 1, cy - 1) : @fm
+         nl := head : t<1> : @fm : field(t, @fm, 2, nt - 2) : @fm : t<nt> : tail
+         if cy < nn then nl := @fm : field(lines, @fm, cy + 1, 99999999)
+         lines = nl
+      end else
+         lines<cy> = head : t<1>
+         for i = 2 to nt - 1
+            ins t<i> before lines<cy + i - 1>
+         next i
+         ins t<nt> : tail before lines<cy + nt - 1>
+      end
       cy += nt - 1
       cx = len(t<nt>) + 1
    end
@@ -497,7 +998,7 @@ find.next:
       cy = y ; cx = mx + len(fnd)
       want = cx
    end else
-      display char(7) :
+      gosub ring.bell
    end
    return
 
@@ -546,13 +1047,56 @@ find.prev:
       cy = y ; cx = p + len(fnd)
       want = cx
    end else
-      display char(7) :
+      gosub ring.bell
+   end
+   return
+
+* A key, through the keyboard macro (9 Nov 26, S.184 stage 5).  Alt-R starts a recording (the old macro goes) and ends it; while it is on, every key the area acted on is
+*   kept in w{'macro'}, as fields; a key it passes back (a function key, a menu) and a paste are not.  Alt-P plays the keys, each as if typed, and stops at one the area does not
+*   act on; each is its own undo step, as it was when typed.  Not while recording, and neither key does anything while a macro plays.  A program's passkeys come first.
+macro.key:
+   if (key = 'alt-r' or key = 'alt-p') and not(index(@vm : w{'passkeys'} : @vm, @vm : key : @vm, 1)) then
+      ret = 'handled'
+      if w{'macrun'} + 0 then return
+      if key = 'alt-r' then
+         if w{'macrec'} + 0 then
+            w{'macrec'} = 0
+         end else
+            w{'macrec'} = 1
+            w{'macro'} = ''
+         end
+         return
+      end
+      if w{'macrec'} + 0 or w{'macro'} = '' then return
+      w{'macrun'} = 1
+      m.list = w{'macro'}
+      m.n = dcount(m.list, @fm)
+      for m.i = 1 to m.n
+         call $sl_memo('key', w, scr, m.list<m.i>, m.ret)
+      while m.ret<1> = 'handled'
+      next m.i
+      w{'macrun'} = 0
+      return
+   end
+   m.key = key
+   m.len = len(lines)
+   m.cy = cy
+   w{'synkey'} = (len(key) = 1 or key = 'bs' or key = 'del' or key = 'enter')      ;* these change the text at the cursor's line and nowhere above it (syn.sync)
+   pr.kind = ''                                  ;* paint.plan: what this key can have changed on the screen
+   if len(key) = 1 or key = 'bs' or key = 'del' then pr.kind = 'edit'
+   if key = 'up' or key = 'down' or key = 'left' or key = 'right' or key = 'home' or key = 'end' then pr.kind = 'move'
+   gosub handle.key
+   if len(m.key) = 1 and len(lines) = m.len + 1 then w{'nct'} = lines              ;* a typed character: as many lines as before (line.count)
+   if w{'macrec'} + 0 and ret<1> = 'handled' and m.key # 'paste' then
+      m.list = w{'macro'}
+      m.list<-1> = m.key
+      w{'macro'} = m.list
    end
    return
 
 handle.key:
    ret = 'handled'
-   k0 = w{'lastop'}                  ;* what the key before did; a key that edits says what it did at the end
+   k0 = w{'lastop'}                 ;* what the key before did; a key that edits says what it did at the end
    w{'lastop'} = ''
    kind = ''
    vert = @false
@@ -575,7 +1119,8 @@ handle.key:
             gosub to.row
             vert = @true
          end else
-            ret = 'unhandled' : @fm : key
+            * 28 Oct 26 dm (S.88 Phase 4, I3): an area with w{'stay'} keeps the arrow at its first or last row; the form does not move the focus to the next widget
+            if not(w{'stay'}) then ret = 'unhandled' : @fm : key
          end
       case key = 'down'
          gosub row.of
@@ -584,7 +1129,7 @@ handle.key:
             gosub to.row
             vert = @true
          end else
-            ret = 'unhandled' : @fm : key
+            if not(w{'stay'}) then ret = 'unhandled' : @fm : key
          end
       case key = 'left'
          if cx > 1 then
@@ -604,7 +1149,57 @@ handle.key:
                cx = 1
             end
          end
-      case key = 'home' or key = 'ctrl-a'
+      case key = 'ins' and ek
+         w{'over'} = (if ov then 0 else 1)       ;* 29 Oct 26 (S.88 D2): overwrite mode on or off; nothing is changed in the text, so no undo step
+      case key = 'ctrl-home' and ek
+         * 29 Oct 26 (S.88 D2): with edkeys the editor's keys: Ctrl-Home is the start of the text, Ctrl-End its end, Ctrl-Left and Ctrl-Right a word back and on
+         cy = 1
+         cx = 1
+      case key = 'ctrl-end' and ek
+         cy = n
+         cx = len(lines<n>) + 1
+      case key = 'ctrl-right' and ek
+         ln = lines<cy>
+         if cx > len(ln) then
+            if cy < n then
+               cy += 1
+               cx = 1
+            end
+         end else
+            loop
+            while cx <= len(ln) and ln[cx, 1] = ' '
+               cx += 1
+            repeat
+            loop
+            while cx <= len(ln) and ln[cx, 1] # ' '
+               cx += 1
+            repeat
+         end
+      case key = 'ctrl-left' and ek
+         if cx = 1 then
+            if cy > 1 then
+               cy -= 1
+               cx = len(lines<cy>) + 1
+            end
+         end else
+            ln = lines<cy>
+            cx -= 1
+            loop
+            while cx > 1 and ln[cx, 1] = ' '
+               cx -= 1
+            repeat
+            loop
+            while cx > 1 and ln[cx - 1, 1] # ' '
+               cx -= 1
+            repeat
+         end
+      case key = 'ctrl-a'
+         * 28 Oct 26 dm (the owner's D31, 20 Oct): Ctrl-A selects all, as in every editor he named; Home is the start of the row
+         my = 1 ; mx = 1
+         cy = n
+         cx = len(lines<n>) + 1
+         want = cx
+      case key = 'home'
          gosub row.of
          rr = dr
          gosub row.text
@@ -674,7 +1269,7 @@ handle.key:
          end else
             my = cy ; mx = cx
          end
-      case key = 'ctrl-c' or key = 'ctrl-o'
+      case key = 'ctrl-c'                       ;* 28 Oct 26 (D31): Ctrl-O is no longer a copy alias; it opens a record in the programs that have one
          if has.sel then
             gosub sel.text
             clip.text = st
@@ -687,10 +1282,18 @@ handle.key:
       case key = 'ctrl-b'                       ;* SED's find backward (14 Oct 26)
          fdir = -1
          gosub find.prompt
-      case key = 'ctrl-n'
+      case key = 'f3'                           ;* 28 Oct 26 (D31): find next is F3 (and Return in the find question); Ctrl-N is New in the programs that have one
          gosub find.next
+      case key = 'shift-f3'                     ;* 28 Oct 26 (Opus's review): and Shift-F3 the one before
+         gosub find.prev
+      case key = 'alt-m' or ((key = 'ctrl-up' or key = 'ctrl-down') and not(wrap))
+         gosub sed.move                  ;* 9 Nov 26 (S.184 stage 2): swap the cursor and the other end of the selection; nudge the view a line (they change no text, so a viewer has them)
       case ro
          ret = 'unhandled' : @fm : key
+      case key = 'tab' and ti > 0
+         gosub indent.in                ;* 28 Oct 26: an area with tabindent (the IDE); without it Tab is 'unhandled' below, as ever
+      case key = 'btab' and ti > 0
+         gosub indent.out
       case key = 'enter'
          kind = 'enter'
          if has.sel then k0 = ''
@@ -699,9 +1302,18 @@ handle.key:
          ln = lines<cy>
          lines<cy> = ln[1, cx - 1]
          rest = ln[cx, len(ln)]
+         nb = 0
+         if ai then
+            * 29 Oct 26 (S.88 D2): the new line begins with the blanks the old one began with, as many as stand before the cursor
+            loop
+            while nb < cx - 1 and ln[nb + 1, 1] = ' '
+               nb += 1
+            repeat
+            rest = space(nb) : rest
+         end
          ins rest before lines<cy + 1>
          cy += 1
-         cx = 1
+         cx = nb + 1
          want = cx
          my = 0 ; mx = 0
       case key = 'bs'
@@ -727,7 +1339,15 @@ handle.key:
          end
          want = cx
          my = 0 ; mx = 0
-      case key = 'del' or key = 'ctrl-d'
+      case key = 'ctrl-d'
+         * 28 Oct 26 (D31): Ctrl-D duplicates the line (micro and Geany); it joined or deleted before, which is Del
+         kind = 'dup'
+         gosub snap.push
+         ins lines<cy> before lines<cy + 1>
+         cy += 1
+         want = cx
+         my = 0 ; mx = 0
+      case key = 'del'
          kind = 'del'
          if has.sel then k0 = ''
          gosub snap.push
@@ -746,11 +1366,49 @@ handle.key:
          end
          want = cx
          my = 0 ; mx = 0
-      case key = 'ctrl-k'
-         kind = 'kill'
+      case key = 'ctrl-del' and ek
+         * 29 Oct 26 (S.88 D2): with edkeys Ctrl-Del deletes the word at the cursor (the blanks before it and the word), or the selection, or at the end of a line joins the next line
+         kind = 'delword'
          gosub snap.push
-         ln = lines<cy>
-         lines<cy> = ln[1, cx - 1]
+         if has.sel then
+            gosub del.sel
+         end else
+            ln = lines<cy>
+            if cx <= len(ln) then
+               ce = cx
+               loop
+               while ce <= len(ln) and ln[ce, 1] = ' '
+                  ce += 1
+               repeat
+               loop
+               while ce <= len(ln) and ln[ce, 1] # ' '
+                  ce += 1
+               repeat
+               lines<cy> = ln[1, cx - 1] : ln[ce, len(ln)]
+            end else
+               if cy < n then
+                  lines<cy> = ln : lines<cy + 1>
+                  del lines<cy + 1>
+               end
+            end
+         end
+         want = cx
+         my = 0 ; mx = 0
+      case key = 'ctrl-k' or key = 'alt-k'
+         * 28 Oct 26 (D31): Ctrl-K cuts the whole line into the clipboard (micro and Geany); it cut to the end of the row before.  A paste at the start of a line puts it back above it.
+         * 8 Nov 26 (S.179): and Alt-K, for a program that keeps Ctrl-K for itself (passkeys: the IDE, where Ctrl-K is the keys list as on every page)
+         kind = 'cutline'
+         gosub snap.push
+         clip.text = lines<cy> : @fm
+         clip.has = 1
+         if n > 1 then
+            del lines<cy>
+            if cy > n - 1 then cy = n - 1
+         end else
+            lines<cy> = ''
+         end
+         cx = 1
+         want = 1
          my = 0 ; mx = 0
       case key = 'ctrl-x'
          if has.sel then
@@ -769,14 +1427,25 @@ handle.key:
             gosub paste
             my = 0 ; mx = 0
          end
+      case key = 'paste'
+         * 28 Oct 26 (S.88 phase 1): the terminal's bracketed paste, one step of undo; $sl_key made the text safe (printable ASCII, line ends as field marks)
+         call $sl_mouse('paste.get', pt)
+         if pt # '' then
+            kind = 'paste'
+            gosub snap.push
+            if has.sel then gosub del.sel
+            t = pt
+            gosub paste.t
+            my = 0 ; mx = 0
+         end
+      case key = 'alt-bs' or key = 'alt-d' or key = 'alt-e' or key = 'alt-t' or key = 'alt-u' or key = 'alt-l' or key = 'alt-c' or key = 'alt- ' or key = 'alt-a'
+         * 9 Nov 26 (S.184 stage 2): SED's editing commands, in the area itself so that every program with a memo has them (Alt and the letter SED gives
+         *   them; the one exception is Alt-E, kill to the end of the line, since Alt-K cuts the whole line here)
+         gosub sed.edit
       case key = 'ctrl-z'
-         src = undo ; dst = redo
-         gosub snap.restore
-         undo = src ; redo = dst
+         gosub undo.step
       case key = 'ctrl-y'
-         src = redo ; dst = undo
-         gosub snap.restore
-         redo = src ; undo = dst
+         gosub redo.step
       case len(key) = 1
          kind = 'type'
          if has.sel then
@@ -785,7 +1454,11 @@ handle.key:
          gosub snap.push
          if has.sel then gosub del.sel
          ln = lines<cy>
-         lines<cy> = ln[1, cx - 1] : key : ln[cx, len(ln)]
+         if ov and kind = 'type' and cx <= len(ln) then
+            lines<cy> = ln[1, cx - 1] : key : ln[cx + 1, len(ln)]       ;* 29 Oct 26 (S.88 D2): overwrite mode (not over a selection, which was deleted and is typed in as before)
+         end else
+            lines<cy> = ln[1, cx - 1] : key : ln[cx, len(ln)]
+         end
          cx += 1
          want = cx
          my = 0 ; mx = 0
@@ -806,11 +1479,89 @@ handle.key:
    gosub paint
    return
 
+* 28 Oct 26: tabindent.  in.a, in.b = the lines a selection covers (has.sel from sel.range): a selection that ends at the start of a line leaves that line out
+indent.lines:
+   in.a = sy
+   in.b = ey
+   if ex = 1 and ey > sy then in.b = ey - 1
+   return
+
+* Tab: blanks to the next stop at the cursor, or the width's blanks before each selected line that holds something (an empty line is left
+* empty).  The cursor and the mark move with their line's text; one at the start of a line stays there, so the selection still begins there.
+indent.in:
+   kind = 'indent'
+   gosub snap.push
+   if has.sel then
+      gosub indent.lines
+      for in.i = in.a to in.b
+         if lines<in.i> # '' then
+            lines<in.i> = space(ti) : lines<in.i>
+            if in.i = cy and cx > 1 then cx += ti
+            if in.i = my and mx > 1 then mx += ti
+         end
+      next in.i
+   end else
+      in.n = ti - mod(cx - 1, ti)
+      ln = lines<cy>
+      lines<cy> = ln[1, cx - 1] : space(in.n) : ln[cx, len(ln)]
+      cx += in.n
+   end
+   want = cx
+   return
+
+* in.ln (a line) -> in.r, the blanks Shift-Tab takes from its start: back to the stop before, at most the width, never more than are there
+outdent.count:
+   in.l = 0
+   loop
+   while in.l < len(in.ln) and in.ln[in.l + 1, 1] = ' '
+      in.l += 1
+   repeat
+   in.r = mod(in.l, ti)
+   if in.r = 0 then in.r = ti
+   if in.r > in.l then in.r = in.l
+   return
+
+* Shift-Tab: the blanks before the cursor's line, or before each selected line, back to the stop before.  Nothing to take out: no change and no undo step.
+indent.out:
+   if has.sel then
+      gosub indent.lines
+   end else
+      in.a = cy
+      in.b = cy
+   end
+   in.any = @false
+   for in.i = in.a to in.b
+      in.ln = lines<in.i>
+      gosub outdent.count
+      if in.r > 0 then in.any = @true
+   next in.i
+   if not(in.any) then return
+   kind = 'outdent'
+   gosub snap.push
+   for in.i = in.a to in.b
+      in.ln = lines<in.i>
+      gosub outdent.count
+      if in.r > 0 then
+         lines<in.i> = in.ln[in.r + 1, len(in.ln)]
+         if in.i = cy then
+            cx -= in.r
+            if cx < 1 then cx = 1
+         end
+         if in.i = my and has.sel then
+            mx -= in.r
+            if mx < 1 then mx = 1
+         end
+      end
+   next in.i
+   want = cx
+   return
+
 paint:
    call $sl_attr('text', tc)
    call $sl_attr('scroll', wc)                  ;* 14 Oct 26: wc is only the scroll bar's column; was 'window'
    call $sl_attr('highlight', hc)
    call $sl_attr('gutter', gc)                  ;* 14 Oct 26: was 'disabled', whose background is the window's, not the text's
+   call $sl_attr('hotkey', kc)                  ;* 2 Nov 26 (S.98 H2): the style of a breakpoint's mark
    call $sl_scrollbar(mh, top, nr, mh, bar)
    gosub sel.range
    * 19 Oct 26: softcur (1) draws the character under the cursor in the highlight style while the area has the focus, so that the place in the
@@ -823,7 +1574,63 @@ paint:
       sc.col = dcx - left + 1
    end
    sl.line = 0                                   ;* the line whose syntax styles are in sty (rows of a wrapped line share them)
+   if syl then gosub syn.sync
+   gosub paint.plan
+   gosub paint.rows
+   if pr.again then                               ;* the edit changed how the next line starts (a comment opened or closed): the rows below it are not as drawn
+      pr.all = @true
+      pr.again = @false
+      sl.line = 0
+      gosub paint.rows
+   end
+   if hb then
+      * 18 Oct 26: the horizontal bar in the row under the text: the gutter blank, the bar as wide as the text, a blank under the vertical bar
+      gosub get.maxl
+      call $sl_hscrollbar(tw, left, maxl, tw, hrow)
+      if gut then call $sl_put(scr, w{'ax'}, w{'ay'} + mh, space(gut), str(gc, gut))
+      call $sl_put(scr, w{'ax'} + gut, w{'ay'} + mh, hrow : ' ', str(wc, tw + 1))
+   end
+   if w{'focused'} then
+      gosub row.of
+      call $sl_curat(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top)
+   end
+   return
+
+* Which rows this paint has to draw (9 Nov 26, S.184 stage 7; SED draws only the rows it has marked).  pr.kind comes from macro.key, for a key that cannot change anything but the
+*   cursor's line ('edit') or the cursor ('move'); every other paint is pr.all.  It holds only if the area is laid out exactly as the last paint left it (psig), with no selection and
+*   no wrapping.  An edit also needs the state the line began and ended in from when it was last drawn: pcyl says for which line those are.
+paint.plan:
+   pr.all = @true
+   pr.a = -1
+   pr.b = -1
+   pr.again = @false
+   pr.sig = top : @vm : left : @vm : nr : @vm : gut : @vm : tw : @vm : mh : @vm : w{'ax'} : @vm : w{'ay'} : @vm : ro : @vm : (w{'focused'} + 0) : @vm : has.sel : @vm : wrap : @vm : syl
+   if pr.kind # '' and not(has.sel) and not(wrap) and pr.sig = w{'psig'} then
+      begin case
+         case pr.kind = 'edit' and cy = m.cy
+            if not(syl) or w{'pcyl'} + 0 = cy then
+               pr.all = @false
+               pr.a = cy - top
+               if syl then
+                  w{'syntl'} = cy                 ;* syn.row starts this line from the state kept for it, not from a checkpoint
+                  w{'synts'} = w{'pcys'} + 0
+               end
+            end
+         case pr.kind = 'move'
+            pr.all = @false
+            if sc.row >= 0 then
+               pr.a = sc.row
+               pr.b = w{'psc'} + 0
+            end
+      end case
+   end
+   w{'psig'} = pr.sig
+   w{'psc'} = sc.row
+   return
+
+paint.rows:
    for r = 0 to mh - 1
+      if not(pr.all) and r # pr.a and r # pr.b then continue
       rr = top + r
       seg = ''
       base = 1
@@ -840,6 +1647,12 @@ paint:
       attrs = str(tc, tw)
       if syl and rr <= nr then
          gosub syn.row
+         if rline = cy then
+            if not(pr.all) and pr.kind = 'edit' and sst2 # w{'pcye'} + 0 then pr.again = @true
+            w{'pcyl'} = cy
+            w{'pcys'} = sst
+            w{'pcye'} = sst2
+         end
          for k = 1 to len(seg)
             if k > tw then exit
             sc = sty[rstart + base + k - 2, 1]
@@ -860,41 +1673,103 @@ paint:
       if gut then
          * The line numbers: on the first row of a line (a wrapped line's other rows, and the rows past the text, have none)
          gnum = space(gut)
-         if rr <= nr and rstart = 1 then gnum = fmt(rline, (gut - 1) : 'R') : ' '
-         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, gnum, str(gc, gut))
+         gsty = str(gc, gut)
+         if gn then
+            if rr <= nr and rstart = 1 then gnum[bpon + 1, gn] = fmt(rline, (gn - 1) : 'R') : ' '
+         end
+         if bpon and rr <= nr and rstart = 1 then
+            * 2 Nov 26 (S.98 H2): the mark cell, in front of the line numbers, on the first row of a marked line
+            locate rline in bpl<1> setting bp.hit then
+               gnum[1, 1] = '*'
+               gsty[1, 1] = kc
+            end
+         end
+         call $sl_put(scr, w{'ax'} + 0, w{'ay'} + r, gnum, gsty)
       end
       call $sl_put(scr, w{'ax'} + gut, w{'ay'} + r, seg : bar[r + 1, 1], attrs : wc)
    next r
-   if hb then
-      * 18 Oct 26: the horizontal bar in the row under the text: the gutter blank, the bar as wide as the text, a blank under the vertical bar
-      gosub get.maxl
-      call $sl_hscrollbar(tw, left, maxl, tw, hrow)
-      if gut then call $sl_put(scr, w{'ax'}, w{'ay'} + mh, space(gut), str(gc, gut))
-      call $sl_put(scr, w{'ax'} + gut, w{'ay'} + mh, hrow : ' ', str(wc, tw + 1))
-   end
-   if w{'focused'} then
-      gosub row.of
-      call $sl_curat(w{'ax'} + gut + dcx - left, w{'ay'} + dr - top)
-   end
    return
 
 * The syntax styles of the line row rr belongs to (rline): in sty, one style code to each character.  A line's styles are made
-* from the state the line before ends in, so the state at the first line shown is found by running through the lines above it
-* (the cheap 'state' op) and a line that follows the last one done goes on from where that finished.  A text of some thousand lines
-* is slower to draw for it.
+* from the state the line before ends in, so the state at the first line shown is found from a checkpoint kept every 100 lines (9 Nov 26,
+* S.184 stage 7, as SED does: every line above it, on every paint, was about 100,000 calls per key at line 100,000) and a line that follows
+* the last one done goes on from where that finished.
 syn.row:
    if rline = sl.line then return
    if sl.line > 0 and rline = sl.line + 1 then
       sst = sst2
    end else
-      sst = 0 ; sst2 = 0
-      for q = 1 to rline - 1
-         call $sl_syntax('state', syl, lines<q>, sst, sst2, '')
-         sst = sst2
-      next q
+      if rline = w{'syntl'} + 0 then
+         sst = w{'synts'} + 0                       ;* the first row shown, as last time: nothing above it has changed (syn.sync)
+         sst2 = sst
+      end else
+         syc.k = int((rline - 1) / 100) + 1
+         if syc.k > syc.n then syc.k = syc.n
+         sst = if syc.k = 1 then 0 else syc.chk<syc.k> + 0
+         sst2 = sst
+         for q = ((syc.k - 1) * 100) + 1 to rline - 1
+            call $sl_syntax('state', syl, lines<q>, sst, sst2, '')
+            sst = sst2
+            if mod(q, 100) = 0 then
+               syc.k2 = (q / 100) + 1
+               if syc.k2 > syc.n then
+                  syc.chk<syc.k2> = sst
+                  syc.n = syc.k2
+               end
+            end
+         next q
+         w{'synchk'} = syc.chk
+         w{'synn'} = syc.n
+         w{'syntl'} = rline
+         w{'synts'} = sst
+      end
    end
    call $sl_syntax('line', syl, lines<rline>, sst, sst2, sty)
    sl.line = rline
+   return
+
+* The checkpoints as they stand for this text.  A checkpoint depends only on the lines above it, so after an edit those from the first changed line on go.  An edit by a key that
+*   works at the cursor (w{'synkey'}, macro.key) is at the cursor's line or the line it was on, and that is taken on trust: the proof, comparing the lines above, costs a copy of the
+*   text on every key.  Any other change (the program's, an undo, a paste) is proved or drops them all, and the next paint finds them again.
+syn.sync:
+   syc.chk = w{'synchk'}
+   syc.n = w{'synn'} + 0
+   if syc.n < 1 or w{'synfor'} # syl then
+      syc.chk = ''
+      syc.n = 1
+      w{'synfor'} = syl
+      w{'syntext'} = lines
+      w{'syncy'} = cy
+      w{'synchk'} = syc.chk
+      w{'synn'} = syc.n
+      w{'syntl'} = 0
+      return
+   end
+   syc.old = w{'syntext'}
+   if syc.old = lines then                       ;* a text that is one number equal to another as a number has no checkpoints to lose
+      w{'syncy'} = cy
+      w{'synkey'} = 0
+      return
+   end
+   syc.y = cy
+   if w{'syncy'} + 0 >= 1 and w{'syncy'} + 0 < syc.y then syc.y = w{'syncy'} + 0
+   syc.same = (syc.y = 1 or w{'synkey'} + 0)
+   if not(syc.same) then
+      syc.o = index(lines, @fm, syc.y - 1)
+      if syc.o then syc.same = ((syc.old[1, syc.o] : '|') = (lines[1, syc.o] : '|'))
+   end
+   if syc.same then
+      syc.k = int((syc.y - 1) / 100) + 1
+      if syc.n > syc.k then syc.n = syc.k
+      if syc.y < w{'syntl'} + 0 then w{'syntl'} = 0
+   end else
+      syc.n = 1
+      w{'syntl'} = 0
+   end
+   w{'syntext'} = lines
+   w{'syncy'} = cy
+   w{'synn'} = syc.n
+   w{'synkey'} = 0
    return
 end
 

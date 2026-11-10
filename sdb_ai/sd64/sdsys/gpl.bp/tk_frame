@@ -7,6 +7,13 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.1).
 * 22 Oct 26 dm  ctx<TK.C.GEN>: an app that has cleared or repainted the screen under the frame has all of it written again (TK-1, tool.keys).
+* 28 Oct 26 dm  S.88 L1 (F1): the cache is forgotten when the context's epoch is not the one last drawn ($tk_open makes a new one, $tk_close clears
+*               it: a second open of an app drew no border, status line or keys) or when the layout's geometry changed ($tk_layout 'refresh').
+* 1 Nov 26 dm  S.99 (look only): the focus marks.  A page that names its focus panes (ctx<TK.C.FOCI>) has [*] at the top right of the box of the pane with the focus
+*               and [-] on the others, as the IDE has had since 19 Oct (the owner's request); drawn only when two or more of them are on the screen and the pane with the
+*               focus is one of them, and written again only when a mark changed or the frame was forgotten.  A page that names none is drawn as before.
+* 1 Nov 26 dm  S.97 stage 1: draws the AI line ($tk_ai 'show') on a page that has given it a row (ctx<TK.C.AIROW>); nothing is drawn or changed for a page that has not.
+* 30 Oct 26 dm  S.88 F0a: the key table and the pane are kept in common /tkreg/ on every call, so that F1 can list the keys of the pane ($tk_help 'box'); $tk_close clears them.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -17,12 +24,15 @@
 *
 *   Draws, on the rows the layout gives (tk.h): the status line, in reverse video, with the pane in brackets first and the message after it; the border,
 *   one line across, in the library's own line character; the function-key row, in the bar's style, made by $tk_fkeys from the key table; and the app's name
-*   and the audience at the right end of row 0.  Each is written only when its text has changed since it was last written: an app calls this on every key
+*   and the audience at the right end of row 0; and, on a page that names its focus boxes (ctx<TK.C.FOCI>, S.99), [*] on the box of the pane with the focus and [-]
+*   on the others, over the top border beside the right corner.  Each is written only when its text has changed since it was last written: an app calls this on every key
 *   and about once a second, and an idle app must not rewrite 140 cells each time.  The cursor is put back where the widget with the focus had left it
 *   (SCREEN TEXT leaves it after the text).  An app that has a menu bar draws the menu first; this writes only the right end of row 0.
 *
-*   The values it compares with are kept in a common block, so one app at a time: $tk_open starts a new app, and a changed layout (ctx) redraws the border.
-*   An app that has cleared or repainted the screen under the frame (it got the key resize) raises ctx<TK.C.GEN>, and the next call writes all four parts again.
+*   The values it compares with are kept in a common block, so one app at a time.  They are forgotten, and all four parts written again, when the context
+*   is of another open than the one last drawn (its epoch, ctx<TK.C.EPOCH>: $tk_open makes a new one and $tk_close clears it), when the layout's geometry
+*   is not the one last drawn (W, H and the three rows: $tk_layout 'refresh' after a resize), and when the app raised ctx<TK.C.GEN> (it cleared or
+*   repainted the screen under the frame).
 *
 * END-DESCRIPTION
 *
@@ -35,20 +45,36 @@ $catalog $tk_frame
 $include sl.h
 $include tk.h
 
-   common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen
+   common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen, last.geo
+   common /tkepoch/ ep.next, ep.drawn             ;* the frame cache's epoch ($tk_open counts, $tk_close clears)
+   common /tkreg/ reg.keys, reg.pane, reg.epoch   ;* the key table and the pane of the app that is drawing, for $tk_help's list of keys ($tk_close clears)
+   common /tkmarks/ last.marks                    ;* the focus marks last written (S.99): their own block, so that /tkframe/, which $tk_menubar shares, is as it was
 
+   reg.keys = keys
+   reg.pane = pane
+   reg.epoch = ctx<TK.C.EPOCH>
    lw = ctx<TK.C.W>
-   * the app raised ctx<TK.C.GEN>: the screen under the frame was cleared or repainted (a resize, the cursor lock lifted), so none of what was written is known to be there
-   if ctx<TK.C.GEN> # last.gen then
+   ystat = ctx<TK.C.YSTAT>
+   ybord = ctx<TK.C.YBORD>
+   ykeys = ctx<TK.C.YKEYS>
+   geo = lw : '/' : ctx<TK.C.H> : '/' : ystat : '/' : ybord : '/' : ykeys
+   * the app raised ctx<TK.C.GEN>: the screen under the frame was cleared or repainted (a resize, the cursor lock lifted), so none of what was written is known to be there.
+   * F1 (28 Oct 26): so too when this is another open of an app (the epoch) or another layout (the geometry) than the one last drawn
+   forget = 0
+   if ctx<TK.C.GEN> # last.gen then forget = 1
+   if ctx<TK.C.EPOCH> # ep.drawn then forget = 1
+   if geo # last.geo then forget = 1
+   if forget then
       last.gen = ctx<TK.C.GEN>
+      ep.drawn = ctx<TK.C.EPOCH>
+      last.geo = geo
       last.stat = ''
       last.keys = ''
       last.bord = ''
       last.top = ''
+      last.marks = ''
    end
-   ystat = ctx<TK.C.YSTAT>
-   ybord = ctx<TK.C.YBORD>
-   ykeys = ctx<TK.C.YKEYS>
+   if unassigned(last.marks) then last.marks = ''
 
    * the status line: the pane in brackets, then the message
    t = ''
@@ -96,6 +122,84 @@ $include tk.h
       screen text a at lw - len(a),0 attr 'bar'
       call $sl_curat('back', keep.cur)
    end
+
+   * S.99: the focus marks, [*] on the box of the pane with the focus and [-] on the other boxes that can take it (ctx<TK.C.FOCI>, the layout's rectangles).  A pane named
+   *   twice (two names for one box) is one box; a box that is collapsed, or too narrow for a mark beside its corner, has none; fewer than two boxes, or a pane with the
+   *   focus that is none of them, and no mark is drawn at all, so that a mark never says something the page does not mean.  The page draws its boxes and raises
+   *   ctx<TK.C.GEN> when it does (a resize, a pane opened or closed), and the frame, which comes after, writes the marks over the top border again.
+   fo = ctx<TK.C.FOCI>
+   mk = ''
+   if fo # '' then
+      pd = ctx<TK.C.PANES>
+      mk.ids = '' ; mk.on = ''
+      for fi = 1 to dcount(fo, @vm)
+         fid = fo<1, fi, 1>
+         mn = dcount(mk.ids, @vm)
+         mj = 0
+         for mq = 1 to mn
+            if mk.ids<1, mq> = fid then mj = mq
+         next mq
+         if mj = 0 then
+            mj = mn + 1
+            mk.ids<1, mj> = fid
+            mk.on<1, mj> = 0
+         end
+         if fo<1, fi, 2> = pane then mk.on<1, mj> = 1
+      next fi
+      mk.n = 0 ; mk.any = 0
+      for mj = 1 to dcount(mk.ids, @vm)
+         for pk = 1 to dcount(pd, @vm)
+            if pd<1, pk, TK.P.ID> = mk.ids<1, mj> then
+               rc = ctx<TK.C.RECTS, pk>
+               if rc<1, 1, 5> and rc<1, 1, 3> >= 10 then
+                  mk.n += 1
+                  if mk.on<1, mj> then mk.any = 1
+                  mk<1, -1> = (rc<1, 1, 1> + rc<1, 1, 3> - 4) : @sm : rc<1, 1, 2> : @sm : (if mk.on<1, mj> then '[*]' else '[-]')
+               end
+               exit
+            end
+         next pk
+      next mj
+      if mk.n < 2 or not(mk.any) then mk = ''
+   end
+   * What is written is judged against the library's own picture of the screen (its shadow), not only against what this wrote last: a page may draw a box again
+   *   (a new title as the cursor moves) without raising ctx<TK.C.GEN>, and that rubs a mark out.  A mark is written when the shadow does not show it; marks that are
+   *   gone (the focus moved to a pane that has none, or the page named other boxes) have the top border put back where the shadow still shows them.
+   if mk # '' or last.marks # '' then
+      mk.scr = ''
+      call $sl_scr('get', mk.scr)
+      mk.out = ''
+      for mj = 1 to dcount(last.marks, @vm)
+         mx = last.marks<1, mj, 1> ; my = last.marks<1, mj, 2>
+         keep = 0
+         for mq = 1 to dcount(mk, @vm)
+            if mk<1, mq, 1> = mx and mk<1, mq, 2> = my then keep = 1
+         next mq
+         if not(keep) then
+            sh = mk.scr<SL.S.SHADOW, my + 1>[mx + 1, 3]
+            if sh = '[*]' or sh = '[-]' then mk.out<1, -1> = mx : @sm : my : @sm : ''
+         end
+      next mj
+      for mj = 1 to dcount(mk, @vm)
+         mx = mk<1, mj, 1> ; my = mk<1, mj, 2>
+         if mk.scr<SL.S.SHADOW, my + 1>[mx + 1, 3] # mk<1, mj, 3> then mk.out<1, -1> = mx : @sm : my : @sm : mk<1, mj, 3>
+      next mj
+      if mk.out # '' then
+         keep.cur = ''
+         call $sl_curat('get', keep.cur)
+         call $sl_line('h', 0, mk.hc)
+         for mj = 1 to dcount(mk.out, @vm)
+            t = mk.out<1, mj, 3>
+            if t = '' then t = str(mk.hc, 3)
+            screen text t at mk.out<1, mj, 1>,mk.out<1, mj, 2>
+         next mj
+         call $sl_curat('back', keep.cur)
+      end
+      last.marks = mk
+   end
+
+   * the AI line, on the row above the status line that the layout took from the body, when the page asked for one ($tk_aipage 'init'); it draws only when it changed
+   if ctx<TK.C.AIROW> and ctx<TK.C.AI> then call $tk_ai('show', ctx, '', '')
 
    return
 end

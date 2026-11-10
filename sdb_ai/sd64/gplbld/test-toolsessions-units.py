@@ -116,21 +116,27 @@ def checks(raw):
     ck("SS9", "the lists are read every three seconds while the page waits for a key, and written again only when what was read differs from what was shown",
        "screen key timeout 3 returning nm" in pg and "gosub timed.refresh" in pg and "old.sig = sig" in tr and "if sig # old.sig then" in tr and "sig = udata : @fm : locks : @fm : inh" in ra)
     acts = sorted(set(re.findall(r"call \$tk_keys\('add', keys, '[^']+', '[^']+', '([a-z]+)'", pg)))
-    ck("SS10", "the key table has exactly: help, switch, logout, unlock, inhibit, refresh, quit; L belongs to the sessions list and U to the locks list, in the table and in the dispatch",
-       acts == sorted(["help", "switch", "logout", "unlock", "inhibit", "refresh", "quit"]) and "'l', 'logout', 'logout', 'Sessions'" in pg and "'u', 'unlock', 'unlock', 'Locks'" in pg
+    ck("SS10", "the key table has exactly: help, switch, logout, unlock, inhibit, refresh, quit - and the Esc row that opens the menu bar (S.88 U2; the bar runs nothing, a choice is one of those keys); L belongs to the sessions list and U to the locks list, in the table and in the dispatch",
+       acts == sorted(["help", "switch", "logout", "unlock", "inhibit", "refresh", "quit", "menu", "output", "find"]) and "'l', 'logout', 'logout', 'Sessions'" in pg and "'u', 'unlock', 'unlock', 'Locks'" in pg
        and "case nm = 'l' and pane = 1" in pg and "case nm = 'u' and pane = 2" in pg, " ".join(acts))
     ck("SS11", "after a command the lists are read again and the whole page is drawn again, and what the status line shows is the verb's own first line",
        len(re.findall(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?gosub first\.line[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", pg)) == 3 and "trim(out<oi>) # ''" in block(pg, "first.line") and "for oi = 1 to dcount(out, @fm)" in block(pg, "first.line"))
     ck("SS12", "the page has a [?] and F1, ? and a click show tool.sessions.page, whose record exists with a title, a documentation page and a body",
-       pg.count("'tool.sessions.page'") == 2 and "call $tk_help('mark', 134, 2, 0, 0)" in pg and "call $tk_help('hit', mev, 134, 2, hit.m)" in pg
+       pg.count("'tool.sessions.page'") == 2 and "call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, ssn.x + ssn.w - 5, ssn.y + 1, hit.m)" in pg
        and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "02-sessions-and-locks" and raw["help"].split("\n")[2].strip() != "")
     dl = block(pg, "draw.all")
     dsn = block(pg, "draw.sessions")
     dlk = block(pg, "draw.locks")
     dr = block(pg, "draw.row")
-    ck("SS13", "the layout fits the 140 by 43 frame: three boxes (rows 1-15, 16-29, 30-39), 11 session rows at y 3-13 with the counts at 14, 10 lock rows at y 18-27 with the lock limit at 28, 7 lines of explanation at y 31-37 and the hint at 38",
-       "screen box at 1,1 size 138,15" in dl and "screen box at 1,16 size 138,14" in dl and "screen box at 1,30 size 138,10" in dl and "VS = 11" in pg and "VL = 10" in pg
-       and "at 3,2 + r attr rat" in dsn and "at 3,14 attr" in dsn and "at 3,17 + r attr rat" in dlk and "at 3,28 attr" in dlk and "for r = 1 to 7" in dr and "at 3,30 + r width 134" in dr and "at 3,38 attr" in dr)
+    dc = block(pg, "declare.layout")
+    gr = block(pg, "get.rects")
+    ck("SS13", "the layout is the layout service's (S.88 L2): three panes declared at the 140 by 43 sizes (rows 15, 14 and 10 of 138), their rectangles asked of $tk_layout and drawn as boxes; 11 session rows under the heading with the counts on the box's "
+       "second row from the foot, 10 lock rows with the lock limit there, 7 lines of explanation and the hint there; (the numbers at 140 by 43 are test-l2-admin-units.py's)",
+       "ld<1> = 'sessions' : @vm : 1 : @vm : 1 : @vm : 15 : @vm : 138" in dc and "ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 14 : @vm : 138" in dc and "ld<3> = 'row' : @vm : 3 : @vm : 1 : @vm : 10 : @vm : 138" in dc
+       and "call $tk_layout('declare', ctx, ld, perr)" in dc and "VS = ssn.h - 4" in gr and "VL = lck.h - 4" in gr and "VR = rwb.h - 3" in gr
+       and "screen box at ssn.x,ssn.y size ssn.w,ssn.h" in dl and "screen box at lck.x,lck.y size lck.w,lck.h" in dl and "screen box at rwb.x,rwb.y size rwb.w,rwb.h" in dl
+       and "at ssn.x + 2,ssn.y + 1 + r attr rat" in dsn and "at ssn.x + 2,ssn.y + ssn.h - 2 attr" in dsn and "at lck.x + 2,lck.y + 1 + r attr rat" in dlk and "at lck.x + 2,lck.y + lck.h - 2 attr" in dlk
+       and "for r = 1 to VR" in dr and "at rwb.x + 2,rwb.y + r width rtw" in dr and "at rwb.x + 2,rwb.y + rwb.h - 2 attr" in dr)
     ck("SS14", "the kind of a session comes from the kernel's flag bits, SDNet before API before phantom (the SDNet flag sets the API one too); 'you' and '(logout pending)' come from @userno and USR$LOGOUT",
        re.search(r"case bitand\(flg, USR\$SDNET\)\s*\n\s*kind = 'sdnet'\s*\n\s*case bitand\(flg, USR\$SDVBSRVR\)\s*\n\s*kind = 'api'\s*\n\s*case bitand\(flg, USR\$PHANTOM\)\s*\n\s*kind = 'phantom'", block(pg, "session.line")) is not None
        and "if v<1, 1> = @userno then stt = 'you'" in block(pg, "session.line") and "bitand(flg, USR$LOGOUT)" in block(pg, "session.line"))
@@ -140,7 +146,12 @@ def checks(raw):
     ar = block(pg, "audit.run")
     ck("SS16", "every command the page ran is audited, once, after $tk_run answered without an error: audit.run writes 'tool run app=tool.sessions command=' + the sentence + the status, and it is called in the else branch of each run, before the status line is made",
        "void kernel(K$AUDIT, 'tool run app=tool.sessions command=' : sent : ' status=' : stat)" in ar and pg.count("gosub audit.run") == 3
-       and len(re.findall(r"if err # '' then\s*\n\s*msg = err\s*\n\s*end else\s*\n\s*gosub audit\.run\s*\n\s*gosub first\.line", pg)) == 3)
+       and len(re.findall(r"if err # '' then\s*\n\s*msg = err\s*\n(?:\s*call \$tk_out\('add', ctx, 'refuse'[^\n]*\n)?\s*end else\s*\n\s*gosub audit\.run\s*\n\s*gosub first\.line", pg)) == 3)
+    lo_rows = [int(x) for x in re.findall(r"lo<\d> = '[a-z]+' : @vm : \d+ : @vm : 1 : @vm : (\d+) : @vm : 138", pg)]
+    ck("SS17", "the output pane (Ctrl-O): the open layout (rows named lo, the closed one stays the page's own) is 13 + 10 + 10 + 6 = 39 rows with the pane named output; the bar is given outopen as BUSY and Esc closes the pane first; Ctrl-PgUp / Ctrl-PgDn and the wheel scroll it only while open; every command's answer is added once, refusals too",
+       lo_rows == [13, 10, 10, 6] and sum(lo_rows) == 39 and "lo<4> = 'output'" in pg and "nm, outopen, mr)" in pg and "case nm = 'esc'\n         if outopen then gosub toggle.out" in pg
+       and "case (nm = 'ctrl-pgup' or nm = 'ctrl-pgdn') and outopen" in pg and 0 < pg.find("if outopen then\n      call $tk_out('mouse', ctx, mev, '', oc)") < pg.find("if mev<1> = 'press' and mev<2> = 1 then")
+       and pg.count("call $tk_out('add'") == 6 and "if outopen then call $tk_out('draw', ctx, 'output', '', oc)" in pg and "case nm = 'ctrl-o'\n         gosub toggle.out" in pg, repr(lo_rows))
     return rows
 
 
@@ -169,8 +180,8 @@ MUTANTS = [
     ("the start audit line comes after the first read", "SS2", sub("page", "   void kernel(K$AUDIT, 'tool start app=tool.sessions')\n", "   call !listu(udata)\n   void kernel(K$AUDIT, 'tool start app=tool.sessions')\n")),
     ("an ordinary account gets the verb", "SS1", setkey("newvoc_has", "1")),
     ("the page may run another command", "SS3", sub("page", "allow = 'logout unlock inhibit.login'", "allow = 'logout unlock inhibit.login sh'")),
-    ("the page runs a command itself", "SS3", sub("page", "      call $tk_run(allow, sent, out, stat, err)\n      if err # '' then\n         msg = err\n      end else\n         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')", "      execute sent capturing out\n      if err # '' then\n         msg = err\n      end else\n         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')")),
-    ("the unlock box is skipped", "SS3", sub("page", "   call $tk_confirm(sent, el, notyped, res, cmsg)\n   if res = 'run' then\n      call $tk_run(allow, sent, out, stat, err)\n      if err # '' then\n         msg = err\n      end else\n         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')", "   res = 'run'\n   if res = 'run' then\n      call $tk_run(allow, sent, out, stat, err)\n      if err # '' then\n         msg = err\n      end else\n         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')")),
+    ("the page runs a command itself", "SS3", sub("page", "      call $tk_run(allow, sent, out, stat, err)", "      execute sent capturing out")),
+    ("the unlock box is skipped", "SS3", sub("page", "   call $tk_confirm(sent, el, notyped, res, cmsg)\n   if res = 'run' then\n      call $tk_run(allow, sent, out, stat, err)", "   res = 'run'\n   if res = 'run' then\n      call $tk_run(allow, sent, out, stat, err)")),
     ("the page writes a file", "SS3", sub("page", "   notyped = ''", "   notyped = ''\n   write 'x' to acc.f, 'y'")),
     ("the session you are in can be logged out", "SS4", sub("page", "   if uid = @userno then\n      msg = 'that is the session you are in; Ctrl-Q leaves the page'\n      return\n   end\n", "")),
     ("a pending logout is refused (a dead session could then never be cleared)", "SS4", sub("page", "   if uid = @userno then\n      msg = 'that is the session you are in; Ctrl-Q leaves the page'\n      return\n   end\n", "   if uid = @userno then\n      msg = 'that is the session you are in; Ctrl-Q leaves the page'\n      return\n   end\n   if bitand(v<1, 4>, USR$LOGOUT) then\n      msg = 'pending'\n      return\n   end\n")),
@@ -196,13 +207,19 @@ MUTANTS = [
     ("the page shows its old rows after a command", "SS11", sub("page", "         msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')\n      end\n      gosub read.all\n      gosub draw.all", "         msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')\n      end\n      gosub draw.all")),
     ("the help key names a record that does not exist", "SS12", sub("page", "call $tk_help('box', 'tool.sessions.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'", "call $tk_help('box', 'tool.sessions.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'")),
     ("the help record names no page", "SS12", sub("help", "02-sessions-and-locks", "")),
-    ("the locks box overruns the explanation", "SS13", sub("page", "screen box at 1,16 size 138,14 title 'Locks'", "screen box at 1,16 size 138,15 title 'Locks'")),
-    ("a lock row is drawn on the border", "SS13", sub("page", "   screen text s at 3,28 attr 'bold' width 134", "   screen text s at 3,29 attr 'bold' width 134")),
+    ("the locks box overruns the explanation", "SS13", sub("page", "ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 14", "ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 15")),
+    ("a lock row is drawn on the border", "SS13", sub("page", "   screen text s at lck.x + 2,lck.y + lck.h - 2 attr 'bold' width ltw", "   screen text s at lck.x + 2,lck.y + lck.h - 1 attr 'bold' width ltw")),
+    ("the lock rows are counted for a box one row higher", "SS13", sub("page", "VL = lck.h - 4", "VL = lck.h - 3")),
     ("API before SDNet", "SS14", sub("page", "      case bitand(flg, USR$SDNET)\n         kind = 'sdnet'\n      case bitand(flg, USR$SDVBSRVR)\n         kind = 'api'", "      case bitand(flg, USR$SDVBSRVR)\n         kind = 'api'\n      case bitand(flg, USR$SDNET)\n         kind = 'sdnet'")),
     ("every holder is signed on", "SS15", sub("page", "   holder = 'no session'\n", "   holder = 'signed on'\n")),
-    ("a command is run without an audit line (unlock)", "SS16", sub("page", "         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')", "         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'released')")),
-    ("the audit line is written even when the command did not run", "SS16", sub("page", "      call $tk_run(allow, sent, out, stat, err)\n      if err # '' then\n         msg = err\n      end else\n         gosub audit.run\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'done')", "      call $tk_run(allow, sent, out, stat, err)\n      gosub audit.run\n      if err # '' then\n         msg = err\n      end else\n         gosub first.line\n         msg = (if said # '' then said[1, 130] else 'done')")),
+    ("a command is run without an audit line (unlock)", "SS16", sub("page", "         gosub audit.run\n         gosub first.line\n         otext = said\n         if otext = '' then otext = 'ran'\n         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')\n         msg = (if said # '' then said[1, 130] else 'released')", "         gosub first.line\n         otext = said\n         if otext = '' then otext = 'ran'\n         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')\n         msg = (if said # '' then said[1, 130] else 'released')")),
+    ("the audit line is written even when the command did not run", "SS16", sub("page", "      call $tk_run(allow, sent, out, stat, err)\n      if err # '' then\n         msg = err\n         call $tk_out('add', ctx, 'refuse', sent : '  ' : err, '')           ;* what the command answered stays in the output pane, whether or not it is open\n      end else\n         gosub audit.run\n         gosub first.line\n         otext = said\n         if otext = '' then otext = 'ran'\n         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')\n         msg = (if said # '' then said[1, 130] else 'done')", "      call $tk_run(allow, sent, out, stat, err)\n      gosub audit.run\n      if err # '' then\n         msg = err\n         call $tk_out('add', ctx, 'refuse', sent : '  ' : err, '')           ;* what the command answered stays in the output pane, whether or not it is open\n      end else\n         gosub first.line\n         otext = said\n         if otext = '' then otext = 'ran'\n         call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')\n         msg = (if said # '' then said[1, 130] else 'done')")),
     ("the audit line names the wrong thing", "SS16", sub("page", "'tool run app=tool.sessions command=' : sent : ' status=' : stat", "'tool run app=tool.sessions command=' : uid : ' status=' : stat")),
+    ("the bar is not told the output pane is open", "SS17", sub("page", "nm, outopen, mr)", "nm, 0, mr)")),
+    ("Esc does not close the output pane", "SS17", sub("page", "case nm = 'esc'\n         if outopen then gosub toggle.out", "case nm = 'esc'\n         if 0 then gosub toggle.out")),
+    ("the locks box of the open layout is a row too tall", "SS17", sub("page", "lo<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 10", "lo<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 11")),
+    ("the wheel does not scroll the pane", "SS17", sub("page", "call $tk_out('mouse', ctx, mev, '', oc)", "oc = ''")),
+    ("an answer is not kept in the pane", "SS17", sub("page", "call $tk_out('add', ctx, 'ok', sent : '  ' : otext, '')", "oc = ''")),
 ]
 
 

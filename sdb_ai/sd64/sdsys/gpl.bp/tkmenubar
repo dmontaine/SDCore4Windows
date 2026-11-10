@@ -1,0 +1,34 @@
+* TKMENUBAR
+* The public full-screen toolkit (S.130): the menu bar, the finder (F2) and the context menu.  A wrapper over $tk_menubar.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkmenubar(op, ctx, keys, pane, a, b, c)       ALWAYS SEVEN ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   The ops are $tk_menubar's: draw, key, click, open, palette and context.  The bar is made from the key table and RUNS NOTHING: choosing an entry returns the action's id
+*   and the key it is bound to, and the program does what it does for that key in its own CASE, with its own rights and gates.  F2 is the finder, which lists every entry of
+*   the bar's menus in one window; Shift-F10 and a right click open the context menu.  The slots of the context that belong to the AI line are cleared first.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkmenubar(op, ctx, keys, pane, a, b, c)
+$catalog !tkmenubar
+
+$include tk.h
+
+   ctx<TK.C.AI> = ''
+   ctx<TK.C.AIROW> = ''
+   call $tk_menubar(op, ctx, keys, pane, a, b, c)
+   return
+end
+
+* END-CODE

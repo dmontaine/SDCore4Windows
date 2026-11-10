@@ -7,16 +7,20 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the question as Esc does.
+* 09 Nov 26 dm  S.184: HISTORY list: Up and Down bring back earlier answers.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   SCREEN ASK prompt {VALUE v} {WIDTH n} {TITLE t} {AT x,y} {MASK} {RETURNING v} {THEN ... ELSE ...}
+*   SCREEN ASK prompt {VALUE v} {WIDTH n} {TITLE t} {AT x,y} {MASK} {HISTORY list} {RETURNING v} {THEN ... ELSE ...}
 *
 *   is compiled into
 *
-*   call !screen_ask(prompt, value, width, title, x, y, mask, ret, status)
+*   call !screen_ask(prompt, value, width, title, x, y, mask, hist, ret, status)
 *
+*     hist     earlier answers, newest first, as fields.  Up shows the next older one and Down the next newer; Down past the
+*              newest gives back what had been typed.  The caller keeps the list; nothing is added to it here.  Left out or
+*              empty, Up and Down do nothing.  A MASK question never recalls (a password is not shown again).
 *     prompt   shown above the field
 *     value    the text the field starts with
 *     width    the width of the field in cells (default 30, at most what the screen holds)
@@ -34,7 +38,7 @@
 * START-CODE
 
 $internal
-subroutine screen_ask(prompt, value, width, title, ax, ay, mask, ret, status)
+subroutine screen_ask(prompt, value, width, title, ax, ay, mask, hist, ret, status)
 $catalog !screen_ask
 
 $include sl.h
@@ -79,6 +83,9 @@ $include sl.h
    if mask # '' then w{'mask'} = '*'
    call $sl_entry('init', w, scr, '', r)
    call $sl_entry('focus', w, scr, 1, r)
+   hn = if mask # '' or hist = '' then 0 else dcount(hist, @fm)
+   hi = 0                                     ;* 0: the line as typed; n: the n-th earlier answer
+   draft = ''
    loop
       call $sl_key('', k)
       if k = '' or k = 'guardquit' then k = 'esc'      ;* guardquit: the user left from the cursor lock ($sl_guardmode)
@@ -94,7 +101,12 @@ $include sl.h
             call $sl_resize(scr)                    ;* the terminal's size changed: the box is drawn again with the rest
             r = 'handled'
          end else
-            call $sl_entry('key', w, scr, k, r)
+            if (k = 'up' or k = 'down') and hn > 0 then
+               gosub recall
+               r = 'handled'
+            end else
+               call $sl_entry('key', w, scr, k, r)
+            end
          end
       end
       st = r<1>
@@ -109,6 +121,21 @@ $include sl.h
       status = 0
    end
 
+   return
+
+* In: k (up or down), hi.  The field shows the older or newer answer, with the cursor after it ('init' puts it there).
+recall:
+   if k = 'up' then
+      if hi >= hn then return
+      if hi = 0 then draft = w{'value'}
+      hi += 1
+   end else
+      if hi = 0 then return
+      hi -= 1
+   end
+   w{'value'} = if hi then hist<hi> else draft
+   call $sl_entry('init', w, scr, '', r)
+   call $sl_entry('draw', w, scr, '', r)
    return
 end
 

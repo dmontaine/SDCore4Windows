@@ -1,0 +1,48 @@
+* CED_SUB
+* CALL !CED(collection) - the data collection editor for a variable (openQM !CED(), 1.2-0).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 12 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !ced(collection)
+*
+*   The collection (or array) is shown in the editor of the CED command and may be changed
+*   there; it is changed on return if the user kept the changes (Ctrl-S, or Y when asked on
+*   leaving) and is as it was if not.  A string holding a JSON object or array is taken as the
+*   collection it parses to, and a null string as an empty collection; on return the variable
+*   holds the collection.  Anything else is left alone.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine ced_sub(c)
+$catalog !ced
+
+   kind = jtype(c)
+   begin case
+      case kind = 'collection' or kind = 'array'
+         null
+      case kind = 'string' and c = ''
+         c = collection()
+      case kind = 'string'
+         y = jparse(c)
+         if status() # 0 then return
+         if jtype(y) # 'collection' and jtype(y) # 'array' then return
+         c = y
+      case 1
+         return
+   end case
+
+   call $cedit(c, '', '', 0, sysmsg(12164), result)
+
+   return
+end
+
+* END-CODE

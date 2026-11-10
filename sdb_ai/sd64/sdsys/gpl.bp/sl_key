@@ -10,6 +10,12 @@
 *               before a key is read; off the screen, $sl_guard takes the keyboard.  'guardquit' is the new key name; a lift
 *               of the lock is reported as 'resize', since the screen is the guard's and the program must draw it again.
 * 22 Oct 26 dm  An Alt-letter is the key alt-x (KEYCODE is asked for it with BINDKEY(, -7) for the read; it used to ring the bell and drop it).
+* 9 Nov 26 dm   S.184 stage 2: Esc and DEL (or Esc and ^H) is the key alt-bs, Alt-Backspace; it was 'alt-' and a control character no program could name.
+* 28 Oct 26 dm  S.88 L1.  R-b: the cursor lock's layout mode ($sl_guardmode with 'layout'): the window against the floor decides, not the cursor.
+*               R-a: every 'resize' handed out is noted (common /slpend/) until the program's own wait (SCREEN KEY, SCREEN WAIT) has delivered one;
+*               a dialogue that read it ($sl_menu, $sl_msgbox, SCREEN ASK, $sl_pickwin, $tk_confirm's and $tk_ai's boxes, the IDE's name box) leaves
+*               it noted, and the program's next wait delivers it ($sl_scr 'pending').
+* 3 Nov 26 dm  S.113: after $sl_guard has drawn its warning the screen is marked unsynced ($sl_scr 'unsync'), so that the next flush repaints it whole.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -41,8 +47,9 @@ $include keyin.h
 $include err.h
 
    common /slsz/ sz.last, sz.has, sz.held
-   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit, g.mode, g.lw, g.lh
    common /slcur/ cu.has, cu.x, cu.y, cu.hid
+   common /slpend/ rz.pending                     ;* 1: a 'resize' was handed out and no program's wait has delivered one since ($sl_scr 'pending')
 
    name = ''
    if system(25) then return              ;* a phantom has no keyboard: asking for a key would abort it
@@ -80,6 +87,10 @@ $include err.h
 
    remain = timeout                       ;* seconds still to wait, null for ever
    if remain = 0 then remain = ''
+   * 28 Oct 26 (S.88 phase 1): a key that means nothing (an unbound sequence, a byte of 128 or more, a cut-short or malformed mouse report) is IGNORED, and the wait goes on.  It used to come
+   * back as a null name with STATUS() 0, which $sl_form takes for the end of the input and the IDE took for "leave": one split mouse report closed it and lost the unsaved text.
+   loop
+   ign = 0
    loop
    until k # '' do
       alt.was = bindkey('', -7)           ;* an Alt-letter comes back as Esc and the letter, for this read only
@@ -113,12 +124,23 @@ $include err.h
    n = seq(k[1, 1])
 
    begin case
+      case k[1, 2] = char(27) : char(2)
+         name = k[3, 99]                       ;* KEYCODE took a whole control sequence: its modified-key name (ctrl-right, shift-up ...), or none, which is ignored
+         if name = '' then ign = 1
+      case len(k) = 2 and k[1,1] = char(27) and (k[2,1] = char(127) or k[2,1] = char(8))
+         name = 'alt-bs'                       ;* 9 Nov 26 (S.184 stage 2): Alt-Backspace (Esc and DEL or ^H, whichever the terminal's Backspace sends): SED's delete the word before
       case len(k) = 2 and k[1,1] = char(27)
          name = 'alt-' : downcase(k[2,1])      ;* an Alt-letter (or Alt-digit or Alt-sign): Alt+S and Alt+s are both alt-s
       case len(k) > 1
          name = k                     ;* A string a binding gave: handed back as it is
       case n = K$MOUSE
          gosub read.mouse
+         if name = '' then ign = 1
+      case n = K$PASTE.START
+         gosub read.paste
+         if name = '' then ign = 1
+      case n = K$PASTE.END
+         ign = 1                               ;* the end of a paste whose start was lost: nothing to do
       case n = K$UP ; name = 'up'
       case n = K$DOWN ; name = 'down'
       case n = K$LEFT ; name = 'left'
@@ -139,17 +161,29 @@ $include err.h
       case n < 32 or n = 127 ; name = 'ctrl-?'
       case 1 ; name = k
    end case
+   if ign then k = ''
+   until not(ign) do
+   repeat
 
    return
 
 * The program asked for the lock, and its cursor ($sl_curat) is off the screen: $sl_guard takes the keyboard.  It returns when the
 * window is big enough (the screen is then the guard's, not the program's: the size that was kept is forgotten, so that this call
 * goes on to report 'resize' and the program draws everything again) or when the user chose to leave.
+* 28 Oct 26 (R-b): in the layout mode the window decides, against the program's floor, wherever the cursor is; $sl_guard is given the floor's last cell as the
+* "cursor", so that it holds the keyboard exactly while the window is smaller than the floor, and its message is the layout mode's.
 guard.cursor:
-   if not(cu.has) or cu.hid then return
-   call $sl_window(gw, gh)
-   if cu.x < gw and cu.y < gh then return
-   call $sl_guard(g.name, g.minw, g.minh, cu.x, cu.y, gres)
+   if g.mode = 'layout' then
+      call $sl_window(gw, gh)
+      if gw >= g.minw and gh >= g.minh then return
+      call $sl_guard(g.name, g.minw, g.minh, g.minw - 1, g.minh - 1, gres, 'layout')
+   end else
+      if not(cu.has) or cu.hid then return
+      call $sl_window(gw, gh)
+      if cu.x < gw and cu.y < gh then return
+      call $sl_guard(g.name, g.minw, g.minh, cu.x, cu.y, gres)
+   end
+   call $sl_scr('unsync', '')               ;* S.113: the guard cleared the terminal and drew its warning: the library's picture of it is not true now
    if gres = 'quit' then
       g.quit = 1
    end else
@@ -161,9 +195,12 @@ guard.cursor:
 * The size of the terminal is not what it was: the key is 'resize'.  This routine does NOT draw anything: the live screen context
 * is the caller's (a dialogue draws into its own copy, which becomes the kept one only when the statement ends), so the caller
 * calls $sl_resize on it.  SCREEN KEY, which has no dialogue, asks $sl_scr, which does it for the kept context.
+* 28 Oct 26 (R-a): it is noted as handed out; the program's own wait clears the note when it is the one that delivers it, and a dialogue that
+* swallows it leaves the note for the program's next wait.
 resized:
    sz.last = size.now
    name = 'resize'
+   rz.pending = 1
    return
 
 * KEYCODE gave K$MOUSE: an xterm mouse report started (ESC [ <).  The rest is b;x;y and M (pressed or moved) or m
@@ -188,9 +225,11 @@ read.mouse:
    b += 0
    mods = ''
    if bitand(b, 4) then mods := 's'
-   if bitand(b, 8) then mods := mods : 'a'
-   if bitand(b, 16) then mods := mods : 'c'
+   * 31 Oct 26 dm (S.94): both appended mods to itself (:= already appends), so shift and control read as (ssc) and shift and alt as (ssa); found by sandbox-gpm.py G3d
+   if bitand(b, 8) then mods := 'a'
+   if bitand(b, 16) then mods := 'c'
    base = bitand(b, 3)
+   if bitand(b, 64) and base >= 2 then return          ;* a sideways wheel or swipe (66, 67): no key, it used to be read as the wheel down
    begin case
       case bitand(b, 64)
          kind = 'wheel'
@@ -207,6 +246,48 @@ read.mouse:
    end case
    call $sl_mouse('set', kind : @fm : btn : @fm : (mx - 1) : @fm : (my - 1) : @fm : mods)
    name = 'mouse'
+   return
+
+* KEYCODE gave K$PASTE.START: the terminal's bracketed paste (the library switched it on with ESC [ ? 2004 h): the pasted text follows, then ESC [ 2 0 1 ~.  It is one key, 'paste', and the
+* text is in $sl_mouse('paste.get') - never keys, so a pasted escape sequence or control character runs nothing.  What is kept: printable ASCII, a line end (CR, LF or CRLF) as a field mark,
+* a tab as four spaces; every other control byte and every byte of 128 or more is dropped.  At most 20,000 characters are kept (the rest is read and thrown away).  A paste that stops
+* short of its end mark (a lost connection) is taken as far as it came.
+read.paste:
+   name = ''
+   raw = ''
+   ptxt = ''
+   pend = char(27) : '[201~'
+   pn = 0
+   loop
+      c = keyin(0.5)
+      set.status 0
+   until c = '' do
+      pn += 1
+      if len(raw) < 60000 then raw := c
+      if c = '~' and raw[len(raw) - 5, 6] = pend then
+         raw = raw[1, len(raw) - 6]
+         c = ''
+      end
+      if c = '' then exit
+   repeat
+   crlf = char(13) : char(10)
+   raw = change(raw, crlf, char(10))
+   raw = change(raw, char(13), char(10))
+   for pj = 1 to len(raw)
+      pc = raw[pj, 1]
+      pv = seq(pc)
+      if len(ptxt) < 20000 then
+         begin case
+            case pv = 10 ; ptxt := @fm
+            case pv = 9 ; ptxt := '    '
+            case pv >= 32 and pv < 127 ; ptxt := pc
+         end case
+      end
+   next pj
+   if ptxt # '' then
+      call $sl_mouse('paste.set', ptxt)
+      name = 'paste'
+   end
    return
 end
 

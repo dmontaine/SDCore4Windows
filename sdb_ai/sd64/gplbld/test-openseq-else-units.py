@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # test-openseq-else-units.py - an OPENSEQ that takes ELSE keeps the name locked until the file variable is closed (26 Oct 2026; found on the VM in home_entry, where the first
 # session at the home screen kept an update lock on the ABSENT start.default for as long as it lived and the next session waited at sign-on).  A program that lives as long as a page
-# or an editor is open must close the variable in the ELSE branch.  home_entry, setstart, tool_menus, viewlist and osread are held by test-home-units.py (H28a); this holds the long-lived
-# programs the audit of the same day added: SED's open of a file by path (SD Core's configuration and catalogue pages, which the audit also fixed, are not in Solo - Solo carry 21, copied from SD Core).
-# Left alone on purpose: apisrvr (seqfiles(os.slot) is an array element, and `unassigned()` of one is not known to compile; the failed open of an API request leaves the lock until the slot
-# is used again - open item), and the short programs that end at once (acc_archive, acc_os_bakdir, netcred, netdefs, locktracer, importdata, ...), whose variable goes with them.
+# or an editor is open must close the variable in the ELSE branch.  home_entry, setstart, tool_menus and osread are held by test-home-units.py (H28a; viewlist went with the pdf verb, 9 Nov 26, S.187); this holds the long-lived
+# programs the audit of the same day added: the configuration page (two reads), the catalogue page (the object a pointer leads to) and SED's open of a file by path.
+# Left alone on purpose: apisrvr - NOT a defect there (measured 26 Oct, S.83): op_openseq takes the ELSE clause for an item that is not there with STATUS() = 0 and a live file variable that
+# holds the lock, vb.openseq treats that as an open file (os.st = 0), and the client's close releases it; sandbox-qmclient.py row P9b holds it - and the short programs that end at once (acc_archive, acc_os_bakdir, netcred, netdefs, locktracer, importdata, ...), whose variable goes with them.
 # FREE CHECK: the BASIC read as text; no install, no sd.
 #
 #   python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-openseq-else-units.py
@@ -16,7 +16,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 BP = os.environ.get("BPDIR", os.path.normpath(os.path.join(HERE, "..", "sdsys", "gpl.bp")))
 # program -> the file variables whose OPENSEQ must close in ELSE
-WANT = {"sed": ["fpath.f"]}       # Solo carry 21: SD Core's configuration and catalogue pages (tool_config, tool_catalog) are not in Solo
+WANT = {"tool_config": ["tf", "cf"], "tool_catalog": ["sf"], "ide_osfile": ["f"]}       # 28 Oct 26: ide_osfile (S.88 stage E) opens a file the IDE's tab then holds for as long as it is open
 
 
 def read(name):
@@ -117,8 +117,11 @@ def selftest():
             print("  [MISSED] %s: failing rows %s" % (name, failing))
             missed += 1
 
-    mutant("sed first open", "sed", "            if not(unassigned(fpath.f)) then close fpath.f ", "            if not(unassigned(fpath.f)) then null ")
-    mutant("sed second open", "sed", "               if not(unassigned(fpath.f)) then close fpath.f\n               open.ok = @false", "               open.ok = @false")
+    mutant("tool_config table read", "tool_config", "      if not(unassigned(tf)) then close tf ", "      if not(unassigned(tf)) then null ")
+    mutant("tool_config conf read", "tool_config", "      if not(unassigned(cf)) then close cf ", "      if not(unassigned(cf)) then null ")
+    mutant("tool_catalog object", "tool_catalog", "            if not(unassigned(sf)) then close sf ", "            if not(unassigned(sf)) then null ")
+    mutant("ide_osfile open", "ide_osfile", "      if not(unassigned(f)) then close f\n", "      if not(unassigned(f)) then null\n")
+    # (the "sed second open" mutant is gone: SED's retry with the name in upper case was removed on 28 Oct 26, so there is no second OPENSEQ to mutate; test-gates-units B28 holds that)
     print("selftest: %d of %d mutants caught, %d missed" % (caught, caught + missed, missed))
     return 0 if missed == 0 else 1
 

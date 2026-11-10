@@ -7,6 +7,16 @@
 *
 * START-HISTORY:
 * 24 Oct 26 dm  New.
+* 30 Oct 26 dm  S.88 F0a pilot: a menu bar made from the key table ($tk_menubar: Esc, F10, Alt and a letter, a click on row 0), the Esc key in the table, the key hint taken out of the first
+*               status message; F1 lists the keys of the pane by itself ($tk_help).
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the gate list shows
+*               more rows and every box is wider (the text is wrapped at the box's width), and a resize is $tk_layout 'refresh' and all of it drawn again.
+* 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; refresh is the one action offered to the model.  An account without the AI
+*               sees the page as it was.
+* 7 Nov 26 dm   S.166: the home gate (kind 'start'): the account's register field ACC$START through $tk_startof.
+* 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -19,7 +29,9 @@
 *   asks the kernel what the session may do (kernel(K$..., -1), the same answer every gate gives) and the system which route groups the person is in; it writes no file, runs no
 *   command and writes no audit line.  Nothing is probed: it never tries an operation to learn whether it works.
 *
-*   Keys: Up and Down move, PgUp and PgDn and Home and End jump, F5 asks again, F1 or ? or a click on the [?] explains the page, Ctrl-Q leaves.
+*   Keys: Up and Down move, PgUp and PgDn and Home and End jump, F5 asks again, F1 or ? or a click on the [?] explains the page, Ctrl-Q leaves.  Esc or F10 (or a click on the top
+*   row) opens the menu bar (File: Quit; View: Refresh; Help); Alt and a title's letter opens that menu.  The bar is made from the key table ($tk_menubar) and runs nothing: a
+*   choice is the key it stands for, taken by this page's own case below.
 *
 *   WHERE EACH STATE COMES FROM.  The gates of the register (sh, os, sd, voc, bp, dict, net, shared-read, shared-write) are what the SESSION holds: sh, os, sd, net and shared were
 *   loaded when it entered this account; voc, bp and dict at SIGN-ON only (LOGTO does not reload them), so an administrator's change shows after the next sign-on.  The route gates (ssh,
@@ -53,8 +65,19 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
    call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 F0a: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2: the AI line.  The page offers the AI only refresh (the owner: opt-in, off by default; the page changes nothing and offers nothing that does); a proposal is
+   * carried out by the page's own key.  Where the AI is not usable for the account nothing here adds a key, a row or a line, and the page is what it always was.
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   VIS = 16                                                      ;* gate rows on the screen
+   VIS = 17                                                     ;* gate rows on the screen (the gate pane's height less 5: set by get.rects)
+   perr = ''
+   gosub declare.layout
    call $tk_gate_info('list', gids)
    NG = dcount(gids, @fm)
    gti = '' ; gon = '' ; goff = '' ; gwhen = '' ; gdef = '' ; gall = '' ; gstill = '' ; gbey = '' ; gstat = '' ; gkind = '' ; ggrp = ''
@@ -76,7 +99,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    ci = 1
    ta = 0
    gen = 0
-   msg = 'Up and Down move; this page only shows what you may do, it cannot change it'
+   msg = 'This page only shows what you may do; it cannot change it'
    done = 0
    gst = ''
 
@@ -84,16 +107,32 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    gosub draw.all
 
    loop
+      call $tk_menubar('draw', ctx, keys, 'My gates', '', '', mr)           ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, 'My gates', msg)
       call $sl_curat(0, ctx<TK.C.YSTAT>)
       nm = ''
       screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'My gates', nm, ao)          ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'My gates', nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar; a choice comes back as the key it has
+      if mr<1> # '' then nm = mr<4>
       begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
          case nm = ''
             if status() = ER$EOF then exit
          case nm = 'guardquit'
             exit
          case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
             gen += 1
             ctx<TK.C.GEN> = gen
             gosub draw.all
@@ -121,6 +160,13 @@ read.all:
             s = ''
          case gkind<k> = 'group'
             s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)
+         case gkind<k> = 'start'                         ;* S.166: the home gate is the account's register field (menu, terminal, blank for the system's default), as !home_entry reads it
+            st.word = ''
+            openpath @sdsys : @ds : 'accounts' to st.f then
+               read st.rec from st.f, downcase(@who) then st.word = st.rec<ACC$START>
+               close st.f
+            end
+            call $tk_startof(st.word, s)
          case gid = 'sh'
             s = (if kernel(K$SH, -1) then 1 else 0)
          case gid = 'os'
@@ -146,22 +192,46 @@ read.all:
 
 * ------------------------------------------------------------------------------------------------- drawing
 
+* The layout (S.88 L2).  The three boxes are panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39), one band each: the gate list
+* takes the rows a bigger window has beyond the reference, and every box the columns.
+* Out: g.x g.y g.w g.h (the gates), c.x c.y c.w c.h (the row under the cursor), s.x s.y s.w s.h (where this comes from), the text width of each, VIS.
+declare.layout:
+   d = ''
+   d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1      ;* S.166: 22 rows for 17 gates (was 21)
+   d<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 11 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<3> = 'note' : @vm : 3 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'gates', rc)
+   g.x = rc<1, 1> ; g.y = rc<1, 2> ; g.w = rc<1, 3> ; g.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'cell', rc)
+   c.x = rc<1, 1> ; c.y = rc<1, 2> ; c.w = rc<1, 3> ; c.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'note', rc)
+   s.x = rc<1, 1> ; s.y = rc<1, 2> ; s.w = rc<1, 3> ; s.h = rc<1, 4>
+   g.tw = g.w - 4                                                ;* the text width of a box: 134 at the reference
+   c.tw = c.w - 4
+   s.tw = s.w - 4
+   VIS = g.h - 5                                                 ;* the header row, the gate rows, the two summary lines and the border: 17 rows of 22
+   return
+
 draw.all:
-   cw2 = ctx<TK.C.W>
-   chh = ctx<TK.C.H> - 5
-   screen clear at 0,1 size cw2,chh
-   screen box at 1,1 size 138,21 title 'What this account may do'
-   screen box at 1,22 size 138,12 title 'The row under the cursor'
-   screen box at 1,34 size 138,6 title 'Where this comes from'
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   screen box at g.x,g.y size g.w,g.h title 'What this account may do'
+   screen box at c.x,c.y size c.w,c.h title 'The row under the cursor'
+   screen box at s.x,s.y size s.w,s.h title 'Where this comes from'
    gosub draw.list
    gosub draw.row
    gosub draw.source
    return
 
 draw.list:
-   screen text fmt('Gate', '24L') : fmt('Now', '6L') : fmt('As delivered', '14L') : fmt('Beyond SD', '11L') : 'A change reaches you' at 3,2 attr 'header' width 134
+   screen text fmt('Gate', '24L') : fmt('Now', '6L') : fmt('As delivered', '14L') : fmt('Beyond SD', '11L') : 'A change reaches you' at g.x + 2,g.y + 1 attr 'header' width g.tw
    if ci <= ta then ta = ci - 1
    if ci > ta + VIS then ta = ci - VIS
+   if ta > NG - VIS then ta = NG - VIS                           ;* a taller list fills its rows again
    if ta < 0 then ta = 0
    for r = 1 to VIS
       kk = ta + r
@@ -177,16 +247,16 @@ draw.list:
          end case
          s = fmt(gti<kk>, '24L') : fmt(nowtxt, '6L') : fmt(gdef<kk>, '14L') : fmt((if gbey<kk> = 1 then 'yes' else 'no'), '11L') : gwhen<kk>
       end
-      screen text s at 3,2 + r attr (if kk = ci and kk <= NG then 'highlight' else 'normal') width 134
+      screen text s at g.x + 2,g.y + 1 + r attr (if kk = ci and kk <= NG then 'highlight' else 'normal') width g.tw
    next r
    n.on = 0
    for k = 1 to NG
       if gst<k> = 1 then n.on += 1
    next k
    s = 'Signed on as ' : @logname : ' in the account ' : @who : '.  ' : n.on : ' of ' : NG : ' gates are on for this session.'
-   screen text fmt(s, '134L') at 3,19 attr 'bold' width 134
-   screen text fmt('Only the administrator can change a gate (modify.account).  Nothing on this page can.', '134L') at 3,20 width 134
-   call $tk_help('mark', 134, 2, 0, 0)
+   screen text fmt(s, g.tw : 'L') at g.x + 2,g.y + g.h - 3 attr 'bold' width g.tw
+   screen text fmt('Only the administrator can change a gate (modify.account).  Nothing on this page can.', g.tw : 'L') at g.x + 2,g.y + g.h - 2 width g.tw
+   call $tk_help('mark', g.x + g.w - 5, g.y + 1, 0, 0)
    return
 
 * In plain sentences, for the gate under the cursor
@@ -216,9 +286,10 @@ draw.row:
             end
       end case
    end
+   wtw = c.tw
    gosub wrap.lines
-   for r = 1 to 10
-      screen text fmt(lines<r>, '134L') at 3,22 + r width 134
+   for r = 1 to c.h - 2
+      screen text fmt(lines<r>, c.tw : 'L') at c.x + 2,c.y + r width c.tw
    next r
    return
 
@@ -226,20 +297,21 @@ draw.source:
    lines = ''
    lines<-1> = "Gates are the administrator's: every account starts with them off except the right to read the shared account.  What you are told here is what this session holds right now, asked of the system - nothing is tried to find out."
    lines<-1> = 'sh, os, sd, net and the shared account were loaded when you entered this account; voc, bp and dict when you signed on; the route gates (ssh, api, files, files-write, files-admin, ai) are read from the system each time.'
+   wtw = s.tw
    gosub wrap.lines
-   for r = 1 to 4
-      screen text fmt(lines<r>, '134L') at 3,34 + r width 134
+   for r = 1 to s.h - 2
+      screen text fmt(lines<r>, s.tw : 'L') at s.x + 2,s.y + r width s.tw
    next r
    return
 
-* A SCREEN TEXT longer than its width is cut, not wrapped
+* A SCREEN TEXT longer than its width is cut, not wrapped: wrapped at wtw, the text width of the box
 wrap.lines:
    wrapped = ''
    for wi = 1 to dcount(lines, @fm)
       if lines<wi> = '' then
          wrapped<-1> = ''
       end else
-         call $tk_wrap(lines<wi>, 134, pieces)
+         call $tk_wrap(lines<wi>, wtw, pieces)
          wrapped<-1> = pieces
       end
    next wi
@@ -278,10 +350,24 @@ on.key:
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.gates.mine', hm, 0, 0)
          if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'My gates', std.r)
       case nm = 'f5'
          gosub read.all
          gosub draw.all
          msg = 'asked the system again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
       case nm = 'ctrl-q'
          done = 1
    end case
@@ -295,7 +381,19 @@ redraw:
 on.mouse:
    screen mouse returning mev else mev = ''
    if mev = '' then return
-   call $tk_help('hit', mev, 134, 2, hit.m)
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'My gates', mev, '', mr)                  ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'My gates', mev, ap)                         ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, g.x + g.w - 5, g.y + 1, hit.m)
    if hit.m then
       call $tk_help('box', 'tool.gates.mine', hm, 0, 0)
       if hm # '' then msg = hm
@@ -304,9 +402,9 @@ on.mouse:
    if mev<1> = 'press' and mev<2> = 1 then
       mx = mev<3>
       my = mev<4>
-      if my >= 3 and my <= 2 + VIS and mx >= 3 and mx <= 136 then
-         if ta + my - 2 <= NG then
-            ci = ta + my - 2
+      if my >= g.y + 2 and my <= g.y + 1 + VIS and mx >= g.x + 2 and mx <= g.x + g.w - 3 then
+         if ta + my - g.y - 1 <= NG then
+            ci = ta + my - g.y - 1
             gosub redraw
          end
       end

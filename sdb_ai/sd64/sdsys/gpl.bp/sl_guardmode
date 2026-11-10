@@ -5,41 +5,80 @@
 *
 * START-HISTORY:
 * 18 Oct 26 dm  New (terminal 140 by 42, phase 3).
+* 28 Oct 26 dm  S.88 L1 (R-b): VAR.ARGS; the layout mode (a fourth argument 'layout', the layout's size fifth and sixth), in which the WINDOW decides:
+*               the lock holds while the window is smaller than minw by minh (the app's floor) and lifts as soon as it is not, wherever the cursor
+*               is.  The three-argument call keeps the cursor mode exactly as it was.  A layout re-arm of the app that already
+*               holds the lock keeps its "user chose to leave".
+* 9 Nov 26 dm  S.134: CED asks for the layout mode too, so no program of SD's own uses the three-argument cursor mode now; the mode itself is unchanged.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*   call $sl_guardmode(name, minw, minh)
+*   call $sl_guardmode(name, minw, minh {, mode, layw, layh})
 *
 *     name        what the program is called in the warning (IDE); null takes the lock off
-*     minw minh   the size the program is laid out for
+*     minw minh   the cursor mode: the size the program is laid out for.  The layout mode: the program's FLOOR, the smallest window it is laid out for
+*     mode        optional: 'layout' for the layout mode; left out or null, the cursor mode
+*     layw layh   optional, the layout mode: the size the program is laid out at now ($tk_layout passes ctx<TK.C.W> and ctx<TK.C.H>); kept with the lock
+*                 for the program's own use, not part of the test (a page whose layout follows the window is laid out at the window's size whenever the
+*                 window is at least the floor, so "smaller than the layout" and "smaller than the floor" are one test once the page has made its
+*                 layout again; a page that has not done so yet must not be locked and unlocked in turn on every redraw)
 *
-*   SD's own full-screen programs that read their keys through the library (the IDE and CED) are laid out for 140 by 42 and show the
-*   upper left corner of the layout when the window is smaller.  So long as the cursor ($sl_curat) is in the part that shows that is
+*   THE CURSOR MODE (the three-argument call; none of SD's own programs uses it since 9 Nov 26, when CED joined the IDE in the layout mode).  A full-screen program that reads its keys through the library is laid out for 140 by 42 and shows
+*   the upper left corner of the layout when the window is smaller.  So long as the cursor ($sl_curat) is in the part that shows that is
 *   safe; when it is not, $sl_key does not hand the program a key but takes the keyboard itself ($sl_guard: a warning in the upper
-*   left, every key dropped, Ctrl-Q the one way out) until the window is made bigger.  Ctrl-Q, then y, makes $sl_key hand back the
-*   key 'guardquit' from then on (and the dialogues of the library read it as Esc), which the program turns into leaving without
-*   saving.  SCREEN CLOSE and $sl_cleanup take the lock off, so it never reaches the next program; a user's SCREEN OPEN program does
-*   not ask for it, so SD imposes nothing on it.
+*   left, every key dropped, Ctrl-Q the one way out) until the window is made bigger.
+*
+*   THE LAYOUT MODE (28 Oct 2026, the toolkit's pages through $tk_layout).  The cursor of a page waits at the start of its status line, which
+*   fits a window too narrow or a row or two too short for the page, so the cursor could not tell: $sl_key takes the keyboard whenever the
+*   window is smaller than the floor (message 12545, naming the floor) and gives it back as soon as the window is the floor or larger.
+*
+*   In both modes Ctrl-Q, then y, makes $sl_key hand back the key 'guardquit' from then on (and the dialogues of the library read it as Esc),
+*   which the program turns into leaving without saving.  SCREEN CLOSE and $sl_cleanup take the lock off, so it never reaches the next program;
+*   a user's SCREEN OPEN program does not ask for it, so SD imposes nothing on it.
 *
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine sl_guardmode(name, minw, minh)
+subroutine sl_guardmode(name, minw, minh, mode, layw, layh) var.args
 $catalog $sl_guardmode
 
-   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit
+   common /slguard/ g.on, g.name, g.minw, g.minh, g.quit, g.mode, g.lw, g.lh
 
-   g.quit = 0
+   md = ''
+   if not(unassigned(mode)) then md = mode
+   lw = ''
+   lh = ''
+   if not(unassigned(layw)) then lw = layw
+   if not(unassigned(layh)) then lh = layh
+
+   * a re-arm in the layout mode for the app that holds the lock (a resize, $tk_layout 'refresh') keeps the user's choice to leave
+   keep.quit = 0
+   if md = 'layout' and name # '' then
+      if g.on and g.mode = 'layout' and g.name = name then keep.quit = 1
+   end
+   if not(keep.quit) then g.quit = 0
+
    if name = '' then
       g.on = 0
+      g.mode = ''
+      g.lw = ''
+      g.lh = ''
    end else
       g.on = 1
       g.name = name
       g.minw = minw
       g.minh = minh
+      g.mode = ''
+      g.lw = ''
+      g.lh = ''
+      if md = 'layout' then
+         g.mode = 'layout'
+         g.lw = lw
+         g.lh = lh
+      end
    end
 
    return

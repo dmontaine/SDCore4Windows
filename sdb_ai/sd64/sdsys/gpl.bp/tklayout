@@ -1,0 +1,33 @@
+* TKLAYOUT
+* The public full-screen toolkit (S.130): the frame, the body and the panes of the page.  A wrapper over $tk_layout.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tklayout(op, ctx, arg, ret)         ALWAYS FOUR ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   The ops are $tk_layout's: refresh (after the key 'resize'), declare, pane and body.  The slots of the context that belong to the AI line are cleared first, so that
+*   the body is never shortened by a row for it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tklayout(op, ctx, arg, ret)
+$catalog !tklayout
+
+$include tk.h
+
+   ctx<TK.C.AI> = ''
+   ctx<TK.C.AIROW> = ''
+   call $tk_layout(op, ctx, arg, ret)
+   return
+end
+
+* END-CODE

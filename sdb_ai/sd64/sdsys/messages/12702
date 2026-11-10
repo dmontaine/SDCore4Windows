@@ -1,0 +1,1 @@
+dict %1 %2 is a dictionary item: it is not compiled here (an I-type is compiled when it is used)

@@ -4,8 +4,15 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 28 Oct 26 dm  S.88 phase 2 (S3): the wait is a second at a time whether or not AUTOLOGOUT is set.  The kernel now measures
+*               idle time across keyin() calls (linuxio.c), so a one-second slice no longer stops AUTOLOGOUT firing, and the
+*               slice of 0 for an AUTOLOGOUT session, which delayed a resize until the next key, is gone.
 * 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 18 Oct 26 dm  New (terminal 140 by 42, phase 4).
+* 28 Oct 26 dm  S.88 L1 (R-b): VAR.ARGS, an optional seventh argument; 'layout' (the cursor lock's layout mode, from $sl_key) words the warning
+*               as message 12545, naming the floor the window must reach, since there it is the window and not the cursor that decides.
+* 28 Oct 26 dm  S.88 handoff step 1: the layout warning names both sizes and says that text not saved is lost unless a recovery copy is on (12545), and fits the
+*               window it is shown in: the longest of three wordings (12545, 12730, 12731) whose wrapped rows fit the window's height; the wrapping is its own label.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -25,7 +32,7 @@
 *   (a long line's end, a prompt on a row below the window) the program calls this BEFORE it reads a key, and while the cursor
 *   is off the screen the user types blind.  So: the screen is cleared, a warning is drawn in the upper left corner (reverse
 *   video, wrapped to the window), and every key and every mouse report is discarded.  The window is looked at about once a
-*   second (a session with AUTOLOGOUT set waits on the keyboard alone, so a resize is noticed at its next key); when it is big
+*   second (AUTOLOGOUT still fires: the kernel counts the idle time across the one-second waits); when it is big
 *   enough to show the cursor the routine returns 'ok'.  Ctrl-Q is the one key that does anything: it changes the warning to
 *   "Leave? (changes are NOT saved) y/n" in the same box, y leaves ('quit') and anything else goes back to the warning.  The
 *   way out is the routine's own, never the program's prompt, which may be on a row that cannot be seen.
@@ -33,30 +40,38 @@
 *   Called by programs that read their keys themselves (SED).  Programs that read them through the screen library will get
 *   the same lock in $sl_key, when the IDE and CED are brought to the 140 by 42 rule.
 *
+*   call $sl_guard(name, minw, minh, cx, cy, result, 'layout')      (28 Oct 2026; $sl_key, for a program in the lock's layout mode)
+*
+*   The same, with the warning of message 12545 ("... is laid out for 140 by 43 or larger: part of the screen is outside the window ...").
+*   $sl_key passes minw - 1, minh - 1 as the cursor, so that the routine holds the keyboard exactly while the window is smaller than minw by minh.
+*   The warning names the window's size and the floor's, says that Ctrl-Q leaves and that text not saved is lost unless a recovery copy is on, and is
+*   drawn in the upper left corner, wrapped to the window (at most 70 columns): the full wording (12545), else a shorter one (12730) when that would
+*   need more rows than the window has, else the shortest (12731); a window too small even for that shows its first rows.
+*
 * END-DESCRIPTION
 *
 * START-CODE
 
 $internal
-subroutine sl_guard(name, minw, minh, cx, cy, result)
+subroutine sl_guard(name, minw, minh, cx, cy, result, mode) var.args
 $catalog $sl_guard
 
 $include keys.h
-$include int$keys.h
 $include err.h
 
    equate BOX.WIDE to 70           ;* the warning's width, if the window is wider
 
    result = 'ok'
+   gmode = ''
+   if not(unassigned(mode)) then gmode = mode
    call $sl_window(w, h)
    if cx < w and cy < h then return
 
    asking = @false
-   slice = (if kernel(K$AUTOLOGOUT, -1) then 0 else 1)   ;* seconds; 0 = wait for a key alone (AUTOLOGOUT must be able to fire)
    gosub draw.box
 
    loop
-      if slice then k = keyin(slice) else k = keyin()
+      k = keyin(1)                                  ;* a second at a time; AUTOLOGOUT is the kernel's, across these waits
       kst = status()                                ;* before anything else is called: a timeout is not the end of the input
 
       call $sl_window(w2, h2)
@@ -90,33 +105,62 @@ $include err.h
 
 * The warning, or the question, in reverse video from the top left, as wide as the window lets it be
 draw.box:
-   if asking then
-      text = sysmsg(12606)
-   end else
-      text = sysmsg(12605, w : ' by ' : h, name, minw : ' by ' : minh)
-   end
    bw = w
    if bw > BOX.WIDE then bw = BOX.WIDE
+   if asking then
+      text = sysmsg(12606)
+      gosub wrap.text
+   end else
+      if gmode = 'layout' then
+         * 28 Oct 26 (step 1): the longest wording that fits the window's rows, the sizes of the window and of the floor in all three, so that whatever the window is,
+         *   the first row says what is wrong; the last one is cut, not dropped, when not even it fits
+         for tier = 1 to 3
+            begin case
+               case tier = 1
+                  text = sysmsg(12545, w : ' by ' : h, name, minw : ' by ' : minh)
+               case tier = 2
+                  text = sysmsg(12730, w : ' by ' : h, name, minw : ' by ' : minh)
+               case 1
+                  text = sysmsg(12731, w : ' by ' : h, name, minw : ' by ' : minh)
+            end case
+            gosub wrap.text
+            if nlines <= h then exit
+         next tier
+      end else
+         text = sysmsg(12605, w : ' by ' : h, name, minw : ' by ' : minh)
+         gosub wrap.text
+      end
+   end
    call $sl_sgr('r', rev)
    call $sl_sgr('n', nor)
    display nor : @(-1) :
-   r = 0
+   nshow = nlines
+   if nshow > h then nshow = h
+   for r = 0 to nshow - 1
+      display rev : @(0, r) : (lines<r + 1> : space(bw))[1, bw] : nor :
+   next r
+   display @(0, 0) :
+   return
+
+* In: text, bw.  Out: lines (one field each), nlines.  Wrapped at spaces to bw columns; a word longer than the box is cut where it must be
+wrap.text:
+   lines = ''
+   nlines = 0
    rest = text
-   loop while rest # '' and r < h do
+   loop while rest # '' do
       if len(rest) <= bw then
          ln = rest
          rest = ''
       end else
          cut = bw
          loop while cut > 1 and rest[cut + 1, 1] # ' ' do cut -= 1 repeat
-         if cut <= 1 then cut = bw                   ;* a word longer than the box is cut where it must be
+         if cut <= 1 then cut = bw
          ln = rest[1, cut]
          rest = trimf(rest[cut + 1, len(rest)])
       end
-      display rev : @(0, r) : (ln : space(bw))[1, bw] : nor :
-      r += 1
+      nlines += 1
+      lines<nlines> = ln
    repeat
-   display @(0, 0) :
    return
 end
 

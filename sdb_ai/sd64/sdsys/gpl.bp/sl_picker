@@ -1,0 +1,141 @@
+* SL_PICKER
+* Screen library, window: pick a file of the account and then a record in it, READ ONLY (S.88 3.10A).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 29 Oct 26 dm  New (S.88 3.10A).
+* 3 Nov 26 dm  The picker extended (owner, 2 Nov: "Extend the picker"): mode 'list', a pick from a list the caller gives, moved here from $tk_pickrec (S.88 U9) so that the
+*              facade is the library again, and given optional columns (headings and widths) and an optional delete action that the CALLER confirms (res 'delete').
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $sl_picker(mode, file, id, res, newtext)
+*
+*     mode     null: the person picks a file, then a record in it.  'file': only the file (file is the answer, id is null).  'record': file is given
+*              and only the record is picked (Esc then ends the picker).
+*     file     the file picked (or, with mode 'record', the file to pick in)
+*     id       the record id picked, exactly as the file stores it
+*     res      'ok' a record (or, with mode 'file', a file) was picked; 'new' the person pressed Ctrl-N in the list of records: file is the file and newtext
+*              is what had been typed into the filter, and id is null - the caller then runs ITS OWN new-record path, with its own gates; 'cancel' Esc at the
+*              first list, a session with no terminal, no file to pick from, or a file that cannot be opened
+*     newtext  see 'new'
+*
+*   The files are the account's VOC entries of type F (or whose first line begins "File "), leaving out the names that begin with a dollar sign: the list the
+*   IDE shows.  The records are listed by $sl_pickwin's paged source, so a file of a million records is read a page at a time.  Esc in the list of records
+*   goes back to the list of files.  THE PICKER NEVER WRITES: it opens the file for reading, takes no lock and creates, changes and deletes nothing.  What the
+*   caller does with the answer, and whether it may, is the caller's.
+*
+*   MODE 'LIST' (field 1 of mode): a pick from a LIST THE CALLER GIVES, not from a file.  file = the entries, one to a field (value 1 the name, value 2 a description shown
+*   beside it - or, with columns, the column texts as subvalues - and value 3 the help shown on ?); id = the window's title on the way in and the number of the entry chosen
+*   (in file) on the way out; newtext = the number of the entry the window starts on, on the way in, and null on the way out.  Typing narrows the list to the entries that
+*   hold the text in the name, the description or a column.  Nothing is opened, read or written.  Optional, in the other fields of mode:
+*     mode<2>  the column headings, one value to a column, the first for the name (null: no columns, the window as it always was)
+*     mode<3>  the column widths, the same way (a width that is not a number is 12)
+*     mode<4>  'delete': the Del key ends the window with res 'delete' and id the number of the entry the cursor was on.  THE PICKER DELETES NOTHING: the caller asks its
+*              own question (a box with the name typed, say) and deletes, or not; it may open the picker again on the same entry (newtext).
+*   res is 'ok' (Enter chose), 'delete' (Del, with mode<4> 'delete', on an entry) or 'cancel' (Esc, a session with no terminal, an empty list).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine sl_picker(mode, file, id, res, newtext)
+$catalog $sl_picker
+
+   if mode<1> = 'list' then
+      gosub pick.list
+      return
+   end
+
+   res = 'cancel'
+   id = ''
+   newtext = ''
+   if system(25) then return                  ;* a phantom has no terminal
+
+   stage = 1
+   if mode = 'record' then stage = 2
+
+   loop
+      if stage = 1 then
+         gosub list.files
+         if fl = '' then return
+         call $sl_pickwin(fl, sysmsg(12176), 0, 0, pr, ps, '', '')
+         if ps # 0 then return
+         file = fl<pr, 1>
+         if mode = 'file' then
+            res = 'ok'
+            return
+         end
+         stage = 2
+      end else
+         open file to fv else return
+         call $sl_pickwin('', sysmsg(12177, file), 0, 0, pr, ps, fv, '0' : @fm : 200 : @fm : 100000 : @fm : 20000, 'ctrl-n', typed)
+         close fv
+         begin case
+            case ps = 0
+               id = pr
+               res = 'ok'
+               return
+            case ps = 2
+               newtext = typed
+               res = 'new'
+               return
+            case mode = 'record'
+               return
+            case 1
+               stage = 1
+         end case
+      end
+   repeat
+
+   return
+
+* The files of the account, one to a field: the VOC's type F entries (or a description that begins "File "), not the names that begin with a dollar sign
+list.files:
+   fl = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      nid = dcount(ids, @fm)
+      if ids = '' then nid = 0
+      for i = 1 to nid
+         read r from vocf, ids<i> then
+            t1 = upcase(r<1>)
+            if (t1 = 'F' or t1[1, 5] = 'FILE ') and ids<i>[1, 1] # '$' then fl<-1> = ids<i>
+         end
+      next i
+      close vocf
+   end
+   return
+
+* Mode 'list': the library's pick window on the caller's entries, one entry chosen (or, with mode<4> 'delete', named for the caller to delete); its number returned
+pick.list:
+   res = 'cancel'
+   ltitle = id
+   ldef = newtext
+   id = ''
+   newtext = ''
+   if system(25) or file = '' then return               ;* a phantom has no terminal; an empty list has nothing to choose
+   if not(num(ldef)) or ldef < 1 then ldef = 1
+   lhot = ''
+   if mode<4> = 'delete' then lhot = 'del'
+   lcols = ''
+   if mode<2> # '' then lcols = mode<2> : @fm : mode<3>
+   ltyped = ''
+   lcur = ''
+   call $sl_pickwin(file, ltitle, 0, ldef, pr, ps, '', '', lhot, ltyped, lcols, lcur)
+   begin case
+      case ps = 0 and pr > 0
+         id = pr
+         res = 'ok'
+      case ps = 2 and pr = 'del' and lcur > 0
+         id = lcur
+         res = 'delete'                                    ;* the caller confirms and deletes, or not: nothing is changed here
+   end case
+   return
+end
+
+* END-CODE

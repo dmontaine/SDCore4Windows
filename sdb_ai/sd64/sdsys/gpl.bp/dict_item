@@ -1,0 +1,415 @@
+* DICT_ITEM
+* A dictionary item as a form: the rows each item type shows, the record read into values, the values checked and built back into a record (S.90, stage 1).  No screen.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+* START-HISTORY:
+* 31 Oct 26 dm  New (S.90, plan .claude/plan-s90-dict-form.md).  The rules are tool_dict's test.answer, moved here so that the IDE's form and the page share them.
+* END-HISTORY
+* START-DESCRIPTION:
+*   call !dict_item(op, a, b, c, d)
+*     'types'   b = the item types the form knows, one to a field: D E I L PH X
+*     'layout'  a = type;  b = the rows of that type, one to a field, each row's parts separated by value marks:
+*                 1 key  2 label  3 kind (type num text word conv just sm expr path memo)  4 low  5 high  6 optional (1 or 0)  7 depends on a key  8 ... and the value that key must have
+*               The Type row is first; a row that depends on another (the association needs S/M = M) is shown only then, and is left out of a record when it is not.
+*               d = '' , or a reason when the type is not one the form knows.
+*     'parse'   a = a dictionary record;  b = a collection of its values, one per row key (an empty string for a field the record does not use);  d = '' when the form can show the
+*               record, else the reason: type (not D E I L PH X), format (a format field that is not width, one of L R T C, and decimals), text (X or PH text with a line the form
+*               cannot hold)
+*     'check'   a = type, b = a row key, c = the value (in; out in its normal form: upper case for a type, justification or S/M, a number without leading zeros, trimmed);
+*               d = '' when the value is good, else what to say.  An empty value is good only for an optional row.
+*     'build'   a = a collection of values (as 'parse' makes), b = the record the item had ('' for a new item), c = the new record, d = '' when every row of the type is good,
+*               else the row's key, a field mark, and what to say (nothing in c).  Everything the form does not show is kept: the user field, the type's comment in field 1 when
+*               the type is the same, fields after the last one the type uses.  A record that changes TYPE loses the fields the new type does not use, and field 15 on (the
+*               compile stamp and the object code), which a new type would not match.  A new item of type I needs no stamp: SD compiles it when it is first used.
+*     'fmtshow'  a = a collection of values (as 'parse' makes);  b = the format as ONE text for the form's Len & Just row: the width, a blank, the justification and, when there are
+*               decimals, a blank and the decimals (30 L, 12 R 2), or '' when there is no width.
+*     'fmtsplit' a = that text (30 L, 30L, 12 r 2 ...);  b = a collection with width, just and dec, each in its normal form (an empty string for what the text does not give);
+*               d = '' when the text is good (an empty text is), else what to say.
+*   Nothing here writes a record or a file, opens one, runs a command or prints.
+* END-DESCRIPTION
+* START-CODE
+
+$internal
+subroutine dict_item(op, a, b, c, d)
+$catalog !dict_item
+
+$include dictdict.h
+
+   TYPES = 'D' : @fm : 'E' : @fm : 'I' : @fm : 'L' : @fm : 'PH' : @fm : 'X'
+   JUSTS = 'LRTC'
+   op.l = downcase(op)
+   begin case
+      case op.l = 'types'
+         b = TYPES
+      case op.l = 'layout'
+         ty = upcase(a)
+         d = ''
+         gosub rows.for
+         b = rw
+         if not(rw.ok) then d = 'type'
+      case op.l = 'parse'
+         gosub do.parse
+      case op.l = 'check'
+         gosub do.check
+      case op.l = 'build'
+         gosub do.build
+      case op.l = 'fmtshow'
+         gosub do.fmtshow
+      case op.l = 'fmtsplit'
+         gosub do.fmtsplit
+      case 1
+         d = 'unknown operation'
+   end case
+   return
+
+* ======================================================================
+* In: ty (a type).  Out: rw (the rows), rw.ok (0 when the type is not one the form knows).  A row: key, label, kind, low, high, optional, depends-on key, depends-on value
+rows.for:
+   rw = ''
+   rw.ok = 1
+   rw<-1> = 'type' : @vm : 'Type' : @vm : 'type' : @vm : '' : @vm : '' : @vm : 0
+   begin case
+      case ty = 'D'
+         rw<-1> = 'loc' : @vm : 'Field #' : @vm : 'num' : @vm : 0 : @vm : 9999 : @vm : 0
+         gosub rows.tail
+      case ty = 'E'
+         rw<-1> = 'path' : @vm : 'Element Path' : @vm : 'path' : @vm : '' : @vm : 300 : @vm : 0
+         gosub rows.tail
+      case ty = 'I'
+         rw<-1> = 'expr' : @vm : 'Expression' : @vm : 'expr' : @vm : '' : @vm : 300 : @vm : 0
+         gosub rows.tail
+      case ty = 'L'
+         rw<-1> = 'idexpr' : @vm : 'Id Expression' : @vm : 'expr' : @vm : '' : @vm : 300 : @vm : 0
+         rw<-1> = 'file' : @vm : 'File' : @vm : 'word' : @vm : '' : @vm : 63 : @vm : 0
+         rw<-1> = 'fexpr' : @vm : 'File Expression' : @vm : 'expr' : @vm : '' : @vm : 300 : @vm : 1
+      case ty = 'PH'
+         rw<-1> = 'text' : @vm : 'Phrase' : @vm : 'memo' : @vm : '' : @vm : 2000 : @vm : 0
+      case ty = 'X'
+         rw<-1> = 'text' : @vm : 'Text' : @vm : 'memo' : @vm : '' : @vm : 2000 : @vm : 1
+      case 1
+         rw = ''
+         rw.ok = 0
+   end case
+   return
+
+* The rows D, E and I share
+rows.tail:
+   rw<-1> = 'conv' : @vm : 'Conversion Cd' : @vm : 'conv' : @vm : '' : @vm : 40 : @vm : 1
+   rw<-1> = 'head' : @vm : 'Column Heading' : @vm : 'text' : @vm : '' : @vm : 40 : @vm : 1
+   rw<-1> = 'width' : @vm : 'Width' : @vm : 'num' : @vm : 1 : @vm : 200 : @vm : 1
+   rw<-1> = 'just' : @vm : 'Justification' : @vm : 'just' : @vm : '' : @vm : '' : @vm : 1
+   rw<-1> = 'dec' : @vm : 'Decimals' : @vm : 'num' : @vm : 0 : @vm : 9 : @vm : 1
+   rw<-1> = 'sm' : @vm : 'Single/Multi' : @vm : 'sm' : @vm : '' : @vm : '' : @vm : 1
+   rw<-1> = 'assoc' : @vm : 'Association' : @vm : 'word' : @vm : '' : @vm : 30 : @vm : 1 : @vm : 'sm' : @vm : 'M'
+   rw<-1> = 'user' : @vm : 'User' : @vm : 'text' : @vm : '' : @vm : 300 : @vm : 1
+   return
+
+* ======================================================================
+* In: tv.kind, tv.val, tv.lo, tv.hi, tv.opt, tv.key.  Out: tv.err ('' when good), tv.val in its normal form
+test.value:
+   tv.err = ''
+   tv.val = trimb(trimf(tv.val))                          ;* the ends only: a blank inside an expression or a phrase is the person's
+   if tv.val = '' then
+      if not(tv.opt) then tv.err = 'an answer is needed'
+      return
+   end
+   begin case
+      case tv.kind = 'type'
+         tv.val = upcase(tv.val)
+         locate tv.val in TYPES<1> setting tv.pos else tv.err = 'D, E, I, L, PH or X'
+      case tv.kind = 'num'
+         tv.ok = (len(tv.val) <= 5)
+         for tv.q = 1 to len(tv.val)
+            if index('0123456789', tv.val[tv.q, 1], 1) = 0 then tv.ok = 0
+         next tv.q
+         if tv.ok then
+            tv.val = (tv.val + 0) : ''                     ;* a string, so that 0 is never taken for an empty answer
+            tv.ok = (tv.val + 0 >= tv.lo and tv.val + 0 <= tv.hi)
+         end
+         if not(tv.ok) then tv.err = 'a whole number from ' : tv.lo : ' to ' : tv.hi
+      case tv.kind = 'just'
+         tv.val = upcase(tv.val)
+         if len(tv.val) # 1 or index(JUSTS, tv.val, 1) = 0 then tv.err = 'L, R, T or C'
+      case tv.kind = 'sm'
+         tv.val = upcase(tv.val)
+         if tv.val # 'S' and tv.val # 'M' then tv.err = 'S or M'
+      case tv.kind = 'word'
+         tv.ok = (len(tv.val) <= tv.hi)
+         for tv.q = 1 to len(tv.val)
+            if index('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-', tv.val[tv.q, 1], 1) = 0 then tv.ok = 0
+         next tv.q
+         if not(tv.ok) then tv.err = 'letters, digits, dot, dash, underscore only, at most ' : tv.hi
+      case tv.kind = 'conv'
+         tv.ok = (len(tv.val) <= tv.hi)
+         for tv.q = 1 to len(tv.val)
+            if seq(tv.val[tv.q, 1]) <= 32 or seq(tv.val[tv.q, 1]) > 126 then tv.ok = 0
+         next tv.q
+         if not(tv.ok) then
+            tv.err = 'no spaces, at most ' : tv.hi : ' characters'
+         end else
+            if upcase(tv.val[1, 1]) # 'U' then
+               void oconv('1', tv.val)
+               if status() = 2 then tv.err = 'SD does not know this conversion'
+            end
+         end
+      case tv.kind = 'memo'
+         tv.ok = (len(tv.val) <= tv.hi)
+         for tv.q = 1 to len(tv.val)
+            tv.s = seq(tv.val[tv.q, 1])
+            if (tv.s < 32 and tv.s # 10) or tv.s > 126 then tv.ok = 0
+         next tv.q
+         if not(tv.ok) then tv.err = 'plain characters, at most ' : tv.hi
+      case 1
+         tv.ok = (len(tv.val) <= tv.hi)
+         for tv.q = 1 to len(tv.val)
+            if seq(tv.val[tv.q, 1]) < 32 or seq(tv.val[tv.q, 1]) > 126 then tv.ok = 0
+         next tv.q
+         if not(tv.ok) then tv.err = 'plain characters, at most ' : tv.hi
+         if tv.ok and (tv.key = 'idexpr' or tv.key = 'fexpr') and index(tv.val, ';', 1) > 0 then tv.err = 'one expression, with no semicolon'
+   end case
+   return
+
+* ======================================================================
+do.check:
+   ty = upcase(a)
+   gosub rows.for
+   d = 'there is no row ' : b
+   c0 = c
+   for rp = 1 to dcount(rw, @fm)
+      if rw<rp, 1> = b then
+         tv.kind = rw<rp, 3>
+         tv.lo = rw<rp, 4>
+         tv.hi = rw<rp, 5>
+         tv.opt = rw<rp, 6>
+         tv.key = b
+         tv.val = c0
+         gosub test.value
+         c = tv.val
+         d = tv.err
+         exit
+      end
+   next rp
+   return
+
+* ======================================================================
+* In: a (a record).  Out: b (the values), d ('' or why the form cannot show it)
+do.parse:
+   rec = a
+   b = collection()
+   d = ''
+   ty = upcase(rec<1>[1, 2])
+   if ty[1, 2] # 'PH' then ty = ty[1, 1]
+   gosub rows.for
+   if not(rw.ok) then
+      d = 'type'
+      return
+   end
+   * every key any type has, so that a reader never asks a collection for a key it does not hold
+   allkeys = 'type' : @fm : 'loc' : @fm : 'path' : @fm : 'expr' : @fm : 'idexpr' : @fm : 'file' : @fm : 'fexpr' : @fm : 'text' : @fm : 'conv' : @fm : 'head' : @fm : 'width' : @fm : 'just' : @fm : 'dec' : @fm : 'sm' : @fm : 'assoc' : @fm : 'user'
+   for kp = 1 to dcount(allkeys, @fm)
+      b{allkeys<kp>} = ''
+   next kp
+   b{'type'} = ty
+   begin case
+      case ty = 'D'
+         b{'loc'} = rec<2>
+      case ty = 'E'
+         b{'path'} = rec<2>
+      case ty = 'I'
+         b{'expr'} = rec<2>
+      case ty = 'L'
+         b{'idexpr'} = rec<2>
+         b{'file'} = rec<3>
+         b{'fexpr'} = rec<4>
+      case 1
+         tx = ''
+         for fp = 2 to dcount(rec, @fm)
+            tx<-1> = rec<fp>
+         next fp
+         b{'text'} = convert(@fm, char(10), tx)
+         tx = b{'text'}
+         for q = 1 to len(tx)
+            if (seq(tx[q, 1]) < 32 and seq(tx[q, 1]) # 10) or seq(tx[q, 1]) > 126 then d = 'text'      ;* what the form's own check would refuse: shown as text instead
+         next q
+   end case
+   if ty = 'D' or ty = 'E' or ty = 'I' then
+      b{'conv'} = rec<3>
+      b{'head'} = rec<4>
+      b{'sm'} = rec<6>
+      b{'assoc'} = rec<7>
+      b{'user'} = rec<8>
+      fm = rec<5>
+      if fm # '' then
+         wd = ''
+         for q = 1 to len(fm)
+            if index('0123456789', fm[q, 1], 1) = 0 then exit
+            wd := fm[q, 1]
+         next q
+         jt = upcase(fm[len(wd) + 1, 1])
+         ds = fm[len(wd) + 2, 99]
+         ok = (wd # '' and len(jt) = 1 and index(JUSTS, jt, 1) > 0)
+         if ok and ds # '' then
+            ok = (len(ds) = 1 and index('0123456789', ds, 1) > 0)
+         end
+         if ok then
+            b{'width'} = wd + 0
+            b{'just'} = jt
+            b{'dec'} = ds
+         end else
+            d = 'format'
+         end
+      end
+   end
+   return
+
+* ======================================================================
+* In: a (values).  Out: b (the format as one text)
+do.fmtshow:
+   b = ''
+   if a{'width'} # '' then
+      b = a{'width'} : ' ' : a{'just'}
+      if a{'dec'} # '' then b := ' ' : a{'dec'}
+   end
+   return
+
+* In: a (the text).  Out: b (width, just, dec), d ('' or what to say).  The width is the leading digits; the justification the one letter that follows them (blanks between are allowed);
+*   the decimals what follows the letter.  Each part is held to the rules of its own row.
+do.fmtsplit:
+   b = collection()
+   b{'width'} = ''
+   b{'just'} = ''
+   b{'dec'} = ''
+   d = ''
+   fx.t = trimb(trimf(a))
+   if fx.t = '' then return
+   fx.w = ''
+   fx.p = 1
+   loop
+   while fx.p <= len(fx.t) and index('0123456789', fx.t[fx.p, 1], 1) > 0 do
+      fx.w := fx.t[fx.p, 1]
+      fx.p += 1
+   repeat
+   fx.rest = trimb(trimf(fx.t[fx.p, 9999]))
+   fx.j = fx.rest[1, 1]
+   fx.d = trimb(trimf(fx.rest[2, 9999]))
+   fx.say = 'a width from 1 to 200, then L, R, T or C, then decimals if any (for example 30 L or 12 R 2)'
+   tv.key = 'width' ; tv.kind = 'num' ; tv.lo = 1 ; tv.hi = 200 ; tv.opt = 0 ; tv.val = fx.w
+   gosub test.value
+   if tv.err # '' then
+      d = fx.say
+      return
+   end
+   fx.w = tv.val
+   tv.key = 'just' ; tv.kind = 'just' ; tv.lo = '' ; tv.hi = '' ; tv.opt = 0 ; tv.val = fx.j
+   gosub test.value
+   if tv.err # '' then
+      d = fx.say
+      return
+   end
+   fx.j = tv.val
+   if fx.d # '' then
+      tv.key = 'dec' ; tv.kind = 'num' ; tv.lo = 0 ; tv.hi = 9 ; tv.opt = 1 ; tv.val = fx.d
+      gosub test.value
+      if tv.err # '' then
+         d = fx.say
+         return
+      end
+      fx.d = tv.val
+   end
+   b{'width'} = fx.w
+   b{'just'} = fx.j
+   b{'dec'} = fx.d
+   return
+
+* ======================================================================
+* In: a (values), b (the old record).  Out: c (the new record), d ('' or key, field mark, what to say)
+do.build:
+   c = ''
+   d = ''
+   old = b
+   ty = upcase(trim(a{'type'}))
+   gosub rows.for
+   if not(rw.ok) then
+      d = 'type' : @fm : 'D, E, I, L, PH or X'
+      return
+   end
+   vals = collection()
+   for rp = 1 to dcount(rw, @fm)
+      key = rw<rp, 1>
+      tv.val = a{key}
+      skip = 0                                           ;* a row that depends on another one: only when that one has the value (BASIC does not short-circuit: a{''} is an error)
+      if rw<rp, 7> # '' then
+         if upcase(trim(a{rw<rp, 7>})) # rw<rp, 8> then skip = 1
+      end
+      if skip then
+         tv.val = ''
+         tv.opt = 1
+         tv.err = ''
+      end else
+         tv.kind = rw<rp, 3>
+         tv.lo = rw<rp, 4>
+         tv.hi = rw<rp, 5>
+         tv.opt = rw<rp, 6>
+         tv.key = key
+         gosub test.value
+      end
+      if tv.err # '' then
+         d = key : @fm : rw<rp, 2> : ': ' : tv.err
+         return
+      end
+      vals{key} = tv.val
+   next rp
+   if ty = 'D' or ty = 'E' or ty = 'I' then
+      * the format is width, justification and decimals together: either all the first two or none
+      if vals{'width'} # '' or vals{'just'} # '' or vals{'dec'} # '' then
+         if vals{'width'} = '' then
+            d = 'width' : @fm : 'Width: an answer is needed'
+            return
+         end
+         if vals{'just'} = '' then
+            d = 'just' : @fm : 'Justification: an answer is needed'
+            return
+         end
+      end
+   end
+   * the record: the old one where the type is the same (everything not shown is kept), a new one where it is not
+   oty = upcase(old<1>[1, 2])
+   if oty[1, 2] # 'PH' then oty = oty[1, 1]
+   rec = old
+   if oty # ty then rec = ty                  ;* a new type starts from nothing: everything the form shows is in vals, and the compile stamp and object code would not fit it
+   begin case
+      case ty = 'D'
+         fv = vals{'loc'} ; fn = 2 ; gosub set.field
+      case ty = 'E'
+         fv = vals{'path'} ; fn = 2 ; gosub set.field
+      case ty = 'I'
+         fv = vals{'expr'} ; fn = 2 ; gosub set.field
+      case ty = 'L'
+         fv = vals{'idexpr'} ; fn = 2 ; gosub set.field
+         fv = vals{'file'} ; fn = 3 ; gosub set.field
+         fv = vals{'fexpr'} ; fn = 4 ; gosub set.field
+      case 1
+         fv = convert(char(10), @fm, vals{'text'})
+         rec = field(rec, @fm, 1, 1)
+         if fv # '' then rec := @fm : fv
+   end case
+   if ty = 'D' or ty = 'E' or ty = 'I' then
+      fv = vals{'conv'} ; fn = 3 ; gosub set.field
+      fv = vals{'head'} ; fn = 4 ; gosub set.field
+      fv = ''
+      if vals{'width'} # '' then fv = vals{'width'} : vals{'just'} : vals{'dec'}
+      fn = 5 ; gosub set.field
+      fv = vals{'sm'} ; fn = 6 ; gosub set.field
+      fv = vals{'assoc'} ; fn = 7 ; gosub set.field
+      fv = vals{'user'} ; fn = 8 ; gosub set.field
+   end
+   c = rec
+   return
+
+* In: rec, fn (the field number), fv (the value).  A value that is empty is written only where the record already has the field (no trailing empty fields are made)
+set.field:
+   if fv # '' or fn <= dcount(rec, @fm) then rec<fn> = fv
+   return
+end
+
+* END-CODE

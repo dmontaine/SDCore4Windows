@@ -1,0 +1,162 @@
+* TK_AIWALL
+* The AI line's wall (S.97 stage 0): what is never sent to the AI, and what is never asked of it from inside SD.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 1 Nov 26 dm   New.  The owner's rule of 1 Nov 2026 (CLAUDE.md, "THE AI BOUNDARY"): the AI field never reaches the C and GPL.BP code or any other system information, for every provider,
+*               and even the administrator asks no system-development questions inside SD.  Before this nothing told $tk_ai where a text came from, so an administrator who had a record of
+*               the system's own gpl.bp open in the IDE or SED sent it to the provider on "Explain the selection".
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_aiwall(op, a, why)
+*
+*   origin   a is the ORIGIN of the text an app is about to put in a request (actx<13> of $tk_ai), a dynamic array of values:
+*              <1,1> the kind: none (the app sends no text of a file: a page that only describes itself), untitled (a buffer that is not yet a record), record, or path;
+*              <1,2> record: the file's name as the account's VOC has it; <1,3> record: the record id, path: the operating system pathname; <1,4> record: 1 for an item of the file's DICTIONARY.
+*            why comes back null when the text may be sent, 'system' when it is part of SD itself, and 'unknown' when the origin cannot be told (the text is then NOT sent: the wall fails shut).
+*            A record is found by opening its file and asking where the file is (FILEINFO FL$PATH); an operating system path is used as it is; either is then put to the geometry test of the kernel
+*            (K$PATH.IN: realpath, so .. and a link out do not count) against the places that are SD's own: the system directory (every program, header, message, help text, dictionary and
+*            file the system account holds, the account register, the audit trail, the error log), the AI helper's directories, /run/sd and /etc/sd.conf.  BY ORIGIN, NEVER BY CONTENT.
+*   request  a is the TYPED request.  why comes back null, or the name that makes it a question about SD's own code or build.  THIS IS A SCREEN, NOT A WALL: a question that names none of the
+*            names passes, and a question that reaches the AI may be answered from what the AI learned of the open source.  The gate is here, in SD.
+*
+*   No provider is named anywhere in this program: it is one rule for every provider.  It writes nothing and runs nothing.
+*
+* END-DESCRIPTION
+* START-CODE
+
+$internal
+subroutine tk_aiwall(op, a, why)
+$catalog $tk_aiwall
+
+$include keys.h
+$include int$keys.h
+
+   why = ''
+   begin case
+      case op = 'origin'
+         gosub check.origin
+      case op = 'request'
+         gosub check.request
+   end case
+   return
+
+* ======================================================================
+* In: a, the origin.  Out: why
+check.origin:
+   kind = a<1, 1>
+   if kind = '' or kind = 'none' or kind = 'untitled' then return
+
+   pth = ''
+   begin case
+      case kind = 'path'
+         pth = a<1, 3>
+      case kind = 'record'
+         rf = a<1, 2>
+         if rf = '' or a<1, 3> = '' then
+            why = 'unknown'
+            return
+         end
+         if a<1, 4> + 0 then
+            open 'DICT', rf to fv else
+               why = 'unknown'
+               return
+            end
+         end else
+            open rf to fv else
+               why = 'unknown'
+               return
+            end
+         end
+         pth = fileinfo(fv, FL$PATH)
+         close fv
+      case 1
+         why = 'unknown'
+         return
+   end case
+
+   if pth[1, 1] # '/' then
+      why = 'unknown'
+      return
+   end
+
+   * the places that are SD's own: a path inside any of them, or equal to one
+   places = @sdsys : @fm : '/var/lib/sd-ai' : @fm : '/usr/local/lib/sd-ai' : @fm : '/run/sd-ai' : @fm : '/run/sd' : @fm : '/etc/sd.conf'
+   for i = 1 to dcount(places, @fm)
+      if places<i> # '' then
+         if kernel(K$PATH.IN, places<i> : @fm : pth) then
+            why = 'system'
+            return
+         end
+      end
+   next i
+
+   * the build tree, wherever a copy of it is: a directory called gplsrc, gplbld or gplobj on the way
+   n = dcount(pth, '/')
+   for i = 1 to n
+      c = field(pth, '/', i)
+      if c = 'gplsrc' or c = 'gplbld' or c = 'gplobj' then
+         why = 'system'
+         return
+      end
+   next i
+   return
+
+* ======================================================================
+* In: a, the typed request.  Out: why (null, or the name that was found)
+check.request:
+   low = downcase(a)
+   toks = 'gpl.bp' : @fm : 'gplsrc' : @fm : 'gplbld' : @fm : 'gplobj' : @fm : '$internal' : @fm : 'bcomp' : @fm : 'bbcmp' : @fm : 'bbproc' : @fm : 'pcode_bld' : @fm : 'sysseg'
+   toks := @fm : 'revstamp' : @fm : 'makefile' : @fm : 'sd_dev_build' : @fm : 'sd -internal' : @fm : 'kernel(' : @fm : '.git-private' : @fm : 'project_status'
+   toks := @fm : 'sd source' : @fm : "sd's source" : @fm : 'source of sd' : @fm : 'source code of sd' : @fm : 'sd kernel' : @fm : 'kernel source' : @fm : 'kernel code' : @fm : 'sd internals'
+   for i = 1 to dcount(toks, @fm)
+      if index(low, toks<i>, 1) then
+         why = toks<i>
+         return
+      end
+   next i
+
+   * op_name.c: a file of the kernel
+   wc = 'abcdefghijklmnopqrstuvwxyz0123456789_'
+   occ = 1
+   loop
+      p = index(low, 'op_', occ)
+   while p
+      q = p + 3
+      loop
+         ch = low[q, 1]
+         if ch = '' then exit
+         if not(index(wc, ch, 1)) then exit
+         q += 1
+      repeat
+      if q > p + 3 then
+         if low[q, 2] = '.c' then
+            why = 'op_*.c'
+            return
+         end
+      end
+      occ += 1
+   repeat
+
+   * a key of the kernel's private interface: the letter k, a dollar sign and a letter
+   al = 'abcdefghijklmnopqrstuvwxyz'
+   occ = 1
+   loop
+      p = index(low, 'k$', occ)
+   while p
+      ch = low[p + 2, 1]
+      if ch # '' then
+         if index(al, ch, 1) then
+            why = 'k$'
+            return
+         end
+      end
+      occ += 1
+   repeat
+   return
+end
+
+* END-CODE

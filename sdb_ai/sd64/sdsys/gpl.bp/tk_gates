@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.3).
+* 7 Nov 26 dm   S.166: the home gate (kind 'start') is read by $tk_startof from ACC$START.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -97,6 +98,8 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
       begin case
          case gi<TK.G.STATUS> # 'built'
             state = ''
+         case gi<TK.G.KIND> = 'start'                ;* S.166: the home gate, any kind of account (menu, terminal, blank for the system's default)
+            call $tk_startof(rec<ACC$START>, state)
          case gi<TK.G.KIND> = 'group'
             if atype = 'USER' then
                state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)

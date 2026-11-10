@@ -277,6 +277,7 @@ deffun pw_complex(pw) calling '!pw_complex'
       if s = '' then
             * This user has come in from a command prompt of some sort.
             s = env('TERM')
+<<<<<<< ours
 * 19 Aug 26 Windows port - 'windows' rather than 'vt100'.  vt100 binds the
 *   arrow keys to ESC O A/B/C/D, which a terminal sends only in application
 *   cursor mode, and nothing in SD ever sends smkx to enter it - so under
@@ -287,6 +288,9 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   nothing that happens in here - see the next comment.  Both must still name
 *   the same type.
             if s = '' then s = 'windows'
+* 10 Nov 26 Windows port - Linux S.88 phase 1 (bcf43131) is NOT carried in this subroutine or the login paragraph: Linux took TERM LINUX out of the paragraph
+*   and chose linux or the xterm family here.  Here every session is typed 'windows' (this fallback and the paragraph's TERM WINDOWS, 5.18), which binds the
+*   keys the Windows console and Windows Terminal send; the bracketed-paste and key decoding of that commit are in _keycode and apply to it unchanged.
       end
 
 * 22 Aug 26 Windows port - THE BATCH GATE, PROJECT_STATUS.md 7 step 9.  A

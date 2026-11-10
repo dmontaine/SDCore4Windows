@@ -1,0 +1,55 @@
+* TK_FINDROW
+* The full-screen toolkit, shared base: '/' finds a row of a page's list by typing (S.186).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 9 Nov 26 dm  New (S.186; the owner, 9 Nov: "Letters stay, '/' finds" - on the pages a letter is a command, so '/' is the one way to find a row by
+*              typing, on every page that has a list).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_findrow(rows, cur, last, pos)
+*
+*     rows   the texts of the page's rows as it shows them, one to a field (what a person reads, so what they type is found)
+*     cur    the row the cursor is on (from 1; 0 when none)
+*     last   in: the text asked for last time on this page (offered again); out: the text asked for now
+*     pos    returned: the row found, the first one AFTER cur that holds the text in any case, going round to the top; cur itself when it is
+*            the only one; -1 when no row holds it (the page says so: message 15045 with last); 0 when the person typed nothing or pressed Esc
+*
+*   It asks with SCREEN ASK (a box over the page that puts back what was under it), reads and changes nothing else, and runs nothing: the page
+*   moves its cursor to pos and draws.  The search is a plain substring of the row's text, in capitals on both sides; no pattern is read in it.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_findrow(rows, cur, last, pos)
+$catalog $tk_findrow
+
+   pos = 0
+   if system(25) then return                                   ;* a phantom has no keyboard
+   fr.v = last
+   screen ask sysmsg(15043) value fr.v width 40 title sysmsg(15044) returning fr.t else return
+   fr.t = trim(fr.t)
+   if fr.t = '' then return
+   last = fr.t
+   fr.u = upcase(fr.t)
+   pos = -1                                                     ;* asked, and found nowhere unless the loop below finds it
+   fr.n = dcount(rows, @fm)
+   if fr.n < 1 or rows = '' then return
+   fr.c = cur + 0
+   if fr.c < 0 or fr.c > fr.n then fr.c = 0
+   for fr.k = 1 to fr.n
+      fr.i = mod(fr.c + fr.k - 1, fr.n) + 1                   ;* cur + 1, cur + 2, ... round to the top, cur itself last
+      if index(upcase(rows<fr.i>), fr.u, 1) then
+         pos = fr.i
+         return
+      end
+   next fr.k
+   return
+end
+
+* END-CODE

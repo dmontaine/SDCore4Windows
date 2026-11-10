@@ -7,6 +7,7 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
 * 18 Oct 26 dm  The cursor is placed through $sl_curat (which tells the cursor lock where it is).
+* 2 Nov 26 dm  S.88 p3.3a: the op 'size' (a new width and height, the nodes and the open ones kept), for $sl_widget_move.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -35,6 +36,7 @@
 *             on a node with nothing under it, so that a form can go on to the widget before or after)
 *     mouse   a click on a node makes it current; a click on its + or - opens or closes it; a second click on the
 *             node the last click chose is Return; the wheel moves three rows
+*     size    key<1> a new width, key<2> a new height ('' keeps one; 2 Nov 26, for $sl_widget_move): the nodes, the open ones and the current one are kept
 *     close   nothing to undo
 *
 * END-DESCRIPTION
@@ -95,6 +97,20 @@ $include sl.h
       case op = 'mouse'
          gosub rows
          gosub click
+
+      case op = 'size'
+         * 2 Nov 26 (S.88 p3.3a): key<1> the new width, key<2> the new height ('' keeps one), from $sl_widget_move.  The nodes, the open ones and the current one
+         * stay; the rows shown follow the current node.  Nothing is drawn and init is not run.
+         if key<1> # '' then tw0 = key<1> + 0
+         if key<2> # '' then th = key<2> + 0
+         if tw0 < 3 then tw0 = 3
+         if th < 1 then th = 1
+         w{'w'} = tw0
+         w{'h'} = th
+         gosub rows
+         gosub scroll
+         gosub store
+         ret = 'handled'
    end case
 
    return

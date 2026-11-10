@@ -1,0 +1,29 @@
+* TKPICKREC
+* The public full-screen toolkit (S.130): pick a file and a record, or one entry of a list the program gives.  A wrapper over $tk_pickrec.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 3 Nov 26 dm  New (S.130).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call !tkpickrec(ctx, mode, file, id, res, newtext)       ALWAYS SIX ARGUMENTS: a call with fewer stops with "Argument count mismatch" (pad with '')
+*
+*   As $tk_pickrec: mode null picks a file and then a record in it, 'file' only a file, 'record' a record of the file given, 'list' one entry of a list the program gives.
+*   THE PICKER NEVER WRITES: it opens a file for reading, takes no lock and changes nothing.  It opens the files the account's own VOC names, by the account's own rights.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tkpickrec(ctx, mode, file, id, res, newtext)
+$catalog !tkpickrec
+
+   call $tk_pickrec(ctx, mode, file, id, res, newtext)
+   return
+end
+
+* END-CODE

@@ -1,0 +1,79 @@
+* TK_OWNFILE
+* The full-screen toolkit, shared base: may this page write the file it has open under this name? (plan section 2.2 of the S.88 plan, defect S2)
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  New (S.88 phase 2, S2).  The test that TOOL.BULK made of its undo file (check.undo), moved here so that TOOL.QUERY asks the same question of &queries& before it writes
+*               or deletes a record.  TOOL.BULK's wording is kept (messages 12761 to 12764 say what its strings said).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $tk_ownfile(fv, name, ok, why)
+*
+*     fv     the file, open, that the page has opened by its VOC name
+*     name   the VOC name it was opened by (&queries&, &bulk.undo&): the name the file must carry on the disk
+*     ok     returned: 1 when the page may write and delete records of fv, else 0
+*     why    returned: null when ok; else the sentence that says why not (messages 12410 to 12412, 12518, 12519, 12761 to 12764)
+*
+*   WHY IT EXISTS.  A page is an $internal program, and the kernel's edit gates let $internal programs through, so a page that writes a file it opened by a name the
+*   PERSON can point somewhere else (a VOC entry &queries& that is a pointer to the program file bp) would write the program file with only the VOC gate on.  The page therefore
+*   asks for itself, and asks here, in one place, so that two pages cannot ask differently.  The file must be, all of these, or it is refused:
+*
+*     a dynamic file,
+*     not read only,
+*     standing DIRECTLY in this account's own directory (the folder the VOC is in) under exactly the name it was opened by - so a pointer to another account's file, to a dictionary
+*     (dict/zq) or to bp is not one,
+*     of K$EDIT.KIND 0 (not the VOC, a dictionary, a program file, nor a record or the structure of a file of the shared account), and
+*     one the kernel's own edit rules (K$EDIT.OK of its pathname) allow this session to change.
+*
+*   The first reason found is returned; nothing is changed.  A refusal by the kernel's rules is shown in the kernel's own words (!edit_msg).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine tk_ownfile(fv, name, ok, why)
+$catalog $tk_ownfile
+
+$include keys.h
+$include int$keys.h
+$include err.h
+
+   deffun edit_msg(kind) calling '!edit_msg'
+
+   ok = 0
+   why = ''
+   ucd = ''
+   open 'VOC' to uvf then
+      ucd = fileinfo(uvf, FL$PATH)
+      close uvf
+   end
+   if ucd # '' then ucd = field(ucd, '/', 1, dcount(ucd, '/') - 1)         ;* the account's own directory: the folder the VOC is in
+   ucp = fileinfo(fv, FL$PATH)
+   uct = fileinfo(fv, FL$TYPE)
+   ucek = kernel(K$EDIT.KIND, ucp)
+   uceo = kernel(K$EDIT.OK, ucp)
+   begin case
+      case uct # FL$TYPE.DH
+         why = sysmsg(12761, name)
+      case fileinfo(fv, FL$READONLY) = 1
+         why = sysmsg(12762, name)
+      case ucd = '' or ucp # ucd : '/' : name
+         why = sysmsg(12763, name)
+      case ucek >= 1 and ucek <= 3
+         why = sysmsg(12764, name, (if ucek = 1 then 'the VOC' else (if ucek = 2 then 'a dictionary' else 'a program file')))
+      case not(uceo)
+         why = edit_msg(ucek)                                   ;* the kernel's own words
+      case ucek # 0
+         why = edit_msg(ucek)                                   ;* a record or the structure of a shared file: the kernel's words for it (not reached from the account's own directory, kept as a floor)
+      case 1
+         ok = 1
+   end case
+
+   return
+end
+
+* END-CODE

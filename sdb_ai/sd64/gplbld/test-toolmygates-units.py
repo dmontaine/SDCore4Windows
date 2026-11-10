@@ -58,8 +58,11 @@ def checks(raw):
        and raw["tmpl"].split("\n")[:3] == ["V", "CA", "$tool_gates"], repr((raw["newvoc"][:60], raw["tmpl"][:30])))
     ck("MG2", "it asks the base for a USER app (no audience word) and shows the base's error and stops when it refuses (a window under 140 by 43)",
        "call $tk_open('tool.gates', '', ctx, err)" in pg and "'admin'" not in pg and re.search(r"call \$tk_open\('tool\.gates', '', ctx, err\)\s*\n\s*if err # '' then\s*\n\s*display err\s*\n\s*stop\s*\n\s*end", pg) is not None)
-    ck("MG3", "THE PAGE CHANGES NOTHING: it has no write, delete, execute, perform or chain, runs no command ($tk_run, $tk_runx), opens no confirm box, writes no audit line and opens no file (not the register, not the group file)",
-       not re.search(r"^\s*(?:execute|os\.execute|perform|chain|write[uv]?|delete[uv]?|matwrite|openpath|open|openseq|readu?|readv)\s", pg, re.M) and "$tk_run" not in pg and "$tk_confirm" not in pg and "K$AUDIT" not in pg and "$tk_runx" not in pg)
+    # 7 Nov 26 S.166: ONE exception, the home gate - no kernel key says where the account starts, so the page reads its own register record's ACC$START, once, with no lock.
+    pg3 = pg.replace("            openpath @sdsys : @ds : 'accounts' to st.f then\n               read st.rec from st.f, downcase(@who) then st.word = st.rec<ACC$START>\n", "", 1)
+    ck("MG3", "THE PAGE CHANGES NOTHING: it has no write, delete, execute, perform or chain, runs no command ($tk_run, $tk_runx), opens no confirm box, writes no audit line and opens no file "
+       "(not the group file; the register only for the home gate's start field, read with no lock, S.166)",
+       pg3 != pg and not re.search(r"^\s*(?:execute|os\.execute|perform|chain|write[uv]?|delete[uv]?|matwrite|openpath|open|openseq|readu?|readv)\s", pg3, re.M) and "$tk_run" not in pg and "$tk_confirm" not in pg and "K$AUDIT" not in pg and "$tk_runx" not in pg)
     used = set(re.findall(r"kernel\((K\$[A-Z.]+), -1\)", pg))
     want_keys = {"K$SH", "K$OS.EXEC", "K$SD.ACCOUNTS", "K$VOC.EDIT", "K$BP.EDIT", "K$DICT.EDIT", "K$NET", "K$SHARED.READ", "K$SHARED.WRITE"}
     ck("MG4", "every register gate is what the SESSION holds - the kernel's own answer for that gate, asked with -1 - and the page asks for exactly the nine and for nothing else of the kernel", used == want_keys and len(re.findall(r"kernel\(", pg)) == len(want_keys), repr(sorted(used ^ want_keys)))
@@ -71,18 +74,28 @@ def checks(raw):
     ck("MG6", "each route gate is membership of its Linux group by the PERSON's login name (@logname), not by the account name, and the lookup is the system's own !is_grp_member",
        "s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)" in pg and "deffun is_grp_member(user,group) calling '!is_grp_member'" in pg and "case gkind<k> = 'group'" in pg and len(built_grp) == 5 and "is_grp_member(@who" not in pg)
     keys = re.findall(r"call \$tk_keys\('add', keys, '([^']+)', '[^']+', '([a-z]+)'", pg)
-    ck("MG7", "the key table is help, refresh and quit and nothing else: no key to queue, run, drop or toggle anything", sorted(a for _k, a in keys) == ["help", "quit", "refresh"], repr(keys))
+    ck("MG7", "the key table is help, refresh and quit - and the Esc key that opens the menu bar (S.88 F0a: the bar runs nothing, a choice is one of those three keys) - and nothing else: no key to queue, run, drop or toggle anything",
+       sorted(a for _k, a in keys) == ["help", "menu", "quit", "refresh"] and ("esc", "menu") in keys, repr(keys))
     ck("MG8", "the words the page gives for a gate are the table's own on and off words for THIS account (@who) and say that only the administrator changes it; a gate that reaches beyond SD says the administrator is asked for the name",
        "'The administrator withdraws it with: modify.account ' : @who : ' ' : goff<k>" in pg and "'The administrator gives it with: modify.account ' : @who : ' ' : gon<k>" in pg and "so the administrator is asked to type your account name" in pg
        and "Only the administrator can change a gate (modify.account).  Nothing on this page can." in pg)
     ck("MG9", "the edit gates are said to be read ONCE at sign-on, and the row of a gate that is only planned says there is nothing to switch",
        "The edit gates are read ONCE when you sign on" in pg and "is planned and not built yet: there is nothing to switch" in pg and "if gids<k> = 'voc' or gids<k> = 'bp' or gids<k> = 'dict' then" in pg)
-    ck("MG10", "there is a [?], F1 and ? and a click show tool.gates.mine, whose record exists; the page calls $tk_help with its five arguments", pg.count("tool.gates.mine") == 2 and "call $tk_help('mark', 134, 2, 0, 0)" in pg
-       and "call $tk_help('hit', mev, 134, 2, hit.m)" in pg and raw["help"].split("\n")[0].strip() != "" and all(len(re.split(r",(?![^()]*\))", m)) == 5 for m in re.findall(r"call \$tk_help\(([^\n]*)\)", pg)))
+    ck("MG10", "there is a [?], F1 and ? and a click show tool.gates.mine, whose record exists; the page calls $tk_help with its five arguments", pg.count("tool.gates.mine") == 2 and "call $tk_help('mark', g.x + g.w - 5, g.y + 1, 0, 0)" in pg
+       and "call $tk_help('hit', mev, g.x + g.w - 5, g.y + 1, hit.m)" in pg and raw["help"].split("\n")[0].strip() != "" and all(len(re.split(r",(?![^()]*\))", m)) == 5 for m in re.findall(r"call \$tk_help\(([^\n]*)\)", pg)))
     n = len(info_rows)
     ck("MG11", "the page shows all the gates of the table on one screen: VIS (the rows on the screen) is at least the number of gates, the box and the text starts are where the draw routines put them",
-       re.search(r"VIS = (\d+)", pg) is not None and int(re.search(r"VIS = (\d+)", pg).group(1)) >= n and "screen box at 1,1 size 138,21 title 'What this account may do'" in pg and "for r = 1 to VIS" in pg, "%d gates" % n)
+       re.search(r"VIS = (\d+)", pg) is not None and int(re.search(r"VIS = (\d+)", pg).group(1)) >= n and "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 :" in pg and "VIS = g.h - 5" in pg
+       and "screen box at g.x,g.y size g.w,g.h title 'What this account may do'" in pg and "for r = 1 to VIS" in pg, "%d gates" % n)
     ck("MG12", "the page starts from the system's answers on every F5 (read.all is called again) and not from a copy it kept", "case nm = 'f5'\n         gosub read.all\n         gosub draw.all" in pg and "gst = ''" in pg)
+    ck("MG13", "THE MENU BAR (S.88 F0a pilot): drawn before the frame in the loop, a key goes to $tk_menubar with busy 0 (the page holds nothing Esc closes first) before the page's own case and a bar answer replaces the key by the name to dispatch on, "
+       "a click on the bar is asked first in on.mouse and replays through on.key, the bar's rows are only the three actions of the table, and every call passes seven arguments",
+       re.search(r"loop\s*\n\s*call \$tk_menubar\('draw', ctx, keys, 'My gates', '', '', mr\)\s*\n\s*call \$tk_frame\(ctx, keys, 'My gates', msg\)", pg) is not None
+       # 1 Nov 26 (S.97 stage 2): the AI line's four lines come between (test-aipage-units AP12d holds them); the bar is then asked only for a key the line did not use
+       and re.search(r"screen key returning nm\s*\n\s*mr = ''\s*\n\s*ao = ''\s*\n(?:[^\n]*\n){3}\s*if nm # '' and ao<1> = '' then call \$tk_menubar\('key', ctx, keys, 'My gates', nm, 0, mr\)\s*\n\s*if mr<1> # '' then nm = mr<4>\s*\n\s*begin case", pg) is not None
+       and re.search(r"if mev = '' then return\s*\n\s*mr = ''\s*\n\s*call \$tk_menubar\('click', ctx, keys, 'My gates', mev, '', mr\)\s*\n\s*if mr<1> # '' then\s*\n\s*nm = mr<4>\s*\n\s*if nm # '' then gosub on\.key[^\n]*\n\s*return\s*\n\s*end", pg) is not None
+       and sorted(re.findall(r"call \$tk_keys\('menu', keys, '([a-z]+)'", pg)) == ["help", "quit", "refresh"]
+       and all(len(m.split(",")) == 7 for m in re.findall(r"\$tk_menubar\(([^)]*)\)", pg)) and len(re.findall(r"\$tk_menubar\(", pg)) == 3, "")
     return rows
 
 
@@ -97,6 +110,11 @@ def sub(key, old, new):
 
 
 MUTANTS = [
+    ("the bar is drawn after the frame", "MG13", sub("page", "      call $tk_menubar('draw', ctx, keys, 'My gates', '', '', mr)", "      call $tk_frame(ctx, keys, 'My gates', msg)\n      call $tk_menubar('draw', ctx, keys, 'My gates', '', '', mr)")),
+    ("the bar is told something is open", "MG13", sub("page", "nm, 0, mr)", "nm, 1, mr)")),
+    ("a bar answer is not taken", "MG13", sub("page", "      if mr<1> # '' then nm = mr<4>\n", "")),
+    ("a click on the bar falls through to the page", "MG13", sub("page", "      nm = mr<4>\n      if nm # '' then gosub on.key", "      nm = mr<4>\n      if nm # '' then msg = ''")),
+    ("an action the page does not have is in the bar", "MG13", sub("page", "   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')\n", "   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')\n   call $tk_keys('menu', keys, 'queue', '&File', '&Queue', '', '')\n")),
     ("the verb in every account runs the administrator's matrix", "MG1", sub("newvoc", "$tool_mygates", "$tool_gates")),
     ("SDSYS's verb runs the holder's page", "MG1", sub("tmpl", "$tool_gates", "$tool_mygates")),
     ("the page asks for an administrator", "MG2", sub("page", "call $tk_open('tool.gates', '', ctx, err)", "call $tk_open('tool.gates', 'admin', ctx, err)")),
@@ -112,7 +130,8 @@ MUTANTS = [
     ("the page says it can change a gate", "MG8", sub("page", "Only the administrator can change a gate (modify.account).  Nothing on this page can.", "You can change a gate here.")),
     ("the sign-on sentence is gone", "MG9", sub("page", "The edit gates are read ONCE when you sign on", "The edit gates are read when you ask")),
     ("the help call has too few arguments", "MG10", sub("page", "call $tk_help('box', 'tool.gates.mine', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'", "call $tk_help('box', 'tool.gates.mine', hm)\n         if hm # '' then msg = hm\n      case nm = 'f5'")),
-    ("the page has no [?]", "MG10", sub("page", "   call $tk_help('mark', 134, 2, 0, 0)\n", "")),
+    ("the page has no [?]", "MG10", sub("page", "   call $tk_help('mark', g.x + g.w - 5, g.y + 1, 0, 0)\n", "")),
+    ("the gate pane is declared one row short", "MG11", sub("page", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 21 :", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 20 :")),
     ("too few rows for the table", "MG11", sub("page", "VIS = 16 ", "VIS = 10 ")),
     ("F5 does not ask again", "MG12", sub("page", "case nm = 'f5'\n         gosub read.all\n         gosub draw.all", "case nm = 'f5'\n         gosub draw.all")),
 ]

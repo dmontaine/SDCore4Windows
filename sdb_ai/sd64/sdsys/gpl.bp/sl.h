@@ -33,13 +33,21 @@
 *                    widget it is calling (18 Oct 26): NARROW is 1 and BCLIP is the clip that was in force before, the
 *                    program's own.  A widget that opens a pop-up (the combo box's list, the memo's find line) lifts
 *                    the clip to BCLIP while the pop-up is on the screen, so that it is not cut at the container's edge.
-*   SL.S.SYNC        1 when the terminal is KNOWN to show exactly what SHADOW and ATTRS say (19 Oct 26): SCREEN OPEN with CLEAR made it
-*                    so, and $sl_repaint makes it so again.  Null for a screen opened without CLEAR (the library believes it blank and
-*                    the terminal may not be: whatever the program printed earlier is there) and for SED's own.
-*   SL.S.DIFF        1 while $sl_form draws on a screen whose SYNC is 1 (it sets it on entry and clears it before it returns):
-*                    $sl_put then leaves out text the terminal already shows in the same styles, so that a form drawn again, or a
-*                    widget redrawn for a change that is in two of its rows, writes only what changed.  Every other statement
-*                    (SCREEN TEXT, BOX ...) writes what it is told, as before: a program may have printed over it.
+*   SL.S.SYNC        1 when the terminal is KNOWN to show exactly what TERM and TATTR say (19 Oct 26; 3 Nov 26, S.113): SCREEN OPEN with
+*                    CLEAR made it so, and $sl_repaint makes it so again.  Null for a screen opened without CLEAR (the library believes it blank
+*                    and the terminal may not be: whatever the program printed earlier is there) and for SED's own.  0 after $sl_scr 'unsync'
+*                    (Ctrl-L or F5 on a page of the toolkit, the cursor lock's warning, a resize of a page): the next flush repaints the screen.
+*   SL.S.DIFF        what $sl_put does with the terminal (S.113): 0 writes what it is told; 1 writes only the cells the terminal does
+*                    not already show in the same styles (TERM and TATTR), so that a form drawn again, or a page drawn again for a change
+*                    in two of its rows, writes only what changed; 2 writes nothing and changes only the shadow, which the next flush
+*                    ($sl_scr 'flush') writes.  $sl_form sets 1 on a screen whose SYNC is 1; $sl_scr 'draw' gives SCREEN TEXT, BOX and CLEAR
+*                    1 (2 while the screen is unsynced) on a screen the toolkit opened (SL.S.TK), and 0 everywhere else: a user's own
+*                    program may have printed over its text, and its statements write what they are told, as before.
+*   SL.S.TERM, SL.S.TATTR   (S.113, 3 Nov 26) value r + 1 is what the TERMINAL shows on row r: the text, and one style code per cell, on a
+*                    screen the library owns.  Every write of $sl_put keeps them; $sl_repaint and $sl_desktop blank them with the terminal.
+*                    SHADOW is what the program has drawn; the two differ only where a SCREEN CLEAR of a toolkit page has blanked the shadow
+*                    and nothing has been drawn there since (DIFF 1 does not write a clear), and while DIFF is 2, until the next flush.
+*   SL.S.TK          1 on a screen $tk_open took (S.113): its plain statements draw by difference, and its program's own waits flush.
 *
 * Everything the library draws goes through $sl_put, which writes this shadow as well as the terminal, so a
 * pop-up can save what is under it and put it back.
@@ -58,7 +66,10 @@ $define SL.W.D        10
 * The style codes, in the order of $sl_theme's list of names (a new style goes on the end of both)
 * 22 Oct 26: the last sixteen (ACDEFHIJKLMNOQRS) are the USER styles user1 to user16, spare slots that $sl_theme('slot') hands to a control that asks for its own
 * colours (the COLOR clause); a theme leaves them plain and keeps what a control put in them
-$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTBACDEFHIJKLMNOQRS'
+* 29 Oct 26: the five ROLE styles warning, success, readonly, busy and focus (codes UVWXY) sit before the sixteen user styles, so the user styles are still the last
+* sixteen and $sl_theme still finds them as len(codes) - 15.  Z is the only letter left.  A program compiled with the old list resets the theme to mono on every
+* drawing call ($sl_sgr tests th.codes against SL.CODES): recompile every program that includes this file after a change here.
+$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTBUVWXYACDEFHIJKLMNOQRS'
 
 $define SL.S.W         1
 $define SL.S.H         2
@@ -74,6 +85,9 @@ $define SL.S.BCLIP     11
 $define SL.S.NARROW    12
 $define SL.S.SYNC      13
 $define SL.S.DIFF      14
+$define SL.S.TERM      15
+$define SL.S.TATTR     16
+$define SL.S.TK        17
 *
 * The answer of $sl_caption (where a control and its label go inside the widget's rectangle), one value to a field (22 Oct 26)
 $define SL.CAP.W       1       ;* the width of the rectangle

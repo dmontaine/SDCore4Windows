@@ -1617,6 +1617,21 @@ void op_kernel() {
           (int32_t)cygwin_internal(CW_CYGWIN_PID_TO_WINPID, getpid());
       break;
 
+    /* 10 Nov 26 Windows port - Linux's in-SD AI helper keys (op_ai.c there).  No helper exists here yet
+       (RELEASE_1.1 173), so each is answered as Linux answers when its helper is not running: the AI
+       routines then find the AI unusable, draw no AI line and send nothing.  The answers are strings
+       of a word, a field mark and a word, as op_ai.c's ai_answer() builds them. */
+    case K_AI_START:
+      k_put_c_string("ERR\376nohelper", &result);
+      break;
+    case K_AI_POLL:
+    case K_AI_STATUS:
+      k_put_c_string("E\376nohelper", &result);
+      break;
+    case K_AI_CANCEL:
+      k_put_c_string("OK", &result);
+      break;
+
     default:
       k_error("Illegal KERNEL() action key (%d)", action);
   }

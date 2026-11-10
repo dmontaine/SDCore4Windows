@@ -15,6 +15,8 @@
 * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: the manifest key net (acc_os_info) is read and handed to !create_account (CA$NET); a manifest that has none gives an
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: the manifest key route.files (acc_os_info) is read and handed to !create_account (CA$FILES), so a restored account is in the
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: the manifest key route.files.write (acc_os_info) is read and handed to !create_account (CA$FILESWRITE) when route.files is 1 too; a
+* 28 Oct 26 dm  S.88 plan 2.9 (D2): the manifest key recovery (acc_os_info) is read and handed to !create_account (CA$RECOVERY) when it is exactly 1; a manifest that has none restores
+*               the account with its editors keeping no recovery copy.
 *              manifest that has none restores as not in sdfileswrite.
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: the manifest keys shared.read and shared.write (acc_os_info) are read and handed to !create_account (CA$SHARED.READ.OFF when the
 *              manifest says 0, CA$SHARED.WRITE when it says 1); a manifest without them (an older one, Solo's) gives read on and write off.
@@ -435,6 +437,7 @@ restore.one:
       settings<CA$SHARED.READ.OFF> = (if m.shared.read = '0' then 1 else '')      ;* 18 Oct 26, S.66: shared.read it had; only an explicit 0 withdraws it (a manifest with none, or from Solo: on)
       settings<CA$SHARED.WRITE> = (if m.shared.write = '1' then 1 else '')        ;* shared.write it had; only an explicit 1 grants it (none: off)
       settings<CA$NET> = m.net                ;* 17 Oct 26, S.65 slice 1: the NET gate it had ('' for a manifest that has none: off)
+      settings<CA$RECOVERY> = (if m.recovery = '1' then 1 else '')                ;* 28 Oct 26, S.88 plan 2.9: the recovery copy it had; only an explicit 1 (none: off)
       settings<CA$FILES> = m.route.files      ;* 17 Oct 26, S.65 slice 2c: the files-only login it had ('' for a manifest that has none: not in sdfiles)
 *     18 Oct 26, S.65 write group: sdfileswrite as it was, but only for an account that is in sdfiles (the group alone gives nothing, and !create_account
 *     refuses it): a manifest with none, or with write and no files, restores as not in the write group.
@@ -729,6 +732,7 @@ load.section:
    m.members = '' ; m.suspended = '' ; m.os.sh = '' ; m.os.execute = ''
    m.edit.voc = '' ; m.edit.bp = '' ; m.edit.dict = '' ; m.net = '' ; m.route.files = '' ; m.route.files.write = '' ; m.route.files.admin = ''
    m.shared.read = '' ; m.shared.write = ''     ;* 18 Oct 26, S.66
+   m.recovery = ''                              ;* 28 Oct 26, S.88 plan 2.9
    m.files = '' ; m.bytes = '' ; m.dirs = ''
    for kp = 1 to dcount(sec.keys<s.idx>, @vm)
       kv = sec.vals<s.idx,kp>
@@ -748,6 +752,7 @@ load.section:
          case sec.keys<s.idx,kp> = 'shared.read'  ; m.shared.read = kv
          case sec.keys<s.idx,kp> = 'shared.write' ; m.shared.write = kv
          case sec.keys<s.idx,kp> = 'net'         ; m.net = kv
+         case sec.keys<s.idx,kp> = 'recovery'    ; m.recovery = kv
          case sec.keys<s.idx,kp> = 'route.files' ; m.route.files = kv
          case sec.keys<s.idx,kp> = 'route.files.write' ; m.route.files.write = kv
          case sec.keys<s.idx,kp> = 'route.files.admin' ; m.route.files.admin = kv
