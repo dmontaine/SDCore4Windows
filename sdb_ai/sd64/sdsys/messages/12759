@@ -1,0 +1,1 @@
+%1 %2 holds characters outside ASCII (bytes 128 to 247), so it is read-only in the IDE: it cannot be saved, saved as, written as a copy, changed by Replace or an AI edit, or edited as fields.  The editor shows such a character a byte at a time and could not be trusted to keep it as it is.

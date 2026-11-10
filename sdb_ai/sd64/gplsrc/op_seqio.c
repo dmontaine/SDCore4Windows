@@ -23,6 +23,11 @@
  * 23 Oct 26 Windows port - from Linux b6186cc (17 Oct 26) S.64 part 2: OPENSEQ and DELETESEQ ask edit_os_path_refusal() about what is ABOVE the final
  *               name only (include_leaf FALSE): a record called sample.bp, voc or x.dic in an ordinary directory file is a plain file.
  * 18 Oct 26 Windows port - from Linux 8c2dfc4 (12 Oct 26): op_openseq() opens a block device, a floppy disk drive among
+ * 02 Nov 26 dm  S.88 A3: OPENSEQ ... CREATING makes the file AFTER the SD lock on its name is taken, so a CREATING that ends in its LOCKED clause (or
+ *               waits for the lock) leaves no empty file behind; the lock-conflict branch marks the closed handle invalid (no second close at the exit).
+ * 30 Oct 26 dm  S.88 A1: the OPENSEQ file,record form looks at the raw record name for a symbolic link before resolving it (so CREATING of a link to nothing
+ *               is refused there too), and the create that WRITESEQ and WEOFSEQ make on the first write never follows a link at the end of the name
+ *               (DIO_OVERWRITE_NOFOLLOW).
  * 30 Oct 26 dm  S.88 stage E2: OPENSEQ ... CREATING of a name that does not exist is exclusive (O_EXCL; ER_EXISTS 6032 when a file or a dangling link is there by
  *               the time it is made); SHARED keeps open-or-create.
  * 17 Oct 26 dm  S.64 part 2: OPENSEQ and DELETESEQ ask edit_os_path_refusal() about what is ABOVE the final name only (include_leaf
@@ -460,6 +465,7 @@ Private void openseq(bool map_name) {
   bool edit_blocked = FALSE; /* 17 Oct 26 S.64: a path in a VOC, a dictionary or a program file that the session may not change */
   bool leaf_is_link = FALSE; /* 30 Oct 26 S.88 E2: the name given is itself a symbolic link (fullpath() follows it below) */
   struct stat leaf_stat_buf;
+  bool create_after_lock = FALSE; /* 02 Nov 26 S.88 A3: CREATING of a name that is not there: the file is made once the SD lock is held */
   int16_t blocking_user;
   int status;
   u_int16_t flags = 0;
@@ -732,18 +738,13 @@ Private void openseq(bool map_name) {
     {
       process.status = ER_EXISTS;
       goto exit_op_openseq;
-    } else if (op_flags & 0x400) /* CREATING (and SHARED, which includes it): make the file now */
+    } else if (op_flags & 0x400) /* CREATING (and SHARED, which includes it): make the file once its SD lock is held (below) */
     {
       /* 12 Oct 26, openQM items 485 and 397 */
-      /* 30 Oct 26 dm - S.88 stage E2: a plain CREATING is EXCLUSIVE (O_CREAT | O_EXCL).  The stat() above failed, so the name was free a moment ago;
-         a file made in between, or a dangling symbolic link at the name (stat follows the link and fails, a plain O_CREAT then follows it and
-         makes its TARGET), is now ER_EXISTS and nothing is created.  SHARED (0x800) keeps the open-or-create it always had: it appends to a file
-         that others add to. */
-      fu = dio_open(fullpathname, (op_flags & 0x800) ? DIO_OVERWRITE : DIO_NEW);
-      if (!ValidFileHandle(fu)) {
-        process.status = (!(op_flags & 0x800) && errno == EEXIST) ? ER_EXISTS : ER_FNF;
-        goto exit_op_openseq;
-      }
+      /* 02 Nov 26 dm - S.88 A3 (the second Opus review of E2): the file is made AFTER the SD lock on its name has been taken, not here.  It was made
+         here, before lock_record(), so an OPENSEQ ... CREATING ... LOCKED of a name another session held left an EMPTY FILE behind and took the
+         LOCKED clause; without a LOCKED clause the open waited with the file already made.  Now a name that is locked gets nothing on the disk. */
+      create_after_lock = TRUE;
     } else /* Does not exist, take ELSE clause, STATUS() = 0 */
     {
       fu = INVALID_FILE_HANDLE; /* Remember not opened yet */
@@ -807,6 +808,7 @@ Private void openseq(bool map_name) {
         if (sysseg->deadlock) {
           if (ValidFileHandle(fu))
             CloseFile(fu);
+          fu = INVALID_FILE_HANDLE;
           k_free(fvar); /* Give away file variable */
           fvar = NULL;
           k_deadlock();
@@ -820,6 +822,7 @@ Private void openseq(bool map_name) {
       default: /* Conflicting lock is held by another user */
         if (ValidFileHandle(fu))
           CloseFile(fu);
+        fu = INVALID_FILE_HANDLE; /* 02 Nov 26: closed - the exit below must not close the number a second time */
 
         /* Modified by Composer AI - 2026/06/10.
            The deadlock path above frees fvar before falling through; do
@@ -858,6 +861,20 @@ Private void openseq(bool map_name) {
         pc -= 2; /* Two byte opcodes for OPENSEQ and OPENSEQP */
         Sleep(250);
         return;
+    }
+  }
+
+  /* 02 Nov 26 dm - S.88 A3: CREATING of a name that was not there, now that the SD lock on it is held (a name another session holds took the
+     LOCKED clause, or waits, above, and NOTHING was made).  30 Oct 26 dm - S.88 stage E2: a plain CREATING is EXCLUSIVE (O_CREAT | O_EXCL).
+     The stat() above failed, so the name was free a moment ago; a file made in between, or a dangling symbolic link at the name (stat follows
+     the link and fails, a plain O_CREAT then follows it and makes its TARGET), is now ER_EXISTS and nothing is created.  SHARED (0x800) keeps
+     the open-or-create it always had: it appends to a file that others add to.  errno is read straight after the open.  A failure goes to the
+     exit, which gives the lock back and frees the file variable. */
+  if (create_after_lock) {
+    fu = dio_open(fullpathname, (op_flags & 0x800) ? DIO_OVERWRITE : DIO_NEW);
+    if (!ValidFileHandle(fu)) {
+      process.status = (!(op_flags & 0x800) && errno == EEXIST) ? ER_EXISTS : ER_FNF;
+      goto exit_op_openseq;
     }
   }
 

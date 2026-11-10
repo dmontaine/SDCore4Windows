@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 2 Nov 26 dm   The end of the input ends the pick list as Q does (item null): on a pipe that has ended, or a terminal that has gone,
+*               KEYCODE() gives the null key, which rang the bell for ever at full CPU.  No timeout is asked, so a null key is never a key.
+*               Its one caller is SP.VIEW.  Rows: sandbox-eofkeys.py, the sp.view rows.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -92,6 +95,11 @@ $include keyin.h
       display @(len(prompt.text), id.prompt.line) :
 
       c = upcase(keycode())
+      if c = '' then                 ;* 2 Nov 26: the input has ended (no timeout was asked), so nobody will choose
+         item = ''
+         display @(0,top.line) : @(-3) :
+         exit
+      end
       gosub map.keys
 
       begin case
