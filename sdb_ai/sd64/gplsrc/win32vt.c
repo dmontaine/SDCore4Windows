@@ -98,3 +98,36 @@ void restore_console_vt(void) {
     vt_changed = 0;
   }
 }
+
+/* ======================================================================
+   console_window_cells()  -  the console WINDOW's size, as Windows has it now.
+
+   10 Nov 26 Windows port - RELEASE_1.1 212.  The owner, 10 Nov: after Windows
+   Terminal's F11 (full screen) the page did not grow to the new size, while
+   the maximize button made it grow.  The tty's TIOCGWINSZ answer, which
+   linuxio.c asks, is the MSYS2 runtime's, and it is brought up to date only
+   when the runtime handles console input; F11 is the terminal's own key and
+   sends SD no input, while a click on the maximize button does.  This asks
+   the console itself: the visible window (srWindow), not the buffer, which
+   can be taller.  Returns 1 and the size, or 0 when there is no console (an
+   ssh session, a pipe, a file) - the caller then keeps the tty's answer.   */
+
+int console_window_cells(int* cols, int* rows) {
+  HANDLE h;
+  CONSOLE_SCREEN_BUFFER_INFO info;
+  int c;
+  int r;
+
+  h = GetStdHandle(STD_OUTPUT_HANDLE);
+  if ((h == NULL) || (h == INVALID_HANDLE_VALUE))
+    return 0;
+  if (!GetConsoleScreenBufferInfo(h, &info))
+    return 0;
+  c = info.srWindow.Right - info.srWindow.Left + 1;
+  r = info.srWindow.Bottom - info.srWindow.Top + 1;
+  if ((c <= 0) || (r <= 0))
+    return 0;
+  *cols = c;
+  *rows = r;
+  return 1;
+}

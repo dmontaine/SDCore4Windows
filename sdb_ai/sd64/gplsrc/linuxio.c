@@ -19,7 +19,9 @@
  * START-HISTORY:
  * 10 Nov 26 Windows port - RELEASE_1.1 212: console_resized() and console_window_size() ask the tty its size (poll_window_size()) before
  *           answering, and take a changed size as the SIGWINCH handler does; under the MSYS2 console the signal came only with the next input
- *           event, so a page stayed garbled after a resize until a click.
+ *           event, so a page stayed garbled after a resize until a click.  The same day, after the owner's test of that build (F11 still
+ *           did not grow the page; maximize did): poll_window_size() asks Windows for the console window first (win32vt.c
+ *           console_window_cells()), since the tty's answer is the runtime's and is stale until it handles input; no console, the tty.
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): signal_handler() no longer logs (it took ERRLOG_SEM inside the handler and could
  *           deadlock a session hung up while it held it); it records the signal, and log_termination_signal() writes the line from
  *           process_events().
@@ -153,6 +155,7 @@ void set_old_tty_modes(void);
    netdb.h and sys/socket.h and the two do not mix. */
 int enable_console_vt(void);
 void restore_console_vt(void);
+int console_window_cells(int* cols, int* rows); /* 10 Nov 26: the console window's size from Windows, 0 with no console (RELEASE_1.1 212) */
 void set_new_tty_modes(void);
 bool negotiate_telnet_parameter(void);
 
@@ -539,12 +542,24 @@ Private void winch_handler(sig) int sig;
    takes it.  An unchanged size touches nothing, so a TERM w,h the person typed is not overwritten on every call.                     */
 Private void poll_window_size() {
   struct winsize ws;
+  int c;
+  int r;
 
-  if ((ioctl(0, TIOCGWINSZ, &ws) != 0) || (ws.ws_col == 0) || (ws.ws_row == 0))
-    return;
-  if ((ws.ws_col != win_cols) || (ws.ws_row != win_rows)) {
-    if (read_window_size())
-      winch_seen = 1;
+  /* 10 Nov 26 - THE CONSOLE FIRST.  The tty's answer is also stale after an F11: the MSYS2 runtime updates it only when it handles console
+     input, and F11 is the terminal's key, so SD gets none (the owner, 10 Nov: the page did not grow).  win32vt.c asks Windows for the
+     console window's size; with no console (ssh, a pipe) the tty's answer is used as before. */
+  if (!console_window_cells(&c, &r)) {
+    if ((ioctl(0, TIOCGWINSZ, &ws) != 0) || (ws.ws_col == 0) || (ws.ws_row == 0))
+      return;
+    c = ws.ws_col;
+    r = ws.ws_row;
+  }
+  if ((c != win_cols) || (r != win_rows)) {
+    win_cols = c;
+    win_rows = r;
+    tio.dsp.width = (win_cols < 20) ? 20 : win_cols;
+    tio.dsp.lines_per_page = (win_rows < 10) ? 10 : win_rows;
+    winch_seen = 1;
   }
 }
 
