@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - RELEASE_1.1 214: F1 names C:\Program Files\SD\changelog, where the changelog is, not @sdsys/changelog.
 * 8 Nov 26 Windows port - from Linux e9f4d42e (S.156): SH with no command starts the interactive shell again.
 * 8 Nov 26 Windows port - from Linux bfca310a (1 Nov 26, its cproc hunk only): the hyphen form is back (owner: "restore the hyphen option"): an unknown
 *           verb is retried with its hyphens changed to dots, lower case then upper case.
@@ -2647,7 +2648,9 @@ read.phantom.cargo:
   f1.help:
 *   if kernel(K$HELP, s) then display sysmsg(5130) ;* Unable to access the help system
 
-   crt sysmsg(10149, @sdsys:@ds:'changelog') ;* SD has no built-in help system - listv, the Start Menu check, and the changelog
+* 10 Nov 26 - RELEASE_1.1 214: the changelog is in the program folder, not the data tree (stage.py has shipped it to {app} since
+*   25 Aug 26), so @sdsys/changelog named a file no install has.  {app} is fixed (sd.iss DisableDirPage), as edit and elevate assume.
+   crt sysmsg(10149, 'C:\Program Files\SD\changelog') ;* SD has no built-in help system - listv, the Start Menu check, and the changelog
 
    return
 

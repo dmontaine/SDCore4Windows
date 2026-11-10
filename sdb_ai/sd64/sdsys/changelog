@@ -18,6 +18,12 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            Linux.
              Does NOT    - Change where an existing system's sessions start: an upgrade does not ask.
 
+10 Nov 26  F1 NAMES THE CHANGELOG WHERE IT IS.
+
+             What        - F1 at an empty command prompt names C:\Program Files\SD\changelog. It named
+                           C:\ProgramData\SD\sdsys/changelog, where the changelog has not been since August.
+             Why         - Found by the owner's test of F1.
+
 10 Nov 26  THE FULL-SCREEN PROGRAMS ARE THOSE OF SD CORE FOR LINUX: THE IDE, THE HOME SCREEN, THE TOOL PAGES AND THE DEBUGGER
            (FROM SD CORE FOR LINUX).
 
