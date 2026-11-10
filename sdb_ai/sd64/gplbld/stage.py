@@ -1934,7 +1934,7 @@ def main():
         print('    to   %s' % PRODUCTION_SDSYS)
 
         offenders = check_no_stage_paths(stage, sdsys,
-                                         allowed={'accounts/sdsys', 'errlog'})
+                                         allowed={'accounts/sdsys', 'errlog', 'bbproc.log'})
         if offenders:
             print('  these staged files still name the staging directory:')
             for o in sorted(offenders)[:20]:
@@ -1944,9 +1944,12 @@ def main():
         print('  checked: nothing else embeds the build path')
 
         # errlog is the bootstrap's own diagnostic output, not install data.
-        el = os.path.join(sdsys, 'errlog')
-        if os.path.isfile(el):
-            os.remove(el)
+        # 10 Nov 26 - and so is bbproc.log, BBPROC's own log, which Linux S.207 (dab60756) moved from /tmp into
+        # @sdsys: it names the stage, so it is allowed past check_no_stage_paths above and removed here, never shipped.
+        for name in ('errlog', 'bbproc.log'):
+            el = os.path.join(sdsys, name)
+            if os.path.isfile(el):
+                os.remove(el)
 
         # 21 Sep 26 - THE BOOTSTRAP'S INPUTS GO BEFORE ANYTHING IS PACKAGED.  The
         # seed was read into SDSYS's VOC above and the completeness check has
