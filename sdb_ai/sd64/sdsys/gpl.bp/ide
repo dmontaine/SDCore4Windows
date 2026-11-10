@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - RELEASE_1.1 211: no locale variable set means UTF-8 (line-drawn borders), as in $tk_open (a Windows console sets none).
 * 8 Nov 26 dm  S.180 (the owner: "all features available on a page need to appear somewhere on the menus"; "Add an Edit menu"): an Edit menu after File
 *              (message 15019) - Undo, Redo, Cut, Copy, Paste, Select all, and the fields pane's Insert, Delete, Rename and Change the type - each handing the key it
 *              names to the widget that owns it (do.editkey; the field entries say 15020 outside the fields pane).
@@ -362,6 +363,7 @@ $include idebrk.h
    if loc = '' then loc = env('LANG')
    loc = upcase(loc)
    utf8 = (index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0)
+   if loc = '' then utf8 = @true     ;* 10 Nov 26 Windows port (RELEASE_1.1 211): no locale set means UTF-8 here, as in $tk_open
 
    * A window smaller than the layout is refused before the screen is taken (the library's one check and message)
    call $sl_need('IDE', LAYW, LAYH, need.msg, '')

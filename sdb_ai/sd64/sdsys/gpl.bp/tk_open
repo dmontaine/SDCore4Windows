@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - RELEASE_1.1 211: no locale variable set means UTF-8 (line drawing), the MSYS2 runtime's own default; measured by the owner.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 28 Oct 26 Windows port - from Linux ec8459b - faults: a window above TK.MAXW by TK.MAXH is refused (message 12956), after the audience check and before the screen.
 * 10 Nov 26 Windows port - level with Linux e3490a7f (S.88 D4 and L1, S.113, S.186).
@@ -109,6 +110,10 @@ $include tk.h
    if loc = '' then loc = env('LANG')
    loc = upcase(loc)
    utf8 = (index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0)
+   * 10 Nov 26 Windows port (RELEASE_1.1 211): a Windows console sets none of the three, and SD's MSYS2 runtime writes UTF-8 when none is set,
+   *   so no locale at all means UTF-8 here (measured by the owner, 10 Nov: tool.keys with LANG=C.UTF-8 drew clean lines; without, + - |).
+   *   A locale that is set and names another character set still gets + - |.
+   if loc = '' then utf8 = @true
 
    saved.trap = pterm(PT$BREAK, -1)
    call $tk_brk('save', saved.trap)                 ;* kept where $sl_cleanup can find it if the app is aborted (28 Oct 26, D4)

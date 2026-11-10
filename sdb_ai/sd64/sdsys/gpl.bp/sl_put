@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - RELEASE_1.1 211: no locale variable set means UTF-8, as in $tk_open (a Windows console sets none of them).
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 19 Oct 26 dm  SL.S.DIFF (sl.h): text the terminal already shows in the same styles is not written again.
@@ -76,6 +77,7 @@ $include sl.h
       loc = upcase(loc)
       loc.mode = 2
       if index(loc, 'UTF-8', 1) > 0 or index(loc, 'UTF8', 1) > 0 then loc.mode = 1
+      if loc = '' then loc.mode = 1     ;* 10 Nov 26 Windows port (RELEASE_1.1 211): no locale set means UTF-8 here, as in $tk_open
    end
 
    * 28 Oct 26 (S1): the control characters and what each is shown as; made once per process.  The stand-ins CHAR(14) to CHAR(22) are not in the list (the library's glyphs, below)
