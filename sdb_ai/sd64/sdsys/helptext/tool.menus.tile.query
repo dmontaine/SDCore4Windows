@@ -1,0 +1,4 @@
+The Queries tile
+29c-sd-tcl-the-development-tools
+Starts tool.query, the page that builds a report: the file, the fields and the conditions, shown as the query sentence they make. It runs the command exactly as the person would have typed it, so it adds no access.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.query at a prompt they have; this setting only changes the home screen.

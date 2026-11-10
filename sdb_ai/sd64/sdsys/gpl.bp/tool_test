@@ -1,0 +1,1181 @@
+* TOOL_TEST
+* The test runner of the account on one screen: the test.* programs of its program files, run and judged by the last line of what they print (S.75, plan
+* .claude/plan-fullscreen-toolkit.md sections 2.7, 8 and 12, DV7).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the two boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the list shows more tests,
+*               the description and the output more lines, both wider; text longer than its box is wrapped when the box is wider than it was.
+* 27 Oct 26 dm  S.87 batch 12: CLEARINPUT in place of INPUTCLEAR (two places).
+* 25 Oct 26 dm  New.
+* 26 Oct 26 dm  faults: the first status hint and the hint under the list are shortened to fit (both were cut at the edge of their line, the second one in the middle of the Ctrl-C then Q instruction).
+* 1 Nov 26 dm  S.99 (look only): names its focus boxes (ctx<TK.C.FOCI>), so $tk_frame marks the one with the focus [*] and the other [-], as the IDE does.
+* 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI, in both panes; filter, refresh and the output pane of the runs are offered to
+*              the model (running a test is not), and a proposal is carried out by the page's own key.  An account without the AI sees the page as it was.
+* 3 Nov 26 dm  S.88 "Tab panes": Tab and Shift-Tab move the focus between the two boxes, as on every page with two: from Tests to the Output of the test under the cursor (as Enter
+*              does), from Output back to Tests (as Esc does).
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page (box.ring, $tk_aipage 'ring': Tests, Output, the AI line); Tab and Shift-Tab no longer move between
+*              the boxes.  Enter still opens the Output box and Esc leaves it.  AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse, the same on every page (the case act:std.mouse, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.TEST       (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the tests of the account the session is in.  THE CONVENTION: a test is a BASIC program whose record
+*   id starts with test. (test.sort, test.invoice.totals) in one of the account's program files, which prints its results and whose LAST NON-EMPTY output line says  N passed, M failed
+*   (the project's own suites end this way; a name and a colon may come first, as in  sandbox-x: 12 passed, 0 failed).  The page runs it with  run FILE ID  and judges: PASS when the
+*   line says M is 0 and N is above 0; FAIL when M is above 0, or when the run aborted; NO VERDICT for anything else (no such line, no output at all, N and M both 0).
+*
+*   WHICH FILES.  The program files of the account are the directory files its VOC points at that are called bp, or end in .bp, or have a file of the same name with .out added beside
+*   them (where the compiler puts the object code).  A test with no record of its own name in that .out file has no object and cannot be run until B has compiled it.
+*
+*   WHAT IT CAN DO.  R runs the test under the cursor, A runs every test shown (the filter applies), F runs again the ones that failed; each is  run FILE ID  through $tk_run, which lets
+*   through only the words run and basic and the characters a-z, digits, dot, dash and underscore.  A run needs no sh and no os gate: it runs the account's own object code, as typing the
+*   command would.  B compiles a test whose object is missing (basic FILE ID) after a box that shows the command.  Enter shows what the test printed, scrolling; Esc comes back.  The
+*   results are kept in memory for the session and written nowhere.
+*
+*   WHAT THE RUN DOES FOR A TEST.  EXECUTE ... CAPTURING collects what it prints (an aborted test's output is discarded by the system, so an abort is told by the abort message the system
+*   keeps: the page sets a message of its own first and the test aborted when the message changed and nothing was captured).  A test that asks for input is given ANSWERS empty answers
+*   (the data stack) and the leftovers are discarded; the result says how many it used.  The break key is turned on for the run: a test that does not end is stopped with Ctrl-C and Q.
+*   BASIC has no time limit for a program and neither has the page.  Only the first and last lines of a very long output are kept (the result says so); the verdict is judged on all of it.
+*
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; R, A, F, B and Enter as above; F11 or / filters the names (a part of a test or file name; empty shows all); Esc clears the
+*   filter; F5 reads the program files again (the results stay); F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.  A name with a character the page does not give to a
+*   command (a capital, an ampersand, a dollar) is listed, and the page says which command to type at the prompt.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_test
+$catalog $tool_test
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'run basic'                                          ;* the commands this page may run, through $tk_run
+   MAXT = 500                                                   ;* tests listed, and results kept
+   ANSWERS = 50                                                 ;* empty answers stacked for a test that asks for input
+   KEEP = 400 ; HEADN = 360 ; TAILN = 39 ; LINEW = 250          ;* the output kept: all of it up to KEEP lines, else the first HEADN, a marker line and the last TAILN
+   VIS = 16 ; VISO = 15                                         ;* test rows on the screen, output rows in the lower box (both set by get.rects from the panes)
+
+   call $tk_open('tool.test', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   rtw = TK.MINW - 2 * TK.XBODY - 4                             ;* the text width of a pane in the reference layout (140 by 43): 134
+   perr = ''
+   outopen = 0                                                  ;* the output pane of the runs (Ctrl-O): closed until asked for
+   gosub declare.layout
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'r', 'run', 'run', 'Tests', 1)
+   call $tk_keys('add', keys, 'a', 'run all', 'runall', 'Tests', 1)
+   call $tk_keys('add', keys, 'f', 'run failed', 'runfailed', 'Tests', 1)
+   call $tk_keys('add', keys, 'b', 'compile', 'compile', 'Tests', 1)
+   call $tk_keys('add', keys, 'enter', 'output', 'output', 'Tests', 1)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', 'Tests', 1)
+   call $tk_keys('add', keys, 'esc', 'tests', 'back', 'Output', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-o', 'runs', 'runspane', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'pane', '', 1)                  ;* S.176: F6 / Shift-F6 the other box and the AI line, as on every page (Tab does not); last on the row, so the rows of each pane begin as they did
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', 'Tests', 1)           ;* S.88 U7: in the Tests pane Esc takes the name filter off first, else opens the menu bar (in Output it is 'back')
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'run', '&Tests', '&Run this test', '', '')
+   call $tk_keys('menu', keys, 'runall', '&Tests', 'Run &all', '', '')
+   call $tk_keys('menu', keys, 'runfailed', '&Tests', 'Run &failed', '', '')
+   call $tk_keys('menu', keys, 'compile', '&Tests', '&Build (compile)', '', '')
+   call $tk_keys('menu', keys, 'output', '&Tests', 'Show the &output', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter the names', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'pane', '&View', '&Switch box', '', '')       ;* S.180: every key's action is on a menu (F6)
+   call $tk_keys('menu', keys, 'runspane', '&View', '&Output of the runs (Ctrl-PgUp, Ctrl-PgDn scroll)', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2: the AI line.  The page offers the AI only the actions that change what is shown - the filter, refresh and the output pane of the runs (the owner: opt-in, off
+   * by default; running a test is not offered); a proposal is carried out by the page's own key.  Where the AI is not usable for the account nothing here adds a key, a row or a
+   * line.  This page lays itself out before its key table, so a line that took a row has the panes declared again.
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_keys('ai', keys, 'runspane', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+   if aout then gosub declare.layout
+
+   dim rz(500)                                                  ;* the result of a test: state, passed, failed, seconds, time, lines, lines left out, abort message, answers used, what the output is, last line, command
+   dim oz(500)                                                  ;* what it printed (the kept lines, one to a field)
+   mat rz = ''
+   mat oz = ''
+   rkeys = ''                                                   ;* file/id of each result, in the order they were made
+
+   ctl = '' ; dots = ''                                         ;* the characters that are shown as a dot
+   for zc = 1 to 31
+      if zc # 9 then
+         ctl := char(zc)
+         dots := '.'
+      end
+   next zc
+   ctl := char(127) : char(251) : char(252) : char(253) : char(254) : char(255)
+   dots := '......'
+
+   hl = fmt('Test', '30L') : fmt('Program file', '14L') : fmt('Object', '8L') : fmt('Result', '13L') : fmt('Passed', '7R') : fmt('Failed', '7R') : fmt('Secs', '6R') : '  ' : fmt('Ran', '9L') : fmt('Lines', '7R')
+
+   tfile = '' ; tid = '' ; tobj = '' ; tok = '' ; nt = 0         ;* every test found, one to a field
+   pfiles = ''
+   shown = '' ; ns = 0                                          ;* the rows shown (filter applied): the numbers of rows in the lists above
+   filt = ''
+   ci = 1 ; ta = 0
+   gen = 0
+   done = 0
+   pn = 'Tests'                                                 ;* the pane with the focus: Tests, or Output (scrolling what one test printed)
+   running.ri = 0
+   mrun = ''
+   capped = 0
+   vlines = '' ; nv = 0 ; ot = 0
+   sentinel = ''
+   msg = ''                                                     ;* S.88 U7: no key hint in the status line (F1 lists the keys)
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, pn, '', '', mr)                   ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, pn, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, pn, nm, ao)                  ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      busy = (if filt # '' or outopen then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, pn, nm, busy, mr)       ;* the Esc rule: a name filter is taken off before the bar opens (in Output Esc is the page's own 'back')
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            if ta > ns - VIS then ta = ns - VIS
+            if ta < 0 then ta = 0
+            if ot > nv - VISO then ot = nv - VISO
+            if ot < 0 then ot = 0
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Every test of the account: the test.* records of its program files; the cursor goes back to the test it was on
+read.all:
+   keep.k = ''
+   if ns > 0 and ci >= 1 and ci <= ns then keep.k = tfile<shown<ci>> : '/' : tid<shown<ci>>
+   tfile = '' ; tid = '' ; tobj = '' ; tok = '' ; nt = 0
+   pfiles = ''
+   capped = 0
+   fids = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      for i = 1 to n
+         read r from vocf, ids<i> then
+            * the first field is F, or a description that starts "File" (a file's description is kept there)
+            t1 = upcase(r<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then fids<-1> = ids<i>
+         end
+      next i
+   end
+   nfv = dcount(fids, @fm)
+   if fids = '' then nfv = 0
+   for i = 1 to nfv
+      fn = fids<i>
+      gosub scan.file
+   next i
+   gosub apply.filter
+   ci = 1 ; ta = 0
+   if keep.k # '' then
+      for zi = 1 to ns
+         if tfile<shown<zi>> : '/' : tid<shown<zi>> = keep.k then ci = zi
+      next zi
+   end
+   if ci > ns then ci = ns
+   if ci < 1 then ci = 1
+   return
+
+* In: fn, a VOC entry that points at a file.  A program file is a directory file called bp, or ending .bp, or with a file of the same name and .out added beside it (the compiler's);
+* its records that start with test. are added to the list, each with whether its object code is in the .out file
+scan.file:
+   lfn = downcase(fn)
+   sfx = ''
+   if len(lfn) >= 4 then sfx = lfn[len(lfn) - 3, 4]
+   cand = @false
+   if sfx # '.out' then
+      if lfn = 'bp' then cand = @true
+      if sfx = '.bp' then cand = @true
+      locate fn : '.out' in fids<1> setting zp then
+         if zp > 0 then cand = @true
+      end
+   end
+   if cand then
+      open fn to zf then
+         if fileinfo(zf, FL$TYPE) = FL$TYPE.DIR then
+            sselect zf to 8
+            readlist zids from 8 else zids = ''
+            ztests = ''
+            loop
+               zid = remove(zids, zdel)
+               if downcase(zid[1, 5]) = 'test.' then ztests<-1> = zid
+            while zdel repeat
+            if ztests # '' then
+               pfiles<-1> = fn
+               zobj = ''
+               open fn : '.out' to zof then
+                  sselect zof to 7
+                  readlist zobj from 7 else zobj = ''
+                  close zof
+               end
+               zt = dcount(ztests, @fm)
+               for zi = 1 to zt
+                  if nt < MAXT then
+                     nt += 1
+                     zid = ztests<zi>
+                     tfile<nt> = fn
+                     tid<nt> = zid
+                     zob = @false
+                     locate downcase(zid) in zobj<1> setting zp then
+                        if zp > 0 then zob = @true
+                     end
+                     tobj<nt> = (if zob then 1 else 0)
+                     zfl = fn
+                     gosub check.names
+                     tok<nt> = (if okname then 1 else 0)
+                  end else
+                     capped = 1
+                  end
+               next zi
+            end
+         end
+         close zf
+      end
+   end
+   return
+
+* The rows that hold the filter's text (any case) in the test name or the program file
+apply.filter:
+   shown = ''
+   ns = 0
+   for zi = 1 to nt
+      if filt = '' or index(upcase(tid<zi> : ' ' : tfile<zi>), upcase(filt), 1) > 0 then shown<-1> = zi
+   next zi
+   ns = dcount(shown, @fm)
+   if shown = '' then ns = 0
+   return
+
+* In: ri, a row.  Out: rp, the place of that test's result (0 when it has none), and fkey, its key
+find.result:
+   rp = 0
+   fkey = tfile<ri> : '/' : tid<ri>
+   locate fkey in rkeys<1> setting fzp then rp = fzp
+   return
+
+* The same, and the place is made when the test has none yet
+make.result:
+   gosub find.result
+   if rp = 0 then
+      if dcount(rkeys, @fm) >= 500 then
+         rkeys = ''
+         mat rz = ''
+         mat oz = ''
+      end
+      rkeys<-1> = fkey
+      rp = dcount(rkeys, @fm)
+      rz(rp) = ''
+      oz(rp) = ''
+   end
+   return
+
+* A name the page may give to a command: letters a-z, digits, dot, dash and underscore only (what $tk_run lets through).  In: zfl (the program file) and zid (the test).  Out: okname
+check.names:
+   okname = (len(zfl) > 0 and len(zid) > 0 and len(zfl) <= 63 and len(zid) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   zz = zfl : zid
+   for zq = 1 to len(zz)
+      if index(good, zz[zq, 1], 1) = 0 then okname = @false
+   next zq
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The two boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the list stretches (a bigger
+* window shows more tests), the lower box (the description, or the output of one test) takes what the layout gives it by its own weight of columns and rows.
+* Out: lx ly lw lh (the list), dx dy dw dh (the lower box), tw (the text width of both), VIS (the test rows), VISO (the output rows).
+declare.layout:
+   d = ''
+   d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'detail' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   if outopen then
+      * the output pane is open (Ctrl-O): the list 6 rows shorter and the output pane, 6 rows, between the list and the lower box (rows named lo, not d: the closed layout above is the page's own)
+      lo = ''
+      lo<1> = d<1> ; lo<1, 4> = 16                              ;* the list: 6 rows shorter (value 4 is the height)
+      lo<2> = d<2> ; lo<2, 1> = 'output' ; lo<2, 2> = 2 ; lo<2, 4> = 6
+      lo<3> = d<2> ; lo<3, 2> = 3                              ;* the lower box as it was, one band lower
+      d = lo
+   end
+   ctx<TK.C.FOCI> = 'list' : @sm : 'Tests' : @vm : 'detail' : @sm : 'Output'        ;* S.99: the boxes that take the focus (Output scrolls in the lower box), for $tk_frame's [*] / [-]
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'list', rc)
+   lx = rc<1, 1> ; ly = rc<1, 2> ; lw = rc<1, 3> ; lh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'detail', rc)
+   dx = rc<1, 1> ; dy = rc<1, 2> ; dw = rc<1, 3> ; dh = rc<1, 4>
+   tw = lw - 4
+   VIS = lh - 6                                                 ;* the header row, the test rows, the two summary lines, a blank row and the border: 16 rows of 22
+   VISO = dh - 2
+   return
+
+* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+fit.lines:
+   dlines = lines
+   if tw > rtw then
+      dlines = ''
+      nd = 0
+      for q = 1 to dcount(lines, @fm)
+         nd += 1
+         dlines<nd> = ''
+         if lines<q> # '' then
+            call $tk_wrap(lines<q>, tw, wpieces)
+            for pj = 1 to dcount(wpieces, @fm)
+               dlines<nd> = wpieces<pj>
+               nd += 1
+            next pj
+            nd -= 1
+         end
+      next q
+   end
+   return
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   ttl = 'Tests in ' : @who
+   screen box at lx,ly size lw,lh title ttl
+   gosub draw.lower
+   gosub draw.list
+   if outopen then call $tk_out('draw', ctx, 'output', '', oc)   ;* the output pane, in the rectangle the open layout gives it
+   return
+
+* Ctrl-O or Tests > Output of the runs, and Esc while it is open: the pane is shown or put away, the layout is declared again and all of it drawn
+toggle.out:
+   call $tk_out('toggle', ctx, '', '', oc)
+   outopen = oc
+   gosub declare.layout                                         ;* draw.list keeps the cursor row in view for the new VIS
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   return
+
+draw.lower:
+   if pn = 'Output' then
+      gosub draw.output
+   end else
+      screen box at dx,dy size dw,dh title 'The test under the cursor'
+      gosub draw.detail
+   end
+   return
+
+draw.list:
+   screen text hl at lx + 2,ly + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VIS then ta = ci - VIS
+   if ta < 0 then ta = 0
+   for r = 1 to VIS
+      kk = ta + r
+      s = ''
+      if kk <= ns then gosub row.text
+      screen text s at lx + 2,ly + 1 + r attr (if kk = ci and kk <= ns then 'highlight' else 'normal') width tw
+   next r
+   gosub draw.foot
+   call $tk_help('mark', lx + lw - 5, ly + 1, 0, 0)
+   return
+
+* In: kk, a place in the rows shown.  Out: s, the line of the list for that test
+row.text:
+   ri = shown<kk>
+   gosub find.result
+   zr = ''
+   if rp > 0 then zr = rz(rp)
+   rtx = ''
+   begin case
+      case ri = running.ri
+         rtx = 'running'
+      case tok<ri> = 0
+         rtx = 'by hand'
+      case tobj<ri> = 0
+         rtx = 'no object'
+      case zr<1> = ''
+         rtx = 'not run'
+      case zr<1> = 'pass'
+         rtx = 'pass'
+      case zr<1> = 'fail' and zr<8> # ''
+         rtx = 'fail: abort'
+      case zr<1> = 'fail'
+         rtx = 'fail'
+      case 1
+         rtx = 'no verdict'
+   end case
+   s = fmt(tid<ri>[1, 29], '30L') : fmt(tfile<ri>[1, 13], '14L') : fmt((if tobj<ri> then 'yes' else 'no'), '8L') : fmt(rtx, '13L') : fmt(zr<2>, '7R') : fmt(zr<3>, '7R') : fmt(zr<4>, '6R') : '  ' : fmt(zr<5>, '9L') : fmt(zr<6>, '7R')
+   return
+
+* The summary under the list, and the gate the page shows (asked of the kernel, never tried)
+draw.foot:
+   c.pass = 0 ; c.fail = 0 ; c.nov = 0 ; c.not = 0
+   for zi = 1 to nt
+      ri = zi
+      gosub find.result
+      zs8 = ''
+      if rp > 0 then zs8 = rz(rp)<1>
+      begin case
+         case zs8 = 'pass'
+            c.pass += 1
+         case zs8 = 'fail'
+            c.fail += 1
+         case zs8 = 'noverdict'
+            c.nov += 1
+         case 1
+            c.not += 1
+      end case
+   next zi
+   npf = dcount(pfiles, @fm)
+   if pfiles = '' then npf = 0
+   s = nt : (if nt = 1 then ' test' else ' tests') : ' in ' : npf : (if npf = 1 then ' program file' else ' program files')
+   s := ':  ' : c.pass : ' pass, ' : c.fail : ' fail, ' : c.nov : ' no verdict, ' : c.not : ' not run'
+   if filt # '' then s := ';  ' : ns : ' with "' : filt : '" in the name'
+   if capped then s := ';  only the first ' : MAXT : ' are listed'
+   s := '.   Your gate:  bp-edit ' : (if kernel(K$BP.EDIT, -1) then 'on' else 'off') : ' (B compiles)'
+   screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
+   note = "A test prints its result, and its last line says N passed, 0 failed.  A run needs no gate.  Ctrl-C then Q stops one that does not end."
+   wpieces = note
+   if tw > rtw then call $tk_wrap(note, tw, wpieces)
+   screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
+   if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
+   return
+
+* The test under the cursor in plain words
+draw.detail:
+   lines = ''
+   if ns >= 1 and ci >= 1 and ci <= ns then
+      ri = shown<ci>
+      gosub describe
+   end else
+      if nt = 0 then
+         lines<-1> = 'This account has no tests yet.'
+         lines<-1> = ''
+         lines<-1> = 'A test is a BASIC program whose record id starts with test. (test.sort, test.invoice.totals) in a program file: bp, a file whose name ends .bp, or one'
+         lines<-1> = 'with a file of the same name and .out beside it.  It prints what it checks, and its LAST line says how it went:  3 passed, 0 failed'
+         lines<-1> = '(a name and a colon may come first, as in  sandbox-x: 12 passed, 0 failed).  It is a PASS when failed is 0 and passed is above 0, a FAIL when failed is above 0'
+         lines<-1> = 'or the run aborted, and NO VERDICT for anything else.  Compile it (B, or basic bp test.name) and R runs it.'
+      end else
+         lines<-1> = 'No test name holds "' : filt : '".  Esc shows all of them.'
+      end
+   end
+   gosub fit.lines
+   for r = 1 to dh - 2
+      screen text fmt(dlines<r>[1, tw], tw : 'L') at dx + 2,dy + r width tw
+   next r
+   return
+
+* In: ri.  Out: lines, the test in sentences
+describe:
+   zfl = tfile<ri> ; zid = tid<ri>
+   gosub find.result
+   zr = ''
+   if rp > 0 then zr = rz(rp)
+   zo = ''
+   if rp > 0 then zo = oz(rp)
+   lines<-1> = zid : '  -  in the program file ' : zfl : (if tobj<ri> then ' (its object code is in ' : zfl : '.out)' else ' (there is no object code for it in ' : zfl : '.out)')
+   begin case
+      case zr<1> = ''
+         if tok<ri> = 0 then
+            lines<-1> = 'The page does not give this name to a command: type  run ' : zfl : ' ' : zid : '  at the prompt (and basic ' : zfl : ' ' : zid : ' first if it has no object code).'
+         end else
+            if tobj<ri> = 0 then
+               lines<-1> = 'It cannot be run yet: B compiles it (basic ' : zfl : ' ' : zid : '), then R runs it.'
+            end else
+               lines<-1> = 'Not run in this session.  R runs it  (run ' : zfl : ' ' : zid : ').'
+            end
+         end
+      case 1
+         gosub describe.result
+   end case
+   if zo # '' then
+      lines<-1> = ''
+      gosub describe.tail
+   end
+   return
+
+* In: zr (the result), zid.  The sentences about a test that has been run
+describe.result:
+   begin case
+      case zr<1> = 'pass'
+         zw = 'PASS - ' : zr<2> : ' passed, ' : zr<3> : ' failed.'
+      case zr<1> = 'fail' and zr<8> # ''
+         zw = 'FAIL - the run aborted: ' : zr<8>
+      case zr<1> = 'fail'
+         zw = 'FAIL - ' : zr<2> : ' passed, ' : zr<3> : ' failed.'
+      case zr<6> = 0
+         zw = 'NO VERDICT - it printed nothing.'
+      case 1
+         zw = 'NO VERDICT - the last line is not  N passed, M failed  with N above 0.  The last line was: ' : zr<11>
+   end case
+   lines<-1> = zw
+   lines<-1> = 'Took ' : zr<4> : ' s, finished at ' : zr<5> : '; ' : zr<6> : (if zr<6> = 1 then ' line' else ' lines') : ' of output.   Command: ' : zr<12>
+   if zr<9> > 0 then lines<-1> = 'It asked for input ' : zr<9> : (if zr<9> = 1 then ' time' else ' times') : ' and was given an empty answer each time.'
+   if zr<7> > 0 then lines<-1> = 'The output is cut: the first ' : HEADN : ' and the last ' : TAILN : ' of its ' : zr<6> : ' lines are kept (the verdict was judged on all of them).'
+   if zr<10> = 'compile' then lines<-1> = "What Enter shows now is the compiler's output, from B; the numbers above are from the last run."
+   return
+
+describe.tail:
+   zn = dcount(zo, @fm)
+   if zo = '' then zn = 0
+   if zn = 0 then
+      lines<-1> = 'It printed nothing.'
+   end else
+      lines<-1> = (if zr<10> = 'compile' then "The end of the compiler's output (Enter shows all of it):" else 'The end of what it printed (Enter shows all of it):')
+      zfirst = zn - 5
+      if zfirst < 1 then zfirst = 1
+      for zq = zfirst to zn
+         lines<-1> = '  ' : zo<zq>
+      next zq
+   end
+   return
+
+* The lower box as a window on what one test printed: lines ot + 1 to ot + VISO of vlines
+draw.output:
+   a1 = ot + 1
+   a2 = ot + VISO
+   if a2 > nv then a2 = nv
+   ottl = 'Output of ' : otitle : '  (lines ' : a1 : ' to ' : a2 : ' of ' : nv : ' kept;  Up, Down, PgUp, PgDn, Home, End scroll;  Esc goes back)'
+   screen box at dx,dy size dw,dh title ottl
+   for r = 1 to VISO
+      kk = ot + r
+      s = ''
+      if kk <= nv then s = fmt(kk, '5R') : '  ' : vlines<kk>[1, tw - 8]
+      screen text fmt(s, tw : 'L') at dx + 2,dy + r width tw
+   next r
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                         ;* R and r are one key
+   begin case
+      case nm = 'ctrl-o'
+         gosub toggle.out
+         return
+      case nm = 'esc' and outopen
+         gosub toggle.out                                        ;* the Esc rule: what the page has open is closed first, in either pane
+         return
+      case (nm = 'ctrl-pgup' or nm = 'ctrl-pgdn') and outopen
+         okey = nm[6, 4]
+         call $tk_out('key', ctx, okey, '', oc)                  ;* the output pane scrolls (pgup / pgdn)
+         call $tk_out('draw', ctx, 'output', '', oc)
+         return
+   end case
+   if pn = 'Output' then
+      gosub out.key
+      return
+   end
+   begin case
+      case nm = 'esc'
+         if filt # '' then
+            filt = ''
+            gosub apply.filter
+            ci = 1 ; ta = 0
+            gosub draw.all
+         end
+      case nm = 'up'
+         if ci > 1 then
+            ci -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if ci < ns then
+            ci += 1
+            gosub redraw
+         end
+      case nm = 'pgup'
+         ci -= VIS
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VIS
+         if ci > ns then ci = ns
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         if ns > 0 then ci = ns
+         gosub redraw
+      case nm = 'r'
+         gosub do.run
+      case nm = 'a'
+         zmode = 'all'
+         gosub do.many
+      case nm = 'f'
+         zmode = 'failed'
+         gosub do.many
+      case nm = 'b'
+         gosub do.compile
+      case nm = 'enter'
+         gosub show.output
+      case nm = 'f11' or nm = '/'
+         gosub do.filter
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.test.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, pn, std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read the program files again; the results are kept'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         gosub box.ring
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+* S.176: F6 / Shift-F6 go round the boxes (Tests, Output) and the AI line, from either box; AI > Ask the AI goes to the line.  The Output box opens only for a test that has
+*   been run (show.output says so): then the ring goes on past it.
+box.ring:
+   rg.at = (if pn = 'Output' then 2 else 1)
+   call $tk_aipage('ring', ctx, keys, rg.at, nm : @fm : 2, ap)
+   msg = ap<2>
+   begin case
+      case ap<1> = 2 and pn # 'Output'
+         gosub show.output
+         if pn # 'Output' then
+            rg.msg = msg
+            call $tk_aipage('ring', ctx, keys, 2, nm : @fm : 2, ap)          ;* nothing to show: on to the next stop
+            msg = (if ap<2> # '' then ap<2> else rg.msg)
+            if ap<1> = 1 then gosub draw.all
+         end
+      case ap<1> = 1 and pn = 'Output'
+         pn = 'Tests'
+         gosub draw.all
+   end case
+   return
+
+redraw:
+   gosub draw.all
+   return
+
+* The keys of the Output pane: the lines of one test's output scroll
+out.key:
+   ozmax = nv - VISO
+   if ozmax < 0 then ozmax = 0
+   begin case
+      case nm = 'esc'
+         pn = 'Tests'                                            ;* the focus back to the Tests box (F6 / Shift-F6 too: box.ring)
+         gosub draw.all
+      case nm = 'up'
+         if ot > 0 then ot -= 1
+         gosub draw.output
+      case nm = 'down'
+         if ot < ozmax then ot += 1
+         gosub draw.output
+      case nm = 'pgup'
+         ot -= VISO
+         if ot < 0 then ot = 0
+         gosub draw.output
+      case nm = 'pgdn'
+         ot += VISO
+         if ot > ozmax then ot = ozmax
+         gosub draw.output
+      case nm = 'home'
+         ot = 0
+         gosub draw.output
+      case nm = 'end'
+         ot = ozmax
+         gosub draw.output
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.test.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, as in the page's other pane ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, pn, std.r)
+      case nm = 'f5'
+         gosub read.all
+         pn = 'Tests'
+         gosub draw.all
+         msg = 'read the program files again; the results are kept'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         gosub box.ring                                          ;* S.176: from the Output box too
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, pn, mev, '', mr)                          ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, pn, mev, ap)                                 ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, lx + lw - 5, ly + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.test.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if pn = 'Output' then return
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= lx + 2 and mx <= lx + lw - 3 and my >= ly + 2 and my <= ly + 1 + VIS then
+         if ta + my - (ly + 1) <= ns then
+            ci = ta + my - (ly + 1)
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- running a test
+
+* In: ri.  Runs the test: the command is  run FILE ID  through $tk_run, which refuses any other word.  What it printed and the verdict are kept and the screen is drawn again.  Out: ran.ok
+run.test:
+   ran.ok = @false
+   cur.ri = ri                                                  ;* the drawing below uses ri, rp and zr for other things
+   zfl = tfile<ri> ; zid = tid<ri>
+   sent = 'run ' : zfl : ' ' : zid
+   running.ri = ri
+   msg = mrun : 'running ' : sent : ' - Ctrl-C then Q stops a test that does not end'
+   call $tk_frame(ctx, keys, pn, msg)
+   gosub draw.list
+   call $sl_curat(0, ctx<TK.C.YSTAT>)
+   gosub set.sentinel
+   for za = 1 to ANSWERS
+      data ''
+   next za
+   bc0 = break.count()
+   void pterm(PT$BREAK, @true)
+   break on
+   t0 = time()
+   call $tk_run(allow, sent, out, stat, rerr)
+   t1 = time()
+   break off
+   void pterm(PT$BREAK, @false)
+   zbn = 0
+   loop while break.count() < bc0 and zbn < 5 do
+      break off
+      zbn += 1
+   repeat
+   loop while break.count() > bc0 and zbn < 10 do
+      break on
+      zbn += 1
+   repeat
+   zleft = len(@data.pending)
+   cleardata
+   running.ri = 0
+   ri = cur.ri
+   if rerr # '' then
+      msg = mrun : rerr
+      otext = sent : '  ' : rerr
+      call $tk_out('add', ctx, 'refuse', otext, '')
+   end else
+      used = ANSWERS - zleft
+      if used < 0 then used = 0
+      gosub judge
+      zs = abm ; gosub clean.line ; abm = zs[1, 200]            ;* the abort message can be a test's own text
+      gosub store.output
+      secs = t1 - t0
+      if secs < 0 then secs += 86400
+      gosub make.result
+      oz(rp) = kept
+      zs = lastl
+      gosub clean.line
+      rz(rp) = zstate : @fm : np : @fm : nf : @fm : secs : @fm : oconv(t1, 'MTS') : @fm : nl : @fm : cutn : @fm : abm : @fm : used : @fm : 'run' : @fm : zs[1, 200] : @fm : sent
+      ran.ok = @true
+      okind = 'ok'
+      if zstate # 'pass' then okind = 'refuse'
+      otext = sent : '  ' : zstate : ', ' : np : ' passed, ' : nf : ' failed, ' : secs : ' s'
+      call $tk_out('add', ctx, okind, otext, '')                 ;* what the run answered stays in the output pane (Ctrl-O), whether or not it is open
+      zr = rz(rp)
+      lines = ''
+      gosub describe.result
+      msg = mrun : zid : ': ' : lines<1>
+      lines = ''
+   end
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   return
+
+* The system keeps the message of the last abort (and of an exception that was caught), which a test that ends normally does not touch: the page sets a message of its own first, and a test
+* that aborted is one whose message is no longer that one and whose output was thrown away by the system (an aborted run captures nothing)
+set.sentinel:
+   zero = 0
+   sentv = 0
+   try
+      sentv = 1 / zero
+   catch sys.program.div_zero
+      sentinel = @abort.message
+   end
+   if sentv # 0 then sentinel = ''
+   return
+
+* In: out (everything the test printed), sentinel.  Out: zstate (pass, fail or noverdict), np, nf, abm (the abort message, or null), lastl (the last non-empty line), nl (the lines printed)
+judge:
+   zstate = 'noverdict'
+   np = '' ; nf = '' ; abm = '' ; lastl = ''
+   nl = dcount(out, @fm)
+   if out = '' then nl = 0
+   if out = '' then
+      if @abort.message # sentinel then
+         zstate = 'fail'
+         abm = @abort.message
+         abm = change(abm, @fm, '|')
+         if abm[9, 2] = ': ' then abm = abm[11, 999]
+         if abm = '' then abm = 'the run aborted'
+      end
+   end else
+      zt = field(out, @fm, (if nl > 50 then nl - 49 else 1), 50)
+      zt.n = dcount(zt, @fm)
+      for zq = zt.n to 1 step -1
+         zl = trim(convert(char(13), '', zt<zq>))
+         if zl # '' then
+            lastl = zl
+            exit
+         end
+      next zq
+      if lastl # '' then
+         v = lastl
+         gosub parse.verdict
+         if vok then
+            begin case
+               case nf > 0
+                  zstate = 'fail'
+               case np > 0
+                  zstate = 'pass'
+            end case
+         end
+      end
+   end
+   return
+
+* In: v, a line.  Out: vok, np, nf.  The line is  N passed, M failed  (anything may follow M failed after a comma, a full stop, a semicolon, a bracket or a space), with  name:  in front if
+* wanted: the verdict line of the project's own suites
+parse.verdict:
+   vok = @false
+   zp1 = index(v, ' passed, ', 1)
+   if zp1 = 0 then return
+   v.lef = v[1, zp1 - 1]
+   v.rig = v[zp1 + 9, 9999]
+   w1 = field(v.lef, ' ', dcount(v.lef, ' '))
+   if not(w1 matches '1N0N') then return
+   v.pre = v.lef[1, len(v.lef) - len(w1)]
+   if v.pre # '' then
+      if v.pre[len(v.pre) - 1, 2] # ': ' then return
+   end
+   w2 = field(v.rig, ' ', 1)
+   if not(w2 matches '1N0N') then return
+   w3 = field(v.rig, ' ', 2)
+   if w3[1, 6] # 'failed' then return
+   w4 = w3[7, 1]
+   if w4 # '' then
+      if index(',.;)', w4, 1) = 0 then return
+   end
+   np = w1 + 0
+   nf = w2 + 0
+   vok = @true
+   return
+
+* In: out, nl.  Out: kept (the lines to keep, one to a field, each cut and made safe to show), cutn (how many lines were left out).  A short output is kept whole; a long one by its
+* first HEADN lines, a marker line and its last TAILN, so that the end of it (the verdict) is always there
+store.output:
+   cutn = 0
+   if nl > KEEP then
+      zhead = field(out, @fm, 1, HEADN)
+      ztail = field(out, @fm, nl - TAILN + 1, TAILN)
+      cutn = nl - HEADN - TAILN
+      zbody = zhead : @fm : '... ' : cutn : ' lines left out ...' : @fm : ztail
+   end else
+      zbody = out
+   end
+   kept = ''
+   if nl > 0 then
+      loop
+         zs = remove(zbody, zdel2)
+         zs = zs[1, LINEW]
+         gosub clean.line
+         kept<-1> = zs
+      while zdel2 repeat
+   end
+   return
+
+* In: zs.  Out: zs with the carriage returns taken out, a tab as four spaces and every other control character and mark as a dot
+clean.line:
+   zs = convert(char(13), '', zs)
+   zs = change(zs, char(9), '    ')
+   zs = convert(ctl, dots, zs)
+   return
+
+* R: the test under the cursor
+do.run:
+   if ns < 1 then return
+   ri = shown<ci>
+   zfl = tfile<ri> ; zid = tid<ri>
+   begin case
+      case tok<ri> = 0
+         msg = 'this name has a character the page does not give to a command: type run ' : zfl : ' ' : zid : ' at the prompt'
+      case tobj<ri> = 0
+         msg = 'no object code for ' : zid : ': B compiles it first (basic ' : zfl : ' ' : zid : ')'
+      case 1
+         mrun = ''
+         gosub run.test
+         clearinput                                              ;* keys typed while it ran are not the page's
+   end case
+   return
+
+* A (zmode all): every test shown that can be run, in the order shown; F (zmode failed): the ones that failed.  The screen shows which is running; Esc stops after the current one
+do.many:
+   queue = ''
+   skipo = 0 ; skipn = 0
+   for zk = 1 to ns
+      ri = shown<zk>
+      begin case
+         case tobj<ri> = 0
+            if zmode = 'all' then skipo += 1
+         case tok<ri> = 0
+            if zmode = 'all' then skipn += 1
+         case 1
+            if zmode = 'all' then
+               queue<-1> = zk
+            end else
+               gosub find.result
+               if rp > 0 then
+                  if rz(rp)<1> = 'fail' then queue<-1> = zk
+               end
+            end
+      end case
+   next zk
+   nq = dcount(queue, @fm)
+   if queue = '' then nq = 0
+   if nq = 0 then
+      if zmode = 'all' then
+         msg = 'nothing to run: no test shown has object code the page can run'
+      end else
+         msg = 'no test shown has failed'
+      end
+      return
+   end
+   * one keystroke would start up to MAXT programs of the account, some of which another member of a group account may have put in a shared program file: a box first, with the count and the first
+   * commands, and Cancel is what Enter chooses.  R, one test, stays unboxed: it is the same as typing  run FILE ID
+   sent = 'run (' : nq : (if nq = 1 then ' test)' else ' tests, one after the other)')
+   lines = 'Runs these programs of your account, each as the command  run FILE ID , in the order shown.  A test can do anything this account can.'
+   shw = nq
+   if shw > 6 then shw = 6
+   for zk2 = 1 to shw
+      zri2 = shown<queue<zk2>>
+      lines<-1> = '  run ' : tfile<zri2> : ' ' : tid<zri2>
+   next zk2
+   if nq > shw then lines<-1> = '  ... and ' : nq - shw : ' more'
+   lines<-1> = 'Esc stops the run after the test that is running.'
+   call $tk_confirm(sent, lines, '', cres, cmsg)
+   if cres # 'run' then
+      msg = cmsg
+      return
+   end
+   m.pass = 0 ; m.fail = 0 ; m.nov = 0 ; m.ran = 0
+   stopped = 0
+   for zj = 1 to nq
+      ci = queue<zj>
+      ri = shown<ci>
+      mrun = 'test ' : zj : ' of ' : nq : ': '
+      gosub run.test
+      if ran.ok then
+         m.ran += 1
+         begin case
+            case zstate = 'pass'
+               m.pass += 1
+            case zstate = 'fail'
+               m.fail += 1
+            case 1
+               m.nov += 1
+         end case
+      end
+      if zj < nq then
+         call $tk_frame(ctx, keys, pn, msg)
+         if keyready() then
+            zkey = ''
+            screen key timeout 1 returning zkey else zkey = ''
+            if zkey = 'esc' then
+               stopped = zj
+               exit
+            end
+            if zkey = '' and status() = ER$EOF then
+               stopped = zj
+               done = 1
+               exit
+            end
+         end
+      end
+   next zj
+   mrun = ''
+   msg = 'ran ' : m.ran : ' of ' : nq : ': ' : m.pass : ' pass, ' : m.fail : ' fail, ' : m.nov : ' no verdict'
+   if stopped > 0 then msg := '; stopped with Esc after test ' : stopped
+   if skipo > 0 then msg := '; ' : skipo : ' without object code left out'
+   if skipn > 0 then msg := '; ' : skipn : ' with a name the page does not run left out'
+   clearinput
+   return
+
+* B: compile the test under the cursor when it has no object code (basic FILE ID, through $tk_run, after a box that shows the command)
+do.compile:
+   if ns < 1 then return
+   ri = shown<ci>
+   zfl = tfile<ri> ; zid = tid<ri>
+   begin case
+      case tok<ri> = 0
+         msg = 'this name has a character the page does not give to a command: type basic ' : zfl : ' ' : zid : ' at the prompt'
+         return
+      case tobj<ri> = 1
+         msg = 'the object code is there already; to compile it again type basic ' : zfl : ' ' : zid : ' at the prompt'
+         return
+   end case
+   sent = 'basic ' : zfl : ' ' : zid
+   lines = 'Compiles the program ' : zid : ' in the program file ' : zfl : ' and writes its object code to ' : zfl : '.out.  It does not run it.'
+   lines<-1> = 'Compiling needs the bp-edit gate, and yours is ' : (if kernel(K$BP.EDIT, -1) then 'on' else 'off') : "; the compiler's own refusal is shown on the status line if it is off."
+   call $tk_confirm(sent, lines, '', cres, cmsg)
+   if cres # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub make.result
+   call $tk_run(allow, sent, out, stat, rerr)
+   if rerr # '' then
+      msg = rerr
+      return
+   end
+   nl = dcount(out, @fm)
+   if out = '' then nl = 0
+   gosub store.output
+   oz(rp) = kept
+   zr = rz(rp)
+   zr<10> = 'compile'
+   rz(rp) = zr
+   zlast = ''
+   for zq = nl to 1 step -1
+      zs = out<zq>
+      gosub clean.line                                          ;* the compiler can echo source text: no carriage return or escape reaches the status line
+      if trim(zs) # '' then
+         zlast = trim(zs)[1, 120]
+         exit
+      end
+   next zq
+   gosub read.all
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   msg = sent : ': ' : (if zlast # '' then zlast else 'it printed nothing')
+   return
+
+* Enter: what the test under the cursor printed (or the compiler printed), in the lower box, scrolling
+show.output:
+   if ns < 1 then return
+   ri = shown<ci>
+   gosub find.result
+   if rp = 0 then
+      msg = 'nothing to show: this test has not been run (R runs it)'
+      return
+   end
+   vlines = oz(rp)
+   nv = dcount(vlines, @fm)
+   if vlines = '' then nv = 0
+   if nv = 0 then
+      msg = 'it printed nothing, so there is nothing to show'
+      return
+   end
+   otitle = tid<ri>
+   ot = 0
+   pn = 'Output'
+   gosub draw.all
+   return
+
+do.filter:
+   screen ask 'Part of a test or program file name (empty shows every test)' width 40 title 'Filter' returning ft then got = 1 else got = 0
+   if not(got) then return
+   filt = trim(ft)
+   gosub apply.filter
+   ci = 1 ; ta = 0
+   gosub draw.all
+   msg = (if filt = '' then 'every test' else ns : ' with "' : filt : '"')
+   return
+
+end
+
+* END-CODE

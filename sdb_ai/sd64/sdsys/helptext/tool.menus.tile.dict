@@ -1,0 +1,4 @@
+The Dictionary tile
+29c-sd-tcl-the-development-tools
+Starts tool.dict, the page for the dictionary of a file: its items and indices. It runs the command exactly as the person would have typed it, so it adds no access: changing a dictionary still needs the account's dict-on gate.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.dict at a prompt they have; this setting only changes the home screen.

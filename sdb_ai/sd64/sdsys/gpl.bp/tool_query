@@ -1,0 +1,2002 @@
+* TOOL_QUERY
+* The query and report builder: choose a file, mark the columns, set the conditions, the sort and the options, read the LIST or SORT sentence they make, run it and read the output in a box
+* of its own, and save the query and load it again (S.75, plan .claude/plan-fullscreen-toolkit.md sections 8 and 12, DV4).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the boxes are panes of the layout service ($tk_layout), declared for the three views (the six boxes of the query; the Results; the Saved queries): at 140 by 43 exactly the
+*               boxes the page has always drawn, in a bigger window the File, Columns and Conditions boxes (and the Results and the Saved queries) take the rows, the Conditions, Options and
+*               Sentence boxes the columns; the sentence and the notes are wrapped to the box they are in.
+* 25 Oct 26 dm  New.
+* 28 Oct 26 dm  S.88 phase 2 (S2): before every write and delete the page asks $tk_ownfile whether &queries& is a file it may write (a VOC entry &queries& that pointed at bp was written and
+*               deleted from, with only voc-edit on), and a delete or a write-over of a record that is not a saved query (field 1 is not query1) is refused.
+* 28 Oct 26 dm  S.87: the word spellings matches, matching, not.matching, before and after are gone from the reserved operator words (the VOC records were removed).
+* 26 Oct 26 dm  faults: the boxes that save and delete a saved query are titled "Write this record?" and "Delete this record?" ($tk_confirm's sixth argument), not "Run this command?".
+* 1 Nov 26 dm  S.99 (look only): names its focus boxes (ctx<TK.C.FOCI>), so $tk_frame marks the one with the focus [*] and the others [-], as the IDE does.
+* 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI, from every view; the file filter and reading the files again are offered to
+*              the model (running, saving, loading and editing are not), and a proposal is carried out by the page's own key.  An account without the AI sees the page as it was.
+* 2 Nov 26 dm  S.88 U6: the page's seven questions (the file filter, a condition's value, the heading, the footing, the sample, the sentence by hand, the name a query is saved under)
+*               are each asked on the toolkit's form ($tk_form) through one routine, ask.form, with the explanation in the form; an answer the page refuses is said IN the form, which
+*               stays with the text typed so it can be put right (Esc leaves it as before), where it used to close and say so on the status line.  The checks are the same routines
+*               (q.value, check.sample, check.sentence, check.name), asked by one place, af.check.  The saved queries stay the page's own list (L).
+* 3 Nov 26 dm  The picker extended (owner, 2 Nov: "Extend the picker"): L shows the saved queries in the toolkit's pick window ($tk_pickrec 'list' with the columns file, report
+*              and sentence; typing narrows it) in place of the page's own Saved queries view; Enter loads as before, Del returns to the page, which asks its own box with the
+*              name typed (Cancel the default) and deletes only on that name.  The list is the one read.saved makes, with check.name on every id, as before.  The Saved view,
+*              its keys (Enter, X, Esc) and its menu are gone; after a load, a refusal or a delete the page is shown with what happened on the status line.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring': the five boxes and the AI line); Tab and Shift-Tab no longer move between the
+*              boxes.  AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.QUERY {file}      (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), that builds a query on one file of the account in five boxes and shows the sentence they make: 1 File
+*   (the account's data files that have a dictionary), 2 Columns (the dictionary items of the file; Space marks one, the order marked is the order printed; B breaks on a column, T totals
+*   it), 3 Conditions (up to six rows of item, operator and value joined by and / or), 4 Sort (up to four levels, ascending or descending) and 5 Options (list, count or sum; the heading
+*   and footing; leave out the record id or the detail lines; no pause between screens; only the first n records).  Tab moves between the boxes.
+*
+*   THE SENTENCE is always on the screen, in a box of its own.  R runs it and shows what it printed in a box of its own (the output goes nowhere else; 2000 lines are kept, and the box says
+*   how many there were); E edits it as text; S saves the query in the file &QUERIES& of the account (made when the first query is saved, after a box that shows the command); L shows the
+*   saved queries in the pick window (typing narrows it), Enter loads one, Del deletes one (with its name typed).  The page changes nothing but that one file.
+*
+*   INJECTION SAFETY is the core of the page.  A sentence it runs is made of: a first word that is one of LIST, SORT, COUNT or SUM; the chosen file's name; words from a fixed list (with and or
+*   by by.dsnd break.on total id.sup det.sup heading footing no.page sample and a few more); operators from a fixed list; the item names of the file's dictionary; numbers; and values in
+*   double quotes.  A value is quoted by ONE routine (q.value) that refuses every control character, any character that is not plain ASCII, the single quote, the double quote, the backslash,
+*   the backquote and the semicolon.  EVERY sentence is read again by ONE routine (check.sentence) before it can run: the one the boxes made, the one the person edited and the one a loaded
+*   query held; a word that sends the output somewhere else or writes (TO, SAVING, ON.TO, LPTR, FILE, AS, CSV, DELIMITER, XML, JSON, STYLE ...) is refused even when it is also the name
+*   of a dictionary item.  A saved query is data: when it is loaded every part is checked against the file's dictionary, the operator table and q.value, and what does not pass is dropped.
+*
+*   NO GATE IS NEEDED and none is asked for: the sentence only reads, and the page itself writes only the one file &QUERIES& - after $tk_ownfile has said that the VOC name &queries& leads
+*   to a file it may write (a dynamic file in the account's own directory, of no guarded kind, which the kernel's edit rules let this session change: the page is $internal, which those
+*   rules let through, so a name pointed at the program file would otherwise be written), and a record it deletes or writes over must be a saved query (field 1 is query1) - (a dictionary item that calls a program of the account runs it, as the same query would
+*   at the prompt; the save, the delete and the creation of &QUERIES& leave no audit line of their own).  The shared account is not in the account's VOC as a file, so its files are not offered.  A dictionary can hold a phrase
+*   (PH) or a defaults record ($QUERY.DEFAULTS) whose words the query processor adds to a sentence; the page does not list a phrase and cannot see the defaults, which are the account's own.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_query
+$catalog $tool_query
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+* ------------------------------------------------------------------------------------------------- the words the page knows (no file is read for any of them)
+
+   QDQ = char(34) ; QSQ = char(39) ; QBS = char(92) ; QBQ = char(96) ; QSEMI = char(59)       ;* the double quote, single quote, backslash, backquote and semicolon
+
+   verbs = 'list sort count sum'                                 ;* the first word of a sentence the page will run
+   redirect = 'to saving on.to lptr file as csv delimiter xml json json.lines elements with.dtd dtd.only with.schema schema.only appending no.query style overlay reporting from using strings display crt pathname'
+   keepwords = 'with and or by by.dsnd break.on total id.sup det.sup heading footing no.page sample sampled col.hdg col.sup col.hdr.sup hdr.sup count.sup dbl.spc vertically average max min median mode range enumerate percentage break.sup grand.total rpt fmt col.spaces'
+   opwords = '= < > <= >= eq ne lt le gt ge not like unlike'
+   qwords = verbs : ' ' : redirect : ' ' : keepwords : ' ' : opwords       ;* a dictionary item with one of these names is never put in a sentence
+   ops = '=' : @fm : 'ne' : @fm : '<' : @fm : '>' : @fm : '<=' : @fm : '>=' : @fm : 'like' : @fm : 'unlike'
+   opdesc = 'equal to' : @fm : 'not equal to' : @fm : 'less than' : @fm : 'greater than' : @fm : 'less than or equal to' : @fm : 'greater than or equal to' : @fm : 'matches the pattern' : @fm : 'does not match the pattern'
+   pane.names = 'File' : @fm : 'Columns' : @fm : 'Conditions' : @fm : 'Sort' : @fm : 'Options'
+   qsent = 'create.file &queries& dynamic'                       ;* the one command the page runs besides the query itself; $tk_run refuses the ampersands, so it is run here, after its box
+
+   VISF = 16 ; VISC = 16 ; RVIS = 33                             ;* rows of files, of columns and of results on the screen (set from the panes by get.rects)
+   perr = '' ; lay.view = ''
+   MAXCOND = 6 ; MAXSORT = 4 ; MAXC = 20 ; MAXSENT = 600 ; MAXVAL = 200 ; MAXLINES = 2000 ; MAXSAVED = 100 ; MAXITEMS = 500
+
+   ctl = ''                                                      ;* every character the page will not write to the screen: controls, DEL and all of 128 to 255
+   for k0 = 1 to 31
+      ctl := char(k0)
+   next k0
+   for k0 = 127 to 255
+      ctl := char(k0)
+   next k0
+   dots = str('.', len(ctl))
+
+   call $tk_open('tool.query', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   panes = 'File' : @sm : 'Columns' : @sm : 'Conditions' : @sm : 'Sort' : @sm : 'Options'
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'next', panes, 1)                ;* S.176: F6 / Shift-F6 move between the boxes on every page (Tab does not)
+   call $tk_keys('add', keys, 'enter', 'choose', 'choose', 'File', 1)
+   call $tk_keys('add', keys, 'space', 'mark', 'mark', 'Columns', 1)
+   call $tk_keys('add', keys, 'b', 'break', 'break', 'Columns', 1)
+   call $tk_keys('add', keys, 't', 'total', 'total', 'Columns', 1)
+   call $tk_keys('add', keys, 'x', 'clear', 'clear', 'Columns', 1)
+   call $tk_keys('add', keys, 'enter', 'edit row', 'editrow', 'Conditions', 1)
+   call $tk_keys('add', keys, 'j', 'and/or', 'join', 'Conditions', 1)
+   call $tk_keys('add', keys, 'd', 'clear row', 'clearrow', 'Conditions' : @sm : 'Sort', 1)
+   call $tk_keys('add', keys, 'enter', 'item', 'sortitem', 'Sort', 1)
+   call $tk_keys('add', keys, 'space', 'order', 'sortdir', 'Sort', 1)
+   call $tk_keys('add', keys, 'enter', 'change', 'option', 'Options', 1)
+   call $tk_keys('add', keys, 'space', 'change', 'option', 'Options', 1)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', 'File', 1)
+   call $tk_keys('add', keys, 'r', 'run', 'run', panes, 1)
+   call $tk_keys('add', keys, 'e', 'edit', 'edit', panes, 1)
+   call $tk_keys('add', keys, 's', 'save', 'save', panes, 1)
+   call $tk_keys('add', keys, 'l', 'load', 'load', panes, 1)
+   call $tk_keys('add', keys, 'f5', 'read', 'reread', panes, 1)
+   call $tk_keys('add', keys, 'up', 'scroll', 'scroll', 'Results', 1)
+   call $tk_keys('add', keys, 'r', 'again', 'again', 'Results', 1)
+   call $tk_keys('add', keys, 'esc', 'back', 'back', 'Results', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', panes, 1)             ;* S.88 U6: in the editing panes Esc takes the name filter off first, else opens the menu bar (in Results it is 'back')
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'choose', '&Query', '&Choose the file', '', '')
+   call $tk_keys('menu', keys, 'run', '&Query', '&Run the query', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Query', '&Edit the sentence', '', '')
+   call $tk_keys('menu', keys, 'save', '&Query', '&Save the query', '', '')
+   call $tk_keys('menu', keys, 'load', '&Query', '&Load a saved query', '', '')
+   call $tk_keys('menu', keys, 'filter', '&Query', '&Filter the files', '', '')
+   call $tk_keys('menu', keys, 'reread', '&Query', 'Read the files a&gain', '', '')
+   call $tk_keys('menu', keys, 'mark', 'Co&lumns', '&Mark the column', '', '')
+   call $tk_keys('menu', keys, 'break', 'Co&lumns', '&Break on it', '', '')
+   call $tk_keys('menu', keys, 'total', 'Co&lumns', '&Total it', '', '')
+   call $tk_keys('menu', keys, 'clear', 'Co&lumns', '&Clear the marks', '', '')
+   call $tk_keys('menu', keys, 'editrow', 'Con&ditions', '&Edit the row', '', '')
+   call $tk_keys('menu', keys, 'join', 'Con&ditions', '&And / or', '', '')
+   call $tk_keys('menu', keys, 'clearrow', 'Con&ditions', '&Clear the row', '', '')
+   call $tk_keys('menu', keys, 'sortitem', '&Sort', '&Choose the item', '', '')
+   call $tk_keys('menu', keys, 'sortdir', '&Sort', '&Order', '', '')
+   call $tk_keys('menu', keys, 'option', '&Options', '&Change the option', '', '')
+   call $tk_keys('menu', keys, 'back', '&Results', '&Back to the query', '', '')
+   call $tk_keys('menu', keys, 'again', '&Results', 'Run &again', '', '')
+   call $tk_keys('menu', keys, 'next', '&View', '&Next box', '', '')         ;* S.180: every key's action is on a menu (F6)
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2: the AI line.  The page offers the AI only the actions that change what is shown - the file filter and reading the files again (the owner: opt-in, off by
+   * default; running, saving, loading and editing the query are not offered); a proposal is carried out by the page's own key.  Where the AI is not usable for the account
+   * nothing here adds a key, a row or a line.
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'reread', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   gosub reset.query
+   fnames = '' ; fkinds = '' ; nfl = 0
+   fshown = '' ; fshown.k = '' ; nfs = 0
+   filt = ''
+   fc = 1 ; ft = 0
+   fname = ''
+   ditem = '' ; dtype = '' ; dhead = '' ; dok = '' ; nd = 0
+   focus = 1
+   view = 'build'
+   rl = '' ; rl.cnt = 0 ; rl.n = 0 ; rl.sent = '' ; rl.note = '' ; rtop = 0 ; rx = 0
+   sv.ids = '' ; sv.info = '' ; nsv = 0 ; svc = 1 ; sv.note = ''
+   gen = 0
+   done = 0
+   dropped = 0 ; dict.ok = 0
+   hx = 0 ; hy = 0                                                ;* the [?] button: set by the drawing of each view
+   msg = ''
+
+   gosub read.files
+   gosub apply.filter
+   gosub gen.sentence                                              ;* no file yet: the sentence box says what to do
+   a1 = downcase(field(@sentence, ' ', 2))                         ;* tool.query zq opens the file zq directly
+   if a1 # '' then
+      af1 = 0
+      for ak = 1 to nfs
+         if fshown<ak> = a1 then af1 = ak
+      next ak
+      if af1 > 0 then
+         fc = af1
+         gosub choose.file
+      end else
+         msg = convert(ctl, dots, a1)[1, 40] : ' is not one of your files that have a dictionary'
+      end
+   end
+   gosub draw.all
+
+   loop
+      gosub set.pane
+      call $tk_menubar('draw', ctx, keys, cur.pane, '', '', mr)             ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, cur.pane, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, cur.pane, nm, ao)            ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      busy = (if cur.pane = 'File' and filt # '' then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, cur.pane, nm, busy, mr)       ;* the Esc rule: the file filter (it belongs to the File pane alone, the only pane with an Esc case for it) is taken off before the bar opens (Results has its own 'back')
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            gosub clamp.tops
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+            gosub draw.all
+         case 1
+            gosub on.key
+            if not(done) then gosub draw.all
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- a new query
+
+reset.query:
+   cols = '' ; cflag = ''
+   cnd.join = str(@fm, MAXCOND - 1) ; cnd.item = str(@fm, MAXCOND - 1) ; cnd.op = str(@fm, MAXCOND - 1) ; cnd.val = str(@fm, MAXCOND - 1)
+   srt.item = str(@fm, MAXSORT - 1) ; srt.dir = str(@fm, MAXSORT - 1)
+   opt.kind = 'list' ; opt.head = '' ; opt.foot = '' ; opt.idsup = 0 ; opt.detsup = 0 ; opt.nopage = 0 ; opt.sample = ''
+   edited = 0 ; sent = '' ; senterr = ''
+   cc = 1 ; ct = 0 ; kc = 1 ; sc = 1 ; oc = 1
+   return
+
+set.pane:
+   begin case
+      case view = 'results'
+         cur.pane = 'Results'
+      case 1
+         cur.pane = pane.names<focus>
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- what the system says: the files and the dictionary
+
+* The VOC entries of type F that open and have a dictionary, in name order: fnames, and fkinds (dyn or dir).  A sequential file, a file on another server and a file with no dictionary cannot be queried here.
+read.files:
+   fnames = '' ; fkinds = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist vids from 9 else vids = ''
+      nv = dcount(vids, @fm)
+      if vids = '' then nv = 0
+      for rf = 1 to nv
+         read vr from vocf, vids<rf> then
+            t1 = upcase(vr<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then
+               pfn = vids<rf>
+               gosub probe.file
+               if pf.kind # '' then
+                  fnames<-1> = pfn
+                  fkinds<-1> = pf.kind
+               end
+            end
+         end
+      next rf
+      close vocf
+   end
+   nfl = dcount(fnames, @fm)
+   if fnames = '' then nfl = 0
+   return
+
+* In: pfn.  Out: pf.kind, dyn or dir when the file opens and has a dictionary, else null
+probe.file:
+   pf.kind = ''
+   pf.t = ''
+   open pfn to pfv then
+      pft = fileinfo(pfv, FL$TYPE)
+      if pft = FL$TYPE.DH then pf.t = 'dyn'
+      if pft = FL$TYPE.DIR then pf.t = 'dir'
+      close pfv
+      if pf.t # '' then
+         open 'DICT', pfn to pdv then
+            pf.kind = pf.t
+            close pdv
+         end
+      end
+   end
+   return
+
+* The names that hold the filter's text (any case), in name order
+apply.filter:
+   fshown = '' ; fshown.k = ''
+   for af = 1 to nfl
+      if filt = '' or index(upcase(fnames<af>), upcase(filt), 1) > 0 then
+         fshown<-1> = fnames<af>
+         fshown.k<-1> = fkinds<af>
+      end
+   next af
+   nfs = dcount(fshown, @fm)
+   if fshown = '' then nfs = 0
+   if fc > nfs then fc = nfs
+   if fc < 1 then fc = 1
+   return
+
+* The dictionary of fname: ditem (the ids, @id first, then the rest in name order), dtype, dhead and dok (1 when the page will put the item in a sentence).  Phrases (PH), links, text records
+* and records whose id starts with a dollar are not listed.  Out: nd.
+read.dict:
+   ditem = '' ; dtype = '' ; dhead = '' ; dok = '' ; nd = 0
+   dict.ok = 0
+   if fname = '' then return
+   have.voc = 0
+   open 'VOC' to dvoc then have.voc = 1
+   id.t = 'D' ; id.h = '@id'
+   ndi = 1                                                       ;* @id is item 1 whether the dictionary has it or not
+   open 'DICT', fname to ddv then
+      dict.ok = 1
+      sselect ddv to 9
+      readlist dids from 9 else dids = ''
+      nds = dcount(dids, @fm)
+      if dids = '' then nds = 0
+      if nds > MAXITEMS then nds = MAXITEMS
+      for rd = 1 to nds
+         did = dids<rd>
+         read drec from ddv, did then
+            t2 = upcase(drec<1>)
+            tc = t2[1, 1]
+            if t2[1, 2] = 'PH' then tc = ''
+            if index('DEI', tc, 1) = 0 then tc = ''      ;* 31 Oct 26: the A and S types (and C) are gone
+            if did[1, 1] = '$' then tc = ''
+            if tc # '' then
+               hd = drec<4>
+               hd = convert(ctl, dots, hd)[1, 30]
+               if did = '@id' then
+                  id.t = tc
+                  id.h = hd
+               end else
+                  ndi += 1
+                  ditem<ndi> = did                                ;* by position: a heading may be empty
+                  dtype<ndi> = tc
+                  dhead<ndi> = hd
+               end
+            end
+         end
+      next rd
+      close ddv
+   end
+   * @id is first; a dictionary made by CREATE.FILE has it, and the query processor makes one up when it is missing
+   ditem<1> = '@id'
+   dtype<1> = id.t
+   dhead<1> = id.h
+   nd = ndi
+   dok = ''
+   for rd = 1 to nd
+      ck.id = ditem<rd>
+      gosub item.check
+      if ck.ok and have.voc then
+         read dkr from dvoc, ck.id then
+            if upcase(dkr<1>)[1, 1] = 'K' then ck.ok = 0                  ;* a VOC keyword of the query processor: never an item in a sentence
+         end
+      end
+      dok<rd> = (if ck.ok then 1 else 0)
+   next rd
+   if have.voc then close dvoc
+   return
+
+* In: ck.id.  Out: ck.ok, 1 when the name is made of a-z, 0-9, dot, dash and underscore (@ as the first character: @id), at most 63, and is not a word of the query language the page knows
+item.check:
+   ck.ok = (len(ck.id) > 0 and len(ck.id) <= 63)
+   okc = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for ck.q = 1 to len(ck.id)
+      ck.c = ck.id[ck.q, 1]
+      if index(okc, ck.c, 1) = 0 then
+         if not(ck.q = 1 and ck.c = '@') then ck.ok = 0
+      end
+   next ck.q
+   if ck.ok then
+      if index(' ' : qwords : ' ', ' ' : ck.id : ' ', 1) > 0 then ck.ok = 0
+   end
+   return
+
+* In: vid.  Out: vdp, the place of the item in the dictionary list, or 0
+find.item:
+   vdp = 0
+   locate vid in ditem<1> setting vdp else vdp = 0
+   return
+
+* A name the page may give to a command: letters a-z, digits, dot, dash and underscore only, at most 63 (what $tk_run lets through)
+check.name:
+   okname = (len(fn) > 0 and len(fn) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for q = 1 to len(fn)
+      if index(good, fn[q, 1], 1) = 0 then okname = @false
+   next q
+   if fn = '.' or fn = '..' then okname = @false                 ;* 26 Oct 26 (review, low): the two names of a directory are no name of a file or of a saved query
+   return
+
+* ------------------------------------------------------------------------------------------------- the quoting and the checking: the whole of the page's injection safety
+
+* In: qv.in.  Out: qv.out, the value in double quotes, and qv.err (null when it is fine).  ONE routine quotes every value that goes into a sentence.
+q.value:
+   qv.err = ''
+   qv.out = ''
+   if len(qv.in) > MAXVAL then
+      qv.err = 'a value is at most ' : MAXVAL : ' characters'
+   end
+   for qi = 1 to len(qv.in)
+      qc = qv.in[qi, 1]
+      qn = seq(qc)
+      begin case
+         case qn < 32 or qn > 126
+            qv.err = 'a value holds a control character or a character that is not plain ASCII'
+         case qc = QDQ or qc = QSQ or qc = QBS or qc = QBQ or qc = QSEMI
+            qv.err = 'a value cannot hold a quote, a backslash, a backquote or a semicolon'
+      end case
+      if qv.err # '' then exit
+   next qi
+   if qv.err = '' then qv.out = QDQ : qv.in : QDQ
+   return
+
+* In: chk.s.  Out: chk.err (null when the page will run it) and chk.out, the sentence with every word that is not in quotes in lower case.  The sentence must be: one of the four first words, the
+* chosen file, and then only words from the fixed lists, numbers, the usable items of the file's dictionary and values in double quotes.  No other quote character, no semicolon, no character that is not plain ASCII.
+check.sentence:
+   chk.err = ''
+   chk.out = ''
+   cs = chk.s
+   if cs = '' then
+      chk.err = 'there is no sentence'
+      return
+   end
+   if len(cs) > MAXSENT then
+      chk.err = 'it is longer than ' : MAXSENT : ' characters'
+      return
+   end
+   for cq = 1 to len(cs)
+      cn = seq(cs[cq, 1])
+      begin case
+         case cn < 32 or cn > 126
+            chk.err = 'it holds a control character or a character that is not plain ASCII'
+         case cn = 39 or cn = 92 or cn = 96 or cn = 59
+            chk.err = 'it holds a single quote, a backslash, a backquote or a semicolon'
+      end case
+      if chk.err # '' then exit
+   next cq
+   if chk.err # '' then return
+   * the words and the quoted values
+   toks = '' ; cur = '' ; inq = @false
+   for cq = 1 to len(cs)
+      ch = cs[cq, 1]
+      if inq then
+         if ch = QDQ then
+            toks<-1> = QDQ : cur : QDQ
+            cur = ''
+            inq = @false
+            nxt = cs[cq + 1, 1]
+            if nxt # '' and nxt # ' ' then chk.err = 'a closing quote must be followed by a space'
+         end else
+            cur := ch
+         end
+      end else
+         begin case
+            case ch = QDQ
+               if cur # '' then chk.err = 'a quote must come after a space, not inside a word'
+               inq = @true
+            case ch = ' '
+               if cur # '' then
+                  toks<-1> = downcase(cur)
+                  cur = ''
+               end
+            case 1
+               cur := ch
+         end case
+      end
+      if chk.err # '' then exit
+   next cq
+   if chk.err # '' then return
+   if inq then
+      chk.err = 'a quote is not closed'
+      return
+   end
+   if cur # '' then toks<-1> = downcase(cur)
+   nt = dcount(toks, @fm)
+   if index(' ' : verbs : ' ', ' ' : toks<1> : ' ', 1) = 0 then
+      chk.err = 'the first word must be list, sort, count or sum'
+      return
+   end
+   if nt < 2 then
+      chk.err = 'there is no file name'
+      return
+   end
+   if fname = '' or toks<2> # fname then
+      chk.err = 'the file must be the one chosen in the File box (' : fname : ')'
+      return
+   end
+   for ck = 3 to nt
+      tk = toks<ck>
+      begin case
+         case tk[1, 1] = QDQ
+            null
+         case index(' ' : redirect : ' ', ' ' : tk : ' ', 1) > 0
+            chk.err = tk : ' sends the output somewhere else or writes: the page does not run it'
+         case index(' ' : keepwords : ' ' : opwords : ' ', ' ' : tk : ' ', 1) > 0
+            null
+         case tk matches "1N0N" or tk matches "1N0N'.'1N0N"
+            null
+         case 1
+            vid = tk
+            gosub find.item
+            if vdp = 0 then
+               chk.err = tk : ' is not a word the page knows, nor an item of the dictionary of ' : fname : ' (a value goes in double quotes)'
+            end else
+               if dok<vdp> # 1 then chk.err = tk : ' is a dictionary item the page does not put in a sentence'
+            end
+      end case
+      if chk.err # '' then exit
+   next ck
+   if chk.err # '' then return
+   chk.out = change(toks, @fm, ' ')
+   return
+
+* ------------------------------------------------------------------------------------------------- the sentence the boxes make
+
+* Out: sent (null when the boxes cannot make one) and senterr.  The sentence is read again by check.sentence before it is kept: a sentence the page would not run is not shown as one.
+gen.sentence:
+   sent = ''
+   senterr = ''
+   if fname = '' then
+      senterr = 'Choose a file first: Enter in the File box.'
+      return
+   end
+   body = ''
+   nco = 0
+   for gi = 1 to MAXCOND
+      if cnd.item<gi> # '' then
+         qv.in = cnd.val<gi>
+         gosub q.value
+         if qv.err # '' then
+            senterr = 'condition ' : gi : ': ' : qv.err
+            exit
+         end
+         piece = 'with ' : cnd.item<gi> : ' ' : cnd.op<gi> : ' ' : qv.out
+         if nco = 0 then
+            body := ' ' : piece
+         end else
+            body := ' ' : (if cnd.join<gi> = 'or' then 'or' else 'and') : ' ' : piece
+         end
+         nco += 1
+      end
+   next gi
+   if senterr # '' then return
+   verb = opt.kind
+   ncl = dcount(cols, @fm)
+   if cols = '' then ncl = 0
+   if verb = 'list' then
+      nso = 0
+      for gi = 1 to MAXSORT
+         if srt.item<gi> # '' then
+            body := ' ' : (if srt.dir<gi> = 'd' then 'by.dsnd' else 'by') : ' ' : srt.item<gi>
+            nso += 1
+         end
+      next gi
+      if nso > 0 then verb = 'sort'
+      for gi = 1 to ncl
+         begin case
+            case cflag<gi> = 'b'
+               body := ' break.on ' : cols<gi>
+            case cflag<gi> = 't'
+               body := ' total ' : cols<gi>
+            case 1
+               body := ' ' : cols<gi>
+         end case
+      next gi
+      if opt.idsup then body := ' id.sup'
+      if opt.detsup then body := ' det.sup'
+      if opt.head # '' then
+         qv.in = opt.head
+         gosub q.value
+         if qv.err # '' then
+            senterr = 'heading: ' : qv.err
+         end else
+            body := ' heading ' : qv.out
+         end
+      end
+      if opt.foot # '' and senterr = '' then
+         qv.in = opt.foot
+         gosub q.value
+         if qv.err # '' then
+            senterr = 'footing: ' : qv.err
+         end else
+            body := ' footing ' : qv.out
+         end
+      end
+   end
+   if verb = 'sum' then
+      if ncl = 0 then senterr = 'A sum needs at least one column: mark one in the Columns box (Space).'
+      for gi = 1 to ncl
+         body := ' ' : cols<gi>
+      next gi
+   end
+   if senterr # '' then return
+   if opt.nopage then body := ' no.page'
+   if opt.sample # '' then body := ' sample ' : opt.sample
+   chk.s = verb : ' ' : fname : body
+   gosub check.sentence
+   if chk.err # '' then
+      senterr = 'The boxes made a sentence the page will not run: ' : chk.err
+      return
+   end
+   sent = chk.out
+   return
+
+* After any change in a box: the sentence is written again from the boxes (a sentence edited by hand is given up)
+changed:
+   if edited then
+      edited = 0
+      msg = 'the sentence was written again from the boxes'
+   end
+   gosub gen.sentence
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  Two declarations, one for each kind of view, in the sizes of the reference layout (140 by 43, the body 138 by 39); the layout service holds the one the view needs:
+*   build    band 1: File (28 wide), Columns (44) and Conditions (the rest), 19 rows, all three stretch in height, Conditions in width;
+*            band 2: Sort (46 wide, fixed) and Options (the rest), 11 rows, fixed in height; band 3: The sentence, 9 rows.  A taller window gives every row to band 1.
+*   whole    the Results box: one pane, the whole body (the saved queries are the toolkit's pick window since 3 Nov 26, no view of the page's).
+* Out: fb.* (File), cb.* (Columns), nb.* (Conditions), sb.* (Sort), ob.* (Options), tb.* (The sentence) or wb.* (whole), each x y w h; VISF VISC RVIS.
+declare.layout:
+   lay.view = want.view
+   dcl = ''
+   if lay.view = 'build' then
+      dcl<1> = 'files' : @vm : 1 : @vm : 1 : @vm : 19 : @vm : 28 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : '' : @vm : ''
+      dcl<2> = 'columns' : @vm : 1 : @vm : 2 : @vm : 19 : @vm : 44 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : '' : @vm : ''
+      dcl<3> = 'conds' : @vm : 1 : @vm : 3 : @vm : 19 : @vm : 66 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+      dcl<4> = 'sorts' : @vm : 2 : @vm : 1 : @vm : 11 : @vm : 46 : @vm : '' : @vm : '' : @vm : '' : @vm : '' : @vm : ''
+      dcl<5> = 'options' : @vm : 2 : @vm : 2 : @vm : 11 : @vm : 92 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+      dcl<6> = 'sentence' : @vm : 3 : @vm : 1 : @vm : 9 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   end else
+      dcl<1> = 'whole' : @vm : 1 : @vm : 1 : @vm : 39 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   end
+   * S.99: the boxes that take the focus, for $tk_frame's [*] / [-]; the whole view (Results) has one box and so no marks
+   ctx<TK.C.FOCI> = 'files' : @sm : 'File' : @vm : 'columns' : @sm : 'Columns' : @vm : 'conds' : @sm : 'Conditions' : @vm : 'sorts' : @sm : 'Sort' : @vm : 'options' : @sm : 'Options'
+   call $tk_layout('declare', ctx, dcl, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   if lay.view = 'build' then
+      call $tk_layout('pane', ctx, 'files', rc)
+      fb.x = rc<1, 1> ; fb.y = rc<1, 2> ; fb.w = rc<1, 3> ; fb.h = rc<1, 4>
+      call $tk_layout('pane', ctx, 'columns', rc)
+      cb.x = rc<1, 1> ; cb.y = rc<1, 2> ; cb.w = rc<1, 3> ; cb.h = rc<1, 4>
+      call $tk_layout('pane', ctx, 'conds', rc)
+      nb.x = rc<1, 1> ; nb.y = rc<1, 2> ; nb.w = rc<1, 3> ; nb.h = rc<1, 4>
+      call $tk_layout('pane', ctx, 'sorts', rc)
+      sb.x = rc<1, 1> ; sb.y = rc<1, 2> ; sb.w = rc<1, 3> ; sb.h = rc<1, 4>
+      call $tk_layout('pane', ctx, 'options', rc)
+      ob.x = rc<1, 1> ; ob.y = rc<1, 2> ; ob.w = rc<1, 3> ; ob.h = rc<1, 4>
+      call $tk_layout('pane', ctx, 'sentence', rc)
+      tb.x = rc<1, 1> ; tb.y = rc<1, 2> ; tb.w = rc<1, 3> ; tb.h = rc<1, 4>
+      VISF = fb.h - 3                                            ;* the file rows: a row under the border, the summary row and the border: 16 of 19
+      VISC = cb.h - 3                                            ;* the header row and the border: 16 of 19
+   end else
+      call $tk_layout('pane', ctx, 'whole', rc)
+      wb.x = rc<1, 1> ; wb.y = rc<1, 2> ; wb.w = rc<1, 3> ; wb.h = rc<1, 4>
+      RVIS = wb.h - 6                                            ;* the border, the three lines of the sentence, the header row and the border: 33 of 39
+   end
+   return
+
+* The views are drawn from the panes of their own declaration: the one the layout holds is changed when the view changes between the boxes and the two full-body boxes
+sync.layout:
+   want.view = (if view = 'build' then 'build' else 'whole')
+   if want.view # lay.view then gosub declare.layout
+   return
+
+* After a resize the tops of the lists may lie past the end of what they list now that more rows are shown
+clamp.tops:
+   if ft > nfs - VISF then ft = nfs - VISF
+   if ft < 0 then ft = 0
+   if ct > nd - VISC then ct = nd - VISC
+   if ct < 0 then ct = 0
+   if rtop > rl.cnt - RVIS then rtop = rl.cnt - RVIS
+   if rtop < 0 then rtop = 0
+   return
+
+* In: nt.par, the paragraphs of a note (one to a field), nt.ref, the same note in the lines it has always been broken into for the reference width; nt.w the width of the box.
+* Out: nt.lines, the lines.  At the reference width (nt.rw) the note keeps its own lines; in a wider box the paragraphs are wrapped to the box
+wrap.note:
+   nt.lines = nt.ref
+   if nt.w > nt.rw then
+      nt.lines = ''
+      for nt.i = 1 to dcount(nt.par, @fm)
+         call $tk_wrap(nt.par<nt.i>, nt.w, nt.pieces)
+         nt.lines<-1> = nt.pieces
+      next nt.i
+   end
+   return
+
+draw.all:
+   gosub sync.layout
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 4
+   screen clear at 0,1 size cw2,chh
+   begin case
+      case view = 'results'
+         gosub draw.results
+      case 1
+         gosub draw.build
+   end case
+   return
+
+draw.build:
+   screen box at fb.x,fb.y size fb.w,fb.h title (if focus = 1 then '[*] File' else 'File')
+   screen box at cb.x,cb.y size cb.w,cb.h title (if focus = 2 then '[*] Columns' else 'Columns')
+   screen box at nb.x,nb.y size nb.w,nb.h title (if focus = 3 then '[*] Conditions' else 'Conditions')
+   screen box at sb.x,sb.y size sb.w,sb.h title (if focus = 4 then '[*] Sort' else 'Sort')
+   screen box at ob.x,ob.y size ob.w,ob.h title (if focus = 5 then '[*] Options' else 'Options')
+   screen box at tb.x,tb.y size tb.w,tb.h title 'The sentence'
+   gosub draw.files
+   gosub draw.columns
+   gosub draw.conds
+   gosub draw.sorts
+   gosub draw.options
+   gosub draw.sentence
+   hx = nb.x + nb.w - 5 ; hy = nb.y + 1
+   call $tk_help('mark', hx, hy, 0, 0)
+   return
+
+* In: ra.cur (1 on the cursor row), ra.foc (1 when the box has the focus), ra.dim (1 for a row the page does not use).  Out: ra, the style.
+row.attr:
+   begin case
+      case ra.dim and not(ra.cur)
+         ra = 'disabled'
+      case ra.cur and ra.foc
+         ra = 'highlight'
+      case ra.cur
+         ra = 'bold'
+      case 1
+         ra = 'normal'
+   end case
+   return
+
+draw.files:
+   if fc <= ft then ft = fc - 1
+   if fc > ft + VISF then ft = fc - VISF
+   if ft < 0 then ft = 0
+   for dr = 1 to VISF
+      kk = ft + dr
+      s = ''
+      ra.dim = 0
+      if kk <= nfs then
+         dn = fshown<kk>
+         s = (if dn = fname then '*' else ' ') : fmt(convert(ctl, dots, dn)[1, 20], '20L') : ' ' : fmt(fshown.k<kk>, '4L')
+         fn = dn
+         gosub check.name
+         ra.dim = (if okname then 0 else 1)
+      end
+      ra.cur = (if kk = fc and kk <= nfs then 1 else 0)
+      ra.foc = (if focus = 1 then 1 else 0)
+      gosub row.attr
+      screen text fmt(s, (fb.w - 2) : 'L') at fb.x + 1,fb.y + dr attr ra width fb.w - 2
+   next dr
+   s = nfl : (if nfl = 1 then ' file' else ' files')
+   if filt # '' then s = nfs : ' with "' : convert(ctl, dots, filt)[1, 8] : '"'
+   if nfl = 0 then s = 'no file with a dictionary'
+   screen text fmt(s, (fb.w - 2) : 'L') at fb.x + 1,fb.y + fb.h - 2 attr 'bold' width fb.w - 2
+   return
+
+draw.columns:
+   screen text fmt('Nr', '3L') : fmt('', '2L') : fmt('Item', '22L') : fmt('Type', '5L') : 'Heading' at cb.x + 1,cb.y + 1 attr 'header' width cb.w - 2
+   if cc <= ct then ct = cc - 1
+   if cc > ct + VISC then ct = cc - VISC
+   if ct < 0 then ct = 0
+   for dr = 1 to VISC
+      kk = ct + dr
+      s = ''
+      ra.dim = 0
+      if kk <= nd then
+         mk = 0
+         locate ditem<kk> in cols<1> setting mp then
+            mk = mp
+         end else
+            mk = 0
+         end
+         fl = ''
+         if mk > 0 then fl = (if cflag<mk> = 'b' then 'B' else (if cflag<mk> = 't' then 'T' else ''))
+         s = fmt((if mk > 0 then mk else ''), '2R') : ' ' : fmt(fl, '2L') : fmt(convert(ctl, dots, ditem<kk>)[1, 21], '22L') : fmt(dtype<kk>, '5L') : dhead<kk>[1, 10]
+         ra.dim = (if dok<kk> = 1 then 0 else 1)
+      end
+      ra.cur = (if kk = cc and kk <= nd then 1 else 0)
+      ra.foc = (if focus = 2 then 1 else 0)
+      gosub row.attr
+      screen text fmt(s, (cb.w - 2) : 'L') at cb.x + 1,cb.y + 1 + dr attr ra width cb.w - 2
+   next dr
+   return
+
+draw.conds:
+   screen text 'Row ' : 'Join ' : fmt('Item', '23L') : fmt('Op', '8L') : 'Value' at nb.x + 1,nb.y + 1 attr 'header' width nb.w - 8
+   for dr = 1 to MAXCOND
+      s = ' ' : dr : '  '
+      if cnd.item<dr> # '' then
+         s := fmt((if dr > 1 then (if cnd.join<dr> = 'or' then 'or' else 'and') else ''), '5L') : fmt(cnd.item<dr>[1, 22], '23L') : fmt(cnd.op<dr>, '8L') : QDQ : convert(ctl, dots, cnd.val<dr>)[1, nb.w - 42] : QDQ
+      end
+      ra.cur = (if dr = kc then 1 else 0)
+      ra.foc = (if focus = 3 then 1 else 0)
+      ra.dim = 0
+      gosub row.attr
+      screen text fmt(s, (nb.w - 4) : 'L') at nb.x + 1,nb.y + 1 + dr attr ra width nb.w - 4
+   next dr
+   nt.par = 'Enter edits the row: the item, the operator, the value.'
+   nt.par<2> = 'J switches and / or.  D clears the row.'
+   nt.par<3> = 'A value is plain text, typed as the query processor reads it for the item (see the query documentation).'
+   nt.par<4> = 'like / unlike take a pattern: 0X any text, 1A a letter, 3N three digits.  0X on both sides finds text inside.'
+   nt.par<5> = 'The sentence in the box at the foot is what will run.'
+   nt.par<6> = 'A value holds no quote, backslash, backquote or ;'
+   nt.ref = 'Enter edits the row: the item, the operator, the value.'
+   nt.ref<2> = 'J switches and / or.  D clears the row.'
+   nt.ref<3> = 'A value is plain text, typed as the query processor'
+   nt.ref<4> = 'reads it for the item (see the query documentation).'
+   nt.ref<5> = 'like / unlike take a pattern: 0X any text, 1A a letter,'
+   nt.ref<6> = '3N three digits.  0X on both sides finds text inside.'
+   nt.ref<7> = 'The sentence in the box at the foot is what will run.'
+   nt.ref<8> = 'A value holds no quote, backslash, backquote or ;'
+   nt.w = nb.w - 4
+   nt.rw = 62
+   gosub wrap.note
+   for dr = 1 to dcount(nt.lines, @fm)
+      if nb.y + 8 + dr <= nb.y + nb.h - 2 then screen text nt.lines<dr> at nb.x + 2,nb.y + 8 + dr width nb.w - 4
+   next dr
+   return
+
+draw.sorts:
+   screen text fmt('Level  Order      Item', (sb.w - 2) : 'L') at sb.x + 1,sb.y + 1 attr 'header' width sb.w - 2
+   for dr = 1 to MAXSORT
+      s = fmt(dr, '3R') : '    '
+      if srt.item<dr> # '' then
+         s := fmt((if srt.dir<dr> = 'd' then 'by.dsnd' else 'by'), '11L') : srt.item<dr>[1, 24]
+      end
+      ra.cur = (if dr = sc then 1 else 0)
+      ra.foc = (if focus = 4 then 1 else 0)
+      ra.dim = 0
+      gosub row.attr
+      screen text fmt(s, (sb.w - 2) : 'L') at sb.x + 1,sb.y + 1 + dr attr ra width sb.w - 2
+   next dr
+   screen text 'Enter picks the item.  Space toggles it.' at sb.x + 2,sb.y + sb.h - 4 width sb.w - 4
+   screen text 'D clears the level.  A count or a sum' at sb.x + 2,sb.y + sb.h - 3 width sb.w - 4
+   screen text 'is not sorted.' at sb.x + 2,sb.y + sb.h - 2 width sb.w - 4
+   return
+
+draw.options:
+   for dr = 1 to 7
+      begin case
+         case dr = 1
+            s = fmt('Report', '28L') : (if opt.kind = 'list' then 'list - the columns, sorted when a sort level is set' else (if opt.kind = 'count' then 'count - only how many records' else 'sum - the total of each column'))
+         case dr = 2
+            s = fmt('Heading', '28L') : (if opt.head = '' then '(the sentence and a page number)' else QDQ : convert(ctl, dots, opt.head)[1, 50] : QDQ)
+         case dr = 3
+            s = fmt('Footing', '28L') : (if opt.foot = '' then '(none)' else QDQ : convert(ctl, dots, opt.foot)[1, 50] : QDQ)
+         case dr = 4
+            s = fmt('Leave out the record id', '28L') : (if opt.idsup then '[x]' else '[ ]') : '  id.sup'
+         case dr = 5
+            s = fmt('Leave out the detail lines', '28L') : (if opt.detsup then '[x]' else '[ ]') : '  det.sup, the totals stay'
+         case dr = 6
+            s = fmt('No pause between screens', '28L') : (if opt.nopage then '[x]' else '[ ]') : '  no.page, for the prompt (the box never pauses)'
+         case 1
+            s = fmt('Only the first n records', '28L') : (if opt.sample = '' then 'all' else opt.sample) : '  sample, taken before any sort'
+      end case
+      ra.cur = (if dr = oc then 1 else 0)
+      ra.foc = (if focus = 5 then 1 else 0)
+      ra.dim = 0
+      gosub row.attr
+      screen text fmt(s, (ob.w - 2) : 'L') at ob.x + 1,ob.y + dr attr ra width ob.w - 2
+   next dr
+   screen text 'Enter or Space changes the row.  Break and total are set in the Columns box (B, T).' at ob.x + 2,ob.y + ob.h - 3 width ob.w - 4
+   screen text 'A heading and a footing are plain text: no quote, backslash, backquote or semicolon.' at ob.x + 2,ob.y + ob.h - 2 width ob.w - 4
+   return
+
+draw.sentence:
+   tw = tb.w - 4
+   pieces = ''
+   if sent # '' then call $tk_wrap(sent, tw - 4, pieces)
+   for dr = 1 to 5
+      s = (if sent = '' and dr = 1 then senterr else pieces<dr>)
+      screen text fmt(s[1, tw], tw : 'L') at tb.x + 2,tb.y + dr attr (if sent = '' then 'normal' else 'bold') width tw
+   next dr
+   if edited then
+      s = 'Edited by hand.  A change in any box writes the sentence again from the boxes.'
+   end else
+      s = (if sent = '' then '' else 'Written from the boxes above.  Every sentence is checked again before it runs.')
+   end
+   screen text fmt(s, tw : 'L') at tb.x + 2,tb.y + tb.h - 3 width tw
+   screen text fmt('R runs it and shows the output in a box (2000 lines are kept).   E edits it as text.   S saves the query.   L loads or deletes one.', tw : 'L') at tb.x + 2,tb.y + tb.h - 2 attr 'disabled' width tw
+   return
+
+draw.results:
+   tw = wb.w - 4
+   screen box at wb.x,wb.y size wb.w,wb.h title 'Results'
+   call $tk_wrap('Ran: ' : rl.sent, tw - 4, pieces)
+   for dr = 1 to 3
+      screen text fmt(pieces<dr>, tw : 'L') at wb.x + 2,wb.y + dr attr 'bold' width tw
+   next dr
+   info = rl.n : (if rl.n = 1 then ' line' else ' lines')
+   if rl.n > rl.cnt then info := ', the first ' : rl.cnt : ' are kept'
+   lastr = rtop + RVIS
+   if lastr > rl.cnt then lastr = rl.cnt
+   if rl.cnt > 0 then info := '.  Showing ' : rtop + 1 : ' to ' : lastr
+   if rx > 0 then info := ', from column ' : rx + 1
+   info := '.  ' : rl.note
+   screen text fmt(info, (tw - 6) : 'L') at wb.x + 2,wb.y + 4 attr 'header' width tw - 6
+   for dr = 1 to RVIS
+      kk = rtop + dr
+      s = ''
+      if kk <= rl.cnt then s = rl<kk>[rx + 1, tw]
+      screen text fmt(s, tw : 'L') at wb.x + 2,wb.y + 4 + dr width tw
+   next dr
+   hx = wb.x + wb.w - 7 ; hy = wb.y + 4
+   call $tk_help('mark', hx, hy, 0, 0)
+   return
+
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                         ;* R and r are one key
+   if nm = ' ' then nm = 'space'
+   if nm = 'ctrl-q' then
+      done = 1
+      return
+   end
+   if nm = 'f1' or nm = '?' then
+      call $tk_help('box', 'tool.query.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai' then
+      * S.176: F6 / Shift-F6 go round the boxes and the AI line, from every view (the builder's five boxes; the results are one); AI > Ask the AI goes to the line
+      if view = 'results' then
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)
+      end else
+         call $tk_aipage('ring', ctx, keys, focus, nm : @fm : 5, ap)
+         if ap<1> > 0 then focus = ap<1>
+      end
+      msg = ap<2>
+      return
+   end
+   begin case
+      case view = 'results'
+         gosub keys.results
+      case 1
+         gosub keys.build
+   end case
+   return
+
+keys.build:
+   begin case
+      case nm = 'r'
+         gosub do.run
+      case nm = 'e'
+         gosub do.edit
+      case nm = 's'
+         gosub do.save
+      case nm = 'l'
+         gosub do.list.saved
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, cur.pane, std.r)
+      case nm = 'f5'
+         gosub do.reread
+      case focus = 1
+         gosub keys.files
+      case focus = 2
+         gosub keys.columns
+      case focus = 3
+         gosub keys.conds
+      case focus = 4
+         gosub keys.sorts
+      case focus = 5
+         gosub keys.options
+   end case
+   return
+
+keys.files:
+   begin case
+      case nm = 'up'
+         if fc > 1 then fc -= 1
+      case nm = 'down'
+         if fc < nfs then fc += 1
+      case nm = 'pgup'
+         fc -= VISF
+         if fc < 1 then fc = 1
+      case nm = 'pgdn'
+         fc += VISF
+         if fc > nfs then fc = nfs
+      case nm = 'home'
+         fc = 1
+      case nm = 'end'
+         if nfs > 0 then fc = nfs
+      case nm = 'enter'
+         gosub choose.file
+      case nm = '/'
+         gosub do.filter
+      case nm = 'esc'
+         if filt # '' then
+            filt = ''
+            gosub apply.filter
+            fc = 1 ; ft = 0
+         end
+   end case
+   return
+
+keys.columns:
+   begin case
+      case nm = 'up'
+         if cc > 1 then cc -= 1
+      case nm = 'down'
+         if cc < nd then cc += 1
+      case nm = 'pgup'
+         cc -= VISC
+         if cc < 1 then cc = 1
+      case nm = 'pgdn'
+         cc += VISC
+         if cc > nd then cc = nd
+      case nm = 'home'
+         cc = 1
+      case nm = 'end'
+         if nd > 0 then cc = nd
+      case nm = 'space'
+         gosub mark.column
+      case nm = 'b'
+         fl.set = 'b'
+         gosub flag.column
+      case nm = 't'
+         fl.set = 't'
+         gosub flag.column
+      case nm = 'x'
+         if cols # '' then
+            cols = '' ; cflag = ''
+            gosub changed
+            msg = 'every mark is cleared'
+         end
+   end case
+   return
+
+keys.conds:
+   begin case
+      case nm = 'up'
+         if kc > 1 then kc -= 1
+      case nm = 'down'
+         if kc < MAXCOND then kc += 1
+      case nm = 'home'
+         kc = 1
+      case nm = 'end'
+         kc = MAXCOND
+      case nm = 'enter'
+         gosub edit.cond
+      case nm = 'j'
+         if kc > 1 and cnd.item<kc> # '' then
+            cnd.join<kc> = (if cnd.join<kc> = 'or' then 'and' else 'or')
+            gosub changed
+         end
+      case nm = 'd' or nm = 'del'
+         if cnd.item<kc> # '' then
+            cnd.item<kc> = '' ; cnd.op<kc> = '' ; cnd.val<kc> = '' ; cnd.join<kc> = ''
+            gosub changed
+         end
+   end case
+   return
+
+keys.sorts:
+   begin case
+      case nm = 'up'
+         if sc > 1 then sc -= 1
+      case nm = 'down'
+         if sc < MAXSORT then sc += 1
+      case nm = 'home'
+         sc = 1
+      case nm = 'end'
+         sc = MAXSORT
+      case nm = 'enter'
+         gosub edit.sort
+      case nm = 'space'
+         if srt.item<sc> # '' then
+            srt.dir<sc> = (if srt.dir<sc> = 'd' then 'a' else 'd')
+            gosub changed
+         end
+      case nm = 'd' or nm = 'del'
+         if srt.item<sc> # '' then
+            srt.item<sc> = '' ; srt.dir<sc> = ''
+            gosub changed
+         end
+   end case
+   return
+
+keys.options:
+   begin case
+      case nm = 'up'
+         if oc > 1 then oc -= 1
+      case nm = 'down'
+         if oc < 7 then oc += 1
+      case nm = 'home'
+         oc = 1
+      case nm = 'end'
+         oc = 7
+      case nm = 'enter' or nm = 'space'
+         gosub edit.option
+   end case
+   return
+
+keys.results:
+   begin case
+      case nm = 'esc'
+         view = 'build'
+      case nm = 'up'
+         if rtop > 0 then rtop -= 1
+      case nm = 'down'
+         if rtop + RVIS < rl.cnt then rtop += 1
+      case nm = 'pgup'
+         rtop -= RVIS
+         if rtop < 0 then rtop = 0
+      case nm = 'pgdn'
+         rtop += RVIS
+         if rtop + RVIS > rl.cnt then rtop = rl.cnt - RVIS
+         if rtop < 0 then rtop = 0
+      case nm = 'home'
+         rtop = 0 ; rx = 0
+      case nm = 'end'
+         rtop = rl.cnt - RVIS
+         if rtop < 0 then rtop = 0
+      case nm = 'left'
+         rx -= 20
+         if rx < 0 then rx = 0
+      case nm = 'right'
+         if rx < 300 then rx += 20
+      case nm = 'r'
+         gosub do.run
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, cur.pane, mev, '', mr)                    ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, cur.pane, mev, ap)                           ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, hx, hy, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.query.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> # 'press' or mev<2> # 1 then return
+   mx = mev<3>
+   my = mev<4>
+   if view # 'build' then return
+   begin case
+      case mx >= fb.x and mx <= fb.x + fb.w - 1 and my >= fb.y and my <= fb.y + fb.h - 1
+         focus = 1
+         if my >= fb.y + 1 and my <= fb.y + VISF and ft + my - fb.y <= nfs then fc = ft + my - fb.y
+      case mx >= cb.x and mx <= cb.x + cb.w - 1 and my >= cb.y and my <= cb.y + cb.h - 1
+         focus = 2
+         if my >= cb.y + 2 and my <= cb.y + 1 + VISC and ct + my - (cb.y + 1) <= nd then cc = ct + my - (cb.y + 1)
+      case mx >= nb.x and mx <= nb.x + nb.w - 1 and my >= nb.y and my <= nb.y + nb.h - 1
+         focus = 3
+         if my >= nb.y + 2 and my <= nb.y + 1 + MAXCOND then kc = my - (nb.y + 1)
+      case mx >= sb.x and mx <= sb.x + sb.w - 1 and my >= sb.y and my <= sb.y + sb.h - 1
+         focus = 4
+         if my >= sb.y + 2 and my <= sb.y + 1 + MAXSORT then sc = my - (sb.y + 1)
+      case mx >= ob.x and mx <= ob.x + ob.w - 1 and my >= ob.y and my <= ob.y + ob.h - 1
+         focus = 5
+         if my >= ob.y + 1 and my <= ob.y + 7 then oc = my - ob.y
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the boxes
+
+* Enter in the File box: the file under the cursor becomes the file of the query; the other boxes are cleared, since they name its items
+choose.file:
+   if nfs < 1 then return
+   fn = fshown<fc>
+   gosub check.name
+   if not(okname) then
+      msg = 'this file name has a character the page does not give to a command: type the query at the prompt'
+      return
+   end
+   fname = fn
+   gosub reset.query
+   gosub read.dict
+   if not(dict.ok) then
+      fname = ''
+      msg = 'the dictionary of ' : fn : ' could not be opened'
+      return
+   end
+   focus = 2
+   gosub gen.sentence
+   msg = fname : ': ' : nd : (if nd = 1 then ' item' else ' items') : ' in its dictionary.  Space marks a column.'
+   return
+
+do.filter:
+   af.kind = 'filter' ; af.ttl = 'Filter' ; af.lab = 'File name has' ; af.btn = '&Filter' ; af.val = '' ; af.w = 40 ; af.max = 100
+   af.note = 'Part of a file name: the File box lists the files whose name holds it.  Empty shows every file.'
+   gosub ask.form
+   if af.why # '' then msg = af.why
+   if not(af.ok) then return
+   filt = af.out
+   gosub apply.filter
+   fc = 1 ; ft = 0
+   msg = (if filt = '' then 'every file' else nfs : ' with "' : convert(ctl, dots, filt)[1, 30] : '"')
+   return
+
+* F5: the files and the dictionary are read again; what the boxes name and the dictionary no longer has is dropped
+do.reread:
+   dropped = 0
+   keep.f = fname
+   gosub read.files
+   gosub apply.filter
+   if keep.f # '' then
+      still = 0
+      for kx = 1 to nfl
+         if fnames<kx> = keep.f then still = 1
+      next kx
+      if still then
+         gosub read.dict
+         gosub validate.panes
+         gosub changed
+      end else
+         fname = ''
+         gosub reset.query
+         ditem = '' ; dtype = '' ; dhead = '' ; dok = '' ; nd = 0
+         gosub gen.sentence
+         msg = keep.f : ' is not one of your files with a dictionary now'
+         return
+      end
+   end
+   msg = 'read the files and the dictionary again'
+   if dropped > 0 then msg := ': ' : dropped : ' part(s) of the query no longer fit and were dropped'
+   return
+
+mark.column:
+   if nd < 1 then return
+   mcol = ditem<cc>
+   locate mcol in cols<1> setting mp then
+      del cols<mp>
+      del cflag<mp>
+   end else
+      if dok<cc> # 1 then
+         msg = 'the page does not put this name in a sentence (it has a character the page does not use, or it is also a word of the query language)'
+         return
+      end
+      ncm = dcount(cols, @fm)
+      if cols = '' then ncm = 0
+      if ncm >= MAXC then
+         msg = 'at most ' : MAXC : ' columns'
+         return
+      end
+      cols<-1> = mcol
+   end
+   gosub changed
+   return
+
+* In: fl.set, b or t.  Break or total on the column under the cursor, which must be marked; the same key again takes it off
+flag.column:
+   if nd < 1 then return
+   mcol = ditem<cc>
+   locate mcol in cols<1> setting mp then
+      cflag<mp> = (if cflag<mp> = fl.set then '' else fl.set)
+      gosub changed
+   end else
+      msg = 'mark the column first (Space)'
+   end
+   return
+
+* Enter in the Conditions box: the item, the operator and the value of the row under the cursor
+edit.cond:
+   if fname = '' then
+      msg = 'choose a file first'
+      return
+   end
+   pk.none = 0
+   pk.title = 'Condition ' : kc : ' - item'
+   gosub pick.item
+   if pk = 0 then return
+   cit = pk.id
+   ttl = 'Condition ' : kc : ' - operator'
+   screen pick ops title ttl returning pko else pko = 0
+   if pko = 0 then return
+   cur.v = (if cnd.item<kc> = cit and cnd.op<kc> = ops<pko> then cnd.val<kc> else '')
+   af.kind = 'value' ; af.ttl = 'Condition ' : kc ; af.lab = 'Value' ; af.btn = '&Set' ; af.val = cur.v ; af.w = '' ; af.max = MAXVAL
+   af.note = 'The value for ' : cit : ' ' : ops<pko> : ' (' : opdesc<pko> : ').  Plain text: no quote, backslash, backquote or semicolon.'
+   gosub ask.form
+   if af.why # '' then msg = af.why
+   if not(af.ok) then return
+   cnd.item<kc> = cit
+   cnd.op<kc> = ops<pko>
+   cnd.val<kc> = af.out
+   if kc > 1 and cnd.join<kc> = '' then cnd.join<kc> = 'and'
+   gosub changed
+   return
+
+* Enter in the Sort box: the item of the level under the cursor, or none to clear it
+edit.sort:
+   if fname = '' then
+      msg = 'choose a file first'
+      return
+   end
+   pk.none = 1
+   pk.title = 'Sort level ' : sc
+   gosub pick.item
+   if pk = 0 then return
+   srt.item<sc> = pk.id
+   srt.dir<sc> = (if pk.id = '' then '' else (if srt.dir<sc> = '' then 'a' else srt.dir<sc>))
+   gosub changed
+   return
+
+* In: pk.title, pk.none (1 to offer "(none)" first).  Out: pk (0 when cancelled) and pk.id (null for none).  Only the items the page puts in a sentence are offered.
+pick.item:
+   pitems = '' ; pids = '' ; pn = 0
+   if pk.none then
+      pn = 1
+      pitems<1> = '(none)'
+      pids<1> = ''
+   end
+   for pj = 1 to nd
+      if dok<pj> = 1 then
+         pn += 1
+         pitems<pn> = fmt(ditem<pj>[1, 24], '24L') : ' ' : fmt(dtype<pj>, '4L') : ' ' : dhead<pj>        ;* by position: pids keeps the place of "(none)"
+         pids<pn> = ditem<pj>
+      end
+   next pj
+   pk = 0
+   ttl = pk.title
+   screen pick pitems title ttl size 70,22 returning pk else pk = 0
+   pk.id = ''
+   if pk > 0 then pk.id = pids<pk>
+   return
+
+edit.option:
+   begin case
+      case oc = 1
+         opt.kind = (if opt.kind = 'list' then 'count' else (if opt.kind = 'count' then 'sum' else 'list'))
+         gosub changed
+      case oc = 2
+         af.kind = 'value' ; af.ttl = 'Heading' ; af.lab = 'Heading' ; af.btn = '&Set' ; af.val = opt.head ; af.w = '' ; af.max = MAXVAL
+         af.note = 'The heading printed at the top of each page.  Plain text; empty for the default.'
+         gosub ask.form
+         if af.why # '' then msg = af.why
+         if af.ok then
+            opt.head = af.out
+            gosub changed
+         end
+      case oc = 3
+         af.kind = 'value' ; af.ttl = 'Footing' ; af.lab = 'Footing' ; af.btn = '&Set' ; af.val = opt.foot ; af.w = '' ; af.max = MAXVAL
+         af.note = 'The footing printed at the foot of each page.  Plain text; empty for none.'
+         gosub ask.form
+         if af.why # '' then msg = af.why
+         if af.ok then
+            opt.foot = af.out
+            gosub changed
+         end
+      case oc = 4
+         opt.idsup = (if opt.idsup then 0 else 1)
+         gosub changed
+      case oc = 5
+         opt.detsup = (if opt.detsup then 0 else 1)
+         gosub changed
+      case oc = 6
+         opt.nopage = (if opt.nopage then 0 else 1)
+         gosub changed
+      case oc = 7
+         af.kind = 'sample' ; af.ttl = 'Sample' ; af.lab = 'Records' ; af.btn = '&Set' ; af.val = opt.sample ; af.w = 10 ; af.max = 10
+         af.note = 'Only the first n records: a whole number from 1 to 99999.  Empty for all.'
+         gosub ask.form
+         if af.why # '' then msg = af.why
+         if af.ok then
+            opt.sample = af.out
+            gosub changed
+         end
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the questions (S.88 U6, 2 Nov 26)
+
+* One question of the page, on the toolkit's form ($tk_form): the explanation in the form's message rows, the answer checked by af.check, and a refusal said IN the form, which stays
+* with what was typed until it passes or the person leaves it (Esc or Cancel).  THE FORM CHECKS NOTHING: af.check does, with the page's own routines.
+* In: af.kind (filter, value, sample, sentence, name), af.ttl, af.lab, af.btn (the default button, with its & mark), af.val (the starting text), af.w (the entry's width; null as wide as
+* the form allows), af.max (the longest text), af.note.  Out: af.ok (1 when an answer passed), af.out (the answer as the page keeps it), af.why (null, or why no form was drawn).
+ask.form:
+   af.ok = 0
+   af.out = ''
+   af.why = ''
+   spec = af.ttl : @fm : af.btn : @fm : ''
+   spec<-1> = 'answer' : @vm : af.lab : @vm : af.w : @vm : af.max
+   fv = af.val
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      af.why = 'the form does not fit this window: nothing was changed'
+      return
+   end
+   call $tk_form('say', ctx, af.note, '', '')
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         return
+      end
+      af.in = fv<1>
+      gosub af.check
+      if af.err = '' then exit
+      call $tk_form('say', ctx, af.err : @fm : af.note, 'answer', '')   ;* 2 Nov 26 (review): the explanation stays under the reason, when it is most needed
+   repeat
+   call $tk_form('close', ctx, '', '', '')
+   af.ok = 1
+   return
+
+* In: af.kind, af.in (the text as typed).  Out: af.err (null when it passes, else what to say in the form), af.out.  The same checks the page has always made, in one place.
+af.check:
+   af.err = ''
+   af.out = ''
+   begin case
+      case af.kind = 'filter'
+         af.out = trim(af.in)
+      case af.kind = 'value'
+         qv.in = trimf(trimb(af.in))
+         gosub q.value
+         if qv.err # '' then af.err = 'not accepted: ' : qv.err else af.out = qv.in
+      case af.kind = 'sample'
+         smp.in = trim(af.in)
+         if smp.in # '' then
+            gosub check.sample
+            if smp.ok then af.out = smp.out else af.err = 'a whole number from 1 to 99999 (empty for all)'
+         end
+      case af.kind = 'sentence'
+         chk.s = trimf(trimb(af.in))
+         gosub check.sentence
+         if chk.err # '' then af.err = 'not accepted: ' : chk.err else af.out = chk.out
+      case af.kind = 'name'
+         fn = downcase(trim(af.in))
+         gosub check.name
+         if not(okname) or len(fn) > 40 then af.err = 'a name of letters a-z, digits, dot, dash and underscore only, at most 40' else af.out = fn
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- edit and run
+
+* E: the sentence as text.  What comes back is read by check.sentence like any other.
+do.edit:
+   if sent = '' then
+      msg = (if senterr # '' then senterr else 'there is no sentence yet')
+      return
+   end
+   af.kind = 'sentence' ; af.ttl = 'Edit the sentence' ; af.lab = 'Sentence' ; af.btn = '&Use it' ; af.val = sent ; af.w = '' ; af.max = MAXSENT
+   af.note = 'The sentence as text.  It is checked now, and again before it can run.'
+   gosub ask.form
+   if not(af.ok) then
+      msg = (if af.why # '' then af.why else 'the sentence was not changed')
+      return
+   end
+   sent = af.out
+   edited = 1
+   senterr = ''
+   msg = 'the sentence is edited by hand; a change in any box writes it again from the boxes'
+   return
+
+* R: the sentence is checked once more, run with its output captured, and the output is read in the Results box.  Nothing else sees it.
+do.run:
+   if sent = '' then
+      msg = (if senterr # '' then senterr else 'there is no sentence yet')
+      return
+   end
+   chk.s = sent
+   gosub check.sentence
+   if chk.err # '' then
+      msg = 'not run: ' : chk.err
+      return
+   end
+   run.s = chk.out
+   sel.was = selectinfo(0, SL$ACTIVE)
+   out = ''
+   execute run.s trapping aborts capturing out
+   out = change(change(change(out, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+   if out[len(out), 1] = @fm then out = out[1, len(out) - 1]      ;* 26 Oct 26 (review, low): the last line ends with its own line break, which made an empty line after it and one line too many in the count
+   rl.n = dcount(out, @fm)
+   if out = '' then rl.n = 0
+   rl.cnt = rl.n
+   if rl.cnt > MAXLINES then rl.cnt = MAXLINES
+   rl = ''
+   for ri = 1 to rl.cnt
+      ln = out<ri>
+      gosub strip.esc
+      rl<ri> = convert(ctl, dots, ln)[1, 400]                      ;* by position: a blank line must keep its place
+   next ri
+   out = ''
+   rl.sent = run.s
+   rl.note = (if sel.was then 'A select list was active: the query used it instead of the whole file.' else '')
+   if rl.n = 0 then rl.note = 'The command printed nothing.  ' : rl.note
+   rtop = 0 ; rx = 0
+   view = 'results'
+   return
+
+* In/out: ln.  A captured listing starts with the terminal's clear-screen sequence and a value may hold others: every escape sequence is taken out
+strip.esc:
+   if index(ln, char(27), 1) = 0 then return
+   outl = ''
+   sk = 0
+   for si = 1 to len(ln)
+      sch = ln[si, 1]
+      begin case
+         case sk = 2
+            if sch matches "1A" or sch = '~' then sk = 0
+         case sk = 1
+            if sch = '[' then sk = 2 else sk = 0
+         case sch = char(27)
+            sk = 1
+         case 1
+            outl := sch
+      end case
+   next si
+   ln = outl
+   return
+
+* ------------------------------------------------------------------------------------------------- saved queries: the file &queries& of the account, and nothing else
+
+* L: the saved queries (up to 100, in name order) in the toolkit's pick window (3 Nov 26, "Extend the picker"): the columns file, report and the sentence when it was saved; typing
+* narrows the list.  Enter loads the query (load.selected, every part checked as before); Del names one for delete.selected, which asks its own box with the name typed.  THE WINDOW
+* CHANGES NOTHING.  After either, or Esc, the page is shown again with what happened on the status line (L opens the list again).
+do.list.saved:
+   gosub read.saved
+   if sv.have = 0 or nsv = 0 then
+      msg = 'no query has been saved yet: S saves the one on the screen'
+      if sv.note # '' then msg = trim(sv.note)
+      return
+   end
+   pk.items = ''
+   for rq = 1 to nsv
+      pk.items<rq, 1> = sv.ids<rq>
+      pk.items<rq, 2> = sv.info<rq, 1> : @sm : sv.info<rq, 2> : @sm : sv.info<rq, 3>
+      pk.items<rq, 3> = sv.info<rq, 3>
+   next rq
+   pk.mode = 'list'
+   pk.mode<2> = 'Name' : @vm : 'File' : @vm : 'Report' : @vm : 'The sentence when it was saved'
+   pk.mode<3> = 30 : @vm : 26 : @vm : 8 : @vm : 70
+   pk.mode<4> = 'delete'
+   pk.id = 'Saved queries: Enter loads, Del deletes'
+   pk.start = 1
+   call $tk_pickrec(ctx, pk.mode, pk.items, pk.id, pk.res, pk.start)
+   begin case
+      case pk.res = 'ok' and pk.id >= 1 and pk.id <= nsv
+         svc = pk.id
+         gosub load.selected
+      case pk.res = 'delete' and pk.id >= 1 and pk.id <= nsv
+         svc = pk.id
+         gosub delete.selected
+      case 1
+         if sv.note # '' then msg = trim(sv.note)
+   end case
+   return
+
+read.saved:
+   sv.ids = '' ; sv.info = '' ; nsv = 0 ; sv.note = '' ; sv.have = 0
+   open '&queries&' to qf then
+      sv.have = 1
+      select qf to 9
+      readlist qids from 9 else qids = ''
+      nq = dcount(qids, @fm)
+      if qids = '' then nq = 0
+      sorted = ''
+      skipped = 0
+      for rq = 1 to nq
+         fn = qids<rq>
+         gosub check.name
+         if okname then
+            locate fn in sorted<1> by 'AL' setting sp else
+               ins fn before sorted<sp>
+            end
+         end else
+            skipped += 1
+         end
+      next rq
+      nsv = dcount(sorted, @fm)
+      if sorted = '' then nsv = 0
+      if nsv > MAXSAVED then
+         nsv = MAXSAVED
+         sv.note = 'The first ' : MAXSAVED : ' of ' : nq : ' records are listed.  '
+      end
+      for rq = 1 to nsv
+         sv.ids<-1> = sorted<rq>
+         read qr from qf, sorted<rq> then
+            sv.info<rq> = convert(ctl, dots, qr<2>)[1, 24] : @vm : convert(ctl, dots, qr<3>)[1, 6] : @vm : convert(ctl, dots, qr<19>)[1, 70]
+         end else
+            sv.info<rq> = ''
+         end
+      next rq
+      if skipped > 0 then sv.note := skipped : ' record(s) with other names are not listed.'
+      close qf
+   end
+   return
+
+* Enter in the list: the record is read, and EVERYTHING in it is checked against the file's dictionary, the operator table and q.value before it is used; what does not pass is dropped
+load.selected:
+   if nsv < 1 then return
+   lname = sv.ids<svc>
+   lrec = ''
+   open '&queries&' to qf then
+      read lrec from qf, lname else lrec = ''
+      close qf
+   end
+   if lrec = '' then
+      msg = lname : ' could not be read'
+      return
+   end
+   if lrec<1> # 'query1' then
+      msg = lname : ' is not a query this page saved'
+      return
+   end
+   lfile = lrec<2>
+   known = 0
+   for lx = 1 to nfl
+      if fnames<lx> = lfile then known = 1
+   next lx
+   if not(known) then
+      msg = 'the file ' : convert(ctl, dots, lfile)[1, 40] : ' is not one of your files with a dictionary: nothing was loaded'
+      return
+   end
+   fn = lfile
+   gosub check.name
+   if not(okname) then
+      msg = 'the file name in the record is not one the page gives to a command: nothing was loaded'
+      return
+   end
+   fname = lfile
+   gosub reset.query
+   gosub read.dict
+   if not(dict.ok) then
+      fname = ''
+      msg = 'the dictionary of the file could not be opened: nothing was loaded'
+      return
+   end
+   lk = lrec<3>
+   opt.kind = (if lk = 'count' or lk = 'sum' then lk else 'list')
+   cols = convert(@vm, @fm, lrec<4>)
+   cflag = convert(@vm, @fm, lrec<5>)
+   cnd.join = convert(@vm, @fm, lrec<6>)
+   cnd.item = convert(@vm, @fm, lrec<7>)
+   cnd.op = convert(@vm, @fm, lrec<8>)
+   cnd.val = convert(@vm, @fm, lrec<9>)
+   srt.item = convert(@vm, @fm, lrec<10>)
+   srt.dir = convert(@vm, @fm, lrec<11>)
+   opt.head = lrec<12>
+   opt.foot = lrec<13>
+   opt.idsup = (if lrec<14> = 1 then 1 else 0)
+   opt.detsup = (if lrec<15> = 1 then 1 else 0)
+   opt.nopage = (if lrec<16> = 1 then 1 else 0)
+   opt.sample = lrec<17>
+   gosub validate.panes
+   gosub gen.sentence
+   * a sentence that was edited by hand is kept only when it passes the same check as any other
+   if lrec<18> = 1 and lrec<19> # '' and sent # '' then
+      chk.s = lrec<19>
+      gosub check.sentence
+      if chk.err = '' then
+         sent = chk.out
+         edited = 1
+      end else
+         dropped += 1
+      end
+   end
+   view = 'build'
+   focus = 2
+   msg = 'loaded ' : lname
+   if dropped > 0 then msg := ': ' : dropped : ' part(s) did not pass the checks and were dropped'
+   return
+
+* The boxes hold what a record or a dictionary gave them: keep only what passes.  Out: dropped.
+validate.panes:
+   dropped = 0
+   * columns
+   ncv = dcount(cols, @fm)
+   if cols = '' then ncv = 0
+   nl = '' ; nfg = '' ; vn = 0
+   for vi = 1 to ncv
+      vid = cols<vi>
+      gosub find.item
+      dupe = 0
+      if vn > 0 then
+         locate vid in nl<1> setting vp then dupe = vp else dupe = 0
+      end
+      if vdp > 0 and not(dupe) and vn < MAXC then
+         if dok<vdp> = 1 then
+            vn += 1
+            nl<vn> = vid
+            vfl = cflag<vi>
+            nfg<vn> = (if vfl = 'b' or vfl = 't' then vfl else '')
+         end else
+            dropped += 1
+         end
+      end else
+         dropped += 1
+      end
+   next vi
+   cols = nl ; cflag = nfg
+   * conditions
+   nj = str(@fm, MAXCOND - 1) ; ni = str(@fm, MAXCOND - 1) ; nop = str(@fm, MAXCOND - 1) ; nvl = str(@fm, MAXCOND - 1)
+   for vi = 1 to MAXCOND
+      vid = cnd.item<vi>
+      if vid # '' then
+         gosub find.item
+         vop = cnd.op<vi>
+         locate vop in ops<1> setting vpo else vpo = 0
+         qv.in = cnd.val<vi>
+         gosub q.value
+         if vdp > 0 and vpo > 0 and qv.err = '' then
+            if dok<vdp> = 1 then
+               ni<vi> = vid
+               nop<vi> = vop
+               nvl<vi> = cnd.val<vi>
+               if vi > 1 then nj<vi> = (if cnd.join<vi> = 'or' then 'or' else 'and')
+            end else
+               dropped += 1
+            end
+         end else
+            dropped += 1
+         end
+      end
+   next vi
+   cnd.join = nj ; cnd.item = ni ; cnd.op = nop ; cnd.val = nvl
+   * sorts
+   ns2 = str(@fm, MAXSORT - 1) ; nd2 = str(@fm, MAXSORT - 1)
+   for vi = 1 to MAXSORT
+      vid = srt.item<vi>
+      if vid # '' then
+         gosub find.item
+         if vdp > 0 then
+            if dok<vdp> = 1 then
+               ns2<vi> = vid
+               nd2<vi> = (if srt.dir<vi> = 'd' then 'd' else 'a')
+            end else
+               dropped += 1
+            end
+         end else
+            dropped += 1
+         end
+      end
+   next vi
+   srt.item = ns2 ; srt.dir = nd2
+   * options
+   if opt.head # '' then
+      qv.in = opt.head
+      gosub q.value
+      if qv.err # '' then
+         opt.head = ''
+         dropped += 1
+      end
+   end
+   if opt.foot # '' then
+      qv.in = opt.foot
+      gosub q.value
+      if qv.err # '' then
+         opt.foot = ''
+         dropped += 1
+      end
+   end
+   if opt.sample # '' then
+      smp.in = opt.sample
+      gosub check.sample
+      if smp.ok then
+         opt.sample = smp.out
+      end else
+         opt.sample = ''
+         dropped += 1
+      end
+   end
+   return
+
+* In: smp.in.  Out: smp.ok (1 when it is a whole number from 1 to 99999) and smp.out, the number without leading zeros.  BASIC does not short-circuit: the number is added to only once it is known to be digits.
+check.sample:
+   smp.ok = 0
+   smp.out = ''
+   if smp.in matches "1N0N" then
+      if len(smp.in) <= 5 then
+         smp.out = smp.in + 0
+         if smp.out >= 1 then smp.ok = 1
+      end
+   end
+   return
+
+* S: the query on the screen is saved as a record of &queries&.  The file is made first, when there is none, after a box that shows the command.
+do.save:
+   if fname = '' then
+      msg = 'choose a file first'
+      return
+   end
+   if sent = '' then
+      msg = 'nothing to save: ' : (if senterr # '' then senterr else 'there is no sentence')
+      return
+   end
+   af.kind = 'name' ; af.ttl = 'Save the query' ; af.lab = 'Name' ; af.btn = '&Save' ; af.val = '' ; af.w = 44 ; af.max = 60
+   af.note = 'The name the query is saved under: a-z, 0-9, dot, dash and underscore; at most 40 characters.'
+   gosub ask.form
+   if not(af.ok) then
+      msg = (if af.why # '' then af.why else 'nothing was saved')
+      return
+   end
+   qname = af.out
+   have.q = 0
+   open '&queries&' to qf then have.q = 1
+   if not(have.q) then
+      lines = 'Makes the file &queries& in the account ' : @who : ', where saved queries are kept.  The page writes records of that one file and no other.'
+      call $tk_confirm(qsent, lines, '', res, cmsg)
+      if res # 'run' then
+         msg = cmsg
+         return
+      end
+      execute qsent trapping aborts capturing mk
+      open '&queries&' to qf then have.q = 1
+      if not(have.q) then
+         msg = 'the file &queries& could not be made: nothing was saved'
+         return
+      end
+   end
+   * 28 Oct 26 (S.88 phase 2, S2): this page is $internal, which the kernel's edit gates let through, so it asks for itself whether &queries& is a file it may write: a dynamic file standing
+   * in this account's own directory under that name, of no guarded kind, which the kernel's edit rules allow this session to change.  A VOC entry &queries& that points at bp is refused.
+   gosub check.qfile
+   if not(qok) then
+      msg = qwhy : ': nothing was saved'
+      close qf
+      return
+   end
+   exists = 0
+   old.file = ''
+   read xrec from qf, qname then
+      exists = 1
+      old.file = convert(ctl, dots, xrec<2>)[1, 40]
+      if xrec<1> # 'query1' then
+         msg = sysmsg(12765, qname) : ': nothing was saved'          ;* a record of that name that is not a saved query is never written over
+         close qf
+         return
+      end
+   end
+   if not(exists) then
+      select qf to 9
+      readlist allq from 9 else allq = ''
+      naq = dcount(allq, @fm)
+      if allq = '' then naq = 0
+      if naq >= MAXSAVED then
+         msg = 'a file of saved queries holds ' : MAXSAVED : ' at most: delete one first (L, then X)'
+         close qf
+         return
+      end
+   end
+   wsent = 'write ' : qname : ' to &queries&'
+   if exists then
+      lines = 'Replaces the saved query ' : qname : ' (on the file ' : old.file : ') with the one on the screen.  This is not a command: the page writes that one record of your file &queries& itself, and nothing else.'
+*     26 Oct 26: the box is about a record, not a command: "Write this record?" (12957)
+      call $tk_confirm(wsent, lines, qname, res, cmsg, sysmsg(12957))
+   end else
+      lines = 'Saves the query on the screen as the record ' : qname : ' of your file &queries&.  This is not a command: the page writes that one record itself, and nothing else.'
+      call $tk_confirm(wsent, lines, '', res, cmsg, sysmsg(12957))
+   end
+   if res # 'run' then
+      msg = cmsg
+      close qf
+      return
+   end
+   gosub check.qfile                                           ;* again, after the box: the gates or the account's files may have changed while it was on the screen
+   if not(qok) then
+      msg = qwhy : ': nothing was saved'
+      close qf
+      return
+   end
+   gosub pack.record
+   writeok = @true
+   write wrec to qf, qname on error writeok = @false
+   close qf
+   if writeok then
+      msg = 'saved ' : qname
+   end else
+      msg = 'the query could not be saved'
+   end
+   return
+
+* Out: wrec, the record: field 1 query1, 2 file, 3 report, 4 columns, 5 their break / total letters, 6 to 9 the conditions, 10 and 11 the sorts, 12 heading, 13 footing, 14 to 16 id.sup, det.sup, no.page, 17 sample,
+* 18 edited by hand, 19 the sentence
+pack.record:
+   wrec = 'query1' : @fm : fname : @fm : opt.kind
+   wrec<4> = convert(@fm, @vm, cols)
+   wrec<5> = convert(@fm, @vm, cflag)
+   wrec<6> = convert(@fm, @vm, cnd.join)
+   wrec<7> = convert(@fm, @vm, cnd.item)
+   wrec<8> = convert(@fm, @vm, cnd.op)
+   wrec<9> = convert(@fm, @vm, cnd.val)
+   wrec<10> = convert(@fm, @vm, srt.item)
+   wrec<11> = convert(@fm, @vm, srt.dir)
+   wrec<12> = opt.head
+   wrec<13> = opt.foot
+   wrec<14> = (if opt.idsup then 1 else 0)
+   wrec<15> = (if opt.detsup then 1 else 0)
+   wrec<16> = (if opt.nopage then 1 else 0)
+   wrec<17> = opt.sample
+   wrec<18> = (if edited then 1 else 0)
+   wrec<19> = sent
+   return
+
+* May this page write and delete records of the file it has open as qf (&queries&)?  $tk_ownfile asks: a dynamic file, not read only, directly in this account's own directory under the
+* name &queries&, of no guarded kind (K$EDIT.KIND 0), and one the kernel's edit rules (K$EDIT.OK) allow this session to change.  Out: qok, qwhy
+check.qfile:
+   qok = 0
+   qwhy = ''
+   call $tk_ownfile(qf, '&queries&', qok, qwhy)
+   return
+
+* Out: dwhy is null and qf is OPEN when the record lname may be deleted; else dwhy says why not and qf is closed.  The record must be a saved query: field 1 is query1.
+check.delete:
+   dwhy = ''
+   open '&queries&' to qf else
+      dwhy = 'the file &queries& could not be opened: nothing was deleted'
+      return
+   end
+   gosub check.qfile
+   if not(qok) then
+      dwhy = qwhy : ': nothing was deleted'
+      close qf
+      return
+   end
+   read qdrec from qf, lname else qdrec = ''
+   if qdrec<1> # 'query1' then
+      dwhy = sysmsg(12765, lname)
+      close qf
+   end
+   return
+
+* Del in the list (the pick window): the record is deleted from &queries& after a box, with its name typed
+delete.selected:
+   if nsv < 1 then return
+   lname = sv.ids<svc>
+   * 28 Oct 26 (S.88 phase 2, S2): refused BEFORE the box when the file is not one this page may write, or the record is not a saved query (field 1 query1)
+   gosub check.delete
+   if dwhy # '' then
+      msg = dwhy
+      return
+   end
+   close qf
+   dsent = 'delete ' : lname : ' from &queries&'
+   lines = 'Deletes the saved query ' : lname : ' from your file &queries&.  This is not a command: the page deletes that one record itself.  The query on the screen is not touched.'
+*  26 Oct 26: "Delete this record?" (12958)
+   call $tk_confirm(dsent, lines, lname, res, cmsg, sysmsg(12958))
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub check.delete                                          ;* again, with the file open for the delete: nothing between this test and the delete
+   if dwhy # '' then
+      msg = dwhy
+      return
+   end
+   delok = @true
+   delete qf, lname on error delok = @false
+   close qf
+   msg = (if delok then 'deleted ' : lname else 'could not delete ' : lname)
+   return
+
+end
+
+* END-CODE

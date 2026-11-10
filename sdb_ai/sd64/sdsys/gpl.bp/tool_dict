@@ -1,0 +1,1608 @@
+* TOOL_DICT
+* The dictionary of a file on one screen: its items by type, how each is formatted and what it computes, the verbs that make, edit, delete, compile and try an item, and the indices of the file
+* (S.75, plan .claude/plan-fullscreen-toolkit.md sections 2.7, 8 and 12, DV2).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 1 Nov 26 dm   S.90 stage 3: N asks the id and hands the terminal to the IDE on a new item, shown as the dictionary form; ask.d, ask.i, show.new and write.item (the page's only write) and the
+*               answer rules only they used are gone, so the page writes nothing: the dict-edit gate and the write are the IDE's.
+* 31 Oct 26 dm  The A and S dictionary item types are gone (owner, 30 Oct 2026): N offers a data or a computed item only, C compiles and T tries D and I items, an index is offered on a D or I
+*               item, and an old A or S item is shown with a sentence that says SD no longer reads it (its fields are not shown: they were in the Pick layout, which no program reads now).
+* 28 Oct 26 dm  S.88 L2: the two boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the list shows more rows and the
+*               description more lines, both wider; text longer than its box is wrapped when the box is wider than it was.  S.88 stage C: E hands the item to the IDE ('ide dict file item';
+*               the IDE locks the record, asks the account's dict-edit gate and gives the lock back) and LIST.INDEX's hand-over is checked against 'ide list.index', in place of SED.
+* 28 Oct 26 dm  S.87: the page no longer names C among the types it compiles, tries or indexes (the messages now say A, S and I; D, A, S and I; A, S or I).
+* 28 Oct 26 dm  S.87: the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
+* 27 Oct 26 dm  S.87 batch 12: the dead FL$TYPE.SH branch of the file kind is gone with the constant.
+* 27 Oct 26 dm  S.87 batch 4: the describe page no longer says a location of 9998 or 9999 shows the item count or the record length.
+* 25 Oct 26 dm  New.
+* 26 Oct 26 dm  faults: the record write's box says "Write this record?" (a sixth argument of $tk_confirm); the choice of keeping the page's own K$EDIT.OK question as the wall is written at write.item.
+* 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the Items and Indices views, back to the file, filter and refresh are offered
+*               to the model, and a proposal is carried out by the page's own key.  An account without the AI sees the page as it was.
+* 1 Nov 26 dm  S.97 stage 4 (the owner's editing actions): New and Compile are offered too, marked 'edit' (Enter alone rejects the proposal); the AI's argument is the DEFAULT of the
+*               page's own prompt (the new item's id, a filter's text), checked as a typed answer, and every box after it applies.
+* 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): Items, Indices and the AI line (the Files view and the AI line); Tab no longer
+*               takes the focus to the Indices box (I still does).  AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.DICT {file}     (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the dictionary of one data file of the account the session is in.  With a file named after the verb the page
+*   opens that file's dictionary; with none it first lists the files the account's VOC points at (the VOC entries of type F) and Enter opens the dictionary of the one under the cursor.
+*   THE ITEMS PANE lists every item of the dictionary: its id, its type (D data, I, E, L, PH, X; any other, an old A or S item included, is shown as its first character), where its value comes from (the field
+*   number, or "computed"), its heading, format, conversion, whether it is single or multivalued, its association, and the expression of an I-type.  The box under the list describes the item
+*   under the cursor in plain words.  THE INDICES PANE (I or Tab) lists the alternate key indices of the file: the item each is on, whether it is built, nulls, case, sort.
+*
+*   WHAT IT CAN DO.  THE PAGE WRITES NOTHING (S.90 stage 3, 1 Nov 2026).  N makes an item: the page asks the id and checks it, and hands the terminal to the IDE on a NEW item (ide dict file id),
+*   which shows the dictionary form - the type, then the fields that type needs, each checked - and writes the record itself, with the account's dict-edit gate and the IDE's own questions.  E hands
+*   the terminal to the IDE on the item that is there (ide dict file item) in the same way.  D deletes the item with the DELETE verb, after its id is typed.  C compiles an I item with
+*   COMPILE.DICT.  T tries the item on a record of the data file: the value ITYPE() gives for that record, which is what the query processor computes, and the same value converted and formatted as
+*   a query would print it.  In the indices pane N makes an index (CREATE.INDEX defines it, then BUILD.INDEX builds it, because an index that is not built finds nothing), B builds it again (BUILD.INDEX),
+*   D deletes it (DELETE.INDEX, after its name is typed) and L lists it in full (LIST.INDEX: it prints to the terminal, which is handed to the verb).  Every verb is the one the person could type,
+*   run through $tk_run after a box that shows the exact command and what it does; Cancel is the default.  An id or an index name with a character the page does not give to a command (a capital, a
+*   dollar, an at sign) is listed and described, and the verb for it is typed at the prompt.
+*
+*   NO FILE IS HELD OPEN: every file the page opens (the dictionary, the data file) is closed again before the next key, because BUILD.INDEX and DELETE.INDEX need the file to themselves, and the
+*   session's own open counts.
+*
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; Enter opens a file (files pane); N, E, D, C, T, I and F (another file) in the items pane; N, B, D, L and I or Tab (back to the items) in the
+*   indices pane; F11 or / filters by a part of the id; Esc clears the filter; F5 reads again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_dict
+$catalog $tool_dict
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+$include dictdict.h
+
+   prompt ''
+
+   deffun edit_msg(kind) calling '!edit_msg'
+
+   allow = 'delete compile.dict create.index build.index delete.index'   ;* the commands this page may run, through $tk_run, after a box
+   show.allow = 'ide list.index'                                       ;* the two it hands the terminal to (the IDE is a screen; LIST.INDEX prints through the print unit)
+
+   fa = downcase(field(trim(@sentence), ' ', 2))                       ;* the file named after the verb, if any
+
+   call $tk_open('tool.dict', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'enter', 'open', 'open', 'Files', 1)
+   call $tk_keys('add', keys, 'n', 'new', 'new', 'Items', 1)
+   call $tk_keys('add', keys, 'e', 'edit', 'edit', 'Items', 1)
+   call $tk_keys('add', keys, 'd', 'delete', 'delete', 'Items', 1)
+   call $tk_keys('add', keys, 'c', 'compile', 'compile', 'Items', 1)
+   call $tk_keys('add', keys, 't', 'test', 'test', 'Items', 1)
+   call $tk_keys('add', keys, 'i', 'indices', 'indices', 'Items', 1)
+   call $tk_keys('add', keys, 'f', 'file', 'file', 'Items', 1)
+   call $tk_keys('add', keys, 'n', 'new index', 'newindex', 'Indices', 1)
+   call $tk_keys('add', keys, 'b', 'build', 'build', 'Indices', 1)
+   call $tk_keys('add', keys, 'd', 'delete', 'delindex', 'Indices', 1)
+   call $tk_keys('add', keys, 'l', 'list', 'listindex', 'Indices', 1)
+   call $tk_keys('add', keys, 'i', 'items', 'items', 'Indices', 1)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', 'Files' : @sm : 'Items', 1)
+   call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'nextpane', 'Items' : @sm : 'Indices', 1)     ;* S.176: F6 / Shift-F6 move between the boxes on every page (the Files view has one: the AI line's own row names F6 there)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', 'Files' : @sm : 'Items', 1)       ;* S.88 U8: Esc takes the name filter of the pane off first, else opens the menu bar (in Indices it goes back to the items)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'open', '&File', '&Open the file', '', '')
+   call $tk_keys('menu', keys, 'new', '&Items', '&New item', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Items', '&Edit in the IDE', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Items', '&Delete', '', '')
+   call $tk_keys('menu', keys, 'compile', '&Items', '&Compile', '', '')
+   call $tk_keys('menu', keys, 'test', '&Items', '&Try the item', '', '')
+   call $tk_keys('menu', keys, 'indices', '&Items', '&Indices', '', '')
+   call $tk_keys('menu', keys, 'file', '&Items', 'Back to the &file', '', '')
+   call $tk_keys('menu', keys, 'newindex', 'In&dex', '&New index', '', '')
+   call $tk_keys('menu', keys, 'build', 'In&dex', '&Build', '', '')
+   call $tk_keys('menu', keys, 'delindex', 'In&dex', '&Delete the index', '', '')
+   call $tk_keys('menu', keys, 'listindex', 'In&dex', '&List', '', '')
+   call $tk_keys('menu', keys, 'items', 'In&dex', 'I&tems', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter the names', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'nextpane', '&View', '&Next box', '', '')     ;* S.180: every key's action is on a menu (F6)
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2: the AI line.  The page offers the AI only the actions that change what is shown - the Items and Indices views, back to the file, the filter and refresh (the
+   * owner: opt-in, off by default); a proposal is carried out by the page's own key.  Where the AI is not usable for the account nothing here adds a key, a row or a line.
+   call $tk_keys('ai', keys, 'indices', '', '', '', '')
+   call $tk_keys('ai', keys, 'items', '', '', '', '')
+   call $tk_keys('ai', keys, 'file', '', '', '', '')
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_keys('ai', keys, 'new', 'edit', '', '', '')                ;* S.97 stage 4 (the owner's editing actions): a new item, its id the AI's argument; Reject is the default
+   call $tk_keys('ai', keys, 'compile', 'edit', '', '', '')            ;* and compile the I item under the cursor, through the page's own Run box
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   VIS = 16                                                            ;* rows of a list on the screen (the list pane's height less 6: set by get.rects)
+   rtw = TK.MINW - 2 * TK.XBODY - 4                                    ;* the text width of a pane in the reference layout (140 by 43): 134
+   MAXV = 3000                                                        ;* items read: a dictionary is some tens; more than this are not listed, and the page says so
+   hl.f = fmt('File', '30L') : fmt('Kind', '12L') : fmt('Dictionary', '12L') : fmt('Items', '8R') : fmt('Indices', '9R')
+   hl.i = fmt('Id', '26L') : fmt('Type', '5L') : fmt('Field', '9L') : fmt('Heading', '22L') : fmt('Format', '8L') : fmt('Conversion', '12L') : fmt('S/M', '4L') : fmt('Association', '12L') : 'Expression or text'
+   hl.x = fmt('Index', '24L') : fmt('Built', '6L') : fmt('Type', '5L') : fmt('Nulls', '6L') : fmt('S/M', '5L') : fmt('Fmt', '5L') : fmt('Case', '6L') : 'Field or expression'
+
+   ctl.set = ''                                                        ;* the characters that are never shown as they are (controls, DEL and the bytes above ASCII)
+   for cq = 1 to 31
+      ctl.set := char(cq)
+   next cq
+   for cq = 127 to 255
+      ctl.set := char(cq)
+   next cq
+   ctl.rep = str('.', len(ctl.set))
+
+   pi = 1                                                              ;* the pane: 1 files, 2 items, 3 indices
+   pnames = 'Files' : @fm : 'Items' : @fm : 'Indices'
+   fnames = '' ; fmeta = '' ; nf = 0 ; fshown = '' ; nfs = 0
+   iids = '' ; imeta = '' ; ni = 0 ; ishown = '' ; nis = 0
+   xnames = '' ; xmeta = '' ; nx = 0
+   cf = 1 ; ci = 1 ; cx = 1 ; tf = 0 ; ti = 0 ; tx = 0
+   filtf = '' ; filti = ''
+   fn = '' ; truncated = 0 ; lastrec = '' ; pre.item = ''
+   gen = 0
+   done = 0
+   msg = ''
+
+   perr = ''
+   gosub declare.layout
+   gosub read.files
+   if fa # '' then
+      gosub open.named
+   end else
+      msg = 'Up and Down move; Enter opens the dictionary of the file under the cursor'
+   end
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, pnames<pi>, '', '', mr)           ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, pnames<pi>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, pnames<pi>, nm, ao)          ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      ai.arg = ''                                                                    ;* S.97 stage 4: the argument of an accepted proposal, the DEFAULT of this page's own prompt for that key
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> = 'replay' then ai.arg = ao<5>
+      if ao<1> # '' then msg = ao<4>
+      busy = (if (pi = 1 and filtf # '') or (pi = 2 and filti # '') or pi = 3 then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, pnames<pi>, nm, busy, mr)       ;* the Esc rule: the pane's name filter is taken off before the bar opens, and Esc in the Indices pane goes back to the items (key.indices)
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Every file of the account (the VOC entries of type F) with its kind, whether it has a dictionary, how many items, how many indices; the cursor goes back to the file it was on
+read.files:
+   sel.f = ''
+   if nfs > 0 and cf >= 1 and cf <= nfs then sel.f = fnames<fshown<cf>>
+   fnames = ''
+   fmeta = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      for i = 1 to n
+         read r from vocf, ids<i> then
+            * the first field is F, or a description that starts "File" (a file's description is kept there)
+            t1 = upcase(r<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then fnames<-1> = ids<i>
+         end
+      next i
+      close vocf
+   end
+   nf = dcount(fnames, @fm)
+   if fnames = '' then nf = 0
+   for i = 1 to nf
+      fn2 = fnames<i>
+      gosub read.fmeta
+      fmeta<i> = meta
+   next i
+   gosub apply.filter.f
+   if sel.f # '' then
+      for i = 1 to nfs
+         if fnames<fshown<i>> = sel.f then
+            cf = i
+            exit
+         end
+      next i
+   end
+   if cf > nfs then cf = nfs
+   if cf < 1 then cf = 1
+   return
+
+* In: fn2.  Out: meta, a field of values: kind, dictionary (1 or 0), items, indices.  Every file opened here is closed again.
+read.fmeta:
+   meta = ''
+   kind = 'cannot open' ; dct = 0 ; nitems = '' ; nidx = ''
+   open fn2 to fv then
+      ft = fileinfo(fv, FL$TYPE)
+      begin case
+         case ft = FL$TYPE.DH
+            kind = 'dynamic'
+         case ft = FL$TYPE.DIR
+            kind = 'directory'
+         case ft = FL$TYPE.SEQ
+            kind = 'sequential'
+         case ft = FL$TYPE.NET
+            kind = 'server'
+         case 1
+            kind = 'other'
+      end case
+      if ft = FL$TYPE.DH then
+         ixl = indices(fv)
+         nidx = dcount(ixl, @fm)
+         if ixl = '' then nidx = 0
+      end
+      close fv
+      open 'DICT', fn2 to dv then
+         dct = 1
+         nitems = fileinfo(dv, FL$RECORD.COUNT)
+         close dv
+      end
+   end
+   meta = kind : @vm : dct : @vm : nitems : @vm : nidx
+   return
+
+apply.filter.f:
+   fshown = ''
+   nfs = 0
+   fu = upcase(filtf)
+   for q = 1 to nf
+      if filtf = '' or index(upcase(fnames<q>), fu, 1) > 0 then
+         fshown<-1> = q
+         nfs += 1
+      end
+   next q
+   return
+
+* The items of the dictionary of fn, in id order, with what the list shows of each; the cursor goes back to the item it was on
+read.items:
+   sel.i = ''
+   if nis > 0 and ci >= 1 and ci <= nis then sel.i = iids<ishown<ci>>
+   iids = '' ; imeta = '' ; truncated = 0
+   open 'DICT', fn to dv then
+      sselect dv to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      if n > MAXV then
+         n = MAXV
+         truncated = 1
+      end
+      for i = 1 to n
+         read rec from dv, ids<i> then
+            gosub classify.item
+            iids<-1> = ids<i>
+            imeta<-1> = ty : @vm : wh : @vm : hd : @vm : ft2 : @vm : cv : @vm : sm : @vm : asoc : @vm : ex
+         end
+      next i
+      close dv
+   end
+   ni = dcount(iids, @fm)
+   if iids = '' then ni = 0
+   gosub apply.filter.i
+   if sel.i # '' then
+      for i = 1 to nis
+         if iids<ishown<i>> = sel.i then
+            ci = i
+            exit
+         end
+      next i
+   end
+   if ci > nis then ci = nis
+   if ci < 1 then ci = 1
+   return
+
+apply.filter.i:
+   ishown = ''
+   nis = 0
+   fu = upcase(filti)
+   for q = 1 to ni
+      if filti = '' or index(upcase(iids<q>), fu, 1) > 0 then
+         ishown<-1> = q
+         nis += 1
+      end
+   next q
+   return
+
+* In: rec (an item).  Out: ty (D data, E, I, L, PH, X or any other first character, an old A or S included), wh (where the value comes from), hd (heading), ft2 (format), cv (conversion), sm (S or M),
+* asoc (association), ex (expression or text).  Every one is cleaned for the screen.
+classify.item:
+   ty = upcase(rec<DICT.TYPE>)
+   if ty[1, 2] = 'PH' then ty = 'PH' else ty = ty[1, 1]
+   wh = '' ; hd = '' ; ft2 = '' ; cv = '' ; sm = '' ; asoc = '' ; ex = ''
+   begin case
+      case ty = 'D' or ty = 'E'
+         wh = rec<DICT.LOC> ; cv = rec<DICT.CONV> ; hd = rec<DICT.DISPLAY.NAME> ; ft2 = rec<DICT.FORMAT> ; sm = rec<DICT.S.M> ; asoc = rec<DICT.ASSOC>
+      case ty = 'I'
+         wh = 'computed' ; ex = rec<DICT.ITYPE.SOURCE> ; cv = rec<DICT.CONV> ; hd = rec<DICT.DISPLAY.NAME> ; ft2 = rec<DICT.FORMAT> ; sm = rec<DICT.S.M> ; asoc = rec<DICT.ASSOC>
+      case ty = 'L'
+         wh = 'link' ; ex = rec<2> : '  file ' : rec<3>
+      case ty = 'X' or ty = 'PH'
+         ex = rec<2>
+   end case
+   ct = wh ; gosub clean.text ; wh = ct
+   ct = hd ; gosub clean.text ; hd = ct
+   ct = ft2 ; gosub clean.text ; ft2 = ct
+   ct = cv ; gosub clean.text ; cv = ct
+   ct = sm ; gosub clean.text ; sm = ct
+   ct = asoc ; gosub clean.text ; asoc = ct
+   ct = ex ; gosub clean.text ; ex = ct
+   ct = ty ; gosub clean.text ; ty = ct
+   return
+
+* In/out: ct.  The text as the screen may show it: value and subvalue marks become | and \, and every control character, DEL and byte above ASCII becomes a dot
+clean.text:
+   ct = convert(@vm, '|', ct)
+   ct = convert(@sm, '\', ct)
+   ct = convert(ctl.set, ctl.rep, ct)
+   return
+
+* The alternate key indices of the file fn: for each its name and what the file says about it.  The file is opened only for this and closed again, so that a build can have it to itself.
+read.indices:
+   sel.x = ''
+   if nx > 0 and cx >= 1 and cx <= nx then sel.x = xnames<cx>
+   xnames = '' ; xmeta = ''
+   open fn to fv then
+      ixl = indices(fv)
+      for i = 1 to dcount(ixl, @fm)
+         if ixl<i> # '' then
+            dd = indices(fv, ixl<i>)
+            xt = upcase(dd<1, 1>)
+            if xt = '' then xt = 'D'
+            xs = dd<6>                                                ;* single or multivalued
+            xj = dd<5>                                                ;* L or R: how the keys are justified, which is how they are ordered
+            ct = dd<2> ; gosub clean.text
+            xnames<-1> = ixl<i>
+            xmeta<-1> = (if dd<1, 4> = '1' then 'yes' else 'no') : @vm : xt : @vm : (if dd<1, 3> = '1' then 'no' else 'yes') : @vm : xs : @vm : xj : @vm : (if dd<1, 8> = '1' then 'any' else 'exact') : @vm : ct
+         end
+      next i
+      close fv
+   end
+   nx = dcount(xnames, @fm)
+   if xnames = '' then nx = 0
+   if sel.x # '' then
+      for i = 1 to nx
+         if xnames<i> = sel.x then
+            cx = i
+            exit
+         end
+      next i
+   end
+   if cx > nx then cx = nx
+   if cx < 1 then cx = 1
+   return
+
+* ------------------------------------------------------------------------------------------------- the file the page works on
+
+* The file named after the verb: a name of a-z, 0-9, dot, dash and underscore that is one of the account's files and has a dictionary
+open.named:
+   cw = fa
+   gosub check.word
+   if not(okname) then
+      msg = 'a file name is made of a-z, 0-9, dot, dash and underscore only: pick the file from the list'
+      return
+   end
+   found = 0
+   for q = 1 to nf
+      if upcase(fnames<q>) = upcase(fa) then
+         found = q
+         exit
+      end
+   next q
+   if not(found) then
+      msg = fa : ' is not a file in this account: pick one from the list'
+      return
+   end
+   fn = fnames<found>
+   gosub enter.file
+   return
+
+* In: fn.  The dictionary of fn is opened to see that it is there; then the items are read and the items pane is shown
+enter.file:
+   dictok = 0
+   open 'DICT', fn to dv then
+      dictok = 1
+      close dv
+   end
+   if not(dictok) then
+      msg = fn : ' has no dictionary: there is nothing to show (a file made by create.file has one)'
+      fn = ''
+      return
+   end
+   pi = 2
+   ci = 1 ; ti = 0 ; filti = ''
+   iids = '' ; imeta = '' ; ni = 0 ; ishown = '' ; nis = 0
+   gosub read.items
+   msg = ''
+   if truncated then msg = 'the dictionary has more than ' : MAXV : ' items: the first ' : MAXV : ' are listed'
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The two boxes are panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the list stretches (a bigger window
+* shows more rows of the files, items or indices), the description takes the columns.  The same two panes serve the three views of the page.
+* Out: lx ly lw lh (the list), dx dy dw dh (the description), tw (the text width of both), VIS (the rows of a list).
+declare.layout:
+   d = ''
+   d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'detail' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'list', rc)
+   lx = rc<1, 1> ; ly = rc<1, 2> ; lw = rc<1, 3> ; lh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'detail', rc)
+   dx = rc<1, 1> ; dy = rc<1, 2> ; dw = rc<1, 3> ; dh = rc<1, 4>
+   tw = lw - 4
+   VIS = lh - 6                                                        ;* the header row, the rows, the two summary lines, a blank row and the border: 16 rows of 22
+   return
+
+* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+fit.lines:
+   dlines = lines
+   if tw > rtw then
+      dlines = ''
+      nd = 0
+      for q = 1 to dcount(lines, @fm)
+         nd += 1
+         dlines<nd> = ''
+         if lines<q> # '' then
+            call $tk_wrap(lines<q>, tw, wpieces)
+            for pj = 1 to dcount(wpieces, @fm)
+               dlines<nd> = wpieces<pj>
+               nd += 1
+            next pj
+            nd -= 1
+         end
+      next q
+   end
+   return
+
+draw.all:
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   begin case
+      case pi = 1
+         ttl = 'Files of ' : @who
+         btl = 'The file under the cursor'
+      case pi = 2
+         ttl = 'Dictionary of ' : fn
+         btl = 'The item under the cursor'
+      case 1
+         ttl = 'Indices of ' : fn
+         btl = 'The index under the cursor'
+   end case
+   screen box at lx,ly size lw,lh title ttl
+   screen box at dx,dy size dw,dh title btl
+   gosub draw.list
+   gosub draw.detail
+   return
+
+* In: pi.  Out: cp (the cursor), cn (rows), tp (the first row shown)
+load.cur:
+   begin case
+      case pi = 1
+         cp = cf ; cn = nfs ; tp = tf
+      case pi = 2
+         cp = ci ; cn = nis ; tp = ti
+      case 1
+         cp = cx ; cn = nx ; tp = tx
+   end case
+   return
+
+store.cur:
+   begin case
+      case pi = 1
+         cf = cp ; tf = tp
+      case pi = 2
+         ci = cp ; ti = tp
+      case 1
+         cx = cp ; tx = tp
+   end case
+   return
+
+draw.list:
+   gosub load.cur
+   if cp <= tp then tp = cp - 1
+   if cp > tp + VIS then tp = cp - VIS
+   if tp > cn - VIS then tp = cn - VIS                                 ;* a taller list fills its rows again
+   if tp < 0 then tp = 0
+   gosub store.cur
+   begin case
+      case pi = 1
+         screen text hl.f at lx + 2,ly + 1 attr 'header' width tw
+      case pi = 2
+         screen text hl.i at lx + 2,ly + 1 attr 'header' width tw
+      case 1
+         screen text hl.x at lx + 2,ly + 1 attr 'header' width tw
+   end case
+   for r = 1 to VIS
+      kk = tp + r
+      s = ''
+      if kk <= cn then
+         begin case
+            case pi = 1
+               s = fmt(fnames<fshown<kk>>, '30L')
+               ma = fmeta<fshown<kk>>
+               s := fmt(ma<1, 1>, '12L') : fmt((if ma<1, 2> = 1 then 'yes' else 'none'), '12L') : fmt(ma<1, 3>, '8R') : fmt(ma<1, 4>, '9R')
+            case pi = 2
+               ma = imeta<ishown<kk>>
+               s = fmt(iids<ishown<kk>>, '26L') : fmt(ma<1, 1>, '5L') : fmt(ma<1, 2>, '9L') : fmt(ma<1, 3>, '22L') : fmt(ma<1, 4>, '8L') : fmt(ma<1, 5>, '12L') : fmt(ma<1, 6>, '4L') : fmt(ma<1, 7>, '12L') : ma<1, 8>
+            case 1
+               ma = xmeta<kk>
+               s = fmt(xnames<kk>, '24L') : fmt(ma<1, 1>, '6L') : fmt(ma<1, 2>, '5L') : fmt(ma<1, 3>, '6L') : fmt(ma<1, 4>, '5L') : fmt(ma<1, 5>, '5L') : fmt(ma<1, 6>, '6L') : ma<1, 7>
+         end case
+      end
+      screen text s at lx + 2,ly + 1 + r attr (if kk = cp and kk <= cn then 'highlight' else 'normal') width tw
+   next r
+   gosub draw.foot
+   call $tk_help('mark', lx + lw - 5, ly + 1, 0, 0)
+   return
+
+* The summary under the list, and the dict-edit gate this session holds (asked of the kernel, never tried)
+draw.foot:
+   begin case
+      case pi = 1
+         s = nf : (if nf = 1 then ' file' else ' files')
+         if filtf # '' then s := ', ' : nfs : ' with "' : filtf : '" in the name'
+      case pi = 2
+         s = ni : (if ni = 1 then ' item' else ' items')
+         if filti # '' then s := ', ' : nis : ' with "' : filti : '" in the id'
+         if truncated then s := ' (the first ' : MAXV : ')'
+      case 1
+         s = nx : (if nx = 1 then ' index' else ' indices')
+   end case
+   gadm = kernel(K$ADMINISTRATOR, -1)                           ;* the verbs let the administrator through whatever the bit says (P3)
+   s := '.   Your gate:  dict-edit ' : (if gadm then 'on (administrator)' else (if kernel(K$DICT.EDIT, -1) then 'on' else 'off'))
+   screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
+   begin case
+      case pi = 1
+         s2 = 'Enter opens the dictionary of the file under the cursor.  A file can also be named after the verb: tool.dict customers'
+      case pi = 2
+         s2 = 'N writes a new item itself, only if dict-edit is on.  E, D and C run the IDE and the verbs, which make their own checks.  T tries an item on a record.'
+      case 1
+         s2 = 'An index that is not built finds nothing: B builds it.  Build and delete need the file to themselves: another session having it open refuses them.'
+   end case
+   wpieces = s2
+   if tw > rtw then call $tk_wrap(s2, tw, wpieces)
+   screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
+   if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
+   return
+
+draw.detail:
+   lines = ''
+   begin case
+      case pi = 1
+         if nfs >= 1 and cf >= 1 and cf <= nfs then
+            gosub describe.file
+         end else
+            lines<-1> = (if nf = 0 then 'This account has no files.' else 'No file name holds "' : filtf : '".  Esc shows all of them.')
+         end
+      case pi = 2
+         if nis >= 1 and ci >= 1 and ci <= nis then
+            gosub describe.item
+         end else
+            lines<-1> = (if ni = 0 then 'This dictionary has no items.  N makes one.' else 'No item id holds "' : filti : '".  Esc shows all of them.')
+         end
+      case 1
+         if nx >= 1 and cx >= 1 and cx <= nx then
+            gosub describe.index
+         end else
+            lines<-1> = 'This file has no indices.  N makes one on an item of the dictionary.'
+         end
+   end case
+   gosub fit.lines
+   for r = 1 to dh - 2
+      screen text fmt(dlines<r>[1, tw], tw : 'L') at dx + 2,dy + r width tw
+   next r
+   return
+
+* The file under the cursor: where it is, its dictionary, its indices
+describe.file:
+   fn2 = fnames<fshown<cf>>
+   ma = fmeta<fshown<cf>>
+   lines<-1> = fn2 : '  -  a ' : ma<1, 1> : ' file'
+   open fn2 to fv then
+      lines<-1> = 'Data: ' : fileinfo(fv, FL$PATH)
+      close fv
+   end else
+      lines<-1> = 'The VOC points at a file this account cannot open now.'
+   end
+   if ma<1, 2> = 1 then
+      open 'DICT', fn2 to dv then
+         lines<-1> = 'Dictionary: ' : fileinfo(dv, FL$PATH) : '  (about ' : ma<1, 3> : ' items)'
+         close dv
+      end
+      lines<-1> = 'Enter opens it.'
+   end else
+      lines<-1> = 'This file has no dictionary: a query cannot read it by field name.'
+   end
+   if ma<1, 4> # '' and ma<1, 4> > 0 then
+      lines<-1> = 'Indices: ' : ma<1, 4> : ' (the indices pane of its dictionary lists them)'
+   end
+   return
+
+* In: the item under the cursor.  Out: lines, the description in sentences
+describe.item:
+   iid = iids<ishown<ci>>
+   lines<-1> = ''
+   rec = ''
+   open 'DICT', fn to dv then
+      read rec from dv, iid else rec = ''
+      close dv
+   end
+   if rec = '' then
+      lines<1> = iid : '  -  this item is not in the dictionary now (F5 reads it again)'
+      return
+   end
+   gosub classify.item
+   gosub type.words
+   lines<1> = iid : '  -  ' : tyw
+   loc = wh
+   begin case
+      case ty = 'D'
+         if loc = '' or not(num(loc)) then
+            lines<-1> = 'Its location "' : loc : '" is not a field number, so a query cannot read it.'
+         end else
+            begin case
+               case loc = 0
+                  lines<-1> = 'Shows the record id.'
+               case 1
+                  lines<-1> = 'Shows field ' : loc : ' of each record.'
+            end case
+         end
+      case ty = 'I'
+         lines<-1> = 'Computes its value for each record from the expression:'
+         ct = ex
+         call $tk_wrap(ct, tw - 6, pieces)
+         for pq = 1 to dcount(pieces, @fm)
+            if pq <= 3 then lines<-1> = '    ' : pieces<pq>
+         next pq
+         if rec<DICT.SYS.INFO> # '' and rec<DICT.ITYPE.OBJECT> # '' then
+            lines<-1> = 'Compiled: the query processor runs the compiled form.'
+         end else
+            lines<-1> = 'Not compiled yet: C compiles it (a query compiles it when it first uses it).'
+         end
+      case ty = 'E'
+         lines<-1> = 'Shows the element ' : wh : ' of each record of a data collection file.'
+      case ty = 'L'
+         lines<-1> = 'Names another file and how to find the record in it: ' : ex : '.'
+      case ty = 'PH'
+         lines<-1> = 'A phrase: a fragment of a query command, replaced where its name is typed: ' : ex
+      case ty = 'X'
+         lines<-1> = 'Text kept in the dictionary under this name.  A query does not read it as a field.'
+      case ty = 'A' or ty = 'S'
+         lines<-1> = 'SD no longer reads A and S items: a query that names it is refused.  Write it again as a data item (N, D) or a computed item (N, I).'
+      case 1
+         lines<-1> = 'SD reads this item as nothing a query can use.'
+   end case
+   if ty = 'D' or ty = 'I' or ty = 'E' then
+      begin case
+         case hd = ''
+            lines<-1> = 'The column heading is the name of the item.'
+         case hd = '\'
+            lines<-1> = 'No column heading is printed.'
+         case 1
+            lines<-1> = 'Column heading "' : hd : '".'
+      end case
+      if ft2 = '' then
+         lines<-1> = 'No format: SD takes ten characters, left-justified for text and right-justified for numbers.'
+      end else
+         fs = ft2
+         gosub describe.format
+         lines<-1> = 'Printed ' : fdesc : '.'
+      end
+      if cv = '' then
+         lines<-1> = 'No conversion: the stored value is printed as it is.'
+      end else
+         cs = cv
+         gosub describe.conv
+         lines<-1> = 'Converted for display with ' : cv : ' (' : cdesc : ').'
+      end
+      begin case
+         case sm = 'M'
+            lines<-1> = 'Multivalued: the field holds several values.' : (if asoc # '' then '  Association ' : asoc : ': its values line up, value by value, with the other items of that association.' else '')
+         case sm = 'S'
+            lines<-1> = 'Single valued.' : (if asoc # '' then '  Association ' : asoc : '.' else '')
+         case 1
+            lines<-1> = 'Single or multivalued is not said.' : (if asoc # '' then '  Association ' : asoc : '.' else '')
+      end case
+   end
+   lines<-1> = ''
+   rawl = 'Record:'
+   for rq = 1 to dcount(rec, @fm)
+      if rq <= DICT.SYS.INFO - 1 then
+         ct = rec<rq> ; gosub clean.text
+         rawl := ' ' : rq : '=' : (if ct = '' then '-' else ct)
+      end
+   next rq
+   call $tk_wrap(rawl, tw - 6, pieces)
+   for pq = 1 to dcount(pieces, @fm)
+      if pq <= 2 then lines<-1> = pieces<pq>
+   next pq
+   lines<-1> = 'E edits it in the IDE, T tries it on a record, C compiles it, D deletes it.'
+   return
+
+* In: ty.  Out: tyw, the type in words
+type.words:
+   begin case
+      case ty = 'D'
+         tyw = 'a data field (D)'
+      case ty = 'A'
+         tyw = 'an A-type item, which SD no longer reads (A)'
+      case ty = 'S'
+         tyw = 'an S-type item, which SD no longer reads (S)'
+      case ty = 'I'
+         tyw = 'a computed field (I-type)'
+      case ty = 'E'
+         tyw = 'an element of a data collection (E)'
+      case ty = 'L'
+         tyw = 'a link to another file (L)'
+      case ty = 'PH'
+         tyw = 'a phrase (PH)'
+      case ty = 'X'
+         tyw = 'text (X)'
+      case 1
+         tyw = 'an item of type "' : ty : '"'
+   end case
+   return
+
+* In: fs (a format such as 10R2).  Out: fdesc, the format in words
+describe.format:
+   fdesc = ''
+   fw = '' ; fq = 1
+   loop while fq <= len(fs) and index('0123456789', fs[fq, 1], 1) > 0 do
+      fw := fs[fq, 1]
+      fq += 1
+   repeat
+   fj = upcase(fs[fq, 1])
+   fq += 1
+   fd = ''
+   loop while fq <= len(fs) and index('0123456789', fs[fq, 1], 1) > 0 do
+      fd := fs[fq, 1]
+      fq += 1
+   repeat
+   fo = fs[fq, 99]
+   if fw = '' or index('LRTCU', fj, 1) = 0 or fj = '' then
+      fdesc = 'in the format "' : fs : '"'
+      return
+   end
+   begin case
+      case fj = 'L'
+         jw = 'left-justified'
+      case fj = 'R'
+         jw = 'right-justified'
+      case fj = 'T'
+         jw = 'as text, wrapped at word breaks'
+      case fj = 'C'
+         jw = 'centered'
+      case 1
+         jw = 'left-justified, not trimmed'
+   end case
+   fdesc = fw : ' characters wide, ' : jw
+   if fd # '' then fdesc := ', ' : fd : ' decimal places'
+   if fo # '' then fdesc := ', with the options "' : fo : '"'
+   return
+
+* In: cs (a conversion code).  Out: cdesc, what kind of conversion it is
+describe.conv:
+   c1 = upcase(cs[1, 1])
+   c2 = upcase(cs[1, 2])
+   begin case
+      case c2 = 'MD' or c2 = 'ML' or c2 = 'MR'
+         cdesc = 'a number with decimal places'
+      case c2 = 'MC'
+         cdesc = 'a change of the characters'
+      case c2 = 'MT'
+         cdesc = 'a time'
+      case c2 = 'MX' or c2 = 'MB' or c2 = 'MO'
+         cdesc = 'hexadecimal, binary or octal'
+      case c1 = 'D'
+         cdesc = 'a date'
+      case c1 = 'T'
+         cdesc = 'a look-up in another file'
+      case c1 = 'G'
+         cdesc = 'a group taken out of the value'
+      case c1 = 'U'
+         cdesc = 'a subroutine of the account'
+      case 1
+         cdesc = 'a conversion code'
+   end case
+   return
+
+* The index under the cursor in words
+describe.index:
+   xn = xnames<cx>
+   ma = xmeta<cx>
+   lines<-1> = xn : '  -  ' : (if ma<1, 1> = 'yes' then 'a built index: it finds records by the value of its field.' else 'defined but NOT BUILT: it finds nothing until B builds it from the records.')
+   begin case
+      case ma<1, 2> = 'I'
+         lines<-1> = 'It is on the computed item with the expression: ' : ma<1, 7>
+      case ma<1, 2> = 'A' or ma<1, 2> = 'S'
+         lines<-1> = 'It was made from an A or S item, which SD no longer reads, so a query never uses it.  Delete it (D); N makes one on a data or computed item.'
+      case 1
+         lines<-1> = 'It is on field ' : ma<1, 7> : ' of each record.'
+   end case
+   lines<-1> = 'Records with an empty value are ' : (if ma<1, 3> = 'yes' then 'indexed.' else 'left out.') : '  Case: ' : (if ma<1, 6> = 'any' then 'differences of case do not matter.' else 'exact.') : '  Keys are ordered as ' : (if ma<1, 5> = 'R' then 'right-justified values (numbers by value).' else 'left-justified text.')
+   lines<-1> = ''
+   lines<-1> = 'N makes an index of an item (create.index defines it, then build.index builds it).  B builds this one again.  D deletes it.  L lists it in full.'
+   lines<-1> = 'Build and delete need the file to themselves: if another session has it open, the verb says so and nothing changes.'
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                          ;* N and n are one key
+   begin case
+      case nm = 'up' or nm = 'down' or nm = 'pgup' or nm = 'pgdn' or nm = 'home' or nm = 'end'
+         gosub move.cursor
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.dict.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, pnames<pi>, std.r)
+      case nm = 'f5'
+         gosub reread
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         * S.176: F6 / Shift-F6 go round the boxes and the AI line: the Files view is one box; Items and Indices are two (Indices is where I and Tab used to take the focus)
+         rg.n = (if pi = 1 then 1 else 2)
+         rg.at = (if pi = 3 then 2 else 1)
+         call $tk_aipage('ring', ctx, keys, rg.at, nm : @fm : rg.n, ap)
+         msg = ap<2>
+         begin case
+            case rg.n = 1
+               null                                                        ;* one box: the line took or gave back the focus, nothing of the page moves
+            case ap<1> = 2 and pi = 2
+               gosub to.indices
+            case ap<1> = 1 and pi = 3
+               pi = 2
+               gosub draw.all
+         end case
+      case nm = 'ctrl-q'
+         done = 1
+      case pi = 1
+         gosub key.files
+      case pi = 2
+         gosub key.items
+      case 1
+         gosub key.indices
+   end case
+   return
+
+move.cursor:
+   gosub load.cur
+   begin case
+      case nm = 'up'
+         if cp > 1 then cp -= 1
+      case nm = 'down'
+         if cp < cn then cp += 1
+      case nm = 'pgup'
+         cp -= VIS
+         if cp < 1 then cp = 1
+      case nm = 'pgdn'
+         cp += VIS
+         if cp > cn then cp = cn
+      case nm = 'home'
+         cp = 1
+      case nm = 'end'
+         if cn > 0 then cp = cn
+   end case
+   gosub store.cur
+   gosub draw.all
+   return
+
+* F5: the pane's own data again
+reread:
+   begin case
+      case pi = 1
+         gosub read.files
+      case pi = 2
+         gosub read.items
+      case 1
+         gosub read.indices
+   end case
+   return
+
+key.files:
+   begin case
+      case nm = 'enter'
+         if nfs < 1 then return
+         fn = fnames<fshown<cf>>
+         gosub enter.file
+         gosub draw.all
+      case nm = 'f11' or nm = '/'
+         screen ask 'Part of a file name (empty shows every file)' width 40 value ai.arg title 'Filter' returning ft1 then got = 1 else got = 0
+         if not(got) then return
+         filtf = trim(ft1)
+         gosub apply.filter.f
+         cf = 1 ; tf = 0
+         gosub draw.all
+         msg = (if filtf = '' then 'every file' else nfs : ' with "' : filtf : '"')
+      case nm = 'esc'
+         if filtf # '' then
+            filtf = ''
+            gosub apply.filter.f
+            cf = 1 ; tf = 0
+            gosub draw.all
+         end
+   end case
+   return
+
+key.items:
+   begin case
+      case nm = 'esc'
+         if filti # '' then
+            filti = ''
+            gosub apply.filter.i
+            ci = 1 ; ti = 0
+            gosub draw.all
+         end
+      case nm = 'n'
+         gosub do.new
+      case nm = 'e'
+         gosub do.edit
+      case nm = 'd'
+         gosub do.delete
+      case nm = 'c'
+         gosub do.compile
+      case nm = 't'
+         gosub do.test
+      case nm = 'i'
+         gosub to.indices
+      case nm = 'f'
+         pi = 1
+         gosub read.files
+         gosub draw.all
+         msg = 'Enter opens the dictionary of the file under the cursor'
+      case nm = 'f11' or nm = '/'
+         screen ask 'Part of an item id (empty shows every item)' width 40 value ai.arg title 'Filter' returning ft1 then got = 1 else got = 0
+         if not(got) then return
+         filti = trim(ft1)
+         gosub apply.filter.i
+         ci = 1 ; ti = 0
+         gosub draw.all
+         msg = (if filti = '' then 'every item' else nis : ' with "' : filti : '"')
+   end case
+   return
+
+key.indices:
+   begin case
+      case nm = 'i' or nm = 'esc'
+         pi = 2
+         gosub draw.all
+      case nm = 'n'
+         gosub do.newindex
+      case nm = 'b'
+         gosub do.build
+      case nm = 'd'
+         gosub do.delindex
+      case nm = 'l'
+         gosub do.listindex
+   end case
+   return
+
+* I or Tab: the indices pane; the item under the cursor is the one offered when N asks for the field
+to.indices:
+   pre.item = ''
+   if nis >= 1 and ci >= 1 and ci <= nis then pre.item = iids<ishown<ci>>
+   pi = 3
+   cx = 1 ; tx = 0
+   gosub read.indices
+   gosub draw.all
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, pnames<pi>, mev, '', mr)                  ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, pnames<pi>, mev, ap)                         ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, lx + lw - 5, ly + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.dict.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= lx + 2 and mx <= lx + lw - 3 and my >= ly + 2 and my <= ly + 1 + VIS then
+         gosub load.cur
+         if tp + my - ly - 1 <= cn then
+            cp = tp + my - ly - 1
+            gosub store.cur
+            gosub draw.all
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- what the page can run
+
+* In: cw.  Out: okname.  A word the page may give to a command: letters a-z, digits, dot, dash and underscore only (what $tk_run lets through), at most 63 long
+check.word:
+   okname = (len(cw) > 0 and len(cw) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for cwq = 1 to len(cw)
+      if index(good, cw[cwq, 1], 1) = 0 then okname = @false
+   next cwq
+   if okname then
+      * a word the VOC holds as a keyword (all, no.query, detail, lptr, data, dict, local ...) is read by the verb as that keyword, whoever's item or index it is: DELETE DICT file ALL asks to
+      * delete every item and DELETE.INDEX file ALL removes every index, on a name the box and the typed name said was one
+      open 'VOC' to kwf then
+         read kwr from kwf, cw then
+            if upcase(kwr<1>[1, 1]) = 'K' then okname = @false
+         end
+         close kwf
+      end
+   end
+   return
+
+* The lines the verb printed, in one line for the status bar
+join.out:
+   out = change(change(change(out, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+   said = ''
+   for oi = 1 to dcount(out, @fm)
+      if trim(out<oi>) # '' then said := (if said = '' then '' else ' / ') : trim(out<oi>)
+   next oi
+   ct = said ; gosub clean.text ; said = ct[1, 220]               ;* the verb's words can echo an expression of the dictionary: no control character reaches the terminal
+   return
+
+* Run sent with the confirm box already answered Run: the verb's own words go to the status line
+run.sent:
+   call $tk_run(allow, sent, out, stat, rerr)
+   if rerr # '' then
+      msg = rerr
+      return
+   end
+   gosub join.out
+   msg = (if said # '' then said else sent : ' ran')
+   return
+
+* The terminal goes to a verb that shows a screen (the IDE) or prints a report (LIST.INDEX) and comes back: the page is taken again afterwards and what it lists is read again.  In: sent, keep (the
+* id or index name to put the cursor on again).  Only the two verbs of show.allow can get here.
+hand.over:
+   if index(' ' : show.allow : ' ', ' ' : field(sent, ' ', 1) : ' ', 1) = 0 then
+      msg = 'the page does not run ' : field(sent, ' ', 1)
+      return
+   end
+   call $tk_close(ctx)
+   execute sent
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.dict', '', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* S.97 stage 2: the new context has no AI line yet; the account may have changed it in the command
+   gosub declare.layout                                                ;* the new context is laid out for the window as it is now (it may have been resized in the command)
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub reread
+   if pi = 2 then
+      for q = 1 to nis
+         if iids<ishown<q>> = keep then ci = q
+      next q
+   end
+   if pi = 3 then
+      for q = 1 to nx
+         if upcase(xnames<q>) = upcase(keep) then cx = q
+      next q
+   end
+   gosub draw.all
+   msg = 'back from ' : sent
+   return
+
+* E: the item in the IDE (S.88 stage C; it was SED).  The IDE asks for no confirmation of its own; it locks the record while it is open, its save is the dictionary write the kernel's dict-edit rule guards, and the IDE asks the kernel itself
+do.edit:
+   if nis < 1 then return
+   iid = iids<ishown<ci>>
+   cw = iid
+   gosub check.word
+   if not(okname) then
+      msg = 'this id is not given to a command by the page (a character it does not pass, or an SD keyword): type  ide dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  ide dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   sent = 'ide dict ' : fn : ' ' : iid
+   keep = iid
+   gosub hand.over
+   return
+
+* D: DELETE DICT file item, after a box and the item's id typed
+do.delete:
+   if nis < 1 then return
+   iid = iids<ishown<ci>>
+   cw = iid
+   gosub check.word
+   if not(okname) then
+      msg = 'this id is not given to a command by the page (a character it does not pass, or an SD keyword): type  delete dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  delete dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   sent = 'delete dict ' : fn : ' ' : iid
+   lines = ''
+   lines<-1> = 'Deletes the item ' : iid : ' from the dictionary of ' : fn : '.  A query that names it stops working; the records of the file are not touched.  Nothing can bring it back; a backup can.'
+   gosub dict.access
+   if dref # '' then lines<-1> = dref : '  The delete is expected to be refused.'
+   call $tk_confirm(sent, lines, iid, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.items
+   gosub draw.all
+   return
+
+* C: COMPILE.DICT file item, after a box.  Only the type the verb compiles (I)
+do.compile:
+   if nis < 1 then return
+   iid = iids<ishown<ci>>
+   ma = imeta<ishown<ci>>
+   if index(' I ', ' ' : ma<1, 1> : ' ', 1) = 0 then
+      msg = 'only I items are compiled; ' : iid : ' is of type ' : ma<1, 1>
+      return
+   end
+   cw = iid
+   gosub check.word
+   if not(okname) then
+      msg = 'this id is not given to a command by the page (a character it does not pass, or an SD keyword): type  compile.dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  compile.dict ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   sent = 'compile.dict ' : fn : ' ' : iid
+   lines = ''
+   lines<-1> = 'Compiles the item ' : iid : ' and keeps the object code in its record.  A query compiles an item when it first uses it after a change, so this only finds a mistake in the expression earlier.'
+   call $tk_confirm(sent, lines, '', res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.items
+   gosub draw.all
+   return
+
+* In: fn.  Out: dpath (the path of the dictionary), dref (null when this session may change that dictionary, else the kernel's own reason).  Asked of the kernel, never tried.  The dictionary is
+* closed again at once.  The question is about the file that is open, not about its name, so a dictionary that is really the VOC or a program file is judged as that (voc-edit, bp-edit).
+dict.access:
+   dpath = ''
+   dref = ''
+   open 'DICT', fn to dv2 then
+      dpath = fileinfo(dv2, FL$PATH)
+      close dv2
+      if not(kernel(K$EDIT.OK, dpath)) then dref = edit_msg(kernel(K$EDIT.KIND, dpath))
+   end else
+      dref = fn : ' has no dictionary now.'
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- try an item on a record
+
+* T: the value an item gives for one record of the data file.  The page writes nothing: the item's compiled form is evaluated with ITYPE(), which is what the query processor does (so an item that calls a subroutine of the account runs it).
+do.test:
+   if nis < 1 then return
+   iid = iids<ishown<ci>>
+   rec = ''
+   open 'DICT', fn to dv then
+      read rec from dv, iid else rec = ''
+      close dv
+   end
+   if rec = '' then
+      msg = iid : ' is not in the dictionary now (F5 reads it again)'
+      return
+   end
+   gosub classify.item
+   if index(' D I ', ' ' : ty : ' ', 1) = 0 then
+      msg = 'only D and I items give a value for a record; ' : iid : ' is of type ' : ty
+      return
+   end
+   needs.obj = (ty = 'I')
+   if needs.obj and (rec<DICT.SYS.INFO> = '' or rec<DICT.ITYPE.OBJECT> = '') then
+      msg = iid : ' has not been compiled yet: C compiles it, then T can try it'
+      return
+   end
+   * S.88: the record is picked from the file's own list (read only, no lock), not typed; the picker puts the screen back under it
+   rid = ''
+   pnew = ''
+   call $tk_pickrec(ctx, 'record', fn, rid, pres, pnew)
+   if pres # 'ok' then
+      msg = 'nothing tried'
+      return
+   end
+   rid = trim(rid)
+   if rid = '' or len(rid) > 200 then
+      msg = 'give the id of a record'
+      return
+   end
+   lastrec = rid
+   drec = ''
+   got.rec = 0
+   open fn to df then
+      read drec from df, rid then got.rec = 1 else got.rec = 0
+      close df
+   end
+   if not(got.rec) then
+      msg = 'there is no record ' : rid : ' in ' : fn
+      return
+   end
+   @id = rid
+   @record = drec
+   val = ''
+   failed = ''
+   try
+      val = itype(rec)
+   catch sys
+      failed = @exception.data
+   end
+   if failed # '' then
+      msg = iid : ' could not be evaluated: ' : failed
+      return
+   end
+   body = ''
+   body<-1> = iid : ' (' : ty : ') on the record ' : rid : ' of ' : fn : ':'
+   body<-1> = ''
+   nv = dcount(val, @vm)
+   if val = '' then nv = 0
+   raw = ''
+   for vq = 1 to nv
+      one = val<1, vq>
+      one = change(one, @sm, ' \ ')
+      raw := (if vq = 1 then '' else ' | ') : one
+   next vq
+   ct = raw
+   ct = change(ct, @fm, ' / ')
+   gosub clean.text
+   raw = ct[1, 1500]
+   if nv = 0 then
+      body<-1> = 'The value is empty.'
+   end else
+      body<-1> = 'The value' : (if nv > 1 then ' (' : nv : ' values, between bars)' else '') : ':'
+      call $tk_wrap(raw, 100, pieces)
+      for pq = 1 to dcount(pieces, @fm)
+         if pq <= 8 then body<-1> = '  ' : pieces<pq>
+      next pq
+   end
+   * the value as a query prints it: the conversion first, then the format, when the format is one the page can read (a text format wraps lines and is not shown)
+   fs = ft2
+   fw = '' ; fj = ''
+   if fs # '' then gosub describe.format
+   fmt.ok = (fs # '' and fw # '' and fj # '' and index('LRCU', fj, 1) > 0)
+   if nv > 0 and (ty = 'D' or ty = 'I') and (cv # '' or fmt.ok) then
+      body<-1> = ''
+      body<-1> = 'As a query prints it' : (if cv # '' then ' (converted with ' : cv : ')' else '') : (if fmt.ok then ' (format ' : fs : ')' else '') : ', between bars:'
+      for vq = 1 to nv
+         one = val<1, vq>
+         one = change(one, @sm, ' \ ')
+         shown.v = one
+         try
+            if cv # '' then shown.v = oconv(one, cv)
+            if fmt.ok then shown.v = fmt(shown.v, fs)
+         catch sys
+            shown.v = '(' : @exception.data : ')'
+         end
+         ct = shown.v ; gosub clean.text
+         if vq <= 8 then body<-1> = '  |' : ct[1, 96] : '|'
+      next vq
+   end
+   screen msgbox body title 'Try an item' buttons '&Close' default 1
+   msg = iid : ' tried on ' : rid
+   gosub draw.all
+   return
+
+* ------------------------------------------------------------------------------------------------- a new item
+
+* N: the id, then the terminal goes to the IDE on a NEW item, which it shows as the dictionary form (S.90 stage 3, 1 Nov 26).  The page asks the id and checks it (the same rules as ever: lower
+* case, a plain word that no VOC keyword is, not taken, and the file's name a word the page may give to a command); the type, the fields, their checks, the write, the dict-edit gate and the
+* overwrite question are the IDE's and the form's.  THE PAGE WRITES NOTHING.
+do.new:
+   atl = 'New item'
+   aq = 'Id of the new item (a-z, 0-9, dot, dash and underscore)'
+   adef = ai.arg                                                 ;* S.97 stage 4: the id the AI proposed, offered here and checked as a typed one
+   aw = 40
+   vk = 'id'
+   vopt = 0
+   gosub ask.valid
+   if not(askok) then
+      msg = 'nothing written'
+      return
+   end
+   nid = askv
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  ide dict ' : fn : ' ' : nid : '  at the prompt'
+      return
+   end
+   sent = 'ide dict ' : fn : ' ' : nid
+   keep = nid
+   gosub hand.over
+   return
+
+* The answers to a question until one passes the test named by vk, or the person cancels.  In: aq, adef, aw, atl, vk, vlo, vhi, vopt (1 when an empty answer is allowed).  Out: askok, askv
+ask.valid:
+   askok = 0
+   etxt = ''
+   loop
+      screen ask aq : (if etxt = '' then '' else '   <-  ' : etxt) width aw value adef title atl returning askv then got = 1 else got = 0
+      if not(got) then return
+      askv = trim(askv)
+      gosub test.answer
+      if vok then
+         askok = 1
+         return
+      end
+      adef = askv
+   repeat
+   return
+
+* In: askv, vk, vlo, vhi, vopt.  Out: vok, etxt (what to say when the answer is no good); askv may be put in its normal form
+test.answer:
+   vok = 1
+   etxt = ''
+   if askv = '' then
+      if not(vopt) then
+         vok = 0
+         etxt = 'an answer is needed'
+      end
+      return
+   end
+   begin case
+      case vk = 'id'
+         askv = downcase(askv)
+         cw = askv
+         gosub check.word
+         vok = okname
+         etxt = 'a-z, 0-9, dot, dash, underscore only, starting with a letter or a digit, and not an SD keyword'
+*        26 Oct 26 (review, low): '.', '..' and an id that starts with a dash or a dot are read as options or directories by some verbs: a new id starts with a letter or a digit
+         if vok then
+            if index('abcdefghijklmnopqrstuvwxyz0123456789', askv[1, 1], 1) = 0 then vok = 0
+         end
+         if vok then
+            for xq = 1 to ni
+               if upcase(iids<xq>) = upcase(askv) then vok = 0
+            next xq
+            if not(vok) then etxt = 'that id is taken'
+         end
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the indices
+
+* N: an index on an item of the dictionary, picked from the list; CREATE.INDEX defines it and, when that worked, BUILD.INDEX builds it (one box, the second command in its text)
+do.newindex:
+   cand = ''
+   cdef = 1
+   for q = 1 to ni
+      ma = imeta<q>
+      if index(' D I ', ' ' : ma<1, 1> : ' ', 1) > 0 then
+         cw = iids<q>
+         gosub check.word
+         if okname then
+            cand<-1> = iids<q>
+            if iids<q> = pre.item then cdef = dcount(cand, @fm)
+         end
+      end
+   next q
+   if cand = '' then
+      msg = 'the dictionary has no data or I item with an id the page can give to a command: type create.index ' : fn : ' and the item at the prompt, then build.index'
+      return
+   end
+   pk = ''
+   cand.v = convert(@fm, @vm, cand)
+   screen pick cand.v title 'Index which item?' size 40,16 default cdef returning pk else pk = ''
+   iid = ''
+   if pk # '' and num(pk) then
+      if pk >= 1 and pk <= dcount(cand, @fm) then iid = cand<pk>
+   end
+   if iid = '' then
+      msg = 'nothing made'
+      return
+   end
+   for q = 1 to nx
+      if upcase(xnames<q>) = upcase(iid) then
+         msg = iid : ' already has an index (' : xnames<q> : ')'
+         return
+      end
+   next q
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  create.index ' : fn : ' ' : iid : '  and build.index ' : fn : ' ' : iid : '  at the prompt'
+      return
+   end
+   sent = 'create.index ' : fn : ' ' : iid
+   lines = ''
+   lines<-1> = 'Defines an index on ' : iid : ', then runs  build.index ' : fn : ' ' : iid : '  to build it from the records now.  An index that is not built finds nothing.'
+   lines<-1> = 'The build needs the file to itself: if another session has it open the verb says so, the index stays defined and B builds it later.'
+   call $tk_confirm(sent, lines, '', res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   if rerr = '' and stat = 0 then
+      sent = 'build.index ' : fn : ' ' : iid
+      gosub run.sent
+   end
+   gosub read.indices
+   for q = 1 to nx
+      if upcase(xnames<q>) = upcase(iid) then cx = q
+   next q
+   gosub draw.all
+   return
+
+* B: BUILD.INDEX file index
+do.build:
+   if nx < 1 then return
+   xn = downcase(xnames<cx>)                                  ;* the verbs find an index whatever its case (an old index may have been made in capitals)
+   cw = xn
+   gosub check.word
+   if not(okname) then
+      msg = 'this index name is not given to a command by the page (a character it does not pass, or an SD keyword): type  build.index ' : fn : ' ' : xn : '  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  build.index ' : fn : ' ' : xn : '  at the prompt'
+      return
+   end
+   sent = 'build.index ' : fn : ' ' : xn
+   lines = ''
+   lines<-1> = 'Throws the index ' : xn : ' away and makes it again from the records of ' : fn : '.  The records are not touched.'
+   lines<-1> = 'The file must not be open in another session: the verb says so and changes nothing if it is.'
+   call $tk_confirm(sent, lines, '', res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.indices
+   gosub draw.all
+   return
+
+* D: DELETE.INDEX file index, after a box and the index name typed
+do.delindex:
+   if nx < 1 then return
+   xn = downcase(xnames<cx>)
+   cw = xn
+   gosub check.word
+   if not(okname) then
+      msg = 'this index name is not given to a command by the page (a character it does not pass, or an SD keyword): type  delete.index ' : fn : ' ' : xn : '  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  delete.index ' : fn : ' ' : xn : '  at the prompt'
+      return
+   end
+   sent = 'delete.index ' : fn : ' ' : xn
+   lines = ''
+   lines<-1> = 'Deletes the index ' : xn : ' of ' : fn : '.  The records are not touched; queries on that field read every record again until an index is made.'
+   lines<-1> = 'The file must not be open in another session: the verb says so and changes nothing if it is.'
+   call $tk_confirm(sent, lines, xn, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.indices
+   gosub draw.all
+   return
+
+* L: LIST.INDEX file index detail, printed by the verb on the terminal that is handed to it
+do.listindex:
+   if nx < 1 then return
+   xn = downcase(xnames<cx>)
+   cw = xn
+   gosub check.word
+   if not(okname) then
+      msg = 'this index name is not given to a command by the page (a character it does not pass, or an SD keyword): type  list.index ' : fn : ' ' : xn : '  detail  at the prompt'
+      return
+   end
+   cw = fn
+   gosub check.word
+   if not(okname) then
+      msg = 'this file name is not given to a command by the page (a character it does not pass, or an SD keyword): type  list.index ' : fn : ' ' : xn : '  detail  at the prompt'
+      return
+   end
+   sent = 'list.index ' : fn : ' ' : xn : ' detail'
+   keep = xn
+   gosub hand.over
+   return
+
+end
+
+* END-CODE

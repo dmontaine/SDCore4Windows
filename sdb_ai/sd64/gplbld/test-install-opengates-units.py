@@ -39,10 +39,10 @@ KEYS = os.path.join(SD64, "sdsys", "syscom", "keys.h")
 
 # modifya on-words that are NOT access gates for this purpose, and why (see the header)
 NOT_GATES = {"SHARED-READ-ON"}
-EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "net-on", "shared-write-on", "files-on", "files-write-on",
-                "files-admin-on", "pins-on"]
+EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "recovery-on", "net-on", "shared-write-on", "files-on", "files-write-on",
+                "files-admin-on", "pins-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9)
 EXPECT_FIELDS = {7: "ACC$SH", 8: "ACC$OS.EXEC", 9: "ACC$SD.ACCOUNTS", 10: "ACC$VOC.EDIT", 11: "ACC$BP.EDIT", 12: "ACC$DICT.EDIT",
-                 14: "ACC$SHARED.WRITE", 15: "ACC$NET", 18: "ACC$PINS"}
+                 14: "ACC$SHARED.WRITE", 15: "ACC$NET", 18: "ACC$PINS", 19: "ACC$RECOVERY"}
 
 
 def read(p):
@@ -83,8 +83,8 @@ function Get-LocalGroupMember {
 
 
 def lines_for(fields):
-    """A register record: one line per field, 1..18; fields maps number -> text."""
-    return "\r\n".join(fields.get(n, "x%d" % n) for n in range(1, 19)) + "\r\n"
+    """A register record: one line per field, 1..19; fields maps number -> text."""
+    return "\r\n".join(fields.get(n, "x%d" % n) for n in range(1, 20)) + "\r\n"
 
 
 def scenario(name, record_fields, members, groups_throw=False, record_missing=False):
@@ -92,7 +92,7 @@ def scenario(name, record_fields, members, groups_throw=False, record_missing=Fa
     return (name, record_fields, members, groups_throw, rec)
 
 
-ALL_YES = {n: "yes" for n in (7, 8, 9, 10, 11, 12, 14, 15, 18)}
+ALL_YES = {n: "yes" for n in (7, 8, 9, 10, 11, 12, 14, 15, 18, 19)}
 BOTH_GROUPS = {"sdssh": ["PC\\Don"], "sdapi": ["PC\\Don"], "sdfiles": ["PC\\Don"], "sdfileswrite": ["PC\\Don"], "sdfilesadmin": ["PC\\Don"]}
 SCENARIOS = [
     scenario("all open (member names carry a domain and a different case)", ALL_YES, BOTH_GROUPS),
@@ -120,7 +120,7 @@ EXPECT = {
     "not in sdapi (both is half done)": (False, ["both"]),
     "in neither route group (both is named once)": (False, ["both"]),
     "groups unreadable": (False, ["both", "files-on", "files-write-on", "files-admin-on"]),
-    "record unreadable": (False, ["sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "shared-write-on", "net-on", "pins-on"]),
+    "record unreadable": (False, ["sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "shared-write-on", "net-on", "pins-on", "recovery-on"]),
 }
 
 
@@ -177,7 +177,7 @@ def checks(att, iss, mod, keys):
     kn = keys_numbers(keys)
     fm = re.search(r"\$GateFields = @\((.*)\)\s*$", att, re.M)
     fields = {int(a): b for a, b in re.findall(r"@\((\d+),\s*'([a-z-]+)'\)", fm.group(1))} if fm else {}
-    want_fields = {n: {7: "sh-on", 8: "os-on", 9: "sd-on", 10: "voc-on", 11: "bp-on", 12: "dict-on", 14: "shared-write-on", 15: "net-on", 18: "pins-on"}[n] for n in EXPECT_FIELDS}
+    want_fields = {n: {7: "sh-on", 8: "os-on", 9: "sd-on", 10: "voc-on", 11: "bp-on", 12: "dict-on", 14: "shared-write-on", 15: "net-on", 18: "pins-on", 19: "recovery-on"}[n] for n in EXPECT_FIELDS}
     row("S4 the register fields read are the ACC$ numbers of keys.h", fields == want_fields and all(kn.get(EXPECT_FIELDS[n]) == n for n in EXPECT_FIELDS),
         "fields %s, keys %s" % (fields, {EXPECT_FIELDS[n]: kn.get(EXPECT_FIELDS[n]) for n in EXPECT_FIELDS}))
     gm = re.search(r"\$GateGroups = \[ordered\]@\{([^}]*)\}", att)

@@ -1,0 +1,608 @@
+* TOOL_BACKUPS
+* Backups and restores on one screen: the saved backup directory, the archives in it with what each holds, who is signed on (a backup and a restore both need everyone else out), and
+* BACKUP.ACCOUNT, RESTORE.ACCOUNT and SET.BACKUP.DIRECTORY behind a box (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A8).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux e3490a7f; two box texts no longer say "the root helper": SDSYS packs and saves BACKUPDIR itself here, elevated.
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): drawn exactly as before at 140 by 43, and in a larger window the archive list takes the extra rows,
+*               every box and text is as wide as the window, and the manifest lists as many accounts as the box has rows. The rows, widths, hit tests and the [?] button are counted from the
+*               pane rectangles; the "... and N more accounts" line stands on the box's last row and counts from the rows the box has (8 accounts fit at 140 by 43).
+* 25 Oct 26 dm  New.
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; refresh is the one action offered to the model.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.BACKUPS      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least).  The top box names the saved backup directory (SET.BACKUP.DIRECTORY's, read through !acc_os_bakdir),
+*   says how many archives it holds, and says whether anyone else is signed on: BACKUP.ACCOUNT and RESTORE.ACCOUNT both run only when every other session has logged out, and LOGIN refuses
+*   new ones while either runs, so the page lists the other sessions (!acc_hold CHECK) and says plainly that the keys will be refused while they are there.  The list is the archives of the
+*   directory (the files SD-host-accounts-yyyymmdd-hhmmss.zip): when it was made, by which computer, for how many accounts and how large.  The box at the foot shows the manifest of the one
+*   under the cursor, read without unpacking anything (!acc_archive MANIFEST): the product, the SD version, the host, and each account with its files, bytes and directories.
+*
+*   WHAT IT RUNS.  Four commands, each through the box that shows the sentence and what it does, answered Run or Cancel (Cancel is what Enter chooses), and run through $tk_runx, which allows
+*   only the four first words below; the verbs ask for the administrator themselves and write their own audit lines:
+*     B   BACKUP.ACCOUNT ALL                       every account to the saved directory
+*     A   BACKUP.ACCOUNT name [name ...]            the accounts you name (a question asks for the names; each must be a plain account name)
+*     R   RESTORE.ACCOUNT archive ALL NO.QUERY      the archive under the cursor, EVERY account it holds, replacing the accounts of those names (the box lists them, from the manifest, and
+*                                                  needs the word RESTORE typed; NO.QUERY is given because the box has asked and the verb's own question cannot be answered through here)
+*     D   SET.BACKUP.DIRECTORY path                 the directory backups go to (a question asks for the path; the verb proves it writable and saves it)
+*   It never runs one while another session is signed on (it says so instead of showing the box).  A backup and a restore need root for the packing and the placing; the page cannot make
+*   them work where they cannot, and shows the verb's own words when it does not.
+*
+*   Keys: Up, Down, PgUp, PgDn, Home, End; B, A, R, D as above; F5 reads the directory, the archives and the sessions again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_backups
+$catalog $tool_backups
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+$include accbak.h
+
+   prompt ''
+
+   allow = 'backup.account restore.account set.backup.directory'   ;* the commands this page may run
+   call $tk_open('tool.backups', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.backups')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'b', 'backup all', 'backupall', '', 1)
+   call $tk_keys('add', keys, 'a', 'backup some', 'backupsome', '', 1)
+   call $tk_keys('add', keys, 'r', 'restore', 'restore', '', 1)
+   call $tk_keys('add', keys, 'd', 'directory', 'directory', '', 1)
+   call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U3: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'backupall', '&Backups', '&Back up all accounts', '', '')
+   call $tk_keys('menu', keys, 'backupsome', '&Backups', 'Back up &some accounts', '', '')
+   call $tk_keys('menu', keys, 'restore', '&Backups', '&Restore the archive', '', '')
+   call $tk_keys('menu', keys, 'directory', '&Backups', '&Directory of the archives', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only refresh (an administrator's page: a backup, a restore and the directory are not offered without the
+   * owner's word); a proposal is carried out by the page's own key.  Where the AI is not usable nothing here adds a key, a row or a line.
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   gosub lay.declare                                            ;* the panes; VA (the archive rows on the screen) and DV (the manifest rows) come from them
+   ha = fmt('Made', '21L') : fmt('Size', '12R') : '  ' : fmt('Accounts', '9L') : fmt('Product', '12L') : 'File'
+
+   bdir = '' ; bderr = '' ; nark = 0 ; others = '' ; hold.err = ''
+   anm = '' ; asize = '' ; awhen = '' ; aacc = '' ; aprod = ''
+   ci = 1 ; ta = 0
+   gen = 0
+   done = 0
+   msg = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, 'Backups', '', '', mr)            ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, 'Backups', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'Backups', nm, ao)           ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'Backups', nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lay.chg)
+            gosub lay.get
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the machine says
+
+* The saved directory, its archives (newest first), the manifest facts of each, and who else is signed on; the cursor goes back to the archive it was on
+read.all:
+   sel.a = ''
+   if nark > 0 and ci >= 1 and ci <= nark then sel.a = anm<ci>
+   call !acc_os_bakdir('GET', bdir, bderr)
+   anm = '' ; asize = '' ; awhen = '' ; aacc = '' ; aprod = '' ; nark = 0
+   if bderr = '' and bdir # '' then
+      if ospath(bdir, OS$EXISTS) then gosub read.archives
+   end
+   call !acc_hold(ACCBAK$CHECK, others, hold.err)
+   if ci > nark then ci = nark
+   if ci < 1 then ci = 1
+   if sel.a # '' then
+      for i = 1 to nark
+         if anm<i> = sel.a then
+            ci = i
+            exit
+         end
+      next i
+   end
+   return
+
+* Every SD-*.zip of the directory, newest first by the time in its name; for each its size, when it was made, and the manifest's product, host and account count
+read.archives:
+   openpath bdir to df else return
+   select df to 9
+   names = ''
+   loop
+      readnext nm from 9 else exit
+      if nm[1, 3] = 'SD-' and nm[len(nm) - 3, 4] = '.zip' and len(nm) > 20 then names<-1> = nm
+   repeat
+   close df
+   if names = '' then return
+   stamps = '' ; byname = ''
+   for i = 1 to dcount(names, @fm)
+      nm = names<i>
+      st = nm[len(nm) - 18, 15]
+      locate st in stamps<1> by 'DL' setting p else null
+      ins st before stamps<p>
+      ins nm before byname<p>
+   next i
+   for i = 1 to dcount(byname, @fm)
+      nm = byname<i>
+      stamp = stamps<i>
+      nark += 1
+      anm<nark> = nm
+      info = ospath(bdir : @ds : nm, OS$INFO)
+      asize<nark> = info<6>
+      awhen<nark> = stamp[1, 4] : '-' : stamp[5, 2] : '-' : stamp[7, 2] : ' ' : stamp[10, 2] : ':' : stamp[12, 2] : ':' : stamp[14, 2]
+      call !acc_archive('MANIFEST', bdir : @ds : nm, '', mtext, merr)
+      aacc<nark> = '?' ; aprod<nark> = '?'
+      if merr = '' then
+         for l = 1 to dcount(mtext, @fm)
+            ml = mtext<l>
+            if ml[1, 10] = 'accounts: ' then aacc<nark> = ml[11, 20]
+            if ml[1, 9] = 'product: ' then aprod<nark> = ml[10, 40]
+         next l
+      end
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- the layout (S.88 L2)
+
+* The page's three boxes as panes of $tk_layout: each size is the box drawn at 140 by 43 (the body is 138 by 39), so at that size nothing moves; in a larger window the archive list
+* stretches (a table shows more rows) and every pane is as wide as the body.
+lay.declare:
+   d = ''
+   d<1> = 'top' : @vm : 1 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<2> = 'list' : @vm : 2 : @vm : 1 : @vm : 20 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<3> = 'detail' : @vm : 3 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, lay.err)
+   gosub lay.get
+   return
+
+* The rectangles of the three panes, and what is counted from them: tw the width of a text line inside a box (134 at 140 by 43), VA the archive rows, DV the manifest rows
+lay.get:
+   lay.id = 'top'
+   gosub lay.rect
+   top.x = lay.x ; top.y = lay.y ; top.w = lay.w ; top.h = lay.h
+   lay.id = 'list'
+   gosub lay.rect
+   lst.x = lay.x ; lst.y = lay.y ; lst.w = lay.w ; lst.h = lay.h
+   lay.id = 'detail'
+   gosub lay.rect
+   det.x = lay.x ; det.y = lay.y ; det.w = lay.w ; det.h = lay.h
+   body.y = ctx<TK.C.YBODY>
+   tx = lst.x + 2
+   tw = lst.w - 4
+   mk.x = top.x + top.w - 5                                     ;* the [?] button, at the right end of the first row of the top box
+   mk.y = top.y + 1
+   VA = lst.h - 3
+   DV = det.h - 2
+   return
+
+lay.rect:
+   call $tk_layout('pane', ctx, lay.id, lay.r)
+   lay.x = lay.r<1, 1>
+   lay.y = lay.r<1, 2>
+   lay.w = lay.r<1, 3>
+   lay.h = lay.r<1, 4>
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,body.y size cw2,chh
+   screen box at top.x,top.y size top.w,top.h title 'Backups'
+   screen box at lst.x,lst.y size lst.w,lst.h title 'Archives'
+   screen box at det.x,det.y size det.w,det.h title 'The archive under the cursor'
+   gosub draw.top
+   gosub redraw
+   return
+
+draw.top:
+   if bderr # '' then
+      s = 'The saved backup directory could not be read.'
+   end else
+      if bdir = '' then
+         s = 'No backup directory has been saved. D saves one (SET.BACKUP.DIRECTORY).'
+      end else
+         s = 'Directory: ' : bdir : '   Archives: ' : nark
+      end
+   end
+   screen text s[1, tw - 6] at tx,top.y + 1 attr 'bold' width tw - 6                  ;* 6 less than the other lines so that the [?] is clear
+   no = dcount(others, @fm)
+   if hold.err = '' or no = 0 then
+      s = 'No other session is signed on: a backup or a restore can start.'
+   end else
+      s = no : ' other session' : (if no = 1 then ' is' else 's are') : ' signed on, so B, A and R are refused until they log out:'
+      for k = 1 to no
+         if k <= 4 then s := ' ' : others<k, 2> : ' (user ' : others<k, 1> : ')'
+      next k
+      if no > 4 then s := ' ...'
+   end
+   screen text s[1, tw] at tx,top.y + 2 width tw
+   screen text 'A backup and a restore both run only when every other session has logged out, and LOGIN refuses new ones while they run.' at tx,top.y + 3 width tw
+   screen text 'B backs every account up   A some   R restores the archive under the cursor   D sets the directory   F5 reads again' at tx,top.y + 4 width tw
+   call $tk_help('mark', mk.x, mk.y, 0, 0)
+   return
+
+redraw:
+   gosub draw.list
+   gosub draw.detail
+   return
+
+draw.list:
+   screen text ha at tx,lst.y + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VA then ta = ci - VA
+   if ta < 0 then ta = 0
+   for r = 1 to VA
+      kk = ta + r
+      s = ''
+      if kk <= nark then
+         s = fmt(awhen<kk>, '21L') : fmt(asize<kk>, '12R') : '  ' : fmt(aacc<kk>[1, 8], '9L') : fmt(aprod<kk>[1, 11], '12L') : anm<kk>
+      end
+      rat = 'normal'
+      if kk = ci and kk <= nark then rat = 'highlight'
+      screen text s[1, tw] at tx,lst.y + 1 + r attr rat width tw
+   next r
+   return
+
+* The manifest of the archive under the cursor, one line each: the facts, then the accounts with their counts
+draw.detail:
+   for r = 1 to DV
+      screen text '' at tx,det.y + r width tw
+   next r
+   if nark = 0 or ci < 1 or ci > nark then
+      s = (if bdir = '' then 'There is no directory to look in.' else 'The directory holds no archive.')
+      screen text s at tx,det.y + 1 width tw
+      return
+   end
+   call !acc_archive('MANIFEST', bdir : @ds : anm<ci>, '', mtext, merr)
+   if merr # '' then
+      s = 'The manifest of this archive cannot be read: ' : merr<1, 1>
+      screen text s at tx,det.y + 1 width tw
+      return
+   end
+   lines = ''
+   facts = ''
+   accts = ''
+   ac.f = '' ; ac.b = '' ; ac.d = ''
+   cur = ''
+   na = 0
+   for l = 1 to dcount(mtext, @fm)
+      ml = mtext<l>
+      if ml[1, 9] = '[account ' then
+         cur = ml[10, len(ml) - 10]
+         na += 1
+         accts<na> = cur
+      end else
+         if cur = '' then
+            if ml # '' then facts<-1> = ml
+         end else
+            if ml[1, 7] = 'files: ' then ac.f<na> = ml[8, 20]
+            if ml[1, 7] = 'bytes: ' then ac.b<na> = ml[8, 20]
+            if ml[1, 6] = 'dirs: ' then ac.d<na> = ml[7, 20]
+         end
+      end
+   next l
+   s = ''
+   for k = 1 to dcount(facts, @fm)
+      ft = facts<k>
+      if ft[1, 8] # 'format: ' and ft[1, 8] # 'accounts' then s := (if s = '' then '' else '   ') : ft
+   next k
+   lines<-1> = s
+   lines<-1> = ''
+   lines<-1> = fmt('Account', '28L') : fmt('Files', '10R') : fmt('Bytes', '16R') : fmt('Directories', '14R')
+   for k = 1 to dcount(accts, @fm)
+      lines<-1> = fmt(accts<k>[1, 27], '28L') : fmt(ac.f<k>, '10R') : fmt(ac.b<k>, '16R') : fmt(ac.d<k>, '14R')
+   next k
+   for r = 1 to dcount(lines, @fm)
+      if r <= DV then
+         lr = lines<r>
+         screen text lr[1, tw] at tx,det.y + r width tw
+      end
+   next r
+   if dcount(lines, @fm) > DV then
+      s = '... and ' : na - (DV - 4) : ' more accounts'                ;* three lines (the facts, a blank, the heading) come before the accounts, and this line stands on the last row, in place of one
+      screen text s at tx,det.y + DV width tw
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         if ci > 1 then ci -= 1
+         gosub redraw
+      case nm = 'down'
+         if ci < nark then ci += 1
+         gosub redraw
+      case nm = 'pgup'
+         ci -= VA
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VA
+         if ci > nark then ci = nark
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         ci = nark
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'b'
+         gosub do.backup.all
+      case nm = 'a'
+         gosub do.backup.some
+      case nm = 'r'
+         gosub do.restore
+      case nm = 'd'
+         gosub do.directory
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'Backups', std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.backups.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'Backups', mev, '', mr)                   ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'Backups', mev, ap)                          ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, mk.x, mk.y, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.backups.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= tx and mx <= tx + tw - 1 and my >= lst.y + 2 and my <= lst.y + 1 + VA then
+         if ta + my - (lst.y + 1) <= nark then
+            ci = ta + my - (lst.y + 1)
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the commands
+
+* sent and el are the sentence and its explanation, typed is null or the word to type; the box is shown, the command run when Run was chosen, everything read again, and the verb's words shown
+confirm.and.run:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      call $tk_runx(allow, sent, out, stat, err)
+      gosub read.all
+      gosub draw.all
+      if err # '' then
+         msg = err
+      end else
+         msg = sent[1, 60] : ' ran (status ' : stat : ')'
+         lastl = ''
+         for k = 1 to dcount(out, @fm)
+            if trim(out<k>) # '' then lastl = trim(out<k>)
+         next k
+         if lastl # '' then msg = msg : ': ' : lastl
+      end
+   end else
+      msg = cmsg
+   end
+   return
+
+* The other sessions must be gone: if any are left say so (the verb would refuse too) and show no box.  others_ok is 1 when the page may go on.
+check.alone:
+   others_ok = 1
+   call !acc_hold(ACCBAK$CHECK, others, hold.err)
+   if hold.err # '' and dcount(others, @fm) > 0 then
+      others_ok = 0
+      msg = dcount(others, @fm) : ' other session(s) are signed on; the verb would refuse until they log out'
+      gosub draw.top
+   end
+   return
+
+do.backup.all:
+   gosub check.alone
+   if not(others_ok) then return
+   if bdir = '' then
+      msg = 'no backup directory has been saved: D saves one first'
+      return
+   end
+   sent = 'backup.account all'
+   typed = ''
+   el = ''
+   el<-1> = 'Every account is packed into one archive in ' : bdir : ', named SD-host-all-date-time.zip. SDSYS is not backed up and no password or credential is in it.'
+   el<-1> = 'Everyone else must be logged out, and LOGIN refuses new sessions while it runs. The packing is done by SDSYS, which runs elevated.'
+   gosub confirm.and.run
+   return
+
+do.backup.some:
+   gosub check.alone
+   if not(others_ok) then return
+   if bdir = '' then
+      msg = 'no backup directory has been saved: D saves one first'
+      return
+   end
+   screen ask 'Accounts to back up: names separated by spaces' width 80 value '' title 'Backup some accounts' returning names.in else return
+   names.in = trim(names.in)
+   if names.in = '' then return
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   ok = 1
+   for w = 1 to dcount(names.in, ' ')
+      wd = field(names.in, ' ', w)
+      for q = 1 to len(wd)
+         if index(good, wd[q, 1], 1) = 0 then ok = 0
+      next q
+   next w
+   if not(ok) or dcount(names.in, ' ') > 20 then
+      msg = 'an account name has only a-z, 0-9, dot, dash and underscore; up to 20 names'
+      return
+   end
+   sent = 'backup.account ' : names.in
+   typed = ''
+   el = ''
+   el<-1> = 'The accounts named are packed into one archive in ' : bdir : '. A name that is not an account is refused by the verb before anything is written.'
+   el<-1> = 'Everyone else must be logged out, and LOGIN refuses new sessions while it runs.'
+   gosub confirm.and.run
+   return
+
+* The archive under the cursor, every account it holds; the box lists the accounts from its manifest and wants RESTORE typed
+do.restore:
+   gosub check.alone
+   if not(others_ok) then return
+   if nark = 0 or ci < 1 or ci > nark then
+      msg = 'there is no archive to restore'
+      return
+   end
+   call !acc_archive('MANIFEST', bdir : @ds : anm<ci>, '', mtext, merr)
+   if merr # '' then
+      msg = 'the manifest of this archive cannot be read'
+      return
+   end
+   accts = ''
+   for l = 1 to dcount(mtext, @fm)
+      ml = mtext<l>
+      if ml[1, 9] = '[account ' then accts<-1> = ml[10, len(ml) - 10]
+   next l
+   * a restore that would MAKE an account asks for its password, which cannot be typed through a page: every account of the archive must be registered here already
+   openpath @sdsys : @ds : 'accounts' to reg.f else
+      msg = 'the account register cannot be read'
+      return
+   end
+   select reg.f to 9
+   regids = ''
+   loop
+      readnext rid from 9 else exit
+      regids<-1> = rid
+   repeat
+   close reg.f
+   missing = ''
+   for k = 1 to dcount(accts, @fm)
+      if index(@fm : regids : @fm, @fm : accts<k> : @fm, 1) = 0 then missing<-1> = accts<k>
+   next k
+   if missing # '' then
+      msg = 'the archive holds accounts that are not registered here (' : convert(@fm, ' ', missing) : '): restore it at the prompt, where a new account can be given its password'
+      return
+   end
+   sent = 'restore.account ' : anm<ci> : ' all no.query'
+   typed = 'RESTORE'
+   el = ''
+   el<-1> = 'EVERY account in this archive replaces the account of the same name: ' : convert(@fm, ' ', accts) : '.'
+   el<-1> = 'What an account holds now is lost. The archive is unpacked and checked against its manifest before anything is changed.'
+   el<-1> = 'Everyone else must be logged out, and LOGIN refuses new sessions while it runs. no.query is given because this box has asked.'
+   gosub confirm.and.run
+   return
+
+do.directory:
+   cv = bdir
+   screen ask 'Backup directory: an absolute path (it is made if it can be, and proved writable)' width 100 value cv title 'Backup directory' returning nd else return
+   nd = trim(nd)
+   if nd = '' or nd[1, 1] # '/' or len(nd) > 200 or index(nd, ' ', 1) > 0 then
+      msg = 'give an absolute path with no space in it'
+      return
+   end
+   sent = 'set.backup.directory ' : nd
+   typed = ''
+   el = ''
+   el<-1> = 'Backups and restores will use this directory from now on. The verb makes it if it can, proves SDSYS can put a file in it, and saves the one line BACKUPDIR in sd.conf.'
+   gosub confirm.and.run
+   return
+
+end
+
+* END-CODE

@@ -112,6 +112,11 @@ RESERVED = {
 #   13000-13999  SHARED NEW (agreed 1 Oct 2026, mail 2026-10-01T1115): messages of code BOTH ports
 #                take byte for byte - the S.50 / RELEASE_1.1 116 verbs first.  LINUX allocates in it
 #                and ships the files; this port copies them and never allocates there itself.
+#   14000-14999  LINUX'S SECOND BLOCK (agreed 3 Nov 2026, mail T0410): never allocated here, and no file here.
+#   15000-15999  WINDOWS' SECOND BLOCK (same mail; taught to this guard 10 Nov 2026 with the TUI carry): Linux 14000-14994
+#                land at +1000 (15000-15994), and Linux 11995-11999, which the +1005 rule would push into the shared
+#                block, at 15995-15999 (agreed 8 Nov, mail 2026-11-08T0830; Linux reserves 14995-14999 for it, edf1e7d6).
+#                Anything at 16000 or above is nobody's block and is refused.
 #
 # The ranges below are what the guard can see: nothing in Linux's block, nothing above the shared
 # block, and the shared block's first copied id present.  It cannot see whether a legacy id is
@@ -120,6 +125,8 @@ RESERVED = {
 LINUX_BLOCK = (11000, 11999)
 WINDOWS_BLOCK = (12000, 12999)
 SHARED_NEW_BLOCK = (13000, 13999)
+LINUX_SECOND_BLOCK = (14000, 14999)
+WINDOWS_SECOND_BLOCK = (15000, 15999)
 
 # ***A COLLISION IS AN ID LIVE IN BOTH TREES WITH DIFFERENT TEXT, WHICH IS A
 # DIFFERENT FACT FROM A RESERVATION AND MUST NOT BE FILED AS ONE***: a reserved
@@ -237,16 +244,24 @@ in_linux_block = sorted(i for i in present if LINUX_BLOCK[0] <= int(i) <= LINUX_
 check("nothing in LINUX'S block (%d-%d) has a record here" % LINUX_BLOCK,
       in_linux_block == [],
       "present: " + ", ".join(in_linux_block) + " - that range is the other port's to allocate from")
-beyond = sorted(i for i in present if int(i) > SHARED_NEW_BLOCK[1])
-check("nothing above the shared block (>%d) has a record here" % SHARED_NEW_BLOCK[1],
+def unowned(ids):
+    """Ids above the shared block that are not in this port's second block: Linux's second block, or nobody's (16000 up)."""
+    return sorted(i for i in ids if int(i) > SHARED_NEW_BLOCK[1] and not (WINDOWS_SECOND_BLOCK[0] <= int(i) <= WINDOWS_SECOND_BLOCK[1]))
+
+
+beyond = unowned(present)
+check("nothing above the shared block (>%d) has a record here, but this port's second block (%d-%d)" % ((SHARED_NEW_BLOCK[1],) + WINDOWS_SECOND_BLOCK),
       beyond == [],
-      "present: " + ", ".join(beyond) + " - an id past the shared block has no owner under the convention")
+      "present: " + ", ".join(beyond) + " - an id in Linux's second block or at 16000 up has no owner here under the convention")
+check("CONTROL: the second block holds the first carried message (15000, Linux 14000)",
+      "15000" in present,
+      "15000 is gone - the toolkit's finder (Linux 1287183d) names it")
+check("MUTANT: a planted id in Linux's second block (14000) and one at 16000 are caught, one in this port's second block (15500) is not",
+      unowned(present | {"14000", "16000", "15500"}) == ["14000", "16000"],
+      "the above-the-block check would miss one, or refuse this port's own block")
 check("CONTROL: the shared block holds the first copied shared message (13000)",
       "13000" in present,
       "13000 is gone - BACKUP.ACCOUNT, RESTORE.ACCOUNT and SETTINGS.REPORT name 13000-13037")
-check("MUTANT: a planted id above the shared block (14000) is caught",
-      sorted(i for i in (present | {"14000"}) if int(i) > SHARED_NEW_BLOCK[1]) == ["14000"],
-      "the above-the-block check would miss it")
 in_windows_block = sorted(i for i in present if WINDOWS_BLOCK[0] <= int(i) <= WINDOWS_BLOCK[1])
 check("CONTROL: the Windows block holds this port's first allocation (12000)",
       "12000" in in_windows_block,

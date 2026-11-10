@@ -1,0 +1,4 @@
+The Vocabulary tile
+29c-sd-tcl-the-development-tools
+Starts tool.voc, the page for the vocabulary of the account: its verbs, pointers and other entries. It runs the command exactly as the person would have typed it, so it adds no access: changing the vocabulary still needs the account's voc-on gate.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.voc at a prompt they have; this setting only changes the home screen.

@@ -1,0 +1,4 @@
+The Bulk update tile
+29c-sd-tcl-the-development-tools
+Starts tool.bulk, the page that changes many records of one data file at once, with safeguards before anything is written. It runs the command exactly as the person would have typed it, so it adds no access.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.bulk at a prompt they have; this setting only changes the home screen.

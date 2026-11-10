@@ -1,0 +1,1792 @@
+* TOOL_BULK
+* A bulk update of the records of one data file of the account: choose the file, choose the records, say what is to be done to them, see a dry run, apply it and, if it was
+* wrong, take the last run back (S.75, plan .claude/plan-fullscreen-toolkit.md sections 2.7, 8 and 12, DV5).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the four boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the Result box takes the
+*               rows and every box is wider; the dry run keeps and shows as many changed records as the Result box has rows (at least the 20 it always did).
+* 28 Oct 26 dm  S.88 phase 2 (S2): check.undo calls $tk_ownfile, the test moved out unchanged so that TOOL.QUERY makes the same one of &queries&.
+* 27 Oct 26 dm  S.87 batch 13: digest(x, 0, 'MD5') for the removed md5(x) (the same 32 lower case hex characters).
+* 26 Oct 26 dm  New.
+* 26 Oct 26 dm  faults: the boxes of the update and of the undo are titled "Update these records?" and "Put these records back?" ($tk_confirm's sixth argument); the file pick list shows a VOC id through a control-character filter.
+* 1 Nov 26 dm  S.99 (look only): names its focus boxes (ctx<TK.C.FOCI>), so $tk_frame marks the one with the focus [*] and the others [-], as the IDE does.
+* 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the list switch and refresh are offered to the model (a dry run, apply, undo
+*              and the edits are not), a proposal is carried out by the page's own key, and build.keys puts the line's rows back ($tk_aipage 'keys').  An account without the AI
+*              sees the page as it was.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring', the AI line one of the stops); Tab and Shift-Tab no longer switch the boxes.
+*              AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.BULK      (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), that changes many records of ONE dynamic data file of the account the session is in.  It is the
+*   most careful page of the set because it WRITES DATA IN BULK, and every step that writes is behind a safeguard that is a line of this program:
+*
+*   THE FILE.  F chooses it.  Only a dynamic file is taken.  A directory file, a sequential file, a file on another server, the VOC, a dictionary and a program file (bp, bp.out,
+*   any .bp or .bp.out) are refused up front, by what the file is and by its name.  The kernel is asked too (K$EDIT.OK of the file's pathname, K$EDIT.KIND for the reason): the page is an
+*   $internal program, which the kernel's own edit gates let through, so it asks for itself, and when the kernel refuses it the kernel's own words are shown (edit_msg).  The shared
+*   account's files are refused the same way unless the session may write them.  A read-only file is refused.
+*
+*   THE RECORDS.  Up to four conditions (item, operator, value), all of which must hold or any of which may, or one saved list chosen by name, or every record.  The conditions
+*   become ONE select sentence made of nothing but words the page picked from its own tables (the file's name, a dictionary item taken from the file's own dictionary, one of eight
+*   operators) and values that one function quotes after refusing anything that is not a letter, a digit, a space or one of  . , : + - _ / @ ( ) % *   so a value cannot carry a quote or
+*   a second command.  It is run with EXECUTE, RTNLIST and the page counts what comes back.  A saved list is read by name in BASIC and no command is built at all.
+*
+*   WHAT TO DO.  Up to ten operations from a closed set, in order, each on an attribute number (or on the attribute of a D item of the dictionary): set a constant, set null, append
+*   text, prepend text, replace text a with b, add a number, upper case, lower case, copy from another attribute.  There are no expressions.  Text is printable ASCII only.  An
+*   operation works on the attribute as a whole; Add needs the attribute to hold a number and a record where it does not is left alone and counted as one the page cannot apply.
+*
+*   THE DRY RUN (R) is mandatory and writes nothing: it reads every selected record, works out the new record, and shows how many were selected, would change, would stay as they are, could not
+*   be worked out or were not found, and before and after for the first twenty records that would change.  APPLY (A) is offered only after a dry run of EXACTLY the same settings in
+*   this session (a fingerprint of the file, the selection and the operations is kept with it; any edit makes the run stale).
+*
+*   APPLY asks for the file's name typed.  It then takes the records the dry run found would change, one at a time: READU (a record another session holds locked is skipped and counted),
+*   a check that the record is still byte for byte what the dry run read (else skipped and counted), the old record and what is about to be written go to the undo file, WRITEU, RELEASE.
+*   The first write error stops the run.  One audit line is written:  bulk update file=<file> records=<n>  (no data); an undo writes  bulk undo file=<file> records=<n>.
+*
+*   THE UNDO FILE is &bulk.undo&, a file of the person's own account made on demand through a box that shows the command.  It holds the LAST run only (a new run replaces it): the header
+*   record, and one record for each changed record - its id, a digest of what the run wrote, and the record as it was.  U puts back a record only if it is still what the run wrote.
+*
+*   Keys: Tab changes the list; F chooses the file; M, J, L, N, E, X choose and edit the records (Selection list); N, E, X edit the operations (Operations list); R dry run; A apply;
+*   U undo the last run; F5 reads the file and the lists again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_bulk
+$catalog $tool_bulk
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   deffun edit_msg(kind) calling '!edit_msg'
+
+   prompt ''
+
+   NCOND = 4                                                    ;* condition rows
+   NOPS = 10                                                    ;* operations
+   MAXSEL = 100000                                              ;* the most records one run takes
+   MAXLIST = 20000                                              ;* the most ids a saved list may hold here (its duplicates are taken out by a search, which is slow for more)
+   NPREV = 20                                                   ;* changed records the dry run shows at least (a taller result box has it show as many as the box has rows)
+   MAXTXT = 120                                                 ;* the longest text a person may give
+   VP = 7                                                       ;* preview rows on the screen (the result box's height less 6: set by get.rects)
+   UNDOF = '&bulk.undo&'                                        ;* where the last run's old records are kept: a file of the person's own account
+   MKUNDO = 'create.file &bulk.undo&'                           ;* the one command that makes it, shown in a box first
+
+   cw = 'eq' : @fm : 'ne' : @fm : 'lt' : @fm : 'le' : @fm : 'gt' : @fm : 'ge' : @fm : 'like' : @fm : 'unlike'
+   ct = 'equal to' : @fm : 'not equal to' : @fm : 'less than' : @fm : 'less than or equal to' : @fm : 'greater than' : @fm : 'greater than or equal to' : @fm : 'matches the pattern' : @fm : 'does not match the pattern'
+   kw = 'set' : @fm : 'null' : @fm : 'append' : @fm : 'prepend' : @fm : 'replace' : @fm : 'add' : @fm : 'upper' : @fm : 'lower' : @fm : 'copy'
+   kt = 'set to a constant' : @fm : 'set to null' : @fm : 'append text' : @fm : 'prepend text' : @fm : 'replace text' : @fm : 'add a number' : @fm : 'upper case' : @fm : 'lower case' : @fm : 'copy from another attribute'
+
+   call $tk_open('tool.bulk', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   panes = 'Selection' : @fm : 'Operations' : @fm : 'Result'
+
+   perr = ''
+   gosub declare.layout
+
+   bf = '' ; fileok = 0 ; finfo = ''                            ;* the file chosen, and the one-line story of it
+   selmode = 'cond' ; selname = '' ; seljoin = 'and'            ;* how the records are chosen: cond, list or all
+   nsc = 0 ; cnd.item = '' ; cnd.op = '' ; cnd.val = ''         ;* the conditions
+   nopr = 0 ; opr.kind = '' ; opr.attr = '' ; opr.a1 = '' ; opr.a2 = '' ; opr.name = ''   ;* the operations
+   cntline = 'Choose a file first (F).'
+   dr.valid = 0 ; dr.fp = '' ; dr.ids = '' ; dr.md5 = '' ; dr.pv = '' ; npv = 0 ; dr.chg = 0 ; pvcap = NPREV
+   n.sel = 0 ; n.chg = 0
+   dr.line = 'No dry run yet.  R makes one: it writes nothing.' ; ap.line = '' ; un.line = ''
+   sel.ids = '' ; sel.n = 0 ; sel.ok = 0 ; sel.big = 0 ; sel.why = ''
+   pane = 1 ; sc = 1 ; oc = 1 ; ra = 1
+   gen = 0
+   done = 0
+   msg = ''
+
+   un.have = 0 ; un.state = ''
+   gosub build.keys
+   call $tk_aipage('init', ctx, keys, '', '', aout)            ;* S.97 stage 2: the AI line, only where the AI is usable for the account; this page laid itself out first,
+   if aout then gosub declare.layout                            ;*   so a line that took a row has the panes declared again
+   gosub read.undo.info
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, panes<pane>, '', '', mr)          ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, panes<pane>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, panes<pane>, nm, ao)         ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, panes<pane>, nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            if ra > npv - VP + 1 then ra = npv - VP + 1
+            if ra < 1 then ra = 1
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* The key table.  A (apply) is on the function-key row only while a dry run of the settings on the screen stands, and U (undo) only while there is a run to put back
+build.keys:
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'switch', '', 1)               ;* S.176: F6 / Shift-F6 move between the boxes on every page (Tab does not)
+   call $tk_keys('add', keys, 'f', 'file', 'file', '', 1)
+   call $tk_keys('add', keys, 'm', 'how', 'how', 'Selection', 1)
+   call $tk_keys('add', keys, 'j', 'all/any', 'join', 'Selection', 1)
+   call $tk_keys('add', keys, 'l', 'saved list', 'list', 'Selection', 1)
+   call $tk_keys('add', keys, 'n', 'new', 'new', 'Selection' : @sm : 'Operations', 1)
+   call $tk_keys('add', keys, 'e', 'edit', 'edit', 'Selection' : @sm : 'Operations', 1)
+   call $tk_keys('add', keys, 'x', 'remove', 'remove', 'Selection' : @sm : 'Operations', 1)
+   call $tk_keys('add', keys, 'r', 'dry run', 'dry', '', 1)
+   call $tk_keys('add', keys, 'a', 'apply', 'apply', '', (if dr.valid then 1 else 0))
+   call $tk_keys('add', keys, 'u', 'undo', 'undo', '', (if un.have and un.state # 'undone' then 1 else 0))
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U5: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'file', '&Update', 'Choose the &file', '', '')
+   call $tk_keys('menu', keys, 'how', '&Update', 'Selection &how', '', '')
+   call $tk_keys('menu', keys, 'join', '&Update', '&All / any', '', '')
+   call $tk_keys('menu', keys, 'list', '&Update', 'Saved &list', '', '')
+   call $tk_keys('menu', keys, 'new', '&Update', '&New condition or operation', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Update', '&Edit it', '', '')
+   call $tk_keys('menu', keys, 'remove', '&Update', '&Remove it', '', '')
+   call $tk_keys('menu', keys, 'dry', '&Update', '&Dry run', '', '')
+   call $tk_keys('menu', keys, 'apply', '&Update', 'A&pply', '', '')
+   call $tk_keys('menu', keys, 'undo', '&Update', '&Undo', '', '')
+   call $tk_keys('menu', keys, 'switch', '&View', '&Switch list', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2: the AI line.  The page offers the AI only the actions that change what is shown - the list switch and refresh (the owner: opt-in, off by default; a dry run,
+   * apply, undo and every edit are not offered); a proposal is carried out by the page's own key.  The table is made anew here, so the line's own rows are put back too.
+   call $tk_keys('ai', keys, 'switch', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('keys', ctx, keys, '', '', aout)
+   return
+
+* ------------------------------------------------------------------------------------------------- the small checks every route uses
+
+* A name the page may give to a command or open: letters a-z, digits, dot, dash and underscore only (what $tk_run lets through), 1 to 63 long.  In: nmv.  Out: okname
+check.name:
+   okname = (len(nmv) > 0 and len(nmv) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for q = 1 to len(nmv)
+      if index(good, nmv[q, 1], 1) = 0 then okname = @false
+   next q
+   return
+
+* Text a person gives for a record: printable ASCII only (no control character, no mark, no byte over 126), 1 to MAXTXT long (an empty text is allowed when emptyok is set).
+* In: tv, emptyok.  Out: tok, twhy
+check.text:
+   tok = 1
+   twhy = ''
+   if tv = '' and not(emptyok) then
+      tok = 0
+      twhy = 'the text is empty'
+   end
+   if len(tv) > MAXTXT then
+      tok = 0
+      twhy = 'the text is longer than ' : MAXTXT : ' characters'
+   end
+   for q = 1 to len(tv)
+      d = seq(tv[q, 1])
+      if d < 32 or d > 126 then
+         tok = 0
+         twhy = 'the text has a character that is not a printable ASCII one'
+      end
+   next q
+   return
+
+* The one function that quotes a value for the select sentence.  It refuses a quote of either kind, a backslash and every character that is not a letter, a digit, a space or one of
+* . , : + - _ / @ ( ) % *  (so no semicolon, ampersand, bar, dollar, backquote, bracket or mark), a value with a space at either end, an empty one and one over 60 characters.
+* In: qv.  Out: qok, qwhy, qout (the value in double quotes)
+quote.val:
+   qok = 1
+   qwhy = ''
+   qout = ''
+   if qv = '' or len(qv) > 60 then
+      qok = 0
+      qwhy = 'a value is 1 to 60 characters with no space at either end'
+   end else
+      if qv[1, 1] = ' ' or qv[len(qv), 1] = ' ' then
+         qok = 0
+         qwhy = 'a value is 1 to 60 characters with no space at either end'
+      end
+   end
+   allowed = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,:+-_/@()%*'
+   for q = 1 to len(qv)
+      if index(allowed, qv[q, 1], 1) = 0 then
+         qok = 0
+         qwhy = 'the page puts into a command only letters, digits, space and  . , : + - _ / @ ( ) % *  - type the select at the prompt for anything else'
+      end
+   next q
+   if qok then qout = '"' : qv : '"'
+   return
+
+* What is shown of text that came from a file or a person: marks become visible characters and everything not printable ASCII becomes a dot, so a record cannot write a
+* control sequence to the terminal.  In: sv.  Out: sv (cut to 40)
+safe.text:
+   sv = change(change(change(sv, @vm, ']'), @sm, '\'), @fm, '^')
+   sv = sv[1, 40]
+   st2 = ''
+   for q2 = 1 to len(sv)
+      c2 = sv[q2, 1]
+      d2 = seq(c2)
+      if d2 >= 32 and d2 <= 126 then st2 := c2 else st2 := '.'
+   next q2
+   sv = st2
+   return
+
+* ------------------------------------------------------------------------------------------------- the file
+
+* May this page update the file named cf?  In: cf.  Out: cok, cwhy (the reason, the kernel's own words where the kernel refuses), cinfo (a few words about it)
+check.file:
+   cok = 0
+   cwhy = ''
+   cinfo = ''
+   nmv = cf
+   gosub check.name
+   if not(okname) then
+      cwhy = 'a file name of letters a-z, digits, dot, dash and underscore only (the page gives nothing else to a command)'
+      return
+   end
+   open cf to cfv else
+      cwhy = 'this account cannot open ' : cf
+      return
+   end
+   cft = fileinfo(cfv, FL$TYPE)
+   cpath = fileinfo(cfv, FL$PATH)
+   cek = kernel(K$EDIT.KIND, cpath)
+   ceo = kernel(K$EDIT.OK, cpath)
+   begin case
+      case not(ceo)
+         cwhy = edit_msg(cek)                                   ;* the kernel's own words: the edit gate is off, or the shared account's rule
+      case cek >= 1 and cek <= 3
+         cwhy = 'this page updates data files only: ' : (if cek = 1 then 'the VOC' else (if cek = 2 then 'a dictionary' else 'a program file')) : ' is not one'
+      case cft # FL$TYPE.DH
+         cwhy = 'this page updates dynamic data files only: ' : cf : ' is ' : (if cft = FL$TYPE.DIR then 'a directory file' else (if cft = FL$TYPE.SEQ then 'a sequential file' else (if cft = FL$TYPE.NET then 'a file on another server' else 'not a dynamic file')))
+      case fileinfo(cfv, FL$READONLY) = 1
+         cwhy = cf : ' is read only'
+      case 1
+         cok = 1
+         cinfo = 'dynamic, about ' : fileinfo(cfv, FL$RECORD.COUNT) : ' records'
+   end case
+   close cfv
+   return
+
+* Open the chosen file again for a run (the file or the gates may have changed since it was chosen).  Out: fok, fv (open when fok); msg says why not
+reopen.file:
+   fok = 0
+   cf = bf
+   gosub check.file
+   if not(cok) then
+      msg = cwhy
+      fileok = 0
+      gosub draw.all
+      return
+   end
+   open bf to fv else
+      msg = 'this account cannot open ' : bf
+      return
+   end
+   fok = 1
+   return
+
+* The words under the file's name
+file.info:
+   finfo = ''
+   if not(fileok) then return
+   open bf to fiv then
+      finfo = 'dynamic file, about ' : fileinfo(fiv, FL$RECORD.COUNT) : ' records'
+      close fiv
+   end
+   open 'DICT', bf to fdv then
+      finfo := ', with a dictionary'
+      close fdv
+   end else
+      finfo := ', no dictionary'
+   end
+   return
+
+* F: choose the file.  Every file the VOC points at is listed with the reason when this page will not update it; the first line lets a name be typed
+do.file:
+   fl.names = ''
+   fl.text = ''
+   fctl = ''                                                    ;* 26 Oct 26 (review, low): a VOC id is shown with every control character, DEL and byte above ASCII as a dot (the id itself is refused by check.name)
+   for fk0 = 1 to 31
+      fctl := char(fk0)
+   next fk0
+   for fk0 = 127 to 255
+      fctl := char(fk0)
+   next fk0
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist vids from 9 else vids = ''
+      nvoc = dcount(vids, @fm)
+      if vids = '' then nvoc = 0
+      for vi = 1 to nvoc
+         read vr from vocf, vids<vi> then
+            t1 = upcase(vr<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then
+               cf = vids<vi>
+               gosub check.file
+               ftxt = (if cok then cinfo else '-  ' : cwhy)
+               fl.names<-1> = cf
+               fl.text<-1> = fmt(convert(fctl, str('.', len(fctl)), cf)[1, 30], '30L') : '  ' : ftxt[1, 100]
+            end
+         end
+      next vi
+      close vocf
+   end
+   items = '(type a file name)'
+   for vi = 1 to dcount(fl.names, @fm)
+      items<-1> = fl.text<vi>
+   next vi
+   pk = 0
+   screen pick items title 'Choose the file to update' size 118,22 returning pk else pk = 0
+   if pk = 0 then return
+   if pk = 1 then
+      screen ask 'File name (a-z, 0-9, dot, dash and underscore)' width 40 value '' title 'Choose the file to update' returning tn else return
+      cf = downcase(trim(tn))
+   end else
+      cf = fl.names<pk - 1>
+   end
+   gosub check.file
+   if not(cok) then
+      msg = cwhy
+      return
+   end
+   if ('S' : cf) # ('S' : bf) then
+      bf = cf                                                 ;* nothing of one file's selection or operations is carried into another file
+      selmode = 'cond' ; selname = '' ; seljoin = 'and'
+      nsc = 0 ; cnd.item = '' ; cnd.op = '' ; cnd.val = ''
+      nopr = 0 ; opr.kind = '' ; opr.attr = '' ; opr.a1 = '' ; opr.a2 = '' ; opr.name = ''
+      sc = 1 ; oc = 1
+   end
+   fileok = 1
+   gosub file.info
+   gosub drop.dry
+   gosub count.sel
+   msg = 'the file is ' : bf : '; now choose the records (Selection) and what to do to them (Operations)'
+   gosub draw.all
+   return
+
+* ------------------------------------------------------------------------------------------------- which records
+
+* M: how the records are chosen
+do.mode:
+   if not(fileok) then
+      msg = 'choose the file first (F)'
+      return
+   end
+   items = 'Conditions: item, operator and value, up to four' : @fm : 'A saved list, chosen by name' : @fm : 'Every record of the file'
+   screen pick items title 'Which records' returning pk else pk = 0
+   if pk = 0 then return
+   begin case
+      case pk = 1
+         selmode = 'cond'
+      case pk = 2
+         gosub do.list
+         return
+      case 1
+         selmode = 'all'
+   end case
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   return
+
+* J: all of the conditions or any of them
+do.join:
+   seljoin = (if seljoin = 'and' then 'or' else 'and')
+   selmode = 'cond'
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   msg = 'a record is taken when ' : (if seljoin = 'or' then 'ANY' else 'ALL') : ' of the conditions hold'
+   return
+
+* L: choose a saved list (the names in the account's saved-list file, $savedlists)
+do.list:
+   if not(fileok) then
+      msg = 'choose the file first (F)'
+      return
+   end
+   lnames = ''
+   open '$savedlists' to slf then
+      sselect slf to 9
+      readlist lnames from 9 else lnames = ''
+      close slf
+   end
+   nl2 = dcount(lnames, @fm)
+   if lnames = '' then nl2 = 0
+   if nl2 < 1 then
+      msg = 'this account has no saved list (save.list makes one)'
+      return
+   end
+   items = ''
+   for li = 1 to nl2
+      sv = lnames<li>
+      gosub safe.text
+      items<-1> = sv
+   next li
+   screen pick items title 'Choose a saved list' returning pk else pk = 0
+   if pk = 0 then return
+   selname = lnames<pk>
+   selmode = 'list'
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   return
+
+* N in the Selection list: a new condition
+do.cnew:
+   if not(fileok) then
+      msg = 'choose the file first (F)'
+      return
+   end
+   if selmode # 'cond' then
+      selmode = 'cond'
+      gosub drop.dry
+   end
+   if nsc >= NCOND then
+      msg = 'at most ' : NCOND : ' conditions'
+      return
+   end
+   ce = 0
+   gosub ask.cond
+   if not(cgot) then return
+   nsc += 1
+   cnd.item<nsc> = c.item
+   cnd.op<nsc> = c.op
+   cnd.val<nsc> = c.val
+   sc = nsc
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   return
+
+* E in the Selection list: change the condition under the cursor
+do.cedit:
+   if selmode # 'cond' or nsc < 1 or sc < 1 or sc > nsc then
+      msg = 'there is no condition to change'
+      return
+   end
+   ce = sc
+   gosub ask.cond
+   if not(cgot) then return
+   cnd.item<sc> = c.item
+   cnd.op<sc> = c.op
+   cnd.val<sc> = c.val
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   return
+
+* X in the Selection list: take the condition under the cursor out
+do.cdel:
+   if selmode # 'cond' or nsc < 1 or sc < 1 or sc > nsc then
+      msg = 'there is no condition to remove'
+      return
+   end
+   del cnd.item<sc>
+   del cnd.op<sc>
+   del cnd.val<sc>
+   nsc -= 1
+   if sc > nsc then sc = nsc
+   if sc < 1 then sc = 1
+   gosub drop.dry
+   gosub count.sel
+   gosub draw.all
+   return
+
+* The three questions of a condition: the item (from the file's own dictionary), the operator (from the table) and the value.  In: ce (the condition being changed, 0 for a new one).  Out: cgot, c.item, c.op, c.val
+ask.cond:
+   cgot = 0
+   want.d = 0
+   gosub dict.items
+   if di.n < 1 then
+      msg = 'the dictionary of ' : bf : ' has no item the page can use'
+      return
+   end
+   items = di.text
+   dflt = 1
+   if ce > 0 then
+      locate cnd.item<ce> in di.names<1> setting dp then dflt = dp else dflt = 1
+   end
+   ttl = 'Condition: which item'
+   screen pick items title ttl default dflt size 100,20 returning pk else pk = 0
+   if pk = 0 then return
+   c.item = di.names<pk>
+   dflt = 1
+   if ce > 0 then
+      locate cnd.op<ce> in cw<1> setting dp then dflt = dp else dflt = 1
+   end
+   ttl = 'Condition: ' : c.item : ' is'
+   screen pick ct title ttl default dflt returning pk else pk = 0
+   if pk = 0 then return
+   c.op = cw<pk>
+   cv = ''
+   if ce > 0 then cv = cnd.val<ce>
+   prm = 'Value to compare ' : c.item : ' with (letters, digits, space and  . , : + - _ / @ ( ) % *)'
+   screen ask prm width 60 value cv title 'Condition: the value' returning qv else return
+   gosub quote.val
+   if not(qok) then
+      msg = qwhy
+      return
+   end
+   c.val = qv
+   cgot = 1
+   return
+
+* The items of the dictionary of the chosen file that the page may name: @id and every item whose name passes check.name.
+* Out: di.names, di.text, di.attr (the attribute number of a D item), di.n.  With want.d set, only the D items with an attribute number from 1 to 999 are kept.
+dict.items:
+   di.names = '' ; di.text = '' ; di.attr = ''
+   if not(want.d) then
+      di.names = '@id' ; di.text = fmt('@id', '30L') : '  the record id' ; di.attr = 0
+   end
+   open 'DICT', bf to dv then
+      sselect dv to 9
+      readlist dids from 9 else dids = ''
+      nd = dcount(dids, @fm)
+      if dids = '' then nd = 0
+      for dj = 1 to nd
+         did = dids<dj>
+         nmv = did
+         gosub check.name
+         if okname then
+            read dit from dv, did then
+               dty = upcase(dit<1>)
+               dty = dty[1, 2]
+               dat = dit<2>
+               keepit = 1
+               if want.d then
+                  keepit = 0
+                  if dty[1, 1] = 'D' and num(dat) and dat # '' then
+                     if index(dat, '.', 1) = 0 and dat >= 1 and dat <= 999 then keepit = 1
+                  end
+               end
+               if keepit then
+                  di.names<-1> = did
+                  di.attr<-1> = (if dty[1, 1] = 'D' then dat else '')
+                  di.text<-1> = fmt(did[1, 30], '30L') : '  ' : (if dty[1, 1] = 'D' then 'attribute ' : dat else 'type ' : dty)
+               end
+            end
+         end
+      next dj
+      close dv
+   end
+   di.n = dcount(di.names, @fm)
+   if di.names = '' then di.n = 0
+   return
+
+* ------------------------------------------------------------------------------------------------- what to do
+
+* N in the Operations list: a new operation
+do.onew:
+   if not(fileok) then
+      msg = 'choose the file first (F)'
+      return
+   end
+   if nopr >= NOPS then
+      msg = 'at most ' : NOPS : ' operations'
+      return
+   end
+   oe = 0
+   gosub ask.op
+   if not(ogot) then return
+   nopr += 1
+   opr.kind<nopr> = o.kind
+   opr.attr<nopr> = o.attr
+   opr.a1<nopr> = o.a1
+   opr.a2<nopr> = o.a2
+   opr.name<nopr> = o.name
+   oc = nopr
+   gosub drop.dry
+   gosub draw.all
+   return
+
+* E in the Operations list: change the operation under the cursor
+do.oedit:
+   if nopr < 1 or oc < 1 or oc > nopr then
+      msg = 'there is no operation to change'
+      return
+   end
+   oe = oc
+   gosub ask.op
+   if not(ogot) then return
+   opr.kind<oc> = o.kind
+   opr.attr<oc> = o.attr
+   opr.a1<oc> = o.a1
+   opr.a2<oc> = o.a2
+   opr.name<oc> = o.name
+   gosub drop.dry
+   gosub draw.all
+   return
+
+* X in the Operations list: take the operation under the cursor out
+do.odel:
+   if nopr < 1 or oc < 1 or oc > nopr then
+      msg = 'there is no operation to remove'
+      return
+   end
+   del opr.kind<oc>
+   del opr.attr<oc>
+   del opr.a1<oc>
+   del opr.a2<oc>
+   del opr.name<oc>
+   nopr -= 1
+   if oc > nopr then oc = nopr
+   if oc < 1 then oc = 1
+   gosub drop.dry
+   gosub draw.all
+   return
+
+* The questions of an operation: what, on which attribute, and its text or number.  In: oe (the operation being changed, 0 for a new one).  Out: ogot, o.kind, o.attr, o.a1, o.a2, o.name
+ask.op:
+   ogot = 0
+   dflt = 1
+   if oe > 0 then
+      locate opr.kind<oe> in kw<1> setting dp then dflt = dp else dflt = 1
+   end
+   screen pick kt title 'Operation' default dflt returning pk else pk = 0
+   if pk = 0 then return
+   o.kind = kw<pk>
+   o.a1 = '' ; o.a2 = ''
+   old1 = '' ; old2 = '' ; olda = ''                            ;* what the operation being changed has now: the questions start from it
+   if oe > 0 and opr.kind<oe> = o.kind then
+      old1 = opr.a1<oe>
+      old2 = opr.a2<oe>
+      olda = opr.attr<oe>
+   end
+   ra.in = olda
+   ra.title = 'Which attribute: ' : kt<pk>
+   gosub pick.attr
+   if not(ra.ok) then
+      msg = ra.why
+      return
+   end
+   o.attr = ra.n
+   o.name = ra.name
+   emptyok = 0
+   begin case
+      case o.kind = 'set'
+         prm = 'The text to set attribute ' : o.attr : ' to (printable ASCII; set to null is a different operation)'
+         screen ask prm width 100 value old1 title 'Operation: the text' returning tv else return
+         gosub check.text
+         if not(tok) then
+            msg = twhy
+            return
+         end
+         o.a1 = tv
+      case o.kind = 'append' or o.kind = 'prepend'
+         prm = 'The text to ' : o.kind : ' to attribute ' : o.attr : ' (printable ASCII)'
+         screen ask prm width 100 value old1 title 'Operation: the text' returning tv else return
+         gosub check.text
+         if not(tok) then
+            msg = twhy
+            return
+         end
+         o.a1 = tv
+      case o.kind = 'replace'
+         * S.88: one form with both texts in view; the first one check.text refuses is said under the entries and the form stays
+         spec = 'Operation: replace in attribute ' : o.attr : @fm : '&Use' : @fm : 'Printable ASCII.  An empty second text takes the first out.'
+         spec<-1> = 'old' : @vm : 'Replace this text' : @vm : 100 : @vm : 300
+         spec<-1> = 'new' : @vm : 'with this text' : @vm : 100 : @vm : 300
+         fvals = old1 : @fm : old2
+         call $tk_form('open', ctx, spec, fvals, fo)
+         if fo = 'no' then
+            msg = 'the form does not fit this window: the operation was not added'
+            return
+         end
+         loop
+            call $tk_form('run', ctx, fans, fvals, fid)
+            if fans # 'ok' then
+               call $tk_form('close', ctx, '', '', '')
+               return
+            end
+            fbad = '' ; fid = ''
+            tv = fvals<1>
+            gosub check.text
+            if not(tok) then
+               fbad = twhy ; fid = 'old'
+            end else
+               o.a1 = tv
+               tv = fvals<2>
+               emptyok = 1
+               gosub check.text
+               emptyok = 0
+               if not(tok) then
+                  fbad = twhy ; fid = 'new'
+               end else
+                  o.a2 = tv
+               end
+            end
+            if fbad = '' then exit
+            call $tk_form('say', ctx, fbad, fid, '')
+         repeat
+         call $tk_form('close', ctx, '', '', '')
+      case o.kind = 'add'
+         prm = 'The number to add to attribute ' : o.attr : ' (a negative one takes away; the attribute must hold a number)'
+         screen ask prm width 20 value old1 title 'Operation: the number' returning tv else return
+         tv = trim(tv)
+         if tv = '' or not(num(tv)) or len(tv) > 15 then
+            msg = 'that is not a number (digits, an optional sign and an optional decimal point)'
+            return
+         end
+         o.a1 = tv
+      case o.kind = 'copy'
+         ra.in = old1
+         ra.title = 'Copy from which attribute'
+         gosub pick.attr
+         if not(ra.ok) then
+            msg = ra.why
+            return
+         end
+         if ra.n = o.attr then
+            msg = 'copying an attribute onto itself changes nothing'
+            return
+         end
+         o.a1 = ra.n
+   end case
+   ogot = 1
+   return
+
+* Which attribute: a D item of the dictionary picked from a list, or a number typed.  In: ra.in (the current one), ra.title.  Out: ra.ok, ra.n (1 to 999), ra.name (the item, or null), ra.why
+pick.attr:
+   ra.ok = 0 ; ra.n = 0 ; ra.name = '' ; ra.why = ''
+   want.d = 1
+   gosub dict.items
+   want.d = 0
+   items = '(type an attribute number)'
+   for dj = 1 to di.n
+      items<-1> = di.text<dj>
+   next dj
+   pk = 0
+   screen pick items title ra.title size 80,20 returning pk else pk = 0
+   if pk = 0 then
+      ra.why = 'nothing changed'
+      return
+   end
+   if pk = 1 then
+      tn = ''
+      screen ask 'Attribute number, 1 to 999' width 8 value ra.in title ra.title returning tn then got = 1 else got = 0
+      if not(got) then
+         ra.why = 'nothing changed'
+         return
+      end
+      tn = trim(tn)
+      if tn = '' or not(num(tn)) or index(tn, '.', 1) > 0 or tn < 1 or tn > 999 then
+         ra.why = 'an attribute number is a whole number from 1 to 999 (attribute 0 is the record id, which this page never changes)'
+         return
+      end
+      ra.n = tn + 0
+   end else
+      ra.n = di.attr<pk - 1> + 0
+      ra.name = di.names<pk - 1>
+   end
+   ra.ok = 1
+   return
+
+* ------------------------------------------------------------------------------------------------- the selection
+
+* The select sentence for the conditions, made of nothing but the page's own words.  Out: ssent, serr.  Each piece is checked again here, not only where it was entered
+build.select:
+   ssent = ''
+   serr = ''
+   nmv = bf
+   gosub check.name
+   if not(okname) then
+      serr = 'the file name is not one the page gives to a command'
+      return
+   end
+   ssent = 'select ' : bf
+   if selmode = 'all' then return
+   if nsc < 1 then
+      serr = 'there is no condition'
+      ssent = ''
+      return
+   end
+   for bi = 1 to nsc
+      bitem = cnd.item<bi>
+      if bitem # '@id' then
+         nmv = bitem
+         gosub check.name
+         if not(okname) then serr = 'item ' : bi : ' is not a name the page gives to a command'
+      end
+      if index(@fm : cw : @fm, @fm : cnd.op<bi> : @fm, 1) = 0 then serr = 'condition ' : bi : ' has an operator the page does not know'
+      qv = cnd.val<bi>
+      gosub quote.val
+      if not(qok) then serr = 'condition ' : bi : ': ' : qwhy
+      if serr # '' then
+         ssent = ''
+         return
+      end
+      ssent := (if bi = 1 then ' with ' else (if seljoin = 'or' then ' or with ' else ' and with ')) : bitem : ' ' : cnd.op<bi> : ' ' : qout
+   next bi
+   return
+
+* Select the records.  In: want.ids (1 to read the ids as well as count them).  Out: sel.ok, sel.n, sel.big (more than MAXSEL: the ids are not read), sel.ids (the ids, when asked for), sel.why
+run.select:
+   sel.ok = 0 ; sel.n = 0 ; sel.big = 0 ; sel.ids = '' ; sel.why = ''
+   if selmode = 'list' then
+      getlistv selname to slv setting lcnt then
+         sel.n = lcnt
+         if lcnt > MAXLIST then
+            sel.why = 'the list holds ' : lcnt : ' ids; this page takes at most ' : MAXLIST : ' from a saved list'
+            sel.big = 1
+            return
+         end
+         loop
+            readnext sid from slv else exit
+            locate sid in sel.ids<1> by 'AL' setting lp else
+               ins sid before sel.ids<lp>                       ;* sorted, and a name that is in the list twice is taken once
+            end
+         repeat
+         sel.n = dcount(sel.ids, @fm)
+         if sel.ids = '' then sel.n = 0
+         if not(want.ids) then sel.ids = ''
+         sel.ok = 1
+      end else
+         sel.why = 'there is no saved list with that name now'
+      end
+      return
+   end
+   gosub build.select
+   if serr # '' then
+      sel.why = serr
+      return
+   end
+   clearselect
+   execute ssent trapping aborts capturing sout rtnlist slv
+   sout = change(change(change(sout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+   sline = ''
+   for oi = 1 to dcount(sout, @fm)
+      if trim(sout<oi>) # '' then
+         sline = trim(sout<oi>)
+         exit
+      end
+   next oi
+   suffix = ' record(s) selected to list 0'
+   sn = ''
+   if len(sline) > len(suffix) then
+      if sline[len(sline) - len(suffix) + 1, len(suffix)] = suffix then sn = sline[1, len(sline) - len(suffix)]
+   end
+   if sn = '' or not(num(sn)) then
+      sel.why = (if sline = '' then 'the select said nothing' else sline[1, 100])      ;* the verb's own words
+      return
+   end
+   sel.n = sn + 0
+   if sel.n > MAXSEL then
+      sel.big = 1
+      sel.ok = 1
+      return
+   end
+   if want.ids then
+      loop
+         readnext sid from slv else exit
+         sel.ids := (if sel.ids = '' then '' else @fm) : sid
+      repeat
+   end
+   sel.ok = 1
+   return
+
+* Count the records the selection chooses now, for the line under the conditions (the dry run selects again)
+count.sel:
+   cntline = ''
+   if not(fileok) then
+      cntline = 'Choose a file first (F).'
+      return
+   end
+   if selmode = 'cond' and nsc < 1 then
+      cntline = 'No condition yet: N adds one.'
+      return
+   end
+   if selmode = 'list' and selname = '' then
+      cntline = 'No saved list yet: L chooses one.'
+      return
+   end
+   want.ids = 0
+   gosub run.select
+   if sel.ok then
+      if sel.big then
+         cntline = 'Selected: ' : sel.n : ' records - more than ' : MAXSEL : ', which one run does not take: narrow the selection.'
+      end else
+         cntline = 'Selected: ' : sel.n : (if sel.n = 1 then ' record.' else ' records.')
+      end
+   end else
+      cntline = 'Cannot select: ' : sel.why
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the operations on a record
+
+* One record through every operation, in order.  In: rec.  Out: newrec, cant (1 when an operation cannot be applied to this record: the record is then left alone)
+apply.ops:
+   newrec = rec
+   cant = 0
+   for oj = 1 to nopr
+      oa = opr.attr<oj>
+      okind = opr.kind<oj>
+      ov = newrec<oa>
+      nv = ov
+      begin case
+         case okind = 'set'
+            nv = opr.a1<oj>
+         case okind = 'null'
+            nv = ''
+         case okind = 'append'
+            nv = ov : opr.a1<oj>
+         case okind = 'prepend'
+            nv = opr.a1<oj> : ov
+         case okind = 'replace'
+            nv = change(ov, opr.a1<oj>, opr.a2<oj>)
+         case okind = 'add'
+            if ov = '' or not(num(ov)) then
+               cant = 1
+            end else
+               nv = ov + opr.a1<oj>
+               * the sum is kept to the process PRECISION (4 decimals), so a value or an amount with more decimals, or more than 15 characters, would lose digits: the record is left alone and counted
+               if len(field(ov, '.', 2)) > 4 or len(field(opr.a1<oj>, '.', 2)) > 4 or len(ov) > 15 or len(opr.a1<oj>) > 15 then cant = 1
+            end
+         case okind = 'upper'
+            nv = upcase(ov)
+         case okind = 'lower'
+            nv = downcase(ov)
+         case okind = 'copy'
+            osrc = opr.a1<oj>
+            nv = newrec<osrc>
+      end case
+      if cant then exit
+      if ('S' : nv) # ('S' : ov) then newrec<oa> = nv           ;* (a text compare: two numeric looking values compare as numbers, '007' = '7') only a real change is written, so an attribute past the end is not padded for nothing
+   next oj
+   return
+
+* A fingerprint of everything a dry run depends on: the file, how the records are chosen, the conditions, the operations
+make.fp:
+   fp = bf : @fm : selmode : @fm : selname : @fm : seljoin : @fm : nsc : @fm : nopr
+   for fi = 1 to nsc
+      fp := @fm : cnd.item<fi> : @vm : cnd.op<fi> : @vm : cnd.val<fi>
+   next fi
+   for fi = 1 to nopr
+      fp := @fm : opr.kind<fi> : @vm : opr.attr<fi> : @vm : opr.a1<fi> : @vm : opr.a2<fi>
+   next fi
+   return
+
+* Any edit makes the last dry run stale
+drop.dry:
+   dr.valid = 0
+   dr.fp = ''
+   dr.ids = '' ; dr.md5 = '' ; dr.pv = '' ; npv = 0
+   dr.line = 'No dry run of these settings yet.  R makes one: it writes nothing.'
+   ra = 1
+   gosub build.keys
+   return
+
+* Before and after of the attributes that differ, as one line.  In: id, rec, newrec.  Out: pvl
+diff.line:
+   sv = id
+   gosub safe.text
+   pvl = fmt(sv[1, 20], '20L') : '  '
+   nfd = dcount(rec, @fm)
+   if dcount(newrec, @fm) > nfd then nfd = dcount(newrec, @fm)
+   for fd = 1 to nfd
+      if rec<fd> # newrec<fd> then
+         sv = rec<fd>
+         gosub safe.text
+         bef = sv
+         sv = newrec<fd>
+         gosub safe.text
+         pvl := 'a' : fd : ' [' : bef : '] -> [' : sv : ']   '
+      end
+   next fd
+   pvl = pvl[1, tw - 2]                                         ;* 132 in the reference layout
+   return
+
+* ------------------------------------------------------------------------------------------------- the dry run
+
+need.ready:
+   ready = 0
+   begin case
+      case not(fileok)
+         msg = 'choose the file first (F)'
+      case nopr < 1
+         msg = 'add an operation first (N in the Operations list)'
+      case selmode = 'cond' and nsc < 1
+         msg = 'add a condition first (N in the Selection list), or choose another way to select (M)'
+      case selmode = 'list' and selname = ''
+         msg = 'choose the saved list first (L)'
+      case 1
+         ready = 1
+   end case
+   return
+
+* A line on the status bar now, while a long loop runs
+show.msg:
+   call $tk_frame(ctx, keys, panes<pane>, msg)
+   return
+
+* R: the dry run.  It writes nothing
+do.dry:
+   gosub need.ready
+   if not(ready) then return
+   gosub reopen.file
+   if not(fok) then return
+   msg = 'selecting...'
+   gosub show.msg
+   want.ids = 1
+   gosub run.select
+   if not(sel.ok) or sel.big then
+      gosub drop.dry
+      close fv
+      msg = (if sel.ok then 'more than ' : MAXSEL : ' records are selected: narrow the selection' else 'cannot select: ' : sel.why)
+      gosub draw.all
+      return
+   end
+   n.sel = 0 ; n.chg = 0 ; n.same = 0 ; n.cant = 0 ; n.gone = 0
+   dr.ids = '' ; dr.md5 = '' ; dr.pv = '' ; npv = 0
+   pvcap = NPREV                                                ;* the changed records this dry run keeps for the Result box: 20, or as many as the box has rows
+   if VP > pvcap then pvcap = VP
+   cant.id = ''
+   lids = sel.ids
+   if lids # '' then
+      loop
+         remove id from lids setting dl
+         n.sel += 1
+         read rec from fv, id then
+            gosub apply.ops
+            begin case
+               case cant
+                  n.cant += 1
+                  if cant.id = '' then cant.id = id
+               case ('S' : newrec) = ('S' : rec)
+                  n.same += 1
+               case 1
+                  n.chg += 1
+                  if n.chg > 1 then
+                     dr.ids := @fm
+                     dr.md5 := @fm
+                  end
+                  dr.ids := id
+                  dr.md5 := digest(rec, 0, 'MD5')
+                  if n.chg <= pvcap then
+                     gosub diff.line
+                     dr.pv<-1> = pvl
+                  end
+            end case
+         end else
+            n.gone += 1
+         end
+         if mod(n.sel, 500) = 0 then
+            msg = 'dry run: ' : n.sel : ' of ' : sel.n : ' records read'
+            gosub show.msg
+         end
+      while dl do repeat
+   end
+   close fv
+   npv = n.chg
+   if npv > pvcap then npv = pvcap
+   gosub make.fp
+   dr.fp = fp
+   dr.valid = 1
+   dr.chg = n.chg
+   dr.line = 'Dry run of ' : bf : ': ' : n.sel : ' selected, ' : n.chg : ' would change, ' : n.same : ' would stay as they are, ' : n.cant : ' cannot be worked out, ' : n.gone : ' not found.'
+   cant.say = ''
+   if n.cant > 0 then
+      sv = cant.id
+      gosub safe.text
+      cant.say = '; the first that cannot be worked out is ' : sv
+   end
+   ra = 1
+   pane = 3
+   gosub build.keys
+   msg = (if n.chg > 0 then 'nothing was written.  A applies exactly this; the first ' : npv : ' changes are listed below' else 'nothing was written, and nothing would change')
+   msg := cant.say
+   gosub draw.all
+   return
+
+* ------------------------------------------------------------------------------------------------- the apply
+
+* The lines that say in words what the operations are, for the box and the screen.  In: oj.  Out: odesc
+describe.op:
+   okind = opr.kind<oj>
+   locate okind in kw<1> setting dp then odesc = kt<dp> else odesc = okind
+   odesc = odesc : ' on attribute ' : opr.attr<oj> : (if opr.name<oj> # '' then ' (' : opr.name<oj> : ')' else '')
+   begin case
+      case okind = 'set'
+         odesc := ': "' : opr.a1<oj> : '"'
+      case okind = 'append' or okind = 'prepend'
+         odesc := ': "' : opr.a1<oj> : '"'
+      case okind = 'replace'
+         odesc := ': "' : opr.a1<oj> : '" with "' : opr.a2<oj> : '"'
+      case okind = 'add'
+         odesc := ': ' : opr.a1<oj>
+      case okind = 'copy'
+         odesc := ': attribute ' : opr.a1<oj>
+   end case
+   return
+
+* The undo file, made on demand.  Out: uok (1 when it exists and is open as uf)
+* The undo file is opened by its VOC name, so what that name leads to is checked before anything is cleared or written in it: a dynamic file, not read only, standing directly in this
+* account's own directory under its own name, and one the kernel's edit rules would let this session change.  The page is $internal, which the kernel lets through, so it asks for itself
+* (a person with voc-edit but not bp-edit could otherwise point the name at a program file).  In: uf open.  Out: uck = 1 when it may be used; ucw says why not.
+check.undo:
+   * 28 Oct 26 (S.88 phase 2, S2): the test itself is $tk_ownfile's now, so that TOOL.QUERY asks exactly the same of &queries&; the wording is the same (messages 12761 to 12764)
+   uck = 0
+   ucw = ''
+   call $tk_ownfile(uf, UNDOF, uck, ucw)
+   return
+
+undo.file:
+   uok = 0
+   open UNDOF to uf then
+      gosub check.undo
+      if uck then
+         uok = 1
+      end else
+         close uf
+         msg = ucw : ': nothing was applied'
+      end
+      return
+   end
+   lines = ''
+   lines<-1> = 'A bulk update keeps the records it changes, as they were, in a file of your own account called ' : UNDOF : ', so that U can put them back.  The file does not exist yet.'
+   lines<-1> = 'This makes it (the file and its VOC entry, in ' : @who : ').  Nothing else is done now.'
+   sent = MKUNDO
+   call $tk_confirm(sent, lines, '', res, cmsg)
+   if res # 'run' then
+      msg = 'no undo file, so nothing was applied'
+      return
+   end
+   execute MKUNDO trapping aborts capturing mkout
+   open UNDOF to uf then
+      gosub check.undo
+      if uck then
+         uok = 1
+      end else
+         close uf
+         msg = ucw : ': nothing was applied'
+      end
+   end else
+      mkout = change(change(change(mkout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+      mkw = trim(mkout<1>)
+      msg = 'the undo file could not be made: ' : mkw[1, 100]
+   end
+   return
+
+* A: apply the dry run
+do.apply:
+   gosub need.ready
+   if not(ready) then return
+   gosub make.fp
+   if not(dr.valid) or dr.fp # fp then
+      msg = 'run a dry run of exactly these settings first (R): the settings changed since the last one, or there is none'
+      return
+   end
+   if dr.chg < 1 then
+      msg = 'the dry run found nothing to change'
+      return
+   end
+   gosub reopen.file
+   if not(fok) then return
+   close fv
+   gosub undo.file
+   if not(uok) then return
+   close uf                                                     ;* the run opens it again once the box has been answered
+   lines = ''
+   lines<-1> = 'Updates the records of ' : bf : ' in the account ' : @who : ', these operations in this order:'
+   for oj = 1 to nopr
+      gosub describe.op
+      lines<-1> = '  ' : oj : '. ' : odesc
+   next oj
+   lines<-1> = ''
+   lines<-1> = dr.chg : ' of the ' : n.sel : ' selected records would change (the dry run you just made).  Each is read again under a lock first: a record another session has locked, or one that is no longer exactly as the dry run read it, is left alone and counted.'
+   lines<-1> = 'The records as they are now are kept in ' : UNDOF : ' (a run before this one is replaced there), so that U can put them back.  One line goes to the audit trail: the file and how many records were written, no data.'
+   sent = 'bulk update ' : bf : ': ' : nopr : (if nopr = 1 then ' operation on ' else ' operations on ') : dr.chg : (if dr.chg = 1 then ' record' else ' records')
+*  26 Oct 26: a bulk update writes records, it is no command: "Update these records?" (12959)
+   call $tk_confirm(sent, lines, bf, res, cmsg, sysmsg(12959))
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub apply.run
+   gosub count.sel                                              ;* what the selection takes now is not what it took before the run
+   gosub read.undo.info
+   gosub draw.all
+   return
+
+* The run itself.  In: bf, dr.ids and dr.md5 (the records the dry run found would change, and their digests).  Out: ap.line, msg
+apply.run:
+   gosub reopen.file
+   if not(fok) then return
+   open UNDOF to uf else
+      close fv
+      msg = 'the undo file cannot be opened'
+      return
+   end
+   gosub check.undo
+   if not(uck) then
+      close fv
+      close uf
+      msg = ucw : ': nothing was applied'
+      return
+   end
+   clearfile uf
+   hdr = 'bulk-undo' : @fm : bf : @fm : date() : @fm : time() : @fm : 0 : @fm : 'running'
+   write hdr on uf, 'last' on error
+      close fv
+      close uf
+      msg = 'the undo file cannot be written (status ' : status() : '): nothing was applied'
+      return
+   end
+   n.done = 0 ; n.lock = 0 ; n.moved = 0 ; n.err = 0 ; n.written = 0
+   halt.why = ''
+   lids = dr.ids
+   lmd = dr.md5
+   n.todo = dr.chg
+   loop
+      remove id from lids setting dl
+      remove emd from lmd setting dl                            ;* both lists have the same number of entries
+      n.done += 1
+      lk = 0 ; got = 0
+      readu rec from fv, id locked
+         lk = 1
+      end then
+         got = 1
+      end else
+         got = 0
+      end
+      begin case
+         case lk
+            n.lock += 1                                         ;* another session holds it: skipped and counted
+         case not(got)
+            n.moved += 1                                        ;* the record is gone
+            release fv, id
+         case ('S' : digest(rec, 0, 'MD5')) # ('S' : emd)
+            n.moved += 1                                        ;* no longer what the dry run read: skipped and counted
+            release fv, id
+         case 1
+            gosub apply.ops
+            if cant or ('S' : newrec) = ('S' : rec) then
+               n.moved += 1
+               release fv, id
+            end else
+               n.written += 1
+               write id : @fm : digest(newrec, 0, 'MD5') : @fm : rec on uf, n.written on error
+                  n.err += 1
+                  n.written -= 1
+                  halt.why = 'the undo file could not be written (status ' : status() : ')'
+               end
+               if halt.why = '' then
+                  writeu newrec on fv, id on error
+                     n.err += 1
+                     halt.why = 'a record could not be written (status ' : status() : ')'
+                     delete uf, n.written                       ;* the old record of a write that did not happen is not kept
+                     n.written -= 1
+                  end
+               end
+               release fv, id
+            end
+      end case
+      if halt.why # '' then exit
+      if mod(n.done, 200) = 0 then
+         msg = 'applying: ' : n.done : ' of ' : n.todo
+         gosub show.msg
+      end
+   while dl do repeat
+   close fv
+   hdr = 'bulk-undo' : @fm : bf : @fm : date() : @fm : time() : @fm : n.written : @fm : 'done'
+   write hdr on uf, 'last' on error
+      n.err += 1
+      halt.why = 'the undo file header could not be written (status ' : status() : ')'
+   end
+   close uf
+   void kernel(K$AUDIT, 'bulk update file=' : bf : ' records=' : n.written)
+   ap.line = 'Applied to ' : bf : ': ' : n.todo : ' to change, ' : n.written : ' changed, ' : n.lock : ' skipped (locked by another session), ' : n.moved : ' skipped (not as the dry run read them), ' : n.err : ' errors.'
+   if halt.why # '' then ap.line := '  Stopped: ' : halt.why
+   dr.valid = 0                                                 ;* the data moved: the dry run is spent
+   dr.line = 'The dry run was used up by the run.  R makes another.'
+   dr.ids = '' ; dr.md5 = '' ; dr.pv = '' ; npv = 0
+   msg = (if halt.why = '' then n.written : ' changed, ' : n.lock : ' locked, ' : n.moved : ' not as read, ' : n.err : ' errors' else 'stopped: ' : halt.why)
+   gosub file.info
+   return
+
+* ------------------------------------------------------------------------------------------------- the undo
+
+* What the undo file says about the last run
+read.undo.info:
+   un.have = 0 ; un.file = '' ; un.state = ''
+   un.line = 'Nothing to undo: no bulk update has been run from this page in this account.'
+   open UNDOF to uif then
+      read uh from uif, 'last' then
+         un.have = 1
+         un.file = uh<2>
+         un.state = uh<6>
+         if un.state # 'running' and un.state # 'done' and un.state # 'undone' then un.state = '?'
+         unn = uh<5>
+         if unn = '' or not(num(unn)) then unn = '?'
+         unw = ''
+         if num(uh<3>) and num(uh<4>) and uh<3> # '' and uh<4> # '' then unw = ', ' : oconv(uh<3>, 'D4-') : ' ' : oconv(uh<4>, 'MTS')
+         sv = uh<2>
+         gosub safe.text
+         un.line = 'Last run: ' : sv : ', ' : unn : ' records written' : unw : ', ' : un.state : '.'
+         if un.state = 'undone' then
+            un.line := '  It has been put back; there is nothing more to undo.'
+         end else
+            un.line := '  U puts the records back that are still as the run left them.'
+         end
+      end
+      close uif
+   end
+   gosub build.keys
+   return
+
+* U: put the last run back
+do.undo:
+   gosub read.undo.info
+   if not(un.have) then
+      msg = 'there is no bulk update to undo'
+      return
+   end
+   if un.state = 'undone' then
+      msg = 'the last run has been put back already'
+      return
+   end
+   if un.state # 'running' and un.state # 'done' then
+      msg = 'the header of the undo file is not one this page wrote: nothing was put back'
+      return
+   end
+   uf.name = un.file
+   cf = uf.name
+   gosub check.file
+   if not(cok) then
+      msg = 'the file of the last run cannot be updated from this page now: ' : cwhy
+      return
+   end
+   open UNDOF to uf else
+      msg = 'the undo file cannot be opened'
+      return
+   end
+   gosub check.undo
+   if not(uck) then
+      close uf
+      msg = ucw : ': nothing was put back'
+      return
+   end
+   n.undo = 0                                                  ;* the records of the run, and how many of them are still to be put back
+   n.rest = 0
+   loop
+      read ur from uf, n.undo + 1 else exit
+      n.undo += 1
+      if ur<2> # 'restored' then n.rest += 1
+   repeat
+   lines = ''
+   lines<-1> = 'Puts back the records of ' : uf.name : ' that the last bulk update changed (' : n.rest : ' still to put back), to what they were before it.'
+   lines<-1> = 'A record is put back only if it is still exactly what that run wrote; one that has changed since, or has gone, or is locked by another session, is left alone and counted.'
+   sent = 'bulk undo ' : uf.name : ': ' : n.rest : (if n.rest = 1 then ' record' else ' records')
+*  26 Oct 26: "Put these records back?" (12960)
+   call $tk_confirm(sent, lines, uf.name, res, cmsg, sysmsg(12960))
+   if res # 'run' then
+      close uf
+      msg = cmsg
+      return
+   end
+   open uf.name to fv else
+      close uf
+      msg = 'this account cannot open ' : uf.name
+      return
+   end
+   u.back = 0 ; u.lock = 0 ; u.since = 0 ; u.gone = 0 ; u.err = 0 ; u.done = 0
+   u.why = ''
+   for un.i = 1 to n.undo
+      read ur from uf, un.i else continue
+      uid = ur<1>
+      uemd = ur<2>
+      del ur<1>
+      del ur<1>
+      if uemd = 'restored' then
+         u.done += 1                                            ;* put back by an earlier U
+         continue
+      end
+      lk = 0 ; got = 0
+      readu cur from fv, uid locked
+         lk = 1
+      end then
+         got = 1
+      end else
+         got = 0
+      end
+      begin case
+         case lk
+            u.lock += 1
+         case not(got)
+            u.gone += 1
+            release fv, uid
+         case ('S' : digest(cur, 0, 'MD5')) # ('S' : uemd)
+            u.since += 1
+            release fv, uid
+         case 1
+            writeu ur on fv, uid on error
+               u.err += 1
+               u.why = 'a record could not be written (status ' : status() : ')'
+            end
+            if u.why = '' then
+               u.back += 1
+               write uid : @fm : 'restored' : @fm : ur on uf, un.i on error null     ;* a second U does not put it back again
+            end
+            release fv, uid
+      end case
+      if u.why # '' then exit
+   next un.i
+   close fv
+   void kernel(K$AUDIT, 'bulk undo file=' : uf.name : ' records=' : u.back)         ;* a put-back is a bulk write too: the file and how many records, no data
+   if u.lock = 0 and u.err = 0 then                             ;* a record that was locked can be put back by another U once it is free
+      read uh from uf, 'last' then
+         uh<6> = 'undone'
+         write uh on uf, 'last' on error null
+      end
+   end
+   close uf
+   ap.line = 'Undo of the last run on ' : uf.name : ': ' : u.back : ' put back, ' : u.since : ' left (changed since), ' : u.gone : ' left (gone), ' : u.lock : ' skipped (locked), ' : u.err : ' errors.'
+   if u.why # '' then ap.line := '  Stopped: ' : u.why
+   if u.lock > 0 then ap.line := '  U again puts the locked ones back when they are free.'
+   if u.done > 0 then ap.line := '  (' : u.done : ' had been put back by an earlier U.)'
+   msg = u.back : ' put back, ' : u.since + u.gone + u.lock : ' left alone, ' : u.err : ' errors'
+   dr.valid = 0
+   dr.line = 'The data moved: R makes a new dry run.'
+   dr.ids = '' ; dr.md5 = '' ; dr.pv = '' ; npv = 0
+   gosub count.sel
+   gosub read.undo.info
+   gosub file.info
+   gosub draw.all
+   return
+
+* F5: read the file and the lists again
+refresh:
+   if fileok then
+      cf = bf
+      gosub check.file
+      if not(cok) then
+         fileok = 0
+         msg = cwhy
+      end else
+         gosub file.info
+         gosub count.sel
+         msg = 'read ' : bf : ' again'
+      end
+   end
+   gosub read.undo.info
+   gosub draw.all
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The four boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the three that hold a fixed number of
+* rows (the file, the conditions NCOND, the operations NOPS) keep their height, the Result box takes the rows a bigger window has; all four take the width.
+* Out: fx fy fw fh (File), sx sy sw sh (Which records), ox oy ow oh (What to do to them), rx ry rw rh (Result), tw (the text width of all), VP (the preview rows).
+declare.layout:
+   dcl = ''
+   dcl<1> = 'file' : @vm : 1 : @vm : 1 : @vm : 4 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   dcl<2> = 'which' : @vm : 2 : @vm : 1 : @vm : 9 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   dcl<3> = 'what' : @vm : 3 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   dcl<4> = 'result' : @vm : 4 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   ctx<TK.C.FOCI> = 'which' : @sm : 'Selection' : @vm : 'what' : @sm : 'Operations' : @vm : 'result' : @sm : 'Result'        ;* S.99: the boxes that take the focus, for $tk_frame's [*] / [-]
+   call $tk_layout('declare', ctx, dcl, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'file', rc)
+   fx = rc<1, 1> ; fy = rc<1, 2> ; fw = rc<1, 3> ; fh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'which', rc)
+   sx = rc<1, 1> ; sy = rc<1, 2> ; sw = rc<1, 3> ; sh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'what', rc)
+   ox = rc<1, 1> ; oy = rc<1, 2> ; ow = rc<1, 3> ; oh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'result', rc)
+   rx = rc<1, 1> ; ry = rc<1, 2> ; rw = rc<1, 3> ; rh = rc<1, 4>
+   tw = fw - 4
+   VP = rh - 6                                                  ;* three status lines, the header row, the preview rows and the border: 7 rows of 13
+   return
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   screen box at fx,fy size fw,fh title 'File'
+   screen box at sx,sy size sw,sh title 'Which records'
+   screen box at ox,oy size ow,oh title 'What to do to them'
+   screen box at rx,ry size rw,rh title 'Result'
+   gosub draw.file
+   gosub draw.sel
+   gosub draw.ops
+   gosub draw.result
+   return
+
+draw.file:
+   if fileok then
+      s = 'File: ' : bf : '   (' : finfo : ')'
+   end else
+      s = 'No file chosen.  F chooses one: a dynamic data file of this account.'
+   end
+   screen text fmt(s[1, tw - 6], (tw - 6) : 'L') at fx + 2,fy + 1 attr 'bold' width tw - 6
+   call $tk_help('mark', fx + fw - 5, fy + 1, 0, 0)
+   s = 'Your gates:  voc-edit ' : (if kernel(K$VOC.EDIT, -1) then 'on' else 'off') : '   dict-edit ' : (if kernel(K$DICT.EDIT, -1) then 'on' else 'off') : '   bp-edit ' : (if kernel(K$BP.EDIT, -1) then 'on' else 'off')
+   s := '     Only dynamic data files are updated; the system is asked about the file you choose.'
+   screen text fmt(s[1, tw], tw : 'L') at fx + 2,fy + 2 width tw
+   return
+
+draw.sel:
+   begin case
+      case selmode = 'all'
+         s = 'Every record of the file.  M changes how the records are chosen.'
+      case selmode = 'list'
+         sv = selname
+         gosub safe.text
+         s = 'The records of the saved list ' : sv : '.  L chooses another list; M changes how the records are chosen.'
+      case 1
+         s = 'Records where ' : (if seljoin = 'or' then 'ANY' else 'ALL') : ' of these hold.  N adds a condition (at most 4), E changes it, X removes it, J ALL/ANY, M how records are chosen.'
+   end case
+   screen text fmt(s[1, tw], tw : 'L') at sx + 2,sy + 1 width tw
+   h1 = '  #  ' : fmt('Item', '28L') : fmt('Is', '30L') : 'Value'
+   screen text fmt(h1, tw : 'L') at sx + 2,sy + 2 attr 'header' width tw
+   for yr = 1 to NCOND
+      s = ''
+      if selmode = 'cond' and yr <= nsc then
+         locate cnd.op<yr> in cw<1> setting dp then otext = ct<dp> else otext = cnd.op<yr>
+         s = fmt(yr, '3R') : '  ' : fmt(cnd.item<yr>[1, 26], '28L') : fmt(otext, '30L') : '"' : cnd.val<yr>[1, 60] : '"'
+      end
+      screen text fmt(s, tw : 'L') at sx + 2,sy + 2 + yr attr (if pane = 1 and yr = sc and selmode = 'cond' and yr <= nsc then 'highlight' else 'normal') width tw
+   next yr
+   screen text fmt(cntline[1, tw], tw : 'L') at sx + 2,sy + sh - 2 attr 'bold' width tw
+   return
+
+draw.ops:
+   h2 = '  #  ' : fmt('What', '30L') : fmt('Attribute', '30L') : 'With'
+   screen text fmt(h2, tw : 'L') at ox + 2,oy + 1 attr 'header' width tw
+   for yr = 1 to NOPS
+      s = ''
+      if yr <= nopr then
+         okind = opr.kind<yr>
+         locate okind in kw<1> setting dp then otext = kt<dp> else otext = okind
+         at2 = 'attribute ' : opr.attr<yr> : (if opr.name<yr> # '' then ' (' : opr.name<yr> : ')' else '')
+         wth = ''
+         begin case
+            case okind = 'set' or okind = 'append' or okind = 'prepend'
+               wth = '"' : opr.a1<yr> : '"'
+            case okind = 'replace'
+               wth = '"' : opr.a1<yr> : '" with "' : opr.a2<yr> : '"'
+            case okind = 'add'
+               wth = opr.a1<yr>
+            case okind = 'copy'
+               wth = 'attribute ' : opr.a1<yr>
+         end case
+         s = fmt(yr, '3R') : '  ' : fmt(otext, '30L') : fmt(at2[1, 28], '30L') : wth[1, 60]
+      end
+      screen text fmt(s, tw : 'L') at ox + 2,oy + 1 + yr attr (if pane = 2 and yr = oc and yr <= nopr then 'highlight' else 'normal') width tw
+   next yr
+   return
+
+draw.result:
+   screen text fmt(dr.line[1, tw], tw : 'L') at rx + 2,ry + 1 attr 'bold' width tw
+   screen text fmt(ap.line[1, tw], tw : 'L') at rx + 2,ry + 2 width tw
+   screen text fmt(un.line[1, tw], tw : 'L') at rx + 2,ry + 3 width tw
+   h3 = fmt('Record id', '20L') : '  Before and after, attribute by attribute (the first ' : pvcap : ' records that would change)'
+   screen text fmt(h3, tw : 'L') at rx + 2,ry + 4 attr 'header' width tw
+   for yr = 1 to VP
+      s = dr.pv<ra + yr - 1>
+      screen text fmt(s[1, tw], tw : 'L') at rx + 2,ry + 4 + yr width tw
+   next yr
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                        ;* N and n are one key
+   begin case
+      case nm = 'up' or nm = 'down' or nm = 'pgup' or nm = 'pgdn' or nm = 'home' or nm = 'end'
+         gosub on.move
+      case nm = 'f'
+         gosub do.file
+      case nm = 'm' and pane = 1
+         gosub do.mode
+      case nm = 'j' and pane = 1
+         gosub do.join
+      case nm = 'l' and pane = 1
+         gosub do.list
+      case nm = 'n' and pane = 1
+         gosub do.cnew
+      case nm = 'e' and pane = 1
+         gosub do.cedit
+      case nm = 'x' and pane = 1
+         gosub do.cdel
+      case nm = 'n' and pane = 2
+         gosub do.onew
+      case nm = 'e' and pane = 2
+         gosub do.oedit
+      case nm = 'x' and pane = 2
+         gosub do.odel
+      case nm = 'enter' and pane = 1
+         gosub do.cedit
+      case nm = 'enter' and pane = 2
+         gosub do.oedit
+      case nm = 'r'
+         gosub do.dry
+      case nm = 'a'
+         gosub do.apply
+      case nm = 'u'
+         gosub do.undo
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.bulk.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, panes<pane>, std.r)
+      case nm = 'f5'
+         gosub refresh
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, pane, nm : @fm : 3, ap)         ;* S.176: F6 / Shift-F6 go round the three boxes and the AI line (Tab no longer switches); AI > Ask the AI goes to the line
+         if ap<1> > 0 and ap<1> # pane then
+            pane = ap<1>
+            gosub draw.all
+         end
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+* The cursor of the list that has the focus
+on.move:
+   begin case
+      case pane = 1
+         cv2 = sc
+         lim = nsc
+         pg = 4
+      case pane = 2
+         cv2 = oc
+         lim = nopr
+         pg = 10
+      case 1
+         cv2 = ra
+         lim = npv - VP + 1
+         pg = VP
+   end case
+   begin case
+      case nm = 'up'
+         cv2 -= 1
+      case nm = 'down'
+         cv2 += 1
+      case nm = 'pgup'
+         cv2 -= pg
+      case nm = 'pgdn'
+         cv2 += pg
+      case nm = 'home'
+         cv2 = 1
+      case nm = 'end'
+         cv2 = lim
+   end case
+   if cv2 > lim then cv2 = lim
+   if cv2 < 1 then cv2 = 1
+   begin case
+      case pane = 1
+         sc = cv2
+      case pane = 2
+         oc = cv2
+      case 1
+         ra = cv2
+   end case
+   gosub draw.all
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, panes<pane>, mev, '', mr)                 ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, panes<pane>, mev, ap)                        ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, fx + fw - 5, fy + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.bulk.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= fx + 2 and mx <= fx + fw - 3 then
+         if my >= sy + 3 and my <= sy + 2 + NCOND and selmode = 'cond' and my - (sy + 2) <= nsc then
+            pane = 1
+            sc = my - (sy + 2)
+            gosub draw.all
+         end
+         if my >= oy + 2 and my <= oy + 1 + NOPS and my - (oy + 1) <= nopr then
+            pane = 2
+            oc = my - (oy + 1)
+            gosub draw.all
+         end
+      end
+   end
+   return
+
+end
+
+* END-CODE

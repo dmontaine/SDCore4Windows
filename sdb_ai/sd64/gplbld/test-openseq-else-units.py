@@ -16,7 +16,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 BP = os.environ.get("BPDIR", os.path.normpath(os.path.join(HERE, "..", "sdsys", "gpl.bp")))
 # program -> the file variables whose OPENSEQ must close in ELSE
-WANT = {"tool_config": ["tf", "cf"], "tool_catalog": ["sf"], "ide_osfile": ["f"]}       # 28 Oct 26: ide_osfile (S.88 stage E) opens a file the IDE's tab then holds for as long as it is open
+WANT = {"tool_catalog": ["sf"], "ide_osfile": ["f"]}       # 28 Oct 26: ide_osfile (S.88 stage E) opens a file the IDE's tab then holds for as long as it is open
+# 10 Nov 26 Windows port: Linux also holds tool_config ("tf", "cf"); that page is not carried here yet (it edits sd.conf through Linux's root helper), so it is not asked for.
 
 
 def read(name):

@@ -1,0 +1,5 @@
+My programs on the home screen
+29a-sd-tcl-the-home-screen
+This page is the list of the programs you have added to your own home screen. A program is a label (up to 21 characters), the command you would type at your prompt, an optional three-character glyph, and whether the screen waits for Enter after a command that only prints. Your home screen shows them as tiles in the group My programs.
+Ctrl-N adds a program, Enter changes the one selected, Del removes it (it asks first; Cancel is the default), U and D move it up and down the list, / goes to the next program whose label or command holds a text you type, and Ctrl-Q leaves: the home screen is built again and shows the list. Esc or F10 opens the menu bar with the same actions by name.
+A program here runs a command you could type yourself, so it gives you no access you did not have: the gates apply as at the prompt. The standard tiles are the administrator's; this list is only yours, and it is kept in the record home of the file &menus& in your own account. The page is there only when the administrator has allowed it for your account (modify.account account pins-on).

@@ -1,0 +1,4 @@
+The Files tile
+29c-sd-tcl-the-development-tools
+Starts tool.files, the page for the files of the account: the files and their indices, in one place. It runs the command exactly as the person would have typed it, so it adds no access.
+Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.files at a prompt they have; this setting only changes the home screen.

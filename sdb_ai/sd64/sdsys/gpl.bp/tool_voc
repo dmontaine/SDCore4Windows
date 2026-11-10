@@ -1,0 +1,689 @@
+* TOOL_VOC
+* The vocabulary of the account on one screen: every VOC entry with its type, what it points at, whether the pointer works and how it differs from the VOC SD ships (S.75, plan
+* .claude/plan-fullscreen-toolkit.md sections 2.7, 8 and 12, DV3).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the two boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the list shows more
+*               entries and the detail more lines, both wider; text longer than its box is wrapped when the box is wider than it was.  S.88 stage C: E hands the entry to the IDE
+*               ('ide voc id'; the IDE locks the record, asks the account's voc-edit gate and gives the lock back) in place of SED.
+* 28 Oct 26 dm  S.88 phase 2 (S4): D refuses an entry the VOC holds as a keyword (type K: all, detail, no.query ...) - DELETE VOC ALL asks "Delete all records in VOC?" into the output the page captures,
+*               and a y would empty the VOC.  The test is $tk_word's, the same one TOOL.FILES and TOOL.DICT make.
+* 26 Oct 26 dm  New.
+* 1 Nov 26 dm   S.97 stage 1: the AI line ($tk_aipage), the pilot page: F6 or AI > Ask the AI puts the cursor in the line; T, S, / and F5 are offered to the model, and a proposal is
+*               carried out by this page's own key for it.  An account without the AI sees no line and no key, and the page is laid out as it always was.
+* 1 Nov 26 dm   S.97 stage 4: the AI's argument with an accepted filter is the DEFAULT of the filter's text.
+* 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.VOC      (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the VOC of the account the session is in.  For each entry: its type (verb, keyword, file pointer, Q-pointer,
+*   paragraph, stored sentence, remote item, text), what it points at in a few words, whether a pointer WORKS (a file or Q-pointer is opened to see) and how it stands against the shipped
+*   VOC: the same as NEWVOC (the file every account's VOC was copied from), changed from it, or one the account added.  The entry under the cursor is shown field by field.
+*
+*   WHAT IT CAN DO.  E edits the entry in the IDE (the terminal is handed to the IDE, 'ide voc id', and taken back); the kernel's own rule applies when the IDE saves it - writing the VOC needs voc-edit, and the page
+*   says which of the edit gates the session holds.  D deletes an entry (DELETE VOC name) after a box and the name typed; an entry that is a keyword of the VOC (type K: all, detail ...) is refused, because DELETE would read the name as the keyword.  Nothing is written by the page itself: a record is changed by
+*   the IDE or by a verb, never by this program.
+*
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; T cycles the type shown (all, verbs, files, pointers, paragraphs and sentences, other); / or F11 filters by a part of the name;
+*   S cycles all, only the entries that differ from the shipped VOC, only broken pointers; E, D as above; F5 reads again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_voc
+$catalog $tool_voc
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'delete'                                             ;* the one command this page may run (the DELETE verb, on the VOC, after a box and the name typed)
+
+   call $tk_open('tool.voc', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'e', 'edit', 'edit', '', 1)
+   call $tk_keys('add', keys, 'd', 'delete', 'delete', '', 1)
+   call $tk_keys('add', keys, 't', 'type', 'type', '', 1)
+   call $tk_keys('add', keys, 's', 'state', 'state', '', 1)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U7: Esc takes the filter and the type and state choices off first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Entry', '&Edit in the IDE', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Entry', '&Delete', '', '')
+   call $tk_keys('menu', keys, 'type', '&View', '&Type shown', '', '')
+   call $tk_keys('menu', keys, 'state', '&View', '&State shown', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter by name', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 1: the AI line.  The page offers the AI the actions that only change what is shown (the owner: opt-in, off by default); a proposal is carried out by the page's own key.
+   * Where the AI is not usable for the account nothing here adds a key, a row or a line, and the page is what it always was.
+   call $tk_keys('ai', keys, 'type', '', '', '', '')
+   call $tk_keys('ai', keys, 'state', '', '', '', '')
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   VIS = 16                                                    ;* entry rows on the screen (the list pane's height less 6: set by get.rects)
+   MAXV = 3000                                                  ;* entries read: a VOC is a few hundred; more than this are not listed, and the page says so
+   rtw = TK.MINW - 2 * TK.XBODY - 4                             ;* the text width of a pane in the reference layout (140 by 43): 134
+
+   tnames = 'all' : @fm : 'verbs' : @fm : 'files' : @fm : 'pointers' : @fm : 'paragraphs and sentences' : @fm : 'other'
+   snames = 'all' : @fm : 'differ from the shipped VOC' : @fm : 'broken pointers'
+   tsel = 1 ; ssel = 1                                          ;* the type and state shown
+   filt = ''
+   enames = '' ; emeta = '' ; nent = 0                           ;* every entry, with what is shown about it
+   shown = '' ; ns = 0
+   ci = 1 ; ta = 0
+   truncated = 0
+   shipped.ok = 0
+   gen = 0
+   done = 0
+   msg = ''
+
+   perr = ''
+   gosub declare.layout
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, 'VOC', '', '', mr)                ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, 'VOC', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'VOC', nm, ao)               ;* S.97 stage 1: while the AI line has the focus it takes the keys, before the bar sees them
+      ai.arg = ''                                                                    ;* S.97 stage 4: the argument of an accepted proposal, the DEFAULT of this page's own prompt for that key
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> = 'replay' then ai.arg = ao<5>
+      if ao<1> # '' then msg = ao<4>
+      busy = (if filt # '' or tsel # 1 or ssel # 1 then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'VOC', nm, busy, mr)       ;* the Esc rule: the filter and the type and state choices are taken off before the bar opens
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            if ta > ns - VIS then ta = ns - VIS
+            if ta < 0 then ta = 0
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Every VOC entry with what the page shows about it; the cursor goes back to the entry it was on
+read.all:
+   sel.e = ''
+   if ns > 0 and ci >= 1 and ci <= ns then sel.e = shown<ci>
+   enames = ''
+   emeta = ''
+   truncated = 0
+   shipped.ok = 0
+   open 'newvoc' to nvf then shipped.ok = 1
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      if n > MAXV then
+         n = MAXV
+         truncated = 1
+      end
+      for i = 1 to n
+         vid = ids<i>
+         read r from vocf, vid then
+            gosub classify
+            enames<-1> = vid
+            emeta<-1> = ety : @vm : esum : @vm : ework : @vm : edif
+         end
+      next i
+      close vocf
+   end
+   if shipped.ok then close nvf
+   nent = dcount(enames, @fm)
+   if enames = '' then nent = 0
+   gosub apply.filter
+   if sel.e # '' then
+      for i = 1 to ns
+         if shown<i> = sel.e then
+            ci = i
+            exit
+         end
+      next i
+   end
+   if ci > ns then ci = ns
+   if ci < 1 then ci = 1
+   return
+
+* In: vid, r (the record), vocf, shipped.ok, nvf.  Out: ety (the type word), esum (what it points at), ework ('yes', 'NO', or null when there is nothing to work), edif ('same', 'changed', 'added' or null)
+classify:
+   t1 = upcase(trim(r<1>))
+   ety = t1[1, 1]
+   if t1[1, 2] = 'PA' or t1[1, 2] = 'PH' or t1[1, 2] = 'PQ' then ety = t1[1, 2]
+   esum = ''
+   ework = ''
+   begin case
+      case ety = 'V'
+         esum = r<2> : ' ' : r<3>
+      case ety = 'K'
+         esum = 'a query keyword'
+      case ety = 'F'
+         esum = 'data ' : r<2> : (if r<3> # '' then '  dict ' : r<3> else '')
+         open vid to tf then
+            ework = 'yes'
+            close tf
+         end else
+            ework = 'NO'
+         end
+      case ety = 'Q'
+         esum = 'file ' : r<3> : ' in the account ' : r<2>
+         open vid to tf then
+            ework = 'yes'
+            close tf
+         end else
+            ework = 'NO'
+         end
+      case ety = 'R'
+         esum = 'record ' : r<3> : ' of ' : r<2>
+      case ety = 'PA' or ety = 'PH' or ety = 'S'
+         esum = r<2>
+      case 1
+         esum = r<2>
+   end case
+   esum = convert(@vm, ' ', convert(@sm, ' ', esum))
+   edif = ''
+   if shipped.ok then
+      read sr from nvf, vid then
+         edif = (if sr = r then 'same' else 'changed')
+      end else
+         edif = 'added'
+      end
+   end
+   return
+
+* The entries that pass the type, the state and the name filter, in name order
+apply.filter:
+   shown = ''
+   ns = 0
+   for i = 1 to nent
+      ok = 1
+      ety = emeta<i, 1>
+      begin case
+         case tsel = 2
+            ok = (ety = 'V')
+         case tsel = 3
+            ok = (ety = 'F')
+         case tsel = 4
+            ok = (ety = 'Q' or ety = 'R')
+         case tsel = 5
+            ok = (ety = 'PA' or ety = 'PH' or ety = 'S')
+         case tsel = 6
+            ok = (ety # 'V' and ety # 'F' and ety # 'Q' and ety # 'R' and ety # 'PA' and ety # 'PH' and ety # 'S')
+      end case
+      if ok and ssel = 2 then ok = (emeta<i, 4> = 'changed' or emeta<i, 4> = 'added')
+      if ok and ssel = 3 then ok = (emeta<i, 3> = 'NO')
+      if ok and filt # '' then ok = (index(upcase(enames<i>), upcase(filt), 1) > 0)
+      if ok then
+         locate enames<i> in shown<1> by 'AL' setting lp else
+            ins enames<i> before shown<lp>
+         end
+      end
+   next i
+   ns = dcount(shown, @fm)
+   if shown = '' then ns = 0
+   return
+
+* The meta of the entry named vid
+find.meta:
+   meta = ''
+   for q = 1 to nent
+      if enames<q> = vid then
+         meta = emeta<q>
+         exit
+      end
+   next q
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The two boxes are panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the list stretches (a bigger window
+* shows more entries), the detail takes the columns.
+* Out: lx ly lw lh (the list), dx dy dw dh (the detail), tw (the text width of both), VIS (the entry rows), hl (the header: the column "Points at" takes the width beyond the reference).
+declare.layout:
+   d = ''
+   d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'detail' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'list', rc)
+   lx = rc<1, 1> ; ly = rc<1, 2> ; lw = rc<1, 3> ; lh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'detail', rc)
+   dx = rc<1, 1> ; dy = rc<1, 2> ; dw = rc<1, 3> ; dh = rc<1, 4>
+   tw = lw - 4
+   VIS = lh - 6                                                 ;* the header row, the entry rows, the two summary lines, a blank row and the border: 16 rows of 22
+   pcol = 58 + tw - rtw                                         ;* the "Points at" column
+   hl = fmt('Name', '28L') : fmt('Type', '6L') : fmt('Points at', pcol : 'L') : fmt('Works', '7L') : 'Against the shipped VOC'
+   return
+
+* In: lines.  Out: dlines, what the detail shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+fit.lines:
+   dlines = lines
+   if tw > rtw then
+      dlines = ''
+      nd = 0
+      for q = 1 to dcount(lines, @fm)
+         nd += 1
+         dlines<nd> = ''
+         if lines<q> # '' then
+            call $tk_wrap(lines<q>, tw, wpieces)
+            for pj = 1 to dcount(wpieces, @fm)
+               dlines<nd> = wpieces<pj>
+               nd += 1
+            next pj
+            nd -= 1
+         end
+      next q
+   end
+   return
+
+draw.all:
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   ttl = 'The VOC of ' : @who
+   screen box at lx,ly size lw,lh title ttl
+   screen box at dx,dy size dw,dh title 'The entry under the cursor'
+   gosub draw.list
+   gosub draw.detail
+   return
+
+draw.list:
+   screen text hl at lx + 2,ly + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VIS then ta = ci - VIS
+   if ta < 0 then ta = 0
+   for r = 1 to VIS
+      kk = ta + r
+      s = ''
+      if kk <= ns then
+         vid = shown<kk>
+         gosub find.meta
+         s = fmt(vid, '28L') : fmt(meta<1, 1>, '6L') : fmt(meta<1, 2>[1, pcol - 2], pcol : 'L') : fmt(meta<1, 3>, '7L') : meta<1, 4>
+      end
+      screen text s at lx + 2,ly + 1 + r attr (if kk = ci and kk <= ns then 'highlight' else 'normal') width tw
+   next r
+   gosub draw.foot
+   call $tk_help('mark', lx + lw - 5, ly + 1, 0, 0)
+   return
+
+* The gates this session holds, asked of the kernel and never tried.  The verbs let the administrator through whatever the bits say, so the raw bit alone would tell SDSYS a gate is off
+* that it does not need (the Opus plan, P3): out gw.voc gw.dict gw.bp, each 'on (administrator)', 'on' or 'off'.
+gate.words:
+   gadm = kernel(K$ADMINISTRATOR, -1)
+   gw.voc = (if gadm then 'on (administrator)' else (if kernel(K$VOC.EDIT, -1) then 'on' else 'off'))
+   gw.dict = (if gadm then 'on (administrator)' else (if kernel(K$DICT.EDIT, -1) then 'on' else 'off'))
+   gw.bp = (if gadm then 'on (administrator)' else (if kernel(K$BP.EDIT, -1) then 'on' else 'off'))
+   return
+
+draw.foot:
+   s = nent : (if nent = 1 then ' entry' else ' entries')
+   s := ', ' : ns : ' shown (' : tnames<tsel> : '; ' : snames<ssel> : (if filt # '' then '; "' : filt : '" in the name' else '') : ').'
+   if truncated then s := '  Only the first ' : MAXV : ' were read.'
+   screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
+   gosub gate.words
+   s = 'Your gates:  voc-edit ' : gw.voc : '   dict-edit ' : gw.dict : '   bp-edit ' : gw.bp
+   if not(shipped.ok) then s := '   The shipped VOC (newvoc) cannot be opened here, so nothing is compared with it.'
+   wpieces = s
+   if tw > rtw then call $tk_wrap(s, tw, wpieces)
+   screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
+   if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
+   return
+
+* The entry under the cursor field by field, then what the type means and what the keys do with it
+draw.detail:
+   lines = ''
+   if ns >= 1 and ci >= 1 and ci <= ns then
+      vid = shown<ci>
+      gosub find.meta
+      ety = meta<1, 1>
+      gosub type.word
+      lines<-1> = vid : '  -  ' : tword
+      open 'VOC' to vf2 then
+         read dr from vf2, vid then
+            nfld = dcount(dr, @fm)
+            if nfld > 9 then nfld = 9
+            for q = 1 to nfld
+               lines<-1> = fmt(q, '3R') : '  ' : convert(@vm, ' | ', convert(@sm, ' / ', dr<q>))
+            next q
+            if dcount(dr, @fm) > 9 then lines<-1> = '     (and ' : dcount(dr, @fm) - 9 : ' more fields; E shows them all in the IDE)'
+         end
+         close vf2
+      end
+      lines<-1> = ''
+      begin case
+         case meta<1, 3> = 'NO'
+            lines<-1> = 'The pointer is broken: the file it names cannot be opened from this account.'
+         case meta<1, 4> = 'added'
+            lines<-1> = 'This entry is not in the shipped VOC (newvoc): it was added in this account.'
+         case meta<1, 4> = 'changed'
+            lines<-1> = 'This entry differs from the shipped VOC (newvoc): someone changed it in this account.'
+         case meta<1, 4> = 'same'
+            lines<-1> = 'This entry is the same as the shipped VOC (newvoc).'
+      end case
+   end else
+      lines<-1> = 'No entry is listed.  T, S and / change what is listed; Esc shows every entry.'
+   end
+   gosub fit.lines
+   for r = 1 to dh - 2
+      screen text fmt(dlines<r>[1, tw], tw : 'L') at dx + 2,dy + r width tw
+   next r
+   return
+
+* In: ety.  Out: tword, the type in words
+type.word:
+   begin case
+      case ety = 'V'
+         tword = 'a verb'
+      case ety = 'K'
+         tword = 'a keyword of the query processor'
+      case ety = 'F'
+         tword = 'a file'
+      case ety = 'Q'
+         tword = 'a pointer to a file in another account'
+      case ety = 'R'
+         tword = 'a pointer to a record in another file'
+      case ety = 'PA' or ety = 'PH'
+         tword = 'a paragraph'
+      case ety = 'PQ'
+         tword = 'a PROC (not supported here)'
+      case ety = 'S'
+         tword = 'a stored sentence'
+      case ety = 'X'
+         tword = 'text, not a command'
+      case ety = 'D'
+         tword = 'a data descriptor'
+      case ety = 'M'
+         tword = 'a menu'
+      case 1
+         tword = 'an entry of type ' : ety
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                         ;* E and e are one key
+   begin case
+      case nm = 'esc'
+         if filt # '' or tsel # 1 or ssel # 1 then
+            filt = ''
+            tsel = 1
+            ssel = 1
+            gosub apply.filter
+            ci = 1 ; ta = 0
+            gosub draw.all
+            msg = 'every entry'
+         end
+      case nm = 'up'
+         if ci > 1 then
+            ci -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if ci < ns then
+            ci += 1
+            gosub redraw
+         end
+      case nm = 'pgup'
+         ci -= VIS
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VIS
+         if ci > ns then ci = ns
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         if ns > 0 then ci = ns
+         gosub redraw
+      case nm = 't'
+         tsel = tsel + 1
+         if tsel > 6 then tsel = 1
+         gosub choose.again
+      case nm = 's'
+         ssel = ssel + 1
+         if ssel > 3 then ssel = 1
+         gosub choose.again
+      case nm = 'e'
+         gosub do.edit
+      case nm = 'd'
+         gosub do.delete
+      case nm = 'f11' or nm = '/'
+         gosub do.filter
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.voc.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'VOC', std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read the VOC again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+redraw:
+   gosub draw.list
+   gosub draw.detail
+   return
+
+* A different type or state is listed: the list starts again at the top
+choose.again:
+   gosub apply.filter
+   ci = 1 ; ta = 0
+   gosub draw.all
+   msg = tnames<tsel> : '; ' : snames<ssel>
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'VOC', mev, '', mr)                       ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'VOC', mev, ap)                              ;* S.97 stage 1: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, lx + lw - 5, ly + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.voc.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= lx + 2 and mx <= lx + lw - 3 and my >= ly + 2 and my <= ly + 1 + VIS then
+         if ta + my - ly - 1 <= ns then
+            ci = ta + my - ly - 1
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the things the page can do
+
+* A VOC id the page may give to a command: letters a-z, digits, dot, dash and underscore only (what $tk_run lets through); a VOC id may have much else ($, %, capitals)
+check.name:
+   okname = (len(vid) > 0 and len(vid) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for q = 1 to len(vid)
+      if index(good, vid[q, 1], 1) = 0 then okname = @false
+   next q
+   return
+
+* The terminal goes to a command and comes back: the page is taken again afterwards and the VOC is read again
+hand.over:
+   call $tk_close(ctx)
+   execute sent
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.voc', '', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* S.97 stage 1: the new context has no AI line yet; the account may have changed it in the command
+   gosub declare.layout                                         ;* the new context is laid out for the window as it is now (it may have been resized in the command)
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub read.all
+   gosub draw.all
+   return
+
+* E: the entry in the IDE (S.88 stage C; it was SED).  The IDE asks for no confirmation of its own; it locks the record while it is open and its own save is the VOC write the kernel's voc-edit rule guards
+do.edit:
+   if ns < 1 then return
+   vid = shown<ci>
+   gosub check.name
+   if not(okname) then
+      msg = 'this id has a character the page does not give to a command: type  ide voc ' : vid : '  at the prompt'
+      return
+   end
+   sent = 'ide voc ' : vid
+   keep = vid
+   gosub hand.over
+   for q = 1 to ns
+      if shown<q> = keep then ci = q
+   next q
+   gosub draw.all
+   msg = 'back from the IDE: the list shows the VOC as it is now'
+   return
+
+* D: DELETE VOC name, after a box and the name typed
+do.delete:
+   if ns < 1 then return
+   vid = shown<ci>
+   gosub check.name
+   if not(okname) then
+      msg = 'this id has a character the page does not give to a command: type  delete voc ' : vid : '  at the prompt'
+      return
+   end
+   * a keyword of the VOC is read by DELETE as the keyword (DELETE VOC ALL means every record), not as the name of an entry: refused here, before any box
+   call $tk_word(vid, kwok, kwwhy)
+   if not(kwok) then
+      msg = kwwhy
+      return
+   end
+   sent = 'delete voc ' : vid
+   gosub find.meta
+   lines = 'Deletes the VOC entry ' : vid : ' from the account ' : @who : '.  If it is a file pointer the file itself stays; a verb or a paragraph stops working.'
+   if meta<1, 4> = 'same' then lines<-1> = 'It is the same as the shipped VOC, so UPDATE.ACCOUNTS would bring it back.'
+   if not(kernel(K$VOC.EDIT, -1)) then lines<-1> = 'voc-edit is off for you: the delete is expected to be refused.'
+   call $tk_confirm(sent, lines, vid, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   call $tk_run(allow, sent, out, stat, rerr)
+   if rerr # '' then
+      msg = rerr
+      return
+   end
+   said = ''
+   for oi = 1 to dcount(out, @fm)
+      if trim(out<oi>) # '' then
+         said = trim(out<oi>)
+         exit
+      end
+   next oi
+   msg = (if said # '' then said else sent : ' ran')
+   gosub read.all
+   gosub draw.all
+   return
+
+do.filter:
+   screen ask 'Part of an id (empty shows every entry)' width 40 value ai.arg title 'Filter' returning ft then got = 1 else got = 0
+   if not(got) then return
+   filt = trim(ft)
+   gosub apply.filter
+   ci = 1 ; ta = 0
+   gosub draw.all
+   msg = (if filt = '' then 'every entry' else ns : ' with "' : filt : '"')
+   return
+
+end
+
+* END-CODE

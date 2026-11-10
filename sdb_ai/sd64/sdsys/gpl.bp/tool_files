@@ -1,0 +1,736 @@
+* TOOL_FILES
+* The files of the account on one screen: what each is, how big, how it is indexed, what triggers it, and the verbs that make, clear and delete one (S.75, plan
+* .claude/plan-fullscreen-toolkit.md sections 2.7, 8 and 12, DV1).  A USER app: any account, the session's own account.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 28 Oct 26 dm  S.88 L2: the two boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the list shows more files and
+*               the description more lines, both wider; text longer than its box is wrapped when the box is wider than it was.
+* 28 Oct 26 dm  S.88 phase 2 (S4): a name the VOC holds as a keyword (all ...) is refused as a target of Make, Clear and Delete and of the reports ($tk_word, check.kw).
+* 27 Oct 26 dm  S.87 batch 12: the dead FL$TYPE.SH branch of the file kind is gone with the constant.
+* 27 Oct 26 dm  S.87: A runs ANALYZE.FILE (the US spelling; the British verb record is gone).
+* 26 Oct 26 dm  New.
+* 26 Oct 26 dm  A, I and T hand the terminal to the verb (the report is printed, not captured: the first version waited for ever on LIST.INDEX's page prompt).
+* 1 Nov 26 dm   S.97 stage 1: the AI line ($tk_aipage): F6 or AI > Ask the AI puts the cursor in the line; / and F5 are offered to the model, and a proposal is carried out by this
+*               page's own key for it.  An account without the AI sees no line and no key, and the page is laid out as it always was.
+* 1 Nov 26 dm   S.97 stage 4 (the owner's editing actions): N is offered too, marked 'edit' (Enter alone rejects the proposal); the AI's argument is the DEFAULT of N's name and of the
+*               filter's text, checked as a typed answer, and every box after it applies.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: the A key's label is analyze, as its menu entry Analyze is (it said analyse); View > Mouse and Ctrl-O, as on every page (act:std.mouse, ctrl-o).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.FILES      (in every account's VOC)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), for the files of the account the session is in: the VOC entries that point at a file.  For each: its kind
+*   (dynamic, directory, sequential, a file on another server), the records in it (the file's own approximate count), its modulus, its size on disk without the indices, how many indices it
+*   has, whether it has a trigger, whether its record ids ignore case and whether it has a dictionary.  The file under the cursor is described in full under the list: where it is, its
+*   groups (in KB) and how full they are, its size, its indices and trigger, who else has it open.
+*
+*   WHAT IT CAN DO.  N makes a file (CREATE.FILE), C clears it (CLEAR.FILE), D deletes it (DELETE.FILE), A runs ANALYZE.FILE on it, I lists its indices (LIST.INDEX), T lists its triggers
+*   (LIST.TRIGGERS).  Every one of them is the verb the person could type.  Make, Clear and Delete run through $tk_run after a box that shows the exact command and says what it does; Clear
+*   and Delete ask the file's name to be typed.  The three reports are printed by their verbs straight to the terminal (EXECUTE ... CAPTURING does not catch the print unit), so the terminal is
+*   handed to the verb, Enter brings the page back.  The page changes nothing itself: the verb's own checks are the wall, so a gate that is off is met as the verb's own refusal, shown as it is.  Which gates matter: making
+*   a new file is not held back by any edit gate (the new VOC pointer is a side effect of an ordinary command); clearing or deleting a PROGRAM file needs bp-edit and a dictionary on its own
+*   needs dict-edit.  The page SHOWS the gates the session holds, asked of the kernel; it never tries an operation to learn one.
+*
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; N, C, D, A, I, T as above; F11 or / filters the names (a part of a name; empty shows all); Esc clears the filter;
+*   F5 reads the files again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.  A name with a character the page does not give to a command (a capital, an ampersand, a dollar)
+*   is listed and described, and the verbs for it are typed at the prompt.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_files
+$catalog $tool_files
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'create.file clear.file delete.file'                 ;* the commands this page may run, through $tk_run, after a box
+   show.allow = 'analyze.file list.index list.triggers'        ;* the three reporting verbs it hands the terminal to (their report is printed, not captured)
+
+   call $tk_open('tool.files', '', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'n', 'new', 'new', '', 1)
+   call $tk_keys('add', keys, 'c', 'clear', 'clear', '', 1)
+   call $tk_keys('add', keys, 'd', 'delete', 'delete', '', 1)
+   call $tk_keys('add', keys, 'a', 'analyze', 'analyse', '', 1)          ;* 9 Nov 26 (S.186): the label as the menu has it (US spelling); the action and the verb analyse.file keep their names
+   call $tk_keys('add', keys, 'i', 'indices', 'indices', '', 1)
+   call $tk_keys('add', keys, 't', 'triggers', 'triggers', '', 1)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', '', 1)
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U7: Esc takes the name filter off first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'new', '&Operations', '&New file', '', '')
+   call $tk_keys('menu', keys, 'clear', '&Operations', '&Clear the file', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Operations', '&Delete the file', '', '')
+   call $tk_keys('menu', keys, 'analyse', '&Operations', '&Analyze', '', '')
+   call $tk_keys('menu', keys, 'indices', '&Operations', '&Indices', '', '')
+   call $tk_keys('menu', keys, 'triggers', '&Operations', '&Triggers', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter the names', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 1: the AI line.  The page offers the AI the actions that only change what is shown (the owner: opt-in, off by default); a proposal is carried out by the page's own key.
+   * Where the AI is not usable for the account nothing here adds a key, a row or a line, and the page is what it always was.
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_keys('ai', keys, 'new', 'edit', '', '', '')                ;* S.97 stage 4 (the owner's editing actions): a new file, its name the AI's argument; Reject is the default
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   VIS = 16                                                    ;* file rows on the screen (the list pane's height less 6: set by get.rects)
+   rtw = TK.MINW - 2 * TK.XBODY - 4                             ;* the text width of a pane in the reference layout (140 by 43): 134
+   perr = ''
+   gosub declare.layout
+   hl =fmt('Name', '30L') : fmt('Kind', '11L') : fmt('Records', '10R') : '  ' : fmt('Modulus', '8R') : '  ' : fmt('Bytes', '12R') : '  ' : fmt('Idx', '4R') : '  ' : fmt('Trigger', '9L') : fmt('Case', '6L') : fmt('Dict', '5L') : 'Open'
+
+   fnames = '' ; fmeta = '' ; nf = 0                            ;* every file, and the rows shown (filter applied)
+   shown = '' ; ns = 0
+   filt = ''
+   ci = 1 ; ta = 0
+   gen = 0
+   done = 0
+   msg = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, 'Files', '', '', mr)              ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, 'Files', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'Files', nm, ao)             ;* S.97 stage 1: while the AI line has the focus it takes the keys, before the bar sees them
+      ai.arg = ''                                                                    ;* S.97 stage 4: the argument of an accepted proposal, the DEFAULT of this page's own prompt for that key
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> = 'replay' then ai.arg = ao<5>
+      if ao<1> # '' then msg = ao<4>
+      busy = (if filt # '' then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'Files', nm, busy, mr)       ;* the Esc rule: a name filter is taken off before the bar opens
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            if ta > ns - VIS then ta = ns - VIS
+            if ta < 0 then ta = 0
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Every file of the account (the VOC entries of type F), with what the system says about it; the cursor goes back to the file it was on
+read.all:
+   sel.f = ''
+   if ns > 0 and ci >= 1 and ci <= ns then sel.f = shown<ci>
+   fnames = ''
+   fmeta = ''
+   open 'VOC' to vocf then
+      sselect vocf to 9
+      readlist ids from 9 else ids = ''
+      n = dcount(ids, @fm)
+      if ids = '' then n = 0
+      for i = 1 to n
+         read r from vocf, ids<i> then
+            * the first field is F, or a description that starts "File" (a file's description is kept there)
+            t1 = upcase(r<1>)
+            if t1 = 'F' or t1[1, 5] = 'FILE ' then fnames<-1> = ids<i>
+         end
+      next i
+   end
+   nf = dcount(fnames, @fm)
+   if fnames = '' then nf = 0
+   for i = 1 to nf
+      fn = fnames<i>
+      gosub read.meta
+      fmeta<i> = meta
+   next i
+   gosub apply.filter
+   if sel.f # '' then
+      for i = 1 to ns
+         if shown<i> = sel.f then
+            ci = i
+            exit
+         end
+      next i
+   end
+   if ci > ns then ci = ns
+   if ci < 1 then ci = 1
+   return
+
+* In: fn.  Out: meta, a field of values: kind, records, modulus, bytes, indices, trigger, nocase, dictionary, readonly, who
+read.meta:
+   meta = ''
+   kind = '?'
+   recs = '' ; modu = '' ; bytes = '' ; nidx = '' ; trig = '' ; nocs = '' ; dct = '' ; rdo = '' ; who = ''
+   open fn to fv then
+      ft = fileinfo(fv, FL$TYPE)
+      begin case
+         case ft = FL$TYPE.DH
+            kind = 'dynamic'
+         case ft = FL$TYPE.DIR
+            kind = 'directory'
+         case ft = FL$TYPE.SEQ
+            kind = 'sequential'
+         case ft = FL$TYPE.NET
+            kind = 'server'
+         case 1
+            kind = 'other'
+      end case
+      if ft = FL$TYPE.DH then
+         recs = fileinfo(fv, FL$RECORD.COUNT)
+         modu = fileinfo(fv, FL$MODULUS)
+         bytes = fileinfo(fv, FL$PHYSBYTES)
+         ixl = indices(fv)
+         nidx = dcount(ixl, @fm)
+         if ixl = '' then nidx = 0
+         trig = fileinfo(fv, FL$TRIGGER)
+         nocs = fileinfo(fv, FL$NOCASE)
+      end
+      if ft = FL$TYPE.DIR then
+         trig = fileinfo(fv, FL$TRIGGER)
+      end
+      rdo = fileinfo(fv, FL$READONLY)
+      who = convert(@fm, ',', fileinfo(fv, FL$WHO))
+      close fv
+      open 'DICT', fn to dv then
+         dct = 1
+         close dv
+      end else
+         dct = 0
+      end
+   end else
+      kind = 'cannot open'
+   end
+   meta = kind : @vm : recs : @vm : modu : @vm : bytes : @vm : nidx : @vm : trig : @vm : nocs : @vm : dct : @vm : rdo : @vm : who
+   return
+
+* The names that hold the filter's text (any case), in name order
+apply.filter:
+   shown = ''
+   ns = 0
+   for i = 1 to nf
+      if filt = '' or index(upcase(fnames<i>), upcase(filt), 1) > 0 then
+         locate fnames<i> in shown<1> by 'AL' setting lp else
+            ins fnames<i> before shown<lp>
+         end
+      end
+   next i
+   ns = dcount(shown, @fm)
+   if shown = '' then ns = 0
+   return
+
+* The meta field of the file named fn (all of them, as a field of values)
+find.meta:
+   meta = ''
+   for q = 1 to nf
+      if fnames<q> = fn then
+         meta = fmeta<q>
+         exit
+      end
+   next q
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The two boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the list stretches (a bigger
+* window shows more files), the description takes what the layout gives it by its own weight of columns and rows.  A new $tk_open (after the terminal was handed to a verb) has no panes,
+* so the declaration is made again.  Out: lx ly lw lh (the list), dx dy dw dh (the description), tw (the text width of both), VIS (the file rows).
+declare.layout:
+   d = ''
+   d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'detail' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, perr)
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'list', rc)
+   lx = rc<1, 1> ; ly = rc<1, 2> ; lw = rc<1, 3> ; lh = rc<1, 4>
+   call $tk_layout('pane', ctx, 'detail', rc)
+   dx = rc<1, 1> ; dy = rc<1, 2> ; dw = rc<1, 3> ; dh = rc<1, 4>
+   tw = lw - 4
+   VIS = lh - 6                                                 ;* the header row, the file rows, the two summary lines, a blank row and the border: 16 rows of 22
+   return
+
+* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+fit.lines:
+   dlines = lines
+   if tw > rtw then
+      dlines = ''
+      nd = 0
+      for q = 1 to dcount(lines, @fm)
+         nd += 1
+         dlines<nd> = ''
+         if lines<q> # '' then
+            call $tk_wrap(lines<q>, tw, pieces)
+            for pj = 1 to dcount(pieces, @fm)
+               dlines<nd> = pieces<pj>
+               nd += 1
+            next pj
+            nd -= 1
+         end
+      next q
+   end
+   return
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   ttl = 'Files in ' : @who
+   screen box at lx,ly size lw,lh title ttl
+   screen box at dx,dy size dw,dh title 'The file under the cursor'
+   gosub draw.list
+   gosub draw.detail
+   return
+
+draw.list:
+   screen text hl at lx + 2,ly + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VIS then ta = ci - VIS
+   if ta < 0 then ta = 0
+   for r = 1 to VIS
+      kk = ta + r
+      s = ''
+      if kk <= ns then
+         fn = shown<kk>
+         gosub find.meta
+         s = fmt(fn, '30L') : fmt(meta<1, 1>, '11L') : fmt(meta<1, 2>, '10R') : '  ' : fmt(meta<1, 3>, '8R') : '  ' : fmt(meta<1, 4>, '12R') : '  ' : fmt(meta<1, 5>, '4R') : '  '
+         s := fmt(meta<1, 6>, '9L') : fmt((if meta<1, 7> = 1 then 'any' else (if meta<1, 7> = '' then '' else 'exact')), '6L') : fmt((if meta<1, 8> = 1 then 'yes' else (if meta<1, 8> = '' then '' else 'no')), '5L')
+         s := (if meta<1, 10> # '' then 'yes' else '')
+      end
+      screen text s at lx + 2,ly + 1 + r attr (if kk = ci and kk <= ns then 'highlight' else 'normal') width tw
+   next r
+   gosub draw.foot
+   call $tk_help('mark', lx + lw - 5, ly + 1, 0, 0)
+   return
+
+* The summary under the list, and the gates this session holds (asked of the kernel, never tried)
+* The gates this session holds, asked of the kernel and never tried.  The verbs let the administrator through whatever the bits say, so the raw bit alone would tell SDSYS a gate is off
+* that it does not need (the Opus plan, P3): out gw.voc gw.dict gw.bp, each 'on (administrator)', 'on' or 'off'.
+gate.words:
+   gadm = kernel(K$ADMINISTRATOR, -1)
+   gw.voc = (if gadm then 'on (administrator)' else (if kernel(K$VOC.EDIT, -1) then 'on' else 'off'))
+   gw.dict = (if gadm then 'on (administrator)' else (if kernel(K$DICT.EDIT, -1) then 'on' else 'off'))
+   gw.bp = (if gadm then 'on (administrator)' else (if kernel(K$BP.EDIT, -1) then 'on' else 'off'))
+   return
+
+draw.foot:
+   s = nf : (if nf = 1 then ' file' else ' files')
+   if filt # '' then s := ', ' : ns : ' with "' : filt : '" in the name'
+   gosub gate.words
+   s := '.   Your gates:  voc-edit ' : gw.voc : '   dict-edit ' : gw.dict : '   bp-edit ' : gw.bp
+   screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
+   note = "The verbs behind the keys make their own checks: clearing or deleting a program file needs bp-edit, a dictionary on its own dict-edit; what refuses is the verb."
+   pieces = note
+   if tw > rtw then call $tk_wrap(note, tw, pieces)
+   screen text fmt(pieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
+   if pieces<2> # '' then screen text fmt(pieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
+   return
+
+* The file under the cursor in plain words
+draw.detail:
+   lines = ''
+   if ns >= 1 and ci >= 1 and ci <= ns then
+      fn = shown<ci>
+      gosub find.meta
+      gosub describe
+   end else
+      if nf = 0 then
+         lines<-1> = 'This account has no files yet.  N makes one.'
+      end else
+         lines<-1> = 'No file name holds "' : filt : '".  Esc shows all of them.'
+      end
+   end
+   gosub fit.lines
+   for r = 1 to dh - 2
+      screen text fmt(dlines<r>[1, tw], tw : 'L') at dx + 2,dy + r width tw
+   next r
+   return
+
+* In: fn, meta.  Out: lines, the description in sentences
+describe:
+   lines = ''
+   open fn to fv then
+      path = fileinfo(fv, FL$PATH)
+      kind = meta<1, 1>
+      lines<-1> = fn : '  -  a ' : kind : ' file at ' : path
+      if kind = 'dynamic' then
+         lines<-1> = 'About ' : meta<1, 2> : ' records.  Modulus ' : fileinfo(fv, FL$MODULUS) : ' (never fewer than ' : fileinfo(fv, FL$MINMOD) : '), groups of ' : fileinfo(fv, FL$GRPSIZE) : ' KB, ' : fileinfo(fv, FL$LOAD) : '% full.  Split at ' : fileinfo(fv, FL$SPLIT) : '%, merge at ' : fileinfo(fv, FL$MERGE) : '%.'
+         lines<-1> = 'On disk, without the indices: ' : meta<1, 4> : ' bytes (primary ' : fileinfo(fv, FL$PRI.BYTES) : ', overflow ' : fileinfo(fv, FL$OVF.BYTES) : ').  File version ' : fileinfo(fv, FL$VERSION) : '.'
+         lines<-1> = 'Record ids ' : (if meta<1, 7> = 1 then 'ignore case (jack and JACK are one record).' else 'are case sensitive.') : '  ' : (if meta<1, 9> = 1 then 'Read only.' else 'Can be written.') : '  ' : (if meta<1, 8> = 1 then 'It has a dictionary.' else 'It has no dictionary.')
+         ixl = indices(fv)
+         if ixl = '' then
+            lines<-1> = 'No indices.'
+         end else
+            lines<-1> = 'Indices: ' : convert(@fm, ' ', ixl) : '  (I lists them in full).'
+         end
+         if meta<1, 6> = '' then
+            lines<-1> = 'No trigger.'
+         end else
+            lines<-1> = 'Trigger: ' : meta<1, 6> : ' (T lists the modes).'
+         end
+      end
+      if kind = 'directory' then
+         lines<-1> = 'A directory file: each record is a file in that directory.  ' : (if meta<1, 9> = 1 then 'Read only.' else 'Can be written.') : '  ' : (if meta<1, 6> = '' then 'No trigger.' else 'Trigger: ' : meta<1, 6> : '.')
+      end
+      if kind = 'server' then
+         lines<-1> = "A file on another SD server: what it is and who may change it is the server's to say."
+      end
+      if meta<1, 10> # '' then
+         lines<-1> = 'Open in other sessions: user ' : meta<1, 10> : ' (a clear or a delete is refused while another session holds it).'
+      end
+      lines<-1> = ''
+      lines<-1> = "C clears every record of the file.  D deletes the file and its VOC entry.  A analyzes its groups.  Clear and Delete ask for the file's name, typed."
+      close fv
+   end else
+      lines<-1> = fn : '  -  the VOC points at a file this account cannot open now.'
+      lines<-1> = 'D removes the VOC entry when the file is gone (DELETE.FILE).'
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)                         ;* N and n are one key
+   begin case
+      case nm = 'esc'
+         if filt # '' then
+            filt = ''
+            gosub apply.filter
+            ci = 1 ; ta = 0
+            gosub draw.all
+         end
+      case nm = 'up'
+         if ci > 1 then
+            ci -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if ci < ns then
+            ci += 1
+            gosub redraw
+         end
+      case nm = 'pgup'
+         ci -= VIS
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VIS
+         if ci > ns then ci = ns
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         if ns > 0 then ci = ns
+         gosub redraw
+      case nm = 'n'
+         gosub do.new
+      case nm = 'c'
+         gosub do.clear
+      case nm = 'd'
+         gosub do.delete
+      case nm = 'a'
+         sent = 'analyze.file ' : shown<ci>
+         gosub do.show
+      case nm = 'i'
+         sent = 'list.index ' : shown<ci> : ' all'                  ;* without a field name the verb stops to ask for one
+         gosub do.show
+      case nm = 't'
+         sent = 'list.triggers ' : shown<ci>
+         gosub do.show
+      case nm = 'f11' or nm = '/'
+         gosub do.filter
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.files.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'Files', std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read the files again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+redraw:
+   gosub draw.all
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'Files', mev, '', mr)                     ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'Files', mev, ap)                            ;* S.97 stage 1: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, lx + lw - 5, ly + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.files.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= lx + 2 and mx <= lx + lw - 3 and my >= ly + 2 and my <= ly + 1 + VIS then
+         if ta + my - (ly + 1) <= ns then
+            ci = ta + my - (ly + 1)
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the things the page can run
+
+* A name the page may give to a command: letters a-z, digits, dot, dash and underscore only (what $tk_run lets through)
+check.name:
+   okname = (len(fn) > 0 and len(fn) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for q = 1 to len(fn)
+      if index(good, fn[q, 1], 1) = 0 then okname = @false
+   next q
+   return
+
+* 28 Oct 26 (S.88 phase 2, S4): a name that the VOC holds as a keyword (all, detail, no.query ...) is read by the verb as that keyword, whoever's file it was meant to be: CLEAR.FILE and
+* DELETE.FILE would act on the word and not the file, and CREATE.FILE would put a pointer where a keyword stands.  $tk_word asks the same of every page.  In: fn (already through check.name).  Out: kwok, kwwhy
+check.kw:
+   call $tk_word(fn, kwok, kwwhy)
+   return
+
+* Run sent with the confirm box already answered Run (or for a verb that only reports): the verb's own words go to the status line, the files are read again
+run.sent:
+   call $tk_run(allow, sent, out, stat, rerr)
+   if rerr # '' then
+      msg = rerr
+      return
+   end
+   gosub first.line
+   msg = (if said # '' then said else sent : ' ran')
+   return
+
+first.line:
+   said = ''
+   for oi = 1 to dcount(out, @fm)
+      if trim(out<oi>) # '' then
+         said = trim(out<oi>)
+         exit
+      end
+   next oi
+   return
+
+* A verb that only reports.  Its report is printed straight to the terminal (these verbs use the print unit, which EXECUTE ... CAPTURING does not catch), so the terminal is given to
+* the verb and the page is taken again afterwards.  Only the three reporting verbs can get here, on a name that passed the character check.
+do.show:
+   if ns < 1 then return
+   fn = shown<ci>
+   gosub check.name
+   if not(okname) then
+      msg = 'this name has a character the page does not give to a command: type ' : field(sent, ' ', 1) : ' at the prompt'
+      return
+   end
+   gosub check.kw
+   if not(kwok) then
+      msg = kwwhy
+      return
+   end
+   if index(' ' : show.allow : ' ', ' ' : field(sent, ' ', 1) : ' ', 1) = 0 then
+      msg = 'the page does not run ' : field(sent, ' ', 1)
+      return
+   end
+   keep = fn
+   call $tk_close(ctx)
+   execute sent
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.files', '', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)             ;* S.97 stage 1: the new context has no AI line yet; the account may have changed it in the command
+   gosub declare.layout                                          ;* the new context has no panes
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub read.all
+   for q = 1 to ns
+      if shown<q> = keep then ci = q
+   next q
+   gosub draw.all
+   msg = 'back from ' : sent
+   return
+
+* N: a name, then dynamic or directory
+do.new:
+   screen ask 'Name of the new file' width 40 value ai.arg title 'New file' returning nn then got = 1 else got = 0
+   if not(got) then
+      msg = 'nothing made'
+      return
+   end
+   fn = trim(nn)
+   gosub check.name
+   if not(okname) then
+      msg = 'a name of letters a-z, digits, dot, dash and underscore only, at most 63 (the page gives nothing else to a command)'
+      return
+   end
+   gosub check.kw
+   if not(kwok) then
+      msg = kwwhy
+      return
+   end
+   screen msgbox 'What kind of file is ' : fn : '?' : @fm : '' : @fm : 'Dynamic: records in groups, indexable, the usual data file.' : @fm : 'Directory: each record is a file in a directory of the operating system.' title 'New file' buttons '&Dynamic,Di&rectory,&Cancel' default 1 returning b else b = 3
+   if b # 1 and b # 2 then
+      msg = 'nothing made'
+      return
+   end
+   sent = 'create.file ' : fn : (if b = 2 then ' directory' else '')
+   lines = 'Makes the file ' : fn : ' in the account ' : @who : ' with its dictionary and a VOC entry.  Making a new file is not held back by the edit gates.'
+   call $tk_confirm(sent, lines, '', res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   newname = fn
+   gosub read.all
+   for q = 1 to ns
+      if shown<q> = newname then ci = q
+   next q
+   gosub draw.all
+   return
+
+do.clear:
+   if ns < 1 then return
+   fn = shown<ci>
+   gosub check.name
+   if not(okname) then
+      msg = 'this name has a character the page does not give to a command: type clear.file ' : fn : ' at the prompt'
+      return
+   end
+   gosub check.kw
+   if not(kwok) then
+      msg = kwwhy
+      return
+   end
+   sent = 'clear.file ' : fn
+   gosub find.meta
+   lines = 'Removes every record of ' : fn : ' (about ' : meta<1, 2> : ').  The file, its dictionary and its indices stay; the records cannot be got back.'
+   call $tk_confirm(sent, lines, fn, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.all
+   gosub draw.all
+   return
+
+do.delete:
+   if ns < 1 then return
+   fn = shown<ci>
+   gosub check.name
+   if not(okname) then
+      msg = 'this name has a character the page does not give to a command: type delete.file ' : fn : ' at the prompt'
+      return
+   end
+   gosub check.kw
+   if not(kwok) then
+      msg = kwwhy
+      return
+   end
+   sent = 'delete.file ' : fn : ' no.query'
+   lines = 'Deletes the file ' : fn : ', its dictionary and its VOC entry.  Nothing can bring them back; a backup can.'
+   call $tk_confirm(sent, lines, fn, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   gosub run.sent
+   gosub read.all
+   gosub draw.all
+   return
+
+do.filter:
+   screen ask 'Part of a name (empty shows every file)' width 40 value ai.arg title 'Filter' returning ft then got = 1 else got = 0
+   if not(got) then return
+   filt = trim(ft)
+   gosub apply.filter
+   ci = 1 ; ta = 0
+   gosub draw.all
+   msg = (if filt = '' then 'every file' else ns : ' with "' : filt : '"')
+   return
+
+end
+
+* END-CODE

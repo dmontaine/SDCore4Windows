@@ -159,7 +159,7 @@ def checks(raw):
     td, tq, tb = strip_bas(raw["tool_dict"]), strip_bas(raw["tool_query"]), strip_bas(raw["tool_bulk"])
     ck("F0", "NULL CASE: tk.h, $tk_open, $tk_confirm, the three pages and the messages were found and are not trivially short (a check on nothing would pass)",
        len(th) > 1500 and len(op) > 800 and len(cf) > 800 and len(td) > 20000 and len(tq) > 20000 and len(tb) > 20000
-       and all(raw["m%d" % n].strip() for n in (12202, 12817, 12869, 12870, 12956, 12957, 12958, 12959, 12960)) and len(raw["pages"]) >= 15,
+       and all(raw["m%d" % n].strip() for n in (12202, 12817, 12869, 12870, 12956, 12957, 12958, 12959, 12960)) and len(raw["pages"]) >= 11,   # 10 Nov 26 Windows port: 11 (Linux 15; tool.accounts, audit, config, jobs, entries, remote and ai are not carried yet)
        "%d %d %d %d %d %d, %d other pages" % (len(th), len(op), len(cf), len(td), len(tq), len(tb), len(raw["pages"])))
 
     # ---- the largest window
@@ -182,11 +182,11 @@ def checks(raw):
        and cf.count("boxtitle") == 4 and ordered(cf, "ttl = sysmsg(12817)", "if not(unassigned(boxtitle)) then if boxtitle # '' then ttl = boxtitle end", "screen msgbox body title ttl buttons", "tt = ttl", "screen ask pr width fw title tt")
        and cf.count("sysmsg(12817)") == 1 and "title sysmsg(12817)" not in cf and " and boxtitle" not in cf and " or boxtitle" not in cf, "")
     want = {("tool_query", "do.save"): ["sysmsg(12957)", "sysmsg(12957)"], ("tool_query", "delete.selected"): ["sysmsg(12958)"],
-            ("tool_bulk", "do.apply"): ["sysmsg(12959)"], ("tool_bulk", "do.undo"): ["sysmsg(12960)"],
-            ("tool_entries", "delete.reached"): ["sysmsg(12958)"],      # S.96 M3 (2 Nov 26): D deletes the record itself, after the id is typed
-            # 3 Nov 26 (S.108, track C): G writes the records itself (Update these records?) and U puts them back (Put these
-            # records back?), titled as tool.bulk's apply and undo; U's create.file box stays a five-argument command box
-            ("tool_entries", "do.global"): ["sysmsg(12959)"], ("tool_entries", "do.undo"): ["sysmsg(12960)"]}
+            ("tool_bulk", "do.apply"): ["sysmsg(12959)"], ("tool_bulk", "do.undo"): ["sysmsg(12960)"]}
+    # 10 Nov 26 Windows port: Linux also expects tool.entries' three titled calls (delete.reached 12958, do.global 12959, do.undo 12960, S.96 M3 and
+    # S.108); tool.entries waits for run.in here (RELEASE_1.1 201), so they are asked for only when the page is in this tree.
+    if "tool_entries" in raw["pages"]:
+        want.update({("tool_entries", "delete.reached"): ["sysmsg(12958)"], ("tool_entries", "do.global"): ["sysmsg(12959)"], ("tool_entries", "do.undo"): ["sysmsg(12960)"]})
     # 2 Nov 26 (S.88 P10): the one call with SEVEN arguments, the buttons, is tool.gates's leave question, Cancel last; it has a title of its own, which is not a record title
     want7 = {("tool_gates", "leave.ask"): [("'Leave the gate matrix?'", "'&Run the changes,&Leave without them,&Cancel'")]}
     got = {}
