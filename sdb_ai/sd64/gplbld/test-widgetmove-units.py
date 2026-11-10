@@ -8,8 +8,8 @@
 #   W0  NULL CASE: every file and routine read here is there
 #   W1  $sl_widget_move is $internal, takes six arguments, decides every refusal (not a form, no widget, a place or size that is not a number, a kind that takes no
 #       size, a label or entry asked for a height other than 1) BEFORE it changes anything, and never calls a kind's init
-#   W2  it hands a memo, a table and a tree their own op 'size'; a label and an entry get a width; SCREEN MOVE (!screen_move) still takes a size for a container,
-#       viewport or frame only (sandbox-viewport.py needs a label to answer ELSE)
+#   W2  it hands a memo, a table and a tree their own op 'size'; a label and an entry get a width; SCREEN MOVE (!screen_move) gives every kind but a container,
+#       viewport or frame its size through this routine (S.183), and a refusal is its ELSE (sandbox-viewport.py: a label of height 5)
 #   W3  $sl_memo's op 'size' is after 'mouse' (test-memoundo slices 'init' to 'draw'), sets the size, works the rectangle out again (geom), brings the view to
 #       the cursor and stores - and does not clear the undo steps, the mark or the find text; the bpon read is in geom, which every call runs
 #   W4  $sl_table's and $sl_tree's 'size': the table keeps its order, marks and column widths (no order.rows, no picked = ''), the tree its open nodes (no opn = '')
@@ -115,8 +115,8 @@ def run():
         all("call $sl_%s('size', w, '', sw : @fm : sh, r)" % k in wm for k in ("memo", "table", "tree"))
         and "case wt = 'label' or (wt = 'entry' and w{'fw'} = '')" in wm and "w{'w'} = sw + 0" in wm
         and "if x # '' then w{'x'} = x + 0" in wm and "if y # '' then w{'y'} = y + 0" in wm, "")
-    row("W2 SCREEN MOVE still takes a size for a container, viewport or frame only",
-        "if (sw # '' or sh # '') and not(ctr or wt = 'frame') then return" in smv and "sl_widget_move" not in smv)
+    row("W2 SCREEN MOVE gives any other widget its size through $sl_widget_move, whose refusal is its ELSE (S.183)",
+        "if (sw # '' or sh # '') and not(ctr or wt = 'frame') then\n      call $sl_widget_move(f, id, ax, ay, sw : @vm : sh, r)" in smv and "if r then return" in smv)
 
     # ---- W3 W4 the 'size' ops ------------------------------------------------------------------------------------------------------------
     ms = case(memo, "size", "bptoggle")
@@ -209,7 +209,7 @@ def selftest():
     mutant("widget move changes x before a refusal (moved up)", "sl_widget_move", "   * Decide everything before anything changes", "   if x # '' then w{'x'} = x + 0\n   * Decide everything before anything changes")
     mutant("widget move calls init", "sl_widget_move", "call $sl_tree('size', w, '', sw : @fm : sh, r)", "call $sl_tree('init', w, '', sw : @fm : sh, r)")
     mutant("widget move sizes any kind", "sl_widget_move", "         case 1\n            return\n", "         case 1\n            kind.op = 'width'\n")
-    mutant("screen move takes a size for a label", "screen_move", "if (sw # '' or sh # '') and not(ctr or wt = 'frame') then return", "if (sw # '' or sh # '') and not(ctr or wt = 'frame' or wt = 'label') then return")
+    mutant("screen move ignores a refused size", "screen_move", "      if r then return\n", "")
     shutil.rmtree(t, ignore_errors=True)
     print("selftest: %d of %d mutants caught, %d missed" % (caught, caught + missed, missed))
     return 0 if missed == 0 else 1

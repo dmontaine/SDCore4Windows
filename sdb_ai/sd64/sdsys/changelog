@@ -3,6 +3,21 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  FULL-SCREEN FIXES: LINES, RESIZING, F11, THE START QUESTION (SOME FROM SD CORE FOR LINUX).
+
+             What        - The full-screen pages draw their boxes with lines on a Windows console (they drew + - | because
+                           a Windows console sets no locale). A page follows the window when it grows or shrinks,
+                           Windows Terminal's F11 full screen included, without waiting for a key or a click. F11 is no
+                           longer a filter key on tool.catalog, tool.dict, tool.files, tool.test and tool.voc: / filters,
+                           as before (terminals keep F11 for full screen). SCREEN FORM ... FILL, and STRETCH on SCREEN
+                           MEMO and SCREEN TABLE, let a program's form follow the window; SCREEN MOVE takes a SIZE. A
+                           new install asks whether new sessions start at the command prompt instead of the home screen.
+                           A session reading from a pipe now leaves when SD is stopped, instead of being ended after ten
+                           seconds.
+             Why         - Found by the owner's first test of the full-screen programs on Windows, and by SD Core for
+                           Linux.
+             Does NOT    - Change where an existing system's sessions start: an upgrade does not ask.
+
 10 Nov 26  THE FULL-SCREEN PROGRAMS ARE THOSE OF SD CORE FOR LINUX: THE IDE, THE HOME SCREEN, THE TOOL PAGES AND THE DEBUGGER
            (FROM SD CORE FOR LINUX).
 

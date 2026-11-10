@@ -17,6 +17,8 @@
 * 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -31,7 +33,7 @@
 *   says which of the edit gates the session holds.  D deletes an entry (DELETE VOC name) after a box and the name typed; an entry that is a keyword of the VOC (type K: all, detail ...) is refused, because DELETE would read the name as the keyword.  Nothing is written by the page itself: a record is changed by
 *   the IDE or by a verb, never by this program.
 *
-*   Keys: Up and Down, PgUp and PgDn, Home and End move; T cycles the type shown (all, verbs, files, pointers, paragraphs and sentences, other); / or F11 filters by a part of the name;
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; T cycles the type shown (all, verbs, files, pointers, paragraphs and sentences, other); / filters by a part of the name;
 *   S cycles all, only the entries that differ from the shipped VOC, only broken pointers; E, D as above; F5 reads again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
 *
 * END-DESCRIPTION
@@ -312,10 +314,10 @@ get.rects:
    hl = fmt('Name', '28L') : fmt('Type', '6L') : fmt('Points at', pcol : 'L') : fmt('Works', '7L') : 'Against the shipped VOC'
    return
 
-* In: lines.  Out: dlines, what the detail shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+* In: lines.  Out: dlines, what the detail shows.  A line longer than the box is wrapped at its width (S.138).
 fit.lines:
    dlines = lines
-   if tw > rtw then
+   if lines # '' then
       dlines = ''
       nd = 0
       for q = 1 to dcount(lines, @fm)
@@ -379,7 +381,7 @@ draw.foot:
    s = 'Your gates:  voc-edit ' : gw.voc : '   dict-edit ' : gw.dict : '   bp-edit ' : gw.bp
    if not(shipped.ok) then s := '   The shipped VOC (newvoc) cannot be opened here, so nothing is compared with it.'
    wpieces = s
-   if tw > rtw then call $tk_wrap(s, tw, wpieces)
+   call $tk_wrap(s, tw, wpieces)
    screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
    if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
    return
@@ -506,7 +508,7 @@ on.key:
          gosub do.edit
       case nm = 'd'
          gosub do.delete
-      case nm = 'f11' or nm = '/'
+      case nm = '/'
          gosub do.filter
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.voc.page', hm, 0, 0)

@@ -10,15 +10,18 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN FORM {TITLE t} {AT x,y} {SIZE w,h} RETURNING f
+*   SCREEN FORM {TITLE t} {AT x,y} {SIZE w,h} {FILL} RETURNING f
 *
 *   is compiled into
 *
-*   call !screen_form(title, x, y, w, h, ret, status)
+*   call !screen_form(title, x, y, w, h, fill, ret, status)
 *
 *     title    shown in the top border
 *     x y      the top left cell of the form on the screen, from 0; left out, the form is centred
 *     w h      its size, border included; left out, wide and high enough for the widgets added to it
+*     fill     the form takes the whole window and follows it: the size above (or the one worked out) is the smallest window the
+*              program is laid out for, a widget with STRETCH gets the spare room and what lies beyond it moves.  Below that size the
+*              keyboard is held behind a warning until the window is big enough (S.183)
 *     ret      the form: a data collection, which the other form verbs take as their first value.  It
 *              is one object however many variables hold it, so the verbs that add widgets and set
 *              values change the program's form without anything being handed back.  JBUILD writes it
@@ -30,7 +33,7 @@
 * START-CODE
 
 $internal
-subroutine screen_form(title, ax, ay, sw, sh, ret, status)
+subroutine screen_form(title, ax, ay, sw, sh, fill, ret, status)
 $catalog !screen_form
 
    f = collection()
@@ -44,6 +47,7 @@ $catalog !screen_form
       f{'w'} = sw + 0
       f{'h'} = sh + 0
    end
+   f{'fill'} = (fill # '')                         ;* S.183
    f{'widgets'} = mat()
    f{'focus'} = 0
    ret = f

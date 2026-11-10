@@ -56,6 +56,7 @@
  * 31 Dec 23 SD launch - prior history suppressed
  * 17 Aug 26 Windows port - login_user() removed; it read /etc/shadow, which
  *           MSYS2 does not have.  The API uses $CRED now.
+ * 10 Nov 26 dm  S.178: keyin() waits on a pipe with poll and sees the events, so a session idle on a pipe leaves on SIGTERM.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -767,6 +768,21 @@ int16_t keyin(timeout) int timeout; /* Milliseconds */
     goto exit_keyin;
   } else {
     if (piped_input) {
+      /* 10 Nov 26 dm - S.178: a read of a pipe is not woken by a signal (SA_RESTART), so a session idle on a pipe never saw
+         EVT_TERMINATE and `sd -stop` had to SIGKILL it after ten seconds.  Wait with poll, as the terminal branch below does,
+         and see the events once a second.  An error other than EINTR goes on to the read, which reports it.                  */
+      for (;;) {
+        poll_ret = sdpoll(0, 1000);
+        if ((poll_ret > 0) || ((poll_ret < 0) && (errno != EINTR)))
+          break;
+        if ((my_uptr != NULL) && (my_uptr->events))
+          process_events();
+        if (k_exit_cause & K_INTERRUPT) {
+          input_handler_enabled = TRUE;
+          return 0;
+        }
+      }
+
       if (read(0, &c, 1) <= 0) {
         process.status = ER_EOF;
         return -1;

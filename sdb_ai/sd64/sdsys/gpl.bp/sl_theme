@@ -29,6 +29,7 @@
 *               with no colour the focused box looked like the selected row); paper's focus is underlined as well as bold, so it does not rely on bold being bright.
 * 10 Nov 26 dm  S.199 (owner: "three themes, dark, light and mono are exactly the same"; "Yes, drop them"; "there is no need to keep them for programs"): the themes dark and
 *               light are gone.  The syntax palettes of those names stay: classic and blue use the dark one, and an editor's SYNTAX LIGHT the light one.
+* 10 Nov 26 dm  S.173: hotkey.sel in every theme; paper's and night's selected entry is white on blue, no longer the page's colours (it looked like a hole in the open menu).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -54,6 +55,7 @@
 *     barsel      s     normal                the selected entry of a bar
 *     hotkey      k     underline             a mnemonic letter
 *     hotkey.bar  j     reverse and underline a mnemonic letter on a bar
+*     hotkey.sel  Z     underline             a mnemonic letter on the selected entry of a bar
 *     field       e     underline             an entry field that has not the focus
 *     disabled    d     normal                an entry that cannot be chosen
 *     desktop     y     normal                what SCREEN CLEAR, TEXT and BOX draw on: the background
@@ -136,6 +138,7 @@ $include sl.h
       th.names := @fm : 'tab' : @fm : 'scroll'      ;* 14 Oct 26: the strip of tabs (code T) and the scroll bar column of a list, text area, table or tree (code B)
       th.names := @fm : 'warning' : @fm : 'success' : @fm : 'readonly'     ;* 29 Oct 26: the roles (codes U V W), before the user styles
       th.names := @fm : 'busy' : @fm : 'focus'                             ;* (codes X Y)
+      th.names := @fm : 'hotkey.sel'                                       ;* 10 Nov 26 (S.173, code Z)
       for q = 1 to 16
          th.names := @fm : 'user' : q                 ;* 22 Oct 26: the spare styles a control's COLOR clause takes (codes A C D E F H I J K L M N O Q R S)
       next q
@@ -233,6 +236,7 @@ set.theme:
          spec<-1> = 'bar=,,reverse'
          spec<-1> = 'hotkey=,,underline'
          spec<-1> = 'hotkey.bar=,,reverse underline'
+         spec<-1> = 'hotkey.sel=,,underline'
          spec<-1> = 'field=,,underline'
          spec<-1> = 'header=,,underline bold'
          spec<-1> = 'bar.disabled=,,reverse dim'   ;* 13 Oct 26: a menu item that cannot be chosen
@@ -246,6 +250,7 @@ set.theme:
          spec<-1> = 'barsel=white,green,bold'
          spec<-1> = 'hotkey=red,white,'
          spec<-1> = 'hotkey.bar=red,white,'
+         spec<-1> = 'hotkey.sel=red,white,'
          spec<-1> = 'field=white,blue,bold'
          spec<-1> = 'disabled=black,white,bold'
          spec<-1> = 'text=white,blue,bold'
@@ -268,6 +273,7 @@ set.theme:
          spec<-1> = 'barsel=white,black,bold'
          spec<-1> = 'hotkey=brown,blue,bold'
          spec<-1> = 'hotkey.bar=red,cyan,'
+         spec<-1> = 'hotkey.sel=brown,blue,bold'
          spec<-1> = 'field=black,cyan,'
          spec<-1> = 'disabled=cyan,blue,'
          spec<-1> = 'text=white,black,'
@@ -299,9 +305,10 @@ set.theme:
          spec<-1> = 'highlight=white,black,bold'
          * the menu bar and the menus are the INVERSE of the page (light grey on black, the letter yellow): a menu the same colours as the page under it had no edge
          spec<-1> = 'bar=white,black,'
-         spec<-1> = 'barsel=black,white,'
+         spec<-1> = 'barsel=white,blue,'
          spec<-1> = 'hotkey=blue,white,underline'
          spec<-1> = 'hotkey.bar=brown,black,bold underline'
+         spec<-1> = 'hotkey.sel=brown,blue,bold underline'
          spec<-1> = 'field=black,white,underline'
          spec<-1> = 'disabled=blue,white,'
          spec<-1> = 'text=black,white,'
@@ -329,9 +336,10 @@ set.theme:
          spec<-1> = 'window=white,black,'
          spec<-1> = 'highlight=black,white,'
          spec<-1> = 'bar=black,white,'
-         spec<-1> = 'barsel=brown,black,bold'
+         spec<-1> = 'barsel=white,blue,'
          spec<-1> = 'hotkey=brown,black,bold underline'
          spec<-1> = 'hotkey.bar=blue,white,underline'
+         spec<-1> = 'hotkey.sel=brown,blue,bold underline'
          spec<-1> = 'field=white,black,underline'
          spec<-1> = 'disabled=cyan,black,'
          spec<-1> = 'text=white,black,'

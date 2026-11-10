@@ -16,7 +16,7 @@
 *
 *   call !screen_style(name, fg, bg, flags, ret, status)
 *
-*     name        a style of a theme: bold, window, highlight, bar, barsel, hotkey, hotkey.bar, field, disabled,
+*     name        a style of a theme: bold, window, highlight, bar, barsel, hotkey, hotkey.bar, hotkey.sel, field, disabled,
 *                 desktop, text or header (normal, reverse, underline and both are the same in every theme;
 *                 see $sl_theme)
 *     fg bg       a colour: black, blue, green, cyan, red, magenta, brown (or yellow) or white; null leaves

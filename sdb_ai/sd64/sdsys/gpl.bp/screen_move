@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 18 Oct 26 dm  New.
+* 10 Nov 26 dm  S.183: SIZE also for a text area, table, tree, label or entry field, through $sl_widget_move.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -19,7 +20,7 @@
 *     f id      the form and the widget's name in it
 *     x y       the widget's new place, counted as it was when it was added (from the form's top left corner, or from
 *               the inside of its container).  What is inside a container moves with it
-*     w h       a new size: for a container, viewport or frame only
+*     w h       a new size: a container, viewport, frame, text area, table or tree; a label or an entry field takes a width (its height stays 1) (S.183)
 *     cw ch     a new size of the sheet: for a viewport only
 *     status    0; 1 if f is not a form, it has no widget of that id, or a size is asked of a widget that cannot have one
 *               (ELSE; nothing is changed then)
@@ -44,19 +45,23 @@ $catalog !screen_move
    w = f{'widgets', n}
    wt = w{'type'}
    ctr = (wt = 'container' or wt = 'viewport')
-   if (sw # '' or sh # '') and not(ctr or wt = 'frame') then return
    if (cw # '' or ch # '') and wt # 'viewport' then return
    if (ax # '' and not(num(ax))) or (ay # '' and not(num(ay))) then return
    if (sw # '' and not(num(sw))) or (sh # '' and not(num(sh))) then return
    if (cw # '' and not(num(cw))) or (ch # '' and not(num(ch))) then return
 
-   if ax # '' then w{'x'} = ax + 0
-   if ay # '' then w{'y'} = ay + 0
-   if sw # '' then w{'w'} = sw + 0
-   if sh # '' then w{'h'} = sh + 0
-   if cw # '' then w{'cw'} = cw + 0
-   if ch # '' then w{'ch'} = ch + 0
-   if ctr then call $sl_viewport('init', w, '', '', r)
+   if (sw # '' or sh # '') and not(ctr or wt = 'frame') then
+      call $sl_widget_move(f, id, ax, ay, sw : @vm : sh, r)    ;* S.183: a text area, table, tree, label or entry: the routine that keeps what it holds
+      if r then return
+   end else
+      if ax # '' then w{'x'} = ax + 0
+      if ay # '' then w{'y'} = ay + 0
+      if sw # '' then w{'w'} = sw + 0
+      if sh # '' then w{'h'} = sh + 0
+      if cw # '' then w{'cw'} = cw + 0
+      if ch # '' then w{'ch'} = ch + 0
+      if ctr then call $sl_viewport('init', w, '', '', r)
+   end
 
    if f{'shown'} and not(system(25)) then
       call $sl_scr('get', scr)

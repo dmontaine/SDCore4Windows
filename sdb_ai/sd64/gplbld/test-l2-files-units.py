@@ -323,10 +323,10 @@ def checks(raw):
        all("if ta > ns - VIS then ta = ns - VIS" in sq[p] for p in ("tool_files", "tool_catalog", "tool_test")) and "if ot > nv - VISO then ot = nv - VISO" in sq["tool_test"]
        and "if ra > npv - VP + 1 then ra = npv - VP + 1" in sq["tool_bulk"] and all(s in q for s in ("if ft > nfs - VISF then ft = nfs - VISF", "if ct > nd - VISC then ct = nd - VISC",
                                                                                                   "if rtop > rl.cnt - RVIS then rtop = rl.cnt - RVIS")), "")
-    ck("S4", "text longer than its box is wrapped when the box is wider than it was and cut as it always was at the reference width: tool.files, tool.catalog and tool.test wrap the detail lines and the foot note "
-             "only when tw > rtw (rtw = TK.MINW - 2 * TK.XBODY - 4) with $tk_wrap; tool.query wraps the sentence and the Results header at the box's width and the Conditions notes (the paragraphs) only when the box is wider than 62",
-       all(("dlines = lines if tw > rtw then dlines = ''" in sq[p] and "call $tk_wrap(lines<q>, tw, " in sq[p] and "rtw = TK.MINW - 2 * TK.XBODY - 4" in sq[p]
-            and re.search(r"if tw > rtw then call \$tk_wrap\(note, tw, w?pieces\)", sq[p])) for p in ("tool_files", "tool_catalog", "tool_test"))
+    ck("S4", "text longer than its box is wrapped at every width (S.138): tool.files, tool.catalog and tool.test wrap the detail lines and the foot note "
+             "with $tk_wrap; tool.query wraps the sentence and the Results header at the box's width and the Conditions notes (the paragraphs) only when the box is wider than 62",
+       all(("dlines = lines if lines # '' then dlines = ''" in sq[p] and "call $tk_wrap(lines<q>, tw, " in sq[p]
+            and re.search(r"call \$tk_wrap\(note, tw, w?pieces\)", sq[p])) for p in ("tool_files", "tool_catalog", "tool_test"))
        and "if nt.w > nt.rw then" in q and "nt.rw = 62" in q and "call $tk_wrap(sent, tw - 4, pieces)" in q and "call $tk_wrap('Ran: ' : rl.sent, tw - 4, pieces)" in q, "")
     paras = ["Enter edits the row: the item, the operator, the value.", "J switches and / or.  D clears the row.",
              "A value is plain text, typed as the query processor reads it for the item (see the query documentation).",
@@ -385,7 +385,7 @@ MUTANTS = [
     ("tool.files forgets its panes after a report", "S2", sub("tool_files", "   gosub declare.layout                                          ;* the new context has no panes\n", "")),
     ("tool.test lets the top of the list pass the end after a resize", "S3", sub("tool_test", "            if ta > ns - VIS then ta = ns - VIS\n", "")),
     ("tool.bulk lets the preview top pass the end", "S3", sub("tool_bulk", "            if ra > npv - VP + 1 then ra = npv - VP + 1\n", "")),
-    ("tool.files wraps at the reference width too", "S4", sub("tool_files", "   if tw > rtw then\n      dlines = ''", "   if tw > 0 then\n      dlines = ''")),
+    ("tool.files does not wrap its detail lines", "S4", sub("tool_files", "   if lines # '' then\n      dlines = ''", "   if @false then\n      dlines = ''")),
     ("tool.query wraps the notes at the reference width", "S4", sub("tool_query", "   if nt.w > nt.rw then", "   if nt.w > 0 then")),
     ("a note of tool.query loses a word", "S5", sub("tool_query", "nt.par<3> = 'A value is plain text, typed as the query processor reads it for the item", "nt.par<3> = 'A value is plain text, typed as the processor reads it for the item")),
     ("tool.bulk keeps 20 previews whatever the box", "S6", sub("tool_bulk", "   if VP > pvcap then pvcap = VP\n", "")),

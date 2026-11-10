@@ -10,6 +10,7 @@
 * 29 Oct 26 dm  S.88 3.10A: the optional arguments hot and filtout (var.args, as $sl_guard): keys that end the window with status 2, and the filter text.
 * 3 Nov 26 dm  The picker extended (owner, 2 Nov: "Extend the picker"): the optional arguments cols (columns with headings and widths, for a list in items) and hotcur
 *              (the entry the cursor was on when a hot key ended the window), so that a caller can offer a key such as Del on the entry and keep its own confirmation.
+* 10 Nov 26 dm  S.138: a name may take 60 cells, not 30.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -105,7 +106,7 @@ $include sl.h
    end
    call $sl_scr('get', scr)
 
-   * the columns: the name (at most 30 cells), then the description; the window is as wide as they need, 44 cells at least
+   * the columns: the name (at most 60 cells: S.138, the finder's "Menu > Label" was cut at 30), then the description; the window is as wide as they need, 44 cells at least
    nw = 4
    dw = 0
    for i = 1 to n
@@ -116,7 +117,7 @@ $include sl.h
       if nw < 12 then nw = 12                 ;* the ids not read yet may be longer than these
       if dfield > 0 and dw < 30 then dw = 30
    end
-   if nw > 30 then nw = 30
+   if nw > 60 then nw = 60
    if ncol > 0 then                           ;* the caller's columns: the widths it gave, the name's included
       nw = cw<1>
       dw = 0

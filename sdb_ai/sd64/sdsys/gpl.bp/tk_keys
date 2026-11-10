@@ -12,6 +12,7 @@
 *               every gate stays with the handler (owner answer 25; test-tk-keys-units.py holds this as text).
 * 1 Nov 26 dm  S.97 stage 1: the ops 'ai' (an action may be offered to the AI) and 'aiacts' (what is offered now), and the tenth value TK.K.AI.  Still no code: both only list.
 * 1 Nov 26 dm  S.97 stage 4: 'ai' with b = 'edit' (TK.K.AI 2, an action that makes or compiles something); 'aiacts' returns those ids in c.  Still no code: both only list.
+* 10 Nov 26 dm  S.133: 'menus' gives a menu entry the reason set by 'why', which the F2 finder shows when the entry is chosen.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -125,6 +126,7 @@ $include tk.h
                      gosub act.state
                      fl = (if ia then '' else 'D')
                      ent = keys<i, TK.K.ENTRY> : @sm : ik : @sm : fa : @sm : fl
+                     if iw # '' then ent := @sm : iw                 ;* S.133: subvalue 5, the reason the F2 finder shows
                      if fa = 'quit' then qent = ent else m<1, -1> = ent
                   end
                end

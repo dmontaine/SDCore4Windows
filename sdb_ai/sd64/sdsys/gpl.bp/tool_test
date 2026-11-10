@@ -19,6 +19,8 @@
 *              the boxes.  Enter still opens the Output box and Esc leaves it.  AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse, the same on every page (the case act:std.mouse, through $tk_std).
+* 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -43,7 +45,7 @@
 *   (the data stack) and the leftovers are discarded; the result says how many it used.  The break key is turned on for the run: a test that does not end is stopped with Ctrl-C and Q.
 *   BASIC has no time limit for a program and neither has the page.  Only the first and last lines of a very long output are kept (the result says so); the verdict is judged on all of it.
 *
-*   Keys: Up and Down, PgUp and PgDn, Home and End move; R, A, F, B and Enter as above; F11 or / filters the names (a part of a test or file name; empty shows all); Esc clears the
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; R, A, F, B and Enter as above; / filters the names (a part of a test or file name; empty shows all); Esc clears the
 *   filter; F5 reads the program files again (the results stay); F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.  A name with a character the page does not give to a
 *   command (a capital, an ampersand, a dollar) is listed, and the page says which command to type at the prompt.
 *
@@ -75,7 +77,6 @@ $include tk.h
       stop
    end
 
-   rtw = TK.MINW - 2 * TK.XBODY - 4                             ;* the text width of a pane in the reference layout (140 by 43): 134
    perr = ''
    outopen = 0                                                  ;* the output pane of the runs (Ctrl-O): closed until asked for
    gosub declare.layout
@@ -371,10 +372,10 @@ get.rects:
    VISO = dh - 2
    return
 
-* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+* In: lines.  Out: dlines, what the description shows.  A line longer than the box is wrapped at its width (S.138).
 fit.lines:
    dlines = lines
-   if tw > rtw then
+   if lines # '' then
       dlines = ''
       nd = 0
       for q = 1 to dcount(lines, @fm)
@@ -494,7 +495,7 @@ draw.foot:
    screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
    note = "A test prints its result, and its last line says N passed, 0 failed.  A run needs no gate.  Ctrl-C then Q stops one that does not end."
    wpieces = note
-   if tw > rtw then call $tk_wrap(note, tw, wpieces)
+   call $tk_wrap(note, tw, wpieces)
    screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
    if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
    return
@@ -669,7 +670,7 @@ on.key:
          gosub do.compile
       case nm = 'enter'
          gosub show.output
-      case nm = 'f11' or nm = '/'
+      case nm = '/'
          gosub do.filter
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.test.page', hm, 0, 0)

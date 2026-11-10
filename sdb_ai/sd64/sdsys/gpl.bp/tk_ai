@@ -37,6 +37,7 @@
 *              gives one it cannot use.
 * 8 Nov 26 dm   S.175 (the owner: "it is showing the standard prefix text, it is not supposed to"): the preview no longer shows SD's own text (the fixed instruction,
 *               the actions, the form's fields, the page's description, the documentation passages); the size still counts it; the person's data and request are shown.
+* 10 Nov 26 dm  S.138: 'Waiting for the answer' no longer stays on the row behind the answer on a page with no AI line.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -682,11 +683,11 @@ run.ask:
       if gave.up then
          void kernel(K$AI.CANCEL, 0)
          b = 'none' : @fm : '' : @fm : '' : @fm : '' : @fm : sysmsg(12651)
-         if ai.line then gosub paint
+         gosub end.wait
          return
       end
    repeat
-   if ai.line then gosub paint
+   gosub end.wait
 
    * the answer: the helper's line, then the model's text as ONE JSON object
    if rp<1> # 'D' then
@@ -842,6 +843,15 @@ wrap.exact:
    for wr.k = 1 to wr.len step wr.w
       wr.out<-1> = (if wr.k = 1 then wr.p1 else wr.p2) : wr.text[wr.k, wr.w]
    next wr.k
+   return
+
+* S.138: the wait is over, so the line that said so goes: the AI line is drawn again, and on a page without one (a row the app named) the row is blanked
+end.wait:
+   if ai.line then
+      gosub paint
+   end else
+      screen text '' at 3,y width lw - 6
+   end
    return
 
 * The model's text to a proposal.  The text is read as ONE JSON object (a first { to the last }, so a code fence round it does no harm); if it is not, it is shown as it is and nothing is

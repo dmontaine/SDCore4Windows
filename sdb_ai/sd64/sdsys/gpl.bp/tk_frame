@@ -14,6 +14,7 @@
 *               focus is one of them, and written again only when a mark changed or the frame was forgotten.  A page that names none is drawn as before.
 * 1 Nov 26 dm  S.97 stage 1: draws the AI line ($tk_ai 'show') on a page that has given it a row (ctx<TK.C.AIROW>); nothing is drawn or changed for a page that has not.
 * 30 Oct 26 dm  S.88 F0a: the key table and the pane are kept in common /tkreg/ on every call, so that F1 can list the keys of the pane ($tk_help 'box'); $tk_close clears them.
+* 10 Nov 26 dm  S.133: on a page with no menu bar, the name at the right end of row 0 is blanked where it was when a wider window moves it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -46,6 +47,7 @@ $include sl.h
 $include tk.h
 
    common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen, last.geo
+   common /tktop/ top.x, top.n, top.ep            ;* S.133: where the name on row 0 was last written, and for which open (a common block's variables start as 0)
    common /tkepoch/ ep.next, ep.drawn             ;* the frame cache's epoch ($tk_open counts, $tk_close clears)
    common /tkreg/ reg.keys, reg.pane, reg.epoch   ;* the key table and the pane of the app that is drawing, for $tk_help's list of keys ($tk_close clears)
    common /tkmarks/ last.marks                    ;* the focus marks last written (S.99): their own block, so that /tkframe/, which $tk_menubar shares, is as it was
@@ -117,10 +119,16 @@ $include tk.h
    a = a : ' '
    if a # last.top then
       last.top = a
+      ax = lw - len(a)
       keep.cur = ''
       call $sl_curat('get', keep.cur)
-      screen text a at lw - len(a),0 attr 'bar'
+      * S.133: on a page with no menu bar nothing else writes row 0, so a name that moved (a wider window) is blanked where it was; $tk_menubar sets top.n to 0 when it writes the row whole
+      if top.n > 0 and top.ep = ctx<TK.C.EPOCH> and top.x # ax and top.x + top.n <= lw then screen text space(top.n) at top.x,0
+      screen text a at ax,0 attr 'bar'
       call $sl_curat('back', keep.cur)
+      top.x = ax
+      top.n = len(a)
+      top.ep = ctx<TK.C.EPOCH>
    end
 
    * S.99: the focus marks, [*] on the box of the pane with the focus and [-] on the other boxes that can take it (ctx<TK.C.FOCI>, the layout's rectangles).  A pane named

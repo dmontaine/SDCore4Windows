@@ -11,11 +11,11 @@
 *
 * START-DESCRIPTION:
 *
-*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP} {SYNTAX name} {LNUM} {ACCEL key}
+*   SCREEN MEMO f, id, text {AT x,y} {SIZE w,h} {READONLY} {WRAP} {SYNTAX name} {LNUM} {ACCEL key} {STRETCH how}
 *
 *   is compiled into
 *
-*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, syntax, lnum, accel, ret, status)
+*   call !screen_memo(f, id, text, x, y, w, h, readonly, wrap, syntax, lnum, accel, stretch, ret, status)
 *
 *     f id      the form and the widget's name in it (as SCREEN LABEL)
 *     text      what it starts with: one line to a field (a linefeed ends a line too).  Null for an empty area.
@@ -32,6 +32,7 @@
 *               not an error: the text is drawn plain
 *     lnum      a column of line numbers down the left, as wide as the number of the last line needs, one
 *               more for a blank; the width given in SIZE includes it
+*     stretch   in a form made with FILL: 'w', 'h' or 'both', the way the area grows with the window (S.183); anything else is ELSE
 *     status    0 added; 1 not (ELSE)
 *
 *   Typing, Return (which splits the line), Backspace and Delete edit; Ctrl-A and Ctrl-E (or Home and End) go
@@ -50,11 +51,13 @@
 * START-CODE
 
 $internal
-subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, syntax, lnum, accel, ret, status)
+subroutine screen_memo(f, id, text, ax, ay, sw, sh, readonly, wrap, syntax, lnum, accel, stretch, ret, status)
 $catalog !screen_memo
 
    ret = ''
    status = 1
+   st.how = downcase(trim(stretch))
+   if st.how # '' and st.how # 'w' and st.how # 'h' and st.how # 'both' then return        ;* S.183
    lines = convert(char(10), @fm, text)
    n = dcount(lines, @fm)
    widest = 0
@@ -88,6 +91,7 @@ $catalog !screen_memo
    nl = 0
    if syntax # '' then call $sl_syntax('index', downcase(trim(syntax)), '', '', '', nl)
    w{'synlang'} = nl + 0
+   w{'stretch'} = st.how
    call $sl_memo('init', w, '', '', r)
    call $sl_accel(w, accel, ast)
    if ast # 0 then return

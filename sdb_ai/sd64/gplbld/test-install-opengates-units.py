@@ -199,7 +199,8 @@ def checks(att, iss, mod, keys):
     row("S10 sd.iss has the task opengates, UNCHECKED (the default is No)", task is not None and "unchecked" in iss[task.start():task.start() + 400],
         "task text: %s" % (iss[task.start():task.start() + 300] if task else "absent"))
     row("S10b the box is SHOWN in the wizard (no Check: on the task), and the wizard is made taller so it is not below the fold (RELEASE_1.1 185)",
-        task is not None and "Check:" not in iss[task.start():task.end()] and re.search(r"^WizardSizePercent=100,145\s*$", iss, re.M) is not None,
+        # 10 Nov 26: 150, Inno's most, for the start box below it (RELEASE_1.1 210); 145 was RELEASE_1.1 185's height
+        task is not None and "Check:" not in iss[task.start():task.end()] and re.search(r"^WizardSizePercent=100,150\s*$", iss, re.M) is not None,
         "task text: %s" % (iss[task.start():task.end()] if task else "absent"))
     ps = between(iss, "function AttachInstallerAccount", "(* 25 Oct 26 - THE SHARED ACCOUNT")
     row("S11 the installer passes -OpenGates only under WizardIsTaskSelected('opengates')",

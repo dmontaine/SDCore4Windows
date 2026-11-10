@@ -26,6 +26,7 @@
 *               from Tab, Shift-Tab, Up, Down and Esc; park.cursor hides the cursor when nothing can have the focus; route.mouse asks can.focus.
 * 8 Nov 26 dm  S.176: f{'tabkeys'} = 1: Tab and Shift-Tab that no widget took come back to the program as keys instead of moving the focus (the IDE, whose
 *               panes are boxes: F6 and Shift-F6 move between them on every page; the owner, 8 Nov 26, "F6 for boxes is fine").
+* 10 Nov 26 dm  S.183: a form made with FILL takes the whole window and follows it (fill.form).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -257,9 +258,86 @@ init.form:
       if f{'w'} = '' then f{'w'} = maxr
       if f{'h'} = '' then f{'h'} = maxb
    end
+   if f{'fill'} then gosub fill.form
    if f{'x'} = '' then f{'x'} = int((scr<SL.S.W> - f{'w'}) / 2)
    if f{'y'} = '' then f{'y'} = int((scr<SL.S.H> - f{'h'}) / 2)
    gosub init.page
+   return
+
+* S.183: a form made with FILL takes the whole window.  Its first size is the smallest window it is laid out for (below that $sl_guardmode holds the keyboard behind a warning).
+* Each widget keeps the place and size it was added with (x0 y0 w0 h0); the spare room dx, dy is shared among the widgets with STRETCH that lie on the same rows (for dx) or in
+* the same columns (for dy), and anything beyond one of them moves over by what it grew.  Worked out from x0 .. h0 every time, so nothing accumulates; a widget inside a container
+* moves with its container and is not touched.
+fill.form:
+   ff.n = inmat(f{'widgets'})
+   ff.sig = scr<SL.S.W> : ',' : scr<SL.S.H> : ',' : ff.n
+   if f{'fillsig'} = ff.sig then return
+   f{'fillsig'} = ff.sig
+   if f{'basew'} = '' then
+      f{'basew'} = f{'w'} + 0
+      f{'baseh'} = f{'h'} + 0
+      ff.name = f{'title'}
+      if ff.name = '' then ff.name = 'This program'
+      call $sl_guardmode(ff.name, f{'basew'}, f{'baseh'}, 'layout', f{'basew'}, f{'baseh'})
+   end
+   ff.dx = scr<SL.S.W> - f{'basew'}
+   if ff.dx < 0 then ff.dx = 0
+   ff.dy = scr<SL.S.H> - f{'baseh'}
+   if ff.dy < 0 then ff.dy = 0
+   f{'x'} = 0
+   f{'y'} = 0
+   f{'w'} = f{'basew'} + ff.dx
+   f{'h'} = f{'baseh'} + ff.dy
+   ff.box = ''                                    ;* for each widget: x0 @vm y0 @vm w0 @vm h0 @vm stretches across @vm stretches down, or null inside a container
+   for ff.i = 1 to ff.n
+      ff.w = f{'widgets', ff.i}
+      if ff.w{'pn'} + 0 = 0 then
+         if ff.w{'x0'} = '' then
+            ff.w{'x0'} = ff.w{'x'} + 0
+            ff.w{'y0'} = ff.w{'y'} + 0
+            ff.w{'w0'} = ff.w{'w'} + 0
+            ff.w{'h0'} = ff.w{'h'} + 0
+            if ff.w{'w0'} < 1 then ff.w{'w0'} = 1             ;* a widget with no size of its own (a label is one row) still lies on a row and a column
+            if ff.w{'h0'} < 1 then ff.w{'h0'} = 1
+         end
+         ff.st = ff.w{'stretch'}
+         ff.box<ff.i> = ff.w{'x0'} : @vm : ff.w{'y0'} : @vm : ff.w{'w0'} : @vm : ff.w{'h0'} : @vm : (ff.st = 'w' or ff.st = 'both') : @vm : (ff.st = 'h' or ff.st = 'both')
+      end
+   next ff.i
+   * What each widget grows by: the room, shared with the stretching widgets beside it (across) or above and below it (down)
+   ff.gw = '' ; ff.gh = ''
+   for ff.i = 1 to ff.n
+      ff.gw<ff.i> = 0 ; ff.gh<ff.i> = 0
+      if ff.box<ff.i> # '' then
+         ff.pw = 0 ; ff.ph = 0
+         for ff.j = 1 to ff.n
+            if ff.box<ff.j> # '' then
+               if ff.box<ff.j, 5> and ff.box<ff.i, 2> < ff.box<ff.j, 2> + ff.box<ff.j, 4> and ff.box<ff.j, 2> < ff.box<ff.i, 2> + ff.box<ff.i, 4> then ff.pw += 1
+               if ff.box<ff.j, 6> and ff.box<ff.i, 1> < ff.box<ff.j, 1> + ff.box<ff.j, 3> and ff.box<ff.j, 1> < ff.box<ff.i, 1> + ff.box<ff.i, 3> then ff.ph += 1
+            end
+         next ff.j
+         if ff.box<ff.i, 5> then ff.gw<ff.i> = int(ff.dx / ff.pw)
+         if ff.box<ff.i, 6> then ff.gh<ff.i> = int(ff.dy / ff.ph)
+      end
+   next ff.i
+   for ff.i = 1 to ff.n
+      if ff.box<ff.i> # '' then
+         ff.sx = 0 ; ff.sy = 0
+         for ff.j = 1 to ff.n
+            if ff.box<ff.j> # '' then
+               if ff.box<ff.j, 1> + ff.box<ff.j, 3> <= ff.box<ff.i, 1> and ff.box<ff.i, 2> < ff.box<ff.j, 2> + ff.box<ff.j, 4> and ff.box<ff.j, 2> < ff.box<ff.i, 2> + ff.box<ff.i, 4> then ff.sx += ff.gw<ff.j>
+               if ff.box<ff.j, 2> + ff.box<ff.j, 4> <= ff.box<ff.i, 2> and ff.box<ff.i, 1> < ff.box<ff.j, 1> + ff.box<ff.j, 3> and ff.box<ff.j, 1> < ff.box<ff.i, 1> + ff.box<ff.i, 3> then ff.sy += ff.gh<ff.j>
+            end
+         next ff.j
+         ff.w = f{'widgets', ff.i}
+         if ff.box<ff.i, 5> or ff.box<ff.i, 6> then
+            call $sl_widget_move(f, ff.w{'id'}, ff.box<ff.i, 1> + ff.sx, ff.box<ff.i, 2> + ff.sy, (ff.box<ff.i, 3> + ff.gw<ff.i>) : @vm : (ff.box<ff.i, 4> + ff.gh<ff.i>), ff.r)
+         end else
+            ff.w{'x'} = ff.box<ff.i, 1> + ff.sx
+            ff.w{'y'} = ff.box<ff.i, 2> + ff.sy
+         end
+      end
+   next ff.i
    return
 
 * The page the form shows is the chosen tab of its tab strip; with no strip every widget shows
@@ -792,6 +870,11 @@ route.key:
       * 19 Oct 26: a resize key with the size unchanged is the lift of the cursor lock ($sl_guard cleared the terminal and drew its own
       *   box): the terminal no longer matches the shadow, so the screen is drawn again from it, which also makes it match for what follows
       if scr<SL.S.W> = sw0 and scr<SL.S.H> = sh0 and scr<SL.S.OWNED> then call $sl_repaint(scr)
+      if f{'fill'} and f{'shown'} then                   ;* S.183: the form follows the window: laid out again and drawn whole (the frame blanks all it covers, which is the window)
+         gosub fill.form
+         gosub layout
+         gosub draw.all
+      end
       ret = 'unhandled' : @fm : key
       return
    end

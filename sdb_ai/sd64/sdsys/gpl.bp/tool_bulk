@@ -19,6 +19,7 @@
 *              AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 10 Nov 26 dm  S.138: the gates line fits its box.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -1572,7 +1573,7 @@ draw.file:
    screen text fmt(s[1, tw - 6], (tw - 6) : 'L') at fx + 2,fy + 1 attr 'bold' width tw - 6
    call $tk_help('mark', fx + fw - 5, fy + 1, 0, 0)
    s = 'Your gates:  voc-edit ' : (if kernel(K$VOC.EDIT, -1) then 'on' else 'off') : '   dict-edit ' : (if kernel(K$DICT.EDIT, -1) then 'on' else 'off') : '   bp-edit ' : (if kernel(K$BP.EDIT, -1) then 'on' else 'off')
-   s := '     Only dynamic data files are updated; the system is asked about the file you choose.'
+   s := '     Only dynamic data files are updated.'
    screen text fmt(s[1, tw], tw : 'L') at fx + 2,fy + 2 width tw
    return
 

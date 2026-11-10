@@ -27,8 +27,8 @@
 *
 *   The kind's 'init' is never called (it would start the widget again).  Nothing is drawn: when the form is on the screen the
 *   caller draws it ($sl_form 'redraw', or SCREEN WAIT after taking it off: f{'shown'} = 0).  A program that moves many widgets
-*   at once takes the form off the screen first, so that it is drawn once.  SCREEN MOVE is not changed: it still takes a size
-*   for a container, viewport or frame only, and a label asked for one there answers ELSE.
+*   at once takes the form off the screen first, so that it is drawn once.  SCREEN MOVE calls this routine for a size of any
+*   kind but a container, viewport or frame, and its ELSE is this routine's refusal (a label asked for a height other than 1).
 *
 * END-DESCRIPTION
 *

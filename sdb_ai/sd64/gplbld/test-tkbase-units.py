@@ -224,9 +224,9 @@ def checks(raw):
     th, sh = squeeze(strip_bas(raw["sl_theme"])), raw["sl.h"]
     codes = re.search(r"\$define SL\.CODES\s+'([^']+)'", sh)
     codes = codes.group(1) if codes else ""
-    add("T35", "the colour slots: SL.CODES has 51 different letters (29 Oct 26: the five roles UVWXY come before the user styles), the last sixteen (ACDEFHIJKLMNOQRS) being the user styles; $sl_theme names them user1 to user16 after the thirty-five styles it has, "
+    add("T35", "the colour slots: SL.CODES has 52 different letters (29 Oct 26: the five roles UVWXY, and on 10 Nov 26 hotkey.sel, Z, come before the user styles), the last sixteen (ACDEFHIJKLMNOQRS) being the user styles; $sl_theme names them user1 to user16 after the thirty-five styles it has, "
         "keeps them across a theme change (saved before clear.defs, put back before the sequences are built), empties them at SCREEN CLOSE, and gives out the slot that already holds a pair or the first free one, refusing when none is",
-        len(codes) == 51 and len(set(codes)) == 51 and codes.endswith("UVWXYACDEFHIJKLMNOQRS") and "for q = 1 to 16 th.names := @fm : 'user' : q next q" in th
+        len(codes) == 52 and len(set(codes)) == 52 and codes.endswith("UVWXYZACDEFHIJKLMNOQRS") and "for q = 1 to 16 th.names := @fm : 'user' : q next q" in th
         and "keepu<s> = th.defs<s>" in th and ordered(th, "keepu = ''", "gosub clear.defs", "if keepu<s> # '' then th.defs<s> = keepu<s>", "gosub build.seqs")
         and "th.defs<s> = ''" in th and ordered(th, "case op = 'reset'", "th.defs<s> = ''", "gosub set.theme")
         and "if th.defs<s, 4> = skey and have = 0 then have = s" in th and "if th.defs<s, 4> = '' and free = 0 then free = s" in th and "case free = 0 ret = 'full'" in th

@@ -565,7 +565,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "MENUBAR" ; screen.defs<-1> = "!screen_menubar":@vm:1:@vm:"ROW:1":@sm:"DRAW:F":@sm:"CLICK:1"
    screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
    screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F":@sm:"HISTORY:1"
-   screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"
+   screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"FILL:F"
    screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1":@sm:"COLOR:2"
    screen.names<-1> = "FRAME"   ; screen.defs<-1> = "!screen_frame":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1"
    screen.names<-1> = "ENTRY"   ; screen.defs<-1> = "!screen_entry":@vm:2:@vm:"AT:2":@sm:"WIDTH:1":@sm:"VALUE:1":@sm:"MASK:F":@sm:"MAXLEN:1":@sm:"COLOR:2":@sm:"ACCEL:1"
@@ -598,11 +598,11 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "STYLE"   ; screen.defs<-1> = "!screen_style":@vm:4
    screen.names<-1> = "TABS"    ; screen.defs<-1> = "!screen_tabs":@vm:3:@vm:"AT:2":@sm:"VALUE:1":@sm:"ACCEL:1"
    screen.names<-1> = "PAGE"    ; screen.defs<-1> = "!screen_page":@vm:2
-   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F":@sm:"SYNTAX:1":@sm:"LNUM:F":@sm:"ACCEL:1"
+   screen.names<-1> = "MEMO"    ; screen.defs<-1> = "!screen_memo":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"READONLY:F":@sm:"WRAP:F":@sm:"SYNTAX:1":@sm:"LNUM:F":@sm:"ACCEL:1":@sm:"STRETCH:1"
    screen.names<-1> = "CLIP"    ; screen.defs<-1> = "!screen_clip":@vm:0:@vm:"AT:2":@sm:"SIZE:2"
    screen.names<-1> = "SCROLLBAR" ; screen.defs<-1> = "!screen_scrollbar":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VISIBLE:1":@sm:"VALUE:1"
    screen.names<-1> = "TREE"    ; screen.defs<-1> = "!screen_tree":@vm:3:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"EXPANDED:F":@sm:"ACCEL:1"
-   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F":@sm:"ACCEL:1"
+   screen.names<-1> = "TABLE"   ; screen.defs<-1> = "!screen_table":@vm:4:@vm:"AT:2":@sm:"SIZE:2":@sm:"VALUE:1":@sm:"MULTI:F":@sm:"ACCEL:1":@sm:"STRETCH:1"
    screen.names<-1> = "CONTAINER" ; screen.defs<-1> = "!screen_container":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1":@sm:"NOBORDER:F"
    screen.names<-1> = "VIEWPORT" ; screen.defs<-1> = "!screen_viewport":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"CONTENT:2":@sm:"TITLE:1":@sm:"NOBORDER:F"
    screen.names<-1> = "IN"      ; screen.defs<-1> = "!screen_in":@vm:2

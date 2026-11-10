@@ -13,6 +13,7 @@
 *              Shift-F10, are as before (the focused box's menu).
 * 9 Nov 26 dm  S.186: the context menu leaves out the page-wide View switches the base adds to every page (std.mouse, std.output): they name no pane, so every
 *              pane "used" them, and View > Mouse took the M of a pane's own &Mark (sandbox-tool-query Q14e2).  They stay on the bar and in the finder.
+* 10 Nov 26 dm  S.133: says when row 0 was written whole, so that $tk_frame blanks an old name only on a page with no bar.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -69,6 +70,7 @@ $catalog $tk_menubar
 $include sl.h
 $include tk.h
 
+   common /tktop/ top.x, top.n, top.ep                 ;* S.133: top.n set to 0 says row 0 was written whole, so the frame has no old name to blank
    common /tkframe/ last.stat, last.keys, last.bord, last.top, last.gen, last.geo      ;* $tk_frame's cache: only last.top is touched, to have the right end of row 0 written again
    common /tkrclick/ rc.state, rc.x, rc.y, rc.epoch    ;* 3 Nov 26: a right click on a box that has not the focus, waiting for the page to move the focus there (rc.state 'ctx')
    common /$slkpush/ kp.name                           ;* 3 Nov 26: a name the page's next SCREEN KEY gives ('kp:' and the name; !screen_key)
@@ -212,6 +214,7 @@ paint.bar:
    call $sl_menu('draw', w, scr, '', r)
    call $sl_scr('put', scr)
    ctx<TK.C.BAR> = sig
+   top.n = 0
    last.top = ''                                       ;* row 0 was written whole: the app's name and the audience at its right end are written again by the next $tk_frame
    return
 

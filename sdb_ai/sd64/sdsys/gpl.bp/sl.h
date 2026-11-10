@@ -69,7 +69,7 @@ $define SL.W.D        10
 * 29 Oct 26: the five ROLE styles warning, success, readonly, busy and focus (codes UVWXY) sit before the sixteen user styles, so the user styles are still the last
 * sixteen and $sl_theme still finds them as len(codes) - 15.  Z is the only letter left.  A program compiled with the old list resets the theme to mono on every
 * drawing call ($sl_sgr tests th.codes against SL.CODES): recompile every program that includes this file after a change here.
-$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTBUVWXYACDEFHIJKLMNOQRS'
+$define SL.CODES       'nruxbwhasjkedytgcqovplzfimGPTBUVWXYZACDEFHIJKLMNOQRS'
 
 $define SL.S.W         1
 $define SL.S.H         2

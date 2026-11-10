@@ -15,6 +15,7 @@
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask theAI is a menu entry of its own.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 *              '/' finds a program by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
+* 10 Nov 26 dm  S.138: the administrator's top row says administrator; the note is inside the box, not on its bottom border.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -58,6 +59,7 @@ $include tk.h
       display err
       stop
    end
+   if kernel(K$ADMINISTRATOR, -1) then ctx<TK.C.AUD> = sysmsg(12808)      ;* S.138: as the home screen and the administrator's pages say it
 
    keys = ''
    call $tk_keys('add', keys, 'enter', 'change', 'change', '', 1)
@@ -200,7 +202,7 @@ draw.all:
       screen text 'You have not added a program yet.  Ctrl-N adds one.' at l.x + 2,l.y + 3 width l.tw
       screen text 'A program here is a command you could type at your prompt.  It is started from your home screen.' at l.x + 2,l.y + 4 attr 'disabled' width l.tw
    end
-   screen text "The standard tiles of the home screen are the administrator's; this list is only yours." at l.x + 2,l.y + l.h - 1 attr 'disabled' width l.tw
+   screen text "The standard tiles of the home screen are the administrator's; this list is only yours." at l.x + 2,l.y + l.h - 2 attr 'disabled' width l.tw
    return
 
 * ------------------------------------------------------------------------------------------------- keys

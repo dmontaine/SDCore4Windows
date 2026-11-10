@@ -15,6 +15,7 @@
 *               placed through $sl_curat.
 * 19 Oct 26 dm  The op hit (which title is over a column), and title.at, which click.menu used inline: a click on a bar that is not open
 *               can start the menu under it (SCREEN MENUBAR ... CLICK; the IDE ignored a click on its bar until Esc had opened the menu).
+* 10 Nov 26 dm  S.173: the style hotkey.sel (code Z), the mnemonic letter on the selected entry of a bar.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -387,7 +388,7 @@ get.styles:
    call $sl_attr('bar', ba)
    call $sl_attr('barsel', bs)
    call $sl_attr('hotkey.bar', hb)
-   call $sl_attr('hotkey', hu)
+   call $sl_attr('hotkey.sel', hu)
    call $sl_attr('bar.disabled', da)
    return
 

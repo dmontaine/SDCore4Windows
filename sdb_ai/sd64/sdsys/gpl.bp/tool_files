@@ -19,6 +19,8 @@
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: the A key's label is analyze, as its menu entry Analyze is (it said analyse); View > Mouse and Ctrl-O, as on every page (act:std.mouse, ctrl-o).
+* 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -37,7 +39,7 @@
 *   a new file is not held back by any edit gate (the new VOC pointer is a side effect of an ordinary command); clearing or deleting a PROGRAM file needs bp-edit and a dictionary on its own
 *   needs dict-edit.  The page SHOWS the gates the session holds, asked of the kernel; it never tries an operation to learn one.
 *
-*   Keys: Up and Down, PgUp and PgDn, Home and End move; N, C, D, A, I, T as above; F11 or / filters the names (a part of a name; empty shows all); Esc clears the filter;
+*   Keys: Up and Down, PgUp and PgDn, Home and End move; N, C, D, A, I, T as above; / filters the names (a part of a name; empty shows all); Esc clears the filter;
 *   F5 reads the files again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.  A name with a character the page does not give to a command (a capital, an ampersand, a dollar)
 *   is listed and described, and the verbs for it are typed at the prompt.
 *
@@ -97,7 +99,6 @@ $include tk.h
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
    VIS = 16                                                    ;* file rows on the screen (the list pane's height less 6: set by get.rects)
-   rtw = TK.MINW - 2 * TK.XBODY - 4                             ;* the text width of a pane in the reference layout (140 by 43): 134
    perr = ''
    gosub declare.layout
    hl =fmt('Name', '30L') : fmt('Kind', '11L') : fmt('Records', '10R') : '  ' : fmt('Modulus', '8R') : '  ' : fmt('Bytes', '12R') : '  ' : fmt('Idx', '4R') : '  ' : fmt('Trigger', '9L') : fmt('Case', '6L') : fmt('Dict', '5L') : 'Open'
@@ -295,10 +296,10 @@ get.rects:
    VIS = lh - 6                                                 ;* the header row, the file rows, the two summary lines, a blank row and the border: 16 rows of 22
    return
 
-* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+* In: lines.  Out: dlines, what the description shows.  A line longer than the box is wrapped at its width (S.138).
 fit.lines:
    dlines = lines
-   if tw > rtw then
+   if lines # '' then
       dlines = ''
       nd = 0
       for q = 1 to dcount(lines, @fm)
@@ -366,7 +367,7 @@ draw.foot:
    screen text fmt(s, tw : 'L') at lx + 2,ly + lh - 4 attr 'bold' width tw
    note = "The verbs behind the keys make their own checks: clearing or deleting a program file needs bp-edit, a dictionary on its own dict-edit; what refuses is the verb."
    pieces = note
-   if tw > rtw then call $tk_wrap(note, tw, pieces)
+   call $tk_wrap(note, tw, pieces)
    screen text fmt(pieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
    if pieces<2> # '' then screen text fmt(pieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
    return
@@ -484,7 +485,7 @@ on.key:
       case nm = 't'
          sent = 'list.triggers ' : shown<ci>
          gosub do.show
-      case nm = 'f11' or nm = '/'
+      case nm = '/'
          gosub do.filter
       case nm = 'f1' or nm = '?'
          call $tk_help('box', 'tool.files.page', hm, 0, 0)

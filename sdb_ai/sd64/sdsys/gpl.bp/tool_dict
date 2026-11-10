@@ -26,6 +26,8 @@
 *               takes the focus to the Indices box (I still does).  AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* 10 Nov 26 dm  S.138: a line longer than its box is wrapped at every width; it used to be cut at the reference width.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -51,7 +53,7 @@
 *   session's own open counts.
 *
 *   Keys: Up and Down, PgUp and PgDn, Home and End move; Enter opens a file (files pane); N, E, D, C, T, I and F (another file) in the items pane; N, B, D, L and I or Tab (back to the items) in the
-*   indices pane; F11 or / filters by a part of the id; Esc clears the filter; F5 reads again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
+*   indices pane; / filters by a part of the id; Esc clears the filter; F5 reads again; F1 or ? or a click on [?] explains the page; Ctrl-Q leaves.
 *
 * END-DESCRIPTION
 *
@@ -134,7 +136,6 @@ $include dictdict.h
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
    VIS = 16                                                            ;* rows of a list on the screen (the list pane's height less 6: set by get.rects)
-   rtw = TK.MINW - 2 * TK.XBODY - 4                                    ;* the text width of a pane in the reference layout (140 by 43): 134
    MAXV = 3000                                                        ;* items read: a dictionary is some tens; more than this are not listed, and the page says so
    hl.f = fmt('File', '30L') : fmt('Kind', '12L') : fmt('Dictionary', '12L') : fmt('Items', '8R') : fmt('Indices', '9R')
    hl.i = fmt('Id', '26L') : fmt('Type', '5L') : fmt('Field', '9L') : fmt('Heading', '22L') : fmt('Format', '8L') : fmt('Conversion', '12L') : fmt('S/M', '4L') : fmt('Association', '12L') : 'Expression or text'
@@ -487,10 +488,10 @@ get.rects:
    VIS = lh - 6                                                        ;* the header row, the rows, the two summary lines, a blank row and the border: 16 rows of 22
    return
 
-* In: lines.  Out: dlines, what the description shows.  At the reference width a line longer than the box is cut, as it has always been; in a wider box it is wrapped
+* In: lines.  Out: dlines, what the description shows.  A line longer than the box is wrapped at its width (S.138).
 fit.lines:
    dlines = lines
-   if tw > rtw then
+   if lines # '' then
       dlines = ''
       nd = 0
       for q = 1 to dcount(lines, @fm)
@@ -613,7 +614,7 @@ draw.foot:
          s2 = 'An index that is not built finds nothing: B builds it.  Build and delete need the file to themselves: another session having it open refuses them.'
    end case
    wpieces = s2
-   if tw > rtw then call $tk_wrap(s2, tw, wpieces)
+   call $tk_wrap(s2, tw, wpieces)
    screen text fmt(wpieces<1>, tw : 'L') at lx + 2,ly + lh - 3 width tw
    if wpieces<2> # '' then screen text fmt(wpieces<2>, tw : 'L') at lx + 2,ly + lh - 2 width tw
    return
@@ -971,7 +972,7 @@ key.files:
          fn = fnames<fshown<cf>>
          gosub enter.file
          gosub draw.all
-      case nm = 'f11' or nm = '/'
+      case nm = '/'
          screen ask 'Part of a file name (empty shows every file)' width 40 value ai.arg title 'Filter' returning ft1 then got = 1 else got = 0
          if not(got) then return
          filtf = trim(ft1)
@@ -1015,7 +1016,7 @@ key.items:
          gosub read.files
          gosub draw.all
          msg = 'Enter opens the dictionary of the file under the cursor'
-      case nm = 'f11' or nm = '/'
+      case nm = '/'
          screen ask 'Part of an item id (empty shows every item)' width 40 value ai.arg title 'Filter' returning ft1 then got = 1 else got = 0
          if not(got) then return
          filti = trim(ft1)

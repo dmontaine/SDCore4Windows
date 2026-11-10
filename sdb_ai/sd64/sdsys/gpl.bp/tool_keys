@@ -14,6 +14,7 @@
 *               draws the page again, as Ctrl-L does on every page): a key tester takes no function key for itself, or that key could not be tested.
 * 29 Oct 26 dm  S.88 3.7a: Ctrl-T takes the library's list of themes ($sl_theme 'next': blue classic dark light mono, the ones this terminal can show) in place of its own mono classic blue.
 * 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
+* 10 Nov 26 dm  S.138: four texts shortened to fit their boxes.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -96,7 +97,7 @@ $include tk.h
    seenf = ''
    nkeys = 0
    mp = 0 ; mr = 0 ; md = 0 ; mu = 0 ; mdn = 0          ;* the mouse events seen: press, release, drag, wheel up, wheel down
-   mlast = 'none yet - click, drag or turn the wheel'
+   mlast = 'none yet - use the mouse here'
    lastsz = @crtwide : ',' : @crthigh
    gen = 0
 
@@ -129,7 +130,7 @@ $include tk.h
                   seenf = ''
                   nkeys = 0
                   mp = 0 ; mr = 0 ; md = 0 ; mu = 0 ; mdn = 0
-                  mlast = 'none yet - click, drag or turn the wheel'
+                  mlast = 'none yet - use the mouse here'
                   msg = 'cleared'
                   gosub draw.dynamic
                case act = 'raw'
@@ -328,7 +329,7 @@ draw.static:
    helps := @fm : 'by the terminal type: Ctrl-R, then press it again'
    helps := @fm : 'to see the bytes the terminal sent.'
    helps := @fm : ''
-   helps := @fm : 'Ctrl-L clears, Ctrl-R names or bytes, Ctrl-T'
+   helps := @fm : 'Ctrl-L clears, Ctrl-R names/bytes, Ctrl-T'
    helps := @fm : 'theme, Ctrl-K keys, Ctrl-Q leaves.'
    helps := @fm : ''
    helps := @fm : 'Make the window smaller to see the cursor'
@@ -388,8 +389,8 @@ draw.mouse:
    screen text 'Last   ' : mlast at mo.x + 2,mo.y + 1 width mo.tw
    screen text 'Press ' : mp : '  release ' : mr at mo.x + 2,mo.y + 3 width mo.tw
    screen text 'Drag  ' : md : '  wheel up ' : mu : '  down ' : mdn at mo.x + 2,mo.y + 4 width mo.tw
-   screen text 'Click, drag and turn the wheel in this window.' at mo.x + 2,mo.y + 6 width mo.tw
-   screen text 'In raw mode the reports show as Esc [ < ...' at mo.x + 2,mo.y + 7 width mo.tw
+   screen text 'Click, drag or turn the wheel here.' at mo.x + 2,mo.y + 6 width mo.tw
+   screen text 'Raw mode shows the reports: Esc [ < ...' at mo.x + 2,mo.y + 7 width mo.tw
    return
 
 end
