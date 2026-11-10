@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 10 Nov 26 Windows port - RELEASE_1.1 215 (owner, 10 Nov: "SD grows its window"): init_console() asks win32vt.c to grow a classic
+ *           console window smaller than 140 by 43, the least the full-screen pages take, before anything reads its size.
  * 10 Nov 26 Windows port - RELEASE_1.1 212: console_resized() and console_window_size() ask the tty its size (poll_window_size()) before
  *           answering, and take a changed size as the SIGWINCH handler does; under the MSYS2 console the signal came only with the next input
  *           event, so a page stayed garbled after a resize until a click.  The same day, after the owner's test of that build (F11 still
@@ -157,6 +159,7 @@ void set_old_tty_modes(void);
 int enable_console_vt(void);
 void restore_console_vt(void);
 int console_window_cells(int* cols, int* rows); /* 10 Nov 26: the console window's size from Windows, 0 with no console (RELEASE_1.1 212) */
+int grow_console_window(int want_cols, int want_rows); /* 10 Nov 26: a small classic console window made big enough (RELEASE_1.1 215) */
 void set_new_tty_modes(void);
 bool negotiate_telnet_parameter(void);
 
@@ -431,6 +434,13 @@ bool init_console() {
        there and nothing is done.  See win32vt.c for why this is not the
        Console API change that was reverted on 23 Aug 2026. */
     (void)enable_console_vt();
+
+    /* 10 Nov 26 Windows port - RELEASE_1.1 215 (owner, 10 Nov: "SD grows its window").  A console window opens at 120 by 30 and the
+       full-screen pages (HOME, the IDE, CED, the toolkit) take 140 by 43 at least, so an account that starts in HOME was refused, and
+       signed out (S.164).  A classic console window smaller than that is made 140 by 43, or as big as the screen allows; Windows
+       Terminal's window is the terminal's own and is left alone, as is a session whose input is not a console (a script).  Before the
+       size is first read, below, so LOGIN sees the window it will have. */
+    (void)grow_console_window(140, 43);
 
     /* ----------------------- Keyboard ----------------------- */
 

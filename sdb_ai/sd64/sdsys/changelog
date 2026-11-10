@@ -18,6 +18,17 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            Linux.
              Does NOT    - Change where an existing system's sessions start: an upgrade does not ask.
 
+10 Nov 26  A SMALL CONSOLE WINDOW IS MADE BIG ENOUGH FOR THE FULL-SCREEN PAGES.
+
+             What        - When SD starts in a classic console window smaller than 140 columns by 43 lines (the window
+                           the Start Menu entry opens is 120 by 30), it makes the window 140 by 43, or as big as the
+                           screen allows. It never makes a window smaller, and it leaves a Windows Terminal window and
+                           a script's console alone.
+             Why         - The home screen, the IDE, CED and the tool pages need 140 by 43, so an account that starts
+                           in the home screen was refused in an ordinary window and its session signed out (owner's
+                           choice, 10 Nov).
+             Does NOT    - Resize Windows Terminal: its window is the terminal's to size.
+
 10 Nov 26  F1 NAMES THE CHANGELOG WHERE IT IS.
 
              What        - F1 at an empty command prompt names C:\Program Files\SD\changelog. It named

@@ -131,3 +131,111 @@ int console_window_cells(int* cols, int* rows) {
   *rows = r;
   return 1;
 }
+
+/* ======================================================================
+   grow_console_window()  -  make a small classic console window big enough
+   for SD's full-screen pages.
+
+   10 Nov 26 Windows port - RELEASE_1.1 215.  A console window opens at 120
+   by 30, from the Start menu shortcut or a typed sd, and HOME, the IDE, CED
+   and the toolkit take 140 by 43 at least, so an account that starts in HOME
+   was refused, and on Core signed out (S.164).  The owner, 10 Nov, chose
+   "SD grows its window": at start-up a CLASSIC console window smaller than
+   want_cols by want_rows is made that size, or as big as the screen allows
+   with the current font (GetLargestConsoleWindowSize).
+
+   IT NEVER SHRINKS A WINDOW, and it acts only when all of these hold:
+   - input and output are both a console: a script feeding SD, or reading
+     its output, keeps the window it has;
+   - the window is conhost's own (class ConsoleWindowClass).  Windows
+     Terminal's sessions run on a pseudo console whose window is a hidden
+     stand-in: the size there belongs to the terminal, and a program that
+     resizes the buffer under it leaves the terminal and the buffer out of
+     step.  So Windows Terminal is left alone, and its window is the person's
+     to size.
+   user32.dll is loaded here, for GetClassNameA only, rather than linked, so
+   sd.exe's list of the DLLs it imports does not change.
+
+   The buffer grows first (a window cannot be wider or taller than its
+   buffer), then the window; the buffer's scrollback is kept.  Returns 1 if
+   the window was made bigger, 0 if nothing was done.                      */
+
+typedef int(WINAPI* class_name_fn)(HWND, LPSTR, int);
+
+int grow_console_window(int want_cols, int want_rows) {
+  HANDLE out;
+  HANDLE in;
+  DWORD mode;
+  HWND w;
+  HMODULE user32;
+  class_name_fn class_name;
+  char cls[64];
+  int n;
+  CONSOLE_SCREEN_BUFFER_INFO info;
+  COORD largest;
+  COORD buf;
+  SMALL_RECT r;
+  int cols;
+  int rows;
+  int c;
+
+  out = GetStdHandle(STD_OUTPUT_HANDLE);
+  in = GetStdHandle(STD_INPUT_HANDLE);
+  if ((out == NULL) || (out == INVALID_HANDLE_VALUE) || (in == NULL) || (in == INVALID_HANDLE_VALUE))
+    return 0;
+  if (!GetConsoleMode(in, &mode)) /* input is not a console: a script */
+    return 0;
+  if (!GetConsoleScreenBufferInfo(out, &info)) /* nor is output */
+    return 0;
+
+  w = GetConsoleWindow();
+  if (w == NULL)
+    return 0;
+  user32 = LoadLibraryA("user32.dll");
+  if (user32 == NULL)
+    return 0;
+  class_name = (class_name_fn)(void (*)(void))GetProcAddress(user32, "GetClassNameA");
+  n = (class_name == NULL) ? 0 : class_name(w, cls, (int)sizeof(cls));
+  FreeLibrary(user32);
+  if ((n <= 0) || (lstrcmpA(cls, "ConsoleWindowClass") != 0))
+    return 0; /* not conhost's window: Windows Terminal, or something else */
+
+  cols = info.srWindow.Right - info.srWindow.Left + 1;
+  rows = info.srWindow.Bottom - info.srWindow.Top + 1;
+  if ((cols >= want_cols) && (rows >= want_rows))
+    return 0;
+
+  largest = GetLargestConsoleWindowSize(out);
+  c = want_cols;
+  if (c > largest.X)
+    c = largest.X;
+  if (c < cols)
+    c = cols;
+  n = want_rows;
+  if (n > largest.Y)
+    n = largest.Y;
+  if (n < rows)
+    n = rows;
+  if ((c == cols) && (n == rows))
+    return 0; /* the screen takes no more */
+
+  buf = info.dwSize;
+  if (buf.X < c)
+    buf.X = (SHORT)c;
+  if (buf.Y < n)
+    buf.Y = (SHORT)n;
+  if ((buf.X != info.dwSize.X) || (buf.Y != info.dwSize.Y)) {
+    if (!SetConsoleScreenBufferSize(out, buf))
+      return 0;
+  }
+
+  r.Left = 0;
+  r.Right = (SHORT)(c - 1);
+  r.Top = info.srWindow.Top;
+  if (r.Top + n > buf.Y)
+    r.Top = (SHORT)(buf.Y - n);
+  r.Bottom = (SHORT)(r.Top + n - 1);
+  if (!SetConsoleWindowInfo(out, TRUE, &r))
+    return 0;
+  return 1;
+}
