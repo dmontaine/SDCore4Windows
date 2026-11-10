@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 10 Nov 26 Windows port - RELEASE_1.1 212: console_resized() and console_window_size() ask the tty its size (poll_window_size()) before
+ *           answering, and take a changed size as the SIGWINCH handler does; under the MSYS2 console the signal came only with the next input
+ *           event, so a page stayed garbled after a resize until a click.
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): signal_handler() no longer logs (it took ERRLOG_SEM inside the handler and could
  *           deadlock a session hung up while it held it); it records the signal, and log_termination_signal() writes the line from
  *           process_events().
@@ -530,7 +533,23 @@ Private void winch_handler(sig) int sig;
    console_resized()  -  Has the display changed since the data lines per
    page were last worked out?  Answers once per change.                    */
 
+/* 10 Nov 26 Windows port - THE SIZE IS ASKED, NOT ONLY WAITED FOR (RELEASE_1.1 212).  Under the MSYS2 console a resize's SIGWINCH
+   reached SD only with the next input event: after Windows Terminal's F11 (full screen and back) a page stayed garbled until a click.
+   So the two readers below ask the tty first, and a size that differs from the one last stored is taken exactly as the SIGWINCH handler
+   takes it.  An unchanged size touches nothing, so a TERM w,h the person typed is not overwritten on every call.                     */
+Private void poll_window_size() {
+  struct winsize ws;
+
+  if ((ioctl(0, TIOCGWINSZ, &ws) != 0) || (ws.ws_col == 0) || (ws.ws_row == 0))
+    return;
+  if ((ws.ws_col != win_cols) || (ws.ws_row != win_rows)) {
+    if (read_window_size())
+      winch_seen = 1;
+  }
+}
+
 Public bool console_resized() {
+  poll_window_size();
   if (!winch_seen)
     return FALSE;
   winch_seen = 0;
@@ -544,6 +563,7 @@ Public bool console_resized() {
 Public bool console_window_size(cols, rows) int *cols;
 int *rows;
 {
+  poll_window_size(); /* 10 Nov 26 Windows port: the size now, not the last SIGWINCH's (RELEASE_1.1 212) */
   if ((win_cols == 0) || (win_rows == 0))
     return FALSE;
   *cols = win_cols;
