@@ -107,7 +107,9 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 ; 8 Nov 26 - taller, so the tasks page shows every box without scrolling once the opengates box is back (RELEASE_1.1 185's stated remedy).
-WizardSizePercent=100,145
+; 10 Nov 26 - 150, Inno's most (170 was refused: "Value of WizardSizePercent is invalid"), for the start box (RELEASE_1.1 210): at 145 the
+;   owner saw Home screen and not Command prompt, below the bottom of the list.  The choice is now ONE box under 5), so one line more, not three.
+WizardSizePercent=100,150
 
 ; 02 Sep 26 - WINDOWS 10 AND 11, NOTHING EARLIER.  Owner's ruling, 2 Sep 2026:
 ; "I don't believe in supporting versions no longer supported by the vendor",
@@ -553,8 +555,10 @@ Name: "opengates"; Description: "Open every access gate for your SD Core account
 ; the home screen); the command prompt runs set-start-default.ps1 (SET.START.DEFAULT TERMINAL).  The tasks page is skipped on an upgrade,
 ; so an upgrade keeps the start.default the site already has.  /TASKS=startprompt answers it on a silent install.  Options only on the
 ; screen; what each means is in the installation document.
-Name: "starthome"; Description: "Home screen"; GroupDescription: "6)  New sessions start at:"; Flags: exclusive
-Name: "startprompt"; Description: "Command prompt"; Flags: exclusive unchecked
+; 10 Nov 26 - ONE BOX, NOT A GROUP OF TWO: the two radio choices under a heading of their own (box 6) were three lines, and the last one,
+;   Command prompt, fell below the bottom of the list at the wizard's tallest (WizardSizePercent 150 is Inno's most).  Unticked is the home
+;   screen, as delivered; it sits in group 5 with the account's other box.
+Name: "startprompt"; Description: "Start new sessions at the command prompt, not the home screen"; Flags: unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
