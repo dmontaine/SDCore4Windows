@@ -2,6 +2,32 @@ W1.2-0 - in progress
 -------------
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
 
+10 Nov 26  THE FULL-SCREEN PROGRAMS ARE THOSE OF SD CORE FOR LINUX: THE IDE, THE HOME SCREEN, THE TOOL PAGES AND THE DEBUGGER
+           (FROM SD CORE FOR LINUX).
+
+             What        - The screen library, the IDE, CED, the full-screen debugger and the home screen are brought level
+                           with SD Core for Linux. Every full-screen page now has a menu bar (Esc or F10), the same keys
+                           (F5 or Ctrl-L redraw, Ctrl-T the theme, which is kept for you, Ctrl-K the keys in use, Ctrl-Q
+                           leaves, F6 and Shift-F6 move between the boxes, F2 finds an action), and fits any window of at
+                           least 140 by 43, using a bigger one whole; a page draws only what changed. New pages for
+                           development and administration: tool.files, tool.voc, tool.dict, tool.query, tool.bulk,
+                           tool.catalog and tool.test in every account, and tool.backups for SDSYS. SED now opens the IDE;
+                           the IDE edits a record as fields (F12), shows a record's marks as @vm @sm @tm, edits a
+                           dictionary item as a form, hands its breakpoints to the debugger, and makes and lists
+                           operating-system files. CED is a command again. A new install's screens use the paper theme
+                           (SCREENTHEME=paper in sd.conf); the themes are blue, classic, mono, night and paper.
+                           MODIFY.ACCOUNT and CREATE.ACCOUNT take RECOVERY-ON (MODIFY.ACCOUNT RECOVERY-OFF too): the
+                           IDE then keeps a copy of a changed record's unsaved text in your own folder and offers it
+                           back the next time the record is opened. Off as delivered, a user account only.
+                           Another session's record ids, paths and commands shown by LIST.READU, PSTAT, PROFILER and
+                           HSM have their control characters shown as ?, so a record id cannot send codes to your
+                           terminal. OPENSEQ ... CREATING no longer makes a file through a link that leads nowhere.
+             Why         - The two products follow one design; Linux built and reviewed these first.
+             Does NOT    - Offer the AI: the screens that would show an AI line show none, because SD Core for Windows has
+                           no AI helper yet. Nor tool.accounts, tool.audit, tool.config or tool.jobs, which the home
+                           screen's administrator tiles name; they are not in this version yet. NOT YET TESTED ON AN
+                           INSTALLED SYSTEM.
+
 9 Nov 26   THE SOURCE IS BESIDE THE INSTALLER, AND NO LONGER INSTALLED.
 
              What        - The complete source of SD Core - the C, the system programs' BASIC (gpl.bp) and the build and

@@ -1195,7 +1195,7 @@ do.decat:
    sent = 'decatalog ' : lid
    lines = ''
    lines<-1> = 'Takes the local catalog entry ' : lid : ' out of the VOC AND deletes the compiled program it points at: ' : (if rtype<mk> = 'p' then meta<1, 12> else rpath<mk>) : '.'
-   lines<-1> = 'The source is not touched; B compiles the program again, and it cannot be run before that.  D would take only the entry out.'
+   lines<-1> = 'The source is not touched; B compiles the program again, but until then it cannot be run.  D would take only the entry out.'
    gosub gate.line
    call $tk_confirm(sent, lines, lid, res, cmsg)
    if res # 'run' then

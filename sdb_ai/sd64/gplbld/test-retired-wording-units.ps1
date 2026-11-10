@@ -322,9 +322,13 @@ $RETIRED = @(
     # absent from both replacements.  That is the point of registering it -
     # sd.iss carries this claim TWICE, on the options page and in the closing
     # box, which is 121's shape exactly.
+    # 10 Nov 26 - NoBasic: the claim was the installer's; tool.catalog (from SD Core for Linux) says "but
+    # until then it cannot be run" about a program left uncompiled, which is a different and true sentence,
+    # and its wording is the template's (Linux mail 2026-11-10T0900).
     @{ Ref = '141'
        Retired     = 'Until then it'
-       Replacement = 'is not recognized' }
+       Replacement = 'is not recognized'
+       NoBasic     = $true }
     # RELEASE_1.1 58 - AN ADMINISTRATOR HAS NO REMOTE DOOR AT ALL.  Owner's
     # ruling, 18 Sep 2026.  Both phrases described the posture 58 replaced and
     # both were TRUE when written, which is exactly the class this lint exists
@@ -542,9 +546,12 @@ Write-Host ''
 
 # Every location, case-insensitive, where $phrase occurs in the corpus.  A
 # message is reported by file; a script line carries its number.
-function Find-Any([string]$phrase) {
+# 10 Nov 26 - $noBasic leaves the gpl.bp half out, for a row whose claim lived only in installer
+# and script text (141): a program that happens to use the same words is not that claim.
+function Find-Any([string]$phrase, [bool]$noBasic = $false) {
     $hits = New-Object System.Collections.ArrayList
     foreach ($c in $corpus) {
+        if ($noBasic -and $c.File.StartsWith('gpl.bp/')) { continue }
         if ($c.Text.IndexOf($phrase, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
             if ($c.Line -gt 0) { [void]$hits.Add(("{0}:{1}" -f $c.File, $c.Line)) }
             else               { [void]$hits.Add($c.File) }
@@ -619,10 +626,19 @@ $bpTrail = Find-Any 'Interactive session startup'
 Check ("a trailing ;* comment is stripped ($($bpTrail.Count) hit(s))") ($bpTrail.Count -eq 0) `
       ("login:228 carries this after ';*' - an echoed sysmsg text would read as a second copy: " + ($bpTrail -join ', '))
 
+# 10 Nov 26 - THE NoBasic SCOPE IS A FILTER, NOT A BLINDFOLD: the same phrase is found in gpl.bp
+# without it, and with it the script half is still read (the canary 'the' is found there).
+$bpOnly  = Find-Any 'Until then it'
+$scrThe  = Find-Any 'the' $true
+Check ("CONTROL: without NoBasic the scan reaches gpl.bp ('Until then it' in tool_catalog: $($bpOnly.Count) hit(s))") (@($bpOnly | Where-Object { $_ -like 'gpl.bp/*' }).Count -gt 0) `
+      'tool_catalog no longer carries the words, so this control proves nothing - pick another gpl.bp phrase'
+Check ("CONTROL: with NoBasic the scripts are still read and no gpl.bp file is ($($scrThe.Count) hit(s))") `
+      (($scrThe.Count -gt 0) -and (@($scrThe | Where-Object { $_ -like 'gpl.bp/*' }).Count -eq 0)) ($scrThe -join ', ')
+
 Write-Host ''
 Write-Host '=== 2. every retired phrase is GONE, and its replacement is present ==='
 foreach ($e in $RETIRED) {
-    $bad  = Find-Any $e.Retired
+    $bad  = Find-Any $e.Retired ([bool]$e.NoBasic)
     $good = Find-Any $e.Replacement
     Check ("[$($e.Ref)] retired phrase absent: `"$($e.Retired)`"") ($bad.Count -eq 0) ("still in " + ($bad -join ', '))
     Check ("[$($e.Ref)] replacement present : `"$($e.Replacement)`"") ($good.Count -gt 0) 'the replacement wording is missing everywhere - is the fix in?'
