@@ -548,6 +548,13 @@ Name: "installpython"; Description: "Install Python for all users"; \
 ; the wizard is taller.  /TASKS=opengates still answers it on a silent install.  Left unticked the account starts closed, and an administrator opens a gate later with modify.account.
 Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files)"; \
     GroupDescription: "5)  SD Core account:"; Flags: unchecked
+; 10 Nov 26 - RELEASE_1.1 210: WHERE NEW SESSIONS START, the home/prompt question (Linux e0e38810; owner, 3 Nov 2026, "the home/prompt
+; question"; found missing here by the owner, 10 Nov).  The home screen is the delivered start and needs nothing (no start.default means
+; the home screen); the command prompt runs set-start-default.ps1 (SET.START.DEFAULT TERMINAL).  The tasks page is skipped on an upgrade,
+; so an upgrade keeps the start.default the site already has.  /TASKS=startprompt answers it on a silent install.  Options only on the
+; screen; what each means is in the installation document.
+Name: "starthome"; Description: "Home screen"; GroupDescription: "6)  New sessions start at:"; Flags: exclusive
+Name: "startprompt"; Description: "Command prompt"; Flags: exclusive unchecked
 
 [Files]
 ; --- C:\Program Files\SD\ --------------------------------------------------
@@ -3465,6 +3472,39 @@ begin
             ExpandConstant('{#DataDir}') + '\make-shared.log' + #13#10#13#10;
 end;
 
+(* 10 Nov 26 - WHERE NEW SESSIONS START, RELEASE_1.1 210 (Linux e0e38810).  Only when the
+   command prompt was chosen (task startprompt): the home screen is the delivered start and
+   needs nothing written.  set-start-default.ps1 runs SET.START.DEFAULT TERMINAL from an
+   -internal session and judges the result on sdsys\start.default, not on an exit code.
+   Codes: 0 written, 3 SD would not start, 1 anything else.  The returned text is EMPTY
+   unless it could not be written. *)
+function SetStartDefault: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  { A FRESH INSTALL ONLY.  Inno remembers the tasks of the last install (UsePreviousTasks), so on an upgrade startprompt
+    could read as chosen again and put back a start the administrator has since changed with SET.START.DEFAULT MENU.
+    An upgrade keeps the start.default the site has, as Linux's offers what the site had. }
+  if not DataTreeWasAbsent then
+    Exit;
+  if not WizardIsTaskSelected('startprompt') then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\set-start-default.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: set-start-default.ps1 exited ' + IntToStr(Code));
+  if Code = 0 then
+    Exit;
+  Result := 'New sessions still start at the home screen (code ' + IntToStr(Code) + '). See ' +
+            ExpandConstant('{#DataDir}') + '\set-start-default.log' + #13#10#13#10;
+end;
+
 (* 26 Oct 26 - THE CONTEXT HELP, RELEASE_1.1 184.  The [?] buttons of the toolkit
    pages show records of the file context.help in the shared account; load-help.ps1
    runs LOAD.HELP to fill it from sdsys\helptext, at install and at upgrade (it
@@ -4414,6 +4454,7 @@ var
   SysdirMsg: String;
   AcctAclMsg: String;
   SharedMsg: String;
+  StartMsg: String;
   DictMsg: String;
   { 04 Sep 26 - PRE_RELEASE_FIXES 70.  Its own variable rather than folded into
     DictMsg, because the two steps fail independently and the cure is different:
@@ -4702,6 +4743,10 @@ begin
       the same sweep that stamps every other group account (which knows the name
       shared and grants sdusers rather than sdg_shared). }
     SharedMsg := MakeSharedAccount;
+
+    { 10 Nov 26 - RELEASE_1.1 210: where new sessions start, when the command prompt was chosen on a fresh install.
+      After the accounts are made (the verb needs a working SDSYS); empty unless it could not be written. }
+    StartMsg := SetStartDefault;
 
     { AFTER adopt, so the register this reads is the finished one.  See the
       function: this is the step that undoes an uninstall having deleted
@@ -5000,6 +5045,8 @@ begin
            AcctAclMsg +
            { Empty unless make-shared.ps1 could not make the shared account. }
            SharedMsg +
+           { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it. }
+           StartMsg +
            { Empty on every first install and on every upgrade that worked. }
            DictMsg +
            { And its pair, for the same reason.  PRE_RELEASE_FIXES 70: empty

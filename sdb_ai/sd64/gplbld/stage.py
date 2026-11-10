@@ -1619,6 +1619,10 @@ def main():
                    # dontcopy entry beside ssh-preflight.ps1).  assert-current
                    # watches it like the rest.
                    'make-shared.ps1',
+                   # 10 Nov 26 - RELEASE_1.1 210: where new sessions start (Linux
+                   # e0e38810, the home/prompt question).  sd.iss runs it on a fresh
+                   # install when the command prompt was chosen.
+                   'set-start-default.ps1',
                    # 26 Oct 26 - RELEASE_1.1 184.  Loads the context help the [?]
                    # buttons show (LOAD.HELP, from sdsys\helptext into the shared
                    # account's file context.help); called from sd.iss right after
