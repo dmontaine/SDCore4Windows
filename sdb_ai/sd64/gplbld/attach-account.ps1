@@ -349,7 +349,7 @@ try {
         Set-Content -LiteralPath $marker -Encoding utf8 -Value @(
             "Written by attach-account.ps1 for $User at $(Get-Date -Format 's').",
             "It permits ONE 'CREATE.ACCOUNT USER $User ATTACH' and is deleted on use.",
-            'It authorises that name only - the name is part of this file name.',
+            'It authorizes that name only - the name is part of this file name.',
             'If this file is still here, the install did not finish - delete it.')
     }
     catch {

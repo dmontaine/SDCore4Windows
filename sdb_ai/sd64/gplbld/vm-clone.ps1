@@ -159,7 +159,7 @@ if ($Audit) {
 
     Write-Host ('read ' + $all.Count + ' VM(s)')
     Write-Host ''
-    Write-Host 'GUESTS GROUPED BY IDENTITY (same UUID and same MAC = one licence):'
+    Write-Host 'GUESTS GROUPED BY IDENTITY (same UUID and same MAC = one license):'
     foreach ($g in ($all | Group-Object { $_.HwUUID + '  ' + $_.MAC } | Sort-Object Count -Descending)) {
         Write-Host ('  ' + $g.Name + '   x' + $g.Count)
         foreach ($m in ($g.Group | Sort-Object Name)) { Write-Host ('      ' + $m.Name) }

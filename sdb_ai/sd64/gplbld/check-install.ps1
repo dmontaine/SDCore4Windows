@@ -521,7 +521,7 @@ if ($sysState -eq 'missing') {
         # simply being used.  What distinguishes a good install from the broken
         # one is 100-odd entries against nearly none.
         if ($count -ge 100) {
-            Ok ("SD's program catalogue is present (" + $count + ' entries).')
+            Ok ("SD's program catalog is present (" + $count + ' entries).')
             # SAY WHOSE RIGHTS ANSWERED IT.  Read under elevation this line is
             # about the ADMINISTRATOR token, and the reader has every reason to
             # take it as being about themselves.  The banner at the top says so
@@ -531,12 +531,12 @@ if ($sysState -eq 'missing') {
                 Info 'ordinary sign-in can open the database.'
             }
         } else {
-            Problem ("SD's program catalogue has only " + $count + ' entries and should have over 100.')
+            Problem ("SD's program catalog has only " + $count + ' entries and should have over 100.')
             Info 'The install did not finish building SD, so almost nothing will work.'
             Info 'Please report this - it is an installer fault.'
         }
     } elseif ($sdUsers.InToken) {
-        Problem 'Could not read the program catalogue, and this sign-in should be able to.'
+        Problem 'Could not read the program catalog, and this sign-in should be able to.'
         Info ('Expected to read ' + $GcatDir)
     } elseif ($sdUsers.InGroup -eq $false) {
         # 22 Aug 26 - ATTRIBUTE THIS TO THE RIGHT CAUSE.  The first version sent
@@ -547,9 +547,9 @@ if ($sysState -eq 'missing') {
         # supposed to explain their install.  The membership check above has
         # already reported their real problem; this only says why the catalogue
         # went unchecked, and does not offer a remedy that cannot work.
-        NotYet 'The program catalogue was not checked, because of the membership problem above.'
+        NotYet 'The program catalog was not checked, because of the membership problem above.'
     } else {
-        NotYet 'Cannot check the program catalogue until you sign out and back in.'
+        NotYet 'Cannot check the program catalog until you sign out and back in.'
         Info 'See the note above - this is the same group membership, not a second problem.'
     }
 }

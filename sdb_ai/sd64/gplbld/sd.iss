@@ -3870,7 +3870,7 @@ begin
 
   { NAMED, NOT BURIED, like the credential store and the shell list: this ACL
     is the whole of a control and it fails silently if the step does not run. }
-  Result := 'The global catalogue was NOT locked (code ' + IntToStr(Code) + '). ' +
+  Result := 'The global catalog was NOT locked (code ' + IntToStr(Code) + '). ' +
             'Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
 end;
