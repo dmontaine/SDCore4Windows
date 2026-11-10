@@ -13,7 +13,7 @@
 *
 *   call $tk_theme(own, changed, msg)
 *
-*     The next theme in the library's one order (blue classic dark light mono night paper) that THIS terminal can show is put in force
+*     The next theme in the library's one order (blue classic mono night paper) that THIS terminal can show is put in force
 *     (as a program's own choice, as SCREEN THEME does) and kept for the person ($sl_theme 'save': the record theme.<login name> of
 *     &menus& in the session's account), so the next page, program and session start in it.
 *

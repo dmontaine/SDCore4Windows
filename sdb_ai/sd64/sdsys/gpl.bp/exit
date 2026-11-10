@@ -6,6 +6,7 @@
 * START-HISTORY:
 * 22 Oct 26 dm  New (S.75, H2; the owner: "a terminal session that can be ended with exit").
 * 7 Nov 26 dm   S.164: /tkhome/ has a fourth variable, hrefused (declared alike everywhere).
+* 10 Nov 26 dm  S.201: a screen typed at the prompt stays one after the Terminal tile and EXIT (hflag 2); it was made the session's own, and Ctrl-Q then signed out.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -27,7 +28,7 @@ $catalog $exit
    common /tkhome/ hflag, hlogto, hstart, hrefused
 
    if hflag and @tty[1, 5] = '/dev/' then
-      hstart = 1                               ;* 3 Nov 26: back from the Terminal tile, the screen is the session's own again (Ctrl-Q signs out), as it was before the tile was used
+      hstart = (hflag = 1)                     ;* 10 Nov 26 (S.201): back from the Terminal tile, the screen is what it was before the tile was used: the session's own (1) or typed at the prompt (2)
       execute 'home'
    end else
       execute 'quit'

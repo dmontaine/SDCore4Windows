@@ -28,7 +28,7 @@
 *               panning sideways; the text itself is not changed
 *     syntax    the name of a language $sl_syntax knows (sd.basic, c, json, markdown, sh, python, or one a
 *               site added in &sed.syntax&): the text is drawn in the syntax styles of the theme in force
-*               (the mono theme has none; classic, blue, dark and light do).  A name it does not know is
+*               (the mono theme has none; the others do).  A name it does not know is
 *               not an error: the text is drawn plain
 *     lnum      a column of line numbers down the left, as wide as the number of the last line needs, one
 *               more for a blank; the width given in SIZE includes it

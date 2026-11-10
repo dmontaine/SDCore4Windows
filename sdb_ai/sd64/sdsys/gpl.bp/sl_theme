@@ -27,6 +27,8 @@
 *               as the record theme.<login name> of &menus& in the session's account - the Recent group's file - so no OS gate is crossed.
 * 9 Nov 26 dm  S.186 (Fable's review): mono's focus is reverse, bold and underline (it was reverse, which is highlight's and the bar's look, so on a terminal
 *               with no colour the focused box looked like the selected row); paper's focus is underlined as well as bold, so it does not rely on bold being bright.
+* 10 Nov 26 dm  S.199 (owner: "three themes, dark, light and mono are exactly the same"; "Yes, drop them"; "there is no need to keep them for programs"): the themes dark and
+*               light are gone.  The syntax palettes of those names stay: classic and blue use the dark one, and an editor's SYNTAX LIGHT the light one.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -67,7 +69,7 @@
 *     focus       Y     reverse, bold, under  the thing that has the keyboard, where highlight is not enough (9 Nov 26: it was reverse, the same as highlight)
 *
 *   op   'code'   a = a style name, or a code itself; ret = the code, n for a name it does not know
-*         'set'    a = the name of a theme: mono, classic, dark, light, blue, night or paper.  ret 0 done; 1 refused, because the
+*         'set'    a = the name of a theme: mono, classic, blue, night or paper.  ret 0 done; 1 refused, because the
 *                  terminal has no colour (or there is no terminal) and the theme needs it - the theme in
 *                  force is left as it was; 2 no theme of that name.  a = '' builds the sequences again for
 *                  the terminal type now in force.
@@ -77,7 +79,7 @@
 *                  blue, green, cyan, red, magenta, brown (or yellow), white, or empty for the terminal's
 *                  own; the flags are any of bold, dim, reverse and underline, separated by spaces or +.
 *         'name'   ret = the name of the theme in force
-*         'list'   ret = the names of the themes, one to a field, in the one order every program shows them: blue, classic, dark, light, mono, night, paper
+*         'list'   ret = the names of the themes, one to a field, in the one order every program shows them: blue, classic, mono, night, paper
 *         'next'   a = the name of a theme ('' for the one in force); ret = the next one in that order that THIS terminal can show, wrapping.  A
 *                  terminal with no colour (or no terminal) can show mono only, so ret is mono whatever a was.
 *         'site'   ret = the theme a program starts in: the person's own (op save) when they kept one in this account, else the one SCREENTHEME
@@ -259,28 +261,6 @@ set.theme:
          spec<-1> = 'busy=white,magenta,bold'
          spec<-1> = 'focus=white,cyan,bold'
          gosub syntax.dark
-      case nm = 'dark'
-         * mono, and the syntax styles in colours that read on a dark terminal background
-         spec<-1> = 'highlight=,,reverse'
-         spec<-1> = 'bar=,,reverse'
-         spec<-1> = 'hotkey=,,underline'
-         spec<-1> = 'hotkey.bar=,,reverse underline'
-         spec<-1> = 'field=,,underline'
-         spec<-1> = 'header=,,underline bold'
-         spec<-1> = 'bar.disabled=,,reverse dim'
-         gosub syntax.dark
-         gosub roles.dark
-      case nm = 'light'
-         * the same for a light terminal background
-         spec<-1> = 'highlight=,,reverse'
-         spec<-1> = 'bar=,,reverse'
-         spec<-1> = 'hotkey=,,underline'
-         spec<-1> = 'hotkey.bar=,,reverse underline'
-         spec<-1> = 'field=,,underline'
-         spec<-1> = 'header=,,underline bold'
-         spec<-1> = 'bar.disabled=,,reverse dim'
-         gosub syntax.light
-         gosub roles.light
       case nm = 'blue'
          spec<-1> = 'window=white,blue,bold'
          spec<-1> = 'highlight=black,cyan,'
@@ -500,25 +480,9 @@ roles.mono:
    spec<-1> = 'focus=,,reverse bold underline'     ;* 9 Nov 26 (S.186): plain reverse was highlight's and the bar's look; all three is no other style's
    return
 
-roles.dark:
-   spec<-1> = 'warning=brown,,bold underline'
-   spec<-1> = 'success=green,,bold'
-   spec<-1> = 'readonly=cyan,,underline'
-   spec<-1> = 'busy=magenta,,reverse underline'
-   spec<-1> = 'focus=white,,reverse'
-   return
-
-roles.light:
-   spec<-1> = 'warning=red,,bold underline'
-   spec<-1> = 'success=green,,bold'
-   spec<-1> = 'readonly=blue,,underline'
-   spec<-1> = 'busy=magenta,,reverse underline'
-   spec<-1> = 'focus=blue,,reverse'
-   return
-
 * The one order the themes are shown in
 theme.order:
-   thorder = 'blue' : @fm : 'classic' : @fm : 'dark' : @fm : 'light' : @fm : 'mono' : @fm : 'night' : @fm : 'paper'
+   thorder = 'blue' : @fm : 'classic' : @fm : 'mono' : @fm : 'night' : @fm : 'paper'
    return
 
 * 8 Nov 26 (S.179) - the person's own theme, kept inside SD (the owner's choice, 8 Nov: "Inside SD (tighter)"), the way the home screen keeps

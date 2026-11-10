@@ -734,6 +734,9 @@ USRDIR=C:\\ProgramData\\SD\\user_accounts
 GRPDIR=C:\\ProgramData\\SD\\group_accounts
 SH=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NoLogo
 SH1=C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command
+# The colour theme a full-screen program gets when it chooses none: paper, night, mono, classic or blue
+# (a terminal with no colour shows mono whatever this says).
+SCREENTHEME=paper
 """
 
 # 25 Aug 26 - THE STAND-ALONE VARIANT, DERIVED FROM SD_CONF AND NEVER WRITTEN

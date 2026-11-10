@@ -55,6 +55,8 @@
 * 9 Nov 26 dm  S.187: the Bypass programs tile is gone with tool.viewers and the pdf verb (owner, 9 Nov 2026: "remove").
 * 9 Nov 26 dm  S.136 (owner, 9 Nov: "your decision, should only appear once"): the hint row says only the keys the key row does not - arrows, a letter,
 *               PgDn; Enter and / are on the key row alone.
+* 10 Nov 26 dm  S.201 (owner: "This is a regression from something previously fixed"; "There is no reason to have multiple key combinations do the same thing"): a screen typed at the
+*               prompt stays one after the Terminal tile and EXIT (hflag 2), so Ctrl-Q still goes back to the prompt; Alt-X is gone: Ctrl-Q is the one key that leaves.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -160,7 +162,7 @@ $define H.TOP.PAGE 'this is the top page'                                 ;* why
       stop
    end
    hlogto = 0
-   menu.session = hstart + 0                           ;* 3 Nov 26: 1 when !home_entry (the account starts in the menu) or EXIT (back from the Terminal tile) started this screen, 0 when the person typed HOME at the prompt
+   menu.session = hstart + 0                           ;* 3 Nov 26: 1 when !home_entry (the account starts in the menu), or EXIT back to such a screen, started this one; 0 when the person typed HOME at the prompt
    hstart = 0                                           ;* taken: a later HOME typed at the prompt the screen gave is typed
 
    call $tk_open('home', '', ctx, err)
@@ -262,7 +264,7 @@ finish:
          null                                             ;* the screen was given back already (it could not be taken again)
       case outcome = 'terminal'
          call $tk_close(ctx)
-         hflag = 1                                        ;* EXIT comes back here
+         hflag = (if menu.session then 1 else 2)          ;* EXIT comes back here, to the same kind of screen (S.201)
          display sysmsg(12869)
       case outcome = 'signout'
          call $tk_close(ctx)
@@ -1101,7 +1103,7 @@ on.key:
          end else
             gosub do.signout
          end
-      case nm = 'alt-x' and leave.ok                       ;* S.179: Alt-X (Ctrl-X is cut wherever there is text)
+      case nm = 'act:signout'                              ;* S.201: File > Sign out when Ctrl-Q leaves for the prompt: the action has no key of its own, and the bar answers with its name
          gosub do.signout
       case nm = 'ctrl-t'                                   ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
          call $tk_std('theme', ctx, keys, '', std.r)
@@ -1459,7 +1461,7 @@ make.keys:
    gosub off.row
    call $tk_keys('add', keys, 'f6', 'ai', 'ai', '', 1)
    if leave.ok then
-      call $tk_keys('add', keys, 'alt-x', 'sign out', 'signout', '', 1)        ;* Ctrl-Q left the screen for the prompt: Sign out has this key (the menu and the tile as well); S.179: Alt-X (Ctrl-X is cut wherever there is text)
+      call $tk_keys('add', keys, '', 'sign out', 'signout', '', 1)        ;* Ctrl-Q left the screen for the prompt: Sign out is on the File menu and the tile, with no key of its own (S.201: one key for each job)
       gosub off.row
    end
    return

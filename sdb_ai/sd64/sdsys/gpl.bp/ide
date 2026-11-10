@@ -184,6 +184,7 @@
 * 09 Nov 26 dm  S.184 stage 7: started by the verb SED the IDE is the editor alone: no files pane, SED's questions and ? for a list of records, the results under the editor, the last
 *               tab closed ends it.  A text in quotes is one word of the sentence.  A record or file holding bytes 128 to 247 is edited like any other (the owner: "Editable everywhere");
 *               the read-only rule of 28 Oct 26 is gone.
+* 10 Nov 26 dm  S.200 (owner: F6 "also moves to the messages box but there i no entry there"; "F6 I agree"): F6 and Shift-F6 pass an empty messages box.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -2894,7 +2895,7 @@ run.cmd:
       case cmd = 'nextpane' or cmd = 'prevpane'
          * F6 and Shift-F6: the focus goes round the panes in the order the status line and the [*] marks name them (S.176: the only box keys; Tab does not move the focus)
          gosub fields.is.on
-         pane.ring = 'tree' : @fm : 'tabs' : @fm : (if fv.on then 'fld' else 'ed') : @fm : 'err'      ;* 30 Oct 26 (stage 2b): the editor pane is the fields table while the tab shows its fields
+         pane.ring = 'tree' : @fm : 'tabs' : @fm : (if fv.on then 'fld' else 'ed') : (if err.rows # '' then @fm : 'err' else '')      ;* 30 Oct 26 (stage 2b): the editor pane is the fields table while the tab shows its fields; 10 Nov 26 (S.200): an empty messages box is not a stop
          if zm then pane.ring = 'tabs' : @fm : (if fv.on then 'fld' else 'ed') : (if al.err then @fm : 'err' else '')                       ;* 9 Nov 26 (S.184 stage 1): zoomed, the files and the messages are hidden
          if ai.on then pane.ring<-1> = 'ai'
          locate focus.id in pane.ring<1> setting pane.at else pane.at = 0

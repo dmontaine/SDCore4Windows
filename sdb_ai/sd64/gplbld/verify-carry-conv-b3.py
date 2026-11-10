@@ -11,6 +11,7 @@
 #
 # START-HISTORY:
 # 11 Oct 26 dm  Written for 1.2-0 bundle B-3.
+# 10 Nov 26 dm  S.125: the D conversion's I code (the ISO week) on its own.
 # END-HISTORY
 #
 # THE INSTRUMENT IS THE VALUE oconv() GAVE, printed between brackets by a BASIC program, beside the plain
@@ -58,6 +59,11 @@ CASES = [
     ("CONTROL: MD2CZ puts cr after a negative value (-567 is -5.67 with two places)", "oconv(-567, 'MD2CZ')", "5.67cr"),
     ("THE ROW: MD2ZC, Z before the sign option, gives the same", "oconv(-567, 'MD2ZC')", "5.67cr"),
     ("THE ROW: and the same with T between: MD2TZC truncates -5.678 to -5.67", "oconv(-567.8, 'MD2TZC')", "5.67cr"),
+    # S.125: the ISO week without the ISO year beside it; the values are Python's calendar (20000 is 3 Oct 2022, 21497 is 8 Nov 2026, 18628 is 31 Dec 2018)
+    ("THE ROW (S.125): DI, the ISO week, with no YI beside it", "oconv(20000, 'DI')", "40"),
+    ("DI: a Sunday is in the week it ends", "oconv(21497, 'DI')", "45"),
+    ("DI: 31 Dec 2018 is in week 1 of the next year", "oconv(18628, 'DI')", "01"),
+    ("CONTROL: DYI, the ISO year of that day, is 2019", "oconv(18628, 'DYI')", "2019"),
 ]
 
 

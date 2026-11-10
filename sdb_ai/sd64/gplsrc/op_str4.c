@@ -24,6 +24,9 @@
  * 7 Nov 26 Windows port - from Linux 698fe22b (S.87 batch 3): op_ereplace() (EREPLACE) is gone; its opcode is an op_illegal row in opcodes.h.
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE COUNT.OVERLAP and INDEX.OVERLAP: count() and op_index() find overlapping occurrences (QM4 gaps Q-16)
  * 18 Oct 26 Windows port - from Linux e91ed09 (12 Oct 26): MATCHES and MATCHFIELD set INMAT() to the number of the template that matched (1.2-0, 315)
+ * 09 Nov 26 dm  S.125: locals of op_matbuild(), op_matparse() and op_trimx() start at NULL / 0 / FALSE (-Wmaybe-uninitialized); the paths that
+ *               leave them unset end in k_error() with a message that does not begin '!', so it never returns.
+ * 10 Nov 26 dm  S.125, found by AddressSanitizer: match_template() compared a quoted literal past the end of a shorter string.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -1644,6 +1647,19 @@ Private void matches(bool matchfield) {
 }
 
 /* ======================================================================
+   match_literal()  -  Match n bytes of literal text at *string, which is
+                       moved over them and never past the end of the string.
+                       Returns FALSE if the match (or, with neg, the lack
+                       of one) fails.                                     */
+
+Private bool match_literal(char *literal, char **string, int n, bool neg) {
+  if ((strncmp(literal, *string, n) == 0) == neg)
+    return FALSE;
+  *string += strnlen(*string, n);
+  return TRUE;
+}
+
+/* ======================================================================
    match_template()  -  Match string against template                     */
 
 bool match_template(char *string,
@@ -1686,13 +1702,8 @@ bool match_template(char *string,
           n = --template_string - start;
           if (n == 0)
             return FALSE;
-          /* without enclosing the !memcmp() in parens, the 
-           * compiler complains about potential ambiguity.
-           * -gwb 22Feb20
-           */
-          if ((!memcmp(start, string, n)) == not )
+          if (!match_literal(start, &string, n, not ))
             return FALSE;
-          string += n;
           break;
 
         case 'A': /* nA  Alphabetic match */
@@ -1805,7 +1816,7 @@ bool match_template(char *string,
             case '\0': /* String longer than template */
               n = --template_string - start;
               if (n) { /* We have found a trailing unquoted literal */
-                if ((memcmp(start, string, n) == 0) != not )
+                if ((strncmp(start, string, n) == 0) != not )
                   return TRUE;
               }
               return FALSE;
@@ -1909,9 +1920,8 @@ bool match_template(char *string,
             default:
               /* We have found an unquoted literal */
               n = --template_string - start;
-              if ((memcmp(start, string, n) == 0) == not )
+              if (!match_literal(start, &string, n, not ))
                 return FALSE;
-              string += n;
               break;
           }
           break;
@@ -1919,12 +1929,11 @@ bool match_template(char *string,
         default:
           /* We have found an unquoted literal */
           n = --template_string - start;
-          if ((memcmp(start, string, n) == 0) == not )
+          if (!match_literal(start, &string, n, not ))
             return FALSE;
-          string += n;
           break;
       }
-    } else if (memcmp(template_string, "...", 3) == 0) { /* ... same as 0X */
+    } else if (strncmp(template_string, "...", 3) == 0) { /* ... same as 0X */
       template_string += 3;
       if (not )
         return FALSE;
@@ -1949,14 +1958,15 @@ bool match_template(char *string,
           return FALSE;
         n = p - template_string;
         if (n) {
-          if ((memcmp(template_string, string, n) == 0) == not )
+          if (!match_literal(template_string, &string, n, not ))
             return FALSE;
-          string += n;
         }
         template_string += n + 1;
       } else { /* Unquoted literal. Treat as single character */
-        if ((*(template_string++) == *(string++)) == not )
+        if ((*(template_string++) == *string) == not )
           return FALSE;
+        if (*string != '\0')
+          string++;
       }
     }
   }

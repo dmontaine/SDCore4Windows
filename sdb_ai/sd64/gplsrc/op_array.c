@@ -23,6 +23,8 @@
  * 28 Oct 26 dm  S.87: the PMATRIX descriptor type, op_pmatrix and AH_PICK_STYLE are gone: every matrix is an ARRAY with an element 0 (nothing made a Pick style matrix since $MODE PICK.MATRIX went).
  * 27 Oct 26 dm  S.87 batch 17: op_dimlclp ($MODE PICK.MATRIX) is gone and a_dimension() has no pick_style, so AH_PICK_STYLE is never set.  The PMATRIX descriptor type and op_pmatrix stay (unreachable: the compiler no longer emits OP_PMATRIX).
  * 31 Dec 23 SD launch - prior history suppressed
+ * 09 Nov 26 dm  S.125: op_common()'s a_hdr and objdata start at NULL (-Wmaybe-uninitialized); each block kind sets what it uses.
+ * 10 Nov 26 dm  S.125, found by AddressSanitizer: a_dimension() growing a matrix copied the old header by the new header's size.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -1168,7 +1170,10 @@ Private void a_dimension(bool set_zero) {
             if (new_ahdr == NULL)
               goto exit_a_dimension;
 
-            memcpy((char*)new_ahdr, (char*)a_hdr, mem_reqd);
+            /* S.125: the OLD header's size; it was the new, larger one, read past the end */
+            memcpy((char*)new_ahdr, (char*)a_hdr,
+                   sizeof(struct ARRAY_HEADER) +
+                       (((int)a_hdr->num_chunks - 1) * (long)sizeof(int16_t*)));
 
             k_free(descr->data.ahdr_addr); /* Free old header */
 

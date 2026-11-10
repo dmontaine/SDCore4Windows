@@ -20,7 +20,7 @@
 *     name     mono (reverse video and underline only: reads on any terminal; the default), paper
 *              (black and dark blue on light grey: the delivered SCREENTHEME), night (white and yellow on
 *              black), classic (dark text on light dialogues over a blue desktop), blue (white on blue
-*              dialogues), dark or light (mono with syntax colours for a dark or a light terminal).
+*              dialogues).
 *              Null changes nothing and only answers.
 *     ret      the name of the theme in force afterwards
 *     status   0 the theme is in force; 1 it is not, and the theme in force is as it was: no such theme,
