@@ -35,7 +35,8 @@
 *    1  user number           5  parent user number (phantoms), else 0
 *    2  operating system pid  6  login user name
 *    3  IP address            7  terminal device name
-*    4  process flags (bits)  8  login time, seconds since 1 Jan 1970
+*    4  process flags (bits)  8  login time, seconds of LOCAL time from SD's day 0
+*                                (31 Dec 1967), the kernel's sdtime(): day = INT(t / 86400)
 *    9  account the user is in (see below)
 *
 * The values are those the kernel keeps for K$USERS and the flag bits are

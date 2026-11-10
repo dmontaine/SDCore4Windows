@@ -277,7 +277,6 @@ deffun pw_complex(pw) calling '!pw_complex'
       if s = '' then
             * This user has come in from a command prompt of some sort.
             s = env('TERM')
-<<<<<<< ours
 * 19 Aug 26 Windows port - 'windows' rather than 'vt100'.  vt100 binds the
 *   arrow keys to ESC O A/B/C/D, which a terminal sends only in application
 *   cursor mode, and nothing in SD ever sends smkx to enter it - so under

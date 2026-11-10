@@ -25,6 +25,7 @@
  * 18 Oct 26 Windows port - from Linux 5315c65 - S.65 slice 3e: prototypes and constants of the write and lock entry points of netfiles.c (net_gate, net_write, net_delete, net_clear,
  * 19 Oct 26 Windows port - from Linux fc8e304 - S.67, the verifier's findings: masters_note_read, masters_cas_on and masters_cas_check (a save of a master record is judged against the record the
  * 20 Oct 26 Windows port - from Linux eb9ef4a - S.72b: NETG_PEEK (net_gate's read-mode test alone, for RECORDLOCKED()).
+ * 28 Oct 26 dm  S.88 phase 2: the comment of the one rule names its new users (profiler.c, object.c hsm_dump(), op_kernel.c K_SHOW_SAFE).
  * 28 Oct 26 dm  S.88 phase 2 review: prototypes of show_unsafe_byte(), show_safe_text() and show_ts_safe() (op_lock.c), the one
  *               rule for showing another session's text; kernel.c's dump_status() uses it.
  *               session read, and again inside the account's write).
@@ -194,6 +195,7 @@ OSFILE dio_open(char * fn, int mode);
    #define DIO_READ      3 /* Open existing file, read only */
    #define DIO_UPDATE    4 /* Open existing file, read/write */
    #define DIO_OVERWRITE 5 /* Open file, creating if doesn't exist */
+   #define DIO_OVERWRITE_NOFOLLOW 6 /* As DIO_OVERWRITE, but never through a symbolic link at the end of the name (O_NOFOLLOW; 30 Oct 26, S.88 A1) */
 
 /* INIPATH.C */
 bool GetConfigPath(char * inipath);
@@ -552,7 +554,9 @@ void transfer_txn_locks(u_int32_t from, u_int32_t to); /* 15 Oct 26: a non-durab
 void clear_lock_wait(void);
 /* 28 Oct 26 S.88 phase 2 review: ONE rule for showing another session's text (a record id, a path, a user name, a command,
    @PSTAT) to a program or a terminal: bytes 0-31, 127, 128-159 and 248-255 become '?', 160-247 are kept.  Used by op_lock.c
-   (GETLOCKS(), SYSTEM(1083), message 1451) and kernel.c (the process-status dump that PSTAT prints). */
+   (GETLOCKS(), SYSTEM(1083), message 1451) and kernel.c (the process-status dump that PSTAT prints); since 28 Oct 26 also profiler.c
+   (the profile table, $IPC F<n>), object.c (hsm_dump(), $IPC H<n>) and op_kernel.c (K_SHOW_SAFE, the rule for BASIC: PSTAT, PROFILER and
+   HSM print what they read from $IPC through it). */
 bool show_unsafe_byte(u_char c);
 char * show_safe_text(char * out, int out_size, const char * s, int len); /* a copy, cut at out_size - 1, nul ended */
 void show_ts_safe(const char * s, int len);                                /* appended to the ts_init() string; len < 0: to the nul */
@@ -607,6 +611,7 @@ void sd_powershell_path(char * buf, int len);
 void freescrn(SCREEN_IMAGE * image);
 void break_key(void);
 int16_t keyin(int timeout);
+int32_t keyin_idle_ms(void); /* ms waited with nothing typed, as AUTOLOGOUT judges it (kernel(K$AUTOLOGOUT, -2)) */
 bool keyready(void);
 void log_termination_signal(void); /* S.196: the SIGHUP/SIGTERM line, written by process_events(), never by the handler */
 int32_t type_ahead_count(void);

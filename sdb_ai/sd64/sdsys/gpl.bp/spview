@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - level with Linux e3490a7f: S.99 (2 Nov: the full-screen pages' look on a window of at least 140 by 43, the bar, the key row,
+*               the site's theme), the end of the input leaves SP.VIEW (2 Nov), and S.179 / S.180 (8 Nov: the menu bar, F5 and Ctrl-L refresh, Ctrl-T the
+*               theme, Ctrl-K and F1 the keys, Ctrl-Q quits).
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): BY field NO.CASE no longer switches on OPTION QUERY.SORT.NO.CASE (the option is gone);
 *               sort.list.no.case sorts the selected list again on the upper-cased value of the field.  Not run.
@@ -51,6 +54,11 @@ $include err.h
 $include int$keys.h
 $include keys.h
 $include keyin.h
+$include sl.h
+$include tk.h
+
+$define LAY.WIDTH    140         ;* 2 Nov 26 (S.99): the record view has the pages' look on a window this wide ...
+$define LAY.DEPTH     43         ;* ... and this deep, or bigger (used whole); below it, the old layout
 
    deffun edit_msg(emk) calling '!edit_msg'       ;* 18 Oct 26 dm, S.66
 
@@ -62,6 +70,17 @@ $include keyin.h
    prompt.line = @crthigh - 1
    info.line = @crthigh - 2
    info.fmt = (@crtwide - 1) : 'L'
+
+   * 2 Nov 26 dm (S.99): the pages' look needs a terminal whose size the kernel can read (not a pipe, a phantom or the API) and that can
+   * address a cell.  Without one, everything is as it was.
+   look.able = (kernel(K$WINSIZE, '') # '' and terminfo('cup') # '')
+   look = @false
+   themed = @false
+   view.w = @crtwide
+   data.row = 0
+   last.w = -1
+   last.h = -1
+   input.ended = @false          ;* 2 Nov 26: the input has ended (get.key), so no key will ever come
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
@@ -204,6 +223,7 @@ $include keyin.h
       until item.name = ''
          item.deleted = @false
          gosub show.item
+         if input.ended then exit          ;* 2 Nov 26: nobody is there to choose another
 
          if item.deleted then
             * Take it off the list, and keep the cursor about where it was
@@ -276,6 +296,9 @@ show.item:
 
    num.lines = dcount(rec, @fm)
 
+   if look.able then gosub theme.in       ;* 2 Nov 26 (S.99): the site's theme while a record is shown (given back below)
+   gosub set.look
+
    data.offset = 0
    pan = 1
    gosub show.data.page
@@ -291,18 +314,28 @@ show.item:
       if more.right then data.prompt := 'Right/'
       data.prompt := 'Top/Bottom/Spool/X-delete/Quit: '
 
-      display @(0, info.line) : @(-13) : fmt(info.text, info.fmt) :
-      display @(0,prompt.line) : fmt(data.prompt, info.fmt) : @(-14) :
+      if look then
+         call $sl_put(scr, 0, info.line, fmt(info.text[1, lay.w], lay.w : 'L'), rev.attr)   ;* the status line
+         call $sl_put(scr, 0, prompt.line, fmt(data.prompt[1, lay.w], lay.w : 'L'), bar.attr)
+      end else
+         display @(0, info.line) : @(-13) : fmt(info.text, info.fmt) :
+         display @(0,prompt.line) : fmt(data.prompt, info.fmt) : @(-14) :
+      end
       display @(len(data.prompt), prompt.line) :
 
-      c = upcase(keycode())
+      gosub get.key
+      if input.ended then exit             ;* 2 Nov 26: the input has ended (a pipe used up, a terminal gone)
+      if k.relaid then                    ;* the window changed: laid out again for its new size, and drawn
+         gosub show.data.page
+         continue
+      end
+      c = upcase(c)
       gosub map.keys
 
       begin case
          case c = 'Q'
             prompt.text = sysmsg(7136) ;* Press return to quit, any other key to continue
-            display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
-            display @(len(prompt.text), prompt.line) :
+            gosub say.prompt
             if seq(keycode()) = K$RETURN then exit
 
          case (c = 'P' or c = 'U') and data.offset > 0
@@ -322,11 +355,11 @@ show.item:
             gosub show.data.page
 
          case c = 'R' and more.right
-            pan += @crtwide - 20
+            pan += view.w - 20
             gosub show.data.page
 
          case c = 'L' and pan > 1
-            pan -= @crtwide - 20
+            pan -= view.w - 20
             if (pan < 1) then pan = 1
             gosub show.data.page
 
@@ -339,11 +372,187 @@ show.item:
             if item.deleted then exit
             gosub show.data.page
 
+         * 8 Nov 26 (S.179): the keys every page has
+         case c = '#REFRESH'
+            if look then gosub set.look
+            display @(-1) :
+            gosub show.data.page
+
+         case c = '#THEME'
+            themed = @true                      ;* theme.out gives the program's own theme back when the record is left
+            call $tk_theme(0, sp.chg, sp.msg)   ;* 0: SP.VIEW draws its own screen, below
+            if sp.chg then
+               gosub set.look                   ;* the styles of the new theme
+               display @(-1) :
+               gosub show.data.page
+            end
+            prompt.text = sp.msg
+            gosub say.note
+
+         case c = '#KEYS'
+            if look then
+               gosub paint.frame                ;* kr.keys, the table of the key row
+               call $tk_keys('keylist', kr.keys, '', sp.kl, '', '', '')
+               sp.kl<-1> = 'F5   refresh (Ctrl-L too)'
+               sp.kl<-1> = '^T   theme'
+               sp.kl<-1> = '^K   keys (F1 too)'
+               sp.kl<-1> = '^Q   quit'
+               sp.kl<-1> = 'Esc  the menu bar (F10 too)'
+               sp.hw = ''
+               sp.hw<SL.W.D> = 'Keys of SP.VIEW'
+               sp.hw<SL.W.D + 1> = convert(@fm, @vm, sp.kl)
+               sp.hw<SL.W.D + 2> = '&OK'
+               call $sl_msgbox('init', sp.hw, scr, '', sp.hb)     ;* over the picture, which the box puts back when it closes
+               call $sl_msgbox('run', sp.hw, scr, '', sp.hb)
+            end else
+               display @sys.bell :
+            end
+
+         case c = ''
+            null                                ;* a menu left with Esc: nothing chosen
+
          case 1
             display @sys.bell :
       end case
    repeat
 
+   if themed or look then gosub theme.out   ;* 2 Nov 26 (S.99): the theme given back, and a plain screen for the pick list or TCL
+
+   return
+
+* ======================================================================
+* 2 Nov 26 dm (S.99) - SET.LOOK  -  The layout for the window as it is now.  look: the pages' look, on a window of at least LAY.WIDTH by
+*   LAY.DEPTH (a bigger one is used whole): row 0 the bar, the record's lines from row 1 (data.row), then the prompt line, the status line, the
+*   border and the key row.  Otherwise the layout SP.VIEW always had: the lines from row 0, the status line and the prompt line at the foot of
+*   the display SD has (@CRTWIDE by @CRTHIGH), in reverse video.
+
+set.look:
+   call $sl_window(win.w, win.h)
+   last.w = win.w
+   last.h = win.h
+   look = (look.able and win.w >= LAY.WIDTH and win.h >= LAY.DEPTH)
+   if look then
+      lay.w = win.w
+      lay.h = win.h
+      view.w = lay.w
+      data.row = 1
+      data.lines.per.page = lay.h - 5
+      prompt.line = lay.h - 4
+      info.line = lay.h - 3
+      border.line = lay.h - 2
+      key.line = lay.h - 1
+      call $sl_scr('get', scr)          ;* a context of this program's own, the size of the display; the library's own is not written back
+      scr<SL.S.CLIP> = ''
+   end else
+      view.w = @crtwide
+      data.row = 0
+      data.lines.per.page = @crthigh - 4
+      prompt.line = @crthigh - 1
+      info.line = @crthigh - 2
+      info.fmt = (@crtwide - 1) : 'L'
+   end
+   return
+
+* GET.KEY  -  One key, in c.  On a terminal the window is looked at once a second while the key is awaited: when its size has changed, the
+*   page is laid out for the new size (set.look), k.relaid is true and c is null, and the caller draws the page again.
+*   2 Nov 26: input.ended is set when the input has ended - a null key that is not a timeout.  With no terminal no timeout is asked, so
+*   every null key is the end; on a terminal it is a null key whose STATUS() is not ER$TIMEOUT.
+get.key:
+   k.relaid = @false
+   if not(look.able) then
+      c = keycode()
+      if c = '' then input.ended = @true
+      return
+   end
+   loop
+      c = keycode(1)
+      k.st = status()
+   until c # '' or k.st # ER$TIMEOUT
+      call $sl_window(win.w, win.h)
+      if win.w # last.w or win.h # last.h then
+         gosub set.look
+         display @(-1) :
+         k.relaid = @true
+         return
+      end
+   repeat
+   if c = '' then input.ended = @true      ;* (k.st is not ER$TIMEOUT: the loop above ends on a null key only then)
+   return
+
+* THEME.IN / THEME.OUT  -  The screen library's theme while a record is shown, chosen as the debugger chooses its own: the theme in force is
+*   kept unless it is mono (as it is at TCL); then the site's theme (SCREENTHEME in sd.conf), and if that names none, or is mono, or this
+*   terminal cannot show it, the classic theme; a terminal with no colour keeps mono.  THEME.OUT puts the theme back and clears the screen in
+*   the plain style, for the pick list and for TCL.
+theme.in:
+   call $sl_theme('name', '', '', '', '', old.theme)
+   themed = @false
+   if old.theme = '' or old.theme = 'mono' then
+      call $sl_theme('site', '', '', '', '', site.theme)     ;* 8 Nov 26 (S.179): the person's own theme first, then SCREENTHEME
+      th.r = 2
+      if site.theme # '' and site.theme # 'mono' then call $sl_theme('set', site.theme, '', '', '', th.r)
+      if th.r # 0 then call $sl_theme('set', 'classic', '', '', '', th.r)
+      if th.r = 0 then themed = @true
+   end
+   bar.attr = 'a'                        ;* bar: the bar, the prompt line and the key row
+   text.attr = 't'                       ;* text: the record's lines and the border
+   call $sl_theme('code', 'reverse', '', '', '', rev.attr)      ;* the status line
+   return
+
+theme.out:
+   if themed then
+      call $sl_theme('set', old.theme, '', '', '', th.r)
+      if old.theme = '' or th.r # 0 then call $sl_theme('set', 'mono', '', '', '', th.r)
+      themed = @false
+   end
+   call $sl_sgr('n', sq)
+   display sq : @(-1) :
+   look = @false
+   return
+
+* PAINT.FRAME  -  The bar (row 0) and the foot (the border and the key row) in the pages' look.  The status line and the prompt line are the
+*   command loop's.  The key row is made from a key table by $tk_keys and $tk_fkeys, as the debugger's foot is; its table lists only keys the
+*   command loop acts on (map.keys and the case c = lines).
+paint.frame:
+   pf.app = 'sp.view  ' : @logname : '@' : @who : ' '
+   pf.left = file.name : '  ' : item.name
+   * 8 Nov 26 (S.180): the menu bar's titles first (File View Help: Esc or F10 opens it), then the file and the item
+   gosub sp.bar
+   call $sl_menu('init', sp.w, scr, '', sp.r)
+   call $sl_menu('draw', sp.w, scr, '', sp.r)
+   pf.w = lay.w - len(pf.app) - sp.tw
+   if pf.w > 1 then call $sl_put(scr, sp.tw, 0, fmt(pf.left[1, pf.w - 1], pf.w : 'L'), bar.attr)
+   call $sl_put(scr, lay.w - len(pf.app), 0, pf.app[1, len(pf.app)], bar.attr)    ;* a copy: $sl_put cuts the text it is given
+   call $sl_line('h', 0, pf.hc)
+   call $sl_put(scr, 0, border.line, str(pf.hc, lay.w), text.attr)
+   kr.keys = ''
+   call $tk_keys('add', kr.keys, 'pgdn', 'next', 'next', '', '')
+   call $tk_keys('add', kr.keys, 'pgup', 'previous', 'previous', '', '')
+   call $tk_keys('add', kr.keys, 'home', 'top', 'top', '', '')
+   call $tk_keys('add', kr.keys, 'end', 'bottom', 'bottom', '', '')
+   call $tk_keys('add', kr.keys, 'left', 'scroll left', 'left', '', '')
+   call $tk_keys('add', kr.keys, 'right', 'scroll right', 'right', '', '')
+   call $tk_keys('add', kr.keys, 's', 'spool', 'spool', '', '')
+   call $tk_keys('add', kr.keys, 'x', 'delete', 'delete', '', '')
+   call $tk_keys('add', kr.keys, 'q', 'quit', 'quit', '', '')
+   kr.ctx = ''
+   kr.ctx<TK.C.W> = lay.w
+   call $tk_fkeys(kr.ctx, kr.keys, '', key.row)
+   call $sl_put(scr, 0, key.line, key.row, bar.attr)
+   return
+
+* SAY.PROMPT / SAY.NOTE  -  prompt.text on the prompt line (in reverse video, or in the bar style in the pages' look); SAY.PROMPT puts the
+*   cursor after it.
+say.prompt:
+   gosub say.note
+   display @(len(prompt.text), prompt.line) :
+   return
+
+say.note:
+   if look then
+      call $sl_put(scr, 0, prompt.line, fmt(prompt.text[1, lay.w], lay.w : 'L'), bar.attr)
+   end else
+      display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+   end
    return
 
 * ======================================================================
@@ -360,26 +569,25 @@ delete.item:
    if not(kernel(K$EDIT.OK, edit.p)) then
       edit.kind = kernel(K$EDIT.KIND, edit.p)
       prompt.text = edit_msg(edit.kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
-      display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+      gosub say.note
       c = keycode()
       return
    end
 
    prompt.text = sysmsg(12110, item.name, file.name) ;* Delete xx from xx (Y/N)?
-   display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
-   display @(len(prompt.text), prompt.line) :
+   gosub say.prompt
    if upcase(keycode()) # 'Y' then return
 
    readvu dummy from data.f, item.name, 0 locked
       prompt.text = sysmsg(12078, item.name) ;* Record 'xx' is locked by another user and was not deleted
-      display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+      gosub say.note
       c = keycode()
       return
    end then
       delete data.f, item.name
       on error
          prompt.text = sysmsg(3222, status(), item.name) ;* Error xx deleting record xx
-         display @(0,prompt.line) : @(-13) : fmt(prompt.text, info.fmt) : @(-14) :
+         gosub say.note
          release data.f, item.name
          c = keycode()
          return
@@ -397,6 +605,21 @@ delete.item:
 
 show.data.page:
    more.right = @false
+   if look then                    ;* 2 Nov 26 (S.99): the pages' look - the bar, the lines from row 1 in the text style, the foot
+      gosub paint.frame
+      for i = 1 to data.lines.per.page
+         j = i + data.offset
+         s = ''
+         if j <= num.lines then
+            s = rec<j>
+            if len(s) >= pan + view.w then more.right = @true
+            s = s[pan, view.w]
+         end
+         call $sl_put(scr, 0, data.row + i - 1, s : space(view.w - len(s)), text.attr)
+      next i
+      return
+   end
+
    for i = 1 to data.lines.per.page
       display @(0,i-1) : @(-4) :
       j = i + data.offset
@@ -427,6 +650,7 @@ spool.item:
 
       loop
          input @(col,4) : lptr, 3_:
+         if status() = ER$EOF then return      ;* 2 Nov 26: the input has ended; nothing is printed
       until lptr matches '1-3N' and lptr <= LPTR$HIGH.PRINT.UNIT
          inputerr sysmsg(2053) ;* Invalid printer number
       repeat
@@ -438,6 +662,7 @@ spool.item:
       loop
          s = oconv(numbering, 'B')
          input @(col,14) : s, 1_:
+         if status() = ER$EOF then return      ;* 2 Nov 26: as above
          s = iconv(s, 'B')
       until status() = 0
          inputerr sysmsg(7142) ;* Y or N only
@@ -450,6 +675,7 @@ spool.item:
       display @(0,16) : sysmsg(7143) :  ;* 'Ok to print (Y/N/Q/?)? '
       loop
          input @(23,16) : yn, 1_:
+         if status() = ER$EOF then return      ;* 2 Nov 26: the input has ended; leave the form (it used to ask again for ever)
          yn = upcase(yn)
          if yn = 'Q' then return
       until yn = 'Y' or yn = 'N'
@@ -545,8 +771,56 @@ map.keys:
       case n = CTRL.P       ; c = 'U'
       case n = CTRL.V       ; c = 'N'
       case n = CTRL.Z       ; c = 'U'
+      * 8 Nov 26 (S.179, S.180): the keys every page has, and the menu bar, in the pages' look
+      case n = K$F5 or n = 12 ; c = '#REFRESH'      ;* F5, Ctrl-L: draw the screen again
+      case n = 20 and look  ; c = '#THEME'           ;* Ctrl-T: the next theme, kept for the person
+      case n = 11           ; c = '#KEYS'            ;* Ctrl-K: the keys
+      case n = K$F1         ; c = '#KEYS'            ;* F1: SP.VIEW's help is its keys
+      case n = 17           ; c = 'Q'                ;* Ctrl-Q: leave, as on every page (Q still does)
+      case (n = 27 or n = K$F10) and look
+         gosub sp.menu                              ;* Esc or F10: the menu bar; c is the letter of what was chosen, or null
    end case
 
+   return
+
+* 8 Nov 26 (S.180, the owner: "all features available on a page need to appear somewhere on the menus") - the menu bar of the pages' look: File, View,
+* Help.  Each entry's code is the letter (or #word) the key loop acts on, so a choice does exactly what its key does.
+sp.bar:
+   sp.w = ''
+   sp.w<SL.W.Y> = 0
+   sp.w<SL.W.W> = lay.w
+   sp.m = '&File'
+   sp.m<1, -1> = '&Spool to a printer' : @sm : 'S' : @sm : 'S'
+   sp.m<1, -1> = '&Delete the item' : @sm : 'X' : @sm : 'X'
+   sp.m<1, -1> = '-'
+   sp.m<1, -1> = '&Quit' : @sm : 'Ctrl-Q' : @sm : 'Q'
+   sp.w<20> = sp.m
+   sp.m = '&View'
+   sp.m<1, -1> = '&Next page' : @sm : 'PgDn' : @sm : 'N'
+   sp.m<1, -1> = '&Previous page' : @sm : 'PgUp' : @sm : 'P'
+   sp.m<1, -1> = '&Top' : @sm : 'Home' : @sm : 'T'
+   sp.m<1, -1> = '&Bottom' : @sm : 'End' : @sm : 'B'
+   sp.m<1, -1> = 'Scroll &left' : @sm : 'Left' : @sm : 'L'
+   sp.m<1, -1> = 'Scroll &right' : @sm : 'Right' : @sm : 'R'
+   sp.m<1, -1> = '-'
+   sp.m<1, -1> = 'T&heme' : @sm : 'Ctrl-T' : @sm : '#THEME'
+   sp.m<1, -1> = 'Re&fresh' : @sm : 'F5' : @sm : '#REFRESH'
+   sp.w<21> = sp.m
+   sp.m = '&Help'
+   sp.m<1, -1> = '&Keys' : @sm : 'Ctrl-K' : @sm : '#KEYS'
+   sp.w<22> = sp.m
+   sp.tw = 0
+   for sp.i = 20 to 22
+      sp.tw += len(convert('&', '', sp.w<sp.i, 1>)) + 2
+   next sp.i
+   return
+
+sp.menu:
+   gosub sp.bar
+   call $sl_menu('init', sp.w, scr, '', sp.r)
+   call $sl_menu('run', sp.w, scr, '', sp.code)
+   c = sp.code
+   gosub paint.frame                  ;* the bar as it is when closed, with the names after the titles
    return
 
 end

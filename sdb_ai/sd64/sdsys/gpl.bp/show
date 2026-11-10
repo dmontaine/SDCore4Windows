@@ -24,6 +24,8 @@
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
+* 30 Oct 26 dm  S.66: SHOW ... EVAL compiles its expression in memory with $dcomp; it no longer writes a temporary I-type into the user's dictionary (and so asks no edit gate, holds no lock).
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -755,15 +757,13 @@ parse:
             dict.rec<DICT.DISPLAY.NAME> = option
             dict.rec<DICT.FORMAT> = '10L'
 
-            recordlocku dict.fvar, ITYPE.NAME
-            writeu dict.rec to dict.fvar, ITYPE.NAME
+            * 30 Oct 26 dm - S.66 (Opus's decision of 30 Oct): the expression is compiled IN MEMORY with $dcomp, the routine COMPILE.DICT uses, and nothing is written.  SHOW is
+            * $internal, so the edit gates never saw the temporary I-type that used to be written into the user's dictionary (and compiled and deleted again) here; a session that
+            * held the record locked made SHOW wait for it.
+            @system.return.code = 0
             hush on
-            execute "COMPILE.DICT " : file.name : " " : ITYPE.NAME
+            call $dcomp(dict.fvar, ITYPE.NAME, dict.rec, dc.format, dc.conv, dc.sm, dc.assoc, dc.constant, 1)
             hush off
-            read dict.rec from dict.fvar, ITYPE.NAME else
-               stop "Cannot read compiled EVAL I-type"
-            end
-            delete dict.fvar, ITYPE.NAME
 
             if @system.return.code then
                stop "Compilation error in EVAL expression : " : option

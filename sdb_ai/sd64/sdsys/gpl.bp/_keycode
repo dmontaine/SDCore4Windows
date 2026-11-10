@@ -20,6 +20,8 @@
 * START-HISTORY:
 * 10 Nov 26 Windows port - from Linux bcf43131 (S.88 phase 1, K1-K3, K6): every terminal's keys in both cursor-key modes, the bracketed paste
 *           (K$PASTE.START / K$PASTE.END), and an unbound control sequence read whole to its final byte (decoded for the screen library).
+*           And from Linux 0717b335 / d9185318 (S.94's Shift-F keys, S.184 stage 2): kc.alt also returns Esc and a blank, Esc and DEL, and
+*           Esc and ^H (Alt-Space, Alt-Backspace).
 * 18 Oct 26 Windows port - from Linux 7ff476f (12 Oct 26): ESC [ < (an xterm SGR mouse report) is bound to K$MOUSE.
 * 02 Oct 26 Windows port - RELEASE_1.1 120.  F1-F5, Home and End as xterm spells
 *           them (ESC O P-S, ESC [ 1 5 ~, ESC [ H, ESC [ F) are bound as defaults,
@@ -272,8 +274,13 @@ $include keycode.h
       * 22 Oct 26 dm - AN ALT-LETTER, FOR A PROGRAM THAT ASKED FOR IT (BINDKEY(, -7): the screen library's $sl_key does, for the one read).  A terminal
       *   sends Alt+x as Esc and x.  Nothing is bound to that, so KEYCODE rang the bell and threw the two characters away.  With kc.alt set it
       *   returns them, Esc first, for the caller to name.  A key that starts a bound sequence (Esc [ and Esc O) was read on above, so it is not this.
+      * 31 Oct 26 dm - S.94, THE LINUX CONSOLE'S SHIFT-TAB: the kernel's default keymap sends Esc and Tab (measured on a real console, Debian 13), not ESC [ Z, so the back-tab of every form
+      *   and dialogue was dropped there.  Only for the linux terminal type: for another type Esc and Tab is Alt-Tab, which is not this key.  (A block of its own, ahead of the Alt-letter's.)
+      if kc.alt and key.string = char(27) : char(9) and downcase(@term.type) = 'linux' then return value char(K$CTRL.TAB)
+      * 9 Nov 26 dm - S.184 stage 2: Esc and a blank (Alt-Space) and Esc and DEL or ^H (Alt-Backspace) come back too; $sl_key names them alt-  and alt-bs.
       if kc.alt and len(key.string) = 2 and key.string[1,1] = char(27) then
-         if seq(key.string[2,1]) > 32 and seq(key.string[2,1]) < 127 then return value key.string
+         alt.c = seq(key.string[2,1])
+         if (alt.c >= 32 and alt.c <= 127) or alt.c = 8 then return value key.string
       end
 
       if not(dropped) then display @sys.bell :
@@ -341,6 +348,23 @@ csi.rest:
       if bitand(md - 1, 2) then pre := 'alt-'
       if bitand(md - 1, 1) then pre := 'shift-'
       got = char(27) : char(2) : pre : base
+   end
+   * 31 Oct 26 dm - S.94, THE LINUX CONSOLE'S SHIFT-F1 TO SHIFT-F8: the kernel's default keymap sends them as F13 to F20 (ESC [ 25 ~, 26, 28, 29, 31, 32, 33, 34 ~; measured on a real
+   *   console, Debian 13), with no modifier, so Shift-F6 (the IDE's previous pane) and Shift-F3 (the editor's find previous) named nothing there.  Only for the linux terminal type: rxvt
+   *   and the VT220 numbering give those strings other meanings.  Shift-F9 to Shift-F12 and Ctrl-F1 to Ctrl-F12 send nothing on the console and cannot be helped here.
+   if fin = '~' and md < 2 and base = '' and downcase(@term.type) = 'linux' then
+      sfn = 0
+      begin case
+         case p1 = 25 ; sfn = 1
+         case p1 = 26 ; sfn = 2
+         case p1 = 28 ; sfn = 3
+         case p1 = 29 ; sfn = 4
+         case p1 = 31 ; sfn = 5
+         case p1 = 32 ; sfn = 6
+         case p1 = 33 ; sfn = 7
+         case p1 = 34 ; sfn = 8
+      end case
+      if sfn then got = char(27) : char(2) : 'shift-f' : sfn
    end
    return
 

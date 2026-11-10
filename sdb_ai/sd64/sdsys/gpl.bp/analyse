@@ -316,7 +316,7 @@ $include int$keys.h
 
             page
 
-            print 'Histogram of group utilisation'
+            print 'Histogram of group utilization'
             print
             g.data = field(info, @fm, 32, 11)
             g.max = maximum(g.data)

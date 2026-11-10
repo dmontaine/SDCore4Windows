@@ -40,7 +40,7 @@
 *    TERM {width} {, lines} {, prt.cols} {, prt.lines} { type}
 *                                    Set to given values
 *    TERM COLOUR {bgc}{,fgc}         Set display colour
-*    TERM DEFAULT                    Set to defaults (140 x 42; the printer is not touched)
+*    TERM DEFAULT                    Set to defaults (140 x 43 since 2 Nov 26; the printer is not touched)
 *    TERM DISPLAY                    Display terminfo bindings
 *
 * @SYSTEM.RETURN.CODE

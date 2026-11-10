@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.88 phase 2: the program name and the calls column of the $ipc record
+*               H<n> are shown through kernel(K$SHOW.SAFE, ...), the kernel's one rule.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -138,15 +140,18 @@ $include int$keys.h
 
                if user then display sysmsg(3352, user)  ;* Data for user %1
                display sysmsg(12262)    ;* Calls..  CP time...  Opens... Reads.... Writes.. Deletes. Program
+               * 28 Oct 26 dm  S.88 phase 2: the texts are shown through kernel(K$SHOW.SAFE, ...), the kernel's one rule
+               * (0-31, 127, 128-159 and 248-255 as '?'): hsm_dump() writes by it, but $ipc is writable by every SD user
+               * and H<n> is read as it stands.  The columns given + 0 or / 1000 are numbers already.
                for i = 1 to n
                   ss = s<i>
-                  display fmt(ss<1, 2>, '7R') : '  ' :         ;* Calls
+                  display fmt(kernel(K$SHOW.SAFE, ss<1, 2>), '7R') : '  ' :         ;* Calls
                   display fmt(ss<1, 3> / 1000, '10R3') : '  ' :     ;* CP time
                   display fmt(ss<1, 4> + 0, '8R') : ' ' :           ;* Opens
                   display fmt(ss<1, 5> + 0, '9R') : ' ' :           ;* Reads
                   display fmt(ss<1, 6> + 0, '8R') : ' ' :           ;* Writes
                   display fmt(ss<1, 7> + 0, '8R') : ' ' :           ;* Deletes
-                  display ss<1, 1>                             ;* Program name
+                  display kernel(K$SHOW.SAFE, ss<1, 1>)        ;* Program name
                next i
             end
          end

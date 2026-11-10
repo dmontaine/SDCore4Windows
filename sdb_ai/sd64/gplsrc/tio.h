@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 18 Oct 26 dm DEFAULT_WIDTH 140 and DEFAULT_DEPTH 42 (were 120 and 36), and linuxio.c and
  *           op_tio.c tio_init() use them instead of literals.
+ * 02 Nov 26 dm DEFAULT_DEPTH 43 (was 42; owner, 2 Nov 2026: "Change to 43"): a session whose terminal gives no size answer
+ *           now meets the 140 by 43 every full-screen page needs.  int$keys.h DEFAULT.DEPTH moves with it.
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -45,7 +47,7 @@
 #define DEFAULT_WIDTH   140
 #define MAX_WIDTH     32767
 #define MIN_DEPTH        10
-#define DEFAULT_DEPTH    42
+#define DEFAULT_DEPTH    43
 #define MAX_DEPTH     32767
 
 #define BACKSPACE_KEY 8

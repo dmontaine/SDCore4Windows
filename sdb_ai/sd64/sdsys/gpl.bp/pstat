@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 28 Oct 26 dm  S.88 phase 2: every text of the $ipc record S<n> is printed through
+*               kernel(K$SHOW.SAFE, ...), the kernel's one rule: a record planted in
+*               $ipc can no longer put a terminal sequence on this screen.
 * 14 Sep 26 Windows port - compares program names lower case (RELEASE_1.1 5
 *           stage 3a)
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
@@ -180,8 +183,12 @@ report:
    end
 
    * Print account name
+   * 28 Oct 26 dm  S.88 phase 2: every text of the record is printed through kernel(K$SHOW.SAFE, ...), the kernel's one
+   * rule (0-31, 127, 128-159 and 248-255 as '?').  The process that is asked writes its record by that rule (kernel.c
+   * dump_status()), but $ipc is writable by every SD user and a record planted under S<n> while this command waits is
+   * read here as it stands, so the reader applies the rule as well.  The comparisons below use the text as read.
 
-   print sysmsg(7151, rec<5>) : ;* Account: %1
+   print sysmsg(7151, kernel(K$SHOW.SAFE, rec<5>)) : ;* Account: %1
 
    * Print last command
 
@@ -192,10 +199,10 @@ report:
          print sysmsg(6804) ;* (SDVbSrvr process)
       case bitand(flags, USR$PHANTOM)
          print sysmsg(6805) ;* (Phantom process)
-         print '     ' : sysmsg(6806, rec<2>)  ;* Command: %1
+         print '     ' : sysmsg(6806, kernel(K$SHOW.SAFE, rec<2>))  ;* Command: %1
       case 1
          print
-         print '     ' : sysmsg(6806, rec<2>)  ;* Command: %1
+         print '     ' : sysmsg(6806, kernel(K$SHOW.SAFE, rec<2>))  ;* Command: %1
    end case
 
    prog.list = raise(rec<3>)
@@ -237,15 +244,15 @@ report:
       * The login name of the process holding the lock, after its number
       * (10 Oct 26 dm, openQM ref 121)
       holder = kernel(K$USERS, rec<4,1> + 0)<1,K$USERS.UNAME>
-      holder = if holder # '' then (' (' : holder : ')') else ''
+      holder = if holder # '' then (' (' : kernel(K$SHOW.SAFE, holder) : ')') else ''
 
       if rec<4,3> = '' then    ;* File lock
-         print '     ' : sysmsg(6809, rec<4,1>) : holder ;* Waiting for file lock held by user xx
-         print '        ' : sysmsg(6810, rec<4,2>) ;* File xx
+         print '     ' : sysmsg(6809, kernel(K$SHOW.SAFE, rec<4,1>)) : holder ;* Waiting for file lock held by user xx
+         print '        ' : sysmsg(6810, kernel(K$SHOW.SAFE, rec<4,2>)) ;* File xx
       end else                 ;* Record lock
-         print '     ' : sysmsg(6811, rec<4,1>) : holder ;* Waiting for record lock held by user xx
-         print '        ' : sysmsg(6810, rec<4,2>) ;* File xx
-         print '        ' : sysmsg(6812, rec<4,3>) ;* Record xx
+         print '     ' : sysmsg(6811, kernel(K$SHOW.SAFE, rec<4,1>)) : holder ;* Waiting for record lock held by user xx
+         print '        ' : sysmsg(6810, kernel(K$SHOW.SAFE, rec<4,2>)) ;* File xx
+         print '        ' : sysmsg(6812, kernel(K$SHOW.SAFE, rec<4,3>)) ;* Record xx
       end
 
       * 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26): openQM item 577: when the wait began, in the time zone of the user running the command (the
@@ -260,7 +267,7 @@ report:
 
    * =============== Field 6  -  @PSTAT, the text the process's application left for this command (15 Oct 26, sheet 492)
 
-   if rec<6> # '' then print '     ' : rec<6>
+   if rec<6> # '' then print '     ' : kernel(K$SHOW.SAFE, rec<6>)
 
    delete ipc.f, 'S':user
 
@@ -269,11 +276,11 @@ report:
 * ======================================================================
 
 show.prog:
-   if sub = 1 then print prog.list<prg,1> :                 ;* Program name
+   if sub = 1 then print kernel(K$SHOW.SAFE, prog.list<prg,1>) :  ;* Program name
    else print space(len(prog.list<prg,1>) + 5) :
 
    ln = prog.list<prg,sub+1,2>                              ;* Line
-   if ln >= 0 then print ' ' : prog.list<prg,sub+1,2> :
+   if ln >= 0 then print ' ' : kernel(K$SHOW.SAFE, ln) :
 
    print ' (' : oconv(prog.list<prg,sub+1,1>, 'MX') : ')'   ;* Address
 

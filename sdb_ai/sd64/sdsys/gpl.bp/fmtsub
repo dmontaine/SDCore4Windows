@@ -22,6 +22,8 @@
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
+* 29 Oct 26 dm  S.88: quiet mode through the named COMMON /fmtq/ (fq.quiet, fq.log): no dots, no error display, no keyin; errors are appended to fq.log.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -97,6 +99,14 @@ subroutine format(in.rec, out.rec, default.file, indent.step, case.option, error
 $catalog !format
 equate MAX.INCLUDE to 20
 
+   common /fmtq/ fq.quiet, fq.log   ;* quiet mode (S.88): the caller sets fq.quiet = 1 just before the call and reads fq.log after it
+
+   * Take the flag into a local and clear it at once: a caller that stops between setting it and
+   * the call (or an abort in this program) must not leave every later FORMAT silently quiet.
+   quiet = (fq.quiet = 1)
+   fq.quiet = 0
+   if quiet then fq.log = ''
+
    name.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$_%'
 
    dim include.f(MAX.INCLUDE)
@@ -121,7 +131,7 @@ equate MAX.INCLUDE to 20
       line = removef(in.rec, 1)
    until status()
       lno += 1
-      if rem(lno,10) = 0 then
+      if rem(lno,10) = 0 and not(quiet) then
          display '.' :
          dot.emitted = @true
       end
@@ -563,10 +573,14 @@ emit:
    * If all has gone correctly, the new record should be identical to the old
    * record if we remove all spaces.
    if upcase(convert(' ', '', in.rec)) # upcase(convert(' ', '', new.rec)) then
-      display 'Internal error - data mismatch.'
+      if quiet then
+         fq.log<-1> = fmt(lno, "4'0'R") : ':  Internal error - data mismatch.'    ;* logged, not shown, no keyin
+      end else
+         display 'Internal error - data mismatch.'
 		display "I started with ":len(in.rec):" bytes and ended up with ": len(new.rec):" bytes"
 		display 'Press ENTER to continue' :
-      i = keyin()
+         i = keyin()
+      end
       new.rec = in.rec
    end
 
@@ -652,8 +666,12 @@ exit.process.include:
 * ======================================================================
 
 error:
-   if dot.emitted then display
-   display fmt(lno, "4'0'R") : ':  ' : message
+   if quiet then
+      fq.log<-1> = fmt(lno, "4'0'R") : ':  ' : message
+   end else
+      if dot.emitted then display
+      display fmt(lno, "4'0'R") : ':  ' : message
+   end
    dot.emitted = @false
    errors += 1
 

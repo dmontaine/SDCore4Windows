@@ -7,6 +7,8 @@
 * 22 Oct 26 dm  New (S.75; the owner: "if defined by the admin or the system, it should be able to be turned off by the admin", then "disabling tiles should be on a
 *               per account basis, by default they are on").
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: the standard ids gain recent, the Recent group of the home screen (the development tiles Linux adds are not in this tree).
+* 26 Oct 26 dm  S.75, home: the standard ids gain the seven development tiles (files voc dict query bulk catalog test) and recent, the Recent group of the home screen.
+* 29 Oct 26 dm  S.88 g-P1: the standard id ced is gone with the Record editor tile (fourteen ids).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -41,7 +43,7 @@ $include err.h
       stop sysmsg(2001) ;* Command requires administrator privileges
    end
 
-   standard = 'editor ide ced terminal keys switch signout recent'
+   standard = 'editor ide terminal keys switch signout files voc dict query bulk catalog test recent'
 
    words = trim(@sentence)
    n.words = dcount(words, ' ')

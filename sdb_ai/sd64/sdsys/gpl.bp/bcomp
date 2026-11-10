@@ -56,6 +56,30 @@
 * 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - ACCEL key (S.75 TK-0.12) on ENTRY, COMBO, CHECK, SLIDER, SELECTOR, RADIO, LIST, BUTTON, TABS, MEMO, TREE and TABLE: the keyword after the others.
 * 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN SELECTOR (a choice of one word among several, S.75 TK-0.10) in the SCREEN.VERBS table.
 * 22 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN SLIDER (an on / off switch, S.75 TK-0.8) in the SCREEN.VERBS table; PLACE on CHECK and SLIDER; COLOR on ENTRY, COMBO, CHECK, SLIDER, RADIO, LIST,
+* 29 Oct 26 dm  S.88 3.5: SCREEN SET passes a presence mask (SCREEN.DEFS field 4 "P"), so a written VALUE / TEXT / ITEMS '' sets; screen_set takes 12 arguments.
+* 28 Oct 26 dm  S.87: the C dictionary item type is gone from the compiler: the is.ctype argument of $BCOMP (callers: basic, bbproc, gplbld/COMP_PCODE), HDR.CTYPE, err.ctype and message 2994.
+* 28 Oct 26 dm  S.87: the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statement names (write CLOSE and EQUATE); every SD program, test and guide example was rewritten.
+* 28 Oct 26 dm  S.87: the function forms EXTRACT(), REPLACE(), INSERT(), DELETE() and SUBR() are gone (use <f,v>, INS, DEL, CALL / DEFFUN); the opcodes stay.
+* 28 Oct 26 dm  S.87: $MODE TIME.MS and $MODE DEFAULT.UNASS.ARGS are gone (bits reserved, blank in mode.names); a default argument value needs VAR.ARGS (message 11274 says so).
+* 27 Oct 26 dm S.87 batch 16: the statement KEEP.SELECT (name and handler row st.keepselect, and the program keepsel) is gone with OPTION CLEAR.SELECT, which was all it served.
+* 27 Oct 26 dm S.87 batch 13: the statements ROOT, KEY( and BSCAN (with the programs rootidx, keyop, bscan) and the Pick style CALL "file name" are gone.
+* 27 Oct 26 dm S.87 batch 13: the functions ADDS, SUBS, MULS, DIVS, IS.ALNUM .. IS.SPACE, LEFT, RIGHT and MD5 are gone (their name and handler rows, and XFUN rows 5 to 12).
+* 27 Oct 26 dm S.87 batch 13: the statement GO / GO TO is gone (write GOTO; ON ... GOTO is the only form of ON), and # no longer starts a compiler directive (write $IFDEF, $DEFINE).
+* 27 Oct 26 dm S.87 batch 13: the @ variables @AM, @SVM, @USER, @USER.NO and @FILENAME are gone (@FM, @SM, @LOGNAME, @USERNO and @FILE.NAME stay).
+* 27 Oct 26 dm  S.87 batch 12: the statement INPUTCLEAR is gone (write CLEARINPUT; both compiled to the same code).
+* 27 Oct 26 dm  S.87 batch 11: the second names DQUOTE, DQUOTES, SWAP and XLATE are gone (write QUOTE, QUOTES, CHANGE and TRANS); each was a row in the intrinsics and handler lists, no opcode.
+* 27 Oct 26 dm  S.87 batch 9: the modes OPEN.FAIL.ZERO.FVAR, PICK.READNEXT and EXECUTE.CLEARLIST are gone (bits 26, 27 and 28 reserved); OPEN, READNEXT and EXECUTE compile as they did without them.
+* 27 Oct 26 dm  S.87 batch 5: emit.errmsg.args (Pick style STOP / ABORT arguments, called by nothing since the ERRMSG family went in 2024) and the label st.stopm are gone.
+* 27 Oct 26 dm  S.87 batch 3, second spellings and forms gone (the owner's emulation survey): the statements $INSERT, INCLUDE (without the $), COM, DIMENSION, REDIMENSION,
+*               ENTER (with $MODE PICK.ENTER, bit 14 now reserved), PERFORM, PRINTERR, REMARK, RQM, SUB, TCLREAD; EXECUTE ... SETTING and PASSLIST with no variable; INPUT ... FOR and
+*               TIMEOUT (WAITING stays); OPENTEMP ... ECS; the bracketed Pick form of LOCATE; the functions EREPLACE, SENTENCE(), SWAPMARKS and TERMINFO.EX; and @SYSTEM.SET.
+*               The conversions MCD, MCDX, MCX and MCXD went from the kernel on the same day.  INPUTERR is the one name of the screen message statement (st.inputerr).
+* 27 Oct 26 dm  Seven $MODE names are gone (the owner's emulation survey, S.87 batch 2): PRCLOSE.DEFAULT.0, UNASSIGNED.COMMON, NO.CASE.INVERT, OPTIONAL.THEN.ELSE, IMPLIED.STOP,
+*               EXCEPTION.SAVE.STACK and CONDITIONAL.STATEMENTS.  A name the compiler no longer knows is refused (2842).  Their bit positions stay reserved with a blank name.
+* 22 Oct 26 dm  ACCEL key (S.75 TK-0.12) on ENTRY, COMBO, CHECK, SLIDER, SELECTOR, RADIO, LIST, BUTTON, TABS, MEMO, TREE and TABLE: the keyword after the others.
+* 22 Oct 26 dm  SCREEN SELECTOR (a choice of one word among several, S.75 TK-0.10) in the SCREEN.VERBS table.
+* 22 Oct 26 dm  SCREEN SLIDER (an on / off switch, S.75 TK-0.8) in the SCREEN.VERBS table; PLACE on CHECK and SLIDER; COLOR on ENTRY, COMBO, CHECK, SLIDER, RADIO, LIST,
 *               BUTTON, LABEL and PROGRESS.
 * 18 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SCREEN CONTAINER, VIEWPORT, IN, MOVE, DELETE and SCROLL (screen library: containers and viewports) in the SCREEN.VERBS table.
 * 18 Oct 26 Windows port - from Linux 68d6c5e-04f1eaa - SDSALT(), SDKEY(passphrase, salt) and SDRANDKEY() (encryption layer 2): XFUN rows 37-39, the first to write no
@@ -115,6 +139,7 @@
 * 11 Sep 26  An unterminated BEGIN TRANSACTION reports 2878 instead of
 *            hanging the compiler (port PRE_RELEASE_FIXES 114).
 * 19 Oct 26  SCREEN MENUBAR takes CLICK x (the menu under a click on the bar opens).
+* 09 Nov 26  SCREEN ASK takes HISTORY list (S.184).
 * END-HISTORY
 *
 *
@@ -529,7 +554,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    * or KEYWORD:F (a flag: no value follows, the subroutine is given 1 if it was written).
    * The subroutine is called with the positional values, then the keyword values in the order given
    * here (null for a clause the program left out; a two-value keyword such as AT is two arguments),
-   * then the RETURNING variable, then a status that is 0 when the user finished normally and 1 when
+   * then, when the row has a 4th field "P", ONE presence mask (bit k-1 set if the k-th keyword was written), then the RETURNING variable, then a status that is 0 when the user finished normally and 1 when
    * the dialogue was cancelled (or no terminal).
    * A statement not listed here is a compile error, so a verb is added in both places and in the
    * subroutine's argument list; test-screencmd-units.py checks the three agree.
@@ -539,7 +564,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "MENU"    ; screen.defs<-1> = "!screen_menu":@vm:1:@vm:"AT:2":@sm:"DEFAULT:1"
    screen.names<-1> = "MENUBAR" ; screen.defs<-1> = "!screen_menubar":@vm:1:@vm:"ROW:1":@sm:"DRAW:F":@sm:"CLICK:1"
    screen.names<-1> = "PICK"    ; screen.defs<-1> = "!screen_pick":@vm:1:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2":@sm:"DEFAULT:1":@sm:"MULTI:F"
-   screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F"
+   screen.names<-1> = "ASK"     ; screen.defs<-1> = "!screen_ask":@vm:1:@vm:"VALUE:1":@sm:"WIDTH:1":@sm:"TITLE:1":@sm:"AT:2":@sm:"MASK:F":@sm:"HISTORY:1"
    screen.names<-1> = "FORM"    ; screen.defs<-1> = "!screen_form":@vm:0:@vm:"TITLE:1":@sm:"AT:2":@sm:"SIZE:2"
    screen.names<-1> = "LABEL"   ; screen.defs<-1> = "!screen_label":@vm:3:@vm:"AT:2":@sm:"ATTR:1":@sm:"WIDTH:1":@sm:"COLOR:2"
    screen.names<-1> = "FRAME"   ; screen.defs<-1> = "!screen_frame":@vm:2:@vm:"AT:2":@sm:"SIZE:2":@sm:"TITLE:1"
@@ -552,7 +577,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    screen.names<-1> = "BUTTON"  ; screen.defs<-1> = "!screen_button":@vm:3:@vm:"AT:2":@sm:"DEFAULT:F":@sm:"CANCEL:F":@sm:"COLOR:2":@sm:"ACCEL:1"
    screen.names<-1> = "RUN"     ; screen.defs<-1> = "!screen_run":@vm:1
    screen.names<-1> = "GET"     ; screen.defs<-1> = "!screen_get":@vm:2
-   screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1":@sm:"WRAP:1":@sm:"READONLY:1":@sm:"VISIBLE:1"
+   screen.names<-1> = "SET"     ; screen.defs<-1> = "!screen_set":@vm:2:@vm:"VALUE:1":@sm:"TEXT:1":@sm:"ITEMS:1":@sm:"ENABLED:1":@sm:"WRAP:1":@sm:"READONLY:1":@sm:"VISIBLE:1":@vm:"P"
    screen.names<-1> = "FOCUS"   ; screen.defs<-1> = "!screen_focus":@vm:2
    screen.names<-1> = "VALUES"  ; screen.defs<-1> = "!screen_values":@vm:1
    screen.names<-1> = "WAIT"    ; screen.defs<-1> = "!screen_wait":@vm:1:@vm:"TIMEOUT:1"
@@ -8740,7 +8765,11 @@ execute.clear.temp:
 * The verb, how many values follow it and the keywords it takes are in SCREEN.NAMES / SCREEN.DEFS
 * (top of this program).  The statement is a CALL of the verb's catalogued subroutine, no opcode:
 *
-*     sub(positional values, keyword values in table order, ret, status)
+*     sub(positional values, keyword values in table order, {presence mask,} ret, status)
+*
+* The presence mask (29 Oct 26, S.88 3.5) is passed only for a row whose 4th field is "P" (SET): the sum of
+* 2^(k-1) over the keywords written, k in TABLE order (VALUE 1, TEXT 2, ITEMS 4, ENABLED 8, WRAP 16,
+* READONLY 32, VISIBLE 64), so the subroutine can tell a written '' from a clause left out.
 *
 * A keyword the program leaves out is passed as the null string, whatever order the keywords are
 * written in: each value is first stored in a hidden variable of its own (__300 up) and the
@@ -8840,6 +8869,20 @@ st.screen:
       next scr.j
    next scr.k
 
+   * The presence mask, for a verb whose row asks for one (a compile-time constant)
+
+   scr.presence = 0
+   if scr.def<1,4> = "P" then
+      scr.presence = 1
+      scr.mask = 0
+      scr.bit = 1
+      for scr.k = 1 to scr.nkw
+         if scr.given<scr.k> then scr.mask += scr.bit
+         scr.bit += scr.bit
+      next scr.k
+      n = scr.mask ; gosub emit.numeric.load
+   end
+
    * The answer, and the status the THEN / ELSE clauses test
 
    if u.look.ahead.token.string = "RETURNING" then
@@ -8857,7 +8900,7 @@ st.screen:
 
    del reserved.names<2>
 
-   scr.argc = scr.npos + scr.nslots + 2
+   scr.argc = scr.npos + scr.nslots + scr.presence + 2
    if scr.argc > greatest.call.arg.count then greatest.call.arg.count = scr.argc
    if print.code then
       s = "CALL     (" : scr.argc : " arguments) SCREEN " : scr.verb

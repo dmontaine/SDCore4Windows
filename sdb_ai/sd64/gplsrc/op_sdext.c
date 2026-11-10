@@ -18,6 +18,9 @@
  * 
  * 
  * START-HISTORY:
+ * 10 Nov 26 Windows port - from Linux d8dbde84 (S.88 review of L2, item 8): op_sdext() freed the argument buffer only when IsArgMV was set, so an
+ *           empty argument with IsArgMV false leaked one byte per call; it is freed unless SDMEArgArray[0] is it.  Item 7 (user_home_dir()'s
+ *           ancestors) is Linux's: win32_user_home() makes its own ACL test.
  * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's AppData\Local and a private store below
  *           it (win32_user_home(), win32tls.c).
  * 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3: SD_KEYRING (120), set / clear / list on the key ring of
@@ -150,6 +153,7 @@ void op_sdext() {
   int32_t myval_len;
   int32_t mybuf_sz;
   char* myval_buffer;                      /* buffer for past value string  */
+  int myval_in_args = 0;                   /* 1 when SDMEArgArray[0] IS myval_buffer, which the release loop below then frees */
   STRING_CHUNK* str;
   int argIdx;
   int argCnt;
@@ -235,7 +239,8 @@ void op_sdext() {
 	    }
     } else {  /* MV Flag not set, */
         argCnt = 1;                       /* always one args */
-        SDMEArgArray[0] = myval_buffer;   /* we just point to the value buffer created earlier */  
+        SDMEArgArray[0] = myval_buffer;   /* we just point to the value buffer created earlier */
+        myval_in_args = 1;
     }
   }	  
   
@@ -573,7 +578,10 @@ void op_sdext() {
   }
   /* and the val buffer */
   if (myval_buffer != NULL){
-    if (IsArgMV != 0) {      /* rem if IsArgMV not set, we pointed DMEArgArray[0] to myval_buffer*/
+    /* 10 Nov 26 Windows port - from Linux d8dbde84 (S.88 review of L2, item 8): the buffer is freed here unless SDMEArgArray[0] points at it (the
+       release loop above has freed it then).  The test used to be IsArgMV != 0, which left the one byte of an EMPTY argument with IsArgMV false
+       allocated for good: SDEXT('', @FALSE, key) is SD_USER_HOME's call for the home itself. */
+    if (!myval_in_args) {
 	    explicit_bzero(myval_buffer, strlen(myval_buffer));
 	    free(myval_buffer);    /* do not want to attempt to free the memory again!!*/
     }

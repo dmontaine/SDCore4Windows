@@ -17,6 +17,9 @@
  *
  * START-HISTORY:
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): New.
+ * 28 Oct 26 dm  S.88 phase 2: the qualifier and the program name go into the table by the kernel's one rule (show_unsafe_byte(),
+ *               show_ts_safe(), op_lock.c: 0-31, 127, 128-159, 248-255 as '?'); the qualifier took 0-31 and 248-255 only, the program
+ *               name nothing.  The table becomes the $IPC record F<n> that PROFILER DISPLAY prints.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -99,10 +102,8 @@ void prof_event(int16_t bit, const char* qual, int qlen) {
     qlen = 0;
   if (qlen > PROF_QUAL_LEN)
     qlen = PROF_QUAL_LEN;
-  for (i = 0; i < qlen; i++) { /* Nothing that delimits the report goes into it */
-    unsigned char c = (unsigned char)qual[i];
-    q[i] = ((c < 32) || (c >= 248)) ? '?' : (char)c;
-  }
+  for (i = 0; i < qlen; i++) /* Nothing that delimits the report or drives a terminal goes into it: the kernel's one rule */
+    q[i] = show_unsafe_byte((u_char)(qual[i])) ? '?' : qual[i];
   q[qlen] = '\0';
 
   prog = ProgramName(c_base);
@@ -163,8 +164,11 @@ void prof_dump(DESCRIPTOR* result) {
     if (t == PROF_TYPES)
       continue;
     ts_copy_byte(FIELD_MARK);
-    ts_printf("%s%c%s%c%s%c%d%c%d", prof_names[t], VALUE_MARK, e->qual, VALUE_MARK, e->prog, VALUE_MARK, (int)e->line, VALUE_MARK,
-              (int)e->count);
+    ts_printf("%s%c", prof_names[t], VALUE_MARK);
+    show_ts_safe(e->qual, -1);
+    ts_copy_byte(VALUE_MARK);
+    show_ts_safe(e->prog, -1);
+    ts_printf("%c%d%c%d", VALUE_MARK, (int)e->line, VALUE_MARK, (int)e->count);
   }
   ts_terminate();
 }

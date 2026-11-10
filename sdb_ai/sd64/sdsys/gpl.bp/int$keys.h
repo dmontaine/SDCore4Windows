@@ -24,6 +24,7 @@
 	  * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 	  * 29 Sep 26 Windows port - from Linux 9d6f407 - K$SET.LANGUAGE (38) retired: SD is English only.
 	  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: K$NET (127), the per-account NET gate.
+	  * 10 Nov 26 Windows port - from Linux 1d587a48: DEFAULT.DEPTH 43 (was 42), with gplsrc/tio.h DEFAULT_DEPTH (owner: "Change to 43").
 	  * 18 Oct 26 Windows port - from Linux fa1cd4c - DEFAULT.WIDTH 140 and DEFAULT.DEPTH 42 (were 120 and 36); gplsrc/tio.h has the same two.
 	  * 18 Oct 26 Windows port - from Linux fa1cd4c - S.66: K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
 	  * END-HISTORY
@@ -45,7 +46,7 @@
       $define DEFAULT.WIDTH      140
       $define MAX.WIDTH        32767
       $define MIN.DEPTH           10
-      $define DEFAULT.DEPTH       42
+      $define DEFAULT.DEPTH       43
       $define MAX.DEPTH        32767
 
 
@@ -140,7 +141,7 @@
       $define K$AK.COLLATION    47       ;* Select/deselect AK collation map
       $define K$EXIT.STATUS     48       ;* Set/retrieve exit status
       $define K$CASE.MAP        49       ;* Set upper/lower case pairing
-      $define K$AUTOLOGOUT      50       ;* Set/retrieve autologout period
+      $define K$AUTOLOGOUT      50       ;* Set/retrieve autologout period (-1 reads it; -2 reads the inactivity clock, in ms)
       $define K$MAP.DIR.IDS     51       ;* Enable/disable dir file id mapping
       $define K$IN.GROUP        52       ;* Is user in named group?
       $define K$BREAK.HANDLER   53       ;* Define break handler
@@ -249,6 +250,7 @@
       $define K$WINSIZE          92      ;* The terminal's size from the tty
       * 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's four keys, so the AI routines carry unchanged.  Windows has no helper yet
       *   (RELEASE_1.1 173): its kernel answers each as Linux's does when no helper is running (op_kernel.c), so the AI is never usable.  Must match gplsrc/keys.h.
+      $define K$SHOW.SAFE       151     ;* any text: the same text with every byte of the kernel's one rule (0-31, 127, 128-159, 248-255) as '?', the same length; for printing another session's text (10 Nov 26, Linux d35f5e31, S.88)
       $define K$AI.START        160     ;* system:@fm:maxtokens:@fm:prompt, answered 'OK' or 'ERR':@fm:why (Windows: 'ERR':@fm:'nohelper')
       $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
       $define K$AI.CANCEL       162     ;* give the request up ('OK')

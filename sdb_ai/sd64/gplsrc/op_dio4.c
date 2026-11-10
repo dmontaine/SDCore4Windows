@@ -28,6 +28,13 @@
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_select() and op_selectv() refuse a NET_FILE (net_refuse) before the target list is touched
  * 16 Oct 26 Windows port - from Linux e7ea5f8 - dir_select() closes the oldest cached file and tries again when opendir() fails at the open-file limit (QM4 Fixes 279).
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - $MODE SELECTV default select list variable (openQM item 85): readnext() takes P_DEF_SELLIST, an unassigned
+ * 30 Oct 26 dm  S.88 stage E2: op_dir() tells a file from a directory with S_ISREG / S_ISDIR (a socket was listed as a file, a block device as a directory).
+ * 28 Oct 26 dm  S.87: OPTION DIR.SEL.OMIT.HIDDEN is gone: a select of a directory file includes the names that begin with a dot.
+ * 27 Oct 26 dm  S.87 batch 17: op_rdnxpos ($MODE COMPOSITE.READNEXT) is gone; readnext() mode 0 is no longer called.
+ * 27 Oct 26 dm  S.87 batch 9: $MODE PICK.READNEXT is gone; READNEXT stores the id and a READNEXT that takes its ELSE sets the target to the null string, as without the mode.
+ * 27 Oct 26 dm  S.87 batch 5: the CASE_INSENSITIVE_FILE_SYSTEM block of op_dir() (upper-casing the names of a directory) is gone, as the select's went with select.keep.case.
+ * 17 Oct 26 dm  S.65 slice 3c: op_select() and op_selectv() refuse a NET_FILE (net_refuse) before the target list is touched
+ * 27 Oct 26 dm  S.87 batch 17: $MODE SELECTV and PICK.SELECT are gone, so readnext() no longer takes P_DEF_SELLIST and op_selectv() no longer takes P_PICK_SEL.
  *               default variable being an empty list
  * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): $MODE PICK.SELECT (QM4 gaps Q-16): op_selectv() moves an active list 0 to its target;
  *               transfer_list0() is the body of op_selecte(), which both now call
@@ -1464,9 +1471,11 @@ void op_dir() {
           continue;
 
         strcpy(name, dp->d_name);
-        if (statbuf.st_mode & S_IFREG)
+        /* 30 Oct 26 dm - S.88 stage E2: the file type is a FIELD of st_mode, not a set of bits: "& S_IFREG" (0100000) is also set for a socket (0140000)
+           and "& S_IFDIR" (0040000) for a block device (0060000), which were listed as a file and as a directory */
+        if (S_ISREG(statbuf.st_mode))
           mode = 'F';
-        else if (statbuf.st_mode & S_IFDIR)
+        else if (S_ISDIR(statbuf.st_mode))
           mode = 'D';
         else
           continue;

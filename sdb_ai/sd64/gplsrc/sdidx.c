@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 30 Oct 26 dm - S.78 (Opus's decision 3c): the primary subfile is opened with O_NOFOLLOW.  sd-elevate akpath-set runs sdidx -p as root on a restored account's hashed file and checks %0 is not a
+ *           link first; the open now refuses a link that was put there after the check (the open fails with ELOOP, "Cannot open data file [40]").
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
  * 18 Oct 26 Windows port - from Linux 04a6baf (18 Oct 26): - The old local index files are deleted through a PATH_LEN buffer (-m and -d used a 33 byte one, so a data
@@ -403,7 +405,7 @@ bool open_primary() {
     unbind_sysseg();
   }
 
-  pfu = open(pathname, (int)(O_RDWR | O_BINARY), default_access);
+  pfu = open(pathname, (int)(O_RDWR | O_BINARY | O_NOFOLLOW), default_access);       /* 30 Oct 26: never through a link at %0 */
   if (pfu < 0) {
     printf("Cannot open data file [%d]\n", errno);
     goto exit_open_primary;

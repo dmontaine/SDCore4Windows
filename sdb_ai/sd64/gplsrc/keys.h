@@ -546,6 +546,11 @@
 /* 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's keys, so the screen library's AI routines ($tk_ai) carry
    unchanged.  Windows has no helper yet (RELEASE_1.1 173): op_kernel.c answers each as Linux's op_ai.c does when no helper is
    running - START 'ERR' FM 'nohelper', POLL and STATUS 'E' FM 'nohelper', CANCEL 'OK' - so the AI is never usable and nothing is sent. */
+/* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2, the readers of $IPC).  K_SHOW_SAFE: the argument is any text; the answer is
+   that text with every byte of THE ONE RULE (op_lock.c show_unsafe_byte(): 0-31, 127, 128-159, 248-255) made '?', the same length.  It
+   reads and changes nothing else and any program may ask: PSTAT, PROFILER DISPLAY and HSM USER n print the $IPC records S<n>, F<n> and
+   H<n> that any SD user can write.  Same number as Linux; GPL.BP/INT$KEYS.H carries it. */
+#define K_SHOW_SAFE          151
 #define K_AI_START           160
 #define K_AI_POLL            161
 #define K_AI_CANCEL          162

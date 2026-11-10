@@ -17,6 +17,8 @@
 *
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2): DISPLAY shows every text of the $ipc record F<n> through kernel(K$SHOW.SAFE, ...), the
+*               kernel's one rule: a record planted in $ipc can no longer put a terminal sequence on this screen.
 * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): New (QM4 gaps 66 and 203).
 * END-HISTORY
 *
@@ -226,7 +228,7 @@ display.profile:
       return
    end
 
-   if s<1,4> + 0 then display sysmsg(12387, s<1,4>)   ;* Events lost: the profile was full
+   if s<1,4> + 0 then display sysmsg(12387, kernel(K$SHOW.SAFE, s<1,4>))   ;* Events lost: the profile was full
 
    level = 1
    sel.type = '' ; sel.qual = '' ; sel.prog = ''
@@ -270,17 +272,22 @@ show.level:
       end
    next i
 
+   * 28 Oct 26 dm  S.88 phase 2: the texts of the profile are shown through kernel(K$SHOW.SAFE, ...), the kernel's one rule
+   * (0-31, 127, 128-159 and 248-255 as '?').  The table is written by that rule (profiler.c), but $ipc is writable by every
+   * SD user and F<n> is read as it stands.  keys and sel.* keep the text as read: they are compared with the table.
    display
    begin case
       case level = 1 ; display sysmsg(12382)
-      case level = 2 ; display sysmsg(12383, sel.type)
-      case level = 3 ; display sysmsg(12384, sel.type, sel.qual)
+      case level = 2 ; display sysmsg(12383, kernel(K$SHOW.SAFE, sel.type))
+      case level = 3 ; display sysmsg(12384, kernel(K$SHOW.SAFE, sel.type), kernel(K$SHOW.SAFE, sel.qual))
       case 1
-         display sysmsg(12385, sel.type, sel.qual, sel.prog)
+         display sysmsg(12385, kernel(K$SHOW.SAFE, sel.type), kernel(K$SHOW.SAFE, sel.qual), kernel(K$SHOW.SAFE, sel.prog))
          if keys = '0' then display sysmsg(12386)
    end case
    for i = 1 to dcount(keys, @fm)
-      display fmt(i, '4R') : '  ' : fmt(counts<i>, '9R') : '  ' : (if keys<i> = '' then '(none)' else keys<i>)
+      shown = keys<i>
+      if shown = '' then shown = '(none)' else shown = kernel(K$SHOW.SAFE, shown)
+      display fmt(i, '4R') : '  ' : fmt(counts<i>, '9R') : '  ' : shown
    next i
    if keys = '' then
       level -= 1

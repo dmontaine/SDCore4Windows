@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 10 Nov 26 Windows port - from Linux d35f5e31 / d8dbde84 (S.88): K_SHOW_SAFE (151), another session's text made safe to print by the kernel's
+ *           one rule (show_ts_safe()); kernel(K$AUTOLOGOUT, -2) returns the inactivity clock (keyin_idle_ms()).  And K_AI_START, POLL, CANCEL
+ *           and STATUS (160-163) answered as Linux's op_ai.c answers with no helper running: no AI helper here yet (RELEASE_1.1 173).
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone with the KEEP.SELECT statement and OPTION CLEAR.SELECT; the
  *           number stays reserved.
  * 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10: K_PHANTOM_NONCE (144), the secret a phantom() hands the new process in its environment (SD_PHANTOM_NONCE) so that the
@@ -244,7 +247,7 @@ void op_kernel() {
      K$COLLATION.NAME     Set primary collation map name
      K$AK.COLLATION       Select AK collation map
      K$EXIT.STATUS        Set exit status
-     K$AUTOLOGOUT         Set/retrieve autologout period
+     K$AUTOLOGOUT         Set/retrieve autologout period (-1 reads it; -2 reads the inactivity clock in ms)
      K$MAP.DIR.IDS        Enable/disable dir file id mapping
      K$AUDIT              Append a record to the audit trail
  */
@@ -1541,7 +1544,9 @@ void op_kernel() {
       GetInt(descr);
       if (descr->data.value >= 0)
         autologout = descr->data.value;
-      result.data.value = autologout;
+      /* 10 Nov 26 Windows port - from Linux d8dbde84 (S.88 review of L2): -2 gives the inactivity clock instead of the period (read only;
+         keyin_idle_ms(), linuxio.c), for the IDE's countdown. */
+      result.data.value = (descr->data.value == -2) ? keyin_idle_ms() : autologout;
       break;
 
     case K_MAP_DIR_IDS:
@@ -1624,6 +1629,20 @@ void op_kernel() {
     case K_AI_START:
       k_put_c_string("ERR\376nohelper", &result);
       break;
+
+    /* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2): K_SHOW_SAFE, the text with every byte of the one rule as '?'
+       (show_ts_safe(), op_lock.c), chunk by chunk, the same length.  The BASIC readers of $IPC (PSTAT, PROFILER, HSM) ask this. */
+    case K_SHOW_SAFE: {
+      STRING_CHUNK* safe_chunk;
+
+      k_get_string(descr);
+      InitDescr(&result, STRING);
+      result.data.str.saddr = NULL;
+      ts_init(&(result.data.str.saddr), 128);
+      for (safe_chunk = descr->data.str.saddr; safe_chunk != NULL; safe_chunk = safe_chunk->next)
+        show_ts_safe(safe_chunk->data, (int)(safe_chunk->bytes));
+      (void)ts_terminate();
+    } break;
     case K_AI_POLL:
     case K_AI_STATUS:
       k_put_c_string("E\376nohelper", &result);

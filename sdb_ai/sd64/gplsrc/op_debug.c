@@ -19,6 +19,10 @@
  * START-HISTORY:
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type is gone (variable display, WATCH).
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): DEBUG.INFO() code 7: the equate and $DEFINE tokens of a $MODE DEBUG.EQUATES program (QM4 gap 218)
+ * 1 Nov 26 dm  S.98 H2 (the IDE hands its breakpoints to the debugger): BREAKPOINT 7 (add a line) leaves STATUS() 1 when a statement begins on that line and 0 when
+ *           it does not (debug_line_start(), shared with BREAKPOINT 10); the breakpoint list is scanned against the id of the RUNNING program and not that of the
+ *           last stop.
+ * 28 Oct 26 dm  S.87: the PMATRIX descriptor type is gone (variable display, WATCH).
  * 14 Sep 26 Windows port - the debugger is $debug / $pdbg (RELEASE_1.1 5)
  * 31 Dec 23 SD launch - prior history suppressed
  * 18 Oct 26 Windows port - from Linux 8da7e5d (11 Oct 26): A data collection variable gives the debugger its kind, its count
@@ -74,6 +78,64 @@ Private int16_t num_active_breakpoints = 0;
 Private void get_var_info(DESCRIPTOR* var_descr, int16_t com_var);
 
 /* ======================================================================
+   debug_line_start()  -  Where source line n begins in the code
+
+   The offset, in the code of the program that called the debugger, of the
+   OP_DEBUG that begins source line n, or -1 when the line has none (no line
+   table, a line beyond the table, a line that begins with another opcode).
+   *actual is then the line number that OP_DEBUG carries: for a line that holds
+   no statement (a comment, a label) the line table gives the offset of the
+   next statement, whose OP_DEBUG names another line.
+   The BREAKPOINT 10 (go to a line) and 7 (add a line, whose STATUS() is 1 only
+   for such a line) both use it.                                           */
+
+Private int32_t debug_line_start(OBJECT_HEADER* obj_hdr, int n, int* actual) {
+  int32_t line_table_offset;
+  int32_t line_table_end;
+  int32_t line_table_bytes;
+  int16_t bytes;
+  int line;
+  int32_t line_pc;
+  u_char* p;
+
+  line_table_offset = obj_hdr->line_tab_offset;
+  if (line_table_offset) {
+    /* The first entry in the line table is for line 0, the fixed
+       stuff on the front of the program.                         */
+
+    line_table_end = obj_hdr->sym_tab_offset;
+    if (line_table_end == 0)
+      line_table_end = obj_hdr->object_size;
+    line_table_bytes = line_table_end - line_table_offset;
+
+    p = ((u_char*)obj_hdr) + line_table_offset;
+    line = 0;
+    line_pc = 0;
+    while (line_table_bytes-- > 0) {
+      bytes = (int16_t)(*(p++));
+      if (bytes == 255) {
+        bytes = (int16_t)(*(p++));
+        bytes |= ((int16_t)(*(p++))) << 8;
+        line_table_bytes -= 2;
+      }
+
+      if (line == n) {
+        p = process.program.prev->saved_c_base + line_pc;
+        if (*(p++) == OP_DEBUG) {
+          *actual = ((int)(*p) << 8) | *(p + 1); /* Line number */
+          return line_pc;
+        }
+        return -1;
+      }
+
+      line_pc += bytes;
+      line += 1;
+    }
+  }
+  return -1;
+}
+
+/* ======================================================================
    op_dbgbrk()  -  Debugger breakpoint control functions                  */
 
 void op_dbgbrk() {
@@ -103,16 +165,11 @@ void op_dbgbrk() {
 
   DESCRIPTOR* descr;
   OBJECT_HEADER* obj_hdr;
-  int32_t line_table_offset;
-  int32_t line_table_end;
-  int32_t line_table_bytes;
-  int16_t bytes;
   int line;
   int32_t line_pc;
   int16_t i;
   int16_t j;
   int n;
-  u_char* p;
 
   /* Get breakpoint type */
 
@@ -163,6 +220,16 @@ void op_dbgbrk() {
       breakpoint_list[num_active_breakpoints].line =
           (u_int16_t)(descr->data.value);
       num_active_breakpoints++;
+
+      /* 1 Nov 26 (S.98 H2): STATUS() says whether a statement begins on that
+         line, i.e. whether a DEBUG opcode for it exists and the breakpoint can
+         ever be reached.  The entry is added either way (as it always was);
+         the editor's hand-over takes the useless ones out again.            */
+
+      n = descr->data.value;
+      obj_hdr = (OBJECT_HEADER*)find_object(debug_id);
+      process.status =
+          ((debug_line_start(obj_hdr, n, &line) >= 0) && (line == n)) ? 1 : 0;
       break;
 
     case BRK_CLEAR:
@@ -190,41 +257,10 @@ void op_dbgbrk() {
       n = descr->data.value;
 
       obj_hdr = (OBJECT_HEADER*)find_object(debug_id);
-      line_table_offset = obj_hdr->line_tab_offset;
-      if (line_table_offset) {
-        /* The first entry in the line table is for line 0, the fixed
-           stuff on the front of the program.                         */
-
-        line_table_end = obj_hdr->sym_tab_offset;
-        if (line_table_end == 0)
-          line_table_end = obj_hdr->object_size;
-        line_table_bytes = line_table_end - line_table_offset;
-
-        p = ((u_char*)obj_hdr) + line_table_offset;
-        line = 0;
-        line_pc = 0;
-        while (line_table_bytes-- > 0) {
-          bytes = (int16_t)(*(p++));
-          if (bytes == 255) {
-            bytes = (int16_t)(*(p++));
-            bytes |= ((int16_t)(*(p++))) << 8;
-            line_table_bytes -= 2;
-          }
-
-          if (line == n) {
-            p = process.program.prev->saved_c_base + line_pc;
-            if (*(p++) == OP_DEBUG) {
-              line = ((int)(*p) << 8) | *(p + 1); /* Line number */
-              process.status = line;              /* Actual line number */
-              line_pc += 4;
-              process.program.prev->saved_pc_offset = line_pc;
-            }
-            break;
-          }
-
-          line_pc += bytes;
-          line += 1;
-        }
+      line_pc = debug_line_start(obj_hdr, n, &line);
+      if (line_pc >= 0) {
+        process.status = line; /* Actual line number */
+        process.program.prev->saved_pc_offset = line_pc + 4;
       }
       break;
 
@@ -724,11 +760,19 @@ void op_debug() {
       event |= DE_WATCH;
     }
 
-    /* Scan breakpoint list */
+    /* Scan breakpoint list.  A breakpoint belongs to the program that was
+       running when it was added (op_dbgbrk takes debug_id, the program of the
+       last stop, then), so it is the RUNNING program's id that is compared:
+       debug_id still names the program of the last stop here, and a
+       subroutine compiled for the debugger that has a statement on the same
+       line number stopped at a breakpoint that was not its own, while a
+       breakpoint in the main program was missed after a stop in a subroutine
+       (1 Nov 26, S.98 H2).                                                 */
 
+    obj_hdr = (struct OBJECT_HEADER*)c_base;
     for (i = 0; i < num_active_breakpoints; i++) {
       if ((line == breakpoint_list[i].line) &&
-          (debug_id == breakpoint_list[i].id)) {
+          (obj_hdr->id == breakpoint_list[i].id)) {
         event |= DE_BREAKPOINT;
         break;
       }
