@@ -288,14 +288,18 @@ try {
     # VOC is on no upgrade list, so its record for it is removed here.  Both
     # outcomes that leave it gone are accepted: DELETE's "1 record(s) deleted",
     # or "Record 'gpl.bp' not found" when an earlier upgrade already did it.
-    Say 'upgrade-voc: sd -internal DELETE VOC gpl.bp'
-    $g = Invoke-Sd @('-internal', 'DELETE', 'VOC', 'gpl.bp')
-    foreach ($l in ("$($g.Text)" -split "`r?`n")) { if ($l.Trim()) { Say ("  | " + $l) } }
-    if ("$($g.Text)" -match "(?m)^(1 record\(s\) deleted|Record 'gpl\.bp' not found)\s*$") {
-        Say 'upgrade-voc: the gpl.bp source pointer is gone from SDSYS''s VOC'
-    } else {
-        $result = 1
-        throw "DELETE VOC gpl.bp printed neither '1 record(s) deleted' nor 'not found'"
+    # FIRST.COMPILE and SECOND.COMPILE go too (Linux e3490a7f, S.198): both compile
+    # gpl.bp, so with no source they can only fail.  THIRD.COMPILE stays.
+    foreach ($rec in @('gpl.bp', 'first.compile', 'second.compile')) {
+        Say ("upgrade-voc: sd -internal DELETE VOC {0}" -f $rec)
+        $g = Invoke-Sd @('-internal', 'DELETE', 'VOC', $rec)
+        foreach ($l in ("$($g.Text)" -split "`r?`n")) { if ($l.Trim()) { Say ("  | " + $l) } }
+        if ("$($g.Text)" -match ("(?mi)^(1 record\(s\) deleted|Record '" + [regex]::Escape($rec) + "' not found)\s*$")) {
+            Say ("upgrade-voc: {0} is gone from SDSYS's VOC" -f $rec)
+        } else {
+            $result = 1
+            throw ("DELETE VOC {0} printed neither '1 record(s) deleted' nor 'not found'" -f $rec)
+        }
     }
 }
 catch {

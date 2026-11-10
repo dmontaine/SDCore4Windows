@@ -7,13 +7,13 @@ Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.
              What        - The complete source of SD Core - the C, the system programs' BASIC (gpl.bp) and the build and
                            installer scripts - is SDCore4Windows-source-<version>.zip beside sd-setup-<version>.exe, with a
                            .txt file naming the commit it was built from. The installer no longer puts gpl.bp in
-                           C:\ProgramData\SD\sdsys, and SDSYS's VOC has no gpl.bp entry. An upgrade removes the gpl.bp
-                           folder and VOC entry an earlier release installed.
+                           C:\ProgramData\SD\sdsys, and SDSYS's VOC has no gpl.bp, first.compile or second.compile entry
+                           (the two verbs compile gpl.bp). An upgrade removes the gpl.bp folder and those VOC entries an
+                           earlier release installed.
              Why         - SD Core is GPL 3 software: its source goes with every copy of the installer, and the installed
                            system needs only the compiled programs (gpl.bp.out).
-             Does NOT    - Change the compiled system programs, or what a user account holds. One report is less complete:
-                           the [global catalogue] section of the settings report used to read gpl.bp to tell SD's own
-                           programs from ones added later, and with no source installed it cannot.
+             Does NOT    - Change the compiled system programs, or what a user account holds. The settings report still
+                           tells SD's own catalog entries from added ones, by their $, ! and _ prefixes.
 
 9 Nov 26   A SESSION WHOSE CONNECTION DROPS, OR THAT FAULTS, CAN NO LONGER STOP EVERY LOGIN (FROM SD CORE FOR LINUX).
 

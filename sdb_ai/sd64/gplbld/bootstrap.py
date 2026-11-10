@@ -483,11 +483,15 @@ def main():
             # BBPROC made from voc_template and every compile above needed.  Last,
             # after the final BASIC gpl.bp.  Anchored on DELETE's success wording;
             # "not found" would mean the bootstrap never made it, which is a fault.
-            print('  removing the gpl.bp source pointer from VOC')
-            out = sd(sdexe, env, ['-internal', 'DELETE', 'VOC', 'gpl.bp'])
-            if not re.search(r'(?m)^1 record\(s\) deleted\s*$', out):
-                die('DELETE VOC gpl.bp did not print "1 record(s) deleted":\n%s' % out)
-            print('  checked: DELETE VOC gpl.bp printed 1 record(s) deleted')
+            # FIRST.COMPILE and SECOND.COMPILE go too (Linux e3490a7f, S.198):
+            # both compile gpl.bp, so with no source they can only fail.
+            # THIRD.COMPILE stays - it compiles dictionary I-types, not gpl.bp.
+            for rec in ('gpl.bp', 'first.compile', 'second.compile'):
+                print('  removing %s from VOC (it names the source)' % rec)
+                out = sd(sdexe, env, ['-internal', 'DELETE', 'VOC', rec])
+                if not re.search(r'(?m)^1 record\(s\) deleted\s*$', out):
+                    die('DELETE VOC %s did not print "1 record(s) deleted":\n%s' % (rec, out))
+                print('  checked: DELETE VOC %s printed 1 record(s) deleted' % rec)
         finally:
             print('  stopping SD')
             sd(sdexe, env, ['-stop'], expect_fail=True)
