@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125): the date conversion's I code (ISO week number) sets iso, so the
+ *           week is worked out (it printed whatever iso_wk held, as only YI set it); int_value, iso_wk and iso_year start at 0.
  * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): the time buffer is large enough for negative parts and long hours.
  * 8 Nov 26 Windows port - from Linux 9b6fe5e1 (3 Nov 26): MCDX is back, as a second name of MX (owner: "Restore MCDX only", for programs moved from
  *           openQM); MCD, MCX and MCXD stay invalid.
@@ -1480,7 +1482,7 @@ Private int32_t masked_decimal_conversion(char* p) {
   int32_t status = 2;
   DESCRIPTOR* src_descr;
   double value;
-  int32_t int_value;
+  int32_t int_value = 0;
   char mode;            /* Conversion mode (D, L or R) */
   int16_t dp;           /* Decimal places */
   int16_t scale_factor; /* Scale factor */
@@ -2945,8 +2947,8 @@ int oconv_d(int dt,     /* Date value to convert */
   char z[12];
   bool leading_upper = FALSE;
   bool iso = FALSE;
-  int iso_wk;
-  int iso_year;
+  int iso_wk = 0;
+  int iso_year = 0;
   int w;
   int y;
   int jan1_dow;
@@ -3065,6 +3067,7 @@ int oconv_d(int dt,     /* Date value to convert */
       case 'I':
         format[i].code = c;
         format[i].width = 2;
+        iso = TRUE; /* 09 Nov 26 (S.125): the ISO week is worked out only when iso is set; without this the I code printed whatever iso_wk held */
         code++;
         break;
 

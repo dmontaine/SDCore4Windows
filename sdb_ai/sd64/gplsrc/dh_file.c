@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125): dio_open() refuses a mode it does not know (EINVAL, an
+ *           invalid handle) instead of calling open() with flags never set.
  *  1 Sep 26 Windows port - dh_flush_header() clears FILE_UPDATED on success
  *           instead of before the attempt, so a failed flush stays dirty and
  *           retries and a successful one is not re-flushed; the read_at and
@@ -260,6 +262,10 @@ OSFILE dio_open(char* fn, int mode) {
     case DIO_OVERWRITE: /* Open file, creating if doesn't exist */
       open_modes = O_RDWR | O_CREAT | O_BINARY;
       break;
+    default: /* 09 Nov 26 (S.125): a mode no caller should pass is refused, not opened with whatever open_modes held */
+      errno = EINVAL;
+      process.os_error = EINVAL;
+      return INVALID_FILE_HANDLE;
   }
 
   /* Check if we are about to hit the FDS limit */

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125, S.194): k_var_name()'s cols starts at 0; an array that
+ *           does not hold the variable sets element back to -1, so a common-block variable found after it
+ *           is no longer named with that array's element count as a subscript in an error message.
  * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): op_illegal2, k_dh_error, k_null_id and k_strnum_len are gone; nothing could reach them.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): k_unassigned_zero/_null, k_div_zero_warning and k_non_numeric_warning (messages 1109 to
  *           1112) are gone with OPTION UNASS.WARNING, DIV.ZERO.WARNING and NON.NUMERIC.WARNING: an unassigned variable, a divide by zero and a
@@ -585,7 +588,7 @@ char* k_var_name(DESCRIPTOR* descr) {
   int16_t c_no = -1; /* Common block variable index */
   ARRAY_HEADER* chdr;  /* Common block header... */
   ARRAY_CHUNK* cchnk;  /* ...and chunk */
-  int32_t cols;
+  int32_t cols = 0;
   int32_t element = -1;
   static char name[80 + 1]; /* Extracted variable name */
   u_char* p;
@@ -648,6 +651,7 @@ char* k_var_name(DESCRIPTOR* descr) {
 
           element += achnk->num_descr;
         }
+        element = -1; /* 09 Nov 26 (S.194): not in this array, so no subscript is carried to a variable found later */
         break;
 
       case COMMON:
@@ -681,6 +685,7 @@ char* k_var_name(DESCRIPTOR* descr) {
 
                 element += achnk->num_descr;
               }
+              element = -1; /* 09 Nov 26 (S.194): not in this array, so no subscript is carried to a variable found later */
             }
           }
 
