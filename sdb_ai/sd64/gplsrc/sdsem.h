@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): release_owned_semaphores().
  * 31 Dec 23 SD launch - prior history suppressed
  * START-HISTORY (OpenSD):
 
@@ -33,5 +34,6 @@ bool get_semaphores(bool create, char* errmsg);
 void delete_semaphores(void);
 void StartExclusive(int semno, int16_t where);
 void EndExclusive(int semno);
+void release_owned_semaphores(void); /* 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): the fatal-signal path gives back what it holds */
 
 /* END-CODE */

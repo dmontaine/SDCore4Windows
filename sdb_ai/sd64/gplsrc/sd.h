@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux ff779018 (S.196): log_termination_signal() (linuxio.c).
  * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): the prototypes of the functions it removed are gone.
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): EDIT_SHARED_WRITE and EDIT_SHARED_STRUCT; prototypes of the shared-account tests (op_sh.c), of
  *               shared_structure_refusal() (op_dio3.c) and of get_voc_file_reference_ex() (op_dio1.c).
@@ -599,6 +600,7 @@ void freescrn(SCREEN_IMAGE * image);
 void break_key(void);
 int16_t keyin(int timeout);
 bool keyready(void);
+void log_termination_signal(void); /* S.196: the SIGHUP/SIGTERM line, written by process_events(), never by the handler */
 int32_t type_ahead_count(void);
 bool write_socket(char * str, int bytes, bool flush);
 bool to_outbuf(char * str, int bytes);

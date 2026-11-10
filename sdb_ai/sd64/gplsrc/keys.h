@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's home and a private directory below it.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone; the number stays reserved.
  * 25 Oct 26 Windows port - from Linux fc4030a (18 Oct 26) S.66: K_SHARED_READ, K_SHARED_WRITE, K_SHARED_REF and K_SHARED_ONCE (128-131), the shared
  *           account's gates and lookup test.  Linux's 127 is K_NET (S.65), which Windows does not carry yet; 127 stays free.
@@ -828,6 +829,10 @@
    Args: path, FILE or DIR.  Answers "1" or "0"; every failure is "0".  Mirrored
    in sdsys/syscom/keys.h. */
 #define SD_FILE_PRIVATE 111  /* op_sdext private-file test, 2 args: path, FILE|DIR */
+/* 9 Nov 26 Windows port - from Linux debd0698 / S.88: the running user's home (AppData\Local here) and a trusted directory below it,
+   made private when missing (win32tls.c win32_user_home()).  Arg: a relative path, '' for the home.  Answers the path or ''.  Mirrored
+   in sdsys/syscom/keys.h. */
+#define SD_USER_HOME    112  /* op_sdext the user's home (+ a trusted directory below it), 1 arg: relative path */
 
 /* embedded python  */
 /* py  object types */

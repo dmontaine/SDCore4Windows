@@ -13,8 +13,8 @@
 #   display   hsm, pstat, profiler, message, _message, _getmsg, cproc (the Mn messages and the Pn register) - what is read is shown, never run, stacked or set
 #   own       login, apisrvr - delete the records of their own user number at start-up
 #   writer    the kernel (hsm, status and profiler tables), bbproc (makes the file), syscom.h (the slot)
-#   unsealed  debug, pdbg, pdebug - the phantom debugger's conversation.  NOT SEALED: it is trusted as the rest of the shared segment is (08-sd-installation).
-#             A change that seals it flips its line in the INVENTORY; until then the row says it is not
+#   (the phantom debugger's conversation - debug, pdbg, pdebug - was "unsealed" here until 9 Nov 2026 (from Linux debd0698, F10b): it now lives in the user's
+#   private directory and none of the three names $ipc, so I1 holds them out of the inventory; test-pdbgstore-units.py holds the store)
 #
 #   I  the inventory: which programs name the file, that the display ones run nothing, what login and apisrvr touch, what the kernel does with it
 #   K  the kernel: key 144, the secret's shape, K_PHANTOM_NONCE 'S' and 'G', op_phantom's environment, the import, the secret printed nowhere
@@ -41,7 +41,6 @@ INVENTORY = {
     "apisrvr": "own", "login": "own", "bbproc": "writer", "syscom.h": "writer",
     "phantom": "sealed", "cproc": "sealed",
     "hsm": "display", "pstat": "display", "profiler": "display", "message": "display", "_message": "display", "_getmsg": "display",
-    "debug": "unsealed", "pdbg": "unsealed", "pdebug": "unsealed",
     "upgrade_nocase": "skipped",      # 28 Oct 26 Windows port: the upgrade walk leaves $ipc alone (the service holds it open); it reads and writes nothing in it
 }
 DISPLAY_ONLY = ["hsm", "pstat", "profiler", "message", "_message", "_getmsg"]
@@ -142,7 +141,7 @@ def run():
     row("I4 only kernel.c uses the slot, three times, and only to dh_write the tables it was asked for (no dh_read of it)",
         holders == ["kernel.c"] and kc.count("SYSCOM_IPC") == 3 and kc.count("dh_write(dh_file") == 3 and "dh_read(" not in kc, repr((holders, kc.count("SYSCOM_IPC"))))
     seal_users = sorted(n for n in gplbp_names() if "ipc_seal" in bas(n) and n != "ipc_seal")
-    row("I5 the sealed programs are PHANTOM and CPROC alone, and the debugger (%s) is still NOT sealed, as the inventory says" % "debug, pdbg, pdebug",
+    row("I5 the sealed programs are PHANTOM and CPROC alone (the debugger %s keeps its conversation elsewhere: I1 holds it out of the inventory)" % "debug, pdbg, pdebug",
         seal_users == ["cproc", "phantom"], repr(seal_users))
 
     # --- K -------------------------------------------------------------------------------------------------------------------
@@ -266,6 +265,7 @@ MUTANTS = [
     ("login-deletes-another-record", "sdsys/gpl.bp/login", "delete ipc.f, 'M':@userno", "delete ipc.f, 'X':@userno", "I3"),
     ("kernel-reads-the-ipc-file", "gplsrc/kernel.c", '        sprintf(id, "F%d", (int)process.user_no);', '        sprintf(id, "F%d", (int)process.user_no);\n        dh_read(dh_file, id, strlen(id));', "I4"),
     ("debugger-seals-with-no-inventory-change", "sdsys/gpl.bp/pdbg", "      debug.initialised = @true", "      zz = ipc_seal('check', '', '', '', '', '', '')\n      debug.initialised = @true", "I5"),
+    ("debugger-names-ipc-again", "sdsys/gpl.bp/pdbg", "      debug.initialised = @true", "      read zz from ipc.f, 'X'\n      debug.initialised = @true", "I1"),
     # the kernel
     ("key-renumbered", "gplsrc/keys.h", "#define K_PHANTOM_NONCE      144", "#define K_PHANTOM_NONCE      143", "K1"),
     ("minimum-length-gone", "gplsrc/op_kernel.c", "#define PHANTOM_NONCE_MIN 16", "#define PHANTOM_NONCE_MIN 1", "K2a"),

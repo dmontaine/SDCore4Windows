@@ -101,7 +101,9 @@ $define MAX.DATA.AREA.LINES   15
                    mouse.on,                    ;* Enable mouse string
                    mouse.off,                   ;* Disable mouse string
 
-                   debugger.uid                 ;* Other side for phantom debugger
+                   debugger.uid,                ;* Other side for phantom debugger
+
+                   dbg.store                    ;* 9 Nov 26 (from Linux debd0698, W.11 F10b): the phantom debugger's private store, a directory file made by !pdbg_store (PDEBUG and PDBG open it; DEBUG uses it)
 
 * Event codes (additive)
 

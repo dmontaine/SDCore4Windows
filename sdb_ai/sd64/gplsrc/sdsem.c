@@ -31,6 +31,7 @@
  *           session 0 and SD has to run as a service.
  * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): LockSemaphore retries only while the semaphore is busy; a wait that FAILS ends the
  *           process with a syslog line (semaphores_gone) instead of spinning for ever.
+ * 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): release_owned_semaphores(), called first by fatal_signal_handler().
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -275,6 +276,30 @@ void EndExclusive(int semno) {
             (semno));
   semptr->owner = 0;
   UnlockSemaphore(semno);
+}
+
+/* ======================================================================
+   release_owned_semaphores()  -  Give back what this process holds, on a fault
+
+   9 Nov 26 Windows port - from Linux W.0 (14 Sep 26, owner's ruling there), found missing here when Linux S.196's guard
+   (test-sighandler-units.py H6) was carried: the fatal-signal path releases the semaphores its own process holds, before
+   anything else in the handler - log_message() takes ERRLOG_SEM, so a fault while holding it would otherwise wait on itself,
+   and every other process behind it.  It sees only what StartExclusive recorded in the owner table; a fault between the lock
+   and the owner being set, or a raw LockSemaphore, is not covered.  Linux has SEM_UNDO for those; a Win32 semaphore has no
+   such undo, so here they stay held until sd -stop clears the objects.                                                       */
+
+void release_owned_semaphores() {
+  register SEMAPHORE_ENTRY* semptr;
+  int i;
+
+  if (sysseg == NULL)
+    return;
+
+  for (i = 0; i < NUM_SEMAPHORES; i++) {
+    semptr = (((SEMAPHORE_ENTRY*)(((char*)sysseg) + sysseg->semaphore_table)) + i);
+    if ((semptr->owner != 0) && (semptr->owner == process.user_no))
+      EndExclusive(i);
+  }
 }
 
 /* END-CODE */

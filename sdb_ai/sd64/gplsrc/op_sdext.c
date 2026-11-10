@@ -18,6 +18,8 @@
  * 
  * 
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's AppData\Local and a private store below
+ *           it (win32_user_home(), win32tls.c).
  * 20 Oct 26 Windows port - from Linux 00a5888 (18 Oct 26), encryption layer 3: SD_KEYRING (120), set / clear / list on the key ring of
  *           the XE conversion (sd_keyring.c); and the argument buffers are wiped before they are freed, for every key (they carry
  *           passphrases and SCRAM secrets).  SD_FILE_PRIVATE (111, S.65) is not carried.
@@ -100,6 +102,8 @@ Private long scram_arg_long(const char* text);
 /* 25 Oct 26 Windows port - from Linux 71eb0aa (S.65 slice 2b): SD_FILE_PRIVATE.  The ACL walk is in win32tls.c (this file includes SD headers, that one
    windows.h); the answer is 1 only when the path is closed to everyone but its owner, SYSTEM and Administrators (win32_private_to_user()). */
 extern int win32_private_to_user(const char* path, int want_dir, char* why, size_t whylen);
+/* 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME.  The walk is in win32tls.c too (win32_user_home()). */
+extern int win32_user_home(const char* rel, char* out, size_t out_sz, char* why, size_t whylen);
 
 /* 12 Sep 26 Windows port - the Python adapters, PROJECT_STATUS.md 5.27. */
 Private int  py_ext_call(const char* verb, const char* arg,
@@ -457,6 +461,24 @@ void op_sdext() {
           answer[0] = '1';
       }
       k_put_c_string(answer, e_stack);
+      e_stack++;
+      break;
+    }
+
+    /* 9 Nov 26 Windows port - from Linux debd0698 / S.88.  SD_USER_HOME: one argument, a path RELATIVE to the home ('' for the home
+       itself; words separated by \ or /).  The home is the running user's AppData\Local.  The answer is the absolute path of that
+       directory when win32_user_home() trusts it (a missing word below the home is made there, private, see win32tls.c), and the null
+       string on every failure (a caller that tests for '' refuses).  More than one argument also sets process.status (SD_EXT_ARG_CNT). */
+    case SD_USER_HOME: {
+      char home_out[1024];
+      char why[512];
+
+      home_out[0] = '\0';
+      if (argCnt != 1)
+        process.status = SD_EXT_ARG_CNT;
+      else if (!win32_user_home(SDMEArgArray[0], home_out, sizeof(home_out), why, sizeof(why)))
+        home_out[0] = '\0';
+      k_put_c_string(home_out, e_stack);
       e_stack++;
       break;
     }

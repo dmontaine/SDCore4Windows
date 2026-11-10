@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b): the messages to and from the debugged phantom go through dbg.store (made by PDEBUG with
+*           !pdbg_store, the user's private directory), not $ipc.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 18 Oct 26 Windows port - from Linux 81ad297 (13 Oct 26): On the screen library (owner: "use the TUI on ced and debugger"): the full-screen display is drawn
 * 18 Oct 26 Windows port - from Linux e4bc454-70aca05 - Terminal 140 by 42 (plan-terminal-140x42.md, phase 3).  The full-screen display is laid out for at least 140 by 42
@@ -2134,17 +2136,17 @@ end
 
 local subroutine send.message
    id = 'DR.':@userno
-   recordlocku ipc.f, id
-   write out.msg to ipc.f, id
+   recordlocku dbg.store, id
+   write out.msg to dbg.store, id
    wake debugger.uid
 
    id = 'D.':@userno
    loop
-      readu in.msg from ipc.f, id then exit
-      release ipc.f, id
+      readu in.msg from dbg.store, id then exit
+      release dbg.store, id
       pause
    repeat
-   delete ipc.f, id
+   delete dbg.store, id
    set.status in.msg<2>
 
    return
@@ -2153,8 +2155,8 @@ end
 local subroutine dbg.stop(msgno)
    if phantom then
       id = 'DR.':@userno
-      recordlocku ipc.f, id
-      write 'STOP' to ipc.f, id
+      recordlocku dbg.store, id
+      write 'STOP' to dbg.store, id
       wake debugger.uid
       break on      ;* Will have been turned off by PDEBUG
       display sysmsg(msgno)

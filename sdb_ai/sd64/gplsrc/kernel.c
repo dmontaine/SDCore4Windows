@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 9 Nov 26 Windows port - from Linux ff779018 (S.196): process_events() writes the "Received termination signal" line
+ *           (log_termination_signal()) when it handles EVT_TERMINATE; the SIGHUP/SIGTERM handler no longer logs.  And from Linux
+ *           W.0 (14 Sep 26), never carried here: fatal_signal_handler() calls release_owned_semaphores() first.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION COMMAND.LEVEL.LOCKS is gone: k_return() releases no parked files.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): k_return() no longer gives back a caller's @STDFIL ($MODE STDFIL.SHARED is gone).
  * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CORRELATIVE.NOCASE is gone; a correlative is case blind only through its own A;NOCASE; flag or an I-type's $mode nocase.strings.
@@ -1342,6 +1345,7 @@ void process_events() {
 
   if (events & EVT_TERMINATE) /* Terminate process gracefully */
   {
+    log_termination_signal(); /* 10 Nov 26 S.196: the signal handler's line, written here and not in the handler */
     k_exit_cause = K_TERMINATE;
     return; /* Ignore any other events */
   }
@@ -1729,6 +1733,10 @@ void sigusr1_handler(int signum) {
    Fatal signal handler                                                   */
 
 void fatal_signal_handler(int signum) {
+  /* 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): give back this process's semaphores FIRST.  log_printf below reaches
+     log_message, which takes ERRLOG_SEM, so a fault while holding it used to wait on itself - and every other process waited
+     behind it.  See sdsem.c release_owned_semaphores(). */
+  release_owned_semaphores();
   set_old_tty_modes();
   log_printf("Fault type %d. PC = %08lX (%02X %02X) in %s\n", signum,
              op_pc - c_base, *op_pc, *(op_pc + 1), ProgramName(c_base));

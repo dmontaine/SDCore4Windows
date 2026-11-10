@@ -1,0 +1,73 @@
+* PDBG_STORE
+* The phantom debugger's private store (W.11 F10b): where PDEBUG and the phantom it debugs leave each other messages.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+* START-HISTORY:
+* 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b).  The store is <AppData\Local>\sd\pdebug of the running user, not
+*           <home>/.local/state/sd/pdebug; SD_USER_HOME makes a missing directory below the home itself, private, so make.dir is
+*           a check (see WINDOWS below).
+* 31 Oct 26 dm  New (W.11 F10b, Opus's decision of 30 Oct).  The conversation used to be carried in $ipc, a file every SD user can write, so a user with
+*               an operating-system shell could answer a debugger that was not theirs.  The directory code is edit_recovery's (where / make.dir / check.dir),
+*               with the store one level shorter: no account directory, because the record ids already carry the account.
+* END-HISTORY
+* START-DESCRIPTION:
+*   call !pdbg_store(pf, why)
+*     pf   the directory file <AppData\Local>\sd\pdebug opened with mark mapping OFF (a message keeps its field marks), else ''
+*     why  '' when pf is open, else a word: user (no usable operating-system user), home (the kernel finds no trusted home for this
+*          process's user), directory (a directory on the way is not trusted, or cannot be made) or open (the directory could not be opened)
+*   WHO MAY USE IT.  Only the person whose process asks: the home is the AppData\Local of the profile of the user this process's
+*   token names - never %LOCALAPPDATA% - and SDEXT SD_USER_HOME (op_sdext.c, win32tls.c) trusts it only when no directory on the way
+*   is a link and nobody else may add, delete, rename or re-own anything from the profile down.  The store itself must also pass
+*   SD_FILE_PRIVATE (owned by the user, nobody but the user, SYSTEM and Administrators in its ACL), so no other user can enter it,
+*   create, rename or read a message in it.  A PDEBUG and a phantom reach each other only when they run as the SAME Windows user
+*   (a phantom carries its parent's token): that is the whole security gain, and the documented form - PDEBUG waiting, a phantom
+*   started afterwards, by the same user - works unchanged.
+*   WINDOWS.  On Linux the directories are made here, under umask 077, and then trusted.  A Windows directory inherits its parent's
+*   access entries instead (AppData\Local carries an app-container entry), and BASIC cannot set an ACL, so SD_USER_HOME makes each
+*   missing directory below the home with a protected ACL; a directory that is there and not private is refused, never repaired.
+*   A message is a record whose id begins D. or DR.; it is deleted by the side that reads it.  The files hold no secret beyond what the debugger shows.
+* END-DESCRIPTION
+* START-CODE
+
+$internal
+subroutine pdbg_store(pf, why)
+$catalog !pdbg_store
+
+$include keys.h
+$include int$keys.h
+
+   STORE = 'sd\pdebug'                      ;* below the home; the last directory is the store
+
+   pf = ''
+   why = 'user'
+   ps.user = downcase(trim(kernel(K$USERNAME, 0)))
+   if ps.user = '' or ps.user = 'system' then return        ;* a service account never (SD_USER_HOME refuses one too)
+
+   why = 'home'
+   ps.home = SDEXT('', @FALSE, SD_USER_HOME)                ;* the profile's AppData\Local of this process's user, trusted, or ''
+   if ps.home = '' then return
+
+   why = 'directory'
+   ps.dir = ps.home : '\' : STORE
+   gosub check.dir
+   if not(dir.ok) then return
+
+   why = 'open'
+   openpath ps.dir to pf else
+      pf = ''
+      return
+   end
+   mark.mapping pf, off
+   why = ''
+   return
+
+* Out: dir.ok, the store's directory is trusted all the way from the home (SD_USER_HOME, which makes a missing one private) and is
+* this user's alone (SD_FILE_PRIVATE)
+check.dir:
+   dir.ok = @false
+   if SDEXT(STORE, @FALSE, SD_USER_HOME) # ps.dir then return
+   dir.ok = (SDEXT(ps.dir : @FM : 'DIR', @TRUE, SD_FILE_PRIVATE) = '1')
+   return
+end
+
+* END-CODE

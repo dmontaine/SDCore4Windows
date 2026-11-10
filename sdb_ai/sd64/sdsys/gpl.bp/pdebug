@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b): the conversation with the phantom is in the user's private directory (dbg.store,
+*           !pdbg_store; message 12953 if it cannot be set up), not $ipc; the records of this user number left by an earlier PDEBUG are removed first.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -40,16 +42,28 @@ $include int$keys.h
       stop sysmsg(1306) ;* Phantom debugger can only be executed from an interactive session
    end
 
-   break off
+   * The conversation with the phantom is kept in this user's private store, not in $IPC (W.11 F10b)
 
-   start.id = 'DR.':@who:'!':@logname
-   recordlocku ipc.f, start.id
-   out.msg = 'START'
-   out.msg<2> = @userno
-   write out.msg to ipc.f, start.id
+   call !pdbg_store(dbg.store, store.why)
+   if store.why # '' then stop sysmsg(12953, store.why)
+
+   break off
 
    in.id = 'D.':@userno
    out.id = 'DR.':@userno
+
+   * The store outlives an SD restart: a record left under this user number by an earlier PDEBUG that was killed must not be taken for the phantom's first message
+
+   recordlocku dbg.store, in.id
+   delete dbg.store, in.id
+   recordlocku dbg.store, out.id
+   delete dbg.store, out.id
+
+   start.id = 'DR.':@who:'!':@logname
+   recordlocku dbg.store, start.id
+   out.msg = 'START'
+   out.msg<2> = @userno
+   write out.msg to dbg.store, start.id
 
    * If the user has supplied anything more than just the verb, treat this
    * as a PHANTOM command.
@@ -61,7 +75,7 @@ $include int$keys.h
 
    display sysmsg(1303) ;* Waiting for phantom process to activate debugger (Q to quit)
    loop
-      read in.msg from ipc.f, in.id then exit
+      read in.msg from dbg.store, in.id then exit
       pause 1
       if keyready() then
          if upcase(keyin()) = 'Q' then
@@ -78,8 +92,8 @@ $include int$keys.h
       * Read incoming message from process being debugged
 
       loop
-         readu in.msg from ipc.f, in.id then exit
-         release ipc.f, in.id
+         readu in.msg from dbg.store, in.id then exit
+         release dbg.store, in.id
          pause 2
          if debugger.uid then
             if kernel(K$USERS, debugger.uid) = '' then
@@ -88,7 +102,7 @@ $include int$keys.h
             end
          end
       repeat
-      delete ipc.f, in.id
+      delete dbg.store, in.id
 
       prog.id = in.msg<2>
       dtm = in.msg<3>
@@ -100,15 +114,15 @@ $include int$keys.h
 
       * Send response back to debugged process
 
-      recordlocku ipc.f, out.id
-      write 'DBG' to ipc.f, out.id
+      recordlocku dbg.store, out.id
+      write 'DBG' to dbg.store, out.id
       wake debugger.uid
    repeat
 
 
 abort.pdebug.startup:
-   recordlocku ipc.f, start.id
-   delete ipc.f, start.id
+   recordlocku dbg.store, start.id
+   delete dbg.store, start.id
 
 exit.pdebug:
    break on

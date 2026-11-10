@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b): the conversation is in the user's private directory (dbg.store, !pdbg_store), not $ipc;
+*           a START record whose PDEBUG has gone is removed and not answered (the store, unlike $ipc, outlives an SD restart).
 * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): cannot.debug: throws SYS.PROGRAM.NO_PDEBUG when a handler is there (QM4 Fixes 513).
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
@@ -47,20 +49,28 @@ deffun atvar(name) calling "!atvar"
    if not(debug.initialised) then
       * There should (hopefully) be a user sitting in PDEBUG waiting to
       * pick up this connection. If so, there will be a DR.xxx record
-      * in the $IPC file where xxx is the account name. This record will
+      * in the user's private store (!pdbg_store, not $IPC) where xxx is
+      * the account name. This record will
       * contain the PDEBUG process user number which will be used for
       * subsequent parts of the conversation so that a second user could
       * start a debugging session.
 
-      id = 'DR.':@who:'!':@logname
-      readu in.msg from ipc.f, id else goto cannot.debug
-      if in.msg<1> # 'START' then goto cannot.debug
-      delete ipc.f, id
+      call !pdbg_store(dbg.store, store.why)
+      if store.why # '' then goto cannot.debug
 
+      id = 'DR.':@who:'!':@logname
+      readu in.msg from dbg.store, id else goto cannot.debug
+      if in.msg<1> # 'START' then goto cannot.debug
       debugger.uid = in.msg<2>
+      if kernel(K$USERS, debugger.uid) = '' then
+         delete dbg.store, id      ;* PDEBUG has gone and left its record: nobody is waiting
+         goto cannot.debug
+      end
+      delete dbg.store, id
+
       id = 'D.':debugger.uid
-      recordlocku ipc.f, id
-      delete ipc.f, id
+      recordlocku dbg.store, id
+      delete dbg.store, id
 
       debug.initialised = @true
    end
@@ -81,19 +91,19 @@ deffun atvar(name) calling "!atvar"
       * Send outgoing message to client side
 
       id = 'D.':debugger.uid
-      recordlocku ipc.f, id
-      write out.msg to ipc.f, id
+      recordlocku dbg.store, id
+      write out.msg to dbg.store, id
       wake debugger.uid
 
       * Get incoming message
 
       id = 'DR.':debugger.uid
       loop
-         readu in.msg from ipc.f, id then exit
-         release ipc.f, id
+         readu in.msg from dbg.store, id then exit
+         release dbg.store, id
          pause
       repeat
-      delete ipc.f, id
+      delete dbg.store, id
 
       msg.type = in.msg<1>
       begin case
@@ -135,7 +145,7 @@ deffun atvar(name) calling "!atvar"
    return
 
 cannot.debug:
-   release ipc.f
+   if store.why = '' then release dbg.store      ;* store.why is set by the call above, before any jump here
    void kernel(K$SUPPRESS.COMO,@false)
    * 17 Oct 26 (QM4 Fixes 513): a process that has an exception handler for it gets SYS.PROGRAM.NO_PDEBUG, the message as
    * its data, and the phantom goes on; without one the phantom ends as it always did.
