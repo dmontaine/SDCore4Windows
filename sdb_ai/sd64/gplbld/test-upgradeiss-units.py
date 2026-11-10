@@ -127,10 +127,17 @@ def main():
               '%d deletes vs %d copies + %d retired'
               % (len(tree_dels), len(copies), len(retired)))
         check('one copy per replace name', len(replace) == len(copies))
+        # 9 Nov 26 - A NAME, NOT A PREFIX (Solo's fix of 28 Sep 26, needed here now
+        # that gpl.bp is retired in Core too).  "\sdsys\<n>" alone matched
+        # "\sdsys\gpl.bp.out" for n = gpl.bp, so the check failed on the replace
+        # entry of a DIFFERENT directory.  The name must end at '"' or '\', as the
+        # PRESERVED check below does.
+        def names(l, n):
+            return (('\\sdsys\\%s"' % n) in l) or (('\\sdsys\\%s\\' % n) in l)
         for n in retired:
             check('RETIRED %s is deleted and NOT copied back' % n,
                   any(('\\sdsys\\%s"' % n) in l for l in tree_dels) and
-                  not any(('\\sdsys\\%s' % n) in l for l in copies))
+                  not any(names(l, n) for l in copies))
         check('every data-tree entry is gated on DataTreeUpgrade',
               all('Check: DataTreeUpgrade' in l for l in tree_dels + copies))
 
@@ -173,7 +180,7 @@ def main():
                   n in retired)
             check('SEED %s is not on the replace list and is not copied' % n,
                   n not in replace and
-                  not any(('\\sdsys\\%s' % n) in l for l in copies))
+                  not any(names(l, n) for l in copies))
             check('SEED %s is not a mirror, so an installed copy is not "current"'
                   % n, n not in [x for x, _w in S.SDSYS_MIRROR])
 

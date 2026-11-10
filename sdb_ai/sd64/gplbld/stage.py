@@ -278,7 +278,13 @@ DLL_SEARCH = [
 # Copied from sd64/sdsys.  Each entry says why it ships, because the next
 # person to read this list will be deciding whether to remove something.
 SDSYS_SHIP = [
-    ('gpl.bp',        'BASIC source; SECOND.COMPILE compiles the lot of it'),
+    # 9 Nov 26 - gpl.bp IS NO LONGER ON THIS LIST.  Owner, 9 Nov 26: "the gpl.bp
+    # and c source should never be installed just distributed with the installer"
+    # (Solo's ruling 26 of 28 Sep 26, now both products).  It is a SDSYS_BUILD_SEED:
+    # the bootstrap compiles it here and the install carries only gpl.bp.out; the
+    # source goes beside the installer (stage_source()).  finish-install.ps1
+    # deletes SDSYS's gpl.bp VOC record.  syscom STAYS: its headers are what user
+    # programs $include.
     ('syscom',        'include records the compile needs'),
     # 15 Aug 26 - THESE TWO DESCRIPTIONS WERE THE WRONG WAY ROUND, and they are
     # the first thing read by anyone adding a verb.  voc_template (now on
@@ -343,6 +349,7 @@ SDSYS_SHIP = [
 # a ship list.
 SDSYS_BUILD_SEED = [
     ('voc_template', "the administrative superset BBPROC copies into SDSYS's own VOC"),
+    ('gpl.bp',       'BASIC source; SECOND.COMPILE compiles the lot of it (owner, 9 Nov 26: never installed)'),
 ]
 
 # Created empty, and filled by the bootstrap when --bootstrap is given.  Their
@@ -487,7 +494,8 @@ TERMINFO_FILES = [('terminfo.src', 'source, so sdtic is usable after install')]
 # licence and contrib are FILES rather than directories, so there is nothing
 # to walk; section B's source -> install pass already covers a file.
 SDSYS_MIRROR = [
-    ('gpl.bp',       'BASIC source; nothing writes it at runtime'),
+    # 9 Nov 26 - gpl.bp is not listed any more: it is never installed (owner;
+    # SDSYS_BUILD_SEED), the same reason as voc_template below.
     ('syscom',       'include records'),
     ('newvoc',       'read by CREATEA; never written'),
     # 21 Sep 26 - voc_template is NOT listed here any more: it no longer ships
@@ -530,6 +538,7 @@ SDSYS_MIRROR = [
 SDSYS_RETIRED = [
     ('changelog', 'moved to {app} on 25 Aug 26 - see the note on SDSYS_SHIP'),
     ('voc_template', 'build-time seed only from 21 Sep 26 - see SDSYS_BUILD_SEED'),
+    ('gpl.bp', 'BASIC source, build-time seed only from 9 Nov 26 (owner: never installed)'),
     ('sd.voclib', 'the ten list sentences, removed 8 Nov 26 (S.87, Linux d241df26); their VOC records are on the deletion list'),
 ]
 
@@ -1184,6 +1193,92 @@ def sd_untracked():
     return os.path.join(projects, 'SD-Untracked')
 
 
+def stage_source(stage, product):
+    """9 Nov 26 - THE COMPLETE SOURCE IS DISTRIBUTED WITH THE INSTALLER, NEVER
+    INSTALLED.  Owner, 9 Nov 26: "the source always should be included for easy
+    gpl3 compliance", then "the gpl.bp and c source should never be installed
+    just distributed with the installer".  GPL 3 section 6 asks that the
+    Corresponding Source go with the object code (6a) or be offered from the same
+    place (6d); it does not ask that it be installed.  So this writes
+    <stage>\\source\\<product>-source.zip and SOURCE.txt (the commit, the branch,
+    any file that differs from that commit) OUTSIDE both install roots, as
+    MANIFEST.txt is, so ISCC never packages them; cycle.ps1 copies the pair
+    beside the installer it builds, named with the installer's version, and a
+    release carries them in its source folder.  The whole public repository, not
+    only gpl.bp.
+
+    WHAT GOES IN: every file `git ls-files` names (the public repository: the
+    private records are in another index and never appear), READ FROM THE WORKING
+    TREE, so the zip is the source this build was made from even before it is
+    committed.  The repository holds no binaries (CLAUDE.md), so this is source
+    only.  A tracked file missing from the working tree is a fault (the build
+    did not use the committed tree either) and stops the stage.
+
+    NOT COVERED HERE: the third-party binaries bundled beside sd.exe (the MSYS2
+    runtime DLLs, the editors, OpenSSH and Python installers) are other people's
+    works under their own licences; their source is theirs to offer.  This zip is
+    SD's own source."""
+    import zipfile
+    # THE REPOSITORY IS FOUND FROM THIS FILE, AND GIT IS RUN IN IT, NOT POINTED AT
+    # IT.  cycle.ps1 runs stage.py under MSYS2's python3 in an MSYS2 login shell,
+    # where there is no git on PATH (measured 9 Nov 26) and Git for Windows' git.exe
+    # would not read an MSYS path like /c/Users/... as an argument; a working
+    # directory is handed to a native child as a Windows path by the runtime.
+    root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                        os.pardir, os.pardir, os.pardir))
+    gitexe = shutil.which('git')
+    for cand in ('/c/Program Files/Git/cmd/git.exe', 'C:/Program Files/Git/cmd/git.exe'):
+        if gitexe is None and os.path.isfile(cand):
+            gitexe = cand
+    if gitexe is None:
+        die('the source zip needs git: none on PATH and no C:\\Program Files\\Git\\cmd\\git.exe')
+    if not os.path.isdir(os.path.join(root, '.git')):
+        die('the source zip needs the checkout: %s has no .git' % root)
+
+    def git(*a):
+        r = subprocess.run([gitexe] + list(a), cwd=root, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE)
+        if r.returncode != 0:
+            die('git %s failed: %s' % (' '.join(a), r.stderr.decode('latin-1').strip()))
+        return r.stdout
+
+    names = [n for n in git('ls-files', '-z').decode('utf-8').split('\0') if n]
+    if len(names) < 1000:
+        die('git ls-files names %d files - that is not this repository' % len(names))
+    commit = git('rev-parse', 'HEAD').decode('ascii').strip()
+    branch = git('rev-parse', '--abbrev-ref', 'HEAD').decode('ascii').strip()
+    dirty = [l for l in git('status', '--porcelain', '--untracked-files=no').decode('utf-8').splitlines() if l]
+    missing = [n for n in names if not os.path.isfile(os.path.join(root, n))]
+    if missing:
+        die('%d tracked file(s) are not in the working tree, e.g. %s' % (len(missing), missing[0]))
+
+    dest = os.path.join(stage, 'source')
+    os.makedirs(dest)
+    zpath = os.path.join(dest, '%s-source.zip' % product)
+    total = 0
+    with zipfile.ZipFile(zpath, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+        for n in names:
+            p = os.path.join(root, n)
+            total += os.path.getsize(p)
+            z.write(p, '%s/%s' % (product, n))
+    info = os.path.join(dest, 'SOURCE.txt')
+    with open(info, 'w', encoding='utf-8', newline='\r\n') as f:
+        f.write('%s - the complete source of the installer beside it\n\n' % product)
+        f.write('The source zip holds every file of the %s repository\n' % product)
+        f.write('(https://github.com/dmontaine/%s) as that installer was built from it.\n' % product)
+        f.write('It is free software under the GNU General Public License, version 3 or later;\n')
+        f.write('the licence is the file licence in the zip (sdb_ai/sd64/sdsys/licence).\n\n')
+        f.write('commit:  %s\nbranch:  %s\nfiles:   %d (%d bytes)\n' % (commit, branch, len(names), total))
+        if dirty:
+            f.write('\nBuilt from a working tree that differs from that commit in %d file(s);\n' % len(dirty))
+            f.write('the zip holds the files as built:\n')
+            for l in dirty:
+                f.write('  %s\n' % l)
+    print('stage: source  %d files (%.1f MB) from %s at %s%s -> %s'
+          % (len(names), total / 1048576.0, branch, commit[:12],
+             (', %d changed since it' % len(dirty)) if dirty else '', zpath))
+
+
 def stage_editors(pfbin, staged, stage):
     """Copy the bundled editors into usr/bin beside sd.exe.  PRE_RELEASE_FIXES
     66.  The binaries are not in git; they live in SD-Untracked/editors.  The
@@ -1364,6 +1459,10 @@ def main():
 
     # Third-party editors bundled beside sd.exe.  PRE_RELEASE_FIXES 66.
     stage_editors(pfbin, staged, stage)
+
+    # 9 Nov 26 - the complete source, distributed beside the installer and
+    # never installed (GPL 3; owner).  Outside both install roots.
+    stage_source(stage, 'SDCore4Windows')
 
     fstab = os.path.join(pf, 'etc', 'fstab')
     os.makedirs(os.path.dirname(fstab))

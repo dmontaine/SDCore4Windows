@@ -81,7 +81,8 @@ $readOnly = @(
     (Join-Path $sysDir 'cat'),
     (Join-Path $dataDir 'sd.conf'),
     (Join-Path $sysDir 'voc'),
-    (Join-Path $sysDir 'gpl.bp'),
+    # 9 Nov 26 - gpl.bp is gone from this list: it is never installed (owner), and
+    # sd.iss no longer locks it.
     # 7 Nov 26 - RELEASE_1.1 197, with the same change to sd.iss: the VOC deletion
     # list and the saved copies of what it removed (from Linux 29c4a48f, S.87).
     (Join-Path $sysDir 'voc_removed'),

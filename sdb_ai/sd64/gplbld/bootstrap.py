@@ -46,6 +46,7 @@
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -474,6 +475,19 @@ def main():
 
             print('  writing the real gcat/$cproc')
             sd(sdexe, env, ['-internal', 'BASIC', 'gpl.bp', 'cproc'])
+
+            # 9 Nov 26 - THE SOURCE IS NEVER INSTALLED (owner: "the gpl.bp and c
+            # source should never be installed just distributed with the
+            # installer").  stage.py deletes the gpl.bp directory after this
+            # (SDSYS_BUILD_SEED); this removes SDSYS's VOC record for it, which
+            # BBPROC made from voc_template and every compile above needed.  Last,
+            # after the final BASIC gpl.bp.  Anchored on DELETE's success wording;
+            # "not found" would mean the bootstrap never made it, which is a fault.
+            print('  removing the gpl.bp source pointer from VOC')
+            out = sd(sdexe, env, ['-internal', 'DELETE', 'VOC', 'gpl.bp'])
+            if not re.search(r'(?m)^1 record\(s\) deleted\s*$', out):
+                die('DELETE VOC gpl.bp did not print "1 record(s) deleted":\n%s' % out)
+            print('  checked: DELETE VOC gpl.bp printed 1 record(s) deleted')
         finally:
             print('  stopping SD')
             sd(sdexe, env, ['-stop'], expect_fail=True)

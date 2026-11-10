@@ -3965,7 +3965,7 @@ function SecureSysdirs: String;
 var
   Code: Integer;
   Ps, Script, Failed: String;
-  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, Gplbp, VocRm, VocRmSaved: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved: String;
 begin
   Result := '';
   Code := 0;
@@ -3999,7 +3999,9 @@ begin
     place.  $ipc is still deliberately NOT here; see that script's header, which
     records it as the one target an ordinary session was measured writing. }
   Voc      := ExpandConstant('{#DataDir}\sdsys\voc');
-  Gplbp    := ExpandConstant('{#DataDir}\sdsys\gpl.bp');
+  { 9 Nov 26 - gpl.bp IS NOT LOCKED HERE ANY MORE: it is never installed (owner,
+    "the gpl.bp and c source should never be installed just distributed with the
+    installer"; stage.py SDSYS_BUILD_SEED), so there is nothing to lock. }
 
   { 7 Nov 26 - THE VOC DELETION LIST (from Linux 29c4a48f, S.87; RELEASE_1.1 197).
     voc_removed is SD's own list of records it no longer ships; voc_removed.saved
@@ -4033,8 +4035,6 @@ begin
     Failed := Conf
   else if not LockOsUsersPath(Ps, Script, Voc, Code) then
     Failed := Voc
-  else if not LockOsUsersPath(Ps, Script, Gplbp, Code) then
-    Failed := Gplbp
   else if not LockOsUsersPath(Ps, Script, VocRm, Code) then
     Failed := VocRm
   else if not LockOsUsersPath(Ps, Script, VocRmSaved, Code) then
