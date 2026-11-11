@@ -333,6 +333,11 @@ SDSYS_SHIP = [
     # buttons of the toolkit pages had nothing to show.  Found by assert-current in a
     # VM install: 14 source files "not in the install at all".
     ('helptext',      'context help text for the [?] buttons; LOAD.HELP reads it'),
+    # 10 Nov 26 - RELEASE_1.1 218 (from Linux S.75 A6).  What each sd.conf parameter
+    # is, for TOOL.CONFIG; a file, replaced on upgrade.  Display only: the helper
+    # (sd-confset.ps1) holds its own list and ranges, and test-confset-units.ps1
+    # holds the two to each other.  Locked to administrators by SecureSysdirs.
+    ('config.table',  'the parameters of sd.conf, for TOOL.CONFIG'),
     # 7 Nov 26 - RELEASE_1.1 197 (from Linux 29c4a48f, S.87).  The VOC deletion list:
     # one record per VOC id SD no longer ships, holding the type and fields 2 and 3 it
     # had, so that an update removes it only from an account where it is still SD's own
@@ -1765,6 +1770,13 @@ def main():
                    # SHIPS - do NOT add it to assert-current's $neverShipped
                    # list.  Its unit test does not.
                    'sd-backupdir.ps1',
+                   # 10 Nov 26 - RELEASE_1.1 218, from Linux S.75 A6: SET.CONFIG
+                   # changes one of 14 tuning parameters of sd.conf.  gpl.bp
+                   # SETCONFIG runs it through !ps_script_out, so as SDSYS's
+                   # elevated helper, like sd-backupdir.ps1.  It SHIPS - do NOT
+                   # add it to assert-current's $neverShipped list.  Its unit
+                   # test (test-confset-units.ps1) does not.
+                   'sd-confset.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

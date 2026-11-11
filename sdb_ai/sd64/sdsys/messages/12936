@@ -1,0 +1,1 @@
+set.config parameter value (for example set.config cleanup 600); tool.config shows which parameters can be changed and the range of each

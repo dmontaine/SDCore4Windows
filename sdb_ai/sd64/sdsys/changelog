@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  TOOL.CONFIG AND SET.CONFIG: THE CONFIGURATION ON ONE SCREEN (FROM SD CORE FOR LINUX).
+
+             What        - TOOL.CONFIG (SDSYS only) shows every parameter of sd.conf: what SD is running with, what the
+                           file says, the default, when a change takes effect and whether this page can change it,
+                           with the saved backup directory and the operating system part of SETTINGS.REPORT. SET.CONFIG
+                           name value, or E on the page, changes one of 14 tuning parameters (CLEANUP, DHCACHE,
+                           GRPSIZE, LGNWAIT, LPTRHIGH, LPTRWIDE, MAXCALL, MAXRLOCK, NETREPLY, NETWAIT, NUMLOCKS,
+                           RECCACHE, SORTMRG, USPLIT) inside the range SD itself enforces. The old file is kept as
+                           C:\ProgramData\SD\sd.conf.bak, and one line goes to the audit trail.
+             Why         - SD Core for Linux has it, and the two are kept the same.
+             Does NOT    - Change any other parameter (doors, paths, commands, logs, security settings and sizes SD
+                           does not check are changed by hand, as before; the page says why and shows the line), or
+                           restart SD: a parameter marked restart takes effect when SD is next stopped and started.
+
 10 Nov 26  OSCOPY COPIES AN OPERATING SYSTEM FILE (FROM SD CORE FOR LINUX).
 
              What        - OSCOPY source target {OVERWRITE | APPEND} copies one operating system file, named by its

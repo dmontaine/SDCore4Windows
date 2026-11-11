@@ -1,0 +1,1 @@
+It takes effect when SD is next stopped and started (sd -restart, or Stop-Service SD then Start-Service SD); sessions started before then keep the old value

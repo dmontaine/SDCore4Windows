@@ -1,0 +1,121 @@
+* SETCONFIG
+* SET.CONFIG: change one tuning parameter of sd.conf, through SDSYS's elevated helper
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux setconfig (S.75 A6, 26 Oct 26, the owner's "do a6"; RELEASE_1.1 218).  The checks, their order,
+*           the words and the audit line are Linux's; messages 11931-11937 are 12936-12942 here (+1005).  OS deviation: the change is
+*           made by gplbld/sd-confset.ps1 through !ps_script_out (an SDSYS session runs it in its elevated helper, as SET.BACKUP.DIRECTORY
+*           does), in place of sudo sd-elevate conf-set, and success is the script's own last line.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    SET.CONFIG parameter value          (SDSYS's VOC only)
+*
+*    Changes one of the 14 tuning parameters that config.c range-checks (CLEANUP DHCACHE GRPSIZE LGNWAIT LPTRHIGH LPTRWIDE MAXCALL
+*    MAXRLOCK NETREPLY NETWAIT NUMLOCKS RECCACHE SORTMRG USPLIT) in C:\ProgramData\SD\sd.conf.  The name and the value are checked here
+*    for their characters only; the helper owns the list and the ranges, refuses everything else, keeps the old file as sd.conf.bak and
+*    reads the file back.  One line goes to the audit trail, on success and on refusal.  TOOL.CONFIG runs this verb for its E key.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.config
+$catalog $setconfig
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+
+   prompt ''
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   words = trim(@sentence)
+   if dcount(words, ' ') # 3 then stop sysmsg(12936)
+
+   pname = upcase(field(words, ' ', 2))
+   pval = field(words, ' ', 3)
+
+   good = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+   ok = (len(pname) >= 1 and len(pname) <= 12)
+   for i = 1 to len(pname)
+      if index(good, pname[i, 1], 1) = 0 then ok = @false
+   next i
+   if not(ok) then stop sysmsg(12937)
+
+   ok = (len(pval) >= 1 and len(pval) <= 7)
+   for i = 1 to len(pval)
+      if index('0123456789', pval[i, 1], 1) = 0 then ok = @false
+   next i
+   if not(ok) then stop sysmsg(12938)
+
+*  The name and the value are letters and digits only, so they cannot end the quoted argument they are put in
+   q = char(39)
+   script = '& ' : q : kernel(K$WINPATH, '/sd-confset.ps1') : q : ' -Name ' : q : pname : q : ' -Value ' : q : pval : q
+   script := '; exit $LASTEXITCODE'
+   both = ps_script_out(script, @true)
+   stat = both<1>
+   del both<1>
+   out = both
+
+   anchor = 'SD-CONFSET OK ' : pname : ' ' : pval : ' '
+   done = @false ; effect = '' ; lastl = '' ; why = ''
+   for i = 1 to dcount(out, @fm)
+      ln = trim(out<i>)
+      if ln # '' then lastl = ln
+      if ln[1, len(anchor)] = anchor then
+         done = @true
+         effect = field(ln[len(anchor) + 1, 40], ' ', 1)
+      end
+      if ln[1, 17] = 'SD-CONFSET ERROR ' then why = trim(ln[18, 400])
+   next i
+
+   if stat # 0 or not(done) or why # '' then
+      if why = '' then why = lastl
+      if why = '' then why = 'the helper gave no answer (status ' : stat : ')'
+      st = 'refused'
+      gosub write.audit
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12939, why)
+   end
+
+   st = 'ok'
+   gosub write.audit
+   @system.return.code = 0
+   display sysmsg(12940, pname, pval)
+   if effect = 'restart' then display sysmsg(12941)
+   if effect = 'session' then display sysmsg(12942)
+   stop
+
+write.audit:
+   void kernel(K$AUDIT, 'set.config key=' : downcase(pname) : ' value=' : pval : ' status=' : st)
+   return
+
+end
+
+* END-CODE

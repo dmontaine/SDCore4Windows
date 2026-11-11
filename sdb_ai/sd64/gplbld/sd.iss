@@ -4009,7 +4009,7 @@ function SecureSysdirs: String;
 var
   Code: Integer;
   Ps, Script, Failed: String;
-  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable: String;
 begin
   Result := '';
   Code := 0;
@@ -4062,6 +4062,14 @@ begin
   VocRm      := ExpandConstant('{#DataDir}\sdsys\voc_removed');
   VocRmSaved := ExpandConstant('{#DataDir}\sdsys\voc_removed.saved');
 
+  { 10 Nov 26 - THE TABLE OF sd.conf's PARAMETERS (from Linux S.75 A6; RELEASE_1.1
+    218).  TOOL.CONFIG shows it to the administrator; the helper that writes
+    sd.conf keeps its own list, so a changed table cannot widen what SET.CONFIG
+    writes, but it could make the page tell the administrator a wrong range or a
+    wrong reason.  Locked, like sd.conf itself, rather than left inheriting
+    sdusers Modify from sdsys. }
+  ConfTable  := ExpandConstant('{#DataDir}\sdsys\config.table');
+
   Failed := '';
   if not LockOsUsersPath(Ps, Script, Accounts, Code) then
     Failed := Accounts
@@ -4082,7 +4090,9 @@ begin
   else if not LockOsUsersPath(Ps, Script, VocRm, Code) then
     Failed := VocRm
   else if not LockOsUsersPath(Ps, Script, VocRmSaved, Code) then
-    Failed := VocRmSaved;
+    Failed := VocRmSaved
+  else if not LockOsUsersPath(Ps, Script, ConfTable, Code) then
+    Failed := ConfTable;
 
   if Failed = '' then
     Exit;
@@ -4091,7 +4101,8 @@ begin
     ACL is the whole of a control and it fails silently if the step does not
     run.  The path that failed is named because ELEVEN were attempted (seven until
     22 Sep 2026, then voc and gpl.bp - RELEASE_1.1 104; voc_removed and
-    voc_removed.saved from 7 Nov 2026 - RELEASE_1.1 197) and the manual command
+    voc_removed.saved from 7 Nov 2026 - RELEASE_1.1 197; config.table from 10 Nov
+    2026 - RELEASE_1.1 218) and the manual command
     below is only worth anything if it says which one. }
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +

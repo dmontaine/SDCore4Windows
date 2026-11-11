@@ -1,0 +1,857 @@
+* TOOL_CONFIG
+* The configuration on one screen: every parameter of sd.conf with the value SD is running with, the value the file now says, the default, what the parameter does and when a change reaches
+* anyone; the backup directory; and the operating system's part of the settings report (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A6).  Since 26 Oct 26 it can change the
+* 14 tuning parameters of the table's 'write' column, through SET.CONFIG and SDSYS's elevated helper.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux (S.75 A6 and its later changes to 9 Nov 26; RELEASE_1.1 218).  OS deviations: sd.conf is the file kernel(K$INIPATH) names (SD_CONFIG, else
+*               C:\ProgramData\SD\sd.conf), not /etc/sd.conf; set.config changes it through SDSYS's elevated helper (gplbld/sd-confset.ps1), not the root helper; the line to add by hand is
+*               added as an administrator; a restart is sd -restart, or Stop-Service SD and Start-Service SD; the report's operating-system part is Windows's (no sudoers file).
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): drawn exactly as before at 140 by 43, and in a larger window the parameter list takes the extra rows, every
+*               box and text is as wide as the window, and the detail wraps at the box's width. The rows, widths, hit tests and the [?] button are counted from the pane rectangles.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
+* 25 Oct 26 dm  New.
+* 25 Oct 26 dm  A file path too long for the top line loses its front ('...'), no longer the counts after it.
+* 26 Oct 26 dm  A6, the write half (the owner: "do a6"): E on a parameter asks for a new value, checks it against the table, shows the exact set.config command and when it takes effect in the
+*               toolkit's confirm box, runs it with $tk_run, and reads the file and SD's own values again; a parameter the table marks write=no shows why and the line to add by hand, and writes nothing.
+*               The table gained its 'write' and 'why' fields and the page a Change column.
+* 26 Oct 26 dm  read.table assigns every column by line number: an append with <-1> to a still-empty array adds nothing, so the minimum and maximum columns (blank for the table's first rows) slid
+*               up and the foot box showed another parameter's range on the first rows (found by the write half's own check of the range E validates against).
+* 27 Oct 26 dm  S.87 batch 15: no parameter is inert or retired any more (the eleven that were are gone from sd.conf), so the 'inert' sentence at the foot is gone; the other parameters number 37.
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the three views, the differ filter and refresh are offered to the model.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the view to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.CONFIG      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least).  Everything it does by itself is LOOKING; its one way of changing anything is the command set.config,
+*   which it runs only after the person has typed a value, the page has checked the value against the table's range, and the confirm box has shown the exact sentence and answered Run.
+*   set.config calls SDSYS's elevated helper (gplbld/sd-confset.ps1), which changes one of 14 tuning parameters and refuses everything else; the page never writes a file and never runs anything else.
+*   The other 37 parameters are not changed from here (the doors, paths and commands, logs and diagnostics, sizes config.c does not check, ...): E shows the reason, from the table, and the
+*   line to add by hand.
+*
+*   Three views.  P, the parameters: one row for each parameter SD knows (the table sdsys/config.table, which test-toolconfig-units.py holds to the parser in config.c), with the value
+*   the CONFIG function reports (what this SD is running with), the value sd.conf says now (the file read again, a parameter written twice counted the way SD counts it), the default, when
+*   a change takes effect (session: a session reads sd.conf itself when it starts, so the sessions started after an edit see it; restart: it sizes or starts the system) and whether anything
+*   acts on it.  A row marked * is one where the file and the running SD disagree; the box at the foot says who will see the file's value.  A name in the file that SD does not know
+*   is listed as unknown and said to stop SD and every new session from starting, which it does.  B, the backup directory: the saved directory and whether it is there.  R, the
+*   operating system's part of settings.report (the ssh and API doors, the groups, the service), read when the view is opened and on F5.
+*
+*   Keys: P, B, R change the view; Up, Down, PgUp, PgDn, Home, End move; D shows only the rows where the file and SD disagree; S only the parameters the file sets; E changes the parameter
+*   under the cursor (or says why it cannot be changed here); F5 reads the file and the report again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts
+*   the cursor there.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_config
+$catalog $tool_config
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'set.config'                                         ;* the one command this page may run
+   call $tk_open('tool.config', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.config')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'p', 'parameters', 'parameters', '', 1)
+   call $tk_keys('add', keys, 'b', 'backups', 'backups', '', 1)
+   call $tk_keys('add', keys, 'r', 'report', 'report', '', 1)
+   call $tk_keys('add', keys, 'd', 'differ', 'differ', 'Parameters', 1)
+   call $tk_keys('add', keys, 's', 'set', 'setonly', 'Parameters', 1)
+   call $tk_keys('add', keys, 'e', 'change', 'edit', 'Parameters', 1)
+   call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U3: Esc goes back to the parameters and takes the row filters off first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Parameter', '&Change this parameter', '', '')
+   call $tk_keys('menu', keys, 'parameters', '&View', '&Parameters', '', '')
+   call $tk_keys('menu', keys, 'backups', '&View', '&Backup directory', '', '')
+   call $tk_keys('menu', keys, 'report', '&View', '&Report', '', '')
+   call $tk_keys('menu', keys, 'differ', '&View', '&Differences only', '', '')
+   call $tk_keys('menu', keys, 'setonly', '&View', '&Set by the file only', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', 'Re&fresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   panes = 'Parameters' : @fm : 'Backup directory' : @fm : 'Report'
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only what changes what is shown - its three views, the "differ from the default" row filter and refresh (an
+   * administrator's page: edit and set-only are not offered); a proposal is carried out by the page's own key.  Where the AI is not usable nothing here adds a key or a line.
+   call $tk_keys('ai', keys, 'parameters', '', '', '', '')
+   call $tk_keys('ai', keys, 'backups', '', '', '', '')
+   call $tk_keys('ai', keys, 'report', '', '', '', '')
+   call $tk_keys('ai', keys, 'differ', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   gosub lay.declare                                            ;* the panes; VP (the parameter rows on the screen) and DV (the detail rows) come from them
+   hp = '  ' : fmt('Parameter', '12L') : fmt('In force', '23L') : fmt('In sd.conf', '23L') : fmt('Default', '20L') : fmt('Takes effect', '13L') : fmt('Status', '9L') : 'Change'
+
+   view = 1                                                     ;* 1 the parameters, 2 the backup directory, 3 the report
+   pshow = '' ; nshow = 0                                       ;* the table rows shown, after the two filters
+   ci = 1 ; ta = 0
+   only.diff = 0 ; only.set = 0
+   repl = '' ; rtop = 1
+   conf.path = ''
+   gen = 0
+   done = 0
+   msg = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, panes<view>, '', '', mr)          ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, panes<view>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, panes<view>, nm, ao)         ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      busy = (if view # 1 or only.diff or only.set then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, panes<view>, nm, busy, mr)       ;* the Esc rule: another view or a row filter is closed before the bar opens
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lay.chg)
+            gosub lay.get
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the machine says
+
+* Read the table, the file and SD's own values again, and put the cursor back on the parameter it was on
+read.all:
+   sel.k = ''
+   if nshow > 0 and ci >= 1 and ci <= nshow then
+      idx = pshow<ci>
+      sel.k = pk<idx>
+   end
+   gosub read.table
+   gosub read.file
+   gosub merge.rows
+   gosub filter.rows
+   if sel.k # '' then
+      for i = 1 to nshow
+         idx = pshow<i>
+         if pk<idx> = sel.k then
+            ci = i
+            exit
+         end
+      next i
+   end
+   if ci > nshow then ci = nshow
+   if ci < 1 then ci = 1
+   return
+
+* The table of parameters (sdsys/config.table): key, kind, default, min, max, effect, status, text, write, why; a line beginning # is a comment
+read.table:
+   tk = '' ; tkind = '' ; tdef = '' ; tmin = '' ; tmax = '' ; teff = '' ; tstat = '' ; ttext = '' ; twrite = '' ; twhy = ''
+   table.err = ''
+   nl = 0
+   openseq @sdsys : @ds : 'config.table' readonly to tf then
+      loop
+         readseq ln from tf else exit
+         if ln = '' or ln[1, 1] = '#' then continue
+*        BY INDEX: an append with <-1> to an array that is still empty adds nothing, so a column whose first values are empty (the minimum and the maximum, blank for the first rows) slides up
+*        and every later row reads the wrong range - which E would then have checked a value against (found by sandbox-tool-config.py row C8a, 26 Oct 26)
+         nl += 1
+         tk<nl> = field(ln, '|', 1)
+         tkind<nl> = field(ln, '|', 2)
+         tdef<nl> = field(ln, '|', 3)
+         tmin<nl> = field(ln, '|', 4)
+         tmax<nl> = field(ln, '|', 5)
+         teff<nl> = field(ln, '|', 6)
+         tstat<nl> = field(ln, '|', 7)
+         ttext<nl> = field(ln, '|', 8)
+         twrite<nl> = field(ln, '|', 9)
+         twhy<nl> = field(ln, '|', 10)
+      repeat
+      close tf
+   end else
+      if not(unassigned(tf)) then close tf       ;* 26 Oct 26 - an OPENSEQ that took ELSE keeps the name locked until the variable is closed (see home_entry)
+      table.err = 'the table of parameters (config.table in the system directory) cannot be read'
+   end
+   return
+
+* sd.conf as SD reads it: the file the kernel read at start (SD_CONFIG, else C:\ProgramData\SD\sd.conf; K$INIPATH); lines of the [sd] section; a line KEY=value, the key in upper case, a
+* line beginning # ignored.  READSEQ strips the CRLF of a Windows file.
+read.file:
+   fk = '' ; fv = ''
+   conf.path = kernel(K$INIPATH, 0)
+   file.err = ''
+   section = ''
+   openseq conf.path readonly to cf then
+      loop
+         readseq ln from cf else exit
+         if ln = '' or ln[1, 1] = '#' then continue
+         if ln[1, 1] = '[' then
+            e = index(ln, ']', 1)
+            section = upcase(ln[2, (if e > 0 then e - 2 else len(ln))])
+            continue
+         end
+         if section # 'SD' then continue
+         e = index(ln, '=', 1)
+         if e = 0 then continue
+         ckey = upcase(ln[1, e - 1])
+         cval = ln[e + 1, len(ln)]
+         gosub file.add
+      repeat
+      close cf
+   end else
+      if not(unassigned(cf)) then close cf       ;* 26 Oct 26 - as above
+      file.err = conf.path : ' cannot be read'
+   end
+   return
+
+* ckey and cval are one line of the file: a flag parameter that SD adds up (bits) is added up here; the others keep the last
+file.add:
+   p = 0
+   for i = 1 to dcount(fk, @fm)
+      if fk<i> = ckey then p = i
+   next i
+   if p = 0 then
+*     26 Oct 26 (review of A6): by index, as read.table does.  Appending an EMPTY value with <-1> to an empty array adds nothing, so a first line such as SH= slid every later value up one row
+      fadd.n = dcount(fk, @fm) + 1
+      fk<fadd.n> = ckey
+      fv<fadd.n> = cval
+      return
+   end
+   kk = 0
+   for i = 1 to dcount(tk, @fm)
+      if tk<i> = ckey and tkind<i> = 'bits' then kk = 1
+   next i
+   old.v = fv<p>
+   if kk and num(old.v) and num(cval) then
+      fv<p> = bitor(old.v + 0, cval + 0)
+   end else
+      fv<p> = cval
+   end
+   return
+
+* One row for each parameter of the table, then one for each name in the file that the table does not have; the values SD runs with, and whether the row disagrees with the file
+merge.rows:
+   pk = '' ; pforce = '' ; pfile = '' ; pdef = '' ; peff = '' ; pstat = '' ; ptext = '' ; prange = '' ; pdiff = '' ; pinfile = '' ; pkind = ''
+   pwrite = '' ; pwhy = '' ; pmin = '' ; pmax = ''
+   ndiff = 0 ; nrestart = 0 ; nin = dcount(fk, @fm) ; unknown = ''
+   nt = dcount(tk, @fm)
+   for i = 1 to nt
+      pk<i> = tk<i>
+      pkind<i> = tkind<i>
+      pdef<i> = tdef<i>
+      peff<i> = teff<i>
+      pstat<i> = tstat<i>
+      ptext<i> = ttext<i>
+      pwrite<i> = twrite<i>
+      pwhy<i> = twhy<i>
+      pmin<i> = tmin<i>
+      pmax<i> = tmax<i>
+      prange<i> = (if tmin<i> = '' and tmax<i> = '' then '' else tmin<i> : ' to ' : tmax<i>)
+      pforce<i> = config(tk<i>)
+      if status() # 0 then pforce<i> = '(not readable)'
+      p = 0
+      for j = 1 to nin
+         if fk<j> = tk<i> then p = j
+      next j
+      pinfile<i> = (p > 0)
+      pfile<i> = (if p > 0 then fv<p> else '')
+      pdiff<i> = 0
+      if p > 0 and pforce<i> # '(not readable)' and tk<i> # 'DEBUG' then
+         gosub compare.values
+         if cmp.diff then
+            pdiff<i> = 1
+            ndiff += 1
+            if teff<i> = 'restart' then nrestart += 1
+         end
+      end
+   next i
+   for j = 1 to nin
+      known = 0
+      for i = 1 to nt
+         if tk<i> = fk<j> then known = 1
+      next i
+      if not(known) then
+         n = dcount(pk, @fm) + 1
+         pk<n> = fk<j>
+         pkind<n> = '' ; pdef<n> = '' ; peff<n> = '' ; pstat<n> = 'unknown' ; prange<n> = ''
+         pwrite<n> = 'no' ; pwhy<n> = 'SD does not know this name.' ; pmin<n> = '' ; pmax<n> = ''
+         ptext<n> = 'SD does not know this name. SD will not start, and no new session will, while the file holds it: correct its spelling or take the line out.'
+         pforce<n> = '' ; pfile<n> = fv<j> ; pinfile<n> = 1 ; pdiff<n> = 1
+         unknown<-1> = fk<j>
+      end
+   next j
+   nrows = dcount(pk, @fm)
+   return
+
+* The value in the file and the value SD runs with, for the parameter i: cmp.diff is 1 when they are different.  A number is compared as a number, a pair or a path as text.
+compare.values:
+   a = trim(pfile<i>)
+   b = trim(pforce<i>)
+   cmp.diff = (a # b)
+   if cmp.diff and num(a) and num(b) then
+      cmp.diff = (abs((a + 0) - (b + 0)) > 0.000000000000001)
+   end
+   return
+
+* The rows shown: all, or only the rows where the file and SD disagree, or only the parameters the file sets
+filter.rows:
+   pshow = ''
+   nshow = 0
+   for i = 1 to nrows
+      keep = 1
+      if only.diff and not(pdiff<i>) then keep = 0
+      if only.set and not(pinfile<i>) then keep = 0
+      if keep then
+         nshow += 1
+         pshow<nshow> = i
+      end
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- the other two views
+
+read.backup:
+   bdir = '' ; bderr = ''
+   call !acc_os_bakdir('GET', bdir, bderr)
+   return
+
+read.report:
+   repl = '' ; rtop = 1
+   call !settings_os(os.lines, rerr)
+   if rerr # '' then
+      repl = 'the report could not be made'
+      return
+   end
+   skip = 0
+   for i = 1 to dcount(os.lines, @fm)
+      l = os.lines<i>
+      if l[1, 1] = '[' then skip = (l[1, 9] = '[sd.conf]')
+      if not(skip) then repl<-1> = l
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- the layout (S.88 L2)
+
+* The page's three boxes as panes of $tk_layout: each size is the box drawn at 140 by 43 (the body is 138 by 39), so at that size nothing moves; in a larger window the list stretches
+* (a table shows more rows) and every pane is as wide as the body.  Declared again after the terminal was given away and the screen taken again.
+lay.declare:
+   d = ''
+   d<1> = 'top' : @vm : 1 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<2> = 'list' : @vm : 2 : @vm : 1 : @vm : 20 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<3> = 'detail' : @vm : 3 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, lay.err)
+   gosub lay.get
+   return
+
+* The rectangles of the three panes, and what is counted from them: tw the width of a text line inside a box (134 at 140 by 43), VP the parameter rows, DV the detail rows
+lay.get:
+   lay.id = 'top'
+   gosub lay.rect
+   top.x = lay.x ; top.y = lay.y ; top.w = lay.w ; top.h = lay.h
+   lay.id = 'list'
+   gosub lay.rect
+   lst.x = lay.x ; lst.y = lay.y ; lst.w = lay.w ; lst.h = lay.h
+   lay.id = 'detail'
+   gosub lay.rect
+   det.x = lay.x ; det.y = lay.y ; det.w = lay.w ; det.h = lay.h
+   body.y = ctx<TK.C.YBODY>
+   tx = lst.x + 2
+   tw = lst.w - 4
+   mk.x = top.x + top.w - 5                                     ;* the [?] button, at the right end of the first row of the top box
+   mk.y = top.y + 1
+   VP = lst.h - 3
+   DV = det.h - 2
+   return
+
+lay.rect:
+   call $tk_layout('pane', ctx, lay.id, lay.r)
+   lay.x = lay.r<1, 1>
+   lay.y = lay.r<1, 2>
+   lay.w = lay.r<1, 3>
+   lay.h = lay.r<1, 4>
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,body.y size cw2,chh
+   screen box at top.x,top.y size top.w,top.h title 'Configuration'
+   ttl = 'Parameters'
+   if view = 2 then ttl = 'Backup directory'
+   if view = 3 then ttl = 'Report'
+   screen box at lst.x,lst.y size lst.w,lst.h title ttl
+   ttl = 'The parameter under the cursor'
+   if view = 2 then ttl = 'About the backup directory'
+   if view = 3 then ttl = 'About the report'
+   screen box at det.x,det.y size det.w,det.h title ttl
+   gosub draw.top
+   gosub redraw
+   return
+
+draw.top:
+   if table.err # '' then
+      s = table.err
+   end else
+      if file.err # '' then
+         s = file.err
+      end else
+         cnt.txt = '   Parameters in it: ' : nin : '   Differ from what SD is running with: ' : ndiff : '   Need a restart: ' : nrestart
+*        the counts are what the administrator acts on: a long path loses its front, never the counts
+         fpath = conf.path
+         room = (tw - 6) - 6 - len(cnt.txt)
+         if len(fpath) > room then fpath = '...' : fpath[len(fpath) - room + 4, room - 3]
+         s = 'File: ' : fpath : cnt.txt
+      end
+   end
+   screen text s[1, tw - 6] at tx,top.y + 1 attr 'bold' width tw - 6                  ;* 6 less than the other lines so that the [?] is clear
+   if unknown = '' then
+      s = 'Names in the file that SD does not know: none'
+   end else
+      s = 'NAMES IN THE FILE THAT SD DOES NOT KNOW (SD will not start with them): ' : convert(@fm, ' ', unknown)
+   end
+   screen text s[1, tw] at tx,top.y + 2 width tw
+   screen text 'session: a change reaches the sessions started after it.  restart: it takes effect when SD is next started.   * marks a row where the file and SD disagree.' at tx,top.y + 3 width tw
+   screen text 'P parameters   B backup directory   R report   D only where they disagree   S only what the file sets   E changes one   F5 reads again' at tx,top.y + 4 width tw
+   call $tk_help('mark', mk.x, mk.y, 0, 0)
+   return
+
+redraw:
+   begin case
+      case view = 1
+         gosub draw.params
+         gosub draw.param.detail
+      case view = 2
+         gosub draw.backup
+      case 1
+         gosub draw.report
+   end case
+   return
+
+draw.params:
+   screen text hp at tx,lst.y + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VP then ta = ci - VP
+   if ta < 0 then ta = 0
+   for r = 1 to VP
+      kk = ta + r
+      s = ''
+      if kk <= nshow then
+         i = pshow<kk>
+         fv.s = pfile<i>
+         if not(pinfile<i>) then fv.s = '-'
+         fo.s = pforce<i>
+         if fo.s = '' then fo.s = '(empty)'
+         if pstat<i> = 'unknown' then fo.s = '-'
+         df.s = pdef<i>
+         if df.s = '' then df.s = '(none)'
+         s = (if pdiff<i> then '* ' else '  ') : fmt(pk<i>[1, 11], '12L') : fmt(fo.s[1, 22], '23L') : fmt(fv.s[1, 22], '23L') : fmt(df.s[1, 19], '20L') : fmt(peff<i>[1, 12], '13L') : fmt(pstat<i>, '9L') : (if pwrite<i> = 'yes' then 'e' else 'by hand')
+      end
+      rat = 'normal'
+      if kk = ci and kk <= nshow then rat = 'highlight'
+      screen text s[1, tw] at tx,lst.y + 1 + r attr rat width tw
+   next r
+   return
+
+* The parameter under the cursor: its facts, when a change reaches whom, and the sentence
+draw.param.detail:
+   for r = 1 to DV
+      screen text '' at tx,det.y + r width tw
+   next r
+   if nshow = 0 or ci < 1 or ci > nshow then
+      screen text 'There is no parameter to show.' at tx,det.y + 1 width tw
+      return
+   end
+   i = pshow<ci>
+   lines = ''
+   s = pk<i> : '   ' : pkind<i> : (if prange<i> = '' then '' else '   range ' : prange<i>) : '   takes effect: ' : peff<i> : '   status: ' : pstat<i>
+   lines<-1> = s
+   fo.s = pforce<i>
+   if fo.s = '' then fo.s = '(empty)'
+   s = 'SD is running with: ' : fo.s : '     sd.conf says: ' : (if pinfile<i> then pfile<i> else '(nothing)') : '     default: ' : (if pdef<i> = '' then '(none)' else pdef<i>)
+   lines<-1> = s
+   lines<-1> = ''
+   call $tk_wrap(ptext<i>, tw, pieces)
+   lines<-1> = pieces
+   lines<-1> = ''
+   if pwrite<i> = 'yes' then
+      lines<-1> = 'E changes it here: a whole number from ' : pmin<i> : ' to ' : pmax<i> : ', the range SD itself enforces; a box shows the command first.'
+   end else
+      call $tk_wrap('Not changed from this page: ' : pwhy<i> : ' E shows the line to add by hand.', tw, pieces)
+      lines<-1> = pieces
+   end
+   if pdiff<i> and pstat<i> # 'unknown' then
+      lines<-1> = ''
+      if peff<i> = 'restart' then
+         lines<-1> = 'The file and SD disagree. This parameter takes effect only when SD is next started: until then SD keeps running with ' : fo.s : '.'
+      end else
+         lines<-1> = 'The file and this session disagree. Sessions started now read the file; this one, and any that were already running, keep ' : fo.s : '.'
+      end
+   end
+   for r = 1 to dcount(lines, @fm)
+      if r <= DV then
+         lr = lines<r>
+         screen text lr[1, tw] at tx,det.y + r width tw
+      end
+   next r
+   return
+
+draw.backup:
+   screen text '' at tx,lst.y + 1 width tw
+   for r = 1 to VP
+      screen text '' at tx,lst.y + 1 + r width tw
+   next r
+   if bderr # '' then
+      screen text 'The saved backup directory could not be read.' at tx,lst.y + 2 width tw
+   end else
+      if bdir = '' then
+         screen text 'No backup directory has been saved. BACKUP.ACCOUNT then needs a directory typed with it, or one saved with SET.BACKUP.DIRECTORY.' at tx,lst.y + 2 width tw
+      end else
+         screen text 'The saved backup directory (BACKUPDIR in ' : conf.path : '):' at tx,lst.y + 2 width tw
+         screen text bdir[1, tw - 4] at tx + 2,lst.y + 3 attr 'bold' width tw - 4
+         if ospath(bdir, OS$EXISTS) then
+            screen text 'It exists.' at tx + 2,lst.y + 5 width tw - 4
+         end else
+            screen text 'It does not exist now. BACKUP.ACCOUNT makes it, or says why it cannot, when it next runs.' at tx + 2,lst.y + 5 width tw - 4
+         end
+      end
+   end
+   for r = 1 to DV
+      screen text '' at tx,det.y + r width tw
+   next r
+   screen text 'The directory is saved with SET.BACKUP.DIRECTORY, which proves it writable and writes the one line of sd.conf (BACKUPDIR) through SDSYS''s elevated helper.' at tx,det.y + 1 width tw
+   screen text 'This page only shows it. NETFILES and SDCLIENT, which decide what an API login may reach, are on the parameters view.' at tx,det.y + 2 width tw
+   return
+
+draw.report:
+   screen text 'The operating system part of SETTINGS.REPORT (the [sd.conf] section is the parameters view)' at tx,lst.y + 1 attr 'header' width tw
+   n = dcount(repl, @fm)
+   for r = 1 to VP
+      kk = rtop + r - 1
+      s = ''
+      if kk <= n then
+         s = repl<kk>
+      end
+      screen text s[1, tw] at tx,lst.y + 1 + r width tw
+   next r
+   for r = 1 to DV
+      screen text '' at tx,det.y + r width tw
+   next r
+   screen text 'Lines ' : rtop : ' to ' : (if rtop + VP - 1 > n then n else rtop + VP - 1) : ' of ' : n : '.  Up, Down, PgUp, PgDn, Home and End scroll.  F5 makes the report again.' at tx,det.y + 1 width tw
+   screen text 'It is what SETTINGS.REPORT prints for the system. It holds no key, no password hash and nothing from the credential files.' at tx,det.y + 2 width tw
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         gosub step.up
+      case nm = 'down'
+         gosub step.down
+      case nm = 'pgup'
+         for q = 1 to VP
+            gosub step.up
+         next q
+      case nm = 'pgdn'
+         for q = 1 to VP
+            gosub step.down
+         next q
+      case nm = 'home'
+         ci = 1
+         rtop = 1
+         gosub redraw
+      case nm = 'end'
+         ci = nshow
+         if ci < 1 then ci = 1
+         rtop = dcount(repl, @fm) - (VP - 1)
+         if rtop < 1 then rtop = 1
+         gosub redraw
+      case nm = 'p'
+         view = 1
+         gosub draw.all
+      case nm = 'b'
+         view = 2
+         gosub read.backup
+         gosub draw.all
+      case nm = 'r'
+         view = 3
+         gosub read.report
+         gosub draw.all
+      case nm = 'd'
+         only.diff = (if only.diff then 0 else 1)
+         gosub filter.rows
+         ci = 1 ; ta = 0
+         view = 1
+         gosub draw.all
+         msg = (if only.diff then 'only the rows where the file and SD disagree' else 'all the rows')
+      case nm = 's'
+         only.set = (if only.set then 0 else 1)
+         gosub filter.rows
+         ci = 1 ; ta = 0
+         view = 1
+         gosub draw.all
+         msg = (if only.set then 'only the parameters the file sets' else 'all the rows')
+      case nm = 'e'
+         gosub edit.param
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, panes<view>, std.r)
+      case nm = 'f5'
+         gosub read.all
+         if view = 2 then gosub read.backup
+         if view = 3 then gosub read.report
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.config.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here: the view shown) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+      case nm = 'esc'
+         if view # 1 or only.diff or only.set then
+            if only.diff or only.set then
+               only.diff = 0 ; only.set = 0
+               gosub filter.rows
+               ci = 1 ; ta = 0                                ;* the rows changed: the cursor goes to the top; leaving the Backup or Report view alone keeps it where it was
+            end
+            view = 1
+            gosub draw.all
+         end
+   end case
+   return
+
+step.up:
+   if view = 1 then
+      if ci > 1 then ci -= 1
+   end
+   if view = 3 then
+      if rtop > 1 then rtop -= 1
+   end
+   gosub redraw
+   return
+
+step.down:
+   if view = 1 then
+      if ci < nshow then ci += 1
+   end
+   if view = 3 then
+      if rtop + VP - 1 < dcount(repl, @fm) then rtop += 1
+   end
+   gosub redraw
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, panes<view>, mev, '', mr)                 ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, panes<view>, mev, ap)                        ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, mk.x, mk.y, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.config.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if view = 1 and mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= tx and mx <= tx + tw - 1 and my >= lst.y + 2 and my <= lst.y + 1 + VP then
+         if ta + my - (lst.y + 1) <= nshow then
+            ci = ta + my - (lst.y + 1)
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the one change this page can make
+
+* E on the parameter under the cursor: a parameter the table marks write=yes is changed (change.param); any other is explained (explain.fixed) and nothing is written
+edit.param:
+   if view # 1 then
+      msg = 'E changes a parameter: press P for the parameters first'
+      return
+   end
+   if nshow = 0 or ci < 1 or ci > nshow then
+      msg = 'there is no parameter to change'
+      return
+   end
+   i = pshow<ci>
+   k = pk<i>
+   if pwrite<i> = 'yes' then
+      gosub change.param
+   end else
+      gosub explain.fixed
+   end
+   return
+
+* Not changed here: the reason from the table and the exact line to add by hand (as an administrator, in the file SD reads), and when it would take effect.  This writes nothing and runs nothing.
+explain.fixed:
+   body = k : ' is not changed from this page.'
+   body<-1> = ''
+   if pstat<i> = 'unknown' then
+      call $tk_wrap('SD does not know this name, and SD will not start, and no new session will, while the file holds it. Take the line out of ' : conf.path : ' by hand, as an administrator, or correct its spelling.', 100, pieces)
+      body<-1> = pieces
+   end else
+      call $tk_wrap('Why: ' : pwhy<i>, 100, pieces)
+      body<-1> = pieces
+      body<-1> = ''
+      call $tk_wrap('To change it, as an administrator, put the line ' : k : '=<value> in the [sd] section of ' : conf.path : ' (the default is ' : (if pdef<i> = '' then 'none' else pdef<i>) : ').', 100, pieces)
+      body<-1> = pieces
+      begin case
+         case peff<i> = 'restart'
+            wh = 'It takes effect when SD is next stopped and started (sd -restart, or Stop-Service SD then Start-Service SD).'
+         case peff<i> = 'session'
+            wh = 'Sessions started after the edit read it; sessions already running keep the old value.'
+         case 1
+            wh = 'It takes effect at once, wherever the file is read.'
+      end case
+      call $tk_wrap(wh : ' A value SD does not accept stops SD, and every new session, from starting: read the guide first.', 100, pieces)
+      body<-1> = pieces
+   end
+   screen msgbox body title 'Not changed here' buttons '&Close' default 1 returning bx else bx = 0
+   msg = k : ' is not changed from this page; nothing was written'
+   return
+
+* A parameter set.config may change: ask for the value, check it against the table, show the command in the toolkit's box, run it, read everything again and say what changed.  The value
+* is digits only and the name is the table's, so $tk_run's character rules are never the only thing between a keystroke and the command line.
+change.param:
+   fo = pforce<i>
+   if fo = '' then fo = '(empty)'
+   old.f = (if pinfile<i> then pfile<i> else '(nothing)')
+   qq = 'New value for ' : k : ': a whole number from ' : pmin<i> : ' to ' : pmax<i> : ' (SD runs with ' : fo : ', sd.conf says ' : old.f : ')'
+   tt = 'Change ' : k
+   nv = ''
+   k.eff = peff<i>                                              ;* kept: read.all below reuses the loop variable i
+   screen ask qq width 12 value '' title tt returning nv then got = 1 else got = 0
+   if not(got) then
+      msg = 'canceled; ' : k : ' is unchanged'
+      return
+   end
+   nv = trim(nv)
+   if nv = '' then
+      msg = 'nothing was typed; ' : k : ' is unchanged'
+      return
+   end
+   ok = (len(nv) <= 7)
+   for q = 1 to len(nv)
+      if index('0123456789', nv[q, 1], 1) = 0 then ok = @false
+   next q
+   if ok then ok = (('S' : nv) = 'S0' or nv[1, 1] # '0')
+   if ok then ok = ((nv + 0) >= (pmin<i> + 0) and (nv + 0) <= (pmax<i> + 0))
+   if not(ok) then
+      msg = k : ' takes a whole number from ' : pmin<i> : ' to ' : pmax<i> : ', digits only; nothing was changed'
+      return
+   end
+   sent = 'set.config ' : downcase(k) : ' ' : nv
+   typed = ''
+   el = ''
+   el<-1> = 'Sets ' : k : ' to ' : nv : ' in ' : conf.path : ' (now ' : old.f : '; the default is ' : (if pdef<i> = '' then 'none' else pdef<i>) : '). The line is replaced where it is, every other line is kept, and the file as it is now is kept as sd.conf.bak.'
+   if env('SD_CONFIG') # '' then
+      el<-1> = 'This session reads ' : conf.path : ' (SD_CONFIG), but the elevated helper changes the sd.conf in ProgramData\SD only.'
+   end
+   if peff<i> = 'restart' then
+      el<-1> = 'It takes effect when SD is next stopped and started (sd -restart, or Stop-Service SD then Start-Service SD). Until then SD, and every session, keeps running with ' : fo : '.'
+   end else
+      el<-1> = 'Sessions started after this read the new value. This session, and any that are already running, keep ' : fo : '.'
+   end
+   el<-1> = 'SDSYS''s elevated helper makes the change and the verb writes one line to the audit trail.'
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   call $tk_run(allow, sent, out, stat, err)
+   gosub read.all
+   gosub draw.all
+   if err # '' then
+      msg = err
+      return
+   end
+*  What the disk and SD say now, not what the verb said: the row of this parameter, found again
+   rj = 0
+   for j = 1 to nrows
+      if pk<j> = k then rj = j
+   next j
+   now.f = (if rj > 0 and pinfile<rj> then pfile<rj> else '(nothing)')
+   now.r = (if rj > 0 then pforce<rj> else '')
+   lastl = ''
+   for j = 1 to dcount(out, @fm)
+      if trim(out<j>) # '' then lastl = trim(out<j>)
+   next j
+   if stat = 0 and ('S' : trim(now.f)) = ('S' : nv) then
+      msg = k : ' in sd.conf: ' : old.f : ' -> ' : now.f : '; SD is running with ' : now.r : (if k.eff = 'restart' then ' until it is restarted' else ' (sessions started now use ' : now.f : ')')
+   end else
+      msg = 'sd.conf was not changed' : (if lastl = '' then '' else ': ' : lastl)
+   end
+   return
+
+end
+
+* END-CODE
