@@ -24,6 +24,9 @@
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the view to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 10 Nov 26 Windows port - the two sentences that name SDSYS's helper are double-quoted: a string ends at its own quote (op_str3.c, no ''
+*               escape), so 'SDSYS''s ...' was two strings side by side; in SCREEN TEXT (line 565) that did not compile, and the cycle of
+*               10 Nov 20:44 stopped at SECOND.COMPILE on it.  The EL<-1> sentence was made the same way and is changed with it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -562,7 +565,7 @@ draw.backup:
    for r = 1 to DV
       screen text '' at tx,det.y + r width tw
    next r
-   screen text 'The directory is saved with SET.BACKUP.DIRECTORY, which proves it writable and writes the one line of sd.conf (BACKUPDIR) through SDSYS''s elevated helper.' at tx,det.y + 1 width tw
+   screen text "The directory is saved with SET.BACKUP.DIRECTORY, which proves it writable and writes the one line of sd.conf (BACKUPDIR) through SDSYS's elevated helper." at tx,det.y + 1 width tw
    screen text 'This page only shows it. NETFILES and SDCLIENT, which decide what an API login may reach, are on the parameters view.' at tx,det.y + 2 width tw
    return
 
@@ -821,7 +824,7 @@ change.param:
    end else
       el<-1> = 'Sessions started after this read the new value. This session, and any that are already running, keep ' : fo : '.'
    end
-   el<-1> = 'SDSYS''s elevated helper makes the change and the verb writes one line to the audit trail.'
+   el<-1> = "SDSYS's elevated helper makes the change and the verb writes one line to the audit trail."
    call $tk_confirm(sent, el, typed, res, cmsg)
    if res # 'run' then
       msg = cmsg
