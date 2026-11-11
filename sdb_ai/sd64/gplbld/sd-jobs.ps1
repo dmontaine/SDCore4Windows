@@ -1,5 +1,9 @@
 # sd-jobs.ps1 - the administrator's scheduled jobs, on Windows Task Scheduler
 #
+# 10 Nov 26 (RELEASE_1.1 222, the owner's sitting on cycle 20261110-215945) - job-set gives a new definition the owner Administrators, as the
+# folder has, and checks the result before it says created.  The file used to take its creator's owner, ace\SDSYS, so set.job run called the
+# job it had just made damaged and every run of it was refused at LOGIN; the dry run skips ACLs, so the guard could not see it (now its T9).
+#
 # 10 Nov 26 Windows port - from Linux 944d6ed3, 5162a5d1, d049d8bb (S.102 stages 2 to 4), carry area 14.  The Windows shape of the job verbs
 # of Linux's root helper (gplbld/sd-elevate there: job-set, job-delete, job-list, job-run), with Task Scheduler in place of systemd timers:
 #
@@ -294,10 +298,19 @@ try {
             # answers "The path is not of a legal form" to that.  A write that fails leaves no .new file behind to be listed as damaged.
             try {
                 [IO.File]::WriteAllText($tmp, (Get-JobText $n $id $s.Sched), [Text.Encoding]::ASCII)
+                if (-not $DryRun) {
+                    # A new file takes its CREATOR as owner (SDSYS here), which Test-JobAdminPath and the kernel's win32_job_admin_path() both
+                    # refuse.  The owner becomes Administrators, as the folder's is (an elevated token may give that group); only the owner part
+                    # is written, so the file's access rules stay the ones it inherits from the folder.
+                    $fsec = (Get-Item -LiteralPath $tmp -Force).GetAccessControl([Security.AccessControl.AccessControlSections]::Owner)
+                    $fsec.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+                    (Get-Item -LiteralPath $tmp -Force).SetAccessControl($fsec)
+                }
                 if ($existed) { [IO.File]::Replace($tmp, $target, [NullString]::Value) } else { [IO.File]::Move($tmp, $target) }
             } finally {
                 if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
             }
+            if (-not $DryRun -and -not (Test-JobAdminPath $target $false)) { Exit-Refused "job $n was written, but it is not the administrators' file (SYSTEM or Administrators must own it and nobody else be allowed anything); job-delete removes it" }
             Out-Line "${Prog}: job $n $(if ($existed) { 'replaced' } else { 'created' })"
 
             if ($DryRun) {
