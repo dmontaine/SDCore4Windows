@@ -1,0 +1,76 @@
+* _SDSYSN
+* !SDSYSN subroutine - the sessions of SDSYS that a person sits at (S.76)
+* Copyright (c) 2026 Donald Montaine
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+*
+* START-HISTORY:
+* 26 Oct 26 dm  New.  The owner's decision of 26 Oct 2026 (S.76): SDSYS may have more than one session at a time, and that must be visible - an audit line when a
+*               second one signs on (LOGIN), a mark on the rows of TOOL.SESSIONS, a count on the home screen's signed-on line.  This is the one definition of "a session
+*               of SDSYS" the three of them use.
+* 10 Nov 26 Windows port - from Linux 13d30532 (S.76), unchanged.  The TUI carry (f55e5fa5, RELEASE_1.1 197) brought its two callers, TOOL_HOME and TOOL_SESSIONS,
+*               and not this file, so HOME in SDSYS stopped with "Unable to load '!sdsysn' object code at line 800 of $tool_home".  K$USERS.DEV is the
+*               session's ttyname() (kernel.c), which MSYS2 fills for a console and leaves empty for piped input, so "on a terminal" means what it means on Linux.
+*               LOGIN's half of S.76 (the audit line for a second SDSYS session) is not carried here yet; Windows LOGIN does not call this, so it needs no place on
+*               the bootstrap list.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    CALL !SDSYSN(n, uids, mine, mytty)
+*
+*    n      how many sessions of the account SDSYS are on a terminal - the ones a person sits at.  A phantom, an API or SDNet process, a session that is being
+*           logged out, and a session with no terminal (a piped command, SD -INTERNAL, a program started from a script) are not counted.
+*    uids   their user numbers, a field mark between each
+*    mine   1 when the calling session is one of them (its own account is SDSYS in the user table); at sign-on it may not have entered its account yet
+*    mytty  1 when the calling session is on a terminal
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine sdsysn(n, uids, mine, mytty)
+$catalog !SDSYSN
+
+$include syscom.h
+$include keys.h
+$include int$keys.h
+
+   n = 0
+   uids = ''
+   mine = 0
+   mytty = 0
+   users = kernel(K$USERS, 0)
+   for i = 1 to dcount(users, @fm)
+      uv = users<i>
+      uid = uv<1, K$USERS.UID> + 0
+      has.tty = (uv<1, K$USERS.DEV> # '')
+      if uid = @userno then mytty = has.tty
+      flg = uv<1, K$USERS.FLAGS> + 0
+      if downcase(uv<1, K$USERS.ACCOUNT>) = 'sdsys' and has.tty then
+         if not(bitand(flg, USR$PHANTOM)) and not(bitand(flg, USR$SDVBSRVR)) and not(bitand(flg, USR$SDNET)) and not(bitand(flg, USR$LOGOUT)) then
+            n += 1
+            uids<-1> = uid
+            if uid = @userno then mine = 1
+         end
+      end
+   next i
+   return
+end
+
+* END-CODE
