@@ -1456,15 +1456,21 @@ Private char* sysdir(void) {
     if (rec[0] == '[') {
       size_t seclen;
 
-      if ((p = strchr(rec, ']')) != NULL)
-        *p = '\0';
+      /* 11 Nov 26, from Linux 71d8550b (S.159 finding 5; RELEASE_1.1 223).
+         A header with no closing bracket, or a name too long for any section
+         SD reads, is not a section: what follows it belongs to none, so it is
+         not read as [sd].  (Until now a name too long was truncated, which
+         could make it equal a real one, and a header with no ] was a section
+         named by the rest of the line.)                                      */
 
-      /* A section name longer than the buffer cannot match anything we look
-         for, so truncating it is harmless.                                  */
+      p = strchr(rec, ']');
+      if ((p == NULL) || ((size_t)(p - (rec + 1)) >= sizeof(section))) {
+        section[0] = '\0';
+        continue;
+      }
+      *p = '\0';
 
       seclen = strlen(rec + 1);
-      if (seclen >= sizeof(section))
-        seclen = sizeof(section) - 1;
       memcpy(section, rec + 1, seclen);
       section[seclen] = '\0';
 
