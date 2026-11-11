@@ -741,7 +741,7 @@ micro.home:
    home.ps1 = kernel(K$WINPATH, '/micro-home.ps1')
    if home.ps1 = '' then
       error.text  = 'Could not locate micro-home.ps1, which prepares the'
-      error.text := ' editor''s configuration directory.' : char(10)
+      error.text := " editor's configuration directory." : char(10)     ;* 11 Nov 26: was ' editor''s ...' - SD BASIC has no '' escape
       error.text := 'ed, the line editor, needs none of this.'
       return
    end

@@ -1792,7 +1792,7 @@ dbg.bar:
    dm.m<1, -1> = '&Abort' : @sm : '' : @sm : 'f2'     ;* 9 Nov 26 (S.186): no key in the full screen (F2 is Find an action, as on every page); still F2 in line mode
    dm.bar<20> = dm.m
    dm.m = '&View'
-   dm.m<1, -1> = 'The program''s &screen' : @sm : 'F4' : @sm : 'f4'
+   dm.m<1, -1> = "The program's &screen" : @sm : 'F4' : @sm : 'f4'     ;* 11 Nov 26: was 'The program''s &screen' - SD BASIC has no '' escape, so that was two strings side by side
    dm.m<1, -1> = '&Theme' : @sm : 'Ctrl-T' : @sm : 'theme'
    dm.m<1, -1> = '&Refresh' : @sm : 'F5' : @sm : 'f5'
    dm.bar<21> = dm.m
