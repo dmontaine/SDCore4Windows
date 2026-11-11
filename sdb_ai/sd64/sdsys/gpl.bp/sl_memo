@@ -29,6 +29,7 @@
 * 09 Nov 26 dm S.184 stage 7: for long records, syntax colour keeps a checkpoint every 100 lines instead of running through every line above the top on each paint, and undo
 *              holds 8,000,000 characters (it held 1,000,000: one step above about 500 KB).
 * 09 Nov 26 dm S.184 stage 5: keyboard macros, SED's: Alt-R starts and ends the recording of the keys the area acts on, Alt-P plays them (macro.key).
+* 11 Nov 26 dm S.210 (owner: "Full width"): the horizontal scroll bar runs under the line numbers too; a click on it is counted from the area's left edge.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -303,15 +304,16 @@ click:
 * A click on the horizontal bar (hb): the left arrow scrolls 8 columns back, the right one 8 on, the track before the thumb a page back and
 * after it a page on; the thumb itself does nothing.  The cursor goes with the view if it would leave it, as it does for the wheel.
 hbar.click:
-   c = key<3> - w{'ax'} - gut                    ;* the cell of the bar, from 0
-   if c < 0 or c >= tw then return
+   hbw = gut + tw                                ;* S.210: the bar runs under the line numbers too, the full width of the area but the vertical bar's column
+   c = key<3> - w{'ax'}                          ;* the cell of the bar, from 0
+   if c < 0 or c >= hbw then return
    gosub get.maxl
-   call $sl_hscrollbar(tw, left, maxl, tw, hbar)
+   call $sl_hscrollbar(hbw, left, maxl, tw, hbar)
    call $sl_line('thumb', '', hth)
    begin case
       case c = 0
          left -= 8
-      case c = tw - 1
+      case c = hbw - 1
          left += 8
       case hbar[c + 1, 1] = hth
          null
@@ -1584,11 +1586,11 @@ paint:
       gosub paint.rows
    end
    if hb then
-      * 18 Oct 26: the horizontal bar in the row under the text: the gutter blank, the bar as wide as the text, a blank under the vertical bar
+      * 18 Oct 26: the horizontal bar in the row under the text, a blank under the vertical bar.  11 Nov 26 (S.210, owner: "Full width"): it runs under the
+      *   line numbers too, from the area's left edge; the thumb is still the text's view (tw of the longest line)
       gosub get.maxl
-      call $sl_hscrollbar(tw, left, maxl, tw, hrow)
-      if gut then call $sl_put(scr, w{'ax'}, w{'ay'} + mh, space(gut), str(gc, gut))
-      call $sl_put(scr, w{'ax'} + gut, w{'ay'} + mh, hrow : ' ', str(wc, tw + 1))
+      call $sl_hscrollbar(gut + tw, left, maxl, tw, hrow)
+      call $sl_put(scr, w{'ax'}, w{'ay'} + mh, hrow : ' ', str(wc, gut + tw + 1))
    end
    if w{'focused'} then
       gosub row.of
