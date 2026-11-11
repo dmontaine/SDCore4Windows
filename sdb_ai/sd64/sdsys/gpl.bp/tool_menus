@@ -21,6 +21,7 @@
 *              (Left and Right still do).  AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 10 Nov 26 dm  The Help box said "Tab changes pane"; F6 does since S.176 (found by the Solo carry).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -35,7 +36,7 @@
 *                 state, [x] on and [ ] off
 *     Default     where an account with no setting of its own starts
 *
-*   Keys: Up and Down move in the pane, Tab and Back-tab (or Left and Right) change pane, Enter or the space bar changes the setting under the cursor, F5 reads the
+*   Keys: Up and Down move in the pane, F6 and Shift-F6 (or Left and Right) change pane, Enter or the space bar changes the setting under the cursor, F5 reads the
 *   register again, Ctrl-Q leaves.  A click selects a row.  F1 or ? on the selected row, or a click on the [?] at the end of a setting's row, shows what the
 *   setting means (keys tool.menus.accounts, tool.menus.starts-in, tool.menus.pins, tool.menus.tile.<id>, tool.menus.default; the text is in helptext/).
 *
@@ -385,7 +386,7 @@ draw.default:
    return
 
 draw.help:
-   screen text 'Arrows move, Tab changes pane, Enter changes (Run or Cancel).' at hlp.x + 2,hlp.y + 1 width hw
+   screen text 'Arrows move, F6 changes box, Enter changes (Run or Cancel).' at hlp.x + 2,hlp.y + 1 width hw
    return
 
 * ------------------------------------------------------------------------------------------------- keys and the mouse
