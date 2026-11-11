@@ -3,6 +3,15 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  TOOL.ACCOUNTS: THE ACCOUNTS ON ONE SCREEN (FROM SD CORE FOR LINUX).
+
+             What        - TOOL.ACCOUNTS (SDSYS only) lists every account with its kind, its suspension, the gates
+                           that are on and who is signed on, and runs MODIFY.ACCOUNT (suspend or lift, add or take
+                           away a person of a group account), CREATE.ACCOUNT and DELETE.ACCOUNT, each after a box
+                           that shows the command and is answered Run.
+             Why         - SD Core for Linux has it, and the two are kept the same.
+             Does NOT    - Change a gate (that is TOOL.GATES), or list or change SDSYS.
+
 10 Nov 26  TOOL.CONFIG AND SET.CONFIG: THE CONFIGURATION ON ONE SCREEN (FROM SD CORE FOR LINUX).
 
              What        - TOOL.CONFIG (SDSYS only) shows every parameter of sd.conf: what SD is running with, what the

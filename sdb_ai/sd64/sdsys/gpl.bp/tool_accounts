@@ -1,0 +1,689 @@
+* TOOL_ACCOUNTS
+* The accounts on one screen: every registered account with its kind, whether it is suspended, which gates are on for it and who is signed on in it; and CREATE.ACCOUNT, DELETE.ACCOUNT and
+* MODIFY.ACCOUNT (suspend, add or take away a person of a group account) behind a box (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A3).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux (S.75 A3 and its later changes to 9 Nov 26; RELEASE_1.1 221).  OS deviations: the words say Windows users and groups (sdu_ and sdg_); a group
+*               account's people are changed by the verb in this elevated session, not through a root helper; X asks no REMOVE.HOME question, because DELETE.ACCOUNT here removes the
+*               profile of a Windows user SD made anyway (the keyword is accepted and changes nothing); an OTHER account's directory is a full Windows path; messages 11865 and 14045
+*               are 12870 and 15045.
+* 25 Oct 26 dm  New.
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): at 140 by 43 exactly the boxes the page has always drawn, in a bigger window the list shows more accounts
+*               (twice the share of the box under it, which shows more of what is known about the account under the cursor) and every box is wider.  The resize key makes the layout again,
+*               and so does the return from a verb that was given the terminal (the new $tk_open has no panes).
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; refresh is the one action offered to the model (an administrator's
+*               page: nothing that changes an account is offered).  An administrator without the AI sees the page as it was.
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (act:std.mouse, ctrl-o, $tk_std); an account name the page will not put in a command
+*              now says which character ($tk_badch).  '/' finds an account by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.ACCOUNTS      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least).  The top box counts the accounts (users, groups, others), the suspended ones and the sessions signed on.
+*   The list is every registered account but SDSYS: its name, its kind, whether it is suspended, the gates that are ON for it (read as TOOL.GATES reads them: the register and the Windows
+*   groups, through $tk_gates) and how many sessions are signed on in it.  The box at the foot shows the account under the cursor as !acc_os_info reports it (the Windows user and group, the
+*   routes, a group account's members), the gates that are on, and who is signed on in it.  The gate switches themselves are TOOL.GATES's; this page is the account.
+*
+*   WHAT IT RUNS.  Each through a box that shows the command and what it does, answered Run or Cancel (Cancel is what Enter chooses); the verbs ask for the administrator again and write
+*   their own audit lines:
+*     S   MODIFY.ACCOUNT name SUSPENDED or UNSUSPENDED    (whichever the account is not; a suspended account is refused at sign-on, by ssh and by the API; nothing changes in Windows)
+*     A   MODIFY.ACCOUNT group ADD user                    (a group account only: a Windows user joins its group; a question asks for the user)
+*     R   MODIFY.ACCOUNT group DELETE user                 (the same, taking one away)
+*     C   CREATE.ACCOUNT GROUP name NO.QUERY, CREATE.ACCOUNT OTHER name path NO.QUERY, and CREATE.ACCOUNT USER name {SSH|API|BOTH|NONE}, for which THE TERMINAL IS GIVEN TO THE VERB, because it
+*         asks for the new person's password at a prompt of its own that shows nothing; nothing typed there passes through this page, and you come back to the page when it ends
+*     X   DELETE.ACCOUNT name, after the account's name is typed; the terminal is given to the verb for its own question (it has no NO.QUERY and never goes down a pipe)
+*   A new account has every gate OFF as the verb makes it; turning one on is TOOL.GATES's.  SDSYS cannot be changed here.
+*
+*   Keys: Up, Down, PgUp, PgDn, Home, End; S, A, R, C, X as above; F5 reads again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_accounts
+$catalog $tool_accounts
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'modify.account create.account'                      ;* the commands this page may run through the routines (delete.account and create.account user are run by the verb on the terminal)
+   call $tk_open('tool.accounts', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.accounts')
+   gosub declare.layout
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'c', 'create', 'create', '', 1)
+   call $tk_keys('add', keys, 's', 'suspend', 'suspend', '', 1)
+   call $tk_keys('add', keys, 'a', 'add person', 'addperson', '', 1)
+   call $tk_keys('add', keys, 'r', 'take away', 'delperson', '', 1)
+   call $tk_keys('add', keys, 'x', 'delete', 'delete', '', 1)
+   call $tk_keys('add', keys, '/', 'find', 'find', '', 1)                  ;* 9 Nov 26 (S.186): '/' finds an account by typing (letters are this page's commands)
+   call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U1: Esc opens the menu bar (this page holds nothing of its own that Esc closes first)
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'create', '&Account', '&Create an account', '', '')
+   call $tk_keys('menu', keys, 'suspend', '&Account', '&Suspend or lift', '', '')
+   call $tk_keys('menu', keys, 'addperson', '&Account', '&Add a person to a group account', '', '')
+   call $tk_keys('menu', keys, 'delperson', '&Account', '&Take a person away', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Account', '&Delete the account', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'find', '&View', '&Find an account', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only refresh (an administrator's page: create, delete, suspend and the people are not offered without the
+   * owner's word); a proposal is carried out by the page's own key.  This page laid itself out first, so a line that took a row has the panes declared again.
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+   if aout then gosub declare.layout
+
+   ha ='  ' : fmt('Account', '20L') : fmt('Kind', '7L') : fmt('State', '11L') : fmt('Gates that are on', '41L') : fmt('Signed on', '10L') : 'Description'
+
+   an = 0 ; anm = '' ; akind = '' ; asusp = '' ; agates = '' ; asess = '' ; adesc = ''
+   nusers = 0 ; ngroups = 0 ; nothers = 0 ; nsusp = 0 ; nsess = 0
+   udata = ''
+   ci = 1 ; ta = 0
+   find.last = ''                                               ;* 9 Nov 26 (S.186): the text '/' asked for last
+   gen = 0
+   done = 0
+   msg = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, 'Accounts', '', '', mr)           ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, 'Accounts', msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, 'Accounts', nm, ao)          ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, 'Accounts', nm, 0, mr)       ;* F10, Alt and a letter, and Esc (nothing of this page's is open): the bar
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lchg)
+            gosub get.rects
+            gosub keep.in.view
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the machine says
+
+* Every registered account but SDSYS in name order, each with its kind, its suspension, the gates that are on, its description and the sessions signed on in it; the cursor goes back to its account
+read.all:
+   sel.a = ''
+   if an > 0 and ci >= 1 and ci <= an then sel.a = anm<ci>
+   names = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      select acc.f to 9
+      loop
+         readnext id from 9 else exit
+         if id # 'sdsys' then
+            locate id in names<1> by 'AL' setting lp else
+               ins id before names<lp>
+            end
+         end
+      repeat
+      close acc.f
+   end
+   call !listu(udata)
+   nsess = dcount(udata, @fm)
+   an = 0 ; anm = '' ; akind = '' ; asusp = '' ; agates = '' ; asess = '' ; adesc = ''
+   nusers = 0 ; ngroups = 0 ; nothers = 0 ; nsusp = 0
+   have.reg = 0
+   openpath @sdsys : @ds : 'accounts' to acc.f then have.reg = 1
+   for i = 1 to dcount(names, @fm)
+      call $tk_gates(names<i>, g, ainfo, gerr)
+      if gerr = '' then
+         an += 1
+         anm<an> = names<i>
+         akind<an> = ainfo<1>
+         asusp<an> = ainfo<2>
+         on.list = ''
+         for j = 1 to dcount(g, @fm)
+            if g<j, 2> = 1 then on.list := (if on.list = '' then '' else ' ') : g<j, 1>
+         next j
+         agates<an> = on.list
+         adesc<an> = ''
+         if have.reg then
+            read arec from acc.f, names<i> then adesc<an> = arec<ACC$DESCR>
+         end
+         ns = 0
+         for k = 1 to nsess
+            if udata<k, 9> = names<i> then ns += 1
+         next k
+         asess<an> = ns
+         begin case
+            case ainfo<1> = 'USER'
+               nusers += 1
+            case ainfo<1> = 'GROUP'
+               ngroups += 1
+            case 1
+               nothers += 1
+         end case
+         if ainfo<2> = 1 then nsusp += 1
+      end
+   next i
+   if have.reg then close acc.f
+   if ci > an then ci = an
+   if ci < 1 then ci = 1
+   if sel.a # '' then
+      for i = 1 to an
+         if anm<i> = sel.a then
+            ci = i
+            exit
+         end
+      next i
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout (S.88 L2).  The three boxes are the panes of the layout service, declared in the sizes of the reference layout (140 by 43, the body 138 by 39): the box at the top stays as
+* high as it is, and the rows a bigger window gives are shared by the list (twice) and the box under it (once, which shows more of what is known about the account).  A new $tk_open
+* (after the terminal was handed to a verb) has no panes, so the declaration is made again then.
+* Out: top (the counts), lst (every account), det (the account under the cursor), each .x .y .w .h; ttw, ltw, dtw (the text width of each box); VA (the account rows on the screen) and
+* DR (the rows of the box under the list).
+declare.layout:
+   ld = ''
+   ld<1> = 'counts' : @vm : 1 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   ld<2> = 'list' : @vm : 2 : @vm : 1 : @vm : 20 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 2 : @vm : 'stretch' : @vm : 1
+   ld<3> = 'detail' : @vm : 3 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, ld, perr)
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
+      stop
+   end
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'counts', lrc)
+   top.x = lrc<1, 1> ; top.y = lrc<1, 2> ; top.w = lrc<1, 3> ; top.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'list', lrc)
+   lst.x = lrc<1, 1> ; lst.y = lrc<1, 2> ; lst.w = lrc<1, 3> ; lst.h = lrc<1, 4>
+   call $tk_layout('pane', ctx, 'detail', lrc)
+   det.x = lrc<1, 1> ; det.y = lrc<1, 2> ; det.w = lrc<1, 3> ; det.h = lrc<1, 4>
+   ttw = top.w - 4
+   ltw = lst.w - 4
+   dtw = det.w - 4
+   VA = lst.h - 3                                               ;* the heading, the account rows and the border: 17 rows of 20
+   DR = det.h - 2                                               ;* the rows of the box under the list: 11 of 13
+   return
+
+* After a resize the rows scrolled off the top are not more than the accounts listed less the rows that fit
+keep.in.view:
+   if ta > an - VA then ta = an - VA
+   if ta < 0 then ta = 0
+   return
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,1 size cw2,chh
+   screen box at top.x,top.y size top.w,top.h title 'Accounts'
+   screen box at lst.x,lst.y size lst.w,lst.h title 'Every account'
+   screen box at det.x,det.y size det.w,det.h title 'The account under the cursor'
+   gosub draw.top
+   gosub redraw
+   return
+
+draw.top:
+   s = an : ' account' : (if an = 1 then '' else 's') : ': ' : nusers : ' user, ' : ngroups : ' group, ' : nothers : ' other.   Suspended: ' : nsusp : '.   Sessions signed on now: ' : nsess : '.'
+   screen text s[1, ttw - 6] at top.x + 2,top.y + 1 attr 'bold' width ttw - 6
+   screen text 'SDSYS, the administrator, is not listed and cannot be changed here. The gate switches are TOOL.GATES; a new account has every gate off.' at top.x + 2,top.y + 2 width ttw
+   screen text 'C creates an account.  X deletes one (its name is typed first).  S suspends the account under the cursor or lifts the suspension.' at top.x + 2,top.y + 3 width ttw
+   screen text 'A adds a person to a group account and R takes one away.  F5 reads again.' at top.x + 2,top.y + 4 width ttw
+   call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)
+   return
+
+redraw:
+   gosub draw.list
+   gosub draw.detail
+   return
+
+draw.list:
+   screen text ha at lst.x + 2,lst.y + 1 attr 'header' width ltw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VA then ta = ci - VA
+   if ta < 0 then ta = 0
+   for r = 1 to VA
+      kk = ta + r
+      s = ''
+      if kk <= an then
+         st.t = (if asusp<kk> = 1 then 'SUSPENDED' else 'active')
+         gtxt = agates<kk>
+         if gtxt = '' then gtxt = '(none)'
+         s = (if asusp<kk> = 1 then '* ' else '  ') : fmt(anm<kk>[1, 19], '20L') : fmt(downcase(akind<kk>), '7L') : fmt(st.t, '11L') : fmt(gtxt[1, 40], '41L') : fmt(asess<kk>, '10L') : adesc<kk>
+      end
+      rat = 'normal'
+      if kk = ci and kk <= an then rat = 'highlight'
+      screen text s[1, ltw] at lst.x + 2,lst.y + 1 + r attr rat width ltw
+   next r
+   return
+
+* The account under the cursor: what !acc_os_info says of it, the gates that are on, and who is signed on in it
+draw.detail:
+   for r = 1 to DR
+      screen text '' at det.x + 2,det.y + r width dtw
+   next r
+   if an = 0 or ci < 1 or ci > an then
+      screen text 'There is no account to show.' at det.x + 2,det.y + 1 width dtw
+      return
+   end
+   nme = anm<ci>
+   lines = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      read arec from acc.f, nme then
+         call !acc_os_info(nme, arec, info, ierr)
+         lines<-1> = nme : '   ' : downcase(akind<ci>) : (if asusp<ci> = 1 then '   SUSPENDED' else '   active') : '   path: ' : arec<ACC$PATH>
+         if ierr # '' then
+            lines<-1> = 'The account facts could not be read.'
+         end else
+            ln.s = ''
+            for k = 1 to dcount(info, @fm)
+               ln.s := (if ln.s = '' then '' else '   ') : info<k>
+            next k
+            call $tk_wrap(ln.s, dtw, pieces)
+            lines<-1> = pieces
+         end
+      end
+      close acc.f
+   end
+   gtxt = agates<ci>
+   lines<-1> = 'Gates that are on: ' : (if gtxt = '' then '(none)' else gtxt)
+   sn = ''
+   for k = 1 to nsess
+      if udata<k, 9> = nme then sn := (if sn = '' then '' else ', ') : 'user ' : udata<k, 1> : ' (' : udata<k, 6> : ')'
+   next k
+   lines<-1> = 'Signed on in it: ' : (if sn = '' then 'nobody' else sn)
+   for r = 1 to dcount(lines, @fm)
+      if r <= DR then
+         lr = lines<r>
+         screen text lr[1, dtw] at det.x + 2,det.y + r width dtw
+      end
+   next r
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         if ci > 1 then ci -= 1
+         gosub redraw
+      case nm = 'down'
+         if ci < an then ci += 1
+         gosub redraw
+      case nm = '/'                         ;* S.186: the next account whose name holds the text typed ($tk_findrow)
+         call $tk_findrow(anm, ci, find.last, fpos)
+         if fpos > 0 then ci = fpos
+         if fpos < 0 then msg = sysmsg(15045, find.last)
+         gosub redraw
+      case nm = 'pgup'
+         ci -= VA
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VA
+         if ci > an then ci = an
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         ci = an
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'c'
+         gosub do.create
+      case nm = 's'
+         gosub do.suspend
+      case nm = 'a'
+         sub.word = 'add'
+         gosub do.person
+      case nm = 'r'
+         sub.word = 'delete'
+         gosub do.person
+      case nm = 'x'
+         gosub do.delete
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, 'Accounts', std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.accounts.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, 'Accounts', mev, '', mr)                  ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, 'Accounts', mev, ap)                         ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, top.x + top.w - 5, top.y + 1, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.accounts.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= lst.x + 2 and mx <= lst.x + lst.w - 3 and my >= lst.y + 2 and my <= lst.y + 1 + VA then
+         if ta + my - lst.y - 1 <= an then
+            ci = ta + my - lst.y - 1
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the commands
+
+* Is word a safe single word for the routines (a-z, 0-9, dot, dash, underscore, 1 to 32 characters)?  plain is 1 or 0
+plain.word:
+   plain = (word # '' and len(word) <= 32)
+   for pi = 1 to len(word)
+      if index('abcdefghijklmnopqrstuvwxyz0123456789.-_', word[pi, 1], 1) = 0 then plain = 0
+   next pi
+   return
+
+* sent and el are the sentence and its explanation, typed is null or the word to type; the box is shown, the command run when Run was chosen through $tk_run, everything read again and the verb's words shown
+confirm.and.run:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      if use.x then
+         call $tk_runx(allow, sent, out, stat, err)
+      end else
+         call $tk_run(allow, sent, out, stat, err)
+      end
+      gosub read.all
+      gosub draw.all
+      if err # '' then
+         msg = err
+      end else
+         msg = sent[1, 60] : ' ran (status ' : stat : ')'
+         lastl = ''
+         for k = 1 to dcount(out, @fm)
+            if trim(out<k>) # '' then lastl = trim(out<k>)
+         next k
+         if lastl # '' then msg = msg : ': ' : lastl
+      end
+   end else
+      msg = cmsg
+   end
+   return
+
+* The same box, but when Run is chosen the TERMINAL is given to the verb (it asks its own questions, one of them for a password that is not shown), and the page is taken again afterwards
+confirm.and.hand.over:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   call $tk_close(ctx)
+   execute sent
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.accounts', 'admin', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* S.97 stage 2: the new context has no AI line yet; the account may have changed it in the command
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub declare.layout                                         ;* the new $tk_open has no panes
+   gosub read.all
+   gosub draw.all
+   msg = 'back from ' : sent[1, 40] : ': the list shows what is registered now'
+   return
+
+do.suspend:
+   if an = 0 or ci < 1 or ci > an then
+      msg = 'there is no account'
+      return
+   end
+   word = anm<ci>
+   gosub plain.word
+   if not(plain) then
+      call $tk_badch(word, bad.ch)                   ;* 9 Nov 26 (S.186): say which character
+      if bad.ch = '' then bad.ch = 'more than 32 characters'
+      msg = 'this account name has ' : bad.ch : ', which this page will not put in a command; use modify.account at the prompt'
+      return
+   end
+   use.x = 0
+   typed = ''
+   el = ''
+   if asusp<ci> = 1 then
+      sent = 'modify.account ' : anm<ci> : ' unsuspended'
+      el<-1> = 'The suspension of ' : anm<ci> : ' is lifted: the account can be signed on to again, by the console, ssh and the API. Nothing changes in Windows.'
+   end else
+      sent = 'modify.account ' : anm<ci> : ' suspended'
+      el<-1> = anm<ci> : ' is suspended: LOGIN, ssh and the API refuse it from now on. Sessions already signed on in it keep running until they end. Nothing changes in Windows, so lifting it later costs nothing.'
+   end
+   gosub confirm.and.run
+   return
+
+* sub.word is add or delete: a Windows user joins or leaves the group of the group account under the cursor
+do.person:
+   if an = 0 or ci < 1 or ci > an then
+      msg = 'there is no account'
+      return
+   end
+   if akind<ci> # 'GROUP' then
+      msg = anm<ci> : ' is not a group account: only a group account has people to add or take away'
+      return
+   end
+   word = anm<ci>
+   gosub plain.word
+   if not(plain) then
+      call $tk_badch(word, bad.ch)                   ;* 9 Nov 26 (S.186): say which character
+      if bad.ch = '' then bad.ch = 'more than 32 characters'
+      msg = 'this account name has ' : bad.ch : ', which this page will not put in a command; use modify.account at the prompt'
+      return
+   end
+   screen ask 'Windows user to ' : (if sub.word = 'add' then 'add to ' else 'take away from ') : anm<ci> : ' (a-z, 0-9, dot, dash and underscore)' width 40 value '' title 'People of a group account' returning pu else return
+   word = trim(pu)
+   gosub plain.word
+   if not(plain) then
+      msg = 'a user name has only a-z, 0-9, dot, dash and underscore, up to 32 characters'
+      return
+   end
+   use.x = 0
+   typed = ''
+   sent = 'modify.account ' : anm<ci> : ' ' : sub.word : ' ' : word
+   el = ''
+   if sub.word = 'add' then
+      el<-1> = word : ' joins the Windows group of ' : anm<ci> : ' and can then enter the account. The group is changed by the verb in this elevated session, as it always does it.'
+   end else
+      el<-1> = word : ' leaves the Windows group of ' : anm<ci> : ' and can no longer enter the account. Taking access away is always allowed.'
+   end
+   gosub confirm.and.run
+   return
+
+* C: the kind, the name, then what that kind needs; a USER account is made with the terminal given to the verb (its password prompt)
+do.create:
+   * S.88: one form with the four answers in view (it was three questions in a row); a refusal is said under the entries and the form stays
+   spec = 'Create an account' : @fm : '&Create' : @fm : ''
+   spec<-1> = 'kind' : @vm : 'Kind: user, group, other' : @vm : 10 : @vm : 10
+   spec<-1> = 'name' : @vm : 'Name (a-z 0-9 . - _)' : @vm : 34 : @vm : 32
+   spec<-1> = 'doors' : @vm : 'Doors: none ssh api both' : @vm : 10 : @vm : 10
+   spec<-1> = 'dir' : @vm : 'Directory (other only)' : @vm : 60 : @vm : 200
+   fv = 'user' : @fm : '' : @fm : 'none' : @fm : ''
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window'
+      return
+   end
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         return
+      end
+      kd = downcase(trim(fv<1>))
+      word = trim(fv<2>)
+      rt = downcase(trim(fv<3>))
+      pth = trim(fv<4>)
+      fbad = ''
+      fid = ''
+      begin case
+         case kd # 'user' and kd # 'group' and kd # 'other'
+            fbad = 'the kind is user, group or other' ; fid = 'kind'
+         case 1
+            gosub plain.word
+            if not(plain) then
+               fbad = 'an account name has only a-z, 0-9, dot, dash and underscore, up to 32 characters' ; fid = 'name'
+            end else
+               locate word in anm<1> setting px else px = 0
+               if px > 0 or word = 'sdsys' then
+                  fbad = word : ' is already an account' ; fid = 'name'
+               end else
+                  if kd = 'user' and rt # 'none' and rt # 'ssh' and rt # 'api' and rt # 'both' then
+                     fbad = 'the doors are none, ssh, api or both' ; fid = 'doors'
+                  end
+*                 A full Windows path written with forward slashes, as SD writes its own paths: a drive letter, a colon and '/'.  Not a backslash: $tk_runx refuses one (it
+*                 lets no word carry an escape or a quote), so the page asks for the form the command will accept.
+                  if kd = 'other' and (not(alpha(pth[1, 1])) or pth[2, 1] # ':' or pth[3, 1] # '/' or index(pth, '\', 1) > 0 or index(pth, ' ', 1) > 0 or len(pth) > 200) then
+                     fbad = 'give a full path with forward slashes, such as C:/Data, with no space in it' ; fid = 'dir'
+                  end
+               end
+            end
+      end case
+      if fbad = '' then exit
+      call $tk_form('say', ctx, fbad, fid, '')
+   repeat
+   call $tk_form('close', ctx, '', '', '')
+   nn = word
+   use.x = 0
+   begin case
+      case kd = 'user'
+         sent = 'create.account user ' : nn : ' ' : rt
+         typed = ''
+         el = ''
+         el<-1> = 'A Windows user ' : nn : ' (denied the console and Remote Desktop) and the SD account are made, with every gate OFF. The terminal is given to the verb, which asks for the password of the new person (nothing is shown) and for your OK.'
+         el<-1> = 'Turning a gate on afterwards is TOOL.GATES. You come back to this page when the verb ends.'
+         gosub confirm.and.hand.over
+      case kd = 'group'
+         sent = 'create.account group ' : nn : ' no.query'
+         typed = ''
+         el = ''
+         el<-1> = 'A group account ' : nn : ' is made: a Windows group (sdg_' : nn : ') for its people and a directory for its files, with no Windows user of its own, so it can have no remote door and no gate that reaches the operating system.'
+         el<-1> = 'People are added to it afterwards with A.'
+         gosub confirm.and.run
+      case 1
+         use.x = 1
+         sent = 'create.account other ' : nn : ' ' : pth : ' no.query'
+         typed = ''
+         el = ''
+         el<-1> = 'An account ' : nn : ' is made over the directory ' : pth : ', which is not changed. It has no Windows user and no Windows group of its own.'
+         gosub confirm.and.run
+         use.x = 0
+   end case
+   return
+
+* X: the account's name is typed, then the terminal is given to DELETE.ACCOUNT for its own question.  No REMOVE.HOME question: on Windows the verb removes the profile of a Windows
+* user SD made in any case (the keyword is accepted there and changes nothing).
+do.delete:
+   if an = 0 or ci < 1 or ci > an then
+      msg = 'there is no account'
+      return
+   end
+   word = anm<ci>
+   gosub plain.word
+   if not(plain) then
+      call $tk_badch(word, bad.ch)                   ;* 9 Nov 26 (S.186): say which character
+      if bad.ch = '' then bad.ch = 'more than 32 characters'
+      msg = 'this account name has ' : bad.ch : ', which this page will not put in a command; use delete.account at the prompt'
+      return
+   end
+   sent = 'delete.account ' : anm<ci>
+   typed = anm<ci>
+   el = ''
+   el<-1> = 'DELETE ' : anm<ci> : ': its directory, its Windows group and its register record are removed' : (if akind<ci> = 'USER' then ', and the Windows user and its profile too when SD made it (one SD did not make is left in place and the verb says so)' else '') : '.'
+   el<-1> = 'There is no taking this back. The terminal is given to the verb, which asks once to confirm; then you come back to this page.'
+   gosub confirm.and.hand.over
+   return
+
+end
+
+* END-CODE
