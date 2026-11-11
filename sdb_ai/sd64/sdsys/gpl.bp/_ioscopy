@@ -1,0 +1,78 @@
+* _IOSCOPY
+* !IOSCOPY() - copy an operating system file or directory tree
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 0cbb8b93, abcda0c1 (S.63), d7cda813 (S.64), d049d8bb (RELEASE_1.1 146): Copy-Item -Recurse in
+*               place of cp -R; the gates as on Linux.
+* 13 Oct 26 dm  S.63: asks the OS-access gate (K$PATH.OK) for both paths; status -4 as in _OSCOPY.
+* 12 Oct 26 dm  1.2-0 openQM ref 369.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !IOSCOPY(source, target, status)
+*
+* Copies a file, or a directory and everything under it, to the target,
+* replacing what is in the way.  If the target is an existing directory the
+* source is copied INTO it.  See _OSCOPY for the status values.  Runs with
+* the permissions of the user.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine ioscopy(source, target, status)
+$catalog !IOSCOPY
+
+$include keys.h
+$include int$keys.h
+
+   status = 0
+   if source = '' or target = '' or index(source, "'", 1) or index(target, "'", 1) then
+      status = -1
+      return
+   end
+* 13 Oct 26 dm - S.63: asked as the account, for both paths, before the existence test (see _OSCOPY).
+   if not(kernel(K$PATH.OK, source)) or not(kernel(K$PATH.OK, target)) then
+      status = -4
+      return
+   end
+* 17 Oct 26 dm - S.64: a copy INTO a program file, a dictionary or a VOC is a change to it and needs the gate (the target only).
+   if not(kernel(K$EDIT.OS.OK, target)) then
+      status = -4
+      return
+   end
+   if not(ospath(source, OS$EXISTS)) then
+      status = -2
+      return
+   end
+
+* 10 Nov 26 Windows port: Copy-Item -Recurse, as cp -R: a directory copied to an existing directory goes INTO it.  Quoting as in _OSCOPY.
+*   The paths go to PowerShell as Windows spells them, so the file copied is the file the gates were asked about (see _OSCOPY).
+   wsource = kernel(K$WINPATH, source)
+   wtarget = kernel(K$WINPATH, target)
+   if wsource = '' or wtarget = '' or index(wsource, "'", 1) or index(wtarget, "'", 1) then
+      status = -1
+      return
+   end
+   out = ''
+   os.execute "try { Copy-Item -LiteralPath '" : wsource : "' -Destination '" : wtarget : "' -Recurse -Force -ErrorAction Stop } catch { exit 1 }" capturing out
+   status = os.error()
+   return
+end
+
+* END-CODE

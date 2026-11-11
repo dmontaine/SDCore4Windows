@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  OSCOPY COPIES AN OPERATING SYSTEM FILE (FROM SD CORE FOR LINUX).
+
+             What        - OSCOPY source target {OVERWRITE | APPEND} copies one operating system file, named by its
+                           path. It will not replace a target that exists unless you say OVERWRITE, and APPEND adds
+                           the source to the end of the target. !OSCOPY(source, target, mode, status) is the same for
+                           programs (mode 0, 1 or 2), and !IOSCOPY(source, target, status) copies a file or a whole
+                           directory tree. The copy is done by Windows with your own permissions.
+             Why         - SD Core for Linux has it, and the two are kept the same.
+             Does NOT    - Reach outside the account's own directory for an account without os-on (SDSYS gives it:
+                           modify.account name os-on), copy into a program file, a dictionary or a VOC for a person
+                           without the edit switch for it, or take a path with a single quote in it.
+
 10 Nov 26  A FAILED OPENSEQ NO LONGER LEAVES ITS RECORD LOCK BEHIND (FROM SD CORE FOR LINUX).
 
              What        - When OPENSEQ took the lock on a record and then failed (OVERWRITE of a file whose old content

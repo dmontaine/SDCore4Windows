@@ -1,0 +1,90 @@
+* OSCOPYA
+* OSCOPY command
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 0cbb8b93 and abcda0c1 (RELEASE_1.1 146); messages 11061-11064 and 11180 are 12066-12069 and 12185.
+* 13 Oct 26 dm  S.63: !OSCOPY refuses a path outside the account for an account without OS.EXECUTE (status -4);
+*               this verb says so in 11180.
+* 12 Oct 26 dm  1.2-0 openQM ref 517.  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   OSCOPY source target {OVERWRITE | APPEND}
+*
+* Copies an operating system file.  Without an option it will not replace a
+* target that exists; OVERWRITE replaces it and APPEND adds the source to the
+* end of it.  A directory is not copied (see !IOSCOPY for that).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $oscopy
+$catalog $oscopya
+
+$include err.h
+$include keys.h
+$include parser.h
+
+   parser = "!PARSER"
+
+   @system.return.code = -ER$ARGS      ;* Preset for command format errors
+
+   mode = 0
+   paths = ''
+
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
+
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case upcase(token) = 'OVERWRITE'
+            mode = 1
+         case upcase(token) = 'APPEND'
+            mode = 2
+         case 1
+            paths<-1> = token
+      end case
+   repeat
+
+   if dcount(paths, @fm) # 2 then stop sysmsg(2018, convert(@fm, ' ', paths)) ;* Unexpected token (xx)
+
+   source = paths<1>
+   target = paths<2>
+
+   call !OSCOPY(source, target, mode, status)
+
+   @system.return.code = status
+   begin case
+      case status = 0
+         display sysmsg(12066, source, target) ;* xx copied to xx
+      case status = -2
+         display sysmsg(12069, source) ;* Source xx not found
+      case status = -3
+         display sysmsg(12068, target) ;* Target xx already exists: give OVERWRITE or APPEND
+      case status = -4
+         display sysmsg(12185, @who) ;* %1 has no OS access, so a file or directory outside its own account cannot be reached
+      case 1
+         display sysmsg(12067, source, target, status) ;* Cannot copy xx to xx (status xx)
+   end case
+
+   return
+end
+
+* END-CODE

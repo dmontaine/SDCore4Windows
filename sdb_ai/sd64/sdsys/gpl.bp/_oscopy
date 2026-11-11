@@ -1,0 +1,116 @@
+* _OSCOPY
+* !OSCOPY() - copy an operating system file, optionally appending
+* Copyright (c) 2026 SD Core for Linux, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 0cbb8b93 (12 Oct), abcda0c1 (S.63), d7cda813 (S.64), d049d8bb (S.96 M6; the S.67 journal
+*               call is not carried, the master copies having been retired): RELEASE_1.1 146.  OS.EXECUTE runs PowerShell here, so
+*               the copy is Copy-Item and the append a .NET byte append (binary safe); the gates are asked as on Linux, as the account,
+*               for both paths and before the existence test.  Messages are Linux's + 1005.
+* 13 Oct 26 dm  S.63: asks the OS-access gate (K$PATH.OK) for both paths; status -4 is a path outside the account
+*               for an account without OS.EXECUTE.  A measured !OSCOPY by such an account read AND wrote files
+*               outside its directory.
+* 12 Oct 26 dm  1.2-0 openQM refs 517 (append) and 369 (iOSCOPY, the directory form).  The syntax is SD's own.
+* END-HISTORY
+*
+*
+* START-DESCRIPTION:
+*
+*   CALL !OSCOPY(source, target, mode, status)
+*   CALL !IOSCOPY(source, target, status)
+*
+* !OSCOPY copies one operating system file.  Mode 0 refuses if the target
+* exists, 1 replaces it, 2 appends the source to the end of it (the target
+* is made if it is not there).  !IOSCOPY copies a file or a whole directory
+* tree, replacing what is in the way; a directory is copied INTO the target
+* if the target is an existing directory.
+*
+* Status is 0 when it worked.  -1 is a path that is null or holds a single
+* quote, -2 a source that is not there, -3 a target that exists (mode 0),
+* -4 a path outside the account's own directory for an account that has not
+* been given OS.EXECUTE (modify.account name os-on), and anything else the
+* status of the copy command.  Both run with the permissions of the user,
+* like OS.EXECUTE, and are asked the same question.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$no.xref
+subroutine oscopy(source, target, mode, status)
+$catalog !OSCOPY
+
+$include keys.h
+$include int$keys.h
+
+   status = 0
+   gosub check.paths
+   if status # 0 then return
+
+   if mode = 0 and ospath(target, OS$EXISTS) then
+      status = -3
+      return
+   end
+
+* 10 Nov 26 Windows port: PowerShell in place of cp and cat.  Both paths are inside single quotes, where PowerShell
+*   expands nothing ($ and the backquote are literal), and a single quote was refused above.  -LiteralPath and the .NET
+*   calls take the name as it is (no wildcards).  A failure is a terminating error that the catch turns into exit 1, so
+*   os.error() is not 0.
+*   PowerShell is given the path as Windows spells it (kernel(K$WINPATH), absolute), which is the file the gates above
+*   were asked about: SD reads /x/y from the runtime's root and PowerShell would read it from the drive's, so the name
+*   as typed could be vetted as one file and copied as another.  A path the runtime cannot convert is refused (-1).
+   wsource = kernel(K$WINPATH, source)
+   wtarget = kernel(K$WINPATH, target)
+   if wsource = '' or wtarget = '' or index(wsource, "'", 1) or index(wtarget, "'", 1) then
+      status = -1
+      return
+   end
+
+   begin case
+      case mode = 2
+         cmd = "try { $b = [System.IO.File]::ReadAllBytes('" : wsource : "'); "
+         cmd := "$s = [System.IO.File]::Open('" : wtarget : "', [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write); "
+         cmd := "try { $s.Write($b, 0, $b.Length) } finally { $s.Close() } } catch { exit 1 }"
+      case 1
+         cmd = "try { Copy-Item -LiteralPath '" : wsource : "' -Destination '" : wtarget : "' -Force -ErrorAction Stop } catch { exit 1 }"
+   end case
+
+   out = ''
+   os.execute cmd capturing out
+   status = os.error()
+   return
+
+check.paths:
+   if source = '' or target = '' or index(source, "'", 1) or index(target, "'", 1) then
+      status = -1
+   end else
+* 13 Oct 26 dm - S.63.  This program is $internal, so the kernel does not ask the account's gate on its behalf and
+*   the copy runs with the permissions of the operating-system user.  It is asked here, as the account, for BOTH paths
+*   and BEFORE the existence test, so that -2 does not tell an account without OS access which files exist elsewhere.
+      if not(kernel(K$PATH.OK, source)) or not(kernel(K$PATH.OK, target)) then
+         status = -4
+      end else if not(kernel(K$EDIT.OS.OK, target)) then
+*        17 Oct 26 dm - S.64: a copy INTO a program file, a dictionary or a VOC (any component of the target below the account) is a
+*        change to it and needs the gate.  Asked for the target only: reading them is not a change.
+         status = -4
+      end else
+         if not(ospath(source, OS$EXISTS)) then
+            status = -2
+         end
+      end
+   end
+   return
+end
+
+* END-CODE
