@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 11 Nov 26 Windows port - from Linux 09008b69: request 72 is reserved for Solo's ssh-key request (a comment on the dispatch list only; Solo had used 49 for it since 30 Sep 26
+*               and the owner ruled that Solo follows this template, 49 being QMRevision here).  Core's next request is 73.
 * 8 Nov 26 Windows port - from Linux 7c910a16 (S.169): findings of a BASIC review.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): QMEvaluate and QMEvalConv refuse a C item with message 12347, whose text no longer lists C (the type list in vb.evaluate is DASI).
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the C dictionary item type is gone: dcomp says message 12998 and makes no object code; the other programs no longer treat a C item as an I-type.
@@ -649,7 +651,7 @@ loop
    vb.writeseqkey,    ;*  68   Write a record under the file's next sequential id (QMWriteSeqKey)
    vb.writeuseqkey,   ;*  69   The same, keeping the update lock (QMWriteuSeqKey)
    vb.fileadmin,      ;*  70   A verb run on the server for the login: analyse, configure, index, create, delete (S.73 item 3)
-   vb.fcontrol,       ;*  71   FCONTROL(file, key, value) (S.73 item 3)
+   vb.fcontrol,       ;*  71   FCONTROL(file, key, value) (S.73 item 3).  72 is RESERVED: Solo's ssh-key request (owner 11 Nov 26); Core's next is 73
    vb.illegal.action
 
    st = status()
