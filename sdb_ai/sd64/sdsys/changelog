@@ -42,15 +42,19 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
 10 Nov 26  RUN.IN, NO.CATALOG AND TOOL.ENTRIES (FROM SD CORE FOR LINUX).
 
              What        - RUN.IN account command runs one of five commands (basic, catalog, decatalog,
-                           delete.catalog, compile.dict) inside another registered account as the administrator,
-                           and comes back to SDSYS whatever happens. BASIC takes NO.CATALOG, which compiles and runs
+                           delete.catalog, compile.dict) inside another registered account for the administrator,
+                           and comes back to SDSYS whatever happens. The command itself does not run as the
+                           administrator: only the one edit gate it needs is on, and SH and OS.EXECUTE are off.
+                           BASIC takes NO.CATALOG, which compiles and runs
                            no $CATALOG directive; RUN.IN always gives it. TOOL.ENTRIES lists every account's VOC
                            entries, dictionary items and programs, and edits, deletes and compiles each in its own
                            account; G changes every row shown and U puts the last change back.
              Why         - SD Core for Linux has it, and the two are kept the same.
              Does NOT    - Run any other command, or debug (not on Windows yet). It refuses a command whose word is
                            not SD's own VOC entry in that account, a file it would write outside the account, a file
-                           it opens that has a trigger, and source with $EXECUTE.
+                           it opens that has a trigger, and source with $EXECUTE. While the command runs, an include
+                           file or dictionary outside the account, LOGTO and a Q-pointer out of the account are
+                           refused.
 
 10 Nov 26  TOOL.ACCOUNTS: THE ACCOUNTS ON ONE SCREEN (FROM SD CORE FOR LINUX).
 

@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): in a compile RUN.IN started (ri.active), $INCLUDE / INCLUDE, $DICT and FILE refuse a file
+*               that lies outside the account's own directory and is not SYSCOM (message 15072, Linux 14072; routine ri.outside).  The compiler is $internal,
+*               so nothing else holds its opens to the account, and here the session's token is elevated whatever the administrator flag says.
 * 10 Nov 26 Windows port (S.96; RELEASE_1.1 201): $EXECUTE is refused while RUN.IN runs the compile (it joins the /$runin/ common to know); message 12568.
 * 8 Nov 26 Windows port - from Linux 218e2e9b: EXECUTE, PHANTOM and OS.EXECUTE take SILENT (for programs moved from openQM): the output is captured into the temporary __silent and thrown away.  Refused with CAPTURING (2911), which it is a form of.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): the C dictionary item type is gone from the compiler: the is.ctype argument of $BCOMP (callers: basic, bbproc, gplbld/COMP_PCODE), HDR.CTYPE, err.ctype and message 2994.
@@ -3157,11 +3160,26 @@ proc.directive:
          end else if look.ahead.token = TKN.END then
             gosub err.syntax
          end else
-            open 'DICT', look.ahead.token.string to dict.f else
-               open 'DICT', u.look.ahead.token.string to dict.f else
+* 10 Nov 26 Windows port - from Linux ca137620 (S.213): opened into a variable of its own first, so that a dictionary RUN.IN's compile may not use is never in dict.f
+*   (the compiler reads dictionary items through dict.f and writes a compiled I-type back to it).
+            ri.opened = @true
+            open 'DICT', look.ahead.token.string to ri.dict.f else
+               open 'DICT', u.look.ahead.token.string to ri.dict.f else
+                  ri.opened = @false
                   err.msg = sysmsg(2012) ;* Cannot open dictionary
                   gosub error
                end
+            end
+            if ri.opened then
+               ri.chk.path = fileinfo(ri.dict.f, FL$PATH)
+               gosub ri.outside
+               if ri.out then
+                  err.msg = sysmsg(15072, 'dict ' : look.ahead.token.string) ;* %1 is outside the account: a compile started by run.in reads ... in the account and syscom only
+                  gosub error
+               end else
+                  dict.f = ri.dict.f
+               end
+               ri.dict.f = 0
             end
          end
 
@@ -3436,6 +3454,17 @@ open.include.record:
       end
    end
 
+* 10 Nov 26 Windows port - from Linux ca137620 (S.213): in a compile RUN.IN started, an include file outside the account (a pointer in the account's VOC leads there) is
+*   not read: its text would be compiled into the account's program by a session whose token is elevated.  Always an error, even where a missing file is ignored.
+   ri.chk.path = fileinfo(incl.file, FL$PATH)
+   gosub ri.outside
+   if ri.out then
+      incl.file = 0
+      err.msg = sysmsg(15072, include.file.name) ;* %1 is outside the account: a compile started by run.in reads include records and dictionaries in the account and syscom only
+      gosub error
+      return
+   end
+
    level += 1
    read include.record(level) from incl.file, include.record.name else
       read include.record(level) from incl.file, downcase(include.record.name) then
@@ -3451,8 +3480,25 @@ open.include.record:
          end
          include.record.name = upcase(include.record.name)
       end
-   end    
+   end
 
+   return
+
+*****************************************************************************
+* RI.OUTSIDE  -  May a compile RUN.IN started read this file?  (10 Nov 26 Windows port - from Linux ca137620, S.213)
+*
+* In: ri.chk.path, the pathname of an open include file or dictionary.  Out: ri.out, true when it must not be used.  Never true outside RUN.IN (ri.active is 0).
+* Inside it, a file is allowed when it lies in the account's own directory (@path: RUN.IN has entered the account) or is SD's SYSCOM, where the standard include
+* records are.  The kernel answers the geometry (K$PATH.IN, os_path_inside: both paths folded into one namespace, case-insensitive, a surviving .. refused).
+* SYSCOM is asked as "would a record of this file be inside the SYSCOM directory", which is true of that directory and of nothing beside it.
+
+ri.outside:
+   ri.out = @false
+   if ri.active then
+      if not(kernel(K$PATH.IN, @path : @fm : ri.chk.path)) then
+         if not(kernel(K$PATH.IN, @sdsys : @ds : 'syscom' : @fm : ri.chk.path : @ds : 'x')) then ri.out = @true
+      end
+   end
    return
 
 *****************************************************************************
@@ -8944,6 +8990,15 @@ st.file:
             err.msg = sysmsg(7018, token.string) ;* Cannot open dictionary for file %1
             goto error
          end
+      end
+
+* 10 Nov 26 Windows port - from Linux ca137620 (S.213): as $DICT, for a compile RUN.IN started
+      ri.chk.path = fileinfo(file.d(0), FL$PATH)
+      gosub ri.outside
+      if ri.out then
+         file.d(0) = 0
+         err.msg = sysmsg(15072, 'dict ' : file.statement.name) ;* %1 is outside the account: a compile started by run.in reads include records and dictionaries in the account and syscom only
+         goto error
       end
 
       locate upcase(file.statement.name) in file.refs<1> setting pos then

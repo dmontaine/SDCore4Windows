@@ -15,6 +15,9 @@ WINDOWS PORT, 10 Nov 26 (from Linux 8fc6b4e1 / d049d8bb at 074397f6; RELEASE_1.1
   - W1-W6 are Windows-only: the checks made in the account before the command runs (VOC entries SD supplies, paths inside the account, no trigger), SDSYS's VOC
     entries read before anything changes, $EXECUTE refused in $BCOMP while ri.active is set, $VOC.PARSER reloaded by the safety net, the register read upper
     case and no EUID change.
+  - 10 Nov 26 (from Linux ca137620, S.213; RELEASE_1.1 230): R39-R51 as Linux numbers them, less R37 and R38 (Linux's ri.own.words against NEWVOC; Windows' W2,
+    12565, is the same check against SDSYS's VOC and is kept) and R47 (Windows' $EXECUTE refusal is W5).  Linux 14072 and 14073 are 15072 and 15073 here (Linux's
+    second block lands at +1000).  R42 is asked of RUN.IN's own code only: LOGTO out of SDSYS drops the flag here too, and R50 keeps LOGTO out of a run.
 
 ***WHAT THIS IS AND WHAT IT IS NOT.*** It reads sdsys/gpl.bp/cproc (int.runin, revert.account, load.account.switches, the abort branch and the /runin/ common), the
 VOC record and the messages as TEXT.  IT CANNOT SAY THE VERB REFUSES ANYBODY OR THAT THE SESSION COMES BACK: that is sandbox-runin.py.  What it holds is the order the
@@ -41,7 +44,9 @@ NEWVOC = os.path.join(SD64, "sdsys", "newvoc")
 MESSAGES = os.path.join(SD64, "sdsys", "messages")
 SOLO_MESSAGES = os.path.join(SD64, os.pardir, os.pardir, os.pardir, "SDCore4WindowsSolo", "sdb_ai", "sd64", "sdsys", "messages")
 BCOMP = os.path.join(SD64, "sdsys", "gpl.bp", "bcomp")
+VOCREF = os.path.join(SD64, "sdsys", "gpl.bp", "_voc_ref")
 WINDOWS_MESSAGES = [12565, 12566, 12567, 12568]
+S213_MESSAGES = [15072, 15073]                            # 10 Nov 26: Linux 14072 (an include or dictionary outside the account) and 14073 (LOGTO during a run)
 
 COMMANDS = ["basic", "catalog", "decatalog", "delete.catalog", "compile.dict"]
 SWITCHES = ["K$SH", "K$OS.EXEC", "K$SD.ACCOUNTS", "K$NET", "K$SHARED.READ", "K$SHARED.WRITE"]
@@ -179,7 +184,8 @@ def checks(src, voc_text, newvoc_names, extra=None):
     ck("R17 revert.account clears the flag FIRST (a failure below it must not run it twice)", bool(rev) and rev[0][1] == "revert.account:" and rev[1][1] == "ri.active = 0",
        "%s" % (rev[:2],))
     rtxt = "\n".join(s for n, s in rev)
-    order_r = re.findall(r"void kernel\((K\$[A-Z.]+),\s+ri\.sw<(\d)>\)", rtxt)
+    all_r = re.findall(r"void kernel\((K\$[A-Z.]+),\s+ri\.sw<(\d+)>\)", rtxt)
+    order_r = [(k, i) for k, i in all_r if k in SWITCHES]        # 10 Nov 26 (S.213, as Linux): the edit gates and the flag are ri.sw<7..10>, held by R44
     ck("R18 it restores the six switches from ri.sw in the order they were kept", [k for k, i in order_r] == SWITCHES and [i for k, i in order_r] == list("123456"), "%s" % order_r)
     kept = re.findall(r"kernel\((K\$[A-Z.]+), -1\)", next((s for n, s in run if s.startswith("ri.sw = ")), ""))
     ck("R19 ... and that is the order int.runin kept them in", kept == SWITCHES, "%s" % kept)
@@ -284,6 +290,85 @@ def checks(src, voc_text, newvoc_names, extra=None):
        "read acc.record from acc.f, upcase(ri.acct) else acc.record = ''" in rtxt_run and "who = upcase(ri.acct)" in rtxt_run
        and "EUID" not in rtxt_run.upper() and "EUID" not in "\n".join(s for n, s in rev).upper())
     ck("W8 the Windows-only messages exist", all(os.path.isfile(os.path.join(MESSAGES, str(n))) for n in WINDOWS_MESSAGES))
+
+    # ---- S.213 (10 Nov 26, from Linux ca137620; RELEASE_1.1 230): the command does not run as the administrator, and its reads stay in the account ----------
+    k7 = first(run, "ri.sw<7> = kernel(K$VOC.EDIT, -1)")
+    k10 = first(run, "ri.sw<10> = kernel(K$ADMINISTRATOR, -1)")
+    k7s = next((s for n, s in run if n == k7), "")
+    ck("R39 (B) the three edit gates and the administrator flag are kept in ri.sw<7> to ri.sw<10>, after the six and before the flag ri.active is set",
+       None not in (k7, k10, A["save_sw"], A["active"]) and A["save_sw"] < k7 <= k10 < A["active"] and "ri.sw<8> = kernel(K$BP.EDIT, -1)" in k7s and "ri.sw<9> = kernel(K$DICT.EDIT, -1)" in k7s,
+       "save_sw %s k7 %s k10 %s active %s" % (A["save_sw"], k7, k10, A["active"]))
+    nar = [s for n, s in section(lines, "ri.narrow:", "ri.plain.word:")]
+    want_nar = ["ri.narrow:", "void kernel(K$VOC.EDIT,  0)",
+                "void kernel(K$BP.EDIT,   (ri.cmd = 'basic') or (ri.cmd = 'catalog') or (ri.cmd = 'decatalog') or (ri.cmd = 'delete.catalog'))",
+                "void kernel(K$DICT.EDIT, (ri.cmd = 'compile.dict'))", "void kernel(K$SH, 0)", "void kernel(K$OS.EXEC, 0)", "void kernel(K$ADMINISTRATOR, 0)", "return"]
+    ck("R40 (B) ri.narrow is exactly: voc-edit off, bp-edit on for basic / catalog / decatalog / delete.catalog only, dict-edit on for compile.dict only, SH off, OS.EXECUTE off, the flag off LAST",
+       nar == want_nar, "%s" % nar)
+    g_nar = first(run, "gosub ri.narrow")
+    after_nar = next((n for n, s in run if g_nar is not None and n > g_nar), None)
+    ck("R41 (B) the flag is dropped once, on the line before the command runs (gosub ri.narrow, then gosub proc.sentence), after the account's switches were loaded",
+       None not in (g_nar, A["proc"], A["switches"]) and count(lines, "gosub ri.narrow") == 1 and after_nar == A["proc"] and A["switches"] < g_nar,
+       "narrow %s next %s proc %s switches %s" % (g_nar, after_nar, A["proc"], A["switches"]))
+    sets_run = [s for n, s in run + rev if re.search(r"kernel\(K\$ADMINISTRATOR,\s*(?!\s|-1\))", s)]
+    ck("R42 (B) in RUN.IN's own code the flag is set exactly twice: off in ri.narrow, back from ri.sw<10> in revert.account; it is never turned ON there",
+       sorted(sets_run) == sorted(["void kernel(K$ADMINISTRATOR, 0)", "void kernel(K$ADMINISTRATOR, ri.sw<10>)   ;* 10 Nov 26, S.213: LAST - see the note above"])
+       and not any("K$ADMINISTRATOR, 1" in s for n, s in run + rev), "%s" % sets_run)
+    lsw_txt = "\n".join(s for n, s in lsw)
+    ck("R43 (B) load.account.switches never turns SH or OS.EXECUTE on while a run is in progress (not(ri.active) and ...)",
+       "void kernel(K$SH,      not(ri.active) and (upcase(trim(acc.record<ACC$SH>)) = 'YES'))" in lsw_txt
+       and "void kernel(K$OS.EXEC, not(ri.active) and (upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES'))" in lsw_txt)
+    rv = [s for n, s in rev]
+    i_cd = next((i for i, s in enumerate(rv) if "OS$CD" in s), None)
+    i_flag = next((i for i, s in enumerate(rv) if "K$ADMINISTRATOR, ri.sw<10>" in s), None)
+    i_sw6 = next((i for i, s in enumerate(rv) if "K$SHARED.WRITE, ri.sw<6>" in s), None)
+    i_aud = next((i for i, s in enumerate(rv) if "'logto revert account='" in s), None)
+    ck("R44 (B) the way back fails closed: the three edit gates go back right after ri.active is cleared and before the first OS$CD; the flag goes back LAST, after the six switches",
+       len(rv) > 4 and rv[1:5] == ["ri.active = 0", "void kernel(K$VOC.EDIT,  ri.sw<7>)", "void kernel(K$BP.EDIT,   ri.sw<8>)", "void kernel(K$DICT.EDIT, ri.sw<9>)"]
+       and None not in (i_cd, i_flag, i_sw6, i_aud) and 4 < i_cd and i_sw6 < i_flag < i_aud, "%s / cd %s sw6 %s flag %s" % (rv[:5], i_cd, i_sw6, i_flag))
+    i_if = next((i for i, (n, s) in enumerate(net) if s == "if ri.active then"), None)
+    ck("R45 (B) the abort branch calls revert.account FIRST inside its test of the flag (nothing runs between), so an aborted command gets the same way back",
+       i_if is not None and i_if + 1 < len(net) and net[i_if + 1][1] == "gosub revert.account")
+    lg_if = first(logto, "if ri.active then")
+    lg_msg = first(logto, "display sysmsg(15073, ri.account)")
+    lg_aud = first(logto, "' reason=logto')")
+    lg_name = first(logto, "display sysmsg(5160)")
+    lg_after = [n for n, s in logto if lg_if is not None and n > lg_if and ("sdsys" in s.lower() or "ON.LOGTO" in s.upper() or "OS$CD" in s)]
+    ck("R50 LOGTO is refused while a run is in progress (15073, audited reason=logto): right after the account name is read, before the sdsys test, ON.LOGTO and any directory change",
+       None not in (lg_if, lg_msg, lg_aud, lg_name) and lg_name < lg_if < lg_msg < lg_aud and lg_aud - lg_if <= 4 and lg_after and min(lg_after) > lg_aud
+       and first(logto, "unwinding = 2", lg_aud) is not None, "name %s if %s msg %s audit %s later %s" % (lg_name, lg_if, lg_msg, lg_aud, lg_after[:1]))
+    if extra is not None and "bcomp" in extra and "_voc_ref" in extra:
+        bc = code(extra["bcomp"])
+        ro = [s for n, s in section(bc, "ri.outside:", "get.token:")]
+        n_calls = count(bc, "gosub ri.outside")
+        pre = [bc[i - 1][1] for i, (n, s) in enumerate(bc) if s == "gosub ri.outside" and i > 0]
+        oi = section(bc, "open.include.record:", "ri.outside:")
+        oi_chk = first(oi, "ri.chk.path = fileinfo(incl.file, FL$PATH)")
+        oi_lvl = first(oi, "level += 1")
+        dtxt = "\n".join(s for n, s in bc)
+        ck("R48 (C) an include file, the $dict dictionary and a FILE statement's dictionary are each asked of ri.outside (three calls, each just after the file's path is read), "
+           "which refuses only under ri.active a file outside @path and SYSCOM (15072); the include is asked before it is read, and dict.f takes the dictionary only when it passed",
+           n_calls == 3 and all(p.startswith("ri.chk.path = fileinfo(") and p.endswith("FL$PATH)") for p in pre)
+           and ro == ["ri.outside:", "ri.out = @false", "if ri.active then", "if not(kernel(K$PATH.IN, @path : @fm : ri.chk.path)) then",
+                      "if not(kernel(K$PATH.IN, @sdsys : @ds : 'syscom' : @fm : ri.chk.path : @ds : 'x')) then ri.out = @true", "end", "end", "return"]
+           and None not in (oi_chk, oi_lvl) and oi_chk < oi_lvl and dtxt.count("sysmsg(15072") == 3 and "end else\ndict.f = ri.dict.f" in dtxt,
+           "calls %d, before %s, include check %s level %s, outside %s" % (n_calls, pre, oi_chk, oi_lvl, ro))
+        vr = code(extra["_voc_ref"])
+        vcom = [s for n, s in vr if re.match(r"common /\$?runin/", s)]
+        ccom2 = [s for n, s in lines if re.match(r"common /\$?runin/", s)]
+        q = section(vr, "parse.as.q.pointer:", "check.q.hop:")
+        q_reg = first(q, "q.registered = @true")
+        q_if = first(q, "if ri.active then", q_reg or 0)
+        q_test = first(q, "if not(q.registered and downcase(q.named) = ri.account) then", q_if or 0)
+        q_perm = first(q, "set.status ER$PERM", q_test or 0)
+        q_hop = first(q, "gosub check.q.hop")
+        ck("R51 _voc_ref joins /$runin/ as CPROC does, and in the Q branch, after the register is read and BEFORE check.q.hop, a run lets a Q-pointer lead only into the run's own account (ER$PERM)",
+           vcom == ccom2 and len(vcom) == 1 and None not in (q_reg, q_if, q_test, q_perm, q_hop) and q_reg < q_if < q_test < q_perm < q_hop and q_test - q_if == 1,
+           "common %s, reg %s if %s test %s perm %s hop %s" % (vcom, q_reg, q_if, q_test, q_perm, q_hop))
+        m72 = extra.get("msg15072", "")
+        m73 = extra.get("msg15073", "")
+        ck("R49 the two new messages exist: 15072 takes the file (%1) and names run.in and syscom, 15073 takes the account (%1) and names logto and run.in; both end in a newline",
+           "%1" in m72 and "run.in" in m72 and "syscom" in m72 and m72.endswith("\n") and "%1" in m73 and "logto" in m73 and "run.in" in m73 and m73.endswith("\n"),
+           "%r / %r" % (m72, m73))
     return out
 
 
@@ -297,7 +382,8 @@ def load():
         voc = f.read()
     names = set(os.listdir(NEWVOC)) if os.path.isdir(NEWVOC) else set()
     extra = {}
-    for key, path in (("basic", BASIC), ("parser.h", PARSERH), ("kw.newvoc", KW_NEWVOC), ("kw.template", KW_TEMPLATE), ("op_array.c", OPARRAY), ("bcomp", BCOMP)):
+    for key, path in (("basic", BASIC), ("parser.h", PARSERH), ("kw.newvoc", KW_NEWVOC), ("kw.template", KW_TEMPLATE), ("op_array.c", OPARRAY), ("bcomp", BCOMP),
+                      ("_voc_ref", VOCREF), ("msg15072", os.path.join(MESSAGES, "15072")), ("msg15073", os.path.join(MESSAGES, "15073"))):
         with open(path, encoding="utf-8", errors="replace") as f:
             extra[key] = f.read()
     return src, voc, names, extra
@@ -360,6 +446,42 @@ MUTANTS = [
     ("$BCOMP's common has other names", "bcomp", "   common /$runin/ ri.active, ri.path,", "   common /$runin/ ri.active, ri.paths,"),
     ("the safety net keeps the visited account's $VOC.PARSER", "cproc", "            ri.active = 0\n            gosub get.voc.parser.rec\n", "            ri.active = 0\n"),
     ("the register is read as typed", "cproc", "read acc.record from acc.f, upcase(ri.acct) else", "read acc.record from acc.f, ri.acct else"),
+    # 10 Nov 26: S.213 (from Linux ca137620), the command does not run as the administrator
+    ("the command keeps the administrator flag", "cproc", "   void kernel(K$OS.EXEC, 0)\n   void kernel(K$ADMINISTRATOR, 0)\n   return\n", "   void kernel(K$OS.EXEC, 0)\n   return\n"),
+    ("the flag is never dropped (no call)", "cproc", "      gosub ri.narrow            ;* 10 Nov 26, S.213: not the administrator from here to revert.account\n", ""),
+    ("the flag is dropped after the command", "cproc", "      gosub ri.narrow            ;* 10 Nov 26, S.213: not the administrator from here to revert.account\n      gosub proc.sentence\n",
+     "      gosub proc.sentence\n      gosub ri.narrow            ;* 10 Nov 26, S.213: not the administrator from here to revert.account\n"),
+    ("compile.dict is given bp-edit", "cproc", "(ri.cmd = 'decatalog') or (ri.cmd = 'delete.catalog'))", "(ri.cmd = 'decatalog') or (ri.cmd = 'delete.catalog') or (ri.cmd = 'compile.dict'))"),
+    ("every command is given voc-edit", "cproc", "   void kernel(K$VOC.EDIT,  0)\n   void kernel(K$BP.EDIT,", "   void kernel(K$VOC.EDIT,  1)\n   void kernel(K$BP.EDIT,"),
+    ("SH stays on for the command", "cproc", "   void kernel(K$SH, 0)\n   void kernel(K$OS.EXEC, 0)\n   void kernel(K$ADMINISTRATOR, 0)\n", "   void kernel(K$OS.EXEC, 0)\n   void kernel(K$ADMINISTRATOR, 0)\n"),
+    ("SH follows the account's record during a run", "cproc", "   void kernel(K$SH,      not(ri.active) and (upcase(trim(acc.record<ACC$SH>)) = 'YES'))", "   void kernel(K$SH,      (upcase(trim(acc.record<ACC$SH>)) = 'YES'))"),
+    ("OS.EXECUTE follows the account's record during a run", "cproc", "   void kernel(K$OS.EXEC, not(ri.active) and (upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES'))",
+     "   void kernel(K$OS.EXEC, (upcase(trim(acc.record<ACC$OS.EXEC>)) = 'YES'))"),
+    ("revert does not restore the flag", "cproc", "   void kernel(K$ADMINISTRATOR, ri.sw<10>)   ;* 10 Nov 26, S.213: LAST - see the note above\n", ""),
+    ("revert restores the flag first", "cproc", "revert.account:\n   ri.active = 0\n", "revert.account:\n   ri.active = 0\n   void kernel(K$ADMINISTRATOR, 1)\n"),
+    ("revert leaves the account's edit gate on", "cproc", "   void kernel(K$BP.EDIT,   ri.sw<8>)\n", ""),
+    ("the gates are restored after the directory change", "cproc",
+     "   void kernel(K$VOC.EDIT,  ri.sw<7>)\n   void kernel(K$BP.EDIT,   ri.sw<8>)\n   void kernel(K$DICT.EDIT, ri.sw<9>)\n   if not(ospath(ri.path, OS$CD)) then\n      display sysmsg(5162)   ;* Fatal error : Cannot return to previous account\n      return to abort.cproc\n   end\n",
+     "   if not(ospath(ri.path, OS$CD)) then\n      display sysmsg(5162)   ;* Fatal error : Cannot return to previous account\n      return to abort.cproc\n   end\n   void kernel(K$VOC.EDIT,  ri.sw<7>)\n   void kernel(K$BP.EDIT,   ri.sw<8>)\n   void kernel(K$DICT.EDIT, ri.sw<9>)\n"),
+    ("the flag is not kept", "cproc", "   ri.sw<10> = kernel(K$ADMINISTRATOR, -1)", "   ri.sw<10> = 1 ;* kernel(K$ADMINISTRATOR, -1)"),
+    ("the run is flagged before the gates are kept", "cproc", "   ri.sw<7> = kernel(K$VOC.EDIT, -1) ;", "   ri.active = 1\n   ri.sw<7> = kernel(K$VOC.EDIT, -1) ;"),
+    ("the abort branch does something before revert", "cproc", "         if ri.active then\n            gosub revert.account\n            display sysmsg(12247, ri.account)",
+     "         if ri.active then\n            void kernel(K$SH, 1)\n            gosub revert.account\n            display sysmsg(12247, ri.account)"),
+    ("LOGTO is allowed during a run", "cproc", "   if ri.active then\n      display sysmsg(15073, ri.account)", "   if 0 then\n      display sysmsg(15073, ri.account)"),
+    ("the LOGTO refusal is not audited", "cproc", "      void kernel(K$AUDIT, 'run.in refused account=' : ri.account : ' target=' : downcase(new.account)[1, 40] : ' reason=logto')\n", ""),
+    ("an include file is not asked", "bcomp", "   ri.chk.path = fileinfo(incl.file, FL$PATH)\n   gosub ri.outside\n", "   ri.out = @false\n"),
+    ("the $dict dictionary is not asked", "bcomp", "               ri.chk.path = fileinfo(ri.dict.f, FL$PATH)\n               gosub ri.outside\n", "               ri.out = @false\n"),
+    ("a FILE dictionary is not asked", "bcomp", "      ri.chk.path = fileinfo(file.d(0), FL$PATH)\n      gosub ri.outside\n", "      ri.out = @false\n"),
+    ("ri.outside refuses nothing", "bcomp", "then ri.out = @true\n", "then ri.out = @false\n"),
+    ("ri.outside refuses outside a run too", "bcomp", "   ri.out = @false\n   if ri.active then\n      if not(kernel(K$PATH.IN, @path", "   ri.out = @false\n   if 1 then\n      if not(kernel(K$PATH.IN, @path"),
+    ("an outside include is read before it is refused", "bcomp", "   ri.chk.path = fileinfo(incl.file, FL$PATH)\n   gosub ri.outside\n   if ri.out then\n      incl.file = 0\n      err.msg = sysmsg(15072, include.file.name)",
+     "   level += 1\n   level -= 1\n   ri.chk.path = fileinfo(incl.file, FL$PATH)\n   gosub ri.outside\n   if ri.out then\n      incl.file = 0\n      err.msg = sysmsg(15072, include.file.name)"),
+    ("the $dict dictionary is used even when it is outside", "bcomp", "               end else\n                  dict.f = ri.dict.f\n               end\n", "               end\n               dict.f = ri.dict.f\n"),
+    ("_voc_ref follows a Q-pointer out during a run", "_voc_ref", "               if ri.active then\n                  if not(q.registered and downcase(q.named) = ri.account) then", "               if 0 then\n                  if not(q.registered and downcase(q.named) = ri.account) then"),
+    ("_voc_ref lets any registered account in during a run", "_voc_ref", "if not(q.registered and downcase(q.named) = ri.account) then", "if not(q.registered) then"),
+    ("_voc_ref's common differs from cproc's", "_voc_ref", "   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.account\n", "   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.acct\n"),
+    ("message 15072 does not name syscom", "msg15072", " and syscom only", " only"),
+    ("message 15073 does not take the account", "msg15073", " in account %1", ""),
 ]
 
 
