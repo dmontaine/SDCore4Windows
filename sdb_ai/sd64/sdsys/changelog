@@ -3,6 +3,14 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  A FAILED OPENSEQ NO LONGER LEAVES ITS RECORD LOCK BEHIND (FROM SD CORE FOR LINUX).
+
+             What        - When OPENSEQ took the lock on a record and then failed (OVERWRITE of a file whose old content
+                           could not be removed, or CREATING of a name another program made in that moment), the lock
+                           stayed until SD was restarted, and LIST.READU showed it against whatever file came next.
+                           It is now given back, as CLOSESEQ gives it back.
+             Why         - Found and measured by SD Core for Linux; this code is the same here.
+
 10 Nov 26  FULL-SCREEN FIXES: LINES, RESIZING, F11, THE START QUESTION (SOME FROM SD CORE FOR LINUX).
 
              What        - The full-screen pages draw their boxes with lines on a Windows console (they drew + - | because

@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 10 Nov 26 Windows port - from Linux ec01ff0b (14 Sep 26, P.6): op_openseq()'s error cleanup releases the record lock it took, and frees the
+ *               buffer and record name.  Every error after lock_record() (a failed OVERWRITE truncate, and since S.88 A3 a failed deferred CREATING)
+ *               left the lock behind past OFF.  Found by Linux's test-ideos-units O1e when it was carried here.
  * 10 Nov 26 Windows port - from Linux 36fe9456 and a63c70f1 (S.88 E2 and A1): OPENSEQ ... CREATING of a name that does not exist is exclusive, a link to
  *               nothing is refused (the file,record form looks at the raw name first too), and the create that WRITESEQ and WEOFSEQ make on the first
  *               write never follows a link at the end of the name (DIO_OVERWRITE_NOFOLLOW).
@@ -467,6 +470,7 @@ Private void openseq(bool map_name) {
   struct stat leaf_stat_buf;
   bool create_after_lock = FALSE; /* 02 Nov 26 S.88 A3: CREATING of a name that is not there: the file is made once the SD lock is held */
   int16_t blocking_user;
+  bool record_locked = FALSE; /* 14 Sep 26 - lock_record() succeeded */
   int status;
   u_int16_t flags = 0;
   char* p;
@@ -802,6 +806,7 @@ Private void openseq(bool map_name) {
                                         !read_only, /* Update lock? */
                                         0, (op_flags & P_LOCKED) != 0)) {
       case 0: /* Got the lock */
+        record_locked = TRUE;
         break;
 
       case -2: /* Deadlock detected */
@@ -997,6 +1002,18 @@ exit_op_openseq:
     if (ValidFileHandle(fu))
       CloseFile(fu);
 
+    /* 14 Sep 26 dm - P.6 (Windows port 10 Nov 26, from Linux ec01ff0b).  THE RECORD LOCK TAKEN ABOVE IS
+       RELEASED HERE TOO.  Every error after lock_record() came through this block, which closed the file and
+       freed the file variable and never unlocked - so the lock outlived the session, listed against whatever
+       file later reused the file-table slot.  Measured on Linux: OPENSEQ ... OVERWRITE on a read-only file,
+       whose truncate rightly fails, left an RL lock that LIST.READU showed from the next session.  Here a
+       failed deferred CREATING (S.88 A3, above) also comes this way.  unlock_record() is close_seq()'s own
+       call, made while fvar->file_id is still counted.  The buffer and record name, which this path also
+       dropped, are freed with sq_file below. */
+    if ((fvar != NULL) && record_locked) {
+      (void)unlock_record(fvar, unmapped_name, rec_name_len);
+    }
+
     if (fvar != NULL) {
       if (fvar->file_id > 0) {
         StartExclusive(FILE_TABLE_LOCK, 75);
@@ -1011,6 +1028,10 @@ exit_op_openseq:
     if (sq_file != NULL) {
       if (sq_file->pathname != NULL)
         k_free(sq_file->pathname);
+      if (sq_file->record_name != NULL)
+        k_free(sq_file->record_name);
+      if (sq_file->buff != NULL)
+        k_free(sq_file->buff);
       k_free(sq_file);
     }
 
