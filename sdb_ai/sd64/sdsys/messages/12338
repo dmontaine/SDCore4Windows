@@ -1,0 +1,1 @@
+Job %1 is damaged; nothing was started (set.job change writes it again, set.job delete removes it)

@@ -5537,6 +5537,39 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+(* Take the administrator's scheduled jobs away: every Task Scheduler task
+   SET.JOB made, then the definitions beside the data tree.
+
+   10 Nov 26 - RELEASE_1.1 222, from Linux's deletesdcore.sh (S.102 stage 3),
+   which stops and removes every sdcore-job timer and unit FIRST and then
+   removes the definitions.  A TASK LEFT BEHIND WOULD START A PROGRAM THAT IS
+   GONE, as SDSYS, at whatever time it was given, for as long as the machine
+   lives.  So this is done on a silent uninstall too, and whether or not the
+   database is kept: like RemoveApiFirewall it closes rather than opens.  The
+   definitions go with the tasks because a definition with no task is nothing
+   SET.JOB would read as a job that runs.
+
+   THE HELPER'S OTHER VERBS ARE SDSYS'S ALONE AND THIS ONE IS NOT: whoever is
+   uninstalling is an administrator and not SDSYS, and the verb only removes.
+
+   AT usUninstall for the same reason as RemoveAllowGroups: by usPostUninstall
+   the script has been deleted with the rest of the application directory.
+   That is also before the [UninstallRun] entries stop the server.
+
+   Not brace-delimited - see RemoveFromPath. *)
+procedure RemoveScheduledJobs;
+var
+  Ps, Script: String;
+  Code: Integer;
+begin
+  Script := ExpandConstant('{app}\sd-jobs.ps1');
+  if not FileExists(Script) then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" job-purge',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 (* Copy the account sweep somewhere that outlives the application directory.
 
    PRE_RELEASE_FIXES 39.  The sweep is offered AFTER the database question, and
@@ -5977,6 +6010,7 @@ begin
     StashAccountSweep;
     RemoveAllowGroups;
     RemoveApiFirewall;
+    RemoveScheduledJobs;
     RemoveFromPath;
     Exit;
   end;

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14: a scheduled administrator job (kernel(K$JOB.MARK)) enters SDSYS
+*   with no desktop and no UAC, in place of Linux's CPROC arm; the grant is audited "elevation granted reason=scheduled job".
 * 8 Nov 26 Windows port - from Linux 81d9599b (S.87 batch 14): update.voc's special case for the MD record and its label accept.without.query are gone.
 * 7 Nov 26 Windows port - from Linux 29c4a48f (27 Oct 26, S.87): the VOC deletion list.  update.voc ends with remove.listed.voc, which removes from the
 *           account's VOC the records listed in sdsys/voc_removed that are still the records SD shipped (!vocrmchk), saves a copy of each to
@@ -635,6 +637,15 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   See PROJECT_STATUS.md section 5.6.
    initial.account = ''
 
+* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  A SCHEDULED ADMINISTRATOR JOB.  Task Scheduler runs a job that
+*   sd-jobs.ps1 registered as the Windows account SDSYS, elevated, with nobody at a desktop, so the SDSYS case below - elevated AND interactive
+*   (kernel.c's seed) - has no yes for it.  kernel(K$JOB.MARK) is the yes: the token is the local SDSYS's batch logon, elevated, not a network
+*   logon, and "sd -job <name>" names a definition only SYSTEM and Administrators can write whose command is this very session's command.
+*   Asked only of the SDSYS login; '' for everybody else, whatever they typed.  Linux grants the same in CPROC's local arm; Windows enters SDSYS
+*   here, so the grant is here.
+   job.name = ''
+   if upcase(@logname) = 'SDSYS' then job.name = kernel(K$JOB.MARK, 0)
+
    begin case
       case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname", or -INTERNAL
          initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
@@ -843,7 +854,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   is the process-start elevation seed and remains the second half - elevation
 *   is immutable, so it still answers correctly after a logto, which is why the
 *   case kept it and :695 uses it for the internal route too.
-      case upcase(@logname) = 'SDSYS' and kernel(K$ADMINISTRATOR, -1)
+      case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '')
          initial.account = 'SDSYS'
 
          read acc.rec from acc.f, initial.account else
@@ -853,11 +864,15 @@ deffun pw_complex(pw) calling '!pw_complex'
             goto terminate.connection
          end
 
-         if elevate('START', '') # 0 then
-            display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-            audit.account = initial.account
-            audit.reason = 'elevation refused or unavailable'
-            goto terminate.connection
+*        10 Nov 26 Windows port - S.102 stage 3: a job has no desktop to show UAC on and its token is already elevated (K$JOB.MARK
+*        requires it), so it does not start or register with the per-user elevation helper.
+         if job.name = '' then
+            if elevate('START', '') # 0 then
+               display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+               audit.account = initial.account
+               audit.reason = 'elevation refused or unavailable'
+               goto terminate.connection
+            end
          end
 
 *        31 Aug 26 Windows port - THE AUDIT RECORD MOVED TO THE GRANT.  It was
@@ -1041,7 +1056,12 @@ deffun pw_complex(pw) calling '!pw_complex'
 *     CPROC:2868 already says out loud: "written after the move has actually
 *     happened ... and after the administrator flag is set, so the record and
 *     the rights it describes cannot disagree."  PRE_RELEASE_FIXES.md 98.
-      void kernel(K$AUDIT, 'elevation granted account=SDSYS')
+*     10 Nov 26 Windows port - S.102 stage 3: a job's grant says so (Linux's wording); every line of its run ends " job=<name>" (k_error.c).
+      if job.name # '' then
+         void kernel(K$AUDIT, 'elevation granted account=SDSYS reason=scheduled job')
+      end else
+         void kernel(K$AUDIT, 'elevation granted account=SDSYS')
+      end
 
 *     6 Oct 26 Windows port - A ONE-LINE BANNER SAYS SO (parity audit; SD Core for
 *     Linux shows one when sdsys is granted, its 10916, and asked for the same here).

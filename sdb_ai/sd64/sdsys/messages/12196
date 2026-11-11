@@ -1,0 +1,1 @@
+set.job {add | change} name job schedule; set.job {delete | run} name; set.job alone lists the administrator's scheduled jobs

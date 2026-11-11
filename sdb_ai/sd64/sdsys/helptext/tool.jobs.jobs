@@ -1,0 +1,4 @@
+The administrator's scheduled jobs
+17-scheduled-jobs
+Each job is a Task Scheduler task that only an administrator can register. It runs one of two fixed commands as the administrator, unattended: backup.account all or update.accounts all. The box shows each job's name, its schedule, its command, when it runs next and how its last run ended. Nothing is scheduled as delivered.
+N makes a job, C or Enter changes its command or its schedule, D deletes it (you type its name), R starts it now. Each is a set.job command, shown with what it does before you answer Run; set.job asks the job helper, and the page writes nothing itself. A schedule is every 5, 10, 15, 20 or 30 minutes, hourly, daily hh:mm, weekly mon..sun hh:mm or monthly 1..28 hh:mm, in the machine's time; a missed run is not made up. At the prompt: set.job alone lists the jobs. A goes back to the account commands.

@@ -255,6 +255,10 @@
       $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
       $define K$AI.CANCEL       162     ;* give the request up ('OK')
       $define K$AI.STATUS       163     ;* the helper's status line, 'D':@fm:json, or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
+* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  kernel(K$JOB.MARK, 0) answers the name of the scheduled administrator
+*   job this process is (Task Scheduler's batch logon of the local account SDSYS, elevated, and an administrator-only definition in sd-jobs naming
+*   this very command), or ''.  Must match gplsrc/keys.h.
+      $define K$JOB.MARK       172      ;* The scheduled job this session is, or ''
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  K$REAL.USER 90 and K$LOGIN.UID 91 are Linux's own and are not carried.
 * 13 Oct 26 dm - S.63.  The per-account OS-access gates are back (see gplsrc/keys.h): K$SH and
 *   K$OS.EXEC, at 93 and 94 now.  Settable only from $internal, like K$ADMINISTRATOR; LOGIN and CPROC

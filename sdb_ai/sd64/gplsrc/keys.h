@@ -555,6 +555,12 @@
 #define K_AI_POLL            161
 #define K_AI_CANCEL          162
 #define K_AI_STATUS          163
+/* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  kernel(K$JOB.MARK, 0) answers the name of the scheduled
+   administrator job this process IS, or "": the process token is the local Windows account SDSYS, a batch logon, elevated (what Task
+   Scheduler gives a task registered by sd-jobs.ps1), the "sd -job <name>" claim names a definition in <ProgramData>\SD\sd-jobs that only
+   SYSTEM and Administrators can write, and its command= is this session's own command line (sd_jobmark.c, win32jobmark.c).  Any program may
+   ask; nothing sets it.  Same number as Linux; GPL.BP/INT$KEYS.H carries it. */
+#define K_JOB_MARK           172
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

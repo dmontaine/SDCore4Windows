@@ -39,6 +39,8 @@
  * 16 Aug 26 Windows port - audit_message() writes the audit trail.  Separate
  *                      from log_message() because errlog DISCARDS its oldest
  *                      half and an audit trail may not lose records
+ * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14: audit_message() ends every record of a
+ *                      scheduled job's run with " job=<name>" (sd_job_active, set by K_JOB_MARK).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
  *
@@ -78,6 +80,7 @@
    type, so it is safe to include here; win32audit.h says why it has to be a
    separate translation unit.                                              */
 #include "win32audit.h"
+#include "sd_jobmark.h"   /* 10 Nov 26 Windows port - sd_job_active, the " job=" suffix (Linux S.102 stage 3, carry area 14) */
 
 #include <setjmp.h>
 #include <stdarg.h>
@@ -954,21 +957,25 @@ void audit_message(char* msg) {
     /* Newline rather than \n for the reason log_message() gives above - this
        is a byte count handed to WriteFile, not a text-mode stream.        */
 
+    /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  A scheduled job's run says so on EVERY line it
+       writes (the name came from K_JOB_MARK: lower case letters, digits and dashes only). */
+    const char* jkey = (sd_job_active[0] != '\0') ? " job=" : "";
+
     if (my_uptr != NULL) {
       bytes = snprintf(buff, sizeof(buff),
                        "%04d-%02d-%02d %02d:%02d:%02d user=%s uid=%d "
-                       "pid=%d %s%s",
+                       "pid=%d %s%s%s%s",
                        ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday,
                        ltime->tm_hour, ltime->tm_min, ltime->tm_sec,
                        my_uptr->username, my_uptr->uid, my_uptr->pid, msg,
-                       Newline);
+                       jkey, sd_job_active, Newline);
     } else {
       bytes = snprintf(buff, sizeof(buff),
                        "%04d-%02d-%02d %02d:%02d:%02d user=? uid=? pid=? "
-                       "%s%s",
+                       "%s%s%s%s",
                        ltime->tm_year + 1900, ltime->tm_mon + 1, ltime->tm_mday,
                        ltime->tm_hour, ltime->tm_min, ltime->tm_sec, msg,
-                       Newline);
+                       jkey, sd_job_active, Newline);
     }
 
     /* snprintf reports the length it WANTED, not what it wrote, so a long

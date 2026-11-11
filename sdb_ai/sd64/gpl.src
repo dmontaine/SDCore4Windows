@@ -78,6 +78,7 @@ op_tio
 pdump
 reccache
 sd_encrypt_sodium
+sd_jobmark
 sd_keyring
 sd_scram
 sd_tls
@@ -95,6 +96,7 @@ win32pipe
 win32vt
 win32session
 win32group
+win32jobmark
 sdtermlb
 strings
 sysdump

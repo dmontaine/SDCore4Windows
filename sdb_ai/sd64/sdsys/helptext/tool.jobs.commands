@@ -1,0 +1,4 @@
+Commands an account may run from the command line
+04-scheduled-jobs
+The paragraphs and sentences of the account's VOC, the only kinds the gate lets run, each allowed or not. Enter allows the command under the cursor or stops allowing it, after a box that shows the set.batch command and its effect.
+An allowed command runs with the account's own rights and takes no arguments. Whoever can change its VOC record changes what the job does. A name still on the list that is no longer a paragraph or a sentence is refused when run; Enter takes it off. At the prompt: set.batch add account command, set.batch remove account command.

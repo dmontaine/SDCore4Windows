@@ -3,6 +3,27 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  SET.JOB AND TOOL.JOBS: THE ADMINISTRATOR'S SCHEDULED JOBS, ON TASK SCHEDULER (FROM SD CORE FOR LINUX).
+
+             What        - SET.JOB (SDSYS only) makes, changes, deletes, starts and lists the administrator's scheduled
+                           jobs. A job runs one of two fixed commands, backup-all (BACKUP.ACCOUNT ALL) or
+                           update-accounts (UPDATE.ACCOUNTS ALL), on one of five schedules: every 5, 10, 15, 20 or 30
+                           minutes, hourly, daily hh:mm, weekly day hh:mm, or monthly 1 to 28 hh:mm. Each job is a
+                           Task Scheduler task, \SD\sdcore-job-NAME, that runs as the Windows account SDSYS with no
+                           stored password. TOOL.JOBS is the Scheduled jobs page: the commands each account may run
+                           from the command line (through SET.BATCH), and with J the administrator's jobs (through
+                           SET.JOB), each change after a box that shows the command and is answered Run. Every change
+                           is written to the audit trail, and every audit line a job's run writes ends job=NAME.
+                           Uninstalling SD removes every job, whether or not the database is kept.
+             Why         - SD Core for Linux has it, and the two are kept the same. Work that reaches every account
+                           (a backup of all of them, an update of every VOC) could be scheduled only by a task that
+                           an administrator built by hand.
+             Does NOT    - Schedule anything as delivered, run any command but the two, take a command or a calendar
+                           as text, or make up a run missed while the machine was off. A job has no network
+                           credentials, so it cannot reach a network share as SDSYS. A definition changed by hand is
+                           listed as damaged, and SET.JOB RUN refuses it. An account's own job is still a task of
+                           the account's own Windows user, made in Task Scheduler.
+
 10 Nov 26  RUN.IN, NO.CATALOG AND TOOL.ENTRIES (FROM SD CORE FOR LINUX).
 
              What        - RUN.IN account command runs one of five commands (basic, catalog, decatalog,

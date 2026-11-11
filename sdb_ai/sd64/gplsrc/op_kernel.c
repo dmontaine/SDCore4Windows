@@ -65,6 +65,8 @@
  *           CN_SOCKET guard.  PRE_RELEASE_FIXES 56.
  * 05 Sep 26 Windows port - K_INTERACTIVE added.  How the session ARRIVED,
  *           where the two above ask who and what.  PRE_RELEASE_FIXES 167.
+ * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14: K_JOB_MARK, on the process token and an
+ *           administrator-only definition in place of Linux's cgroup (sd_jobmark.c, win32jobmark.c).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -95,6 +97,7 @@
 #include "win32session.h"
 #include "win32group.h"   /* K_GROUP_MEMBER's live SAM query */
 #include "sd_tls.h"
+#include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
 
 #include <syslog.h>
 
@@ -1650,6 +1653,26 @@ void op_kernel() {
     case K_AI_CANCEL:
       k_put_c_string("OK", &result);
       break;
+
+    /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  K_JOB_MARK: the name of the scheduled administrator job
+       this process IS, or "".  Linux asks systemd's cgroup; here every one of these must hold (sd_jobmark.h, win32jobmark.c): not an API
+       socket session; a "sd -job <name>" claim (job_claim); a process token that is the local account SDSYS, a batch logon (not network, not
+       interactive), elevated; <ProgramData>/SD/sd-jobs (named from the registry, win32_job_dir(), never from SD_CONFIG) and its file <name>
+       owned by and open only to SYSTEM and Administrators; and the file's command= exactly the kernel's own single_command.  Any program may
+       ask; no argument is read, so nothing a caller passes counts.  A name, once answered, stays for the life of the process: every audit
+       line it writes ends " job=<name>" (audit_message).  LOGIN asks it for an SDSYS login only (the SDSYS case), in place of the desktop
+       it otherwise requires. */
+    case K_JOB_MARK: {
+      char jn[SD_JOB_NAME_MAX + 1];
+      char jdir[MAX_PATHNAME_LEN + 1];
+      char jwhy[256];
+
+      if ((sd_job_active[0] == '\0') && (job_claim != NULL) && (single_command != NULL) && (connection_type != CN_SOCKET) &&
+          win32_job_token_ok(jwhy, sizeof(jwhy)) && win32_job_dir(jdir, sizeof(jdir)) &&
+          (sd_job_name(jdir, job_claim, single_command, win32_job_admin_path, jn, sizeof(jn)) == 0))
+        strcpy(sd_job_active, jn);
+      k_put_c_string(sd_job_active, &result);
+    } break;
 
     default:
       k_error("Illegal KERNEL() action key (%d)", action);

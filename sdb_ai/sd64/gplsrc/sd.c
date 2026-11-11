@@ -43,6 +43,8 @@
  * 08 Aug 24 mab add code to embedded python if EMBED_PYTHON defined 
  * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): A phantom that finds SD suspended gives back its user table cell (QM4 Fixes 280).
  * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): -stop and -restart call stop_sd_ex(TRUE), which ends with SIGKILL what is still running after the wait.
+ * 10 Nov 26 Windows port - for Linux 5162a5d1 (S.102 stage 3), carry area 14: -JOB name, the claim a scheduled job's task makes (job_claim).
+ *           Windows only: Linux reads the name from systemd's cgroup.  It grants nothing by itself; K$JOB.MARK tests it.
  * rev 0.9.1 Mar 25 return to single rev track
  * END-HISTORY
  *
@@ -67,6 +69,7 @@
  * "Word" options
  *    -CLEANUP      Clean up lost processes
  *    -INTERNAL     Run in internal mode
+ *    -JOB name     A scheduled job's claim to be job <name> (only a key: see K$JOB.MARK)
  *    -QUIET        Suppress copyright/licence display on entry
  *    -RESUME       Resume updates
  *    -SUSPEND      Suspend updates
@@ -360,6 +363,13 @@ Private bool comlin(int argc, char *argv[]) {
     } else if (!stricmp(argv[arg], "-TERM")) {
       if (++arg < argc)
         strcpy(tio.term_type, argv[arg]);
+    } else if (!stricmp(argv[arg], "-JOB")) {
+/* 10 Nov 26 Windows port - for Linux 5162a5d1 (S.102 stage 3), carry area 14.  The name a scheduled job's task gives on its command line
+   ("sd -job <name> <command>", written by sd-jobs.ps1).  ONLY A KEY: kernel(K$JOB.MARK) answers it only for a process whose token is
+   Task Scheduler's elevated batch logon of SDSYS and whose command is the one the administrator-only definition of <name> names.  Anybody
+   may type it; for anybody else it answers "" and changes nothing. */
+      if (++arg < argc)
+        job_claim = argv[arg];
     } else if (!stricmp(argv[arg], "-I")) {    
 /* 20240702 mab Bootstrap build arg must be exactly "-I" */		  
         /* Bootstrap Install*/

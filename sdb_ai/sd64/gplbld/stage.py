@@ -1777,6 +1777,15 @@ def main():
                    # add it to assert-current's $neverShipped list.  Its unit
                    # test (test-confset-units.ps1) does not.
                    'sd-confset.ps1',
+                   # 10 Nov 26 - carry area 14, Linux S.102 stages 2 to 4: the
+                   # administrator's scheduled jobs on Task Scheduler.  gpl.bp
+                   # SET_JOB runs it from the SDSYS session, which is elevated;
+                   # it writes the definitions K$JOB.MARK trusts and registers
+                   # the tasks, so it ships here for sd-elevate.ps1's reason
+                   # below and not in the data tree.  It SHIPS - do NOT add it
+                   # to assert-current's $neverShipped list.  Its unit test
+                   # (test-jobs-helper-units.ps1) does not.
+                   'sd-jobs.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):

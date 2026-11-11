@@ -74,6 +74,7 @@ Public bool hsm init(FALSE); /* Hot spot monitor enabled? */
 Public char config_path[MAX_PATHNAME_LEN + 1] init("");
 Public char* single_command init(NULL); /* User typed "SD xxx" */
 Public char* forced_account init(NULL); /* User typed "SD -Axxx" */
+Public char* job_claim init(NULL); /* 10 Nov 26 Windows port (Linux S.102 stage 3, carry area 14): "SD -JOB name"; only a key for K$JOB.MARK */
 
 /* 14 Sep 26 - lower case, the canonical case of program names (RELEASE_1.1 5
    stage 3a).  k_call() is given this name directly, so no canonicalization
