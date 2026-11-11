@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 10 Nov 26 Windows port (S.96; RELEASE_1.1 201): $EXECUTE is refused while RUN.IN runs the compile (it joins the /$runin/ common to know); message 12568.
 * 8 Nov 26 Windows port - from Linux 218e2e9b: EXECUTE, PHANTOM and OS.EXECUTE take SILENT (for programs moved from openQM): the output is captured into the temporary __silent and thrown away.  Refused with CAPTURING (2911), which it is a form of.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): the C dictionary item type is gone from the compiler: the is.ctype argument of $BCOMP (callers: basic, bbproc, gplbld/COMP_PCODE), HDR.CTYPE, err.ctype and message 2994.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): the PROC leftovers PROCREAD, PROCWRITE, @PIB, @SIB, @POB and @SOB are gone (opcode 0xCF9A reserved).
@@ -303,6 +304,10 @@ mode.names<1,43> = ""                   ;* retired 27 Oct 26 (was STDFIL.SHARED)
 mode.names<1,44> = "DEBUG.EQUATES"
 mode.names<1,45> = ""                   ;* retired 27 Oct 26 (was AUTOLOCK)
 *****************************************************************************
+
+* 10 Nov 26 Windows port (S.96, RELEASE_1.1 201): RUN.IN's common, joined only to read ri.active (the $EXECUTE directive below).  Same six names, same order,
+*   as the command processor declares it; a $ name, so only an internal program can join it.
+   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.account
 
    * The {name} construct is not available until the $DICT directive is used.
 
@@ -3170,6 +3175,14 @@ proc.directive:
          end
 
          gosub get.token
+
+* 10 Nov 26 Windows port (S.96, RELEASE_1.1 201): not while RUN.IN runs a compile.  The administrator compiles an account's source in that account, on an
+*   elevated token; the directive would run a command the account wrote, with those rights.  The compile fails with the reason.
+         if ri.active then
+            err.msg = sysmsg(12568) ;* $EXECUTE is not run in a compile that run.in runs
+            gosub error
+            goto exit.proc.directive
+         end
 
          execute token.string
 

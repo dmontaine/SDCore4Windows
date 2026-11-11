@@ -1,0 +1,4 @@
+Accounts and the entries by pointer
+19-the-master-files
+Every registered account but SDSYS, with the edit gates it holds, shown as v d b or a dash: voc-edit (the right to save a change to its VOC), dict-edit (its dictionaries) and bp-edit (its programs). A dash is what locks the account out of its own files; an administrator is not held to the gates. The next column says whether SDSYS can write inside the account's directories from outside SD; on Windows it is always yes, because SDSYS is an elevated administrator and the account directories give Administrators full control. The last column says whether the account is suspended.
+Nothing is copied. The VOC of the account under the cursor, its dictionary items or its programs (K), is read from the account's own files when the cursor comes to it, so a system with many accounts is not read as a whole. Enter or F6 goes to its entries, where E edits a VOC entry or a dictionary item in this account and N makes a new one.

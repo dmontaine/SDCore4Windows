@@ -18,6 +18,9 @@
 * 
 *
 * START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 8fc6b4e1 (S.96; RELEASE_1.1 201): the NO.CATALOG option.  A program that compiled is not catalogued, whatever asked for it - a $CATALOG
+*               directive in the source or in a file it includes, or the CATALOGUE entry of the account's $BASIC.OPTIONS - and message 12250 says the directive was not
+*               run.  RUN.IN gives it to every BASIC it runs.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux 43527e34 (S.87 batch 13): the command it builds says CATALOG (the verb CATALOGUE is gone).
 * 8 Nov 26 Windows port - from Linux fcee0b9a (S.87 batch 7): OPTION KEEP.OLD.OBJECT is gone; a failed compilation leaves no object code, as it did with the option off.
@@ -93,6 +96,7 @@ $define max.levels   10
 
    compiler.flags = 0
    no.query = @false
+   no.catalog = @false          ;* 3 Nov 26 (S.96)
 
    source.file.name = ""
    record.name = ""
@@ -113,6 +117,9 @@ $define max.levels   10
 
          case keyword = KW$NO.QUERY
             no.query = @true      ;* 10 Oct 26 dm  (ref 27)
+
+         case keyword = KW$NO.CATALOG
+            no.catalog = @true    ;* 3 Nov 26 dm  (S.96)
 
          case keyword = KW$NOXREF
             compiler.flags = bitor(compiler.flags, BCOMP.NO.XREF.TABLES)
@@ -395,7 +402,11 @@ compile:
       recordlocku out.f, record.name
       write object.code to out.f, record.name
 
-      if catalogue.name # '' then
+* 3 Nov 26 dm - S.96.  NO.CATALOG: the one place a directive becomes a CATALOG command.  Whatever asked for the catalogue step (a $CATALOG in the source or in a file it includes, or
+*   the CATALOGUE entry of $BASIC.OPTIONS) is not run, and the compile says so.
+      if catalogue.name # '' and no.catalog then
+         display sysmsg(12250, record.name)   ;* %1 compiled; its catalog directive was not run (no.catalog)
+      end else if catalogue.name # '' then
          cat.cmd = 'CATALOG ' : source.file.name : ' ' : catalogue.name : ' ' : record.name : ' ' : catalogue.mode
          * NO.QUERY on the BASIC command, or on the $CATALOG directive or
          * the CATALOGUE entry of $BASIC.OPTIONS (it is then in catalogue.mode)

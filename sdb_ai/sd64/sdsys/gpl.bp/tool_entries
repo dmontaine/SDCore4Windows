@@ -1,0 +1,2540 @@
+* TOOL_ENTRIES
+* The master files as the owner meant them, first stage (S.96, M1a): the VOC entries of every account by pointer, read from each account's own file.  An administrator app.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux 42b79767, 0f49c651, ee582047, 61697538, d5aeaaf6, 4324e2a4, 7c23f7cf, 5162a5d1, 1b20c681, 5cb78f05, d049d8bb and
+*              1c127f7c (S.96 M1a-M6, S.108 G and U; RELEASE_1.1 201), at Linux 074397f6, messages + 1005.  Windows changes: an absolute path is a drive
+*              letter or @ds (abs.pat, ten places); the register's ids are upper case; the SDSYS column is always "yes" and there is no 'relog' refusal
+*              (no sdsys user or POSIX group here: Linux S.103 is not carried, so Linux's message 11981 is not either); B says it is not built, because
+*              run.in has no debug on Windows.
+* 3 Nov 26 dm  S.97 / S.96, THE GLOBAL CHANGE (the owner's answers of 3 Nov 26, after the core-direction warning; then "Yes, add undo").  G changes EVERY ROW THE PAGE SHOWS
+*              (a filter / or a find F must be on, and the list must not be cut at MAXV), of all three kinds: a field of a VOC entry or a dictionary item (by number, or "heading" for
+*              a D, I, E or L item) set to a value or a text in it replaced, or a text replaced in a program's source, which is then compiled again IN ITS OWN ACCOUNT by run.in
+*              and judged on the compiler's success line.  One preview box (Run / Cancel, no name typed: the owner's choice, recorded as delivered) lists each account with
+*              its count and first ids and the rows that will be refused; the writes are then made account by account, each account judged afresh (the register, the relog
+*              state) and each file by THE POINTER RULE before it is opened for writing (K$PATH.IN of the path, of what was opened and of its subfiles; a program's own file
+*              too); each record is taken with READU (a held one is refused), must still be what the preview read (a digest), and its old self is written to the undo
+*              file BEFORE the WRITEU.  A refusal or a failure is counted and the run goes on with the rest; one audit line per account (master global ...).  U puts the
+*              last run back from &entries.undo& (a file of SDSYS's own account, made on demand through a box that shows create.file, as tool.bulk's &bulk.undo&; the last
+*              run only): a record only if it is still byte for byte what the run wrote, under the same pointer rule and READU; a program put back is compiled again by
+*              run.in; one audit line per account (entries undo ...).  The AI line is NOT offered G or U (no destructive action on an administrator page without his word).
+*              Field 1 (the type of a VOC entry or a dictionary item; the owner: "Exclude field 1 from batch actions, allow it on a single item with a confirm warning") is refused
+*              before the preview when more than one record is shown; on one record the box warns that its type changes (old -> new).  U puts it back like any field.
+* 2 Nov 26 dm  The SDSYS column tells the truth for the RUNNING session (follow-up (1) of PROJECT_STATUS entry (95)): it said "yes" from /etc/group alone, so a session of SDSYS that
+*              began before the account's group gained the sdsys user was told it could write and an edit then failed with error 3018.  sdsys.state (the one place) asks the
+*              kernel too (K$IN.GROUP: this process's own groups) and shows "relog" when the sdsys user is in the group and this session does not hold it; edit.record refuses
+*              E, N, D, C and B on such an account with 11981 (Linux's, not carried) after the register is read again and before anything is written.  The pointer rule and every check are unchanged.
+* 2 Nov 26 dm  An account whose VOC cannot be opened shows its register path WRAPPED at the box's width (up to six lines): a long path was cut at the edge, so the
+*              account's own name, at its end, was lost (sandbox-tool-entries.py E3 failed under regress.sh's longer sandbox directory).
+* 2 Nov 26 dm  S.96 M6a: D deletes a PROGRAM too, the way it deletes a VOC entry (edit.record, emode 'delete', then delete.reached: the update lock, the id typed, the delete through
+*              the file judged, "master delete ... kind=bp"), and with it its compiled program: the record of the same name, lower case, in the .out file found by NAME as the list
+*              finds it (the <file>.out the account's VOC names, read again at the keypress, else the one beside the program file).  THE POINTER RULE holds for the .out file as for
+*              the program file: it and the object's own file must lie inside the account (K$PATH.IN), asked before the box and before anything is deleted; a .out file outside the
+*              account refuses the whole delete.  Nothing is run (no run.in: no command on its list removes a bp.out record).  A catalogue entry of the program (local, private or
+*              global) is the account's and is LEFT: the box and the status line say so and name DELETE.CATALOG in that account.
+* 2 Nov 26 dm  S.96 M5: B debugs the program under the cursor IN ITS ACCOUNT: edit.record (emode 'debug'), then debug.reached - run.in compiles it for the debugger
+*              (compile.in.account, shared with C; a failure is shown as C shows it) and run.in runs the debugger there; "master debug" is audited; the page comes back
+*              through retake.page, taken out of hand.over so that the editor's and the debugger's way back are one.  The IDE's own Debug of such a tab does the same.
+* 2 Nov 26 dm  S.96 M4: the programs.  E and N open a program in the IDE in its own account (edit.record, isprog: the program file's DATA path is judged by the pointer rule, the
+*              temporary pointer is a data-only F pointer, the opened file must be a directory file, the program's own file must lie inside the account and a name that is a link
+*              leading nowhere is refused); the sentence ends /in=account,file so that the IDE compiles and catalogues the tab through run.in IN THAT ACCOUNT (the owner's
+*              mechanism C of 2 Nov 26) and refuses Run and Debug.  C compiles the program under the cursor the same way (compile.reached), shows what the compiler said and
+*              writes "master compile".  Delete of a program is not offered yet.
+* 2 Nov 26 dm  S.96 M3: D deletes the record under the cursor, in its own account.  It goes the whole of E's way (edit.record, emode 'delete'): the register and the account's VOC read
+*              again, THE POINTER RULE, the F pointer holding the checked path, the opened file and its two subfiles judged again; then the record is read with its update lock (one held
+*              by another session, an editor's, refuses), the administrator types its id in the confirm box (12958, Cancel the default), and the page deletes that one record through the
+*              file it judged, gives the pointer back and writes "master delete".  Nothing is run as a command.
+* 3 Nov 26 dm  S.96 M2: E edits the record under the cursor and N makes a new one, in the IDE (the VOC entry as text, the dictionary item as the form), IN ITS OWN ACCOUNT.  The IDE reaches another
+*              account's file through a temporary pointer in SDSYS's VOC (mechanism A of the owner's decision of 2 Nov 26), named zm<user number>.<account>.<file>, written just before the
+*              terminal is handed over and taken away just after.  It is an F pointer holding the path the page checked, not a Q-pointer into the account's VOC (an independent review the
+*              same day: a Q-pointer is followed again at every open, after the check); what it opens must be a hashed file whose two subfiles lie inside the account too; a pointer left by
+*              a session killed inside the IDE is swept at the page's next start.  THE OWNER'S POINTER RULE comes first and is asked afresh, of the register and of the account's own VOC, at the keypress (the
+*              list may be old): the file to be edited must lie inside the account (K$PATH.IN, realpath) and so must what the pointer opens (checked again, through the pointer, before the
+*              IDE is given it); a dictionary that lies outside the account is refused with its reason, nothing is written and no pointer is made.  A VOC entry that is itself a pointer is the
+*              account's own record and is edited like any other.  Programs are not edited from here yet.
+* 3 Nov 26 dm  S.96 M1b: the second kind, the DICTIONARY ITEMS of the account's files (K switches).  The reading of an account is one routine, collect.account, used by the list of the
+*              account under the cursor and by the find in every account; a dictionary item matches a text in its id OR its column heading (the owner's example: "display all dictionary
+*              items with the name First Name"; which of the two he meant is his to say, so both).
+* 3 Nov 26 dm  New (S.96 M1a; owner, 31 Oct 2026: "pointers seem to me to be a good way to do it").  The VOC kind only, READ ONLY; programs, and the editing, are later
+*              stages.  Made from tool_jobs (its Accounts and list boxes) and tool_voc (the entry's type and what it points at).
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring', the AI line one of the stops); Tab and Shift-Tab no longer switch the boxes
+*              (Left and Right still do).  AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186 (Fable's review): retake.page takes the page again as 'admin', as the start does; it said '', so after the editor or the debugger the
+*              administrator was not asked again and the bar named the user instead.  View > Mouse and Ctrl-O, as on every page (act:std.mouse, ctrl-o, $tk_std).
+* 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.ENTRIES
+*
+*   For the administrator only (it is refused, before anything is read, for anyone else; it is in SDSYS's VOC only).  A full-screen page, in the toolkit's frame (140 columns by 43
+*   lines at least).  Nothing is copied: every list is read from the account's own file by its pathname when it is asked for.
+*
+*     Accounts   every registered account but SDSYS with the edit gates it holds (voc-edit, dict-edit, bp-edit, shown as v d b or a dash), whether the sdsys user is in its group, and
+*                whether it is suspended
+*     Entries    the VOC of the account under the cursor: each entry's id, its type and what it points at, in name order; K switches to the DICTIONARY ITEMS of its files (the
+*                dictionary each file pointer of the VOC names): file, item id, type and column heading, in file and id order
+*
+*   The VOC of an account is read when the cursor comes to the account, not at the start: a system with many accounts is not read as a whole.  F finds an id, or a part of one, in the
+*   VOC of EVERY account (this reads them all and is asked for by name); the boxes then list the hits with their accounts, and Enter on a hit goes to that entry in its account.
+*
+*   Keys: Up and Down, PgUp and PgDn move in the box, Tab changes box, Enter in Accounts goes to its entries (and on a hit goes to the entry in its account), / filters the entries of the
+*   account by a part of the id, F finds an id in every account, K changes the kind, E edits the record under the cursor in the IDE, N makes a new record (its id asked first), D deletes the record under the cursor (its id typed to confirm), C compiles the program under the cursor in its own account (run.in), B debugs it there, Esc takes the
+*   find and the filter off, F5 reads again, F1 or ? or a click on a [?] explains the box, Ctrl-Q leaves.  Esc or F10 (or a click on the top row) opens the menu bar when there is nothing
+*   to take off.
+*
+*   WHAT IT CHANGES.  Nothing itself: E and N give the terminal to the IDE on the record, in the account it lives in, and take it back.  The only thing the page writes is the temporary
+*   pointer in SDSYS's VOC (an F pointer holding the checked path) that lets the IDE reach the account's file, and it takes it away again.  An administrator passes the edit gates; they are shown because they are what
+*   locks the account out of its own files.  THE POINTER RULE (owner, 3 Nov 26): a pointer record is edited like any record of its account, but what a pointer points at is never edited
+*   from another account; a dictionary that lies outside the account being listed is refused for E and N, before any pointer is made.  D deletes one record through the file it
+*   judged; for a program also its compiled program in the .out file, judged by the same rule (a catalogue entry is left).
+*
+*   THE GLOBAL CHANGE (G) AND ITS UNDO (U).  G works on the rows shown, never more: a filter or a find must be on.  It asks the field (a number, or heading for a dictionary item;
+*   a program's source has no field) and set or replace, then shows ONE box with every account, its count, its first ids and what will be refused; Run writes, account by
+*   account, each record in the file it lives in (never a pointer's target: the pointer rule refuses it in the box and again at the write), and a changed program is compiled
+*   again in its account by run.in.  There is no name to type (the owner's choice).  The records as they were go to &entries.undo& in SDSYS's account first; U puts back those
+*   still exactly as the run left them.  Field 1, the type, is changed on ONE record only, with a warning in the box.  A refusal or a failure in one account does not stop the others.  Audit: master global ... per account; entries undo ... per account.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_entries
+$catalog $tool_entries
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+   prompt ''
+
+* 10 Nov 26 Windows port: an absolute path is one that starts with @ds or with a drive letter and either slash (as _voc_ref tells them, RELEASE_1.1 189).  Linux tests
+*   for a leading /.  A path that does not match is relative to the account's directory.
+   abs.pat = "'" : @ds : "'0X" : @vm : "1A':\'0X" : @vm : "1A':/'0X"
+
+   MAXV = 3000                                                  ;* entries read for one account, or hits kept in a find: a VOC is a few hundred; more are not listed, and the page says so
+
+   call $tk_open('tool.entries', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.entries')
+   gosub sweep.pointers
+
+   GMAXF = 500                                                   ;* the highest field number G takes
+   GMAXT = 120                                                   ;* the longest text G takes (a value, a text to replace and what replaces it)
+   UNDOF = '&entries.undo&'                                      ;* the last global change's records as they were: a file of SDSYS's own account (the administrator's), as tool.bulk keeps &bulk.undo&
+   MKUNDO = 'create.file &entries.undo&'                         ;* the one command that makes it, shown in a box first
+   gosub read.undo.info
+   gosub build.keys
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   pnames = 'Accounts' : @fm : 'Entries'
+
+   VIS = 10                                                      ;* rows in a list (the list pane's height less 4: set by get.rects)
+   pane = 1
+   ac = 1 ; atop = 1                                             ;* the row selected in Accounts, and the first row shown
+   ec = 1 ; etop = 1                                             ;* the same in Entries (the hits, in a find)
+   an = 0 ; anm = '' ; en = 0 ; enm = '' ; hn = 0               ;* read.all reads both before it fills them (BASIC does not short-circuit)
+   ekey = '' ; efile = '' ; hfile = '' ; eout = '' ; hout = '' ; vfail = 0 ; dfail = 0
+   kind = 1                                                      ;* 1 the VOC entries, 2 the dictionary items of the account's files, 3 the programs of its program files
+   filt = '' ; fnd = ''
+   ai.arg = ''
+   gen = 0
+   msg = ''
+   done = 0
+
+   perr = ''
+   gosub declare.layout
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, pnames<pane>, '', '', mr)
+      call $tk_frame(ctx, keys, pnames<pane>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, pnames<pane>, nm, ao)
+      ai.arg = ''
+      if ao<1> = 'replay' then nm = ao<2>
+      if ao<1> = 'replay' then ai.arg = ao<5>
+      if ao<1> # '' then msg = ao<4>
+      busy = (if filt # '' or fnd # '' then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, pnames<pane>, nm, busy, mr)
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', chg)
+            gosub get.rects
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* The key table.  U is offered (enabled) only while the undo file holds a global change that has not been put back (read.undo.info).  Built at the start and again after G and U.
+build.keys:
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, 'enter', 'open', 'open', '', 1)
+   call $tk_keys('add', keys, 'f6', 'box', 'pane', '', 1)                 ;* S.176: F6 / Shift-F6 move between the boxes on every page (Tab does not)
+   call $tk_keys('add', keys, '/', 'filter', 'filter', '', 1)
+   call $tk_keys('add', keys, 'f', 'find', 'find', '', 1)
+   call $tk_keys('add', keys, 'k', 'kind', 'kind', '', 1)
+   call $tk_keys('add', keys, 'e', 'edit', 'edit', '', 1)
+   call $tk_keys('add', keys, 'n', 'new', 'new', '', 1)
+   call $tk_keys('add', keys, 'd', 'delete', 'delete', '', 1)
+   call $tk_keys('add', keys, 'c', 'compile', 'compile', '', 1)
+   call $tk_keys('add', keys, 'b', 'debug', 'debug', '', 1)
+   call $tk_keys('add', keys, 'g', 'global', 'global', '', 1)
+   call $tk_keys('add', keys, 'u', 'undo', 'undo', '', (if un.have and un.state # 'undone' then 1 else 0))
+   call $tk_keys('add', keys, 'f5', 'refresh', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* Esc takes the find and the filter off first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'edit', '&Entry', '&Edit the record in the editor', '', '')
+   call $tk_keys('menu', keys, 'new', '&Entry', '&New record', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Entry', '&Delete the record', '', '')
+   call $tk_keys('menu', keys, 'compile', '&Entry', '&Compile the program (in its account)', '', '')
+   call $tk_keys('menu', keys, 'debug', '&Entry', 'De&bug the program (in its account)', '', '')
+   call $tk_keys('menu', keys, 'global', '&Entry', '&Global change of every row shown', '', '')
+   call $tk_keys('menu', keys, 'undo', '&Entry', '&Undo the last global change', '', '')
+   call $tk_keys('menu', keys, 'open', '&Entry', '&Open the row', '', '')    ;* S.180: every key's action is on a menu (Enter)
+   call $tk_keys('menu', keys, 'pane', '&View', '&Switch box', '', '')
+   call $tk_keys('menu', keys, 'filter', '&View', '&Filter the entries by id', '', '')
+   call $tk_keys('menu', keys, 'find', '&View', 'F&ind an id in every account', '', '')
+   call $tk_keys('menu', keys, 'kind', '&View', '&Kind: VOC entries or dictionary items', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', '&Refresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this box', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   * The AI line: offered the actions that only change what is shown; a proposal is carried out by the page's own key, and its argument is the DEFAULT of the page's own prompt.
+   call $tk_keys('ai', keys, 'pane', '', '', '', '')
+   call $tk_keys('ai', keys, 'filter', '', '', '', '')
+   call $tk_keys('ai', keys, 'find', '', '', '', '')
+   call $tk_keys('ai', keys, 'kind', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   * G and U are NOT offered to the AI (S.97: no destructive action on an administrator page without the owner's word for that row)
+   return
+
+* ------------------------------------------------------------------------------------------------- what the system says
+
+* Every registered account but SDSYS by name, with its path, the edit gates it holds, whether the sdsys user is in its group and whether it is suspended; then the VOC of the
+* selected account.  The selection is kept by name through a refresh.  The account's own record is the only thing read for the list: no VOC is opened here.
+read.all:
+   old.acct = (if ac >= 1 and ac <= an then anm<ac> else '')
+   names = ''
+   apath = ''
+   agate = ''
+   asds = ''
+   asus = ''
+   openpath @sdsys:@ds:'accounts' to acc.f then
+      select acc.f to 9
+      loop
+         readnext id from 9 else exit
+         if upcase(id) # 'SDSYS' then          ;* 10 Nov 26 Windows port: the register's ids are upper case
+            read arec from acc.f, id then
+               locate id in names<1> by 'AL' setting lp else
+                  ins id before names<lp>
+                  ins parse.pathname.tokens(arec<1>) before apath<lp>
+                  gset = (if upcase(trim(arec<ACC$VOC.EDIT>)) = 'YES' then 'v' else '-')
+                  gset := (if upcase(trim(arec<ACC$DICT.EDIT>)) = 'YES' then 'd' else '-')
+                  gset := (if upcase(trim(arec<ACC$BP.EDIT>)) = 'YES' then 'b' else '-')
+                  ins gset before agate<lp>
+                  sg.grp = trim(arec<ACC$GROUP>)
+                  gosub sdsys.state
+                  ins sdw before asds<lp>
+                  stw = ''
+                  if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then stw = 'suspended'
+                  ins stw before asus<lp>
+               end
+            end
+         end
+      repeat
+      close acc.f
+   end
+   an = dcount(names, @fm)
+   anm = names
+   ac = 1
+   if old.acct # '' then
+      locate old.acct in anm<1> setting op then ac = op
+   end
+   if ac > an then ac = an
+   if ac < 1 then ac = 1
+   if fnd # '' then gosub run.find
+   gosub read.entries
+   return
+
+* The selected account's entries of the kind shown (the VOC, or the dictionary items of its files), read by the pathname the register gives, in name order: ekey (the sort key), enm (the
+* id), efile (the file, for a dictionary item), ety (the type word), esm (what it points at, or the heading), en; filt, if set, keeps what holds it.  vfail is 1 when the account's VOC
+* could not be opened; dfail is the number of dictionaries that could not be opened; etrunc when MAXV were listed and there were more; eall is the number read.
+read.entries:
+   old.e = (if ec >= 1 and ec <= en and fnd = '' then ekey<ec> else '')
+   ekey = '' ; enm = '' ; efile = '' ; ety = '' ; esm = '' ; eout = ''
+   en = 0 ; eall = 0 ; etrunc = 0 ; vfail = 0 ; dfail = 0
+   if an > 0 then
+      ca = ac
+      pat = filt
+      gosub collect.account
+      ekey = ckey ; enm = cid ; efile = cfile ; ety = cty2 ; esm = csm2 ; eout = cout
+      en = cn ; eall = rcount ; etrunc = ctrunc ; vfail = cfail ; dfail = cdfail
+   end
+   if fnd = '' then
+      ec = 1
+      if old.e # '' then
+         locate old.e in ekey<1> setting op then ec = op
+      end
+      if ec > en then ec = en
+      if ec < 1 then ec = 1
+   end
+   gosub keep.tops
+   return
+
+* The entries of account number ca of the kind shown that hold the text pat ('' = all), sorted by key.  Out: ckey, cid, cfile ('' for a VOC entry), cty2, csm2, cn; rcount (how many were
+* read), ctrunc (MAXV were kept and there were more), cfail (the VOC could not be opened), cdfail (dictionaries that could not be opened).  The VOC is opened by the pathname the register
+* gives and the records are only read.  A dictionary item holds the text in its id or in its heading.  The dictionary path of a file pointer is read as LOGTO reads a pathname: the
+* tokens are expanded (@SDSYS/voc.dic is the system's dictionary of the VOC, and the shipped pointers of every VOC use it), and a path that is still relative is the account's.
+collect.account:
+   ckey = '' ; cid = '' ; cfile = '' ; cty2 = '' ; csm2 = '' ; cout = '' ; cn = 0 ; rcount = 0 ; ctrunc = 0 ; cfail = 0 ; cdfail = 0
+   openpath apath<ca>:@ds:'voc' to vf else
+      cfail = 1
+      return
+   end
+   select vf to 9
+   if kind = 1 then
+      loop
+         readnext id from 9 else exit
+         rcount += 1
+         if pat = '' or index(upcase(id), upcase(pat), 1) > 0 then
+            if cn >= MAXV then
+               ctrunc = 1
+            end else
+               read r from vf, id then
+                  gosub classify
+                  locate id in ckey<1> by 'AL' setting lp else
+                     ins id before ckey<lp>
+                     ins id before cid<lp>
+                     ins '' before cfile<lp>
+                     ins cty before cty2<lp>
+                     ins csm before csm2<lp>
+                     ins coutf before cout<lp>
+                     cn += 1
+                  end
+               end
+            end
+         end
+      repeat
+      close vf
+      return
+   end
+   if kind = 3 then
+      * programs: the program files of this VOC, found as tool.catalog finds them (a directory file named bp, or ending .bp, or with a file of the same name and .out beside it, where BASIC
+      * puts the compiled programs), then the records of each; a program is built when its compiled program is in the .out file under the same name
+      pfiles = '' ; ppaths = '' ; popaths = ''
+      loop
+         readnext id from 9 else exit
+         read r from vf, id then
+            if upcase(trim(r<1>))[1, 1] = 'F' then
+               tl = downcase(id)
+               isp = 0
+               orr = ''
+               if not(len(tl) > 4 and tl[len(tl) - 3, 4] = '.out') then
+                  if tl = 'bp' then isp = 1
+                  if len(tl) > 3 and tl[len(tl) - 2, 3] = '.bp' then isp = 1
+                  read orr from vf, id : '.out' else orr = ''
+                  if not(isp) and upcase(trim(orr<1>))[1, 1] = 'F' then isp = 1
+               end
+               if isp then
+                  locate id in pfiles<1> by 'AL' setting lp else
+                     ins id before pfiles<lp>
+                     ins trim(r<2>) before ppaths<lp>
+                     ins (if upcase(trim(orr<1>))[1, 1] = 'F' then trim(orr<2>) else '') before popaths<lp>
+                  end
+               end
+            end
+         end
+      repeat
+      close vf
+      for fi = 1 to dcount(pfiles, @fm)
+         pp = parse.pathname.tokens(ppaths<fi>)
+         if not(pp matches abs.pat) then pp = apath<ca> : @ds : pp
+         tp = pp
+         gosub out.test                                              ;* a program file outside this account is not this account's to edit
+         poutf = is.out
+         onames = ''
+         if popaths<fi> # '' then
+            op2 = parse.pathname.tokens(popaths<fi>)
+            if not(op2 matches abs.pat) then op2 = apath<ca> : @ds : op2
+         end else
+            op2 = pp : '.out'                                        ;* this VOC names no .out file (a program file reached by a pointer from another account's VOC has none): the one BASIC makes BESIDE the program file
+         end
+         openpath op2 to ofv then
+            select ofv to 9
+            readlist onames from 9 else onames = ''
+            close ofv
+         end
+         onames = downcase(onames)
+         openpath pp to pfv then
+            if fileinfo(pfv, FL$TYPE) = FL$TYPE.DIR then
+               select pfv to 9
+               loop
+                  readnext pid from 9 else exit
+                  rcount += 1
+                  if pat = '' or index(upcase(pid), upcase(pat), 1) > 0 then
+                     if cn >= MAXV then
+                        ctrunc = 1
+                     end else
+                        pk = pfiles<fi> : '*' : pid
+                        locate pk in ckey<1> by 'AL' setting lp else
+                           built = '-'
+                           locate downcase(pid) in onames<1> setting op3 then built = 'yes'
+                           ins pk before ckey<lp>
+                           ins pid before cid<lp>
+                           ins pfiles<fi> before cfile<lp>
+                           ins built before cty2<lp>
+                           ins pp before csm2<lp>
+                           ins poutf before cout<lp>
+                           cn += 1
+                        end
+                     end
+                  end
+               repeat
+            end
+            close pfv
+         end else
+            cdfail += 1
+         end
+      next fi
+      return
+   end
+   * dictionaries: the files of this VOC that have one (field 3 of the file pointer), then the items of each
+   dfiles = '' ; dpaths = ''
+   loop
+      readnext id from 9 else exit
+      read r from vf, id then
+         if upcase(trim(r<1>))[1, 1] = 'F' and trim(r<3>) # '' then
+            locate id in dfiles<1> by 'AL' setting lp else
+               ins id before dfiles<lp>
+               ins trim(r<3>) before dpaths<lp>
+            end
+         end
+      end
+   repeat
+   close vf
+   for fi = 1 to dcount(dfiles, @fm)
+      dp = parse.pathname.tokens(dpaths<fi>)                      ;* @SDSYS/voc.dic and the like, as LOGTO and the VOC pointers read them
+      if not(dp matches abs.pat) then dp = apath<ca> : @ds : dp
+      tp = dp
+      gosub out.test                                              ;* a dictionary outside this account (SDSYS's voc.dic, which every account's pointer shares, or another account's) is not this account's to edit
+      doutf = is.out
+      openpath dp to df then
+         select df to 9
+         loop
+            readnext did from 9 else exit
+            rcount += 1
+            read dr from df, did then
+               gosub dclassify
+               match.it = (pat = '')
+               if not(match.it) then match.it = (index(upcase(did), upcase(pat), 1) > 0 or index(upcase(dhead), upcase(pat), 1) > 0)
+               if match.it then
+                  if cn >= MAXV then
+                     ctrunc = 1
+                  end else
+                     dk = dfiles<fi> : '*' : did
+                     locate dk in ckey<1> by 'AL' setting lp else
+                        ins dk before ckey<lp>
+                        ins did before cid<lp>
+                        ins dfiles<fi> before cfile<lp>
+                        ins dty before cty2<lp>
+                        ins dhead before csm2<lp>
+                        ins doutf before cout<lp>
+                        cn += 1
+                     end
+                  end
+               end
+            end
+         repeat
+         close df
+      end else
+         cdfail += 1
+      end
+   next fi
+   return
+
+* In: tp (a pathname with its tokens expanded and made absolute), ca (the account number).  Out: is.out, 1 when the path lies OUTSIDE the directory of that account, whether in SDSYS, in
+* another account or anywhere else.  THE OWNER'S RULE (3 Nov 26, in three messages): "pointers back to sdsys should not be editable ... they need to be edited in the sdsys account"; then
+* "the actual pointer should be editable, for example change @SDSYS/voc.dic to some other directory.  But the system should not follow and edit something in SDSYS from another account";
+* then "no pointer records should ever allow the master to end up editing something in [one] account from [another].  The actual pointer could be edited but never the target of the
+* pointer."  So a row marked > means, for a VOC entry, that the POINTER leads outside this account (the record is this account's and is edited like any VOC entry; what it points at is
+* never reached from here) and, for a dictionary item, that the ITEM LIVES OUTSIDE this account (read through its pointer; it is edited in the account it lives in).  The question is
+* the kernel's own geometry (K$PATH.IN: realpath, so .. and links cannot make a path look inside).  This stage edits nothing; the stages that edit follow the rule.
+out.test:
+   is.out = (if kernel(K$PATH.IN, apath<ca> : @fm : tp) then 0 else 1)
+   return
+
+* In: dr (a dictionary item).  Out: dty (D, I, E, L, PH or X), dhead (its column heading, or for a phrase and a text what it says), on one line
+dclassify:
+   t1 = upcase(trim(dr<1>))
+   dty = t1[1, 1]
+   if t1[1, 2] = 'PH' then dty = 'PH'
+   if dty = 'D' or dty = 'I' or dty = 'E' or dty = 'L' then
+      dhead = dr<4>
+   end else
+      dhead = dr<2>
+   end
+   dhead = convert(@vm, ' ', convert(@sm, ' ', dhead))
+   return
+
+* F: the text in the entries of the kind shown of EVERY account (an id for the VOC; an id or a heading for a dictionary item).  The hits are kept in name order of account and key: hacc,
+* hid, hfile, hty, hsm, hn; htrunc when there were more than MAXV; hseen is the number of VOCs that could be opened.  This reads every VOC (and every dictionary); it is run only when it is
+* asked for, and again by F5.  Each account's entries come back from collect.account already sorted, and the accounts are taken in name order, so the hits are appended.
+run.find:
+   hacc = '' ; hid = '' ; hfile = '' ; hty = '' ; hsm = '' ; hout = '' ; hn = 0 ; htrunc = 0 ; hseen = 0
+   for a = 1 to an
+      ca = a
+      pat = fnd
+      gosub collect.account
+      if not(cfail) then
+         hseen += 1
+         for q = 1 to cn
+            if hn >= MAXV then
+               htrunc = 1
+            end else
+               hn += 1
+               hacc<hn> = anm<a>
+               hid<hn> = cid<q>
+               hfile<hn> = cfile<q>
+               hty<hn> = cty2<q>
+               hsm<hn> = csm2<q>
+               hout<hn> = cout<q>
+            end
+         next q
+         if ctrunc then htrunc = 1
+      end
+   next a
+   ec = 1 ; etop = 1
+   return
+
+* In: r (the record).  Out: cty (the type word), csm (what it points at, on one line)
+classify:
+   t1 = upcase(trim(r<1>))
+   cty = t1[1, 1]
+   if t1[1, 2] = 'PA' or t1[1, 2] = 'PH' or t1[1, 2] = 'PQ' then cty = t1[1, 2]
+   begin case
+      case cty = 'V'
+         csm = r<2> : ' ' : r<3>
+      case cty = 'K'
+         csm = 'a query keyword'
+      case cty = 'F'
+         csm = 'data ' : r<2> : (if r<3> # '' then '  dict ' : r<3> else '')
+      case cty = 'Q'
+         csm = 'file ' : r<3> : ' in the account ' : r<2>
+      case cty = 'R'
+         csm = 'record ' : r<3> : ' of ' : r<2>
+      case 1
+         csm = r<2>
+   end case
+   csm = convert(@vm, ' ', convert(@sm, ' ', csm))
+   * >: a pointer whose target lies outside this account - a file pointer whose data or dictionary path leads outside its directory, a Q-pointer to any other account, a remote item (R),
+   * whose file this page does not follow to see where it lives.  The pointer record is this account's (see out.test).
+   coutf = 0
+   begin case
+      case cty = 'F'
+         tp = parse.pathname.tokens(trim(r<2>))
+         if not(tp matches abs.pat) then tp = apath<ca> : @ds : tp
+         gosub out.test
+         coutf = is.out
+         if not(coutf) and trim(r<3>) # '' then
+            tp = parse.pathname.tokens(trim(r<3>))
+            if not(tp matches abs.pat) then tp = apath<ca> : @ds : tp
+            gosub out.test
+            coutf = is.out
+         end
+      case cty = 'Q'
+         coutf = (if downcase(trim(r<2>)) = downcase(anm<ca>) then 0 else 1)
+      case cty = 'R'
+         coutf = 1
+   end case
+   return
+
+* The first row shown in each box follows the selection
+keep.tops:
+   if ac < atop then atop = ac
+   if ac > atop + VIS - 1 then atop = ac - VIS + 1
+   if atop < 1 then atop = 1
+   if ec < etop then etop = ec
+   if ec > etop + VIS - 1 then etop = ec - VIS + 1
+   if etop < 1 then etop = 1
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+* The layout: the two lists side by side in the first band, the explanation in the second and the help in the third, at 140 by 43 the sizes tool.jobs has.
+* Out: a.x a.y a.w a.h (Accounts), c.x c.y c.w c.h (Entries), m.x m.y m.w m.h (What this means), h.x h.y h.w h.h (Help), VIS.
+declare.layout:
+   d = ''
+   d<1> = 'accounts' : @vm : 1 : @vm : 1 : @vm : 14 : @vm : 50 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<2> = 'entries' : @vm : 1 : @vm : 2 : @vm : 14 : @vm : 87 : @vm : 1 : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<3> = 'means' : @vm : 2 : @vm : 1 : @vm : 17 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<4> = 'help' : @vm : 3 : @vm : 1 : @vm : 5 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   ctx<TK.C.FOCI> = 'accounts' : @sm : 'Accounts' : @vm : 'entries' : @sm : 'Entries'   ;* the boxes that take the focus, for $tk_frame's [*] / [-]
+   call $tk_layout('declare', ctx, d, perr)
+   if perr # '' then
+      call $tk_close(ctx)
+      display perr
+      stop
+   end
+   gosub get.rects
+   return
+
+get.rects:
+   call $tk_layout('pane', ctx, 'accounts', rc)
+   a.x = rc<1, 1> ; a.y = rc<1, 2> ; a.w = rc<1, 3> ; a.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'entries', rc)
+   c.x = rc<1, 1> ; c.y = rc<1, 2> ; c.w = rc<1, 3> ; c.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'means', rc)
+   m.x = rc<1, 1> ; m.y = rc<1, 2> ; m.w = rc<1, 3> ; m.h = rc<1, 4>
+   call $tk_layout('pane', ctx, 'help', rc)
+   h.x = rc<1, 1> ; h.y = rc<1, 2> ; h.w = rc<1, 3> ; h.h = rc<1, 4>
+   m.tw = m.w - 4
+   h.tw = h.w - 4
+   VIS = a.h - 4                                                 ;* the header row, the rows, a blank row and the border
+   gosub keep.tops
+   return
+
+draw.all:
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   screen box at a.x,a.y size a.w,a.h title 'Accounts'
+   kw1 = (if kind = 1 then 'VOC' else (if kind = 2 then 'Dictionary items' else 'Programs'))
+   if fnd # '' then
+      ttl = kw1 : ' with "' : fnd : '" in every account'
+   end else
+      ttl = kw1 : (if an > 0 then ' of ' : anm<ac> else '') : (if filt # '' then ', matching "' : filt : '"' else '')
+   end
+   screen box at c.x,c.y size c.w,c.h title ttl
+   screen box at m.x,m.y size m.w,m.h title 'What this means'
+   screen box at h.x,h.y size h.w,h.h title 'Help'
+   gosub draw.accounts
+   gosub draw.entries
+   gosub draw.effect
+   gosub draw.help
+   return
+
+* The SDSYS column for the account group sg.grp, and the test E, N, D, C and B ask (2 Nov 26).  Out: sdw.  'n/a' when the account has no group in the register; 'no' when /etc/group
+* does not list the sdsys user in it; 'yes' when it does AND this session holds the group; 'relog' when it does but this session does not.  A process keeps the groups it started with,
+* so a session of SDSYS that began before the sdsys user joined the group cannot write inside the account (error 3018) until SDSYS signs on again.  The session's own groups are
+* the kernel's answer (K$IN.GROUP: the process's effective and supplementary groups, compared with the group's number), not a reading of /etc/group.
+* 10 Nov 26 Windows port (RELEASE_1.1 201): there is no sdsys user and no POSIX group to join (Linux S.103 is not carried).  An SDSYS session is an elevated
+*   administrator, and every account directory gives Administrators full control (secure-account-dirs.ps1), so the answer is always 'yes' and 'relog' never
+*   happens: the column and the refusals that ask for it stay, so the page reads as on Linux.
+sdsys.state:
+   sdw = 'yes'
+   return
+
+draw.accounts:
+   tw = a.w - 8
+   ex = a.w - 50
+   screen text fmt('Account', (20 + ex) : 'L') : fmt('Gates', '7L') : fmt('SDSYS', '6L') : 'State' at a.x + 2,a.y + 1 attr 'header' width tw      ;* 20 + 7 + 6 + 'suspended' (9) = the 42 columns of the box at 140 by 43
+   for r = 1 to VIS
+      k = atop + r - 1
+      s = ''
+      if k <= an then s = fmt(anm<k>[1, 18 + ex], (20 + ex) : 'L') : fmt(agate<k>, '7L') : fmt(asds<k>, '6L') : asus<k>
+      screen text s at a.x + 2,a.y + 1 + r attr (if k = ac and k <= an then (if pane = 1 then 'highlight' else 'bold') else 'normal') width tw
+   next r
+   if an = 0 then screen text 'No account is registered but SDSYS.' at a.x + 2,a.y + 3 width tw
+   call $tk_help('mark', a.x + a.w - 5, a.y + 1, 0, 0)
+   return
+
+draw.entries:
+   tw = c.w - 8
+   ex = c.w - 87
+   if fnd # '' then
+      if kind = 1 then
+         s = fmt('Account', '16L') : fmt('Id', (24 + ex) : 'L') : fmt('>', '2L') : fmt('Type', '6L') : 'Points at'
+      end else
+         s = fmt('Account', '14L') : fmt('File', '12L') : fmt('>', '2L') : fmt('Id', (18 + ex) : 'L') : fmt((if kind = 2 then 'Type' else 'Built'), '5L') : (if kind = 2 then 'Heading' else 'Source file')
+      end
+      screen text s at c.x + 2,c.y + 1 attr 'header' width tw
+      for r = 1 to VIS
+         k = etop + r - 1
+         s = ''
+         if k <= hn then
+            if kind = 1 then
+               s = fmt(hacc<k>[1, 14], '16L') : fmt(hid<k>[1, 22 + ex], (24 + ex) : 'L') : fmt((if hout<k> then '>' else ''), '2L') : fmt(hty<k>, '6L') : hsm<k>
+            end else
+               s = fmt(hacc<k>[1, 12], '14L') : fmt(hfile<k>[1, 10], '12L') : fmt((if hout<k> then '>' else ''), '2L') : fmt(hid<k>[1, 16 + ex], (18 + ex) : 'L') : fmt(hty<k>, '5L') : hsm<k>
+            end
+         end
+         screen text s at c.x + 2,c.y + 1 + r attr (if k = ec and k <= hn then (if pane = 2 then 'highlight' else 'bold') else 'normal') width tw
+      next r
+      if hn = 0 then
+         begin case
+            case kind = 1
+               s = 'No VOC has an id with "' : fnd : '" in it (' : hseen : ' VOCs read).'
+            case kind = 2
+               s = 'No dictionary item has "' : fnd : '" in its id or its heading (' : hseen : ' accounts read).'
+            case 1
+               s = 'No program has "' : fnd : '" in its id (' : hseen : ' accounts read).'
+         end case
+         screen text s at c.x + 2,c.y + 3 width tw
+      end
+      s = hn : (if hn = 1 then ' hit' else ' hits') : ' in ' : hseen
+      if kind = 1 then
+         s := (if hseen = 1 then ' VOC' else ' VOCs') : ' read'
+      end else
+         s := (if hseen = 1 then ' account' else ' accounts') : ' read'
+      end
+      if htrunc then s := '; only the first ' : MAXV : ' are listed'
+      s := '.'
+      screen text s at c.x + 2,c.y + c.h - 2 attr 'bold' width tw
+   end else
+      if kind = 1 then
+         s = fmt('Id', (30 + ex) : 'L') : fmt('>', '2L') : fmt('Type', '6L') : 'Points at'
+      end else
+         s = fmt('File', '13L') : fmt('>', '2L') : fmt('Id', (22 + ex) : 'L') : fmt((if kind = 2 then 'Type' else 'Built'), '5L') : (if kind = 2 then 'Heading' else 'Source file')
+      end
+      screen text s at c.x + 2,c.y + 1 attr 'header' width tw
+      for r = 1 to VIS
+         k = etop + r - 1
+         s = ''
+         if k <= en then
+            if kind = 1 then
+               s = fmt(enm<k>[1, 28 + ex], (30 + ex) : 'L') : fmt((if eout<k> then '>' else ''), '2L') : fmt(ety<k>, '6L') : esm<k>
+            end else
+               s = fmt(efile<k>[1, 11], '13L') : fmt((if eout<k> then '>' else ''), '2L') : fmt(enm<k>[1, 20 + ex], (22 + ex) : 'L') : fmt(ety<k>, '5L') : esm<k>      ;* a dictionary item: its type and heading; a program: built or not, and the directory of its file
+            end
+         end
+         screen text s at c.x + 2,c.y + 1 + r attr (if k = ec and k <= en then (if pane = 2 then 'highlight' else 'bold') else 'normal') width tw
+      next r
+      s = ''
+      begin case
+         case an = 0
+            null
+         case vfail
+            s = "This account's VOC cannot be opened from here."
+            s2 = 'Its path in the register: ' : apath<ac>                    ;* on lines of its own, WRAPPED at the box's width (2 Nov 26): cut at the edge, the account's name was in the part that was lost
+            pr = 0
+            loop
+               screen text s2[1, tw] at c.x + 2,c.y + 4 + pr width tw
+               s2 = s2[tw + 1, len(s2)]
+               pr += 1
+            while s2 # '' and pr < 6 repeat
+         case en = 0 and filt # '' and kind = 1
+            s = 'No entry has "' : filt : '" in its id.'
+         case en = 0 and filt # '' and kind = 2
+            s = 'No dictionary item has "' : filt : '" in its id or its heading.'
+         case en = 0 and filt # ''
+            s = 'No program has "' : filt : '" in its id.'
+         case en = 0 and kind = 1
+            s = 'The VOC of this account is empty.'
+         case en = 0 and kind = 2
+            s = 'No file of this account has a dictionary with an item in it.'
+         case en = 0
+            s = 'This account has no program file (a directory file named bp, or ending .bp, or with a .out file beside it) with a program in it.'
+      end case
+      if s # '' then screen text s at c.x + 2,c.y + 3 width tw
+      if an > 0 and not(vfail) then
+         begin case
+            case kind = 1
+               s = en : ' of ' : eall : (if eall = 1 then ' entry' else ' entries')
+            case kind = 2
+               s = en : ' of ' : eall : (if eall = 1 then ' item' else ' items')
+            case 1
+               s = en : ' of ' : eall : (if eall = 1 then ' program' else ' programs')
+         end case
+         if filt # '' then s := ' hold "' : filt : '"'
+         if etrunc then s := '; only the first ' : MAXV : ' are listed'
+         if dfail > 0 then s := '; ' : dfail : (if kind = 2 then (if dfail = 1 then ' dictionary' else ' dictionaries') else (if dfail = 1 then ' program file' else ' program files')) : ' could not be opened'
+         s := '.'
+         screen text s at c.x + 2,c.y + c.h - 2 attr 'bold' width tw
+      end
+   end
+   call $tk_help('mark', c.x + c.w - 5, c.y + 1, 0, 0)
+   return
+
+* In plain sentences, for what is selected; then the entry under the cursor field by field
+draw.effect:
+   lines = ''
+   if an = 0 then
+      lines<-1> = 'There is no registered account but SDSYS, so there is nothing to list.'
+   end else
+      lines<-1> = anm<ac> : ': the gates ' : agate<ac> : ' are the right to save a change to its VOC (v, voc-edit), its dictionaries (d, dict-edit) and its programs (b, bp-edit); a dash means the account is locked out of that.  An administrator is not held to them.'
+      begin case
+         case asds<ac> = 'yes'
+            lines<-1> = "SDSYS is an elevated administrator, and the account's directories give Administrators full control, so SDSYS can write inside them from outside SD."
+         case asds<ac> = 'relog'
+            lines<-1> = "The sdsys user is in the account's group, but this session of SDSYS began before it joined and does not hold the group: it cannot write inside the account.  Sign on again as SDSYS; until then E, N, D, C and B refuse it."
+         case asds<ac> = 'no'
+            lines<-1> = "The sdsys user is NOT in the account's group: SDSYS cannot write inside it from outside SD (modify.account " : anm<ac> : ' sdsys-on puts it in).'
+         case 1
+            lines<-1> = 'The account has no group in the register.'
+      end case
+      if asus<ac> # '' then lines<-1> = 'The account is suspended.'
+      begin case
+         case kind = 1
+            lines<-1> = 'The entries are read from the account' : "'s own VOC file when the cursor comes to the account; nothing is copied.  E edits the entry under the cursor in the editor, N makes a new one and D deletes it: only the VOC's own records, never the file a pointer leads to."
+            lines<-1> = ">: the entry is a pointer whose target lies outside this account (in SDSYS, as @SDSYS/voc.dic does, or in another account).  The pointer is this account's own record, edited like any VOC entry; what it points at belongs to the account it lies in and is never edited from this page."
+         case kind = 2
+            lines<-1> = 'The dictionary items are read, when the cursor comes to the account, from the dictionary of each file its VOC points at (field 3 of the file pointer); nothing is copied.  An item matches a text in its id or in its column heading.  E edits the item under the cursor as the form, N makes a new one in the dictionary of the file under the cursor and D deletes it: only dictionary items.'
+            lines<-1> = ">: the item lives in a dictionary outside this account (SDSYS's, which every account's pointer to it shares, or another account's) and is only read through this account's pointer.  It is edited in the account it lives in, never from here: E and N refuse it."
+         case 1
+            lines<-1> = "The programs are the records of the account's program files (a directory file named bp, or ending .bp, or with a file of the same name and .out beside it), read when the cursor comes to the account; nothing is copied.  Built: yes when the compiled program is in the .out file under the same name, - when it is not (the .out file is the one the VOC names, else the one beside the program file).  E edits the program under the cursor in the editor and N makes a new one in the same program file, in the account it belongs to; C compiles it IN THAT ACCOUNT (run.in) and B debugs it there, and the editor's own Compile, Catalog and Debug do the same.  D deletes it with its compiled program (a catalog entry is left: DELETE.CATALOG in the account removes it)."
+            lines<-1> = ">: the program file lies outside this account (SDSYS's or another account's) and is only read through this account's pointer.  Its programs are edited, compiled and run in the account it lives in, never from here."
+      end case
+   end
+   lines<-1> = ''
+   gosub entry.lines
+   gosub wrap.lines
+   for r = 1 to m.h - 3
+      screen text lines<r> at m.x + 2,m.y + 1 + r width m.tw
+   next r
+   return
+
+* The entry under the cursor field by field (up to nine fields), read from its account's VOC; the type in words first
+entry.lines:
+   eacct = '' ; eid = '' ; efl = ''
+   if fnd # '' and hn > 0 and ec >= 1 and ec <= hn then
+      eacct = hacc<ec> ; eid = hid<ec> ; ety1 = hty<ec> ; efl = hfile<ec>
+   end
+   if fnd = '' and en > 0 and ec >= 1 and ec <= en then
+      eacct = anm<ac> ; eid = enm<ec> ; ety1 = ety<ec> ; efl = efile<ec>
+   end
+   if eid = '' then return
+   if kind = 2 then
+      gosub dict.item.lines
+      return
+   end
+   if kind = 3 then
+      gosub prog.item.lines
+      return
+   end
+   gosub type.word
+   lines<-1> = eid : ' in ' : eacct : '  -  ' : tword
+   locate eacct in anm<1> setting ap1 then
+      openpath apath<ap1>:@ds:'voc' to vf2 then
+         read dr from vf2, eid then
+            nfld = dcount(dr, @fm)
+            if nfld > 9 then nfld = 9
+            for q = 1 to nfld
+               lines<-1> = fmt(q, '3R') : '  ' : convert(@vm, ' | ', convert(@sm, ' / ', dr<q>))
+            next q
+            if dcount(dr, @fm) > 9 then lines<-1> = '     (and ' : dcount(dr, @fm) - 9 : ' more fields)'
+         end
+         close vf2
+      end
+   end
+   return
+
+* The program under the cursor: eid in the program file efl of the account eacct, the first lines of its source (up to nine), found by the file's pointer in that account's VOC; whether
+* it is built is ety1 ('yes' or '-')
+prog.item.lines:
+   lines<-1> = eid : ' in ' : efl : ' of ' : eacct : '  -  ' : (if ety1 = 'yes' then 'built (its compiled program is in the .out file)' else 'not built (no compiled program of that name in the .out file)')
+   locate eacct in anm<1> setting ap1 then
+      openpath apath<ap1>:@ds:'voc' to vf2 then
+         read fr from vf2, efl then
+            pp2 = parse.pathname.tokens(trim(fr<2>))
+            if not(pp2 matches abs.pat) then pp2 = apath<ap1> : @ds : pp2
+            openpath pp2 to pf2 then
+               read psrc from pf2, eid then
+                  nfld = dcount(psrc, @fm)
+                  if nfld > 9 then nfld = 9
+                  for q = 1 to nfld
+                     lines<-1> = fmt(q, '3R') : '  ' : psrc<q>
+                  next q
+                  if dcount(psrc, @fm) > 9 then lines<-1> = '     (and ' : dcount(psrc, @fm) - 9 : ' more lines)'
+               end
+               close pf2
+            end
+         end
+         close vf2
+      end
+   end
+   return
+
+* The dictionary item under the cursor: eid in the dictionary of the file efl of the account eacct, field by field (up to nine), found by the file's pointer in that account's VOC
+dict.item.lines:
+   begin case
+      case ety1 = 'D'
+         tword = 'a D-type item (a field of the record)'
+      case ety1 = 'I'
+         tword = 'an I-type item (calculated)'
+      case ety1 = 'PH'
+         tword = 'a phrase'
+      case 1
+         tword = 'an item of type ' : ety1
+   end case
+   lines<-1> = eid : ' in the dictionary of ' : efl : ' of ' : eacct : '  -  ' : tword
+   locate eacct in anm<1> setting ap1 then
+      openpath apath<ap1>:@ds:'voc' to vf2 then
+         read fr from vf2, efl then
+            dp = trim(fr<3>)
+            if dp # '' then
+               dp = parse.pathname.tokens(dp)
+               if not(dp matches abs.pat) then dp = apath<ap1> : @ds : dp
+               openpath dp to df2 then
+                  read dr from df2, eid then
+                     nfld = dcount(dr, @fm)
+                     if nfld > 9 then nfld = 9
+                     for q = 1 to nfld
+                        lines<-1> = fmt(q, '3R') : '  ' : convert(@vm, ' | ', convert(@sm, ' / ', dr<q>))
+                     next q
+                     if dcount(dr, @fm) > 9 then lines<-1> = '     (and ' : dcount(dr, @fm) - 9 : ' more fields)'
+                  end
+                  close df2
+               end
+            end
+         end
+         close vf2
+      end
+   end
+   return
+
+* In: ety1.  Out: tword, the type in words
+type.word:
+   begin case
+      case ety1 = 'V'
+         tword = 'a verb'
+      case ety1 = 'K'
+         tword = 'a keyword of the query processor'
+      case ety1 = 'F'
+         tword = 'a file'
+      case ety1 = 'Q'
+         tword = 'a pointer to a file in another account'
+      case ety1 = 'R'
+         tword = 'a pointer to a record in another file'
+      case ety1 = 'PA' or ety1 = 'PH'
+         tword = 'a paragraph'
+      case ety1 = 'PQ'
+         tword = 'a PROC (not supported here)'
+      case ety1 = 'S'
+         tword = 'a stored sentence'
+      case ety1 = 'X'
+         tword = 'text, not a command'
+      case ety1 = 'D'
+         tword = 'a data descriptor'
+      case ety1 = 'M'
+         tword = 'a menu'
+      case 1
+         tword = 'an entry of type ' : ety1
+   end case
+   return
+
+wrap.lines:
+   wrapped = ''
+   for wi = 1 to dcount(lines, @fm)
+      if lines<wi> = '' then
+         wrapped<-1> = ''
+      end else
+         call $tk_wrap(lines<wi>, m.tw, pieces)
+         wrapped<-1> = pieces
+      end
+   next wi
+   lines = wrapped
+   return
+
+draw.help:
+   screen text 'Up and Down move, PgUp and PgDn a page.  Tab changes box.  Enter in Accounts goes to its entries.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
+   screen text '/ filters by a part of an id (of a heading too, in dictionaries).  F finds it in every account (Enter on a hit goes to it).  Esc takes them off.' at h.x + 2,h.y + 2 width h.tw
+   screen text 'K kind.  E edit, N new, D delete, C compile, B debug the row; G changes every row shown, U puts it back.  F5 again.  Ctrl-Q leaves.' at h.x + 2,h.y + 3 width h.tw
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 then nm = downcase(nm)
+   nrows = (if fnd # '' then hn else en)
+   begin case
+      case nm = 'up'
+         if pane = 1 and ac > 1 then
+            ac -= 1
+            gosub new.account
+         end
+         if pane = 2 and ec > 1 then
+            ec -= 1
+            gosub redraw
+         end
+      case nm = 'down'
+         if pane = 1 and ac < an then
+            ac += 1
+            gosub new.account
+         end
+         if pane = 2 and ec < nrows then
+            ec += 1
+            gosub redraw
+         end
+      case nm = 'pgup' or nm = 'pgdn'
+         stp = (if nm = 'pgup' then 0 - VIS else VIS)
+         if pane = 1 and an > 0 then
+            ac = ac + stp
+            if ac < 1 then ac = 1
+            if ac > an then ac = an
+            gosub new.account
+         end
+         if pane = 2 and nrows > 0 then
+            ec = ec + stp
+            if ec < 1 then ec = 1
+            if ec > nrows then ec = nrows
+            gosub redraw
+         end
+      case nm = 'home' or nm = 'end'
+         if pane = 1 and an > 0 then
+            ac = (if nm = 'home' then 1 else an)
+            gosub new.account
+         end
+         if pane = 2 and nrows > 0 then
+            ec = (if nm = 'home' then 1 else nrows)
+            gosub redraw
+         end
+      case nm = 'right' or nm = 'left'
+         pane = (if pane = 1 then 2 else 1)
+         gosub redraw
+      case nm = 'enter' or nm = ' '
+         if pane = 1 then
+            pane = 2
+            gosub redraw
+         end else
+            gosub open.entry
+         end
+      case nm = '/'
+         gosub do.filter
+      case nm = 'f'
+         gosub do.find
+      case nm = 'k'
+         gosub do.kind
+      case nm = 'e'
+         gosub do.edit
+      case nm = 'n'
+         gosub do.new
+      case nm = 'd'
+         gosub do.delete
+      case nm = 'c'
+         gosub do.build
+      case nm = 'b'
+         gosub do.debug
+      case nm = 'g'
+         gosub do.global
+      case nm = 'u'
+         gosub do.undo
+      case nm = 'f1' or nm = '?'
+         gosub help.here
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, pnames<pane>, std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, pane, nm : @fm : 2, ap)         ;* S.176: F6 / Shift-F6 go round the two boxes and the AI line; AI > Ask the AI goes to the line
+         if ap<1> > 0 and ap<1> # pane then
+            pane = ap<1>
+            gosub redraw
+         end
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+      case nm = 'esc'
+         if fnd # '' or filt # '' then
+            fnd = '' ; filt = ''
+            ec = 1 ; etop = 1
+            gosub read.entries
+            gosub draw.all
+            msg = 'every entry of the account'
+         end
+   end case
+   return
+
+* Another account selected: its VOC is read and the box is drawn again under its new title
+new.account:
+   if fnd = '' then
+      ec = 1
+      etop = 1
+      gosub read.entries
+      gosub draw.all
+   end else
+      gosub redraw
+   end
+   return
+
+redraw:
+   gosub keep.tops
+   gosub draw.accounts
+   gosub draw.entries
+   gosub draw.effect
+   return
+
+* Enter in Entries: on a hit of a find it goes to that entry in its account; otherwise it says which key edits
+open.entry:
+   if fnd # '' and hn > 0 and ec >= 1 and ec <= hn then
+      want.acct = hacc<ec>
+      want.id = hid<ec>
+      want.key = (if kind = 1 then hid<ec> else hfile<ec> : '*' : hid<ec>)
+      fnd = ''
+      locate want.acct in anm<1> setting ap2 then ac = ap2
+      filt = ''
+      ec = 1 ; etop = 1
+      gosub read.entries
+      locate want.key in ekey<1> setting ep2 then ec = ep2
+      gosub keep.tops
+      gosub draw.all
+      msg = want.id : ' in ' : want.acct
+   end else
+      msg = 'E edits the record under the cursor in the editor, N makes a new one, D deletes it'
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- E and N (S.96 M2)
+
+* A word the page may put in a Q-pointer's name and in the sentence it gives the IDE: letters a-z, digits, dot, dash and underscore, 1 to 63 of them (what $tk_run lets through).  In: cw.  Out: okname
+check.word:
+   okname = (len(cw) > 0 and len(cw) <= 63)
+   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   for cwq = 1 to len(cw)
+      if index(good, cw[cwq, 1], 1) = 0 then okname = @false
+   next cwq
+   return
+
+* E: the record under the cursor, in the editor.  The cursor must be in Entries on a row; a hit of a find is edited in the account it was found in.
+do.edit:
+   if pane # 2 then
+      msg = 'Tab to the entries first, then E'
+      return
+   end
+   nrows = (if fnd # '' then hn else en)
+   if ec < 1 or ec > nrows then
+      msg = 'there is no entry here to edit: N makes a new one'
+      return
+   end
+   if fnd # '' then
+      ea = hacc<ec> ; eid = hid<ec> ; efl = hfile<ec>
+   end else
+      ea = anm<ac> ; eid = enm<ec> ; efl = efile<ec>
+   end
+   enw = 0
+   emode = 'edit'
+   gosub edit.record
+   return
+
+* D: the record under the cursor is deleted, in its own account (a hit of a find in the account it was found in).  It goes E's way through edit.record, so the pointer rule and every
+* check of E come first; delete.reached then asks for the id to be typed and deletes.
+do.delete:
+   if pane # 2 then
+      msg = 'Tab to the entries first, then D'
+      return
+   end
+   nrows = (if fnd # '' then hn else en)
+   if ec < 1 or ec > nrows then
+      msg = 'there is no entry here to delete'
+      return
+   end
+   if fnd # '' then
+      ea = hacc<ec> ; eid = hid<ec> ; efl = hfile<ec>
+   end else
+      ea = anm<ac> ; eid = enm<ec> ; efl = efile<ec>
+   end
+   enw = 0
+   emode = 'delete'
+   gosub edit.record
+   return
+
+* C: the program under the cursor is compiled IN ITS OWN ACCOUNT by run.in (the owner's mechanism C of 2 Nov 26: its VOC, its bp.out, its catalogue, and NO.CATALOG, so a $catalog in the
+* source does not act as the administrator).  It goes E's way through edit.record first, so the pointer rule refuses a program file that lies outside the account before anything runs.
+do.build:
+   if pane # 2 then
+      msg = 'Tab to the entries first, then C'
+      return
+   end
+   if kind # 3 then
+      msg = 'C compiles a program: K shows the programs'
+      return
+   end
+   nrows = (if fnd # '' then hn else en)
+   if ec < 1 or ec > nrows then
+      msg = 'there is no program here to compile'
+      return
+   end
+   if fnd # '' then
+      ea = hacc<ec> ; eid = hid<ec> ; efl = hfile<ec>
+   end else
+      ea = anm<ac> ; eid = enm<ec> ; efl = efile<ec>
+   end
+   enw = 0
+   emode = 'compile'
+   gosub edit.record
+   return
+
+* B (M5): the program under the cursor in the debugger, IN ITS OWN ACCOUNT (run.in compiles it for the debugger and runs the debugger there).  E's way through edit.record first.
+do.debug:
+* 10 Nov 26 Windows port (RELEASE_1.1 201): run.in has no debug here (the debugger would run the account's program on the session's elevated token), so B
+*   says so and does nothing.  The key stays, so the page's keys are Linux's; the rest of this routine is kept for the day debug is built.
+   msg = 'B is not built on Windows: run.in does not debug in another account.  Debug the program in its own account'
+   return
+   if pane # 2 then
+      msg = 'Tab to the entries first, then B'
+      return
+   end
+   if kind # 3 then
+      msg = 'B debugs a program: K shows the programs'
+      return
+   end
+   nrows = (if fnd # '' then hn else en)
+   if ec < 1 or ec > nrows then
+      msg = 'there is no program here to debug'
+      return
+   end
+   if fnd # '' then
+      ea = hacc<ec> ; eid = hid<ec> ; efl = hfile<ec>
+   end else
+      ea = anm<ac> ; eid = enm<ec> ; efl = efile<ec>
+   end
+   enw = 0
+   emode = 'debug'
+   gosub edit.record
+   return
+
+* N: a new record in the account under the cursor (a new item: in the dictionary of the file the row under the cursor belongs to).  Its id is asked first.  Not while a find is on: a hit
+* belongs to an account the Accounts box does not show.
+do.new:
+   if an < 1 then return
+   if fnd # '' then
+      msg = 'Esc takes the find off first: a new record is made in the account selected in Accounts'
+      return
+   end
+   efl = ''
+   ptxt = 'Id of the new VOC entry in ' : anm<ac>
+   if kind = 2 then
+      if ec < 1 or ec > en or pane # 2 then
+         msg = 'put the cursor on an item of the file the new item belongs to (Tab to the entries)'
+         return
+      end
+      efl = efile<ec>
+      ptxt = 'Id of the new item in the dictionary of ' : efl : ' (' : anm<ac> : ')'
+   end
+   if kind = 3 then
+      if ec < 1 or ec > en or pane # 2 then
+         msg = 'put the cursor on a program of the file the new program belongs to (Tab to the entries)'
+         return
+      end
+      efl = efile<ec>
+      ptxt = 'Id of the new program in ' : efl : ' (' : anm<ac> : ')'
+   end
+   screen ask ptxt width 40 value '' title 'New' returning nt then got = 1 else got = 0
+   if not(got) then return
+   eid = downcase(trim(nt))
+   if eid = '' then return
+   ea = anm<ac>
+   enw = 1
+   emode = 'edit'
+   gosub edit.record
+   return
+
+* The record eid of the account ea (the VOC when efl is '', else the dictionary of its file efl) in the IDE, enw = 1 when it is to be made.  THE POINTER RULE (owner, 3 Nov 26): nothing is
+* written, and no pointer is made, until the file that would be edited is known to lie inside the account.  The register and the account's own VOC are read AGAIN here (the list may be
+* old; an account may have repointed a file since), the path is judged by the kernel's geometry (K$PATH.IN: realpath, so .. and links cannot make a path look inside), and what the
+* pointer opens is judged once more before the IDE is given it.
+edit.record:
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      msg = 'the register cannot be opened'
+      return
+   end
+   read arec from acc.f, ea else arec = ''
+   close acc.f
+   if arec = '' then
+      msg = ea : ' is not in the register any more: F5 reads the list again'
+      return
+   end
+   ap.f = parse.pathname.tokens(arec<1>)
+   tp = ap.f : @ds : 'voc'
+   isprog = (kind = 3)                                           ;* M4: a program; efl is its program file, whose DATA path (field 2) is the file edited
+   if efl # '' then
+      openpath ap.f : @ds : 'voc' to rvf else
+         msg = 'the VOC of ' : ea : ' cannot be opened'
+         return
+      end
+      read fr from rvf, efl else fr = ''
+      dorr = ''
+      if isprog then read dorr from rvf, efl : '.out' else dorr = ''     ;* M6a: the .out file this VOC names, read at the keypress like the program file (D's object)
+      close rvf
+      if isprog then
+         if upcase(trim(fr<1>))[1, 1] # 'F' or trim(fr<2>) = '' then
+            msg = efl : ' is not a program file of ' : ea
+            return
+         end
+         tp = parse.pathname.tokens(trim(fr<2>))
+      end else
+         if upcase(trim(fr<1>))[1, 1] # 'F' or trim(fr<3>) = '' then
+            msg = efl : ' is not a file of ' : ea : ' that has a dictionary'
+            return
+         end
+         tp = parse.pathname.tokens(trim(fr<3>))
+      end
+      if not(tp matches abs.pat) then tp = ap.f : @ds : tp
+   end
+   if not(kernel(K$PATH.IN, ap.f : @fm : tp)) then
+      msg = (if efl = '' then 'the VOC file of ' : ea : ' lies outside the account' else 'the dictionary of ' : efl : ' lies outside ' : ea : ': it is edited in the account it lives in, not from here (' : tp : ')')
+      if isprog then msg = 'the program file ' : efl : ' lies outside ' : ea : ': its programs are edited and compiled in the account they live in, not from here (' : tp : ')'
+      return
+   end
+   * The words that go into the pointer's name and the IDE's sentence: asked AFTER the rule, so that a file outside the account ($map's dictionary in SDSYS) is refused for the reason
+   * that matters, not for a character
+   cw = ea
+   gosub check.word
+   ok1 = okname
+   cw = eid
+   gosub check.word
+   ok2 = (okname and eid # 'creating.seqkey')                    ;* the IDE reads that word as "the next sequential id", not as a record
+   cw = (if efl = '' then 'voc' else efl)
+   gosub check.word
+   if not(ok1 and ok2 and okname) then
+      msg = 'an account, file or id with a character the page does not handle: work on it in that account (' : (if emode = 'delete' then 'delete' else 'ide') : ')'
+      return
+   end
+   * 2 Nov 26 (Linux): a session that does not hold the account's group cannot write inside the account, so E, N, D, C and B were refused here in the 'relog' state.
+   * 10 Nov 26 Windows port: there is no such state here (see sdsys.state), so there is no refusal and Linux's message 11981 is not carried.
+   * The pointer SDSYS's VOC holds for the length of the edit is an F pointer that holds THE PATH JUST CHECKED (review of 3 Nov 26, finding 1): a Q-pointer would send the IDE back to
+   * the account's own VOC at every open, and an account that may write its VOC could repoint the file between this check and the IDE's open.  For an item both parts are the
+   * dictionary, so nothing else can be reached through the name; for the VOC there is no dictionary part.
+   qf = (if efl = '' then 'voc' else efl)
+   qn = 'zm' : @userno : '.' : ea : '.' : qf
+   if len(qn) > 63 then
+      msg = 'the name of this account and file is too long for the page'
+      return
+   end
+   qrec = 'F' : @fm : tp : @fm : (if efl = '' then '' else tp)
+   if isprog then qrec = 'F' : @fm : tp                          ;* a program file: the data part only (no dictionary is reached through it)
+   open 'voc' to svf else
+      msg = "the VOC of SDSYS cannot be opened"
+      return
+   end
+   read qold from svf, qn then
+      if qold # qrec then
+         close svf
+         msg = 'SDSYS holds a VOC entry called ' : qn : ' that this page did not make: it is not changed'
+         return
+      end
+   end
+   write qrec on svf, qn on error
+      close svf
+      msg = 'the VOC of SDSYS refused the pointer ' : qn
+      return
+   end
+   close svf
+   dfl = (if efl = '' then '' else 'dict')
+   if isprog then dfl = ''
+   open dfl, qn to tf else
+      gosub drop.pointer
+      msg = 'SD cannot follow the pointer into ' : ea : ' (is the account suspended?)'
+      return
+   end
+   rp = fileinfo(tf, FL$PATH)
+   rt = fileinfo(tf, FL$TYPE)
+   rtw = (if isprog then FL$TYPE.DIR else FL$TYPE.DH)            ;* a program file is a directory file; the VOC and a dictionary are hashed files
+   * M4: a program is a file of its own in the directory.  SD writes a directory file's record by opening that name (without SAFEDIR), so a LINK in its place would be followed.
+   * The kernel's test of the record's own path (below) refuses both kinds: a link to a file outside the account (realpath), and a link that leads NOWHERE (op_sh.c's
+   * resolve_name, 2 Nov 26: such a name used to be judged a new file inside; SD's SELECT of a directory file does not even list it, so the page could not see it itself).
+   if emode # 'delete' then close tf                            ;* D deletes through THIS open, the one judged below, not a second one
+   * What the kernel opened must lie inside the account, and so must the two subfiles of the hashed file it is (finding 2: the check of a directory says nothing of a link inside it,
+   * and the subfiles are opened without refusing a link).  A file that is not a hashed file is not handed over at all.
+   in.ok = kernel(K$PATH.IN, ap.f : @fm : rp)
+   if in.ok then in.ok = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : '%0')
+   if in.ok then in.ok = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : '%1')
+   if isprog and in.ok then in.ok = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : eid)     ;* the program's own file: a link in its place to a file outside is caught here
+   if rt # rtw then
+      gosub drop.pointer
+      msg = 'the ' : (if efl = '' then 'VOC' else 'dictionary of ' : efl) : ' of ' : ea : ' is not a hashed file: the page does not hand it to the editor'
+      if isprog then msg = 'the program file ' : efl : ' of ' : ea : ' is not a directory file: the page does not hand it to the editor'
+      return
+   end
+   if not(in.ok) then
+      gosub drop.pointer
+      msg = 'the pointer into ' : ea : ' opens a file outside the account: it is edited in the account it lives in, not from here (' : rp : ')'
+      return
+   end
+   if emode = 'delete' then
+      gosub delete.reached
+      return
+   end
+   if emode = 'compile' then
+      gosub drop.pointer                                        ;* run.in reaches the file through the account's own VOC, not through the pointer
+      gosub compile.reached
+      return
+   end
+   if emode = 'debug' then
+      gosub drop.pointer                                        ;* the same: run.in, in the account
+      gosub debug.reached
+      return
+   end
+   akind = (if efl = '' then 'voc' else 'dict')
+   if isprog then akind = 'bp'
+   void kernel(K$AUDIT, 'master edit account=' : ea : ' kind=' : akind : ' file=' : qf : ' id=' : eid : ' new=' : enw)
+   sent = 'ide ' : (if efl = '' then '' else 'dict ') : qn : ' ' : eid
+   if isprog then sent = 'ide ' : qn : ' ' : eid : ' /in=' : ea : ',' : efl     ;* the IDE compiles and catalogues a tab of qn through run.in in ea
+   keep.k = (if efl = '' then eid else efl : '*' : eid)
+   keep.ec = ec
+   gosub hand.over
+   return
+
+* At the start: a pointer this user number left in SDSYS's VOC when a session ended inside the IDE (the page takes its pointer away when the IDE returns; a session that is killed
+* cannot).  A zm<user number>.* entry that is an F or a Q record is the page's own name and is taken away (finding 4).
+sweep.pointers:
+   sw.pre = 'zm' : @userno : '.'
+   open 'voc' to svf then
+      select svf to 8
+      loop
+         readnext sw.id from 8 else exit
+         if sw.id[1, len(sw.pre)] = sw.pre then
+            read sw.r from svf, sw.id then
+               if sw.r<1> = 'F' or sw.r<1> = 'Q' then
+                  delete svf, sw.id
+               end
+            end
+         end
+      repeat
+      close svf
+   end
+   return
+
+* The pointer qn is taken out of SDSYS's VOC, if it is the one the page made
+drop.pointer:
+   open 'voc' to svf then
+      read qold from svf, qn then
+         if qold = qrec then
+            delete svf, qn
+         end
+      end
+      close svf
+   end
+   return
+
+* D, after edit.record reached the record through the pointer and judged the file it opened (tf, still open): the record is read with its update lock (a record another session holds,
+* an editor's, is refused), the administrator types its id in the box (Cancel is the default), and that one record is deleted through tf.  The pointer is given back on every way out.
+* Nothing is run as a command.
+delete.reached:
+   dwhere = (if efl = '' then 'the VOC' else 'the dictionary of ' : efl) : ' of ' : ea
+   dwhat = (if efl = '' then 'VOC entry' else 'dictionary item')
+   dkind = (if efl = '' then 'voc' else 'dict')
+   if isprog then
+      dwhere = 'the program file ' : efl : ' of ' : ea
+      dwhat = 'program'
+      dkind = 'bp'
+   end
+   dhave = 1
+   readu dold from tf, eid locked
+      dlu = status()
+      close tf
+      gosub drop.pointer
+      msg = eid : ' in ' : dwhere : ' is locked by user ' : dlu : ' (an editor holds it): it is not deleted'
+      return
+   end else
+      dhave = 0
+   end
+   if not(dhave) then
+      close tf
+      gosub drop.pointer
+      msg = eid : ' is not in ' : dwhere : ' any more: F5 reads the list again'
+      return
+   end
+   dohave = 0
+   if isprog then
+      gosub object.judge                                        ;* the compiled program: found by name, judged by the pointer rule, before the box
+      if not(dook) then
+         close tf
+         gosub drop.pointer
+         return
+      end
+   end
+   dsent = 'delete ' : eid : ' from ' : dwhere
+   dlines = 'Deletes the ' : dwhat : ' ' : eid : ' from the account ' : ea : ', in its own file:' : @fm : rp
+   if isprog then
+      if dohave then
+         dlines<-1> = 'and its compiled program ' : doid : ' in ' : dorp
+      end else
+         dlines<-1> = 'It has no compiled program (nothing called ' : doid : ' in ' : dop : ').'
+      end
+      dlines<-1> = 'A catalog entry of the program is left: it is the account' : "'" : 's (DELETE.CATALOG in ' : ea : ' removes it).'
+   end
+   dlines<-1> = 'This is not a command: the page deletes ' : (if dohave then 'those two records' else 'that one record') : ' itself.  Type its id to confirm.'
+   call $tk_confirm(dsent, dlines, eid, res, cmsg, sysmsg(12958))   ;* Delete this record?
+   if res # 'run' then
+      close tf                                                  ;* the lock goes with it
+      if dohave then close dof
+      gosub drop.pointer
+      gosub draw.all
+      msg = cmsg
+      return
+   end
+   delok = @true
+   delete tf, eid on error delok = @false
+   close tf
+   gosub drop.pointer
+   dores = 'none'
+   if dohave then
+      if delok then
+         dores = 'deleted'
+         delete dof, doid on error dores = 'failed'
+      end
+      close dof
+   end
+   * The messages are made BEFORE anything is drawn: entry.lines (the box under the lists) sets eid and efl to the row under the cursor, which after a delete is another record
+   if not(delok) then
+      msg = 'the ' : dwhat : ' ' : eid : ' of ' : ea : ' was not deleted: the file refused it'
+      gosub draw.all
+      return
+   end
+   if isprog then
+      void kernel(K$AUDIT, 'master delete account=' : ea : ' kind=' : dkind : ' file=' : qf : ' id=' : eid : ' object=' : dores)
+   end else
+      void kernel(K$AUDIT, 'master delete account=' : ea : ' kind=' : dkind : ' file=' : qf : ' id=' : eid)
+   end
+   dmsg = 'deleted ' : eid : ' from ' : dwhere
+   if dores = 'deleted' then dmsg := ' and its compiled program (a catalog entry is left)'
+   if dores = 'failed' then dmsg := ': its compiled program in ' : dorp : ' was NOT deleted, the file refused it'
+   keep.ec = ec
+   gosub read.all
+   ec = keep.ec
+   nrows = (if fnd # '' then hn else en)
+   if ec > nrows then ec = nrows
+   if ec < 1 then ec = 1
+   gosub keep.tops
+   gosub draw.all
+   msg = dmsg
+   return
+
+* M6a: the compiled program of the program eid, for D.  Found by NAME as the list finds it (M1c): the .out file the account's VOC names (dorr, the record <efl>.out that edit.record
+* read again at the keypress), else the one beside the program file (tp, the path edit.record judged, and .out); the record is the program's id in lower case, as BASIC writes it.
+* THE POINTER RULE holds for it as for the program file: the .out file (as written, then as the kernel opened it) and the object's own file must lie inside the account, asked
+* here, before the box and before anything is deleted; a .out file outside the account refuses the whole delete.  A .out file that is not there, or holds no such record, is no object.
+* Out: dook (the delete may go on; msg when not), dohave (there is an object; dof is open on its .out file), dop (the .out path), dorp (as opened), doid (the object's id).
+object.judge:
+   dook = @true
+   dohave = 0
+   dorp = ''
+   doid = downcase(eid)
+   if upcase(trim(dorr<1>))[1, 1] = 'F' and trim(dorr<2>) # '' then
+      dop = parse.pathname.tokens(trim(dorr<2>))
+      if not(dop matches abs.pat) then dop = ap.f : @ds : dop
+   end else
+      dop = tp : '.out'
+   end
+   if not(kernel(K$PATH.IN, ap.f : @fm : dop)) then
+      dook = @false
+      msg = 'the compiled programs of ' : efl : ' lie outside ' : ea : ': ' : eid : ' is deleted in the account they live in, not from here (' : dop : ')'
+      return
+   end
+   openpath dop to dof else return                              ;* no .out file: no object
+   dorp = fileinfo(dof, FL$PATH)
+   if fileinfo(dof, FL$TYPE) # FL$TYPE.DIR then
+      close dof
+      return                                                    ;* not a directory file: not where BASIC puts a compiled program
+   end
+   do.in = kernel(K$PATH.IN, ap.f : @fm : dorp)
+   if do.in then do.in = kernel(K$PATH.IN, ap.f : @fm : dorp : @ds : doid)     ;* the object's own file: a link in its place is caught here
+   if not(do.in) then
+      close dof
+      dook = @false
+      msg = 'the compiled program of ' : eid : ' opens a file outside ' : ea : ': it is deleted in the account it lives in, not from here (' : dorp : ')'
+      return
+   end
+   read dox from dof, doid then dohave = 1 else close dof
+   return
+
+* C, after edit.record judged the program file and the program (the pointer is already given back): run.in compiles it in its own account and the page shows what the compiler said.
+* The verdict is the compiler's own success line, not a return code (run.in's answer is about run.in).  run.in writes its own audit lines; the page adds "master compile".
+compile.reached:
+   copt = ''
+   gosub compile.in.account
+   gosub compile.box
+   keep.ec = ec
+   gosub read.all                                               ;* Built changes
+   ec = keep.ec
+   nrows = (if fnd # '' then hn else en)
+   if ec > nrows then ec = nrows
+   if ec < 1 then ec = 1
+   gosub keep.tops
+   gosub draw.all
+   msg = cmsg
+   return
+
+* run.in compiles eid of the program file efl in the account ea (copt: '' or ' debugging').  Out: cout (what it printed), cok (the compiler's success line is there), cmsg.
+compile.in.account:
+   csent = 'run.in ' : ea : ' basic ' : efl : ' ' : eid : copt
+   execute csent capturing cout
+   cok = (index(cout, 'Compiled 1 program(s) with no errors', 1) > 0)
+   void kernel(K$AUDIT, 'master compile account=' : ea : ' file=' : efl : ' id=' : eid : ' result=' : (if cok then 'ok' else 'failed'))
+   cmsg = (if cok then 'compiled ' : eid : ' in ' : ea : ' (in its own account, by run.in)' else eid : ' in ' : ea : ' did not compile: the compiler said why')
+   return
+
+* What the compiler said (cout), in a box: its last 30 lines, where the errors and the verdict are
+compile.box:
+   cbody = ''
+   cn2 = dcount(cout, @fm)
+   for cq = 1 to cn2
+      cl = trimb(convert(char(13), '', cout<cq>))
+      if cl # '' then cbody<-1> = cl[1, 110]
+   next cq
+   if dcount(cbody, @fm) > 30 then cbody = field(cbody, @fm, dcount(cbody, @fm) - 29, 30)     ;* the last 30 lines: the errors and the verdict are at the end
+   if cbody = '' then cbody = '(the compiler printed nothing)'
+   ctitle = 'Compile ' : eid : ' in ' : ea
+   screen msgbox cbody title ctitle buttons '&OK' default 1 returning cb2 else cb2 = 0
+   return
+
+* B (M5), after edit.record judged the program file and the program (the pointer is already given back): run.in compiles it for the debugger in its own account, and when that
+* worked the terminal goes to the debugger, which run.in runs IN that account (the owner's mechanism C of 2 Nov 26); the page is taken again when the debugger ends.  A compile that
+* failed is shown as C shows it and nothing is debugged.
+debug.reached:
+   copt = ' debugging'
+   gosub compile.in.account
+   if not(cok) then
+      gosub compile.box
+      gosub draw.all
+      msg = cmsg
+      return
+   end
+   void kernel(K$AUDIT, 'master debug account=' : ea : ' file=' : efl : ' id=' : eid)
+   dbsent = 'run.in ' : ea : ' debug ' : efl : ' ' : eid
+   keep.k = efl : '*' : eid
+   keep.ec = ec
+   call $tk_close(ctx)
+   execute dbsent
+   gosub retake.page
+   msg = 'back from the debugger: ' : eid : ' was debugged in ' : ea
+   return
+
+* The terminal goes to the IDE and comes back: the pointer is taken away as soon as the IDE has ended, then the page is taken again and what it lists is read again.  Only the IDE can get here.
+hand.over:
+   if field(sent, ' ', 1) # 'ide' then
+      gosub drop.pointer
+      msg = 'the page does not run ' : field(sent, ' ', 1)
+      return
+   end
+   call $tk_close(ctx)
+   execute sent
+   gosub drop.pointer
+   gosub retake.page
+   msg = 'back from the editor: the list shows ' : (if kind = 1 then 'the VOC' else 'the dictionary') : ' as it is now'
+   if kind = 3 then msg = 'back from the editor: the list shows the programs as they are now'
+   return
+
+* After the editor (hand.over) or the debugger (debug.reached) gave the terminal back: a pause, the page taken again for the window as it is now, the lists read again and the cursor
+* put back on keep.k (keep.ec in a find).  2 Nov 26 (M5): taken out of hand.over, which had it inline, so that the debugger's way back is the same one.
+retake.page:
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.entries', 'admin', ctx, err)              ;* 9 Nov 26 (S.186): 'admin', as at the start (it was '': the administrator was not asked again and the bar named the user)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* the new context has no AI line yet
+   gosub declare.layout                                         ;* it is laid out for the window as it is now
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub read.all
+   if fnd = '' then
+      locate keep.k in ekey<1> setting ep2 then ec = ep2
+   end else
+      ec = keep.ec
+      if ec > hn then ec = hn
+      if ec < 1 then ec = 1
+   end
+   gosub keep.tops
+   gosub draw.all
+   return
+
+* /: keep the entries of the account whose id holds a text (a dictionary item: its id or its heading)
+do.filter:
+   ptxt = 'Part of an id (empty shows every entry)'
+   if kind = 2 then ptxt = 'Part of an item id or heading (empty shows every item)'
+   if kind = 3 then ptxt = 'Part of a program id (empty shows every program)'
+   screen ask ptxt width 40 value ai.arg title 'Filter' returning ft then got = 1 else got = 0
+   if not(got) then return
+   filt = trim(ft)
+   fnd = ''
+   ec = 1 ; etop = 1
+   gosub read.entries
+   gosub draw.all
+   msg = (if filt = '' then 'every entry' else en : ' with "' : filt : '"')
+   return
+
+* F: a text in the entries of every account (an id for the VOC; an id or a heading for a dictionary item)
+do.find:
+   ptxt = 'Part of an id, searched in the VOC of every account'
+   if kind = 2 then ptxt = 'Part of an item id or heading, searched in the dictionaries of every account'
+   if kind = 3 then ptxt = 'Part of a program id, searched in the program files of every account'
+   screen ask ptxt width 40 value ai.arg title 'Find' returning ft then got = 1 else got = 0
+   if not(got) then return
+   fnd = trim(ft)
+   filt = ''
+   if fnd = '' then
+      ec = 1 ; etop = 1
+      gosub read.entries
+      gosub draw.all
+      msg = 'every entry of the account'
+      return
+   end
+   gosub run.find
+   pane = 2
+   gosub draw.all
+   msg = hn : ' hit' : (if hn = 1 then '' else 's') : ' in ' : hseen : (if kind = 1 then ' VOCs' else ' accounts') : (if htrunc then '; only the first ' : MAXV : ' are listed' else '')
+   return
+
+* K: the other kind of entry.  What was filtered or found is taken off, because a filter that means an id in the VOC means an id or a heading in a dictionary
+do.kind:
+   kind += 1
+   if kind > 3 then kind = 1
+   fnd = '' ; filt = ''
+   ec = 1 ; etop = 1
+   gosub read.entries
+   gosub draw.all
+   begin case
+      case kind = 1
+         msg = 'the VOC entries'
+      case kind = 2
+         msg = 'the dictionary items'
+      case 1
+         msg = 'the programs'
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- G and U, the global change (S.97 / S.96, the owner's answers of 3 Nov 26)
+
+* G: ONE change to every row the page shows - the hits of a find (every account) or the rows the filter keeps (this account).  The set is exactly the rows shown: a filter or a find
+* must be on and the list must not be cut at MAXV.  The change: a field (a number, or heading for a D, I, E or L item) set to a value or a text in it replaced; for a program, a text
+* replaced in its source.  A preview (gc.pass, gw = 0, nothing written) is shown in ONE Run / Cancel box (the owner's choice: no name typed), then the run (gc.pass, gw = 1).
+do.global:
+   if fnd = '' and filt = '' then
+      msg = 'G changes every row shown: narrow the rows first with / (this account) or F (every account)'
+      return
+   end
+   if fnd # '' then
+      gn = hn
+      gtr = htrunc
+   end else
+      gn = en
+      gtr = etrunc
+   end
+   if gn < 1 then
+      msg = 'no row is shown: there is nothing to change'
+      return
+   end
+   if gtr then
+      msg = 'the page lists only the first ' : MAXV : ' rows: narrow the filter or the find until every row is shown'
+      return
+   end
+   gacc = '' ; gfl = '' ; gid = '' ; gdig = '' ; g1old = '' ; g1new = ''
+   for gi = 1 to gn
+      if fnd # '' then
+         gacc<gi> = hacc<gi>
+         gfl<gi> = hfile<gi>
+         gid<gi> = hid<gi>
+      end else
+         gacc<gi> = anm<ac>
+         gfl<gi> = efile<gi>
+         gid<gi> = enm<gi>
+      end
+   next gi
+   gkd = kind
+   gkw = (if kind = 1 then 'voc' else (if kind = 2 then 'dict' else 'bp'))
+   gfld = 0 ; gop = 'replace' ; gval = '' ; gfrom = '' ; gto = ''
+   if kind # 3 then
+      ptxt = 'Field to change: its number, 1 to ' : GMAXF : (if kind = 2 then ', or heading' else '')
+      screen ask ptxt width 40 value '' title 'Global change' returning ft then got = 1 else got = 0
+      if not(got) then return
+      ft = downcase(trim(ft))
+      begin case
+         case kind = 2 and ft = 'heading'
+            gfld = 'heading'
+         case ft # '' and convert('0123456789', '', ft) = '' and len(ft) <= 3
+            gfld = ft + 0
+            if gfld < 1 or gfld > GMAXF then
+               msg = 'the field is a number from 1 to ' : GMAXF : ': nothing was changed'
+               return
+            end
+         case 1
+            msg = 'the field is a number from 1 to ' : GMAXF : (if kind = 2 then ', or the word heading' else '') : ': nothing was changed'
+            return
+      end case
+      * Field 1 is the TYPE of a VOC entry or a dictionary item (the owner, 3 Nov 26: "Exclude field 1 from batch actions, allow it on a single item with a confirm warning"):
+      * refused here, before the preview, when more than one record is shown; on ONE record the box carries a warning line
+      if gfld = 1 and gn > 1 then
+         msg = 'field 1 is the type of the record: G changes it on one record only, and ' : gn : ' are shown (narrow the filter or the find to that record): nothing was changed'
+         return
+      end
+      screen ask 'S sets the field to a value, R replaces a text in it' width 40 value '' title 'Global change' returning ft then got = 1 else got = 0
+      if not(got) then return
+      ft = downcase(trim(ft))
+      begin case
+         case ft = 's'
+            gop = 'set'
+         case ft = 'r'
+            gop = 'replace'
+         case 1
+            msg = 'S or R: nothing was changed'
+            return
+      end case
+   end
+   if gop = 'set' then
+      screen ask 'The new value of the field (empty empties it)' width 60 value '' title 'Global change' returning gval then got = 1 else got = 0
+      if not(got) then return
+      pv = gval
+      gosub check.print
+      if not(pok) then return
+   end else
+      screen ask 'Text to replace' : (if kind = 3 then ' in the source' else '') width 60 value '' title 'Global change' returning gfrom then got = 1 else got = 0
+      if not(got) then return
+      if gfrom = '' then
+         msg = 'there is no text to replace: nothing was changed'
+         return
+      end
+      pv = gfrom
+      gosub check.print
+      if not(pok) then return
+      screen ask 'Replace it with (empty takes it out)' width 60 value '' title 'Global change' returning gto then got = 1 else got = 0
+      if not(got) then return
+      pv = gto
+      gosub check.print
+      if not(pok) then return
+   end
+   begin case
+      case kind = 3
+         gwhat = 'replace "' : gfrom : '" with "' : gto : '" in the source'
+      case gfld = 'heading' and gop = 'set'
+         gwhat = 'set the heading to "' : gval : '"'
+      case gfld = 'heading'
+         gwhat = 'replace "' : gfrom : '" with "' : gto : '" in the heading'
+      case gop = 'set'
+         gwhat = 'set field ' : gfld : ' to "' : gval : '"'
+      case 1
+         gwhat = 'replace "' : gfrom : '" with "' : gto : '" in field ' : gfld
+   end case
+   * the preview: every account and file judged, every record read, nothing written
+   gw = 0
+   gosub gc.pass
+   gtc = 0 ; gts = 0 ; gtrf = 0 ; gtf = 0
+   for gq = 1 to gk
+      gtc += gnc<gq>
+      gts += gns<gq>
+      gtrf += gnr<gq>
+      gtf += gnf<gq>
+   next gq
+   gsent = 'global change: ' : gwhat : ', ' : gn : (if gn = 1 then ' row' else ' rows') : ' in ' : gk : (if gk = 1 then ' account' else ' accounts')
+   if gtc = 0 then
+      msg = 'no row would change (' : gts : ' as they are, ' : gtrf + gtf : ' refused): nothing was written'
+      return
+   end
+   glines = ''
+   glines<-1> = 'The page writes each record itself, account by account, in the file it lives in.' : (if kind = 3 then '  Each program changed is compiled again IN ITS OWN ACCOUNT by run.in.' else '  Nothing is run.')
+   glines<-1> = 'A row whose file lies outside its account (the pointer rule), one another session holds, and one that has changed since this preview are refused and left as they are; the run goes on with the rest.'
+   glines<-1> = 'The records as they were are kept in ' : UNDOF : ' (this run only): U puts back those still exactly as the run left them.'
+   if gfld = 1 then
+      glines<-1> = ''
+      glines<-1> = 'WARNING: this changes the TYPE of ' : gid<1> : ' (field 1): "' : g1old : '" -> "' : g1new : '".  A pointer (F, Q, R), a verb (V) or a dictionary item given another type becomes something else, and what used it no longer works as it did.'
+   end
+   glines<-1> = ''
+   for gq = 1 to gk
+      if gq <= 12 then
+         gl = gan<gq> : ': ' : gnc<gq> : ' to change'
+         if gids<gq> # '' then gl := ' (' : convert(@vm, ' ', gids<gq>) : (if gnc<gq> > dcount(gids<gq>, @vm) then ' ...' else '') : ')'
+         gl := ', ' : gns<gq> : ' as they are, ' : gnr<gq> + gnf<gq> : ' refused'
+         if gwhy<gq> # '' then gl := ' - ' : gwhy<gq, 1>
+         glines<-1> = gl
+      end
+   next gq
+   if gk > 12 then glines<-1> = 'and ' : gk - 12 : ' more accounts'
+   glines<-1> = ''
+   glines<-1> = 'In all: ' : gtc : ' to change, ' : gts : ' as they are, ' : gtrf + gtf : ' refused.'
+   call $tk_confirm(gsent, glines, '', res, cmsg, sysmsg(12959))   ;* Update these records?  Run / Cancel, Cancel the default; no name typed (the owner's choice, 3 Nov 26)
+   if res # 'run' then
+      gosub draw.all
+      msg = cmsg
+      return
+   end
+   * the undo file first: no record is written unless its old self can be kept
+   gosub undo.file
+   if not(uok) then
+      gosub draw.all
+      return
+   end
+   clearfile uf
+   gun = 0
+   ghdr = 'entries-undo' : @fm : date() : @fm : time() : @fm : @logname : @fm : gsent : @fm : 0 : @fm : 'running'
+   write ghdr on uf, 'last' on error
+      close uf
+      gosub draw.all
+      msg = 'the undo file cannot be written (status ' : status() : '): nothing was changed'
+      return
+   end
+   gw = 1
+   gosub gc.pass
+   gsum = ''
+   gtc = 0 ; gtrf = 0 ; gtf = 0
+   for gq = 1 to gk
+      gtc += gnc<gq>
+      gtrf += gnr<gq>
+      gtf += gnf<gq>
+      gl = gan<gq> : ': ' : gnc<gq> : ' changed, ' : gnr<gq> : ' refused, ' : gnf<gq> : ' failed'
+      gsum<-1> = gl
+      for gr = 1 to dcount(gwhy<gq>, @vm)
+         gsum<-1> = '   ' : gwhy<gq, gr>
+      next gr
+      ghdr<8, gq> = gan<gq> : @sm : gnc<gq> : @sm : gnr<gq> : @sm : gnf<gq>
+   next gq
+   ghdr<6> = gun
+   ghdr<7> = 'done'
+   write ghdr on uf, 'last' on error null
+   close uf
+   if dcount(gsum, @fm) > 30 then gsum = field(gsum, @fm, 1, 30) : @fm : '(and more: the audit trail has a line for each account)'
+   gtitle = 'Global change: ' : gtc : ' changed'
+   screen msgbox gsum title gtitle buttons '&OK' default 1 returning cb2 else cb2 = 0
+   gmsg = 'global change: ' : gtc : ' changed, ' : gtrf : ' refused, ' : gtf : ' failed, in ' : gk : (if gk = 1 then ' account' else ' accounts') : '; U puts it back'
+   gosub after.global
+   msg = gmsg
+   return
+
+* After G or U: the undo state and the key table again (U enabled or not), the lists read again
+after.global:
+   gosub read.undo.info
+   gosub build.keys
+   call $tk_aipage('keys', ctx, keys, '', '', aout)
+   keep.ec = ec
+   gosub read.all
+   ec = keep.ec
+   nrows = (if fnd # '' then hn else en)
+   if ec > nrows then ec = nrows
+   if ec < 1 then ec = 1
+   gosub keep.tops
+   gosub draw.all
+   return
+
+* In: pv.  Out: pok (printable ASCII only, at most GMAXT characters; msg when not)
+check.print:
+   pok = (len(pv) <= GMAXT)
+   for pq = 1 to len(pv)
+      pc = seq(pv[pq, 1])
+      if pc < 32 or pc > 126 then pok = 0
+   next pq
+   if not(pok) then msg = 'a text G takes is printable ASCII, at most ' : GMAXT : ' characters: nothing was changed'
+   return
+
+* THE PASS, preview (gw = 0: records read, nothing written) or run (gw = 1).  In: gn rows gacc gfl gid (in account order: a find's hits are), gkd gkw, the change (gfld gop gval
+* gfrom gto), gdig (gw = 1: the digest of each row the preview would change).  Each ACCOUNT is judged afresh (gc.account: the register read again, the relog state) and each FILE by
+* THE POINTER RULE (gc.file), before it is opened for writing; each row by gc.row.  A refusal or a failure is counted and the pass goes on, in that account and in the next.
+* Out, per account gq of gk: gan the name, gnc to change (or changed), gns as they are, gnr refused, gnf failed, gids the first three ids changed, gwhy the first two reasons.
+gc.pass:
+   gan = '' ; gnc = '' ; gns = '' ; gnr = '' ; gnf = '' ; gids = '' ; gwhy = '' ; gk = 0
+   gcura = '' ; gcurf = '' ; gfopen = 0 ; gaok = 0 ; gawhy = ''
+   for gi = 1 to gn
+      if gk = 0 or gacc<gi> # gcura then
+         if gfopen then
+            close gf
+            gfopen = 0
+         end
+         if gk > 0 and gw then gosub gc.audit
+         gk += 1
+         gcura = gacc<gi>
+         gcurf = '?'
+         gan<gk> = gcura
+         gnc<gk> = 0 ; gns<gk> = 0 ; gnr<gk> = 0 ; gnf<gk> = 0 ; gids<gk> = '' ; gwhy<gk> = ''
+         gosub gc.account
+      end
+      ea = gcura
+      efl = gfl<gi>
+      eid = gid<gi>
+      grs = '' ; grw = ''
+      if not(gaok) then
+         grs = 'refused'
+         grw = gawhy
+      end else
+         if efl # gcurf then
+            if gfopen then
+               close gf
+               gfopen = 0
+            end
+            gcurf = efl
+            gosub gc.file
+         end
+         if gfok then
+            gosub gc.row
+         end else
+            grs = 'refused'
+            grw = gfwhy
+         end
+      end
+      gosub gc.count
+   next gi
+   if gfopen then
+      close gf
+      gfopen = 0
+   end
+   if gk > 0 and gw then gosub gc.audit
+   return
+
+* One audit line for each account of a run, lower case, no data: what was changed, refused and failed
+gc.audit:
+   void kernel(K$AUDIT, 'master global account=' : gan<gk> : ' kind=' : gkw : ' changed=' : gnc<gk> : ' refused=' : gnr<gk> : ' failed=' : gnf<gk>)
+   return
+
+* In: grs (change, done, same, refused, failed), grw (why), eid efl.  The account's counts.
+gc.count:
+   gwho = (if efl = '' then eid else efl : ' ' : eid)
+   begin case
+      case grs = 'change' or grs = 'done'
+         gnc<gk> = gnc<gk> + 1
+         if dcount(gids<gk>, @vm) < 3 then gids<gk, -1> = gwho
+      case grs = 'same'
+         gns<gk> = gns<gk> + 1
+      case grs = 'refused'
+         gnr<gk> = gnr<gk> + 1
+         if dcount(gwhy<gk>, @vm) < 2 then gwhy<gk, -1> = gwho : ': ' : grw
+      case 1
+         gnf<gk> = gnf<gk> + 1
+         if dcount(gwhy<gk>, @vm) < 2 then gwhy<gk, -1> = gwho : ': ' : grw
+   end case
+   return
+
+* The account gcura, judged afresh at the pass: the register read again (the list may be old) and the session's hold on its group (the relog state, 12986).  Out: gaok, gawhy, ap.f.
+gc.account:
+   gaok = 0
+   gawhy = ''
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      gawhy = 'the register cannot be opened'
+      return
+   end
+   read arec from acc.f, gcura else arec = ''
+   close acc.f
+   if arec = '' then
+      gawhy = 'the account is not in the register any more'
+      return
+   end
+   ap.f = parse.pathname.tokens(arec<1>)
+* 10 Nov 26 Windows port: no 'relog' state to refuse (see sdsys.state); Linux's message 11981 is not carried.
+   gaok = 1
+   return
+
+* THE POINTER RULE for the file of the rows (efl: '' the account's VOC, else the file pointer of its VOC whose dictionary (gkd 2) or data (gkd 3, a program file) is changed), asked
+* BEFORE the file is opened for writing: the path (tokens expanded, made the account's when relative) must lie inside the account, and so must what the kernel opened (FL$PATH) and,
+* for a hashed file, its two subfiles (K$PATH.IN: realpath, so .. and links cannot make a path look inside).  A pointer's target outside the account is NEVER written: the owner's rule.
+* Out: gfok, gfwhy; gf open (gfopen) when it got that far.
+gc.file:
+   gfok = 0
+   gfwhy = ''
+   tp = ap.f : @ds : 'voc'
+   if efl # '' then
+      openpath ap.f : @ds : 'voc' to gvf else
+         gfwhy = 'the VOC of the account cannot be opened'
+         return
+      end
+      read fr from gvf, efl else fr = ''
+      close gvf
+      if gkd = 3 then
+         if upcase(trim(fr<1>))[1, 1] # 'F' or trim(fr<2>) = '' then
+            gfwhy = efl : ' is not a program file of the account'
+            return
+         end
+         tp = parse.pathname.tokens(trim(fr<2>))
+      end else
+         if upcase(trim(fr<1>))[1, 1] # 'F' or trim(fr<3>) = '' then
+            gfwhy = efl : ' is not a file of the account with a dictionary'
+            return
+         end
+         tp = parse.pathname.tokens(trim(fr<3>))
+      end
+      if not(tp matches abs.pat) then tp = ap.f : @ds : tp
+   end
+   gin = kernel(K$PATH.IN, ap.f : @fm : tp)
+   rt = ''
+   if gin then
+      openpath tp to gf else
+         gfwhy = 'the file cannot be opened (' : tp : ')'
+         return
+      end
+      gfopen = 1
+      rp = fileinfo(gf, FL$PATH)
+      rt = fileinfo(gf, FL$TYPE)
+      gin = kernel(K$PATH.IN, ap.f : @fm : rp)
+      if gkd # 3 then
+         if gin then gin = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : '%0')
+         if gin then gin = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : '%1')
+      end
+   end
+   if not(gin) then
+      gfwhy = 'it lies outside the account (the pointer rule): it is changed in the account it lives in'
+      return
+   end
+   if rt # (if gkd = 3 then FL$TYPE.DIR else FL$TYPE.DH) then
+      gfwhy = (if gkd = 3 then 'the program file is not a directory file' else 'the file is not a hashed file')
+      return
+   end
+   gfok = 1
+   return
+
+* A program's row: its words go into run.in's sentence (check.word), and its own file must lie inside the account (a link in its place).  In: ea efl eid, rp.  Out: gpok, gpw.
+gc.prog:
+   gpok = 0
+   gpw = ''
+   cw = ea
+   gosub check.word
+   ok1 = okname
+   cw = efl
+   gosub check.word
+   ok2 = okname
+   cw = eid
+   gosub check.word
+   if not(ok1 and ok2 and okname) then
+      gpw = 'a name with a character the page does not give run.in'
+      return
+   end
+   if not(kernel(K$PATH.IN, ap.f : @fm : rp : @ds : eid)) then
+      gpw = "the program's own file lies outside the account (the pointer rule)"
+      return
+   end
+   gpok = 1
+   return
+
+* One row in the file gf the pass judged.  The preview reads it and works out the change (gdig keeps what it read); the run takes the record with READU (another session's lock
+* refuses), works the change out again, refuses a record that is no longer what the preview read, writes the record as it was to the undo file FIRST, then WRITEU; a program
+* is then compiled again in its account by run.in, judged on the compiler's success line.  Out: grs, grw.
+gc.row:
+   if gkd = 3 then
+      gosub gc.prog
+      if not(gpok) then
+         grs = 'refused'
+         grw = gpw
+         return
+      end
+   end
+   glk = 0
+   ghave = 0
+   if gw then
+      readu grec from gf, eid locked
+         glk = status()
+         if glk = 0 then glk = '?'
+      end then
+         ghave = 1
+      end else
+         ghave = 0
+      end
+   end else
+      read grec from gf, eid then ghave = 1
+   end
+   if glk then
+      grs = 'refused'
+      grw = 'another session holds it (user ' : glk : ')'
+      return
+   end
+   if not(ghave) then
+      if gw then release gf, eid
+      grs = 'refused'
+      grw = 'it is not there any more'
+      return
+   end
+   gosub gc.new
+   if gcant then
+      if gw then release gf, eid
+      grs = 'refused'
+      grw = gcw
+      return
+   end
+   if ('S' : gnew) = ('S' : grec) then
+      if gw then release gf, eid
+      grs = 'same'
+      return
+   end
+   if not(gw) then
+      g1old = grec<1>                                           ;* for the field 1 warning of the box (a set of one record only)
+      g1new = gnew<1>
+      gdig<gi> = digest(grec, 0, 'MD5')
+      grs = 'change'
+      return
+   end
+   if ('S' : digest(grec, 0, 'MD5')) # ('S' : gdig<gi>) then
+      release gf, eid
+      grs = 'refused'
+      grw = 'it has changed since the preview'
+      return
+   end
+   gun += 1
+   write ea : @fm : gkw : @fm : (if efl = '' then 'voc' else efl) : @fm : eid : @fm : digest(gnew, 0, 'MD5') : @fm : grec on uf, gun on error
+      gun -= 1
+      release gf, eid
+      grs = 'failed'
+      grw = 'the undo file could not be written (status ' : status() : ')'
+      return
+   end
+   writeu gnew on gf, eid on error
+      grs = 'failed'
+      grw = 'the file refused the write (status ' : status() : ')'
+      delete uf, gun                                            ;* the old record of a write that did not happen is not kept
+      gun -= 1
+   end
+   release gf, eid
+   if grs = 'failed' then return
+   grs = 'done'
+   if gkd = 3 then
+      copt = ''
+      gosub compile.in.account
+      if not(cok) then
+         grs = 'failed'
+         grw = 'changed, but it did not compile in ' : ea : ' (run.in): C shows why'
+      end
+   end
+   return
+
+* The change worked out on grec.  Out: gnew, gcant (1: this record cannot take it; gcw why)
+gc.new:
+   gcant = 0
+   gcw = ''
+   gnew = grec
+   if gkd = 3 then
+      gnew = change(grec, gfrom, gto)
+      return
+   end
+   gfno = gfld
+   if gfld = 'heading' then
+      t1 = upcase(trim(grec<1>))[1, 1]
+      if t1 = 'D' or t1 = 'I' or t1 = 'E' or t1 = 'L' then
+         gfno = 4
+      end else
+         gcant = 1
+         gcw = 'it has no heading (not a D, I, E or L item)'
+         return
+      end
+   end
+   if gfno > dcount(grec, @fm) and (gop # 'set' or gval = '') then return     ;* nothing there to replace or to empty: the record is left as it is
+   if gop = 'set' then
+      gnew<gfno> = gval
+   end else
+      gnew<gfno> = change(grec<gfno>, gfrom, gto)
+   end
+   return
+
+* The undo file (tool.bulk's way): the page may write it only if $tk_ownfile says so (a dynamic file standing directly in this account, SDSYS's, under that name, that the kernel's
+* edit rules allow).  Made on demand through a box that shows the command.  Out: uok (uf open)
+check.undo:
+   uck = 0
+   ucw = ''
+   call $tk_ownfile(uf, UNDOF, uck, ucw)
+   return
+
+undo.file:
+   uok = 0
+   open UNDOF to uf then
+      gosub check.undo
+      if uck then
+         uok = 1
+      end else
+         close uf
+         msg = ucw : ': nothing was changed'
+      end
+      return
+   end
+   ulines = ''
+   ulines<-1> = 'A global change keeps the records it changes, as they were, in a file of SDSYS' : "'" : 's own account called ' : UNDOF : ', so that U can put them back.  The file does not exist yet.'
+   ulines<-1> = 'This makes it (the file and its VOC entry, in ' : @who : ').  Nothing else is done now; the change comes after it.'
+   usent = MKUNDO
+   call $tk_confirm(usent, ulines, '', res, cmsg)
+   if res # 'run' then
+      msg = 'no undo file, so nothing was changed'
+      return
+   end
+   execute MKUNDO trapping aborts capturing mkout
+   open UNDOF to uf then
+      gosub check.undo
+      if uck then
+         uok = 1
+      end else
+         close uf
+         msg = ucw : ': nothing was changed'
+      end
+   end else
+      mkout = change(change(change(mkout, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+      mkw = trim(mkout<1>)
+      msg = 'the undo file could not be made: ' : mkw[1, 100]
+   end
+   return
+
+* What the undo file says about the last run.  Out: un.have, un.state (running, done, undone)
+read.undo.info:
+   un.have = 0
+   un.state = ''
+   open UNDOF to uif then
+      read uh from uif, 'last' then
+         if uh<1> = 'entries-undo' then
+            un.have = 1
+            un.state = uh<7>
+         end
+      end
+      close uif
+   end
+   return
+
+* U: the last global change put back, account by account.  A record is put back only if it is STILL BYTE FOR BYTE what the run wrote (the digest kept with it); one changed since, gone,
+* or held by another session is left and counted, never overwritten.  Every account is judged afresh and every file by the pointer rule (gc.account, gc.file), as the run was; a
+* program put back is compiled again in its account by run.in.  One audit line per account: entries undo account=<a> records=<n>.
+do.undo:
+   gosub read.undo.info
+   if not(un.have) then
+      msg = 'there is no global change to undo'
+      return
+   end
+   if un.state = 'undone' then
+      msg = 'the last global change has been put back already: there is nothing to undo'
+      return
+   end
+   if un.state # 'running' and un.state # 'done' then
+      msg = 'the header of the undo file is not one this page wrote: nothing was put back'
+      return
+   end
+   open UNDOF to uf else
+      msg = 'the undo file cannot be opened'
+      return
+   end
+   gosub check.undo
+   if not(uck) then
+      close uf
+      msg = ucw : ': nothing was put back'
+      return
+   end
+   read uh from uf, 'last' else uh = ''
+   n.undo = 0
+   n.rest = 0
+   loop
+      read ur from uf, n.undo + 1 else exit
+      n.undo += 1
+      if ur<5> # 'restored' then n.rest += 1
+   repeat
+   ulines = ''
+   ulines<-1> = 'Puts back the records the last global change wrote (' : n.rest : ' still to put back), to what they were before it:'
+   ulines<-1> = uh<5>
+   ulines<-1> = 'A record is put back only if it is still exactly what that run wrote; one that has changed since, has gone, or is held by another session is left alone and counted.  The pointer rule is asked again; a program put back is compiled again in its account by run.in.'
+   usent = 'global change undo: ' : n.rest : (if n.rest = 1 then ' record' else ' records')
+   call $tk_confirm(usent, ulines, '', res, cmsg, sysmsg(12960))   ;* Put these records back?  Run / Cancel
+   if res # 'run' then
+      close uf
+      msg = cmsg
+      return
+   end
+   u.back = 0 ; u.lock = 0 ; u.since = 0 ; u.gone = 0 ; u.ref = 0 ; u.err = 0 ; u.done = 0
+   usum = ''
+   gcura = '' ; gcurf = '' ; gfopen = 0 ; gaok = 0 ; gkd = 0 ; u.acct = 0 ; u.any = 0
+   for un.i = 1 to n.undo
+      read ur from uf, un.i else continue
+      ua = ur<1>
+      ukw = ur<2>
+      ufl = ur<3>
+      uid = ur<4>
+      uemd = ur<5>
+      for uq = 1 to 5
+         del ur<1>
+      next uq
+      if uemd = 'restored' then
+         u.done += 1                                            ;* put back by an earlier U
+         continue
+      end
+      ugk = (if ukw = 'voc' then 1 else (if ukw = 'dict' then 2 else 3))
+      if not(u.any) or ua # gcura then
+         if gfopen then
+            close gf
+            gfopen = 0
+         end
+         if u.any then gosub undo.audit
+         u.any = 1
+         gcura = ua
+         gcurf = '?'
+         u.acct = 0
+         gosub gc.account
+      end
+      ea = ua
+      efl = (if ukw = 'voc' then '' else ufl)
+      eid = uid
+      if not(gaok) then
+         u.ref += 1
+         if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': ' : gawhy
+         continue
+      end
+      if efl # gcurf or ugk # gkd then
+         if gfopen then
+            close gf
+            gfopen = 0
+         end
+         gkd = ugk
+         gcurf = efl
+         gosub gc.file
+      end
+      if not(gfok) then
+         u.ref += 1
+         if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': ' : gfwhy
+         continue
+      end
+      if gkd = 3 then
+         gosub gc.prog
+         if not(gpok) then
+            u.ref += 1
+            if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': ' : gpw
+            continue
+         end
+      end
+      lk = 0 ; got = 0
+      readu cur from gf, uid locked
+         lk = 1
+      end then
+         got = 1
+      end else
+         got = 0
+      end
+      begin case
+         case lk
+            u.lock += 1
+            if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': another session holds it'
+         case not(got)
+            u.gone += 1
+            release gf, uid
+         case ('S' : digest(cur, 0, 'MD5')) # ('S' : uemd)
+            u.since += 1                                        ;* changed since the run: left as it is, never overwritten
+            release gf, uid
+            if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': changed since the run, left as it is'
+         case 1
+            uok2 = 1
+            writeu ur on gf, uid on error
+               uok2 = 0
+               u.err += 1
+               if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': the file refused the write (status ' : status() : ')'
+            end
+            release gf, uid
+            if uok2 then
+               u.back += 1
+               u.acct += 1
+               ur2 = ua : @fm : ukw : @fm : ufl : @fm : uid : @fm : 'restored'
+               write ur2 on uf, un.i on error null       ;* a second U does not put it back again
+               if gkd = 3 then
+                  copt = ''
+                  gosub compile.in.account
+                  if not(cok) then
+                     u.err += 1
+                     if dcount(usum, @fm) < 20 then usum<-1> = ua : ' ' : uid : ': put back, but it did not compile (run.in): C shows why'
+                  end
+               end
+            end
+      end case
+   next un.i
+   if gfopen then
+      close gf
+      gfopen = 0
+   end
+   if u.any then gosub undo.audit
+   if u.lock = 0 and u.err = 0 and u.ref = 0 then              ;* a record held, refused or failed can be put back by another U
+      if uh # '' then
+         uh<7> = 'undone'
+         write uh on uf, 'last' on error null
+      end
+   end
+   close uf
+   uhead = u.back : ' put back, ' : u.since : ' left (changed since the run), ' : u.gone : ' left (gone), ' : u.lock : ' held by another session, ' : u.ref : ' refused, ' : u.err : ' errors'
+   if u.done > 0 then uhead := ' (' : u.done : ' put back by an earlier U)'
+   usum = uhead : (if usum # '' then @fm : usum else '')
+   screen msgbox usum title 'Undo of the global change' buttons '&OK' default 1 returning cb2 else cb2 = 0
+   gosub after.global
+   msg = 'undo: ' : uhead
+   return
+
+* One audit line for each account of an undo, lower case, no data
+undo.audit:
+   void kernel(K$AUDIT, 'entries undo account=' : gcura : ' records=' : u.acct)
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, pnames<pane>, mev, '', mr)
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, pnames<pane>, mev, ap)
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, a.x + a.w - 5, a.y + 1, hit.accounts)
+   call $tk_help('hit', mev, c.x + c.w - 5, c.y + 1, hit.entries)
+   if hit.accounts or hit.entries then
+      pane = (if hit.accounts then 1 else 2)
+      gosub redraw
+      gosub help.here
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      nrows = (if fnd # '' then hn else en)
+      begin case
+         case mx >= a.x + 1 and mx <= a.x + a.w - 2 and my >= a.y + 2 and my <= a.y + 1 + VIS
+            k = atop + my - a.y - 2
+            pane = 1
+            if k <= an and k # ac then
+               ac = k
+               gosub new.account
+            end else
+               gosub redraw
+            end
+         case mx >= c.x + 1 and mx <= c.x + c.w - 2 and my >= c.y + 2 and my <= c.y + 1 + VIS
+            k = etop + my - c.y - 2
+            if k <= nrows then ec = k
+            pane = 2
+            gosub redraw
+      end case
+   end
+   return
+
+help.here:
+   call $tk_help('box', (if pane = 1 then 'tool.entries.accounts' else 'tool.entries.entries'), hm, 0, 0)
+   if hm # '' then msg = hm
+   return
+
+end
+
+* END-CODE

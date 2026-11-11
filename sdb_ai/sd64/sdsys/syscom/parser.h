@@ -247,6 +247,7 @@ $define KW$IN             235   ;* 16 Oct 26  QM4 gap 94 (selection clause opera
 $define KW$NOT.IN         236   ;* 16 Oct 26  QM4 gap 94 (selection clause operator: field NOT.IN {NO.CASE} listname | "filename id")
 $define KW$JSON           237   ;* 20 Oct 26  CSV / JSON / XML task (the report as a JSON array of objects, one for each record)
 $define KW$JSON.LINES     238   ;* 20 Oct 26  ... the report as JSON Lines: one object to a line, no brackets
+$define KW$NO.CATALOG     239   ;* 10 Nov 26  S.96, from Linux 8fc6b4e1 (BASIC ... NO.CATALOG: compile, and run no catalog directive; RUN.IN gives it to every BASIC it runs)
 
 * ----------------------------------------------------------------------
 * !PARSER action key values
