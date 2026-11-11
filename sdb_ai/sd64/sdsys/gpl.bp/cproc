@@ -18,11 +18,14 @@
 * 
 * 
 * START-HISTORY:
+* 11 Nov 26 Windows port - Linux ca137620 (S.213; RELEASE_1.1 231, owner 10 Nov: "should match linux"): the command and option words are checked as Linux checks them,
+*               by ri.own.words against the shipped NEWVOC, BEFORE anything is kept or changed, and a refusal is message 15070 (Linux 14070).  Windows' own
+*               comparison with SDSYS's VOC (ri.voc.key, the first check of ri.windows.checks, 12565) is gone.  $EXECUTE in a compile run.in starts is 15071 (was 12568).
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): RUN.IN's command no longer runs as the administrator.  Just before it, ri.narrow turns
 *               the administrator flag OFF, SH and OS.EXECUTE OFF and only the edit gate the command needs ON (bp-edit for basic, catalog, decatalog and
 *               delete.catalog, dict-edit for compile.dict); revert.account puts the gates back first, the six switches after the session is home, and the
 *               flag LAST, so a way back that stops part way leaves no flag.  load.account.switches never turns SH or OS.EXECUTE on while a run is in progress.
-*               LOGTO is refused during a run (15073, Linux 14073).  The words check is Windows' own ri.windows.checks (12565, Linux 14070), kept.  Windows
+*               LOGTO is refused during a run (15073, Linux 14073).  The words check was Windows' own (12565); 11 Nov 26 it became Linux's ri.own.words.  Windows
 *               difference: the session's process token stays ELEVATED whatever the flag says, so the reads S.213 closes ($INCLUDE and dictionaries
 *               outside the account in BCOMP, 15072; a Q-pointer out in _VOC_REF) matter more here than on Linux.
 * 10 Nov 26 Windows port - from Linux 8fc6b4e1, d049d8bb (S.96; RELEASE_1.1 201): RUN.IN, internal verb 42, the administrator's account-scoped run of one
@@ -3124,9 +3127,14 @@ load.account.switches:
 * WHAT IS DIFFERENT ON WINDOWS, AND WHY.  LOGTO out of SDSYS gives up the administrator flag and stops the elevated helper (int.logto); RUN.IN keeps the helper and, since
 * 10 Nov 26 (Linux S.213), turns the flag OFF for the command itself (ri.narrow), with only the edit gate the command needs.  But an SDSYS session's own token is elevated for
 * its life, and the flag does not change it: any code of the account's that ran during the command, and any file it read, would have the elevated Windows administrator's
-* reach.  Hence: (1) no debug (Linux's sixth command runs the account's program), (2) the checks in ri.windows.checks, made in the account before the command runs (the
-* command and option words are the VOC entries SD supplies; every file the command writes is inside the account; no file it opens carries a trigger), (3) $BCOMP refuses
-* $EXECUTE, and an $INCLUDE or dictionary outside the account (15072), while ri.active is set, and (4) _VOC_REF follows a Q-pointer only into the run's own account.
+* reach.  Hence: (1) no debug (Linux's sixth command runs the account's program), (2) the checks in ri.windows.checks, made in the account before the command runs (every
+* file the command writes is inside the account; no file it opens carries a trigger), (3) $BCOMP refuses $EXECUTE (15071), and an $INCLUDE or dictionary outside the
+* account (15072), while ri.active is set, and (4) _VOC_REF follows a Q-pointer only into the run's own account.
+*
+* 11 Nov 26 Windows port, as Linux (S.213; owner 10 Nov: "should match linux").  THE COMMAND IS SD'S OWN COMMAND: the command word and every option word of the sentence must
+* have, in the account's VOC, the type and the dispatch fields (everything after the description) of the record of the same name in the shipped VOC, NEWVOC (ri.own.words).
+* A record that is missing or differs is refused BEFORE anything is kept or changed (message 15070, audit run.in refused account= word= reason=).  The names are not looked at:
+* a name is a plain word that is not one of SD's keywords, see above.
 *
 * THE WAY BACK is revert.account, from two places: the end of this routine, and the top of the abort branch (a break, a run-time error, ABORT or a forced logout abandons this
 * routine's frame, and the bottom command processor is called again).  /$runin/ holds what is needed; ri.active says a run is in progress.  It is audited on the way in and the way out
@@ -3237,18 +3245,14 @@ int.runin:
    end
    acc.rec = parse.pathname.tokens(acc.record<ACC$PATH>)
 
-* 10 Nov 26 Windows port: SDSYS's own entry for the command word and for every option word of the built sentence (no.catalog included), read HERE, from the
-*   administrator's VOC, to be compared with the account's in ri.windows.checks.
-   ri.vwords = '' ; ri.vkeys = '' ; ri.nv = 0
-   for ri.w = 1 to dcount(ri.sentence, ' ')
-      if ri.w = 1 or ri.w > 1 + ri.n.names then
-         ri.word = field(ri.sentence, ' ', ri.w)
-         gosub ri.voc.key
-         ri.nv += 1
-         ri.vwords<ri.nv> = ri.word
-         ri.vkeys<ri.nv> = ri.key
-      end
-   next ri.w
+* 11 Nov 26 Windows port, as Linux (S.213): the command word and the option words are SD's own in that account's VOC, or nothing is run.  Asked before anything is kept or changed.
+   gosub ri.own.words
+   if ri.bad # '' then
+      display sysmsg(15070, ri.bad[1, 40], ri.acct)   ;* run.in: %1 is not SD's own entry in the VOC of account %2; nothing was run
+      void kernel(K$AUDIT, 'run.in refused account=' : ri.acct : ' word=' : ri.bad[1, 40] : ' reason=' : ri.why)
+      unwinding = 2
+      return
+   end
 
 * what is needed to come back, kept in the common BEFORE anything changes
    ri.path = ospath('', os$cwd)
@@ -3347,45 +3351,59 @@ ri.plain.word:
    end
    return
 
-* 10 Nov 26 Windows port.  The entry for ri.word in the VOC that is open now, as one value: the type letter (upper case) and fields 2 to 5, so that SDSYS's
-*   "V" and an account's "Verb to compile ..." compare equal.  '' when there is none.  Lower case first, then upper, as the file check above reads.
-ri.voc.key:
-   read ri.krec from voc, ri.word else
-      read ri.krec from voc, upcase(ri.word) else ri.krec = ''
-   end
-   if ri.krec = '' then
-      ri.key = ''
-   end else
-      ri.key = upcase(ri.krec[1, 1]) : @vm : ri.krec<2> : @vm : ri.krec<3> : @vm : ri.krec<4> : @vm : ri.krec<5>
-   end
+* 11 Nov 26 Windows port, as Linux (S.213).  SD's own words: the command word (the first of ri.sentence) and the option words (those after the names) against the shipped VOC.
+*   The answer is ri.bad (the first word that fails, '' when all pass) and ri.why (for the audit line).  What is compared is what decides what runs: the type letter and
+*   every field after the first (a V record's dispatch and program, a K record's number and anything it hands over to); the first field's description is not (an account
+*   may hold a [LOCKED] one).  Read under the ids the command processor and the parser read first: the words as they stand in the sentence, which is lower case.  Anything
+*   that cannot be read is a refusal.  No early return from the loop.
+ri.own.words:
+   ri.bad = '' ; ri.why = ''
+   ri.nv.open = @false ; ri.av.open = @false
+   openpath @sdsys:@ds:'newvoc' to ri.nv.f then ri.nv.open = @true
+   openpath acc.rec:@ds:'voc' to ri.av.f then ri.av.open = @true
+   begin case
+      case not(ri.nv.open)
+         ri.bad = ri.cmd ; ri.why = 'the shipped voc cannot be read'
+      case not(ri.av.open)
+         ri.bad = ri.cmd ; ri.why = 'the voc of the account cannot be read'
+      case 1
+         ri.n.sw = dcount(ri.sentence, ' ')
+         for ri.w = 1 to ri.n.sw
+            if (ri.w = 1 or ri.w > 1 + ri.n.names) and ri.bad = '' then
+               ri.word = field(ri.sentence, ' ', ri.w)
+               read ri.own from ri.nv.f, ri.word else ri.own = ''
+               read ri.vrec from ri.av.f, ri.word else ri.vrec = ''
+               begin case
+                  case ri.own = ''
+                     ri.bad = ri.word ; ri.why = 'not in the shipped voc'
+                  case ri.vrec = ''
+                     ri.bad = ri.word ; ri.why = 'no entry in the voc of the account'
+                  case upcase(ri.vrec[1, 1]) # upcase(ri.own[1, 1])
+                     ri.bad = ri.word ; ri.why = 'the entry in the voc of the account is not the shipped one'
+                  case field(ri.vrec, @fm, 2, 9999) # field(ri.own, @fm, 2, 9999)
+                     ri.bad = ri.word ; ri.why = 'the entry in the voc of the account is not the shipped one'
+               end case
+            end
+         next ri.w
+   end case
+   if ri.nv.open then close ri.nv.f
+   if ri.av.open then close ri.av.f
    return
 
 *****************************************************************************
 * RI.WINDOWS.CHECKS  -  what RUN.IN asks in the account before the command runs, on Windows only  (10 Nov 26, RELEASE_1.1 201)
 *
 * The session's token is elevated and the administrator flag is on, so everything here stops the account's own code or the account's own pointers from being used by them:
-*   1. The command word and each option word must be, in the account's VOC, the entry SD supplies (the one in SDSYS's VOC, read before the change into ri.vkeys).  An
-*      account's VOC could otherwise make basic, or the keyword no.catalog, something of its own.  12565.
+*   1. (The command and option words are the entries SD supplies: ri.own.words, as Linux, before anything changes.  Until 11 Nov 26 this was check 1 here, 12565.)
 *   2. Every path the command writes must be inside the account: the named file's data and dictionary paths, the .out entry of basic and catalog (when there is one), and
 *      the private catalogue of catalog, decatalog and delete.catalog.  A relative path with no '..' and no @ token; never a drive, a leading slash or a backslash root.
 *      A VOC entry could otherwise point at SDSYS's own files, which this session can write.  12567.
 *   3. No file the command opens may carry a trigger: the VOC, the named file and its dictionary, the .out file and the private catalogue.  A trigger is a program found
 *      in the account's own catalogue, and it would run in this session.  12566.
 * The files a compile READS ($INCLUDE, $DICT, FILE) are BCOMP's to hold (15072, since 10 Nov 26), and a Q-pointer is _VOC_REF's.
-* In: ri.vwords, ri.vkeys, ri.n.names, ri.file, ri.vrec, ri.cmd, private.catalogue.  Out: ri.why, '' when all pass; the message has been displayed when it is not.
+* In: ri.n.names, ri.file, ri.vrec, ri.cmd, private.catalogue.  Out: ri.why, '' when all pass; the message has been displayed when it is not.
 ri.windows.checks:
    ri.why = ''
-   for ri.v = 1 to ri.nv
-      if ri.why = '' then
-         ri.word = ri.vwords<ri.v>
-         gosub ri.voc.key
-         if ri.key = '' or ri.key # ri.vkeys<ri.v> then
-            display sysmsg(12565, ri.word, ri.acct)   ;* %1 in the VOC of account %2 is not the entry SD supplies; run.in did not run the command
-            ri.why = 'not the voc entry sd supplies'
-         end
-      end
-   next ri.v
-
    ri.orec = ''
    ri.oname = ''
    if ri.n.names = 2 then

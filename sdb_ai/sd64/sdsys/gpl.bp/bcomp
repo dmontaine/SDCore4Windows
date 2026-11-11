@@ -21,6 +21,7 @@
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): in a compile RUN.IN started (ri.active), $INCLUDE / INCLUDE, $DICT and FILE refuse a file
 *               that lies outside the account's own directory and is not SYSCOM (message 15072, Linux 14072; routine ri.outside).  The compiler is $internal,
 *               so nothing else holds its opens to the account, and here the session's token is elevated whatever the administrator flag says.
+* 11 Nov 26 Windows port (RELEASE_1.1 231): the $EXECUTE refusal is message 15071, Linux's 14071 (was 12568).
 * 10 Nov 26 Windows port (S.96; RELEASE_1.1 201): $EXECUTE is refused while RUN.IN runs the compile (it joins the /$runin/ common to know); message 12568.
 * 8 Nov 26 Windows port - from Linux 218e2e9b: EXECUTE, PHANTOM and OS.EXECUTE take SILENT (for programs moved from openQM): the output is captured into the temporary __silent and thrown away.  Refused with CAPTURING (2911), which it is a form of.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): the C dictionary item type is gone from the compiler: the is.ctype argument of $BCOMP (callers: basic, bbproc, gplbld/COMP_PCODE), HDR.CTYPE, err.ctype and message 2994.
@@ -3197,7 +3198,7 @@ proc.directive:
 * 10 Nov 26 Windows port (S.96, RELEASE_1.1 201): not while RUN.IN runs a compile.  The administrator compiles an account's source in that account, on an
 *   elevated token; the directive would run a command the account wrote, with those rights.  The compile fails with the reason.
          if ri.active then
-            err.msg = sysmsg(12568) ;* $EXECUTE is not run in a compile that run.in runs
+            err.msg = sysmsg(15071) ;* $execute is refused in a compile started by run.in: it would run a command from the administrator's session
             gosub error
             goto exit.proc.directive
          end

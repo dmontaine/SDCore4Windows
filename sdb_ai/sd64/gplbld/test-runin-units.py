@@ -12,12 +12,13 @@ WINDOWS PORT, 10 Nov 26 (from Linux 8fc6b4e1 / d049d8bb at 074397f6; RELEASE_1.1
   - R31 (sandbox-runin.py's mutants still match) and R32 (registered in regress.sh / regress-map.txt) are NOT carried: neither file exists here.  A free guard is
     registered by being a test-*-units file (check-free-tier.ps1), and the sandbox suite has not been ported.
   - R30 looks in the Windows Solo tree instead of Linux Solo's.
-  - W1-W6 are Windows-only: the checks made in the account before the command runs (VOC entries SD supplies, paths inside the account, no trigger), SDSYS's VOC
-    entries read before anything changes, $EXECUTE refused in $BCOMP while ri.active is set, $VOC.PARSER reloaded by the safety net, the register read upper
-    case and no EUID change.
-  - 10 Nov 26 (from Linux ca137620, S.213; RELEASE_1.1 230): R39-R51 as Linux numbers them, less R37 and R38 (Linux's ri.own.words against NEWVOC; Windows' W2,
-    12565, is the same check against SDSYS's VOC and is kept) and R47 (Windows' $EXECUTE refusal is W5).  Linux 14072 and 14073 are 15072 and 15073 here (Linux's
-    second block lands at +1000).  R42 is asked of RUN.IN's own code only: LOGTO out of SDSYS drops the flag here too, and R50 keeps LOGTO out of a run.
+  - W1-W7 are Windows-only: the checks made in the account before the command runs (paths inside the account, no trigger), $EXECUTE refused in $BCOMP while
+    ri.active is set, $VOC.PARSER reloaded by the safety net, the register read upper case and no EUID change.
+  - 10 Nov 26 (from Linux ca137620, S.213; RELEASE_1.1 230): R39-R51 as Linux numbers them, less R47 (Windows' $EXECUTE refusal is W5).  Linux 14070 to 14073 are
+    15070 to 15073 here (Linux's second block lands at +1000).  R42 is asked of RUN.IN's own code only: LOGTO out of SDSYS drops the flag here too, and R50 keeps
+    LOGTO out of a run.
+  - 11 Nov 26 (RELEASE_1.1 231, owner 10 Nov: "should match linux"): R37 and R38 are Linux's, carried (ri.own.words against NEWVOC, 15070); Windows' own comparison with
+    SDSYS's VOC (the old W2 first check, W3, message 12565) is gone, and 12568 became 15071 (W5).  --selftest --from=r231 runs the mutants added that day.
 
 ***WHAT THIS IS AND WHAT IT IS NOT.*** It reads sdsys/gpl.bp/cproc (int.runin, revert.account, load.account.switches, the abort branch and the /runin/ common), the
 VOC record and the messages as TEXT.  IT CANNOT SAY THE VERB REFUSES ANYBODY OR THAT THE SESSION COMES BACK: that is sandbox-runin.py.  What it holds is the order the
@@ -45,8 +46,9 @@ MESSAGES = os.path.join(SD64, "sdsys", "messages")
 SOLO_MESSAGES = os.path.join(SD64, os.pardir, os.pardir, os.pardir, "SDCore4WindowsSolo", "sdb_ai", "sd64", "sdsys", "messages")
 BCOMP = os.path.join(SD64, "sdsys", "gpl.bp", "bcomp")
 VOCREF = os.path.join(SD64, "sdsys", "gpl.bp", "_voc_ref")
-WINDOWS_MESSAGES = [12565, 12566, 12567, 12568]
-S213_MESSAGES = [15072, 15073]                            # 10 Nov 26: Linux 14072 (an include or dictionary outside the account) and 14073 (LOGTO during a run)
+WINDOWS_MESSAGES = [12566, 12567]
+RETIRED_MESSAGES = [12565, 12568]                         # 11 Nov 26: replaced by Linux's 14070 and 14071 (15070, 15071 here)
+S213_MESSAGES = [15070, 15071, 15072, 15073]              # Linux 14070 (a word that is not SD's own), 14071 ($execute), 14072 (an include or dictionary outside the account), 14073 (LOGTO during a run)
 
 COMMANDS = ["basic", "catalog", "decatalog", "delete.catalog", "compile.dict"]
 SWITCHES = ["K$SH", "K$OS.EXEC", "K$SD.ACCOUNTS", "K$NET", "K$SHARED.READ", "K$SHARED.WRITE"]
@@ -133,6 +135,7 @@ def checks(src, voc_text, newvoc_names, extra=None):
         "plain": first(run, "gosub ri.plain.word"),
         "sdsys": first(run, "if ri.acct = 'sdsys' then"),
         "register": first(run, "openpath @sdsys:@ds:'accounts' to acc.f"),
+        "own": first(run, "gosub ri.own.words"),
         "save_path": first(run, "ri.path = ospath('', os$cwd)"),
         "save_sw": first(run, "ri.sw = kernel(K$SH, -1)"),
         "active": first(run, "ri.active = 1"),
@@ -144,7 +147,7 @@ def checks(src, voc_text, newvoc_names, extra=None):
         "revert": last(run, "gosub revert.account"),
         "end": last(run, "'run.in end account=' : ri.acct)"),
     }
-    order = ["admin", "nest", "parser", "loop", "nocat", "sdsys", "register", "save_path", "save_sw", "active", "begin", "cd", "switches", "filechk", "proc", "revert", "end"]
+    order = ["admin", "nest", "parser", "loop", "nocat", "sdsys", "register", "own", "save_path", "save_sw", "active", "begin", "cd", "switches", "filechk", "proc", "revert", "end"]
     missing = [k for k in order if A[k] is None]
     ck("R4 every anchor of int.runin is there", not missing, "missing " + ", ".join(missing))
     ck("R5 the order: administrator first, then the nest test, the words, the register, THEN what is kept to come back, THEN the flag, THEN the first change",
@@ -265,12 +268,10 @@ def checks(src, voc_text, newvoc_names, extra=None):
     g_cat = first(run, "gosub find.private.catalogue")
     ck("W1 the Windows checks run in the account, after its private catalogue is found and before the command, and the command runs only when they pass",
        None not in (g_chk, g_cat, A["proc"]) and g_cat < g_chk < A["proc"] and "if ri.file.ok and ri.why = '' then" in rtxt_run, "catalogue %s checks %s proc %s" % (g_cat, g_chk, A["proc"]))
-    ck("W2 the checks: each command and option word is the account's VOC entry SD supplies (12565), every path written is inside the account (12567), no file opened has a trigger (12566)",
-       all(x in ptxt for x in ("gosub ri.voc.key", "if ri.key = '' or ri.key # ri.vkeys<ri.v> then", "sysmsg(12565", "gosub ri.path.inside", "fileinfo(voc, FL$TRIGGER)",
-                              "fileinfo(ri.tf, FL$TRIGGER)", "ri.p = private.catalogue", "sysmsg(12567", "sysmsg(12566")))
-    w_keys = first(run, "ri.vkeys<ri.nv> = ri.key")
-    ck("W3 SDSYS's own entries are read after the register and BEFORE anything changes (what is kept to come back, the flag, the directory)",
-       None not in (w_keys, A["register"], A["save_path"]) and A["register"] < w_keys < A["save_path"], "keys %s" % w_keys)
+    ck("W2 the checks: every path written is inside the account (12567), no file opened has a trigger (12566); the words are NOT compared here with SDSYS's VOC any more "
+       "(ri.own.words asks, 11 Nov 26)",
+       all(x in ptxt for x in ("gosub ri.path.inside", "fileinfo(voc, FL$TRIGGER)", "fileinfo(ri.tf, FL$TRIGGER)", "ri.p = private.catalogue", "sysmsg(12567", "sysmsg(12566"))
+       and not any(x in "\n".join(s for n, s in lines) for x in ("ri.voc.key", "ri.vkeys", "ri.vwords", "sysmsg(12565")))
     ck("W4 a path inside the account: relative, no leading slash or backslash, no @ token, no drive, no '..'; and the longest part of it that exists is inside by the kernel's geometry (K$PATH.IN)",
        "if ri.q[1, 1] = '/' or ri.q[1, 1] = '@' or index(ri.q, ':', 1) or index('/' : ri.q : '/', '/../', 1) then" in ptxt and "ri.q = change(ri.p, '\\', '/')" in ptxt
        and "if not(kernel(K$PATH.IN, account.path : @fm : ri.chk)) then ri.ok = @false" in ptxt and "while ri.chk # '' and not(ospath(ri.chk, OS$EXISTS))" in ptxt)
@@ -279,19 +280,40 @@ def checks(src, voc_text, newvoc_names, extra=None):
         bcom = [s for n, s in bc if re.match(r"common /\$?runin/", s)]
         ccom = [s for n, s in lines if re.match(r"common /\$?runin/", s)]
         b_if = first(bc, "if ri.active then")
-        b_msg = first(bc, "err.msg = sysmsg(12568)", b_if or 0)
+        b_msg = first(bc, "err.msg = sysmsg(15071)", b_if or 0)
         b_exe = first(bc, "execute token.string")
-        ck("W5 $BCOMP joins /$runin/ with the command processor's six names and refuses $EXECUTE while ri.active is set (12568, before the execute)",
-           bcom == ccom and len(bcom) == 1 and None not in (b_if, b_msg, b_exe) and b_if < b_msg < b_exe and b_exe - b_if < 8, "common %s, if %s msg %s execute %s" % (bcom, b_if, b_msg, b_exe))
+        ck("W5 $BCOMP joins /$runin/ with the command processor's six names and refuses $EXECUTE while ri.active is set (15071, Linux 14071, before the execute); the old 12568 is gone",
+           bcom == ccom and len(bcom) == 1 and None not in (b_if, b_msg, b_exe) and b_if < b_msg < b_exe and b_exe - b_if < 8 and not any("12568" in s for n, s in bc),
+           "common %s, if %s msg %s execute %s" % (bcom, b_if, b_msg, b_exe))
     r_n = first(net, "gosub revert.account")
     v_n = first(net, "gosub get.voc.parser.rec")
     ck("W6 the safety net reads $VOC.PARSER again after the way back (it was read from the account the command visited)", None not in (r_n, v_n) and r_n < v_n)
     ck("W7 the register is read upper case, the session's name is the register's, and nothing changes the effective user",
        "read acc.record from acc.f, upcase(ri.acct) else acc.record = ''" in rtxt_run and "who = upcase(ri.acct)" in rtxt_run
        and "EUID" not in rtxt_run.upper() and "EUID" not in "\n".join(s for n, s in rev).upper())
-    ck("W8 the Windows-only messages exist", all(os.path.isfile(os.path.join(MESSAGES, str(n))) for n in WINDOWS_MESSAGES))
+    ck("W8 the Windows-only messages exist, and the two Linux replaced (12565, 12568) are gone",
+       all(os.path.isfile(os.path.join(MESSAGES, str(n))) for n in WINDOWS_MESSAGES) and not any(os.path.exists(os.path.join(MESSAGES, str(n))) for n in RETIRED_MESSAGES))
 
     # ---- S.213 (10 Nov 26, from Linux ca137620; RELEASE_1.1 230): the command does not run as the administrator, and its reads stay in the account ----------
+    # ---- 11 Nov 26 (RELEASE_1.1 231, from Linux ca137620): SD's own words, R37 and R38 as Linux's, with Windows' labels -------------------------------------------
+    own = section(lines, "ri.own.words:", "ri.windows.checks:")
+    otxt = "\n".join(s for n, s in own)
+    ow = A["own"]
+    ow_ref = first(run, "display sysmsg(15070, ri.bad[1, 40], ri.acct)", ow or 0)
+    ow_aud = first(run, "'run.in refused account=' : ri.acct : ' word=' : ri.bad[1, 40] : ' reason=' : ri.why", ow or 0)
+    ow_ret = first(run, "return", ow_aud or 0)
+    ck("R37 (A) the words are asked after the register is read and BEFORE anything is kept or changed; a failure says so (15070, the word and the account), is audited "
+       "with word= and reason=, and returns before the flag is set",
+       None not in (ow, ow_ref, ow_aud, ow_ret, A["register"], A["save_path"], A["active"]) and A["register"] < ow < ow_ref < ow_aud < ow_ret < A["save_path"] < A["active"]
+       and count(run, "gosub ri.own.words") == 1, "own %s refuse %s audit %s return %s save %s" % (ow, ow_ref, ow_aud, ow_ret, A["save_path"]))
+    ck("R38 (A) ri.own.words reads the SHIPPED record (NEWVOC of the system directory) and the ACCOUNT's VOC by the register's path, for the command word and every word after "
+       "the names, and compares the type letter and every field after the first; a file it cannot open and a record that is missing are refusals",
+       "openpath @sdsys:@ds:'newvoc' to ri.nv.f then ri.nv.open = @true" in otxt and "openpath acc.rec:@ds:'voc' to ri.av.f then ri.av.open = @true" in otxt
+       and "if (ri.w = 1 or ri.w > 1 + ri.n.names) and ri.bad = '' then" in otxt and "ri.word = field(ri.sentence, ' ', ri.w)" in otxt
+       and "read ri.own from ri.nv.f, ri.word else ri.own = ''" in otxt and "read ri.vrec from ri.av.f, ri.word else ri.vrec = ''" in otxt
+       and "case upcase(ri.vrec[1, 1]) # upcase(ri.own[1, 1])" in otxt and "case field(ri.vrec, @fm, 2, 9999) # field(ri.own, @fm, 2, 9999)" in otxt
+       and "case ri.own = ''" in otxt and "case ri.vrec = ''" in otxt and "case not(ri.nv.open)" in otxt and "case not(ri.av.open)" in otxt
+       and otxt.count("ri.bad = ri.") == 6 and not re.search(r"\bexecute\b|proc\.sentence|write ", otxt), "")
     k7 = first(run, "ri.sw<7> = kernel(K$VOC.EDIT, -1)")
     k10 = first(run, "ri.sw<10> = kernel(K$ADMINISTRATOR, -1)")
     k7s = next((s for n, s in run if n == k7), "")
@@ -364,11 +386,15 @@ def checks(src, voc_text, newvoc_names, extra=None):
         ck("R51 _voc_ref joins /$runin/ as CPROC does, and in the Q branch, after the register is read and BEFORE check.q.hop, a run lets a Q-pointer lead only into the run's own account (ER$PERM)",
            vcom == ccom2 and len(vcom) == 1 and None not in (q_reg, q_if, q_test, q_perm, q_hop) and q_reg < q_if < q_test < q_perm < q_hop and q_test - q_if == 1,
            "common %s, reg %s if %s test %s perm %s hop %s" % (vcom, q_reg, q_if, q_test, q_perm, q_hop))
+        m70 = extra.get("msg15070", "")
+        m71 = extra.get("msg15071", "")
         m72 = extra.get("msg15072", "")
         m73 = extra.get("msg15073", "")
-        ck("R49 the two new messages exist: 15072 takes the file (%1) and names run.in and syscom, 15073 takes the account (%1) and names logto and run.in; both end in a newline",
-           "%1" in m72 and "run.in" in m72 and "syscom" in m72 and m72.endswith("\n") and "%1" in m73 and "logto" in m73 and "run.in" in m73 and m73.endswith("\n"),
-           "%r / %r" % (m72, m73))
+        ck("R49 the four S.213 messages exist: 15070 takes the word and the account (%1, %2) and says the entry is not SD's own, 15071 names $execute and run.in, 15072 takes the file "
+           "(%1) and names run.in and syscom, 15073 takes the account (%1) and names logto and run.in; all end in a newline",
+           "%1" in m70 and "%2" in m70 and "not SD's own entry in the VOC" in m70 and m70.endswith("\n") and "$execute" in m71 and "run.in" in m71 and m71.endswith("\n")
+           and "%1" in m72 and "run.in" in m72 and "syscom" in m72 and m72.endswith("\n") and "%1" in m73 and "logto" in m73 and "run.in" in m73 and m73.endswith("\n"),
+           "%r / %r / %r / %r" % (m70, m71, m72, m73))
     return out
 
 
@@ -383,7 +409,8 @@ def load():
     names = set(os.listdir(NEWVOC)) if os.path.isdir(NEWVOC) else set()
     extra = {}
     for key, path in (("basic", BASIC), ("parser.h", PARSERH), ("kw.newvoc", KW_NEWVOC), ("kw.template", KW_TEMPLATE), ("op_array.c", OPARRAY), ("bcomp", BCOMP),
-                      ("_voc_ref", VOCREF), ("msg15072", os.path.join(MESSAGES, "15072")), ("msg15073", os.path.join(MESSAGES, "15073"))):
+                      ("_voc_ref", VOCREF), ("msg15070", os.path.join(MESSAGES, "15070")), ("msg15071", os.path.join(MESSAGES, "15071")),
+                      ("msg15072", os.path.join(MESSAGES, "15072")), ("msg15073", os.path.join(MESSAGES, "15073"))):
         with open(path, encoding="utf-8", errors="replace") as f:
             extra[key] = f.read()
     return src, voc, names, extra
@@ -438,11 +465,9 @@ MUTANTS = [
     ("the Windows checks are not asked", "cproc", "   if ri.file.ok then gosub ri.windows.checks\n", ""),
     ("the command runs when a check refused", "cproc", "   if ri.file.ok and ri.why = '' then\n", "   if ri.file.ok then\n"),
     ("a trigger on the VOC is not asked", "cproc", "      if fileinfo(voc, FL$TRIGGER) # '' then\n", "      if 0 then\n"),
-    ("the account's VOC entry is not compared", "cproc", "         if ri.key = '' or ri.key # ri.vkeys<ri.v> then\n", "         if 0 then\n"),
     ("a drive letter is inside the account", "cproc", " or index(ri.q, ':', 1) or", " or"),
     ("a link in the account is not asked of the kernel", "cproc", "            if not(kernel(K$PATH.IN, account.path : @fm : ri.chk)) then ri.ok = @false\n", ""),
-    ("SDSYS's entries are read after the change", "cproc", "         ri.vkeys<ri.nv> = ri.key\n", "         null\n"),
-    ("$EXECUTE runs under run.in", "bcomp", "         if ri.active then\n            err.msg = sysmsg(12568)", "         if 0 then\n            err.msg = sysmsg(12568)"),
+    ("$EXECUTE runs under run.in", "bcomp", "         if ri.active then\n            err.msg = sysmsg(15071)", "         if 0 then\n            err.msg = sysmsg(15071)"),
     ("$BCOMP's common has other names", "bcomp", "   common /$runin/ ri.active, ri.path,", "   common /$runin/ ri.active, ri.paths,"),
     ("the safety net keeps the visited account's $VOC.PARSER", "cproc", "            ri.active = 0\n            gosub get.voc.parser.rec\n", "            ri.active = 0\n"),
     ("the register is read as typed", "cproc", "read acc.record from acc.f, upcase(ri.acct) else", "read acc.record from acc.f, ri.acct else"),
@@ -484,6 +509,27 @@ MUTANTS = [
     ("message 15073 does not take the account", "msg15073", " in account %1", ""),
 ]
 
+# 11 Nov 26, RELEASE_1.1 231.  --selftest --from=r231 runs the mutants from here on (Linux's own-words mutants, with this tree's text).
+M_R231 = len(MUTANTS)
+MUTANTS += [
+    ("the words are not compared with the shipped VOC", "cproc", "   gosub ri.own.words\n   if ri.bad # '' then\n", "   ri.bad = ''\n   if ri.bad # '' then\n"),
+    ("the words are asked after the flag is set", "cproc", "   gosub ri.own.words\n   if ri.bad # '' then\n      display sysmsg(15070, ri.bad[1, 40], ri.acct)",
+     "   ri.active = 1\n   gosub ri.own.words\n   if ri.bad # '' then\n      display sysmsg(15070, ri.bad[1, 40], ri.acct)"),
+    ("the words are asked after what is kept to come back", "cproc", "   gosub ri.own.words\n   if ri.bad # '' then\n      display sysmsg(15070, ri.bad[1, 40], ri.acct)",
+     "   ri.path = ospath('', os$cwd)\n   gosub ri.own.words\n   if ri.bad # '' then\n      display sysmsg(15070, ri.bad[1, 40], ri.acct)"),
+    ("only the command word is compared, not the options", "cproc", "            if (ri.w = 1 or ri.w > 1 + ri.n.names) and ri.bad = '' then", "            if (ri.w = 1) and ri.bad = '' then"),
+    ("only the type letter is compared", "cproc", "                  case field(ri.vrec, @fm, 2, 9999) # field(ri.own, @fm, 2, 9999)\n", "                  case 0\n"),
+    ("a missing record passes", "cproc", "                  case ri.vrec = ''\n                     ri.bad = ri.word ; ri.why = 'no entry in the voc of the account'\n", ""),
+    ("a word the shipped VOC lacks passes", "cproc", "                  case ri.own = ''\n                     ri.bad = ri.word ; ri.why = 'not in the shipped voc'\n", ""),
+    ("an unreadable shipped VOC passes", "cproc", "      case not(ri.nv.open)\n         ri.bad = ri.cmd ; ri.why = 'the shipped voc cannot be read'\n", ""),
+    ("the refusal of a word is not audited", "cproc", "      void kernel(K$AUDIT, 'run.in refused account=' : ri.acct : ' word=' : ri.bad[1, 40] : ' reason=' : ri.why)\n", ""),
+    ("the words are compared with SDSYS's VOC again (the voc of the session)", "cproc", "   openpath acc.rec:@ds:'voc' to ri.av.f then ri.av.open = @true", "   openpath @sdsys:@ds:'voc' to ri.av.f then ri.av.open = @true"),
+    ("the old message 12565 is used again", "cproc", "      display sysmsg(15070, ri.bad[1, 40], ri.acct)", "      display sysmsg(12565, ri.bad[1, 40], ri.acct)"),
+    ("$execute is refused with the old id 12568", "bcomp", "            err.msg = sysmsg(15071)", "            err.msg = sysmsg(12568)"),
+    ("message 15070 does not name the account", "msg15070", " of account %2", ""),
+    ("message 15071 does not name run.in", "msg15071", "started by run.in", "started somewhere"),
+]
+
 
 def selftest():
     src, voc, names, extra = load()
@@ -492,7 +538,14 @@ def selftest():
         print("selftest: the unmutated source already fails; fix that first")
         return 1
     missed = 0
-    for name, kind, old, new in MUTANTS:
+    start = 0
+    for a in sys.argv:
+        if a.startswith("--from="):
+            v = a[len("--from="):].lower()
+            start = M_R231 if v == "r231" else int(v)
+    if start:
+        print("selftest: from mutant %d of %d" % (start, len(MUTANTS)))
+    for name, kind, old, new in MUTANTS[start:]:
         s, v, nm, ex = src, voc, set(names), dict(extra)
         if kind == "cproc":
             if s.count(old) != 1:
@@ -517,7 +570,7 @@ def selftest():
         else:
             print("  [MISSED] %-60s" % name)
             missed += 1
-    print("selftest: %d mutants, %d missed or not applied" % (len(MUTANTS), missed))
+    print("selftest: %d mutants, %d missed or not applied" % (len(MUTANTS) - start, missed))
     return 0 if missed == 0 else 1
 
 
