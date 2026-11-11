@@ -268,7 +268,10 @@ def run_checks(tree):
         row("8 the C headers are valid C (no C compiler here: not run)", True, "skipped")
 
     # the Python header against a library built from this source
-    lib = os.path.join(LIB_DIR or os.path.join(tree, "bin"), "sdclilib.so")
+    # 11 Nov 26, Windows (RELEASE_1.1 224): the library is sdclilib.dll in bin/client64, which is what sdclient.py loads on win32 ('./sdclilib.dll').  Until now
+    # only sdclilib.so was looked for, which Windows never builds, so this row printed "skipped" and passed.
+    libname, libsub = ("sdclilib.dll", os.path.join("bin", "client64")) if sys.platform == "win32" else ("sdclilib.so", "bin")
+    lib = os.path.join(LIB_DIR or os.path.join(tree, libsub), libname)
     src = os.path.join(tree, "gplsrc", "sdclilib", "sdclilib.c")
     if os.path.isfile(lib) and os.path.isfile(src) and (LIB_DIR or os.path.getmtime(lib) >= os.path.getmtime(src)):
         code = ("import importlib.util, sys; s = importlib.util.spec_from_file_location('c', sys.argv[1]); m = importlib.util.module_from_spec(s);"
@@ -277,10 +280,10 @@ def run_checks(tree):
         r = subprocess.run([sys.executable, "-I", "-B", "-c", code, os.path.join(tree, "sdsys/syscom/sdclient.py")], cwd=os.path.dirname(lib),
                            capture_output=True, text=True)
         m = re.search(r"BOUND (\d+)", r.stdout)
-        row("9 sdclient.py loads against the built bin/sdclilib.so and binds every function in the header",
+        row("9 sdclient.py loads against the built %s and binds every function in the header" % libname,
             m is not None and int(m.group(1)) == len(want), (r.stdout + r.stderr)[-300:])
     else:
-        row("9 (bin/sdclilib.so is missing or older than gplsrc/sdclilib/sdclilib.c: the Python header was not loaded against it)", True, "skipped")
+        row("9 (%s is missing or older than gplsrc/sdclilib/sdclilib.c: the Python header was not loaded against it)" % libname, True, "skipped")
 
     # C# (P/Invoke): names, SDCall / SDCallx for 0 to 20 arguments, and the C type each parameter and result stands for
     hs = parse_c_sigs(read(tree, "gplsrc/sdclilib/sdclilib.h"), "SD_API")
@@ -417,6 +420,24 @@ def selftest():
         hit = [r for r in res if not r[1] and r[0].startswith(want)]
         print("  [%s] %s: %s" % ("PASS" if hit else "FAIL", name, "caught by row %s" % hit[0][0][:2] if hit else "NOT CAUGHT"))
         ok_all &= bool(hit)
+    # 11 Nov 26, Windows (RELEASE_1.1 224): row 9 needs the built library, whatever its age (as --lib), so it has its own case.  Only when one is there.
+    global LIB_DIR
+    wl = os.path.join(SD64, "bin", "client64", "sdclilib.dll") if sys.platform == "win32" else os.path.join(SD64, "bin", "sdclilib.so")
+    if os.path.isfile(wl):
+        keep, LIB_DIR = LIB_DIR, os.path.dirname(wl)
+        try:
+            d = mutate_copy(SD64, [("sdsys/syscom/sdclient.py", "SDRevision = _lib.SDRevision\n", "SDRevision = _lib.SDRevision\nSDBogus = _lib.SDBogus\n")])
+            try:
+                res = run_checks(d)
+            finally:
+                shutil.rmtree(d)
+            hit = [r for r in res if not r[1] and r[0].startswith("9 ")]
+            print("  [%s] a binding for a function the BUILT library has not: %s" % ("PASS" if hit else "FAIL", "caught by row 9" if hit else "NOT CAUGHT"))
+            ok_all &= bool(hit)
+        finally:
+            LIB_DIR = keep
+    else:
+        print("  [skip] the row 9 case: no built library at %s" % wl)
     return 0 if ok_all else 1
 
 
