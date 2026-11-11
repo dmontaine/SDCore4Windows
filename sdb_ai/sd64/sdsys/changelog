@@ -3,6 +3,21 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+10 Nov 26  TOOL.REMOTE: EVERYTHING THAT REACHES SD FROM OUTSIDE, ON ONE SCREEN (FROM SD CORE FOR LINUX).
+
+             What        - TOOL.REMOTE (SDSYS only) is a full-screen page of five views: the API and ssh doors as the
+                           machine reports them (REMOTE.API and REMOTE.SSH with no keyword), the routes of each user account,
+                           the SDNet servers, who is connected now, and this machine's TLS identity. A changes the API and
+                           S changes ssh, X deletes a server and N defines one, each after a box that shows the command and
+                           is answered Run; turning a door on wants the word OPEN typed. A and N give the terminal to the
+                           verb, so that REMOTE.API's restart question and SET.SERVER's questions are answered by you.
+             Why         - SD Core for Linux has it, and the two are kept the same. The home screen's Remote servers tile
+                           ran a page this system did not have.
+             Does NOT    - Show or open the SDSYS sign-in over ssh: that view of SD Core for Linux's page is left out, as
+                           administration over ssh is not offered here. Change anything itself: the verbs do, and write
+                           their own audit lines. A change of the API to or from OFF still asks whether to restart SD,
+                           which ends every session, this one too.
+
 10 Nov 26  SET.JOB AND TOOL.JOBS: THE ADMINISTRATOR'S SCHEDULED JOBS, ON TASK SCHEDULER (FROM SD CORE FOR LINUX).
 
              What        - SET.JOB (SDSYS only) makes, changes, deletes, starts and lists the administrator's scheduled

@@ -42,9 +42,8 @@ NOT_HERE = {
     'docsinst':         'Core provides no docs.install, decided 26 Oct 2026 under the owner\'s delegation (HISTORY); Solo has it (SOLO 47)',
     'euid_restore':     'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'euid_set':         'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
-    'locktracer':       'LOCK.TRACER (Linux 7f7a4fd4) is to be carried, the trace file protected by ACL (agreed with Linux, mail 2026-11-11T0630): RELEASE_1.1 228',
+    'locktracer':       'LOCK.TRACER (Linux 7f7a4fd4) was held back 18 Oct (0480ce9a): every session would append to a file in SDSYS\'s directory; owner, 10 Nov: carry it once the service is the only writer, as for the audit (RELEASE_1.1 182)',
     'setmode':          'OS: SET.MODE (Linux 3b435253) sets POSIX permission bits; Windows files have ACLs, not mode bits (agreed with Linux, mail 2026-11-11T0630)',
-    'tool_remote':      'tool.remote (Linux S.75 A9, df48c780) is to be carried, with this machine\'s own remote doors (agreed with Linux, mail 2026-11-11T0630): RELEASE_1.1 228',
     'peer_local':       'removed here with the administrator predicate (RELEASE_1.1 64, fdded05a)',
     'remotesdsys':      'remote.sdsys, administration over ssh: deferred by the owner (RELEASE_1.1 202)',
 }

@@ -1,0 +1,837 @@
+* TOOL_REMOTE
+* Everything that lets a machine or a person reach SD from outside, on one screen: the two doors (the API and ssh) as the machine reports them, how each account can be reached, the SDNet
+* servers, who is connected now, and this machine's TLS identity (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A9).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 10 Nov 26 Windows port - from Linux (S.75 A9, df48c780, and its later changes to S.186 ad4a2cf6; RELEASE_1.1 228), agreed with Linux by mail 2026-11-11T0630.  Five views,
+*               not six: the sdsys login view (REMOTE.SDSYS, S.95 and S.106) is left out, as remote administration over ssh is deferred here (RELEASE_1.1 202), so 6, O and F
+*               and the verb are gone.  OS deviations: A hands the terminal to REMOTE.API instead of running it through $tk_run, because the Windows verb asks whether to
+*               restart SD when the listener moves to or from OFF (the socket is opened only at start-up, and a restart ends every session); the doors' words are what
+*               api-listener.ps1, api-firewall.ps1 and ssh-firewall.ps1 read back from sd.conf and the firewall rules; a route is a Windows group; "Press Enter" is 12870.
+* 02 Nov 26 dm  S.106: the authenticator code is removed (owner: password only for this release).  The sdsys login view reports whether sshd lets sdsys in; O opens it (REMOTE.SDSYS ON,
+*               after a box wanting the word OPEN) and F shuts it (OFF); R (recovery codes) and L (the code at the console) are gone.
+* 02 Nov 26 dm  S.101 stage D: L on the sdsys login view - REMOTE.SDSYS LOCAL ON or OFF after a box (the code at the console too, or not; off as delivered).
+* 28 Oct 26 dm  S.88 L2: the three boxes are panes of the layout service ($tk_layout): drawn exactly as before at 140 by 43, and in a larger window the list takes the extra rows, every
+*               box and text is as wide as the window, and the explanation wraps at the box's width. The rows, widths, hit tests and the [?] button are counted from the pane rectangles.
+*               The layout is declared again after the terminal was given to SET.SERVER and the screen taken again.
+* 25 Oct 26 dm  New.
+* 1 Nov 26 dm  S.97 stage 2 (group B): the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; the five views and refresh are offered, nothing that opens a door.
+* 1 Nov 26 dm  S.95 stage 1b: a sixth view, the sdsys login over ssh: REMOTE.SDSYS's report, and O, R and F give the terminal to REMOTE.SDSYS ON, RECOVERY and OFF after a box
+*              (the secret and the recovery codes are shown by the verb on the plain terminal and never pass through this page).
+* 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the view to the AI line and back; AI > Ask the AI is a menu entry of its own.
+* 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
+* 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   TOOL.REMOTE      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
+*
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), of five views, chosen with the keys 1 to 5:
+*     1  the doors     REMOTE.API and REMOTE.SSH with no keyword, which report what the machine says (sd.conf's APIPORT and the firewall rules read back, not an intention): the list
+*                      is their words.  A changes the API (ON, LOCAL or OFF): after its box the terminal is given to REMOTE.API, which asks whether to restart SD when the listener
+*                      moves to or from OFF.  S changes ssh (ON or OFF) through the routine.  ON lets other computers in, so either box wants the word OPEN typed.
+*     2  routes        every USER account with the doors it has (ssh, api, files, files-write, files-admin) and the NET gate, and in words how that account can be reached.  It only
+*                      shows: the switches are TOOL.GATES's.
+*     3  servers       the SDNet servers of the servers file (!netdefs): name, host:port, the remote account and the mode, the pin shortened, the local accounts that may use it.  X deletes
+*                      the one under the cursor (DELETE.SERVER, after a box).  N defines one: the fields are asked and checked here, and the terminal is given to SET.SERVER, whose
+*                      CONNECT step shows the key the server presents and asks whether to trust it.
+*     4  connected     every session now, by the door it came through: the user number, the kind (user, api, sdnet, phantom), the login user, the account and where it came from.
+*     5  TLS           this machine's own TLS identity as SETTINGS.REPORT gives it: the certificate fields and the public-key hash another SD server pins.  Never the private key.
+*   Keys: Up, Down, PgUp, PgDn, Home, End; F5 reads again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
+*
+*   WHAT IT RUNS.  Each change only after its box was answered Run (Cancel is what Enter chooses): REMOTE.API and REMOTE.SSH with no keyword through the routine (to report);
+*   REMOTE.SSH ON or OFF and DELETE.SERVER through the routine; REMOTE.API ON, LOCAL or OFF and SET.SERVER on the terminal, given to the verb.  LIST.SERVERS is not run (the file
+*   is read with !netdefs).  The verbs ask for the administrator again and write their own audit lines.  The page writes nothing itself.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $tool_remote
+$catalog $tool_remote
+
+$include keys.h
+$include int$keys.h
+$include err.h
+$include sl.h
+$include tk.h
+
+   prompt ''
+
+   allow = 'remote.api remote.ssh delete.server'   ;* the commands this page may run through the routine (remote.api only to report; a change of it and set.server go to the verb on the terminal)
+   call $tk_open('tool.remote', 'admin', ctx, err)
+   if err # '' then
+      display err
+      stop
+   end
+   void kernel(K$AUDIT, 'tool start app=tool.remote')
+
+   keys = ''
+   call $tk_keys('add', keys, 'f1', 'help', 'help', '', 1)
+   call $tk_keys('add', keys, '1', 'doors', 'doors', '', 1)
+   call $tk_keys('add', keys, '2', 'routes', 'routes', '', 1)
+   call $tk_keys('add', keys, '3', 'servers', 'servers', '', 1)
+   call $tk_keys('add', keys, '4', 'connected', 'connected', '', 1)
+   call $tk_keys('add', keys, '5', 'tls', 'tls', '', 1)
+   call $tk_keys('add', keys, 'a', 'api', 'api', 'Doors', 1)
+   call $tk_keys('add', keys, 's', 'ssh', 'ssh', 'Doors', 1)
+   call $tk_keys('add', keys, 'x', 'delete', 'delete', 'Servers', 1)
+   call $tk_keys('add', keys, 'n', 'new', 'new', 'Servers', 1)
+   call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
+   call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U4: Esc goes back to the doors view first, else opens the menu bar
+   call $tk_keys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call $tk_keys('menu', keys, 'api', '&Door', '&API door on or off', '', '')
+   call $tk_keys('menu', keys, 'ssh', '&Door', '&Ssh door on or off', '', '')
+   call $tk_keys('menu', keys, 'delete', '&Server', '&Delete the server', '', '')
+   call $tk_keys('menu', keys, 'new', '&Server', '&New server', '', '')
+   call $tk_keys('menu', keys, 'doors', '&View', '&Doors', '', '')
+   call $tk_keys('menu', keys, 'routes', '&View', '&Routes', '', '')
+   call $tk_keys('menu', keys, 'servers', '&View', '&Servers', '', '')
+   call $tk_keys('menu', keys, 'connected', '&View', '&Connected', '', '')
+   call $tk_keys('menu', keys, 'tls', '&View', '&TLS', '', '')
+   call $tk_keys('menu', keys, 'refresh', '&View', 'Re&fresh', '', '')
+   call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
+   call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
+   panes = 'Doors' : @fm : 'Routes' : @fm : 'Servers' : @fm : 'Connected' : @fm : 'TLS'
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only its five views and refresh (opening or closing ssh or the API, a new server and deleting one are
+   * NOT offered without the owner's word); a proposal is carried out by the page's own key.  Where the AI is not usable nothing here adds a key, a row or a line.
+   call $tk_keys('ai', keys, 'doors', '', '', '', '')
+   call $tk_keys('ai', keys, 'routes', '', '', '', '')
+   call $tk_keys('ai', keys, 'servers', '', '', '', '')
+   call $tk_keys('ai', keys, 'connected', '', '', '', '')
+   call $tk_keys('ai', keys, 'tls', '', '', '', '')
+   call $tk_keys('ai', keys, 'refresh', '', '', '', '')
+   call $tk_aipage('init', ctx, keys, '', '', aout)
+
+   gosub lay.declare                                            ;* the panes; VR (the list rows on the screen) and DV (the explanation rows) come from them
+   view = 1
+   rowtxt = '' ; nrows = 0 ; hdr = ''
+   api.out = '' ; ssh.out = ''
+   defs = '' ; nsrv = 0
+   udata = '' ; nsess = 0
+   unames = '' ; nu = 0
+   ugates = ''
+   tls.lines = ''
+   ci = 1 ; ta = 0
+   gen = 0
+   done = 0
+   msg = ''
+
+   gosub read.all
+   gosub draw.all
+
+   loop
+      call $tk_menubar('draw', ctx, keys, panes<view>, '', '', mr)          ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
+      call $tk_frame(ctx, keys, panes<view>, msg)
+      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      nm = ''
+      screen key returning nm
+      mr = ''
+      ao = ''
+      if nm # '' then call $tk_aipage('key', ctx, keys, panes<view>, nm, ao)         ;* S.97 stage 2: while the AI line has the focus it takes the keys, before the bar sees them
+      if ao<1> = 'replay' then nm = ao<2>                                            ;* an action the AI proposed and the person accepted: this page's own key for it
+      if ao<1> # '' then msg = ao<4>
+      busy = (if view # 1 then 1 else 0)
+      if nm # '' and ao<1> = '' then call $tk_menubar('key', ctx, keys, panes<view>, nm, busy, mr)       ;* the Esc rule: another view is left before the bar opens
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case ao<1> = 'taken'
+            if ao<3> then
+               gen += 1                                                               ;* the preview, the wait and the answer covered the page: all of it is drawn again
+               ctx<TK.C.GEN> = gen
+               gosub draw.all
+            end
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit'
+            exit
+         case nm = 'resize'
+            call $tk_layout('refresh', ctx, '', lay.chg)
+            gosub lay.get
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case nm = 'mouse'
+            gosub on.mouse
+         case 1
+            gosub on.key
+      end case
+      if done then exit
+   repeat
+
+   call $tk_close(ctx)
+   stop
+
+* ------------------------------------------------------------------------------------------------- what the machine says
+
+* Everything the five views show, read again: the doors' reports, the SDNet servers, the sessions, the accounts' routes and the TLS lines
+read.all:
+   sel.t = ''
+   if nrows > 0 and ci >= 1 and ci <= nrows then sel.t = rowtxt<ci>
+   cmd = 'remote.api'
+   gosub run.report
+   api.out = rep
+   cmd = 'remote.ssh'
+   gosub run.report
+   ssh.out = rep
+   call !netdefs('READ', defs, nderr)
+   if nderr # '' then defs = ''
+   nsrv = dcount(defs, @fm)
+   call !listu(udata)
+   nsess = dcount(udata, @fm)
+   gosub read.accounts
+   call !settings_os(os.lines, soerr)
+   tls.lines = ''
+   if soerr = '' then
+      inapi = 0
+      for i = 1 to dcount(os.lines, @fm)
+         l = os.lines<i>
+         if l[1, 1] = '[' then inapi = (l[1, 5] = '[api]')
+         if inapi and l[1, 5] # '[api]' then tls.lines<-1> = l
+      next i
+   end
+   gosub build.rows
+   if sel.t # '' then
+      for i = 1 to nrows
+         if rowtxt<i> = sel.t then
+            ci = i
+            exit
+         end
+      next i
+   end
+   if ci > nrows then ci = nrows
+   if ci < 1 then ci = 1
+   return
+
+* cmd is a verb with no keyword (it reports and changes nothing); rep is what it printed, or why it was not run
+run.report:
+   call $tk_run(allow, cmd, rep, rstat, rerr)
+   if rerr # '' then rep = rerr
+* a message with line breaks is several rows, never one row that moves the cursor (a message writes \n as LF then CR, so the CR that is left starts the next row at column 0)
+   rep = change(change(change(rep, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+   if rstat # 0 and trim(rep) = '' then rep = cmd : ' returned status ' : rstat
+   return
+
+* The USER accounts, in name order, with the state of the doors and the NET gate
+read.accounts:
+   names = ''
+   openpath @sdsys : @ds : 'accounts' to acc.f then
+      select acc.f to 9
+      loop
+         readnext id from 9 else exit
+         if id # 'sdsys' then
+            locate id in names<1> by 'AL' setting lp else
+               ins id before names<lp>
+            end
+         end
+      repeat
+      close acc.f
+   end
+   unames = '' ; ugates = '' ; nu = 0
+   for i = 1 to dcount(names, @fm)
+      call $tk_gates(names<i>, g, ainfo, gerr)
+      if gerr = '' and ainfo<1> = 'USER' then
+         nu += 1
+         unames<nu> = names<i>
+         st.s = ''
+         for j = 1 to dcount(g, @fm)
+            gid = g<j, 1>
+            if gid = 'ssh' or gid = 'api' or gid = 'files' or gid = 'files-write' or gid = 'files-admin' or gid = 'net' then
+               st.s := (if st.s = '' then '' else ' ') : gid : '=' : g<j, 2>
+            end
+         next j
+         ugates<nu> = st.s
+      end
+   next i
+   return
+
+* The rows of the view that is showing, and the heading above them
+build.rows:
+   rowtxt = '' ; nrows = 0
+   begin case
+      case view = 1
+         hdr = 'What the machine says (REMOTE.API, then REMOTE.SSH, with no keyword)'
+         for i = 1 to dcount(api.out, @fm)
+            if trim(api.out<i>) # '' then rowtxt<-1> = api.out<i>
+         next i
+         rowtxt<-1> = ''
+         for i = 1 to dcount(ssh.out, @fm)
+            if trim(ssh.out<i>) # '' then rowtxt<-1> = ssh.out<i>
+         next i
+      case view = 2
+         hdr = fmt('Account', '20L') : fmt('ssh', '6L') : fmt('api', '6L') : fmt('files', '7L') : fmt('write', '7L') : fmt('admin', '7L') : fmt('net', '6L') : 'How it can be reached'
+         for i = 1 to nu
+            gosub route.line
+            rowtxt<-1> = rline
+         next i
+      case view = 3
+         hdr = fmt('Name', '17L') : fmt('Address', '34L') : fmt('Remote account / mode', '24L') : fmt('Pin', '21L') : 'Local accounts that may use it'
+         for i = 1 to nsrv
+            d = defs<i>
+            allowed = d<1, 7>
+            if allowed = '' then allowed = 'none'
+            pn = d<1, 5>
+            rowtxt<-1> = fmt(d<1, 1>, '17L') : fmt(d<1, 2> : ':' : d<1, 3>, '34L') : fmt(d<1, 4> : '/' : d<1, 6>, '24L') : fmt(pn[1, 16] : '...', '21L') : allowed
+         next i
+      case view = 4
+         hdr = fmt('User', '6R') : '  ' : fmt('Kind', '9L') : fmt('Login user', '16L') : fmt('Account', '20L') : 'Came from'
+         for i = 1 to nsess
+            gosub session.line
+            rowtxt<-1> = sline
+         next i
+      case 1
+         hdr = 'The certificate and public-key lines of SETTINGS.REPORT [api]; the private key is never read'
+         for i = 1 to dcount(tls.lines, @fm)
+            if trim(tls.lines<i>) # '' then rowtxt<-1> = tls.lines<i>
+         next i
+   end case
+   nrows = dcount(rowtxt, @fm)
+   if rowtxt = '' then nrows = 0
+   return
+
+* One USER account (i is its place in unames) as a line: the doors it has and what that means
+route.line:
+   gs = ugates<i>
+   cell.ssh = (if index(gs, 'ssh=1', 1) then 'yes' else 'no')
+   cell.api = (if index(gs, 'api=1', 1) then 'yes' else 'no')
+   cell.files = (if index(gs, 'files=1', 1) then 'yes' else 'no')
+   cell.fw = (if index(gs, 'files-write=1', 1) then 'yes' else 'no')
+   cell.fa = (if index(gs, 'files-admin=1', 1) then 'yes' else 'no')
+   cell.net = (if index(gs, 'net=1', 1) then 'yes' else 'no')
+   reach = ''
+   if cell.api = 'yes' then reach<-1> = 'the whole API'
+   if cell.api = 'no' and cell.files = 'yes' then
+      w = 'files only (read)'
+      if cell.fw = 'yes' then w = 'files only (read and write)'
+      if cell.fa = 'yes' then w = 'files only (read, write and administer)'
+      reach<-1> = w
+   end
+   if cell.ssh = 'yes' then reach<-1> = 'ssh'
+   if reach = '' then reach = 'no remote door'
+   rline = fmt(unames<i>[1, 19], '20L') : fmt(cell.ssh, '6L') : fmt(cell.api, '6L') : fmt(cell.files, '7L') : fmt(cell.fw, '7L') : fmt(cell.fa, '7L') : fmt(cell.net, '6L') : convert(@fm, ', ', reach)
+   return
+
+* One session (i is its place in udata) as a line
+session.line:
+   v = udata<i>
+   flg = v<1, 4>
+   kind = 'user'
+   begin case
+      case bitand(flg, USR$SDNET)
+         kind = 'sdnet'
+      case bitand(flg, USR$SDVBSRVR)
+         kind = 'api'
+      case bitand(flg, USR$PHANTOM)
+         kind = 'phantom'
+   end case
+   org = v<1, 3>
+   if v<1, 7> # '' then org := (if org = '' then '' else ' ') : v<1, 7>
+   sline = fmt(v<1, 1>, '6R') : '  ' : fmt(kind, '9L') : fmt(v<1, 6>, '16L') : fmt(v<1, 9>, '20L') : org
+   return
+
+* ------------------------------------------------------------------------------------------------- the layout (S.88 L2)
+
+* The page's three boxes as panes of $tk_layout: each size is the box drawn at 140 by 43 (the body is 138 by 39), so at that size nothing moves; in a larger window the list stretches
+* (a table shows more rows) and every pane is as wide as the body.  Declared again after the terminal was given away and the screen taken again.
+lay.declare:
+   d = ''
+   d<1> = 'top' : @vm : 1 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<2> = 'list' : @vm : 2 : @vm : 1 : @vm : 20 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   d<3> = 'detail' : @vm : 3 : @vm : 1 : @vm : 13 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   call $tk_layout('declare', ctx, d, lay.err)
+   gosub lay.get
+   return
+
+* The rectangles of the three panes, and what is counted from them: tw the width of a text line inside a box (134 at 140 by 43), VR the list rows, DV the explanation rows
+lay.get:
+   lay.id = 'top'
+   gosub lay.rect
+   top.x = lay.x ; top.y = lay.y ; top.w = lay.w ; top.h = lay.h
+   lay.id = 'list'
+   gosub lay.rect
+   lst.x = lay.x ; lst.y = lay.y ; lst.w = lay.w ; lst.h = lay.h
+   lay.id = 'detail'
+   gosub lay.rect
+   det.x = lay.x ; det.y = lay.y ; det.w = lay.w ; det.h = lay.h
+   body.y = ctx<TK.C.YBODY>
+   tx = lst.x + 2
+   tw = lst.w - 4
+   mk.x = top.x + top.w - 5                                     ;* the [?] button, at the right end of the first row of the top box
+   mk.y = top.y + 1
+   VR = lst.h - 3
+   DV = det.h - 2
+   return
+
+lay.rect:
+   call $tk_layout('pane', ctx, lay.id, lay.r)
+   lay.x = lay.r<1, 1>
+   lay.y = lay.r<1, 2>
+   lay.w = lay.r<1, 3>
+   lay.h = lay.r<1, 4>
+   return
+
+* ------------------------------------------------------------------------------------------------- drawing
+
+draw.all:
+   cw2 = ctx<TK.C.W>
+   chh = ctx<TK.C.H> - 5
+   screen clear at 0,body.y size cw2,chh
+   screen box at top.x,top.y size top.w,top.h title 'Remote access'
+   t.list = 'The doors'
+   if view = 2 then t.list = 'The routes of the user accounts'
+   if view = 3 then t.list = 'SDNet servers'
+   if view = 4 then t.list = 'Connected now'
+   if view = 5 then t.list = 'TLS identity of this machine'
+   screen box at lst.x,lst.y size lst.w,lst.h title t.list
+   screen box at det.x,det.y size det.w,det.h title 'About this view'
+   gosub draw.top
+   gosub redraw
+   return
+
+draw.top:
+   ap = trim(api.out<1>)
+   sp = trim(ssh.out<1>)
+   s = 'API: ' : ap
+   screen text s[1, tw - 6] at tx,top.y + 1 attr 'bold' width tw - 6                  ;* 6 less than the other lines so that the [?] is clear
+   s = 'ssh: ' : sp
+   screen text s[1, tw] at tx,top.y + 2 width tw
+   s = nsrv : ' SDNet server' : (if nsrv = 1 then '' else 's') : ' defined.   ' : nu : ' user account' : (if nu = 1 then '' else 's') : '.   ' : nsess : ' session' : (if nsess = 1 then '' else 's') : ' now.'
+   screen text s at tx,top.y + 3 width tw
+   screen text '1 doors  2 routes  3 servers  4 connected  5 TLS   doors: A api, S ssh  servers: X delete, N new' at tx,top.y + 4 width tw
+   call $tk_help('mark', mk.x, mk.y, 0, 0)
+   return
+
+redraw:
+   gosub draw.list
+   gosub draw.detail
+   return
+
+draw.list:
+   screen text hdr[1, tw] at tx,lst.y + 1 attr 'header' width tw
+   if ci <= ta then ta = ci - 1
+   if ci > ta + VR then ta = ci - VR
+   if ta < 0 then ta = 0
+   for r = 1 to VR
+      kk = ta + r
+      s = ''
+      if kk <= nrows then s = rowtxt<kk>
+      rat = 'normal'
+      if kk = ci and kk <= nrows and view # 1 and view # 5 then rat = 'highlight'
+      screen text s[1, tw] at tx,lst.y + 1 + r attr rat width tw
+   next r
+   return
+
+draw.detail:
+   for r = 1 to DV
+      screen text '' at tx,det.y + r width tw
+   next r
+   lines = ''
+   begin case
+      case view = 1
+         lines<-1> = 'API ON: SD listens on port 4247 and the firewall rule lets other computers on the network connect. LOCAL: SD listens on port 4247 and only this computer may connect. OFF: SD opens no API socket at all.'
+         lines<-1> = 'SD opens or closes the API socket only when it starts, so a change to or from OFF asks whether to restart SD now, and a restart ends every session, this one too. A gives the terminal to REMOTE.API for that question.'
+         lines<-1> = 'ssh ON lets other computers on the network connect over ssh; OFF lets only this computer connect, and ssh to this machine itself keeps working. It scopes the firewall rule and never stops or removes the ssh server.'
+         lines<-1> = 'What is shown above is what the machine says, read back from sd.conf and the firewall rules, not what this page meant. Turning a door ON lets other computers reach this one, so its box wants the word OPEN typed.'
+      case view = 2
+         lines<-1> = 'A user account is reached by a door only if its Windows user is in the Windows group of that door: sdssh for ssh, sdapi for the whole API, sdfiles for the files-only route (sdfileswrite and sdfilesadmin add what it may do).'
+         lines<-1> = 'When sdapi and sdfiles are both held, the API wins. NET is the register switch that lets the account open a file on another SD server. The switches are changed on TOOL.GATES (or modify.account), not here.'
+         if nrows > 0 and ci >= 1 and ci <= nu then lines<-1> = 'Under the cursor: ' : unames<ci> : ' - ' : ugates<ci>
+      case view = 3
+         lines<-1> = 'The servers are in the SDNet servers file of the system directory: a name, an address, the remote account and mode, the SHA-256 hash of the public key of the server (the pin) and the local accounts allowed to use it.'
+         lines<-1> = 'A local account also needs the NET gate. X deletes the definition under the cursor (it does not ask itself; the box here does). N asks the fields, checks them, and gives the terminal to SET.SERVER.'
+         if nsrv > 0 and ci >= 1 and ci <= nsrv then
+            d = defs<ci>
+            lines<-1> = ''
+            lines<-1> = 'Under the cursor: ' : d<1, 1> : ' at ' : d<1, 2> : ':' : d<1, 3> : ', remote account ' : d<1, 4> : ', ' : d<1, 6> : ', defined ' : d<1, 8>
+            lines<-1> = 'Full pin: ' : d<1, 5>
+            lines<-1> = 'Local accounts that may use it: ' : (if d<1, 7> = '' then 'none' else d<1, 7>)
+         end
+      case view = 4
+         lines<-1> = 'Every session now, with the kind it is: user (a terminal, the console or ssh), api (an API login, including the files-only route), sdnet (an SDNet client) and phantom. Where it came from is the address or terminal.'
+         k.user = 0 ; k.api = 0 ; k.sdnet = 0 ; k.ph = 0
+         for k = 1 to nsess
+            fl = udata<k, 4>
+            begin case
+               case bitand(fl, USR$SDNET)
+                  k.sdnet += 1
+               case bitand(fl, USR$SDVBSRVR)
+                  k.api += 1
+               case bitand(fl, USR$PHANTOM)
+                  k.ph += 1
+               case 1
+                  k.user += 1
+            end case
+         next k
+         lines<-1> = k.user : ' user, ' : k.api : ' api, ' : k.sdnet : ' sdnet, ' : k.ph : ' phantom.'
+      case 1
+         lines<-1> = 'The certificate the API presents, and the hash of its public key: that hash is what another SD server pins in its definition of this machine (SET.SERVER ... pin).'
+         lines<-1> = 'Give the public-key hash to the administrator of the other machine by a way you trust. The certificate fingerprint changes when it is renewed; the public-key hash does not.'
+   end case
+   n = 0
+   for i = 1 to dcount(lines, @fm)
+      call $tk_wrap(lines<i>, tw, pieces)
+      for q = 1 to dcount(pieces, @fm)
+         n += 1
+         if n <= DV then
+            pl = pieces<q>
+            screen text pl[1, tw] at tx,det.y + n width tw
+         end
+      next q
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- keys and mouse
+
+on.key:
+   msg = ''
+   if len(nm) = 1 and nm >= 'A' and nm <= 'Z' then nm = downcase(nm)
+   begin case
+      case nm = 'up'
+         if ci > 1 then ci -= 1
+         gosub redraw
+      case nm = 'down'
+         if ci < nrows then ci += 1
+         gosub redraw
+      case nm = 'pgup'
+         ci -= VR
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'pgdn'
+         ci += VR
+         if ci > nrows then ci = nrows
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm = 'home'
+         ci = 1
+         gosub redraw
+      case nm = 'end'
+         ci = nrows
+         if ci < 1 then ci = 1
+         gosub redraw
+      case nm >= '1' and nm <= '5' and len(nm) = 1
+         view = nm + 0
+         ci = 1 ; ta = 0
+         gosub build.rows
+         gosub draw.all
+      case nm = 'a' and view = 1
+         gosub do.api
+      case nm = 's' and view = 1
+         gosub do.ssh
+      case nm = 'x' and view = 3
+         gosub do.delete
+      case nm = 'n' and view = 3
+         gosub do.new
+      case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
+         call $tk_std('theme', ctx, keys, '', std.r)
+         if std.r<1> then gosub draw.all
+         msg = std.r<2>
+      case nm = 'act:std.mouse'             ;* S.186: View > Mouse, the same on every page ($tk_std)
+         call $tk_std('mouse', ctx, keys, '', std.r)
+         msg = std.r<2>
+      case nm = 'ctrl-o'                    ;* S.186: the log of the commands this page ran (View > Output; $tk_std)
+         call $tk_std('output', ctx, keys, '', std.r)
+      case nm = 'ctrl-k'                    ;* S.179: the keys of this page, in a box
+         call $tk_std('keylist', ctx, keys, panes<view>, std.r)
+      case nm = 'f5'
+         gosub read.all
+         gosub draw.all
+         msg = 'read again'
+      case nm = 'f1' or nm = '?'
+         call $tk_help('box', 'tool.remote.page', hm, 0, 0)
+         if hm # '' then msg = hm
+      case nm = 'f6' or nm = 'shift-f6' or nm = 'act:ai'
+         call $tk_aipage('ring', ctx, keys, 1, nm : @fm : 1, ap)            ;* S.176: F6 / Shift-F6 go round the boxes (one here: the view shown) and the AI line; AI > Ask the AI goes to the line
+         msg = ap<2>
+      case nm = 'ctrl-q'
+         done = 1
+      case nm = 'esc'
+         if view # 1 then
+            view = 1
+            ci = 1 ; ta = 0
+            gosub build.rows
+            gosub draw.all
+         end
+   end case
+   return
+
+on.mouse:
+   screen mouse returning mev else mev = ''
+   if mev = '' then return
+   mr = ''
+   call $tk_menubar('click', ctx, keys, panes<view>, mev, '', mr)                 ;* a click on the bar on row 0
+   if mr<1> # '' then
+      nm = mr<4>
+      if nm # '' then gosub on.key                          ;* a bar left with nothing chosen has no name: the status message stays
+      return
+   end
+   call $tk_aipage('mouse', ctx, keys, panes<view>, mev, ap)                        ;* S.97 stage 2: a click on the AI line gives it the focus
+   if ap # '' then
+      msg = ap
+      return
+   end
+   call $tk_help('hit', mev, mk.x, mk.y, hit.m)
+   if hit.m then
+      call $tk_help('box', 'tool.remote.page', hm, 0, 0)
+      if hm # '' then msg = hm
+      return
+   end
+   if mev<1> = 'press' and mev<2> = 1 then
+      mx = mev<3>
+      my = mev<4>
+      if mx >= tx and mx <= tx + tw - 1 and my >= lst.y + 2 and my <= lst.y + 1 + VR then
+         if ta + my - (lst.y + 1) <= nrows then
+            ci = ta + my - (lst.y + 1)
+            gosub redraw
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the commands
+
+* Is word a safe single word for the routine (a-z, 0-9, dot, dash, underscore, 1 to 32 characters)?  plain is 1 or 0
+plain.word:
+   plain = (word # '' and len(word) <= 32)
+   for pi = 1 to len(word)
+      if index('abcdefghijklmnopqrstuvwxyz0123456789.-_', word[pi, 1], 1) = 0 then plain = 0
+   next pi
+   return
+
+* sent and el are the sentence and its explanation, typed is null or the word to type; the box is shown, the command run when Run was chosen, everything read again, and the verb's words shown
+confirm.and.run:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res = 'run' then
+      call $tk_run(allow, sent, out, stat, err)
+      gosub read.all
+      gosub draw.all
+      if err # '' then
+         msg = err
+      end else
+         msg = sent[1, 60] : ' ran (status ' : stat : ')'
+         lastl = ''
+         for k = 1 to dcount(out, @fm)
+            if trim(out<k>) # '' then lastl = trim(out<k>)
+         next k
+         if lastl # '' then msg = msg : ': ' : lastl
+      end
+   end else
+      msg = cmsg
+   end
+   return
+
+* The same box, then the terminal is given to the verb (SET.SERVER's CONNECT step shows a key and asks whether to trust it) and the screen is taken again after it
+confirm.and.hand.over:
+   call $tk_confirm(sent, el, typed, res, cmsg)
+   if res # 'run' then
+      msg = cmsg
+      return
+   end
+   call $tk_close(ctx)
+   execute sent
+   crt
+   crt sysmsg(12870) :                                         ;* Press Enter to return
+   input junk
+   if junk = char(1) then null                                 ;* any answer goes back; the answer itself is not used
+   call $tk_open('tool.remote', 'admin', ctx, err)
+   if err # '' then
+      display err
+      done = 1
+      return
+   end
+   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* S.97 stage 2: the new context has no AI line yet
+   gosub lay.declare                                           ;* the new context holds no panes; the window may be another size
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub read.all
+   gosub draw.all
+   msg = 'back from ' : sent[1, 40] : ': the list shows what is defined now'
+   return
+
+* A: the API door
+do.api:
+   screen ask 'REMOTE.API: on, local or off' width 8 value '' title 'The API door' returning aw else return
+   aw = downcase(trim(aw))
+   if aw # 'on' and aw # 'local' and aw # 'off' then
+      msg = 'the API door is on, local or off'
+      return
+   end
+   sent = 'remote.api ' : aw
+   typed = ''
+   el = ''
+   begin case
+      case aw = 'on'
+         typed = 'OPEN'
+         el<-1> = 'SD listens on port 4247 and the firewall rule is opened for it: other computers on the network may connect to the API of this machine.'
+      case aw = 'local'
+         el<-1> = 'SD listens on port 4247 and the firewall rule lets only this computer connect.'
+      case 1
+         el<-1> = 'SD opens no API socket at all.'
+   end case
+   el<-1> = 'The terminal is given to REMOTE.API. SD opens or closes the socket only when it starts, so when the listener moves to or from OFF the verb asks whether to restart SD now (Enter answers no).'
+   el<-1> = 'A restart ends every session, this one too; answered no, the change waits for the next start of SD. The firewall part takes effect at once.'
+   gosub confirm.and.hand.over
+   return
+
+* S: the ssh door
+do.ssh:
+   screen ask 'REMOTE.SSH: on or off' width 8 value '' title 'The ssh door' returning sw else return
+   sw = downcase(trim(sw))
+   if sw # 'on' and sw # 'off' then
+      msg = 'the ssh door is on or off'
+      return
+   end
+   sent = 'remote.ssh ' : sw
+   typed = ''
+   el = ''
+   if sw = 'on' then
+      typed = 'OPEN'
+      el<-1> = 'The firewall rule for the ssh server lets other computers on the network connect to this one over ssh.'
+   end else
+      el<-1> = 'The firewall rule for the ssh server lets only this computer connect over ssh; ssh to this machine itself keeps working.'
+   end
+   el<-1> = 'This scopes the firewall rule and never stops or removes the ssh server (SSH.SERVER REMOVE does that). Where there is no ssh server the verb refuses and says so. It takes effect at once.'
+   gosub confirm.and.run
+   return
+
+* X: forget the server under the cursor
+do.delete:
+   if nsrv = 0 or ci < 1 or ci > nsrv then
+      msg = 'there is no server to delete'
+      return
+   end
+   d = defs<ci>
+   word = d<1, 1>
+   gosub plain.word
+   if not(plain) then
+      msg = 'this server name has characters this page will not put in a command; use delete.server at the prompt'
+      return
+   end
+   sent = 'delete.server ' : word
+   typed = ''
+   el = ''
+   el<-1> = 'The definition of ' : word : ' (' : d<1, 2> : ':' : d<1, 3> : ') is removed from the servers file. No account can open its files after this.'
+   el<-1> = 'The verb does not ask; this box is the question. set.server makes the definition again, but its pin must be typed or confirmed again.'
+   gosub confirm.and.run
+   return
+
+* N: ask for the fields, check every one the way SET.SERVER does, then give the terminal to the verb
+do.new:
+   * S.88: one form with the seven answers in view; the first one SET.SERVER would refuse is said under the entries and the form stays
+   spec = 'Define a server' : @fm : '&Define' : @fm : 'Pin: connect or 64 hex digits.  Port 4247 SD Core, 4249 Solo.'
+   spec<-1> = 'name' : @vm : 'Name (a-z, 0-9)' : @vm : 18 : @vm : 16
+   spec<-1> = 'host' : @vm : 'Host (DNS, IPv4, IPv6)' : @vm : 60 : @vm : 253
+   spec<-1> = 'port' : @vm : 'API port' : @vm : 8 : @vm : 5
+   spec<-1> = 'acc' : @vm : 'Account on the server' : @vm : 34 : @vm : 32
+   spec<-1> = 'pin' : @vm : 'Pin' : @vm : 66 : @vm : 64
+   spec<-1> = 'mode' : @vm : 'Files: read or write' : @vm : 8 : @vm : 8
+   spec<-1> = 'accts' : @vm : 'Local accounts (a,b)' : @vm : 60 : @vm : 300
+   fv = '' : @fm : '' : @fm : '4247' : @fm : '' : @fm : 'connect' : @fm : 'read' : @fm : ''
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window: nothing was defined'
+      return
+   end
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         return
+      end
+      s.name = downcase(trim(fv<1>))
+      s.host = downcase(trim(fv<2>))
+      s.port = trim(fv<3>)
+      s.acc = trim(fv<4>)
+      s.pin = downcase(trim(fv<5>))
+      s.mode = downcase(trim(fv<6>))
+      s.accts = downcase(trim(fv<7>))
+      fbad = '' ; fid = ''
+      ok = (s.name # '' and len(s.name) <= 16 and s.name[1, 1] >= 'a' and s.name[1, 1] <= 'z')
+      for q = 1 to len(s.name)
+         if index('abcdefghijklmnopqrstuvwxyz0123456789', s.name[q, 1], 1) = 0 then ok = 0
+      next q
+      if not(ok) then
+         fbad = 'a server name is a lower case letter and up to 15 lower case letters or digits' ; fid = 'name'
+      end
+      if fbad = '' then
+         ok = (s.host # '' and len(s.host) <= 253 and s.host[1, 1] # '-' and s.host[1, 1] # '.')
+         for q = 1 to len(s.host)
+            if index('abcdefghijklmnopqrstuvwxyz0123456789.-:', s.host[q, 1], 1) = 0 then ok = 0
+         next q
+         if not(ok) then
+            fbad = 'a host is letters, digits, dots, hyphens and colons, not starting with a hyphen or a dot' ; fid = 'host'
+         end
+      end
+      if fbad = '' then
+         ok = (s.port # '' and len(s.port) <= 5)
+         for q = 1 to len(s.port)
+            if index('0123456789', s.port[q, 1], 1) = 0 then ok = 0
+         next q
+         if ok then
+            if (s.port + 0) < 1 or (s.port + 0) > 65535 then ok = 0
+         end
+         if not(ok) then
+            fbad = 'a port is a number from 1 to 65535' ; fid = 'port'
+         end
+      end
+      if fbad = '' then
+         ok = (s.acc # '' and len(s.acc) <= 32)
+         for q = 1 to len(s.acc)
+            if index('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-', s.acc[q, 1], 1) = 0 then ok = 0
+         next q
+         if not(ok) then
+            fbad = 'a remote account is up to 32 letters, digits, dots, underscores and hyphens' ; fid = 'acc'
+         end
+      end
+      if fbad = '' then
+         ok = (s.pin = 'connect')
+         if not(ok) and len(s.pin) = 64 then
+            ok = 1
+            for q = 1 to 64
+               if index('0123456789abcdef', s.pin[q, 1], 1) = 0 then ok = 0
+            next q
+         end
+         if not(ok) then
+            fbad = 'a pin is the word connect or exactly 64 hexadecimal digits' ; fid = 'pin'
+         end
+      end
+      if fbad = '' and s.mode # 'read' and s.mode # 'write' then
+         fbad = 'the mode is read or write' ; fid = 'mode'
+      end
+      if fbad = '' then
+         ok = 1
+         for w = 1 to dcount(s.accts, ',')
+            wd = field(s.accts, ',', w)
+            if s.accts # '' then
+               if index(@fm : unames : @fm, @fm : wd : @fm, 1) = 0 then ok = 0
+            end
+         next w
+         if not(ok) then
+            fbad = 'each local account must be a registered USER account (see the routes view), separated by commas with no space' ; fid = 'accts'
+         end
+      end
+      if fbad = '' then exit
+      call $tk_form('say', ctx, fbad, fid, '')
+   repeat
+   call $tk_form('close', ctx, '', '', '')
+   sent = 'set.server ' : s.name : ' ' : s.host : ' ' : s.port : ' ' : s.acc : ' ' : s.pin : ' ' : s.mode
+   if s.accts # '' then sent := ' accounts ' : s.accts
+   typed = ''
+   el = ''
+   el<-1> = 'The server ' : s.name : ' at ' : s.host : ':' : s.port : ' is defined, entered as account ' : s.acc : ', ' : s.mode : '. An existing definition of that name is replaced after the verb asks.'
+   if s.pin = 'connect' then
+      el<-1> = 'The terminal is given to the verb: it makes one TLS handshake, shows the key the server presents and the hash of it, and asks whether to trust it. Nothing is sent to the server.'
+   end else
+      el<-1> = 'The pin is the one you typed; nothing is dialled.'
+   end
+   el<-1> = 'The accounts that may use it also need the NET gate (modify.account name net-on).'
+   gosub confirm.and.hand.over
+   return
+
+end
+
+* END-CODE
