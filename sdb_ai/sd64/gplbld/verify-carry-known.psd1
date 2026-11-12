@@ -124,6 +124,12 @@
         'fix-b10' = @{
             '545: the adds4000-at entry'          = 'the -at terminfo entries (the AccuTerm types) were removed by RELEASE_1.1 139, area 6c: there is no adds4000-at entry on purpose (measured 19 Oct: "no entry")'
         }
+        'fcontrol' = @{
+            'FC$SYNC true returns the previous state' = 'Windows SD has no FC$SYNC (Linux made it work 16 Oct 26, QM4 Fixes 102): the public FCONTROL stops the program with 12359; measured on Solo 11 Nov, same code here; RELEASE_1.1 236'
+            '-1 asks without changing: 1'             = 'the FC$SYNC leg: see the row above (RELEASE_1.1 236)'
+            'false returns the previous state, 1'     = 'the FC$SYNC leg: see the row above (RELEASE_1.1 236)'
+            'THE ROW: FC$CRLF on a hashed file'       = 'Windows SD has no line terminator modes: FC$CRLF stops the program with 12359 (RELEASE_1.1 236)'
+        }
         'sys-b2' = @{
             '1035 is the Unix epoch now'          = 'the probe wants SD started less than two hours ago (SYSTEM(1045)); the service had been up over three hours, and the zone half of the row passes (measured 26 Oct, guest: got 01). Passes on a freshly started service.'
             '1034, 1040, 1044, 1051, 1080:'       = 'SYSTEM(1040) answers 1 here: Windows file names are not case sensitive (deviation 8 of the areas 2-5 list)'
