@@ -13,7 +13,7 @@ the revision reached Solo's key handler.  The ruling: Solo follows Core.  49 is 
 WHAT IS HELD (text only; whether the server answers is the verify suite's):
   - every entry of apisrvr's dispatch list has the number its comment gives (a table that drifts by one is the failure this file exists for);
   - 49 is vb.revision, whose handler is `response = system(1012)`;
-  - Solo: 72 is vb.sshkey, 50 to 69 are Core's handlers in Core's order (12 Nov 26, SOLO 56 group 7) and 70 and 71 vb.illegal.action (group 8),
+  - Solo: 72 is vb.sshkey, 50 to 71 are Core's handlers in Core's order (12 Nov 26, SOLO 56 groups 7 and 8: 70 vb.fileadmin, 71 vb.fcontrol),
     SrvrSshKey is 72 in sdclient.h, the BASIC sdclient and scram-probe.py, SrvrRevision is 49 in the first two,
     and the request is not one a session may make before it has logged in;
   - Core: 71 is the last request, 72 is not allocated (the entry after 71 is vb.illegal.action) and the comment on 71 says it is reserved for Solo's ssh key.
@@ -71,9 +71,9 @@ def checks(files):
        at.get(49) == "vb.revision" and re.search(r"^vb\.revision:\s*\n\s*response = system\(1012\)\s*\n\s*return", ap, re.M) is not None, "49 is %s" % at.get(49))
     if SOLO:
         ck("S1 request 72 is vb.sshkey, with its handler", at.get(72) == "vb.sshkey" and re.search(r"^vb\.sshkey:", ap, re.M) is not None, "72 is %s" % at.get(72))
-        # 12 Nov 26 (SOLO 56 group 7): 50 to 69 are Core's handlers, in Core's order; 70 and 71 (file administration) are not in Solo yet
-        want = dict(zip(range(50, 72), CORE_50_69 + ["vb.illegal.action", "vb.illegal.action"]))
-        ck("S2 requests 50 to 69 are Core's handlers in Core's order, and 70 and 71 are vb.illegal.action (group 8)", all(at.get(i) == want[i] for i in range(50, 72)),
+        # 12 Nov 26 (SOLO 56 groups 7 and 8): 50 to 71 are Core's handlers, in Core's order; 70 and 71 (file administration) came with group 8
+        want = dict(zip(range(50, 72), CORE_50_69 + ["vb.fileadmin", "vb.fcontrol"]))
+        ck("S2 requests 50 to 71 are Core's handlers in Core's order (70 vb.fileadmin and 71 vb.fcontrol since group 8)", all(at.get(i) == want[i] for i in range(50, 72)),
            "%s" % [(i, at.get(i), want[i]) for i in range(50, 72) if at.get(i) != want[i]][:5])
         ck("S3 the ssh key request is in one place only (nothing else is vb.sshkey)", sum(1 for n, h, c in t if h == "vb.sshkey") == 1)
         h = files["sdclient.h"]
@@ -106,7 +106,7 @@ MUTANTS_SOLO = [
     ("49 is the ssh key again", "apisrvr", "   vb.revision,       ;*  49 ", "   vb.sshkey,         ;*  49 "),
     ("the table drifts by one after 49", "apisrvr", "   vb.getvar,         ;*  50 ", "   vb.getvar,         ;*  51 "),
     ("72 is not the ssh key", "apisrvr", "   vb.sshkey,         ;*  72 ", "   vb.illegal.action, ;*  72 "),
-    ("70 is allocated before group 8", "apisrvr", "   vb.illegal.action, ;*  70", "   vb.revision,       ;*  70"),
+    ("70 is not the file administration", "apisrvr", "   vb.fileadmin,      ;*  70", "   vb.illegal.action, ;*  70"),
     ("a Core handler between 50 and 69 is missing", "apisrvr", "   vb.txn,            ;*  54", "   vb.illegal.action, ;*  54"),
     ("the handler is another revision", "apisrvr", "response = system(1012)", "response = system(1013)"),
     ("the header says 49 for the key", "sdclient.h", "#define SrvrSshKey       72", "#define SrvrSshKey       49"),
