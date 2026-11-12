@@ -118,10 +118,12 @@ def selftest():
             print("  [MISSED] %s: failing rows %s" % (name, failing))
             missed += 1
 
-    mutant("tool_config table read", "tool_config", "      if not(unassigned(tf)) then close tf ", "      if not(unassigned(tf)) then null ")
-    mutant("tool_config conf read", "tool_config", "      if not(unassigned(cf)) then close cf ", "      if not(unassigned(cf)) then null ")
+    # 11 Nov 26 (found carrying SOLO 56 group 4): the two tool_config mutants are gone - tool_config is not in WANT here (see above), so the self-test
+    # stopped on them with a KeyError and never reached the rest; and the ide_osfile mutant broke the first "close f", which is in the ON ERROR clause,
+    # not the ELSE branch the check reads, so it could never be caught.  It now breaks the close in the ELSE branch of the first open.
     mutant("tool_catalog object", "tool_catalog", "            if not(unassigned(sf)) then close sf ", "            if not(unassigned(sf)) then null ")
-    mutant("ide_osfile open", "ide_osfile", "      if not(unassigned(f)) then close f\n", "      if not(unassigned(f)) then null\n")
+    mutant("ide_osfile open", "ide_osfile", "   end else\n      op.st = status()\n      if not(unassigned(f)) then close f\n",
+           "   end else\n      op.st = status()\n      if not(unassigned(f)) then null\n")
     # (the "sed second open" mutant is gone: SED's retry with the name in upper case was removed on 28 Oct 26, so there is no second OPENSEQ to mutate; test-gates-units B28 holds that)
     print("selftest: %d of %d mutants caught, %d missed" % (caught, caught + missed, missed))
     return 0 if missed == 0 else 1

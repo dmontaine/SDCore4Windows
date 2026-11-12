@@ -3,6 +3,14 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+11 Nov 26  THE DEBUGGER'S F1 HELP LISTS THE KEYS IT HAS (FROM SD CORE FOR LINUX).
+
+             What        - F1 in the debugger listed the old keys (F2 abort, F5 run). It now says F2 finds an
+                           action, Ctrl-Q stops the program and leaves, F5 draws the screen again, F9 runs, F10 or
+                           Esc opens the menu bar, Ctrl-T changes the theme and Ctrl-K lists the keys. The first
+                           full-screen picture is drawn the way every later one is.
+             Why         - The keys changed on 10 Nov; the help text had not. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 10 Nov 26  TOOL.REMOTE: EVERYTHING THAT REACHES SD FROM OUTSIDE, ON ONE SCREEN (FROM SD CORE FOR LINUX).
 
              What        - TOOL.REMOTE (SDSYS only) is a full-screen page of five views: the API and ssh doors as the

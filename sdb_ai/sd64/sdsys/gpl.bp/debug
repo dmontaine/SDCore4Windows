@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 11 Nov 26 Windows port - RELEASE_1.1 238 (found carrying SOLO 56 group 4): the one hunk this file still lacked against Linux (S.98 H1, 28ab9cb5): the first
+*               full-screen paint is paint.layout, not the old fill of three areas.  Message 6712 (F1) is Linux's S.186 text (F2 find, Ctrl-Q, F9 run, F10 menu).
 * 10 Nov 26 Windows port - level with Linux e3490a7f (S.98 H1-H3, S.179/S.180, S.186; the AI command is there and finds the AI unusable: no helper, RELEASE_1.1 173).
 *               The Windows carries of 18 Oct (81ad297, e4bc454-70aca05), 8 Nov (2930d92f) and 9 Nov (debd0698) are the Linux lines below.
 * 9 Nov 26 dm  S.186 (the owner: "QM compatibility is not a focus, consistency within SD is"): in the full screen F2 is Find an action (dbg.find, the
@@ -1173,13 +1175,7 @@ initialise:
          ibk.alt = 1                             ;* S.98 H2 (see the entry)
       end
       display @(-1) :
-      call $sl_put(scr, 0, 0, space(@crtwide), title.attr)
-      for i = SOURCE.AREA to data.area - 1
-         call $sl_put(scr, 0, i, space(@crtwide), source.attr)
-      next i
-      for i = data.area to @crthigh - 1
-         call $sl_put(scr, 0, i, space(@crtwide - (i = @crthigh - 1)), command.attr)
-      next i
+      gosub paint.layout
       gosub theme.out
    end
 
