@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): XF_OSPATH 31, OSPATH() for a program that is not internal, now carried (the 18 Oct
+ *           line below held it for the S.63 gate, which this tree has since 23 Oct).  The function is pub_ospath() in op_dio2.c, beside the
+ *           internal OSPATH, with Windows path rules.  The 16 Oct to 19 Oct lines that name x_ospath() describe Linux's code, never this tree's.
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type is gone.
  * 8 Nov 26 Windows port - from Linux 7301a363 (S.87 batch 13): XF 5 to 12 (IS.ALNUM, IS.ALPHA, IS.DIGIT, IS.GRAPH, IS.MARK, IS.SPACE, LEFT, RIGHT) are gone;
  *               the numbers stay reserved.
@@ -70,6 +73,7 @@
  *    XF_FCONTROL    FCONTROL(fvar, action {, qualifier})  the openQM function: 2 and 3 the CREATING.SEQKEY counter, 5 field access
  *                   (always true), 6 a valid record id, 7 the minimum modulus; 1 and 4 (forced writes, line terminators) abort
  *                   with a message, SD having neither
+ *    XF_OSPATH      OSPATH(path, key {, qualifier})  for a program that is not internal: openQM's keys (pub_ospath(), op_dio2.c)
  *
  * END-DESCRIPTION
  *
@@ -108,7 +112,7 @@
 #define XF_SELSOCKET 27 /* SELECT.SOCKET(socket matrix, timeout): the compiler loads the matrix itself (in.select.socket), QM4 gaps Q-5 */
 /* 28 was SWAPMARKS(string), which returned its argument (SD has no ECS mode); removed on 27 Oct 26 (S.87 batch 3), the number stays reserved */
 #define XF_FCONTROL 29  /* FCONTROL(fvar, action, qualifier): the public one, openQM's numbers; pub_fcontrol() in dh_misc.c */
-/* 31 is Linux's XF_OSPATH (OSPATH for any program, behind the S.63 OS-access gate): not carried, and the number stays free. */
+#define XF_OSPATH 31    /* OSPATH(path, key {, qualifier}) for any program, openQM's key numbers, behind the OS-access gate: pub_ospath() in op_dio2.c (12 Nov 26, RELEASE_1.1 241) */
 #define XF_GET 30      /* GET var {, length} {SETTING count} FROM dev {UNTIL term} {RETURNING last} {WAITING timeout}: op_get_device() in op_seqio.c (QM4 Fixes item 583) */
 #define XF_SORT 32      /* SORT(key.count, {MAT} flags) (QM4 Fixes item 371) */
 #define XF_SORTADD 33   /* SORTADD sortvar, {MAT} keys {, data} (QM4 Fixes item 371) */
@@ -156,6 +160,7 @@ void x_sortclear(void);
 void x_sortdata(void);
 void x_sortnext(void);
 void pub_fcontrol(void);
+void pub_ospath(void); /* op_dio2.c, RELEASE_1.1 241 */
 
 void op_dcount(void);
 void op_field(void);
@@ -280,6 +285,9 @@ void op_xfun() {
       break;
     case XF_FCONTROL:
       pub_fcontrol();
+      break;
+    case XF_OSPATH:
+      pub_ospath();
       break;
     case XF_GET:
       op_get_device();

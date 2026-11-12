@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+12 Nov 26  ANY PROGRAM MAY CALL OSPATH() (FROM SD CORE FOR LINUX).
+
+             What        - OSPATH(path, key {, qualifier}) compiles in a program that is not internal, with openQM's
+                           key numbers 0 to 18: valid names, exists, a unique name, the full path, delete a file or
+                           an empty folder (never a tree), open in SD, modified time, the parent, make a folder or a
+                           path, file or folder, and the owner. Every key that looks at or changes the disk asks the
+                           account's OS access; deleting or making a folder also asks the edit switches and is
+                           refused inside the shared account. On Windows keys 11, 12 and 15 (user, group, modes)
+                           answer 0 and key 18 is the owner's Windows account name.
+             Why         - It was internal-only, so an ordinary program got "Matrix OSPATH is not referenced";
+                           parity with SD Core for Linux.
+             Does NOT    - Reach outside the account while it has no OS access (the delivered state). Change the
+                           internal OSPATH, which keeps its own numbers. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 12 Nov 26  NEW FILES HAVE 4 KB GROUPS, AND A RIGHT JUSTIFIED INDEX KEEPS ITS KEYS IN ONE ORDER (FROM SD CORE FOR LINUX).
 
              What        - A new hashed file is made with 4 KB groups unless it says otherwise (GRPSIZE=4 in the

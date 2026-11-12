@@ -24,7 +24,8 @@
         'inhibit-q8'   = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
         'listu-a5'     = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
         # S.63 (per-account OS gates) is on the HOLD list and is not carried.
-        'ospath'       = 'loads sandbox-gates.py (S.63 per-account OS gates, HOLD list, not carried) and needs SDSYS sessions'
+        # 12 Nov 26 (RELEASE_1.1 241): the public OSPATH is carried; ospathw (written for Windows) runs its switch-off half in an ordinary account.
+        'ospath'       = 'loads sandbox-gates.py: SDSYS sessions and fixture accounts with the OS switch on and off; the switch-off half is ospathw'
         'prof'         = 'loads sandbox-gates.py (S.63 per-account OS gates, HOLD list, not carried) and needs SDSYS sessions'
         'resetall'     = 'loads sandbox-gates.py (S.63 per-account OS gates, HOLD list, not carried) and needs SDSYS sessions'
         'stacked'      = 'loads sandbox-gates.py (S.63 per-account OS gates, HOLD list, not carried) and needs SDSYS sessions'

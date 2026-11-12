@@ -667,8 +667,16 @@
 *     SD's OS$ names are in the internal program header int$keys.h and keep the older numbering).
       $define OS$FULLPATHX    4     ;*   Full path name keeping the case: the same as OS$FULLPATH, which keeps it on Linux
       $define OS$INFO         20    ;*   Information in the form of the STATUS statement's array
-*     (Linux 7aba47d also names OS$PARENT, OS$UID, OS$GID, OS$MODES, OS$IS.FILE and OS$IS.DIR here for OSPATH() in a program that is
-*     not internal; that function is behind the S.63 gate, which is held, so those names are not carried.)
+*     12 Nov 26 (RELEASE_1.1 241, from Linux 7aba47d) - OSPATH() in a program that is not internal is the openQM function (it takes
+*     OS$FULLPATHX as well as 4).  Its names that int$keys.h does not use are here; OS$OPEN (6 in the manual, 11 in the internal
+*     OSPATH) and OS$OWNER (18, 15 there) are not named here, so give those two as the numbers 6 and 18.  On Windows OS$UID, OS$GID
+*     and OS$MODES answer 0, and 18 is the owner's Windows account name.
+      $define OS$PARENT       10    ;*   The parent directory
+      $define OS$UID          11    ;*   Owner's user number: 0 on Windows
+      $define OS$GID          12    ;*   Group number: 0 on Windows
+      $define OS$MODES        15    ;*   Permission bits as a decimal number: 0 on Windows
+      $define OS$IS.FILE      16    ;*   Is the path a file?
+      $define OS$IS.DIR       17    ;*   Is the path a directory?
 
 *     15 Oct 26 - SYSTEM() keys of the openQM 4 manual (QM4 gaps bundle Q-18), named here by what they return.
       $define SYS$TYPEAHEAD   14    ;*   Characters waiting to be read (a snapshot for piped input)

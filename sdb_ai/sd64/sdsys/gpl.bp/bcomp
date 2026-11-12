@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - from Linux 7aba47d (RELEASE_1.1 241): OSPATH() in a program that is not internal compiles to XF_OSPATH 31 (pub_ospath).
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): in a compile RUN.IN started (ri.active), $INCLUDE / INCLUDE, $DICT and FILE refuse a file
 *               that lies outside the account's own directory and is not SYSCOM (message 15072, Linux 14072; routine ri.outside).  The compiler is $internal,
 *               so nothing else holds its opens to the account, and here the session's token is elevated whatever the administrator flag says.
@@ -4226,9 +4227,25 @@ end
 
             x.symbol.name = symbol.name
 
-            * 18 Oct 26 Windows port - Linux 7aba47d (QM4 Fixes item 233) compiles OSPATH(path, key {, qualifier}) in a program that is
-            * not internal as the openQM function XF_OSPATH, behind its S.63 OS-access gate.  That gate is held and not carried, so an
-            * ordinary program does not get OSPATH here; the internal programs keep the internal OSPATH as before.
+            * 12 Nov 26 Windows port - from Linux 7aba47d (QM4 Fixes item 233; RELEASE_1.1 241).  OSPATH(path, key {, qualifier}) in a
+            * program that is not internal is the openQM function: its own key numbers, and every key that touches the file system asks the
+            * OS-access gate (XF_OSPATH, pub_ospath in op_dio2.c).  An internal program keeps the internal OSPATH, which the shipped programs use.
+            * (Held from 18 Oct for the S.63 gate, which this tree has since 23 Oct.)
+            if x.symbol.name = 'OSPATH' and not(internal) then
+               gosub get.token                   ;* Skip left bracket
+               intrinsic.stack = OP.XFUN : @fm : intrinsic.stack
+               gosub exprf                       ;* The path
+               gosub check.comma
+               gosub exprf                       ;* The key
+               if look.ahead.token = TKN.COMMA then
+                  gosub get.token
+                  gosub exprf                    ;* The qualifier, which is read and ignored
+               end else
+                  opcode.string = '' ; gosub emit.string.load
+               end
+               n = 31 ; gosub emit.numeric.load      ;* XF_OSPATH
+               goto intrinsic.common
+            end
 
             locate x.symbol.name in intrinsics<1> by 'AL' setting i else
                * Try restricted functions if in internal mode

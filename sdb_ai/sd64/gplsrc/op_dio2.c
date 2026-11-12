@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): pub_ospath(), the public OSPATH() (Linux's x_ospath) with openQM's keys and Linux's
+ *           gates, and Windows path rules: '\' is a separator, a drive root, OS$OPEN in one namespace and ignoring case, OS$UID/GID/MODES 0,
+ *           OS$OWNER the Windows account name (owner's D1 and D2).
  * 8 Nov 26 Windows port - from Linux 71d8550b (S.159): delete_path() removes a link as a link (lstat) and never walks its target; fullpath_n() takes the buffer size; make_path() is bounded.
  * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): faults that optimisation exposed.
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the five CASE_INSENSITIVE_FILE_SYSTEM blocks (op_ospath, op_osrename: upper-casing a
@@ -1327,6 +1330,285 @@ set_status:
 
 exit_op_pathinfo:
   return;
+}
+
+/* ======================================================================
+   pub_ospath()  -  OSPATH(path, key {, qualifier})  for a program that is NOT internal   (12 Nov 26, RELEASE_1.1 241)
+
+   Linux's x_ospath() (7aba47df, QM4 Fixes item 233; op_xfun.c there) with openQM's key numbers (OS$ in syscom/keys.h), here
+   beside the internal OSPATH (op_pathinfo above, which keeps its own numbers) because the Windows path helpers it needs are
+   private to this file.  op_xfun.c calls it for XF_OSPATH 31; the compiler emits that for OSPATH() outside internal mode.
+
+   THE GATES ARE LINUX'S.  Every key that looks at or changes the disk asks os_path_open_ok() (S.63: an internal program is
+   trusted, anyone else is held to the account's own directory unless the account has OS.EXECUTE or SD.ACCOUNTS).  The keys that
+   delete or make something (5, 13, 14) also ask edit_os_path_refusal() (S.64) and, for anyone but the administrator,
+   path_resolved_in_shared() (S.66).  A refusal is STATUS() ER_PERM and the answer false, or null for a key that answers text.
+
+   WHAT WINDOWS CHANGES, each for an OS reason (design: RELEASE_1.1 241, owner's D1 and D2 of 12 Nov 26):
+     - A backslash is a separator.  For every key that touches the disk the path is first copied with each '\' made '/', so the
+       gates and the operation see one spelling (make_path() splits on '/' only).  Keys 0 and 1 judge the text as it was given.
+     - 0 OS$PATHNAME takes a drive letter and either separator (the internal key's rule).  1 OS$FILENAME is valid_name() and not
+       "." or "..", at most 255 characters.
+     - 6 OS$OPEN compares the file table and the name through net_normalise() and ignoring case: fullpath() answers "C:/..." or
+       "/c/..." depending on its input, and the file system ignores case.
+     - 10 OS$PARENT knows a drive root ("C:/").
+     - 11 OS$UID, 12 OS$GID and 15 OS$MODES are 0 (D1): the runtime makes them up from the SIDs and the ACL, and a program that
+       tested them would be acting on numbers Windows does not have.  They still ask the gate, as on Linux.
+     - 18 OS$OWNER is the owner's Windows account name (D2), read as the internal owner key reads it; it reads the disk, so it is
+       gated (Linux answers null and does not gate it).
+     - 5 OS$DELETE flushes this process's cache of closed dynamic files first: Windows will not delete a file that is open.
+   The keys:
+      0 OS$PATHNAME  1 OS$FILENAME      is it a valid name (text only: no gate)
+      2 OS$EXISTS    16 IS.FILE 17 IS.DIR   exists as either / as a file / as a directory
+      3 OS$UNIQUE                       a file name that does not exist in the directory path (the name, not the path)
+      4 OS$FULLPATH  9 FULLPATHX        the full path name, as the internal key gives it (no gate: the open that follows is gated)
+      5 OS$DELETE                       a file, or a directory that is EMPTY: not a tree (the internal key removes a tree)
+      6 OS$OPEN                         is it open in SD (any user)
+      7 OS$DTM                          modified, as an epoch value, 0 if it is not there
+      8 OS$FLUSH.CACHE                  flush this process's cache of dynamic files; true
+      10 OS$PARENT                      the parent directory (the same, for a root)
+      11 OS$UID  12 OS$GID  15 OS$MODES 0 on Windows
+      13 OS$MKDIR  14 OS$MKPATH         make a directory / and the levels above it; true if done
+      18 OS$OWNER                       the owner's Windows account name, null if it is not there
+   An unknown key is STATUS() ER_ARGS and the answer false.  The qualifier is read and ignored.                                */
+
+void pub_ospath() {
+  DESCRIPTOR* descr;
+  char given[MAX_PATHNAME_LEN + 1];
+  char path[MAX_PATHNAME_LEN + 1];
+  char name[MAX_PATHNAME_LEN + 1];
+  char a[MAX_PATHNAME_LEN + 1];
+  char b[MAX_PATHNAME_LEN + 1];
+  struct stat sb;
+  int32_t key;
+  int len;
+  int64 value = 0;
+  bool text = FALSE;
+  char* p;
+  char* q;
+  int file_id;
+  FILE_ENTRY* fptr;
+  int32_t n;
+
+  process.status = 0;
+  name[0] = '\0';
+
+  descr = e_stack - 2;
+  GetInt(descr);
+  key = descr->data.value;
+
+  descr = e_stack - 3;
+  len = k_get_c_string(descr, given, MAX_PATHNAME_LEN);
+  if (len < 0) {
+    process.status = ER_LENGTH;
+    goto pub_ospath_done;
+  }
+
+  /* One spelling for the gates and the disk: '\' becomes '/' */
+  strcpy(path, given);
+  for (p = path; *p != '\0'; p++) {
+    if (*p == '\\')
+      *p = '/';
+  }
+
+  /* The keys that touch the disk are asked of the gate; the ones that are only about the text of the name are not */
+  switch (key) {
+    case 0:
+    case 1:
+    case 4:
+    case 8:
+    case 9:
+    case 10:
+      break;
+    case 2:
+    case 3:
+    case 5:
+    case 6:
+    case 7:
+    case 11:
+    case 12:
+    case 13:
+    case 14:
+    case 15:
+    case 16:
+    case 17:
+    case 18:
+      if ((len == 0) && (key == 3))
+        strcpy(path, ".");
+      if (!os_path_open_ok(path)) {
+        process.status = ER_PERM;
+        if ((key == 3) || (key == 18))
+          text = TRUE;
+        goto pub_ospath_done;
+      }
+      /* S.64 part 2: a delete or a make that runs through a VOC, a dictionary, a program file or the private catalogue (the gate
+         above sees geometry only).  The name deleted counts when it is anything but a plain file; a directory made always counts. */
+      if (((key == 5) || (key == 13) || (key == 14)) && (edit_os_path_refusal(path, (key == 5) ? edit_leaf_counts(path) : TRUE) != EDIT_NONE)) {
+        process.status = ER_PERM;
+        goto pub_ospath_done;
+      }
+      /* S.66: deleting or making something INSIDE the shared account is a structure change, SDSYS's alone (the account's OS access
+         does not reach past it). */
+      if (((key == 5) || (key == 13) || (key == 14)) && !MY_ADMIN() && path_resolved_in_shared(path)) {
+        process.status = ER_PERM;
+        goto pub_ospath_done;
+      }
+      break;
+    default:
+      process.status = ER_ARGS;
+      goto pub_ospath_done;
+  }
+
+  switch (key) {
+    case 0: /* OS$PATHNAME: an optional drive letter and root, then names valid_name() accepts, either separator */
+      strcpy(name, given);
+      value = (len > 0);
+      p = name;
+      if (IsAlpha(p[0]) && (p[1] == ':'))
+        p += 2;
+      if ((*p == '/') || (*p == '\\'))
+        p++;
+      while (value && (*p != '\0')) {
+        q = p;
+        while ((*q != '\0') && (*q != '/') && (*q != '\\'))
+          q++;
+        if (*q != '\0') {
+          *q = '\0';
+          q++;
+        }
+        if ((*p != '\0') && ((strlen(p) > 255) || !valid_name(p))) /* an empty part (a//b, a trailing separator) is allowed, as on Linux */
+          value = 0;
+        p = q;
+      }
+      name[0] = '\0';
+      break;
+
+    case 1: /* OS$FILENAME: one name, not . or .. */
+      value = (len > 0) && (len <= 255) && strcmp(given, ".") && strcmp(given, "..") && valid_name(given);
+      break;
+
+    case 2:
+      value = (stat(path, &sb) == 0);
+      break;
+
+    case 3: /* A name that is not in the directory yet */
+      text = TRUE;
+      n = (int32_t)((time(NULL) * 10) % 10000000); /* seven digits: D and seven digits, as the name is documented */
+      do {
+        n = (n > 0) ? n - 1 : 9999999;
+        if (snprintf(name, MAX_PATHNAME_LEN + 1, "%s%cD%07d", path, DS, (int)n) >= MAX_PATHNAME_LEN + 1) {
+          process.status = ER_LENGTH;
+          name[0] = '\0';
+          goto pub_ospath_done;
+        }
+      } while (stat(name, &sb) == 0);
+      snprintf(name, sizeof(name), "D%07d", (int)n);
+      break;
+
+    case 4:
+    case 9:
+      text = TRUE;
+      fullpath(name, path);
+      break;
+
+    case 5: /* A file or an empty directory, and nothing below it */
+      flush_dh_cache(); /* Windows will not delete a file a cached dynamic file holds open */
+      if (lstat(path, &sb) != 0)
+        break;
+      if (S_ISDIR(sb.st_mode))
+        value = (rmdir(path) == 0);
+      else
+        value = (unlink(path) == 0);
+      break;
+
+    case 6: /* Is it open in SD?  One namespace and no case on either side */
+      fullpath(name, path);
+      if (net_normalise(name, a)) {
+        for (file_id = 1; file_id <= sysseg->used_files; file_id++) {
+          fptr = FPtr(file_id);
+          if ((fptr->ref_ct != 0) && net_normalise((char*)(fptr->pathname), b) && (strcasecmp(a, b) == 0)) {
+            value = 1;
+            break;
+          }
+        }
+      }
+      name[0] = '\0';
+      break;
+
+    case 7:
+      if (stat(path, &sb) == 0)
+        value = (int64)sb.st_mtime;
+      break;
+
+    case 8:
+      value = 1;
+      flush_dh_cache();
+      break;
+
+    case 10: /* The parent: everything before the last part of the full name; a root (C:/ or /) is its own parent */
+      text = TRUE;
+      fullpath(name, path);
+      n = (int32_t)strlen(name);
+      if ((n > 1) && (name[n - 1] == '/') && !((n == 3) && (name[1] == ':')))
+        name[--n] = '\0'; /* a trailing slash, not a drive root's */
+      p = strrchr(name, '/');
+      if (p == NULL)
+        strcpy(name, "/");
+      else if ((p == name + 2) && (name[1] == ':'))
+        name[3] = '\0'; /* C:/x -> C:/ */
+      else if (p == name)
+        name[1] = '\0';
+      else
+        *p = '\0';
+      break;
+
+    case 11:
+    case 12:
+    case 15: /* D1: no Windows meaning */
+      value = 0;
+      break;
+
+    case 13:
+      value = (MakeDirectory(path) == 0);
+      break;
+
+    case 14:
+      value = make_path(path) ? 1 : 0;
+      break;
+
+    case 16:
+      value = (stat(path, &sb) == 0) && S_ISREG(sb.st_mode);
+      break;
+
+    case 17:
+      value = (stat(path, &sb) == 0) && S_ISDIR(sb.st_mode);
+      break;
+
+    case 18: /* D2: the owner's Windows account name, as the internal owner key reads it */
+      {
+        struct passwd* pw;
+
+        text = TRUE;
+        if (stat(path, &sb) == 0) {
+          pw = getpwuid(sb.st_uid);
+          if (pw != NULL)
+            snprintf(name, sizeof(name), "%s", pw->pw_name);
+        }
+      }
+      break;
+  }
+
+pub_ospath_done:
+  k_dismiss(); /* qualifier */
+  k_dismiss(); /* key */
+  k_dismiss(); /* path */
+  if (text) {
+    k_put_c_string(name, e_stack);
+    e_stack++;
+  } else {
+    InitDescr(e_stack, INTEGER);
+    (e_stack++)->data.value = (int32_t)value;
+  }
 }
 
 /* ======================================================================

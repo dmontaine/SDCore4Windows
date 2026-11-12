@@ -121,7 +121,8 @@ def checks(d):
     sels = {sel for sel, _a, _o, _m in rows.values()}
     # XF_CASING (a statement) and XF_ARGPRESENT (ARG.PRESENT's own handler) are loaded by code of their own, not by a row
     own_c = {"XF_CASING": 19, "XF_ARGPRESENT": 20, "XF_REUSING": 24, "XF_SELSOCKET": 27, "XF_GET": 30,
-             "XF_SORT": 32, "XF_SORTADD": 33, "XF_SORTCLEAR": 34, "XF_SORTDATA": 35, "XF_SORTNEXT": 36,   # 16 Oct 26 (Linux's XF_OSPATH 31 is not carried)
+             "XF_OSPATH": 31,   # 12 Nov 26 (RELEASE_1.1 241): bcomp loads 31 for OSPATH() outside internal mode, by code of its own
+             "XF_SORT": 32, "XF_SORTADD": 33, "XF_SORTCLEAR": 34, "XF_SORTDATA": 35, "XF_SORTNEXT": 36,   # 16 Oct 26
              # 20 Oct 26: FORMCSV(item, delim, quote, esc) (PRINTCSV, WRITECSV), CSVDQ with a quote (CSVDQ, READCSV, MATREADCSV) and
              # CSV.MODE's third and fourth operands: each loaded by the handler of the statement or function, not by a row
              "XF_FORMCSVX": 40, "XF_CSVDQX": 41, "XF_CSVQESC": 42}
