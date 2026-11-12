@@ -441,8 +441,12 @@ database traffic and should be protected accordingly.
 FreeBASIC can link directly to the supplied MinGW import library. The
 FreeBASIC compiler, import library, DLL, and application must all target the
 same architecture. The supplied `sdclilib.dll` is 64-bit, so use a 64-bit
-Windows FreeBASIC compiler. A 32-bit FreeBASIC application requires a separate
-32-bit build of the DLL.
+Windows FreeBASIC compiler. The 32-bit build is installed too, in
+`usr\clients\client32`, under the names older 32-bit clients load:
+`qmclilib.dll` and `qmclient.dll`, with `libqmclilib.dll.a`. It exports the
+same SD functions, so a 32-bit FreeBASIC application would use
+`#inclib "qmclilib"` in place of `#inclib "sdclilib"` below; this has not been
+tested. A new application should be 64-bit.
 
 ### FreeBASIC declarations
 
