@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 814c5f07 (RELEASE_1.1 240 c): audit_message() writes a control character, DEL or an SD mark in its text as '?'.
  * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125, S.194): k_var_name()'s cols starts at 0; an array that
  *           does not hold the variable sets element back to -1, so a common-block variable found after it
  *           is no longer named with that array's element count as a subscript in an error message.
@@ -942,9 +943,17 @@ void audit_message(char* msg) {
   int bytes;
   char path[MAX_PATHNAME_LEN + 1];
   char buff[AUDIT_BUFF_SIZE];
+  char* p;
 
   if (sysseg == NULL)
     return;
+
+  /* 12 Nov 26 Windows port - from Linux 814c5f07 (RELEASE_1.1 240 c): a control character, DEL or an SD mark in the text becomes '?', so a
+     value that holds a newline cannot start a false line of the audit trail. */
+  for (p = msg; *p != '\0'; p++) {
+    if (((u_char)*p < 32) || ((u_char)*p == 127) || ((u_char)*p >= 248))
+      *p = '?';
+  }
 
   timenow = time(NULL);
   ltime = localtime(&timenow);

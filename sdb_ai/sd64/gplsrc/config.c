@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 3d3890e3 (RELEASE_1.1 240 a): GRPSIZE's default is 4 (kb), for new files only; the shipped sd.conf says 4 too.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer
  *           strips the line from a kept sd.conf (sd.iss RemoveRetiredConf).
  * 06 Oct 26 Windows port - APILOGIN is retired: accepted and ignored, not
@@ -138,7 +139,7 @@ struct CONFIG* read_config(char* errmsg) {
     Drive letters and backslashes only became usable when sdrealpath() was
     taught to accept them - see the note there.                            */
   strncpy(pcfg.grpdir,"C:\\ProgramData\\SD\\group_accounts",MAX_PATHNAME_LEN+1);  /* GRPDIR: group accounts parent dir */
-  pcfg.grpsize = 1;               /* GRPSIZE:  Default group size */
+  pcfg.grpsize = 4;               /* GRPSIZE:  Default group size (1 until 12 Nov 26; the shipped sd.conf said 2, now 4) */
   pcfg.intprec = 11;              /* INTPREC:  Precision for INT() etc. 13 until 1.2-0 (openQM 2.6-9, item 6) */
   pcfg.lptrhigh = 66;             /* LPTRHIGH: Default printer lines */
   pcfg.lptrwide = 80;             /* LPTRWIDE: Default printer width */

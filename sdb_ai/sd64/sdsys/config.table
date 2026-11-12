@@ -20,7 +20,7 @@
 #   why      for a no, one sentence of at most 100 characters, plain, no vertical bar: why this page does not change it; blank for a yes
 #
 # A line beginning with # is a comment.  Alphabetical by key.  Windows differs from Linux's table in: APIPORT and NETDIRS (Windows parameters), no STARTUP (refused by
-# name on Windows), the Windows paths and defaults (GRPSIZE 1, the PowerShell shell commands, TEMPDIR from TMP), and SPOOLER inert.
+# name on Windows), the Windows paths and defaults (the PowerShell shell commands, TEMPDIR from TMP), and SPOOLER inert.
 #
 APIPORT|int|0|||restart|live|Any value above 0 switches on the API listener, which then listens on the fixed port 4247; 0 or no line leaves it off. The shipped file says 4247.|no|A door: it opens the API listener to the network.
 BACKUPDIR|path||||now|file|The directory set.backup.directory saves. The kernel ignores it; the backup and restore programs read sd.conf each time they run, so a change needs no restart.|no|A directory: set.backup.directory saves it, with its own checks of the path.
@@ -35,7 +35,7 @@ FDS|int|32767|||restart|live|A limit on the file descriptors SD uses; when it is
 FLTDIFF|float|0.0000000000291|||session|live|Two floating point numbers closer together than this compare equal.|no|Changes how every program compares floating point numbers.
 FSYNC|bits|0|||session|live|Flag bits that say when SD forces data to disk with fsync: a higher value is safer and slower.|no|Trades the safety of data against speed; flag bits that SD does not check.
 GRPDIR|path|C:\ProgramData\SD\group_accounts|||session|live|The directory create.account puts a group account in.|no|A directory: group accounts are made there.
-GRPSIZE|int|1|1|8|session|live|The group size, in kilobytes, of a hashed file made without one. The shipped file says 2.|yes|
+GRPSIZE|int|4|1|8|session|live|The group size, in kilobytes, of a hashed file made without one. 4 since 12 November 2026; an installed system keeps the value its sd.conf has until you change it.|yes|
 INTPREC|int|11|0|14|session|live|How many digits of precision integer arithmetic and the INT function keep.|no|Changes the results of arithmetic in programs that already exist.
 LGNWAIT|int|0|0|32767|restart|live|Seconds a sign-on waits for a free user number when the user limit is reached; 0 refuses at once.|yes|
 LPTRHIGH|int|66|10|32767|session|live|The default page depth of the printer, in lines.|yes|

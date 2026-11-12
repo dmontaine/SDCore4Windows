@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 3d3890e3 (25 Oct 26; RELEASE_1.1 240 a): DEFAULT_GROUP_SIZE 1 -> 4 (kb), for NEW files only.  Linux measured
+ *               200,000 records of 130 bytes at the default 80% split load: 12-24% of the groups overflowed with 1 kb groups, 0.1-1.7% with 4 kb; a
+ *               write took 18% less, a read 7% more, the file the same size (not measured on Windows).  A file made before keeps the group size in its
+ *               header.  The split and merge loads (80, 50) are unchanged.
  * 31 Dec 23 SD launch - prior history suppressed
  * START-DESCRIPTION:
  *
@@ -40,7 +44,7 @@ Public int16_t dh_cache_count init(0);
 
 Public DH_FILE* ak_dh_file; /* For dh_write, dh_del interactions with AKs */
 
-#define DEFAULT_GROUP_SIZE 1
+#define DEFAULT_GROUP_SIZE 4
 #define DEFAULT_BIG_REC_SIZE ((int)(DH_BLOCK_SIZE * 0.8))
 #define DEFAULT_MIN_MODULUS 1
 #define DEFAULT_MERGE_LOAD 50

@@ -1217,7 +1217,7 @@ bool check_file() {
             if (!delete_bad_ak(sf, akno))
               goto exit_check;
           }
-        } else if (ak_header.magic != DH_INDEX) {
+        } else if ((ak_header.magic != DH_INDEX) && (ak_header.magic != DH_INDEX2)) {   /* 25 Oct 26: DH_INDEX2 is a right justified index in the total order */
           emit("AK%d subfile has incorrect magic number (%04X)\n", (int)akno, (int)(ak_header.magic));
           if (fix()) {
             if (!delete_bad_ak(sf, akno))

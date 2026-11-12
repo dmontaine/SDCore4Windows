@@ -55,5 +55,6 @@ $define AK$LSORT     16        ;* Keys sorted left aligned  } Mutually
 $define AK$RSORT     32        ;* Keys sorted right aligned } exclusive
 $define AK$NOCASE    64        ;* Case insensitive
 $define AK$COLL     128        ;* Index on a data collection file: the record is parsed into a collection first (13 Oct 26)
+$define AK$V2       256        ;* Right justified keys in the total order: the empty key, numbers by value (decimals too), then text (25 Oct 26)
 
 * END-CODE

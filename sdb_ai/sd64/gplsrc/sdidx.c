@@ -477,7 +477,7 @@ bool cross_check(char *path) {
 
       /* Check magic number in primary subfile */
 
-      if (ak_header.magic != DH_INDEX) {
+      if ((ak_header.magic != DH_INDEX) && (ak_header.magic != DH_INDEX2)) {
         printf("Incorrect magic number in index subfile %d\n", SF(ak));
         goto exit_cross_check;
       }

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 3d3890e3 (RELEASE_1.1 240 b): DH_INDEX2 0x209E and AK_V2 0x0100 (kept free for them since 25 Oct, RELEASE_1.1 181).
  * 15 Oct 26 dm  DH_HEADER_SHARED_SIZE: the header bytes every writer but dh_seq_key() may write (the sequential id counter audit).
  * 31 Dec 23 SD launch - prior history suppressed
  * END-HISTORY
@@ -114,6 +115,8 @@ struct DH_HEADER {
 #define DH_OVERFLOW 0x209B
 #define DH_INDEX 0x209C
 #define DH_CONVERTING 0x209D /* Primary subfile during sdconv */
+#define DH_INDEX2 0x209E     /* 25 Oct 26: index subfile whose keys, if right justified, are in the total order (AK_V2).  A copy of SD that does not know it
+                                refuses the file at dh_open() (DHE_AK_HDR_FAULT) instead of using the old comparator on a tree made with the new one. */
   int32_t group_size;        /* As bytes */
   struct {
     int32_t modulus; /* Current modulus */
@@ -191,6 +194,8 @@ struct DH_AK_HEADER {
 #define AK_RSORT 0x0020   /* ... sorted left aligned (or unsorted) */
 #define AK_NOCASE 0x0040  /* Case insensitive AK */
 #define AK_COLL 0x0080    /* Index on a data collection file (13 Oct 26) */
+#define AK_V2 0x0100      /* 25 Oct 26: keys of a right justified index are in the total order (null, numbers by value, then text); set with the DH_INDEX2 magic.
+                             Never set on a left justified index.  An index without it keeps the old comparator for as long as it exists. */
   int16_t fno;            /* Field number, -1 if I-type index */
   int16_t spare;
   int32_t free_chain; /* Pointer to head of free chain */

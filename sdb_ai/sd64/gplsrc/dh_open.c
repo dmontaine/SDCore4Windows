@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux 3d3890e3 (RELEASE_1.1 240 b): an index subfile with the magic DH_INDEX2 is accepted, and the magic, not the
+ *           stored flag, decides AK_V2.  An index made on Linux since 25 Oct 26 now opens here.
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): Linux removed the CASE_INSENSITIVE_FILE_SYSTEM block of a
  *            directory file's entry (ext4 is case sensitive).  NOT taken here, an OS reason: NTFS is case blind, so the
  *            unconditional DHF_NOCASE of 17 Aug 26 below stays.
@@ -368,10 +370,16 @@ DH_FILE* dh_open(char path[]) {
           goto exit_dh_open;
         }
 
-        if (ak_header.magic != DH_INDEX) {
+        if ((ak_header.magic != DH_INDEX) && (ak_header.magic != DH_INDEX2)) {
           dh_err = DHE_AK_HDR_FAULT;
           goto exit_dh_open;
         }
+
+        /* 25 Oct 26  The magic number decides how the keys are ordered, not the flag: DH_INDEX2 is the total order (AK_V2), DH_INDEX the old comparator. */
+        if (ak_header.magic == DH_INDEX2)
+          ak_header.flags |= AK_V2;
+        else
+          ak_header.flags &= ~AK_V2;
 
         /* Cross-check the index subfile with the primary data subfile */
 

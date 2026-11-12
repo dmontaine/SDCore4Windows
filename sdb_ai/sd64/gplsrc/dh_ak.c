@@ -17,6 +17,10 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 12 Nov 26 Windows port - from Linux 3d3890e3 (25 Oct 26; RELEASE_1.1 240 b): a right justified index made now has the magic DH_INDEX2 and the flag AK_V2,
+ *           and its keys are in one total order (the empty key, numbers by value with decimals and up to 15 digits, then text: ak_key_class(),
+ *           compare() with AKJ_TOTAL).  An index made before keeps the old comparator (AKJ_RIGHT); a left justified one is unchanged.  Only the
+ *           order part of 3d3890e3: its tree fix came 25 Oct (RELEASE_1.1 181).
  * 8 Nov 26 Windows port - from Linux 71d8550b (S.159): delete_ak() tests the index map with & after a range check, and clears the bit.
  * 8 Nov 26 Windows port - from Linux b8e7a480 (S.125): faults that optimisation exposed.
  * 25 Oct 26 Windows port - from Linux 3d3890e: update_internal_node(): removing the LAST child of an internal node that has others left no longer takes the node out of its parent too (a live
@@ -149,7 +153,19 @@ Private int32_t get_ak_node(DH_FILE *dh_file, int16_t subfile);
 
 Private bool free_ak_node(DH_FILE *dh_file, int16_t subfile, int32_t node_num);
 
-Private int16_t compare(char *s1, int16_t s1_len, char *s2, int16_t s2_len, bool right_justified, bool nocase);
+/* 25 Oct 26  How the keys of an index are compared.  AKJ_RIGHT is the comparator every right justified index had until this date (an empty or sign-only key is 0,
+   a number must fit an int32, a decimal is text, and a number against text is compared as text, which is not transitive); an index made now has AK_V2 and AKJ_TOTAL. */
+#define AKJ_LEFT 0
+#define AKJ_RIGHT 1
+#define AKJ_TOTAL 2
+#define ak_justify(flags) (((flags) & AK_RIGHT) ? (((flags) & AK_V2) ? AKJ_TOTAL : AKJ_RIGHT) : AKJ_LEFT)
+#define AKC_NULL 0
+#define AKC_NUMBER 1
+#define AKC_TEXT 2
+
+Private int ak_key_class(const char *s, int16_t len, double *value);
+
+Private int16_t compare(char *s1, int16_t s1_len, char *s2, int16_t s2_len, int justify, bool nocase);
 
 Private bool update_internal_node(DH_FILE *dh_file,
                                   int16_t subfile,
@@ -2041,7 +2057,14 @@ Private int16_t create_ak(char *data_path,          /* Data file path name */
   /* Create an empty AK subfile */
 
   memset((char *)&ak_header, 0, DH_AK_HEADER_SIZE);
-  ak_header.magic = DH_INDEX;
+  /* 25 Oct 26  A right justified index is made in the total order (AK_V2) and with a magic number that an older SD refuses; a left justified one is unchanged. */
+  if (flags & AK_RIGHT) {
+    ak_header.magic = DH_INDEX2;
+    flags |= AK_V2;
+  } else {
+    ak_header.magic = DH_INDEX;
+    flags &= ~AK_V2;
+  }
   ak_header.flags = flags;
   ak_header.fno = fno;
   strcpy((char *)ak_header.ak_name, ak_name);
@@ -2288,7 +2311,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   int16_t header_lock = 0; /* File header group lock table index */
   int32_t node_num;
   int16_t flags;    /* AK flags from ak.data matrix */
-  bool rj;          /* Right justified? */
+  int rj;           /* How keys are compared: AKJ_LEFT, AKJ_RIGHT or AKJ_TOTAL */
   bool nocase;      /* Case insensitive? */
   int16_t child_ct; /* Child node count */
   int16_t ci;       /* Child index for node scan */
@@ -2332,7 +2355,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   fptr = FPtr(dh_file->file_id);
   subfile = AK_BASE_SUBFILE + akno;
   flags = (int16_t)(AKData(dh_file, akno, AKD_FLGS)->data.value);
-  rj = (flags & AK_RIGHT) != 0;
+  rj = ak_justify(flags);
   nocase = (flags & AK_NOCASE) != 0;
   fptr->stats.ak_writes++;
   NoteStat(ak_writes);
@@ -3175,7 +3198,7 @@ Private void ak_delete(DH_FILE *dh_file, /* File descriptor */
   int32_t node_num;
   int32_t sibling_node_num;
   int16_t flags;      /* AK flags from ak.data matrix */
-  bool rj;            /* Right justified? */
+  int rj;             /* How keys are compared: AKJ_LEFT, AKJ_RIGHT or AKJ_TOTAL */
   bool nocase;        /* Case insensitive? */
   int16_t child_ct;   /* Child node count */
   int16_t ci;         /* Child index for node scan */
@@ -3202,7 +3225,7 @@ Private void ak_delete(DH_FILE *dh_file, /* File descriptor */
   fptr = FPtr(dh_file->file_id);
   subfile = AK_BASE_SUBFILE + akno;
   flags = (int16_t)AKData(dh_file, akno, AKD_FLGS)->data.value;
-  rj = (flags & AK_RIGHT) != 0;
+  rj = ak_justify(flags);
   nocase = (flags & AK_NOCASE) != 0;
   fptr->stats.ak_deletes++;
   NoteStat(ak_deletes);
@@ -3441,7 +3464,7 @@ Private STRING_CHUNK *ak_read(DH_FILE *dh_file, /* File descriptor */
   int32_t node_num;
   int32_t big_node_num;   /* 0556 */
   int16_t flags;          /* AK flags from ak.data matrix */
-  bool rj;                /* Right justified? */
+  int rj;                 /* How keys are compared: AKJ_LEFT, AKJ_RIGHT or AKJ_TOTAL */
   bool nocase;            /* Case insensitive? */
   int16_t child_ct;       /* Child node count */
   int16_t ci;             /* Child index for node scan */
@@ -3468,7 +3491,7 @@ Private STRING_CHUNK *ak_read(DH_FILE *dh_file, /* File descriptor */
   fptr = FPtr(dh_file->file_id);
   subfile = AK_BASE_SUBFILE + akno;
   flags = (int16_t)(AKData(dh_file, akno, AKD_FLGS)->data.value);
-  rj = (flags & AK_RIGHT) != 0;
+  rj = ak_justify(flags);
   nocase = (flags & AK_NOCASE) != 0;
   ak_upd = fptr->ak_upd;
   fptr->stats.ak_reads++;
@@ -3644,19 +3667,79 @@ exit_ak_read:
 }
 
 /* ======================================================================
+   ak_key_class()  -  What kind of key is this, for the total order of an AK_V2 index
+
+   25 Oct 26  AKC_NULL: no characters at all.  AKC_NUMBER: optional spaces, an optional sign, digits with at most one decimal point, optional spaces, and between
+   one and 15 digits in all (so that two different numbers are two different doubles); *value is set.  AKC_TEXT: anything else, an all-space key included.
+   The old comparator took an empty or sign-only key for the number 0, a number of more than 9 digits for text, and any decimal for text.                       */
+
+Private int ak_key_class(const char *s, int16_t len, double *value) {
+  char buf[24];
+  int16_t i = 0;
+  int16_t n = 0;
+  int16_t digits = 0;
+  bool dot = FALSE;
+
+  if (len == 0)
+    return AKC_NULL;
+
+  while ((i < len) && (s[i] == ' '))
+    i++;
+  if ((i < len) && ((s[i] == '+') || (s[i] == '-')))
+    buf[n++] = s[i++];
+  for (; i < len; i++) {
+    if (IsDigit(s[i])) {
+      if (++digits > 15)
+        return AKC_TEXT;
+      buf[n++] = s[i];
+    } else if ((s[i] == '.') && !dot) {
+      dot = TRUE;
+      buf[n++] = '.';
+    } else {
+      break;
+    }
+  }
+  while ((i < len) && (s[i] == ' '))
+    i++;
+  if ((i != len) || (digits == 0))
+    return AKC_TEXT;
+
+  buf[n] = '\0';
+  *value = strtod(buf, NULL);
+  return AKC_NUMBER;
+}
+
+/* ======================================================================
    Compare strings
    Returns -1   s2 < s1
             0   Strings are equal
             1   s1 > s2                                                   */
 
-Private int16_t compare(char *s1, int16_t s1_len, char *s2, int16_t s2_len, bool right_justified, bool nocase) {
+Private int16_t compare(char *s1, int16_t s1_len, char *s2, int16_t s2_len, int justify, bool nocase) {
   int16_t n;
   int16_t d = 0;
   int32_t value1;
   int32_t value2;
+  int class1;
+  int class2;
+  double x1;
+  double x2;
 
-  if (right_justified) {
-    if (strnint(s1, s1_len, &value1) && strnint(s2, s2_len, &value2)) {
+  if (justify == AKJ_TOTAL) {
+    /* 25 Oct 26  The total order of an AK_V2 index: the empty key, then numbers by value, then text.  Within a class the order is complete, so the whole is. */
+    class1 = ak_key_class(s1, s1_len, &x1);
+    class2 = ak_key_class(s2, s2_len, &x2);
+    if (class1 != class2)
+      return (class1 < class2) ? -1 : 1;
+    if (class1 == AKC_NULL)
+      return 0;
+    if (class1 == AKC_NUMBER)
+      return (x1 < x2) ? -1 : ((x1 > x2) ? 1 : 0);
+    /* two texts: right justified, below */
+  }
+
+  if (justify != AKJ_LEFT) {
+    if ((justify == AKJ_RIGHT) && strnint(s1, s1_len, &value1) && strnint(s2, s2_len, &value2)) {
       if (value1 > value2)
         d = 1;
       else if (value1 == value2)

@@ -3,6 +3,22 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+12 Nov 26  NEW FILES HAVE 4 KB GROUPS, AND A RIGHT JUSTIFIED INDEX KEEPS ITS KEYS IN ONE ORDER (FROM SD CORE FOR LINUX).
+
+             What        - A new hashed file is made with 4 KB groups unless it says otherwise (GRPSIZE=4 in the
+                           shipped sd.conf; it was 2). A right justified index made now orders its keys as: the
+                           empty key, numbers by value (decimals too), then text, so 1, 01 and +1 are one key and
+                           BUILD.INDEX no longer loses ids that share such a key. An index made on SD Core for
+                           Linux since 25 Oct 2026 now opens here. The audit trail writes a control character in
+                           a value as ?, so a value cannot start a false line. Only a program compiled in internal
+                           mode may set internal mode with KERNEL(K$INTERNAL). The terminal definitions say 43
+                           lines, as the default terminal does.
+             Why         - Fewer overflowed groups; an index order that does not depend on the order keys were
+                           written; parity with SD Core for Linux.
+             Does NOT    - Change a file or an index that exists: an installed system keeps its sd.conf and its
+                           GRPSIZE, a file keeps its group size, and an old index keeps the old order. An index made
+                           now cannot be opened by an older release. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 11 Nov 26  THE DEBUGGER'S F1 HELP LISTS THE KEYS IT HAS (FROM SD CORE FOR LINUX).
 
              What        - F1 in the debugger listed the old keys (F2 abort, F5 run). It now says F2 finds an

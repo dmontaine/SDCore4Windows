@@ -660,7 +660,7 @@ SDSYS=C:\\ProgramData\\SD\\sdsys
 # readable by every SD user.  secure-dumps.ps1 makes this directory write-only
 # to sdusers, so a dump can be added and nobody else's can be listed or read.
 DUMPDIR=C:\\ProgramData\\SD\\sdsys\\dumps
-GRPSIZE=2
+GRPSIZE=4
 NUMUSERS=20
 SORTMEM=4096
 ERRLOG=50

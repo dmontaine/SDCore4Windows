@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux S.8 (RELEASE_1.1 240 e): K_INTERNAL is set only by a program flagged HDR_INTERNAL; a read (-1) is unchanged.
  * 10 Nov 26 Windows port - from Linux d35f5e31 / d8dbde84 (S.88): K_SHOW_SAFE (151), another session's text made safe to print by the kernel's
  *           one rule (show_ts_safe()); kernel(K$AUTOLOGOUT, -2) returns the inactivity clock (keyin_idle_ms()).  And K_AI_START, POLL, CANCEL
  *           and STATUS (160-163) answered as Linux's op_ai.c answers with no helper running: no AI helper here yet (RELEASE_1.1 173).
@@ -279,10 +280,14 @@ void op_kernel() {
 
   switch (action) {
     case K_INTERNAL:
+      /* 12 Nov 26 Windows port - from Linux's S.8 (14 Sep 26; RELEASE_1.1 240 e).  Setting was unguarded.  KERNEL compiles only in internal
+         mode, so this was reachable only from $internal code already; the guard makes that the rule rather than a consequence of BCOMP.
+         No shipped BASIC sets it (every caller passes -1); sd -internal sets it in C (sd.c).  A refused attempt is not an error and
+         changes nothing, as for K_ADMINISTRATOR. */
       GetInt(descr);
       if (descr->data.value < 0)
         result.data.value = internal_mode;
-      else
+      else if (process.program.flags & HDR_INTERNAL)
         internal_mode = (descr->data.value != 0);
 
       break;
