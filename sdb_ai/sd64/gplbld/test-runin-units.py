@@ -232,7 +232,13 @@ def checks(src, voc_text, newvoc_names, extra=None):
        "cited %s" % cited)
     if os.path.isdir(SOLO_MESSAGES):
         clash = [n for n in NEW_MESSAGES if os.path.exists(os.path.join(SOLO_MESSAGES, str(n)))]
-        ck("R30 none of the eight numbers (nor 12250) is used in Solo (a later carry cannot collide)", not clash and not os.path.exists(os.path.join(SOLO_MESSAGES, str(NOCATALOG_MESSAGE))), "in Solo: %s" % clash)
+        # 12 Nov 26 (Solo's SOLO 56 group 7): Solo carried BASIC ... NO.CATALOG with this message, so 12250 may be in Solo - but only as this same
+        # message, byte for byte; any other text there is the collision this row exists for.
+        p_core = os.path.join(SD64, "sdsys", "messages", str(NOCATALOG_MESSAGE))
+        p_solo = os.path.join(SOLO_MESSAGES, str(NOCATALOG_MESSAGE))
+        same_nocat = (not os.path.exists(p_solo)) or (os.path.exists(p_core) and open(p_solo, "rb").read() == open(p_core, "rb").read())
+        ck("R30 none of the eight numbers is used in Solo, and 12250 there, if present, is this message byte for byte (a later carry cannot collide)",
+           not clash and same_nocat, "in Solo: %s; 12250 same: %s" % (clash, same_nocat))
 
     # ---- the NO.CATALOG option (owner, 3 Nov 26: "compile option"): run.in basic always gives it, basic honours it at the one place the catalogue step runs ----------
     ck("R33 no option list lets a person give no.catalog (it is added by the verb, after the typed words are checked, and only to basic)",

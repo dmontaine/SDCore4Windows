@@ -13,7 +13,8 @@ the revision reached Solo's key handler.  The ruling: Solo follows Core.  49 is 
 WHAT IS HELD (text only; whether the server answers is the verify suite's):
   - every entry of apisrvr's dispatch list has the number its comment gives (a table that drifts by one is the failure this file exists for);
   - 49 is vb.revision, whose handler is `response = system(1012)`;
-  - Solo: 72 is vb.sshkey, 50 to 71 are vb.illegal.action, SrvrSshKey is 72 in sdclient.h, the BASIC sdclient and scram-probe.py, SrvrRevision is 49 in the first two,
+  - Solo: 72 is vb.sshkey, 50 to 69 are Core's handlers in Core's order (12 Nov 26, SOLO 56 group 7) and 70 and 71 vb.illegal.action (group 8),
+    SrvrSshKey is 72 in sdclient.h, the BASIC sdclient and scram-probe.py, SrvrRevision is 49 in the first two,
     and the request is not one a session may make before it has logged in;
   - Core: 71 is the last request, 72 is not allocated (the entry after 71 is vb.illegal.action) and the comment on 71 says it is reserved for Solo's ssh key.
 """
@@ -25,6 +26,10 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SD64 = os.path.abspath(os.path.join(HERE, os.pardir))
 SOLO = os.path.isfile(os.path.join(HERE, "solo-sshkey.ps1"))
+# Requests 50 to 69, the QMClient requests of 15 Oct 26, in SD Core's order (sdclient.h SrvrGetVar to SrvrWriteuSeqKey); Solo has them since SOLO 56 group 7
+CORE_50_69 = ["vb.getvar", "vb.system", "vb.trans", "vb.rtrans", "vb.txn", "vb.evaluate", "vb.evalconv", "vb.iconv", "vb.oconv", "vb.iconvs",
+              "vb.oconvs", "vb.openseq", "vb.readseq", "vb.readblk", "vb.writeseq", "vb.writeblk", "vb.seek", "vb.weofseq", "vb.writeseqkey",
+              "vb.writeuseqkey"]
 FILES = {
     "apisrvr": os.path.join(SD64, "sdsys", "gpl.bp", "apisrvr"),
     "sdclient.h": os.path.join(SD64, "gplsrc", "sdclilib", "sdclient.h"),
@@ -66,8 +71,10 @@ def checks(files):
        at.get(49) == "vb.revision" and re.search(r"^vb\.revision:\s*\n\s*response = system\(1012\)\s*\n\s*return", ap, re.M) is not None, "49 is %s" % at.get(49))
     if SOLO:
         ck("S1 request 72 is vb.sshkey, with its handler", at.get(72) == "vb.sshkey" and re.search(r"^vb\.sshkey:", ap, re.M) is not None, "72 is %s" % at.get(72))
-        ck("S2 requests 50 to 71 are vb.illegal.action (they are Core's and not in Solo)", all(at.get(i) == "vb.illegal.action" for i in range(50, 72)),
-           "%s" % [(i, at.get(i)) for i in range(50, 72) if at.get(i) != "vb.illegal.action"][:5])
+        # 12 Nov 26 (SOLO 56 group 7): 50 to 69 are Core's handlers, in Core's order; 70 and 71 (file administration) are not in Solo yet
+        want = dict(zip(range(50, 72), CORE_50_69 + ["vb.illegal.action", "vb.illegal.action"]))
+        ck("S2 requests 50 to 69 are Core's handlers in Core's order, and 70 and 71 are vb.illegal.action (group 8)", all(at.get(i) == want[i] for i in range(50, 72)),
+           "%s" % [(i, at.get(i), want[i]) for i in range(50, 72) if at.get(i) != want[i]][:5])
         ck("S3 the ssh key request is in one place only (nothing else is vb.sshkey)", sum(1 for n, h, c in t if h == "vb.sshkey") == 1)
         h = files["sdclient.h"]
         ck("S4 sdclient.h: SrvrRevision 49 and SrvrSshKey 72", re.search(r"#define SrvrRevision\s+49\b", h) is not None and re.search(r"#define SrvrSshKey\s+72\b", h) is not None)
@@ -97,9 +104,10 @@ def load():
 
 MUTANTS_SOLO = [
     ("49 is the ssh key again", "apisrvr", "   vb.revision,       ;*  49 ", "   vb.sshkey,         ;*  49 "),
-    ("the table drifts by one after 49", "apisrvr", "   vb.illegal.action, ;*  50 ", "   vb.illegal.action, ;*  51 "),
+    ("the table drifts by one after 49", "apisrvr", "   vb.getvar,         ;*  50 ", "   vb.getvar,         ;*  51 "),
     ("72 is not the ssh key", "apisrvr", "   vb.sshkey,         ;*  72 ", "   vb.illegal.action, ;*  72 "),
-    ("a request between 50 and 71 is allocated", "apisrvr", "   vb.illegal.action, ;*  60", "   vb.revision,       ;*  60"),
+    ("70 is allocated before group 8", "apisrvr", "   vb.illegal.action, ;*  70", "   vb.revision,       ;*  70"),
+    ("a Core handler between 50 and 69 is missing", "apisrvr", "   vb.txn,            ;*  54", "   vb.illegal.action, ;*  54"),
     ("the handler is another revision", "apisrvr", "response = system(1012)", "response = system(1013)"),
     ("the header says 49 for the key", "sdclient.h", "#define SrvrSshKey       72", "#define SrvrSshKey       49"),
     ("the BASIC copy says 49 for the key", "sdclient", "$define SrvrSshKey       72", "$define SrvrSshKey       49"),
