@@ -57,8 +57,8 @@
 *   25 Oct 26 (Linux 3cbe3a5, RELEASE_1.1 169): the CSV, JSON and XML functions of the carry.  Linux's sandbox-csvb, sandbox-jsonx and
 *   sandbox-xmlx exercise them; Windows has no carried suite for them yet, so they are declared until one is written.
 * NOT.TESTED: CSVPARSE CSVBUILD CSVOPEN JMERGE JPATCH JPATH JVALIDATE XPARSE XBUILD XPATH
-*   25 Oct 26 (Linux 400500c, RELEASE_1.1 178): the public FCONTROL needs an open file variable; Linux's sandbox-fcontrol covers it and the
-*   carried verify-carry suites fcontrol and crlf are not run yet (row 148).
+*   25 Oct 26 (Linux 400500c, RELEASE_1.1 178): the public FCONTROL needs an open file variable; the carried verify-carry suite fcontrol
+*   covers it (12 Nov 26: 25 rows pass, 4 N/A, Windows' 12359 refusal; verify-carry-20261112-112430).  crlf stays NotRun (12359).
 * NOT.TESTED: FCONTROL
 * NOT.TESTED: FILEINFO INDICES LISTINDEX SELECTINFO RECORDLOCKED
 * NOT.TESTED: TRANS RTRANS ITYPE OBJECT OBJINFO CCALL OUTERJOIN
