@@ -12,6 +12,9 @@
 #
 # START-HISTORY:
 # 12 Nov 26  Written with pub_ospath() (op_dio2.c), the owner's D1 and D2 of 12 Nov 26.  NOT RUN when written.
+# 12 Nov 26  First run (verify-carry-20261112-112430): every key row passed; the G rows failed because the account (don) holds OS
+#            access (register field 8 yes).  The G rows now read that switch, print it, and check the state it gives: off, refused;
+#            on, reached.  An account whose record cannot be found still fails them.
 # END-HISTORY
 #
 # THE INSTRUMENT IS WHAT EACH PROGRAM PRINTS between brackets, with STATUS() after it, and the disk as Python reads it.  Every key
@@ -19,10 +22,9 @@
 #   C  CONTROLS: OSPATH compiles in an ordinary program (it did not before: "Matrix OSPATH is not referenced"); key 2 of a file
 #      this script made answers 1 and of a name it did not make answers 0.
 #   K  the keys inside the account, given as C:\...\x (backslashes), as C:/.../x, and for 6 in the other case.
-#   G  THE GATE, the switch being off: a folder this script made OUTSIDE the account (in the user's temp folder): key 2 answers 0
-#      with STATUS() ER$PERM; delete leaves the file there; mkdir makes nothing; owner answers null.
-#   If G2's control fails (the account reaches the outside folder), the account holds OS access and the G rows are not a measure of
-#   the gate: the suite says so and fails them rather than passing a gate it never met.
+#   G  THE GATE, on a folder this script made OUTSIDE the account (in the user's temp folder).  The account's OS switch is read
+#      from its register record (field 8, ACC$OS.EXEC) and printed.  Off: key 2 answers 0 with STATUS() ER$PERM, delete leaves the
+#      file there, mkdir makes nothing, owner answers null.  On: each is let through.  A record that cannot be found fails the rows.
 
 import os
 import re
@@ -62,6 +64,24 @@ def sess(box, *cmds):
                        capture_output=True, text=True, timeout=900)
     out = ANSI.sub("", p.stdout + p.stderr)
     return out.split(":TERM 200,9999", 1)[-1]
+
+
+def os_switch(acct):
+    """'on' / 'off' from the account's register record (field 8, ACC$OS.EXEC), found as sdsys/accounts/<name> in a folder above
+    the account directory (Core: C:/ProgramData/SD; Solo: the Solo folder), or 'unknown'."""
+    name = os.path.basename(acct.rstrip("\\/")).lower()
+    d = os.path.dirname(acct.rstrip("\\/"))
+    for _ in range(4):
+        reg = os.path.join(d, "sdsys", "accounts")
+        if os.path.isdir(reg):
+            for f in os.listdir(reg):
+                if f.lower() == name:
+                    with open(os.path.join(reg, f), encoding="latin-1") as h:
+                        lines = h.read().replace("\r\n", "\n").split("\n")
+                    say("  register record: %s (%d fields)" % (os.path.join(reg, f), len(lines)))
+                    return "on" if len(lines) >= 8 and lines[7].strip().lower() == "yes" else "off"
+        d = os.path.dirname(d)
+    return "unknown"
 
 
 def q(s):
@@ -220,16 +240,29 @@ def main():
         row("K6 a file that is not open is not", m6n is not None and m6n.group(1).split("|")[0] == "0",
             "got %r" % (m6n.group(1) if m6n else None))
 
-        reached = val("g2") == "1"
-        if reached:
-            say("  NOTE: the account reached the outside folder (key 2 answered 1): it holds OS access, so the G rows below do not"
-                " measure the gate and fail.")
-        row("G2 outside the account: answer 0 and STATUS() ER$PERM", val("g2") == "0" and perm("g2"), "got %r" % g["g2"])
-        row("G5 outside: the file is NOT deleted (ER$PERM, still on the disk)",
-            before_o and perm("g5") and os.path.exists(os.path.join(out_dir, "o.txt")), "got %r" % g["g5"])
-        row("G13 outside: nothing is made (ER$PERM, no folder)", perm("g13") and not os.path.exists(os.path.join(out_dir, "m")),
-            "got %r" % g["g13"])
-        row("G18 outside: the owner is null with ER$PERM", val("g18") == "" and perm("g18"), "got %r" % g["g18"])
+        # The gate rows depend on the account's OS switch, so it is READ, from the account's register record, and printed: field 8
+        # (ACC$OS.EXEC) 'yes' is on.  Off: the outside folder is refused.  On: it is reached (the switch is what lets it through).
+        # No record found: the rows fail rather than guess (12 Nov 26: the first run was in an account with the switch on).
+        osw = os_switch(acct)
+        say("  the account's OS switch (register field 8): %s" % osw)
+        if osw == "off":
+            row("G2 outside the account: answer 0 and STATUS() ER$PERM", val("g2") == "0" and perm("g2"), "got %r" % g["g2"])
+            row("G5 outside: the file is NOT deleted (ER$PERM, still on the disk)",
+                before_o and perm("g5") and os.path.exists(os.path.join(out_dir, "o.txt")), "got %r" % g["g5"])
+            row("G13 outside: nothing is made (ER$PERM, no folder)", perm("g13") and not os.path.exists(os.path.join(out_dir, "m")),
+                "got %r" % g["g13"])
+            row("G18 outside: the owner is null with ER$PERM", val("g18") == "" and perm("g18"), "got %r" % g["g18"])
+        elif osw == "on":
+            row("G2 outside, switch on: key 2 answers 1", val("g2") == "1" and not perm("g2"), "got %r" % g["g2"])
+            row("G5 outside, switch on: the file is deleted (answer 1, gone)",
+                before_o and val("g5") == "1" and not os.path.exists(os.path.join(out_dir, "o.txt")), "got %r" % g["g5"])
+            row("G13 outside, switch on: the folder is made", val("g13") == "1" and os.path.isdir(os.path.join(out_dir, "m")),
+                "got %r" % g["g13"])
+            row("G18 outside, switch on: not refused (the file G5 deleted has no owner, so null)",
+                val("g18") == "" and not perm("g18"), "got %r" % g["g18"])
+        else:
+            for nm in ("G2", "G5", "G13", "G18"):
+                row(nm + " the account's OS switch could not be read, so the gate was not measured", False, "no register record")
     finally:
         for nm in names:
             for d in ("bp", "bp.out"):

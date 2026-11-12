@@ -50,7 +50,7 @@ case("SYSTEM(1048) is a sequence number: the second call is one more than the fi
      "a = system(1048)\nb = system(1048)\nx = (a >= 1) : '/' : (b = a + 1)", "1/1")
 case("SYSTEM(1049) is false by default, true under HUSH ON and false again after HUSH OFF",
      "a = system(1049)\nhush on\nb = system(1049)\nhush off\nx = a : '/' : b : '/' : system(1049)", "0/1/0")
-case("SYSTEM(1067) is the default group size of a dynamic file in bytes", "x = system(1067)", "1024")
+case("SYSTEM(1067) is the default group size of a dynamic file in bytes (4 kb since 25 Oct 26; it was 1 kb)", "x = system(1067)", "4096")
 
 
 def say(s=""):
