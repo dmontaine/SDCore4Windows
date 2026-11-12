@@ -33,9 +33,8 @@
         'lock-b6'      = 'sets DEADLOCK=2 NUMLOCKS=10 in sd.conf and restarts the daemon, then stops "SD NOT STARTED" when it sees no change; the installed service does not read the box copy'
         # Encryption layers 2 and 3 (RELEASE_1.1 168).  READ from the suite on 20 Oct 2026, not run: it stops before its first row.
         'crypt'        = 'READ, not run: bails when ctypes.util.find_library("sodium") finds no libsodium (MSYS2 has cygsodium-26.dll, which native Python cannot load), and part 2 loads sandbox-stmt-q3.py (SDSYS sessions, fixture accounts); owed a Windows-native layer 2 and 3 check (RELEASE_1.1 168)'
-        # The public FCONTROL function and the FC$ tokens are Linux 400500c, part of the held QMClient chain: not carried.
-        'fcontrol'     = 'FCONTROL(fvar, FC$...) is the public FCONTROL (Linux 400500c, QMClient chain, held): the probes do not compile'
-        'crlf'         = 'its first leg uses FCONTROL(fvar, FC$CRLF, ...), the public FCONTROL (held): the probe does not compile'
+        # The public FCONTROL is carried (284a91cd, 25 Oct 26) and its suite fcontrol runs (the entry was left stale until 11 Nov 26); Windows has no line terminator modes.
+        'crlf'         = 'FC$CRLF and the letters of the line terminator modes are not in Windows SD: the public FCONTROL refuses actions 1 and 4 with message 12359'
         # A job sent to the Windows default printer: SETPTR mode 1 or 6 here is Out-Printer on a real, paper-printing printer.
         # Found 18 Oct 2026 when the owner's printer printed pages saying "hello" (option-q17, two jobs per run) and "line one"
         # (oq2, one job per run).  Linux's sandbox has no printer.  They stay out until a null printer exists to point them at.
@@ -126,7 +125,6 @@
             '545: the adds4000-at entry'          = 'the -at terminfo entries (the AccuTerm types) were removed by RELEASE_1.1 139, area 6c: there is no adds4000-at entry on purpose (measured 19 Oct: "no entry")'
         }
         'sys-b2' = @{
-            '1024, 1027, 1028, 1034, 1036:'     = 'FILEINFO 1031 (CREATING.SEQKEY, Linux d6a86a7 and 400500c of the held QMClient chain) is not carried: the key answers a null string'
             '1035 is the Unix epoch now'          = 'the probe wants SD started less than two hours ago (SYSTEM(1045)); the service had been up over three hours, and the zone half of the row passes (measured 26 Oct, guest: got 01). Passes on a freshly started service.'
             '1034, 1040, 1044, 1051, 1080:'       = 'SYSTEM(1040) answers 1 here: Windows file names are not case sensitive (deviation 8 of the areas 2-5 list)'
             'THE ZONE TOOK EFFECT'                = 'the MSYS2 runtime reads POSIX TZ strings (EST5EDT) and the Windows zone but not Olson names such as Asia/Kathmandu (measured 18 Oct: UTC)'
