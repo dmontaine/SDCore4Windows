@@ -224,6 +224,73 @@ function Remove-RelayAccount {
     }
 }
 
+# --- the run.in account -------------------------------------------------------
+#
+# 13 Nov 2026 - RELEASE_1.1 253(b).  "run.in <account> debug <file> <program>"
+# runs the program in a SEPARATE sd.exe, because an SDSYS session's token is
+# elevated for its life.  The SD service starts that child as this bare local
+# account, "sdrunin", by S4U with two groups ADDED to the one token - sdusers
+# and the account's own sdu_<account> - every privilege removed, Medium
+# integrity, in a job of one process (gplsrc/sdsvc/sdrunin.c).  So the account
+# itself is made exactly as sdrelay is: in NO group (the groups come from the
+# service, for one run, and the SAM never says it is in any), a random password
+# nobody keeps, every interactive kind of logon denied, not disabled (S4U cannot
+# log a disabled account on).  ***NOT IN Administrators, EVER***: the service
+# refuses a token that would carry it.  It is reachable only through the
+# service, and the service only for an elevated administrator's run.in debug.
+# The name is SD_RUNIN_ACCOUNT in gplsrc/win32runin.h.
+$RuninAccount = 'sdrunin'
+$RuninDescription = 'SD run.in debugged program. Do not sign in'
+$script:RuninAccountOk = $false
+
+function Install-RuninAccount {
+    $u = Get-LocalUser -Name $RuninAccount -ErrorAction SilentlyContinue
+    if ($null -eq $u) {
+        $sec = ConvertTo-SecureString (New-RandomPassword) -AsPlainText -Force
+        try {
+            $u = New-LocalUser -Name $RuninAccount -Password $sec -PasswordNeverExpires `
+                -AccountNeverExpires -UserMayNotChangePassword `
+                -Description $RuninDescription -ErrorAction Stop
+        } catch {
+            Say "could not create the run.in account ${RuninAccount}: $($_.Exception.Message)"
+            return
+        }
+        Say "created the run.in account $RuninAccount (no group, random unused password)"
+    } else {
+        Say "run.in account $RuninAccount exists"
+        if (-not $u.Enabled) {
+            Enable-LocalUser -Name $RuninAccount
+            Say "  it was disabled; enabled (S4U cannot log a disabled account on)"
+        }
+    }
+    foreach ($g in @(Get-LocalGroup)) {
+        $m = Get-LocalGroupMember -Group $g.Name -ErrorAction SilentlyContinue |
+             Where-Object { $_.SID -eq $u.SID }
+        if ($m) {
+            Remove-LocalGroupMember -Group $g.Name -Member $u.SID -ErrorAction SilentlyContinue
+            Say "  removed $RuninAccount from $($g.Name)"
+        }
+    }
+    $rc = [SdLsaRights]::Add($u.SID.Value, [string[]]$RelayDenies)
+    if ($rc -ne 0) {
+        Say "LsaAddAccountRights failed (win32=$rc) denying logon to $RuninAccount"
+        return
+    }
+    Say "  denied interactive, remote interactive, batch and service logon"
+    $script:RuninAccountOk = $true
+}
+
+function Remove-RuninAccount {
+    $u = Get-LocalUser -Name $RuninAccount -ErrorAction SilentlyContinue
+    if ($null -eq $u) { Say "no run.in account $RuninAccount; nothing to remove"; return }
+    Remove-LocalUser -Name $RuninAccount -ErrorAction SilentlyContinue
+    if (Get-LocalUser -Name $RuninAccount -ErrorAction SilentlyContinue) {
+        Say "could not remove the run.in account $RuninAccount"
+    } else {
+        Say "run.in account $RuninAccount removed"
+    }
+}
+
 # --- remove ----------------------------------------------------------------
 #
 # IDEMPOTENT, like the rest of the installer's helpers: an absent service is
@@ -231,7 +298,7 @@ function Remove-RelayAccount {
 # was never created or was removed by hand.
 if ($Remove) {
     $s = Get-Svc
-    if ($null -eq $s) { Say "no $SvcName service; nothing to remove"; Remove-RelayAccount; exit 0 }
+    if ($null -eq $s) { Say "no $SvcName service; nothing to remove"; Remove-RelayAccount; Remove-RuninAccount; exit 0 }
 
     if ($s.Status -ne 'Stopped') {
         Say "stopping $SvcName"
@@ -250,6 +317,7 @@ if ($Remove) {
     if ($LASTEXITCODE -ne 0) { Say "sc delete failed, exit $LASTEXITCODE"; exit 1 }
     Say "$SvcName removed"
     Remove-RelayAccount
+    Remove-RuninAccount
     exit 0
 }
 
@@ -271,6 +339,14 @@ $relayMissing = (-not $script:RelayAccountOk) -or
                 (-not (Get-LocalUser -Name $RelayAccount -ErrorAction SilentlyContinue))
 if ($relayMissing) {
     Say "THE RELAY ACCOUNT $RelayAccount IS NOT IN PLACE - every API connection will be refused until it is (rerun: install-service.ps1 -Install, elevated)"
+}
+
+# 13 Nov 2026 - RELEASE_1.1 253(b): the run.in account, before the service too.
+# A missing one is reported and does NOT fail the install: only run.in's debug
+# needs it, and the service refuses that run with the reason in sdsvc.log.
+Install-RuninAccount
+if ((-not $script:RuninAccountOk) -or (-not (Get-LocalUser -Name $RuninAccount -ErrorAction SilentlyContinue))) {
+    Say "the run.in account $RuninAccount is not in place - run.in debug is refused until it is (rerun: install-service.ps1 -Install, elevated)"
 }
 
 if ($null -ne (Get-Svc)) {

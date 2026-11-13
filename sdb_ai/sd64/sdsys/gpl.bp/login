@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child (kernel(K$RUNIN.CHILD), the SD service's "sd -RUNIN account") enters that account
+*           only when its token holds the account's group and sdusers, with no administrator flag, no SH, no OS.EXECUTE and no edit gate, and ri.active 2;
+*           the sdusers membership test and the batch list are not asked of it (it is no member of anything; sd.c held its command).
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO IS LOWER CASE, AS LINUX (mail 2026-11-13T0830).  initial.account is downcased at every source
 *   (the forced account, 'sdsys', @logname, the path leaf), its tests and the audit name say 'sdsys', and the update.sdsys.voc test is Linux's
 *   `@who = 'sdsys'` again.  setacc, cproc LOGTO / run.in and apisrvr set WHO the same way.
@@ -243,6 +246,9 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun elevate(action,arg) calling '!elevate'
 * 19 Sep 26 Windows port - RELEASE_1.1 75's rule, shared with the Linux port.
 deffun pw_complex(pw) calling '!pw_complex'
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): RUN.IN's common, declared as CPROC declares it (the same six names, same order), so that run.in's debugged
+*   child can be put in the run state (ri.active 2) before CPROC runs its command.  A $ name: only an internal program can join it.
+   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.account
 
    ok = @false
    admin.login = @false
@@ -277,6 +283,10 @@ deffun pw_complex(pw) calling '!pw_complex'
    gate.ok = @true
 
    is.phantom = kernel(K$IS.PHANTOM, 0)
+
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  RUN.IN'S DEBUGGED CHILD: the SD service's "sd -RUNIN account", whose token sd.c already checked (the bare
+*   account sdrunin, no privilege, not elevated).  '' for every other session.  account <FM> store <FM> the token's local groups.
+   runin.info = kernel(K$RUNIN.CHILD, 0)
 
    * If the terminal type has not yet been set, work out what it is
 
@@ -576,7 +586,9 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   to sdusers, read the data tree, or run as SYSTEM, so this is AN EXPLICIT
 *   ACT AND AN AUDIT TRAIL, NOT A BOUNDARY THAT HOLDS AGAINST THEM.  The owner
 *   was shown that before ruling.
-     if not(kernel(K$INTERNAL,-1)) then
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child is not a MEMBER of sdusers (the SAM says sdrunin is in no group); the service put
+*   sdusers in its token, and the account case below asks the token for it.
+     if not(kernel(K$INTERNAL,-1)) and runin.info = '' then
         if not(is_grp_member(lgn.id,'sdusers')) then
            display sysmsg(5009) ;* This user is not registered for SD use
            audit.reason = 'not a member of sdusers'
@@ -653,6 +665,26 @@ deffun pw_complex(pw) calling '!pw_complex'
    if upcase(@logname) = 'SDSYS' then job.name = kernel(K$JOB.MARK, 0)
 
    begin case
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  RUN.IN'S DEBUGGED CHILD enters the account the SD service named, and only if its token holds that
+*   account's own group and sdusers - which only the service could have put there (an S4U logon with groups needs SeTcb).  No administrator flag.
+      case runin.info # ''
+         initial.account = downcase(runin.info<1>)
+         read acc.rec from acc.f, initial.account else
+            display sysmsg(5018, initial.account) ;* Account %1 not in register
+            audit.account = initial.account
+            audit.reason = 'no such account in the register'
+            goto terminate.connection
+         end
+         runin.groups = ',' : downcase(runin.info<3>) : ','
+         runin.group = downcase(trim(acc.rec<ACC$GROUP>))
+         if runin.group = '' or not(index(runin.groups, ',' : runin.group : ',', 1)) or not(index(runin.groups, ',sdusers,', 1)) then
+            display sysmsg(10051) ;* You can only log in to your own account
+            audit.account = initial.account
+            audit.reason = 'the run.in child token does not hold the group of the account'
+            goto terminate.connection
+         end
+         void kernel(K$ADMINISTRATOR, 0)
+
       case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname", or -INTERNAL
          initial.account = downcase(kernel(K$FORCED.ACCOUNT,0))
 
@@ -1007,6 +1039,22 @@ deffun pw_complex(pw) calling '!pw_complex'
    void kernel(K$BP.EDIT,   upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES')
    void kernel(K$DICT.EDIT, upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES')
 
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  RUN.IN'S DEBUGGED CHILD runs as Linux's ri.narrow leaves a debugged program: no edit gate, no SH, no
+*   OS.EXECUTE, no administrator flag, the account's other switches as its record says.  And ri.active 2, so that what holds during a run on Linux holds
+*   here: LOGTO is refused (15073), a Q-pointer leads only into this account (_VOC_REF), $BCOMP refuses $EXECUTE and outside includes, and CPROC's abort
+*   ends this process rather than going back anywhere.
+   if runin.info # '' then
+      void kernel(K$VOC.EDIT,  0)
+      void kernel(K$BP.EDIT,   0)
+      void kernel(K$DICT.EDIT, 0)
+      void kernel(K$SH, 0)
+      void kernel(K$OS.EXEC, 0)
+      void kernel(K$ADMINISTRATOR, 0)
+      ri.path = '' ; ri.account.path = '' ; ri.who = '' ; ri.sw = ''
+      ri.account = initial.account
+      ri.active = 2
+   end
+
    * Set @PATH
 
    account.path = ospath("", OS$CWD)
@@ -1298,7 +1346,8 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   24 Aug 26 - batch.command IS NOW SET BY THE BLOCK ABOVE, under the same
 *   guard, because the password exemption added that day needs it too.  The
 *   assignment moved; nothing else here changed.
-   if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) then
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): not run.in's debugged child, whose one command sd.c held to "debug <file> <program>" before anything ran.
+   if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) and runin.info = '' then
       if batch.command # '' and not(kernel(K$ADMINISTRATOR,-1)) then
          gosub batch.permitted
          if not(batch.ok) then goto terminate.connection
@@ -1314,7 +1363,9 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   22 Aug 26 - THE COMMAND IS NAMED IN THE RECORD when there is one, because
 *   "LOGIN account=x" alone cannot distinguish a person signing in from a job
 *   that ran something.  It is empty for every interactive session.
-   if batch.command = '' then
+   if runin.info # '' then
+      void kernel(K$AUDIT, 'run.in child account=' : audit.account : ' command=' : batch.command)   ;* 13 Nov 26 (RELEASE_1.1 253(b))
+   end else if batch.command = '' then
       void kernel(K$AUDIT, 'login account=' : audit.account)
    end else
       void kernel(K$AUDIT, 'login account=' : audit.account : ' command=' : batch.command)

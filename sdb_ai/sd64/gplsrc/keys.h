@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)); Windows only.
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER.
  * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's home and a private directory below it.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone; the number stays reserved.
@@ -566,6 +567,19 @@
    SYSTEM and Administrators can write, and its command= is this session's own command line (sd_jobmark.c, win32jobmark.c).  Any program may
    ask; nothing sets it.  Same number as Linux; GPL.BP/INT$KEYS.H carries it. */
 #define K_JOB_MARK           172
+/* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug (win32runin.h).  WINDOWS ONLY, in the gap after the Windows-only
+   58-68 that Linux leaves free (its 90 and 91 are above it):
+     K_RUNIN_CHILD  for run.in's debugged child (sd -RUNIN, its token checked by sd.c runin_door()): account <FM> store <FM> the
+                    token's local groups, comma separated; "" for every other process.  Only to a $internal program (LOGIN, $PDBG).
+     K_RUNIN_DEBUG  the SDSYS session's end of a run, only to a $internal program in a session holding the administrator flag:
+                    "O" <FM> account <FM> file <FM> program <FM> term <FM> cols <FM> rows   asks the SD service for the child;
+                       answers "OK" <FM> pid <FM> store, or "ER" <FM> reason
+                    "P" <FM> ms   relays for up to ms (at most 2000): the child's screen to this terminal, this keyboard to the
+                       child, a break as the break key; answers 0 running, 1 the run is over, -1 no run open
+                    "C"   ends the run (the service terminates the child's job); answers 1
+   GPL.BP/INT$KEYS.H carries the same numbers. */
+#define K_RUNIN_CHILD        84
+#define K_RUNIN_DEBUG        85
 
 /* PTERM() function action keys */
 #define PT_BREAK              1

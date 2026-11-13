@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug: in run.in's debugged child (kernel(K$RUNIN.CHILD)) the store is the run's,
+*           made by the SD service, and the start record DR.START; and 'SOURCE' sends the program's source as this process reads it, for a
+*           debugger that must not open a name the debugged process gave.  Windows only.
 * 9 Nov 26 Windows port - from Linux debd0698 (W.11 F10b): the conversation is in the user's private directory (dbg.store, !pdbg_store), not $ipc;
 *           a START record whose PDEBUG has gone is removed and not answered (the store, unlike $ipc, outlives an SD restart).
 * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): cannot.debug: throws SYS.PROGRAM.NO_PDEBUG when a handler is there (QM4 Fixes 513).
@@ -55,10 +58,33 @@ deffun atvar(name) calling "!atvar"
       * subsequent parts of the conversation so that a second user could
       * start a debugging session.
 
-      call !pdbg_store(dbg.store, store.why)
-      if store.why # '' then goto cannot.debug
+      * 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child (sd -RUNIN, the SD service's process) talks to the
+      * administrator's session through the run's own store, which the service made for this logon and administrators alone, and
+      * the administrator's START record there is DR.START.  Any other process uses its user's private store as before.
+      runin.info = kernel(K$RUNIN.CHILD, 0)
+      if runin.info # '' then
+         store.why = ''
+         openpath runin.info<2> to dbg.store else
+            store.why = 'open'
+            goto cannot.debug
+         end
+         mark.mapping dbg.store, off
+         id = 'DR.START'
+         * The administrator's session writes it when the service has answered, which may be after this process reached here:
+         * up to ten seconds
+         runin.try = 0
+         loop
+            readv runin.x from dbg.store, id, 0 then exit
+            runin.try += 1
+         until runin.try >= 40
+            nap 250
+         repeat
+      end else
+         call !pdbg_store(dbg.store, store.why)
+         if store.why # '' then goto cannot.debug
 
-      id = 'DR.':@who:'!':@logname
+         id = 'DR.':@who:'!':@logname
+      end
       readu in.msg from dbg.store, id else goto cannot.debug
       if in.msg<1> # 'START' then goto cannot.debug
       debugger.uid = in.msg<2>
@@ -134,6 +160,24 @@ deffun atvar(name) calling "!atvar"
 
          case msg.type = 'STOP'
             stop
+
+         * 13 Nov 26 Windows port - RELEASE_1.1 253(b): the program's source, read HERE, with this process's reach, for a debugger in
+         * another process that must not open the name itself (run.in's: that session is the elevated administrator's).  2 is 0 when
+         * the record was read, 3 its date and time, 4 on the record.
+         case msg.type = 'SOURCE'
+            src.path = debug.info(3, 0)
+            out.msg = 'SOURCE'
+            out.msg<2> = 1
+            n = count(src.path, @ds)
+            openpath field(src.path, @ds, 1, n) to src.f then
+               read src.text from src.f, field(src.path, @ds, n + 1) then
+                  out.msg<2> = 0
+                  out.msg<3> = ospath(src.path, OS$DTM)
+                  out.msg<4> = src.text
+               end
+               close src.f
+            end
+            src.text = ''
 
          case msg.type = 'WATCH'
             watch in.msg<2>, in.msg<3>

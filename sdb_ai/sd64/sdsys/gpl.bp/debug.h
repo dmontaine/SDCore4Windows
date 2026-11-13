@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - dbg.relay at the end of the common block (so no earlier variable moves): run.in's debug, RELEASE_1.1 253(b).
 * 10 Nov 26 Windows port - level with Linux e3490a7f: ai.ok (24 Oct) before dbg.store, and S.98 H1/H3's styles and stops after it, as Linux has them.
 * 1 Nov 26 dm  S.98 H1: the styles and the two stops of the new display are at the end of the common block, so no earlier variable moves.
 * 26 Oct 26 Windows port - from Linux fa146d9 (QM4 Fixes 193, 550): data.lines, expand.np and MAX.DATA.AREA.LINES.  The carry of `debug` in a8d06eb0 took the program and left this
@@ -117,7 +118,9 @@ $define MAX.DATA.AREA.LINES   15
                    num.attr,
                    auto.here,                   ;* ...and the stops the Autos pane keys on, as program index:line: this one and the one before (0 when there is none)
                    auto.prev,
-                   alt.able                     ;* 2 Nov 26 (S.98 H3): the terminal has an alternate screen (smcup and rmcup); set once, in initialise. Without one a full-screen debugger takes the main screen for the length of a stop
+                   alt.able,                    ;* 2 Nov 26 (S.98 H3): the terminal has an alternate screen (smcup and rmcup); set once, in initialise. Without one a full-screen debugger takes the main screen for the length of a stop
+
+                   dbg.relay                    ;* 13 Nov 26 Windows port (RELEASE_1.1 253(b)): '' or, while !RUNIN_DEBUG runs, the account run.in debugs in: the program is in ANOTHER process whose screen shares this terminal, so the full screen and the program's screen (F4, V) are as for a program in this session, and nothing that process names is opened here
 
 * Event codes (additive)
 

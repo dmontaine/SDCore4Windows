@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN account, run.in's debugged child (the SD service starts it as the bare account
+ *           sdrunin); runin_door() lets it through only on that token, with "debug <file> <program>" as its one command.
  * 12 Nov 26 Windows port - RELEASE_1.1 245: an interactive console session runs in a classic window of SD's own (win32vt.c own_window()).
  * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): fatal() and dump() are gone, and with fatal() the only longjmp to sd_exit, so its setjmp too.
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the -L option (apply a new licence: it set a flag nothing read) is gone; "sd -l"
@@ -71,6 +73,7 @@
  *    -CLEANUP      Clean up lost processes
  *    -INTERNAL     Run in internal mode
  *    -JOB name     A scheduled job's claim to be job <name> (only a key: see K$JOB.MARK)
+ *    -RUNIN acct   run.in's debugged child; refused unless the process token is the SD service's sdrunin (runin_door)
  *    -QUIET        Suppress copyright/licence display on entry
  *    -RESUME       Resume updates
  *    -SUSPEND      Suspend updates
@@ -115,6 +118,7 @@
 /* 17 Aug 26 Windows port - its own header rather than a prototype here, so
    that sd.c never sees windows.h.  See win32pipe.h.                        */
 #include "win32pipe.h"
+#include "win32runin.h" /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN's door; no Windows type */
 #include "locks.h"
 #include "keys.h"
 
@@ -133,6 +137,7 @@ void kill_user(char *user);
 
 Private void sd_init(int argc, char *argv[]);
 Private void check_admin(void);
+Private void runin_door(void); /* 13 Nov 26 Windows port - RELEASE_1.1 253(b) */
 Private bool comlin(int argc, char *argv[]);
 Private bool load_pcode(char *pname, u_char **ptr);
 
@@ -373,6 +378,16 @@ Private bool comlin(int argc, char *argv[]) {
     } else if (!stricmp(argv[arg], "-TERM")) {
       if (++arg < argc)
         strcpy(tio.term_type, argv[arg]);
+    } else if (!stricmp(argv[arg], "-RUNIN")) {
+/* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  "sd -RUNIN account ... debug file program": run.in's debugged child, which the SD
+   service starts (gplsrc/sdsvc/sdrunin.c) as the bare account sdrunin.  Anybody may TYPE it; runin_door() below lets it through only
+   for a process whose token is that account's, as the service makes it, and nobody else can make one.  The account is consumed here
+   as -TERM consumes its argument. */
+      if (++arg >= argc) {
+        fprintf(stderr, "sd: -RUNIN needs an account name\n");
+        exit(1);
+      }
+      runin_account = argv[arg];
     } else if (!stricmp(argv[arg], "-JOB")) {
 /* 10 Nov 26 Windows port - for Linux 5162a5d1 (S.102 stage 3), carry area 14.  The name a scheduled job's task gives on its command line
    ("sd -job <name> <command>", written by sd-jobs.ps1).  ONLY A KEY: kernel(K$JOB.MARK) answers it only for a process whose token is
@@ -738,6 +753,10 @@ Private bool comlin(int argc, char *argv[]) {
     }
   }
 
+  /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child is let through here or not at all (runin_door exits). */
+  if (runin_account != NULL)
+    runin_door();
+
   /* Start connection */
 
   switch (connection_type) {
@@ -781,6 +800,68 @@ help:
   fprintf(stderr, "      -start      Start system\n");
   fprintf(stderr, "      -stop       Stop system\n");
   return FALSE;
+}
+
+/* ======================================================================
+   runin_door()  -  run.in's debugged child, or nothing  (13 Nov 26 Windows port - RELEASE_1.1 253(b))
+
+   THE TOKEN DECIDES, NOT THE COMMAND LINE.  win32_runin_child_verify() (win32runin.c) reads this process's token: the local
+   account sdrunin, not elevated, no privilege at all, Medium integrity or lower, no Administrators.  Only the SD service can
+   make such a process - the account has no password anybody knows and every interactive kind of logon is denied it, and an
+   S4U logon needs SeTcb - so a person typing "sd -RUNIN account" is refused here, before the shared segment is bound.
+
+   WHAT ELSE MUST HOLD, AND IT IS THE SERVICE'S COMMAND LINE CHECKED AGAIN: no other entry mode with it (-INTERNAL, -A, -JOB,
+   -P, -Q, -H, -N, -C); the account a plain word; the command exactly "debug <file> <program>", plain words; the run's store in
+   the environment, which is taken out of it here so that nothing the program runs could inherit it (as a phantom's nonce is).
+
+   THE SESSION'S SCREEN AND KEYBOARD ARE ITS STANDARD HANDLES, A PIPE TO THE SERVICE, so it is CN_PORT: output is written to
+   descriptor 1 as it is made (write_socket), input read from descriptor 0 (keyin's poll), no console asked for anything.  Which
+   account it enters, with what, is LOGIN's (K$RUNIN.CHILD): the account named here, and only if this token holds its group.  */
+
+Private void runin_door(void) {
+  static char groups[1024];
+  char why[256];
+  char cmd[3][RUNIN_WORD_MAX + 2];
+  char extra[8];
+  char* store;
+  int n;
+
+  if (internal_mode || (forced_account != NULL) || (job_claim != NULL) || is_phantom || is_sdApiSrvr ||
+      (connection_type != CN_CONSOLE)) {
+    fprintf(stderr, "sd: -RUNIN cannot be given with another entry mode\n");
+    exit(1);
+  }
+  if (!runin_plain_word(runin_account, RUNIN_WORD_MAX)) {
+    fprintf(stderr, "sd: -RUNIN needs a plain account name\n");
+    exit(1);
+  }
+  if (!win32_runin_child_verify(groups, sizeof(groups), why, sizeof(why))) {
+    fprintf(stderr, "sd: -RUNIN is only for run.in's debugged program, which the SD service starts: %s\n", why);
+    exit(1);
+  }
+
+  n = 0;
+  if (single_command != NULL)
+    n = sscanf(single_command, "%65s %65s %65s %7s", cmd[0], cmd[1], cmd[2], extra);
+  if ((n != 3) || (strcmp(cmd[0], "debug") != 0) || !runin_plain_word(cmd[1], RUNIN_WORD_MAX) ||
+      !runin_plain_word(cmd[2], RUNIN_WORD_MAX)) {
+    fprintf(stderr, "sd: -RUNIN runs \"debug <file> <program>\" and nothing else\n");
+    exit(1);
+  }
+
+  store = getenv(RUNIN_STORE_ENV);
+  if ((store == NULL) || (*store == '\0') || (strlen(store) > MAX_PATHNAME_LEN)) {
+    fprintf(stderr, "sd: -RUNIN was given no store by the SD service\n");
+    exit(1);
+  }
+  runin_store = strdup(store);
+  unsetenv(RUNIN_STORE_ENV);
+  runin_groups = groups;
+  if (runin_store == NULL) {
+    fprintf(stderr, "sd: insufficient memory\n");
+    exit(1);
+  }
+  connection_type = CN_PORT;
 }
 
 /* ======================================================================

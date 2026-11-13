@@ -17,7 +17,8 @@ WINDOWS PORT, 10 Nov 26 (from Linux at 074397f6; RELEASE_1.1 201).  Message ids 
   - T13 (registered in regress.sh / regress-map.txt) is not carried: neither file exists here; a free guard is registered by its name (check-free-tier.ps1).
   - T19's kernel half (op_sh.c's resolve_name refusing a link that leads nowhere) is not carried: op_sh.c here resolves names by fullpath() and has no such
     test; the page's own half of T19 is kept.
-  - B is not built (run.in has no debug here): W2 holds that do.debug says so and returns before anything; T20 and T22 still hold the code kept behind it.
+  - B: from 10 Nov 26 to 13 Nov 26 it was not built (run.in had no debug here).  RELEASE_1.1 253(b) built run.in's debug as a separate, unelevated process of
+    the account, so W2 now holds that B is Linux's (do.debug refuses nothing first; the help says B debugs it there, in a separate process).
 
 ***WHAT THIS IS AND WHAT IT IS NOT.*** It reads sdsys/gpl.bp/tool_entries, the VOC record and the two help records as TEXT.  IT CANNOT SAY THE PAGE SHOWS THE RIGHT GATES OR THE RIGHT
 ENTRIES: that is sandbox-tool-entries.py.  What it holds is the shape the design depends on and a hand edit could break unnoticed: the page is the administrator's and asks for that
@@ -329,9 +330,11 @@ def checks(src, voc, helps):
        and "K$IN.GROUP" not in txt and "is_grp_member(" not in txt.replace("deffun is_grp_member(user,group) calling '!is_grp_member'", "")
        and "sdw = 'relog'" not in txt and "sysmsg(12986" not in txt and "always yes" in helps.get("tool.entries.accounts", "") and "relog" not in helps.get("tool.entries.accounts", ""), st[:120])
     dbg = section(lines, "do.debug:", "do.new:")
-    ck("W2 (Windows) B IS NOT BUILT: do.debug says so and returns before anything else (run.in has no debug here), and the entries help says so",
-       len(dbg) > 3 and dbg[1][1].startswith("msg = 'B is not built on Windows") and dbg[2][1] == "return"
-       and "B is not built on Windows" in helps.get("tool.entries.entries", ""), "%s" % (dbg[:3],))
+    # 13 Nov 26 (RELEASE_1.1 253(b)): run.in debugs again (in a separate, unelevated process of the account), so W2 now holds that B is Linux's B
+    ck("W2 (Windows) B IS BUILT, as Linux's: do.debug starts with the pane test and refuses nothing else first, and the entries help says B debugs it there, in a separate process",
+       len(dbg) > 3 and dbg[1][1] == "if pane # 2 then" and "B is not built" not in "\n".join(s for n, s in dbg)
+       and "B debugs it there" in helps.get("tool.entries.entries", "") and "B is not built" not in helps.get("tool.entries.entries", "")
+       and "separate process" in helps.get("tool.entries.entries", ""), "%s" % (dbg[:3],))
     ck("W3 (Windows) an absolute path is a drive letter with either slash or one that starts with @ds (as _voc_ref tells them), defined once before anything is read, and every "
        "'made the account's when relative' test asks it",
        "abs.pat = \"'\" : @ds : \"'0X\" : @vm : \"1A':\\'0X\" : @vm : \"1A':/'0X\"" in txt and txt.count("abs.pat = ") == 1 and txt.count("matches abs.pat") == 10
@@ -582,7 +585,7 @@ MUTANTS = [
     # ---- 10 Nov 26, Windows: THE FIRST IS M_WINDOWS
     ("the SDSYS column asks a group again", "src", "sdsys.state:\n   sdw = 'yes'\n   return\n", "sdsys.state:\n   sdw = 'n/a'\n   if is_grp_member('sdsys', sg.grp) then sdw = 'yes'\n   return\n"),
     ("the accounts help explains relog again", "help", "on Windows it is always yes", "it says relog when the session does not hold the group"),
-    ("B debugs on Windows", "src", "   msg = 'B is not built on Windows: run.in does not debug in another account.  Debug the program in its own account'\n   return\n", ""),
+    ("B refuses again on Windows", "src", "do.debug:\n", "do.debug:\n   msg = 'B is not built on Windows: run.in does not debug in another account.  Debug the program in its own account'\n   return\n"),
     ("an absolute path is a leading slash only", "src", "   abs.pat = \"'\" : @ds : \"'0X\" : @vm : \"1A':\\'0X\" : @vm : \"1A':/'0X\"\n", "   abs.pat = \"'/'0X\"\n"),
     ("one relative path is not made the account's", "src", "         if not(pp matches abs.pat) then pp = apath<ca> : @ds : pp\n", "         if pp[1, 1] # '/' then pp = apath<ca> : @ds : pp\n"),
 ]

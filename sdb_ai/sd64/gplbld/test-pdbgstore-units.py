@@ -91,16 +91,21 @@ def checks(src, msgs, others, csrc):
     named = [k for k in ("debug", "pdbg", "pdebug") if re.search(r"ipc\.f|\$ipc|\bipc_seal\b", code[k], re.I)]
     ck("P1a debug, pdbg and pdebug name neither the file $ipc nor ipc.f nor ipc_seal in code", not named, repr(named))
     uses = {k: len(re.findall(r"\bdbg\.store\b", code[k])) for k in ("debug", "pdbg", "pdebug")}
-    ck("P1b every message statement of the three goes to dbg.store: 7 uses in debug (send.message 5, dbg.stop 2), 12 in pdbg, 15 in pdebug", uses == {"debug": 7, "pdbg": 12, "pdebug": 15}, repr(uses))
+    # 13 Nov 26 (RELEASE_1.1 253(b)): pdbg 15, three more - run.in's debugged child opens the run's store (openpath ... to dbg.store, mark.mapping
+    # dbg.store, off) and waits for its START record (readv ... from dbg.store) - all of them dbg.store.
+    ck("P1b every message statement of the three goes to dbg.store: 7 uses in debug (send.message 5, dbg.stop 2), 15 in pdbg, 15 in pdebug", uses == {"debug": 7, "pdbg": 15, "pdebug": 15}, repr(uses))
     stray = []
     seen = 0
     for k in ("pdbg", "pdebug"):
         for ln in code[k].split("\n"):
             m = re.search(r"^\s*(?:readu?\s+[\w.]+\s+from|write\s+.+?\s+to|delete|recordlocku|release)\s+([\w.]+)", ln)
-            if m and m.group(1) not in ("dbg.store",):
+            # 13 Nov 26 (RELEASE_1.1 253(b)): the one other file is the debugged program's OWN SOURCE, which PDBG reads for 'SOURCE' (src.f) so that a debugger in
+            # another, elevated process opens no name the debugged process gave; no message goes through it.
+            if m and m.group(1) not in ("dbg.store",) and not (k == "pdbg" and m.group(1) == "src.f" and ln.strip().startswith("read src.text from src.f,")):
                 stray.append(k + ": " + ln.strip()[:60])
             seen += 1 if m else 0
-    ck("P1c every record statement of pdbg and pdebug (readu, read, write, delete, recordlocku, release) names dbg.store and no other file (some 20 of them)",
+    ck("P1c every record statement of pdbg and pdebug (readu, read, write, delete, recordlocku, release) names dbg.store and no other file (some 20 of them), "
+       "but for PDBG's read of the program's own source for 'SOURCE'",
        not stray and seen >= 18, repr((seen, stray[:3])))
 
     ck("P2a !pdbg_store is $internal, `subroutine pdbg_store(pf, why)`, cataloged as !pdbg_store",

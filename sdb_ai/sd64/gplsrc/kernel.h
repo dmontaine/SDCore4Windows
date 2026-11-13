@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - runin_account, runin_store and runin_groups: run.in's debugged child (RELEASE_1.1 253(b)).
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): has_stdfil and stdfil_saved are gone with $MODE STDFIL.SHARED.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): keep_select is gone (the KEEP.SELECT statement).
  * 14 Sep 26 Windows port - command_processor defaults to $cproc (RELEASE_1.1 5)
@@ -75,6 +76,12 @@ Public char config_path[MAX_PATHNAME_LEN + 1] init("");
 Public char* single_command init(NULL); /* User typed "SD xxx" */
 Public char* forced_account init(NULL); /* User typed "SD -Axxx" */
 Public char* job_claim init(NULL); /* 10 Nov 26 Windows port (Linux S.102 stage 3, carry area 14): "SD -JOB name"; only a key for K$JOB.MARK */
+/* 13 Nov 26 Windows port - RELEASE_1.1 253(b): "SD -RUNIN account", run.in's debugged child.  Set by sd.c only after the process token
+   passed win32_runin_child_verify(); NULL in every other process.  The store is the run's (the SD service gave it in the environment),
+   the groups the token's local groups, for LOGIN to find the account's own in (K$RUNIN.CHILD). */
+Public char* runin_account init(NULL);
+Public char* runin_store init(NULL);
+Public char* runin_groups init(NULL);
 
 /* 14 Sep 26 - lower case, the canonical case of program names (RELEASE_1.1 5
    stage 3a).  k_call() is given this name directly, so no canonicalization

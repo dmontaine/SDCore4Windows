@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): B debugs as on Linux (run.in debugs in a separate, unelevated process of the account); the
+*              "not built" refusal of 10 Nov 26 is gone.
 * 10 Nov 26 Windows port - from Linux 42b79767, 0f49c651, ee582047, 61697538, d5aeaaf6, 4324e2a4, 7c23f7cf, 5162a5d1, 1b20c681, 5cb78f05, d049d8bb and
 *              1c127f7c (S.96 M1a-M6, S.108 G and U; RELEASE_1.1 201), at Linux 074397f6, messages + 1005.  Windows changes: an absolute path is a drive
 *              letter or @ds (abs.pat, ten places); the register's ids are upper case; the SDSYS column is always "yes" and there is no 'relog' refusal
@@ -1204,10 +1206,8 @@ do.build:
 
 * B (M5): the program under the cursor in the debugger, IN ITS OWN ACCOUNT (run.in compiles it for the debugger and runs the debugger there).  E's way through edit.record first.
 do.debug:
-* 10 Nov 26 Windows port (RELEASE_1.1 201): run.in has no debug here (the debugger would run the account's program on the session's elevated token), so B
-*   says so and does nothing.  The key stays, so the page's keys are Linux's; the rest of this routine is kept for the day debug is built.
-   msg = 'B is not built on Windows: run.in does not debug in another account.  Debug the program in its own account'
-   return
+* 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in debugs again, as on Linux - the program runs in a separate, unelevated process of the account
+*   (the SD service's), so B is Linux's B.  (10 Nov 26 to 13 Nov 26 it said "B is not built on Windows" and returned here.)
    if pane # 2 then
       msg = 'Tab to the entries first, then B'
       return

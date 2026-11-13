@@ -31,6 +31,7 @@ LINUX_REPO = 'SDCore4Linux'
 LINUX = os.environ.get('SD_LINUX_SD64') or os.path.normpath(os.path.join(HERE, '..', '..', '..', '..', LINUX_REPO, 'sdb_ai', 'sd64'))
 
 # (Linux id, our id): reason.  Each reason cites its evidence.  Read 12 Nov 2026 (RELEASE_1.1 257), text against text.
+# 13 Nov 2026 (RELEASE_1.1 253(b)): 11447/12452 and 11448/12453 left this list - run.in debugs on Windows too, so the texts are Linux's.
 ALLOWED = {
     ('10002', '10002'): 'OS: Linux enters SDSYS as the sdsys OS user; on Windows by a Windows sign-in as SDSYS (RELEASE_1.1 64)',
     ('10024', '10024'): 'OS: a Windows group, not a Linux group',
@@ -49,8 +50,6 @@ ALLOWED = {
     ('11904', '11904'): 'sl_put\'s 11904 is a character code (CJK radicals), not a message id; Linux has the same literal (RELEASE_1.1 258)',
     ('11010', '12007'): 'OS: a Windows account SD made is reused with a new password; Linux keeps the Linux password',
     ('11332', '12337'): 'OS: the job helper is a Task Scheduler script, not a root helper (RELEASE_1.1 222)',
-    ('11447', '12452'): 'run.in without debug on Windows (no restricted token): RELEASE_1.1 201, question open in RELEASE_1.1 253',
-    ('11448', '12453'): 'run.in without debug on Windows (no restricted token): RELEASE_1.1 201, question open in RELEASE_1.1 253',
     ('11458', '12463'): 'OS: a Windows user, not a Linux user',
     ('11462', '12467'): 'OS: a Windows login, not a Linux login',
     ('11936', '12941'): 'OS: SD is a Windows service (sd -restart, Stop-Service / Start-Service) (RELEASE_1.1 218)',

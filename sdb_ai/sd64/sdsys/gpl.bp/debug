@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug: relay.on (a cross-process stop whose program is run.in's child, dbg.relay set by
+*               !RUNIN_DEBUG) has the full screen, the alternate screen and F4 / V as a program in this session does, because the child's
+*               screen is relayed to this terminal; it has no AI command; and a program's source is read by the CHILD and sent ('SOURCE'),
+*               never opened here by a name the child gave - this session is the administrator's, elevated.
 * 11 Nov 26 Windows port - RELEASE_1.1 238 (found carrying SOLO 56 group 4): the one hunk this file still lacked against Linux (S.98 H1, 28ab9cb5): the first
 *               full-screen paint is paint.layout, not the old fill of three areas.  Message 6712 (F1) is Linux's S.186 text (F2 find, Ctrl-Q, F9 run, F10 menu).
 * 10 Nov 26 Windows port - level with Linux e3490a7f (S.98 H1-H3, S.179/S.180, S.186; the AI command is there and finds the AI unusable: no helper, RELEASE_1.1 173).
@@ -114,6 +118,9 @@ $define GUTTER.W               2       ;* the source's gutter: a mark (* a break
    gosub set.geometry
    return.key = seq(pterm(PT$INEWLINE,''))
    phantom = bitand(event, 0x80000000) # 0
+   * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in's debugged child is a cross-process stop like a phantom's, but its screen is this
+   *   terminal's (the relay), so the display is the one a program in this session gets
+   relay.on = phantom and (dbg.relay # '')
 
    * On a terminal that has an ALTERNATE screen the debugger takes the whole of it: the program's own screen is kept
    * by the terminal and comes back when the debugger lets go.  alt.on is true between the two (initialise enters it
@@ -126,7 +133,7 @@ $define GUTTER.W               2       ;* the source's gutter: a mark (* a break
    if ibk.mode + 0 = IBK.K.ARMED then debug.initialised = @false     ;* 2 Nov 26 (S.98 H2): CPROC does this before each command; an IDE session never passes through it, and a run-on in the 2nd run of a session ran to the end
    if not(debug.initialised) then gosub initialise
 
-   alt.screen = full.screen and not(phantom) and alt.able
+   alt.screen = full.screen and (not(phantom) or relay.on) and alt.able
    if alt.screen and not(alt.on) then
       display terminfo('smcup') : @(-1) :
       alt.on = @true
@@ -256,7 +263,7 @@ found.program:
                case n = K$F3             ;* Stop
                   gosub stop.debug
 
-               case n = K$F4 and full.screen and not(phantom)  ;* Show user screen
+               case n = K$F4 and full.screen and (not(phantom) or relay.on)  ;* Show user screen
                   gosub view
 
                case n = K$F5 and full.screen   ;* Refresh (8 Nov 26, S.179: F5 refreshes on every page; run is F9)
@@ -597,7 +604,7 @@ found.program:
                   watch.op = '' ; watch.val = ''
                   gosub dbg.watch(-1, 0)
 
-               case (action = "V" or action = "VIEW") and full.screen and not(phantom)
+               case (action = "V" or action = "VIEW") and full.screen and (not(phantom) or relay.on)
                   gosub view
 
                case action = 'W' or action = 'WATCH'
@@ -1101,7 +1108,7 @@ initialise:
    *   library knows of the program's screen is drawn again when it lets go (take.main, give.main).  dumb, unknown and null have no cup and stay in line mode.
    full.screen = @false
    alt.able = @false
-   if not(phantom) then
+   if not(phantom) or relay.on then
       if kernel(K$WINSIZE, '') # '' and terminfo('cup') # '' and terminfo('clear') # '' then
          full.screen = @true
          alt.able = (terminfo('smcup') # '' and terminfo('rmcup') # '')
@@ -1163,13 +1170,15 @@ initialise:
 
    * 24 Oct 26: the AI command (AI, or AI and a question) only in the full-screen display, and only when the AI is usable for the account
    ai.ok = 0
-   if full.screen then call $tk_ai('usable', '', ai.ok, ai.pm)
+   * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): not for run.in's child: what it sends is untrusted in this elevated session, and the AI is
+   *   given nothing of it
+   if full.screen and not(relay.on) then call $tk_ai('usable', '', ai.ok, ai.pm)
 
    if full.screen and alt.able then
       * Set up initial display and save screen image: the title bar, the source area, the data area and the
       * command line, in the library's styles.  (S.98 H3: only on an alternate screen; on the main screen the entry takes the screen and paints, once it is known that this stop is to be shown)
       gosub theme.in
-      if not(phantom) then
+      if not(phantom) or relay.on then
          display terminfo('smcup') :             ;* the alternate screen, before anything is drawn
          alt.on = @true
          ibk.alt = 1                             ;* S.98 H2 (see the entry)
@@ -1476,20 +1485,34 @@ allocate.new.program:
    *    Check that its DTM not greater than that of the debugged program
 
    source.path = dbg.info(3,0)
-   n = count(source.path, @ds)
-   source.file = field(source.path, @ds, 1, n)
-   source.record = field(source.path, @ds, n + 1)
-   openpath source.file to program.file then
-      readv rec from program.file, source.record, 0 then
-         source.dtm = ospath(source.path, OS$DTM)
-         if source.dtm <= dtm then
-            read rec from program.file, source.record then
-               * Looks ok as source
-               goto found.source.record
+   if relay.on then
+      * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in's child names the source and this session is elevated, so the name is NOT
+      *   opened here: the child reads the record itself, with the account's own reach, and sends it (PDBG's 'SOURCE').  A name it gave
+      *   could be any file this session can read ($cred, another account's).  The name is shown below only with its control
+      *   characters made '?', as the source lines are.
+      out.msg = 'SOURCE'
+      gosub send.message
+      if in.msg<2> = 0 and num(in.msg<3>) and in.msg<3> # '' and in.msg<3> <= dtm then
+         rec = field(in.msg, @fm, 4, 99999999)
+         goto found.source.record
+      end
+      source.path = convert(banned, replacements, source.path)
+   end else
+      n = count(source.path, @ds)
+      source.file = field(source.path, @ds, 1, n)
+      source.record = field(source.path, @ds, n + 1)
+      openpath source.file to program.file then
+         readv rec from program.file, source.record, 0 then
+            source.dtm = ospath(source.path, OS$DTM)
+            if source.dtm <= dtm then
+               read rec from program.file, source.record then
+                  * Looks ok as source
+                  goto found.source.record
+               end
             end
          end
+         close program.file
       end
-      close program.file
    end
 
    * 18 Oct 26 Windows port - from Linux 43f9fa8 (12 Oct 26): - openQM 203: the keyword NO.SOURCE.WARNING in the VOC record $DEBUG.OPTIONS (one keyword to a
@@ -2623,7 +2646,9 @@ check.debugable:
 * Out: ib.on, true when the IDE armed this run and the debugger is the one of a session with a terminal (a phantom is never handed anything)
 ibk.armed:
    ib.on = @false
-   if not(phantom) then
+   * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in's child too - the IDE in this session armed it, and its marks go to the child as
+   *   messages (dbg.breakpoint); the child's source name is only compared here, never opened
+   if not(phantom) or relay.on then
       if ibk.mode matches '1N' then
          if ibk.mode = IBK.K.ARMED then ib.on = @true
       end

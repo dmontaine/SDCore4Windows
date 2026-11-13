@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - run.in's debugged child (runin_account) takes $pdbg, as a phantom does (RELEASE_1.1 253(b)).
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the PMATRIX descriptor type is gone (variable display, WATCH).
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): DEBUG.INFO() code 7: the equate and $DEFINE tokens of a $MODE DEBUG.EQUATES program (QM4 gap 218)
  * 1 Nov 26 dm  S.98 H2 (the IDE hands its breakpoints to the debugger): BREAKPOINT 7 (add a line) leaves STATUS() 1 when a statement begins on that line and 0 when
@@ -852,7 +853,9 @@ void op_debug() {
 
     in_debugger = TRUE;
     /* 20240219 mab rebrand VBSRVR to APISRVR */
-    k_call((is_phantom || is_sdApiSrvr) ? "$pdbg" : "$debug", 5, NULL, 0);
+    /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): run.in's debugged child is debugged from the administrator's SDSYS session,
+       another process, as a phantom is from PDEBUG: its side of the conversation is $pdbg, through the run's store. */
+    k_call((is_phantom || is_sdApiSrvr || (runin_account != NULL)) ? "$pdbg" : "$debug", 5, NULL, 0);
   } else
     pc += 3;
 

@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 13 Nov 26 Windows port - K$RUNIN.CHILD (84) and K$RUNIN.DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)).
 	  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K$LOCK.TRACE (115), LOCK.TRACER.
 	  * 8 Nov 26 Windows port - from Linux 904fadd3 (S.87 batch 14): K$FORM.QUEUE (111) is gone with SP.ASSIGN; the number stays reserved.
 	  * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): $define for OS$OPEN, as # no longer starts a directive.
@@ -260,6 +261,9 @@
 *   job this process is (Task Scheduler's batch logon of the local account SDSYS, elevated, and an administrator-only definition in sd-jobs naming
 *   this very command), or ''.  Must match gplsrc/keys.h.
       $define K$JOB.MARK       172      ;* The scheduled job this session is, or ''
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
+      $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
+      $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  K$REAL.USER 90 and K$LOGIN.UID 91 are Linux's own and are not carried.
 * 13 Oct 26 dm - S.63.  The per-account OS-access gates are back (see gplsrc/keys.h): K$SH and
 *   K$OS.EXEC, at 93 and 94 now.  Settable only from $internal, like K$ADMINISTRATOR; LOGIN and CPROC

@@ -14,6 +14,8 @@
  *           unchanged, so win32relay.c can mint the TLS relay's bare account
  *           with the same code (RELEASE_1.1 43).  AssumeUserIdentity() is
  *           what it was: that call, then impersonate, then adopt.
+ * 13 Nov 26 Windows port - win32_s4u_logon() moved, unchanged, to win32s4ulogon.c, so that the SD service can build it
+ *           (RELEASE_1.1 253(b): it starts run.in's debugged child); S4U_ORIGIN and S4U_SOURCE went with it.
  * END-HISTORY
  *
  * WHY THIS EXISTS.  sdwind.c:491 fork()s the session, so it inherits the
@@ -115,12 +117,6 @@
 
 #include "win32s4u.h"
 
-/* Origin and source names are cosmetic - they appear in the logon session's
-   audit record.  TOKEN_SOURCE.SourceName is a fixed 8 bytes and is NOT
-   NUL-terminated, so it is memcpy'd rather than strcpy'd. */
-#define S4U_ORIGIN "SD"
-#define S4U_SOURCE "SDsessn"
-
 /* The token we are impersonating with, kept so it can be closed on revert.
    One session is one process here, so a single static is the right scope. */
 static HANDLE s4u_token = NULL;
@@ -184,140 +180,9 @@ static int adopt_in_runtime(HANDLE token, const char* username) {
    Returns TRUE only when the calling thread is, on return, running as the
    named user.  Anything else returns FALSE with the thread untouched.       */
 
-/* ======================================================================
-   win32_s4u_logon()  -  the S4U logon itself: an IMPERSONATION-level token
-   for a local account, or NULL
-
-   16 Sep 26 - lifted out of AssumeUserIdentity() unchanged, so that
-   win32relay.c can mint the TLS relay's bare account the same way (RELEASE_1.1
-   43).  The two traps below were each paid for once; one copy of the
-   incantation is how they stay paid for.  The caller owns the handle.       */
-
-void* win32_s4u_logon(const char* username) {
-  LSA_HANDLE hlsa = NULL;
-  LSA_OPERATIONAL_MODE mode = 0;
-  LSA_STRING lsaname;
-  LSA_STRING pkgname;
-  LSA_STRING origin;
-  ULONG pkg = 0;
-  MSV1_0_S4U_LOGON* s4u = NULL;
-  ULONG s4ulen;
-  BYTE* tail;
-  WCHAR* wuser;
-  WCHAR* wdom;
-  int wuserlen;
-  int wdomlen;
-  char domain[MAX_COMPUTERNAME_LENGTH + 1];
-  DWORD domainlen = sizeof(domain);
-  TOKEN_SOURCE source;
-  NTSTATUS st;
-  NTSTATUS sub = 0;
-  void* profile = NULL;
-  ULONG profilelen = 0;
-  LUID logonid;
-  QUOTA_LIMITS quotas;
-  HANDLE token = NULL;
-  SECURITY_IMPERSONATION_LEVEL level;
-  DWORD got = 0;
-  int ok = 0;
-
-  if ((username == NULL) || (*username == '\0'))
-    return NULL;
-
-  /* A local account's domain is this machine.  LEAVING DomainName EMPTY GIVES
-     STATUS_NOT_SUPPORTED from a call that otherwise looks right - paid for
-     while writing probe-impersonate.c. */
-  if (!GetComputerNameA(domain, &domainlen))
-    return NULL;
-
-  lsaname.Buffer = (PCHAR)S4U_ORIGIN;
-  lsaname.Length = (USHORT)strlen(S4U_ORIGIN);
-  lsaname.MaximumLength = (USHORT)(lsaname.Length + 1);
-
-  /* TRUSTED or nothing.  LsaConnectUntrusted would succeed here and produce an
-     Identification-level token, which impersonates nothing - a failure that
-     looks like a success until the first file open. */
-  st = LsaRegisterLogonProcess(&lsaname, &hlsa, &mode);
-  if (st != 0)
-    return NULL;
-
-  pkgname.Buffer = (PCHAR)MSV1_0_PACKAGE_NAME;
-  pkgname.Length = (USHORT)strlen(MSV1_0_PACKAGE_NAME);
-  pkgname.MaximumLength = (USHORT)(pkgname.Length + 1);
-  st = LsaLookupAuthenticationPackage(hlsa, &pkgname, &pkg);
-  if (st != 0)
-    goto exit_logon;
-
-  /* ONE CONTIGUOUS BLOCK.  LSA copies the whole buffer into its own process,
-     so both UNICODE_STRING.Buffer pointers must point inside it. */
-  wuserlen = MultiByteToWideChar(CP_ACP, 0, username, -1, NULL, 0);
-  wdomlen = MultiByteToWideChar(CP_ACP, 0, domain, -1, NULL, 0);
-  if ((wuserlen <= 0) || (wdomlen <= 0))
-    goto exit_logon;
-
-  s4ulen = (ULONG)(sizeof(MSV1_0_S4U_LOGON) + (wuserlen * sizeof(WCHAR)) +
-                   (wdomlen * sizeof(WCHAR)));
-  s4u = (MSV1_0_S4U_LOGON*)malloc(s4ulen);
-  if (s4u == NULL)
-    goto exit_logon;
-  memset(s4u, 0, s4ulen);
-
-  tail = (BYTE*)s4u + sizeof(MSV1_0_S4U_LOGON);
-  wuser = (WCHAR*)tail;
-  wdom = (WCHAR*)(tail + (wuserlen * sizeof(WCHAR)));
-  MultiByteToWideChar(CP_ACP, 0, username, -1, wuser, wuserlen);
-  MultiByteToWideChar(CP_ACP, 0, domain, -1, wdom, wdomlen);
-
-  s4u->MessageType = MsV1_0S4ULogon;
-  s4u->Flags = 0;
-
-  /* Length is in BYTES and EXCLUDES the terminator; MaximumLength INCLUDES it.
-     Setting them equal gives STATUS_INVALID_PARAMETER from a call that reads
-     correctly - the other mistake probe-impersonate.c paid for. */
-  s4u->UserPrincipalName.Length = (USHORT)((wuserlen - 1) * sizeof(WCHAR));
-  s4u->UserPrincipalName.MaximumLength = (USHORT)(wuserlen * sizeof(WCHAR));
-  s4u->UserPrincipalName.Buffer = wuser;
-  s4u->DomainName.Length = (USHORT)((wdomlen - 1) * sizeof(WCHAR));
-  s4u->DomainName.MaximumLength = (USHORT)(wdomlen * sizeof(WCHAR));
-  s4u->DomainName.Buffer = wdom;
-
-  origin.Buffer = (PCHAR)S4U_ORIGIN;
-  origin.Length = (USHORT)strlen(S4U_ORIGIN);
-  origin.MaximumLength = (USHORT)(origin.Length + 1);
-
-  memcpy(source.SourceName, S4U_SOURCE, sizeof(source.SourceName));
-  if (!AllocateLocallyUniqueId(&source.SourceIdentifier))
-    goto exit_logon;
-
-  /* Network, not Interactive: an S4U logon carries no credentials and the user
-     has no right to a desktop here. */
-  st = LsaLogonUser(hlsa, &origin, Network, pkg, s4u, s4ulen, NULL, &source,
-                    &profile, &profilelen, &logonid, &token, &quotas, &sub);
-  if ((st != 0) || (token == NULL))
-    goto exit_logon;
-
-  /* Refuse an Identification-level token rather than hand it back:
-     ImpersonateLoggedOnUser would SUCCEED with it and change nothing, and
-     DuplicateTokenEx to a primary token would fail less legibly. */
-  if (!GetTokenInformation(token, TokenImpersonationLevel, &level, sizeof(level),
-                           &got) ||
-      (level != SecurityImpersonation))
-    goto exit_logon;
-  ok = 1;
-
-exit_logon:
-  if (profile != NULL)
-    LsaFreeReturnBuffer(profile);
-  if (s4u != NULL)
-    free(s4u);
-  if (hlsa != NULL)
-    LsaDeregisterLogonProcess(hlsa);
-  if (!ok && token != NULL) {
-    CloseHandle(token);
-    token = NULL;
-  }
-  return (void*)token;
-}
+/* win32_s4u_logon() - the S4U logon itself - is in win32s4ulogon.c since 13 Nov 26, unchanged, beside
+   win32_s4u_logon_groups(): the SD service (native) builds that file, and this one, which takes the MSYS2 runtime's
+   headers, it cannot.  One copy of the incantation is still how its two traps stay paid for. */
 
 int AssumeUserIdentity(const char* username) {
   HANDLE token;

@@ -65,7 +65,9 @@ def checks(s):
     ck("F1 full.screen is assigned from K$WINSIZE, cup and clear, never from smcup; alt.able from smcup and rmcup",
        re.search(r"kernel\(K\$WINSIZE, ''\) # '' and terminfo\('cup'\) # '' and terminfo\('clear'\) # '' then\s*\n\s*full\.screen = @true\s*\n\s*alt\.able = \(terminfo\('smcup'\) # '' and terminfo\('rmcup'\) # ''\)", ini)
        and not re.search(r"full\.screen = .*smcup", ini), ini[:200])
-    ck("F2 alt.screen is the alternate screen in use: full.screen, not a phantom, and alt.able", "alt.screen = full.screen and not(phantom) and alt.able" in c)
+    # 13 Nov 26 Windows port (RELEASE_1.1 253(b)): or run.in's debugged child, a cross-process stop whose screen is this terminal's (relay.on)
+    ck("F2 alt.screen is the alternate screen in use: full.screen, not a phantom (Windows: or run.in's relay), and alt.able",
+       "alt.screen = full.screen and (not(phantom) or relay.on) and alt.able" in c)
 
     # smcup / rmcup are written only under alt.on, alt.screen or alt.able
     bad = []
@@ -130,7 +132,9 @@ def checks(s):
 
     block = h.split("common /$debug/", 1)[1] if "common /$debug/" in h else ""
     block = block.split("$define DE$WATCH", 1)[0].rstrip()
-    ck("F17 alt.able is the LAST variable of debug.h's common block, after auto.prev (no earlier one moves)", block.endswith("alt.able") and block.rfind("auto.prev") < block.rfind("alt.able"), block[-120:])
+    # 13 Nov 26 Windows port (RELEASE_1.1 253(b)): dbg.relay went after it, at the very end, so that alt.able itself did not move
+    ck("F17 alt.able comes after auto.prev in debug.h's common block, and only dbg.relay (Windows, 13 Nov 26) after it (no earlier one moves)",
+       block.endswith("dbg.relay") and block.rfind("auto.prev") < block.rfind("alt.able") < block.rfind("dbg.relay"), block[-120:])
 
     ti = s["terminfo.src"]
     got = {}
@@ -155,7 +159,7 @@ def mutants(s):
         res.append((name, t))
 
     mut("F1 full.screen from smcup again", "debug", "terminfo('cup') # '' and terminfo('clear') # '' then", "terminfo('smcup') # '' and terminfo('clear') # '' then")
-    mut("F2 alt.screen ignores alt.able", "debug", "alt.screen = full.screen and not(phantom) and alt.able", "alt.screen = full.screen and not(phantom)")
+    mut("F2 alt.screen ignores alt.able", "debug", "alt.screen = full.screen and (not(phantom) or relay.on) and alt.able", "alt.screen = full.screen and (not(phantom) or relay.on)")
     mut("F3 rmcup written unguarded", "debug", "leave.alt:\n   if alt.on then\n      display terminfo('rmcup') :", "leave.alt:\n   if 1 then\n      display terminfo('rmcup') :")
     mut("F4 initialise paints on every full screen", "debug", "if full.screen and alt.able then\n      * Set up initial display", "if full.screen then\n      * Set up initial display")
     mut("F5 stop.debug gives back the alternate screen only", "debug", "stop.debug:\n   gosub ibk.sync\n   if full.screen then gosub theme.out\n   gosub leave.screen", "stop.debug:\n   gosub ibk.sync\n   if full.screen then gosub theme.out\n   gosub leave.alt")

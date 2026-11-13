@@ -8,7 +8,9 @@ No elevation, no install, no sd.  Exit 0 all checks passed, 1 a check failed, 2 
 sdsys, a fixed command list).
 
 WINDOWS PORT, 10 Nov 26 (from Linux 8fc6b4e1 / d049d8bb at 074397f6; RELEASE_1.1 201).  Message ids are Linux's + 1005.  What differs, and why:
-  - five commands: there is no debug (the session's token is elevated; the debugger would run the account's program on it).  R8 and R13 say five.
+  - six commands, as Linux, since 13 Nov 26 (RELEASE_1.1 253(b)); from 10 Nov 26 to then there was no debug (the session's token is elevated).  debug is NOT run
+    in this session: int.runin hands it to ri.debug before anything is kept or changed, and the program runs in a separate, unelevated process of the account
+    (the SD service's).  R8 says six; D1-D5 hold the hand-over (test-runindebug-units.py holds the rest); --selftest --from=r253 runs their mutants.
   - R31 (sandbox-runin.py's mutants still match) and R32 (registered in regress.sh / regress-map.txt) are NOT carried: neither file exists here.  A free guard is
     registered by being a test-*-units file (check-free-tier.ps1), and the sandbox suite has not been ported.
   - R30 looks in the Windows Solo tree instead of Linux Solo's.
@@ -50,7 +52,7 @@ WINDOWS_MESSAGES = [12566, 12567]
 RETIRED_MESSAGES = [12565, 12568]                         # 11 Nov 26: replaced by Linux's 14070 and 14071 (15070, 15071 here)
 S213_MESSAGES = [15070, 15071, 15072, 15073]              # Linux 14070 (a word that is not SD's own), 14071 ($execute), 14072 (an include or dictionary outside the account), 14073 (LOGTO during a run)
 
-COMMANDS = ["basic", "catalog", "decatalog", "delete.catalog", "compile.dict"]
+COMMANDS = ["basic", "catalog", "decatalog", "delete.catalog", "debug", "compile.dict"]
 SWITCHES = ["K$SH", "K$OS.EXEC", "K$SD.ACCOUNTS", "K$NET", "K$SHARED.READ", "K$SHARED.WRITE"]
 NEW_MESSAGES = [12452, 12453, 12454, 12181, 12182, 12183, 12246, 12247]
 BASIC = os.path.join(SD64, "sdsys", "gpl.bp", "basic")
@@ -161,7 +163,23 @@ def checks(src, voc_text, newvoc_names, extra=None):
 
     # ---- the list, the sentence and the words ---------------------------------------------------------------------------
     cases = re.findall(r"case ri\.cmd = '([^']+)'", "\n".join(s for n, s in run))
-    ck("R8 the commands are exactly basic, catalog, decatalog, delete.catalog and compile.dict (no debug on Windows)", sorted(cases) == sorted(COMMANDS), "found %s" % cases)
+    ck("R8 the commands are exactly basic, catalog, decatalog, delete.catalog, debug and compile.dict (Linux's six; 13 Nov 26)", sorted(cases) == sorted(COMMANDS), "found %s" % cases)
+    # 13 Nov 26 (RELEASE_1.1 253(b)): debug is handed to ri.debug after the words, the register and the own-words check, and BEFORE anything is kept or changed;
+    # ri.debug runs nothing in this session (no proc.sentence, no execute, no directory change, no flag) and is audited as the other commands are.
+    dsec = section(lines, "ri.debug:", "ri.narrow:")
+    dtxt = "\n".join(s for n, s in dsec)
+    d_if = first(run, "if ri.cmd = 'debug' then")
+    d_go = first(run, "gosub ri.debug")
+    ck("D1 debug is handed to ri.debug after the own-words check and before what is kept to come back (and so before the flag and any change)",
+       None not in (d_if, d_go, A["own"], A["save_path"]) and A["own"] < d_if < d_go < A["save_path"], "if %s gosub %s own %s save %s" % (d_if, d_go, A["own"], A["save_path"]))
+    d_next = next((s for n, s in run if d_go is not None and n > d_go), None)
+    ck("D2 ... and returns at once after it", d_next == "return", "the line after it: %r" % d_next)
+    ck("D3 ri.debug runs nothing here: no proc.sentence, no execute, no OS$CD, no K$ADMINISTRATOR, no ri.active, no new.sentence",
+       bool(dsec) and not re.search(r"proc\.sentence|^execute|OS\$CD|K\$ADMINISTRATOR|ri\.active|new\.sentence", dtxt, re.M), "%d lines" % len(dsec))
+    ck("D4 ri.debug checks the file is a file in the account's VOC (12181) and only then calls !runin_debug, audited begin and end",
+       "if upcase(ri.vrec[1, 1]) # 'F' then" in dtxt and "sysmsg(12181" in dtxt and "call !runin_debug(ri.acct, ri.file, ri.prog, ri.dbg.why)" in dtxt
+       and dtxt.find("sysmsg(12181") < dtxt.find("call !runin_debug") and "'run.in begin account='" in dtxt and "'run.in end account='" in dtxt)
+    ck("D5 a run that could not start is 12929, with the reason", "display sysmsg(12929, ri.dbg.why)" in dtxt and os.path.isfile(os.path.join(MESSAGES, "12929")))
     assigns = [s for n, s in run if re.match(r"new\.sentence\s*=", s)]
     ck("R9 the only sentence the verb runs is the one built from checked words (new.sentence = ri.sentence, once)", assigns == ["new.sentence = ri.sentence"], "%s" % assigns)
     sent = re.findall(r"(ri\.sentence\s*:?=[^\n]*)", "\n".join(s for n, s in run))
@@ -434,7 +452,7 @@ MUTANTS = [
      "   if 0 then\n      display sysmsg(2001)   ;* Command requires administrator privileges\n      void kernel(K$AUDIT, 'run.in refused reason=not the administrator')"),
     ("nest test off", "cproc", "   if ri.active then\n      display sysmsg(12183)", "   if 0 then\n      display sysmsg(12183)"),
     ("a sixth command: sh", "cproc", "      case ri.cmd = 'compile.dict'\n         ri.n.names = 2\n", "      case ri.cmd = 'sh'\n         ri.n.names = 1\n      case ri.cmd = 'compile.dict'\n         ri.n.names = 2\n"),
-    ("debug is back on the list", "cproc", "      case ri.cmd = 'compile.dict'\n         ri.n.names = 2\n", "      case ri.cmd = 'debug'\n         ri.n.names = 2\n      case ri.cmd = 'compile.dict'\n         ri.n.names = 2\n"),
+    ("debug is taken off the list", "cproc", "      case ri.cmd = 'debug'\n         ri.n.names = 2\n", ""),
     ("the typed text is run", "cproc", "      new.sentence = ri.sentence\n", "      new.sentence = ri.rest\n"),
     ("the flag is not cleared first", "cproc", "revert.account:\n   ri.active = 0\n", "revert.account:\n"),
     ("the switches are restored in another order", "cproc", "   void kernel(K$SH,          ri.sw<1>)\n", "   void kernel(K$SH,          ri.sw<2>)\n"),
@@ -538,6 +556,20 @@ MUTANTS += [
     ("message 15071 does not name run.in", "msg15071", "started by run.in", "started somewhere"),
 ]
 
+# 13 Nov 26, RELEASE_1.1 253(b).  --selftest --from=r253 runs the mutants from here on (the hand-over of debug to ri.debug, D1-D5).
+M_R253 = len(MUTANTS)
+MUTANTS += [
+    ("debug is run in this session again", "cproc", "   if ri.cmd = 'debug' then\n      gosub ri.debug\n      return\n   end\n", ""),
+    ("ri.debug does not return at once", "cproc", "      gosub ri.debug\n      return\n", "      gosub ri.debug\n      i = 0\n      return\n"),
+    ("ri.debug runs the sentence here", "cproc", "   call !runin_debug(ri.acct, ri.file, ri.prog, ri.dbg.why)\n",
+     "   new.sentence = ri.sentence\n   call !runin_debug(ri.acct, ri.file, ri.prog, ri.dbg.why)\n"),
+    ("ri.debug turns the flag off here", "cproc", "   ri.dbg.why = ''\n", "   ri.dbg.why = ''\n   void kernel(K$ADMINISTRATOR, 0)\n"),
+    ("ri.debug does not check the file", "cproc",
+     "   if upcase(ri.vrec[1, 1]) # 'F' then\n      display sysmsg(12181, ri.file[1, 40], ri.acct)   ;* %1 is not a file in account %2\n      unwinding = 2\n      return\n   end\n   void kernel(K$AUDIT, 'run.in begin account=' : ri.acct : ' command=' : ri.sentence : ' process=separate')",
+     "   void kernel(K$AUDIT, 'run.in begin account=' : ri.acct : ' command=' : ri.sentence : ' process=separate')"),
+    ("a run that could not start is not 12929", "cproc", "display sysmsg(12929, ri.dbg.why)", "display ri.dbg.why"),
+]
+
 
 def selftest():
     src, voc, names, extra = load()
@@ -550,7 +582,7 @@ def selftest():
     for a in sys.argv:
         if a.startswith("--from="):
             v = a[len("--from="):].lower()
-            start = M_R231 if v == "r231" else int(v)
+            start = M_R231 if v == "r231" else (M_R253 if v == "r253" else int(v))
     if start:
         print("selftest: from mutant %d of %d" % (start, len(MUTANTS)))
     for name, kind, old, new in MUTANTS[start:]:

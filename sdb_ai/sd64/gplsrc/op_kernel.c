@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85): run.in WITH debug (RELEASE_1.1 253(b)), Windows only - the child's
+ *           account and store, and the SDSYS session's end of the run (runin_debug_key: ask the SD service, relay the screen and keys).
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER; the file is made by
  *           win32_locktrace_create() for SYSTEM and Administrators only, since the SD service is its one writer (RELEASE_1.1 247).
  * 12 Nov 26 Windows port - from Linux S.8 (RELEASE_1.1 240 e): K_INTERNAL is set only by a program flagged HDR_INTERNAL; a read (-1) is unchanged.
@@ -102,6 +104,8 @@
 #include "sd_tls.h"
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
 #include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
+#include "win32runin.h"     /* 13 Nov 26 Windows port - K_RUNIN_CHILD, K_RUNIN_DEBUG (RELEASE_1.1 253(b)); no Windows type */
+#include <sys/time.h>
 
 #include <syslog.h>
 
@@ -204,6 +208,149 @@ Private bool run_exe(char *exe_name, char *cmd_line);
 
 /* ======================================================================
    op_kernel()  -  KERNEL()  -  Miscellaneous kernel functions            */
+
+/* ======================================================================
+   runin_debug_key()  -  K_RUNIN_DEBUG, the SDSYS session's end of run.in's debug  (13 Nov 26 Windows port - RELEASE_1.1 253(b))
+
+   WHO MAY.  A $internal program, in a session holding the administrator flag, that is not itself a run.in child and not an API
+   session.  The SD service asks the same of the token again (an elevated administrator), so this is the first of two locks.
+
+   WHAT IS BELIEVED OF THE CHILD: NOTHING BUT BYTES.  "P" copies what the child wrote to this terminal as it came - the same bytes
+   the program would have written to the administrator's terminal on Linux, where it runs in his session - and this keyboard to
+   the child.  Nothing the child sends is a name this process opens.  Keys are relayed only from a terminal (a session reading a
+   script has no keyboard to give).                                                                                            */
+
+#define RUNIN_PUMP_MAX_MS 2000
+
+Private int64 runin_now_ms(void) {
+  struct timeval tv;
+
+  gettimeofday(&tv, NULL);
+  return (((int64)tv.tv_sec) * 1000) + (tv.tv_usec / 1000);
+}
+
+Private void runin_show(char *buf, int n) {
+  switch (connection_type) {
+    case CN_CONSOLE:
+      write_console(buf, n);
+      break;
+    case CN_SOCKET:
+    case CN_PORT:
+      write_socket(buf, n, TRUE);
+      break;
+    default:
+      fwrite(buf, 1, n, stdout);
+      fflush(stdout);
+      break;
+  }
+}
+
+Private void runin_debug_key(DESCRIPTOR *descr, DESCRIPTOR *result) {
+  char arg[(MAX_PATHNAME_LEN * 2) + 1];
+  char req[RUNIN_LINE_MAX + 1];
+  char ans[RUNIN_LINE_MAX + 1];
+  char out[RUNIN_LINE_MAX + 8];
+  char buf[4096];
+  char keys[64];
+  char *f[8];
+  char *p;
+  int nf;
+  int n;
+  int kn;
+  int ms;
+  int cols;
+  int rows;
+  bool kb;
+  int64 until;
+
+  result->data.value = -1;
+  if (k_get_c_string(descr, arg, sizeof(arg) - 1) < 1)
+    return;
+
+  /* The fields: the action, then its arguments, field mark separated. */
+  nf = 0;
+  for (p = arg; (p != NULL) && (nf < 8); nf++) {
+    f[nf] = p;
+    if ((p = strchr(p, FIELD_MARK)) != NULL)
+      *(p++) = '\0';
+  }
+
+  if (!(process.program.flags & HDR_INTERNAL) || !MY_PRIV(USR_ADMIN) || (runin_account != NULL) ||
+      (connection_type == CN_SOCKET) || is_sdApiSrvr || is_phantom) {
+    if (f[0][0] == 'O')
+      k_put_c_string("ER" FIELD_MARK_STRING "only the administrator's own session may debug a program in another account", result);
+    return;
+  }
+
+  switch (f[0][0]) {
+    case 'O':
+      if ((nf != 7) || !runin_plain_word(f[1], RUNIN_WORD_MAX) || !runin_plain_word(f[2], RUNIN_WORD_MAX) ||
+          !runin_plain_word(f[3], RUNIN_WORD_MAX) || !runin_term_word(f[4]) ||
+          ((cols = runin_size(f[5], RUNIN_MIN_COLS)) == 0) || ((rows = runin_size(f[6], RUNIN_MIN_ROWS)) == 0)) {
+        k_put_c_string("ER" FIELD_MARK_STRING "the request is not account, file, program, terminal and size", result);
+        return;
+      }
+      snprintf(req, sizeof(req), "%s%s\t%s\t%s\t%s\t%d\t%d\n", RUNIN_MAGIC, f[1], f[2], f[3], f[4], cols, rows);
+      if (win32_runin_open(req, ans, sizeof(ans)) == 0) {
+        /* "<pid>\t<store>" */
+        if ((p = strchr(ans, '\t')) != NULL)
+          *p = FIELD_MARK;
+        snprintf(out, sizeof(out), "OK%c%s", FIELD_MARK, ans);
+      } else {
+        snprintf(out, sizeof(out), "ER%c%s", FIELD_MARK, ans);
+      }
+      k_put_c_string(out, result);
+      break;
+
+    case 'P':
+      if (!win32_runin_is_open())
+        return; /* -1 */
+      ms = (nf > 1) ? atoi(f[1]) : 0;
+      if (ms < 0)
+        ms = 0;
+      if (ms > RUNIN_PUMP_MAX_MS)
+        ms = RUNIN_PUMP_MAX_MS;
+      kb = (my_uptr != NULL) && (my_uptr->ttyname[0] != '\0');
+      until = runin_now_ms() + ms;
+      for (;;) {
+        n = win32_runin_read(buf, sizeof(buf));
+        if (n < 0) {
+          result->data.value = 1; /* the child has ended and its last screen has been shown */
+          return;
+        }
+        if (n > 0)
+          runin_show(buf, n);
+
+        kn = 0;
+        if (kb) {
+          while ((kn < (int)sizeof(keys) - 1) && keyready())
+            keys[kn++] = (char)keyin(0);
+        }
+        if (break_pending) {
+          break_pending = FALSE;
+          keys[kn++] = tio.break_char; /* the break key, which the child's input takes as its own */
+        }
+        if ((kn > 0) && (win32_runin_write(keys, kn) != 0)) {
+          result->data.value = 1;
+          return;
+        }
+
+        if ((my_uptr != NULL) && my_uptr->events)
+          process_events();
+        if ((k_exit_cause & K_INTERRUPT) || (runin_now_ms() >= until))
+          break;
+        if ((n == 0) && (kn == 0))
+          usleep(15000);
+      }
+      result->data.value = 0;
+      break;
+
+    case 'C':
+      win32_runin_close();
+      result->data.value = 1;
+      break;
+  }
+}
 
 void op_kernel() {
   /* Stack:
@@ -1709,6 +1856,22 @@ void op_kernel() {
         strcpy(sd_job_active, jn);
       k_put_c_string(sd_job_active, &result);
     } break;
+
+    /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug: see keys.h.  The child's answer exists only in a process sd.c's
+       runin_door() let through on its token. */
+    case K_RUNIN_CHILD:
+      if ((runin_account != NULL) && (process.program.flags & HDR_INTERNAL)) {
+        snprintf(s, sizeof(s), "%s%c%s%c%s", runin_account, FIELD_MARK, (runin_store != NULL) ? runin_store : "", FIELD_MARK,
+                 (runin_groups != NULL) ? runin_groups : "");
+        k_put_c_string(s, &result);
+      } else {
+        k_put_c_string("", &result);
+      }
+      break;
+
+    case K_RUNIN_DEBUG:
+      runin_debug_key(descr, &result);
+      break;
 
     default:
       k_error("Illegal KERNEL() action key (%d)", action);
