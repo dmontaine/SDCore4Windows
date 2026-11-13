@@ -232,6 +232,7 @@ WRITERS = {
     "attach-account.ps1": "Set-SdInternalMarker",
     "make-shared.ps1": "Set-SdInternalMarker",
     "load-help.ps1": "Set-SdInternalMarker",           # 26 Oct 26, RELEASE_1.1 184
+    "shared-docs.ps1": "Set-SdInternalMarker",         # 13 Nov 26, RELEASE_1.1 252 (DOCS.INSTALL at install)
     "set-start-default.ps1": "Set-SdInternalMarker",   # 10 Nov 26, RELEASE_1.1 210: SET.START.DEFAULT TERMINAL at install
     "finish-install.ps1": "Set-SdInternalMarker",
     "upgrade-dicts.ps1": "Set-SdInternalMarker",
@@ -375,7 +376,7 @@ row(("messages" + chr(92) + "5024") in code_only and "$termText" in code_only an
 # the shipped scripts find the helper beside them: it must be staged with them
 stage = read(os.path.join(HERE, "stage.py"))
 row("'internal-marker.ps1'" in stage, "stage.py ships internal-marker.ps1 beside the scripts that dot-source it")
-for name in ("attach-account.ps1", "make-shared.ps1", "load-help.ps1", "set-start-default.ps1", "finish-install.ps1", "upgrade-dicts.ps1", "upgrade-gates.ps1", "upgrade-nocase.ps1", "upgrade-voc.ps1"):
+for name in ("attach-account.ps1", "make-shared.ps1", "load-help.ps1", "shared-docs.ps1", "set-start-default.ps1", "finish-install.ps1", "upgrade-dicts.ps1", "upgrade-gates.ps1", "upgrade-nocase.ps1", "upgrade-voc.ps1"):
     row("internal-marker.ps1" in read(os.path.join(HERE, name)), "%s dot-sources internal-marker.ps1" % name)
 
 # ---------------------------------------------------------------------------

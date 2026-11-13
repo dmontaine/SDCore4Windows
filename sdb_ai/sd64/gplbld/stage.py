@@ -1691,6 +1691,12 @@ def main():
                    # account's file context.help); called from sd.iss right after
                    # make-shared.ps1, at install and at upgrade.
                    'load-help.ps1',
+                   # 13 Nov 26 - RELEASE_1.1 252 (audit P-25) and 265.  The shared
+                   # account's pdf directory (administrator-only), the changes
+                   # document and the manuals beside the installer (DOCS.INSTALL);
+                   # called from sd.iss after LoadContextHelp, at install and at
+                   # upgrade.
+                   'shared-docs.ps1',
                    # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
                    # attach-account, finish-install and the three upgrade-*
                    # scripts, which write LOGIN's one-shot "sd -internal"

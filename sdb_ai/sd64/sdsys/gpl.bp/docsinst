@@ -1,0 +1,133 @@
+* DOCSINST
+* DOCS.INSTALL verb: copy documentation PDFs into the pdf directory of the shared account (S.75, plan .claude/plan-fullscreen-toolkit.md section 14.7).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - from Linux Core (S.75, 72e708e and later; RELEASE_1.1 252, audit P-25, with row 265): Linux's verb, with SD Core Solo for
+*               Windows' Windows parts (SOLO 47): Copy-Item through PowerShell replaces cp and chmod, and a directory may be written in any spelling SD
+*               uses (C:/x, C:\x, /cygdrive/c/x, /c/x), made into the drive-letter form here (make.native, Solo's !VIEWLIST 'native' rule, which
+*               Core does not carry).  The pdf directory is the shared account's, as Linux's: the installer makes it, administrator-only.
+*               The message ids are Linux's plus 1005 (12725-12729).
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
+* 23 Oct 26 dm  New (S.75; the owner: "in the shared account directory should be the documentation PDF's").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   DOCS.INSTALL directory
+*
+*   The administrator's verb.  The PDFs are generated from the documentation repository and are not part of the source tree (no binary is tracked), so they arrive in the
+*   shared account's pdf directory by this verb, from a directory the administrator names: the pdf directories of a documentation checkout, or a release's bundle
+*   unpacked (the installer runs it on the pdf folder beside it).  Each file of the directory (not its sub-directories) is copied if its name is lower case, a-z 0-9 dot
+*   dash underscore, ends in .pdf and does not begin with a dot, and the file starts with %PDF- ; anything else is skipped and named.  A file already there is replaced.
+*   The directory must be a plain absolute path (a drive letter, then folders; letters, digits, space and : / . _ + - ( ) only).  The pdf directory is made by the
+*   installer (administrators may write it, every SD user may read it), never by this verb.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program docs.install
+$catalog $docsinst
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   words = trim(@sentence)
+   if dcount(words, ' ') < 2 then stop sysmsg(12725)             ;* docs.install directory
+   src = trim(field(words, ' ', 2, 99))
+   if src[1, 1] = '"' and src[len(src), 1] = '"' and len(src) >= 2 then src = src[2, len(src) - 2]
+   a = src ; gosub make.native ; srcn = b
+   if srcn = '' then stop sysmsg(12726, src[1, 60])               ;* The directory %1 cannot be read or is not a plain path
+   entries = dir(srcn)
+   if entries = '' then stop sysmsg(12726, src[1, 60])
+
+*  The shared account's directory, from the register (Linux reads ACC$PATH the same way)
+   openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(12729)
+   read arec from acc.f, 'shared' else arec = ''
+   close acc.f
+   a = parse.pathname.tokens(arec<ACC$PATH>) ; gosub make.native ; sharedn = b
+   if sharedn = '' then stop sysmsg(12729)
+   dest = sharedn : '/pdf'
+   if dir(dest) = '' and status() # 0 then stop sysmsg(12729)    ;* the installer makes the directory; this verb does not
+
+   n.copied = 0
+   n.skipped = 0
+   for i = 1 to dcount(entries, @fm)
+      nm = entries<i, 1>
+      if entries<i, 2> # 'F' then continue
+      if nm[len(nm) - 3, 4] # '.pdf' then continue
+      gosub copy.one
+   next i
+
+   void kernel(K$AUDIT, 'docs.install copied=' : n.copied : ' skipped=' : n.skipped)
+   @system.return.code = (if n.skipped then -ER$FAILED else 0)
+   display sysmsg(12727, n.copied, n.skipped)                    ;* Copied %1 document(s) into the shared account; skipped %2
+   stop
+
+copy.one:
+   ok = (len(nm) >= 5 and len(nm) <= 84 and nm[1, 1] # '.' and nm = downcase(nm))
+   if ok then
+      if trim(convert('abcdefghijklmnopqrstuvwxyz0123456789._-', space(39), nm)) # '' then ok = 0
+   end
+   if not(ok) then
+      display sysmsg(12728, nm[1, 60], 'the name is not lower case letters, digits and . _ -')
+      n.skipped += 1
+      return
+   end
+   magic = ''
+   openseq srcn : @ds : nm readonly to pf then
+      readseq magic from pf else magic = ''
+      close pf
+   end
+   if magic[1, 5] # '%PDF-' then
+      display sysmsg(12728, nm, 'it does not start with %PDF-')
+      n.skipped += 1
+      return
+   end
+*  Copy-Item, one line, single quotes only; both names are plain (a checked file name after a checked directory)
+   ps = "$ErrorActionPreference='Stop'; try { $to=('" : dest : "/" : nm : "'.Replace('/','\')); Copy-Item -LiteralPath ('" : srcn : "/" : nm : "'.Replace('/','\')) -Destination $to -Force; if (Test-Path -LiteralPath $to) { 'OK' } else { 'it could not be copied' } } catch { 'it could not be copied' }"
+   os.execute ps capturing co
+*  The captured output keeps the carriage return and line feed PowerShell ends a line with, so it is compared after they and the field marks are turned
+*  into spaces (SOLO 47's first hand test: without this the copy WORKED and the verb said it could not be copied).
+   if trim(convert(char(13) : char(10) : @fm, '   ', co)) # 'OK' then
+      display sysmsg(12728, nm, 'it could not be copied')
+      n.skipped += 1
+   end else
+      n.copied += 1
+   end
+   return
+
+*  a, any spelling of an absolute path SD uses  ->  b, the drive-letter form (C:/x/y), or '' when it is not an absolute path of plain characters.
+*  SD Core Solo for Windows' !VIEWLIST 'native' rule (SOLO 47), the same lines.
+make.native:
+   b = ''
+   p = trim(a)
+   n = ''
+   begin case
+      case len(p) >= 3 and p[2, 1] = ':' and (p[3, 1] = '/' or p[3, 1] = '\')
+         n = upcase(p[1, 1]) : ':' : change(p[3, 99999], '\', '/')
+      case p[1, 10] = '/cygdrive/' and len(p) >= 12 and p[12, 1] = '/'
+         n = upcase(p[11, 1]) : ':' : p[12, 99999]
+      case len(p) >= 3 and p[1, 1] = '/' and p[3, 1] = '/'
+         n = upcase(p[2, 1]) : ':' : p[3, 99999]
+   end case
+   if n = '' then return
+   if not(alpha(n[1, 1])) then return
+   okc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:/._+-() '
+   if len(n) > 200 or trim(convert(okc, space(len(okc)), n)) # '' then return
+   if index(n, '..', 1) > 0 or index(n, '//', 1) > 0 then return
+   b = n
+   return
+end
+
+* END-CODE

@@ -39,7 +39,6 @@ NOT_HERE = {
     'audit_read':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 197',
     'tool_audit':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 197',
     'define_install.h': 'removed here as dead code with the PRE_RELEASE 168 chain (aafca0bb)',
-    'docsinst':         'Core provides no docs.install, decided 26 Oct 2026 under the owner\'s delegation (HISTORY); Solo has it (SOLO 47)',
     'euid_restore':     'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'euid_set':         'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'locktracer':       'LOCK.TRACER (Linux 7f7a4fd4) was held back 18 Oct (0480ce9a): every session would append to a file in SDSYS\'s directory; owner, 10 Nov: carry it once the service is the only writer, as for the audit (RELEASE_1.1 182)',

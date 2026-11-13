@@ -3559,6 +3559,31 @@ begin
   Log('SD: load-help.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\load-help.log');
 end;
 
+(* 13 Nov 26 - THE SHARED ACCOUNT'S DOCUMENTATION, RELEASE_1.1 252 (audit P-25) and 265.  Linux's SHARED-CONTENT, CHANGES-DOC and
+   MANUALS-PDF: shared-docs.ps1 makes the shared account's pdf directory administrator-only, copies the changes document that sits beside
+   this installer ({src}) and hands the pdf folder beside it to DOCS.INSTALL.  At install and at upgrade, after LoadContextHelp.
+   NEVER STOPS THE INSTALL.  Codes: 0 done, 2 no shared account, 1 anything else - the only one the closing box mentions. *)
+function SharedDocs: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\shared-docs.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '" -SourceDir "' +
+                  ExpandConstant('{src}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: shared-docs.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\shared-docs.log');
+  if (Code = 0) or (Code = 2) then
+    Exit;
+  Result := 'The documentation in the shared account was not fully set up (code ' + IntToStr(Code) + '). See ' +
+            ExpandConstant('{#DataDir}') + '\shared-docs.log' + #13#10#13#10;
+end;
+
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
   install, and nothing here asks for a password: there is no adopted account to
@@ -4501,6 +4526,7 @@ var
   SysdirMsg: String;
   AcctAclMsg: String;
   SharedMsg: String;
+  DocsMsg: String;
   StartMsg: String;
   DictMsg: String;
   { 04 Sep 26 - PRE_RELEASE_FIXES 70.  Its own variable rather than folded into
@@ -4814,6 +4840,9 @@ begin
       the file it makes in the shared account is made under the account's final
       permissions.  Never stops the install: see LoadContextHelp. }
     LoadContextHelp;
+    { 13 Nov 26 - the shared account's documentation, RELEASE_1.1 252 / 265.  After SecureAccountDirs, which stamps the shared
+      directory itself and not what is under it, so the pdf directory's own access list stands.  See SharedDocs. }
+    DocsMsg := SharedDocs;
 
     case SdsysCode of
       0: begin
@@ -5093,6 +5122,8 @@ begin
            AcctAclMsg +
            { Empty unless make-shared.ps1 could not make the shared account. }
            SharedMsg +
+           { Empty unless shared-docs.ps1 could not set up the shared account's documentation. }
+           DocsMsg +
            { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it. }
            StartMsg +
            { Empty on every first install and on every upgrade that worked. }
