@@ -212,7 +212,7 @@ def check_b(t):
         "AI_HELPER_FILES = ['sd-ai', 'sd-ai-ctl', 'sd-ai-ctl.ps1', 'sd-ai-python.ps1', 'ai-providers', 'ai-context']" in st and "ai_dst = os.path.join(pf, 'lib', 'sd-ai')" in st
         and "raise SystemExit('missing %s - the AI helper needs it' % src)" in st and "'install-aihelper.ps1'," in st, "")
     g = ps_only(t["groups"])
-    row("(Windows) sync-route-groups.ps1 makes sdaiusers with the other gate groups and adds nobody to it", "$AiGroup   = 'sdaiusers'" in g and "$null     = Ensure-Group $AiGroup $AiComment" in g
+    row("(Windows) sync-route-groups.ps1 makes sdaiusers with the other gate groups and adds nobody to it", "$AiGroup   = 'sdaiusers'" in g and "    Ensure-Group $AiGroup $AiComment" in g
         and not re.search(r"Add-LocalGroupMember[^\n]*\$AiGroup|sdaiusers[^\n]*/add", g), "")
     a = ps_only(t["attach"])
     row("(Windows) the installer's 'open every access gate' answer gives ai-on and reads sdaiusers back, as Linux's does (owner on Linux: every gate)", "'sdaiusers' = 'ai-on'" in a and "ai-on" in a, "")
@@ -548,7 +548,7 @@ GROUP_B_MUTANTS = [
     ("iss", "the service is left at uninstall", "    Parameters: \"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"\"{app}\\install-aihelper.ps1\"\" -Remove\"; \\\n", "    Parameters: \"-NoProfile\"; \\\n"),
     ("iss", "the group is left at uninstall", "  Exec(Net, 'localgroup sdaiusers /delete',    '', SW_HIDE, ewWaitUntilTerminated, Code);\n", ""),
     ("stage", "the helper is not staged", "AI_HELPER_FILES = ['sd-ai', ", "AI_HELPER_FILES = ["),
-    ("groups", "sdaiusers is not made", "    $null     = Ensure-Group $AiGroup $AiComment\n", ""),
+    ("groups", "sdaiusers is not made", "    Ensure-Group $AiGroup $AiComment\n", ""),
     ("createacc.h", "CA$AI shares a number", "$define CA$AI              41", "$define CA$AI              40"),
     ("createa", "ai-on is not a word", "         case upcase(token) = 'AI-ON'\n            settings<CA$AI> = 1\n", ""),
     ("acc_os_info", "the manifest has no route.ai", "   info<-1> = 'route.ai: ' : aiuse", "   info<-1> = 'route.x: ' : aiuse"),

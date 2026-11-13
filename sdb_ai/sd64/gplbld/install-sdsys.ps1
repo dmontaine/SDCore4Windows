@@ -179,7 +179,9 @@ function New-RandomPassword {
         foreach ($b in $bytes) { $s += $chars[$b % $chars.Length] }
         if (Test-GeneratedPasswordComplex -Password $s) { return $s }
     }
-    Say 'WARNING: 20 generated passwords in a row failed SD password rule - using the last.'
+    # 13 Nov 26 - RELEASE_1.1 277: Out-Host, so the warning reaches the log but is not returned with the password (a function's
+    # output stream IS its return value: the password would have been the warning line and the password, an array).
+    Say 'WARNING: 20 generated passwords in a row failed SD password rule - using the last.' | Out-Host
     return $s
 }
 

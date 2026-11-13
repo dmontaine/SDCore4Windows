@@ -3,6 +3,17 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  AN INSTALL NO LONGER PUTS BACK SSH ACCESS YOU TOOK AWAY.
+
+             What        - Installing over an existing SD (or running its route-groups step again)
+                           put the members of the sign-on group back into sdssh even when sdssh was
+                           already there, so an account you had taken off ssh got it back. It now
+                           seeds sdssh only when it creates it. Four installer helpers that could
+                           mix a progress line into the value they return (among them the one that
+                           makes SDSYS's password, on a rare path) no longer do.
+             Does NOT    - Change sdssh's membership on an install where you never changed it. NOT
+                           YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  ONE FAILED START NO LONGER STALLS EVERY LATER SESSION.
 
              What        - An sd.exe that stopped with "SD has not been started." (or failed in

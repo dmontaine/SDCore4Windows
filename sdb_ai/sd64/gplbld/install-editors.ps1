@@ -149,7 +149,7 @@ function Get-EditorVersion($path, $versionArg) {
                                -RedirectStandardInput $nul
             if (-not $p.WaitForExit(5000)) {
                 try { $p.Kill() } catch { }
-                Say ('    version probe timed out after 5s: ' + $path + ' ' + $versionArg)
+                Say ('    version probe timed out after 5s: ' + $path + ' ' + $versionArg) | Out-Host   # 13 Nov 26 RELEASE_1.1 277: not the return value
             } else {
                 $text = ''
                 if (Test-Path -LiteralPath $out) { $text = (Get-Content -LiteralPath $out -Raw) }
@@ -165,7 +165,7 @@ function Get-EditorVersion($path, $versionArg) {
                 }
             }
         } catch {
-            Say ('    version probe failed: ' + $_.Exception.Message)
+            Say ('    version probe failed: ' + $_.Exception.Message) | Out-Host   # 13 Nov 26 RELEASE_1.1 277: not the return value
         } finally {
             foreach ($f in @($out, $err, $nul)) {
                 try { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } } catch { }

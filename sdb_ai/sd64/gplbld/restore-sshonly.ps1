@@ -137,7 +137,7 @@ function Get-GroupMembers {
         # An empty local group throws on some builds rather than returning
         # nothing; that is not the same as a failure to read, but this script
         # cannot tell them apart, so it says so and treats it as empty.
-        Say ("note: could not enumerate " + $Group + " (" + $_.Exception.Message + ")")
+        Say ("note: could not enumerate " + $Group + " (" + $_.Exception.Message + ")") | Out-Host   # 13 Nov 26 RELEASE_1.1 277: not a member name
     }
     return $m
 }

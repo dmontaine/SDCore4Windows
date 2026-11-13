@@ -73,21 +73,33 @@ $failed = $false
 
 function Say($msg) { Write-Output ("sync-route-groups: " + $msg) }
 
-# Returns $true if the group had to be created, $false if it was already there.
-# Throws on a real failure.
+# Sets $script:GroupCreated: $true if the group had to be created, $false if it
+# was already there.  Throws on a real failure.
+#
+# 13 Nov 26 - RELEASE_1.1 277.  THE ANSWER GOES IN A VARIABLE, NOT THE PIPELINE.
+# This returned $true/$false after calling Say, which writes to the output
+# stream, so the caller got an ARRAY (Say's line and the flag): never empty,
+# always true.  `-not $sshIsNew` was therefore always false, and an existing
+# sdssh was re-seeded every run - putting back members an administrator had
+# taken off ssh - while Say's "already there" line was swallowed.  Now the
+# function returns nothing, its lines reach the output, and the flag is read
+# from $script:GroupCreated (memory ps-function-output-trap, a fourth time).
+$script:GroupCreated = $false
 function Ensure-Group([string]$name, [string]$comment) {
+    $script:GroupCreated = $false
     $g = Get-LocalGroup -Name $name -ErrorAction SilentlyContinue
     if ($null -ne $g) {
         Say "$name is already there"
-        return $false
+        return
     }
     if ($Check) {
         Say "would create $name"
-        return $true
+        $script:GroupCreated = $true
+        return
     }
     $null = New-LocalGroup -Name $name -Description $comment
     Say "created $name"
-    return $true
+    $script:GroupCreated = $true
 }
 
 # The member names of a group, as bare names with any DOMAIN\ or MACHINE\
@@ -102,7 +114,7 @@ function Get-Members([string]$name) {
     try {
         $ms = Get-LocalGroupMember -Group $name -ErrorAction Stop
     } catch {
-        Say "cannot read the members of $name - $($_.Exception.Message)"
+        Say "cannot read the members of $name - $($_.Exception.Message)" | Out-Host   # 13 Nov 26 RELEASE_1.1 277: else $null never comes back
         return $null
     }
     foreach ($m in $ms) {
@@ -114,12 +126,13 @@ function Get-Members([string]$name) {
 }
 
 try {
-    $sshIsNew = Ensure-Group $SshGroup $SshComment
-    $null     = Ensure-Group $ApiGroup $ApiComment
-    $null     = Ensure-Group $FilesGroup $FilesComment
-    $null     = Ensure-Group $FilesWriteGroup $FilesWriteComment
-    $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment
-    $null     = Ensure-Group $AiGroup $AiComment
+    Ensure-Group $SshGroup $SshComment
+    $sshIsNew = $script:GroupCreated
+    Ensure-Group $ApiGroup $ApiComment
+    Ensure-Group $FilesGroup $FilesComment
+    Ensure-Group $FilesWriteGroup $FilesWriteComment
+    Ensure-Group $FilesAdminGroup $FilesAdminComment
+    Ensure-Group $AiGroup $AiComment
 
     if (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"

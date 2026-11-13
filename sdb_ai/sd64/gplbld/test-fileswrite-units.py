@@ -494,9 +494,9 @@ def run_checks(raw):
        "finds none, so an upgrade install creates them empty and adds nobody; nobody is added to either); the uninstaller removes them with the other route groups, after the "
        "silent-uninstall exit, once each",
        re.search(r"^\$FilesWriteGroup\s*=\s*'sdfileswrite'\s*$", srg, re.M) is not None and re.search(r"^\$FilesAdminGroup\s*=\s*'sdfilesadmin'\s*$", srg, re.M) is not None
-       and re.search(r"^\s*\$null\s*=\s*Ensure-Group \$FilesWriteGroup \$FilesWriteComment\s*$", srg, re.M) is not None
-       and re.search(r"^\s*\$null\s*=\s*Ensure-Group \$FilesAdminGroup \$FilesAdminComment\s*$", srg, re.M) is not None
-       and ordered(egf, "$g = Get-LocalGroup -Name $name", "if ($null -ne $g) {", "return $false", "New-LocalGroup -Name $name")
+       and re.search(r"^\s*Ensure-Group \$FilesWriteGroup \$FilesWriteComment\s*$", srg, re.M) is not None    # 13 Nov 26 (277): no $null =, the answer is $script:GroupCreated
+       and re.search(r"^\s*Ensure-Group \$FilesAdminGroup \$FilesAdminComment\s*$", srg, re.M) is not None
+       and ordered(egf, "$g = Get-LocalGroup -Name $name", "if ($null -ne $g) {", "return", "New-LocalGroup -Name $name")   # 277: a bare return
        and not re.search(r"Add-LocalGroupMember[^\n]*(?:\$FilesWriteGroup|\$FilesAdminGroup|\$FilesGroup|sdfiles)", srg)
        and "Script := ExpandConstant('{app}" + chr(92) + "sync-route-groups.ps1');" in iss and "RouteMsg := SyncRouteGroups;" in iss
        and ordered(rsg, "if UninstallSilent then", "Exit;", "Exec(Net, 'localgroup sdfiles /delete'", "Exec(Net, 'localgroup sdfileswrite /delete'", "Exec(Net, 'localgroup sdfilesadmin /delete'")
@@ -726,12 +726,12 @@ def mutants(raw):
       "if m.route.files = '1' and m.route.files.admin = '1' then settings<CA$FILESADMIN> = 1")
     # installers
     # 13 Nov 26 Windows port: Linux's installsdcore.sh / deletesdcore.sh mutants, aimed at sync-route-groups.ps1 and sd.iss; the four sd-elevate mutants are out with its rows (F14)
-    m("the installer does not make the group", "sync-route-groups.ps1", "    $null     = Ensure-Group $FilesWriteGroup $FilesWriteComment\n", "")
-    m("the installer does not make the administration group", "sync-route-groups.ps1", "    $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment\n", "")
+    m("the installer does not make the group", "sync-route-groups.ps1", "    Ensure-Group $FilesWriteGroup $FilesWriteComment\n", "")
+    m("the installer does not make the administration group", "sync-route-groups.ps1", "    Ensure-Group $FilesAdminGroup $FilesAdminComment\n", "")
     m("the installer makes the group under another name", "sync-route-groups.ps1", "$FilesWriteGroup = 'sdfileswrite'", "$FilesWriteGroup = 'sdfileswr'")
     m("Ensure-Group makes a group that is already there (an upgrade would fail or reset it)", "sync-route-groups.ps1", "    if ($null -ne $g) {\n", "    if ($false) {\n")
-    m("the installer seeds the write group", "sync-route-groups.ps1", "    $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment\n",
-      "    $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment\n    Add-LocalGroupMember -Group $FilesWriteGroup -Member $env:USERNAME\n")
+    m("the installer seeds the write group", "sync-route-groups.ps1", "    Ensure-Group $FilesAdminGroup $FilesAdminComment\n",
+      "    Ensure-Group $FilesAdminGroup $FilesAdminComment\n    Add-LocalGroupMember -Group $FilesWriteGroup -Member $env:USERNAME\n")
     m("the uninstaller does not remove the group", "sd.iss", "  Exec(Net, 'localgroup sdfileswrite /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);\n", "")
     m("the uninstaller does not remove the administration group", "sd.iss", "  Exec(Net, 'localgroup sdfilesadmin /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);\n", "")
     # messages
