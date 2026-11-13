@@ -1,0 +1,194 @@
+* AI
+* AI verb: ask the AI the administrator has chosen one question (S.69 step 2, plan .claude/plan-ai-step2.md; the owner's decisions of 23 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the AI verb, with its messages renumbered (11xxx + 1005, 14xxx + 1000) and the fixed sentence
+*              naming SD Core for Windows.  The helper is the service sd-ai on the pipe \\.\pipe\sd-ai, and it reads the caller's Windows user off the pipe.
+* 23 Oct 26 dm  New.
+* 7 Nov 26 dm   S.160: the standing text goes first in the system text, after the wall's screen; it is not shown in the preview.
+* 8 Nov 26 dm   S.175 (the owner: "it is showing the standard prefix text, it is not supposed to"): the fixed sentence is not shown either; the preview is the question.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   AI text          shows what will be sent, asks whether to send it, and prints the answer
+*
+*   A text that ends with a question mark is put in quotes ("what is a select list?"): the command line is taken by TCL first, and a TCL command that ends with ? is added to the
+*   command stack without being run (cproc, "add to stack without execution"), so this verb never sees it.  The quotes are taken off before anything is shown or sent.
+*
+*   THE PREVIEW IS NOT OPTIONAL HERE.  The text is shown with the provider and model that will receive it and the size, and nothing is sent unless the person answers y.  An
+*   answer of anything else, an empty answer and an input that has ended (a pipe, a phantom) all send nothing, so a program cannot make this verb send by feeding it.  What is
+*   sent is the text and one fixed sentence that asks for a short plain answer; nothing else of the account, the session or the data is added.
+*
+*   WHO MAY USE IT IS NOT DECIDED HERE.  The helper (sd-ai) reads the caller's Windows user off the pipe and refuses an account that is not in the group
+*   sdaiusers (modify.account NAME ai-on); this verb asks the helper for its status first only to say so in words, before it shows a preview of something that cannot
+*   be sent.  The request itself goes through KERNEL(K$AI.START), which writes the audit line (account, this program's name, the size - never the text) before the
+*   connection is made.  The reply is plain ASCII, with anything else already replaced by the helper, and is printed as text, never run.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program ai
+$catalog $ai
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   words = trim(@sentence)
+   sp = index(words, ' ', 1)
+   question = ''
+   if sp > 0 then question = trim(words[sp + 1, 99999])
+   q1 = question[1, 1]
+   if len(question) >= 2 and (q1 = '"' or q1 = "'") and question[len(question), 1] = q1 then question = trim(question[2, len(question) - 2])
+   if question = '' then stop sysmsg(12628)                                     ;* ai text
+
+*  1 Nov 26 (S.97 stage 0): a question about SD's own code or build is not taken to the AI from inside SD.  The screen of $tk_aiwall, the same one every AI line uses, for every provider
+   call $tk_aiwall('request', question, why)
+   if why # '' then
+      void kernel(K$AUDIT, 'ai refused why=request app=ai name=' : why)
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12946, why)                                                   ;* SD does not take questions about its own code or build (%1) to the AI
+   end
+
+*  A request that an earlier run left in the kernel (a break while it waited) is given up first; the kernel allows one at a time
+   void kernel(K$AI.CANCEL, 0)
+
+*  What the helper says about this caller, before anything is shown
+   reply = kernel(K$AI.STATUS, 0)
+   if reply<1> # 'D' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12612)                                                        ;* The AI helper could not be reached
+   end
+   st = jparse(reply<2>)
+   if status() or st{'t'} # 'status' then
+      @system.return.code = -ER$FAILED
+      code = st{'code'}
+      msg = st{'msg'}
+      stop sysmsg(12632, code, msg[1, 100])                                     ;* The AI did not answer: %1 (%2)
+   end
+   prov = st{'provider'}
+   model = st{'model'}
+   if prov = '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12629)                                                        ;* The AI is off
+   end
+   if not(st{'gate'}) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12630, @who)                                                  ;* This account may not use the AI
+   end
+   if model = '' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12631, prov, 'model')
+   end
+   if not(st{'key'}) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12631, prov, 'key')
+   end
+
+*  The preview
+   system.text = 'You are answering a question typed at the terminal of SD Core for Windows, a multivalue database. Answer briefly, in plain text without markup.'
+*  7 Nov 26 S.160: the standing text (the administrator's, or the shipped default), first, put to the same screen as the question; not shown in the preview (its size is counted)
+   ctext = st{'context'}
+   if ctext # '' then
+      ok.c = ''
+      for i = 1 to len(ctext)
+         sq = seq(ctext[i, 1])
+         if sq = 10 or (sq >= 32 and sq <= 126) then ok.c := ctext[i, 1]
+      next i
+      ctext = trimb(trimf(ok.c))
+   end
+   if ctext # '' then
+      call $tk_aiwall('request', ctext, why)
+      if why # '' then
+         void kernel(K$AUDIT, 'ai refused why=context app=ai name=' : why)
+         @system.return.code = -ER$FAILED
+         stop sysmsg(15013, why)                                                ;* The standing text names SD's own code or build (%1) ...
+      end
+   end
+   fixed.text = system.text
+   c.send = ''
+   if ctext # '' then c.send = 'Standing information from the administrator of this SD system:' : char(10) : ctext : char(10) : char(10)
+   system.text = c.send : fixed.text
+   display sysmsg(12633, prov, model, len(question) + len(system.text))
+*  8 Nov 26 (the owner: "When i sent a AI request it is showing the standard prefix text, it is not supposed to"): SD's own text - the standing text and the fixed
+*  sentence - is not shown; the preview is the person's question, and the size counts all of it
+   display question
+   crt sysmsg(12634) : ' ' :
+   input ans
+   ans = trim(downcase(ans))
+   if ans # 'y' and ans # 'yes' then
+      @system.return.code = 0
+      stop sysmsg(12635)                                                        ;* Nothing was sent.
+   end
+
+*  The request
+   reply = kernel(K$AI.START, system.text : @fm : 1024 : @fm : question)
+   if reply<1> # 'OK' then
+      @system.return.code = -ER$FAILED
+      if reply<2> = 'nohelper' then stop sysmsg(12612)
+      stop sysmsg(12632, reply<2>, 'the request was not sent')
+   end
+   display sysmsg(12636)                                                        ;* Waiting for the answer ...
+   got = 0
+   for tries = 1 to 1600
+      reply = kernel(K$AI.POLL, 0)
+      if reply<1> # 'W' then
+         got = 1
+         exit
+      end
+      nap 250
+   next tries
+   if not(got) then
+      void kernel(K$AI.CANCEL, 0)
+      reply = 'E' : @fm : 'timeout'
+   end
+
+*  The answer
+   if reply<1> # 'D' then
+      @system.return.code = -ER$FAILED
+      if reply<2> = 'nohelper' then stop sysmsg(12612)
+      stop sysmsg(12632, reply<2>, 'no answer came')
+   end
+   j = jparse(reply<2>)
+   if status() then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12632, 'badreply', 'the answer could not be read')
+   end
+   if j{'t'} # 'ok' then
+      @system.return.code = -ER$FAILED
+      code = j{'code'}
+      if code = 'disabled' then stop sysmsg(12629)
+      if code = 'nogate' then stop sysmsg(12630, @who)
+      if code = 'nomodel' then stop sysmsg(12631, prov, 'model')
+      if code = 'nokey' then stop sysmsg(12631, prov, 'key')
+      msg = j{'msg'}
+      stop sysmsg(12632, code, msg[1, 100])
+   end
+
+   width = system(2) - 1
+   if width < 40 or width > 200 then width = 79
+   text = change(change(j{'text'}, char(13), ''), char(10), @fm)
+   display ''
+   for i = 1 to dcount(text, @fm)
+      call $tk_wrap(text<i>, width, pieces)
+      if pieces = '' then display ''
+      for p = 1 to dcount(pieces, @fm)
+         display trimb(pieces<p>)
+      next p
+   next i
+   display ''
+   if j{'truncated'} then display sysmsg(12637)                                 ;* The answer was cut off at the length limit
+   if j{'replaced'} > 0 then display sysmsg(12638, j{'replaced'})               ;* %1 characters of the answer were replaced with ?
+   display sysmsg(12639, j{'in'}, j{'out'}, j{'provider'})                      ;* Tokens used: %1 in, %2 out (%3)
+   @system.return.code = 0
+   stop
+end
+
+* END-CODE

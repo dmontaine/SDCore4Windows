@@ -19,6 +19,8 @@
  * START-HISTORY:
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER; the file is made by
  *           win32_locktrace_create() for SYSTEM and Administrators only, since the SD service is its one writer (RELEASE_1.1 247).
+ * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): K_AI_START, POLL, CANCEL and STATUS (160-163) go to k_ai() (op_ai.c, its
+ *           transport win32ai.c), as Linux's do; the "nohelper" stubs of 10 Nov are gone with the AI helper they stood in for.
  * 12 Nov 26 Windows port - from Linux S.8 (RELEASE_1.1 240 e): K_INTERNAL is set only by a program flagged HDR_INTERNAL; a read (-1) is unchanged.
  * 10 Nov 26 Windows port - from Linux d35f5e31 / d8dbde84 (S.88): K_SHOW_SAFE (151), another session's text made safe to print by the kernel's
  *           one rule (show_ts_safe()); kernel(K$AUTOLOGOUT, -2) returns the inactivity clock (keyin_idle_ms()).  And K_AI_START, POLL, CANCEL
@@ -1661,12 +1663,13 @@ void op_kernel() {
           (int32_t)cygwin_internal(CW_CYGWIN_PID_TO_WINPID, getpid());
       break;
 
-    /* 10 Nov 26 Windows port - Linux's in-SD AI helper keys (op_ai.c there).  No helper exists here yet
-       (RELEASE_1.1 173), so each is answered as Linux answers when its helper is not running: the AI
-       routines then find the AI unusable, draw no AI line and send nothing.  The answers are strings
-       of a word, a field mark and a word, as op_ai.c's ai_answer() builds them. */
+    /* 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the in-SD AI helper (op_ai.c), a transport
+       that only a $internal program may use, as Linux's.  Its pipe is \\.\pipe\sd-ai (win32ai.c). */
     case K_AI_START:
-      k_put_c_string("ERR\376nohelper", &result);
+    case K_AI_POLL:
+    case K_AI_CANCEL:
+    case K_AI_STATUS:
+      k_ai(action, descr, &result);
       break;
 
     /* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2): K_SHOW_SAFE, the text with every byte of the one rule as '?'
@@ -1682,13 +1685,6 @@ void op_kernel() {
         show_ts_safe(safe_chunk->data, (int)(safe_chunk->bytes));
       (void)ts_terminate();
     } break;
-    case K_AI_POLL:
-    case K_AI_STATUS:
-      k_put_c_string("E\376nohelper", &result);
-      break;
-    case K_AI_CANCEL:
-      k_put_c_string("OK", &result);
-      break;
 
     /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  K_JOB_MARK: the name of the scheduled administrator job
        this process IS, or "".  Linux asks systemd's cgroup; here every one of these must hold (sd_jobmark.h, win32jobmark.c): not an API

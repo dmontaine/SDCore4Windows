@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): CA$AI joins the new user to the Windows group sdaiusers, the right to use the AI
+*              provider's API through the helper sd-ai; it stands alone, is refused for a group or other account (10087, 10081 as CA$FILES), the group is looked for
+*              before anything is made, and the state line 12611 is read off the group.  A reused SD user (RELEASE_1.1 130) loses an sdaiusers it was not asked for.
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): CA$RECOVERY (exactly 1) writes ACC$RECOVERY 'yes' for a user account ('no' otherwise,
 *              written explicitly like the gates) and is said with 12775; a group or other account is refused (12776) before anything is made.
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (menu, terminal or blank) is written to ACC$START and CA$PINS (exactly 1) to ACC$PINS 'yes', for every type of account, and said with 12873 and 12890;
@@ -179,6 +182,8 @@ deffun ps_script(script) calling '!ps_script'
    files.write.want = (settings<CA$FILESWRITE> = 1)
 * 21 Oct 26 dm - S.73 item 3: FILES-ADMIN-ON, the same rule; it is a request only with FILES-ON and FILES-WRITE-ON (sdfilesadmin alone gives nothing).
    files.admin.want = (settings<CA$FILESADMIN> = 1)
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): AI-ON, the right to use the AI provider's API (membership of sdaiusers), the same rule; it stands alone.
+   ai.want = (settings<CA$AI> = 1)
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON, the account's editors keep a recovery copy of unsaved text; the same rule,
 *   exactly 1 to be a request; a user account only.
    recovery.want = (settings<CA$RECOVERY> = 1)
@@ -250,6 +255,13 @@ deffun ps_script(script) calling '!ps_script'
          goto exit.create
        end
        files.grp.name = 'sdfilesadmin'
+       gosub check.files.group
+       if files.bad then goto exit.create
+     end
+
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): AI-ON needs nothing else, but the group sdaiusers is looked for before anything is made, as the others are.
+     if ai.want then
+       files.grp.name = 'sdaiusers'
        gosub check.files.group
        if files.bad then goto exit.create
      end
@@ -625,7 +637,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: and no files-only login to give (10087; the group account is reached with logto).
-     if files.want or files.write.want or files.admin.want then
+     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate to give, for the same reason
        @system.return.code = -ER$ARGS
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
@@ -650,7 +662,7 @@ PW.TRY.AGAIN:
        goto exit.create
      end
 * 17 Oct 26 dm - S.65 slice 2c: nor a files-only login (10081 with status 2, as MODIFY.ACCOUNT says it for an account with no Windows user).
-     if files.want or files.write.want or files.admin.want then
+     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): nor an AI gate
        @system.return.code = -ER$ARGS
        err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
        goto exit.create
@@ -1085,6 +1097,9 @@ PW.TRY.AGAIN:
 *     21 Oct 26, S.73 item 3: and for sdfilesadmin.
       files.anow = is_grp_member(acc.uname, 'sdfilesadmin')
       crt sysmsg(12530, acc.name, if files.anow then 'yes' else 'no')  ;* Account %1 has files-admin %2
+*     13 Nov 26 Windows port (Linux S.69 step 2, RELEASE_1.1 246): and for sdaiusers.
+      ai.now = is_grp_member(acc.uname, 'sdaiusers')
+      crt sysmsg(12611, acc.name, if ai.now then 'yes' else 'no')  ;* Account %1 has ai %2
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
 *     10 Nov 26 (from Linux 44807a43, S.88 plan 2.9, D2): the recovery copy, in the words MODIFY.ACCOUNT says it with.
       crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
@@ -1700,6 +1715,14 @@ set.access:
          err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
       end
    end
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): and the AI group, on its own.  The state line (12611) is printed with the others.
+   if ai.want then
+      stat = os_group("ADDMEM", "sdaiusers", acc.uname)
+      if stat # 0 then
+         @system.return.code = -ER$FAILED
+         err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+      end
+   end
 
 *  9 Oct 26 Windows port - RELEASE_1.1 130.  A REUSED SD USER (restore, CA$REUSE.SD.USER) may already
 *   sit in sdssh / sdapi from its earlier account, and the adds above never remove: a restore that
@@ -1736,6 +1759,18 @@ set.access:
          rm.told = status()
          stat = 0
          if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfiles", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+*     13 Nov 26 Windows port - RELEASE_1.1 246: and for sdaiusers, the AI gate, the same way (a reused user from an earlier account keeps no AI it was
+*     not asked for; a machine without the group has nothing to take away).
+      if not(ai.want) then
+         rm.member = is_grp_member(acc.uname, 'sdaiusers')
+         rm.told = status()
+         stat = 0
+         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdaiusers", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

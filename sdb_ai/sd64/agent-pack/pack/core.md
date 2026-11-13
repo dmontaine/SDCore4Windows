@@ -48,16 +48,17 @@ The dictionary item types (field 1 starts with the letter). Each type is the chu
 | `8` | user | free for the application — SD does not read it |
 
 ### core:gates
-> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:667#d1a7d433
+> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:671#d1378dbc
 
 A new user account starts with every gate OFF. Only SDSYS, the one administrator, turns one on, with these words (`create.account`, then `modify.account <account> <word>`). Each word is the chunk `sys:word:<word>`. This is what `create.account` prints:
 
 ```
-Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}
+Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on}
                   {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {no.query}
                   A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change
                   the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers
-                  (net-on), and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files
+                  (net-on), no files-only login (files-on; it cannot change files here without files-write-on), and no use of the AI
+                  (ai-on); it can open and read the files
                   of the shared account by name unless shared-read-off is typed, and cannot write them unless
                   shared-write-on is typed;
                   the words above give them, and modify.account changes any of them afterwards, either way.

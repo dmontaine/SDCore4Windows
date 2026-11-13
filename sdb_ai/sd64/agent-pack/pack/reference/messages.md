@@ -3782,7 +3782,7 @@ cited by: `tk_form`
 Cancel
 ```
 
-cited by: `tk_form`
+cited by: `tk_form`, `tool_ai`
 
 ### msg:12255
 > kind=message tier=reference since=- src=sdsys/messages/12255:1#e00382e3
@@ -6357,6 +6357,15 @@ Back from SED: %1 %2 is saved
 Back from SED: %1 %2 is as it was
 ```
 
+### msg:12611
+> kind=message tier=reference since=- src=sdsys/messages/12611:1#d9625a28
+
+```
+Account %1 has ai %2
+```
+
+cited by: `create_account`, `modifya`
+
 ### msg:12612
 > kind=message tier=reference since=- src=sdsys/messages/12612:1#f3374397
 
@@ -6364,7 +6373,151 @@ Back from SED: %1 %2 is as it was
 The AI helper could not be reached: it is not running, or it is not installed
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `setai`, `tk_ai`, `tool_ai`
+
+### msg:12613
+> kind=message tier=reference since=- src=sdsys/messages/12613:1#53bb63db
+
+```
+The AI helper refused: %1 (%2)
+```
+
+cited by: `setai`
+
+### msg:12614
+> kind=message tier=reference since=- src=sdsys/messages/12614:1#a39694a4
+
+```
+set.ai {provider NAME | model PROVIDER NAME | key PROVIDER | custom NAME URL FORMAT AUTH VERSION MAXPARAM | ca C:/PATH | limit NAME NUMBER | context HEX | context -}; set.ai alone says what is set
+```
+
+cited by: `setai`
+
+### msg:12615
+> kind=message tier=reference since=- src=sdsys/messages/12615:1#a07bb4a2
+
+```
+%1 is not one of anthropic, openai, google, deepseek and custom
+```
+
+cited by: `setai`
+
+### msg:12616
+> kind=message tier=reference since=- src=sdsys/messages/12616:1#3787cc8c
+
+```
+The AI provider for every account is now %1
+```
+
+cited by: `setai`
+
+### msg:12617
+> kind=message tier=reference since=- src=sdsys/messages/12617:1#6ccb165b
+
+```
+The AI is now off for every account: no provider is selected
+```
+
+cited by: `setai`
+
+### msg:12618
+> kind=message tier=reference since=- src=sdsys/messages/12618:1#6c457bdc
+
+```
+The model for %1 is now %2
+```
+
+cited by: `setai`
+
+### msg:12619
+> kind=message tier=reference since=- src=sdsys/messages/12619:1#ff7db8ab
+
+```
+The model for %1 is cleared
+```
+
+cited by: `setai`
+
+### msg:12620
+> kind=message tier=reference since=- src=sdsys/messages/12620:1#dce90c12
+
+```
+The key for %1 is set
+```
+
+cited by: `setai`
+
+### msg:12621
+> kind=message tier=reference since=- src=sdsys/messages/12621:1#fbbec801
+
+```
+The key for %1 is cleared
+```
+
+cited by: `setai`
+
+### msg:12622
+> kind=message tier=reference since=- src=sdsys/messages/12622:1#fd9d72b5
+
+```
+The custom connection is now %1, at %2
+```
+
+cited by: `setai`
+
+### msg:12623
+> kind=message tier=reference since=- src=sdsys/messages/12623:1#32ab1a01
+
+```
+The custom connection is cleared
+```
+
+cited by: `setai`
+
+### msg:12624
+> kind=message tier=reference since=- src=sdsys/messages/12624:1#911ece57
+
+```
+The ca-file is now %1
+```
+
+cited by: `setai`
+
+### msg:12625
+> kind=message tier=reference since=- src=sdsys/messages/12625:1#4c1c6efc
+
+```
+The ca-file is now the system store of certificate authorities
+```
+
+cited by: `setai`
+
+### msg:12626
+> kind=message tier=reference since=- src=sdsys/messages/12626:1#c08d87b4
+
+```
+The limit %1 is now %2
+```
+
+cited by: `setai`
+
+### msg:12627
+> kind=message tier=reference since=- src=sdsys/messages/12627:1#a51f2631
+
+```
+%1 has a character that is not allowed here: use letters, digits and . _ : / @ + , -
+```
+
+cited by: `setai`
+
+### msg:12628
+> kind=message tier=reference since=- src=sdsys/messages/12628:1#00fc7b30
+
+```
+ai text: asks the AI the administrator has chosen; you see what will be sent and say yes first. Put the text in quotes if it ends with ?
+```
+
+cited by: `ai`
 
 ### msg:12629
 > kind=message tier=reference since=- src=sdsys/messages/12629:1#c30bea17
@@ -6373,7 +6526,7 @@ cited by: `tk_ai`
 The AI is off: the administrator has not chosen a provider (tool.ai or set.ai)
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12630
 > kind=message tier=reference since=- src=sdsys/messages/12630:1#0853f7ae
@@ -6382,7 +6535,7 @@ cited by: `tk_ai`
 This account may not use the AI: the administrator can allow it with modify.account %1 ai-on
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12631
 > kind=message tier=reference since=- src=sdsys/messages/12631:1#62b7e7e6
@@ -6391,7 +6544,7 @@ cited by: `tk_ai`
 The AI is not set up for %1: the administrator has not set its %2 (tool.ai or set.ai)
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12632
 > kind=message tier=reference since=- src=sdsys/messages/12632:1#74d419a5
@@ -6400,7 +6553,7 @@ cited by: `tk_ai`
 The AI did not answer: %1 (%2)
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12633
 > kind=message tier=reference since=- src=sdsys/messages/12633:1#8456c22a
@@ -6409,7 +6562,16 @@ cited by: `tk_ai`
 This will be sent to %1 (model %2), %3 bytes; the provider sees all of it:
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
+
+### msg:12634
+> kind=message tier=reference since=- src=sdsys/messages/12634:1#e995047f
+
+```
+Send it? (y/N)
+```
+
+cited by: `ai`
 
 ### msg:12635
 > kind=message tier=reference since=- src=sdsys/messages/12635:1#f6305b7b
@@ -6418,7 +6580,34 @@ cited by: `tk_ai`
 Nothing was sent.
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
+
+### msg:12636
+> kind=message tier=reference since=- src=sdsys/messages/12636:1#193f538d
+
+```
+Waiting for the answer ...
+```
+
+cited by: `ai`
+
+### msg:12637
+> kind=message tier=reference since=- src=sdsys/messages/12637:1#e74dab69
+
+```
+The answer was cut off at the length limit.
+```
+
+cited by: `ai`
+
+### msg:12638
+> kind=message tier=reference since=- src=sdsys/messages/12638:1#ae818345
+
+```
+%1 characters of the answer were replaced with ?: only plain text is shown.
+```
+
+cited by: `ai`
 
 ### msg:12639
 > kind=message tier=reference since=- src=sdsys/messages/12639:1#64da2396
@@ -6427,7 +6616,7 @@ cited by: `tk_ai`
 Tokens used: %1 in, %2 out (%3)
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12640
 > kind=message tier=reference since=- src=sdsys/messages/12640:1#16cae5b1
@@ -8879,6 +9068,15 @@ Passages of SD's own documentation follow, each with its id in brackets. Use the
 
 cited by: `tk_ai`
 
+### msg:12934
+> kind=message tier=reference since=- src=sdsys/messages/12934:1#55dcb476
+
+```
+The AI needs Python 3.13 or later installed for all users, and none was found
+```
+
+cited by: `setai`
+
 ### msg:12935
 > kind=message tier=reference since=- src=sdsys/messages/12935:1#84d240de
 
@@ -8983,7 +9181,7 @@ cited by: `tk_ai`
 SD does not take questions about its own code or build (%1) to the AI: the source is open, so ask an AI outside SD
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `tk_ai`
 
 ### msg:12947
 > kind=message tier=reference since=- src=sdsys/messages/12947:1#d0f7e91d
@@ -10361,6 +10559,24 @@ Left out (not a field of this form, or not text): %1
 
 cited by: `tk_ai`
 
+### msg:15011
+> kind=message tier=reference since=- src=sdsys/messages/15011:1#ba376885
+
+```
+The standing text sent with every AI request is now the administrator's (%1 characters)
+```
+
+cited by: `setai`
+
+### msg:15012
+> kind=message tier=reference since=- src=sdsys/messages/15012:1#d7a36ce4
+
+```
+The standing text sent with every AI request is the shipped default again
+```
+
+cited by: `setai`
+
 ### msg:15013
 > kind=message tier=reference since=- src=sdsys/messages/15013:1#e3fa88ea
 
@@ -10368,7 +10584,16 @@ cited by: `tk_ai`
 The standing text names SD's own code or build (%1), so it is not used and nothing is sent
 ```
 
-cited by: `tk_ai`
+cited by: `ai`, `setai`, `tk_ai`
+
+### msg:15014
+> kind=message tier=reference since=- src=sdsys/messages/15014:1#4a319d96
+
+```
+The standing text is given as hexadecimal ASCII, at most 4000 characters
+```
+
+cited by: `setai`
 
 ### msg:15015
 > kind=message tier=reference since=- src=sdsys/messages/15015:1#27affe50
@@ -10378,6 +10603,33 @@ This account starts at the home screen, which could not open, so the session is 
 ```
 
 cited by: `home_entry`
+
+### msg:15016
+> kind=message tier=reference since=- src=sdsys/messages/15016:1#4cfb6252
+
+```
+%1 does not list a model named %2, so requests may be refused
+```
+
+cited by: `setai`
+
+### msg:15017
+> kind=message tier=reference since=- src=sdsys/messages/15017:1#98766085
+
+```
+%1 lists %2 models:
+```
+
+cited by: `setai`
+
+### msg:15018
+> kind=message tier=reference since=- src=sdsys/messages/15018:1#abb71575
+
+```
+It lists %1 (model names are case-sensitive)
+```
+
+cited by: `setai`
 
 ### msg:15019
 > kind=message tier=reference since=- src=sdsys/messages/15019:1#de8f17c8
@@ -11220,7 +11472,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat`, `deleteserver` and 22 more
+cited by: `apndpath`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat`, `deleteserver` and 23 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524

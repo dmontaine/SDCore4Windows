@@ -31,13 +31,9 @@ LINUX_REPO = 'SDCore4Linux'
 LINUX = os.environ.get('SD_LINUX_GPLBP') or os.path.normpath(
     os.path.join(HERE, '..', '..', '..', '..', LINUX_REPO, 'sdb_ai', 'sd64', 'sdsys', 'gpl.bp'))
 
-AI = 'the AI (Linux S.69) is not carried to Windows yet: RELEASE_1.1 197'
-NOT_HERE = {
-    'ai':               AI,
-    'setai':            AI,
-    'tool_ai':          AI,
-    'audit_read':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 197',
-    'tool_audit':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 197',
+NOT_HERE = {   # 13 Nov 26: ai, setai and tool_ai are carried (RELEASE_1.1 246) and left this list
+    'audit_read':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 247',
+    'tool_audit':       'tool.audit (Linux S.75 A5) is not carried yet: RELEASE_1.1 247',
     'define_install.h': 'removed here as dead code with the PRE_RELEASE 168 chain (aafca0bb)',
     'euid_restore':     'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'euid_set':         'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',

@@ -1275,6 +1275,13 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; finishing window runs on Setup's elevated token after the wizard has gone.***
 
 [UninstallRun]
+; 13 Nov 26 - RELEASE_1.1 246: THE AI HELPER SERVICE sd-ai goes too (stopped and deleted, its event log source removed).  Its state,
+; {#DataDir}\ai (settings and keys), stays with the database, as Linux keeps /var/lib/sd-ai until the accounts go.  Independent of
+; the SD service below, so the order between them does not matter.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-aihelper.ps1"" -Remove"; \
+    Flags: runhidden skipifdoesntexist; RunOnceId: "RemoveSDAiService"
+
 ; THE SERVICE GOES FIRST, and the order is load-bearing.  Removing it stops it,
 ; which stops SD; doing it the other way round lets the service notice the
 ; daemon has gone and, with the restart action configured, start it again from
@@ -4496,6 +4503,33 @@ begin
               'Its log is ' + LogPath + '.' + #13#10#13#10;
 end;
 
+(* 13 Nov 26 - RELEASE_1.1 246, THE AI HELPER SERVICE (Linux's sd-ai, S.69 step 2).  install-aihelper.ps1 makes the service sd-ai
+   (the virtual account NT SERVICE\sd-ai) and its state directory {#DataDir}\ai, and starts it.  AFTER InstallPython, because the
+   service runs under the all-users Python that step may have just installed; from [Code] for that reason and not from [Run], which
+   comes before ssPostInstall.  Nothing is turned on: no provider, no key, nobody in sdaiusers.  NEVER STOPS THE INSTALL.  Codes:
+   0 running, 3 no all-users Python 3.13+ (no service; the AI is optional - the documentation says what to do), anything else is
+   the one the closing box mentions. *)
+function InstallAiHelper: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  SayStep('Setting up the AI helper...');
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\install-aihelper.ps1') + '" -Install -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: install-aihelper.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\install-aihelper.log');
+  if (Code = 0) or (Code = 3) then
+    Exit;
+  Result := 'The AI helper service was NOT set up (code ' + IntToStr(Code) + '). See ' +
+            ExpandConstant('{#DataDir}') + '\install-aihelper.log' + #13#10#13#10;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   SshLimit: String;
@@ -4555,6 +4589,8 @@ var
   ApiScope: String;
   { 26 Sep 26 - InstallPython's answer: empty when the box was not ticked. }
   PyMsg: String;
+  { 13 Nov 26 - RELEASE_1.1 246: InstallAiHelper's answer, empty unless the service could not be set up. }
+  AiMsg: String;
 begin
   { 8 Nov 26 - RELEASE_1.1 197: a kept sd.conf loses its retired parameters before
     anything can start SD (see RemoveRetiredConf). }
@@ -4604,6 +4640,8 @@ begin
     { 26 Sep 26 - PYTHON, AFTER THE ACL STEPS: it closes no hole, so it waits
       behind the ones that do, and it is the slowest step here. }
     PyMsg := InstallPython;
+    { 13 Nov 26 - RELEASE_1.1 246: the AI helper runs under that Python, so it follows it. }
+    AiMsg := InstallAiHelper;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the
       accounts rather than configuring the server, and it needs nothing from
@@ -5124,6 +5162,8 @@ begin
            SharedMsg +
            { Empty unless shared-docs.ps1 could not set up the shared account's documentation. }
            DocsMsg +
+           { 13 Nov 26 - RELEASE_1.1 246: empty unless install-aihelper.ps1 could not set up the AI helper service. }
+           AiMsg +
            { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it. }
            StartMsg +
            { Empty on every first install and on every upgrade that worked. }
@@ -5734,6 +5774,8 @@ begin
   Exec(Net, 'localgroup sdfiles /delete',      '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdfileswrite /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdfilesadmin /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  { 13 Nov 26 - RELEASE_1.1 246: the AI gate's group goes with the others. }
+  Exec(Net, 'localgroup sdaiusers /delete',    '', SW_HIDE, ewWaitUntilTerminated, Code);
   Exec(Net, 'localgroup sdsshonly /delete', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 

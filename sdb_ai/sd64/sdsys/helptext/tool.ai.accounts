@@ -1,0 +1,5 @@
+Accounts that may use the AI
+administrator-21-the-ai-helper
+This box shows, for each account that belongs to a person, whether its ai gate is on. An account whose gate is off cannot send anything to the AI provider, whatever else is set. Nothing is on as delivered.
+Enter turns the gate on or off for the account under the cursor: the command is modify.account NAME ai-on or ai-off. Turning it on asks you to type the account's name, because the text the person sends leaves this machine for the provider you chose. The change takes effect at the person's next request to the AI.
+The gate is membership of the Windows group sdaiusers. The AI helper reads the caller's Windows user from the connection and asks the system, so the gate holds even for a program that does not use SD's own verbs. SDSYS has no gate and is not listed: the administrator, who chooses the provider and the key, may always use the AI.

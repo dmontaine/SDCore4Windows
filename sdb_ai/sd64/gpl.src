@@ -33,6 +33,7 @@ messages
 netfiles
 object
 objprog
+op_ai
 op_arith
 op_array
 op_btree
@@ -99,6 +100,7 @@ win32session
 win32group
 win32jobmark
 win32gcat
+win32ai
 sdtermlb
 strings
 sysdump

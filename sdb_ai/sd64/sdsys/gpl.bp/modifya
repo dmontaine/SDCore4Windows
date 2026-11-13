@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON / AI-OFF put the account's person in or out of the Windows group sdaiusers (set.ai,
+*           through change.files.group, read back, said with 12611); in word.arr / slot.arr after the files words, as Linux; AI-OFF on a machine with no sdaiusers has
+*           nothing to take away.
 * 13 Nov 26 Windows (RELEASE_1.1 254, test-tkgates G7): the SHARED-READ and SHARED-WRITE words are carried out before the FILES words, Linux's order
 *           (word.arr and slot.arr); tk_gate_info already lists them that way, so the gate screens and modify.account now agree.
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON / RECOVERY-OFF write 'yes' / 'no' in register field 19 (ACC$RECOVERY), a user
@@ -178,7 +181,13 @@
 * MODIFY.ACCOUNT account NONE              - neither
 * MODIFY.ACCOUNT account SH-ON | SH-OFF    - the SH verb and "!"
 * MODIFY.ACCOUNT account OS-ON | OS-OFF    - OS.EXECUTE and the screen editors
+* MODIFY.ACCOUNT account AI-ON | AI-OFF    - membership of the Windows group sdaiusers, the right to use the AI (13 Nov 26)
 * MODIFY.ACCOUNT account SUSPENDED | UNSUSPENDED
+*
+* 13 Nov 26 Windows port - from Linux S.69 step 2 (23 Oct 26), RELEASE_1.1 246.  AI-ON / AI-OFF add or remove the account's person from the Windows group sdaiusers.
+*   A person in it may use the AI provider the administrator chose (set.ai, the same provider and model for every account) through the helper sd-ai; a person
+*   outside it is refused by the helper (nogate).  Off for a new account.  The line printed is "Account %1 has ai yes|no" (12611), read back from the group.  It
+*   takes effect at the person's next request: the helper reads the group each time (NetLocalGroupGetMembers), with no sign-out.
 *
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIERS ARE GONE, AND THESE ARE
 *   THE TWO STATE FORMS THAT REMAIN.  SUSPENDED writes SUSPENDED to
@@ -496,6 +505,15 @@ do.action:
             files.grp = 'sdfilesadmin'
             files.want = @false
             gosub set.files
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246; owner: "an API gate for each user account ... API access can be turned on or off depending on
+*   the user"): AI-ON / AI-OFF, membership of the Windows group sdaiusers, the right to use the AI provider's API through the helper sd-ai.  It stands alone (no other
+*   group is needed) and is OFF for a new account.
+         case upcase(action) = 'AI-ON'
+            ai.want = @true
+            gosub set.ai
+         case upcase(action) = 'AI-OFF'
+            ai.want = @false
+            gosub set.ai
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
 *   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
 *   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
@@ -674,7 +692,7 @@ add.delete.arm:
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, recovery-on, recovery-off, net-on, net-off,'
-         crt '   files-on, files-off, files-write-on, files-write-off, files-admin-on, files-admin-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
+         crt '   files-on, files-off, files-write-on, files-write-off, files-admin-on, files-admin-off, ai-on, ai-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   start-menu, start-terminal, start-default, pins-on, pins-off,'
          crt '   suspended or unsuspended'
       end
@@ -701,6 +719,7 @@ show.usage:
    crt '                  modify.account <account> recovery-on | recovery-off'
    crt '                  modify.account <account> net-on | net-off'
    crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off | files-admin-on | files-admin-off'
+   crt '                  modify.account <account> ai-on | ai-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> start-menu | start-terminal | start-default'
    crt '                  modify.account <account> pins-on | pins-off'
@@ -720,12 +739,12 @@ show.usage:
 *     - two different words of the same slot set one access to different states (sh-on and sh-off, or ssh and api: say both) and are refused
 *       with 12796.
 *   word.arr is also the ORDER the words are carried out in (run.actions): the routes, the register switches, and the suspension last.  slot.arr
-*   holds the slot of each word.  do.action's case lines are the third list.  Linux's net, files, ai, start and pins words are not here: this
-*   tree has none of them.  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
+*   holds the slot of each word.  do.action's case lines are the third list.  (Linux's net, files, ai, start and pins words came later: the
+*   last of them, ai-on / ai-off, on 13 Nov 26.)  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,ST,ST,ST,PN,PN,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,AI,AI,ST,ST,ST,PN,PN,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -1230,6 +1249,84 @@ change.files.group:
       files.stat = status()
       if files.stat = 0 and cg.now # cg.want then files.stat = 2
    end
+   return
+
+*****************************************************************************
+* SET.AI  -  MODIFY.ACCOUNT <account> AI-ON | AI-OFF
+*
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246; owner, 23 Oct: "an API gate for each user account, so that API access can be turned on or off
+*   depending on the user").  Membership of the Windows group sdaiusers IS the gate, as sdapi and sdfiles are: nothing is written to the register, and the helper sd-ai
+*   reads the membership of the caller's SID (from its named pipe) at every request, so the gate does not depend on SD's BASIC.  ai.want is set by the caller.  The
+*   group stands alone (no other group is needed) and is empty for a new account.
+*
+* AS SET.FILES, THE LOOKUP IS THREE-VALUED: !is_grp_member answers @false for "not a member" and for "could not tell", and tells them apart only by status().  A
+*   lookup that could not answer changes NOTHING and says so (10081 with the status).  The same refusals: a group (sdg_) or other account has no Windows user (10087,
+*   10081); AI-ON for a person who is not in sdusers (a login would refuse them first, so the group is not added to look like access); AI-ON when the Windows group
+*   sdaiusers does not exist on this machine (an install from before this release has not made it yet: 10024 names it).  The state line (12611) is read back from the
+*   group after the change, and a read back that does not show the wanted state is a failure (10081), never a success.  change.files.group is the one place a group is
+*   changed (it is not specific to files).
+
+set.ai:
+   if group.name[1,4] # 'sdu_' then
+      @system.return.code = -ER$FAILED
+      if group.name[1,4] = 'sdg_' then
+         crt sysmsg(10087, acc.name)  ;* %1 is a group account and has no remote access; reach it with logto
+      end else
+         crt sysmsg(10081, acc.name, 2)  ;* Unable to change remote access for %1, status: %2
+      end
+      return
+   end
+   files.user = group.name[5,999]
+   if not(valid_os_name(files.user)) then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, 2)
+      return
+   end
+
+   has.ai = is_grp_member(files.user, 'sdaiusers')
+   files.stat = status()
+   if files.stat # 0 and not(ai.want) then
+*     AI-OFF on a machine with no group sdaiusers: there is nothing to take away (the lookup's status 1 there is "no such group").
+      ai.found = is_group('sdaiusers')
+      if status() = 0 and not(ai.found) then
+         files.stat = 0
+         has.ai = @false
+      end
+   end
+   if files.stat = 0 and ai.want then
+      in.sdusers = is_grp_member(files.user, 'sdusers')
+      files.stat = status()
+      if files.stat = 0 and not(in.sdusers) then files.stat = 2
+   end
+   if files.stat # 0 and ai.want and not(is_group('sdaiusers')) and status() = 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10024, 'sdaiusers')  ;* %1 is not a valid Windows group
+      return
+   end
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   if has.ai = ai.want then
+      @system.return.code = 0
+      crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
+      return
+   end
+
+   cg.group = 'sdaiusers'
+   cg.want = ai.want
+   gosub change.files.group
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   crt sysmsg(12611, acc.name, if cg.now then 'yes' else 'no')  ;* Account %1 has ai %2
    return
 
 * ======================================================================

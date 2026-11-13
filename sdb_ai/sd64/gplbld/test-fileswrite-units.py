@@ -444,18 +444,18 @@ def run_checks(raw):
        "other account is refused as for FILES-ON, the join is sd-elevate addgroup <user> sdfileswrite AFTER the sdfiles join, and the state line 12527 is read off /etc/group",
        re.search(r"\$define\s+CA\$FILESWRITE\s+39\b", hdr) is not None and len(re.findall(r"\$define\s+\S+\s+39\b", hdr)) == 1
        and re.search(r"case upcase\(token\) = 'FILES-WRITE-ON'\s*\n\s*settings<CA\$FILESWRITE> = 1\s*\n", cr) is not None and len(re.findall(r"(?<!if )settings<CA\$FILESWRITE>\s*=", cr)) == 1
-       and "{files-on} {files-write-on} {files-admin-on}" in cr      # 13 Nov 26 Windows port: the words after it differ (no {ai-on} here, the shared words between); they are other rows'
+       and "{files-on} {files-write-on} {files-admin-on} {ai-on}" in cr      # 13 Nov 26 Windows port: {ai-on} with RELEASE_1.1 246 (Linux S.69 step 2); the words after it differ (the shared words between)
        and "files.write.want = (settings<CA$FILESWRITE> = 1)" in ca2
        and re.search(r"if files\.write\.want then\s*\n\s*if not\(files\.want\) then\s*\n\s*@system\.return\.code = -ER\$ARGS\s*\n\s*err = 12528:@vm:acc\.name[^\n]*\n\s*goto exit\.create\s*\n\s*end", ca2) is not None
        # 21 Oct 26 (S.73 item 3): the look-up of a group and its join are the two internal subroutines check.files.group and join.files.group, called once per group, sdfiles then sdfileswrite then sdfilesadmin;
        # the look-ups all come BEFORE the Linux user is made and the joins AFTER
        # 13 Nov 26 Windows port: the joins are !os_group ADDMEM in set.access (after create_user), typed out once per group, each stopping the verb with 10081 and its
-       # status; Linux's join.files.group subroutine is the same steps.  Three look-ups and three joins: there is no sdaiusers here (S.69 is another row's)
+       # status; Linux's join.files.group subroutine is the same steps.  Four look-ups (the fourth is sdaiusers, RELEASE_1.1 246; test-ai-units.py holds its rows) and three files joins
        and ordered(ca2, "files.grp.name = 'sdfiles'", "gosub check.files.group", "if files.write.want then", "err = 12528:@vm:acc.name", "files.grp.name = 'sdfileswrite'", "gosub check.files.group",
                    "if files.admin.want then", "err = 12531:@vm:acc.name", "files.grp.name = 'sdfilesadmin'", "gosub check.files.group",
                    "if not(create_user(acc.uname)) then", "if files.want then", 'stat = os_group("ADDMEM", "sdfiles", acc.uname)', "if files.write.want then", 'stat = os_group("ADDMEM", "sdfileswrite", acc.uname)',
                    "if files.admin.want then", 'stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)')
-       and ca2.count("gosub check.files.group") == 3 and all(ca2.count('os_group("ADDMEM", "%s", acc.uname)' % g_) == 1 for g_ in ("sdfiles", "sdfileswrite", "sdfilesadmin"))
+       and ca2.count("gosub check.files.group") == 4 and all(ca2.count('os_group("ADDMEM", "%s", acc.uname)' % g_) == 1 for g_ in ("sdfiles", "sdfileswrite", "sdfilesadmin"))
        and all(re.search(r'if %s then\s*\n\s*stat = os_group\("ADDMEM", "%s", acc\.uname\)\s*\n\s*if stat # 0 then\s*\n\s*@system\.return\.code = -ER\$FAILED\s*\n'
                          r"\s*err = 10081:@vm:acc\.uname:@vm:stat ; return\s*\n\s*end\s*\n\s*end" % (re.escape(w_), g_), ca2) is not None
                for w_, g_ in (("files.want", "sdfiles"), ("files.write.want", "sdfileswrite"), ("files.admin.want", "sdfilesadmin")))
@@ -465,10 +465,10 @@ def run_checks(raw):
                      r"\s*@system\.return\.code = -ER\$FAILED\s*\n\s*err = 10024:@vm:files\.grp\.name[^\n]*\n\s*files\.bad = @true\s*\n\s*end\s*\n\s*end\s*\n\s*return\s*$", ca2, re.M) is not None
        and re.search(r"\$define\s+CA\$FILESADMIN\s+40\b", hdr) is not None and len(re.findall(r"\$define\s+\S+\s+40\b", hdr)) == 1
        and re.search(r"case upcase\(token\) = 'FILES-ADMIN-ON'\s*\n\s*settings<CA\$FILESADMIN> = 1\s*\n", cr) is not None and len(re.findall(r"(?<!if )settings<CA\$FILESADMIN>\s*=", cr)) == 1
-       # 13 Nov 26 Windows port: the state lines read the group into files.wnow / files.anow first (the same reading); no ai.want here (another row's)
+       # 13 Nov 26 Windows port: the state lines read the group into files.wnow / files.anow first (the same reading); ai.want joins the group / other refusal (RELEASE_1.1 246)
        and "files.admin.want = (settings<CA$FILESADMIN> = 1)" in ca2
        and re.search(r"files\.anow = is_grp_member\(acc\.uname, 'sdfilesadmin'\)\s*\n\s*crt sysmsg\(12530, acc\.name, if files\.anow then 'yes' else 'no'\)", ca2) is not None
-       and ca2.count("if files.want or files.write.want or files.admin.want then") == 2
+       and ca2.count("if files.want or files.write.want or files.admin.want or ai.want then") == 2
        and re.search(r"files\.wnow = is_grp_member\(acc\.uname, 'sdfileswrite'\)\s*\n\s*crt sysmsg\(12527, acc\.name, if files\.wnow then 'yes' else 'no'\)", ca2) is not None, "")
     ck("F13 the manifest: route.files.write: 1|0 for a USER account from membership of sdfileswrite, right after route.files and before os.sh; RESTORE.ACCOUNT reads it (and clears it for each "
        "section), hands it on as CA$FILESWRITE only when route.files is 1 too, so a manifest without the key, or with the write group and no files route, restores as NOT in the group",
@@ -709,8 +709,8 @@ def mutants(raw):
       '      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)\n      if stat # 0 then', '      stat = os_group("ADDMEM", "sdfileswrite", acc.uname)\n      if 0 then')
     m("the write group needs no files-on", "create_account", "       if not(files.want) then\n         @system.return.code = -ER$ARGS\n         err = 12528",
       "       if 0 then\n         @system.return.code = -ER$ARGS\n         err = 12528")
-    m("a group account is no longer refused the write group", "create_account", "     if files.want or files.write.want or files.admin.want then\n       @system.return.code = -ER$ARGS\n       err = 10087",
-      "     if files.want or files.admin.want then\n       @system.return.code = -ER$ARGS\n       err = 10087")
+    m("a group account is no longer refused the write group", "create_account", "     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate",
+      "     if files.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate")
     m("the manifest has no write key", "acc_os_info", "   info<-1> = 'route.files.write: ' : fwrite\n", "")      # 13 Nov 26 Windows port: the key is built from fwrite (F13)
     m("the manifest's write key is read off the wrong group (13 Nov 26 Windows port)", "acc_os_info", "m = is_grp_member(uname, 'sdfileswrite')", "m = is_grp_member(uname, 'sdfiles')")
     m("a write group that cannot be read is a member in the manifest (13 Nov 26 Windows port)", "acc_os_info", "if m and status() = 0 then fwrite = 1", "if m then fwrite = 1")
@@ -719,8 +719,8 @@ def mutants(raw):
     m("FILES-ADMIN-ON sets nothing", "createa", "'FILES-ADMIN-ON'\n            settings<CA$FILESADMIN> = 1", "'FILES-ADMIN-ON'\n            settings<CA$FILES> = 1")
     m("the administration group needs no files-write-on", "create_account", "       if not(files.want) or not(files.write.want) then", "       if not(files.want) then")
     m("the administration group is joined as sdfiles", "create_account", 'stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)', 'stat = os_group("ADDMEM", "sdfiles", acc.uname)')
-    m("a group account is given the administration group (the 10087 refusal forgets it)", "create_account", "     if files.want or files.write.want or files.admin.want then\n       @system.return.code = -ER$ARGS\n       err = 10087",
-      "     if files.want or files.write.want then\n       @system.return.code = -ER$ARGS\n       err = 10087")
+    m("a group account is given the administration group (the 10087 refusal forgets it)", "create_account", "     if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate",
+      "     if files.want or files.write.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate")
     m("the manifest has no administration key", "acc_os_info", "   info<-1> = 'route.files.admin: ' : fadmin\n", "")
     m("the restore gives the administration group without the write route", "restorea", "if m.route.files = '1' and m.route.files.write = '1' and m.route.files.admin = '1' then settings<CA$FILESADMIN> = 1",
       "if m.route.files = '1' and m.route.files.admin = '1' then settings<CA$FILESADMIN> = 1")

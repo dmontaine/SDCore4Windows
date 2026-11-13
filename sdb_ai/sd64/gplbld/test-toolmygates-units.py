@@ -10,6 +10,8 @@ no administrator, it can change nothing (no write, no command, no confirm box, n
 every route gate from the group of the person's login name - are mostly ABSENCE and a pairing, and an edit that breaks one still compiles.
 
 --selftest breaks each invariant in the way an edit plausibly would and requires a check to notice; a mutant that nothing catches is a failure of the self-test.
+
+13 Nov 26 Windows port - RELEASE_1.1 246: MG6 counts SIX built group gates, as Linux's does: the ai gate (the Windows group sdaiusers) is built here now.
 """
 
 import os
@@ -72,7 +74,7 @@ def checks(raw):
         ok = ok and pairs.get(r[0]) == r[7]
     ck("MG5", "each register gate of the table is read with the kernel key the TABLE names for it (sh K$SH, os K$OS.EXEC ...)", ok and len(built_reg) == 9, repr((pairs, [(r[0], r[7]) for r in built_reg])))
     ck("MG6", "each route gate is membership of its Linux group by the PERSON's login name (@logname), not by the account name, and the lookup is the system's own !is_grp_member",
-       "s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)" in pg and "deffun is_grp_member(user,group) calling '!is_grp_member'" in pg and "case gkind<k> = 'group'" in pg and len(built_grp) == 5 and "is_grp_member(@who" not in pg)
+       "s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)" in pg and "deffun is_grp_member(user,group) calling '!is_grp_member'" in pg and "case gkind<k> = 'group'" in pg and len(built_grp) == 6 and "is_grp_member(@who" not in pg)
     keys = re.findall(r"call \$tk_keys\('add', keys, '([^']+)', '[^']+', '([a-z]+)'", pg)
     ck("MG7", "the key table is help, refresh and quit - and the Esc key that opens the menu bar (S.88 F0a: the bar runs nothing, a choice is one of those three keys) - and nothing else: no key to queue, run, drop or toggle anything",
        sorted(a for _k, a in keys) == ["help", "menu", "quit", "refresh"] and ("esc", "menu") in keys, repr(keys))
