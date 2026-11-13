@@ -14,6 +14,24 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
              Does NOT    - Change sdssh's membership on an install where you never changed it. NOT
                            YET TESTED ON AN INSTALLED SYSTEM.
 
+13 Nov 26  RUN.IN DEBUGS A PROGRAM IN ANOTHER ACCOUNT, AS ON LINUX.
+
+             What        - The administrator can type RUN.IN account DEBUG file program. The
+                           program runs in a separate SD process of that account, which the SD
+                           service starts without the administrator's rights: no administrator
+                           flag, no shell, no OS.EXECUTE, no edit gates, and Windows access only to
+                           that account's files and what any SD user can reach. The debugger is
+                           shown in the administrator's own window, and the program's screen and
+                           keyboard are that window's while it runs. B on the master files'
+                           programs page and the editor's Debug of another account's program now
+                           work. The installer makes a local Windows account, sdrunin, for these
+                           processes; nobody can sign in as it, and uninstalling removes it.
+             Does NOT    - Let the program reach the administrator's rights or another account's
+                           files: it can do what a session of that account can, less its shell.
+                           Give the debugger's AI command (it is off for these runs). Follow a
+                           resize of the window while the program runs. NOT YET TESTED ON AN
+                           INSTALLED SYSTEM.
+
 13 Nov 26  ONE FAILED START NO LONGER STALLS EVERY LATER SESSION.
 
              What        - An sd.exe that stopped with "SD has not been started." (or failed in

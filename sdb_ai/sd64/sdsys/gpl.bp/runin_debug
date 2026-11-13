@@ -1,0 +1,116 @@
+* RUNIN_DEBUG
+* run.in account debug file program, the administrator's side: the debugger here, the program in a separate, unelevated process of the account.
+* Copyright (c) String Database.  This program is free software; you can redistribute it and/or modify it under the terms of the GNU General
+* Public License, version 3 or later.
+* START-HISTORY:
+* 13 Nov 26 Windows port - written.  RELEASE_1.1 253(b): run.in WITH debug, the form Windows allows (gplsrc/win32runin.h has the design; the
+*           design note is .claude/design-runin-debug-20261113.md).  PDEBUG's loop (gpl.bp/pdebug), with the run's store for the user's own
+*           and the child's screen and keyboard relayed to this terminal while the program runs.
+* END-HISTORY
+* START-DESCRIPTION:
+*   call !runin_debug(acct, file, prog, why)     from CPROC's ri.debug only (run.in, the administrator's verb)
+*     acct, file, prog   plain words CPROC checked (the file a file in the account's VOC)
+*     why                '' when the run started (and has now ended); otherwise why it could not start, for message 12599
+*
+*   THE PROGRAM IS NOT RUN HERE.  This session is the administrator's and its token is elevated for its life.  kernel(K$RUNIN.DEBUG, 'O')
+*   asks the SD service, which starts "sd -RUNIN acct ... debug file prog" as the bare account sdrunin with sdusers and the account's own
+*   group, no privilege, Medium integrity, in a job of one process; that child enters the account (LOGIN) with no administrator flag, no SH,
+*   no OS.EXECUTE and no edit gate, and its debugger side is $PDBG.  This is the other side, as PDEBUG is for a phantom: each stop is a
+*   message in the run's store, and $DEBUG is called with the phantom bit.  dbg.relay (debug.h) tells $DEBUG that the program's screen is
+*   this terminal's, so it gets the full screen, F4 and V, and no AI, and reads source only through the child ('SOURCE').
+*
+*   WHAT THE CHILD SENDS IS UNTRUSTED HERE.  A stop message is taken only when its fields are numbers; nothing in it is a name this program
+*   opens.  The store is the service's (its path came from the LocalSystem pipe, whose owner win32runin.c checked).
+*
+*   BETWEEN STOPS, kernel(K$RUNIN.DEBUG, 'P') relays half a second at a time: the child's screen to this terminal, this keyboard to the
+*   child, and the break key as the child's break key; then the store is looked at.  The run ends when the child ends (1) or this session
+*   ends it ('C', which also happens in CPROC's abort branch if this routine is abandoned).
+* END-DESCRIPTION
+* START-CODE
+
+$internal
+subroutine runin_debug(rd.acct, rd.file, rd.prog, rd.why)
+$catalog !runin_debug
+
+$include keys.h
+$include debug.h
+$include syscom.h
+$include int$keys.h
+
+   rd.why = ''
+
+   * The terminal the child is to draw for: this one's type and size
+   rd.term = downcase(trim(system(7)))
+   if rd.term = '' or len(rd.term) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-+', '', rd.term) # '' then rd.term = 'windows'
+   rd.cols = @crtwide + 0
+   rd.rows = @crthigh + 0
+   if rd.cols < 20 then rd.cols = 20
+   if rd.cols > 999 then rd.cols = 999
+   if rd.rows < 10 then rd.rows = 10
+   if rd.rows > 999 then rd.rows = 999
+
+   rd.ans = kernel(K$RUNIN.DEBUG, 'O' : @fm : rd.acct : @fm : rd.file : @fm : rd.prog : @fm : rd.term : @fm : rd.cols : @fm : rd.rows)
+   if rd.ans<1> # 'OK' then
+      rd.why = rd.ans<2>
+      if rd.why = '' then rd.why = 'the SD service gave no answer'
+      return
+   end
+   rd.store = rd.ans<3>
+   openpath rd.store to dbg.store else
+      void kernel(K$RUNIN.DEBUG, 'C')
+      rd.why = 'the store of the run could not be opened'
+      return
+   end
+   mark.mapping dbg.store, off
+
+   rd.in = 'D.':@userno
+   rd.out = 'DR.':@userno
+   dbg.relay = rd.acct
+   debug.initialised = @false      ;* the display is set up again for this run, and again after it
+   debugger.uid = 0
+
+   * The child's $PDBG waits for this, as a phantom's waits for PDEBUG's
+   recordlocku dbg.store, 'DR.START'
+   write 'START' : @fm : @userno to dbg.store, 'DR.START'
+
+   break off
+   rd.ended = @false
+   loop
+      * The child's screen and this keyboard, until its next stop or its end
+      loop
+         if kernel(K$RUNIN.DEBUG, 'P' : @fm : 500) # 0 then rd.ended = @true
+      until rd.ended
+         readu rd.msg from dbg.store, rd.in then exit
+         release dbg.store, rd.in
+      repeat
+   until rd.ended
+      delete dbg.store, rd.in
+
+      * A stop: DBG and six numbers (program id, compile time, line, subroutine reference, event, the child's user number)
+      rd.ok = (rd.msg<1> = 'DBG')
+      for rd.i = 2 to 7
+         rd.f = rd.msg<rd.i>
+         if not(rd.f matches '1N0N') or len(rd.f) > 12 then rd.ok = @false
+      next rd.i
+      if not(rd.ok) then
+         rd.why = 'the debugged program sent a message that is not a stop'
+         exit
+      end
+      debugger.uid = rd.msg<7> + 0
+      call $debug(rd.msg<2> + 0, rd.msg<3> + 0, rd.msg<4> + 0, rd.msg<5> + 0, bitor(rd.msg<6> + 0, 0x80000000))
+
+      * Send the response back to the debugged process
+      recordlocku dbg.store, rd.out
+      write 'DBG' to dbg.store, rd.out
+      wake debugger.uid
+   repeat
+
+   void kernel(K$RUNIN.DEBUG, 'C')
+   close dbg.store
+   dbg.relay = ''
+   debug.initialised = @false
+   break on
+   return
+end
+
+* END-CODE

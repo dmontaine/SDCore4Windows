@@ -5343,19 +5343,19 @@ cited by: `setserver`
 cited by: `setserver`
 
 ### msg:12452
-> kind=message tier=reference since=- src=sdsys/messages/12452:1#9c442a5d
+> kind=message tier=reference since=- src=sdsys/messages/12452:1#eb329ff5
 
 ```
-run.in account command name ...; the commands are basic, catalog, decatalog, delete.catalog and compile.dict
+run.in account command name ...; the commands are basic, catalog, decatalog, delete.catalog, debug and compile.dict
 ```
 
 cited by: `cproc`
 
 ### msg:12453
-> kind=message tier=reference since=- src=sdsys/messages/12453:1#c14771e0
+> kind=message tier=reference since=- src=sdsys/messages/12453:1#312a4fb5
 
 ```
-%1 is not a command run.in runs (it runs basic, catalog, decatalog, delete.catalog and compile.dict)
+%1 is not a command run.in runs (it runs basic, catalog, decatalog, delete.catalog, debug and compile.dict)
 ```
 
 cited by: `cproc`
@@ -6280,6 +6280,15 @@ cited by: `cproc`
 
 ```
 %1 in account %2 names a path outside the account; run.in did not run the command
+```
+
+cited by: `cproc`
+
+### msg:12599
+> kind=message tier=reference since=- src=sdsys/messages/12599:1#7133d5b8
+
+```
+run.in: the program could not be debugged in a separate process of the account (%1)
 ```
 
 cited by: `cproc`

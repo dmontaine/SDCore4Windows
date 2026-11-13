@@ -19,6 +19,9 @@
 * 
 * START-HISTORY:
 * 13 Nov 26 Windows port - RELEASE_1.1 202: LOGTO is refused to the remote administration session (SDRADMIN over ssh), 12847.
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): RUN.IN ... DEBUG, Linux's sixth command, in the form the OS allows: ri.debug has the SD service start a separate,
+*           unelevated sd.exe of the account (the bare account sdrunin with the account's group, no privilege) and shows the debugger here (!RUNIN_DEBUG); in
+*           that child (ri.active 2, set by LOGIN) MASTER.LOGIN and the account's LOGIN are not run and an abort ends it; an abort here ends a run left open.
 * 13 Nov 26 Windows (RELEASE_1.1 254): LOGTO sets the VOC and loads the account's switches before its audit line, Linux's order.
 * 12 Nov 26 Windows port - from Linux ca3c6f41 (RELEASE_1.1 252, P-21): RUN folds the program name (as typed, lower, upper), as Linux.
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO is lower case, as Linux: LOGTO's new.account and run.in's who are lower case, and the
@@ -554,15 +557,19 @@ restart.cproc:
       end
 
       * Look for a MASTER.LOGIN paragraph
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b): not in run.in's debugged child (ri.active 2, set by LOGIN), and nor is the account's LOGIN below: run.in runs
+*   no paragraph of the account, and the child is there for its one command.
 
-      openpath @sdsys:@ds:'voc' to sdvoc.f on error null
-      then
-         read pa.rec from sdvoc.f,"MASTER.LOGIN" on error null
+      if ri.active # 2 then
+         openpath @sdsys:@ds:'voc' to sdvoc.f on error null
          then
-            pa.name = 'MASTER.LOGIN'
-            if upcase(pa.rec[1,2]) = 'PA' then gosub execute.paragraph
+            read pa.rec from sdvoc.f,"MASTER.LOGIN" on error null
+            then
+               pa.name = 'MASTER.LOGIN'
+               if upcase(pa.rec[1,2]) = 'PA' then gosub execute.paragraph
+            end
+            close sdvoc.f
          end
-         close sdvoc.f
       end
 
       * Look for a LOGIN paragraph
@@ -578,7 +585,7 @@ restart.cproc:
          read voc.rec from voc, login.voc.id else login.voc.id = ""
       end
 
-      if login.voc.id # "" then
+      if login.voc.id # "" and ri.active # 2 then   ;* 13 Nov 26: not in run.in's debugged child (above)
          at.command = ""
          new.sentence = login.voc.id
          gosub proc.sentence
@@ -606,12 +613,24 @@ restart.cproc:
 *   account it left before anything else happens, whatever the cause and at whatever level the abort was caught.  Without this the administrator would stay in that account for the
 *   rest of the session, and LOGTO SDSYS is refused for everybody.
 *   10 Nov 26 Windows port: $VOC.PARSER was read above from the account the command visited, so it is read again from the VOC the way back opened.
+*   13 Nov 26 Windows port - RELEASE_1.1 253(b): ri.active 2 is run.in's debugged child (LOGIN sets it), a process of its own started for this one
+*   command: it has nowhere to go back to, so an abort ends it, and runs no ON.ABORT paragraph of the account (run.in runs none).
+         if ri.active = 2 then
+            void kernel(K$AUDIT, 'run.in child end account=' : ri.account : ' reason=abort')
+            goto abort.cproc
+         end
          if ri.active then
             gosub revert.account
             display sysmsg(12247, ri.account)   ;* run.in: the command did not finish; the session is back in account %1
             void kernel(K$AUDIT, 'run.in revert account=' : ri.account : ' reason=abort')
             ri.active = 0
             gosub get.voc.parser.rec
+         end
+*   13 Nov 26 Windows port - RELEASE_1.1 253(b): a run.in debug this session left open by the abort is ended (the SD service then ends the child).
+         if dbg.relay # '' then
+            void kernel(K$RUNIN.DEBUG, 'C')
+            dbg.relay = ''
+            debug.initialised = @false
          end
 
          begin case
@@ -3148,7 +3167,7 @@ load.account.switches:
 *
 *   run.in account basic file program [debugging] [no.query]      run.in account catalog file program [local] [no.query]
 *   run.in account decatalog program                              run.in account delete.catalog program [local]
-*   run.in account compile.dict file item
+*   run.in account debug file program                             run.in account compile.dict file item
 *
 * THE COMMAND IS BUILT HERE FROM CHECKED WORDS AND IS NEVER THE TEXT THAT WAS TYPED: the account and every name are one plain word (a-z, 0-9, dot, dash, underscore; a letter or digit
 * first; not an SD keyword; at most 64 characters), each option is on the command's own list, a file is a file in that account's VOC.  Not LOGTO: the account's LOGIN paragraph is NOT run
@@ -3157,7 +3176,8 @@ load.account.switches:
 * WHAT IS DIFFERENT ON WINDOWS, AND WHY.  LOGTO out of SDSYS gives up the administrator flag and stops the elevated helper (int.logto); RUN.IN keeps the helper and, since
 * 10 Nov 26 (Linux S.213), turns the flag OFF for the command itself (ri.narrow), with only the edit gate the command needs.  But an SDSYS session's own token is elevated for
 * its life, and the flag does not change it: any code of the account's that ran during the command, and any file it read, would have the elevated Windows administrator's
-* reach.  Hence: (1) no debug (Linux's sixth command runs the account's program), (2) the checks in ri.windows.checks, made in the account before the command runs (every
+* reach.  Hence: (1) debug is not run in this session at all (13 Nov 26, RELEASE_1.1 253(b): ri.debug - the program runs in a separate, unelevated process
+* of the account, which the SD service starts, and only the debugger is here; until then there was no debug), (2) the checks in ri.windows.checks, made in the account before the command runs (every
 * file the command writes is inside the account; no file it opens carries a trigger), (3) $BCOMP refuses $EXECUTE (15071), and an $INCLUDE or dictionary outside the
 * account (15072), while ri.active is set, and (4) _VOC_REF follows a Q-pointer only into the run's own account.
 *
@@ -3197,7 +3217,7 @@ int.runin:
    ri.acct = field(ri.rest, ' ', 1)
    ri.cmd = field(ri.rest, ' ', 2)
 
-* the command's shape: how many names follow it and which option words it takes.  10 Nov 26 Windows port: no debug (see the banner).
+* the command's shape: how many names follow it and which option words it takes.  13 Nov 26 Windows port: debug is on the list again, as Linux's sixth (ri.debug).
    ri.n.names = 0 ; ri.opts = ''
    begin case
       case ri.cmd = 'basic'
@@ -3208,6 +3228,8 @@ int.runin:
          ri.n.names = 1
       case ri.cmd = 'delete.catalog'
          ri.n.names = 1 ; ri.opts = 'local'
+      case ri.cmd = 'debug'
+         ri.n.names = 2
       case ri.cmd = 'compile.dict'
          ri.n.names = 2
    end case
@@ -3284,6 +3306,15 @@ int.runin:
       return
    end
 
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  DEBUG DOES NOT RUN IN THIS SESSION: its token is elevated for its life, so the account's program would have a
+*   Windows administrator's reach.  ri.debug has the SD service start a separate sd.exe that never held elevation, which enters the account as a session of it
+*   would and runs DEBUG there, less its shell, OS.EXECUTE, the edit gates and the administrator flag; only the debugger is shown here, and the program's screen and
+*   keyboard are this terminal's.  Nothing in this session is kept or changed, so there is no way back to take.
+   if ri.cmd = 'debug' then
+      gosub ri.debug
+      return
+   end
+
 * what is needed to come back, kept in the common BEFORE anything changes
    ri.path = ospath('', os$cwd)
    ri.account.path = account.path
@@ -3349,6 +3380,37 @@ int.runin:
 
    gosub revert.account
    void kernel(K$AUDIT, 'run.in end account=' : ri.acct)
+   return
+
+* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  RI.DEBUG - run.in account debug file program, in a separate process.  In: ri.acct, ri.rest, ri.sentence and
+*   acc.rec (the account's directory, from the register).  The file must be a file in the account's VOC, as for the other commands (read here, nothing else
+*   of the account is opened).  !RUNIN_DEBUG asks the SD service for the child (an elevated administrator only), shows the debugger here, relays the
+*   program's screen and keyboard, and ends the run; it says why in ri.dbg.why when the run could not start, and that is 12599.  Audited as the others.
+ri.debug:
+   ri.file = field(ri.rest, ' ', 3)
+   ri.prog = field(ri.rest, ' ', 4)
+   ri.vrec = ''
+   openpath acc.rec:@ds:'voc' to ri.av.f then
+      read ri.vrec from ri.av.f, ri.file else
+         read ri.vrec from ri.av.f, upcase(ri.file) else ri.vrec = ''
+      end
+      close ri.av.f
+   end
+   if upcase(ri.vrec[1, 1]) # 'F' then
+      display sysmsg(12181, ri.file[1, 40], ri.acct)   ;* %1 is not a file in account %2
+      unwinding = 2
+      return
+   end
+   void kernel(K$AUDIT, 'run.in begin account=' : ri.acct : ' command=' : ri.sentence : ' process=separate')
+   ri.dbg.why = ''
+   call !runin_debug(ri.acct, ri.file, ri.prog, ri.dbg.why)
+   if ri.dbg.why # '' then
+      display sysmsg(12599, ri.dbg.why)   ;* run.in: the program could not be debugged in a separate process of the account (%1)
+      void kernel(K$AUDIT, 'run.in end account=' : ri.acct : ' command=debug reason=' : ri.dbg.why[1, 120])
+      unwinding = 2
+      return
+   end
+   void kernel(K$AUDIT, 'run.in end account=' : ri.acct : ' command=debug')
    return
 
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213).  Not the administrator: called once, just before the command.  The three edit gates are SET, not added to

@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 253(b): the service starts run.in's debugged child for an elevated administrator
+ *           (sdrunin.c, pipe SD_RUNIN_PIPE); started beside the audit writer and stopped with it.
  * 13 Nov 26 Windows port - RELEASE_1.1 247: the service is the audit trail's writer (sdaudit.c), started before
  *           "sd -start" and stopped after the last "sd -stop"; it also appends LOCK.TRACER's lines (RELEASE_1.1 182).
  * 06 Oct 26 Windows port - sdsvc-sd.log CAPTURES NOTHING, FIXED.  RELEASE_1.1 125.
@@ -125,6 +127,9 @@
 
 #include "../win32auditpipe.h"
 #include "sdaudit.h" /* 13 Nov 26 - the audit trail's writer, RELEASE_1.1 247 */
+#include <userenv.h>
+#include "../win32runin.h"
+#include "sdrunin.h" /* 13 Nov 26 - run.in's debugged child, RELEASE_1.1 253(b) */
 
 #define SVC_NAME "SD"
 #define SDWIND_EXE "sdwind.exe"
@@ -612,6 +617,33 @@ static void svc_audit_start(void) {
   (void)sdaudit_start(SD_AUDIT_PIPE, sysdir, audit_grant, svc_log);
 }
 
+/* ======================================================================
+   run.in's debugged child.
+
+   13 Nov 26 Windows port - RELEASE_1.1 253(b).  The SDSYS session's "run.in account debug file program" asks here for
+   an sd.exe that never held elevation, as the bare account sdrunin with sdusers and the account's sdu_ group; sdrunin.c
+   checks the asker is an elevated administrator and does the rest.  Stores under <ProgramData>\SD\runin.  NOTHING HERE
+   IS FATAL, as for the audit writer: without it run.in's debug is refused, and everything else in SD runs.          */
+
+static void svc_runin_start(void) {
+  char sysdir[MAX_PATH];
+  char base[MAX_PATH];
+  char exe[MAX_PATH];
+  DWORD n = sizeof(base);
+
+  if (sdaudit_sysdir(sysdir, sizeof(sysdir)) != 0) {
+    svc_log("run.in debug: not started - no SDSYS= in the [sd] section of ProgramData\\SD\\sd.conf");
+    return;
+  }
+  if (!GetAllUsersProfileDirectoryA(base, &n) || (strlen(base) + strlen("\\SD\\runin") + 1 > sizeof(base)) ||
+      !sd_exe_path(exe, sizeof(exe))) {
+    svc_log("run.in debug: not started - ProgramData or sd.exe could not be found");
+    return;
+  }
+  strcat(base, "\\SD\\runin");
+  (void)sdrunin_start(SD_RUNIN_PIPE, sysdir, base, exe, svc_log);
+}
+
 static void WINAPI svc_ctrl(DWORD ctrl) {
   switch (ctrl) {
     case SERVICE_CONTROL_STOP:
@@ -679,6 +711,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
 
   /* 13 Nov 26 - the audit writer, before SD: see svc_audit_start(). */
   svc_audit_start();
+  svc_runin_start(); /* 13 Nov 26 - RELEASE_1.1 253(b): see svc_runin_start() */
 
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -
@@ -689,6 +722,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
     svc_log("could not run \"sd -start\" at all - CreateProcess error %lu",
             (unsigned long)GetLastError());
     sdaudit_stop();
+    sdrunin_stop();
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -734,6 +768,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
             (unsigned long)rc);
 
     sdaudit_stop();
+    sdrunin_stop();
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -769,6 +804,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
               (unsigned long)rc);
 
       sdaudit_stop();
+      sdrunin_stop();
       report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
       CloseHandle(svc_stop_event);
       svc_stop_event = NULL;
@@ -783,6 +819,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   run_sd("-stop", &rc);
   svc_log("service stopping: \"sd -stop\" exited with %lu", (unsigned long)rc);
   sdaudit_stop(); /* after the sessions' last records, not before */
+  sdrunin_stop(); /* 13 Nov 26 - any run still going is ended, its store removed */
 
   CloseHandle(svc_stop_event);
   svc_stop_event = NULL;

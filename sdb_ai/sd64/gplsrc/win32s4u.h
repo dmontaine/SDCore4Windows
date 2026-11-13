@@ -22,6 +22,7 @@
  *           runtime adopt the token, so it survives fork().  No signature
  *           change and no new entry point: the session still becomes the user
  *           at one place, and callers need not know it takes two calls.
+ * 13 Nov 26 Windows port - win32_s4u_logon_groups() (RELEASE_1.1 253(b)); both logons are in win32s4ulogon.c now.
  * END-HISTORY
  *
  * AssumeUserIdentity() returns TRUE only when the calling thread is, on
@@ -62,6 +63,12 @@ int HoldingUserToken(void);
    win32relay.c mints the TLS relay's bare account with it; the caller owns
    the handle.  Nothing is impersonated or adopted here.                    */
 void* win32_s4u_logon(const char* username);
+
+/* 13 Nov 26 - RELEASE_1.1 253(b).  The same logon with local groups ADDED to the token (LsaLogonUser's LocalGroups,
+   which also needs SeTcb): groups is a NULL-terminated list of names of groups of THIS machine, at most four; NULL is
+   win32_s4u_logon().  A name that is not a local group of this machine fails the call (NULL) rather than giving a token
+   without it.  Both are in win32s4ulogon.c, which the SD service builds natively. */
+void* win32_s4u_logon_groups(const char* username, const char* const* groups);
 
 /* 17 Sep 26 - RELEASE_1.1 55.  THE PROCESS TOKEN'S USER NAME, BARE.
    ImpersonatingUser() above cannot answer this and it is worth saying why,

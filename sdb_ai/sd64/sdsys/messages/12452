@@ -1,1 +1,1 @@
-run.in account command name ...; the commands are basic, catalog, decatalog, delete.catalog and compile.dict
+run.in account command name ...; the commands are basic, catalog, decatalog, delete.catalog, debug and compile.dict

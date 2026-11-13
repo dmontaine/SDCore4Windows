@@ -339,10 +339,15 @@ SVCDIR   := $(GPLSRC)sdsvc
 # here too - one copy of the rotation for both.  -luserenv for
 # GetAllUsersProfileDirectoryA (where sd.conf is).  stage.py's NATIVE_ONLY
 # still refuses an msys- import in sdsvc.exe.
+# 13 Nov 26 Windows port - RELEASE_1.1 253(b): and it starts run.in's debugged
+# child, sdrunin.c, with the S4U logon of win32s4ulogon.c (the same file sd.exe
+# links; it takes no MSYS2 header).  -lsecur32 for LsaLogonUser, -lbcrypt for
+# BCryptGenRandom (the store's and the child pipe's names).
 sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(SVCDIR)/sdsvc.c $(SVCDIR)/sdaudit.c $(GPLSRC)win32audit.c \
+	    $(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt \
 	    -ladvapi32 -luserenv -o $(GPLBIN)sdsvc.exe
 
 # 16 Sep 26 Windows port - RELEASE_1.1 43: THE API's TLS RELAY IS NATIVE, AND

@@ -26,6 +26,11 @@
     Mutant control on a COPY: the description lengthened by one character
     turns row 1 red; the live file is asserted unchanged.
 
+    13 Nov 2026 - RELEASE_1.1 253(b): rows R1-R7 hold the same of the run.in
+    account (sdrunin): description cap, name, no valued return, in no group
+    and never added to one, the four logon denials, made before the service,
+    removed on both exits.  Their mutants are in test-runindebug-units.py.
+
 .OUTPUTS
     Exit 0 all rows passed, 1 a row failed, 2 could not run.
 #>
@@ -100,6 +105,30 @@ Row 'the gate asks Windows for the account, not only the verdict' $gate ''
 
 $removeCalls = ([regex]::Matches($text, 'Remove-RelayAccount(?!\s*\{)')).Count
 Row '-Remove removes the account on both exits (2 call sites)' ($removeCalls -ge 2) "$removeCalls call(s)"
+
+# 13 Nov 2026 - RELEASE_1.1 253(b): the run.in account (sdrunin) is made and removed the same way, under the same traps.
+$rdesc = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+                        $args[0].Left.Extent.Text -eq '$RuninDescription' }, $true) | Select-Object -First 1
+$rdescText = if ($rdesc) { $rdesc.Right.Extent.Text.Trim("'", '"') } else { $null }
+Row 'R1 the run.in account description is at most 48 characters' ($null -ne $rdescText -and $rdescText.Length -le 48) ("[$rdescText]")
+$rname = $text -match "(?m)^\`$RuninAccount = 'sdrunin'\r?$"
+Row 'R2 the run.in account is sdrunin (SD_RUNIN_ACCOUNT in gplsrc/win32runin.h)' $rname ''
+$rfn = $ast.FindAll({ $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                      $args[0].Name -eq 'Install-RuninAccount' }, $true) | Select-Object -First 1
+if ($rfn) {
+    $rvals = $rfn.Body.FindAll({ $args[0] -is [System.Management.Automation.Language.ReturnStatementAst] -and $null -ne $args[0].Pipeline }, $true)
+    $rbody = $rfn.Body.Extent.Text
+    Row 'R3 Install-RuninAccount returns no VALUE and sets $script:RuninAccountOk = $true on the success path' (($rvals.Count -eq 0) -and ($rbody -match '\$script:RuninAccountOk\s*=\s*\$true')) ''
+    Row 'R4 ... takes the account out of EVERY group (none: the service adds the groups to one token) and denies the four interactive kinds of logon' (
+        ($rbody -match 'foreach \(\$g in @\(Get-LocalGroup\)\)') -and ($rbody -match 'Remove-LocalGroupMember') -and ($rbody -match '\[SdLsaRights\]::Add\(\$u\.SID\.Value, \[string\[\]\]\$RelayDenies\)')) ''
+    Row 'R5 ... and never adds it to a group' (-not ($rbody -match 'Add-LocalGroupMember')) ''
+} else {
+    Row 'R3 Install-RuninAccount is defined' $false ''
+}
+$rinstall = $text -match '(?m)^Install-RuninAccount\r?$'
+Row 'R6 -Install makes the run.in account before the service is created' ($rinstall -and ($text.IndexOf("`nInstall-RuninAccount") -lt $text.IndexOf('sc.exe" create'))) ''
+$rremove = ([regex]::Matches($text, 'Remove-RuninAccount(?!\s*\{)')).Count
+Row 'R7 -Remove removes the run.in account on both exits (2 call sites)' ($rremove -ge 2) "$rremove call(s)"
 
 # Mutant control, on a copy: one character too many must turn row 3 red.
 $copy = Join-Path $env:TEMP ('install-service-mutant-' + [guid]::NewGuid() + '.ps1')
