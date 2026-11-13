@@ -148,7 +148,7 @@ def checks(raw):
        "screen key returning nm" in pg and "timeout" not in pg and pg.count("gosub read.all") == 4, "read.all x%d" % pg.count("gosub read.all"))
     ck("RM14", "the page has a [?] and F1, ? and a click show tool.remote.page, whose record exists with a title, the remote access page of the administrator guide (which has a section on tool.remote) and a body",
        pg.count("'tool.remote.page'") == 2 and "call $tk_help('mark', mk.x, mk.y, 0, 0)" in pg and "call $tk_help('hit', mev, mk.x, mk.y, hit.m)" in pg and raw["help"].split("\n")[0].strip() != ""
-       and raw["help"].split("\n")[1].strip() == "05-remote-access-and-the-machine" and raw["help"].split("\n")[2].strip() != "" and "## Everything that reaches SD from outside, on one screen: `tool.remote`" in raw["doc"], "")
+       and raw["help"].split("\n")[1].strip() == "administrator-05-remote-access-and-the-machine" and raw["help"].split("\n")[2].strip() != "" and "## Everything that reaches SD from outside, on one screen: `tool.remote`" in raw["doc"], "")
     dl = block(pg, "draw.all")
     dsl = block(pg, "draw.list")
     dd = block(pg, "draw.detail")

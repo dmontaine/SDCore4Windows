@@ -193,7 +193,7 @@ def run(raw, quiet=False):
     hp = raw["help"]
     ck("T7", "VOC entries, help topic, staging and the installer's lock",
        raw["vocpage"] == "V\nCA\n$tool_config\n" and raw["vocverb"] == "V\nCA\n$setconfig\n"
-       and hp.splitlines()[:2] == ["The configuration", "07-sd-admin-configuration"]
+       and hp.splitlines()[:2] == ["The configuration", "administrator-07-sd-admin-configuration"]
        and all(s in hp for s in ("E changes the parameter under the cursor", "set.config", "sd.conf.bak", "Only 14 tuning parameters", "by hand"))
        and "/etc/" not in hp and "root" not in hp
        and "('config.table'," in raw["stage"] and "'sd-confset.ps1'," in raw["stage"]

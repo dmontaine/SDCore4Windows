@@ -1,4 +1,4 @@
 The Programs tile
-29c-sd-tcl-the-development-tools
+user-29c-sd-tcl-the-development-tools
 Starts tool.catalog, the page for the programs of the account: compile, catalog and remove them. It runs the command exactly as the person would have typed it, so it adds no access: compiling and cataloging still need the account's bp-on gate.
 Turned off, the tile is missing from this account's home screen and its menu entry cannot be chosen. The person can still type tool.catalog at a prompt they have; this setting only changes the home screen.

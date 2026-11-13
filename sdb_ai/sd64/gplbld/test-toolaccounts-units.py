@@ -135,7 +135,7 @@ def checks(raw):
        "screen key returning nm" in pg and "timeout" not in pg and pg.count("gosub read.all") == 4, "read.all x%d" % pg.count("gosub read.all"))
     ck("AC13", "the page has a [?] and F1, ? and a click show tool.accounts.page, whose record exists with a title, the accounts and security page of the administrator guide (which has a section on tool.accounts) and a body",
        pg.count("'tool.accounts.page'") == 2 and "call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, top.x + top.w - 5, top.y + 1, hit.m)" in pg and raw["help"].split("\n")[0].strip() != ""
-       and raw["help"].split("\n")[1].strip() == "01-accounts-and-security" and raw["help"].split("\n")[2].strip() != "" and "### The accounts on one screen: `tool.accounts`" in raw["doc"], "")
+       and raw["help"].split("\n")[1].strip() == "administrator-01-accounts-and-security" and raw["help"].split("\n")[2].strip() != "" and "### The accounts on one screen: `tool.accounts`" in raw["doc"], "")
     dl = block(pg, "draw.all")
     dsl = block(pg, "draw.list")
     dd2 = block(pg, "draw.detail")

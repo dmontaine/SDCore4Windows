@@ -320,7 +320,7 @@ def checks(src, voc, helps):
        and "ctx<TK.C.FOCI> = 'accounts' : @sm : 'Accounts' : @vm : 'entries' : @sm : 'Entries'" in txt and txt.count("call $tk_help('mark'") == 2)
     asked = sorted(set(re.findall(r"'(tool\.entries\.[a-z]+)'", txt)))
     ck("T12 the help keys the page asks for (tool.entries.accounts and .entries) are the two shipped records, each with a title, a document that exists in the administrator guide and a body",
-       asked == ["tool.entries.accounts", "tool.entries.entries"] and all(len(helps[k].split("\n")) >= 3 and helps[k].split("\n")[1] == "19-the-master-files" for k in asked), "%s" % asked)
+       asked == ["tool.entries.accounts", "tool.entries.entries"] and all(len(helps[k].split("\n")) >= 3 and helps[k].split("\n")[1] == "administrator-19-the-master-files" for k in asked), "%s" % asked)
     # T13 (regress.sh registration) and T23, T23b, T23c (the relog state) are Linux's and are not carried: see the header.
     st = "\n".join(s for n, s in section(lines, "sdsys.state:", "draw.accounts:"))
     ck("W1 (Windows) THE SDSYS COLUMN: sdsys.state answers yes and nothing else (no sdsys user or POSIX group here, Linux S.103 not carried); read.all asks it; no group is "

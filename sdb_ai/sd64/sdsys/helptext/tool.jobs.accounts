@@ -1,4 +1,4 @@
 Accounts and their command-line lists
-04-scheduled-jobs
+gettingstarted-04-scheduled-jobs
 Every registered account but SDSYS, with the number of commands it may run from the command line: sd COMMAND, which is how a Task Scheduler task of the account's own Windows account runs SD. Nothing is allowed as delivered, so every count starts at 0.
 The list is the account's record in the SD system file batch.jobs. Only an administrator can change it, and this page changes it only through set.batch. Enter or F6 goes to the account's commands. / goes to the next row of the box you are in whose name holds a text you type.

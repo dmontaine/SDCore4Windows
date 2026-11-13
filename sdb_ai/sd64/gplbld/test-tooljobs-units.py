@@ -146,7 +146,7 @@ def checks(raw):
     ai = re.findall(r"\$tk_keys\('ai', keys, '([a-z]+)'", page)
     ck("P12 the AI line is offered only the pane switch, the output pane and refresh: no job action", sorted(ai) == ["output", "pane", "refresh"], ai)
     hm = raw["help"].split("\n")
-    ck("P13 the page asks for tool.jobs.jobs in the Jobs view and the help record has a title and the page 17-scheduled-jobs (the Administrator page; Linux's is 23)", "hkey = 'tool.jobs.jobs'" in page and len(hm) >= 3 and hm[0].strip() and hm[1] == "17-scheduled-jobs", hm[:2])
+    ck("P13 the page asks for tool.jobs.jobs in the Jobs view and the help record has a title and the page 17-scheduled-jobs (the Administrator page; Linux's is 23)", "hkey = 'tool.jobs.jobs'" in page and len(hm) >= 3 and hm[0].strip() and hm[1] == "administrator-17-scheduled-jobs", hm[:2])
     nk = block(page, "name.ok")
     ck("P14 the page's name rule is the helper's: 1 to 32, a letter first, a-z 0-9 and the dash, no dash at the end",
        all(s in nk for s in ("len(jname) < 1 or len(jname) > 32", "index('abcdefghijklmnopqrstuvwxyz', jname[1, 1], 1) = 0", "jname[len(jname), 1] = '-'", "convert('abcdefghijklmnopqrstuvwxyz0123456789-', '', jname)"))

@@ -3,6 +3,13 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  A HELP BOX NAMES ITS PDF AS THE PDF DIRECTORY HOLDS IT.
+
+             What        - The last line of a page's help box names the documentation PDF with its book first
+                           (administrator-01-accounts-and-security.pdf), which is how the release puts the chapters in the
+                           shared account's pdf directory. It named the chapter alone, a file that was not there.
+             Does NOT    - Change anything else. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 12 Nov 26  MORE OF SD CORE FOR LINUX'S BEHAVIOUR.
 
              What        - @WHO is the account name in lower case (it was upper case), as on Linux. The SPOOLER

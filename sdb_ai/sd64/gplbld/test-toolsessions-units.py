@@ -123,7 +123,7 @@ def checks(raw):
        len(re.findall(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?gosub first\.line[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", pg)) == 3 and "trim(out<oi>) # ''" in block(pg, "first.line") and "for oi = 1 to dcount(out, @fm)" in block(pg, "first.line"))
     ck("SS12", "the page has a [?] and F1, ? and a click show tool.sessions.page, whose record exists with a title, a documentation page and a body",
        pg.count("'tool.sessions.page'") == 2 and "call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, ssn.x + ssn.w - 5, ssn.y + 1, hit.m)" in pg
-       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "02-sessions-and-locks" and raw["help"].split("\n")[2].strip() != "")
+       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-02-sessions-and-locks" and raw["help"].split("\n")[2].strip() != "")
     dl = block(pg, "draw.all")
     dsn = block(pg, "draw.sessions")
     dlk = block(pg, "draw.locks")
