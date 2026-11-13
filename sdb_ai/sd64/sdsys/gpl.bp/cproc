@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - from Linux ca3c6f41 (RELEASE_1.1 252, P-21): RUN folds the program name (as typed, lower, upper), as Linux.
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO is lower case, as Linux: LOGTO's new.account and run.in's who are lower case, and the
 *   administrator grant, the audit names and "can only be executed from SDSYS" test against 'sdsys'.
 * 12 Nov 26 Windows port - RELEASE_1.1 245: a refused login sets exit status 1 (it was 0), for the session's own window and for scripts.
@@ -2396,13 +2397,23 @@ int.run.common:
       return
    end
 
+* 12 Nov 26 Windows port - from Linux ca3c6f41 (RELEASE_1.1 252, P-21): THE PROGRAM NAME FOLDS TOO - as typed, lower, upper - and the
+*   spelling that answered is run.  On NTFS the first read already finds any case, so here the fold changes only which spelling is
+*   kept; it is carried so that the two ports read alike.
    readv s from run.file,run.record.name,0 on error
       display sysmsg(5072) ;* Cannot access program record
    end else
-      @system.return.code = -status()
-      close run.file
-      display sysmsg(5073, run.file.name, run.record.name) ;* Program xx xx not found
-      return
+      run.try.name = downcase(run.record.name)
+      readv s from run.file,run.try.name,0 else
+         run.try.name = upcase(run.record.name)
+         readv s from run.file,run.try.name,0 else
+            @system.return.code = -status()
+            close run.file
+            display sysmsg(5073, run.file.name, run.record.name) ;* Program xx xx not found
+            return
+         end
+      end
+      run.record.name = run.try.name
    end
 
    if run.debug then debug.on

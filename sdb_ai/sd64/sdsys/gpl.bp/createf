@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - from Linux 47efffaf (RELEASE_1.1 252, P-21): the name is looked up (as typed, lower, upper) before it is folded.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  CREATE.FILE name,part and the MULTIFILE word are refused (a comma after the name is an unexpected token, 2018), a file that already has a data part is no longer converted or extended, field 4 of an existing record is ignored, and edit.check.existing and messages 6103, 6124, 6162, 6195, 6197 and 6201 go with them.  PARSER$MFILE is now PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VERSION keyword is gone (a file is made in the current format); its size check, remote word and message 6117 go with it.
 * 8 Nov 26 Windows port - from Linux 7de9f2c0 (S.87 batch 13): the words NO.CASE and CASE are gone; every file is made case insensitive (a case sensitive
@@ -152,7 +153,21 @@ $define default.split.load 80
 *   7 Nov 26 Windows port - from Linux 398fb6a1 (S.87 batch 1): the
 *   CREATE.FILE.CASE option, the way back to "exactly as typed", is gone (owner's
 *   emulation survey, A-039), so the name is always lower case.
-   file.name = downcase(file.name)          ;* 8 Nov 26: component (a multifile part) is gone, S.87 (Linux d241df26)
+*   12 Nov 26 Windows port - from Linux 47efffaf (RELEASE_1.1 252, P-21): THE NAME IS LOOKED UP BEFORE IT IS FOLDED, as Linux: as typed,
+*   lower, upper.  An entry that already exists keeps its id, so CREATE.FILE MYDATA over an existing MYDATA finds it (and refuses the
+*   duplicate) instead of making a second file mydata - the VOC is a hashed file, whose ids are case sensitive even on NTFS.  Only a
+*   name with no entry at all becomes lower case.
+   read voc.rec from voc.f, file.name else
+      read voc.rec from voc.f, downcase(file.name) then
+         file.name = downcase(file.name)
+      end else
+         read voc.rec from voc.f, upcase(file.name) then
+            file.name = upcase(file.name)
+         end else
+            file.name = downcase(file.name)
+         end
+      end
+   end
 
    * Check for file type keyword. We default to DYNAMIC
 
