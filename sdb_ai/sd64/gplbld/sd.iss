@@ -838,7 +838,11 @@ Name: "{#DataDir}\sdsys\batch.jobs.dic"; Flags: uninsneveruninstall
 Name: "{#DataDir}\sdsys\voc_removed.saved"; Flags: uninsneveruninstall
 
 [Icons]
-Name: "{group}\SD"; Filename: "{app}\usr\bin\sd.exe"; WorkingDir: "{#DataDir}"
+; 12 Nov 26 - SOLO 63 (owner: "change both shortcuts to use conhost"): the shortcut runs SD inside conhost.exe, the classic
+; console, named outright.  Started plainly, a console program on Windows 11 is handed to Windows Terminal when that is the
+; default terminal, and in that window a full-screen page took about a second; in conhost.exe, measured the same day, 0.09 s.
+; {sys} is System32: this installer runs in 64-bit mode, and conhost.exe has no SysWOW64 copy.  The icon stays SD's own.
+Name: "{group}\SD"; Filename: "{sys}\conhost.exe"; Parameters: """{app}\usr\bin\sd.exe"""; WorkingDir: "{#DataDir}"; IconFilename: "{app}\usr\bin\sd.exe"
 
 ; 22 Aug 26 - THE CHECK NEEDS TO BE FINDABLE, AND THAT IS NOT A CONVENIENCE.
 ; check-install.ps1 is offered as a tickbox at the end of the install, but the

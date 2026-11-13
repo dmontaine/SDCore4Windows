@@ -8,8 +8,10 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
              What        - In a classic console window (the one Windows PowerShell or cmd opens) a full-screen page
                            (HOME, the TOOL pages, the editors) took 3 to 5 seconds to draw; it now draws as quickly
                            as in Windows Terminal. SD writes to the console directly instead of through the runtime
-                           library's console layer.
-             Why         - That layer cost several milliseconds for each of the few hundred writes a page makes.
+                           library's console layer. The Start Menu entry now opens SD in a classic console window
+                           (conhost.exe) rather than whichever window Windows would choose.
+             Why         - That layer cost several milliseconds for each of the few hundred writes a page makes; and a
+                           window Windows hands to Windows Terminal still drew a page in about a second.
              Does NOT    - Change what is drawn, Windows Terminal, an ssh session, or how the keyboard and mouse are
                            read. NOT YET TESTED ON AN INSTALLED SYSTEM.
 
