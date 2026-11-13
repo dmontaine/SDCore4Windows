@@ -31,9 +31,8 @@
  *   - not over API_PKT_MAX_PRELOGIN (65,536) while no user has logged in.  Everything the server may be sent before that - the SCRAM
  *     messages - is under 4 KB;
  *   - not over API_PKT_MAX_STRING + 10 afterwards: the largest SD string (sddefs.h MAX_STRING_SIZE) plus the packet's header, so no
- *     packet that holds a legal SD string is refused.  (Linux's comment says this is also SD_MAX_PACKET_BYTES in sdclilib.c; here that
- *     constant is 256 MB, the most the client library accepts FROM a server, so it is a different limit and the server side keeps
- *     Linux's number.)
+ *     packet that holds a legal SD string is refused.  This is also SD_MAX_PACKET_BYTES in sdclilib.c (13 Nov 26: it was 256 MB there
+ *     until RELEASE_1.1 270 gave the client Linux's number).
  *
  * It is a header of its own so that a small C program can test it without the kernel (gplbld/test-apipkt-units.py).
  *

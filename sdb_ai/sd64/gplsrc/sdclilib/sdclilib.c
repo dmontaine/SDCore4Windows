@@ -19,6 +19,8 @@
  * along with this library.  If not, see <https://www.gnu.org/licenses/>.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows - SD_MAX_PACKET_BYTES is Linux's (MAX_STRING_SIZE + 10, e60f54a7), not 256 MB: a reply holding a string the server
+ *           may hold is accepted, as on Linux (RELEASE_1.1 270, found writing User 37's request-size section).
  * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): SDChecksum(): the QMChecksum equivalent, evaluated on the client with the
  *           algorithm of BASIC's CHECKSUM().
  * 31 Dec 23 SD launch - prior history suppressed
@@ -389,8 +391,11 @@ struct ARGDATA {
 #define BUFF_INCR 4096
 /* Upper bound on a single response packet. Guards against a rogue or
    version-mismatched server, protocol desync, and signed overflow in the
-   buffer-size rounding. Generous for record data, well under INT32_MAX. */
-#define SD_MAX_PACKET_BYTES (256 * 1024 * 1024)
+   buffer-size rounding.  13 Nov 26 (RELEASE_1.1 270): Linux's bound, the
+   largest SD string plus the 10 bytes of header, so a record the server may
+   hold is one the client can read; it was 256 MB here.  Still well under
+   INT32_MAX after grow_buffer_size() rounds it up by BUFF_INCR.            */
+#define SD_MAX_PACKET_BYTES (MAX_STRING_SIZE + 10)
 /* Size of the fixed response-packet header: length(4) + error(2) + status(4). */
 #define IN_PKT_HDR_BYTES 10
 typedef struct INBUFF INBUFF;
