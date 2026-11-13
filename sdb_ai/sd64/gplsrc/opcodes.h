@@ -605,7 +605,7 @@ _opc_(0xCFE6, OP_CSVMODE,  "CSVMODE",    op_csvmode,   OPCODE_BYTE,        -2)  
 _opc_(0xCFE7, OP_CSVDELIM, "CSVDELIM",   op_csvdelim,  OPCODE_BYTE,         1)  /* 14 Oct 26: the CSV delimiter as a string */
 _opc_(0xCFE8, OP_FLUSHDH,  "FLUSHDH",    op_flushdh,   OPCODE_BYTE,        -1)  /* 14 Oct 26: FLUSH.DH.CACHE (openQM 83, 123) */
 _opc_(0xCFE9, OP_STKLST,   "STKLST",     op_stklst,    OPCODE_BYTE,         0)  /* 14 Oct 26: EXECUTE ... STACKLIST (openQM 61) */
-_opc_(0xCFEA, OP_CFEA,     "OPCFEA",     op_illegal,   OPCODE_BYTE,         0)  /* Linux's OPENTEMP (held: it rests on the S.63 OS-access gate); left free so the numbers stay the same */
+_opc_(0xCFEA, OP_OPENTEMP, "OPENTEMP",   op_opentemp,  OPCODE_BYTE,        -1)  /* 14 Oct 26: OPENTEMP (openQM 431, 440); 13 Nov 26 Windows, RELEASE_1.1 251 */
 _opc_(0xCFEB, OP_INPUTTRAP, "INPUTTRAP", op_inputtrap, JUMP_ADDR,           -3)  /* 14 Oct 26: INPUTTRAP (openQM 408): chars, mode, label count; the stub's address follows */
 _opc_(0xCFEC, OP_ITRAPCHK, "ITRAPCHK",   op_itrapchk,  ONE_BYTE_VALUE,       0)  /* 14 Oct 26: after INPUT @: jump to the INPUTTRAP stub if a trapped character was typed */
 _opc_(0xCFED, OP_SSELECTV, "SSELECTV",   op_sselectv,  OPCODE_BYTE,        -3)  /* 14 Oct 26: SSELECTV file TO listvar (openQM 209) */

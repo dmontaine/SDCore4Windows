@@ -768,6 +768,7 @@ Private void openseq(bool map_name) {
   fvar->type = SEQ_FILE;
   fvar->access.seq.sq_file = NULL;
   fvar->voc_name = NULL;
+  fvar->temp_path = NULL;
   fvar->id_len = 0;
   fvar->id = NULL;
   fvar->flags = 0;

@@ -352,9 +352,11 @@ struct FILE_VAR {
   u_char flags;
 #define FV_RDONLY 0x01  /* Read only file */
 #define FV_NON_TXN 0x02 /* Updates are non-transactional */
+#define FV_TEMP 0x04    /* Made by OPENTEMP: the file is deleted when this file variable is closed (temp_path) */
   int16_t id_len;       /* Length of id and... */
   char* id;             /* ...actual id of last record read */
   char* voc_name;
+  char* temp_path;      /* FV_TEMP: pathname of the file to delete on close, else NULL */
 
   union {
     struct {

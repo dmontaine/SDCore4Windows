@@ -3,6 +3,23 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  OPENTEMP, AND SD IS BUILT OPTIMISED, AS ON LINUX.
+
+             What        - OPENTEMP {pathname} {NON.TRANSACTIONAL} TO file.var makes a dynamic file
+                           and opens it; the file is deleted when the file variable is closed (or
+                           goes out of scope). Leave the pathname out, or give a null string, and
+                           SD makes the file in its temporary directory (the TEMPDIR setting) under
+                           a name made from the process number and a counter. A name that exists
+                           already is refused, never taken. The file's updates are never part of a
+                           transaction, so that closing it really deletes it. SD itself is now
+                           compiled with optimisation and with the compiler's buffer-overflow
+                           checks, as SD Core for Linux is.
+             Does NOT    - Let an account without OS access reach the temporary directory or a
+                           path outside the account: such an account can use OPENTEMP only with a
+                           name inside its own directory, and gets the ELSE clause for the others.
+                           A session that is killed leaves its temporary file behind. NOT YET TESTED
+                           ON AN INSTALLED SYSTEM.
+
 13 Nov 26  A HELP BOX NAMES ITS PDF AS THE PDF DIRECTORY HOLDS IT.
 
              What        - The last line of a page's help box names the documentation PDF with its book first

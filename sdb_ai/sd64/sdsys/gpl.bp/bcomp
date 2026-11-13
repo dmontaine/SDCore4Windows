@@ -492,7 +492,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
    statements := @fm:"MATREAD":@fm:"MATREADCSV":@fm:"MATREADL":@fm:"MATREADU"
    statements := @fm:"MATWRITE":@fm:"MATWRITEU"
    statements := @fm:"NAP":@fm:"NEXT":@fm:"NOBUF":@fm:"NULL"
-   statements := @fm:"ON":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ"
+   statements := @fm:"ON":@fm:"OPEN":@fm:"OPENPATH":@fm:"OPENSEQ":@fm:"OPENTEMP"   ;* OPENTEMP: 14 Oct 26 dm - openQM 431, 440
    statements := @fm:"OS.EXECUTE"
    statements := @fm:"PAGE":@fm:"PAUSE":@fm:"PDUMP"
    statements := @fm:"PHANTOM":@fm:"PRECISION":@fm:"PRINT"
@@ -2400,6 +2400,7 @@ is.statement:
                  st.open,
                  st.openpath,
                  st.openseq,
+                 st.opentemp,
                  st.os.execute,
                  st.page,
                  st.pause,
@@ -11722,6 +11723,20 @@ st.openpath:
    gosub exprf               ;* Emit file name expression
    goto open.common
 
+* ST.OPENTEMP  -  OPENTEMP {pathname} {NON.TRANSACTIONAL} TO file.var   (14 Oct 26 dm, openQM 431 and 440)
+* The pathname may be left out (or be a null string): the kernel then makes the file in the temp directory.
+* The file is deleted when the file variable is closed.  (The ECS word, read and ignored, was removed on 27 Oct 26: S.87 batch 3.)
+
+st.opentemp:
+   reserved.names<2> = "NON.TRANSACTIONAL":@VM:"TO"
+   opcode = OP.OPENTEMP
+   find u.look.ahead.token.string in reserved.names setting i then
+      opcode.string = '' ; gosub emit.string.load        ;* No pathname
+   end else
+      gosub exprf                                        ;* Emit file name expression
+   end
+   goto open.common
+
 st.open:
    reserved.names<2> = "READONLY":@VM:"NON.TRANSACTIONAL":@VM:"SYNC"   ;* 12 Oct 26 dm - openQM 64; SYNC 16 Oct 26 (Fixes item 102)
    opcode = OP.OPEN
@@ -11756,7 +11771,7 @@ open.common:
             gosub get.token
             opcode.byte = OP.SETFLAGS  ; gosub emit.simple
             code.value = 0x40 ; code.bytes = 2 ; gosub emit.multibyte.value
-         case u.look.ahead.token.string = 'SYNC'   ;* 16 Oct 26, Fixes item 102: forced writes (P_SYNC); Linux's "and opcode # OP.OPENTEMP" is not needed, OPENTEMP is not carried
+         case u.look.ahead.token.string = 'SYNC' and opcode # OP.OPENTEMP   ;* 16 Oct 26, Fixes item 102: forced writes (P_SYNC)
             gosub get.token
             opcode.byte = OP.SETFLAGS  ; gosub emit.simple
             code.value = 0x200 ; code.bytes = 2 ; gosub emit.multibyte.value

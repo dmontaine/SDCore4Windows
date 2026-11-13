@@ -185,7 +185,7 @@ struct PROCESS {
 #define P_SYNC 0x0200      /* OPEN / OPENPATH ... SYNC: forced writes (QM4 Fixes item 102) */
 /* 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): 0x0400 (P_THEN_ELSE, $MODE WRITE.DELETE.THEN.ELSE), the 0x2000 of $MODE PICK.SELECT,
    0x8000 (P_AUTOLOCK and P_DEF_SELLIST, $MODE AUTOLOCK and SELECTV) and 0x0020 (P_PICKREAD) are retired; the compiler no longer emits them. */
-/* 0x0800 is Linux's P_TEMPFILE (OPENTEMP, held: it rests on the S.63 OS-access gate); left free so the values agree */
+#define P_TEMPFILE 0x0800 /* OPENTEMP: open_file() marks the file variable FV_TEMP, so that closing it deletes the file (openQM items 431, 440; 13 Nov 26 Windows, RELEASE_1.1 251) */
 #define P_MATCMP 0x1000   /* MATSTR makes a comparison key for IF MAT a = MAT b (openQM item 111) */
 #define P_SEQKEY 0x4000   /* WRITE ... CREATING.SEQKEY id.var: the "record id" operand is the address of a variable that is given the file's next sequential id (15 Oct 26) */
 #define P_REC_LOCKS (P_LLOCK | P_ULOCK) /* Either LLOCK or ULOCK */
