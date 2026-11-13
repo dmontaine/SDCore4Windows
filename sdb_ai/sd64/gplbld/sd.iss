@@ -4014,7 +4014,7 @@ function SecureSysdirs: String;
 var
   Code: Integer;
   Ps, Script, Failed: String;
-  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable: String;
+  Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable, VocTpl: String;
 begin
   Result := '';
   Code := 0;
@@ -4075,6 +4075,12 @@ begin
     sdusers Modify from sdsys. }
   ConfTable  := ExpandConstant('{#DataDir}\sdsys\config.table');
 
+  { 12 Nov 26 - VOC_TEMPLATE IS INSTALLED AGAIN (RELEASE_1.1 266; owner, 12 Nov:
+    "Yes, install it", for parity with Linux).  UPDATE.ACCOUNTS refreshes SDSYS's
+    own VOC from it, so whoever could write it would put records into the
+    administrator's VOC.  Locked like newvoc, which feeds every other account. }
+  VocTpl     := ExpandConstant('{#DataDir}\sdsys\voc_template');
+
   Failed := '';
   if not LockOsUsersPath(Ps, Script, Accounts, Code) then
     Failed := Accounts
@@ -4097,17 +4103,19 @@ begin
   else if not LockOsUsersPath(Ps, Script, VocRmSaved, Code) then
     Failed := VocRmSaved
   else if not LockOsUsersPath(Ps, Script, ConfTable, Code) then
-    Failed := ConfTable;
+    Failed := ConfTable
+  else if not LockOsUsersPath(Ps, Script, VocTpl, Code) then
+    Failed := VocTpl;
 
   if Failed = '' then
     Exit;
 
   { NAMED, NOT BURIED, like the global catalogue and the credential store: this
     ACL is the whole of a control and it fails silently if the step does not
-    run.  The path that failed is named because ELEVEN were attempted (seven until
+    run.  The path that failed is named because TWELVE are attempted (seven until
     22 Sep 2026, then voc and gpl.bp - RELEASE_1.1 104; voc_removed and
     voc_removed.saved from 7 Nov 2026 - RELEASE_1.1 197; config.table from 10 Nov
-    2026 - RELEASE_1.1 218) and the manual command
+    2026 - RELEASE_1.1 218; voc_template from 12 Nov 2026 - RELEASE_1.1 266) and the manual command
     below is only worth anything if it says which one. }
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +

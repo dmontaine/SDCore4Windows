@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 266 (owner: "Yes, install it"): voc_template is installed again, so UPDATE.ACCOUNT / UPDATE.ACCOUNTS in SDSYS
+*   refresh SDSYS's own VOC from it as Linux 6dc0e3e intended.  The test downcases @who, which is upper case on Windows; as written it was never
+*   true here, so SDSYS's VOC had been refreshed from NEWVOC (the holder's tool.gates over the administrator's).
 * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14: a scheduled administrator job (kernel(K$JOB.MARK)) enters SDSYS
 *   with no desktop and no UAC, in place of Linux's CPROC arm; the grant is audited "elevation granted reason=scheduled job".
 * 8 Nov 26 Windows port - from Linux 81d9599b (S.87 batch 14): update.voc's special case for the MD record and its label accept.without.query are gone.
@@ -379,7 +382,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   whole of VOC_TEMPLATE and NEWVOC is a smaller set for the other accounts; where the two hold the same id with different content (tool.gates: the
 *   matrix for the administrator, the holder's read-only page for everyone else) UPDATE.ACCOUNTS ALL, which the installer runs on every install,
 *   wrote the holder's page over the administrator's.
-         update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))
+         update.sdsys.voc = (downcase(@who) = 'sdsys' and kernel(K$ADMINISTRATOR,-1))   ;* 12 Nov 26: @who is upper case here (row 266)
          upd.account = downcase(@who)               ;* 27 Oct 26 - the name the deletion list's saved copies and audit line carry
          gosub update.voc
          if upd.denied then display sysmsg(12988, @path : @ds : 'voc')

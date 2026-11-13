@@ -200,10 +200,19 @@ def main():
         # 21 Sep 26 - THE BUILD SEED.  Owner: "do not keep voc_template after the
         # install".  The claim is about three lists and one emitted file, and each
         # half is asserted on its own so a failure names the half that broke.
+        # 12 Nov 26 - RELEASE_1.1 266: voc_template SHIPS again (owner: "Yes, install it"),
+        # so the null-case row names gpl.bp, the seed that stays, and three rows say
+        # voc_template is replaced on upgrade and is neither a seed nor retired.
         seeds = [n for n, _w in S.SDSYS_BUILD_SEED]
-        check('the build-seed list names voc_template (the null case: a seed '
+        check('the build-seed list names gpl.bp (the null case: a seed '
               'list that came out empty would pass every row below)',
-              'voc_template' in seeds, 'seeds: %s' % seeds)
+              'gpl.bp' in seeds, 'seeds: %s' % seeds)
+        check('voc_template is a ship name, not a seed and not retired',
+              'voc_template' in [x for x, _w in S.SDSYS_SHIP] and
+              'voc_template' not in seeds and 'voc_template' not in retired)
+        check('voc_template is on the upgrade replace list and is copied back',
+              'voc_template' in replace and
+              any(names(l, 'voc_template') for l in copies))
         for n in seeds:
             check('SEED %s is on no ship, empty or preserve list' % n,
                   n not in [x for x, _w in S.SDSYS_SHIP] and
@@ -356,13 +365,35 @@ def main():
     finally:
         shutil.rmtree(r, ignore_errors=True)
 
+    # 12 Nov 26 - RELEASE_1.1 266: the installed voc_template loses the records Linux's
+    # installer removes, and keeps everything else.
+    print('voc_template strip:')
+    r = tempfile.mkdtemp()
+    try:
+        s = build_tree(r)
+        tpl = os.path.join(s, 'voc_template')
+        for rec in S.VOC_TEMPLATE_STRIP + ['tool.gates']:
+            with open(os.path.join(tpl, rec), 'w') as f:
+                f.write('x')
+        check('CONTROL: the strip list names gpl.bp, first.compile and second.compile',
+              sorted(S.VOC_TEMPLATE_STRIP) == ['first.compile', 'gpl.bp', 'second.compile'],
+              '%s' % S.VOC_TEMPLATE_STRIP)
+        S.strip_voc_template(s)
+        left = sorted(os.listdir(tpl))
+        check('strip_voc_template removes the three records', not any(x in left for x in S.VOC_TEMPLATE_STRIP), 'left: %s' % left)
+        check('and keeps the rest (tool.gates, X)', 'tool.gates' in left and 'X' in left, 'left: %s' % left)
+        shutil.rmtree(tpl)
+        expect_die('a staged tree with no voc_template', lambda: S.strip_voc_template(s))
+    finally:
+        shutil.rmtree(r, ignore_errors=True)
+
     # 21 Sep 26 - the two refusals a build seed adds.  Both are made by injecting
     # into a copy of the real lists, so the guard is measured against the live
     # rules and not against a restatement of them.
     r = tempfile.mkdtemp()
     try:
         s = build_tree(r)
-        os.makedirs(os.path.join(s, 'voc_template'))
+        os.makedirs(os.path.join(s, 'gpl.bp'))     # 12 Nov 26: gpl.bp, the seed that stays (voc_template ships now)
         expect_die('a build seed still in the staged tree (would be packaged)',
                    lambda: S.write_upgrade_iss(r, s, True))
     finally:

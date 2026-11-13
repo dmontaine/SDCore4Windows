@@ -59,11 +59,10 @@
 # state to reach a branch is the technique verify-notyet.ps1 uses for the same
 # reason: the branch that matters most is otherwise the one never observed.
 #
-# 21 Sep 26 - THE SAME FOR sdsys\voc_template, which stopped shipping that day
-# (stage.py SDSYS_BUILD_SEED) and is on SDSYS_RETIRED so that an upgrade removes
-# the copy an earlier release installed.  An install made from the new stage.py
-# never has it, so -Snapshot plants one, with a probe file inside, when it is
-# absent; -Compare requires it gone.
+# 12 Nov 26 - sdsys\voc_template SHIPS AGAIN and is replaced on upgrade
+# (RELEASE_1.1 266; from 21 Sep to 12 Nov it was retired and this script required
+# it gone).  -Snapshot puts a probe file in it (making the directory on an older
+# install that has none); -Compare requires the directory present and the probe gone.
 
 [CmdletBinding()]
 param(
@@ -147,8 +146,8 @@ $PRESERVE = @('$cred', 'accounts', 'cat', 'os.users', 'os.users.dic',
               'batch.jobs', 'batch.jobs.dic', 'prt', '$hold', 'bp', 'bp.out')
 
 # The computed replace list - the ship lists minus preserve.
-# 21 Sep 26 - voc_template is NOT here any more: it no longer ships, and the
-# upgrade REMOVES it (SDSYS_RETIRED) - see [S3] and [5] below.
+# 12 Nov 26 - voc_template is replaced again (RELEASE_1.1 266) but is scored in [5]
+# on its own, because an install older than this change has none to snapshot here.
 $REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'messages',              # 8 Nov 26: sd.voclib no longer ships (S.87)
               'license', 'contrib', 'gpl.bp.out', 'gcat',
               'pcode.out', 'bin', 'terminfo', 'terminfo.src')
@@ -348,19 +347,17 @@ if ($Snapshot) {
     $appChangelog = Join-Path $appDir 'changelog'
     Write-Output ("  {app}\changelog present before: " + (Test-Path -LiteralPath $appChangelog))
 
-    # 21 Sep 26 - the second retired name, a DIRECTORY.  Planted with a file inside
-    # so the delete has something to remove, and so "gone" cannot mean "was empty".
+    # 12 Nov 26 - voc_template SHIPS AGAIN (RELEASE_1.1 266) and is on the replace
+    # list: the upgrade deletes the directory and copies the new one.  A probe file is
+    # put inside (the directory made if an older install has none), so that "replaced"
+    # is observed as the probe gone with the directory present, not assumed.
     $sdsysVocT = Join-Path $sdsys 'voc_template'
     $hadVocT = Test-Path -LiteralPath $sdsysVocT
-    if ($hadVocT) {
-        Write-Output ("  sdsys\voc_template already present - left as it is: " + $sdsysVocT)
-    } else {
-        $null = New-Item -ItemType Directory -Path $sdsysVocT
-        Set-Content -LiteralPath (Join-Path $sdsysVocT 'probe') -Value `
-            'verify-upgrade.ps1 planted this to reach the SDSYS_RETIRED branch.' -Encoding ASCII
-        Write-Output ("  CREATED " + $sdsysVocT + " (with a probe file) to reach the retired-name branch")
-    }
-    Write-Output ("  sdsys\voc_template present before the upgrade: " + (Test-Path -LiteralPath $sdsysVocT))
+    if (-not $hadVocT) { $null = New-Item -ItemType Directory -Path $sdsysVocT }
+    Set-Content -LiteralPath (Join-Path $sdsysVocT 'zzupgrade-probe') -Value `
+        'verify-upgrade.ps1 planted this; the upgrade must replace voc_template and so remove it.' -Encoding ASCII
+    Write-Output ("  sdsys\voc_template present before: " + $hadVocT + "; probe planted: " +
+                  (Test-Path -LiteralPath (Join-Path $sdsysVocT 'zzupgrade-probe')))
 
     $sdExeHash = ''
     if (Test-Path -LiteralPath $sdExe) {
@@ -378,7 +375,6 @@ if ($Snapshot) {
         Replace        = $sReplace
         Unnamed        = $sUnnamed
         PlantedChangelog = (-not $hadIt)
-        PlantedVocTemplate = (-not $hadVocT)
         AppChangelog   = (Test-Path -LiteralPath $appChangelog)
     }
     $stateDir = Split-Path -Parent $StatePath
@@ -589,11 +585,17 @@ Write-Output ("  sdsys\changelog : " + $(if (Test-Path -LiteralPath $sdsysChange
 Write-Output ("  {app}\changelog : " + $(if (Test-Path -LiteralPath $appChangelog) { 'present' } else { 'GONE' }))
 Note 'sdsys\changelog was removed' $false (Test-Path -LiteralPath $sdsysChangelog)
 Note '{app}\changelog is present'  $true  (Test-Path -LiteralPath $appChangelog)
-# 21 Sep 26 - the second retired name.  It was present before (installed, or planted
-# by -Snapshot), so "gone" here is the upgrade's own doing.
+# 12 Nov 26 - voc_template is REPLACED, not retired (RELEASE_1.1 266): present, the
+# probe -Snapshot put in it gone, tool.gates (the administrator's page) there, and
+# none of the three records stage.py strips (gpl.bp, first.compile, second.compile).
 $sdsysVocT = Join-Path $sdsys 'voc_template'
-Write-Output ("  sdsys\voc_template : " + $(if (Test-Path -LiteralPath $sdsysVocT) { 'PRESENT' } else { 'gone' }))
-Note 'sdsys\voc_template was removed' $false (Test-Path -LiteralPath $sdsysVocT)
+Write-Output ("  sdsys\voc_template : " + $(if (Test-Path -LiteralPath $sdsysVocT) { 'present' } else { 'GONE' }))
+Note 'sdsys\voc_template is present'              $true  (Test-Path -LiteralPath $sdsysVocT)
+Note 'sdsys\voc_template was replaced (probe gone)' $false (Test-Path -LiteralPath (Join-Path $sdsysVocT 'zzupgrade-probe'))
+Note 'sdsys\voc_template holds tool.gates'          $true  (Test-Path -LiteralPath (Join-Path $sdsysVocT 'tool.gates'))
+foreach ($rec in @('gpl.bp', 'first.compile', 'second.compile')) {
+    Note ("sdsys\voc_template has no " + $rec) $false (Test-Path -LiteralPath (Join-Path $sdsysVocT $rec))
+}
 
 Write-Output ''
 Write-Output '=== [6] What was upgraded to what ================================'
@@ -667,7 +669,7 @@ if (Test-Path -LiteralPath $probeKeep) {
 foreach ($pl in @(
         @{ Path = $probeGone;                       Flag = $true;                          What = 'the probe planted in gcat' },
         @{ Path = (Join-Path $sdsys 'changelog');   Flag = [bool]$state.PlantedChangelog;  What = 'the planted sdsys\changelog' },
-        @{ Path = (Join-Path $sdsys 'voc_template'); Flag = [bool]$state.PlantedVocTemplate; What = 'the planted sdsys\voc_template' })) {
+        @{ Path = (Join-Path (Join-Path $sdsys 'voc_template') 'zzupgrade-probe'); Flag = $true; What = 'the probe planted in sdsys\voc_template' })) {
     if ($pl.Flag -and (Test-Path -LiteralPath $pl.Path)) {
         Remove-Item -LiteralPath $pl.Path -Recurse -Force -ErrorAction SilentlyContinue
         Write-Output ("  cleanup: removed " + $pl.What + " (" + $pl.Path + ") - still there after the upgrade; scored above")

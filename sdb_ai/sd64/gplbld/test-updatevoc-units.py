@@ -26,6 +26,10 @@ SD64 = os.path.normpath(os.path.join(HERE, ".."))
 LOGIN = os.environ.get("LOGIN", os.path.join(SD64, "sdsys", "gpl.bp", "login"))
 NEWVOC = os.environ.get("NEWVOC_TG", os.path.join(SD64, "sdsys", "newvoc", "tool.gates"))
 TEMPLATE = os.environ.get("TEMPLATE_TG", os.path.join(SD64, "sdsys", "voc_template", "tool.gates"))
+# 12 Nov 26 Windows port - RELEASE_1.1 266: @who is UPPER case on Windows (login upcases initial.account), so Linux's `@who = 'sdsys'` was
+# never true here and SDSYS's VOC was refreshed from NEWVOC.  This port's test is `downcase(@who) = 'sdsys'`; V2 asks for that, and the
+# mutant "flag-who-not-downcased" puts back the form that was dead.  When @who is lower case here as on Linux, this goes back to Linux's.
+WHO = "downcase(@who) = 'sdsys'"
 
 
 def read(p):
@@ -56,10 +60,10 @@ def checks(login, tg_new, tg_tpl):
 
     gosubs = [i for i, l in code_lines(login) if l.strip() == "gosub update.voc"]
     sets = [i for i, l in code_lines(login) if re.match(r"\s*update\.sdsys\.voc\s*=", l)]
-    own = [i for i in sets if "@who = 'sdsys'" in lines[i] and "kernel(K$ADMINISTRATOR,-1)" in lines[i]]
+    own = [i for i in sets if WHO in lines[i] and "kernel(K$ADMINISTRATOR,-1)" in lines[i]]
     zero = [i for i in sets if re.match(r"\s*update\.sdsys\.voc\s*=\s*0\b", lines[i])]
     mode24 = [i for i, l in code_lines(login) if "if mode = 2 or mode = 4 then" in l]
-    row("V2 update.sdsys.voc is set from @who = 'sdsys' and the administrator test (line %s), after `if mode = 2 or mode = 4` (%s) and before the first gosub (%s)"
+    row("V2 update.sdsys.voc is set from downcase(@who) = 'sdsys' and the administrator test (line %s), after `if mode = 2 or mode = 4` (%s) and before the first gosub (%s)"
         % (own and own[0] + 1, mode24 and mode24[0] + 1, gosubs and gosubs[0] + 1),
         len(own) == 1 and mode24 and gosubs and mode24[0] < own[0] < gosubs[0], "sets %s" % [lines[i].strip() for i in sets])
     row("V3 the walk clears it (line %s) before its own gosub (%s)" % (zero and zero[0] + 1, len(gosubs) > 1 and gosubs[1] + 1),
@@ -148,11 +152,13 @@ def selftest():
             print("  [MISSED] %s: failed %s, wanted %s" % (name, [f[:3] for f in failing], expect))
             missed += 1
 
-    SET = "         update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))\n"
+    SET = re.search(r"\n(\s*update\.sdsys\.voc = \(" + re.escape(WHO) + r"[^\n]*\n)", login)
+    SET = SET.group(1) if SET else "(the flag line was not found)"
     mutant("flag-never-set", "V2", lambda s: s.replace(SET, "", 1))
-    mutant("flag-without-administrator", "V2", lambda s: s.replace("update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))", "update.sdsys.voc = (@who = 'sdsys')", 1))
+    mutant("flag-without-administrator", "V2", lambda s: s.replace("update.sdsys.voc = (" + WHO + " and kernel(K$ADMINISTRATOR,-1))", "update.sdsys.voc = (" + WHO + ")", 1))
     mutant("flag-always-on", "V2", lambda s: s.replace(SET, "         update.sdsys.voc = 1\n", 1))
-    mutant("flag-set-after-gosub", "V2", lambda s: re.sub(r"(\n\s*update\.sdsys\.voc = \(@who[^\n]*)((?:\n\s*upd\.account[^\n]*)?)(\n\s*gosub update\.voc)", r"\2\3\1", s, count=1))
+    mutant("flag-who-not-downcased", "V2", lambda s: s.replace("update.sdsys.voc = (" + WHO, "update.sdsys.voc = (@who = 'sdsys'", 1))
+    mutant("flag-set-after-gosub", "V2", lambda s: re.sub(r"(\n\s*update\.sdsys\.voc = \(downcase\(@who\)[^\n]*)((?:\n\s*upd\.account[^\n]*)?)(\n\s*gosub update\.voc)", r"\2\3\1", s, count=1))
     mutant("walk-keeps-the-flag", "V3", lambda s: re.sub(r"\n\s*update\.sdsys\.voc = 0 [^\n]*", "", s, count=1))
     mutant("walk-flag-after-gosub", "V3", lambda s: re.sub(r"(\n\s*)update\.sdsys\.voc = 0 [^\n]*((?:\n\s*upd\.account[^\n]*)?)(\n\s*gosub update\.voc)", r"\2\3\1update.sdsys.voc = 0", s, count=1))
     mutant("source-always-newvoc", "V4", lambda s: s.replace('then upd.source = "voc_template"', 'then upd.source = "newvoc"', 1))
