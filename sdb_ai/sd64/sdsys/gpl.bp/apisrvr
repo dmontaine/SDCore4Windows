@@ -19,6 +19,9 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows - correcting the 17 Oct S.64 part 2 line below: the block that loads the three edit gates ON for SDSYS is not in
+*           this program and is not needed.  An API session reaches the sdsys account only local and elevated (K$ADMINISTRATOR, the
+*           SDSYS test in the entry code), and the administrator passes every edit test (found carrying test-editgates-units, G25d).
 * 12 Nov 26 Windows port - RELEASE_1.1 266: WHO is lower case, as Linux (the path leaf at start, the account a client asks for).
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-02; Linux b6186ccb): WRITE ... CREATING.SEQKEY asks check.edit, as every other write here.
 * 12 Nov 26 Windows port - RELEASE_1.1 248 (Core parity audit P-14 / Core-Solo C-01; Linux b6186ccb, S.64 part 2): vb.openseq opens a VOC,

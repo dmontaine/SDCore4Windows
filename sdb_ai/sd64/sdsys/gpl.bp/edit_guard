@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows (RELEASE_1.1 255, D-01): the remote file's refusal is edit_msg(kind), as Linux and as the local branch below; it was
+*               sysmsg(12409 + kind) with kinds 4 and 5 (a shared record, a shared structure) folded to 1.
 * 25 Oct 26 Windows port - from Linux 5315c65 (18 Oct 26) S.65 slice 3e: a file on another SD server (no pathname, FL$NETFILE 1) is asked of the kernel by its file variable, before the
 *               administrator test; a local file is unchanged.
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the refusal text comes from !edit_msg, which also knows the shared account's two refusals
@@ -67,8 +69,7 @@ $include int$keys.h
       if fileinfo(f, FL$NETFILE) then
          if kernel(K$EDIT.OK, f) then return @true
          kind = kernel(K$EDIT.KIND, f)
-         if kind < 1 or kind > 3 then kind = 1
-         display sysmsg(12409 + kind) ;* 12410 VOC, 12411 dictionary, 12412 program file
+         display edit_msg(kind) ;* 12410 VOC, 12411 dictionary, 12412 program file, 12518 shared record, 12519 shared structure
          return @false
       end
       if kernel(K$ADMINISTRATOR, -1) then return @true
