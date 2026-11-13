@@ -1,0 +1,1 @@
+SD remote administration: this session is SDRADMIN, signed in over ssh from %1\nwith its password.  Its account commands are run by the remote administration\nhelper; it is never a Windows administrator.  remote.sdsys off shuts this door.

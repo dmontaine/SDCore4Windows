@@ -1,0 +1,1 @@
+ssh is open for SDRADMIN: it can sign in from other computers with its password\nand run account commands, and nothing else stands between the network and those\ncommands.  Shut it again with remote.sdsys off.

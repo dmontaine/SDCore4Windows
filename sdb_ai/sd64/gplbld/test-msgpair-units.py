@@ -32,6 +32,7 @@ LINUX = os.environ.get('SD_LINUX_SD64') or os.path.normpath(os.path.join(HERE, '
 
 # (Linux id, our id): reason.  Each reason cites its evidence.  Read 12 Nov 2026 (RELEASE_1.1 257), text against text.
 ALLOWED = {
+    ('11923', '12928'): 'OS: remote.sdsys opens a separate account, SDRADMIN, because SDSYS is an elevated Windows administrator; the remote session reads AUDIT and ACCOUNTS through it, having no shell (RELEASE_1.1 202)',
     ('10002', '10002'): 'OS: Linux enters SDSYS as the sdsys OS user; on Windows by a Windows sign-in as SDSYS (RELEASE_1.1 64)',
     ('10024', '10024'): 'OS: a Windows group, not a Linux group',
     ('10003', '10051'): 'OS: two different refusals that sit on the same LOGIN line; ours names LOGTO (RELEASE_1.1 64)',

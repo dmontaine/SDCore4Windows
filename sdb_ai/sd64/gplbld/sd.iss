@@ -1441,6 +1441,9 @@ var
   PythonWasFound: Boolean;
   { 09 Oct 26 (RELEASE_1.1 131) - the one-question page an UPGRADE shows in place of the skipped tasks page. }
   PythonPage: TInputOptionWizardPage;
+  { 13 Nov 26 (RELEASE_1.1 202) - the remote administration question (Linux S.155): a page of its own, not a task, because the tasks page
+    is already at the wizard's tallest (the 10 Nov note at the opengates task). }
+  RemoteAdminPage: TInputOptionWizardPage;
   { 06 Oct 26 (RELEASE_1.1 121) - the OpenSSH server MSI found beside this installer, or ''. }
   SshMsiPath: String;
 
@@ -2059,6 +2062,19 @@ begin
     stays unasked and unchanged, as the ruling above says. }
   if PageID = PythonPage.ID then
     Result := not (TrueUpgrade and PythonExeOffered);
+  { 13 Nov 26 - RELEASE_1.1 202.  The remote administration question: a first install only (an upgrade keeps whichever state is there,
+    the owner's Q7, as Linux's --install keeps whichever form it finds), and only where an ssh server is or will be. }
+  if PageID = RemoteAdminPage.ID then
+    Result := TrueUpgrade or (SshWasAbsent and not WizardIsTaskSelected('sshserver'));
+end;
+
+{ 13 Nov 26 - RELEASE_1.1 202.  Is remote administration to be opened at the end of the install?  Only the box on RemoteAdminPage, on a
+  first install, says yes; not ticked by default (high security delivered; Linux S.155 asks the same and answers No unless told).
+  SshWasAbsent, the cached answer SshServerAbsent returns, because that function is declared further down. }
+function RemoteAdminChosen: Boolean;
+begin
+  Result := (not TrueUpgrade) and RemoteAdminPage.Values[0] and
+            not (SshWasAbsent and not WizardIsTaskSelected('sshserver'));
 end;
 
 { 09 Oct 26 - RELEASE_1.1 131.  Is Python to be installed?  The tasks-page box (a first install, or
@@ -2398,6 +2414,13 @@ begin
   PythonPage := CreateInputOptionPage(wpSelectTasks, 'Python', '', '', False, False);
   PythonPage.Add('Install Python for all users');
   PythonPage.Values[0] := False;
+
+  { 13 Nov 26 - RELEASE_1.1 202 (Linux S.155): the remote administration question.  Options only (owner, 20 Sep 2026); what it opens and
+    what that risks is in the installation and administrator documents.  Not ticked by default.  Ticked, finish-install.ps1 runs
+    REMOTE.SDSYS ON after the passwords, which asks the new account's password in that window. }
+  RemoteAdminPage := CreateInputOptionPage(PythonPage.ID, 'Remote administration', '', '', False, False);
+  RemoteAdminPage.Add('Let the remote administration account SDRADMIN sign in over ssh');
+  RemoteAdminPage.Values[0] := False;
 end;
 
 { ---------------------------------------------------------------------------
@@ -3716,6 +3739,9 @@ begin
           ExpandConstant('{app}') + '" -SdsysCode ' + IntToStr(SdsysCode) +
           ' -AttachUser "' + ExpandConstant('{username}') + '"' +
           ' -AttachCode ' + IntToStr(AttachCode);
+  { 13 Nov 26 - RELEASE_1.1 202: a switch and nothing secret; the password is asked in that window by REMOTE.SDSYS ON itself. }
+  if RemoteAdminChosen then
+    Args := Args + ' -RemoteAdmin';
 
   if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
               Args, ExpandConstant('{#DataDir}'), SW_SHOW,
@@ -5634,6 +5660,29 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+(* Take remote administration away: the broker task \SD\sdcore-radmin, SD's remote administration block in sshd_config (sshd restarted),
+   SDRADMIN out of sdssh and disabled, its deny rights, and <ProgramData>\SD\remote-admin.
+
+   13 Nov 26 - RELEASE_1.1 202, from Linux's deletesdcore.sh (S.106), which removes the sdsys arm.  Like RemoveScheduledJobs it closes and
+   never opens, so it runs on a silent uninstall too and whether or not the database is kept; and at usUninstall because the script goes
+   with {app}.  THE ACCOUNT ITSELF IS LEFT, disabled and still in sdusers, for the "Remove the Windows accounts SD Core created?" question,
+   which removes every account carrying SD's stamp; that question reads sdusers, so -Remove does not take SDRADMIN out of it.  The other
+   sshd block (allow-ssh-groups.ps1's, RemoveAllowGroups) and this one each leave the other alone.
+
+   Not brace-delimited - see RemoveFromPath. *)
+procedure RemoveRemoteAdmin;
+var
+  Ps, Script: String;
+  Code: Integer;
+begin
+  Script := ExpandConstant('{app}\remote-admin.ps1');
+  if not FileExists(Script) then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + Script + '" -Remove',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
 (* Copy the account sweep somewhere that outlives the application directory.
 
    PRE_RELEASE_FIXES 39.  The sweep is offered AFTER the database question, and
@@ -6075,6 +6124,7 @@ begin
     RemoveAllowGroups;
     RemoveApiFirewall;
     RemoveScheduledJobs;
+    RemoveRemoteAdmin;
     RemoveFromPath;
     Exit;
   end;

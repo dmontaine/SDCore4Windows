@@ -1,0 +1,207 @@
+* RADMIN
+* The administration commands of a remote administration session (SDRADMIN over ssh): sent to the broker, run there
+* Copyright (c) 2026 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys in the Windows form; design .claude/design-remote-admin-
+*           20261113.md section 5; the owner's answers of 13 Nov 2026: Q2 the console verbs' own names, as Linux's remote sdsys types them;
+*           Q3 the list; Q4 one password at sign-in).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    In SDRADMIN's own account, LOGIN points these five VOC names here: CREATE.ACCOUNT, DELETE.ACCOUNT, MODIFY.ACCOUNT, MODIFY.PASSWORD and
+*    REMOTE.SDSYS.  The person types the console's command, with the console's words; this program asks what the console verb would ask a
+*    person (a new password twice, hidden, checked by !pw_complex; the account's name again before a deletion), writes the request, and has
+*    sd-radmin-client.ps1 hand it to the broker (sd-radmin.ps1), which checks every word against its own list and runs the console verb in
+*    an elevated SDSYS job.  What the verb printed is printed here.
+*
+*    The words go as they were typed, lower case, and the BROKER is the one place that decides what may run: a word this program let
+*    through is refused there (12838, with the broker's reason).  REMOTE.SDSYS ON is refused here as well (12847): it opens a door, and is
+*    the console's.  REMOTE.SDSYS with no keyword is sent as STATUS.  MODIFY.PASSWORD without an account name would be SDRADMIN's own SD
+*    password, which it does not use; refused (12847).
+*
+*    THE PASSWORD, in order: typed at INPUT ... HIDDEN on the ssh terminal; written in hexadecimal into the request in SDSYS's pstmp (each
+*    file there is its writer's alone, secure-psdir.ps1) under a name of this session and the request's nonce; read and DELETED by
+*    sd-radmin-client.ps1 before it connects; sent on the pipe the broker's access list gives SDRADMIN alone; written once to the job's
+*    standard input.  The variables are emptied here, and the file is deleted here too for a client that never ran.  Nothing of it is in
+*    a command line, the audit trail or a log.
+*
+*    ONLY THE REMOTE ADMINISTRATION SESSION: logged in as SDRADMIN, in the account sdradmin, over ssh (SSH_CONNECTION), not elevated.
+*    Anybody else is told 2001 - and the broker would refuse them anyway, by the SID of the caller's token.
+*
+*    Audited in this session: remote.admin <verb> words=<words> status=<exit status, refused, timeout or noanswer>.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $radmin
+$catalog $radmin
+
+$include keys.h
+$include int$keys.h
+$include err.h
+
+deffun pw_complex(pw) calling '!pw_complex'
+
+   prompt ''
+   @system.return.code = -ER$ARGS
+
+   if upcase(@logname) # 'SDRADMIN' or downcase(@who) # 'sdradmin' or env('SSH_CONNECTION') = '' or kernel(K$ADMINISTRATOR, -1) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   words = trim(@sentence)
+   words = convert(' ', @fm, words)
+   verb = downcase(words<1>)
+   del words<1>
+   nw = dcount(words, @fm)
+   if nw > 16 then stop sysmsg(2018, words<17>)  ;* Unexpected token (xx)
+   for i = 1 to nw
+      w = downcase(words<i>)
+      if len(w) < 1 or len(w) > 32 or index('._-', w[1, 1], 1) or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then
+         stop sysmsg(2018, words<i>)  ;* Unexpected token (xx)
+      end
+      words<i> = w
+   next i
+
+   need.secret = @false
+   pw.prompt = 'New password: '
+   begin case
+      case verb = 'remote.sdsys'
+         if nw = 0 then
+            words = 'status'
+            nw = 1
+         end
+         if words<1> = 'on' then stop sysmsg(12847, 'remote.sdsys on')  ;* %1 is not available in a remote administration session
+
+      case verb = 'create.account'
+         if words<1> = 'user' then
+            need.secret = @true
+            pw.prompt = 'New Windows password for ' : words<2> : ': '
+         end
+
+      case verb = 'modify.password'
+         if nw = 0 then stop sysmsg(12847, 'modify.password with no account name')
+         if nw > 1 then stop sysmsg(5276)  ;* A password is never given on the command line...
+         need.secret = @true
+
+      case verb = 'delete.account'
+         if nw >= 1 then
+            crt sysmsg(10158, words<1>)  ;* deleting takes the data with it; suspend instead
+            display 'Type the name of the account again to delete it: ' :
+            input again
+            if downcase(trim(again)) # words<1> then
+               @system.return.code = -ER$STOPPED
+               stop sysmsg(6030)  ;* Account deletion abandoned
+            end
+         end
+
+      case verb = 'modify.account'
+         null
+
+      case 1
+         stop sysmsg(12847, verb)
+   end case
+
+   pw1 = ''
+   pw2 = ''
+   if need.secret then
+      display pw.prompt :
+      input pw1 HIDDEN
+      display
+      display 'Type it again: ' :
+      input pw2 HIDDEN
+      display
+      if pw1 = '' or pw1 # pw2 then
+         pw1 = '' ; pw2 = ''
+         stop sysmsg(10118)  ;* The two passwords did not match, or none was entered
+      end
+      pw2 = ''
+      if not(pw_complex(pw1)) then
+         pw1 = ''
+         stop sysmsg(10920)  ;* A password needs at least 8 characters...
+      end
+   end
+
+* The request.  The nonce names the one-shot job and pairs the answer with the question; it is not a secret.
+   randomize (date() * 86400 + time()) * 1000 + @userno
+   nonce = ''
+   for i = 1 to 16
+      nonce := '0123456789abcdef'[rnd(16) + 1, 1]
+   next i
+   req = 'version=1' : @fm : 'verb=' : verb
+   for i = 1 to nw
+      req<-1> = 'word' : i : '=' : words<i>
+   next i
+   req<-1> = 'nonce=' : nonce
+   if need.secret then
+      req<-1> = 'secret=' : downcase(oconv(pw1, 'MX0C'))
+      pw1 = ''
+   end
+   req<-1> = 'end'
+
+   ps.dir = @sdsys : @ds : 'pstmp'
+   req.id = '$RADMIN.' : @userno : '.' : nonce
+   openpath ps.dir to ps.f else
+      req = ''
+      stop sysmsg(12839, 'the request could not be written')  ;* The remote administration helper gave no answer (%1)
+   end
+   write req to ps.f, req.id on error
+      req = ''
+      delete ps.f, req.id
+      close ps.f
+      stop sysmsg(12839, 'the request could not be written')
+   end
+   req = ''
+
+   q = char(39)
+   cmd = '& ' : q : kernel(K$WINPATH, '/sd-radmin-client.ps1') : q : ' -Request ' : q : ps.dir : @ds : req.id : q
+   os.execute cmd capturing reply
+   delete ps.f, req.id   ;* the client deleted it before it connected; this is for a client that never ran
+   close ps.f
+
+   reply = convert(char(13), '', reply)
+   reply = change(reply, char(10), @fm)
+   job.rc = ''
+   for i = 1 to dcount(reply, @fm)
+      l = reply<i>
+      begin case
+         case l[1, 4] = 'out='
+            crt l[5, 99999]
+         case l[1, 5] = 'exit='
+            job.rc = trim(l[6, 20])
+         case l[1, 8] = 'refused='
+            crt sysmsg(12838, l[9, 999])  ;* The remote administration helper refused the command: %1
+            job.rc = 'refused'
+         case l[1, 8] = 'timeout='
+            crt sysmsg(12839, 'still running after 180 seconds')
+            job.rc = 'timeout'
+         case l[1, 9] = 'noanswer='
+            crt sysmsg(12839, l[10, 999])
+            job.rc = 'noanswer'
+      end case
+   next i
+   if job.rc = '' then
+      crt sysmsg(12839, 'no answer')
+      job.rc = 'noanswer'
+   end
+
+   void kernel(K$AUDIT, 'remote.admin ' : verb : ' words=' : convert(@fm, ',', words) : ' status=' : job.rc)
+   @system.return.code = (if job.rc = '0' then 0 else -ER$FAILED)
+
+end
+
+* END-CODE

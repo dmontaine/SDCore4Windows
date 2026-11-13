@@ -1,0 +1,1 @@
+SDRADMIN signs in only over ssh, and only while remote administration is open\n(remote.sdsys on, at this computer).

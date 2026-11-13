@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202 (Linux S.106's remote.sdsys, the Windows form): the account sdradmin is entered only by the Windows
+*   account SDRADMIN, over ssh, unelevated, while remote administration is open (!radmin_open); its sh, os.execute and the other gates are
+*   off whatever its register record says, 12800 says what the session is, and its VOC's five administration names point at $radmin.
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO IS LOWER CASE, AS LINUX (mail 2026-11-13T0830).  initial.account is downcased at every source
 *   (the forced account, 'sdsys', @logname, the path leaf), its tests and the audit name say 'sdsys', and the update.sdsys.voc test is Linux's
 *   `@who = 'sdsys'` again.  setacc, cproc LOGTO / run.in and apisrvr set WHO the same way.
@@ -243,9 +246,12 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun elevate(action,arg) calling '!elevate'
 * 19 Sep 26 Windows port - RELEASE_1.1 75's rule, shared with the Linux port.
 deffun pw_complex(pw) calling '!pw_complex'
+* 13 Nov 26 Windows port - RELEASE_1.1 202: is remote administration open?
+deffun radmin_open(arg) calling '!radmin_open'
 
    ok = @false
    admin.login = @false
+   radmin.login = @false
 
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  Every refusal below
 *   leaves through terminate.connection, so the audit record is written there
@@ -946,6 +952,40 @@ deffun pw_complex(pw) calling '!pw_complex'
          end
    end case
 
+* 13 Nov 26 Windows port - RELEASE_1.1 202 (remote administration over ssh: Linux S.106's remote.sdsys in the Windows form, design
+*   .claude/design-remote-admin-20261113.md section 6).  THE ACCOUNT sdradmin IS ENTERED BY THE WINDOWS ACCOUNT SDRADMIN, OVER ssh, UNELEVATED,
+*   WHILE REMOTE ADMINISTRATION IS OPEN, AND IN NO OTHER WAY.  Here, after the case statement and not as a case of its own, so it covers
+*   every arm that can land there: case 1 (SDRADMIN's own sign-in) and the forced arm ("sd -Asdradmin" is the caller's own account).
+*   The four tests, any one of which refuses (12600, and the audit says which):
+*     - the Windows account is SDRADMIN (no other person stands in this account);
+*     - the process did not START elevated (K$OS.ELEVATED, immutable - case 1 has already cleared K$ADMINISTRATOR, so the seed cannot say);
+*     - SSH_CONNECTION is set, as win32vt.c:392 knows an ssh session.  SDRADMIN has no other way to start a process: remote-admin.ps1
+*       denies it the console, Remote Desktop, batch and service logons, and the account is disabled while remote administration is shut;
+*     - remote administration is open (!radmin_open: the state file only remote-admin.ps1 writes).
+*   ONE PASSWORD (owner, Q4, as Linux's sdsys): sshd checked the Windows password; LOGIN asks nothing more of anybody here, and
+*   require.credential below is for elevated sessions only, so it never asks this one.  K$ADMINISTRATOR is cleared whatever the arm did.
+   if initial.account = 'sdradmin' then
+      radmin.why = ''
+      begin case
+         case upcase(@logname) # 'SDRADMIN'
+            radmin.why = 'sdradmin is entered by its own Windows account only'
+         case kernel(K$OS.ELEVATED, 0)
+            radmin.why = 'SDRADMIN in an elevated session'
+         case env('SSH_CONNECTION') = ''
+            radmin.why = 'SDRADMIN not over ssh'
+         case not(radmin_open(0))
+            radmin.why = 'remote administration is off'
+      end case
+      void kernel(K$ADMINISTRATOR, 0)
+      if radmin.why # '' then
+         display sysmsg(12600) ;* SDRADMIN signs in only over ssh, and only while remote administration is open
+         audit.account = initial.account
+         audit.reason = radmin.why
+         goto terminate.connection
+      end
+      radmin.login = @true
+   end
+
    audit.account = initial.account
 
 * 27 Aug 26 Windows port - A SUSPENDED ACCOUNT IS NOT ENTERED.  Owner, 27 Aug
@@ -987,6 +1027,16 @@ deffun pw_complex(pw) calling '!pw_complex'
       goto terminate.connection
    end
 
+* 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration session holds NONE of the gates, whatever sdradmin's register record says
+*   (remote.sdsys makes it with none, and MODIFY.ACCOUNT refuses the name, but a record is a file an administrator can edit): no shell, no
+*   OS.EXECUTE, no other account's files, no SDNet, no shared account, no editing of its VOC, programs or dictionaries.  The fields of THIS
+*   SESSION'S COPY of the record are set to their shut values before the one place below that loads the gates (nothing writes acc.rec back),
+*   so each gate is still loaded once.  What it may change it asks the broker for, through $radmin.
+   if radmin.login then
+      acc.rec<ACC$SH> = '' ; acc.rec<ACC$OS.EXEC> = '' ; acc.rec<ACC$SD.ACCOUNTS> = '' ; acc.rec<ACC$NET> = ''
+      acc.rec<ACC$SHARED.READ> = 'no' ; acc.rec<ACC$SHARED.WRITE> = ''
+      acc.rec<ACC$VOC.EDIT> = '' ; acc.rec<ACC$BP.EDIT> = '' ; acc.rec<ACC$DICT.EDIT> = ''
+   end
 * 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates are loaded at sign-on (CPROC's
 *   logto reloads them when the account changes): SH and OS.EXECUTE are OFF unless this account's register record says 'yes'.
 *   SDSYS switches them (MODIFY.ACCOUNT SH-ON / OS-ON).  Blank, or an account with no record, is denied.  The administrator
@@ -1078,6 +1128,16 @@ deffun pw_complex(pw) calling '!pw_complex'
          display sysmsg(12012) ;* SD administration granted: this session is the SDSYS Windows account, elevated
       end
    end
+* 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration session says what it is, as Linux's remote sdsys does (11795, carried
+*   as 12800), on a terminal only, and the trail says where from (the client address of SSH_CONNECTION).  Not an elevation: nothing is granted.
+   if radmin.login then
+      radmin.from = field(env('SSH_CONNECTION'), ' ', 1)
+      if radmin.from = '' then radmin.from = 'unknown'
+      void kernel(K$AUDIT, 'remote administration login from=' : radmin.from)
+      if kernel(K$TTY, 0) # '' and not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
+         display sysmsg(12800, radmin.from) ;* SD remote administration: this session is SDRADMIN, signed in over ssh from %1
+      end
+   end
    close acc.f
 
    * Set @TTY
@@ -1098,7 +1158,24 @@ deffun pw_complex(pw) calling '!pw_complex'
    * 20240219 mab as part of the security changes, do not allow auto creation of account !
    *   gosub create.account
        display sysmsg(5163)    ;* Directory is not a  sd account
-       goto terminate.connection 
+       goto terminate.connection
+   end
+
+* 13 Nov 26 Windows port - RELEASE_1.1 202: THE REMOTE ADMINISTRATION SESSION TYPES THE CONSOLE'S COMMANDS (owner, Q2: as Linux's remote sdsys
+*   does), and in its account these five names are $radmin, which sends them to the broker.  Written at every sign-in, so an UPDATE.ACCOUNTS
+*   that copied NEWVOC over them (MODIFY.PASSWORD is in NEWVOC) is put right before the person types anything.  A record that cannot be
+*   written leaves the name as it was: the command is then refused (2001 or "not in your VOC"), never run with more rights.
+   if radmin.login then
+      radmin.rec = 'V' : @fm : 'CA' : @fm : '$radmin'
+      radmin.names = 'create.account' : @fm : 'delete.account' : @fm : 'modify.account' : @fm : 'modify.password' : @fm : 'remote.sdsys'
+      for radmin.i = 1 to 5
+         read radmin.old from voc, radmin.names<radmin.i> else radmin.old = ''
+         if radmin.old # radmin.rec then
+            write radmin.rec to voc, radmin.names<radmin.i> on error
+               radmin.old = ''
+            end
+         end
+      next radmin.i
    end
 
    if catalogued('CCALL.INIT') then call ccall.init

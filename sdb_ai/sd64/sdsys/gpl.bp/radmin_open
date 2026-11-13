@@ -1,0 +1,54 @@
+* RADMIN_OPEN
+* !radmin_open() - is remote administration over ssh open (REMOTE.SDSYS ON)?
+* Copyright (c) 2026 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - written for RELEASE_1.1 202 (remote administration over ssh, Linux S.106's remote.sdsys in the Windows form).
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    open = radmin_open(0)
+*
+*    @true when <ProgramData>\SD\remote-admin\state says "on", @false otherwise - no file, no directory, anything else in it.
+*
+*    The state is written by remote-admin.ps1 alone, in a directory only SYSTEM and Administrators may change and sdusers may read, so
+*    LOGIN can read it as SDRADMIN (its one caller that is not elevated).  It is the fifth wall: LOGIN lands SDRADMIN only while it is on,
+*    and DELETE.ACCOUNT leaves SDRADMIN alone while it is on.  FAIL CLOSED: anything that cannot be read is "off".
+*
+*    The place is the PARENT of the SDSYS directory, which is <ProgramData>\SD on every install (sd.iss DataDir), named from @sdsys
+*    rather than from the environment, which the caller sets.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+function radmin_open(arg)
+$catalog !radmin_open
+
+   open = @false
+   n = count(@sdsys, @ds)
+   if n < 1 then return open
+   state.dir = @sdsys[1, index(@sdsys, @ds, n) - 1] : @ds : 'remote-admin'
+   openpath state.dir to state.f then
+      read state.rec from state.f, 'state' then
+         if trim(state.rec<1>) = 'on' then open = @true
+      end
+      close state.f
+   end
+
+return open
+end
+
+* END-CODE

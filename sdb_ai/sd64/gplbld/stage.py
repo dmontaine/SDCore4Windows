@@ -1860,6 +1860,19 @@ def main():
                    # SHIPS - do NOT add it to assert-current's $neverShipped
                    # list.  Its unit test does not.
                    'sd-backupdir.ps1',
+                   # 13 Nov 26 - RELEASE_1.1 202, remote administration over
+                   # ssh (Linux S.106's remote.sdsys, the Windows form):
+                   # remote-admin.ps1 moves the four walls around SDRADMIN
+                   # (gpl.bp REMOTESDSYS runs it through SDSYS's elevated
+                   # helper, the uninstaller runs -Remove); sd-radmin.ps1 is
+                   # the broker the task \SD\sdcore-radmin runs as SDSYS,
+                   # elevated; sd-radmin-client.ps1 is SDRADMIN's end of its
+                   # pipe (gpl.bp RADMIN).  Here and not in the data tree for
+                   # sd-elevate.ps1's reason below: the broker runs elevated.
+                   # They SHIP - do NOT add them to assert-current's
+                   # $neverShipped list.  Their unit test
+                   # (test-remoteadmin-units.ps1) does not.
+                   'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1',
                    # 10 Nov 26 - RELEASE_1.1 218, from Linux S.75 A6: SET.CONFIG
                    # changes one of 14 tuning parameters of sd.conf.  gpl.bp
                    # SETCONFIG runs it through !ps_script_out, so as SDSYS's

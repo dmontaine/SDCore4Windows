@@ -3,10 +3,11 @@
 
     python gplbld/test-toolremote-units.py [--selftest]
 
-WINDOWS PORT, 10 Nov 26 (RELEASE_1.1 228): from SD Core for Linux's guard of the same name.  The Windows page has five views, not six: the sdsys login view
-(REMOTE.SDSYS) is left out, as remote administration over ssh is deferred here (RELEASE_1.1 202), so RM12 lists no login, sdsyson or sdsysoff and RM16 now
-holds that ABSENCE.  A hands the terminal to REMOTE.API rather than running it through the routine, because the Windows verb asks whether to restart SD when
-the listener moves to or from OFF (RM6).  The guide is SD Core for Windows' own, in the SDCore4WindowsDocs clone beside this repository (SD_DOCS_ADMIN to
+WINDOWS PORT, 10 Nov 26 (RELEASE_1.1 228): from SD Core for Linux's guard of the same name.  A hands the terminal to REMOTE.API rather than running it
+through the routine, because the Windows verb asks whether to restart SD when the listener moves to or from OFF (RM6).
+13 Nov 26 Windows port - RELEASE_1.1 202: the sixth view is back (it was left out while remote administration over ssh was deferred, and RM16 held that
+absence).  RM3, RM5, RM12 and RM16 are Linux's again, with one OS deviation in RM16: O (REMOTE.SDSYS ON) gives the TERMINAL to the verb, because the first
+ON makes the account SDRADMIN and asks its Windows password; F (OFF) runs through the routine, as Linux's both do.  The guide is SD Core for Windows' own, in the SDCore4WindowsDocs clone beside this repository (SD_DOCS_ADMIN to
 point elsewhere).
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A DOOR OPENS OR THAT A SERVER IS DEFINED***: opening the API's
@@ -91,9 +92,9 @@ def checks(raw):
        "open %s audit %s first %s" % (i_open, i_audit, i_first))
     cr = block(pg, "confirm.and.run")
     ch = block(pg, "confirm.and.hand.over")
-    ck("RM3", "the routine runs remote.api, remote.ssh and delete.server (one allow list) and nothing else: $tk_run directly after the confirm box guarded by res = 'run', and in run.report for the two reports; "
+    ck("RM3", "the routine runs remote.api, remote.ssh, delete.server and remote.sdsys (one allow list) and nothing else: $tk_run directly after the confirm box guarded by res = 'run', and in run.report for the three reports; "
        "the one other way a verb is run is the terminal hand-over (`execute sent` once, after the box and after $tk_close); no $tk_runx, os.execute, perform or chain",
-       re.findall(r"\ballow = '([^']*)'", pg) == ["remote.api remote.ssh delete.server"] and pg.count("call $tk_run(allow,") == 2 and "$tk_runx" not in pg
+       re.findall(r"\ballow = '([^']*)'", pg) == ["remote.api remote.ssh delete.server remote.sdsys"] and pg.count("call $tk_run(allow,") == 2 and "$tk_runx" not in pg
        and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res = 'run' then\s*\n\s*call \$tk_run\(allow, sent, out, stat, err\)", cr) is not None
        and len(re.findall(r"\bexecute\b", pg)) == 1 and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res # 'run' then\s*\n\s*msg = cmsg\s*\n\s*return\s*\n\s*end\s*\n\s*call \$tk_close\(ctx\)\s*\n\s*execute sent", ch) is not None
        and not re.search(r"\b(os\.execute|perform|chain)\b", pg), "")
@@ -102,8 +103,8 @@ def checks(raw):
        and pg.count("openpath @sdsys : @ds : 'accounts'") == 1 and "if id # 'sdsys' then" in block(pg, "read.accounts"), "")
     rr = block(pg, "run.report")
     ra = block(pg, "read.all")
-    ck("RM5", "the two reports are run as exactly 'remote.api' and 'remote.ssh' with NO keyword (so they report and change nothing), in read.all and nowhere else; a change is built only in do.api and do.ssh",
-       "cmd = 'remote.api'" in ra and "cmd = 'remote.ssh'" in ra and pg.count("cmd = ") == 2 and "call $tk_run(allow, cmd, rep, rstat, rerr)" in rr and pg.count("sent = 'remote.api ' : aw") == 1 and pg.count("sent = 'remote.ssh ' : sw") == 1, ra[:200])
+    ck("RM5", "the three reports are run as exactly 'remote.api', 'remote.ssh' and 'remote.sdsys' with NO keyword (so they report and change nothing), in read.all and nowhere else; a change is built only in do.api, do.ssh and do.sdsys",
+       "cmd = 'remote.api'" in ra and "cmd = 'remote.ssh'" in ra and "cmd = 'remote.sdsys'" in ra and pg.count("cmd = ") == 3 and "call $tk_run(allow, cmd, rep, rstat, rerr)" in rr and pg.count("sent = 'remote.api ' : aw") == 1 and pg.count("sent = 'remote.ssh ' : sw") == 1, ra[:200])
     da = block(pg, "do.api")
     ds = block(pg, "do.ssh")
     ck("RM6", "A takes on, local or off only and S on or off only, tested BEFORE the sentence; turning a door ON wants the word OPEN typed (typed = 'OPEN' for on, null otherwise), and the box says what ON opens; "
@@ -136,14 +137,17 @@ def checks(raw):
        "case view = 1" in br and "case view = 2" in br and "case view = 3" in br and "case view = 4" in br and "pn[1, 16] : '...'" in br and "if gid = 'ssh' or gid = 'api' or gid = 'files' or gid = 'files-write' or gid = 'files-admin' or gid = 'net' then" in block(pg, "read.accounts")
        and "if gerr = '' and ainfo<1> = 'USER' then" in block(pg, "read.accounts") and "if cell.api = 'no' and cell.files = 'yes' then" in rl and "bitand(flg, USR$SDNET)" in sl and "bitand(flg, USR$SDVBSRVR)" in sl and "bitand(flg, USR$PHANTOM)" in sl and "inapi = (l[1, 5] = '[api]')" in ra, "")
     acts = sorted(set(re.findall(r"call \$tk_keys\('add', keys, '[^']+', '[^']+', '([a-z]+)'", pg)))
-    ck("RM12", "the key table has exactly: help, doors, routes, servers, connected, tls, api, ssh, delete, new, refresh, quit - and the Esc row that opens the menu bar (S.88 U4; it runs nothing); A and S act on the doors view only, X and N on the servers view only; the views are 1 to 5",
-       acts == sorted(["help", "doors", "routes", "servers", "connected", "tls", "api", "ssh", "delete", "new", "refresh", "quit", "menu"])
+    ck("RM12", "the key table has exactly: help, doors, routes, servers, connected, tls, login, api, ssh, delete, new, sdsyson, sdsysoff, refresh, quit - and the Esc row that opens the menu bar (S.88 U4; it runs nothing); A and S act on the doors view only, X and N on the servers view only, O and F on the remote administration view only; the views are 1 to 6",
+       acts == sorted(["help", "doors", "routes", "servers", "connected", "tls", "login", "api", "ssh", "delete", "new", "sdsyson", "sdsysoff", "refresh", "quit", "menu"])
        and "case nm = 'a' and view = 1" in pg and "case nm = 's' and view = 1" in pg and "case nm = 'x' and view = 3" in pg
-       and "case nm = 'n' and view = 3" in pg and "case nm >= '1' and nm <= '5' and len(nm) = 1" in pg and "case nm = 'f1' or nm = '?'" in pg, " ".join(acts))
-    ck("RM16", "WINDOWS: the sdsys login view is NOT here (remote administration over ssh is deferred, RELEASE_1.1 202): the code names no remote.sdsys, has no do.sdsys, no view 6, no O or F case "
-       "and no login, sdsyson or sdsysoff action, and parses no secret=, recovery= or authenticator line",
-       "remote.sdsys" not in pg and block(pg, "do.sdsys") == "" and "view = 6" not in pg and "nm = 'o'" not in pg and "nm = 'f'" not in pg
-       and not re.search(r"'(login|sdsyson|sdsysoff)'", pg) and not re.search(r"secret=|recovery=|authenticator", pg.lower()), "")
+       and "case nm = 'n' and view = 3" in pg and "case (nm = 'o' or nm = 'f') and view = 6" in pg and "case nm >= '1' and nm <= '6' and len(nm) = 1" in pg and "case nm = 'f1' or nm = '?'" in pg, " ".join(acts))
+    dsd = block(pg, "do.sdsys")
+    ck("RM16", "RELEASE_1.1 202, the remote administration view (Linux S.106): the two sentences are FIXED words (nothing typed reaches them); ON, which loosens, wants OPEN typed and GIVES THE TERMINAL to the verb "
+       "(WINDOWS: the first ON makes SDRADMIN and asks its password); OFF runs through the routine after its box; the page parses no secret=, recovery= or authenticator line",
+       sorted(re.findall(r"sent = '([^']*)'", dsd)) == ["remote.sdsys off", "remote.sdsys on"] and dsd.count("sent = ") == 2 and dsd.count("typed = 'OPEN'") == 1
+       and re.search(r"sent = 'remote.sdsys on'\s*\n\s*typed = 'OPEN'", dsd) is not None and dsd.count("gosub confirm.and.hand.over") == 1 and dsd.count("gosub confirm.and.run") == 1
+       and 0 < dsd.find("sent = 'remote.sdsys on'") < dsd.find("gosub confirm.and.hand.over") < dsd.find("sent = 'remote.sdsys off'") < dsd.find("gosub confirm.and.run")
+       and "view = 6" in pg and not re.search(r"secret=|recovery=|authenticator", pg.lower()), dsd[:200])
     ck("RM13", "the page waits for a key with no timeout and reads again only when it opens, on F5 and after a command or a hand-over",
        "screen key returning nm" in pg and "timeout" not in pg and pg.count("gosub read.all") == 4, "read.all x%d" % pg.count("gosub read.all"))
     ck("RM14", "the page has a [?] and F1, ? and a click show tool.remote.page, whose record exists with a title, the remote access page of the administrator guide (which has a section on tool.remote) and a body",
@@ -190,7 +194,7 @@ MUTANTS = [
     ("the page is opened for anyone", "RM2", sub("page", "call $tk_open('tool.remote', 'admin', ctx, err)", "call $tk_open('tool.remote', '', ctx, err)")),
     ("the page runs a report before it opens the base", "RM2", sub("page", "   call $tk_open('tool.remote', 'admin', ctx, err)\n   if err # '' then\n      display err\n      stop\n   end\n", "   call $tk_run(allow, 'remote.api', o0, s0, e0)\n   call $tk_open('tool.remote', 'admin', ctx, err)\n   if err # '' then\n      display err\n      stop\n   end\n")),
     ("an ordinary account gets the verb", "RM1", setkey("newvoc_has", "1")),
-    ("the page may run another command", "RM3", sub("page", "allow = 'remote.api remote.ssh delete.server'", "allow = 'remote.api remote.ssh delete.server set.server'")),
+    ("the page may run another command", "RM3", sub("page", "allow = 'remote.api remote.ssh delete.server remote.sdsys'", "allow = 'remote.api remote.ssh delete.server remote.sdsys set.server'")),
     ("the page runs with the loose routine", "RM3", sub("page", "      call $tk_run(allow, sent, out, stat, err)\n      gosub read.all", "      call $tk_runx(allow, sent, out, stat, err)\n      gosub read.all")),
     ("the box is skipped", "RM3", sub("page", "   call $tk_confirm(sent, el, typed, res, cmsg)\n   if res = 'run' then", "   res = 'run'\n   if res = 'run' then")),
     ("the terminal is handed over before the box", "RM3", sub("page", "   call $tk_confirm(sent, el, typed, res, cmsg)\n   if res # 'run' then\n      msg = cmsg\n      return\n   end\n   call $tk_close(ctx)\n   execute sent", "   call $tk_close(ctx)\n   execute sent")),
@@ -218,10 +222,14 @@ MUTANTS = [
     ("an other account is listed in the routes", "RM11", sub("page", "if gerr = '' and ainfo<1> = 'USER' then", "if gerr = '' then")),
     ("a key is added to the table", "RM12", sub("page", "   call $tk_keys('add', keys, 'n', 'new', 'new', 'Servers', 1)\n", "   call $tk_keys('add', keys, 'n', 'new', 'new', 'Servers', 1)\n   call $tk_keys('add', keys, 'k', 'kill', 'kill', '', 1)\n")),
     ("A acts on every view", "RM12", sub("page", "      case nm = 'a' and view = 1\n", "      case nm = 'a'\n")),
-    ("a sixth view key comes back", "RM12", sub("page", "      case nm >= '1' and nm <= '5' and len(nm) = 1", "      case nm >= '1' and nm <= '6' and len(nm) = 1")),
-    ("the login view's report comes back", "RM16", sub("page", "   ssh.out = rep\n", "   ssh.out = rep\n   cmd = 'remote.sdsys'\n   gosub run.report\n")),
-    ("an O key comes back for the login view", "RM16", sub("page", "      case nm = 'n' and view = 3\n         gosub do.new\n", "      case nm = 'n' and view = 3\n         gosub do.new\n      case nm = 'o'\n         gosub do.new\n")),
-    ("the page reads a secret", "RM16", sub("page", "   ssh.out = rep\n", "   ssh.out = rep\n   if index(rep, 'secret=', 1) then msg = 'x'\n")),
+    ("O and F act on every view", "RM12", sub("page", "      case (nm = 'o' or nm = 'f') and view = 6\n", "      case (nm = 'o' or nm = 'f')\n")),
+    ("the sixth view key is lost", "RM12", sub("page", "      case nm >= '1' and nm <= '6' and len(nm) = 1", "      case nm >= '1' and nm <= '5' and len(nm) = 1")),
+    ("the login view's report is run with a keyword", "RM5", sub("page", "   cmd = 'remote.sdsys'\n", "   cmd = 'remote.sdsys on'\n")),
+    ("remote administration is opened with no typed word", "RM16", sub("page", "      sent = 'remote.sdsys on'\n      typed = 'OPEN'\n", "      sent = 'remote.sdsys on'\n      typed = ''\n")),
+    ("ON runs through the routine, where its password prompt has nobody to answer it", "RM16", sub("page", "Shut again with F.'\n      gosub confirm.and.hand.over", "Shut again with F.'\n      gosub confirm.and.run")),
+    ("OFF is handed the terminal", "RM16", sub("page", "as delivered.'\n      gosub confirm.and.run", "as delivered.'\n      gosub confirm.and.hand.over")),
+    ("the sentence takes a typed word", "RM16", sub("page", "      sent = 'remote.sdsys off'\n", "      sent = 'remote.sdsys ' : sw\n")),
+    ("the page reads a secret", "RM16", sub("page", "   sd.out = rep\n", "   sd.out = rep\n   if index(rep, 'secret=', 1) then msg = 'x'\n")),
     ("the page reads on a timer", "RM13", sub("page", "      screen key returning nm\n", "      screen key timeout 3 returning nm\n")),
     ("the help key names a record that does not exist", "RM14", sub("page", "call $tk_help('box', 'tool.remote.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f6'", "call $tk_help('box', 'tool.remote.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f6'")),     # 1 Nov 26: F6 (the AI line) is the case after help
     ("the help record names no page", "RM14", sub("help", "05-remote-access-and-the-machine", "")),
