@@ -208,6 +208,7 @@ $neverShipped = @(
     # generators and build tools that run from source
     'build-sdpy.ps1', 'build-sdpyclient.ps1', 'gen_includes.py', 'mkbasicsyntax.py',
     'mkvocdoc.py', 'checksyntax.py', 'scan-msgdiff.py', 'reword-yn-prompts.ps1',
+    'mkrelease.ps1',   # 13 Nov 26: packages a built installer (RELEASE_1.1 268); runs after a cycle, never installed
     # fixtures and measurement stubs without the probe- prefix
     'apiadminprobe.sb', 'apiosexecprobe.sb', 'basicfuncs.sb', 'testsdcli.bp',
     'relay-hold.py', 'sample-sdstate.ps1', 'scram-probe.py',
