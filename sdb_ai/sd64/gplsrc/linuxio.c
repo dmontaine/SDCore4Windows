@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - SOLO 63 (both products): write_console() hands a console session's output to WriteConsoleW (win32vt.c,
+ *           console_write_direct()): through the MSYS2 runtime's console layer a full-screen page took 3 to 5 s in a classic console.
  * 10 Nov 26 Windows port - RELEASE_1.1 215 (owner, 10 Nov: "SD grows its window"): init_console() asks win32vt.c to grow a classic
  *           console window smaller than 140 by 43, the least the full-screen pages take, before anything reads its size.
  * 10 Nov 26 Windows port - RELEASE_1.1 212: console_resized() and console_window_size() ask the tty its size (poll_window_size()) before
@@ -160,6 +162,7 @@ int enable_console_vt(void);
 void restore_console_vt(void);
 int console_window_cells(int* cols, int* rows); /* 10 Nov 26: the console window's size from Windows, 0 with no console (RELEASE_1.1 212) */
 int grow_console_window(int want_cols, int want_rows); /* 10 Nov 26: a small classic console window made big enough (RELEASE_1.1 215) */
+int console_write_direct(const char* p, int bytes);    /* 12 Nov 26: a console session's output to WriteConsoleW (SOLO 63) */
 void set_new_tty_modes(void);
 bool negotiate_telnet_parameter(void);
 
@@ -656,6 +659,11 @@ void set_new_tty_modes() {
 
 bool write_console(char *p, int bytes) {
   int n;
+
+  /* 12 Nov 26 - SOLO 63: a console session's output goes to WriteConsoleW (win32vt.c says why: a page cost 3 to 5 s through the
+     runtime's console layer in a classic window).  A socket's buffer is flushed through here too, and keeps write(). */
+  if ((connection_type == CN_CONSOLE) && console_write_direct(p, bytes))
+    return TRUE;
 
   while (bytes) {
     n = write(1, p, bytes);

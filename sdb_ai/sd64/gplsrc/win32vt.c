@@ -42,6 +42,7 @@
  */
 
 #include <windows.h>
+#include <string.h>
 
 #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
 /* Present since Windows 10 1511.  Defined here so an older SDK still builds;
@@ -237,5 +238,113 @@ int grow_console_window(int want_cols, int want_rows) {
   r.Bottom = (SHORT)(r.Top + n - 1);
   if (!SetConsoleWindowInfo(out, TRUE, &r))
     return 0;
+  return 1;
+}
+
+/* ======================================================================
+   console_write_direct()  -  a console session's output handed to Windows.
+
+   12 Nov 26 Windows port - SOLO 63 (both products).  The owner: every
+   full-screen page took 3 to 5 seconds to draw in a classic console window
+   and was instant in Windows Terminal.  MEASURED, not assumed (strace of
+   Core and Solo, and a probe built with this runtime, both 12 Nov 26): a
+   page is about 500 writes of 30 to 180 bytes; through the MSYS2 runtime's
+   console layer (fhandler_console) each cost about 9 ms of SD's output in a
+   classic console, while the probe's own writes cost 0.07 ms there and
+   WriteConsoleW 0.01 ms in every console state tried (raw tty, mouse
+   reporting, polling).  Batching does not help: one large write through the
+   runtime cost what the small ones did.  So the bytes go to WriteConsoleW.
+
+   NOT THE REVERTED CHANGE OF 23 Aug 26 (the header above): output only; the
+   termios calls and the runtime's input side are untouched.  And what the
+   runtime's input side depends on still reaches it: a write that switches a
+   terminal mode (ESC [ ?, as mouse reporting and bracketed paste do, from
+   $sl_mouse, one write of its own) returns 0 and goes through write(), so
+   the runtime sees it as before.
+
+   SD's text is UTF-8 (the runtime's own charset, which converted it before);
+   a character split across two writes is held back until the next.
+   Returns 1 when the bytes were written here, 0 when the caller is to use
+   write() - no console (ssh, a pipe, a file), a mode switch, or a refusal. */
+
+int console_write_direct(const char* p, int bytes) {
+  static int state = 0; /* 0 not asked yet, 1 a console, -1 not */
+  static HANDLE h = INVALID_HANDLE_VALUE;
+  static char carry[4];
+  static int ncarry = 0;
+  WCHAR wbuf[4100];
+  char cbuf[4100];
+  DWORD mode;
+  DWORD done;
+  int i;
+  int n;
+  int take;
+  int keep;
+  int need;
+  int wn;
+  int off;
+  int wrote = 0;
+
+  if (state == 0) {
+    h = GetStdHandle(STD_OUTPUT_HANDLE);
+    state = ((h != NULL) && (h != INVALID_HANDLE_VALUE) && GetConsoleMode(h, &mode)) ? 1 : -1;
+  }
+  if (state < 0)
+    return 0;
+  for (i = 0; i + 2 < bytes; i++) {
+    if ((p[i] == 27) && (p[i + 1] == '[') && (p[i + 2] == '?'))
+      return 0; /* a mode switch: the runtime must see it */
+  }
+  /* The escapes are the console's to act on, as enable_console_vt() asked; the runtime may have changed the mode since. */
+  if (!GetConsoleMode(h, &mode))
+    return 0;
+  if (!(mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) && !SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+    return 0;
+
+  while ((bytes > 0) || (ncarry > 0)) {
+    memcpy(cbuf, carry, ncarry);
+    take = bytes;
+    if (take > 4096 - ncarry)
+      take = 4096 - ncarry;
+    memcpy(cbuf + ncarry, p, take);
+    n = ncarry + take;
+    p += take;
+    bytes -= take;
+    ncarry = 0;
+
+    /* A UTF-8 sequence that this chunk cuts short is kept for the next one. */
+    keep = 0;
+    for (i = n - 1; (i >= 0) && (i >= n - 3); i--) {
+      unsigned char c = (unsigned char)cbuf[i];
+      if ((c & 0xC0) == 0x80)
+        continue; /* a continuation byte: look further back */
+      need = ((c & 0xE0) == 0xC0) ? 2 : ((c & 0xF0) == 0xE0) ? 3 : ((c & 0xF8) == 0xF0) ? 4 : 1;
+      if (n - i < need)
+        keep = n - i;
+      break;
+    }
+    if (keep > 0) { /* to the front of the next chunk, or of the next call */
+      memcpy(carry, cbuf + n - keep, keep);
+      ncarry = keep;
+      n -= keep;
+    }
+    if (n <= 0)
+      break;
+
+    /* A failure before anything was written hands the whole write to the runtime; after, the rest is dropped rather than
+       written twice. */
+    wn = MultiByteToWideChar(CP_UTF8, 0, cbuf, n, wbuf, 4100);
+    if (wn <= 0)
+      return wrote;
+    off = 0;
+    while (off < wn) {
+      if (!WriteConsoleW(h, wbuf + off, (DWORD)(wn - off), &done, NULL) || (done == 0))
+        return wrote;
+      off += (int)done;
+      wrote = 1;
+    }
+    if ((bytes == 0) && (ncarry > 0))
+      break; /* the held-back bytes wait for the next write */
+  }
   return 1;
 }
