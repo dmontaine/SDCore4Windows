@@ -258,14 +258,47 @@ int grow_console_window(int want_cols, int want_rows) {
    NOT THE REVERTED CHANGE OF 23 Aug 26 (the header above): output only; the
    termios calls and the runtime's input side are untouched.  And what the
    runtime's input side depends on still reaches it: a write that switches a
-   terminal mode (ESC [ ?, as mouse reporting and bracketed paste do, from
-   $sl_mouse, one write of its own) returns 0 and goes through write(), so
-   the runtime sees it as before.
+   terminal mode the input side reads (mouse reporting and bracketed paste,
+   from $sl_mouse, application cursor keys; mode_switch_for_runtime() below)
+   returns 0 and goes through write(), so the runtime sees it as before.
 
    SD's text is UTF-8 (the runtime's own charset, which converted it before);
    a character split across two writes is held back until the next.
    Returns 1 when the bytes were written here, 0 when the caller is to use
    write() - no console (ssh, a pipe, a file), a mode switch, or a refusal. */
+
+/* After "ESC [ ?": 1 when the sequence is a DEC mode set or reset (final h or l) naming a mode other than 25 (cursor shown),
+   12 (cursor blink) and 7 (line wrap) - mouse reporting, bracketed paste, application cursor keys and the rest, which change
+   what the runtime's input side delivers.  The cursor's own (the windows entry's civis and cnorm, ESC[?25l ESC[?1c, sent around
+   every page update) and anything that is not h or l (ESC[?1c) are the console's alone: 0.  Measured 12 Nov 26 (the owner): with
+   every ESC [ ? handed to the runtime, a page still took a third to half a second, each such write costing what all did before. */
+static int mode_switch_for_runtime(const char* q, int n) {
+  int i = 0;
+  int v;
+  int other = 0;
+
+  while (i < n) {
+    if ((q[i] < '0') || (q[i] > '9'))
+      return 1; /* not a number list: hand it over, to be safe */
+    v = 0;
+    while ((i < n) && (q[i] >= '0') && (q[i] <= '9')) {
+      v = v * 10 + (q[i] - '0');
+      i++;
+    }
+    if ((v != 25) && (v != 12) && (v != 7))
+      other = 1;
+    if (i >= n)
+      return 1; /* cut short: hand it over */
+    if (q[i] == ';') {
+      i++;
+      continue;
+    }
+    if ((q[i] == 'h') || (q[i] == 'l'))
+      return other;
+    return 0; /* another final, as ESC[?1c: not a mode switch */
+  }
+  return 1;
+}
 
 int console_write_direct(const char* p, int bytes) {
   static int state = 0; /* 0 not asked yet, 1 a console, -1 not */
@@ -292,8 +325,8 @@ int console_write_direct(const char* p, int bytes) {
   if (state < 0)
     return 0;
   for (i = 0; i + 2 < bytes; i++) {
-    if ((p[i] == 27) && (p[i + 1] == '[') && (p[i + 2] == '?'))
-      return 0; /* a mode switch: the runtime must see it */
+    if ((p[i] == 27) && (p[i + 1] == '[') && (p[i + 2] == '?') && mode_switch_for_runtime(p + i + 3, bytes - i - 3))
+      return 0; /* a mode switch the runtime's input side must see */
   }
   /* The escapes are the console's to act on, as enable_console_vt() asked; the runtime may have changed the mode since. */
   if (!GetConsoleMode(h, &mode))
