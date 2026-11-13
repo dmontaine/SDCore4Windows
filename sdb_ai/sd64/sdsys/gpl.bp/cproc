@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 245: a refused login sets exit status 1 (it was 0), for the session's own window and for scripts.
 * 11 Nov 26 Windows port - Linux ca137620 (S.213; RELEASE_1.1 231, owner 10 Nov: "should match linux"): the command and option words are checked as Linux checks them,
 *               by ri.own.words against the shipped NEWVOC, BEFORE anything is kept or changed, and a refusal is message 15070 (Linux 14070).  Windows' own
 *               comparison with SDSYS's VOC (ri.voc.key, the first check of ri.windows.checks, 12565) is gone.  $EXECUTE in a compile run.in starts is 15071 (was 12568).
@@ -462,7 +463,12 @@ restart.cproc:
 
       i = '$LOGIN'
       call @i(j,0)
-      if not(j) then goto abort.cproc
+*  12 Nov 26 Windows port - RELEASE_1.1 245: a refused login ends the process with status 1, not 0, so the window SD opened for the
+*  session (win32vt.c own_window()) waits for Enter and the reason can be read; and a script or job can tell refused from done.
+      if not(j) then
+         i = kernel(K$EXIT.STATUS, 1)
+         goto abort.cproc
+      end
 
 
       

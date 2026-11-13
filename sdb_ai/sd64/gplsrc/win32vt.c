@@ -43,6 +43,7 @@
 
 #include <windows.h>
 #include <string.h>
+#include <wchar.h>
 
 #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
 /* Present since Windows 10 1511.  Defined here so an older SDK still builds;
@@ -298,6 +299,175 @@ static int mode_switch_for_runtime(const char* q, int n) {
     return 0; /* another final, as ESC[?1c: not a mode switch */
   }
   return 1;
+}
+
+/* ======================================================================
+   own_window()  -  an interactive SD session lives in a window of its own.
+
+   12 Nov 26 Windows port - RELEASE_1.1 245 (both products).  The owner: "on
+   windows we treat sd as though it was a windows app, it always opens it's
+   own window which it controls, it does not display in an existing console,
+   it assumes a minimum screen size of 1920x1080"; and "the user can always
+   make the window bigger than 140x43 that is just the starting size"; and,
+   when it ends with an error, the window waits for Enter so the reason can
+   be read.  Found in SOLO 63: a window Windows 11 hands to Windows Terminal
+   drew SD's pages slowly and takes the window's size away from SD.
+
+   sd.c calls this only for an interactive console session (no command on
+   the line, not a phantom, a job, the bootstrap or a network session).  It
+   returns only when the session is to run in this window:
+     - SD_OWN_WINDOW is set: this process is the session a host started.
+     - ssh (SSH_CONNECTION or SSH_CLIENT), session 0, or input or output not a
+       console: there is no desktop window to open.
+   Otherwise it does not return:
+     - a CLASSIC console window (ConsoleWindowClass) whose only client is this
+       process - the Start Menu shortcut's conhost.exe, or the window opened
+       below - becomes SD's: 140 by 43 to start (GetLargestConsoleWindowSize
+       caps it), a 3000-line buffer, the title, and this process HOSTS the
+       session: it starts this program again with the same arguments and
+       SD_OWN_WINDOW=1 in the same window, waits, and when the session's exit
+       status is not 0 says so and waits for Enter.  Ctrl-C and Ctrl-Break
+       are the session's: the host's handler swallows them.
+     - anything else (typed at a prompt, a window handed to Windows Terminal):
+       conhost.exe is started with this program and its arguments, in a new
+       window, and this process exits 0 - the prompt it was typed at comes
+       back, as after notepad.  If conhost.exe cannot be started, it returns
+       and the session runs here as before.
+   It is its own function, here, because it needs windows.h (the header). */
+
+typedef int(WINAPI* cls_fn)(HWND, LPSTR, int);
+
+static BOOL WINAPI host_ctrl(DWORD ev) {
+  return (ev == CTRL_C_EVENT || ev == CTRL_BREAK_EVENT) ? TRUE : FALSE;
+}
+
+/* The arguments of this process's command line, after the program name, by Windows' own quoting rule for argv[0]. */
+static const WCHAR* cmdline_args(void) {
+  const WCHAR* c = GetCommandLineW();
+  if (*c == L'"') {
+    c++;
+    while (*c && *c != L'"') c++;
+    if (*c == L'"') c++;
+  } else {
+    while (*c && *c != L' ' && *c != L'\t') c++;
+  }
+  while (*c == L' ' || *c == L'\t') c++;
+  return c;
+}
+
+static void size_own_window(HANDLE out, int want_cols, int want_rows, int buffer_rows) {
+  COORD largest = GetLargestConsoleWindowSize(out);
+  COORD buf;
+  SMALL_RECT r;
+  int c = want_cols, n = want_rows;
+  if (largest.X > 0 && c > largest.X) c = largest.X;
+  if (largest.Y > 0 && n > largest.Y) n = largest.Y;
+  r.Left = 0; r.Top = 0; r.Right = 0; r.Bottom = 0;
+  SetConsoleWindowInfo(out, TRUE, &r); /* the smallest window first, so the buffer may be set to anything */
+  buf.X = (SHORT)c;
+  buf.Y = (SHORT)((buffer_rows > n) ? buffer_rows : n);
+  SetConsoleScreenBufferSize(out, buf);
+  r.Right = (SHORT)(c - 1);
+  r.Bottom = (SHORT)(n - 1);
+  SetConsoleWindowInfo(out, TRUE, &r);
+}
+
+void own_window(const WCHAR* title) {
+  HANDLE in, out;
+  DWORD m, sid = 0, list[4], n;
+  HWND w;
+  HMODULE user32;
+  cls_fn class_name;
+  char cls[64];
+  int classic = 0;
+  WCHAR exe[MAX_PATH], sysdir[MAX_PATH], conhost[MAX_PATH + 32];
+  WCHAR* cmd;
+  size_t len;
+  STARTUPINFOW si;
+  PROCESS_INFORMATION pi;
+  DWORD code = 0;
+
+  if (GetEnvironmentVariableW(L"SD_OWN_WINDOW", NULL, 0) > 0)
+    return; /* the session a host started */
+  if (GetEnvironmentVariableW(L"SSH_CONNECTION", NULL, 0) > 0 || GetEnvironmentVariableW(L"SSH_CLIENT", NULL, 0) > 0)
+    return;
+  in = GetStdHandle(STD_INPUT_HANDLE);
+  out = GetStdHandle(STD_OUTPUT_HANDLE);
+  if (!GetConsoleMode(in, &m) || !GetConsoleMode(out, &m))
+    return;
+  if (ProcessIdToSessionId(GetCurrentProcessId(), &sid) && sid == 0)
+    return;
+  if (GetModuleFileNameW(NULL, exe, MAX_PATH) == 0 || GetModuleFileNameW(NULL, exe, MAX_PATH) >= MAX_PATH)
+    return;
+
+  w = GetConsoleWindow();
+  user32 = LoadLibraryA("user32.dll");
+  if (w != NULL && user32 != NULL) {
+    class_name = (cls_fn)(void (*)(void))GetProcAddress(user32, "GetClassNameA");
+    if (class_name != NULL && class_name(w, cls, (int)sizeof(cls)) > 0 && lstrcmpA(cls, "ConsoleWindowClass") == 0)
+      classic = 1;
+  }
+  if (user32 != NULL)
+    FreeLibrary(user32);
+  n = GetConsoleProcessList(list, 4);
+
+  len = wcslen(exe) + wcslen(cmdline_args()) + 8;
+  cmd = (WCHAR*)HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
+  if (cmd == NULL)
+    return;
+
+  if (classic && n == 1) {
+    /* SD's window: size it, title it, and host the session in it. */
+    size_own_window(out, 140, 43, 3000);
+    SetConsoleTitleW(title);
+    SetConsoleCtrlHandler(host_ctrl, TRUE);
+    SetEnvironmentVariableW(L"SD_OWN_WINDOW", L"1");
+    swprintf(cmd, len, L"\"%ls\" %ls", exe, cmdline_args());
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    if (!CreateProcessW(exe, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+      SetEnvironmentVariableW(L"SD_OWN_WINDOW", NULL);
+      HeapFree(GetProcessHeap(), 0, cmd);
+      return; /* run here instead */
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    if (code != 0) {
+      WCHAR msg[160], c;
+      DWORD done;
+      swprintf(msg, 160, L"\r\nSD ended with status %lu. Press Enter to close this window.", (unsigned long)code);
+      SetConsoleMode(in, ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
+      FlushConsoleInputBuffer(in);
+      WriteConsoleW(out, msg, (DWORD)wcslen(msg), &done, NULL);
+      while (ReadConsoleW(in, &c, 1, &done, NULL) && done == 1 && c != L'\n' && c != L'\r')
+        ;
+    }
+    ExitProcess(code);
+  }
+
+  /* Elsewhere: SD in a new classic window, through conhost.exe; this process ends and the prompt it was typed at comes back. */
+  if (GetSystemDirectoryW(sysdir, MAX_PATH) == 0) {
+    HeapFree(GetProcessHeap(), 0, cmd);
+    return;
+  }
+  swprintf(conhost, MAX_PATH + 32, L"%ls\\conhost.exe", sysdir);
+  HeapFree(GetProcessHeap(), 0, cmd);
+  len = wcslen(conhost) + wcslen(exe) + wcslen(cmdline_args()) + 12;
+  cmd = (WCHAR*)HeapAlloc(GetProcessHeap(), 0, len * sizeof(WCHAR));
+  if (cmd == NULL)
+    return;
+  swprintf(cmd, len, L"\"%ls\" \"%ls\" %ls", conhost, exe, cmdline_args());
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
+  if (!CreateProcessW(conhost, cmd, NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi)) {
+    HeapFree(GetProcessHeap(), 0, cmd);
+    return; /* run here instead */
+  }
+  CloseHandle(pi.hThread);
+  CloseHandle(pi.hProcess);
+  ExitProcess(0);
 }
 
 int console_write_direct(const char* p, int bytes) {

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 245: an interactive console session runs in a classic window of SD's own (win32vt.c own_window()).
  * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): fatal() and dump() are gone, and with fatal() the only longjmp to sd_exit, so its setjmp too.
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the -L option (apply a new licence: it set a flag nothing read) is gone; "sd -l"
  *           is an unrecognised option like any other.
@@ -139,6 +140,7 @@ void suspend_resume(bool suspend);
 void cleanup(void);
 void clean_stop(void);
 void dump_pcode_file(void);
+void own_window(const wchar_t* title); /* 12 Nov 26: win32vt.c, an interactive session in a window of its own (RELEASE_1.1 245) */
 
 /* ====================================================================== */
 
@@ -186,6 +188,14 @@ int main(int argc, char *argv[]) {
     clean_stop();
     return status; /* TODO: add a custom return value for this failure. */
   }
+
+  /* 12 Nov 26 Windows port - RELEASE_1.1 245 (owner: "on windows we treat sd as though it was a windows app, it always opens it's own
+     window which it controls").  An interactive console session - no command on the line, not a phantom, a scheduled job, the
+     bootstrap or a network session - runs in a classic console window of SD's own; win32vt.c own_window() opens or takes it, and
+     returns only when the session is to run here.  Before the shared segment is bound, so a process that opens a new window and ends
+     has touched nothing. */
+  if ((connection_type == CN_CONSOLE) && !is_phantom && !is_bootstrap && (single_command == NULL) && (job_claim == NULL))
+    own_window(L"SD Core");
 
   if (!bind_sysseg(FALSE, errmsg)) {
     fprintf(stderr, "%s\n", errmsg);

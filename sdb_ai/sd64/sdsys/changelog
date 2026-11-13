@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+12 Nov 26  SD ALWAYS RUNS IN A WINDOW OF ITS OWN.
+
+             What        - Typing sd at a PowerShell or cmd prompt now opens SD in its own window, as a Windows
+                           application does, and the prompt comes back at once; the Start Menu entry opens the same
+                           kind of window. It is a classic console window SD controls: 140 by 43 to start (it can be
+                           made bigger), a scrollback buffer, and the title SD Core. When SD ends with an error, such
+                           as a refused sign-in, the window waits for Enter so the reason can be read; and a refused
+                           sign-in now ends with exit status 1 (it was 0).
+             Why         - SD is designed for Windows 11 on a screen of at least 1920 by 1080, and a window it does not
+                           control can draw its pages slowly or take its size away.
+             Does NOT    - Change sd with a command, the switches (-start, -stop and the rest), anything with its input
+                           or output redirected, or an ssh session: those run where they are typed. NOT YET TESTED ON AN
+                           INSTALLED SYSTEM.
+
 12 Nov 26  FULL-SCREEN PAGES DRAW AT ONCE IN A CLASSIC CONSOLE WINDOW.
 
              What        - In a classic console window (the one Windows PowerShell or cmd opens) a full-screen page
