@@ -494,14 +494,9 @@ def checks(srcs):
        re.search(r"case kind = 1\s*return sysmsg\(12410\)\s*case kind = 2\s*return sysmsg\(12411\)\s*case kind = 3\s*return sysmsg\(12412\)\s*case kind = 4\s*return sysmsg\(12518\)\s*"
                  r"case kind = 5\s*return sysmsg\(12519\)\s*end case\s*return sysmsg\(12410\)", em_) is not None and "$catalog !edit_msg" in em_, "")
     miss = [p for p, needle in EDIT_MSG_SITES if needle not in B(p)]
-    # PARITY GAP: edit_guard's network-file branch (a file on another SD server) still clamps the kind and prints sysmsg(12409 + kind), where Linux's
-    # prints edit_msg(kind); that branch is cut out of the clamp scan until the tree carries Linux's line.
-    clamp_text = {p: B(p) for p, _ in EDIT_MSG_SITES}
-    eg = clamp_text["edit_guard"]
-    clamp_text["edit_guard"] = eg.replace(between(eg, "if fileinfo(f, FL$NETFILE) then", "if kernel(K$ADMINISTRATOR, -1) then return @true"), "")
-    clamp = [p for p, _ in EDIT_MSG_SITES if re.search(r"kind\s*>\s*3|12409\s*\+", clamp_text[p])]
+    clamp = [p for p, _ in EDIT_MSG_SITES if re.search(r"kind\s*>\s*3|12409\s*\+", B(p))]
     ck("L4 every program that prints an edit refusal calls edit_msg() (edit_guard, ide, ced_edit, spview, sed, cname, createf, deletef, the API server) and none keeps the clamp 'kind > 3' or the "
-       "sum 12409 + kind: kinds 4 and 5 would print the VOC's message (edit_guard's network-file branch excepted: PARITY GAP)",
+       "sum 12409 + kind: kinds 4 and 5 would print the VOC's message",
        not miss and not clamp, repr(miss) + repr(clamp))
     bs = B("basic")
     ck("L5 basic (the compiler verb) asks edit_guard(out.f) after the object file is open and before anything is compiled, for every session but the administrator (the bootstrap runs basic before "
