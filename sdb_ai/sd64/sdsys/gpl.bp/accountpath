@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 264: K$PATH.OK decides, as Linux (owner: "Yes, as Linux"); the own-account stand-in is gone.
 * 25 Oct 26 Windows port - from Linux 5732bb2 (18 Oct 26): the register's path goes through parse.pathname.tokens (!PATHTKN); this file already did.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (ACCOUNT.PATH), as a function in BASIC that bcomp knows by name.
 * END-HISTORY
@@ -53,25 +54,16 @@ $include int$keys.h
       end
    end
 
-   * 18 Oct 26 Windows port - Linux asks the kernel's path test, the S.63 OS-access gate, which is held here (no such key).  What
-   * stands in for it is the rule an account WITHOUT the gate gets on Linux: the path of the session's own account is told, and any
-   * other only to an administrator session (SDSYS), which can read it anyway.  The deviation is told to Linux.
    * The register holds a drive letter path ("C:/ProgramData/SD/user_accounts/don"); @PATH, FILEINFO(FL$PATH) and VOCPATH() give the
-   * same directory in this process's own spelling ("/cygdrive/c/ProgramData/..."), which is also what a program can open.  Both
-   * are brought to that spelling, so that the answer starts with a slash as on Linux and the own-account test compares like
-   * with like (18 Oct 26: the first run found ACCOUNT.PATH of the caller's own account empty, because the two spellings never matched).
+   * same directory in this process's own spelling ("/cygdrive/c/ProgramData/..."), which is also what a program can open, so the
+   * answer is given in that spelling and starts with a slash as on Linux.
+   * 12 Nov 26 Windows port - RELEASE_1.1 264 (owner, 12 Nov: "Yes, as Linux"): the kernel's path test, K$PATH.OK, decides, as on
+   * Linux; it has been here since 23 Oct.  It replaces this port's own-account-or-administrator test, so an account with OS access
+   * (os-on) or SD.ACCOUNTS (sd-on) is now told what it could open, as on Linux.
    if path # '' then
       path = convert(char(92), '/', path)
       if path[2, 1] = ':' then path = '/cygdrive/' : downcase(path[1, 1]) : path[3, 99999]
-      ok = kernel(K$ADMINISTRATOR, -1)
-      if not(ok) then
-         own = convert(char(92), '/', @path)
-         if own[2, 1] = ':' then own = '/cygdrive/' : downcase(own[1, 1]) : own[3, 99999]
-         own = upcase(own) : '/'
-         here = upcase(path) : '/'
-         ok = (here[1, len(own)] = own)
-      end
-      if not(ok) then path = ''
+      if not(kernel(K$PATH.OK, path)) then path = ''
    end
    return path
 end

@@ -18,6 +18,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 264: K$PATH.OK decides, as Linux (owner: "Yes, as Linux"); the own-account stand-in is gone.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the description no longer lists a multifile name among the forms OPEN takes.
 * 18 Oct 26 Windows port - from Linux c608b9f (15 Oct 26): Written for QM4 gaps bundle Q-4 (VOCPATH), as a function in BASIC that bcomp knows by name.  It is called
 *               !vocpathfn because !VOCPATH is the catalogue name of the older subroutine in _vocpath (two programs under one
@@ -77,17 +78,10 @@ $include keys.h
    p = fileinfo(f, FL$PATH)
    close f
 
-   * Only a path the account could open is told.
-   * 18 Oct 26 Windows port - Linux asks the kernel's path test, the S.63 OS-access gate, which is held here (no such key).  What stands in
-   * for it is the rule an account WITHOUT the gate gets on Linux: a path inside the session's own account directory is told, any other
-   * only to an administrator session (SDSYS), which can read it anyway.  The deviation is told to Linux.
-   ok = kernel(K$ADMINISTRATOR, -1)
-   if not(ok) then
-      own = upcase(convert(char(92), '/', @path)) : '/'
-      here = upcase(convert(char(92), '/', p)) : '/'
-      ok = (here[1, len(own)] = own)
-   end
-   if not(ok) then
+   * Only a path the account could open is told
+   * 12 Nov 26 Windows port - RELEASE_1.1 264 (owner, 12 Nov: "Yes, as Linux"): the kernel's path test decides, as on Linux (here since
+   * 23 Oct); it replaces this port's own-account-or-administrator test.
+   if not(kernel(K$PATH.OK, p)) then
       set.status ER$PERM
       return ''
    end
