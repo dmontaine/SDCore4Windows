@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 243 (owner: a line before any wait over 2 s): 12950 before the report, 12944 before a change.
 * 06 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  A completed
 *           change writes an audit record, 'REMOTE.SSH ON|OFF', as SD Core for
 *           Linux's does, and a refusal or failure sets @SYSTEM.RETURN.CODE
@@ -116,6 +117,8 @@ $include err.h
 *  verb is administrator-gated, so ps_script always reached the elevated helper,
 *  which returned a status and threw the script's output away.  ON and OFF keep
 *  ps_script because 10138 already says what they did.
+*  12 Nov 26 (RELEASE_1.1 243; owner: a line before any wait over 2 s): the script is a fresh PowerShell, a few seconds.
+   if want = '-Show' then display sysmsg(12950) else display sysmsg(12944)   ;* Reading the setting / Making the change (a few seconds)...
    if want = '-Show' then
       both   = ps_script_out(ps, @true)
       rc     = field(both, @fm, 1)

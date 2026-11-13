@@ -14,7 +14,10 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            unset. EDIT and MICRO refuse, before the editor starts, a VOC record, program or dictionary
                            the account may not change. DIGEST of a file outside the account needs the account's OS
                            access, as every other OS path does. An API client's WRITE ... CREATING.SEQKEY asks the same
-                           edit gates as its other writes.
+                           edit gates as its other writes. REMOTE.API and REMOTE.SSH say "Reading the setting" or "Making
+                           the change" before the few seconds they wait. The home screen leaves out the tile of a page
+                           this version does not have (the AI, the audit trail). RUN of a program whose path is too long
+                           says what the limit is.
              Does NOT    - Change anything else. NOT YET TESTED ON AN INSTALLED SYSTEM.
 
 12 Nov 26  SD ALWAYS RUNS IN A WINDOW OF ITS OWN.

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux (PORT_ADOPTION 28, S.48; RELEASE_1.1 259): op_run() raises 10918, which names the limit, for a runfile path over it.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): OPTION FORCE.RELOAD is gone, and refresh_link() with it: a CALL never replaces a link variable's object.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): op_ongosubp and op_ongotop ($MODE PICK.JUMP.RANGE) are gone, and computed_jump() has
  *           no pick_style: an index out of range uses the nearest label.
@@ -810,8 +811,14 @@ void op_run() {
      failed "Invalid runfile pathname".  object.c bounds its header copy.   */
   char runfile_name[MAX_PATHNAME_LEN + 1];
 
+  int n;
+
   descr = e_stack - 1;
-  if (k_get_c_string(descr, runfile_name, MAX_PATHNAME_LEN) < 1) {
+  n = k_get_c_string(descr, runfile_name, MAX_PATHNAME_LEN);
+  if (n < 0) {
+    k_error(sysmsg(10918), MAX_PATHNAME_LEN); /* 12 Nov 26 (RELEASE_1.1 259, Linux PORT_ADOPTION 28): name the limit */
+  }
+  if (n < 1) {
     k_error(sysmsg(1135));
   }
   k_dismiss();

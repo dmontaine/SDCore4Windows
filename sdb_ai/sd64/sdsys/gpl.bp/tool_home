@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 262/229: a cmd: tile is shown only when its verb is in the account's VOC (the AI and Audit trail tiles had no page here).
 * 10 Nov 26 Windows port - Linux e3490a7f taken whole (messages renumbered): Windows' earlier changes were the 28 Oct carry of ec8459b and the dropped
 *               Bypass programs tile, and Linux has both now (S.187).  Tiles for pages this tree does not carry yet run a verb SD does not know; HOME traps it.
 * 22 Oct 26 dm  New (S.75, H1; the owner: "the display design is approved as drawn. Start home H0, then H1 and H2").
@@ -337,6 +338,8 @@ build.page:
    * the tiles the administrator has turned off for this account (SET.TILE): left out of the page, their menu entries cannot be chosen
    call !home_off(@who, off.list)
    off.set = ' ' : off.list : ' '
+   tile.voc.ok = @false                                   ;* 12 Nov 26 (RELEASE_1.1 262): add.tile asks this account's VOC for a cmd: tile's verb
+   open 'VOC' to tile.voc then tile.voc.ok = @true
    terminal.off = (index(off.set, ' terminal ', 1) > 0)
    tl = ''
    gr = ''
@@ -498,6 +501,17 @@ pick.level:
 add.tile:
    added = 0
    if index(off.set, ' ' : id : ' ', 1) then return        ;* turned off by the administrator: not on the page at all
+*  12 Nov 26 (RELEASE_1.1 262): a tile for one of SD's own pages (tool.*) whose verb is not in this account's VOC is not shown.  Choosing it failed (the AI tile, whose page
+*  is not in this tree yet; Audit trail where tool.audit is not; and any tool page an account made before it shipped never gained, as an
+*  upgrade adds no verb to an existing account).  When the verb arrives the tile appears with no change here.
+   if tile.voc.ok and act[1, 4] = 'cmd:' then
+      tile.verb = field(trim(act[5, 999]), ' ', 1)
+      if downcase(tile.verb[1, 5]) = 'tool.' then              ;* SD's own pages only: a pin's sentence may start with a catalogued program that has no VOC record
+         read tile.vr from tile.voc, tile.verb else
+            read tile.vr from tile.voc, downcase(tile.verb) else return
+         end
+      end
+   end
    t = id : @vm : grp : @vm : label : @vm : glyph : @vm : sub : @vm : act : @vm : pal : @vm : size : @vm : pause : @vm : why
    tl<-1> = t
    nt = dcount(tl, @fm)

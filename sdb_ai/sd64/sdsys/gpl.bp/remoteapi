@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 243 (owner: a line before any wait over 2 s): 12950 before the report, 12944 before a change.
 * 06 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  A completed
 *           change writes an audit record, 'REMOTE.API ON|LOCAL|OFF', as SD Core
 *           for Linux's does, and a refusal or failure sets @SYSTEM.RETURN.CODE
@@ -127,6 +128,7 @@ $include err.h
 *  never be able to change it, so this path runs api-listener.ps1 -Show and
 *  stops before anything else.
    if token.type = PARSER$END or action = '' then
+      display sysmsg(12950)   ;* Reading the setting (a few seconds)...  (owner, 12 Nov 26: a line before any wait over 2 s; RELEASE_1.1 243)
       gosub report.state
       stop
    end
@@ -156,6 +158,7 @@ $include err.h
 *      prints "already ON" and this verb learns from the SECOND script, below,
 *      whether anything actually needs restarting.
 *  ---------------------------------------------------------------------------
+   display sysmsg(12944)   ;* Making the change (a few seconds)...  (RELEASE_1.1 243: two PowerShell scripts follow)
    gosub run.listener
    if rc # 0 then
       @system.return.code = -ER$FAILED

@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 243: the status line says "Reading the setting" while the two reports run (as SD Core Solo), and the verbs' own
+*           wait line is taken off the captured report.
 * 10 Nov 26 Windows port - from Linux (S.75 A9, df48c780, and its later changes to S.186 ad4a2cf6; RELEASE_1.1 228), agreed with Linux by mail 2026-11-11T0630.  Five views,
 *               not six: the sdsys login view (REMOTE.SDSYS, S.95 and S.106) is left out, as remote administration over ssh is deferred here (RELEASE_1.1 202), so 6, O and F
 *               and the verb are gone.  OS deviations: A hands the terminal to REMOTE.API instead of running it through $tk_run, because the Windows verb asks whether to
@@ -171,6 +173,12 @@ $include tk.h
 
 * Everything the five views show, read again: the doors' reports, the SDNet servers, the sessions, the accounts' routes and the TLS lines
 read.all:
+*  12 Nov 26 (RELEASE_1.1 243): the two reports start PowerShell, a few seconds: the status line says so first (owner, 12 Nov 26, a line
+*  before any wait over 2 s; SD Core Solo's tool_remote does the same), and the page's own message comes back after.
+   held.msg = msg
+   msg = sysmsg(12950)                                          ;* Reading the setting (a few seconds)...
+   call $tk_frame(ctx, keys, panes<view>, msg)
+   msg = held.msg
    sel.t = ''
    if nrows > 0 and ci >= 1 and ci <= nrows then sel.t = rowtxt<ci>
    cmd = 'remote.api'
@@ -214,6 +222,7 @@ run.report:
    if rerr # '' then rep = rerr
 * a message with line breaks is several rows, never one row that moves the cursor (a message writes \n as LF then CR, so the CR that is left starts the next row at column 0)
    rep = change(change(change(rep, char(13) : char(10), @fm), char(10), @fm), char(13), '')
+   if trim(rep<1>) = trim(sysmsg(12950)) or trim(rep<1>) = trim(sysmsg(12944)) then del rep<1>   ;* 12 Nov 26: the verb's wait line; the status line said it
    if rstat # 0 and trim(rep) = '' then rep = cmd : ' returned status ' : rstat
    return
 
