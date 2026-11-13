@@ -23,6 +23,8 @@
         'stmt-q3'      = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS, builds fixture accounts and starts sd -internal; none exists in an ordinary account'
         'inhibit-q8'   = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
         'listu-a5'     = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
+        # 13 Nov 26 (RELEASE_1.1 272): carried with the pty driver (probe-winpty.py); its first run against SD is owed.
+        'winsize'      = 'not yet run: the first run of the pty driver against SD (probe-winpty.py) is owed on row 272; its K$WINSIZE rows need row 254''s SDSYS stand-in'
         # S.63 (per-account OS gates) is on the HOLD list and is not carried.
         # 12 Nov 26 (RELEASE_1.1 241): the public OSPATH is carried; ospathw (written for Windows) runs its switch-off half in an ordinary account.
         'ospath'       = 'loads sandbox-gates.py: SDSYS sessions and fixture accounts with the OS switch on and off; the switch-off half is ospathw'

@@ -253,6 +253,9 @@ NON_WRITERS = {
     # 18 Oct 26: a byte copy of Linux's sandbox-sys-b2.py.  Most of it runs; the few rows that start `sd -internal` write NO marker, so
     # the gate refuses them ("This command needs an elevated session") and verify-carry-known.psd1 Rows names each as N/A.
     "verify-carry-sys-b2.py": "a Linux suite copy; its internal rows write no marker and are refused, named N/A in verify-carry-known.psd1",
+    # 13 Nov 26 (RELEASE_1.1 272): Linux's sandbox-winsize.py with its internal-mode helper kept but never called on Windows (its
+    # header says why: sd -internal is elevated-only and lands in SDSYS); the K$WINSIZE rows wait on row 254's SDSYS stand-in.
+    "verify-carry-winsize.py": "a Linux suite copy; its sd -internal helper is kept for the diff but never called here",
 }
 # gplsrc/sd.c is outside gplbld and holds the "-INTERNAL" argument PARSER, not a session start.
 

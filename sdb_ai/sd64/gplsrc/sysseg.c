@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 276: bind_sysseg() gives SHORT_CODE back on every exit taken while it holds it.  Six
+ *           exits after LockSemaphore(SHORT_CODE) ("SD has not been started." among them) jumped to exit_bind_sysseg with it held.
+ *           Linux's System V semaphore is returned by the kernel when the process ends (SEM_UNDO); a Windows semaphore is not, so
+ *           one sd.exe that could not see the segment left every later session spinning in LockSemaphore (measured 13 Nov: count
+ *           0 of 1 after a probe started sd.exe under another MSYS2 runtime; recovered by releasing it once).  Windows only.
  * 16 Aug 26 Windows port - a segment left by a previous boot is SD_STOPPED and
  *                      not SD_WRECKAGE.  /dev/shm is NTFS here, so it survives
  *                      a reboot and the service could not start after one
@@ -110,6 +115,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   /* Linux only - Create rather than attach to existing? */
 
   bool status = FALSE;
+  bool short_code_held = FALSE; /* 13 Nov 26 (RELEASE_1.1 276): given back at exit_bind_sysseg if still held */
   int32_t sharedMemSize;
   int32_t offset;
   int16_t num_glocks;
@@ -138,11 +144,13 @@ bool bind_sysseg(bool create, char* errmsg) {
    */
 
   LockSemaphore(SHORT_CODE);
+  short_code_held = TRUE;
 
   if (attach_shared_memory()) {
     /* The shared memory is already initialised */
 
     UnlockSemaphore(SHORT_CODE);
+    short_code_held = FALSE;
 
     if (sysseg->revstamp != SYSSEG_REVSTAMP) {
       sprintf(errmsg, "Shared memory revstamp mismatch (%08X %08X)",
@@ -322,6 +330,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   offset += sizeof(struct PCFG);
 
   UnlockSemaphore(SHORT_CODE);
+  short_code_held = FALSE;
 
   /* Reset file stats timer. This must be done after creating the dynamic
     tables as sdtime() may reference user table. Furthermore, because
@@ -339,6 +348,11 @@ bool bind_sysseg(bool create, char* errmsg) {
     k_free(cfg);
 
 exit_bind_sysseg:
+
+  /* 13 Nov 26 (RELEASE_1.1 276): a Windows semaphore outlives the process that took it, so give SHORT_CODE back before
+     anything else; stop_sd() below may close the semaphores. */
+  if (short_code_held)
+    UnlockSemaphore(SHORT_CODE);
 
   if (!status)
     stop_sd();

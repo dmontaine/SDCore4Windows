@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - from Linux (3 Nov 26): the TERM DEFAULT help line is back to the "(140 x 43; ...)" form, without
+*           "since 2 Nov 26" (Linux's sandbox-winsize.py reads it; RELEASE_1.1 272).
 * 18 Oct 26 Windows port - from Linux 37b0630 (12 Oct 26): 1.2-0 openQM 466: prt.cols and prt.lines set the default printer's
 * 18 Oct 26 Windows port - from Linux fa1cd4c - TERM DEFAULT gives 140 x 42 (DEFAULT.WIDTH and DEFAULT.DEPTH, were 120 x 36).
 * 12 Oct 26 Windows port - from Linux fa1cd4c - 1.2-0 openQM 466: prt.cols and prt.lines set the default printer's
@@ -40,7 +42,7 @@
 *    TERM {width} {, lines} {, prt.cols} {, prt.lines} { type}
 *                                    Set to given values
 *    TERM COLOUR {bgc}{,fgc}         Set display colour
-*    TERM DEFAULT                    Set to defaults (140 x 43 since 2 Nov 26; the printer is not touched)
+*    TERM DEFAULT                    Set to defaults (140 x 43; the printer is not touched)
 *    TERM DISPLAY                    Display terminfo bindings
 *
 * @SYSTEM.RETURN.CODE
