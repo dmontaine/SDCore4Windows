@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 266: WHO is lower case, as Linux (the path leaf at start, the account a client asks for).
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-02; Linux b6186ccb): WRITE ... CREATING.SEQKEY asks check.edit, as every other write here.
 * 12 Nov 26 Windows port - RELEASE_1.1 248 (Core parity audit P-14 / Core-Solo C-01; Linux b6186ccb, S.64 part 2): vb.openseq opens a VOC,
 *           dictionary or program record, or an OS path holding one, read-only when the session's edit gates refuse it (K$EDIT.OK / K$EDIT.OS.OK).
@@ -380,7 +381,7 @@ if not(kernel(K$CPROC.LEVEL,0)) then
 
    account.path = ospath("", os$cwd)     ;* @PATH
    initial.account.path = account.path
-   who = upcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999]) ;* 0414
+   who = downcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999]) ;* 0414; 12 Nov 26 (RELEASE_1.1 266): lower case, as Linux
    abort.code = 0
 
    tty = 'apisrvr'
@@ -903,7 +904,7 @@ vb.account:
 readv i from @voc,'ON.LOGTO',0 on error null
 then execute 'ON.LOGTO' trapping aborts capturing response
 
-new.account = upcase(cmnd)
+new.account = downcase(cmnd)       ;* 12 Nov 26 (RELEASE_1.1 266): lower case, as Linux apisrvr:683
 
 old.account.path = account.path
 

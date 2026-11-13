@@ -18,9 +18,12 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO IS LOWER CASE, AS LINUX (mail 2026-11-13T0830).  initial.account is downcased at every source
+*   (the forced account, 'sdsys', @logname, the path leaf), its tests and the audit name say 'sdsys', and the update.sdsys.voc test is Linux's
+*   `@who = 'sdsys'` again.  setacc, cproc LOGTO / run.in and apisrvr set WHO the same way.
 * 12 Nov 26 Windows port - RELEASE_1.1 266 (owner: "Yes, install it"): voc_template is installed again, so UPDATE.ACCOUNT / UPDATE.ACCOUNTS in SDSYS
-*   refresh SDSYS's own VOC from it as Linux 6dc0e3e intended.  The test downcases @who, which is upper case on Windows; as written it was never
-*   true here, so SDSYS's VOC had been refreshed from NEWVOC (the holder's tool.gates over the administrator's).
+*   refresh SDSYS's own VOC from it as Linux 6dc0e3e intended.  Until @who was lower case (the line above) the test had to downcase it; as Linux
+*   wrote it, it was never true here, so SDSYS's VOC had been refreshed from NEWVOC (the holder's tool.gates over the administrator's).
 * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14: a scheduled administrator job (kernel(K$JOB.MARK)) enters SDSYS
 *   with no desktop and no UAC, in place of Linux's CPROC arm; the grant is audited "elevation granted reason=scheduled job".
 * 8 Nov 26 Windows port - from Linux 81d9599b (S.87 batch 14): update.voc's special case for the MD record and its label accept.without.query are gone.
@@ -382,14 +385,14 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   whole of VOC_TEMPLATE and NEWVOC is a smaller set for the other accounts; where the two hold the same id with different content (tool.gates: the
 *   matrix for the administrator, the holder's read-only page for everyone else) UPDATE.ACCOUNTS ALL, which the installer runs on every install,
 *   wrote the holder's page over the administrator's.
-         update.sdsys.voc = (downcase(@who) = 'sdsys' and kernel(K$ADMINISTRATOR,-1))   ;* 12 Nov 26: @who is upper case here (row 266)
+         update.sdsys.voc = (@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1))
          upd.account = downcase(@who)               ;* 27 Oct 26 - the name the deletion list's saved copies and audit line carry
          gosub update.voc
          if upd.denied then display sysmsg(12988, @path : @ds : 'voc')
          close update.voc.f
       end
 
-      if @who = 'SDSYS' and kernel(K$ADMINISTRATOR,-1) then
+      if @who = 'sdsys' and kernel(K$ADMINISTRATOR,-1) then
 * 04 Sep 26 Windows port - MODE 4 DOES NOT ASK, AND IT SAYS SO RATHER THAN GOING
 *   QUIET.  PRE_RELEASE_FIXES 70.  The installer runs this from ssPostInstall,
 *   where there is nobody at a keyboard: stdin is not a terminal, "input" gets
@@ -651,7 +654,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 
    begin case
       case kernel(K$FORCED.ACCOUNT,0) # ''   ;* "sd -Aname", or -INTERNAL
-         initial.account = upcase(kernel(K$FORCED.ACCOUNT,0))
+         initial.account = downcase(kernel(K$FORCED.ACCOUNT,0))
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
@@ -685,7 +688,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   and comes from a command line rather than a session.
 
          if kernel(K$INTERNAL,-1) then
-            if initial.account = 'SDSYS' and not(kernel(K$ADMINISTRATOR,-1)) then
+            if initial.account = 'sdsys' and not(kernel(K$ADMINISTRATOR,-1)) then
                display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
                audit.reason = 'SDSYS requires an elevated session'
                goto terminate.connection
@@ -697,7 +700,7 @@ deffun pw_complex(pw) calling '!pw_complex'
             gosub internal.gate
             if not(gate.ok) then goto terminate.connection
          end else
-            if initial.account # upcase(@logname) then
+            if initial.account # downcase(@logname) then
                display sysmsg(10051) ;* You can only log in to your own account
                audit.reason = 'not the caller own account'
                goto terminate.connection
@@ -858,7 +861,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 *   is immutable, so it still answers correctly after a logto, which is why the
 *   case kept it and :695 uses it for the internal route too.
       case upcase(@logname) = 'SDSYS' and (kernel(K$ADMINISTRATOR, -1) or job.name # '')
-         initial.account = 'SDSYS'
+         initial.account = 'sdsys'
 
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
@@ -900,12 +903,12 @@ deffun pw_complex(pw) calling '!pw_complex'
 *        is most specific about is not the one to leave to a second line.)
          if upcase(@logname) = 'SDSYS' and not(kernel(K$ADMINISTRATOR, -1)) then
             display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-            audit.account = 'SDSYS'
+            audit.account = 'sdsys'
             audit.reason = 'SDSYS requires an elevated session'
             goto terminate.connection
          end
 
-         initial.account = upcase(@logname)
+         initial.account = downcase(@logname)
 
 * 22 Sep 26 Windows port - THE ONLY PRIVILEGED ACCOUNT IS SDSYS.  Owner's
 *   ruling, 22 Sep 2026: "elevation should not give ANY user any additional SD
@@ -1028,7 +1031,7 @@ deffun pw_complex(pw) calling '!pw_complex'
 
       if initial.account = '' then
          * Just use final part of pathname
-         initial.account = upcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999])
+         initial.account = downcase(account.path[index(account.path, @ds, count(account.path, @ds)) + 1, 99999])
       end
    end
 

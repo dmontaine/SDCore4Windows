@@ -294,8 +294,10 @@ def checks(src, voc_text, newvoc_names, extra=None):
     r_n = first(net, "gosub revert.account")
     v_n = first(net, "gosub get.voc.parser.rec")
     ck("W6 the safety net reads $VOC.PARSER again after the way back (it was read from the account the command visited)", None not in (r_n, v_n) and r_n < v_n)
-    ck("W7 the register is read upper case, the session's name is the register's, and nothing changes the effective user",
-       "read acc.record from acc.f, upcase(ri.acct) else acc.record = ''" in rtxt_run and "who = upcase(ri.acct)" in rtxt_run
+    # 12 Nov 26 (RELEASE_1.1 266): @who is lower case on Windows as on Linux, so the register is read by ri.acct (lower case since
+    # ri.rest = downcase(...)) and who = ri.acct, Linux's own two lines; until today both were upcase(ri.acct).
+    ck("W7 the register is read by the lower-case name, the session's name is that name, and nothing changes the effective user",
+       "read acc.record from acc.f, ri.acct else acc.record = ''" in rtxt_run and "who = ri.acct" in rtxt_run
        and "EUID" not in rtxt_run.upper() and "EUID" not in "\n".join(s for n, s in rev).upper())
     ck("W8 the Windows-only messages exist, and the two Linux replaced (12565, 12568) are gone",
        all(os.path.isfile(os.path.join(MESSAGES, str(n))) for n in WINDOWS_MESSAGES) and not any(os.path.exists(os.path.join(MESSAGES, str(n))) for n in RETIRED_MESSAGES))
@@ -476,7 +478,7 @@ MUTANTS = [
     ("$EXECUTE runs under run.in", "bcomp", "         if ri.active then\n            err.msg = sysmsg(15071)", "         if 0 then\n            err.msg = sysmsg(15071)"),
     ("$BCOMP's common has other names", "bcomp", "   common /$runin/ ri.active, ri.path,", "   common /$runin/ ri.active, ri.paths,"),
     ("the safety net keeps the visited account's $VOC.PARSER", "cproc", "            ri.active = 0\n            gosub get.voc.parser.rec\n", "            ri.active = 0\n"),
-    ("the register is read as typed", "cproc", "read acc.record from acc.f, upcase(ri.acct) else", "read acc.record from acc.f, ri.acct else"),
+    ("the session's name goes back to upper case", "cproc", "   who = ri.acct\n", "   who = upcase(ri.acct)\n"),
     # 10 Nov 26: S.213 (from Linux ca137620), the command does not run as the administrator
     ("the command keeps the administrator flag", "cproc", "   void kernel(K$OS.EXEC, 0)\n   void kernel(K$ADMINISTRATOR, 0)\n   return\n", "   void kernel(K$OS.EXEC, 0)\n   return\n"),
     ("the flag is never dropped (no call)", "cproc", "      gosub ri.narrow            ;* 10 Nov 26, S.213: not the administrator from here to revert.account\n", ""),

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO is lower case, as Linux: LOGTO's new.account and run.in's who are lower case, and the
+*   administrator grant, the audit names and "can only be executed from SDSYS" test against 'sdsys'.
 * 12 Nov 26 Windows port - RELEASE_1.1 245: a refused login sets exit status 1 (it was 0), for the session's own window and for scripts.
 * 11 Nov 26 Windows port - Linux ca137620 (S.213; RELEASE_1.1 231, owner 10 Nov: "should match linux"): the command and option words are checked as Linux checks them,
 *               by ri.own.words against the shipped NEWVOC, BEFORE anything is kept or changed, and a refusal is message 15070 (Linux 14070).  Windows' own
@@ -2912,9 +2914,9 @@ int.logto:
    acc.record = ''
    openpath @sdsys:@ds:'accounts' to acc.f then
 *      readv acc.rec from acc.f, upcase(new.account), ACC$PATH then
-      read acc.record from acc.f, upcase(new.account) then
+      read acc.record from acc.f, downcase(new.account) then
          acc.rec = parse.pathname.tokens(acc.record<ACC$PATH>)
-         new.account = upcase(new.account)
+         new.account = downcase(new.account)     ;* 12 Nov 26 (RELEASE_1.1 266): lower case, as Linux cproc:2949
       end
       close acc.f
    end
@@ -2936,7 +2938,7 @@ int.logto:
 *   does not say whether the account exists, so that the register cannot be
 *   probed - but the TRAIL may say, and should: somebody working through account
 *   names is the pattern this exists to make visible.
-      void kernel(K$AUDIT, 'logto refused account=' : upcase(new.account) : ' reason=not in the register')
+      void kernel(K$AUDIT, 'logto refused account=' : downcase(new.account) : ' reason=not in the register')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -2953,7 +2955,7 @@ int.logto:
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The account exists and
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other
 *   half of "who used the access" and the one an investigation starts from.
-      void kernel(K$AUDIT, 'logto refused account=' : upcase(new.account) : ' reason=not granted')
+      void kernel(K$AUDIT, 'logto refused account=' : downcase(new.account) : ' reason=not granted')
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -3007,7 +3009,7 @@ int.logto:
 *   rights a property of the session rather than of the account you are
 *   standing in.  See PROJECT_STATUS.md section 5.6.
 
-   if new.account = 'SDSYS' then
+   if new.account = 'sdsys' then      ;* 12 Nov 26 (RELEASE_1.1 266): new.account is lower case now
       void kernel(K$ADMINISTRATOR, 1)
    end else
 * 16 Aug 26 Windows port - AND THE PRIVILEGE GOES WITH THEM.  PROJECT_STATUS.md
@@ -3240,7 +3242,7 @@ int.runin:
 * a registered account, and only that: the register's own record gives the directory.  10 Nov 26 Windows port: the register's ids are upper case (as int.logto reads it).
    acc.record = ''
    openpath @sdsys:@ds:'accounts' to acc.f then
-      read acc.record from acc.f, upcase(ri.acct) else acc.record = ''
+      read acc.record from acc.f, ri.acct else acc.record = ''
       close acc.f
    end
    if acc.record<ACC$PATH> = '' then
@@ -3287,7 +3289,7 @@ int.runin:
    end
    i = ospath('', os$flush.cache)
    account.path = ospath('', os$cwd)
-   who = upcase(ri.acct)
+   who = ri.acct
    void kernel(K$SET.ACCOUNT, who)
    voc = new.voc ; new.voc = 0
    gosub load.account.switches
@@ -3938,7 +3940,7 @@ int.logout:
            return
          end
 
-         if @who # 'SDSYS' then
+         if @who # 'sdsys' then
            display sysmsg(2002) ;* Command can only be executed from SDSYS account
            return
          end

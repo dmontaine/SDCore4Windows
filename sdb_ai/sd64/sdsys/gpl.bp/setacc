@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 266: the account name (and so @WHO) is lower case, as Linux setacc:45/47.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -43,9 +44,9 @@ $include keys.h
 
    if index(acc, @ds, 1) then    ;* Attaching by account path
       path = acc
-      acc = upcase(path[index(path, @ds, count(path, @ds)) + 1, 99999])
+      acc = downcase(path[index(path, @ds, count(path, @ds)) + 1, 99999])
    end else                      ;* Attaching by account name
-      acc = upcase(acc)
+      acc = downcase(acc)
 
       openpath @sdsys:@ds:'accounts' to acc.f else
          err = ER$FNF
