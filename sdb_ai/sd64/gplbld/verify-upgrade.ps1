@@ -33,9 +33,10 @@
 #
 # -Snapshot writes the same marker file into two directories:
 #
-#   sdsys\bp\$upgrade-probe     - bp is on SDSYS_PRESERVE.  SD ships nothing
-#                                 into it, so it is empty and a stray file
-#                                 there is harmless.  It MUST SURVIVE.
+#   sdsys\bp\$upgrade-probe     - bp is on SDSYS_PRESERVE.  SD ships only four
+#                                 named samples into it (12 Nov 26, RELEASE_1.1
+#                                 256), copied by name, so a stray file there is
+#                                 harmless.  It MUST SURVIVE.
 #   sdsys\gcat\$upgrade-probe   - gcat is on the computed replace list, so
 #                                 upgrade.iss deletes the whole directory with
 #                                 Type: filesandordirs before [Files] copies it

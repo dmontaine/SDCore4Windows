@@ -77,6 +77,17 @@ def build_tree(root, skip=(), empty=()):
         if n not in empty:
             with open(os.path.join(sdsys, n, 'X'), 'w') as f:
                 f.write('x')
+    # 12 Nov 26 - RELEASE_1.1 256: the named files stage.py copies into a
+    # preserved directory, as the real stage does.
+    for d, fns, _w in S.SDSYS_SHIP_INTO_PRESERVED:
+        if d in skip:
+            continue
+        os.makedirs(os.path.join(sdsys, d), exist_ok=True)
+        for fn in fns:
+            if (d, fn) in skip:
+                continue
+            with open(os.path.join(sdsys, d, fn), 'w') as f:
+                f.write('x')
     return sdsys
 
 
@@ -122,11 +133,21 @@ def main():
         tree_dels = [l for l in dels if '\\sdsys\\' in l]
         app_dels  = [l for l in dels if '{app}' in l]
         retired = [n for n, _w in S.SDSYS_RETIRED]
-        check('delete and copy are paired, apart from the retired names',
-              len(tree_dels) == len(copies) + len(retired),
+        # 12 Nov 26 - RELEASE_1.1 256: the per-file copies into a preserved
+        # directory are copy-only by design, so they are counted apart.
+        into = [(d, fn) for d, fns, _w in S.SDSYS_SHIP_INTO_PRESERVED for fn in fns]
+        into_copies = [l for l in copies
+                       if any(('\\sdsys\\%s\\%s"' % (d, fn)) in l for d, fn in into)]
+        plain = [l for l in copies if l not in into_copies]
+        check('delete and copy are paired, apart from the retired names and the '
+              'named files into preserved directories',
+              len(tree_dels) == len(plain) + len(retired),
               '%d deletes vs %d copies + %d retired'
-              % (len(tree_dels), len(copies), len(retired)))
-        check('one copy per replace name', len(replace) == len(copies))
+              % (len(tree_dels), len(plain), len(retired)))
+        check('one copy per replace name', len(replace) == len(plain))
+        check('one copy per named file into a preserved directory (%d named)' % len(into),
+              len(into) > 0 and len(into_copies) == len(into),
+              '%d copies for %d names' % (len(into_copies), len(into)))
         # 9 Nov 26 - A NAME, NOT A PREFIX (Solo's fix of 28 Sep 26, needed here now
         # that gpl.bp is retired in Core too).  "\sdsys\<n>" alone matched
         # "\sdsys\gpl.bp.out" for n = gpl.bp, so the check failed on the replace
@@ -142,9 +163,21 @@ def main():
               all('Check: DataTreeUpgrade' in l for l in tree_dels + copies))
 
         for n in preserve:
-            check('PRESERVED %s appears in neither section' % n,
-                  ('\\sdsys\\%s"' % n) not in text and
-                  ('\\sdsys\\%s\\' % n) not in text)
+            named = [fn for d, fn in into if d == n]
+            if not named:
+                check('PRESERVED %s appears in neither section' % n,
+                      ('\\sdsys\\%s"' % n) not in text and
+                      ('\\sdsys\\%s\\' % n) not in text)
+                continue
+            # A preserved directory SD ships named files into: never deleted, and
+            # copied only file by file, by name - no wildcard that could reach a
+            # program the site wrote.
+            check('PRESERVED %s is never deleted' % n,
+                  not any(names(l, n) for l in dels))
+            check('PRESERVED %s is copied only as its named files %s' % (n, named),
+                  all(any(('\\sdsys\\%s\\%s"' % (n, fn)) in l for fn in named)
+                      for l in copies if names(l, n)) and
+                  not any('\\sdsys\\%s\\*' % n in l for l in copies))
         for n in replace:
             check('REPLACED %s is deleted and copied back' % n,
                   any(('\\sdsys\\%s"' % n) in l for l in dels) and
@@ -255,6 +288,27 @@ def main():
                    lambda: S.write_upgrade_iss(r, s, True))
     finally:
         S.SDSYS_PRESERVE = saved
+        shutil.rmtree(r, ignore_errors=True)
+
+    # 12 Nov 26 - RELEASE_1.1 256: the two refusals the named files add.
+    r = tempfile.mkdtemp()
+    try:
+        d0, fns0, _w0 = S.SDSYS_SHIP_INTO_PRESERVED[0]
+        s = build_tree(r, skip=[(d0, fns0[0])])
+        expect_die('a named file into a preserved directory missing from the stage',
+                   lambda: S.write_upgrade_iss(r, s, True))
+    finally:
+        shutil.rmtree(r, ignore_errors=True)
+
+    r = tempfile.mkdtemp()
+    saved = S.SDSYS_SHIP_INTO_PRESERVED
+    try:
+        s = build_tree(r)
+        S.SDSYS_SHIP_INTO_PRESERVED = saved + [('gcat', ('X',), 'a replaced directory')]
+        expect_die('named files into a directory that is not preserved',
+                   lambda: S.write_upgrade_iss(r, s, True))
+    finally:
+        S.SDSYS_SHIP_INTO_PRESERVED = saved
         shutil.rmtree(r, ignore_errors=True)
 
     r = tempfile.mkdtemp()

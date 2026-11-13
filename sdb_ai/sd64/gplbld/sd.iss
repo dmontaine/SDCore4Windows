@@ -727,7 +727,8 @@ Name: "{#DataDir}\shm"; Flags: uninsneveruninstall
 ; EMPTY, AND WHY BEING EMPTY IS THE WHOLE DEFECT.
 ;
 ; stage.py creates sdsys\bp, sdsys\bp.out and sdsys\batch.jobs EMPTY and puts
-; all three on the PRESERVED list - "the directory still has to exist", because
+; all three on the PRESERVED list (12 Nov 26: bp then gets four named Python
+; samples, RELEASE_1.1 256; the [Dirs] entry below is still what keeps it) - "the directory still has to exist", because
 ; SDSYS's VOC record bp (seeded from voc_template at build time) is an
 ; F-pointer at it and secure-sysdirs.ps1 hardens it.
 ;

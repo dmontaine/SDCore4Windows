@@ -1,0 +1,280 @@
+program py_test
+* Test embedded python functions 
+* Copyright (c)2025 The SD Developers, All Rights Reserved
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+$include SDPYFUNC.H
+$include keys.h
+
+deffun typetxt(inx) LOCAL
+
+crt 'embedded python test, hit <enter> to start':
+
+*input ok
+crt str('=',50)
+*
+crt 'attempt init'
+rtn_stat = PY_INITIALIZE()
+crt 'rtn_stat = ':rtn_stat
+crt 'status()   = ':status()
+crt str('=',50)
+if rtn_stat # 0 then 
+  crt 'python init failure, about'
+  stop
+end
+*
+crt 'script text:'
+lf = char(10)
+ script  = 'FMRK   = chr(254)':lf
+ script := 'VMRKM  = chr(253)':lf
+ script := 'SVMRK  = chr(252)':lf
+ script := 'result = ""':lf
+ script := 'alist = ["item 1", "item 2", "item 3", "item 4"]':lf
+ script := 'countdown = {"3" : "Three", "2" : "Two", "1" : "One", "0" : "Ignition!"}':lf
+ script := 'for count in countdown:':lf
+ script := '  result += count + " " + countdown[count] + FMRK ':lf
+ script := "result = bytes(result, 'latin')":lf
+ *
+* show the script script
+script_len = len(script)
+for i = 1 to script_len
+ch = script[i,1]
+  if ch = lf then
+    crt
+  end else
+    crt ch:
+  end
+next i
+crt str('=',50)
+*
+crt 'attempt to run script:'
+rtn_stat = PY_RUNSTRING(script)
+crt 'rtn_stat = ':rtn_stat
+crt 'status()   = ':status()
+if rtn_stat <> 0 then goto 999
+crt str('=',50)
+*
+crt 'attempt to access python object: result'
+rtn_string = PY_GETATTR("result")
+crt 'status = ':status()
+crt "result:"
+crt rtn_string
+fldcnt = dcount(rtn_string,@FM)
+for i = 1 to fldcnt
+  crt rtn_string<i>
+next i
+*
+
+crt str('=',50)
+crt 'attempt to access python object: countdown'
+rtn_string = PY_GETATTR("countdown")
+crt 'status = ':status()
+crt "countdown:"
+crt rtn_string
+*
+
+
+crt str('=',50)
+crt 'attempt to access nonexistent python object: dummy'
+rtn_string = PY_GETATTR("dummy")
+crt 'status = ':status()
+crt "dummy:"
+crt rtn_string
+*
+
+*
+crt str('=',50)
+crt 'attempt to create python dictionary my_dict'
+rtn_status = PY_CREATEDICT("my_dict")
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'add key "k1" value "first value" dictionary my_dict'
+rtn_status = PY_DICTVALSETS("my_dict","k1","first value")
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'add key "k2" value "this is my second value" dictionary my_dict'
+rtn_status = PY_DICTVALSETS("my_dict","k2","this is my second value")
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'add key "k3" value "third value" dictionary my_dict'
+rtn_status = PY_DICTVALSETS("my_dict","k3","third value")
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+*
+crt 'Now display contents via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(my_dict)")
+crt
+*
+crt str('=',50)
+crt 'attempt get value for key "k1" dictionary my_dict'
+rtn_string = PY_DICTVALGETS("my_dict","k1")
+crt 'rtn_string = ':rtn_string
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'attempt delete key "k2" dictionary my_dict'
+rtn_string = PY_DICTIDEL("my_dict","k2")
+crt 'rtn_string = ':rtn_string
+crt 'status()   = ':status()
+*
+crt 'Now display contents via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(my_dict)")
+crt
+*
+crt str('=',50)
+crt 'attempt to clear python dictionary my_dict'
+rtn_status = PY_CLEARDICT("my_dict")
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+crt 'Now display contents via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(my_dict)")
+crt
+*
+crt str('=',50)
+crt 'attempt to create python string "my_str" as "this is my string object"'
+rtn_status = PY_STRSET("my_str","this is my string object" )
+crt 'rtn_status = ':rtn_status
+crt 'status()   = ':status()
+*
+crt 'Now display contents via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(my_str)")
+crt
+*
+crt str('=',50)
+crt 'attempt to access python string "my_str" '
+rtn_string = PY_STRGET("my_str")
+crt 'rtn_string = ':rtn_string
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'attempt to access non existent python string "my_dmmy" '
+rtn_string = PY_STRGET("my_dmmy")
+crt 'rtn_string = ':rtn_string
+crt 'status()   = ':status()
+
+*
+crt str('=',50)
+crt 'Display contents of dictionary countdown via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(countdown)")
+crt
+crt 'attempt to access dictionary countdown keys '
+rtn_string = PY_DICTGETKEYS("countdown")
+*
+icount = dcount(rtn_string,@fm)
+crt
+for i = 1 to icount
+  crt 'rtn_string<':i:'> = ':rtn_string<i>
+next i
+crt 
+crt 'status()   = ':status()
+
+crt str('=',50)
+crt 'Display contents of dictionary countdown via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(countdown)")
+crt
+crt 'attempt to access dictionary countdown values '
+rtn_string = PY_DICTGETVALUES("countdown")
+*
+icount = dcount(rtn_string,@fm)
+crt
+for i = 1 to icount
+  crt 'rtn_string<':i:'> = ':rtn_string<i>
+next i
+crt 
+crt 'status()   = ':status()
+*
+crt str('=',50)
+crt 'Now display contents of alist via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(alist)")
+crt
+crt 'attempt to access alist items '
+
+rtn_string = PY_LISTGETS("alist")
+
+*ilen = len(rtn_string)
+*for i = 1 to ilen
+*  c = rtn_string[i,1]
+*  crt c: ' = ' : seq(c)
+*next i
+
+icount = dcount(rtn_string,@fm)
+crt
+for i = 1 to icount
+  crt 'rtn_string<':i:'> = ':rtn_string<i>
+next i
+crt 
+crt 'status()   = ':status()
+
+crt str('=',50)
+crt 'Count some objects'
+crt str('-',50)
+crt "countdown"
+rtn_stat = PY_RUNSTRING("print(countdown)")
+crt 
+crt 'Size of countdown ':PY_OBJLEN("countdown")
+crt 'Type: ':typetxt(PY_OBJTYPE("countdown"))
+crt str('-',50)
+crt 'my_str'
+rtn_stat = PY_RUNSTRING("print(my_str)") 
+crt
+crt 'Size of my_str ':PY_OBJLEN("my_str")
+crt 'Type: ':typetxt(PY_OBJTYPE("my_str"))
+crt str('-',50)
+crt 'alist'
+rtn_stat = PY_RUNSTRING("print(alist)") 
+crt
+crt 'Size of my_str ':PY_OBJLEN("alist")
+crt 'Type: ':typetxt(PY_OBJTYPE("alist"))
+
+crt str('=',50)
+crt 'Now re display contents of alist and my_str via PY_RUNSTRING'
+rtn_stat = PY_RUNSTRING("print(alist)")
+crt
+rtn_stat = PY_RUNSTRING("print(my_str)") 
+crt
+crt 'attempt to append my_str to alist items '
+
+rtn_string = PY_LISTAPPD("alist","my_str")
+rtn_stat = PY_RUNSTRING("print(alist)")
+crt
+
+*
+* don't finalize, we will check when sd closes
+999: crt 'complete'
+stop
+
+local function typetxt(id)
+
+  begin case
+  case id = SD_Obj_Unkn ;*   0  /* Unknown python object type */
+    return 'unknown'
+  case id = SD_Obj_Str  ;*   1  /* String (Unicode) python object type */
+    return 'String'
+  case id = SD_Obj_List ;*   2  /* List python object type */
+    return 'List'
+  case id =  SD_Obj_Dict ;*  3  /* Dictionary  python object type */
+    return 'Dict'
+  case 1
+    return 'Unknown index'
+  end case
+end
+end

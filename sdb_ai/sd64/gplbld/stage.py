@@ -383,7 +383,7 @@ SDSYS_EMPTY = [
     # into either, anything in them on a live machine was put there by the
     # site, which makes them the user's.  That is exactly the argument that
     # keeps 'cat' - the private catalogue - on the preserve list.
-    ('bp',          "SDSYS's own BP - SD ships nothing into it; the site may"),
+    ('bp',          "SDSYS's own BP - the site's, apart from SDSYS_SHIP_INTO_PRESERVED's four samples (12 Nov 26)"),
     ('bp.out',      'its compiled objects; nothing compiles into it at install'),
     ('gcat',        'global catalog; the bootstrap touches $CPROC here first'),
     ('cat',         'private catalog'),
@@ -606,6 +606,21 @@ SDSYS_PRESERVE = [
     ('bp.out',         'their compiled objects'),
     # 7 Nov 26 - RELEASE_1.1 197: the only way back for a VOC record an update removed.
     ('voc_removed.saved', 'saved copies of removed VOC records - RESTORE.VOC needs them'),
+]
+
+# 12 Nov 26 - RELEASE_1.1 256.  NAMED FILES SD SHIPS INTO A PRESERVED DIRECTORY.
+# Owner, 12 Nov 26: "there is no release without parity", so the four embedded-
+# Python samples Linux ships in SDSYS's BP ship here too (this replaces the 25 Aug
+# "SD ships nothing into SDSYS's BP" for these files only).  The directory stays
+# preserved - everything else in it is the site's - so an upgrade does NOT delete
+# it: each file below gets its own copy entry BY NAME and no delete, which
+# replaces SD's copy and cannot reach a program the site wrote.  That is what
+# Linux's "cp -R sdsys" does to the same files.  A first install gets them with
+# the whole tree.  Each name must exist in source and in the staged tree, and the
+# directory must be on SDSYS_PRESERVE; write_upgrade_iss refuses otherwise.
+SDSYS_SHIP_INTO_PRESERVED = [
+    ('bp', ('PY_JSON', 'PY_TERM', 'PY_TEST', 'PY_TEST2'),
+     'the embedded-Python samples Linux ships in sdsys/bp (RELEASE_1.1 256)'),
 ]
 
 # Directories the bootstrap and the running system create for themselves, listed
@@ -1153,6 +1168,21 @@ def write_upgrade_iss(stage, sdsys, bootstrapped):
                          r'DestDir: "{#DataDir}\sdsys"; '
                          r'Flags: uninsneveruninstall; Check: DataTreeUpgrade'
                          % name)
+
+    # Named files into a preserved directory, copy-only and BY NAME (RELEASE_1.1
+    # 256): no delete, and no wildcard that could reach a file the site put there.
+    for dname, fnames, _why in SDSYS_SHIP_INTO_PRESERVED:
+        if dname not in preserve:
+            die('SDSYS_SHIP_INTO_PRESERVED names %s, which SDSYS_PRESERVE does not - '
+                'it would be replaced whole, so per-file entries are wrong' % dname)
+        for fn in fnames:
+            if not os.path.isfile(os.path.join(sdsys, dname, fn)):
+                die('the staged tree has no sdsys/%s/%s, which SDSYS_SHIP_INTO_PRESERVED '
+                    'names - the upgrade would copy nothing' % (dname, fn))
+            files.append(r'Source: "{#Stage}\ProgramData\sdsys\%s\%s"; '
+                         r'DestDir: "{#DataDir}\sdsys\%s"; '
+                         r'Flags: uninsneveruninstall; Check: DataTreeUpgrade'
+                         % (dname, fn, dname))
 
     # The retired names, delete-only.  filesandordirs covers both shapes
     # because a retired entry may have been either, and the path is gone by
@@ -1898,6 +1928,17 @@ def main():
 
     for name, _why in SDSYS_EMPTY:
         os.makedirs(os.path.join(sdsys, name))
+
+    # Named files into a preserved directory (RELEASE_1.1 256): only these names,
+    # so a README that keeps the source directory in git is never staged.
+    for dname, fnames, _why in SDSYS_SHIP_INTO_PRESERVED:
+        for fn in fnames:
+            src = os.path.join('sdsys', dname, fn)
+            if not os.path.isfile(src):
+                die('sdsys/%s/%s is on SDSYS_SHIP_INTO_PRESERVED but is not in the tree' % (dname, fn))
+            dst = os.path.join(sdsys, dname, fn)
+            shutil.copy2(src, dst)
+            staged.add(stage, dst)
 
     for name, _why in TERMINFO_DIRS:
         copy_tree(name, os.path.join(sdsys, name), staged, stage)
