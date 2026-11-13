@@ -19,6 +19,7 @@
  * START-HISTORY:
  * 27 Oct 26 dm  S.87 batch 17: op_locates (LOCATE with numeric data not special, $MODE STRING.LOCATE) is gone; its opcode is an op_illegal row.
  * 31 Dec 23 SD launch - prior history suppressed
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -121,7 +122,7 @@ Private void locate(bool numeric_mode) {
   int16_t item_len;
   int32_t item_value;
   bool skipping;
-  char* srch;
+  char* srch = NULL;
   char c;
   char mark; /* Mark which ends item */
   int16_t n;

@@ -54,6 +54,7 @@
  *           OPEN and OPENPATH, and FV_RDONLY for a read-only admission
  * 14 Sep 26 Windows port - op_create_dh() sets DHF_NOCASE on every file it
  *           creates (RELEASE_1.1 5 D2); DHF_KEEPCASE honoured in internal mode
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -724,7 +725,7 @@ Private void open_file(bool map_name) /* Map file name via VOC entry */
   DESCRIPTOR* fvar_descr;
   DESCRIPTOR* dict_descr;
   DESCRIPTOR* filename_descr;
-  bool open_dict;
+  bool open_dict = FALSE;
   char voc_name[MAX_ID_LEN + 1];
   char mapped_name[MAX_PATHNAME_LEN + 1];
   char pathname[MAX_PATHNAME_LEN + 1];

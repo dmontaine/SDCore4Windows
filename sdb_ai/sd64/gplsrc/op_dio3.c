@@ -85,6 +85,7 @@
  * 01 Jul 24 mab define max string size.
  * 31 Dec 23 SD launch - prior history suppressed
  * 25 Aug 26 Windows port - VFS stripped: the C never implemented it
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -579,7 +580,7 @@ void op_delete() {
   char id[MAX_ID_LEN + 1];
   char mapped_id[2 * MAX_ID_LEN + 1];
   int16_t id_len;
-  FILE_VAR *fvar;
+  FILE_VAR *fvar = NULL;
   DH_FILE *dh_file;
   u_int16_t op_flags;
   char subfilename[MAX_PATHNAME_LEN + 1];
@@ -587,7 +588,7 @@ void op_delete() {
   int16_t path_len;
   FILE_ENTRY *fptr;
   bool keep_lock;
-  u_int32_t txn_id;
+  u_int32_t txn_id = 0;
   struct stat statbuf;
 
   op_flags = process.op_flags;
@@ -1161,7 +1162,7 @@ void op_write() {
   char id[MAX_ID_LEN + 1];
   char lock_id[MAX_ID_LEN + 1];
   char mapped_id[2 * MAX_ID_LEN + 1];
-  int16_t id_len;
+  int16_t id_len = 0;   /* 09 Nov 26 (S.125): defined on the remote CREATING.SEQKEY exit, which reaches unlock_record() before an id is taken */
   FILE_VAR *fvar;
   DH_FILE *dh_file;
   STRING_CHUNK *str;

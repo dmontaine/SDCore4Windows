@@ -165,7 +165,17 @@ sd: BITSIZE := 64
 #           -fPIE (position independent code is the default and the flag is
 #           ignored with a warning on this target).  Added the libsodium
 #           include path now that it lives under /usr/local.
-sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(ARCH)
+# 13 Nov 26 Windows port - from Linux S.125 (Makefile:101-110; RELEASE_1.1 265): OPT_FLAGS is the
+#           optimised build, the same flags as Linux.  -O2; -fwrapv (the arithmetic opcodes' overflow
+#           tests assume signed overflow wraps, and plain -O2 may delete them); -fno-strict-aliasing
+#           (the 2007 code reads one type through a pointer to another); _FORTIFY_SOURCE=3 and
+#           -fstack-protector-strong (run-time buffer checks, active only with optimisation).
+#           MEASURED here, MSYS2 gcc 15.2.0: both macros defined (_FORTIFY_SOURCE=3, __SSP_STRONG__=3)
+#           and a fortified strcpy overflow aborts "buffer overflow detected", so no OS deviation;
+#           every gplsrc/*.c compiles with them (114 files, 0 errors) once Linux's local initialisers
+#           are carried (RELEASE_1.1 251).  No -march, as Linux.
+OPT_FLAGS := -O2 -fwrapv -fno-strict-aliasing -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong
+sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(OPT_FLAGS) $(ARCH)
 sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sdpy sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)

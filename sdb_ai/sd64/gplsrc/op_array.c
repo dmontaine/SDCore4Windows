@@ -25,6 +25,7 @@
  * 31 Dec 23 SD launch - prior history suppressed
  * 09 Nov 26 dm  S.125: op_common()'s a_hdr and objdata start at NULL (-Wmaybe-uninitialized); each block kind sets what it uses.
  * 10 Nov 26 dm  S.125, found by AddressSanitizer: a_dimension() growing a matrix copied the old header by the new header's size.
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -95,13 +96,13 @@ void op_common() {
   int16_t name_len;    /* Bytes in block name */
   u_char creation_flags;
   char block_name[32 + 1];
-  ARRAY_HEADER* a_hdr;
+  ARRAY_HEADER* a_hdr = NULL;
   ARRAY_CHUNK* a_chunk;
   DESCRIPTOR* descr;
   STRING_CHUNK* str_hdr;
   int16_t actual_size;
   bool add_block_to_common_chain = TRUE;
-  OBJDATA* objdata;
+  OBJDATA* objdata = NULL;
   bool is_persistent_vars; /* Persistent variables for object? */
   char* creator;           /* Name of the program making the block */
   int creator_len;

@@ -60,6 +60,7 @@
  *           exit_op_openseq
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to % 
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -459,7 +460,7 @@ Private void openseq(bool map_name) {
   char record_name[MAX_PATHNAME_LEN + 1];
   char pathname[MAX_PATHNAME_LEN + 1];
   char fullpathname[MAX_PATHNAME_LEN + 1];
-  int16_t rec_name_len;
+  int16_t rec_name_len = 0;
   FILE_VAR* fvar = NULL;
   SQ_FILE* sq_file = NULL;
   OSFILE fu = INVALID_FILE_HANDLE;

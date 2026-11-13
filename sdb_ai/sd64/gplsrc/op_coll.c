@@ -17,6 +17,7 @@
  * 18 Oct 26 Windows port - from Linux 81fea55 (12 Oct 26): coll_record_text() builds with JB_INVALID: an element a file cannot
  *               hold (a file variable) is stored as a JSON null, as the manual says,
  *               where the write failed with ER$BUILD.ERROR.
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -192,7 +193,7 @@ void op_coll() {
   int32_t max;
   int32_t setop = 0;
   int32_t first;
-  int32_t count;
+  int32_t count = 0;
   ARRAY_HEADER* ahdr;
   bool exists;
   bool star;

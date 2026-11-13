@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -134,14 +135,14 @@ void op_compare() {
   /* char* str1; */
   char* str1 = NULL;
   /* -------------------- */
-  int16_t str1_bytes_remaining;
+  int16_t str1_bytes_remaining = 0;
 
   STRING_CHUNK* str2_hdr;
   int32_t str2_len;
   /* char* str2; */
   char* str2 = NULL;
   /* -------------------- */
-  int16_t str2_bytes_remaining;
+  int16_t str2_bytes_remaining = 0;
   int16_t d = 0;
   int32_t n;
 

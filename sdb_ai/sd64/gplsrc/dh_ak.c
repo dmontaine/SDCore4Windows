@@ -61,6 +61,7 @@
  *               they cannot put an old sequential id counter (CREATING.SEQKEY) over a newer one.
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab change dyn file prefix to %
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -2319,7 +2320,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   bool status = FALSE;
   int16_t rec_offset; /* Offset of current record... */
   DH_RECORD *rec_ptr; /* ...its DH_RECORD pointer... */
-  int16_t rec_size;   /* ...and its size */
+  int16_t rec_size = 0; /* ...and its size */
   NODE *node_ptr;
   bool found;
   int32_t new_big_rec_head = 0;
@@ -2336,7 +2337,7 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
   DH_TERM_NODE *new_node3 = NULL;
   int32_t new_node1_num;
   int32_t new_node2_num;
-  int32_t new_node3_num;
+  int32_t new_node3_num = 0;
   DH_TERM_NODE *link_node = NULL;
   DH_TERM_NODE *link_node_ptr;
   char *key1;
@@ -3211,7 +3212,7 @@ Private void ak_delete(DH_FILE *dh_file, /* File descriptor */
   int16_t ci;         /* Child index for node scan */
   int16_t rec_offset; /* Offset of current record... */
   DH_RECORD *rec_ptr; /* ...its DH_RECORD pointer... */
-  int16_t rec_size;   /* ...and its size */
+  int16_t rec_size = 0; /* ...and its size */
   NODE *node_ptr;
   bool found;
   int16_t x;
@@ -3465,7 +3466,7 @@ Private STRING_CHUNK *ak_read(DH_FILE *dh_file, /* File descriptor */
                          record does not exist, non-NULL if it does.  */
 {
   FILE_ENTRY *fptr;      /* File table entry pointer */
-  int32_t data_len;      /* Data length */
+  int32_t data_len = 0;  /* Data length */
   int16_t subfile;       /* Subfile number */
   int16_t lock_slot = 0; /* Group lock table index */
   int32_t node_num;
@@ -4333,7 +4334,7 @@ Private int16_t find_ak_by_name(DESCRIPTOR *name_descr, DH_FILE *dh_file) {
 Private STRING_CHUNK *ak_read_record(DH_FILE *dh_file, int16_t subfile, DH_RECORD *rec_ptr) {
   STRING_CHUNK *str = NULL;
   int32_t node_num;
-  int32_t data_len;
+  int32_t data_len = 0;
   int16_t n;
   DH_BIG_NODE *buff = NULL;
 

@@ -23,6 +23,7 @@
  *           non-numeric value are always errors; k_unass_zero(), k_unass_null() and k_non_numeric_zero() are deleted.
  * 18 Oct 26 Windows port - from Linux b51c637 (16 Oct 26): k_release() offers a file variable whose last reference has gone to park_fvar() (OPTION COMMAND.LEVEL.LOCKS)
  * 31 Dec 23 SD launch - prior history suppressed
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -107,9 +108,9 @@ STRING_CHUNK* k_copy_string(STRING_CHUNK* src_str) {
   int32_t total_src_bytes_remaining;
 
   STRING_CHUNK* tgt_head = NULL;
-  STRING_CHUNK* tgt_str;
+  STRING_CHUNK* tgt_str = NULL;
   STRING_CHUNK* next_tgt;
-  char* tgt;
+  char* tgt = NULL;
   int16_t tgt_bytes_remaining = 0;
 
   int16_t n;
@@ -1312,8 +1313,8 @@ bool k_str_to_num(DESCRIPTOR* p) /* Returns FALSE if cannot convert */
   int16_t dp;     /* Decimal places */
   bool floating;
   int32_t value;
-  double float_value;
-  double dplace;
+  double float_value = 0.0;
+  double dplace = 0.0;
   char* q;
   u_char reuse_flag;
   bool num_array;

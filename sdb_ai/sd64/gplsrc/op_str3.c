@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 31 Dec 23 SD launch - prior history suppressed
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -271,7 +272,7 @@ void op_rmvtkn() {
   int16_t offset;       /* Offset into current source chunk */
   STRING_CHUNK* str_hdr;
   int16_t bytes_remaining;
-  STRING_CHUNK* tgt_str;
+  STRING_CHUNK* tgt_str = NULL;
   STRING_CHUNK* new_tgt;
   int16_t tgt_bytes_remaining;
   char* tgt;

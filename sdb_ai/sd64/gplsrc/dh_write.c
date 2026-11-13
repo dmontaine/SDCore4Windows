@@ -26,6 +26,7 @@
  *           and put in under a second spelling.  A record added again after a
  *           size change also keeps its stored spelling now, instead of taking
  *           the writer's.
+ * 13 Nov 26 Windows port - from Linux S.125: the locals gcc -O2 called maybe-uninitialized start at 0, NULL or FALSE, as Linux's do (RELEASE_1.1 251; the build takes Linux's OPT_FLAGS, RELEASE_1.1 265).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -53,7 +54,7 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
   int32_t base_size; /* Bytes required excluding big_rec chain */
   int16_t pad_bytes;
   int32_t grp;
-  FILE_ENTRY* fptr;              /* File table entry */
+  FILE_ENTRY* fptr = NULL;       /* File table entry */
   int32_t group;                /* Group number */
   int16_t group_bytes;         /* Group size in bytes */
   int16_t lock_slot = 0;       /* Lock table index */
@@ -78,7 +79,7 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
   DH_RECORD* orec_ptr;
   int16_t orec_bytes;
   bool big_rec;         /* Is this a big record? */
-  int32_t load_change; /* Change in file load for this write */
+  int32_t load_change = 0; /* Change in file load for this write */
   STRING_CHUNK* str;
   bool ak;
   bool jnl;
