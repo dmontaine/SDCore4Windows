@@ -420,9 +420,11 @@ sdidx: sdidx.o
 #           iphlpapi, which mingw does not link by default; the OpenProcess and
 #           LookupAccountSid half of that file is covered by the -ladvapi32
 #           already here for win32sem.o.
-sdwind: sdwind.o sdsem.o win32sem.o win32peer.o exepath.o
+# 13 Nov 26 Windows port - inipath.o (GetConfigPath()): sdwind takes the system directory from the configuration file,
+#           not from the shared segment (Linux W.11 F1, RELEASE_1.1 249).
+sdwind: sdwind.o sdsem.o win32sem.o win32peer.o exepath.o inipath.o
 	@echo Linking $@
-	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)win32sem.o $(GPLOBJ)win32peer.o $(GPLOBJ)exepath.o -ladvapi32 -liphlpapi -o $(GPLBIN)sdwind
+	@$(COMP) $(C_FLAGS) -lc $(GPLOBJ)sdwind.o $(GPLOBJ)sdsem.o $(GPLOBJ)win32sem.o $(GPLOBJ)win32peer.o $(GPLOBJ)exepath.o $(GPLOBJ)inipath.o -ladvapi32 -liphlpapi -o $(GPLBIN)sdwind
 
 terminfo:
 	@echo Compiling terminfo library

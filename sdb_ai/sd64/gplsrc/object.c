@@ -37,6 +37,11 @@
  *               catalogue or for the administrator (load_object()).  Before, the bit was trusted from ANY object file, so
  *               a user who could write one to a directory file with a <name>.out VOC entry, or to a runfile, set the bit
  *               in the header and ran the program with every kernel gate (S.63, S.64) skipped.
+ * 13 Nov 26 Windows port - from Linux 12615e80 (W.11 F2, RELEASE_1.1 249): an object of the global catalogue is refused when other
+ *               users can write it (message 12935, Linux 11930), so that a mistake in the catalogue's rights fails closed: the
+ *               trust above, "only SDSYS can write the global catalogue", is kept by the files' rights.  Linux tests the mode
+ *               bits for others and the group sdusers; the Windows rights are the file's DACL, which win32_gcat_writable()
+ *               (win32gcat.c) reads: write rights for Everyone, Authenticated Users, Interactive, Users or sdusers refuse it.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -50,6 +55,8 @@
 #include "header.h"
 #include "config.h"
 #include <time.h>
+#include <sys/cygwin.h> /* 13 Nov 26 Windows port - cygwin_conv_path(), for gcat_object_writable() */
+#include "win32gcat.h"
 
 Private int32_t object_total = 0;  /* Total bytes loaded */
 Private int16_t object_items = 0; /* Number of objects loaded */
@@ -106,6 +113,20 @@ u_int32_t SwapLong(u_int32_t value) {
 
 Private bool discard(void);
 Private void hsm_log(OBJECT* obj);
+
+/* ======================================================================
+   gcat_object_writable()  -  Is this global catalogue object one that someone other than SDSYS could have changed?
+   W.11 F2 (Linux 12615e80), in the Windows form: the file's DACL, through win32_gcat_writable(), which answers TRUE
+   for write rights held by Everyone, Authenticated Users, Interactive, Users or sdusers, and when it cannot tell
+   (fail closed).  The path is the one load_object() built; it is turned into a native path first.             */
+
+Private bool gcat_object_writable(const char* path) {
+  char win[MAX_PATHNAME_LEN + 1];
+
+  if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, path, win, sizeof(win)) != 0)
+    return TRUE; /* cannot tell: fail closed */
+  return win32_gcat_writable(win) != 0;
+}
 
 /* ======================================================================
    load_object  -  Load an object item                                    */
@@ -232,6 +253,13 @@ void* load_object(char* name, bool abort_on_error) {
     return NULL;
 
 found:
+  /* W.11 F2: a global catalogue object that other users can write is not trusted (see gcat_object_writable()). */
+  if ((flags & OBJ_GLOBAL) && gcat_object_writable(obj_path)) {
+    CloseFile(obj_fu);
+    /* Always an error, never a NULL return: the callers that ask for no abort report a NULL as "Unable to load", which hides the reason. */
+    k_error(sysmsg(12935), name);
+  }
+
   /* Object found  - read header */
 
   if (Read(obj_fu, (char*)(&obj_header), OBJECT_HEADER_SIZE) < 0) {

@@ -1,0 +1,1 @@
+%s in the global catalog can be written by other users, so it was not loaded (take write away from Users, Authenticated Users, Everyone and sdusers)

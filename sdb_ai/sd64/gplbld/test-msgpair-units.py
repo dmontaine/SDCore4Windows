@@ -55,6 +55,7 @@ ALLOWED = {
     ('11462', '12467'): 'OS: a Windows login, not a Linux login',
     ('11936', '12941'): 'OS: SD is a Windows service (sd -restart, Stop-Service / Start-Service) (RELEASE_1.1 218)',
     ('11983', '12988'): 'OS: Windows has no sdsys group; SDSYS reaches every account by ACL, and the upgrade updates every account (CLAUDE.md, S.103)',
+    ('11930', '12935'): 'OS: a Windows file\'s rights are its access list, not chmod modes; the cure names the principals win32gcat.c judges (RELEASE_1.1 249)',
 }
 
 MSG = re.compile(r'\b1[0-5]\d{3}\b')

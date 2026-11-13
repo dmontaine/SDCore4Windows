@@ -17,6 +17,12 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - from Linux 12615e80 (W.11 F1, RELEASE_1.1 249): this daemon runs as LocalSystem, so it
+ *                      no longer takes the system directory from the shared segment, which any member of sdusers may
+ *                      change: own_sysdir() reads SDSYS= from the configuration file sd reads (Linux takes it from its
+ *                      own path; here the programs and the data tree are apart), at start-up, and the error log is
+ *                      opened under it with a bounded snprintf.  "sd -cleanup" was already started with execl and no
+ *                      shell (17 Sep 26), and from beside this executable (14 Aug 26).
  * 18 Oct 26 Windows port - from Linux 7f7a4fd (sdlnxd.c, 16 Oct 26): the scan for lost
  *                      processes runs every CLEANUP seconds (sd.conf, 30 to 3600,
  *                      default 300); the loop's tick is ten seconds, kept on the clock
@@ -103,6 +109,41 @@ bool terminate = FALSE;
    one place to change it. */
 static int api_listener = -1;
 
+/* 13 Nov 26 Windows port - from Linux 12615e80 (W.11 F1, RELEASE_1.1 249): the system directory, NOT from the shared
+   segment, which every member of sdusers can write: this daemon runs as LocalSystem, so a segment that named another
+   directory would have SYSTEM open and append to a file of someone else's choosing.  Linux's sdlnxd finds it from its own
+   path (<sysdir>/bin/sdlnxd); on Windows the programs and the data tree are apart (C:\Program Files\SD and
+   C:\ProgramData\SD), so it is the SDSYS= line of the [sd] section of the configuration file that sd itself reads
+   (GetConfigPath(): SD_CONFIG, else %ProgramData%\SD\sd.conf), the last one, as config.c's sd_sysdir() takes it. */
+static char own_sysdir_path[MAX_PATHNAME_LEN + 1];
+
+static bool own_sysdir(void) {
+  char conf[MAX_PATHNAME_LEN + 1];
+  char rec[MAX_PATHNAME_LEN + 32];
+  char* p;
+  bool in_sd = FALSE;
+  bool found = FALSE;
+  FILE* fu;
+
+  if (!GetConfigPath(conf) || ((fu = fopen(conf, "r")) == NULL))
+    return FALSE;
+  while (fgets(rec, sizeof(rec), fu) != NULL) {
+    if ((p = strpbrk(rec, "\r\n")) != NULL)
+      *p = '\0';
+    if ((rec[0] == '#') || (rec[0] == '\0'))
+      continue;
+    if (rec[0] == '[') {
+      in_sd = (strncasecmp(rec, "[sd]", 4) == 0);
+      continue;
+    }
+    if (in_sd && (strncmp(rec, "SDSYS=", 6) == 0) && (rec[6] != '\0') &&
+        (snprintf(own_sysdir_path, sizeof(own_sysdir_path), "%s", rec + 6) < (int)sizeof(own_sysdir_path)))
+      found = TRUE;
+  }
+  fclose(fu);
+  return found;
+}
+
 void check_lost_users(void);
 static int open_api_listener(int port);
 static void accept_api_session(void);
@@ -122,6 +163,12 @@ int main() {
   time_t next_tick;
 
   process.user_no = -2; /* Mark as sdwind for semaphore table */
+
+  /* 13 Nov 26 W.11 F1: the system directory from the configuration file, before anything else (see own_sysdir()). */
+  if (!own_sysdir()) {
+    fprintf(stderr, "sdwind: cannot find the system directory: no SDSYS= line in the [sd] section of the configuration file\n");
+    exit(3);
+  }
 
   signal(SIGTERM, signal_handler);
 
@@ -689,8 +736,12 @@ void log_message(char* msg) {
   if (sysseg->errlog) {
     StartExclusive(ERRLOG_SEM, 71);
 
-    sprintf(buff, "%s%cerrlog", sysseg->sysdir, DS); /* 25 Oct 26 W.11 F9: NOT converted, as Linux's sdlnxd is not: this daemon maps the segment itself and never reads sd.conf, so sd_sysdir() is "" here (row 53) */
-    errlog = open(buff, O_RDWR | O_CREAT | O_BINARY, 0777);
+    /* 13 Nov 26 W.11 F1 (Linux 12615e80): not the segment's copy, and snprintf, because this runs as LocalSystem.  (The note of
+       25 Oct said Linux's sdlnxd was not converted; it was, the day before, by F1.) */
+    if (snprintf(buff, BUFF_SIZE, "%s%cerrlog", own_sysdir_path, DS) >= BUFF_SIZE)
+      errlog = -1;
+    else
+      errlog = open(buff, O_RDWR | O_CREAT | O_BINARY, 0777);
 
     /* Modified by Composer AI - 2026/06/10.
        If the open() failed, "bytes" was used uninitialized and write()/

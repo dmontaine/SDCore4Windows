@@ -97,6 +97,7 @@ win32vt
 win32session
 win32group
 win32jobmark
+win32gcat
 sdtermlb
 strings
 sysdump
