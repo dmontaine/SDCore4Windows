@@ -25,6 +25,7 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - from Linux (26 Oct 26, S.76; RELEASE_1.1 252): _sdsysn joins the bootstrap list, as LOGIN now calls !sdsysn.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): the call of $BCOMP no longer passes the is.ctype argument (the C dictionary item type is gone).
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): login_inhibit joins the bootstrap list: LOGIN calls it (QM4 gaps Q-8, INHIBIT.LOGIN).
 * 19 Aug 26 Windows port - $include gpl.bp, the VOC id having moved.  5.12 (b).
@@ -286,6 +287,10 @@ src.list<-1> = 'ACC_HOLD'
 *   same reason as !acc_hold (the bootstrap's own SECOND.COMPILE session included).  LOGIN_INHIBIT calls no catalogued
 *   routine, so the chain ends here.
 src.list<-1> = 'LOGIN_INHIBIT'
+* 12 Nov 26 Windows port - from Linux (26 Oct 26, S.76; RELEASE_1.1 252, P-15): LOGIN calls !sdsysn when a session of SDSYS signs on, and
+*   every pass after this one is such a session, so without it the pass would die "Unable to load '!SDSYSN' object code in $LOGIN".
+*   _SDSYSN calls no catalogued routine, so the chain ends here.
+src.list<-1> = '_SDSYSN'
 src.list<-1> = 'TERM'
 
 src.cnt = dcount(src.list,@FM) 

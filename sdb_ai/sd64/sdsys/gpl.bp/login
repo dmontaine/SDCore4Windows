@@ -1320,6 +1320,16 @@ deffun pw_complex(pw) calling '!pw_complex'
       void kernel(K$AUDIT, 'login account=' : audit.account : ' command=' : batch.command)
    end
 
+* 12 Nov 26 Windows port - from Linux (26 Oct 26, S.76; RELEASE_1.1 252, P-15): SDSYS may have more than one session at a time and a
+*   second one is made visible - one more line after the sign-on's own, when this session is on a terminal and another session of SDSYS
+*   is on one too (!SDSYSN counts only sessions on a terminal).  Linux's lines, inside its mode 0 test.
+   if mode = 0 then
+      if downcase(initial.account) = 'sdsys' then
+         call !sdsysn(sd.n, sd.uids, sd.mine, sd.tty)
+         if sd.tty and sd.n - sd.mine > 0 then void kernel(K$AUDIT, 'sdsys second session others=' : sd.n - sd.mine)
+      end
+   end
+
    ok = @true
    return
 

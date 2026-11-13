@@ -24,8 +24,7 @@
 * 10 Nov 26 Windows port - from Linux 13d30532 (S.76), unchanged.  The TUI carry (f55e5fa5, RELEASE_1.1 197) brought its two callers, TOOL_HOME and TOOL_SESSIONS,
 *               and not this file, so HOME in SDSYS stopped with "Unable to load '!sdsysn' object code at line 800 of $tool_home".  K$USERS.DEV is the
 *               session's ttyname() (kernel.c), which MSYS2 fills for a console and leaves empty for piped input, so "on a terminal" means what it means on Linux.
-*               LOGIN's half of S.76 (the audit line for a second SDSYS session) is not carried here yet; Windows LOGIN does not call this, so it needs no place on
-*               the bootstrap list.
+*               LOGIN's half of S.76 was carried on 12 Nov 26 (RELEASE_1.1 252): LOGIN calls this when SDSYS signs on, so it is on BBPROC's bootstrap list.
 * END-HISTORY
 *
 * START-DESCRIPTION:
