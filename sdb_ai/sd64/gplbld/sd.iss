@@ -3574,7 +3574,7 @@ begin
                   ExpandConstant('{app}\shared-docs.ps1') + '" -AppDir "' +
                   ExpandConstant('{app}') + '" -DataDir "' +
                   ExpandConstant('{#DataDir}') + '" -SourceDir "' +
-                  ExpandConstant('{src}') + '"',
+                  AddBackslash(ExpandConstant('{src}')) + '."',      { '.': a root folder (E:\) must not end in the backslash that escapes the quote }
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Code := -1;
   Log('SD: shared-docs.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\shared-docs.log');
