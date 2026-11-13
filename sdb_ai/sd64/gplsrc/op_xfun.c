@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 264: the 18 Oct line's "XF_FCONTROL 29 ... NOT carried" is wrong: it came on 15 Oct (pub_fcontrol(),
+ *           dh_misc.c), the line further down.
  * 12 Nov 26 Windows port - RELEASE_1.1 263: DIGEST of a file asks os_path_open_ok() for every session, as Linux and SD Core Solo (the S.63 gate came 23 Oct).
  * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): XF_OSPATH 31, OSPATH() for a program that is not internal, now carried (the 18 Oct
  *           line below held it for the S.63 gate, which this tree has since 23 Oct).  The function is pub_ospath() in op_dio2.c, beside the

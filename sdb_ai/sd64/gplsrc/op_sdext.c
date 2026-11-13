@@ -18,6 +18,8 @@
  * 
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 264: the 20 Oct line's "SD_FILE_PRIVATE (111, S.65) is not carried" is wrong: it came on 17 Oct
+ *           (slice 2b, the line below it), with its ACL walk on 25 Oct.
  * 10 Nov 26 Windows port - from Linux d8dbde84 (S.88 review of L2, item 8): op_sdext() freed the argument buffer only when IsArgMV was set, so an
  *           empty argument with IsArgMV false leaked one byte per call; it is freed unless SDMEArgArray[0] is it.  Item 7 (user_home_dir()'s
  *           ancestors) is Linux's: win32_user_home() makes its own ACL test.

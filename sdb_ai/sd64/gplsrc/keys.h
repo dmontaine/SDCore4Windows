@@ -381,10 +381,10 @@
 
 /* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26 dm): 1.2-0 sheet items 24, 29 and 38 (LISTU).
    THE NUMBERS ARE LINUX'S, in its own block 90-99, and are kept exactly (kernel key numbers are
-   compiled into BASIC programs shared byte for byte).  This port keeps 58-89 for its own keys; 90-96
-   are LEFT EMPTY here on purpose (Linux's K_REAL_USER, K_LOGIN_UID and the S.63 gate keys
-   K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN are not carried: PAM and the held OS-access gates), except
-   92, K_WINSIZE (below), which came with the screen library (area 6a).  GPL.BP/INT$KEYS.H carries the same numbers.
+   compiled into BASIC programs shared byte for byte).  This port keeps 58-89 for its own keys.  90 and 91
+   (Linux's K_REAL_USER, K_LOGIN_UID: PAM) are LEFT EMPTY on purpose; 92 is K_WINSIZE (screen library,
+   area 6a) and 93-96 the S.63 gate keys K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN (carried 23 Oct, below;
+   12 Nov 26, RELEASE_1.1 264: this note said they were not).  GPL.BP/INT$KEYS.H carries the same numbers.
      K_SET_ACCOUNT  the account the session is in, for the user table.  The argument is the account name, set only from
                     a $internal program (LOGIN, CPROC's logto, APISRVR, which own entry to an account), and the name
                     as it stands is returned.  K_USERS answers it as the ninth value of each user.

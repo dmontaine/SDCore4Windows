@@ -805,8 +805,9 @@ void op_kernel() {
        (LISTU, !LISTU).  Set only from a $internal program, like K_SET_USERNAME; the name as it stands is returned,
        so a refused caller is told what it still is.  An overlength name (k_get_c_string answers -1) sets nothing.
        K_USER_PEAK: the most user table cells in use at once since SD started.
-       18 Oct 26 Windows port - carried from Linux 0b6a207 with Linux's key numbers (97, 98); the S.63 gate keys
-       it sits among (K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN) are not carried here.                          */
+       18 Oct 26 Windows port - carried from Linux 0b6a207 with Linux's key numbers (97, 98).  The S.63 gate keys
+       it sits among (K_SH, K_OS_EXEC, K_PATH_OK, K_PATH_IN) came on 23 Oct, further down this switch (12 Nov 26,
+       RELEASE_1.1 264: this note said they were not carried).                                               */
     case K_SET_ACCOUNT:
       {
         char aname[MAX_ACCOUNT_NAME_LEN + 1];
