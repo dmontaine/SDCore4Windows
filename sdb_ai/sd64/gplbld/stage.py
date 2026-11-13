@@ -349,7 +349,20 @@ SDSYS_SHIP = [
     # record.  Shipped and REPLACED on upgrade (a later release adds to it); locked to
     # administrators by sd.iss SecureSysdirs.
     ('voc_removed',   'VOC records SD no longer ships; an update removes them (S.87)'),
+    # 13 Nov 26 - RELEASE_1.1 253a (from Linux S.69 rows 1 and 1b; Linux owner, 20 Oct 26: "ship the guide and the pack under
+    # /usr/local/sdsys/agent-pack/ via the installer; the skill stays repo-only").  TEXT ONLY: the SD BASIC guide and the
+    # knowledge pack generated from this tree (agent-pack/mkpack.py), for the administrator to copy to where an AI agent
+    # works.  Nothing in SD reads it.  Its source is sd64/agent-pack/{guide,pack}, not sdsys (SDSYS_SHIP_SOURCE below);
+    # replaced on upgrade like every ship name; the sysdir's own rights keep it writable by the administrators only.
+    ('agent-pack',    'the AI guide and the knowledge pack of this version, as text'),
 ]
+
+# 13 Nov 26 - A SHIP NAME WHOSE SOURCE IS NOT sdsys/<name>.  Each entry is the staged name and the (source, staged
+# sub-path) pairs that make it.  agent-pack takes only guide/ and pack/: the skill, the templates, the recipe, the
+# generator and the notes stay in the repository, as on Linux.
+SDSYS_SHIP_SOURCE = {
+    'agent-pack': [('agent-pack/guide', 'guide'), ('agent-pack/pack', 'pack')],
+}
 
 # 21 Sep 26 - INPUTS TO THE BOOTSTRAP THAT MUST NOT REACH THE INSTALL.  Copied into
 # the staged tree so BBPROC can read them, and DELETED from it once the bootstrap has
@@ -1950,6 +1963,12 @@ def main():
     # SDSYS_BUILD_SEED is copied like a ship name - BBPROC reads it during the
     # bootstrap below - and deleted again once that has finished.
     for name, _why in SDSYS_SHIP + SDSYS_BUILD_SEED:
+        if name in SDSYS_SHIP_SOURCE:   # 13 Nov 26: staged from elsewhere in the tree (agent-pack)
+            for s, d in SDSYS_SHIP_SOURCE[name]:
+                if not os.path.isdir(s):
+                    die('%s is the source of the ship name %s but is not in the tree' % (s, name))
+                copy_tree(s, os.path.join(sdsys, name, d), staged, stage)
+            continue
         src = os.path.join('sdsys', name)
         if not os.path.exists(src):
             die('sdsys/%s is on the ship or seed list but is not in the tree' % name)

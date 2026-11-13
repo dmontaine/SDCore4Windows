@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sd": {
+      "type": "stdio",
+      "command": "ssh",
+      "args": ["-T", "-o", "BatchMode=yes", "${SD_AGENT_USER:-agent}@${SD_HOST}", "sd-mcp"]
+    }
+  }
+}

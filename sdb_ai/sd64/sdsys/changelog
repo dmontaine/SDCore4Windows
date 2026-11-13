@@ -3,6 +3,16 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  THE AI GUIDE AND KNOWLEDGE PACK ARE INSTALLED, AS ON LINUX.
+
+             What        - The installer puts two folders of text under the system directory,
+                           agent-pack\guide (the SD BASIC guide for an AI agent) and agent-pack\pack
+                           (a reference of every verb, statement, function, message and setting,
+                           generated from this release), for the administrator to copy to the
+                           machine where an AI agent works. An upgrade replaces them.
+             Does NOT    - Connect an AI to SD, hold a key or call a model: they are documents,
+                           and nothing in SD reads them. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  THE GLOBAL CATALOG AND THE DAEMON TRUST LESS, AS ON LINUX.
 
              What        - SD refuses to load a program from the global catalog that other users
