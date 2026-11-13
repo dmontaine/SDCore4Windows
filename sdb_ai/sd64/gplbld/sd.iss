@@ -1219,6 +1219,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
     Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\install-service.ps1"" -Install -AppDir ""{app}"""; \
     Flags: runhidden skipifdoesntexist; \
+    BeforeInstall: ApiRuleBeforeService; \
     StatusMsg: "Creating and starting the SD service..."
 
 ; THE POST-INSTALL CHECK IS NOT A [Run] ENTRY AT ALL ANY MORE - 22 Aug 2026.
@@ -1302,6 +1303,13 @@ Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
 var
   DataTreeWasAbsent: Boolean;
   SshWasAbsent: Boolean;
+  { 13 Nov 26 - RELEASE_1.1 213.  THE API RULE IS MADE BEFORE SD STARTS.  The service entry in [Run] starts SD,
+    whose listener opens at once when sd.conf turns the API on; the rule used to come at ssPostInstall, seconds
+    later, so Windows logged event 2011 (no rule for a listening program) at every install.  ApiRuleBeforeService,
+    the BeforeInstall of that entry, makes the rule first and keeps its message here; ssPostInstall uses it and
+    makes the rule itself only if the entry did not run.  Solo's SOLO 33 is the same order reached another way. }
+  EarlyApiFwDone: Boolean;
+  EarlyApiFw: String;
   { 02 Sep 26 - PRE_RELEASE_FIXES 133.  DID ApplyAllowGroups ACTUALLY WRITE?
     The closing box used to answer that from SshWasAbsent - "did this machine
     already have a server" - while the ACTION is gated on "not TrueUpgrade".
@@ -2832,6 +2840,17 @@ begin
     Result := 'Moving the SD Core API rule to port 4247 FAILED. Run from an ELEVATED ' +
               'PowerShell prompt to see why:' + #13#10#13#10 +
               '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Retarget' + #13#10#13#10;
+end;
+
+{ 13 Nov 26 - RELEASE_1.1 213: the BeforeInstall of the service entry in [Run] - the same choice ssPostInstall made,
+  made before SD's listener can open.  See EarlyApiFwDone. }
+procedure ApiRuleBeforeService;
+begin
+  if (not TrueUpgrade) and ApiConfAbsent then
+    EarlyApiFw := ApplyApiFirewall
+  else if TrueUpgrade then
+    EarlyApiFw := RetargetApiFirewall;
+  EarlyApiFwDone := True;
 end;
 
 (* ***WHO MAY REACH THE API PORT - MEASURED, NOT INFERRED.***
@@ -4625,11 +4644,12 @@ begin
       change and no service change from one tick.  Where the box is not
       offered, the site's own rule is left exactly as it was and remote.api
       on|local|off is the way to change it. }
-    if (not TrueUpgrade) and ApiConfAbsent then
-      ApiFw := ApplyApiFirewall
-    else if TrueUpgrade then
-      { 01 Oct 26 - the port only; see RetargetApiFirewall. }
-      ApiFw := RetargetApiFirewall;
+    { 13 Nov 26 - RELEASE_1.1 213: the gate and both arms (ApplyApiFirewall, and on a true upgrade RetargetApiFirewall,
+      the port only) are in ApiRuleBeforeService, the BeforeInstall of the service entry, so the rule is made before SD
+      starts.  Called here only when that entry did not run; either way its message is what this step reports. }
+    if not EarlyApiFwDone then
+      ApiRuleBeforeService;
+    ApiFw := EarlyApiFw;
 
     { 03 Sep 26 - AND THEN ASK WHO MAY ACTUALLY REACH IT.  PRE_RELEASE_FIXES 147.
 
