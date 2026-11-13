@@ -31,6 +31,9 @@
  *                      under <sysdir>/bin, which no longer holds binaries
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F9: a session takes pcfg and the system directory from the configuration file (session_trust()), not from the segment's template
  *               and sysdir; start_sd() asks sd_sysdir().  The segment still holds both, for display.
+ * 13 Nov 26 Windows - correcting the 24 Oct line below: the 0660/sdusers half of F1 is NOT in this file.  shm_open() still passes 0666, which the
+ *               noacl mount ignores; the segment's file inherits the ACL of C:\ProgramData\SD\shm (SYSTEM, Administrators, sdusers - sd.iss's data
+ *               tree icacls), the same outcome as Linux's 0660 sdusers.  test-shmmode-units holds that (RELEASE_1.1 254).
  * 24 Oct 26 Windows port - from Linux 2a68b2f - W.11 F1: the shared segment is made 0660 and given to the group sdusers (create_shared_segment()), not 0666.
  * 13 Sep 26 Windows port - from Linux 2a68b2f - The startup command runs in the sdsys account, its lower-case
  *               name (plan M: account names are lower case).
