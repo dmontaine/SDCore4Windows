@@ -14,6 +14,8 @@
 #
 # START-HISTORY:
 # 12 Nov 26  Written for SOLO 58 (Solo) and carried to Core (same rule, S.64 part 2).  NOT RUN when written.
+# 12 Nov 26  First run, Solo in Win11VM Solo WS2.0-0 on a fresh install (OS switch off): 4/4 PASSED, verify-carry-20261112-201249.
+#            Not yet run on Core (both host accounts hold OS access).
 # END-HISTORY
 #
 # THE GATE IT USES: the account's OS switch (register field 8).  OFF (the delivered state): an ordinary program's OSPATH(path, 2)
