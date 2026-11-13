@@ -5,6 +5,8 @@ no elevation, no sd.
     python gplbld/test-remotesdsys-units.py [--selftest]
 
 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys in the Windows form; design .claude/design-remote-admin-20261113.md).
+13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity: B10 (RUN's REMOTE.SSH and REMOTE.API words; REMOTE.API's restart answered N through the DATA
+queue), R6 (RADMIN sends both), L3 seven names; mutants for each.
 
 WHAT IT READS: gpl.bp REMOTESDSYS (the verb and the broker's job runner), RADMIN (the remote session's commands), RADMIN_OPEN, and the hunks
 of LOGIN, CPROC, CREATEA, MODIFYA and DELACC that keep the account SDRADMIN where it belongs; the VOC entry, the nine messages, stage.py,
@@ -119,8 +121,8 @@ def checks(raw):
     ck("B5", "THE PASSWORD: read once from standard input with INPUT ... HIDDEN, put in the DATA queue twice and 'n' once, the variable cleared BEFORE the verb runs, the queue cleared after; "
        "it is in no audit line and no command line", ok and rr.count("data secret") == 2 and rr.count("input secret") == 1 and not re.search(r"K\$AUDIT[^\n]*secret", v) and not re.search(r"execute[^\n]*secret", v)
        and "secret" not in rr[rr.find("run.sentence = run.verb"):rr.find("begin case")], str(pos))
-    ck("B6", "RUN runs only the five verbs, refuses the words sdsys, sdradmin and shared and any word outside lower-case letters, digits, dot, dash and underscore, and its exit status says whether the verb failed",
-       "run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys')" in rr
+    ck("B6", "RUN runs only the seven verbs, refuses the words sdsys, sdradmin and shared and any word outside lower-case letters, digits, dot, dash and underscore, and its exit status says whether the verb failed",
+       "run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys' or run.verb = 'remote.ssh' or run.verb = 'remote.api')" in rr
        and "if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false" in rr and "convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # ''" in rr
        and "void kernel(K$EXIT.STATUS, (if run.rc < 0 then 1 else 0))" in rr and "data 'Y'" in block(v, "run.request"), "")
     on = block(v, "on.request")
@@ -135,6 +137,15 @@ def checks(raw):
     rh = block(v, "run.helper")
     ck("B9", "the helper is run straight through OS.EXECUTE only in the broker's job (an elevated SDSYS with no helper of its own), through SDSYS's elevated helper otherwise",
        re.search(r"if in\.job then\s*\n\s*os\.execute hcmd", rh) is not None and "both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)" in rh and "kernel(K$WINPATH, '/remote-admin.ps1')" in rh, "")
+    ra = rr[rr.find("      case run.verb = 'remote.api'"):] if "      case run.verb = 'remote.api'" in rr else ""
+    ra = ra[:ra.find("\n      case ", 10)] if ra.find("\n      case ", 10) > 0 else ra
+    ok, pos = ordered(ra, ["case run.verb = 'remote.api'", "         data 'N'\n", "         execute run.sentence\n", "         run.rc = @system.return.code\n         cleardata\n"])
+    ck("B10", "the doors (Linux parity): RUN takes REMOTE.SSH with ON, OFF or no word and REMOTE.API with ON, LOCAL, OFF or no word, one word at most; REMOTE.API's restart question is answered N "
+       "(Enter's answer at the console: no restart, no session ended) through the DATA queue before the verb, never Y, and the queue is cleared after",
+       ok and ra.count("data ") == 1 and not re.search(r"data\s+'[yY]", ra)
+       and "   if run.verb = 'remote.ssh' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'off') then run.ok = @false" in rr
+       and "   if run.verb = 'remote.api' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local' and run.words<1> # 'off') then run.ok = @false" in rr
+       and rr.find("   if run.verb = 'remote.api' then") < rr.find("   if not(run.ok) then"), str(pos))
 
     ck("R1", "RADMIN is an internal program catalogued as $radmin, and the remote session's identity (SDRADMIN, in sdradmin, over ssh, not elevated) is tested first, refused 2001",
        re.search(r"^\$internal\s*\nprogram \$radmin\s*\n\$catalog \$radmin\b", r, re.M) is not None
@@ -151,6 +162,8 @@ def checks(raw):
     ck("R5", "the answer: out= lines printed, refused= as 12838, timeout= and noanswer= as 12839, no answer at all as 12839; the audit line says the status",
        "crt sysmsg(12838, l[9, 999])" in r and "crt sysmsg(12839, 'still running after 180 seconds')" in r and "crt sysmsg(12839, l[10, 999])" in r and "crt sysmsg(12839, 'no answer')" in r
        and "void kernel(K$AUDIT, 'remote.admin ' : verb : ' words=' : convert(@fm, ',', words) : ' status=' : job.rc)" in r, "")
+    ck("R6", "RADMIN sends REMOTE.SSH and REMOTE.API with the word typed, or none (Linux parity); it asks them nothing",
+       re.search(r"case verb = 'remote\.ssh' or verb = 'remote\.api'\s*\n\s*null\b", r) is not None, "")
     ck("O1", "!radmin_open reads <ProgramData>\\SD\\remote-admin\\state, from the parent of @sdsys, and is true only for 'on' (anything unreadable is off)",
        "state.dir = @sdsys[1, index(@sdsys, @ds, n) - 1] : @ds : 'remote-admin'" in o and "if trim(state.rec<1>) = 'on' then open = @true" in o and "open = @false" in o and "$catalog !radmin_open" in raw["open"], "")
 
@@ -169,9 +182,9 @@ def checks(raw):
        "shared write, voc, bp and dict editing ('' each) and shared read ('no') BEFORE the one place that loads them",
        all(("acc.rec<ACC$%s> = ''" % g) in gz for g in ("SH", "OS.EXEC", "SD.ACCOUNTS", "NET", "SHARED.WRITE", "VOC.EDIT", "BP.EDIT", "DICT.EDIT")) and "acc.rec<ACC$SHARED.READ> = 'no'" in gz
        and 0 < zs < lg.find("   void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')") and not re.search(r"write[uv]? acc\.rec\b", lg), str(zs))
-    ck("L3", "the remote session's five administration names in its VOC are $radmin (V CA $radmin), written at sign-in and only for that session",
+    ck("L3", "the remote session's seven administration names in its VOC are $radmin (V CA $radmin), written at sign-in and only for that session",
        "radmin.rec = 'V' : @fm : 'CA' : @fm : '$radmin'" in lg
-       and "radmin.names = 'create.account' : @fm : 'delete.account' : @fm : 'modify.account' : @fm : 'modify.password' : @fm : 'remote.sdsys'" in lg
+       and "radmin.names = 'create.account' : @fm : 'delete.account' : @fm : 'modify.account' : @fm : 'modify.password' : @fm : 'remote.sdsys'\n      radmin.names := @fm : 'remote.ssh' : @fm : 'remote.api'\n      for radmin.i = 1 to dcount(radmin.names, @fm)" in lg
        and re.search(r"if radmin\.login then\s*\n\s*radmin\.rec = ", lg) is not None, "")
     ck("L4", "the remote session says what it is (12800, the client address) on a terminal only, and the audit says where from; no password is asked of it (require.credential is for elevated sessions)",
        "display sysmsg(12800, radmin.from)" in lg and "void kernel(K$AUDIT, 'remote administration login from=' : radmin.from)" in lg
@@ -230,8 +243,14 @@ MUTANTS = [
     ("the password is kept until after the verb", "B5", sub("verb", "            secret = ''\n            execute run.sentence", "            execute run.sentence\n            secret = ''")),
     ("the queue is not cleared", "B5", sub("verb", "            run.rc = @system.return.code\n            cleardata\n", "            run.rc = @system.return.code\n")),
     ("the password is audited", "B5", sub("verb", "   void kernel(K$AUDIT, 'remote.sdsys run verb=' : run.verb : ' status=' : run.rc)", "   void kernel(K$AUDIT, 'remote.sdsys run verb=' : run.verb : ' status=' : run.rc : secret)")),
-    ("RUN runs another verb", "B6", sub("verb", "or run.verb = 'remote.sdsys')", "or run.verb = 'remote.sdsys' or run.verb = 'logto')")),
+    ("RUN runs another verb", "B6", sub("verb", "or run.verb = 'remote.api')", "or run.verb = 'remote.api' or run.verb = 'logto')")),
     ("RUN takes sdsys as a word", "B6", sub("verb", "      if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false\n", "")),
+    ("RUN does not run remote.ssh", "B6", sub("verb", " or run.verb = 'remote.ssh' or run.verb = 'remote.api')", " or run.verb = 'remote.api')")),
+    ("RUN's remote.ssh takes any word", "B10", sub("verb", "and run.words<1> # 'on' and run.words<1> # 'off') then run.ok = @false", "and 0) then run.ok = @false")),
+    ("RUN's remote.api takes two words", "B10", sub("verb", "      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local'", "      if 0 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local'")),
+    ("remote.api's restart is answered yes", "B10", sub("verb", "      case run.verb = 'remote.api'\n         data 'N'\n", "      case run.verb = 'remote.api'\n         data 'Y'\n")),
+    ("remote.api's answer is left in the queue", "B10", sub("verb", "         data 'N'\n         execute run.sentence\n         run.rc = @system.return.code\n         cleardata\n", "         data 'N'\n         execute run.sentence\n         run.rc = @system.return.code\n")),
+    ("remote.api runs with nothing queued", "B10", sub("verb", "      case run.verb = 'remote.api'\n         data 'N'\n", "      case run.verb = 'remote.api'\n")),
     ("ON is allowed in the job", "B7", sub("verb", "   if in.job then\n      @system.return.code = -ER$ARGS\n      stop sysmsg(12847, 'remote.sdsys on')", "   if 0 then\n      @system.return.code = -ER$ARGS\n      stop sysmsg(12847, 'remote.sdsys on')")),
     ("SDRADMIN is made with ssh and API", "B7", sub("verb", "   settings<CA$ROUTE.API> = 0\n", "   settings<CA$ROUTE.API> = 1\n")),
     ("SDRADMIN is made with a shell", "B7", sub("verb", "   settings<CA$START> = 'terminal'\n", "   settings<CA$START> = 'terminal'\n   settings<CA$OS.SH> = 1\n")),
@@ -252,6 +271,8 @@ MUTANTS = [
     ("SDRADMIN lands while remote administration is shut", "L1", sub("login", "         case not(radmin_open(0))\n            radmin.why = 'remote administration is off'\n", "")),
     ("the remote session keeps OS.EXECUTE", "L2", sub("login", "acc.rec<ACC$OS.EXEC> = '' ; ", "")),
     ("the remote session keeps shared read", "L2", sub("login", "acc.rec<ACC$SHARED.READ> = 'no'", "acc.rec<ACC$SHARED.READ> = ''")),
+    ("the remote session sends remote.api nowhere", "R6", sub("radmin", "      case verb = 'remote.ssh' or verb = 'remote.api'", "      case verb = 'remote.ssh'")),
+    ("LOGIN points only the five names", "L3", sub("login", "      radmin.names := @fm : 'remote.ssh' : @fm : 'remote.api'\n", "")),
     ("the VOC names point elsewhere", "L3", sub("login", "radmin.rec = 'V' : @fm : 'CA' : @fm : '$radmin'", "radmin.rec = 'V' : @fm : 'CA' : @fm : '$createa'")),
     ("the session is not announced", "L4", sub("login", "         display sysmsg(12800, radmin.from)", "         null")),
     ("SDRADMIN may LOGTO", "C1", sub("cproc", "   if upcase(@logname) = 'SDRADMIN' then\n      display sysmsg(12847, 'logto')", "   if 0 then\n      display sysmsg(12847, 'logto')")),

@@ -97,7 +97,11 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
 
              What        - REMOTE.SDSYS ON lets a separate account, SDRADMIN, sign in over ssh with
                            its Windows password and create, change, suspend and delete SD accounts,
-                           set their passwords, read the audit trail and shut the door again.
+                           set their passwords, read the audit trail and shut the door again. It
+                           can also run REMOTE.SSH and REMOTE.API; an API change made from there
+                           does not restart SD, so the listener moves when SD next starts, and
+                           REMOTE.SSH OFF keeps the session it was typed in but lets no other
+                           computer sign in until REMOTE.SSH ON is typed at the console.
                            SDRADMIN is never a Windows administrator: its commands are run by a
                            helper that takes a fixed list. The first ON makes the account and asks
                            its password. REMOTE.SDSYS OFF shuts it and logs SDRADMIN out; with no

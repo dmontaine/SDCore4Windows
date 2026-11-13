@@ -2,6 +2,9 @@
 #
 # 13 Nov 26 Windows port - written for RELEASE_1.1 202 (design .claude/design-remote-admin-20261113.md, section 5; the owner's answers of
 # 13 Nov 2026: Q3 the list, Q8 the job route).
+# 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov: Linux's remote sdsys runs them, and they run no code of the
+# caller's as a Windows administrator): REMOTE.SSH {ON | OFF} and REMOTE.API {ON | LOCAL | OFF}, each also with no keyword (the report), are
+# on the list - seven verbs.  REMOTE.SDSYS RUN answers REMOTE.API's restart question N, the console's Enter.
 #
 #   sd-radmin.ps1 -Serve     the broker; run by the task \SD\sdcore-radmin that remote-admin.ps1 -On registers (SDSYS, S4U, highest run
 #                            level, at start-up) and nothing else
@@ -21,7 +24,7 @@
 #   4. The REQUEST: ASCII "key=value" lines, at most 4096 bytes, ending in a line "end", read within 10 seconds.  version=1, verb=, word1..
 #      wordN= (contiguous, at most 16), nonce= (16 lower-case hex), secret= (hex, only for the two commands that take a password).  An
 #      unknown, repeated or missing key is a refusal.
-#   5. The COMMAND: the verb from five, each word from that verb's own list or an account name (a lower-case letter, then lower-case letters,
+#   5. The COMMAND: the verb from seven, each word from that verb's own list or an account name (a lower-case letter, then lower-case letters,
 #      digits, _ and -, 20 at most), never a reserved name (sdsys, sdradmin, shared, SD's own groups, Windows' built-in accounts).
 #      Radmin_request below; the command line is BUILT here from the checked words, no request text is copied into it.
 #   6. The TARGETS on Windows: an account name that is a Windows user must carry SD's stamp ("SD account") and must not be in Administrators.
@@ -54,7 +57,7 @@ $Prog = 'sd-radmin'
 # BEGIN radmin_request
 # The pure part: reading and checking a request and building the command.  gplbld/test-remoteadmin-units.ps1 lifts this block out and drives
 # it with good and bad requests; its mutants break each check here.
-$RadminVerbs = @('create.account', 'delete.account', 'modify.account', 'modify.password', 'remote.sdsys')
+$RadminVerbs = @('create.account', 'delete.account', 'modify.account', 'modify.password', 'remote.sdsys', 'remote.ssh', 'remote.api')
 $RadminRoutes = @('ssh', 'api', 'both', 'none')
 $RadminStarts = @('start-menu', 'start-terminal', 'start-default')
 $RadminCreateUser = @('ssh', 'api', 'both', 'none', 'sh-on', 'os-on', 'voc-on', 'bp-on', 'dict-on', 'net-on', 'files-on', 'files-write-on',
@@ -65,6 +68,9 @@ $RadminModify = @('ssh', 'api', 'both', 'none', 'sh-on', 'sh-off', 'os-on', 'os-
                   'files-write-off', 'files-admin-on', 'files-admin-off', 'shared-read-on', 'shared-read-off', 'shared-write-on',
                   'shared-write-off', 'start-menu', 'start-terminal', 'start-default', 'pins-on', 'pins-off', 'suspended', 'unsuspended')
 $RadminReports = @('off', 'status', 'audit', 'accounts')
+# The doors: one keyword, or none (the console verb's report).
+$RadminSshWords = @('on', 'off')
+$RadminApiWords = @('on', 'local', 'off')
 # Never a target from here: SD's own accounts and groups, and Windows' built-in accounts.  Matched after the name test, so lower case.
 $RadminReserved = @('sdsys', 'sdradmin', 'shared', 'sdusers', 'sdssh', 'sdsshonly', 'sdapi', 'sdfiles', 'sdfileswrite', 'sdfilesadmin',
                     'sdaiusers', 'administrator', 'administrators', 'guest', 'defaultaccount', 'wdagutilityaccount', 'system')
@@ -180,6 +186,12 @@ function Get-RadminPlan($req) {
                 if ($w.Count -gt 2 -or ($w.Count -eq 2 -and $w[1] -cnotmatch '^[1-9][0-9]{0,2}$')) { $p.Why = 'remote.sdsys audit takes a number of lines, 1 to 500'; return $p }
                 if ($w.Count -eq 2 -and [int]$w[1] -gt 500) { $p.Why = 'remote.sdsys audit takes a number of lines, 1 to 500'; return $p }
             } elseif ($w.Count -ne 1) { $p.Why = "remote.sdsys $($w[0]) takes nothing more"; return $p }
+        }
+        'remote.ssh' {
+            if ($w.Count -gt 1 -or ($w.Count -eq 1 -and $RadminSshWords -cnotcontains $w[0])) { $p.Why = 'remote.ssh takes on or off, or nothing for the report'; return $p }
+        }
+        'remote.api' {
+            if ($w.Count -gt 1 -or ($w.Count -eq 1 -and $RadminApiWords -cnotcontains $w[0])) { $p.Why = 'remote.api takes on, local or off, or nothing for the report'; return $p }
         }
         default { $p.Why = 'the command is not one remote administration may run'; return $p }
     }

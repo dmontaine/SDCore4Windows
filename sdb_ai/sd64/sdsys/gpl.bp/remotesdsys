@@ -4,6 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov: Linux's remote sdsys runs them): RUN runs REMOTE.SSH {ON | OFF}
+*              and REMOTE.API {ON | LOCAL | OFF}, each also with no keyword, seven verbs; REMOTE.API's restart question is answered N
+*              (the console's Enter: nothing is restarted, the listener moves at SD's next start).
 * 13 Nov 26 Windows port - RELEASE_1.1 202: carried from Linux (S.95 stage 1b, S.101, S.106) in the Windows form of
 *              .claude/design-remote-admin-20261113.md and the owner's answers of 13 Nov 2026 (Linux parity unless the OS forbids).  ON | OFF
 *              open and shut ssh for a SEPARATE account, SDRADMIN, not for SDSYS: SDSYS is an elevated Windows administrator, and its password
@@ -31,8 +34,9 @@
 *                 prompt; its Windows password is asked twice here), then remote-admin.ps1 -On: SDRADMIN enabled, in sdssh, sshd's remote
 *                 administration arm open (password only, no forwarding, ForceCommand sd), the broker task running, the state on.  SDRADMIN
 *                 can then sign in from other computers with its password, into its own account, where create.account, delete.account,
-*                 modify.account, modify.password and remote.sdsys (OFF, AUDIT, ACCOUNTS, no keyword) are sent to the broker, which runs
-*                 them here as an SDSYS job.  It is never a Windows administrator and never elevated.
+*                 modify.account, modify.password, remote.sdsys (OFF, AUDIT, ACCOUNTS, no keyword), remote.ssh (ON, OFF, no keyword) and
+*                 remote.api (ON, LOCAL, OFF, no keyword) are sent to the broker, which runs them here as an SDSYS job.  It is never a
+*                 Windows administrator and never elevated.
 *       OFF       remote-admin.ps1 -Off (the arm shut, SDRADMIN out of sdssh and disabled, the broker stopped, the state off), then every
 *                 SDRADMIN session is logged out.  It tightens, so nothing is asked.  Allowed from the remote session (owner, Q6).
 *       AUDIT n   The last n lines of the audit trail (50 when n is not given, at most 500).
@@ -43,6 +47,8 @@
 *    REMOTE.SDSYS RUN <command> is the broker's and is refused anywhere but in the one-shot job sd-radmin.ps1 starts (kernel(K$JOB.MARK) names
 *    radmin-<nonce>): it removes the job's definition first, then runs the one command the broker checked, the console verb itself, with the
 *    password it reads from standard input in the DATA queue (twice, for the verb's two prompts) and the answer to a confirmation.
+*    REMOTE.API's "Restart SD now?" is answered N, the answer Enter gives at the console: a restart ends every session, the job's own and the
+*    remote one with it, so from here the listener moves at SD's next start (10136 says so) and the firewall half takes effect at once.
 *
 *    ADMINISTRATOR ONLY, and audited (the keyword and the helper's status).
 *
@@ -330,12 +336,19 @@ run.request:
       run.words<-1> = downcase(w)
    repeat
 
-   run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys')
+   run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys' or run.verb = 'remote.ssh' or run.verb = 'remote.api')
    for i = 1 to dcount(run.words, @fm)
       w = run.words<i>
       if len(w) < 1 or len(w) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then run.ok = @false
       if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false
    next i
+* The doors take one keyword or none (the report), as the broker checked.
+   if run.verb = 'remote.ssh' then
+      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'off') then run.ok = @false
+   end
+   if run.verb = 'remote.api' then
+      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local' and run.words<1> # 'off') then run.ok = @false
+   end
    if not(run.ok) then
       crt sysmsg(12847, run.verb)
       void kernel(K$AUDIT, 'remote.sdsys run refused verb=' : run.verb[1, 40])
@@ -386,6 +399,13 @@ run.request:
 
       case run.verb = 'delete.account'
          data 'Y'
+         execute run.sentence
+         run.rc = @system.return.code
+         cleardata
+
+* REMOTE.API ON or OFF asks whether to restart SD.  N, Enter's answer at the console: nothing is restarted, and no session ends.
+      case run.verb = 'remote.api'
+         data 'N'
          execute run.sentence
          run.rc = @system.return.code
          cleardata

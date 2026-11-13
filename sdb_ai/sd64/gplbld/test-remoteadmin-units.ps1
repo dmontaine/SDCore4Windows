@@ -4,6 +4,8 @@
 #
 # 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys, the Windows form).  Free: no install, no elevation, no sd,
 # no pipe, no Task Scheduler, no sshd.
+# 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity: REMOTE.SSH {on | off} and REMOTE.API {on | local | off}, and each with no word, are
+# accepted (Q1) and every other word, a second word and a password refused (Q3); six mutants break the two lists and their checks.
 #
 # WHAT IT DRIVES.  sd-radmin.ps1's "# BEGIN radmin_request" region - the broker's whole wall against a request (the keys, the words, the names,
 # the password's shape, the command built from checked words) - with good requests and bad ones; remote-admin.ps1's "# BEGIN radmin_functions"
@@ -89,7 +91,13 @@ function Get-Rows([hashtable]$t) {
             @(@('version=1', 'verb=modify.password', 'word1=bob', "nonce=$nonce", "secret=$pw", 'end'), 'remote.sdsys run modify.password bob', $true, 'bob'),
             @(@('version=1', 'verb=remote.sdsys', 'word1=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys off', $false, ''),
             @(@('version=1', 'verb=remote.sdsys', 'word1=audit', 'word2=500', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys audit 500', $false, ''),
-            @(@('version=1', 'verb=remote.sdsys', 'word1=status', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys status', $false, '')
+            @(@('version=1', 'verb=remote.sdsys', 'word1=status', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys status', $false, ''),
+            @(@('version=1', 'verb=remote.ssh', 'word1=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.ssh off', $false, ''),
+            @(@('version=1', 'verb=remote.ssh', 'word1=on', "nonce=$nonce", 'end'), 'remote.sdsys run remote.ssh on', $false, ''),
+            @(@('version=1', 'verb=remote.ssh', "nonce=$nonce", 'end'), 'remote.sdsys run remote.ssh', $false, ''),
+            @(@('version=1', 'verb=remote.api', 'word1=local', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api local', $false, ''),
+            @(@('version=1', 'verb=remote.api', 'word1=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api off', $false, ''),
+            @(@('version=1', 'verb=remote.api', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api', $false, '')
         )
         foreach ($g in $goods) {
             $p = Plan (Q $g[0])
@@ -111,7 +119,20 @@ function Get-Rows([hashtable]$t) {
             @('verb set.config', (Q (@('version=1', 'verb=set.config', 'word1=x', "nonce=$nonce", 'end')))),
             @('verb logto', (Q (@('version=1', 'verb=logto', 'word1=sdsys', "nonce=$nonce", 'end')))),
             @('verb sh', (Q (@('version=1', 'verb=sh', "nonce=$nonce", 'end')))),
-            @('verb remote.api', (Q (@('version=1', 'verb=remote.api', 'word1=on', "nonce=$nonce", 'end')))),
+            @('verb ssh.server', (Q (@('version=1', 'verb=ssh.server', 'word1=remove', "nonce=$nonce", 'end')))),
+            @('remote.ssh status (the report is no keyword)', (Q (@('version=1', 'verb=remote.ssh', 'word1=status', "nonce=$nonce", 'end')))),
+            @('remote.ssh open', (Q (@('version=1', 'verb=remote.ssh', 'word1=open', "nonce=$nonce", 'end')))),
+            @('remote.ssh local', (Q (@('version=1', 'verb=remote.ssh', 'word1=local', "nonce=$nonce", 'end')))),
+            @('remote.ssh on off', (Q (@('version=1', 'verb=remote.ssh', 'word1=on', 'word2=off', "nonce=$nonce", 'end')))),
+            @('remote.ssh off with an account name', (Q (@('version=1', 'verb=remote.ssh', 'word1=off', 'word2=bob', "nonce=$nonce", 'end')))),
+            @('remote.ssh ON in capitals', (Q (@('version=1', 'verb=remote.ssh', 'word1=ON', "nonce=$nonce", 'end')))),
+            @('remote.ssh with a password', (Q (@('version=1', 'verb=remote.ssh', 'word1=off', "nonce=$nonce", "secret=$pw", 'end')))),
+            @('remote.api restart', (Q (@('version=1', 'verb=remote.api', 'word1=restart', "nonce=$nonce", 'end')))),
+            @('remote.api on y (an answer to the restart question)', (Q (@('version=1', 'verb=remote.api', 'word1=on', 'word2=y', "nonce=$nonce", 'end')))),
+            @('remote.api on local', (Q (@('version=1', 'verb=remote.api', 'word1=on', 'word2=local', "nonce=$nonce", 'end')))),
+            @('remote.api status', (Q (@('version=1', 'verb=remote.api', 'word1=status', "nonce=$nonce", 'end')))),
+            @('remote.api a port number', (Q (@('version=1', 'verb=remote.api', 'word1=4243', "nonce=$nonce", 'end')))),
+            @('remote.api with a password', (Q (@('version=1', 'verb=remote.api', 'word1=on', "nonce=$nonce", "secret=$pw", 'end')))),
             @('verb CREATE.ACCOUNT in capitals', (Q (@('version=1', 'verb=CREATE.ACCOUNT', 'word1=group', 'word2=x', "nonce=$nonce", 'end')))),
             @('target sdsys', (Q (@('version=1', 'verb=delete.account', 'word1=sdsys', "nonce=$nonce", 'end')))),
             @('target sdradmin', (Q (@('version=1', 'verb=modify.password', 'word1=sdradmin', "nonce=$nonce", "secret=$pw", 'end')))),
@@ -320,6 +341,12 @@ if ($SelfTest) {
         @('a password where none belongs', 'Q3', 'broker', "    if (-not `$p.NeedsSecret -and `$null -ne `$req.Secret) { `$p.Why = 'this command takes no password and the request has one'; return `$p }", ''),
         @('no password where one belongs', 'Q3', 'broker', "    if (`$p.NeedsSecret -and `$null -eq `$req.Secret) { `$p.Why = 'this command needs the new password and the request has none'; return `$p }", ''),
         @('remote.sdsys on is allowed', 'Q3', 'broker', "`$RadminReports = @('off', 'status', 'audit', 'accounts')", "`$RadminReports = @('on', 'off', 'status', 'audit', 'accounts')"),
+        @('remote.ssh takes any one word', 'Q3', 'broker', "(`$w.Count -eq 1 -and `$RadminSshWords -cnotcontains `$w[0])) { `$p.Why = 'remote.ssh", "(`$false)) { `$p.Why = 'remote.ssh"),
+        @('remote.ssh takes two words', 'Q3', 'broker', "            if (`$w.Count -gt 1 -or (`$w.Count -eq 1 -and `$RadminSshWords", "            if ((`$w.Count -eq 1 -and `$RadminSshWords"),
+        @('remote.api takes restart', 'Q3', 'broker', "`$RadminApiWords = @('on', 'local', 'off')", "`$RadminApiWords = @('on', 'local', 'off', 'restart')"),
+        @('remote.api takes an answer after the keyword', 'Q3', 'broker', "            if (`$w.Count -gt 1 -or (`$w.Count -eq 1 -and `$RadminApiWords", "            if ((`$w.Count -eq 1 -and `$RadminApiWords"),
+        @('remote.api is off the list', 'Q1', 'broker', "'remote.sdsys', 'remote.ssh', 'remote.api')", "'remote.sdsys', 'remote.ssh')"),
+        @('remote.ssh is off the plan', 'Q1', 'broker', "        'remote.ssh' {`n", "        'remote.ssh.x' {`n"),
         @('two routes allowed', 'Q3', 'broker', "    if (`$routes -gt 1) { return 'more than one of ssh, api, both and none' }", ''),
         @('a word may repeat', 'Q3', 'broker', '        if ($seen.ContainsKey($w)) { return "$w is given twice" }', ''),
         @('create.account other is allowed', 'Q3', 'broker', "(`$w[0] -cne 'user' -and `$w[0] -cne 'group')", "(`$w[0] -cne 'user' -and `$w[0] -cne 'group' -and `$w[0] -cne 'other')"),

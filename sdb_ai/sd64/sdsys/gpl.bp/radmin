@@ -16,20 +16,26 @@
 * 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys in the Windows form; design .claude/design-remote-admin-
 *           20261113.md section 5; the owner's answers of 13 Nov 2026: Q2 the console verbs' own names, as Linux's remote sdsys types them;
 *           Q3 the list; Q4 one password at sign-in).
+* 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov: Linux's remote sdsys runs them): REMOTE.SSH and REMOTE.API are
+*           sent as well, seven names; with no keyword each is sent with no word, the console verb's report.
 * END-HISTORY
 *
 * START-DESCRIPTION:
 *
-*    In SDRADMIN's own account, LOGIN points these five VOC names here: CREATE.ACCOUNT, DELETE.ACCOUNT, MODIFY.ACCOUNT, MODIFY.PASSWORD and
-*    REMOTE.SDSYS.  The person types the console's command, with the console's words; this program asks what the console verb would ask a
-*    person (a new password twice, hidden, checked by !pw_complex; the account's name again before a deletion), writes the request, and has
+*    In SDRADMIN's own account, LOGIN points these seven VOC names here: CREATE.ACCOUNT, DELETE.ACCOUNT, MODIFY.ACCOUNT, MODIFY.PASSWORD,
+*    REMOTE.SDSYS, REMOTE.SSH and REMOTE.API.  The person types the console's command, with the console's words; this program asks what
+*    the console verb would ask a person (a new password twice, hidden, checked by !pw_complex; the account's name again before a
+*    deletion), writes the request, and has
 *    sd-radmin-client.ps1 hand it to the broker (sd-radmin.ps1), which checks every word against its own list and runs the console verb in
 *    an elevated SDSYS job.  What the verb printed is printed here.
 *
 *    The words go as they were typed, lower case, and the BROKER is the one place that decides what may run: a word this program let
 *    through is refused there (12838, with the broker's reason).  REMOTE.SDSYS ON is refused here as well (12847): it opens a door, and is
-*    the console's.  REMOTE.SDSYS with no keyword is sent as STATUS.  MODIFY.PASSWORD without an account name would be SDRADMIN's own SD
-*    password, which it does not use; refused (12847).
+*    the console's.  REMOTE.SDSYS with no keyword is sent as STATUS; REMOTE.SSH and REMOTE.API with none are sent with none, which is
+*    their report.  REMOTE.API ON or OFF is answered N to its restart question in the job (a restart would end this session too), so the
+*    verb says the change waits for SD's next start.  REMOTE.SSH OFF scopes ssh to this computer for the NEXT sign-in: this session is
+*    not cut off, and from then on remote administration is reachable only after REMOTE.SSH ON at the console.  MODIFY.PASSWORD without
+*    an account name would be SDRADMIN's own SD password, which it does not use; refused (12847).
 *
 *    THE PASSWORD, in order: typed at INPUT ... HIDDEN on the ssh terminal; written in hexadecimal into the request in SDSYS's pstmp (each
 *    file there is its writer's alone, secure-psdir.ps1) under a name of this session and the request's nonce; read and DELETED by
@@ -111,6 +117,9 @@ deffun pw_complex(pw) calling '!pw_complex'
 
       case verb = 'modify.account'
          null
+
+      case verb = 'remote.ssh' or verb = 'remote.api'
+         null   ;* one keyword or none; the broker checks which
 
       case 1
          stop sysmsg(12847, verb)

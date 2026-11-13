@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov): the remote administration session's VOC points seven names at
+*   $radmin, REMOTE.SSH and REMOTE.API with the five (Linux's remote sdsys runs both).
 * 13 Nov 26 Windows port - RELEASE_1.1 202 (Linux S.106's remote.sdsys, the Windows form): the account sdradmin is entered only by the Windows
 *   account SDRADMIN, over ssh, unelevated, while remote administration is open (!radmin_open); its sh, os.execute and the other gates are
 *   off whatever its register record says, 12800 says what the session is, and its VOC's five administration names point at $radmin.
@@ -1210,13 +1212,14 @@ deffun radmin_open(arg) calling '!radmin_open'
    end
 
 * 13 Nov 26 Windows port - RELEASE_1.1 202: THE REMOTE ADMINISTRATION SESSION TYPES THE CONSOLE'S COMMANDS (owner, Q2: as Linux's remote sdsys
-*   does), and in its account these five names are $radmin, which sends them to the broker.  Written at every sign-in, so an UPDATE.ACCOUNTS
+*   does), and in its account these seven names are $radmin, which sends them to the broker.  Written at every sign-in, so an UPDATE.ACCOUNTS
 *   that copied NEWVOC over them (MODIFY.PASSWORD is in NEWVOC) is put right before the person types anything.  A record that cannot be
 *   written leaves the name as it was: the command is then refused (2001 or "not in your VOC"), never run with more rights.
    if radmin.login then
       radmin.rec = 'V' : @fm : 'CA' : @fm : '$radmin'
       radmin.names = 'create.account' : @fm : 'delete.account' : @fm : 'modify.account' : @fm : 'modify.password' : @fm : 'remote.sdsys'
-      for radmin.i = 1 to 5
+      radmin.names := @fm : 'remote.ssh' : @fm : 'remote.api'
+      for radmin.i = 1 to dcount(radmin.names, @fm)
          read radmin.old from voc, radmin.names<radmin.i> else radmin.old = ''
          if radmin.old # radmin.rec then
             write radmin.rec to voc, radmin.names<radmin.i> on error
