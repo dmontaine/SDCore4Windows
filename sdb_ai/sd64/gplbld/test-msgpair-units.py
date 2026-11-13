@@ -46,6 +46,7 @@ ALLOWED = {
     ('10137', '10140'): 'OS: Windows has a "no ssh server" answer (exit 2) where Linux shows the syntax; different messages on a matching line',
     ('10158', '10158'): 'OS: the same words, wrapped at another place (RELEASE_1.1 128)',
     ('10910', '10920'): 'OS: create_account checks the password rule itself (pw_complex) where Linux reports PAM\'s refusal',
+    ('11904', '11904'): 'sl_put\'s 11904 is a character code (CJK radicals), not a message id; Linux has the same literal (RELEASE_1.1 258)',
     ('11010', '12007'): 'OS: a Windows account SD made is reused with a new password; Linux keeps the Linux password',
     ('11332', '12337'): 'OS: the job helper is a Task Scheduler script, not a root helper (RELEASE_1.1 222)',
     ('11447', '12452'): 'run.in without debug on Windows (no restricted token): RELEASE_1.1 201, question open in RELEASE_1.1 253',

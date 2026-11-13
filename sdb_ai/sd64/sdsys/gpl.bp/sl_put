@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 258: the CJK-radicals bound is 11904 again, as Linux; the +1005 message renumbering had changed it to 12909.
 * 10 Nov 26 Windows port - RELEASE_1.1 211: no locale variable set means UTF-8, as in $tk_open (a Windows console sets none of them).
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
@@ -345,7 +346,7 @@ utf8.pad:
          u8.w = 1
          begin case
             case u8.cp >= 4352 and u8.cp <= 4447 ; u8.w = 2          ;* Hangul Jamo
-            case u8.cp >= 12909 and u8.cp <= 42191 and u8.cp # 12351 ; u8.w = 2      ;* CJK radicals to Yi
+            case u8.cp >= 11904 and u8.cp <= 42191 and u8.cp # 12351 ; u8.w = 2      ;* CJK radicals to Yi
             case u8.cp >= 44032 and u8.cp <= 55203 ; u8.w = 2        ;* Hangul syllables
             case u8.cp >= 63744 and u8.cp <= 64255 ; u8.w = 2        ;* CJK compatibility ideographs
             case u8.cp >= 65040 and u8.cp <= 65049 ; u8.w = 2        ;* vertical forms
