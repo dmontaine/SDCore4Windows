@@ -548,7 +548,7 @@ Name: "installpython"; Description: "Install Python for all users"; \
 ; 8 Nov 26 - SHOWN AGAIN, AND EVERY GATE (owner on Linux, 1 Nov 2026, bfca310a: "we need to add that back", "Every gate"; here, 8 Nov: all gates open if requested).  The 26 Oct removal and
 ; the hiding before it are undone.  It had been hidden because the box did not say what an access gate is and sat below the fold: the text now names them and
 ; the wizard is taller.  /TASKS=opengates still answers it on a silent install.  Left unticked the account starts closed, and an administrator opens a gate later with modify.account.
-Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files)"; \
+Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files, AI)"; \
     GroupDescription: "5)  SD Core account:"; Flags: unchecked
 ; 10 Nov 26 - RELEASE_1.1 210: WHERE NEW SESSIONS START, the home/prompt question (Linux e0e38810; owner, 3 Nov 2026, "the home/prompt
 ; question"; found missing here by the owner, 10 Nov).  The home screen is the delivered start and needs nothing (no start.default means
@@ -6159,6 +6159,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataPath: String;
   DbDelete, ConfDelete, DbFailed, ConfFailed, UsersGroupGoes: Boolean;
+  Code: Integer;   { 13 Nov 26 - RELEASE_1.1 246: the AI state folder's takeown / icacls }
 begin
   if CurUninstallStep = usUninstall then
   begin
@@ -6275,6 +6276,15 @@ begin
 
   if DbDelete then
   begin
+    { 13 Nov 26 - RELEASE_1.1 246: the AI helper's state folder ai in the data tree (its keys folder) grants only SYSTEM and the service
+      NT SERVICE\sd-ai, so this elevated uninstaller could not delete it and DelTree failed on it.  When the database is
+      deleted, take ownership of that folder and give Administrators full control first; nothing else changes. }
+    if DirExists(AddBackslash(DataPath) + 'ai') then
+    begin
+      Exec(ExpandConstant('{sys}\takeown.exe'), '/F "' + AddBackslash(DataPath) + 'ai" /R /D Y', '', SW_HIDE, ewWaitUntilTerminated, Code);
+      Exec(ExpandConstant('{sys}\icacls.exe'), '"' + AddBackslash(DataPath) + 'ai" /grant *S-1-5-32-544:(OI)(CI)F /T /C', '', SW_HIDE,
+           ewWaitUntilTerminated, Code);
+    end;
     if ConfDelete then
       DbFailed := not DelTree(DataPath, True, True, True)
     else

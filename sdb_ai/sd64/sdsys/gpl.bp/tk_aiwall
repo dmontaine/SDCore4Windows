@@ -4,6 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 246: the places are Windows' own (the system directory, C:/ProgramData/SD/ai, C:/ProgramData/SD/shm,
+*               C:/ProgramData/SD/sd.conf and the program folder C:/Program Files/SD, which holds lib/sd-ai), and a drive-letter path (C:/...,
+*               what FILEINFO FL$PATH gives here, measured 13 Nov) counts as absolute: Linux's "not /, so unknown" refused every record on Windows.
 * 1 Nov 26 dm   New.  The owner's rule of 1 Nov 2026 (CLAUDE.md, "THE AI BOUNDARY"): the AI field never reaches the C and GPL.BP code or any other system information, for every provider,
 *               and even the administrator asks no system-development questions inside SD.  Before this nothing told $tk_ai where a text came from, so an administrator who had a record of
 *               the system's own gpl.bp open in the IDE or SED sent it to the provider on "Explain the selection".
@@ -19,7 +22,8 @@
 *            why comes back null when the text may be sent, 'system' when it is part of SD itself, and 'unknown' when the origin cannot be told (the text is then NOT sent: the wall fails shut).
 *            A record is found by opening its file and asking where the file is (FILEINFO FL$PATH); an operating system path is used as it is; either is then put to the geometry test of the kernel
 *            (K$PATH.IN: realpath, so .. and a link out do not count) against the places that are SD's own: the system directory (every program, header, message, help text, dictionary and
-*            file the system account holds, the account register, the audit trail, the error log), the AI helper's directories, /run/sd and /etc/sd.conf.  BY ORIGIN, NEVER BY CONTENT.
+*            file the system account holds, the account register, the audit trail, the error log), the AI helper's directory C:/ProgramData/SD/ai, the program folder
+*            C:/Program Files/SD (lib/sd-ai among it), the shared-memory folder and sd.conf.  BY ORIGIN, NEVER BY CONTENT.
 *   request  a is the TYPED request.  why comes back null, or the name that makes it a question about SD's own code or build.  THIS IS A SCREEN, NOT A WALL: a question that names none of the
 *            names passes, and a question that reaches the AI may be answered from what the AI learned of the open source.  The gate is here, in SD.
 *
@@ -78,13 +82,14 @@ check.origin:
          return
    end case
 
-   if pth[1, 1] # '/' then
+   * absolute: /... (or /cygdrive/c/...) or a drive letter, C:/... or C:\... (13 Nov 26, Windows: FILEINFO FL$PATH gives C:/...)
+   if not(pth[1, 1] = '/' or (pth[2, 1] = ':' and alpha(pth[1, 1]) and (pth[3, 1] = '/' or pth[3, 1] = '\'))) then
       why = 'unknown'
       return
    end
 
-   * the places that are SD's own: a path inside any of them, or equal to one
-   places = @sdsys : @fm : '/var/lib/sd-ai' : @fm : '/usr/local/lib/sd-ai' : @fm : '/run/sd-ai' : @fm : '/run/sd' : @fm : '/etc/sd.conf'
+   * the places that are SD's own: a path inside any of them, or equal to one (Windows' own places, 13 Nov 26)
+   places = @sdsys : @fm : 'C:/ProgramData/SD/ai' : @fm : 'C:/ProgramData/SD/shm' : @fm : 'C:/ProgramData/SD/sd.conf' : @fm : 'C:/Program Files/SD'
    for i = 1 to dcount(places, @fm)
       if places<i> # '' then
          if kernel(K$PATH.IN, places<i> : @fm : pth) then
@@ -94,10 +99,11 @@ check.origin:
       end
    next i
 
-   * the build tree, wherever a copy of it is: a directory called gplsrc, gplbld or gplobj on the way
-   n = dcount(pth, '/')
+   * the build tree, wherever a copy of it is: a directory called gplsrc, gplbld or gplobj on the way (either separator, 13 Nov 26)
+   pf = convert('\', '/', pth)
+   n = dcount(pf, '/')
    for i = 1 to n
-      c = field(pth, '/', i)
+      c = downcase(field(pf, '/', i))
       if c = 'gplsrc' or c = 'gplbld' or c = 'gplobj' then
          why = 'system'
          return
