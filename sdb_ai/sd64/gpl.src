@@ -89,6 +89,7 @@ sdpy_session
 sdsem
 win32sem
 win32audit
+win32auditpipe
 win32tls
 win32relay
 win32s4u

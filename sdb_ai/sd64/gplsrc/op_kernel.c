@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER; the file is made by
+ *           win32_locktrace_create() for SYSTEM and Administrators only, since the SD service is its one writer (RELEASE_1.1 247).
  * 12 Nov 26 Windows port - from Linux S.8 (RELEASE_1.1 240 e): K_INTERNAL is set only by a program flagged HDR_INTERNAL; a read (-1) is unchanged.
  * 10 Nov 26 Windows port - from Linux d35f5e31 / d8dbde84 (S.88): K_SHOW_SAFE (151), another session's text made safe to print by the kernel's
  *           one rule (show_ts_safe()); kernel(K$AUTOLOGOUT, -2) returns the inactivity clock (keyin_idle_ms()).  And K_AI_START, POLL, CANCEL
@@ -99,6 +101,7 @@
 #include "win32group.h"   /* K_GROUP_MEMBER's live SAM query */
 #include "sd_tls.h"
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
+#include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
 
 #include <syslog.h>
 
@@ -1271,6 +1274,33 @@ void op_kernel() {
         k_put_c_string(phantom_nonce_mine, &result);
       }
       break;
+
+    case K_LOCK_TRACE: {
+      /* LOCK.TRACER (see keys.h).  Only an administrator changes it.  Starting makes an EMPTY locktrace file in the system
+         directory and refuses a link or a directory in its place.  13 Nov 26 Windows port (Linux 7f7a4fd4, RELEASE_1.1 182):
+         Linux's file is mode 0620 so that every session appends; here the SD service is its one writer, so
+         win32_locktrace_create() gives it SYSTEM and Administrators and nobody else.                                    */
+      int lt_arg;
+      char lt_path[MAX_PATHNAME_LEN + 1];
+
+      GetInt(descr);
+      lt_arg = (int)descr->data.value;
+      if (lt_arg == -1) {
+        result.data.value = sysseg->lock_trace;
+      } else if (!MY_ADMIN()) {
+        result.data.value = -1;
+      } else if (lt_arg == 0) {
+        sysseg->lock_trace = 0;
+        result.data.value = 0;
+      } else {
+        result.data.value = -1;
+        if ((snprintf(lt_path, sizeof(lt_path), "%s%clocktrace", sd_sysdir(), DS) < (int)sizeof(lt_path)) &&
+            (win32_locktrace_create(lt_path) == 0)) {
+          sysseg->lock_trace = 1;
+          result.data.value = 1;
+        }
+      }
+    } break;
 
     case K_PROFILER:
       /* The application event profiler of this process (see keys.h and profiler.c).  Anyone may profile their own process. */

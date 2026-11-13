@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 247 (Linux W.11 F4, option C1): audit_message() hands the record to the SD service over
+ *           SD_AUDIT_PIPE (win32_audit_pipe()), which stamps the user and pid from the kernel; it appends the record itself only
+ *           when the service does not take it.  AUDIT_ROTATE_BYTES moved to win32auditpipe.h.
  * 12 Nov 26 Windows port - RELEASE_1.1 251: SYS.* names for 12353 and 12360 (Linux 11348 and 11355), which are in use here now.
  * 12 Nov 26 Windows port - from Linux 814c5f07 (RELEASE_1.1 240 c): audit_message() writes a control character, DEL or an SD mark in its text as '?'.
  * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125, S.194): k_var_name()'s cols starts at 0; an array that
@@ -82,6 +85,7 @@
    type, so it is safe to include here; win32audit.h says why it has to be a
    separate translation unit.                                              */
 #include "win32audit.h"
+#include "win32auditpipe.h" /* 13 Nov 26 Windows port - the service is the trail's writer (RELEASE_1.1 247); no Windows type either */
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - sd_job_active, the " job=" suffix (Linux S.102 stage 3, carry area 14) */
 
 #include <setjmp.h>
@@ -887,6 +891,14 @@ void log_message(char* msg) {
    of the identity model in 5.6: access is controlled, and until this existed
    nothing recorded who used it.
 
+   13 Nov 26 - RELEASE_1.1 247: THE SERVICE WRITES THE RECORD NOW, AND WHAT
+   FOLLOWS IS THE FALLBACK.  A session's own append could say anything about
+   who it was; the service's line says user= and pid= from the kernel
+   (sdsvc/sdaudit.c, win32auditpipe.h) and names the user DOMAIN\name, where
+   a session's own line has the runtime's name (bare, or DOMAIN+name).  While
+   the service is down a member can still append a forged line here: the
+   exposure Linux accepted with C1.
+
    WHY NOT log_message().  errlog TRIMS ITS OLDEST HALF when it reaches the
    configured ERRLOG size (above, and config.c requires 10kb for that to work).
    That is right for diagnostics and disqualifying for an audit trail, where
@@ -931,7 +943,7 @@ void log_message(char* msg) {
    and an audit file that cannot be written must not be what stops somebody
    logging in; the missing records are themselves the evidence.               */
 
-#define AUDIT_ROTATE_BYTES 1048576L /* 1MB, then rename and start a new one */
+/* 13 Nov 26 Windows port - AUDIT_ROTATE_BYTES is in win32auditpipe.h, the one copy the service reads too (RELEASE_1.1 247). */
 #define AUDIT_BUFF_SIZE    2048     /* One record.  op_kernel caps msg well
                                        below this; the stamp adds ~70.      */
 
@@ -946,6 +958,8 @@ void audit_message(char* msg) {
   int bytes;
   char path[MAX_PATHNAME_LEN + 1];
   char buff[AUDIT_BUFF_SIZE];
+  char pmsg[AUDIT_BUFF_SIZE];
+  char who[16];
   char* p;
 
   if (sysseg == NULL)
@@ -958,6 +972,23 @@ void audit_message(char* msg) {
       *p = '?';
   }
 
+  /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  A scheduled job's run says so on EVERY line it
+     writes, the service's copy included (the name came from K_JOB_MARK: lower case letters, digits and dashes only). */
+  const char* jkey = (sd_job_active[0] != '\0') ? " job=" : "";
+
+  /* 13 Nov 26 Windows port - RELEASE_1.1 247, Linux W.11 F4 option C1.  The SD service (sdsvc.exe, LocalSystem) writes the record when it
+     is serving SD_AUDIT_PIPE: it stamps the user and the pid from the kernel's view of this process, so a session can no longer add a
+     line that names somebody else.  Only when it does not take it (not running, a pipe that is not LocalSystem's, busy past four tries,
+     another tree's service) does this process append the record itself, below, as it always did.  Outside ERRLOG_SEM, as Linux sends
+     its datagram: a stalled service must not hold the semaphore every session's logging waits on. */
+  snprintf(pmsg, sizeof(pmsg), "%s%s%s", msg, jkey, sd_job_active);
+  if ((my_uptr != NULL) && (my_uptr->uid > 0))
+    snprintf(who, sizeof(who), "%d", (int)(my_uptr->uid));
+  else
+    strcpy(who, "?");
+  if (win32_audit_pipe(sd_sysdir(), who, pmsg) == 0)
+    return;
+
   timenow = time(NULL);
   ltime = localtime(&timenow);
 
@@ -968,10 +999,6 @@ void audit_message(char* msg) {
   if (*path != '\0') {
     /* Newline rather than \n for the reason log_message() gives above - this
        is a byte count handed to WriteFile, not a text-mode stream.        */
-
-    /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  A scheduled job's run says so on EVERY line it
-       writes (the name came from K_JOB_MARK: lower case letters, digits and dashes only). */
-    const char* jkey = (sd_job_active[0] != '\0') ? " job=" : "";
 
     if (my_uptr != NULL) {
       bytes = snprintf(buff, sizeof(buff),

@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K$LOCK.TRACE (115), LOCK.TRACER.
 	  * 8 Nov 26 Windows port - from Linux 904fadd3 (S.87 batch 14): K$FORM.QUEUE (111) is gone with SP.ASSIGN; the number stays reserved.
 	  * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): $define for OS$OPEN, as # no longer starts a directive.
 	  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
@@ -225,7 +226,7 @@
       $define K$GROUP.PHANTOM   110      ;* Mark the phantom with this user number as grouped with this process: 1 if marked (15 Oct 26, Q-8, PHANTOM GROUP)
       $define K$USER.STATS      112     ;* File activity counts of a user (0: all): uid, 11 counts, when counting began, login name (15 Oct 26, Q-8)
       $define K$NON.DURABLE.TXN 113      ;* 1: the next COMMIT is non-durable, a nested transaction goes to its parent (15 Oct 26, sheet 442; carried 25 Oct 26 with QMClient)
-*  115 is Linux's K$LOCK.TRACE (LOCK.TRACER, not carried): left unused.
+      $define K$LOCK.TRACE      115      ;* 1 start lock tracing (administrator: makes the locktrace file), 0 stop, -1 ask; the state, -1 if refused (16 Oct 26; carried 13 Nov 26, RELEASE_1.1 182)
       $define K$SD.ACCOUNTS     118      ;* may reach files under the directory of an account its user could LOGTO, except its VOC (set from $internal; -1 asks) (16 Oct 26, carried 23 Oct 26)
       $define K$VOC.EDIT        121      ;* may save changes to a VOC (set from $internal at sign-on only; -1 asks) (17 Oct 26, S.64; carried 23 Oct 26)
       $define K$BP.EDIT         122      ;* may save changes to a program file, source or object, and BASIC / CATALOG (same rules) (17 Oct 26, S.64)

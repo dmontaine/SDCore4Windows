@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 247: the service is the audit trail's writer (sdaudit.c), started before
+ *           "sd -start" and stopped after the last "sd -stop"; it also appends LOCK.TRACER's lines (RELEASE_1.1 182).
  * 06 Oct 26 Windows port - sdsvc-sd.log CAPTURES NOTHING, FIXED.  RELEASE_1.1 125.
  *           open_child_log() opened the file FILE_APPEND_DATA only, and the POSIX
  *           runtime in sd.exe could not write to a stderr handle that lacks
@@ -120,6 +122,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include "../win32auditpipe.h"
+#include "sdaudit.h" /* 13 Nov 26 - the audit trail's writer, RELEASE_1.1 247 */
 
 #define SVC_NAME "SD"
 #define SDWIND_EXE "sdwind.exe"
@@ -584,6 +589,29 @@ static void run_sweep(const char *script_name, const char *what) {
   svc_log("%s: exited with %lu", what, (unsigned long)rc);
 }
 
+/* ======================================================================
+   The audit trail's writer.
+
+   13 Nov 26 Windows port - RELEASE_1.1 247 (Linux W.11 F4: sdlnxd, the root daemon, is the trail's writer).  This is the
+   one LocalSystem process SD has that lives as long as SD does, so it is the writer here: sdaudit.c serves the pipe,
+   stamps each record with the user and pid the kernel gives for the sender, and appends it.  Started BEFORE "sd -start"
+   so that a session never meets an SD with no writer, and stopped AFTER the last "sd -stop" so that the sessions' last
+   records reach it.  NOTHING HERE IS FATAL, as for the sweeps: without the writer the sessions write the trail
+   themselves, as they always did.  Who besides Administrators may send: every SD user (sd.iss makes the group).    */
+
+static const char* const audit_grant[] = {"sdusers", NULL};
+
+static void svc_audit_start(void) {
+  char sysdir[MAX_PATH];
+
+  if (sdaudit_sysdir(sysdir, sizeof(sysdir)) != 0) {
+    svc_log("audit writer: not started - no SDSYS= in the [sd] section of ProgramData\\SD\\sd.conf; sessions "
+            "write the audit trail themselves");
+    return;
+  }
+  (void)sdaudit_start(SD_AUDIT_PIPE, sysdir, audit_grant, svc_log);
+}
+
 static void WINAPI svc_ctrl(DWORD ctrl) {
   switch (ctrl) {
     case SERVICE_CONTROL_STOP:
@@ -649,6 +677,9 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      as it was measured.                                                    */
   run_sweep(RECONCILE_SCRIPT, "register reconcile");
 
+  /* 13 Nov 26 - the audit writer, before SD: see svc_audit_start(). */
+  svc_audit_start();
+
   /* A NON-ZERO EXIT IS NOT ALWAYS A FAILURE.  "sd -start" exits 1 when SD is
      already running, which at boot means somebody started it by hand first -
      the service's job is done either way.  Reporting a failure there would
@@ -657,6 +688,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
   if (!run_sd("-start", &rc)) {
     svc_log("could not run \"sd -start\" at all - CreateProcess error %lu",
             (unsigned long)GetLastError());
+    sdaudit_stop();
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -701,6 +733,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
     svc_log("cleared the half-started segment: \"sd -stop\" exited with %lu",
             (unsigned long)rc);
 
+    sdaudit_stop();
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -735,6 +768,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
       svc_log("cleared up after it: \"sd -stop\" exited with %lu",
               (unsigned long)rc);
 
+      sdaudit_stop();
       report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
       CloseHandle(svc_stop_event);
       svc_stop_event = NULL;
@@ -748,6 +782,7 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      alternative, leaving the daemon behind, orphans the segment.          */
   run_sd("-stop", &rc);
   svc_log("service stopping: \"sd -stop\" exited with %lu", (unsigned long)rc);
+  sdaudit_stop(); /* after the sessions' last records, not before */
 
   CloseHandle(svc_stop_event);
   svc_stop_event = NULL;

@@ -1,0 +1,154 @@
+* LOCKTRACER
+* LOCK.TRACER verb
+* Copyright (c) 2026 SD Core for Linux
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - from Linux 7f7a4fd4 and 2930d92f (RELEASE_1.1 182): messages 11359-11366 are 12364-12371 here (Linux id
+*           + 1005).  The trace file is written by the SD service, not by the sessions (RELEASE_1.1 247), and a program's name is
+*           also cut at a back slash.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
+* 16 Oct 26 dm  Written for the QM4 gap LOCK.TRACER.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LOCK.TRACER ON                       start logging
+*   LOCK.TRACER OFF                      stop logging
+*   LOCK.TRACER {USER n} {LPTR {n}} {NO.PAGE}   display the logged data
+*
+* Administrator only.  Logging writes a line for every lock taken or let go, by every session, to the file locktrace in the
+* system directory (the kernel sends it: op_lock.c lock_trace(); the SD service appends it); ON empties the file first.  The
+* file can be read only by the administrator and is written only by the SD service, so while the service is not running the
+* trace gets no lines.  Each line is value mark delimited: epoch time, user number, pathname, record id (null for a file
+* lock), action code, program, offset in it as hexadecimal, line number (-1 if not known) - openQM's layout, so a program of
+* the administrator's own can analyse it.  The action codes: 1 get RU (update lock on a record), 2 get RL (read lock),
+* 3 RU->RL, 4 RL->RU, 5 get FX (file lock), 6 rel RX (let go of a record lock), 7 rel FX.
+*
+* openQM's report needs a terminal 132 wide; this one is 120.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program locktracer
+$catalog $locktracer
+
+$include int$keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   words = trim(upcase(field(@sentence, ' ', 2, 999999)))
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then stop sysmsg(12366)         ;* Lock tracing is for the administrator
+
+   if words = 'ON' then
+      if kernel(K$LOCK.TRACE, 1) = 1 then
+         @system.return.code = 0
+         crt sysmsg(12364)                                            ;* Lock tracing is on
+      end else
+         stop sysmsg(12367)                                           ;* Lock tracing could not be started
+      end
+      return
+   end
+   if words = 'OFF' then
+      void kernel(K$LOCK.TRACE, 0)
+      @system.return.code = 0
+      crt sysmsg(12365)                                               ;* Lock tracing is off
+      return
+   end
+
+   * The report
+   user = 0
+   lptr = -1
+   nopage = @false
+   i = 1
+   n.words = dcount(words, ' ')
+   loop
+   while i <= n.words
+      w = field(words, ' ', i)
+      i += 1
+      begin case
+         case w = 'NO.PAGE'
+            nopage = @true
+         case w = 'USER'
+            v = field(words, ' ', i)
+            i += 1
+            if not(v matches '1N0N') or v = '0' then stop sysmsg(2018, v)         ;* Unexpected token (xx)
+            user = v + 0
+         case w = 'LPTR'
+            lptr = 0
+            v = field(words, ' ', i)
+            if v matches '1N0N' then
+               if v + 0 > 255 then stop sysmsg(2053)                               ;* Invalid print unit number
+               lptr = v + 0
+               i += 1
+            end
+         case 1
+            stop sysmsg(2018, w)
+      end case
+   repeat
+
+   path = @sdsys : @ds : 'locktrace'
+   openseq path to f else
+      @system.return.code = 0
+      crt sysmsg(12368)                                               ;* There is no lock trace
+      return
+   end
+
+   actions = 'Get RU':@fm:'Get RL':@fm:'RU->RL':@fm:'RL->RU':@fm:'Get FX':@fm:'Rel RX':@fm:'Rel FX'
+
+   if lptr = 0 then printer on
+   if nopage then page.state = kernel(K$PAGINATE, @false)
+   @system.return.code = 0
+
+   shown = 0
+   loop
+      readseq line from f else exit
+      if line = '' then continue
+      u = line<1,2> + 0
+      if user # 0 and u # user then continue
+      if shown = 0 then print on lptr sysmsg(12369)                 ;* Date and time ... Record id
+      e = line<1,1> + 0
+      act = line<1,5> + 0
+      code = if act >= 1 and act <= 7 then actions<act> else act
+      file = line<1,3>
+      if len(file) > 30 then file = '...' : file[len(file) - 26, 27]
+      rid = line<1,4>
+      if len(rid) > 30 then rid = rid[1, 27] : '...'
+      ln = line<1,8>
+      prog = line<1,6>
+      if index(prog, '/', 1) then prog = field(prog, '/', dcount(prog, '/'))      ;* the program's name, not the path of its object
+      if index(prog, '\', 1) then prog = field(prog, '\', dcount(prog, '\'))
+      d = mvdate(e)
+      day = oconv(d, 'D4Y') : '-' : fmt(oconv(d, 'DM'), '2"0"R') : '-' : fmt(oconv(d, 'DD'), '2"0"R')
+      print on lptr day : ' ' : oconv(mvtime(e), 'MTS') : ' ' : fmt(u, '5R') : ' ' : fmt(code, '7L') : ' ' : fmt(prog, '20L') : ' ' : fmt(ln, '6R') : ' ' : fmt(file, '30L') : ' ' : rid
+      shown += 1
+   repeat
+   close f
+
+   if shown = 0 then
+      if user # 0 then print on lptr sysmsg(12370, user) else print on lptr sysmsg(12371)   ;* no locks were logged for user %1 / No locks have been logged
+   end
+
+   if nopage then page.state = kernel(K$PAGINATE, page.state)
+   if lptr = 0 then printer close
+   return
+end
+
+* END-CODE

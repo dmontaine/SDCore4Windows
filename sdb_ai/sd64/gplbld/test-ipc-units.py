@@ -154,7 +154,7 @@ def run():
     row("K2b phantom_nonce_valid() refuses a length outside the two bounds and any character outside A-Z a-z 0-9 + / =",
         bool(fv) and "(len < PHANTOM_NONCE_MIN) || (len > PHANTOM_NONCE_MAX)" in fv and all(t in fv for t in ("'A'", "'Z'", "'a'", "'z'", "'0'", "'9'", "c == '+'", "c == '/'", "c == '='"))
         and fv.count("return FALSE") == 2 and "return TRUE" in fv, fv[:200])
-    cs = between(opk, "case K_PHANTOM_NONCE:", "case K_PROFILER:")      # 28 Oct 26 Windows port: K_LOCK_TRACE is not carried, the next case is K_PROFILER
+    cs = between(opk, "case K_PHANTOM_NONCE:", "case K_LOCK_TRACE")      # 13 Nov 26 Windows port: K_LOCK_TRACE is carried now (RELEASE_1.1 182), the next case as on Linux
     row("K3a 'S' empties the staged secret, then stages the text after it only if phantom_nonce_valid() says so", ordered(cs, "s[0] == 'S'", "phantom_nonce_next[0] = '\\0'", "phantom_nonce_valid(s + 1)", "strcpy(phantom_nonce_next, s + 1)"), cs[:200])
     row("K3b 'G' answers the secret this process was started with, for the argument 'G' alone", "(s[0] == 'G') && (s[1] == '\\0')" in cs and "k_put_c_string(phantom_nonce_mine, &result)" in cs)
     row("K3c the staged secret is never answered or printed: 5 mentions (declaration, 'S' twice, op_phantom twice) and no k_put_c_string of it",

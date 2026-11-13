@@ -333,10 +333,17 @@ build-api-identity:
 # which would otherwise compile this with the POSIX flags and fail.
 SVCDIR   := $(GPLSRC)sdsvc
 
+# 13 Nov 26 Windows port - RELEASE_1.1 247: the service is the audit trail's
+# writer, sdaudit.c beside it.  win32audit.c is the rotation sd.exe uses at
+# "sd -start"; it includes windows.h and no SD header, so it builds natively
+# here too - one copy of the rotation for both.  -luserenv for
+# GetAllUsersProfileDirectoryA (where sd.conf is).  stage.py's NATIVE_ONLY
+# still refuses an msys- import in sdsvc.exe.
 sdsvc:
 	@echo Building native service wrapper
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
-	    $(SVCDIR)/sdsvc.c -ladvapi32 -o $(GPLBIN)sdsvc.exe
+	    $(SVCDIR)/sdsvc.c $(SVCDIR)/sdaudit.c $(GPLSRC)win32audit.c \
+	    -ladvapi32 -luserenv -o $(GPLBIN)sdsvc.exe
 
 # 16 Sep 26 Windows port - RELEASE_1.1 43: THE API's TLS RELAY IS NATIVE, AND
 # FOR A REASON THAT IS MEASURED RATHER THAN CHOSEN.  sd starts one per

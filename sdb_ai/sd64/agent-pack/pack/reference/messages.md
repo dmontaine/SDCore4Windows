@@ -4580,6 +4580,78 @@ user number %1 is already in use
 
 cited by: `phantom`
 
+### msg:12364
+> kind=message tier=reference since=- src=sdsys/messages/12364:1#e892dc87
+
+```
+lock tracing is on
+```
+
+cited by: `locktracer`
+
+### msg:12365
+> kind=message tier=reference since=- src=sdsys/messages/12365:1#49e22c87
+
+```
+lock tracing is off
+```
+
+cited by: `locktracer`
+
+### msg:12366
+> kind=message tier=reference since=- src=sdsys/messages/12366:1#fa3aef26
+
+```
+lock tracing is for the administrator
+```
+
+cited by: `locktracer`
+
+### msg:12367
+> kind=message tier=reference since=- src=sdsys/messages/12367:1#53372c67
+
+```
+lock tracing could not be started
+```
+
+cited by: `locktracer`
+
+### msg:12368
+> kind=message tier=reference since=- src=sdsys/messages/12368:1#cd05b7aa
+
+```
+there is no lock trace: lock.tracer on starts one
+```
+
+cited by: `locktracer`
+
+### msg:12369
+> kind=message tier=reference since=- src=sdsys/messages/12369:1#5cb895f8
+
+```
+date       time     user  action  program                line file                           record id
+```
+
+cited by: `locktracer`
+
+### msg:12370
+> kind=message tier=reference since=- src=sdsys/messages/12370:1#46f096c1
+
+```
+no locks were logged for user %1
+```
+
+cited by: `locktracer`
+
+### msg:12371
+> kind=message tier=reference since=- src=sdsys/messages/12371:1#4fcfac2c
+
+```
+no locks have been logged
+```
+
+cited by: `locktracer`
+
 ### msg:12373
 > kind=message tier=reference since=- src=sdsys/messages/12373:1#30e1f172
 
@@ -11271,7 +11343,7 @@ cited by: `findfile`
 Unexpected token (%1)
 ```
 
-cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 59 more
+cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 60 more
 
 ### msg:2019
 > kind=message tier=reference since=- src=sdsys/messages/2019:1#a22e9c3b
@@ -11415,7 +11487,7 @@ cited by: `delete`
 Invalid print unit number
 ```
 
-cited by: `analyseidx`, `copylst`, `filestat`, `fstatuser`, `listi`, `listrdu`, `listtrg`, `listu` and 8 more
+cited by: `analyseidx`, `copylst`, `filestat`, `fstatuser`, `listi`, `listrdu`, `listtrg`, `listu` and 9 more
 
 ### msg:2054
 > kind=message tier=reference since=- src=sdsys/messages/2054:1#f14c4807

@@ -12,6 +12,27 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
              Does NOT    - Change anything for a session that starts normally. NOT YET TESTED ON
                            AN INSTALLED SYSTEM.
 
+13 Nov 26  THE SD SERVICE WRITES THE AUDIT TRAIL, AS ON LINUX.
+
+             What        - Each session hands its audit records to the SD service, which writes them
+                           to sdsys\audit with the Windows user and process id it sees for that
+                           session, so a session can no longer add a line that names somebody else.
+                           Its lines name the user as DOMAIN\name. One user's records past 600 in a
+                           minute are dropped and one line says how many. The trail is started
+                           anew at 1 MB while SD runs, not only when SD starts.
+             Does NOT    - Stop SD when the service is not running: the sessions then write the
+                           trail themselves, as before, and such a line names the user the session
+                           gives. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
+13 Nov 26  LOCK.TRACER, AS ON LINUX.
+
+             What        - LOCK.TRACER ON (administrator only) starts a trace of every lock taken
+                           or let go by every session, OFF stops it, and LOCK.TRACER {USER n}
+                           {LPTR {n}} {NO.PAGE} lists it. The trace is sdsys\locktrace, which only
+                           the administrator can read and only the SD service writes.
+             Does NOT    - Record anything while the SD service is not running. NOT YET TESTED ON
+                           AN INSTALLED SYSTEM.
+
 13 Nov 26  A DIRECTORY FILE LISTS EVERY RECORD ID AS IT WAS WRITTEN.
 
              What        - SELECT of a directory file gives back a record id holding a byte from 128
