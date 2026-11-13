@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - as Linux (RELEASE_1.1 251): an empty TMP is treated as unset, and TEMPDIR's default is copied with a bound.
  * 12 Nov 26 Windows port - from Linux 3d3890e3 (RELEASE_1.1 240 a): GRPSIZE's default is 4 (kb), for new files only; the shipped sd.conf says 4 too.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer
  *           strips the line from a kept sd.conf (sd.iss RemoveRetiredConf).
@@ -430,7 +431,7 @@ struct CONFIG* read_config(char* errmsg) {
 
   if (pcfg.tempdir[0] == '\0') {
     p = getenv("TMP");
-    strcpy(pcfg.tempdir, (p == NULL) ? "/tmp" : p);
+    snprintf(pcfg.tempdir, MAX_PATHNAME_LEN + 1, "%s", ((p == NULL) || (*p == '\0')) ? "/tmp" : p); /* 12 Nov 26: as Linux */
   }
 
   /* If the SORTWORK parameter has not been set, use TEMPDIR */

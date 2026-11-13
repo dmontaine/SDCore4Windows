@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - from Linux d049d8bb (RELEASE_1.1 250): op_capture() tracks the chunk before the last as such. `prev` was
+ *           set to every chunk in turn, so it was the last chunk itself; output that was a lone newline freed the emptied only
+ *           chunk while capture_head still pointed at it ("double free or corruption" on Linux).
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): $MODE STDFIL.SHARED is gone; stdfil_element(), stdfil_shared_save() and
  *           stdfil_shared_restore() are deleted.
  * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE EXECUTE.CLEARLIST is gone; flag 0x80 of EXECUTE (clear list 0 after STACKLIST kept its copy) is no longer used.
@@ -110,6 +113,7 @@ void op_capture() {
   /* Change all newlines to field marks */
 
   for (str = capture_head; str != NULL; str = str->next) {
+    prev = last; /* the chunk before this one (NULL for the first) */
     last = str;
     bytes = str->bytes;
     p = str->data;
@@ -118,7 +122,6 @@ void op_capture() {
       bytes -= q + 1 - p;
       p = q + 1;
     }
-    prev = str;
   }
 
   /* Remove last character if it is a field mark */

@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 248 (Core parity audit P-14 / Core-Solo C-01; Linux b6186ccb, S.64 part 2): vb.openseq opens a VOC,
+*           dictionary or program record, or an OS path holding one, read-only when the session's edit gates refuse it (K$EDIT.OK / K$EDIT.OS.OK).
 * 11 Nov 26 Windows port - from Linux 09008b69: request 72 is reserved for Solo's ssh-key request (a comment on the dispatch list only; Solo had used 49 for it since 30 Sep 26
 *               and the owner ruled that Solo follows this template, 49 being QMRevision here).  Core's next request is 73.
 * 8 Nov 26 Windows port - from Linux 7c910a16 (S.169): findings of a BASIC review.
@@ -3274,6 +3276,7 @@ if os.id = '' then
       error.msg = sysmsg(12350, os.name) ;* %1 is not a file this account may open
       return
    end
+   os.edit.ok = kernel(K$EDIT.OS.OK, os.name)   ;* 12 Nov 26 (RELEASE_1.1 248, Linux b6186ccb, S.64 part 2): see below
 end else
    os.path = @false
    open os.name to os.tf else
@@ -3281,6 +3284,7 @@ end else
       return
    end
    os.trusted = bitand(fileinfo(os.tf, FL$FLAGS), FL$FLAGS.TRUSTED)
+   os.edit.ok = kernel(K$EDIT.OK, fileinfo(os.tf, FL$PATH))   ;* 12 Nov 26 (RELEASE_1.1 248): asked of the file that is open, before it is closed
    close os.tf
    if os.trusted then
       server.error = SV$ELSE
@@ -3295,6 +3299,12 @@ begin case
    case bitand(os.modes, 512)  ; os.m = 3
    case bitand(os.modes, 256)  ; os.m = 2
 end case
+
+* 12 Nov 26 (RELEASE_1.1 248; Linux Core b6186ccb, S.64 part 2, as Solo has it).  This program is $internal, which the kernel's OPENSEQ test
+*   for a VOC, a dictionary or a program file lets through, so it is asked here: a pathname with such a file in it (K$EDIT.OS.OK), or a record
+*   of one (K$EDIT.OK on the file it is in), that the session may not change is opened for reading only, as the kernel opens it for a user
+*   program - nothing is made and nothing written (a write then takes the ELSE case).  Reading is not refused.
+if not(os.edit.ok) then os.m = 1
 
 loop
    os.lk = 0

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 251: SYS.* names for 12353 and 12360 (Linux 11348 and 11355), which are in use here now.
  * 12 Nov 26 Windows port - from Linux 814c5f07 (RELEASE_1.1 240 c): audit_message() writes a control character, DEL or an SD mark in its text as '?'.
  * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125, S.194): k_var_name()'s cols starts at 0; an array that
  *           does not hold the variable sets element back to -1, so a common-block variable found after it
@@ -251,8 +252,10 @@ Private const SYS_EXC sys_exc_table[] = {
     {12130, SE_DATATYPE "INVALID"},
     {12132, SE_FILESYS "INVALID_FILE_TYPE"},
     {12167, SE_LOCKS "LIMIT"},
-    /* 18 Oct 26 Windows port: Linux's 11348 (CREATING.SEQKEY needs a hashed file; the QMClient sitting) and 11355 (the public
-       FCONTROL's unknown action) are not carried, so neither has a row here: 12353 and 12360 are left unused. */
+    /* 12 Nov 26 (RELEASE_1.1 251): Linux's 11348 and 11355, carried since as 12353 (op_dio3.c, CREATING.SEQKEY needs a hashed file)
+       and 12360 (dh_misc.c, FCONTROL's unknown action).  The 18 Oct note here said neither was carried. */
+    {12353, SE_FILESYS "INVALID_FILE_TYPE"},
+    {12360, SE_PROGRAM "INVALID_KEY"},
     {12403, SE_DATATYPE "NOT_SORT"},
     {12404, SE_SORT "INVALID_OPERATION"},
 };

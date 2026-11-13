@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 12 Nov 26 Windows port - from Linux 413312f3 (RELEASE_1.1 251): get_ak_node() checks the chsize64() that makes room for a new node.
  * 12 Nov 26 Windows port - from Linux 3d3890e3 (25 Oct 26; RELEASE_1.1 240 b): a right justified index made now has the magic DH_INDEX2 and the flag AK_V2,
  *           and its keys are in one total order (the empty key, numbers by value with decimals and up to 15 digits, then text: ak_key_class(),
  *           compare() with AKJ_TOTAL).  An index made before keeps the old comparator (AKJ_RIGHT); a left justified one is unchanged.  Only the
@@ -3123,7 +3124,13 @@ Private int32_t get_ak_node(DH_FILE *dh_file, int16_t subfile) {
     file_bytes = filelength64(dh_file->sf[subfile].fu);
     new_node_num = (int32_t)((file_bytes - dh_file->ak_header_bytes) / DH_AK_NODE_SIZE + 1);
 
-    chsize64(dh_file->sf[subfile].fu, file_bytes + DH_AK_NODE_SIZE);
+    /* 12 Nov 26 (RELEASE_1.1 251, from Linux 413312f3): the truncate that makes room for the node just computed was unchecked, so a full
+       disk or an I/O error handed the caller a node number past the end of the file.  chsize64() returns non-zero on failure (op_seqio.c). */
+    if (chsize64(dh_file->sf[subfile].fu, file_bytes + DH_AK_NODE_SIZE)) {
+      dh_err = DHE_AK_WRITE_ERROR;
+      new_node_num = 0;
+      goto exit_get_ak_node;
+    }
   } else {
     new_node_num = GetAKFwdLink(dh_file, ak_header->free_chain);
     if (!dh_read_group(dh_file, subfile, new_node_num, (char *)&ak_node, DH_FREE_NODE_SIZE)) {

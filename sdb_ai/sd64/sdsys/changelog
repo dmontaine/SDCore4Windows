@@ -3,6 +3,17 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+12 Nov 26  SMALL FIXES CARRIED FROM SD CORE FOR LINUX.
+
+             What        - An API client's OPENSEQ of a VOC, dictionary or program record that the account may not change
+                           now opens it for reading only, as a BASIC program's does. EXECUTE ... CAPTURING of a command
+                           whose whole output is one newline no longer risks a crash. A failure to extend an index file
+                           is reported instead of being ignored. A process dump is created readable by its owner only,
+                           and a failure to create it names the file and the reason. TRY ... CATCH gives the
+                           CREATING.SEQKEY and FCONTROL errors their SYS.* names. An empty TMP setting is treated as
+                           unset.
+             Does NOT    - Change anything else. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 12 Nov 26  SD ALWAYS RUNS IN A WINDOW OF ITS OWN.
 
              What        - Typing sd at a PowerShell or cmd prompt now opens SD in its own window, as a Windows

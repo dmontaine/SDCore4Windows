@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 12 Nov 26 Windows port - as Linux (RELEASE_1.1 251): saved_status is int32_t, as process.status is; an int16_t cut a large STATUS() value.
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): txn_rollback_to(): an exception thrown out of a TRY clause rolls back the
  *           transactions begun inside it (op_jumps.c exc_raise(), QM4 Fixes 354).
  * 18 Oct 26 Windows port - from Linux 084ff8a (12 Oct 26): txn_file_updated() (FILEINFO FL$TXN.UPDATE) and txn_cache_report()
@@ -1171,7 +1172,7 @@ Private void capture_undo(FILE_VAR* fvar, char* id, int16_t id_len) {
   char msg[MAX_PATHNAME_LEN + MAX_ID_LEN + 80];
   int bytes;
 
-  int16_t saved_status = process.status;
+  int32_t saved_status = process.status; /* 12 Nov 26: process.status is int32_t (kernel.h) */
   int32_t saved_os_error = process.os_error;
   int16_t saved_dh_err = dh_err;
 
