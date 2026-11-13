@@ -10,7 +10,6 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            exactly as written. It was listed with three other bytes in its place, so
                            the id READNEXT returned did not match the one written.
              Does NOT    - Change the file names already on disk, or ids that are plain text or UTF-8.
-                           NOT YET TESTED ON AN INSTALLED SYSTEM.
 
 13 Nov 26  ACCOUNT RULES MADE THE SAME AS ON LINUX.
 
