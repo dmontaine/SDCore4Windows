@@ -3,6 +3,19 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  FCONTROL DOES FORCED WRITES AND LINE TERMINATOR MODES, AS ON LINUX.
+
+             What        - FCONTROL(f, FC$SYNC, 1 or 0) turns forced writes on or off for a hashed
+                           file already open, and FCONTROL(f, FC$CRLF, 0 to 3) sets the line
+                           terminator mode of an open directory or sequential file; each returns
+                           the setting it had, and -1 only asks. Until now both stopped the
+                           program with a message. keys.h also defines FC$CRLF.NO.CR.
+             Does NOT    - Change a file that never asks: one with no mode set still reads and
+                           writes as it always has here (CR LF written). FC$CRLF reports 0 for
+                           such a directory file and 2 for such a sequential file, as SD Core for
+                           Linux does, although neither is exactly what this port does. NOT YET
+                           TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  OPENTEMP, AND SD IS BUILT OPTIMISED, AS ON LINUX.
 
              What        - OPENTEMP {pathname} {NON.TRANSACTIONAL} TO file.var makes a dynamic file

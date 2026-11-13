@@ -34,8 +34,8 @@
         'lock-b6'      = 'sets DEADLOCK=2 NUMLOCKS=10 in sd.conf and restarts the daemon, then stops "SD NOT STARTED" when it sees no change; the installed service does not read the box copy'
         # Encryption layers 2 and 3 (RELEASE_1.1 168).  READ from the suite on 20 Oct 2026, not run: it stops before its first row.
         'crypt'        = 'READ, not run: bails when ctypes.util.find_library("sodium") finds no libsodium (MSYS2 has cygsodium-26.dll, which native Python cannot load), and part 2 loads sandbox-stmt-q3.py (SDSYS sessions, fixture accounts); owed a Windows-native layer 2 and 3 check (RELEASE_1.1 168)'
-        # The public FCONTROL is carried (284a91cd, 25 Oct 26) and its suite fcontrol runs (the entry was left stale until 11 Nov 26); Windows has no line terminator modes.
-        'crlf'         = 'FC$CRLF and the letters of the line terminator modes are not in Windows SD: the public FCONTROL refuses actions 1 and 4 with message 12359'
+        # 13 Nov 26 (RELEASE_1.1 236): crlf is no longer excused.  The public FCONTROL answers FC$SYNC and FC$CRLF as Linux's does
+        # (pub_fcontrol carried whole); the line terminator modes and their letters were already in the kernel (crlf_from_vflags).
         # A job sent to the Windows default printer: SETPTR mode 1 or 6 here is Out-Printer on a real, paper-printing printer.
         # Found 18 Oct 2026 when the owner's printer printed pages saying "hello" (option-q17, two jobs per run) and "line one"
         # (oq2, one job per run).  Linux's sandbox has no printer.  They stay out until a null printer exists to point them at.
@@ -124,12 +124,6 @@
         }
         'fix-b10' = @{
             '545: the adds4000-at entry'          = 'the -at terminfo entries (the AccuTerm types) were removed by RELEASE_1.1 139, area 6c: there is no adds4000-at entry on purpose (measured 19 Oct: "no entry")'
-        }
-        'fcontrol' = @{
-            'FC$SYNC true returns the previous state' = 'Windows SD has no FC$SYNC (Linux made it work 16 Oct 26, QM4 Fixes 102): the public FCONTROL stops the program with 12359; measured on Solo 11 Nov, same code here; RELEASE_1.1 236'
-            '-1 asks without changing: 1'             = 'the FC$SYNC leg: see the row above (RELEASE_1.1 236)'
-            'false returns the previous state, 1'     = 'the FC$SYNC leg: see the row above (RELEASE_1.1 236)'
-            'THE ROW: FC$CRLF on a hashed file'       = 'Windows SD has no line terminator modes: FC$CRLF stops the program with 12359 (RELEASE_1.1 236)'
         }
         'sys-b2' = @{
             '1035 is the Unix epoch now'          = 'the probe wants SD started less than two hours ago (SYSTEM(1045)); the service had been up over three hours, and the zone half of the row passes (measured 26 Oct, guest: got 01). Passes on a freshly started service.'

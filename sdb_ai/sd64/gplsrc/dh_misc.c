@@ -22,6 +22,12 @@
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): op_settrig() and the actions of op_fcontrol() that change a setting of the file refuse a
  *           file in the shared account with message 12519 (Linux 11514) for anyone but the administrator, a $internal program included
  *           (shared_structure_refusal).  Windows had no pub_fcontrol when this was carried (it came later, with 400500c), and has no FC$SYNC / FC$CRLF / FC$MINMOD, so Linux's hunk for those is not carried.
+ * 13 Nov 26 Windows port - from Linux 7aba47df (QM4 Fixes 102) and f0af637c (452), RELEASE_1.1 236: pub_fcontrol() answers FC$SYNC
+ *           (DHF_SYNC on a hashed file) and FC$CRLF (the mode of a directory or sequential file) as Linux's does, in place of message
+ *           12359; and Linux's S.66 hunk (fc4030a) now has its place: 1, 4 and 7 refuse a change to a file in the shared account.
+ *           The machinery they set was already here (DHF_SYNC in dh_file.c, the crlf modes in op_dio3.c and op_seqio.c).  One
+ *           difference stays: a file with no mode set behaves as this port always has (CR LF written), which is none of the four
+ *           modes, and FC$CRLF reports Linux's number for it (0, or 2 for a sequential file); RELEASE_1.1 271 asks the owner.
  * 17 Oct 26 Windows port - from Linux e7ea5f8 - S.65 slice 3c: op_fcontrol() and pub_fcontrol() refuse a NET_FILE (net_refuse)
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - pub_fcontrol(): the public FCONTROL() with openQM's action numbers (op_fcontrol is FCONTROL.INT).
  * 15 Oct 26 Windows port - from Linux e7ea5f8 - Audit of the sequential id counter (CREATING.SEQKEY): dh_seq_key() writes only the counter's four bytes and
@@ -366,8 +372,9 @@ exit_op_fcontrol:
                     action
                     file variable                                   -> the result
 
-      1 FC$SYNC     forced writes     \  SD has neither: the program is stopped with a message, never answered as if it
-      4 FC$CRLF     line terminators  /  had worked
+      1 FC$SYNC     qualifier 0 / 1 / -1   forced writes of a hashed file; the state it was in (QM4 Fixes item 102)
+      4 FC$CRLF     qualifier 0 to 3 / -1  line terminator mode of a directory or sequential file; the mode it was in
+                    (QM4 Fixes item 452; a hashed file: STATUS() ER_NDIR; a mode outside 0 to 3: ER_ARGS, nothing changed)
       2 FC$SET.SEQ.KEY  qualifier n   sets the next id of WRITE ... CREATING.SEQKEY (a hashed file); 1 if done
       3 FC$GET.SEQ.KEY                takes that id and moves the counter on; a null string if the file is not hashed
       5 field access                  always 1 (SD has no field level encryption)
@@ -429,11 +436,65 @@ void pub_fcontrol() {
   descr = e_stack - 1;
   k_get_value(descr);
 
+  /* 18 Oct 26 S.66: FC$SYNC, FC$CRLF and FC$MINMOD CHANGE the file's setting when the qualifier sets (-1 only asks); for a file in the
+     shared account that is a structure change, SDSYS's alone ($internal is not exempt).  Refused before anything is changed.  2, 3, 5 and 6
+     (the sequential key counter, the field access test, the valid id test) are record level and are left alone. */
+  if (((action == 1) || (action == 4) || (action == 7)) && (shared_structure_refusal(fvar) != EDIT_NONE)) {
+    GetInt(descr); /* the cases below convert it the same way */
+    if (descr->data.value != -1)
+      k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
+  }
+
   switch (action) {
-    case 1: /* FC$SYNC */
-    case 4: /* FC$CRLF */
-      k_error(sysmsg(12359)); /* does not return */
+    case 1: /* FC$SYNC: forced writes of a hashed file (QM4 Fixes item 102).  The previous state is the result; -1 asks only. */
+      if (fvar->type != DYNAMIC_FILE) {
+        process.status = ER_NDYN;
+        break;
+      }
+      GetInt(descr);
+      n = descr->data.value;
+      result.data.value = ((dh_file->flags & DHF_SYNC) != 0);
+      if (n >= 0) {
+        if (n != 0)
+          dh_file->flags |= DHF_SYNC;
+        else
+          dh_file->flags &= ~DHF_SYNC;
+      }
       break;
+
+    case 4: /* FC$CRLF: the line terminator mode of a directory file or a sequential file (16 Oct 26, QM4 Fixes item 452) */
+    {
+      u_char *crlf;
+      int dflt;
+
+      if (fvar->type == DIRECTORY_FILE) {
+        /* the bit field cannot be pointed at: work on a copy and put it back */
+        dflt = 0; /* LF: what a directory file READ and WRITE have always done */
+        n = fvar->access.dir.crlf;
+        crlf = NULL;
+      } else if ((fvar->type == SEQ_FILE) && (fvar->access.seq.sq_file != NULL)) {
+        dflt = 2; /* BOTH: READSEQ has always ended a line at LF and dropped a CR in front of it */
+        crlf = &(fvar->access.seq.sq_file->crlf);
+        n = *crlf;
+      } else {
+        process.status = ER_NDIR; /* a hashed file has no line terminators */
+        break;
+      }
+      result.data.value = (n == CRLF_UNSET) ? dflt : (n - 1); /* the mode it was in */
+
+      GetInt(descr);
+      if (descr->data.value == -1) /* only asking */
+        break;
+      if ((descr->data.value < 0) || (descr->data.value > 3)) {
+        process.status = ER_ARGS;
+        break;
+      }
+      n = (int32_t)descr->data.value + 1; /* FC$CRLF.LF 0 .. FC$CRLF.NOCR 3 are CRLF_LF .. CRLF_NOCR less one */
+      if (crlf != NULL)
+        *crlf = (u_char)n;
+      else
+        fvar->access.dir.crlf = (u_int16_t)n;
+    } break;
 
     case 2: /* FC$SET.SEQ.KEY */
     case 7: /* FC$MINMOD */
