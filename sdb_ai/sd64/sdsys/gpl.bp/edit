@@ -15,6 +15,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-03; Linux S.64, 17 Oct): the record's file is asked (!edit_guard) before the editor is
+*           started; an account without voc.edit, bp.edit or dict.edit could change a VOC record, a program or a dictionary with EDIT or MICRO.
 * 06 Oct 26 Windows port - RELEASE_1.1 127.  The working-copy path, the editor's
 *           path and micro's configuration home are put into the PowerShell
 *           command with every single quote doubled; a record id or a profile
@@ -153,6 +155,8 @@ $catalog $EDIT
 
 $include syscom keys.h
 $include int$keys.h
+
+   deffun edit_guard(f) calling '!edit_guard'   ;* 12 Nov 26, RELEASE_1.1 263 (Linux S.64)
 
    q            = char(39)          ;* single quote, as ELEVATE builds its own
    ds           = @ds
@@ -791,6 +795,13 @@ return
 * ---------------------------------------------------------------------------
 open.files:
    open dict.text, in.file.name to input.file then
+* 12 Nov 26 (RELEASE_1.1 263; Linux S.64, 17 Oct): an editor that saves into a VOC, a dictionary or a program file needs the gate.  This
+*   program is $internal, which the kernel's write test lets through, so it asks !edit_guard (which says why) BEFORE the editor is started,
+*   so the person does not edit and then lose the work at the save.
+      if not(edit_guard(input.file)) then
+         error.text = trim(dict.text : ' ' : in.file.name) : ' cannot be changed from this account.'
+         return
+      end
       open temp.file.name to temp.file then
          files.opened = @true
       end else

@@ -11,7 +11,10 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            is reported instead of being ignored. A process dump is created readable by its owner only,
                            and a failure to create it names the file and the reason. TRY ... CATCH gives the
                            CREATING.SEQKEY and FCONTROL errors their SYS.* names. An empty TMP setting is treated as
-                           unset.
+                           unset. EDIT and MICRO refuse, before the editor starts, a VOC record, program or dictionary
+                           the account may not change. DIGEST of a file outside the account needs the account's OS
+                           access, as every other OS path does. An API client's WRITE ... CREATING.SEQKEY asks the same
+                           edit gates as its other writes.
              Does NOT    - Change anything else. NOT YET TESTED ON AN INSTALLED SYSTEM.
 
 12 Nov 26  SD ALWAYS RUNS IN A WINDOW OF ITS OWN.

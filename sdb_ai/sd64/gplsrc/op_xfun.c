@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 263: DIGEST of a file asks os_path_open_ok() for every session, as Linux and SD Core Solo (the S.63 gate came 23 Oct).
  * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): XF_OSPATH 31, OSPATH() for a program that is not internal, now carried (the 18 Oct
  *           line below held it for the S.63 gate, which this tree has since 23 Oct).  The function is pub_ospath() in op_dio2.c, beside the
  *           internal OSPATH, with Windows path rules.  The 16 Oct to 19 Oct lines that name x_ospath() describe Linux's code, never this tree's.
@@ -400,11 +401,17 @@ Private int32_t x_signal(int32_t uid) {
    on this port is contained only for a network session (net_path_permitted() in op_dio2.c; a local session is limited by
    Windows itself), so DIGEST of a file asks the same and nothing more.  An $internal program is exempt, as for OPENSEQ.  */
 
+/* 12 Nov 26 (RELEASE_1.1 263, parity re-audit N-01).  The note above is out of date: the S.63 gate was carried on 23 Oct (op_dio2.c).
+   DIGEST of an operating system file is an OS path and asks it as Linux and SD Core Solo do: an account without OS access reaches only
+   its own directory.  The network containment below stays for an API session.                                                       */
+
 Private bool digest_path_ok(char* name) {
   char resolved[MAX_PATHNAME_LEN + 1];
 
   if (process.program.flags & HDR_INTERNAL)
     return TRUE;
+  if (!os_path_open_ok(name))
+    return FALSE;
   if (connection_type != CN_SOCKET)
     return TRUE;
   if (!fullpath(resolved, name))

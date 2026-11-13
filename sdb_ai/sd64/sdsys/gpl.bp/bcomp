@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-05): after 15072 the include search is marked reported, as Linux, so no second error follows.
 * 12 Nov 26 Windows port - from Linux 7aba47d (RELEASE_1.1 241): OSPATH() in a program that is not internal compiles to XF_OSPATH 31 (pub_ospath).
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): in a compile RUN.IN started (ri.active), $INCLUDE / INCLUDE, $DICT and FILE refuse a file
 *               that lies outside the account's own directory and is not SYSCOM (message 15072, Linux 14072; routine ri.outside).  The compiler is $internal,
@@ -3464,6 +3465,7 @@ open.include.record:
       incl.file = 0
       err.msg = sysmsg(15072, include.file.name) ;* %1 is outside the account: a compile started by run.in reads include records and dictionaries in the account and syscom only
       gosub error
+      search.reported = @true      ;* 12 Nov 26 (RELEASE_1.1 263, as Linux bcomp:3400): this refusal is the report; no "not found" after it
       return
    end
 
