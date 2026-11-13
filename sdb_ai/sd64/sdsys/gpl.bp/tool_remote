@@ -5,6 +5,10 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202: the sixth view is back, as Linux's (S.95, S.106), for the remote administration account SDRADMIN:
+*               REMOTE.SDSYS with no keyword through the routine (remote-admin.ps1 -Status, one line per wall), O = REMOTE.SDSYS ON after a box
+*               wanting OPEN and F = REMOTE.SDSYS OFF after a box.  OS deviation: O gives the TERMINAL to the verb (as A does REMOTE.API),
+*               because the first ON makes the account and asks its Windows password twice; F runs through the routine, as Linux's.
 * 12 Nov 26 Windows port - RELEASE_1.1 243: the status line says "Reading the setting" while the two reports run (as SD Core Solo), and the verbs' own
 *           wait line is taken off the captured report.
 * 10 Nov 26 Windows port - from Linux (S.75 A9, df48c780, and its later changes to S.186 ad4a2cf6; RELEASE_1.1 228), agreed with Linux by mail 2026-11-11T0630.  Five views,
@@ -31,7 +35,7 @@
 *
 *   TOOL.REMOTE      (SDSYS's VOC only; the audience is the administrator, asked of the kernel before anything is read)
 *
-*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), of five views, chosen with the keys 1 to 5:
+*   A full-screen page, in the toolkit's frame (140 columns by 43 lines at least), of six views, chosen with the keys 1 to 6:
 *     1  the doors     REMOTE.API and REMOTE.SSH with no keyword, which report what the machine says (sd.conf's APIPORT and the firewall rules read back, not an intention): the list
 *                      is their words.  A changes the API (ON, LOCAL or OFF): after its box the terminal is given to REMOTE.API, which asks whether to restart SD when the listener
 *                      moves to or from OFF.  S changes ssh (ON or OFF) through the routine.  ON lets other computers in, so either box wants the word OPEN typed.
@@ -42,11 +46,13 @@
 *                      CONNECT step shows the key the server presents and asks whether to trust it.
 *     4  connected     every session now, by the door it came through: the user number, the kind (user, api, sdnet, phantom), the login user, the account and where it came from.
 *     5  TLS           this machine's own TLS identity as SETTINGS.REPORT gives it: the certificate fields and the public-key hash another SD server pins.  Never the private key.
+*     6  remote admin  REMOTE.SDSYS with no keyword: whether SDRADMIN may sign in over ssh, wall by wall.  O opens it (the terminal is given to REMOTE.SDSYS ON,
+*                      which makes the account and asks its password the first time) and F shuts it, each after a box, O's wanting the word OPEN.
 *   Keys: Up, Down, PgUp, PgDn, Home, End; F5 reads again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
 *
 *   WHAT IT RUNS.  Each change only after its box was answered Run (Cancel is what Enter chooses): REMOTE.API and REMOTE.SSH with no keyword through the routine (to report);
 *   REMOTE.SSH ON or OFF and DELETE.SERVER through the routine; REMOTE.API ON, LOCAL or OFF and SET.SERVER on the terminal, given to the verb.  LIST.SERVERS is not run (the file
-*   is read with !netdefs).  The verbs ask for the administrator again and write their own audit lines.  The page writes nothing itself.
+*   is read with !netdefs).  REMOTE.SDSYS with no keyword and OFF through the routine; REMOTE.SDSYS ON on the terminal.  The verbs ask for the administrator again and write their own audit lines.  The page writes nothing itself.
 *
 * END-DESCRIPTION
 *
@@ -64,7 +70,7 @@ $include tk.h
 
    prompt ''
 
-   allow = 'remote.api remote.ssh delete.server'   ;* the commands this page may run through the routine (remote.api only to report; a change of it and set.server go to the verb on the terminal)
+   allow = 'remote.api remote.ssh delete.server remote.sdsys'   ;* the commands this page may run through the routine (remote.api only to report; a change of it, remote.sdsys on and set.server go to the verb on the terminal)
    call $tk_open('tool.remote', 'admin', ctx, err)
    if err # '' then
       display err
@@ -79,10 +85,13 @@ $include tk.h
    call $tk_keys('add', keys, '3', 'servers', 'servers', '', 1)
    call $tk_keys('add', keys, '4', 'connected', 'connected', '', 1)
    call $tk_keys('add', keys, '5', 'tls', 'tls', '', 1)
+   call $tk_keys('add', keys, '6', 'remote admin', 'login', '', 1)
    call $tk_keys('add', keys, 'a', 'api', 'api', 'Doors', 1)
    call $tk_keys('add', keys, 's', 'ssh', 'ssh', 'Doors', 1)
    call $tk_keys('add', keys, 'x', 'delete', 'delete', 'Servers', 1)
    call $tk_keys('add', keys, 'n', 'new', 'new', 'Servers', 1)
+   call $tk_keys('add', keys, 'o', 'open', 'sdsyson', 'Login', 1)
+   call $tk_keys('add', keys, 'f', 'shut', 'sdsysoff', 'Login', 1)
    call $tk_keys('add', keys, 'f5', 'read', 'refresh', '', 1)
    call $tk_keys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
    call $tk_keys('add', keys, 'esc', 'menu', 'menu', '', 1)                ;* S.88 U4: Esc goes back to the doors view first, else opens the menu bar
@@ -91,29 +100,33 @@ $include tk.h
    call $tk_keys('menu', keys, 'ssh', '&Door', '&Ssh door on or off', '', '')
    call $tk_keys('menu', keys, 'delete', '&Server', '&Delete the server', '', '')
    call $tk_keys('menu', keys, 'new', '&Server', '&New server', '', '')
+   call $tk_keys('menu', keys, 'sdsyson', '&Login', '&Open remote administration', '', '')
+   call $tk_keys('menu', keys, 'sdsysoff', '&Login', '&Shut remote administration', '', '')
    call $tk_keys('menu', keys, 'doors', '&View', '&Doors', '', '')
    call $tk_keys('menu', keys, 'routes', '&View', '&Routes', '', '')
    call $tk_keys('menu', keys, 'servers', '&View', '&Servers', '', '')
    call $tk_keys('menu', keys, 'connected', '&View', '&Connected', '', '')
    call $tk_keys('menu', keys, 'tls', '&View', '&TLS', '', '')
+   call $tk_keys('menu', keys, 'login', '&View', 'Remote &admin', '', '')
    call $tk_keys('menu', keys, 'refresh', '&View', 'Re&fresh', '', '')
    call $tk_keys('menu', keys, 'help', '&Help', '&Help on this page', '', '')
    call $tk_std('keys', ctx, keys, '', '')                ;* S.179: Ctrl-T theme, Ctrl-K keys and their View and Help entries, as on every page
-   panes = 'Doors' : @fm : 'Routes' : @fm : 'Servers' : @fm : 'Connected' : @fm : 'TLS'
-   * S.97 stage 2 (group B): the AI line.  The page offers the AI only its five views and refresh (opening or closing ssh or the API, a new server and deleting one are
+   panes = 'Doors' : @fm : 'Routes' : @fm : 'Servers' : @fm : 'Connected' : @fm : 'TLS' : @fm : 'Login'
+   * S.97 stage 2 (group B): the AI line.  The page offers the AI only its six views and refresh (opening or closing ssh or the API, a new server and deleting one are
    * NOT offered without the owner's word); a proposal is carried out by the page's own key.  Where the AI is not usable nothing here adds a key, a row or a line.
    call $tk_keys('ai', keys, 'doors', '', '', '', '')
    call $tk_keys('ai', keys, 'routes', '', '', '', '')
    call $tk_keys('ai', keys, 'servers', '', '', '', '')
    call $tk_keys('ai', keys, 'connected', '', '', '', '')
    call $tk_keys('ai', keys, 'tls', '', '', '', '')
+   call $tk_keys('ai', keys, 'login', '', '', '', '')
    call $tk_keys('ai', keys, 'refresh', '', '', '', '')
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
    gosub lay.declare                                            ;* the panes; VR (the list rows on the screen) and DV (the explanation rows) come from them
    view = 1
    rowtxt = '' ; nrows = 0 ; hdr = ''
-   api.out = '' ; ssh.out = ''
+   api.out = '' ; ssh.out = '' ; sd.out = ''
    defs = '' ; nsrv = 0
    udata = '' ; nsess = 0
    unames = '' ; nu = 0
@@ -187,6 +200,9 @@ read.all:
    cmd = 'remote.ssh'
    gosub run.report
    ssh.out = rep
+   cmd = 'remote.sdsys'
+   gosub run.report
+   sd.out = rep
    call !netdefs('READ', defs, nderr)
    if nderr # '' then defs = ''
    nsrv = dcount(defs, @fm)
@@ -293,6 +309,11 @@ build.rows:
             gosub session.line
             rowtxt<-1> = sline
          next i
+      case view = 6
+         hdr = 'What the machine says (REMOTE.SDSYS, with no keyword)'
+         for i = 1 to dcount(sd.out, @fm)
+            if trim(sd.out<i>) # '' then rowtxt<-1> = sd.out<i>
+         next i
       case 1
          hdr = 'The certificate and public-key lines of SETTINGS.REPORT [api]; the private key is never read'
          for i = 1 to dcount(tls.lines, @fm)
@@ -396,6 +417,7 @@ draw.all:
    if view = 3 then t.list = 'SDNet servers'
    if view = 4 then t.list = 'Connected now'
    if view = 5 then t.list = 'TLS identity of this machine'
+   if view = 6 then t.list = 'Remote administration over ssh (SDRADMIN)'
    screen box at lst.x,lst.y size lst.w,lst.h title t.list
    screen box at det.x,det.y size det.w,det.h title 'About this view'
    gosub draw.top
@@ -411,7 +433,7 @@ draw.top:
    screen text s[1, tw] at tx,top.y + 2 width tw
    s = nsrv : ' SDNet server' : (if nsrv = 1 then '' else 's') : ' defined.   ' : nu : ' user account' : (if nu = 1 then '' else 's') : '.   ' : nsess : ' session' : (if nsess = 1 then '' else 's') : ' now.'
    screen text s at tx,top.y + 3 width tw
-   screen text '1 doors  2 routes  3 servers  4 connected  5 TLS   doors: A api, S ssh  servers: X delete, N new' at tx,top.y + 4 width tw
+   screen text '1 doors  2 routes  3 servers  4 connected  5 TLS  6 remote admin   doors: A api, S ssh  servers: X delete, N new  remote admin: O open, F shut' at tx,top.y + 4 width tw
    call $tk_help('mark', mk.x, mk.y, 0, 0)
    return
 
@@ -430,7 +452,7 @@ draw.list:
       s = ''
       if kk <= nrows then s = rowtxt<kk>
       rat = 'normal'
-      if kk = ci and kk <= nrows and view # 1 and view # 5 then rat = 'highlight'
+      if kk = ci and kk <= nrows and view # 1 and view # 5 and view # 6 then rat = 'highlight'
       screen text s[1, tw] at tx,lst.y + 1 + r attr rat width tw
    next r
    return
@@ -477,6 +499,11 @@ draw.detail:
             end case
          next k
          lines<-1> = k.user : ' user, ' : k.api : ' api, ' : k.sdnet : ' sdnet, ' : k.ph : ' phantom.'
+      case view = 6
+         lines<-1> = 'SDRADMIN may sign in over ssh only when the administrator opens that door, with its password, into a fixed list of account commands; it is never a Windows administrator. It is shut as delivered.'
+         lines<-1> = 'Each line is one wall: the account enabled, SDRADMIN in sdssh, the sshd arm, the broker task, the state LOGIN reads. All five open is open; all shut is closed; a mix is inconsistent and names the odd ones.'
+         lines<-1> = 'O opens the door (REMOTE.SDSYS ON) after a box that wants the word OPEN typed: the terminal is given to the verb, which makes SDRADMIN and asks its password the first time. Open it only on a machine whose SDRADMIN password is long and used nowhere else.'
+         lines<-1> = 'F shuts the door again (REMOTE.SDSYS OFF) and logs SDRADMIN out. An elevated administrator can do the same from any prompt: remote-admin.ps1 -On or -Off in the SD program folder.'
       case 1
          lines<-1> = 'The certificate the API presents, and the hash of its public key: that hash is what another SD server pins in its definition of this machine (SET.SERVER ... pin).'
          lines<-1> = 'Give the public-key hash to the administrator of the other machine by a way you trust. The certificate fingerprint changes when it is renewed; the public-key hash does not.'
@@ -522,7 +549,7 @@ on.key:
          ci = nrows
          if ci < 1 then ci = 1
          gosub redraw
-      case nm >= '1' and nm <= '5' and len(nm) = 1
+      case nm >= '1' and nm <= '6' and len(nm) = 1
          view = nm + 0
          ci = 1 ; ta = 0
          gosub build.rows
@@ -535,6 +562,8 @@ on.key:
          gosub do.delete
       case nm = 'n' and view = 3
          gosub do.new
+      case (nm = 'o' or nm = 'f') and view = 6
+         gosub do.sdsys
       case nm = 'ctrl-t'                    ;* S.179: the theme, kept for the person - the same on every page ($tk_std)
          call $tk_std('theme', ctx, keys, '', std.r)
          if std.r<1> then gosub draw.all
@@ -705,6 +734,24 @@ do.ssh:
    end
    el<-1> = 'This scopes the firewall rule and never stops or removes the ssh server (SSH.SERVER REMOVE does that). Where there is no ssh server the verb refuses and says so. It takes effect at once.'
    gosub confirm.and.run
+   return
+
+* O and F on the remote administration view (RELEASE_1.1 202; Linux S.95 stage 1b, S.106).  The words are fixed here, never typed.  O, which loosens,
+* wants OPEN typed and gives the terminal to the verb (the first ON makes SDRADMIN and asks its Windows password twice); F runs through the routine.
+do.sdsys:
+   typed = ''
+   el = ''
+   if nm = 'o' then
+      sent = 'remote.sdsys on'
+      typed = 'OPEN'
+      el<-1> = 'sshd is opened for SDRADMIN: it can then sign in from other computers with its password, with no forwarding, into a fixed list of account commands.'
+      el<-1> = 'Nothing but that password stands between the network and those commands: creating, changing and deleting SD accounts. The terminal is given to REMOTE.SDSYS ON, which asks the password the first time. Shut again with F.'
+      gosub confirm.and.hand.over
+   end else
+      sent = 'remote.sdsys off'
+      el<-1> = 'sshd is shut to SDRADMIN, the account is disabled and taken out of sdssh, the broker stops, and every SDRADMIN session is logged out, as delivered.'
+      gosub confirm.and.run
+   end
    return
 
 * X: forget the server under the cursor

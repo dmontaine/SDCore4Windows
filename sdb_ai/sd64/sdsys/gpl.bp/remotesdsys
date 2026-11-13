@@ -1,0 +1,404 @@
+* REMOTESDSYS
+* REMOTE.SDSYS verb
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202: carried from Linux (S.95 stage 1b, S.101, S.106) in the Windows form of
+*              .claude/design-remote-admin-20261113.md and the owner's answers of 13 Nov 2026 (Linux parity unless the OS forbids).  ON | OFF
+*              open and shut ssh for a SEPARATE account, SDRADMIN, not for SDSYS: SDSYS is an elevated Windows administrator, and its password
+*              over the network would be the machine's (OS reason).  ON makes SDRADMIN the first time (CREATE.ACCOUNT's own body, the Windows
+*              password asked twice here) and then runs remote-admin.ps1 -On; OFF runs -Off and logs every SDRADMIN session out.  The helper is
+*              remote-admin.ps1 through SDSYS's elevated helper, in place of "sudo -n sd-elevate sdsys-ssh".  Windows additions: AUDIT {n} and
+*              ACCOUNTS (the remote session has no shell to read them with), and RUN, the broker's job (sd-radmin.ps1): one listed account
+*              command with its password, if any, read from standard input and given to the verb through the DATA queue.
+*              Messages are Linux's + 1005 (11923 -> 12928, 11924 -> 12929), naming SDRADMIN, except 11929, whose slot 12934 the AI took the
+*              same day (RELEASE_1.1 246): it is 12601, a hole whose Linux id (11596) Linux does not use.
+* 1 Nov 26 dm  New.  S.95 stage 1b: the administrator's way, at a plain terminal, to set up the authenticator code the sdsys login over ssh asks for,
+*              to get new recovery codes and to switch the code off.  TOOL.REMOTE's sixth view hands the terminal to this verb, so the secret is handled here only.
+* 2 Nov 26 dm  S.101 stage D: LOCAL ON | OFF.
+* 2 Nov 26 dm  S.106: the authenticator code is removed (owner: password only for this release).  The verb is ON | OFF: ssh for sdsys is shut as delivered, ON opens it
+*              for sdsys's password, OFF shuts it.  RECOVERY, LOCAL and everything that handled a secret or a code are gone.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    REMOTE.SDSYS {ON | OFF | AUDIT {n} | ACCOUNTS}
+*
+*    Whether the remote administration account SDRADMIN may come in over ssh.  Shut as delivered.
+*
+*       ON        The first time, makes the account SDRADMIN (a USER account with no route, sh and os.execute off, starting at the command
+*                 prompt; its Windows password is asked twice here), then remote-admin.ps1 -On: SDRADMIN enabled, in sdssh, sshd's remote
+*                 administration arm open (password only, no forwarding, ForceCommand sd), the broker task running, the state on.  SDRADMIN
+*                 can then sign in from other computers with its password, into its own account, where create.account, delete.account,
+*                 modify.account, modify.password and remote.sdsys (OFF, AUDIT, ACCOUNTS, no keyword) are sent to the broker, which runs
+*                 them here as an SDSYS job.  It is never a Windows administrator and never elevated.
+*       OFF       remote-admin.ps1 -Off (the arm shut, SDRADMIN out of sdssh and disabled, the broker stopped, the state off), then every
+*                 SDRADMIN session is logged out.  It tightens, so nothing is asked.  Allowed from the remote session (owner, Q6).
+*       AUDIT n   The last n lines of the audit trail (50 when n is not given, at most 500).
+*       ACCOUNTS  LIST ACCOUNTS.
+*
+*    With no keyword it prints what remote-admin.ps1 -Status reports (one line per wall) and changes nothing.
+*
+*    REMOTE.SDSYS RUN <command> is the broker's and is refused anywhere but in the one-shot job sd-radmin.ps1 starts (kernel(K$JOB.MARK) names
+*    radmin-<nonce>): it removes the job's definition first, then runs the one command the broker checked, the console verb itself, with the
+*    password it reads from standard input in the DATA queue (twice, for the verb's two prompts) and the answer to a confirmation.
+*
+*    ADMINISTRATOR ONLY, and audited (the keyword and the helper's status).
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program $remote.sdsys
+$catalog $remotesdsys
+
+$include keys.h
+$include int$keys.h
+$include parser.h
+$include err.h
+$include createacc.h
+
+deffun ps_script_out(script, want.out) calling '!ps_script_out'
+deffun is_user(uname) calling '!is_user'
+
+   prompt ''
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001)  ;* Command requires administrator privileges
+   end
+
+   action = ''
+   extra = ''
+   rc = 0
+   job = kernel(K$JOB.MARK, 0)
+   in.job = (job[1, 7] = 'radmin-')
+
+   parser = "!PARSER"
+   call @parser(PARSER$RESET, 0, @sentence, 0)
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)   ;* Verb remote.sdsys
+   call @parser(PARSER$GET.TOKEN, token.type, action, keyword)  ;* ON | OFF | AUDIT | ACCOUNTS | RUN
+   if token.type = PARSER$END then action = ''
+   action = downcase(trim(action))
+
+   if action = 'run' then
+      if not(in.job) then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12928)  ;* remote.sdsys on | off
+      end
+      gosub run.request
+      stop
+   end
+
+   if action = '' or action = 'status' then
+      gosub show.status
+      stop
+   end
+
+   begin case
+      case action = 'on' or action = 'off' or action = 'accounts'
+         call @parser(PARSER$GET.TOKEN, token.type, extra, keyword)
+         if token.type # PARSER$END then
+            @system.return.code = -ER$ARGS
+            stop sysmsg(12928)
+         end
+      case action = 'audit'
+         audit.n = 50
+         call @parser(PARSER$GET.TOKEN, token.type, extra, keyword)
+         if token.type # PARSER$END then
+            if not(extra matches '1N0N') or extra < 1 or extra > 500 then
+               @system.return.code = -ER$ARGS
+               stop sysmsg(12928)
+            end
+            audit.n = extra + 0
+            call @parser(PARSER$GET.TOKEN, token.type, extra, keyword)
+            if token.type # PARSER$END then
+               @system.return.code = -ER$ARGS
+               stop sysmsg(12928)
+            end
+         end
+      case 1
+         @system.return.code = -ER$ARGS
+         stop sysmsg(12928)  ;* remote.sdsys on | off
+   end case
+
+   begin case
+      case action = 'on'
+         gosub on.request
+      case action = 'off'
+         gosub off.request
+      case action = 'audit'
+         gosub show.audit
+      case action = 'accounts'
+         execute 'LIST ACCOUNTS'
+         @system.return.code = 0
+   end case
+   stop
+
+*****************************************************************************
+* ON.  Never from the broker's job: the broker refuses it before a job is made, and this says so again.
+on.request:
+   if in.job then
+      @system.return.code = -ER$ARGS
+      stop sysmsg(12847, 'remote.sdsys on')  ;* %1 is not available in a remote administration session
+   end
+
+   gosub make.account
+   if made.rc # 0 then
+      crt sysmsg(12929, 'on', made.rc)  ;* remote.sdsys %1 did not succeed (status %2)
+      void kernel(K$AUDIT, 'remote.sdsys on status=' : made.rc)
+      @system.return.code = -ER$FAILED
+      return
+   end
+
+* The helper's words go straight to the terminal.  Nothing secret passes here: the password was set by !create_account above.
+   helper.args = '-On'
+   gosub run.helper
+   gosub show.helper
+   if rc # 0 then
+      crt sysmsg(12929, 'on', rc)
+   end else
+      crt sysmsg(12601)  ;* ssh is open for SDRADMIN (Linux 11929)
+   end
+   void kernel(K$AUDIT, 'remote.sdsys on status=' : rc)
+   @system.return.code = (if rc = 0 then 0 else -ER$FAILED)
+   return
+
+*****************************************************************************
+* MAKE.ACCOUNT - SDRADMIN, the first time.  Sets made.rc: 0 the account is there (made now or before), 2 it could not be made.
+*
+* The SD account sdradmin and the Windows account SDRADMIN.  CREATE.ACCOUNT's own body (!create_account) makes both, with SD's "SD account"
+* stamp, in sdusers and sdsshonly (no console, no Remote Desktop) and its directory's ACL - exactly as CREATE.ACCOUNT USER sdradmin NONE
+* START-TERMINAL would, which the verb itself refuses (the name is this verb's).  No route (remote-admin.ps1 puts it in sdssh while open
+* and never in sdapi), sh and os.execute off, a description that says what it is for.  The Windows password is asked twice by
+* !set_passwd, hidden, on this terminal, and is never on a command line.
+*
+* A Windows SDRADMIN that SD made earlier and whose register record is gone (the uninstaller's database question said delete, its accounts
+* question said keep) is used again with a new password, CA$REUSE.SD.USER, as RESTORE.ACCOUNT does.  A register record whose Windows account
+* is gone is not mended here: DELETE.ACCOUNT sdradmin (allowed while remote administration is off) takes it away first.
+make.account:
+   made.rc = 0
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      crt sysmsg(6000)  ;* Cannot open ACCOUNTS file in SDSYS account
+      made.rc = 2
+      return
+   end
+   reg.has = @false
+   read acc.rec from acc.f, 'sdradmin' then reg.has = @true
+   close acc.f
+   win.has = is_user('SDRADMIN')
+
+   if reg.has then
+      if not(win.has) then
+         crt sysmsg(12704)  ;* SDRADMIN is the remote administration account...
+         made.rc = 2
+      end
+      return
+   end
+
+   settings = ''
+   settings<CA$DESC> = 'Remote administration over ssh (remote.sdsys)'
+   settings<CA$ROUTE.SSH> = 0
+   settings<CA$ROUTE.API> = 0
+   settings<CA$START> = 'terminal'
+   if win.has then settings<CA$REUSE.SD.USER> = 1
+   err = ''
+   call !create_account('USER', 'sdradmin', settings, err)
+   if err # '' then
+      crt sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+      made.rc = 2
+      return
+   end
+   void kernel(K$AUDIT, 'remote.sdsys on made account=sdradmin gates=none')
+   return
+
+*****************************************************************************
+* OFF.  From the console, or from the remote session through the broker's job (owner, Q6), where the broker's task is left for the broker
+* to stop once it has answered (-KeepBroker): the job is the broker's own child.
+off.request:
+   helper.args = '-Off'
+   if in.job then helper.args := ' -KeepBroker'
+   gosub run.helper
+   gosub show.helper
+   if rc # 0 then crt sysmsg(12929, 'off', rc)
+
+* OFF MEANS NOW: every session of SDRADMIN is logged out, as LOGOUT n would (sshd only refuses the next sign-in).  A session that is in the
+* middle of this very request ends when the request has answered.
+   users = kernel(K$USERS, 0)
+   for i = 1 to dcount(users, @fm)
+      if upcase(users<i, K$USERS.UNAME>) = 'SDRADMIN' then
+         z = logout(users<i, K$USERS.UID> + 0, @false)
+      end
+   next i
+
+   void kernel(K$AUDIT, 'remote.sdsys off status=' : rc : (if in.job then ' from=remote' else ''))
+   @system.return.code = (if rc = 0 then 0 else -ER$FAILED)
+   return
+
+*****************************************************************************
+* No keyword: what the machine says.
+show.status:
+   helper.args = '-Status'
+   gosub run.helper
+   gosub show.helper
+   if rc # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(12929, 'report', rc)
+   end else
+      @system.return.code = 0
+   end
+   return
+
+*****************************************************************************
+* AUDIT n: the last n lines of SDSYS's audit trail, read as a record of the SDSYS directory.  The remote session has no shell to read it with.
+show.audit:
+   openpath @sdsys to sys.f else
+      crt sysmsg(12929, 'audit', 2)
+      @system.return.code = -ER$FAILED
+      return
+   end
+   read trail from sys.f, 'audit' else trail = ''
+   close sys.f
+   tn = dcount(trail, @fm)
+   if tn > 0 and trail<tn> = '' then tn -= 1
+   first = tn - audit.n + 1
+   if first < 1 then first = 1
+   for i = first to tn
+      crt trail<i>
+   next i
+   trail = ''
+   @system.return.code = 0
+   return
+
+*****************************************************************************
+* RUN.HELPER - remote-admin.ps1 with helper.args.  Sets rc and helper.out (one line a field).
+*
+* At the console through SDSYS's elevated helper (!ps_script_out, which brings the output back).  In the broker's job, which is itself an
+* elevated SDSYS process with no desktop and no helper of its own, straight through OS.EXECUTE.
+run.helper:
+   q = char(39)
+   hcmd = '& ' : q : kernel(K$WINPATH, '/remote-admin.ps1') : q : ' ' : helper.args
+   if in.job then
+      os.execute hcmd : '; exit $LASTEXITCODE' capturing helper.out
+      rc = os.error()
+      helper.out = convert(char(13), '', helper.out)
+      helper.out = change(helper.out, char(10), @fm)
+   end else
+      both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)
+      rc = field(both, @fm, 1)
+      helper.out = field(both, @fm, 2, 99999)
+   end
+   loop while helper.out[-1, 1] = @fm
+      helper.out = helper.out[1, len(helper.out) - 1]
+   repeat
+   return
+
+show.helper:
+   for i = 1 to dcount(helper.out, @fm)
+      crt helper.out<i>
+   next i
+   return
+
+*****************************************************************************
+* RUN.REQUEST - the broker's one-shot job (in.job is true, so this is an elevated SDSYS process Task Scheduler's broker started).
+*
+* THE DEFINITION IS DELETED FIRST.  kernel(K$JOB.MARK) answered it at LOGIN and keeps the name for the life of the process (every audit line
+* of this run ends " job=radmin-<nonce>"), so nothing more is needed of it, and a second process cannot be admitted by it: the consumer
+* closes the door, as LOGIN's internal marker.
+*
+* THE BROKER CHECKED EVERY WORD (sd-radmin.ps1, radmin_request); this checks the shape again and refuses the three names the broker never
+* sends, because a check in one place is a wall only as far as that place goes.  The command run is the CONSOLE VERB, so what it does,
+* prints and audits is what it does at the console.
+*
+* THE PASSWORD: the broker writes it, once, on this process's standard input and closes it; it is read here with INPUT ... HIDDEN and put in
+* the DATA queue twice (the verb asks it twice), then 'n' for a "try again?" the verb asks if Windows refused it.  The queue is cleared
+* after the verb and the variable emptied.  It is never in a command line, the audit trail or a file.  DELETE.ACCOUNT's Y/N is answered Y:
+* the remote session asked for the name to be typed again before it sent the request.
+run.request:
+   jobs.def = @sdsys[1, index(@sdsys, @ds, count(@sdsys, @ds)) - 1] : @ds : 'sd-jobs' : @ds : job
+   void ospath(jobs.def, OS$DELETE)
+
+   run.verb = ''
+   run.words = ''
+   call @parser(PARSER$GET.TOKEN, token.type, run.verb, keyword)
+   if token.type = PARSER$END then run.verb = ''
+   run.verb = downcase(run.verb)
+   loop
+      call @parser(PARSER$GET.TOKEN, token.type, w, keyword)
+   until token.type = PARSER$END
+      run.words<-1> = downcase(w)
+   repeat
+
+   run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys')
+   for i = 1 to dcount(run.words, @fm)
+      w = run.words<i>
+      if len(w) < 1 or len(w) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then run.ok = @false
+      if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false
+   next i
+   if not(run.ok) then
+      crt sysmsg(12847, run.verb)
+      void kernel(K$AUDIT, 'remote.sdsys run refused verb=' : run.verb[1, 40])
+      void kernel(K$EXIT.STATUS, 1)
+      return
+   end
+
+   run.sentence = run.verb
+   if run.words # '' then run.sentence := ' ' : convert(@fm, ' ', run.words)
+   run.rc = 0
+   begin case
+      case run.verb = 'remote.sdsys'
+         action = run.words<1>
+         begin case
+            case action = 'off'
+               gosub off.request
+            case action = 'status'
+               gosub show.status
+            case action = 'audit'
+               audit.n = 50
+               if run.words<2> matches '1N0N' then audit.n = run.words<2> + 0
+               if audit.n < 1 or audit.n > 500 then audit.n = 50
+               gosub show.audit
+            case action = 'accounts'
+               execute 'LIST ACCOUNTS'
+               @system.return.code = 0
+            case 1
+               crt sysmsg(12847, 'remote.sdsys ' : action)
+               @system.return.code = -ER$ARGS
+         end case
+         run.rc = @system.return.code
+
+      case (run.verb = 'create.account' and run.words<1> = 'user') or run.verb = 'modify.password'
+         secret = ''
+         input secret HIDDEN
+         if secret = '' then
+            crt sysmsg(10118)  ;* The two passwords did not match, or none was entered
+            run.rc = -ER$ARGS
+         end else
+            data secret
+            data secret
+            data 'n'
+            secret = ''
+            execute run.sentence
+            run.rc = @system.return.code
+            cleardata
+         end
+
+      case run.verb = 'delete.account'
+         data 'Y'
+         execute run.sentence
+         run.rc = @system.return.code
+         cleardata
+
+      case 1
+         execute run.sentence
+         run.rc = @system.return.code
+   end case
+
+   void kernel(K$AUDIT, 'remote.sdsys run verb=' : run.verb : ' status=' : run.rc)
+   void kernel(K$EXIT.STATUS, (if run.rc < 0 then 1 else 0))
+   return
+
+end
+
+* END-CODE

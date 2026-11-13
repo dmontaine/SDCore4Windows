@@ -251,12 +251,18 @@ function Get-Patterns {
 
 # sshd_config lines that already decide who may connect, ignoring SD's own.
 function Get-ExistingRestrictions([string[]]$lines) {
+    # 13 Nov 26 Windows port - RELEASE_1.1 202: remote-admin.ps1's fenced block is SD's too ("Match User sdradmin" then "DenyUsers *" while
+    # remote administration is shut), so its DenyUsers is not somebody else's restriction.  The fence lines are remote-admin.ps1's $RadminBegin
+    # and $RadminEnd, matched by their fixed start.
     $inOurs = $false
+    $inRadmin = $false
     $found = New-Object System.Collections.ArrayList
     foreach ($l in $lines) {
         if ($l -eq $begin) { $inOurs = $true; continue }
         if ($l -eq $end)   { $inOurs = $false; continue }
-        if ($inOurs) { continue }
+        if ($l.StartsWith('# --- BEGIN SD remote administration (RELEASE_1.1 202)')) { $inRadmin = $true; continue }
+        if ($l -eq '# --- END SD remote administration ---') { $inRadmin = $false; continue }
+        if ($inOurs -or $inRadmin) { continue }
         if ($l -match '^\s*(AllowGroups|AllowUsers|DenyGroups|DenyUsers)\b') {
             $null = $found.Add($l.Trim())
         }
@@ -330,6 +336,8 @@ function Add-OurBlock([string[]]$lines, [string[]]$patterns, [string]$sdexe = ''
     $at = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match '^\s*Match\b') { $at = $i; break }
+        # 13 Nov 26 - RELEASE_1.1 202: remote-admin.ps1's fence opens on a comment line before its Match; this block goes above the fence, never inside it.
+        if ($lines[$i].StartsWith('# --- BEGIN SD remote administration (RELEASE_1.1 202)')) { $at = $i; break }
     }
     if ($at -lt 0) { return @($lines + $block) }
     return @($lines[0..($at - 1)] + $block + $lines[$at..($lines.Count - 1)])

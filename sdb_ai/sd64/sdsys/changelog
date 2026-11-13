@@ -64,6 +64,23 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            administrator of the machine can do. NOT YET TESTED ON AN INSTALLED
                            SYSTEM.
 
+13 Nov 26  REMOTE ADMINISTRATION OVER SSH, SHUT UNLESS THE ADMINISTRATOR OPENS IT.
+
+             What        - REMOTE.SDSYS ON lets a separate account, SDRADMIN, sign in over ssh with
+                           its Windows password and create, change, suspend and delete SD accounts,
+                           set their passwords, read the audit trail and shut the door again.
+                           SDRADMIN is never a Windows administrator: its commands are run by a
+                           helper that takes a fixed list. The first ON makes the account and asks
+                           its password. REMOTE.SDSYS OFF shuts it and logs SDRADMIN out; with no
+                           keyword it shows each of the walls. TOOL.REMOTE has a sixth view for it,
+                           and the installer asks whether to open it (not ticked).
+             Does NOT    - Open anything as delivered, or on an upgrade that did not already have it
+                           open; let SDRADMIN sign in at the console or by Remote Desktop, run a
+                           shell, LOGTO another account, or open remote administration itself.
+                           Anyone holding SDRADMIN's password while it is open can delete every SD
+                           account and its data: open it only with a long password used nowhere
+                           else. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  A DIRECTORY FILE LISTS EVERY RECORD ID AS IT WAS WRITTEN.
 
              What        - SELECT of a directory file gives back a record id holding a byte from 128

@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202: sdradmin, the remote administration account, is refused (12704) while remote administration is open.
 * 12 Nov 26 Windows port - RELEASE_1.1 260: the name is lower case, as Linux, so the 'shared' guard (dead behind upcase) holds, the walk skips the account
 *           itself (register ids are lower case) and a Q pointer is compared lower case.  @who is still upper case here (row 266), so the own-account
 *           test downcases it.  $cred and the register are directory files on NTFS: a lower-case id reaches a record stored upper case (measured).
@@ -114,6 +115,7 @@ deffun valid_os_name(name) calling '!valid_os_name'
 deffun is_grp_member(user,group) calling '!is_grp_member'
 * 14 Aug 26 Windows port - did SD create the OS account behind this account?
 deffun is_sd_user(username) calling '!is_sd_user'
+deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
    prompt ''
 
    parser = "!PARSER"
@@ -172,6 +174,13 @@ deffun is_sd_user(username) calling '!is_sd_user'
 
    if acc.name = 'sdsys' then
       stop sysmsg(6025) ;* Cannot delete SDSYS account
+   end
+
+* 13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN, the remote administration account, is deleted only while remote administration is
+*   shut (remote.sdsys off): an open door must not lose the account its walls are built around.  Shut, it is an ordinary deletion - the way
+*   out of a register record whose Windows account is gone, before remote.sdsys on makes it again.
+   if acc.name = 'sdradmin' then
+      if radmin_open(0) then stop sysmsg(12704) ;* SDRADMIN is the remote administration account
    end
 
    if acc.name = downcase(@who) then   ;* 12 Nov 26 - @who is upper case on Windows (row 266)

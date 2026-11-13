@@ -48,7 +48,7 @@ The dictionary item types (field 1 starts with the letter). Each type is the chu
 | `8` | user | free for the application — SD does not read it |
 
 ### core:gates
-> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:671#d1378dbc
+> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:672#d1378dbc
 
 A new user account starts with every gate OFF. Only SDSYS, the one administrator, turns one on, with these words (`create.account`, then `modify.account <account> <word>`). Each word is the chunk `sys:word:<word>`. This is what `create.account` prints:
 

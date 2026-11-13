@@ -1,0 +1,1 @@
+remote.sdsys %1 did not succeed (status %2); the lines above say why.\n\nStatus 2: the helper refused or could not run.  Status 3: sshd could not be\nchanged, and its state is as it was before.

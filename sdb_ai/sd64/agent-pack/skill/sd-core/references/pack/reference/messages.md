@@ -872,7 +872,7 @@ cited by: `deletef`
 The two passwords did not match, or none was entered.
 ```
 
-cited by: `create_account`
+cited by: `create_account`, `radmin`, `remotesdsys`
 
 ### msg:10119
 > kind=message tier=reference since=- src=sdsys/messages/10119:1#fcd36e31
@@ -1207,7 +1207,7 @@ cited by: `apndpath`
 Deleting %1 removes everything the account holds. Its files and the data in\nthem go with it, and this cannot be undone.\n\nIf you only want to stop %1 using SD, suspend it instead:\n\n    modify.account %1 suspended\n\nA suspended account keeps its files, and modify.account %1 unsuspended\nlets it back in.\n
 ```
 
-cited by: `delacc`
+cited by: `delacc`, `radmin`
 
 ### msg:10159
 > kind=message tier=reference since=- src=sdsys/messages/10159:1#077e4554
@@ -1591,7 +1591,7 @@ cited by: `delacc`
 A password needs at least 8 characters, with a lower-case letter, an upper-case letter, a digit and a symbol.
 ```
 
-cited by: `create_account`, `login`, `set_acc_password`
+cited by: `create_account`, `login`, `radmin`, `set_acc_password`
 
 ### msg:10921
 > kind=message tier=reference since=- src=sdsys/messages/10921:1#5ac6a81c
@@ -6284,6 +6284,24 @@ cited by: `cproc`
 
 cited by: `cproc`
 
+### msg:12600
+> kind=message tier=reference since=- src=sdsys/messages/12600:1#77cc635b
+
+```
+SDRADMIN signs in only over ssh, and only while remote administration is open\n(remote.sdsys on, at this computer).
+```
+
+cited by: `login`
+
+### msg:12601
+> kind=message tier=reference since=- src=sdsys/messages/12601:1#23c664ce
+
+```
+ssh is open for SDRADMIN: it can sign in from other computers with its password\nand run account commands, and nothing else stands between the network and those\ncommands.  Shut it again with remote.sdsys off.
+```
+
+cited by: `remotesdsys`
+
 ### msg:12602
 > kind=message tier=reference since=- src=sdsys/messages/12602:1#bb1ca89d
 
@@ -7186,6 +7204,15 @@ cited by: `ide`
 
 cited by: `ide`
 
+### msg:12704
+> kind=message tier=reference since=- src=sdsys/messages/12704:1#d5de6750
+
+```
+SDRADMIN is the remote administration account: remote.sdsys makes it and changes\nit, and delete.account removes it only while remote administration is off.
+```
+
+cited by: `createa`, `delacc`, `modifya`, `remotesdsys`
+
 ### msg:12705
 > kind=message tier=reference since=- src=sdsys/messages/12705:1#1e363371
 
@@ -8026,6 +8053,15 @@ Account %1: NOT every action was carried out. Done: %2. Not done: %3
 
 cited by: `modifya`
 
+### msg:12800
+> kind=message tier=reference since=- src=sdsys/messages/12800:1#0b1e68e9
+
+```
+SD remote administration: this session is SDRADMIN, signed in over ssh from %1\nwith its password.  Its account commands are run by the remote administration\nhelper; it is never a Windows administrator.  remote.sdsys off shuts this door.
+```
+
+cited by: `login`
+
 ### msg:12801
 > kind=message tier=reference since=- src=sdsys/messages/12801:1#b6ad70de
 
@@ -8359,6 +8395,24 @@ Help is not installed here: the shared account has no file context.help.  The ad
 
 cited by: `tk_help`
 
+### msg:12838
+> kind=message tier=reference since=- src=sdsys/messages/12838:1#08a1ddf9
+
+```
+The remote administration helper refused the command, and nothing was changed: %1
+```
+
+cited by: `radmin`
+
+### msg:12839
+> kind=message tier=reference since=- src=sdsys/messages/12839:1#46138dfa
+
+```
+The remote administration helper gave no answer (%1).  The command may not have\nrun, or may still be running; the audit trail says which.
+```
+
+cited by: `radmin`
+
 ### msg:12840
 > kind=message tier=reference since=- src=sdsys/messages/12840:1#8113ac02
 
@@ -8421,6 +8475,15 @@ Could not write the help record %1
 ```
 
 cited by: `loadhelp`
+
+### msg:12847
+> kind=message tier=reference since=- src=sdsys/messages/12847:1#2b054eac
+
+```
+%1 is not available in a remote administration session; it is done at this\ncomputer's console.
+```
+
+cited by: `cproc`, `radmin`, `remotesdsys`
 
 ### msg:12848
 > kind=message tier=reference since=- src=sdsys/messages/12848:1#dfadd38c
@@ -9067,6 +9130,24 @@ Passages of SD's own documentation follow, each with its id in brackets. Use the
 ```
 
 cited by: `tk_ai`
+
+### msg:12928
+> kind=message tier=reference since=- src=sdsys/messages/12928:1#e4deb3cb
+
+```
+remote.sdsys on | off | audit {n} | accounts\n\nON        opens ssh for SDRADMIN: it can sign in from other computers with its\n          password, into a fixed list of account commands.\nOFF       shuts it again, as delivered.\n\nWith no keyword it reports the state and changes nothing.
+```
+
+cited by: `remotesdsys`
+
+### msg:12929
+> kind=message tier=reference since=- src=sdsys/messages/12929:1#6999e6ee
+
+```
+remote.sdsys %1 did not succeed (status %2); the lines above say why.\n\nStatus 2: the helper refused or could not run.  Status 3: sshd could not be\nchanged, and its state is as it was before.
+```
+
+cited by: `remotesdsys`
 
 ### msg:12934
 > kind=message tier=reference since=- src=sdsys/messages/12934:1#55dcb476
@@ -11472,7 +11553,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat`, `deleteserver` and 23 more
+cited by: `apndpath`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat`, `deleteserver` and 25 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524
@@ -11595,7 +11676,7 @@ cited by: `findfile`
 Unexpected token (%1)
 ```
 
-cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 60 more
+cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 61 more
 
 ### msg:2019
 > kind=message tier=reference since=- src=sdsys/messages/2019:1#a22e9c3b
@@ -17357,7 +17438,7 @@ cited by: `apisrvr`
 A password is never given on the command line; modify.password prompts for it
 ```
 
-cited by: `set_acc_password`
+cited by: `radmin`, `set_acc_password`
 
 ### msg:5277
 > kind=message tier=reference since=- src=sdsys/messages/5277:1#4ec99a0a
@@ -17373,7 +17454,7 @@ Authentication succeeded but the session could not take your Windows identity
 Cannot open ACCOUNTS file in SDSYS account
 ```
 
-cited by: `backupa`, `delacc`, `granta`, `modifya`, `restorea`, `setserver`, `settingsr`
+cited by: `backupa`, `delacc`, `granta`, `modifya`, `remotesdsys`, `restorea`, `setserver`, `settingsr`
 
 ### msg:6001
 > kind=message tier=reference since=- src=sdsys/messages/6001:1#3e29c383
@@ -17593,7 +17674,7 @@ cited by: `delacc`
 Account deletion abandoned
 ```
 
-cited by: `delacc`
+cited by: `delacc`, `radmin`
 
 ### msg:6032
 > kind=message tier=reference since=- src=sdsys/messages/6032:1#e107883c

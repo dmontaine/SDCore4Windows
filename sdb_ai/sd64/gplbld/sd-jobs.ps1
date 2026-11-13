@@ -1,5 +1,9 @@
 # sd-jobs.ps1 - the administrator's scheduled jobs, on Windows Task Scheduler
 #
+# 13 Nov 26 Windows port - RELEASE_1.1 202: the definitions named radmin-<nonce> are the remote administration broker's one-shot jobs
+# (sd-radmin.ps1 writes one, REMOTE.SDSYS RUN deletes it as it starts): job-list and job-run do not see them, they do not count towards
+# the 32, and job-set refuses a name that starts radmin-.
+#
 # 10 Nov 26 (RELEASE_1.1 222, the owner's sitting on cycle 20261110-215945) - job-set gives a new definition the owner Administrators, as the
 # folder has, and checks the result before it says created.  The file used to take its creator's owner, ace\SDSYS, so set.job run called the
 # job it had just made damaged and every run of it was refused at LOGIN; the dry run skips ACLs, so the guard could not see it (now its T9).
@@ -185,6 +189,7 @@ function Read-JobRows([string]$dir, [scriptblock]$safe) {
     foreach ($it in @(Get-ChildItem -LiteralPath $dir -Force | Sort-Object Name)) {
         $n = $it.Name
         if ($n.StartsWith('.')) { continue }
+        if ($n.StartsWith('radmin-')) { continue }      # 13 Nov 26 - the remote administration broker's one-shot jobs (RELEASE_1.1 202)
         if (-not (Test-JobName $n)) { $rows += @{ Kind = 'BAD'; Name = $n; Why = 'not a job name' }; continue }
         if ($it.PSIsContainer -or ($it.Attributes -band [IO.FileAttributes]::ReparsePoint)) { $rows += @{ Kind = 'BAD'; Name = $n; Why = 'not a plain file' }; continue }
         if (-not (& $safe $it.FullName)) { $rows += @{ Kind = 'BAD'; Name = $n; Why = 'not the administrators'' file' }; continue }
@@ -257,6 +262,7 @@ try {
             if ($Words.Count -lt 3) { Exit-Refused 'job-set takes a name, a job and a schedule: job-set NAME JOB every 15 minutes | hourly | daily 02:30 | weekly sun 03:00 | monthly 1 04:00' }
             $n = $Words[0]; $id = $Words[1]
             if (-not (Test-JobName $n)) { Exit-Refused 'a job name is 1 to 32 characters: a lower case letter first, then lower case letters, digits and dashes, not ending in a dash' }
+            if ($n.StartsWith('radmin-')) { Exit-Refused 'a job name that starts radmin- is the remote administration broker''s; choose another' }
             if ((Get-JobCommand $id) -eq '') { Exit-Refused 'the command of a job is one of backup-all and update-accounts; it is not text a caller supplies' }
             $s = Get-JobSchedule ($Words[2..($Words.Count - 1)])
             if ($null -eq $s) { Exit-Refused 'the schedule is none of: every 5|10|15|20|30 minutes, hourly, daily HH:MM, weekly mon|tue|wed|thu|fri|sat|sun HH:MM, monthly D HH:MM (D 1 to 28)' }
@@ -290,7 +296,7 @@ try {
                 if ($it.PSIsContainer -or ($it.Attributes -band [IO.FileAttributes]::ReparsePoint)) { Exit-Refused "$n is not a plain file; it was left as it is" }
                 if (-not $DryRun -and -not (Test-JobAdminPath $target $false)) { Exit-Refused "$n is not the administrators' file; it was left as it is" }
             } else {
-                $count = @(Get-ChildItem -LiteralPath $jobsDir -Force | Where-Object { Test-JobName $_.Name }).Count
+                $count = @(Get-ChildItem -LiteralPath $jobsDir -Force | Where-Object { (Test-JobName $_.Name) -and -not $_.Name.StartsWith('radmin-') }).Count
                 if ($count -ge $JobMax) { Exit-Refused "there are already $JobMax jobs; delete one first" }
             }
             $tmp = Join-Path $jobsDir ".new.$PID"

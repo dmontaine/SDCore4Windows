@@ -5500,7 +5500,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 15
+"words": 17
 },
 "msg:10119": {
 "kind": "message",
@@ -5773,7 +5773,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 52
+"words": 53
 },
 "msg:10159": {
 "kind": "message",
@@ -6081,7 +6081,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 26
+"words": 27
 },
 "msg:10921": {
 "kind": "message",
@@ -9947,6 +9947,20 @@
 "tier": "reference",
 "words": 21
 },
+"msg:12600": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 22
+},
+"msg:12601": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 38
+},
 "msg:12602": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -10661,6 +10675,13 @@
 "tier": "reference",
 "words": 19
 },
+"msg:12704": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 29
+},
 "msg:12705": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -11319,6 +11340,13 @@
 "tier": "reference",
 "words": 18
 },
+"msg:12800": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 40
+},
 "msg:12801": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -11578,6 +11606,20 @@
 "tier": "reference",
 "words": 23
 },
+"msg:12838": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 17
+},
+"msg:12839": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 28
+},
 "msg:12840": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -11626,6 +11668,13 @@
 "since": "-",
 "tier": "reference",
 "words": 12
+},
+"msg:12847": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 22
 },
 "msg:12848": {
 "kind": "message",
@@ -12167,6 +12216,20 @@
 "words": 7
 },
 "msg:12927": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 39
+},
+"msg:12928": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 49
+},
+"msg:12929": {
 "kind": "message",
 "part": "reference/messages.md",
 "since": "-",
@@ -18989,7 +19052,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 18
+"words": 19
 },
 "msg:5277": {
 "kind": "message",
@@ -19003,7 +19066,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 18
+"words": 19
 },
 "msg:6001": {
 "kind": "message",
@@ -19199,7 +19262,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 8
+"words": 9
 },
 "msg:6032": {
 "kind": "message",
@@ -28322,6 +28385,13 @@
 "tier": "reference",
 "words": 43
 },
+"tcl:remote.sdsys": {
+"kind": "tcl.verb",
+"part": "reference/tcl-verbs.md",
+"since": "-",
+"tier": "reference",
+"words": 44
+},
 "tcl:remote.ssh": {
 "kind": "tcl.verb",
 "part": "reference/tcl-verbs.md",
@@ -29321,7 +29391,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 105
+"words": 106
 },
 "voc:type:F": {
 "kind": "voc.type",

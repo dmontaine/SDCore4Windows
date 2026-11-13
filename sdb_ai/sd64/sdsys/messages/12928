@@ -1,0 +1,1 @@
+remote.sdsys on | off | audit {n} | accounts\n\nON        opens ssh for SDRADMIN: it can sign in from other computers with its\n          password, into a fixed list of account commands.\nOFF       shuts it again, as delivered.\n\nWith no keyword it reports the state and changes nothing.

@@ -252,10 +252,10 @@ def checks(s):
        and "allow = 'modify.account create.account'" in tac and tac.count("allow = ") == 1 and "tool.accounts.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in tac and "call $tk_wrap(ln.s, dtw, pieces)" in tac and "rest[cut" not in tac)
 
     trm = strip(s["tool_remote"])
-    # 13 Nov 26 Windows: no remote.sdsys (the SDSYS-over-ssh view is deferred here, row 202), so the allow list is the other three.
-    ck("P17j tool.remote: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only remote.api, remote.ssh and delete.server through the routine (set.server is the verb's on the terminal), and wraps with $tk_wrap",
+    # 13 Nov 26 Windows: remote.sdsys is back (the remote administration view, RELEASE_1.1 202), so the allow list is Linux's four again.
+    ck("P17j tool.remote: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only remote.api, remote.ssh, delete.server and remote.sdsys through the routine (set.server and remote.sdsys on are the verb's on the terminal), and wraps with $tk_wrap",
        "call $tk_help('mark', mk.x, mk.y, 0, 0)" in trm and "case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.remote.page', hm, 0, 0)" in trm and "call $tk_help('hit', mev, mk.x, mk.y, hit.m)" in trm
-       and "allow = 'remote.api remote.ssh delete.server'" in trm and trm.count("allow = ") == 1 and "tool.remote.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in trm and "call $tk_wrap(lines<i>, tw, pieces)" in trm and "rest[cut" not in trm)
+       and "allow = 'remote.api remote.ssh delete.server remote.sdsys'" in trm and trm.count("allow = ") == 1 and "tool.remote.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in trm and "call $tk_wrap(lines<i>, tw, pieces)" in trm and "rest[cut" not in trm)
 
     tfl = strip(s["tool_files"])
     ck("P17k tool.files: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only create.file, clear.file and delete.file through $tk_run and hands the terminal to analyze.file, list.index and list.triggers only, and Clear and Delete ask for the file's name typed",
@@ -388,7 +388,7 @@ MUTANTS = [
      "   sent = 'delete.file ' : fn : ' no.query'\n   lines = 'Deletes the file ' : fn : ', its dictionary and its VOC entry.  Nothing can bring them back; a backup can.'\n   call $tk_confirm(sent, lines, '', res, cmsg)"),
     ("tool.remote loses its [?]", "tool_remote", "   call $tk_help('mark', mk.x, mk.y, 0, 0)\n", ""),
     ("tool.remote calls $tk_help with too few arguments", "tool_remote", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.remote.page', hm, 0, 0)", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.remote.page', hm)"),
-    ("tool.remote can run another command", "tool_remote", "allow = 'remote.api remote.ssh delete.server'", "allow = 'remote.api remote.ssh delete.server sh'"),
+    ("tool.remote can run another command", "tool_remote", "allow = 'remote.api remote.ssh delete.server remote.sdsys'", "allow = 'remote.api remote.ssh delete.server remote.sdsys sh'"),
     ("tool.sessions loses its [?]", "tool_sessions", "   call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)\n", ""),
     ("tool.sessions calls $tk_help with too few arguments", "tool_sessions", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.sessions.page', hm, 0, 0)", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.sessions.page', hm)"),
     ("tool.sessions can run another command", "tool_sessions", "allow = 'logout unlock inhibit.login'", "allow = 'logout unlock inhibit.login sh'"),

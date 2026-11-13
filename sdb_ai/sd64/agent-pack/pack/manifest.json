@@ -1,5 +1,5 @@
 {
- "chunk_count": 4199,
+ "chunk_count": 4209,
  "development": "the changelog's 'Next release - in progress' section is part of this tree",
  "gaps": {
   "basic_names_without_a_docs_syntax_line": []
@@ -79,8 +79,8 @@
    "sha256": "f8f7e8bad58d56ed8c8d1f5a500d1e52f99b0733d33a251e1d987471d86fc157"
   },
   "message": {
-   "chunks": 2922,
-   "sha256": "4d710b2759d219c96fe5847d68468c1da096b39f4774cf7125e529522df53fb1"
+   "chunks": 2931,
+   "sha256": "1015a73bb2db86b9ebb1c83376e2d1fb9a0ddaf5c8a377041206329c650c49b3"
   },
   "sys.keys": {
    "chunks": 41,
@@ -107,8 +107,8 @@
    "sha256": "cd6aaac0f60d8d6871ebd3407ee46424ad9c9673f55ddf18b31e440995d2599e"
   },
   "tcl.verb": {
-   "chunks": 206,
-   "sha256": "74a46150f832623ab798d0c3e7e5467d4ccbb7f0b206f2ce4c67707b2c160ad6"
+   "chunks": 207,
+   "sha256": "92614c813586077f5031f047a3db51d63274946b5b3a2a93437ef44dc019cf55"
   },
   "tcl.verb+keyword": {
    "chunks": 4,
@@ -120,7 +120,7 @@
   },
   "voc.layer": {
    "chunks": 2,
-   "sha256": "1f6f2e5e049c87d244ee92fd3cbcab1c88566b19fa638d977c9a69b5110c871a"
+   "sha256": "c153e3b649d6adf6bd9db680610ab763c255fd7e5505f798d766133d582ad7ea"
   },
   "voc.type": {
    "chunks": 9,
@@ -150,7 +150,7 @@
    "words": 6613
   },
   "index.json": {
-   "sha256": "5537baa9ee86de74b28cb35693a2e0375cd88da910a6bc8928ad161f440aa2f3"
+   "sha256": "0314609c866d5df9d753f41f74ca6c60de4afa8281bd5a16d453f07f9e70ad64"
   },
   "reference/basic-functions.md": {
    "chunks": 267,
@@ -173,9 +173,9 @@
    "words": 5601
   },
   "reference/messages.md": {
-   "chunks": 2922,
-   "sha256": "88e4e3242f48f33da474aff5d3fc055c4418678229407a34c0e4ed3c7fa0a8d1",
-   "words": 39539
+   "chunks": 2931,
+   "sha256": "684363a4557705a445c55c01d44dc8958446481cbdc5484bfad2224d25c57de1",
+   "words": 39830
   },
   "reference/system-keys.md": {
    "chunks": 41,
@@ -193,14 +193,14 @@
    "words": 10228
   },
   "reference/tcl-verbs.md": {
-   "chunks": 210,
-   "sha256": "776001f0929b65404cbc49bf2342f66fbbe0fa1b4de059c878e29011997fd12b",
-   "words": 9796
+   "chunks": 211,
+   "sha256": "59c1fb24154121b38e65eec824a58f3cbf0d30208e6d54e6e05a3f03f9acb047",
+   "words": 9840
   },
   "reference/voc.md": {
    "chunks": 12,
-   "sha256": "98336aaa5d3aa57f395abca867f346b11628b06c90b0a3318d3a75750f59af71",
-   "words": 1897
+   "sha256": "bda39333cf60e2baf06af00cc951047aed4557a73475fa8112c67d490aa4c95a",
+   "words": 1898
   }
  },
  "product": "SD Core for Windows",

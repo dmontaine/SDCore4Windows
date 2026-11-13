@@ -47,9 +47,10 @@ EXPECT_ADD_ROWS = 350         # 9 Nov 26 (S.184 stage 5): the IDE's Alt-R and Al
 # AI (RELEASE_1.1 173), tool.entries for run.in (RELEASE_1.1 201), tool.remote for remote administration (RELEASE_1.1 202).  A page named here counts
 # again, and its ledger entries are asked for again, as soon as its program is in gpl.bp; the counts themselves stay exact.
 NOT_CARRIED = {"tool_accounts": 10, "tool_ai": 13, "tool_audit": 11, "tool_config": 10, "tool_entries": 16, "tool_jobs": 14, "tool_remote": 16}
-# 10 Nov 26 Windows port (RELEASE_1.1 228): a carried page with fewer 'add' rows than Linux's, and how many fewer.  tool.remote has no sdsys login view here
-# (remote administration over ssh is deferred, RELEASE_1.1 202), so its 6, O and F rows are not carried: 13 of Linux's 16.
-WINDOWS_LESS = {"tool_remote": 3}
+# 10 Nov 26 Windows port (RELEASE_1.1 228): a carried page with fewer 'add' rows than Linux's, and how many fewer.  tool.remote had no sdsys login view here
+# (remote administration over ssh was deferred, RELEASE_1.1 202), so its 6, O and F rows were not carried: 13 of Linux's 16.
+# 13 Nov 26 Windows port - RELEASE_1.1 202: the sixth view is carried (the remote administration account SDRADMIN), so tool.remote has Linux's 16 again.
+WINDOWS_LESS = {}
 # earlier counts: (266 with the IDE's eight rows of the pane "fields", 31 Oct 26; 256 with tool_sessions' Ctrl-O row, 257 with tool_home's F1 row, 258 with tool_test's Ctrl-O row, 29 Oct 26) after the 30 Oct 26 page fan-out: the 232 rows of the tree before 29 Oct 26, tool_tktest's pilot, and the Esc, menu and bar rows the pages on $tk_menubar added
 KNOWN_OPS_S0 = {"add", "name", "action"}
 
@@ -76,9 +77,10 @@ LEDGER = {
     "handler": {
         # 30 Oct 26: "ide:esc/menu" (the IDE's Esc is handled where the form is read, not in do.key) is gone from this ledger because the IDE's fields view (fields.run) now has the literal 'esc' in its
         #   source; the Esc that opens the menu bar is still the main loop's `case 1`, so the check passes by the fields view's word until somebody takes it out, when this entry comes back
-        "tool_remote:2/": "tool_remote's digit keys 2 to 4 choose a pane by number (a computed test, not a literal case; 1 and 5 are its ends: 10 Nov 26 Windows port, no sixth view)",
+        "tool_remote:2/": "tool_remote's digit keys 2 to 5 choose a pane by number (a computed test, not a literal case; 1 and 6 are its ends: 13 Nov 26 Windows port, the sixth view is back, RELEASE_1.1 202)",
         "tool_remote:3/": "(as 2)",
         "tool_remote:4/": "(as 2)",
+        "tool_remote:5/": "(as 2)",
     },
     "conflict": {
         "tool_home:ctrl-q": "3 Nov 26 (S.149): Ctrl-Q is 'prompt' (leave) in the branch for a screen typed at the prompt and 'sign out' in the other: make.keys registers ONE of the two, never both",

@@ -22,6 +22,7 @@
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON / AI-OFF put the account's person in or out of the Windows group sdaiusers (set.ai,
 *           through change.files.group, read back, said with 12611); in word.arr / slot.arr after the files words, as Linux; AI-OFF on a machine with no sdaiusers has
 *           nothing to take away.
+* 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration account SDRADMIN is refused (12704), as SDSYS is: remote.sdsys's alone.
 * 13 Nov 26 Windows (RELEASE_1.1 254, test-tkgates G7): the SHARED-READ and SHARED-WRITE words are carried out before the FILES words, Linux's order
 *           (word.arr and slot.arr); tk_gate_info already lists them that way, so the gate screens and modify.account now agree.
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON / RECOVERY-OFF write 'yes' / 'no' in register field 19 (ACC$RECOVERY), a user
@@ -298,6 +299,11 @@ deffun ps_script(script) calling '!ps_script'
 *   action to name here, and SDSYS is outside this verb's reach for all of them.
    if acc.name = 'SDSYS' then
       stop sysmsg(12001) ;* Remote access is never available to SDSYS
+   end
+* 13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN, the remote administration account, is remote.sdsys's alone (a route, a gate or a
+*   member here would widen what a network password reaches).
+   if acc.name = 'SDRADMIN' then
+      stop sysmsg(12704) ;* SDRADMIN is the remote administration account
    end
    *
    read acc.rec from acc.f, acc.name else      
@@ -608,6 +614,10 @@ add.delete.arm:
          call @parser(PARSER$GET.TOKEN, token.type, extra.word, keyword)
          if token.type # PARSER$END then
             stop sysmsg(12719, extra.word)  ;* modify.account does one action at a time, and nothing was changed: %1 was not carried out
+         end
+*        13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN joins no group account (it would reach that group's files).
+         if upcase(action) = 'ADD' and upcase(user.name) = 'SDRADMIN' then
+            stop sysmsg(12704) ;* SDRADMIN is the remote administration account
          end
 
          if (upcase(action) = 'ADD') then

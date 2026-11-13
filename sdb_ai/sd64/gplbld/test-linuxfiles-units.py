@@ -39,7 +39,6 @@ NOT_HERE = {   # 13 Nov 26: ai, setai and tool_ai are carried (RELEASE_1.1 246) 
     'euid_set':         'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'setmode':          'OS: SET.MODE (Linux 3b435253) sets POSIX permission bits; Windows files have ACLs, not mode bits (agreed with Linux, mail 2026-11-11T0630)',
     'peer_local':       'removed here with the administrator predicate (RELEASE_1.1 64, fdded05a)',
-    'remotesdsys':      'remote.sdsys, administration over ssh: deferred by the owner (RELEASE_1.1 202)',
 }
 
 EVIDENCE = re.compile(r'(RELEASE_1\.1 \d+|SOLO \d+|\b[0-9a-f]{7,8}\b|^OS: )')

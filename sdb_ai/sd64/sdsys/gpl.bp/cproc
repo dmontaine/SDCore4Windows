@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 202: LOGTO is refused to the remote administration session (SDRADMIN over ssh), 12847.
 * 13 Nov 26 Windows (RELEASE_1.1 254): LOGTO sets the VOC and loads the account's switches before its audit line, Linux's order.
 * 12 Nov 26 Windows port - from Linux ca3c6f41 (RELEASE_1.1 252, P-21): RUN folds the program name (as typed, lower, upper), as Linux.
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO is lower case, as Linux: LOGTO's new.account and run.in's who are lower case, and the
@@ -2746,6 +2747,14 @@ int.logto:
    if ri.active then
       display sysmsg(15073, ri.account) ;* logto is refused while run.in is running a command in account %1
       void kernel(K$AUDIT, 'run.in refused account=' : ri.account : ' target=' : downcase(new.account)[1, 40] : ' reason=logto')
+      unwinding = 2
+      return
+   end
+* 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration session (SDRADMIN over ssh) stays in its own account.  It has no reason
+*   to stand in another, and its commands run in SDSYS through the broker, not by a LOGTO; a LOGTO SDSYS is refused below anyway.
+   if upcase(@logname) = 'SDRADMIN' then
+      display sysmsg(12847, 'logto') ;* %1 is not available in a remote administration session
+      void kernel(K$AUDIT, 'logto refused target=' : downcase(new.account)[1, 40] : ' reason=remote administration session')
       unwinding = 2
       return
    end
