@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 12 Nov 26 Windows port - RELEASE_1.1 219 (owner: parity decides): sd.conf's SPOOLER is the printer a job goes to when SETPTR names none
+ *           (Linux: the lp command, such as "lp -d office"; Windows prints with Out-Printer, so here it is a printer NAME).  Quoted
+ *           exactly as an AT name is, so it is never a command.  Empty, as delivered: the Windows default printer, as before.
  * 17 Sep 26 Windows port - RELEASE_1.1 54: spool_print_job() hands the job
  *           to WINDOWS PRINTING through PowerShell's Out-Printer - the
  *           session user's default printer, or the one SETPTR named with AT
@@ -167,6 +170,12 @@ void spool_print_job(PRINT_UNIT* pu) {
   if (pu->printer_name != NULL && pu->printer_name[0] != '\0') {
     if (ps_quote(qprinter, sizeof(qprinter), pu->printer_name) < 0) {
       tio_printf("Print job not sent: the printer name is too long\n");
+      return;
+    }
+  } else if (pcfg.spooler[0] != '\0') {
+    /* 12 Nov 26 (RELEASE_1.1 219): sd.conf's SPOOLER, the printer SD uses when SETPTR names none */
+    if (ps_quote(qprinter, sizeof(qprinter), pcfg.spooler) < 0) {
+      tio_printf("Print job not sent: the SPOOLER printer name is too long\n");
       return;
     }
   }

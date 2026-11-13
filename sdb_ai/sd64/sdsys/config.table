@@ -11,7 +11,7 @@
 #   effect   session: a session reads sd.conf itself when it starts, so an edit reaches the sessions started after it; restart: it sizes or starts the system, so it takes
 #            effect when SD is next started; now: a program reads sd.conf each time it uses the parameter, so a change needs no restart and no new session
 #   status   live (something acts on it), file (read from sd.conf by a program each time it is used, not by the kernel), inert (accepted, and nothing on Windows acts on
-#            it yet: SPOOLER, whose Linux reader is lp)
+#            it; none since 12 Nov 26, when SPOOLER became the default printer's name, RELEASE_1.1 219)
 #   text     one sentence, plain, no vertical bar
 #   write    yes: the page and the verb set.config may change it, through SDSYS's elevated helper (gplbld/sd-confset.ps1); no: they may not, and the page shows the line to add
 #            by hand.  ONLY A PARAMETER THAT CONFIG.C RANGE-CHECKS CAN BE yes, and the range above is then the range the helper enforces (test-confset-units.ps1 holds the
@@ -20,7 +20,7 @@
 #   why      for a no, one sentence of at most 100 characters, plain, no vertical bar: why this page does not change it; blank for a yes
 #
 # A line beginning with # is a comment.  Alphabetical by key.  Windows differs from Linux's table in: APIPORT and NETDIRS (Windows parameters), no STARTUP (refused by
-# name on Windows), the Windows paths and defaults (the PowerShell shell commands, TEMPDIR from TMP), and SPOOLER inert.
+# name on Windows), the Windows paths and defaults (the PowerShell shell commands, TEMPDIR from TMP), and SPOOLER a printer name (Linux: a command).
 #
 APIPORT|int|0|||restart|live|Any value above 0 switches on the API listener, which then listens on the fixed port 4247; 0 or no line leaves it off. The shipped file says 4247.|no|A door: it opens the API listener to the network.
 BACKUPDIR|path||||now|file|The directory set.backup.directory saves. The kernel ignores it; the backup and restore programs read sd.conf each time they run, so a change needs no restart.|no|A directory: set.backup.directory saves it, with its own checks of the path.
@@ -66,7 +66,7 @@ SH1|text||||session|live|The command sh followed by a command line uses; when it
 SORTMEM|int|4096|||session|live|Kilobytes of data above which a sort works on disk instead of in memory.|no|A size in kilobytes that SD does not check, so a mistake shows only when a sort runs.
 SORTMRG|int|4|2|10|session|live|How many work files a disk sort merges at once.|yes|
 SORTWORK|path||||session|live|The directory for the work files of a sort that does not fit in memory; when it is not set, or does not exist, SD uses TEMPDIR.|no|A directory: the work files of a large sort are written there.
-SPOOLER|text||||session|inert|Accepted and reported by CONFIG, and nothing on Windows reads it: SD prints through Windows printing, to the default printer or the one SETPTR names.|no|Nothing on Windows acts on it.
+SPOOLER|text||||session|live|The Windows printer a print job goes to when SETPTR names none (Linux: the spooler command). Empty: the Windows default printer.|no|Text that names a printer; check the printer's exact name in Windows first.
 TEMPDIR|path||||session|live|The directory for temporary files; when it is not set, or does not exist, SD uses the TMP environment variable.|no|A directory: temporary files are written there.
 TERMINFO|path||||session|live|An extra directory of terminfo definitions. The shipped definitions are found without it.|no|A directory: terminal definitions are read from there.
 USERPOOL|int|1023|0|16383|restart|live|The highest user number handed out; user numbers rotate through 1 to this value.|no|The highest user number: PHANTOMS is checked against it; a mistake stops SD.

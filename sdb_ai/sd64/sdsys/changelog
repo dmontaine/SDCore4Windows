@@ -3,6 +3,19 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+12 Nov 26  MORE OF SD CORE FOR LINUX'S BEHAVIOUR.
+
+             What        - @WHO is the account name in lower case (it was upper case), as on Linux. The SPOOLER
+                           line of sd.conf names the Windows printer a print job goes to when SETPTR names none; empty
+                           is the Windows default printer, as before. ACCOUNT.PATH() and VOCPATH() tell an account with
+                           OS access a path outside its own directory, as on Linux. The SDSYS account's bp file holds
+                           four examples of embedded Python (PY_JSON, PY_TERM, PY_TEST, PY_TEST2); an upgrade replaces
+                           those four and keeps the rest of bp. UPDATE.ACCOUNTS run in SDSYS refreshes SDSYS's own VOC
+                           from voc_template, which is installed again, so SDSYS keeps its administration pages.
+                           DELETE.ACCOUNT refuses the shared account, as it was meant to.
+             Does NOT    - Change anything else. A program that compared @WHO with an upper-case name must compare
+                           without regard to case. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 12 Nov 26  SMALL FIXES CARRIED FROM SD CORE FOR LINUX.
 
              What        - An API client's OPENSEQ of a VOC, dictionary or program record that the account may not change
