@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 260: the $cred id is lower case, as Linux; NTFS finds a record an earlier release stored upper case.
 * 19 Aug 26 Windows port - reads a version 2 SCRAM record, and compares in
 *           constant time.  docs/SCRAM_AUTH.md
 * 19 Aug 26 Windows port - the credential store is $cred on disk.  5.12 (a).
@@ -62,7 +63,7 @@ $include err.h
    ok = @false
    set.status 0
 
-   account = upcase(trim(account))
+   account = downcase(trim(account))
    if account = '' or password = '' then return
 
    openpath @sdsys:@ds:'$cred' to cred.f else

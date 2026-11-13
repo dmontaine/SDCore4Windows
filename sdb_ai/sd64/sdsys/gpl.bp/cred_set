@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 260: the $cred id is lower case, as Linux; writing over a record an earlier release stored upper case keeps
+*           its file (NTFS, and .NET WriteAllText for the elevated write, both match names without case).
 * 19 Aug 26 Windows port - writes a version 2 SCRAM record.  The Argon2
 *           verifier is gone: SCRAM needs material a client can prove
 *           knowledge of without sending the password, and a one-way verifier
@@ -72,7 +74,7 @@ deffun ps_script(script) calling '!ps_script'
    ok = @false
    set.status 0
 
-   account = upcase(trim(account))
+   account = downcase(trim(account))
    if account = '' or password = '' then
       set.status ER$ARGS
       return

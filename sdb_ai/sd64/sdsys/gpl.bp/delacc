@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 12 Nov 26 Windows port - RELEASE_1.1 260: the name is lower case, as Linux, so the 'shared' guard (dead behind upcase) holds, the walk skips the account
+*           itself (register ids are lower case) and a Q pointer is compared lower case.  @who is still upper case here (row 266), so the own-account
+*           test downcases it.  $cred and the register are directory files on NTFS: a lower-case id reaches a record stored upper case (measured).
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the cross-reference scan looks at the first value of field 2 of an F record and not at every value.
 * 28 Oct 26 Windows port - RELEASE_1.1 175: os.users is retired (owner 23 Oct; the grant is the account's, S.63), so drop.os.access and its two callers are gone: the grant
 *           left with the register record, and the person's os.users record (an old install's, unread since S.63) is no longer touched here.
@@ -138,7 +141,7 @@ deffun is_sd_user(username) calling '!is_sd_user'
 
    * Validate account name
 
-   acc.name = upcase(acc.name)
+   acc.name = downcase(acc.name)
 
    * Check no further command arguments, other than REMOVE.HOME
    *
@@ -167,11 +170,11 @@ deffun is_sd_user(username) calling '!is_sd_user'
       stop sysmsg(12522) ;* The shared account cannot be deleted
    end
 
-   if acc.name = 'SDSYS' then
+   if acc.name = 'sdsys' then
       stop sysmsg(6025) ;* Cannot delete SDSYS account
    end
 
-   if acc.name = @who then
+   if acc.name = downcase(@who) then   ;* 12 Nov 26 - @who is upper case on Windows (row 266)
       stop sysmsg(6026) ;* Cannot delete own account
    end
 
@@ -260,7 +263,7 @@ deffun is_sd_user(username) calling '!is_sd_user'
                               end
 
                            case type = 'Q'
-                              if xvoc.rec<2> = acc.name or xvoc.rec<2> = pathname then
+                              if downcase(xvoc.rec<2>) = acc.name or xvoc.rec<2> = pathname then
                                  gosub report.xref
                               end
                         end case
