@@ -194,7 +194,7 @@ void op_coll() {
   int32_t setop = 0;
   int32_t first;
   int32_t count = 0;
-  ARRAY_HEADER* ahdr;
+  ARRAY_HEADER* ahdr = NULL;
   bool exists;
   bool star;
   int nseg;

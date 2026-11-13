@@ -65,7 +65,7 @@ bool dh_write(DH_FILE* dh_file,       /* File descriptor */
   int16_t used_bytes;          /* Number of bytes used in this group buffer */
   int16_t rec_size;            /* Size of current record */
   int32_t old_big_rec_head = 0; /* Head of old big record chain */
-  int32_t new_big_rec_head;     /* Head of new big record chain */
+  int32_t new_big_rec_head = 0; /* Head of new big record chain */
   int32_t ogrp;
   char* data_ptr; /* Data */
   char* p;

@@ -275,7 +275,7 @@ void op_rmvtkn() {
   STRING_CHUNK* tgt_str = NULL;
   STRING_CHUNK* new_tgt;
   int16_t tgt_bytes_remaining;
-  char* tgt;
+  char* tgt = NULL;
   int16_t token_type;
   char* p;
   char c;
