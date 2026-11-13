@@ -1,0 +1,376 @@
+* SETAI
+* SET.AI verb: which AI provider every account uses, its model and key, the custom connection, the certificate authority file and the limits (S.69 step 2,
+* plan .claude/plan-ai-step2.md; the owner's decisions of 23 Oct 2026).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the messages renumbered (11xxx + 1005, 14xxx + 1000) and the Windows facts of the client.  The
+*              client is the PowerShell wrapper <program folder>\lib\sd-ai\sd-ai-ctl.ps1 (K$WINPATH of /lib/sd-ai/sd-ai-ctl.ps1), which finds the all-users
+*              Python and runs the Python client; OS.EXECUTE runs PowerShell here, so it is called as & '<path>' 'word' ..., its path (which has spaces and
+*              backslashes) is refused only for a single quote, and nothing is redirected (2>&1 would wrap the client's text in PowerShell error records; the
+*              client writes everything to standard output).  A client that finds no Python says error: nopython:, and the verb then stops with 12934.  KEY p
+*              HANDOVER gives the client the hand-over file's path (--handover): PowerShell has no < redirection, so the client reads the file itself and removes it
+*              whatever happens; the verb then removes it again with Remove-Item.  The administrator is SDSYS, an elevated Windows sign-in (K$ADMINISTRATOR).  What the
+*              client printed is read with PowerShell's carriage returns taken out.
+* 8 Nov 26 dm   S.170 (the owner: "is there any way to verify the model name entry, or provide a dropdown list of valid models", then "Instead of entering the model and key
+*               separately is there any way to do that in a single dialog with the key field displaying asterisks"; warned that the key would then pass through SD, he chose
+*               the single form): SET.AI MODELS provider lists the provider's own model names; SET.AI MODEL warns (15016, 15018) when the provider does not list the name;
+*               SET.AI KEY provider HANDOVER takes the key from the AI page's hand-over file (a directory only sdsys may enter) and removes the file whatever happens.
+*               run.ctl no longer takes a helper's refusal whose words hold "not found" (a provider's "model not found") for an unreachable helper.
+* 7 Nov 26 dm   S.160: SET.AI CONTEXT hex | - (the standing text), put to the wall's screen before the helper keeps it.
+* 23 Oct 26 dm  New (S.69 step 2; the owner: "an ai choice page ... a checkbox for the currently selected provider ... the same model needs to be used by all accounts").
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   SET.AI                                   says what is set
+*   SET.AI PROVIDER name | none              the provider every account uses: anthropic, openai, google, deepseek or custom; none turns the AI off
+*   SET.AI MODEL provider name | -           the model for a provider (- clears it: the provider's starting model is used again; Custom has none)
+*   SET.AI KEY provider                      asks for the key at the terminal, not shown, and keeps it for the helper only
+*   SET.AI KEY provider CLEAR                removes it
+*   SET.AI KEY provider HANDOVER             (S.170) the key the AI page's form wrote to its hand-over file ($aikey\key in the sdsys directory, a directory only SDSYS and
+*                                            SYSTEM may enter); the client reads the file and removes it, and the verb removes it again whatever happened
+*   SET.AI MODELS provider                   (S.170) the provider's own list of model names, asked with its key
+*   SET.AI CUSTOM name url format auth version | - maxparam     the fourth choice, where everything is the administrator's (format anthropic | openai, auth bearer | x-api-key)
+*   SET.AI CUSTOM CLEAR                      forgets the custom connection (not while it is the selected provider)
+*   SET.AI CA path | -                       the file of certificate authorities for a private CA (- is the system store).  On Windows the path is written with forward
+*                                            slashes, C:/ProgramData/SD/ai/ca.pem: a word here may not hold a backslash, and the helper reads either form
+*   SET.AI LIMIT name number                 requests-hour tokens-day timeout bytes-request bytes-reply max-tokens
+*   SET.AI CONTEXT hex | -                   (S.160) the standing text sent with every request, as hexadecimal ASCII (tool.ai's T builds it); - is the shipped default
+*
+*   The administrator's verb (the AI choice page, tool.ai, runs it).  It changes nothing itself: the settings live in the AI helper's own directory, and the helper
+*   (the service sd-ai) makes the change, after asking who is calling by the Windows user it reads from the pipe - this verb runs the helper's client as the
+*   administrator.  SET.AI KEY hands the console to the client, which reads the key itself without echo: that key never passes through SD.  The AI page's form (S.170,
+*   the owner's choice after a warning) reads the key in SD and hands it over in a file only SDSYS can reach; neither form puts the key on a command line or in the audit
+*   trail.  One provider and one model serve every account; whether an ACCOUNT may use it is the account's own gate (modify.account name ai-on).  Nothing is selected, no
+*   model or key is set and no account has the gate as delivered, so the AI is off until the administrator has done all of that.  A URL for custom is https only, with no
+*   query string.  Every change is audited in lower case, with no key in it.  The AI needs Python 3.13 or later installed for all users (the installer's Python box):
+*   without it the client says so and this verb stops with 12934.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program set.ai
+$catalog $setai
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   okc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/@+,-'
+*  The helper's client lives with the helper, in the program folder and outside the SD system directory (so that no SD account can replace the program that holds the
+*  key).  It is a PowerShell wrapper that finds the all-users Python and runs the Python client.  The administrator's own environment may name another, for the tests
+*  only (SD_AI_CTL); the product never sets it.  The path has spaces and backslashes (C:\Program Files\SD\...), so it is not held to okc: it goes inside single quotes
+*  on the PowerShell command line, and the one character that could end those quotes is refused.
+   ctl = env('SD_AI_CTL')
+   if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai-ctl.ps1')
+   if ctl = '' or index(ctl, "'", 1) then stop sysmsg(12612)       ;* no client path, or one a command line may not carry
+
+   words = trim(@sentence)
+   n.words = dcount(words, ' ')
+   for i = 2 to n.words
+      w = field(words, ' ', i)
+      if trim(convert(okc, space(len(okc)), w)) # '' then stop sysmsg(12627, w[1, 40])    ;* %1 has a character that is not allowed here
+   next i
+   sub = downcase(field(words, ' ', 2))
+   providers = ' anthropic openai google deepseek custom '
+
+   begin case
+      case n.words = 1
+         qargs = "'show'"
+         gosub run.ctl
+         for i = 1 to dcount(out, @fm)
+            display out<i>
+         next i
+         @system.return.code = 0
+
+      case sub = 'provider' and n.words = 3
+         prov = downcase(field(words, ' ', 3))
+         if prov # 'none' and index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])      ;* %1 is not one of anthropic, openai, google, deepseek and custom
+         qargs = "'provider' '" : prov : "'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai provider=' : prov)
+         if prov = 'none' then display sysmsg(12617) else display sysmsg(12616, prov)       ;* The AI is now off ... / The AI provider for every account is now %1
+         @system.return.code = 0
+
+      case sub = 'model' and n.words = 4
+         prov = downcase(field(words, ' ', 3))
+         model = field(words, ' ', 4)
+         if index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])
+         qargs = "'model' '" : prov : "' '" : model : "'"
+         gosub run.ctl
+         gosub need.ok
+         if model = '-' then
+            void kernel(K$AUDIT, 'set.ai model provider=' : prov : ' cleared')
+            display sysmsg(12619, prov)                                                   ;* The model for %1 is cleared
+         end else
+            void kernel(K$AUDIT, 'set.ai model provider=' : prov : ' model=' : model)
+            display sysmsg(12618, prov, model)                                            ;* The model for %1 is now %2
+*           S.170: the name is kept either way (a provider's list is not always complete), but a name the provider does not list is said, with the one it lists that differs
+*           only in case (the owner's "Deepseek-V4-Pro" for deepseek-v4-pro).  No list (no key yet, a provider with none, the network) says nothing.
+            gosub list.models
+            if ml.ok and ml.n > 0 then
+               gosub find.model
+               if not(fm.found) then
+                  display sysmsg(15016, prov, model)                                      ;* %1 does not list a model named %2; requests may be refused
+                  if fm.near # '' then display sysmsg(15018, fm.near)                     ;* It lists %1
+               end
+            end
+         end
+         @system.return.code = 0
+
+      case sub = 'models' and n.words = 3
+         prov = downcase(field(words, ' ', 3))
+         if index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])
+         gosub list.models
+         if not(ml.ok) then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12613, ml.code, ml.words[1, 120])                                 ;* The AI helper refused: %1 (%2)
+         end
+         display sysmsg(15017, prov, ml.n)                                                ;* %1 lists %2 models:
+         for i = 1 to ml.n
+            display '  ' : ml.list<i>
+         next i
+         @system.return.code = 0
+
+      case sub = 'key' and n.words = 4 and downcase(field(words, ' ', 4)) = 'handover'
+         prov = downcase(field(words, ' ', 3))
+         hand.f = @sdsys : @ds : '$aikey' : @ds : 'key'
+         if index(providers, ' ' : prov : ' ', 1) = 0 then
+            gosub drop.handover
+            stop sysmsg(12615, prov[1, 40])
+         end
+*        The client reads the key from the hand-over file itself (--handover: PowerShell has no < redirection to make the file its standard input), so the key is on no
+*        command line; the client removes the file whatever happens, and so does this verb, BEFORE anything else is looked at (run.ctl's stops would otherwise leave it).
+*        What happened is read back from the helper, as for the typed key; the client's own words are not trusted for it.
+         out = ''
+         os.execute "& '" : ctl : "' 'key' '" : prov : "' '--handover' '" : hand.f : "'" capturing out
+         gosub drop.handover
+         out = convert(char(13), '', out)                                                ;* PowerShell's line ends (see run.ctl)
+         if trim(out<1>)[1, 16] = 'error: nopython:' then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12934)                                                            ;* The AI needs Python 3.13 or later installed for all users ...
+         end
+         qargs = "'show'"
+         gosub run.ctl
+         gosub check.key
+         if not(key.found) then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12613, 'nokey', 'the key was not set')                             ;* The AI helper refused: %1 (%2)
+         end
+         void kernel(K$AUDIT, 'set.ai key set provider=' : prov : ' from=page')
+         display sysmsg(12620, prov)                                                      ;* The key for %1 is set
+         @system.return.code = 0
+
+      case sub = 'key' and n.words = 4 and downcase(field(words, ' ', 4)) = 'clear'
+         prov = downcase(field(words, ' ', 3))
+         if index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])
+         qargs = "'key-clear' '" : prov : "'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai key cleared provider=' : prov)
+         display sysmsg(12621, prov)                                                      ;* The key for %1 is cleared
+         @system.return.code = 0
+
+      case sub = 'key' and n.words = 3
+         prov = downcase(field(words, ' ', 3))
+         if index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])
+*        The console is handed to the helper's client and nothing is captured: the key is typed there, never read by SD.  What happened is then read back, not assumed.
+*        Nothing is redirected: the client writes to standard output only.
+         os.execute "& '" : ctl : "' 'key' '" : prov : "'"
+         qargs = "'show'"
+         gosub run.ctl
+         gosub check.key
+         if not(key.found) then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12613, 'nokey', 'the key was not set')                             ;* The AI helper refused: %1 (%2)
+         end
+         void kernel(K$AUDIT, 'set.ai key set provider=' : prov)
+         display sysmsg(12620, prov)                                                      ;* The key for %1 is set
+         @system.return.code = 0
+
+      case sub = 'custom' and n.words = 3 and downcase(field(words, ' ', 3)) = 'clear'
+         qargs = "'custom-clear'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai custom cleared')
+         display sysmsg(12623)                                                            ;* The custom connection is cleared
+         @system.return.code = 0
+
+      case sub = 'custom' and n.words = 8
+         cname = field(words, ' ', 3)
+         curl = field(words, ' ', 4)
+         qargs = "'custom'"
+         for i = 3 to 8
+            qargs := " '" : field(words, ' ', i) : "'"
+         next i
+         gosub run.ctl
+         gosub need.ok
+         chost = field(curl, '/', 3)
+*        The audit line names the host and never the whole URL: nothing a person might put in a URL is written to the trail
+         void kernel(K$AUDIT, 'set.ai custom name=' : cname : ' host=' : chost)
+         display sysmsg(12622, cname, chost)                                              ;* The custom connection is now %1, at %2
+         @system.return.code = 0
+
+      case sub = 'ca' and n.words = 3
+         cpath = field(words, ' ', 3)
+         qargs = "'ca' '" : cpath : "'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai ca file=' : cpath)
+         if cpath = '-' then display sysmsg(12625) else display sysmsg(12624, cpath)      ;* The ca-file is now the system store ... / The ca-file is now %1
+         @system.return.code = 0
+
+      case sub = 'limit' and n.words = 4
+         lname = downcase(field(words, ' ', 3))
+         lvalue = field(words, ' ', 4)
+         qargs = "'limit' '" : lname : "' '" : lvalue : "'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai limit name=' : lname : ' value=' : lvalue)
+         display sysmsg(12626, lname, lvalue)                                             ;* The limit %1 is now %2
+         @system.return.code = 0
+
+      case sub = 'context' and n.words = 3
+*        7 Nov 26 S.160: the standing text sent with every request, as ONE word of hexadecimal ASCII (a text of several lines is carried whole that way; tool.ai builds it), or - for
+*        the shipped default.  The text is decoded here and put to the wall's screen BEFORE the helper is asked: a standing text that names SD's own code would go with every request,
+*        so it is never kept.  The helper checks it again (printable ASCII and line feeds, 4000 characters).  The audit line has the size, never the text.
+         hx = field(words, ' ', 3)
+         if hx = '-' then
+            qargs = "'context' '-'"
+            gosub run.ctl
+            gosub need.ok
+            void kernel(K$AUDIT, 'set.ai context=default')
+            display sysmsg(15012)                                                         ;* ... is the shipped default again
+            @system.return.code = 0
+            stop
+         end
+         hx = downcase(hx)
+         if len(hx) = 0 or mod(len(hx), 2) or len(hx) > 8000 or convert('0123456789abcdef', '', hx) # '' then stop sysmsg(15014)
+         ctext = iconv(hx, 'MX0C')
+         if status() or len(ctext) * 2 # len(hx) then stop sysmsg(15014)
+         for i = 1 to len(ctext)
+            cc = seq(ctext[i, 1])
+            if cc # 10 and (cc < 32 or cc > 126) then stop sysmsg(15014)
+         next i
+         call $tk_aiwall('request', ctext, why)
+         if why # '' then
+            void kernel(K$AUDIT, 'set.ai context refused name=' : why)
+            stop sysmsg(15013, why)                                                       ;* ... names SD's own code or build (%1) and is not kept
+         end
+         qargs = "'context' '" : hx : "'"
+         gosub run.ctl
+         gosub need.ok
+         void kernel(K$AUDIT, 'set.ai context bytes=' : len(ctext))
+         display sysmsg(15011, len(ctext))                                                ;* ... is now the administrator's (%1 characters)
+         @system.return.code = 0
+
+      case 1
+         display sysmsg(12614)                                                            ;* set.ai {provider NAME | ... }
+   end case
+   stop
+
+* The helper's client, run as the administrator with its words already quoted; out holds what it printed (its errors too: the client writes everything to standard output,
+* and nothing is redirected, so PowerShell adds no error records of its own).  No Python ends the verb with 12934; a client that is not there or a helper that cannot be
+* reached ends it with 12612, and a refusal with 12613 and the helper's own code and words.
+run.ctl:
+   out = ''
+   os.execute "& '" : ctl : "' " : qargs capturing out
+*  13 Nov 26 Windows port: PowerShell ends every captured line with a carriage return (measured 27 Aug 2026, gpl.bp/edit), which "ok" and the [x] lines must not carry
+   out = convert(char(13), '', out)
+*  13 Nov 26 Windows port: the wrapper found no all-users Python 3.13 or later to run the client with
+   if trim(out<1>)[1, 16] = 'error: nopython:' then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12934)                                                                  ;* The AI needs Python 3.13 or later installed for all users ...
+   end
+*  8 Nov 26: a refusal of the helper's (error: ...) is not an unreachable helper, whatever its words hold: a provider's "model not found" passes through it now
+   if trim(out) = '' or (trim(out<1>)[1, 7] # 'error: ' and (index(out, 'could not be reached', 1) or index(out, 'not found', 1) or index(out, 'No such file', 1) or index(out, 'Permission denied', 1))) then
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12612)                                                                  ;* The AI helper could not be reached ...
+   end
+   return
+
+* After a setting: the client says ok (or, for a key, its own sentence), or error: code: words.
+need.ok:
+   first = trim(out<1>)
+   if first[1, 7] = 'error: ' then
+      rest = first[8, 999]
+      code = field(rest, ':', 1)
+      words2 = trim(rest[index(rest, ':', 1) + 1, 999])
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12613, code, words2[1, 70])                                             ;* The AI helper refused: %1 (%2)
+   end
+   if first # 'ok' and first[1, 8] # 'The key ' then                                        ;* key-clear prints its own sentence
+      @system.return.code = -ER$FAILED
+      stop sysmsg(12613, 'badreply', first[1, 70])
+   end
+   return
+
+* S.170: the provider's own list of model names (prov).  ml.ok 1 with ml.list (one to a field) and ml.n; ml.ok 0 with the helper's ml.code and ml.words.  run.ctl's
+* stops still apply (a helper that cannot be reached ends the verb).
+list.models:
+   qargs = "'models' '" : prov : "'"
+   gosub run.ctl
+   ml.ok = 0 ; ml.list = '' ; ml.n = 0 ; ml.code = '' ; ml.words = ''
+   first = trim(out<1>)
+   if first[1, 7] = 'error: ' then
+      rest = first[8, 999]
+      ml.code = field(rest, ':', 1)
+      ml.words = trim(rest[index(rest, ':', 1) + 1, 999])
+      return
+   end
+   if first[1, 8] # 'models: ' then
+      ml.code = 'badreply'
+      ml.words = first[1, 70]
+      return
+   end
+   ml.ok = 1
+   for i = 2 to dcount(out, @fm)
+      w = trim(out<i>)
+      if w # '' then
+         ml.n += 1
+         ml.list<ml.n> = w
+      end
+   next i
+   return
+
+* fm.found 1 when model is in ml.list exactly; fm.near the listed name that differs from it only in case
+find.model:
+   fm.found = 0
+   fm.near = ''
+   for i = 1 to ml.n
+      if ml.list<i> = model then fm.found = 1
+      if fm.near = '' and downcase(ml.list<i>) = downcase(model) then fm.near = ml.list<i>
+   next i
+   if fm.found then fm.near = ''
+   return
+
+* S.170: the hand-over file goes, whatever happened (single quotes: the $ of $aikey is not a PowerShell variable there)
+drop.handover:
+   os.execute "Remove-Item -LiteralPath '" : hand.f : "' -Force -ErrorAction SilentlyContinue"
+   return
+
+* Whether the show listing (in out) says a key is set for the provider: its block is the line that names it and the line after it
+check.key:
+   key.found = 0
+   for i = 1 to dcount(out, @fm)
+      ln = trim(out<i>)
+      if (ln[1, 3] = '[x]' or ln[1, 3] = '[ ]') and index(ln, ' ' : prov : ' ', 1) then
+         if index(out<i + 1>, 'key: set', 1) then key.found = 1
+      end
+   next i
+   return
+
+end
+
+* END-CODE

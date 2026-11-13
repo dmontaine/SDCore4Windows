@@ -114,8 +114,8 @@ def checks(raw):
         [r[0] for r in st] == ["home"] and st[0][5] == "ACC$START" and "ACC$START" in keys_defs_all and st[0][6] == "" and st[0][7] == ""
         and (st[0][2], st[0][3], st[0][10]) == ("start-menu", "start-terminal", "ST")
         and "case gi<TK.G.KIND> = 'start'" in raw["gates"] and "call $tk_startof(rec<ACC$START>, state)" in raw["gates"], [r[0] for r in st])
-    add("G11", "a gate that reaches beyond SD is marked as one wherever the operating system, the network or another server is reached: sh os sd net ssh api files files-write files-admin sockets",
-        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "sockets"}, sorted(      # 13 Nov 26 Windows: no ai row until RELEASE_1.1 246 carries the gate
+    add("G11", "a gate that reaches beyond SD is marked as one wherever the operating system, the network or another server is reached: sh os sd net ssh api files files-write files-admin ai sockets",
+        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "ai", "sockets"}, sorted(      # 13 Nov 26 Windows: the ai row is in with RELEASE_1.1 246, as Linux
 r[0] for r in rows if r[13] == "1"))
     add("G12", "no sentence is empty, holds an escape or ends in a full stop (the screens add their own punctuation), and none starts with a capital (they continue 'on allows ...')",
         all(r[11] and r[12] and not r[11].endswith(".") and not r[12].endswith(".") and r[11][0].islower() and r[12][0].islower() for r in rows), "")

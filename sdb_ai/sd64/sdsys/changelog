@@ -3,6 +3,37 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  ASK AN AI FROM INSIDE SD, AS ON LINUX. IT IS OFF AS DELIVERED.
+
+             What        - The ai verb sends one question to the AI provider the administrator chose
+                           and shows the answer. Before anything is sent you see what will go and
+                           are asked to say yes; the answer is shown as plain text and never run.
+                           The screen library's AI line works the same way. TOOL.AI (SDSYS only) is
+                           the AI choice page: Anthropic, OpenAI, Google and DeepSeek with their
+                           details filled in, or a Custom provider; the key and the model in one
+                           dialog; the accounts and their ai gate; the standing text sent with every
+                           request. SET.AI (SDSYS only) does the same at the prompt. MODIFY.ACCOUNT
+                           name AI-ON / AI-OFF and AI-ON on CREATE.ACCOUNT are each account's gate:
+                           membership of the new Windows group sdaiusers. BACKUP.ACCOUNT and
+                           RESTORE.ACCOUNT keep it. The home screen's AI tile is live.
+                           The requests go through a new service, sd-ai, running as the account
+                           NT SERVICE\sd-ai; it is the only part of SD that connects to a provider
+                           and the only one that can open a key. Keys are encrypted for that
+                           account. Every request is written to the audit trail before it is sent,
+                           without its text. Each account has limits on requests and tokens.
+             Needs       - Python 3.13 or later installed for all users: the installer's Python box.
+                           Without it the sd-ai service is not installed and SET.AI says so. Install
+                           Python later, then run C:\Program Files\SD\install-aihelper.ps1 as an
+                           administrator.
+             Does NOT    - Turn anything on. No provider, no key and no account's gate are set as
+                           delivered, unless the installer's "open every access gate" box was
+                           ticked, which gives your own account its ai gate as it gives the others.
+                           Turning the AI on sends the text a person types, and anything they
+                           paste, to the provider's servers on the internet. On Windows SDSYS is an
+                           elevated administrator and can read a provider's key, which any Windows
+                           administrator of the machine can do. NOT YET TESTED ON AN INSTALLED
+                           SYSTEM.
+
 13 Nov 26  A DIRECTORY FILE LISTS EVERY RECORD ID AS IT WAS WRITTEN.
 
              What        - SELECT of a directory file gives back a record id holding a byte from 128

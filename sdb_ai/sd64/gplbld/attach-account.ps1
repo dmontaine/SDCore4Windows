@@ -94,6 +94,9 @@
 #   recovery-on, the editors' recovery copy, with the S.88 carry, as Linux's carry note said it would).  The result is
 #   JUDGED ON WHAT THE SYSTEM HOLDS - register fields 7 to 12, 14, 15, 18 and 19, and the groups sdssh, sdapi, sdfiles, sdfileswrite and sdfilesadmin - never
 #   on sd's exit status, which says nothing about a refusal.  test-install-opengates-units.py holds the word list to modifya's on-words.
+# 13 Nov 26 Windows port - RELEASE_1.1 246 (Linux S.69 step 2; installsdcore.sh gate_words and gate_grp sdaiusers ai-on): ai-on joins the words, after
+#   files-admin-on as modify.account carries it out, and the group sdaiusers is read back with the others.  Only a ticked box opens it: the delivered
+#   state stays closed, and the AI is still off until the administrator chooses a provider and sets its key (set.ai).
 #
 
 [CmdletBinding()]
@@ -233,7 +236,7 @@ function Wait-SdRunning {
 # --- every access gate, for -OpenGates ----------------------------------------
 
 # The words, in the order modify.account carries them out.  test-install-opengates-units.py holds this list to modifya's on-words.
-$GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'recovery-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on', 'files-admin-on', 'pins-on')
+$GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'recovery-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on', 'files-admin-on', 'ai-on', 'pins-on')
 
 # Register field (keys.h ACC$..., one line each in the record) -> the word that sets it.
 # PAIRS, NOT A DICTIONARY: an ordered dictionary indexed by an integer is indexed by POSITION, so $d[7] is the eighth value, not the one keyed 7
@@ -241,7 +244,7 @@ $GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 
 $GateFields = @(@(7, 'sh-on'), @(8, 'os-on'), @(9, 'sd-on'), @(10, 'voc-on'), @(11, 'bp-on'), @(12, 'dict-on'), @(14, 'shared-write-on'), @(15, 'net-on'), @(18, 'pins-on'), @(19, 'recovery-on'))
 
 # The Windows groups that are gates: membership of each is the gate.
-$GateGroups = [ordered]@{ 'sdssh' = 'both'; 'sdapi' = 'both'; 'sdfiles' = 'files-on'; 'sdfileswrite' = 'files-write-on'; 'sdfilesadmin' = 'files-admin-on' }
+$GateGroups = [ordered]@{ 'sdssh' = 'both'; 'sdapi' = 'both'; 'sdfiles' = 'files-on'; 'sdfileswrite' = 'files-write-on'; 'sdfilesadmin' = 'files-admin-on'; 'sdaiusers' = 'ai-on' }
 
 function Get-ClosedGates {
     <#

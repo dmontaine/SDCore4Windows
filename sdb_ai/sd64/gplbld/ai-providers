@@ -1,0 +1,68 @@
+# ai-providers - the AI providers SD Core ships connection details for (S.69 step 2, owner's decision of 23 Oct 2026; Google and a starting model for each, 1 Nov 2026).
+#
+# 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the providers and their details are Linux's, byte for byte below this paragraph.  On Windows the
+# installer puts this file in <program folder>\lib\sd-ai, which no SD account can change; a Windows ADMINISTRATOR can, and on Windows SDSYS is one (the
+# installation documentation says so).
+#
+# Read by sd-ai (the helper).  The installer puts it at /usr/local/lib/sd-ai/ai-providers, root-owned and not writable by sdsys or any SD account, with the
+# helper: whoever could change a URL here could send the key anywhere.  The AI choice page shows these details through the helper's status.
+# What a person MUST supply is the KEY: it is not here.  The model is here as a STARTING model: the administrator may name another for any provider (set.ai model),
+# and clearing that returns to the one below.  The fifth choice, Custom, is not here either: its details, model included, are the administrator's own, kept in the
+# helper's settings (set.ai custom ...).
+#
+#   name      what the page shows
+#   url       the whole URL the request is posted to: https only, no query string
+#   format    the wire format: anthropic (the Messages API) or openai (chat completions)
+#   auth      how the key is sent: x-api-key (a header of that name) or bearer (Authorization: Bearer ...)
+#   version   the anthropic-version header (the anthropic format only)
+#   maxparam  the name of the reply-size field in the request body
+#   model     the starting model: used while the administrator has set none; letters, digits and . _ : / @ + -
+#
+# Checked 23 Oct 2026 against the providers' documentation: Anthropic (POST /v1/messages, x-api-key, anthropic-version 2023-06-01) and
+# DeepSeek (https://api.deepseek.com, /chat/completions, Authorization: Bearer, OpenAI-compatible).  OpenAI's own reference could not be
+# read; its details are from its long-standing chat completions API and max_completion_tokens (third-party reports say max_tokens is
+# deprecated there) and have NOT been tried against a real key.  A change at a provider is a change to this file.
+#
+# 8 Nov 2026 (S.170): DeepSeek retired deepseek-chat on 24 Jul 2026 (its change log; api-docs.deepseek.com/updates), so every request with the shipped default came back
+# HTTP 400.  Its list of models (GET /models) now names deepseek-v4-pro and deepseek-flash; the starting model is deepseek-flash, its balanced one, by the rule below.
+# The AI page now offers each provider's own list once a key is set, so a starting model that a provider retires is replaced by picking another.
+#
+# 1 Nov 2026 additions - READ FROM THE PROVIDERS' OWN PAGES THAT DAY, NONE TRIED AGAINST A REAL KEY, AND MODEL NAMES CHANGE FAST: Google's details are its
+# OpenAI-compatibility endpoint (https://ai.google.dev/gemini-api/docs/openai: base https://generativelanguage.googleapis.com/v1beta/openai/, path chat/completions,
+# the key as a Bearer token; that page does not say which reply-size field it takes, so max_tokens, which compatible services take, is used).  The starting models
+# are the balanced choice of each provider, not its largest: Anthropic claude-sonnet-5-5 (Sonnet 5.5); OpenAI gpt-6.1-sol and Google gemini-3.8-flash (the models
+# pages of 1 Nov 2026 name them; OpenAI's page describes the Responses API, so whether this chat completions layout takes that name is not known); DeepSeek
+# deepseek-chat (its long-standing name).  A model that a provider refuses comes back as that provider's own error; the administrator names another with M on the AI page.
+
+[anthropic]
+name=Anthropic
+url=https://api.anthropic.com/v1/messages
+format=anthropic
+auth=x-api-key
+version=2023-06-01
+maxparam=max_tokens
+model=claude-sonnet-5-5
+
+[openai]
+name=OpenAI
+url=https://api.openai.com/v1/chat/completions
+format=openai
+auth=bearer
+maxparam=max_completion_tokens
+model=gpt-6.1-sol
+
+[google]
+name=Google
+url=https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+format=openai
+auth=bearer
+maxparam=max_tokens
+model=gemini-3.8-flash
+
+[deepseek]
+name=DeepSeek
+url=https://api.deepseek.com/chat/completions
+format=openai
+auth=bearer
+maxparam=max_tokens
+model=deepseek-flash

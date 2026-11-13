@@ -594,6 +594,11 @@ SDSYS_RETIRED = [
 # deleted: "1 file(s) in C:\Program Files\SD are no longer shipped by stage.py or
 # sd.iss".  That is the mechanism working, not a nuisance: the file is in every
 # install made before today.
+# 13 Nov 26 - RELEASE_1.1 246.  THE AI HELPER'S FILES, staged from gplbld to ProgramFiles\lib\sd-ai
+# (main(); Linux installs the same four to /usr/local/lib/sd-ai, plus the two Windows .ps1 that find
+# the all-users Python).  Named, so that a file missing from the tree fails the build.
+AI_HELPER_FILES = ['sd-ai', 'sd-ai-ctl', 'sd-ai-ctl.ps1', 'sd-ai-python.ps1', 'ai-providers', 'ai-context']
+
 PF_RETIRED = [
     # 18 Sep 26 - RELEASE_1.1 64.  The install's own account step used to be this
     # script, which gave the INSTALLING Windows administrator an SD account.  The
@@ -1876,6 +1881,12 @@ def main():
                    # to assert-current's $neverShipped list.  Its unit test
                    # (test-jobs-helper-units.ps1) does not.
                    'sd-jobs.ps1',
+                   # 13 Nov 26 - RELEASE_1.1 246 (Linux's AI helper, S.69 step 2).  Creates, starts and
+                   # removes the AI helper service sd-ai (the virtual account NT SERVICE\sd-ai) and its
+                   # state directory {#DataDir}\ai; sd.iss runs it from {app} at ssPostInstall, after the
+                   # Python step, and at uninstall.  It SHIPS - do NOT add it to assert-current's
+                   # $neverShipped list.  Its guard (test-aihelper-units.py) does not.
+                   'install-aihelper.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
         src = os.path.join(here, script)
         if not os.path.exists(src):
@@ -1949,6 +1960,24 @@ def main():
             'the MICRO verb highlights with')
     mc_dst = os.path.join(pf, 'micro')
     copy_tree(mc_src, mc_dst, staged, stage)
+    # 13 Nov 26 - RELEASE_1.1 246, THE AI HELPER (Linux's /usr/local/lib/sd-ai, root-owned and
+    # outside the data tree so that no SD account can replace the program that holds the key).
+    # PROGRAM FILES, NOT THE DATA TREE, for the helper scripts' reason above: the data tree is
+    # writable by sdusers.  The helper and its client are Python (run under the all-users Python
+    # the installer offers); the two .ps1 files find that Python; ai-providers says where a key may
+    # be sent and ai-context is the shipped standing text.  install-aihelper.ps1 (staged above)
+    # makes the service that runs it.  A missing one is a build failure, as for the scripts above.
+    ai_dst = os.path.join(pf, 'lib', 'sd-ai')
+    os.makedirs(ai_dst)
+    for name in AI_HELPER_FILES:
+        src = os.path.join(here, name)
+        if not os.path.isfile(src):
+            raise SystemExit('missing %s - the AI helper needs it' % src)
+        dst = os.path.join(ai_dst, name)
+        shutil.copy2(src, dst)
+        staged.add(stage, dst)
+    print('  AI helper: %d file(s) staged to ProgramFiles\\lib\\sd-ai' % len(AI_HELPER_FILES))
+
     print('  micro: %d syntax file(s) staged to ProgramFiles\\micro'
           % len(os.listdir(os.path.join(mc_dst, 'syntax'))))
     print('  FILES_DICTS: %d dictionary records staged to ProgramFiles\\gplbld'

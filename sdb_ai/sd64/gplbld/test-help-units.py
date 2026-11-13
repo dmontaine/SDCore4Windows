@@ -5,9 +5,10 @@
   python sdb_ai/sd64/gplbld/test-help-units.py --selftest
 
 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 254, the test-subset audit's item 6; row 239): Linux's message ids are
-Core's (11830-11842 + 1005, 14002/14003/14046 + 1000), the docs checkout is the sibling SDCore4WindowsDocs, and tool_ai and
-tool_audit are not read (Core has neither page yet: rows 246, 247), so check P17f and its three mutants are out.  P12 (the book
-in line 2) is also held, by Core's own test-helpbook-units.py.
+Core's (11830-11842 + 1005, 14002/14003/14046 + 1000), the docs checkout is the sibling SDCore4WindowsDocs, and
+tool_audit is not read (Core has no such page yet: row 247), so check P17f and its three mutants are out.  P12 (the book
+in line 2) is also held, by Core's own test-helpbook-units.py.  13 Nov 26 (RELEASE_1.1 246): tool_ai is read again, as on Linux,
+now that the AI page is carried (P13 / P14 see its two keys).
 
 No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it could not run.
 
@@ -56,7 +57,7 @@ def read(path):
 
 def load():
     src = {n: read(os.path.join(GPL, n)) for n in PROGS}
-    # 13 Nov 26 Windows: tool_ai is not read; Core has no AI page yet (row 246).
+    src["tool_ai"] = read(os.path.join(GPL, "tool_ai"))     # 13 Nov 26 Windows (RELEASE_1.1 246, the AI carried): the AI page asks for tool.ai.providers and tool.ai.accounts
     src["tool_gates"] = read(os.path.join(GPL, "tool_gates"))     # 24 Oct 26, S.75 A2: the gate matrix asks for tool.gates.matrix
     src["tool_mygates"] = read(os.path.join(GPL, "tool_mygates"))     # 24 Oct 26, S.75 A2: the holder's page asks for tool.gates.mine
     src["tool_sessions"] = read(os.path.join(GPL, "tool_sessions"))   # 24 Oct 26, S.75 A4: the sessions and locks page asks for tool.sessions.page
@@ -201,7 +202,7 @@ def checks(s):
     # keys asked for by the pages
     tids = re.search(r"tids = ('[a-z]+'(?: : @fm : '[a-z]+')*)", tm)
     tile_ids = re.findall(r"'([a-z]+)'", tids.group(1)) if tids else []
-    asked = set(re.findall(r"'(tool\.(?:menus|ai|gates|sessions|jobs|entries|audit|config|backups|accounts|remote|files|voc|dict|query|bulk|catalog|test|home)\.[a-z-]+)'", tm + "\n" +strip(s["tool_jobs"]) + "\n" + strip(s["tool_entries"]) + "\n" + strip(s["tool_gates"]) + "\n" + strip(s["tool_mygates"]) + "\n" + strip(s["tool_sessions"]) + "\n" + strip(s["tool_config"]) + "\n" + strip(s["tool_backups"]) + "\n" + strip(s["tool_accounts"]) + "\n" + strip(s["tool_remote"]) + "\n" + strip(s["tool_files"]) + "\n" + strip(s["tool_voc"]) + "".join("\n" + strip(s["tool_" + a]) for a in ("dict", "query", "bulk", "catalog", "test", "home")) + "\n" + strip(s["mymenu"])))
+    asked = set(re.findall(r"'(tool\.(?:menus|ai|gates|sessions|jobs|entries|audit|config|backups|accounts|remote|files|voc|dict|query|bulk|catalog|test|home)\.[a-z-]+)'", tm + "\n" +strip(s["tool_jobs"]) + "\n" + strip(s["tool_entries"]) + "\n" + strip(s["tool_ai"]) + "\n" + strip(s["tool_gates"]) + "\n" + strip(s["tool_mygates"]) + "\n" + strip(s["tool_sessions"]) + "\n" + strip(s["tool_config"]) + "\n" + strip(s["tool_backups"]) + "\n" + strip(s["tool_accounts"]) + "\n" + strip(s["tool_remote"]) + "\n" + strip(s["tool_files"]) + "\n" + strip(s["tool_voc"]) + "".join("\n" + strip(s["tool_" + a]) for a in ("dict", "query", "bulk", "catalog", "test", "home")) + "\n" + strip(s["mymenu"])))
     if "'tool.menus.tile.' : tids<si - 2>" in tm:
         asked |= {"tool.menus.tile." + t for t in tile_ids}
     ck("P13 every key a page asks for has a shipped record (%d keys)" % len(asked), len(asked) >= 13 and not (asked - set(hts)), repr(sorted(asked - set(hts))))

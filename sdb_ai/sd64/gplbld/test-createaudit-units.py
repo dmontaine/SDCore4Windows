@@ -25,7 +25,9 @@ CA = os.path.join(HERE, os.pardir, "sdsys", "gpl.bp", "createa")
 
 # (setting, word) in the order of the usage line
 PAIRS = [("CA$ROUTE.SSH", "ssh"), ("CA$ROUTE.API", "api"), ("CA$OS.SH", "sh-on"), ("CA$OS.EXECUTE", "os-on"), ("CA$VOC.EDIT", "voc-on"),
-         ("CA$BP.EDIT", "bp-on"), ("CA$DICT.EDIT", "dict-on"), ("CA$NET", "net-on"), ("CA$FILES", "files-on"), ("CA$FILESWRITE", "files-write-on"), ("CA$FILESADMIN", "files-admin-on"), ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on"),
+         ("CA$BP.EDIT", "bp-on"), ("CA$DICT.EDIT", "dict-on"), ("CA$NET", "net-on"), ("CA$FILES", "files-on"), ("CA$FILESWRITE", "files-write-on"), ("CA$FILESADMIN", "files-admin-on"),
+         ("CA$AI", "ai-on"),      # 13 Nov 26 (RELEASE_1.1 246, from Linux S.69 step 2): the AI gate, membership of sdaiusers
+         ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on"),
          ("CA$PINS", "pins-on"),   # 28 Oct 26, S.75 (from Linux ec8459b): the person may add programs of their own to their home screen
          ("CA$RECOVERY", "recovery-on")]   # 10 Nov 26 (from Linux 44807a43, S.88 plan 2.9): the editors keep a recovery copy of unsaved text
 # 25 Oct 26 Windows port: the list is Linux's, files-admin-on (S.73 item 3) included; the account name is upcased here

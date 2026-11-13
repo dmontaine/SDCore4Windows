@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON (joins the Windows group sdaiusers, the right to use the AI provider's API, on its
+*           own); CA$AI in createacc.h; in the syntax line, the usage and the audit gates= list.
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON (CA$RECOVERY), in the syntax line, the usage and the audit gates= list.
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: START-MENU / START-TERMINAL (where the account starts) and PINS-ON (the person may add programs of their own to their home screen), the words
 *           MODIFY.ACCOUNT takes that differ from the delivered state; CA$START and CA$PINS in createacc.h; two start words are refused (12796) before anything is made; the audit gates= list names pins-on
@@ -416,6 +418,8 @@
 * CREATE.ACCOUNT USER  <user name> {SSH | API | BOTH | NONE} {START-MENU | START-TERMINAL} {PINS-ON} {RECOVERY-ON} {NO.QUERY}
 *   RECOVERY-ON (10 Nov 26, from Linux S.88 plan 2.9) the account's editors keep a recovery copy of text that was not saved, so a hang-up or an abort does not
 *               lose it.  Off unless typed.  A user account only (12776).  RECOVERY-OFF restates the default and is not accepted here.
+*   AI-ON       (13 Nov 26, from Linux S.69 step 2) the person joins the Windows group sdaiusers: the right to use the AI provider's API through the helper sd-ai (one
+*               provider and model for every account, chosen by SDSYS with set.ai).  Stands alone; off unless typed; a user account only (10087, 10081).
 *                        - the route defaults to BOTH when nothing is said
 *                          (RELEASE_1.1 68); the tier words went with 64
 * CREATE.ACCOUNT GROUP <group name> {NO.QUERY}
@@ -664,11 +668,12 @@ deffun ps_script(script) calling '!ps_script'
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on}'
     crt '                  {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {no.query}'
     crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
     crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
-    crt '                  (net-on), and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files'
+    crt '                  (net-on), no files-only login (files-on; it cannot change files here without files-write-on), and no use of the AI'
+    crt '                  (ai-on); it can open and read the files'
     crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
     crt '                  shared-write-on is typed;'
     crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
@@ -721,6 +726,7 @@ deffun ps_script(script) calling '!ps_script'
    if settings<CA$FILES> = 1 then gates<-1> = 'files-on'
    if settings<CA$FILESWRITE> = 1 then gates<-1> = 'files-write-on'
    if settings<CA$FILESADMIN> = 1 then gates<-1> = 'files-admin-on'
+   if settings<CA$AI> = 1 then gates<-1> = 'ai-on'     ;* 13 Nov 26 Windows port (Linux S.69 step 2, RELEASE_1.1 246)
    if settings<CA$SHARED.READ.OFF> = 1 then gates<-1> = 'shared-read-off'
    if settings<CA$SHARED.WRITE> = 1 then gates<-1> = 'shared-write-on'
    if settings<CA$PINS> = 1 then gates<-1> = 'pins-on'
@@ -920,6 +926,11 @@ more.args:
 *   !create_account refuses it without FILES-ON and FILES-WRITE-ON (12531), and for a GROUP or OTHER account as it refuses FILES-ON.
          case upcase(token) = 'FILES-ADMIN-ON'
             settings<CA$FILESADMIN> = 1
+
+* 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): AI-ON, the person joins sdaiusers, the right to use the AI provider's API.  Off unless typed.
+*   !create_account refuses it for a GROUP or OTHER account as it refuses FILES-ON, and looks for the group before anything is made.
+         case upcase(token) = 'AI-ON'
+            settings<CA$AI> = 1
 
 * 28 Oct 26 dm (from Linux ec8459b) - S.75, home: START-MENU and START-TERMINAL name where the new account starts; they are one setting, so the second of two different ones is refused with 12796 (the words
 *   MODIFY.ACCOUNT refuses the same pair with) before anything is made.  PINS-ON lets the person add programs of their own to their home screen; off unless typed.  START-DEFAULT and

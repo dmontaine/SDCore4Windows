@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 246: the AI keys' comment says the helper is here (op_ai.c); the numbers are unchanged.
  * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's home and a private directory below it.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone; the number stays reserved.
  * 25 Oct 26 Windows port - from Linux fc4030a (18 Oct 26) S.66: K_SHARED_READ, K_SHARED_WRITE, K_SHARED_REF and K_SHARED_ONCE (128-131), the shared
@@ -544,8 +545,7 @@
                        A program compiled with $MODE NON.DURABLE.TXN sets it before each COMMIT. */
 #define K_NON_DURABLE_TXN    113
 /* 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's keys, so the screen library's AI routines ($tk_ai) carry
-   unchanged.  Windows has no helper yet (RELEASE_1.1 173): op_kernel.c answers each as Linux's op_ai.c does when no helper is
-   running - START 'ERR' FM 'nohelper', POLL and STATUS 'E' FM 'nohelper', CANCEL 'OK' - so the AI is never usable and nothing is sent. */
+   unchanged.  13 Nov 26 (RELEASE_1.1 246): the helper is here now, and op_kernel.c sends all four to k_ai() (op_ai.c), as Linux does. */
 /* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2, the readers of $IPC).  K_SHOW_SAFE: the argument is any text; the answer is
    that text with every byte of THE ONE RULE (op_lock.c show_unsafe_byte(): 0-31, 127, 128-159, 248-255) made '?', the same length.  It
    reads and changes nothing else and any program may ask: PSTAT, PROFILER DISPLAY and HSM USER n print the $IPC records S<n>, F<n> and

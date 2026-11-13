@@ -17,7 +17,8 @@ and the groups HOLD, never on what the stub sd returned (the real sd says nothin
 THE DEFAULT IS NO.  The task is "unchecked" (a tick, or /TASKS=opengates on a silent run, is the only way it is on); -OpenGates is passed only
 under WizardIsTaskSelected('opengates'); an upgrade skips the tasks page, and an existing account (exit 2) is never touched.  The word list is
 every word modify.account accepts to turn something on, less shared-read-on (the default).  8 Nov 2026, Linux bfca310a, owner 1 Nov "Every gate":
-files-admin-on and pins-on are in the list now, and the box is shown in the wizard (no Check: WizardSilent), which is made taller for it.  A gate
+files-admin-on and pins-on are in the list now, and the box is shown in the wizard (no Check: WizardSilent), which is made taller for it.
+13 Nov 2026 (RELEASE_1.1 246, Linux S.69 step 2): ai-on, read back from the group sdaiusers, after files-admin-on.  A gate
 added later fails the row that compares the list with modifya until it is decided here.
 
 NOT MEASURED HERE: that the real modify.account, run as sd -internal at ssPostInstall, accepts each word for the ATTACHed account, and that the
@@ -40,7 +41,7 @@ KEYS = os.path.join(SD64, "sdsys", "syscom", "keys.h")
 # modifya on-words that are NOT access gates for this purpose, and why (see the header)
 NOT_GATES = {"SHARED-READ-ON"}
 EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "recovery-on", "net-on", "shared-write-on", "files-on", "files-write-on",
-                "files-admin-on", "pins-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9)
+                "files-admin-on", "ai-on", "pins-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9); 13 Nov 26: ai-on (sdaiusers, RELEASE_1.1 246, Linux 277/308)
 EXPECT_FIELDS = {7: "ACC$SH", 8: "ACC$OS.EXEC", 9: "ACC$SD.ACCOUNTS", 10: "ACC$VOC.EDIT", 11: "ACC$BP.EDIT", 12: "ACC$DICT.EDIT",
                  14: "ACC$SHARED.WRITE", 15: "ACC$NET", 18: "ACC$PINS", 19: "ACC$RECOVERY"}
 
@@ -93,7 +94,7 @@ def scenario(name, record_fields, members, groups_throw=False, record_missing=Fa
 
 
 ALL_YES = {n: "yes" for n in (7, 8, 9, 10, 11, 12, 14, 15, 18, 19)}
-BOTH_GROUPS = {"sdssh": ["PC\\Don"], "sdapi": ["PC\\Don"], "sdfiles": ["PC\\Don"], "sdfileswrite": ["PC\\Don"], "sdfilesadmin": ["PC\\Don"]}
+BOTH_GROUPS = {"sdssh": ["PC\\Don"], "sdapi": ["PC\\Don"], "sdfiles": ["PC\\Don"], "sdfileswrite": ["PC\\Don"], "sdfilesadmin": ["PC\\Don"], "sdaiusers": ["PC\\Don"]}
 SCENARIOS = [
     scenario("all open (member names carry a domain and a different case)", ALL_YES, BOTH_GROUPS),
     scenario("sd-on blank", {**ALL_YES, 9: ""}, BOTH_GROUPS),
@@ -102,6 +103,7 @@ SCENARIOS = [
     scenario("not in sdfileswrite", ALL_YES, {**BOTH_GROUPS, "sdfileswrite": ["PC\\Ann"]}),
     scenario("not in sdfiles", ALL_YES, {**BOTH_GROUPS, "sdfiles": []}),
     scenario("not in sdfilesadmin", ALL_YES, {**BOTH_GROUPS, "sdfilesadmin": []}),
+    scenario("not in sdaiusers", ALL_YES, {**BOTH_GROUPS, "sdaiusers": []}),
     scenario("pins-on blank", {**ALL_YES, 18: ""}, BOTH_GROUPS),
     scenario("not in sdapi (both is half done)", ALL_YES, {**BOTH_GROUPS, "sdapi": []}),
     scenario("in neither route group (both is named once)", ALL_YES, {**BOTH_GROUPS, "sdapi": [], "sdssh": []}),
@@ -116,10 +118,11 @@ EXPECT = {
     "not in sdfileswrite": (False, ["files-write-on"]),
     "not in sdfiles": (False, ["files-on"]),
     "not in sdfilesadmin": (False, ["files-admin-on"]),
+    "not in sdaiusers": (False, ["ai-on"]),
     "pins-on blank": (False, ["pins-on"]),
     "not in sdapi (both is half done)": (False, ["both"]),
     "in neither route group (both is named once)": (False, ["both"]),
-    "groups unreadable": (False, ["both", "files-on", "files-write-on", "files-admin-on"]),
+    "groups unreadable": (False, ["both", "files-on", "files-write-on", "files-admin-on", "ai-on"]),
     "record unreadable": (False, ["sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "shared-write-on", "net-on", "pins-on", "recovery-on"]),
 }
 
@@ -182,8 +185,8 @@ def checks(att, iss, mod, keys):
         "fields %s, keys %s" % (fields, {EXPECT_FIELDS[n]: kn.get(EXPECT_FIELDS[n]) for n in EXPECT_FIELDS}))
     gm = re.search(r"\$GateGroups = \[ordered\]@\{([^}]*)\}", att)
     groups = dict(re.findall(r"'([a-z]+)'\s*=\s*'([a-z-]+)'", gm.group(1))) if gm else {}
-    row("S5 the groups read are sdssh and sdapi (both), sdfiles (files-on), sdfileswrite (files-write-on) and sdfilesadmin (files-admin-on), and no others",
-        groups == {"sdssh": "both", "sdapi": "both", "sdfiles": "files-on", "sdfileswrite": "files-write-on", "sdfilesadmin": "files-admin-on"}, "%s" % groups)
+    row("S5 the groups read are sdssh and sdapi (both), sdfiles (files-on), sdfileswrite (files-write-on), sdfilesadmin (files-admin-on) and sdaiusers (ai-on), and no others",
+        groups == {"sdssh": "both", "sdapi": "both", "sdfiles": "files-on", "sdfileswrite": "files-write-on", "sdfilesadmin": "files-admin-on", "sdaiusers": "ai-on"}, "%s" % groups)
 
     # --- static: the call, the exit code, the default -------------------------------------------------------------------------------
     row("S6 -OpenGates is a switch, off by default", re.search(r"\[switch\] \$OpenGates", att) is not None)
@@ -241,15 +244,17 @@ MUTANTS = [
     # (name, file key, old text, new text)
     ("the task is ticked by default", "iss", 'GroupDescription: "5)  SD Core account:"; Flags: unchecked', 'GroupDescription: "5)  SD Core account:"; Flags: '),
     ("the switch is passed whatever the task says", "iss", "  if WizardIsTaskSelected('opengates') then\n    Gates := ' -OpenGates';", "  Gates := ' -OpenGates';"),
-    ("net-on is not in the list", "att", "'dict-on', 'net-on', 'shared-write-on'", "'dict-on', 'shared-write-on'"),
+    ("net-on is not in the list", "att", "'recovery-on', 'net-on', 'shared-write-on'", "'recovery-on', 'shared-write-on'"),      # 13 Nov 26: recovery-on stands before it since 10 Nov (the old text no longer matched)
     ("files-write-on comes before files-on", "att", "'files-on', 'files-write-on', 'files-admin-on'", "'files-write-on', 'files-on', 'files-admin-on'"),
-    ("files-admin-on comes before files-write-on", "att", "'files-write-on', 'files-admin-on', 'pins-on')", "'files-admin-on', 'files-write-on', 'pins-on')"),
-    ("files-admin-on is not in the list", "att", "'files-write-on', 'files-admin-on', 'pins-on')", "'files-write-on', 'pins-on')"),
-    ("pins-on is not in the list", "att", "'files-admin-on', 'pins-on')", "'files-admin-on')"),
-    ("sdfilesadmin is not read back", "att", "; 'sdfilesadmin' = 'files-admin-on' }", " }"),
-    ("register field 18 is not read back", "att", ", @(18, 'pins-on'))", ")"),
+    ("files-admin-on comes before files-write-on", "att", "'files-write-on', 'files-admin-on', 'ai-on'", "'files-admin-on', 'files-write-on', 'ai-on'"),
+    ("files-admin-on is not in the list", "att", "'files-write-on', 'files-admin-on', 'ai-on'", "'files-write-on', 'ai-on'"),
+    ("pins-on is not in the list", "att", "'ai-on', 'pins-on')", "'ai-on')"),
+    ("sdfilesadmin is not read back", "att", "; 'sdfilesadmin' = 'files-admin-on';", ";"),
+    ("ai-on is not in the list (13 Nov 26, RELEASE_1.1 246)", "att", "'files-admin-on', 'ai-on', 'pins-on')", "'files-admin-on', 'pins-on')"),
+    ("sdaiusers is not read back (13 Nov 26, RELEASE_1.1 246)", "att", "; 'sdaiusers' = 'ai-on' }", " }"),
+    ("register field 18 is not read back", "att", ", @(18, 'pins-on'), @(19", ", @(19"),      # 13 Nov 26: field 19 follows it since 10 Nov
     ("the box is hidden from the wizard again", "iss", 'GroupDescription: "5)  SD Core account:"; Flags: unchecked', 'GroupDescription: "5)  SD Core account:"; Flags: unchecked; Check: WizardSilent'),
-    ("the wizard is back to its old height", "iss", "WizardSizePercent=100,145\n", ""),
+    ("the wizard is back to its old height", "iss", "WizardSizePercent=100,150\n", ""),      # 13 Nov 26: 150 since 10 Nov (RELEASE_1.1 210)
     ("a wrong register field", "att", "@(10, 'voc-on')", "@(9, 'voc-on')"),
     ("the success is not judged", "att", "if ($closed.Count -eq 0) {", "if ($true) {"),
     ("a missing group is not judged", "att", "if ((-not $in) -and ($closed -notcontains $GateGroups[$g])) { $null = $closed.Add($GateGroups[$g]) }", ""),

@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 13 Nov 26 Windows port - RELEASE_1.1 246: the four AI keys answer as Linux's do now (op_ai.c); their "nohelper" notes are gone.
 	  * 8 Nov 26 Windows port - from Linux 904fadd3 (S.87 batch 14): K$FORM.QUEUE (111) is gone with SP.ASSIGN; the number stays reserved.
 	  * 8 Nov 26 Windows port - from Linux afc22bb6 (S.87 batch 13): $define for OS$OPEN, as # no longer starts a directive.
 	  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): K$SHARED.READ (128), K$SHARED.WRITE (129), K$SHARED.REF (130), K$SHARED.ONCE (131).
@@ -248,13 +249,13 @@
       * 13 Oct 26 dm (Linux 7ff476f) - The terminal's own size: kernel(K$WINSIZE, '') answers width, a field mark, height as the kernel last
       *   read them from the tty (start-up and every SIGWINCH), or null when it could not.  Must match gplsrc/keys.h.
       $define K$WINSIZE          92      ;* The terminal's size from the tty
-      * 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's four keys, so the AI routines carry unchanged.  Windows has no helper yet
-      *   (RELEASE_1.1 173): its kernel answers each as Linux's does when no helper is running (op_kernel.c), so the AI is never usable.  Must match gplsrc/keys.h.
+      * 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's four keys, so the AI routines carry unchanged.  13 Nov 26 (RELEASE_1.1 246):
+      *   the kernel serves them as Linux's does (op_ai.c, the pipe \\.\pipe\sd-ai).  Must match gplsrc/keys.h.
       $define K$SHOW.SAFE       151     ;* any text: the same text with every byte of the kernel's one rule (0-31, 127, 128-159, 248-255) as '?', the same length; for printing another session's text (10 Nov 26, Linux d35f5e31, S.88)
-      $define K$AI.START        160     ;* system:@fm:maxtokens:@fm:prompt, answered 'OK' or 'ERR':@fm:why (Windows: 'ERR':@fm:'nohelper')
-      $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
+      $define K$AI.START        160     ;* system:@fm:maxtokens:@fm:prompt, answered 'OK' or 'ERR':@fm:why
+      $define K$AI.POLL         161     ;* 'W' waiting, 'D':@fm:the helper's reply (JSON), or 'E':@fm:why
       $define K$AI.CANCEL       162     ;* give the request up ('OK')
-      $define K$AI.STATUS       163     ;* the helper's status line, 'D':@fm:json, or 'E':@fm:why (Windows: 'E':@fm:'nohelper')
+      $define K$AI.STATUS       163     ;* the helper's status line, 'D':@fm:json, or 'E':@fm:why
 * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  kernel(K$JOB.MARK, 0) answers the name of the scheduled administrator
 *   job this process is (Task Scheduler's batch logon of the local account SDSYS, elevated, and an administrator-only definition in sd-jobs naming
 *   this very command), or ''.  Must match gplsrc/keys.h.

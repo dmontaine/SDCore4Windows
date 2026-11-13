@@ -17,6 +17,7 @@
 * 28 Oct 26 Windows port - from Linux ec8459b - S.75, home: CA$START (42) and CA$PINS (43), where the new account starts and whether it may add programs of its own to its home screen.
 *              Both ports read them (the Linux block ran past 40 on 23 Oct and is 31-50 there).
 * 28 Oct 26 dm S.88 plan 2.9 (D2): CA$RECOVERY (44), Linux only, whether a new user account's editors keep a recovery copy of unsaved text.  Same block, same deferral.
+* 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux (S.69 step 2, 23 Oct 26): CA$AI (41), membership of the Windows group sdaiusers, the AI gate.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -75,6 +76,9 @@ $define CA$FILESWRITE      39    ;* 1 = start in the group sdfileswrite (with CA
 
 * Linux only (21 Oct 26, S.73 item 3): 1 = also join the Linux group sdfilesadmin, so a files-only login may administer files on this server.  Needs CA$FILES and CA$FILESWRITE.
 $define CA$FILESADMIN      40    ;* 1 = start in the group sdfilesadmin (with CA$FILES and CA$FILESWRITE; S.73 item 3)
+
+* Both ports (23 Oct 26 Linux, S.69 step 2; 13 Nov 26 Windows, RELEASE_1.1 246): 1 = also join the group sdaiusers, the right to use the AI provider's API through the helper sd-ai.  Stands alone.
+$define CA$AI              41    ;* 1 = start in the group sdaiusers (S.69 step 2)
 
 * READ BY BOTH PORTS (26 Oct 26, S.75, the home screen).  CA$START is a request only when it is exactly menu or terminal (lower case): the new account's ACC$START is that word; anything else
 * is refused before anything is made.  Blank leaves the account following the system default (SET.START.DEFAULT).  CA$PINS is a request only when exactly 1 (off unless named): the

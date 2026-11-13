@@ -140,6 +140,15 @@ READS_STATUS = {
         "the front's audit of the administration group: api.admin.stat = status() on the next line; any doubt reads as no administration",
     ("modifya", "cg.now = is_grp_member(files.user, cg.group)"):
         "change.files.group's read back after every change: files.stat = status() on the next line; a read back that does not show the wanted state is 10081",
+    # 13 Nov 26 - RELEASE_1.1 246 (Linux S.69 step 2): the AI gate, sdaiusers, the same shapes as sdfilesadmin.
+    ("acc_os_info", "m = is_grp_member(uname, 'sdaiusers')"):
+        "backup manifest route.ai: 'status() = 0' on the next line; a group that is missing reads as not a member",
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdaiusers')"):
+        "reused-user removal of an AI gate not asked for: rm.told = status() on the next line; only a lookup that fails for a reason other than "
+        "'no such group' stops the verb with 10081",
+    ("modifya", "has.ai = is_grp_member(files.user, 'sdaiusers')"):
+        "ai-on / ai-off: files.stat = status() on the next line; a lookup that cannot tell is followed by is_group() (no such group: ai-off has "
+        "nothing to take away, ai-on is 10024), and a group that is there and cannot be read stops the command with 10081",
 }
 FAIL_CLOSED = {
     # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).
@@ -149,6 +158,8 @@ FAIL_CLOSED = {
         "the same state line for sdfileswrite: display only",
     ("create_account", "files.anow = is_grp_member(acc.uname, 'sdfilesadmin')"):
         "the same state line for sdfilesadmin: display only",
+    ("create_account", "ai.now = is_grp_member(acc.uname, 'sdaiusers')"):
+        "the same state line for sdaiusers (12611, RELEASE_1.1 246): display only",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
     # 02 Oct 26 - these two moved with CREATEA's body into create_account

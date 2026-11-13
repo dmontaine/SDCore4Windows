@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): the manifest key route.ai (1 if the user is in the group sdaiusers, the right to use the
+*               AI provider's API), after route.files.admin; same reading (no such group is "not a member").
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: the manifest key route.files.admin (1 if the user is in the group sdfilesadmin, which lets the files-only login
 *               administer files), after route.files.write; same reading as the other two (no such group is "not a member").
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the manifest keys shared.read (1 unless ACC$SHARED.READ says no: a blank field means on) and
@@ -55,7 +57,7 @@
 *    os.execute  the register's ACC$OS.EXEC "yes" -> 1, else 0  } os.users is retired)
 *    acc.name ''  - the system keys: product, host, accounts.root, sd.version.
 *    acc.name set - the account's keys, from its ACCOUNTS record (acc.rec):
-*                   type, os.user, os.group, route.ssh, route.api, route.files, route.files.write, route.files.admin, os.sh,
+*                   type, os.user, os.group, route.ssh, route.api, route.files, route.files.write, route.files.admin, route.ai, os.sh,
 *                   os.execute, and for a GROUP account its members.
 *
 * WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
@@ -125,6 +127,7 @@ deffun os_group(action, group, member) calling '!os_group'
    files = 0
    fwrite = 0
    fadmin = 0
+   aiuse = 0
    if typ = 'USER' then
       m = is_grp_member(uname, 'sdssh')
       if status() then
@@ -148,12 +151,16 @@ deffun os_group(action, group, member) calling '!os_group'
 *     25 Oct 26 Windows port - from Linux ef9d594 (S.73 item 3): and sdfilesadmin, only meaningful with both; same reading.
       m = is_grp_member(uname, 'sdfilesadmin')
       if m and status() = 0 then fadmin = 1
+*     13 Nov 26 Windows port - from Linux S.69 step 2 (RELEASE_1.1 246): and sdaiusers, the right to use the AI provider's API; it stands alone; same reading.
+      m = is_grp_member(uname, 'sdaiusers')
+      if m and status() = 0 then aiuse = 1
    end
    info<-1> = 'route.ssh: ' : ssh
    info<-1> = 'route.api: ' : api
    info<-1> = 'route.files: ' : files     ;* NOT `files`: the backup writes `files: N` (the file count) into the same section
    info<-1> = 'route.files.write: ' : fwrite
    info<-1> = 'route.files.admin: ' : fadmin
+   info<-1> = 'route.ai: ' : aiuse     ;* 13 Nov 26 (Linux S.69 step 2): membership of sdaiusers, the right to use the AI provider's API
 
    if typ = 'GROUP' then
       members = ''

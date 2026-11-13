@@ -127,7 +127,7 @@ def checks(s):
     cmds = re.findall(r"act = '(cmd:[^']*|menu:[^']*|terminal|switch|signout|back)' ; pal", th)       # the rows of the table (the case lines of start.tile also say act = ...)
     ADMIN_TILES = {"menus": "tool.menus", "audit": "tool.audit", "config": "tool.config", "backups": "tool.backups", "entries": "tool.entries",
                    "accounts": "tool.accounts", "sessions": "tool.sessions", "gates": "tool.gates", "jobs": "tool.jobs", "remote": "tool.remote", "ai": "tool.ai"}   # jobs: S.102 (2 Nov 26)
-    PENDING_VERBS = {"tool.ai", "tool.audit"}      # 13 Nov 26 Windows: tiles whose verbs RELEASE_1.1 246 and 247 owe (H28)
+    PENDING_VERBS = {"tool.audit"}      # 13 Nov 26 Windows: tiles whose verbs RELEASE_1.1 247 owes (H28); tool.ai left it with RELEASE_1.1 246, which carries the verb
     DEV_TILES = {"files": "tool.files", "voc": "tool.voc", "dict": "tool.dict", "query": "tool.query", "bulk": "tool.bulk", "catalog": "tool.catalog", "test": "tool.test"}            # the development apps (DV), for every account; each adds its tile in the commit that builds it (plan 13.2)
     ck("H4 tool_home: every tile of the table has a fixed action (cmd:sed, ide, tool.keys, my.menu, the development apps and the eleven administrator pages), terminal, switch, signout or back (the Back tile of a sub-menu page); the ONLY other action is a person's own program (H25); and no tile of the delivered page opens a sub-menu (no menu:<name>)",
        sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))
@@ -180,8 +180,8 @@ def checks(s):
     w = words.group(1).split(",") if words else []
     sl = slots.group(1).split(",") if slots else []
     ck("H14 modify.account: START-MENU, START-TERMINAL and START-DEFAULT are in the word list between the ai words (23 Oct 26, S.69 step 2) and the pins, and share the slot ST",
-       # 13 Nov 26 Windows: no AI-ON/AI-OFF yet (RELEASE_1.1 246) and no SDSYS-ON/SDSYS-OFF (an OS deviation: SDSYS reaches every account by ACL); the files gates come straight before.
-       "FILES-ADMIN-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED" in ",".join(w) and len(w) == len(sl)
+       # 13 Nov 26 Windows: AI-ON/AI-OFF are in with RELEASE_1.1 246; no SDSYS-ON/SDSYS-OFF (an OS deviation: SDSYS reaches every account by ACL), so the ai words come straight before.
+       "FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED" in ",".join(w) and len(w) == len(sl)
        and [sl[w.index(x)] for x in ("START-MENU", "START-TERMINAL", "START-DEFAULT")] == ["ST", "ST", "ST"] and [sl[w.index(x)] for x in ("PINS-ON", "PINS-OFF")] == ["PN", "PN"])
     # 13 Nov 26 Windows: H14b and H24d read Core's dispatch, one CASE upcase(action) in the main loop with no RETURN.
     ck("H14b ...do.action has the three cases and start.set writes only field 16, says 12873, audits, and says 12874 when nothing changes",
@@ -267,7 +267,7 @@ def checks(s):
     ck("H28a every program that opens a possibly absent file READONLY (!home_entry, SET.START.DEFAULT, the menu management page, OSREAD) closes the file variable in its ELSE branch, so that an absent start.default does not leave an update lock on it for the life of the session",
        not leaks, repr(leaks))
     ck("H28 every administrator page has a tile (plan 13.2: a new app adds its row in the commit that builds it): each verb of voc_template named tool.* (all of SDSYS's) is the action of a tile, and no tile runs a tool.* verb that has no VOC entry",
-       # 13 Nov 26 Windows: the AI and Audit trail tiles are carried but their verbs are not yet (RELEASE_1.1 246, 247).  PENDING names them; when one lands
+       # 13 Nov 26 Windows: the Audit trail tile is carried but its verb is not yet (RELEASE_1.1 247; tool.ai landed with 246).  PENDING names it; when it lands
        # this goes red until it is taken out of PENDING, so neither a dead tile nor a stale exception can stand unnoticed.
        sorted(s["tool.verbs"]) == sorted((set(v for v in ADMIN_TILES.values()) | set(DEV_TILES.values()) | {"tool.keys"}) - PENDING_VERBS) and all(("act = 'cmd:%s'" % v) in th for v in s["tool.verbs"]), repr(s["tool.verbs"]))
     dev = between(th, "gr<g> = 'Develop'", "\n   id = 'switch' ;")

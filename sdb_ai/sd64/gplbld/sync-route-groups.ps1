@@ -62,6 +62,12 @@ $FilesWriteComment = 'SD files-only API accounts that may write files'
 # delete, the file's counter).  Created EMPTY like the other two (modify.account files-admin-on names a person); it carries no Windows right.
 $FilesAdminGroup   = 'sdfilesadmin'
 $FilesAdminComment = 'SD files-only API accounts that are file admins'
+# 13 Nov 26 - RELEASE_1.1 246 (Linux S.69 step 2, installsdcore.sh's sdaiusers): the AI gate.  A person in sdaiusers may use the AI provider the
+# administrator chose, through the helper service sd-ai, which reads the membership of the caller's SID at every request.  Created EMPTY and never
+# seeded (high security delivered: modify.account ai-on names a person; the installer's "open every access gate" box gives the installing user's
+# account ai-on through attach-account.ps1 -OpenGates).  It carries no Windows right; the helper reads it by name.
+$AiGroup   = 'sdaiusers'
+$AiComment = 'SD accounts that may use the AI'
 
 $failed = $false
 
@@ -113,6 +119,7 @@ try {
     $null     = Ensure-Group $FilesGroup $FilesComment
     $null     = Ensure-Group $FilesWriteGroup $FilesWriteComment
     $null     = Ensure-Group $FilesAdminGroup $FilesAdminComment
+    $null     = Ensure-Group $AiGroup $AiComment
 
     if (-not $sshIsNew) {
         Say "$SshGroup already existed - not seeding, its membership is whatever an administrator left"

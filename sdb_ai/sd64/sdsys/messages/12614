@@ -1,0 +1,1 @@
+set.ai {provider NAME | model PROVIDER NAME | key PROVIDER | custom NAME URL FORMAT AUTH VERSION MAXPARAM | ca C:/PATH | limit NAME NUMBER | context HEX | context -}; set.ai alone says what is set
