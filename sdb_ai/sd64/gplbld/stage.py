@@ -1402,6 +1402,9 @@ def main():
     ap.add_argument('--list-retired', action='store_true',
                     help='print the sdsys names that no longer ship into the '
                          'data tree, one per line, and exit')
+    ap.add_argument('--list-stripped', action='store_true',
+                    help='print the voc_template records the staging removes, '
+                         'as voc_template/<name>, one per line, and exit')
     args = ap.parse_args()
 
     # ANSWERED BEFORE ANY OTHER CHECK, DELIBERATELY.  assert-current.ps1 asks
@@ -1430,6 +1433,16 @@ def main():
     if args.list_retired:
         for name, _why in SDSYS_RETIRED:
             print(name)
+        return 0
+
+    # 13 Nov 26 - THE STRIPPED voc_template RECORDS, for the same reader.  They
+    # are in source and deliberately absent from the install (RELEASE_1.1 266),
+    # and the retired list cannot hold them: it matches a FIRST path segment,
+    # and these are under voc_template.  The first cycle after the strip went
+    # STALE on all three, on a correct install.
+    if args.list_stripped:
+        for rec in VOC_TEMPLATE_STRIP:
+            print('voc_template/' + rec)
         return 0
 
     # bootstrap.py refuses an unelevated window, and by the time it gets the

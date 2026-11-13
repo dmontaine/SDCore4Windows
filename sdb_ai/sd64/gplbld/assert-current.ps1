@@ -472,6 +472,22 @@ if (-not (Test-Path $stagePy)) {
     }
 }
 
+# 13 Nov 26 - THE STRIPPED voc_template RECORDS (RELEASE_1.1 266), asked of
+# stage.py for the same reason.  Matched on the WHOLE relative path, since they
+# sit under voc_template and the retired match is on the first segment.  The
+# first cycle after the strip reported all three "not in the install at all".
+$stripped = @()
+if (-not $retiredErr) {
+    $strippedRaw = & $python.Source $stagePy --list-stripped 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $retiredErr = "stage.py --list-stripped exited $LASTEXITCODE"
+    } else {
+        $stripped = @($strippedRaw | ForEach-Object { "$_".Trim() } |
+                      Where-Object { $_ -match '^voc_template/[A-Za-z0-9._$-]+$' } |
+                      ForEach-Object { $_.Replace('/', '\').ToLowerInvariant() })
+    }
+}
+
 # THE FAILURE DIRECTION IS SAFE AND IS STILL SAID OUT LOUD.  An empty or
 # unreadable list leaves the walk exactly as strict as it was before today, so
 # it can only produce the FALSE STALE above - loud and wrong - never a silent
@@ -480,6 +496,9 @@ if ($retiredErr) {
     Note ("  could not read the retired list ({0}) - a name retired from the data tree will report STALE" -f $retiredErr)
 } elseif ($retired.Count -gt 0) {
     Note ("  {0} retired name(s) excluded from the rename walk: {1}" -f $retired.Count, ($retired -join ' '))
+}
+if ($stripped.Count -gt 0) {
+    Note ("  {0} stripped voc_template record(s) excluded from the rename walk: {1}" -f $stripped.Count, ($stripped -join ' '))
 }
 
 $srcSys  = Join-Path $sd64 'sdsys'
@@ -502,6 +521,7 @@ if ((Test-Path $srcSys) -and (Test-Path $instSys)) {
             # retired file matches itself.  changelog is the only one today.
             $seg = $rel.Split([char]'\')[0]
             if ($retired -contains $seg) { return }
+            if ($stripped -contains $key) { return }
             if ($instByLower.ContainsKey($key)) {
                 # -cne is the whole point: -ne would call these equal.
                 if ($instByLower[$key] -cne $rel) {
