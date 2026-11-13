@@ -10,7 +10,8 @@ MSYS2 gcc (the server's toolchain, the cygwin_conv_path() the server uses) besid
 prints the input and the answer.  os_path_inside() calls both before anything else, which W0 checks as text.
 
   absolute:        C:\\x, c:/x, /x, \\\\server\\share   -> yes;   x, .\\x, C:x, '' -> no
-  whole machine:   / , // , /c , /c/ , /cygdrive/c (if the runtime maps it)  -> yes;   /c/ProgramData/SD/user_accounts/x, /usr -> no
+  whole machine:   / , // , /cygdrive/c , /cygdrive/c/  -> yes;   /c (a folder inside SD's root on SD's runtime), /cygdrive/c/ProgramData/SD/user_accounts/x, /usr -> no
+  (the probe runs on a runtime root laid out as SD's: the DLL in usr\bin, SD's etc\fstab; 13 Nov 26)
 
 Exit 0 every row held, 1 a row failed, 2 no MSYS2 bash.  --selftest mutates the C text (each must match once), rebuilds, and needs a red row.
 """
@@ -24,6 +25,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(os.path.dirname(HERE), "gplsrc", "op_dio2.c")
 BASH = "C:/msys64/usr/bin/bash.exe"
+DLL = "C:/msys64/usr/bin/msys-2.0.dll"     # the runtime the probe is linked against (the same file SD ships, 13 Nov 26)
 BS = chr(92)
 
 MAIN = r'''
@@ -46,10 +48,15 @@ int main(int argc, char** argv) {
 }
 '''
 
+# 13 Nov 26: the probe runs on a runtime root laid out as SD's (usr\bin with the DLL, etc\fstab with SD's one line, so the
+# drive prefix is /cygdrive).  It ran on C:\msys64's root before, whose fstab maps /c to C:, a mapping SD's runtime does not
+# have: there /c is a folder inside SD's root, not the drive.  Found when the guard went red in a shell whose PATH put another
+# runtime first.  The rows are production's truth.
+FSTAB = "C:/ProgramData/SD/shm /dev/shm ntfs binary 0 0\n"     # what stage.py writes into SD's etc\fstab
 ROWS = [("abs", "C:" + BS + "x", 1), ("abs", "c:/x", 1), ("abs", "/x", 1), ("abs", BS + BS + "server" + BS + "share", 1),
         ("abs", "x", 0), ("abs", "." + BS + "x", 0), ("abs", "C:x", 0), ("abs", "", 0),
-        ("whole", "/", 1), ("whole", "//", 1), ("whole", "/c", 1), ("whole", "/c/", 1),
-        ("whole", "/c/ProgramData/SD/user_accounts/x", 0), ("whole", "/usr", 0)]
+        ("whole", "/", 1), ("whole", "//", 1), ("whole", "/cygdrive/c", 1), ("whole", "/cygdrive/c/", 1),
+        ("whole", "/c", 0), ("whole", "/cygdrive/c/ProgramData/SD/user_accounts/x", 0), ("whole", "/usr", 0)]
 
 
 def cut(text, head):
@@ -73,7 +80,18 @@ def build(work, text, exe):
     open(os.path.join(work, "p.c"), "w", newline="\n").write(MAIN % (a + "\n" + b))
     r = subprocess.run([BASH, "-lc", 'cd "%s" && gcc -O2 -Wall -o "%s" p.c' % (to_msys(work), to_msys(exe))],
                        capture_output=True, text=True, env=dict(os.environ, MSYSTEM="MSYS"))
-    return r.returncode == 0, (r.stdout + r.stderr).strip()
+    if r.returncode != 0:
+        return False, (r.stdout + r.stderr).strip()
+    # SD's layout: the exe beside the runtime DLL in <root>\usr\bin, and <root>\etc\fstab as SD's.  The runtime takes its
+    # root from the DLL's folder, so this root's fstab (not C:\msys64's) decides what /c means.
+    root = os.path.join(os.path.dirname(exe), "sdroot-" + os.path.splitext(os.path.basename(exe))[0])
+    os.makedirs(os.path.join(root, "usr", "bin"), exist_ok=True)
+    os.makedirs(os.path.join(root, "etc"), exist_ok=True)
+    shutil.copy2(DLL, os.path.join(root, "usr", "bin", "msys-2.0.dll"))
+    shutil.copy2(exe, os.path.join(root, "usr", "bin", os.path.basename(exe)))
+    with open(os.path.join(root, "etc", "fstab"), "w", newline="\n") as h:
+        h.write(FSTAB)
+    return True, os.path.join(root, "usr", "bin", os.path.basename(exe))
 
 
 def rows(exe, text, quiet=False):
@@ -116,7 +134,9 @@ def main():
         if not ok:
             print("BUILD FAILED: " + msg)
             return 1
-        bad = rows(exe, text)
+        print("probe runs as %s (runtime root %s, its fstab: %s)" % (msg, os.path.dirname(os.path.dirname(os.path.dirname(msg))),
+                                                                   FSTAB.strip()))
+        bad = rows(msg, text)
         print("%d rows failed" % bad)
         if bad:
             return 1
@@ -130,7 +150,7 @@ def main():
                 mt = text.replace(old, new, 1)
                 mexe = os.path.join(work, "m%d.exe" % i)
                 ok, msg = build(work, mt, mexe)
-                caught = (not ok) or rows(mexe, mt, quiet=True) > 0
+                caught = (not ok) or rows(msg, mt, quiet=True) > 0
                 print("  [%s] %s%s" % ("pass" if caught else "FAIL", name, "" if caught else ": NOT CAUGHT"))
                 holes += 0 if caught else 1
             print("self-test: %d mutants, %d not caught" % (len(MUTANTS), holes))

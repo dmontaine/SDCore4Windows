@@ -256,6 +256,9 @@ NON_WRITERS = {
     # 13 Nov 26 (RELEASE_1.1 272): Linux's sandbox-winsize.py with its internal-mode helper kept but never called on Windows (its
     # header says why: sd -internal is elevated-only and lands in SDSYS); the K$WINSIZE rows wait on row 254's SDSYS stand-in.
     "verify-carry-winsize.py": "a Linux suite copy; its sd -internal helper is kept for the diff but never called here",
+    # 13 Nov 26 (RELEASE_1.1 254): the launcher's adm mode never starts sd -internal itself.  It reads a suite's "-internal" and hands
+    # the session to verify-carry-seat.ps1, whose Invoke-SdViaSeat -Internal (sdsys-seat.ps1, a declared WRITER) writes the marker.
+    "verify-carry-run.py": "routes a suite's -internal to the SDSYS seat (verify-carry-seat.ps1 -> sdsys-seat.ps1, the writer)",
 }
 # gplsrc/sd.c is outside gplbld and holds the "-INTERNAL" argument PARSER, not a session start.
 
