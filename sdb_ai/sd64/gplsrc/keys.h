@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER.
  * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's home and a private directory below it.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): K_KEEP_SELECT (107) is gone; the number stays reserved.
  * 25 Oct 26 Windows port - from Linux fc4030a (18 Oct 26) S.66: K_SHARED_READ, K_SHARED_WRITE, K_SHARED_REF and K_SHARED_ONCE (128-131), the shared
@@ -446,9 +447,13 @@
                        those the PHANTOMS parameter keeps and not be in use, or phantom() returns 0.  0 cancels.  phantom() clears
                        it, made or not.  Returns 1. */
 #define K_PHANTOM_USER       114
-/* 115 is Linux's K_LOCK_TRACE (LOCK.TRACER).  Not carried here: the trace file lives in the system directory with mode 0620 and
-   the directory's group so that every session can append, which an ordinary Windows user cannot do in SDSYS's directory (and
-   loosening that is not a thing to do for a diagnostic).  The number is left unused.                                         */
+/* 16 Oct 26 dm - QM4 gaps (LOCK.TRACER).  13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182), held back on 18 Oct
+   (0480ce9a) until the SD service was the trail's one writer (RELEASE_1.1 247).
+     K_LOCK_TRACE      1 starts lock tracing, 0 stops it, -1 only asks.  Starting (administrator only) makes an empty file
+                       locktrace in the system directory that only SYSTEM and Administrators may use; every lock taken or let
+                       go after that is sent by lock_trace() in op_lock.c to the SD service, which appends it.  Returns the
+                       state after the call, -1 if the caller may not change it or the file could not be made. */
+#define K_LOCK_TRACE         115
 /* 28 Oct 26 Windows port - from Linux ec8459b - W.11 F10 (the start-up records of a phantom are written to $ipc, a file every SD user's process may write).
      K_PHANTOM_NONCE   'S' followed by 16 to 64 characters of the base64 alphabet: the secret the next phantom() of this process is to
                        give the new process (in its environment, SD_PHANTOM_NONCE, which only the same operating-system user can read).

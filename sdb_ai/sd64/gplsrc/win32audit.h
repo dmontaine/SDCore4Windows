@@ -13,6 +13,7 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 247: what a failed rotation leaves, and that the service calls it too.
  * 16 Aug 26 Windows port - written.  The POSIX runtime cannot open a file for
  *           appending without also asking for FILE_WRITE_DATA, which defeats
  *           an append-only ACL.  PROJECT_STATUS.md 7 step 4.
@@ -69,7 +70,11 @@ int win32_audit_append(const char* path, const char* data, int len);
    from anything that could drift out of step with the installer.
 
    Caller must be elevated: renaming needs Delete, which sdusers is not given.
-   Returns 0 on success and -1 on any failure.                             */
+   Returns 0 on success and -1 on any failure; a -1 leaves the trail under its
+   own name with its own DACL (13 Nov 26: nothing is renamed when the DACL
+   cannot be read, and the rename is undone when the new file cannot be made
+   or given that DACL).  Called by "sd -start" and by the service as it
+   writes (RELEASE_1.1 247).                                               */
 
 int win32_audit_rotate(const char* path, const char* rotated);
 

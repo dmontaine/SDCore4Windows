@@ -41,7 +41,6 @@ NOT_HERE = {
     'define_install.h': 'removed here as dead code with the PRE_RELEASE 168 chain (aafca0bb)',
     'euid_restore':     'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
     'euid_set':         'OS: Linux\'s sudo identity switch (seteuid); a Windows process has no effective user id',
-    'locktracer':       'LOCK.TRACER (Linux 7f7a4fd4) was held back 18 Oct (0480ce9a): every session would append to a file in SDSYS\'s directory; owner, 10 Nov: carry it once the service is the only writer, as for the audit (RELEASE_1.1 182)',
     'setmode':          'OS: SET.MODE (Linux 3b435253) sets POSIX permission bits; Windows files have ACLs, not mode bits (agreed with Linux, mail 2026-11-11T0630)',
     'peer_local':       'removed here with the administrator predicate (RELEASE_1.1 64, fdded05a)',
     'remotesdsys':      'remote.sdsys, administration over ssh: deferred by the owner (RELEASE_1.1 202)',
