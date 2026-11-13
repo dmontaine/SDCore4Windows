@@ -437,7 +437,9 @@ void own_window(const WCHAR* title) {
     if (code != 0) {
       WCHAR msg[160], c;
       DWORD done;
-      swprintf(msg, 160, L"\r\nSD ended with status %lu. Press Enter to close this window.", (unsigned long)code);
+      /* The owner's wording, 12 Nov 26: what the person needs first, the status after it for support and scripts. */
+      swprintf(msg, 160, L"\r\nSD stopped - the reason is shown above. Press Enter to close this window. (exit status %lu)",
+               (unsigned long)code);
       SetConsoleMode(in, ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT);
       FlushConsoleInputBuffer(in);
       WriteConsoleW(out, msg, (DWORD)wcslen(msg), &done, NULL);
