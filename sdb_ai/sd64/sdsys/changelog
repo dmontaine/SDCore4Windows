@@ -3,6 +3,16 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  ACCOUNT RULES MADE THE SAME AS ON LINUX.
+
+             What        - CREATE.ACCOUNT GROUP refuses SSH, API, BOTH, NONE, SH-ON and OS-ON with a
+                           message saying a group account has no remote access or no shell; they were
+                           accepted and not recorded. A path test against an account directory refuses
+                           a directory that is not absolute and one that is a drive root. Two
+                           FILES-WRITE messages are in lower case. A remote file that may not be
+                           changed is refused with the same message as a local one.
+             Does NOT    - Change any account already made. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  THE CLIENT LIBRARY READS A RECORD AS LARGE AS SD CAN HOLD, AS ON LINUX.
 
              What        - sdclilib.dll and sdclient.dll accept a reply up to the largest SD string

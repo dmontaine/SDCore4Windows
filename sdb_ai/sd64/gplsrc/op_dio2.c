@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows (RELEASE_1.1 254, Linux path_inside_dir): os_path_inside() (K_PATH_IN) refuses a directory that is not absolute and one
+ *           that holds the whole machine (a drive root, or "/", the runtime's root); account_path_permitted() refuses such an account root too.
  * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): pub_ospath(), the public OSPATH() (Linux's x_ospath) with openQM's keys and Linux's
  *           gates, and Windows path rules: '\' is a separator, a drive root, OS$OPEN in one namespace and ignoring case, OS$UID/GID/MODES 0,
  *           OS$OWNER the Windows account name (owner's D1 and D2).
@@ -2159,6 +2161,35 @@ bool net_vocpath_permitted(char* path, bool for_write) {
 /* os_path_inside()  -  is name at or below rootdir?  Geometry only (Linux's K_PATH_IN): both are resolved as an open would
    resolve them, folded into one namespace, and a surviving ".." refuses.  It does not ask the OS gate.                     */
 
+/* 13 Nov 26 (RELEASE_1.1 254, found carrying test-gates-units; Linux op_sh.c path_inside_dir()): the directory must be absolute - a
+   relative one would be resolved against whatever the working directory is - and a directory that holds the whole machine is
+   refused.  Linux refuses "/"; here that is a drive root ("C:\", "/c") and "/" itself, which is the runtime's root, SD's folder.  */
+
+Private bool os_root_absolute(const char* d) {
+  if ((d[0] == '/') || (d[0] == '\\'))
+    return TRUE;
+  return (((d[0] >= 'A') && (d[0] <= 'Z')) || ((d[0] >= 'a') && (d[0] <= 'z'))) && (d[1] == ':') && ((d[2] == '/') || (d[2] == '\\'));
+}
+
+Private bool os_root_whole_machine(const char* root) {   /* ROOT has been through net_normalise() */
+  char r[MAX_PATHNAME_LEN + 1];
+  char w[MAX_PATHNAME_LEN + 1];
+  size_t n;
+
+  snprintf(r, sizeof(r), "%s", root);
+  n = strlen(r);
+  while ((n > 1) && (r[n - 1] == '/'))
+    r[--n] = '\0';
+  if (strcmp(r, "/") == 0)
+    return TRUE;
+  if (cygwin_conv_path(CCP_POSIX_TO_WIN_A, r, w, sizeof(w)) != 0)
+    return TRUE;   /* cannot say what it is: refuse, as net_normalise() does */
+  n = strlen(w);
+  while ((n > 2) && ((w[n - 1] == '\\') || (w[n - 1] == '/')))
+    w[--n] = '\0';
+  return (n == 2) && (w[1] == ':');
+}
+
 bool os_path_inside(const char* rootdir, const char* name) {
   char rr[MAX_PATHNAME_LEN + 1];
   char cc[MAX_PATHNAME_LEN + 1];
@@ -2167,9 +2198,13 @@ bool os_path_inside(const char* rootdir, const char* name) {
 
   if ((rootdir == NULL) || (name == NULL) || (rootdir[0] == '\0') || (name[0] == '\0'))
     return FALSE;
+  if (!os_root_absolute(rootdir))
+    return FALSE;
   if (!fullpath(rr, (char*)rootdir) || !fullpath(cc, (char*)name))
     return FALSE;
   if (!net_normalise(rr, root) || !net_normalise(cc, cand))
+    return FALSE;
+  if (os_root_whole_machine(root))
     return FALSE;
   if (has_parent_ref(cand))
     return FALSE;
@@ -2348,7 +2383,8 @@ bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() *
   if (process.syscom != NULL) {
     descr = Element(process.syscom, SYSCOM_ACCOUNT_PATH);
     if (k_get_c_string(descr, item, MAX_PATHNAME_LEN) > 0) {
-      if (net_normalise(item, root) && path_within(cand, root))
+      /* 13 Nov 26 (RELEASE_1.1 254, Linux path_inside_dir): an account at "/" or a drive root would hold the whole machine */
+      if (net_normalise(item, root) && !os_root_whole_machine(root) && path_within(cand, root))
         return TRUE;
     }
   }

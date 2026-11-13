@@ -4892,7 +4892,7 @@ cited by: `icomp`
 The expressions of link %1 cannot be compound (no semicolons)
 ```
 
-cited by: `edit_guard`, `icomp`
+cited by: `icomp`
 
 ### msg:12410
 > kind=message tier=reference since=- src=sdsys/messages/12410:1#35f833cb
@@ -5862,19 +5862,19 @@ This login cannot change or lock files here: ask the administrator for files-wri
 cited by: `apisrvr`
 
 ### msg:12527
-> kind=message tier=reference since=- src=sdsys/messages/12527:1#659aec6c
+> kind=message tier=reference since=- src=sdsys/messages/12527:1#1ce94a5d
 
 ```
-Account %1 has FILES-WRITE %2
+Account %1 has files-write %2
 ```
 
 cited by: `create_account`, `modifya`
 
 ### msg:12528
-> kind=message tier=reference since=- src=sdsys/messages/12528:1#553dffd0
+> kind=message tier=reference since=- src=sdsys/messages/12528:1#3712fdd7
 
 ```
-Account %1 does not have FILES access, so it cannot be given FILES-WRITE: use files-on first
+Account %1 does not have files access, so it cannot be given files-write: use files-on first
 ```
 
 cited by: `modifya`

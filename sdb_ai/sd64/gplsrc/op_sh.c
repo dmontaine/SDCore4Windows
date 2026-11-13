@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows (RELEASE_1.1 254, as Linux): shared_root_get() and shared_ref_ok() refuse a path that is not absolute
+ *           (sh_path_absolute()); they handed a relative one to fullpath().
  * 25 Oct 26 Windows port - from Linux 2a68b2f (24 Oct 26) W.11 F9: every privilege and gate test reads the process's own words (MY_ADMIN, MY_PRIV, MY_GATE: sysseg.h), not the user
  *           table entry; the register and the shared account are under sd_sysdir().
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): the shared account.  shared_root_get() (the account's directory from its register record, a hit
@@ -518,6 +520,14 @@ bool edit_permitted(int kind) {
    path (or @SDSYS<rest>), so the root is resolved as an open resolves it (fullpath) and FOLDED into the POSIX namespace (path_fold) once; a
    candidate is folded the same way and compared case-insensitively on a component boundary, as path_within() in op_dio2.c does.  OUT has
    MAX_PATHNAME_LEN + 1 bytes and receives the folded root.  */
+/* 13 Nov 26 (RELEASE_1.1 254, found carrying test-shared-units; Linux refuses a path that does not begin with '/'): an absolute
+   Windows or POSIX path - '/', '\' or a drive letter and a separator.  A relative one would be resolved against the working directory. */
+static bool sh_path_absolute(const char *p) {
+  if ((p[0] == '/') || (p[0] == '\\'))
+    return TRUE;
+  return (((p[0] >= 'A') && (p[0] <= 'Z')) || ((p[0] >= 'a') && (p[0] <= 'z'))) && (p[1] == ':') && ((p[2] == '/') || (p[2] == '\\'));
+}
+
 bool shared_root_get(char *out) {
   static char root[MAX_PATHNAME_LEN + 1];
   static bool have = FALSE;
@@ -565,6 +575,8 @@ bool shared_root_get(char *out) {
       return FALSE;
     strcpy(line1, body);
   }
+  if (!sh_path_absolute(line1))
+    return FALSE;
   if (!fullpath(resolved, line1) || !path_fold(resolved, folded))
     return FALSE;
   n = strlen(folded);
@@ -697,7 +709,7 @@ bool shared_ref_ok(const char *path, int fno, const char *catname) {
   if ((fno != 2) && (fno != 3))
     return FALSE;
   /* 25 Oct 26 Windows port: the target is resolved as an open resolves it (fullpath) and folded into the root's namespace; it must exist */
-  if ((path == NULL) || (path[0] == '\0') || (strlen(path) > MAX_PATHNAME_LEN) || !shared_root_get(root))
+  if ((path == NULL) || !sh_path_absolute(path) || (strlen(path) > MAX_PATHNAME_LEN) || !shared_root_get(root))
     return FALSE;
   if (!fullpath(absp, (char *)path) || !path_fold(absp, resolved))
     return FALSE;

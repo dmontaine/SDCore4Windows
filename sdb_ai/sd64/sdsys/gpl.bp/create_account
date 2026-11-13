@@ -612,6 +612,18 @@ PW.TRY.AGAIN:
        err = 2202 ;* Account name is invalid
        goto exit.create
      end
+* 13 Nov 26 Windows - from Linux (S.29, S.63; RELEASE_1.1 254, found carrying test-gates-units): a GROUP account has no routes to
+*   narrow (10087) and no shell to permit (10105); both were accepted here and not recorded.
+     if access.given then
+       @system.return.code = -ER$ARGS
+       err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
+       goto exit.create
+     end
+     if os.sh or os.exec then
+       @system.return.code = -ER$ARGS
+       err = 10105:@vm:acc.name ;* %1 is a group account and has no Windows user, so it has no shell to permit
+       goto exit.create
+     end
 * 17 Oct 26 dm - S.65 slice 2c: and no files-only login to give (10087; the group account is reached with logto).
      if files.want or files.write.want or files.admin.want then
        @system.return.code = -ER$ARGS

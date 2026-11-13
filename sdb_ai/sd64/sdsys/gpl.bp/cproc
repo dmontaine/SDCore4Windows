@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows (RELEASE_1.1 254): LOGTO sets the VOC and loads the account's switches before its audit line, Linux's order.
 * 12 Nov 26 Windows port - from Linux ca3c6f41 (RELEASE_1.1 252, P-21): RUN folds the program name (as typed, lower, upper), as Linux.
 * 12 Nov 26 Windows port - RELEASE_1.1 266: @WHO is lower case, as Linux: LOGTO's new.account and run.in's who are lower case, and the
 *   administrator grant, the audit names and "can only be executed from SDSYS" test against 'sdsys'.
@@ -3049,13 +3050,14 @@ int.logto:
 *   identity from the user table instead.
 *   7 Oct 26 - EVERY AUDIT WORD IS LOWER CASE here ('logto', 'logto refused', 'elevation released'):
 *   the owner's ruling of 7 Oct, "All lower case", event names included (Linux T1830).
-   void kernel(K$AUDIT, 'logto account=' : new.account)
+* 13 Nov 26 Windows (RELEASE_1.1 254, found carrying test-gates-units B1): Linux's order - the VOC, then the switches, then this line.
+   voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
 
 * 10 Nov 26 Windows port - from Linux 8fc6b4e1 (S.96): the six account-scoped switches are loaded by load.account.switches (below this
 *   routine), unchanged, so that RUN.IN loads them in the same way.
    gosub load.account.switches   ;* the account-scoped switches, from the new account's own register record (3 Nov 26: one routine, shared with RUN.IN)
 
-   voc = new.voc ; new.voc = 0   ;* Dereference temporary VOC file var
+   void kernel(K$AUDIT, 'logto account=' : new.account)
 
    gosub find.private.catalogue
 
