@@ -2855,14 +2855,68 @@ begin
               '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Retarget' + #13#10#13#10;
 end;
 
+{ 14 Nov 26 - RELEASE_1.1 283 (Linux 58e60670, owner 14 Nov: "If closed they stay closed, if open they stay open").  THE API
+  ACROSS AN UNINSTALL THAT KEEPS sd.conf, THEN AN INSTALL.  The uninstaller always removes the API's firewall rule (RemoveApiFirewall:
+  removing closes, and it must not open a port on its way out), so an API that had been open to other computers came back blocked:
+  the install is neither a true upgrade (the uninstall key is gone) nor a fresh one (sd.conf is there), so no step touched the rule.
+  The uninstaller now notes the rule's scope before it goes (SaveApiAccessNote) and this installer puts an OPEN one back.  Only the
+  word open does anything: a closed or absent rule stays as the uninstall left it.
+  WHERE: HKLM64, which only an administrator can write.  A note in the data tree would let any SD user, who may modify everything
+  there, open the API by writing one word.  HKLM64 and not HKLM because Setup is a 32-bit process (see SdWasInstalled).
+  The note is removed by whichever comes first: this install, or an uninstall that leaves no sd.conf. }
+function ApiNoteKey: String;
+begin
+  Result := 'SOFTWARE\SD\SetupNotes';
+end;
+
+function ApiNoteSaysOpen: Boolean;
+var
+  V: String;
+begin
+  Result := RegQueryStringValue(HKLM64, ApiNoteKey, 'ApiAccess', V) and (V = 'open');
+end;
+
+procedure ApiNoteClear;
+begin
+  RegDeleteValue(HKLM64, ApiNoteKey, 'ApiAccess');
+end;
+
+{ The kept rule put back: api-firewall.ps1 -Open, as ApplyApiFirewall does for a box ticked.  Not a choice made now - the
+  administrator's own earlier answer, read from the machine.  A failure carries ELEVATED so IsFailureText sends it to the closing box. }
+function KeepApiFirewallOpen: String;
+var
+  Code: Integer;
+  Ps, Args: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+          ExpandConstant('{app}\api-firewall.ps1') + '" -Open';
+  if not Exec(Ps, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) then
+  begin
+    Result := 'Putting back the rule that let other computers reach the SD Core API FAILED: the script did not run.' + #13#10#13#10;
+    Exit;
+  end;
+  if Code = 0 then
+    Result := 'Other computers on your network can still reach the SD Core API (port 4247), as before the uninstall.' + #13#10#13#10
+  else
+    Result := 'Putting back the rule that let other computers reach the SD Core API FAILED. Run from an ELEVATED ' +
+              'PowerShell prompt to see why:' + #13#10#13#10 +
+              '    powershell -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}') + '\api-firewall.ps1" -Open' + #13#10#13#10;
+end;
+
 { 13 Nov 26 - RELEASE_1.1 213: the BeforeInstall of the service entry in [Run] - the same choice ssPostInstall made,
-  made before SD's listener can open.  See EarlyApiFwDone. }
+  made before SD's listener can open.  See EarlyApiFwDone.
+  14 Nov 26 - RELEASE_1.1 283: the third arm, the kept rule put back (see ApiNoteKey); the note is spent on any install. }
 procedure ApiRuleBeforeService;
 begin
   if (not TrueUpgrade) and ApiConfAbsent then
     EarlyApiFw := ApplyApiFirewall
   else if TrueUpgrade then
-    EarlyApiFw := RetargetApiFirewall;
+    EarlyApiFw := RetargetApiFirewall
+  else if ApiNoteSaysOpen and ApiConfHasListener then
+    EarlyApiFw := KeepApiFirewallOpen;
+  ApiNoteClear;
   EarlyApiFwDone := True;
 end;
 
@@ -5725,6 +5779,17 @@ begin
        '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
+{ 14 Nov 26 - RELEASE_1.1 283.  Run at usUninstall BEFORE RemoveApiFirewall: the rule is read while it still exists.  An open one
+  is noted (see ApiNoteKey); anything else, including a scope that could not be read, clears the note, so a stale 'open' can never
+  survive a rule that was closed.  Whether sd.conf survives is asked later, at usPostUninstall, which clears the note when it did not. }
+procedure SaveApiAccessNote;
+begin
+  if GetApiRuleScope = 'open' then
+    RegWriteStringValue(HKLM64, ApiNoteKey, 'ApiAccess', 'open')
+  else
+    ApiNoteClear;
+end;
+
 (* Take the administrator's scheduled jobs away: every Task Scheduler task
    SET.JOB made, then the definitions beside the data tree.
 
@@ -6223,6 +6288,7 @@ begin
   begin
     StashAccountSweep;
     RemoveAllowGroups;
+    SaveApiAccessNote;
     RemoveApiFirewall;
     RemoveScheduledJobs;
     RemoveRemoteAdmin;
@@ -6296,6 +6362,7 @@ begin
     if not UninstallSilent then
       OfferAccountRemoval;
     RemoveSdUsersGroup;
+    ApiNoteClear;   { 14 Nov 26 - RELEASE_1.1 283: no tree, so no sd.conf to keep the API's state for }
     Exit;
   end;
 
@@ -6376,6 +6443,10 @@ begin
     never having been asked - and with two questions there are now four
     outcomes to tell apart rather than two. }
   RecordDatabaseChoice(DataPath, DbDelete, DbFailed, ConfDelete, ConfFailed);
+
+  { 14 Nov 26 - RELEASE_1.1 283: the API's noted state is for a reinstall that finds sd.conf; with none left it means nothing. }
+  if not FileExists(AddBackslash(DataPath) + 'sd.conf') then
+    ApiNoteClear;
 
   UsersGroupGoes := DbDelete;
 

@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  AN API THAT WAS OPEN TO OTHER COMPUTERS IS STILL OPEN AFTER AN UNINSTALL THAT KEPT THE CONFIGURATION AND A NEW INSTALL.
+
+             What        - the uninstaller always removed the API's firewall rule, so installing again over a kept sd.conf left
+                           an API that had been open to the network blocked, with no question asked and nothing said.  The
+                           uninstaller now notes whether the rule let other computers in (one value in the registry, written by
+                           an administrator), and an install that finds sd.conf with the API switched on makes that open rule
+                           again and says so on the closing page.  An API that was closed stays closed, a configuration that was
+                           deleted leaves no note, and the note is removed by the install that uses it.  The same outcome as
+                           SD Core for Linux ("if closed they stay closed, if open they stay open").
+             Why         - an upgrade must not change who can reach the API.
+             Does NOT    - Change a true upgrade (it already kept the rule), or the ssh question: a reinstall over a kept
+                           configuration still asks it, with the box already set to keep the present state.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  THE CLIENT LIBRARY REMEMBERS EACH SERVER'S CERTIFICATE AND REFUSES A DIFFERENT ONE.
 
              What        - the first time the client library connects to a server it keeps the server's TLS certificate (in
