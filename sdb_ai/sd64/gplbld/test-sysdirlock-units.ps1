@@ -30,8 +30,11 @@ $ErrorActionPreference = 'Stop'
 # The classes.  Fixed: SecureSysdirs' own variables.  Elsewhere: their own
 # secure-*.ps1 or [Code] step.  Open: written by ordinary sessions.
 $Locked = @('syscom','terminfo','terminfo.src','helptext','dir_dict','licence','contrib',
-            'start.default','agent-pack','bp.out','pcode.out',
+            'agent-pack','bp.out','pcode.out',
             'dict.dic','voc.dic','$map.dic','accounts.dic','$hold','$hold.dic')
+# 14 Nov 26 - start.default is NOT in the staged tree (SET.START.DEFAULT writes it after SecureSysdirs); it is locked by
+# LockStartDefault once it exists.  In the early list it made secure-sysdirs.ps1 exit 2 and LockSysdirNames stop (check L8).
+$LockedLate = @('start.default')
 $Fixed  = @('accounts','$map','messages','newvoc','bp','cat','voc',
             'voc_removed','voc_removed.saved','config.table','voc_template')
 $Elsewhere = @('audit','dumps','pstmp','batch.jobs','batch.jobs.dic','gcat','gpl.bp.out','bin','$cred')
@@ -89,6 +92,15 @@ function Test-All([string]$issT, [string]$scrT) {
         $want = @('sdusers:(RX)', 'sdusers:(OI)(CI)(IO)(M)')
         $r['L6'] = $(if (($g.Count -eq 2) -and ($g -contains $want[0]) -and ($g -contains $want[1])) { '' }
                      else { 'sdusers grants are: ' + ($g -join ' ') }) }
+    # L8: a name the installer writes AFTER SecureSysdirs is not in the early list (the lock script refuses a missing path and the
+    # loop stops at the first failure), and is locked after the step that writes it.
+    $early = @($LockedLate | Where-Object { $list -contains $_ })
+    $fn = Get-Body $issT 'function LockStartDefault: String;'
+    $iSet = $issT.IndexOf('StartMsg := SetStartDefault;')
+    $iLock = $issT.IndexOf('StartMsg := StartMsg + LockStartDefault;')
+    $r['L8'] = $(if ($early.Count) { 'a late-written name is in the early list: ' + ($early -join ' ') }
+                 elseif (($fn -notmatch "sdsys\\start\.default") -or ($fn -notmatch 'if not FileExists\(Target\) then')) { 'LockStartDefault does not lock start.default only when it exists' }
+                 elseif (($iSet -lt 0) -or ($iLock -le $iSet)) { 'LockStartDefault is not called after SetStartDefault' } else { '' })
     return $r
 }
 
@@ -104,7 +116,7 @@ foreach ($k in $live.Keys) {
 $tree = 'C:/ProgramData/SD/sdsys'
 if (Test-Path -LiteralPath $tree) {
     $names = @(Get-ChildItem -LiteralPath $tree -Force | ForEach-Object { $_.Name })
-    $all = $Locked + $Fixed + $Elsewhere + $Open
+    $all = $Locked + $LockedLate + $Fixed + $Elsewhere + $Open
     $new = @($names | Where-Object { $all -notcontains $_ })
     Write-Output "  installed tree $tree : $($names.Count) entries"
     if ($names.Count -eq 0) { Write-Output '  [FAIL] L7 : the installed tree listed nothing'; $fail++ }
@@ -116,7 +128,10 @@ if (Test-Path -LiteralPath $tree) {
 
 # Mutants: each must turn its check red.
 $mutants = @(
-    @{ n='drop agent-pack from the list';      k='L1'; t='iss'; a="'start.default/agent-pack/bp.out/pcode.out/' +"; b="'start.default/bp.out/pcode.out/' +" }
+    @{ n='drop agent-pack from the list';      k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/' +"; b="'bp.out/pcode.out/' +" }
+    @{ n='start.default back in the early list'; k='L8'; t='iss'; a="'agent-pack/bp.out/pcode.out/' +"; b="'start.default/agent-pack/bp.out/pcode.out/' +" }
+    @{ n='start.default never locked after its step'; k='L8'; t='iss'; a='StartMsg := StartMsg + LockStartDefault;'; b='StartMsg := StartMsg + LockStartDefaultX;' }
+    @{ n='start.default locked even when absent'; k='L8'; t='iss'; a='if not FileExists(Target) then'; b='if FileExists(Target + ''x'') then' }
     @{ n='drop the whole list call';          k='L1'; t='iss'; a='LockSysdirNames(Ps, Script,'; b='LockSysdirNamesX(Ps, Script,' }
     @{ n='lock $ipc too';                     k='L2'; t='iss'; a="'dict.dic/voc.dic"; b="'`$ipc/dict.dic/voc.dic" }
     @{ n='no folder lock';                    k='L3'; t='iss'; a='LockKeepChildrenPath(Ps, Script, Root, Code)'; b='LockOsUsersPath(Ps, Script, Root, Code)' }

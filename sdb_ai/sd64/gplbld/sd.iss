@@ -4297,7 +4297,7 @@ begin
   if Failed = '' then
     Failed := LockSysdirNames(Ps, Script,
       'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
-      'start.default/agent-pack/bp.out/pcode.out/' +
+      'agent-pack/bp.out/pcode.out/' +
       'dict.dic/voc.dic/$map.dic/accounts.dic/$hold/$hold.dic', Code);
 
   { errlog is not shipped: the first process that logs creates it, in sdsys.
@@ -4329,6 +4329,29 @@ begin
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
             '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+end;
+
+{ 14 Nov 26 - RELEASE_1.1 293, FOUND BY THE FIRST RUN OF verify-sysdiracl ON THE 15:38 INSTALL.  start.default is the one name of
+  the eighteen that is not in the staged tree: SET.START.DEFAULT (SetStartDefault) writes it, AFTER SecureSysdirs.  It was in
+  LockSysdirNames' list, secure-sysdirs.ps1 refuses a path that is not there (exit 2), and LockSysdirNames stops at the first
+  failure - so it skipped every name after it, the errlog creation and the folder lock, and the install reported nothing that
+  reached the closing page.  Eleven rows of the verifier were red.  It is now locked HERE, after SetStartDefault, on every
+  install, when the file exists (a kept one is locked too).  Where there is none, there is nothing to lock. }
+function LockStartDefault: String;
+var
+  Code: Integer;
+  Ps, Script, Target: String;
+begin
+  Result := '';
+  Target := ExpandConstant('{#DataDir}\sdsys\start.default');
+  if not FileExists(Target) then
+    Exit;
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-sysdirs.ps1');
+  if not LockOsUsersPath(Ps, Script, Target, Code) then
+    Result := 'The SD Core start setting was NOT locked (code ' + IntToStr(Code) + '): ' + Target +
+              '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+              '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
 end;
 
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
@@ -5019,6 +5042,7 @@ begin
     { 10 Nov 26 - RELEASE_1.1 210: where new sessions start, when the command prompt was chosen on a fresh install.
       After the accounts are made (the verb needs a working SDSYS); empty unless it could not be written. }
     StartMsg := SetStartDefault;
+    StartMsg := StartMsg + LockStartDefault;   { 14 Nov 26 - RELEASE_1.1 293: after the file exists, see LockStartDefault }
 
     { AFTER adopt, so the register this reads is the finished one.  See the
       function: this is the step that undoes an uninstall having deleted
