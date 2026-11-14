@@ -77,24 +77,14 @@
             'SEND of an expression with colons'         = 'SEND ends its line with CR LF on the console here; the probe reads the line end as one character'
             'VOCPATH with DICT in front'                = 'the VOC dictionary lives in SDSYS, outside the ordinary account, so its path is told to an administrator only (the K$PATH.OK stand-in)'
         }
-        # 13 Nov 26 (RELEASE_1.1 271, owner's choice a; RELEASE_1.1 236): the line end written is the operating system's.  dir_write()
-        # and WRITESEQ are Linux's code (op_dio3.c: "the other modes write the operating system's line end, which on Linux is the
-        # LF"); here Newline is CR LF, so modes 0, 2, 3 and an unset file write CR LF where Linux's rows expect LF.  An unset file
-        # also reads CR LF or LF as a line end (the 271 deviation), which the READ reference row takes for mode 0.  Mode 1 (CRLF)
-        # and every read in a set mode pass.
+        # 13 Nov 26 (RELEASE_1.1 271, owner's choice a): a file with NO line-terminator mode reads CR LF or LF as a line end and
+        # writes CR LF here, the Windows text convention; Linux's rows expect its mode 0 / 2.  An EXPLICIT mode 0, 2 or 3 writes LF
+        # as Linux's does (RELEASE_1.1 279: those rows were excused here as "the OS line end" until 13 Nov, wrongly - Windows does
+        # not force it - and now pass); mode 1 and every read in a set mode pass.
         'crlf' = @{
             'READ, no mode set'      = 'RELEASE_1.1 271: an unset Windows file reads CR LF or LF as a line end; the reference is Linux''s mode 0 (CR is data)'
             'WRITE, no mode set'     = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
-            'WRITE, mode 0 (LF)'     = 'dir_write() writes the operating system''s line end in this mode (Linux''s code and comment); on Windows that is CR LF'
-            'WRITE, mode 2 (BOTH)'   = 'dir_write() writes the operating system''s line end in this mode (Linux''s code and comment); on Windows that is CR LF'
-            'WRITE, mode 3 (NOCR)'   = 'dir_write() writes the operating system''s line end in this mode (Linux''s code and comment); on Windows that is CR LF'
             'WRITESEQ, no mode set'  = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
-            'WRITESEQ, mode 0'       = 'WRITESEQ writes the operating system''s line end in this mode, as dir_write(); on Windows that is CR LF'
-            'WRITESEQ, mode 2'       = 'WRITESEQ writes the operating system''s line end in this mode, as dir_write(); on Windows that is CR LF'
-            'WRITESEQ, mode 3'       = 'WRITESEQ writes the operating system''s line end in this mode, as dir_write(); on Windows that is CR LF'
-            'letter L: WRITESEQ'     = 'the VOC letter L is mode 0, which writes the operating system''s line end; on Windows that is CR LF'
-            'letter B: WRITESEQ'     = 'the VOC letter B is mode 2, which writes the operating system''s line end; on Windows that is CR LF'
-            'letter X: WRITESEQ'     = 'the VOC letter X is mode 3, which writes the operating system''s line end; on Windows that is CR LF'
             'no letter: WRITESEQ'    = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
         }
         # Administrator-only verbs: the ordinary account's VOC has no LIST.READU, CONFIG and the like (the tier split).

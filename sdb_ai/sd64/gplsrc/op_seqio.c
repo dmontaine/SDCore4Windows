@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 279: WRITESEQ writes LF for an explicit FC$CRLF mode 0, 2 or 3; CR LF stays for mode 1 and a
+ *           file with no mode (RELEASE_1.1 271).
  * 10 Nov 26 Windows port - from Linux ec01ff0b (14 Sep 26, P.6): op_openseq()'s error cleanup releases the record lock it took, and frees the
  *               buffer and record name.  Every error after lock_record() (a failed OVERWRITE truncate, and since S.88 A3 a failed deferred CREATING)
  *               left the lock behind past OFF.  Found by Linux's test-ideos-units O1e when it was carried here.
@@ -2017,6 +2019,11 @@ Private void writeseq(bool flush_to_disk) {
   if (sq_file->crlf == CRLF_CRLF) {
     nl = "\r\n";
     nl_bytes = 2;
+  } else if (sq_file->crlf != CRLF_UNSET) {
+    /* 13 Nov 26 Windows port - RELEASE_1.1 279: an EXPLICIT mode 0, 2 or 3 writes LF, as User 07's table and Linux say; only a
+       file with no mode keeps this port's CR LF (Newline; the owner's RELEASE_1.1 271).  Windows does not force CR LF here. */
+    nl = "\n";
+    nl_bytes = 1;
   }
 
   fu = sq_file->fu;

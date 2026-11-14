@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 279: dir_write() writes LF for an explicit FC$CRLF mode 0, 2 or 3; CR LF stays for mode 1 and a
+ *           file with no mode (RELEASE_1.1 271).
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): net_pre_change_lock() can no longer ask a caller to wait (that was AUTOLOCK's): NETL_WAIT, its two arms and the retry_pc of op_write and op_delete are gone.
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): $MODE PICK.READ (op_pickread, P_PICKREAD), AUTOLOCK (P_AUTOLOCK, also in
  *           net_pre_change_lock) and WRITE.DELETE.THEN.ELSE (P_THEN_ELSE) are gone: a read always releases its target first, a write or delete
@@ -2715,8 +2717,10 @@ bool dir_write(FILE_VAR *fvar, char *mapped_id, STRING_CHUNK *str) {
   struct stat statbuf;
   /* What ends a line of the record: LF, except in the mode that wants CR LF (16 Oct 26, QM4 Fixes item 452).  The other
      modes write the operating system's line end, which on Linux is the LF. */
-  char *newline = (fvar->access.dir.crlf == CRLF_CRLF) ? "\r\n" : Newline;
-  int16_t newline_bytes = (fvar->access.dir.crlf == CRLF_CRLF) ? 2 : NewlineBytes;
+  /* 13 Nov 26 Windows port - RELEASE_1.1 279: an EXPLICIT mode 0, 2 or 3 writes LF (User 07's table, Linux); only a file with no
+     mode keeps this port's CR LF (Newline; RELEASE_1.1 271), and mode 1 CR LF. */
+  char *newline = (fvar->access.dir.crlf == CRLF_CRLF) ? "\r\n" : (fvar->access.dir.crlf == CRLF_UNSET) ? Newline : "\n";
+  int16_t newline_bytes = (fvar->access.dir.crlf == CRLF_CRLF) ? 2 : (fvar->access.dir.crlf == CRLF_UNSET) ? NewlineBytes : 1;
 
   t1_fu = INVALID_FILE_HANDLE;
   process.status = 0;
