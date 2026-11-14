@@ -86,9 +86,28 @@ $readOnly = @(
     # 7 Nov 26 - RELEASE_1.1 197, with the same change to sd.iss: the VOC deletion
     # list and the saved copies of what it removed (from Linux 29c4a48f, S.87).
     (Join-Path $sysDir 'voc_removed'),
-    (Join-Path $sysDir 'voc_removed.saved')
+    (Join-Path $sysDir 'voc_removed.saved'),
+    # 14 Nov 26 - RELEASE_1.1 293, with the same change to sd.iss (Linux parity):
+    # the sdsys FOLDER itself (a new file in it must be refused; its inheriting
+    # children keep Modify, which the controls below measure) and the fifteen
+    # entries that still inherited Modify.  probe-syswrites.ps1, VM, 14 Nov 08:43:
+    # an ordinary session and a PHANTOM wrote only $ipc\%0.
+    $sysDir,
+    (Join-Path $sysDir 'syscom'),       (Join-Path $sysDir 'terminfo'),
+    (Join-Path $sysDir 'terminfo.src'), (Join-Path $sysDir 'helptext'),
+    (Join-Path $sysDir 'dir_dict'),     (Join-Path $sysDir 'licence'),
+    (Join-Path $sysDir 'contrib'),      (Join-Path $sysDir 'start.default'),
+    (Join-Path $sysDir 'agent-pack'),   (Join-Path $sysDir 'bp.out'),
+    (Join-Path $sysDir 'pcode.out'),    (Join-Path $sysDir 'dict.dic'),
+    (Join-Path $sysDir 'voc.dic'),      (Join-Path $sysDir '$map.dic'),
+    (Join-Path $sysDir 'accounts.dic')
 )
 $ipc = Join-Path $sysDir '$ipc'
+# 14 Nov 26 - RELEASE_1.1 293: two more controls, because the sdsys folder is now
+# locked and these are children that must KEEP the Modify they inherit: every
+# session appends to errlog (the installer creates it before the lock), and prt
+# takes the print queue.
+$moreControls = @((Join-Path $sysDir 'errlog'), (Join-Path $sysDir 'prt'))
 
 $results     = @()
 $fatal       = $false
@@ -140,7 +159,7 @@ if (-not $inSdusers) {
 # REFUSE THE NULL CASE.  If the install is not there, or a path has been
 # renamed, every write probe below fails for the wrong reason and the run reads
 # as a clean lock.  Name what is missing and stop.
-$absent = @(@($readOnly + $ipc) | Where-Object { -not (Test-Path -LiteralPath $_) })
+$absent = @(@($readOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($absent.Count -gt 0) {
     Write-Output 'verify-sysdiracl: these paths do not exist, so nothing could be measured:'
     $absent | ForEach-Object { Write-Output "    $_" }
@@ -218,6 +237,13 @@ Note 'sdusers can read $ipc (CONTROL)' $ipcRead $true $true
 $ipcWrite = Test-CanWrite $ipc
 if (-not $ipcWrite) { $tooHard = $true }
 Note 'sdusers can WRITE $ipc (CONTROL)' $ipcWrite $true $true
+
+foreach ($c in $moreControls) {
+    $leaf = Split-Path -Leaf $c
+    $cw = Test-CanWrite $c
+    if (-not $cw) { $tooHard = $true }
+    Note "sdusers can WRITE $leaf (CONTROL)" $cw $true $true
+}
 
 # Ownership, reported not asserted - an owner can always rewrite the DACL.
 foreach ($p in @($readOnly[0], $ipc)) {

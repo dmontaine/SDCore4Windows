@@ -3779,6 +3779,51 @@ begin
   Result := (Code = 0);
 end;
 
+{ 14 Nov 26 - RELEASE_1.1 293.  The same call with -KeepChildren, for the sdsys
+  folder itself: sdusers may no longer add a name to it, and the children that
+  still inherit keep their Modify.  secure-sysdirs.ps1 has the measurement. }
+function LockKeepChildrenPath(Ps, Script, Target: String; var Code: Integer): Boolean;
+begin
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" -Path "' + Target + '" -KeepChildren',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Result := (Code = 0);
+end;
+
+{ 14 Nov 26 - RELEASE_1.1 293.  Locks each sdsys entry in Names ('/' between
+  them: no name has one, and test-usspelling reads a name between slashes as a
+  name, not a word) with LockOsUsersPath, one call apiece as SecureSysdirs does, and returns
+  the first path that failed, or '' when every one was locked. }
+function LockSysdirNames(Ps, Script, Names: String; var Code: Integer): String;
+var
+  Rest, Name, Target: String;
+  P: Integer;
+begin
+  Result := '';
+  Rest := Names;
+  while Rest <> '' do
+  begin
+    P := Pos('/', Rest);
+    if P = 0 then
+    begin
+      Name := Rest;
+      Rest := '';
+    end
+    else
+    begin
+      Name := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 1, Length(Rest));
+    end;
+    Target := ExpandConstant('{#DataDir}\sdsys\') + Name;
+    if not LockOsUsersPath(Ps, Script, Target, Code) then
+    begin
+      Result := Target;
+      Exit;
+    end;
+  end;
+end;
+
 { LOCK THE ACCOUNT DIRECTORIES.  PROJECT_STATUS.md section 8, "the B work".
 
   THE HOLE: the data tree grants sdusers Modify with (OI)(CI), so every account
@@ -4072,6 +4117,7 @@ var
   Code: Integer;
   Ps, Script, Failed: String;
   Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable, VocTpl: String;
+  ErrLog, Root: String;   { 14 Nov 26 - RELEASE_1.1 293 }
 begin
   Result := '';
   Code := 0;
@@ -4163,6 +4209,37 @@ begin
     Failed := ConfTable
   else if not LockOsUsersPath(Ps, Script, VocTpl, Code) then
     Failed := VocTpl;
+
+  { 14 Nov 26 - THE REST OF sdsys, AND THE FOLDER ITSELF (RELEASE_1.1 293, Linux
+    parity: there sdsys is 755 and only errlog, prt, dumps and $ipc are group
+    writable, mail 1535).  These fifteen still inherited sdusers Modify, and an
+    ordinary account could create files in sdsys.  probe-syswrites.ps1 on the VM,
+    14 Nov 2026 08:43 (an unelevated session and a PHANTOM): only $ipc\%0 was
+    written; every name below was untouched.  LEFT OPEN, deliberately: $ipc (every
+    session writes it), errlog (every session appends to it), prt, $hold and
+    $hold.dic (deferred prints), and dumps and pstmp, which their own scripts
+    secure. }
+  if Failed = '' then
+    Failed := LockSysdirNames(Ps, Script,
+      'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
+      'start.default/agent-pack/bp.out/pcode.out/' +
+      'dict.dic/voc.dic/$map.dic/accounts.dic', Code);
+
+  { errlog is not shipped: the first process that logs creates it, in sdsys.
+    Once the folder is locked an ordinary session could not, so it is made here,
+    empty, before the lock, as Linux's installer touches it; it inherits Modify. }
+  ErrLog := ExpandConstant('{#DataDir}\sdsys\errlog');
+  if (Failed = '') and not FileExists(ErrLog) then
+    SaveStringToFile(ErrLog, '', False);
+
+  Root := ExpandConstant('{#DataDir}\sdsys');
+  if (Failed = '') and not LockKeepChildrenPath(Ps, Script, Root, Code) then
+  begin
+    Result := 'The SD Core system folder was NOT locked (code ' + IntToStr(Code) + '): ' +
+              Root + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+              '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Root + '" -KeepChildren' + #13#10#13#10;
+    Exit;
+  end;
 
   if Failed = '' then
     Exit;

@@ -59,11 +59,23 @@
 # reports the kind of each path it touched: a run that silently treated the
 # file as a directory would have granted nothing at all.
 #
+# 14 Nov 26 - -KeepChildren, FOR THE sdsys FOLDER ITSELF (RELEASE_1.1 293, Linux
+# parity: there sdsys is 755 and only errlog, prt, dumps and $ipc are group
+# writable).  An ordinary account could create files in sdsys because the folder
+# inherited sdusers Modify.  With -KeepChildren the folder gets sdusers (RX) for
+# ITSELF ONLY plus an INHERIT-ONLY sdusers (OI)(CI)(IO)(M), so a session can no
+# longer add a name to sdsys while every child that still inherits - $ipc, errlog,
+# prt, $hold - keeps exactly the Modify it had.  Measured on a scratch folder
+# 14 Nov 2026: icacls keeps the two sdusers ACEs apart, a child folder reads
+# (I)(OI)(CI)(M), a child file (I)(M), and an unelevated token is refused a new
+# file in the folder.  Directories only: a file has no children to keep anything.
+#
 # Exit 0 done, 1 failed, 2 could not be attempted.
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)] [string[]] $Path
+    [Parameter(Mandatory = $true)] [string[]] $Path,
+    [switch] $KeepChildren
 )
 
 $ErrorActionPreference = 'Stop'
@@ -114,7 +126,17 @@ try {
         #   *S-1-5-18       NT AUTHORITY\SYSTEM
         #   *S-1-5-32-544   BUILTIN\Administrators
         # sdusers is our own name and is safe to write.
-        if ($item.PSIsContainer) {
+        if ($KeepChildren) {
+            if (-not $item.PSIsContainer) {
+                Write-Output "secure-sysdirs: -KeepChildren is for a directory and $($item.FullName) is a file - nothing secured"
+                exit 2
+            }
+            $kind   = 'directory, children keep Modify'
+            $grants = @('*S-1-5-18:(OI)(CI)(F)',
+                        '*S-1-5-32-544:(OI)(CI)(F)',
+                        'sdusers:(RX)',
+                        'sdusers:(OI)(CI)(IO)(M)')
+        } elseif ($item.PSIsContainer) {
             $kind   = 'directory'
             $grants = @('*S-1-5-18:(OI)(CI)(F)',
                         '*S-1-5-32-544:(OI)(CI)(F)',
@@ -138,10 +160,9 @@ try {
         # all.  NO /T: these are the only objects being restamped, and a walk
         # is what section 6's "empties the parent, loses the walk, exits 0"
         # trap needs to bite.
-        $out = & icacls.exe $item.FullName /inheritance:r `
-            /grant $grants[0] `
-            /grant $grants[1] `
-            /grant $grants[2] 2>&1
+        $icArgs = @($item.FullName, '/inheritance:r')
+        foreach ($g in $grants) { $icArgs += @('/grant', $g) }
+        $out = & icacls.exe @icArgs 2>&1
         $text = ($out | Out-String)
 
         # THE EXIT CODE IS NOT THE ONLY INSTRUMENT - section 6, and it cost two
@@ -159,8 +180,13 @@ try {
             exit 1
         }
 
-        Write-Output ("secure-sysdirs: {0} is readable by sdusers, writable only by administrators" -f
-                      $item.FullName)
+        if ($KeepChildren) {
+            Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; its inheriting children keep Modify" -f
+                          $item.FullName)
+        } else {
+            Write-Output ("secure-sysdirs: {0} is readable by sdusers, writable only by administrators" -f
+                          $item.FullName)
+        }
     }
 
     exit 0
