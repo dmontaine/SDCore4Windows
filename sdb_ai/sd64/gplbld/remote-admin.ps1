@@ -2,6 +2,8 @@
 #
 # 13 Nov 26 Windows port - written for RELEASE_1.1 202, Linux S.106's remote.sdsys (sd-elevate sdsys-ssh, ssh-forcecommand.sh --open-sdsys /
 # --close-sdsys / --sdsys-state) in the Windows form of .claude/design-remote-admin-20261113.md, with the owner's answers of 13 Nov 2026.
+# 13 Nov 26 Windows port - RELEASE_1.1 280: -On enables SDRADMIN BEFORE the arm is checked (sshd -T -C cannot resolve a disabled account,
+# so the installer's REMOTE.SDSYS ON failed every time); a shut arm for a disabled SDRADMIN is checked with sshd -t and says so.
 #
 #   remote-admin.ps1 -Status          what the machine says, one line per wall; changes nothing
 #   remote-admin.ps1 -On              opens remote administration for SDRADMIN (REMOTE.SDSYS ON runs it, after making the account)
@@ -353,6 +355,30 @@ function Invoke-SshdT([string]$sshd, [string]$spec) {
 
 function Test-SshdArm([string]$sshd, [string]$mode, [string]$sdExe) {
     # Both spellings of the name, the way the arm's Match line names it.  '' or why.
+    # 13 Nov 26 - RELEASE_1.1 280: sshd -T -C cannot resolve a DISABLED account (ga_init; measured on the host).  An open arm is never
+    # written for one (-On enables SDRADMIN first).  A SHUT arm for a disabled SDRADMIN - -On's undo before the enable, or OFF on an
+    # account already disabled - is checked as a whole file with "sshd -t" instead, and $script:ArmCheck says so to the caller's line:
+    # a disabled account cannot sign in at all, and the DenyUsers arm is the second wall, not the only one.
+    $script:ArmCheck = 'sshd -T'
+    $acct = Get-LocalUser -Name $RadminUser -ErrorAction SilentlyContinue
+    if ($null -ne $acct -and -not $acct.Enabled) {
+        if ($mode -cne 'closed') { return 'SDRADMIN is disabled, and sshd cannot resolve a disabled account to check an open arm' }
+        $psi = New-Object Diagnostics.ProcessStartInfo
+        $psi.FileName = $sshd
+        $psi.Arguments = '-t'
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $p = [Diagnostics.Process]::Start($psi)
+        $o = $p.StandardOutput.ReadToEndAsync()
+        $e = $p.StandardError.ReadToEndAsync()
+        $p.WaitForExit()
+        $null = $o.Result
+        if ($p.ExitCode -ne 0) { return ('sshd -t refused the configuration: ' + $e.Result.Trim()) }
+        $script:ArmCheck = 'sshd -t only: SDRADMIN is disabled, which sshd -T cannot resolve'
+        return ''
+    }
     foreach ($u in @($RadminUser, ([Environment]::MachineName.ToLowerInvariant() + '\' + $RadminUser))) {
         $r = Invoke-SshdT $sshd ('user=' + $u + ',host=sdcheck,addr=192.0.2.1')
         if ($r.Code -ne 0) { return ('sshd -T refused the configuration: ' + $r.Err) }
@@ -433,7 +459,7 @@ function Close-Walls([string]$userSid, [bool]$keepBroker, [string]$armMode) {
             } elseif ($sshd -ne '') {
                 $why = Write-SshdArm $cfg $sshd 'closed' (Get-SdExePath)
                 if ($why -ne '') { $left++; Out-Line "${Prog}: the sshd arm could not be shut ($why); sshd_config is as it was" }
-                else { Out-Line "${Prog}: the sshd arm is shut (DenyUsers)" }
+                else { Out-Line "${Prog}: the sshd arm is shut (DenyUsers; checked by $script:ArmCheck)" }
             }
             if ($null -ne (Get-Service sshd -ErrorAction SilentlyContinue)) { Restart-Service sshd -ErrorAction SilentlyContinue }
         }
@@ -583,6 +609,18 @@ try {
         Exit-With 1 "SDRADMIN's groups or rights could not be set ($($_.Exception.Message)); every wall is shut"
     }
 
+    # 13 Nov 26 - RELEASE_1.1 280: ENABLED BEFORE THE ARM IS CHECKED.  sshd -T -C resolves the user's groups (ga_init), and Win32-OpenSSH
+    # cannot resolve a DISABLED account: measured 13 Nov on the host, "ga_init, unable to resolve user" for sdradmin, DefaultAccount and
+    # Guest, all disabled, and 86 lines for an enabled account.  Enabled after the check, as first built, -On could never succeed.  Here
+    # SDRADMIN is still outside sdssh (AllowGroups refuses it ssh) and already holds its deny rights; an undo below disables it again.
+    try {
+        Enable-LocalUser -SID $userSid -ErrorAction Stop
+    } catch {
+        $null = Close-Walls $userSid $false 'closed'
+        Exit-With 1 "the Windows account SDRADMIN could not be enabled ($($_.Exception.Message)); every wall is shut"
+    }
+    Out-Line "${Prog}: the Windows account SDRADMIN is enabled (not yet in sdssh, so ssh still refuses it)"
+
     $why = Write-SshdArm $cfg $sshd 'open' $SdExe
     if ($why -ne '') {
         $null = Close-Walls $userSid $false 'closed'
@@ -592,8 +630,6 @@ try {
 
     try {
         Add-ToGroup $sshSid $userSid 'sdssh'
-        Enable-LocalUser -SID $userSid -ErrorAction Stop
-        Out-Line "${Prog}: the Windows account SDRADMIN is enabled"
         Restart-Service sshd
         Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml (Get-BrokerXml $sdsysSid) -Force | Out-Null
         Enable-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' | Out-Null
