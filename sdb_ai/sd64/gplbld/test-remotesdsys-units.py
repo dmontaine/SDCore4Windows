@@ -210,8 +210,11 @@ def checks(raw):
     iss = raw["iss"]
     # 13 Nov 26 (RELEASE_1.1 282, owner: "should we always install remote ssh admin off ... It's just an available feature that can be
     # turned on"): the installer neither asks nor opens it.  The uninstaller still takes it away.
-    ck("I1", "the installer does not offer remote administration (no page, no -RemoteAdmin to the finishing window); the uninstaller still runs remote-admin.ps1 -Remove after the jobs",
+    # And the owner's ruling, 13 Nov 2026: "I don't believe an upgrade should shut something that is already open" - the installer runs
+    # remote-admin.ps1 with -Remove only (the uninstaller), never -Off or -On.
+    ck("I1", "the installer does not offer remote administration (no page, no -RemoteAdmin to the finishing window) and an upgrade leaves it as it was (no -Off, no -On); the uninstaller still runs remote-admin.ps1 -Remove after the jobs",
        "RemoteAdminPage" not in iss and "RemoteAdminChosen" not in iss and "' -RemoteAdmin'" not in iss
+       and "'\" -Off'" not in iss and "'\" -On'" not in iss
        and re.search(r"RemoveScheduledJobs;\s*\n\s*RemoveRemoteAdmin;", iss) is not None and "'\" -Remove'" in iss.replace(" + '\" -Remove'", "'\" -Remove'"), "")
     fi = raw["finish"]
     ck("I2", "finish-install.ps1 takes no -RemoteAdmin and never runs REMOTE.SDSYS",
@@ -287,6 +290,7 @@ MUTANTS = [
     ("a message is missing", "M1", setkey("msg12838", "")),
     ("the installer asks about remote administration again", "I1", sub("iss", "  PythonPage.Values[0] := False;\nend;", "  PythonPage.Values[0] := False;\n  RemoteAdminPage := CreateInputOptionPage(PythonPage.ID, 'Remote administration', '', '', False, False);\nend;")),
     ("Setup hands the finishing window -RemoteAdmin again", "I1", sub("iss", "          ' -AttachCode ' + IntToStr(AttachCode);\n", "          ' -AttachCode ' + IntToStr(AttachCode) + ' -RemoteAdmin';\n")),
+    ("an upgrade shuts remote administration (against the owner's ruling)", "I1", sub("iss", "  Script := ExpandConstant('{app}\\remote-admin.ps1');\n  if not FileExists(Script) then\n    Exit;\n", "  Script := ExpandConstant('{app}\\remote-admin.ps1');\n  if not FileExists(Script) then\n    Exit;\n  Exec(Ps, '-File \"' + Script + '\" -Off', '', SW_HIDE, ewWaitUntilTerminated, Code);\n")),
     ("the uninstaller leaves remote administration", "I1", sub("iss", "    RemoveScheduledJobs;\n    RemoveRemoteAdmin;\n", "    RemoveScheduledJobs;\n")),
     ("the finishing window opens remote administration again", "I2", sub("finish", "# 13 Nov 26 - RELEASE_1.1 282: the install no longer opens remote administration", "if ($RemoteAdmin) { $null = 'REMOTE.SDSYS' }\n# 13 Nov 26 - RELEASE_1.1 282: the install no longer opens remote administration")),
     ("a script does not ship", "I3", sub("stage", "'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1',", "'remote-admin.ps1', 'sd-radmin.ps1',")),

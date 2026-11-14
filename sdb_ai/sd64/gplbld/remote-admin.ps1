@@ -51,7 +51,8 @@
 #
 # NOTHING EXISTS AS DELIVERED: no account, no task, no sshd lines, no state.  The installer runs nothing of this and asks nothing about it
 # (RELEASE_1.1 282, owner 13 Nov 2026: delivered off, "just an available feature that can be turned on"); an upgrade runs nothing of it,
-# so ON stays ON (Q7).
+# so ON stays ON (Q7).  OWNER'S RULING, 13 Nov 2026, when an upgrade-shuts-it change was built for Linux parity (Linux's upgrade shuts
+# it): "I don't believe an upgrade should shut something that is already open."  So an upgrade NEVER runs -Off or -On; Linux is told.
 
 param(
     [switch]$On,
