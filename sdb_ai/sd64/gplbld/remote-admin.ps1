@@ -4,6 +4,9 @@
 # --close-sdsys / --sdsys-state) in the Windows form of .claude/design-remote-admin-20261113.md, with the owner's answers of 13 Nov 2026.
 # 13 Nov 26 Windows port - RELEASE_1.1 280: -On enables SDRADMIN BEFORE the arm is checked (sshd -T -C cannot resolve a disabled account,
 # so the installer's REMOTE.SDSYS ON failed every time); a shut arm for a disabled SDRADMIN is checked with sshd -t and says so.
+# 13 Nov 26 Windows port - RELEASE_1.1 280: the broker task is registered by SDSYS itself or with SDSYS's Windows password (-SdsysPassword,
+# asked by REMOTE.SDSYS at the terminal), before any wall moves; without either -On exits 4 having changed nothing.  Every task cmdlet
+# stops on error, and "open" waits for the broker's pipe.
 #
 #   remote-admin.ps1 -Status          what the machine says, one line per wall; changes nothing
 #   remote-admin.ps1 -On              opens remote administration for SDRADMIN (REMOTE.SDSYS ON runs it, after making the account)
@@ -34,7 +37,8 @@
 #
 # THE SUCCESS LINES the verb anchors on: "remote-admin: open" (-On), "remote-admin: closed" (-Off), "remote-admin: removed" (-Remove).
 # Exit codes: 0 done; 1 refused or failed (the line before says why); 2 not possible on this machine (no ssh server, no sshd_config, no
-# sdssh group, no account SDRADMIN - the verb makes it first); 3 sshd would not take the change and sshd_config is as it was before.
+# sdssh group, no account SDRADMIN - the verb makes it first); 3 sshd would not take the change and sshd_config is as it was before;
+# 4 (-On only) SDSYS's Windows password is needed and was not given - nothing was changed, and REMOTE.SDSYS asks for it and runs -On again.
 # -Status always exits 0 when it could read the machine and prints:
 #   remote-admin=open|closed|absent|inconsistent  (and odd=<the walls that disagree> when inconsistent)
 #   account=enabled|disabled|absent   sdssh=yes|no   sshd-arm=open|closed|none|damaged   broker=running|ready|disabled|absent   state=on|off|none
@@ -52,6 +56,11 @@ param(
     [switch]$Status,
     [switch]$Remove,
     [switch]$KeepBroker,
+    # 13 Nov 26 - RELEASE_1.1 280.  SDSYS's Windows password, for -On run by anyone but SDSYS: Windows registers an S4U task for SDSYS only
+    # for SDSYS itself or for a caller that gives SDSYS's password (measured 13 Nov: an elevated administrator and SYSTEM are refused
+    # without it; with it the task registers and keeps logon type S4U, so no password is stored).  REMOTE.SDSYS passes it as a SecureString
+    # inside the script !ps_script_out writes to SD's restricted PSTMP file, never on a command line; it is used once and never printed.
+    [Security.SecureString]$SdsysPassword = $null,
     # Where sd.exe is, for ForceCommand.  Set in the body, not as a default: $PSScriptRoot is empty in a param default (adopt-account.ps1).
     [string]$SdExe = ''
 )
@@ -358,37 +367,29 @@ function Invoke-SshdT([string]$sshd, [string]$spec) {
     return @{ Code = $p.ExitCode; Out = @($o.Result -split "`r?`n"); Err = $e.Result.Trim() }
 }
 
-function Invoke-SshdTAsSystem([string]$sshd, [string]$spec) {
-    # 13 Nov 26 - RELEASE_1.1 280.  The same sshd -T -C, run by a one-shot task as SYSTEM (\SD\sdcore-radmin-check), always removed
-    # again.  The task runs a fixed PowerShell text with no input from anyone: the sshd path and the spec are this script's own (the spec
-    # is "user=<SDRADMIN, either spelling>,host=sdcheck,addr=192.0.2.1"), passed base64-encoded so no quoting reaches a shell.  Its
-    # output goes to three files under %SystemRoot%\Temp named by a fresh GUID (SYSTEM and Administrators may read them; they are
-    # deleted here).  The configuration it prints is sshd_config's, which every user can already read.
+function ConvertTo-PsQuoted([string]$s) { return ("'" + $s.Replace("'", "''") + "'") }
+
+function Invoke-SystemTask([string]$body, [string]$what) {
+    # 13 Nov 26 - RELEASE_1.1 280.  Runs a fixed PowerShell text as SYSTEM by a one-shot task \SD\sdcore-radmin-check, always removed again,
+    # for what only SYSTEM may do here (measured on the host 13 Nov): ask sshd -T -C about another account.  The text is
+    # this script's own with no input from anyone, passed base64-encoded so no quoting reaches a shell; it writes @@OUT@@, @@ERR@@ and,
+    # last, @@CODE@@, three files under %SystemRoot%\Temp named by a fresh GUID, read and deleted here.  @{ Code; Out = lines; Err }.
     $tag = [Guid]::NewGuid().ToString('N')
     $base = Join-Path $env:SystemRoot ('Temp\sd-radmin-check-' + $tag)
-    $q = { param($s) "'" + $s.Replace("'", "''") + "'" }
-    $body = @(
-        ('$psi = New-Object Diagnostics.ProcessStartInfo; $psi.FileName = ' + (& $q $sshd)),
-        ('$psi.Arguments = ' + (& $q ('-T -C "' + $spec + '"'))),
-        '$psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true; $psi.CreateNoWindow = $true',
-        '$p = [Diagnostics.Process]::Start($psi); $o = $p.StandardOutput.ReadToEndAsync(); $e = $p.StandardError.ReadToEndAsync(); $p.WaitForExit()',
-        ('[IO.File]::WriteAllText(' + (& $q ($base + '.out')) + ', $o.Result)'),
-        ('[IO.File]::WriteAllText(' + (& $q ($base + '.err')) + ', $e.Result)'),
-        ('[IO.File]::WriteAllText(' + (& $q ($base + '.code')) + ', [string]$p.ExitCode)')
-    ) -join "`n"
-    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
-    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $files = @(($base + '.out'), ($base + '.err'), ($base + '.code'))
+    $text = $body.Replace('@@OUT@@', (ConvertTo-PsQuoted $files[0])).Replace('@@ERR@@', (ConvertTo-PsQuoted $files[1])).Replace('@@CODE@@', (ConvertTo-PsQuoted $files[2]))
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     try {
-        Out-Line "${Prog}: asking sshd, as SYSTEM, what it would give $($spec.Split(',')[0]) (a few seconds)..."
+        Out-Line "${Prog}: $what, as SYSTEM (a few seconds)..."
         $act = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc)
         $pr = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
-        Register-ScheduledTask -TaskName 'sdcore-radmin-check' -TaskPath '\SD\' -Action $act -Principal $pr -Force | Out-Null
-        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check'
+        Register-ScheduledTask -TaskName 'sdcore-radmin-check' -TaskPath '\SD\' -Action $act -Principal $pr -Force -ErrorAction Stop | Out-Null
+        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -ErrorAction Stop
         $deadline = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $files[2])) { Start-Sleep -Milliseconds 250 }
         if (-not (Test-Path -LiteralPath $files[2])) {
-            return @{ Code = -1; Out = @(); Err = 'the check run as SYSTEM did not finish in 60 seconds' }
+            return @{ Code = -1; Out = @(); Err = 'the step run as SYSTEM did not finish in 60 seconds' }
         }
         Start-Sleep -Milliseconds 200
         $code = -1
@@ -399,6 +400,60 @@ function Invoke-SshdTAsSystem([string]$sshd, [string]$spec) {
     } finally {
         Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:$false -ErrorAction SilentlyContinue
         foreach ($f in $files) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+    }
+}
+
+function Invoke-SshdTAsSystem([string]$sshd, [string]$spec) {
+    # sshd -T -C as SYSTEM.  The sshd path and the spec ("user=<SDRADMIN, either spelling>,host=sdcheck,addr=192.0.2.1") are this
+    # script's own.  The configuration it prints is sshd_config's, which every user can already read.
+    $body = @(
+        ('$psi = New-Object Diagnostics.ProcessStartInfo; $psi.FileName = ' + (ConvertTo-PsQuoted $sshd)),
+        ('$psi.Arguments = ' + (ConvertTo-PsQuoted ('-T -C "' + $spec + '"'))),
+        '$psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true; $psi.CreateNoWindow = $true',
+        '$p = [Diagnostics.Process]::Start($psi); $o = $p.StandardOutput.ReadToEndAsync(); $e = $p.StandardError.ReadToEndAsync(); $p.WaitForExit()',
+        '[IO.File]::WriteAllText(@@OUT@@, $o.Result)',
+        '[IO.File]::WriteAllText(@@ERR@@, $e.Result)',
+        '[IO.File]::WriteAllText(@@CODE@@, [string]$p.ExitCode)'
+    ) -join "`n"
+    return (Invoke-SystemTask $body ('asking sshd what it would give ' + $spec.Split(',')[0]))
+}
+
+function Test-BrokerPipe {
+    # The broker's own success: its pipe exists (sd-radmin.ps1 makes \\.\pipe\sd-radmin, first instance only).
+    return (@([IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -ieq '\\.\pipe\sd-radmin' }).Count -gt 0)
+}
+
+function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureString]$pw) {
+    # 13 Nov 26 - RELEASE_1.1 280.  The broker runs as SDSYS by S4U, and Windows registers an S4U task for SDSYS only for SDSYS itself or
+    # for a caller that gives SDSYS's password.  Measured on the host 13 Nov (probes 4 to 6): an elevated administrator is refused ("Access
+    # is denied") in every variant, SYSTEM is refused too, and an elevated administrator that passes SDSYS's password to
+    # RegisterTaskDefinition with logon type S4U is accepted and the task KEEPS logon type S4U - nothing is stored.  So SDSYS (REMOTE.SDSYS
+    # ON at its console) registers it as itself, and anyone else (the installer) with $pw.  The logon type is read back, and a task that
+    # came back as anything but S4U - a stored password - is deleted and refused.  Throws on any failure.
+    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq $sdsysSid) {
+        Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml $xml -Force -ErrorAction Stop | Out-Null
+        return
+    }
+    if ($null -eq $pw -or $pw.Length -eq 0) { throw 'SDSYS''s Windows password is needed to register the broker task, and none was given' }
+    $user = (New-Object Security.Principal.SecurityIdentifier($sdsysSid)).Translate([Security.Principal.NTAccount]).Value
+    $svc = New-Object -ComObject Schedule.Service
+    $svc.Connect()
+    $folder = $svc.GetFolder('\SD')
+    $def = $svc.NewTask(0)
+    $def.XmlText = $xml
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw)
+    try {
+        # 6 = TASK_CREATE_OR_UPDATE, 2 = TASK_LOGON_S4U.
+        $null = $folder.RegisterTaskDefinition('sdcore-radmin', $def, 6, $user, [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr), 2, $null)
+    } catch {
+        throw ('the broker task could not be registered with SDSYS''s Windows password (a wrong password is refused here): ' + $_.Exception.Message.Trim())
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+    $lt = [int]$folder.GetTask('sdcore-radmin').Definition.Principal.LogonType
+    if ($lt -ne 2) {
+        try { $folder.DeleteTask('sdcore-radmin', 0) } catch { }
+        throw ("the broker task came back with logon type $lt, not S4U, so a password would have been stored; it is deleted")
     }
 }
 
@@ -526,12 +581,20 @@ function Close-Walls([string]$userSid, [bool]$keepBroker, [string]$armMode) {
         $t = Get-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction SilentlyContinue
         if ($null -ne $t) {
             if ($armMode -ceq 'none') {
-                Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -Confirm:$false
+                Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -Confirm:$false -ErrorAction Stop
                 Out-Line "${Prog}: the broker task is removed"
             } else {
-                if (-not $keepBroker -and [string]$t.State -eq 'Running') { Stop-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' }
-                Disable-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' | Out-Null
-                Out-Line ("${Prog}: the broker task is disabled" + $(if ($keepBroker) { '; the broker stops itself when it has answered' } else { '' }))
+                if (-not $keepBroker -and [string]$t.State -eq 'Running') { Stop-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop }
+                # 13 Nov 26 - RELEASE_1.1 280: disabling re-saves the task, which for an SDSYS task an administrator may be refused without
+                # SDSYS's password (not measured); deleting it is allowed (measured 13 Nov).  So a refused disable deletes it instead: the
+                # next ON registers it again, which needs SDSYS or its password anyway.
+                $how = 'disabled'
+                try { Disable-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop | Out-Null }
+                catch {
+                    Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -Confirm:$false -ErrorAction Stop
+                    $how = "removed (disabling it was refused: $($_.Exception.Message.Trim()))"
+                }
+                Out-Line ("${Prog}: the broker task is $how" + $(if ($keepBroker) { '; the broker stops itself when it has answered' } else { '' }))
             }
         }
     } catch { $left++; Out-Line "${Prog}: the broker task: $($_.Exception.Message)" }
@@ -643,6 +706,22 @@ try {
     $sdsysSid = Get-LocalSid 'SDSYS'
     if ($sdsysSid -eq '') { Exit-With 2 'there is no local account SDSYS to run the broker as' }
 
+    # 13 Nov 26 - RELEASE_1.1 280: THE BROKER TASK FIRST, BEFORE ANY WALL MOVES.  Only SDSYS, or a caller holding SDSYS's Windows password,
+    # can register it (Register-BrokerTask's header).  Without either this exits 4 having changed nothing, and REMOTE.SDSYS asks for the
+    # password at the terminal and runs -On again.  A wrong password is refused here too, still before anything has changed.
+    $asSdsys = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq $sdsysSid)
+    if (-not $asSdsys -and ($null -eq $SdsysPassword -or $SdsysPassword.Length -eq 0)) {
+        Exit-With 4 'the broker task runs as SDSYS, and this is not SDSYS: SDSYS''s Windows password is needed to register it; nothing was changed'
+    }
+    try {
+        Register-BrokerTask (Get-BrokerXml $sdsysSid) $sdsysSid $SdsysPassword
+    } catch {
+        Exit-With 1 "$($_.Exception.Message); nothing else was changed"
+    } finally {
+        $SdsysPassword = $null
+    }
+    Out-Line "${Prog}: the broker task \SD\sdcore-radmin is registered to run as SDSYS ($(if ($asSdsys) { 'by SDSYS' } else { 'with SDSYS''s password; no password is stored' }))"
+
     Out-Line "${Prog}: -On: the sshd arm opened for SDRADMIN, SDRADMIN in sdssh and enabled, the broker task \SD\sdcore-radmin running as SDSYS, the state on"
     try {
         # Out of every group that would give it more than an SD user has (Users is the owner's Q10), into sdsshonly, and its own deny rights.
@@ -677,16 +756,25 @@ try {
     }
     Out-Line "${Prog}: the sshd arm is open; sshd -T gives SDRADMIN the open keywords for both spellings of its name"
 
+    # 13 Nov 26 - RELEASE_1.1 280: EVERY TASK CMDLET CARRIES -ErrorAction Stop, AND "open" WAITS FOR THE BROKER'S PIPE.  The ScheduledTasks
+    # cmdlets are a module's, and $ErrorActionPreference = 'Stop' above does not reach into a module's scope in Windows PowerShell 5.1:
+    # on the 13 Nov host cycle Register-ScheduledTask was refused ("Access is denied"), Enable and Start found no task, and this block
+    # carried on, wrote the state on and printed "registered and started" and "open" with no broker - a false success that left the
+    # walls open.  Now a failure lands in the catch (every wall shut, the state off), and success is \\.\pipe\sd-radmin existing.
     try {
         Add-ToGroup $sshSid $userSid 'sdssh'
-        Restart-Service sshd
-        Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml (Get-BrokerXml $sdsysSid) -Force | Out-Null
-        Enable-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' | Out-Null
+        Restart-Service sshd -ErrorAction Stop
+        # Registered above, enabled by its own definition (Get-BrokerXml's <Enabled>true</Enabled>): no Enable-ScheduledTask, which re-saves
+        # the task and might want SDSYS's password again.
         Set-StateFile 'on'
         # Started afresh even when it was running: the broker reads SDRADMIN's SID once, at start, for its pipe's access list.
-        if ((Get-TaskState) -eq 'running') { Stop-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' }
-        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin'
-        Out-Line "${Prog}: the broker task is registered and started"
+        if ((Get-TaskState) -eq 'running') { Stop-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop }
+        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop
+        Out-Line "${Prog}: the broker task is registered; waiting for its pipe \\.\pipe\sd-radmin (up to 20 seconds)..."
+        $deadline = (Get-Date).AddSeconds(20)
+        while ((Get-Date) -lt $deadline -and -not (Test-BrokerPipe)) { Start-Sleep -Milliseconds 250 }
+        if (-not (Test-BrokerPipe)) { throw ('the broker started but its pipe \\.\pipe\sd-radmin did not appear in 20 seconds (task state ' + (Get-TaskState) + ')') }
+        Out-Line "${Prog}: the broker is running: \\.\pipe\sd-radmin is there"
     } catch {
         $msg = $_.Exception.Message
         $null = Close-Walls $userSid $false 'closed'

@@ -146,6 +146,17 @@ def checks(raw):
        and "   if run.verb = 'remote.ssh' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'off') then run.ok = @false" in rr
        and "   if run.verb = 'remote.api' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local' and run.words<1> # 'off') then run.ok = @false" in rr
        and rr.find("   if run.verb = 'remote.api' then") < rr.find("   if not(run.ok) then"), str(pos))
+    # 13 Nov 26 (RELEASE_1.1 280): ON run by anyone but SDSYS asks SDSYS's Windows password when -On answers 4, and hands it on only inside
+    # the script !ps_script_out writes to its restricted file, never on a command line, never in the broker's job, never audited or shown.
+    ok, pos = ordered(on, ["helper.args = '-On'", "gosub run.helper", "if rc = 4 then", "input sdsys.pw HIDDEN", "if sdsys.pw # '' then", "helper.pw = sdsys.pw", "sdsys.pw = ''", "gosub run.helper", "gosub show.helper"])
+    pwl = rh[rh.find("pw.line = ''"):rh.find("if in.job then")] if "pw.line = ''" in rh else ""
+    ck("B11", "SDSYS's password (RELEASE_1.1 280): asked hidden only when -On answers 4, passed only as a SecureString line inside the !ps_script_out script, apostrophes doubled, "
+       "never in the broker's job, cleared at once; never on the os.execute line, in an audit line or shown",
+       ok and "if helper.pw # '' and not(in.job) then" in pwl and "pw.line = '$sdsysPw = ConvertTo-SecureString -String ' : q : change(helper.pw, q, q:q) : q : ' -AsPlainText -Force'" in pwl
+       and "hcmd := ' -SdsysPassword $sdsysPw'" in pwl and pwl.rstrip().endswith("helper.pw = ''")
+       and "both = ps_script_out(pw.line : @fm : hcmd : @fm : 'exit $LASTEXITCODE', @true)" in rh and re.search(r"\n\s*end\s*\n\s*pw\.line = ''\s*\n", rh[rh.find("both = ps_script_out(pw.line"):]) is not None
+       and not re.search(r"K\$AUDIT[^\n]*(sdsys\.pw|helper\.pw|pw\.line)", v) and not re.search(r"(crt|display|print)[^\n]*(sdsys\.pw|helper\.pw|pw\.line)", v)
+       and not re.search(r"os\.execute[^\n]*(pw\.line|helper\.pw)", v), str(pos))
 
     ck("R1", "RADMIN is an internal program catalogued as $radmin, and the remote session's identity (SDRADMIN, in sdradmin, over ssh, not elevated) is tested first, refused 2001",
        re.search(r"^\$internal\s*\nprogram \$radmin\s*\n\$catalog \$radmin\b", r, re.M) is not None
@@ -256,6 +267,9 @@ MUTANTS = [
     ("SDRADMIN is made with a shell", "B7", sub("verb", "   settings<CA$START> = 'terminal'\n", "   settings<CA$START> = 'terminal'\n   settings<CA$OS.SH> = 1\n")),
     ("OFF leaves the sessions", "B8", sub("verb", "         z = logout(users<i, K$USERS.UID> + 0, @false)\n", "")),
     ("the job asks the console's helper", "B9", sub("verb", "   if in.job then\n      os.execute hcmd", "   if 0 then\n      os.execute hcmd")),
+    ("SDSYS's password is passed in the broker's job too", "B11", sub("verb", "   if helper.pw # '' and not(in.job) then", "   if helper.pw # '' then")),
+    ("SDSYS's password is kept after the script is built", "B11", sub("verb", "      hcmd := ' -SdsysPassword $sdsysPw'\n   end\n   helper.pw = ''\n", "      hcmd := ' -SdsysPassword $sdsysPw'\n   end\n")),
+    ("SDSYS's password is put on the command line", "B11", sub("verb", "      hcmd := ' -SdsysPassword $sdsysPw'", "      hcmd := ' -SdsysPassword ' : helper.pw")),
     ("anybody may send", "R1", sub("radmin", " or env('SSH_CONNECTION') = '' or kernel(K$ADMINISTRATOR, -1) then", " or kernel(K$ADMINISTRATOR, -1) then")),
     ("a word is not checked", "R2", sub("radmin", "convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # ''", "0")),
     ("ON is sent", "R2", sub("radmin", "         if words<1> = 'on' then stop sysmsg(12847, 'remote.sdsys on')", "         null")),
