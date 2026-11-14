@@ -448,6 +448,20 @@ function Resolve-WitSections([string[]]$Only, [string[]]$Known) {
 
 # ---------------------------------------------------------------------------------------------------- SD through the seat
 
+# 13 Nov 26 (VM sitting, step 3): "sd -start" and "sd -restart" fork sdwind with daemon(1, 1) (sysseg.c start_sd), which KEEPS the
+# caller's standard output and error.  A caller that reads them through a pipe (& sd.exe -restart 2>&1 | ...) waits for the daemon,
+# that is for ever: measured in the VM, 24 minutes at "sd -restart" until SD was stopped.  So the switch is run through cmd with its
+# output redirected to a file: cmd waits for sd.exe only, and the daemon holding the file cannot hold the caller.  @{ Code; Text }.
+function Invoke-WitSdSwitch([string]$Exe, [string]$Switch) {
+    $tmp = Join-Path $env:TEMP ('sdswitch-' + [Guid]::NewGuid().ToString('N') + '.txt')
+    & cmd.exe /d /c ('"' + $Exe + '" ' + $Switch + ' > "' + $tmp + '" 2>&1')
+    $code = $LASTEXITCODE
+    $text = ''
+    try { $fs = New-Object IO.FileStream($tmp, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite); $sr = New-Object IO.StreamReader($fs); $text = $sr.ReadToEnd(); $sr.Close() } catch { $text = '(the output file could not be read: ' + $_.Exception.Message + ')' }
+    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+    return @{ Code = $code; Text = $text }
+}
+
 # Runs SD lines as SDSYS through sdsys-seat.ps1 (the caller dot-sources it).  Returns the seat's result object; prints the
 # commands (passwords redacted) and SD's raw output with Write-Host.
 function Invoke-WitSd {

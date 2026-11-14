@@ -131,8 +131,8 @@ if ($Phase -eq 'After') {
     $pw = ''
     if ($null -ne $fix -and $fix.ContainsKey('zzwitold')) { $pw = $fix['zzwitold'] }
     $null = Invoke-WitSd -Commands @('remote.api local', 'N') -Label 'the API to LOCAL (answer N; SD is restarted next)' -TimeoutSec 180
-    $rs = & $script:WitSdExe -restart 2>&1 | ForEach-Object { [string]$_ }
-    Write-WitRaw 'sd -restart' ($rs -join "`n")
+    # 13 Nov 26: through the SD service, not a captured "sd -restart" (witness-vm-lib.ps1 Invoke-WitSdSwitch's note: it hangs).
+    try { Restart-Service -Name SD -ErrorAction Stop; Write-Wit ('  service SD restarted: ' + (Get-Service SD).Status) } catch { Write-Wit ('  Restart-Service SD failed: ' + $_.Exception.Message) }
     Start-Sleep -Seconds 3
     $port = 0
     try { $m = [regex]::Match([IO.File]::ReadAllText((Join-Path $script:WitDataDir 'sd.conf')), '(?m)^\s*APIPORT\s*=\s*(\d+)'); if ($m.Success) { $port = [int]$m.Groups[1].Value } } catch { }

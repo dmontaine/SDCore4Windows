@@ -272,9 +272,10 @@ if ($sections -contains 'api') {
     # The API LOCAL and running, for the API session below.  on -> local moves no listener, so no question.
     $null = Invoke-WitSd -Commands @('remote.api local', 'N') -Label 'API to LOCAL for the API session (answer N)' -TimeoutSec 180
     $port = Get-ApiPort
-    Write-Wit ('  sd.conf APIPORT now: ' + $port + '.  Restarting SD so the listener opens: sd -restart (about 15 seconds)')
-    $rs = & $script:WitSdExe -restart 2>&1 | ForEach-Object { [string]$_ }
-    Write-WitRaw 'sd -restart' ($rs -join "`n")
+    # 13 Nov 26: through the SD service, not "sd -restart" - that one restarts SD OUTSIDE the service and its daemon keeps a captured
+    # pipe open for ever (Invoke-WitSdSwitch's note; measured in step 3 of this sitting).  The service is how the install runs SD.
+    Write-Wit ('  sd.conf APIPORT now: ' + $port + '.  Restarting SD through its service so the listener opens (about 15 seconds)')
+    try { Restart-Service -Name SD -ErrorAction Stop; Write-Wit ('  service SD: ' + (Get-Service SD).Status) } catch { Write-Wit ('  Restart-Service SD failed: ' + $_.Exception.Message) }
     Start-Sleep -Seconds 3
     $lis = @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | ForEach-Object { $_.LocalAddress + ':' + $_.LocalPort + ' pid ' + $_.OwningProcess })
     Write-Wit ('  listening on ' + $port + ': ' + ($lis -join ', '))

@@ -72,10 +72,11 @@ if ($sessions.Count -lt 2) { Add-WitResult '203' 'two idle sessions were open be
 
 Write-Wit '  sd -stop (it waits up to ten seconds for SIGTERM, then ends the rest)'
 $t0 = Get-Date
-$stopOut = & (Join-Path $sdDir 'usr\bin\sd.exe') -stop 2>&1 | ForEach-Object { [string]$_ }
+# 13 Nov 26: the switches run through Invoke-WitSdSwitch (output to a file): a captured "sd -start" keeps the caller's pipe open for ever.
+$sw = Invoke-WitSdSwitch (Join-Path $sdDir 'usr\bin\sd.exe') '-stop'
 $secs = [Math]::Round(((Get-Date) - $t0).TotalSeconds, 1)
-$st = $stopOut -join "`n"
-Write-WitRaw ('sd -stop (' + $secs + ' s, exit ' + $LASTEXITCODE + ')') $st
+$st = $sw.Text
+Write-WitRaw ('sd -stop (' + $secs + ' s, exit ' + $sw.Code + ')') $st
 Start-Sleep -Seconds 3
 $after = Get-SdProcs
 Write-Procs 'after sd -stop' $after
@@ -91,11 +92,23 @@ if ($left.Count -eq 0) { Add-WitResult '203' 'after sd -stop no SD session or da
 else { Add-WitResult '203' 'after sd -stop no SD session or daemon is left' 'FAIL' ('still running (LEFT ALONE, not killed): ' + (($left | ForEach-Object { 'pid ' + $_.Id + ' ' + $_.Name + ' ' + $_.User }) -join '; ')) }
 
 Write-Wit '  sd -start'
-$startOut = & (Join-Path $sdDir 'usr\bin\sd.exe') -start 2>&1 | ForEach-Object { [string]$_ }
-$sst = $startOut -join "`n"
-Write-WitRaw ('sd -start (exit ' + $LASTEXITCODE + ')') $sst
+$sw2 = Invoke-WitSdSwitch (Join-Path $sdDir 'usr\bin\sd.exe') '-start'
+$sst = $sw2.Text
+Write-WitRaw ('sd -start (exit ' + $sw2.Code + ')') $sst
 Set-WitVerdict '203' 'the next sd -start succeeds' $sst 'SD \(64 Bit\) has been started' @('did not shut down cleanly', 'already started', 'did not start within 10 seconds', 'fork\(\) failed')
 Start-Sleep -Seconds 3
+# 13 Nov 26 (RELEASE_1.1 284): "sd -start" from a command line runs SD outside its Windows service (measured in this sitting's step 3).
+$svcState = [string](Get-Service SD -ErrorAction SilentlyContinue).Status
+$dmn = @(Get-Process sdwind -ErrorAction SilentlyContinue)
+if ($svcState -ne 'Running' -and $dmn.Count -gt 0) { Add-WitResult '284' 'after sd -start, SD runs but its Windows service does not' 'FINDING' ('service SD ' + $svcState + '; sdwind pid ' + (($dmn | ForEach-Object { $_.Id }) -join ',')) }
+else { Add-WitResult '284' ('after sd -start: service SD ' + $svcState + ', sdwind ' + $dmn.Count) 'INFO' '' }
+if ($svcState -ne 'Running') {
+    # Put SD back under its service for the steps after this one: a clean sd -stop (no kill), then the service.
+    $sw3 = Invoke-WitSdSwitch (Join-Path $sdDir 'usr\bin\sd.exe') '-stop'
+    Write-WitRaw ('sd -stop, to hand SD back to its service (exit ' + $sw3.Code + ')') $sw3.Text
+    try { Start-Service -Name SD -ErrorAction Stop } catch { Write-Wit ('  Start-Service SD failed: ' + $_.Exception.Message) }
+    Write-Wit ('  service SD now: ' + (Get-Service SD -ErrorAction SilentlyContinue).Status)
+}
 $w = Invoke-WitSd -Commands @('WHO') -Label 'a new session after the restart'
 Set-WitVerdict '203' 'a new session works after the restart' $w.Text '(?m)^\s*\d+\s+SDSYS\b' @('SD has not been started', 'restricted to privileged users')
 
