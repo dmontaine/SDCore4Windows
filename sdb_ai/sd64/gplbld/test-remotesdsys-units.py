@@ -169,6 +169,12 @@ def checks(raw):
        and "void kernel(K$AUDIT, 'remote.admin ' : verb : ' words=' : convert(@fm, ',', words) : ' status=' : job.rc)" in r, "")
     ck("R6", "RADMIN sends REMOTE.SSH and REMOTE.API with the word typed, or none (Linux parity); it asks them nothing",
        re.search(r"case verb = 'remote\.ssh' or verb = 'remote\.api'\s*\n\s*null\b", r) is not None, "")
+    # 14 Nov 26 (VM step 5, 07:17): the seed was (date() * 86400 + time()) * 1000, about 1.7e12; RANDOMIZE took it as a 32-bit integer and every
+    # request stopped with "Numeric overflow at line 149".  The seed must be reduced first, and the largest value it can take must fit.
+    ms = re.findall(r"^\s*randomize\s+(.*)$", r, re.M)
+    m7 = re.fullmatch(r"mod\(date\(\) \* 86400 \+ int\(time\(\)\), (\d+)\) \* 1000 \+ @userno", ms[0].strip()) if len(ms) == 1 else None
+    ck("R7", "the request's RANDOMIZE seed is reduced before it is scaled, so the largest seed (the modulus less one, times 1000, plus a user number of up to 100000) fits 31 bits",
+       m7 is not None and (int(m7.group(1)) - 1) * 1000 + 100000 < 2 ** 31, str(ms))
     ck("O1", "!radmin_open reads <ProgramData>\\SD\\remote-admin\\state, from the parent of @sdsys, and is true only for 'on' (anything unreadable is off)",
        "sp = convert(char(92), '/', @sdsys)" in o and "n = count(sp, '/')" in o and "state.dir = sp[1, index(sp, '/', n) - 1] : '/remote-admin'" in o and "count(@sdsys, @ds)" not in o   # 14 Nov 26: either slash (row 202, measured in the VM)
        and "if trim(state.rec<1>) = 'on' then open = @true" in o and "open = @false" in o and "$catalog !radmin_open" in raw["open"], "")
@@ -272,6 +278,7 @@ MUTANTS = [
     ("the password is not checked for strength", "R3", sub("radmin", "      if not(pw_complex(pw1)) then", "      if 0 then")),
     ("the password goes on the client's command line", "R3", sub("radmin", "' -Request ' : q : ps.dir : @ds : req.id : q", "' -Request ' : q : ps.dir : @ds : req.id : q : ' ' : pw1")),
     ("the password is audited in the session", "R3", sub("radmin", "' status=' : job.rc)", "' status=' : job.rc : pw1)")),
+    ("the seed overflows 32 bits", "R7", sub("radmin", "randomize mod(date() * 86400 + int(time()), 2000000) * 1000 + @userno", "randomize (date() * 86400 + time()) * 1000 + @userno")),
     ("the request file is left", "R4", sub("radmin", "   delete ps.f, req.id   ;*", "   null   ;*")),
     ("a refusal is not shown", "R5", sub("radmin", "            crt sysmsg(12838, l[9, 999])", "            null")),
     ("the state file is believed when it says anything", "O1", sub("open", "if trim(state.rec<1>) = 'on' then open = @true", "open = @true")),

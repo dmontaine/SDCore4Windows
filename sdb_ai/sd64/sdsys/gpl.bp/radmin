@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 202: the RANDOMIZE seed no longer overflows 32 bits ("Numeric overflow at line 149"), which stopped every request.
 * 13 Nov 26 Windows port - written for RELEASE_1.1 202 (Linux S.106's remote.sdsys in the Windows form; design .claude/design-remote-admin-
 *           20261113.md section 5; the owner's answers of 13 Nov 2026: Q2 the console verbs' own names, as Linux's remote sdsys types them;
 *           Q3 the list; Q4 one password at sign-in).
@@ -146,7 +147,9 @@ deffun pw_complex(pw) calling '!pw_complex'
    end
 
 * The request.  The nonce names the one-shot job and pairs the answer with the question; it is not a secret.
-   randomize (date() * 86400 + time()) * 1000 + @userno
+*  14 Nov 26: the seed is reduced before it is scaled.  (date() * 86400 + time()) * 1000 is about 1.7e12, past 32 bits, and RANDOMIZE
+*  stopped every request with "Numeric overflow" (VM step 5, 07:17).  The result here is under 2,000,000,000 plus the user number.
+   randomize mod(date() * 86400 + int(time()), 2000000) * 1000 + @userno
    nonce = ''
    for i = 1 to 16
       nonce := '0123456789abcdef'[rnd(16) + 1, 1]
