@@ -99,7 +99,7 @@ Set-WitVerdict '203' 'the next sd -start succeeds' $sst 'SD \(64 Bit\) has been 
 Start-Sleep -Seconds 3
 # 13 Nov 26 (RELEASE_1.1 284): "sd -start" from a command line runs SD outside its Windows service (measured in this sitting's step 3).
 $svcState = [string](Get-Service SD -ErrorAction SilentlyContinue).Status
-$dmn = @(Get-Process sdwind -ErrorAction SilentlyContinue)
+$dmn = @(Get-Process -Name sdwind -ErrorAction SilentlyContinue | Where-Object { -not ($_.Path -and (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $_.Path) 'sd-solo.exe'))) })   # Core's daemon only: Solo's sdwind sits beside sd-solo.exe
 if ($svcState -ne 'Running' -and $dmn.Count -gt 0) { Add-WitResult '284' 'after sd -start, SD runs but its Windows service does not' 'FINDING' ('service SD ' + $svcState + '; sdwind pid ' + (($dmn | ForEach-Object { $_.Id }) -join ',')) }
 else { Add-WitResult '284' ('after sd -start: service SD ' + $svcState + ', sdwind ' + $dmn.Count) 'INFO' '' }
 if ($svcState -ne 'Running') {

@@ -334,15 +334,9 @@ if ($sections -contains 'runin201') {
         "      write 'F' : @fm : 'zzcust' : @fm : 'zzcust.dic' to v, 'zzcust'",
         "      openpath acc : '/zzcust.dic' to d else stop 'zzfix: cannot open zzcust.dic'",
         "      write 'I' : @fm : 'len(@id)' : @fm : '' : @fm : 'Total' : @fm : '5R' : @fm : 'S' to d, 'total'",
+        "      open 'voc' to sv else stop 'zzfix: cannot open the voc of this account'",
+        "      write 'F' : @fm : acc : '/zzcust' : @fm : acc : '/zzcust.dic' to sv, 'zzcust.w'",
         "      crt 'zzfix setup: done'",
-        "   case act = 'trig' or act = 'untrig'",
-        "      openpath acc : '/zzcust' to f else stop 'zzfix: cannot open zzcust'",
-        "      if act = 'trig' then",
-        "         set.trigger f, 'zztrig', 1",
-        '      end else',
-        "         set.trigger f, '', 0",
-        '      end',
-        "      crt 'zzfix ' : act : ': status ' : status()",
         "   case act = 'nocat'",
         "      delete v, 'no.catalog'",
         "      crt 'zzfix nocat: done'",
@@ -352,18 +346,22 @@ if ($sections -contains 'runin201') {
         "      write r to v, 'no.catalog'",
         "      crt 'zzfix recat: done'",
         '   case 1',
-        "      crt 'zzfix: setup, trig, untrig, nocat or recat'",
+        "      crt 'zzfix: setup, nocat or recat'",
         'end case',
         'end')
     if (-not (Test-Registered 'zzrunin')) { Add-WitResult '201' 'run.in fixtures' 'NOT-MEASURED' 'zzrunin is not registered: run -Only fixtures first' }
     else {
         Write-WitBasic $script:WitSdsys 'zzfix' $fixSrc
-        $r = Invoke-WitSd -Commands @('basic bp zzfix', 'run bp zzfix setup') -Label 'compile and run the fixture program'
+        # 13 Nov 26 (VM sitting): SET.TRIGGER is a RESTRICTED statement (bcomp: $internal programs only, which the seat cannot compile),
+        # so the trigger is set with the SET.TRIGGER verb on a VOC pointer the setup writes (zzcust.w), and the verb wants the trigger
+        # routine cataloged: zztrig, which does nothing (run.in must refuse BEFORE anything runs).
+        Write-WitBasic $script:WitSdsys 'zztrig' @('subroutine zztrig(mode, id, rec, on.error, fvar)', '* zztrig - a trigger that does nothing, for the run.in witness (row 201)', 'return', 'end')
+        $r = Invoke-WitSd -Commands @('basic bp zzfix', 'run bp zzfix setup', 'basic bp zztrig', 'catalog bp zztrig global') -Label 'compile and run the fixture program; the do-nothing trigger, cataloged'
         Set-WitVerdict '201' 'the fixture program compiled and set up zzcust and zzri' $r.Text '(?s)Compiled 1 program\(s\) with no errors.*zzfix setup: done' @('with errors in', 'zzfix: cannot')
         $r = Invoke-WitSd -Commands @('run.in zzrunin compile.dict zzcust total') -Label 'run.in compile.dict (no trigger)'
         Set-WitVerdict '201' 'run.in zzrunin compile.dict compiles an I-type' $r.Text 'Compiled \d+ .*with no errors' @('has a trigger function', 'is not a command run.in runs', 'with errors', 'not SD''s own entry', 'is not in your VOC')
-        $r = Invoke-WitSd -Commands @('run bp zzfix trig', 'run.in zzrunin compile.dict zzcust total', 'run bp zzfix untrig') -Label 'run.in compile.dict with a trigger on the file'
-        Set-WitVerdict '201' 'with a trigger on the file run.in refuses (12566) and runs nothing' $r.Text 'has a trigger function; run\.in did not run the command' @('zzfix: cannot')
+        $r = Invoke-WitSd -Commands @('set.trigger zzcust.w zztrig', 'run.in zzrunin compile.dict zzcust total', 'set.trigger zzcust.w ""') -Label 'run.in compile.dict with a trigger on the file (SET.TRIGGER verb)'
+        Set-WitVerdict '201' 'with a trigger on the file run.in refuses (12566) and runs nothing' $r.Text 'has a trigger function; run\.in did not run the command' @('zzfix: cannot', 'is not cataloged', 'File not found', 'Illegal trigger function name')
         $r = Invoke-WitSd -Commands @('run bp zzfix nocat', 'run.in zzrunin basic bp zzri no.query') -Label 'run.in basic with no.catalog removed from the account''s VOC'
         Set-WitVerdict '201' 'an account lacking SD''s no.catalog is refused (15070)' $r.Text 'no\.catalog is not SD''s own entry in the VOC of account' @('Compiled 1 program\(s\) with no errors')
         $r = Invoke-WitSd -Commands @('run bp zzfix recat', 'run.in zzrunin basic bp zzri no.query') -Label 'and with it put back'
@@ -483,7 +481,7 @@ if ($sections -contains 'print219') {
 
         & $set 'zz-no-such-printer'
         $r = Invoke-WitSd -Commands @('SETPTR 0,80,60,0,0,1,BRIEF', 'LIST VOC WITH @ID = "WHO" @ID LPTR') -Label 'SPOOLER naming a printer that does not exist' -TimeoutSec 120
-        Set-WitVerdict '219' 'a refused SPOOLER job says so and names the SPOOLER printer' $r.Text 'Print job not sent: Windows refused it for printer zz-no-such-printer' @('printer \(null\)') 'a "(null)" here is the defect suspected in linuxprt.c:231 (pu->printer_name, not the SPOOLER name)'
+        Set-WitVerdict '219' 'a refused SPOOLER job says so and names the SPOOLER printer' $r.Text 'Print job not sent: Windows refused it for printer ''?zz-no-such-printer''?' @('printer \(null\)') 'a "(null)" here is the defect suspected in linuxprt.c:231 (pu->printer_name, not the SPOOLER name)'
     } catch {
         Add-WitResult '219' 'SPOOLER printing' 'NOT-MEASURED' $_.Exception.Message
     } finally {
@@ -868,8 +866,19 @@ if ($sections -contains 'runin253') {
             '* zzw253 - run under run.in ... debug (row 253(b)): what the separate child can reach; results in this account''s bp',
             '$include err.h',
             "   res = 'logname=' : @logname : ' who=' : @who",
-            "   openpath 'C:/ProgramData/SD/user_accounts/zzwiton/bp' to f1 then res<-1> = 'other-account=OPENED' ; close f1 end else res<-1> = 'other-account=refused status=' : status()",
-            "   openpath 'C:/ProgramData/SD/sdsys/$cred' to f2 then res<-1> = 'cred=OPENED' ; close f2 end else res<-1> = 'cred=refused status=' : status()",
+            '* 13 Nov 26 (VM sitting): THEN and ELSE as blocks - "then a ; b end else c" on one line ends the program at that end.',
+            "   openpath 'C:/ProgramData/SD/user_accounts/zzwiton/bp' to f1 then",
+            "      res<-1> = 'other-account=OPENED'",
+            '      close f1',
+            '   end else',
+            "      res<-1> = 'other-account=refused status=' : status()",
+            '   end',
+            "   openpath 'C:/ProgramData/SD/sdsys/$cred' to f2 then",
+            "      res<-1> = 'cred=OPENED'",
+            '      close f2',
+            '   end else',
+            "      res<-1> = 'cred=refused status=' : status()",
+            '   end',
             "   oswrite 'x' to 'C:/ProgramData/SD/sdsys/zzw253probe'",
             "   res<-1> = 'sdsys-write status=' : status()",
             "   open 'bp' to b else stop 'zzw253: no bp'",
