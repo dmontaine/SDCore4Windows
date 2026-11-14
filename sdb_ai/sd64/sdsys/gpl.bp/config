@@ -244,7 +244,7 @@ show.doc:
 *  numeric PU$ key and a unit number and is for print units, while pagination
 *  is a kernel setting.  Read it, turn it on, put it back.
    pagination.state = kernel(K$PAGINATE, -1)
-   i = kernel(K$PAGINATE, @true)
+   void kernel(K$PAGINATE, @true)
 
    crt @(-1) :
 *  Field 1 is the record type, X.  The text starts at field 2.
@@ -252,7 +252,7 @@ show.doc:
       print doc.rec<doc.i>
    next doc.i
 
-   i = kernel(K$PAGINATE, pagination.state)
+   void kernel(K$PAGINATE, pagination.state)
 return
 
 * ======================================================================

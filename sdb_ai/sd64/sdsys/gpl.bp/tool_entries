@@ -274,7 +274,6 @@ read.all:
                   gset := (if upcase(trim(arec<ACC$DICT.EDIT>)) = 'YES' then 'd' else '-')
                   gset := (if upcase(trim(arec<ACC$BP.EDIT>)) = 'YES' then 'b' else '-')
                   ins gset before agate<lp>
-                  sg.grp = trim(arec<ACC$GROUP>)
                   gosub sdsys.state
                   ins sdw before asds<lp>
                   stw = ''

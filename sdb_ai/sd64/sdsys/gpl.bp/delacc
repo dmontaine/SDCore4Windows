@@ -374,7 +374,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 *   Message 10919 is Linux's number, taken there first and free in both trees;
 *   using it keeps one id for one fact across the two ports.
    if dir.exists then
-      da.deleted = ospath(pathname, OS$DELETE)
+      void ospath(pathname, OS$DELETE)   ;* 14 Nov 26 RELEASE_1.1 286: the answer was assigned and never read; the EXISTS test below is the check
       if ospath(pathname, OS$EXISTS) then
          display sysmsg(10919, pathname) ;* Account directory %1 was not removed
       end
@@ -500,7 +500,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 *   "0, 6, 7 or 8" here would be a second opinion about what !delete_user did,
 *   and one of the two would go stale the next time a status is added - which is
 *   how 8 came to exist in the first place.
-               login.gone = delete_user(del.user)
+               void delete_user(del.user)   ;* 14 Nov 26 RELEASE_1.1 286: the answer was never read; status() below is what is used
                stat = status()
                begin case
                   case stat = 0

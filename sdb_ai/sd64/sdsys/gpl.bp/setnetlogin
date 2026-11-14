@@ -84,8 +84,6 @@ $define SV$ON.ERROR      1
    found = 0
    acc = ''
    lu = ''
-   out = ''
-   stat = 0
    cred.path = ''
    cred.root = ''
    is.admin = @false

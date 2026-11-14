@@ -165,7 +165,7 @@ def checks(src, voc, helps):
        "the sdsys column is asked of sdsys.state",
        "if upcase(id) # 'SDSYS' then" in txt
        and re.search(r"gset = \(if upcase\(trim\(arec<ACC\$VOC\.EDIT>\)\) = 'YES' then 'v' else '-'\)\s+gset := \(if upcase\(trim\(arec<ACC\$DICT\.EDIT>\)\) = 'YES' then 'd' else '-'\)\s+gset := \(if upcase\(trim\(arec<ACC\$BP\.EDIT>\)\) = 'YES' then 'b' else '-'\)", txt)
-       and "sg.grp = trim(arec<ACC$GROUP>)\ngosub sdsys.state\nins sdw before asds<lp>" in txt)
+       and "gosub sdsys.state\nins sdw before asds<lp>" in txt)   # 14 Nov 26 RELEASE_1.1 286: sg.grp was assigned and never read, so the line is gone
     ck("T8 both long reads are cut at MAXV (the entries and the hits) and the page says so", txt.count(">= MAXV") == 4 and txt.count("only the first ' : MAXV : ' are listed") == 3)       # collect.account's three reads and the find; the entries' foot, the hits' foot and the status line of a find
     ck("T9 the filter and the find ask with screen ask, take the AI's argument as the default, and each clears the other",
        txt.count("screen ask ptxt width 40 value ai.arg") == 2 and txt.count("value ai.arg") == 2 and "filt = trim(ft)\nfnd = ''" in txt and "fnd = trim(ft)\nfilt = ''" in txt)

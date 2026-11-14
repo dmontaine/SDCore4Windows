@@ -240,7 +240,7 @@ off.request:
    users = kernel(K$USERS, 0)
    for i = 1 to dcount(users, @fm)
       if upcase(users<i, K$USERS.UNAME>) = 'SDRADMIN' then
-         z = logout(users<i, K$USERS.UID> + 0, @false)
+         void logout(users<i, K$USERS.UID> + 0, @false)   ;* 14 Nov 26 RELEASE_1.1 286: the answer was never read
       end
    next i
 

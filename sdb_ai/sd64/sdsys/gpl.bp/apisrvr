@@ -935,7 +935,7 @@ end
 *   gone with the tier fields; the suspension test reads ACC$SUSPENDED inside
 *   the same block, for the reason the acc.group note above gives.
 account.path = ''
-acc.group = ''
+* 14 Nov 26 Windows - RELEASE_1.1 286: acc.group is gone (assigned, never read; the compiler said so).
 acc.suspended = ''
 * 23 Oct 26 Windows port - from Linux abcda0c (13 Oct 26, S.63 second sitting: "api should read switches").  The account's SH and
 *   OS.EXECUTE switches are read here from its register record, as LOGIN reads them at sign-on and CPROC's LOGTO reloads them,
@@ -965,7 +965,6 @@ api.shared.write.grant = @false   ;*   or an unreadable register leaves both off
 openpath @sdsys:@ds:'accounts' to acc.f then
    read acc.rec from acc.f, new.account then
       account.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-      acc.group = acc.rec<ACC$GROUP>
       acc.suspended = acc.rec<ACC$SUSPENDED>
       api.sh.grant = (upcase(trim(acc.rec<ACC$SH>)) = 'YES')
       api.os.grant = (upcase(trim(acc.rec<ACC$OS.EXEC>)) = 'YES')

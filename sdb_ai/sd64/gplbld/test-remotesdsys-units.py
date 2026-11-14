@@ -132,7 +132,7 @@ def checks(raw):
        ok and "call !create_account('USER', 'sdradmin', settings, err)" in ma and "settings<CA$ROUTE.SSH> = 0" in ma and "settings<CA$ROUTE.API> = 0" in ma
        and not re.search(r"CA\$(OS\.SH|OS\.EXECUTE|VOC\.EDIT|BP\.EDIT|DICT\.EDIT|NET|FILES|SHARED\.WRITE)\b", ma), str(pos))
     off = block(v, "off.request")
-    ok, pos = ordered(off, ["helper.args = '-Off'", "if in.job then helper.args := ' -KeepBroker'", "gosub run.helper", "if upcase(users<i, K$USERS.UNAME>) = 'SDRADMIN' then", "z = logout(users<i, K$USERS.UID> + 0, @false)"])
+    ok, pos = ordered(off, ["helper.args = '-Off'", "if in.job then helper.args := ' -KeepBroker'", "gosub run.helper", "if upcase(users<i, K$USERS.UNAME>) = 'SDRADMIN' then", "void logout(users<i, K$USERS.UID> + 0, @false)"])
     ck("B8", "OFF: remote-admin.ps1 -Off (with -KeepBroker only in the broker's own job), then every SDRADMIN session is logged out", ok, str(pos))
     rh = block(v, "run.helper")
     ck("B9", "the helper is run straight through OS.EXECUTE only in the broker's job (an elevated SDSYS with no helper of its own), through SDSYS's elevated helper otherwise",
@@ -269,7 +269,7 @@ MUTANTS = [
     ("ON is allowed in the job", "B7", sub("verb", "   if in.job then\n      @system.return.code = -ER$ARGS\n      stop sysmsg(12847, 'remote.sdsys on')", "   if 0 then\n      @system.return.code = -ER$ARGS\n      stop sysmsg(12847, 'remote.sdsys on')")),
     ("SDRADMIN is made with ssh and API", "B7", sub("verb", "   settings<CA$ROUTE.API> = 0\n", "   settings<CA$ROUTE.API> = 1\n")),
     ("SDRADMIN is made with a shell", "B7", sub("verb", "   settings<CA$START> = 'terminal'\n", "   settings<CA$START> = 'terminal'\n   settings<CA$OS.SH> = 1\n")),
-    ("OFF leaves the sessions", "B8", sub("verb", "         z = logout(users<i, K$USERS.UID> + 0, @false)\n", "")),
+    ("OFF leaves the sessions", "B8", sub("verb", "         void logout(users<i, K$USERS.UID> + 0, @false)   ;* 14 Nov 26 RELEASE_1.1 286: the answer was never read\n", "")),
     ("the job asks the console's helper", "B9", sub("verb", "   if in.job then\n      os.execute hcmd", "   if 0 then\n      os.execute hcmd")),
     ("ON asks for SDSYS's password again", "B11", sub("verb", "   helper.args = '-On'\n   gosub run.helper\n   gosub show.helper\n", "   helper.args = '-On'\n   gosub run.helper\n   display 'Windows password for SDSYS: ' :\n   input sdsys.pw HIDDEN\n   gosub show.helper\n")),
     ("anybody may send", "R1", sub("radmin", " or env('SSH_CONNECTION') = '' or kernel(K$ADMINISTRATOR, -1) then", " or kernel(K$ADMINISTRATOR, -1) then")),
