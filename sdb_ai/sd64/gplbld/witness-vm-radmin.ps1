@@ -268,21 +268,33 @@ if ($sections -contains 'ops') {
         $r2 = Invoke-WitSsh 'zzwitra' $pa @('WHO') 'F4: zzwitra signs in with the password the broker set'
         Set-WitVerdict '202' 'F4/A6: the new account signs in with the password sent as the secret' (& $ok $r2) '(?m)^\s*\d+\s+zzwitra\b' @('Permission denied')
         $r = Invoke-WitSsh 'sdradmin' $pw @('modify.password zzwitra', $pb, $pb) 'F4: modify.password zzwitra'
-        $r2 = Invoke-WitSsh 'zzwitra' $pb @('WHO') 'F4: the new password works'
-        Set-WitVerdict '202' 'F4: modify.password through the broker changes the password' (& $ok $r2) '(?m)^\s*\d+\s+zzwitra\b' @('Permission denied')
+        # 14 Nov 26 (08:00 run).  MODIFY.PASSWORD sets the account's SD credential ($cred, what the API checks - docs GettingStarted 09 and 05), NOT the Windows
+        # password that sshd checks for a user account.  This block signed in over ssh with the NEW password and took "Permission denied" for a failure of the
+        # broker; the broker had run it (audit status=0, broker.log exit 0, SD said "Password accepted").  Worse, the suspended-account check below used the same
+        # new password, so it "passed" on a login that could never succeed.  Now: the broker's run is the check, the Windows password ($pa) must STILL sign in, and
+        # the suspension is bracketed by a sign-in that works before and after, so a failed login cannot pass for a refusal.
+        Set-WitVerdict '202' 'F4: modify.password through the broker runs and SD accepts the password' (& $ok $r) 'Password accepted' @('refused', 'gave no answer', 'Command requires administrator', 'not in your VOC')
+        $r2 = Invoke-WitSsh 'zzwitra' $pa @('WHO') 'F4: zzwitra still signs in over ssh with the Windows password'
+        Set-WitVerdict '202' 'F4: modify.password does not change the Windows password the ssh sign-in checks (it sets the SD credential)' (& $ok $r2) '(?m)^\s*\d+\s+zzwitra\b' @('Permission denied')
+        Add-WitResult '202' 'F4: the new SD credential works at an API sign-in' 'NOT-MEASURED' 'zzwitra is made with the ssh gate only, so an API sign-in is refused whatever the password; the credential itself is the kernel and $cred, held by the admin witness'
         $r = Invoke-WitSsh 'sdradmin' $pw @('modify.account zzwitra suspended') 'F4: suspend zzwitra'
-        $r2 = Invoke-WitSsh 'zzwitra' $pb @('WHO') 'F4: a suspended account is refused at sign-on'
+        $r2 = Invoke-WitSsh 'zzwitra' $pa @('WHO') 'F4: a suspended account is refused at sign-on'
         $t2 = & $ok $r2
-        if ($t2 -match '(?m)^\s*\d+\s+zzwitra\b') { Add-WitResult '202' 'F4: modify.account suspended through the broker takes effect' 'FAIL' 'zzwitra still answered WHO' } else { Add-WitResult '202' 'F4: modify.account suspended through the broker takes effect' 'PASS' 'no WHO answer after the suspension (raw output above)' }
+        if ($t2 -match '(?m)^\s*\d+\s+zzwitra\b') { Add-WitResult '202' 'F4: modify.account suspended through the broker takes effect' 'FAIL' 'zzwitra still answered WHO' } else { Add-WitResult '202' 'F4: modify.account suspended through the broker takes effect' 'PASS' 'no WHO answer after the suspension (raw output above); the control below says the same sign-in works when not suspended' }
         $null = Invoke-WitSsh 'sdradmin' $pw @('modify.account zzwitra unsuspended') 'F4: unsuspend zzwitra'
+        $r2 = Invoke-WitSsh 'zzwitra' $pa @('WHO') 'F4: after unsuspending, zzwitra signs in again (the control)'
+        Set-WitVerdict '202' 'F4: the control: the sign-in that was refused while suspended works again after unsuspending' (& $ok $r2) '(?m)^\s*\d+\s+zzwitra\b' @('Permission denied')
         $null = Invoke-WitSsh 'sdradmin' $pw @('create.account group zzwitrg') 'F4: create.account group zzwitrg'
         Set-WitCompare '202' 'F4: create.account group through the broker' 'True' ([string](Test-Registered 'zzwitrg'))
         $null = Invoke-WitSsh 'sdradmin' $pw @('modify.account zzwitrg add zzwitra') 'F4: modify.account zzwitrg add zzwitra'
-        $m = Get-WitGroupMembers 'sdu_zzwitrg'
+        # 14 Nov 26: a GROUP account's Windows group is sdg_<name>; sdu_<name> is a USER account's.  The lookup said sdu_, found no group, and the
+        # first check FAILed on "Group sdu_zzwitrg was not found" while SD said "zzwitra added to group sdg_zzwitrg"; the second ("takes the user out",
+        # wanted False) PASSED on the same missing group - a pass that measured nothing.  Refused below when the group cannot be read at all.
+        $m = Get-WitGroupMembers 'sdg_zzwitrg'
         Set-WitCompare '202' 'F4: modify.account add puts the user in the group''s Windows group' 'True' ([string]($m -contains 'zzwitra')) -Evidence ($m -join ',')
         $null = Invoke-WitSsh 'sdradmin' $pw @('modify.account zzwitrg delete zzwitra') 'F4: modify.account zzwitrg delete zzwitra'
-        $m = Get-WitGroupMembers 'sdu_zzwitrg'
-        Set-WitCompare '202' 'F4: modify.account delete takes the user out' 'False' ([string]($m -contains 'zzwitra')) -Evidence ($m -join ',')
+        $m = Get-WitGroupMembers 'sdg_zzwitrg'
+        Set-WitCompare '202' 'F4: modify.account delete takes the user out' 'False' ([string](($m -contains 'zzwitra') -or (($m -join ',') -match 'group unreadable'))) -Evidence ($m -join ',')   # an unreadable group is not "user out"
         $r = Invoke-WitSsh 'sdradmin' $pw @('remote.sdsys accounts', 'remote.sdsys audit 20', 'remote.ssh', 'remote.api') 'F4: the reports'
         Set-WitVerdict '202' 'F4: the read-only reports answer through the broker' (& $ok $r) 'zzwitra' @('helper refused', 'gave no answer')
         $null = Invoke-WitSsh 'sdradmin' $pw @('delete.account zzwitra', 'zzwitra') 'F4: delete.account zzwitra (the name typed again)'
@@ -307,7 +319,11 @@ if ($sections -contains 'refuse') {
         foreach ($n in @('zzwitplain', 'zzwitadm')) { if (-not (Test-WinUser $n)) { $null = New-LocalUser -Name $n -Password $plainPw -Description 'witness fixture, not made by SD' } }
         try { Add-LocalGroupMember -SID 'S-1-5-32-544' -Member 'zzwitadm' -ErrorAction Stop } catch { }
         $refusal = 'helper refused the command|is not available in a remote administration session|Command requires administrator privileges|is not in your VOC|User not allowed in requested account|SDSYS Account access is restricted|usage|not an account'
-        foreach ($n in @('sdsys', 'sdradmin', 'shared', 'administrator', 'zzwitplain', 'zzwitadm', 'zz..x', 'zzabcdefghijklmnopqrs', 'ZZUPPER')) {
+        # 14 Nov 26: ZZUPPER is not a refusal case.  $radmin folds every word to lower case before it checks and sends it (the SD convention: upper-case
+        # input accepted, names lower case), so it made the account zzupper, which is right; the witness wanted a refusal.  What case could still get
+        # wrong is a PROTECTED name typed in upper case folding past the refusal, so SDSYS, SDRADMIN and SHARED are tried in upper case instead, and
+        # the fold itself is checked below.
+        foreach ($n in @('sdsys', 'sdradmin', 'shared', 'administrator', 'zzwitplain', 'zzwitadm', 'zz..x', 'zzabcdefghijklmnopqrs', 'SDSYS', 'SDRADMIN', 'SHARED')) {
             $before = Test-Registered $n.ToLower()
             $r = Invoke-WitSsh 'sdradmin' $pw @(('create.account group ' + $n)) ('F5: create.account group ' + $n)
             $t = ''
@@ -316,13 +332,22 @@ if ($sections -contains 'refuse') {
             if ($made) { Add-WitResult '202' ('F5: the broker refuses the target ' + $n) 'FAIL' 'a register record was made' }
             else { Set-WitVerdict '202' ('F5: the broker refuses the target ' + $n) $t $refusal @('remote\.admin create\.account .*status=0') }
         }
+        # The fold: upper-case input makes the LOWER-case account, and nothing is made under the upper-case spelling.  Cleaned up afterwards.
+        $beforeUp = Test-Registered 'zzupper'
+        $r = Invoke-WitSsh 'sdradmin' $pw @('create.account group ZZUPPER') 'F5: create.account group ZZUPPER (folded)'
+        Add-WitResult '202' 'F5: upper-case input is folded: ZZUPPER makes the account zzupper' $(if ((-not $beforeUp) -and (Test-Registered 'zzupper')) { 'PASS' } else { 'FAIL' }) ('before ' + $beforeUp + ', after ' + (Test-Registered 'zzupper'))
+        $null = Invoke-WitSsh 'sdradmin' $pw @('delete.account zzupper', 'zzupper') 'F5: delete.account zzupper (cleanup)'
         foreach ($c in @('set.config cleanup 600', 'set.job', 'backup.account all', 'update.accounts all', 'run.in zzrunin basic bp zzri no.query', 'catalog bp zzri global',
-                         'logto zzwitoff', 'sh whoami', 'remote.sdsys on', 'create.file zzwitf dynamic', 'ed voc who')) {
+                         'logto zzwitoff', 'sh whoami', 'remote.sdsys on', 'create.file zzwitf dynamic')) {
             $r = Invoke-WitSsh 'sdradmin' $pw @($c, 'N', 'N') ('F5: ' + $c)
             $t = ''
             if ($null -ne $r) { $t = $r.Out }
             Set-WitVerdict '202' ('F5: the remote session refuses "' + $c + '"') $t $refusal @('status=ok', 'is scheduled', 'Backed up', 'had their VOC updated', 'Compiled 1 program', '\\sdradmin\s*$', 'ssh is open for', 'Created file')
         }
+        # 14 Nov 26: "ed voc who" is no longer asked to be refused.  ED opens a record read-only for anybody (no gate call in ed, here or on Linux: 0 of 0) and
+        # the VOC edit gate is the KERNEL's, at the WRITE: the 08:00 run showed ED open the record ("3 line(s)") and wait for commands, which is how it works.
+        # The remote session's gates being shut is pinned by the free guard test-remotesdsys-units.py row L2; a runtime refusal needs a save attempted.
+        Add-WitResult '202' 'F5: a VOC write by the remote session is refused at the save' 'NOT-MEASURED' 'ED opens a record read-only; the refusal is the kernel edit gate at the write (guard L2 holds the gates shut); a save attempt is not made here'
         foreach ($n in @('zzwitplain', 'zzwitadm')) { try { Remove-LocalUser -Name $n -ErrorAction Stop } catch { } }
         Add-WitResult '202' 'F5: hand-made requests (an extra key, oversize, a bad op) sent to the broker' 'NOT-MEASURED' 'only a process of SDRADMIN''s own may connect, and SDRADMIN has no shell: the free guard test-remoteadmin-units.ps1 drives the parser (139 rows, 50 mutants)'
         Add-WitResult '202' 'the broker''s built list lets modify.account set sh-on and os-on remotely (sd-radmin.ps1 $RadminModify)' 'INFO' 'the design proposed the tightening forms only (its Q3, the owner''s); not a refusal this sitting tests'
