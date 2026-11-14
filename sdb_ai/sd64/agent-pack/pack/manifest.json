@@ -88,7 +88,7 @@
   },
   "sys.param": {
    "chunks": 52,
-   "sha256": "ee2250fa1a95282499d68bfb98d8859b590b1c4796a00e6697dff64a27e7d210"
+   "sha256": "7f56e952cc3c094a7a6522149a4e63ac75fb3578fa67c897d16d32f7ab2dd116"
   },
   "sys.releases": {
    "chunks": 1,
@@ -124,7 +124,7 @@
   },
   "voc.type": {
    "chunks": 9,
-   "sha256": "1eaa27de70d015509686cfb137c768925130f6cfacf6e88d31d7d42877909f1b"
+   "sha256": "6fa6a8e04aaadde3b59d6f0a4ff1967e18bab5efdf36e93461948a13be47e0ff"
   },
   "voc.types": {
    "chunks": 1,
@@ -150,7 +150,7 @@
    "words": 6613
   },
   "index.json": {
-   "sha256": "42f515b23d2841fa49abae8c220bdedeaaf97efb85367fd1fbaf178426bff3ab"
+   "sha256": "acf9e50efa6dde02b323571b2a993a26c40c312a94bfa7ee46dcd760ce18dba7"
   },
   "reference/basic-functions.md": {
    "chunks": 267,
@@ -184,7 +184,7 @@
   },
   "reference/system.md": {
    "chunks": 95,
-   "sha256": "8549e5232858c1345ef22e2e2155cc12e43dcb13d766a13bc37a77b2027a70e1",
+   "sha256": "54433f36d9c635a7bfd4c322faa57b29d52604c22dfd36f5b5285efa0567ae72",
    "words": 2617
   },
   "reference/tcl-keywords.md": {
@@ -199,8 +199,8 @@
   },
   "reference/voc.md": {
    "chunks": 12,
-   "sha256": "bda39333cf60e2baf06af00cc951047aed4557a73475fa8112c67d490aa4c95a",
-   "words": 1898
+   "sha256": "74150b952302be9719233bf360c3d98b693cad05c49517c6dbbd059d19671c31",
+   "words": 1905
   }
  },
  "product": "SD Core for Windows",

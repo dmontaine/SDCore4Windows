@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  AN API SIGN-IN IS ON THE AUDIT TRAIL, BY USER AND ACCOUNT.
+
+             What        - a program that signed in over the API (SDConnect and the client libraries) left nothing on the audit trail
+                           that named the user: only a refusal was recorded, and the one success line was for a sign-in on the
+                           files-only route. The first time a session enters its account the trail now gains
+                           "api login user=<name> account=<account>", before the account's own LOGIN runs. A terminal sign-in
+                           already wrote "login account=".
+             Why         - an administrator reading the trail to see who used the system could not see an ordinary API user at all.
+             Does NOT    - Write a second line for an SDLogto to another account (that is not another sign-in), write one for a
+                           refused sign-in (those are "api refused" as before), or record anything else about the session.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  A SESSION WHOSE INPUT HAS ENDED NO LONGER SPINS AT PAUSE OR AT THE CTRL-R SEARCH PROMPT.
 
              What        - a piped session (a script, a test, a login that is not a terminal) whose input ended while it was at the

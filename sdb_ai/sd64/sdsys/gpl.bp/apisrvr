@@ -19,6 +19,7 @@
 *
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux d5270fe2 (S.235; RELEASE_1.1 247): an API sign-in writes `api login user=<name> account=<account>` once, at the first entry to an account.
 * 13 Nov 26 Windows - correcting the 17 Oct S.64 part 2 line below: the block that loads the three edit gates ON for SDSYS is not in
 *           this program and is not needed.  An API session reaches the sdsys account only local and elevated (K$ADMINISTRATOR, the
 *           SDSYS test in the entry code), and the administrator passes every edit test (found carrying test-editgates-units, G25d).
@@ -1231,29 +1232,20 @@ end
 
 i = kernel(K$PRIVATE.CATALOGUE, private.catalogue)
 
-* 19 Oct 26 Windows port - from Linux d6a86a7 (sheet 170): the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session as CPROC
-*   runs it for an interactive or phantom one: once, when the session first enters an account, before that account's own LOGIN.  There is
-*   no such paragraph unless the administrator wrote one.  It runs in the account just entered, under that account's switches.
-if not(master.login.done) then
-   master.login.done = @true
-   openpath @sdsys:@ds:'voc' to master.f on error null
-   then
-      read master.rec from master.f, 'MASTER.LOGIN' on error null
-      then
-         if upcase(master.rec[1,2]) = 'PA' then
-            execute field(master.rec, @fm, 2, 9999999) trapping aborts capturing master.out
-         end
-      end
-      close master.f
-   end
-end
-
+* 14 Nov 26 Windows port: the 19 Oct carry of this paragraph's run had come in twice, a Windows-port copy and Linux's own below; the first set
+*   master.login.done, so the second could never run.  One copy is kept, Linux's, as in Linux's apisrvr.
 * 15 Oct 26 dm - sheet 170: the MASTER.LOGIN paragraph of the SDSYS VOC is run for an API session as CPROC runs it for an
 *   interactive or phantom one: once, when the session first enters an account, before that account's own LOGIN.  (Entering
 *   another account with LOGTO runs the new account's LOGIN only, as it does for a terminal session.)  There is no such
 *   paragraph unless the administrator wrote one.  It runs in the account just entered, under that account's switches.
 if not(master.login.done) then
    master.login.done = @true
+*  14 Nov 26 Windows port - from Linux d5270fe2 (S.235; RELEASE_1.1 247): THE API SIGN-IN IS ON THE AUDIT TRAIL BY USER AND ACCOUNT.  A terminal sign-in
+*    writes `login account=` from LOGIN; an API caller reaches an account through neither, and the only success line was the files-only
+*    route's (`api login route=sdfiles`), so an ordinary API sign-in left nothing that named the user.  One line, at the first entry to an
+*    account (an SDLogto is not another sign-in), after every refusal of this routine has passed and before MASTER.LOGIN or the account's
+*    LOGIN runs.  @logname, not logname: a plain variable does not survive an abort (as the other lines of this program).
+   void kernel(K$AUDIT, 'api login user=' : @logname : ' account=' : who)
    openpath @sdsys:@ds:'voc' to master.f on error null
    then
       read master.rec from master.f, 'MASTER.LOGIN' on error null

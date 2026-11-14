@@ -37,8 +37,11 @@ $roots = [ordered]@{
     # and leaves the group only errlog (664), prt (775) and dumps (1730 - write and enter, no read) writable (installsdcore.sh,
     # chmod -R 755 then those three).  On Windows 22 entries inherit sdusers:(M), including the sdsys folder itself.  Nothing
     # is locked blind: every candidate is listed here so ONE unelevated run says which an ordinary session or phantom writes.
-    # errlog, prt, dumps, $hold and pstmp are the CONTROLS - expected WRITTEN; the rest are expected untouched.  A candidate that
-    # reads WRITTEN stays open (or is fixed at its writer); the others are locked by secure-sysdirs.ps1.
+    # Linux's answer (mail 14 Nov 15:35, measured on its install): FOUR entries under sdsys are written by an ordinary session or
+    # phantom - errlog, prt, dumps and $ipc - and Linux has NO sdsys $hold (its hold files are in the ACCOUNT's own directory).
+    # So errlog, prt, dumps and $ipc are the CONTROLS, expected WRITTEN; $hold and pstmp are Windows runtime directories whose
+    # reading is open; everything else is expected untouched.  A candidate that reads WRITTEN stays open (or is fixed at its
+    # writer); the others are locked by secure-sysdirs.ps1.
     'syscom'        = 'C:\ProgramData\SD\sdsys\syscom'
     'terminfo'      = 'C:\ProgramData\SD\sdsys\terminfo'
     'terminfo.src'  = 'C:\ProgramData\SD\sdsys\terminfo.src'

@@ -16,8 +16,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 BP = os.environ.get("BPDIR", os.path.normpath(os.path.join(HERE, "..", "sdsys", "gpl.bp")))
 # program -> the file variables whose OPENSEQ must close in ELSE
-WANT = {"tool_catalog": ["sf"], "ide_osfile": ["f"]}       # 28 Oct 26: ide_osfile (S.88 stage E) opens a file the IDE's tab then holds for as long as it is open
-# 10 Nov 26 Windows port: Linux also holds tool_config ("tf", "cf"); that page is not carried here yet (it edits sd.conf through Linux's root helper), so it is not asked for.
+WANT = {"tool_config": ["tf", "cf"], "tool_catalog": ["sf"], "ide_osfile": ["f"]}      # 28 Oct 26: ide_osfile (S.88 stage E) opens a file the IDE's tab then holds for as long as it is open
+# 14 Nov 26 Windows port: tool_config is held again, as Linux holds it (RELEASE_1.1 218 carried the page; the 10 Nov note said it was not carried, which stopped being true).
 
 
 def read(name):
@@ -118,9 +118,11 @@ def selftest():
             print("  [MISSED] %s: failing rows %s" % (name, failing))
             missed += 1
 
-    # 11 Nov 26 (found carrying SOLO 56 group 4): the two tool_config mutants are gone - tool_config is not in WANT here (see above), so the self-test
-    # stopped on them with a KeyError and never reached the rest; and the ide_osfile mutant broke the first "close f", which is in the ON ERROR clause,
-    # not the ELSE branch the check reads, so it could never be caught.  It now breaks the close in the ELSE branch of the first open.
+    # 11 Nov 26 (found carrying SOLO 56 group 4): the ide_osfile mutant broke the first "close f", which is in the ON ERROR clause, not the ELSE branch
+    # the check reads, so it could never be caught.  It now breaks the close in the ELSE branch of the first open.  (The two tool_config mutants,
+    # dropped that day while tool_config was out of WANT, are back from 14 Nov 26 with it.)
+    mutant("tool_config table read", "tool_config", "      if not(unassigned(tf)) then close tf ", "      if not(unassigned(tf)) then null ")
+    mutant("tool_config conf read", "tool_config", "      if not(unassigned(cf)) then close cf ", "      if not(unassigned(cf)) then null ")
     mutant("tool_catalog object", "tool_catalog", "            if not(unassigned(sf)) then close sf ", "            if not(unassigned(sf)) then null ")
     mutant("ide_osfile open", "ide_osfile", "   end else\n      op.st = status()\n      if not(unassigned(f)) then close f\n",
            "   end else\n      op.st = status()\n      if not(unassigned(f)) then null\n")

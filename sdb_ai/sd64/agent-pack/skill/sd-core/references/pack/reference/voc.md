@@ -17,7 +17,7 @@ Every ordinary account's VOC is `newvoc` in full (`create.account` copies it; `u
 SDSYS's own VOC is `voc_template` in full: a superset of `newvoc`. The records only SDSYS has (64): `$contrib`, `$hold`, `$licence`, `accounts`, `append.sd.path`, `backup.account`, `bp`, `bp.out`, `clean.account`, `clear.locks`, `config`, `create.account`, `delete.account`, `delete.server`, `docs.install`, `first.compile`, `gpl.bp`, `gpl.bp.out`, `grant`, `inhibit.login`, `list.grants`, `list.locks`, `list.readu`, `list.servers`, `list.shared`, `list.voc.removed`, `listu`, `load.help`, `lock`, `lock.tracer`, `messages`, `modify.account`, `qfile`, `remote.api`, `remote.sdsys`, `remote.ssh`, `restore.account`, `restore.voc`, `revoke`, `run.in`, `second.compile`, `set.ai`, `set.backup.directory`, `set.batch`, `set.config`, `set.date`, `set.job`, `set.server`, `set.start.default`, `set.tile`, `settings.report`, `ssh.server`, `third.compile`, `tool.accounts`, `tool.ai`, `tool.backups`, `tool.config`, `tool.entries`, `tool.jobs`, `tool.menus`, `tool.remote`, `tool.sessions`, `unlock`, `update.accounts`.
 
 ### voc:type:F
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:75#98baf5a6
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:80#98baf5a6
 
 **The F record — a file**
 
@@ -74,7 +74,7 @@ name rather than by path.
 
 
 ### voc:type:K
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:256#4f0b8cdd
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:262#4f0b8cdd
 
 **The K record — a keyword**
 
@@ -106,13 +106,13 @@ last part of the pathname in field 5, which is the name it was catalogued
 under, so a program catalogued under a call name different from its program
 name is not reached this way.
 
-The 248 K-records in a stock VOC are the query processor's vocabulary,
+The 218 K-records in a stock VOC are the query processor's vocabulary,
 and they are what makes a sentence like `list stock with qty > 100 by
 supplier` parse.
 
 
 ### voc:type:PA
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:221#9486a7c4
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:227#9486a7c4
 
 **The PA record — a paragraph**
 
@@ -152,7 +152,7 @@ in the command instead.
 
 
 ### voc:type:PH
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:238#7acc327c
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:244#7acc327c
 
 **The PH record — a phrase**
 
@@ -175,7 +175,7 @@ in the command instead.
 
 
 ### voc:type:Q
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:178#b10fccd2
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:184#b10fccd2
 
 **The Q record — an indirect pointer**
 
@@ -193,7 +193,7 @@ followed with the same account test, so a chain cannot reach where its links alo
 
 
 ### voc:type:R
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:191#7919279b
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:197#7919279b
 
 **The R record — a remote record reference**
 
@@ -217,7 +217,7 @@ keywords, `"PA"` paragraphs, `"PH"` phrases, `"Q"` Q-pointers, `"R"` R-records,
 
 
 ### voc:type:S
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:210#e478fff6
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:216#e478fff6
 
 **The S record — a sentence**
 
@@ -233,7 +233,7 @@ command with its first arguments filled in.
 
 
 ### voc:type:V
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:127#770e48c1
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:132#770e48c1
 
 **The V record — a verb**
 
@@ -250,15 +250,16 @@ target, and the remaining fields carry options.
 
 | Field 2 | Field 3 | What it does |
 |---|---|---|
-| `CA` | *catalogue name* | a catalogued program — 163 of the shipped verbs |
+| `CA` | *catalogue name* | a catalogued program — 168 of the shipped verbs |
 | `IN` | *number* | internal verb *n*, handled by the command processor itself — 38 verbs |
 | `OS` | *text* | an operating-system command — `sh`, and nothing else |
 | `CS` | *path* | a locally catalogued function |
 
-Those four rows account for all but four of SDSYS's 144 `V` records. The
-remaining four are the keyword records described above — `break`, `count`,
-`display` and `off` — where field 2 holds a keyword number rather than a
-dispatch type, and it is field 3 that marks the record as a verb.
+The first three rows account for all 207 of SDSYS's `V` records (none shipped
+is `CS`). The other four of its 211 verbs are the keyword records described
+above — `break`, `count`, `display` and `off` — where field 2 holds a keyword
+number rather than a dispatch type, and it is field 3 that marks the record as
+a verb.
 
 Field 4 carries dispatch options and **field 5 names a security subroutine**.
 If field 5 is present, that subroutine is called before the verb runs and
@@ -289,7 +290,7 @@ a marginal verb.
 
 
 ### voc:type:X
-> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:289#f1c700c1
+> kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:295#f1c700c1
 
 **The X record — text**
 
