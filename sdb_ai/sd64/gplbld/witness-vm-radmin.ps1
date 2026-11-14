@@ -333,6 +333,9 @@ if ($sections -contains 'refuse') {
             else { Set-WitVerdict '202' ('F5: the broker refuses the target ' + $n) $t $refusal @('remote\.admin create\.account .*status=0') }
         }
         # The fold: upper-case input makes the LOWER-case account, and nothing is made under the upper-case spelling.  Cleaned up afterwards.
+        # A zzupper left by an earlier run (14 Nov: the first version of this check did not clean up) is removed first, so "before" is false and the check
+        # measures the fold and not the leftover.
+        if (Test-Registered 'zzupper') { $null = Invoke-WitSsh 'sdradmin' $pw @('delete.account zzupper', 'zzupper') 'F5: delete.account zzupper (a leftover)' }
         $beforeUp = Test-Registered 'zzupper'
         $r = Invoke-WitSsh 'sdradmin' $pw @('create.account group ZZUPPER') 'F5: create.account group ZZUPPER (folded)'
         Add-WitResult '202' 'F5: upper-case input is folded: ZZUPPER makes the account zzupper' $(if ((-not $beforeUp) -and (Test-Registered 'zzupper')) { 'PASS' } else { 'FAIL' }) ('before ' + $beforeUp + ', after ' + (Test-Registered 'zzupper'))
