@@ -346,6 +346,8 @@ def checks(s):
        "if cur.menu # '' then call $tk_keys('add', keys, 'esc', 'back', 'back', '', 1)" in mk and ordered(st2, "ttl = 'Home'", "ttl := ' > ' : crumb<ck>", "idx = (if cur.menu # '' then xcol<2> else xcol<1>)")
        and "call $tk_frame(ctx, keys, ttl, msg)" in th and "ttl = 'Home'" in th and "screen clear at 0,hdy size xcol<ncol - 1> - 1,3" in between(th, "\ndraw.header:\n", "\ndraw.clock:\n")
        and "screen text fmt(who.line, '60L') at idx,hdy + 1 attr 'bold'" in th and "at idx,hdy + 2 attr 'desktop'" in th, mk + st2)   # 3 Nov 26: the date line is in the page's own role (the blue theme's disabled band was unreadable)
+    ck("H30k ...the date line ends with the product and the version stamp, cut at 72 (owner 14 Nov 2026, RELEASE_1.1 285, Linux S.231)",
+       "$include revstamp.h" in th and "mm : '  -  SD Core for Windows ' : SD.REV.STAMP, '72L') at idx,hdy + 2 attr 'desktop'" in between(th, "\ndraw.clock:\n", "\n   return\n"), "")
     ck("H30i ...the AI line is offered no folder tile, no Back tile and no copy (its list is the cmd: tiles and the Terminal, except a recent copy)",
        ordered(between(th, "\nask.ai:\n", "\n   ctxt = "), "if ta[1, 4] = 'cmd:' or ta = 'terminal' then", "if tl<i, HT.ID>[1, 2] # 'r:' then", "acts<1, -1> = "), "")
     ck("H30j ...an empty band takes no room and a page whose first band is 0 (the Recent group) is laid out from it: the layout finds the first band, and moves down only when a group was placed",
@@ -546,6 +548,7 @@ MUTANTS = [
     ("the Gates tile is moved out of its group name", "tool_home", "gr<g> = 'People and access'", "gr<g> = 'People'"),
     ("a live line is read for an account holder too", "tool_home", "live.chg = ''\n   if not(is.admin) then return", "live.chg = ''"),
     ("a live line writes to the audit trail", "tool_home", "   call !listu(ludata)\n", "   call !listu(ludata)\n   void kernel(K$AUDIT, 'home live')\n"),
+    ("the home screen no longer names the product and version", "tool_home", "mm : '  -  SD Core for Windows ' : SD.REV.STAMP, '72L')", "mm, '60L')"),
     ("the key wait no longer reads the live lines again", "tool_home", "gosub draw.clock\n            gosub live.draw", "gosub draw.clock"),
     ("the live line is written over the dimmed reason", "tool_home", "s = '  ' : (if tl<di, HT.WHY> # '' then tl<di, HT.WHY> else (if tl<di, HT.LIVE> # '' then tl<di, HT.LIVE> else tl<di, HT.SUB>))", "s = '  ' : (if tl<di, HT.LIVE> # '' then tl<di, HT.LIVE> else tl<di, HT.SUB>)"),
     ("MENU runs another program for every account", "menu.n", "$tool_home", "$exit"),

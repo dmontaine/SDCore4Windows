@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 285 (owner 14 Nov, Linux S.231): the date line ends with the product and the version stamp, cut at 72 (60 would not hold them).
 * 12 Nov 26 Windows port - RELEASE_1.1 262/229: a cmd: tile is shown only when its verb is in the account's VOC (the AI and Audit trail tiles had no page here).
 * 10 Nov 26 Windows port - Linux e3490a7f taken whole (messages renumbered): Windows' earlier changes were the 28 Oct carry of ec8459b and the dropped
 *               Bypass programs tile, and Linux has both now (S.187).  Tiles for pages this tree does not carry yet run a verb SD does not know; HOME traps it.
@@ -117,6 +118,7 @@ $include int$keys.h
 $include err.h
 $include sl.h
 $include tk.h
+$include revstamp.h
 
 deffun is_grp_member(user, group) calling '!is_grp_member'
 
@@ -765,7 +767,7 @@ draw.clock:
       dt = oconv(date(), 'D4DMY[,A3]')
       mo = field(dt, ' ', 2)
       mo = upcase(mo[1, 1]) : downcase(mo[2, 9])
-      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm, '60L') at idx,hdy + 2 attr 'desktop'
+      screen text fmt(wd : ' ' : field(dt, ' ', 1) : ' ' : mo : ' ' : field(dt, ' ', 3) : '  -  ' : mm : '  -  SD Core for Windows ' : SD.REV.STAMP, '72L') at idx,hdy + 2 attr 'desktop'
    end
    return
 

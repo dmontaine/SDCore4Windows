@@ -3,6 +3,13 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  THE HOME SCREEN SAYS WHICH SD IS RUNNING.
+
+             What        - The home screen's date line ends with the product and its version, for
+                           example "SD Core for Windows W2.0-0".
+             Does NOT    - Change the sign-on line, which already named the product.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  SD'S TASK SCHEDULER FOLDER IS CLOSED TO EVERYONE BUT SYSTEM AND THE ADMINISTRATORS.
 
              What        - Setup makes the Task Scheduler folder SD open to SYSTEM and administrators only.
