@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed truncate in an index clear is an error.
  * 12 Nov 26 Windows port - from Linux 413312f3 (RELEASE_1.1 251): get_ak_node() checks the chsize64() that makes room for a new node.
  * 12 Nov 26 Windows port - from Linux 3d3890e3 (25 Oct 26; RELEASE_1.1 240 b): a right justified index made now has the magic DH_INDEX2 and the flag AK_V2,
  *           and its keys are in one total order (the empty key, numbers by value with decimals and up to 15 digits, then text: ak_key_class(),
@@ -4278,7 +4279,13 @@ bool ak_clear(DH_FILE *dh_file, int16_t subfile) {
       node_num = GetAKFwdLink(dh_file, ((DH_ITYPE_NODE *)buff)->next);
     }
 
-    chsize64(dh_file->sf[subfile].fu, eof);
+    /* 14 Nov 26 dm - a failed truncate is an error, as in get_ak_node() above (dh_ak.c 3087): it used to be ignored, so a
+       CLEAR.FILE of an index could report success with the old nodes still in the subfile.  */
+    if (chsize64(dh_file->sf[subfile].fu, eof)) {
+      dh_err = DHE_AK_WRITE_ERROR;
+      process.os_error = OSError;
+      goto exit_ak_clear;
+    }
 
     /* Write an empty terminal node at the root node position */
 

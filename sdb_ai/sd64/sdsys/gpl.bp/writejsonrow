@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: the JPARSE that sets STATUS() is a VOID call; its result went to x, which nothing read.
 * 20 Oct 26 dm  Written for the CSV / JSON / XML task.  The compiler (bcomp, st.writejson) calls it.
 * END-HISTORY
 *
@@ -38,7 +39,7 @@ $catalog !writejsonrow
 
    if jtype(c) # 'collection' and jtype(c) # 'array' then
       * not a data collection: JBUILD would stop the program.  Parsing a null string sets STATUS() 1020 (not JSON), which is what ELSE shows.
-      x = jparse('')
+      void jparse('')
       return 0
    end
    line = jbuild(c)

@@ -674,7 +674,7 @@ def run_b(raw):
                         "if rc.state = 'ctx' and rc.epoch = ctx<TK.C.EPOCH> then rc.state = '' cx = rc.x ; cy = rc.y gosub run.context if c<1> = 'act' and c<4> # '' then kp.name = 'kp:' : c<4> c = '' end"),
                        ("the box under the pointer is a shown focus box's", "if rr<1, 1, 5> and cx >= rr<1, 1, 1> and cx < rr<1, 1, 1> + rr<1, 1, 3> and cy >= rr<1, 1, 2> and cy < rr<1, 1, 2> + rr<1, 1, 4> then bx.name = fo<1, fi, 2>"),
                        ("the finder lists the bar's own menus", "call $sl_palette(menus, sysmsg(15000), pr, ps, pw)"),
-                       ("a disabled entry is answered with its reason and nothing chosen", "case ps = 2 screen msgbox pw returning bn else bn = 0 gosub no.answer"),
+                       ("a disabled entry is answered with its reason and nothing chosen", "case ps = 2 screen msgbox pw gosub no.answer"),
                        ("an answer is the action's key, as the bar's", "answer.act: call $tk_keys('keyof', keys, pr, pane, kn, '', '') c = 'act' : @fm : pr : @fm : kn : @fm : (if kn = '' then 'act:' : pr else kn)"),
                        ("the context menu leaves out File and Help", "if tt = 'File' or tt = 'Help' or tt[1, 1] = '>' then continue"),
                        ("the context menu lists only what the pane uses, with the bar's flags", "gosub pane.uses if uses then citems<1, -1> = menus<k, v, 1> : @sm : menus<k, v, 2> : @sm : fa : @sm : menus<k, v, 4>"),
@@ -797,7 +797,7 @@ mut("tool_home", "   call $tk_keys('add', keys, 'ctrl-w', 'switch', 'switch', ''
 M_K78 = len(M)
 mut("tk_menubar", "            case nm = 'f2'\n               start = -1", "            case nm = 'f3'\n               start = -1", "the finder is on another key", "finder")
 mut("tk_menubar", "            if pa # '' and pa # 'menu' then start = 0\n", "", "the bar takes F2 from a page that binds it", "finder")
-mut("tk_menubar", "      case ps = 2\n         screen msgbox pw returning bn else bn = 0\n         gosub no.answer", "      case ps = 2\n         gosub answer.act", "a disabled entry of the finder is answered", "finder")
+mut("tk_menubar", "      case ps = 2\n         screen msgbox pw\n         gosub no.answer", "      case ps = 2\n         gosub answer.act", "a disabled entry of the finder is answered", "finder")
 mut("tk_menubar", "         if uses then citems<1, -1>", "         citems<1, -1>", "the context menu lists every action, not the pane's", "finder")
 mut("tk_menubar", "      if tt = 'File' or tt = 'Help' or tt[1, 1] = '>' then continue", "      if tt[1, 1] = '>' then continue", "the context menu holds File and Help", "finder")
 mut("tk_menubar", "      case 1\n         gosub answer.act\n   end case", "      case 1\n         execute pr\n   end case", "the context menu runs its answer", "finder")

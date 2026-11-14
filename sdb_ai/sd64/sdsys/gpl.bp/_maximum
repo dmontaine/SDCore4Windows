@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 dm  VOID kernel(K$MAXMIN.POS.SET, ...): the bootstrap compiler (bbcmp.py) now codes VOID, so the unused x is gone.
 * 19 Jan 04  0.6.1 SD launch. Earlier history details suppressed.
 * END-HISTORY
 *
@@ -70,7 +71,7 @@ $include int$keys.h
       repeat
    end
 
-   x = kernel(K$MAXMIN.POS.SET, pos)     ;* (not VOID: the bootstrap compiler, gplbld/bbcmp.py, does not code it)
+   void kernel(K$MAXMIN.POS.SET, pos)
    return value result
 end
 

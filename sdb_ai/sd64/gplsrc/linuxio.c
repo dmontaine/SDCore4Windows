@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): socket_byte() gives a NUL on an ended read, the key
+ *            written to a child's pipe is tested, and the Unix-socket path is copied with its terminator always set.
  * 12 Nov 26 Windows port - from Linux e79f6499 (RELEASE_1.1 252, P-23): a TCP connection to a session that is not the API server is
  *           refused, and a peer whose address cannot be read has port 0.
  * 12 Nov 26 Windows port - as Linux S.125 (RELEASE_1.1 251): keyin()'s t1 starts at 0.
@@ -240,7 +242,15 @@ bool start_connection(int unused) {
       case PF_UNIX:
         struct sockaddr_un* sU =  (struct sockaddr_un*)&sa;
         /* pull out UNIX Socket path */
-        strncpy(ip_addr,sU->sun_path,MAX_SOCKET_ADDR_STR_LEN-1);
+        {
+          /* 14 Nov 26 Windows port - from Linux 64561d81 (S.230): bounded copy that always terminates (strncpy could leave
+             ip_addr without its NUL when the path filled sun_path; -Wstringop-truncation).  */
+          size_t n = strnlen(sU->sun_path, sizeof(sU->sun_path));
+          if (n > MAX_SOCKET_ADDR_STR_LEN - 1)
+            n = MAX_SOCKET_ADDR_STR_LEN - 1;
+          memcpy(ip_addr, sU->sun_path, n);
+          ip_addr[n] = '\0';
+        }
         /* see who is connecting */
         if (getpeereid(0, &peer_usr_id, &peer_grp_id) == -1){
           // check errno
@@ -1033,7 +1043,11 @@ again:
       if (c == inewline)
         c = 10;
       tio_display_string(&c, 1, TRUE, FALSE);
-      write(ChildPipe, &c, 1);
+      /* 14 Nov 26 dm - tested: a failed write means the child closed its input (or ended); the key was for it, so it is
+         dropped, and op_sh.c closes the pipe when the child is reaped.  */
+      if (write(ChildPipe, &c, 1) != 1) {
+        /* dropped: see above */
+      }
     } else {
       /* Pop this character into the ring buffer */
 
@@ -1133,7 +1147,10 @@ int bytes;
 char socket_byte() {
   char c;
 
-  read(0, &c, 1);
+  /* 14 Nov 26 dm - an ended or failed read left c unset and the telnet negotiation read whatever was on the stack; it is
+     now a NUL, which no negotiation step acts on, and the next read of the connection sees the end.  */
+  if (read(0, &c, 1) != 1)
+    c = '\0';
 
   return c;
 }

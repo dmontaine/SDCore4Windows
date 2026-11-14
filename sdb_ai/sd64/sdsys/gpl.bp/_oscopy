@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused out = '' before CAPTURING is gone.
 * 10 Nov 26 Windows port - from Linux 0cbb8b93 (12 Oct), abcda0c1 (S.63), d7cda813 (S.64), d049d8bb (S.96 M6; the S.67 journal
 *               call is not carried, the master copies having been retired): RELEASE_1.1 146.  OS.EXECUTE runs PowerShell here, so
 *               the copy is Copy-Item and the append a .NET byte append (binary safe); the gates are asked as on Linux, as the account,
@@ -86,7 +87,6 @@ $include int$keys.h
          cmd = "try { Copy-Item -LiteralPath '" : wsource : "' -Destination '" : wtarget : "' -Force -ErrorAction Stop } catch { exit 1 }"
    end case
 
-   out = ''
    os.execute cmd capturing out
    status = os.error()
    return

@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the SCREEN MSGBOX keeps no unused answer.
 * 10 Nov 26 Windows port - from Linux (S.75 A6 and its later changes to 9 Nov 26; RELEASE_1.1 218).  OS deviations: sd.conf is the file kernel(K$INIPATH) names (SD_CONFIG, else
 *               C:\ProgramData\SD\sd.conf), not /etc/sd.conf; set.config changes it through SDSYS's elevated helper (gplbld/sd-confset.ps1), not the root helper; the line to add by hand is
 *               added as an administrator; a restart is sd -restart, or Stop-Service SD and Start-Service SD; the report's operating-system part is Windows's (no sudoers file).
@@ -778,7 +779,7 @@ explain.fixed:
       call $tk_wrap(wh : ' A value SD does not accept stops SD, and every new session, from starting: read the guide first.', 100, pieces)
       body<-1> = pieces
    end
-   screen msgbox body title 'Not changed here' buttons '&Close' default 1 returning bx else bx = 0
+   screen msgbox body title 'Not changed here' buttons '&Close' default 1
    msg = k : ' is not changed from this page; nothing was written'
    return
 

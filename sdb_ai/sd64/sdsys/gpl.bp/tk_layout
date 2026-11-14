@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: removed the unused list cmh (a column's least height, set and never read; the band's least height is still taken from c.mh).
 * 28 Oct 26 dm  New (S.88 L1): the frame, the body and the panes of a page made from the window and the app's floor, and made again after a
 *               resize ('refresh'); the cursor lock armed in its layout mode (decided by the window against the floor, never by the cursor).
 * 1 Nov 26 dm  S.97 stage 1: THE AI LINE'S ROW.  A page that has given the AI line a row (ctx<TK.C.AIROW>, set by $tk_aipage 'init' only when the AI is usable for the account) has a
@@ -433,7 +434,7 @@ structure:
          if cc<bi, ci> = '' then cc<bi, ci> = i else cc<bi, ci> = cc<bi, ci> : @sm : i
       end
    next i
-   cbw = '' ; cmw = '' ; cg = '' ; chs = '' ; cbh = '' ; cmh = '' ; bbh = '' ; bmh = '' ; bvs = ''
+   cbw = '' ; cmw = '' ; cg = '' ; chs = '' ; cbh = '' ; bbh = '' ; bmh = '' ; bvs = ''
    for bi = 1 to nb
       ncol = dcount(cl<bi>, @vm)
       b.h = 0 ; b.m = 0 ; b.v = 0
@@ -452,7 +453,7 @@ structure:
             c.h += ph<i>
             c.mh += pmh<i>
          next k
-         cbw<bi, ci> = c.w ; cmw<bi, ci> = c.mw ; chs<bi, ci> = c.hs ; cbh<bi, ci> = c.h ; cmh<bi, ci> = c.mh
+         cbw<bi, ci> = c.w ; cmw<bi, ci> = c.mw ; chs<bi, ci> = c.hs ; cbh<bi, ci> = c.h
          if c.h > b.h then b.h = c.h
          if c.mh > b.m then b.m = c.mh
       next ci

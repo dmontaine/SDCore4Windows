@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused old is gone.
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 13 Oct 26 dm  New.
 * 18 Oct 26 dm  The cursor is placed through $sl_curat (which tells the cursor lock where it is).
@@ -79,7 +80,6 @@ $include sl.h
          if span < 0 then span = 0
          pg = vis - 1
          if pg < 1 then pg = 1
-         old = val
          dec = if horiz then 'left' else 'up'
          inc = if horiz then 'right' else 'down'
          begin case

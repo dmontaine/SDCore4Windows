@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed getcwd() leaves cwd empty, not unset.
  * 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN account, run.in's debugged child (the SD service starts it as the bare account
  *           sdrunin); runin_door() lets it through only on that token, with "debug <file> <program>" as its one command.
  * 12 Nov 26 Windows port - RELEASE_1.1 245: an interactive console session runs in a classic window of SD's own (win32vt.c own_window()).
@@ -314,7 +315,10 @@ Private void sd_init(int argc, char *argv[]) {
 
   /* Save the current working directory for use by SYSTEM(1024) */
 
-  (void)getcwd(cwd, MAX_PATHNAME_LEN);
+  /* 14 Nov 26 dm - a failed getcwd() (the directory removed, or a path too long) left cwd unset and strlen() read past it;
+     SYSTEM(1024) is then the empty string.  */
+  if (getcwd(cwd, MAX_PATHNAME_LEN) == NULL)
+    cwd[0] = '\0';
   entry_dir = k_alloc(MAX_PATHNAME_LEN, strlen(cwd) + 1); /* was hard coded at 110 -gwb */
   /* Modified by Composer AI - 2026/06/10.
      k_alloc() can return NULL; abort startup rather than strcpy to NULL. */

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a phantom's failed daemon() is logged.
  * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85): run.in WITH debug (RELEASE_1.1 253(b)), Windows only - the child's
  *           account and store, and the SDSYS session's end of the run (runin_debug_key: ask the SD service, relay the screen and keys).
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER; the file is made by
@@ -2007,7 +2008,10 @@ void op_phantom() {
     for (i = 3; i < 1024; i++)
       close(i); /* 0401 */
 
-    daemon(1, 1);
+    /* 14 Nov 26 Windows port - from Linux 64561d81 (S.230): a failed daemon() (its own fork) leaves the phantom running, attached to
+       this process group; it is now said in the error log rather than ignored.  */
+    if (daemon(1, 1) != 0)
+      log_message("phantom: daemon() failed; the phantom runs without detaching");
 
     /* 06 Oct 26 Windows port - RELEASE_1.1 119.  THIS BUILT "<sysdir>/bin/sd", WHICH
        HOLDS NO EXECUTABLE IN AN INSTALL (the Windows layout puts the programs in

@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the SCREEN MSGBOXes keep no unused answer.
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b): B debugs as on Linux (run.in debugs in a separate, unelevated process of the account); the
 *              "not built" refusal of 10 Nov 26 is gone.
 * 10 Nov 26 Windows port - from Linux 42b79767, 0f49c651, ee582047, 61697538, d5aeaaf6, 4324e2a4, 7c23f7cf, 5162a5d1, 1b20c681, 5cb78f05, d049d8bb and
@@ -1614,7 +1615,7 @@ compile.box:
    if dcount(cbody, @fm) > 30 then cbody = field(cbody, @fm, dcount(cbody, @fm) - 29, 30)     ;* the last 30 lines: the errors and the verdict are at the end
    if cbody = '' then cbody = '(the compiler printed nothing)'
    ctitle = 'Compile ' : eid : ' in ' : ea
-   screen msgbox cbody title ctitle buttons '&OK' default 1 returning cb2 else cb2 = 0
+   screen msgbox cbody title ctitle buttons '&OK' default 1
    return
 
 * B (M5), after edit.record judged the program file and the program (the pointer is already given back): run.in compiles it for the debugger in its own account, and when that
@@ -1927,7 +1928,7 @@ do.global:
    close uf
    if dcount(gsum, @fm) > 30 then gsum = field(gsum, @fm, 1, 30) : @fm : '(and more: the audit trail has a line for each account)'
    gtitle = 'Global change: ' : gtc : ' changed'
-   screen msgbox gsum title gtitle buttons '&OK' default 1 returning cb2 else cb2 = 0
+   screen msgbox gsum title gtitle buttons '&OK' default 1
    gmsg = 'global change: ' : gtc : ' changed, ' : gtrf : ' refused, ' : gtf : ' failed, in ' : gk : (if gk = 1 then ' account' else ' accounts') : '; U puts it back'
    gosub after.global
    msg = gmsg
@@ -2474,7 +2475,7 @@ do.undo:
    uhead = u.back : ' put back, ' : u.since : ' left (changed since the run), ' : u.gone : ' left (gone), ' : u.lock : ' held by another session, ' : u.ref : ' refused, ' : u.err : ' errors'
    if u.done > 0 then uhead := ' (' : u.done : ' put back by an earlier U)'
    usum = uhead : (if usum # '' then @fm : usum else '')
-   screen msgbox usum title 'Undo of the global change' buttons '&OK' default 1 returning cb2 else cb2 = 0
+   screen msgbox usum title 'Undo of the global change' buttons '&OK' default 1
    gosub after.global
    msg = 'undo: ' : uhead
    return

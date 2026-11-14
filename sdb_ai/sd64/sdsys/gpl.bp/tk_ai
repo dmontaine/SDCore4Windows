@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: removed the unused assignments to cx.from (the standing text's 'context-from', read and never used).
 * 23 Oct 26 dm  New (AI line stage 1: the library routine and the home screen).
 * 28 Oct 26 dm  S.88 phase 2 (S5): every line of the preview, the diff and the command is shown whole, in rows, not cut at the box (wrap.exact); a diff counts its rows towards the 30.
 * 28 Oct 26 dm  S.88 handoff step 2 (the owner's approval of Opus's proposal): actx<12>, the ids of the offered actions that do more than navigate; the default of an action proposal
@@ -433,14 +434,12 @@ run.ask:
    *   to the wall's screen as a typed request is, with the other screens and before anything else is read for the request: SET.AI refuses to keep one that names SD's own code,
    *   and a text that does so all the same is not sent - nor is the request.
    cx.text = ''
-   cx.from = ''
    rp = kernel(K$AI.STATUS, 0)
    if rp<1> = 'D' then
       cxj = jparse(rp<2>)
       if not(status()) then
          if cxj{'t'} = 'status' then
             cx.text = cxj{'context'}
-            cx.from = cxj{'context-from'}
          end
       end
    end

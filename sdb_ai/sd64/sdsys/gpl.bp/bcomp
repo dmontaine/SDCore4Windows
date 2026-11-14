@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): "assigned a value but never used" only for a value an
+*            assignment gave (SYM.PLAIN); a statement's own target (READU, LOCATE SETTING, CAPTURING) is not warned about.
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-05): after 15072 the include search is marked reported, as Linux, so no second error follows.
 * 12 Nov 26 Windows port - from Linux 7aba47d (RELEASE_1.1 241): OSPATH() in a program that is not internal compiles to XF_OSPATH 31 (pub_ospath).
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): in a compile RUN.IN started (ri.active), $INCLUDE / INCLUDE, $DICT and FILE refuse a file
@@ -1100,7 +1102,8 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
 
    last.debug.line = -1
    errors = 0
-   j = kernel(K$CASE.SENSITIVE, 0)     ;* (bbcmp.py has no VOID statement) names are not case sensitive (the mode that made them so, CASE.SENSITIVE, is gone)
+   plain.assign = @false               ;* 14 Nov 26: true only while is.assignment looks up its target (SYM.PLAIN)
+   void kernel(K$CASE.SENSITIVE, 0)    ;* names are not case sensitive (the mode that made them so, CASE.SENSITIVE, is gone)
 
    eof = @false
    line.no(1) = -auto.include.lines
@@ -1180,6 +1183,7 @@ $define STACK.MARK 9999         ;* Marks start of sub-expression
       $define SYM.ARG 3 ;* V3 : Line used as subroutine argument
       $define SYM.DIM 4 ;* V4 : Line dimensioned
       $define SYM.MAIN 5 ;* V5 : Set by the program itself and not by an include record (for TRAP.UNUSED.MAIN); not a line number, never listed
+      $define SYM.PLAIN 6 ;* V6 : Set by an assignment statement (x = ..., x += ..., x<f> = ...), not as the target a statement needs; never listed
    symbol.mode = SYM.USE
 
    * Unless we are doing XREF, we have no need to track every line number
@@ -1794,7 +1798,7 @@ $define J.TRY                  8  ;* TRY / CATCH (12 Oct 26 dm, openQM 355)
             err.msg = sysmsg(2825, s) ;* %1 is not assigned a value
             gosub warning
          end
-      end else if symbol.refs<i,SYM.USE> = '' then
+      end else if symbol.refs<i,SYM.USE> = '' and symbol.refs<i,SYM.PLAIN> # '' then   ;* 14 Nov 26: only a value an assignment gave
          if internal or bittest(mode, M.TRAP.UNUSED) or (bittest(mode2, M2.TRAP.UNUSED.MAIN) and symbol.refs<i,SYM.MAIN> # '') then
               err.msg = sysmsg(2826, s) ;* %1 is assigned a value but never used
               gosub warning
@@ -2681,7 +2685,18 @@ is.assignment:
       end
    end
 
+   * 14 Nov 26 dm - "assigned a value but never used" is for a value an ASSIGNMENT gave: plain.assign marks the target of
+   * this statement (SYM.PLAIN), and only such a variable is warned about.  A variable that is only the target a statement
+   * needs (READU's record when the lock is the point, LOCATE ... SETTING as a yes/no test, CAPTURING, INPUT) is not.  And
+   * x->... or x{...} = ... USES what x holds - an object, or a collection that a write through x changes (assigning a
+   * collection does not copy it) - so it counts as a use.
+   plain.assign = @true
+   sympos = 0                  ;* so that the use below is marked only on a symbol this lookup found or made
    gosub emit.lvar.reference   ;* Set up a reference to the target variable
+   plain.assign = @false
+   if look.ahead.token = TKN.OBJREF or look.ahead.token = TKN.LCBR then
+      if sympos then symbol.refs<sympos,SYM.USE> = line.no(1)
+   end
 
    * Is this an object reference?
 
@@ -3811,7 +3826,7 @@ emit.function.result.load:
 *    SYMBOL.COMMON.OFFSET  -ve if local variable, else common offset
 *    SYMBOL.DIM            Dimensions (0 if scalar, 1 or 2 for array,
 *                                      -1 if array but dimensions not yet known)
-*    SYMBOL.COMMON.INDEX   Index into COMMONS for common variable
+* (14 Nov 26 dm: SYMBOL.COMMON.INDEX, the fourth value of a symbol's info, was set here and read nowhere; it is gone.)
 
 * NOTE.SYMBOL.REF  -  Record the line at which the symbol at SYMPOS was set, used, passed as an argument or dimensioned
 * (as SYMBOL.MODE says; none for SYM.CHK), and whether a setting came from the program itself rather than from an include
@@ -3820,6 +3835,7 @@ note.symbol.ref:
    if symbol.mode then
       symbol.refs<sympos,symbol.mode,symsv> = line.no(1)
       if symbol.mode = SYM.SET and level = 1 then symbol.refs<sympos,SYM.MAIN> = 1
+      if symbol.mode = SYM.SET and plain.assign then symbol.refs<sympos,SYM.PLAIN> = 1  ;* 14 Nov 26: see is.assignment
    end
    return
 
@@ -3830,7 +3846,6 @@ find.var:
          symbol.var.no = remove(var.data, k) + 0
          symbol.common.offset = remove(var.data, k) + 0
          symbol.dim = remove(var.data, k) + 0
-         symbol.common.index = remove(var.data, k) + 0
          gosub note.symbol.ref
          return
       end
@@ -3841,7 +3856,6 @@ find.var:
          symbol.var.no = sympos - 1  ;* Map to local vars 0 onwards (arg 1+)
          symbol.common.offset = -1   ;* Local variable
          symbol.dim = 0              ;* Always scalar
-         symbol.common.index = 0
          return
       end
    end
@@ -3851,13 +3865,11 @@ find.var:
       symbol.var.no = remove(var.data, k) + 0
       symbol.common.offset = remove(var.data, k) + 0
       symbol.dim = remove(var.data, k) + 0
-      symbol.common.index = remove(var.data, k) + 0
       gosub note.symbol.ref
    end else
       symbol.dim = 0
       symbol.var.no = -1
       symbol.common.offset = -1
-      symbol.common.index = -1
    end
 
    symbol.mode = SYM.USE

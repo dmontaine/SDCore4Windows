@@ -77,7 +77,7 @@ def checks(src, hdr):
     entry = c.split("found.program:")[0]
     first = entry.find("gosub read.layout")
     ck("the entry lays out: read.layout, then set.geometry (after data.lines is known), before anything is drawn",
-       0 <= first < entry.find("gosub set.geometry") < entry.find("return.key"), "")
+       0 <= first < entry.find("gosub set.geometry") < entry.find("phantom = bitand"), "")
     for nm in ("relayout", "new.window"):
         body = routine(c, nm) or ""
         ck("%s calls set.geometry" % nm, "gosub set.geometry" in body, body[:200])

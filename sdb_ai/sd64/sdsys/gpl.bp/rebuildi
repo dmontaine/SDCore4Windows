@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused junk = '' before CAPTURING is gone.
 * 18 Oct 26 Windows port - from Linux 341151d (12 Oct 26): 1.2-0 openQM ref 58.  The syntax is SD's own.
 * END-HISTORY
 *
@@ -77,7 +78,6 @@ $include parser.h
                   have = indices(f)
                   close f
                   if have # '' then
-                     junk = ''
                      execute 'BUILD.INDEX ' : id : ' ALL' capturing junk
                      display sysmsg(12086, id) ;* Indices of xx rebuilt
                      done += 1

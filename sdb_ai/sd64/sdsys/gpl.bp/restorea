@@ -3,6 +3,7 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused lat.bstamp is gone.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): the manifest key route.ai (acc_os_info) is read and handed to !create_account (CA$AI); a
 *              manifest that has none restores as not in sdaiusers.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
@@ -176,7 +177,7 @@ $include createacc.h
          if field(lat.info<k>, ':', 1) = 'host' then lat.host = downcase(trim(field(lat.info<k>, ':', 2, 99)))
       next k
       openpath bak.dir to lat.f else stop sysmsg(13010, bak.dir)
-      lat.best = '' ; lat.bstamp = ''
+      lat.best = ''
       lat.newest = '' ; lat.nstamp = ''   ;* the newest backup of ANYTHING made on this computer
       lat.ids = '' ; lat.stamps = ''      ;* the zips the NAME admits, in no order
 *     Select lists 11 and 12 are the only ones in range (measured, 1 Oct 26); the loop
@@ -233,7 +234,6 @@ $include createacc.h
          lat.stamps<lat.pick> = ''           ;* used: it cannot be the newest again
          if all then
             lat.best = lat.id
-            lat.bstamp = lat.stamp
             exit
          end
          call !acc_archive('MANIFEST', bak.dir : @ds : lat.id, '', lat.mtext, lat.err)
@@ -252,7 +252,6 @@ $include createacc.h
             next k
             if lat.holds then
                lat.best = lat.id
-               lat.bstamp = lat.stamp
                exit
             end
          end

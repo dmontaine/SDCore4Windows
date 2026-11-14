@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the error log's truncate and write results are tested.
  * 13 Nov 26 Windows port - RELEASE_1.1 247 (Linux W.11 F4, option C1): audit_message() hands the record to the SD service over
  *           SD_AUDIT_PIPE (win32_audit_pipe()), which stamps the user and pid from the kernel; it appends the record itself only
  *           when the service does not take it.  AUDIT_ROTATE_BYTES moved to win32auditpipe.h.
@@ -843,9 +844,12 @@ void log_message(char* msg) {
           p = buff;
         } while (bytes > 0);
 
-        /* Truncate the file */
+        /* Truncate the file.  14 Nov 26 dm - the result is tested: this IS the error log, so a failure has nowhere to be
+           recorded; the log is then longer than ERRLOG until the next trim, which is all it costs.  */
 
-        chsize64(errlog, dst);
+        if (chsize64(errlog, dst) != 0) {
+          /* nothing further: see above */
+        }
       }
 
       Seek(errlog, 0, SEEK_END);
@@ -875,7 +879,10 @@ void log_message(char* msg) {
                         ltime->tm_sec, Newline, msg, Newline);
       }
 
-      Write(errlog, buff, bytes);
+      /* 14 Nov 26 dm - tested, not ignored: a failed write of the error log cannot itself be logged.  */
+      if (Write(errlog, buff, bytes) != bytes) {
+        /* nothing further: this is the error log */
+      }
 
       CloseFile(errlog); /* 0423 */
     }

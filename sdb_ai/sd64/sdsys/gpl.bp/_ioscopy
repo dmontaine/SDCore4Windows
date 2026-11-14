@@ -13,6 +13,7 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused out = '' before CAPTURING is gone.
 * 10 Nov 26 Windows port - from Linux 0cbb8b93, abcda0c1 (S.63), d7cda813 (S.64), d049d8bb (RELEASE_1.1 146): Copy-Item -Recurse in
 *               place of cp -R; the gates as on Linux.
 * 13 Oct 26 dm  S.63: asks the OS-access gate (K$PATH.OK) for both paths; status -4 as in _OSCOPY.
@@ -69,7 +70,6 @@ $include int$keys.h
       status = -1
       return
    end
-   out = ''
    os.execute "try { Copy-Item -LiteralPath '" : wsource : "' -Destination '" : wtarget : "' -Recurse -Force -ErrorAction Stop } catch { exit 1 }" capturing out
    status = os.error()
    return

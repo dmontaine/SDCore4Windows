@@ -276,7 +276,7 @@ def checks(raw):
     add("T38", "an Alt-letter: $sl_key asks KEYCODE for it (BINDKEY(, -7)) for the one read and gives the state back (-7 if it was on, else -8), and names Esc and one character alt- and the character in lower case "
         "before it takes a longer string for a binding's; KEYCODE returns an unbound Esc and one printable character as the two characters only when kc.alt is set, before it rings the bell; BINDKEY -7 sets and -8 "
         "clears kc.alt and each answers the old state; kc.alt is in the common block",
-        "alt.was = bindkey('', -7) k = keycode(1) kst = status() if alt.was then x = bindkey('', -7) else x = bindkey('', -8) set.status kst" in kk
+        "alt.was = bindkey('', -7) k = keycode(1) kst = status() if alt.was then void bindkey('', -7) else void bindkey('', -8) set.status kst" in kk
         and ordered(kk, "case len(k) = 2 and k[1,1] = char(27) name = 'alt-' : downcase(k[2,1])", "case len(k) > 1 name = k")
         and "if kc.alt and len(key.string) = 2 and key.string[1,1] = char(27) then alt.c = seq(key.string[2,1]) if (alt.c >= 32 and alt.c <= 127) or alt.c = 8 then return value key.string end if not(dropped) then display @sys.bell" in kc  # 9 Nov 26 (S.184 stage 2): a blank, DEL and ^H too
         and "case action = -7 n = kc.alt + 0 kc.alt = @true return value n case action = -8 n = kc.alt + 0 kc.alt = @false return value n" in kb
@@ -504,7 +504,7 @@ MUT = [
     ("sl_form", "a label with no control to go to still moves", "if ni = 0 then ni = -1", "null"),
     ("sl_key", "the Alt-letter is not asked for", "alt.was = bindkey('', -7)", "alt.was = 0"),
     ("sl_key", "BINDKEY's clearing of STATUS() is not undone", "      set.status kst\n", "\n"),
-    ("sl_key", "the Alt-letter stays asked for","if alt.was then x = bindkey('', -7) else x = bindkey('', -8)", "x = bindkey('', -7)"),
+    ("sl_key", "the Alt-letter stays asked for","if alt.was then void bindkey('', -7) else void bindkey('', -8)", "void bindkey('', -7)"),
     ("sl_key", "the Alt-letter keeps the case typed", "name = 'alt-' : downcase(k[2,1])", "name = 'alt-' : k[2,1]"),
     ("_keycode", "an Alt-letter is returned whether asked for or not", "if kc.alt and len(key.string) = 2", "if len(key.string) = 2"),
     ("_bindkey", "-8 leaves the Alt-letter on", "kc.alt = @false", "kc.alt = @true"),

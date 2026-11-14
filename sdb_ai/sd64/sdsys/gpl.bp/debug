@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused return.key and var.flags are gone.
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug: relay.on (a cross-process stop whose program is run.in's child, dbg.relay set by
 *               !RUNIN_DEBUG) has the full screen, the alternate screen and F4 / V as a program in this session does, because the child's
 *               screen is relayed to this terminal; it has no AI command; and a program's source is read by the CHILD and sent ('SOURCE'),
@@ -116,7 +117,6 @@ $define GUTTER.W               2       ;* the source's gutter: a mark (* a break
    msg.prefix = ''
    if data.lines < 5 then data.lines = DATA.AREA.LINES      ;* a common block starts at 0
    gosub set.geometry
-   return.key = seq(pterm(PT$INEWLINE,''))
    phantom = bitand(event, 0x80000000) # 0
    * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in's debugged child is a cross-process stop like a phantom's, but its screen is this
    *   terminal's (the relay), so the display is the one a program in this session gets
@@ -2120,7 +2120,6 @@ display.variable:
    var.type = var.info<1> + 0   ;* 0554
 
    if var.dim then
-      var.flags = var.info<4>
       if var.info<1> # V$ARRAY then
          message = sysmsg(6719) ;* Index not allowed with scalar variable
          gosub emit.err.msg
@@ -2231,7 +2230,6 @@ display.data.common:
          end case
 
       case var.type = V$ARRAY
-         var.flags = var.info<4>
          message := 'Array: '
          rows = var.info<2> + 0
          cols = var.info<3> + 0
@@ -2561,8 +2559,6 @@ setvar:
    var.type = var.info<1>
 
    if var.dim then
-      var.flags = var.info<4>
-
       if var.type # V$ARRAY then ;* 0530
          message = sysmsg(6719) ;* Index not allowed with scalar variable
          gosub emit.err.msg

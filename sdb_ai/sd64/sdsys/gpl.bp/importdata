@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: removed the unused assignments to kids.
 * 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 20 Oct 26 dm  New.  The owner's CSV / JSON / XML task: "a one-line import of a CSV file into an SD file" and "reading an XML document into a
 *               file's records (the reverse of the XML keyword)".  One program under three VOC verbs; the word typed says which.
@@ -326,8 +327,6 @@ import.xml:
          end
       end
    repeat
-   kids = ''
-   if element.exists(x, 'children') then kids = x{'children'}
    nrec = 0 ; gen = 0
    if element.exists(x, 'children') then nrec = inmat(x{'children'})
    for r = 1 to nrec

@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: removed the unused variable have.screen; the SCREEN OPEN and its ELSE are unchanged.
 * 30 Oct 26 dm  The one-editor plan, stage 1 (no change in what the editor does): everything between the key loop and the painting is gpl.bp/ced_core now, with its state in a collection;
 *               this program keeps the screen, the key loop, the break setting, the layout and the write of the record (with the edit gate), and says so to the engine.
 * 28 Oct 26 dm  The break setting the editor takes is kept by $tk_brk (save, and close at both exits), so that an abort inside the editor does not leave Ctrl-C dead (TUI phase 2 review).
@@ -110,9 +111,8 @@ $include sl.h
    break off
 
    * The library's screen.  A session with no terminal has nothing to show an editor on.
-   have.screen = @false
    screen open clear then
-      have.screen = @true
+      null
    end else
       call $tk_brk('close', saved.trap)
       return

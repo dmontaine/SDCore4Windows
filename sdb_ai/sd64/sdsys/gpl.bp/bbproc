@@ -25,6 +25,7 @@
 *
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): an unused assignment (inp_ln) is gone.
 * 12 Nov 26 Windows port - from Linux (26 Oct 26, S.76; RELEASE_1.1 252): _sdsysn joins the bootstrap list, as LOGIN now calls !sdsysn.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): the call of $BCOMP no longer passes the is.ctype argument (the C dictionary item type is gone).
 * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): login_inhibit joins the bootstrap list: LOGIN calls it (QM4 gaps Q-8, INHIBIT.LOGIN).
@@ -423,7 +424,6 @@ until key_char = cr    ;* enter key
   end
 repeat
 crt ''
-inp_ln = in_str
 return
 
 end

@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused os.ok and tl.ok are gone.
 * 10 Nov 26 Windows port - RELEASE_1.1 211: no locale variable set means UTF-8 (line-drawn borders), as in $tk_open (a Windows console sets none).
 * 8 Nov 26 dm  S.180 (the owner: "all features available on a page need to appear somewhere on the menus"; "Add an Edit menu"): an Edit menu after File
 *              (message 15019) - Undo, Redo, Cut, Copy, Paste, Select all, and the fields pane's Insert, Delete, Rename and Change the type - each handing the key it
@@ -1209,9 +1210,8 @@ os.find:
    return
 
 * In: os.dir.  The entries of the directory are asked of !ide_osfile 'list' (the only DIR() of the IDE; the kernel asks the account's OS gate) and put in ofiles / orecs, or replaced there.
-*   Out: os.ok, and msg when the directory could not be listed or entries were left out.
+*   Out: msg when the directory could not be listed or entries were left out.
 os.load:
-   os.ok = @false
    call !ide_osfile('list', os.dir, os.lf, os.lt, os.li, os.lw)
    if os.lw # '' then
       begin case
@@ -1243,7 +1243,6 @@ os.load:
    end
    orecs<os.q> = os.ents
    if os.li<5> + 0 then msg = sysmsg(12753, os.dir, os.li<5>)
-   os.ok = @true
    return
 
 * In: os.dir.  The directory and every directory listed under it are taken out of the tree's lists ('/' takes them all)
@@ -2114,10 +2113,9 @@ release.all:
    next tu.i
    return
 
-* In: tu.i.  The tab is given its record's lock (a tab that has just become a record: an untitled buffer named, Save as, New record).  Out: tl.ok, false when
-*   another session holds it (the tab then holds none; its save will say so) or the file cannot be opened (msg)
+* In: tu.i.  The tab is given its record's lock (a tab that has just become a record: an untitled buffer named, Save as, New record).  The tab holds none
+*   when another session holds it (its save will say so) or the file cannot be opened (msg)
 tab.lock:
-   tl.ok = @false
    tl.u = bu<tu.i>
    tl.k = 'd' : tl.u
    lk.dict = bx{tl.k}
@@ -2132,7 +2130,6 @@ tab.lock:
    bx{tl.k} = lk.kind
    tl.k = 'l' : tl.u
    bx{tl.k} = lk.slot
-   tl.ok = (lk.slot > 0)
    return
 
 * After the terminal was handed to a program (Run, Debug, SED, CED): a lock the program let go - a RELEASE in it, or SED's own READU of the record, which moves the
@@ -3320,7 +3317,7 @@ refuse.box:
    if rf.w > 100 then rf.w = 100
    call $tk_wrap(rf.text, rf.w, rf.pieces)
    rf.body = change(rf.pieces, @fm, @vm)
-   screen msgbox rf.body buttons '&OK' default 1 returning rf.b else rf.b = 0
+   screen msgbox rf.body buttons '&OK' default 1
    last.status = char(1)
    return
 

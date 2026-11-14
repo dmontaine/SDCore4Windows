@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused hdx and hdw are gone.
 * 13 Nov 26 Windows port - RELEASE_1.1 285 (owner 14 Nov, Linux S.231): the date line ends with the product and the version stamp, cut at 72 (60 would not hold them).
 * 12 Nov 26 Windows port - RELEASE_1.1 262/229: a cmd: tile is shown only when its verb is in the account's VOC (the AI and Audit trail tiles had no page here).
 * 10 Nov 26 Windows port - Linux e3490a7f taken whole (messages renumbered): Windows' earlier changes were the 28 Oct carry of ec8459b and the dropped
@@ -299,9 +300,7 @@ geometry:
    lw = ctx<TK.C.W>
    lh = ctx<TK.C.H>
    call $tk_layout('pane', ctx, 'header', prect)
-   hdx = prect<1, 1>
    hdy = prect<1, 2>
-   hdw = prect<1, 3>
    call $tk_layout('pane', ctx, 'panel', prect)
    pnx = prect<1, 1>
    py0 = prect<1, 2>

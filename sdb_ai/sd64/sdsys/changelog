@@ -3,6 +3,23 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  THE INSTALL'S COMPILE OF SD'S OWN PROGRAMS NO LONGER PRINTS WARNINGS, AND WHAT THEY POINTED AT IS FIXED.
+
+             What        - the install's compile of SD's own programs printed many "X is assigned a value but never used"
+                           warnings.  Each was fixed where it is, not hidden.  A user notices: an index whose clear could not
+                           shrink its file reports an error.  The rest is internal: results that were thrown away are tested
+                           (a failed path lookup is an error, a phantom or the SD daemon that cannot detach says so), and
+                           section names in sd.conf are always ended properly.
+             Compiler    - "assigned a value but never used" is now said only of a variable whose every assignment is a plain
+                           "x = ..." and which is never read.  A variable a statement fills for you - the variable of READU,
+                           LOCATE ... SETTING, FINDSTR, INPUT, CAPTURING and the like - is no longer reported: the statement
+                           needs it whether or not the program looks at it afterwards.  A call made only for what it does is
+                           written VOID name(...).
+             Why         - the owner (14 Nov 2026), after an upgrade printed screens of warnings: "fix".  The same change as
+                           SD Core for Linux; SENDMAIL is unchanged here (it is not supported on Windows).
+             Does NOT    - Change what any program does apart from the failure named above.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  AN API SIGN-IN IS ON THE AUDIT TRAIL, BY USER AND ACCOUNT.
 
              What        - a program that signed in over the API (SDConnect and the client libraries) left nothing on the audit trail

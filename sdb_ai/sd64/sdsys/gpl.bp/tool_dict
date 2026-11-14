@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: removed the unused assignments to lastrec.
 * 1 Nov 26 dm   S.90 stage 3: N asks the id and hands the terminal to the IDE on a new item, shown as the dictionary form; ask.d, ask.i, show.new and write.item (the page's only write) and the
 *               answer rules only they used are gone, so the page writes nothing: the dict-edit gate and the write are the IDE's.
 * 31 Oct 26 dm  The A and S dictionary item types are gone (owner, 30 Oct 2026): N offers a data or a computed item only, C compiles and T tries D and I items, an index is offered on a D or I
@@ -157,7 +158,7 @@ $include dictdict.h
    xnames = '' ; xmeta = '' ; nx = 0
    cf = 1 ; ci = 1 ; cx = 1 ; tf = 0 ; ti = 0 ; tx = 0
    filtf = '' ; filti = ''
-   fn = '' ; truncated = 0 ; lastrec = '' ; pre.item = ''
+   fn = '' ; truncated = 0 ; pre.item = ''
    gen = 0
    done = 0
    msg = ''
@@ -1306,7 +1307,6 @@ do.test:
       msg = 'give the id of a record'
       return
    end
-   lastrec = rid
    drec = ''
    got.rec = 0
    open fn to df then

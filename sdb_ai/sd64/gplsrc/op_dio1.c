@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): lchown()'s result is tested (best effort, as before).
  * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE OPEN.FAIL.ZERO.FVAR is gone; the file variable of a failed open stays as the open left it (unassigned).
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the comment about a name containing ';' no longer being a network file reference
  *           is gone with the code it described (_voc_ref no longer builds such a name).
@@ -258,7 +259,11 @@ Private void inherit_ownership(const char* path, uid_t uid, gid_t gid, int depth
   struct dirent* ent;
   char sub[MAX_PATHNAME_LEN + 1];
 
-  (void)lchown(path, uid, gid);
+  /* 14 Nov 26 dm - tested: inheriting the owner is best effort (OPTION INHERIT.OWNERSHIP; a non-root session may change only
+     the group, and only to one of its own); a file it cannot change keeps the creator's owner, as with the option off.  */
+  if (lchown(path, uid, gid) != 0) {
+    /* best effort: see above */
+  }
   if ((depth > 8) || (lstat(path, &st) != 0) || !S_ISDIR(st.st_mode))
     return;
   if ((dir = opendir(path)) == NULL)

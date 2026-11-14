@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the SCREEN MSGBOX keeps no unused answer.
 * 10 Nov 26 Windows port - level with Linux e3490a7f (S.88 F0a, K7/K8, S.187: no Documentation button, as Linux Core now has); the 25 Oct null doc is gone with it.
 * 23 Oct 26 dm  New (S.75, plan section 14.5).
 * 30 Oct 26 dm  S.88 F0a: the box shows "Keys in this pane" (message 12249) above the page's help text, a list made from the key table $tk_frame kept; no page's F1 line changes.
@@ -141,7 +142,7 @@ show.box:
    if kb # '' and dcount(kb, @fm) + dcount(body, @fm) <= scr<SL.S.H> - 14 then body = kb : @fm : body
    * S.187: the document is named, not opened - the pdf verb is gone; the file is in the shared account's pdf directory, to be copied and read elsewhere
    if doc # '' then body<-1> = '' ; body<-1> = sysmsg(15046, doc)
-   screen msgbox body title hdr buttons '&Close' default 1 returning bn else bn = 0
+   screen msgbox body title hdr buttons '&Close' default 1
    return
 end
 

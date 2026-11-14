@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): sdwind's failed daemon() is said, not ignored.
  * 13 Nov 26 Windows port - RELEASE_1.1 276: bind_sysseg() gives SHORT_CODE back on every exit taken while it holds it.  Six
  *           exits after LockSemaphore(SHORT_CODE) ("SD has not been started." among them) jumped to exit_bind_sysseg with it held.
  *           Linux's System V semaphore is returned by the kernel when the process ends (SEM_UNDO); a Windows semaphore is not, so
@@ -740,7 +741,9 @@ bool start_sd() {
   if (cpid == 0) { /* Child process */
     for (i = 3; i < 1024; i++)
       close(i);
-    daemon(1, 1);
+    /* 14 Nov 26 Windows port - from Linux 64561d81 (S.230): a failed daemon() is said, not ignored: sdwind then starts without detaching.  */
+    if (daemon(1, 1) != 0)
+      fprintf(stderr, "%s: daemon() failed (%s); starting it without detaching\n", SDWIND_NAME, strerror(errno));
 
     /* 14 Aug 26 Windows port - this built "<sysdir>/bin/sdlnxd", which was
        right while the Linux install kept the executables and the pcode

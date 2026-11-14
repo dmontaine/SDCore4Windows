@@ -384,9 +384,9 @@ def checks(src):
        "anything else 12752 with the status) and returns; entries left out are said (12753); do.act lists on the first Return on an O: node and takes it back, with everything listed under it, "
        "on the second (os.collapse deletes from the END of the list, a directory and what is under it only), and a P: node is opened by open.path with the path as the tree gave it (never folded)",
        ide.count("call !ide_osfile('list'") == 1 and "call !ide_osfile('list'" in ol and callers(LI, "os.load") == ["do.act", "os.refresh"] and callers(LI, "os.collapse") == ["do.act"]
-       and ordered(ol, "os.ok = @false", "call !ide_osfile('list', os.dir, os.lf, os.lt, os.li, os.lw)", "if os.lw # '' then", "case os.lw = 'name'", "sysmsg(12733, os.dir)", "case os.lw = 'gate'",
+       and ordered(ol, "call !ide_osfile('list', os.dir, os.lf, os.lt, os.li, os.lw)", "if os.lw # '' then", "case os.lw = 'name'", "sysmsg(12733, os.dir)", "case os.lw = 'gate'",
                    "sysmsg(12185, @who)", "case os.lw = 'none'", "sysmsg(12734, os.dir)", "case 1", "sysmsg(12752, os.dir, os.li<6>)", "return", "os.ents<1, -1> = os.lt<os.j, 2> : os.lt<os.j, 1>",
-                   "gosub os.find", "ofiles<-1> = os.dir", "orecs<os.q> = os.ents", "if os.li<5> + 0 then msg = sysmsg(12753, os.dir, os.li<5>)", "os.ok = @true")
+                   "gosub os.find", "ofiles<-1> = os.dir", "orecs<os.q> = os.ents", "if os.li<5> + 0 then msg = sysmsg(12753, os.dir, os.li<5>)")
        and ordered(seg, "case code[1, 2] = 'O:'", "os.dir = code[3, 9999]", "gosub os.find", "if os.q then", "gosub os.collapse", "end else", "gosub os.load", "cur.code = code", "gosub tree.apply",
                    "gosub redraw.tree", "case code[1, 2] = 'P:'", "op.path = code[3, 9999]", "cur.code = code", "gosub open.path", "if nbuf > 0 then", "ft.id = 'ed'", "gosub focus.to")
        and "downcase(" not in seg and ordered(da, "case focus.id = 'tree'", "case code[1, 2] = 'O:'", "case focus.id = 'err'")

@@ -4936,7 +4936,11 @@ def st_until():
     return
 
 def st_void():
-    error(token_string + ' statement not coded')
+    # 14 Nov 26 dm - VOID, as bcomp's st.void codes it: the expression, then POP.  _maximum and _minimum call
+    # kernel(K$MAXMIN.POS.SET, ...) for its effect only and are compiled here, so without VOID they had to assign the
+    # result to a variable nothing read (the compiler's "assigned a value but never used").
+    expr()
+    emit_simple(OP_POP)
     return
 
 def st_wake():

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): sdrealpath(): a failed getcwd() for a relative path is NULL.
  * 31 Dec 23 SD launch - prior history suppressed
  * 14 Aug 26 Windows port - IsElevated() added beside IsAdmin()
  * 05 Sep 26 Windows port - IsInteractive() added beside both.  How the session
@@ -483,7 +484,10 @@ char* sdrealpath(char* inpath,  /* Supplied path */
         return NULL;
 
       default: /* Relative pathname - get current directory */
-        getcwd(outpath, PATH_MAX);
+        /* 14 Nov 26 Windows port - from Linux 64561d81 (S.230): a failed getcwd() left outpath unset and the path was built on
+           garbage; it is an error, as an empty pathname is.  */
+        if (getcwd(outpath, PATH_MAX) == NULL)
+          return NULL;
         tgt = strchr(outpath, '\0');
         break;
     }

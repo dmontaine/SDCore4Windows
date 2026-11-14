@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused junk = '' before CAPTURING is gone.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
@@ -161,7 +162,6 @@ $include err.h
    close dict.f
 
    for i = 1 to dcount(old.indices, @fm)
-      junk = ''
       execute 'DELETE.INDEX ' : (if dict.flag # '' then 'DICT ' else '') : filename : ' ' : old.indices<i> capturing junk
    next i
 

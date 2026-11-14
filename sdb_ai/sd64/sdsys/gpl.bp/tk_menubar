@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 dm  Compiler warning: the SCREEN MSGBOX no longer keeps its answer in bn, which nothing read (RETURNING and ELSE are optional).
 * 30 Oct 26 dm  New (S.88 F0a).
 * 3 Nov 26 dm  S.88 K7 and K8 (owner, "Build now"; keys "Tab panes, F2 finder"): F2 opens the palette of every action of the bar ($sl_palette) and Shift-F10 or a right click
 *              opens a context menu of the actions the focused pane uses (!screen_menu at the pointer).  Both answer exactly as the bar does (out), so every page on the bar
@@ -284,7 +285,7 @@ run.palette:
       case ps = 0 and pr # ''
          gosub answer.act
       case ps = 2
-         screen msgbox pw returning bn else bn = 0
+         screen msgbox pw
          gosub no.answer
       case 1
          gosub no.answer

@@ -29,6 +29,7 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused already count is gone.
 * 07 Oct 26 Windows port - parity audit, Linux T1215.  A path is judged once per
 *           account, so "Converted N of M" counts distinct files: the account's own
 *           voc was visited twice (its own record, then the last step).
@@ -89,7 +90,6 @@ $include err.h
 
    scanned = 0                     ;* DH files examined
    converted = 0                   ;* rebuilt to NOCASE
-   already = 0                     ;* already NOCASE, left as they are
    twin.count = 0                  ;* files holding a fold-pair, NOT converted
    dup.total = 0                   ;* duplicate record ids across all those files
    twin.files = ''                 ;* @fm: one path per file that has a pair
@@ -310,7 +310,6 @@ convert.one:
    scanned += 1
 
    if bitand(fileinfo(old.fu, FL$FLAGS), FL$FLAGS.NOCASE) then
-      already += 1
       close old.fu
       return
    end
