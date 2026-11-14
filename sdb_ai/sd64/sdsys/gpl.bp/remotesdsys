@@ -4,10 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
-* 13 Nov 26 Windows port - RELEASE_1.1 280: ON run by anyone but SDSYS (the installer) asks for SDSYS's Windows password here, hidden, when
-*              remote-admin.ps1 -On answers 4: only SDSYS, or a caller holding its password, can register the broker task that runs as
-*              SDSYS (measured).  The password goes to the helper inside the script !ps_script_out writes to its restricted file, as
-*              !set_passwd's does, never on a command line, and is cleared at once.
+* 13 Nov 26 Windows port - RELEASE_1.1 282 (owner, 13 Nov): ON is SDSYS's, at its console; the installer no longer offers it.  The SDSYS
+*              password prompt RELEASE_1.1 280 added for the installer's run is gone with it: remote-admin.ps1 -On answers 4 to anyone but
+*              SDSYS, having changed nothing, and its line says where to run it.
 * 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov: Linux's remote sdsys runs them): RUN runs REMOTE.SSH {ON | OFF}
 *              and REMOTE.API {ON | LOCAL | OFF}, each also with no keyword, seven verbs; REMOTE.API's restart question is answered N
 *              (the console's Enter: nothing is restarted, the listener moves at SD's next start).
@@ -40,8 +39,8 @@
 *                 can then sign in from other computers with its password, into its own account, where create.account, delete.account,
 *                 modify.account, modify.password, remote.sdsys (OFF, AUDIT, ACCOUNTS, no keyword), remote.ssh (ON, OFF, no keyword) and
 *                 remote.api (ON, LOCAL, OFF, no keyword) are sent to the broker, which runs them here as an SDSYS job.  It is never a
-*                 Windows administrator and never elevated.  Run by anyone but SDSYS (the installer runs it as the installing
-*                 administrator), it also asks for SDSYS's Windows password, which Windows needs to register the broker task that runs as SDSYS.
+*                 Windows administrator and never elevated.  Opened only by SDSYS at its console: Windows lets only SDSYS register the
+*                 broker task that runs as SDSYS without its password, and the installer does not offer remote administration.
 *       OFF      remote-admin.ps1 -Off (the arm shut, SDRADMIN out of sdssh and disabled, the broker stopped, the state off), then every
 *                 SDRADMIN session is logged out.  It tightens, so nothing is asked.  Allowed from the remote session (owner, Q6).
 *       AUDIT n   The last n lines of the audit trail (50 when n is not given, at most 500).
@@ -83,9 +82,6 @@ deffun is_user(uname) calling '!is_user'
    action = ''
    extra = ''
    rc = 0
-   helper.pw = ''
-   sdsys.pw = ''
-   pw.line = ''
    job = kernel(K$JOB.MARK, 0)
    in.job = (job[1, 7] = 'radmin-')
 
@@ -169,24 +165,6 @@ on.request:
 * The helper's words go straight to the terminal.  SDRADMIN's password was set by !create_account above.
    helper.args = '-On'
    gosub run.helper
-
-* 13 Nov 26 Windows port - RELEASE_1.1 280.  STATUS 4: THIS IS NOT SDSYS, AND THE BROKER TASK NEEDS SDSYS'S WINDOWS PASSWORD.  Windows
-*   registers a task that runs as SDSYS only for SDSYS itself or for a caller that gives SDSYS's password (measured: an elevated
-*   administrator and SYSTEM are refused without it), and the installer runs this as the installing administrator.  -On changed nothing
-*   before answering 4.  The password is asked here, hidden, and goes to -On inside the script !ps_script_out writes to its restricted
-*   file (as !set_passwd's does), never on a command line; it is cleared as soon as the script is built.
-   if rc = 4 then
-      gosub show.helper
-      display 'Windows password for SDSYS: ' :
-      input sdsys.pw HIDDEN
-      display
-      if sdsys.pw # '' then
-         helper.pw = sdsys.pw
-         sdsys.pw = ''
-         gosub run.helper
-      end
-      sdsys.pw = ''
-   end
    gosub show.helper
    if rc # 0 then
       crt sysmsg(12929, 'on', rc)
@@ -311,26 +289,13 @@ show.audit:
 run.helper:
    q = char(39)
    hcmd = '& ' : q : kernel(K$WINPATH, '/remote-admin.ps1') : q : ' ' : helper.args
-* 13 Nov 26 Windows port - RELEASE_1.1 280: SDSYS's Windows password, when ON asked for it, as a SecureString built inside the script (single
-*   quotes, the apostrophe doubled, as !set_passwd), so it is in the restricted script file and never on a command line.
-   pw.line = ''
-   if helper.pw # '' and not(in.job) then
-      pw.line = '$sdsysPw = ConvertTo-SecureString -String ' : q : change(helper.pw, q, q:q) : q : ' -AsPlainText -Force'
-      hcmd := ' -SdsysPassword $sdsysPw'
-   end
-   helper.pw = ''
    if in.job then
       os.execute hcmd : '; exit $LASTEXITCODE' capturing helper.out
       rc = os.error()
       helper.out = convert(char(13), '', helper.out)
       helper.out = change(helper.out, char(10), @fm)
    end else
-      if pw.line # '' then
-         both = ps_script_out(pw.line : @fm : hcmd : @fm : 'exit $LASTEXITCODE', @true)
-      end else
-         both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)
-      end
-      pw.line = ''
+      both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)
       rc = field(both, @fm, 1)
       helper.out = field(both, @fm, 2, 99999)
    end

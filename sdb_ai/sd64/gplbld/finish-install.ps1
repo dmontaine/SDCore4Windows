@@ -90,10 +90,6 @@ param(
     # rather than guessed at, exactly as -SdsysCode is.
     [int] $AttachCode = -1,
 
-    # 13 Nov 26 - RELEASE_1.1 202 (Linux S.155).  The installer's remote administration box was ticked: run REMOTE.SDSYS ON after the
-    # passwords, in this window, so the person types the new account's password at its own hidden prompts.  A switch, never a credential.
-    [switch] $RemoteAdmin,
-
     # Passed straight through to check-install.ps1.
     [switch] $Yes
 )
@@ -857,35 +853,8 @@ catch {
 }
 
 # ---------------------------------------------------------------------------
-# 13 Nov 26 - RELEASE_1.1 202 (Linux S.155: the installer opens remote administration after the sdsys password when it was asked to).
-# REMOTE.SDSYS ON in an "sd -internal" session, as Set-AttachedAccountPassword runs MODIFY.PASSWORD: the verb is in SDSYS's VOC only, this
-# window is elevated, and LOGIN admits the internal session against the one-shot marker written immediately before it.  The verb makes
-# SDRADMIN, asks its Windows password twice at its own hidden prompts in this window (inherited console), and runs remote-admin.ps1 -On;
-# what it prints is what the person reads.  Nothing secret passes through this script.  A refusal or a failure leaves remote
-# administration shut, which is the delivered state, and REMOTE.SDSYS ON at the SDSYS console is the way back.
-if ($RemoteAdmin) {
-    Write-Host '---------------------------------------------------------------'
-    Write-Host 'Remote administration: the account SDRADMIN'
-    Write-Host '---------------------------------------------------------------'
-    Write-Host ''
-    try {
-        . (Join-Path $PSScriptRoot 'internal-marker.ps1')
-        $marked = Set-SdInternalMarker -SdsysDir $SysDir -Writer 'finish-install'
-        try {
-            $p = Start-Process -FilePath $SdExe -ArgumentList '-internal', '-QUIET', 'REMOTE.SDSYS', 'ON' `
-                    -NoNewWindow -Wait -PassThru -ErrorAction Stop
-        }
-        finally {
-            if ($marked) { $null = Remove-SdInternalMarker -SdsysDir $SysDir }
-        }
-        $null = $p
-    }
-    catch {
-        Write-Wrapped -Text ('ERROR: SD Core could not be started for remote administration: ' + $_.Exception.Message +
-            '  Remote administration stays shut; REMOTE.SDSYS ON at the SDSYS console opens it.')
-    }
-    Write-Host ''
-}
+# 13 Nov 26 - RELEASE_1.1 282: the install no longer opens remote administration (RELEASE_1.1 202's -RemoteAdmin step is gone).  Owner,
+# 13 Nov 2026: it is delivered off and is "just an available feature that can be turned on" - REMOTE.SDSYS ON at SDSYS's console.
 
 # ---------------------------------------------------------------------------
 # AND ON TO THE CHECK.  Called rather than launched: same window, same console,

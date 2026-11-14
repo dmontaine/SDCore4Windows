@@ -4,9 +4,10 @@
 # --close-sdsys / --sdsys-state) in the Windows form of .claude/design-remote-admin-20261113.md, with the owner's answers of 13 Nov 2026.
 # 13 Nov 26 Windows port - RELEASE_1.1 280: -On enables SDRADMIN BEFORE the arm is checked (sshd -T -C cannot resolve a disabled account,
 # so the installer's REMOTE.SDSYS ON failed every time); a shut arm for a disabled SDRADMIN is checked with sshd -t and says so.
-# 13 Nov 26 Windows port - RELEASE_1.1 280: the broker task is registered by SDSYS itself or with SDSYS's Windows password (-SdsysPassword,
-# asked by REMOTE.SDSYS at the terminal), before any wall moves; without either -On exits 4 having changed nothing.  Every task cmdlet
-# stops on error, and "open" waits for the broker's pipe.
+# 13 Nov 26 Windows port - RELEASE_1.1 280: the broker task is registered before any wall moves; every task cmdlet stops on error, and
+# "open" waits for the broker's pipe.  RELEASE_1.1 282 (owner, 13 Nov): only SDSYS opens remote administration (REMOTE.SDSYS ON at its
+# console) - Windows registers a task that runs as SDSYS only for SDSYS or a caller holding its password, and the installer, which was the
+# only other caller, no longer offers it; -On run by anyone else exits 4 having changed nothing.
 #
 #   remote-admin.ps1 -Status          what the machine says, one line per wall; changes nothing
 #   remote-admin.ps1 -On              opens remote administration for SDRADMIN (REMOTE.SDSYS ON runs it, after making the account)
@@ -38,17 +39,19 @@
 # THE SUCCESS LINES the verb anchors on: "remote-admin: open" (-On), "remote-admin: closed" (-Off), "remote-admin: removed" (-Remove).
 # Exit codes: 0 done; 1 refused or failed (the line before says why); 2 not possible on this machine (no ssh server, no sshd_config, no
 # sdssh group, no account SDRADMIN - the verb makes it first); 3 sshd would not take the change and sshd_config is as it was before;
-# 4 (-On only) SDSYS's Windows password is needed and was not given - nothing was changed, and REMOTE.SDSYS asks for it and runs -On again.
+# 4 (-On only) this is not SDSYS - nothing was changed; REMOTE.SDSYS ON at SDSYS's console opens it.
 # -Status always exits 0 when it could read the machine and prints:
 #   remote-admin=open|closed|absent|inconsistent  (and odd=<the walls that disagree> when inconsistent)
 #   account=enabled|disabled|absent   sdssh=yes|no   sshd-arm=open|closed|none|damaged   broker=running|ready|disabled|absent   state=on|off|none
 #
 # ELEVATED ONLY: sshd_config, Task Scheduler's SDSYS task and the user rights need an administrator.  REMOTE.SDSYS runs it through SDSYS's
-# elevated helper (!ps_script_out); an elevated administrator may run it by hand, as Linux's "sudo sd-elevate sdsys-ssh":
+# elevated helper (!ps_script_out); an elevated administrator may run -Status, -Off or -Remove by hand, as Linux's "sudo sd-elevate
+# sdsys-ssh" (-On is SDSYS's alone, RELEASE_1.1 282):
 #   powershell -ExecutionPolicy Bypass -File "C:\Program Files\SD\remote-admin.ps1" -Status
 #
-# NOTHING EXISTS AS DELIVERED: no account, no task, no sshd lines, no state.  The installer runs nothing of this unless its remote
-# administration question was answered yes (closed by default, Linux S.155); an upgrade runs nothing of it, so ON stays ON (Q7).
+# NOTHING EXISTS AS DELIVERED: no account, no task, no sshd lines, no state.  The installer runs nothing of this and asks nothing about it
+# (RELEASE_1.1 282, owner 13 Nov 2026: delivered off, "just an available feature that can be turned on"); an upgrade runs nothing of it,
+# so ON stays ON (Q7).
 
 param(
     [switch]$On,
@@ -56,11 +59,6 @@ param(
     [switch]$Status,
     [switch]$Remove,
     [switch]$KeepBroker,
-    # 13 Nov 26 - RELEASE_1.1 280.  SDSYS's Windows password, for -On run by anyone but SDSYS: Windows registers an S4U task for SDSYS only
-    # for SDSYS itself or for a caller that gives SDSYS's password (measured 13 Nov: an elevated administrator and SYSTEM are refused
-    # without it; with it the task registers and keeps logon type S4U, so no password is stored).  REMOTE.SDSYS passes it as a SecureString
-    # inside the script !ps_script_out writes to SD's restricted PSTMP file, never on a command line; it is used once and never printed.
-    [Security.SecureString]$SdsysPassword = $null,
     # Where sd.exe is, for ForceCommand.  Set in the body, not as a default: $PSScriptRoot is empty in a param default (adopt-account.ps1).
     [string]$SdExe = ''
 )
@@ -433,13 +431,13 @@ function Test-BrokerPipe {
     return (@([IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -ieq '\\.\pipe\sd-radmin' }).Count -gt 0)
 }
 
-function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureString]$pw) {
-    # 13 Nov 26 - RELEASE_1.1 280.  The broker runs as SDSYS by S4U, and Windows registers an S4U task for SDSYS only for SDSYS itself or
-    # for a caller that gives SDSYS's password.  Measured on the host 13 Nov (probes 4 to 6): an elevated administrator is refused ("Access
-    # is denied") in every variant, SYSTEM is refused too, and an elevated administrator that passes SDSYS's password to
-    # RegisterTaskDefinition with logon type S4U is accepted and the task KEEPS logon type S4U - nothing is stored.  So SDSYS (REMOTE.SDSYS
-    # ON at its console) registers it as itself, and anyone else (the installer) with $pw.  The logon type is read back, and a task that
-    # came back as anything but S4U - a stored password - is deleted and refused.  Throws on any failure.
+function Register-BrokerTask([string]$xml, [string]$sdsysSid) {
+    # 13 Nov 26 - RELEASE_1.1 280, 282.  The broker runs as SDSYS by S4U, and Windows registers an S4U task for SDSYS only for SDSYS itself
+    # or for a caller that gives SDSYS's password.  Measured on the host 13 Nov (probes 4 to 6): an elevated administrator is refused
+    # ("Access is denied") in every variant and SYSTEM is refused too; SET.JOB registers SDSYS's own tasks the same way as here.  -On is
+    # SDSYS's alone (RELEASE_1.1 282: the installer no longer opens remote administration), so this registers as SDSYS and refuses anyone
+    # else.  Throws on any failure.
+    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne $sdsysSid) { throw 'the broker task is registered by SDSYS only' }
     $svc = New-Object -ComObject Schedule.Service
     $svc.Connect()
     # The \SD folder may not exist yet: on a fresh install this is the first task SD makes (13 Nov host cycle: GetFolder threw 0x80070002,
@@ -447,28 +445,7 @@ function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureSt
     $folder = Initialize-SdTaskFolder $svc
     # An existing task of this name is deleted first, never updated in place: one somebody else put there would keep its own access list.
     try { $folder.DeleteTask('sdcore-radmin', 0) } catch { }
-    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq $sdsysSid) {
-        Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml $xml -Force -ErrorAction Stop | Out-Null
-        return
-    }
-    if ($null -eq $pw -or $pw.Length -eq 0) { throw 'SDSYS''s Windows password is needed to register the broker task, and none was given' }
-    $user = (New-Object Security.Principal.SecurityIdentifier($sdsysSid)).Translate([Security.Principal.NTAccount]).Value
-    $def = $svc.NewTask(0)
-    $def.XmlText = $xml
-    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw)
-    try {
-        # 6 = TASK_CREATE_OR_UPDATE, 2 = TASK_LOGON_S4U.
-        $null = $folder.RegisterTaskDefinition('sdcore-radmin', $def, 6, $user, [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr), 2, $null)
-    } catch {
-        throw ('the broker task could not be registered with SDSYS''s Windows password (a wrong password is refused here): ' + $_.Exception.Message.Trim())
-    } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
-    }
-    $lt = [int]$folder.GetTask('sdcore-radmin').Definition.Principal.LogonType
-    if ($lt -ne 2) {
-        try { $folder.DeleteTask('sdcore-radmin', 0) } catch { }
-        throw ("the broker task came back with logon type $lt, not S4U, so a password would have been stored; it is deleted")
-    }
+    Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml $xml -Force -ErrorAction Stop | Out-Null
 }
 
 function Test-SshdArm([string]$sshd, [string]$mode, [string]$sdExe) {
@@ -720,21 +697,18 @@ try {
     $sdsysSid = Get-LocalSid 'SDSYS'
     if ($sdsysSid -eq '') { Exit-With 2 'there is no local account SDSYS to run the broker as' }
 
-    # 13 Nov 26 - RELEASE_1.1 280: THE BROKER TASK FIRST, BEFORE ANY WALL MOVES.  Only SDSYS, or a caller holding SDSYS's Windows password,
-    # can register it (Register-BrokerTask's header).  Without either this exits 4 having changed nothing, and REMOTE.SDSYS asks for the
-    # password at the terminal and runs -On again.  A wrong password is refused here too, still before anything has changed.
-    $asSdsys = ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq $sdsysSid)
-    if (-not $asSdsys -and ($null -eq $SdsysPassword -or $SdsysPassword.Length -eq 0)) {
-        Exit-With 4 'the broker task runs as SDSYS, and this is not SDSYS: SDSYS''s Windows password is needed to register it; nothing was changed'
+    # 13 Nov 26 - RELEASE_1.1 280, 282: SDSYS ONLY, AND THE BROKER TASK FIRST, BEFORE ANY WALL MOVES.  Only SDSYS can register the task that
+    # runs as SDSYS without its password (Register-BrokerTask's header), and remote administration is opened only at SDSYS's console (the
+    # owner, 13 Nov: the installer no longer offers it).  Anyone else is refused here, having changed nothing.
+    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne $sdsysSid) {
+        Exit-With 4 'remote administration is opened by SDSYS: run REMOTE.SDSYS ON at SDSYS''s console; nothing was changed'
     }
     try {
-        Register-BrokerTask (Get-BrokerXml $sdsysSid) $sdsysSid $SdsysPassword
+        Register-BrokerTask (Get-BrokerXml $sdsysSid) $sdsysSid
     } catch {
         Exit-With 1 "$($_.Exception.Message); nothing else was changed"
-    } finally {
-        $SdsysPassword = $null
     }
-    Out-Line "${Prog}: the broker task \SD\sdcore-radmin is registered to run as SDSYS ($(if ($asSdsys) { 'by SDSYS' } else { 'with SDSYS''s password; no password is stored' }))"
+    Out-Line "${Prog}: the broker task \SD\sdcore-radmin is registered to run as SDSYS"
 
     Out-Line "${Prog}: -On: the sshd arm opened for SDRADMIN, SDRADMIN in sdssh and enabled, the broker task \SD\sdcore-radmin running as SDSYS, the state on"
     try {

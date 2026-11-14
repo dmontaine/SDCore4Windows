@@ -293,22 +293,24 @@ function Get-Rows([hashtable]$t) {
     $is = $is.Substring(0, [Math]::Max(0, $is.IndexOf("`n}")))
     $null = $rows.Add(@('R8 (RELEASE_1.1 280) sshd -T -C about SDRADMIN runs as SYSTEM: anyone else hands it to a one-shot SYSTEM task, which is always unregistered and its files deleted, and whose registration and start stop on error',
         (($it -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne 'S-1-5-18'\) \{ return \(Invoke-SshdTAsSystem \`$sshd \`$spec\) \}") -and ($is -match "New-ScheduledTaskPrincipal -UserId 'S-1-5-18'") -and ($is -match '-EncodedCommand ') -and ($is -match "-Principal \`$pr -Force -ErrorAction Stop") -and ($is -match "Start-ScheduledTask -TaskPath '\\SD\\' -TaskName 'sdcore-radmin-check' -ErrorAction Stop") -and ($is -match "\} finally \{\s*\r?\n\s*Unregister-ScheduledTask -TaskPath '\\SD\\' -TaskName 'sdcore-radmin-check'") -and ($is -match 'foreach \(\$f in \$files\) \{ if \(Test-Path -LiteralPath \$f\) \{ Remove-Item')), ''))
-    # R9: the broker.  Every task cmdlet stops on error (a module's cmdlets do not see the script's $ErrorActionPreference); the broker
-    # task is registered BEFORE any wall moves, by SDSYS itself or with SDSYS's password (exit 4, nothing changed, without either); a task
-    # that does not come back as S4U is deleted; "running" is printed only once the broker's pipe exists; no Enable-ScheduledTask in -On.
+    # R9: the broker.  Every task cmdlet stops on error (a module's cmdlets do not see the script's $ErrorActionPreference); -On is
+    # SDSYS's alone (RELEASE_1.1 282: exit 4, nothing changed, for anyone else) and registers the broker task BEFORE any wall moves, as
+    # SDSYS, with no password route anywhere; "running" is printed only once the broker's pipe exists; no Enable-ScheduledTask in -On.
     $rb = $a.Substring([Math]::Max(0, $a.IndexOf('function Register-BrokerTask')))
     $rb = $rb.Substring(0, [Math]::Max(0, $rb.IndexOf("`n}")))
     $taskLines = @($a -split "`r?`n" | Where-Object { $_ -match '^\s+[^#]*\b(Register|Enable|Disable|Start|Stop|Unregister)-ScheduledTask\b' -and $_ -notmatch "'sdcore-radmin-check' -Confirm:\`$false -ErrorAction SilentlyContinue" })
     $noStop = @($taskLines | Where-Object { $_ -notmatch '-ErrorAction Stop' })
-    $iExit4 = $on.IndexOf("Exit-With 4 'the broker task runs as SDSYS")
-    $iReg = $on.IndexOf('Register-BrokerTask (Get-BrokerXml $sdsysSid) $sdsysSid $SdsysPassword')
+    $iExit4 = $on.IndexOf("Exit-With 4 'remote administration is opened by SDSYS")
+    $iReg = $on.IndexOf('Register-BrokerTask (Get-BrokerXml $sdsysSid) $sdsysSid')
     $iWall = $on.IndexOf('Remove-FromGroup $g[0]')
-    $null = $rows.Add(@('R9 (RELEASE_1.1 280) every task cmdlet stops on error; the broker task is registered before any wall moves, by SDSYS or with its password (exit 4 otherwise), and kept only as S4U; "running" only once \\.\pipe\sd-radmin exists',
-        (($taskLines.Count -ge 8) -and ($noStop.Count -eq 0) -and ($iExit4 -ge 0) -and ($iExit4 -lt $iReg) -and ($iReg -lt $iWall) -and
+    $null = $rows.Add(@('R9 (RELEASE_1.1 280, 282) every task cmdlet stops on error; -On is SDSYS''s alone (exit 4 otherwise) and registers the broker task, as SDSYS, before any wall moves; no password route; "running" only once \\.\pipe\sd-radmin exists',
+        (($taskLines.Count -ge 7) -and ($noStop.Count -eq 0) -and ($iExit4 -ge 0) -and ($iExit4 -lt $iReg) -and ($iReg -lt $iWall) -and
+         ($on -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne \`$sdsysSid\) \{\s*\r?\n\s*Exit-With 4 ") -and
          ($on -match "if \(-not \(Test-BrokerPipe\)\) \{ throw ") -and ($on.IndexOf("if (-not (Test-BrokerPipe)) { throw ") -lt $on.IndexOf('the broker is running: ')) -and ($on.IndexOf('the broker is running: ') -ge 0) -and
          ($on -notmatch '(?m)^\s+Enable-ScheduledTask') -and
-         ($rb -match "GetCurrent\(\)\.User\.Value -eq \`$sdsysSid") -and ($rb -match 'RegisterTaskDefinition\(''sdcore-radmin'', \$def, 6, \$user, ') -and ($rb -match 'ZeroFreeBSTR\(\$bstr\)') -and
-         ($rb -match 'if \(\$lt -ne 2\) \{\s*\r?\n\s*try \{ \$folder\.DeleteTask\(''sdcore-radmin'', 0\) \}') -and ($rb -notmatch 'Invoke-SystemTask')),
+         ($rb -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne \`$sdsysSid\) \{ throw ") -and
+         ($rb.IndexOf('throw ''the broker task is registered by SDSYS only''') -lt $rb.IndexOf('Register-ScheduledTask')) -and
+         ($a -notmatch 'SdsysPassword|RegisterTaskDefinition|SecureStringToBSTR') -and ($rb -notmatch 'Invoke-SystemTask')),
         ("task cmdlet lines {0}, without -ErrorAction Stop: {1}; exit4 {2} < register {3} < first wall {4}" -f $taskLines.Count, ($noStop -join ' | '), $iExit4, $iReg, $iWall)))
     # R10 (RELEASE_1.1 280): the task folder \SD.  Measured 13 Nov: the root folder gives Authenticated Users write, inherited, and an
     # ordinary user can make a top-level folder and own it.  \SD is made protected, SYSTEM and Administrators only; an existing one is used
@@ -344,7 +346,7 @@ function Get-Rows([hashtable]$t) {
          ($js.IndexOf('try { $sdFolder.DeleteTask("sdcore-job-$n", 0) } catch { }') -lt $js.IndexOf('Register-ScheduledTask -TaskName')) -and
          ($jobTaskLines.Count -ge 4) -and ($jobNoStop.Count -eq 0) -and
          ($fiBlock -match "^\s*\. \(Join-Path \`$PSScriptRoot 'sd-taskfolder\.ps1'\)\s*\r?\n\s*\`$tsSvc = New-Object -ComObject Schedule\.Service\s*\r?\n\s*\`$tsSvc\.Connect\(\)\s*\r?\n\s*\`$null = Initialize-SdTaskFolder \`$tsSvc") -and
-         ($fi.IndexOf('$null = Initialize-SdTaskFolder $tsSvc') -lt $fi.IndexOf('if ($RemoteAdmin) {')) -and
+         ($fi.IndexOf('$null = Initialize-SdTaskFolder $tsSvc') -lt $fi.IndexOf('# AND ON TO THE CHECK')) -and
          $t.stage.Contains("'sd-taskfolder.ps1',")),
         ("sd-jobs task cmdlet lines {0}, without -ErrorAction Stop: {1}" -f $jobTaskLines.Count, ($jobNoStop -join ' | '))))
     $null = $rows.Add(@('R6 the success lines are open, closed and removed, each printed only at the end of its branch', (($a -match 'Out-Line "\$\{Prog\}: open"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: closed"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: removed"\s*\r?\n\s*exit 0')), ''))
@@ -452,7 +454,8 @@ if ($SelfTest) {
         @('the SYSTEM check task is left registered', 'R8', 'admin', "        Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:`$false -ErrorAction SilentlyContinue", ''),
         @('-On says the broker runs without its pipe (RELEASE_1.1 280)', 'R9', 'admin', "        if (-not (Test-BrokerPipe)) { throw ('the broker started but its pipe \\.\pipe\sd-radmin did not appear in 20 seconds (task state ' + (Get-TaskState) + ')') }", ''),
         @('a task cmdlet in -On carries on after an error', 'R9', 'admin', "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop", "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin'"),
-        @('-On goes on without SDSYS or its password', 'R9', 'admin', "        Exit-With 4 'the broker task runs as SDSYS, and this is not SDSYS: SDSYS''s Windows password is needed to register it; nothing was changed'", "        `$null = 4"),
+        @('-On goes on for a caller that is not SDSYS', 'R9', 'admin', "        Exit-With 4 'remote administration is opened by SDSYS: run REMOTE.SDSYS ON at SDSYS''s console; nothing was changed'", "        `$null = 4"),
+        @('the broker is registered for a caller that is not SDSYS', 'R9', 'admin', "    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne `$sdsysSid) { throw 'the broker task is registered by SDSYS only' }", ''),
         @('\SD is made with inherited defaults (Authenticated Users write)', 'R10', 'taskfolder', "catch { return `$svc.GetFolder('\').CreateFolder('SD', `$SdTaskFolderSddl) }", "catch { return `$svc.GetFolder('\').CreateFolder('SD') }"),
         @('the \SD access list grants Authenticated Users write', 'R10', 'taskfolder', "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'", "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FW;;;AU)'"),
         @('an \SD owned by anybody is used', 'R10', 'taskfolder', "    if (`$null -eq `$owner -or -not (Test-SdAdminOwner `$owner.Value)) {", "    if (`$false) {"),
@@ -466,7 +469,6 @@ if ($SelfTest) {
         @('sd-taskfolder.ps1 does not ship', 'R11', 'stage', "                   'sd-taskfolder.ps1',", ''),
         @('a broker task already there is updated in place', 'R10', 'admin', "    try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }", ''),
         @('a SYSTEM check task already there is updated in place', 'R10', 'admin', "        try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }", ''),
-        @('a broker task that stored a password is kept', 'R9', 'admin', "    if (`$lt -ne 2) {", "    if (`$false) {"),
         @('sshd_config is not put back', 'R2', 'admin', "    if (`$why -ne '') { [IO.File]::WriteAllBytes(`$cfg, `$orig) }", ''),
         @('network logon denied', 'R3', 'admin', "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')", "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight', 'SeDenyNetworkLogonRight')"),
         @('SDRADMIN stays in Remote Desktop Users', 'R4', 'admin', "@('S-1-5-32-555', 'Remote Desktop Users'), ", ''),

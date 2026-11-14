@@ -146,17 +146,11 @@ def checks(raw):
        and "   if run.verb = 'remote.ssh' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'off') then run.ok = @false" in rr
        and "   if run.verb = 'remote.api' then\n      if dcount(run.words, @fm) > 1 or (run.words # '' and run.words<1> # 'on' and run.words<1> # 'local' and run.words<1> # 'off') then run.ok = @false" in rr
        and rr.find("   if run.verb = 'remote.api' then") < rr.find("   if not(run.ok) then"), str(pos))
-    # 13 Nov 26 (RELEASE_1.1 280): ON run by anyone but SDSYS asks SDSYS's Windows password when -On answers 4, and hands it on only inside
-    # the script !ps_script_out writes to its restricted file, never on a command line, never in the broker's job, never audited or shown.
-    ok, pos = ordered(on, ["helper.args = '-On'", "gosub run.helper", "if rc = 4 then", "input sdsys.pw HIDDEN", "if sdsys.pw # '' then", "helper.pw = sdsys.pw", "sdsys.pw = ''", "gosub run.helper", "gosub show.helper"])
-    pwl = rh[rh.find("pw.line = ''"):rh.find("if in.job then")] if "pw.line = ''" in rh else ""
-    ck("B11", "SDSYS's password (RELEASE_1.1 280): asked hidden only when -On answers 4, passed only as a SecureString line inside the !ps_script_out script, apostrophes doubled, "
-       "never in the broker's job, cleared at once; never on the os.execute line, in an audit line or shown",
-       ok and "if helper.pw # '' and not(in.job) then" in pwl and "pw.line = '$sdsysPw = ConvertTo-SecureString -String ' : q : change(helper.pw, q, q:q) : q : ' -AsPlainText -Force'" in pwl
-       and "hcmd := ' -SdsysPassword $sdsysPw'" in pwl and pwl.rstrip().endswith("helper.pw = ''")
-       and "both = ps_script_out(pw.line : @fm : hcmd : @fm : 'exit $LASTEXITCODE', @true)" in rh and re.search(r"\n\s*end\s*\n\s*pw\.line = ''\s*\n", rh[rh.find("both = ps_script_out(pw.line"):]) is not None
-       and not re.search(r"K\$AUDIT[^\n]*(sdsys\.pw|helper\.pw|pw\.line)", v) and not re.search(r"(crt|display|print)[^\n]*(sdsys\.pw|helper\.pw|pw\.line)", v)
-       and not re.search(r"os\.execute[^\n]*(pw\.line|helper\.pw)", v), str(pos))
+    # 13 Nov 26 (RELEASE_1.1 282, owner): ON is SDSYS's, at its console, and asks no SDSYS password - the installer no longer offers it, so
+    # the prompt RELEASE_1.1 280 added for the installer's run is gone; -On refuses anyone but SDSYS (exit 4) and says where to run it.
+    ok, pos = ordered(on, ["helper.args = '-On'", "gosub run.helper", "gosub show.helper"])
+    ck("B11", "ON asks no SDSYS password (RELEASE_1.1 282): -On is run once and its lines shown; no HIDDEN input in ON, no -SdsysPassword anywhere in the verb",
+       ok and "input" not in on.lower().replace("helper.args = '-on'", "") and "-SdsysPassword" not in v and "sdsys.pw" not in v, str(pos))
 
     ck("R1", "RADMIN is an internal program catalogued as $radmin, and the remote session's identity (SDRADMIN, in sdradmin, over ssh, not elevated) is tested first, refused 2001",
        re.search(r"^\$internal\s*\nprogram \$radmin\s*\n\$catalog \$radmin\b", r, re.M) is not None
@@ -214,14 +208,14 @@ def checks(raw):
     missing = sorted(u for u in used if not os.path.exists(os.path.join(SDSYS, "messages", u)))
     ck("M1", "the nine messages are there, one line each with an LF and no CR, and every message these programs show exists", msg_ok and not missing and "%1" in raw["msg12800"] and "%2" in raw["msg12929"], " ".join(missing))
     iss = raw["iss"]
-    ck("I1", "the installer asks on a page of its own, NOT ticked, skipped on an upgrade; Setup passes -RemoteAdmin to the finishing window only when it was ticked; the uninstaller runs remote-admin.ps1 -Remove after the jobs",
-       "RemoteAdminPage.Values[0] := False;" in iss and "Result := TrueUpgrade or (SshWasAbsent and not WizardIsTaskSelected('sshserver'));" in iss
-       and re.search(r"if RemoteAdminChosen then\s*\n\s*Args := Args \+ ' -RemoteAdmin';", iss) is not None and iss.count("' -RemoteAdmin'") == 1
+    # 13 Nov 26 (RELEASE_1.1 282, owner: "should we always install remote ssh admin off ... It's just an available feature that can be
+    # turned on"): the installer neither asks nor opens it.  The uninstaller still takes it away.
+    ck("I1", "the installer does not offer remote administration (no page, no -RemoteAdmin to the finishing window); the uninstaller still runs remote-admin.ps1 -Remove after the jobs",
+       "RemoteAdminPage" not in iss and "RemoteAdminChosen" not in iss and "' -RemoteAdmin'" not in iss
        and re.search(r"RemoveScheduledJobs;\s*\n\s*RemoveRemoteAdmin;", iss) is not None and "'\" -Remove'" in iss.replace(" + '\" -Remove'", "'\" -Remove'"), "")
     fi = raw["finish"]
-    ck("I2", "finish-install.ps1 runs REMOTE.SDSYS ON only on -RemoteAdmin, in an internal session behind the one-shot marker, in its own window, so the password is typed at the verb's prompts",
-       "[switch] $RemoteAdmin," in fi and re.search(r"if \(\$RemoteAdmin\) \{", fi) is not None
-       and ordered(fi[fi.find("if ($RemoteAdmin) {"):], ["Set-SdInternalMarker -SdsysDir $SysDir -Writer 'finish-install'", "-ArgumentList '-internal', '-QUIET', 'REMOTE.SDSYS', 'ON'", "Remove-SdInternalMarker -SdsysDir $SysDir"])[0], "")
+    ck("I2", "finish-install.ps1 takes no -RemoteAdmin and never runs REMOTE.SDSYS",
+       "$RemoteAdmin" not in fi and "'REMOTE.SDSYS'" not in fi, "")
     ck("I3", "stage.py ships remote-admin.ps1, sd-radmin.ps1 and sd-radmin-client.ps1 to the program folder", "'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1'," in raw["stage"], "")
     return rows
 
@@ -267,9 +261,7 @@ MUTANTS = [
     ("SDRADMIN is made with a shell", "B7", sub("verb", "   settings<CA$START> = 'terminal'\n", "   settings<CA$START> = 'terminal'\n   settings<CA$OS.SH> = 1\n")),
     ("OFF leaves the sessions", "B8", sub("verb", "         z = logout(users<i, K$USERS.UID> + 0, @false)\n", "")),
     ("the job asks the console's helper", "B9", sub("verb", "   if in.job then\n      os.execute hcmd", "   if 0 then\n      os.execute hcmd")),
-    ("SDSYS's password is passed in the broker's job too", "B11", sub("verb", "   if helper.pw # '' and not(in.job) then", "   if helper.pw # '' then")),
-    ("SDSYS's password is kept after the script is built", "B11", sub("verb", "      hcmd := ' -SdsysPassword $sdsysPw'\n   end\n   helper.pw = ''\n", "      hcmd := ' -SdsysPassword $sdsysPw'\n   end\n")),
-    ("SDSYS's password is put on the command line", "B11", sub("verb", "      hcmd := ' -SdsysPassword $sdsysPw'", "      hcmd := ' -SdsysPassword ' : helper.pw")),
+    ("ON asks for SDSYS's password again", "B11", sub("verb", "   helper.args = '-On'\n   gosub run.helper\n   gosub show.helper\n", "   helper.args = '-On'\n   gosub run.helper\n   display 'Windows password for SDSYS: ' :\n   input sdsys.pw HIDDEN\n   gosub show.helper\n")),
     ("anybody may send", "R1", sub("radmin", " or env('SSH_CONNECTION') = '' or kernel(K$ADMINISTRATOR, -1) then", " or kernel(K$ADMINISTRATOR, -1) then")),
     ("a word is not checked", "R2", sub("radmin", "convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # ''", "0")),
     ("ON is sent", "R2", sub("radmin", "         if words<1> = 'on' then stop sysmsg(12847, 'remote.sdsys on')", "         null")),
@@ -293,10 +285,10 @@ MUTANTS = [
     ("MODIFY.ACCOUNT reaches SDRADMIN", "A1", sub("modifya", "   if acc.name = 'SDRADMIN' then\n      stop sysmsg(12704)", "   if 0 then\n      stop sysmsg(12704)")),
     ("DELETE.ACCOUNT takes SDRADMIN while open", "A1", sub("delacc", "      if radmin_open(0) then stop sysmsg(12704)", "      null")),
     ("a message is missing", "M1", setkey("msg12838", "")),
-    ("the installer ticks the box", "I1", sub("iss", "RemoteAdminPage.Values[0] := False;", "RemoteAdminPage.Values[0] := True;")),
-    ("the installer asks on an upgrade", "I1", sub("iss", "Result := TrueUpgrade or (SshWasAbsent and not WizardIsTaskSelected('sshserver'));", "Result := SshWasAbsent and not WizardIsTaskSelected('sshserver');")),
+    ("the installer asks about remote administration again", "I1", sub("iss", "  PythonPage.Values[0] := False;\nend;", "  PythonPage.Values[0] := False;\n  RemoteAdminPage := CreateInputOptionPage(PythonPage.ID, 'Remote administration', '', '', False, False);\nend;")),
+    ("Setup hands the finishing window -RemoteAdmin again", "I1", sub("iss", "          ' -AttachCode ' + IntToStr(AttachCode);\n", "          ' -AttachCode ' + IntToStr(AttachCode) + ' -RemoteAdmin';\n")),
     ("the uninstaller leaves remote administration", "I1", sub("iss", "    RemoveScheduledJobs;\n    RemoveRemoteAdmin;\n", "    RemoveScheduledJobs;\n")),
-    ("the finishing window opens it without the marker", "I2", sub("finish", "'internal-marker.ps1')\n        $marked = Set-SdInternalMarker -SdsysDir $SysDir -Writer 'finish-install'\n", "'internal-marker.ps1')\n        $marked = $false\n")),
+    ("the finishing window opens remote administration again", "I2", sub("finish", "# 13 Nov 26 - RELEASE_1.1 282: the install no longer opens remote administration", "if ($RemoteAdmin) { $null = 'REMOTE.SDSYS' }\n# 13 Nov 26 - RELEASE_1.1 282: the install no longer opens remote administration")),
     ("a script does not ship", "I3", sub("stage", "'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1',", "'remote-admin.ps1', 'sd-radmin.ps1',")),
 ]
 

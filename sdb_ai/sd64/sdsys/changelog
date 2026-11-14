@@ -9,10 +9,10 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            SET.JOB and REMOTE.SDSYS ON register their tasks only into such a folder, and
                            remove a task of the same name first rather than updating it. By Windows'
                            default any signed-in user could create that folder, or a task in it, first.
-                         - REMOTE.SDSYS ON run by anyone but SDSYS (the installer runs it as the
-                           administrator who is installing) asks for SDSYS's Windows password: Windows
-                           lets only SDSYS, or someone giving its password, set up the task that runs as
-                           SDSYS. The task keeps no copy of the password.
+                         - The installer no longer asks about remote administration. It is delivered
+                           off and is opened, when wanted, with REMOTE.SDSYS ON at SDSYS's console;
+                           run by anyone but SDSYS it refuses and changes nothing, because Windows lets
+                           only SDSYS set up the task that runs as SDSYS without its password.
                          - A task Windows refuses to register or start is reported as refused; SET.JOB
                            and REMOTE.SDSYS ON no longer go on to say it was done.
              Does NOT    - Use a folder SD owned by an account that is not an administrator: it is named,
