@@ -162,7 +162,7 @@ int win32_ai_write(int slot, const char* buf, int len, int wait_ms) {
     }
     if (idle >= wait_ms)
       return 0;
-    Sleep(10);
+    SleepEx(10, FALSE); /* not Sleep(): linuxlb.c defines SD's own Sleep(), and kernel32's stub would clash at link (13 Nov 26) */
     idle += 10;
   }
   return 1;

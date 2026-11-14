@@ -263,7 +263,7 @@ int win32_runin_open_to(const char* pipe_name, int need_system_owner, const char
         say(answer, alen, "the SD service did not answer");
         return -1;
       }
-      Sleep(20);
+      SleepEx(20, FALSE); /* not Sleep(): linuxlb.c defines SD's own Sleep(), and kernel32's stub would clash at link (13 Nov 26) */
       waited += 20;
       continue;
     }
