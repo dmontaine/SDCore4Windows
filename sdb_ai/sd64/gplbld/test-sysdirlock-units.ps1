@@ -31,11 +31,11 @@ $ErrorActionPreference = 'Stop'
 # secure-*.ps1 or [Code] step.  Open: written by ordinary sessions.
 $Locked = @('syscom','terminfo','terminfo.src','helptext','dir_dict','licence','contrib',
             'start.default','agent-pack','bp.out','pcode.out',
-            'dict.dic','voc.dic','$map.dic','accounts.dic')
+            'dict.dic','voc.dic','$map.dic','accounts.dic','$hold','$hold.dic')
 $Fixed  = @('accounts','$map','messages','newvoc','bp','cat','voc',
             'voc_removed','voc_removed.saved','config.table','voc_template')
 $Elsewhere = @('audit','dumps','pstmp','batch.jobs','batch.jobs.dic','gcat','gpl.bp.out','bin','$cred')
-$Open   = @('$ipc','errlog','prt','$hold','$hold.dic')
+$Open   = @('$ipc','errlog','prt')   # 14 Nov 26: $hold and $hold.dic locked too (Linux 755, mail 17:35)
 
 $iss    = Join-Path $PSScriptRoot 'sd.iss'
 $script = Join-Path $PSScriptRoot 'secure-sysdirs.ps1'

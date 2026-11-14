@@ -100,7 +100,8 @@ $readOnly = @(
     (Join-Path $sysDir 'agent-pack'),   (Join-Path $sysDir 'bp.out'),
     (Join-Path $sysDir 'pcode.out'),    (Join-Path $sysDir 'dict.dic'),
     (Join-Path $sysDir 'voc.dic'),      (Join-Path $sysDir '$map.dic'),
-    (Join-Path $sysDir 'accounts.dic')
+    (Join-Path $sysDir 'accounts.dic'),
+    (Join-Path $sysDir '$hold'),        (Join-Path $sysDir '$hold.dic')
 )
 $ipc = Join-Path $sysDir '$ipc'
 # 14 Nov 26 - RELEASE_1.1 293: two more controls, because the sdsys folder is now

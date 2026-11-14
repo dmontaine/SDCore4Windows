@@ -4215,15 +4215,16 @@ begin
     writable, mail 1535).  These fifteen still inherited sdusers Modify, and an
     ordinary account could create files in sdsys.  probe-syswrites.ps1 on the VM,
     14 Nov 2026 08:43 (an unelevated session and a PHANTOM): only $ipc\%0 was
-    written; every name below was untouched.  LEFT OPEN, deliberately: $ipc (every
-    session writes it), errlog (every session appends to it), prt, $hold and
-    $hold.dic (deferred prints), and dumps and pstmp, which their own scripts
-    secure. }
+    written; every name below was untouched.  $hold and $hold.dic too (Linux keeps
+    both 755, mail 14 Nov 17:35): a hold file goes to the ACCOUNT's own $hold, a
+    relative path (to_file.c:238), so only SDSYS's own sessions use these.  LEFT
+    OPEN, deliberately: $ipc (every session writes it), errlog (every session
+    appends to it), prt, and dumps and pstmp, which their own scripts secure. }
   if Failed = '' then
     Failed := LockSysdirNames(Ps, Script,
       'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
       'start.default/agent-pack/bp.out/pcode.out/' +
-      'dict.dic/voc.dic/$map.dic/accounts.dic', Code);
+      'dict.dic/voc.dic/$map.dic/accounts.dic/$hold/$hold.dic', Code);
 
   { errlog is not shipped: the first process that logs creates it, in sdsys.
     Once the folder is locked an ordinary session could not, so it is made here,

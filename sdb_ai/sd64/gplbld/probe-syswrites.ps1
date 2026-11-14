@@ -66,6 +66,10 @@ $roots = [ordered]@{
     # the sdsys folder ITSELF: its top-level names are listed before and after, so a file or folder an ordinary session CREATES
     # in it shows as CREATED.  The marker prefix keeps Snapshot from walking the folder and keeps the -like match to these rows.
     'sdsys-root'    = 'ROOTLIST:C:\ProgramData\SD\sdsys'
+    # 14 Nov 26 - RELEASE_1.1 293, $hold: Linux keeps SDSYS's $hold and $hold.dic 755 (mail 14 Nov 17:35); a hold file goes to
+    # the ACCOUNT's own $hold (to_file.c:238, a relative path).  The workload prints in hold mode, and this row is the CONTROL:
+    # it must read WRITTEN, or hold printing never ran and "sdsys $hold untouched" proves nothing.
+    'own-$hold'     = "C:\ProgramData\SD\user_accounts\$($env:USERNAME.ToLower())\`$hold"
 }
 
 "who am i : $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
@@ -166,6 +170,8 @@ $cmds = @(
     # the case back to 0.5s.  PHANTOM is deliberately NOT in this list; it
     # hangs the pipe because the phantom inherits it, and it gets its own pass.
     'SETPTR 0,80,60,0,0', 'Y',
+    # 14 Nov 26 - RELEASE_1.1 293: hold mode (3, PRINT_TO_FILE) and a report to it, then back to the display (0).
+    'SETPTR 0,80,60,0,0,3', 'Y', 'LIST VOC SAMPLE 2 LPTR', 'SETPTR 0,80,60,0,0,0', 'Y',
     'SELECT VOC', "SAVE.LIST $stamp", "GET.LIST $stamp", "DELETE.LIST $stamp",
     "DELETE.FILE $stamp"
 )
@@ -257,6 +263,13 @@ $created = -not ($out -match ('No VOC record found for ' + $stamp))
 "BOM ate a verb  : $bom      (must be False)"
 "CREATE.FILE took: $created  (must be True)"
 "output length   : $($out.Length) chars"
+$ownHold = @($changed | Where-Object { $_ -like ('*' + $roots['own-$hold'] + '\*') }).Count
+"hold file made  : $ownHold in $($roots['own-$hold'])  (must be 1 or more)"
+if ($ownHold -lt 1) {
+    ''
+    'REFUSING THE $hold ROWS: no hold file appeared in the account''s own $hold, so hold mode was not exercised.'
+    exit 1
+}
 if ($ran -lt $cmds.Count -or $bom -or $namedMiss.Count -or -not $created) {
     ''
     'REFUSING THE RESULT: the session did not run in full, so "untouched" above is NOT evidence.'
