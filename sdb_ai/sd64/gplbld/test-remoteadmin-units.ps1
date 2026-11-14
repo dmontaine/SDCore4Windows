@@ -35,8 +35,12 @@ $files = @{
     client = Join-Path $here 'sd-radmin-client.ps1'
     jobs   = Join-Path $here 'sd-jobs.ps1'
     allow  = Join-Path $here 'allow-ssh-groups.ps1'
+    # 13 Nov 26 - RELEASE_1.1 281: the task folder's one rule and the two other places that use it.
+    taskfolder = Join-Path $here 'sd-taskfolder.ps1'
+    finish     = Join-Path $here 'finish-install.ps1'
+    stage      = Join-Path $here 'stage.py'
 }
-Write-Output "test-remoteadmin-units: subjects $($files.broker), $($files.admin), $($files.client), $($files.jobs), $($files.allow)"
+Write-Output "test-remoteadmin-units: subjects $($files.broker), $($files.admin), $($files.client), $($files.jobs), $($files.allow), $($files.taskfolder), $($files.finish), $($files.stage)"
 $texts = @{}
 foreach ($k in @($files.Keys)) {
     if (-not (Test-Path -LiteralPath $files[$k])) { Write-Output "test-remoteadmin-units: CANNOT RUN - $($files[$k]) is missing"; exit 2 }
@@ -308,18 +312,41 @@ function Get-Rows([hashtable]$t) {
         ("task cmdlet lines {0}, without -ErrorAction Stop: {1}; exit4 {2} < register {3} < first wall {4}" -f $taskLines.Count, ($noStop -join ' | '), $iExit4, $iReg, $iWall)))
     # R10 (RELEASE_1.1 280): the task folder \SD.  Measured 13 Nov: the root folder gives Authenticated Users write, inherited, and an
     # ordinary user can make a top-level folder and own it.  \SD is made protected, SYSTEM and Administrators only; an existing one is used
-    # only when SYSTEM or Administrators own it and is then tightened; both SD tasks are deleted before they are registered, never updated.
-    $sf = $a.Substring([Math]::Max(0, $a.IndexOf('function Initialize-SdTaskFolder')))
+    # only when SYSTEM, Administrators or a member owns it and is then tightened; both SD tasks are deleted before they are registered.
+    # 13 Nov 26 (RELEASE_1.1 281): the rule is ONE copy, sd-taskfolder.ps1, which remote-admin.ps1 dot-sources and no longer defines.
+    $tf = $t.taskfolder
+    $sf = $tf.Substring([Math]::Max(0, $tf.IndexOf('function Initialize-SdTaskFolder')))
     $sf = $sf.Substring(0, [Math]::Max(0, $sf.IndexOf("`n}")))
-    $null = $rows.Add(@('R10 (RELEASE_1.1 280) \SD is made protected, SYSTEM and Administrators only; an existing one is used only when they own it, then tightened; the broker and the SYSTEM check task are vetted into it and deleted before they are registered',
-        ($a.Contains("`$SdTaskFolderSddl = 'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'") -and
+    $ao = $tf.Substring([Math]::Max(0, $tf.IndexOf('function Test-SdAdminOwner')))
+    $ao = $ao.Substring(0, [Math]::Max(0, $ao.IndexOf("`n}")))
+    $null = $rows.Add(@('R10 (RELEASE_1.1 280, 281) \SD is made protected, SYSTEM and Administrators only; an existing one is used only when SYSTEM, Administrators or a member owns it, then tightened; the broker and the SYSTEM check task are vetted into it and deleted before they are registered',
+        ($tf.Contains("`$SdTaskFolderSddl = 'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'") -and
          ($sf -match "catch \{ return \`$svc\.GetFolder\('\\'\)\.CreateFolder\('SD', \`$SdTaskFolderSddl\) \}") -and
-         ($sf -match "@\('S-1-5-18', 'S-1-5-32-544'\) -notcontains \`$owner\.Value\) \{\s*\r?\n\s*throw ") -and ($sf -match "\`$f\.SetSecurityDescriptor\(\`$SdTaskFolderSddl, 0\)") -and
+         ($sf -match "if \(\`$null -eq \`$owner -or -not \(Test-SdAdminOwner \`$owner\.Value\)\) \{\s*\r?\n\s*throw ") -and ($sf -match "\`$f\.SetSecurityDescriptor\(\`$SdTaskFolderSddl, 0\)") -and
          ($sf.IndexOf('throw (') -lt $sf.IndexOf('$f.SetSecurityDescriptor(')) -and
+         ($ao -match "if \(@\('S-1-5-18', 'S-1-5-32-544'\) -contains \`$sid\) \{ return \`$true \}") -and ($ao -match "\} catch \{ return \`$false \}") -and
+         ($a.Contains(". (Join-Path `$PSScriptRoot 'sd-taskfolder.ps1')")) -and -not $a.Contains('function Initialize-SdTaskFolder') -and -not $a.Contains('$SdTaskFolderSddl = ') -and
          ($rb -match "\`$folder = Initialize-SdTaskFolder \`$svc") -and ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -ge 0) -and
          ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -lt $rb.IndexOf('Register-ScheduledTask -TaskName')) -and
          ($is -match "\`$sdFolder = Initialize-SdTaskFolder \`$svc") -and ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -ge 0) -and
          ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -lt $is.IndexOf('Register-ScheduledTask -TaskName'))), ''))
+    # R11 (RELEASE_1.1 281): SET.JOB's tasks under the same rule, every sd-jobs task cmdlet stopping on error, \SD made at install, the rule shipped.
+    $jb = $t.jobs
+    $js = $jb.Substring([Math]::Max(0, $jb.IndexOf("'job-set' {")))
+    $js = $js.Substring(0, [Math]::Max(0, $js.IndexOf("'job-delete' {")))
+    $jobTaskLines = @($jb -split "`r?`n" | Where-Object { $_ -match '^\s+[^#]*\b(Register|Enable|Disable|Start|Stop|Unregister)-ScheduledTask\b' })
+    $jobNoStop = @($jobTaskLines | Where-Object { $_ -notmatch '-ErrorAction Stop' })
+    $fi = $t.finish
+    $fiBlock = $fi.Substring([Math]::Max(0, $fi.IndexOf("    . (Join-Path `$PSScriptRoot 'sd-taskfolder.ps1')")))
+    $null = $rows.Add(@('R11 (RELEASE_1.1 281) job-set vets \SD and deletes the job''s task before registering it; every sd-jobs task cmdlet stops on error; finish-install makes \SD at install; stage.py ships sd-taskfolder.ps1',
+        ($jb.Contains(". (Join-Path `$PSScriptRoot 'sd-taskfolder.ps1')") -and -not $jb.Contains('function Initialize-SdTaskFolder') -and
+         ($js -match "\`$sdFolder = Initialize-SdTaskFolder \`$svc") -and ($js.IndexOf('try { $sdFolder.DeleteTask("sdcore-job-$n", 0) } catch { }') -ge 0) -and
+         ($js.IndexOf('try { $sdFolder.DeleteTask("sdcore-job-$n", 0) } catch { }') -lt $js.IndexOf('Register-ScheduledTask -TaskName')) -and
+         ($jobTaskLines.Count -ge 4) -and ($jobNoStop.Count -eq 0) -and
+         ($fiBlock -match "^\s*\. \(Join-Path \`$PSScriptRoot 'sd-taskfolder\.ps1'\)\s*\r?\n\s*\`$tsSvc = New-Object -ComObject Schedule\.Service\s*\r?\n\s*\`$tsSvc\.Connect\(\)\s*\r?\n\s*\`$null = Initialize-SdTaskFolder \`$tsSvc") -and
+         ($fi.IndexOf('$null = Initialize-SdTaskFolder $tsSvc') -lt $fi.IndexOf('if ($RemoteAdmin) {')) -and
+         $t.stage.Contains("'sd-taskfolder.ps1',")),
+        ("sd-jobs task cmdlet lines {0}, without -ErrorAction Stop: {1}" -f $jobTaskLines.Count, ($jobNoStop -join ' | '))))
     $null = $rows.Add(@('R6 the success lines are open, closed and removed, each printed only at the end of its branch', (($a -match 'Out-Line "\$\{Prog\}: open"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: closed"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: removed"\s*\r?\n\s*exit 0')), ''))
 
     # G: allow-ssh-groups.ps1 reads remote-admin's fence as SD's own
@@ -426,9 +453,17 @@ if ($SelfTest) {
         @('-On says the broker runs without its pipe (RELEASE_1.1 280)', 'R9', 'admin', "        if (-not (Test-BrokerPipe)) { throw ('the broker started but its pipe \\.\pipe\sd-radmin did not appear in 20 seconds (task state ' + (Get-TaskState) + ')') }", ''),
         @('a task cmdlet in -On carries on after an error', 'R9', 'admin', "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop", "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin'"),
         @('-On goes on without SDSYS or its password', 'R9', 'admin', "        Exit-With 4 'the broker task runs as SDSYS, and this is not SDSYS: SDSYS''s Windows password is needed to register it; nothing was changed'", "        `$null = 4"),
-        @('\SD is made with inherited defaults (Authenticated Users write)', 'R10', 'admin', "catch { return `$svc.GetFolder('\').CreateFolder('SD', `$SdTaskFolderSddl) }", "catch { return `$svc.GetFolder('\').CreateFolder('SD') }"),
-        @('the \SD access list grants Authenticated Users write', 'R10', 'admin', "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'", "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FW;;;AU)'"),
-        @('an \SD owned by anybody is used', 'R10', 'admin', "    if (`$null -eq `$owner -or @('S-1-5-18', 'S-1-5-32-544') -notcontains `$owner.Value) {", "    if (`$false) {"),
+        @('\SD is made with inherited defaults (Authenticated Users write)', 'R10', 'taskfolder', "catch { return `$svc.GetFolder('\').CreateFolder('SD', `$SdTaskFolderSddl) }", "catch { return `$svc.GetFolder('\').CreateFolder('SD') }"),
+        @('the \SD access list grants Authenticated Users write', 'R10', 'taskfolder', "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'", "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FW;;;AU)'"),
+        @('an \SD owned by anybody is used', 'R10', 'taskfolder', "    if (`$null -eq `$owner -or -not (Test-SdAdminOwner `$owner.Value)) {", "    if (`$false) {"),
+        @('a doubtful membership lookup trusts the owner', 'R10', 'taskfolder', "    } catch { return `$false }", "    } catch { return `$true }"),
+        @('remote-admin keeps its own copy of the rule', 'R10', 'admin', ". (Join-Path `$PSScriptRoot 'sd-taskfolder.ps1')", "function Initialize-SdTaskFolder(`$svc) { return `$svc.GetFolder('\SD') }"),
+        @('a job''s task already there is updated in place', 'R11', 'jobs', '                try { $sdFolder.DeleteTask("sdcore-job-$n", 0) } catch { }', ''),
+        @('job-set registers into an unvetted \SD', 'R11', 'jobs', '                $sdFolder = Initialize-SdTaskFolder $svc', '                $sdFolder = $svc.GetFolder(''\SD'')'),
+        @('a refused job registration falls through to "scheduled"', 'R11', 'jobs', 'Register-ScheduledTask -TaskName "sdcore-job-$n" -TaskPath $JobTaskPath -Xml $xml -Force -ErrorAction Stop | Out-Null', 'Register-ScheduledTask -TaskName "sdcore-job-$n" -TaskPath $JobTaskPath -Xml $xml -Force | Out-Null'),
+        @('a refused job start falls through to "started"', 'R11', 'jobs', 'try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -ErrorAction Stop } catch {', 'try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" } catch {'),
+        @('the installer does not make \SD', 'R11', 'finish', '    $null = Initialize-SdTaskFolder $tsSvc', '    $null = 0'),
+        @('sd-taskfolder.ps1 does not ship', 'R11', 'stage', "                   'sd-taskfolder.ps1',", ''),
         @('a broker task already there is updated in place', 'R10', 'admin', "    try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }", ''),
         @('a SYSTEM check task already there is updated in place', 'R10', 'admin', "        try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }", ''),
         @('a broker task that stored a password is kept', 'R9', 'admin', "    if (`$lt -ne 2) {", "    if (`$false) {"),

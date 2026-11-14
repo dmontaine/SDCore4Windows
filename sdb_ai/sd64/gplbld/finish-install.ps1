@@ -841,6 +841,22 @@ switch ($AttachCode) {
 }
 
 # ---------------------------------------------------------------------------
+# 13 Nov 26 - RELEASE_1.1 281: THE TASK SCHEDULER FOLDER \SD, MADE NOW, SYSTEM AND ADMINISTRATORS ONLY.  Scheduled jobs (SET.JOB) and
+# remote administration put tasks there that run as SDSYS or SYSTEM, and any signed-in user may otherwise create \SD first (measured;
+# sd-taskfolder.ps1's header).  Made here, at install, there is no such window.  An existing \SD owned by SYSTEM, Administrators or one of
+# its members is tightened; any other is left alone and named, and both features refuse it until it is deleted.  Silent when all is well.
+try {
+    . (Join-Path $PSScriptRoot 'sd-taskfolder.ps1')
+    $tsSvc = New-Object -ComObject Schedule.Service
+    $tsSvc.Connect()
+    $null = Initialize-SdTaskFolder $tsSvc
+}
+catch {
+    Write-Wrapped -Text ('Task Scheduler folder \SD: ' + $_.Exception.Message)
+    Write-Host ''
+}
+
+# ---------------------------------------------------------------------------
 # 13 Nov 26 - RELEASE_1.1 202 (Linux S.155: the installer opens remote administration after the sdsys password when it was asked to).
 # REMOTE.SDSYS ON in an "sd -internal" session, as Set-AttachedAccountPassword runs MODIFY.PASSWORD: the verb is in SDSYS's VOC only, this
 # window is elevated, and LOGIN admits the internal session against the one-shot marker written immediately before it.  The verb makes

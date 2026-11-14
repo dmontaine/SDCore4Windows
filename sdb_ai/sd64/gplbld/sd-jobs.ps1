@@ -1,5 +1,8 @@
 # sd-jobs.ps1 - the administrator's scheduled jobs, on Windows Task Scheduler
 #
+# 13 Nov 26 Windows port - RELEASE_1.1 281: job-set registers into a vetted \SD (sd-taskfolder.ps1, SYSTEM and Administrators only) and
+# deletes a task of the job's name first, never updating one in place; every task cmdlet carries -ErrorAction Stop.
+#
 # 13 Nov 26 Windows port - RELEASE_1.1 202: the definitions named radmin-<nonce> are the remote administration broker's one-shot jobs
 # (sd-radmin.ps1 writes one, REMOTE.SDSYS RUN deletes it as it starts): job-list and job-run do not see them, they do not count towards
 # the 32, and job-set refuses a name that starts radmin-.
@@ -65,6 +68,14 @@ $env:PSModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules;$env:SystemRoot
 
 $ErrorActionPreference = 'Stop'
 $Prog = 'sd-jobs'
+
+# 13 Nov 26 - RELEASE_1.1 281: the task folder \SD, SYSTEM and Administrators only (Initialize-SdTaskFolder), one copy with remote-admin.ps1.
+# Any signed-in user can otherwise make \SD before SD does, or a task named sdcore-job-NAME in it, and SDSYS's job would be registered
+# into their folder or over their task (sd-taskfolder.ps1's header: measured, the root gives Authenticated Users write).  ALSO: every task
+# cmdlet below carries -ErrorAction Stop - the ScheduledTasks cmdlets are a module's, which $ErrorActionPreference above does not reach in
+# Windows PowerShell 5.1, so a refused Register-ScheduledTask used to fall through to "job NAME is scheduled" (measured on remote-admin.ps1,
+# RELEASE_1.1 280).
+. (Join-Path $PSScriptRoot 'sd-taskfolder.ps1')
 
 # BEGIN jobs_functions
 $JobMax = 32
@@ -327,7 +338,13 @@ try {
             }
             try {
                 $xml = Get-JobTaskXml $n $id $s $sdsysSid $sdExe $workDir
-                Register-ScheduledTask -TaskName "sdcore-job-$n" -TaskPath $JobTaskPath -Xml $xml -Force | Out-Null
+                # Into a vetted \SD, and never over a task of this name already there: it is deleted first (a job being replaced loses its
+                # old task here, which the catch's line already says: nothing runs until job-set succeeds).
+                $svc = New-Object -ComObject Schedule.Service
+                $svc.Connect()
+                $sdFolder = Initialize-SdTaskFolder $svc
+                try { $sdFolder.DeleteTask("sdcore-job-$n", 0) } catch { }
+                Register-ScheduledTask -TaskName "sdcore-job-$n" -TaskPath $JobTaskPath -Xml $xml -Force -ErrorAction Stop | Out-Null
             } catch {
                 Out-Line "${Prog}: the definition of $n is written, but its task could not be registered ($($_.Exception.Message)); nothing will run until job-set succeeds"
                 exit 1
@@ -345,7 +362,7 @@ try {
             if (-not $DryRun) {
                 if ((Test-Path -LiteralPath $jobsDir) -and -not (Test-JobAdminPath $jobsDir $true)) { Exit-Refused "$jobsDir is a link, or is owned by or open to somebody other than SYSTEM and Administrators; it was left as it is" }
                 $t = Get-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -ErrorAction SilentlyContinue
-                if ($null -ne $t) { Unregister-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -Confirm:$false }
+                if ($null -ne $t) { Unregister-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -Confirm:$false -ErrorAction Stop }
             }
             $target = Join-Path $jobsDir $n
             if (-not (Test-Path -LiteralPath $target)) {
@@ -384,7 +401,7 @@ try {
             if ($DryRun) { Out-Line "${Prog}: dry run: the task is not started"; Out-Line "${Prog}: job $n started"; exit 0 }
             $t = Get-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -ErrorAction SilentlyContinue
             if ($null -eq $t) { Out-Line "${Prog}: no job named $n; nothing was started"; exit 0 }
-            try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" } catch { Exit-Refused "Task Scheduler did not start job ${n}: $($_.Exception.Message)" }
+            try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -ErrorAction Stop } catch { Exit-Refused "Task Scheduler did not start job ${n}: $($_.Exception.Message)" }
             Out-Line "${Prog}: job $n started"
             exit 0
         }
@@ -423,7 +440,7 @@ try {
             } else {
                 foreach ($t in @(Get-ScheduledTask -TaskPath $JobTaskPath -TaskName 'sdcore-job-*' -ErrorAction SilentlyContinue)) {
                     try {
-                        Unregister-ScheduledTask -TaskPath $JobTaskPath -TaskName $t.TaskName -Confirm:$false
+                        Unregister-ScheduledTask -TaskPath $JobTaskPath -TaskName $t.TaskName -Confirm:$false -ErrorAction Stop
                         Out-Line "${Prog}: task $($t.TaskName) removed"
                     } catch {
                         $left++

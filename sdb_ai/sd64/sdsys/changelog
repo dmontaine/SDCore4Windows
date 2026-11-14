@@ -3,6 +3,21 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  SD'S TASK SCHEDULER FOLDER IS CLOSED TO EVERYONE BUT SYSTEM AND THE ADMINISTRATORS.
+
+             What        - Setup makes the Task Scheduler folder SD open to SYSTEM and administrators only.
+                           SET.JOB and REMOTE.SDSYS ON register their tasks only into such a folder, and
+                           remove a task of the same name first rather than updating it. By Windows'
+                           default any signed-in user could create that folder, or a task in it, first.
+                         - REMOTE.SDSYS ON run by anyone but SDSYS (the installer runs it as the
+                           administrator who is installing) asks for SDSYS's Windows password: Windows
+                           lets only SDSYS, or someone giving its password, set up the task that runs as
+                           SDSYS. The task keeps no copy of the password.
+                         - A task Windows refuses to register or start is reported as refused; SET.JOB
+                           and REMOTE.SDSYS ON no longer go on to say it was done.
+             Does NOT    - Use a folder SD owned by an account that is not an administrator: it is named,
+                           and refused until an administrator deletes it.
+
 13 Nov 26  A LINE-END MODE YOU SET IS THE ONE WRITTEN.
 
              What        - A directory or sequential file set to line-end mode 0, 2 or 3 (with

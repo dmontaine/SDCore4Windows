@@ -1889,6 +1889,11 @@ def main():
                    # $neverShipped list.  Their unit test
                    # (test-remoteadmin-units.ps1) does not.
                    'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1',
+                   # 13 Nov 26 - RELEASE_1.1 281: the task folder \SD's one rule,
+                   # dot-sourced by remote-admin.ps1, sd-jobs.ps1 and
+                   # finish-install.ps1.  It SHIPS - do NOT add it to
+                   # assert-current's $neverShipped list.
+                   'sd-taskfolder.ps1',
                    # 10 Nov 26 - RELEASE_1.1 218, from Linux S.75 A6: SET.CONFIG
                    # changes one of 14 tuning parameters of sd.conf.  gpl.bp
                    # SETCONFIG runs it through !ps_script_out, so as SDSYS's

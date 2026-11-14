@@ -256,12 +256,9 @@ public class SdRadminLsa {
 '@
 $DenyRights = @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')
 
-# 13 Nov 26 - RELEASE_1.1 280: THE TASK FOLDER \SD, SYSTEM AND ADMINISTRATORS ONLY.  Measured on the host 13 Nov: Task Scheduler's root
-# folder gives Authenticated Users WRITE, inherited by every subfolder ((A;CI;FW;;;AU)), and CREATOR OWNER full control of whatever it
-# makes; an ordinary unelevated user CAN create a top-level folder, and owns it.  So with inherited defaults any signed-in user could
-# make \SD first, or put a task named sdcore-radmin in it first, and the broker - a task that runs as SDSYS - would be registered into
-# their folder, or over their task.  (That this is exploitable was not measured; the door is shut instead.)  Protected, not inherited.
-$SdTaskFolderSddl = 'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+# 13 Nov 26 - RELEASE_1.1 280, 281: THE TASK FOLDER \SD, SYSTEM AND ADMINISTRATORS ONLY - $SdTaskFolderSddl and Initialize-SdTaskFolder,
+# one copy shared with sd-jobs.ps1 and finish-install.ps1 (its header says why: any signed-in user can otherwise make \SD, or a task in it).
+. (Join-Path $PSScriptRoot 'sd-taskfolder.ps1')
 
 function Get-LocalSid([string]$name) {
     try {
@@ -434,19 +431,6 @@ function Invoke-SshdTAsSystem([string]$sshd, [string]$spec) {
 function Test-BrokerPipe {
     # The broker's own success: its pipe exists (sd-radmin.ps1 makes \\.\pipe\sd-radmin, first instance only).
     return (@([IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -ieq '\\.\pipe\sd-radmin' }).Count -gt 0)
-}
-
-function Initialize-SdTaskFolder($svc) {
-    # The ITaskFolder \SD, made with $SdTaskFolderSddl when it is missing.  One that exists is used only when its OWNER is SYSTEM or
-    # Administrators (anyone else could have put anything in it: refused, nothing changed), and is then given $SdTaskFolderSddl, which
-    # takes away the Authenticated Users write it inherited.  Throws on any doubt.
-    try { $f = $svc.GetFolder('\SD') } catch { return $svc.GetFolder('\').CreateFolder('SD', $SdTaskFolderSddl) }
-    $owner = (New-Object Security.AccessControl.RawSecurityDescriptor($f.GetSecurityDescriptor(0x1))).Owner
-    if ($null -eq $owner -or @('S-1-5-18', 'S-1-5-32-544') -notcontains $owner.Value) {
-        throw ('the task folder \SD is owned by ' + $(if ($null -eq $owner) { 'nobody' } else { $owner.Value }) + ', not SYSTEM or Administrators, so it is not used; delete it (an elevated administrator: schtasks /delete and the folder in Task Scheduler) and run this again')
-    }
-    $f.SetSecurityDescriptor($SdTaskFolderSddl, 0)
-    return $f
 }
 
 function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureString]$pw) {
