@@ -283,6 +283,12 @@ function Get-Rows([hashtable]$t) {
     $ta = $ta.Substring(0, [Math]::Max(0, $ta.IndexOf("`n}")))
     $null = $rows.Add(@('R7 (RELEASE_1.1 280) for a disabled SDRADMIN the arm check refuses an OPEN arm and checks a shut one with sshd -t, saying so; only one Enable-LocalUser, in -On',
         (($ta -match "if \(\`$mode -cne 'closed'\) \{ return 'SDRADMIN is disabled") -and ($ta -match "\`$psi\.Arguments = '-t'") -and ($ta -match "-not \`$acct\.Enabled") -and ($ta -match "\`$script:ArmCheck = 'sshd -t only") -and ($a -match 'checked by \$script:ArmCheck') -and (@([regex]::Matches($a, 'Enable-LocalUser')).Count -eq 1)), ''))
+    $it = $a.Substring([Math]::Max(0, $a.IndexOf('function Invoke-SshdT(')))
+    $it = $it.Substring(0, [Math]::Max(0, $it.IndexOf("`n}")))
+    $is = $a.Substring([Math]::Max(0, $a.IndexOf('function Invoke-SshdTAsSystem')))
+    $is = $is.Substring(0, [Math]::Max(0, $is.IndexOf("`n}")))
+    $null = $rows.Add(@('R8 (RELEASE_1.1 280) sshd -T -C about SDRADMIN runs as SYSTEM: anyone else hands it to a one-shot SYSTEM task, which is always unregistered and its files deleted',
+        (($it -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne 'S-1-5-18'\) \{ return \(Invoke-SshdTAsSystem \`$sshd \`$spec\) \}") -and ($is -match "New-ScheduledTaskPrincipal -UserId 'S-1-5-18'") -and ($is -match '-EncodedCommand ') -and ($is -match "\} finally \{\s*\r?\n\s*Unregister-ScheduledTask -TaskPath '\\SD\\' -TaskName 'sdcore-radmin-check'") -and ($is -match 'foreach \(\$f in \$files\) \{ if \(Test-Path -LiteralPath \$f\) \{ Remove-Item')), ''))
     $null = $rows.Add(@('R6 the success lines are open, closed and removed, each printed only at the end of its branch', (($a -match 'Out-Line "\$\{Prog\}: open"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: closed"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: removed"\s*\r?\n\s*exit 0')), ''))
 
     # G: allow-ssh-groups.ps1 reads remote-admin's fence as SD's own
@@ -384,6 +390,8 @@ if ($SelfTest) {
         @('-On proves the arm before SDRADMIN is enabled (RELEASE_1.1 280)', 'R1', 'admin', "    # 13 Nov 26 - RELEASE_1.1 280: ENABLED BEFORE THE ARM IS CHECKED.", "    `$why = Write-SshdArm `$cfg `$sshd 'open' `$SdExe`n    # 13 Nov 26 - RELEASE_1.1 280: ENABLED BEFORE THE ARM IS CHECKED."),
         @('an open arm is checked for a disabled SDRADMIN', 'R7', 'admin', "        if (`$mode -cne 'closed') { return 'SDRADMIN is disabled, and sshd cannot resolve a disabled account to check an open arm' }", ''),
         @('a shut arm checked by sshd -t does not say so', 'R7', 'admin', "        `$script:ArmCheck = 'sshd -t only: SDRADMIN is disabled, which sshd -T cannot resolve'", ''),
+        @('the arm is checked from the caller''s own token (RELEASE_1.1 280)', 'R8', 'admin', "    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne 'S-1-5-18') { return (Invoke-SshdTAsSystem `$sshd `$spec) }", ''),
+        @('the SYSTEM check task is left registered', 'R8', 'admin', "        Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:`$false -ErrorAction SilentlyContinue", ''),
         @('sshd_config is not put back', 'R2', 'admin', "    if (`$why -ne '') { [IO.File]::WriteAllBytes(`$cfg, `$orig) }", ''),
         @('network logon denied', 'R3', 'admin', "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')", "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight', 'SeDenyNetworkLogonRight')"),
         @('SDRADMIN stays in Remote Desktop Users', 'R4', 'admin', "@('S-1-5-32-555', 'Remote Desktop Users'), ", ''),

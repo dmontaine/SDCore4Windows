@@ -339,6 +339,11 @@ function Get-SshdPath {
 function Invoke-SshdT([string]$sshd, [string]$spec) {
     # @{ Code; Out = lines; Err = text }.  A Process with both streams read, not Start-Process with temp files and not "2>&1" (which
     # PowerShell 5.1 turns into a terminating error under Stop - allow-ssh-groups.ps1's note).
+    # 13 Nov 26 - RELEASE_1.1 280: ONLY SYSTEM CAN ASK THIS ABOUT ANOTHER ACCOUNT.  sshd -T -C builds the named user's token to read its
+    # groups (ga_init).  Measured on the host: from an elevated administrator's shell only the CALLER resolves (Don yes; SDSYS, two SD
+    # accounts, sdrelay and sdrunin "ga_init, unable to resolve user"); as SYSTEM every enabled account resolves.  REMOTE.SDSYS ON runs
+    # this elevated as an administrator, never as SYSTEM, so the check goes through a one-shot SYSTEM task (Invoke-SshdTAsSystem).
+    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne 'S-1-5-18') { return (Invoke-SshdTAsSystem $sshd $spec) }
     $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $sshd
     $psi.Arguments = '-T -C "' + $spec + '"'
@@ -351,6 +356,50 @@ function Invoke-SshdT([string]$sshd, [string]$spec) {
     $e = $p.StandardError.ReadToEndAsync()
     $p.WaitForExit()
     return @{ Code = $p.ExitCode; Out = @($o.Result -split "`r?`n"); Err = $e.Result.Trim() }
+}
+
+function Invoke-SshdTAsSystem([string]$sshd, [string]$spec) {
+    # 13 Nov 26 - RELEASE_1.1 280.  The same sshd -T -C, run by a one-shot task as SYSTEM (\SD\sdcore-radmin-check), always removed
+    # again.  The task runs a fixed PowerShell text with no input from anyone: the sshd path and the spec are this script's own (the spec
+    # is "user=<SDRADMIN, either spelling>,host=sdcheck,addr=192.0.2.1"), passed base64-encoded so no quoting reaches a shell.  Its
+    # output goes to three files under %SystemRoot%\Temp named by a fresh GUID (SYSTEM and Administrators may read them; they are
+    # deleted here).  The configuration it prints is sshd_config's, which every user can already read.
+    $tag = [Guid]::NewGuid().ToString('N')
+    $base = Join-Path $env:SystemRoot ('Temp\sd-radmin-check-' + $tag)
+    $q = { param($s) "'" + $s.Replace("'", "''") + "'" }
+    $body = @(
+        ('$psi = New-Object Diagnostics.ProcessStartInfo; $psi.FileName = ' + (& $q $sshd)),
+        ('$psi.Arguments = ' + (& $q ('-T -C "' + $spec + '"'))),
+        '$psi.UseShellExecute = $false; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true; $psi.CreateNoWindow = $true',
+        '$p = [Diagnostics.Process]::Start($psi); $o = $p.StandardOutput.ReadToEndAsync(); $e = $p.StandardError.ReadToEndAsync(); $p.WaitForExit()',
+        ('[IO.File]::WriteAllText(' + (& $q ($base + '.out')) + ', $o.Result)'),
+        ('[IO.File]::WriteAllText(' + (& $q ($base + '.err')) + ', $e.Result)'),
+        ('[IO.File]::WriteAllText(' + (& $q ($base + '.code')) + ', [string]$p.ExitCode)')
+    ) -join "`n"
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $files = @(($base + '.out'), ($base + '.err'), ($base + '.code'))
+    try {
+        Out-Line "${Prog}: asking sshd, as SYSTEM, what it would give $($spec.Split(',')[0]) (a few seconds)..."
+        $act = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc)
+        $pr = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName 'sdcore-radmin-check' -TaskPath '\SD\' -Action $act -Principal $pr -Force | Out-Null
+        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check'
+        $deadline = (Get-Date).AddSeconds(60)
+        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $files[2])) { Start-Sleep -Milliseconds 250 }
+        if (-not (Test-Path -LiteralPath $files[2])) {
+            return @{ Code = -1; Out = @(); Err = 'the check run as SYSTEM did not finish in 60 seconds' }
+        }
+        Start-Sleep -Milliseconds 200
+        $code = -1
+        if (-not [int]::TryParse(([IO.File]::ReadAllText($files[2])).Trim(), [ref]$code)) { $code = -1 }
+        $out = if (Test-Path -LiteralPath $files[0]) { [IO.File]::ReadAllText($files[0]) } else { '' }
+        $err = if (Test-Path -LiteralPath $files[1]) { [IO.File]::ReadAllText($files[1]) } else { '' }
+        return @{ Code = $code; Out = @($out -split "`r?`n"); Err = $err.Trim() }
+    } finally {
+        Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:$false -ErrorAction SilentlyContinue
+        foreach ($f in $files) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+    }
 }
 
 function Test-SshdArm([string]$sshd, [string]$mode, [string]$sdExe) {
