@@ -147,15 +147,25 @@ if ($sections -contains 'cim') {
     Write-Wit '=== cim: CIM cmdlets inside an ssh session of Core (row 242; zzwiton, SH on)'
     $cmds = @('SH Get-Date -Format yyyy', 'SH Get-NetTCPConnection -LocalPort 22 -State Listen', 'SH Get-NetFirewallProfile -Name Private', 'SH Get-ScheduledTask -TaskName ScheduledDefrag')
     $r = Invoke-WitSsh -User 'zzwiton' -Password $fix['zzwiton'] -Commands $cmds -Label 'one non-CIM control and three CIM cmdlets'
+    # 14 Nov 26: the first run scored two of these PASS on SD's ECHO of the typed command (":SH Get-NetTCPConnection -LocalPort 22 -State
+    # Listen" holds 22 and Listen; the echo of the third holds ScheduledDefrag) while all three cmdlets failed on stderr ("Cannot connect to
+    # CIM server. Access denied").  So the anchors read the output with the echo lines (":...") taken out, each is a row only the cmdlet
+    # prints, and the disqualifiers are looked for in stdout AND stderr.
     $t = ''
-    if ($null -ne $r) { $t = $r.Out }
-    $broken = @('BrokenCimSession', 'CimJob_', 'CimException', 'Access denied', 'is not recognized', 'Invalid class', 'cannot be loaded')
+    if ($null -ne $r) { $t = (@(([string]$r.Out) -split "`r?`n") | Where-Object { $_ -notmatch '^\s*:' }) -join "`n" }
     if ($t -notmatch '(?m)^\s*20\d\d\s*$') { Add-WitResult '242' 'SH runs PowerShell in the ssh session (control: Get-Date)' 'NOT-MEASURED' 'Get-Date printed no year: SH did not run, so the CIM rows say nothing' }
     else {
         Add-WitResult '242' 'SH runs PowerShell in the ssh session (control: Get-Date)' 'PASS' ([regex]::Match($t, '(?m)^\s*20\d\d\s*$').Value.Trim())
-        Set-WitVerdict '242' 'Get-NetTCPConnection works in an ssh session (sshd''s port 22 Listen)' $t '(?m)\b22\s+.*Listen|Listen\s.*\b22\b|(?m)^\S+\s+22\s' $broken
-        Set-WitVerdict '242' 'Get-NetFirewallProfile works in an ssh session' $t '(?m)^Name\s*:\s*Private' $broken
-        Set-WitVerdict '242' 'Get-ScheduledTask works in an ssh session' $t 'ScheduledDefrag' $broken
+        $err = if ($null -ne $r) { [string]$r.Err } else { '' }
+        foreach ($c in @(
+                @('Get-NetTCPConnection', 'Get-NetTCPConnection works in an ssh session (sshd''s port 22 Listen)', '(?m)^\S+\s+22\s+\S+\s+\d+\s+Listen\b'),
+                @('Get-NetFirewallProfile', 'Get-NetFirewallProfile works in an ssh session', '(?m)^Name\s*:\s*Private\s*$'),
+                @('Get-ScheduledTask', 'Get-ScheduledTask works in an ssh session', '(?m)^\\Microsoft\\Windows\\Defrag\\\s+ScheduledDefrag\b'))) {
+            $mine = [regex]::Match($err, '(?m)^' + [regex]::Escape($c[0]) + '\s*:\s*(.*)$')
+            if ($mine.Success) { Add-WitResult '242' $c[1] 'FAIL' ('stderr: ' + $c[0] + ' : ' + $mine.Groups[1].Value.Trim()) }
+            elseif ($t -match $c[2]) { Add-WitResult '242' $c[1] 'PASS' ('its own output row: ' + [regex]::Match($t, $c[2]).Value.Trim()) }
+            else { Add-WitResult '242' $c[1] 'FAIL' ('no output row /' + $c[2] + '/ and no error naming it; see the raw output above') }
+        }
     }
 }
 
