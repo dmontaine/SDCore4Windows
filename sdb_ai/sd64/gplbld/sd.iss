@@ -271,7 +271,7 @@ Name: "sshserver"; Description: "Install the OpenSSH server"; \
 
 Name: "sshserver\sshremote"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     Flags: unchecked dontinheritcheck; \
-    Check: SshServerAbsent
+    Check: SshServerAbsent and (not KeptConfReinstall)
 
 ; PRESENT AND CURRENTLY LOOPBACK-ONLY - default unticked, so doing nothing keeps
 ; it loopback-only.
@@ -284,7 +284,7 @@ Name: "sshserver\sshremote"; Description: "Let other computers on your network c
 ; "SSH Server - Availability and Access".
 Name: "sshremoteshut"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     GroupDescription: "2)  The ssh server is already installed."; Flags: unchecked; \
-    Check: (not SshServerAbsent) and (not SshCurrentlyOpen)
+    Check: (not SshServerAbsent) and (not SshCurrentlyOpen) and (not KeptConfReinstall)
 
 ; PRESENT AND CURRENTLY OPEN - default TICKED, so doing nothing leaves the
 ; site's existing exposure exactly as it was.  Unticking it is then a deliberate
@@ -293,7 +293,7 @@ Name: "sshremoteshut"; Description: "Let other computers on your network connect
 ; access."
 Name: "sshremoteopen"; Description: "Let other computers on your network connect to this one over ssh (port 22)"; \
     GroupDescription: "2)  The ssh server is already installed."; \
-    Check: (not SshServerAbsent) and SshCurrentlyOpen
+    Check: (not SshServerAbsent) and SshCurrentlyOpen and (not KeptConfReinstall)
 
 ; ===========================================================================
 ; 25 Aug 26 - THIS IS NO LONGER A TASK.  THERE IS NO CHECKBOX.  The work still
@@ -2180,6 +2180,26 @@ end;
 function ApiConfAbsent: Boolean;
 begin
   Result := ApiConfWasAbsent;
+end;
+
+{ 14 Nov 26 - RELEASE_1.1 283 (Linux 58e60670; owner 14 Nov: "those questions should not be asked during an upgrade if the config
+  file has been saved.  If closed they stay closed, if open they stay open"; Linux, same day: "kept configuration: nothing is closed,
+  nothing is opened, nothing is asked").  AN INSTALL OVER A KEPT sd.conf WHEN SD WAS UNINSTALLED: not a true upgrade (the uninstall
+  key is gone, so the tasks page is shown) but not a fresh install either.  The API box is already hidden there (ApiConfAbsent);
+  this is the same for the ssh ACCESS questions - "let other computers connect over ssh" in its three forms.  THE SERVER BOX
+  ("Install the OpenSSH server") IS NOT AN ACCESS QUESTION and stays, and so does the sshd_config confinement, which the uninstaller
+  took away and the install must put back.  A HIDDEN TASK READS AS UNSELECTED, so hiding without gating the action would CLOSE an
+  open port: the call site of ApplySshFirewall carries the gate (SshScopeKept). }
+function KeptConfReinstall: Boolean;
+begin
+  Result := (not TrueUpgrade) and (not ApiConfAbsent);
+end;
+
+{ The ssh firewall rule is left exactly as the machine has it: a true upgrade, or a kept-configuration reinstall over an ssh
+  server SD did not just install.  (A server this install adds is still scoped, to this computer only, as a fresh one is.) }
+function SshScopeKept: Boolean;
+begin
+  Result := TrueUpgrade or (KeptConfReinstall and (not SshWasAbsent));
 end;
 
 (* WILL THERE BE AN API LISTENER WHEN THIS INSTALL FINISHES?
@@ -4800,8 +4820,10 @@ begin
       nobody saw.  ***AND THE "SAFE" DIRECTION IS NOT SAFE EITHER***: a false
       SshRemoteWanted means -Restrict, which would silently CLOSE a port the
       site had deliberately opened.  Doing nothing is the ruling and is also
-      the only answer that cannot be wrong.  remote.ssh on|off changes it. }
-    if not TrueUpgrade then
+      the only answer that cannot be wrong.  remote.ssh on|off changes it.
+      14 Nov 26 - RELEASE_1.1 283: THE SAME FOR A KEPT-CONFIGURATION REINSTALL over an ssh server that was already here (SshScopeKept):
+      its three access boxes are hidden (KeptConfReinstall), so they read as unselected and this call would close an open port. }
+    if not SshScopeKept then
     begin
       SshFw := ApplySshFirewall;
       { 02 Sep 26 - SshReport IS NO LONGER CALLED HERE, PRE_RELEASE_FIXES 133.

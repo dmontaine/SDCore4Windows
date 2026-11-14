@@ -12,9 +12,13 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            again and says so on the closing page.  An API that was closed stays closed, a configuration that was
                            deleted leaves no note, and the note is removed by the install that uses it.  The same outcome as
                            SD Core for Linux ("if closed they stay closed, if open they stay open").
-             Why         - an upgrade must not change who can reach the API.
-             Does NOT    - Change a true upgrade (it already kept the rule), or the ssh question: a reinstall over a kept
-                           configuration still asks it, with the box already set to keep the present state.
+                           The same reinstall no longer asks who may reach ssh: the three "let other computers connect over ssh"
+                           boxes are not shown, and an ssh server that was already here keeps its firewall rule exactly as it
+                           was (open stays open, closed stays closed).  A server the install adds itself is still reachable from
+                           this computer only, as on a new machine.  The "Install the OpenSSH server" box is still shown, and
+                           ssh is still limited to SD's accounts, as before.
+             Why         - an upgrade must not change who can reach the API or ssh, or ask again.
+             Does NOT    - Change a true upgrade (it already kept both), or what an install over a deleted configuration asks.
                            NOT YET TESTED ON AN INSTALLED SYSTEM.
 
 14 Nov 26  THE CLIENT LIBRARY REMEMBERS EACH SERVER'S CERTIFICATE AND REFUSES A DIFFERENT ONE.

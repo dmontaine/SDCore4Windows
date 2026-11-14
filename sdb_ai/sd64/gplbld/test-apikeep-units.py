@@ -74,10 +74,44 @@ def checks(t):
          re.search(r'RemoveSdUsersGroup;\s*ApiNoteClear;', cur) is not None)
     need('the note is cleared when sd.conf is gone after the answers',
          re.search(r"RecordDatabaseChoice\([^)]*\);\s*\{[^}]*\}\s*if not FileExists\(AddBackslash\(DataPath\) \+ 'sd.conf'\) then\s*ApiNoteClear;", cur) is not None)
+    # The ssh half (Linux 2026-11-14T2030: "kept configuration: nothing is closed, nothing is opened, nothing is asked").
+    def task_check(name):
+        m = re.search(r'^Name: "' + re.escape(name) + r'";.*?\n(?:.*\\\n)*?.*Check: ([^\n]*)', t, re.M)
+        return m.group(1) if m else ''
+
+    for nm in ('sshserver\\sshremote', 'sshremoteshut', 'sshremoteopen'):
+        need('the ssh access box %s is hidden on a kept-configuration reinstall' % nm,
+             'not KeptConfReinstall' in task_check(nm))
+    need('the ssh SERVER box is not an access question and stays',
+         task_check('sshserver').strip() == 'SshServerAbsent')
+    need('a kept-configuration reinstall is not a true upgrade and has an sd.conf',
+         'Result := (not TrueUpgrade) and (not ApiConfAbsent);' in body(t, 'function KeptConfReinstall'))
+    need('the ssh rule is left alone on a true upgrade or over a server SD did not just install',
+         'Result := TrueUpgrade or (KeptConfReinstall and (not SshWasAbsent));' in body(t, 'function SshScopeKept'))
+    need('ApplySshFirewall is called only when the rule is not kept',
+         re.search(r'if not SshScopeKept then\s*begin\s*SshFw := ApplySshFirewall;', t) is not None)
+    need('the sshd confinement is still put back on that path (not gated by the kept rule)',
+         re.search(r'if not TrueUpgrade then\s*begin\s*SshLimit := ApplyAllowGroups;', t) is not None)
     return bad
 
 
 MUTANTS = [
+    ('one ssh access box is still shown on a kept-configuration reinstall',
+     lambda t: t.replace('Check: (not SshServerAbsent) and SshCurrentlyOpen and (not KeptConfReinstall)',
+                         'Check: (not SshServerAbsent) and SshCurrentlyOpen')),
+    ('the ssh child box is still shown',
+     lambda t: t.replace('Check: SshServerAbsent and (not KeptConfReinstall)', 'Check: SshServerAbsent')),
+    ('the ssh server box is hidden too (an unasked server install)',
+     lambda t: t.replace('Flags: checkablealone unchecked; \\\n    Check: SshServerAbsent\n',
+                         'Flags: checkablealone unchecked; \\\n    Check: SshServerAbsent and (not KeptConfReinstall)\n')),
+    ('the firewall call is gated on a true upgrade only (a hidden box would close an open port)',
+     lambda t: t.replace('if not SshScopeKept then\n    begin\n      SshFw := ApplySshFirewall;',
+                         'if not TrueUpgrade then\n    begin\n      SshFw := ApplySshFirewall;')),
+    ('a server this install adds is no longer scoped',
+     lambda t: t.replace('(KeptConfReinstall and (not SshWasAbsent))', '(KeptConfReinstall)')),
+    ('the sshd confinement is skipped on a kept configuration',
+     lambda t: t.replace('if not TrueUpgrade then\n    begin\n      SshLimit := ApplyAllowGroups;',
+                         'if not SshScopeKept then\n    begin\n      SshLimit := ApplyAllowGroups;')),
     ('the note is written with plain HKLM (redirected, and wrong)',
      lambda t: t.replace('RegWriteStringValue(HKLM64, ApiNoteKey', 'RegWriteStringValue(HKLM, ApiNoteKey')),
     ('any non-empty note counts as open',
