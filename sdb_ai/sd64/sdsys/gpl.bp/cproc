@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux d5270fe2 (S.237, RELEASE_1.1 254): end of input ('') cancels get.string (the Ctrl-R prompt) and is Q at PAUSE, as Solo has since SOLO 16;
+*           neither case matched '' before, so both spun.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: LOGTO is refused to the remote administration session (SDRADMIN over ssh), 12847.
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b): RUN.IN ... DEBUG, Linux's sixth command, in the form the OS allows: ri.debug has the SD service start a separate,
 *           unelevated sd.exe of the account (the bare account sdrunin with the account's group, no privilege) and shows the debugger here (!RUNIN_DEBUG); in
@@ -1192,6 +1194,15 @@ get.string:
    first = @true
    loop
       c = keycode(0)
+
+*     14 Nov 26 Windows port - from Linux d5270fe2 (S.237; Solo SOLO 16): end of input
+*     cancels the string.  '' is never a key (the command editor above takes it as OFF);
+*     the caller then returns to the command editor, which ends the session on the same
+*     end of input.
+      if c = '' then
+         string = ''
+         exit
+      end
 
       n = seq(c)
       if first and n >= 32 and n < 128 then
@@ -4370,7 +4381,14 @@ int.pause:
 
    loop
       c = keycode(0)
+*     14 Nov 26 Windows port - from Linux d5270fe2 (S.237; Solo SOLO 16): end of input
+*     ('') is Q.  It spun here because no case matched ''.  Q unwinds to the command
+*     editor, which ends the session on the same end of input.
       begin case
+         case c = ''
+            display
+            unwinding = 1
+            exit
          case seq(c) = K$RETURN
             display
             exit

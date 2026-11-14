@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  A SESSION WHOSE INPUT HAS ENDED NO LONGER SPINS AT PAUSE OR AT THE CTRL-R SEARCH PROMPT.
+
+             What        - a piped session (a script, a test, a login that is not a terminal) whose input ended while it was at the
+                           PAUSE verb, or at the command editor's Ctrl-R "RSearch:" prompt, used all of a CPU for as long as it was
+                           left and never ended. The end of input now ends it: PAUSE acts as Q (the command is left), and the
+                           search prompt is cancelled, after which the command editor ends the session on the same end of input as
+                           it always did. SD Core Solo had this since 28 Sep 2026; Core now has it too.
+             Why         - a session that spins holds a user slot, its record locks and a CPU until somebody kills it, and nothing
+                           on the screen says so.
+             Does NOT    - Change anything at a terminal: Return, A and Q at PAUSE and a typed search string work as before.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  A LINK INSIDE AN ACCOUNT NO LONGER STOPS A BACKUP.
 
              What        - BACKUP.ACCOUNT leaves out a junction or other link inside an account, names it
