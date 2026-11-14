@@ -3,6 +3,20 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  A LINK INSIDE AN ACCOUNT NO LONGER STOPS A BACKUP.
+
+             What        - BACKUP.ACCOUNT leaves out a junction or other link inside an account, names it
+                           ("Not in the backup: ..."), and goes on. It used to stop the whole backup, so one
+                           link in one account stopped BACKUP.ACCOUNT ALL and the backup-all job for all.
+             Does NOT    - Follow the link: what it points at is never packed.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
+13 Nov 26  MODIFY.ACCOUNT AND GRANT NAME THE ACCOUNT IN LOWER CASE.
+
+             What        - Their messages and audit lines give the account name in lower case, as
+                           CREATE.ACCOUNT and DELETE.ACCOUNT already did.
+             Does NOT    - Change which account is changed. NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  UPDATE.ACCOUNTS ALL KEEPS SDSYS'S OWN COMMANDS.
 
              What        - Run in SDSYS, UPDATE.ACCOUNTS ALL updated SDSYS's VOC from the administrator's

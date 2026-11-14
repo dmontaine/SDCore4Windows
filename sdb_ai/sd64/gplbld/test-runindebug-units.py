@@ -434,9 +434,14 @@ static void n7(void) {
   row("N7b", rc != 0 && strstr(ans, "owner is not LocalSystem") != NULL, "a client that requires a LocalSystem owner sends nothing to another's pipe", ans);
 
   bad[0] = '\0';
+  /* 13 Nov 26: the one instance can still be busy with N7b's client (ERROR_PIPE_BUSY), so wait for it, once; the error is printed. */
   h = CreateFileA(name, READ_CONTROL, 0, NULL, OPEN_EXISTING, 0, NULL);
+  if (h == INVALID_HANDLE_VALUE && GetLastError() == ERROR_PIPE_BUSY && WaitNamedPipeA(name, 5000))
+    h = CreateFileA(name, READ_CONTROL, 0, NULL, OPEN_EXISTING, 0, NULL);
   if (h == INVALID_HANDLE_VALUE) {
-    row("N7c", 0, "the pipe's DACL", "the pipe could not be opened to read it");
+    char e[96];
+    snprintf(e, sizeof(e), "the pipe could not be opened to read it (error %lu)", (unsigned long)GetLastError());
+    row("N7c", 0, "the pipe's DACL", e);
   } else {
     PSID owner = NULL;
     PACL dacl = NULL;

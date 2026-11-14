@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 289: a reparse point the archiver skipped is named (12028, Linux's 11023 + 1005), as Linux
+*           names a skipped symlink; the archiver no longer refuses the whole backup for one.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 05 Oct 26 Windows port - MANIFEST mode, for RESTORE.ACCOUNT LATEST choosing the newest
 *           backup that HOLDS the account (owner, 5 Oct 2026; Linux's mail T1156).
@@ -232,6 +234,12 @@ read.result:
             mrow = both<ln>
             if mrow[len(mrow), 1] = char(13) then mrow = mrow[1, len(mrow) - 1]
             counts<-1> = mrow[19, len(mrow)]
+         case tag = 'SKIPPED'
+*           13 Nov 26 (RELEASE_1.1 289): a reparse point the archiver left out and did not follow, named as Linux's 11023 does.
+*           Taken from both<ln>: trim() would fold blanks in the path.
+            sk = both<ln>
+            if sk[len(sk), 1] = char(13) then sk = sk[1, len(sk) - 1]
+            crt sysmsg(12028, sk[index(sk, 'SKIPPED ', 1) + 8, len(sk)]) ;* Not in the backup: %1
          case tag = 'ERROR'
             why = line[19, len(line)]
          case tag = 'WARNING'

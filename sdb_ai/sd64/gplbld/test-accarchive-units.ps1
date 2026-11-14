@@ -211,7 +211,17 @@ try {
     [void][System.IO.Directory]::CreateDirectory($jt)
     $null = & cmd.exe /c mklink /J (Join-Path $jt 'link') (Join-Path $work 'src') 2>&1
     if (Test-Path -LiteralPath (Join-Path $jt 'link')) {
-        Check 'a junction is refused, not followed' ((Throws { Get-TreeCounts $jt } '*reparse point*') -eq '')
+        # 13 Nov 26 (RELEASE_1.1 289): SKIPPED and named, not refused (one junction stopped BACKUP.ACCOUNT ALL), and still never followed.
+        [System.IO.File]::WriteAllText((Join-Path $jt 'own.txt'), "own`n")
+        $script:Skipped = $null
+        $jTarget = Get-TreeCounts (Join-Path $work 'src')
+        $jc = Get-TreeCounts $jt
+        Write-Host ('    the junction''s tree: ' + (Format-Counts $jc) + '; skipped: ' + (@($script:Skipped) -join ', ') + '; its target holds ' + (Format-Counts $jTarget))
+        Check 'CONTROL: the junction''s target is not empty (following it would show)' ($jTarget.Files -gt 0)
+        Check 'a junction is not followed: only the tree''s own file is counted' (($jc.Files -eq 1) -and ($jc.Dirs -eq 0))
+        Check 'a junction is skipped, not refused, and named once' ((@($script:Skipped).Count -eq 1) -and (@($script:Skipped)[0] -eq (Join-Path $jt 'link')))
+        $null = Get-TreeCounts $jt
+        Check 'a second walk does not name it twice' (@($script:Skipped).Count -eq 1)
         [System.IO.Directory]::Delete((Join-Path $jt 'link'))
     } else {
         Check 'could make a junction to test with' $false 'mklink /J failed'

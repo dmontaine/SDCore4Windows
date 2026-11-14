@@ -1995,6 +1995,15 @@ cited by: `upgrade_nocase`
 Invalid data type
 ```
 
+### msg:12028
+> kind=message tier=reference since=- src=sdsys/messages/12028:1#70816855
+
+```
+Not in the backup: %1
+```
+
+cited by: `acc_archive`
+
 ### msg:1203
 > kind=message tier=reference since=- src=sdsys/messages/1203:1#0fb8db6b
 
