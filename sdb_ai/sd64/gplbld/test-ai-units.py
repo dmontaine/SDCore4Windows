@@ -7,6 +7,9 @@
 # What a behaviour test cannot say: that a rule is still WRITTEN where it must be.  Exit 0 every row passed, 1 a row failed.   --selftest   each MUTANT (a rule
 # taken out of a copy of the text, in memory) must turn a row red; --from=N runs the mutants from number N on.  test-aihelper-units.py RUNS the Windows parts.
 #
+# 13 Nov 26 Windows port - THE HELPER IS NATIVE C (the owner's ruling that day: "python not being an integral part of windows argues for the c helper"): the rows that
+# read the Python helper gplbld/sd-ai, its client, sd-ai-ctl.ps1 and sd-ai-python.ps1 read gplsrc/sdai/*.c instead (shipped(): comments and the -DSDAI_TESTS blocks out),
+# every rule kept; new rows for the Makefile target, the files gone, 12934 gone, the trust store, the retry and the 4 MB cap, and no USER32 / SHELL32; mutants follow.
 # 13 Nov 26 Windows port - from Linux b1d496df.  Groups A, C, D, E and F are Linux's rows with the Windows facts (message ids + 1005 / + 1000, SDSYS, the pipe for the
 # socket, DPAPI and the private access list for the 0600 key file, PowerShell for the shell, the client's wrapper and its --handover).  GROUP B is Windows' own:
 # Linux's installer, remover, sd-elevate and systemd units have no counterpart here; their place is taken by install-aihelper.ps1 (the service, its account, its
@@ -26,11 +29,14 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SD64 = os.path.dirname(HERE)
 BP = os.path.join(SD64, "sdsys", "gpl.bp")
+AIDIR = os.path.join(SD64, "gplsrc", "sdai")
 FILES = {
-    "helper": os.path.join(HERE, "sd-ai"),
-    "ctl": os.path.join(HERE, "sd-ai-ctl"),
-    "wrapper": os.path.join(HERE, "sd-ai-ctl.ps1"),
-    "finder": os.path.join(HERE, "sd-ai-python.ps1"),
+    "main": os.path.join(AIDIR, "sdai_main.c"),
+    "win": os.path.join(AIDIR, "sdai_win.c"),
+    "https": os.path.join(AIDIR, "sdai_https.c"),
+    "json": os.path.join(AIDIR, "sdai_json.c"),
+    "ctl": os.path.join(AIDIR, "sdai_ctl.c"),
+    "makefile": os.path.join(SD64, "Makefile"),
     "providers": os.path.join(HERE, "ai-providers"),
     "context": os.path.join(HERE, "ai-context"),
     "install": os.path.join(HERE, "install-aihelper.ps1"),
@@ -124,50 +130,102 @@ def c_only(text):
     return re.sub(r"//[^\n]*", "", text)
 
 
+def c_strip(text):
+    """C source without its comments, reading string and character literals as such (c_only would take the // of "https://" for a comment)."""
+    out = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch in "\"'":
+            j = i + 1
+            while j < n and text[j] != ch:
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        elif text.startswith("/*", i):
+            j = text.find("*/", i + 2)
+            out.append(" ")
+            i = n if j < 0 else j + 2
+        elif text.startswith("//", i):
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+def shipped(text):
+    """C source as the Makefile builds it: no comments, and no #ifdef SDAI_TESTS block (the test build's hooks, test-aihelper-units.py's -DSDAI_TESTS)."""
+    return re.sub(r"#ifdef SDAI_TESTS\b(?:.|\n)*?#endif", " ", c_strip(text))
+
+
+def helper(t):
+    """The helper as shipped: its four C files (the client, sdai_ctl.c, is t["ctl"])."""
+    return "\n".join(shipped(t[k]) for k in ("main", "win", "https", "json"))
+
+
+def func(text, head):
+    """The body of the C function whose definition starts with head, to the next function at column 0."""
+    i = text.find(head)
+    if i < 0:
+        return ""
+    m = re.search(r"\n(static |int |void |jval\* |HANDLE |wchar_t\* |char\* )", text[i + len(head):])
+    return text[i:i + len(head) + m.start()] if m else text[i:]
+
+
 def check_a(t):
-    c = code_only(t["helper"])
-    row("no way to turn certificate checking off: no CERT_NONE, no verify=False, no _create_unverified_context, no 'insecure' anywhere", not re.search(r"CERT_NONE|verify\s*=\s*False|_create_unverified|insecure", c, re.I), "")
-    row("the TLS context checks the host name and requires a certificate (check_hostname = True, CERT_REQUIRED) and is not older than TLS 1.2", "ctx.check_hostname = True" in c and "ctx.verify_mode = ssl.CERT_REQUIRED" in c
-        and "minimum_version = ssl.TLSVersion.TLSv1_2" in c, "")
-    row("the URL a request goes to must be https: URL_RE starts ^https://, and has no query string and no % escape", 'URL_RE = re.compile(r"^https://' in c and "http://" not in c.replace("https://", "")
-        and re.search(r'URL_RE = re\.compile\(r"[^"]*\(/\[A-Za-z0-9\._~/\+,:-\]\{0,500\}\)\?\$"\)', c) is not None, "")
-    pops = re.findall(r"subprocess\.Popen\(\[([^\]]*)\]", c)
-    row("(Windows) it starts no program but ITSELF for one request (the service loop): one subprocess.Popen, of sys.executable -I -B this file --one; no os.system, os.popen, eval, exec, pickle, shell=True",
-        len(pops) == 1 and pops[0].startswith('sys.executable, "-I", "-B", os.path.abspath(__file__), "--one"') and c.count("subprocess.") == 1
-        and not re.search(r"os\.system|os\.popen|\beval\(|\bexec\(|\bpickle\b|shell\s*=\s*True", c), repr(pops))
-    row("it never prints to stdout (the one reply is written with os.write on the connection)", not re.search(r"\bprint\(|sys\.stdout", c), "")
-    row("the gate group is sdaiusers and the administrator account is SDSYS", 'GATE_GROUP = "sdaiusers"' in c and 'ADMIN_USER = "SDSYS"' in c, "")
-    hall = c[c.index("def handle("):c.index("def write_all(")]
-    mb = between(hall, 'if req["op"] == "models":', 'if req["op"] in ("set", "keyset", "keyclear"):')
+    c = helper(t)
+    hs = shipped(t["https"])
+    row("no way to turn certificate checking off: no SSL_VERIFY_NONE, no verify callback, no 'insecure' anywhere in the helper", not re.search(r"SSL_VERIFY_NONE|set_verify_callback|insecure", c, re.I)
+        and c.count("SSL_CTX_set_verify(") == 1, "")
+    row("the TLS context requires the provider's certificate (SSL_VERIFY_PEER), checks the host name (SSL_set1_host, or the address for an IP), sends SNI and is not older than TLS 1.2",
+        "SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);" in hs and "SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION)" in hs and "!SSL_set1_host(ssl, host) || !SSL_set_tlsext_host_name(ssl, host)" in hs
+        and "X509_VERIFY_PARAM_set1_ip_asc(vp, host)" in hs, "")
+    up = func(shipped(t["main"]), "static int url_parse(")
+    row("the URL a request goes to must be https: url_parse refuses anything not starting https://, and its path has no query string and no % escape", 'if (strncmp(u, "https://", 8) != 0)\n    return 0;' in up
+        and 'return chars_in(p, "._~/+,:-");' in up and "http://" not in c, "")
+    row("(Windows) it starts no program but ITSELF for one request (the service loop): one CreateProcessW, of this program with --one; no system, popen, ShellExecute, WinExec",
+        c.count("CreateProcessW(") == 1 and "CreateProcessW(self, wcmd," in c and '"\\"%s\\" --one --state"' in c and not re.search(r"\bsystem\s*\(|_?popen\s*\(|ShellExecute|WinExec|\bexec[lv]p?\s*\(", c), "")
+    row("it never prints: no printf, puts or stdout in the shipped helper; the one reply goes to the connection handed to serve(), the standard output of --one",
+        not re.search(r"\bprintf\s*\(|\bputs\s*\(|\bstdout\b|fwrite\s*\(", c) and c.count("STD_OUTPUT_HANDLE") == 1
+        and "return serve(GetStdHandle(STD_INPUT_HANDLE), GetStdHandle(STD_OUTPUT_HANDLE));" in c, "")
+    row("the gate group is sdaiusers and the administrator account is SDSYS; the test build's gate (SD_AI_TEST_GATE) is not in the shipped helper",
+        '#define GATE_GROUP L"sdaiusers"' in c and '#define ADMIN_USER L"SDSYS"' in c and "SD_AI_TEST_GATE" not in c and "--test-key" not in c and "SD_AI_TEST_GATE" in t["win"], "")
+    hall = func(shipped(t["main"]), "static void handle(")
+    mb = between(hall, 'if (strcmp(op, "models") == 0) {', 'if (strcmp(op, "set") == 0 ||')
     row("(S.170) in handle() the models request is the administrator's: is_admin is asked BEFORE the settings or the key are read, a caller who is not gets noadmin, and the list is asked last",
-        ordered(mb, "not is_admin(uid)", '"code": "noadmin"', "parse_kv(", "read_key(state, name)", "list_models(conf, name, p, key, limits)"), "")
-    h = hall[hall.index('if req["op"] in ("set", "keyset", "keyclear"):'):]
-    row("in handle() the gate is asked BEFORE the settings are read (may_ask comes before parse_kv); the caller is read from the pipe (peer) and from nothing the caller wrote",
-        h.index("if not may_ask(uid):") < h.index("parse_kv(") and "uid = peer(fd)" in hall and hall.count("peer(") == 1, "")
-    m = c[c.index("def may_ask("):c.index("def ", c.index("def may_ask(") + 4)]
+        ordered(mb, "if (c == NULL || !is_admin(c)) {", '"noadmin", "only the administrator may ask for the list of models"', "conf_and_table(&conf)", "read_key(pname, &key)",
+                "list_models(&conf, pname, &p, key, lim, &ids, &nids)"), "")
+    h = hall[hall.find('if (strcmp(op, "set") == 0 ||'):]
+    sv = func(shipped(t["main"]), "static int serve(")
+    row("in handle() the gate is asked BEFORE the settings are read (may_ask comes before conf_and_table); the caller is read from the pipe in serve() once, from nothing the caller wrote",
+        0 <= h.find("if (!may_ask(c)) {") < h.find("conf_and_table(&conf)") and c.count("caller_from_pipe(") == 2 and "have_caller = caller_from_pipe(hin, &c);" in sv, "")
     row("may_ask (S.163, owner Q6): SDSYS OR a member of the gate group, and nobody else (another Windows administrator needs the gate); an unknown caller is never let through",
-        "return caller is not None and (is_sdsys(caller) or in_group(caller.sid, GATE_GROUP))" in m and m.count("return") == 1, "")
-    ia = c[c.index("def is_admin("):c.index("def may_ask(")]
-    row("is_admin (owner Q6): SDSYS, or an ELEVATED caller with Administrators enabled - the settings only", "return caller is not None and (is_sdsys(caller) or (caller.elevated and caller.admins))" in ia, "")
-    row("in handle() the key is read after the model and before the request is checked, the limits are counted before the call, and the call is last", h.index("selected(conf, table)") < h.index("read_key(")
-        < h.index("counters(state, uid, time.time(), limits, count=True)") < h.index("ask(state, conf"), "")
-    row("in handle() set, keyset and keyclear reach admin_op only for the administrator: is_admin is asked first, and a caller who is not gets noadmin", ordered(h, 'req["op"] in ("set", "keyset", "keyclear")',
-        "not is_admin(uid)", '"code": "noadmin"', "admin_op(state, providers_path, req)") and h.count("admin_op(") == 1, "")
-    s = c[c.index("def serve("):c.index("def flush_out(")]
-    log = re.search(r'log\("([^"]*)"[^\n]*', s)
-    row("the one log line names the caller (sid), the provider, the status and the sizes and no text or key", bool(log) and all(w in log.group(0) for w in ("sid=", "provider=", "status=", "in=", "out="))
-        and not re.search(r"prompt|text|key|system", log.group(1)), repr(log.group(0) if log else None))
+        "int may_ask(const caller_t* c) { return c != NULL && (is_sdsys(c) || in_group(c->psid, gate_group())); }" in c, "")
+    row("is_admin (owner Q6): SDSYS, or an ELEVATED caller with Administrators enabled - the settings only", "int is_admin(const caller_t* c) { return c != NULL && (is_sdsys(c) || (c->elevated && c->admins)); }" in c, "")
+    row("in handle() the key is read after the model and before the request is checked, the limits are counted before the call, and the call is last",
+        ordered(h, "sel = selected(&conf, &name, &p, &model);", "read_key(name, &key)", 'json_get(req, "prompt")', "counters(c->sid, lim, 0, 1)", "ask(&conf, &p, model, key,"), "")
+    row("in handle() set, keyset and keyclear reach admin_op only for the administrator: is_admin is asked first, and a caller who is not gets noadmin",
+        ordered(h, 'if (strcmp(op, "set") == 0 || strcmp(op, "keyset") == 0 || strcmp(op, "keyclear") == 0) {', "if (c == NULL || !is_admin(c)) {",
+                '"noadmin", "only the administrator may change the AI settings"', "admin_op(req, &js)") and c.count("admin_op(req, &js)") == 1, "")
+    lg = func(shipped(t["main"]), "static void log_line(")
+    fmt = re.search(r'snprintf\(line, sizeof line, "([^"]*)", ([^;]*)\);', lg)
+    row("the one log line names the caller (sid), the provider, the status and the sizes and no text or key", bool(fmt) and fmt.group(1) == "%s sd-ai: sid=%s provider=%s status=%s in=%s out=%s\\n"
+        and fmt.group(2) == 'ts, c ? c->sid : "None", r->prov, r->status, r->in, r->out', repr(fmt.groups() if fmt else None))
     row("it writes no audit trail: no 'audit' and no K$AUDIT in the helper (SD writes the line BEFORE it asks)", "audit" not in c.lower(), "")
-    rk = c[c.index("def read_key("):c.index("def private_create(")]
-    row("(Windows) the key file must be private BEFORE it is read: private_file (a plain file, no reparse point, an access list of this account and SYSTEM only) comes before the open; a "
-        "file that is not is nokey", ordered(rk, "if not private_file(path):", '"the key file is not private"', 'open(path, "rb")', "dpapi(blob, key_entropy(name), False)")
-        and "os.lstat(path)" in c and "stat.S_ISREG" in c and "FILE_ATTRIBUTE_REPARSE_POINT" in c, "")
-    row("a redirect is never followed: no http.client redirect handling, no urllib.request, no requests", not re.search(r"urllib\.request|import requests|HTTPRedirectHandler", c) and "redirect, which is not followed" in c, "")
-    row("the reply is cut to ASCII by hygiene() before it is returned, and an oversize reply is an error, not a cut", c.index("text, replaced = hygiene(text)") < c.index('"toobig", "the reply is over'), "")
-    ad = c[c.index("def admin_op("):c.index("def readable(")]
-    row("admin_op checks the whole result before it writes (selected, every limit) and write_key/write_conf replace atomically; a key reply never holds the key", ordered(ad, "selected(new, table)", "int_setting(new, k)", "write_conf(state, new)")
-        and "replace(tmp, path)" in c and "replace(tmp, os.path.join(d, name))" in c and 'return {"t": "ok", "key": "set"}' in ad and 'req.get("key")' in ad
-        and not re.search(r'\{[^}]*"echo"', ad), "")
+    rk = func(shipped(t["main"]), "static int read_key(")
+    pf = func(shipped(t["win"]), "int private_file(")
+    row("(Windows) the key file must be private BEFORE it is read: private_file (a plain file, no reparse point, an access list of this account and SYSTEM only) comes before the read; a "
+        "file that is not is nokey", ordered(rk, "if (!private_file(path))", '"the key file is not private"', "read_file(path, 65536, &blob, &n)", "dpapi((BYTE*)blob, (DWORD)n, entropy, 0, &raw, &rn)")
+        and "if (!path_plain_file(path) ||" in pf and "FILE_ATTRIBUTE_REPARSE_POINT" in c, "")
+    row("a redirect is never followed: the HTTP code never reads a Location header, and a 3xx is refused", "location" not in hs.lower() and "redirect, which is not followed" in c, "")
+    row("the reply is cut to ASCII by hygiene() before it is returned, and an oversize reply is an error, not a cut", ordered(h, "hygiene(text.p, text.n, &clean, &replaced);", '"the reply is over %lld bytes"'), "")
+    ad = func(shipped(t["main"]), "static int admin_op_locked(")
+    row("admin_op checks the whole result before it writes (selected, every limit) and write_key/write_conf replace atomically; a key reply never holds the key",
+        ordered(ad, "if (selected(&nw, &n, &p, &m) < 0)", "if (all_limits(&nw, lim) < 0)", "if (write_conf(&nw) < 0)")
+        and "return replace_file(tmp, path);" in c and 'replace_file(tmp, state_path("keys", name))' in c and 'sb_puts(out, "{\\"t\\": \\"ok\\", \\"key\\": \\"set\\"}");' in ad
+        and 'json_get(req, "key")' in ad and "echo" not in ad, "")
     p = t["providers"]
     secs = re.findall(r"^\[([a-z]+)\]$", p, re.M)
     row("the shipped providers table has exactly anthropic, openai, google and deepseek", secs == ["anthropic", "openai", "google", "deepseek"], repr(secs))
@@ -176,14 +234,18 @@ def check_a(t):
     models = re.findall(r"^model=(.*)$", p, re.M)
     row("the shipped table holds a default model for each provider (a plain model name) and no key (the person supplies the key; the model may be changed)",
         len(models) == 4 and all(re.match(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$", m) for m in models) and not re.search(r"^key", p, re.M | re.I), repr(models))
-    k = code_only(t["ctl"])
-    kb = between(k, 'elif cmd == "key" and len(rest) == 1:', "if req is None:")
-    row("sd-ai-ctl never takes a key as an argument: in the key branch the key comes from getpass or stdin only (rest holds the provider and nothing else), and it is never printed",
-        'key = getpass.getpass("Key for %s (not shown): " % rest[0])' in kb and "key = sys.stdin.readline().rstrip" in kb and "rest[1]" not in kb and "sys.argv" not in kb
-        and not re.search(r'say\([^)]*\bkey\s*\)|say\(.*\breq\b', k) and 'rest[0] not in PROVIDERS' in k, "")
-    hb = between(k, 'elif cmd == "key" and len(rest) == 3 and rest[1] == "--handover":', 'elif cmd == "key" and len(rest) == 1:')
-    row("(Windows) sd-ai-ctl key --handover: the key is the FILE's (named by the third word), read and removed BEFORE the provider is even checked, and never printed",
-        ordered(hb, "key = handover_key(rest[2])", "if rest[0] not in PROVIDERS:", '"keyset"') and ordered(k, "def handover_key(path):", "f.readline()", "finally:", "os.remove(path)"), "")
+    k = shipped(t["ctl"])
+    kb = between(k, 'strcmp(cmd, "key") == 0 && nr == 1', "return usage();")
+    rc = func(k, "static char* read_key_console(")
+    row("the client never takes a key as an argument: in the key branch the key comes from the console (echo off, then restored) or standard input only (rest holds the provider and nothing "
+        "else), and it is never printed", "key = read_key_console(rest[0]);" in kb and "rest[1]" not in kb and "argv" not in kb
+        and ordered(rc, "GetConsoleMode(in, &mode)", "& ~ENABLE_ECHO_INPUT", "ReadConsoleW(", "SetConsoleMode(in, mode);") and not re.search(r"\bsayf?\((?:[^;]*,\s*)?key\s*[,)]", k)
+        and "if (!is_provider(rest[0]))" in kb, "")
+    hb = between(k, 'strcmp(cmd, "key") == 0 && nr == 3 && strcmp(rest[1], "--handover") == 0', 'strcmp(cmd, "key") == 0 && nr == 1')
+    hk = func(k, "static char* handover_key(")
+    row("(Windows) the client's key --handover: the key is the FILE's (named by the third word), read and removed BEFORE the provider is even checked, and never printed",
+        ordered(hb, "key = handover_key(rest[2]);", "if (!is_provider(rest[0]))", '"keyset"') and ordered(hk, "read_file(w, 65536, &data, &n)", "DeleteFileW(w);")
+        and hk.count("return") == 1, "")
     ct = t["context"]
     row("(Windows) the shipped standing text names SD Core for Windows, its own paths and documents, no Linux path, and is printable ASCII within 4000 characters",
         ct.startswith("About this system: SD Core for Windows") and "/usr/local" not in ct and "Linux" not in ct and "SDCore4WindowsDocs" in ct and len(ct) <= 4001
@@ -196,21 +258,34 @@ def check_b(t):
         "and refuses an unelevated run",
         "$SvcAccount = 'NT SERVICE\\sd-ai'" in ins and "& $sc config $SvcName obj= $SvcAccount" in ins and "-StartupType Automatic" in ins and "& $sc sidtype $SvcName restricted" in ins
         and "& $sc privs $SvcName SeChangeNotifyPrivilege" in ins and ordered(ins, "IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)", "exit 2", "New-Service"), "")
-    row("...the service runs the all-users Python, isolated and writing no bytecode, on the helper in the program folder, with --service; no Python means NO service (exit 3), never a guess",
-        "$bin = '\"' + $py + '\" -I -B \"' + $helper + '\" --service'" in ins and ordered(ins, "$py = Find-SdPython", "if (-not $py) {", "Remove-Svc", "exit 3", "New-Service"), "")
+    row("...the service runs the native helper sd-ai.exe in the program folder with --service, and nothing looks for Python (the owner, 13 Nov 2026: the C helper)",
+        "$helper = Join-Path $lib 'sd-ai.exe'" in ins and "$bin = '\"' + $helper + '\" --service'" in ins and "python" not in ins.lower() and "exit 3" not in ins
+        and "foreach ($f in @('sd-ai.exe', 'ai-providers', 'ai-context')) {" in ins, "")
     row("...the keys directory is SYSTEM's and the service's ONLY (no Administrators entry), the state directory adds Administrators READ; inheritance cut on both; ai.conf is not written (none is AI off)",
         "& icacls $keys /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' \"${SvcAccount}:(OI)(CI)M\" | Out-Null" in ins
         and "& icacls $state /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' \"${SvcAccount}:(OI)(CI)M\" '*S-1-5-32-544:(OI)(CI)RX' | Out-Null" in ins and "ai.conf" not in ins.replace("ai.conf is NOT written", ""), "")
     row("...nothing is deleted from the state directory (an upgrade keeps settings and keys, as Linux keeps /var/lib/sd-ai), and what was made is read back and printed (account, command, pipe, access lists)",
         not re.search(r"Remove-Item[^\n]*\$(state|keys|cnt)\b", ins) and "Get-CimInstance -ClassName Win32_Service" in ins and "$w.StartName -eq $SvcAccount" in ins and "Test-AiPipe" in ins, "")
     iss = t["iss"]
-    row("(Windows) sd.iss sets up the helper AFTER the Python step (from [Code], at ssPostInstall), reports only a failure, removes the service at uninstall and deletes the group sdaiusers with the others",
-        ordered(iss, "PyMsg := InstallPython;", "AiMsg := InstallAiHelper;") and "AiMsg +" in iss and "\\install-aihelper.ps1\"\" -Remove\"" in iss
-        and "Exec(Net, 'localgroup sdaiusers /delete'," in iss and "if (Code = 0) or (Code = 3) then" in between(iss, "function InstallAiHelper: String;", "procedure CurStepChanged"), "")
+    ia = between(iss, "function InstallAiHelper: String;", "procedure CurStepChanged")
+    row("(Windows) sd.iss sets up the helper at ssPostInstall (from [Code]), reports any code but 0 as a failure (no Python excuse: exit 3 is gone), removes the service at uninstall and deletes the "
+        "group sdaiusers with the others",
+        iss.count("AiMsg := InstallAiHelper;") == 1 and "AiMsg +" in iss and "\\install-aihelper.ps1\"\" -Remove\"" in iss
+        and "Exec(Net, 'localgroup sdaiusers /delete'," in iss and "  if Code = 0 then\n    Exit;" in ia and "Code = 3" not in ia, "")
     st = t["stage"]
-    row("(Windows) stage.py ships the helper, its client, the two finders and the two data files to ProgramFiles\\lib\\sd-ai (a missing one fails the build), and install-aihelper.ps1 to {app}",
-        "AI_HELPER_FILES = ['sd-ai', 'sd-ai-ctl', 'sd-ai-ctl.ps1', 'sd-ai-python.ps1', 'ai-providers', 'ai-context']" in st and "ai_dst = os.path.join(pf, 'lib', 'sd-ai')" in st
+    row("(Windows) stage.py ships bin\\sd-ai.exe and the two data files to ProgramFiles\\lib\\sd-ai (a missing one fails the build), refuses an msys-, python, USER32 or SHELL32 import in it, "
+        "and ships install-aihelper.ps1 to {app}",
+        "AI_HELPER_BIN = 'sd-ai.exe'" in st and "AI_HELPER_FILES = ['ai-providers', 'ai-context']" in st and "ai_dst = os.path.join(pf, 'lib', 'sd-ai')" in st
+        and "for src in [os.path.join('bin', AI_HELPER_BIN)] + [os.path.join(here, n) for n in AI_HELPER_FILES]:" in st
+        and "'sd-ai.exe':      ['msys-', 'python', 'user32', 'shell32']," in st
         and "raise SystemExit('missing %s - the AI helper needs it' % src)" in st and "'install-aihelper.ps1'," in st, "")
+    mk = "\n".join(l for l in t["makefile"].split("\n") if not l.lstrip().startswith("#"))
+    rec = between(mk, "\nsd-ai:\n", "\n\n")
+    row("(Windows) the Makefile builds sd-ai.exe as sd's prerequisite with the UCRT64 compiler and the STATIC OpenSSL, from every C file of gplsrc/sdai, and never with -DSDAI_TESTS",
+        re.search(r"^sd: \$\(SDOBJS\)[^\n]*\bsd-ai\b", mk, re.M) is not None and "$(UCRT_CC)" in rec and "-Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic" in rec
+        and "$(wildcard $(AIDIR)/*.c)" in rec and "-o $(GPLBIN)sd-ai.exe" in rec and "-municode" in rec and "SDAI_TESTS" not in mk, rec[:200])
+    gone = [n for n in ("sd-ai", "sd-ai-ctl", "sd-ai-ctl.ps1", "sd-ai-python.ps1") if os.path.exists(os.path.join(HERE, n))]
+    row("(Windows) the Python helper, its client and their two PowerShell finders are gone from gplbld", not gone, repr(gone))
     g = ps_only(t["groups"])
     row("(Windows) sync-route-groups.ps1 makes sdaiusers with the other gate groups and adds nobody to it", "$AiGroup   = 'sdaiusers'" in g and "    Ensure-Group $AiGroup $AiComment" in g
         and not re.search(r"Add-LocalGroupMember[^\n]*\$AiGroup|sdaiusers[^\n]*/add", g), "")
@@ -246,9 +321,10 @@ def check_b(t):
         ordered(sa, "case sub = 'key' and n.words = 3", "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\"\n", "qargs = \"'show'\"", "gosub run.ctl", "gosub check.key", "if not(key.found) then")
         and not re.search(r"\binput\b|readline", sa) and "2>&1" not in sa, "")
     rc = between(sa, "run.ctl:", "need.ok:")
-    row("(Windows) run.ctl: the client is run with its words quoted and NOTHING redirected, its carriage returns are taken out, no Python stops with 12934, and only then is an unreachable helper judged",
-        ordered(rc, "os.execute \"& '\" : ctl : \"' \" : qargs capturing out", "out = convert(char(13), '', out)", "if trim(out<1>)[1, 16] = 'error: nopython:' then", "stop sysmsg(12934)",
-                "if trim(out) = '' or (trim(out<1>)[1, 7] # 'error: ' and (index(out, 'could not be reached', 1) or index(out, 'not found', 1)"), "")
+    row("(Windows) run.ctl: the client is run with its words quoted and NOTHING redirected, its carriage returns are taken out, and only then is an unreachable helper judged; no Python is "
+        "looked for anywhere (no nopython, no 12934: the helper is native, 13 Nov 2026)",
+        ordered(rc, "os.execute \"& '\" : ctl : \"' \" : qargs capturing out", "out = convert(char(13), '', out)",
+                "if trim(out) = '' or (trim(out<1>)[1, 7] # 'error: ' and (index(out, 'could not be reached', 1) or index(out, 'not found', 1)") and "nopython" not in sa and "12934" not in sa, "")
     audits = re.findall(r"kernel\(K\$AUDIT, ([^\n]*)\)", sa)
     row("every audit line of set.ai is lower case, has no key (no 'key=' and no variable named key) and names a host, never a whole URL; (S.160) the standing text's three lines carry its size or the "
         "name the wall found, never the text", len(audits) == 13 and all(a.lstrip().startswith("'set.ai ") for a in audits)
@@ -259,12 +335,13 @@ def check_b(t):
         "and a refusal stops before the client runs",
         ordered(sa, "case sub = 'context' and n.words = 3", "if len(hx) = 0 or mod(len(hx), 2) or len(hx) > 8000", "ctext = iconv(hx, 'MX0C')", "if cc # 10 and (cc < 32 or cc > 126) then stop sysmsg(15014)",
                 "call $tk_aiwall('request', ctext, why)", "stop sysmsg(15013, why)", "qargs = \"'context' '\" : hx : \"'\"", "gosub run.ctl"), "")
-    row("(Windows) set.ai finds its client in the program folder (K$WINPATH of /lib/sd-ai/sd-ai-ctl.ps1), never in the SD system directory; SD_AI_CTL overrides it for the tests only; a path holding a quote is refused",
-        "if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai-ctl.ps1')" in sa and "env('SD_AI_CTL')" in sa and not re.search(r"ctl\s*=[^\n]*@sdsys", sa) and sa.count("@sdsys") == 1
+    row("(Windows) set.ai finds its client in the program folder (K$WINPATH of /lib/sd-ai/sd-ai.exe, the helper's own program), never in the SD system directory; SD_AI_CTL overrides it for the "
+        "tests only; a path holding a quote is refused",
+        "if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai.exe')" in sa and "env('SD_AI_CTL')" in sa and not re.search(r"ctl\s*=[^\n]*@sdsys", sa) and sa.count("@sdsys") == 1
         and "index(ctl, \"'\", 1)" in sa, "")
     row("set.ai is in SDSYS's VOC only: voc_template has it as a verb for $setai and newvoc has no set.ai", t["voc_template"].split("\n")[:3] == ["V", "CA", "$setai"]
         and not os.path.exists(os.path.join(SD64, "sdsys", "newvoc", "set.ai")), "")
-    need = [str(n) for n in range(12611, 12628)] + ["12934"]
+    need = [str(n) for n in range(12611, 12628)]
     bad = []
     for n in need:
         p = os.path.join(MESSAGES, n)
@@ -275,10 +352,10 @@ def check_b(t):
             continue
         if not tx.endswith("\n") or tx.count("\n") != 1 or tx.strip() == "":
             bad.append(n + " shape")
-    row("messages 12611 to 12627 and 12934 exist, one line each", not bad, repr(bad))
-    row("12611 is 'Account %1 has ai %2', 12614 is the usage, 12613 does not name the program, and 12934 says the AI needs Python 3.13 or later for all users",
+    row("messages 12611 to 12627 exist, one line each; 12934 (\"the AI needs Python\") is gone with the Python helper", not bad and not os.path.exists(os.path.join(MESSAGES, "12934")), repr(bad))
+    row("12611 is 'Account %1 has ai %2', 12614 is the usage, and 12613 does not name the program",
         open(os.path.join(MESSAGES, "12611")).read() == "Account %1 has ai %2\n" and "set.ai {" in open(os.path.join(MESSAGES, "12614")).read()
-        and "sd-ai" not in open(os.path.join(MESSAGES, "12613")).read() and "Python 3.13 or later" in open(os.path.join(MESSAGES, "12934")).read(), "")
+        and "sd-ai" not in open(os.path.join(MESSAGES, "12613")).read(), "")
 
 
 def check_c(t):
@@ -465,74 +542,96 @@ def check_w(t):
     cn = o[o.index("Private int ai_connect("):o.index("Private bool ai_send_all(")]
     row("(Windows) op_ai.c: a pipe that is not the service's is AUDITED ('ai refused reason=pipe.owner', lower case) and answered as no helper; nothing is sent to it",
         ordered(cn, "slot = win32_ai_open(path, check_owner, AI_CONNECT_MS);", "if (slot == WIN32_AI_NOTOURS) {", 'audit_message("ai refused reason=pipe.owner");', "return -1;"), "")
-    c = code_only(t["helper"])
-    cp = c[c.index("def create_pipe("):c.index("class JOBOBJECT_BASIC_LIMIT_INFORMATION")]
-    row("the helper's pipe REJECTS REMOTE CLIENTS (PIPE_REJECT_REMOTE_CLIENTS, 0x8: a Windows pipe is reachable over the network otherwise) and its first instance is FILE_FLAG_FIRST_PIPE_INSTANCE",
-        "0x00000008" in between(cp, "pipe_mode =", "\n") and "0x00080000 if first else 0" in cp and "PIPE_REJECT_REMOTE_CLIENTS" in t["helper"], "")
-    sd = c[c.index("def pipe_sddl("):c.index("def create_pipe(")]
+    c = helper(t)
+    m = shipped(t["main"])
+    wn = shipped(t["win"])
+    cp = func(m, "static HANDLE create_pipe(")
+    lo = func(m, "static int listener_open(")
+    row("the helper's pipe REJECTS REMOTE CLIENTS (a Windows pipe is reachable over the network otherwise), and its FIRST instance is FILE_FLAG_FIRST_PIPE_INSTANCE (a name someone else made first stops it)",
+        "DWORD pipe_mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;" in cp and "PIPE_ACCESS_DUPLEX | (first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0)" in cp
+        and "g_cur = create_pipe(g_pipe, 1, &g_sa);" in lo and m.count("create_pipe(g_pipe, 1,") == 1, "")
+    sd = func(m, "static int pipe_sa(")
     row("the pipe's security: owner the helper's own account, a PROTECTED list (P:), SYSTEM and the helper full, sdusers and Administrators PIPE_CLIENT_MASK only, and PIPE_CLIENT_MASK is win32ai.c's AI_ACCESS (0x00120183)",
-        'parts = ["O:%sD:P(A;;GA;;;SY)(A;;GA;;;%s)" % (me, me)]' in sd and 'parts.append("(A;;0x%08X;;;%s)" % (PIPE_CLIENT_MASK, sdusers))' in sd and 'parts.append("(A;;0x%08X;;;BA)" % PIPE_CLIENT_MASK)' in sd
-        and "PIPE_CLIENT_MASK = 0x00120183" in c and sd.count("GA") == 2, "")
-    pr = c[c.index("def peer("):c.index("def in_group(")]
+        'snprintf(sd, sizeof sd, "O:%sD:P(A;;GA;;;SY)(A;;GA;;;%s)", me, me);' in sd and 'snprintf(t, sizeof t, "(A;;0x%08X;;;%s)", PIPE_CLIENT_MASK, s);' in sd
+        and 'snprintf(t, sizeof t, "(A;;0x%08X;;;BA)", PIPE_CLIENT_MASK);' in sd and "#define PIPE_CLIENT_MASK 0x00120183" in m and "#define PIPE_CLIENT_MASK 0x00120183" in shipped(t["ctl"])
+        and sd.count("GA") == 2, "")
+    pr = func(wn, "int caller_from_pipe(")
     row("the caller is read by impersonating the pipe's client and REVERTING before anything else; a failed revert ends the process; LocalSystem, LocalService and NetworkService are no caller",
-        ordered(pr, "if not adv.ImpersonateNamedPipeClient(h):", "return None", "try:", "OpenThreadToken(", "caller = read_token(tok)", "finally:", "if not adv.RevertToSelf():", "os._exit(5)",
-                "if caller is None or caller.sid in SERVICE_SIDS:", "return None") and 'SERVICE_SIDS = ("S-1-5-18", "S-1-5-19", "S-1-5-20")' in c, "")
-    ig = c[c.index("def in_group("):c.index("def is_sdsys(")]
-    row("the gate is read LIVE at each request (NetLocalGroupGetMembers, the caller's own SID among the members) and every doubt is no", "netapi.NetLocalGroupGetMembers(None, group, 0," in ig
-        and "if rc not in (0, 234):" in ig and ig.count("return True") == 1 and "if sid_text(psid) == sid:" in ig, "")
-    dp = c[c.index("def dpapi("):c.index("def key_entropy(")]
-    row("the key is DPAPI in the helper account's OWN scope (no CRYPTPROTECT_LOCAL_MACHINE, 0x4: any process on the machine could open a machine blob), no UI, with the provider's name as entropy",
-        "crypt.CryptProtectData(ctypes.byref(din), None, ctypes.byref(ent), None, None, 0x1, ctypes.byref(out))" in dp and "0x4" not in dp and "0x5" not in dp
-        and 'return ("sd-ai key " + name).encode("ascii")' in c, "")
-    wk = c[c.index("def write_key("):c.index("def set_context(")]
-    pc = c[c.index("def private_create("):c.index("def replace(")]
+        ordered(pr, "if (!ImpersonateNamedPipeClient(h))", "return 0;", "OpenThreadToken(", "ok = read_token(tok, c);", "if (!RevertToSelf())", "ExitProcess(5);",
+                'strcmp(c->sid, "S-1-5-18") == 0 || strcmp(c->sid, "S-1-5-19") == 0 || strcmp(c->sid, "S-1-5-20") == 0', "return 0;"), "")
+    ig = func(wn, "int in_group(")
+    row("the gate is read LIVE at each request (NetLocalGroupGetMembers, the caller's own SID among the members) and every doubt is no", "NetLocalGroupGetMembers(NULL, group, 0," in ig
+        and "if (rc != NERR_Success && rc != ERROR_MORE_DATA) {" in ig and ig.count("return 1;") == 1 and "EqualSid(m, (PSID)sid)" in ig, "")
+    dp = func(wn, "int dpapi(")
+    row("the key is DPAPI in the helper account's OWN scope (no CRYPTPROTECT_LOCAL_MACHINE: any process on the machine could open a machine blob), no UI, with the provider's name as entropy",
+        "CryptProtectData(&din, NULL, &ent, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &dout)" in dp and "CryptUnprotectData(&din, NULL, &ent, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &dout)" in dp
+        and "LOCAL_MACHINE" not in c and 'static void key_entropy(char* out, size_t n, const char* name) { snprintf(out, n, "sd-ai key %s", name); }' in m
+        and m.count("key_entropy(entropy, sizeof entropy, name);") == 2, "")
+    wk = func(m, "static int write_key(")
+    pc = func(wn, "HANDLE private_create(")
     row("write_key encrypts BEFORE it writes, into a file created with a protected list of this account and SYSTEM only (not one that inherits), then replaces the old one",
-        ordered(wk, "blob = dpapi(key.encode(\"ascii\"), key_entropy(name), True)", "with private_create(tmp) as f:", "f.write(blob)", "replace(tmp, os.path.join(d, name))")
-        and 'sddl = "O:%sD:P(A;;FA;;;SY)(A;;FA;;;%s)" % (me, me)' in pc, "")
-    pf = c[c.index("def private_file("):c.index("def read_key(")]
+        ordered(wk, "dpapi((const BYTE*)key, (DWORD)strlen(key), entropy, 1, &blob, &bn)", "h = private_create(tmp);", "WriteFile(h, blob, bn, &w, NULL)", 'replace_file(tmp, state_path("keys", name))')
+        and 'snprintf(sddl, sizeof sddl, "O:%sD:P(A;;FA;;;SY)(A;;FA;;;%s)", me, me);' in pc, "")
+    pf = func(wn, "int private_file(")
     row("private_file allows only this account and SYSTEM, and refuses a list it cannot read or judge (no list, an entry of a kind not known)",
-        "return sids is not None and me is not None and sids <= {me, SID_SYSTEM}" in pf and "if not dacl.value:" in c and "if hdr.AceType != 0:" in c, "")
-    ls = c[c.index("class Listener:"):c.index("SERVICE_WIN32_OWN_PROCESS = 0x10")]
+        "if (!EqualSid(s, me) && !EqualSid(s, (PSID)system))" in pf and "if (dacl == NULL ||" in pf and "if (hdr->AceType != ACCESS_ALLOWED_ACE_TYPE) {" in pf, "")
+    ls = func(m, "static void listener_run(")
+    spn = func(m, "static int spawn(")
     row("the service loop makes the NEXT instance BEFORE it lets go of the connected one (there is never a moment with no instance of ours for another user to take the name), and each request "
-        "process is put in a job that ends it when the service stops", ordered(ls, "ok = k32.ConnectNamedPipe(self.cur, None)", "nxt, err = create_pipe(self.name, False, self.sa)", "self.spawn(self.cur)", "self.cur = nxt")
-        and ls.count("self.spawn(") == 1 and "k32.AssignProcessToJobObject(self.job, int(child._handle))" in ls and "info.BasicLimitInformation.LimitFlags = 0x00002000" in c, "")
-    sv = c[c.index("def serve("):c.index("def flush_out(")]
+        "process is started suspended, put in a job that ends it when the service stops, and inherits the connection and the log and nothing else",
+        ordered(ls, "BOOL ok = ConnectNamedPipe(g_cur, NULL);", "nxt = create_pipe(g_pipe, 0, &g_sa);", "if (!spawn(g_cur)) {", "g_cur = nxt;") and ls.count("spawn(") == 1
+        and ordered(spn, "PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit,", "CREATE_SUSPENDED", "AssignProcessToJobObject(g_job, pi.hProcess);", "ResumeThread(pi.hThread);")
+        and "info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;" in m, "")
+    sv = func(m, "static int serve(")
     row("a request process ends itself if it runs far past its deadline (the watchdog, Linux's alarm), and the reply is flushed to the client before the process ends",
-        "WATCHDOG = CONNECT_TIMEOUT + 300 + 5" in c and ordered(sv, "dog = threading.Timer(WATCHDOG, stuck)", "dog.start()", "reply, prov = handle(", "write_all(fd_out, data)", "flush_out(fd_out)"), "")
-    k = code_only(t["ctl"])
-    row("(Windows) sd-ai-ctl writes EVERYTHING to standard output (PowerShell 5.1 would wrap standard error in error records where set.ai reads 'error:') and checks the real pipe's owner before sending",
-        "sys.stderr" not in k and "print(" not in k and "check_owner = path.lower() == DEFAULT_PIPE.lower()" in k
-        and ordered(k, "def talk(path, req, check_owner):", "if check_owner and not owned_by_service(h):", "raise OSError", "k32.WriteFile("), "")
-    wr = ps_only(t["wrapper"])
-    row("(Windows) sd-ai-ctl.ps1 finds the all-users Python (sd-ai-python.ps1) and runs the client isolated (-I -B); with none it prints one 'error: nopython:' line and exits 1",
-        ordered(wr, ". (Join-Path $PSScriptRoot 'sd-ai-python.ps1')", "$py = Find-SdPython", "if (-not $py) {", "Write-Output 'error: nopython: no Python 3.13 or later is installed for all users'", "exit 1",
-                "& $py -I -B (Join-Path $PSScriptRoot 'sd-ai-ctl') @args"), "")
-    fd = ps_only(t["finder"])
-    row("(Windows) Find-SdPython reads HKLM PythonCore only (all users; a per-user Python is out of reach of the service), 3.13 or later, a python.exe that exists, and prints nothing",
-        "'HKLM:\\SOFTWARE\\Python\\PythonCore'" in fd and "HKCU" not in fd and "[version]'3.13'" in fd and "Test-Path -LiteralPath $exe -PathType Leaf" in fd and "Write-Output" not in fd, "")
+        "#define WATCHDOG_MS ((5 + 300 + 5) * 1000)" in m and ordered(sv, "CreateThread(NULL, 0, watchdog, NULL, 0, NULL);", "handle(buf.p,", "write_all(hout, r.js.p, r.js.n);", "FlushFileBuffers(hout);"), "")
+    k = shipped(t["ctl"])
+    tk = func(k, "static jval* talk(")
+    row("(Windows) the client writes EVERYTHING to standard output (PowerShell 5.1 would wrap standard error in error records where set.ai reads 'error:') and checks the real pipe's owner before sending",
+        "STD_ERROR_HANDLE" not in k and "stderr" not in k and not re.search(r"(?<!\w)f?printf\s*\(", k) and "SD_AI_TEST_CHECK_OWNER" not in k and "check_owner = _stricmp(path, DEFAULT_PIPE) == 0;" in k
+        and ordered(tk, "CreateFileW(wp, PIPE_CLIENT_MASK, 0, NULL, OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL)", "if ((check_owner && !owned_by_service(h))",
+                    "WriteFile(h, req + done,"), "")
+    hs = shipped(t["https"])
+    row("(13 Nov 26, the C helper) the provider's certificate is checked against the ca-file ALONE when SET.AI CA set one (Linux's meaning), else against the Windows ROOT store's certificates that "
+        "may vouch for a server; X509_STRICT and PARTIAL_CHAIN as Python 3.13's default context",
+        ordered(hs, "if (ca_file != NULL && ca_file[0] != '\\0') {", "SSL_CTX_load_verify_file(ctx, ca_file) != 1", "} else if (load_windows_roots(SSL_CTX_get_cert_store(ctx)) == 0) {")
+        and 'CertOpenSystemStoreW(0, L"ROOT")' in hs and "szOID_PKIX_KP_SERVER_AUTH" in hs
+        and "if (!usage_ok(c, CERT_FIND_PROP_ONLY_ENHKEY_USAGE_FLAG) || !usage_ok(c, CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG))" in hs
+        and "X509_V_FLAG_X509_STRICT | X509_V_FLAG_PARTIAL_CHAIN" in hs, "")
+    ak = func(m, "static int ask(")
+    row("(13 Nov 26, the C helper) ONE retry on 429 and 5xx within the deadline, at most 4 MB of an answer read, more refused; connect and handshake within 5 seconds; no proxy",
+        "for (attempt = 1; attempt <= 2; attempt++) {" in ak and "(r.status == 429 || r.status == 500 || r.status == 502 || r.status == 503 || r.status == 504) && attempt == 1" in ak
+        and "#define RAW_CAP (4 * 1024 * 1024)" in t["https"] + t["main"] + open(os.path.join(AIDIR, "sdai.h"), encoding="latin-1").read()
+        and "if (r->len > RAW_CAP)" in m and "#define CONNECT_TIMEOUT_MS 5000" in open(os.path.join(AIDIR, "sdai.h"), encoding="latin-1").read()
+        and not re.search(r"proxy|WinHttp|InternetOpen", c, re.I), "")
+    row("(13 Nov 26, the C helper) no USER32 and no SHELL32 in the program: libcrypto's three USER32 imports are stubbed (sdtlsrelay.c's measurement), and the command line comes from wmain, "
+        "not SHELL32's CommandLineToArgvW", all(("void* __imp_%s = (void*)stub_%s;" % (f, f)) in hs for f in ("GetProcessWindowStation", "GetUserObjectInformationW", "MessageBoxW"))
+        and "int wmain(int argc, wchar_t** wargv) {" in m and "CommandLineToArgvW" not in c and "shellapi" not in c, "")
 
 
 GROUP_A_MUTANTS = [
-    ("helper", "certificate check off", "ctx.verify_mode = ssl.CERT_REQUIRED", "ctx.verify_mode = ssl.CERT_NONE"),
-    ("helper", "host name check off", "ctx.check_hostname = True", "ctx.check_hostname = False"),
-    ("helper", "http accepted", 'URL_RE = re.compile(r"^https://', 'URL_RE = re.compile(r"^https?://'),
-    ("helper", "a query string is accepted in a URL", "(/[A-Za-z0-9._~/+,:-]{0,500})?$", "(/[A-Za-z0-9._~/+,:?=&-]{0,500})?$"),
-    ("helper", "a program is started", "        flush_out(fd_out)\n            os._exit(4)", "        flush_out(fd_out)\n            os.system('x')\n            os._exit(4)"),
-    ("helper", "the helper prints", "        serve(0, 1, state, providers, sys.stderr.write)\n", "        print('x')\n        serve(0, 1, state, providers, sys.stderr.write)\n"),
-    ("helper", "the gate group is renamed", 'GATE_GROUP = "sdaiusers"', 'GATE_GROUP = "sdusers"'),
-    ("helper", "the key is put in the log line", 'sd-ai: sid=%s provider=%s status=%s in=%s out=%s\\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), uid,', 'sd-ai: key=%s sid=%s provider=%s status=%s in=%s out=%s\\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), prov, uid,'),
-    ("helper", "the key file is read before it is judged", "    if not private_file(path):\n        raise Refuse(\"nokey\", \"the key file is not private\")\n", ""),
-    ("helper", "the hygiene runs after the size test", "        text, replaced = hygiene(text)\n        if len(text.encode(\"ascii\"))", "        if len(text.encode(\"ascii\", \"replace\"))"),
-    ("helper", "the settings are checked for the administrator after they are done", '        if uid is None or not is_admin(uid):\n            return {"t": "err", "code": "noadmin", "msg": "only the administrator may change', '        if False:\n            return {"t": "err", "code": "noadmin", "msg": "only the administrator may change'),
-    ("helper", "keyset echoes the key", 'return {"t": "ok", "key": "set"}', 'return {"t": "ok", "key": "set", "echo": key}'),
-    ("helper", "the result of a setting is not checked before it is written", "            selected(new, table)", "            pass  #"),
-    ("helper", "any Windows administrator may ask without the gate", "return caller is not None and (is_sdsys(caller) or in_group(caller.sid, GATE_GROUP))", "return caller is not None and (is_admin(caller) or in_group(caller.sid, GATE_GROUP))"),
-    ("helper", "an unelevated administrator may change settings", "(caller.elevated and caller.admins)", "(caller.admins)"),
+    ("https", "certificate check off", "SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);", "SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);"),
+    ("https", "host name check off", "if (!SSL_set1_host(ssl, host) || !SSL_set_tlsext_host_name(ssl, host)) {", "if (!SSL_set_tlsext_host_name(ssl, host)) {"),
+    ("main", "http accepted", 'if (strncmp(u, "https://", 8) != 0)\n    return 0;\n  h = p = u + 8;', 'if (strncmp(u, "http", 4) != 0)\n    return 0;\n  h = p = u + (u[4] == \'s\' ? 8 : 7);'),
+    ("main", "a query string is accepted in a URL", 'return chars_in(p, "._~/+,:-");', 'return chars_in(p, "._~/+,:?=&-");'),
+    ("main", "a program is started", "  ExitProcess(4);\n  return 0;\n}", "  system(\"x\");\n  ExitProcess(4);\n  return 0;\n}"),
+    ("main", "the helper prints", "  g_out = hout;\n", "  g_out = hout;\n  printf(\"x\");\n"),
+    ("win", "the gate group is renamed", '#define GATE_GROUP L"sdaiusers"', '#define GATE_GROUP L"sdusers"'),
+    ("main", "the key is put in the log line", '"%s sd-ai: sid=%s provider=%s status=%s in=%s out=%s\\n", ts,', '"%s sd-ai: key=%s sid=%s provider=%s status=%s in=%s out=%s\\n", ts, "k",'),
+    ("main", "the key file is read before it is judged", '  if (!private_file(path))\n    return refuse("nokey", "the key file is not private");\n', ""),
+    ("main", "the hygiene runs after the size test", "    hygiene(text.p, text.n, &clean, &replaced);\n    if ((long long)clean.n > lim[L_BYTES_REPLY]) {", "    if ((long long)text.n > lim[L_BYTES_REPLY]) {"),
+    ("main", "the settings are checked for the administrator after they are done", '    if (c == NULL || !is_admin(c)) {\n      reply_err(r, "noadmin", "only the administrator may change the AI settings");',
+     '    if (0) {\n      reply_err(r, "noadmin", "only the administrator may change the AI settings");'),
+    ("main", "keyset echoes the key", 'sb_puts(out, "{\\"t\\": \\"ok\\", \\"key\\": \\"set\\"}");', 'sb_puts(out, "{\\"t\\": \\"ok\\", \\"key\\": \\"set\\", \\"echo\\": ");\n    sb_jstrz(out, kv->s);'),
+    ("main", "the result of a setting is not checked before it is written", "  if (selected(&nw, &n, &p, &m) < 0)", "  if (0)"),
+    ("win", "any Windows administrator may ask without the gate", "(is_sdsys(c) || in_group(c->psid, gate_group()))", "(is_admin(c) || in_group(c->psid, gate_group()))"),
+    ("win", "an unelevated administrator may change settings", "(c->elevated && c->admins)", "(c->admins)"),
     ("providers", "an http URL in the table", "url=https://api.openai.com", "url=http://api.openai.com"),
     ("providers", "a model in the table", "[openai]\n", "[openai]\nmodel=gpt\n"),
-    ("ctl", "the key is taken from the command line", "key = getpass.getpass(", "key = rest[1] if len(rest) > 1 else getpass.getpass("),
-    ("ctl", "--handover reads the file only for a known provider", "        key = handover_key(rest[2])                                   # removed first, whatever follows\n        if rest[0] not in PROVIDERS:\n            say(\"sd-ai-ctl: the provider is one of %s\" % \", \".join(PROVIDERS))\n            return 2\n",
-     "        if rest[0] not in PROVIDERS:\n            say(\"sd-ai-ctl: the provider is one of %s\" % \", \".join(PROVIDERS))\n            return 2\n        key = handover_key(rest[2])\n"),
+    ("ctl", "the key is taken from the command line", "    key = read_key_console(rest[0]);", "    key = (argc > 3) ? argv[3] : read_key_console(rest[0]);"),
+    ("ctl", "--handover reads the file only for a known provider",
+     '    key = handover_key(rest[2]); /* removed first, whatever follows */\n    if (!is_provider(rest[0])) {\n      say("sd-ai-ctl: the provider is one of anthropic, openai, google, deepseek, custom");\n      return 2;\n    }\n',
+     '    if (!is_provider(rest[0])) {\n      say("sd-ai-ctl: the provider is one of anthropic, openai, google, deepseek, custom");\n      return 2;\n    }\n    key = handover_key(rest[2]);\n'),
     ("context", "the standing text says Linux", "About this system: SD Core for Windows", "About this system: SD Core for Linux"),
 ]
 M_B = len(GROUP_A_MUTANTS)
@@ -541,13 +640,16 @@ GROUP_B_MUTANTS = [
     ("install", "the service SID is not restricted", "& $sc sidtype $SvcName restricted | Out-Null", "& $sc sidtype $SvcName unrestricted | Out-Null"),
     ("install", "the keys directory admits Administrators", "& icacls $keys /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' \"${SvcAccount}:(OI)(CI)M\" | Out-Null",
      "& icacls $keys /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' \"${SvcAccount}:(OI)(CI)M\" '*S-1-5-32-544:(OI)(CI)F' | Out-Null"),
-    ("install", "the service is made with no Python", "if (-not $py) {\n    # A service", "if ($false) {\n    # A service"),
+    ("install", "the service runs under Python again", "$bin = '\"' + $helper + '\" --service'", "$bin = '\"' + $py + '\" -I -B \"' + $helper + '\" --service'"),
     ("install", "the state is reset on an upgrade", "foreach ($d in @($state, $keys, $cnt)) {", "Remove-Item -LiteralPath $state -Recurse -Force\nforeach ($d in @($state, $keys, $cnt)) {"),
-    ("iss", "the helper is set up before Python", "    PyMsg := InstallPython;\n    { 13 Nov 26 - RELEASE_1.1 246: the AI helper runs under that Python, so it follows it. }\n    AiMsg := InstallAiHelper;\n",
-     "    AiMsg := InstallAiHelper;\n    PyMsg := InstallPython;\n"),
+    ("iss", "a helper that did not start is passed over (the old no-Python code 3)", "  if Code = 0 then\n    Exit;\n  Result := 'The AI helper service", "  if (Code = 0) or (Code = 3) then\n    Exit;\n  Result := 'The AI helper service"),
+    ("makefile", "the test build's hooks are compiled into the shipped helper", "\t@PATH=\"$(UCRT_BIN):$$PATH\" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode \\",
+     "\t@PATH=\"$(UCRT_BIN):$$PATH\" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode -DSDAI_TESTS \\"),
+    ("makefile", "sd does not build the helper", "sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sd-ai sdpy", "sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sdpy"),
+    ("stage", "sd-ai.exe may import the MSYS2 runtime or Python", "'sd-ai.exe':      ['msys-', 'python', 'user32', 'shell32'],", "'sd-ai.exe':      ['user32'],"),
     ("iss", "the service is left at uninstall", "    Parameters: \"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"\"{app}\\install-aihelper.ps1\"\" -Remove\"; \\\n", "    Parameters: \"-NoProfile\"; \\\n"),
     ("iss", "the group is left at uninstall", "  Exec(Net, 'localgroup sdaiusers /delete',    '', SW_HIDE, ewWaitUntilTerminated, Code);\n", ""),
-    ("stage", "the helper is not staged", "AI_HELPER_FILES = ['sd-ai', ", "AI_HELPER_FILES = ["),
+    ("stage", "the helper is not staged", "AI_HELPER_BIN = 'sd-ai.exe'", "AI_HELPER_BIN = 'sd-ai'"),
     ("groups", "sdaiusers is not made", "    Ensure-Group $AiGroup $AiComment\n", ""),
     ("createacc.h", "CA$AI shares a number", "$define CA$AI              41", "$define CA$AI              40"),
     ("createa", "ai-on is not a word", "         case upcase(token) = 'AI-ON'\n            settings<CA$AI> = 1\n", ""),
@@ -557,10 +659,10 @@ GROUP_B_MUTANTS = [
     ("setai", "a semicolon is an allowed character", "0123456789._:/@+,-'", "0123456789._:/@+,-;'"),
     ("setai", "the key is captured by SD", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\"\n", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\" capturing keyout\n"),
     ("setai", "the whole URL goes to the audit trail", "' host=' : chost)", "' host=' : curl)"),
-    ("setai", "the client is looked for in the SD system directory", "if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai-ctl.ps1')", "if ctl = '' then ctl = @sdsys : @ds : 'bin' : @ds : 'sd-ai-ctl.ps1'"),
-    ("setai", "the carriage returns are left in", "   out = convert(char(13), '', out)\n*  13 Nov 26 Windows port: the wrapper", "*  13 Nov 26 Windows port: the wrapper"),
-    ("setai", "no Python is taken for an unreachable helper", "   if trim(out<1>)[1, 16] = 'error: nopython:' then\n      @system.return.code = -ER$FAILED\n      stop sysmsg(12934)                                                                  ;* The AI needs",
-     "   if 0 then\n      @system.return.code = -ER$FAILED\n      stop sysmsg(12934)                                                                  ;* The AI needs"),
+    ("setai", "the client is looked for in the SD system directory", "if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai.exe')", "if ctl = '' then ctl = @sdsys : @ds : 'bin' : @ds : 'sd-ai.exe'"),
+    ("setai", "the carriage returns are left in", "   out = convert(char(13), '', out)\n*  8 Nov 26", "*  8 Nov 26"),
+    ("setai", "the no-Python stop comes back", "   out = convert(char(13), '', out)\n*  8 Nov 26",
+     "   out = convert(char(13), '', out)\n   if trim(out<1>)[1, 16] = 'error: nopython:' then stop sysmsg(12934)\n*  8 Nov 26"),
     ("voc_template", "set.ai is a different program", "$setai", "$setstart"),
 ]
 M_C = M_B + len(GROUP_B_MUTANTS)
@@ -608,7 +710,7 @@ GROUP_D_MUTANTS = [
     ("voc_tool_ai", "tool.ai is another program", "$tool_ai", "$tool_audit"),
     ("tk_gate_info", "the ai gate is on as delivered", "|ai-on|ai-off|group||sdaiusers||at the next request|off|AI|", "|ai-on|ai-off|group||sdaiusers||at the next request|on|AI|"),
     ("tk_gate_info", "the ai gate is another group", "|group||sdaiusers||at the next request|off|AI|", "|group||sdusers||at the next request|off|AI|"),
-    ("h_acc", "the help record points at another page", "20-the-ai-helper", "01-accounts-and-security"),
+    ("h_acc", "the help record points at another page", "21-the-ai-helper", "01-accounts-and-security"),
     ("h_prov", "the help says nothing of SDSYS reading the key", " On Windows SDSYS is an elevated Administrator and can read the key", " The key is safe"),
 ]
 M_E = M_D + len(GROUP_D_MUTANTS)
@@ -643,20 +745,24 @@ GROUP_W_MUTANTS = [
     ("win32ai", "any file may be opened", "  if (GetFileType(h) != FILE_TYPE_PIPE) {", "  if (0) {"),
     ("op_ai", "a squatted pipe is not audited", '    audit_message("ai refused reason=pipe.owner");\n', ""),
     ("op_ai", "the poll reads without asking what is there", "    if (want > avail)\n      want = avail;\n    n = win32_ai_read(ai.slot,", "    n = win32_ai_read(ai.slot,"),
-    ("helper", "remote clients are let in", "0x00000000 | 0x00000000 | 0x00000000 | 0x00000008", "0x00000000 | 0x00000000 | 0x00000000 | 0x00000000"),
-    ("helper", "the pipe's list is not protected", 'parts = ["O:%sD:P(A;;GA;;;SY)', 'parts = ["O:%sD:(A;;GA;;;SY)'),
-    ("helper", "sdusers may make pipe instances", 'parts.append("(A;;0x%08X;;;%s)" % (PIPE_CLIENT_MASK, sdusers))', 'parts.append("(A;;GA;;;%s)" % sdusers)'),
-    ("helper", "the thread is not reverted", "        if not adv.RevertToSelf():\n            os._exit(5)", "        pass"),
-    ("helper", "LocalSystem is a caller", 'SERVICE_SIDS = ("S-1-5-18", "S-1-5-19", "S-1-5-20")', 'SERVICE_SIDS = ("S-1-5-19", "S-1-5-20")'),
-    ("helper", "the key is a machine blob", "None, None, 0x1, ctypes.byref(out))\n    else:", "None, None, 0x5, ctypes.byref(out))\n    else:"),
-    ("helper", "a list of any kind passes", "            if hdr.AceType != 0:                          # anything but a plain ALLOW", "            if False:                          # anything but a plain ALLOW"),
-    ("helper", "the connected instance is let go before the next is made", "            self.reap()\n            nxt = None\n", "            self.spawn(self.cur)\n            self.reap()\n            nxt = None\n"),
-    ("helper", "no watchdog", "        dog.start()\n", ""),
-    ("ctl", "the client trusts any pipe's owner", "        if check_owner and not owned_by_service(h):", "        if False:"),
-    ("ctl", "the client's errors go to standard error", "def say(s):\n    sys.stdout.write(s + \"\\n\")", "def say(s):\n    sys.stderr.write(s + \"\\n\")"),
-    ("wrapper", "no Python is not said", "    Write-Output 'error: nopython: no Python 3.13 or later is installed for all users'\n", ""),
-    ("wrapper", "the client is not isolated", "& $py -I -B (Join-Path", "& $py (Join-Path"),
-    ("finder", "a per-user Python is used", "'HKLM:\\SOFTWARE\\Python\\PythonCore'", "'HKCU:\\SOFTWARE\\Python\\PythonCore'"),
+    ("main", "remote clients are let in", "PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS;", "PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;"),
+    ("main", "the first instance may join a pipe someone else made", "PIPE_ACCESS_DUPLEX | (first ? FILE_FLAG_FIRST_PIPE_INSTANCE : 0)", "PIPE_ACCESS_DUPLEX"),
+    ("main", "the pipe's list is not protected", '"O:%sD:P(A;;GA;;;SY)(A;;GA;;;%s)", me, me);', '"O:%sD:(A;;GA;;;SY)(A;;GA;;;%s)", me, me);'),
+    ("main", "sdusers may make pipe instances", 'snprintf(t, sizeof t, "(A;;0x%08X;;;%s)", PIPE_CLIENT_MASK, s);', 'snprintf(t, sizeof t, "(A;;GA;;;%s)", s);'),
+    ("win", "the thread is not reverted", "  if (!RevertToSelf())\n    ExitProcess(5); /* never go on as anyone else */", "  RevertToSelf();"),
+    ("win", "LocalSystem is a caller", 'strcmp(c->sid, "S-1-5-18") == 0 || ', ""),
+    ("win", "the key is a machine blob", "CryptProtectData(&din, NULL, &ent, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN, &dout);", "CryptProtectData(&din, NULL, &ent, NULL, NULL, CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, &dout);"),
+    ("win", "a list of any kind passes", "    if (hdr->AceType != ACCESS_ALLOWED_ACE_TYPE) {", "    if (0) {"),
+    ("main", "the connected instance is let go before the next is made", "    reap();\n    while (nxt == INVALID_HANDLE_VALUE && !stopping) {", "    spawn(g_cur);\n    reap();\n    while (nxt == INVALID_HANDLE_VALUE && !stopping) {"),
+    ("main", "no watchdog", "    HANDLE dog = CreateThread(NULL, 0, watchdog, NULL, 0, NULL);\n", "    HANDLE dog = NULL;\n"),
+    ("main", "a request process is not in the job", "    AssignProcessToJobObject(g_job, pi.hProcess);\n", ""),
+    ("ctl", "the client trusts any pipe's owner", "if ((check_owner && !owned_by_service(h))", "if ((0)"),
+    ("ctl", "the client's errors go to standard error", "  HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);\n  DWORD w;\n  size_t n = strlen(s);", "  HANDLE h = GetStdHandle(STD_ERROR_HANDLE);\n  DWORD w;\n  size_t n = strlen(s);"),
+    ("https", "the Windows store is trusted beside the administrator's ca-file", "  } else if (load_windows_roots(SSL_CTX_get_cert_store(ctx)) == 0) {", "  }\n  if (load_windows_roots(SSL_CTX_get_cert_store(ctx)) == 0) {"),
+    ("https", "a root barred from server authentication is trusted", "    if (!usage_ok(c, CERT_FIND_PROP_ONLY_ENHKEY_USAGE_FLAG) || !usage_ok(c, CERT_FIND_EXT_ONLY_ENHKEY_USAGE_FLAG))\n      continue;\n", ""),
+    ("https", "USER32 is imported again", "void* __imp_MessageBoxW = (void*)stub_MessageBoxW;\n", ""),
+    ("main", "two retries", "for (attempt = 1; attempt <= 2; attempt++) {", "for (attempt = 1; attempt <= 3; attempt++) {"),
+    ("win", "the test gate is in the shipped helper", "#ifdef SDAI_TESTS\n  /* THE TEST BUILD ONLY", "#if 1\n  /* THE TEST BUILD ONLY"),
 ]
 
 
