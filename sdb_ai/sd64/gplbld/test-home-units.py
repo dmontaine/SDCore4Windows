@@ -127,7 +127,7 @@ def checks(s):
     cmds = re.findall(r"act = '(cmd:[^']*|menu:[^']*|terminal|switch|signout|back)' ; pal", th)       # the rows of the table (the case lines of start.tile also say act = ...)
     ADMIN_TILES = {"menus": "tool.menus", "audit": "tool.audit", "config": "tool.config", "backups": "tool.backups", "entries": "tool.entries",
                    "accounts": "tool.accounts", "sessions": "tool.sessions", "gates": "tool.gates", "jobs": "tool.jobs", "remote": "tool.remote", "ai": "tool.ai"}   # jobs: S.102 (2 Nov 26)
-    PENDING_VERBS = {"tool.audit"}      # 13 Nov 26 Windows: tiles whose verbs RELEASE_1.1 247 owes (H28); tool.ai left it with RELEASE_1.1 246, which carries the verb
+    PENDING_VERBS = set()               # 14 Nov 26 Windows: empty - tool.audit landed with RELEASE_1.1 247 (tool.ai with 246); a tile whose verb is owed goes here
     DEV_TILES = {"files": "tool.files", "voc": "tool.voc", "dict": "tool.dict", "query": "tool.query", "bulk": "tool.bulk", "catalog": "tool.catalog", "test": "tool.test"}            # the development apps (DV), for every account; each adds its tile in the commit that builds it (plan 13.2)
     ck("H4 tool_home: every tile of the table has a fixed action (cmd:sed, ide, tool.keys, my.menu, the development apps and the eleven administrator pages), terminal, switch, signout or back (the Back tile of a sub-menu page); the ONLY other action is a person's own program (H25); and no tile of the delivered page opens a sub-menu (no menu:<name>)",
        sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))
@@ -267,8 +267,8 @@ def checks(s):
     ck("H28a every program that opens a possibly absent file READONLY (!home_entry, SET.START.DEFAULT, the menu management page, OSREAD) closes the file variable in its ELSE branch, so that an absent start.default does not leave an update lock on it for the life of the session",
        not leaks, repr(leaks))
     ck("H28 every administrator page has a tile (plan 13.2: a new app adds its row in the commit that builds it): each verb of voc_template named tool.* (all of SDSYS's) is the action of a tile, and no tile runs a tool.* verb that has no VOC entry",
-       # 13 Nov 26 Windows: the Audit trail tile is carried but its verb is not yet (RELEASE_1.1 247; tool.ai landed with 246).  PENDING names it; when it lands
-       # this goes red until it is taken out of PENDING, so neither a dead tile nor a stale exception can stand unnoticed.
+       # 13 Nov 26 Windows: PENDING names a tile whose verb is not carried yet; a verb that lands turns this red until it is taken out of PENDING, so
+       # neither a dead tile nor a stale exception can stand unnoticed.  14 Nov 26: tool.audit landed (RELEASE_1.1 247); PENDING is empty.
        sorted(s["tool.verbs"]) == sorted((set(v for v in ADMIN_TILES.values()) | set(DEV_TILES.values()) | {"tool.keys"}) - PENDING_VERBS) and all(("act = 'cmd:%s'" % v) in th for v in s["tool.verbs"]), repr(s["tool.verbs"]))
     dev = between(th, "gr<g> = 'Develop'", "\n   id = 'switch' ;")
     ck("H28b ...the development apps' tiles are in the group Develop, the LAST group (so that the groups before it, and what the keys and the sandbox rows find in them, stay where they were), built for everyone (outside `if is.admin then`), each exactly once and running its app's verb",
@@ -540,7 +540,7 @@ MUTANTS = [
     ("the scroll bar goes black again in blue", "sl_theme", "'scroll=black,cyan,bold'", "'scroll=black,cyan,'"),
     ("the Audit trail tile is built for everyone", "tool_home", "gosub add.tile\n      id = 'audit' ;", "gosub add.tile\n   end\n   if @true then\n      id = 'audit' ;"),
     ("the Accounts tile is built for everyone", "tool_home", "      id = 'accounts' ; grp = g ;", "   end\n   if @true then\n      id = 'accounts' ; grp = g ;"),
-    ("the Gates tile runs another page", "tool_home", "act = 'cmd:tool.gates'", "act = 'cmd:tool.config'"),      # 13 Nov 26 Windows: Linux's Audit trail tile, whose verb Core lacks (H28 PENDING)
+    ("the Audit trail tile runs another page", "tool_home", "act = 'cmd:tool.audit'", "act = 'cmd:tool.config'"),      # 14 Nov 26 Windows: Linux's mutant again, its verb carried (RELEASE_1.1 247)
     ("the Remote servers tile is gone", "tool_home", "      id = 'remote' ; grp = g ;", "      id = 'remoteX' ; grp = g ;"),
     ("the administrator's People and access group is given a band of its own", "tool_home", "      * who may do what, and who is on: the people and access group\n      g += 1", "      * who may do what, and who is on: the people and access group\n      bnd += 1\n      g += 1"),
     ("the Files tile runs another app", "tool_home", "act = 'cmd:tool.files'", "act = 'cmd:tool.keys'"),

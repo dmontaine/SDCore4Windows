@@ -12,6 +12,7 @@
 # 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 254, the test-subset audit's item 6): tool_ai's and tool_audit's sites are not
 #              listed, because Core has neither page yet (rows 246 and 247); they come back with the pages.
 # 13 Nov 26 Windows port - RELEASE_1.1 246: tool_ai is carried, and its one site is listed again as on Linux (confirmed).
+# 14 Nov 26 Windows port - RELEASE_1.1 247: tool_audit is carried, and its one site is listed again as on Linux (own: its $hold record).
 # END-HISTORY
 #
 # WHAT IT HOLDS.  A TRIPWIRE, NOT A PROOF: it finds every WRITE, WRITEU, WRITEV, MATWRITE, DELETE and EXECUTE statement in a tool_* program (comments
@@ -41,6 +42,7 @@ STMT = re.compile(r"^\s*(execute|write|writeu|writev|writevu|matwrite|matwriteu|
 SITES = {
     ("tool_accounts", "execute", "execute sent"): "confirmed",
     ("tool_ai", "execute", "execute cx.sent trapping aborts capturing out"): "confirmed",
+    ("tool_audit", "write", "write etxt to hold.f, rid on error"): "own",
     ("tool_bulk", "execute", "execute ssent trapping aborts capturing sout rtnlist slv"): "allowed",
     ("tool_bulk", "execute", "execute MKUNDO trapping aborts capturing mkout"): "confirmed",
     ("tool_bulk", "write", "write hdr on uf, 'last' on error"): "own",

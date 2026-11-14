@@ -3,6 +3,16 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  TOOL.AUDIT: THE AUDIT TRAIL ON ONE SCREEN, FOR THE ADMINISTRATOR.
+
+             What        - a full-screen page in SDSYS that reads the audit trail from its end, a screen at a time, so a large
+                           trail is never read whole.  Filters by time, event, account, user and text; go to a time; follow
+                           the file as it is written; the rotated files; X saves the lines shown to a record of $HOLD.
+             Why         - the trail could be read only by opening the file in an editor started as administrator.  The same
+                           page as SD Core for Linux.
+             Does NOT    - Change anything: it runs no command, and only the administrator may open it.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  THE INSTALL'S COMPILE OF SD'S OWN PROGRAMS NO LONGER PRINTS WARNINGS, AND WHAT THEY POINTED AT IS FIXED.
 
              What        - the install's compile of SD's own programs printed many "X is assigned a value but never used"

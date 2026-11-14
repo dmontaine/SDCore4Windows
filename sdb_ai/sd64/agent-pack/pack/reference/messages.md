@@ -11562,7 +11562,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat`, `deleteserver` and 25 more
+cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 26 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524

@@ -6,7 +6,7 @@
 
 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 254, the test-subset audit's item 6; row 239): Linux's message ids are
 Core's (11830-11842 + 1005, 14002/14003/14046 + 1000), the docs checkout is the sibling SDCore4WindowsDocs, and
-tool_audit is not read (Core has no such page yet: row 247), so check P17f and its three mutants are out.  P12 (the book
+tool_audit was not read until 14 Nov 26, when the page was carried (row 247) and P17f and its three mutants came back.  P12 (the book
 in line 2) is also held, by Core's own test-helpbook-units.py.  13 Nov 26 (RELEASE_1.1 246): tool_ai is read again, as on Linux,
 now that the AI page is carried (P13 / P14 see its two keys).
 
@@ -63,7 +63,7 @@ def load():
     src["tool_sessions"] = read(os.path.join(GPL, "tool_sessions"))   # 24 Oct 26, S.75 A4: the sessions and locks page asks for tool.sessions.page
     src["tool_jobs"] = read(os.path.join(GPL, "tool_jobs"))           # 2 Nov 26, S.102 stage 1: the scheduled jobs page asks for tool.jobs.accounts and .commands (and .jobs, stage 4)
     src["tool_entries"] = read(os.path.join(GPL, "tool_entries"))     # 3 Nov 26, S.96 M1a: the entries page asks for tool.entries.accounts and .entries
-    # 13 Nov 26 Windows: tool_audit is not read; Core has no audit-trail page yet (row 247), so check P17f and its three mutants are out.
+    src["tool_audit"] = read(os.path.join(GPL, "tool_audit"))         # 25 Oct 26, S.75 A5: the audit trail page asks for tool.audit.page (14 Nov 26 Windows: carried, RELEASE_1.1 247)
     src["tool_config"] = read(os.path.join(GPL, "tool_config"))       # 25 Oct 26, S.75 A6: the configuration page asks for tool.config.page
     src["tool_backups"] = read(os.path.join(GPL, "tool_backups"))     # 25 Oct 26, S.75 A8: the backups page asks for tool.backups.page
     src["tool_accounts"] = read(os.path.join(GPL, "tool_accounts"))   # 25 Oct 26, S.75 A3: the accounts page asks for tool.accounts.page
@@ -202,7 +202,7 @@ def checks(s):
     # keys asked for by the pages
     tids = re.search(r"tids = ('[a-z]+'(?: : @fm : '[a-z]+')*)", tm)
     tile_ids = re.findall(r"'([a-z]+)'", tids.group(1)) if tids else []
-    asked = set(re.findall(r"'(tool\.(?:menus|ai|gates|sessions|jobs|entries|audit|config|backups|accounts|remote|files|voc|dict|query|bulk|catalog|test|home)\.[a-z-]+)'", tm + "\n" +strip(s["tool_jobs"]) + "\n" + strip(s["tool_entries"]) + "\n" + strip(s["tool_ai"]) + "\n" + strip(s["tool_gates"]) + "\n" + strip(s["tool_mygates"]) + "\n" + strip(s["tool_sessions"]) + "\n" + strip(s["tool_config"]) + "\n" + strip(s["tool_backups"]) + "\n" + strip(s["tool_accounts"]) + "\n" + strip(s["tool_remote"]) + "\n" + strip(s["tool_files"]) + "\n" + strip(s["tool_voc"]) + "".join("\n" + strip(s["tool_" + a]) for a in ("dict", "query", "bulk", "catalog", "test", "home")) + "\n" + strip(s["mymenu"])))
+    asked = set(re.findall(r"'(tool\.(?:menus|ai|gates|sessions|jobs|entries|audit|config|backups|accounts|remote|files|voc|dict|query|bulk|catalog|test|home)\.[a-z-]+)'", tm + "\n" +strip(s["tool_jobs"]) + "\n" + strip(s["tool_entries"]) + "\n" + strip(s["tool_ai"]) + "\n" + strip(s["tool_gates"]) + "\n" + strip(s["tool_mygates"]) + "\n" + strip(s["tool_sessions"]) + "\n" + strip(s["tool_audit"]) + "\n" + strip(s["tool_config"]) + "\n" + strip(s["tool_backups"]) + "\n" + strip(s["tool_accounts"]) + "\n" + strip(s["tool_remote"]) + "\n" + strip(s["tool_files"]) + "\n" + strip(s["tool_voc"]) + "".join("\n" + strip(s["tool_" + a]) for a in ("dict", "query", "bulk", "catalog", "test", "home")) + "\n" + strip(s["mymenu"])))
     if "'tool.menus.tile.' : tids<si - 2>" in tm:
         asked |= {"tool.menus.tile." + t for t in tile_ids}
     ck("P13 every key a page asks for has a shipped record (%d keys)" % len(asked), len(asked) >= 13 and not (asked - set(hts)), repr(sorted(asked - set(hts))))
@@ -233,7 +233,10 @@ def checks(s):
        and "allow = 'logout unlock inhibit.login'" in tsn and tsn.count("allow = ") == 1 and "tool.sessions.page" in hts and "call $tk_wrap(lines<wi>, rtw, pieces)" in tsn and "rest[cut" not in tsn)
 
     # P17e (tool.masters, S.75 A7) went with the page on 2 Nov 26 (S.96 M6: the master-file copies are retired; tool.entries' help keys are in P13 / P14).
-    # P17f (tool.audit) is not checked here: Core has no audit-trail page yet (row 247).  It comes back with the page.
+    tau = strip(s["tool_audit"])
+    ck("P17f tool.audit: a [?] at the end of the first box, F1 and ? and a click show its help, it runs no command (no allow list, no $tk_run), and it wraps with $tk_wrap",
+       "call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)" in tau and "case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.audit.page', hm, 0, 0)" in tau and "call $tk_help('hit', mev, top.x + top.w - 5, top.y + 1, hit.m)" in tau
+       and "allow = " not in tau and "$tk_run" not in tau and "tool.audit.page" in hts and "call $tk_wrap(cline, dtw, pieces)" in tau and "rest[cut" not in tau)
 
     tcf = strip(s["tool_config"])
     ck("P17g tool.config: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only set.config (one allow list, since 26 Oct 26, S.75 A6) through $tk_run behind the confirm box, and it wraps with $tk_wrap",
@@ -361,6 +364,9 @@ MUTANTS = [
     ("$tk_confirm wraps the explanation at a width the box cuts", "tk_confirm", "call $tk_wrap(lines<li>, wrapw, pieces)", "call $tk_wrap(lines<li>, 200, pieces)"),
     ("$tk_wrap cuts a word at the wrong place", "tk_wrap", "rest[cut, 1] # ' '", "rest[cut, 1] # 'x'"),
     ("tool.gates loses its [?]", "tool_gates", "   call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)\n", ""),
+    ("tool.audit loses its [?]", "tool_audit", "   call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)\n", ""),
+    ("tool.audit calls $tk_help with too few arguments", "tool_audit", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.audit.page', hm, 0, 0)", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.audit.page', hm)"),
+    ("tool.audit gains a command to run", "tool_audit", "   keys = ''\n", "   allow = 'logout'\n   keys = ''\n"),
     ("tool.config loses its [?]", "tool_config", "   call $tk_help('mark', mk.x, mk.y, 0, 0)\n", ""),
     ("tool.config calls $tk_help with too few arguments", "tool_config", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.config.page', hm, 0, 0)", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.config.page', hm)"),
     ("tool.config can run another command", "tool_config", "allow = 'set.config'", "allow = 'set.config sh'"),

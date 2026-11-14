@@ -1,0 +1,422 @@
+* AUDIT_READ
+* The audit trail as lines, read from the end: the reader behind TOOL.AUDIT (S.75, plan .claude/plan-fullscreen-toolkit.md section 5, A5).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 14 Nov 26 Windows port - from Linux d5270fe2 (RELEASE_1.1 247): carried.  The Windows trail ends each line with CR LF (sdsvc's
+*            sdaudit.c and k_error.c), so a line's text loses its CR after its offset is counted; offsets stay byte offsets.
+*            Windows lines carry no sudo= and their uid= is a SID; parse gives them as they are.
+* 28 Oct 26 dm  S.87: CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
+* 25 Oct 26 dm  New.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   call $audit_read(op, which, filt, arg, out, err)
+*
+*     op     files   out is the audit files of the system directory, one to a field: the current one first (audit), then the rotated ones newest first
+*                    (audit.yyyymmdd-hhmmss, which the audit daemon and "sd -start" make when the file reaches a megabyte)
+*            size    out is the size of the file in bytes
+*            back    the newest lines BEFORE a place in the file that pass the filter, at most arg<2> of them: arg<1> is the byte offset to read back from (null is the end of the
+*                    file).  out<1> is the offset to give next time to go further back (the offset of the oldest line returned; 0 when the start of the file was reached), out<2>
+*                    is the size of the file when it was read, out<3> the offset to read FORWARD from next time (the end of the last whole line of the file, which is the size
+*                    unless a last line is still being written), and each field from out<4> is one line: <n,1> its offset in the file and <n,2> its text, oldest line first.
+*            fwd     the lines AT OR AFTER a place in the file that pass the filter, at most arg<2> of them: arg<1> is the offset to read from.  out<1> is the offset to give next
+*                    time (the end of the last COMPLETE line read: a line still being written is not read), out<2> the size, out<3> the same as out<1>, and the lines from out<4>
+*                    as for back.
+*            parse   arg is one audit line; out<1> the time stamp, <2> user, <3> sudo, <4> uid, <5> pid, <6> the event words, and from <7> one field for each key=value pair.  A
+*                    word that holds no '=' after a pair belongs to that pair's value, so a reason with spaces in it stays whole.
+*     which  the file: audit, or a name audit.yyyymmdd-hhmmss; nothing else (no path, no other name).  Null is the current file.
+*     filt   the filter, one field to a test, all of which must pass; a null field passes everything:
+*              <1> from: a time stamp or the start of one (2026-10-25, or 2026-10-25 14:30); a line passes when its stamp is not before it
+*              <2> to:   the same; a line passes when its stamp is not after it (2026-10-25 includes the whole day)
+*              <3> event: the event words contain this (not case sensitive; they are lower case)
+*              <4> account: the line has account=this (not case sensitive)
+*              <5> user: the line's user= or sudo= is this (not case sensitive)
+*              <6> text: the line contains this anywhere (not case sensitive)
+*     err    null when the operation was done; else the reason it was not (a text, not a message number)
+*
+*   THE ADMINISTRATOR ONLY, ASKED OF THE KERNEL before the file is touched (message 2001).  The file is the audit trail of the whole system; its lines name accounts, users and
+*   addresses.  This reads it and changes nothing: it opens the file for reading only and writes no record of its own (the page that calls it writes the audit line that it was opened).
+*
+*   READING FROM THE END.  The file is read backwards in blocks of 64 kilobytes, a block at a time, until enough lines have passed the filter; a large trail is never read whole.  A
+*   line is the text up to a line feed.  The first piece of a block, which is the end of a line that began in the block before, is held and joined to it; the last piece of the
+*   file, if it has no line feed yet, is not a line (the audit daemon is writing it) and is left alone.  A byte of the mark range (248 to 255) in a line is read as a question mark,
+*   so that a line can sit in a dynamic array whatever it holds.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+subroutine audit_read(op, which, filt, arg, out, err)
+$catalog $audit_read
+
+$include keys.h
+$include int$keys.h
+
+   out = ''
+   err = ''
+   opened = 0
+   CHUNK = 65536
+   LF = char(10)
+   CR = char(13)                                           ;* 14 Nov 26 Windows port: the trail's lines end CR LF
+
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      err = sysmsg(2001)
+      return
+   end
+
+   begin case
+      case op = 'files'
+         gosub list.files
+      case op = 'size'
+         gosub open.audit
+         if err = '' then out = fsize
+         gosub close.audit
+      case op = 'back'
+         gosub open.audit
+         if err = '' then gosub read.back
+         gosub close.audit
+      case op = 'fwd'
+         gosub open.audit
+         if err = '' then gosub read.fwd
+         gosub close.audit
+      case op = 'parse'
+         ln = arg
+         gosub parse.line
+         out = p.stamp : @fm : p.user : @fm : p.sudo : @fm : p.uid : @fm : p.pid : @fm : p.event
+         for pi = 1 to dcount(p.pairs, @fm)
+            out<-1> = p.pairs<pi>
+         next pi
+      case 1
+         err = 'audit_read: not an operation: ' : op
+   end case
+   return
+
+* ------------------------------------------------------------------------------------------------- the files
+
+* out is audit first, then the rotated files (audit.yyyymmdd-hhmmss) newest first
+list.files:
+   openpath @sdsys to sysf else
+      err = 'cannot open the system directory'
+      return
+   end
+   select sysf to 9
+   names = ''
+   have.current = 0
+   loop
+      readnext nm from 9 else exit
+      if nm = 'audit' then
+         have.current = 1
+      end else
+         cn = nm
+         gosub chk.name
+         if cn.ok then names<-1> = nm
+      end
+   repeat
+   if have.current then out<-1> = 'audit'
+   if names # '' then
+      call !sort(names, sorted, 'A')
+      for i = dcount(sorted, @fm) to 1 step -1
+         out<-1> = sorted<i>
+      next i
+   end
+   if out = '' then err = 'there is no audit file in the system directory'
+   return
+
+* cn is a name; cn.ok is 1 when it is audit or audit.yyyymmdd-hhmmss (the digits and the two separators, nothing else)
+chk.name:
+   cn.ok = 0
+   if cn = 'audit' then
+      cn.ok = 1
+      return
+   end
+   if len(cn) # 21 or cn[1, 6] # 'audit.' then return
+   cd = cn[7, 99]
+   for ci = 1 to 15
+      cc = cd[ci, 1]
+      if ci = 9 then
+         if cc # '-' then return
+      end else
+         if index('0123456789', cc, 1) = 0 then return
+      end
+   next ci
+   cn.ok = 1
+   return
+
+* ------------------------------------------------------------------------------------------------- opening
+
+* which is audit or audit.yyyymmdd-hhmmss; sets path, f and fsize
+open.audit:
+   cn = which
+   if cn = '' then cn = 'audit'
+   gosub chk.name
+   if not(cn.ok) then
+      err = 'not an audit file name: ' : cn
+      return
+   end
+   path = @sdsys : @ds : cn
+   if not(ospath(path, OS$EXISTS)) then
+      err = 'there is no file ' : cn : ' in the system directory'
+      return
+   end
+   info = ospath(path, OS$INFO)
+   fsize = info<6>
+   if fsize = '' then fsize = 0
+   openseq path readonly to f then
+      null
+   end else
+      err = 'cannot open ' : cn
+      return
+   end
+   opened = 1
+   return
+
+close.audit:
+   if opened then close f
+   opened = 0
+   return
+
+* ------------------------------------------------------------------------------------------------- reading back from an offset
+
+read.back:
+   before = arg<1>
+   if before = '' or before > fsize then before = fsize
+   maxl = arg<2>
+   if maxl = '' or maxl < 1 then maxl = 100
+   found = ''                                           ;* offset @vm text, oldest first
+   nfound = 0
+   pos = before                                         ;* buf is the bytes [pos, bend)
+   bend = before
+   buf = ''
+   trimmed = 0
+   stopped = 0
+   newbefore = before
+   endoff = before
+   loop
+      if pos <= 0 or nfound >= maxl then exit
+      st = pos - CHUNK
+      if st < 0 then st = 0
+      seek f, st, 0 else null
+      blk = ''
+      readblk blk from f, pos - st else blk = ''
+      buf = blk : buf
+      pos = st
+      * the end of the file: a last piece with no line feed is not a line yet
+      if not(trimmed) then
+         trimmed = 1
+         if before = fsize and buf # '' then
+            if buf[len(buf), 1] # LF then
+               k = len(buf)
+               loop
+                  if k = 0 then exit
+                  if buf[k, 1] = LF then exit
+                  k -= 1
+               repeat
+               bend -= len(buf) - k
+               buf = buf[1, k]
+               endoff = bend
+            end
+         end
+      end
+      gosub take.lines
+   repeat
+   out = (if stopped then newbefore else (if pos <= 0 then 0 else bend)) : @fm : fsize : @fm : endoff
+   for i = 1 to dcount(found, @fm)
+      out<-1> = found<i>
+   next i
+   return
+
+* Take the whole lines out of buf (the first piece is the end of an older line unless the start of the file is in buf), newest first, into the front of found
+take.lines:
+   if buf = '' then return
+   if pos > 0 then
+      k = index(buf, LF, 1)
+      if k = 0 then return                               ;* one line longer than the buffer: read further back
+      carry = buf[1, k]
+      body = buf[k + 1, len(buf)]
+   end else
+      carry = ''
+      body = buf
+   end
+   if body = '' then
+      buf = carry
+      return
+   end
+   nlines = dcount(body, LF)
+   if body[len(body), 1] = LF then nlines -= 1
+   e = bend
+   for i = nlines to 1 step -1
+      ln = field(body, LF, i)
+      ls = e - len(ln) - 1
+      e = ls
+      if ln[len(ln), 1] = CR then ln = ln[1, len(ln) - 1]      ;* 14 Nov 26 Windows port: CR LF lines; the offset above counted the CR
+      if ln # '' then
+         convert char(248) : char(249) : char(250) : char(251) : char(252) : char(253) : char(254) : char(255) to '????????' in ln
+         gosub line.passes
+         if okl then
+            found = ls : @vm : ln : (if found = '' then '' else @fm : found)
+            nfound += 1
+            if nfound >= maxl then
+               newbefore = ls
+               stopped = 1
+               exit
+            end
+         end
+      end
+   next i
+   if stopped then
+      buf = ''
+   end else
+      buf = carry
+      bend = e
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- reading forward from an offset
+
+read.fwd:
+   pos = arg<1>
+   if pos = '' or pos < 0 then pos = 0
+   maxl = arg<2>
+   if maxl = '' or maxl < 1 then maxl = 100
+   found = ''
+   nfound = 0
+   if pos > fsize then pos = fsize
+   tail = ''                                            ;* an incomplete line at the end of the last block, from tailpos
+   tailpos = pos
+   next.off = pos
+   loop
+      if pos >= fsize or nfound >= maxl then exit
+      seek f, pos, 0 else null
+      want = fsize - pos
+      if want > CHUNK then want = CHUNK
+      blk = ''
+      readblk blk from f, want else blk = ''
+      if blk = '' then exit
+      buf = tail : blk
+      base = tailpos
+      pos += len(blk)
+      * whole lines of buf only; the last piece with no line feed waits
+      nlines = dcount(buf, LF) - 1
+      if nlines < 1 then
+         tail = buf
+         continue
+      end
+      e = base
+      for i = 1 to nlines
+         ln = field(buf, LF, i)
+         ls = e
+         e = e + len(ln) + 1
+         next.off = e
+         if ln[len(ln), 1] = CR then ln = ln[1, len(ln) - 1]   ;* 14 Nov 26 Windows port: CR LF lines; the offsets above counted the CR
+         if ln # '' then
+            convert char(248) : char(249) : char(250) : char(251) : char(252) : char(253) : char(254) : char(255) to '????????' in ln
+            gosub line.passes
+            if okl then
+               found<-1> = ls : @vm : ln
+               nfound += 1
+               if nfound >= maxl then exit
+            end
+         end
+      next i
+      if nfound >= maxl then
+         tail = ''
+      end else
+         tail = buf[e - base + 1, len(buf)]
+         tailpos = e
+      end
+   repeat
+   out = next.off : @fm : fsize : @fm : next.off
+   for i = 1 to dcount(found, @fm)
+      out<-1> = found<i>
+   next i
+   return
+
+* ------------------------------------------------------------------------------------------------- the filter
+
+* ln is one line; okl is 1 when it passes every test of filt
+line.passes:
+   okl = 1
+   if filt = '' then return
+   s = filt<1>
+   if s # '' then
+      if ln[1, len(s)] < s then
+         okl = 0
+         return
+      end
+   end
+   s = filt<2>
+   if s # '' then
+      if ln[1, len(s)] > s then
+         okl = 0
+         return
+      end
+   end
+   s = filt<6>
+   if s # '' then
+      if index(downcase(ln), downcase(s), 1) = 0 then
+         okl = 0
+         return
+      end
+   end
+   if filt<3> = '' and filt<4> = '' and filt<5> = '' then return
+   gosub parse.line
+   s = filt<3>
+   if s # '' then
+      if index(downcase(p.event), downcase(s), 1) = 0 then okl = 0
+   end
+   s = filt<4>
+   if s # '' and okl then
+      okl = 0
+      for pi = 1 to dcount(p.pairs, @fm)
+         if downcase(p.pairs<pi>) = 'account=' : downcase(s) then okl = 1
+      next pi
+   end
+   s = filt<5>
+   if s # '' and okl then
+      if downcase(p.user) # downcase(s) and downcase(p.sudo) # downcase(s) then okl = 0
+   end
+   return
+
+* ln is one line; the pieces are p.stamp p.user p.sudo p.uid p.pid p.event and p.pairs (one key=value to a field)
+parse.line:
+   p.stamp = ln[1, 19]
+   p.user = '' ; p.sudo = '' ; p.uid = '' ; p.pid = '' ; p.event = '' ; p.pairs = ''
+   rest = ln[21, len(ln)]
+   nw = dcount(rest, ' ')
+   in.event = 1
+   cur = 0
+   for wi = 1 to nw
+      w = field(rest, ' ', wi)
+      if w = '' then continue
+      eqp = index(w, '=', 1)
+      if in.event and eqp = 0 and (p.pid # '' or p.uid # '') then
+         p.event := (if p.event = '' then '' else ' ') : w
+      end else
+         begin case
+            case eqp = 0
+               * a word that is not a pair starts nothing: it belongs to the pair before it
+               if cur > 0 then p.pairs<cur> = p.pairs<cur> : ' ' : w
+            case in.event and w[1, eqp] = 'user=' and p.user = ''
+               p.user = w[eqp + 1, len(w)]
+            case in.event and w[1, eqp] = 'sudo=' and p.sudo = ''
+               p.sudo = w[eqp + 1, len(w)]
+            case in.event and w[1, eqp] = 'uid=' and p.uid = ''
+               p.uid = w[eqp + 1, len(w)]
+            case in.event and w[1, eqp] = 'pid=' and p.pid = ''
+               p.pid = w[eqp + 1, len(w)]
+            case 1
+               in.event = 0
+               cur += 1
+               p.pairs<cur> = w
+         end case
+      end
+   next wi
+   return
+
+end
+
+* END-CODE

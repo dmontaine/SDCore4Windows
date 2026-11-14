@@ -28959,6 +28959,13 @@
 "tier": "reference",
 "words": 66
 },
+"tcl:tool.audit": {
+"kind": "tcl.verb",
+"part": "reference/tcl-verbs.md",
+"since": "-",
+"tier": "reference",
+"words": 79
+},
 "tcl:tool.backups": {
 "kind": "tcl.verb",
 "part": "reference/tcl-verbs.md",
@@ -29398,7 +29405,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 106
+"words": 107
 },
 "voc:type:F": {
 "kind": "voc.type",
