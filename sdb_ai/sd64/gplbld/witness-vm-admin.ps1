@@ -377,9 +377,41 @@ if ($sections -contains 'job222') {
     $bdir = Join-Path $fixDir 'backup'
     if (-not (Test-Path -LiteralPath $bdir)) { $null = New-Item -ItemType Directory -Path $bdir -Force }
     $before = @(Get-ChildItem -LiteralPath $bdir -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+
+    # 13 Nov 26 - RELEASE_1.1 281: the task folder \SD the install made, read elevated, before and after set.job; and a task planted under
+    # the job's own name first (the squatter sd-taskfolder.ps1 guards against), which set.job must REPLACE - delete, then register - so the
+    # registered task runs sd.exe as SDSYS and keeps nothing of the plant.
+    $checkSdFolder = {
+        param([string]$when)
+        try {
+            $svc = New-Object -ComObject Schedule.Service
+            $svc.Connect()
+            $sddl = $svc.GetFolder('\SD').GetSecurityDescriptor(0x5)
+            $rsd = New-Object Security.AccessControl.RawSecurityDescriptor($sddl)
+            $sids = @($rsd.DiscretionaryAcl | ForEach-Object { $_.SecurityIdentifier.Value } | Sort-Object -Unique)
+            $prot = ($rsd.ControlFlags -band [Security.AccessControl.ControlFlags]::DiscretionaryAclProtected) -ne 0
+            $ok = (@('S-1-5-32-544', 'S-1-5-18') -contains $rsd.Owner.Value) -and $prot -and (($sids -join ',') -ceq 'S-1-5-18,S-1-5-32-544')
+            Add-WitResult '281' ('the task folder \SD is owned by SYSTEM or Administrators, protected, and open to them only (' + $when + ')') $(if ($ok) { 'PASS' } else { 'FAIL' }) $sddl
+        } catch { Add-WitResult '281' ('the task folder \SD could be read (' + $when + ')') 'FAIL' $_.Exception.Message }
+    }
+    & $checkSdFolder 'as the install left it'
+    $plantOk = $false
+    try {
+        $plantAct = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\cmd.exe') -Argument '/c exit 0'
+        Register-ScheduledTask -TaskName 'sdcore-job-zzwb' -TaskPath '\SD\' -Action $plantAct -Description 'witness 281: a planted task' -Force -ErrorAction Stop | Out-Null
+        $plantOk = $true
+        Write-Wit '  planted \SD\sdcore-job-zzwb (cmd.exe /c exit 0, as this administrator) before set.job add zzwb'
+    } catch { Add-WitResult '281' 'a task could be planted under the job''s name before set.job' 'NOT-MEASURED' $_.Exception.Message }
+
     $mark = Get-WitAuditMark
     $r = Invoke-WitSd -Commands @(('set.backup.directory ' + $bdir), 'set.job add zzwb backup-all daily 03:00') -Label 'the backup folder and the job' -TimeoutSec 180
     $task = @(Get-ScheduledTask -TaskPath '\SD\' -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like '*zzwb*' })
+    if ($plantOk -and $task.Count -eq 1) {
+        $exe = [string]$task[0].Actions[0].Execute
+        $ok = ($exe -like '*\sd.exe') -and ([string]$task[0].Principal.UserId -match 'SDSYS$') -and ([string]$task[0].Description -notmatch 'witness 281')
+        Add-WitResult '281' 'set.job replaced the planted task: it runs sd.exe as SDSYS and keeps nothing of the plant' $(if ($ok) { 'PASS' } else { 'FAIL' }) ('action ' + $exe + '; principal ' + $task[0].Principal.UserId + '; description ' + $task[0].Description)
+    }
+    & $checkSdFolder 'after set.job add'
     if ($task.Count -ne 1) { Add-WitResult '222' 'set.job add makes the task under \SD\' 'FAIL' ('tasks under \SD\ naming zzwb: ' + $task.Count) }
     else {
         Add-WitResult '222' 'set.job add makes the task under \SD\' 'PASS' ($task[0].TaskPath + $task[0].TaskName + ' as ' + $task[0].Principal.UserId + ' ' + $task[0].Principal.LogonType + ' ' + $task[0].Principal.RunLevel)

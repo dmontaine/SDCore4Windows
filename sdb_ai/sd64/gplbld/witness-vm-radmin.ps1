@@ -67,9 +67,31 @@ function Get-RaStatus {
 }
 function Get-RadminPw { $f = Read-WitFixtures; if ($null -eq $f -or -not $f.ContainsKey('sdradmin')) { return '' }; return $f['sdradmin'] }
 function Get-SshdT([string]$User) {
+    # 13 Nov 26 - RELEASE_1.1 280.  Measured on the host: sshd -T -C from an elevated administrator resolves ONLY the caller ("ga_init,
+    # unable to resolve user" for anyone else); as SYSTEM every ENABLED account resolves, a disabled one never does.  So it runs as SYSTEM
+    # through a one-shot task in the ROOT folder (never \SD), removed again; the output comes back through a file in C:\SD-witness.
     if ($sshd -eq '') { return '' }
-    $o = & $sshd -T -C ('user=' + $User + ',host=sdcheck,addr=192.0.2.1') 2>&1 | ForEach-Object { [string]$_ }
-    return ($o -join "`n")
+    $out = Join-Path $script:WitRoot ('sshdt-' + [Guid]::NewGuid().ToString('N') + '.txt')
+    $q = { param($s) "'" + $s.Replace("'", "''") + "'" }
+    $body = '$o = & ' + (& $q $sshd) + ' -T -C ' + (& $q ('user=' + $User + ',host=sdcheck,addr=192.0.2.1')) + ' 2>&1 | ForEach-Object { [string]$_ }; ' +
+            '[IO.File]::WriteAllText(' + (& $q ($out + '.tmp')) + ', ($o -join "`n")); Move-Item -LiteralPath ' + (& $q ($out + '.tmp')) + ' -Destination ' + (& $q $out)
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    try {
+        $act = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc)
+        $pr = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName 'sdwitness-sshdt' -TaskPath '\' -Action $act -Principal $pr -Force -ErrorAction Stop | Out-Null
+        Start-ScheduledTask -TaskPath '\' -TaskName 'sdwitness-sshdt' -ErrorAction Stop
+        $deadline = (Get-Date).AddSeconds(60)
+        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $out)) { Start-Sleep -Milliseconds 250 }
+        if (Test-Path -LiteralPath $out) { return [IO.File]::ReadAllText($out) }
+        return ''
+    } catch {
+        return ('(sshd -T as SYSTEM could not be run: ' + $_.Exception.Message + ')')
+    } finally {
+        Unregister-ScheduledTask -TaskPath '\' -TaskName 'sdwitness-sshdt' -Confirm:$false -ErrorAction SilentlyContinue
+        foreach ($f in @($out, ($out + '.tmp'))) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+    }
 }
 function Test-WinUser([string]$Name) { try { $null = Get-LocalUser -Name $Name -ErrorAction Stop; return $true } catch { return $false } }
 function Test-Registered([string]$Name) { return (Test-Path -LiteralPath (Join-Path (Join-Path $script:WitSdsys 'accounts') $Name)) }
@@ -157,6 +179,7 @@ if ($sections -contains 'on') {
     $mark = Get-WitAuditMark
     $r = Invoke-WitSd -Commands @('remote.sdsys on', $pw, $pw) -Label 'remote.sdsys on' -Secrets @($pw) -TimeoutSec 300
     Set-WitVerdict '202' 'F2: remote.sdsys on succeeds (12601 "ssh is open for SDRADMIN")' $r.Text 'ssh is open for SDRADMIN' @('did not succeed', 'Command requires administrator', 'not available in a remote administration session')
+    Set-WitVerdict '280' 'remote.sdsys on as SDSYS: the broker task is registered by SDSYS and its pipe appears' $r.Text 'the broker is running: \\\\\.\\pipe\\sd-radmin is there' @('did not succeed', 'is registered by SDSYS only', 'did not appear in 20 seconds')
     $s = Get-RaStatus
     Write-WitRaw 'remote-admin.ps1 -Status' $s
     Set-WitVerdict '202' 'F2: -Status says remote-admin=open' $s '(?m)^remote-admin=open\s*$' @('remote-admin=(inconsistent|closed|absent)')
@@ -478,8 +501,31 @@ if ($sections -contains 'off') {
     Set-WitVerdict '202' 'F7: -Status says remote-admin=closed' $s '(?m)^remote-admin=closed\s*$' @('remote-admin=(open|inconsistent)')
     foreach ($kv in @('account=disabled', 'sdssh=no', 'sshd-arm=closed', 'state=off')) { Set-WitVerdict '202' ('F7: wall ' + $kv) $s ('(?m)^' + [regex]::Escape($kv) + '\s*$') @() }
     Set-WitVerdict '202' 'F7: the broker is not running' $s '(?m)^broker=(disabled|ready|absent)\s*$' @('(?m)^broker=running')
-    $t = Get-SshdT 'sdradmin'
-    Set-WitVerdict '202' 'F7: sshd -T for sdradmin gives denyusers *' $t '(?m)^denyusers \*\s*$' @()
+    # 13 Nov 26 - RELEASE_1.1 280: SDRADMIN is DISABLED after OFF, and sshd -T -C resolves no disabled account even as SYSTEM (measured),
+    # so the shut arm is read as text - SD's block in sshd_config says DenyUsers * for sdradmin - and the whole file is checked with
+    # sshd -t, which is what remote-admin.ps1's OFF checks itself ("checked by sshd -t only").
+    $c = ''
+    try { $c = [IO.File]::ReadAllText($cfg) } catch { }
+    $bi = $c.IndexOf($marker)
+    $block = if ($bi -ge 0) { $c.Substring($bi) } else { '' }
+    $ei = $block.IndexOf('# --- END SD remote administration ---')
+    if ($ei -ge 0) { $block = $block.Substring(0, $ei) }
+    Write-WitRaw 'SD''s remote administration block in sshd_config after OFF' $block
+    Set-WitVerdict '202' 'F7: SD''s block in sshd_config is the shut arm (Match User sdradmin, DenyUsers *)' $block '(?ms)^Match User sdradmin.*^\s*DenyUsers \*\s*$' @('(?m)^\s*ForceCommand')
+    $tt = & $sshd -t 2>&1 | Out-String
+    Set-WitCompare '202' 'F7: sshd -t accepts sshd_config with the shut arm' '0' ([string]$LASTEXITCODE) -Evidence ($tt.Trim())
+    # 13 Nov 26 - RELEASE_1.1 280, 282: -On is SDSYS's alone.  Here SDRADMIN exists and the door is shut, so -On run by this elevated
+    # administrator (not SDSYS) gets past its own preconditions to the SDSYS rule: it must answer 4 and change nothing.
+    if (Test-Path -LiteralPath $ra) {
+        $psx = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $o = & $psx -NoProfile -ExecutionPolicy Bypass -File $ra -On 2>&1 | Out-String
+        $code = $LASTEXITCODE
+        Write-WitRaw ('remote-admin.ps1 -On as this administrator (exit ' + $code + ')') $o
+        Set-WitCompare '280' 'remote-admin.ps1 -On run by an administrator who is not SDSYS refuses with exit 4' '4' ([string]$code) -Evidence ($o.Trim())
+        Set-WitVerdict '280' 'the refusal says where to run it and that nothing was changed' $o 'run REMOTE\.SDSYS ON at SDSYS''s console; nothing was changed' @('remote-admin: open', 'is registered to run as SDSYS')
+        $s2 = Get-RaStatus
+        Set-WitVerdict '280' 'after the refused -On, -Status still says remote-admin=closed' $s2 '(?m)^remote-admin=closed\s*$' @('remote-admin=(open|inconsistent)')
+    }
     if ($pw -ne '') {
         $r = Invoke-SshRaw (Get-Command ssh.exe).Source ($sshOpts + @('sdradmin@localhost', 'whoami')) $pw "WHO`nOFF`n"
         Write-WitRaw ('ssh as SDRADMIN after OFF (exit ' + $r.ExitCode + ')') ($r.Out + "`n" + $r.Err)
