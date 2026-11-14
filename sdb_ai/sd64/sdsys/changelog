@@ -3,6 +3,26 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  THE CLIENT LIBRARY REMEMBERS EACH SERVER'S CERTIFICATE AND REFUSES A DIFFERENT ONE.
+
+             What        - the first time the client library connects to a server it keeps the server's TLS certificate (in
+                           %USERPROFILE%\.sdcore\known_servers, or the file named by SD_KNOWN_SERVERS, one line "host:port
+                           sha256"), and refuses, before a single byte of the login is sent, a later connection to the same
+                           address and port that presents a different one.  The message names both fingerprints and the line to
+                           remove.  A server whose certificate has been replaced (for instance SD installed on a fresh data
+                           folder) is a different certificate: remove its line and connect again.  A file that cannot be read or
+                           written refuses the connection instead of connecting unchecked; a program with no user profile (a
+                           service) sets SD_KNOWN_SERVERS.  The same as SD Core for Linux (and SD Core Solo for Windows, which has
+                           had it since 30 Sep 2026): the same value, file format and words.
+             Why         - a person in the middle who posed as the server could collect the login's proof and try to crack the
+                           password from it at leisure; the pin stops that after the first connection.
+             Does NOT    - Protect the very first connection to a server (as with ssh, someone in the middle at that moment is
+                           remembered in the server's place), change the login, or filter sd itself.  A program that connects
+                           with the BASIC !sdclient class or SDNet does not go through the client library and is not pinned.
+                           (The API's TLS relay was already confined: it runs as a bare local account at low integrity with every
+                           privilege removed, which is Windows' form of the system-call filter Linux has added.)
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  A SCRIPT THAT CAPTURES THE OUTPUT OF "sd -start" OR "sd -restart" NO LONGER WAITS UNTIL SD IS STOPPED.
 
              What        - $x = sd -start, or "sd -restart | Tee-Object log", printed SD's start message and then never

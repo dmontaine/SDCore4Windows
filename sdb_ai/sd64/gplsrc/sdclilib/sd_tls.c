@@ -32,6 +32,9 @@
  * WHAT THAT DOES NOT COVER, recorded in RELEASE_1.1 41: a man in the middle
  * who poses as the server can collect a client proof and try to crack the
  * password offline.  Pinning the server's key on first use would close that.
+ * 14 Nov 26 RELEASE_1.1 297 (Solo's SOLO 24, Linux S.236): IT NOW DOES - sdclilib.c pins the certificate on first use
+ * right after the handshake and before any login byte (sd_pin.h, sd_tls_client_
+ * certhex below).  The handshake itself still does not verify; the pin does.
  *
  * OpenSSL is STATIC-LINKED into the DLL (Makefile), so the client stays a
  * single file that can be copied beside an application - the property bcrypt
@@ -43,6 +46,7 @@
 #include "sd_tls.h"
 
 #include <ws2tcpip.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -201,6 +205,27 @@ fail:
     SSL_CTX_free(c->ctx);
   free(c);
   return NULL;
+}
+
+/* 30 Sep 26 - SOLO 24.  The value Linux pins: the digest of the WHOLE
+   certificate, DER form (X509_digest), lower-case hex. */
+int sd_tls_client_certhex(SD_TLS_CLIENT* c, char hex[65]) {
+  X509* cert = SSL_get1_peer_certificate(c->ssl);
+  unsigned char md[EVP_MAX_MD_SIZE];
+  unsigned int mdlen = 0;
+  unsigned int i;
+
+  if (cert == NULL)
+    return 0;
+  if (X509_digest(cert, EVP_sha256(), md, &mdlen) != 1 || mdlen != 32) {
+    X509_free(cert);
+    return 0;
+  }
+  X509_free(cert);
+  for (i = 0; i < mdlen; i++)
+    snprintf(hex + 2 * i, 3, "%02x", md[i]);
+  hex[64] = '\0';
+  return 1;
 }
 
 int sd_tls_client_read(SD_TLS_CLIENT* c, void* buf, int len) {

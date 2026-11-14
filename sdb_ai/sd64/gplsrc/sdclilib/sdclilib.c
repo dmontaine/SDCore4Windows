@@ -19,6 +19,8 @@
  * along with this library.  If not, see <https://www.gnu.org/licenses/>.
  *
  * START-HISTORY:
+ * 14 Nov 26 Windows - RELEASE_1.1 297 (Linux S.236, Solo's SOLO 24): OpenSocket() pins the server's certificate on first use, right after the
+ *           TLS handshake and before a login byte (sd_pin.h, sd_tls_client_certhex); tls_err is 512 and the failure text is bounded.
  * 13 Nov 26 Windows - SD_MAX_PACKET_BYTES is Linux's (MAX_STRING_SIZE + 10, e60f54a7), not 256 MB: a reply holding a string the server
  *           may hold is accepted, as on Linux (RELEASE_1.1 270, found writing User 37's request-size section).
  * 20 Oct 26 Windows port - from Linux 845d3b1 (18 Oct 26): SDChecksum(): the QMChecksum equivalent, evaluated on the client with the
@@ -346,6 +348,7 @@ void set_default_character_maps(void);
    and its SCRAM login is bound to the TLS session.  OpenSSL is confined to
    sd_tls.c; this header names no OpenSSL type. */
 #include "sd_tls.h"
+#include "sd_pin.h" /* 14 Nov 26 RELEASE_1.1 297 (Linux S.236, Solo's SOLO 24): first-use pinning of the server's certificate */
 
 DLLEntry char* SDError(void);
 
@@ -4714,7 +4717,8 @@ Private bool OpenSocket(char* host, int16_t port) {
        below now arrives inside TLS.  Its channel binding is what scram_login()
        binds the login to.  A failure here leaves the socket for CloseSocket(). */
     {
-        char tls_err[256];
+        char tls_err[512];
+        char cert_hex[65];
 
         session[session_idx].tls = sd_tls_client_start(
             session[session_idx].sock, SD_TLS_HANDSHAKE_MS + 5000, tls_err,
@@ -4722,7 +4726,23 @@ Private bool OpenSocket(char* host, int16_t port) {
         if (session[session_idx].tls == NULL) {
             snprintf(session[session_idx].sderror,
                      sizeof(session[session_idx].sderror),
-                     "Secure connection to server failed: %s", tls_err);
+                     "Secure connection to server failed: %.400s", tls_err);
+            goto exit_opensocket;
+        }
+        /* 14 Nov 26 - RELEASE_1.1 297 (Linux S.236; Solo's SOLO 24): FIRST-USE
+           PINNING, after the handshake and BEFORE a single login byte (so before
+           SCRAM client-first), the same value, store and words as the Linux
+           client (sd_pin.h).  A refused pin sends nothing: CloseSocket() ends
+           the session. */
+        if (!sd_tls_client_certhex(session[session_idx].tls, cert_hex)) {
+            snprintf(session[session_idx].sderror,
+                     sizeof(session[session_idx].sderror),
+                     "Secure connection to server failed: the server presented no certificate");
+            goto exit_opensocket;
+        }
+        if (!sd_pin_check(host, port, cert_hex, tls_err, sizeof(tls_err))) {
+            snprintf(session[session_idx].sderror,
+                     sizeof(session[session_idx].sderror), "%s", tls_err);
             goto exit_opensocket;
         }
     }

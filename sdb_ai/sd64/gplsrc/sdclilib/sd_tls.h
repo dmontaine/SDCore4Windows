@@ -64,6 +64,11 @@ int sd_tls_client_pending(SD_TLS_CLIENT* c);
 /* The whole buffer (non-zero) or 0. */
 int sd_tls_client_write(SD_TLS_CLIENT* c, const void* buf, int len);
 
+/* SOLO 24: SHA-256 of the server's whole certificate in DER form as 64
+   lower-case hex digits plus the NUL, for first-use pinning (sd_pin.h).  1 on
+   success; 0 if the server presented no certificate. */
+int sd_tls_client_certhex(SD_TLS_CLIENT* c, char hex[65]);
+
 /* This end's 32-byte tls-exporter binding. */
 const unsigned char* sd_tls_client_binding(SD_TLS_CLIENT* c);
 

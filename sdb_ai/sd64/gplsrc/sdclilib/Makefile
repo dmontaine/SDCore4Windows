@@ -26,7 +26,8 @@ LDLIBS += -lws2_32 -lbcrypt
 # libcrypto references them (a second -lws2_32; harmless).  The 64-bit static
 # libs are in /ucrt64/lib and the 32-bit in /mingw32/lib, each on its own
 # compiler's default library path.
-TLSSRC     = sd_tls.c
+# 14 Nov 26 - RELEASE_1.1 297: sd_pin.c, first-use pinning of the server's certificate (Linux S.236; Solo's SOLO 24).
+TLSSRC     = sd_tls.c sd_pin.c
 OPENSSL_STATIC = -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32
 
 # 15 Aug 26 - THE COMPILER'S OWN DIRECTORY MUST BE ON PATH, even when CC is
@@ -151,7 +152,7 @@ QMDEF2 = qmclient.def
 # The library's own headers, and the two files that are 32-bit-only: qmcompat.c
 # implements QMConnectLocal, which is the one QM entry point with no sdclilib
 # counterpart and so the only one that cannot be aliased in the .def.
-HDRS = sdclilib.h sdclient.h err.h revstamp.h sd_tls.h
+HDRS = sdclilib.h sdclient.h err.h revstamp.h sd_tls.h sd_pin.h
 QMSRCS = sdclilib.c qmcompat.c
 
 # ===========================================================================
