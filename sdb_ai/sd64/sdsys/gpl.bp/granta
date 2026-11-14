@@ -17,6 +17,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 288: the account name is downcased, not upcased (as modifya, createa and delacc).
 * 19 Aug 26 Windows port - SDSYS accounts is lower case on disk.  5.12 (a).
 * 15 Aug 26 Windows port - written.  PROJECT_STATUS.md 7 step 5.
 * 16 Aug 26 Windows port - step 5f: GRANT and REVOKE write the audit record,
@@ -111,7 +112,7 @@ deffun is_user(uname) calling '!is_user'
       acc.name = trim(acc.name)
       if acc.name = '' then stop
    end
-   acc.name = upcase(acc.name)
+   acc.name = downcase(acc.name)   ;* 13 Nov 26 (RELEASE_1.1 288): account names are lower case, as CREATE.ACCOUNT writes them
 
    * TO / FROM clause.  Absent means "list", which is what LIST.GRANTS is.
 

@@ -200,7 +200,7 @@ def checks(raw):
     ck("A1", "the console verbs keep their hands off SDRADMIN: CREATE.ACCOUNT refuses the name, MODIFY.ACCOUNT refuses it and refuses to ADD it to a group, DELETE.ACCOUNT refuses it while remote administration is open (12704 each)",
        re.search(r"if downcase\(trim\(acc\.name\)\) = 'sdradmin' then\s*\n\s*stop sysmsg\(12704\)", raw["createa"]) is not None
        and raw["createa"].find("if downcase(trim(acc.name)) = 'sdradmin' then") < raw["createa"].find("   settings = ''\n   if upcase(acc.type) = 'OTHER'")
-       and re.search(r"if acc\.name = 'SDRADMIN' then\s*\n\s*stop sysmsg\(12704\)", raw["modifya"]) is not None
+       and re.search(r"if acc\.name = 'sdradmin' then\s*\n\s*stop sysmsg\(12704\)", raw["modifya"]) is not None   # 13 Nov 26: names are lower case (row 288)
        and "if upcase(action) = 'ADD' and upcase(user.name) = 'SDRADMIN' then" in raw["modifya"]
        and re.search(r"if acc\.name = 'sdradmin' then\s*\n\s*if radmin_open\(0\) then stop sysmsg\(12704\)", raw["delacc"]) is not None, "")
     msg_ok = all(raw["msg" + m] and raw["msg" + m].endswith("\n") and raw["msg" + m].count("\n") == 1 and "\r" not in raw["msg" + m] for m in MSGS)
@@ -285,7 +285,7 @@ MUTANTS = [
     ("the VOC names point elsewhere", "L3", sub("login", "radmin.rec = 'V' : @fm : 'CA' : @fm : '$radmin'", "radmin.rec = 'V' : @fm : 'CA' : @fm : '$createa'")),
     ("the session is not announced", "L4", sub("login", "         display sysmsg(12800, radmin.from)", "         null")),
     ("SDRADMIN may LOGTO", "C1", sub("cproc", "   if upcase(@logname) = 'SDRADMIN' then\n      display sysmsg(12847, 'logto')", "   if 0 then\n      display sysmsg(12847, 'logto')")),
-    ("MODIFY.ACCOUNT reaches SDRADMIN", "A1", sub("modifya", "   if acc.name = 'SDRADMIN' then\n      stop sysmsg(12704)", "   if 0 then\n      stop sysmsg(12704)")),
+    ("MODIFY.ACCOUNT reaches SDRADMIN", "A1", sub("modifya", "   if acc.name = 'sdradmin' then\n      stop sysmsg(12704)", "   if 0 then\n      stop sysmsg(12704)")),
     ("DELETE.ACCOUNT takes SDRADMIN while open", "A1", sub("delacc", "      if radmin_open(0) then stop sysmsg(12704)", "      null")),
     ("a message is missing", "M1", setkey("msg12838", "")),
     ("the installer asks about remote administration again", "I1", sub("iss", "  PythonPage.Values[0] := False;\nend;", "  PythonPage.Values[0] := False;\n  RemoteAdminPage := CreateInputOptionPage(PythonPage.ID, 'Remote administration', '', '', False, False);\nend;")),

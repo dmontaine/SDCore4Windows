@@ -19,6 +19,9 @@
 * 
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 288: the account name is downcased, not upcased, as Linux's MODIFY.ACCOUNT (13 Sep 26, plan M)
+*   and our own CREATE.ACCOUNT and DELETE.ACCOUNT: messages and audit lines named ZZWITSH.  The literal tests ('sdsys', 'sdradmin') and
+*   the suspend-yourself test (downcase(@logname), downcase(@who)) moved with it.  The register is read by the same name either way.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON / AI-OFF put the account's person in or out of the Windows group sdaiusers (set.ai,
 *           through change.files.group, read back, said with 12611); in word.arr / slot.arr after the files words, as Linux; AI-OFF on a machine with no sdaiusers has
 *           nothing to take away.
@@ -286,7 +289,7 @@ deffun ps_script(script) calling '!ps_script'
       stop
    end
    *
-   acc.name = upcase(acc.name)   ;* account names are always upper case
+   acc.name = downcase(acc.name)   ;* account names are always lower case (13 Nov 26, RELEASE_1.1 288, as Linux's 13 Sep 26)
 * 22 Sep 26 Windows port - RELEASE_1.1 101.  SAY WHY, INSTEAD OF "Account name is
 *   invalid".  Owner, 22 Sep 2026: "the modify.account verb should not accept api
 *   or ssh commands for the sdsys account - remote access is always off."  The
@@ -297,12 +300,12 @@ deffun ps_script(script) calling '!ps_script'
 *   IT COVERS EVERY ACTION, NOT JUST THE TWO HE NAMED, and that is deliberate:
 *   the refusal is reached before the action token is parsed, so there is no
 *   action to name here, and SDSYS is outside this verb's reach for all of them.
-   if acc.name = 'SDSYS' then
+   if acc.name = 'sdsys' then
       stop sysmsg(12001) ;* Remote access is never available to SDSYS
    end
 * 13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN, the remote administration account, is remote.sdsys's alone (a route, a gate or a
 *   member here would widen what a network password reaches).
-   if acc.name = 'SDRADMIN' then
+   if acc.name = 'sdradmin' then
       stop sysmsg(12704) ;* SDRADMIN is the remote administration account
    end
    *
@@ -1555,7 +1558,7 @@ tier.set:
 *  it ends and then cannot be re-established, and the only way back is
 *  "sd -internal", which is undocumented and elevated.
    if want.tier = 'SUSPENDED' then
-      if (acc.name = upcase(@logname)) or (acc.name = upcase(@who)) then
+      if (acc.name = downcase(@logname)) or (acc.name = downcase(@who)) then
          @system.return.code = -ER$FAILED
          crt sysmsg(10112) ;* You cannot suspend your own account or the one you are standing in
          return
