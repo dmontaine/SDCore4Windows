@@ -192,7 +192,7 @@ clause of `execute` and `os.execute` — take the output
 `clear` — zeroes every variable
 
 - a statement of SD BASIC
-- docs: `User/markdown/06a-sd-basic-encryption.md` line 101
+- docs: `User/markdown/06a-sd-basic-encryption.md` line 102
 
 ### basic:stmt:clearcommon
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:469#9dcc91f1 src2=docs:tools/syntax-shapes.txt:37#5d346836
@@ -763,7 +763,7 @@ clause of `find`, `findstr` and `locate`
 `inherit` *object*
 
 - a statement of SD BASIC
-- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 215
+- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 217
 
 ### basic:stmt:input
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:486#009b2f48 src2=docs:tools/syntax-shapes.txt:112#297b31e5
@@ -1203,7 +1203,7 @@ clause of `execute` — the select list held in a variable becomes the command's
 `precision` *n*
 
 - a statement of SD BASIC
-- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 204
+- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 206
 
 ### basic:stmt:print
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:498#ea8544c2 src2=docs:tools/syntax-shapes.txt:162#8897326d
@@ -1211,7 +1211,7 @@ clause of `execute` — the select list held in a variable becomes the command's
 `print` *expr* {`:` …} {`:`}   ·   `print on` *unit* *expr*
 
 - a statement of SD BASIC
-- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 194
+- docs: `User/markdown/03a-sd-basic-numeric-tests-and-formatting.md` line 196
 
 ### basic:stmt:printcsv
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:499#089d3f8b src2=docs:tools/syntax-shapes.txt:163#cb450a2a
@@ -1283,7 +1283,7 @@ clause of `execute` — the select list held in a variable becomes the command's
 clause of `input` — read exactly *length* characters as they arrive
 
 - a word that belongs inside another statement's syntax, not a statement of its own
-- docs: `User/markdown/06a-sd-basic-encryption.md` line 138
+- docs: `User/markdown/06a-sd-basic-encryption.md` line 140
 
 ### basic:stmt:read
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:502#d5b3ec8b src2=docs:tools/syntax-shapes.txt:171#7f31b3b1
