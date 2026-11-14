@@ -788,12 +788,23 @@ Step 6 "Deleting BOTH trees"
 # silently keeps the tree that first created it - and every measurement taken
 # afterwards describes THAT build.  CLAUDE.md, and the four-fault run in
 # HISTORY.md.
+# 13 Nov 26 - SOME OF THE DATA TREE IS CLOSED TO ADMINISTRATORS ON PURPOSE.  The AI's key folder
+# (ai, SYSTEM and NT SERVICE\sd-ai only; RELEASE_1.1 246) and run.in debug's per-run store (runin,
+# RELEASE_1.1 253) grant an elevated administrator nothing, so Remove-Item failed on them and this
+# step blamed "a handle" (the 17:12 cycle of 13 Nov).  This elevated script takes ownership of the
+# tree and gives Administrators full control first: the tree is about to be deleted anyway.
 foreach ($t in @($PfTree, $PdTree)) {
     if (Test-Path -LiteralPath $t) {
+        if ($t -eq $PdTree) {
+            Write-Host "   taking ownership of $t so its closed folders can be deleted (a few seconds)..."
+            & "$env:SystemRoot\System32\takeown.exe" /F $t /R /D Y 2>&1 | Out-Null
+            & "$env:SystemRoot\System32\icacls.exe" $t /grant '*S-1-5-32-544:(OI)(CI)F' /T /C /Q 2>&1 | Out-Null
+        }
         Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue
     }
     if (Test-Path -LiteralPath $t) {
-        Fail "could not delete $t - something still has a handle on it.  Close any SD session or Explorer window and run this again."
+        $left = @(Get-ChildItem -LiteralPath $t -Force -ErrorAction SilentlyContinue | Select-Object -First 8 | ForEach-Object { $_.Name }) -join ', '
+        Fail "could not delete $t (still there: $left).  Either something has a handle on it (close any SD session or Explorer window) or its permissions refuse even an elevated administrator; then run this again."
     }
     Write-Host "   $t gone"
 }

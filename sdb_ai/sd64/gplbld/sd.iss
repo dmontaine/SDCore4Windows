@@ -6278,11 +6278,19 @@ begin
   begin
     { 13 Nov 26 - RELEASE_1.1 246: the AI helper's state folder ai in the data tree (its keys folder) grants only SYSTEM and the service
       NT SERVICE\sd-ai, so this elevated uninstaller could not delete it and DelTree failed on it.  When the database is
-      deleted, take ownership of that folder and give Administrators full control first; nothing else changes. }
+      deleted, take ownership of that folder and give Administrators full control first; nothing else changes.
+      13 Nov 26 - RELEASE_1.1 253: run.in debug's per-run store runin is closed to Administrators the same way, so it gets the
+      same treatment (the 17:12 cycle of 13 Nov stopped on the two folders). }
     if DirExists(AddBackslash(DataPath) + 'ai') then
     begin
       Exec(ExpandConstant('{sys}\takeown.exe'), '/F "' + AddBackslash(DataPath) + 'ai" /R /D Y', '', SW_HIDE, ewWaitUntilTerminated, Code);
       Exec(ExpandConstant('{sys}\icacls.exe'), '"' + AddBackslash(DataPath) + 'ai" /grant *S-1-5-32-544:(OI)(CI)F /T /C', '', SW_HIDE,
+           ewWaitUntilTerminated, Code);
+    end;
+    if DirExists(AddBackslash(DataPath) + 'runin') then
+    begin
+      Exec(ExpandConstant('{sys}\takeown.exe'), '/F "' + AddBackslash(DataPath) + 'runin" /R /D Y', '', SW_HIDE, ewWaitUntilTerminated, Code);
+      Exec(ExpandConstant('{sys}\icacls.exe'), '"' + AddBackslash(DataPath) + 'runin" /grant *S-1-5-32-544:(OI)(CI)F /T /C', '', SW_HIDE,
            ewWaitUntilTerminated, Code);
     end;
     if ConfDelete then
