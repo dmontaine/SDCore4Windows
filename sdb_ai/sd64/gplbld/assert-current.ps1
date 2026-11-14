@@ -196,7 +196,10 @@ Note ("  installed at: {0}" -f $installed.ToString('dd MMM HH:mm:ss'))
 # names present in gplsrc, sdsys and gplbld with the same ship evidence: ZERO files
 # that were exempt became watched, and nine probe .c files that were watched
 # (and so could have raised a false stale) became exempt.
-$harnessFamily = '^(verify|test|probe|check|clean)-'
+# 13 Nov 26 - witness- and sandbox- joined the family: the testing rule (CLAUDE.md) already counts
+# them as test scripts, and witness-vm-upgrade.ps1, written a minute after the 17:20 install, made
+# that install read STALE although nothing it holds had changed.
+$harnessFamily = '^(verify|test|probe|check|clean|witness|sandbox)-'
 $neverShipped = @(
     # suite runners and guards
     'VerifyInstall1.ps1', 'VerifyInstall2.ps1', 'assert-current.ps1', 'cycle.ps1',
