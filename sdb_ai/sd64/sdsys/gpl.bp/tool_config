@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12950 before the report's !settings_os (PowerShell, a few seconds).
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the SCREEN MSGBOX keeps no unused answer.
 * 10 Nov 26 Windows port - from Linux (S.75 A6 and its later changes to 9 Nov 26; RELEASE_1.1 218).  OS deviations: sd.conf is the file kernel(K$INIPATH) names (SD_CONFIG, else
 *               C:\ProgramData\SD\sd.conf), not /etc/sd.conf; set.config changes it through SDSYS's elevated helper (gplbld/sd-confset.ps1), not the root helper; the line to add by hand is
@@ -363,6 +364,10 @@ read.backup:
 
 read.report:
    repl = '' ; rtop = 1
+   held.msg = msg                                               ;* 14 Nov 26 (RELEASE_1.1 243): !settings_os starts PowerShell, a few seconds;
+   msg = sysmsg(12950)                                          ;* the status line says so first, as tool.remote's does
+   call $tk_frame(ctx, keys, panes<view>, msg)
+   msg = held.msg
    call !settings_os(os.lines, rerr)
    if rerr # '' then
       repl = 'the report could not be made'

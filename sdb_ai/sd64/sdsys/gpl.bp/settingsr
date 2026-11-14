@@ -3,6 +3,7 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 243: 12950 is printed before !settings_os, which starts PowerShell (a line before any wait over 2 s).
 * 01 Oct 26 dm Written for S.50 (owner, 1 Oct 2026: "I think we need a way for
 *              an admin to store a copy of the system settings, it could be as
 *              simple as a text document").  SHARED WITH SD CORE FOR WINDOWS BYTE
@@ -159,6 +160,7 @@ $include header.h
    end
 
 * The operating system's sections
+   display sysmsg(12950)   ;* Reading the setting (a few seconds)...  14 Nov 26 (RELEASE_1.1 243): !settings_os starts PowerShell
    call !settings_os(os.lines, err)
    if err # '' then
       r<-1> = ''

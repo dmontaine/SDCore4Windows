@@ -9253,7 +9253,7 @@ cited by: `cd`, `dcomp`, `mkindx`
 Making the change (a few seconds)...
 ```
 
-cited by: `remoteapi`, `remotessh`, `tool_remote`
+cited by: `remoteapi`, `remotessh`, `set_job`, `tool_jobs`, `tool_remote`
 
 ### msg:12945
 > kind=message tier=reference since=- src=sdsys/messages/12945:1#c06cef8b
@@ -9305,7 +9305,7 @@ cited by: `tk_aipage`
 Reading the setting (a few seconds)...
 ```
 
-cited by: `remoteapi`, `remotessh`, `tool_remote`
+cited by: `remoteapi`, `remotessh`, `set_job`, `settingsr`, `tool_config`, `tool_jobs`, `tool_remote`
 
 ### msg:12951
 > kind=message tier=reference since=- src=sdsys/messages/12951:1#ce2f5d0f

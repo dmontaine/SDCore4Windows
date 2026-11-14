@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 243 (owner, 12 Nov 26: a line before any wait over 2 s): 12950 before the first read and 12944 before
+*            the first change, once per command, as REMOTE.API and REMOTE.SSH.
 * 10 Nov 26 Windows port - from Linux d049d8bb (S.102 stage 4), carry area 14.  The helper is sd-jobs.ps1 (Task Scheduler) in place of
 *              sudo sd-elevate (systemd timers), run through !ps_script_out as the other SDSYS verbs run theirs (SET.CONFIG); its lines start
 *              "sd-jobs: ".  The next and last run come from the helper's job-state (Task Scheduler) in place of systemctl show.  Messages are
@@ -58,6 +60,8 @@ deffun ps_script_out(script, want.out) calling '!ps_script_out'
    end
 
    q = char(39)
+   said.read = @false                                           ;* 14 Nov 26 (RELEASE_1.1 243): the wait line is printed once per command,
+   said.change = @false                                         ;* not once per PowerShell call (a plain set.job asks for each job's state)
    helper = kernel(K$WINPATH, '/sd-jobs.ps1')
    if helper = '' or index(helper, q, 1) then
       @system.return.code = -ER$FAILED
@@ -269,6 +273,19 @@ job.state:
 * hargs in; out (fields) and rc out.  Built only from words this program checked: a job name, a job id, schedule words of a-z, 0-9 and the colon, so nothing
 * in it can end PowerShell's argument list; the helper's path came from K$WINPATH and holds no single quote (checked above).
 run.cmd:
+   * 14 Nov 26 (RELEASE_1.1 243; owner, 12 Nov 26: a line before any wait over 2 s): PowerShell takes a few seconds, so a line says so first,
+   * as REMOTE.API and REMOTE.SSH do - 12950 before the first read, 12944 before the first change.  TOOL.JOBS drops these lines from what it captures.
+   if hargs[1, 8] = 'job-list' or hargs[1, 9] = 'job-state' then
+      if not(said.read) then
+         display sysmsg(12950)   ;* Reading the setting (a few seconds)...
+         said.read = @true
+      end
+   end else
+      if not(said.change) then
+         display sysmsg(12944)   ;* Making the change (a few seconds)...
+         said.change = @true
+      end
+   end
    script = '& ' : q : helper : q : ' ' : hargs : '; exit $LASTEXITCODE'
    both = ps_script_out(script, @true)
    rc = both<1>

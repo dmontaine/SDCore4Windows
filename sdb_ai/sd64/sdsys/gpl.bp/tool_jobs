@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12950 while SET.JOB reads (as tool.remote), and the verb's wait lines are
+*            dropped from what it printed, so they are never read as job lines or shown as its result.
 * 10 Nov 26 Windows port - from Linux 944d6ed3, d049d8bb, 1c127f7c (S.102 stages 1, 4 and 5), 87659a06 (S.176), c792b4a2 (S.179), e8c72d31 (S.185),
 *              ad4a2cf6 and c1aca2a8 (S.186), carry area 14.  The code is Linux's; the words are Windows': a job is a Task Scheduler task registered by the
 *              job helper (sd-jobs.ps1, through SET.JOB) and run as the Windows account SDSYS, an account's command is run by a task of its own Windows
@@ -293,8 +295,15 @@ read.jobs:
    jnm = '' ; jsch = '' ; jcmd = '' ; jid = '' ; jnext = '' ; jlast = '' ; jbad = '' ; jerr = ''
    jn = 0
    jread = 1
+   * 14 Nov 26 (RELEASE_1.1 243; owner, 12 Nov 26: a line before any wait over 2 s): SET.JOB starts PowerShell, a few seconds; the status line
+   * says so first, as tool.remote's does, and the page's own message comes back after.  The verb's own wait line is dropped from what it printed.
+   held.msg = msg
+   msg = sysmsg(12950)                                          ;* Reading the setting (a few seconds)...
+   call $tk_frame(ctx, keys, pnames<pane>, msg)
+   msg = held.msg
    call $tk_run(allow, 'set.job', jout, jst, jrerr)
    jout = change(change(jout, char(13) : char(10), @fm), char(13), '')
+   gosub drop.wait.lines.jout
    if jrerr # '' then
       jerr = jrerr
    end else
@@ -911,6 +920,19 @@ change:
    end
    return
 
+* 14 Nov 26 (RELEASE_1.1 243): SET.JOB's wait lines (12950, 12944) are not job lines and not its result: they go before anything is read
+drop.wait.lines.jout:
+   for wi = dcount(jout, @fm) to 1 step -1
+      if trim(jout<wi>) = trim(sysmsg(12950)) or trim(jout<wi>) = trim(sysmsg(12944)) then del jout<wi>
+   next wi
+   return
+
+drop.wait.lines.out:
+   for wi = dcount(out, @fm) to 1 step -1
+      if trim(out<wi>) = trim(sysmsg(12950)) or trim(out<wi>) = trim(sysmsg(12944)) then del out<wi>
+   next wi
+   return
+
 * sent in: $tk_run, then what it answered on the status line and in the output pane (the last line the command printed, which is the helper's own result line)
 run.sent:
    call $tk_run(allow, sent, out, st, err)
@@ -920,6 +942,7 @@ run.sent:
       return
    end
    out = change(change(out, char(13) : char(10), @fm), char(13), '')
+   gosub drop.wait.lines.out
    said = ''
    for oi = dcount(out, @fm) to 1 step -1
       if said = '' and trim(out<oi>) # '' then said = trim(out<oi>)
