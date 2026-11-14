@@ -33,6 +33,36 @@ $roots = [ordered]@{
     'sd.conf'  = 'C:\ProgramData\SD\sd.conf'
     'voc'      = 'C:\ProgramData\SD\sdsys\voc'
     'gpl.bp'   = 'C:\ProgramData\SD\sdsys\gpl.bp'
+    # 14 Nov 26 - RELEASE_1.1 293, THE PARITY LOCK OF THE REST OF sdsys.  Linux makes the whole of sdsys sdsys:sdusers 755
+    # and leaves the group only errlog (664), prt (775) and dumps (1730 - write and enter, no read) writable (installsdcore.sh,
+    # chmod -R 755 then those three).  On Windows 22 entries inherit sdusers:(M), including the sdsys folder itself.  Nothing
+    # is locked blind: every candidate is listed here so ONE unelevated run says which an ordinary session or phantom writes.
+    # errlog, prt, dumps, $hold and pstmp are the CONTROLS - expected WRITTEN; the rest are expected untouched.  A candidate that
+    # reads WRITTEN stays open (or is fixed at its writer); the others are locked by secure-sysdirs.ps1.
+    'syscom'        = 'C:\ProgramData\SD\sdsys\syscom'
+    'terminfo'      = 'C:\ProgramData\SD\sdsys\terminfo'
+    'terminfo.src'  = 'C:\ProgramData\SD\sdsys\terminfo.src'
+    'helptext'      = 'C:\ProgramData\SD\sdsys\helptext'
+    'dir_dict'      = 'C:\ProgramData\SD\sdsys\dir_dict'
+    'licence'       = 'C:\ProgramData\SD\sdsys\licence'
+    'contrib'       = 'C:\ProgramData\SD\sdsys\contrib'
+    'start.default' = 'C:\ProgramData\SD\sdsys\start.default'
+    'agent-pack'    = 'C:\ProgramData\SD\sdsys\agent-pack'
+    'bp.out'        = 'C:\ProgramData\SD\sdsys\bp.out'
+    'pcode.out'     = 'C:\ProgramData\SD\sdsys\pcode.out'
+    'dict.dic'      = 'C:\ProgramData\SD\sdsys\dict.dic'
+    'voc.dic'       = 'C:\ProgramData\SD\sdsys\voc.dic'
+    '$map.dic'      = 'C:\ProgramData\SD\sdsys\$map.dic'
+    'accounts.dic'  = 'C:\ProgramData\SD\sdsys\accounts.dic'
+    '$hold.dic'     = 'C:\ProgramData\SD\sdsys\$hold.dic'
+    '$hold'         = 'C:\ProgramData\SD\sdsys\$hold'
+    'pstmp'         = 'C:\ProgramData\SD\sdsys\pstmp'
+    'prt'           = 'C:\ProgramData\SD\sdsys\prt'
+    'dumps'         = 'C:\ProgramData\SD\sdsys\dumps'
+    'errlog'        = 'C:\ProgramData\SD\sdsys\errlog'
+    # the sdsys folder ITSELF: its top-level names are listed before and after, so a file or folder an ordinary session CREATES
+    # in it shows as CREATED.  The marker prefix keeps Snapshot from walking the folder and keeps the -like match to these rows.
+    'sdsys-root'    = 'ROOTLIST:C:\ProgramData\SD\sdsys'
 }
 
 "who am i : $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
@@ -45,6 +75,14 @@ function Snapshot {
     $h = @{}
     foreach ($k in $roots.Keys) {
         $p = $roots[$k]
+        if ($p -like 'ROOTLIST:*') {
+            # the top-level names of the folder, not its contents (14 Nov 26, RELEASE_1.1 293)
+            $rl = $p.Substring(9)
+            if (Test-Path -LiteralPath $rl) {
+                foreach ($e in Get-ChildItem -LiteralPath $rl -Force -ErrorAction SilentlyContinue) { $h[$p + '\' + $e.Name] = 'listed' }
+            }
+            continue
+        }
         if (-not (Test-Path -LiteralPath $p)) { continue }
         $files = if ((Get-Item -LiteralPath $p).PSIsContainer) {
             Get-ChildItem -LiteralPath $p -Recurse -File -Force -ErrorAction SilentlyContinue
@@ -156,7 +194,7 @@ if ($changed.Count -eq 0) {
 '== per-target verdict =='
 foreach ($k in $roots.Keys) {
     $p = $roots[$k]
-    $hits = @($changed | Where-Object { $_ -like "*$p*" }).Count
+    $hits = @($changed | Where-Object { $_ -like "*$p\*" -or $_ -like "*$p" }).Count   # a path boundary: voc must not match voc.dic
     '{0,-10} {1}' -f $k, $(if ($hits) { "WRITTEN ($hits file(s))" } else { 'untouched' })
 }
 
@@ -269,7 +307,7 @@ if ($sdBefore -gt 0) {
     }
     if ($chg2.Count -eq 0) { '   nothing changed' } else { $chg2 | Sort-Object | ForEach-Object { "   $_" } }
     foreach ($k in $roots.Keys) {
-        $hits = @($chg2 | Where-Object { $_ -like ('*' + $roots[$k] + '*') }).Count
+        $hits = @($chg2 | Where-Object { $_ -like ('*' + $roots[$k] + '\*') -or $_ -like ('*' + $roots[$k]) }).Count
         '   {0,-10} {1}' -f $k, $(if ($hits) { "WRITTEN ($hits)" } else { 'untouched' })
     }
     if ($peak -le 0) {
