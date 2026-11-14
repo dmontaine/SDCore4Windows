@@ -231,7 +231,8 @@ MUTANTS = [
     ("200 becomes 2000", "AU14", sub("page", "BLK = 200 ", "BLK = 2000 ")),
     ("the page follows without being asked", "AU14", sub("page", "            if follow then gosub timed.follow", "            gosub timed.follow")),
     ("a key is added to the table", "AU15", sub("page", "   call $tk_keys('add', keys, 'x', 'save', 'export', '', 1)\n", "   call $tk_keys('add', keys, 'x', 'save', 'export', '', 1)\n   call $tk_keys('add', keys, 'k', 'kill', 'kill', '', 1)\n")),
-    ("the help key names a record that does not exist", "AU16", sub("page", "call $tk_help('box', 'tool.audit.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'", "call $tk_help('box', 'tool.audit.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'")),
+    # 14 Nov 26: re-anchored on the case after F1's help (S.179 put ctrl-t there; the f5 anchor no longer matched and the mutant tested nothing - found by Windows; Linux 4b082133)
+    ("the help key names a record that does not exist", "AU16", sub("page", "call $tk_help('box', 'tool.audit.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'", "call $tk_help('box', 'tool.audit.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'")),
     ("the help record names no page", "AU16", sub("help", "20-the-audit-trail", "")),
     ("the lines box overruns the detail", "AU17", sub("page", "ld<2> = 'lines' : @vm : 2 : @vm : 1 : @vm : 20", "ld<2> = 'lines' : @vm : 2 : @vm : 1 : @vm : 21")),
     ("the first filter line runs under the [?]", "AU17", sub("page", "attr 'bold' width ttw - 6", "attr 'bold' width ttw")),

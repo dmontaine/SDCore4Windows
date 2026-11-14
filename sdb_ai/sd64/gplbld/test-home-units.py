@@ -524,7 +524,8 @@ MUTANTS = [
     ("a piped session is let in", "tool_home", "   if @tty[1, 5] # '/dev/' then\n      display sysmsg(12868)", "   if @false then\n      display sysmsg(12868)"),
     ("the home entry keeps the lock of an absent start.default", "home_entry", "         if not(unassigned(df)) then close df\n", "         null\n"),
     ("set.tile lets the Back tile be turned off", "settile", "if tile = 'back' and state = 'off' then stop sysmsg(12967)", "if @false then stop sysmsg(12967)"),
-    ("modify.account loses a start word", "modifya", "FILES-ADMIN-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED", "FILES-ADMIN-OFF,START-MENU,START-TERMINAL,PINS-ON,PINS-OFF,SUSPENDED"),
+    # 14 Nov 26 (RELEASE_1.1 296): re-anchored on the words round START-DEFAULT; the list gained AI-ON,AI-OFF and UNSUSPENDED (3045d667) and the long anchor matched nothing
+    ("modify.account loses a start word", "modifya", "START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON", "START-MENU,START-TERMINAL,PINS-ON"),
     ("modify.account loses a pins word", "modifya", "START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED", "START-DEFAULT,PINS-ON,SUSPENDED"),
     ("pins-on writes another field", "modifya", "os.field = ACC$PINS\n            os.want  = @true", "os.field = ACC$NET\n            os.want  = @true"),      # 13 Nov 26 Windows: Core's two-line form
     ("home_pins does not ask the gate", "home_pins", "   if not(on) then return\n", ""),
