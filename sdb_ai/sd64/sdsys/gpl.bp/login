@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 266: UPDATE.ACCOUNTS ALL's walk compares account paths with the case and the slashes folded (as restorea does).
+*   The walk is to pass over the account it was run in, and SDSYS's register path (C:\ProgramData\SD\sdsys) did not match @path exactly, so the walk
+*   updated SDSYS's VOC a second time, from NEWVOC, over the VOC_TEMPLATE update (VM sitting 13 Nov: SDSYS's tool.gates was $tool_mygates).  Windows
+*   only: a Windows path is the same path in either case and with either slash.
 * 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov): the remote administration session's VOC points seven names at
 *   $radmin, REMOTE.SSH and REMOTE.API with the five (Linux's remote sdsys runs both).
 * 13 Nov 26 Windows port - RELEASE_1.1 202 (Linux S.106's remote.sdsys, the Windows form): the account sdradmin is entered only by the Windows
@@ -445,7 +449,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   was read.
             acc.updated = 0
             acc.denied = 0
-            voc.paths = @path
+            voc.paths = downcase(convert('\', '/', @path))          ;* 13 Nov 26 (266): paths compared folded, see START-HISTORY
             openpath @sdsys:@ds:'accounts' to acc.f then
                select acc.f to 12
                loop
@@ -453,7 +457,8 @@ deffun radmin_open(arg) calling '!radmin_open'
                   read acc.rec from acc.f, acc.name then
                      acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
-                     locate acc.path in voc.paths<1> setting s else
+                     acc.key = downcase(convert('\', '/', acc.path))
+                     locate acc.key in voc.paths<1> setting s else
                         s = acc.path:@ds:'voc'
                         openpath s to update.voc.f then
                            display sysmsg(5004, s) ;* Updating xx
@@ -474,7 +479,7 @@ deffun radmin_open(arg) calling '!radmin_open'
                            upd.account = downcase(acc.name)   ;* 7 Nov 26 (Linux 29c4a48f) - the name the deletion list's saved copies and audit line carry
                            gosub update.voc
                            close update.voc.f
-                           voc.paths<-1> = acc.path
+                           voc.paths<-1> = acc.key
                            if upd.denied then
                               display sysmsg(12988, s)
                               acc.denied += 1
