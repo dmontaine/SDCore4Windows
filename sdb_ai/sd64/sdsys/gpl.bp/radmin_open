@@ -13,6 +13,8 @@
 * GNU General Public License for more details.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 202: it answered "off" every time (@SDSYS has backslashes, @DS is '/'; measured in the VM), so
+*   SDRADMIN was refused at sign-in while remote administration was open.  The state directory is found with either slash.
 * 13 Nov 26 Windows port - written for RELEASE_1.1 202 (remote administration over ssh, Linux S.106's remote.sdsys in the Windows form).
 * END-HISTORY
 *
@@ -38,9 +40,13 @@ function radmin_open(arg)
 $catalog !radmin_open
 
    open = @false
-   n = count(@sdsys, @ds)
+* 14 Nov 26 Windows port - RELEASE_1.1 202: @SDSYS is C:\ProgramData\SD\sdsys (backslashes) and @DS is '/' (measured in the VM), so
+*   count(@sdsys, @ds) was 0 and this answered "off" every time: SDRADMIN was refused at sign-in with remote administration open.
+*   The parent is found with either slash; Windows takes C:/... as well as C:\....
+   sp = convert(char(92), '/', @sdsys)
+   n = count(sp, '/')
    if n < 1 then return open
-   state.dir = @sdsys[1, index(@sdsys, @ds, n) - 1] : @ds : 'remote-admin'
+   state.dir = sp[1, index(sp, '/', n) - 1] : '/remote-admin'
    openpath state.dir to state.f then
       read state.rec from state.f, 'state' then
          if trim(state.rec<1>) = 'on' then open = @true

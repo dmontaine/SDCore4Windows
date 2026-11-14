@@ -115,7 +115,7 @@ def checks(raw):
     ck("B3", "RUN is refused (the usage, 12928) unless kernel(K$JOB.MARK) names a radmin- job - the broker's one-shot job - and only then runs the request", ok and v.count("gosub run.request") == 1, str(pos))
     rr = block(v, "run.request")
     ok, pos = ordered(rr, ["void ospath(jobs.def, OS$DELETE)", "call @parser(PARSER$GET.TOKEN, token.type, run.verb, keyword)"])
-    ck("B4", "RUN deletes the job's definition (the consumer closes the door) before it reads a word of the request", ok and "jobs.def = @sdsys[1, index(@sdsys, @ds, count(@sdsys, @ds)) - 1] : @ds : 'sd-jobs' : @ds : job" in rr, str(pos))
+    ck("B4", "RUN deletes the job's definition (the consumer closes the door) before it reads a word of the request", ok and "sp = convert(char(92), '/', @sdsys)" in rr and "jobs.def = sp[1, index(sp, '/', count(sp, '/')) - 1] : '/sd-jobs/' : job" in rr and "count(@sdsys, @ds)" not in rr, str(pos))   # 14 Nov 26: @SDSYS has backslashes, @DS is '/' (row 202)
     sec = rr[rr.find("input secret HIDDEN"):] if "input secret HIDDEN" in rr else ""
     ok, pos = ordered(sec, ["input secret HIDDEN", "data secret\n", "data secret\n", "data 'n'", "            secret = ''\n            execute run.sentence", "run.rc = @system.return.code\n            cleardata\n         end"])
     ck("B5", "THE PASSWORD: read once from standard input with INPUT ... HIDDEN, put in the DATA queue twice and 'n' once, the variable cleared BEFORE the verb runs, the queue cleared after; "
@@ -170,7 +170,8 @@ def checks(raw):
     ck("R6", "RADMIN sends REMOTE.SSH and REMOTE.API with the word typed, or none (Linux parity); it asks them nothing",
        re.search(r"case verb = 'remote\.ssh' or verb = 'remote\.api'\s*\n\s*null\b", r) is not None, "")
     ck("O1", "!radmin_open reads <ProgramData>\\SD\\remote-admin\\state, from the parent of @sdsys, and is true only for 'on' (anything unreadable is off)",
-       "state.dir = @sdsys[1, index(@sdsys, @ds, n) - 1] : @ds : 'remote-admin'" in o and "if trim(state.rec<1>) = 'on' then open = @true" in o and "open = @false" in o and "$catalog !radmin_open" in raw["open"], "")
+       "sp = convert(char(92), '/', @sdsys)" in o and "n = count(sp, '/')" in o and "state.dir = sp[1, index(sp, '/', n) - 1] : '/remote-admin'" in o and "count(@sdsys, @ds)" not in o   # 14 Nov 26: either slash (row 202, measured in the VM)
+       and "if trim(state.rec<1>) = 'on' then open = @true" in o and "open = @false" in o and "$catalog !radmin_open" in raw["open"], "")
 
     gate = lg[lg.find("   if initial.account = 'sdradmin' then"):]
     m = re.search(r"\n         void kernel\(K\$ADMINISTRATOR, 0\)\n(?:[^\n]*\n){0,12}?   end case\n\s*\n   if initial\.account = 'sdradmin' then\n", lg)
@@ -274,6 +275,8 @@ MUTANTS = [
     ("the request file is left", "R4", sub("radmin", "   delete ps.f, req.id   ;*", "   null   ;*")),
     ("a refusal is not shown", "R5", sub("radmin", "            crt sysmsg(12838, l[9, 999])", "            null")),
     ("the state file is believed when it says anything", "O1", sub("open", "if trim(state.rec<1>) = 'on' then open = @true", "open = @true")),
+    ("the state directory is split on @ds again", "O1", sub("open", "   sp = convert(char(92), '/', @sdsys)\n", "   sp = @sdsys\n")),
+    ("the job definition is split on @ds again", "B4", sub("verb", "   sp = convert(char(92), '/', @sdsys)", "   sp = @sdsys")),
     ("the gate is inside case 1 only", "L1", sub("login", "   if initial.account = 'sdradmin' then\n      radmin.why = ''", "   if 0 then\n      radmin.why = ''")),
     ("an elevated SDRADMIN lands", "L1", sub("login", "         case kernel(K$OS.ELEVATED, 0)\n            radmin.why = 'SDRADMIN in an elevated session'\n", "")),
     ("a local SDRADMIN lands", "L1", sub("login", "         case env('SSH_CONNECTION') = ''\n            radmin.why = 'SDRADMIN not over ssh'\n", "")),

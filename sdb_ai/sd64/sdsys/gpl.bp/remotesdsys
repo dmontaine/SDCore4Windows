@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 202: run.request's job definition path split @SDSYS on @DS ('/'), which a backslashed @SDSYS
+*   never holds, so it named /sd-jobs/<job> and the used definition was never deleted (VM sitting).  Split with either slash.
 * 13 Nov 26 Windows port - RELEASE_1.1 282 (owner, 13 Nov): ON is SDSYS's, at its console; the installer no longer offers it.  The SDSYS
 *              password prompt RELEASE_1.1 280 added for the installer's run is gone with it: remote-admin.ps1 -On answers 4 to anyone but
 *              SDSYS, having changed nothing, and its line says where to run it.
@@ -326,7 +328,8 @@ show.helper:
 * after the verb and the variable emptied.  It is never in a command line, the audit trail or a file.  DELETE.ACCOUNT's Y/N is answered Y:
 * the remote session asked for the name to be typed again before it sent the request.
 run.request:
-   jobs.def = @sdsys[1, index(@sdsys, @ds, count(@sdsys, @ds)) - 1] : @ds : 'sd-jobs' : @ds : job
+   sp = convert(char(92), '/', @sdsys)      ;* 14 Nov 26 (202): @SDSYS has backslashes and @DS is '/', so the parent is found with either slash
+   jobs.def = sp[1, index(sp, '/', count(sp, '/')) - 1] : '/sd-jobs/' : job
    void ospath(jobs.def, OS$DELETE)
 
    run.verb = ''
