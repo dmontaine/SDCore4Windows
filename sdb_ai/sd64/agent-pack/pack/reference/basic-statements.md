@@ -896,7 +896,7 @@ clause of `readu`, `readl`, `readvu`, `readvl`, `matreadu`, `matreadl`, `fileloc
 `logmsg` *text*
 
 - a statement of SD BASIC
-- docs: `User/markdown/29-sd-tcl-the-terminal-and-the-session.md` line 501
+- docs: `User/markdown/29-sd-tcl-the-terminal-and-the-session.md` line 504
 
 ### basic:stmt:loop
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:490#ae1c50d9 src2=docs:tools/syntax-shapes.txt:131#13c6f6f2
@@ -1156,7 +1156,7 @@ clause of `openseq`
 `page` {*n*}
 
 - a statement of SD BASIC
-- docs: `User/markdown/12a-sd-basic-the-screen-statement.md` line 307
+- docs: `User/markdown/12a-sd-basic-the-screen-statement.md` line 311
 
 ### basic:stmt:panning
 > kind=basic.clause tier=reference since=- src=sdsys/gpl.bp/bcomp:10370#7502bc52 src2=docs:tools/syntax-shapes.txt:158#13ce5390
