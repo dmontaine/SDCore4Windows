@@ -23,8 +23,6 @@
         'stmt-q3'      = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS, builds fixture accounts and starts sd -internal; none exists in an ordinary account'
         'inhibit-q8'   = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
         'listu-a5'     = 'reads and recompiles <sys>/gpl.bp/cproc as SDSYS and starts sd -internal; none exists in an ordinary account'
-        # 13 Nov 26 (RELEASE_1.1 272): carried with the pty driver (probe-winpty.py); its first run against SD is owed.
-        'winsize'      = 'not yet run: the first run of the pty driver against SD (probe-winpty.py) is owed on row 272; its K$WINSIZE rows need row 254''s SDSYS stand-in'
         # S.63 (per-account OS gates) is on the HOLD list and is not carried.
         # 12 Nov 26 (RELEASE_1.1 241): the public OSPATH is carried; ospathw (written for Windows) runs its switch-off half in an ordinary account.
         'ospath'       = 'loads sandbox-gates.py: SDSYS sessions and fixture accounts with the OS switch on and off; the switch-off half is ospathw'
@@ -86,6 +84,15 @@
             'WRITE, no mode set'     = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
             'WRITESEQ, no mode set'  = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
             'no letter: WRITESEQ'    = 'RELEASE_1.1 271: an unset Windows file writes CR LF, the Windows text convention'
+        }
+        # 13 Nov 26 (RELEASE_1.1 272): the first run on the pty driver (verify-carry-20261113-172335.log) passed 36 rows; these
+        # six failed ONLY on K$WINSIZE, which PROG cannot read because $internal needs an SD administrator in internal mode here
+        # (a harness gap: row 254's SDSYS stand-in).  The display size in every one of them was right.  A display regression
+        # would be hidden too until 254 lands, which is why the excusal names the row.
+        'winsize' = @{
+            '... and the kernel has no window size to give'      = 'RELEASE_1.1 254: K$WINSIZE needs a $internal PROG, compiled only by an SDSYS stand-in (the display size was right)'
+            'a pseudo-terminal of '                               = 'RELEASE_1.1 254: K$WINSIZE needs a $internal PROG, compiled only by an SDSYS stand-in (the display size was right)'
+            'on an 80 by 24 window TERM DEFAULT gives 140 by 43'  = 'RELEASE_1.1 254: K$WINSIZE needs a $internal PROG, compiled only by an SDSYS stand-in (the display size was right)'
         }
         # Administrator-only verbs: the ordinary account's VOC has no LIST.READU, CONFIG and the like (the tier split).
         'cll' = @{
