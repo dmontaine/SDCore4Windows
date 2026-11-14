@@ -9,6 +9,12 @@
 # question could not be answered - the file is missing, unreadable, or carries
 # neither form of the line.
 #
+# 13 Nov 26 - RELEASE_1.1 278: -ReportChange (remote.api passes it, nobody else)
+# makes "already ON" / "already OFF" exit 3 instead of 0, so the verb learns
+# whether the listener actually moved and offers SD's restart only then.  Its
+# comment always said so; it decided from the word typed, so LOCAL from OFF
+# was never offered the restart and a second ON was asked again.
+#
 # WHY THIS EXISTS.  "remote.api on|local|off" (gpl.bp/remoteapi) is the verb;
 # this is the half of it that edits a file.  The verb is a thin wrapper on
 # purpose: a script can be parse-checked, byte-checked and run on its own,
@@ -53,6 +59,7 @@ param(
     [switch]$On,
     [switch]$Off,
     [switch]$Show,
+    [switch]$ReportChange,   # 13 Nov 26 (RELEASE_1.1 278): "already" exits 3, not 0
 
     # Overridable for testing.  The default is where the installer puts it, and
     # is derived the same way every other shipped script locates the install.
@@ -162,10 +169,12 @@ $wantOn = [bool]$On
 $newActive = @($activeIdx).Count - $legacyActive
 if ($wantOn -and $activeIdx.Count -gt 0 -and ($newActive -gt 0 -or $legacyActive -eq 0)) {
     Say 'already ON - nothing to change'
+    if ($ReportChange) { exit 3 }
     exit 0
 }
 if ((-not $wantOn) -and $activeIdx.Count -eq 0) {
     Say 'already OFF - nothing to change'
+    if ($ReportChange) { exit 3 }
     exit 0
 }
 

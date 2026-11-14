@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 278: port.moved comes from what api-listener.ps1 reports (-ReportChange: 0 it moved, 3 it was
+*           already so), as the comment at THE RESTART always said; it came from the word typed, so LOCAL from OFF was never offered
+*           the restart (the listener opened only at SD's next start, unannounced) and ON twice asked twice.
 * 12 Nov 26 Windows port - RELEASE_1.1 243 (owner: a line before any wait over 2 s): 12950 before the report, 12944 before a change.
 * 06 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  A completed
 *           change writes an audit record, 'REMOTE.API ON|LOCAL|OFF', as SD Core
@@ -283,21 +286,19 @@ print.report:
    return
 
 run.listener:
-   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' ' : want.port
+   ps  =       '& ' : char(39) : kernel(K$WINPATH, '/api-listener.ps1') : char(39) : ' ' : want.port : ' -ReportChange'
    ps := @fm : 'exit $LASTEXITCODE'
    rc = ps_script(ps)
 
-*  ***"ALREADY" IS NOT VISIBLE THROUGH AN EXIT CODE, SO IT IS ASKED SEPARATELY.***
-*  ps_script returns the status and nothing else, so this cannot read the
-*  script's own "already ON" line.  Rather than guess, it asks the machine what
-*  it wants to know: was the listener in the wanted state BEFORE this ran?  The
-*  -Show call above the change would have answered that, so it is made again
-*  here only when the change succeeded, and the two are compared.
-*
-*  SIMPLER AND HONEST: a restart is offered whenever the listener was asked to
-*  move to or from OFF and the write succeeded.  Offering it once too often
-*  costs a question; never offering it leaves a setting that does not take.
-   port.moved = (rc = 0) and (action = 'ON' or action = 'OFF')
+*  13 Nov 26 - RELEASE_1.1 278.  "ALREADY" IS VISIBLE THROUGH THE EXIT CODE NOW.
+*  With -ReportChange the script exits 0 when it moved the listener and 3 when
+*  it was already in the wanted state (a success, nothing to restart for).  The
+*  rule this replaced offered the restart only for the WORDS on and off, so
+*  LOCAL from OFF - which turns the listener on - was never offered it, leaving
+*  "a setting that does not take" until SD's next start, the case its own
+*  comment said must not happen; and ON twice asked twice.
+   port.moved = (rc = 0)
+   if rc = 3 then rc = 0
    return
 
 run.firewall:

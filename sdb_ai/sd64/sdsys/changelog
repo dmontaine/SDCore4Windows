@@ -3,6 +3,15 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+13 Nov 26  REMOTE.API OFFERS THE RESTART WHENEVER THE LISTENER MOVES.
+
+             What        - REMOTE.API LOCAL from OFF turns the API listener on, which takes a
+                           restart of SD, but it never offered one, so the listener stayed closed
+                           until SD was next started and nothing said so. It is now offered, as it
+                           is for ON and OFF; and REMOTE.API ON when it is already on no longer asks.
+             Does NOT    - Restart anything without asking (the answer N is still the default).
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 13 Nov 26  AN INSTALL NO LONGER PUTS BACK SSH ACCESS YOU TOOK AWAY.
 
              What        - Installing over an existing SD (or running its route-groups step again)
