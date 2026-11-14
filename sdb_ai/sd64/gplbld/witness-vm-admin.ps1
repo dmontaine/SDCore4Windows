@@ -297,8 +297,9 @@ if ($sections -contains 'api') {
         $pt = $po -join "`n"
         Write-WitRaw 'scram-probe' $pt
         if ($pt -notmatch 'SCRAM: server signature VERIFIED') { Add-WitResult '266' 'an API session''s @WHO is lower case' 'NOT-MEASURED' 'the API login did not succeed (no "SCRAM: server signature VERIFIED")' }
-        elseif ($pt -cmatch '(?m)^\s*\d+\s+zzwitapi\b') { Add-WitResult '266' 'an API session''s @WHO is lower case' 'PASS' ('WHO answered: ' + [regex]::Match($pt, '(?m)^\s*\d+\s+\S+').Value) }
-        else { Add-WitResult '266' 'an API session''s @WHO is lower case' 'FAIL' ('no lower-case "<n> zzwitapi" line; WHO lines: ' + (([regex]::Matches($pt, '(?m)^\s*\d+\s+\S+') | ForEach-Object { $_.Value.Trim() }) -join ' / ')) }
+        # 13 Nov 26: scram-probe prints a reply line as "| 2 zzwitapi", so the leading bar is allowed.
+        elseif ($pt -cmatch '(?m)^[\s|]*\d+\s+zzwitapi\b') { Add-WitResult '266' 'an API session''s @WHO is lower case' 'PASS' ('WHO answered: ' + [regex]::Match($pt, '(?m)^[\s|]*\d+\s+\S+').Value.Trim()) }
+        else { Add-WitResult '266' 'an API session''s @WHO is lower case' 'FAIL' ('no lower-case "<n> zzwitapi" line; WHO lines: ' + (([regex]::Matches($pt, '(?m)^[\s|]*\d+\s+\S+') | ForEach-Object { $_.Value.Trim() }) -join ' / ')) }
         $al = @(Get-WitAuditSince $amark | Where-Object { $_ -match 'zzwitapi' })
         Write-WitRaw 'audit lines naming zzwitapi' ($al -join "`n")
         $stamped = @($al | Where-Object { $_ -match ('user=' + [regex]::Escape($vm) + '\\zzwitapi\s') })
@@ -361,7 +362,8 @@ if ($sections -contains 'runin201') {
         $r = Invoke-WitSd -Commands @('basic bp zzfix', 'run bp zzfix setup', 'basic bp zztrig', 'catalog bp zztrig global') -Label 'compile and run the fixture program; the do-nothing trigger, cataloged'
         Set-WitVerdict '201' 'the fixture program compiled and set up zzcust and zzri' $r.Text '(?s)Compiled 1 program\(s\) with no errors.*zzfix setup: done' @('with errors in', 'zzfix: cannot')
         $r = Invoke-WitSd -Commands @('run.in zzrunin compile.dict zzcust total') -Label 'run.in compile.dict (no trigger)'
-        Set-WitVerdict '201' 'run.in zzrunin compile.dict compiles an I-type' $r.Text 'Compiled \d+ .*with no errors' @('has a trigger function', 'is not a command run.in runs', 'with errors', 'not SD''s own entry', 'is not in your VOC')
+        # 13 Nov 26: COMPILE.DICT (cd) prints only "Compiling <name>" when it succeeds; a failure follows that line with 2811, 2974, 2975 or 2976.
+        Set-WitVerdict '201' 'run.in zzrunin compile.dict compiles an I-type' $r.Text '(?m)^\W*Compiling total\s*$' @('Compilation error in', 'has no expression', 'is not an I-type', 'Source record', 'has a trigger function', 'is not a command run.in runs', 'with errors', 'not SD''s own entry', 'is not in your VOC')
         $r = Invoke-WitSd -Commands @('set.trigger zzcust.w zztrig', 'run.in zzrunin compile.dict zzcust total', 'set.trigger zzcust.w ""') -Label 'run.in compile.dict with a trigger on the file (SET.TRIGGER verb)'
         Set-WitVerdict '201' 'with a trigger on the file run.in refuses (12566) and runs nothing' $r.Text 'has a trigger function; run\.in did not run the command' @('zzfix: cannot', 'is not cataloged', 'File not found', 'Illegal trigger function name')
         $r = Invoke-WitSd -Commands @('run bp zzfix nocat', 'run.in zzrunin basic bp zzri no.query') -Label 'run.in basic with no.catalog removed from the account''s VOC'
