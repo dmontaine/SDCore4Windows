@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 13 Nov 26 Windows port - RELEASE_1.1 266, later the same night: folding case and slashes was not enough.  Measured in the VM, @PATH is
+*   /cygdrive/c/ProgramData/SD/sdsys, so the walk still re-updated SDSYS.  Both sides now go through path.key (accountpath's form).
 * 13 Nov 26 Windows port - RELEASE_1.1 266: UPDATE.ACCOUNTS ALL's walk compares account paths with the case and the slashes folded (as restorea does).
 *   The walk is to pass over the account it was run in, and SDSYS's register path (C:\ProgramData\SD\sdsys) did not match @path exactly, so the walk
 *   updated SDSYS's VOC a second time, from NEWVOC, over the VOC_TEMPLATE update (VM sitting 13 Nov: SDSYS's tool.gates was $tool_mygates).  Windows
@@ -449,7 +451,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   was read.
             acc.updated = 0
             acc.denied = 0
-            voc.paths = downcase(convert('\', '/', @path))          ;* 13 Nov 26 (266): paths compared folded, see START-HISTORY
+            pk.in = @path ; gosub path.key ; voc.paths = pk.out      ;* 13 Nov 26 (266): paths compared in one form, see path.key
             openpath @sdsys:@ds:'accounts' to acc.f then
                select acc.f to 12
                loop
@@ -457,7 +459,7 @@ deffun radmin_open(arg) calling '!radmin_open'
                   read acc.rec from acc.f, acc.name then
                      acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
 
-                     acc.key = downcase(convert('\', '/', acc.path))
+                     pk.in = acc.path ; gosub path.key ; acc.key = pk.out
                      locate acc.key in voc.paths<1> setting s else
                         s = acc.path:@ds:'voc'
                         openpath s to update.voc.f then
@@ -1920,6 +1922,25 @@ batch.permitted:
    end
 
    batch.ok = @true
+   return
+
+*
+* ======================================================================
+* PATH.KEY  -  one spelling of an account directory, for UPDATE.ACCOUNTS ALL's
+*              walk to compare (13 Nov 26 Windows port, RELEASE_1.1 266).
+*
+* @PATH is this process's own spelling (/cygdrive/c/ProgramData/SD/sdsys,
+* measured in the VM sitting, 13 Nov) and the register holds the drive-letter
+* one (C:\ProgramData\SD\sdsys), so neither an exact nor a case-and-slash
+* comparison matches and the walk updated SDSYS's VOC a second time, from
+* NEWVOC.  Both are put into accountpath's form: forward slashes, a drive
+* letter as /cygdrive/<letter>, then lower case (NTFS ignores case).
+*  pk.in  ->  pk.out
+
+path.key:
+   pk.out = convert(char(92), '/', pk.in)
+   if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]
+   pk.out = downcase(pk.out)
    return
 
 *

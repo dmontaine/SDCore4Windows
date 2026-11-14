@@ -104,13 +104,17 @@ def checks(login, tg_new, tg_tpl):
     row("V7 messages 12988 (names the account's VOC and the upgrade) and 12989 (a count) exist and are under the 231-character limit (%d, %d)" % (len(m1), len(m2)),
         "%1" in m1 and "VOC" in m1 and "installer" in m1 and "sdsys-on" not in m1 and "%1" in m2 and 0 < len(m1) < 231 and 0 < len(m2) < 231, "%r %r" % (m1[:60], m2[:60]))
     # V8 (13 Nov 26 Windows port, RELEASE_1.1 266, VM sitting): the walk passes over the account it was run in by finding its path in voc.paths; SDSYS's register path
-    # (C:\ProgramData\SD\sdsys) did not equal @path exactly, so the walk updated SDSYS's VOC again from NEWVOC.  Both sides are compared folded (case, slash).
-    fold = "downcase(convert('\\', '/', %s))"
-    vp = [l.strip() for i, l in code_lines(login) if re.match(r"\s*voc\.paths\s*=", l)]
-    row("V8 the walk compares account paths folded: voc.paths starts as the folded @path, each register path is folded into acc.key, located and added as acc.key",
-        len(vp) == 1 and vp[0].startswith("voc.paths = " + fold % "@path") and ("acc.key = " + fold % "acc.path") in walk_text(login)
+    # (C:\ProgramData\SD\sdsys) did not equal @path, so the walk updated SDSYS's VOC again from NEWVOC.  Folding case and slash was not enough: measured
+    # later that night, @path is /cygdrive/c/ProgramData/SD/sdsys.  Both sides go through path.key (accountpath's form: '/', /cygdrive/<letter>, lower case).
+    vp = [l.strip() for i, l in code_lines(login) if re.search(r"\bvoc\.paths\s*=", l)]
+    pk = login[login.find("\npath.key:\n"):login.find("\n   return\n", login.find("\npath.key:\n")) + 1] if "\npath.key:\n" in login else ""
+    pk_ok = ("pk.out = convert(char(92), '/', pk.in)" in pk and "if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]" in pk
+             and "pk.out = downcase(pk.out)" in pk and pk.find("convert(") < pk.find("/cygdrive/") < pk.find("downcase("))
+    row("V8 the walk compares account paths in one form: voc.paths starts as path.key of @path, each register path becomes acc.key through path.key, located and "
+        "added as acc.key; path.key turns slashes, a drive letter into /cygdrive/<letter>, then lower case",
+        len(vp) == 1 and vp[0].startswith("pk.in = @path ; gosub path.key ; voc.paths = pk.out") and "pk.in = acc.path ; gosub path.key ; acc.key = pk.out" in walk_text(login)
         and "locate acc.key in voc.paths<1> setting s else" in walk_text(login) and "voc.paths<-1> = acc.key" in walk_text(login)
-        and "locate acc.path in voc.paths" not in login and "voc.paths<-1> = acc.path" not in login, "voc.paths lines %s" % vp)
+        and "locate acc.path in voc.paths" not in login and "voc.paths<-1> = acc.path" not in login and pk_ok, "voc.paths lines %s; path.key %r" % (vp, pk[:200]))
     return rows
 
 
@@ -193,7 +197,8 @@ def selftest():
     mutant("walk-does-not-say-why", "V6", lambda s: s.replace("                              display sysmsg(12988, s)\n", "", 1))
     mutant("own-account-does-not-say-why", "V6", lambda s: s.replace("         if upd.denied then display sysmsg(12988, @path : @ds : 'voc')\n", "", 1))
     mutant("summary-gone", "V6", lambda s: re.sub(r"\n               if acc\.denied then display sysmsg\(12989, acc\.denied\)[^\n]*", "", s, count=1))
-    mutant("walk-starts-from-the-raw-path", "V8", lambda s: s.replace("voc.paths = downcase(convert('" + chr(92) + "', '/', @path))", "voc.paths = @path", 1))
+    mutant("walk-starts-from-the-raw-path", "V8", lambda s: s.replace("pk.in = @path ; gosub path.key ; voc.paths = pk.out", "voc.paths = @path", 1))
+    mutant("path-key-keeps-the-drive-letter", "V8", lambda s: s.replace("   if pk.out[2, 1] = ':' then pk.out = '/cygdrive/' : pk.out[1, 1] : pk.out[3, 99999]\n", "", 1))
     mutant("walk-locates-the-raw-path", "V8", lambda s: s.replace("locate acc.key in voc.paths<1> setting s else", "locate acc.path in voc.paths<1> setting s else", 1))
     mutant("premise-gone-newvoc", "V1", lambda s: s.replace("$tool_mygates", "$tool_gates"), which="new")
     mutant("premise-gone-template", "V1", lambda s: s.replace("$tool_gates", "$tool_mygates"), which="tpl")
