@@ -7,6 +7,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - the no-answer line names the program sd-ai.exe: the helper is native C, not Python (the owner's ruling of the same day).
 * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the messages renumbered (11249 -> 12254, 11607 -> 12612); the Accounts box says Windows user;
 *              the no-answer line names the service sd-ai and its pipe; hand.key makes the hand-over directory $aikey with PowerShell and icacls (SDSYS and SYSTEM
 *              only, inheritance removed: OS.EXECUTE runs PowerShell here, and Windows has no umask or chmod 700) and removes the file with Remove-Item.  A's prompt
@@ -373,7 +374,7 @@ draw.detail:
    lines = ''
    r = pi
    if not(helper.ok) then
-      lines<-1> = 'No answer from the AI helper (the service sd-ai, the program sd-ai under Python, on the pipe \\.\pipe\sd-ai).'
+      lines<-1> = 'No answer from the AI helper (the service sd-ai, the program sd-ai.exe, on the pipe \\.\pipe\sd-ai).'
    end else
       nm.s = pnm<r>
       if nm.s = '' then nm.s = 'Custom'

@@ -147,9 +147,17 @@ PROGRAM_FILES_BIN = [
 # ever see; sdtlsrelay.c satisfies them with stubs, and this refuses the build
 # if they come back (gplbld/probe-user32desk.c has the measurement).  Each
 # entry names the DLL-name prefixes that binary may not import.
+#
+# 13 Nov 26 Windows port - RELEASE_1.1 246: sd-ai.exe, the AI helper, native C
+# since the owner's ruling that day ("python not being an integral part of
+# windows argues for the c helper").  No msys- (it is UCRT64), no python (the
+# whole point), no USER32 (its service runs on a write-restricted token, which
+# should never have to reach a window station; sdai_https.c stubs libcrypto's
+# three USER32 imports as sdtlsrelay.c does).
 NATIVE_ONLY = {
     'sdsvc.exe':      ['msys-'],
     'sdtlsrelay.exe': ['msys-', 'user32'],
+    'sd-ai.exe':      ['msys-', 'python', 'user32', 'shell32'],
 }
 
 # 12 Sep 26 - THE PYTHON HELPER, PROJECT_STATUS.md 5.27.  Staged if bin/ has
@@ -594,10 +602,13 @@ SDSYS_RETIRED = [
 # deleted: "1 file(s) in C:\Program Files\SD are no longer shipped by stage.py or
 # sd.iss".  That is the mechanism working, not a nuisance: the file is in every
 # install made before today.
-# 13 Nov 26 - RELEASE_1.1 246.  THE AI HELPER'S FILES, staged from gplbld to ProgramFiles\lib\sd-ai
-# (main(); Linux installs the same four to /usr/local/lib/sd-ai, plus the two Windows .ps1 that find
-# the all-users Python).  Named, so that a file missing from the tree fails the build.
-AI_HELPER_FILES = ['sd-ai', 'sd-ai-ctl', 'sd-ai-ctl.ps1', 'sd-ai-python.ps1', 'ai-providers', 'ai-context']
+# 13 Nov 26 - RELEASE_1.1 246.  THE AI HELPER'S FILES, staged to ProgramFiles\lib\sd-ai (main(); Linux
+# installs its four to /usr/local/lib/sd-ai).  The same day, the owner's ruling: the helper is NATIVE
+# C, so the program is bin\sd-ai.exe (the Makefile's sd-ai target; helper and client in one) and the
+# two data files come from gplbld; the Python helper, its client and their two .ps1 finders are gone,
+# and the AI needs no Python.  Named, so that a file missing from the tree fails the build.
+AI_HELPER_BIN = 'sd-ai.exe'
+AI_HELPER_FILES = ['ai-providers', 'ai-context']
 
 PF_RETIRED = [
     # 18 Sep 26 - RELEASE_1.1 64.  The install's own account step used to be this
@@ -1896,8 +1907,8 @@ def main():
                    'sd-jobs.ps1',
                    # 13 Nov 26 - RELEASE_1.1 246 (Linux's AI helper, S.69 step 2).  Creates, starts and
                    # removes the AI helper service sd-ai (the virtual account NT SERVICE\sd-ai) and its
-                   # state directory {#DataDir}\ai; sd.iss runs it from {app} at ssPostInstall, after the
-                   # Python step, and at uninstall.  It SHIPS - do NOT add it to assert-current's
+                   # state directory {#DataDir}\ai; sd.iss runs it from {app} at ssPostInstall and at
+                   # uninstall.  It SHIPS - do NOT add it to assert-current's
                    # $neverShipped list.  Its guard (test-aihelper-units.py) does not.
                    'install-aihelper.ps1',
                    'sd-elevate.ps1', 'sd-elevate-helper.ps1'):
@@ -1976,20 +1987,19 @@ def main():
     # 13 Nov 26 - RELEASE_1.1 246, THE AI HELPER (Linux's /usr/local/lib/sd-ai, root-owned and
     # outside the data tree so that no SD account can replace the program that holds the key).
     # PROGRAM FILES, NOT THE DATA TREE, for the helper scripts' reason above: the data tree is
-    # writable by sdusers.  The helper and its client are Python (run under the all-users Python
-    # the installer offers); the two .ps1 files find that Python; ai-providers says where a key may
-    # be sent and ai-context is the shipped standing text.  install-aihelper.ps1 (staged above)
-    # makes the service that runs it.  A missing one is a build failure, as for the scripts above.
+    # writable by sdusers.  The helper and its client are ONE native program, sd-ai.exe, built by
+    # the Makefile into bin\ (13 Nov 26: no Python); ai-providers says where a key may be sent and
+    # ai-context is the shipped standing text.  install-aihelper.ps1 (staged above) makes the
+    # service that runs it.  A missing one is a build failure, as for the scripts above.
     ai_dst = os.path.join(pf, 'lib', 'sd-ai')
     os.makedirs(ai_dst)
-    for name in AI_HELPER_FILES:
-        src = os.path.join(here, name)
+    for src in [os.path.join('bin', AI_HELPER_BIN)] + [os.path.join(here, n) for n in AI_HELPER_FILES]:
         if not os.path.isfile(src):
             raise SystemExit('missing %s - the AI helper needs it' % src)
-        dst = os.path.join(ai_dst, name)
+        dst = os.path.join(ai_dst, os.path.basename(src))
         shutil.copy2(src, dst)
         staged.add(stage, dst)
-    print('  AI helper: %d file(s) staged to ProgramFiles\\lib\\sd-ai' % len(AI_HELPER_FILES))
+    print('  AI helper: %d file(s) staged to ProgramFiles\\lib\\sd-ai' % (1 + len(AI_HELPER_FILES)))
 
     print('  micro: %d syntax file(s) staged to ProgramFiles\\micro'
           % len(os.listdir(os.path.join(mc_dst, 'syntax'))))

@@ -3,17 +3,20 @@
 #   powershell -ExecutionPolicy Bypass -File "C:\Program Files\SD\install-aihelper.ps1" -Install [-AppDir <dir>] [-DataDir <dir>]
 #   powershell -ExecutionPolicy Bypass -File "C:\Program Files\SD\install-aihelper.ps1" -Remove
 #
-# Elevated.  Exit 0 done, 1 failed, 2 could not be attempted (not elevated, no helper in the program folder), 3 no all-users Python 3.13 or later, so no
-# service (not a failure: the AI is optional and needs that Python; install it and run this again).
+# Elevated.  Exit 0 done, 1 failed, 2 could not be attempted (not elevated, no helper in the program folder).
+#
+# 13 Nov 26 Windows port - RELEASE_1.1 246, the owner's ruling the same day ("python not being an integral part of windows argues for the c
+# helper"): the helper is the native program sd-ai.exe, so the service runs it directly and this no longer looks for Python.  Exit 3 (no
+# all-users Python, no service) is gone with it.
 #
 # 13 Nov 26 Windows port - RELEASE_1.1 246, Linux's AI helper (S.69 step 2; design .claude/design-ai-helper-20261113.md 3.1, 3.4, 3.10; the owner's answers
 # of 13 Nov 2026).  Linux's installer makes the OS user sdai, puts sd-ai, sd-ai-ctl, ai-providers and ai-context root-owned in /usr/local/lib/sd-ai, keeps
 # /var/lib/sd-ai{,/keys,/state} sdai's own (kept by an upgrade) and enables sd-ai.socket.  Here:
-#   - THE PROGRAM is in <AppDir>\lib\sd-ai (the installer's [Files]; Program Files: only administrators may change it).
+#   - THE PROGRAM is <AppDir>\lib\sd-ai\sd-ai.exe, helper and administrator's client in one, beside ai-providers and ai-context (the installer's
+#     [Files]; Program Files: only administrators may change it).
 #   - THE ACCOUNT is the virtual account NT SERVICE\sd-ai (owner, Q3): no password to keep, no interactive sign-in, a SID of its own for the access lists
 #     and a profile of its own for DPAPI (the keys are encrypted in ITS user scope, owner Q4).
-#   - THE SERVICE sd-ai runs "<python.exe> -I -B <AppDir>\lib\sd-ai\sd-ai --service" (the all-users Python, Find-SdPython), start auto (it holds the pipe's
-#     name from boot, so nobody else can make \\.\pipe\sd-ai first), restricted SID (Linux ProtectSystem=strict + ReadWritePaths: it may write only where its
+#   - THE SERVICE sd-ai runs "<AppDir>\lib\sd-ai\sd-ai.exe --service", start auto (it holds the pipe's name from boot, so nobody else can make \\.\pipe\sd-ai first), restricted SID (Linux ProtectSystem=strict + ReadWritePaths: it may write only where its
 #     own SID is granted), one privilege, SeChangeNotifyPrivilege (Linux CapabilityBoundingSet=), restarted twice on failure.
 #   - THE STATE is <DataDir>\ai: SYSTEM full, the service modify, Administrators read (the log and the settings); keys\ is SYSTEM and the service only.  Kept
 #     by an upgrade, as Linux keeps /var/lib/sd-ai; it goes when the database does.  ai.conf is NOT written: none means no provider, the AI off as delivered.
@@ -103,27 +106,17 @@ if ($Remove) {
 }
 
 # --- install -------------------------------------------------------------------
-$helper = Join-Path $lib 'sd-ai'
-foreach ($f in @('sd-ai', 'sd-ai-ctl', 'sd-ai-ctl.ps1', 'sd-ai-python.ps1', 'ai-providers', 'ai-context')) {
+$helper = Join-Path $lib 'sd-ai.exe'
+foreach ($f in @('sd-ai.exe', 'ai-providers', 'ai-context')) {
     if (-not (Test-Path -LiteralPath (Join-Path $lib $f) -PathType Leaf)) { Say "no $(Join-Path $lib $f) - was the install complete?"; exit 2 }
 }
 
-. (Join-Path $lib 'sd-ai-python.ps1')
-$py = Find-SdPython
-Say ("all-users Python 3.13 or later: {0}" -f $(if ($py) { $py } else { '(none)' }))
-if (-not $py) {
-    # A service whose Python has gone would fail at every start; take it away.  The state (keys, settings) stays for when Python is back.
-    Remove-Svc
-    if (-not $script:SvcRemoved) { exit 1 }
-    Say 'NO ALL-USERS PYTHON 3.13 OR LATER: the AI helper service is not installed.  The AI needs it: install Python for all users, then run this again, elevated.'
-    exit 3
-}
-
-# The service is made afresh (an upgrade may have moved Python), with New-Service so that the command line's quotes reach the SCM as written
-# (sc.exe binPath= through PowerShell 5.1 loses embedded quotes), then given its account and hardening with sc.exe, whose words have no quotes inside.
+# The service is made afresh (an earlier build ran the Python helper; an upgrade may have moved the program), with New-Service so that the command
+# line's quotes reach the SCM as written (sc.exe binPath= through PowerShell 5.1 loses embedded quotes), then given its account and hardening with
+# sc.exe, whose words have no quotes inside.
 Remove-Svc
 if (-not $script:SvcRemoved) { exit 1 }
-$bin = '"' + $py + '" -I -B "' + $helper + '" --service'
+$bin = '"' + $helper + '" --service'
 try {
     New-Service -Name $SvcName -BinaryPathName $bin -DisplayName $SvcDisplay -Description $SvcDesc -StartupType Automatic -ErrorAction Stop | Out-Null
 } catch {

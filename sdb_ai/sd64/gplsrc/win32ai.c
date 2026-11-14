@@ -15,12 +15,15 @@
  * START-HISTORY:
  * 13 Nov 26 Windows port - written for RELEASE_1.1 246 (Linux's AI helper,
  *           S.69 step 2, design .claude/design-ai-helper-20261113.md 3.2, 3.6).
+ * 13 Nov 26 Windows port - comments only: the helper is now the native C
+ *           program sd-ai.exe (gplsrc/sdai), not the Python one; the pipe, the
+ *           protocol and this file's code are unchanged.
  * END-HISTORY
  *
  * START-DESCRIPTION:
  *
  * Linux's op_ai.c talks to its helper on the Unix socket /run/sd-ai/sock.  The
- * Windows helper (gplbld/sd-ai, Python, the service sd-ai running as the
+ * Windows helper (sd-ai.exe, gplsrc/sdai, the service sd-ai running as the
  * virtual account NT SERVICE\sd-ai) listens on the pipe \\.\pipe\sd-ai.  The
  * protocol is Linux's byte for byte: one JSON line each way.  This file is the
  * part that differs, and only that part.
@@ -63,7 +66,7 @@
 
 /* FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE = 0x00120183.
    FILE_WRITE_ATTRIBUTES is what SetNamedPipeHandleState needs; READ_CONTROL is what the owner check needs.  The helper's DACL
-   grants this mask and no more (gplbld/sd-ai, PIPE_CLIENT_MASK), and the two must stay equal. */
+   grants this mask and no more (gplsrc/sdai/sdai_main.c, PIPE_CLIENT_MASK), and the two must stay equal. */
 #define AI_ACCESS (FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | READ_CONTROL | SYNCHRONIZE)
 
 static HANDLE slots[AI_SLOTS] = {NULL, NULL, NULL, NULL};

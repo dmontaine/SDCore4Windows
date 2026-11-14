@@ -5,6 +5,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 13 Nov 26 Windows port - the client is the native helper itself, <program folder>\lib\sd-ai\sd-ai.exe (K$WINPATH of /lib/sd-ai/sd-ai.exe), the
+*              owner's ruling of the same day ("python not being an integral part of windows argues for the c helper"): no PowerShell wrapper, no Python,
+*              so no "error: nopython:" and no 12934 (deleted).  Its words, its printed lines and its exit codes are the Python client's.
 * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the messages renumbered (11xxx + 1005, 14xxx + 1000) and the Windows facts of the client.  The
 *              client is the PowerShell wrapper <program folder>\lib\sd-ai\sd-ai-ctl.ps1 (K$WINPATH of /lib/sd-ai/sd-ai-ctl.ps1), which finds the all-users
 *              Python and runs the Python client; OS.EXECUTE runs PowerShell here, so it is called as & '<path>' 'word' ..., its path (which has spaces and
@@ -45,8 +48,7 @@
 *   the owner's choice after a warning) reads the key in SD and hands it over in a file only SDSYS can reach; neither form puts the key on a command line or in the audit
 *   trail.  One provider and one model serve every account; whether an ACCOUNT may use it is the account's own gate (modify.account name ai-on).  Nothing is selected, no
 *   model or key is set and no account has the gate as delivered, so the AI is off until the administrator has done all of that.  A URL for custom is https only, with no
-*   query string.  Every change is audited in lower case, with no key in it.  The AI needs Python 3.13 or later installed for all users (the installer's Python box):
-*   without it the client says so and this verb stops with 12934.
+*   query string.  Every change is audited in lower case, with no key in it.
 *
 * END-DESCRIPTION
 *
@@ -68,11 +70,11 @@ $include err.h
 
    okc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/@+,-'
 *  The helper's client lives with the helper, in the program folder and outside the SD system directory (so that no SD account can replace the program that holds the
-*  key).  It is a PowerShell wrapper that finds the all-users Python and runs the Python client.  The administrator's own environment may name another, for the tests
-*  only (SD_AI_CTL); the product never sets it.  The path has spaces and backslashes (C:\Program Files\SD\...), so it is not held to okc: it goes inside single quotes
-*  on the PowerShell command line, and the one character that could end those quotes is refused.
+*  key).  It is the helper's own program, sd-ai.exe, which is the client when its first word is one of the client's.  The administrator's own environment may name
+*  another, for the tests only (SD_AI_CTL); the product never sets it.  The path has spaces and backslashes (C:\Program Files\SD\...), so it is not held to okc: it
+*  goes inside single quotes on the PowerShell command line, and the one character that could end those quotes is refused.
    ctl = env('SD_AI_CTL')
-   if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai-ctl.ps1')
+   if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai.exe')
    if ctl = '' or index(ctl, "'", 1) then stop sysmsg(12612)       ;* no client path, or one a command line may not carry
 
    words = trim(@sentence)
@@ -157,10 +159,6 @@ $include err.h
          os.execute "& '" : ctl : "' 'key' '" : prov : "' '--handover' '" : hand.f : "'" capturing out
          gosub drop.handover
          out = convert(char(13), '', out)                                                ;* PowerShell's line ends (see run.ctl)
-         if trim(out<1>)[1, 16] = 'error: nopython:' then
-            @system.return.code = -ER$FAILED
-            stop sysmsg(12934)                                                            ;* The AI needs Python 3.13 or later installed for all users ...
-         end
          qargs = "'show'"
          gosub run.ctl
          gosub check.key
@@ -281,18 +279,13 @@ $include err.h
    stop
 
 * The helper's client, run as the administrator with its words already quoted; out holds what it printed (its errors too: the client writes everything to standard output,
-* and nothing is redirected, so PowerShell adds no error records of its own).  No Python ends the verb with 12934; a client that is not there or a helper that cannot be
-* reached ends it with 12612, and a refusal with 12613 and the helper's own code and words.
+* and nothing is redirected, so PowerShell adds no error records of its own).  A client that is not there or a helper that cannot be reached ends it with 12612, and a
+* refusal with 12613 and the helper's own code and words.
 run.ctl:
    out = ''
    os.execute "& '" : ctl : "' " : qargs capturing out
 *  13 Nov 26 Windows port: PowerShell ends every captured line with a carriage return (measured 27 Aug 2026, gpl.bp/edit), which "ok" and the [x] lines must not carry
    out = convert(char(13), '', out)
-*  13 Nov 26 Windows port: the wrapper found no all-users Python 3.13 or later to run the client with
-   if trim(out<1>)[1, 16] = 'error: nopython:' then
-      @system.return.code = -ER$FAILED
-      stop sysmsg(12934)                                                                  ;* The AI needs Python 3.13 or later installed for all users ...
-   end
 *  8 Nov 26: a refusal of the helper's (error: ...) is not an unreachable helper, whatever its words hold: a provider's "model not found" passes through it now
    if trim(out) = '' or (trim(out<1>)[1, 7] # 'error: ' and (index(out, 'could not be reached', 1) or index(out, 'not found', 1) or index(out, 'No such file', 1) or index(out, 'Permission denied', 1))) then
       @system.return.code = -ER$FAILED

@@ -4530,11 +4530,10 @@ begin
 end;
 
 (* 13 Nov 26 - RELEASE_1.1 246, THE AI HELPER SERVICE (Linux's sd-ai, S.69 step 2).  install-aihelper.ps1 makes the service sd-ai
-   (the virtual account NT SERVICE\sd-ai) and its state directory {#DataDir}\ai, and starts it.  AFTER InstallPython, because the
-   service runs under the all-users Python that step may have just installed; from [Code] for that reason and not from [Run], which
-   comes before ssPostInstall.  Nothing is turned on: no provider, no key, nobody in sdaiusers.  NEVER STOPS THE INSTALL.  Codes:
-   0 running, 3 no all-users Python 3.13+ (no service; the AI is optional - the documentation says what to do), anything else is
-   the one the closing box mentions. *)
+   (the virtual account NT SERVICE\sd-ai) and its state directory {#DataDir}\ai, and starts it.  The same day the helper became the
+   native program lib\sd-ai\sd-ai.exe (the owner: "python not being an integral part of windows argues for the c helper"), so it no
+   longer waits for or depends on the Python step.  Nothing is turned on: no provider, no key, nobody in sdaiusers.  NEVER STOPS THE
+   INSTALL.  Codes: 0 running; anything else is the one the closing box mentions. *)
 function InstallAiHelper: String;
 var
   Code: Integer;
@@ -4550,7 +4549,7 @@ begin
               '', SW_HIDE, ewWaitUntilTerminated, Code) then
     Code := -1;
   Log('SD: install-aihelper.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\install-aihelper.log');
-  if (Code = 0) or (Code = 3) then
+  if Code = 0 then
     Exit;
   Result := 'The AI helper service was NOT set up (code ' + IntToStr(Code) + '). See ' +
             ExpandConstant('{#DataDir}') + '\install-aihelper.log' + #13#10#13#10;
@@ -4666,7 +4665,8 @@ begin
     { 26 Sep 26 - PYTHON, AFTER THE ACL STEPS: it closes no hole, so it waits
       behind the ones that do, and it is the slowest step here. }
     PyMsg := InstallPython;
-    { 13 Nov 26 - RELEASE_1.1 246: the AI helper runs under that Python, so it follows it. }
+    { 13 Nov 26 - RELEASE_1.1 246: the AI helper service.  Native (sd-ai.exe), so it needs nothing from the Python step above;
+      its place here is only where its line falls in the closing box. }
     AiMsg := InstallAiHelper;
 
     { AHEAD OF THE ssh STEPS BELOW because it is the one that confines the

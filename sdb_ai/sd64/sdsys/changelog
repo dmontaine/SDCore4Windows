@@ -98,10 +98,8 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            and the only one that can open a key. Keys are encrypted for that
                            account. Every request is written to the audit trail before it is sent,
                            without its text. Each account has limits on requests and tokens.
-             Needs       - Python 3.13 or later installed for all users: the installer's Python box.
-                           Without it the sd-ai service is not installed and SET.AI says so. Install
-                           Python later, then run C:\Program Files\SD\install-aihelper.ps1 as an
-                           administrator.
+                           The helper is a program of SD's own, installed with SD: the AI needs no
+                           Python.
              Does NOT    - Turn anything on. No provider, no key and no account's gate are set as
                            delivered, unless the installer's "open every access gate" box was
                            ticked, which gives your own account its ai gate as it gives the others.

@@ -176,7 +176,7 @@ sd: BITSIZE := 64
 #           are carried (RELEASE_1.1 251).  No -march, as Linux.
 OPT_FLAGS := -O2 -fwrapv -fno-strict-aliasing -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -fstack-protector-strong
 sd: C_FLAGS  :=  -std=gnu17 -Wall -Wformat=2 -Wno-format-nonliteral -D_FILE_OFFSET_BITS=64 -I$(GPLSRC) -I$(SODIUM) -DGPL -g $(OPT_FLAGS) $(ARCH)
-sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sdpy sdtic sdfix sdconv sdidx sdwind terminfo
+sd: $(SDOBJS) sdclilib sdsvc sdtlsrelay sd-ai sdpy sdtic sdfix sdconv sdidx sdwind terminfo
 	@echo Linking $@
 	@cd $(GPLOBJ)
 # 13 Aug 26 Windows port - libraries must follow the objects that reference
@@ -206,7 +206,7 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # Neither target names a file that make should test for.  Without this, VPATH
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
-.PHONY: sdclilib sdsvc sdtlsrelay sdpy terminfo check-local check-remote check-api-admin build-api-identity
+.PHONY: sdclilib sdsvc sdtlsrelay sd-ai sdpy terminfo check-local check-remote check-api-admin build-api-identity
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -368,6 +368,25 @@ sdtlsrelay:
 	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 \
 	    $(RELAYDIR)/sdtlsrelay.c -o $(GPLBIN)sdtlsrelay.exe \
 	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32
+
+# 13 Nov 26 Windows port - RELEASE_1.1 246: THE AI HELPER IS NATIVE C (the owner,
+# 13 Nov 2026: "python not being an integral part of windows argues for the c
+# helper").  sd-ai.exe is the service sd-ai (NT SERVICE\sd-ai), one process per
+# request, and the administrator's client, in one program.  Built like
+# sdtlsrelay - the UCRT64 compiler and the same STATIC OpenSSL - so it needs no
+# MSYS2 runtime and no Python; stage.py ships it to lib\sd-ai and its
+# NATIVE_ONLY refuses an msys-, python or USER32 import (sdai_https.c stubs the
+# three USER32 functions libcrypto imports, as sdtlsrelay.c does).  -municode:
+# wmain, so SHELL32 (which brings USER32) is not needed for the command line.
+# NEVER -DSDAI_TESTS here: that is the test build test-aihelper-units.py makes.
+# Its own directory keeps it out of TEMPSRCS' wildcard, as sdsvc/ is.
+AIDIR := $(GPLSRC)sdai
+
+sd-ai:
+	@echo Building native AI helper
+	@PATH="$(UCRT_BIN):$$PATH" $(UCRT_CC) -std=gnu17 -Wall -Wformat=2 -O2 -municode \
+	    $(wildcard $(AIDIR)/*.c) -o $(GPLBIN)sd-ai.exe \
+	    -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lcrypt32 -lws2_32 -ladvapi32 -lnetapi32
 
 # 12 Sep 26 Windows port - the Python helper, PROJECT_STATUS.md 5.27.
 #

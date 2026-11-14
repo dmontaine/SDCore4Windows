@@ -9158,15 +9158,6 @@ remote.sdsys %1 did not succeed (status %2); the lines above say why.\n\nStatus 
 
 cited by: `remotesdsys`
 
-### msg:12934
-> kind=message tier=reference since=- src=sdsys/messages/12934:1#55dcb476
-
-```
-The AI needs Python 3.13 or later installed for all users, and none was found
-```
-
-cited by: `setai`
-
 ### msg:12935
 > kind=message tier=reference since=- src=sdsys/messages/12935:1#84d240de
 
