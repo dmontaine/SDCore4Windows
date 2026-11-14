@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  A SCRIPT THAT CAPTURES THE OUTPUT OF "sd -start" OR "sd -restart" NO LONGER WAITS UNTIL SD IS STOPPED.
+
+             What        - $x = sd -start, or "sd -restart | Tee-Object log", printed SD's start message and then never
+                           finished: the background process SD starts kept the script's pipe as its own output, so the
+                           script waited for the end of that output until "sd -stop" (24 minutes in one test).  That
+                           process and a phantom now give back a pipe they were handed and write to /dev/null in its
+                           place.  Output sent to a file or a console window is kept as before, and so is the SD
+                           service's own log.  The same change as SD Core for Linux, which had the same code.
+             Why         - a start script, an installer step or a monitoring check that read the start message hung.
+             Does NOT    - Change what "sd -start" prints or where a phantom's own log goes (its COMO file, as before).
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  TOOL.AUDIT: THE AUDIT TRAIL ON ONE SCREEN, FOR THE ADMINISTRATOR.
 
              What        - a full-screen page in SDSYS that reads the audit trail from its end, a screen at a time, so a large

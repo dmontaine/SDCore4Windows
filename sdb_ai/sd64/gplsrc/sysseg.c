@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): release_pipe_fds() - sdwind gives back a caller's pipe on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): sdwind's failed daemon() is said, not ignored.
  * 13 Nov 26 Windows port - RELEASE_1.1 276: bind_sysseg() gives SHORT_CODE back on every exit taken while it holds it.  Six
  *           exits after LockSemaphore(SHORT_CODE) ("SD has not been started." among them) jumped to exit_bind_sysseg with it held.
@@ -86,6 +87,7 @@ void UnlockSemaphore(int semno);
    and native Windows has no System V IPC.                                  */
 
 #include <sys/mman.h>
+#include <sys/stat.h> /* 14 Nov 26 - S_ISFIFO for release_pipe_fds() */
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -647,6 +649,33 @@ Private int sd_state(int* daemon_pid, int* sessions) {
 }
 
 /* ======================================================================
+   release_pipe_fds()  -  A detached child gives back the caller's pipe
+
+   14 Nov 26 Windows port - from Linux e99979d6 (S.241), found here (RELEASE_1.1 284): daemon(1, 1) keeps fds 0-2, so
+   sdwind, started by a caller that captured "sd -start" or "sd -restart" through a pipe, held the pipe's write end and
+   the reader waited for end of file until sd -stop (24 minutes on the VM, 13 Nov).  Called in the child after
+   daemon(): each of 0-2 that is a pipe (S_ISFIFO; the MSYS2 runtime reports a Windows pipe so) is reopened on
+   /dev/null, read for 0 and write for 1 and 2.  A regular file (the SD service's sdsvc-sd.log), a terminal and a
+   socket are kept, and so is anything fstat() cannot read.  If /dev/null cannot be opened nothing changes.          */
+
+void release_pipe_fds(void) {
+  int fd;
+  struct stat st;
+
+  for (fd = 0; fd <= 2; fd++) {
+    if (fstat(fd, &st) != 0 || !S_ISFIFO(st.st_mode))
+      continue;
+    int null_fd = open("/dev/null", (fd == 0) ? O_RDONLY : O_WRONLY);
+    if (null_fd < 0)
+      continue;
+    if (null_fd != fd) {
+      dup2(null_fd, fd);
+      close(null_fd);
+    }
+  }
+}
+
+/* ======================================================================
    start_sd()                                                             */
 
 bool start_sd() {
@@ -744,6 +773,7 @@ bool start_sd() {
     /* 14 Nov 26 Windows port - from Linux 64561d81 (S.230): a failed daemon() is said, not ignored: sdwind then starts without detaching.  */
     if (daemon(1, 1) != 0)
       fprintf(stderr, "%s: daemon() failed (%s); starting it without detaching\n", SDWIND_NAME, strerror(errno));
+    release_pipe_fds(); /* S.241: after the message above, which may still need the caller's stderr */
 
     /* 14 Aug 26 Windows port - this built "<sysdir>/bin/sdlnxd", which was
        right while the Linux install kept the executables and the pcode

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): a phantom gives back a pipe its session held on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a phantom's failed daemon() is logged.
  * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85): run.in WITH debug (RELEASE_1.1 253(b)), Windows only - the child's
  *           account and store, and the SDSYS session's end of the run (runin_debug_key: ask the SD service, relay the screen and keys).
@@ -2012,6 +2013,7 @@ void op_phantom() {
        this process group; it is now said in the error log rather than ignored.  */
     if (daemon(1, 1) != 0)
       log_message("phantom: daemon() failed; the phantom runs without detaching");
+    release_pipe_fds(); /* 14 Nov 26 S.241: a session run through a pipe must not hand that pipe to its phantom */
 
     /* 06 Oct 26 Windows port - RELEASE_1.1 119.  THIS BUILT "<sysdir>/bin/sd", WHICH
        HOLDS NO EXECUTABLE IN AN INSTALL (the Windows layout puts the programs in
