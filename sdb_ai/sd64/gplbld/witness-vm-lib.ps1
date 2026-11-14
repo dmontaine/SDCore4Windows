@@ -561,6 +561,14 @@ function Get-WitRights {
     return $map
 }
 
+# Whether a right lists this local user: secedit writes a local account by NAME and others by SID, so both are matched (13 Nov 26: the
+# SID-only test read sdrunin's four deny rights as absent in the VM sitting).  Returns 'True'/'False' plus what the right lists.
+function Test-WitRight($Rights, [string]$Right, $User) {
+    $have = @($Rights[$Right])
+    $hit = @($have | Where-Object { $_ -eq $User.SID.Value -or $_ -ieq $User.Name -or $_ -ieq ($env:COMPUTERNAME + '\' + $User.Name) }).Count -gt 0
+    return @{ Value = [string]$hit; Listed = ($Right + ' = ' + ($have -join ',')) }
+}
+
 function Get-WitSid([string]$Name) {
     try { return (New-Object Security.Principal.NTAccount($Name)).Translate([Security.Principal.SecurityIdentifier]).Value } catch { return '' }
 }
@@ -607,9 +615,12 @@ function Test-WitPipeRemote([string]$Name) {
 
 # Runs a gplbld script as LocalSystem through a one-shot scheduled task and returns @{ Ok; Text; Why }.
 function Invoke-WitAsSystem {
-    param([string]$Script, [string]$Arguments, [string]$OutFile, [int]$TimeoutSec = 60)
+    param([string]$Script, [string]$Arguments, [string]$OutFile, [int]$TimeoutSec = 60, [scriptblock]$While = $null)
+    # 13 Nov 26: -While runs after the task is started and before the wait, so a session can be alive while the SYSTEM task reads it
+    # (row 275); its output comes back as WhileOut.
     $name = 'SDWitnessSystem_' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
     $made = $false
+    $whileOut = $null
     try {
         Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
         $act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $Script + '" ' + $Arguments + ' -Out "' + $OutFile + '"')
@@ -619,16 +630,17 @@ function Invoke-WitAsSystem {
         $made = $true
         Start-ScheduledTask -TaskName $name
         $deadline = (Get-Date).AddSeconds($TimeoutSec)
+        if ($null -ne $While) { $whileOut = & $While }
         while (-not (Test-Path -LiteralPath $OutFile) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 300 }
         if (-not (Test-Path -LiteralPath $OutFile)) {
             $last = '?'
             try { $last = (Get-ScheduledTaskInfo -TaskName $name).LastTaskResult } catch { }
-            return @{ Ok = $false; Text = ''; Why = ('the SYSTEM task wrote nothing in ' + $TimeoutSec + ' s (LastTaskResult ' + $last + ')') }
+            return @{ Ok = $false; Text = ''; Why = ('the SYSTEM task wrote nothing in ' + $TimeoutSec + ' s (LastTaskResult ' + $last + ')'); WhileOut = $whileOut }
         }
         Start-Sleep -Milliseconds 300
-        return @{ Ok = $true; Text = [IO.File]::ReadAllText($OutFile); Why = '' }
+        return @{ Ok = $true; Text = [IO.File]::ReadAllText($OutFile); Why = ''; WhileOut = $whileOut }
     } catch {
-        return @{ Ok = $false; Text = ''; Why = ('the SYSTEM task could not be run: ' + $_.Exception.Message) }
+        return @{ Ok = $false; Text = ''; Why = ('the SYSTEM task could not be run: ' + $_.Exception.Message); WhileOut = $whileOut }
     } finally {
         if ($made) { try { Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop } catch { } }
     }

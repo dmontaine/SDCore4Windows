@@ -20,7 +20,7 @@
 #   audit247     247 (the writer's pipe, its DACL, remote clients refused, a forged claim stamped with the real user, an injected
 #                line flattened, a foreign tree answered N, LOCK.TRACER through the service, timing, the rate bound) and 240
 #                (a control character from a session reaches the trail as '?')
-#   logto275     275 (SDSYS LOGTOs into an SH-on group and runs whoami /groups: the High label or not) and 266 (LOGTO in, WHO
+#   logto275     275 (SDSYS LOGTOs into a group account; SYSTEM reads that sd.exe's token while it waits: elevated / High or not) and 266 (LOGTO in, WHO
 #                lower case, the logto and elevation-released audit lines)
 #   gates266     266: update.accounts all, then the tool.gates verbs in SDSYS and in an account
 #   shared260    260: delete.account shared refused (12522)
@@ -195,8 +195,9 @@ if ($sections -contains 'fixtures') {
         Set-WitCompare 'fixtures' ('group account ' + $g + ' is registered') 'True' ([string](Test-Registered $g)) -Evidence (Join-Path (Join-Path $script:WitSdsys 'accounts') $g)
     }
     $r = Invoke-WitSd -Commands @('MODIFY.ACCOUNT zzwitsh sh-on', 'MODIFY.ACCOUNT zzwitsh ADD sdsys') -Label 'zzwitsh: SH on, and SDSYS a member (for 275 and 266)'
-    $mem = Get-WitGroupMembers 'sdu_zzwitsh'
-    Set-WitCompare 'fixtures' 'SDSYS is a member of zzwitsh''s Windows group sdu_zzwitsh' 'True' ([string]($mem -contains 'sdsys')) -Evidence ('members: ' + ($mem -join ','))
+    # 13 Nov 26: a GROUP account's Windows group is sdg_<name> (createa; "sdsys added to group sdg_zzwitsh"), not sdu_.
+    $mem = Get-WitGroupMembers 'sdg_zzwitsh'
+    Set-WitCompare 'fixtures' 'SDSYS is a member of zzwitsh''s Windows group sdg_zzwitsh' 'True' ([string]($mem -contains 'sdsys')) -Evidence ('members: ' + ($mem -join ','))
 
     # Group D: the folders outside each account, the junction inside it pointing out, the inside file, and the probes.
     foreach ($pair in @(@('zzwitoff', 'out-off'), @('zzwiton', 'out-on'))) {
@@ -289,8 +290,9 @@ if ($sections -contains 'api') {
         $ssl = 'C:\sdtools\bin\libssl-3-x64.dll'
         if (Test-Path -LiteralPath $ssl) { $env:SD_PROBE_LIBSSL = $ssl }
         $amark = Get-WitAuditMark
-        Write-Wit ('  > python ' + $probe + ' --user zzwitapi --port ' + $port + ' -- WHO   (SD_PROBE_LIBSSL=' + $env:SD_PROBE_LIBSSL + ')')
-        $po = & $py.Source $probe --user zzwitapi --port $port -- WHO 2>&1 | ForEach-Object { [string]$_ }
+        # 13 Nov 26: commands need --account (step 3b: "CANNOT RUN - commands need --account"); the user's own account.
+        Write-Wit ('  > python ' + $probe + ' --user zzwitapi --account zzwitapi --port ' + $port + ' -- WHO   (SD_PROBE_LIBSSL=' + $env:SD_PROBE_LIBSSL + ')')
+        $po = & $py.Source $probe --user zzwitapi --account zzwitapi --port $port -- WHO 2>&1 | ForEach-Object { [string]$_ }
         Remove-Item Env:\SD_SCRAM_PASSWORD -ErrorAction SilentlyContinue
         $pt = $po -join "`n"
         Write-WitRaw 'scram-probe' $pt
@@ -429,7 +431,14 @@ if ($sections -contains 'job222') {
         Write-WitRaw 'audit lines with job=zzwb' ($jl -join "`n")
         $ev = ('task last run ' + $info.LastRunTime + ' result ' + $info.LastTaskResult + '; new files: ' + (($new | ForEach-Object { $_.FullName + ' (' + $_.Length + ' bytes)' }) -join ', '))
         if ($new.Count -gt 0 -and @($new | Where-Object { $_.Length -gt 0 }).Count -gt 0) { Add-WitResult '222' 'backup-all as SDSYS wrote a backup when no other session was signed on' 'PASS' $ev }
-        else { Add-WitResult '222' 'backup-all as SDSYS wrote a backup when no other session was signed on' 'FAIL' $ev }
+        else {
+            Add-WitResult '222' 'backup-all as SDSYS wrote a backup when no other session was signed on' 'FAIL' $ev
+            # 13 Nov 26: a scheduled job's output goes nowhere, so step 3b could not say why it wrote nothing.  The same command once
+            # through the seat prints its refusal (the other sessions it saw, !acc_hold) or the zip it wrote (13008, with the path).
+            $d = Invoke-WitSd -Commands @('BACKUP.ACCOUNT ALL') -Label 'why the job wrote nothing: BACKUP.ACCOUNT ALL once through the seat' -TimeoutSec 300
+            $zips = @(Get-ChildItem -LiteralPath $bdir -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $before -notcontains $_.FullName })
+            Add-WitResult '222' 'BACKUP.ACCOUNT ALL through the seat (diagnosis for the job)' 'INFO' ('new files in ' + $bdir + ' now: ' + (($zips | ForEach-Object { $_.Name + ' (' + $_.Length + ')' }) -join ', ') + '; see the raw output above')
+        }
         $sys = @($jl | Where-Object { $_ -match ('user=' + [regex]::Escape($vm) + '\\SDSYS\s') })
         if ($jl.Count -gt 0) { Set-WitCompare '247' 'a scheduled job''s audit lines carry user=<machine>\SDSYS (the job kind)' $jl.Count $sys.Count -Evidence 'lines with job=zzwb' }
     }
@@ -618,12 +627,29 @@ if ($sections -contains 'logto275') {
     $mark = Get-WitAuditMark
     # No LOGTO back to SDSYS here: its refusal (10002) was witnessed on 22 Sep 2026, and a live one in a gplbld script must
     # be declared in test-logtoreaim-units.ps1, which this sitting does not edit.
-    $r = Invoke-WitSd -Commands @('LOGTO zzwitsh', 'WHO', 'SH whoami /groups', 'SH whoami /priv') -Label 'LOGTO zzwitsh, WHO, whoami' -TimeoutSec 180
+    # 13 Nov 26: SH cannot measure it - SDSYS's own shell gate is closed as delivered, and SH asks the person's gate, so step 3b's
+    # whoami never ran.  The token of the session's own sd.exe is read instead, as SYSTEM, while the session waits in zzwitsh
+    # (SLEEP 30): the reader starts with the session and reads after 15 s, by which time LOGTO has been done.  The pid is the
+    # one the audit's logto line names.
+    $out = Join-Path (Join-Path $fixDir 'sys') 'token275.txt'
+    $null = New-Item -ItemType Directory -Force -Path (Split-Path -Parent $out)
+    $ts = Invoke-WitAsSystem -Script $systemScript -Arguments '-Mode Token -UserName SDSYS -DelaySec 15' -OutFile $out -TimeoutSec 120 -While {
+        Invoke-WitSd -Commands @('LOGTO zzwitsh', 'WHO', 'SLEEP 30', 'WHO') -Label 'LOGTO zzwitsh, WHO, then wait 30 s while SYSTEM reads the token' -TimeoutSec 180
+    }
+    $r = $ts.WhileOut
     $t = [string]$r.Text
-    if (-not $r.Ok) { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' $r.Why }
-    elseif ($t -match 'Mandatory Label\\High Mandatory Level') { Add-WitResult '275' 'after LOGTO from SDSYS a program the account runs (SH) still has the High integrity label and Administrators' 'FINDING' ('whoami /groups: ' + [regex]::Match($t, '(?m)^.*Mandatory Label\\High.*$').Value.Trim() + ' | ' + [regex]::Match($t, '(?m)^BUILTIN\\Administrators.*$').Value.Trim() + ' - the remedy is the owner''s decision (the row)') }
-    elseif ($t -match 'Mandatory Label\\Medium Mandatory Level') { Add-WitResult '275' 'after LOGTO from SDSYS, SH runs at Medium' 'PASS' ([regex]::Match($t, '(?m)^.*Mandatory Label\\Medium.*$').Value.Trim()) }
-    else { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' 'whoami /groups printed no Mandatory Label line (SH did not run - see the raw output)' }
+    $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'logto|elevation released' })
+    $lpid = [regex]::Match(($al -join "`n"), 'pid=(\d+)\s+logto account=zzwitsh').Groups[1].Value
+    Write-WitRaw 'the SYSTEM token report (row 275)' ([string]$ts.Text)
+    $line = ''
+    if ($lpid -ne '') { $line = [regex]::Match([string]$ts.Text, '(?m)^pid=' + $lpid + ' image=.*$').Value }
+    if (-not $ts.Ok) { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' $ts.Why }
+    elseif ($null -eq $r -or -not $r.Ok) { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the seat did not run: ' + $(if ($r) { $r.Why } else { 'no result' })) }
+    elseif ($lpid -eq '') { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' 'the audit has no logto line with a pid' }
+    elseif ($line -eq '') { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the SYSTEM report has no line for pid ' + $lpid + ' (the session had ended?)') }
+    elseif ($line -match 'error=0 ' -and ($line -match 'elevated=1' -or $line -match 'integrity=S-1-16-12288')) { Add-WitResult '275' 'after LOGTO from SDSYS the session''s process is still elevated (High label): a program run in the account has administrator rights' 'FINDING' ($line + ' - the remedy is the owner''s decision (the row)') }
+    elseif ($line -match 'error=0 ' -and $line -match 'elevated=0') { Add-WitResult '275' 'after LOGTO from SDSYS the session''s process is not elevated' 'PASS' $line }
+    else { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the token could not be read: ' + $line) }
     Set-WitVerdict '266' 'WHO after LOGTO zzwitsh answers the account in lower case' $t '(?m)^\s*\d+\s+zzwitsh\b' @('User not allowed in requested account')
     if ($t -cmatch '(?m)^\s*\d+\s+ZZWITSH\b') { Add-WitResult '266' 'WHO after LOGTO is lower case' 'FAIL' 'WHO answered ZZWITSH' }
     $al = @(Get-WitAuditSince $mark | Where-Object { $_ -match 'logto|elevation released' })
@@ -711,6 +737,11 @@ if ($sections -contains 'ai246') {
     if ($offPw -eq '') { Add-WitResult '246' 'F6: the gate is read at the next request' 'NOT-MEASURED' 'no zzwitoff password on file (run -Only fixtures)' }
     else {
         Write-Wit '  F6: one ssh session as zzwitoff asks twice, 40 seconds apart; the gate is opened between (about 60 seconds)'
+        # 13 Nov 26: ai asks for a provider BEFORE the gate (gpl.bp/ai:78-85, as Linux ai:76-83), so with none chosen both asks said 12629 and the
+        # gate was never reached.  A provider with no key is chosen for F6: the gate speaks first (12630), and an ask that passes it stops at 12631
+        # (no key) before anything is sent.  PROVIDER none puts the delivered state back.
+        $r = Invoke-WitSd -Commands @('SET.AI PROVIDER anthropic') -Label 'F6: a provider with no key, so the gate is reached'
+        Write-WitRaw 'SET.AI PROVIDER anthropic' $r.Text
         $job = Start-Job -ScriptBlock {
             param($lib, $pw)
             . $lib
@@ -724,11 +755,13 @@ if ($sections -contains 'ai246') {
         Remove-Job $job -Force -ErrorAction SilentlyContinue
         Write-WitRaw 'the zzwitoff session' $jo
         $i1 = $jo.IndexOf('may not use the AI')
-        $i2 = $jo.IndexOf('The AI is off')
+        $i2 = $jo.IndexOf('The AI is not set up for')
+        $i0 = $jo.IndexOf('The AI is off')
         if ($jo -eq '') { Add-WitResult '246' 'F6: the gate is read at the next request' 'NOT-MEASURED' 'the ssh session gave nothing back in 120 s' }
-        elseif ($i1 -ge 0 -and $i2 -gt $i1) { Add-WitResult '246' 'F6/F2: the first ask is refused by the gate (12630), the second, after ai-on, passes the gate (12629 off) - same session, no sign-out; the helper read the person, not SYSTEM' 'PASS' ('12630 at ' + $i1 + ', 12629 at ' + $i2) }
-        else { Add-WitResult '246' 'F6: the gate is read at the next request' 'FAIL' ('12630 at ' + $i1 + ', 12629 at ' + $i2) }
-        $null = Invoke-WitSd -Commands @('MODIFY.ACCOUNT zzwitoff ai-off') -Label 'F6: close the gate again'
+        elseif ($i0 -ge 0) { Add-WitResult '246' 'F6: the gate is read at the next request' 'NOT-MEASURED' ('no provider was chosen (12629 at ' + $i0 + '), so the gate was not reached') }
+        elseif ($i1 -ge 0 -and $i2 -gt $i1) { Add-WitResult '246' 'F6/F2: the first ask is refused by the gate (12630), the second, after ai-on, passes it (12631, no key) - same session, no sign-out; the helper read the person, not SYSTEM' 'PASS' ('12630 at ' + $i1 + ', 12631 at ' + $i2) }
+        else { Add-WitResult '246' 'F6: the gate is read at the next request' 'FAIL' ('12630 at ' + $i1 + ', 12631 at ' + $i2) }
+        $null = Invoke-WitSd -Commands @('MODIFY.ACCOUNT zzwitoff ai-off', 'SET.AI PROVIDER none') -Label 'F6: close the gate again and choose no provider (as delivered)'
         $mem = Get-WitGroupMembers 'sdaiusers'
         Set-WitCompare '246' 'ai-off took zzwitoff out of sdaiusers' 'False' ([string]($mem -contains 'zzwitoff'))
     }
@@ -825,7 +858,9 @@ if ($sections -contains 'runin253') {
         Set-WitCompare '253' 'sdrunin is in no local group (its groups are added per run, in the token)' '' ($in -join ',')
         $rights = Get-WitRights
         foreach ($rn in @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')) {
-            Set-WitCompare '253' ('sdrunin holds ' + $rn) 'True' ([string](@($rights[$rn]) -contains $u.SID.Value))
+            $tr = Test-WitRight $rights $rn $u
+            Write-Wit ('  ' + $tr.Listed)
+            Set-WitCompare '253' ('sdrunin holds ' + $rn) 'True' $tr.Value
         }
     }
     $p = Get-WitPipe 'sd-runin'
@@ -916,7 +951,7 @@ if ($sections -contains 'runinchild') {
         Write-WitRaw 'the SYSTEM token probe' $t.Text
         if (-not $t.Ok -or $t.Text -notmatch 'ENDOFREPORT') { Add-WitResult '253' 'the child''s token' 'NOT-MEASURED' $t.Why }
         else {
-            $grp = Get-WitSid 'sdu_zzrunin'
+            $grp = Get-WitSid 'sdg_zzrunin'   # 13 Nov 26: zzrunin is a GROUP account, so its group is sdg_ (row 287: sdrunin.c wants sdu_)
             $sdu = Get-WitSid 'sdusers'
             $lines = @($t.Text -split "`r?`n")
             $g = ($lines | Where-Object { $_ -match ' groups=' } | Select-Object -First 1)
@@ -925,7 +960,7 @@ if ($sections -contains 'runinchild') {
             $grpEnabled = $hasGrp -and (([Convert]::ToInt32($Matches[1], 16) -band 4) -ne 0)
             $adm = [regex]::Match([string]$g, 'S-1-5-32-544\|0x([0-9A-F]+);')
             $admEnabled = $adm.Success -and (([Convert]::ToInt32($adm.Groups[1].Value, 16) -band 4) -ne 0)
-            Set-WitCompare '253' ('F2: the child''s token has the account''s group sdu_zzrunin enabled (' + $grp + ')') 'True' ([string]$grpEnabled) -Evidence $g
+            Set-WitCompare '253' ('F2: the child''s token has the account''s group sdg_zzrunin enabled (' + $grp + ')') 'True' ([string]$grpEnabled) -Evidence $g
             Set-WitCompare '253' ('F2: and sdusers (' + $sdu + ')') 'True' ([string]($g -match [regex]::Escape($sdu))) -Evidence $g
             Set-WitCompare '253' 'F3: no enabled Administrators in the child''s token' 'False' ([string]$admEnabled) -Evidence $g
             Set-WitVerdict '253' 'F3: the child is at Medium integrity (S-1-16-8192)' $h 'integrity=S-1-16-8192\b' @('integrity=S-1-16-12288', 'integrity=S-1-16-16384')

@@ -195,9 +195,13 @@ if ($sections -contains 'on') {
         Set-WitCompare '202' 'F2: SDRADMIN is in sdusers, sdssh and sdsshonly' '' ($need -join ',') -Evidence ('groups: ' + ($g -join ','))
         $rights = Get-WitRights
         foreach ($rn in @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')) {
-            Set-WitCompare '202' ('F2: SDRADMIN holds ' + $rn) 'True' ([string](@($rights[$rn]) -contains $u.SID.Value))
+            $tr = Test-WitRight $rights $rn $u
+            Write-Wit ('  ' + $tr.Listed)
+            Set-WitCompare '202' ('F2: SDRADMIN holds ' + $rn) 'True' $tr.Value
         }
-        Set-WitCompare '202' 'F2: SDRADMIN is NOT denied the network logon sshd needs' 'False' ([string](@($rights['SeDenyNetworkLogonRight']) -contains $u.SID.Value))
+        $tr = Test-WitRight $rights 'SeDenyNetworkLogonRight' $u
+        Write-Wit ('  ' + $tr.Listed)
+        Set-WitCompare '202' 'F2: SDRADMIN is NOT denied the network logon sshd needs' 'False' $tr.Value
     } else { Add-WitResult '202' 'F2: the Windows account SDRADMIN was made' 'FAIL' 'Get-LocalUser SDRADMIN found nothing' }
     foreach ($spell in @('sdradmin', ($vm.ToLower() + '\sdradmin'))) {
         $t = Get-SshdT $spell

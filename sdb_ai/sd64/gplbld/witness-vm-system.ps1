@@ -20,8 +20,10 @@ param(
     [string]$UserName = '',
     [string]$KeyDir = 'C:\ProgramData\SD\ai\keys',
     [string]$CopyTo = '',
+    [int]$DelaySec = 0,
     [Parameter(Mandatory = $true)][string]$Out
 )
+# 13 Nov 26: -DelaySec lets the caller start a session first and have its token read while it waits (row 275, logto275).
 
 $ErrorActionPreference = 'Continue'
 . (Join-Path $PSScriptRoot 'witness-vm-lib.ps1')
@@ -31,6 +33,7 @@ $null = $lines.Add('identity=' + [Security.Principal.WindowsIdentity]::GetCurren
 $null = $lines.Add('mode=' + $Mode)
 
 if ($Mode -eq 'Token') {
+    if ($DelaySec -gt 0) { $null = $lines.Add('delay=' + $DelaySec); Start-Sleep -Seconds $DelaySec }
     $pids = @($ProcessId)
     if ($UserName -ne '') {
         foreach ($p in @(Get-Process -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.UserName -like ('*\' + $UserName) })) { $pids += $p.Id }
