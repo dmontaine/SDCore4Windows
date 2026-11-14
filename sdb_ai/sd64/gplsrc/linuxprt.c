@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 219: a refused job names the printer it was sent to.  When that name came from SPOOLER
+ *           the message printed the print unit's own name, which is unset on that path ("printer (null)").  Found by reading.
+ *           It prints qprinter, the quoted name Windows was given, so SPOOLER is still read only through ps_quote.
  * 12 Nov 26 Windows port - RELEASE_1.1 219 (owner: parity decides): sd.conf's SPOOLER is the printer a job goes to when SETPTR names none
  *           (Linux: the lp command, such as "lp -d office"; Windows prints with Out-Printer, so here it is a printer NAME).  Quoted
  *           exactly as an AT name is, so it is never a command.  Empty, as delivered: the Windows default printer, as before.
@@ -228,7 +231,7 @@ void spool_print_job(PRINT_UNIT* pu) {
       tio_printf("Print job not sent: PowerShell did not start (%s)\n", psh);
     else if (qprinter[0])
       tio_printf("Print job not sent: Windows refused it for printer %s (exit %d) - is the name right?\n",
-                 pu->printer_name, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+                 qprinter, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
     else
       tio_printf("Print job not sent: Windows refused it for the default printer (exit %d) - is one set for this user?\n",
                  WIFEXITED(status) ? WEXITSTATUS(status) : -1);
