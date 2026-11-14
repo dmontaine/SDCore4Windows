@@ -440,6 +440,8 @@ try {
             } else {
                 foreach ($t in @(Get-ScheduledTask -TaskPath $JobTaskPath -TaskName 'sdcore-job-*' -ErrorAction SilentlyContinue)) {
                     try {
+                        # 14 Nov 26 - RELEASE_1.1 291: a running job (a backup in flight) holds SD's files after its task is unregistered (measured), so it is stopped first.
+                        if (-not (Stop-SdTaskBeforeRemoval $JobTaskPath $t.TaskName)) { Out-Line "${Prog}: task $($t.TaskName) is still running after it was stopped" }
                         Unregister-ScheduledTask -TaskPath $JobTaskPath -TaskName $t.TaskName -Confirm:$false -ErrorAction Stop
                         Out-Line "${Prog}: task $($t.TaskName) removed"
                     } catch {

@@ -12,7 +12,7 @@
   },
   "basic.function": {
    "chunks": 230,
-   "sha256": "84ee668d841c69183563e7c345fe5e507cb9706843e7a174cae87b7c245877da"
+   "sha256": "01193be91c9ebdc632ab0c35a2285300634a7afe3c01a0c785e3583d4e181f57"
   },
   "basic.internal": {
    "chunks": 37,
@@ -104,11 +104,11 @@
   },
   "tcl.keyword": {
    "chunks": 214,
-   "sha256": "cd6aaac0f60d8d6871ebd3407ee46424ad9c9673f55ddf18b31e440995d2599e"
+   "sha256": "8e170e35cd84af7b7c8a01bd127cfb4e878e384091a62f08523b40035caaf8c0"
   },
   "tcl.verb": {
    "chunks": 207,
-   "sha256": "4e15e6f6fd557b58e558684b9a188449ab593a43946b7d3970eab675ce0dcc36"
+   "sha256": "e0753af18bde56a6269b83c118443e4bd93485c82f243c057e8b863d74967668"
   },
   "tcl.verb+keyword": {
    "chunks": 4,
@@ -150,11 +150,11 @@
    "words": 6613
   },
   "index.json": {
-   "sha256": "3c1d04ed9fcbe218ee5c69959db09f7f717e137f644ad9a79162f893d67a2ad8"
+   "sha256": "42f515b23d2841fa49abae8c220bdedeaaf97efb85367fd1fbaf178426bff3ab"
   },
   "reference/basic-functions.md": {
    "chunks": 267,
-   "sha256": "9b29eb3956b997aac94956e80b56030848535ec0d6d061fd35950171f810d93a",
+   "sha256": "eedbb98f64ae0cd785344795c47d15d2c93c83f52ac07ca0bef4247884a5fff7",
    "words": 4288
   },
   "reference/basic-modes.md": {
@@ -189,13 +189,13 @@
   },
   "reference/tcl-keywords.md": {
    "chunks": 214,
-   "sha256": "98b9ce81e99d1135f931bf8ca8308368802072b32fc3484086351d7124af28be",
+   "sha256": "a8275975e68a5e8219b5fb6404884ba08e700e433d10fc502f63dfa49de8c1ab",
    "words": 10228
   },
   "reference/tcl-verbs.md": {
    "chunks": 211,
-   "sha256": "1410163ededa2e6982f79865bff2f2a4905247b60ac78fa52a2229abfbaad752",
-   "words": 9840
+   "sha256": "59824cb11ba9ec515f317a16af05303285ecd2d32680056b270d7cf3ba3af1d9",
+   "words": 9842
   },
   "reference/voc.md": {
    "chunks": 12,

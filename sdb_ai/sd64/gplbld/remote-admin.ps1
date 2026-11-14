@@ -573,6 +573,8 @@ function Close-Walls([string]$userSid, [bool]$keepBroker, [string]$armMode) {
         $t = Get-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction SilentlyContinue
         if ($null -ne $t) {
             if ($armMode -ceq 'none') {
+                # 14 Nov 26 - RELEASE_1.1 291: a running broker keeps its files open after its task is unregistered (measured), so it is stopped first.
+                if (-not (Stop-SdTaskBeforeRemoval '\SD\' 'sdcore-radmin')) { $left++; Out-Line "${Prog}: the broker task is still running after it was stopped; the data tree may not be deletable" }
                 Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -Confirm:$false -ErrorAction Stop
                 Out-Line "${Prog}: the broker task is removed"
             } else {

@@ -1,6 +1,10 @@
 # sd-taskfolder.ps1 - the Task Scheduler folder \SD, SYSTEM and Administrators only.  ONE copy, dot-sourced by remote-admin.ps1 (the
 # remote administration broker and its SYSTEM check task), sd-jobs.ps1 (SET.JOB's tasks) and finish-install.ps1 (made at install).
 #
+# 14 Nov 26 Windows port - RELEASE_1.1 291: Stop-SdTaskBeforeRemoval.  MEASURED in the VM (probe taskdel.ps1): Unregister-ScheduledTask on
+#   a RUNNING task leaves its process running and its files locked (the task is gone, the process stays); Stop-ScheduledTask ends it and
+#   frees the file in about 1.5 s (taskstop.ps1).  The uninstaller removed the remote administration broker that way, the running
+#   broker kept C:\ProgramData\SD open, and "database DELETE ... some files could NOT be removed" left a half tree.
 # 13 Nov 26 Windows port - written for RELEASE_1.1 281, moved here out of remote-admin.ps1 (RELEASE_1.1 280) so SET.JOB uses the same rule.
 #
 # WHY.  Measured on the host 13 Nov 2026: Task Scheduler's root folder grants Authenticated Users WRITE, inherited by every subfolder
@@ -42,4 +46,21 @@ function Initialize-SdTaskFolder($svc) {
     }
     $f.SetSecurityDescriptor($SdTaskFolderSddl, 0)
     return $f
+}
+
+# Stops the task if it is running and waits (up to $seconds) until it is not and its process has let go.  Returns $true when the task is
+# not running afterwards, $false when it still is (the caller says so and goes on: the data tree cannot then be deleted).  Call it BEFORE
+# Unregister-ScheduledTask for any task whose process could hold SD's files; see the 14 Nov 26 note above.
+function Stop-SdTaskBeforeRemoval([string]$taskPath, [string]$taskName, [int]$seconds = 20) {
+    $t = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($null -eq $t) { return $true }
+    if ([string]$t.State -ne 'Running') { return $true }
+    Stop-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction Stop
+    $deadline = (Get-Date).AddSeconds($seconds)
+    do {
+        Start-Sleep -Milliseconds 500
+        $t = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
+    } while ($null -ne $t -and [string]$t.State -eq 'Running' -and (Get-Date) -lt $deadline)
+    Start-Sleep -Milliseconds 1500
+    return ($null -eq $t -or [string]$t.State -ne 'Running')
 }

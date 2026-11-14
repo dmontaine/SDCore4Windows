@@ -349,6 +349,41 @@ function Get-Rows([hashtable]$t) {
          ($fi.IndexOf('$null = Initialize-SdTaskFolder $tsSvc') -lt $fi.IndexOf('# AND ON TO THE CHECK')) -and
          $t.stage.Contains("'sd-taskfolder.ps1',")),
         ("sd-jobs task cmdlet lines {0}, without -ErrorAction Stop: {1}" -f $jobTaskLines.Count, ($jobNoStop -join ' | '))))
+    # R12 (RELEASE_1.1 291, 14 Nov 26): a RUNNING task is stopped before it is unregistered - measured in the VM, Unregister-ScheduledTask alone leaves
+    # the process running and its files locked, and the uninstaller's removal of the running broker left C:\ProgramData\SD half deleted.  The helper
+    # is in sd-taskfolder.ps1 once; the broker's -Remove branch and sd-jobs' job-purge call it BEFORE their Unregister; and the helper itself is
+    # DRIVEN here on stubs (not running: no stop; running: stopped and waited for; stuck: false; absent: true).
+    $tfx = $t.taskfolder
+    $stopFn = [regex]::Match($tfx, '(?ms)^function Stop-SdTaskBeforeRemoval.*?^\}').Value
+    $beh = @()
+    if ($stopFn -ne '') {
+        $beh = & {
+            function Get-ScheduledTask { if ($script:tsGone) { return $null }; return [pscustomobject]@{ State = $script:tsState } }
+            function Stop-ScheduledTask { $script:tsCalls += 'stop'; if (-not $script:tsStuck) { $script:tsState = 'Ready' } }
+            function Start-Sleep { }
+            . ([scriptblock]::Create($stopFn))
+            $r = @()
+            $script:tsGone = $false; $script:tsStuck = $false; $script:tsCalls = @(); $script:tsState = 'Ready'
+            $r += ('notrunning:' + (Stop-SdTaskBeforeRemoval '\SD\' 'x' 1) + ':' + $script:tsCalls.Count)
+            $script:tsCalls = @(); $script:tsState = 'Running'
+            $r += ('running:' + (Stop-SdTaskBeforeRemoval '\SD\' 'x' 1) + ':' + $script:tsCalls.Count)
+            $script:tsCalls = @(); $script:tsState = 'Running'; $script:tsStuck = $true
+            $r += ('stuck:' + (Stop-SdTaskBeforeRemoval '\SD\' 'x' 1) + ':' + $script:tsCalls.Count)
+            $script:tsStuck = $false; $script:tsGone = $true
+            $r += ('absent:' + (Stop-SdTaskBeforeRemoval '\SD\' 'x' 1))
+            $r
+        }
+    }
+    $rm = $a.Substring([Math]::Max(0, $a.IndexOf("if (`$armMode -ceq 'none') {")))
+    $rm = $rm.Substring(0, [Math]::Max(0, $rm.IndexOf("Out-Line `"`${Prog}: the broker task is removed`"")))
+    $jpu = $jb.Substring([Math]::Max(0, $jb.IndexOf("'job-purge' {")))
+    $jpu = $jpu.Substring(0, [Math]::Max(0, $jpu.IndexOf('Out-Line "${Prog}: task $($t.TaskName) removed"')))
+    $null = $rows.Add(@('R12 (RELEASE_1.1 291) a running task is stopped and waited for before it is unregistered: the helper is in sd-taskfolder.ps1 and works (driven on stubs), and the broker''s -Remove and sd-jobs'' job-purge call it before Unregister-ScheduledTask',
+        (($tfx -match 'function Stop-SdTaskBeforeRemoval') -and ($tfx -match 'Stop-ScheduledTask -TaskPath \$taskPath -TaskName \$taskName -ErrorAction Stop') -and ($tfx -match "while \(\`$null -ne \`$t -and \[string\]\`$t\.State -eq 'Running'") -and
+         (($beh -join ' ') -ceq 'notrunning:True:0 running:True:1 stuck:False:1 absent:True') -and
+         ($rm.IndexOf("Stop-SdTaskBeforeRemoval '\SD\' 'sdcore-radmin'") -ge 0) -and ($rm.IndexOf("Stop-SdTaskBeforeRemoval '\SD\' 'sdcore-radmin'") -lt $rm.IndexOf('Unregister-ScheduledTask')) -and
+         ($jpu.IndexOf('Stop-SdTaskBeforeRemoval $JobTaskPath $t.TaskName') -ge 0) -and ($jpu.IndexOf('Stop-SdTaskBeforeRemoval $JobTaskPath $t.TaskName') -lt $jpu.IndexOf('Unregister-ScheduledTask'))),
+        ('helper driven: ' + ($beh -join ' '))))
     $null = $rows.Add(@('R6 the success lines are open, closed and removed, each printed only at the end of its branch', (($a -match 'Out-Line "\$\{Prog\}: open"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: closed"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: removed"\s*\r?\n\s*exit 0')), ''))
 
     # G: allow-ssh-groups.ps1 reads remote-admin's fence as SD's own
@@ -467,6 +502,10 @@ if ($SelfTest) {
         @('a refused job start falls through to "started"', 'R11', 'jobs', 'try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" -ErrorAction Stop } catch {', 'try { Start-ScheduledTask -TaskPath $JobTaskPath -TaskName "sdcore-job-$n" } catch {'),
         @('the installer does not make \SD', 'R11', 'finish', '    $null = Initialize-SdTaskFolder $tsSvc', '    $null = 0'),
         @('sd-taskfolder.ps1 does not ship', 'R11', 'stage', "                   'sd-taskfolder.ps1',", ''),
+        @('a running broker is unregistered without being stopped', 'R12', 'admin', 'Stop-SdTaskBeforeRemoval ''\SD\'' ''sdcore-radmin''', '$true'),
+        @('a running job is unregistered without being stopped', 'R12', 'jobs', 'Stop-SdTaskBeforeRemoval $JobTaskPath $t.TaskName', '$true'),
+        @('the helper never stops the task', 'R12', 'taskfolder', 'Stop-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction Stop', '$null = 0'),
+        @('the helper does not wait for the task to end', 'R12', 'taskfolder', '} while ($null -ne $t -and [string]$t.State -eq ''Running'' -and (Get-Date) -lt $deadline)', '} while ($false)'),
         @('a broker task already there is updated in place', 'R10', 'admin', "    try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }", ''),
         @('a SYSTEM check task already there is updated in place', 'R10', 'admin', "        try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }", ''),
         @('sshd_config is not put back', 'R2', 'admin', "    if (`$why -ne '') { [IO.File]::WriteAllBytes(`$cfg, `$orig) }", ''),
