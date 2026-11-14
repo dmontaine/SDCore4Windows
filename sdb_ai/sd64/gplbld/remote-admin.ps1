@@ -256,6 +256,13 @@ public class SdRadminLsa {
 '@
 $DenyRights = @('SeDenyInteractiveLogonRight', 'SeDenyRemoteInteractiveLogonRight', 'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')
 
+# 13 Nov 26 - RELEASE_1.1 280: THE TASK FOLDER \SD, SYSTEM AND ADMINISTRATORS ONLY.  Measured on the host 13 Nov: Task Scheduler's root
+# folder gives Authenticated Users WRITE, inherited by every subfolder ((A;CI;FW;;;AU)), and CREATOR OWNER full control of whatever it
+# makes; an ordinary unelevated user CAN create a top-level folder, and owns it.  So with inherited defaults any signed-in user could
+# make \SD first, or put a task named sdcore-radmin in it first, and the broker - a task that runs as SDSYS - would be registered into
+# their folder, or over their task.  (That this is exploitable was not measured; the door is shut instead.)  Protected, not inherited.
+$SdTaskFolderSddl = 'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'
+
 function Get-LocalSid([string]$name) {
     try {
         return (New-Object Security.Principal.NTAccount("$([Environment]::MachineName)\$name")).Translate([Security.Principal.SecurityIdentifier]).Value
@@ -382,6 +389,12 @@ function Invoke-SystemTask([string]$body, [string]$what) {
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     try {
         Out-Line "${Prog}: $what, as SYSTEM (a few seconds)..."
+        # A task that runs as SYSTEM goes only into a vetted \SD, and never over a task of the same name that is already there
+        # ($SdTaskFolderSddl's comment: any signed-in user could otherwise have made either first).
+        $svc = New-Object -ComObject Schedule.Service
+        $svc.Connect()
+        $sdFolder = Initialize-SdTaskFolder $svc
+        try { $sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }
         $act = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc)
         $pr = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
         Register-ScheduledTask -TaskName 'sdcore-radmin-check' -TaskPath '\SD\' -Action $act -Principal $pr -Force -ErrorAction Stop | Out-Null
@@ -423,6 +436,19 @@ function Test-BrokerPipe {
     return (@([IO.Directory]::GetFiles('\\.\pipe\') | Where-Object { $_ -ieq '\\.\pipe\sd-radmin' }).Count -gt 0)
 }
 
+function Initialize-SdTaskFolder($svc) {
+    # The ITaskFolder \SD, made with $SdTaskFolderSddl when it is missing.  One that exists is used only when its OWNER is SYSTEM or
+    # Administrators (anyone else could have put anything in it: refused, nothing changed), and is then given $SdTaskFolderSddl, which
+    # takes away the Authenticated Users write it inherited.  Throws on any doubt.
+    try { $f = $svc.GetFolder('\SD') } catch { return $svc.GetFolder('\').CreateFolder('SD', $SdTaskFolderSddl) }
+    $owner = (New-Object Security.AccessControl.RawSecurityDescriptor($f.GetSecurityDescriptor(0x1))).Owner
+    if ($null -eq $owner -or @('S-1-5-18', 'S-1-5-32-544') -notcontains $owner.Value) {
+        throw ('the task folder \SD is owned by ' + $(if ($null -eq $owner) { 'nobody' } else { $owner.Value }) + ', not SYSTEM or Administrators, so it is not used; delete it (an elevated administrator: schtasks /delete and the folder in Task Scheduler) and run this again')
+    }
+    $f.SetSecurityDescriptor($SdTaskFolderSddl, 0)
+    return $f
+}
+
 function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureString]$pw) {
     # 13 Nov 26 - RELEASE_1.1 280.  The broker runs as SDSYS by S4U, and Windows registers an S4U task for SDSYS only for SDSYS itself or
     # for a caller that gives SDSYS's password.  Measured on the host 13 Nov (probes 4 to 6): an elevated administrator is refused ("Access
@@ -430,15 +456,19 @@ function Register-BrokerTask([string]$xml, [string]$sdsysSid, [Security.SecureSt
     # RegisterTaskDefinition with logon type S4U is accepted and the task KEEPS logon type S4U - nothing is stored.  So SDSYS (REMOTE.SDSYS
     # ON at its console) registers it as itself, and anyone else (the installer) with $pw.  The logon type is read back, and a task that
     # came back as anything but S4U - a stored password - is deleted and refused.  Throws on any failure.
+    $svc = New-Object -ComObject Schedule.Service
+    $svc.Connect()
+    # The \SD folder may not exist yet: on a fresh install this is the first task SD makes (13 Nov host cycle: GetFolder threw 0x80070002,
+    # "The system cannot find the file specified").  Initialize-SdTaskFolder makes it, or vets and tightens the one that is there.
+    $folder = Initialize-SdTaskFolder $svc
+    # An existing task of this name is deleted first, never updated in place: one somebody else put there would keep its own access list.
+    try { $folder.DeleteTask('sdcore-radmin', 0) } catch { }
     if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq $sdsysSid) {
         Register-ScheduledTask -TaskName 'sdcore-radmin' -TaskPath '\SD\' -Xml $xml -Force -ErrorAction Stop | Out-Null
         return
     }
     if ($null -eq $pw -or $pw.Length -eq 0) { throw 'SDSYS''s Windows password is needed to register the broker task, and none was given' }
     $user = (New-Object Security.Principal.SecurityIdentifier($sdsysSid)).Translate([Security.Principal.NTAccount]).Value
-    $svc = New-Object -ComObject Schedule.Service
-    $svc.Connect()
-    $folder = $svc.GetFolder('\SD')
     $def = $svc.NewTask(0)
     $def.XmlText = $xml
     $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($pw)

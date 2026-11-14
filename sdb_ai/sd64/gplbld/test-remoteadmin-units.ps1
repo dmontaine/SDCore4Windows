@@ -306,6 +306,20 @@ function Get-Rows([hashtable]$t) {
          ($rb -match "GetCurrent\(\)\.User\.Value -eq \`$sdsysSid") -and ($rb -match 'RegisterTaskDefinition\(''sdcore-radmin'', \$def, 6, \$user, ') -and ($rb -match 'ZeroFreeBSTR\(\$bstr\)') -and
          ($rb -match 'if \(\$lt -ne 2\) \{\s*\r?\n\s*try \{ \$folder\.DeleteTask\(''sdcore-radmin'', 0\) \}') -and ($rb -notmatch 'Invoke-SystemTask')),
         ("task cmdlet lines {0}, without -ErrorAction Stop: {1}; exit4 {2} < register {3} < first wall {4}" -f $taskLines.Count, ($noStop -join ' | '), $iExit4, $iReg, $iWall)))
+    # R10 (RELEASE_1.1 280): the task folder \SD.  Measured 13 Nov: the root folder gives Authenticated Users write, inherited, and an
+    # ordinary user can make a top-level folder and own it.  \SD is made protected, SYSTEM and Administrators only; an existing one is used
+    # only when SYSTEM or Administrators own it and is then tightened; both SD tasks are deleted before they are registered, never updated.
+    $sf = $a.Substring([Math]::Max(0, $a.IndexOf('function Initialize-SdTaskFolder')))
+    $sf = $sf.Substring(0, [Math]::Max(0, $sf.IndexOf("`n}")))
+    $null = $rows.Add(@('R10 (RELEASE_1.1 280) \SD is made protected, SYSTEM and Administrators only; an existing one is used only when they own it, then tightened; the broker and the SYSTEM check task are vetted into it and deleted before they are registered',
+        ($a.Contains("`$SdTaskFolderSddl = 'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'") -and
+         ($sf -match "catch \{ return \`$svc\.GetFolder\('\\'\)\.CreateFolder\('SD', \`$SdTaskFolderSddl\) \}") -and
+         ($sf -match "@\('S-1-5-18', 'S-1-5-32-544'\) -notcontains \`$owner\.Value\) \{\s*\r?\n\s*throw ") -and ($sf -match "\`$f\.SetSecurityDescriptor\(\`$SdTaskFolderSddl, 0\)") -and
+         ($sf.IndexOf('throw (') -lt $sf.IndexOf('$f.SetSecurityDescriptor(')) -and
+         ($rb -match "\`$folder = Initialize-SdTaskFolder \`$svc") -and ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -ge 0) -and
+         ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -lt $rb.IndexOf('Register-ScheduledTask -TaskName')) -and
+         ($is -match "\`$sdFolder = Initialize-SdTaskFolder \`$svc") -and ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -ge 0) -and
+         ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -lt $is.IndexOf('Register-ScheduledTask -TaskName'))), ''))
     $null = $rows.Add(@('R6 the success lines are open, closed and removed, each printed only at the end of its branch', (($a -match 'Out-Line "\$\{Prog\}: open"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: closed"\s*\r?\n\s*exit 0') -and ($a -match 'Out-Line "\$\{Prog\}: removed"\s*\r?\n\s*exit 0')), ''))
 
     # G: allow-ssh-groups.ps1 reads remote-admin's fence as SD's own
@@ -412,6 +426,11 @@ if ($SelfTest) {
         @('-On says the broker runs without its pipe (RELEASE_1.1 280)', 'R9', 'admin', "        if (-not (Test-BrokerPipe)) { throw ('the broker started but its pipe \\.\pipe\sd-radmin did not appear in 20 seconds (task state ' + (Get-TaskState) + ')') }", ''),
         @('a task cmdlet in -On carries on after an error', 'R9', 'admin', "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop", "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin'"),
         @('-On goes on without SDSYS or its password', 'R9', 'admin', "        Exit-With 4 'the broker task runs as SDSYS, and this is not SDSYS: SDSYS''s Windows password is needed to register it; nothing was changed'", "        `$null = 4"),
+        @('\SD is made with inherited defaults (Authenticated Users write)', 'R10', 'admin', "catch { return `$svc.GetFolder('\').CreateFolder('SD', `$SdTaskFolderSddl) }", "catch { return `$svc.GetFolder('\').CreateFolder('SD') }"),
+        @('the \SD access list grants Authenticated Users write', 'R10', 'admin', "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)'", "'O:BAG:SYD:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FW;;;AU)'"),
+        @('an \SD owned by anybody is used', 'R10', 'admin', "    if (`$null -eq `$owner -or @('S-1-5-18', 'S-1-5-32-544') -notcontains `$owner.Value) {", "    if (`$false) {"),
+        @('a broker task already there is updated in place', 'R10', 'admin', "    try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }", ''),
+        @('a SYSTEM check task already there is updated in place', 'R10', 'admin', "        try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }", ''),
         @('a broker task that stored a password is kept', 'R9', 'admin', "    if (`$lt -ne 2) {", "    if (`$false) {"),
         @('sshd_config is not put back', 'R2', 'admin', "    if (`$why -ne '') { [IO.File]::WriteAllBytes(`$cfg, `$orig) }", ''),
         @('network logon denied', 'R3', 'admin', "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight')", "'SeDenyBatchLogonRight', 'SeDenyServiceLogonRight', 'SeDenyNetworkLogonRight')"),
