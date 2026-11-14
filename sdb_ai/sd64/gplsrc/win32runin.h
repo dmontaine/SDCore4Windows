@@ -72,7 +72,8 @@
 #define RUNIN_MIN_ROWS 10
 #define RUNIN_MAX_SIZE 999
 #define RUNIN_USERS_GROUP "sdusers"
-#define RUNIN_GROUP_PREFIX "sdu_"  /* create_account: ACC$GROUP is "sdu_" : the account name */
+#define RUNIN_GROUP_PREFIX "sdu_"  /* create_account: ACC$GROUP is "sdu_" : the account name for a USER account */
+#define RUNIN_GROUP_PREFIX_GROUP "sdg_"  /* ... and "sdg_" : the account name for a GROUP account (RELEASE_1.1 287) */
 
 /* The child's store, given to it in its environment (taken out at start-up, as SD_PHANTOM_NONCE is). */
 #define RUNIN_STORE_ENV "SD_RUNIN_STORE"

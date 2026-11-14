@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 13 Nov 26 Windows port - RELEASE_1.1 287: a GROUP account's register group is sdg_<account>, and it was refused (only sdu_ was
+ *           accepted), so run.in WITH debug could not be used in any group account.  Either of SD's own two names for that account
+ *           is accepted now; any other group is still refused.
  * 13 Nov 26 Windows port - written.  RELEASE_1.1 253(b): run.in WITH debug, the Windows form of Linux's
  *           "run.in account debug file program" (.claude/design-runin-debug-20261113.md, section 6).
  * END-HISTORY
@@ -33,7 +36,8 @@
  * under run.in).
  *
  * WHAT IT BELIEVES OF THE REQUEST.  Words, checked again here (runin_plain_word); the account's group is the register's,
- * read by this process, and must be sdu_<account>; the store is made here; no path comes from the wire.
+ * read by this process, and must be sdu_<account> (a user account) or sdg_<account> (a group account); the store is made
+ * here; no path comes from the wire.
  *
  * THE CHILD'S TOKEN, IN ORDER (the order is what test-runindebug-units.py holds):
  *   1. win32_s4u_logon_groups(SD_RUNIN_ACCOUNT, {sdusers, sdu_<account>})   the bare account, plus the two groups a
@@ -252,6 +256,7 @@ int sdrunin_register(const char* sysdir, const char* account, char* group, size_
                      size_t whylen) {
   char path[MAX_PATH];
   char want[RUNIN_WORD_MAX + 8];
+  char want_g[RUNIN_WORD_MAX + 8];
   char suspended[64];
   char* rec = NULL;
   HANDLE h;
@@ -299,8 +304,9 @@ int sdrunin_register(const char* sysdir, const char* account, char* group, size_
   }
   register_field(rec, 3, group, grouplen); /* ACC$GROUP */
   snprintf(want, sizeof(want), "%s%s", RUNIN_GROUP_PREFIX, account);
-  if (_stricmp(group, want) != 0) {
-    say(why, whylen, "the register gives account %s the group \"%.80s\", not %s", account, group, want);
+  snprintf(want_g, sizeof(want_g), "%s%s", RUNIN_GROUP_PREFIX_GROUP, account);
+  if ((_stricmp(group, want) != 0) && (_stricmp(group, want_g) != 0)) {
+    say(why, whylen, "the register gives account %s the group \"%.80s\", not %s or %s", account, group, want, want_g);
     group[0] = '\0';
     goto done;
   }

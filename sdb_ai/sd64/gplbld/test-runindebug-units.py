@@ -11,8 +11,9 @@ UNELEVATED in a temporary directory.  Nothing here needs SD, an install, the ser
 
   N1  the request: a well-formed line is read field by field; every other shape is refused (magic, field count, an upper-case or
       dotted or slashed word, the administrator account sdsys, a blank in the terminal, a size outside 20/10 to 999, 65 characters)
-  N2  the register: the account's record must be a plain file, not SUSPENDED, and give the group sdu_<account> (case aside; LF, CRLF
-      and field marks all read); a missing account and a directory in its place are refused
+  N2  the register: the account's record must be a plain file, not SUSPENDED, and give the group sdu_<account>, or sdg_<account> for a
+      group account (RELEASE_1.1 287; case aside; LF, CRLF and field marks all read); a missing account, a directory in its place,
+      another account's group and any other prefix are refused
   N3  the child's environment: TERM, LINES, COLUMNS and the store are the run's, once each; SD_SESSION, SD_PHANTOM_NONCE and an
       SD_RUNIN_STORE the block already had are gone; everything else is kept
   N4  a run's store: a new directory, its DACL protected; SYSTEM, Administrators and this process's user, and the logon SID with
@@ -204,8 +205,11 @@ static void n2(void) {
     {"crlf", "C:\\a\\crlf\r\n\r\nSDU_CRLF\r\n\r\n\r\n", 0, 1, ""},
     {"fm", "C:\\a\\fm\xfe\xfesdu_fm\xfe\xfe", 0, 1, ""},
     {"susp", "C:\\a\n\nsdu_susp\n\nSUSPENDED\n", 0, 0, "suspended"},
-    {"wrong", "C:\\a\n\nsdu_other\n\n\n", 0, 0, "not sdu_wrong"},
+    {"wrong", "C:\\a\n\nsdu_other\n\n\n", 0, 0, "not sdu_wrong or sdg_wrong"},
     {"nogroup", "C:\\a\n\n\n\n\n", 0, 0, "not sdu_nogroup"},
+    {"grpacc", "C:\\a\\grpacc\n\nsdg_grpacc\n\n\n", 0, 1, ""},
+    {"grpwrong", "C:\\a\n\nsdg_other\n\n\n", 0, 0, "not sdu_grpwrong or sdg_grpwrong"},
+    {"grpodd", "C:\\a\n\nsdx_grpodd\n\n\n", 0, 0, "not sdu_grpodd"},
   };
   size_t i;
   int ok = 1, r;
@@ -227,11 +231,13 @@ static void n2(void) {
   }
   r = sdrunin_register(sys, "good", g, sizeof(g), why, sizeof(why));
   if (r != 0 || lstrcmpiA(g, "sdu_good") != 0) { ok = 0; strcat(bad, "good's group; "); }
+  r = sdrunin_register(sys, "grpacc", g, sizeof(g), why, sizeof(why));
+  if (r != 0 || lstrcmpiA(g, "sdg_grpacc") != 0) { ok = 0; strcat(bad, "grpacc's group; "); }
   r = sdrunin_register(sys, "nobody", g, sizeof(g), why, sizeof(why));
   if (r == 0 || strstr(why, "is not a registered account") == NULL) { ok = 0; strcat(bad, "missing account; "); }
   r = sdrunin_register(sys, "dir", g, sizeof(g), why, sizeof(why));
   if (r == 0 || strstr(why, "not a plain file") == NULL) { ok = 0; snprintf(bad + strlen(bad), sizeof(bad) - strlen(bad), "dir [%s]; ", why); }
-  row("N2", ok, "the register: a plain record, not suspended, group sdu_<account>; anything else refused", bad);
+  row("N2", ok, "the register: a plain record, not suspended, group sdu_<account> or (a group account) sdg_<account>; anything else refused", bad);
 }
 
 /* ---------------------------------------------------------------- N3 */
@@ -684,7 +690,9 @@ MUTANTS = [
     ("sdsvc/sdrunin.c", "a base that is a link is used", "    if ((attr & FILE_ATTRIBUTE_DIRECTORY) && !(attr & FILE_ATTRIBUTE_REPARSE_POINT) &&",
      "    if ((attr & FILE_ATTRIBUTE_DIRECTORY) &&"),
     ("sdsvc/sdrunin.c", "the asker is not asked", "  if (!runin_client_ok(h, who, sizeof(who), why, sizeof(why))) {", "  if (0) {"),
-    ("sdsvc/sdrunin.c", "the register's group is not checked", "  if (_stricmp(group, want) != 0) {", "  if (0) {"),
+    ("sdsvc/sdrunin.c", "the register's group is not checked", "  if ((_stricmp(group, want) != 0) && (_stricmp(group, want_g) != 0)) {", "  if (0) {"),
+    # 13 Nov 26 (RELEASE_1.1 287): a group account's sdg_ group refused again, as before the fix
+    ("sdsvc/sdrunin.c", "a group account's sdg_ group is refused", "  if ((_stricmp(group, want) != 0) && (_stricmp(group, want_g) != 0)) {", "  if (_stricmp(group, want) != 0) {"),
     ("sdsvc/sdrunin.c", "a suspended account is entered", '  if (_stricmp(suspended, "SUSPENDED") == 0) {', "  if (0) {"),
     ("sdsvc/sdrunin.c", "SD_SESSION reaches the child", ' L"SD_SESSION",\n', "\n"),
     ("sdsvc/sdrunin.c", "the administrator account may be debugged in", '  if (strcmp(field[0], "sdsys") == 0) {', "  if (0) {"),
