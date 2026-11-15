@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 306, from Linux c4ce87e9: the group ADD/DELETE arm sets @system.return.code on all seven outcomes (0 on
+*   10017, 10018, 10021, 10023; -ER$FAILED on 10019, 10020, 10022); a success left the -ER$ARGS preset, so remote.sdsys audited status=-1.
 * 13 Nov 26 Windows port - RELEASE_1.1 288: the account name is downcased, not upcased, as Linux's MODIFY.ACCOUNT (13 Sep 26, plan M)
 *   and our own CREATE.ACCOUNT and DELETE.ACCOUNT: messages and audit lines named ZZWITSH.  The literal tests ('sdsys', 'sdradmin') and
 *   the suspend-yourself test (downcase(@logname), downcase(@who)) moved with it.  The register is read by the same name either way.
@@ -643,12 +645,14 @@ add.delete.arm:
             * this user looks legit, add to group
             * first check to see if user is already a member of the group
                if is_grp_member(user.name,group.name) THEN
+                  @system.return.code = 0  ;* 14 Nov 26 (RELEASE_1.1 306, Linux c4ce87e9): nothing to change, as run.actions counts it
                   crt sysmsg(10017,user.name,group.name)  ;* %1 is already a member of group %2
                end else
                   * Modified by Composer AI - 2026/06/10.
                   * Use shared !valid_os_name before os.execute (phase 2).
                   * if convert(os.name.chars, '', user.name) # '' ...
                   if not(valid_os_name(user.name)) or not(valid_os_name(group.name)) then
+                     @system.return.code = -ER$FAILED
                      crt sysmsg(10019,user.name,group.name,2) ;* Unable to add user %1 to group %s status: %2
                   end else
 * 14 Aug 26 Windows port - was: os.execute "sudo usermod -aG ..."
@@ -664,14 +668,17 @@ add.delete.arm:
 * file.  The identity is stamped by audit_message() in k_error.c and is not
 * passed from here, so a caller cannot forge it.  PRE_RELEASE_FIXES.md 27.
                      void kernel(K$AUDIT, 'modify.account add account=' : acc.name : ' to=' : user.name)
+                     @system.return.code = 0
                      crt sysmsg(10018,user.name,group.name)  ;* %1 added to group %2
                   end else
+                     @system.return.code = -ER$FAILED
                      crt sysmsg(10019,user.name,group.name,stat) ;* Unable to add user %1 to group %s status: %2
                   end
                   end
-               end 
+               end
             end else
                crt user.name
+               @system.return.code = -ER$FAILED
                crt sysmsg(10020,user.name) ;* %1 is not a member of sdusers, not allowed
             end 
          
@@ -681,6 +688,7 @@ add.delete.arm:
                * Modified by Composer AI - 2026/06/10.
                * Use shared !valid_os_name before os.execute (phase 2).
                if not(valid_os_name(user.name)) or not(valid_os_name(group.name)) then
+                  @system.return.code = -ER$FAILED
                   crt sysmsg(10022,user.name,group.name,2) ;* Unable to remove user %1 from group %s status: %2
                end else
 * 14 Aug 26 Windows port - was: os.execute "sudo deluser ..."
@@ -690,12 +698,15 @@ add.delete.arm:
 * 28 Aug 26 Windows port - and the DELETE arm, for the reason given at the ADD
 * one above.  GRANTA:233 is the model.  PRE_RELEASE_FIXES.md 27.
                      void kernel(K$AUDIT, 'modify.account delete account=' : acc.name : ' from=' : user.name)
+                     @system.return.code = 0
                      crt sysmsg(10021,user.name,group.name) ;*  %1 removed from group %2
                   end else
+                     @system.return.code = -ER$FAILED
                      crt sysmsg(10022,user.name,group.name,stat) ;* Unable to remove user %1 from group %s status: %2
                   end
                end
             end else
+               @system.return.code = 0  ;* 14 Nov 26 (RELEASE_1.1 306): nothing to remove
                crt sysmsg(10023,user.name,group.name) ;* %1 is not a member of  %2
             end 
           

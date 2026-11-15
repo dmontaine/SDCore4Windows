@@ -239,8 +239,15 @@ def check_a(t):
     rc = func(k, "static char* read_key_console(")
     row("the client never takes a key as an argument: in the key branch the key comes from the console (echo off, then restored) or standard input only (rest holds the provider and nothing "
         "else), and it is never printed", "key = read_key_console(rest[0]);" in kb and "rest[1]" not in kb and "argv" not in kb
-        and ordered(rc, "GetConsoleMode(in, &mode)", "& ~ENABLE_ECHO_INPUT", "ReadConsoleW(", "SetConsoleMode(in, mode);") and not re.search(r"\bsayf?\((?:[^;]*,\s*)?key\s*[,)]", k)
+        and ordered(rc, "GetConsoleMode(in, &mode)", "& ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)", "ReadConsoleInputW(", "SetConsoleMode(in, mode);") and not re.search(r"\bsayf?\((?:[^;]*,\s*)?key\s*[,)]", k)
         and "if (!is_provider(rest[0]))" in kb, "")
+    # 14 Nov 26 (RELEASE_1.1 309, Linux c4ce87e9 read_key_stars): one * per character, never the character; Backspace and Ctrl-U; escape sequences dropped; nothing on success.
+    row("(RELEASE_1.1 309) the console key prompt says it shows stars, writes only \"*\" (or \"\\b \\b\") to the console for what is typed, takes Backspace / DEL and Ctrl-U, drops an "
+        "escape sequence, and the key command prints nothing on success (set.ai's 12620 is the one line)",
+        '"Key for %s (shown as *): "' in rc and re.findall(r"WriteFile\(out, ([^,]+),", rc) == ["prompt", '"\\b \\b"', '"\\b \\b"', '"*"', '"\\r\\n"']
+        and "c == 0x08 || c == 0x7f" in rc and "c == 0x15" in rc and "c == 0x1b" in rc and "esc = (c == L'[' || c == L'O') ? 2 : 0;" in rc
+        and "if (c >= 0x40 && c <= 0x7e)" in rc and "is set" not in k and "| ENABLE_PROCESSED_INPUT)" in rc,
+        repr(re.findall(r"WriteFile\(out, ([^,]+),", rc)))
     hb = between(k, 'strcmp(cmd, "key") == 0 && nr == 3 && strcmp(rest[1], "--handover") == 0', 'strcmp(cmd, "key") == 0 && nr == 1')
     hk = func(k, "static char* handover_key(")
     row("(Windows) the client's key --handover: the key is the FILE's (named by the third word), read and removed BEFORE the provider is even checked, and never printed",
@@ -763,6 +770,11 @@ GROUP_W_MUTANTS = [
     ("https", "USER32 is imported again", "void* __imp_MessageBoxW = (void*)stub_MessageBoxW;\n", ""),
     ("main", "two retries", "for (attempt = 1; attempt <= 2; attempt++) {", "for (attempt = 1; attempt <= 3; attempt++) {"),
     ("win", "the test gate is in the shipped helper", "#ifdef SDAI_TESTS\n  /* THE TEST BUILD ONLY", "#if 1\n  /* THE TEST BUILD ONLY"),
+    # 14 Nov 26 (RELEASE_1.1 309): the console key prompt
+    ("ctl", "the key is echoed as typed", 'WriteFile(out, "*", 1, &w, NULL);', "WriteFile(out, &c, 1, &w, NULL);"),
+    ("ctl", "the client says the key is set again", "  } else if (strcmp(cmd, \"key\") == 0) {\n", "  } else if (strcmp(cmd, \"key\") == 0) {\n    sayf(\"The key for %s is set.\", rest[0]);\n"),
+    ("ctl", "an escape sequence is typed into the key", "esc = (c == L'[' || c == L'O') ? 2 : 0;", "esc = 0;"),
+    ("ctl", "Ctrl-C no longer reaches the system while the key is typed", "(mode | ENABLE_PROCESSED_INPUT) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)", "(mode & ~ENABLE_PROCESSED_INPUT) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)"),
 ]
 
 

@@ -145,6 +145,16 @@ def checks(src, msgs):
     add_arm = c[c.find("\nadd.delete.arm:\n"):]
     ck("M8 ADD and DELETE are as they were: a word after the user name is refused with 12719, and no other path reads extra.word",
        add_arm.count("stop sysmsg(12719, extra.word)") == 1 and c.count("extra.word") == 2, "extra.word lines: %d" % c.count("extra.word"))
+    # 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 306): the ADD / DELETE arm left @system.return.code at the -ER$ARGS preset after a SUCCESS, so a caller
+    # that EXECUTEd modify.account and read the code (remote.sdsys's broker) was told the change failed.  Every outcome message now follows the code that says what happened.
+    # WINDOWS: the arm is cut where it ends (its "Action Must Be" refusal), because account.user, after it, prints 10020 twice more (Windows only).
+    arm_end = add_arm.find("crt 'modify.account Action Must Be")
+    arm = add_arm[:arm_end] if arm_end > 0 else ""
+    outcome = {10017: "0", 10018: "0", 10021: "0", 10023: "0", 10019: "-ER\\$FAILED", 10020: "-ER\\$FAILED", 10022: "-ER\\$FAILED"}
+    seen = {n: len(re.findall(r"@system\.return\.code = %s[^\n]*\n\s+crt sysmsg\(%d," % (code, n), arm)) for n, code in outcome.items()}
+    ck("M8b the ADD / DELETE arm sets the return code before every outcome message: 0 for already a member (10017), added (10018), removed (10021) and not a member (10023); -ER$FAILED for 10019 (twice), 10020 and 10022 (twice)",
+       arm != "" and all(seen[n] == (2 if n in (10019, 10022) else 1) for n in outcome) and all(arm.count("sysmsg(%d," % n) == (2 if n in (10019, 10022) else 1) for n in outcome),
+       "arm %d bytes; found %s" % (len(arm), seen))
     ck("M9 the usage says that several actions may be given together, with an example",
        "may be given together in one command" in usage and "modify.account <account> sh-on os-on voc-on bp-on" in usage)
 
@@ -200,14 +210,16 @@ def report(rows, quiet=False):
 
 
 MUTANTS = [
+    ("a successful group ADD leaves the -ER$ARGS preset (RELEASE_1.1 306)", "                     @system.return.code = 0\n                     crt sysmsg(10018,", "                     crt sysmsg(10018,"),
+    ("a failed group DELETE says 0 (RELEASE_1.1 306)", "                     @system.return.code = -ER$FAILED\n                     crt sysmsg(10022,user.name,group.name,stat)", "                     @system.return.code = 0\n                     crt sysmsg(10022,user.name,group.name,stat)"),
     ("validate.actions is never called", "         gosub validate.actions\n", ""),
     ("run.actions is called before validate.actions", "         gosub validate.actions\n         gosub run.actions\n", "         gosub run.actions\n         gosub validate.actions\n"),
-    ("a word is missing from the word list", ",DICT-OFF,SHARED-READ-ON,", ",SHARED-READ-ON,"),
+    ("a word is missing from the word list", ",DICT-OFF,RECOVERY-ON,", ",RECOVERY-ON,"),   # 14 Nov 26: the RECOVERY words follow DICT-OFF now; the old text matched nothing
     ("the usage forgets a word", "voc-on | voc-off | bp-on | bp-off | dict-on | dict-off", "voc-on | voc-off | bp-on | dict-on | dict-off"),
     ("sh-on and os-on share a slot", "'R,R,R,R,SH,SH,OS,OS,", "'R,R,R,R,SH,SH,SH,SH,"),
     ("the suspension runs first", "PINS-OFF,SUSPENDED,UNSUSPENDED'", "PINS-OFF,UNSUSPENDED,SUSPENDED'"),
     ("the start and pins words run after the suspension (25 Oct 26, S.75)", "START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED'", "SUSPENDED,UNSUSPENDED,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF'"),
-    ("the pins words share the start slot (25 Oct 26, S.75)", "SW,SW,ST,ST,ST,PN,PN,S,S')", "SW,SW,ST,ST,ST,ST,ST,S,S')"),
+    ("the pins words share the start slot (25 Oct 26, S.75)", "AI,AI,ST,ST,ST,PN,PN,S,S')", "AI,AI,ST,ST,ST,ST,ST,S,S')"),   # 14 Nov 26: F, FW, FA and AI come before ST now
     ("a case of do.action ends in stop", "            gosub os.set\n         case upcase(action) = 'SH-OFF'", "            gosub os.set\n            stop\n         case upcase(action) = 'SH-OFF'"),
     ("the account is not read again before each action", "      read acc.rec from acc.f, acc.name else null\n", ""),
     ("the code is not cleared before each action", "      @system.return.code = 0\n      gosub do.action\n", "      gosub do.action\n"),

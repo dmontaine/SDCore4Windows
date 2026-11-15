@@ -167,7 +167,14 @@ def checks(s):
     sign = between(cp, "\nconnected.port:\n", "\n   loop\n")
     ck("H11b ...exactly: connected.port: then if @tty[1, 5] = '/dev/' then call !home_entry('signon'), then the loop", sign.strip() == "connected.port:\n   if @tty[1, 5] = '/dev/' then call !home_entry('signon')", repr(sign))
     ck("H11c ...and int.logto ends with the hook for a LOGTO typed at the prompt, after the RESET restart and before the return",
-       "   if logto.reset then goto restart.cproc\n\n   if @tty[1, 5] = '/dev/' then call !home_entry('logto')\n\n   return" in cp)
+       "   if logto.reset then goto restart.cproc\n\n   if @tty[1, 5] = '/dev/' and not(logto.admin) then call !home_entry('logto')" in cp)
+    # 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 275).  WINDOWS FORM: Linux asks K$ADMINISTRATOR, which our LOGTO clears on the way out of SDSYS, so
+    # the test here is the process's own elevation at a desktop (K$OS.ELEVATED and K$INTERACTIVE, the seed's test at kernel.c:363), which does not change.
+    ck("H11e ...and a LOGTO made by an ADMINISTRATOR session runs no LOGIN paragraph and never the home screen (owner ruling 14 Nov 26, RELEASE_1.1 275): logto.admin is asked of "
+       "the process's elevation at a desktop, blanks the LOGIN id before the RESET ALL block and the LOGIN run, and the home hook is skipped for it",
+       "   logto.admin = kernel(K$OS.ELEVATED, -1) and kernel(K$INTERACTIVE, -1)\n   if logto.admin then login.voc.id = ''\n" in cp
+       and 0 < cp.find("   if logto.admin then login.voc.id = ''") < cp.find("   if logto.reset.all then") < cp.find("   if login.voc.id # \"\" then\n      at.command = \"\"")
+       and "      login.voc.id = downcase(login.voc.id)\n      read voc.rec from voc, login.voc.id else login.voc.id = \"\"\n   end\n\n   logto.admin = kernel(K$OS.ELEVATED, -1)" in cp)   # just after the LOGIN read (cp is comment-stripped)
     ck("H11d ...and these are the only two calls", cp.count("call !home_entry(") == 2)
 
     ck("H12 EXIT: with the flag and a terminal it starts HOME (saying first what kind of screen it was: hstart = (hflag = 1), S.201), otherwise it does what QUIT does", "if hflag and @tty[1, 5] = '/dev/' then\n      hstart = (hflag = 1)\n      execute 'home'\n   end else\n      execute 'quit'\n   end" in ex)
@@ -491,8 +498,11 @@ MUTANTS = [
     ("home_entry starts the screen for the terminal word", "home_entry", "   if start # 'menu' then return\n", ""),
     ("home_entry reads the field of another account", "home_entry", "read arec from acc.f, downcase(@who)", "read arec from acc.f, 'sdsys'"),
     ("the sign-on hook has no terminal test", "cproc", "   if @tty[1, 5] = '/dev/' then call !home_entry('signon')\n", "   call !home_entry('signon')\n"),
-    ("the LOGTO hook has no terminal test", "cproc", "   if @tty[1, 5] = '/dev/' then call !home_entry('logto')\n", "   call !home_entry('logto')\n"),
-    ("a third call to the hook appears", "cproc", "   if @tty[1, 5] = '/dev/' then call !home_entry('logto')\n", "   if @tty[1, 5] = '/dev/' then call !home_entry('logto')\n   call !home_entry('x')\n"),
+    ("the LOGTO hook has no terminal test", "cproc", "   if @tty[1, 5] = '/dev/' and not(logto.admin) then call !home_entry('logto')", "   call !home_entry('logto')"),
+    ("a third call to the hook appears", "cproc", "   if @tty[1, 5] = '/dev/' and not(logto.admin) then call !home_entry('logto')", "   if @tty[1, 5] = '/dev/' and not(logto.admin) then call !home_entry('logto')\n   call !home_entry('x')"),
+    ("an administrator's LOGTO is taken home", "cproc", "and not(logto.admin) then call !home_entry('logto')", "then call !home_entry('logto')"),
+    ("an administrator's LOGTO runs the LOGIN paragraph", "cproc", "   if logto.admin then login.voc.id = ''\n", "   if 0 then login.voc.id = ''\n"),
+    ("an administrator's LOGTO is told by SD's own flag, which LOGTO has cleared", "cproc", "   logto.admin = kernel(K$OS.ELEVATED, -1) and kernel(K$INTERACTIVE, -1)\n", "   logto.admin = kernel(K$ADMINISTRATOR, -1)\n"),
     ("EXIT starts the screen without the flag", "exit", "if hflag and @tty[1, 5] = '/dev/' then", "if @tty[1, 5] = '/dev/' then"),
     ("EXIT never ends the session", "exit", "      execute 'quit'\n", "      null\n"),
     ("SET.START.DEFAULT does not ask for the administrator", "setstart", "   if not(kernel(K$ADMINISTRATOR, -1)) then\n      stop sysmsg(2001) ;* Command requires administrator privileges\n   end\n", ""),

@@ -15,6 +15,8 @@
  * START-HISTORY:
  * 13 Nov 26 Windows port - New (RELEASE_1.1 246): the Python client gplbld/sd-ai-ctl (from Linux b1d496df) and its wrapper sd-ai-ctl.ps1 in
  *           C, in the helper's own program: the same words, the same lines printed, the same exit codes.  No Python, so no "error: nopython:".
+ * 14 Nov 26 Windows port - RELEASE_1.1 309, from Linux c4ce87e9: key shows one * per character typed or pasted (Backspace, Ctrl-U; escape
+ *           sequences dropped) and says nothing on success, so set.ai's own line is the only "is set".
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -26,7 +28,7 @@
  *   sd-ai.exe [--pipe NAME] custom-clear
  *   sd-ai.exe [--pipe NAME] ca PATH                         (PATH - for the Windows certificate store; a drive path written with /, C:/...)
  *   sd-ai.exe [--pipe NAME] limit NAME NUMBER
- *   sd-ai.exe [--pipe NAME] key PROVIDER                    (read from the console and not shown; from standard input when it is not a console)
+ *   sd-ai.exe [--pipe NAME] key PROVIDER                    (read from the console, shown as one * per character; from standard input when it is not a console)
  *   sd-ai.exe [--pipe NAME] key PROVIDER --handover FILE    (the key is the first line of FILE, which is removed whatever happens)
  *   sd-ai.exe [--pipe NAME] key-clear PROVIDER
  *   sd-ai.exe [--pipe NAME] context HEX | -
@@ -304,27 +306,87 @@ static char* handover_key(const char* path) {
   return k.p;
 }
 
+/* 14 Nov 26 (RELEASE_1.1 309, Linux c4ce87e9 read_key_stars): the key is read one key event at a time and shown as one * for each character typed or
+   pasted, so a long pasted key gives a sign that it arrived; the key itself is never shown, only its length.  Backspace (and DEL) takes one back,
+   Ctrl-U all; an escape sequence (an arrow key under VT input, a bracketed paste's markers) is dropped, as on Linux: ESC, then [ or O, then
+   everything up to a final byte 0x40-0x7e; any other character after ESC is dropped with it.  Other control characters are ignored.  Ctrl-C is
+   still the system's (ENABLE_PROCESSED_INPUT), and on_ctrl gives the console its mode back.  A key event's repeat count is honoured.  At most
+   KEYMAX UTF-16 units are kept; more are ignored (a key is far shorter). */
+#define KEYMAX 4096
 static char* read_key_console(const char* provider) {
   HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
   DWORD mode;
   sbuf k;
   sb_init(&k);
   if (in != NULL && in != INVALID_HANDLE_VALUE && GetConsoleMode(in, &mode)) {
-    wchar_t wb[1024];
-    DWORD got = 0;
+    static wchar_t wb[KEYMAX + 1];
+    size_t got = 0;
+    int esc = 0; /* 0 none, 1 after ESC, 2 inside ESC [ or ESC O */
+    int done = 0;
     HANDLE out = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
     char prompt[128];
     DWORD w;
-    snprintf(prompt, sizeof prompt, "Key for %s (not shown): ", provider);
+    snprintf(prompt, sizeof prompt, "Key for %s (shown as *): ", provider);
     if (out != INVALID_HANDLE_VALUE)
       WriteFile(out, prompt, (DWORD)strlen(prompt), &w, NULL);
-    SetConsoleMode(in, (mode | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT) & ~ENABLE_ECHO_INPUT);
-    if (ReadConsoleW(in, wb, 1023, &got, NULL)) {
-      char* u;
-      wb[got] = L'\0';
-      while (got > 0 && (wb[got - 1] == L'\n' || wb[got - 1] == L'\r'))
-        wb[--got] = L'\0';
-      u = w2u(wb);
+    SetConsoleMode(in, (mode | ENABLE_PROCESSED_INPUT) & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
+    while (!done) {
+      INPUT_RECORD r;
+      DWORD nread = 0;
+      WORD rep;
+      wchar_t c;
+      if (!ReadConsoleInputW(in, &r, 1, &nread) || nread == 0)
+        break; /* the input ended: what was typed so far (nothing is an empty key, which the helper refuses) */
+      if (r.EventType != KEY_EVENT || !r.Event.KeyEvent.bKeyDown)
+        continue;
+      c = r.Event.KeyEvent.uChar.UnicodeChar;
+      if (c == 0)
+        continue; /* a key that types nothing (an arrow, a function key, Shift) */
+      for (rep = (r.Event.KeyEvent.wRepeatCount > 0) ? r.Event.KeyEvent.wRepeatCount : 1; rep > 0 && !done; rep--) {
+        if (esc == 1) {
+          esc = (c == L'[' || c == L'O') ? 2 : 0;
+          continue;
+        }
+        if (esc == 2) {
+          if (c >= 0x40 && c <= 0x7e)
+            esc = 0;
+          continue;
+        }
+        if (c == L'\r' || c == L'\n') {
+          done = 1;
+        } else if (c == 0x08 || c == 0x7f) {
+          if (got > 0) {
+            got--;
+            if (got > 0 && wb[got] >= 0xDC00 && wb[got] <= 0xDFFF && wb[got - 1] >= 0xD800 && wb[got - 1] <= 0xDBFF)
+              got--; /* one character, two UTF-16 units */
+            wb[got] = 0;
+            if (out != INVALID_HANDLE_VALUE)
+              WriteFile(out, "\b \b", 3, &w, NULL);
+          }
+        } else if (c == 0x15) {
+          size_t stars = 0, i;
+          for (i = 0; i < got; i++)
+            if (!(wb[i] >= 0xDC00 && wb[i] <= 0xDFFF))
+              stars++;
+          for (i = 0; i < stars; i++)
+            if (out != INVALID_HANDLE_VALUE)
+              WriteFile(out, "\b \b", 3, &w, NULL);
+          SecureZeroMemory(wb, sizeof wb);
+          got = 0;
+        } else if (c == 0x1b) {
+          esc = 1;
+        } else if (c < 0x20) {
+          /* another control character: ignored */
+        } else if (got < KEYMAX) {
+          wb[got++] = c;
+          if (!(c >= 0xDC00 && c <= 0xDFFF) && out != INVALID_HANDLE_VALUE)
+            WriteFile(out, "*", 1, &w, NULL); /* the second half of a pair is the same character: one star */
+        }
+      }
+    }
+    wb[got] = L'\0';
+    {
+      char* u = w2u(wb);
       sb_puts(&k, u);
       SecureZeroMemory(u, strlen(u));
       free(u);
@@ -533,9 +595,9 @@ int ctl_main(int argc, char** argv) {
     for (i = 0; i < k; i++)
       if (json_is_str(m->items[i]))
         sayf("  %s", m->items[i]->s);
-  } else if (strcmp(cmd, "key") == 0)
-    sayf("The key for %s is set.", rest[0]);
-  else if (strcmp(cmd, "key-clear") == 0)
+  } else if (strcmp(cmd, "key") == 0) {
+    /* 14 Nov 26 (RELEASE_1.1 309, Linux c4ce87e9): nothing on success - set.ai reads the key back and prints its own line (12620), so two lines said the same */
+  } else if (strcmp(cmd, "key-clear") == 0)
     sayf("The key for %s is cleared.", rest[0]);
   else
     say("ok");

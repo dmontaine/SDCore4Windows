@@ -223,8 +223,8 @@ def checks(src, voc_text, newvoc_names, extra=None):
     ntxt = "\n".join(s for n, s in net)
     ck("R23 the abort branch puts the session back BEFORE the case on the abort cause (the block sits between 'abort.code = n' and 'begin case')",
        bool(net) and "if ri.active then" in ntxt and "gosub revert.account" in ntxt, "%d lines between" % len(net))
-    ck("R24 ... says so (12247 with the account) and audits it as run.in revert ... reason=abort",
-       "display sysmsg(12247, ri.account)" in ntxt and "'run.in revert account=' : ri.account : ' reason=abort'" in ntxt)
+    ck("R24 ... says so (12247 with the account the session went BACK to, ri.who, not the one the command visited) and audits it as run.in revert ... reason=abort",
+       "display sysmsg(12247, ri.who)" in ntxt and "'run.in revert account=' : ri.account : ' reason=abort'" in ntxt)   # 14 Nov 26 (RELEASE_1.1 308, Linux c4ce87e9): the account the session went BACK to
     ck("R25 the test is the flag and nothing else, and it comes before the first 'case' of the branch",
        a_n is not None and b_n is not None and next((n for n, s in lines if n > a_n and s.startswith("case ")), 10 ** 9) > b_n)
     commons = [s for n, s in lines if re.match(r"common /\$?runin/", s)]
@@ -456,8 +456,8 @@ MUTANTS = [
     ("the typed text is run", "cproc", "      new.sentence = ri.sentence\n", "      new.sentence = ri.rest\n"),
     ("the flag is not cleared first", "cproc", "revert.account:\n   ri.active = 0\n", "revert.account:\n"),
     ("the switches are restored in another order", "cproc", "   void kernel(K$SH,          ri.sw<1>)\n", "   void kernel(K$SH,          ri.sw<2>)\n"),
-    ("the safety net is off", "cproc", "         if ri.active then\n            gosub revert.account\n            display sysmsg(12247, ri.account)",
-     "         if 0 then\n            gosub revert.account\n            display sysmsg(12247, ri.account)"),
+    ("the safety net is off", "cproc", "         if ri.active then\n            gosub revert.account\n            display sysmsg(12247, ri.who)",
+     "         if 0 then\n            gosub revert.account\n            display sysmsg(12247, ri.who)"),
     ("the flag is never set", "cproc", "   ri.active = 1\n   void kernel(K$AUDIT, 'run.in begin", "   ri.active = 0\n   void kernel(K$AUDIT, 'run.in begin"),
     ("the account's LOGIN is run", "cproc", "      new.sentence = ri.sentence\n", "      new.sentence = 'LOGIN'\n      gosub proc.sentence\n      new.sentence = ri.sentence\n"),
     ("a slash is a plain character", "cproc", "'abcdefghijklmnopqrstuvwxyz0123456789._-', ri.word[ri.i, 1], 1)", "'abcdefghijklmnopqrstuvwxyz0123456789._-/', ri.word[ri.i, 1], 1)"),
@@ -471,7 +471,8 @@ MUTANTS = [
     ("the word loop does not check the plain word", "cproc", "            gosub ri.plain.word\n", "            ri.ok = @true\n"),
     ("the directory is entered before the flag", "cproc", "   ri.active = 1\n   void kernel(K$AUDIT, 'run.in begin account=' : ri.acct : ' command=' : ri.sentence)\n",
      "   void kernel(K$AUDIT, 'run.in begin account=' : ri.acct : ' command=' : ri.sentence)\n   if ospath(acc.rec, OS$CD) then null\n   ri.active = 1\n"),
-    ("no message after an abort", "cproc", "            display sysmsg(12247, ri.account)   ;* run.in: the command did not finish; the session is back in account %1\n", ""),
+    ("no message after an abort", "cproc", "            display sysmsg(12247, ri.who)   ;* run.in: the command did not finish; the session is back in account %1 - the account it LEFT (ri.who), not the one it visited (14 Nov 26, RELEASE_1.1 308, Linux c4ce87e9)\n", ""),
+    ("the message names the account the command visited", "cproc", "display sysmsg(12247, ri.who)", "display sysmsg(12247, ri.account)"),
     # 3 Nov 26: the NO.CATALOG option
     ("run.in basic does not give no.catalog", "cproc", "   if ri.cmd = 'basic' then ri.sentence := ' no.catalog'\n", ""),
     ("no.catalog is given to every command", "cproc", "if ri.cmd = 'basic' then ri.sentence := ' no.catalog'", "ri.sentence := ' no.catalog'"),
@@ -516,8 +517,8 @@ MUTANTS = [
      "   if not(ospath(ri.path, OS$CD)) then\n      display sysmsg(5162)   ;* Fatal error : Cannot return to previous account\n      return to abort.cproc\n   end\n   void kernel(K$VOC.EDIT,  ri.sw<7>)\n   void kernel(K$BP.EDIT,   ri.sw<8>)\n   void kernel(K$DICT.EDIT, ri.sw<9>)\n"),
     ("the flag is not kept", "cproc", "   ri.sw<10> = kernel(K$ADMINISTRATOR, -1)", "   ri.sw<10> = 1 ;* kernel(K$ADMINISTRATOR, -1)"),
     ("the run is flagged before the gates are kept", "cproc", "   ri.sw<7> = kernel(K$VOC.EDIT, -1) ;", "   ri.active = 1\n   ri.sw<7> = kernel(K$VOC.EDIT, -1) ;"),
-    ("the abort branch does something before revert", "cproc", "         if ri.active then\n            gosub revert.account\n            display sysmsg(12247, ri.account)",
-     "         if ri.active then\n            void kernel(K$SH, 1)\n            gosub revert.account\n            display sysmsg(12247, ri.account)"),
+    ("the abort branch does something before revert", "cproc", "         if ri.active then\n            gosub revert.account\n            display sysmsg(12247, ri.who)",
+     "         if ri.active then\n            void kernel(K$SH, 1)\n            gosub revert.account\n            display sysmsg(12247, ri.who)"),
     ("LOGTO is allowed during a run", "cproc", "   if ri.active then\n      display sysmsg(15073, ri.account)", "   if 0 then\n      display sysmsg(15073, ri.account)"),
     ("the LOGTO refusal is not audited", "cproc", "      void kernel(K$AUDIT, 'run.in refused account=' : ri.account : ' target=' : downcase(new.account)[1, 40] : ' reason=logto')\n", ""),
     ("an include file is not asked", "bcomp", "   ri.chk.path = fileinfo(incl.file, FL$PATH)\n   gosub ri.outside\n", "   ri.out = @false\n"),

@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux c4ce87e9: an administrator's LOGTO (and LOGTO ... RESET ALL) runs no LOGIN paragraph and no home screen,
+*           the session lands at the prompt (RELEASE_1.1 275, owner's ruling; the test is the process's elevation, see int.logto); run.in's
+*           abort message 12247 names the account the session went back to, not the one it visited (RELEASE_1.1 308).
 * 14 Nov 26 Windows port - from Linux d5270fe2 (S.237, RELEASE_1.1 254): end of input ('') cancels get.string (the Ctrl-R prompt) and is Q at PAUSE, as Solo has since SOLO 16;
 *           neither case matched '' before, so both spun.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: LOGTO is refused to the remote administration session (SDRADMIN over ssh), 12847.
@@ -623,7 +626,7 @@ restart.cproc:
          end
          if ri.active then
             gosub revert.account
-            display sysmsg(12247, ri.account)   ;* run.in: the command did not finish; the session is back in account %1
+            display sysmsg(12247, ri.who)   ;* run.in: the command did not finish; the session is back in account %1 - the account it LEFT (ri.who), not the one it visited (14 Nov 26, RELEASE_1.1 308, Linux c4ce87e9)
             void kernel(K$AUDIT, 'run.in revert account=' : ri.account : ' reason=abort')
             ri.active = 0
             gosub get.voc.parser.rec
@@ -3122,6 +3125,17 @@ logto.unwind:
       read voc.rec from voc, login.voc.id else login.voc.id = ""
    end
 
+* 14 Nov 26 Windows port - from Linux c4ce87e9.  OWNER RULING (RELEASE_1.1 275): "when sdsys logs to another account it always needs to be at the prompt not taken into
+*   home".  A LOGTO made by an administrator's session runs NO LOGIN paragraph of the account it enters and does not open the home screen: the session lands at the command
+*   prompt, where 12987 (above) stays on screen.  None of the account's own start-up code runs in the administrator's session (the tighter behaviour).  An ordinary user's
+*   LOGTO is unchanged.  LOGTO ... RESET ALL by the administrator runs none either (login.voc.id is empty below).
+*   WINDOWS FORM, SAME OUTCOME: Linux asks K$ADMINISTRATOR, which its administrator keeps after LOGTO.  Ours is cleared on the way out of SDSYS (above, 13 Aug 26), so it
+*   cannot say.  The process's own elevation can: K$OS.ELEVATED and K$INTERACTIVE are the test that seeds the flag at session start (kernel.c:363), and a process's
+*   elevation does not change, so a session that started as SDSYS is still known after one LOGTO or several - and an elevated process is exactly where an account's start-up
+*   code should not run.  run.in never reaches here (it refuses LOGTO, and runs no LOGIN).
+   logto.admin = kernel(K$OS.ELEVATED, -1) and kernel(K$INTERACTIVE, -1)
+   if logto.admin then login.voc.id = ''
+
 * 18 Oct 26 Windows port - from Linux 7aba47d (16 Oct 26): - QM4 Fixes item 30: RESET ALL.  The account has been entered and ON.LOGTO has run; what is left is the LOGIN of the
 *   new account and the start of the command prompt.  Every stacked command processor is cast off first (the kernel does it at
 *   the end of this opcode and calls the bottom one again), and the bottom one runs LOGIN, so a menu LOGIN starts is not itself
@@ -3146,7 +3160,7 @@ logto.unwind:
 
 * 22 Oct 26 dm - S.75: the account entered by a LOGTO typed at the prompt starts as its setting says (the home screen, or the prompt).  !HOME_ENTRY returns at once for a LOGTO run
 *   by a program (the command processor is not the bottom one) and for the one the home screen runs itself.
-   if @tty[1, 5] = '/dev/' then call !home_entry('logto')
+   if @tty[1, 5] = '/dev/' and not(logto.admin) then call !home_entry('logto')   ;* 14 Nov 26: an administrator's LOGTO stays at the prompt (RELEASE_1.1 275, above)
 
    return
 

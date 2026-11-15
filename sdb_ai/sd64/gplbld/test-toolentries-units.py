@@ -414,6 +414,19 @@ def checks(src, voc, helps):
                "if u.lock = 0 and u.err = 0 and u.ref = 0 then", "uh<7> = 'undone'")
        and "void kernel(K$AUDIT, 'entries undo account=' : gcura : ' records=' : u.acct)" in txt
        and "if uh<1> = 'entries-undo' then" in txt and "if gkd = 3 then\ncopt = ''\ngosub compile.in.account" in dun and "'entries-undo' : @fm : date()" in dgl, "")
+    # 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): since S.176 (8 Nov) F6 / Shift-F6 change the box on every page and Tab does not, yet the help lines
+    # and refusals of three pages still told the person to Tab.  The three pages are read from the page's own directory; comments are left out (the history lines say what
+    # Tab no longer does).  WINDOWS: tool_entries is the text this check was given (src), so --selftest's mutant of it is seen; the other two are read from disk.
+    tabtalk = []
+    for nm in ("tool_entries", "tool_jobs", "tool_sessions"):
+        if nm == "tool_entries":
+            ptxt = src
+        else:
+            with open(os.path.join(os.path.dirname(PAGE), nm), encoding="utf-8", errors="replace") as f:
+                ptxt = f.read()
+        body = "\n".join(s for n, s in code(ptxt))
+        tabtalk += [nm + ": " + m for m in re.findall(r"[^\n']*\bTab\b[^\n']*", body)]
+    ck("T29 no page tells the person to use Tab to change box (F6 does it, S.176): tool_entries, tool_jobs and tool_sessions say F6", tabtalk == [], "; ".join(tabtalk)[:300])
     return out
 
 
@@ -487,8 +500,8 @@ MUTANTS = [
     ("the pointer is left after the IDE", "src", "   execute sent\n   gosub drop.pointer\n", "   execute sent\n"),
     ("the page runs anything", "src", "   if field(sent, ' ', 1) # 'ide' then\n", "   if 0 then\n"),
     ("the data path is judged for an item", "src", "that has a dictionary'\n            return\n         end\n         tp = parse.pathname.tokens(trim(fr<3>))\n", "that has a dictionary'\n            return\n         end\n         tp = parse.pathname.tokens(trim(fr<2>))\n"),
-    ("E refuses the programs again", "src", "   if pane # 2 then\n      msg = 'Tab to the entries first, then E'\n      return\n   end\n",
-     "   if pane # 2 then\n      msg = 'Tab to the entries first, then E'\n      return\n   end\n   if kind = 3 then\n      return\n   end\n"),
+    ("E refuses the programs again", "src", "   if pane # 2 then\n      msg = 'F6 to the entries first, then E'\n      return\n   end\n",
+     "   if pane # 2 then\n      msg = 'F6 to the entries first, then E'\n      return\n   end\n   if kind = 3 then\n      return\n   end\n"),
     ("a program's own file is not judged", "src", "   if isprog and in.ok then in.ok = kernel(K$PATH.IN, ap.f : @fm : rp : @ds : eid)", "   in.ok = in.ok"),
     ("the program pointer reaches a dictionary", "src", "   if isprog then qrec = 'F' : @fm : tp ", "   if isprog then qrec = qrec "),
     ("C compiles without the checks", "src", "   emode = 'compile'\n   gosub edit.record\n", "   gosub compile.reached\n"),
@@ -502,7 +515,7 @@ MUTANTS = [
     ("the pointer holds an unchecked path", "src", "qrec = 'F' : @fm : tp : @fm : (if efl = '' then '' else tp)", "qrec = 'F' : @fm : ap.f : @fm : (if efl = '' then '' else tp)"),
     ("the audit line is lost", "src", "   void kernel(K$AUDIT, 'master edit account=' : ea : ' kind=' : akind : ' file=' : qf : ' id=' : eid : ' new=' : enw)\n", ""),
     ("a slash is a word character", "src", "   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-'\n   for cwq", "   good = 'abcdefghijklmnopqrstuvwxyz0123456789._-/'\n   for cwq"),
-    ("E works in Accounts", "src", "   if pane # 2 then\n      msg = 'Tab to the entries first, then E'\n      return\n   end\n", ""),
+    ("E works in Accounts", "src", "   if pane # 2 then\n      msg = 'F6 to the entries first, then E'\n      return\n   end\n", ""),
     ("the pointer is left when SD cannot follow it", "src", "   open dfl, qn to tf else\n      gosub drop.pointer\n", "   open dfl, qn to tf else\n"),
     ("D deletes without the id typed", "src", "call $tk_confirm(dsent, dlines, eid, res, cmsg, sysmsg(12958))", "call $tk_confirm(dsent, dlines, '', res, cmsg, sysmsg(12958))"),
     ("D deletes on Cancel", "src", "   if res # 'run' then\n      close tf", "   if 0 then\n      close tf"),
@@ -588,6 +601,8 @@ MUTANTS = [
     ("B refuses again on Windows", "src", "do.debug:\n", "do.debug:\n   msg = 'B is not built on Windows: run.in does not debug in another account.  Debug the program in its own account'\n   return\n"),
     ("an absolute path is a leading slash only", "src", "   abs.pat = \"'\" : @ds : \"'0X\" : @vm : \"1A':\\'0X\" : @vm : \"1A':/'0X\"\n", "   abs.pat = \"'/'0X\"\n"),
     ("one relative path is not made the account's", "src", "         if not(pp matches abs.pat) then pp = apath<ca> : @ds : pp\n", "         if pp[1, 1] # '/' then pp = apath<ca> : @ds : pp\n"),
+    # ---- 14 Nov 26, from Linux c4ce87e9 (RELEASE_1.1 307): T29, appended so the --from numbers above stay true; --from=123 runs it alone
+    ("a refusal tells the person to Tab again", "src", "      msg = 'F6 to the entries first, then D'\n", "      msg = 'Tab to the entries first, then D'\n"),
 ]
 M_FIELD1 = next(i for i, m in enumerate(MUTANTS) if m[0] == "G changes field 1 on many records")
 M_GLOBAL = next(i for i, m in enumerate(MUTANTS) if m[0] == "G changes every row of the account with no filter")

@@ -4,6 +4,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): the help line and the refusals say F6, which changes box since S.176, not Tab.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the SCREEN MSGBOXes keep no unused answer.
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b): B debugs as on Linux (run.in debugs in a separate, unelevated process of the account); the
 *              "not built" refusal of 10 Nov 26 is gone.
@@ -85,7 +86,7 @@
 *   The VOC of an account is read when the cursor comes to the account, not at the start: a system with many accounts is not read as a whole.  F finds an id, or a part of one, in the
 *   VOC of EVERY account (this reads them all and is asked for by name); the boxes then list the hits with their accounts, and Enter on a hit goes to that entry in its account.
 *
-*   Keys: Up and Down, PgUp and PgDn move in the box, Tab changes box, Enter in Accounts goes to its entries (and on a hit goes to the entry in its account), / filters the entries of the
+*   Keys: Up and Down, PgUp and PgDn move in the box, F6 changes box, Enter in Accounts goes to its entries (and on a hit goes to the entry in its account), / filters the entries of the
 *   account by a part of the id, F finds an id in every account, K changes the kind, E edits the record under the cursor in the IDE, N makes a new record (its id asked first), D deletes the record under the cursor (its id typed to confirm), C compiles the program under the cursor in its own account (run.in), B debugs it there, Esc takes the
 *   find and the filter off, F5 reads again, F1 or ? or a click on a [?] explains the box, Ctrl-Q leaves.  Esc or F10 (or a click on the top row) opens the menu bar when there is nothing
 *   to take off.
@@ -965,7 +966,7 @@ wrap.lines:
    return
 
 draw.help:
-   screen text 'Up and Down move, PgUp and PgDn a page.  Tab changes box.  Enter in Accounts goes to its entries.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
+   screen text 'Up and Down move, PgUp and PgDn a page.  F6 changes box.  Enter in Accounts goes to its entries.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
    screen text '/ filters by a part of an id (of a heading too, in dictionaries).  F finds it in every account (Enter on a hit goes to it).  Esc takes them off.' at h.x + 2,h.y + 2 width h.tw
    screen text 'K kind.  E edit, N new, D delete, C compile, B debug the row; G changes every row shown, U puts it back.  F5 again.  Ctrl-Q leaves.' at h.x + 2,h.y + 3 width h.tw
    return
@@ -1138,7 +1139,7 @@ check.word:
 * E: the record under the cursor, in the editor.  The cursor must be in Entries on a row; a hit of a find is edited in the account it was found in.
 do.edit:
    if pane # 2 then
-      msg = 'Tab to the entries first, then E'
+      msg = 'F6 to the entries first, then E'
       return
    end
    nrows = (if fnd # '' then hn else en)
@@ -1160,7 +1161,7 @@ do.edit:
 * check of E come first; delete.reached then asks for the id to be typed and deletes.
 do.delete:
    if pane # 2 then
-      msg = 'Tab to the entries first, then D'
+      msg = 'F6 to the entries first, then D'
       return
    end
    nrows = (if fnd # '' then hn else en)
@@ -1182,7 +1183,7 @@ do.delete:
 * source does not act as the administrator).  It goes E's way through edit.record first, so the pointer rule refuses a program file that lies outside the account before anything runs.
 do.build:
    if pane # 2 then
-      msg = 'Tab to the entries first, then C'
+      msg = 'F6 to the entries first, then C'
       return
    end
    if kind # 3 then
@@ -1209,7 +1210,7 @@ do.debug:
 * 13 Nov 26 Windows port (RELEASE_1.1 253(b)): run.in debugs again, as on Linux - the program runs in a separate, unelevated process of the account
 *   (the SD service's), so B is Linux's B.  (10 Nov 26 to 13 Nov 26 it said "B is not built on Windows" and returned here.)
    if pane # 2 then
-      msg = 'Tab to the entries first, then B'
+      msg = 'F6 to the entries first, then B'
       return
    end
    if kind # 3 then
@@ -1243,7 +1244,7 @@ do.new:
    ptxt = 'Id of the new VOC entry in ' : anm<ac>
    if kind = 2 then
       if ec < 1 or ec > en or pane # 2 then
-         msg = 'put the cursor on an item of the file the new item belongs to (Tab to the entries)'
+         msg = 'put the cursor on an item of the file the new item belongs to (F6 to the entries)'
          return
       end
       efl = efile<ec>
@@ -1251,7 +1252,7 @@ do.new:
    end
    if kind = 3 then
       if ec < 1 or ec > en or pane # 2 then
-         msg = 'put the cursor on a program of the file the new program belongs to (Tab to the entries)'
+         msg = 'put the cursor on a program of the file the new program belongs to (F6 to the entries)'
          return
       end
       efl = efile<ec>

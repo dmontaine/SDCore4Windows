@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): the help line and the Selected line say F6 changes box, not Tab.
 * 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12950 while SET.JOB reads (as tool.remote), and the verb's wait lines are
 *            dropped from what it printed, so they are never read as job lines or shown as its result.
 * 10 Nov 26 Windows port - from Linux 944d6ed3, d049d8bb, 1c127f7c (S.102 stages 1, 4 and 5), 87659a06 (S.176), c792b4a2 (S.179), e8c72d31 (S.185),
@@ -571,7 +572,7 @@ draw.effect:
          end case
       end
       if pane = 1 and an > 0 then
-         lines<-1> = 'Selected: ' : anm<ai> : ' may run ' : dcount(alist<ai>, @vm) : ' command(s) from the command line.  Enter or Tab goes to its commands.'
+         lines<-1> = 'Selected: ' : anm<ai> : ' may run ' : dcount(alist<ai>, @vm) : ' command(s) from the command line.  Enter or F6 goes to its commands.'
       end
       if outopen and ((pane = 1 and an > 0) or (pane = 2 and cn > 0)) then
          nl = dcount(lines, @fm)
@@ -623,7 +624,7 @@ draw.help:
       screen text 'F5 reads the jobs again.  A goes back to the account commands.  Ctrl-Q leaves.' at h.x + 2,h.y + 3 width h.tw
       return
    end
-   screen text 'Up and Down move, PgUp and PgDn a page.  Tab changes box.  Enter in Commands allows or stops allowing.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
+   screen text 'Up and Down move, PgUp and PgDn a page.  F6 changes box.  Enter in Commands allows or stops allowing.  F1 or ? explains the box.' at h.x + 2,h.y + 1 width h.tw
    screen text 'Each change is shown as its command; you answer Run or Cancel.' at h.x + 2,h.y + 2 width h.tw
    screen text 'F5 reads the lists again.  J shows the administrator' : "'s scheduled jobs.  Ctrl-Q leaves." at h.x + 2,h.y + 3 width h.tw
    return
