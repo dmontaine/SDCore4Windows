@@ -412,9 +412,14 @@ $RETIRED = @(
     # of source text cannot tell reachable from dead, so leaving the old
     # anchor here would have kept passing while proving nothing.  Retired
     # unchanged: "which is the one you set before" is still gone.
+    # 15 Nov 26 - RELEASE_1.1 320: the "Two accounts exist" count was false on an upgrade and when SDSYS ran setup; the line
+    # names the administrator account instead, so the replacement anchor moves with it, and the count is retired too.
     @{ Ref = '20Sep-a'
        Retired     = 'which is the one you set before'
-       Replacement = 'Two accounts exist: SDSYS' }
+       Replacement = 'The SD Core administrator account is SDSYS' }
+    @{ Ref = '15Nov-320'
+       Retired     = 'Two accounts exist'
+       Replacement = 'The SD Core administrator account is SDSYS' }
     @{ Ref = '20Sep-b'
        Retired     = 'command its tier does not allow'
        Replacement = 'Your database, accounts and settings are kept' }

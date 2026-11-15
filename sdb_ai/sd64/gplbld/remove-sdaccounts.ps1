@@ -299,6 +299,22 @@ foreach ($name in $toRemove) {
     }
 }
 
+# 15 Nov 26 - RELEASE_1.1 319 (VM sit3 step 12).  THE KEPT ACCOUNT'S OWN GROUP IS SD'S, NOT THE PERSON'S.  The account named by -Keep
+# (the person running the uninstall) stays, but sdu_<name> is a group SD made for it, and nothing outside SD reads it; after a full
+# uninstall it was the one SD object left on the machine.  It goes here; the person's account, its other groups and its profile are
+# untouched.  A group account (sdg_) is never the kept one, so only sdu_ is looked for.
+$keptGroup = 'sdu_' + $Keep
+if (Get-LocalGroup -Name $keptGroup -ErrorAction SilentlyContinue) {
+    Say ''
+    Say ("--- " + $Keep + " (kept)")
+    try {
+        Remove-LocalGroup -Name $keptGroup -ErrorAction Stop
+        Say ("    group  $keptGroup removed (the account itself is kept)")
+    } catch {
+        Say ("    group  $keptGroup NOT removed: " + $_.Exception.Message)
+    }
+}
+
 Say ''
 Say ('remove-sdaccounts: removed ' + $done + ' of ' + $toRemove.Count + ' account(s); kept ' + $kept.Count + '.')
 if ($left.Count -gt 0) {

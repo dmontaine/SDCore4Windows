@@ -5485,16 +5485,20 @@ begin
       AT ALL if SdsysCode itself failed: there is no "accounts exist" to
       claim, and AccountMsg's failure text above already carries the
       remediation. }
+    { 15 Nov 26 - RELEASE_1.1 320 (VM sit3): NOT A COUNT.  "Two accounts exist: SDSYS and <name>" was false on an upgrade (the
+      register also held the old release's accounts) and read "SDSYS and sdsys" when SDSYS itself ran setup.  The line now says
+      only what this install made or kept: the administrator account, and the installing user's own account when that is
+      someone other than SDSYS. }
     AccountsReport := '';
     if SdsysCode in [0, 2] then
     begin
-      if AttachCode in [0, 2] then
-        AccountsReport := 'Two accounts exist: SDSYS and ' +
-          Lowercase(ExpandConstant('{username}')) + '.' + #13#10#13#10 +
+      if (AttachCode in [0, 2]) and (Lowercase(ExpandConstant('{username}')) <> 'sdsys') then
+        AccountsReport := 'The SD Core administrator account is SDSYS. Your account, ' +
+          Lowercase(ExpandConstant('{username}')) + ', is an SD Core account too.' + #13#10#13#10 +
           'The next screen will ask for the SDSYS password, and yours too ' +
           'if it is not already set.' + #13#10#13#10
       else
-        AccountsReport := 'One account exists: SDSYS.' + #13#10#13#10 +
+        AccountsReport := 'The SD Core administrator account is SDSYS.' + #13#10#13#10 +
           'The next screen will ask for its password.' + #13#10#13#10;
     end;
     { 25 Oct 26 - the opengates task's result when it is good news (a warning went to FinishReport above). }
