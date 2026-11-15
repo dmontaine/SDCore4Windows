@@ -17,6 +17,7 @@
 #
 # START-HISTORY:
 # 15 Nov 26  New (RELEASE_1.1 299).  Parse-checked; first run is the VM round of 15 Nov.
+# 15 Nov 26  After the first run: the no-slot check takes any "xfer refused" (xfer-on is asked first); the held session's lines end CR.
 # END-HISTORY
 
 $ErrorActionPreference = 'Continue'
@@ -92,9 +93,11 @@ try {
     Start-Sleep -Seconds 2
     $a = @(Get-WitAuditSince $mark)
     Write-WitRaw 'audit since the mark' ($a -join "`n")
-    $xferNoSlot = @($a | Where-Object { $_ -match 'xfer refused' -and $_ -match 'no slot is open' })
+    # 15 Nov 26 (first run): the server asks xfer-on BEFORE the slot, so with xfer-off the refusal is "xfer-on is not set", not "no slot
+    # is open".  What proves the request reached SD's transfer server is ANY "xfer refused" line for zzwiton with no login line.
+    $xferNoSlot = @($a | Where-Object { $_ -match 'xfer refused reason=' -and $_ -match 'user=zzwiton' })
     $loginLine = @($a | Where-Object { $_ -match '\blogin\b' -and $_ -match 'zzwiton' })
-    if ($xferNoSlot.Count -gt 0 -and $loginLine.Count -eq 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server (Win32-OpenSSH passes sftp-server.exe; sd.exe recognises it) and is refused: no slot is open' 'PASS' $xferNoSlot[0] }
+    if ($xferNoSlot.Count -gt 0 -and $loginLine.Count -eq 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server (Win32-OpenSSH passes sftp-server.exe; sd.exe recognises it) and is refused in words' 'PASS' $xferNoSlot[0] }
     elseif ($loginLine.Count -gt 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server' 'FAIL' ('SD ran a LOGIN for it instead: ' + $loginLine[0] + ' (SSH_ORIGINAL_COMMAND did not match sd_sftp.h)') }
     else { Add-WitResult '299' 'an sftp request reaches SD''s transfer server' 'FAIL' 'no "xfer refused ... no slot is open" line; see the client output and the audit above' }
 
@@ -116,6 +119,9 @@ try {
     if (Test-Path -LiteralPath (Join-Path $inDir 'orders.csv')) { Remove-Item -LiteralPath (Join-Path $inDir 'orders.csv') -Force }
     $mark = Get-WitAuditMark
     $h = Start-Client $sshExe.Source ($opts + @('zzwiton@localhost', 'session'))
+    # 15 Nov 26 (first run): a line ends with CR only, as a terminal sends it.  WriteLine's CR LF left the LF behind as a keystroke,
+    # which receive read as Enter and closed the slot in the same second ("Transfer closed (closed here): 0 file(s)").
+    $h.P.StandardInput.NewLine = "`r"
     $h.P.StandardInput.WriteLine(''); $h.P.StandardInput.WriteLine('TERM 200,9999'); $h.P.StandardInput.WriteLine('receive'); $h.P.StandardInput.Flush()
     Start-Sleep -Seconds 10
     $t2 = Run-Sftp @(('put "' + $txt + '"'), ('put "' + $bin + '"'), 'quit')
