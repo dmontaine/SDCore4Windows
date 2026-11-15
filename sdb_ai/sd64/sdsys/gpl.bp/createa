@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 315: the audit line names the account as given, as Linux (it was upcased, this port's case before
+*           account names went lower case; VM sit3 showed account=ZZWITPU).
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON (joins the Windows group sdaiusers, the right to use the AI provider's API, on its
 *           own); CA$AI in createacc.h; in the syntax line, the usage and the audit gates= list.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: the name sdradmin is refused (12704): REMOTE.SDSYS ON makes that account, through !create_account.
@@ -742,7 +744,7 @@ deffun ps_script(script) calling '!ps_script'
 *    the system default has the line it always had.
    start.audit = ''
    if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)
-   void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)
+   void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)   ;* 15 Nov 26 (RELEASE_1.1 315): the name as given, as Linux; it was upcased (account=ZZWITPU beside zzwitpu everywhere else)
 
    @system.return.code = 0
    stop

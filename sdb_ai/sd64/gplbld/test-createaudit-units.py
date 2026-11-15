@@ -30,9 +30,10 @@ PAIRS = [("CA$ROUTE.SSH", "ssh"), ("CA$ROUTE.API", "api"), ("CA$OS.SH", "sh-on")
          ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on"),
          ("CA$PINS", "pins-on"),   # 28 Oct 26, S.75 (from Linux ec8459b): the person may add programs of their own to their home screen
          ("CA$RECOVERY", "recovery-on")]   # 10 Nov 26 (from Linux 44807a43, S.88 plan 2.9): the editors keep a recovery copy of unsaved text
-# 25 Oct 26 Windows port: the list is Linux's, files-admin-on (S.73 item 3) included; the account name is upcased here
-# (this port's own case) and the create call passes the type upcased.
-AUDIT = "void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)"
+# 25 Oct 26 Windows port: the list is Linux's, files-admin-on (S.73 item 3) included; the create call passes the type upcased.
+# 15 Nov 26 (RELEASE_1.1 315): the account name on the audit line is as given, as Linux (it was upcased, the port's case before names
+# went lower case; VM sit3's trail said account=ZZWITPU).
+AUDIT = "void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)"
 START_WORDS = {"START-MENU", "START-TERMINAL"}       # 28 Oct 26, S.75: where the account starts, not an access: they have a tail of their own (start=), not a place in gates=
 CREATE_CALL = "call !create_account(upcase(acc.type), acc.name, settings, err)"
 
@@ -89,7 +90,8 @@ def report(rows):
 MUTANTS = [
     ("the audit line loses gates=", " : ' gates=' : gates : start.audit)", " : start.audit)"),
     ("the audit line is written before create_account", CREATE_CALL,
-     "void kernel(K$AUDIT, 'create.account account=' : upcase(acc.name) : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)\n   " + CREATE_CALL),
+     "void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)\n   " + CREATE_CALL),
+    ("the audit line upcases the account name again (RELEASE_1.1 315)", "'create.account account=' : acc.name : ' type='", "'create.account account=' : upcase(acc.name) : ' type='"),
     ("pins-on is not named", "   if settings<CA$PINS> = 1 then gates<-1> = 'pins-on'\n", ""),
     ("the start tail is not written", "   if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)\n", ""),
     ("the start tail is written for every account", "   if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)\n", "   start.audit = ' start=' : downcase(settings<CA$START>)\n"),
