@@ -884,6 +884,24 @@ if ($sections -contains 'runin253') {
     $sl = @(Get-Content -LiteralPath (Join-Path $script:WitDataDir 'sdsvc.log') -ErrorAction SilentlyContinue | Where-Object { $_ -match 'run\.in debug:' } | Select-Object -Last 3)
     Set-WitVerdict '253' 'sdsvc.log says run.in debug is serving' ($sl -join "`n") 'run\.in debug: serving' @()
 
+    # 15 Nov 26 (0fcc0940): the base the stores are in lets sdrunin through - traverse and synchronize (0x100020), on the base
+    # alone - and nobody else but SYSTEM and Administrators (and LocalSystem's own entry, which is SY).  Round 2's child could not
+    # traverse it and stopped at "Error 3001 at line 67 of $pdbg".
+    $base = Join-Path $script:WitDataDir 'runin'
+    if (-not (Test-Path -LiteralPath $base)) { Add-WitResult '253' 'the run.in base' 'NOT-MEASURED' ($base + ' is not there: the service makes it when it starts') }
+    elseif ($null -eq $u) { Add-WitResult '253' 'the run.in base grants sdrunin traverse' 'NOT-MEASURED' 'no sdrunin to look for' }
+    else {
+        $bsddl = (Get-Acl -LiteralPath $base).Sddl
+        Write-Wit ('  ' + $base + ': ' + $bsddl)
+        $baces = @(Get-WitAces $bsddl)
+        $rin = @($baces | Where-Object { $_.Sid -eq $u.SID.Value })
+        $rinShape = ($rin | ForEach-Object { $_.Type + ';' + $_.Flags + ';' + $_.Rights }) -join ','
+        Set-WitCompare '253' 'the run.in base grants sdrunin one entry: allow, no inheritance, traverse and synchronize only' 'A;;0x100020' $rinShape -Evidence $bsddl
+        $others = @($baces | Where-Object { $_.Sid -ne $u.SID.Value -and $_.Sid -ne 'SY' -and $_.Sid -ne 'BA' } | ForEach-Object { $_.Sid })
+        Set-WitCompare '253' 'nobody else but SYSTEM and Administrators is in the run.in base''s list' '' ($others -join ',') -Evidence $bsddl
+        Set-WitVerdict '253' 'the run.in base''s list is protected (inherits nothing from SD''s data tree)' $bsddl '^O:[^D]*(G:[^D]*)?D:P' @()
+    }
+
     # F4, the elevated half: an administrator's sd.exe -RUNIN is refused (it is not the service's child).
     $o = Join-Path $fixDir 'runin-f4.out'
     $e = Join-Path $fixDir 'runin-f4.err'
