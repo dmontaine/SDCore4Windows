@@ -14,6 +14,7 @@
  *
  * START-HISTORY:
  * 10 Nov 26 Windows port - written for Linux 5162a5d1 (S.102 stage 3), carry area 14.
+ * 15 Nov 26 Windows port - RELEASE_1.1 310: win32_sdsys_desktop_ok(), the process that signed in as SDSYS at a desktop (K_OS_SDSYS_USER, 174).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -50,6 +51,7 @@
 int win32_job_token_ok(char *why, size_t whylen);
 int win32_job_admin_path(const char *path, int want_dir);
 int win32_job_dir(char *out, size_t outlen);
+int win32_sdsys_desktop_ok(char *why, size_t whylen);
 
 /* WHERE THE DEFINITIONS ARE: <the machine's ProgramData folder>\SD\sd-jobs, the installer's {commonappdata}\SD.  Named from the profile list in
    the registry (GetAllUsersProfileDirectory), NOT from sd.conf's place: GetConfigPath() follows SD_CONFIG and %ProgramData%, which whoever
@@ -130,6 +132,67 @@ int win32_job_token_ok(char *why, size_t whylen)
     }
     if (!batch || net || inter) {
         snprintf(why, whylen, "the process is not a batch logon (batch %d, network %d, interactive %d)", batch, net, inter);
+        return 0;
+    }
+    if (!admins) {
+        snprintf(why, whylen, "the process is not elevated");
+        return 0;
+    }
+    return 1;
+}
+
+/* 15 Nov 26 Windows port - RELEASE_1.1 310 (owner, 15 Nov: "the admin needs to be able to logto a users account and then log back to sdsys
+   without having to log out each time"; kernel key 174 agreed with Linux, mail T1625).  DID THIS PROCESS SIGN IN AS SDSYS AT A DESKTOP?  1 only
+   when the process token is the LOCAL account SDSYS (by SID, as win32_job_token_ok() asks), an interactive logon (INTERACTIVE present, NETWORK
+   absent: an ssh or API session is a network logon), and elevated (BUILTIN\Administrators enabled).  A process's user and logon type never
+   change, so the answer is the same after any number of LOGTOs - which is what Linux's K$ADMINISTRATOR, kept across LOGTO, says there (ours is
+   cleared on the way out of SDSYS).  Every failure answers 0. */
+int win32_sdsys_desktop_ok(char *why, size_t whylen)
+{
+    HANDLE tok = NULL;
+    BYTE ubuf[256];
+    DWORD got = 0;
+    PSID user = NULL;
+    char comp[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD clen = sizeof(comp);
+    char acct[MAX_COMPUTERNAME_LENGTH + 16];
+    BYTE sbuf[SECURITY_MAX_SID_SIZE];
+    DWORD slen = sizeof(sbuf);
+    char dom[256];
+    DWORD dlen = sizeof(dom);
+    SID_NAME_USE use;
+    int net = 0, inter = 0, admins = 0;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tok)) {
+        snprintf(why, whylen, "cannot read the process token (error %lu)", (unsigned long)GetLastError());
+        return 0;
+    }
+    if (GetTokenInformation(tok, TokenUser, ubuf, sizeof(ubuf), &got))
+        user = ((TOKEN_USER *)ubuf)->User.Sid;
+    CloseHandle(tok);
+    if (user == NULL) {
+        snprintf(why, whylen, "cannot read the process user");
+        return 0;
+    }
+    if (!GetComputerNameA(comp, &clen)) {
+        snprintf(why, whylen, "cannot read the computer name (error %lu)", (unsigned long)GetLastError());
+        return 0;
+    }
+    snprintf(acct, sizeof(acct), "%s\\SDSYS", comp);
+    if (!LookupAccountNameA(NULL, acct, sbuf, &slen, dom, &dlen, &use) || use != SidTypeUser) {
+        snprintf(why, whylen, "there is no local account %s", acct);
+        return 0;
+    }
+    if (!EqualSid(user, (PSID)sbuf)) {
+        snprintf(why, whylen, "the process is not the local account SDSYS");
+        return 0;
+    }
+    if (!member(WinNetworkSid, &net) || !member(WinInteractiveSid, &inter) || !member(WinBuiltinAdministratorsSid, &admins)) {
+        snprintf(why, whylen, "cannot test the token's groups (error %lu)", (unsigned long)GetLastError());
+        return 0;
+    }
+    if (!inter || net) {
+        snprintf(why, whylen, "the process is not an interactive logon (interactive %d, network %d)", inter, net);
         return 0;
     }
     if (!admins) {

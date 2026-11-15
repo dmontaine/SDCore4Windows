@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 310, from Linux b9e63f17 (S.246) in the Windows form: LOGTO SDSYS is taken by the process that signed in
+*           as SDSYS at a desktop (K$OS.SDSYS.USER, 174), so the administrator can come back from a user's account without signing out; it
+*           enters @sdsys itself and skips the group test (SDSYS's register group is not a Windows group).  Every other session is refused (10002).
 * 14 Nov 26 Windows port - from Linux c4ce87e9: an administrator's LOGTO (and LOGTO ... RESET ALL) runs no LOGIN paragraph and no home screen,
 *           the session lands at the prompt (RELEASE_1.1 275, owner's ruling; the test is the process's elevation, see int.logto); run.in's
 *           abort message 12247 names the account the session went back to, not the one it visited (RELEASE_1.1 308).
@@ -2846,7 +2849,16 @@ int.logto:
 *   ssh and the API alike, before an account is chosen.  Owner's ruling, 5 Sep
 *   2026, PROJECT_STATUS.md 5.25.  A test that can drift is better than a
 *   guarantee that was never there - and it is one a verifier can measure.
-   if upcase(new.account) = "SDSYS" then
+* 15 Nov 26 Windows port - RELEASE_1.1 310, from Linux b9e63f17 (S.246) in the Windows form.  OWNER, 15 Nov: "the admin needs to be able to
+*   logto a users account and then log back to sdsys without having to log out each time".  LOGTO SDSYS is taken ONLY by the process
+*   that signed in as SDSYS at a desktop: K$OS.SDSYS.USER (174, win32jobmark.c) - its token is the local account SDSYS by SID, an
+*   interactive logon, elevated.  A process's user and logon type never change, so it is still known after any number of LOGTOs.
+*   Linux asks K$ADMINISTRATOR, kept across LOGTO there; ours is cleared on the way out of SDSYS (below), so it cannot say (deviation in
+*   form, same outcome; Linux agreed, mail T1625).  Every other session is refused exactly as before (10002, audited), whatever account
+*   it is in: an ordinary user, an elevated administrator who is not SDSYS, an ssh or API session (a network logon).  run.in's command
+*   is refused above, before this.  The way back enters @sdsys itself, never a path from the register (below).
+   into.sdsys = (upcase(new.account) = "SDSYS")
+   if into.sdsys and not(kernel(K$OS.SDSYS.USER, -1)) then
 
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  A NON-ADMINISTRATOR IS NOT
 *   ADMITTED TO SDSYS, AND UNTIL NOW ONE COULD BE.  Owner's question, 29 Aug
@@ -2974,6 +2986,10 @@ int.logto:
       end
       close acc.f
    end
+   if into.sdsys then                   ;* 15 Nov 26 (RELEASE_1.1 310, Linux b9e63f17): the way back is to the system directory itself, never a path the register holds
+      acc.rec = @sdsys
+      new.account = 'sdsys'
+   end
 
    * new.account contains the account name
    * acc.rec contains the pathname of the account (other fields removed)
@@ -3004,7 +3020,9 @@ int.logto:
 *   SDSYS is refused above unless the session is elevated.
 *   See PROJECT_STATUS.md section 5.6.
 
-   gosub logto.authorised
+* 15 Nov 26 Windows port - RELEASE_1.1 310: for the way back to SDSYS the authorisation is K$OS.SDSYS.USER, asked above: SDSYS's register
+*   record names a group Windows does not have (logto.authorised's own note), so the group test would refuse the one session allowed.
+   if into.sdsys then logto.ok = @true else gosub logto.authorised
    if not(logto.ok) then
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The account exists and
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other

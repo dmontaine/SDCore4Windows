@@ -266,6 +266,9 @@
 *   close, state) and the transfer server's side (find, serve, refuse).  The arguments and answers are at k_xfer() in gplsrc/sd_sftp.c.  Must match
 *   gplsrc/keys.h.
       $define K$XFER           173      ;* File transfer over the ssh login: the slot and the server (S.242)
+* 15 Nov 26 Windows port - RELEASE_1.1 310 (Windows only; Linux reserves 174, mail T1625).  kernel(K$OS.SDSYS.USER, -1): 1 when this process
+*   signed in as SDSYS at a desktop (the local SDSYS by SID, interactive, elevated).  CPROC's LOGTO SDSYS asks it.  Must match gplsrc/keys.h.
+      $define K$OS.SDSYS.USER  174      ;* Did this process sign in as SDSYS at a desktop?
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)

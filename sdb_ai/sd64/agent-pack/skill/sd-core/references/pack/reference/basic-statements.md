@@ -1945,7 +1945,7 @@ clause of `open`, `for`, `equate`, `readcsv`, `select`, `savelist`, `writecsv`
 clause of `execute` — trap the break key
 
 - a word that belongs inside another statement's syntax, not a statement of its own
-- docs: `User/markdown/19a-sd-tcl-the-command-stack.md` line 158
+- docs: `User/markdown/19a-sd-tcl-the-command-stack.md` line 159
 
 ### basic:stmt:try
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:519#947699b4 src2=docs:tools/syntax-shapes.txt:302#6907e92f

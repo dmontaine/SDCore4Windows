@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+15 Nov 26  THE ADMINISTRATOR CAN LOGTO SDSYS TO COME BACK.
+
+             What        - a session that signed in to Windows as SDSYS and went to another account with logto can now type
+                           logto sdsys to come back to SDSYS.  It is an ordinary LOGTO, audited as logto account=sdsys, and
+                           it goes to the system directory itself.
+             Why         - the administrator had to sign out and in again after every visit to a user's account.
+             Does NOT    - Let any other session in.  logto sdsys is still refused, in the same words and audited, to every
+                           session that did not sign in to Windows as SDSYS at its desktop: an ordinary user in any account,
+                           another Windows administrator, an ssh or API session, and a command that run.in is running.  It
+                           does not change how SDSYS is first entered.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 15 Nov 26  FILE TRANSFER OVER THE SSH LOGIN: RECEIVE AND SEND, OFF AS DELIVERED.
 
              What        - a person can move plain-text files in or out of their own account with an sftp client (WinSCP,

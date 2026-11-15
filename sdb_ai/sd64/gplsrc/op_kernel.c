@@ -1843,6 +1843,13 @@ void op_kernel() {
       k_xfer(descr, &result);
       break;
 
+    /* 15 Nov 26 Windows port - RELEASE_1.1 310: did this process sign in as SDSYS at a desktop (win32jobmark.c)?  Read-only; no argument is read. */
+    case K_OS_SDSYS_USER: {
+      char sdsys_why[256];
+      result.data.value = win32_sdsys_desktop_ok(sdsys_why, sizeof(sdsys_why)) ? 1 : 0;
+      break;
+    }
+
     /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  K_JOB_MARK: the name of the scheduled administrator job
        this process IS, or "".  Linux asks systemd's cgroup; here every one of these must hold (sd_jobmark.h, win32jobmark.c): not an API
        socket session; a "sd -job <name>" claim (job_claim); a process token that is the local account SDSYS, a batch logon (not network, not

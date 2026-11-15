@@ -25653,7 +25653,7 @@
 "part": "reference/system-keys.md",
 "since": "-",
 "tier": "reference",
-"words": 1807
+"words": 1822
 },
 "sys:ikeys:lgn$": {
 "kind": "sys.keys",
@@ -26227,49 +26227,49 @@
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:xferfile": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:xferidle": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:xferkind": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 7
+"words": 12
 },
 "sys:param:xfermax": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:xferslot": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:xferwait": {
 "kind": "sys.param",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 20
+"words": 25
 },
 "sys:param:yearbase": {
 "kind": "sys.param",
@@ -26584,14 +26584,14 @@
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 22
+"words": 27
 },
 "sys:word:xfer-on": {
 "kind": "sys.word",
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 39
+"words": 44
 },
 "tcl:%e": {
 "kind": "tcl.keyword",

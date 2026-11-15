@@ -572,6 +572,11 @@
    {: @fm : ...}) from a $internal program: the slot a session opens with RECEIVE / SEND (open, close, state) and the transfer server's side
    of it (find, serve, refuse); sd_sftp.c k_xfer() has the arguments and answers.  Same number as Linux; GPL.BP/INT$KEYS.H carries it.  */
 #define K_XFER               173
+/* 15 Nov 26 Windows port - RELEASE_1.1 310 (WINDOWS ONLY; Linux reserves the number, mail T1625).  kernel(K$OS.SDSYS.USER, -1): 1 when this
+   process signed in as SDSYS at a desktop - its token is the local account SDSYS (by SID), an interactive logon, elevated
+   (win32jobmark.c win32_sdsys_desktop_ok()); 0 otherwise.  Read-only, any program may ask.  CPROC's LOGTO SDSYS asks it: the way back to
+   SDSYS for the session that came from there, which Linux answers with K$ADMINISTRATOR (kept across LOGTO there, cleared here). */
+#define K_OS_SDSYS_USER      174
 /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug (win32runin.h).  WINDOWS ONLY, in the gap after the Windows-only
    58-68 that Linux leaves free (its 90 and 91 are above it):
      K_RUNIN_CHILD  for run.in's debugged child (sd -RUNIN, its token checked by sd.c runin_door()): account <FM> store <FM> the

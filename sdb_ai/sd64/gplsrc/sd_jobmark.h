@@ -54,5 +54,6 @@ extern char sd_job_active[SD_JOB_NAME_MAX + 1];
 int win32_job_token_ok(char *why, size_t whylen);
 int win32_job_admin_path(const char *path, int want_dir);
 int win32_job_dir(char *out, size_t outlen);   /* <ProgramData>/SD/sd-jobs with forward slashes; 0 when it cannot be named */
+int win32_sdsys_desktop_ok(char *why, size_t whylen);   /* 15 Nov 26, RELEASE_1.1 310: the local SDSYS, interactive, elevated (K_OS_SDSYS_USER) */
 
 #endif
