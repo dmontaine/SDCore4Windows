@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 dm  Windows row 303: read.status keeps which test failed in ai.why (at the END of /tkai/), 'gate' or 'setup', and the op 'why' gives it back, so that HOME can say
+*               "not set up on this computer" instead of blaming the account when no provider, model or key is set.
 * 14 Nov 26 dm  Compiler warning: removed the unused assignments to cx.from (the standing text's 'context-from', read and never used).
 * 23 Oct 26 dm  New (AI line stage 1: the library routine and the home screen).
 * 28 Oct 26 dm  S.88 phase 2 (S5): every line of the preview, the diff and the command is shown whole, in rows, not cut at the box (wrap.exact); a diff counts its rows towards the 30.
@@ -60,6 +62,8 @@
 *   mouse   (ctx, mev -> out)  out 'focus' when a press of the left button lands on the line.
 *   text    (ctx -> out)       the line's text.
 *   clear   (ctx)              empties the line.
+*   why     (-> a)             (15 Nov 26) why the last init or usable found the AI not usable: 'gate' (this account's ai gate is off), 'setup' (this computer has no AI set up:
+*                              the helper did not answer, or there is no provider, model or key), '' when it is usable.  Asks nothing.
 *   usable  (-> a, b)          for an app that has no line of its own on the toolkit's frame (the IDE puts an entry in its own form): a is 1 when the AI is usable for this account
 *                              (the same four tests as init), and b is the provider and the model, as two fields.
 *   ask     (ctx, actx -> res) THE WHOLE SEQUENCE for the request in the line: the preview (everything that will leave the machine, Send or Cancel, Cancel is the
@@ -114,7 +118,9 @@ $include err.h
 $include sl.h
 $include tk.h
 
-   common /tkai/ ai.on, ai.w, ai.focus, ai.prov, ai.model, ai.line, ai.sig, ai.fq, ai.fa, ai.fapp, ai.ft, ai.fwho
+   common /tkai/ ai.on, ai.w, ai.focus, ai.prov, ai.model, ai.line, ai.sig, ai.fq, ai.fa, ai.fapp, ai.ft, ai.fwho, ai.why
+
+   if unassigned(ai.why) then ai.why = 'setup'               ;* 15 Nov 26: why the AI is not usable, 'gate' or 'setup' ('' when it is); read.status sets it
 
    if unassigned(ai.on) then
       ai.on = 0
@@ -128,6 +134,8 @@ $include tk.h
    if unassigned(ai.fq) then gosub follow.drop       ;* 3 Nov 26: the follow-up kept for the next request (the questions and the answers, as fields; the app, the time, the account)
 
    begin case
+      case op = 'why'
+         a = ai.why                                       ;* 15 Nov 26: why the last init / usable found the AI not usable ('gate', 'setup'), '' when it is; the helper is not asked again
       case op = 'usable'
          gosub read.status
          ai.line = 0                                      ;* this app draws no line of the library's (a line left by an earlier app of the session is not this app's)
@@ -298,22 +306,30 @@ splice.edits:
 * ------------------------------------------------------------------------------------------------- whether the AI is usable, and the line
 
 * The helper's status line: usable only when the gate is on for this account and a provider, a model and a key are set.  Any doubt is "not usable": the line is not drawn.
+*   15 Nov 26: ai.why keeps which test failed, so that a page can say whether it is this ACCOUNT (the gate, 'gate') or this COMPUTER (no helper answer, no
+*   provider, model or key: 'setup'); Windows row 303, the owner's F6 on HOME on a fresh install, where the message blamed the account.  The gate is tested
+*   before the provider, so an account whose gate is off hears 'gate' whatever the computer's state.
 read.status:
    ai.on = 0
    ai.prov = ''
    ai.model = ''
+   ai.why = 'setup'
    if system(25) then return
    rp = kernel(K$AI.STATUS, 0)
    if rp<1> # 'D' then return
    hj = jparse(rp<2>)
    if status() then return
    if hj{'t'} # 'status' then return
-   if not(hj{'gate'}) then return
+   if not(hj{'gate'}) then
+      ai.why = 'gate'
+      return
+   end
    if hj{'provider'} = '' or hj{'model'} = '' then return
    if not(hj{'key'}) then return
    ai.prov = hj{'provider'}
    ai.model = hj{'model'}
    ai.on = 1
+   ai.why = ''
    return
 
 make.widget:

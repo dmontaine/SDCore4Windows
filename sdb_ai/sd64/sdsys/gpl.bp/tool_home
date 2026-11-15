@@ -4,6 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - from Linux b5adf503 (RELEASE_1.1 303): F6 and AI > Ask the AI say "the AI is not set up on this computer (the
+*               administrator sets it up in AI)" when the computer has no provider, model or key, and "the AI is not on for this account" only when the
+*               account's gate is off ($tk_ai 'why'; ai.off.text).
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused hdx and hdw are gone.
 * 13 Nov 26 Windows port - RELEASE_1.1 285 (owner 14 Nov, Linux S.231): the date line ends with the product and the version stamp, cut at 72 (60 would not hold them).
 * 12 Nov 26 Windows port - RELEASE_1.1 262/229: a cmd: tile is shown only when its verb is in the account's VOC (the AI and Audit trail tiles had no page here).
@@ -154,7 +157,8 @@ $define HT.BASECOLS 6      ;* the tile columns of the 140 by 43 panel: a panel w
 $define HM.DEPTH   8       ;* sub-menu pages open at most this many levels deep (MAX.DEPTH is int$keys.h's)
 
 $define H.TILE.OFF 'turned off for this account by the administrator'     ;* why a key and its menu entry cannot be used when the tile is off (S.88 U9)
-$define H.AI.OFF   'the AI is not on for this account'                    ;* why F6 and AI > Ask the AI do nothing here
+$define H.AI.OFF   'the AI is not on for this account'                    ;* why F6 and AI > Ask the AI do nothing here: this account's ai gate is off
+$define H.AI.SETUP 'the AI is not set up on this computer (the administrator sets it up in AI)'   ;* the same, when the computer has no provider, model or key (15 Nov 26)
 $define H.TOP.PAGE 'this is the top page'                                 ;* why Go > Back cannot be chosen on the top page
 
    common /tkhome/ hflag, hlogto, hstart, hrefused     ;* S.164: hrefused is set when the screen could not open, for !home_entry to sign the session out
@@ -1109,7 +1113,8 @@ on.key:
          if ctx<TK.C.AI> then
             gosub ai.focus.on                              ;* F6, Shift-F6 or AI > Ask the AI: the focus goes to the line (S.176: the tiles and the line are the two stops of the box ring)
          end else
-            msg = H.AI.OFF
+            gosub ai.off.text
+            msg = ai.off.msg
          end
       case nm = 'ctrl-q'
          if leave.ok then
@@ -1594,7 +1599,18 @@ make.menus:
    if index(off.set, ' switch ', 1) then call $tk_keys('why', keys, 'switch', H.TILE.OFF, '', '', '')
    if index(off.set, ' recent ', 1) then call $tk_keys('why', keys, 'recent', H.TILE.OFF, '', '', '')
    if cur.menu = '' then call $tk_keys('why', keys, 'back', H.TOP.PAGE, '', '', '')
-   if not(ctx<TK.C.AI>) then call $tk_keys('why', keys, 'ai', H.AI.OFF, '', '', '')
+   if not(ctx<TK.C.AI>) then
+      gosub ai.off.text
+      call $tk_keys('why', keys, 'ai', ai.off.msg, '', '', '')
+   end
+   return
+
+* 15 Nov 26 (Windows row 303): why the AI cannot be used here, from the reason $tk_ai's last status read kept - this account's gate, or a computer with no AI set
+* up (no provider, model or key, or no helper answer).  The message used to name the account for both, and the owner met it on a fresh install with every gate open.
+ai.off.text:
+   ai.off.why = ''
+   call $tk_ai('why', ctx, ai.off.why, '')
+   if ai.off.why = 'gate' then ai.off.msg = H.AI.OFF else ai.off.msg = H.AI.SETUP
    return
 
 * / (or Go > Find a tile): a window of the page's tiles ($tk_pickrec 'list', the toolkit's pick window): typing narrows the list to the tiles that hold the text in their name or
