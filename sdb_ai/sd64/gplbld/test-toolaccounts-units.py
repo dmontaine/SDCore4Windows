@@ -7,7 +7,7 @@ The Windows carry (10 Nov 2026, RELEASE_1.1 221) of Linux's guard of the same na
 SDCore4WindowsDocs (SD_DOCS_CHECKOUT, else the checkout beside this one; absent, the guard says NO TREE and exits 2); an OTHER account's
 directory is a full Windows path with forward slashes ($tk_runx refuses a backslash); X asks no REMOVE.HOME question (Windows DELETE.ACCOUNT
 removes the profile of a Windows user SD made anyway); the page says Windows, never Linux, and its messages are 12870 and 15045 (Linux
-11865 and 14045).
+11865 and 14045), and 12944, the status line before a change (14 Nov 26, RELEASE_1.1 243, Windows only: PowerShell makes the wait).
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT AN ACCOUNT IS MADE OR REMOVED***: creating and deleting an
 account make and remove Windows users and groups, which only a real install can show.  What a text check is for: the properties that make the page a FRONT END - it opens the base for the
@@ -36,7 +36,7 @@ FILES = {
 }
 NEWVOC = os.path.join(SDSYS, "newvoc", "tool.accounts")
 SAFE = "abcdefghijklmnopqrstuvwxyz0123456789.-_"
-MSGS = (12870, 15045)
+MSGS = (12870, 12944, 15045)   # 14 Nov 26 (RELEASE_1.1 243): 12944, "Making the change (a few seconds)...", the status line before a change
 
 
 def load():
@@ -98,7 +98,7 @@ def checks(raw):
     ck("AC3", "the commands run through the routines are modify.account and create.account only (one allow list), through $tk_run or $tk_runx directly after the confirm box and guarded by res = 'run', each exactly once; "
        "the only other way a verb is run is the terminal hand-over, which is `execute sent` once, after the box and after $tk_close; nothing else executes, performs or chains",
        re.findall(r"\ballow = '([^']*)'", pg) == ["modify.account create.account"] and pg.count("call $tk_run(allow, sent, out, stat, err)") == 1 and pg.count("call $tk_runx(allow, sent, out, stat, err)") == 1
-       and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res = 'run' then\s*\n\s*if use\.x then\s*\n\s*call \$tk_runx", cr) is not None
+       and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res = 'run' then\s*\n\s*call \$tk_frame\(ctx, keys, 'Accounts', sysmsg\(12944\)\)\s*\n\s*if use\.x then\s*\n\s*call \$tk_runx", cr) is not None   # 14 Nov 26 (RELEASE_1.1 243): the wait line first
        and len(re.findall(r"\bexecute\b", pg)) == 1 and re.search(r"call \$tk_confirm\(sent, el, typed, res, cmsg\)\s*\n\s*if res # 'run' then\s*\n\s*msg = cmsg\s*\n\s*return\s*\n\s*end\s*\n\s*call \$tk_close\(ctx\)\s*\n\s*execute sent", ch) is not None
        and not re.search(r"\b(os\.execute|perform|chain)\b", pg), "")
     ck("AC4", "THE PAGE WRITES NOTHING ITSELF: no write, delete, writeseq, openseq, matwrite, no ospath with OS$DELETE or OS$CHOWN; the register is opened only to be read and SDSYS is never listed",
@@ -151,7 +151,7 @@ def checks(raw):
     used = sorted(set(int(n) for n in re.findall(r"sysmsg\((\d+)", pg)))
     ck("AC15", "WINDOWS: the page and its help say Windows and never Linux, a root helper or /etc; its messages are 12870 and 15045 (Linux 11865 and 14045 + 1005/1000), and both exist",
        "linux" not in pg.lower() and "root helper" not in pg and "/etc/" not in pg and "linux" not in raw["help"].lower() and "Windows" in pg and "Windows" in raw["help"]
-       and used == list(MSGS) and raw["msgs"] == "11", repr((used, raw["msgs"])))
+       and used == list(MSGS) and raw["msgs"] == "111", repr((used, raw["msgs"])))
     return rows
 
 
@@ -178,7 +178,7 @@ MUTANTS = [
     ("the page reads before it opens the base", "AC2", sub("page", "   call $tk_open('tool.accounts', 'admin', ctx, err)\n   if err # '' then\n      display err\n      stop\n   end\n", "   openpath @sdsys : @ds : 'accounts' to acc0 else null\n   call $tk_open('tool.accounts', 'admin', ctx, err)\n   if err # '' then\n      display err\n      stop\n   end\n")),
     ("an ordinary account gets the verb", "AC1", setkey("newvoc_has", "1")),
     ("the page may run another command", "AC3", sub("page", "allow = 'modify.account create.account'", "allow = 'modify.account create.account delete.account'")),
-    ("the box is skipped for the routines", "AC3", sub("page", "   call $tk_confirm(sent, el, typed, res, cmsg)\n   if res = 'run' then\n      if use.x then", "   res = 'run'\n   if res = 'run' then\n      if use.x then")),
+    ("the box is skipped for the routines", "AC3", sub("page", "confirm.and.run:\n   call $tk_confirm(sent, el, typed, res, cmsg)\n   if res = 'run' then\n", "confirm.and.run:\n   res = 'run'\n   if res = 'run' then\n")),   # 14 Nov 26: the wait line now follows the test
     ("the terminal is handed over before the box", "AC3", sub("page", "   call $tk_confirm(sent, el, typed, res, cmsg)\n   if res # 'run' then\n      msg = cmsg\n      return\n   end\n   call $tk_close(ctx)\n   execute sent", "   call $tk_close(ctx)\n   execute sent")),
     ("a second execute", "AC3", sub("page", "   keys = ''\n", "   execute 'who' capturing xx\n   keys = ''\n")),
     ("the page writes a record", "AC4", sub("page", "   keys = ''\n", "   write 'x' to acc.f, 'y'\n   keys = ''\n")),
@@ -211,7 +211,8 @@ MUTANTS = [
     ("the layout is not declared again after a verb had the terminal", "AC14", sub("page", "   gosub declare.layout                                         ;* the new $tk_open has no panes\n   gosub read.all", "   gosub read.all")),
     ("the page keeps a Linux sentence", "AC15", sub("page", "Nothing changes in Windows.'", "Nothing changes in Linux.'")),
     ("the page keeps Linux's message number", "AC15", sub("page", "sysmsg(12870)", "sysmsg(11865)")),
-    ("a message file is missing", "AC15", setkey("msgs", "10")),
+    ("a message file is missing", "AC15", setkey("msgs", "110")),
+    ("the change runs with no wait line first (RELEASE_1.1 243)", "AC3", sub("page", "      call $tk_frame(ctx, keys, 'Accounts', sysmsg(12944))", "      null")),
     ("the help keeps Linux's /etc/group", "AC15", sub("help", "the Windows groups give them", "/etc/group give them (Linux)")),
 ]
 

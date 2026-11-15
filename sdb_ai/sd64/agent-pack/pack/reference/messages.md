@@ -9253,7 +9253,7 @@ cited by: `cd`, `dcomp`, `mkindx`
 Making the change (a few seconds)...
 ```
 
-cited by: `remoteapi`, `remotessh`, `set_job`, `tool_jobs`, `tool_remote`
+cited by: `remoteapi`, `remotessh`, `set_job`, `tool_accounts`, `tool_jobs`, `tool_remote`
 
 ### msg:12945
 > kind=message tier=reference since=- src=sdsys/messages/12945:1#c06cef8b

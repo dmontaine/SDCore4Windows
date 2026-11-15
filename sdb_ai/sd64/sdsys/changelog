@@ -3,6 +3,25 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  "ERROR 5 GETTING SEMAPHORES" NOW SAYS WHAT IT MEANS.
+
+             What        - a Windows user who is not an SD user, and starts SD, saw only "Error 5 getting semaphores" before the
+                           window closed.  Two lines now follow it: this Windows user is not an SD user, or was made one after
+                           signing in to Windows; an administrator makes an SD user with CREATE.ACCOUNT, and a user just made
+                           signs out of Windows and in again.
+             Why         - the line was true and told the person nothing.
+             Does NOT    - Change who may use SD, or the exit code.  Windows only.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
+14 Nov 26  TOOL.ACCOUNTS SAYS IT IS MAKING THE CHANGE WHILE IT WAITS.
+
+             What        - creating, deleting or suspending an account, or adding or taking away a person of a group account,
+                           takes a few seconds while Windows' users and groups are changed.  The page's status line now says
+                           "Making the change (a few seconds)..." for that time instead of showing nothing.
+             Why         - seen by the owner: creating an account sat for about ten seconds with no sign of anything happening.
+             Does NOT    - Change what any of the changes does.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  AN ADMINISTRATOR'S LOGTO LANDS AT THE PROMPT: NO LOGIN PARAGRAPH, NO HOME SCREEN.
 
              What        - when the administrator (SDSYS) entered another account with LOGTO, the account's own LOGIN paragraph ran

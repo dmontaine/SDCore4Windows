@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 14 Nov 26 Windows port - RELEASE_1.1 311: after "Error 5 getting semaphores", two lines say what it means (not an SD user, or made one
+ *           since signing in) and what to do.  Windows only.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed getcwd() leaves cwd empty, not unset.
  * 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN account, run.in's debugged child (the SD service starts it as the bare account
  *           sdrunin); runin_door() lets it through only on that token, with "debug <file> <program>" as its one command.
@@ -205,6 +207,13 @@ int main(int argc, char *argv[]) {
 
   if (!bind_sysseg(FALSE, errmsg)) {
     fprintf(stderr, "%s\n", errmsg);
+    /* 14 Nov 26 Windows port - RELEASE_1.1 311: "Error 5 getting semaphores" alone was true and said nothing to the person who saw it
+       (VM sit2, a Windows user in no SD group).  The semaphores refuse a token without sdusers: either the user is not an SD user, or
+       was made one after signing in (Windows applies a new group at the next sign-in; Getting Started 01).  The exit is unchanged. */
+    if (sem_access_denied)
+      fprintf(stderr,
+              "This Windows user is not an SD user, or was made one after signing in to Windows.\n"
+              "An administrator makes an SD user with CREATE.ACCOUNT; a user just made signs out of Windows and in again.\n");
     clean_stop();
     return status; /* TODO: add a custom return value for this failure. */
   }

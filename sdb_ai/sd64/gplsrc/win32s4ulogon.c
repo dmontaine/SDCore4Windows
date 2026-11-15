@@ -1,6 +1,8 @@
 /* win32s4ulogon.c - the S4U logon: a local account's token, minted on the caller's SeTcb, no password.
  *
  * START-HISTORY:
+ * 14 Nov 26 Windows port - RELEASE_1.1 253(b): win32_s4u_logon_groups() also puts a logon SID in the token (made from a fresh
+ *           LUID, SE_GROUP_LOGON_ID): a Network logon has none, and the run.in child's store is granted to it (VM sit2 C11).
  * 13 Nov 26 Windows port - lifted out of win32s4u.c unchanged, so that the SD service (native, UCRT64) can build it too:
  *           win32s4u.c takes the MSYS2 runtime's headers for adopt_in_runtime() and cannot.  And win32_s4u_logon_groups()
  *           added: the same logon with local groups put in the token (LsaLogonUser's LocalGroups), for RELEASE_1.1 253(b),
@@ -92,6 +94,9 @@ void* win32_s4u_logon_groups(const char* username, const char* const* groups) {
   int ng = 0;
   BYTE gsid[S4U_GROUPS_MAX][SECURITY_MAX_SID_SIZE];
   TOKEN_GROUPS* tg = NULL;
+  SID_IDENTIFIER_AUTHORITY ntauth = {SECURITY_NT_AUTHORITY};
+  LUID lsid_luid;
+  PSID lsid = NULL;
   int i;
 
   if ((username == NULL) || (*username == '\0'))
@@ -103,14 +108,28 @@ void* win32_s4u_logon_groups(const char* username, const char* const* groups) {
       return NULL;
   }
   if (ng > 0) {
-    tg = (TOKEN_GROUPS*)malloc(sizeof(TOKEN_GROUPS) + (ng * sizeof(SID_AND_ATTRIBUTES)));
-    if (tg == NULL)
+    /* 14 Nov 26 Windows port - RELEASE_1.1 253(b), VM sit2 C11: "the child's token has no logon SID" (sdrunin.c).  A NETWORK
+       logon carries none - only Interactive, Batch and their kin are given one - and sdrunin grants its per-run store to that
+       SID alone, so the store had nobody to belong to.  So a logon SID is MADE here, S-1-5-5-<hi>-<lo> from a fresh LUID, and
+       passed with the groups, marked SE_GROUP_LOGON_ID as a logon's own is: it is unique to this one token, so no other run of
+       the same account, and no other logon of anybody, holds it.  Batch is not the way round: sdrunin holds the deny-batch
+       right by design.  win32_s4u_logon() (no groups) is unchanged. */
+    if (!AllocateLocallyUniqueId(&lsid_luid) ||
+        !AllocateAndInitializeSid(&ntauth, SECURITY_LOGON_IDS_RID_COUNT, SECURITY_LOGON_IDS_RID, (DWORD)lsid_luid.HighPart,
+                                  lsid_luid.LowPart, 0, 0, 0, 0, 0, &lsid))
       return NULL;
-    tg->GroupCount = (DWORD)ng;
+    tg = (TOKEN_GROUPS*)malloc(sizeof(TOKEN_GROUPS) + ((ng + 1) * sizeof(SID_AND_ATTRIBUTES)));
+    if (tg == NULL) {
+      FreeSid(lsid);
+      return NULL;
+    }
+    tg->GroupCount = (DWORD)(ng + 1);
     for (i = 0; i < ng; i++) {
       tg->Groups[i].Sid = (PSID)gsid[i];
       tg->Groups[i].Attributes = SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED;
     }
+    tg->Groups[ng].Sid = lsid;
+    tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED;
   }
 
   /* A local account's domain is this machine.  LEAVING DomainName EMPTY GIVES STATUS_NOT_SUPPORTED from a call that
@@ -196,6 +215,8 @@ exit_logon:
     free(s4u);
   if (tg != NULL)
     free(tg);
+  if (lsid != NULL)
+    FreeSid(lsid);
   if (hlsa != NULL)
     LsaDeregisterLogonProcess(hlsa);
   if (!ok && token != NULL) {

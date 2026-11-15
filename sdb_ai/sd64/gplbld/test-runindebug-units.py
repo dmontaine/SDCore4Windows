@@ -610,6 +610,15 @@ def text_rows(t):
                  "the service starts the broker before \"sd -start\" and stops it wherever it stops the audit writer",
                  "$(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt" in mk and "win32s4ulogon" in gs and "win32runin" in gs
                  and 0 < mn.find("  svc_runin_start();") < mn.find('run_sd("-start", &rc)') and mn.count("sdrunin_stop();") == mn.count("sdaudit_stop();") == 4, ""))
+    # 14 Nov 26 (RELEASE_1.1 253(b), VM sit2 C11: "the child's token has no logon SID"): a Network logon carries none, so the groups logon MAKES one
+    sl = body(t["win32s4ulogon.c"], "void* win32_s4u_logon_groups(")
+    rows.append(("W19", "the groups logon puts a logon SID in the token: S-1-5-5-<hi>-<lo> from a fresh LUID, marked SE_GROUP_LOGON_ID, enabled and mandatory, after the "
+                 "groups, freed on every exit; the plain logon (no groups) is unchanged",
+                 all(x >= 0 for x in order(sl, ["AllocateLocallyUniqueId(&lsid_luid)", "SECURITY_LOGON_IDS_RID_COUNT, SECURITY_LOGON_IDS_RID,",
+                                                "tg->GroupCount = (DWORD)(ng + 1);", "tg->Groups[ng].Sid = lsid;",
+                                                "LsaLogonUser(hlsa, &origin, Network, pkg, s4u, s4ulen, tg,", "if (lsid != NULL)\n    FreeSid(lsid);"]))
+                 and "tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED;" in sl
+                 and "return win32_s4u_logon_groups(username, NULL);" in t["win32s4ulogon.c"], ""))
     kh, ik = t["keys.h"], t["../sdsys/gpl.bp/int$keys.h"]
     rows.append(("W18", "the two keys are 84 and 85 in keys.h and in int$keys.h",
                  re.search(r"#define K_RUNIN_CHILD\s+84\b", kh) and re.search(r"#define K_RUNIN_DEBUG\s+85\b", kh)
@@ -738,6 +747,10 @@ MUTANTS = [
      "    Add-LocalGroupMember -Group 'Users' -Member $u.SID\n    $script:RuninAccountOk = $true\n"),
     ("../Makefile", "the broker is not built into the service", "$(SVCDIR)/sdrunin.c $(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt", "$(GPLSRC)win32s4ulogon.c -lsecur32 -lbcrypt"),
     ("sdsvc/sdsvc.c", "the service never starts the broker", "  svc_runin_start(); /*", "  (void)0; /*"),
+    # 14 Nov 26 (RELEASE_1.1 253(b)): the logon SID the groups logon makes
+    ("win32s4ulogon.c", "the made logon SID is not marked as one", "    tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY",
+     "    tg->Groups[ng].Attributes = SE_GROUP_MANDATORY"),
+    ("win32s4ulogon.c", "the made logon SID is not passed", "    tg->GroupCount = (DWORD)(ng + 1);", "    tg->GroupCount = (DWORD)ng;"),
 ]
 
 

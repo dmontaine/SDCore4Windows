@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 14 Nov 26 Windows port - RELEASE_1.1 243: the status line says 12944 (making the change, a few seconds) before a change is run.
 * 10 Nov 26 Windows port - from Linux (S.75 A3 and its later changes to 9 Nov 26; RELEASE_1.1 221).  OS deviations: the words say Windows users and groups (sdu_ and sdg_); a group
 *               account's people are changed by the verb in this elevated session, not through a root helper; X asks no REMOVE.HOME question, because DELETE.ACCOUNT here removes the
 *               profile of a Windows user SD made anyway (the keyword is accepted and changes nothing); an OTHER account's directory is a full Windows path; messages 11865 and 14045
@@ -467,6 +468,9 @@ plain.word:
 confirm.and.run:
    call $tk_confirm(sent, el, typed, res, cmsg)
    if res = 'run' then
+*     14 Nov 26 Windows port - RELEASE_1.1 243 (owner, VM sit2: C sat 10 s with no line): CREATE.ACCOUNT, DELETE.ACCOUNT and MODIFY.ACCOUNT change Windows users and
+*     groups through PowerShell, a few seconds; the status line says so first (owner's rule of 12 Nov 26, a line before any wait over 2 s), as tool.remote's does.
+      call $tk_frame(ctx, keys, 'Accounts', sysmsg(12944))      ;* Making the change (a few seconds)...
       if use.x then
          call $tk_runx(allow, sent, out, stat, err)
       end else

@@ -32,6 +32,7 @@
  * 09 Nov 26 Windows port - from Linux 2e0d2a97 (S.177): LockSemaphore retries only while the semaphore is busy; a wait that FAILS ends the
  *           process with a syslog line (semaphores_gone) instead of spinning for ever.
  * 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): release_owned_semaphores(), called first by fatal_signal_handler().
+ * 14 Nov 26 Windows port - RELEASE_1.1 311: sem_access_denied, set when the open is refused for access, so sd.c can say what it means.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -118,6 +119,9 @@ Private void close_semaphores() {
   }
 }
 
+/* 14 Nov 26 Windows port - RELEASE_1.1 311: TRUE when get_semaphores() failed because the semaphores refused this token (access denied). */
+bool sem_access_denied = FALSE;
+
 /* ======================================================================
    get_semaphores()  -  Get inter-process semaphores                      */
 
@@ -167,6 +171,9 @@ bool get_semaphores(bool create, char* errmsg) {
 
   err = w32sem_last_error();
   if (!w32sem_absent(err)) {
+    /* 14 Nov 26 Windows port - RELEASE_1.1 311: 5 is ERROR_ACCESS_DENIED - the semaphores' DACL names sdusers and this token has not got
+       it.  The text stays as it was (verify-sshonly.ps1 classifies it, and errmsg holds 80 bytes); sd.c says what it means. */
+    sem_access_denied = (err == 5);
     sprintf(errmsg, "Error %lu getting semaphores", err);
     return FALSE;
   }

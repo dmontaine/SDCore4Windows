@@ -18,6 +18,7 @@
  * 
  * START-HISTORY:
  * 9 Nov 26 Windows port - from Linux W.0 (14 Sep 26): release_owned_semaphores().
+ * 14 Nov 26 Windows port - RELEASE_1.1 311: sem_access_denied.
  * 31 Dec 23 SD launch - prior history suppressed
  * START-HISTORY (OpenSD):
 
@@ -31,6 +32,7 @@
  */
 
 bool get_semaphores(bool create, char* errmsg);
+extern bool sem_access_denied; /* 14 Nov 26 Windows port - RELEASE_1.1 311: the last get_semaphores() was refused for access */
 void delete_semaphores(void);
 void StartExclusive(int semno, int16_t where);
 void EndExclusive(int semno);
