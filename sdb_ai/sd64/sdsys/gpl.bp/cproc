@@ -3078,6 +3078,11 @@ int.logto:
       if was.admin then
          void elevate('STOP', '')
          void kernel(K$AUDIT, 'elevation released account=' : new.account)
+* 14 Nov 26 Windows port - RELEASE_1.1 275 (owner: leave it as Linux, and say so).  The line above ends SD's own administrator rights
+*   and the elevated helper, but a process cannot give up its Windows token: this session's sd.exe stays elevated (High, 24
+*   privileges, measured 13 Nov in the VM).  So the administrator is told, once per LOGTO out of SDSYS.  Windows only (Linux's
+*   administrator keeps the flag and stays sdsys after LOGTO, mail 0950; the warning is for the Windows token).
+         display sysmsg(12987, new.account)
       end
    end
 

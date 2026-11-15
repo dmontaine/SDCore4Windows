@@ -1711,6 +1711,28 @@ begin
   end;
 end;
 
+{ 14 Nov 26 - RELEASE_1.1 294 (owner, 14 Nov: refuse a half tree, "tell the installer why with how to correct").  A data tree whose
+  sdsys is there but whose account register (sdsys\accounts, one file per account) holds no account.  An earlier install or removal
+  did not finish: the 01:11 half tree of 14 Nov, found by setup running as an upgrade over it, made no accounts and no shared account
+  and reported success.  True when there is no file in the register (or no register).  The caller asks only when sdsys exists. }
+function DataTreeHasNoAccounts: Boolean;
+var
+  R: TFindRec;
+begin
+  Result := True;
+  if FindFirst(ExpandConstant('{#DataDir}\sdsys\accounts\*'), R) then
+  begin
+    try
+      repeat
+        if (R.Name <> '.') and (R.Name <> '..') and ((R.Attributes and FILE_ATTRIBUTE_DIRECTORY) = 0) then
+          Result := False;
+      until (not Result) or (not FindNext(R));
+    finally
+      FindClose(R);
+    end;
+  end;
+end;
+
 function InitializeSetup: Boolean;
 var
   PreflightPs, PreflightScript, PreflightReasonPath: String;
@@ -1861,6 +1883,21 @@ begin
      why test-apigate-units.ps1 asserts that ApiConfAbsent reads this variable
      and never the file system. *)
   ApiConfWasAbsent := not FileExists(ExpandConstant('{#DataDir}\sd.conf'));
+
+  { 14 Nov 26 - RELEASE_1.1 294: A HALF TREE IS REFUSED, AND SAID WHY, WITH HOW TO CORRECT IT (owner's ruling).  sdsys is there and no
+    account is: the install would run as an upgrade or a reinstall over nothing and make no accounts.  Nothing has been copied yet. }
+  if (not DataTreeWasAbsent) and DataTreeHasNoAccounts then
+  begin
+    Log('SD: refusing - ' + ExpandConstant('{#DataDir}\sdsys') + ' is there and ' + ExpandConstant('{#DataDir}\sdsys\accounts') +
+        ' holds no account: a half data tree.');
+    SuppressibleMsgBox('SD Core was not installed.' + #13#10#13#10 +
+                       'The data folder ' + ExpandConstant('{#DataDir}') + ' has a system folder and no accounts, so an earlier install or ' +
+                       'removal did not finish.' + #13#10#13#10 +
+                       'To correct it: delete ' + ExpandConstant('{#DataDir}') + ' (or restore it from a backup), then run this setup again.',
+                       mbError, MB_OK, IDOK);
+    Result := False;
+    Exit;
+  end;
 
   (* SD DOES NOT SUPPORT UNATTENDED INSTALLATION.  Owner's ruling, 23 Aug 2026,
      in his own words: "unattended deployment is not supported in sd - install

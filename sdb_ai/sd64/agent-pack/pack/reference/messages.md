@@ -9571,6 +9571,15 @@ Type the name of a file
 
 cited by: `ide_name`
 
+### msg:12987
+> kind=message tier=reference since=- src=sdsys/messages/12987:1#2e695081
+
+```
+This session started as an administrator and keeps its Windows administrator rights in account %1. A program it starts can use them. Sign out and sign in to %1 to work without them.
+```
+
+cited by: `cproc`
+
 ### msg:12988
 > kind=message tier=reference since=- src=sdsys/messages/12988:1#c4aab862
 

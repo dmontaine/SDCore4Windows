@@ -3,6 +3,30 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  SETUP REFUSES A DATA FOLDER THAT HAS A SYSTEM FOLDER AND NO ACCOUNTS, AND SAYS HOW TO CORRECT IT.
+
+             What        - if C:\ProgramData\SD holds a sdsys folder whose account register has no account in it (an earlier
+                           install or removal did not finish), setup stops before it copies anything and says: the data folder
+                           has a system folder and no accounts, so an earlier install or removal did not finish; delete it, or
+                           restore it from a backup, then run setup again.  A machine with no data folder, and one with at
+                           least one account, are not affected.
+             Why         - setup ran over such a folder as an upgrade, made no accounts and no shared account, and finished
+                           without saying anything was wrong.
+             Does NOT    - Repair the folder or delete anything itself.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
+14 Nov 26  LOGTO OUT OF AN ADMINISTRATOR SESSION NOW TELLS THE ADMINISTRATOR THAT THE WINDOWS RIGHTS STAY.
+
+             What        - when a session that started as SDSYS does LOGTO into another account, SD clears its administrator flag
+                           and stops the elevated helper, as before, and now prints once: this session started as an
+                           administrator and keeps its Windows administrator rights in account X; a program it starts can use
+                           them; sign out and sign in to X to work without them.  Nothing is printed for a session that was not
+                           an administrator.
+             Why         - a Windows process cannot give up the rights it started with, so the session that has moved to an
+                           ordinary account is still elevated at the Windows level (measured: high integrity, 24 privileges).
+             Does NOT    - Change what LOGTO does, or remove the rights; only the warning is new.  Windows only.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  AN API THAT WAS OPEN TO OTHER COMPUTERS IS STILL OPEN AFTER AN UNINSTALL THAT KEPT THE CONFIGURATION AND A NEW INSTALL.
 
              What        - the uninstaller always removed the API's firewall rule, so installing again over a kept sd.conf left
