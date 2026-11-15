@@ -619,6 +619,15 @@ def text_rows(t):
                                                 "LsaLogonUser(hlsa, &origin, Network, pkg, s4u, s4ulen, tg,", "if (lsid != NULL)\n    FreeSid(lsid);"]))
                  and "tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY | SE_GROUP_ENABLED_BY_DEFAULT | SE_GROUP_ENABLED;" in sl
                  and "return win32_s4u_logon_groups(username, NULL);" in t["win32s4ulogon.c"], ""))
+    # 15 Nov 26 (RELEASE_1.1 253(b), VM sit3 C11 "the store of the run could not be opened"): the answer is "OK <pid><TAB><store>" and the
+    # reader dropped every byte under 32, the TAB too, so op_kernel.c found no TAB to split at and BASIC got no store.  The N rows cannot
+    # reach the OK answer unelevated (the service refuses the asker), so this is read off the source: the reader keeps the TAB, the service
+    # writes it, and the kernel splits at it.
+    rd = body(t["win32runin.c"], "int win32_runin_open_to(")
+    rows.append(("W20", "the answer keeps its TAB: the reader takes TAB as well as bytes from 32 up, the service writes \"OK %lu\\t%s\", and op_kernel.c splits the "
+                 "answer at the TAB into the pid and the store",
+                 "(((unsigned char)c >= 32) || (c == '\\t'))" in rd and 'runin_answer(h, ev, "OK %lu\\t%s", (unsigned long)run.pid, run.store);' in sr
+                 and "if ((p = strchr(ans, '\\t')) != NULL)" in read("op_kernel.c"), ""))
     kh, ik = t["keys.h"], t["../sdsys/gpl.bp/int$keys.h"]
     rows.append(("W18", "the two keys are 84 and 85 in keys.h and in int$keys.h",
                  re.search(r"#define K_RUNIN_CHILD\s+84\b", kh) and re.search(r"#define K_RUNIN_DEBUG\s+85\b", kh)
@@ -751,6 +760,8 @@ MUTANTS = [
     ("win32s4ulogon.c", "the made logon SID is not marked as one", "    tg->Groups[ng].Attributes = SE_GROUP_LOGON_ID | SE_GROUP_MANDATORY",
      "    tg->Groups[ng].Attributes = SE_GROUP_MANDATORY"),
     ("win32s4ulogon.c", "the made logon SID is not passed", "    tg->GroupCount = (DWORD)(ng + 1);", "    tg->GroupCount = (DWORD)ng;"),
+    # 15 Nov 26 (RELEASE_1.1 253(b), sit3 C11): the answer's TAB dropped again
+    ("win32runin.c", "the answer reader drops the TAB", "(((unsigned char)c >= 32) || (c == '\\t'))", "((unsigned char)c >= 32)"),
 ]
 
 

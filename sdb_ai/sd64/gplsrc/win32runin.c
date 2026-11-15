@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 253(b): the answer line keeps its TAB (it separates the child's pid from the store's
+ *           path); dropping it left BASIC no store path (VM sit3 C11, "the store of the run could not be opened").
  * 13 Nov 26 Windows port - written.  RELEASE_1.1 253(b); win32runin.h has the design and the wire.
  * END-HISTORY
  *
@@ -274,7 +276,10 @@ int win32_runin_open_to(const char* pipe_name, int need_system_owner, const char
     }
     if (c == '\n')
       break;
-    if ((got + 1 < alen) && ((unsigned char)c >= 32))
+    /* 15 Nov 26 - RELEASE_1.1 253(b), VM sit3 C11: the TAB is kept.  The service's answer is "OK <pid><TAB><store>" and
+       op_kernel.c splits it at that TAB; dropping every byte under 32 dropped the TAB too, so BASIC got no store path and
+       runin_debug refused "the store of the run could not be opened".  Every other control byte is still dropped. */
+    if ((got + 1 < alen) && (((unsigned char)c >= 32) || (c == '\t')))
       answer[got++] = c;
     if (got + 1 >= RUNIN_LINE_MAX) {
       CloseHandle(h);
