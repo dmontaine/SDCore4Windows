@@ -182,10 +182,12 @@ try {
     # commands this account has"; it lists every record, files and pointers too
     # (403 here).  LISTV lists the verbs.  (2) The cursor was left hanging: the
     # message ended on a line of its own, nothing drew the prompt again.
-    Note 'F1 names LISTV for the commands this account has'        $true `
-         ($f1x -match 'type:\s+listv')
-    Note 'and no longer sends the reader to LIST VOC'              $false `
-         ($f1x -match 'list voc')
+    # 14 Nov 26 - RELEASE_1.1 214/197: message 10149 was reworded (Linux d241df26 removed LISTV with the ten list sentences) and now
+    # names LIST VOC WITH TYPE = "V" - the verbs only - and ends on the Start Menu line.  The rows below follow the message.
+    Note 'F1 names LIST VOC WITH TYPE = "V" for the commands this account has' $true `
+         ($f1x -match 'type:\s+list voc with type = "V"')
+    Note 'and does not send the reader to a bare LIST VOC (every record)'     $false `
+         ($f1x -match 'list voc(?! with type)')
 
     # THE PROMPT ROW COUNTS BARE ":" LINES AFTER THE MESSAGE'S LAST LINE.  MEASURED
     # on the tree before the fix: ONE, the Enter being echoed.  The top of the same
@@ -196,7 +198,7 @@ try {
     $escRx   = [regex]::Escape([string]$esc) + '\[[0-9;?]*[A-Za-z]'
     $f1lines = [regex]::Replace($f1x, $escRx, '') -split "`n"
     $endAt   = -1
-    for ($i = 0; $i -lt $f1lines.Count; $i++) { if ($f1lines[$i] -match 'sdsys/changelog') { $endAt = $i } }
+    for ($i = 0; $i -lt $f1lines.Count; $i++) { if ($f1lines[$i] -match 'Check the SD installation') { $endAt = $i } }   # 14 Nov 26: was 'sdsys/changelog', which neither Windows product has (RELEASE_1.1 214)
     $barePrompts = 0
     if ($endAt -ge 0) {
         for ($i = $endAt + 1; $i -lt $f1lines.Count; $i++) {
