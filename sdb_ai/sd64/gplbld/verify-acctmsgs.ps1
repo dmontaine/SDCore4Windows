@@ -698,11 +698,14 @@ Note '27 null case: the audit trail grew' $true ($tail.Length -gt 0) $true
 # SENSITIVE, so both decisive rows would have scored FAIL.  Only the words moved:
 # the account name stays upper case and the user stays as typed, which is the
 # shape this row exists to pin.  RELEASE_1.1 129.
+# 14 Nov 26 (RELEASE_1.1 300): THE ACCOUNT NAME IS LOWER CASE NOW TOO (row 260): the 18:07 run's audit line read
+# "modify.account add account=<lower-case name> to=<user>".  The comment above ("MODIFYA upper-cases acc.name") is from before that; the patterns asked for the
+# upper-cased name case-sensitively and failed both decisive rows on a correct audit record.
 Note '27: the ADD is in the audit trail' $true `
-     (Test-Say $tail ('modify\.account add account=' + [regex]::Escape($acctReal.ToUpper()) +
+     (Test-Say $tail ('modify\.account add account=' + [regex]::Escape($acctReal.ToLower()) +
                       ' to=' + [regex]::Escape($acctUser))) $true
 Note '27: the DELETE is in the audit trail' $true `
-     (Test-Say $tail ('modify\.account delete account=' + [regex]::Escape($acctReal.ToUpper()) +
+     (Test-Say $tail ('modify\.account delete account=' + [regex]::Escape($acctReal.ToLower()) +
                       ' from=' + [regex]::Escape($acctUser))) $true
 
 # -------------------------------------------------------------- clean up
