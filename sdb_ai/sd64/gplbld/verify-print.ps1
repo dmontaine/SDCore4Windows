@@ -228,7 +228,9 @@ try {
     $sizeD = File-Size $FileD
     $out = Invoke-SD @('SETPTR 0,80,60,0,0,1,AT zz-no-such-printer,BRIEF', "LIST VOC WITH @ID = ""WHO"" @ID LPTR")
     Show 'session' $out
-    Note 'refusal: the session said the job was not sent, naming the printer' $true ($out -match 'Print job not sent: Windows refused it for printer zz-no-such-printer')
+    # 14 Nov 26 (RELEASE_1.1 300): the printer name is printed in single quotes ('zz-no-such-printer': linuxprt.c prints the quoted form it built for the PowerShell
+    # command, %s = qprinter), as the 18:26 run's transcript shows; the pattern had none.  The quotes are optional here so the wording can lose or keep them.
+    Note 'refusal: the session said the job was not sent, naming the printer' $true ($out -match "Print job not sent: Windows refused it for printer '?zz-no-such-printer'?")
     # linuxprt.c's -Command text catches its own error and writes only the
     # message.  Before that (b177, b178) the user saw PowerShell's six-line
     # dump - "At line:1 char:", carets, CategoryInfo - ahead of SD's line.

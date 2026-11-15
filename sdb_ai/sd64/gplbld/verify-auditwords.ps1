@@ -241,6 +241,13 @@ if ($parsed.Count -eq 0) {
 Write-Output ''
 Write-Output '=== events this release writes, and how many of them this run produced =============='
 $gplDir = Join-Path (Join-Path $dataDir 'sdsys') 'gpl.bp'
+# 14 Nov 26 (RELEASE_1.1 300): gpl.bp is NOT INSTALLED any more (owner, 9 Nov: the BASIC source of the GPL programs is distributed with the installer, not
+# installed - stage.py SDSYS_BUILD_SEED), so the installed directory is empty and the table read nothing: "the table was read from gpl.bp" FAILed on the 18:07
+# run.  The same source the install was built from is beside this script (sdb_ai\sd64\sdsys\gpl.bp), and assert-current has already proved the install matches it.
+if (-not (Test-Path -LiteralPath $gplDir)) {
+    $srcGpl = Join-Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'sdsys') 'gpl.bp'
+    if (Test-Path -LiteralPath $srcGpl) { Write-Output ('verify-auditwords: the install has no gpl.bp; reading the source it was built from: ' + $srcGpl); $gplDir = $srcGpl }
+}
 $heads = @()
 try { $heads = @(Get-AuditEventHeads $gplDir) + @($script:CEvents) } catch { Write-Output ('verify-auditwords: cannot read ' + $gplDir + ': ' + $_.Exception.Message) }
 Write-Output ('  {0} event head(s) read from the kernel(K$AUDIT, ...) literals in {1} (+ {2} written by C)' -f ($heads.Count - @($script:CEvents).Count), $gplDir, @($script:CEvents).Count)

@@ -101,6 +101,12 @@ Check 'COPY success lines alone' @() (Get-WhoAccounts "1 record(s) copied.`n0 re
 Check 'bare WHO'      @('DON')        (Get-WhoAccounts '47 DON')
 Check 'WHO with from' @('SDAPIIDB24') (Get-WhoAccounts '48 SDAPIIDB24 from DON')
 
+# 14 Nov 26 (RELEASE_1.1 300): WHO prints the account in LOWER case now, as the real transcript of the 18:07 full run showed ("6 sdapiidb332 from sdsys").
+# The reader had demanded upper case and found 0 reports in two verifiers.  A lower-case WHO line is a report; a COPY line in the same text is still not.
+Check 'lower-case WHO with from' @('sdapiidb332')  (Get-WhoAccounts '6 sdapiidb332 from sdsys')
+Check 'lower-case bare WHO'      @('don')          (Get-WhoAccounts '47 don')
+Check 'lower-case WHO among COPY lines' @('sdapiidb332') (Get-WhoAccounts "1 record(s) copied.`n6 sdapiidb332 from sdsys`n0 record(s) copied.")
+
 # CASE CONTROL - if (?i) ever creeps back, [A-Z] matches the "r" of record(s)
 # and b24 returns.
 Check 'lower-case token rejected' @() (Get-WhoAccounts '1 record(s) copied.')

@@ -264,7 +264,9 @@ function Invoke-SDIn([string]$account, [string[]]$commands) {
 # a success test can match the failure line".  WHO upcases the account name
 # (measured on b24: "47 SDAPIIDB24 from DON"), so (?m) alone is correct.
 function Get-WhoAccounts([string]$text) {
-    $pattern = '(?m)^\s*\d+\s+([A-Z][A-Z0-9_.$-]*)(?:\s+from\s+[A-Z][A-Z0-9_.$-]*)?\s*$'
+    # 14 Nov 26 (RELEASE_1.1 300): WHO prints the account in LOWER case now ("6 sdapiidb332 from sdsys"; the lower-case ids, row 260), so the token class takes
+    # either case.  It is still an ACCOUNT-SHAPED token to end of line: "record(s) copied." has a parenthesis and prose, so it cannot match (the b24 lesson).
+    $pattern = '(?m)^\s*\d+\s+([A-Za-z][A-Za-z0-9_.$-]*)(?:\s+from\s+[A-Za-z][A-Za-z0-9_.$-]*)?\s*$'
     return @([regex]::Matches($text, $pattern) | ForEach-Object { $_.Groups[1].Value })
 }
 

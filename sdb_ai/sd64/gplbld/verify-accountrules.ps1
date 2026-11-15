@@ -545,7 +545,18 @@ try {
         # 27 Oct 26 - NONE OR SSH, NEVER THE API.  The installer's "install OpenSSH server" box puts the installing user in sdssh (measured on the b305 install with the
         # box ticked: routes were ssh), so 'none' is only the answer when that box was not ticked.  Silence must not hand out the API.
         $instRoutes = Routes $installUser
-        Note 'CONTROL: an attached account has no API route by silence (none, or ssh from the installer box)' $true ($instRoutes -in @('none', 'ssh'))
+        Write-Host ("   the installing user's routes (sdssh, sdapi membership): " + $instRoutes)   # 14 Nov 26: the observed value was never printed, only True/False
+        # 14 Nov 26 (RELEASE_1.1 300): THIS CONTROL ASSUMES THE WIZARD'S "Open every access gate for your SD Core account" BOX WAS LEFT UNTICKED.  Ticked, the
+        # installing user is given the API on purpose and its register record holds "yes" in every gate field (measured on the 17:56 install: 9 of them), so
+        # "no route by silence" is not what was installed and the control cannot be asked.  It is reported NOT MEASURED, with the evidence, and fails nothing;
+        # an API route WITHOUT that box (fewer than 9 "yes" fields) is still the defect the control exists to catch.
+        $gateYes = @(Get-Content -LiteralPath (AcctRec $installUser) -ErrorAction SilentlyContinue | Where-Object { $_.Trim() -eq 'yes' }).Count
+        if (($instRoutes -notin @('none', 'ssh')) -and ($gateYes -ge 9)) {
+            Write-Host ("  [NOT MEASURED] CONTROL: an attached account has no API route by silence: the install opened every gate on purpose ($gateYes 'yes' fields in its record, routes $instRoutes)")
+            $null = $results.Add([pscustomobject]@{ Check = 'CONTROL: an attached account has no API route by silence'; Expected = 'measured'; Observed = 'NOT MEASURED (open-every-gate install)' })
+        } else {
+            Note 'CONTROL: an attached account has no API route by silence (none, or ssh from the installer box)' $true ($instRoutes -in @('none', 'ssh'))
+        }
         # 10040, not 10034: ATTACH must not put a borrowed login into sdsshonly.
         Note 'CONTROL: it kept its sign-in rights (10040)' $true `
              ($logText -match [regex]::Escape($installUser + ' keeps the Windows sign-in rights it already had'))

@@ -161,8 +161,11 @@ Write-Output '=== 3. UNLOCK, which shipped in the same cycle and is unrelated ==
 # The digit is left optional rather than pinned to 1: the field number is what
 # it is, and this check is about the TYPE CODE, not about which line it lands on.
 $out = Invoke-SD @('CT VOC UNLOCK')
-Note 'CT VOC UNLOCK shows a V type code' $true ($out -match '(?m)^\s*\d*:?\s*V\s*$')
-Note 'and no longer the description text' $false ($out -match 'Verb to unlock records')
+# 14 Nov 26 (RELEASE_1.1 300): THE RECORD NOW READS AS LINUX'S DOES.  The 12 Nov parity batch (452edd29) made voc_template/unlock "Verb to unlock records" - a
+# description whose FIRST LETTER is the type, as the 150-odd "Verb ..." records of newvoc are and as Linux ships this one - so a bare V and the absence of
+# the description are no longer the requirement.  The requirement was always that SD sees it as a verb: field 1 begins with V (a bare V, or "Verb ..."), and the
+# third check below (UNLOCK answers differently from an unknown verb) is the behaviour.  The 18:07 run on 14 Nov failed both old notes on this record.
+Note 'CT VOC UNLOCK field 1 begins with V (a bare V, or "Verb ..." as Linux ships it)' $true ($out -match '(?m)^\s*\d*:?\s*V(erb\b[^\r\n]*)?\s*$')
 Write-Output '  --- CT VOC UNLOCK said: ---'
 Write-Output $out
 
