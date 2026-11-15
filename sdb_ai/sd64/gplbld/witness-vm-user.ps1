@@ -188,8 +188,18 @@ if ($sections -contains 'pipes') {
         $want = '5'
         if ($inSdusers) { $want = '0' }
         Set-WitCompare $pn[1] ('an unelevated token ' + $(if ($inSdusers) { 'IN' } else { 'NOT in' }) + ' sdusers opens \\.\pipe\' + $pn[0] + ' as a client: ' + $(if ($inSdusers) { 'allowed' } else { 'refused' })) $want ([string]$e)
-        $e2 = [SdWit.Native]::PipeProbe(('\\.\pipe\' + $pn[0]), 0x0004)
-        Set-WitCompare $pn[1] ('nobody but the server may add an instance of \\.\pipe\' + $pn[0] + ' (FILE_CREATE_PIPE_INSTANCE refused)') '5' ([string]$e2)
+        # 14 Nov 26 - RELEASE_1.1 304.  THIS USED TO BE A CLIENT CreateFile ASKING 0x4, AND THAT MEASURES NOTHING: the pipe filesystem does
+        #   not check 0x4 on a client open (measured on the host, probe-pipeinst 20:54: opened, with no ACE granting 0x4, while CreateNamedPipe
+        #   on the same name was refused), so sit2's step 4 scored two FAILs on a product that was right.  The act that matters is the
+        #   server's: probe-pipeinst.ps1 calls CreateNamedPipe on the name from this token (5 = refused; a made instance is closed at once).
+        $pi = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'probe-pipeinst.ps1') -Names $pn[0] 2>&1 | Out-String)
+        $piExit = $LASTEXITCODE
+        Write-Wit ('    --- probe-pipeinst ' + $pn[0] + ' (exit ' + $piExit + ') (raw) ---')
+        foreach ($l in ($pi -split "`r?`n")) { if ($l -ne '') { Write-Wit ('    | ' + $l) } }
+        $what = 'nobody but the server may add an instance of \\.\pipe\' + $pn[0] + ' (CreateNamedPipe from this token refused, 5)'
+        if ($piExit -eq 2 -or $pi -match '(?m)^\s*NOT-MEASURED\s') { Add-WitResult $pn[1] $what 'NOT-MEASURED' 'the pipe was not running, or the probe refused to run: see its raw output' }
+        elseif ($piExit -eq 0 -and $pi -match 'PASS\s+CreateNamedPipe from this token is refused \(5\)' -and $pi -notmatch '(?m)^\s*(FAIL|INCONCLUSIVE)\s') { Add-WitResult $pn[1] $what 'PASS' 'probe-pipeinst: CreateNamedPipe refused (5)' }
+        else { Add-WitResult $pn[1] $what 'FAIL' ('probe-pipeinst exit ' + $piExit + ': see its raw output') }
     }
     # 253(b) F4: the child entry mode from an ordinary token.  Redirected, so no window of its own; never killed.
     $o = Join-Path $env:TEMP ('witness-runin-' + $PID + '.out')
