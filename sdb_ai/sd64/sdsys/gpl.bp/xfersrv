@@ -1,0 +1,246 @@
+* XFERSRV
+* The file transfer server: the command processor of an sftp request that came in over the ssh login.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 15 Nov 26 dm S.242 stage 3: written.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    Not a verb and not called by anything in BASIC.  The kernel runs it in place of $CPROC when sd was started by sshd for an sftp
+*    request (gplsrc/sd_sftp.c xfer_detect(): no terminal, SSH_ORIGINAL_COMMAND the Subsystem path of the ordinary Match arm).  The
+*    client's channel is not this process's terminal: nothing printed here reaches it.  The kernel speaks the protocol
+*    (KERNEL(K$XFER, 'serve') and 'refuse'); THIS PROGRAM DECIDES WHETHER THERE IS A TRANSFER, in this order, and every refusal is
+*    told to the client in words and written to the audit trail:
+*
+*       1  XFER is 1 in sd.conf (delivered 0).
+*       2  The Linux user is not root or sdsys (the administrator has no transfer door), is a member of sdusers, and SD is taking
+*          new sessions (no backup or restore running, no INHIBIT.LOGIN).
+*       3  The account NAMED AFTER THE USER is in the register, is a user account (its group is sdu_...), the user is a member of
+*          that group, the account is not suspended, and its register record says xfer-on (ACC$XFER, delivered off).
+*       4  A signed-in session of the same user, in that account, has a slot open (RECEIVE / SEND) that has not run out of time.
+*       5  The slot's directory, xfer.in or xfer.out in the account's own directory, is there and is a plain directory.
+*
+*    THE REGISTER IS READ HERE, BY THIS PROCESS, AT EVERY CONNECTION.  Nothing the account's own files hold decides anything: not its
+*    VOC (the directory is found by its fixed name under the register's path, never through a VOC pointer) and not a file in it.
+*
+*    It runs once.  A command processor is called again after an abort; a second entry ends the process.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program xfersrv
+$catalog $xfersrv
+
+$flags cproc
+$flags trusted
+
+$include syscom.h
+$include int$keys.h
+$include header.h
+
+$include err.h
+$include keys.h
+
+deffun is_grp_member(user,group) calling '!is_grp_member'
+
+   if kernel(K$CPROC.LEVEL,0) then goto exit.xfersrv     ;* called again after an abort or a forced logout: nothing to resume
+
+* What a command processor sets up before anything else may run (as $APISRVR does)
+
+   abort.message = ''
+   parser = '!PARSER'
+   void kernel(K$CPROC.LEVEL,1)
+   xeq.command = ''
+   data.queue = ''
+   command.stack = ''
+   at.sentence = ''
+   last.command = ''
+   sys.bell = char(7)
+   user.return.code = 0
+   aliased.commands = ''
+   alias.targets = ''
+   default.style.rec = ''
+   logname = kernel(K$USERNAME, 0)
+   mat qproc.breakpoint.value = ''
+   user.var.names = ''
+   user.var.values = ''
+   itype.mode = 0
+   trigger.return.code = 0
+   dir.separator = '/'
+   tty = 'sftp'
+   who = ''
+   account.path = ''
+   initial.account.path = ''
+
+   if umask(002) then null      ;* the mode of a file taken is the mode of a file a session of this account makes
+
+   lgn = kernel(K$USERNAME, 0)
+   acct = downcase(lgn)
+   peer = system(42)             ;* the client's address (the first word of SSH_CONNECTION)
+   refusal = ''
+   reason = ''
+
+* ----------------------------------------------------------------------
+* 1  The system's switch
+
+   if config('XFER') # 1 then
+      refusal = sysmsg(15076)  ;* File transfer is not turned on for this system (XFER is 0 in sd.conf)
+      reason = 'xfer is off'
+      goto refuse
+   end
+
+   if not(ospath(@sdsys, OS$CD)) then
+      refusal = sysmsg(15093, sysmsg(5261))  ;* File transfer could not start: Cannot attach to SDSYS
+      reason = 'cannot attach to sdsys'
+      goto refuse
+   end
+
+* ----------------------------------------------------------------------
+* 2  The person
+
+   if acct = 'root' or acct = 'sdsys' then
+      refusal = sysmsg(15078, lgn)  ;* File transfer is only for a user account, for its own person; %1 has no user account of its own
+      reason = 'the administrator has no transfer'
+      goto refuse
+   end
+
+   if not(is_grp_member(lgn, 'sdusers')) then
+      refusal = sysmsg(5009)  ;* This user is not registered for SD use
+      reason = 'not a member of sdusers'
+      goto refuse
+   end
+
+   call !acc_hold('TEST', hold.info, hold.err)
+   if hold.err # '' then
+      refusal = sysmsg(hold.err<1,1>, hold.err<1,2>, hold.err<1,3>)
+      reason = 'a backup or restore is running'
+      goto refuse
+   end
+
+   call !login_inhibit('TEST', inhibit.info, inhibit.err)
+   if inhibit.err # '' then
+      refusal = sysmsg(inhibit.err<1,1>, inhibit.err<1,2>, inhibit.err<1,3>)
+      reason = 'logins are inhibited (inhibit.login)'
+      goto refuse
+   end
+
+* ----------------------------------------------------------------------
+* 3  The account: the one named after the user, read from the register now
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      refusal = sysmsg(15093, sysmsg(2200))  ;* File transfer could not start: Cannot open accounts register
+      reason = 'the accounts register could not be opened'
+      goto refuse
+   end
+   read acc.rec from acc.f, acct else
+      close acc.f
+      refusal = sysmsg(15078, lgn)
+      reason = 'no account of its own'
+      goto refuse
+   end
+   close acc.f
+
+   if acc.rec<ACC$GROUP>[1,4] # 'sdu_' then
+      refusal = sysmsg(15078, lgn)
+      reason = 'not a user account'
+      goto refuse
+   end
+
+   if not(is_grp_member(lgn, acc.rec<ACC$GROUP>)) then
+      refusal = sysmsg(10003)  ;* User not allowed in requested account
+      reason = 'not a member of the account group'
+      goto refuse
+   end
+
+   if upcase(trim(acc.rec<ACC$SUSPENDED>)) = 'SUSPENDED' then
+      refusal = sysmsg(10107, acct)  ;* Account %1 is suspended
+      reason = 'the account is suspended'
+      goto refuse
+   end
+
+   if upcase(trim(acc.rec<ACC$XFER>)) # 'YES' then     ;* blank is no
+      refusal = sysmsg(15077, acct)  ;* Account %1 may not move files over its ssh login (...modify.account %1 xfer-on)
+      reason = 'xfer-on is not set'
+      goto refuse
+   end
+
+   acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+   if not(ospath(acc.path, OS$CD)) then
+      refusal = sysmsg(15093, sysmsg(5019, acc.path))  ;* File transfer could not start: Unable to change to directory xx
+      reason = 'the account directory could not be entered'
+      goto refuse
+   end
+   account.path = acc.path
+   initial.account.path = acc.path
+   who = acct
+   void kernel(K$SET.ACCOUNT, who)     ;* LISTU shows the account
+
+* ----------------------------------------------------------------------
+* 4  The slot: a session of this user, in this account, typed RECEIVE or SEND and is waiting
+
+   ans = kernel(K$XFER, 'find' : @fm : acct)
+   if ans<1> # 'OK' then
+      if ans<2> = 'expired' then
+         refusal = sysmsg(15080, acct)  ;* The transfer that was open for %1 has run out of time: type receive or send again
+         reason = 'the slot ran out of time'
+      end else
+         refusal = sysmsg(15079, acct)  ;* No transfer is open for %1: sign in to SD, type receive or send, and connect while it waits
+         reason = 'no slot is open'
+      end
+      goto refuse
+   end
+
+   if ans<2> = 1 then
+      dir.word = 'in'
+      dir.name = 'xfer.in'
+   end else
+      dir.word = 'out'
+      dir.name = 'xfer.out'
+   end
+   holder = ans<4>
+
+* ----------------------------------------------------------------------
+* 5  The transfer.  The directory is the fixed name under the register's path; the kernel opens it without following a link.
+
+   void kernel(K$AUDIT, 'xfer connect dir=' : dir.word : ' holder=' : holder : ' from=' : peer : ' account=' : acct)
+   ans = kernel(K$XFER, 'serve' : @fm : acc.path : @ds : dir.name)
+   if ans<1> = 'OK' then goto exit.xfersrv     ;* the kernel wrote "xfer disconnect dir= why= files= bytes= refusals=" as the conversation ended
+
+   if ans<2> = 'dir' then
+      refusal = sysmsg(15092, dir.name)  ;* The transfer directory %1 is not there, or is not a plain directory (receive and send make it)
+      reason = 'no transfer directory'
+   end else
+      refusal = sysmsg(15093, ans<2>)
+      reason = 'the server could not start (' : ans<2> : ')'
+   end
+
+* ----------------------------------------------------------------------
+* No transfer: the audit trail first, then the client is told why (in words on its error channel, and as the answer to what it asks)
+
+refuse:
+   void kernel(K$AUDIT, 'xfer refused reason=' : reason : ' from=' : peer : ' user=' : lgn)
+   void kernel(K$XFER, 'refuse' : @fm : refusal)
+
+exit.xfersrv:
+   return to exit.xfersrv
+end
+
+* END-CODE

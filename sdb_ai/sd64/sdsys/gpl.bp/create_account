@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 299, from Linux e080527e (S.242 stage 1): CA$XFER (exactly 1) writes ACC$XFER 'yes' for a user account ('no' otherwise,
+*              written explicitly) and is said with 15074; a group or other account is refused (15075) before anything is made.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): CA$AI joins the new user to the Windows group sdaiusers, the right to use the AI
 *              provider's API through the helper sd-ai; it stands alone, is refused for a group or other account (10087, 10081 as CA$FILES), the group is looked for
 *              before anything is made, and the state line 12611 is read off the group.  A reused SD user (RELEASE_1.1 130) loses an sdaiusers it was not asked for.
@@ -187,6 +189,8 @@ deffun ps_script(script) calling '!ps_script'
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON, the account's editors keep a recovery copy of unsaved text; the same rule,
 *   exactly 1 to be a request; a user account only.
    recovery.want = (settings<CA$RECOVERY> = 1)
+* 15 Nov 26 Windows port - from Linux e080527e (S.242): XFER-ON, file transfer over the ssh login; the same rule, exactly 1 to be a request; a user account only.
+   xfer.want = (settings<CA$XFER> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -648,6 +652,12 @@ PW.TRY.AGAIN:
        err = 12776:@vm:acc.name ;* %1 is not a user account, and a recovery copy is kept only in a user account, for its own person; nothing was changed
        goto exit.create
      end
+* 15 Nov 26 Windows port - from Linux e080527e (S.242): nor file transfer: a slot belongs to one person's session (15075).
+     if xfer.want then
+       @system.return.code = -ER$ARGS
+       err = 15075:@vm:acc.name ;* %1 is not a user account, and file transfer is only for a user account, for its own person; nothing was changed
+       goto exit.create
+     end
 
    case acc.type = 'OTHER'
 *    CREATE.ACCOUNT OTHER <account name> <pathname>, the path in CA$PATH
@@ -671,6 +681,12 @@ PW.TRY.AGAIN:
      if recovery.want then
        @system.return.code = -ER$ARGS
        err = 12776:@vm:acc.name ;* %1 is not a user account, and a recovery copy is kept only in a user account, for its own person; nothing was changed
+       goto exit.create
+     end
+* 14 Nov 26 dm - S.242: nor file transfer (15075), as for a group account.
+     if xfer.want then
+       @system.return.code = -ER$ARGS
+       err = 15075:@vm:acc.name ;* %1 is not a user account, and file transfer is only for a user account, for its own person; nothing was changed
        goto exit.create
      end
      pathname = trim(settings<CA$PATH>)
@@ -1066,6 +1082,9 @@ PW.TRY.AGAIN:
       acc.rec<ACC$SHARED.WRITE> = if shared.write.want then 'yes' else 'no'
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): the recovery copy, written explicitly for a user account ('no' unless asked).
       acc.rec<ACC$RECOVERY> = if recovery.want then 'yes' else 'no'
+* 15 Nov 26 Windows port - from Linux e080527e (S.242, RELEASE_1.1 299): file transfer, written explicitly for a user account ('no' unless asked).  Fields
+*   20-21 are Solo's (keys.h) and stay blank here.
+      acc.rec<ACC$XFER> = if xfer.want then 'yes' else 'no'
    end else
 *     A group or other account has no sign-on of its own to carry them, but MODIFY.ACCOUNT allows the switches there, so the words
 *     are honoured here too: written only when asked (blank is off).
@@ -1103,6 +1122,8 @@ PW.TRY.AGAIN:
       crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3
 *     10 Nov 26 (from Linux 44807a43, S.88 plan 2.9, D2): the recovery copy, in the words MODIFY.ACCOUNT says it with.
       crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
+*     15 Nov 26 (from Linux e080527e, S.242, RELEASE_1.1 299): file transfer, in the words MODIFY.ACCOUNT says it with.
+      crt sysmsg(15074, acc.name, acc.rec<ACC$XFER>)  ;* Account %1 may move files over its ssh login (receive / send): %2
    end
 *  28 Oct 26, S.75, home: the two settings are said when they were asked for, in the words MODIFY.ACCOUNT says them with.
    if start.want # '' then crt sysmsg(12873, acc.name, start.want)  ;* Account %1 starts at: %2

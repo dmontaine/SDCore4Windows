@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): is_xfer, xfer_fd_in, xfer_fd_out (the file transfer server).
  * 13 Nov 26 Windows port - runin_account, runin_store and runin_groups: run.in's debugged child (RELEASE_1.1 253(b)).
  * 8 Nov 26 Windows port - from Linux 7416a68a (S.87 batch 17): has_stdfil and stdfil_saved are gone with $MODE STDFIL.SHARED.
  * 8 Nov 26 Windows port - from Linux 2eddc5ed (S.87 batch 16): keep_select is gone (the KEEP.SELECT statement).
@@ -41,6 +42,12 @@ Public u_int16_t object_key;
 
 Public int exit_status init(0);    /* Final exit status */
 Public char* entry_dir init(NULL); /* Current directory on entry */
+/* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): this process is the file transfer server of an sftp
+   request (sd_sftp.c xfer_detect()).  The client's channel is on these two descriptors and nowhere else; 0 and 1 are the null device,
+   so nothing SD prints reaches the client. */
+Public bool is_xfer init(FALSE);
+Public int xfer_fd_in init(-1);
+Public int xfer_fd_out init(-1);
 
 Public bool is_bootstrap init(FALSE);  /* Bootstrap build (install process) */
 Public bool is_phantom init(FALSE);  /* Process is a phantom */

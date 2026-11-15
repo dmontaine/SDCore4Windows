@@ -29,6 +29,7 @@
  * 06 Oct 26 Windows port - api_login removed (APILOGIN retired, PAW-5)
  * 14 Sep 26 Windows port - from Linux d93ea0d - S.18: api_login removed (APILOGIN retired).
  * 19 Oct 26 Windows port - from Linux d93ea0d - netwait and netreply are 32 bit (verifier finding of the SDNet finish): a value in sd.conf is read into an int and a 16 bit field wrapped 65541 to 5 before rangecheck saw it.
+ * 14 Nov 26 dm  S.242 stage 1: xfer, xferfile, xferslot, xferwait, xferidle, xfermax, xferkind - file transfer over the ssh login (delivered off).
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -130,6 +131,16 @@ struct PCFG  {
   char timezone[64+1];                  /* TIMEZONE: the zone the epoch functions use, null = the process's own TZ (15 Oct 26) */
 /* 20240219 mab create-account based on type (user / group / other) */  
   char usrdir[MAX_PATHNAME_LEN+1];      /* USRDIR:   Parent Directory for user accounts */
+  /* 14 Nov 26 dm - S.242, file transfer over the ssh login (RECEIVE / SEND).  Per process: the transfer server reads sd.conf itself, as every
+     session does, so nothing in the shared segment decides it.  XFER is the system-wide switch, delivered 0 (the register's ACC$XFER is the
+     per-account one).  Sizes in kilobytes, times in seconds; the defaults are the owner's of 14 Nov ("10 MB file / 100 MB slot", "60 minutes"). */
+  int16_t xfer;                         /* XFER:     0 = no file transfer on this system, 1 = accounts with xfer-on may transfer */
+  int32_t xferfile;                     /* XFERFILE: largest file, kilobytes (10240) */
+  int32_t xferslot;                     /* XFERSLOT: most bytes one slot takes, kilobytes (102400) */
+  int32_t xferwait;                     /* XFERWAIT: seconds a slot waits for its first connection (600) */
+  int32_t xferidle;                     /* XFERIDLE: seconds a slot stays open after its last file closes (120) */
+  int32_t xfermax;                      /* XFERMAX:  seconds a slot may stay open at most, 0 = no ceiling (3600) */
+  char xferkind[128+1];                 /* XFERKIND: extensions a file must have, comma separated; null = any plain-text file */
   int16_t yearbase;                     /* YEARBASE: Two digit year start */
  };
 

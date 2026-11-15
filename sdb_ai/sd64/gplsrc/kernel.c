@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): init_kernel() clears the file transfer slot of the cell it takes;
+ *           the transfer server's @TTY is "sftp".
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): process_events() writes the "Received termination signal" line
  *           (log_termination_signal()) when it handles EVT_TERMINATE; the SIGHUP/SIGTERM handler no longer logs.  And from Linux
  *           W.0 (14 Sep 26), never carried here: fatal_signal_handler() calls release_owned_semaphores() first.
@@ -217,6 +219,14 @@ retry_login:
     }
     my_uptr->lockwait_index = 0;
     my_uptr->ttyname[0] = '\0';
+    /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3): no file transfer slot is open in a cell just taken (whatever the
+       process before left) */
+    my_uptr->xfer_dir = 0;
+    my_uptr->xfer_flags = 0;
+    my_uptr->xfer_files = 0;
+    my_uptr->xfer_opened = 0;
+    my_uptr->xfer_last = 0;
+    my_uptr->xfer_bytes = 0;
 
     /* 14 Oct 26 dm - sheet items 24 and 29: the account is empty until the session enters one (a phantom's cell
        was given its parent's account when the parent reserved it, and keeps it).  And item 38: the peak number of
@@ -394,6 +404,11 @@ retry_login:
       /* 18 Oct 26 Windows port - Linux 1298f82 sets @TTY to "startup" here for the process the STARTUP
          parameter starts (openQM item 91, a SD_STARTUP variable that sysseg.c sets).  There is no such
          process here (RELEASE_1.1 119: STARTUP is refused in config.c), so the hunk is not carried. */
+
+      /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the file transfer server of an sftp request
+         (sd_sftp.c) is "sftp" in LISTU */
+      if (is_xfer)
+        strcpy((char*)(my_uptr->ttyname), "sftp");
     }
   }
 

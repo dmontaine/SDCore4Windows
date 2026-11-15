@@ -162,6 +162,11 @@ FAIL_CLOSED = {
         "the same state line for sdaiusers (12611, RELEASE_1.1 246): display only",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
+    # 15 Nov 26 - RELEASE_1.1 299 (Linux d15ace15, S.242 stage 3): the file transfer server's two membership tests, each a refusal.
+    ("xfersrv", "if not(is_grp_member(lgn, 'sdusers')) then"):
+        "the transfer server refuses a person not in sdusers (5009): a could-not-tell refuses",
+    ("xfersrv", "if not(is_grp_member(lgn, acc.rec<ACC$GROUP>)) then"):
+        "the transfer server refuses a person not in the account's group (10003): a could-not-tell refuses",
     # 02 Oct 26 - these two moved with CREATEA's body into create_account
     # (RELEASE_1.1 116); the verb is the parser now and calls nothing here.
     ("create_account", "if not(is_grp_member(acc.uname,'sdusers')) then"):

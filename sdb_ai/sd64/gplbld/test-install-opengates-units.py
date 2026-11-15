@@ -39,7 +39,9 @@ MODIFYA = os.path.join(SD64, "sdsys", "gpl.bp", "modifya")
 KEYS = os.path.join(SD64, "sdsys", "syscom", "keys.h")
 
 # modifya on-words that are NOT access gates for this purpose, and why (see the header)
-NOT_GATES = {"SHARED-READ-ON"}
+# 15 Nov 26 (RELEASE_1.1 299, from Linux S.242): XFER-ON is a door behind sd.conf's XFER=1 with its own limits, which the administrator opens by
+# hand; Linux's open_installer_gates (test-install-opengates.sh WORDS, b9e63f17) does not open it either.
+NOT_GATES = {"SHARED-READ-ON", "XFER-ON"}
 EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "recovery-on", "net-on", "shared-write-on", "files-on", "files-write-on",
                 "files-admin-on", "ai-on", "pins-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9); 13 Nov 26: ai-on (sdaiusers, RELEASE_1.1 246, Linux 277/308)
 EXPECT_FIELDS = {7: "ACC$SH", 8: "ACC$OS.EXEC", 9: "ACC$SD.ACCOUNTS", 10: "ACC$VOC.EDIT", 11: "ACC$BP.EDIT", 12: "ACC$DICT.EDIT",

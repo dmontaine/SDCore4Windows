@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server (sd_sftp.c k_xfer()).
  * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): a phantom gives back a pipe its session held on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a phantom's failed daemon() is logged.
  * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85): run.in WITH debug (RELEASE_1.1 253(b)), Windows only - the child's
@@ -109,6 +110,7 @@
 #include "sd_jobmark.h"   /* 10 Nov 26 Windows port - K_JOB_MARK (Linux S.102 stage 3, carry area 14) */
 #include "win32auditpipe.h" /* 13 Nov 26 Windows port - K_LOCK_TRACE's file (RELEASE_1.1 182); no Windows type */
 #include "win32runin.h"     /* 13 Nov 26 Windows port - K_RUNIN_CHILD, K_RUNIN_DEBUG (RELEASE_1.1 253(b)); no Windows type */
+#include "sd_sftp.h"        /* 15 Nov 26 Windows port - K_XFER (Linux d15ace15, S.242 stage 3, RELEASE_1.1 299) */
 #include <sys/time.h>
 
 #include <syslog.h>
@@ -1834,6 +1836,12 @@ void op_kernel() {
         show_ts_safe(safe_chunk->data, (int)(safe_chunk->bytes));
       (void)ts_terminate();
     } break;
+
+    /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the file transfer slot (RECEIVE / SEND) and the
+       transfer server's side of it; $internal only (sd_sftp.c). */
+    case K_XFER:
+      k_xfer(descr, &result);
+      break;
 
     /* 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  K_JOB_MARK: the name of the scheduled administrator job
        this process IS, or "".  Linux asks systemd's cgroup; here every one of these must hold (sd_jobmark.h, win32jobmark.c): not an API

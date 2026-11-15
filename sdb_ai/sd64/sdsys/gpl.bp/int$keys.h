@@ -262,6 +262,10 @@
 *   job this process is (Task Scheduler's batch logon of the local account SDSYS, elevated, and an administrator-only definition in sd-jobs naming
 *   this very command), or ''.  Must match gplsrc/keys.h.
       $define K$JOB.MARK       172      ;* The scheduled job this session is, or ''
+* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299).  kernel(K$XFER, op {: @fm : ...}): the file transfer slot (open,
+*   close, state) and the transfer server's side (find, serve, refuse).  The arguments and answers are at k_xfer() in gplsrc/sd_sftp.c.  Must match
+*   gplsrc/keys.h.
+      $define K$XFER           173      ;* File transfer over the ssh login: the slot and the server (S.242)
 * 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug; Windows only.  Must match gplsrc/keys.h, which says what each answers.
       $define K$RUNIN.CHILD     84      ;* run.in's debugged child: account:@fm:store:@fm:groups, '' for any other process
       $define K$RUNIN.DEBUG     85      ;* the SDSYS session's end of a run: 'O', 'P' (relay) or 'C' (end)

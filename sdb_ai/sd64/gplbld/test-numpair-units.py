@@ -45,6 +45,7 @@ ALLOWED = {
     ('option', r"^opt<-1> = '[A-Z.]+\|\|#'$"): 'an option\'s third field is its help message id (RELEASE_1.1 258)',
     ('k_error.c', r'^\{#, SE_[A-Z]+ "[A-Z_]+"\},$'): 'the k_error table maps a message id to its SE_ code (RELEASE_1.1 251)',
     ('op_sh.c', r'^return #( \+ kind)?;$'): 'op_sh returns the id of the refusal message its caller shows (RELEASE_1.1 258)',
+    ('sd_sftp.c', r'^#define XM_[A-Z_]+ #'): 'the XM_ names are message ids the transfer server returns to xfersrv to show (Linux d15ace15, RELEASE_1.1 299)',
 }
 
 NUM = re.compile(r'\b1[0-5]\d{3}\b')

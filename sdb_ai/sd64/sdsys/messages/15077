@@ -1,0 +1,1 @@
+Account %1 may not move files over its ssh login (the administrator allows it with modify.account %1 xfer-on)

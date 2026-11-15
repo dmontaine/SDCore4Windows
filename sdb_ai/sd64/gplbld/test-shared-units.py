@@ -586,10 +586,11 @@ def checks(srcs):
        ordered(ca2, "sad.grant = q : change(sad.group, q, q:q) : ':(OI)(CI)(M)' : q", "if downcase(trim(acc.name)) = 'shared' then sad.grant = q : 'sdusers:(OI)(CI)(M)' : q",
                "/grant ' : sad.grant") and "acc.rec<ACC$GROUP> = group_name" in ca2, "")
     # Windows: the syntax text names the two words on its second line, after {files-admin-on} (Linux: between {dict-on} and {net-on}).
-    ck("G7 createa: the syntax text names {shared-read-off} {shared-write-on} (before the {start-menu | start-terminal} {pins-on} {recovery-on} {no.query} tail), and ONLY those two words are "
+    # 15 Nov 26 (from Linux d15ace15, S.242, RELEASE_1.1 299): the tail gains {xfer-on}.
+    ck("G7 createa: the syntax text names {shared-read-off} {shared-write-on} (before the {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query} tail), and ONLY those two words are "
        "taken (SHARED-READ-OFF sets CA$SHARED.READ.OFF, SHARED-WRITE-ON sets CA$SHARED.WRITE): the other two restate the default",
        "{dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}" in cr
-       and "{shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {no.query}" in cr
+       and "{shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}" in cr
        and re.search(r"case upcase\(token\) = 'SHARED-READ-OFF'\s*\n\s*settings<CA\$SHARED\.READ\.OFF> = 1\s*\n\s*case upcase\(token\) = 'SHARED-WRITE-ON'\s*\n\s*settings<CA\$SHARED\.WRITE> = 1", cr) is not None
        and "SHARED-READ-ON" not in cr and "SHARED-WRITE-OFF" not in cr, "")
     # Windows: each word is 'case upcase(action) = ...' with os.field and os.want on lines of their own, and no return after gosub os.set.

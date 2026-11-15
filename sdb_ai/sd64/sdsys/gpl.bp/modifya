@@ -30,6 +30,8 @@
 * 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration account SDRADMIN is refused (12704), as SDSYS is: remote.sdsys's alone.
 * 13 Nov 26 Windows (RELEASE_1.1 254, test-tkgates G7): the SHARED-READ and SHARED-WRITE words are carried out before the FILES words, Linux's order
 *           (word.arr and slot.arr); tk_gate_info already lists them that way, so the gate screens and modify.account now agree.
+* 15 Nov 26 Windows port - from Linux e080527e (S.242 stage 1, RELEASE_1.1 299; owner 14 Nov: file transfer in this release, delivered off): XFER-ON / XFER-OFF
+*           write 'yes' / 'no' in register field 22 (ACC$XFER), through os.set like RECOVERY-ON; a user account only (15075), said with 15074; slot XF.
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): RECOVERY-ON / RECOVERY-OFF write 'yes' / 'no' in register field 19 (ACC$RECOVERY), a user
 *           account only (12776), said with 12775; with yes the IDE keeps a copy of the unsaved text of a changed record (!edit_recovery).  Delivered off.
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: FILES-ADMIN-ON / FILES-ADMIN-OFF put the account's person in or out of the Windows group sdfilesadmin, the right to ADMINISTER
@@ -476,6 +478,16 @@ do.action:
             os.field = ACC$RECOVERY
             os.want  = @false
             gosub os.set
+* 15 Nov 26 Windows port - from Linux e080527e (S.242, RELEASE_1.1 299): XFER-ON / XFER-OFF, file transfer over the ssh login (delivered off).  A user account
+*   only (os.set refuses any other with 15075).  The transfer server reads the field at each connection, so it takes effect at once.
+         case upcase(action) = 'XFER-ON'
+            os.field = ACC$XFER
+            os.want  = @true
+            gosub os.set
+         case upcase(action) = 'XFER-OFF'
+            os.field = ACC$XFER
+            os.want  = @false
+            gosub os.set
 * 25 Oct 26 Windows port - from Linux 9d6f407 (17 Oct 26), S.65 slice 1 (SDNet): NET-ON / NET-OFF, the gate for opening a file on another SD server.  Allowed on
 *   a group account as SD-ON is.  Account-scoped: it takes effect at the person's next account entry (sign-on, LOGTO, the API server).
          case upcase(action) = 'NET-ON'
@@ -715,7 +727,7 @@ add.delete.arm:
          
       end else
          crt 'modify.account Action Must Be add, delete, ssh, api, both, none,'
-         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, recovery-on, recovery-off, net-on, net-off,'
+         crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, recovery-on, recovery-off, xfer-on, xfer-off, net-on, net-off,'
          crt '   files-on, files-off, files-write-on, files-write-off, files-admin-on, files-admin-off, ai-on, ai-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   start-menu, start-terminal, start-default, pins-on, pins-off,'
          crt '   suspended or unsuspended'
@@ -741,6 +753,7 @@ show.usage:
    crt '                  modify.account <account> sd-on | sd-off'
    crt '                  modify.account <account> voc-on | voc-off | bp-on | bp-off | dict-on | dict-off'
    crt '                  modify.account <account> recovery-on | recovery-off'
+   crt '                  modify.account <account> xfer-on | xfer-off'
    crt '                  modify.account <account> net-on | net-off'
    crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off | files-admin-on | files-admin-off'
    crt '                  modify.account <account> ai-on | ai-off'
@@ -767,8 +780,8 @@ show.usage:
 *   last of them, ai-on / ai-off, on 13 Nov 26.)  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,AI,AI,ST,ST,ST,PN,PN,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,XFER-ON,XFER-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,XF,XF,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,AI,AI,ST,ST,ST,PN,PN,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -1450,6 +1463,8 @@ os.set:
 *     10 Nov 26 (Linux 44807a43, S.88 plan 2.9, D2): the recovery copy has its own words for why: it is kept only in a user account, for its own person.
       if os.field = ACC$RECOVERY then
          crt sysmsg(12776, acc.name)  ;* %1 is not a user account, and a recovery copy is kept only in a user account, for its own person; nothing was changed
+      end else if os.field = ACC$XFER then
+         crt sysmsg(15075, acc.name)  ;* %1 is not a user account, and file transfer is only for a user account, for its own person; nothing was changed
       end else
          crt sysmsg(10105, acc.name) ;* %1 is a group account and has no Windows user
       end
@@ -1501,6 +1516,11 @@ os.set:
    if os.field = ACC$RECOVERY then
 *     10 Nov 26 (Linux 44807a43, S.88 plan 2.9, D2): one field of its own, so the line names only it.
       crt sysmsg(12775, acc.name, if upcase(trim(acc.new<ACC$RECOVERY>)) = 'YES' then 'yes' else 'no')   ;* Account %1 keeps a recovery copy of unsaved editor text: %2
+      return
+   end
+   if os.field = ACC$XFER then
+*     15 Nov 26 (Linux e080527e, S.242): one field of its own, so the line names only it.
+      crt sysmsg(15074, acc.name, if upcase(trim(acc.new<ACC$XFER>)) = 'YES' then 'yes' else 'no')   ;* Account %1 may move files over its ssh login (receive / send): %2
       return
    end
    if os.field = ACC$PINS then

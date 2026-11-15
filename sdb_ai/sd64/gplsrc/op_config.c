@@ -22,6 +22,7 @@
  * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT and NETREPLY, the two SDNet timeouts (K8d): CONFIG() reads them and PCONFIG sets them for the process, 1 to 3600 seconds.
  * 15 Oct 26 Windows port - from Linux 0bdc4bd - TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
  * 10 Sep 26 Windows port - from Linux 0bdc4bd - Parity audit: CONFIG() with a name over eight characters
+ * 14 Nov 26 dm  S.242 stage 1: CONFIG() reads XFER, XFERFILE, XFERSLOT, XFERWAIT, XFERIDLE, XFERMAX and XFERKIND; PCONFIG sets none of them.
  * 29 Oct 26 dm  S.88 3.7a: CONFIG() takes a name of up to 16 characters (op_config()'s buffer and k_get_c_string limit; the setter is not touched).  SCREENTHEME is 11, so it was
  *               never found and the site theme never applied.  A name over 16 is still "not found"; BACKUPDIR and SDSYS still have no branch.
  * 28 Oct 26 dm  S.87: FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
@@ -252,6 +253,21 @@ void op_config() {
  /* 20240219 mab create-account based on type (user / group / other) */
   else if (!strcmp(param, "USRDIR"))
     k_put_c_string(pcfg.usrdir, &result);
+  /* 14 Nov 26, S.242: the file transfer parameters, read only (PCONFIG does not set them: the transfer server reads sd.conf itself) */
+  else if (!strcmp(param, "XFER"))
+    result.data.value = pcfg.xfer;
+  else if (!strcmp(param, "XFERFILE"))
+    result.data.value = pcfg.xferfile;
+  else if (!strcmp(param, "XFERSLOT"))
+    result.data.value = pcfg.xferslot;
+  else if (!strcmp(param, "XFERWAIT"))
+    result.data.value = pcfg.xferwait;
+  else if (!strcmp(param, "XFERIDLE"))
+    result.data.value = pcfg.xferidle;
+  else if (!strcmp(param, "XFERMAX"))
+    result.data.value = pcfg.xfermax;
+  else if (!strcmp(param, "XFERKIND"))
+    k_put_c_string(pcfg.xferkind, &result);
   else if (!strcmp(param, "YEARBASE"))
     result.data.value = pcfg.yearbase;
   else {

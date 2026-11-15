@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the user table gains the file transfer slot (xfer_dir, xfer_flags,
+ *               xfer_files, xfer_opened, xfer_last, xfer_bytes); the layout of the shared memory changes, so a running SD must be restarted after an upgrade.
  * 25 Oct 26 Windows port - from Linux fc4030a (S.66): UG_SHARED_READ (0x0010) and UG_SHARED_WRITE (0x0020) in the gates word, the shared-account gates.
  *               No change of layout.
  * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: UG_NET (0x0008) in the gates word, the NET gate.  No change of layout.
@@ -287,6 +289,17 @@ struct USER_ENTRY
                                       (openQM item 487) */
    int16_t prof_request;         /* 16 Oct 26 dm - PROFILER ON / OFF USER n: set by the administrator's K_PROFILER_USER and read when
                                       EVT_PROFILER is handled.  0x4000 = start, the low bits the events to log; 0 = stop and report. */
+   /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299).  The file transfer slot this session has open
+      (RECEIVE / SEND; sd_sftp.c, K_XFER).  Zeroed as the process takes its entry.  The transfer server, another process of the same
+      Windows user, finds the slot here and adds to the counts.  NOTHING HERE GRANTS A TRANSFER: XFER and the limits are sd.conf's and
+      the account's xfer-on is the register's, each read by the server itself.  The layout of the shared memory changes: a running SD
+      must be restarted after an upgrade (the installer does).  Placed before file_map[], which must stay last (it runs past the struct). */
+   u_int8_t xfer_dir;            /* XFER_NONE, XFER_IN (RECEIVE), XFER_OUT (SEND) */
+   u_int8_t xfer_flags;          /* XFS_OVERWRITE */
+   int32_t xfer_files;           /* files the slot has taken or given */
+   int64_t xfer_opened;          /* time() the slot was opened */
+   int64_t xfer_last;            /* time() of the last connection, write, read or file closed; 0 = no connection yet */
+   int64_t xfer_bytes;           /* the bytes of those files */
    u_int16_t file_map[1];          /* Count of opens by file.
                                                Protected by FILE_TABLE_LOCK */
  };

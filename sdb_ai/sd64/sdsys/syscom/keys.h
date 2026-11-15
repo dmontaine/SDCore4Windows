@@ -15,6 +15,7 @@
       *                      returned it and VFS is gone from the C
       * 17 Oct 26 Windows port - from Linux 9d6f407 - S.65 slice 1: ACC$NET (15), the per-account NET gate.
       * 09 Sep 26 Windows port - from Linux 9d6f407 - add ACC$TIER (5) and ACC$PRIOR.TIER (6), matching the
+      * 14 Nov 26 dm  S.242: ACC$XFER (22), file transfer over the ssh login (off as delivered; fields 20-21 are Solo's).
       *               Windows port.  PRE_RELEASE 18.
       * rev 0.9-2 Mar 25 mab add sdpyobj
       * rev 0.9.0 Jan 25 mab with the change in ownership of group ACCOUNTS
@@ -464,6 +465,14 @@
       *   a group or other account is entered by several people, any of whom could rename the directory, so the words are refused there (12776).  Not a gate: nothing is
       *   loaded at sign-on; the editor reads the field when it writes a copy, so RECOVERY-OFF stops new copies at once.  No upgrade walk: existing accounts stay off.
       $define ACC$RECOVERY     19    ;* the editors keep a recovery copy of unsaved text (yes/no; blank = no)
+      * 11 Nov 26 dm - FIELDS 20 AND 21 ARE RESERVED FOR SD CORE FOR LINUX SOLO (S.211): its MCP door (ACC$MCP, ACC$MCP.WRITE).  SD Core for Linux has no MCP door (dropped 21 Oct 26) and
+      *   must not use these two for anything else without moving Solo's: the two products keep one numbering of the register record's fields so that a record can be read by both.
+      * 14 Nov 26 dm - FIELD 22: file transfer over the ssh login (S.242; owner, 14 Nov: in this release, delivered off).  yes/no; BLANK MEANS NO.  With it, and with XFER=1 in
+      *   sd.conf, the account's person may open a slot with RECEIVE or SEND and move plain-text files in or out with an sftp client over their usual ssh login; the slot is
+      *   confined to the account's xfer.in / xfer.out.  A USER ACCOUNT ONLY, for its own person (a group or other account is refused, 15075).  SDSYS switches it
+      *   (MODIFY.ACCOUNT XFER-ON / XFER-OFF; CREATE.ACCOUNT takes XFER-ON).  Read by the transfer server itself at each connection, never loaded into a session.
+      *   No upgrade walk: existing accounts stay off.
+      $define ACC$XFER         22    ;* may move files in and out over ssh with RECEIVE / SEND (yes/no; blank = no)
       deffun parse.pathname.tokens(path) calling "!PATHTKN"
       
       * encrytption decryption  *

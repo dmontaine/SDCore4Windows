@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server.
  * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)); Windows only.
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER.
  * 13 Nov 26 Windows port - RELEASE_1.1 246: the AI keys' comment says the helper is here (op_ai.c); the numbers are unchanged.
@@ -567,6 +568,10 @@
    SYSTEM and Administrators can write, and its command= is this session's own command line (sd_jobmark.c, win32jobmark.c).  Any program may
    ask; nothing sets it.  Same number as Linux; GPL.BP/INT$KEYS.H carries it. */
 #define K_JOB_MARK           172
+/* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, file transfer over the ssh login, RELEASE_1.1 299).  kernel(K$XFER, 'op'
+   {: @fm : ...}) from a $internal program: the slot a session opens with RECEIVE / SEND (open, close, state) and the transfer server's side
+   of it (find, serve, refuse); sd_sftp.c k_xfer() has the arguments and answers.  Same number as Linux; GPL.BP/INT$KEYS.H carries it.  */
+#define K_XFER               173
 /* 13 Nov 26 Windows port - RELEASE_1.1 253(b), run.in WITH debug (win32runin.h).  WINDOWS ONLY, in the gap after the Windows-only
    58-68 that Linux leaves free (its 90 and 91 are above it):
      K_RUNIN_CHILD  for run.in's debugged child (sd -RUNIN, its token checked by sd.c runin_door()): account <FM> store <FM> the

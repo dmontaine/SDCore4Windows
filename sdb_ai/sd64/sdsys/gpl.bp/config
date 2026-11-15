@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 14 Nov 26 dm  S.242 stage 1: the listing gains XFER, XFERFILE, XFERSLOT, XFERWAIT, XFERIDLE, XFERMAX and XFERKIND.
 * 28 Oct 26 dm  S.87: FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 28 Oct 26 dm  S.87: the contrib and licence pages are shown with sh less (the ! verb is gone).
 * 27 Oct 26 dm  S.87: CODEPAGE, EXCLREM, GDI, JNLDIR, JNLMODE, PORTMAP and RINGWAIT are no longer reported (they are no longer parameters); nor were APILOGIN or CREATUSR.
@@ -161,6 +162,13 @@ report.params:
    print 'USPLIT    '        : config('USPLIT')
 * 20240219 mab create-account based on type (user / group / other)
    print 'USRDIR    '        : config('USRDIR')
+   print 'XFER      '        : config('XFER')
+   print 'XFERFILE  '        : config('XFERFILE') : ' kb'
+   print 'XFERSLOT  '        : config('XFERSLOT') : ' kb'
+   print 'XFERWAIT  '        : config('XFERWAIT') : ' seconds'
+   print 'XFERIDLE  '        : config('XFERIDLE') : ' seconds'
+   print 'XFERMAX   '        : config('XFERMAX') : ' seconds'
+   print 'XFERKIND  '        : config('XFERKIND')
    print 'YEARBASE  '        : config('YEARBASE')
    print
 

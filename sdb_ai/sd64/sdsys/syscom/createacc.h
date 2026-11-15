@@ -18,6 +18,7 @@
 *              Both ports read them (the Linux block ran past 40 on 23 Oct and is 31-50 there).
 * 28 Oct 26 dm S.88 plan 2.9 (D2): CA$RECOVERY (44), Linux only, whether a new user account's editors keep a recovery copy of unsaved text.  Same block, same deferral.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux (S.69 step 2, 23 Oct 26): CA$AI (41), membership of the Windows group sdaiusers, the AI gate.
+* 15 Nov 26 Windows port - RELEASE_1.1 299, from Linux e080527e (S.242): CA$XFER (45), whether a new user account may move files over the ssh login (RECEIVE / SEND).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -89,5 +90,9 @@ $define CA$PINS            43    ;* 1 = the new account starts with ACC$PINS 'ye
 * Linux only (28 Oct 26, S.88 plan 2.9, D2): 1 = the new USER account starts with ACC$RECOVERY 'yes' (its editors keep a recovery copy of unsaved text).  Blank or 0 leaves it off.
 *   Refused for a group or other account (12776).
 $define CA$RECOVERY        44    ;* 1 = the new account starts with ACC$RECOVERY 'yes'
+
+* Linux only (14 Nov 26, S.242): 1 = the new USER account starts with ACC$XFER 'yes' (file transfer over the ssh login, RECEIVE / SEND).  Blank or 0 leaves it off.
+*   Refused for a group or other account (15075).
+$define CA$XFER            45    ;* 1 = the new account starts with ACC$XFER 'yes'
 
 * END-CODE

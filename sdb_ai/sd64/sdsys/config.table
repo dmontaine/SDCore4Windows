@@ -72,4 +72,11 @@ TERMINFO|path||||session|live|An extra directory of terminfo definitions. The sh
 USERPOOL|int|1023|0|16383|restart|live|The highest user number handed out; user numbers rotate through 1 to this value.|no|The highest user number: PHANTOMS is checked against it; a mistake stops SD.
 USPLIT|flag|0|0|1|restart|live|1 gives interactive sessions the lowest free user numbers and every other process (a phantom, an API session) the highest.|yes|
 USRDIR|path|C:\ProgramData\SD\user_accounts|||session|live|The directory create.account puts a user account in.|no|A directory: user accounts are made there.
+XFER|flag|0|0|1|session|live|1 lets accounts given xfer-on move files over their ssh login with RECEIVE and SEND; 0, as delivered, refuses every transfer.|no|A door: 1 opens file transfer over ssh for every account that has xfer-on.
+XFERFILE|int|10240|1|1048576|session|live|The largest file one transfer slot takes, in kilobytes; a bigger file is refused and discarded.|no|A transfer limit: raising it lets one file fill more of the disk.
+XFERIDLE|int|120|10|3600|session|live|Seconds a transfer slot stays open after its last file has finished; a file still moving is never cut off.|no|A transfer limit: raising it keeps an unused slot open longer.
+XFERKIND|text||||session|live|The extensions a received file must have, separated by commas; blank takes any plain-text file (no NUL byte and no SD mark byte).|no|A transfer filter: blank takes any plain-text file.
+XFERMAX|int|3600|0|86400|session|live|Seconds a transfer slot may stay open at most; 0 removes the ceiling. A file still moving is never cut off.|no|A transfer limit: 0 lets a slot stay open for as long as its session does.
+XFERSLOT|int|102400|1|4194304|session|live|The most one transfer slot takes in all its files, in kilobytes.|no|A transfer limit: raising it lets one slot fill more of the disk.
+XFERWAIT|int|600|10|3600|session|live|Seconds a transfer slot waits for the sftp client's first connection before it closes.|no|A transfer limit: raising it keeps a slot open longer before anyone connects.
 YEARBASE|int|1930|||session|live|The base year of a two-digit year: with 1930 the two-digit years run from 1930 to 2029.|no|Changes how every program reads a two-digit year; SD checks no range.

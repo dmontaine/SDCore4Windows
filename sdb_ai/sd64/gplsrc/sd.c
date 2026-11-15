@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): main() calls xfer_detect() first; an sftp request sshd sent here
+ *           is the file transfer server (sd_sftp.c), and it never opens SD's own window.
  * 14 Nov 26 Windows port - RELEASE_1.1 311: after "Error 5 getting semaphores", two lines say what it means (not an SD user, or made one
  *           since signing in) and what to do.  Windows only.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed getcwd() leaves cwd empty, not unset.
@@ -122,6 +124,7 @@
    that sd.c never sees windows.h.  See win32pipe.h.                        */
 #include "win32pipe.h"
 #include "win32runin.h" /* 13 Nov 26 Windows port - RELEASE_1.1 253(b): -RUNIN's door; no Windows type */
+#include "sd_sftp.h"    /* 15 Nov 26 Windows port - xfer_detect() (Linux d15ace15, S.242 stage 3, RELEASE_1.1 299) */
 #include "locks.h"
 #include "keys.h"
 
@@ -159,6 +162,11 @@ int main(int argc, char *argv[]) {
   char errmsg[80 + 1];
 
   tio.term_type[0] = '\0';
+
+  /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299).  FIRST, before anything can print: an sftp request that
+     sshd sent here (no terminal, SSH_ORIGINAL_COMMAND the Subsystem path) is the file transfer server, not a login.  Its channel is moved
+     off descriptors 0 and 1 (sd_sftp.c). */
+  xfer_detect(argc);
 
  /* 20240126 mab add syslog */
  /* log startup and command line args */
@@ -202,7 +210,8 @@ int main(int argc, char *argv[]) {
      bootstrap or a network session - runs in a classic console window of SD's own; win32vt.c own_window() opens or takes it, and
      returns only when the session is to run here.  Before the shared segment is bound, so a process that opens a new window and ends
      has touched nothing. */
-  if ((connection_type == CN_CONSOLE) && !is_phantom && !is_bootstrap && (single_command == NULL) && (job_claim == NULL))
+  /* 15 Nov 26 Windows port - RELEASE_1.1 299: and never the file transfer server (is_xfer, set by xfer_detect() at the top of main()). */
+  if ((connection_type == CN_CONSOLE) && !is_phantom && !is_bootstrap && !is_xfer && (single_command == NULL) && (job_claim == NULL))
     own_window(L"SD Core");
 
   if (!bind_sysseg(FALSE, errmsg)) {

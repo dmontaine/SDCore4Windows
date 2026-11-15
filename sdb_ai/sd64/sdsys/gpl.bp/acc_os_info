@@ -34,6 +34,7 @@
 * 17 Oct 26 Windows port - from Linux 96d8be8 - S.65 slice 2c: the manifest key route.files (1 if the user is in the group sdfiles, the files-only SDNet login), beside route.ssh and
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.65 write group: the manifest key route.files.write (1 if the user is in the group sdfileswrite, which lets the files-only login change files), after route.files.
 * 18 Oct 26 Windows port - from Linux 3fbfc0d - S.66: the manifest keys shared.read (1 unless ACC$SHARED.READ says no: a blank field means on) and shared.write (1 only if yes), USER arm only.
+* 14 Nov 26 dm S.242 stage 1: the manifest key xfer (1 only if ACC$XFER says yes), USER arm only, after recovery.
 * 28 Oct 26 dm S.88 plan 2.9 (D2): the manifest key recovery (1 only if ACC$RECOVERY says yes), USER arm only, after shared.write.
 * END-HISTORY
 *
@@ -184,6 +185,7 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'shared.write: ':(if upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES' then 1 else 0)
       info<-1> = 'net: ':(if upcase(trim(acc.rec<ACC$NET>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.65 slice 1: the NET gate (does nothing yet)
       info<-1> = 'recovery: ':(if upcase(trim(acc.rec<ACC$RECOVERY>)) = 'YES' then 1 else 0)     ;* 10 Nov 26 (Linux 44807a43, S.88 plan 2.9): the recovery copy (blank means off)
+      info<-1> = 'xfer: ':(if upcase(trim(acc.rec<ACC$XFER>)) = 'YES' then 1 else 0)     ;* 15 Nov 26 (Linux e080527e, S.242): file transfer over ssh (blank means off)
    end
 
    return

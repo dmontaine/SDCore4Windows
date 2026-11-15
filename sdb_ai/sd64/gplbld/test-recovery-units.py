@@ -163,7 +163,7 @@ def checks(src, msgs):
        "the syntax line names {recovery-on} and the audit gates= list names recovery-on",
        re.search(r"case upcase\(token\) = 'RECOVERY-ON'\s*\n\s*settings<CA\$RECOVERY> = 1\s*\n", more) is not None
        and len(re.findall(r"(?<!if )settings<CA\$RECOVERY>\s*=", ca)) == 1 and "RECOVERY-OFF" not in ca
-       and "{pins-on} {recovery-on} {no.query}" in ca and "if settings<CA$RECOVERY> = 1 then gates<-1> = 'recovery-on'" in ca, "")
+       and "{pins-on} {recovery-on} {xfer-on} {no.query}" in ca and "if settings<CA$RECOVERY> = 1 then gates<-1> = 'recovery-on'" in ca, "")
 
     cr = strip(src["create_account"])
     grp = between(cr, "   case acc.type = 'GROUP'\n", "   case acc.type = 'OTHER'\n")
