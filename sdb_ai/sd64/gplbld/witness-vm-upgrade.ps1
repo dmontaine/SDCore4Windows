@@ -15,6 +15,7 @@
 #
 # START-HISTORY:
 # 13 Nov 26  New, for the Core VM witness sitting.  Parse-checked; not run (it needs the VM).
+# 15 Nov 26  sit3 step 13: 260's scram-probe call gains --account (it refused "commands need --account"); the rest passed.
 # END-HISTORY
 
 param([Parameter(Mandatory = $true)][ValidateSet('Before', 'After')][string]$Phase)
@@ -141,7 +142,9 @@ if ($Phase -eq 'After') {
     else {
         $env:SD_SCRAM_PASSWORD = $pw
         if (Test-Path -LiteralPath 'C:\sdtools\bin\libssl-3-x64.dll') { $env:SD_PROBE_LIBSSL = 'C:\sdtools\bin\libssl-3-x64.dll' }
-        $po = & $pyExe.Source (Join-Path $PSScriptRoot 'scram-probe.py') --user zzwitold --port $port -- WHO 2>&1 | ForEach-Object { [string]$_ }
+        # 15 Nov 26 (sit3 step 13): commands need --account ("CANNOT RUN - commands need --account"), as witness-vm-admin's api section.
+        Write-Wit ('  > python scram-probe.py --user zzwitold --account zzwitold --port ' + $port + ' -- WHO   (SD_PROBE_LIBSSL=' + $env:SD_PROBE_LIBSSL + ')')
+        $po = & $pyExe.Source (Join-Path $PSScriptRoot 'scram-probe.py') --user zzwitold --account zzwitold --port $port -- WHO 2>&1 | ForEach-Object { [string]$_ }
         Remove-Item Env:\SD_SCRAM_PASSWORD -ErrorAction SilentlyContinue
         $pt = $po -join "`n"
         Write-WitRaw 'scram-probe as zzwitold' $pt

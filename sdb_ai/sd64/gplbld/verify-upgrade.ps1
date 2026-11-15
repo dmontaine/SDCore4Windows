@@ -148,9 +148,18 @@ $PRESERVE = @('$cred', 'accounts', 'cat', 'os.users', 'os.users.dic',
 # The computed replace list - the ship lists minus preserve.
 # 12 Nov 26 - voc_template is replaced again (RELEASE_1.1 266) but is scored in [5]
 # on its own, because an install older than this change has none to snapshot here.
-$REPLACE  = @('gpl.bp', 'syscom', 'newvoc', 'messages',              # 8 Nov 26: sd.voclib no longer ships (S.87)
-              'license', 'contrib', 'gpl.bp.out', 'gcat',
+# 15 Nov 26 - VM sit3 step 13 (three red rows, none the product's): gpl.bp is OFF this list - it is no longer installed
+# (RELEASE_1.1 208, owner 9 Nov: "never installed"), so an upgrade REMOVES the old release's copy, scored in [5]; and
+# 'licence' is the shipped name (stage.py since d58271b5) - 54951f4f's US-spelling sweep had turned this FILE NAME into
+# 'license', which no tree has ever had.
+$REPLACE  = @('syscom', 'newvoc', 'messages',                       # 8 Nov 26: sd.voclib no longer ships (S.87)
+              'licence', 'contrib', 'gpl.bp.out', 'gcat',
               'pcode.out', 'bin', 'terminfo', 'terminfo.src')
+
+# 15 Nov 26 - RELEASE_1.1 256: stage.py SDSYS_SHIP_INTO_PRESERVED puts these four into the PRESERVED bp on every install
+# and upgrade, by name.  bp's "unchanged" fingerprint leaves them out (on both sides), so it still catches any OTHER change
+# to a site's bp; witness-vm-upgrade.ps1 checks the four themselves byte for byte.
+$SHIPPED_INTO_PRESERVED = @{ 'bp' = @('PY_JSON', 'PY_TERM', 'PY_TEST', 'PY_TEST2') }
 
 # Named by NO ship list, and protected by that alone.  voc is a dynamic file
 # made by "sd -i" and declared nowhere; errlog is the log.  If the upgrade ever
@@ -187,7 +196,7 @@ if (-not (Test-Path -LiteralPath $sdsys)) {
 # distinguishes "left alone" from "deleted and recreated with identical
 # contents", which is the case content hashing cannot see.
 # ---------------------------------------------------------------------------
-function Get-Fingerprint([string]$path) {
+function Get-Fingerprint([string]$path, [string[]]$exclude = @()) {
     $r = [pscustomobject]@{
         Exists = $false; Kind = 'absent'; Hash = ''; Count = 0
         Created = ''; Readable = $true
@@ -199,7 +208,8 @@ function Get-Fingerprint([string]$path) {
     if ($item.PSIsContainer) {
         $r.Kind = 'dir'
         try {
-            $files = @(Get-ChildItem -LiteralPath $path -Recurse -File -Force -ErrorAction Stop)
+            $files = @(Get-ChildItem -LiteralPath $path -Recurse -File -Force -ErrorAction Stop |
+                       Where-Object { $exclude -notcontains $_.Name })
         } catch {
             $r.Readable = $false
             return $r
@@ -236,7 +246,7 @@ function Get-Fingerprint([string]$path) {
 function Snapshot-Names([string[]]$names) {
     $out = @{}
     foreach ($n in $names) {
-        $fp = Get-Fingerprint (Join-Path $sdsys $n)
+        $fp = Get-Fingerprint (Join-Path $sdsys $n) @($SHIPPED_INTO_PRESERVED[$n])
         $out[$n] = $fp
         Write-Host ("    {0,-16} {1,-7} {2,4} item(s)  {3}  created {4}" -f
             $n, $fp.Kind, $fp.Count,
@@ -326,7 +336,7 @@ if ($Snapshot) {
     # empty = E3B0..., probe only = BAC9...).  The survival of the probe is scored in
     # [1]; this row has to compare like with like.  Created is re-read too, harmlessly:
     # adding a file does not move a directory's creation time.
-    $sPreserve['bp'] = Get-Fingerprint (Join-Path $sdsys 'bp')
+    $sPreserve['bp'] = Get-Fingerprint (Join-Path $sdsys 'bp') @($SHIPPED_INTO_PRESERVED['bp'])
     Write-Output ("  bp re-fingerprinted with the probe in it: " + $sPreserve['bp'].Hash.Substring(0, 16) +
                   "  (" + $sPreserve['bp'].Count + " item(s))")
 
@@ -520,7 +530,7 @@ Write-Output '=== [2] PRESERVED names must be byte-identical ===================
 # HIDE a move - so a creation time that DID move is never a false alarm here.
 foreach ($n in $PRESERVE) {
     $before = $state.Preserve.$n
-    $after  = Get-Fingerprint (Join-Path $sdsys $n)
+    $after  = Get-Fingerprint (Join-Path $sdsys $n) @($SHIPPED_INTO_PRESERVED[$n])
     if (-not $before.Readable -or -not $after.Readable) {
         Skip ("preserved: " + $n) 'not readable even elevated, so no comparison was made'
         continue
@@ -584,6 +594,8 @@ $appChangelog   = Join-Path $appDir 'changelog'
 Write-Output ("  sdsys\changelog : " + $(if (Test-Path -LiteralPath $sdsysChangelog) { 'PRESENT' } else { 'gone' }))
 Write-Output ("  {app}\changelog : " + $(if (Test-Path -LiteralPath $appChangelog) { 'present' } else { 'GONE' }))
 Note 'sdsys\changelog was removed' $false (Test-Path -LiteralPath $sdsysChangelog)
+# 15 Nov 26 - RELEASE_1.1 208: the source is no longer installed, so an upgrade takes the old release's gpl.bp away.
+Note 'sdsys\gpl.bp is not installed (RELEASE_1.1 208)' $false (Test-Path -LiteralPath (Join-Path $sdsys 'gpl.bp'))
 Note '{app}\changelog is present'  $true  (Test-Path -LiteralPath $appChangelog)
 # 12 Nov 26 - voc_template is REPLACED, not retired (RELEASE_1.1 266): present, the
 # probe -Snapshot put in it gone, tool.gates (the administrator's page) there, and
