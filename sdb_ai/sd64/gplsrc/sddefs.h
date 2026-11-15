@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 299: _XOPEN_CRYPT is defined only when MSYS2's headers have not (sd_sftp.c's include order).
  * 01 Oct 26 Windows port - SD_API_PORT, 4247, fixed (owner's port ruling)
  * 02 Oct 26 Windows port - SD Core's own IPC keys, 0x53435701/02, and the
  *           object names that carry them, so the four SD Core products and
@@ -72,7 +73,12 @@
 #define HOT_SPOT_MONITOR
 
 #define _XOPEN_SOURCE 700
+/* 15 Nov 26 Windows port - RELEASE_1.1 299: sd_sftp.c includes OpenSSL's evp.h before sd.h (Linux's order), and MSYS2's
+   sys/features.h has then already defined _XOPEN_CRYPT as 1, so the plain define here was the build's one warning.  The
+   value is all that differs; the guard keeps it whichever comes first.  glibc does not define it, so Linux never saw this. */
+#ifndef _XOPEN_CRYPT
 #define _XOPEN_CRYPT
+#endif
 #include <unistd.h>
 
 #include <endian.h>
