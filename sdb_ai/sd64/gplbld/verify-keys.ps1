@@ -149,12 +149,22 @@ try {
     Note 'and LEFT did not land it one short of the mark'         $false `
          ($normal -match 'COUN is not in your VOC')
 
-    # WITHOUT THIS THE SECTION WOULD PASS ON A BUILD THAT ACCEPTED ANY ESCAPE
-    # SEQUENCE AS AN ARROW.  Only the decisive half is asserted - whatever the
-    # unbound bytes leave in the command line, they must not produce a COUNT.
+    # 14 Nov 26 - THE APPLICATION-MODE SPELLING IS BOUND NOW, ON PURPOSE.  _keycode
+    # carries Linux S.88 K1/K2 (10 Nov 26, _keycode:107 and :127): every terminal's
+    # keys in BOTH cursor-key modes.  This row was a control that ESC O D / ESC O C
+    # were NOT bound (2 Oct 26); since S.88 that is the opposite of the design, and
+    # it was the one red step of runs b331 and b335.  It is a positive row now.
     $appmode = Invoke-SD @((& $arrowLine ($esc + 'OD') ($esc + 'OC')))
-    Note 'control: the application-mode spelling is NOT bound'    $false `
+    Note 'the application-mode spelling (ESC O D, ESC O C) moves the cursor too (S.88)' $true `
          ($appmode -match 'record\(s\) counted')
+
+    # WITHOUT THIS THE SECTION WOULD PASS ON A BUILD THAT ACCEPTED ANY ESCAPE
+    # SEQUENCE AS AN ARROW - the job the row above used to do.  ESC [ 99 ~ is bound
+    # by no terminal; S.88 K3 takes an unbound sequence whole and rings the bell.
+    # Only the decisive half is asserted: it must not produce a COUNT.
+    $unbound = Invoke-SD @((& $arrowLine ($esc + '[99~') ($esc + '[98~')))
+    Note 'control: an unbound sequence in place of the arrows moves nothing' $false `
+         ($unbound -match 'record\(s\) counted')
 
     $noarrow = Invoke-SD @('COUNTVOC ')
     Note 'control: with no arrows at all, COUNTVOC is refused'    $true `
