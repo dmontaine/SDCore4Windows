@@ -17,6 +17,7 @@
 *              names the account (av) before run.queue, so that the leave question can run the queue of an account that is not under the cursor.
 *              After the review: run.queue says whether its command ran without a refusal or an error (rq.ok); Run the changes keeps the page open and shows the
 *              failing account's message when any did not succeed (run.queue clears a queue once the box said Run, so "nothing left" alone was not success).
+* 15 Nov 26 dm S.242 stage 6: the file transfer gate (xfer, kind 'record') is a column, a USER account's only like sh and os (modify.account refuses it for another, 15075).
 * 7 Nov 26 dm  S.166: the home gate is a column (ON the home screen, off the command prompt; words start-menu and start-terminal).  A and N leave it alone: which of the two is
 *              the tighter is not "off", so "all on" and "all off" do not decide where a person starts.
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the matrix to the AI line and back; AI > Ask the AI is a menu entry of its own.
@@ -342,7 +343,7 @@ get.rects:
    VIS = mat.h - 5                                               ;* the heading, the account rows, the two lines of counts and the border: 14 rows of 19
    CL = cel.h - 2                                                ;* the lines about the cell: 9 rows of 11
    RW = rea.h - 2                                                ;* the rows of each list under the cell: 7 of 9 (the last of them holds the "..." of the first list)
-   X0 = mat.x + 28                                               ;* the column of the first cell (2 inside the box + the 26 of name and kind)
+   X0 = mat.x + 23                                               ;* the column of the first cell (2 inside the box + the 21 of name and kind)
    return
 
 * After a resize the rows scrolled off the top are not more than the accounts shown less the rows that fit
@@ -366,7 +367,7 @@ draw.all:
    return
 
 draw.matrix:
-   s = fmt('Account', '20L') : fmt('Kind', '6L')
+   s = fmt('Account', '15L') : fmt('Kind', '6L')
    for k = 1 to NG
       s := fmt(ghdr<k>, CW : 'L')
    next k
@@ -379,12 +380,12 @@ draw.matrix:
       s = ''
       if kk <= nv then
          av = view<kk>
-         s = fmt(anm<av>, '20L') : fmt(downcase(aty<av>), '6L')
+         s = fmt(anm<av>, '15L') : fmt(downcase(aty<av>), '6L')           ;* S.242: eighteen cells leave room for 15 letters of a name (the cell box below has it whole)
          for k = 1 to NG
             gosub cell.text
             s := fmt(ct, CW : 'L')
          next k
-         if asu<av> then s := ' susp'                    ;* S.166: seventeen cells leave five columns (the cell box below says "suspended" in full)
+         if asu<av> then s := ' susp'                    ;* S.166: the cells leave five columns (S.242: eighteen of them, after the name was cut to 15 letters; the cell box below says "suspended" in full)
       end
       screen text s at mat.x + 2,mat.y + 1 + r attr (if kk = ci and kk <= nv then 'bold' else 'normal') width mtw
    next r
@@ -455,14 +456,15 @@ draw.cell:
             lines<-1> = 'This gate is planned and not built yet: it has no words and nothing to switch.'
          case s0 = 'na'
             lines<-1> = 'This gate does not apply to a ' : downcase(aty<av>) : ' account: it is a route for a person, and the account has no Windows user of its own.'
-         case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'
-            lines<-1> = 'Now: ' : (if s0 = 1 then 'ON' else 'off') : '.  A ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so a shell or OS.EXECUTE granted to it would be granted to all of them: modify.account refuses ' : gids<k> : ' for it, in either direction.'
+         case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer
+            lines<-1> = 'Now: ' : (if s0 = 1 then 'ON' else 'off') : '.  A ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so a shell, OS.EXECUTE or file transfer granted to it would be granted to all of them: modify.account refuses ' : gids<k> : ' for it, in either direction.'
          case 1
             lines<-1> = 'Now: ' : (if s0 = 1 then 'ON' else 'off') : '.  As delivered: ' : gdef<k> : '.  Words: ' : gon<k> : ' turns it on, ' : goff<k> : ' turns it off.' : (if aq<av, k> # '' then '  Queued: ' : (if aq<av, k> = 1 then 'ON' else 'off') : '.' else '')
             lines<-1> = 'ON allows: ' : gall<k>
             lines<-1> = 'OFF still allows: ' : gstill<k>
             lines<-1> = 'A change reaches the person: ' : gwhen<k> : '.  It does not touch a session that is already running.' : (if gbey<k> = 1 then '  This gate reaches BEYOND SD.' else '')
             if gids<k> = 'ssh' or gids<k> = 'api' then lines<-1> = 'ssh and api are ONE setting in modify.account (the words ssh, api, both and none set it): the page sends the one word that gives the pair you queue.'
+            if gids<k> = 'xfer' then lines<-1> = 'xfer also needs the system switch XFER (sd.conf, off as delivered), the ssh gate and a free transfer slot; the server reads this gate at each connection.'
             if gids<k> = 'files-write' then lines<-1> = 'files-write needs files; files-off takes it away too.'
             if gids<k> = 'files-admin' then lines<-1> = 'files-admin needs files-write; files-write-off and files-off take it away too.'
       end case
@@ -689,7 +691,7 @@ cell.why:
          why = gti<k> : ' is planned and not built yet'
       case ast<av, k> = 'na'
          why = gti<k> : ' does not apply to a ' : downcase(aty<av>) : ' account'
-      case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'
+      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer
          why = 'a ' : downcase(aty<av>) : ' account is entered by whoever its Windows group admits, so modify.account refuses ' : gids<k> : ' for it'
    end case
    return
@@ -737,7 +739,7 @@ tighten:
    av = view<ci>
    n.q = 0
    for k = 1 to NG
-      person.only = (gids<k> = 'sh' or gids<k> = 'os')
+      person.only = (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer')
       if gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1 and not(person.only and aty<av> # 'USER') then
          aq<av, k> = 0
          n.q += 1

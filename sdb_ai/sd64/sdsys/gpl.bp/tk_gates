@@ -7,6 +7,7 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the toolkit base and tool.keys (S.75 TK-0.1 to TK-1)
 * 22 Oct 26 dm  New (S.75, TK-0.3).
 * 7 Nov 26 dm   S.166: the home gate (kind 'start') is read by $tk_startof from ACC$START.
+* 15 Nov 26 dm  S.242 stage 6: the file transfer gate (kind 'record') is the register field ACC$XFER, yes or no.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -100,6 +101,8 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
             state = ''
          case gi<TK.G.KIND> = 'start'                ;* S.166: the home gate, any kind of account (menu, terminal, blank for the system's default)
             call $tk_startof(rec<ACC$START>, state)
+         case gi<TK.G.KIND> = 'record'               ;* S.242 stage 6: the file transfer gate, a register field no kernel key holds (the transfer server reads it at each connection)
+            state = (if upcase(trim(rec<ACC$XFER>)) = 'YES' then 1 else 0)
          case gi<TK.G.KIND> = 'group'
             if atype = 'USER' then
                state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)

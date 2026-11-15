@@ -88,11 +88,11 @@ def checks(raw):
        not re.search(r"^\s*aq<.*>\s*=\s*1\b", pg, re.M) and re.search(r"aq<av, k> = \(if nw = s0 then '' else nw\)", qc) is not None and "gosub cell.why" in qc
        and re.search(r"case nm = 'a'\s*\n\s*tv = 1\s*\n\s*gosub queue.all", pg) is not None and re.search(r"case nm = 'n'\s*\n\s*tv = 0\s*\n\s*gosub queue.all", pg) is not None
        and re.search(r"gosub cell\.why\s*\n\s*if gids<k> = 'home' then why = [^\n]*\n\s*if why = '' then\s*\n\s*aq<av, k> = \(if ast<av, k> = tv then '' else tv\)", qa) is not None and qa.count("aq<av, k> =") == 1   # S.166: A and N leave home alone
-       and not re.search(r"\$tk_run|\$tk_confirm|execute|gosub run\.queue", qa) and "case gstat<k> # 'built'" in cw and "case ast<av, k> = 'na'" in cw and "case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'" in cw
+       and not re.search(r"\$tk_run|\$tk_confirm|execute|gosub run\.queue", qa) and "case gstat<k> # 'built'" in cw and "case ast<av, k> = 'na'" in cw and "case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'" in cw
        and sorted(set(re.findall(r"call \$tk_keys\('add', keys, '[^']+', '[^']+', '([a-z]+)'", pg))) == sorted(["help", "queue", "run", "drop", "tighten", "allon", "alloff", "filter", "find", "refresh", "quit", "menu"]))   # find: '/' (S.186, 9 Nov 26)
     th = block(pg, "tighten")
     ck("TG6", "T queues OFF (0) and only for a built gate that is off as delivered and on now, and not sh or os for an account that is not a person",
-       "aq<av, k> = 0" in th and "gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1" in th and "person.only = (gids<k> = 'sh' or gids<k> = 'os')" in th and "not(person.only and aty<av> # 'USER')" in th and th.count("aq<av, k> =") == 1)
+       "aq<av, k> = 0" in th and "gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1" in th and "person.only = (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer')" in th and "not(person.only and aty<av> # 'USER')" in th and th.count("aq<av, k> =") == 1)
     ck("TG7", "turning ON a gate that reaches beyond SD makes the box ask for the account's name (the flag comes from the table's beyond column, typed is the name, and it starts empty), and the order is check the needs, make the sentence, confirm, then run",
        "typed = ''" in mk and "if gbey<k> = 1 then beyond = 1" in mk and re.search(r"if beyond then\s*\n[^\n]*\n\s*typed = anm<av>", mk) is not None and "gbey<k> = gi<TK.G.BEYOND>" in pg
        and 0 < pg.find("gosub check.needs") < pg.find("gosub make.sentence") < pg.find("call $tk_confirm(") < pg.find("call $tk_run("))
@@ -105,7 +105,7 @@ def checks(raw):
        and re.search(r"gosub check\.needs\s*\n\s*if bad # '' then\s*\n\s*msg = bad\s*\n\s*return", pg) is not None)
     qc = block(pg, "queue.cell")
     ck("TG11", "sh and os are not queued for an account that is not a person (the verb refuses them in both directions), and a cell that is planned or not applicable queues nothing",
-       "case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'" in cw and "case gstat<k> # 'built'" in cw and "case ast<av, k> = 'na'" in cw
+       "case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'" in cw and "case gstat<k> # 'built'" in cw and "case ast<av, k> = 'na'" in cw
        and 0 < qc.find("gosub cell.why") < qc.find("if why # '' then") < qc.find("aq<av, k> ="))
     ck("TG12", "SDSYS is not a row (modify.account refuses it), and an account whose gates could not be read is not shown", "if id # 'sdsys' then" in pg and "call $tk_gates(names<i>, g, ainfo, gerr)\n      if gerr = '' then" in pg)
     rq = block(pg, "run.queue")
@@ -119,8 +119,9 @@ def checks(raw):
         m = re.search(r"case gid = '%s'\s*\n\s*hd = '([^']*)'" % re.escape(gid), pg)
         heads[gid] = m.group(1) if m else gid[:5]
     n = len(info_rows)
-    ck("TG15", "the layout fits: the first cell is at column 3 + 20 + 6, the cells are 6 wide, every gate of the table has a heading of at most 5 characters and the headings differ, and the cells fit the 134 columns",
-       "X0 = mat.x + 28" in pg and "CW = 6" in pg and "fmt('Account', '20L') : fmt('Kind', '6L')" in pg and 26 + 6 * n <= 134 and len(set(heads.values())) == len(heads) and all(len(h) <= 5 for h in heads.values()) and len(heads) == n, repr(heads))
+    ck("TG15", "the layout fits: the first cell is at column 3 + 15 + 6 (S.242: the name was 20 wide until eighteen cells needed the room), the cells are 6 wide, every gate of the table has a heading of at most 5 characters "
+       "and the headings differ, and the cells and the ' susp' mark fit the 134 columns",
+       "X0 = mat.x + 23" in pg and "CW = 6" in pg and "fmt('Account', '15L') : fmt('Kind', '6L')" in pg and "fmt(anm<av>, '15L')" in pg and 21 + 6 * n + 5 <= 134 and len(set(heads.values())) == len(heads) and all(len(h) <= 5 for h in heads.values()) and len(heads) == n, repr(heads))
     ck("TG16", "the filter has three modes and names them; the sessions are read with !listu and shown only for the account under the cursor", "flt = mod(flt + 1, 3)" in pg and pg.count("accounts of persons") == 1 and "call !listu(udata)" in pg and "if v<1, 9> = anm<av> then" in pg)
     ck("TG17", "the matrix has a [?] and F1, ? and a click show tool.gates.matrix, whose record exists", "call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)" in pg and pg.count("tool.gates.matrix") == 2 and "call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)" in pg and raw["help"].split("\n")[0].strip() != "")
     # S.88 p5-U2b P10 (2 Nov 26): Ctrl-Q dropped the queue without a word
@@ -171,7 +172,7 @@ MUTANTS = [
     ("all on skips the test of a cell", "TG5", sub("page", "      gosub cell.why\n      if why = '' then\n         aq<av, k> = (if ast<av, k> = tv", "      why = ''\n      if why = '' then\n         aq<av, k> = (if ast<av, k> = tv")),
     ("all on runs the queue at once", "TG5", sub("page", "   gosub redraw\n   w.st = ", "   gosub run.queue\n   w.st = ")),
     ("all off queues on", "TG5", sub("page", "      case nm = 'n'\n         tv = 0", "      case nm = 'n'\n         tv = 1")),
-    ("cell.why lets sh through for a group account", "TG5", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'\n         why =", "      case 0\n         why =")),
+    ("cell.why lets sh through for a group account", "TG5", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'\n         why =", "      case 0\n         why =")),
     ("a gate already on is queued again", "TG5", sub("page", "aq<av, k> = (if ast<av, k> = tv then '' else tv)", "aq<av, k> = tv")),
     ("tighten queues ON", "TG5", sub("page", "         aq<av, k> = 0\n         n.q += 1", "         aq<av, k> = 1\n         n.q += 1")),
     ("tighten takes a gate that is on as delivered", "TG6", sub("page", "gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1", "gstat<k> = 'built' and ast<av, k> = 1")),
@@ -184,14 +185,14 @@ MUTANTS = [
     ("the route columns are also sent as words of their own", "TG9", sub("page", "if aq<av, k> # '' and k # rs and k # ra then", "if aq<av, k> # '' then")),
     ("files-write is allowed without files", "TG10", sub("page", "if fin<fw> = 1 and fin<fi> # 1 then bad =", "if fin<fw> = 1 and fin<fi> = 7 then bad =")),
     ("files-admin is allowed without files-write", "TG10", sub("page", "if fin<fa> = 1 and fin<fw> # 1 then bad =", "if @false then bad =")),
-    ("sh is queued for a group account", "TG11", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os') and aty<av> # 'USER'\n         why =", "      case @false\n         why =")),
+    ("sh is queued for a group account", "TG11", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'\n         why =", "      case @false\n         why =")),
     ("Enter queues without the test", "TG11", sub("page", "   s0 = ast<av, k>\n   gosub cell.why\n", "   s0 = ast<av, k>\n   why = ''\n")),
     ("SDSYS is a row", "TG12", sub("page", "if id # 'sdsys' then", "if id # 'sdsysx' then")),
     ("the page is not drawn again after a command", "TG13", sub("page", "      gosub read.all\n      gosub draw.all\n   end else\n      msg = cmsg", "      msg = msg\n   end else\n      msg = cmsg")),
     ("the cell shows the queue as the state", "TG14", sub("page", "ct = (if d = 1 then 'ON' else 'off') : (if aq<av, k> # '' then '*' else '')", "ct = (if d = 1 then 'ON' else 'off')")),
     ("two gates have the same heading", "TG15", sub("page", "         hd = 'sh-wr'", "         hd = 'sh-rd'")),
     ("a heading is too long", "TG15", sub("page", "         hd = 'f-adm'", "         hd = 'files-admin'")),
-    ("the cells start in another column", "TG15", sub("page", "X0 = mat.x + 28", "X0 = mat.x + 29")),
+    ("the cells start in another column", "TG15", sub("page", "X0 = mat.x + 23", "X0 = mat.x + 24")),
     ("the filter has a fourth mode", "TG16", sub("page", "flt = mod(flt + 1, 3)", "flt = mod(flt + 1, 4)")),
     ("the matrix has no [?]", "TG17", sub("page", "   call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)\n", "")),
 ]

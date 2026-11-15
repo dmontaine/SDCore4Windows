@@ -1,0 +1,291 @@
+* XFER
+* RECEIVE and SEND: open a file transfer slot for an sftp client that signs in over the ssh login.
+* Copyright (c) String Database
+*
+* This program is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3, or (at your option)
+* any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software Foundation,
+* Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+*
+* START-HISTORY:
+* 15 Nov 26 dm S.242 stage 4: written.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    RECEIVE {OVERWRITE}
+*    SEND file id {id ...}
+*
+*    RECEIVE opens a slot for files coming IN to the directory file xfer.in of the person's own account and waits; the person
+*    then puts files with an sftp client (WinSCP, FileZilla, OpenSSH sftp) signed in with the same login as for ssh.  With
+*    OVERWRITE a file that comes in may replace one of the same name; without it such a file is refused.
+*    SEND copies the named records of a file to the directory file xfer.out, opens a slot for files going OUT and waits; the
+*    person then gets them with the sftp client.
+*    Either ends when Enter is pressed, when nothing has come for XFERWAIT (before a connection) or XFERIDLE (after one), at
+*    XFERMAX, or when the session's input ends; it then says what was moved.
+*
+*    WHO MAY (the transfer server, gplsrc/sd_sftp.c and gpl.bp/xfersrv, asks all of this again at every connection; these tests
+*    are so that the person is told here, at once, and not by a client that says "Permission denied"):
+*       XFER is 1 in sd.conf; the session is in the account named after its Linux user; that account is a user account whose
+*       register record says xfer-on.
+*
+*    THE DIRECTORY is <account path from the register>/xfer.in or xfer.out, the fixed name the server uses.  It is made on first
+*    use, with a VOC entry of the same name so that the files are records (COPY, ED, BASIC).  A VOC entry of that name that is
+*    anything else is left alone and the transfer is refused: the server would not use it, and the person would look for the
+*    files in the wrong place.
+*
+*    The slot is this session's (KERNEL(K$XFER)); it ends with the session.  $internal: an ordinary account may write its VOC
+*    entry here whatever its voc-edit gate says, and only this one fixed entry.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program xfer
+$catalog $xfer
+
+$include syscom.h
+$include keys.h
+$include int$keys.h
+$include err.h
+
+   @system.return.code = -ER$FAILED
+
+   s = trim(@sentence)
+   is.send = (upcase(field(s, ' ', 1)) = 'SEND')
+   nwords = dcount(s, ' ')
+   flags = 0
+
+   if is.send then
+      if nwords < 3 then
+         crt sysmsg(15102)  ;* Command Syntax: send <file> <record id> {<record id> ...}
+         @system.return.code = -ER$ARGS
+         stop
+      end
+      dir = 2 ; dir.word = 'out' ; dir.name = 'xfer.out'
+   end else
+      if nwords > 2 or (nwords = 2 and upcase(field(s, ' ', 2)) # 'OVERWRITE') then
+         crt sysmsg(15107)  ;* Command Syntax: receive {overwrite}
+         @system.return.code = -ER$ARGS
+         stop
+      end
+      if nwords = 2 then flags = 1
+      dir = 1 ; dir.word = 'in' ; dir.name = 'xfer.in'
+   end
+
+* ----------------------------------------------------------------------
+* May this session open a transfer?  (The server asks again, of the register, at every connection.)
+
+   if config('XFER') # 1 then
+      crt sysmsg(15076)  ;* File transfer is not turned on for this system (XFER is 0 in sd.conf)
+      stop
+   end
+
+   lgn = @logname
+   acct = downcase(lgn)
+   if downcase(@who) # acct then
+      crt sysmsg(15095, acct, @who)  ;* A transfer is opened from your own account, %1; this session is in %2
+      stop
+   end
+
+   openpath @sdsys:@ds:'accounts' to acc.f else
+      crt sysmsg(2200)  ;* Cannot open accounts register
+      stop
+   end
+   read acc.rec from acc.f, acct else acc.rec = ''
+   close acc.f
+
+   if acc.rec<ACC$GROUP>[1,4] # 'sdu_' then
+      crt sysmsg(15078, lgn)  ;* File transfer is only for a user account, for its own person; %1 has no user account of its own
+      stop
+   end
+   if upcase(trim(acc.rec<ACC$XFER>)) # 'YES' then
+      crt sysmsg(15077, acct)  ;* Account %1 may not move files over its ssh login (the administrator allows it with modify.account %1 xfer-on)
+      stop
+   end
+   acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
+   xdir = acc.path : @ds : dir.name
+
+* ----------------------------------------------------------------------
+* The directory file: the fixed name under the account's path, and its VOC entry
+
+   read voc.rec from voc, dir.name then
+      if upcase(voc.rec<1>[1,1]) # 'F' or (voc.rec<2> # dir.name and voc.rec<2> # xdir) then
+         crt sysmsg(15096, dir.name)  ;* %1 is in this account's VOC as something other than the transfer directory; nothing was opened
+         stop
+      end
+   end else
+      voc.rec = ''
+   end
+
+   if not(ospath(xdir, OS$EXISTS)) then
+      create.file xdir directory on error
+         crt sysmsg(15092, dir.name)  ;* The transfer directory %1 is not there, or is not a plain directory
+         stop
+      end
+   end
+   openpath xdir to x.f else
+      crt sysmsg(15092, dir.name)
+      stop
+   end
+   if voc.rec = '' then
+      write 'F' : @fm : dir.name to voc, dir.name on error
+         crt sysmsg(15096, dir.name)
+         stop
+      end
+   end
+
+* ----------------------------------------------------------------------
+* SEND: copy the records out first.  A record must be plain text as the server means it, under a name the server takes.
+
+   if is.send then
+      src.name = field(s, ' ', 2)
+      open src.name to src.f else
+         crt sysmsg(15105, src.name)  ;* Cannot open %1
+         stop
+      end
+      copied = 0
+      for w = 3 to nwords
+         id = field(s, ' ', w)
+         ans = kernel(K$XFER, 'name' : @fm : id)
+         if ans<1> # 'OK' then
+            crt sysmsg(15108, id)  ;* %1 is not a name a transfer takes (or not a kind of file this system moves) and was not copied
+            continue
+         end
+         read rec from src.f, id else
+            crt sysmsg(15104, src.name, id)  ;* %1 has no record %2
+            continue
+         end
+         gosub plain.test
+         if not(plain) then
+            crt sysmsg(15103, src.name, id)  ;* %1 %2 is not plain text (a NUL byte, or a mark other than a field mark) and was not copied
+            continue
+         end
+         write rec to x.f, id on error
+            crt sysmsg(15104, dir.name, id)
+            continue
+         end
+         copied += 1
+      next w
+      close src.f
+      if copied = 0 then
+         crt sysmsg(15106)  ;* Nothing was copied, so no transfer was opened
+         stop
+      end
+   end
+
+* ----------------------------------------------------------------------
+* What is in the directory now, so that what the transfer brings can be told afterwards
+
+   before.ids = ''
+   before.dtm = ''
+   select x.f to 11
+   loop
+      readnext id from 11 else exit
+      before.ids<-1> = id
+      before.dtm<-1> = ospath(xdir : @ds : id, OS$DTM)
+   repeat
+
+* ----------------------------------------------------------------------
+* Open the slot and wait
+
+   ans = kernel(K$XFER, 'open' : @fm : dir : @fm : flags)
+   if ans<1> # 'OK' then
+      begin case
+         case ans<2> = 'off'     ; crt sysmsg(15076)
+         case ans<2> = 'session' ; crt sysmsg(15101)  ;* A transfer is opened from a terminal session, not from a phantom or a program run for a client
+         case 1                  ; crt sysmsg(15093, ans<2>)
+      end case
+      stop
+   end
+   void kernel(K$AUDIT, 'xfer open dir=' : dir.word : ' overwrite=' : (if flags then 'yes' else 'no') : ' account=' : acct)
+
+   conn = env('SSH_CONNECTION')
+   if conn # '' then
+      where = field(conn, ' ', 3) : ' port ' : field(conn, ' ', 4)
+   end else
+      where = @hostname
+   end
+   if is.send then
+      crt sysmsg(15098, dir.name, where, lgn)  ;* Ready to send from %1.  Connect an sftp client to %2 as %3 and get the files.  Press Enter here when done.
+   end else
+      crt sysmsg(15097, dir.name, where, lgn)  ;* Ready to receive into %1.  Connect an sftp client to %2 as %3 and put the files.  Press Enter here when done.
+   end
+
+   why = ''
+   early = 0
+   loop
+      st = kernel(K$XFER, 'state')
+      if st<4> # 'live' then
+         why = st<4>
+         exit
+      end
+      t0 = time()
+      k = keyin(1)
+      if k # '' then
+         why = 'done'
+         exit
+      end
+      if time() = t0 then          ;* no key and no second gone: the session's input has ended
+         early += 1
+         if early >= 3 then
+            why = 'input ended'
+            exit
+         end
+      end else
+         early = 0
+      end
+   repeat
+
+   ans = kernel(K$XFER, 'close')
+   n.files = ans<2> + 0
+   n.bytes = ans<3> + 0
+   void kernel(K$AUDIT, 'xfer close dir=' : dir.word : ' why=' : why : ' files=' : n.files : ' bytes=' : n.bytes : ' account=' : acct)
+
+   begin case
+      case why = 'done'        ; why.text = sysmsg(15109)  ;* closed here
+      case why = 'wait'        ; why.text = sysmsg(15110)  ;* no connection came in time
+      case why = 'idle'        ; why.text = sysmsg(15111)  ;* nothing more came
+      case why = 'max'         ; why.text = sysmsg(15112)  ;* the time limit for a transfer was reached
+      case 1                   ; why.text = sysmsg(15113)  ;* this session's input ended
+   end case
+   crt sysmsg(15099, why.text, n.files, n.bytes)  ;* Transfer closed (%1): %2 file(s), %3 bytes
+
+* What came in: the files that are new or changed, each with its SHA-256 to compare with the sender's
+
+   if not(is.send) then
+      select x.f to 11
+      loop
+         readnext id from 11 else exit
+         locate id in before.ids<1> setting pos then
+            if ospath(xdir : @ds : id, OS$DTM) = before.dtm<pos> then continue
+         end
+         crt '   ' : id : '   sha256 ' : downcase(digest(xdir : @ds : id, 1, 'SHA256'))
+      repeat
+   end
+
+   @system.return.code = n.files
+   stop
+
+* ----------------------------------------------------------------------
+* plain.test  -  rec is plain text: no NUL, and no mark but the field mark (which a directory file writes as a new line)
+
+plain.test:
+   plain = (index(rec, char(0), 1) = 0)
+   for c = 248 to 255
+      if c # 254 and index(rec, char(c), 1) then plain = @false
+   next c
+   return
+end
+
+* END-CODE

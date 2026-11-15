@@ -1428,6 +1428,7 @@ Private bool sx_buffers(void) {
      close                      ...and closes it.  OK <FM> files <FM> bytes.
      state                      OK <FM> dir <FM> flags <FM> state <FM> seconds left <FM> files <FM> bytes <FM> connected,
                                 state being none, live, wait, idle or max (the last three: ended, for that reason).
+     name <FM> text             Is the text a name the server takes (sx_name_ok) of a kind XFERKIND allows?  OK, or ERR <FM> name.
      find <FM> account          The transfer server looks for an open slot of its own Linux user in that account.
                                 OK <FM> dir <FM> flags <FM> holder's user number, or ERR <FM> none | expired | server.
      serve <FM> directory       The transfer server runs the conversation in that directory, for the slot found.
@@ -1510,6 +1511,11 @@ void k_xfer(DESCRIPTOR* descr, DESCRIPTOR* result) {
     xfer_answer(result, "OK%c%d%c%d%c%s%c%d%c%d%c%lld%c%d", FIELD_MARK, (int)my_uptr->xfer_dir, FIELD_MARK, (int)my_uptr->xfer_flags,
                 FIELD_MARK, xfer_state_word(st), FIELD_MARK, (int)left, FIELD_MARK, (int)my_uptr->xfer_files, FIELD_MARK,
                 (long long)my_uptr->xfer_bytes, FIELD_MARK, (my_uptr->xfer_last != 0) ? 1 : 0);
+    return;
+  }
+
+  if (strcmp(arg, "name") == 0) { /* is this a name the server takes?  One rule, asked by SEND before it copies a record out */
+    xfer_answer(result, ((f2 != NULL) && sx_name_ok(f2) && sx_kind_ok(f2)) ? "OK" : "ERR%cname", FIELD_MARK);
     return;
   }
 

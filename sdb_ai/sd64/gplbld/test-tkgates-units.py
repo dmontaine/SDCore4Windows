@@ -34,8 +34,7 @@ FILES = {
 FIELDS = ["id", "title", "on", "off", "kind", "field", "group", "key", "when", "default", "slot", "allows", "still", "beyond", "status"]
 # 7 Nov 26 (S.166): START-MENU and START-TERMINAL are the home gate's words now; START-DEFAULT (back to the system's default) is still not a gate word.
 NOT_GATE_WORDS = {"BOTH", "SUSPENDED", "UNSUSPENDED", "START-DEFAULT", "PINS-ON", "PINS-OFF", "SDSYS-ON", "SDSYS-OFF",
-                  "RECOVERY-ON", "RECOVERY-OFF",
-                  "XFER-ON", "XFER-OFF"}      # 14 Nov 26 (S.242 stage 1): file transfer, ACC$XFER, has no kernel key (the transfer server reads the register at each connection), so it is not a row until the matrix has a kind for it (S.242 stage 6);  28 Oct 26 (S.88 plan 2.9, D2): the editors' recovery copy, ACC$RECOVERY - a convenience the administrator switches, not a wall, and not yet a row of the gate matrix (a follow-up); 26 Oct 26 (F6): SDSYS-ON / SDSYS-OFF are the sdsys user's membership of the account's group, state in /etc/group, no register field and no row of the gate matrix; words of modify.account that are not one gate's on or off word (22 Oct 26: the three START words are one three-state setting, ACC$START, and PINS-ON / PINS-OFF the permission to add one's own programs to the home screen, ACC$PINS; both are managed on the menu management page, tool.menus, not on tool.gates)
+                  "RECOVERY-ON", "RECOVERY-OFF"}      # 15 Nov 26 (S.242 stage 6): XFER-ON / XFER-OFF are the file transfer gate's words now (kind 'record', ACC$XFER, no kernel key);  28 Oct 26 (S.88 plan 2.9, D2): the editors' recovery copy, ACC$RECOVERY - a convenience the administrator switches, not a wall, and not yet a row of the gate matrix (a follow-up); 26 Oct 26 (F6): SDSYS-ON / SDSYS-OFF are the sdsys user's membership of the account's group, state in /etc/group, no register field and no row of the gate matrix; words of modify.account that are not one gate's on or off word (22 Oct 26: the three START words are one three-state setting, ACC$START, and PINS-ON / PINS-OFF the permission to add one's own programs to the home screen, ACC$PINS; both are managed on the menu management page, tool.menus, not on tool.gates)
 
 
 def load():
@@ -67,7 +66,7 @@ def checks(raw):
     built = [r for r in rows if len(r) == len(FIELDS) and r[14] == "built"]
     planned = [r for r in rows if len(r) == len(FIELDS) and r[14] == "planned"]
     add("G2", "a built gate has both words, a kind, a slot and two sentences; a planned gate has no word, no field, no group and no key (it shows as not yet built)",
-        all(r[2] and r[3] and r[4] in ("register", "group", "start") and r[10] and r[11] and r[12] for r in built) and all(not (r[2] or r[3] or r[5] or r[6] or r[7]) for r in planned),
+        all(r[2] and r[3] and r[4] in ("register", "group", "start", "record") and r[10] and r[11] and r[12] for r in built) and all(not (r[2] or r[3] or r[5] or r[6] or r[7]) for r in planned),
         [r[0] for r in built if not (r[2] and r[3] and r[10])])
 
     hdr = re.search(r"^\* id\|(\S+)$", raw["info"], re.M)
@@ -115,9 +114,14 @@ def checks(raw):
         [r[0] for r in st] == ["home"] and st[0][5] == "ACC$START" and "ACC$START" in keys_defs_all and st[0][6] == "" and st[0][7] == ""
         and (st[0][2], st[0][3], st[0][10]) == ("start-menu", "start-terminal", "ST")
         and "case gi<TK.G.KIND> = 'start'" in raw["gates"] and "call $tk_startof(rec<ACC$START>, state)" in raw["gates"], [r[0] for r in st])
-    add("G11", "a gate that reaches beyond SD is marked as one wherever the operating system, the network or another server is reached: sh os sd net ssh api files files-write files-admin ai sockets",
-        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "ai", "sockets"}, sorted(      # 13 Nov 26 Windows: the ai row is in with RELEASE_1.1 246, as Linux
-r[0] for r in rows if r[13] == "1"))
+    add("G11", "a gate that reaches beyond SD is marked as one wherever the operating system, the network or another server is reached: sh os sd net ssh api files files-write files-admin sockets xfer (file transfer, S.242: it opens a door from the network into the account's folders)",
+        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "ai", "sockets", "xfer"}, sorted(r[0] for r in rows if r[13] == "1"))
+    rc = [r for r in built if r[4] == "record"]
+    add("G15", "S.242 stage 6: the one 'record' gate is xfer: its field is ACC$XFER (defined in keys.h), it has no group and no kernel key (the transfer server reads the register at each connection), "
+        "its words are xfer-on / xfer-off in slot XF, it is off as delivered, and $tk_gates reads exactly that field, yes or no",
+        [r[0] for r in rc] == ["xfer"] and rc[0][5] == "ACC$XFER" and "ACC$XFER" in keys_defs_all and rc[0][6] == "" and rc[0][7] == ""
+        and (rc[0][2], rc[0][3], rc[0][10], rc[0][9]) == ("xfer-on", "xfer-off", "XF", "off")
+        and "case gi<TK.G.KIND> = 'record'" in raw["gates"] and "state = (if upcase(trim(rec<ACC$XFER>)) = 'YES' then 1 else 0)" in raw["gates"], [r[0] for r in rc])
     add("G12", "no sentence is empty, holds an escape or ends in a full stop (the screens add their own punctuation), and none starts with a capital (they continue 'on allows ...')",
         all(r[11] and r[12] and not r[11].endswith(".") and not r[12].endswith(".") and r[11][0].islower() and r[12][0].islower() for r in rows), "")
     pairs = re.findall(r"case id = '([a-z-]+)'\s*\n\s*raw = rec<(ACC\$[A-Z.]+)>", raw["gates"])
@@ -153,6 +157,10 @@ MUT = [
     ("gates", "a gate has no case", "               case id = 'dict'\n                  raw = rec<ACC$DICT.EDIT>\n", ""),
     ("gates", "a case for a gate that is not in the table", "               case id = 'net'\n", "               case id = 'nett'\n"),
     ("modifya", "a word modifya knows that no row holds", "NET-ON,NET-OFF,", "NET-ON,NET-OFF,PRINT-ON,PRINT-OFF,"),
+    ("info", "the file transfer gate is read from another field", "|record|ACC$XFER|", "|record|ACC$SH|"),
+    ("info", "the file transfer gate holds a kernel key", "|record|ACC$XFER|||next connection|", "|record|ACC$XFER||K$SH|next connection|"),
+    ("gates", "the file transfer gate reads another field", "state = (if upcase(trim(rec<ACC$XFER>)) = 'YES'", "state = (if upcase(trim(rec<ACC$SH>)) = 'YES'"),
+    ("gates", "the file transfer gate is on unless it says no", "state = (if upcase(trim(rec<ACC$XFER>)) = 'YES' then 1 else 0)", "state = (if upcase(trim(rec<ACC$XFER>)) # 'NO' then 1 else 0)"),
     ("tkh", "a TK.G number is out of order", "$define TK.G.TITLE     2", "$define TK.G.TITLE     3"),
 ]
 

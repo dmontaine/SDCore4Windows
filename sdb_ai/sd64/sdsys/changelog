@@ -3,6 +3,29 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+15 Nov 26  FILE TRANSFER OVER THE SSH LOGIN: RECEIVE AND SEND, OFF AS DELIVERED.
+
+             What        - a person can move plain-text files in or out of their own account with an sftp client (WinSCP,
+                           FileZilla, Windows' own sftp) over the same login as for ssh.  Two commands open a transfer from
+                           the person's own SD session:
+                             receive {overwrite}             files come in, to the file xfer.in of the account
+                             send <file> <id> {<id> ...}     the named records are copied to xfer.out and go out
+                           Either says it is ready and waits; the person then connects the sftp client and puts or gets the
+                           files; Enter ends it (so do XFERWAIT with no connection, XFERIDLE with nothing happening, XFERMAX,
+                           or the end of the session).  It then says how many files and bytes moved and, for each file that
+                           came in, its SHA-256.  SD answers the sftp client itself, in that one directory and nowhere else: no
+                           sub-directory, no "..", nothing made, renamed or removed except a file the same connection has just
+                           sent, and a file must be plain text within the size limits.  Every connection, file and refusal is
+                           an "xfer" line of the audit trail, and the connection shows as sftp in LISTU.  A Receive files tile
+                           appears on the home screen where receive would open a transfer, and tool.gates has an xfer column.
+             Why         - the owner wanted files moved in and out without a shell or a share.
+             Does NOT    - Work unless the administrator sets XFER=1 in sd.conf (with XFERFILE, XFERSLOT, XFERWAIT, XFERIDLE,
+                           XFERMAX and XFERKIND as limits) and gives the account xfer-on (modify.account <name> xfer-on, or
+                           create.account ... xfer-on).  A group or other account, SDSYS, and an account reached with LOGTO
+                           have no transfer.  SD must be restarted after this update (the installer does it): the layout of
+                           its shared memory changed.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 15 Nov 26  THE HOME SCREEN SAYS WHY THE AI CANNOT BE USED: THE ACCOUNT, OR A COMPUTER WITH NO AI SET UP.
 
              What        - F6 and AI > Ask the AI on the home screen said "the AI is not on for this account" whenever the AI

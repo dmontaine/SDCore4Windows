@@ -61,9 +61,10 @@ def checks(raw):
     ck("MG2", "it asks the base for a USER app (no audience word) and shows the base's error and stops when it refuses (a window under 140 by 43)",
        "call $tk_open('tool.gates', '', ctx, err)" in pg and "'admin'" not in pg and re.search(r"call \$tk_open\('tool\.gates', '', ctx, err\)\s*\n\s*if err # '' then\s*\n\s*display err\s*\n\s*stop\s*\n\s*end", pg) is not None)
     # 7 Nov 26 S.166: ONE exception, the home gate - no kernel key says where the account starts, so the page reads its own register record's ACC$START, once, with no lock.
-    pg3 = pg.replace("            openpath @sdsys : @ds : 'accounts' to st.f then\n               read st.rec from st.f, downcase(@who) then st.word = st.rec<ACC$START>\n", "", 1)
+    # 15 Nov 26 (S.242 stage 6): the file transfer gate shares that one read - own.rec is read once in read.all and both gates take their field from it.
+    pg3 = pg.replace("   openpath @sdsys : @ds : 'accounts' to st.f then\n      read st.rec from st.f, downcase(@who) then own.rec = st.rec\n", "", 1)
     ck("MG3", "THE PAGE CHANGES NOTHING: it has no write, delete, execute, perform or chain, runs no command ($tk_run, $tk_runx), opens no confirm box, writes no audit line and opens no file "
-       "(not the group file; the register only for the home gate's start field, read with no lock, S.166)",
+       "(not the group file; the register only for the home gate's start field and the file transfer gate's field, read once with no lock, S.166 and S.242)",
        pg3 != pg and not re.search(r"^\s*(?:execute|os\.execute|perform|chain|write[uv]?|delete[uv]?|matwrite|openpath|open|openseq|readu?|readv)\s", pg3, re.M) and "$tk_run" not in pg and "$tk_confirm" not in pg and "K$AUDIT" not in pg and "$tk_runx" not in pg)
     used = set(re.findall(r"kernel\((K\$[A-Z.]+), -1\)", pg))
     want_keys = {"K$SH", "K$OS.EXEC", "K$SD.ACCOUNTS", "K$VOC.EDIT", "K$BP.EDIT", "K$DICT.EDIT", "K$NET", "K$SHARED.READ", "K$SHARED.WRITE"}
@@ -87,7 +88,7 @@ def checks(raw):
        and "call $tk_help('hit', mev, g.x + g.w - 5, g.y + 1, hit.m)" in pg and raw["help"].split("\n")[0].strip() != "" and all(len(re.split(r",(?![^()]*\))", m)) == 5 for m in re.findall(r"call \$tk_help\(([^\n]*)\)", pg)))
     n = len(info_rows)
     ck("MG11", "the page shows all the gates of the table on one screen: VIS (the rows on the screen) is at least the number of gates, the box and the text starts are where the draw routines put them",
-       re.search(r"VIS = (\d+)", pg) is not None and int(re.search(r"VIS = (\d+)", pg).group(1)) >= n and "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 :" in pg and "VIS = g.h - 5" in pg
+       re.search(r"VIS = (\d+)", pg) is not None and int(re.search(r"VIS = (\d+)", pg).group(1)) >= n and "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 23 : @vm : 138 :" in pg and "VIS = g.h - 5" in pg
        and "screen box at g.x,g.y size g.w,g.h title 'What this account may do'" in pg and "for r = 1 to VIS" in pg, "%d gates" % n)
     ck("MG12", "the page starts from the system's answers on every F5 (read.all is called again) and not from a copy it kept", "case nm = 'f5'\n         gosub read.all\n         gosub draw.all" in pg and "gst = ''" in pg)
     ck("MG13", "THE MENU BAR (S.88 F0a pilot): drawn before the frame in the loop, a key goes to $tk_menubar with busy 0 (the page holds nothing Esc closes first) before the page's own case and a bar answer replaces the key by the name to dispatch on, "
@@ -98,6 +99,10 @@ def checks(raw):
        and re.search(r"if mev = '' then return\s*\n\s*mr = ''\s*\n\s*call \$tk_menubar\('click', ctx, keys, 'My gates', mev, '', mr\)\s*\n\s*if mr<1> # '' then\s*\n\s*nm = mr<4>\s*\n\s*if nm # '' then gosub on\.key[^\n]*\n\s*return\s*\n\s*end", pg) is not None
        and sorted(re.findall(r"call \$tk_keys\('menu', keys, '([a-z]+)'", pg)) == ["help", "quit", "refresh"]
        and all(len(m.split(",")) == 7 for m in re.findall(r"\$tk_menubar\(([^)]*)\)", pg)) and len(re.findall(r"\$tk_menubar\(", pg)) == 3, "")
+    ck("MG14", "S.242 stage 6: the file transfer gate (kind 'record') is the account's own register field ACC$XFER, yes or nothing else, taken from the one read of the register record in read.all "
+       "(the same read as the home gate's start field), and the page asks the kernel nothing for it",
+       "case gkind<k> = 'record'" in pg and "s = (if upcase(trim(own.rec<ACC$XFER>)) = 'YES' then 1 else 0)" in pg and "call $tk_startof(own.rec<ACC$START>, s)" in pg
+       and len(re.findall(r"openpath @sdsys", pg)) == 1 and pg.count("read st.rec from st.f, downcase(@who) then own.rec = st.rec") == 1 and "K$XFER" not in pg, "")
     return rows
 
 
@@ -120,7 +125,7 @@ MUTANTS = [
     ("the verb in every account runs the administrator's matrix", "MG1", sub("newvoc", "$tool_mygates", "$tool_gates")),
     ("SDSYS's verb runs the holder's page", "MG1", sub("tmpl", "$tool_gates", "$tool_mygates")),
     ("the page asks for an administrator", "MG2", sub("page", "call $tk_open('tool.gates', '', ctx, err)", "call $tk_open('tool.gates', 'admin', ctx, err)")),
-    ("the page writes a record", "MG3", sub("page", "   gst = ''\n   for k = 1 to NG\n      gid = gids<k>", "   gst = ''\n   write 'x' to nowhere, 'y'\n   for k = 1 to NG\n      gid = gids<k>")),
+    ("the page writes a record", "MG3", sub("page", "   gst = ''\n   own.rec = ''", "   gst = ''\n   write 'x' to nowhere, 'y'\n   own.rec = ''")),
     ("the page writes an audit line", "MG3", sub("page", "   prompt ''\n", "   prompt ''\n   void kernel(K$AUDIT, 'tool start app=tool.gates')\n")),
     ("the page runs a command", "MG3", sub("page", "         msg = 'asked the system again'", "         execute 'modify.account x sh-on'\n         msg = 'asked the system again'")),
     ("sh is read from the OS key", "MG5", sub("page", "case gid = 'sh'\n            s = (if kernel(K$SH, -1) then 1 else 0)", "case gid = 'sh'\n            s = (if kernel(K$OS.EXEC, -1) then 1 else 0)")),
@@ -133,8 +138,11 @@ MUTANTS = [
     ("the sign-on sentence is gone", "MG9", sub("page", "The edit gates are read ONCE when you sign on", "The edit gates are read when you ask")),
     ("the help call has too few arguments", "MG10", sub("page", "call $tk_help('box', 'tool.gates.mine', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'", "call $tk_help('box', 'tool.gates.mine', hm)\n         if hm # '' then msg = hm\n      case nm = 'f5'")),
     ("the page has no [?]", "MG10", sub("page", "   call $tk_help('mark', g.x + g.w - 5, g.y + 1, 0, 0)\n", "")),
-    ("the gate pane is declared one row short", "MG11", sub("page", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 21 :", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 20 :")),
-    ("too few rows for the table", "MG11", sub("page", "VIS = 16 ", "VIS = 10 ")),
+    ("the gate pane is declared one row short", "MG11", sub("page", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 23 :", "d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 22 :")),
+    ("too few rows for the table", "MG11", sub("page", "VIS = 18 ", "VIS = 10 ")),
+    ("the file transfer gate is read from another field", "MG14", sub("page", "own.rec<ACC$XFER>", "own.rec<ACC$SH>")),
+    ("the file transfer gate is on unless it says no", "MG14", sub("page", "trim(own.rec<ACC$XFER>)) = 'YES'", "trim(own.rec<ACC$XFER>)) # 'NO'")),
+    ("the file transfer gate opens the register itself again", "MG14", sub("page", "            s = (if upcase(trim(own.rec<ACC$XFER>))", "            openpath @sdsys : @ds : 'accounts' to st.f then\n               close st.f\n            end\n            s = (if upcase(trim(own.rec<ACC$XFER>))")),
     ("F5 does not ask again", "MG12", sub("page", "case nm = 'f5'\n         gosub read.all\n         gosub draw.all", "case nm = 'f5'\n         gosub draw.all")),
 ]
 

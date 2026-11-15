@@ -13,6 +13,7 @@
 *               more rows and every box is wider (the text is wrapped at the box's width), and a resize is $tk_layout 'refresh' and all of it drawn again.
 * 1 Nov 26 dm  S.97 stage 2: the AI line ($tk_aipage), as tool.voc has it: F6 or AI > Ask the AI; refresh is the one action offered to the model.  An account without the AI
 *               sees the page as it was.
+* 15 Nov 26 dm  S.242 stage 6: the file transfer gate (kind 'record'): the account's register field ACC$XFER, read here as the transfer server reads it.
 * 7 Nov 26 dm   S.166: the home gate (kind 'start'): the account's register field ACC$START through $tk_startof.
 * 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
@@ -75,7 +76,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    call $tk_keys('ai', keys, 'refresh', '', '', '', '')
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   VIS = 17                                                     ;* gate rows on the screen (the gate pane's height less 5: set by get.rects)
+   VIS = 18                                                     ;* gate rows on the screen (the gate pane's height less 5: set by get.rects)
    perr = ''
    gosub declare.layout
    call $tk_gate_info('list', gids)
@@ -152,6 +153,11 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
 * The state of every gate FOR THIS SESSION: 1 on, 0 off, null for a gate that is only planned
 read.all:
    gst = ''
+   own.rec = ''                                                 ;* the account's own register record, read ONCE here, with no lock: the home gate's start field and the file transfer gate's field (S.166, S.242)
+   openpath @sdsys : @ds : 'accounts' to st.f then
+      read st.rec from st.f, downcase(@who) then own.rec = st.rec
+      close st.f
+   end
    for k = 1 to NG
       gid = gids<k>
       s = ''
@@ -160,13 +166,10 @@ read.all:
             s = ''
          case gkind<k> = 'group'
             s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)
+         case gkind<k> = 'record'                        ;* S.242 stage 6: the file transfer gate is the account's register field, which the transfer server reads at each connection (no session holds it)
+            s = (if upcase(trim(own.rec<ACC$XFER>)) = 'YES' then 1 else 0)
          case gkind<k> = 'start'                         ;* S.166: the home gate is the account's register field (menu, terminal, blank for the system's default), as !home_entry reads it
-            st.word = ''
-            openpath @sdsys : @ds : 'accounts' to st.f then
-               read st.rec from st.f, downcase(@who) then st.word = st.rec<ACC$START>
-               close st.f
-            end
-            call $tk_startof(st.word, s)
+            call $tk_startof(own.rec<ACC$START>, s)
          case gid = 'sh'
             s = (if kernel(K$SH, -1) then 1 else 0)
          case gid = 'os'
@@ -197,8 +200,8 @@ read.all:
 * Out: g.x g.y g.w g.h (the gates), c.x c.y c.w c.h (the row under the cursor), s.x s.y s.w s.h (where this comes from), the text width of each, VIS.
 declare.layout:
    d = ''
-   d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1      ;* S.166: 22 rows for 17 gates (was 21)
-   d<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 11 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 23 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1      ;* S.242: 23 rows for 18 gates (S.166: 22 for 17, was 21)
+   d<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
    d<3> = 'note' : @vm : 3 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
    call $tk_layout('declare', ctx, d, perr)
    gosub get.rects
@@ -214,7 +217,7 @@ get.rects:
    g.tw = g.w - 4                                                ;* the text width of a box: 134 at the reference
    c.tw = c.w - 4
    s.tw = s.w - 4
-   VIS = g.h - 5                                                 ;* the header row, the gate rows, the two summary lines and the border: 17 rows of 22
+   VIS = g.h - 5                                                 ;* the header row, the gate rows, the two summary lines and the border: 18 rows of 23
    return
 
 draw.all:
@@ -280,6 +283,9 @@ draw.row:
             lines<-1> = 'As delivered it is ' : gdef<k> : '.  A change reaches you: ' : gwhen<k> : '.'
             if gkind<k> = 'group' then
                lines<-1> = 'This one is about you as a person, not about the account: it is membership of the Windows group ' : ggrp<k> : ' by your login name, ' : @logname : '.'
+            end
+            if gids<k> = 'xfer' then
+               lines<-1> = 'This one is read at each connection, not once when you sign on, and it works only while the system switch XFER is on and you have the ssh gate.'
             end
             if gids<k> = 'voc' or gids<k> = 'bp' or gids<k> = 'dict' then
                lines<-1> = 'The edit gates are read ONCE when you sign on (LOGTO does not reload them): after the administrator changes one, sign off and on again to see it here.'

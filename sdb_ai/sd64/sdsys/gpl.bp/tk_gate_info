@@ -15,6 +15,8 @@
 *               screen and off the command prompt (the owner: "on means home display off means tcl").  Its delivered state is the installer's answer, said as on (the
 *               question's default).  $tk_startof reads it.
 * 9 Nov 26 dm  S.186: what the program prints is in US spelling (the owner: "Everything SD prints"); its text only, no change of behaviour.
+* 15 Nov 26 dm  S.242 stage 6: the file transfer gate, a fourth kind ('record'): the register field ACC$XFER, no kernel key, because the transfer server reads the register at each
+*               connection and no session holds it.  It sits between dict and net, the order modify.account carries its words out.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -54,6 +56,7 @@ $include tk.h
    rows<-1> = "voc|Save VOC|voc-on|voc-off|register|ACC$VOC.EDIT||K$VOC.EDIT|next sign-on only|off|VOC|save changes to a VOC|read the VOC and run its entries|0|built"
    rows<-1> = "bp|Save programs|bp-on|bp-off|register|ACC$BP.EDIT||K$BP.EDIT|next sign-on only|off|BP|save changes to a program file, and use BASIC and CATALOG|run cataloged programs and read program source|0|built"
    rows<-1> = "dict|Save dictionaries|dict-on|dict-off|register|ACC$DICT.EDIT||K$DICT.EDIT|next sign-on only|off|DICT|save changes to a dictionary|read dictionaries and use them in queries|0|built"
+   rows<-1> = "xfer|File transfer|xfer-on|xfer-off|record|ACC$XFER|||next connection|off|XF|move text files in and out of its transfer folders over its ssh login, with the receive and send commands, while the system's XFER switch is on|everything else its other gates allow, and ssh sign-in itself|1|built"
    rows<-1> = "net|Remote files|net-on|net-off|register|ACC$NET||K$NET|next account entry|off|NET|open a file on another SD server through a server definition|every file on this server that its other gates allow|1|built"
    rows<-1> = "shared-read|Read shared|shared-read-on|shared-read-off|register|ACC$SHARED.READ||K$SHARED.READ|next account entry|on|SR|open the files of the shared account by name, with no LOGTO|its own account, and the shared account by LOGTO if its person may enter it|0|built"
    rows<-1> = "shared-write|Write shared|shared-write-on|shared-write-off|register|ACC$SHARED.WRITE||K$SHARED.WRITE|next account entry|off|SW|write records in the files of the shared account|read them, if shared-read is on|0|built"

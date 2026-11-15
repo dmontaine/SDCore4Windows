@@ -46,7 +46,7 @@ cited by: `cproc`, `login`
 User not allowed in requested account
 ```
 
-cited by: `apisrvr`, `cproc`
+cited by: `apisrvr`, `cproc`, `xfersrv`
 
 ### msg:10004
 > kind=message tier=reference since=- src=sdsys/messages/10004:1#0650a247
@@ -795,7 +795,7 @@ cited by: `modifya`
 Account %1 is suspended
 ```
 
-cited by: `cproc`, `login`
+cited by: `cproc`, `login`, `xfersrv`
 
 ### msg:10109
 > kind=message tier=reference since=- src=sdsys/messages/10109:1#3aae254a
@@ -11232,6 +11232,333 @@ logto is refused while run.in is running a command in account %1
 
 cited by: `cproc`
 
+### msg:15074
+> kind=message tier=reference since=- src=sdsys/messages/15074:1#dc09b4db
+
+```
+Account %1 may move files over its ssh login (receive / send): %2
+```
+
+cited by: `create_account`, `modifya`
+
+### msg:15075
+> kind=message tier=reference since=- src=sdsys/messages/15075:1#2a1020ee
+
+```
+%1 is not a user account, and file transfer is only for a user account, for its own person; nothing was changed
+```
+
+cited by: `modifya`
+
+### msg:15076
+> kind=message tier=reference since=- src=sdsys/messages/15076:1#d673b2b3
+
+```
+File transfer is not turned on for this system (XFER is 0 in sd.conf)
+```
+
+cited by: `xfer`, `xfersrv`
+
+### msg:15077
+> kind=message tier=reference since=- src=sdsys/messages/15077:1#6e3a7055
+
+```
+Account %1 may not move files over its ssh login (the administrator allows it with modify.account %1 xfer-on)
+```
+
+cited by: `xfer`, `xfersrv`
+
+### msg:15078
+> kind=message tier=reference since=- src=sdsys/messages/15078:1#e9cafa95
+
+```
+File transfer is only for a user account, for its own person; %1 has no user account of its own
+```
+
+cited by: `xfer`, `xfersrv`
+
+### msg:15079
+> kind=message tier=reference since=- src=sdsys/messages/15079:1#c2f9f988
+
+```
+No transfer is open for %1: sign in to SD, type receive or send, and connect while it waits
+```
+
+cited by: `xfersrv`
+
+### msg:15080
+> kind=message tier=reference since=- src=sdsys/messages/15080:1#d2bfaa6b
+
+```
+The transfer that was open for %1 has run out of time: type receive or send again
+```
+
+cited by: `xfersrv`
+
+### msg:15081
+> kind=message tier=reference since=- src=sdsys/messages/15081:1#a7ddfac9
+
+```
+%1 is not a name SD takes here: one plain name with no directory, not starting with . or ~, and with none of * , = > < / + : ; ? or a percent sign, double quote or backslash
+```
+
+### msg:15082
+> kind=message tier=reference since=- src=sdsys/messages/15082:1#0292a4a5
+
+```
+%1 is already there and was not replaced (receive overwrite replaces files)
+```
+
+### msg:15083
+> kind=message tier=reference since=- src=sdsys/messages/15083:1#056859ca
+
+```
+%1 is not plain text (it holds a NUL byte or one of the bytes 248 to 255) and was not taken
+```
+
+### msg:15084
+> kind=message tier=reference since=- src=sdsys/messages/15084:1#b870b0d3
+
+```
+%1 is larger than the %2 kilobytes one file may be (XFERFILE) and was not taken
+```
+
+### msg:15085
+> kind=message tier=reference since=- src=sdsys/messages/15085:1#a6485ced
+
+```
+%1 would take this transfer over its %2 kilobytes in all (XFERSLOT) and was not taken
+```
+
+### msg:15086
+> kind=message tier=reference since=- src=sdsys/messages/15086:1#b7e81bc9
+
+```
+%1 is not a kind of file this system takes (XFERKIND is %2)
+```
+
+### msg:15087
+> kind=message tier=reference since=- src=sdsys/messages/15087:1#78f26803
+
+```
+This transfer takes files in (receive); nothing can be read from it
+```
+
+### msg:15088
+> kind=message tier=reference since=- src=sdsys/messages/15088:1#64fb337a
+
+```
+This transfer gives files out (send); nothing can be written to it
+```
+
+### msg:15089
+> kind=message tier=reference since=- src=sdsys/messages/15089:1#f9880a42
+
+```
+That is not available in an SD file transfer
+```
+
+### msg:15090
+> kind=message tier=reference since=- src=sdsys/messages/15090:1#a5d45a7c
+
+```
+Only a file this connection has just sent can be renamed or removed
+```
+
+### msg:15091
+> kind=message tier=reference since=- src=sdsys/messages/15091:1#b181586c
+
+```
+A file is sent whole, from its start: a transfer cannot be resumed or added to
+```
+
+### msg:15092
+> kind=message tier=reference since=- src=sdsys/messages/15092:1#d976c743
+
+```
+The transfer directory %1 is not there, or is not a plain directory (receive and send make it)
+```
+
+cited by: `xfer`, `xfersrv`
+
+### msg:15093
+> kind=message tier=reference since=- src=sdsys/messages/15093:1#62e443e9
+
+```
+File transfer could not start: %1
+```
+
+cited by: `xfer`, `xfersrv`
+
+### msg:15094
+> kind=message tier=reference since=- src=sdsys/messages/15094:1#694f6a4e
+
+```
+Too many files are open at once in this transfer
+```
+
+### msg:15095
+> kind=message tier=reference since=- src=sdsys/messages/15095:1#132df9d9
+
+```
+A transfer is opened from your own account, %1; this session is in %2
+```
+
+cited by: `xfer`
+
+### msg:15096
+> kind=message tier=reference since=- src=sdsys/messages/15096:1#50cbaf73
+
+```
+%1 is in this account's VOC as something other than the transfer directory; nothing was opened
+```
+
+cited by: `xfer`
+
+### msg:15097
+> kind=message tier=reference since=- src=sdsys/messages/15097:1#ef4b0ec6
+
+```
+Ready to receive into %1.  Connect an sftp client to %2 as %3 and put the files.  Press Enter here when done.
+```
+
+cited by: `xfer`
+
+### msg:15098
+> kind=message tier=reference since=- src=sdsys/messages/15098:1#14aa56e2
+
+```
+Ready to send from %1.  Connect an sftp client to %2 as %3 and get the files.  Press Enter here when done.
+```
+
+cited by: `xfer`
+
+### msg:15099
+> kind=message tier=reference since=- src=sdsys/messages/15099:1#5f650daf
+
+```
+Transfer closed (%1): %2 file(s), %3 bytes
+```
+
+cited by: `xfer`
+
+### msg:15101
+> kind=message tier=reference since=- src=sdsys/messages/15101:1#3ef4765e
+
+```
+A transfer is opened from a terminal session, not from a phantom or a program run for a client
+```
+
+cited by: `xfer`
+
+### msg:15102
+> kind=message tier=reference since=- src=sdsys/messages/15102:1#7180caad
+
+```
+Command Syntax: send <file> <record id> {<record id> ...}
+```
+
+cited by: `xfer`
+
+### msg:15103
+> kind=message tier=reference since=- src=sdsys/messages/15103:1#711fe96f
+
+```
+%1 %2 is not plain text (a NUL byte, or a mark other than a field mark) and was not copied
+```
+
+cited by: `xfer`
+
+### msg:15104
+> kind=message tier=reference since=- src=sdsys/messages/15104:1#5ae03d90
+
+```
+%1 has no record %2
+```
+
+cited by: `xfer`
+
+### msg:15105
+> kind=message tier=reference since=- src=sdsys/messages/15105:1#44186357
+
+```
+Cannot open %1
+```
+
+cited by: `xfer`
+
+### msg:15106
+> kind=message tier=reference since=- src=sdsys/messages/15106:1#92bd0fa5
+
+```
+Nothing was copied, so no transfer was opened
+```
+
+cited by: `xfer`
+
+### msg:15107
+> kind=message tier=reference since=- src=sdsys/messages/15107:1#e391d583
+
+```
+Command Syntax: receive {overwrite}
+```
+
+cited by: `xfer`
+
+### msg:15108
+> kind=message tier=reference since=- src=sdsys/messages/15108:1#f092962c
+
+```
+%1 is not a name a transfer takes (or not a kind of file this system moves) and was not copied
+```
+
+cited by: `xfer`
+
+### msg:15109
+> kind=message tier=reference since=- src=sdsys/messages/15109:1#be6c97dc
+
+```
+closed here
+```
+
+cited by: `xfer`
+
+### msg:15110
+> kind=message tier=reference since=- src=sdsys/messages/15110:1#4a976b60
+
+```
+no connection came in time
+```
+
+cited by: `xfer`
+
+### msg:15111
+> kind=message tier=reference since=- src=sdsys/messages/15111:1#1c1c4e0a
+
+```
+nothing more came
+```
+
+cited by: `xfer`
+
+### msg:15112
+> kind=message tier=reference since=- src=sdsys/messages/15112:1#48108779
+
+```
+the time limit for a transfer was reached
+```
+
+cited by: `xfer`
+
+### msg:15113
+> kind=message tier=reference since=- src=sdsys/messages/15113:1#023aeaad
+
+```
+this session's input ended
+```
+
+cited by: `xfer`
+
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74
 
@@ -12003,7 +12330,7 @@ cited by: `cname`, `savestk`
 Cannot open accounts register
 ```
 
-cited by: `login`, `lstvocrm`, `rstvoc`, `set_acc_password`, `setacc`, `setfile`, `upgrade_nocase`
+cited by: `login`, `lstvocrm`, `rstvoc`, `set_acc_password`, `setacc`, `setfile`, `upgrade_nocase`, `xfer` and 1 more
 
 ### msg:2201
 > kind=message tier=reference since=- src=sdsys/messages/2201:1#704ebe48
@@ -16309,7 +16636,7 @@ Telnet connection from %1
 This user is not registered for String Database (sd) use
 ```
 
-cited by: `login`
+cited by: `login`, `xfersrv`
 
 ### msg:5010
 > kind=message tier=reference since=- src=sdsys/messages/5010:1#6c135f1f
@@ -16395,7 +16722,7 @@ cited by: `login`, `set_acc_password`
 Unable to change to directory %1
 ```
 
-cited by: `apisrvr`, `login`
+cited by: `apisrvr`, `login`, `xfersrv`
 
 ### msg:5020
 > kind=message tier=reference since=- src=sdsys/messages/5020:1#84bb3e8d
@@ -17321,7 +17648,7 @@ cited by: `cproc`
 Cannot attach to SDSYS
 ```
 
-cited by: `apisrvr`
+cited by: `apisrvr`, `xfersrv`
 
 ### msg:5262
 > kind=message tier=reference since=- src=sdsys/messages/5262:1#31d67960

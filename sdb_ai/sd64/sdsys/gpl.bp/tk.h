@@ -101,7 +101,7 @@ $define TK.G.ID        1       ;* the gate's id, the column name of the gate scr
 $define TK.G.TITLE     2       ;* what a person calls it
 $define TK.G.ON        3       ;* the modify.account word that turns it on (null for a planned gate)
 $define TK.G.OFF       4       ;* the word that turns it off
-$define TK.G.KIND      5       ;* register (a field of the account's register record) or group (membership of a Linux group)
+$define TK.G.KIND      5       ;* register (a field of the account's register record, held by a kernel key in a session), group (membership of a Linux group), start (the home gate) or record (a register field no kernel key holds: file transfer)
 $define TK.G.FIELD     6       ;* the ACC$ name of the register field (kind register)
 $define TK.G.GROUP     7       ;* the Linux group (kind group)
 $define TK.G.KEY       8       ;* the kernel key that holds it in a session, or null when only the register or a group holds it

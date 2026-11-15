@@ -63,6 +63,8 @@
 *               PgDn; Enter and / are on the key row alone.
 * 10 Nov 26 dm  S.201 (owner: "This is a regression from something previously fixed"; "There is no reason to have multiple key combinations do the same thing"): a screen typed at the
 *               prompt stays one after the Terminal tile and EXIT (hflag 2), so Ctrl-Q still goes back to the prompt; Alt-X is gone: Ctrl-Q is the one key that leaves.
+* 15 Nov 26 dm  S.242 stage 6 (owner: "Home screen tile"): Receive files, in the person's own tools, only where RECEIVE would open a transfer (xfer.usable asks what RECEIVE
+*               asks, in its order); it runs RECEIVE and waits for a key after.  Not on the administrator's page (SDSYS has no transfer).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -380,6 +382,15 @@ build.page:
    gr<g> = gname : @vm : bnd : @vm : 6
    id = 'editor' ; grp = g ; label = 'Editor' ; glyph = '[=]' ; sub = 'edit a record' ; act = 'cmd:sed' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
    id = 'ide' ; grp = g ; label = 'IDE' ; glyph = '</>' ; sub = 'programs and files' ; act = 'cmd:ide' ; pal = pal.tools ; size = 'n' ; pause = 0 ; why = '' ; gosub add.tile
+   * 15 Nov 26 (S.242 stage 6; the owner: a home screen tile): files in from an sftp client, only where RECEIVE would open a transfer - the system switch, the person's own user
+   * account, its xfer gate - so a tile never stands for a door that is shut.  It waits for a key after, so the summary and each file's SHA-256 can be read.  SEND takes a file
+   * and record ids, so it stays a typed command.
+   if not(is.admin) then
+      gosub xfer.usable
+      if xf.ok then
+         id = 'receive' ; grp = g ; label = 'Receive files' ; glyph = '[v]' ; sub = 'from an sftp client' ; act = 'cmd:receive' ; pal = pal.tools ; size = 'n' ; pause = 1 ; why = '' ; gosub add.tile
+      end
+   end
    * the person's own programs (MY.MENU), when the administrator has allowed it (the administrator always may): a group of their own after the standard tools, with a tile that
    * opens the list for changing.  They are only tiles that run what the person could type at their prompt.
    call !home_pins(@who, pins.on, pins.items)
@@ -501,6 +512,23 @@ pick.level:
    tl = tl2
    gr = gr2
    nt = dcount(tl, @fm)
+   return
+
+* Would RECEIVE open a transfer for this session?  The same questions RECEIVE asks ($xfer), in its order, read only: the system switch XFER, the session in the account named after
+* its person, a user account (sdu_), its xfer gate.  xf.ok 1 when all say yes.  The transfer server asks the register again at every connection; this only decides the tile.
+xfer.usable:
+   xf.ok = 0
+   if config('XFER') # 1 then return
+   xf.acct = downcase(@logname)
+   if downcase(@who) # xf.acct then return
+   xf.rec = ''
+   openpath @sdsys : @ds : 'accounts' to xf.f then
+      read xf.rec from xf.f, xf.acct else xf.rec = ''
+      close xf.f
+   end
+   if xf.rec<ACC$GROUP>[1,4] # 'sdu_' then return
+   if upcase(trim(xf.rec<ACC$XFER>)) # 'YES' then return
+   xf.ok = 1
    return
 
 add.tile:
@@ -1345,7 +1373,7 @@ run.command:
    * 28 Oct 26 (S.88 phase 2, plan 2.5): TRAPPING ABORTS - a command that is refused (a verb that aborts, a program that stops with an error) comes back here and the page is taken again,
    * where it used to end HOME and leave the person at the prompt of a session that had been in the toolkit.  An app the command started and that was aborted may still hold the screen and
    * the break setting: $sl_cleanup gives both back (it writes nothing where the library holds nothing), and reopen takes the screen again.
-   * An abort prints its message on the ordinary terminal and the page then draws over it, so the person never read why the tile failed (every delivered tile has pause = 0).  EXECUTE ... TRAPPING ABORTS
+   * An abort prints its message on the ordinary terminal and the page then draws over it, so the person never read why the tile failed (every delivered tile but Receive files has pause = 0).  EXECUTE ... TRAPPING ABORTS
    * reports an abort only through @abort.message (@abort.code is back to 0 when the command processor returns): a sentinel message is set first, as tool.test does, and an aborted command is the
    * one that leaves a different message.  The key is waited for as for a tile with a pause, before the screen is taken again.
    gosub set.sentinel

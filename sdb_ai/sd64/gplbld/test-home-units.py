@@ -130,7 +130,7 @@ def checks(s):
     PENDING_VERBS = set()               # 14 Nov 26 Windows: empty - tool.audit landed with RELEASE_1.1 247 (tool.ai with 246); a tile whose verb is owed goes here
     DEV_TILES = {"files": "tool.files", "voc": "tool.voc", "dict": "tool.dict", "query": "tool.query", "bulk": "tool.bulk", "catalog": "tool.catalog", "test": "tool.test"}            # the development apps (DV), for every account; each adds its tile in the commit that builds it (plan 13.2)
     ck("H4 tool_home: every tile of the table has a fixed action (cmd:sed, ide, tool.keys, my.menu, the development apps and the eleven administrator pages), terminal, switch, signout or back (the Back tile of a sub-menu page); the ONLY other action is a person's own program (H25); and no tile of the delivered page opens a sub-menu (no menu:<name>)",
-       sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))
+       sorted(cmds) == sorted(["cmd:sed", "cmd:ide", "terminal", "cmd:tool.keys", "switch", "signout", "back", "cmd:my.menu", "cmd:receive"] + ["cmd:" + v for v in ADMIN_TILES.values()] + ["cmd:" + v for v in DEV_TILES.values()]), repr(cmds))   # 15 Nov 26: cmd:receive (Linux b9e63f17, S.242 stage 6)
     ck("H4b ...execute is given only a sentence from that table, 'quit', or the logto of an account picked from the register list",
        sorted(re.findall(r"execute ([^\n]+)", th)) == sorted(["sentence trapping aborts", "'quit'", "'quit'", "'logto ' : acct trapping aborts"]), repr(re.findall(r"execute ([^\n]+)", th)))     # 'quit' twice: sign out, and the confined account; the two that run what is not HOME's own are trapped (28 Oct 26, S.88 phase 2)
     fin = between(th, "\nfinish:\n", "\nreturn")
@@ -242,7 +242,7 @@ def checks(s):
        "tiles.off" not in st_ and "'all'" not in st_ and "readu acc.rec from acc.f, who else" in st_ and "acc.rec<ACC$TILES.OFF> = new.list" in st_ and "write acc.rec to acc.f, who on error ok = @false" in st_
        and "sysmsg(12882, tile, state, who)" in st_ and "K$AUDIT, 'set.tile '" in st_ and "sysmsg(12888, tile)" in st_ and "standard = '" + " ".join(STANDARD) + "'" in st_)
     tm0 = strip(s["tool_menus"])
-    drawn = set(re.findall(r"id = '([a-z]+)' ; grp = ", th)) - {"mymenu", "back"} - set(ADMIN_TILES)               # what the page draws for an account holder: the standard tiles (the administrator's pages, the account's own programs and the Back tile are not standard)
+    drawn = set(re.findall(r"id = '([a-z]+)' ; grp = ", th)) - {"mymenu", "back", "receive"} - set(ADMIN_TILES)      # 15 Nov 26 (S.242): receive is switched by the account's xfer gate, not by set.tile (H86)               # what the page draws for an account holder: the standard tiles (the administrator's pages, the account's own programs and the Back tile are not standard)
     m_ids = re.search(r"tids = ('[a-z]+'(?: : @fm : '[a-z]+')*)", tm0)
     m_labs = re.search(r"tlabs = ('[^']+'(?: : @fm : '[^']+')*)", tm0)
     ids_tm = re.findall(r"'([a-z]+)'", m_ids.group(1)) if m_ids else []
@@ -477,6 +477,15 @@ def checks(s):
        "call $tk_close(ctx)" in leave_case and "quit" not in leave_case and "hflag" not in leave_case
        and fin.find("case terminal.off and outcome # 'signout'") < fin.find("case outcome = 'leave'")
        and "hstart = 1\n   execute 'home'" in he and "hstart = (hflag = 1)\n      execute 'home'" in ex, repr(leave_case))
+    xu = between(th, "\nxfer.usable:\n", "\nadd.tile:\n")
+    rcv = between(th, "   if not(is.admin) then\n      gosub xfer.usable", "\n   end\n")
+    ck("H86 S.242 stage 6 (the owner: a home screen tile): Receive files is built once, for an account holder only, and only when xfer.usable says RECEIVE would open a transfer; it runs receive and waits for "
+       "a key after (pause 1); xfer.usable asks what RECEIVE asks, in its order - XFER is 1, the session is in the account named after its person, a user account (sdu_), the xfer gate exactly YES - and only reads",
+       th.count("id = 'receive' ;") == 1 and rcv.startswith("   if not(is.admin) then") and "if xf.ok then\n         id = 'receive' ;" in rcv
+       and re.search(r"id = 'receive' ;[^\n]*act = 'cmd:receive' ;[^\n]*pause = 1 ;", rcv) is not None
+       and xu.startswith("\nxfer.usable:\n   xf.ok = 0") and ordered(xu, "if config('XFER') # 1 then return", "if downcase(@who) # xf.acct then return", "if xf.rec<ACC$GROUP>[1,4] # 'sdu_' then return",
+                                                    "if upcase(trim(xf.rec<ACC$XFER>)) # 'YES' then return", "xf.ok = 1")
+       and not re.search(r"^\s*(?:write[uv]?|delete|readu|execute)\b", xu, re.M), repr((rcv[:160], xu[:120])))
     return rows
 
 
@@ -643,6 +652,15 @@ MUTANTS = [
 ]
 M_U9 = len(MUTANTS) - 16 - 8
 M_LEAVE = len(MUTANTS) - 8
+M_S242 = len(MUTANTS)                  # 15 Nov 26 (S.242 stage 6): the Receive files tile; --selftest --from=M_S242 runs these alone
+MUTANTS += [
+    ("the Receive tile is built whatever the gate says", "tool_home", "      if xf.ok then\n         id = 'receive' ;", "      if 1 then\n         id = 'receive' ;"),
+    ("the Receive tile does not wait for a key", "tool_home", "act = 'cmd:receive' ; pal = pal.tools ; size = 'n' ; pause = 1 ;", "act = 'cmd:receive' ; pal = pal.tools ; size = 'n' ; pause = 0 ;"),
+    ("the tile ignores the system switch", "tool_home", "   if config('XFER') # 1 then return\n", ""),
+    ("the tile ignores which account the session is in", "tool_home", "   if downcase(@who) # xf.acct then return\n", ""),
+    ("the tile is on unless the gate says no", "tool_home", "if upcase(trim(xf.rec<ACC$XFER>)) # 'YES' then return", "if upcase(trim(xf.rec<ACC$XFER>)) = 'NO' then return"),
+    ("the administrator gets the tile", "tool_home", "   if not(is.admin) then\n      gosub xfer.usable", "   if 1 then\n      gosub xfer.usable"),
+]
 
 
 def selftest(first=0):
