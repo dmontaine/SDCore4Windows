@@ -649,8 +649,10 @@ if ($sections -contains 'logto275') {
     elseif ($null -eq $r -or -not $r.Ok) { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the seat did not run: ' + $(if ($r) { $r.Why } else { 'no result' })) }
     elseif ($lpid -eq '') { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' 'the audit has no logto line with a pid' }
     elseif ($line -eq '') { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the SYSTEM report has no line for pid ' + $lpid + ' (the session had ended?)') }
-    elseif ($line -match 'error=0 ' -and ($line -match 'elevated=1' -or $line -match 'integrity=S-1-16-12288')) { Add-WitResult '275' 'after LOGTO from SDSYS the session''s process is still elevated (High label): a program run in the account has administrator rights' 'FINDING' ($line + ' - the remedy is the owner''s decision (the row)') }
-    elseif ($line -match 'error=0 ' -and $line -match 'elevated=0') { Add-WitResult '275' 'after LOGTO from SDSYS the session''s process is not elevated' 'PASS' $line }
+    # 15 Nov 26 - RELEASE_1.1 313: the OWNER'S RULING of 14 Nov (row 275, closed 15 Nov): SDSYS's LOGTO keeps the elevated token, warns
+    # (12987) and lands at the prompt.  So elevated is the delivered behaviour; this check predated the ruling and called it a FINDING.
+    elseif ($line -match 'error=0 ' -and ($line -match 'elevated=1' -or $line -match 'integrity=S-1-16-12288')) { Add-WitResult '275' 'after LOGTO from SDSYS the session keeps its elevated token (owner''s ruling 14 Nov; 12987 says so)' 'PASS' $line }
+    elseif ($line -match 'error=0 ' -and $line -match 'elevated=0') { Add-WitResult '275' 'after LOGTO from SDSYS the session''s process is NOT elevated, against the 14 Nov ruling (12987 would then be wrong)' 'FINDING' $line }
     else { Add-WitResult '275' 'the token after LOGTO from SDSYS' 'NOT-MEASURED' ('the token could not be read: ' + $line) }
     Set-WitVerdict '266' 'WHO after LOGTO zzwitsh answers the account in lower case' $t '(?m)^\s*\d+\s+zzwitsh\b' @('User not allowed in requested account')
     if ($t -cmatch '(?m)^\s*\d+\s+ZZWITSH\b') { Add-WitResult '266' 'WHO after LOGTO is lower case' 'FAIL' 'WHO answered ZZWITSH' }
@@ -1013,7 +1015,9 @@ if ($sections -contains 'afterconsole') {
     # 201's abort (Ctrl-C on zzbig), 228's S and A, 218/221/227 page starts: the audit as evidence beside the sheet's answers.
     $ab = @($lines | Where-Object { $_ -match 'run\.in revert account=zzrunin reason=abort' })
     if ($ab.Count) { Add-WitResult '201' 'Ctrl-C then A during run.in basic aborts and reverts' 'PASS' $ab[0] } else { Add-WitResult '201' 'Ctrl-C then A during run.in basic aborts and reverts' 'NOT-MEASURED' 'no "run.in revert account=zzrunin reason=abort" line (the compile may have ended before Ctrl-C: the sheet''s answer decides)' }
-    $ssh = @($lines | Where-Object { $_ -match 'remote\.ssh on' })
+    # 15 Nov 26 - RELEASE_1.1 313: the console session's line only.  sit3 step 8 matched step 5's "remote.ssh on job=radmin-..." (the
+    # remote administration broker's) instead, twice; a broker line carries job=, the console's does not.
+    $ssh = @($lines | Where-Object { $_ -match 'remote\.ssh on' -and $_ -notmatch '\bjob=' })
     $api = @($lines | Where-Object { $_ -match 'remote\.api (local|on)' } | ForEach-Object { [regex]::Match($_, 'remote\.api \w+').Value })
     if ($ssh.Count) { Add-WitResult '228' 'tool.remote S with on wrote remote.ssh on' 'PASS' $ssh[0] } else { Add-WitResult '228' 'tool.remote S with on' 'NOT-MEASURED' 'no remote.ssh on line since the mark' }
     if (($api -join ',') -match 'remote\.api local.*remote\.api on') { Add-WitResult '228' 'tool.remote A to LOCAL and back to ON' 'PASS' ($api -join ', ') } else { Add-WitResult '228' 'tool.remote A to LOCAL and back to ON' 'NOT-MEASURED' ('remote.api lines: ' + ($api -join ', ')) }

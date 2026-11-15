@@ -157,14 +157,19 @@ if ($sections -contains 'cim') {
     else {
         Add-WitResult '242' 'SH runs PowerShell in the ssh session (control: Get-Date)' 'PASS' ([regex]::Match($t, '(?m)^\s*20\d\d\s*$').Value.Trim())
         $err = if ($null -ne $r) { [string]$r.Err } else { '' }
+        # 15 Nov 26 - RELEASE_1.1 313: THE EXPECTATION IS THE REFUSAL.  Row 242 closed 14 Nov on the finding that these cmdlets cannot
+        # reach the CIM server from an ssh logon ("Cannot connect to CIM server. Access denied"), and SD runs them only through the
+        # elevated broker.  So the pass is the cmdlet's own error naming that refusal; its own output row would be a FINDING (the
+        # premise changed), and neither is NOT-MEASURED.
         foreach ($c in @(
-                @('Get-NetTCPConnection', 'Get-NetTCPConnection works in an ssh session (sshd''s port 22 Listen)', '(?m)^\S+\s+22\s+\S+\s+\d+\s+Listen\b'),
-                @('Get-NetFirewallProfile', 'Get-NetFirewallProfile works in an ssh session', '(?m)^Name\s*:\s*Private\s*$'),
-                @('Get-ScheduledTask', 'Get-ScheduledTask works in an ssh session', '(?m)^\\Microsoft\\Windows\\Defrag\\\s+ScheduledDefrag\b'))) {
+                @('Get-NetTCPConnection', 'Get-NetTCPConnection is refused in an ssh session (CIM access denied)', '(?m)^\S+\s+22\s+\S+\s+\d+\s+Listen\b'),
+                @('Get-NetFirewallProfile', 'Get-NetFirewallProfile is refused in an ssh session (CIM access denied)', '(?m)^Name\s*:\s*Private\s*$'),
+                @('Get-ScheduledTask', 'Get-ScheduledTask is refused in an ssh session (CIM access denied)', '(?m)^\\Microsoft\\Windows\\Defrag\\\s+ScheduledDefrag\b'))) {
             $mine = [regex]::Match($err, '(?m)^' + [regex]::Escape($c[0]) + '\s*:\s*(.*)$')
-            if ($mine.Success) { Add-WitResult '242' $c[1] 'FAIL' ('stderr: ' + $c[0] + ' : ' + $mine.Groups[1].Value.Trim()) }
-            elseif ($t -match $c[2]) { Add-WitResult '242' $c[1] 'PASS' ('its own output row: ' + [regex]::Match($t, $c[2]).Value.Trim()) }
-            else { Add-WitResult '242' $c[1] 'FAIL' ('no output row /' + $c[2] + '/ and no error naming it; see the raw output above') }
+            if ($mine.Success -and $mine.Groups[1].Value -match 'Cannot connect to CIM server|Access denied') { Add-WitResult '242' $c[1] 'PASS' ('stderr: ' + $c[0] + ' : ' + $mine.Groups[1].Value.Trim()) }
+            elseif ($t -match $c[2]) { Add-WitResult '242' $c[1] 'FINDING' ('it WORKED - its own output row: ' + [regex]::Match($t, $c[2]).Value.Trim() + ' (row 242 found it refused)') }
+            elseif ($mine.Success) { Add-WitResult '242' $c[1] 'FAIL' ('a different error: ' + $c[0] + ' : ' + $mine.Groups[1].Value.Trim()) }
+            else { Add-WitResult '242' $c[1] 'NOT-MEASURED' ('no output row /' + $c[2] + '/ and no error naming it; see the raw output above') }
         }
     }
 }

@@ -490,6 +490,11 @@ if ($sections -contains 'lockout') {
 if ($sections -contains 'keep') {
     Write-Wit ''
     Write-Wit '=== remote.ssh off keeps the remote session; remote.sdsys off ends it (about 90 seconds)'
+    # 15 Nov 26 - RELEASE_1.1 313: this section turns ssh off and back ON, so it must put back what it found (sit3: delivered OFF, left
+    # ON).  The port-22 rules' remote addresses are read before and after; if they changed, remote.ssh off is run at the console.
+    function Get-SshScope { (@(Get-NetFirewallPortFilter -Protocol TCP -ErrorAction SilentlyContinue | Where-Object LocalPort -eq 22 | Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' } | ForEach-Object { $_.DisplayName + '=' + ((($_ | Get-NetFirewallAddressFilter).RemoteAddress) -join ',') }) | Sort-Object) -join '; ' }
+    $scopeBefore = Get-SshScope
+    Write-Wit ('  ssh firewall scope before: ' + $scopeBefore)
     if ($pw -eq '') { Add-WitResult '202' 'keep' 'NOT-MEASURED' 'no SDRADMIN password on file' }
     else {
         $h = Start-HeldSsh 'sdradmin' $pw
@@ -521,6 +526,15 @@ if ($sections -contains 'keep') {
         Add-WitResult '202' 'F7: remote.sdsys off at the console ends a live SDRADMIN session at once' $(if ($ended -and $whos -lt 3) { 'PASS' } else { 'FAIL' }) ('the session ended within 20 s of OFF: ' + $ended + '; WHO answers in all: ' + $whos)
         Set-WitVerdict '202' 'F7: the console OFF printed no failure' $r.Text 'remote-admin: closed|the sshd arm shut' @('did not succeed', 'could not be shut')
     }
+    $scopeAfter = Get-SshScope
+    if ($scopeAfter -ne $scopeBefore -and $scopeBefore -notmatch '=Any\b') {
+        $null = Invoke-WitSd -Commands @('remote.ssh off') -Label 'put the ssh scope back as found (this section turned it on)' -TimeoutSec 180
+        $scopeAfter = Get-SshScope
+    }
+    Write-Wit ('  ssh firewall scope after : ' + $scopeAfter)
+    # An empty scope means the rules could not be read (unelevated: "Access is denied", swallowed) - not "unchanged".
+    if ($scopeBefore -eq '' -or $scopeAfter -eq '') { Add-WitResult '202' 'keep leaves the ssh firewall scope as it found it' 'NOT-MEASURED' ('no port-22 rule read (before: [' + $scopeBefore + '] after: [' + $scopeAfter + '])') }
+    else { Add-WitResult '202' 'keep leaves the ssh firewall scope as it found it' $(if ($scopeAfter -eq $scopeBefore) { 'INFO' } else { 'FAIL' }) ('before: ' + $scopeBefore + ' | after: ' + $scopeAfter) }
 }
 
 # ===================================================================================================== off (F7)
