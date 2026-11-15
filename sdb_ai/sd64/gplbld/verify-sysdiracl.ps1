@@ -162,6 +162,15 @@ if (-not $inSdusers) {
 # REFUSE THE NULL CASE.  If the install is not there, or a path has been
 # renamed, every write probe below fails for the wrong reason and the run reads
 # as a clean lock.  Name what is missing and stop.
+# 15 Nov 26 - RELEASE_1.1 293, VM sit3 step 10c b: start.default is the ONE entry that may be absent on a healthy install - it is
+# written only when setup is told to start at the command prompt (set-start-default.ps1), and its absence IS the delivered home
+# screen; sd.iss's LockStartDefault locks it only when it exists.  On a home-screen install this refused before measuring anything.
+# It is dropped from the list, said so out loud, and every other entry is still required.
+$startDefault = Join-Path $sysDir 'start.default'
+if (-not (Test-Path -LiteralPath $startDefault)) {
+    Write-Output "verify-sysdiracl: $startDefault is absent (the home screen is the start; nothing to lock) - not measured."
+    $readOnly = @($readOnly | Where-Object { $_ -ne $startDefault })
+}
 $absent = @(@($readOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($absent.Count -gt 0) {
     Write-Output 'verify-sysdiracl: these paths do not exist, so nothing could be measured:'
