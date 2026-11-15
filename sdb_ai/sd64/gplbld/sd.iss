@@ -4229,6 +4229,7 @@ var
   Ps, Script, Failed: String;
   Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable, VocTpl: String;
   ErrLog, Root: String;   { 14 Nov 26 - RELEASE_1.1 293 }
+  Stacks: String;         { 14 Nov 26 - RELEASE_1.1 301 }
 begin
   Result := '';
   Code := 0;
@@ -4331,10 +4332,20 @@ begin
     relative path (to_file.c:238), so only SDSYS's own sessions use these.  LEFT
     OPEN, deliberately: $ipc (every session writes it), errlog (every session
     appends to it), prt, and dumps and pstmp, which their own scripts secure. }
+  { 14 Nov 26 - RELEASE_1.1 301: stacks, SDSYS's command history.  CPROC makes
+    <account dir>\stacks at the first logout of an account whose VOC has
+    $COMMAND.STACK, and SDSYS's account dir is sdsys, so it appeared at runtime
+    and inherited sdusers Modify from the folder lock's inherit-only grant: an
+    ordinary user could write the history SDSYS recalls and re-runs.  On Linux
+    root makes it, 755.  Made here, empty, so it can be locked with the rest;
+    only SDSYS's own (elevated) sessions write it, through Administrators. }
+  Stacks := ExpandConstant('{#DataDir}\sdsys\stacks');
+  if (Failed = '') and not DirExists(Stacks) then
+    ForceDirectories(Stacks);
   if Failed = '' then
     Failed := LockSysdirNames(Ps, Script,
       'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
-      'agent-pack/bp.out/pcode.out/' +
+      'agent-pack/bp.out/pcode.out/stacks/' +
       'dict.dic/voc.dic/$map.dic/accounts.dic/$hold/$hold.dic', Code);
 
   { errlog is not shipped: the first process that logs creates it, in sdsys.

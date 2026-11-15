@@ -3,6 +3,15 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+14 Nov 26  THE ADMINISTRATOR'S COMMAND HISTORY CAN NO LONGER BE CHANGED BY AN ORDINARY USER.
+
+             What        - sdsys\stacks, where the SDSYS account keeps the command history it recalls and re-runs, is now made
+                           by setup and is read-only to ordinary users, like the rest of the system folder.
+             Why         - it was made at the administrator's first sign-off and took write access for every SD user from the
+                           folder around it, so an ordinary user could put a command into the administrator's history.
+             Does NOT    - Change any other account's history, which stays in that account's own folder.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 14 Nov 26  SETUP REFUSES A DATA FOLDER THAT HAS A SYSTEM FOLDER AND NO ACCOUNTS, AND SAYS HOW TO CORRECT IT.
 
              What        - if C:\ProgramData\SD holds a sdsys folder whose account register has no account in it (an earlier

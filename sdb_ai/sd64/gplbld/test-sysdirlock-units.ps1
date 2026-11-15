@@ -22,6 +22,8 @@
 #       (OI)(CI)(IO)(M) and no other sdusers ACE
 #   L7  if an installed tree exists, every entry in it is in one class below;
 #       a name in none of them is a new entry nobody decided about
+#   L9  stacks (SDSYS's command history, made at runtime by CPROC) is created
+#       BEFORE LockSysdirNames, which refuses a missing path (RELEASE_1.1 301)
 # Then MUTANTS: each is a changed copy of the text IN MEMORY (the live files
 # are never written), and the matching check must go red on it.
 
@@ -30,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 # The classes.  Fixed: SecureSysdirs' own variables.  Elsewhere: their own
 # secure-*.ps1 or [Code] step.  Open: written by ordinary sessions.
 $Locked = @('syscom','terminfo','terminfo.src','helptext','dir_dict','licence','contrib',
-            'agent-pack','bp.out','pcode.out',
+            'agent-pack','bp.out','pcode.out','stacks',
             'dict.dic','voc.dic','$map.dic','accounts.dic','$hold','$hold.dic')
 # 14 Nov 26 - start.default is NOT in the staged tree (SET.START.DEFAULT writes it after SecureSysdirs); it is locked by
 # LockStartDefault once it exists.  In the early list it made secure-sysdirs.ps1 exit 2 and LockSysdirNames stop (check L8).
@@ -101,6 +103,10 @@ function Test-All([string]$issT, [string]$scrT) {
     $r['L8'] = $(if ($early.Count) { 'a late-written name is in the early list: ' + ($early -join ' ') }
                  elseif (($fn -notmatch "sdsys\\start\.default") -or ($fn -notmatch 'if not FileExists\(Target\) then')) { 'LockStartDefault does not lock start.default only when it exists' }
                  elseif (($iSet -lt 0) -or ($iLock -le $iSet)) { 'LockStartDefault is not called after SetStartDefault' } else { '' })
+    $sk = $body.IndexOf('ForceDirectories(Stacks)')
+    $sv = $body.IndexOf("Stacks := ExpandConstant('{#DataDir}\sdsys\stacks');")
+    $sl = $body.IndexOf('LockSysdirNames(Ps, Script,')
+    $r['L9'] = $(if ($sv -ge 0 -and $sk -gt $sv -and $sl -gt $sk) { '' } else { 'stacks is not created before LockSysdirNames' })
     return $r
 }
 
@@ -128,8 +134,10 @@ if (Test-Path -LiteralPath $tree) {
 
 # Mutants: each must turn its check red.
 $mutants = @(
-    @{ n='drop agent-pack from the list';      k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/' +"; b="'bp.out/pcode.out/' +" }
-    @{ n='start.default back in the early list'; k='L8'; t='iss'; a="'agent-pack/bp.out/pcode.out/' +"; b="'start.default/agent-pack/bp.out/pcode.out/' +" }
+    @{ n='drop agent-pack from the list';      k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'bp.out/pcode.out/stacks/' +" }
+    @{ n='drop stacks from the list';          k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'agent-pack/bp.out/pcode.out/' +" }
+    @{ n='stacks not created';                 k='L9'; t='iss'; a='ForceDirectories(Stacks)'; b='{ForceDirectories}(Stacks)' }
+    @{ n='start.default back in the early list'; k='L8'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'start.default/agent-pack/bp.out/pcode.out/stacks/' +" }
     @{ n='start.default never locked after its step'; k='L8'; t='iss'; a='StartMsg := StartMsg + LockStartDefault;'; b='StartMsg := StartMsg + LockStartDefaultX;' }
     @{ n='start.default locked even when absent'; k='L8'; t='iss'; a='if not FileExists(Target) then'; b='if FileExists(Target + ''x'') then' }
     @{ n='drop the whole list call';          k='L1'; t='iss'; a='LockSysdirNames(Ps, Script,'; b='LockSysdirNamesX(Ps, Script,' }
