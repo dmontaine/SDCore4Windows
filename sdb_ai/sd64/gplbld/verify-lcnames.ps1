@@ -411,7 +411,10 @@ try {
     # 21 Sep 26 - voc_template is NOT here: it no longer ships (stage.py
     # SDSYS_BUILD_SEED); it is asserted ABSENT just below.
     # 8 Nov 26: sd.voclib no longer ships (S.87, Linux d241df26).
-    $shipped = @('gpl.bp', 'syscom', 'newvoc', 'messages',
+    # 14 Nov 26 - gpl.bp OFF this list and voc_template ON it (RELEASE_1.1 300): the
+    # owner ruled 9 Nov that gpl.bp is never installed (stage.py SDSYS_BUILD_SEED) and
+    # 12 Nov that voc_template ships again (RELEASE_1.1 266).  Both rows were red on b336.
+    $shipped = @('syscom', 'newvoc', 'messages', 'voc_template',
                  'accounts', 'bp', 'gpl.bp.out', 'bp.out',
                  'pcode.out', '$hold', '$cred')   # 8 Nov 26: os.users and os.users.dic no longer ship (RELEASE_1.1 175)
     # MADE BY THE BOOTSTRAP: BBPROC's FILES_LIST, plus voc at BBPROC:158.
@@ -431,9 +434,10 @@ try {
                      '$HOLD.DIC', '$MAP', '$MAP.DIC', '$IPC', 'PSTMP')) {
         Note ('sdsys ' + $n + ' absent') 0 @($sysDisk | Where-Object { $_ -ceq $n }).Count
     }
-    # 21 Sep 26 - the build seed is not installed, in either spelling.
-    Note 'sdsys voc_template absent (a build seed, not installed)' 0 `
-         @($sysDisk | Where-Object { $_ -ceq 'voc_template' }).Count
+    # 14 Nov 26 - the build seed now is gpl.bp: the BASIC source is distributed with the
+    # installer, never installed (owner, 9 Nov 26).  Its upper-case spelling is checked above.
+    Note 'sdsys gpl.bp absent (a build seed, not installed)' 0 `
+         @($sysDisk | Where-Object { $_ -ceq 'gpl.bp' }).Count
     # THE CONTROLS FOR THIS SECTION.  gcat, cat, prt, bin and terminfo were
     # lower case before any of it, so they show the listing is not folding case.
     foreach ($n in @('gcat', 'cat', 'prt', 'bin')) {
