@@ -490,6 +490,14 @@ if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Director
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $summary = Join-Path $logDir ('post-cycle-' + $stamp + '.txt')
 
+# 14 Nov 26 - RELEASE_1.1 300/297.  THE API CLIENT PINS THE SERVER'S CERTIFICATE (S.236) and every fresh install makes a
+# new one, so a profile's known_servers from an earlier install made every API verifier refuse "THE SERVER'S CERTIFICATE
+# HAS CHANGED" (b337: apiremote, apiadmin, apiname, apiport, apiidentity).  Each run gets its own store; the children
+# inherit it.
+$env:SD_KNOWN_SERVERS = Join-Path $logDir ('known_servers-' + $stamp)
+if (Test-Path -LiteralPath $env:SD_KNOWN_SERVERS) { Remove-Item -LiteralPath $env:SD_KNOWN_SERVERS -Force }
+Write-Output "VerifyInstall2: API pin store for this run: $env:SD_KNOWN_SERVERS"
+
 # 11 Sep 26 - AND IT NOW KEEPS ONE.  RELEASE_1.1_FIXES.md 14.
 #
 # ***WITHOUT -Quiet THIS RUNNER USED TO KEEP NO RECORD OF ANYTHING IT RAN.***
