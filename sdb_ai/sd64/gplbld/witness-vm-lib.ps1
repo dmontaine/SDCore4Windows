@@ -452,10 +452,15 @@ function Resolve-WitSections([string[]]$Only, [string[]]$Known) {
 # caller's standard output and error.  A caller that reads them through a pipe (& sd.exe -restart 2>&1 | ...) waits for the daemon,
 # that is for ever: measured in the VM, 24 minutes at "sd -restart" until SD was stopped.  So the switch is run through cmd with its
 # output redirected to a file: cmd waits for sd.exe only, and the daemon holding the file cannot hold the caller.  @{ Code; Text }.
+# 15 Nov 26 (RELEASE_1.1 284/203, VM sit3 step 10): "& cmd.exe ..." still hung at sd -start: PowerShell gives cmd a pipe of its own for
+# cmd's output, cmd hands its inheritable handles down to sd.exe, and the daemon kept that pipe, so PowerShell waited until sd -stop
+# (04:33 to 04:39).  Now cmd is started with Start-Process (no redirection: ShellExecute, nothing inherited from this process) and only
+# cmd's own exit is waited for (WaitForExit on that process, not -Wait, which waits for the daemon too).  The file still carries the text.
 function Invoke-WitSdSwitch([string]$Exe, [string]$Switch) {
     $tmp = Join-Path $env:TEMP ('sdswitch-' + [Guid]::NewGuid().ToString('N') + '.txt')
-    & cmd.exe /d /c ('"' + $Exe + '" ' + $Switch + ' > "' + $tmp + '" 2>&1')
-    $code = $LASTEXITCODE
+    $cp = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\cmd.exe') -ArgumentList @('/d', '/c', ('""' + $Exe + '" ' + $Switch + ' > "' + $tmp + '" 2>&1"')) -WindowStyle Hidden -PassThru
+    if (-not $cp.WaitForExit(120000)) { return @{ Code = -1; Text = '(cmd did not end within 120 s; pid ' + $cp.Id + ', left alone)' } }
+    $code = $cp.ExitCode
     $text = ''
     try { $fs = New-Object IO.FileStream($tmp, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite); $sr = New-Object IO.StreamReader($fs); $text = $sr.ReadToEnd(); $sr.Close() } catch { $text = '(the output file could not be read: ' + $_.Exception.Message + ')' }
     Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
