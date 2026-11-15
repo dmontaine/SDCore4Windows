@@ -98,6 +98,14 @@ $StockCfg  = Join-Path $MsSshDir 'sshd_config_default'
 $SdBegin   = '# --- BEGIN SD ssh-only model - PROJECT_STATUS.md 5.6.2 ---'
 $SdEnd     = '# --- END SD ssh-only model ---'
 
+# 15 Nov 26 - RELEASE_1.1 316.  REMOTE ADMINISTRATION'S FENCE IS SD'S TOO.  remote-admin.ps1 writes it on the first
+# remote.sdsys on and LEAVES it, shut ("Match User sdradmin" / "DenyUsers *"), on remote.sdsys off; only the uninstall
+# removes it.  Read as somebody else's settings, it refused every reinstall and upgrade over a machine whose administrator
+# had ever opened remote administration (VM sit3 step 9: "Added: Match User sdradmin,acevm\sdradmin; ...").  The prefix is
+# the one allow-ssh-groups.ps1 matches, so the two scripts agree on where the fence starts.
+$RadminBeginPrefix = '# --- BEGIN SD remote administration (RELEASE_1.1 202)'
+$RadminEnd         = '# --- END SD remote administration ---'
+
 $reasons = New-Object System.Collections.ArrayList
 $verdict = 0
 
@@ -262,11 +270,14 @@ Say '== has anyone configured the Windows ssh server ========================='
 function Get-Directives([string]$path) {
     $out = New-Object System.Collections.ArrayList
     $inOurs = $false
+    $inRadmin = $false
     foreach ($line in (Get-Content -LiteralPath $path -ErrorAction Stop)) {
         $t = $line.Trim()
         if ($t -eq $SdBegin) { $inOurs = $true;  continue }
         if ($t -eq $SdEnd)   { $inOurs = $false; continue }
-        if ($inOurs) { continue }
+        if ($t.StartsWith($RadminBeginPrefix)) { $inRadmin = $true;  continue }
+        if ($t -eq $RadminEnd)                 { $inRadmin = $false; continue }
+        if ($inOurs -or $inRadmin) { continue }
         if ($t -eq '' -or $t.StartsWith('#')) { continue }
         $null = $out.Add(($t -replace '\s+', ' '))   # tabs and spaces compare equal
     }
