@@ -97,7 +97,7 @@ try {
     # is open".  What proves the request reached SD's transfer server is ANY "xfer refused" line for zzwiton with no login line.
     $xferNoSlot = @($a | Where-Object { $_ -match 'xfer refused reason=' -and $_ -match 'user=zzwiton' })
     $loginLine = @($a | Where-Object { $_ -match '\blogin\b' -and $_ -match 'zzwiton' })
-    if ($xferNoSlot.Count -gt 0 -and $loginLine.Count -eq 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server (Win32-OpenSSH passes sftp-server.exe; sd.exe recognises it) and is refused in words' 'PASS' $xferNoSlot[0] }
+    if ($xferNoSlot.Count -gt 0 -and $loginLine.Count -eq 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server (Win32-OpenSSH passes sftp-server.exe; sd.exe recognizes it) and is refused in words' 'PASS' $xferNoSlot[0] }
     elseif ($loginLine.Count -gt 0) { Add-WitResult '299' 'an sftp request reaches SD''s transfer server' 'FAIL' ('SD ran a LOGIN for it instead: ' + $loginLine[0] + ' (SSH_ORIGINAL_COMMAND did not match sd_sftp.h)') }
     else { Add-WitResult '299' 'an sftp request reaches SD''s transfer server' 'FAIL' 'no "xfer refused ... no slot is open" line; see the client output and the audit above' }
 

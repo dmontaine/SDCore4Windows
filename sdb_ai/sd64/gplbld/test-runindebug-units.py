@@ -3,7 +3,7 @@
 separate, unelevated sd.exe, and the administrator's elevated SDSYS session only shows the debugger.
 
   python sdb_ai/sd64/gplbld/test-runindebug-units.py
-  python sdb_ai/sd64/gplbld/test-runindebug-units.py --selftest
+  python sdb_ai/sd64/gplbld/test-runindebug-units.py --selftest [--from=N]   (N: the first mutant to run, 1-based)
 
 WHAT IT RUNS (N rows).  The service's half (gplsrc/sdsvc/sdrunin.c, with gplsrc/win32s4ulogon.c) and sd.exe's half
 (gplsrc/win32runin.c) are compiled NATIVELY with the UCRT64 gcc - the toolchain sdsvc.exe is built with - beside a test main, and run
@@ -282,7 +282,13 @@ static int dacl_check(const char* path, int want_logon, char* bad, size_t badlen
   PSECURITY_DESCRIPTOR sd = NULL;
   SECURITY_DESCRIPTOR_CONTROL ctl = 0;
   DWORD rev = 0, i;
-  int ok = 1, dir_ace = 0, file_ace = 0;
+  int ok = 1, dir_ace = 0, file_ace = 0, base_ace = 0, have_child = 0;
+  BYTE child[SECURITY_MAX_SID_SIZE];
+  char cdom[256];
+  DWORD cn = sizeof(child), cdl = sizeof(cdom);
+  SID_NAME_USE cuse;
+  /* 15 Nov 26 (RELEASE_1.1 253): the base, and only the base, holds one entry for the run.in account when it exists: traverse, no flags */
+  have_child = LookupAccountNameA(NULL, SD_RUNIN_ACCOUNT, (PSID)child, &cn, cdom, &cdl, &cuse) ? 1 : 0;
   if (GetNamedSecurityInfoA(path, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, NULL, NULL, &dacl, NULL, &sd) != ERROR_SUCCESS || dacl == NULL) {
     snprintf(bad, badlen, "no DACL on %s", path);
     return 0;
@@ -308,10 +314,17 @@ static int dacl_check(const char* path, int want_logon, char* bad, size_t badlen
       }
       continue;
     }
+    if (!want_logon && have_child && EqualSid(s, (PSID)child)) {
+      base_ace++;
+      if ((a->Header.AceFlags != 0) || (a->Mask != (FILE_TRAVERSE | SYNCHRONIZE)))
+        { ok = 0; snprintf(bad + strlen(bad), badlen - strlen(bad), "the run.in account's base grant is %08lx flags %02x; ", (unsigned long)a->Mask, (unsigned)a->Header.AceFlags); }
+      continue;
+    }
     ok = 0;
     strncat(bad, "an ACE for somebody else; ", badlen - strlen(bad) - 1);
   }
   if (want_logon && (dir_ace != 1 || file_ace != 1)) { ok = 0; snprintf(bad + strlen(bad), badlen - strlen(bad), "logon ACEs %d/%d; ", dir_ace, file_ace); }
+  if (!want_logon && (base_ace != have_child)) { ok = 0; snprintf(bad + strlen(bad), badlen - strlen(bad), "run.in account ACEs on the base %d, want %d; ", base_ace, have_child); }
   LocalFree(sd);
   return ok;
 }
@@ -546,6 +559,11 @@ def text_rows(t):
     dgt = dg.group(1) if dg else ""
     rows.append(("W7", "the store's grant to the child names no FILE_ADD_SUBDIRECTORY, WRITE_DAC, WRITE_OWNER, DELETE or GENERIC on the directory",
                  bool(dgt) and not re.search(r"FILE_ADD_SUBDIRECTORY|WRITE_DAC|WRITE_OWNER|\bDELETE\b|GENERIC", dgt), dgt))
+    # 15 Nov 26 (RELEASE_1.1 253): the child holds no bypass-traverse, so the base must let SD_RUNIN_ACCOUNT through - and only through
+    rows.append(("W7b", "the base grants SD_RUNIN_ACCOUNT traverse and nothing more (no list, not inherited), so the child reaches its own store",
+                 "#define RUNIN_BASE_GRANT (FILE_TRAVERSE | SYNCHRONIZE)\n" in sr
+                 and "((logon == NULL) && group_sid(SD_RUNIN_ACCOUNT, child) &&\n       !AddAccessAllowedAceEx(acl, ACL_REVISION, 0, RUNIN_BASE_GRANT, (PSID)child))" in sr
+                 and "if ((acl = store_acl(NULL)) == NULL) {" in sr, ""))
     sd = t["sd.c"]
     door = body(sd, "Private void runin_door(void) {")
     cl = sd[sd.find("Private bool comlin("):]
@@ -762,6 +780,12 @@ MUTANTS = [
     ("win32s4ulogon.c", "the made logon SID is not passed", "    tg->GroupCount = (DWORD)(ng + 1);", "    tg->GroupCount = (DWORD)ng;"),
     # 15 Nov 26 (RELEASE_1.1 253(b), sit3 C11): the answer's TAB dropped again
     ("win32runin.c", "the answer reader drops the TAB", "(((unsigned char)c >= 32) || (c == '\\t'))", "((unsigned char)c >= 32)"),
+    # 15 Nov 26 (RELEASE_1.1 253): the base's traverse grant to the child account
+    ("sdsvc/sdrunin.c", "the base gives the child no traverse", "((logon == NULL) && group_sid(SD_RUNIN_ACCOUNT, child) &&", "((logon == NULL) && 0 && group_sid(SD_RUNIN_ACCOUNT, child) &&"),
+    ("sdsvc/sdrunin.c", "the base lets the child list it", "#define RUNIN_BASE_GRANT (FILE_TRAVERSE | SYNCHRONIZE)\n",
+     "#define RUNIN_BASE_GRANT (FILE_TRAVERSE | FILE_LIST_DIRECTORY | SYNCHRONIZE)\n"),
+    ("sdsvc/sdrunin.c", "the base's grant is inherited into every store", "AddAccessAllowedAceEx(acl, ACL_REVISION, 0, RUNIN_BASE_GRANT, (PSID)child)",
+     "AddAccessAllowedAceEx(acl, ACL_REVISION, OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE, RUNIN_BASE_GRANT, (PSID)child)"),
 ]
 
 
@@ -787,7 +811,16 @@ def main():
             return 1
         if "--selftest" in sys.argv[1:]:
             holes = 0
-            for rel, name, old, new in MUTANTS:
+            # 15 Nov 26: --from=N (1-based) runs mutants N.. only, so a sitting runs the ones it added (the testing rule, 3)
+            first = 1
+            for a in sys.argv[1:]:
+                if a.startswith("--from="):
+                    first = int(a[len("--from="):])
+            if first < 1 or first > len(MUTANTS):
+                print("  [FAIL] --from=%d: there are %d mutants" % (first, len(MUTANTS)))
+                return 1
+            print("self-test: mutants %d to %d of %d" % (first, len(MUTANTS), len(MUTANTS)))
+            for rel, name, old, new in MUTANTS[first - 1:]:
                 if t[rel].count(old) != 1:
                     print("  [FAIL] %s: the text to mutate matches %d times in %s" % (name, t[rel].count(old), rel))
                     holes += 1
@@ -797,7 +830,7 @@ def main():
                 caught = check(mt, work, cache, quiet=True) > 0
                 print("  [%s] %s%s" % ("pass" if caught else "FAIL", name, "" if caught else ": NOT CAUGHT"))
                 holes += 0 if caught else 1
-            print("self-test: %d mutants, %d not caught" % (len(MUTANTS), holes))
+            print("self-test: %d mutants, %d not caught" % (len(MUTANTS) - first + 1, holes))
             return 1 if holes else 0
         return 0
     finally:

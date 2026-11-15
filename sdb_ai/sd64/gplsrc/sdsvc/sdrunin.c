@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 253: the base grants SD_RUNIN_ACCOUNT traverse (only), so the child, which holds no
+ *           bypass-traverse privilege, can reach its own store; without it OPENPATH of the store gave "Error 3001" (store_acl).
  * 13 Nov 26 Windows port - RELEASE_1.1 287: a GROUP account's register group is sdg_<account>, and it was refused (only sdu_ was
  *           accepted), so run.in WITH debug could not be used in any group account.  Either of SD's own two names for that account
  *           is accepted now; any other group is still refused.
@@ -104,6 +106,9 @@
   (FILE_LIST_DIRECTORY | FILE_ADD_FILE | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | FILE_READ_EA | FILE_DELETE_CHILD |    \
    READ_CONTROL | SYNCHRONIZE)
 #define RUNIN_STORE_FILE_GRANT (FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE)
+/* What SD_RUNIN_ACCOUNT may do to the base the stores are in: pass through it to a name it knows.  Not list it, not
+   inherited (15 Nov 26, RELEASE_1.1 253; see store_acl). */
+#define RUNIN_BASE_GRANT (FILE_TRAVERSE | SYNCHRONIZE)
 
 typedef struct {
   HANDLE job;
@@ -390,12 +395,24 @@ void* sdrunin_env(const void* src, const char* store, const char* term, int cols
 /* ======================================================================
    The store                                                                */
 
+static BOOL group_sid(const char* name, BYTE* sid);
+
 /* SYSTEM, Administrators and this process's own user (LocalSystem in the service, the test's user in the test) full
-   control, inherited; with logon, the child's two entries (see RUNIN_STORE_DIR_GRANT). */
+   control, inherited; with logon, the child's two entries (see RUNIN_STORE_DIR_GRANT).
+
+   15 Nov 26 (RELEASE_1.1 253): WITHOUT logon - the base - the account SD_RUNIN_ACCOUNT also gets RUNIN_BASE_GRANT, on the
+   base alone.  The child holds no privilege (step 3), so it has no bypass-traverse either, and a base it could not
+   traverse left its own store unreachable by path: measured 15 Nov on the host with the store's DACL, the parent closed and
+   SeChangeNotifyPrivilege off, Windows answered access denied for the store and MSYS2's access() answered 0 for ANY name
+   in it - "%0" included, so OPENPATH took the store for a hashed file and the child stopped at "Error 3001 opening file"
+   ($pdbg line 67).  With the traverse grant: ENOENT again, a record written and read back, listing the base still refused.
+   Traverse is not list: the child reaches only a name it already knows, its own store's, and each store's DACL admits one
+   logon.  An account that cannot be looked up (not made yet) gets nothing; no run can start without it anyway. */
 static PACL store_acl(PSID logon) {
   DWORD size = sizeof(ACL) + 5 * (sizeof(ACCESS_ALLOWED_ACE) + SECURITY_MAX_SID_SIZE);
   PACL acl = (PACL)LocalAlloc(LPTR, size);
   DWORD inh = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+  BYTE child[SECURITY_MAX_SID_SIZE];
 
   if ((acl == NULL) || !InitializeAcl(acl, size, ACL_REVISION) ||
       !AddAccessAllowedAceEx(acl, ACL_REVISION, inh, FILE_ALL_ACCESS, (PSID)runin_system_sid) ||
@@ -404,7 +421,9 @@ static PACL store_acl(PSID logon) {
        !AddAccessAllowedAceEx(acl, ACL_REVISION, inh, FILE_ALL_ACCESS, (PSID)runin_own_sid)) ||
       ((logon != NULL) && (!AddAccessAllowedAceEx(acl, ACL_REVISION, 0, RUNIN_STORE_DIR_GRANT, logon) ||
                            !AddAccessAllowedAceEx(acl, ACL_REVISION, OBJECT_INHERIT_ACE | INHERIT_ONLY_ACE,
-                                                  RUNIN_STORE_FILE_GRANT, logon)))) {
+                                                  RUNIN_STORE_FILE_GRANT, logon))) ||
+      ((logon == NULL) && group_sid(SD_RUNIN_ACCOUNT, child) &&
+       !AddAccessAllowedAceEx(acl, ACL_REVISION, 0, RUNIN_BASE_GRANT, (PSID)child))) {
     if (acl != NULL)
       LocalFree(acl);
     return NULL;
