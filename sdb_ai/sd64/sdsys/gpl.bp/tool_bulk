@@ -128,7 +128,7 @@ $include tk.h
    loop
       call $tk_menubar('draw', ctx, keys, panes<pane>, '', '', mr)          ;* the bar first: it writes row 0 whole, and the frame then writes the app name at its right end
       call $tk_frame(ctx, keys, panes<pane>, msg)
-      call $sl_curat(0, ctx<TK.C.YSTAT>)
+      call $tk_aipage('cursor', ctx, '', '', '', '')        ;* RELEASE_1.1 328: in the AI line while it has the focus, else at the start of the status line
       nm = ''
       screen key returning nm
       mr = ''

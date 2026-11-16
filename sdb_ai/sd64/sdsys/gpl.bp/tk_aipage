@@ -7,6 +7,9 @@
 * START-HISTORY:
 * 15 Nov 26 Windows port - RELEASE_1.1 327 (the owner on HOME: after Follow up "the cursor does not appear in the ai entry"): after Follow up the
 *               line keeps the focus, so the follow-up question is typed at once; any other answer gives it back to the page as before.
+* 15 Nov 26 Windows port - RELEASE_1.1 328 (the owner on tool.files, VM: after Follow up the text went into the line but the cursor stayed "under [ in
+*               the first position in the line under the ai line"): the op 'cursor'.  Every page's key loop put the cursor at the start of the status
+*               line, whatever had the focus; it now asks here, and the line puts it at its own cursor while it has the focus (as tool_home does).
 * 1 Nov 26 dm  New (S.97 stage 1).
 * 1 Nov 26 dm  S.97 stage 2: the op 'keys', for a page that makes its key table anew (tool.bulk): the line's two rows are put back when the page has a line; the rows are one
 *              internal subroutine, add.rows, which 'init' calls too.
@@ -39,6 +42,8 @@
 *                               next stop, Shift-F6 the one before, act:ai the line itself.  The line is focused or given up here; out<1> is the box that is to have the focus
 *                               (0: the line has it) and out<2> the status line's message.  A page with one box and no line gets its own box back.
 *   mouse  (ctx, keys, pane, a -> out)   a = the event of SCREEN MOUSE: a left press on the line gives it the focus; out is then its message, else null.
+*   cursor (ctx)                the page's key loop, just before SCREEN KEY: the cursor goes into the line at its own place while the line has the focus, else to the start
+*                               of the status line, where it waits (in a window made smaller that row is off the screen, and the library's cursor lock takes the keyboard).
 *
 *   WHAT IS OFFERED TO THE MODEL is the page's key table, not a list typed again: the actions the page opted in ($tk_keys 'ai') that are available now for the pane and have a key.  The
 *   model can only name one of those ids (the library refuses any other), and an accepted proposal is run as the page's own key, so every confirm box, gate and $tk_run path of the
@@ -83,6 +88,15 @@ $include tk.h
 
       case op = 'ring'
          gosub ring
+
+      case op = 'cursor'
+         foc = 0
+         if ctx<TK.C.AIROW> and ctx<TK.C.AI> then call $tk_ai('focused', ctx, foc, '')
+         if foc then
+            call $tk_ai('draw', ctx, 1, '')                   ;* the line puts the cursor at its own (tk_ai paint, entry.cursor)
+         end else
+            call $sl_curat(0, ctx<TK.C.YSTAT>)
+         end
 
       case op = 'mouse'
          if ctx<TK.C.AIROW> and ctx<TK.C.AI> then
