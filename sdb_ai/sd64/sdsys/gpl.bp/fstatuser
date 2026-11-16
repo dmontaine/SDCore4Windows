@@ -18,6 +18,8 @@
 *
 * START-HISTORY:
 * 18 Oct 26 Windows port - from Linux aebb597 (15 Oct 26): Written for QM4 gaps bundle Q-8 (FSTAT.USER).
+* 15 Nov 26 Windows port - from Linux 853870e6 (S.245): the list without TOP is put in user number order, as the description promised; it came
+*           in the order of the user table's cells.  One ordering routine, order.rows, for both orders.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -116,19 +118,7 @@ $include err.h
       if rows = '' then
          print on lptr sysmsg(12343)                   ;* No sessions to show
       end else
-         if top then
-            * Descending order of reads + writes + deletes
-            keys = ''
-            ordered = ''
-            for r = 1 to dcount(rows, @fm)
-               u = raise(rows<r>)
-               act = u<3> + u<4> + u<5>
-               locate act in keys<1> by 'DR' setting pos else null
-               ins act before keys<pos>
-               ins rows<r> before ordered<pos>
-            next r
-            rows = ordered
-         end
+         gosub order.rows
          print on lptr sysmsg(12340)                   ;* User Name...                ....Reads        ..Writes       ..Deletes
          for r = 1 to dcount(rows, @fm)
             u = raise(rows<r>)
@@ -139,6 +129,26 @@ $include err.h
 
    if nopage then page.state = kernel(K$PAGINATE, page.state)
    if lptr = 0 then printer close
+   return
+
+* The rows in the order the report promises: with TOP, descending reads + writes + deletes; otherwise ascending user number.  The kernel
+* gives them in the order of the user table's cells, which is NOT user number order once user numbers rotate through the pool (USERPOOL).
+order.rows:
+   keys = ''
+   ordered = ''
+   for r = 1 to dcount(rows, @fm)
+      u = raise(rows<r>)
+      if top then
+         k = u<3> + u<4> + u<5>
+         locate k in keys<1> by 'DR' setting pos else null
+      end else
+         k = u<1> + 0
+         locate k in keys<1> by 'AR' setting pos else null
+      end
+      ins k before keys<pos>
+      ins rows<r> before ordered<pos>
+   next r
+   rows = ordered
    return
 end
 

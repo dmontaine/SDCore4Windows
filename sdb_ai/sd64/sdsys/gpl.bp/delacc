@@ -80,6 +80,9 @@
 * rev 0.9.0 delete-account requires admin priv, are we admin?
 *           on user account, delete os user if configured
 * rev 1.0-1 use userdel not deluser (deluser not on all Linux version)
+* 15 Nov 26 dm  S.244 (4), the owner of tool.accounts X: "type x, get a prompt for the name and click
+*               run", no terminal.  NO.QUERY leaves out the one confirmation, which the caller
+*               has asked.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -145,7 +148,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 
    acc.name = downcase(acc.name)
 
-   * Check no further command arguments, other than REMOVE.HOME
+   * Check no further command arguments, other than REMOVE.HOME and NO.QUERY
    *
    * 6 Oct 26 Windows port - REMOVE.HOME IS ACCEPTED (parity audit J-1, agreed with the
    *   SD Core for Linux agent).  On Linux the keyword removes the OS user's home
@@ -153,18 +156,21 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
    *   default (delete_user, and the 10075/10116/10123 warnings when part of it
    *   cannot be), so the keyword asks for what already happens.  Accepted so that
    *   the same command line works on both ports; it changes nothing here.
-
-   call @parser(parser$get.token, token.type, token, keyword)
-   if token.type # PARSER$END then
-      if upcase(token) = 'REMOVE.HOME' then
-         call @parser(parser$get.token, token.type, token, keyword)
-         if token.type # PARSER$END then
+   * 15 Nov 26 Windows port - from Linux 853870e6 (S.244 (4)): NO.QUERY, the confirmation was asked by the caller (tool.accounts X's
+   *   one dialog), so the verb asks nothing on the terminal.  The keywords in any order; anything else is refused.
+   no.query = @false
+   loop
+      call @parser(parser$get.token, token.type, token, keyword)
+   until token.type = PARSER$END
+      begin case
+         case upcase(token) = 'REMOVE.HOME'
+            null                             ;* what already happens here (above)
+         case keyword = KW$NO.QUERY
+            no.query = @true
+         case 1
             stop sysmsg(2018, token) ;* Unexpected token (xx)
-         end
-      end else
-         stop sysmsg(2018, token) ;* Unexpected token (xx)
-      end
-   end
+      end case
+   repeat
 
 * 18 Oct 26 dm - S.66: the shared account is part of the system, like SDSYS: the installer makes it and the remover takes it away.  Refused before the
 *   own-account test, the register is read, any prompt is shown or anything is removed.
@@ -327,6 +333,9 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 *   its meaning and the warning is not duplicated in both.  OUTSIDE the loop, so
 *   a mistyped answer re-asks the question without repeating the warning.  The
 *   y/<n> default below is untouched: n is still the conservative answer.
+* 15 Nov 26 Windows port - from Linux 853870e6 (S.244 (4)): with NO.QUERY the caller asked (tool.accounts X), so none of this is shown.
+   yn = 'Y'
+   if not(no.query) then
    crt sysmsg(10158, acc.name)
    * deleting takes the data with it; suspend instead
 
@@ -346,6 +355,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
       if yn = '' then yn = 'N'
       until yn = 'Y' or yn = 'N'
    repeat
+   end
 
    if yn = 'N' then
       @system.return.code = -ER$STOPPED

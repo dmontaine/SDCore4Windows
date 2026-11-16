@@ -6,6 +6,9 @@
 * START-HISTORY:
 * 30 Oct 26 dm  New (S.88 F0b).  Modelled on $ide_name (two entries, a message area, a refusal said in the form); this one is made of SCREEN FORM and its controls, so the
 *               focus ring, Tab and the mouse are the library's, and a refusal moves the focus with SCREEN FOCUS (the focus service, S.88 p3.6).
+* 15 Nov 26 dm  S.244, the owner's page rules (2) "Entry fields must open EMPTY" - "Every field" - and (1) "A choice from a fixed set must not be a typed field": an entry
+*               always opens empty and a starting value is shown BESIDE it ("now: ...", Ctrl-R puts it in the field, message 15114); a field may say that an empty
+*               entry keeps the value shown (value 6); a field of kind 2 is a selector of fixed words (value 7), its starting value the word in force.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -17,11 +20,15 @@
 *
 *     open   (ctx, spec, vals -> c)   draws the form centred and returns at once.  spec is a dynamic array: <1> the title, <2> the label of the default button, with a & mark ('&Create';
 *                                     it stands for what the form will do), <3> the hint line (null: message 12253), then one FIELD for each entry, whose values are: 1 its id (a plain word,
-*                                     unique), 2 its label, 3 its width in cells (null: as wide as the form allows), 4 its longest text (null: 300), 5 1 for a masked entry (a password, shown as *).
-*                                     vals is the entries' starting texts, one to a field of the same order (null for none).  c is null, or 'no' when nothing was drawn (a session with no
-*                                     terminal, no entry, or a window too small for the form).
+*                                     unique), 2 its label, 3 its width in cells (null: as wide as the form allows), 4 its longest text (null: 300), 5 its kind: null an entry, 1 a masked
+*                                     entry (a password, shown as *), 2 a choice of fixed words (a selector), 6 1 when an empty entry keeps the value shown beside it, 7 a choice's words,
+*                                     separated by subvalue marks, 8 the word put before a value shown (null: now).
+*                                     vals is the starting values, one to a field of the same order (null for none).  AN ENTRY ALWAYS OPENS EMPTY (S.244 (2)): its starting value is shown
+*                                     beside it as "now: value" (never for a masked entry) and Ctrl-R in the entry puts it in.  A choice starts on the word vals names (the first when it
+*                                     names none).  c is null, or 'no' when nothing was drawn (a session with no terminal, no entry, or a window too small for the form).
 *     run    (ctx -> a, b, c)         the person fills the form in until the default button (Return in an entry presses it) or Cancel (Esc) ends it.  a is 'ok' or 'cancel' (also an input that
-*                                     ended), b the texts of the entries as typed, one to a field, c the id of the entry that has the focus.  The form stays on the screen.
+*                                     ended), b the answers, one to a field: an entry's text as typed (its starting value when it was left empty and value 6 is 1), a choice's word; c the id
+*                                     of the field that has the focus.  The form stays on the screen.
 *     say    (ctx, text, id)          the page's refusal or note, wrapped into the three rows under the entries (null empties them), and the focus goes to the entry id (null: it stays).
 *     close  (ctx)                    the screen is put back as it was under the form
 *
@@ -38,7 +45,9 @@ $catalog $tk_form
 $include sl.h
 $include tk.h
 
-   common /tkform/ tf.f, tf.n, tf.ids, tf.msgw, tf.open        ;* the form on the screen: its collection, the number of entries and their ids (values), the message width, 1 while it is shown
+   common /tkform/ tf.f, tf.n, tf.ids, tf.msgw, tf.open, tf.ini, tf.kind, tf.keep, tf.words   ;* the form on the screen: its collection, the number of fields and their ids (values),
+                                                                                             ;* the message width, 1 while it is shown; each field's starting value, kind, keep flag
+                                                                                             ;* and a choice's words (one field each)
 
    begin case
       case op = 'open'
@@ -83,32 +92,79 @@ open.form:
    by = int((sh - bh) / 2)
    tf.msgw = bw - 4
    tf.ids = ''
+   tf.ini = ''
+   tf.kind = ''
+   tf.keep = ''
+   tf.words = ''
    tf.n = nf
+   shown = 0                                         ;* 1 when a starting value is shown beside an entry: the Ctrl-R note goes under the entries
    screen form title ttl at bx,by size bw,bh returning tf.f
    for i = 1 to nf
       fd = spec<3 + i>
       id = fd<1, 1>
       tf.ids<1, i> = id
       ini = b<i>
+      knd = fd<1, 5> + 0
+      tf.ini<i> = ini
+      tf.kind<i> = knd
+      tf.keep<i> = (fd<1, 6> + 0 = 1)
       wd = fd<1, 3> + 0
       if wd < 1 or wd > fw then wd = fw
       ml = fd<1, 4> + 0
       if ml < 1 then ml = 300
       screen label tf.f, 'l' : i, fd<1, 2>[1, labw - 2] at 2,1 + i width labw - 2
-      if fd<1, 5> + 0 = 1 then
-         screen entry tf.f, id at 2 + labw,1 + i width wd value ini mask maxlen ml
-      end else
-         screen entry tf.f, id at 2 + labw,1 + i width wd value ini maxlen ml
-      end
+      begin case
+         case knd = 2
+            gosub add.choice
+         case knd = 1
+            screen entry tf.f, id at 2 + labw,1 + i width wd value '' mask maxlen ml
+         case 1
+            gosub add.entry
+      end case
    next i
    for j = 1 to 3
       screen label tf.f, 'm' : j, '' at 2,nf + 2 + j width tf.msgw
    next j
+   if shown then screen set tf.f, 'm3' text sysmsg(15114)[1, tf.msgw]
    screen button tf.f, 'ok', eff at 2,nf + 6 default
    screen button tf.f, 'cancel', sysmsg(12254) at 2 + len(eff) + 6,nf + 6 cancel
    screen label tf.f, 'hint', hint[1, tf.msgw] at 2,nf + 7 width tf.msgw
    tf.open = 1
    c = ''
+   return
+
+* An entry of field i, opened EMPTY (S.244 (2)).  A starting value is shown beside it, "now: value", in the cells the entry leaves: the entry gives up as much of its
+* width as it can keep 12 cells, and the value is cut with ... when it does not fit (Ctrl-R puts the whole of it in the entry)
+add.entry:
+   if ini # '' then
+      bwd = fw - wd - 1                              ;* cells to the right of the entry
+      if bwd < 16 then
+         wd = fw - 17
+         if wd < 12 then wd = 12
+         bwd = fw - wd - 1
+      end
+      screen entry tf.f, id at 2 + labw,1 + i width wd value '' maxlen ml
+      if bwd >= 8 then
+         bw.word = fd<1, 8>
+         if bw.word = '' then bw.word = 'now'
+         bt = bw.word : ': ' : ini
+         if len(bt) > bwd then bt = bt[1, bwd - 3] : '...'
+         screen label tf.f, 'v' : i, bt at 3 + labw + wd,1 + i width bwd
+      end
+      shown = 1
+   end else
+      screen entry tf.f, id at 2 + labw,1 + i width wd value '' maxlen ml
+   end
+   return
+
+* A choice of fixed words for field i (S.244 (1)): a selector, on the word the starting value names
+add.choice:
+   tf.words<i> = fd<1, 7>                            ;* kept with its subvalue marks: the run turns the number chosen back into the word
+   wds = fd<1, 7>
+   convert @sm to @vm in wds
+   cv = 1
+   locate ini in wds<1, 1> setting cp then cv = cp      ;* <1, 1> walks the values; <1> would walk the fields
+   screen selector tf.f, id, '', wds at 2 + labw,1 + i value cv
    return
 
 * ------------------------------------------------------------------------------------------------- run
@@ -131,6 +187,8 @@ run.form:
             case ev<1> = 'cancel'
                res = 'cancel'
                exit
+            case ev<1> = 'key' and ev<3> = 'ctrl-r'
+               gosub recall.value
          end case
       end else
          res = 'cancel'                              ;* the input ended
@@ -139,6 +197,12 @@ run.form:
    repeat
    for i = 1 to tf.n
       screen get tf.f, tf.ids<1, i> returning v
+      begin case
+         case tf.kind<i> = 2
+            v = field(tf.words<i>, @sm, v + 0)
+         case v = '' and tf.keep<i>
+            v = tf.ini<i>                            ;* an empty entry keeps the value shown beside it
+      end case
       b<i> = v
    next i
    a = res
@@ -148,6 +212,16 @@ run.form:
       fw = tf.f{'widgets', fx}
       if index(@vm : tf.ids : @vm, @vm : fw{'id'} : @vm, 1) > 0 then c = fw{'id'}
    end
+   return
+
+* Ctrl-R in an entry: the value shown beside it goes into it, the cursor at its end, to be changed (S.244 (2)); nothing for a masked entry, a choice, or no value
+recall.value:
+   rx = tf.f{'focus'} + 0
+   if rx < 1 then return
+   rw = tf.f{'widgets', rx}
+   locate rw{'id'} in tf.ids<1, 1> setting ri else return       ;* the ids are values of field 1
+   if tf.kind<ri> # 0 or tf.ini<ri> = '' then return
+   screen set tf.f, rw{'id'} value tf.ini<ri>
    return
 
 * ------------------------------------------------------------------------------------------------- say

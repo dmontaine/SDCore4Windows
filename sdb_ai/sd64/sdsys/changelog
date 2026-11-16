@@ -3,6 +3,40 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+15 Nov 26  THE FULL-SCREEN PAGES' FIELDS OPEN EMPTY; FIXED CHOICES ARE CHOSEN, NOT TYPED; DELETING AN ACCOUNT IS ONE DIALOG.
+
+             What        - every entry field of the administrator's and the person's own pages now opens empty.  Where a
+                           field changes a value, the value in force is shown beside it ("now: ...") and Ctrl-R puts it
+                           in to be edited; for most such fields an empty entry keeps it.  The '/' find box starts empty
+                           too, and Up or Ctrl-R brings back the last text.  A choice from a fixed set is chosen from a row
+                           of words or a list instead of typed: the kind and doors of a new account, the API and ssh doors
+                           (the list starts on off), a server's file mode, a scheduled job, the AI layout and
+                           authentication, a menu program's Wait for Enter, and the global change's set or replace.  The
+                           global change of the master files page asks everything on one form.  X on the accounts page is
+                           one dialog: type the account's name and press Run; nothing is asked on the terminal (a
+                           Windows user SD made goes with its profile, as before).  delete.account takes no.query for
+                           this.  The words a box asks you to type, open and restore, are shown in lower case and taken
+                           in either case.
+             Why         - the owner's rules for the pages: a field that holds the last thing typed is easy to run again
+                           by mistake, a fixed set typed by hand can be mistyped, and a delete needed three confirmations
+                           with a terminal in between.
+             Does NOT    - Change what any command does or checks.  delete.account typed at the prompt still asks before
+                           it deletes unless no.query is given.  A on the remote access page still gives the terminal to
+                           REMOTE.API, whose question whether to restart SD is yours to answer.  A question that offers
+                           what the AI line proposed still starts with the proposal, and the editors (the IDE, SED, CED)
+                           are unchanged.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
+15 Nov 26  FSTAT.USER LISTS SESSIONS IN USER NUMBER ORDER; A GROUPED PHANTOM WHOSE PARENT HAS GONE ENDS AT ONCE.
+
+             What        - FSTAT.USER without TOP lists the sessions in user number order, as its help says.  And a phantom
+                           started with PHANTOM GROUP whose parent session ended before the phantom had started now ends as
+                           soon as it starts.
+             Why         - the list came in the order of the system's internal table, which is not user number order once
+                           user numbers rotate through the pool.  The phantom was told to end gracefully, and a graceful end
+                           runs the phantom's command first: it stayed for the whole command, shown as "logout pending".
+             Does NOT    - Change FSTAT.USER TOP (busiest first) or USER n, or a grouped phantom whose parent ends while it
+                           is running.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 15 Nov 26  THE ADMINISTRATOR CAN LOGTO SDSYS TO COME BACK.
 
              What        - a session that signed in to Windows as SDSYS and went to another account with logto can now type

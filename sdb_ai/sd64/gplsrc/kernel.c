@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - from Linux 853870e6 (S.245): a grouped phantom whose parent ended before it started is given EVT_LOGOUT, not
+ *           EVT_TERMINATE, so it ends at once instead of running its command first.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): init_kernel() clears the file transfer slot of the cell it takes;
  *           the transfer server's @TTY is "sftp".
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): process_events() writes the "Received termination signal" line
@@ -213,8 +215,12 @@ retry_login:
     memset((void*)&(my_uptr->ustats), 0, sizeof(struct FILESTATS)); /* FSTAT.USER */
     my_uptr->ustats.reset = sdtime();
     if (is_phantom && my_uptr->grouped && (my_uptr->puid == 0)) {
-      /* PHANTOM GROUP, and the parent ended before this phantom had started: it goes at once (ReleaseLicence) */
-      my_uptr->events = EVT_TERMINATE;
+      /* PHANTOM GROUP, and the parent ended before this phantom had started: it goes at once (ReleaseLicence).
+         15 Nov 26 dm - S.245: EVT_LOGOUT, the immediate end, not EVT_TERMINATE.  The graceful one unwinds to the command processor
+         and calls it again, and a phantom's command processor that has not yet run the phantom's command runs it then: the phantom
+         stayed, "logout pending", for the length of its command (measured: SLEEP 60, alive for all of it, the error log saying
+         "Forced logout").  Nothing has run yet, so there is nothing for a graceful end to tidy. */
+      my_uptr->events = EVT_LOGOUT;
       my_uptr->flags = USR_LOGOUT;
     }
     my_uptr->lockwait_index = 0;

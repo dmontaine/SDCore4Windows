@@ -250,9 +250,9 @@ def checks(s):
        and "allow = 'backup.account restore.account set.backup.directory'" in tbk and tbk.count("allow = ") == 1 and "tool.backups.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in tbk and "call $tk_runx(allow, sent, out, stat, err)" in tbk)
 
     tac = strip(s["tool_accounts"])
-    ck("P17i tool.accounts: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only modify.account and create.account through the routines (the terminal-hand-over verbs are the box's), and wraps with $tk_wrap",
+    ck("P17i tool.accounts: a [?] at the end of the first box, F1 and ? and a click show its help, it runs only modify.account, create.account and (since 15 Nov 26, S.244 (4), with no.query after its own dialog) delete.account through the routines (create.account user is the box's terminal hand-over), and wraps with $tk_wrap",
        "call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)" in tac and "case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.accounts.page', hm, 0, 0)" in tac and "call $tk_help('hit', mev, top.x + top.w - 5, top.y + 1, hit.m)" in tac
-       and "allow = 'modify.account create.account'" in tac and tac.count("allow = ") == 1 and "tool.accounts.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in tac and "call $tk_wrap(ln.s, dtw, pieces)" in tac and "rest[cut" not in tac)
+       and "allow = 'modify.account create.account delete.account'" in tac and tac.count("allow = ") == 1 and "tool.accounts.page" in hts and "call $tk_confirm(sent, el, typed, res, cmsg)" in tac and "call $tk_wrap(ln.s, dtw, pieces)" in tac and "rest[cut" not in tac)
 
     trm = strip(s["tool_remote"])
     # 13 Nov 26 Windows: remote.sdsys is back (the remote administration view, RELEASE_1.1 202), so the allow list is Linux's four again.
@@ -375,7 +375,7 @@ MUTANTS = [
     ("tool.backups can run another command", "tool_backups", "allow = 'backup.account restore.account set.backup.directory'", "allow = 'backup.account restore.account set.backup.directory sh'"),
     ("tool.accounts loses its [?]", "tool_accounts", "   call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)\n", ""),
     ("tool.accounts calls $tk_help with too few arguments", "tool_accounts", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.accounts.page', hm, 0, 0)", "      case nm = 'f1' or nm = '?'\n         call $tk_help('box', 'tool.accounts.page', hm)"),
-    ("tool.accounts can run another command", "tool_accounts", "allow = 'modify.account create.account'", "allow = 'modify.account create.account sh'"),
+    ("tool.accounts can run another command", "tool_accounts", "allow = 'modify.account create.account delete.account'", "allow = 'modify.account create.account delete.account sh'"),
     ("tool.files loses its [?]", "tool_files", "   call $tk_help('mark', lx + lw - 5, ly + 1, 0, 0)\n", ""),
     ("tool.files can run another command", "tool_files", "   allow = 'create.file clear.file delete.file'", "   allow = 'create.file clear.file delete.file sh'"),
     ("tool.files can hand the terminal to another command", "tool_files", "show.allow = 'analyze.file list.index list.triggers'", "show.allow = 'analyze.file list.index list.triggers sh'"),

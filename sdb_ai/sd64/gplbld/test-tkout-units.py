@@ -11,6 +11,8 @@
 #       in $sl_picker since 3 Nov 26 ("Extend the picker"): optional columns, and a Del that only NAMES the entry (res 'delete'; the page confirms and deletes)
 #   O7  $tk_form open: a phantom returns first, a form left open is put away, the form is refused (c 'no') when the window is too small, the entries are SCREEN ENTRYs (masked ones with
 #       MASK), three message rows, the default button 'ok', the cancel button 'cancel', and tf.open is 1 only at the end
+#   O7b S.244 (15 Nov 26, the owner: "Every field" opens empty; a fixed set is a choice): every entry opens EMPTY, a starting value is shown beside it, a choice is a selector
+#   O7c S.244: Ctrl-R puts the value shown in the focused entry (never a masked one or a choice); run gives a choice's word and, where value 6 is 1, keeps the value shown for an empty entry
 #   O8  $tk_form run: waits for the form's events, a button 'ok' is 'ok' and anything else (the cancel button, Esc, the input ending) is 'cancel', every entry's text is read with SCREEN GET,
 #       the entry that has the focus comes back, and the form is NOT hidden
 #   O9  $tk_form say: the text is wrapped into exactly the three rows (a written empty text empties the ones not used) and the focus goes to the entry named, with an ELSE
@@ -141,8 +143,27 @@ def checks(s):
     ck("O7 $tk_form open: a phantom returns first, a form left open is put away, the form is refused when the window is too small, the entries are SCREEN ENTRYs (a masked one with MASK), three message rows, "
        "the default button 'ok', the cancel button, and tf.open is 1 only at the end",
        ordered(of, "c = 'no'", "if system(25) then return", "if tf.open + 0 then gosub close.form", "if nf < 1 then return", "if bw < 40 or bh > sh - 2 then return", "screen form title ttl at bx,by size bw,bh returning tf.f",
-               "if fd<1, 5> + 0 = 1 then", "mask maxlen ml", "end else", "maxlen ml", "for j = 1 to 3", "'m' : j", "screen button tf.f, 'ok', eff at 2,nf + 6 default",
+               "case knd = 2", "gosub add.choice", "case knd = 1", "value '' mask maxlen ml", "case 1", "gosub add.entry", "for j = 1 to 3", "'m' : j",
+               "if shown then screen set tf.f, 'm3' text sysmsg(15114)", "screen button tf.f, 'ok', eff at 2,nf + 6 default",
                "screen button tf.f, 'cancel', sysmsg(12254) at 2 + len(eff) + 6,nf + 6 cancel", "tf.open = 1", "c = ''"), of[:300])
+
+    # S.244 (2) "Every field" opens EMPTY, (1) a choice of fixed words is a selector
+    ae = label(fm, "add.entry")
+    ac = label(fm, "add.choice")
+    ck("O7b S.244: an entry opens EMPTY on both paths (no 'value ini' anywhere in the form), a starting value is shown BESIDE it as '<word>: value' (now when the field names no word) "
+       "only when there is one, and a choice is a SCREEN SELECTOR of value 7's words on the word the starting value names",
+       "value ini" not in code(s["tk_form"])
+       and ordered(ae, "if ini # '' then", "screen entry tf.f, id at 2 + labw,1 + i width wd value '' maxlen ml", "bw.word = fd<1, 8>", "if bw.word = '' then bw.word = 'now'",
+                   "bt = bw.word : ': ' : ini", "screen label tf.f, 'v' : i, bt", "shown = 1", "end else", "screen entry tf.f, id at 2 + labw,1 + i width wd value '' maxlen ml")
+       and ordered(ac, "tf.words<i> = fd<1, 7>", "convert @sm to @vm in wds", "locate ini in wds<1, 1> setting cp then cv = cp", "screen selector tf.f, id, '', wds at 2 + labw,1 + i value cv"),
+       ae[:300] + " || " + ac[:200])
+    rv = label(fm, "recall.value")
+    ck("O7c S.244: Ctrl-R puts the starting value in the focused ENTRY only (not a masked one, not a choice, not when there is none); run gives a choice's WORD and, for a field whose "
+       "value 6 is 1, the starting value when the entry was left empty",
+       ordered(label(fm, "run.form"), "case ev<1> = 'key' and ev<3> = 'ctrl-r'", "gosub recall.value", "case tf.kind<i> = 2", "v = field(tf.words<i>, @sm, v + 0)",
+               "case v = '' and tf.keep<i>", "v = tf.ini<i>", "b<i> = v")
+       and ordered(rv, "rx = tf.f{'focus'} + 0", "locate rw{'id'} in tf.ids<1, 1> setting ri else return", "if tf.kind<ri> # 0 or tf.ini<ri> = '' then return",
+                   "screen set tf.f, rw{'id'} value tf.ini<ri>"), rv[:300])
 
     rf = label(fm, "run.form")
     ck("O8 $tk_form run: waits for events; the button 'ok' is 'ok', anything else (Cancel, Esc, the input ending) is 'cancel'; every entry is read with SCREEN GET; the focused entry comes back; the form is not hidden",
@@ -185,7 +206,7 @@ MUTANTS = [
     ("the picker writes", "tk_pickrec", "   call $sl_picker(mode, file, id, res, newtext)\n", "   call $sl_picker(mode, file, id, res, newtext)\n   write id on file, id\n", "O6"),
     ("the picker is asked for a file only", "tk_pickrec", "call $sl_picker(mode, file, id, res, newtext)", "call $sl_picker('file', file, id, res, newtext)", "O6"),
     ("a form that is too small is drawn", "tk_form", "   if bw < 40 or bh > sh - 2 then return\n", "", "O7"),
-    ("a masked entry shows its text", "tk_form", "value ini mask maxlen ml", "value ini maxlen ml", "O7"),
+    ("a masked entry shows its text", "tk_form", "value '' mask maxlen ml", "value '' maxlen ml", "O7"),
     ("the form is open before it is drawn", "tk_form", "   tf.open = 1\n   c = ''", "   c = ''", "O7"),
     ("Cancel is not the cancel button", "tk_form", " at 2 + len(eff) + 6,nf + 6 cancel", " at 2 + len(eff) + 6,nf + 6", "O7"),
     ("run hides the form", "tk_form", "   a = res\n   fx = tf.f", "   screen hide tf.f\n   a = res\n   fx = tf.f", "O8"),
@@ -202,8 +223,18 @@ MUTANTS = [
     ("Del is offered to every list", "sl_picker", "   if mode<4> = 'delete' then lhot = 'del'\n", "   lhot = 'del'\n", "O6"),
     ("Del answers an entry when none is shown", "sl_picker", "      case ps = 2 and pr = 'del' and lcur > 0\n", "      case ps = 2 and pr = 'del'\n", "O6"),
     ("the list mode is left in the facade", "tk_pickrec", "   call $sl_picker(mode, file, id, res, newtext)\n   return\n", "   if mode = 'list' then return\n   call $sl_picker(mode, file, id, res, newtext)\n   return\n", "O6"),
+    # 15 Nov 26 (S.244, the owner's page rules (1) and (2)): M_S244 is the first of these
+    ("an entry opens holding its starting value", "tk_form", "   end else\n      screen entry tf.f, id at 2 + labw,1 + i width wd value '' maxlen ml\n   end\n   return",
+     "   end else\n      screen entry tf.f, id at 2 + labw,1 + i width wd value ini maxlen ml\n   end\n   return", "O7b"),
+    ("the starting value is not shown beside the entry", "tk_form", "         screen label tf.f, 'v' : i, bt at", "         screen label tf.f, 'v' : i, '' at", "O7b"),
+    ("a choice starts on the first word whatever it is given", "tk_form", "   locate ini in wds<1, 1> setting cp then cv = cp", "   null", "O7b"),
+    ("a choice's word is looked for among the FIELDS (SD's <1> walks fields, so it is never found)", "tk_form", "locate ini in wds<1, 1> setting", "locate ini in wds<1> setting", "O7b"),
+    ("a choice gives its number, not its word", "tk_form", "            v = field(tf.words<i>, @sm, v + 0)\n", "            null\n", "O7c"),
+    ("an empty entry never keeps the value shown", "tk_form", "            v = tf.ini<i>                            ;* an empty entry keeps", "            null                            ;* an empty entry keeps", "O7c"),
+    ("Ctrl-R fills a masked entry", "tk_form", "   if tf.kind<ri> # 0 or tf.ini<ri> = '' then return\n", "   if tf.ini<ri> = '' then return\n", "O7c"),
 ]
-M_U9 = len(MUTANTS) - 5
+M_U9 = len(MUTANTS) - 11
+M_S244 = len(MUTANTS) - 6
 M_PICK = M_U9
 
 

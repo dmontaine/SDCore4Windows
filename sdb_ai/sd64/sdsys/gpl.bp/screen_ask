@@ -8,6 +8,8 @@
 * 12 Oct 26 dm  New.
 * 18 Oct 26 dm  The key guardquit (the user left from the cursor lock, $sl_guardmode) closes the question as Esc does.
 * 09 Nov 26 dm  S.184: HISTORY list: Up and Down bring back earlier answers.
+* 15 Nov 26 dm  S.244: Ctrl-R brings back the newest answer of the list, the key a $tk_form field gives for the value shown beside it; a page that asks for a
+*               change opens the field empty and passes the value in force as the list.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -20,7 +22,8 @@
 *
 *     hist     earlier answers, newest first, as fields.  Up shows the next older one and Down the next newer; Down past the
 *              newest gives back what had been typed.  The caller keeps the list; nothing is added to it here.  Left out or
-*              empty, Up and Down do nothing.  A MASK question never recalls (a password is not shown again).
+*              empty, Up and Down do nothing.  Ctrl-R shows the newest whatever is shown.  A MASK question never recalls (a
+*              password is not shown again).
 *     prompt   shown above the field
 *     value    the text the field starts with
 *     width    the width of the field in cells (default 30, at most what the screen holds)
@@ -101,7 +104,7 @@ $include sl.h
             call $sl_resize(scr)                    ;* the terminal's size changed: the box is drawn again with the rest
             r = 'handled'
          end else
-            if (k = 'up' or k = 'down') and hn > 0 then
+            if (k = 'up' or k = 'down' or k = 'ctrl-r') and hn > 0 then
                gosub recall
                r = 'handled'
             end else
@@ -123,9 +126,13 @@ $include sl.h
 
    return
 
-* In: k (up or down), hi.  The field shows the older or newer answer, with the cursor after it ('init' puts it there).
+* In: k (up, down or ctrl-r), hi.  The field shows the older or newer answer, with the cursor after it ('init' puts it there).  Ctrl-R brings back the newest
+* answer whatever is shown (S.244: the key $tk_form gives a field for the value shown beside it)
 recall:
-   if k = 'up' then
+   if k = 'ctrl-r' then
+      if hi = 0 then draft = w{'value'}
+      hi = 1
+   end else if k = 'up' then
       if hi >= hn then return
       if hi = 0 then draft = w{'value'}
       hi += 1

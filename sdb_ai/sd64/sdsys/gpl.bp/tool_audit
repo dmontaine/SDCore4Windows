@@ -16,6 +16,7 @@
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 *              '/' opens the filter form as F does: '/' is every page's find key (the owner: "Letters stay, '/' finds").
+* 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  The filter form's entries open empty with the filter in force beside them; an empty entry keeps it.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -551,13 +552,15 @@ on.mouse:
 do.filter:
    * S.88: one form with the six filters in view; a time that is not one is refused in the form, which stays
    nf = flt
-   spec = 'Audit filter (empty = any)' : @fm : '&Filter' : @fm : 'Times: 2026-10-25 or 2026-10-25 14:30; a date alone is a day.'
-   spec<-1> = 'from' : @vm : 'From (time)' : @vm : 20 : @vm : 19
-   spec<-1> = 'to' : @vm : 'To (time)' : @vm : 20 : @vm : 19
-   spec<-1> = 'event' : @vm : 'Event' : @vm : 40 : @vm : 60
-   spec<-1> = 'account' : @vm : 'Account (account=)' : @vm : 40 : @vm : 60
-   spec<-1> = 'user' : @vm : 'User' : @vm : 40 : @vm : 60          ;* 14 Nov 26 Windows port: no sudo= on a Windows line
-   spec<-1> = 'text' : @vm : 'Text anywhere' : @vm : 60 : @vm : 60
+   * S.244 (2): the entries open empty, a filter in force is shown beside its entry and an empty entry keeps it (C clears them all)
+   spec = 'Audit filter (empty keeps the one shown, or any)' : @fm : '&Filter' : @fm : 'Times: 2026-10-25 or 2026-10-25 14:30; a date alone is a day.'
+   kp = @vm : '' : @vm : 1                                      ;* values 5 and 6 of a field: an entry, and empty keeps the value shown
+   spec<-1> = 'from' : @vm : 'From (time)' : @vm : 20 : @vm : 19 : kp
+   spec<-1> = 'to' : @vm : 'To (time)' : @vm : 20 : @vm : 19 : kp
+   spec<-1> = 'event' : @vm : 'Event' : @vm : 40 : @vm : 60 : kp
+   spec<-1> = 'account' : @vm : 'Account (account=)' : @vm : 40 : @vm : 60 : kp
+   spec<-1> = 'user' : @vm : 'User' : @vm : 40 : @vm : 60 : kp     ;* 14 Nov 26 Windows port: no sudo= on a Windows line
+   spec<-1> = 'text' : @vm : 'Text anywhere' : @vm : 60 : @vm : 60 : kp
    fv = flt<1> : @fm : flt<2> : @fm : flt<3> : @fm : flt<4> : @fm : flt<5> : @fm : flt<6>
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then

@@ -256,8 +256,8 @@ def checks(src):
     ck("E23", "SCREEN ASK ... HISTORY: the compiler's row for ASK has the keyword after MASK and the subroutine takes hist between mask and ret; a MASK question recalls nothing and an empty list leaves Up and Down as they were; Up stops at the "
        "oldest and keeps what was typed, Down gives it back; both IDE prompts offer ih.cmds and remember what was run through one routine, in the common's last place",
        '"MASK:F":@sm:"HISTORY:1"' in src["bcomp"] and "subroutine screen_ask(prompt, value, width, title, ax, ay, mask, hist, ret, status)" in sa
-       and "hn = if mask # '' or hist = '' then 0 else dcount(hist, @fm)" in sa and "if (k = 'up' or k = 'down') and hn > 0 then" in sa
-       and ordered(sa, "recall:", "if hi >= hn then return", "if hi = 0 then draft = w{'value'}", "hi += 1", "if hi = 0 then return", "hi -= 1", "w{'value'} = if hi then hist<hi> else draft", "$sl_entry('init'", "$sl_entry('draw'")
+       and "hn = if mask # '' or hist = '' then 0 else dcount(hist, @fm)" in sa and "if (k = 'up' or k = 'down' or k = 'ctrl-r') and hn > 0 then" in sa
+       and ordered(sa, "recall:", "if k = 'ctrl-r' then", "hi = 1", "end else if k = 'up' then", "if hi >= hn then return", "if hi = 0 then draft = w{'value'}", "hi += 1", "if hi = 0 then return", "hi -= 1", "w{'value'} = if hi then hist<hi> else draft", "$sl_entry('init'", "$sl_entry('draw'")
        and "screen ask sysmsg(12559) history ih.cmds returning xq.cmd" in ide and "screen ask sysmsg(15053) history ih.cmds returning xm.cmd" in ide
        and ide.count("gosub hist.command") == 2 and "ih.cmds = hp.list" in ide, "")
     me = strip(src["sl_memo"])
@@ -445,7 +445,8 @@ MUTANTS += [
     ("the compiler does not know HISTORY", "E23", sub("bcomp", ':@sm:"HISTORY:1"', "")),
     ("a password question recalls", "E23", sub("screen_ask", "hn = if mask # '' or hist = '' then 0", "hn = if hist = '' then 0")),
     ("Up runs past the oldest", "E23", sub("screen_ask", "      if hi >= hn then return\n", "")),
-    ("what was typed is lost", "E23", sub("screen_ask", "      if hi = 0 then draft = w{'value'}\n", "")),
+    ("what was typed is lost", "E23", sub("screen_ask", "      if hi >= hn then return\n      if hi = 0 then draft = w{'value'}\n", "      if hi >= hn then return\n")),
+    ("Ctrl-R does not recall (S.244)", "E23", sub("screen_ask", "if (k = 'up' or k = 'down' or k = 'ctrl-r') and hn > 0 then", "if (k = 'up' or k = 'down') and hn > 0 then")),
     ("the field is not drawn again", "E23", sub("screen_ask", "   call $sl_entry('draw', w, scr, '', r)\n", "")),
     ("the terminal prompt offers no history", "E23", sub("ide", "screen ask sysmsg(15053) history ih.cmds returning", "screen ask sysmsg(15053) returning")),
     ("a command is not remembered", "E23", sub("ide", "   hp.item = xq.cmd\n   gosub hist.command\n", "")),

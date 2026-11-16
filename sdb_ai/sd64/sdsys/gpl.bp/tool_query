@@ -28,6 +28,8 @@
 *              boxes.  AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  ask.form's entry opens empty with the value in force beside it (Ctrl-R puts it in); for a condition's
+*              value and the sentence an empty entry keeps it (af.keep), for the heading, footing and sample empty is still an answer.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -176,6 +178,7 @@ $include tk.h
    gen = 0
    done = 0
    dropped = 0 ; dict.ok = 0
+   af.keep = 0                                                    ;* S.244: set to 1 by a caller of ask.form for one call
    hx = 0 ; hy = 0                                                ;* the [?] button: set by the drawing of each view
    msg = ''
 
@@ -1326,6 +1329,7 @@ edit.cond:
    cur.v = (if cnd.item<kc> = cit and cnd.op<kc> = ops<pko> then cnd.val<kc> else '')
    af.kind = 'value' ; af.ttl = 'Condition ' : kc ; af.lab = 'Value' ; af.btn = '&Set' ; af.val = cur.v ; af.w = '' ; af.max = MAXVAL
    af.note = 'The value for ' : cit : ' ' : ops<pko> : ' (' : opdesc<pko> : ').  Plain text: no quote, backslash, backquote or semicolon.'
+   af.keep = 1
    gosub ask.form
    if af.why # '' then msg = af.why
    if not(af.ok) then return
@@ -1422,13 +1426,14 @@ edit.option:
 * One question of the page, on the toolkit's form ($tk_form): the explanation in the form's message rows, the answer checked by af.check, and a refusal said IN the form, which stays
 * with what was typed until it passes or the person leaves it (Esc or Cancel).  THE FORM CHECKS NOTHING: af.check does, with the page's own routines.
 * In: af.kind (filter, value, sample, sentence, name), af.ttl, af.lab, af.btn (the default button, with its & mark), af.val (the starting text), af.w (the entry's width; null as wide as
-* the form allows), af.max (the longest text), af.note.  Out: af.ok (1 when an answer passed), af.out (the answer as the page keeps it), af.why (null, or why no form was drawn).
+* the form allows), af.max (the longest text), af.note, af.keep (1: an empty entry keeps af.val; for this call only).  Out: af.ok (1 when an answer passed), af.out (the answer as the page keeps it), af.why (null, or why no form was drawn).
 ask.form:
    af.ok = 0
    af.out = ''
    af.why = ''
    spec = af.ttl : @fm : af.btn : @fm : ''
-   spec<-1> = 'answer' : @vm : af.lab : @vm : af.w : @vm : af.max
+   spec<-1> = 'answer' : @vm : af.lab : @vm : af.w : @vm : af.max : @vm : '' : @vm : (if af.keep then 1 else '')
+   af.keep = 0                                                     ;* S.244 (2): the entry opens empty, af.val beside it; af.keep (one call only) makes an empty entry keep it
    fv = af.val
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then
@@ -1489,6 +1494,7 @@ do.edit:
    end
    af.kind = 'sentence' ; af.ttl = 'Edit the sentence' ; af.lab = 'Sentence' ; af.btn = '&Use it' ; af.val = sent ; af.w = '' ; af.max = MAXSENT
    af.note = 'The sentence as text.  It is checked now, and again before it can run.'
+   af.keep = 1
    gosub ask.form
    if not(af.ok) then
       msg = (if af.why # '' then af.why else 'the sentence was not changed')

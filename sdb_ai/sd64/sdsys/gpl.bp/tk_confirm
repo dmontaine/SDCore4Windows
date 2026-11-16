@@ -14,6 +14,7 @@
 *              leave question.  No existing call changes.
 * 9 Nov 26 dm  S.186: before the box is drawn, the keys already typed are thrown away and it waits for a third of a second with no key, so that a held R (the
 *              page's command and the box's Run) cannot open the box and answer it by key repeat.
+* 15 Nov 26 dm  S.244 (5), the owner: the typed word is taken "in either case, as with any command" (the pages now show open and restore in lower case).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -24,7 +25,7 @@
 *     lines     the explanation under it, one to a field ($tk_explain makes it); may be null.  A line longer than the box is wrapped at spaces; an empty line stays empty
 *     typed     null for a Run / Cancel box; a name the person must type for a second step (an account's name, for a destructive action or a gate that
 *               reaches beyond SD)
-*     res       returned: 'run' only when Run was chosen and, when a name was asked for, the name was typed exactly; 'cancel' for Cancel, Esc, an input
+*     res       returned: 'run' only when Run was chosen and, when a name was asked for, the name was typed (in either case); 'cancel' for Cancel, Esc, an input
 *               that ended, a session with no terminal; 'wrong' for a name that was not the one asked for
 *     msg       returned: null for 'run'; else the line for the status bar (12826 nothing was run, or 12815 naming the name asked for)
 *     boxtitle  OPTIONAL (the routine is VAR.ARGS, so every call with five arguments is as it was): the title of the box and of the box that asks for the name.  Left out or null it is
@@ -34,8 +35,8 @@
 *               of three returns res 'alt' and msg null, and asks for no name.  tool.gates's leave question is the one caller: Run the changes, Leave without them, Cancel.
 *
 *   THE DEFAULT BUTTON IS CANCEL: Enter alone never runs a command.  Run is chosen by its letter (r) or by moving to it.  The sentence is shown wrapped at
-*   spaces, never cut, and never altered.  A session with no terminal cannot answer, so nothing runs ('cancel').  The typed name is compared as typed
-*   (with surrounding spaces taken off), exactly.  This routine runs nothing and changes nothing: the caller runs the command with $tk_run when
+*   spaces, never cut, and never altered.  A session with no terminal cannot answer, so nothing runs ('cancel').  The typed name is compared with
+*   surrounding spaces taken off and in either case (S.244 (5): an account name, open, restore are lower case words, taken as any command is).  This routine runs nothing and changes nothing: the caller runs the command with $tk_run when
 *   res is 'run'.
 *
 * END-DESCRIPTION
@@ -123,7 +124,7 @@ $include tk.h
       tt = ttl
       screen ask pr width fw title tt returning ans then got = 1 else got = 0
       if not(got) then return
-      if trim(ans) # typed then
+      if downcase(trim(ans)) # downcase(typed) then              ;* S.244 (5): in either case, as with any command
          res = 'wrong'
          msg = sysmsg(12815, typed)
          return

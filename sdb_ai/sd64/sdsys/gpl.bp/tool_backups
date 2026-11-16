@@ -14,6 +14,8 @@
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  The backup directory's question opens empty with the directory in force in it (Ctrl-R puts it in);
+*               an empty answer changes nothing.  (5): the word the restore box wants is shown as restore, and taken in either case.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -580,7 +582,7 @@ do.restore:
       return
    end
    sent = 'restore.account ' : anm<ci> : ' all no.query'
-   typed = 'RESTORE'
+   typed = 'restore'                                            ;* S.244 (5): the word is shown in lower case and taken in either case ($tk_confirm)
    el = ''
    el<-1> = 'EVERY account in this archive replaces the account of the same name: ' : convert(@fm, ' ', accts) : '.'
    el<-1> = 'What an account holds now is lost. The archive is unpacked and checked against its manifest before anything is changed.'
@@ -590,9 +592,14 @@ do.restore:
 
 do.directory:
    cv = bdir
-   screen ask 'Backup directory: an absolute path (it is made if it can be, and proved writable)' width 100 value cv title 'Backup directory' returning nd else return
+   * S.244 (2): the field opens empty, the directory in force is shown in the question and Ctrl-R puts it in; an empty answer changes nothing
+   screen ask 'Backup directory, an absolute path (made if it can be) ' : sysmsg(15115, cv) width 100 value '' title 'Backup directory' history cv returning nd else return
    nd = trim(nd)
-   if nd = '' or nd[1, 1] # '/' or len(nd) > 200 or index(nd, ' ', 1) > 0 then
+   if nd = '' then
+      msg = 'nothing changed'
+      return
+   end
+   if nd[1, 1] # '/' or len(nd) > 200 or index(nd, ' ', 1) > 0 then
       msg = 'give an absolute path with no space in it'
       return
    end

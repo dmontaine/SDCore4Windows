@@ -16,6 +16,8 @@
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 *              '/' finds a program by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
 * 10 Nov 26 dm  S.138: the administrator's top row says administrator; the note is inside the box, not on its bottom border.
+* 15 Nov 26 dm  S.244, the owner's page rules: the form's entries open empty with the value in force beside them, an empty entry keeping it (2); Wait for
+*               Enter is a yes / no choice (1).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -310,11 +312,13 @@ change.item:
 ask.item:
    ok = 0
    spec = 'Add a program' : @fm : '&Save' : @fm : ''
-   spec<-1> = 'label' : @vm : 'Label (21 characters)' : @vm : 24 : @vm : 21
-   spec<-1> = 'command' : @vm : 'Command, as you type it' : @vm : 100 : @vm : 200
-   spec<-1> = 'glyph' : @vm : 'Glyph (3, empty for >>>)' : @vm : 5 : @vm : 3
-   spec<-1> = 'wait' : @vm : 'Wait for Enter? (y/n)' : @vm : 3 : @vm : 3
-   fv = lab : @fm : cmd : @fm : gly : @fm : pau
+   * S.244: the entries open empty and an empty one keeps the value shown beside it (2); Wait is a choice, not a typed y or n (1)
+   kp = @vm : '' : @vm : 1
+   spec<-1> = 'label' : @vm : 'Label (21 characters)' : @vm : 24 : @vm : 21 : kp
+   spec<-1> = 'command' : @vm : 'Command, as you type it' : @vm : 100 : @vm : 200 : kp
+   spec<-1> = 'glyph' : @vm : 'Glyph (3; >>> if none)' : @vm : 5 : @vm : 3 : kp
+   spec<-1> = 'wait' : @vm : 'Wait for Enter?' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'yes' : @sm : 'no'
+   fv = lab : @fm : cmd : @fm : gly : @fm : (if pau = 'n' then 'no' else 'yes')
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then
       msg = 'the form does not fit this window: nothing was saved'

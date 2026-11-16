@@ -8213,7 +8213,7 @@ cited by: `tk_gates`
 nothing was run: what was typed is not %1
 ```
 
-cited by: `tk_confirm`
+cited by: `tk_confirm`, `tool_accounts`
 
 ### msg:12816
 > kind=message tier=reference since=- src=sdsys/messages/12816:1#d52a820a
@@ -8312,7 +8312,7 @@ cited by: `tk_explain`
 nothing was run
 ```
 
-cited by: `tk_confirm`, `tool_jobs`
+cited by: `tk_confirm`, `tool_accounts`, `tool_jobs`, `tool_remote`
 
 ### msg:12827
 > kind=message tier=reference since=- src=sdsys/messages/12827:1#bca2b715
@@ -11558,6 +11558,24 @@ this session's input ended
 ```
 
 cited by: `xfer`
+
+### msg:15114
+> kind=message tier=reference since=- src=sdsys/messages/15114:1#a21d1a2e
+
+```
+Ctrl-R puts the value shown beside a field into it
+```
+
+cited by: `tk_form`
+
+### msg:15115
+> kind=message tier=reference since=- src=sdsys/messages/15115:1#61b82d7a
+
+```
+(now: %1; Ctrl-R puts it in)
+```
+
+cited by: `tool_ai`, `tool_backups`, `tool_bulk`
 
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74

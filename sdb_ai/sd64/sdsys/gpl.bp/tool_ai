@@ -35,6 +35,10 @@
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * 11 Nov 26 dm  S.209: a resize while the key box or the standing-text box was open left the page at its old size when the box closed; after.box asks the layout again.
+* 15 Nov 26 dm  S.239: the reopen routine is gone.  It took the screen back after the terminal was handed to the key prompt; S.170 (7 Nov) put the key
+*               into the page's own dialog and removed the last gosub reopen, so nothing has called it since.  No change of behaviour.
+* 15 Nov 26 dm  S.244, the owner's page rules: C's entries and A's question open empty with the value in force beside them, an empty answer keeping it (2); C's
+*               layout and authentication are choices, not typed (1).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -1172,23 +1176,6 @@ context.check:
    next cx.i
    return
 
-* Take the screen again after the terminal was given away; the window may have changed
-reopen:
-   call $tk_open('tool.ai', 'admin', ctx, err)
-   if err # '' then
-      display err
-      done = 1
-      return
-   end
-   call $tk_aipage('again', ctx, keys, '', '', aout)            ;* S.97 stage 2: the new context has no AI line yet; the settings may have changed in the command
-   gosub lay.declare                                           ;* the new context holds no panes; the window may be another size
-   gen += 1
-   ctx<TK.C.GEN> = gen
-   gosub read.all
-   gosub draw.all
-   msg = 'back from the key prompt: the key shows as set when it was accepted'
-   return
-
 * X: remove the key of the provider under the cursor
 do.clearkey:
    p = provs<pi>
@@ -1220,12 +1207,14 @@ do.custom:
    v6 = pmax<nprov>
    * S.88: one form with the six answers in view; a refusal names the field and the form stays
    spec = 'Custom AI connection' : @fm : '&Continue' : @fm : ''
-   spec<-1> = 'name' : @vm : 'Name' : @vm : 40 : @vm : 40
-   spec<-1> = 'url' : @vm : 'Address (https only)' : @vm : 100 : @vm : 300
-   spec<-1> = 'layout' : @vm : 'Layout: anthropic, openai' : @vm : 12 : @vm : 12
-   spec<-1> = 'auth' : @vm : 'Auth: bearer, x-api-key' : @vm : 12 : @vm : 12
-   spec<-1> = 'version' : @vm : 'Version header (- none)' : @vm : 24 : @vm : 40
-   spec<-1> = 'maxfield' : @vm : 'Length field' : @vm : 30 : @vm : 60
+   * S.244: the entries open empty with the value in force beside them, and an empty entry keeps it (2); the layout and the authentication are choices (1)
+   kp = @vm : '' : @vm : 1
+   spec<-1> = 'name' : @vm : 'Name' : @vm : 40 : @vm : 40 : kp
+   spec<-1> = 'url' : @vm : 'Address (https only)' : @vm : 100 : @vm : 300 : kp
+   spec<-1> = 'layout' : @vm : 'Layout' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'anthropic' : @sm : 'openai'
+   spec<-1> = 'auth' : @vm : 'Authentication' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'bearer' : @sm : 'x-api-key'
+   spec<-1> = 'version' : @vm : 'Version header (- none)' : @vm : 24 : @vm : 40 : kp
+   spec<-1> = 'maxfield' : @vm : 'Length field' : @vm : 30 : @vm : 60 : kp
    fv = v1 : @fm : v2 : @fm : v3 : @fm : v4 : @fm : v5 : @fm : v6
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then
@@ -1292,8 +1281,14 @@ do.dropcustom:
 
 * A: the file of certificate authorities the helper trusts (instead of the system store); a dash is the system store
 do.ca:
-   screen ask 'File of certificate authorities, written with / (a dash is the system store)' width 100 value ca title 'Certificate authorities' returning cv else return
+   * S.244 (2): the field opens empty, the file in force is shown in the question and Ctrl-R puts it in; an empty answer changes nothing
+   ca.now = (if ca = '' then '-' else ca)
+   screen ask 'File of certificate authorities, written with / (a dash is the system store) ' : sysmsg(15115, ca.now) width 100 value '' title 'Certificate authorities' history ca.now returning cv else return
    cv = trim(cv)
+   if cv = '' then
+      msg = 'nothing changed'
+      return
+   end
    vw = cv
    vmax = 300
    gosub valid.word

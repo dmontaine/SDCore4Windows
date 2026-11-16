@@ -29,6 +29,8 @@
 *              first showed as not allowed and Enter offered to add it again.
 * 9 Nov 26 dm  S.186: View > Mouse, the same on every page (the case act:std.mouse in both panes' handlers, through $tk_std).
 * 9 Nov 26 dm  S.186: '/' finds a row by typing in either view ($tk_findrow; the owner: "Letters stay, '/' finds").
+* 15 Nov 26 dm  S.244, the owner's page rules: N's and C's job is a choice, not typed (1); the schedule opens empty with the one in force (or the default) beside it,
+*              an empty entry keeping it (2).  job.fields is the two fields, once for both forms.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -956,6 +958,15 @@ run.sent:
 
 * ------------------------------------------------------------------------------------------------- the administrator's jobs: N, C, D, R
 
+* The job and schedule fields of the N and C forms (S.244): the job a choice of the helper's ids (1), the schedule an entry that opens empty, an empty entry keeping the
+* schedule shown beside it (2).  In: spec, fmode ('add' names the shown schedule the default).  Out: spec with the two fields added
+job.fields:
+   jw = JOBIDS
+   convert @fm to @sm in jw
+   spec<-1> = 'job' : @vm : 'Job' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : jw
+   spec<-1> = 'sched' : @vm : 'Schedule: every 15 minutes, hourly, daily 02:30, weekly sun 03:00, monthly 1 04:00' : @vm : 24 : @vm : 24 : @vm : '' : @vm : 1 : @vm : '' : @vm : (if spec<1>[1, 3] = 'New' then 'default' else 'now')
+   return
+
 * N: one form, the name, the job and the schedule; the page checks all three before it shows the box (set.job and the job helper check them again)
 job.new:
    if jerr # '' then
@@ -965,8 +976,7 @@ job.new:
    fname = '' ; fjob = 'update-accounts' ; fsch = 'daily 02:30'
    spec = 'New scheduled job' : @fm : '&Next' : @fm : ''
    spec<-1> = 'name' : @vm : 'Name (a-z 0-9 -)' : @vm : 34 : @vm : 32
-   spec<-1> = 'job' : @vm : 'Job: backup-all, update-accounts' : @vm : 20 : @vm : 20
-   spec<-1> = 'sched' : @vm : 'Schedule: every 15 minutes, hourly, daily 02:30, weekly sun 03:00, monthly 1 04:00' : @vm : 24 : @vm : 24
+   gosub job.fields                                             ;* S.244: the job is a choice (1); the schedule opens empty, its default beside it (2)
    fv = fname : @fm : fjob : @fm : fsch
    fmode = 'add'
    gosub job.form
@@ -988,9 +998,8 @@ job.change:
       return
    end
    spec = 'Change the job ' : fname : @fm : '&Next' : @fm : ''
-   spec<-1> = 'job' : @vm : 'Job: backup-all, update-accounts' : @vm : 20 : @vm : 20
-   spec<-1> = 'sched' : @vm : 'Schedule: every 15 minutes, hourly, daily 02:30, weekly sun 03:00, monthly 1 04:00' : @vm : 24 : @vm : 24
-   fv = (if jbad<ji> = '' then jid<ji> else 'update-accounts') : @fm : (if jbad<ji> = '' then jsch<ji> else 'daily 02:30')
+   gosub job.fields                                             ;* S.244: the job is a choice (1); the schedule opens empty, the one in force beside it (2)
+   fv =(if jbad<ji> = '' then jid<ji> else 'update-accounts') : @fm : (if jbad<ji> = '' then jsch<ji> else 'daily 02:30')
    fmode = 'change'
    gosub job.form
    if not(fok) then return

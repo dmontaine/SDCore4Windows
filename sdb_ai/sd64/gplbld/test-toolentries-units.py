@@ -342,7 +342,8 @@ def checks(src, voc, helps):
 
     # ---- 3 Nov 26, S.97 / S.96: G, the global change, and U, its undo (the owner's answers of 3 Nov 26, then "Yes, add undo")
     dgl = "\n".join(s for n, s in section(lines, "do.global:", "after.global:"))
-    gp = "\n".join(s for n, s in section(lines, "gc.pass:", "gc.audit:"))
+    gfm = "\n".join(s for n, s in section(lines, "global.form:", "check.print:"))     # S.244 (3): G's questions on one form
+    gp ="\n".join(s for n, s in section(lines, "gc.pass:", "gc.audit:"))
     ga = "\n".join(s for n, s in section(lines, "gc.account:", "gc.file:"))
     gfi = "\n".join(s for n, s in section(lines, "gc.file:", "gc.prog:"))
     gpr = "\n".join(s for n, s in section(lines, "gc.prog:", "gc.row:"))
@@ -359,7 +360,10 @@ def checks(src, voc, helps):
        ordered(dgl, "if fnd = '' and filt = '' then", "return", "if gtr then", "return", "gacc<gi> = hacc<gi>", "gfl<gi> = hfile<gi>", "gid<gi> = hid<gi>",
                "gacc<gi> = anm<ac>", "gfl<gi> = efile<gi>", "gid<gi> = enm<gi>", "gw = 0\ngosub gc.pass", "call $tk_confirm(gsent, glines, '', res, cmsg, sysmsg(12959))",
                "if res # 'run' then", "gosub undo.file\nif not(uok) then", "clearfile uf", "write ghdr on uf, 'last' on error", "gw = 1\ngosub gc.pass")
-       and "case kind = 2 and ft = 'heading'" in dgl and "if gfld < 1 or gfld > GMAXF then" in dgl and dgl.count("gosub check.print") == 3
+       and ordered(dgl, "gosub global.form", "if not(gfok) then return", "gw = 0\ngosub gc.pass") and "screen ask" not in dgl and "screen ask" not in gfm
+       and ordered(gfm, "call $tk_form('open', ctx, spec, fv, fo)", "call $tk_form('run', ctx, fans, fv, fid)", "call $tk_form('say', ctx, gfbad : @fm : gf.note, gfid, '')", "call $tk_form('close', ctx, '', '', '')", "gfok = 1")
+       and "spec<-1> = 'op' : @vm : 'Change' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'replace' : @sm : 'set'" in gfm
+       and "case kind = 2 and ft = 'heading'" in gfm and "ft + 0 >= 1 and ft + 0 <= GMAXF" in gfm and gfm.count("gosub check.print") == 2
        and "if pc < 32 or pc > 126 then pok = 0" in txt and "gtr = htrunc" in dgl and "gtr = etrunc" in dgl
        and "case nm = 'g'\ngosub do.global" in txt and "case nm = 'u'\ngosub do.undo" in txt
        and "call $tk_keys('add', keys, 'u', 'undo', 'undo', '', (if un.have and un.state # 'undone' then 1 else 0))" in bk
@@ -370,8 +374,8 @@ def checks(src, voc, helps):
     ck("T24b FIELD 1, the type (owner, 3 Nov 26: \"Exclude field 1 from batch actions, allow it on a single item with a confirm warning\"): G refuses field 1 when more than one "
        "record is shown, with its own words and BEFORE the preview; on one record the preview keeps the old and new value of field 1 and the box carries a WARNING line naming them "
        "before Run is asked; the help says so",
-       ordered(dgl, "if gfld = 1 and gn > 1 then", "msg = 'field 1 is the type of the record: G changes it on one record only", "return", "end",
-               "gw = 0\ngosub gc.pass", "if gfld = 1 then", "WARNING: this changes the TYPE of ' : gid<1> : ' (field 1): \"' : g1old : '\" -> \"' : g1new : '\"",
+       ordered(gfm, "if gfbad = '' and gfld = 1 and gn > 1 then", "gfbad = 'field 1 is the type of the record: G changes it on one record only", "end")
+       and ordered(dgl, "gosub global.form", "gw = 0\ngosub gc.pass", "if gfld = 1 then", "WARNING: this changes the TYPE of ' : gid<1> : ' (field 1): \"' : g1old : '\" -> \"' : g1new : '\"",
                "call $tk_confirm(gsent, glines, '', res, cmsg, sysmsg(12959))")
        and ordered(grw, "if not(gw) then", "g1old = grec<1>", "g1new = gnew<1>", "gdig<gi> = digest(grec, 0, 'MD5')")
        and "field 1" in hent, "")
@@ -416,16 +420,15 @@ def checks(src, voc, helps):
        and "if uh<1> = 'entries-undo' then" in txt and "if gkd = 3 then\ncopt = ''\ngosub compile.in.account" in dun and "'entries-undo' : @fm : date()" in dgl, "")
     # 14 Nov 26 Windows port - from Linux c4ce87e9 (RELEASE_1.1 307): since S.176 (8 Nov) F6 / Shift-F6 change the box on every page and Tab does not, yet the help lines
     # and refusals of three pages still told the person to Tab.  The three pages are read from the page's own directory; comments are left out (the history lines say what
-    # Tab no longer does).  WINDOWS: tool_entries is the text this check was given (src), so --selftest's mutant of it is seen; the other two are read from disk.
+    # Tab no longer does).
+    # 15 Nov 26 Windows port - from Linux 853870e6 (S.243, which Linux took from this port's form): the three texts are the ones handed in (src for tool_entries,
+    # helps for the other two), so a mutant reaches each of them.
     tabtalk = []
-    for nm in ("tool_entries", "tool_jobs", "tool_sessions"):
-        if nm == "tool_entries":
-            ptxt = src
-        else:
-            with open(os.path.join(os.path.dirname(PAGE), nm), encoding="utf-8", errors="replace") as f:
-                ptxt = f.read()
-        body = "\n".join(s for n, s in code(ptxt))
+    for nm, text in (("tool_entries", src), ("tool_jobs", helps.get("__jobs__", "")), ("tool_sessions", helps.get("__sessions__", ""))):
+        body = "\n".join(s for n, s in code(text))
         tabtalk += [nm + ": " + m for m in re.findall(r"[^\n']*\bTab\b[^\n']*", body)]
+    if not helps.get("__jobs__") or not helps.get("__sessions__"):
+        tabtalk.append("tool_jobs or tool_sessions was not read: the check would see nothing")
     ck("T29 no page tells the person to use Tab to change box (F6 does it, S.176): tool_entries, tool_jobs and tool_sessions say F6", tabtalk == [], "; ".join(tabtalk)[:300])
     return out
 
@@ -454,6 +457,9 @@ def load():
         helps["__ide__"] = f.read()          # M4: the IDE's half of the hand-over (T19); a mutant of kind "ide" changes it
     with open(OPSH, encoding="utf-8", errors="replace") as f:
         helps["__opsh__"] = f.read()         # M4: the kernel's resolve_name refuses a link that leads nowhere (T19); kind "opsh"
+    for key, nm in (("__jobs__", "tool_jobs"), ("__sessions__", "tool_sessions")):            # T29 (S.243): kinds "jobs" "sessions"
+        with open(os.path.join(os.path.dirname(PAGE), nm), encoding="utf-8", errors="replace") as f:
+            helps[key] = f.read()
     for key, path in (("__cproc__", CPROC), ("__basic__", BASIC), ("__opdio1__", OPDIO1)):
         with open(path, encoding="utf-8", errors="replace") as f:
             helps[key] = f.read()            # M6a T22: run.in keeps /idebrk/, the compiler and the IDE name the source by FL$PATH, the kernel makes it real; kinds "cproc" "basic" "opdio1"
@@ -590,8 +596,8 @@ MUTANTS = [
      "   gosub read.undo.info\n   call $tk_open('tool.entries', 'admin', ctx, err)\n   if err # '' then\n      display err\n      stop\n   end\n"),
     ("the help does not explain G", "helpe", "&entries.undo&", "the undo file"),
     # ---- 3 Nov 26, the owner's field 1 answer: THE FIRST IS M_FIELD1
-    ("G changes field 1 on many records", "src", "   if gfld = 1 and gn > 1 then\n", "   if 0 then\n"),
-    ("G's field 1 test comes after the preview", "src", "      if gfld = 1 and gn > 1 then\n", "      if gfld = 1 and gn > 1 and gw = 1 then\n"),
+    ("G changes field 1 on many records", "src", "         if gfbad = '' and gfld = 1 and gn > 1 then\n", "         if 0 then\n"),
+    ("G's questions are not asked before the preview", "src", "   gosub global.form\n   if not(gfok) then return\n", ""),
     ("field 1 on one record has no warning", "src", "   if gfld = 1 then\n      glines<-1> = ''\n", "   if 0 then\n      glines<-1> = ''\n"),
     ("the warning does not say the old value", "src", "g1old = grec<1>", "g1old = ''"),
     ("the help does not explain field 1", "helpe", "field 1", "the type"),
@@ -603,7 +609,12 @@ MUTANTS = [
     ("one relative path is not made the account's", "src", "         if not(pp matches abs.pat) then pp = apath<ca> : @ds : pp\n", "         if pp[1, 1] # '/' then pp = apath<ca> : @ds : pp\n"),
     # ---- 14 Nov 26, from Linux c4ce87e9 (RELEASE_1.1 307): T29, appended so the --from numbers above stay true; --from=123 runs it alone
     ("a refusal tells the person to Tab again", "src", "      msg = 'F6 to the entries first, then D'\n", "      msg = 'Tab to the entries first, then D'\n"),
+    # 15 Nov 26, from Linux 853870e6 (S.243): T29 sees a page that says Tab again, in each of the three pages; --from=M_TAB runs them
+    ("tool.entries tells the person to Tab", "src", "PgUp and PgDn a page.  F6 changes box.  Enter in Accounts", "PgUp and PgDn a page.  Tab changes box.  Enter in Accounts"),
+    ("tool.jobs tells the person to Tab", "jobs", "PgUp and PgDn a page.  F6 changes box.  Enter in Commands", "PgUp and PgDn a page.  Tab changes box.  Enter in Commands"),
+    ("tool.sessions tells the person to Tab", "sessions", "F6 changes to the locks.", "Tab changes to the locks."),
 ]
+M_TAB = len(MUTANTS) - 3                     # --from=M_TAB runs the three of S.243
 M_FIELD1 = next(i for i, m in enumerate(MUTANTS) if m[0] == "G changes field 1 on many records")
 M_GLOBAL = next(i for i, m in enumerate(MUTANTS) if m[0] == "G changes every row of the account with no filter")
 M_WINDOWS = next(i for i, m in enumerate(MUTANTS) if m[0] == "the SDSYS column asks a group again")
@@ -633,7 +644,7 @@ def selftest():
             s = s.replace(old, new)
         elif kind == "voc":
             v = v.replace(old, new)
-        elif kind in ("ide", "opsh", "cproc", "basic", "opdio1"):
+        elif kind in ("ide", "opsh", "cproc", "basic", "opdio1", "jobs", "sessions"):
             key = "__%s__" % kind
             if h[key].count(old) != 1:
                 print("  [CANNOT] %-48s the text occurs %d times in %s" % (name, h[key].count(old), kind))

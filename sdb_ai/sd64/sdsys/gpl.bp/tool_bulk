@@ -20,6 +20,9 @@
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 * 10 Nov 26 dm  S.138: the gates line fits its box.
+* 15 Nov 26 dm  S.244 (2), the owner: "Every field" opens empty.  The condition's value, an operation's text or number and the attribute number open empty with the
+*               value in force shown in the question (Ctrl-R puts it in) and an empty answer keeps it; the replace form's first text keeps it the same way, its
+*               second is an answer when empty.  ask.text is the one question of the three text operations.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -214,6 +217,15 @@ check.name:
    for q = 1 to len(nmv)
       if index(good, nmv[q, 1], 1) = 0 then okname = @false
    next q
+   return
+
+* An operation's text (S.244 (2)): the field opens empty, the text the operation has now is shown in the question and Ctrl-R puts it in, and an empty answer keeps it.
+* In: prm, old1.  Out: got (0 when the person pressed Esc), tv
+ask.text:
+   got = 0
+   if old1 # '' then prm := ' ' : sysmsg(15115, old1)
+   screen ask prm width 100 value '' title 'Operation: the text' history old1 returning tv then got = 1 else return
+   if tv = '' then tv = old1
    return
 
 * Text a person gives for a record: printable ASCII only (no control character, no mark, no byte over 126), 1 to MAXTXT long (an empty text is allowed when emptyok is set).
@@ -570,7 +582,9 @@ ask.cond:
    cv = ''
    if ce > 0 then cv = cnd.val<ce>
    prm = 'Value to compare ' : c.item : ' with (letters, digits, space and  . , : + - _ / @ ( ) % *)'
-   screen ask prm width 60 value cv title 'Condition: the value' returning qv else return
+   if cv # '' then prm := ' ' : sysmsg(15115, cv)          ;* S.244 (2): the field opens empty; an empty answer keeps the value shown
+   screen ask prm width 60 value '' title 'Condition: the value' history cv returning qv else return
+   if trim(qv) = '' then qv = cv
    gosub quote.val
    if not(qok) then
       msg = qwhy
@@ -714,7 +728,8 @@ ask.op:
    begin case
       case o.kind = 'set'
          prm = 'The text to set attribute ' : o.attr : ' to (printable ASCII; set to null is a different operation)'
-         screen ask prm width 100 value old1 title 'Operation: the text' returning tv else return
+         gosub ask.text
+         if not(got) then return
          gosub check.text
          if not(tok) then
             msg = twhy
@@ -723,7 +738,8 @@ ask.op:
          o.a1 = tv
       case o.kind = 'append' or o.kind = 'prepend'
          prm = 'The text to ' : o.kind : ' to attribute ' : o.attr : ' (printable ASCII)'
-         screen ask prm width 100 value old1 title 'Operation: the text' returning tv else return
+         gosub ask.text
+         if not(got) then return
          gosub check.text
          if not(tok) then
             msg = twhy
@@ -733,8 +749,8 @@ ask.op:
       case o.kind = 'replace'
          * S.88: one form with both texts in view; the first one check.text refuses is said under the entries and the form stays
          spec = 'Operation: replace in attribute ' : o.attr : @fm : '&Use' : @fm : 'Printable ASCII.  An empty second text takes the first out.'
-         spec<-1> = 'old' : @vm : 'Replace this text' : @vm : 100 : @vm : 300
-         spec<-1> = 'new' : @vm : 'with this text' : @vm : 100 : @vm : 300
+         spec<-1> = 'old' : @vm : 'Replace this text' : @vm : 100 : @vm : 300 : @vm : '' : @vm : 1    ;* S.244 (2): an empty entry keeps the text shown beside it
+         spec<-1> = 'new' : @vm : 'with this text' : @vm : 100 : @vm : 300                          ;* empty here is an answer (the first text taken out)
          fvals = old1 : @fm : old2
          call $tk_form('open', ctx, spec, fvals, fo)
          if fo = 'no' then
@@ -770,8 +786,10 @@ ask.op:
          call $tk_form('close', ctx, '', '', '')
       case o.kind = 'add'
          prm = 'The number to add to attribute ' : o.attr : ' (a negative one takes away; the attribute must hold a number)'
-         screen ask prm width 20 value old1 title 'Operation: the number' returning tv else return
+         if old1 # '' then prm := ' ' : sysmsg(15115, old1)     ;* S.244 (2): the field opens empty; an empty answer keeps the number shown
+         screen ask prm width 20 value '' title 'Operation: the number' history old1 returning tv else return
          tv = trim(tv)
+         if tv = '' then tv = old1
          if tv = '' or not(num(tv)) or len(tv) > 15 then
             msg = 'that is not a number (digits, an optional sign and an optional decimal point)'
             return
@@ -812,12 +830,14 @@ pick.attr:
    end
    if pk = 1 then
       tn = ''
-      screen ask 'Attribute number, 1 to 999' width 8 value ra.in title ra.title returning tn then got = 1 else got = 0
+      * S.244 (2): the field opens empty; an empty answer keeps the number shown
+      screen ask 'Attribute number, 1 to 999' : (if ra.in = '' then '' else ' ' : sysmsg(15115, ra.in)) width 8 value '' title ra.title history ra.in returning tn then got = 1 else got = 0
       if not(got) then
          ra.why = 'nothing changed'
          return
       end
       tn = trim(tn)
+      if tn = '' then tn = ra.in
       if tn = '' or not(num(tn)) or index(tn, '.', 1) > 0 or tn < 1 or tn > 999 then
          ra.why = 'an attribute number is a whole number from 1 to 999 (attribute 0 is the record id, which this page never changes)'
          return

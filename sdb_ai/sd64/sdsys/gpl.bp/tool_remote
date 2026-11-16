@@ -29,6 +29,8 @@
 * 8 Nov 26 dm  S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the view to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 15 Nov 26 dm  S.244, the owner's page rules: A and S choose from a list, not a typed word (1); N's entries open empty, its defaults beside them, and Files is a choice
+*              (1, 2); the word the boxes want is shown as open and taken in either case (5).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -467,7 +469,7 @@ draw.detail:
          lines<-1> = 'API ON: SD listens on port 4247 and the firewall rule lets other computers on the network connect. LOCAL: SD listens on port 4247 and only this computer may connect. OFF: SD opens no API socket at all.'
          lines<-1> = 'SD opens or closes the API socket only when it starts, so a change to or from OFF asks whether to restart SD now, and a restart ends every session, this one too. A gives the terminal to REMOTE.API for that question.'
          lines<-1> = 'ssh ON lets other computers on the network connect over ssh; OFF lets only this computer connect, and ssh to this machine itself keeps working. It scopes the firewall rule and never stops or removes the ssh server.'
-         lines<-1> = 'What is shown above is what the machine says, read back from sd.conf and the firewall rules, not what this page meant. Turning a door ON lets other computers reach this one, so its box wants the word OPEN typed.'
+         lines<-1> = 'What is shown above is what the machine says, read back from sd.conf and the firewall rules, not what this page meant. A and S choose from a list that starts on off; turning a door on lets other computers reach this one, so its box wants the word open typed (in either case).'
       case view = 2
          lines<-1> = 'A user account is reached by a door only if its Windows user is in the Windows group of that door: sdssh for ssh, sdapi for the whole API, sdfiles for the files-only route (sdfileswrite and sdfilesadmin add what it may do).'
          lines<-1> = 'When sdapi and sdfiles are both held, the API wins. NET is the register switch that lets the account open a file on another SD server. The switches are changed on TOOL.GATES (or modify.account), not here.'
@@ -502,7 +504,7 @@ draw.detail:
       case view = 6
          lines<-1> = 'SDRADMIN may sign in over ssh only when the administrator opens that door, with its password, into a fixed list of account commands; it is never a Windows administrator. It is shut as delivered.'
          lines<-1> = 'Each line is one wall: the account enabled, SDRADMIN in sdssh, the sshd arm, the broker task, the state LOGIN reads. All five open is open; all shut is closed; a mix is inconsistent and names the odd ones.'
-         lines<-1> = 'O opens the door (REMOTE.SDSYS ON) after a box that wants the word OPEN typed: the terminal is given to the verb, which makes SDRADMIN and asks its password the first time. Open it only on a machine whose SDRADMIN password is long and used nowhere else.'
+         lines<-1> = 'O opens the door (REMOTE.SDSYS ON) after a box that wants the word open typed (in either case): the terminal is given to the verb, which makes SDRADMIN and asks its password the first time. Open it only on a machine whose SDRADMIN password is long and used nowhere else.'
          lines<-1> = 'F shuts the door again (REMOTE.SDSYS OFF) and logs SDRADMIN out. An elevated administrator can do the same from any prompt: remote-admin.ps1 -On or -Off in the SD program folder.'
       case 1
          lines<-1> = 'The certificate the API presents, and the hash of its public key: that hash is what another SD server pins in its definition of this machine (SET.SERVER ... pin).'
@@ -692,18 +694,20 @@ confirm.and.hand.over:
 
 * A: the API door
 do.api:
-   screen ask 'REMOTE.API: on, local or off' width 8 value '' title 'The API door' returning aw else return
-   aw = downcase(trim(aw))
-   if aw # 'on' and aw # 'local' and aw # 'off' then
-      msg = 'the API door is on, local or off'
+   * S.244 (1): a choice from a list, not a typed word; the list starts on off, the tightest
+   dw = 'on' : @vm : 'local' : @vm : 'off'
+   screen pick 'on    - other computers may connect' : @vm : 'local - only this computer' : @vm : 'off   - no API socket' title 'The API door (REMOTE.API)' default 3 returning pk else pk = 0
+   if pk < 1 or pk > 3 then
+      msg = sysmsg(12826)                                       ;* nothing was run
       return
    end
+   aw = dw<1, pk>
    sent = 'remote.api ' : aw
    typed = ''
    el = ''
    begin case
       case aw = 'on'
-         typed = 'OPEN'
+         typed = 'open'
          el<-1> = 'SD listens on port 4247 and the firewall rule is opened for it: other computers on the network may connect to the API of this machine.'
       case aw = 'local'
          el<-1> = 'SD listens on port 4247 and the firewall rule lets only this computer connect.'
@@ -717,17 +721,18 @@ do.api:
 
 * S: the ssh door
 do.ssh:
-   screen ask 'REMOTE.SSH: on or off' width 8 value '' title 'The ssh door' returning sw else return
-   sw = downcase(trim(sw))
-   if sw # 'on' and sw # 'off' then
-      msg = 'the ssh door is on or off'
+   * S.244 (1): a choice from a list, not a typed word; the list starts on off, the tightest
+   screen pick 'on  - the firewall allows port 22' : @vm : 'off - only this computer over ssh' title 'The ssh door (REMOTE.SSH)' default 2 returning pk else pk = 0
+   if pk < 1 or pk > 2 then
+      msg = sysmsg(12826)                                       ;* nothing was run
       return
    end
+   sw = (if pk = 1 then 'on' else 'off')
    sent = 'remote.ssh ' : sw
    typed = ''
    el = ''
    if sw = 'on' then
-      typed = 'OPEN'
+      typed = 'open'
       el<-1> = 'The firewall rule for the ssh server lets other computers on the network connect to this one over ssh.'
    end else
       el<-1> = 'The firewall rule for the ssh server lets only this computer connect over ssh; ssh to this machine itself keeps working.'
@@ -743,7 +748,7 @@ do.sdsys:
    el = ''
    if nm = 'o' then
       sent = 'remote.sdsys on'
-      typed = 'OPEN'
+      typed = 'open'
       el<-1> = 'sshd is opened for SDRADMIN: it can then sign in from other computers with its password, with no forwarding, into a fixed list of account commands.'
       el<-1> = 'Nothing but that password stands between the network and those commands: creating, changing and deleting SD accounts. The terminal is given to REMOTE.SDSYS ON, which asks the password the first time. Shut again with F.'
       gosub confirm.and.hand.over
@@ -779,12 +784,14 @@ do.delete:
 do.new:
    * S.88: one form with the seven answers in view; the first one SET.SERVER would refuse is said under the entries and the form stays
    spec = 'Define a server' : @fm : '&Define' : @fm : 'Pin: connect or 64 hex digits.  Port 4247 SD Core, 4249 Solo.'
+   * S.244: the entries open empty and the port and pin show their defaults beside them, an empty entry taking it (2); Files is a choice (1)
+   dk = @vm : '' : @vm : 1 : @vm : '' : @vm : 'default'
    spec<-1> = 'name' : @vm : 'Name (a-z, 0-9)' : @vm : 18 : @vm : 16
    spec<-1> = 'host' : @vm : 'Host (DNS, IPv4, IPv6)' : @vm : 60 : @vm : 253
-   spec<-1> = 'port' : @vm : 'API port' : @vm : 8 : @vm : 5
+   spec<-1> = 'port' : @vm : 'API port' : @vm : 8 : @vm : 5 : dk
    spec<-1> = 'acc' : @vm : 'Account on the server' : @vm : 34 : @vm : 32
-   spec<-1> = 'pin' : @vm : 'Pin' : @vm : 66 : @vm : 64
-   spec<-1> = 'mode' : @vm : 'Files: read or write' : @vm : 8 : @vm : 8
+   spec<-1> = 'pin' : @vm : 'Pin' : @vm : 66 : @vm : 64 : dk
+   spec<-1> = 'mode' : @vm : 'Files' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'read' : @sm : 'write'
    spec<-1> = 'accts' : @vm : 'Local accounts (a,b)' : @vm : 60 : @vm : 300
    fv = '' : @fm : '' : @fm : '4247' : @fm : '' : @fm : 'connect' : @fm : 'read' : @fm : ''
    call $tk_form('open', ctx, spec, fv, fo)

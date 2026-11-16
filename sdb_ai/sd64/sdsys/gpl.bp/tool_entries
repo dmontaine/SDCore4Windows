@@ -69,6 +69,8 @@
 * 9 Nov 26 dm  S.186 (Fable's review): retake.page takes the page again as 'admin', as the start does; it said '', so after the editor or the debugger the
 *              administrator was not asked again and the bar named the user instead.  View > Mouse and Ctrl-O, as on every page (act:std.mouse, ctrl-o, $tk_std).
 * 10 Nov 26 dm  S.205: F11 is no longer the filter's second key: a terminal keeps it for its own full screen, and / is the key the page shows.
+* 15 Nov 26 dm  S.244 (3), the owner: G's find and replace "as ONE dialog with two fields" - global.form asks the field, the change (a choice, (1)) and the two texts
+*               on one $tk_form, a refusal said in it; the preview, the box and the run are as they were.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -1779,65 +1781,8 @@ do.global:
    gkd = kind
    gkw = (if kind = 1 then 'voc' else (if kind = 2 then 'dict' else 'bp'))
    gfld = 0 ; gop = 'replace' ; gval = '' ; gfrom = '' ; gto = ''
-   if kind # 3 then
-      ptxt = 'Field to change: its number, 1 to ' : GMAXF : (if kind = 2 then ', or heading' else '')
-      screen ask ptxt width 40 value '' title 'Global change' returning ft then got = 1 else got = 0
-      if not(got) then return
-      ft = downcase(trim(ft))
-      begin case
-         case kind = 2 and ft = 'heading'
-            gfld = 'heading'
-         case ft # '' and convert('0123456789', '', ft) = '' and len(ft) <= 3
-            gfld = ft + 0
-            if gfld < 1 or gfld > GMAXF then
-               msg = 'the field is a number from 1 to ' : GMAXF : ': nothing was changed'
-               return
-            end
-         case 1
-            msg = 'the field is a number from 1 to ' : GMAXF : (if kind = 2 then ', or the word heading' else '') : ': nothing was changed'
-            return
-      end case
-      * Field 1 is the TYPE of a VOC entry or a dictionary item (the owner, 3 Nov 26: "Exclude field 1 from batch actions, allow it on a single item with a confirm warning"):
-      * refused here, before the preview, when more than one record is shown; on ONE record the box carries a warning line
-      if gfld = 1 and gn > 1 then
-         msg = 'field 1 is the type of the record: G changes it on one record only, and ' : gn : ' are shown (narrow the filter or the find to that record): nothing was changed'
-         return
-      end
-      screen ask 'S sets the field to a value, R replaces a text in it' width 40 value '' title 'Global change' returning ft then got = 1 else got = 0
-      if not(got) then return
-      ft = downcase(trim(ft))
-      begin case
-         case ft = 's'
-            gop = 'set'
-         case ft = 'r'
-            gop = 'replace'
-         case 1
-            msg = 'S or R: nothing was changed'
-            return
-      end case
-   end
-   if gop = 'set' then
-      screen ask 'The new value of the field (empty empties it)' width 60 value '' title 'Global change' returning gval then got = 1 else got = 0
-      if not(got) then return
-      pv = gval
-      gosub check.print
-      if not(pok) then return
-   end else
-      screen ask 'Text to replace' : (if kind = 3 then ' in the source' else '') width 60 value '' title 'Global change' returning gfrom then got = 1 else got = 0
-      if not(got) then return
-      if gfrom = '' then
-         msg = 'there is no text to replace: nothing was changed'
-         return
-      end
-      pv = gfrom
-      gosub check.print
-      if not(pok) then return
-      screen ask 'Replace it with (empty takes it out)' width 60 value '' title 'Global change' returning gto then got = 1 else got = 0
-      if not(got) then return
-      pv = gto
-      gosub check.print
-      if not(pok) then return
-   end
+   gosub global.form
+   if not(gfok) then return
    begin case
       case kind = 3
          gwhat = 'replace "' : gfrom : '" with "' : gto : '" in the source'
@@ -1947,6 +1892,90 @@ after.global:
    if ec < 1 then ec = 1
    gosub keep.tops
    gosub draw.all
+   return
+
+* G's questions on ONE form (S.244 (3), the owner: find and replace "as ONE dialog with two fields"): for a VOC entry or a dictionary item the field and the change (a choice,
+* S.244 (1): replace a text in it, or set it), then the two texts; for a program the two texts only.  A refusal is said in the form, which stays.  In: kind, gn.
+* Out: gfok (1 when every answer passed), gfld, gop, gval, gfrom, gto
+global.form:
+   gfok = 0
+   spec = 'Global change' : @fm : '&Preview' : @fm : ''
+   if kind # 3 then
+      spec<-1> = 'field' : @vm : 'Field (1 to ' : GMAXF : (if kind = 2 then ', heading)' else ')') : @vm : 10 : @vm : 7
+      spec<-1> = 'op' : @vm : 'Change' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'replace' : @sm : 'set'
+      spec<-1> = 'from' : @vm : 'Text to replace' : @vm : 60 : @vm : GMAXT
+      spec<-1> = 'to' : @vm : 'With, or the value' : @vm : 60 : @vm : GMAXT
+      gf.note = 'Replace: the first text becomes the second (empty takes it out).  Set: the field becomes the second text (empty empties it); the first is not used.'
+   end else
+      spec<-1> = 'from' : @vm : 'Text to replace' : @vm : 60 : @vm : GMAXT
+      spec<-1> = 'to' : @vm : 'Replace it with' : @vm : 60 : @vm : GMAXT
+      gf.note = 'In the source of every program shown; an empty second text takes the first out.'
+   end
+   fv = ''
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window: nothing was changed'
+      return
+   end
+   call $tk_form('say', ctx, gf.note, '', '')
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         msg = 'nothing was changed'
+         return
+      end
+      gfbad = '' ; gfid = ''
+      if kind # 3 then
+         ft = downcase(trim(fv<1>))
+         gop = fv<2>
+         gfrom = fv<3>
+         gto = fv<4>
+         begin case
+            case kind = 2 and ft = 'heading'
+               gfld = 'heading'
+            case ft # '' and convert('0123456789', '', ft) = '' and len(ft) <= 3 and ft + 0 >= 1 and ft + 0 <= GMAXF
+               gfld = ft + 0
+            case 1
+               gfbad = 'the field is a number from 1 to ' : GMAXF : (if kind = 2 then ', or the word heading' else '') ; gfid = 'field'
+         end case
+         * Field 1 is the TYPE of a VOC entry or a dictionary item (the owner, 3 Nov 26: "Exclude field 1 from batch actions, allow it on a single item with a confirm warning"):
+         * refused here, before the preview, when more than one record is shown; on ONE record the box carries a warning line
+         if gfbad = '' and gfld = 1 and gn > 1 then
+            gfbad = 'field 1 is the type of the record: G changes it on one record only, and ' : gn : ' are shown (narrow the filter or the find to that record)' ; gfid = 'field'
+         end
+      end else
+         gop = 'replace'
+         gfrom = fv<1>
+         gto = fv<2>
+      end
+      if gop = 'set' then
+         gval = gto
+         gfrom = '' ; gto = ''
+      end
+      if gfbad = '' and gop = 'replace' and gfrom = '' then
+         gfbad = 'there is no text to replace' ; gfid = 'from'
+      end
+      if gfbad = '' then
+         pv = gfrom
+         gosub check.print
+         if pok then
+            pv = (if gop = 'set' then gval else gto)
+            gosub check.print
+            if not(pok) then gfid = 'to'
+         end else
+            gfid = 'from'
+         end
+         if not(pok) then
+            gfbad = 'a text G takes is printable ASCII, at most ' : GMAXT : ' characters'
+            msg = ''
+         end
+      end
+      if gfbad = '' then exit
+      call $tk_form('say', ctx, gfbad : @fm : gf.note, gfid, '')
+   repeat
+   call $tk_form('close', ctx, '', '', '')
+   gfok = 1
    return
 
 * In: pv.  Out: pok (printable ASCII only, at most GMAXT characters; msg when not)

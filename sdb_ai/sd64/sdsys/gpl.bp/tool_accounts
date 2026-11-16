@@ -20,6 +20,8 @@
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (act:std.mouse, ctrl-o, $tk_std); an account name the page will not put in a command
 *              now says which character ($tk_badch).  '/' finds an account by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
+* 15 Nov 26 dm  S.244, the owner's page rules: C's kind and doors are choices, not typed (1); X is "type x, get a prompt for the name and click run" (4) - one dialog,
+*              delete.account ... no.query through $tk_run, no terminal; run.sent is the run half of confirm.and.run, which X shares.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -39,6 +41,8 @@
 *     C   CREATE.ACCOUNT GROUP name NO.QUERY, CREATE.ACCOUNT OTHER name path NO.QUERY, and CREATE.ACCOUNT USER name {SSH|API|BOTH|NONE}, for which THE TERMINAL IS GIVEN TO THE VERB, because it
 *         asks for the new person's password at a prompt of its own that shows nothing; nothing typed there passes through this page, and you come back to the page when it ends
 *     X   DELETE.ACCOUNT name, after the account's name is typed; the terminal is given to the verb for its own question (it has no NO.QUERY and never goes down a pipe)
+*     X   DELETE.ACCOUNT name {REMOVE.HOME} NO.QUERY, from ONE dialog instead of the box (S.244 (4)): the account's name typed exactly, for a user account the home directory kept or
+*         removed (a choice), and Run; no terminal
 *   A new account has every gate OFF as the verb makes it; turning one on is TOOL.GATES's.  SDSYS cannot be changed here.
 *
 *   Keys: Up, Down, PgUp, PgDn, Home, End; S, A, R, C, X as above; F5 reads again; F1 or ? or a click on the [?] explains the page; Ctrl-Q leaves.  A click on a row puts the cursor there.
@@ -59,7 +63,8 @@ $include tk.h
 
    prompt ''
 
-   allow = 'modify.account create.account'                      ;* the commands this page may run through the routines (delete.account and create.account user are run by the verb on the terminal)
+   allow = 'modify.account create.account delete.account'       ;* the commands this page may run through the routines (create.account user is run by the verb on the terminal;
+                                                                ;* delete.account always with no.query, after the page's own dialog, S.244 (4))
    call $tk_open('tool.accounts', 'admin', ctx, err)
    if err # '' then
       display err
@@ -277,7 +282,7 @@ draw.top:
    s = an : ' account' : (if an = 1 then '' else 's') : ': ' : nusers : ' user, ' : ngroups : ' group, ' : nothers : ' other.   Suspended: ' : nsusp : '.   Sessions signed on now: ' : nsess : '.'
    screen text s[1, ttw - 6] at top.x + 2,top.y + 1 attr 'bold' width ttw - 6
    screen text 'SDSYS, the administrator, is not listed and cannot be changed here. The gate switches are TOOL.GATES; a new account has every gate off.' at top.x + 2,top.y + 2 width ttw
-   screen text 'C creates an account.  X deletes one (its name is typed first).  S suspends the account under the cursor or lifts the suspension.' at top.x + 2,top.y + 3 width ttw
+   screen text 'C creates an account.  X deletes one (type its name, then Run).  S suspends the account under the cursor or lifts the suspension.' at top.x + 2,top.y + 3 width ttw
    screen text 'A adds a person to a group account and R takes one away.  F5 reads again.' at top.x + 2,top.y + 4 width ttw
    call $tk_help('mark', top.x + top.w - 5, top.y + 1, 0, 0)
    return
@@ -468,28 +473,34 @@ plain.word:
 confirm.and.run:
    call $tk_confirm(sent, el, typed, res, cmsg)
    if res = 'run' then
-*     14 Nov 26 Windows port - RELEASE_1.1 243 (owner, VM sit2: C sat 10 s with no line): CREATE.ACCOUNT, DELETE.ACCOUNT and MODIFY.ACCOUNT change Windows users and
-*     groups through PowerShell, a few seconds; the status line says so first (owner's rule of 12 Nov 26, a line before any wait over 2 s), as tool.remote's does.
-      call $tk_frame(ctx, keys, 'Accounts', sysmsg(12944))      ;* Making the change (a few seconds)...
-      if use.x then
-         call $tk_runx(allow, sent, out, stat, err)
-      end else
-         call $tk_run(allow, sent, out, stat, err)
-      end
-      gosub read.all
-      gosub draw.all
-      if err # '' then
-         msg = err
-      end else
-         msg = sent[1, 60] : ' ran (status ' : stat : ')'
-         lastl = ''
-         for k = 1 to dcount(out, @fm)
-            if trim(out<k>) # '' then lastl = trim(out<k>)
-         next k
-         if lastl # '' then msg = msg : ': ' : lastl
-      end
+      gosub run.sent
    end else
       msg = cmsg
+   end
+   return
+
+* sent (and use.x) in: the command is run through $tk_run (or $tk_runx), everything read again and the verb's last words shown.  The caller has asked for the OK
+run.sent:
+*  14 Nov 26 Windows port - RELEASE_1.1 243 (owner, VM sit2: C sat 10 s with no line): CREATE.ACCOUNT, DELETE.ACCOUNT and MODIFY.ACCOUNT change Windows users and
+*  groups through PowerShell, a few seconds; the status line says so first (owner's rule of 12 Nov 26, a line before any wait over 2 s), as tool.remote's does.
+*  15 Nov 26: here, in Linux's run.sent (853870e6), so X's one dialog gets it too.
+   call $tk_frame(ctx, keys, 'Accounts', sysmsg(12944))      ;* Making the change (a few seconds)...
+   if use.x then
+      call $tk_runx(allow, sent, out, stat, err)
+   end else
+      call $tk_run(allow, sent, out, stat, err)
+   end
+   gosub read.all
+   gosub draw.all
+   if err # '' then
+      msg = err
+   end else
+      msg = sent[1, 60] : ' ran (status ' : stat : ')'
+      lastl = ''
+      for k = 1 to dcount(out, @fm)
+         if trim(out<k>) # '' then lastl = trim(out<k>)
+      next k
+      if lastl # '' then msg = msg : ': ' : lastl
    end
    return
 
@@ -588,9 +599,10 @@ do.person:
 do.create:
    * S.88: one form with the four answers in view (it was three questions in a row); a refusal is said under the entries and the form stays
    spec = 'Create an account' : @fm : '&Create' : @fm : ''
-   spec<-1> = 'kind' : @vm : 'Kind: user, group, other' : @vm : 10 : @vm : 10
+   * S.244 (1): the kind and the doors are choices of fixed words (a selector: Left, Right or the space bar), not typed; the two entries open empty (2)
+   spec<-1> = 'kind' : @vm : 'Kind' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'user' : @sm : 'group' : @sm : 'other'
    spec<-1> = 'name' : @vm : 'Name (a-z 0-9 . - _)' : @vm : 34 : @vm : 32
-   spec<-1> = 'doors' : @vm : 'Doors: none ssh api both' : @vm : 10 : @vm : 10
+   spec<-1> = 'doors' : @vm : 'Doors (user only)' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'none' : @sm : 'ssh' : @sm : 'api' : @sm : 'both'
    spec<-1> = 'dir' : @vm : 'Directory (other only)' : @vm : 60 : @vm : 200
    fv = 'user' : @fm : '' : @fm : 'none' : @fm : ''
    call $tk_form('open', ctx, spec, fv, fo)
@@ -665,8 +677,9 @@ do.create:
    end case
    return
 
-* X: the account's name is typed, then the terminal is given to DELETE.ACCOUNT for its own question.  No REMOVE.HOME question: on Windows the verb removes the profile of a Windows
-* user SD made in any case (the keyword is accepted there and changes nothing).
+* X: one dialog - the account's name typed exactly - then Run runs DELETE.ACCOUNT ... NO.QUERY (S.244 (4)).  15 Nov 26 Windows port - from Linux 853870e6, WITHOUT
+* Linux's home-directory choice: on Windows the verb removes the profile of a Windows user SD made in any case (REMOVE.HOME is accepted there and changes nothing,
+* parity audit J-1), so there is nothing to choose.  OS deviation, mailed.
 do.delete:
    if an = 0 or ci < 1 or ci > an then
       msg = 'there is no account'
@@ -680,12 +693,34 @@ do.delete:
       msg = 'this account name has ' : bad.ch : ', which this page will not put in a command; use delete.account at the prompt'
       return
    end
-   sent = 'delete.account ' : anm<ci>
-   typed = anm<ci>
-   el = ''
-   el<-1> = 'DELETE ' : anm<ci> : ': its directory, its Windows group and its register record are removed' : (if akind<ci> = 'USER' then ', and the Windows user and its profile too when SD made it (one SD did not make is left in place and the verb says so)' else '') : '.'
-   el<-1> = 'There is no taking this back. The terminal is given to the verb, which asks once to confirm; then you come back to this page.'
-   gosub confirm.and.hand.over
+   * S.244 (4), the owner: "type x, get a prompt for the name and click run" - ONE dialog, no terminal: the name typed exactly is the confirmation, Run (Return in the
+   * entry) runs delete.account with no.query
+   isusr = (akind<ci> = 'USER')
+   spec = 'Delete the account ' : anm<ci> : @fm : '&Run' : @fm : ''
+   spec<-1> = 'name' : @vm : 'Type its name' : @vm : 34 : @vm : 32
+   fv = ''
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window: nothing was deleted'
+      return
+   end
+   dl.note = 'Removed: its directory, its Windows group and its register record' : (if isusr then ', and the Windows user and its profile when SD made it (one SD did not make is left in place)' else '') : '. There is no taking this back.'
+   call $tk_form('say', ctx, dl.note, '', '')
+   loop
+      call $tk_form('run', ctx, fans, fv, fid)
+      if fans # 'ok' then
+         call $tk_form('close', ctx, '', '', '')
+         msg = sysmsg(12826)                                     ;* nothing was run
+         return
+      end
+      if trim(fv<1>) = anm<ci> then exit
+      dl.why = sysmsg(12815, anm<ci>) : @fm : dl.note             ;* nothing was run: what was typed is not <name>
+      call $tk_form('say', ctx, dl.why, 'name', '')
+   repeat
+   call $tk_form('close', ctx, '', '', '')
+   sent = 'delete.account ' : anm<ci> : ' no.query'
+   use.x = 0
+   gosub run.sent
    return
 
 end

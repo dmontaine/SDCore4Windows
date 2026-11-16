@@ -107,11 +107,16 @@ def checks(raw):
        "cmd = 'remote.api'" in ra and "cmd = 'remote.ssh'" in ra and "cmd = 'remote.sdsys'" in ra and pg.count("cmd = ") == 3 and "call $tk_run(allow, cmd, rep, rstat, rerr)" in rr and pg.count("sent = 'remote.api ' : aw") == 1 and pg.count("sent = 'remote.ssh ' : sw") == 1, ra[:200])
     da = block(pg, "do.api")
     ds = block(pg, "do.ssh")
-    ck("RM6", "A takes on, local or off only and S on or off only, tested BEFORE the sentence; turning a door ON wants the word OPEN typed (typed = 'OPEN' for on, null otherwise), and the box says what ON opens; "
-       "A gives the terminal to REMOTE.API (its restart question is a person's to answer) and says a restart ends every session, while S runs through the routine",
-       "if aw # 'on' and aw # 'local' and aw # 'off' then" in da and "if sw # 'on' and sw # 'off' then" in ds and da.count("typed = 'OPEN'") == 1 and ds.count("typed = 'OPEN'") == 1
-       and re.search(r"case aw = 'on'\s*\n\s*typed = 'OPEN'", da) is not None and re.search(r"if sw = 'on' then\s*\n\s*typed = 'OPEN'", ds) is not None
-       and 0 < da.find("if aw # 'on'") < da.find("sent = ") and 0 < ds.find("if sw # 'on'") < ds.find("sent = ") and "other computers on the network may connect" in da and "firewall" in ds
+    # 15 Nov 26 Windows port - Linux S.244's RM6, with the Windows OS deviation kept: A still gives the terminal to REMOTE.API, because SD opens the API
+    # socket only when it starts and the verb's restart question (every session ends, this page's too) is a person's to answer.  Linux restarts a socket unit.
+    ck("RM6", "A and S choose from a LIST (S.244 (1): a fixed set is not typed): A on, local or off, S on or off, the word taken from the page's own list by the number chosen, a number outside it ending with "
+       "nothing run, the list starting on off (the tightest), all BEFORE the sentence; turning a door on wants the word open typed (typed = 'open' for on, null otherwise; S.244 (5) lower case), and the box says what on opens; "
+       "WINDOWS: A gives the terminal to REMOTE.API (its restart question is a person's to answer) and says a restart ends every session, while S runs through the routine",
+       "screen ask" not in da and "screen ask" not in ds and "dw = 'on' : @vm : 'local' : @vm : 'off'" in da and "aw = dw<1, pk>" in da and "if pk < 1 or pk > 3 then" in da and "default 3 returning pk" in da
+       and "sw = (if pk = 1 then 'on' else 'off')" in ds and "if pk < 1 or pk > 2 then" in ds and "default 2 returning pk" in ds
+       and da.count("typed = 'open'") == 1 and ds.count("typed = 'open'") == 1 and "'OPEN'" not in pg
+       and re.search(r"case aw = 'on'\s*\n\s*typed = 'open'", da) is not None and re.search(r"if sw = 'on' then\s*\n\s*typed = 'open'", ds) is not None
+       and 0 < da.find("if pk < 1") < da.find("sent = ") and 0 < ds.find("if pk < 1") < ds.find("sent = ") and "other computers on the network may connect" in da and "firewall" in ds
        and da.count("gosub confirm.and.hand.over") == 1 and "gosub confirm.and.run" not in da and "ends every session" in da
        and ds.count("gosub confirm.and.run") == 1 and "gosub confirm.and.hand.over" not in ds, da[:200])
     dx = block(pg, "do.delete")
@@ -142,10 +147,10 @@ def checks(raw):
        and "case nm = 'a' and view = 1" in pg and "case nm = 's' and view = 1" in pg and "case nm = 'x' and view = 3" in pg
        and "case nm = 'n' and view = 3" in pg and "case (nm = 'o' or nm = 'f') and view = 6" in pg and "case nm >= '1' and nm <= '6' and len(nm) = 1" in pg and "case nm = 'f1' or nm = '?'" in pg, " ".join(acts))
     dsd = block(pg, "do.sdsys")
-    ck("RM16", "RELEASE_1.1 202, the remote administration view (Linux S.106): the two sentences are FIXED words (nothing typed reaches them); ON, which loosens, wants OPEN typed and GIVES THE TERMINAL to the verb "
+    ck("RM16", "RELEASE_1.1 202, the remote administration view (Linux S.106): the two sentences are FIXED words (nothing typed reaches them); ON, which loosens, wants open typed (S.244 (5) lower case) and GIVES THE TERMINAL to the verb "
        "(WINDOWS: the first ON makes SDRADMIN and asks its password); OFF runs through the routine after its box; the page parses no secret=, recovery= or authenticator line",
-       sorted(re.findall(r"sent = '([^']*)'", dsd)) == ["remote.sdsys off", "remote.sdsys on"] and dsd.count("sent = ") == 2 and dsd.count("typed = 'OPEN'") == 1
-       and re.search(r"sent = 'remote.sdsys on'\s*\n\s*typed = 'OPEN'", dsd) is not None and dsd.count("gosub confirm.and.hand.over") == 1 and dsd.count("gosub confirm.and.run") == 1
+       sorted(re.findall(r"sent = '([^']*)'", dsd)) == ["remote.sdsys off", "remote.sdsys on"] and dsd.count("sent = ") == 2 and dsd.count("typed = 'open'") == 1
+       and re.search(r"sent = 'remote.sdsys on'\s*\n\s*typed = 'open'", dsd) is not None and dsd.count("gosub confirm.and.hand.over") == 1 and dsd.count("gosub confirm.and.run") == 1
        and 0 < dsd.find("sent = 'remote.sdsys on'") < dsd.find("gosub confirm.and.hand.over") < dsd.find("sent = 'remote.sdsys off'") < dsd.find("gosub confirm.and.run")
        and "view = 6" in pg and not re.search(r"secret=|recovery=|authenticator", pg.lower()), dsd[:200])
     ck("RM13", "the page waits for a key with no timeout and reads again only when it opens, on F5 and after a command or a hand-over",
@@ -202,9 +207,12 @@ MUTANTS = [
     ("the page writes a record", "RM4", sub("page", "   keys = ''\n", "   write 'x' to acc.f, 'y'\n   keys = ''\n")),
     ("the page rewrites the servers", "RM4", sub("page", "   call !netdefs('READ', defs, nderr)", "   call !netdefs('WRITE', defs, nderr)")),
     ("the report is run with a keyword", "RM5", sub("page", "   cmd = 'remote.api'\n", "   cmd = 'remote.api off'\n")),
-    ("A takes any word", "RM6", sub("page", "   if aw # 'on' and aw # 'local' and aw # 'off' then", "   if 0 then")),
-    ("on needs no typed word", "RM6", sub("page", "      case aw = 'on'\n         typed = 'OPEN'", "      case aw = 'on'\n         typed = ''")),
-    ("ssh on needs no typed word", "RM6", sub("page", "   if sw = 'on' then\n      typed = 'OPEN'", "   if sw = 'on' then\n      typed = ''")),
+    ("A takes a number outside its list", "RM6", sub("page", "   if pk < 1 or pk > 3 then", "   if 0 then")),
+    ("A's list starts on on", "RM6", sub("page", "default 3 returning pk", "default 1 returning pk")),
+    ("A types its word again", "RM6", sub("page", "   aw = dw<1, pk>\n", "   screen ask 'REMOTE.API: on, local or off' width 8 value '' title 'The API door' returning aw else return\n")),
+    ("on needs no typed word", "RM6", sub("page", "      case aw = 'on'\n         typed = 'open'", "      case aw = 'on'\n         typed = ''")),
+    ("ssh on needs no typed word", "RM6", sub("page", "   if sw = 'on' then\n      typed = 'open'", "   if sw = 'on' then\n      typed = ''")),
+    ("the word is upper case again", "RM6", sub("page", "      case aw = 'on'\n         typed = 'open'", "      case aw = 'on'\n         typed = 'OPEN'")),
     ("A runs REMOTE.API through the routine, where its restart question has nobody to answer it", "RM6", sub("page", "takes effect at once.'\n   gosub confirm.and.hand.over", "takes effect at once.'\n   gosub confirm.and.run")),
     ("A no longer says a restart ends every session", "RM6", sub("page", "'A restart ends every session, this one too;", "'A restart may follow;")),
     ("S hands the terminal over", "RM6", sub("page", "takes effect at once.'\n   gosub confirm.and.run", "takes effect at once.'\n   gosub confirm.and.hand.over")),
@@ -225,7 +233,7 @@ MUTANTS = [
     ("O and F act on every view", "RM12", sub("page", "      case (nm = 'o' or nm = 'f') and view = 6\n", "      case (nm = 'o' or nm = 'f')\n")),
     ("the sixth view key is lost", "RM12", sub("page", "      case nm >= '1' and nm <= '6' and len(nm) = 1", "      case nm >= '1' and nm <= '5' and len(nm) = 1")),
     ("the login view's report is run with a keyword", "RM5", sub("page", "   cmd = 'remote.sdsys'\n", "   cmd = 'remote.sdsys on'\n")),
-    ("remote administration is opened with no typed word", "RM16", sub("page", "      sent = 'remote.sdsys on'\n      typed = 'OPEN'\n", "      sent = 'remote.sdsys on'\n      typed = ''\n")),
+    ("remote administration is opened with no typed word", "RM16", sub("page", "      sent = 'remote.sdsys on'\n      typed = 'open'\n", "      sent = 'remote.sdsys on'\n      typed = ''\n")),
     ("ON runs through the routine, where its password prompt has nobody to answer it", "RM16", sub("page", "Shut again with F.'\n      gosub confirm.and.hand.over", "Shut again with F.'\n      gosub confirm.and.run")),
     ("OFF is handed the terminal", "RM16", sub("page", "as delivered.'\n      gosub confirm.and.run", "as delivered.'\n      gosub confirm.and.hand.over")),
     ("the sentence takes a typed word", "RM16", sub("page", "      sent = 'remote.sdsys off'\n", "      sent = 'remote.sdsys ' : sw\n")),
