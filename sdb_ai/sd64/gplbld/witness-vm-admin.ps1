@@ -1035,7 +1035,7 @@ if ($sections -contains 'afterconsole') {
     }
     $rl = @($lines | Where-Object { $_ -match 'run\.in (begin|end) account=zzrunin' })
     Write-WitRaw 'audit: run.in lines' ($rl -join "`n")
-    Set-WitVerdict '253' 'the audit has run.in begin ... command=debug process=separate and run.in end ... command=debug with no reason' ($rl -join "`n") '(?s)run\.in begin account=zzrunin command=debug process=separate.*run\.in end account=zzrunin command=debug(?! reason)' @('command=debug reason=')
+    Set-WitVerdict '253' 'the audit has run.in begin ... command=debug process=separate and run.in end ... command=debug with no reason' ($rl -join "`n") '(?s)run\.in begin account=zzrunin command=debug bp zzw253 process=separate.*run\.in end account=zzrunin command=debug(?! reason)' @('command=debug reason=')
 
     # 201's abort (Ctrl-C on zzbig), 228's S and A, 218/221/227 page starts: the audit as evidence beside the sheet's answers.
     $ab = @($lines | Where-Object { $_ -match 'run\.in revert account=zzrunin reason=abort' })
