@@ -15,6 +15,8 @@
  * START-HISTORY:
  * 13 Nov 26 Windows port - New (RELEASE_1.1 246): the C helper replaces the Python one (gplbld/sd-ai's https_call: ssl.create_default_context
  *           and http.client), design .claude/design-ai-helper-20261113.md 3.5 option A and Q2 (OpenSSL, so SET.AI CA keeps Linux's meaning).
+ * 15 Nov 26 Windows port - RELEASE_1.1 246: a host name with no ca-file is verified by Windows' own chain engine and SSL policy
+ *           (win_verify_cb), which fetches a trusted root Windows has not stored yet; api.deepseek.com was refused on a fresh VM.
  * END-HISTORY
  *
  * START-DESCRIPTION:
@@ -23,6 +25,9 @@
  *   - THE CERTIFICATE IS VERIFIED (SSL_VERIFY_PEER) against the ca-file when one is set - the administrator's file ALONE, as Linux's
  *     create_default_context(cafile=...) - or else the Windows ROOT store, each certificate the store does not bar from server
  *     authentication (Python's load_default_certs on Windows).  X509_STRICT and PARTIAL_CHAIN as Python 3.13's default context.
+ *     15 Nov 26: for a host NAME with no ca-file the chain is instead verified by Windows itself (CertGetCertificateChain and the
+ *     CERT_CHAIN_POLICY_SSL policy with the server name: name, server authentication, trusted root, dates), because the store holds only
+ *     the roots Windows has needed so far and OpenSSL cannot ask it for more (win_verify_cb).  An IP address keeps the store copy.
  *   - THE HOST NAME IS CHECKED (SSL_set1_host, or the address for an IP), and SNI sent.  TLS 1.2 or later.
  *   - NO REDIRECT IS FOLLOWED: there is no code here that reads Location; a 3xx is a status like any other, refused by the caller.
  *   - NO PROXY: a direct connection (owner, Q7), as Linux.
@@ -118,6 +123,80 @@ static int load_windows_roots(X509_STORE* store) {
   ERR_clear_error(); /* a duplicate certificate is an error to X509_STORE_add_cert and nothing to us */
   CertCloseStore(hs, 0);
   return added;
+}
+
+/* 15 Nov 26 - RELEASE_1.1 246 (the owner's real DeepSeek key, VM round 2): "the provider's certificate was not accepted".  api.deepseek.com
+   sends its leaf, Amazon RSA 2048 S24 and Amazon Root CA 1 cross-signed by Starfield Services Root G2, which is a root Windows trusts but
+   does not keep until its own chain engine first asks for it (Windows Update's root list): the fresh VM's LocalMachine Root held 25
+   certificates and not Starfield G2, the host's 47 and it.  load_windows_roots() copies that store into OpenSSL, and OpenSSL never asks.
+   So for a host NAME with no ca-file, the chain OpenSSL received is handed to Windows' own engine (CertGetCertificateChain, which fetches
+   such a root as Windows does), with the SSL policy for that server name (CertVerifyCertificateChainPolicy, CERT_CHAIN_POLICY_SSL: the
+   name, server authentication, a trusted root, dates).  Anything but success fails the handshake as before (HC_CERT), so nothing is sent.
+   An IP address or the administrator's ca-file keeps OpenSSL's check against load_windows_roots() or that file, unchanged. */
+static int win_verify_cb(X509_STORE_CTX* xs, void* arg) {
+  const char* host = (const char*)arg;
+  X509* leaf = X509_STORE_CTX_get0_cert(xs);
+  STACK_OF(X509)* rest = X509_STORE_CTX_get0_untrusted(xs);
+  HCERTSTORE mem = NULL;
+  PCCERT_CONTEXT lc = NULL;
+  PCCERT_CHAIN_CONTEXT chain = NULL;
+  unsigned char* der = NULL;
+  int len, i, ok = 0;
+  wchar_t whost[300];
+  CERT_CHAIN_PARA cp;
+  LPSTR usage[1] = {(LPSTR)szOID_PKIX_KP_SERVER_AUTH};
+  CERT_CHAIN_POLICY_PARA pp;
+  SSL_EXTRA_CERT_CHAIN_POLICY_PARA sp;
+  CERT_CHAIN_POLICY_STATUS ps;
+
+  if (leaf == NULL || host == NULL || MultiByteToWideChar(CP_ACP, 0, host, -1, whost, (int)(sizeof whost / sizeof whost[0])) == 0)
+    goto out;
+  mem = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, 0, 0, NULL);
+  if (mem == NULL)
+    goto out;
+  for (i = 0; rest != NULL && i < sk_X509_num(rest); i++) {   /* the intermediates the server sent, as an additional store */
+    der = NULL;
+    len = i2d_X509(sk_X509_value(rest, i), &der);
+    if (len > 0)
+      CertAddEncodedCertificateToStore(mem, X509_ASN_ENCODING, der, (DWORD)len, CERT_STORE_ADD_ALWAYS, NULL);
+    OPENSSL_free(der);
+  }
+  der = NULL;
+  len = i2d_X509(leaf, &der);
+  if (len <= 0)
+    goto out;
+  lc = CertCreateCertificateContext(X509_ASN_ENCODING, der, (DWORD)len);
+  OPENSSL_free(der);
+  der = NULL;
+  if (lc == NULL)
+    goto out;
+  memset(&cp, 0, sizeof cp);
+  cp.cbSize = sizeof cp;
+  cp.RequestedUsage.dwType = USAGE_MATCH_TYPE_AND;
+  cp.RequestedUsage.Usage.cUsageIdentifier = 1;
+  cp.RequestedUsage.Usage.rgpszUsageIdentifier = usage;
+  if (!CertGetCertificateChain(NULL, lc, NULL, mem, &cp, 0, NULL, &chain))
+    goto out;
+  memset(&sp, 0, sizeof sp);
+  sp.cbSize = sizeof sp;
+  sp.dwAuthType = AUTHTYPE_SERVER;
+  sp.pwszServerName = whost;
+  memset(&pp, 0, sizeof pp);
+  pp.cbSize = sizeof pp;
+  pp.pvExtraPolicyPara = &sp;
+  memset(&ps, 0, sizeof ps);
+  ps.cbSize = sizeof ps;
+  if (CertVerifyCertificateChainPolicy(CERT_CHAIN_POLICY_SSL, chain, &pp, &ps) && ps.dwError == 0)
+    ok = 1;
+out:
+  if (chain != NULL)
+    CertFreeCertificateChain(chain);
+  if (lc != NULL)
+    CertFreeCertificateContext(lc);
+  if (mem != NULL)
+    CertCloseStore(mem, 0);
+  X509_STORE_CTX_set_error(xs, ok ? X509_V_OK : X509_V_ERR_CERT_UNTRUSTED);
+  return ok;
 }
 
 static void set_timeout(SOCKET s, int ms) {
@@ -409,11 +488,15 @@ int https_call(const char* host, int port, const char* method, const char* path,
   SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
   SSL_CTX_set_options(ctx, SSL_OP_IGNORE_UNEXPECTED_EOF | SSL_OP_NO_COMPRESSION);
   X509_VERIFY_PARAM_set_flags(SSL_CTX_get0_param(ctx), X509_V_FLAG_X509_STRICT | X509_V_FLAG_PARTIAL_CHAIN);
+  is_ip = (inet_pton(AF_INET, host, &a4) == 1) || (inet_pton(AF_INET6, host, &a6) == 1);
   if (ca_file != NULL && ca_file[0] != '\0') {
     if (SSL_CTX_load_verify_file(ctx, ca_file) != 1) {
       rc = HC_TLS;
       goto done;
     }
+  } else if (!is_ip) {
+    /* 15 Nov 26 (RELEASE_1.1 246): a host name with no ca-file - Windows' own chain engine and SSL policy decide (win_verify_cb above) */
+    SSL_CTX_set_cert_verify_callback(ctx, win_verify_cb, (void*)host);
   } else if (load_windows_roots(SSL_CTX_get_cert_store(ctx)) == 0) {
     rc = HC_CERT; /* no anchor at all: nothing could be accepted */
     goto done;
@@ -430,7 +513,6 @@ int https_call(const char* host, int port, const char* method, const char* path,
     goto done;
   }
   vp = SSL_get0_param(ssl);
-  is_ip = (inet_pton(AF_INET, host, &a4) == 1) || (inet_pton(AF_INET6, host, &a6) == 1);
   if (is_ip) {
     if (!X509_VERIFY_PARAM_set1_ip_asc(vp, host)) {
       rc = HC_TLS;

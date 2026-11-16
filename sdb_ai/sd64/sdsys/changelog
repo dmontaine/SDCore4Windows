@@ -3,6 +3,18 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+15 Nov 26  THE AI HELPER ACCEPTS A PROVIDER'S CERTIFICATE AS WINDOWS DOES; DEEPSEEK'S STARTING MODEL IS deepseek-v4-flash.
+
+             What        - with no certificate file set, Windows itself now checks the provider's certificate (its name, its
+                           dates and a trusted root), and fetches a trusted root it has not needed before, as it does for a
+                           browser.  DeepSeek's starting model is deepseek-v4-flash; deepseek-flash was not its name.
+             Why         - on a newly installed machine every request to DeepSeek said "the provider's certificate was not
+                           accepted": its root was one Windows trusts but had not yet stored, and the helper only looked at
+                           what was stored.
+             Does NOT    - Change a certificate file set with SET.AI CA, which alone is trusted, as before; nothing is sent to
+                           a provider whose certificate is refused.  An address written as an IP number is checked against
+                           the stored roots.
+
 15 Nov 26  THE API'S LOCAL SETTING LISTENS ON 127.0.0.1 ONLY; REINSTALLING AND UNINSTALLING LEAVE NOTHING BEHIND.
 
              What        - REMOTE.API LOCAL (and an install whose API is not for other computers) now makes SD listen on
