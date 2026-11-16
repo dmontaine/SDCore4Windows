@@ -942,6 +942,10 @@ if ($sections -contains 'runin253') {
             "   write res to b, 'zzw253.out'",
             "   crt 'zzw253 done'",
             'end')
+        # 15 Nov 26 (round 2 R.43): the probe writes its results into zzrunin's bp, and the child runs with zzrunin's OWN switches - BP.EDIT is
+        # off as delivered, so line 20 was refused (00000288), correctly.  The administrator gives the account bp.edit first, as one would.
+        $g = Invoke-WitSd -Commands @('modify.account zzrunin bp-on') -Label 'give zzrunin bp.edit, so the probe can write its results into its bp'
+        Set-WitVerdict '253' 'zzrunin has bp.edit for the probe''s results' $g.Text 'BP\.EDIT yes' @('not in register', 'requires administrator', 'syntax')
         $r = Invoke-WitSd -Commands @('run.in zzrunin basic bp zzw253 debugging no.query') -Label 'compile the debug probe in zzrunin, with debugging'
         Set-WitVerdict '253' 'the debug probe compiled in zzrunin (for sheet step C8)' $r.Text 'Compiled 1 program\(s\) with no errors' @('with errors in', 'not SD''s own entry', 'is not a command run.in runs')
     }
