@@ -1301,6 +1301,13 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 Filename: "{app}\usr\bin\sd.exe"; Parameters: "-stop"; Flags: runhidden; \
     RunOnceId: "StopSD"
 
+; 15 Nov 26 - RELEASE_1.1 321: then close any SD window still waiting at "SD stopped ... Press Enter" (an sd.exe sd -stop cannot
+; see; it holds the runtime's DLLs, so the files under usr\bin would stay).  After StopSD, so nothing live is left to close.
+; {{ is Inno's escape for a brace.  The install's copy of this step is CloseLeftoverSdWindows in [Code].
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -NonInteractive -Command ""Get-Process -Name sd -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like '{app}\usr\bin\*' } | ForEach-Object {{ Stop-Process -Id $_.Id -Force; Wait-Process -Id $_.Id -Timeout 5 -ErrorAction SilentlyContinue }"""; \
+    Flags: runhidden; RunOnceId: "CloseLeftoverSD"
+
 [Code]
 
 { ---------------------------------------------------------------------------
@@ -2474,6 +2481,25 @@ end;
   Install
   --------------------------------------------------------------------------- }
 
+{ 15 Nov 26 - RELEASE_1.1 321 (VM, measured by vm-321-check): A FINISHED SD WINDOW OUTLIVES sd -stop.  When a session ends with an
+  error, SD's window host (win32vt.c own_window, itself sd.exe) waits at "SD stopped ... Press Enter to close this window" with the
+  runtime's DLLs loaded.  No SD session list holds it, so sd -stop cannot end it, and the upgrade met Inno's files-in-use page naming
+  cygsodium-26.dll until the owner signed SDSYS out.  Called only AFTER sd -stop: SD is down by then, so what is left of the program folder's
+  own sd.exe is such a window and closing it loses nothing.  The same step is in [UninstallRun] after StopSD.  Returns PowerShell's exit. }
+function CloseLeftoverSdWindows: Integer;
+var
+  Bin, Params: String;
+begin
+  Bin := ExpandConstant('{app}\usr\bin');
+  StringChangeEx(Bin, '''', '''''', True);
+  Params := '-NoProfile -NonInteractive -Command "Get-Process -Name sd -ErrorAction SilentlyContinue | ' +
+            'Where-Object { $_.Path -like ''' + Bin + '\*'' } | ' +
+            'ForEach-Object { Stop-Process -Id $_.Id -Force; Wait-Process -Id $_.Id -Timeout 5 -ErrorAction SilentlyContinue }"';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Params, '', SW_HIDE, ewWaitUntilTerminated, Result) then
+    Result := -1;
+  Log('SD: leftover SD windows closed after sd -stop, exit ' + IntToStr(Result));
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Exe: String;
@@ -2486,7 +2512,10 @@ begin
     open, and a half-replaced runtime is a worse outcome than a failed install. }
   Exe := ExpandConstant('{app}\usr\bin\sd.exe');
   if FileExists(Exe) then
+  begin
     Exec(Exe, '-stop', '', SW_HIDE, ewWaitUntilTerminated, Code);
+    CloseLeftoverSdWindows;
+  end;
 
   { 15 Nov 26 - RELEASE_1.1 321 (VM round 2): THE AI HELPER SERVICE TOO.  sd-ai.exe runs from the program folder's lib\sd-ai, so a reinstall over a
     running install met Inno's "applications are using files" page naming the SD Core AI helper.  Stopped here, before that check;

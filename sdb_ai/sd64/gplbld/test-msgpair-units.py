@@ -44,7 +44,6 @@ ALLOWED = {
     ('10909', '10122'): 'OS: create_account sets a Windows password, then SD\'s credential; different failures on a matching line',
     ('10130', '10130'): 'OS: the Windows account and its removal, not a Linux user',
     ('10133', '10133'): 'OS: api-listener.ps1 and its statuses, not the root helper',
-    ('11635', '12640'): 'RELEASE_1.1 325: the owner, 15 Nov 2026, "it should display the whole response" - say is the whole answer here; Linux is mailed to take the same words, and then this goes',
     ('10139', '10139'): 'OS: the Windows firewall rule and its statuses, not ufw',
     ('10137', '10140'): 'OS: Windows has a "no ssh server" answer (exit 2) where Linux shows the syntax; different messages on a matching line',
     ('10158', '10158'): 'OS: the same words, wrapped at another place (RELEASE_1.1 128)',
