@@ -6,6 +6,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 325 (the owner: "that is supposed to be a scrolling field, so it should display the whole response"): the
+*               answer's box shows the whole answer - message 12640 asks for a full answer to a question (one sentence for a page action), say keeps
+*               its paragraphs (clean.nl) up to 6000 characters and each is wrapped on its own, and a request may take 1024 tokens (was 600 and 600).
 * 15 Nov 26 Windows port - RELEASE_1.1 324: entry.cursor - the screen's own cursor is set to the entry's before each put, so the cursor follows the
 *               typing in the AI line (it stayed at the line's first cell: the label's SCREEN TEXT had left SL.S.CUR there).
 * 15 Nov 26 dm  Windows row 303: read.status keeps which test failed in ai.why (at the END of /tkai/), 'gate' or 'setup', and the op 'why' gives it back, so that HOME can say
@@ -679,7 +682,7 @@ run.ask:
 
    * the request goes: the kernel writes the audit line first, then connects.  A follow-up (3 Nov 26) is  maxtokens VM n, then n questions and n answers, each a field, before the
    *   prompt, which stays last (they hold no mark: each was cleaned)
-   ks = cx.send : sysx : @fm : 600                         ;* S.160: the standing text goes first in the system text
+   ks = cx.send : sysx : @fm : 1024                        ;* S.160: the standing text goes first in the system text.  15 Nov 26 (RELEASE_1.1 325): 1024, the AI verb's, for a whole answer
    if h.n > 0 then
       ks := @vm : h.n
       for i = 1 to h.n
@@ -752,11 +755,19 @@ run.ask:
    gosub read.proposal
 
    * the popup: what the AI said, the proposal if there is one, and Accept / Reject
-   call $tk_wrap(say, wrapw, pieces)
    body = ''
-   for p = 1 to dcount(pieces, @fm)
-      body<-1> = pieces<p>
-   next p
+   for sp = 1 to dcount(say, nl)                          ;* 15 Nov 26 (RELEASE_1.1 325): each paragraph wrapped on its own; a blank line stays a blank line
+      sline = field(say, nl, sp)
+      if trim(sline) = '' then
+         body<-1> = ''
+      end else
+         call $tk_wrap(sline, wrapw, pieces)
+         for p = 1 to dcount(pieces, @fm)
+            body<-1> = pieces<p>
+         next p
+      end
+   next sp
+   if body = '' then body<-1> = ' '
    if note.p # '' then
       body<-1> = ''
       body<-1> = note.p
@@ -898,14 +909,14 @@ read.proposal:
       if not(status()) then obj.ok = 1
    end
    if not(obj.ok) then
-      say = atext[1, 600]
+      say = atext[1, 6000]
       note.p = sysmsg(12656)
       return
    end
    raw = obj{'say'}
-   gosub clean
-   say = clean.out[1, 600]
-   if say = '' then say = ' '
+   gosub clean.nl                                         ;* 15 Nov 26 (RELEASE_1.1 325): the whole answer, its paragraphs kept; the box scrolls (sl_msgbox, PgUp PgDn)
+   say = clean.out[1, 6000]
+   if trim(say) = '' then say = ' '
    act = trim(obj{'action'})
    if act # '' and downcase(act) # 'none' then
       found = 0
