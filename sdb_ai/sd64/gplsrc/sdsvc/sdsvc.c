@@ -13,6 +13,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 295: each of the three self-stops sets its own service-specific exit code (1 no start, 2 the daemon
+ *           never came up, 3 the daemon went away), named in sdsvc.log too.
  * 13 Nov 26 Windows port - RELEASE_1.1 253(b): the service starts run.in's debugged child for an elevated administrator
  *           (sdrunin.c, pipe SD_RUNIN_PIPE); started beside the audit writer and stopped with it.
  * 13 Nov 26 Windows port - RELEASE_1.1 247: the service is the audit trail's writer (sdaudit.c), started before
@@ -459,6 +461,13 @@ static BOOL run_sd(const char *arg, DWORD *exit_code) {
 
 /* ====================================================================== */
 
+/* 15 Nov 26 Windows port - RELEASE_1.1 295: the three ways the service stops itself each give the Service Control Manager its own
+   service-specific code, so "terminated with the following service-specific error" in the System log says WHICH (after the VM's power cut
+   the event gave none: the field was never set).  sdsvc.log names the same code on the line before. */
+#define SVC_EXIT_NO_START        1   /* "sd -start" could not be run at all (CreateProcess failed) */
+#define SVC_EXIT_DAEMON_NEVER_UP 2   /* "sd -start" ran but the daemon did not come up; the half-started segment was cleared */
+#define SVC_EXIT_DAEMON_GONE     3   /* the daemon was up and went away while the service watched it */
+
 static void report(DWORD state, DWORD win32_exit, DWORD wait_hint) {
   static DWORD checkpoint = 1;
 
@@ -719,10 +728,11 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
      leave a red service on a working system.  A start that could not run at
      all is the real failure, and that is what CreateProcess reports.       */
   if (!run_sd("-start", &rc)) {
-    svc_log("could not run \"sd -start\" at all - CreateProcess error %lu",
-            (unsigned long)GetLastError());
+    svc_log("could not run \"sd -start\" at all - CreateProcess error %lu (service exit code %d)",
+            (unsigned long)GetLastError(), SVC_EXIT_NO_START);
     sdaudit_stop();
     sdrunin_stop();
+    svc_status.dwServiceSpecificExitCode = SVC_EXIT_NO_START;
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -764,11 +774,12 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
        leave the machine as it found it.                                     */
 
     run_sd("-stop", &rc);
-    svc_log("cleared the half-started segment: \"sd -stop\" exited with %lu",
-            (unsigned long)rc);
+    svc_log("cleared the half-started segment: \"sd -stop\" exited with %lu (service exit code %d)",
+            (unsigned long)rc, SVC_EXIT_DAEMON_NEVER_UP);
 
     sdaudit_stop();
     sdrunin_stop();
+    svc_status.dwServiceSpecificExitCode = SVC_EXIT_DAEMON_NEVER_UP;
     report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
     return;
   }
@@ -800,11 +811,12 @@ static void WINAPI svc_main(DWORD argc, LPSTR *argv) {
          nobody can use, or the next ordinary session meets "Error 116 getting
          semaphores" instead of a machine it can start SD on.                */
       run_sd("-stop", &rc);
-      svc_log("cleared up after it: \"sd -stop\" exited with %lu",
-              (unsigned long)rc);
+      svc_log("cleared up after it: \"sd -stop\" exited with %lu (service exit code %d)",
+              (unsigned long)rc, SVC_EXIT_DAEMON_GONE);
 
       sdaudit_stop();
       sdrunin_stop();
+      svc_status.dwServiceSpecificExitCode = SVC_EXIT_DAEMON_GONE;
       report(SERVICE_STOPPED, ERROR_SERVICE_SPECIFIC_ERROR, 0);
       CloseHandle(svc_stop_event);
       svc_stop_event = NULL;

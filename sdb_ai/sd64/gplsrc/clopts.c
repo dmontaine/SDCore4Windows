@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 302 (b): cleanup() writes its two refusals (not active, no semaphores) and a run that removed nothing
+ *               to the error log; they went only to stderr, which nobody reads when sdwind runs "sd -cleanup".
  * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): show_status(): the buffer for the start time was one byte short for its "not recorded" text (gcc warned on every
  *               build); 64 bytes now.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): pid_is_alive(): process_exists() for kernel(K_PID_ALIVE) (QM4 gaps Q-8, INHIBIT.LOGIN).
@@ -363,14 +365,21 @@ void cleanup() {
   int pid;
   char username[MAX_USERNAME_LEN + 1]; /* Login user name */
   char errmsg[80 + 1];
+  int removed = 0;
 
+  /* 15 Nov 26 Windows port - RELEASE_1.1 302 (b): sdwind runs "sd -cleanup" for a lost session and logs only its exit, and these two
+     refusals went to stderr, which goes nowhere there, and exited 0: sdwind's log said "Lost user 113 ... running sd -cleanup" and then
+     nothing, so which of them (or neither) had happened could not be told.  Each is written to the error log as well now, and so is a run
+     that found no slot to remove. */
   if (!attach_shared_memory()) {
     fprintf(stderr, "SD is not active.\n");
+    log_printf("Cleanup not done: SD is not active (the shared segment could not be attached).\n");
     return;
   }
 
   if (!get_semaphores(FALSE, errmsg)) {
     fprintf(stderr, "Cannot access semaphores.\n");
+    log_printf("Cleanup not done: cannot access the semaphores (%s).\n", errmsg);
     return;
   }
 
@@ -406,6 +415,7 @@ void cleanup() {
         remove_user(uptr);
         log_printf("Cleanup removed user %d (pid %d, %s).\n", (int)user_no, pid,
                    username);
+        removed++;
       }
     }
   }
@@ -414,6 +424,9 @@ void cleanup() {
   EndExclusive(GROUP_LOCK_SEM);
   EndExclusive(REC_LOCK_SEM);
   EndExclusive(FILE_TABLE_LOCK);
+
+  if (removed == 0)
+    log_printf("Cleanup found no lost session: every user table slot's process answered.\n");   /* 15 Nov 26, RELEASE_1.1 302 (b) */
 
   unbind_sysseg();
 }
