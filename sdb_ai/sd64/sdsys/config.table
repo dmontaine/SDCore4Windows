@@ -22,6 +22,7 @@
 # A line beginning with # is a comment.  Alphabetical by key.  Windows differs from Linux's table in: APIPORT and NETDIRS (Windows parameters), no STARTUP (refused by
 # name on Windows), the Windows paths and defaults (the PowerShell shell commands, TEMPDIR from TMP), and SPOOLER a printer name (Linux: a command).
 #
+APILOCAL|flag|0|||restart|live|1 makes the API listener (APIPORT) listen on 127.0.0.1 only, so only this computer can reach it; 0 or no line, every address. REMOTE.API LOCAL writes it and ON takes it away.|no|Set with REMOTE.API LOCAL or ON, which also sets the firewall rule to match.
 APIPORT|int|0|||restart|live|Any value above 0 switches on the API listener, which then listens on the fixed port 4247; 0 or no line leaves it off. The shipped file says 4247.|no|A door: it opens the API listener to the network.
 BACKUPDIR|path||||now|file|The directory set.backup.directory saves. The kernel ignores it; the backup and restore programs read sd.conf each time they run, so a change needs no restart.|no|A directory: set.backup.directory saves it, with its own checks of the path.
 CLEANUP|int|300|30|3600|restart|live|Seconds between the checks that look for sessions that ended without signing off (a killed terminal, a lost connection) and clear them from the user table.|yes|

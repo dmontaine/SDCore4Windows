@@ -2,7 +2,8 @@
 # PRE_RELEASE_FIXES 78.
 #
 #   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -Show     report, change nothing
-#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -On       set APIPORT
+#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -On       set APIPORT (every interface: APILOCAL=1 commented out)
+#   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -Local    set APIPORT and APILOCAL=1 (127.0.0.1 only; RELEASE_1.1 317)
 #   powershell -ExecutionPolicy Bypass -File api-listener.ps1 -Off      comment APIPORT out
 #
 # Exit 0 the file now says what was asked, 1 it could not be written, 2 the
@@ -57,6 +58,7 @@
 
 param(
     [switch]$On,
+    [switch]$Local,          # 15 Nov 26 (RELEASE_1.1 317): ON, and APILOCAL=1 - the listener binds 127.0.0.1 only
     [switch]$Off,
     [switch]$Show,
     [switch]$ReportChange,   # 13 Nov 26 (RELEASE_1.1 278): "already" exits 3, not 0
@@ -75,6 +77,12 @@ $COMMENTED = '# APIPORT=4247'
 $LEGACY_ACTIVE    = 'APIPORT=4243'
 $LEGACY_COMMENTED = '# APIPORT=4243'
 
+# 15 Nov 26 - RELEASE_1.1 317.  ONE LINE SAYS WHICH ADDRESS: APILOCAL=1 active binds 127.0.0.1 only (-Local, remote.api local, as
+# SD Core for Linux's LOCAL); commented or absent, every interface (-On).  -Off leaves it alone (no listener either way).  A move
+# between ON and LOCAL changes the bind, which SD reads only as it starts, so -ReportChange counts it as a move like OFF's.
+$LOCAL_ACTIVE    = 'APILOCAL=1'
+$LOCAL_COMMENTED = '# APILOCAL=1'
+
 if ($ConfPath -eq '') {
     $ConfPath = Join-Path $env:ProgramData 'SD\sd.conf'
 }
@@ -84,14 +92,14 @@ function Say([string]$t) { Write-Output ("api-listener: " + $t) }
 # EVERY RUN ECHOES ITS REAL INPUTS.  CLAUDE.md's instrument rule: a verdict with
 # no evidence of what was measured is not a result.
 Say ("file   : " + $ConfPath)
-Say ("action : " + $(if ($On) { 'On' } elseif ($Off) { 'Off' } elseif ($Show) { 'Show' } else { '(none given)' }))
+Say ("action : " + $(if ($On) { 'On' } elseif ($Local) { 'Local' } elseif ($Off) { 'Off' } elseif ($Show) { 'Show' } else { '(none given)' }))
 
-if (-not $On -and -not $Off -and -not $Show) {
-    Say 'one of -On, -Off or -Show is required'
+if (-not $On -and -not $Local -and -not $Off -and -not $Show) {
+    Say 'one of -On, -Local, -Off or -Show is required'
     exit 2
 }
-if ($On -and $Off) {
-    Say '-On and -Off are contradictory'
+if (@($On, $Local, $Off | Where-Object { $_ }).Count -gt 1) {
+    Say '-On, -Local and -Off are contradictory'
     exit 2
 }
 
@@ -116,13 +124,18 @@ $lines = $text -split "`r`n", 0, 'SimpleMatch'
 $activeIdx    = @()
 $commentedIdx = @()
 $legacyActive = 0
+$localIdx     = @()
+$localOffIdx  = @()
 for ($i = 0; $i -lt $lines.Count; $i++) {
     $t = $lines[$i].Trim()
     if ($t -ceq $ACTIVE)           { $activeIdx    += $i }
     if ($t -ceq $LEGACY_ACTIVE)    { $activeIdx    += $i; $legacyActive++ }
     if ($t -ceq $COMMENTED)        { $commentedIdx += $i }
     if ($t -ceq $LEGACY_COMMENTED) { $commentedIdx += $i }
+    if ($t -ceq $LOCAL_ACTIVE)     { $localIdx     += $i }
+    if ($t -ceq $LOCAL_COMMENTED)  { $localOffIdx  += $i }
 }
+$isLocal = ($localIdx.Count -gt 0)
 
 # 02 Sep 26 - "before" IS A LIE ON THE -Show PATH, because nothing comes after
 # it.  PRE_RELEASE_FIXES.md 127: "remote.api" with no keyword runs -Show, and
@@ -149,7 +162,8 @@ if ($activeIdx.Count -eq 0 -and $commentedIdx.Count -eq 0) {
 }
 
 if ($Show) {
-    if ($activeIdx.Count -gt 0) { Say 'state  : ON - SD opens the API listener when it next starts' }
+    if ($activeIdx.Count -gt 0 -and $isLocal) { Say 'state  : ON - SD opens the API listener on 127.0.0.1 only (APILOCAL)' }
+    elseif ($activeIdx.Count -gt 0) { Say 'state  : ON - SD opens the API listener when it next starts' }
     else                        { Say 'state  : OFF - SD opens no API socket at all' }
     # THE FILE MAY STILL SAY 4243 AND THE READER SHOULD NOT BE LEFT TO WORK OUT
     # WHICH NUMBER WINS.  The number is ignored; the port is 4247.
@@ -161,14 +175,17 @@ if ($Show) {
     exit 0
 }
 
-$wantOn = [bool]$On
+$wantOn = [bool]$On -or [bool]$Local
+$wantLocal = [bool]$Local
+Say ("bind   : " + $(if ($isLocal) { '127.0.0.1 only (APILOCAL=1)' } else { 'every interface' }))
 
 # ON ALREADY, BUT IN THE LEGACY FORM: the state is right and the line is not, so
 # -On normalizes it rather than reporting "already ON" over a file that names a
 # port SD no longer listens on.  Only when no line is already in the 4247 form.
+# 15 Nov 26 (RELEASE_1.1 317): and "already" only when the bind is already the one asked for.
 $newActive = @($activeIdx).Count - $legacyActive
-if ($wantOn -and $activeIdx.Count -gt 0 -and ($newActive -gt 0 -or $legacyActive -eq 0)) {
-    Say 'already ON - nothing to change'
+if ($wantOn -and $activeIdx.Count -gt 0 -and ($newActive -gt 0 -or $legacyActive -eq 0) -and ($isLocal -eq $wantLocal)) {
+    Say ('already ' + $(if ($wantLocal) { 'LOCAL' } else { 'ON' }) + ' - nothing to change')
     if ($ReportChange) { exit 3 }
     exit 0
 }
@@ -182,7 +199,7 @@ if ((-not $wantOn) -and $activeIdx.Count -eq 0) {
 # count is reported above so the caller can see it, and touching only one keeps
 # the change reversible by eye.
 if ($wantOn) {
-    if ($activeIdx.Count -gt 0) { $i = $activeIdx[0] }      # a legacy 4243 line, rewritten
+    if ($activeIdx.Count -gt 0) { $i = $activeIdx[0] }      # already on (the bind moves below), or a legacy 4243 line, rewritten
     else                        { $i = $commentedIdx[0] }
     $lines[$i] = $ACTIVE
 } else {
@@ -190,6 +207,24 @@ if ($wantOn) {
     $lines[$i] = $COMMENTED
 }
 Say ("editing line " + ($i + 1))
+
+# 15 Nov 26 (RELEASE_1.1 317): the bind.  -Local makes one APILOCAL=1 line active (a commented one turned on, or a new line after
+# APIPORT's); -On comments every active one out; -Off leaves them.
+if ($wantLocal -and -not $isLocal) {
+    if ($localOffIdx.Count -gt 0) {
+        $lines[$localOffIdx[0]] = $LOCAL_ACTIVE
+        Say ("APILOCAL on, line " + ($localOffIdx[0] + 1))
+    } else {
+        $before = @(); $after2 = @()
+        if ($i -ge 0) { $before = $lines[0..$i] }
+        if ($i + 1 -le $lines.Count - 1) { $after2 = $lines[($i + 1)..($lines.Count - 1)] }
+        $lines = @($before) + @($LOCAL_ACTIVE) + @($after2)
+        Say ("APILOCAL added after line " + ($i + 1))
+    }
+} elseif ($wantOn -and -not $wantLocal -and $isLocal) {
+    foreach ($li in $localIdx) { $lines[$li] = $LOCAL_COMMENTED }
+    Say ("APILOCAL commented out (" + $localIdx.Count + " line(s))")
+}
 
 try {
     [System.IO.File]::WriteAllText($ConfPath, ($lines -join $nl), [System.Text.Encoding]::ASCII)
@@ -211,10 +246,15 @@ try {
 }
 
 $afterActive = @($after -split "`r`n", 0, 'SimpleMatch' | Where-Object { ($_.Trim() -ceq $ACTIVE) -or ($_.Trim() -ceq $LEGACY_ACTIVE) })
-Say ("after  : active=" + $afterActive.Count)
+$afterLocal = @($after -split "`r`n", 0, 'SimpleMatch' | Where-Object { $_.Trim() -ceq $LOCAL_ACTIVE })
+Say ("after  : active=" + $afterActive.Count + " local=" + $afterLocal.Count)
 
 if ($wantOn -and $afterActive.Count -ne 1) {
     Say 'the file does not read back as ON'
+    exit 1
+}
+if ($wantOn -and (($afterLocal.Count -gt 0) -ne $wantLocal)) {
+    Say ('the file does not read back as ' + $(if ($wantLocal) { 'LOCAL (no active APILOCAL=1)' } else { 'ON (an APILOCAL=1 is still active)' }))
     exit 1
 }
 if ((-not $wantOn) -and $afterActive.Count -ne 0) {
@@ -222,6 +262,7 @@ if ((-not $wantOn) -and $afterActive.Count -ne 0) {
     exit 1
 }
 
-if ($wantOn) { Say 'the API listener is ON when SD is next started' }
-else         { Say 'the API listener is OFF when SD is next started' }
+if ($wantLocal)  { Say 'the API listener is ON, on 127.0.0.1 only, when SD is next started' }
+elseif ($wantOn) { Say 'the API listener is ON when SD is next started' }
+else             { Say 'the API listener is OFF when SD is next started' }
 exit 0

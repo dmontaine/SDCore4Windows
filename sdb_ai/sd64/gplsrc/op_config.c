@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 317: CONFIG('APILOCAL') reads the segment, as APIPORT.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
  * 19 Oct 26 Windows port - from Linux 0bdc4bd - NETWAIT and NETREPLY, the two SDNet timeouts (K8d): CONFIG() reads them and PCONFIG sets them for the process, 1 to 3600 seconds.
@@ -209,6 +210,9 @@ void op_config() {
    PORTMAP above is read the same way and for the same reason.              */
   else if (!strcmp(param, "APIPORT"))
     result.data.value = sysseg->api_port;
+  /* 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL, from the segment for APIPORT's reason (what sdwind bound at startup). */
+  else if (!strcmp(param, "APILOCAL"))
+    result.data.value = sysseg->api_local;
   else if (!strcmp(param, "RECCACHE"))
     result.data.value = pcfg.reccache;
   else if (!strcmp(param, "SAFEDIR"))

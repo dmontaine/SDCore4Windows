@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 317: LOCAL runs api-listener.ps1 -Local (APILOCAL=1, the listener on 127.0.0.1 only, as Linux's
+*           LOCAL); a move between ON and LOCAL therefore moves the listener and is offered the restart.
 * 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): RESTART or NO.RESTART after the word answers
 *           the restart question in advance, so tool.remote asks it in its own dialog and gives no terminal.  Windows only: Linux has no restart
 *           to ask about (a socket unit listens for SD).
@@ -44,14 +46,18 @@
 *
 *    REMOTE.API ON | LOCAL | OFF {RESTART | NO.RESTART}
 *
-*    RESTART or NO.RESTART answers in advance the question this verb asks when the listener moves (to or from OFF): restart SD now (every
-*    session ends) or leave the change for SD's next start.  Without either word the question is asked.
+*    RESTART or NO.RESTART answers in advance the question this verb asks when the listener moves (on, local and off are three
+*    different listeners): restart SD now (every session ends) or leave the change for SD's next start.  Without either word the
+*    question is asked.
 *
 *    Says whether this machine provides the SD API, and who may reach it.
 *
-*       ON     SD listens on port 4247 and other computers may connect
-*       LOCAL  SD listens on port 4247 and only this computer may connect
+*       ON     SD listens on port 4247 on every address and other computers may connect
+*       LOCAL  SD listens on port 4247 at 127.0.0.1 only (APILOCAL=1) and only this computer may connect
 *       OFF    SD opens no API socket at all
+*
+*    15 Nov 26 (RELEASE_1.1 317): LOCAL was every address with the firewall shut; it binds the loopback address now, as SD Core
+*    for Linux's LOCAL, so a move between ON and LOCAL moves the listener too and is offered the restart.
 *
 *    With no keyword it reports the current setting and changes nothing.
 *
@@ -64,10 +70,10 @@
 *
 * ***THE LISTENER ONLY OPENS AT START-UP, SO ON AND OFF NEED A RESTART.***
 * gplbld/stage.py:499 records it: open_api_listener() returns -1 for "no
-* listener" when the port is <= 0, read once as SD starts.  LOCAL and ON differ
-* only in the firewall when the listener is already up, so the restart is asked
-* for ONLY when APIPORT itself moved - api-listener.ps1 reports "already ON" or
-* "already OFF" and this reads that.
+* listener" when the port is <= 0, read once as SD starts.  The restart is asked
+* for ONLY when the listener moved - api-listener.ps1 reports "already ON",
+* "already LOCAL" or "already OFF" and this reads that.  (Until 15 Nov 26 LOCAL
+* and ON differed only in the firewall; RELEASE_1.1 317 made LOCAL a loopback bind.)
 *
 * ***THE RESTART DISCONNECTS THE CALLER, AND THAT IS WHY THE WARNING COMES
 * FIRST.***  Measured in the C on 30 Aug 2026: stop_sd() (gplsrc/sysseg.c:766)
@@ -147,7 +153,7 @@ $include err.h
          want.port = '-On'
          want.fw   = '-Open'
       case action = 'LOCAL'
-         want.port = '-On'
+         want.port = '-Local'     ;* 15 Nov 26 (RELEASE_1.1 317): APILOCAL=1, the listener binds 127.0.0.1 only, as Linux's LOCAL
          want.fw   = '-Restrict'
       case action = 'OFF'
          want.port = '-Off'
@@ -216,11 +222,10 @@ $include err.h
 *  ---------------------------------------------------------------------------
 *  3.  THE RESTART, AND ONLY IF THE LISTENER ACTUALLY MOVED.
 *
-*      GOING TO OR FROM "OFF" IS WHAT NEEDS IT.  ON and LOCAL differ only in the
-*      firewall, which takes effect at once, so an administrator moving between
-*      those two is not asked to disconnect anybody.  port.moved is set by
-*      run.listener from what the script reported rather than from what was
-*      asked for, so "remote.api on" twice asks once.
+*      A MOVE OF THE LISTENER IS WHAT NEEDS IT: off, on (every address) and local
+*      (127.0.0.1, since 15 Nov 26, RELEASE_1.1 317) are three listeners.  port.moved
+*      is set by run.listener from what the script reported rather than from what
+*      was asked for, so "remote.api on" twice asks once.
 *  ---------------------------------------------------------------------------
    if not(port.moved) then
       stop

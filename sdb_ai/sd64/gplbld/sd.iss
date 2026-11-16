@@ -2488,7 +2488,7 @@ begin
   if FileExists(Exe) then
     Exec(Exe, '-stop', '', SW_HIDE, ewWaitUntilTerminated, Code);
 
-  { 15 Nov 26 - RELEASE_1.1 321 (VM round 2): THE AI HELPER SERVICE TOO.  sd-ai.exe runs from {app}\lib\sd-ai, so a reinstall over a
+  { 15 Nov 26 - RELEASE_1.1 321 (VM round 2): THE AI HELPER SERVICE TOO.  sd-ai.exe runs from the program folder's lib\sd-ai, so a reinstall over a
     running install met Inno's "applications are using files" page naming the SD Core AI helper.  Stopped here, before that check;
     install-aihelper.ps1 starts it again once the files are in place (as the SD service is started again).  Stop-Service waits for the
     stop; no service (a first install) is not an error. }
@@ -2973,6 +2973,8 @@ end;
 { 13 Nov 26 - RELEASE_1.1 213: the BeforeInstall of the service entry in [Run] - the same choice ssPostInstall made,
   made before SD's listener can open.  See EarlyApiFwDone.
   14 Nov 26 - RELEASE_1.1 283: the third arm, the kept rule put back (see ApiNoteKey); the note is spent on any install. }
+procedure MatchApiListenerToScope; forward;     { 15 Nov 26 - RELEASE_1.1 317: defined after GetApiRuleScope, which it reads }
+
 procedure ApiRuleBeforeService;
 begin
   if (not TrueUpgrade) and ApiConfAbsent then
@@ -2981,6 +2983,7 @@ begin
     EarlyApiFw := RetargetApiFirewall
   else if ApiNoteSaysOpen and ApiConfHasListener then
     EarlyApiFw := KeepApiFirewallOpen;
+  MatchApiListenerToScope;
   ApiNoteClear;
   EarlyApiFwDone := True;
 end;
@@ -3059,6 +3062,33 @@ begin
         'open, restricted or none; the API firewall scope is unknown.');
 
   Log('SD: API firewall scope read as "' + Scope + '".');
+end;
+
+{ 15 Nov 26 - RELEASE_1.1 317: the listener's address follows the scope just decided (called from ApiRuleBeforeService, before the
+  service starts, so the first listener is already the right one).  With the API on (sd.conf's APIPORT) and SD's rule not 'open',
+  api-listener.ps1 -Local writes APILOCAL=1 so sdwind binds 127.0.0.1 only, as Linux's LOCAL.  A listener on every interface with no
+  allow rule of SD's (a reinstall that kept sd.conf, VM sit3 step 10c) made Windows ask the person whether to let sdwind through:
+  Allow opened the API behind SD's back, Cancel added Block rules that later beat remote.api on.  'open' leaves the file alone (every
+  interface, the rule open).  Logged only: the closing page says nothing new. }
+procedure MatchApiListenerToScope;
+var
+  Scope: String;
+  Code: Integer;
+begin
+  if not ApiConfHasListener then
+    Exit;
+  Scope := GetApiRuleScope;
+  if Scope = 'open' then
+  begin
+    Log('SD: API rule open - the listener stays on every interface.');
+    Exit;
+  end;
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+              '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\api-listener.ps1') + '" -Local',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Log('SD: api-listener.ps1 -Local could not be started; the listener stays on every interface.')
+  else
+    Log('SD: API rule "' + Scope + '" - api-listener.ps1 -Local exited ' + IntToStr(Code) + ' (0 or 3: APILOCAL=1, 127.0.0.1 only).');
 end;
 
 { What happened to the ssh server, judged from the state of the machine rather

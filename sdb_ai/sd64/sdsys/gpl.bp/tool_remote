@@ -468,8 +468,8 @@ draw.detail:
    lines = ''
    begin case
       case view = 1
-         lines<-1> = 'API ON: SD listens on port 4247 and the firewall rule lets other computers on the network connect. LOCAL: SD listens on port 4247 and only this computer may connect. OFF: SD opens no API socket at all.'
-         lines<-1> = 'SD opens or closes the API socket only when it starts, so a change to or from OFF needs SD restarted, and a restart ends every session, this one too. A asks on its own form whether to restart now or leave it for the next start.'
+         lines<-1> = 'API ON: SD listens on port 4247 and the firewall rule lets other computers on the network connect. LOCAL: SD listens on 127.0.0.1:4247 only, so only this computer may connect. OFF: SD opens no API socket at all.'
+         lines<-1> = 'SD opens the API socket only when it starts, so any change of on, local or off needs SD restarted, and a restart ends every session, this one too. A asks on its own form whether to restart now or leave it for the next start.'
          lines<-1> = 'ssh ON lets other computers on the network connect over ssh; OFF lets only this computer connect, and ssh to this machine itself keeps working. It scopes the firewall rule and never stops or removes the ssh server.'
          lines<-1> = 'What is shown above is what the machine says, read back from sd.conf and the firewall rules, not what this page meant. A and S choose from a list that starts on off; turning a door on lets other computers reach this one, so its box wants the word open typed (in either case).'
       case view = 2
@@ -701,7 +701,7 @@ do.api:
    * REMOTE.API is run with RESTART or NO.RESTART through the routine and the terminal is never given to it.  Linux has no restart to ask about.
    spec = 'The API door (REMOTE.API)' : @fm : '&Next' : @fm : 'Left, Right or the space bar choose.'
    spec<-1> = 'door' : @vm : 'API' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'on' : @sm : 'local' : @sm : 'off'
-   spec<-1> = 'restart' : @vm : 'Restart SD if it must (to or from off)' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'
+   spec<-1> = 'restart' : @vm : 'Restart SD if the listener changes' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'
    fv = 'off' : @fm : 'later'
    call $tk_form('open', ctx, spec, fv, fo)
    if fo = 'no' then
@@ -728,15 +728,15 @@ do.api:
          typed = 'open'
          el<-1> = 'SD listens on port 4247 and the firewall rule is opened for it: other computers on the network may connect to the API of this machine.'
       case aw = 'local'
-         el<-1> = 'SD listens on port 4247 and the firewall rule lets only this computer connect.'
+         el<-1> = 'SD listens on 127.0.0.1:4247 only and the firewall rule lets only this computer connect.'
       case 1
          el<-1> = 'SD opens no API socket at all.'
    end case
-   el<-1> = 'SD opens or closes the socket only when it starts, so a change to or from OFF needs SD restarted. The firewall part takes effect at once.'
+   el<-1> = 'SD opens its socket only when it starts, so a change of the listener (on, local or off) needs SD restarted. The firewall part takes effect at once.'
    if rw = 'now' then
       el<-1> = 'You chose to restart now: if the listener moves, SD restarts at once, which ends every session, this one too. Otherwise nothing restarts.'
    end else
-      el<-1> = 'You chose later: nothing restarts, and a change to or from OFF waits for the next start of SD.'
+      el<-1> = 'You chose later: nothing restarts, and a change of the listener waits for the next start of SD.'
    end
    gosub confirm.and.run
    return

@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 317: with APILOCAL=1 the API listener binds 127.0.0.1 only, as Linux's LOCAL; it was every
+ *           interface with the firewall restricting it, which made Windows ask whether to let sdwind through.
  * 13 Nov 26 Windows port - from Linux 12615e80 (W.11 F1, RELEASE_1.1 249): this daemon runs as LocalSystem, so it
  *                      no longer takes the system directory from the shared segment, which any member of sdusers may
  *                      change: own_sysdir() reads SDSYS= from the configuration file sd reads (Linux takes it from its
@@ -145,7 +147,7 @@ static bool own_sysdir(void) {
 }
 
 void check_lost_users(void);
-static int open_api_listener(int port);
+static int open_api_listener(int port, bool local_only);
 static void accept_api_session(void);
 
 void signal_handler(int signum);
@@ -230,7 +232,7 @@ int main() {
      arrives, so counting iterations would run check_lost_users() once per
      API connection rather than once every five minutes.  With APIPORT unset
      there is no descriptor to watch and select() is just the old sleep.    */
-  api_listener = open_api_listener((int)sysseg->api_port);
+  api_listener = open_api_listener((int)sysseg->api_port, sysseg->api_local != 0);
 
   next_tick = time(NULL) + TICK_SECONDS;
 
@@ -454,9 +456,17 @@ void check_lost_users() {
    STILL NOT CONFIGURABLE, and deliberately: one bind address in a config file
    is a way to get this wrong by accident in the other direction too.  A site
    that wants to narrow it uses the firewall rule, which is where a Windows
-   administrator expects to look.  gplbld/api-firewall.ps1.                   */
+   administrator expects to look.  gplbld/api-firewall.ps1.
 
-static int open_api_listener(int port) {
+   15 Nov 26 Windows port - RELEASE_1.1 317: ONE NARROWING IS CONFIGURABLE NOW, AND ONLY THAT ONE.  sd.conf's
+   APILOCAL=1 (written by api-listener.ps1 -Local, i.e. remote.api local and an install whose API is not for other
+   computers) binds 127.0.0.1, as SD Core for Linux's LOCAL listens on 127.0.0.1:4247.  It was every interface with the
+   firewall restricting it, and a listener on every interface with no allow rule of SD's (a reinstall that kept sd.conf)
+   made Windows ask the person whether to let sdwind through: Allow opened the API behind SD's back, Cancel added Block
+   rules that later beat remote.api on.  A loopback listener draws no such question.  No address is taken from the file:
+   it is a switch between the two, and the wider one stays the firewall's to narrow. */
+
+static int open_api_listener(int port, bool local_only) {
   int fd;
   int on = 1;
   struct sockaddr_in addr;
@@ -474,9 +484,8 @@ static int open_api_listener(int port) {
 
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
-  /* EVERY INTERFACE.  See the block above this function for why this changed
-     and what still guards it.                                              */
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  /* EVERY INTERFACE, or with APILOCAL=1 the loopback address only.  See the block above this function. */
+  addr.sin_addr.s_addr = htonl(local_only ? INADDR_LOOPBACK : INADDR_ANY);
   addr.sin_port = htons((u_int16_t)port);
 
   if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
@@ -499,7 +508,10 @@ static int open_api_listener(int port) {
      administrator finds out what this install actually exposes, and it read
      "127.0.0.1" for as long as that was true - so it must not go on saying so
      now that it is not.                                                     */
-  snprintf(msg, sizeof(msg), "API listener on all interfaces, port %d", port);
+  if (local_only)
+    snprintf(msg, sizeof(msg), "API listener on 127.0.0.1 only (APILOCAL), port %d", port);
+  else
+    snprintf(msg, sizeof(msg), "API listener on all interfaces, port %d", port);
   log_message(msg);
   return fd;
 }

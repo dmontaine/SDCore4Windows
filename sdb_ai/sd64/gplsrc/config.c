@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1 (the API listener binds the loopback address only).
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): copy_section_name() bounds and terminates a [section] name.
  * 12 Nov 26 Windows port - as Linux (RELEASE_1.1 251): an empty TMP is treated as unset, and TEMPDIR's default is copied with a bound.
  * 12 Nov 26 Windows port - from Linux 3d3890e3 (RELEASE_1.1 240 a): GRPSIZE's default is 4 (kb), for new files only; the shipped sd.conf says 4 too.
@@ -372,6 +373,9 @@ struct CONFIG* read_config(char* errmsg) {
    the port it listens on moves by itself.  A value of zero or less is OFF.  */
       else if (sscanf(rec, "APIPORT=%d", &n) == 1)
         cfg->api_port = (n > 0) ? SD_API_PORT : 0;
+      /* 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1 binds the listener to 127.0.0.1 only (remote.api local). */
+      else if (sscanf(rec, "APILOCAL=%d", &n) == 1)
+        cfg->api_local = (n != 0);
       else if (strncmp(rec, "SDSYS=", 6) == 0) {
         if (!(command_options & CMD_FLASH))
           strcpy(cfg->sysdir, rec + 6);

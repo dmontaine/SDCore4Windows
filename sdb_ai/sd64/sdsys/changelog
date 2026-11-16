@@ -3,6 +3,19 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+15 Nov 26  THE API'S LOCAL SETTING LISTENS ON 127.0.0.1 ONLY; REINSTALLING AND UNINSTALLING LEAVE NOTHING BEHIND.
+
+             What        - REMOTE.API LOCAL (and an install whose API is not for other computers) now makes SD listen on
+                           127.0.0.1 only, as on SD Core for Linux; it listened on every address with the firewall shut.
+                           A move between ON, LOCAL and OFF therefore offers to restart SD.  Reinstalling over a running
+                           install no longer shows Windows' "applications are using files" page for the AI helper.  An
+                           uninstall that cannot remove a profile because its account is still signed in now removes it
+                           at the next startup, as it said it would.
+             Why         - Windows asked whether to let SD's listener through after a reinstall that kept sd.conf, and
+                           either answer was wrong; a left-behind profile made the next install give SDSYS a new home
+                           folder and refuse to make the old accounts again.
+             Does NOT    - Change ON or OFF, or the firewall rule.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 15 Nov 26  THE FULL-SCREEN PAGES' FIELDS OPEN EMPTY; FIXED CHOICES ARE CHOSEN, NOT TYPED; DELETING AN ACCOUNT IS ONE DIALOG.
 
              What        - every entry field of the administrator's and the person's own pages now opens empty.  Where a

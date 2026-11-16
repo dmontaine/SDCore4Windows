@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local copied to the segment for sdwind.
  * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): release_pipe_fds() - sdwind gives back a caller's pipe on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): sdwind's failed daemon() is said, not ignored.
  * 13 Nov 26 Windows port - RELEASE_1.1 276: bind_sysseg() gives SHORT_CODE back on every exit taken while it holds it.  Six
@@ -278,6 +279,7 @@ bool bind_sysseg(bool create, char* errmsg) {
   sysseg->netfiles = cfg->netfiles;                   /* NETFILES */
   sysseg->pdump = cfg->pdump;                         /* PDUMP */
   sysseg->api_port = cfg->api_port;                   /* APIPORT */
+  sysseg->api_local = cfg->api_local;                 /* APILOCAL (15 Nov 26, RELEASE_1.1 317) */
   strcpy((char*)(sysseg->sysdir), cfg->sysdir);       /* SDSYS */
   sysseg->userpool = cfg->userpool;                   /* USERPOOL */
   sysseg->usplit = cfg->usplit;                       /* USPLIT */

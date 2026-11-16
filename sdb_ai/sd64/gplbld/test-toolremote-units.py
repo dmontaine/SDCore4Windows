@@ -116,7 +116,7 @@ def checks(raw):
        "(S.244 (5) lower case), and the box says what on opens; A's box says a restart ends every session; BOTH run through the routine and neither gives the terminal to the verb",
        "screen ask" not in da and "screen ask" not in ds and "screen pick" not in da
        and "spec<-1> = 'door' : @vm : 'API' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'on' : @sm : 'local' : @sm : 'off'" in da
-       and "spec<-1> = 'restart' : @vm : 'Restart SD if it must (to or from off)' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'" in da
+       and "spec<-1> = 'restart' : @vm : 'Restart SD if the listener changes' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'" in da
        and "fv = 'off' : @fm : 'later'" in da and "if (aw # 'on' and aw # 'local' and aw # 'off') or (rw # 'later' and rw # 'now') then" in da
        and "sent = 'remote.api ' : aw : (if rw = 'now' then ' restart' else ' no.restart')" in da
        and "sw = (if pk = 1 then 'on' else 'off')" in ds and "if pk < 1 or pk > 2 then" in ds and "default 2 returning pk" in ds

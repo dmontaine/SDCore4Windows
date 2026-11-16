@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY
+ * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local (APILOCAL).
  * 31 Dec 23 SD launch - prior history suppressed
  * rev 0.9.0 Jan 25 mab add create_user
  * 16 Aug 26 Windows port - create_user removed.  Nothing read it after the
@@ -78,6 +79,9 @@ struct CONFIG {
      installing.  01 Oct 26: the port is SD_API_PORT (4247, sddefs.h) and the
      value in sd.conf only switches it on - config.c stores 0 or that number. */
   int16_t api_port;                /* APIPORT:  API listener port, 0 = off */
+  /* 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1, the listener binds 127.0.0.1 only (remote.api local), as SD Core for Linux's
+     LOCAL does; absent or 0, every interface.  Off by default here only because APIPORT itself is off by default. */
+  int16_t api_local;               /* APILOCAL: 1 = bind the loopback address only */
  };
 
 
