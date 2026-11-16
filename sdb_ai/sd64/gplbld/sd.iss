@@ -2487,6 +2487,14 @@ begin
   Exe := ExpandConstant('{app}\usr\bin\sd.exe');
   if FileExists(Exe) then
     Exec(Exe, '-stop', '', SW_HIDE, ewWaitUntilTerminated, Code);
+
+  { 15 Nov 26 - RELEASE_1.1 321 (VM round 2): THE AI HELPER SERVICE TOO.  sd-ai.exe runs from {app}\lib\sd-ai, so a reinstall over a
+    running install met Inno's "applications are using files" page naming the SD Core AI helper.  Stopped here, before that check;
+    install-aihelper.ps1 starts it again once the files are in place (as the SD service is started again).  Stop-Service waits for the
+    stop; no service (a first install) is not an error. }
+  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+       '-NoProfile -NonInteractive -Command "Stop-Service -Name ''sd-ai'' -Force -ErrorAction SilentlyContinue"',
+       '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
 { Deny the sdsshonly group the console and Remote Desktop, and return what to

@@ -65,6 +65,30 @@ $ErrorActionPreference = 'Stop'
 
 function Say([string]$s) { Write-Output $s }
 
+# 15 Nov 26 - RELEASE_1.1 323.  A one-shot task for a profile Windows would not remove now (its hive is loaded): SYSTEM, at the next
+# startup, removes the profile with that SID through Win32_UserProfile (folder and ProfileList entry together) only if it is not loaded,
+# and the task then deletes itself; a profile still loaded keeps the task for the boot after.  The SID is checked to be a local
+# account's (S-1-5-21-...) before it is put in the task, and the command travels encoded, so nothing in it is re-parsed.
+# RETURNS ONE LINE AND PRINTS NOTHING (the folded-output trap: a function that writes AND returns gives the caller an array).
+function Register-ProfileReclaim([string]$sid, [string]$path) {
+    if ($sid -notmatch '^S-1-5-21(-\d+){4}$') { return 'It was NOT queued for removal (not a local account SID); remove it by hand.' }
+    $name = 'SD profile cleanup ' + $sid
+    $cmd = '$p = Get-CimInstance Win32_UserProfile -Filter "SID=''' + $sid + '''"; ' +
+           'if ($p -and -not $p.Loaded) { Remove-CimInstance -InputObject $p }; ' +
+           'if (-not $p -or -not $p.Loaded) { Unregister-ScheduledTask -TaskName ''' + $name + ''' -TaskPath ''\'' -Confirm:$false }'
+    $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+    try {
+        $act = New-ScheduledTaskAction -Execute (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+                   -Argument ('-NoProfile -NonInteractive -EncodedCommand ' + $enc) -ErrorAction Stop
+        $trg = New-ScheduledTaskTrigger -AtStartup -ErrorAction Stop
+        $prn = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest -ErrorAction Stop
+        $null = Register-ScheduledTask -TaskName $name -TaskPath '\' -Action $act -Trigger $trg -Principal $prn -Force -ErrorAction Stop
+        return 'It goes at the next restart (task "' + $name + '"), or by hand.'
+    } catch {
+        return 'It was NOT queued for removal (' + $_.Exception.Message + '); it goes by hand.'
+    }
+}
+
 Say ''
 Say 'remove-sdaccounts: the Windows accounts SD created'
 Say '=================================================='
@@ -297,7 +321,13 @@ foreach ($name in $toRemove) {
             } catch {
                 Say ("    profile LEFT BEHIND: " + $path)
                 Say '            Windows will not remove a profile whose registry hive is still'
-                Say '            loaded.  It goes at the next restart, or by hand.'
+                Say '            loaded.'
+                # 15 Nov 26 - RELEASE_1.1 323 (VM round 2 R.35): "It goes at the next restart" was not true after an uninstall: the
+                # SD service, whose reclaim-profiles.ps1 sweep does that for an ordinary DELETE.ACCOUNT, is removed by this same
+                # uninstall, and the left-behind profiles were still there after the restart (the next install then gave SDSYS a
+                # suffixed home, SDSYS.AceVM, and refused to make zzwitoff again).  A one-shot task, SYSTEM at the next startup,
+                # removes this profile through Windows' own API if its hive is down by then, and then deletes itself.
+                Say ('            ' + (Register-ProfileReclaim $sid $path))
             }
         }
     }
