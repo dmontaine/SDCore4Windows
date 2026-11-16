@@ -917,10 +917,10 @@ if ($sections -contains 'runin253') {
     $acct = Join-Path $groupDir 'zzrunin'
     if (-not (Test-Path -LiteralPath $acct)) { Add-WitResult '253' 'the debug probe' 'NOT-MEASURED' 'no zzrunin (run -Only fixtures)' }
     else {
-        Remove-Item -LiteralPath (Join-Path $acct 'bp\zzw253.out') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $acct '$hold\zzw253.out') -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath (Join-Path $script:WitSdsys 'zzw253probe') -Force -ErrorAction SilentlyContinue
         Write-WitBasic $acct 'zzw253' @(
-            '* zzw253 - run under run.in ... debug (row 253(b)): what the separate child can reach; results in this account''s bp',
+            '* zzw253 - run under run.in ... debug (row 253(b)): what the separate child can reach; results in this account''s $hold',
             '$include err.h',
             "   res = 'logname=' : @logname : ' who=' : @who",
             '* 13 Nov 26 (VM sitting): THEN and ELSE as blocks - "then a ; b end else c" on one line ends the program at that end.',
@@ -938,14 +938,12 @@ if ($sections -contains 'runin253') {
             '   end',
             "   oswrite 'x' to 'C:/ProgramData/SD/sdsys/zzw253probe'",
             "   res<-1> = 'sdsys-write status=' : status()",
-            "   open 'bp' to b else stop 'zzw253: no bp'",
+            '* 15 Nov 26 (round 2 R.43, R.45): the results go to $hold, a data file.  The child has NO edit gate whatever the account says (login,',
+            '* as Linux''s ri.narrow), so a write into bp was refused with 00000288 even with BP.EDIT yes in the register - correctly.',
+            "   open '`$hold' to b else stop 'zzw253: no `$hold'",
             "   write res to b, 'zzw253.out'",
             "   crt 'zzw253 done'",
             'end')
-        # 15 Nov 26 (round 2 R.43): the probe writes its results into zzrunin's bp, and the child runs with zzrunin's OWN switches - BP.EDIT is
-        # off as delivered, so line 20 was refused (00000288), correctly.  The administrator gives the account bp.edit first, as one would.
-        $g = Invoke-WitSd -Commands @('modify.account zzrunin bp-on') -Label 'give zzrunin bp.edit, so the probe can write its results into its bp'
-        Set-WitVerdict '253' 'zzrunin has bp.edit for the probe''s results' $g.Text 'BP\.EDIT yes' @('not in register', 'requires administrator', 'syntax')
         $r = Invoke-WitSd -Commands @('run.in zzrunin basic bp zzw253 debugging no.query') -Label 'compile the debug probe in zzrunin, with debugging'
         Set-WitVerdict '253' 'the debug probe compiled in zzrunin (for sheet step C8)' $r.Text 'Compiled 1 program\(s\) with no errors' @('with errors in', 'not SD''s own entry', 'is not a command run.in runs')
     }
@@ -1020,7 +1018,7 @@ if ($sections -contains 'afterconsole') {
     }
 
     # 253(b): the probe's own record, the sdsys write it must not have made, and the audit pair.
-    $res = Join-Path $groupDir 'zzrunin\bp\zzw253.out'
+    $res = Join-Path $groupDir 'zzrunin\$hold\zzw253.out'
     if (-not (Test-Path -LiteralPath $res)) { Add-WitResult '253' 'the debugged program ran in the child and wrote its results' 'NOT-MEASURED' ('no ' + $res + ' (sheet step C8: run it to its end with F9)') }
     else {
         $txt = [Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes($res)) -replace [char]254, ' | '
