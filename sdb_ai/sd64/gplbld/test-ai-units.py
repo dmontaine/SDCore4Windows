@@ -420,7 +420,7 @@ def check_c(t):
         len(re.findall(r"^\s*system\.text = '[^']*'\s*$", v, re.M)) == 1 and len(re.findall(r"system\.text\s*=", v)) == 2
         and ordered(v, "ctext = st{'context'}", "call $tk_aiwall('request', ctext, why)", "stop sysmsg(15013, why)", "fixed.text = system.text",
                     "if ctext # '' then c.send = 'Standing information from the administrator of this SD system:' : char(10) : ctext", "system.text = c.send : fixed.text")
-        and "reply = kernel(K$AI.START, system.text : @fm : 1024 : @fm : question)" in v and not re.search(r"question\s*=[^\n]*ctext", v), "")
+        and "reply = kernel(K$AI.START, system.text : @fm : 100000 : @fm : question)" in v and not re.search(r"question\s*=[^\n]*ctext", v), "")
     row("(Windows) the fixed sentence names SD Core for Windows", "system.text = 'You are answering a question typed at the terminal of SD Core for Windows, a multivalue database." in v, "")
     row("(S.160, S.175) SD's own text is INVISIBLE to the person asking: the preview displays the question only, never system.text, fixed.text, c.send or ctext",
         "display question" in v and not any(re.search(r"\b(system\.text|fixed\.text|c\.send|ctext)\b", l.replace("len(system.text)", ""))
@@ -692,7 +692,8 @@ GROUP_C_MUTANTS = [
     ("ai", "the preview answer is not tested", "   if ans # 'y' and ans # 'yes' then", "   if @false then"),
     ("ai", "nobody is asked", "   input ans\n", "   ans = 'y'\n"),
     ("ai", "the account is put into the system sentence", "   system.text = 'You are", "   system.text = @who : 'You are"),
-    ("ai", "the account is put into the request", "system.text : @fm : 1024 : @fm : question)", "system.text : @fm : 1024 : @fm : question : @who)"),
+    ("ai", "the account is put into the request", "system.text : @fm : 100000 : @fm : question)", "system.text : @fm : 100000 : @fm : question : @who)"),
+    ("ai", "the answer's length is fixed by the verb, not the administrator (row 326)", "system.text : @fm : 100000 : @fm : question)", "system.text : @fm : 1024 : @fm : question)"),
     ("ai", "the gate is not read from the status", "   if not(st{'gate'}) then", "   if @false then"),
     ("ai", "the answer is run", "   display sysmsg(12639, j{'in'}", "   os.execute text\n   display sysmsg(12639, j{'in'}"),
     ("newvoc_ai", "ai is a different program for accounts", "$ai", "$pdf"),

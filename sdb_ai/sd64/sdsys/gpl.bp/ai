@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 326 (the owner: the pages and AI follow set.ai limit max-tokens): the request asks for 100000 tokens, the
+*              kernel's ceiling, so the administrator's max-tokens decides (it asked for 1024).
 * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the AI verb, with its messages renumbered (11xxx + 1005, 14xxx + 1000) and the fixed sentence
 *              naming SD Core for Windows.  The helper is the service sd-ai on the pipe \\.\pipe\sd-ai, and it reads the caller's Windows user off the pipe.
 * 23 Oct 26 dm  New.
@@ -128,8 +130,9 @@ $include err.h
       stop sysmsg(12635)                                                        ;* Nothing was sent.
    end
 
-*  The request
-   reply = kernel(K$AI.START, system.text : @fm : 1024 : @fm : question)
+*  The request.  15 Nov 26 (RELEASE_1.1 326): it asks for 100000 tokens, the kernel's ceiling, so the administrator's SET.AI LIMIT max-tokens (the helper
+*  takes the smaller) decides how long an answer may be; it asked for 1024, so a limit raised above that changed nothing.
+   reply = kernel(K$AI.START, system.text : @fm : 100000 : @fm : question)
    if reply<1> # 'OK' then
       @system.return.code = -ER$FAILED
       if reply<2> = 'nohelper' then stop sysmsg(12612)

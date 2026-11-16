@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 326 (the owner: follow set.ai limit max-tokens): a request asks for 100000 tokens, the kernel's ceiling, so
+*               the administrator's max-tokens decides; say is cut at 65536 (the helper's bytes-reply bounds it), not 6000.
 * 15 Nov 26 Windows port - RELEASE_1.1 325 (the owner: "that is supposed to be a scrolling field, so it should display the whole response"): the
 *               answer's box shows the whole answer - message 12640 asks for a full answer to a question (one sentence for a page action), say keeps
 *               its paragraphs (clean.nl) up to 6000 characters and each is wrapped on its own, and a request may take 1024 tokens (was 600 and 600).
@@ -682,7 +684,7 @@ run.ask:
 
    * the request goes: the kernel writes the audit line first, then connects.  A follow-up (3 Nov 26) is  maxtokens VM n, then n questions and n answers, each a field, before the
    *   prompt, which stays last (they hold no mark: each was cleaned)
-   ks = cx.send : sysx : @fm : 1024                        ;* S.160: the standing text goes first in the system text.  15 Nov 26 (RELEASE_1.1 325): 1024, the AI verb's, for a whole answer
+   ks = cx.send : sysx : @fm : 100000                      ;* S.160: the standing text goes first in the system text.  15 Nov 26 (RELEASE_1.1 326): 100000, the kernel's ceiling, so the administrator's set.ai limit max-tokens decides (the helper takes the smaller)
    if h.n > 0 then
       ks := @vm : h.n
       for i = 1 to h.n
@@ -909,13 +911,13 @@ read.proposal:
       if not(status()) then obj.ok = 1
    end
    if not(obj.ok) then
-      say = atext[1, 6000]
+      say = atext[1, 65536]
       note.p = sysmsg(12656)
       return
    end
    raw = obj{'say'}
    gosub clean.nl                                         ;* 15 Nov 26 (RELEASE_1.1 325): the whole answer, its paragraphs kept; the box scrolls (sl_msgbox, PgUp PgDn)
-   say = clean.out[1, 6000]
+   say = clean.out[1, 65536]                              ;* (row 326: no cut of the page's own; the helper's bytes-reply, 65536 delivered, bounds the answer)
    if trim(say) = '' then say = ' '
    act = trim(obj{'action'})
    if act # '' and downcase(act) # 'none' then
