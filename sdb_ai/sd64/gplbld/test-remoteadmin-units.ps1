@@ -292,7 +292,7 @@ function Get-Rows([hashtable]$t) {
     $is = $a.Substring([Math]::Max(0, $a.IndexOf('function Invoke-SystemTask')))
     $is = $is.Substring(0, [Math]::Max(0, $is.IndexOf("`n}")))
     $null = $rows.Add(@('R8 (RELEASE_1.1 280) sshd -T -C about SDRADMIN runs as SYSTEM: anyone else hands it to a one-shot SYSTEM task, which is always unregistered and its files deleted, and whose registration and start stop on error',
-        (($it -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne 'S-1-5-18'\) \{ return \(Invoke-SshdTAsSystem \`$sshd \`$spec\) \}") -and ($is -match "New-ScheduledTaskPrincipal -UserId 'S-1-5-18'") -and ($is -match '-EncodedCommand ') -and ($is -match "-Principal \`$pr -Force -ErrorAction Stop") -and ($is -match "Start-ScheduledTask -TaskPath '\\SD\\' -TaskName 'sdcore-radmin-check' -ErrorAction Stop") -and ($is -match "\} finally \{\s*\r?\n\s*Unregister-ScheduledTask -TaskPath '\\SD\\' -TaskName 'sdcore-radmin-check'") -and ($is -match 'foreach \(\$f in \$files\) \{ if \(Test-Path -LiteralPath \$f\) \{ Remove-Item')), ''))
+        (($it -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne 'S-1-5-18'\) \{ return \(Invoke-SshdTAsSystem \`$sshd \`$spec\) \}") -and ($is.Contains("`$def.Principal.UserId = 'S-1-5-18'")) -and ($is.Contains('$def.Principal.LogonType = 5')) -and ($is -match '-EncodedCommand ') -and ($is.Contains("`$task = `$sdFolder.RegisterTaskDefinition('sdcore-radmin-check', `$def, 6, 'S-1-5-18', `$null, 5)")) -and ($is.Contains('$null = $task.Run($null)')) -and ($is -match "\} finally \{\s*\r?\n\s*if \(\`$null -ne \`$sdFolder\) \{ try \{ \`$sdFolder\.DeleteTask\('sdcore-radmin-check', 0\) \} catch \{ \} \}") -and ($is -match 'foreach \(\$f in \$files\) \{ if \(Test-Path -LiteralPath \$f\) \{ Remove-Item')), ''))
     # R9: the broker.  Every task cmdlet stops on error (a module's cmdlets do not see the script's $ErrorActionPreference); -On is
     # SDSYS's alone (RELEASE_1.1 282: exit 4, nothing changed, for anyone else) and registers the broker task BEFORE any wall moves, as
     # SDSYS, with no password route anywhere; "running" is printed only once the broker's pipe exists; no Enable-ScheduledTask in -On.
@@ -310,7 +310,9 @@ function Get-Rows([hashtable]$t) {
          ($on -notmatch '(?m)^\s+Enable-ScheduledTask') -and
          ($rb -match "if \(\[Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.User\.Value -ne \`$sdsysSid\) \{ throw ") -and
          ($rb.IndexOf('throw ''the broker task is registered by SDSYS only''') -lt $rb.IndexOf('Register-ScheduledTask')) -and
-         ($a -notmatch 'SdsysPassword|RegisterTaskDefinition|SecureStringToBSTR') -and ($rb -notmatch 'Invoke-SystemTask')),
+         ($a -notmatch 'SdsysPassword|SecureStringToBSTR') -and ($rb -notmatch 'Invoke-SystemTask') -and
+         # 15 Nov 26 (RELEASE_1.1 312): RegisterTaskDefinition is allowed exactly once, the SYSTEM check task with NO password (service account)
+         ([regex]::Matches($a, 'RegisterTaskDefinition').Count -eq 1) -and $a.Contains("RegisterTaskDefinition('sdcore-radmin-check', `$def, 6, 'S-1-5-18', `$null, 5)")),
         ("task cmdlet lines {0}, without -ErrorAction Stop: {1}; exit4 {2} < register {3} < first wall {4}" -f $taskLines.Count, ($noStop -join ' | '), $iExit4, $iReg, $iWall)))
     # R10 (RELEASE_1.1 280): the task folder \SD.  Measured 13 Nov: the root folder gives Authenticated Users write, inherited, and an
     # ordinary user can make a top-level folder and own it.  \SD is made protected, SYSTEM and Administrators only; an existing one is used
@@ -331,7 +333,7 @@ function Get-Rows([hashtable]$t) {
          ($rb -match "\`$folder = Initialize-SdTaskFolder \`$svc") -and ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -ge 0) -and
          ($rb.IndexOf("try { `$folder.DeleteTask('sdcore-radmin', 0) } catch { }") -lt $rb.IndexOf('Register-ScheduledTask -TaskName')) -and
          ($is -match "\`$sdFolder = Initialize-SdTaskFolder \`$svc") -and ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -ge 0) -and
-         ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -lt $is.IndexOf('Register-ScheduledTask -TaskName'))), ''))
+         ($is.IndexOf("try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }") -lt $is.IndexOf('RegisterTaskDefinition('))), ''))
     # R11 (RELEASE_1.1 281): SET.JOB's tasks under the same rule, every sd-jobs task cmdlet stopping on error, \SD made at install, the rule shipped.
     $jb = $t.jobs
     $js = $jb.Substring([Math]::Max(0, $jb.IndexOf("'job-set' {")))
@@ -486,7 +488,9 @@ if ($SelfTest) {
         @('an open arm is checked for a disabled SDRADMIN', 'R7', 'admin', "        if (`$mode -cne 'closed') { return 'SDRADMIN is disabled, and sshd cannot resolve a disabled account to check an open arm' }", ''),
         @('a shut arm checked by sshd -t does not say so', 'R7', 'admin', "        `$script:ArmCheck = 'sshd -t only: SDRADMIN is disabled, which sshd -T cannot resolve'", ''),
         @('the arm is checked from the caller''s own token (RELEASE_1.1 280)', 'R8', 'admin', "    if ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value -ne 'S-1-5-18') { return (Invoke-SshdTAsSystem `$sshd `$spec) }", ''),
-        @('the SYSTEM check task is left registered', 'R8', 'admin', "        Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:`$false -ErrorAction SilentlyContinue", ''),
+        @('the SYSTEM check task is left registered', 'R8', 'admin', "        if (`$null -ne `$sdFolder) { try { `$sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { } }", ''),
+        @('the check task runs as another account (RELEASE_1.1 312)', 'R8', 'admin', "        `$def.Principal.UserId = 'S-1-5-18'", "        `$def.Principal.UserId = 'S-1-5-19'"),
+        @('a task is registered with a password (RELEASE_1.1 312)', 'R9', 'admin', "RegisterTaskDefinition('sdcore-radmin-check', `$def, 6, 'S-1-5-18', `$null, 5)", "RegisterTaskDefinition('sdcore-radmin-check', `$def, 6, 'S-1-5-18', `$pw, 1)"),
         @('-On says the broker runs without its pipe (RELEASE_1.1 280)', 'R9', 'admin', "        if (-not (Test-BrokerPipe)) { throw ('the broker started but its pipe \\.\pipe\sd-radmin did not appear in 20 seconds (task state ' + (Get-TaskState) + ')') }", ''),
         @('a task cmdlet in -On carries on after an error', 'R9', 'admin', "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction Stop", "        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin'"),
         @('-On goes on for a caller that is not SDSYS', 'R9', 'admin', "        Exit-With 4 'remote administration is opened by SDSYS: run REMOTE.SDSYS ON at SDSYS''s console; nothing was changed'", "        `$null = 4"),

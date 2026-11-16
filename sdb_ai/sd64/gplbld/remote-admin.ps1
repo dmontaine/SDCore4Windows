@@ -383,6 +383,7 @@ function Invoke-SystemTask([string]$body, [string]$what) {
     $text = $body.Replace('@@OUT@@', (ConvertTo-PsQuoted $files[0])).Replace('@@ERR@@', (ConvertTo-PsQuoted $files[1])).Replace('@@CODE@@', (ConvertTo-PsQuoted $files[2]))
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($text))
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $sdFolder = $null
     try {
         Out-Line "${Prog}: $what, as SYSTEM (a few seconds)..."
         # A task that runs as SYSTEM goes only into a vetted \SD, and never over a task of the same name that is already there
@@ -391,10 +392,21 @@ function Invoke-SystemTask([string]$body, [string]$what) {
         $svc.Connect()
         $sdFolder = Initialize-SdTaskFolder $svc
         try { $sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { }
-        $act = New-ScheduledTaskAction -Execute $ps -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc)
-        $pr = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
-        Register-ScheduledTask -TaskName 'sdcore-radmin-check' -TaskPath '\SD\' -Action $act -Principal $pr -Force -ErrorAction Stop | Out-Null
-        Start-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -ErrorAction Stop
+        # 15 Nov 26 - RELEASE_1.1 312: made, started and removed through the COM interface too (the WMI-based cmdlets stalled for minutes).
+        # The same task: SYSTEM (S-1-5-18) as a service account, highest, one action; and allowed on battery, which the cmdlets' default was not.
+        $def = $svc.NewTask(0)
+        $def.Principal.UserId = 'S-1-5-18'
+        $def.Principal.LogonType = 5                     # TASK_LOGON_SERVICE_ACCOUNT
+        $def.Principal.RunLevel = 1                      # TASK_RUNLEVEL_HIGHEST
+        $def.Settings.Enabled = $true
+        $def.Settings.DisallowStartIfOnBatteries = $false
+        $def.Settings.StopIfGoingOnBatteries = $false
+        $def.Settings.ExecutionTimeLimit = 'PT2M'
+        $a = $def.Actions.Create(0)                      # TASK_ACTION_EXEC
+        $a.Path = $ps
+        $a.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ' + $enc
+        $task = $sdFolder.RegisterTaskDefinition('sdcore-radmin-check', $def, 6, 'S-1-5-18', $null, 5)   # 6 = create or update
+        $null = $task.Run($null)
         $deadline = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $files[2])) { Start-Sleep -Milliseconds 250 }
         if (-not (Test-Path -LiteralPath $files[2])) {
@@ -407,7 +419,7 @@ function Invoke-SystemTask([string]$body, [string]$what) {
         $err = if (Test-Path -LiteralPath $files[1]) { [IO.File]::ReadAllText($files[1]) } else { '' }
         return @{ Code = $code; Out = @($out -split "`r?`n"); Err = $err.Trim() }
     } finally {
-        Unregister-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin-check' -Confirm:$false -ErrorAction SilentlyContinue
+        if ($null -ne $sdFolder) { try { $sdFolder.DeleteTask('sdcore-radmin-check', 0) } catch { } }
         foreach ($f in $files) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
     }
 }
@@ -497,13 +509,21 @@ function Write-SshdArm([string]$cfg, [string]$sshd, [string]$mode, [string]$sdEx
 }
 
 function Get-TaskState {
-    $t = Get-ScheduledTask -TaskPath '\SD\' -TaskName 'sdcore-radmin' -ErrorAction SilentlyContinue
+    # 15 Nov 26 - RELEASE_1.1 312 (VM sit3 step 5: a -Status and a second -On stalled for minutes, then 0x80010108 "disconnected from its
+    # clients", the WMI provider's failure): read through Task Scheduler's own COM interface, as Initialize-SdTaskFolder already does, not the
+    # ScheduledTasks cmdlets, which go through WMI.  TASK_STATE: 1 disabled, 2 queued, 3 ready, 4 running.
+    $t = $null
+    try {
+        $svc = New-Object -ComObject Schedule.Service
+        $svc.Connect()
+        $t = $svc.GetFolder('\SD').GetTask('sdcore-radmin')
+    } catch { return 'absent' }
     if ($null -eq $t) { return 'absent' }
-    switch ([string]$t.State) {
-        'Running'  { return 'running' }
-        'Ready'    { return 'ready' }
-        'Queued'   { return 'ready' }
-        'Disabled' { return 'disabled' }
+    switch ([int]$t.State) {
+        4 { return 'running' }
+        3 { return 'ready' }
+        2 { return 'ready' }
+        1 { return 'disabled' }
     }
     return 'disabled'
 }
