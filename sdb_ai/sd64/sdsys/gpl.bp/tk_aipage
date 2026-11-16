@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 327 (the owner on HOME: after Follow up "the cursor does not appear in the ai entry"): after Follow up the
+*               line keeps the focus, so the follow-up question is typed at once; any other answer gives it back to the page as before.
 * 1 Nov 26 dm  New (S.97 stage 1).
 * 1 Nov 26 dm  S.97 stage 2: the op 'keys', for a page that makes its key table anew (tool.bulk): the line's two rows are put back when the page has a line; the rows are one
 *              internal subroutine, add.rows, which 'init' calls too.
@@ -125,7 +127,7 @@ ask:
    actx<12> = ai.edits                                                        ;* S.97 stage 4: the actions that make or compile something: Enter alone rejects a proposal of one of them
    call $tk_ai('ask', ctx, actx, res)
    call $tk_ai('clear', ctx, '', '')
-   call $tk_ai('focus', ctx, 0, '')                                           ;* the line gives the focus back to the page
+   call $tk_ai('focus', ctx, (if res<1> = 'follow' then 1 else 0), '')        ;* the line gives the focus back to the page; after Follow up it keeps it, for the next question (row 327)
    out = 'taken' : @fm : '' : @fm : 1 : @fm : res<5>
    if res<1> = 'action' then
       call $tk_keys('keyof', keys, res<2>, pane, kk, '', '')

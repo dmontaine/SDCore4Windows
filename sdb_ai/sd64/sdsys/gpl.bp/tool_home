@@ -4,6 +4,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 327 (the owner: after Follow up "the cursor does not appear in the ai entry, i have to click on the field"):
+*               ask.ai gives the AI line the focus again (ai.focus.on) when the answer was Follow up; any other answer leaves it with the tiles as before.
 * 15 Nov 26 Windows port - from Linux b5adf503 (RELEASE_1.1 303): F6 and AI > Ask the AI say "the AI is not set up on this computer (the
 *               administrator sets it up in AI)" when the computer has no provider, model or key, and "the AI is not on for this account" only when the
 *               account's gate is off ($tk_ai 'why'; ai.off.text).
@@ -1308,6 +1310,10 @@ ask.ai:
    call $tk_ai('clear', ctx, '', '')
    aif = 0
    msg = res<5>
+   if res<1> = 'follow' then                              ;* 15 Nov 26 (RELEASE_1.1 327): Follow up leaves the cursor in the AI line for the next question
+      gosub ai.focus.on
+      msg = res<5>
+   end
    begin case
       case res<1> = 'action'
          found = 0
