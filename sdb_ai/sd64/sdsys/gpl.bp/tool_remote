@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): A is one form, the door and restart
+*               now or later, and runs REMOTE.API ... RESTART | NO.RESTART through the routine; the terminal is no longer given to it.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: the sixth view is back, as Linux's (S.95, S.106), for the remote administration account SDRADMIN:
 *               REMOTE.SDSYS with no keyword through the routine (remote-admin.ps1 -Status, one line per wall), O = REMOTE.SDSYS ON after a box
 *               wanting OPEN and F = REMOTE.SDSYS OFF after a box.  OS deviation: O gives the TERMINAL to the verb (as A does REMOTE.API),
@@ -467,7 +469,7 @@ draw.detail:
    begin case
       case view = 1
          lines<-1> = 'API ON: SD listens on port 4247 and the firewall rule lets other computers on the network connect. LOCAL: SD listens on port 4247 and only this computer may connect. OFF: SD opens no API socket at all.'
-         lines<-1> = 'SD opens or closes the API socket only when it starts, so a change to or from OFF asks whether to restart SD now, and a restart ends every session, this one too. A gives the terminal to REMOTE.API for that question.'
+         lines<-1> = 'SD opens or closes the API socket only when it starts, so a change to or from OFF needs SD restarted, and a restart ends every session, this one too. A asks on its own form whether to restart now or leave it for the next start.'
          lines<-1> = 'ssh ON lets other computers on the network connect over ssh; OFF lets only this computer connect, and ssh to this machine itself keeps working. It scopes the firewall rule and never stops or removes the ssh server.'
          lines<-1> = 'What is shown above is what the machine says, read back from sd.conf and the firewall rules, not what this page meant. A and S choose from a list that starts on off; turning a door on lets other computers reach this one, so its box wants the word open typed (in either case).'
       case view = 2
@@ -694,15 +696,31 @@ confirm.and.hand.over:
 
 * A: the API door
 do.api:
-   * S.244 (1): a choice from a list, not a typed word; the list starts on off, the tightest
-   dw = 'on' : @vm : 'local' : @vm : 'off'
-   screen pick 'on    - other computers may connect' : @vm : 'local - only this computer' : @vm : 'off   - no API socket' title 'The API door (REMOTE.API)' default 3 returning pk else pk = 0
-   if pk < 1 or pk > 3 then
+   * S.244 (1): a choice, not a typed word; it starts on off, the tightest.  15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart
+   * question in the page's dialog"): ONE form with two choices, the door and whether SD restarts now if it must (later first, the default), so
+   * REMOTE.API is run with RESTART or NO.RESTART through the routine and the terminal is never given to it.  Linux has no restart to ask about.
+   spec = 'The API door (REMOTE.API)' : @fm : '&Next' : @fm : 'Left, Right or the space bar choose.'
+   spec<-1> = 'door' : @vm : 'API' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'on' : @sm : 'local' : @sm : 'off'
+   spec<-1> = 'restart' : @vm : 'Restart SD if it must (to or from off)' : @vm : '' : @vm : '' : @vm : 2 : @vm : '' : @vm : 'later' : @sm : 'now'
+   fv = 'off' : @fm : 'later'
+   call $tk_form('open', ctx, spec, fv, fo)
+   if fo = 'no' then
+      msg = 'the form does not fit this window: nothing was run'
+      return
+   end
+   call $tk_form('run', ctx, fans, fv, fid)
+   call $tk_form('close', ctx, '', '', '')
+   if fans # 'ok' then
       msg = sysmsg(12826)                                       ;* nothing was run
       return
    end
-   aw = dw<1, pk>
-   sent = 'remote.api ' : aw
+   aw = fv<1>
+   rw = fv<2>
+   if (aw # 'on' and aw # 'local' and aw # 'off') or (rw # 'later' and rw # 'now') then
+      msg = sysmsg(12826)                                       ;* nothing was run
+      return
+   end
+   sent = 'remote.api ' : aw : (if rw = 'now' then ' restart' else ' no.restart')
    typed = ''
    el = ''
    begin case
@@ -714,9 +732,13 @@ do.api:
       case 1
          el<-1> = 'SD opens no API socket at all.'
    end case
-   el<-1> = 'The terminal is given to REMOTE.API. SD opens or closes the socket only when it starts, so when the listener moves to or from OFF the verb asks whether to restart SD now (Enter answers no).'
-   el<-1> = 'A restart ends every session, this one too; answered no, the change waits for the next start of SD. The firewall part takes effect at once.'
-   gosub confirm.and.hand.over
+   el<-1> = 'SD opens or closes the socket only when it starts, so a change to or from OFF needs SD restarted. The firewall part takes effect at once.'
+   if rw = 'now' then
+      el<-1> = 'You chose to restart now: if the listener moves, SD restarts at once, which ends every session, this one too. Otherwise nothing restarts.'
+   end else
+      el<-1> = 'You chose later: nothing restarts, and a change to or from OFF waits for the next start of SD.'
+   end
+   gosub confirm.and.run
    return
 
 * S: the ssh door

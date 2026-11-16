@@ -16,13 +16,16 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            one dialog: type the account's name and press Run; nothing is asked on the terminal (a
                            Windows user SD made goes with its profile, as before).  delete.account takes no.query for
                            this.  The words a box asks you to type, open and restore, are shown in lower case and taken
-                           in either case.
+                           in either case.  A on the remote access page asks on one form both the API setting and whether
+                           to restart SD now if the change needs it (later is the default), and runs REMOTE.API with the
+                           new word RESTART or NO.RESTART, which answers its restart question in advance; nothing is
+                           asked on the terminal.
              Why         - the owner's rules for the pages: a field that holds the last thing typed is easy to run again
                            by mistake, a fixed set typed by hand can be mistyped, and a delete needed three confirmations
                            with a terminal in between.
              Does NOT    - Change what any command does or checks.  delete.account typed at the prompt still asks before
-                           it deletes unless no.query is given.  A on the remote access page still gives the terminal to
-                           REMOTE.API, whose question whether to restart SD is yours to answer.  A question that offers
+                           it deletes unless no.query is given, and REMOTE.API typed at the prompt without RESTART or
+                           NO.RESTART still asks whether to restart SD.  A question that offers
                            what the AI line proposed still starts with the proposal, and the editors (the IDE, SED, CED)
                            are unchanged.  NOT YET TESTED ON AN INSTALLED SYSTEM.
 

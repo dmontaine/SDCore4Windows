@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): RESTART or NO.RESTART after the word answers
+*           the restart question in advance, so tool.remote asks it in its own dialog and gives no terminal.  Windows only: Linux has no restart
+*           to ask about (a socket unit listens for SD).
 * 13 Nov 26 Windows port - RELEASE_1.1 278: port.moved comes from what api-listener.ps1 reports (-ReportChange: 0 it moved, 3 it was
 *           already so), as the comment at THE RESTART always said; it came from the word typed, so LOCAL from OFF was never offered
 *           the restart (the listener opened only at SD's next start, unannounced) and ON twice asked twice.
@@ -39,7 +42,10 @@
 *
 * START-DESCRIPTION:
 *
-*    REMOTE.API ON | LOCAL | OFF
+*    REMOTE.API ON | LOCAL | OFF {RESTART | NO.RESTART}
+*
+*    RESTART or NO.RESTART answers in advance the question this verb asks when the listener moves (to or from OFF): restart SD now (every
+*    session ends) or leave the change for SD's next start.  Without either word the question is asked.
 *
 *    Says whether this machine provides the SD API, and who may reach it.
 *
@@ -151,6 +157,28 @@ $include err.h
          stop sysmsg(10131)  ;* remote.api on | local | off
    end case
 
+*  15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog").  RESTART or NO.RESTART after the word answers
+*  THE RESTART question below in advance, so tool.remote can ask it in its own dialog and run this verb with no terminal.  Neither word: the question
+*  is asked here, as before.  The restart still happens only when the listener moved.  Read BEFORE anything is changed, so a wrong word changes nothing.
+   want.restart = ''
+   call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+   if token.type # PARSER$END then
+      begin case
+         case upcase(token) = 'RESTART'
+            want.restart = 'Y'
+         case upcase(token) = 'NO.RESTART'
+            want.restart = 'N'
+         case @true
+            @system.return.code = -ER$ARGS
+            stop sysmsg(10131)  ;* remote.api on | local | off {restart | no.restart}
+      end case
+      call @parser(PARSER$GET.TOKEN, token.type, token, keyword)
+      if token.type # PARSER$END then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(10131)
+      end
+   end
+
 *  ---------------------------------------------------------------------------
 *  1.  THE LISTENER.  api-listener.ps1 edits APIPORT in sd.conf and reads the
 *      record back before reporting; see its own header for why it is a script
@@ -204,6 +232,9 @@ $include err.h
 *  nothing that has not already been written and disconnects nobody.  The two
 *  halves have to agree: a prompt that shows a default and then loops on an
 *  empty answer is worse than one that shows none.
+   if want.restart # '' then
+      yn = want.restart        ;* 15 Nov 26 (RELEASE_1.1 314): answered in advance by RESTART or NO.RESTART
+   end else
    loop
       display sysmsg(10135) :   ;* Restart SD now? Every session ends (y/<n>)?
       input yn
@@ -211,6 +242,7 @@ $include err.h
       if yn = '' then yn = 'N'
       until yn = 'Y' or yn = 'N'
    repeat
+   end
 
    if yn = 'N' then
       stop sysmsg(10136)  ;* Not restarted - it takes effect when SD is next started

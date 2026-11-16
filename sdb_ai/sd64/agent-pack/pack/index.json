@@ -5577,7 +5577,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 80
+"words": 91
 },
 "msg:10132": {
 "kind": "message",
@@ -28754,7 +28754,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 43
+"words": 46
 },
 "tcl:remote.sdsys": {
 "kind": "tcl.verb",
