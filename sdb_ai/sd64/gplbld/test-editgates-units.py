@@ -486,11 +486,13 @@ def checks(srcs, messages_dir):
     # Windows: Linux loads the three gates ON for the OS user sdsys entering sdsys, because its API session carries no administrator flag.  Here the
     #   API server admits SDSYS to sdsys ONLY as the local, ELEVATED Windows account SDSYS (K$ADMINISTRATOR), and the administrator passes every
     #   edit test (C2, C12, C13, G9), so the grant is the admission rule itself; anyone else is refused before the gates are loaded.
+    #   16 Nov 26 (RELEASE_1.1 331, Linux S.256): the remote door's session is admitted too (sdsys.api.remote, set only for the Windows user
+    #   SDSYS on an elevated token, which also makes it the administrator); the two other terms still hold for both doors.
     ck("G25d SDSYS in its own account over the API passes the three gates: it is admitted only when the session is the administrator, and the entry "
        "rule is asked before the first-entry load of the register's own gates",
-       "ent.member = local.session and (ent.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)" in ap2
+       "ent.member = (local.session or sdsys.api.remote) and (ent.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)" in ap2
        and re.search(r"if upcase\(ent\.name\) = 'SDSYS' then\s*\n\s*ent\.who = upcase\(kernel\(K\$USERNAME, 0\)\)", ap2) is not None
-       and 0 <= at(ap2, "ent.member = local.session and (ent.who = 'SDSYS')") < at(ap2, "void kernel(K$VOC.EDIT,  api.voc.grant)"), "")
+       and 0 <= at(ap2, "ent.member = (local.session or sdsys.api.remote) and (ent.who = 'SDSYS')") < at(ap2, "void kernel(K$VOC.EDIT,  api.voc.grant)"), "")
 
     # ---- M. the messages ------------------------------------------------------------------------------------------------------
     texts = {}

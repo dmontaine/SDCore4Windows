@@ -1,0 +1,125 @@
+* ADDRMATCH
+* Is a client address inside one of the administrator's ranges?
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 16 Nov 26 Windows port - RELEASE_1.1 331: from Linux 3f8d2fa2 (S.256), the code unchanged.  The list is the entries of
+*           <ProgramData>\SD\sd-tls\sdsys-api after its "on" line (Linux: /etc/sdcore/sdsys-api), written by gplbld/sd-sdsysapi.ps1.
+* 16 Nov 26 dm  New.  S.256: APISRVR's remote-API door for SDSYS (remote.sdsys api), taken out of it so that the rule can be run by a test.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*    call !addrmatch(peer, list, ok)
+*
+*    peer   the client's address as the kernel saw it (system(42)): IPv4 dotted, or IPv6; an IPv4-mapped IPv6 address (::ffff:1.2.3.4) is
+*           taken as its IPv4 form
+*    list   the entries of /etc/sdcore/sdsys-api after its "on" line, one a field: network/length as the root helper wrote them, or the word
+*           any (written only alone)
+*    ok     @true when the word any is there, or when the peer's first LENGTH bits equal the network's, for an entry of the same family;
+*           else @false
+*
+*    THE COMPARISON IS OF BITS, 32 for IPv4 and 128 for IPv6, with IPv6's "::" expanded and each group read as hex, so no spelling of one
+*    address gives a different answer.  An address that cannot be read is in no range.  A length of 0 never matches: it would be every
+*    address, which the owner allowed only as the explicit word any (16 Nov 2026).  A length that is not a whole number from 1 to the
+*    family's width never matches.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+$flags trusted
+subroutine addrmatch(peer, list, ok)
+$catalog !addrmatch
+
+   ok = @false
+
+   p = downcase(trim(peer))
+   if p[1,7] = '::ffff:' and index(p, '.', 1) then p = p[8,999]
+   atb.in = p
+   gosub addr.to.bits
+   pbits = atb.bits
+
+   n = dcount(list, @fm)
+   for i = 1 to n
+      e = downcase(trim(list<i>))
+      if e = 'any' then ok = @true
+      if pbits # '' and index(e, '/', 1) then
+         atb.in = field(e, '/', 1)
+         plen = field(e, '/', 2)
+         gosub addr.to.bits
+         if atb.bits # '' and len(atb.bits) = len(pbits) and plen # '' then
+            chk = plen
+            convert '0123456789' to '' in chk
+            if chk = '' and len(plen) <= 3 then
+               if plen >= 1 and plen <= len(atb.bits) then
+                  if atb.bits[1, plen] = pbits[1, plen] then ok = @true
+               end
+            end
+         end
+      end
+   next i
+
+   return
+
+* atb.in, an IPv4 or IPv6 address in text, as a string of bits in atb.bits: 32 for IPv4, 128 for IPv6; '' when it is neither.
+addr.to.bits:
+   atb.bits = ''
+   a = downcase(trim(atb.in))
+   if a = '' then return
+   if index(a, ':', 1) then
+      if count(a, '::') > 1 then return
+      cp = index(a, '::', 1)
+      if cp then
+         lpart = a[1, cp - 1]
+         rpart = a[cp + 2, 999]
+         nl = (if lpart = '' then 0 else dcount(lpart, ':'))
+         nr = (if rpart = '' then 0 else dcount(rpart, ':'))
+         nfill = 8 - nl - nr
+         if nfill < 1 then return
+         groups = lpart
+         for k = 1 to nfill
+            if groups = '' then groups = '0' else groups := ':0'
+         next k
+         if rpart # '' then groups := ':' : rpart
+      end else
+         groups = a
+      end
+      convert ':' to @fm in groups
+      if dcount(groups, @fm) # 8 then return
+      out = ''
+      for k = 1 to 8
+         g = groups<k>
+         if len(g) < 1 or len(g) > 4 then return
+         chk = g
+         convert '0123456789abcdef' to '' in chk
+         if chk # '' then return
+         v = iconv(g, 'MX')
+         for b = 15 to 0 step -1
+            out := mod(int(v / pwr(2, b)), 2)
+         next b
+      next k
+      atb.bits = out
+   end else
+      if dcount(a, '.') # 4 then return
+      out = ''
+      for k = 1 to 4
+         g = field(a, '.', k)
+         if len(g) < 1 or len(g) > 3 then return
+         chk = g
+         convert '0123456789' to '' in chk
+         if chk # '' then return
+         if g > 255 then return
+         for b = 7 to 0 step -1
+            out := mod(int(g / pwr(2, b)), 2)
+         next b
+      next k
+      atb.bits = out
+   end
+   return
+
+end
+
+* END-CODE

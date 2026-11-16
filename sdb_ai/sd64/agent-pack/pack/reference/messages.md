@@ -1366,6 +1366,20 @@ update.accounts does not take '%1', so nothing has been changed.\n\nThe only wor
 
 cited by: `cproc`
 
+### msg:10174
+> kind=message tier=reference since=- src=sdsys/messages/10174:1#f3ccbb1d
+
+```
+SDSYS may be reached through the API from another computer only when the
+administrator has opened it.
+
+SDSYS can change every account on this system, and the API admits a
+connection on the SD password alone.  It is shut as delivered; the
+administrator opens it for chosen addresses with remote.sdsys api on.
+```
+
+cited by: `apisrvr`
+
 ### msg:10176
 > kind=message tier=reference since=- src=sdsys/messages/10176:1#1c7a681d
 
@@ -9150,10 +9164,10 @@ Passages of SD's own documentation follow, each with its id in brackets. Use the
 cited by: `tk_ai`
 
 ### msg:12928
-> kind=message tier=reference since=- src=sdsys/messages/12928:1#e4deb3cb
+> kind=message tier=reference since=- src=sdsys/messages/12928:1#30090f4e
 
 ```
-remote.sdsys on | off | audit {n} | accounts\n\nON        opens ssh for SDRADMIN: it can sign in from other computers with its\n          password, into a fixed list of account commands.\nOFF       shuts it again, as delivered.\n\nWith no keyword it reports the state and changes nothing.
+remote.sdsys {on | off} | audit {n} | accounts\nremote.sdsys ssh {on | off}\nremote.sdsys api {on address ... | off}\n\nON, SSH ON     opens ssh for SDRADMIN: it can sign in from other computers\n               with its password, into a fixed list of account commands.\nOFF, SSH OFF   shuts it again, as delivered.\nAPI ON a ...   lets an API client at one of the addresses sign in as sdsys\n               with its SD password and be the administrator.  An address is\n               IPv4 or IPv6, or a range such as 192.168.1.0/24; at most 32.\nAPI ON ANY     the same from every address on the internet (a VPN into a\n               listed range is safer).\nAPI OFF        shuts the API to sdsys from other computers, as delivered.\n\nWith no keyword it reports the state and changes nothing.
 ```
 
 cited by: `remotesdsys`
@@ -11576,6 +11590,51 @@ cited by: `tk_form`
 ```
 
 cited by: `tool_ai`, `tool_backups`, `tool_bulk`
+
+### msg:15116
+> kind=message tier=reference since=- src=sdsys/messages/15116:1#b2bc1430
+
+```
+SDSYS may use the API from another computer only from an address the\nadministrator listed with remote.sdsys api on, and %1 is not one of them.
+```
+
+cited by: `apisrvr`
+
+### msg:15117
+> kind=message tier=reference since=- src=sdsys/messages/15117:1#334504fb
+
+```
+The API is open for sdsys from %1: a client there can sign in as sdsys with\nits SD password and is the administrator, and nothing else stands between\nthose addresses and the administrator.  Shut it again with remote.sdsys api off.
+```
+
+cited by: `remotesdsys`
+
+### msg:15118
+> kind=message tier=reference since=- src=sdsys/messages/15118:1#64278c90
+
+```
+remote.sdsys api: %1 is not an address or a range (an IPv4 or IPv6 address,\nor a range such as 192.168.1.0/24).
+```
+
+cited by: `remotesdsys`
+
+### msg:15119
+> kind=message tier=reference since=- src=sdsys/messages/15119:1#61f7b7df
+
+```
+remote.sdsys api on needs at least one address or range, and takes at most 32;\nor the word any, alone.
+```
+
+cited by: `remotesdsys`
+
+### msg:15120
+> kind=message tier=reference since=- src=sdsys/messages/15120:1#d3b14e5c
+
+```
+The API is open for sdsys from EVERY address: anyone who can reach this\ncomputer's API port, from anywhere on the internet, can sign in as sdsys with\nits SD password alone and be the administrator.  A VPN into a listed range is\nthe safer way to travel.  Shut it again with remote.sdsys api off.
+```
+
+cited by: `remotesdsys`
 
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74

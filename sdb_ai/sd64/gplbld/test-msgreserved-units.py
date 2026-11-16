@@ -58,9 +58,14 @@ MESSAGES = os.path.normpath(os.path.join(HERE, os.pardir, "sdsys", "messages"))
 # 10174 was OURS until RELEASE_1.1 64 (commit e0c8d90, 18 Sep 2026) deleted it
 # with the tiers.  Linux never deleted theirs and asked on 19 Sep 2026 to keep
 # it rather than renumber a refusal they ship.
+#
+# 16 Nov 2026 - RELEASE_1.1 331 (Linux S.256, 3f8d2fa2): 10174 IS CARRIED BACK,
+# UNDER LINUX'S ID AND IN LINUX'S WORDS, for the same refusal (SDSYS over the
+# API from another computer while the door is shut).  So it is no longer a
+# number to keep absent: it moved to CARRIED below, which asserts the record is
+# here AND says exactly what Linux's says - the one way two ports can share an
+# id without the hazard this file exists for.
 RESERVED = {
-    "10174": ("SD Core for Linux", "19 Sep 2026",
-              "apisrvr's refusal of a REMOTE session claiming SDSYS"),
     # ***THE 10176-10181 COLLISION IS SETTLED AND THIS BLOCK IS WHAT IT BECAME
     # - 20 Sep 2026, the two agents deciding it under the owner's delegation
     # ("decide between the two how to synchronize the two systems").***  THE
@@ -168,6 +173,34 @@ COLLISION = {
 # deleted on the Linux side on 14 Sep when MODIFY.PASSWORD stopped driving
 # passwd(1); they are not claimed and were never ours.
 FREE_BOTH_SIDES = ("10175",)
+
+# CARRIED UNDER THE OTHER PORT'S OWN ID: id -> the other port's text, byte for
+# byte (typed in from its commit, never read from the clone - the rule above).
+# The record must be here and must say exactly this; a different word under a
+# shared id is the hazard RESERVED guards against, arriving the other way.
+CARRIED = {
+    # Linux 3f8d2fa2 (S.256), sdsys/messages/10174; RELEASE_1.1 331
+    "10174": ("SDSYS may be reached through the API from another computer only when the\n"
+              "administrator has opened it.\n"
+              "\n"
+              "SDSYS can change every account on this system, and the API admits a\n"
+              "connection on the SD password alone.  It is shut as delivered; the\n"
+              "administrator opens it for chosen addresses with remote.sdsys api on.\n"),
+}
+
+
+def carried_mismatch(carried, read):
+    """Carried ids whose record is missing (read returns None) or differs from
+    the other port's text, sorted.  Isolated so the mutants can drive it."""
+    return sorted(i for i in carried if read(i) != carried[i])
+
+
+def read_record(i):
+    p = os.path.join(MESSAGES, i)
+    if not os.path.isfile(p):
+        return None
+    with open(p, "rb") as f:
+        return f.read().decode("ascii", "replace")
 
 # An id we expect to be PRESENT, so that "10174 is absent" is known to mean
 # absent rather than "this script is looking at nothing".  Its neighbour.
@@ -333,6 +366,20 @@ check("MUTANT: an unreserved id present in the tree is not reported",
 check("CONTROL: the detector answers nothing for an empty reservation table",
       reallocated({}, present) == [],
       "an empty table must not manufacture a finding")
+
+# --- ids carried under the other port's own number: here, and word for word ---
+for i in sorted(CARRIED):
+    print("  carried %s under Linux's id, Linux's text" % i)
+bad = carried_mismatch(CARRIED, read_record)
+check("every id carried under Linux's own number is here with Linux's exact text (%d carried)" % len(CARRIED),
+      bad == [],
+      "missing or different: " + ", ".join(bad))
+check("MUTANT: a carried record with one word changed is caught",
+      carried_mismatch(CARRIED, lambda i: (read_record(i) or "").replace("shut", "closed")) == sorted(CARRIED),
+      "the comparison waved a reworded record through")
+check("MUTANT: a carried record that is missing is caught",
+      carried_mismatch(CARRIED, lambda i: None) == sorted(CARRIED),
+      "the comparison waved a missing record through")
 
 print("")
 print("test-msgreserved-units: %d passed, %d failed." % (passed, failed))

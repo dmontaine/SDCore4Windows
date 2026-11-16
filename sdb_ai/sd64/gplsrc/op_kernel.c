@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): K_API_PREAUTH gives a third field, whether a pre-authenticated session's own token is
+ *           elevated, so APISRVR can make an SDSYS session admitted by its remote door the administrator.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server (sd_sftp.c k_xfer()).
  * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): a phantom gives back a pipe its session held on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a phantom's failed daemon() is logged.
@@ -771,15 +773,38 @@ void op_kernel() {
    was STARTED (sd.c's -H) and field 2 from what Windows says its token IS, so
    a session that was spawned pre-authenticated but cannot name itself reports
    1 and an empty name instead of quietly looking like an ordinary session. */
+    /* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256, remote administration through the API).  A THIRD FIELD: is THIS
+       pre-authenticated session's own token elevated?  1 or 0, and 0 for any session that is not pre-authenticated.
+
+       WHY NOT K_OS_ELEVATED.  That key answers FALSE for every CN_SOCKET session, and must: an API session used to be forked by the
+       LocalSystem service and carry its elevated token (the kernel.c:240 trap).  A pre-authenticated session is different in the way that
+       matters - win32session.c started it with the S4U token minted for the proven user, so IsElevated() reads THAT user's token and
+       nothing borrowed.  Measured on the host (HISTORY, RELEASE_1.1 101): an S4U logon of SDSYS, a Windows administrator, comes back at
+       High integrity with Administrators enabled; a standard account's has no administrator half.
+
+       WHAT APISRVR DOES WITH IT.  Only an SDSYS session admitted by the remote door is handed over as SDSYS (vb.scram.final refuses the
+       rest), and such a session is the administrator only while this reads 1 - its token is the same elevated SDSYS token the console's
+       LOGIN requires.  The one other way to be a pre-authenticated SDSYS process is an elevated SDSYS running "sd -N -H" itself, which is
+       already the console's administrator.  An undetermined answer is 0, the refusing one.  Read-only, so not gated on HDR_INTERNAL. */
     case K_API_PREAUTH:
       {
         char who[MAX_USERNAME_LEN + 1];
-        char both[MAX_USERNAME_LEN + 8];
+        char both[MAX_USERNAME_LEN + 16];
+        int elevated = 0;
 
         if (!api_preauth || !ProcessUserName(who, sizeof(who)))
           who[0] = '\0';
-        snprintf(both, sizeof(both), "%d%c%s", api_preauth ? 1 : 0, FIELD_MARK,
-                 who);
+        if (api_preauth) {
+          PRIV_WHY why;
+
+          elevated = IsElevated(&why) ? 1 : 0;
+          if (why != PRIV_ANSWERED) {
+            priv_log_undetermined("K$API.PREAUTH elevation", why);
+            elevated = 0;
+          }
+        }
+        snprintf(both, sizeof(both), "%d%c%s%c%d", api_preauth ? 1 : 0, FIELD_MARK,
+                 who, FIELD_MARK, elevated);
         k_put_c_string(both, &result);
       }
       break;

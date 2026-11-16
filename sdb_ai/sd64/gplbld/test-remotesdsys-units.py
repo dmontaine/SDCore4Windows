@@ -136,7 +136,11 @@ def checks(raw):
     ck("B8", "OFF: remote-admin.ps1 -Off (with -KeepBroker only in the broker's own job), then every SDRADMIN session is logged out", ok, str(pos))
     rh = block(v, "run.helper")
     ck("B9", "the helper is run straight through OS.EXECUTE only in the broker's job (an elevated SDSYS with no helper of its own), through SDSYS's elevated helper otherwise",
-       re.search(r"if in\.job then\s*\n\s*os\.execute hcmd", rh) is not None and "both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)" in rh and "kernel(K$WINPATH, '/remote-admin.ps1')" in rh, "")
+       re.search(r"if in\.job then\s*\n\s*os\.execute hcmd", rh) is not None and "both = ps_script_out(hcmd : @fm : 'exit $LASTEXITCODE', @true)" in rh
+       # 16 Nov 26 (RELEASE_1.1 331): the script is helper.script, remote-admin.ps1 unless the API door names sd-sdsysapi.ps1 for its call
+       # and puts it back (test-sdsysapi-units.py checks the API door itself)
+       and "kernel(K$WINPATH, helper.script)" in rh and "   helper.script = '/remote-admin.ps1'" in v[:v.find("call @parser(PARSER$RESET")]
+       and v.count("helper.script = '/sd-sdsysapi.ps1'") == v.count("   gosub run.helper\n   helper.script = '/remote-admin.ps1'"), "")
     ra = rr[rr.find("      case run.verb = 'remote.api'"):] if "      case run.verb = 'remote.api'" in rr else ""
     ra = ra[:ra.find("\n      case ", 10)] if ra.find("\n      case ", 10) > 0 else ra
     ok, pos = ordered(ra, ["case run.verb = 'remote.api'", "         data 'N'\n", "         execute run.sentence\n", "         run.rc = @system.return.code\n         cleardata\n"])

@@ -1889,6 +1889,13 @@ def main():
                    # $neverShipped list.  Their unit test
                    # (test-remoteadmin-units.ps1) does not.
                    'remote-admin.ps1', 'sd-radmin.ps1', 'sd-radmin-client.ps1',
+                   # 16 Nov 26 - RELEASE_1.1 331 (Linux S.256's sd-elevate
+                   # sdsys-api): REMOTE.SDSYS API writes SDSYS's remote-API
+                   # setting into <ProgramData>\SD\sd-tls through it, as
+                   # SDSYS's elevated helper.  It SHIPS - do NOT add it to
+                   # assert-current's $neverShipped list.  Its unit test
+                   # (test-sdsysapi-units.py) does not.
+                   'sd-sdsysapi.ps1',
                    # 13 Nov 26 - RELEASE_1.1 281: the task folder \SD's one rule,
                    # dot-sourced by remote-admin.ps1, sd-jobs.ps1 and
                    # finish-install.ps1.  It SHIPS - do NOT add it to

@@ -3,6 +3,23 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+16 Nov 26  SDSYS CAN BE ADMINISTERED THROUGH THE API FROM ANOTHER COMPUTER, ONCE THE ADMINISTRATOR OPENS IT.
+
+             What        - remote.sdsys api on <address or range> ... opens the API to SDSYS from those addresses: an
+                           administration program there signs in as sdsys with SDSYS's SD password (the one SD asked SDSYS to
+                           set at its first sign-in, not its Windows password) and has every right of the administrator.  An
+                           entry is an IPv4 or IPv6 address or a range such as 192.168.1.0/24 (for a computer whose DHCP
+                           address changes); remote.sdsys api on any, alone, opens it to every address (for an administrator
+                           who travels; a VPN into a listed range is safer).  remote.sdsys api off shuts it; remote.sdsys with
+                           no word reports both doors, ssh and the API.  remote.sdsys on | off still means ssh (SDRADMIN).
+                           From this computer SDSYS keeps the API as before: signed in to Windows as SDSYS, elevated.
+             Why         - a free API administration program, a Windows client that works with every SD version, is to be
+                           distributed with SD; the owner: deliver it closed and secure and let the administrator decide to
+                           loosen it, with full rights for SDSYS and an account's own rights for every other account.
+             Does NOT    - Open anything as delivered, open the API port (remote.api does that), give any account but SDSYS
+                           more than its own rights, accept a key or a second factor, or let an SDSYS that Windows has not
+                           elevated be the administrator.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 15 Nov 26  THE AI HELPER ACCEPTS A PROVIDER'S CERTIFICATE AS WINDOWS DOES; DEEPSEEK'S STARTING MODEL IS deepseek-v4-flash.
 
              What        - with no certificate file set, Windows itself now checks the provider's certificate (its name, its

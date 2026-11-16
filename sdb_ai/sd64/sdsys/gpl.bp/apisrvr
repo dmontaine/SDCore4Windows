@@ -19,6 +19,11 @@
 *
 *
 * START-HISTORY:
+* 16 Nov 26 Windows port - RELEASE_1.1 331, from Linux 3f8d2fa2, 42e05d2a, 2fd1731f (S.256): remote administration through the API.  SDSYS
+*           from another computer is admitted only when <ProgramData>\SD\sd-tls\sdsys-api (written by remote.sdsys api through
+*           sd-sdsysapi.ps1) says on and lists the client's address (10174 shut, 15116 names an unlisted one); the session it is handed to
+*           is the administrator while its own S4U token is elevated (K$API.PREAUTH <3>), and enters the sdsys account.  The local door
+*           (SDConnectLocal, the Windows user SDSYS, elevated) is unchanged and gains Linux's audit line.
 * 14 Nov 26 Windows port - from Linux d5270fe2 (S.235; RELEASE_1.1 247): an API sign-in writes `api login user=<name> account=<account>` once, at the first entry to an account.
 * 13 Nov 26 Windows - correcting the 17 Oct S.64 part 2 line below: the block that loads the three edit gates ON for SDSYS is not in
 *           this program and is not needed.  An API session reaches the sdsys account only local and elevated (K$ADMINISTRATOR, the
@@ -278,7 +283,8 @@ logging,            ;* Logging network traffic?
 master.login.done,  ;* The MASTER.LOGIN paragraph has been run (it is run once per session)
 seqfiles(SEQ.MAX),  ;* Sequential files opened by vb.openseq, numbered SEQ.BASE + their index (sheet 441)
 seq.state(SEQ.MAX), ;* 1 while the slot holds an open sequential file
-seq.unbuf(SEQ.MAX)  ;* 1 when it was opened unbuffered: every line written is flushed
+seq.unbuf(SEQ.MAX), ;* 1 when it was opened unbuffered: every line written is flushed
+sdsys.api.remote    ;* 16 Nov 26 RELEASE_1.1 331: this is an SDSYS session the remote door admitted (the administrator); set at start, never cleared
 
 * 19 Aug 26 Windows port - DECLARED HERE, NOT IN vb.login.  Both the old login
 *   and the SCRAM one screen the user name with it, and phase 5 of
@@ -405,6 +411,28 @@ if not(kernel(K$CPROC.LEVEL,0)) then
 *   not sdapi is files only; a person in neither, or whose groups cannot be read, is refused (10073) and never enters the request loop.  sdsys
 *   is exempt by name, as in the front.  Nothing is passed from the front, so there is nothing to forge or lose; a group change between the two
 *   tests can only tighten (sdapi taken away) or refuse.
+*
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256), THE REMOTE DOOR'S SESSION.  The owner, 16 Nov 2026: "Full admin rights only if API
+*   into SDSYS"; ruled for Windows the same day, "SDSYS, SD password": the remote door signs in as SDSYS itself, on its SD password.  The
+*   front admits SDSYS only through the remote door (vb.scram.final: the setting on and the client's address listed) and hands the
+*   connection to this process, started with SDSYS's own S4U token.  On Linux the grant is K$ADMINISTRATOR in the same process, after
+*   the identity; here the process that serves is this one, so the grant is made HERE, and on the same rule as the console's LOGIN: the
+*   Windows user SDSYS with an ELEVATED token (K$API.PREAUTH <3>, read from this process's own token).  Nothing comes from the front.
+*   The only other way to be a pre-authenticated SDSYS process is an elevated SDSYS running "sd -N -H" itself, which is the console's
+*   administrator already.  An SDSYS session whose token is not elevated is refused outright (10174) rather than kept as a lesser SDSYS:
+*   SDSYS over the API is the administrator or nothing.  The audit line is the front's, written after the handover gave this token.
+*   sdsys.api.remote is in the common block, so an abort keeps it; account.entry.check reads it to let this session into sdsys.
+   sdsys.api.remote = @false
+   if api.preauth<1> = 1 and downcase(logname) = 'sdsys' then
+      if api.preauth<3> # 1 then
+         void kernel(K$AUDIT, 'api refused user=sdsys reason=the session started without an elevated token')
+         abort.message = sysmsg(10174)
+         * SDSYS may be reached through the API from another computer only when the administrator has opened it
+         goto connection.failed
+      end
+      void kernel(K$ADMINISTRATOR, 1)
+      sdsys.api.remote = @true
+   end
    if api.preauth<1> = 1 and downcase(logname) # 'sdsys' then
       api.in.sdapi = is_grp_member(logname, 'sdapi')
       api.route.stat = status()
@@ -512,6 +540,9 @@ scram.refuse.reason = '';* Why this exchange was refused; '' = not refused
 * success; read once, right after the reply below reaches the wire, to hand
 * this connection off to a new session running as the authenticated user.
 scram.handoff = @false
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256).  Set by vb.scram.final to the client's address when the remote door admitted
+* SDSYS; read after the handover, which is where the administrator's token is given on Windows.
+sdsys.api.from = ''
 
 loop
    unload.object               ;* Unload inactive object code
@@ -719,6 +750,13 @@ return.status.set: ;* Return to here if ST already set
          handoff.ok = kernel(K$HANDOFF, scram.user)
          if not(handoff.ok) then
             void kernel(K$AUDIT, 'api handover failed user=' : scram.user : ' - see syslog; the connection is closed')
+         end else
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): THE GRANT'S AUDIT LINE, in Linux's words, written AFTER the grant (PORT_ADOPTION
+*   13's order).  On Windows the administrator's rights are SDSYS's own elevated token, and the handover that just succeeded is what gave
+*   the session that token; the session then takes K$ADMINISTRATOR from it at start, and refuses itself (audited) if it is not elevated.
+            if sdsys.api.from # '' then
+               void kernel(K$AUDIT, 'elevation granted reason=sdsys api from=' : sdsys.api.from)
+            end
          end
       end
       done = @true
@@ -818,13 +856,15 @@ if ent.group = '' then
    return
 end
 
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): OR the session the remote door admitted (sdsys.api.remote, set at start only for
+*   the Windows user SDSYS on an elevated token).  The other two terms still hold for it: it is SDSYS, and it is the administrator.
 if upcase(ent.name) = 'SDSYS' then
    ent.who = upcase(kernel(K$USERNAME, 0))
    if index(ent.who, '\', 1) > 0 then ent.who = field(ent.who, '\', dcount(ent.who, '\'))
-   ent.member = local.session and (ent.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
+   ent.member = (local.session or sdsys.api.remote) and (ent.who = 'SDSYS') and kernel(K$ADMINISTRATOR, -1)
    ent.told = 0
    if not(ent.member) then
-      void kernel(K$AUDIT, 'account refused branch=4 sdsys.not.local.elevated user=' : ent.who : ' local=' : local.session : ' account=' : ent.name)
+      void kernel(K$AUDIT, 'account refused branch=4 sdsys.not.local.elevated user=' : ent.who : ' local=' : local.session : ' remote.door=' : sdsys.api.remote : ' account=' : ent.name)
    end
 end else
    ent.member = is_grp_member(kernel(K$USERNAME, 0), ent.group)
@@ -1212,8 +1252,9 @@ void kernel(K$SHARED.READ,  api.shared.read.grant)    ;* 18 Oct 26, S.66: accoun
 void kernel(K$SHARED.WRITE, api.shared.write.grant)
 * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: the edit gates are the SIGN-ON account's (owner, 17 Oct), so they are loaded at the
 *   first entry to an account and never again; an SDLogto leaves them as they were.  master.login.done is set once, at that same first entry.
-*   (Linux's part 2 also gives an API session of the OS user sdsys entering the sdsys account all three; the API is never open to SDSYS here -
-*   modify.account refuses it and sdsys is denied network sign-in - so that rule is not carried.)
+*   (Linux's part 2 also gives an API session of the OS user sdsys entering the sdsys account all three.  Here SDSYS reaches the API by the
+*   local door and, since RELEASE_1.1 331, by the remote one, and both sessions hold K$ADMINISTRATOR, which passes every edit test (the
+*   13 Nov 26 note in the history), so that rule is not carried.)
 if not(master.login.done) then
    void kernel(K$VOC.EDIT,  api.voc.grant)
    void kernel(K$BP.EDIT,   api.bp.grant)
@@ -1858,6 +1899,16 @@ vb.local.login:
 *              vb.account reads this to decide whether SDSYS may be entered.
                local.session = @true
 
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): THE LOCAL DOOR'S AUDIT LINE, Linux's words.  Linux's local door gives SDSYS the
+*   administrator's rights at its SCRAM and audits "elevation granted reason=sdsys api from=this machine".  Here the local door is this
+*   transport (the Windows user SDSYS, elevated, no password), and the kernel made an elevated, interactive pipe session the administrator
+*   when it started; this records that an API session is that administrator, and only when it is.
+               local.who = downcase(logname)
+               if index(local.who, '\', 1) > 0 then local.who = field(local.who, '\', dcount(local.who, '\'))
+               if local.who = 'sdsys' and kernel(K$ADMINISTRATOR, -1) then
+                  void kernel(K$AUDIT, 'elevation granted reason=sdsys api from=this machine')
+               end
+
                * dsm 20240612 i = kernel(K$ADMINISTRATOR,lgn.rec<LGN$ADMIN>)
                * mab 20240219    end else      ;* System is insecure
                * mab 20240219      i = kernel(K$ADMINISTRATOR,1)    ;* All users are administrators
@@ -2194,8 +2245,52 @@ vb.scram.final:
                api.files.login = @false
                api.files.write = @false
                api.files.admin = @false
-               api.in.sdapi = is_grp_member(scram.user, 'sdapi')
-               api.route.stat = status()
+*
+* 16 Nov 26 Windows port - RELEASE_1.1 331, from Linux 3f8d2fa2 (S.256), REMOTE ADMINISTRATION THROUGH THE API (owner, 16 Nov 2026: "we will
+*   need the ability for the admin to turn on remote management through the API in Core as we now do through SSH.  Again, deliver closed and
+*   secure and let the admin decide to loosen"; "Full admin rights only if API into SDSYS, and normal limited rights if API into other
+*   accounts").  His choices, on Linux: remote.sdsys api on ADDR ... | off, LISTED CLIENT ADDRESSES ONLY, ranges in CIDR form too ("Allow
+*   ranges too"), and the word any alone for an administrator who travels ("Yes, as an explicit word"); a /0 range is never matched.  On
+*   Windows he ruled the account the same day: "SDSYS, SD password" - SDSYS itself, on its SD password (SCRAM checks $cred, never the Windows
+*   password; LOGIN asks SDSYS to set it at its first sign-in, message 10089).
+*   - EVERY SCRAM LOGIN IS THE REMOTE DOOR HERE.  This port's local door is SDConnectLocal (vb.local.login: pipes, the Windows user SDSYS,
+*     elevated, no password), so a SCRAM login as sdsys came over TCP - from 127.0.0.1 too, which must be listed like any other address.
+*   - SHUT (10174) unless the setting says on; an address none of its entries holds is refused by name (15116, Linux's 14116).  The address
+*     is the TCP peer as the kernel saw it at accept (system(42), getpeername() before the TLS relay took the socket).  The setting is
+*     <ProgramData>\SD\sd-tls\sdsys-api, in the directory the installer makes SYSTEM and Administrators only and the relay refuses in any
+*     other state (win32tls.c) before this connection reached SCRAM; only remote.sdsys api, through sd-sdsysapi.ps1, writes it.  The
+*     comparison is of bits (!addrmatch).
+*   - sdsys IS EXEMPT FROM THE sdapi AND sdfiles ROUTES BY NAME, as on Linux: it has the whole API through its own door.
+*   - ADMITTED, it is handed over as SDSYS like any other login; the session is the administrator while its own token is elevated (the
+*     start-up block) and the grant is audited after the handover (the dispatcher), Linux's "elevation granted reason=sdsys api from=".
+               if downcase(scram.user) = 'sdsys' then
+                  api.peer.addr = system(42)
+                  gosub read.sdsys.api
+                  if not(sdsys.api.on) then
+                     scram.refuse.reason = 'sdsys on a remote API session from ' : api.peer.addr
+                     abort.message = sysmsg(10174)
+                     * SDSYS may be reached through the API from another computer only when the administrator has opened it
+                     server.error = SV$ON.ERROR
+                     goto exit.vb.scram.fail
+                  end
+                  sdsys.api.peer = downcase(trim(api.peer.addr))
+                  if sdsys.api.peer[1,7] = '::ffff:' and index(sdsys.api.peer, '.', 1) then sdsys.api.peer = sdsys.api.peer[8,999]
+                  sdsys.api.listed = @false
+                  call !addrmatch(sdsys.api.peer, sdsys.api.list, sdsys.api.listed)   ;* the rule, in one routine a test can run
+                  if not(sdsys.api.listed) then
+                     scram.refuse.reason = 'sdsys on a remote API session from an address not listed by remote.sdsys api: ' : api.peer.addr
+                     abort.message = sysmsg(15116, api.peer.addr)
+                     * SDSYS may use the API from another computer only from an address listed with remote.sdsys api on
+                     server.error = SV$ON.ERROR
+                     goto exit.vb.scram.fail
+                  end
+                  sdsys.api.from = sdsys.api.peer
+                  api.in.sdapi = @true
+                  api.route.stat = 0
+               end else
+                  api.in.sdapi = is_grp_member(scram.user, 'sdapi')
+                  api.route.stat = status()
+               end
                if api.route.stat # 0 then
                   scram.refuse.reason = 'the sdapi route could not be read, status ' : api.route.stat
                   abort.message = sysmsg(10073, scram.user) ;* %1 is not permitted to use the API
@@ -2346,6 +2441,37 @@ vb.scram.final:
                response = 'v=' : scram.ssig
                scram.handoff = @true
 
+               return
+
+* 16 Nov 26 Windows port - RELEASE_1.1 331, from Linux 3f8d2fa2 and 42e05d2a (S.256): the administrator's remote-API setting.  The first
+*   line is "on"; each line after it is one client address or range as sd-sdsysapi.ps1 wrote it (network/length, lower case, IPv6 in its
+*   short form), or the word any alone.  A missing or unreadable file, or any first line but "on", is OFF: the delivered state, and the
+*   refusing answer.  OPENSEQ, NOT OSREAD (Linux measured OSREAD read nothing for a session that has not entered an account: it is a call of
+*   !osread, held to the account's OS gate); this program is $internal, which os_path_open_ok() trusts.  READONLY, closed on every path.
+*   The place is <ProgramData>\SD\sd-tls, found as the parent of @SDSYS with either slash (@SDSYS has backslashes, @DS is '/': the
+*   RELEASE_1.1 202 lesson, radmin_open), the directory the installer's secure-tls.ps1 makes SYSTEM and Administrators only.
+read.sdsys.api:
+               sdsys.api.on = @false
+               sdsys.api.list = ''
+               sdsys.api.sp = convert(char(92), '/', @sdsys)
+               sdsys.api.n = count(sdsys.api.sp, '/')
+               if sdsys.api.n < 1 then return
+               sdsys.api.path = sdsys.api.sp[1, index(sdsys.api.sp, '/', sdsys.api.n) - 1] : '/sd-tls/sdsys-api'
+               openseq sdsys.api.path readonly to sdsys.api.f then
+                  readseq sdsys.api.line from sdsys.api.f then
+                     if downcase(trim(sdsys.api.line)) = 'on' then
+                        sdsys.api.on = @true
+                        loop
+                           readseq sdsys.api.line from sdsys.api.f else exit
+                           sdsys.api.line = downcase(trim(sdsys.api.line))
+                           if sdsys.api.line # '' then sdsys.api.list<-1> = sdsys.api.line
+                        repeat
+                     end
+                  end
+                  close sdsys.api.f
+               end else
+                  close sdsys.api.f
+               end
                return
 
                * ----------------------------------------------------------------------

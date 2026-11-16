@@ -1,0 +1,1 @@
+The API is open for sdsys from %1: a client there can sign in as sdsys with\nits SD password and is the administrator, and nothing else stands between\nthose addresses and the administrator.  Shut it again with remote.sdsys api off.

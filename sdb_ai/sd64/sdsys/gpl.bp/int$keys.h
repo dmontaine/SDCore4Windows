@@ -197,7 +197,9 @@
 *   <1> 1 if pre-authenticated, 0 if not.  <2> the bare Windows user name.
 *   <1>=1 with <2> empty is a session that cannot name itself - REFUSE it, do
 *   not carry on unnamed.  Read-only, so not $internal-only.
-      $define K$API.PREAUTH      67      ;* <1> pre-authenticated? <2> user name
+* 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): <3> 1 if a pre-authenticated session's own token is elevated, else 0 (and 0
+*   when the check could not complete).  APISRVR makes an SDSYS session the remote door admitted the administrator only while it is 1.
+      $define K$API.PREAUTH      67      ;* <1> pre-authenticated? <2> user name <3> its token elevated?
 * 17 Sep 26 Windows port - RELEASE_1.1 55.  IS A NAMED USER IN A NAMED LOCAL
 *   GROUP?  A live SAM query with NO CHILD PROCESS, which is what a
 *   pre-authenticated session needs: one spawned AS the user by 66 cannot start
