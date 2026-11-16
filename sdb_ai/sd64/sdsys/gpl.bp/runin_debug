@@ -6,6 +6,8 @@
 * 13 Nov 26 Windows port - written.  RELEASE_1.1 253(b): run.in WITH debug, the form Windows allows (gplsrc/win32runin.h has the design; the
 *           design note is .claude/design-runin-debug-20261113.md).  PDEBUG's loop (gpl.bp/pdebug), with the run's store for the user's own
 *           and the child's screen and keyboard relayed to this terminal while the program runs.
+* 15 Nov 26 Windows port - RELEASE_1.1 253(b): a stop's program id may be negative (a program run from its file); it was refused as
+*           "not a stop" at the first stop of the VM witness.
 * END-HISTORY
 * START-DESCRIPTION:
 *   call !runin_debug(acct, file, prog, why)     from CPROC's ri.debug only (run.in, the administrator's verb)
@@ -86,10 +88,13 @@ $include int$keys.h
    until rd.ended
       delete dbg.store, rd.in
 
-      * A stop: DBG and six numbers (program id, compile time, line, subroutine reference, event, the child's user number)
+      * A stop: DBG and six numbers (program id, compile time, line, subroutine reference, event, the child's user number).
+      * 15 Nov 26: the program id alone may be negative - a program RUN from its file, not catalogued, has a negative object id
+      * (object.c: "Run files have negative ids"), and the first witness (VM round 2, R.34) was refused here at its first stop.
       rd.ok = (rd.msg<1> = 'DBG')
       for rd.i = 2 to 7
          rd.f = rd.msg<rd.i>
+         if rd.i = 2 and rd.f[1, 1] = '-' then rd.f = rd.f[2, 99]
          if not(rd.f matches '1N0N') or len(rd.f) > 12 then rd.ok = @false
       next rd.i
       if not(rd.ok) then

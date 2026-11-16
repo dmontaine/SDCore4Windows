@@ -67,7 +67,7 @@ BS = chr(92)
 BUILT = ["win32runin.c", "win32runin.h", "win32s4u.h", "win32s4ulogon.c", "sdsvc/sdrunin.c", "sdsvc/sdrunin.h"]
 # Read as text only (paths relative to gplsrc).
 TEXTS = ["sd.c", "op_debug.c", "op_kernel.c", "keys.h", "sdsvc/sdsvc.c", "../Makefile", "../gpl.src", "../sdsys/gpl.bp/login",
-         "../sdsys/gpl.bp/cproc", "../sdsys/gpl.bp/debug", "../sdsys/gpl.bp/pdbg", "../sdsys/gpl.bp/int$keys.h",
+         "../sdsys/gpl.bp/cproc", "../sdsys/gpl.bp/debug", "../sdsys/gpl.bp/pdbg", "../sdsys/gpl.bp/runin_debug", "../sdsys/gpl.bp/int$keys.h",
          "../gplbld/install-service.ps1"]
 
 T_ROWS = ["N1", "N2", "N3", "N4", "N4b", "N5", "N5b", "N6", "N7", "N7b", "N7c", "N8"]
@@ -646,6 +646,14 @@ def text_rows(t):
                  "answer at the TAB into the pid and the store",
                  "(((unsigned char)c >= 32) || (c == '\\t'))" in rd and 'runin_answer(h, ev, "OK %lu\\t%s", (unsigned long)run.pid, run.store);' in sr
                  and "if ((p = strchr(ans, '\\t')) != NULL)" in read("op_kernel.c"), ""))
+    # 15 Nov 26 (RELEASE_1.1 253(b), VM round 2 R.34 "the debugged program sent a message that is not a stop"): a program RUN from its file
+    # has a negative object id (object.c), and !runin_debug took only unsigned digits, so the first stop was refused.  The id alone may be
+    # negative; every other field stays digits only.
+    ri = t["../sdsys/gpl.bp/runin_debug"]
+    rows.append(("W21", "!runin_debug takes a negative program id (a program run from its file) and only there: field 2 may lose one leading '-', then every "
+                 "field must be digits",
+                 "         if rd.i = 2 and rd.f[1, 1] = '-' then rd.f = rd.f[2, 99]\n         if not(rd.f matches '1N0N') or len(rd.f) > 12 then rd.ok = @false" in ri
+                 and "obj->code.id = -(next_id++); /* Run files have negative ids */" in read("object.c"), ""))
     kh, ik = t["keys.h"], t["../sdsys/gpl.bp/int$keys.h"]
     rows.append(("W18", "the two keys are 84 and 85 in keys.h and in int$keys.h",
                  re.search(r"#define K_RUNIN_CHILD\s+84\b", kh) and re.search(r"#define K_RUNIN_DEBUG\s+85\b", kh)
@@ -786,6 +794,8 @@ MUTANTS = [
      "#define RUNIN_BASE_GRANT (FILE_TRAVERSE | FILE_LIST_DIRECTORY | SYNCHRONIZE)\n"),
     ("sdsvc/sdrunin.c", "the base's grant is inherited into every store", "AddAccessAllowedAceEx(acl, ACL_REVISION, 0, RUNIN_BASE_GRANT, (PSID)child)",
      "AddAccessAllowedAceEx(acl, ACL_REVISION, OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE, RUNIN_BASE_GRANT, (PSID)child)"),
+    # 15 Nov 26 (RELEASE_1.1 253(b), round 2 R.34): a run file's negative program id refused again
+    ("../sdsys/gpl.bp/runin_debug", "a negative program id is refused", "         if rd.i = 2 and rd.f[1, 1] = '-' then rd.f = rd.f[2, 99]\n", ""),
 ]
 
 
