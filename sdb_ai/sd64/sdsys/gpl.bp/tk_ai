@@ -6,6 +6,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 15 Nov 26 Windows port - RELEASE_1.1 324: entry.cursor - the screen's own cursor is set to the entry's before each put, so the cursor follows the
+*               typing in the AI line (it stayed at the line's first cell: the label's SCREEN TEXT had left SL.S.CUR there).
 * 15 Nov 26 dm  Windows row 303: read.status keeps which test failed in ai.why (at the END of /tkai/), 'gate' or 'setup', and the op 'why' gives it back, so that HOME can say
 *               "not set up on this computer" instead of blaming the account when no provider, model or key is set.
 * 14 Nov 26 dm  Compiler warning: removed the unused assignments to cx.from (the standing text's 'context-from', read and never used).
@@ -367,6 +369,7 @@ paint:
       ai.w{'focused'} = (if ai.focus then 1 else 0)
       call $sl_scr('get', scr)
       call $sl_entry('draw', ai.w, scr, '', r)
+      gosub entry.cursor
       call $sl_scr('put', scr)
    end
    if not(ai.focus) then call $sl_curat('back', keep.cur)
@@ -388,8 +391,16 @@ on.key:
          ai.w{'focused'} = 1
          call $sl_scr('get', scr)
          call $sl_entry('key', ai.w, scr, nm, r)
+         gosub entry.cursor
          call $sl_scr('put', scr)
    end case
+   return
+
+* 15 Nov 26 (Windows RELEASE_1.1 324, the owner on HOME: "the cursor stays at the first position, the typed characters do appear"): the screen's own
+* cursor is where the entry's is.  The label's SCREEN TEXT left SL.S.CUR just after the label - the entry's first cell - and the put that follows
+* the entry's $sl_curat wrote the cursor there again (sl_scr put.cursor), as did a later flush of a put that was owed.
+entry.cursor:
+   if ai.focus then scr<SL.S.CUR> = (ai.w{'ax'} + ai.w{'pos'} - ai.w{'pan'}) : @vm : (ai.w{'ay'} + 0)
    return
 
 * ------------------------------------------------------------------------------------------------- the whole sequence
