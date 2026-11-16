@@ -152,6 +152,15 @@ function ConvertTo-Network([string]$e) {
     if ($plen -eq 0) { Refuse ('a /0 range is every address, and is refused: ' + $e) }
     $bits = Get-Bits $addr
     $net = Get-BytesFromBits ($bits.Substring(0, $plen) + ('0' * ($width - $plen)))
+    # 16 Nov 26 (Linux db29dcc7, from Windows' finding): an IPv4-mapped IPv6 entry (::ffff:a.b.c.d) of length 96 or more is written as
+    # its IPv4 form, a.b.c.d/(n-96), the form APISRVR compares a mapped peer in; written as IPv6 it was accepted, reported open, and
+    # never matched.  A /96 of it is every IPv4 address and is refused like any /0.
+    if ($v6 -and $plen -ge 96 -and (($net[0..9] | Where-Object { $_ -ne 0 }).Count -eq 0) -and $net[10] -eq 255 -and $net[11] -eq 255) {
+        $v6 = $false
+        $net = [byte[]]($net[12..15])
+        $plen = $plen - 96
+        if ($plen -eq 0) { Refuse ('a /0 range is every address, and is refused: ' + $e) }
+    }
     if ($v6) { $text = Format-V6 $net } else { $text = ($net -join '.') }
     return ($text + '/' + $plen)
 }

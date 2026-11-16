@@ -3,6 +3,12 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+16 Nov 26  THE INSTALLER'S "OPEN EVERY ACCESS GATE" BOX INCLUDES FILE TRANSFER.
+
+             What        - Ticked, it also turns on xfer-on for your account, as on SD Core for Linux.
+             Does NOT    - Set XFER=1 in sd.conf, which file transfer also needs: it stays off, so the account's switch
+                           alone moves nothing.  The box is still unticked as delivered.
+
 16 Nov 26  SDSYS CAN BE ADMINISTERED THROUGH THE API FROM ANOTHER COMPUTER, ONCE THE ADMINISTRATOR OPENS IT.
 
              What        - remote.sdsys api on <address or range> ... opens the API to SDSYS from those addresses: an
@@ -12,6 +18,8 @@ both Windows products is 2.0-0, as all four SD Core versions will be.)
                            address changes); remote.sdsys api on any, alone, opens it to every address (for an administrator
                            who travels; a VPN into a listed range is safer).  remote.sdsys api off shuts it; remote.sdsys with
                            no word reports both doors, ssh and the API.  remote.sdsys on | off still means ssh (SDRADMIN).
+                           SDRADMIN's remote session over ssh can use the same API words, and ssh off.  An IPv4 address
+                           written as IPv6 (::ffff:a.b.c.d) is kept in its IPv4 form, the form it is compared in.
                            From this computer SDSYS keeps the API as before: signed in to Windows as SDSYS, elevated.
              Why         - a free API administration program, a Windows client that works with every SD version, is to be
                            distributed with SD; the owner: deliver it closed and secure and let the administrator decide to

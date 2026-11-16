@@ -39,13 +39,13 @@ MODIFYA = os.path.join(SD64, "sdsys", "gpl.bp", "modifya")
 KEYS = os.path.join(SD64, "sdsys", "syscom", "keys.h")
 
 # modifya on-words that are NOT access gates for this purpose, and why (see the header)
-# 15 Nov 26 (RELEASE_1.1 299, from Linux S.242): XFER-ON is a door behind sd.conf's XFER=1 with its own limits, which the administrator opens by
-# hand; Linux's open_installer_gates (test-install-opengates.sh WORDS, b9e63f17) does not open it either.
-NOT_GATES = {"SHARED-READ-ON", "XFER-ON"}
+# 15 Nov 26 (RELEASE_1.1 299, from Linux S.242): XFER-ON was left out, as Linux's open_installer_gates did.  16 Nov 26 (Linux db29dcc7, the owner's
+# "Every gate"): Linux added it, so it is a gate here too (field 22); sd.conf's XFER=1 stays off, so the account's switch alone moves nothing.
+NOT_GATES = {"SHARED-READ-ON"}
 EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "recovery-on", "net-on", "shared-write-on", "files-on", "files-write-on",
-                "files-admin-on", "ai-on", "pins-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9); 13 Nov 26: ai-on (sdaiusers, RELEASE_1.1 246, Linux 277/308)
+                "files-admin-on", "ai-on", "pins-on", "xfer-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9); 13 Nov 26: ai-on (sdaiusers, RELEASE_1.1 246, Linux 277/308); 16 Nov 26: xfer-on (Linux db29dcc7)
 EXPECT_FIELDS = {7: "ACC$SH", 8: "ACC$OS.EXEC", 9: "ACC$SD.ACCOUNTS", 10: "ACC$VOC.EDIT", 11: "ACC$BP.EDIT", 12: "ACC$DICT.EDIT",
-                 14: "ACC$SHARED.WRITE", 15: "ACC$NET", 18: "ACC$PINS", 19: "ACC$RECOVERY"}
+                 14: "ACC$SHARED.WRITE", 15: "ACC$NET", 18: "ACC$PINS", 19: "ACC$RECOVERY", 22: "ACC$XFER"}
 
 
 def read(p):
@@ -86,8 +86,8 @@ function Get-LocalGroupMember {
 
 
 def lines_for(fields):
-    """A register record: one line per field, 1..19; fields maps number -> text."""
-    return "\r\n".join(fields.get(n, "x%d" % n) for n in range(1, 20)) + "\r\n"
+    """A register record: one line per field, 1..22 (16 Nov 26: 22, ACC$XFER, Linux db29dcc7); fields maps number -> text."""
+    return "\r\n".join(fields.get(n, "x%d" % n) for n in range(1, 23)) + "\r\n"
 
 
 def scenario(name, record_fields, members, groups_throw=False, record_missing=False):
@@ -95,7 +95,7 @@ def scenario(name, record_fields, members, groups_throw=False, record_missing=Fa
     return (name, record_fields, members, groups_throw, rec)
 
 
-ALL_YES = {n: "yes" for n in (7, 8, 9, 10, 11, 12, 14, 15, 18, 19)}
+ALL_YES = {n: "yes" for n in (7, 8, 9, 10, 11, 12, 14, 15, 18, 19, 22)}
 BOTH_GROUPS = {"sdssh": ["PC\\Don"], "sdapi": ["PC\\Don"], "sdfiles": ["PC\\Don"], "sdfileswrite": ["PC\\Don"], "sdfilesadmin": ["PC\\Don"], "sdaiusers": ["PC\\Don"]}
 SCENARIOS = [
     scenario("all open (member names carry a domain and a different case)", ALL_YES, BOTH_GROUPS),
@@ -107,6 +107,7 @@ SCENARIOS = [
     scenario("not in sdfilesadmin", ALL_YES, {**BOTH_GROUPS, "sdfilesadmin": []}),
     scenario("not in sdaiusers", ALL_YES, {**BOTH_GROUPS, "sdaiusers": []}),
     scenario("pins-on blank", {**ALL_YES, 18: ""}, BOTH_GROUPS),
+    scenario("xfer-on blank", {**ALL_YES, 22: ""}, BOTH_GROUPS),
     scenario("not in sdapi (both is half done)", ALL_YES, {**BOTH_GROUPS, "sdapi": []}),
     scenario("in neither route group (both is named once)", ALL_YES, {**BOTH_GROUPS, "sdapi": [], "sdssh": []}),
     scenario("groups unreadable", ALL_YES, {}, groups_throw=True),
@@ -122,10 +123,11 @@ EXPECT = {
     "not in sdfilesadmin": (False, ["files-admin-on"]),
     "not in sdaiusers": (False, ["ai-on"]),
     "pins-on blank": (False, ["pins-on"]),
+    "xfer-on blank": (False, ["xfer-on"]),
     "not in sdapi (both is half done)": (False, ["both"]),
     "in neither route group (both is named once)": (False, ["both"]),
     "groups unreadable": (False, ["both", "files-on", "files-write-on", "files-admin-on", "ai-on"]),
-    "record unreadable": (False, ["sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "shared-write-on", "net-on", "pins-on", "recovery-on"]),
+    "record unreadable": (False, ["sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "shared-write-on", "net-on", "pins-on", "recovery-on", "xfer-on"]),
 }
 
 
@@ -182,7 +184,7 @@ def checks(att, iss, mod, keys):
     kn = keys_numbers(keys)
     fm = re.search(r"\$GateFields = @\((.*)\)\s*$", att, re.M)
     fields = {int(a): b for a, b in re.findall(r"@\((\d+),\s*'([a-z-]+)'\)", fm.group(1))} if fm else {}
-    want_fields = {n: {7: "sh-on", 8: "os-on", 9: "sd-on", 10: "voc-on", 11: "bp-on", 12: "dict-on", 14: "shared-write-on", 15: "net-on", 18: "pins-on", 19: "recovery-on"}[n] for n in EXPECT_FIELDS}
+    want_fields = {n: {7: "sh-on", 8: "os-on", 9: "sd-on", 10: "voc-on", 11: "bp-on", 12: "dict-on", 14: "shared-write-on", 15: "net-on", 18: "pins-on", 19: "recovery-on", 22: "xfer-on"}[n] for n in EXPECT_FIELDS}
     row("S4 the register fields read are the ACC$ numbers of keys.h", fields == want_fields and all(kn.get(EXPECT_FIELDS[n]) == n for n in EXPECT_FIELDS),
         "fields %s, keys %s" % (fields, {EXPECT_FIELDS[n]: kn.get(EXPECT_FIELDS[n]) for n in EXPECT_FIELDS}))
     gm = re.search(r"\$GateGroups = \[ordered\]@\{([^}]*)\}", att)
@@ -250,9 +252,11 @@ MUTANTS = [
     ("files-write-on comes before files-on", "att", "'files-on', 'files-write-on', 'files-admin-on'", "'files-write-on', 'files-on', 'files-admin-on'"),
     ("files-admin-on comes before files-write-on", "att", "'files-write-on', 'files-admin-on', 'ai-on'", "'files-admin-on', 'files-write-on', 'ai-on'"),
     ("files-admin-on is not in the list", "att", "'files-write-on', 'files-admin-on', 'ai-on'", "'files-write-on', 'ai-on'"),
-    ("pins-on is not in the list", "att", "'ai-on', 'pins-on')", "'ai-on')"),
+    ("pins-on is not in the list", "att", "'ai-on', 'pins-on', 'xfer-on')", "'ai-on', 'xfer-on')"),
     ("sdfilesadmin is not read back", "att", "; 'sdfilesadmin' = 'files-admin-on';", ";"),
-    ("ai-on is not in the list (13 Nov 26, RELEASE_1.1 246)", "att", "'files-admin-on', 'ai-on', 'pins-on')", "'files-admin-on', 'pins-on')"),
+    ("ai-on is not in the list (13 Nov 26, RELEASE_1.1 246)", "att", "'files-admin-on', 'ai-on', 'pins-on', 'xfer-on')", "'files-admin-on', 'pins-on', 'xfer-on')"),
+    ("xfer-on is not in the list (16 Nov 26, Linux db29dcc7)", "att", "'pins-on', 'xfer-on')", "'pins-on')"),
+    ("register field 22 is not read back", "att", ", @(22, 'xfer-on'))", ")"),
     ("sdaiusers is not read back (13 Nov 26, RELEASE_1.1 246)", "att", "; 'sdaiusers' = 'ai-on' }", " }"),
     ("register field 18 is not read back", "att", ", @(18, 'pins-on'), @(19", ", @(19"),      # 13 Nov 26: field 19 follows it since 10 Nov
     ("the box is hidden from the wizard again", "iss", 'GroupDescription: "5)  SD Core account:"; Flags: unchecked', 'GroupDescription: "5)  SD Core account:"; Flags: unchecked; Check: WizardSilent'),

@@ -101,7 +101,14 @@ function Get-Rows([hashtable]$t) {
             @(@('version=1', 'verb=remote.ssh', "nonce=$nonce", 'end'), 'remote.sdsys run remote.ssh', $false, ''),
             @(@('version=1', 'verb=remote.api', 'word1=local', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api local', $false, ''),
             @(@('version=1', 'verb=remote.api', 'word1=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api off', $false, ''),
-            @(@('version=1', 'verb=remote.api', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api', $false, '')
+            @(@('version=1', 'verb=remote.api', "nonce=$nonce", 'end'), 'remote.sdsys run remote.api', $false, ''),
+            # 16 Nov 26 (RELEASE_1.1 331, Linux mail 2000): remote.sdsys's doors by name - ssh off and its report, the API door
+            @(@('version=1', 'verb=remote.sdsys', 'word1=ssh', 'word2=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys ssh off', $false, ''),
+            @(@('version=1', 'verb=remote.sdsys', 'word1=ssh', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys ssh', $false, ''),
+            @(@('version=1', 'verb=remote.sdsys', 'word1=api', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys api', $false, ''),
+            @(@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=off', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys api off', $false, ''),
+            @(@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', 'word3=192.168.1.0/24', 'word4=fd00::/64', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys api on 192.168.1.0/24 fd00::/64', $false, ''),
+            @(@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', 'word3=any', "nonce=$nonce", 'end'), 'remote.sdsys run remote.sdsys api on any', $false, '')
         )
         foreach ($g in $goods) {
             $p = Plan (Q $g[0])
@@ -166,6 +173,18 @@ function Get-Rows([hashtable]$t) {
             @('remote.sdsys audit 0', (Q (@('version=1', 'verb=remote.sdsys', 'word1=audit', 'word2=0', "nonce=$nonce", 'end')))),
             @('remote.sdsys off with more', (Q (@('version=1', 'verb=remote.sdsys', 'word1=off', 'word2=now', "nonce=$nonce", 'end')))),
             @('remote.sdsys with nothing', (Q (@('version=1', 'verb=remote.sdsys', "nonce=$nonce", 'end')))),
+            # 16 Nov 26 (RELEASE_1.1 331): the doors by name
+            @('remote.sdsys ssh on (the console''s)', (Q (@('version=1', 'verb=remote.sdsys', 'word1=ssh', 'word2=on', "nonce=$nonce", 'end')))),
+            @('remote.sdsys ssh off with more', (Q (@('version=1', 'verb=remote.sdsys', 'word1=ssh', 'word2=off', 'word3=now', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on with no address', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on any with another', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', 'word3=any', 'word4=10.0.0.1', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on an address with a semicolon', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', 'word3=10.0.0.1;x', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on an address with a quote', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', "word3=10.0.0.1'", "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on an address of 65 characters', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', ('word3=' + ('1' * 65)), "nonce=$nonce", 'end')))),
+            @('remote.sdsys api off with an address', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=off', 'word3=10.0.0.1', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api status', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=status', "nonce=$nonce", 'end')))),
+            @('an address-shaped word outside api on', (Q (@('version=1', 'verb=modify.account', 'word1=bob', 'word2=10.0.0.0/8', "nonce=$nonce", 'end')))),
+            @('remote.sdsys api on with a password', (Q (@('version=1', 'verb=remote.sdsys', 'word1=api', 'word2=on', 'word3=10.0.0.1', "nonce=$nonce", "secret=$pw", 'end')))),
             @('two routes', (Q (@('version=1', 'verb=modify.account', 'word1=bob', 'word2=ssh', 'word3=api', "nonce=$nonce", 'end')))),
             @('a word twice', (Q (@('version=1', 'verb=modify.account', 'word1=bob', 'word2=sh-on', 'word3=sh-on', "nonce=$nonce", 'end')))),
             @('two start words', (Q (@('version=1', 'verb=modify.account', 'word1=bob', 'word2=start-menu', 'word3=start-default', "nonce=$nonce", 'end')))),

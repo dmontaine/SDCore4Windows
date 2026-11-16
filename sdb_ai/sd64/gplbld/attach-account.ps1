@@ -236,12 +236,14 @@ function Wait-SdRunning {
 # --- every access gate, for -OpenGates ----------------------------------------
 
 # The words, in the order modify.account carries them out.  test-install-opengates-units.py holds this list to modifya's on-words.
-$GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'recovery-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on', 'files-admin-on', 'ai-on', 'pins-on')
+# 16 Nov 26 - from Linux db29dcc7 (owner's "Every gate"): xfer-on (ACC$XFER, field 22, file transfer over the ssh login) joins the list, last as
+#   on Linux.  The system's own switch, XFER=1 in sd.conf, stays off, so the account's switch alone moves nothing.
+$GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'recovery-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on', 'files-admin-on', 'ai-on', 'pins-on', 'xfer-on')
 
 # Register field (keys.h ACC$..., one line each in the record) -> the word that sets it.
 # PAIRS, NOT A DICTIONARY: an ordered dictionary indexed by an integer is indexed by POSITION, so $d[7] is the eighth value, not the one keyed 7
 # (found by test-install-opengates-units.py, which runs this code).
-$GateFields = @(@(7, 'sh-on'), @(8, 'os-on'), @(9, 'sd-on'), @(10, 'voc-on'), @(11, 'bp-on'), @(12, 'dict-on'), @(14, 'shared-write-on'), @(15, 'net-on'), @(18, 'pins-on'), @(19, 'recovery-on'))
+$GateFields = @(@(7, 'sh-on'), @(8, 'os-on'), @(9, 'sd-on'), @(10, 'voc-on'), @(11, 'bp-on'), @(12, 'dict-on'), @(14, 'shared-write-on'), @(15, 'net-on'), @(18, 'pins-on'), @(19, 'recovery-on'), @(22, 'xfer-on'))
 
 # The Windows groups that are gates: membership of each is the gate.
 $GateGroups = [ordered]@{ 'sdssh' = 'both'; 'sdapi' = 'both'; 'sdfiles' = 'files-on'; 'sdfileswrite' = 'files-write-on'; 'sdfilesadmin' = 'files-admin-on'; 'sdaiusers' = 'ai-on' }

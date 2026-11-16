@@ -9,7 +9,8 @@
 *              (SDRADMIN here), a bare ON | OFF keeps meaning it; no keyword reports both.  The API words are read from @sentence, checked
 *              character by character, and given to sd-sdsysapi.ps1 (in place of "sudo -n sd-elevate sdsys-api"), which checks them again,
 *              writes them in standard form to <ProgramData>\SD\sd-tls\sdsys-api, and reports.  Messages are Linux's + 1000 (14117-14120 ->
-*              15117-15120) and 12928 (11923); the API door is not offered in the broker's job (SDRADMIN's fixed list never sends it).
+*              15117-15120) and 12928 (11923).  Offered through SDRADMIN's broker as on Linux (its mail 2000: the remote administrator
+*              runs remote.sdsys api): RUN takes API (its words from the job's sentence) and SSH OFF / SSH; SSH ON stays the console's.
 * 14 Nov 26 Windows port - RELEASE_1.1 202: run.request's job definition path split @SDSYS on @DS ('/'), which a backslashed @SDSYS
 *   never holds, so it named /sd-jobs/<job> and the used definition was never deleted (VM sitting).  Split with either slash.
 * 13 Nov 26 Windows port - RELEASE_1.1 282 (owner, 13 Nov): ON is SDSYS's, at its console; the installer no longer offers it.  The SDSYS
@@ -56,7 +57,8 @@
 *                 prompt; its Windows password is asked twice here), then remote-admin.ps1 -On: SDRADMIN enabled, in sdssh, sshd's remote
 *                 administration arm open (password only, no forwarding, ForceCommand sd), the broker task running, the state on.  SDRADMIN
 *                 can then sign in from other computers with its password, into its own account, where create.account, delete.account,
-*                 modify.account, modify.password, remote.sdsys (OFF, AUDIT, ACCOUNTS, no keyword), remote.ssh (ON, OFF, no keyword) and
+*                 modify.account, modify.password, remote.sdsys (OFF, SSH OFF, SSH, AUDIT, ACCOUNTS, API ON a ..., API ON ANY, API OFF,
+*                 API, no keyword), remote.ssh (ON, OFF, no keyword) and
 *                 remote.api (ON, LOCAL, OFF, no keyword) are sent to the broker, which runs them here as an SDSYS job.  It is never a
 *                 Windows administrator and never elevated.  Opened only by SDSYS at its console: Windows lets only SDSYS register the
 *                 broker task that runs as SDSYS without its password, and the installer does not offer remote administration.
@@ -103,6 +105,7 @@ deffun is_user(uname) calling '!is_user'
    extra = ''
    rc = 0
    helper.script = '/remote-admin.ps1'   ;* 16 Nov 26 (331): run.helper's script; the API door's subroutines name sd-sdsysapi.ps1 for their call
+   api.words = ''                        ;* 16 Nov 26 (331): what follows API, set by the console's api.request or RUN.REQUEST
    job = kernel(K$JOB.MARK, 0)
    in.job = (job[1, 7] = 'radmin-')
 
@@ -306,43 +309,46 @@ show.status:
 * API - SDSYS's API door from other computers (RELEASE_1.1 331, Linux S.256).  remote.sdsys api [on <address|range>... | on any | off].
 *
 * THE WORDS COME FROM @sentence AS PLAIN WORDS, NOT THROUGH !PARSER: an address range (192.168.1.0/24, fd00::/64) must reach the checks below
-* whole, whatever the parser would make of its dots, colons and slash.  words<1> is the verb, words<2> is API.
+* whole, whatever the parser would make of its dots, colons and slash.  api.words is what follows API: at the console it is taken here
+* (@sentence's words 3 on: the verb, API, then these); in the broker's job RUN.REQUEST took it from its own sentence the same way.
 *
 * Each address is checked here, character by character (hex digits, '.', ':' and '/', at most 64), before it is put in the helper's command
 * text, inside single quotes it cannot contain; the helper checks it again as an address and writes it in its standard form.  ANY is only
-* alone.  Not in the broker's job: SDRADMIN's fixed list never sends it, and this says so again.
+* alone.  16 Nov 26 (Linux mail 2000, the template: the remote administrator over ssh runs remote.sdsys api): offered through SDRADMIN's
+* broker too, which checked the words before the job; a refusal here RETURNS with the code set, so the job's exit status says so.
 api.request:
-   if in.job then
-      @system.return.code = -ER$ARGS
-      stop sysmsg(12847, 'remote.sdsys api')  ;* %1 is not available in a remote administration session
+   if not(in.job) then
+      words = trim(@sentence)
+      convert ' ' to @fm in words
+      api.words = field(words, @fm, 3, 9999)
    end
-
-   words = trim(@sentence)
-   convert ' ' to @fm in words
-   nwords = dcount(words, @fm)
-   if nwords < 3 then
+   if api.words = '' then
       gosub api.status
       return
    end
+   nwords = dcount(api.words, @fm)
 
-   api.action = downcase(words<3>)
+   api.action = downcase(api.words<1>)
    if api.action # 'on' and api.action # 'off' then
       @system.return.code = -ER$ARGS
-      stop sysmsg(12928)  ;* the syntax
+      crt sysmsg(12928)  ;* the syntax
+      return
    end
 
    addrs = ''
-   for i = 4 to nwords
-      a = words<i>
+   for i = 2 to nwords
+      a = api.words<i>
       if api.action = 'off' then
          @system.return.code = -ER$ARGS
-         stop sysmsg(12928)
+         crt sysmsg(12928)
+         return
       end
       * 16 Nov 26 (owner, on Linux: "Yes, as an explicit word"): ANY, alone, admits every address
       if downcase(a) = 'any' then
-         if nwords # 4 then
+         if nwords # 2 then
             @system.return.code = -ER$ARGS
-            stop sysmsg(15119)  ;* at least one address or range, at most 32; or the word any, alone
+            crt sysmsg(15119)  ;* at least one address or range, at most 32; or the word any, alone
+            return
          end
          addrs = 'any'
       end else
@@ -351,7 +357,8 @@ api.request:
          convert '0123456789abcdefABCDEF.:/' to '' in chk
          if chk # '' or len(a) < 1 or len(a) > 64 then
             @system.return.code = -ER$ARGS
-            stop sysmsg(15118, a)  ;* not an address or a range
+            crt sysmsg(15118, a)  ;* not an address or a range
+            return
          end
          addrs<-1> = a
       end
@@ -360,7 +367,8 @@ api.request:
    if api.action = 'on' then
       if addrs = '' or dcount(addrs, @fm) > 32 then
          @system.return.code = -ER$ARGS
-         stop sysmsg(15119)
+         crt sysmsg(15119)
+         return
       end
    end
 
@@ -387,7 +395,7 @@ api.request:
       end
    end
    audit.from = change(addrs, @fm, ',')
-   void kernel(K$AUDIT, 'remote.sdsys api ' : api.action : (if audit.from = '' then '' else ' from=' : audit.from) : ' status=' : rc)
+   void kernel(K$AUDIT, 'remote.sdsys api ' : api.action : (if audit.from = '' then '' else ' from=' : audit.from) : ' status=' : rc : (if in.job then ' by=remote' else ''))
    @system.return.code = (if rc = 0 then 0 else -ER$FAILED)
    return
 
@@ -486,10 +494,26 @@ run.request:
    repeat
 
    run.ok = (run.verb = 'create.account' or run.verb = 'delete.account' or run.verb = 'modify.account' or run.verb = 'modify.password' or run.verb = 'remote.sdsys' or run.verb = 'remote.ssh' or run.verb = 'remote.api')
+* 16 Nov 26 (RELEASE_1.1 331, Linux mail 2000): REMOTE.SDSYS API's words are taken whole from this job's sentence, as the console's are
+*   (remote.sdsys run remote.sdsys api ...: words 5 on), not through !PARSER, and an address after API ON is checked as one: hex digits,
+*   '.', ':' and '/', at most 64, or the word any.  Every other word keeps the lower-case-word rule.  api.request checks them again.
+   run.api = (run.verb = 'remote.sdsys' and run.words<1> = 'api')
+   if run.api then
+      sw = trim(@sentence)
+      convert ' ' to @fm in sw
+      run.words = 'api'
+      for i = 5 to dcount(sw, @fm)
+         run.words<-1> = downcase(sw<i>)
+      next i
+   end
    for i = 1 to dcount(run.words, @fm)
       w = run.words<i>
-      if len(w) < 1 or len(w) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then run.ok = @false
-      if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false
+      if run.api and i >= 3 and run.words<2> = 'on' then
+         if w # 'any' and (len(w) < 1 or len(w) > 64 or convert('0123456789abcdef.:/', '', w) # '') then run.ok = @false
+      end else
+         if len(w) < 1 or len(w) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then run.ok = @false
+         if w = 'sdsys' or w = 'sdradmin' or w = 'shared' then run.ok = @false
+      end
    next i
 * The doors take one keyword or none (the report), as the broker checked.
    if run.verb = 'remote.ssh' then
@@ -524,6 +548,15 @@ run.request:
             case action = 'accounts'
                execute 'LIST ACCOUNTS'
                @system.return.code = 0
+* 16 Nov 26 (RELEASE_1.1 331, Linux mail 2000: the remote administrator runs remote.sdsys's doors): SSH OFF is OFF, SSH alone the report
+*   (SSH ON stays the console's: only SDSYS may register the broker's task); API is api.request, with the words taken above.
+            case action = 'ssh' and run.words<2> = 'off' and dcount(run.words, @fm) = 2
+               gosub off.request
+            case action = 'ssh' and dcount(run.words, @fm) = 1
+               gosub show.status
+            case action = 'api'
+               api.words = field(run.words, @fm, 2, 9999)
+               gosub api.request
             case 1
                crt sysmsg(12847, 'remote.sdsys ' : action)
                @system.return.code = -ER$ARGS

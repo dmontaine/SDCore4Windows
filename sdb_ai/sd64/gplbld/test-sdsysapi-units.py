@@ -46,6 +46,7 @@ MSGDIR = os.path.join(SD64, "sdsys", "messages")
 FILES = {
     "apisrvr": os.path.join(GPLBP, "apisrvr"),
     "remotesdsys": os.path.join(GPLBP, "remotesdsys"),
+    "radmin": os.path.join(GPLBP, "radmin"),
     "addrmatch": os.path.join(GPLBP, "addrmatch"),
     "op_kernel": os.path.join(SD64, "gplsrc", "op_kernel.c"),
     "stage": os.path.join(HERE, "stage.py"),
@@ -175,17 +176,39 @@ def checks(src):
     r = squeeze(src["remotesdsys"])
     ar = region(r, "\napi.request:", "\napi.status:")
     ok, pos = ordered(ar, [
-        "if in.job then", "stop sysmsg(12847, 'remote.sdsys api')",
-        "words = trim(@sentence)", "convert ' ' to @fm in words",
-        "if downcase(a) = 'any' then\nif nwords # 4 then", "stop sysmsg(15119)",
-        "convert '0123456789abcdefABCDEF.:/' to '' in chk\nif chk # '' or len(a) < 1 or len(a) > 64 then", "stop sysmsg(15118, a)",
-        "if addrs = '' or dcount(addrs, @fm) > 32 then", "stop sysmsg(15119)",
+        "if not(in.job) then\nwords = trim(@sentence)\nconvert ' ' to @fm in words\napi.words = field(words, @fm, 3, 9999)",
+        "if downcase(a) = 'any' then\nif nwords # 2 then", "crt sysmsg(15119)", "return",
+        "convert '0123456789abcdefABCDEF.:/' to '' in chk\nif chk # '' or len(a) < 1 or len(a) > 64 then", "crt sysmsg(15118, a)", "return",
+        "if addrs = '' or dcount(addrs, @fm) > 32 then", "crt sysmsg(15119)", "return",
         "helper.args = '-Action on -Entries ' : q : change(addrs, @fm, q : ',' : q) : q",
         "helper.script = '/sd-sdsysapi.ps1'\ngosub run.helper\nhelper.script = '/remote-admin.ps1'",
         "crt sysmsg(15120)", "crt sysmsg(15117, change(addrs, @fm, ','))",
         "void kernel(K$AUDIT, 'remote.sdsys api ' : api.action"])
-    ck("R1", "REMOTE.SDSYS API: never in the broker's job; words from @sentence; each address only hex, '.', ':' and '/', at most 64; ANY only "
-       "alone; one to 32 entries; quoted into sd-sdsysapi.ps1's command; 15120 for any, 15117 for a list; audited", ok, str(pos))
+    ck("R1", "REMOTE.SDSYS API: at the console the words after API from @sentence (in the job, RUN.REQUEST's); each address only hex, '.', ':' "
+       "and '/', at most 64; ANY only alone; one to 32 entries; a refusal RETURNS (the job's exit status says so); quoted into "
+       "sd-sdsysapi.ps1's command; 15120 for any, 15117 for a list; audited",
+       ok and "stop sysmsg(" not in ar, str(pos))
+    rr = r[r.find("\nrun.request:"):] if "\nrun.request:" in r else ""      # to the end of the program: run.request is its last routine
+    ok, pos = ordered(rr, [
+        "run.api = (run.verb = 'remote.sdsys' and run.words<1> = 'api')",
+        "if run.api then\nsw = trim(@sentence)\nconvert ' ' to @fm in sw\nrun.words = 'api'\nfor i = 5 to dcount(sw, @fm)",
+        "if run.api and i >= 3 and run.words<2> = 'on' then",
+        "if w # 'any' and (len(w) < 1 or len(w) > 64 or convert('0123456789abcdef.:/', '', w) # '') then run.ok = @false",
+        "end else\nif len(w) < 1 or len(w) > 32 or convert('abcdefghijklmnopqrstuvwxyz0123456789._-', '', w) # '' then run.ok = @false",
+        "case action = 'ssh' and run.words<2> = 'off' and dcount(run.words, @fm) = 2\ngosub off.request",
+        "case action = 'ssh' and dcount(run.words, @fm) = 1\ngosub show.status",
+        "case action = 'api'\napi.words = field(run.words, @fm, 2, 9999)\ngosub api.request"])
+    ck("R3", "the broker's job (Linux mail 2000): REMOTE.SDSYS API's words are taken whole from the job's sentence; only after API ON may a word "
+       "be an address (hex, '.', ':', '/', at most 64) or any, every other word keeps the word rule; SSH OFF is OFF, SSH alone the report; "
+       "SSH ON is not offered", ok and "case action = 'ssh' and run.words<2> = 'on'" not in rr, str(pos))
+    cl = squeeze(src["radmin"])
+    ok, pos = ordered(cl, [
+        "if verb = 'remote.sdsys' and i >= 3 and downcase(words<1>) = 'api' and downcase(words<2>) = 'on' then",
+        "if len(w) < 1 or len(w) > 64 or convert('0123456789abcdef.:/', '', w) # '' then\nif w # 'any' then stop sysmsg(2018, words<i>)",
+        "end else\nif len(w) < 1 or len(w) > 32 or index('._-', w[1, 1], 1)",
+        "if words<1> = 'on' then stop sysmsg(12847, 'remote.sdsys on')",
+        "if words<1> = 'ssh' and words<2> = 'on' then stop sysmsg(12847, 'remote.sdsys ssh on')"])
+    ck("R4", "SDRADMIN's verb: an address-shaped word only after REMOTE.SDSYS API ON; SSH ON refused here as ON is (the console's)", ok, str(pos))
     top = r[:r.find("\nrun.request:")] if "\nrun.request:" in r else r
     ck("R2", "no keyword reports both doors (remote-admin.ps1 -Status, then the API's); SSH ON | OFF is ON | OFF; API goes to api.request",
        "gosub show.status\nif action = '' then gosub api.status" in top and "if action = 'ssh' then" in top
@@ -230,7 +253,12 @@ def py_norm(e):
 VALID = ["192.168.1.5", "192.168.1.5/24", "10.1.2.3/255.0.0.0", "10.1.2.3/0.0.0.255", "FD00:0:0:0:0:0:0:1",
          "2001:db8::1/48", "1:0:0:2:0:0:0:3", "fe80::1/10", "1.2.3.4/024", "192.168.1.9/24"]
 REFUSED = [("010.0.0.1", "not an address or a range: 010.0.0.1"), ("1.2.3.4/0", "a /0 range is every address, and is refused: 1.2.3.4/0"),
-           ("::/0", "a /0 range is every address, and is refused: ::/0"), ("1.2.3.4/255.0.255.0", "not an address or a range: 1.2.3.4/255.0.255.0")]
+           ("::/0", "a /0 range is every address, and is refused: ::/0"), ("1.2.3.4/255.0.255.0", "not an address or a range: 1.2.3.4/255.0.255.0"),
+           # 16 Nov 26 (Linux db29dcc7): a mapped /96 is every IPv4 address once written in its IPv4 form
+           ("::ffff:0.0.0.0/96", "a /0 range is every address, and is refused: ::ffff:0.0.0.0/96")]
+# 16 Nov 26 (Linux db29dcc7, Windows' finding): an IPv4-mapped IPv6 entry of length 96 or more is written as its IPv4 form, which is how
+# APISRVR compares a mapped peer; Linux's H1b, the same two entries.
+MAPPED = ("::ffff:192.168.1.5,::ffff:10.1.2.0/120", ["192.168.1.5/32", "10.1.2.0/24"])
 
 
 def helper_rows(helper):
@@ -248,6 +276,10 @@ def helper_rows(helper):
     got = out[-1].split("then ", 1)[1].split(" ") if rc == 0 and out and "then " in out[-1] else []
     ck("H1", "-DryRun: %d entries give the %d networks Python's ipaddress.ip_network(strict=False) gives, in order, repeats kept once"
        % (len(VALID), len(expect)), rc == 0 and got == expect, "py=%s ps=%s" % (expect, got))
+    rc, out = ps(helper, ["-Action", "on", "-Entries", MAPPED[0], "-DryRun"])
+    got = out[-1].split("then ", 1)[1].split(" ") if rc == 0 and out and "then " in out[-1] else []
+    ck("H1b", "an IPv4-mapped IPv6 entry is written as its IPv4 form (a single address /32, a /120 as /24), the form a mapped peer is "
+       "compared in (Linux db29dcc7)", rc == 0 and got == MAPPED[1], "want=%s got=%s" % (MAPPED[1], got))
 
     bad = []
     for e, line in REFUSED:
@@ -257,8 +289,8 @@ def helper_rows(helper):
     rc1, out1 = ps(helper, ["-Action", "on", "-Entries", "any,1.2.3.4", "-DryRun"])
     rc2, out2 = ps(helper, ["-Action", "on", "-Entries", ",".join("10.0.0.%d" % i for i in range(1, 34)), "-DryRun"])
     rc3, out3 = ps(helper, ["-Action", "on", "-Entries", "any", "-DryRun"])
-    ck("H2", "refused, exit 1 and 'nothing was changed': a leading zero, /0 (IPv4 and IPv6), a mask that is neither a netmask nor a "
-       "hostmask, any with another entry, 33 entries; any alone is accepted as itself",
+    ck("H2", "refused, exit 1 and 'nothing was changed': a leading zero, /0 (IPv4, IPv6, and a mapped /96), a mask that is neither a "
+       "netmask nor a hostmask, any with another entry, 33 entries; any alone is accepted as itself",
        bad == [] and rc1 == 1 and rc2 == 1 and rc3 == 0 and out3 and out3[-1].endswith(": on, then any"),
        "bad=%s any+=%d n33=%d any=%d" % (bad, rc1, rc2, rc3))
 
@@ -351,9 +383,13 @@ MUTANTS = [
     ("the grant is audited before the handover", "D7", sub("apisrvr", "            if sdsys.api.from # '' then\n               void kernel(K$AUDIT, 'elevation granted reason=sdsys api from=' : sdsys.api.from)\n            end\n", "")),
     ("the address outlives the connection", "D8", sub("apisrvr", "\nsdsys.api.from = ''\n", "\n")),
     ("an undetermined elevation counts", "K1", sub("op_kernel", "            elevated = 0;\n", "")),
-    ("the broker may open it", "R1", sub("remotesdsys", "      stop sysmsg(12847, 'remote.sdsys api')", "      null")),
+    ("a refusal stops the job without its status", "R1", sub("remotesdsys", "            crt sysmsg(15118, a)  ;* not an address or a range\n            return", "            stop sysmsg(15118, a)")),
+    ("the job reads its words through the parser", "R3", sub("remotesdsys", "   if run.api then\n      sw = trim(@sentence)", "   if 0 then\n      sw = trim(@sentence)")),
+    ("an address-shaped word anywhere in the job", "R3", sub("remotesdsys", "      if run.api and i >= 3 and run.words<2> = 'on' then", "      if run.api then")),
+    ("the client lets an address through anywhere", "R4", sub("radmin", "      if verb = 'remote.sdsys' and i >= 3 and downcase(words<1>) = 'api' and downcase(words<2>) = 'on' then", "      if verb = 'remote.sdsys' then")),
+    ("ssh on is sent", "R4", sub("radmin", "         if words<1> = 'ssh' and words<2> = 'on' then stop sysmsg(12847, 'remote.sdsys ssh on')", "         null")),
     ("a word is not checked", "R1", sub("remotesdsys", "         convert '0123456789abcdefABCDEF.:/' to '' in chk", "         chk = ''")),
-    ("any with others", "R1", sub("remotesdsys", "         if nwords # 4 then", "         if 0 then")),
+    ("any with others", "R1", sub("remotesdsys", "         if nwords # 2 then", "         if 0 then")),
     ("33 entries", "R1", sub("remotesdsys", "      if addrs = '' or dcount(addrs, @fm) > 32 then", "      if addrs = '' then")),
     ("no keyword reports ssh only", "R2", sub("remotesdsys", "      if action = '' then gosub api.status\n", "")),
     ("addrmatch drifts from Linux", "A1", sub("addrmatch", "if len(g) < 1 or len(g) > 3 then return", "if len(g) < 1 or len(g) > 4 then return")),
@@ -370,26 +406,35 @@ def selftest(src):
         print("  mutant %-48s want %-3s red %-12s %s" % (name, want, ",".join(red) or "-", "caught" if caught else "NOT CAUGHT"))
         if not caught:
             holes += 1
-    # One helper mutant, on a temporary COPY: the /0 refusal removed; H2 must go red.  The live helper is only read.
+    # Helper mutants, each on a temporary COPY (the live helper is only read): the run that row's check makes must come out wrong.
     live_sha = hashlib.sha256(open(HELPER, "rb").read()).hexdigest()
+    helper_mutants = [
+        ("the helper writes a /0 range", "H2",
+         "    if ($plen -eq 0) { Refuse ('a /0 range is every address, and is refused: ' + $e) }\n    $bits = Get-Bits $addr\n",
+         "    $bits = Get-Bits $addr\n", ["-Action", "on", "-Entries", "1.2.3.4/0", "-DryRun"], lambda rc, out: rc != 1),
+        ("a mapped entry is kept in IPv6 form", "H1b",
+         "    if ($v6 -and $plen -ge 96 -and", "    if ($false -and $plen -ge 96 -and",
+         ["-Action", "on", "-Entries", MAPPED[0], "-DryRun"],
+         lambda rc, out: not (rc == 0 and out and out[-1].endswith("then " + " ".join(MAPPED[1])))),
+    ]
     tmpd = tempfile.mkdtemp(prefix="sdsysapi-mut-")
     try:
         copy = os.path.join(tmpd, "sd-sdsysapi.ps1")
         text = read(HELPER)
-        old = "    if ($plen -eq 0) { Refuse ('a /0 range is every address, and is refused: ' + $e) }\n"
-        assert old in text, "helper mutant text not found"
-        with open(copy, "wb") as f:
-            f.write(text.replace(old, "", 1).encode("latin-1"))
-        rc, out = ps(copy, ["-Action", "on", "-Entries", "1.2.3.4/0", "-DryRun"])
-        caught = rc != 1
-        print("  mutant %-48s want H2  %s" % ("the helper writes a /0 range", "caught" if caught else "NOT CAUGHT"))
-        if not caught:
-            holes += 1
+        for name, want, old, new, args, wrong in helper_mutants:
+            assert old in text, "helper mutant text not found: " + name
+            with open(copy, "wb") as f:
+                f.write(text.replace(old, new, 1).encode("latin-1"))
+            rc, out = ps(copy, args)
+            caught = wrong(rc, out)
+            print("  mutant %-48s want %-3s %s" % (name, want, "caught" if caught else "NOT CAUGHT"))
+            if not caught:
+                holes += 1
     finally:
         shutil.rmtree(tmpd, ignore_errors=True)
     unchanged = hashlib.sha256(open(HELPER, "rb").read()).hexdigest() == live_sha
     print("  the live helper is unchanged by SHA-256: %s" % unchanged)
-    print("selftest: %d mutants, %d not caught" % (len(MUTANTS) + 1, holes))
+    print("selftest: %d mutants, %d not caught" % (len(MUTANTS) + len(helper_mutants), holes))
     return 1 if holes or not unchanged else 0
 
 

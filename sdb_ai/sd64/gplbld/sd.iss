@@ -548,7 +548,8 @@ Name: "installpython"; Description: "Install Python for all users"; \
 ; 8 Nov 26 - SHOWN AGAIN, AND EVERY GATE (owner on Linux, 1 Nov 2026, bfca310a: "we need to add that back", "Every gate"; here, 8 Nov: all gates open if requested).  The 26 Oct removal and
 ; the hiding before it are undone.  It had been hidden because the box did not say what an access gate is and sat below the fold: the text now names them and
 ; the wizard is taller.  /TASKS=opengates still answers it on a silent install.  Left unticked the account starts closed, and an administrator opens a gate later with modify.account.
-Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files, AI)"; \
+; 16 Nov 26 - file transfer (xfer-on) joins every gate, Linux db29dcc7; XFER=1 in sd.conf stays off (the docs say so).
+Name: "opengates"; Description: "Open every access gate for your SD Core account (ssh, API, shell, editing, files, AI, file transfer)"; \
     GroupDescription: "5)  SD Core account:"; Flags: unchecked
 ; 10 Nov 26 - RELEASE_1.1 210: WHERE NEW SESSIONS START, the home/prompt question (Linux e0e38810; owner, 3 Nov 2026, "the home/prompt
 ; question"; found missing here by the owner, 10 Nov).  The home screen is the delivered start and needs nothing (no start.default means

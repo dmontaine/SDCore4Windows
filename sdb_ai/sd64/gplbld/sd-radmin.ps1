@@ -5,6 +5,10 @@
 # 13 Nov 26 Windows port - RELEASE_1.1 202, Linux parity (owner, 13 Nov: Linux's remote sdsys runs them, and they run no code of the
 # caller's as a Windows administrator): REMOTE.SSH {ON | OFF} and REMOTE.API {ON | LOCAL | OFF}, each also with no keyword (the report), are
 # on the list - seven verbs.  REMOTE.SDSYS RUN answers REMOTE.API's restart question N, the console's Enter.
+# 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256, its mail 2000: the remote administrator runs remote.sdsys api): REMOTE.SDSYS
+# also takes API (the report), API ON with one to 32 addresses or ranges or ANY alone, API OFF, SSH OFF and SSH (the report); SSH ON is
+# the console's, as ON is.  A word after API ON may hold ':' and '/' (hex digits, '.', ':', '/', at most 64); every other word keeps the
+# lower-case-word rule.  The broker stops after SSH OFF as after OFF.
 #
 #   sd-radmin.ps1 -Serve     the broker; run by the task \SD\sdcore-radmin that remote-admin.ps1 -On registers (SDSYS, S4U, highest run
 #                            level, at start-up) and nothing else
@@ -111,8 +115,13 @@ function ConvertFrom-RadminRequest([string]$text) {
     }
     $nw = @($f.Keys | Where-Object { $_ -cmatch '^word' }).Count
     if ($nw -ne $words.Count) { $r.Why = 'the words of the request are not numbered from 1 without a gap'; return $r }
-    foreach ($w in $words) {
-        if ($w -cnotmatch '^[a-z0-9][a-z0-9_.-]{0,31}$') { $r.Why = 'a word of the command is not a lower-case word or a number'; return $r }
+    # 16 Nov 26 (RELEASE_1.1 331): after "remote.sdsys api on" a word is an address or a range (Test-RadminPermit checks it as one).
+    $apiOn = ($f['verb'] -ceq 'remote.sdsys' -and $words.Count -ge 2 -and $words[0] -ceq 'api' -and $words[1] -ceq 'on')
+    for ($i = 0; $i -lt $words.Count; $i++) {
+        $w = $words[$i]
+        if ($apiOn -and $i -ge 2) {
+            if ($w -cnotmatch '^[0-9a-f.:/]{1,64}$' -and $w -cne 'any') { $r.Why = 'an address of remote.sdsys api on is not hex digits, dots, colons and a slash'; return $r }
+        } elseif ($w -cnotmatch '^[a-z0-9][a-z0-9_.-]{0,31}$') { $r.Why = 'a word of the command is not a lower-case word or a number'; return $r }
     }
     $secret = $null
     if ($f.ContainsKey('secret')) {
@@ -181,7 +190,23 @@ function Get-RadminPlan($req) {
             $p.NeedsSecret = $true
         }
         'remote.sdsys' {
-            if ($w.Count -lt 1 -or $RadminReports -cnotcontains $w[0]) { $p.Why = 'remote.sdsys takes off, status, audit or accounts here (on is the console''s)'; return $p }
+            # 16 Nov 26 (RELEASE_1.1 331): the doors by name.  ssh: off, or nothing (the report); its on is the console's.  api: on with one
+            # to 32 addresses or ranges (each of hex digits, '.', ':' and '/', at most 64) or any alone, off, or nothing (the report).
+            if ($w.Count -ge 1 -and $w[0] -ceq 'ssh') {
+                if ($w.Count -eq 1 -or ($w.Count -eq 2 -and $w[1] -ceq 'off')) { break }
+                $p.Why = 'remote.sdsys ssh takes off, or nothing for the report, here (on is the console''s)'; return $p
+            }
+            if ($w.Count -ge 1 -and $w[0] -ceq 'api') {
+                if ($w.Count -eq 1 -or ($w.Count -eq 2 -and $w[1] -ceq 'off')) { break }
+                if ($w[1] -cne 'on' -or $w.Count -lt 3 -or $w.Count -gt 34) { $p.Why = 'remote.sdsys api takes on with one to 32 addresses or ranges, on any, off, or nothing'; return $p }
+                $addr = @($w[2..($w.Count - 1)])
+                if ($addr -ccontains 'any' -and $addr.Count -ne 1) { $p.Why = 'remote.sdsys api on any takes no other address'; return $p }
+                foreach ($a in $addr) {
+                    if ($a -cne 'any' -and $a -cnotmatch '^[0-9a-f.:/]{1,64}$') { $p.Why = 'an address of remote.sdsys api on is not hex digits, dots, colons and a slash'; return $p }
+                }
+                break
+            }
+            if ($w.Count -lt 1 -or $RadminReports -cnotcontains $w[0]) { $p.Why = 'remote.sdsys takes off, status, audit, accounts, ssh or api here (on is the console''s)'; return $p }
             if ($w[0] -ceq 'audit') {
                 if ($w.Count -gt 2 -or ($w.Count -eq 2 -and $w[1] -cnotmatch '^[1-9][0-9]{0,2}$')) { $p.Why = 'remote.sdsys audit takes a number of lines, 1 to 500'; return $p }
                 if ($w.Count -eq 2 -and [int]$w[1] -gt 500) { $p.Why = 'remote.sdsys audit takes a number of lines, 1 to 500'; return $p }
@@ -421,7 +446,7 @@ function Invoke-Request($pipe, [string]$radminSid) {
             foreach ($l in $outLines) { $answer += ('out=' + $l) }
             $answer += ('exit=' + $p.ExitCode)
             Write-Log "done verb=$($req.Verb) words=$words caller=$($c.User) nonce=$($req.Nonce) result=exit $($p.ExitCode)"
-            if ($req.Verb -ceq 'remote.sdsys' -and $req.Words[0] -ceq 'off' -and $p.ExitCode -eq 0) { $stop = $true }
+            if ($req.Verb -ceq 'remote.sdsys' -and ($req.Words[0] -ceq 'off' -or ($req.Words[0] -ceq 'ssh' -and $req.Words.Count -eq 2 -and $req.Words[1] -ceq 'off')) -and $p.ExitCode -eq 0) { $stop = $true }   # 16 Nov 26 (331): SSH OFF is OFF
         }
     } catch {
         Write-Log "failed verb=$($req.Verb) words=$words caller=$($c.User) nonce=$($req.Nonce) result=$($_.Exception.Message)"

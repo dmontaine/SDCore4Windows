@@ -34,6 +34,10 @@ LINUX = os.environ.get('SD_LINUX_SD64') or os.path.normpath(os.path.join(HERE, '
 # 13 Nov 2026 (RELEASE_1.1 253(b)): 11447/12452 and 11448/12453 left this list - run.in debugs on Windows too, so the texts are Linux's.
 ALLOWED = {
     ('11923', '12928'): 'OS: remote.sdsys opens a separate account, SDRADMIN, because SDSYS is an elevated Windows administrator; the remote session reads AUDIT and ACCOUNTS through it, having no shell (RELEASE_1.1 202)',
+    # 16 Nov 2026 (RELEASE_1.1 331): Windows' api.request also runs in the SDRADMIN broker's job, so a refusal sets the code and RETURNS (crt + return)
+    # where Linux's stops; the two programs' lines then align with our syntax refusal (12928) beside Linux's count refusal (14119), which is
+    # our 15119 a few lines on.  Text against text: 15119 equals Linux's 14119 byte for byte (test-sdsysapi-units.py M1 and the carry).
+    ('14119', '12928'): 'OS: remotesdsys api.request returns rather than stops (it runs in the SDRADMIN broker\'s job too); the line our syntax refusal 12928 sits on aligns with Linux\'s 14119, which is our 15119 (RELEASE_1.1 331)',
     ('10002', '10002'): 'OS: Linux enters SDSYS as the sdsys OS user; on Windows by a Windows sign-in as SDSYS (RELEASE_1.1 64)',
     ('10024', '10024'): 'OS: a Windows group, not a Linux group',
     ('10003', '10051'): 'OS: two different refusals that sit on the same LOGIN line; ours names LOGTO (RELEASE_1.1 64)',
