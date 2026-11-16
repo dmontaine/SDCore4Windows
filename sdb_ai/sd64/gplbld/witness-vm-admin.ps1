@@ -881,8 +881,13 @@ if ($sections -contains 'runin253') {
         if (-not $rem.Measured) { Add-WitResult '253' 'a remote client is refused' 'NOT-MEASURED' $rem.Why }
         else { Set-WitCompare '253' 'a remote client is refused (loopback UNC open fails)' 'True' ([string]($rem.Remote -ne 0)) -Evidence ('local ' + $rem.Local + ', remote ' + $rem.Remote) }
     }
-    $sl = @(Get-Content -LiteralPath (Join-Path $script:WitDataDir 'sdsvc.log') -ErrorAction SilentlyContinue | Where-Object { $_ -match 'run\.in debug:' } | Select-Object -Last 3)
-    Set-WitVerdict '253' 'sdsvc.log says run.in debug is serving' ($sl -join "`n") 'run\.in debug: serving' @()
+    # 15 Nov 26 (round 2 R.46): the LAST three run.in lines were read, and after a few runs their begin/end lines pushed "serving" out, so a
+    # serving broker read FAIL.  The serving line is looked for in the whole log; the evidence is it and the last three run.in lines.
+    $slog = Join-Path $script:WitDataDir 'sdsvc.log'
+    $all = @(Get-Content -LiteralPath $slog -ErrorAction SilentlyContinue | Where-Object { $_ -match 'run\.in debug:' })
+    $sv = @($all | Where-Object { $_ -match 'run\.in debug: serving' } | Select-Object -Last 1)
+    Write-Wit ('  ' + $slog + ': ' + $all.Count + ' run.in debug line(s)')
+    Set-WitVerdict '253' 'sdsvc.log says run.in debug is serving' ((@($sv) + @($all | Select-Object -Last 3)) -join "`n") 'run\.in debug: serving' @()
 
     # 15 Nov 26 (0fcc0940): the base the stores are in lets sdrunin through - traverse and synchronize (0x100020), on the base
     # alone - and nobody else but SYSTEM and Administrators (and LocalSystem's own entry, which is SY).  Round 2's child could not
