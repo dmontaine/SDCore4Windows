@@ -213,6 +213,10 @@ Say ''
 Say ('REMOVING (' + $toRemove.Count + '):')
 if ($toRemove.Count -eq 0) { Say '  (nothing)' }
 else { $toRemove | ForEach-Object { Say ('  ' + $_) } }
+# 15 Nov 26 - RELEASE_1.1 322: and every group SD made (sdu_/sdg_ with SD's description) that is still there after them.
+$grpNow = @(Get-LocalGroup -ErrorAction SilentlyContinue | Where-Object {
+        ($_.Name -like 'sdu_*' -or $_.Name -like 'sdg_*') -and $_.Description -eq 'SD account group' } | ForEach-Object { $_.Name })
+Say ('  and the SD account groups (' + $grpNow.Count + '): ' + $(if ($grpNow.Count) { $grpNow -join ', ' } else { '(none)' }))
 
 if (-not $Remove) {
     Say ''
@@ -312,6 +316,28 @@ if (Get-LocalGroup -Name $keptGroup -ErrorAction SilentlyContinue) {
         Say ("    group  $keptGroup removed (the account itself is kept)")
     } catch {
         Say ("    group  $keptGroup NOT removed: " + $_.Exception.Message)
+    }
+}
+
+# 15 Nov 26 - RELEASE_1.1 322 (VM round 2 R.26).  THE OWNER: "uninstall should probably remove everything if asked to remove
+# accounts".  A GROUP account has a Windows group (sdg_<name>) and no Windows user, so it is never an sdusers member and the loop
+# above never reached its group: sdg_zzrunin and sdg_zzwitsh were left.  Every group SD made is made by os_group ADD with the
+# description "SD account group", so what is left of SD's own groups is found by BOTH the name (sdu_ or sdg_) and that exact
+# description: a group somebody else made with an sd-like name is not touched.  (Linux leaves sdu_*/sdg_* and prints a note;
+# this is the owner's ruling, mailed to Linux.)
+$sdGroups = @(Get-LocalGroup -ErrorAction SilentlyContinue | Where-Object {
+        ($_.Name -like 'sdu_*' -or $_.Name -like 'sdg_*') -and $_.Description -eq 'SD account group' })
+if ($sdGroups.Count -gt 0) {
+    Say ''
+    Say ('--- SD account groups left (' + $sdGroups.Count + ')')
+    foreach ($g in $sdGroups) {
+        try {
+            Remove-LocalGroup -Name $g.Name -ErrorAction Stop
+            Say ('    group  ' + $g.Name + ' removed')
+        } catch {
+            Say ('    group  ' + $g.Name + ' NOT removed: ' + $_.Exception.Message)
+            $null = $left.Add('group ' + $g.Name)
+        }
     }
 }
 
