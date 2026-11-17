@@ -3,6 +3,19 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+16 Nov 26  A FULL-SCREEN PAGE NO LONGER TURNS TO GARBAGE WHILE SD'S WINDOW IS DRAGGED WIDER OR NARROWER.
+
+             What        - In SD's own window, the home screen, the toolkit's pages, the IDE (and SED), CED and any SCREEN
+                           program that opens with CLEAR are drawn in the console's alternate screen.  Windows rewraps
+                           the window's ordinary text when its width changes, which ran the page's lines into one another
+                           until the drag ended; it leaves the alternate screen alone, so the page stays as it was while
+                           the window is dragged (a narrower window hides its right-hand edge) and is drawn again at the
+                           new size when the drag ends.  Leaving the page brings back the window as it was before it,
+                           with the lines from before the page still there to scroll back to.
+             Why         - Windows' console rewraps on a width change; a Linux terminal does not do it this way.
+             Does NOT    - Change anything over ssh, in another terminal, or on SD Core for Linux.  NOT YET TESTED ON AN
+                           INSTALLED SYSTEM.
+
 16 Nov 26  THE INSTALLER'S "OPEN EVERY ACCESS GATE" BOX INCLUDES FILE TRANSFER.
 
              What        - Ticked, it also turns on xfer-on for your account, as on SD Core for Linux.

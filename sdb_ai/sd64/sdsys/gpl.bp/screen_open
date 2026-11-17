@@ -7,6 +7,13 @@
 * 25 Oct 26 Windows port - from Linux 04f1eaa - the screen library as of S.75 TK-0.13 (containers and viewports, slider, selector, colour, accelerators, table styles)
 * 12 Oct 26 dm  New.
 * 19 Oct 26 dm  With CLEAR the context is marked SL.S.SYNC (the terminal matches the shadow), so that forms write only what changes.
+* 16 Nov 26 Windows port - RELEASE_1.1 305 (owner: "if windows can make the drag garbage less because of os differences do so").  In SD's
+*               own classic console window (SD_OWN_WINDOW, win32vt.c own_window) a page opened with CLEAR is drawn in the console's alternate
+*               screen buffer (ESC[?1049h), once, whoever opens first; SCREEN CLOSE and $sl_cleanup leave it (common /slalt/).  MEASURED
+*               (probe_reflow.py, 16 Nov 26): in the 140 x 3000 main buffer a width change makes conhost reflow every full-width row into
+*               the next (43 of 43 rows mixed, widening and narrowing); in the alternate buffer no row is reflowed (widening keeps 43 of 43,
+*               narrowing cuts each row at the width) and SD's resize redraw then puts the page right.  The lines from before the page are
+*               still there after it.  Over ssh and on Linux nothing changes: OS deviation, conhost's reflow of its main buffer.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -47,6 +54,8 @@ $catalog !screen_open
 
 $include sl.h
 
+   common /slalt/ alt.on                               ;* 16 Nov 26 Windows port (305): 1 while a page is in the console's alternate buffer
+
    ret = ''
    status = 1
    if system(25) then return                        ;* a phantom has no terminal
@@ -58,6 +67,13 @@ $include sl.h
    call $sl_scr('open', scr)
    call $sl_line('on', (lines # ''), r)                ;* borders in line-drawing characters, if asked for
    if clear # '' then
+      if env('SD_OWN_WINDOW') # '' then                ;* 16 Nov 26 Windows port (305): SD's own console window - the page in the alternate buffer, which conhost never reflows
+         if unassigned(alt.on) then alt.on = 0
+         if not(alt.on) then
+            display char(27) : '[?1049h' :
+            alt.on = 1
+         end
+      end
       call $sl_desktop(scr)
       scr<SL.S.SYNC> = 1                              ;* the terminal is cleared and the shadow is blank: a form may leave out what is shown already
    end

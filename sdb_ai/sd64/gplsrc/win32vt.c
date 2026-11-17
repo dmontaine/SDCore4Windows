@@ -272,7 +272,9 @@ int grow_console_window(int want_cols, int want_rows) {
    12 (cursor blink) and 7 (line wrap) - mouse reporting, bracketed paste, application cursor keys and the rest, which change
    what the runtime's input side delivers.  The cursor's own (the windows entry's civis and cnorm, ESC[?25l ESC[?1c, sent around
    every page update) and anything that is not h or l (ESC[?1c) are the console's alone: 0.  Measured 12 Nov 26 (the owner): with
-   every ESC [ ? handed to the runtime, a page still took a third to half a second, each such write costing what all did before. */
+   every ESC [ ? handed to the runtime, a page still took a third to half a second, each such write costing what all did before.
+   16 Nov 26 - RELEASE_1.1 305: 1049 (the alternate screen buffer, which SCREEN OPEN CLEAR enters in SD's own window) is the console's
+   too: it changes nothing the runtime's input side reads, and WriteConsoleW is the path the reflow probe measured it on. */
 static int mode_switch_for_runtime(const char* q, int n) {
   int i = 0;
   int v;
@@ -286,7 +288,7 @@ static int mode_switch_for_runtime(const char* q, int n) {
       v = v * 10 + (q[i] - '0');
       i++;
     }
-    if ((v != 25) && (v != 12) && (v != 7))
+    if ((v != 25) && (v != 12) && (v != 7) && (v != 1049))
       other = 1;
     if (i >= n)
       return 1; /* cut short: hand it over */

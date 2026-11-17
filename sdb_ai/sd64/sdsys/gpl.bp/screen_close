@@ -11,6 +11,8 @@
 * 8 Nov 26 dm  S.172: the theme is put back to mono BEFORE the normal style is sent and the screen cleared.  paper and night give normal the theme's two
 *               colours, so the old order left the prompt black on grey and the clear painted the whole terminal grey (owner: "The color scheme is retained
 *               after exiting from the full screen view").
+* 16 Nov 26 Windows port - RELEASE_1.1 305: leaves the console's alternate buffer if SCREEN OPEN entered it (SD's own window; screen_open's
+*               history), last, so the prompt comes back below the lines from before the page.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -36,6 +38,8 @@ $catalog !screen_close
 
 $include sl.h
 
+   common /slalt/ alt.on                               ;* 16 Nov 26 Windows port (305): 1 while a page is in the console's alternate buffer
+
    ret = ''
    status = 0
    if system(25) then return                  ;* a phantom has no terminal: nothing was drawn, nothing to give back
@@ -51,6 +55,12 @@ $include sl.h
    display @(-31) : sq :
    if dc # 'n' then display @(-1) :                   ;* a coloured desktop is not left behind
    display @(0, @crthigh - 1) :
+   if not(unassigned(alt.on)) then
+      if alt.on then
+         display char(27) : '[?1049l' :                ;* 16 Nov 26 Windows port (305): back to the main buffer, its lines and cursor as the page found them
+         alt.on = 0
+      end
+   end
    scr = ''
    call $sl_scr('close', scr)
    call $sl_guardmode('', 0, 0)                       ;* the cursor lock belongs to the program that asked for it
