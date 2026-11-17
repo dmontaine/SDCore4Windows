@@ -406,8 +406,10 @@ def tcl_chunks(ctx, voc, since):
     return out, shapes
 
 
-KEYWORD_DOCS = ["19-sd-tcl-command-processor", "21-sd-tcl-query-processor", "22-sd-tcl-select-lists", "23-sd-tcl-alternate-key-indexes",
-                "20-sd-tcl-files-and-records", "20a-sd-tcl-collection-files"]
+# 17 Nov 26 (Linux S.62): pages 20 and 21 were split to the docs' page-length rule; the parts are listed so the keyword tables that moved are still read.
+KEYWORD_DOCS = ["19-sd-tcl-command-processor", "21-sd-tcl-query-processor", "21a-sd-tcl-query-processor-headings-and-output",
+                "22-sd-tcl-select-lists", "23-sd-tcl-alternate-key-indexes",
+                "20-sd-tcl-files-and-records", "20-sd-tcl-files-and-records-2-comparing-triggers-and-import", "20a-sd-tcl-collection-files"]
 
 
 def keyword_rows(ctx):
@@ -1042,7 +1044,7 @@ def system_chunks(ctx, since, mentions):
 
 # ----------------------------------------------------------------------------------------------------------- core digests
 
-CORE_VERB_DOCS = ("19-", "19a-", "20-", "20a-", "21-", "22-", "23-", "24-", "40-")
+CORE_VERB_DOCS = ("19-", "19a-", "20-", "20a-", "21-", "21a-", "22-", "23-", "24-", "24a-", "24b-", "24c-", "24d-", "24e-", "40-")   # 17 Nov 26: the parts of the split pages 21 and 24
 CORE_VERBS = 30
 CORE_CONVERSIONS = 12
 

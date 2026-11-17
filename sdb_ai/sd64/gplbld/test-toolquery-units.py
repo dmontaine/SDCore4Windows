@@ -373,7 +373,7 @@ MUTANTS = [
     ("the file rows overrun their border", "TQ19", sub("page", "VISF = fb.h - 3", "VISF = fb.h - 2")),
     ("the page waits with no key reader of the library", "TQ20", sub("page", "screen key returning nm", "input nm, 1")),
     ("the end of the input is not seen", "TQ20", sub("page", "            if status() = ER$EOF then exit\n", "")),
-    ("the help key names a record that does not exist", "TQ21", sub("help", "29c-sd-tcl-the-development-tools", "")),
+    ("the help key names a record that does not exist", "TQ21", sub("help", "29c2-sd-tcl-tool-query", "")),
     ("the help button asks for another record", "TQ21", sub("page", "      call $tk_help('box', 'tool.query.page', hm, 0, 0)\n      if hm # '' then msg = hm\n      return\n   end\n   if mev<1>", "      call $tk_help('box', 'tool.query.nopage', hm, 0, 0)\n      if hm # '' then msg = hm\n      return\n   end\n   if mev<1>")),
     ("the sentence may be longer", "TQ22", sub("page", "MAXSENT = 600", "MAXSENT = 6000")),
     ("the sort comes after the columns", "TQ23", sub("page", "      if nso > 0 then verb = 'sort'\n", "")),

@@ -66,6 +66,15 @@ def load():
     doc = os.path.join(DOCS, "Administrator", "markdown", "07-sd-admin-configuration.md")
     print("  doc      %s" % os.path.abspath(doc))
     raw["doc"] = open(doc, "rb").read().decode("utf-8", "replace") if os.path.exists(doc) else None
+    # 17 Nov 26 (as Linux 0edeb757): page 07 was split to the docs' page-length rule (07, 07a "changing from SD", 07b "API,
+    # printing and NETFILES").  The guide is the three parts read as one text, in order; a missing part is simply absent, and the
+    # rows that need what it held fail.
+    if raw["doc"] is not None:
+        for part in ("07a-sd-admin-configuration-changing-from-sd.md", "07b-sd-admin-configuration-api-printing-and-netfiles.md"):
+            pp = os.path.join(DOCS, "Administrator", "markdown", part)
+            print("  doc      %s" % os.path.abspath(pp))
+            if os.path.exists(pp):
+                raw["doc"] += "\n" + open(pp, "rb").read().decode("utf-8", "replace")
     return raw
 
 

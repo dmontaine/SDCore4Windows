@@ -383,7 +383,7 @@ cited by: `cproc`
 Could not secure account directory %1 (%2)
 ```
 
-cited by: `create_account`
+cited by: `create_account`, `loadexamples`
 
 ### msg:1006
 > kind=message tier=reference since=- src=sdsys/messages/1006:1#2e947f51
@@ -9006,7 +9006,7 @@ cited by: `tk_aipage`
 Reading the setting (a few seconds)...
 ```
 
-cited by: `remoteapi`, `remotessh`, `set_job`, `settingsr`, `tool_config`, `tool_jobs`, `tool_remote`
+cited by: `remoteapi`, `remotessh`, `set_job`, `settingsr`, `tool_jobs`, `tool_remote`
 
 ### msg:12951
 > kind=message tier=reference since=- src=sdsys/messages/12951:1#ce2f5d0f
@@ -11409,6 +11409,33 @@ cited by: `removeexamples`
 ```
 
 cited by: `qproc`
+
+### msg:15150
+> kind=message tier=reference since=- src=sdsys/messages/15150:1#3d946bd0
+
+```
+Reading the settings (a few seconds)...
+```
+
+cited by: `tool_config`, `tool_remote`
+
+### msg:15170
+> kind=message tier=reference since=- src=sdsys/messages/15170:1#51d2c584
+
+```
+%1: its Windows user %2 was not made by SD, so its ssh keys are its own and ssh-key-on and ssh-key-off do not apply to it; nothing was changed
+```
+
+cited by: `modifya`
+
+### msg:15171
+> kind=message tier=reference since=- src=sdsys/messages/15171:1#3bdf5ce8
+
+```
+Account %1 may sign in over ssh with a key: %2
+```
+
+cited by: `create_account`, `modifya`
 
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74

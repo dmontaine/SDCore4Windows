@@ -123,7 +123,7 @@ def checks(raw):
        len(re.findall(r"call \$tk_run\(allow, sent, out, stat, err\)[\s\S]*?gosub first\.line[\s\S]*?gosub read\.all\s*\n\s*gosub draw\.all", pg)) == 3 and "trim(out<oi>) # ''" in block(pg, "first.line") and "for oi = 1 to dcount(out, @fm)" in block(pg, "first.line"))
     ck("SS12", "the page has a [?] and F1, ? and a click show tool.sessions.page, whose record exists with a title, a documentation page and a body",
        pg.count("'tool.sessions.page'") == 2 and "call $tk_help('mark', ssn.x + ssn.w - 5, ssn.y + 1, 0, 0)" in pg and "call $tk_help('hit', mev, ssn.x + ssn.w - 5, ssn.y + 1, hit.m)" in pg
-       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-02-sessions-and-locks" and raw["help"].split("\n")[2].strip() != "")
+       and raw["help"].split("\n")[0].strip() != "" and raw["help"].split("\n")[1].strip() == "administrator-02a-locks-and-the-sessions-screen" and raw["help"].split("\n")[2].strip() != "")
     dl = block(pg, "draw.all")
     dsn = block(pg, "draw.sessions")
     dlk = block(pg, "draw.locks")
@@ -206,7 +206,7 @@ MUTANTS = [
     ("a key queues something else", "SS10", sub("page", "call $tk_keys('add', keys, 'i', 'logins', 'inhibit', '', 1)", "call $tk_keys('add', keys, 'i', 'logins', 'inhibit', '', 1)\n   call $tk_keys('add', keys, 'a', 'all', 'all', '', 1)")),
     ("the page shows its old rows after a command", "SS11", sub("page", "         msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')\n      end\n      gosub read.all\n      gosub draw.all", "         msg = (if said # '' then said[1, 130] else 'asked user ' : uid : ' to end; the list is read again every three seconds')\n      end\n      gosub draw.all")),
     ("the help key names a record that does not exist", "SS12", sub("page", "call $tk_help('box', 'tool.sessions.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'", "call $tk_help('box', 'tool.sessions.nopage', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'ctrl-t'")),
-    ("the help record names no page", "SS12", sub("help", "02-sessions-and-locks", "")),
+    ("the help record names no page", "SS12", sub("help", "02a-locks-and-the-sessions-screen", "")),
     ("the locks box overruns the explanation", "SS13", sub("page", "ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 14", "ld<2> = 'locks' : @vm : 2 : @vm : 1 : @vm : 15")),
     ("a lock row is drawn on the border", "SS13", sub("page", "   screen text s at lck.x + 2,lck.y + lck.h - 2 attr 'bold' width ltw", "   screen text s at lck.x + 2,lck.y + lck.h - 1 attr 'bold' width ltw")),
     ("the lock rows are counted for a box one row higher", "SS13", sub("page", "VL = lck.h - 4", "VL = lck.h - 3")),

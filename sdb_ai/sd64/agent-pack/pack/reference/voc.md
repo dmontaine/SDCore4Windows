@@ -187,7 +187,7 @@ in the command instead.
 ```
 
 This is `sd.accounts`. Field 2 is the account name, field 3 is the file
-name in that account. `set.file` writes Q-pointers; see below. Since 16 Oct 2026 the
+name in that account. `set.file` writes Q-pointers; see below. The
 target of `set.file` may itself be a Q-pointer, which makes a chain (not recommended, but it opens): each link is
 followed with the same account test, so a chain cannot reach where its links alone could not.
 
@@ -337,8 +337,8 @@ load-bearing and the remaining thirty are not.**
 | `X` | text | miscellaneous data — not a command |
 | `D` | descriptor | a data descriptor, which is what dictionary records are |
 
-**`PQ` is a valid type and is refused.** PROC was removed from this port
-(23 Aug 2026). A record of type `PQ` is reported as *"PROC is not
+**`PQ` is a valid type and is refused.** PROC was removed from this port.
+A record of type `PQ` is reported as *"PROC is not
 supported"* rather than being dispatched, because the record itself is
 valid PROC and it is the interpreter that is gone.
 

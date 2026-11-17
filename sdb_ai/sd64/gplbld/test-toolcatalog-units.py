@@ -245,7 +245,7 @@ MUTANTS = [
     ("the detail overruns the border", "TC15", sub("page", "for r = 1 to dh - 2", "for r = 1 to dh - 1")),
     ("the first box overlaps the second", "TC15", sub("page", "d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 22 : @vm : 138 :", "d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 23 : @vm : 138 :")),
     ("the end of the input is not seen", "TC16", sub("page", "            if status() = ER$EOF then exit\n", "")),
-    ("the help record names no page", "TC17", sub("help", "29c-sd-tcl-the-development-tools", "")),
+    ("the help record names no page", "TC17", sub("help", "29c4-sd-tcl-tool-catalog-and-tool-test", "")),
     ("a refusal opens the report box", "TC18", sub("page", "   if stat < 0 then\n      msg = (if said # '' then said else sent : ' was refused')\n      return\n   end\n   gosub show.report", "   gosub show.report")),
     ("a local entry is no longer matched by its path", "TC20", sub("page", "if lpl[1, len(pre)] = pre then", "if 0 then")),
     ("an object is called current before its times were read", "TC21", sub("page", "      mstate = '?'\n      gosub src.times", "      mstate = 'current'\n      gosub src.times")),

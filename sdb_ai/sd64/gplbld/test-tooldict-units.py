@@ -277,7 +277,7 @@ MUTANTS = [
     ("the list has a row too many", "TD19", sub("page", "VIS = lh - 6 ", "VIS = lh - 5 ")),
     ("the page waits with no key reader of the library", "TD20", sub("page", "screen key returning nm", "input nm,1")),
     ("the end of the input is not seen", "TD20", sub("page", "            if status() = ER$EOF then exit\n", "")),
-    ("the help key names a record that does not exist", "TD21", sub("help", "29c-sd-tcl-the-development-tools", "")),
+    ("the help key names a record that does not exist", "TD21", sub("help", "29c1-sd-tcl-tool-dict", "")),
     ("the id may be in any case", "TD22", sub("page", "         askv = downcase(askv)\n         cw = askv", "         cw = askv")),
     ("an id that exists in another case is accepted", "TD22", sub("page", "if upcase(iids<xq>) = upcase(askv) then vok = 0", "if iids<xq> = askv then vok = 0")),
     ("a wrong answer is not asked again", "TD22", sub("page", "      adef = askv\n   repeat", "      return\n   repeat")),

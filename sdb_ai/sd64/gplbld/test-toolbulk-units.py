@@ -318,7 +318,7 @@ MUTANTS = [
     ("the preview overruns the border", "TB20", sub("page", "VP = rh - 6", "VP = rh - 5")),
     ("the first box overlaps the second", "TB20", sub("page", "dcl<1> = 'file' : @vm : 1 : @vm : 1 : @vm : 4 : @vm : 138 :", "dcl<1> = 'file' : @vm : 1 : @vm : 1 : @vm : 5 : @vm : 138 :")),
     ("the end of the input is not seen", "TB21", sub("page", "            if status() = ER$EOF then exit\n", "")),
-    ("the help key names a page that does not exist", "TB22", sub("help", "29c-sd-tcl-the-development-tools", "")),
+    ("the help key names a page that does not exist", "TB22", sub("help", "29c3-sd-tcl-tool-bulk", "")),
     ("the help box is not reached from F1", "TB22", sub("page", "         call $tk_help('box', 'tool.bulk.page', hm, 0, 0)\n         if hm # '' then msg = hm\n      case nm = 'f5'", "         msg = 'help'\n      case nm = 'f5'")),
     ("a gate is not asked", "TB23", sub("page", "kernel(K$DICT.EDIT, -1)", "1")),
     ("the fingerprint leaves the operations out", "TB24", sub("page", "fp := @fm : opr.kind<fi> : @vm : opr.attr<fi> : @vm : opr.a1<fi> : @vm : opr.a2<fi>", "fp := @fm : opr.kind<fi> : @vm : opr.attr<fi>")),

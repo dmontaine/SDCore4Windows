@@ -3897,7 +3897,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 243
+"words": 267
 },
 "core:start": {
 "kind": "core.start",
@@ -3911,7 +3911,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 256
+"words": 246
 },
 "core:voc-types": {
 "kind": "core.digest",
@@ -5101,7 +5101,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 12
+"words": 13
 },
 "msg:1006": {
 "kind": "message",
@@ -12080,7 +12080,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 17
+"words": 16
 },
 "msg:12951": {
 "kind": "message",
@@ -14055,6 +14055,27 @@
 "since": "-",
 "tier": "reference",
 "words": 8
+},
+"msg:15150": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 12
+},
+"msg:15170": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 34
+},
+"msg:15171": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 17
 },
 "msg:15995": {
 "kind": "message",
@@ -26129,7 +26150,7 @@
 "part": "reference/system.md",
 "since": "-",
 "tier": "reference",
-"words": 367
+"words": 396
 },
 "sys:word:add": {
 "kind": "sys.word",
@@ -26368,6 +26389,20 @@
 "since": "-",
 "tier": "reference",
 "words": 22
+},
+"sys:word:ssh-key-off": {
+"kind": "sys.word",
+"part": "reference/system.md",
+"since": "-",
+"tier": "reference",
+"words": 27
+},
+"sys:word:ssh-key-on": {
+"kind": "sys.word",
+"part": "reference/system.md",
+"since": "-",
+"tier": "reference",
+"words": 44
 },
 "sys:word:start-default": {
 "kind": "sys.word",
@@ -26612,7 +26647,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 40
+"words": 49
 },
 "tcl:basic": {
 "kind": "tcl.verb",
@@ -28656,7 +28691,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 48
+"words": 58
 },
 "tcl:restore.voc": {
 "kind": "tcl.verb",
@@ -28908,7 +28943,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 32
+"words": 42
 },
 "tcl:sh": {
 "kind": "tcl.verb",
@@ -29216,7 +29251,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 74
+"words": 98
 },
 "tcl:tool.keys": {
 "kind": "tcl.verb",
@@ -29615,7 +29650,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 80
+"words": 76
 },
 "voc:type:R": {
 "kind": "voc.type",
@@ -29650,7 +29685,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 243
+"words": 240
 }
 },
 "pack_format": 1
