@@ -75,6 +75,10 @@ $logFile = Join-Path $dataDir 'nocase-upgrade.log'
 $probeName = 'zznuprobe'
 $probeSrc  = Join-Path (Join-Path $sdsys 'bp') $probeName
 $probeObj  = Join-Path (Join-Path $sdsys 'bp.out') $probeName
+# 16 Nov 26 - RELEASE_1.1 300: the builder of the case-sensitive fixtures (below, $buildBasic).
+$buildName = 'zznubuild'
+$buildSrc  = Join-Path (Join-Path $sdsys 'bp') $buildName
+$buildObj  = Join-Path (Join-Path $sdsys 'bp.out') $buildName
 $fixtures  = @('zznuclean', 'zznutwin', 'zznuak', 'zznunc')
 
 Write-Output '===== verify-nocaseupgrade.ps1 ====='
@@ -127,6 +131,28 @@ function Show([string]$label, [string]$text) {
         Write-Output ("    " + $l)
     }
 }
+
+# 16 Nov 26 - RELEASE_1.1 300.  THE CASE-SENSITIVE FIXTURES ARE MADE BY A PROGRAM, NOT BY THE VERB.  This built them with
+# "CREATE.FILE zznuclean CASE", and S.87 removed the verb's CASE word (suite b339's red).  The owner's ruling of 16 Nov is
+# Linux parity, and Linux's own upgrade test (sandbox-upgradenocase.py) builds its fixtures with the BASIC statement
+# CREATE.FILE path DYNAMIC FLAGS 4: DHF_KEEPCASE, a request op_dio1.c honours only in internal mode (the seat's -Internal door,
+# sd -internal).  Both parts are made case sensitive, as the verb's CASE made them, and the VOC record is the one CREATE.FILE
+# writes for a plain name (F, the name, the name.DIC), so COPY, CREATE.INDEX and DELETE.FILE treat them as before.  A part that
+# cannot be made stops the program with a BUILD line, which the precondition row below then names.
+$buildBasic = @'
+* zznubuild - written by verify-nocaseupgrade.ps1.  Safe to delete.
+   open 'VOC' to v else crt 'BUILD no VOC' ; stop
+   names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak'
+   for i = 1 to 3
+      n = names<i>
+      create.file n : '.DIC' dynamic flags 4 on error crt 'BUILD create failed ' : n : '.DIC' ; stop
+      create.file n dynamic flags 4 on error crt 'BUILD create failed ' : n ; stop
+      write 'F' : @fm : n : @fm : n : '.DIC' to v, n
+      crt 'BUILD made ' : n
+   next i
+   crt 'BUILD done'
+end
+'@
 
 # The probe: one line per fixture part, ids as stored.
 $probeBasic = @'
@@ -187,7 +213,7 @@ function Get-TempLeftovers {
 }
 function Remove-Fixtures {
     $null = Invoke-Bounded @($fixtures | ForEach-Object { "DELETE.FILE $_ FORCE" }) $false
-    foreach ($f in @($probeSrc, $probeObj)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
+    foreach ($f in @($probeSrc, $probeObj, $buildSrc, $buildObj)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
     return @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
              Where-Object { $_.Name -match '^(?i)zznu' } | ForEach-Object { $_.Name })
 }
@@ -208,13 +234,14 @@ try {
     if ($tempBefore.Count) { Write-Output ("verify-nocaseupgrade: walk temp files already in sdsys, not this run's: " + ($tempBefore -join ', ')); exit 2 }
 
     # ---- build: one sd -internal session for every case-sensitive fixture ----
+    [IO.File]::WriteAllText($buildSrc, ($buildBasic -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
+    Write-Output ("  wrote " + $buildSrc)
     $mk = Invoke-Bounded @(
-        'CREATE.FILE zznuclean CASE',
+        "BASIC bp $buildName",
+        "RUN bp $buildName",
         'COPY FROM VOC TO zznuclean who,jack',
-        'CREATE.FILE zznutwin CASE',
         'COPY FROM VOC TO zznutwin who,jack',
         'COPY FROM VOC TO zznutwin who,JACK',
-        'CREATE.FILE zznuak CASE',
         'COPY FROM VOC TO zznuak who,jack',
         'COPY FROM DICT VOC TO DICT zznuak f1,f1',
         'CREATE.INDEX zznuak f1',
@@ -328,7 +355,8 @@ finally {
     $vocOk = $vocLeft -match '(?m)^0 record\(s\) listed'
     Write-Output ("  sdsys entries left: " + $(if ($left.Count) { $left -join ', ' } else { '(none)' }) + "; VOC zznu* records: " + $(if ($vocOk) { 'none' } else { 'SOME - see below' }))
     if (-not $vocOk) { Show 'LIST VOC zznu...' $vocLeft }
-    $cleanOk = ($left.Count -eq 0) -and $vocOk -and -not (Test-Path -LiteralPath $probeSrc) -and -not (Test-Path -LiteralPath $probeObj)
+    $cleanOk = ($left.Count -eq 0) -and $vocOk -and -not (Test-Path -LiteralPath $probeSrc) -and -not (Test-Path -LiteralPath $probeObj) -and
+               -not (Test-Path -LiteralPath $buildSrc) -and -not (Test-Path -LiteralPath $buildObj)
     Row 'cleanup: no fixture, VOC record or probe left in SDSYS' $cleanOk
     if (-not $cleanOk -and $exit -eq 0) { $exit = 1 }
     if ($logLenBefore -lt 0 -and (Test-Path -LiteralPath $logFile)) {
