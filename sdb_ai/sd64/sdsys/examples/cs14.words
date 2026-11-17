@@ -1,0 +1,23 @@
+* cs14.words - counting how often each word appears, kept in order with locate
+*
+* locate w in list<1> by 'AL' setting pos finds w in a field-mark list kept in ascending order; when it is not
+* there, pos is where it belongs, and ins puts it there.  Two lists side by side: the words and their counts.
+
+program cs14.words
+   text = 'the cat sat on the mat and the dog sat on the log'
+   list = ''
+   counts = ''
+   for i = 1 to dcount(text, ' ')
+      w = field(text, ' ', i)
+      locate w in list<1> by 'AL' setting pos then
+         counts<pos> += 1
+      end else
+         ins w before list<pos>
+         ins 1 before counts<pos>
+      end
+   next i
+   crt dcount(text, ' ') : ' words, ' : dcount(list, @fm) : ' different:'
+   for i = 1 to dcount(list, @fm)
+      crt fmt(list<i>, 'L#6') : counts<i>
+   next i
+end

@@ -1,0 +1,15 @@
+* cs08.temperature - a formula, decimals and rounding
+*
+* Fahrenheit = Celsius * 9 / 5 + 32.  fmt(x, 'R1#7') rounds to 1 decimal place in 7 spaces.
+
+program cs08.temperature
+   crt 'Celsius  Fahrenheit'
+   for c = -20 to 40 step 10
+      f = c * 9 / 5 + 32
+      crt fmt(c, 'R#7') : fmt(f, 'R1#12')
+   next c
+   crt
+   body = 37
+   crt 'body temperature ' : body : ' C is ' : fmt(body * 9 / 5 + 32, 'R1') : ' F'
+   crt 'and back again: ' : fmt((98.6 - 32) * 5 / 9, 'R1') : ' C'
+end

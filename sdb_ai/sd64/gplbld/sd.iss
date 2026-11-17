@@ -3776,6 +3776,31 @@ begin
             ExpandConstant('{#DataDir}') + '\shared-docs.log' + #13#10#13#10;
 end;
 
+(* 16 Nov 26 - THE EXAMPLE PROGRAMS, from Linux cc7e41c6 (S.261; owner, 17 Nov 2026: "there should be a examples.bp file available to all users",
+   asked how, "A copy in every account").  Linux's EXAMPLES block: load-examples.ps1 runs LOAD.EXAMPLES, which gives every registered account in
+   service its own examples.bp from sdsys\examples, compiled.  At install and at upgrade, after SharedDocs: an upgrade refreshes the shipped programs
+   in every kept account and keeps any other program in the file (create.account does the same for each account made later).  No gate changes.
+   NEVER STOPS THE INSTALL.  Codes: 0 done, 2 nothing to load, 3 SD would not start, 1 anything else; 1 and 3 put one line in the closing box. *)
+function LoadExamples: String;
+var
+  Code: Integer;
+  Ps: String;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  ExpandConstant('{app}\load-examples.ps1') + '" -AppDir "' +
+                  ExpandConstant('{app}') + '" -DataDir "' +
+                  ExpandConstant('{#DataDir}') + '"',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Log('SD: load-examples.ps1 exited ' + IntToStr(Code) + '; see ' + ExpandConstant('{#DataDir}') + '\load-examples.log');
+  if (Code = 0) or (Code = 2) then
+    Exit;
+  Result := 'The example programs were not put into the accounts (code ' + IntToStr(Code) + '). As SDSYS, run: load.examples' + #13#10 +
+            'See ' + ExpandConstant('{#DataDir}') + '\load-examples.log' + #13#10#13#10;
+end;
+
 { 18 Sep 26 - THE PASSWORD STEP IS GONE, RELEASE_1.1 64, AND WHAT FOLLOWS IS
   HISTORY IN FRONT OF LIVE CODE.  No SD session is opened at the end of an
   install, and nothing here asks for a password: there is no adopted account to
@@ -4414,6 +4439,7 @@ begin
     Failed := LockSysdirNames(Ps, Script,
       'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
       'agent-pack/bp.out/pcode.out/stacks/' +
+      'examples/' +
       'dict.dic/voc.dic/$map.dic/accounts.dic/$hold/$hold.dic', Code);
 
   { errlog is not shipped: the first process that logs creates it, in sdsys.
@@ -4857,6 +4883,7 @@ var
   AcctAclMsg: String;
   SharedMsg: String;
   DocsMsg: String;
+  ExamplesMsg: String;
   StartMsg: String;
   DictMsg: String;
   { 04 Sep 26 - PRE_RELEASE_FIXES 70.  Its own variable rather than folded into
@@ -5181,6 +5208,9 @@ begin
     { 13 Nov 26 - the shared account's documentation, RELEASE_1.1 252 / 265.  After SecureAccountDirs, which stamps the shared
       directory itself and not what is under it, so the pdf directory's own access list stands.  See SharedDocs. }
     DocsMsg := SharedDocs;
+    { 16 Nov 26 - the example programs (Linux cc7e41c6, S.261): every account's examples.bp, after the shared account's content as on Linux.
+      See LoadExamples. }
+    ExamplesMsg := LoadExamples;
 
     case SdsysCode of
       0: begin
@@ -5462,6 +5492,8 @@ begin
            SharedMsg +
            { Empty unless shared-docs.ps1 could not set up the shared account's documentation. }
            DocsMsg +
+           { 16 Nov 26 - S.261: empty unless load-examples.ps1 could not put the example programs into the accounts. }
+           ExamplesMsg +
            { 13 Nov 26 - RELEASE_1.1 246: empty unless install-aihelper.ps1 could not set up the AI helper service. }
            AiMsg +
            { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it. }

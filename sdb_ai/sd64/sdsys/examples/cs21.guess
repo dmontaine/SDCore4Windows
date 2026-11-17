@@ -1,0 +1,33 @@
+* cs21.guess - a guessing game: a random number, input, a loop and a count
+*
+* rnd(n) gives a whole number from 0 to n - 1; randomize sets where the random numbers start.  Give a number after
+* the program name to start from that seed, so the same game can be played twice:  run examples.bp cs21.guess 42
+
+program cs21.guess
+   prompt ''
+   seed = field(trim(@sentence), ' ', 4)      ;* run examples.bp cs21.guess SEED: the fourth word
+   if num(seed) and seed # '' then randomize seed else randomize time()
+   secret = rnd(100) + 1
+   tries = 0
+   crt 'I am thinking of a number from 1 to 100.'
+   loop
+      crt 'Your guess: ' :
+      input guess
+      if guess = '' then
+         crt 'The number was ' : secret : '.'
+         exit
+      end
+      if not(num(guess)) then
+         crt 'Type a number.'
+         continue
+      end
+      tries += 1
+      begin case
+         case guess < secret ; crt 'Too low.'
+         case guess > secret ; crt 'Too high.'
+         case 1
+            crt 'You got it in ' : tries : ' tries!'
+            exit
+      end case
+   repeat
+end

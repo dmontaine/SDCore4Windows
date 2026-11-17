@@ -1,0 +1,24 @@
+* cs04.decisions - if / then / else, and begin case for a choice among several
+*
+* A condition is true when it is not 0 and not empty.  Comparisons: =  #  <  >  <=  >=  (# means "not equal").
+* Joining conditions: and, or, not().  BASIC works out BOTH sides of an and / or: it does not stop early.
+
+program cs04.decisions
+   scores = 95 : @fm : 83 : @fm : 71 : @fm : 64 : @fm : 40
+   for i = 1 to dcount(scores, @fm)
+      s = scores<i>
+      begin case
+         case s >= 90 ; grade = 'A'
+         case s >= 80 ; grade = 'B'
+         case s >= 70 ; grade = 'C'
+         case s >= 60 ; grade = 'D'
+         case 1       ; grade = 'F'                ;* case 1 is always true: the "otherwise"
+      end case
+      if grade = 'F' then
+         note = 'not passed'
+      end else
+         note = 'passed'
+      end
+      crt 'score ' : s : ': grade ' : grade : ', ' : note
+   next i
+end

@@ -3,6 +3,34 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+16 Nov 26  EVERY ACCOUNT HAS EXAMPLE PROGRAMS: THE FILE EXAMPLES.BP AND THE LOAD.EXAMPLES AND REMOVE.EXAMPLES VERBS.
+
+             What        - every account now has its own file examples.bp of example programs, already compiled, so
+                           "run examples.bp cs01.hello" works at once.  It holds the five programs of the SD Text User
+                           Interface - Programmer's Guide (hello, menus, notes, browse, stock) and 23 programs of a first
+                           course in programming, cs01.hello to cs23.bank: variables, decisions, loops, FizzBuzz, tables,
+                           subroutines, recursion, arrays, dynamic arrays, strings, word counts, primes, Euclid's
+                           algorithm, sorting, searching, a stack and a queue, files, a guessing game, dates and a small
+                           ledger.  The installer gives it to every account and refreshes it on an upgrade; create.account
+                           gives it to each new account; the administrator's load.examples (all accounts, or a list of
+                           them) does it by hand, and its companion remove.examples (all accounts, or a list) takes the
+                           shipped programs and their compiled objects out again.  A program the administrator adds to an
+                           account's examples.bp is kept by both, and remove.examples deletes the file itself only when
+                           nothing of the administrator's is left in it.  The programs are in examples in the system
+                           folder (C:\ProgramData\SD\sdsys\examples), replaced on an upgrade.
+             Why         - the owner: "there should be a examples.bp file available to all users that contains those
+                           programs and a set of training programs typical for a Computer Science 101 course"; a tester
+                           could not find the guide's programs, which until now were only printed in the guide.  As SD
+                           Core for Linux.
+             Does NOT    - Open any access: examples.bp is an ordinary program file of its account, so bp.edit decides
+                           whether its person may change it (off as delivered); a person who wants to change a program
+                           copies it to bp, which needs bp-on.  It is not a shared file and no account's VOC points
+                           outside the account.  A suspended account is skipped until it is back.  What remove.examples
+                           takes out comes back with the next install or upgrade, a new account, or a load.examples.
+                           Unlike SD Core for Linux, the two verbs do not LOGTO into the accounts (on Windows that ends
+                           the administrator's right): they reach each account's folder by its path.  NOT YET TESTED ON
+                           AN INSTALLED SYSTEM.
+
 16 Nov 26  THE VOC RECORDS $CONTRIB AND $LICENCE ARE GONE; THE TEXTS ARE IN THE SYSTEM FOLDER.
 
              What        - The administrator's VOC set no longer has $contrib and $licence, two records holding the list of

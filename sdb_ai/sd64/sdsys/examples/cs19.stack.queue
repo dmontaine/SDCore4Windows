@@ -1,0 +1,29 @@
+* cs19.stack.queue - a stack (last in, first out) and a queue (first in, first out) in a dynamic array
+*
+* A stack adds and takes at the same end; a queue adds at the end and takes from the front.
+
+program cs19.stack.queue
+   stack = ''
+   for i = 1 to 4
+      stack<-1> = 'plate ' : i                  ;* push
+   next i
+   crt 'stack holds ' : dcount(stack, @fm) : ' items'
+   loop
+   while stack # '' do
+      top = stack<dcount(stack, @fm)>           ;* pop: the last one
+      del stack<dcount(stack, @fm)>
+      crt '  pop  ' : top
+   repeat
+
+   queue = ''
+   for i = 1 to 4
+      queue<-1> = 'customer ' : i               ;* join the end of the queue
+   next i
+   crt 'queue holds ' : dcount(queue, @fm) : ' items'
+   loop
+   while queue # '' do
+      first = queue<1>                          ;* serve the front
+      del queue<1>
+      crt '  serve ' : first
+   repeat
+end

@@ -11636,6 +11636,105 @@ The API is open for sdsys from EVERY address: anyone who can reach this\ncompute
 
 cited by: `remotesdsys`
 
+### msg:15121
+> kind=message tier=reference since=- src=sdsys/messages/15121:1#3aea67a7
+
+```
+The example programs directory is missing or empty: %1
+```
+
+cited by: `loadexamples`, `removeexamples`
+
+### msg:15122
+> kind=message tier=reference since=- src=sdsys/messages/15122:1#0eda3557
+
+```
+No account is registered as %1, so no example programs were put there
+```
+
+cited by: `loadexamples`
+
+### msg:15123
+> kind=message tier=reference since=- src=sdsys/messages/15123:1#66839c1b
+
+```
+Could not enter the account %1, or make the file examples.bp there; it was left as it is
+```
+
+cited by: `loadexamples`
+
+### msg:15124
+> kind=message tier=reference since=- src=sdsys/messages/15124:1#77f98dbe
+
+```
+Example programs in examples.bp of %1 account(s): %2 new, %3 changed, %4 the same
+```
+
+cited by: `loadexamples`
+
+### msg:15125
+> kind=message tier=reference since=- src=sdsys/messages/15125:1#fcd2f6fc
+
+```
+Compiled %1 of the %2 that were new, changed or not yet compiled; programs added by the administrator, kept: %3
+```
+
+cited by: `loadexamples`
+
+### msg:15126
+> kind=message tier=reference since=- src=sdsys/messages/15126:1#4c173ea8
+
+```
+%1 was not loaded: %2
+```
+
+cited by: `loadexamples`
+
+### msg:15127
+> kind=message tier=reference since=- src=sdsys/messages/15127:1#505314b0
+
+```
+Example programs removed from %1 account(s): %2 programs, %3 files examples.bp deleted (nothing else was in them)
+```
+
+cited by: `removeexamples`
+
+### msg:15128
+> kind=message tier=reference since=- src=sdsys/messages/15128:1#916ddde3
+
+```
+Accounts that had no examples.bp: %1; programs added by the administrator, kept: %2
+```
+
+cited by: `removeexamples`
+
+### msg:15129
+> kind=message tier=reference since=- src=sdsys/messages/15129:1#edb8d92f
+
+```
+%1 was not removed: %2
+```
+
+cited by: `removeexamples`
+
+### msg:15130
+> kind=message tier=reference since=- src=sdsys/messages/15130:1#c74ae22c
+
+```
+No account is registered as %1, so no example programs were removed there
+```
+
+cited by: `removeexamples`
+
+### msg:15131
+> kind=message tier=reference since=- src=sdsys/messages/15131:1#15838a5f
+
+```
+Could not enter the account %1; its example programs were left as they are
+```
+
+cited by: `removeexamples`
+
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74
 
@@ -11975,7 +12074,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 26 more
+cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 28 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524
@@ -12170,7 +12269,7 @@ cited by: `icomp`
 Cannot open VOC
 ```
 
-cited by: `apisrvr`, `cname`, `deletef`
+cited by: `apisrvr`, `cname`, `deletef`, `loadexamples`
 
 ### msg:2027
 > kind=message tier=reference since=- src=sdsys/messages/2027:1#01cb6fa3
@@ -17901,7 +18000,7 @@ Account already exists
 Account name is invalid
 ```
 
-cited by: `loadhelp`, `modifya`, `settile`
+cited by: `loadexamples`, `loadhelp`, `modifya`, `removeexamples`, `settile`
 
 ### msg:6004
 > kind=message tier=reference since=- src=sdsys/messages/6004:1#34da8e01

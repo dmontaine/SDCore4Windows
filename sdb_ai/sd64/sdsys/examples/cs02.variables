@@ -1,0 +1,30 @@
+* cs02.variables - variables, numbers and strings, arithmetic and the order it is done in
+*
+* A variable needs no declaration: it is made the first time it is given a value.  It can hold a number
+* or a string, and SD converts between them when a statement needs the other kind.
+
+program cs02.variables
+   apples = 7
+   pears = 5
+   total = apples + pears
+   crt 'apples + pears = ' : total
+
+*  The usual order: * and / before + and -; brackets first
+   crt '2 + 3 * 4     = ' : 2 + 3 * 4
+   crt '(2 + 3) * 4   = ' : (2 + 3) * 4
+   crt '17 / 5        = ' : 17 / 5
+   crt 'int(17 / 5)   = ' : int(17 / 5)       ;* the whole part
+   crt 'mod(17, 5)    = ' : mod(17, 5)         ;* what is left over
+   crt '2 ** 10       = ' : 2 ** 10            ;* a power
+
+*  A string is text between quotes; a number written as text is still a number to arithmetic
+   name = 'Ada'
+   year = '1815'
+   crt name : ' was born in ' : year : ', ' : 2026 - year : ' years ago.'
+
+*  Changing a variable from its own value
+   count = 0
+   count = count + 1
+   count += 1                                 ;* the same thing, shorter
+   crt 'count = ' : count
+end

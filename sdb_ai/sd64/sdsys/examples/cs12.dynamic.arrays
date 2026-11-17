@@ -1,0 +1,25 @@
+* cs12.dynamic.arrays - SD's own data structure: a string divided by marks
+*
+* A record is one string: fields divided by @fm, values in a field by @vm, subvalues by @sm.  x<2> is field 2,
+* x<2,3> value 3 of field 2.  A dynamic array grows as it is given values, and dcount() says how many there are.
+
+program cs12.dynamic.arrays
+   person = ''
+   person<1> = 'Grace Hopper'
+   person<2> = 'COBOL' : @vm : 'FLOW-MATIC' : @vm : 'A-0'
+   person<3> = 1906
+   crt 'name:       ' : person<1>
+   crt 'languages:  ' : dcount(person<2>, @vm)
+   for v = 1 to dcount(person<2>, @vm)
+      crt '   ' : v : ': ' : person<2, v>
+   next v
+   crt 'born:       ' : person<3>
+
+   person<2, -1> = 'MATH-MATIC'                ;* -1 adds a value at the end
+   crt 'now:        ' : change(person<2>, @vm, ', ')
+   ins 'B-0' before person<2, 1>
+   crt 'inserted:   ' : change(person<2>, @vm, ', ')
+   del person<2, 2>
+   crt 'deleted 2:  ' : change(person<2>, @vm, ', ')
+   crt 'fields:     ' : dcount(person, @fm)
+end

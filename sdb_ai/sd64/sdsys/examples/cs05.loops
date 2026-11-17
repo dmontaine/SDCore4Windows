@@ -1,0 +1,37 @@
+* cs05.loops - for / next, step, and loop with while or until
+*
+* for counts; loop ... repeat goes round until a while is false or an until is true; exit leaves at once.
+
+program cs05.loops
+   total = 0
+   for n = 1 to 100
+      total += n
+   next n
+   crt 'the sum of 1 to 100 is ' : total
+
+   line = ''
+   for n = 10 to 1 step -1
+      line := n : ' '                          ;* := adds to the end of a string
+   next n
+   crt 'countdown: ' : line : 'go'
+
+*  Halve a number until it is below 1, counting the steps
+   x = 1000
+   steps = 0
+   loop
+   while x >= 1 do
+      x = x / 2
+      steps += 1
+   repeat
+   crt '1000 halves below 1 after ' : steps : ' steps'
+
+*  The digits of a number, added up, with until
+   number = 98765
+   digits = 0
+   loop
+      digits += mod(number, 10)
+      number = int(number / 10)
+   until number = 0 do
+   repeat
+   crt 'the digits of 98765 add up to ' : digits
+end

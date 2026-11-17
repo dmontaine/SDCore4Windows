@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 16 Nov 26 Windows port - from Linux 657da3de (S.261) and cc7e41c6: the new account gets its own examples.bp (the example programs, compiled) from LOAD.EXAMPLES,
+*           after its audit line.
 * 15 Nov 26 Windows port - RELEASE_1.1 315: the audit line names the account as given, as Linux (it was upcased, this port's case before
 *           account names went lower case; VM sit3 showed account=ZZWITPU).
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): AI-ON (joins the Windows group sdaiusers, the right to use the AI provider's API, on its
@@ -750,6 +752,14 @@ deffun ps_script(script) calling '!ps_script'
    start.audit = ''
    if settings<CA$START> # '' then start.audit = ' start=' : downcase(settings<CA$START>)
    void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)   ;* 15 Nov 26 (RELEASE_1.1 315): the name as given, as Linux; it was upcased (account=ZZWITPU beside zzwitpu everywhere else)
+
+* 16 Nov 26 Windows port - from Linux cc7e41c6 (S.261).  THE EXAMPLE PROGRAMS (owner, 17 Nov 2026: "there should be a examples.bp file available to all
+*   users", asked how, "A copy in every account"): the new account gets its own examples.bp, compiled, from LOAD.EXAMPLES; its two summary lines are
+*   shown.  A failure there does not undo the account (it is made and audited above); the administrator runs load.examples <name> again.
+   execute 'load.examples ' : downcase(acc.name) capturing ex.out
+   for ex.i = 1 to dcount(ex.out, @fm)
+      if index(ex.out<ex.i>, 'Example programs in examples.bp', 1) or ex.out<ex.i>[1, 9] = 'Compiled ' or index(ex.out<ex.i>, 'was not loaded', 1) then crt ex.out<ex.i>
+   next ex.i
 
    @system.return.code = 0
    stop

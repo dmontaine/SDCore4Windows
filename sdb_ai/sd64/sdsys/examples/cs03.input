@@ -1,0 +1,17 @@
+* cs03.input - asking the person at the terminal for values
+*
+* input waits for a line and puts it in a variable.  prompt sets the character input shows first ('' for none).
+* A number typed is still text until it is used as a number; num() says whether it can be.
+
+program cs03.input
+   prompt ''
+   crt 'What is your name? ' :               ;* a : at the end keeps the cursor on the same line
+   input name
+   crt 'How old are you? ' :
+   input age
+   if not(num(age)) or age = '' then
+      crt 'That is not a number, ' : name : '.'
+      stop
+   end
+   crt 'Hello, ' : name : '.  In ten years you will be ' : age + 10 : '.'
+end

@@ -14280,6 +14280,83 @@
 "tier": "reference",
 "words": 57
 },
+"msg:15121": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 15
+},
+"msg:15122": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 18
+},
+"msg:15123": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 23
+},
+"msg:15124": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 19
+},
+"msg:15125": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 25
+},
+"msg:15126": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 10
+},
+"msg:15127": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 22
+},
+"msg:15128": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 18
+},
+"msg:15129": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 10
+},
+"msg:15130": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 18
+},
+"msg:15131": {
+"kind": "message",
+"part": "reference/messages.md",
+"since": "-",
+"tier": "reference",
+"words": 19
+},
 "msg:15995": {
 "kind": "message",
 "part": "reference/messages.md",
@@ -14768,7 +14845,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 10
+"words": 11
 },
 "msg:2027": {
 "kind": "message",
@@ -19430,7 +19507,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 11
+"words": 13
 },
 "msg:6004": {
 "kind": "message",
@@ -28140,6 +28217,13 @@
 "tier": "reference",
 "words": 35
 },
+"tcl:load.examples": {
+"kind": "tcl.verb",
+"part": "reference/tcl-verbs.md",
+"since": "-",
+"tier": "reference",
+"words": 53
+},
 "tcl:load.help": {
 "kind": "tcl.verb",
 "part": "reference/tcl-verbs.md",
@@ -28818,6 +28902,13 @@
 "since": "-",
 "tier": "reference",
 "words": 41
+},
+"tcl:remove.examples": {
+"kind": "tcl.verb",
+"part": "reference/tcl-verbs.md",
+"since": "-",
+"tier": "reference",
+"words": 59
 },
 "tcl:repeating": {
 "kind": "tcl.keyword",
@@ -29811,7 +29902,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 105
+"words": 107
 },
 "voc:type:F": {
 "kind": "voc.type",

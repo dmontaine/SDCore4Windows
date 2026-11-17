@@ -1,0 +1,105 @@
+* menus - the key table, the menu bar, F1, F2, Esc, the context menu and the mouse
+$include tkpub.h
+$include err.h
+
+   prompt ''
+   call !tkopen('menus', ctx, err, '', '')
+   if err # '' then
+      crt err
+      stop
+   end
+
+   keys = ''
+   call !tkkeys('add', keys, 'f1', 'help', 'help', '', 1)
+   call !tkkeys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call !tkkeys('add', keys, 'f5', 'count', 'count', '', 1)
+   call !tkkeys('add', keys, 'ctrl-s', 'save', 'save', '', 1)
+   call !tkkeys('add', keys, 'esc', 'menu', 'menu', '', 1)
+   call !tkkeys('add', keys, '', '', 'about', '', 1)
+   call !tkkeys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call !tkkeys('menu', keys, 'save', '&File', '&Save', '', '')
+   call !tkkeys('menu', keys, 'count', '&View', '&Count', '', '')
+   call !tkkeys('menu', keys, 'help', '&Help', '&Keys of this page', '', '')
+   call !tkkeys('menu', keys, 'about', '&Help', '&About', '', '')
+   save.why = 'there is nothing to save'
+   call !tkkeys('why', keys, 'save', save.why, '', '', '')
+
+   d = ''
+   d<1> = 'main' : @vm : 1 : @vm : 1 : @vm : 39 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   perr = ''
+   call !tklayout('declare', ctx, d, perr)
+
+   pane = 'Main'
+   gen = 0
+   counted = 0
+   shown = ''
+   msg = 'F10 or Esc opens the menus; F2 finds an action'
+   gosub draw.all
+   loop
+      call !tkmenubar('draw', ctx, keys, pane, '', '', mr)
+      call !tkframe(ctx, keys, pane, msg)
+      nm = ''
+      screen key returning nm
+      if nm = '' then
+         if status() = ER$EOF then exit
+         continue
+      end
+      mr = ''
+      if nm = 'mouse' then
+         mev = ''
+         screen mouse returning mev else mev = ''
+         call !tkmenubar('click', ctx, keys, pane, mev, '', mr)
+         if mr<1> = '' then continue
+      end else
+         call !tkmenubar('key', ctx, keys, pane, nm, 0, mr)
+      end
+      if mr<1> # '' then
+         if mr<4> = '' then continue
+         nm = mr<4>
+      end
+      if nm = 'guardquit' then exit
+      if nm = 'resize' then
+         call !tklayout('refresh', ctx, '', chg)
+         gen += 1
+         ctx<TK.C.GEN> = gen
+         gosub draw.all
+         continue
+      end
+
+      act = ''
+      if nm[1, 4] = 'act:' then
+         act = nm[5, 99]
+      end else
+         call !tkkeys('action', keys, nm, pane, act, '', '')
+      end
+      begin case
+         case act = 'quit'
+            exit
+         case act = 'help'
+            call !tkkeys('keylist', keys, pane, shown, '', '', '')
+            msg = 'The keys of this page'
+            gosub draw.all
+         case act = 'count'
+            counted += 1
+            msg = 'Counted ' : counted : ' time(s)'
+         case act = 'about'
+            msg = 'menus: an example page'
+         case nm = 'ctrl-s'
+            msg = 'Save: ' : save.why
+         case 1
+            msg = nm : ' does nothing on this page'
+      end case
+   repeat
+   call !tkclose(ctx)
+   stop
+
+draw.all:
+   r = ''
+   call !tklayout('pane', ctx, 'main', r)
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   screen box at r<1,1>,r<1,2> size r<1,3>,r<1,4> title 'Menus'
+   for i = 1 to dcount(shown, @fm)
+      screen text shown<i> at r<1,1> + 2,r<1,2> + i width r<1,3> - 4
+   next i
+   return
+end

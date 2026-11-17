@@ -32,7 +32,7 @@ $ErrorActionPreference = 'Stop'
 # The classes.  Fixed: SecureSysdirs' own variables.  Elsewhere: their own
 # secure-*.ps1 or [Code] step.  Open: written by ordinary sessions.
 $Locked = @('syscom','terminfo','terminfo.src','helptext','dir_dict','licence','contrib',
-            'agent-pack','bp.out','pcode.out','stacks',
+            'agent-pack','bp.out','pcode.out','stacks','examples',
             'dict.dic','voc.dic','$map.dic','accounts.dic','$hold','$hold.dic')
 # 14 Nov 26 - start.default is NOT in the staged tree (SET.START.DEFAULT writes it after SecureSysdirs); it is locked by
 # LockStartDefault once it exists.  In the early list it made secure-sysdirs.ps1 exit 2 and LockSysdirNames stop (check L8).
@@ -136,6 +136,7 @@ if (Test-Path -LiteralPath $tree) {
 $mutants = @(
     @{ n='drop agent-pack from the list';      k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'bp.out/pcode.out/stacks/' +" }
     @{ n='drop stacks from the list';          k='L1'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'agent-pack/bp.out/pcode.out/' +" }
+    @{ n='drop examples from the list';        k='L1'; t='iss'; a="'examples/' +"; b="'' +" }     # 16 Nov 26, S.261
     @{ n='stacks not created';                 k='L9'; t='iss'; a='ForceDirectories(Stacks)'; b='{ForceDirectories}(Stacks)' }
     @{ n='start.default back in the early list'; k='L8'; t='iss'; a="'agent-pack/bp.out/pcode.out/stacks/' +"; b="'start.default/agent-pack/bp.out/pcode.out/stacks/' +" }
     @{ n='start.default never locked after its step'; k='L8'; t='iss'; a='StartMsg := StartMsg + LockStartDefault;'; b='StartMsg := StartMsg + LockStartDefaultX;' }

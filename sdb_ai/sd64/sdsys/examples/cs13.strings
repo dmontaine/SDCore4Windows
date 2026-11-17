@@ -1,0 +1,33 @@
+* cs13.strings - working with text: length, case, parts, searching, and a palindrome check
+*
+* s[start, length] is part of a string; index(s, t, 1) where t first appears (0 when it does not); field(s, d, n)
+* the n-th part when s is divided at each d.
+
+program cs13.strings
+   s = 'The quick brown fox'
+   crt 'text:        ' : s
+   crt 'length:      ' : len(s)
+   crt 'upper case:  ' : upcase(s)
+   crt 'lower case:  ' : downcase(s)
+   crt 'first 9:     ' : s[1, 9]
+   crt 'last 3:      ' : s[len(s) - 2, 3]
+   crt 'word 3:      ' : field(s, ' ', 3)
+   crt 'brown is at: ' : index(s, 'brown', 1)
+   crt 'words:       ' : dcount(s, ' ')
+
+   rev = ''
+   for i = len(s) to 1 step -1
+      rev := s[i, 1]
+   next i
+   crt 'backwards:   ' : rev
+
+   words = 'level' : @fm : 'kayak' : @fm : 'basic' : @fm : 'A man a plan a canal Panama'
+   for w = 1 to dcount(words, @fm)
+      t = downcase(convert(' ', '', words<w>))   ;* without spaces, in one case
+      back = ''
+      for i = len(t) to 1 step -1
+         back := t[i, 1]
+      next i
+      crt words<w> : (if back = t then ' is a palindrome' else ' is not a palindrome')
+   next w
+end

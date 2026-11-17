@@ -1,0 +1,40 @@
+* cs17.sorting - two ways to sort: bubble sort with swaps, and insertion into a list kept in order
+*
+* Bubble sort walks the list, swapping neighbours that are the wrong way round, until a walk swaps nothing.
+* Insertion builds a new list and puts each item where it belongs (locate ... by 'AR' for numbers, right-justified).
+
+program cs17.sorting
+   dim a(10)
+   values = '64,25,12,22,11,90,3,47,58,36'
+   n = 10
+   for i = 1 to n
+      a(i) = field(values, ',', i)
+   next i
+   passes = 0
+   loop
+      swapped = 0
+      for i = 1 to n - 1
+         if a(i) > a(i + 1) then
+            t = a(i)
+            a(i) = a(i + 1)
+            a(i + 1) = t
+            swapped = 1
+         end
+      next i
+      passes += 1
+   until not(swapped) do
+   repeat
+   line = ''
+   for i = 1 to n
+      line := a(i) : ' '
+   next i
+   crt 'bubble sort:    ' : trim(line) : '   (' : passes : ' passes)'
+
+   sorted = ''
+   for i = 1 to n
+      v = field(values, ',', i)
+      locate v in sorted<1> by 'AR' setting pos else null
+      ins v before sorted<pos>
+   next i
+   crt 'insertion sort: ' : change(sorted, @fm, ' ')
+end

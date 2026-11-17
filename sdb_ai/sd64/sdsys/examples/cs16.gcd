@@ -1,0 +1,29 @@
+* cs16.gcd - Euclid's algorithm, the oldest algorithm still in use
+*
+* The greatest common divisor of a and b: replace (a, b) by (b, a mod b) until b is 0.  The least common multiple is
+* a * b / gcd.
+
+program cs16.gcd
+   pairs = '48,18' : @fm : '1071,462' : @fm : '17,5' : @fm : '100,75'
+   for p = 1 to dcount(pairs, @fm)
+      a = field(pairs<p>, ',', 1)
+      b = field(pairs<p>, ',', 2)
+      gosub gcd(a, b, g)
+      crt 'gcd(' : a : ', ' : b : ') = ' : g : '    lcm = ' : a * b / g
+   next p
+   stop
+
+local subroutine gcd(x, y, result)
+   private a, b, t
+   a = x
+   b = y
+   loop
+   while b # 0 do
+      t = mod(a, b)
+      a = b
+      b = t
+   repeat
+   result = a
+   return
+end
+end

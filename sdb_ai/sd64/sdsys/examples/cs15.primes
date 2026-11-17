@@ -1,0 +1,27 @@
+* cs15.primes - the sieve of Eratosthenes: an array of flags
+*
+* Start with every number marked; for each number still marked, unmark its multiples.  What stays marked is prime.
+
+program cs15.primes
+   limit = 100
+   dim is.prime(limit)
+   mat is.prime = 1
+   is.prime(1) = 0
+   for n = 2 to limit
+      if is.prime(n) and n * n <= limit then
+         for m = n * n to limit step n
+            is.prime(m) = 0
+         next m
+      end
+   next n
+   line = ''
+   found = 0
+   for n = 2 to limit
+      if is.prime(n) then
+         line := n : ' '
+         found += 1
+      end
+   next n
+   crt 'the ' : found : ' primes up to ' : limit : ':'
+   crt trim(line)
+end

@@ -1,0 +1,65 @@
+* hello - the smallest page: the frame, one box, and Ctrl-Q to leave
+$include tkpub.h
+$include err.h
+
+   prompt ''
+   call !tkopen('hello', ctx, err, '', '')
+   if err # '' then
+      crt err
+      stop
+   end
+
+   keys = ''
+   call !tkkeys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+
+   d = ''
+   d<1, TK.P.ID> = 'main'
+   d<1, TK.P.BAND> = 1
+   d<1, TK.P.COL> = 1
+   d<1, TK.P.H> = 39
+   d<1, TK.P.W> = 138
+   d<1, TK.P.VKIND> = 'stretch'
+   d<1, TK.P.HKIND> = 'stretch'
+   d<1, TK.P.MINH> = 10
+   d<1, TK.P.MINW> = 40
+   perr = ''
+   call !tklayout('declare', ctx, d, perr)
+   if perr # '' then
+      call !tkclose(ctx)
+      crt perr
+      stop
+   end
+
+   gen = 0
+   msg = 'Press any key; Ctrl-Q leaves'
+   gosub draw.all
+   loop
+      call !tkframe(ctx, keys, 'Main', msg)
+      nm = ''
+      screen key returning nm
+      begin case
+         case nm = ''
+            if status() = ER$EOF then exit
+         case nm = 'guardquit' or nm = 'ctrl-q'
+            exit
+         case nm = 'resize'
+            call !tklayout('refresh', ctx, '', chg)
+            gen += 1
+            ctx<TK.C.GEN> = gen
+            gosub draw.all
+         case 1
+            msg = 'You pressed ' : nm
+      end case
+   repeat
+   call !tkclose(ctx)
+   stop
+
+draw.all:
+   r = ''
+   call !tklayout('pane', ctx, 'main', r)
+   screen clear at 0,0 size ctx<TK.C.W>,ctx<TK.C.YSTAT>
+   screen box at r<1,1>,r<1,2> size r<1,3>,r<1,4> title 'Hello'
+   s = 'The page is ' : ctx<TK.C.W> : ' by ' : ctx<TK.C.H> : ' and its body ' : ctx<TK.C.BODYW> : ' by ' : ctx<TK.C.BODYH> : '.'
+   screen text s at r<1,1> + 2,r<1,2> + 1 width r<1,3> - 4
+   return
+end

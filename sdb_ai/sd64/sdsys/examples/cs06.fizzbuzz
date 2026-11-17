@@ -1,0 +1,14 @@
+* cs06.fizzbuzz - the classic exercise: a loop, mod and a choice
+*
+* For 1 to 30: Fizz for a multiple of 3, Buzz for a multiple of 5, FizzBuzz for both, otherwise the number.
+
+program cs06.fizzbuzz
+   for n = 1 to 30
+      begin case
+         case mod(n, 15) = 0 ; crt 'FizzBuzz'
+         case mod(n, 3) = 0  ; crt 'Fizz'
+         case mod(n, 5) = 0  ; crt 'Buzz'
+         case 1              ; crt n
+      end case
+   next n
+end

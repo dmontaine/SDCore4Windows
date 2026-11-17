@@ -1,0 +1,31 @@
+* cs23.bank - a small program put together: a ledger of transactions, a rule, and a report
+*
+* Each transaction is "type,amount".  A withdrawal that would take the balance below zero is refused.  Money is kept
+* in cents (whole numbers) and shown with oconv(x, 'MD2'), so no rounding error creeps in.
+
+program cs23.bank
+   balance = 0
+   ledger = 'deposit,10000' : @fm : 'withdraw,2550' : @fm : 'withdraw,9000' : @fm : 'deposit,1999' : @fm : 'withdraw,4000'
+   crt fmt('transaction', 'L#14') : fmt('amount', 'R#10') : fmt('balance', 'R#12') : '  note'
+   for i = 1 to dcount(ledger, @fm)
+      kind = field(ledger<i>, ',', 1)
+      amount = field(ledger<i>, ',', 2)
+      gosub apply(kind, amount, note)
+      crt fmt(kind, 'L#14') : fmt(oconv(amount, 'MD2'), 'R#10') : fmt(oconv(balance, 'MD2'), 'R#12') : '  ' : note
+   next i
+   crt 'closing balance: ' : oconv(balance, 'MD2')
+   stop
+
+local subroutine apply(kind, amount, note)
+   note = ''
+   begin case
+      case kind = 'deposit'
+         balance += amount
+      case kind = 'withdraw' and amount <= balance
+         balance -= amount
+      case kind = 'withdraw'
+         note = 'refused: not enough money'
+   end case
+   return
+end
+end

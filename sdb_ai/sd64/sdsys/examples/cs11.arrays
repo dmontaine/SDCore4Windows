@@ -1,0 +1,26 @@
+* cs11.arrays - a dimensioned array: a fixed number of numbered elements
+*
+* dim marks(8) makes marks(1) to marks(8).  mat marks = 0 sets them all.  Then the sum, the average, the highest
+* and the lowest.
+
+program cs11.arrays
+   dim marks(8)
+   mat marks = 0
+   values = '72,85,91,66,78,95,59,88'
+   for i = 1 to 8
+      marks(i) = field(values, ',', i)
+   next i
+   total = 0
+   high = marks(1)
+   low = marks(1)
+   for i = 1 to 8
+      total += marks(i)
+      if marks(i) > high then high = marks(i)
+      if marks(i) < low then low = marks(i)
+   next i
+   crt 'marks:   ' : values
+   crt 'total:   ' : total
+   crt 'average: ' : fmt(total / 8, 'R2')
+   crt 'highest: ' : high
+   crt 'lowest:  ' : low
+end

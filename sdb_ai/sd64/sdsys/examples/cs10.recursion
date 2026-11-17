@@ -1,0 +1,35 @@
+* cs10.recursion - a routine that calls itself, and the same work done with a loop
+*
+* factorial(n) = n * factorial(n - 1), and factorial(0) = 1.  Each call of the local subroutine has its own private
+* variables, so a call inside a call does not overwrite the outer one's.
+
+program cs10.recursion
+   for n = 0 to 10
+      gosub factorial(n, f)
+      crt n : '! = ' : f
+   next n
+   crt
+   crt 'the first 15 Fibonacci numbers, by a loop:'
+   a = 0
+   b = 1
+   line = ''
+   for i = 1 to 15
+      line := a : ' '
+      next.one = a + b
+      a = b
+      b = next.one
+   next i
+   crt trim(line)
+   stop
+
+local subroutine factorial(n, result)
+   private inner
+   if n <= 1 then
+      result = 1
+   end else
+      gosub factorial(n - 1, inner)
+      result = n * inner
+   end
+   return
+end
+end

@@ -1,0 +1,39 @@
+* cs20.files - a file of records: make it, write, read, select, change and delete
+*
+* It makes the file cs20.data in your account (and removes it at the end):  run examples.bp cs20.files
+* open gives a file variable; write puts a record under an id; read gets it back (else when there is none);
+* sselect makes a sorted list of the ids and readnext takes them one at a time.
+
+program cs20.files
+   open 'cs20.data' to f else
+      execute 'create.file cs20.data dynamic' capturing out
+      open 'cs20.data' to f else stop 'could not make the file cs20.data'
+   end
+   people = 'p1,Ada,1815' : @fm : 'p2,Alan,1912' : @fm : 'p3,Grace,1906'
+   for i = 1 to dcount(people, @fm)
+      rec = ''
+      rec<1> = field(people<i>, ',', 2)
+      rec<2> = field(people<i>, ',', 3)
+      write rec to f, field(people<i>, ',', 1)
+   next i
+   crt 'wrote ' : dcount(people, @fm) : ' records'
+
+   read rec from f, 'p2' then crt 'p2 is ' : rec<1> : ', born ' : rec<2> else crt 'no p2'
+   read rec from f, 'p9' then crt 'p9 is there' else crt 'there is no p9'
+
+   readu rec from f, 'p3' then                ;* readu locks the record while it is changed
+      rec<1> = 'Grace Hopper'
+      write rec to f, 'p3'                     ;* write lets the lock go
+   end
+   sselect f to 1                             ;* sselect gives the ids in order; select in the order they are stored
+   loop
+      readnext id from 1 else exit
+      read rec from f, id then crt '  ' : id : ': ' : rec<1> : ' (' : rec<2> : ')'
+   repeat
+
+   delete f, 'p1'
+   read rec from f, 'p1' then crt 'p1 is still there' else crt 'p1 is deleted'
+   close f
+   execute 'delete.file cs20.data' capturing out
+   crt 'the file cs20.data is removed again'
+end

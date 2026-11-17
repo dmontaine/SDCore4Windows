@@ -1,0 +1,19 @@
+* cs07.tables - a loop inside a loop, and lining up columns with fmt
+*
+* fmt(value, 'R#4') puts a value at the right of 4 spaces; 'L#4' at the left.
+
+program cs07.tables
+   head = '    |'
+   for c = 1 to 9
+      head := fmt(c, 'R#4')
+   next c
+   crt head
+   crt str('-', len(head))                     ;* str() repeats a string
+   for r = 1 to 9
+      line = fmt(r, 'R#3') : ' |'
+      for c = 1 to 9
+         line := fmt(r * c, 'R#4')
+      next c
+      crt line
+   next r
+end

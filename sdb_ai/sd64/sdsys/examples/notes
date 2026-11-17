@@ -1,0 +1,159 @@
+* notes - a form, a confirm box, a record the program writes, and the output pane
+$include tkpub.h
+$include err.h
+
+   prompt ''
+   open 'notes' to notes.f else
+      crt 'notes: the file notes cannot be opened'
+      stop
+   end
+   call !tkopen('notes', ctx, err, '', '')
+   if err # '' then
+      crt err
+      stop
+   end
+
+   keys = ''
+   call !tkkeys('add', keys, 'ctrl-q', 'quit', 'quit', '', 1)
+   call !tkkeys('add', keys, 'ctrl-n', 'new', 'new', '', 1)
+   call !tkkeys('add', keys, 'ctrl-o', 'output', 'output', '', 1)
+   call !tkkeys('add', keys, 'esc', 'menu', 'menu', '', 1)
+   call !tkkeys('menu', keys, 'quit', '&File', '&Quit', '', '')
+   call !tkkeys('menu', keys, 'new', '&File', '&New note', '', '')
+   call !tkkeys('menu', keys, 'output', '&View', '&Output', '', '')
+
+   outopen = 0
+   gosub declare.layout
+   gen = 0
+   msg = 'Ctrl-N writes a new note'
+   gosub draw.all
+   loop
+      call !tkmenubar('draw', ctx, keys, 'Notes', '', '', mr)
+      call !tkframe(ctx, keys, 'Notes', msg)
+      nm = ''
+      screen key returning nm
+      if nm = '' then
+         if status() = ER$EOF then exit
+         continue
+      end
+      mr = ''
+      call !tkmenubar('key', ctx, keys, 'Notes', nm, outopen, mr)
+      if mr<1> # '' then nm = mr<4>
+      begin case
+         case nm = ''
+            null
+         case nm = 'guardquit' or nm = 'ctrl-q'
+            exit
+         case nm = 'resize'
+            call !tklayout('refresh', ctx, '', chg)
+            gosub redraw
+         case nm = 'ctrl-n'
+            gosub new.note
+         case nm = 'ctrl-o'
+            gosub toggle.out
+         case nm = 'esc'
+            if outopen then gosub toggle.out
+         case outopen and (nm = 'up' or nm = 'down' or nm = 'pgup' or nm = 'pgdn')
+            oc = ''
+            call !tkout('key', ctx, nm, '', oc)
+            call !tkout('draw', ctx, 'output', '', oc)
+      end case
+   repeat
+   call !tkclose(ctx)
+   stop
+
+new.note:
+   spec = 'New note' : @fm : '&Write' : @fm : ''
+   spec<4> = 'id' : @vm : 'Record id' : @vm : 20
+   spec<5> = 'text' : @vm : 'Text' : @vm : 60 : @vm : 500
+   fa = '' ; fb = '' ; fc = ''
+   call !tkform('open', ctx, spec, '', fc)
+   loop
+      call !tkform('run', ctx, fa, fb, fc)
+      if fa # 'ok' then exit
+      id = trim(fb<1>)
+      bad = ''
+      if id = '' then bad = 'A note needs a record id.'
+      if index(id, ' ', 1) then bad = 'A record id here has no spaces.'
+      if bad = '' then exit
+      call !tkform('say', ctx, bad, 'id', '')
+   repeat
+   call !tkform('close', ctx, '', '', '')
+   if fa # 'ok' then
+      msg = 'Nothing was written'
+      return
+   end
+
+   sent = 'write ' : id : ' in notes'
+   lines = 'The text: ' : fb<2>
+   read old from notes.f, id then
+      lines<-1> = 'A note ' : id : ' exists; Write replaces it.'
+   end
+   res = '' ; cm = ''
+   call !tkconfirm(sent, lines, '', res, cm, 'Write this record?', '&Write,&Cancel')
+   if res # 'run' then
+      msg = 'Nothing was written'
+      call !tkout('add', ctx, 'info', sent : ': ' : cm, '')
+      return
+   end
+   write fb<2> to notes.f, id
+   call !tkout('add', ctx, 'ok', 'wrote ' : id : ' in notes', '')
+   msg = 'Wrote ' : id
+   gosub draw.list
+   if outopen then call !tkout('draw', ctx, 'output', '', oc)
+   return
+
+toggle.out:
+   oc = ''
+   call !tkout('toggle', ctx, '', '', oc)
+   outopen = oc
+   gosub declare.layout
+   gosub redraw
+   return
+
+declare.layout:
+   d = ''
+   if outopen then
+      d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 29 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+      d<2> = 'output' : @vm : 2 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   end else
+      d<1> = 'list' : @vm : 1 : @vm : 1 : @vm : 39 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1
+   end
+   perr = ''
+   call !tklayout('declare', ctx, d, perr)
+   return
+
+redraw:
+   gen += 1
+   ctx<TK.C.GEN> = gen
+   gosub draw.all
+   return
+
+draw.all:
+   screen clear at 0,ctx<TK.C.YBODY> size ctx<TK.C.W>,ctx<TK.C.BODYH>
+   gosub draw.list
+   oc = ''
+   if outopen then call !tkout('draw', ctx, 'output', '', oc)
+   return
+
+draw.list:
+   r = ''
+   call !tklayout('pane', ctx, 'list', r)
+   screen box at r<1,1>,r<1,2> size r<1,3>,r<1,4> title 'Notes'
+   ids = ''
+   select notes.f to 1
+   loop
+      readnext id from 1 else exit
+      locate id in ids<1> by 'AL' setting p else null
+      ins id before ids<p>
+   repeat
+   for i = 1 to r<1,4> - 2
+      s = ''
+      if ids<i> # '' then
+         read t from notes.f, ids<i> else t = ''
+         s = fmt(ids<i>, '20L') : t
+      end
+      screen text s at r<1,1> + 2,r<1,2> + i width r<1,3> - 4
+   next i
+   return
+end

@@ -346,6 +346,11 @@ SDSYS_SHIP = [
     # buttons of the toolkit pages had nothing to show.  Found by assert-current in a
     # VM install: 14 source files "not in the install at all".
     ('helptext',      'context help text for the [?] buttons; LOAD.HELP reads it'),
+    # 16 Nov 26 - S.261 (from Linux cc7e41c6).  The example programs, one file to a
+    # program, that LOAD.EXAMPLES copies into every account's examples.bp and compiles
+    # there (load-examples.ps1 at install and upgrade, create.account for a new account).
+    # Replaced on upgrade; locked to administrators by sd.iss SecureSysdirs.
+    ('examples',      'the example programs LOAD.EXAMPLES puts into every account (S.261)'),
     # 10 Nov 26 - RELEASE_1.1 218 (from Linux S.75 A6).  What each sd.conf parameter
     # is, for TOOL.CONFIG; a file, replaced on upgrade.  Display only: the helper
     # (sd-confset.ps1) holds its own list and ranges, and test-confset-units.ps1
@@ -545,6 +550,7 @@ SDSYS_MIRROR = [
     # ships would make "installed but not in source" mean the wrong thing.
     ('messages',     'sysmsg text'),
     ('voc_removed',  'the VOC deletion list; nothing writes it at runtime (7 Nov 26)'),
+    ('examples',     'the example programs; LOAD.EXAMPLES only reads them (16 Nov 26, S.261)'),
     # 25 Aug 26 - bp IS NO LONGER A MIRROR, and it stopped qualifying the
     # moment SD stopped shipping into it.
     #
@@ -1739,6 +1745,10 @@ def main():
                    # called from sd.iss after LoadContextHelp, at install and at
                    # upgrade.
                    'shared-docs.ps1',
+                   # 16 Nov 26 - S.261 (from Linux cc7e41c6).  Every account's
+                   # examples.bp (LOAD.EXAMPLES, from sdsys\examples); called from
+                   # sd.iss after SharedDocs, at install and at upgrade.
+                   'load-examples.ps1',
                    # 20 Sep 26 - RELEASE_1.1 82 (D2').  DOT-SOURCED by
                    # attach-account, finish-install and the three upgrade-*
                    # scripts, which write LOGIN's one-shot "sd -internal"

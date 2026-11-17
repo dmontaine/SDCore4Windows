@@ -1,0 +1,291 @@
+* LOADEXAMPLES
+* LOAD.EXAMPLES verb: put the shipped example programs into the file examples.bp of every account (or of the accounts named) and compile them there.
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 16 Nov 26 Windows port - from Linux 657da3de (S.261) and cc7e41c6: new.  NO LOGTO: each account's examples.bp is reached by the pathname the register holds,
+*               as LOAD.HELP reaches the shared account (RELEASE_1.1 187), because on this port LOGTO out of SDSYS gives up the administrator right and an
+*               installer's internal session cannot LOGTO back (RELEASE_1.1 310 lets only a desktop SDSYS sign-in do that).  The compile is given two
+*               pointers of SDSYS's own VOC to the account's examples.bp and examples.bp.out and removes them again; the account's own VOC gets the two
+*               relative pointers a file made in the account would have.  Messages 14121-14126 are 15121-15126 here.
+* 17 Nov 26 dm  The verb takes a LIST of accounts (the owner, 17 Nov 2026: "both load.examples and remove.examples should take a list of accounts"); an unknown name is
+*               said (14122) and skipped instead of ending the command.  Its companion is REMOVE.EXAMPLES (removeexamples).
+* 17 Nov 26 dm  New (the owner, 17 Nov 2026: "there should be a examples.bp file available to all users that contains those programs and a set of
+*               training programs typical for a Computer Science 101 course", then "all four versions should deliver with examples.bp").  Asked how
+*               every account reaches it - the shared account's lookup serves no program file (S.66), and an F-pointer outside an account is refused by
+*               the OS gate - he chose "A copy in every account": no gate changes.  Made from loadhelp, which fills context.help the same way.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   LOAD.EXAMPLES                       every registered account
+*   LOAD.EXAMPLES account ...           the accounts named, a list (create.account runs it for the account it made); a name that is not
+*                                       registered is said and skipped, and the others go on
+*
+*   The administrator's verb, run by the installer, by create.account, and by hand after the programs under examples change.  Every file of the
+*   examples directory of the SD system directory (C:\ProgramData\SD\sdsys\examples) is one program, the FILE NAME its record id (a lower case
+*   letter first, then a-z 0-9 dot dash underscore, up to 80 characters): the five programs of the SD Text User Interface - Programmer's Guide
+*   (hello, menus, notes, browse, stock) and the training programs cs01 to cs23.  In each account they go into examples.bp, a directory file of the
+*   account, made when it is not there; a record that is already the same is not written; a program under an id that is not shipped is kept; a
+*   shipped one is replaced, so a change to a shipped program is made under examples, not in the file.  Then each program that is new, changed, or
+*   has no object yet is compiled there, so the account's person can run it where it is (RUN examples.bp name) or copy it to bp to change it.
+*   "Compiled N of M" counts those M.
+*
+*   NO GATE IS TOUCHED: examples.bp is an ordinary program file of the account (a name ending .bp), so the edit gate bp.edit decides whether its
+*   person may change it - off as delivered, so it is read-only to them.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the administrator
+*   right): it reaches each account's directory by the pathname in the register and never leaves SDSYS.  An account it cannot reach or make the file
+*   in is named and skipped; a program that does not compile is named.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program load.examples
+$catalog $loadexamples
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   keychars = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   bs = char(92)
+   src = @sdsys : @ds : 'examples'
+   entries = dir(src)
+   if entries = '' then stop sysmsg(15121, src)                   ;* The example programs directory is missing or empty: %1
+
+*  The programs, read once: names and texts
+   names = '' ; texts = ''
+   n.bad = 0
+   for i = 1 to dcount(entries, @fm)
+      name = entries<i, 1>
+      if entries<i, 2> # 'F' then continue
+      gosub read.one
+   next i
+   if names = '' then stop sysmsg(15121, src)
+
+*  The accounts: those named (a list, each once), or every one in the register.  A name that is not registered is said and skipped.
+   want = downcase(trim(@sentence))                              ;* the verb, then the account names
+   openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
+   accts = ''
+   if dcount(want, ' ') > 1 then
+      for w = 2 to dcount(want, ' ')
+         aid = field(want, ' ', w)
+         read arec from acc.f, aid else
+            display sysmsg(15122, aid)                           ;* No account is registered as %1 ...
+            n.bad += 1
+            continue
+         end
+         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
+      next w
+   end else
+      select acc.f to 11
+      loop
+         readnext aid from 11 else exit
+         read arec from acc.f, aid else continue
+         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue     ;* a suspended account is skipped (LOGTO refuses it); it is given them when it is back
+         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
+      repeat
+   end
+
+*  SDSYS's own VOC holds, for the length of each account's compile, two pointers to that account's examples.bp and examples.bp.out: the compiler opens
+*  its source and object files by VOC name, and this session never leaves SDSYS.
+   open 'VOC' to sv else stop sysmsg(2026)                       ;* Cannot open VOC
+   src.voc = 'load.examples.src'
+   gosub drop.pointers
+
+   n.acc = 0 ; n.new = 0 ; n.changed = 0 ; n.same = 0 ; n.kept = 0 ; n.compiled = 0 ; n.tried = 0
+   for a = 1 to dcount(accts, @fm)
+      acct = accts<a>
+      gosub do.account
+   next a
+   gosub drop.pointers
+   close sv
+   close acc.f
+
+   void kernel(K$AUDIT, 'load.examples accounts=' : n.acc : ' new=' : n.new : ' changed=' : n.changed : ' same=' : n.same : ' kept=' : n.kept : ' compiled=' : n.compiled : ' of=' : n.tried : ' skipped=' : n.bad)
+   display sysmsg(15124, n.acc, n.new, n.changed, n.same)           ;* SYSMSG takes four places
+   display sysmsg(15125, n.compiled, n.tried, n.kept)
+   @system.return.code = (if n.bad then -ER$FAILED else 0)
+   stop
+
+* ------------------------------------------------------------------------------------------------- one account
+
+do.account:
+   acct.dir = ''
+   read arec from acc.f, acct then gosub account.dir
+   if acct.dir = '' then
+      display sysmsg(15123, acct)                                ;* Could not enter the account %1 ...
+      n.bad += 1
+      return
+   end
+   x.path = acct.dir : '/examples.bp'
+   o.path = x.path : '.out'
+   openpath x.path to xf else
+      made = @true
+      create.file x.path directory on error
+         made = @false
+      end
+      if made then
+         openpath x.path to xf else made = @false
+      end
+      if not(made) then
+         display sysmsg(15123, acct)
+         n.bad += 1
+         return
+      end
+   end
+   have.obj = @false
+   openpath o.path to of then
+      have.obj = @true
+   end else
+      made = @true
+      create.file o.path directory on error
+         made = @false
+      end
+      if made then
+         openpath o.path to of else made = @false
+      end
+      if not(made) then
+         close xf
+         display sysmsg(15123, acct)
+         n.bad += 1
+         return
+      end
+   end
+*  The account's own VOC names both files, relative, as a file made in the account names them (a pointer already there is left as it is)
+   openpath convert('/', bs, acct.dir) : bs : 'voc' to avf else
+      close xf ; close of
+      display sysmsg(15123, acct)
+      n.bad += 1
+      return
+   end
+   for vi = 1 to 2
+      vid = (if vi = 1 then 'examples.bp' else 'examples.bp.out')
+      read vrec from avf, vid else
+         vrec = (if vi = 1 then 'F File of example programs' else 'F')
+         vrec<2> = vid
+         write vrec to avf, vid
+      end
+   next vi
+   close avf
+   n.acc += 1
+   todo = ''                                                     ;* the programs to compile here: new, changed, or with no object yet
+   for p = 1 to dcount(names, @fm)
+      rec = raise(texts<p>)
+      old = ''
+      read old from xf, names<p> then
+         if old = rec then
+            n.same += 1
+            obj = ''
+            if have.obj then read obj from of, names<p> else obj = ''
+            if obj = '' then todo<-1> = names<p>
+            continue
+         end
+         n.changed += 1
+      end else
+         n.new += 1
+      end
+      todo<-1> = names<p>
+      wok = @true
+      write rec to xf, names<p> on error wok = @false
+      if not(wok) then
+         display sysmsg(15126, acct : ' ' : names<p>, 'it could not be written')
+         n.bad += 1
+      end
+   next p
+   select xf to 12
+   loop
+      readnext rid from 12 else exit
+      locate rid in names<1> setting kp else n.kept += 1
+   repeat
+   close xf
+   close of
+*  Each program to compile, one at a time, judged on the compiler's own success line, through SDSYS's two pointers to this account's files
+   pv = 'F' : @fm : convert('/', bs, x.path)
+   write pv to sv, src.voc
+   pv<2> = convert('/', bs, o.path)
+   write pv to sv, src.voc : '.out'
+   for p = 1 to dcount(todo, @fm)
+      n.tried += 1
+      execute 'basic ' : src.voc : ' ' : todo<p> capturing out
+      if index(out, 'Compiled 1 program(s) with no errors', 1) then
+         n.compiled += 1
+      end else
+         display sysmsg(15126, acct : ' ' : todo<p>, 'it did not compile')
+         n.bad += 1
+      end
+   next p
+   gosub drop.pointers
+   return
+
+* ------------------------------------------------------------------------------------------------- the account's directory, from its register record
+
+*  The register may hold an @SDSYS token, a drive letter path with forward slashes (C:/ProgramData/SD/user_accounts/don) or backslashes; the answer
+*  is in forward slashes, without a trailing one, or a null string when it is not an absolute path.
+account.dir:
+   acct.dir = trim(arec<ACC$PATH>)
+   if acct.dir[1, 1] = '@' then acct.dir = parse.pathname.tokens(acct.dir)
+   acct.dir = convert(bs, '/', acct.dir)
+   loop
+   while len(acct.dir) > 3 and acct.dir[1] = '/' do
+      acct.dir = acct.dir[1, len(acct.dir) - 1]
+   repeat
+   if len(acct.dir) < 2 or not(acct.dir[2, 1] = ':' or acct.dir[1, 1] = '/') then acct.dir = ''
+   return
+
+* ------------------------------------------------------------------------------------------------- SDSYS's two pointers for the compiler
+
+drop.pointers:
+   for di = 1 to 2
+      did = (if di = 1 then src.voc else src.voc : '.out')
+      read drec from sv, did then delete sv, did
+   next di
+   return
+
+* ------------------------------------------------------------------------------------------------- one shipped file
+
+read.one:
+   ok = (len(name) >= 1 and len(name) <= 80 and index('abcdefghijklmnopqrstuvwxyz', name[1, 1], 1) > 0)
+   if ok then
+      for ci = 2 to len(name)
+         if index(keychars, name[ci, 1], 1) = 0 then ok = 0
+      next ci
+   end
+   if not(ok) then
+      display sysmsg(15126, name, 'not a key')
+      n.bad += 1
+      return
+   end
+   rec = ''
+   nf = 0
+   got = 0
+   openseq src : @ds : name readonly to sf then
+      got = 1
+      loop
+         readseq ln from sf else exit
+         nf += 1
+         rec<nf> = trimb(ln)
+      repeat
+      close sf
+   end
+   if not(got) or nf = 0 then
+      display sysmsg(15126, name, 'cannot be read')
+      n.bad += 1
+      return
+   end
+   locate name in names<1> by 'AL' setting np else
+      ins name before names<np>
+      ins lower(rec) before texts<np>
+   end
+   return
+
+end
+
+* END-CODE

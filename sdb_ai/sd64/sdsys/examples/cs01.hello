@@ -1,0 +1,17 @@
+* cs01.hello - the first program: output, comments and the end of a program
+*
+* Every account has the example programs in its own file examples.bp, already compiled.  Run one where it is:
+*    run examples.bp cs01.hello
+* To change one, copy it to your bp file first (examples.bp is refreshed by an upgrade, so your change would not last there):
+*    copy from examples.bp to bp cs01.hello
+*    basic bp cs01.hello
+*    run bp cs01.hello
+*
+* A line that begins with * is a comment: SD skips it.  So is anything after ;* on a line.
+* crt writes to the terminal and ends the line; print does the same and can be sent to a printer.
+
+program cs01.hello
+   crt 'Hello, world!'
+   crt 'This is SD BASIC.'           ;* a comment at the end of a line
+   print 'One plus one is ' : 1 + 1  ;* : joins two values into one string
+end

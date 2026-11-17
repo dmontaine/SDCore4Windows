@@ -1,0 +1,17 @@
+* cs22.dates - dates and times: stored as numbers, shown with conversions
+*
+* date() is today as a day number (0 is 31 December 1967); time() is seconds since midnight.  oconv() shows a stored
+* value in a form a person reads, iconv() takes that form back to the stored value.
+
+program cs22.dates
+   today = date()
+   crt 'today is day number ' : today
+   crt 'which is            ' : oconv(today, 'D4')
+   crt 'or                  ' : oconv(today, 'D4-YMD')
+   crt 'a weekday name:     ' : oconv(today, 'DWA')
+   crt 'the time now:       ' : oconv(time(), 'MTS')
+
+   landing = iconv('20 JUL 1969', 'D')
+   crt 'the Moon landing was day ' : landing : ', ' : today - landing : ' days ago'
+   crt 'in 100 days it will be ' : oconv(today + 100, 'D4')
+end

@@ -1,0 +1,33 @@
+* cs09.subroutines - breaking a program into named parts
+*
+* gosub name jumps to a label and return comes back.  A LOCAL SUBROUTINE takes arguments and has variables of its
+* own (private), so it cannot spoil the caller's.  An argument a local subroutine changes is changed for the caller.
+
+program cs09.subroutines
+   gosub banner
+   gosub area('square', 4, 4, a)
+   crt 'square 4 by 4: area ' : a
+   gosub area('rectangle', 3, 7, a)
+   crt 'rectangle 3 by 7: area ' : a
+   i = "the main program's i"                ;* a string can be in double quotes, so it can hold a single one
+   gosub count.to(3)
+   crt 'after count.to, i is still: ' : i
+   stop
+
+banner:
+   crt '== areas =='
+   return
+
+local subroutine area(shape, w, h, result)
+   result = w * h
+   return
+end
+
+local subroutine count.to(n)
+   private i
+   for i = 1 to n
+      crt '  counting ' : i
+   next i
+   return
+end
+end

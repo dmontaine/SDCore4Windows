@@ -98,6 +98,7 @@ $readOnly = @(
     (Join-Path $sysDir 'dir_dict'),     (Join-Path $sysDir 'licence'),
     (Join-Path $sysDir 'contrib'),      (Join-Path $sysDir 'start.default'),
     (Join-Path $sysDir 'agent-pack'),   (Join-Path $sysDir 'bp.out'),
+    (Join-Path $sysDir 'examples'),     # 16 Nov 26 - S.261: the example programs LOAD.EXAMPLES copies into the accounts
     (Join-Path $sysDir 'pcode.out'),    (Join-Path $sysDir 'dict.dic'),
     (Join-Path $sysDir 'voc.dic'),      (Join-Path $sysDir '$map.dic'),
     (Join-Path $sysDir 'accounts.dic'),

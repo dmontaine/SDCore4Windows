@@ -1,0 +1,219 @@
+* REMOVEEXAMPLES
+* REMOVE.EXAMPLES verb: take the shipped example programs out of the file examples.bp of every account (or of the accounts named).
+* Copyright (c) 2026, SD Core for Linux.  This program is free software; you can redistribute
+* it and/or modify it under the terms of the GNU General Public License, version 3 or later.
+*
+* START-HISTORY:
+* 16 Nov 26 Windows port - from Linux 657da3de (S.261): new.  NO LOGTO, as LOAD.EXAMPLES here: each account's examples.bp and examples.bp.out are reached by
+*               the pathname the register holds (on this port LOGTO out of SDSYS gives up the administrator right).  An emptied file is deleted with
+*               OSPATH(OS$DELETE), as DELETE.FILE deletes a data part, and the account's VOC pointer to it goes with it.  Messages 14127-14131 are
+*               15127-15131 here.
+* 17 Nov 26 dm  New (the owner, 17 Nov 2026: "there should be a companion remove.examples verb for the administrator, both load.examples and remove.examples
+*               should take a list of accounts").  Made from loadexamples, which it undoes.
+* END-HISTORY
+*
+* START-DESCRIPTION:
+*
+*   REMOVE.EXAMPLES                     every registered account
+*   REMOVE.EXAMPLES account ...         the accounts named, a list; a name that is not registered is said and skipped, and the others go on
+*
+*   The administrator's verb, the companion of LOAD.EXAMPLES.  In each account it deletes from examples.bp every program the system ships (the files of
+*   the examples directory of the SD system directory, the same list LOAD.EXAMPLES writes) together with its compiled object in examples.bp.out.
+*   A program the administrator or the account's person added under another name is KEPT, and so are its object and the file; examples.bp and
+*   examples.bp.out are deleted only when nothing is left in examples.bp.  An account with no examples.bp is counted and left alone.
+*
+*   THE EXAMPLES COME BACK: the installer and an upgrade run LOAD.EXAMPLES for every account, and create.account runs it for a new one, so what this
+*   verb removes is put back by the next of those, or by LOAD.EXAMPLES by hand.  It does not LOGTO (on Windows a LOGTO out of SDSYS ends the
+*   administrator right): it reaches each account's directory by the pathname in the register and never leaves SDSYS.  An account it cannot reach,
+*   and a program that cannot be deleted, is named and counted; the command goes on with the others.
+*
+* END-DESCRIPTION
+*
+* START-CODE
+
+$internal
+program remove.examples
+$catalog $removeexamples
+
+$include int$keys.h
+$include keys.h
+$include err.h
+
+   @system.return.code = -ER$ARGS
+   if not(kernel(K$ADMINISTRATOR, -1)) then
+      stop sysmsg(2001) ;* Command requires administrator privileges
+   end
+
+   keychars = 'abcdefghijklmnopqrstuvwxyz0123456789._-'
+   bs = char(92)
+   src = @sdsys : @ds : 'examples'
+   entries = dir(src)
+   if entries = '' then stop sysmsg(15121, src)                   ;* The example programs directory is missing or empty: %1
+
+*  The names of the shipped programs (a file name that LOAD.EXAMPLES would not take is not one of them)
+   names = ''
+   n.bad = 0
+   for i = 1 to dcount(entries, @fm)
+      name = entries<i, 1>
+      if entries<i, 2> # 'F' then continue
+      ok = (len(name) >= 1 and len(name) <= 80 and index('abcdefghijklmnopqrstuvwxyz', name[1, 1], 1) > 0)
+      if ok then
+         for ci = 2 to len(name)
+            if index(keychars, name[ci, 1], 1) = 0 then ok = 0
+         next ci
+      end
+      if ok then
+         locate name in names<1> by 'AL' setting np else ins name before names<np>
+      end
+   next i
+   if names = '' then stop sysmsg(15121, src)
+
+*  The accounts: those named (a list, each once), or every one in the register.  A name that is not registered is said and skipped.
+   want = downcase(trim(@sentence))                              ;* the verb, then the account names
+   openpath @sdsys : @ds : 'accounts' to acc.f else stop sysmsg(6003)
+   accts = ''
+   if dcount(want, ' ') > 1 then
+      for w = 2 to dcount(want, ' ')
+         aid = field(want, ' ', w)
+         read arec from acc.f, aid else
+            display sysmsg(15130, aid)                           ;* No account is registered as %1 ...
+            n.bad += 1
+            continue
+         end
+         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
+      next w
+   end else
+      select acc.f to 11
+      loop
+         readnext aid from 11 else exit
+         read arec from acc.f, aid else continue
+         if upcase(trim(arec<ACC$SUSPENDED>)) = 'SUSPENDED' then continue     ;* a suspended account is skipped, as LOAD.EXAMPLES skips it
+         locate aid in accts<1> by 'AL' setting ap else ins aid before accts<ap>
+      repeat
+   end
+
+   n.acc = 0 ; n.removed = 0 ; n.files = 0 ; n.none = 0 ; n.kept = 0
+   for a = 1 to dcount(accts, @fm)
+      acct = accts<a>
+      gosub do.account
+   next a
+   close acc.f
+
+   void kernel(K$AUDIT, 'remove.examples accounts=' : n.acc : ' removed=' : n.removed : ' files=' : n.files : ' none=' : n.none : ' kept=' : n.kept : ' skipped=' : n.bad)
+   display sysmsg(15127, n.acc, n.removed, n.files)               ;* SYSMSG takes four places
+   display sysmsg(15128, n.none, n.kept)
+   @system.return.code = (if n.bad then -ER$FAILED else 0)
+   stop
+
+* ------------------------------------------------------------------------------------------------- one account
+
+do.account:
+   acct.dir = ''
+   read arec from acc.f, acct then gosub account.dir
+   if acct.dir = '' then
+      display sysmsg(15131, acct)                                ;* Could not enter the account %1 ...
+      n.bad += 1
+      return
+   end
+   x.path = acct.dir : '/examples.bp'
+   o.path = x.path : '.out'
+   openpath x.path to xf else
+      n.none += 1
+      return
+   end
+   n.acc += 1
+   have.obj = @false
+   openpath o.path to of then have.obj = @true
+   for p = 1 to dcount(names, @fm)
+      read old from xf, names<p> then
+         dok = @true
+         delete xf, names<p> on error dok = @false
+         if dok then
+            n.removed += 1
+         end else
+            display sysmsg(15129, acct : ' ' : names<p>, 'it could not be deleted')
+            n.bad += 1
+         end
+      end
+      if have.obj then
+         read obj from of, names<p> then
+            dok = @true
+            delete of, names<p> on error dok = @false
+            if not(dok) then
+               display sysmsg(15129, acct : ' ' : names<p> : ' (compiled)', 'it could not be deleted')
+               n.bad += 1
+            end
+         end
+      end
+   next p
+*  What is left in examples.bp is the account's own: it stays, and so do the files while there is any
+   left = 0
+   select xf to 12
+   loop
+      readnext rid from 12 else exit
+      left += 1
+   repeat
+   n.kept += left
+   close xf
+   if have.obj then close of
+   if left = 0 then
+      dummy = ospath('', OS$FLUSH.CACHE)
+      dummy = ospath(x.path, OS$DELETE)
+      openpath x.path to xf then
+         close xf
+         display sysmsg(15129, acct : ' examples.bp', 'the file could not be deleted')
+         n.bad += 1
+      end else
+         n.files += 1
+         vid = 'examples.bp'
+         gosub drop.voc
+         openpath o.path to of then
+            close of
+            dummy = ospath('', OS$FLUSH.CACHE)
+            dummy = ospath(o.path, OS$DELETE)
+            openpath o.path to of then
+               close of
+               display sysmsg(15129, acct : ' examples.bp.out', 'the file could not be deleted')
+               n.bad += 1
+            end else
+               vid = 'examples.bp.out'
+               gosub drop.voc
+            end
+         end else
+            vid = 'examples.bp.out'
+            gosub drop.voc
+         end
+      end
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the account's VOC pointer to a file that is gone
+
+*  Deleted only when it is the relative pointer LOAD.EXAMPLES (or a CREATE.FILE in the account) writes: F, and the file's own name as its path.
+drop.voc:
+   openpath convert('/', bs, acct.dir) : bs : 'voc' to avf then
+      read vrec from avf, vid then
+         if upcase(vrec<1>[1, 1]) = 'F' and vrec<2> = vid then delete avf, vid
+      end
+      close avf
+   end
+   return
+
+* ------------------------------------------------------------------------------------------------- the account's directory, from its register record
+
+*  The register may hold an @SDSYS token, a drive letter path with forward slashes (C:/ProgramData/SD/user_accounts/don) or backslashes; the answer
+*  is in forward slashes, without a trailing one, or a null string when it is not an absolute path.
+account.dir:
+   acct.dir = trim(arec<ACC$PATH>)
+   if acct.dir[1, 1] = '@' then acct.dir = parse.pathname.tokens(acct.dir)
+   acct.dir = convert(bs, '/', acct.dir)
+   loop
+   while len(acct.dir) > 3 and acct.dir[1] = '/' do
+      acct.dir = acct.dir[1, len(acct.dir) - 1]
+   repeat
+   if len(acct.dir) < 2 or not(acct.dir[2, 1] = ':' or acct.dir[1, 1] = '/') then acct.dir = ''
+   return
+
+end
+
+* END-CODE
