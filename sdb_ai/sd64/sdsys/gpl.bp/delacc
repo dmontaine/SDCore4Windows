@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 0d2ac6f8 (pass 4, S.62): a kept Windows user also leaves sdfilesadmin, sdfileswrite, sdfiles and sdaiusers; a later
+*           account for the same user inherited the files routes and the AI.
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): a kept Windows user (one SD did not make) also leaves sdsshnokey, after sdusers.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3343 to P-3347): laid out as Linux's - the SDSYS refusal before the shared
 *           account's, crt for 10919, Linux's spacing, the is_grp_member deffun after is_sd_user; no change in effect.
@@ -591,6 +593,12 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
                strip.user = os.user
                strip.group = 'sdssh'   ; gosub strip.membership
                strip.group = 'sdapi'   ; gosub strip.membership
+* 17 Nov 26 Windows port - from Linux 0d2ac6f8 (pass 4, S.62): and every other group create.account can put a user in - the files routes and the AI - or a
+*   later account for the same Windows user inherits them.  Before sdusers, as Linux.
+               strip.group = 'sdfilesadmin' ; gosub strip.membership
+               strip.group = 'sdfileswrite' ; gosub strip.membership
+               strip.group = 'sdfiles'      ; gosub strip.membership
+               strip.group = 'sdaiusers'    ; gosub strip.membership
                strip.group = 'sdusers' ; gosub strip.membership
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): and sdsshnokey, the group whose members sshd offers no key sign-in.  SD puts only a user it made in it, so
 *   a kept user is in it only by an administrator's own hand; it goes LAST because leaving it gives MORE (the machine's own key sign-in back), the opposite of the

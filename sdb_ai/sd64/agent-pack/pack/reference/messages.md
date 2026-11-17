@@ -3081,10 +3081,10 @@ Output
 cited by: `sl_out`
 
 ### msg:12185
-> kind=message tier=reference since=- src=sdsys/messages/12185:1#f1e41e13
+> kind=message tier=reference since=- src=sdsys/messages/12185:1#fb2d09f3
 
 ```
-%1 has no OS access, so a file or directory outside its own account cannot be reached by pathname (SDSYS can give it: modify.account %1 os-on)
+%1 has no OS access, so outside its own account it can reach by pathname only a directory the administrator opened to all (SDSYS can give it: modify.account %1 os-on)
 ```
 
 cited by: `convertdata`, `ide`, `ide_name`, `importdata`, `oscopya`, `qproc`, `seldir`, `setptr`
@@ -3371,10 +3371,10 @@ LN() attempted for negative value
 ```
 
 ### msg:12220
-> kind=message tier=reference since=- src=sdsys/messages/12220:1#43a9ea61
+> kind=message tier=reference since=- src=sdsys/messages/12220:1#3ba79526
 
 ```
-F4               Next error or result\nF5, Ctrl-L       Draw the screen again (as on every page)\nF9               Run\nF7              Debug (it runs on to the first breakpoint mark; Build / Debug from the first line stops at the first line)\nShift-F7         Set or clear the breakpoint mark of the line (a click in the gutter does the same; Build / Clear breakpoints)\nF8               Compile\nShift-F9         Build: compile and catalog\nAlt-G            Go to a line\nCtrl-T           The next theme (kept for you; View, Theme)\nCtrl-K           The keys (Help, Keys)\nCtrl-E           Zoom: the editor fills the screen, or the files come back\nF12              Edit the record as fields: values and subvalues in CED (Ctrl-S there brings the fields back here)\nMarks            A dictionary item's, a VOC record's or a data record's value, subvalue and text marks show as :@vm: :@sm: :@tm: and are read back as marks (a program's never)\nLocks            A record open in a tab is locked; one another session has locked opens read-only\nNot ASCII        A record holding characters outside ASCII (bytes 128 to 247) opens read-only\nIdle             With autologout set, the status line counts down its last 60 seconds; any key stops it\nInclude          Go, Open the include: the record a $include line at the cursor names\nMenus            Save as, Write a copy and Find in the records of the file are in the File and Search menus\n
+F4               Next error or result\nF5, Ctrl-L       Draw the screen again (as on every page)\nF9               Run\nF7              Debug (it runs on to the first breakpoint mark; Build / Debug from the first line stops at the first line)\nShift-F7         Set or clear the breakpoint mark of the line (a click in the gutter does the same; Build / Clear breakpoints)\nF8               Compile\nShift-F9         Build: compile and catalog\nAlt-G            Go to a line\nCtrl-T           The next theme (kept for you; View, Theme)\nCtrl-K           The keys (Help, Keys)\nCtrl-E           Zoom: the editor fills the screen, or the files come back\nF12              Edit the record as fields: values and subvalues in CED (Ctrl-S there brings the fields back here)\nMarks            A dictionary item's, a VOC record's or a data record's value, subvalue and text marks show as :@vm: :@sm: :@tm: and are read back as marks (a program's never)\nLocks            A record open in a tab is locked; one another session has locked opens read-only\nNot ASCII        A record holding characters outside ASCII (bytes 128 to 247) is edited like any other and the bytes are kept as they are\nIdle             With autologout set, the status line counts down its last 60 seconds; any key stops it\nInclude          Go, Open the include: the record a $include line at the cursor names\nMenus            Save as, Write a copy and Find in the records of the file are in the File and Search menus\n
 ```
 
 cited by: `ide`
