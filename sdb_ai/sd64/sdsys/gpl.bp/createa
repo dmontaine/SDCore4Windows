@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-finding 1): settings is emptied BEFORE the parser, as Linux
+*           createa:236.  It was emptied after it, so shared-read-off, shared-write-on, net-on, files-*, ai-on, the start
+*           word, pins-on, recovery-on and xfer-on never reached !create_account (a lost shared-read-off left shared read on).
 * 16 Nov 26 Windows port - from Linux 657da3de (S.261) and cc7e41c6: the new account gets its own examples.bp (the example programs, compiled) from LOAD.EXAMPLES,
 *           after its audit line.
 * 15 Nov 26 Windows port - RELEASE_1.1 315: the audit line names the account as given, as Linux (it was upcased, this port's case before
@@ -653,6 +656,7 @@ deffun ps_script(script) calling '!ps_script'
 
    acc.name = ''
    pathname = ''
+   settings = ''      ;* before more.args writes into it (Linux createa:236)
    begin case
    case upcase(acc.type) = 'USER'
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
@@ -700,7 +704,6 @@ deffun ps_script(script) calling '!ps_script'
       stop sysmsg(12704) ;* SDRADMIN is the remote administration account
    end
 
-   settings = ''
    if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname
    if access.given then
       if access.ssh then settings<CA$ROUTE.SSH> = 1 else settings<CA$ROUTE.SSH> = 0

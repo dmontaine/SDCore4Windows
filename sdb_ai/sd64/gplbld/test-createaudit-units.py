@@ -72,6 +72,11 @@ def checks(src):
     ck("A7 the two start words share the one setting and refuse each other (12796) BEFORE !create_account is called: the second different one stops the verb; PINS-ON sets CA$PINS to 1; START-DEFAULT and PINS-OFF, which restate the delivered state, are not words of this verb",
        0 <= c.find("case upcase(token) = 'START-MENU' or upcase(token) = 'START-TERMINAL'") < c.find("stop sysmsg(12796, 'start-' : settings<CA$START>, downcase(token))") < c.find("settings<CA$START> = downcase(token[7, 99])") < c.find("case upcase(token) = 'PINS-ON'\n            settings<CA$PINS> = 1")
        and 0 <= c.find("gosub more.args") < cr and "if settings<CA$START> # '' and settings<CA$START> # downcase(token[7, 99]) then" in c and "START-DEFAULT" not in more and "PINS-OFF" not in more, "")
+    # 17 Nov 26 - four-version audit round 1: settings was emptied AFTER more.args had written into it, so every word the
+    # parser stores in settings (shared-read-off, net-on, files-*, ai-on, start-*, pins-on, recovery-on, xfer-on) was lost.
+    ck("A8 settings is emptied once, before the first gosub more.args (Linux createa:236), never between the parser and !create_account",
+       c.count("   settings = ''\n") == 1 and 0 <= c.find("   settings = ''\n") < c.find("gosub more.args") < cr,
+       "resets %d, at %d, first more.args %d" % (c.count("   settings = ''\n"), c.find("   settings = ''\n"), c.find("gosub more.args")))
     return rows
 
 
@@ -103,6 +108,9 @@ MUTANTS = [
     ("voc-on is named bp-on", "settings<CA$VOC.EDIT> = 1 then gates<-1> = 'voc-on'", "settings<CA$VOC.EDIT> = 1 then gates<-1> = 'bp-on'"),
     ("an empty list is not none", "if gates = '' then gates = 'none' else", "if gates = '' then gates = '' else"),
     ("the words are not separated", "gates = convert(@fm, ',', gates)", "gates = convert(@fm, '', gates)"),
+    ("settings is emptied again after the parser (the audit round 1 defect)", "   if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname\n",
+     "   settings = ''\n   if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname\n"),
+    ("settings is never emptied", "   settings = ''      ;* before more.args writes into it (Linux createa:236)\n", ""),
     ("a new gate word is accepted and not audited", "         case upcase(token) = 'DICT-ON'\n", "         case upcase(token) = 'DICT-OK'\n            settings<CA$NET> = 1\n         case upcase(token) = 'DICT-ON'\n"),
 ]
 

@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: the sdusers test is back at both API logins (local and SCRAM), as Linux
+*           apisrvr:1396 and :1670, refusing with 5009 (this port's 13 Aug removal predates 13 Oct; the tighter side is kept).
 * 16 Nov 26 Windows port - RELEASE_1.1 331, from Linux 3f8d2fa2, 42e05d2a, 2fd1731f (S.256): remote administration through the API.  SDSYS
 *           from another computer is admitted only when <ProgramData>\SD\sd-tls\sdsys-api (written by remote.sdsys api through
 *           sd-sdsysapi.ps1) says on and lists the client's address (10174 shut, 15116 names an unlisted one); the session it is handed to
@@ -1862,9 +1864,24 @@ vb.local.login:
 
                * mab 20240219 if kernel(K$SECURE, -1) then
                * dsm 20240612 readu lgn.rec from lgn.f, username else null
-               * 20240219 mab user must be member of sdusers           
+               * 20240219 mab user must be member of sdusers
 * 13 Aug 26 Windows port - removed the sdusers group test; SD no longer
 *   consults operating system groups.
+* 17 Nov 26 Windows port - four-version audit round 1 (P-finding 2): THE TEST IS BACK, as Linux apisrvr:1396 (a pre-13-Oct
+*   conflict, so the tighter side is kept).  Every SD user is in sdusers here too (create_account joins it; install-sdsys.ps1
+*   refuses an SDSYS that is not), so it refuses nobody who belongs.  A group that cannot be read refuses, with its own reason.
+               api.in.sdusers = is_grp_member(username, 'sdusers')
+               api.sdusers.stat = status()
+               if not(api.in.sdusers) then
+                     server.error = SV$ON.ERROR
+                     if api.sdusers.stat # 0 then
+                        void kernel(K$AUDIT, 'api refused user=' : username : ' reason=the sdusers group could not be read, status ' : api.sdusers.stat : ' (local login)')
+                     end else
+                        void kernel(K$AUDIT, 'api refused user=' : username : ' reason=not a member of sdusers (local login)')
+                     end
+                     abort.message = sysmsg(5009) ;* This user is not registered for SD use
+                     goto exit.vb.local.login
+               end
 
 * 02 Oct 26 Windows port - RELEASE_1.1 116, the login hold (see vb.scram.first).
                call !acc_hold('TEST', hold.info, hold.err)
@@ -2263,6 +2280,20 @@ vb.scram.final:
 *   - sdsys IS EXEMPT FROM THE sdapi AND sdfiles ROUTES BY NAME, as on Linux: it has the whole API through its own door.
 *   - ADMITTED, it is handed over as SDSYS like any other login; the session is the administrator while its own token is elevated (the
 *     start-up block) and the grant is audited after the handover (the dispatcher), Linux's "elevation granted reason=sdsys api from=".
+* 17 Nov 26 Windows port - four-version audit round 1 (P-finding 2): sdusers FIRST, with 5009 - an SD user at all - as Linux apisrvr:1670,
+*   before the sdsys door and the sdapi / sdfiles routes.  SDSYS and SDRADMIN are in sdusers (install-sdsys.ps1, remote-admin.ps1).
+               api.in.sdusers = is_grp_member(scram.user, 'sdusers')
+               api.sdusers.stat = status()
+               if not(api.in.sdusers) then
+                  if api.sdusers.stat # 0 then
+                     scram.refuse.reason = 'the sdusers group could not be read, status ' : api.sdusers.stat
+                  end else
+                     scram.refuse.reason = 'not a member of sdusers'
+                  end
+                  abort.message = sysmsg(5009) ;* This user is not registered for SD use
+                  server.error = SV$ON.ERROR
+                  goto exit.vb.scram.fail
+               end
                if downcase(scram.user) = 'sdsys' then
                   api.peer.addr = system(42)
                   gosub read.sdsys.api

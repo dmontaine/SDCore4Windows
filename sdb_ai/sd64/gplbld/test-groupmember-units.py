@@ -114,6 +114,11 @@ READS_STATUS = {
         "same session test, second group: api.files.stat = status() on the next line; could-not-tell refuses",
     ("apisrvr", "api.in.sdapi = is_grp_member(scram.user, 'sdapi')"):
         "the sdapi gate at SCRAM: api.route.stat = status() on the next line; could-not-tell is refused with its own audit reason",
+    # 17 Nov 26 - four-version audit round 1: the sdusers gate at both API logins, as Linux apisrvr:1396 and :1670.
+    ("apisrvr", "api.in.sdusers = is_grp_member(username, 'sdusers')"):
+        "the sdusers gate at the local API login: api.sdusers.stat = status() on the next line; could-not-tell refuses (5009) with its own audit reason",
+    ("apisrvr", "api.in.sdusers = is_grp_member(scram.user, 'sdusers')"):
+        "the sdusers gate at SCRAM, before the sdsys door and the routes: api.sdusers.stat = status() on the next line; could-not-tell refuses (5009) with its own reason",
     ("apisrvr", "api.in.sdfiles = is_grp_member(scram.user, 'sdfiles')"):
         "the sdfiles gate at SCRAM: api.files.stat = status() on the next line; could-not-tell is refused with its own audit reason",
     ("create_account", "rm.member = is_grp_member(acc.uname, 'sdfiles')"):

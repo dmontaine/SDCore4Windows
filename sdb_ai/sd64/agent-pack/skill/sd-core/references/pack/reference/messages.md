@@ -16679,7 +16679,7 @@ Telnet connection from %1
 This user is not registered for String Database (sd) use
 ```
 
-cited by: `login`, `xfersrv`
+cited by: `apisrvr`, `login`, `xfersrv`
 
 ### msg:5010
 > kind=message tier=reference since=- src=sdsys/messages/5010:1#6c135f1f
