@@ -104,6 +104,7 @@ win32group
 win32jobmark
 win32gcat
 win32ai
+win32trace
 sdtermlb
 strings
 sysdump

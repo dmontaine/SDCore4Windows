@@ -157,7 +157,14 @@ TEMPSRCS := $(notdir $(wildcard $(GPLSRC)*.c))
 SRCS     := $(TEMPSRCS)
 OBJS     := $(SRCS:.c=.o)
 DIROBJS  := $(addprefix $(GPLOBJ),$(OBJS))
-	
+
+# 17 Nov 26 Windows port - four-version audit round 1 (P-3216, P-3217, P-3218), from Linux's Makefile: the object and binary
+#           directories are made when make starts (gplobj/README, which kept gplobj in git, is gone; bin/README stays, it says what
+#           bin is for), a plain "make" checks the generated BASIC includes against the C headers before building sd, and
+#           check-includes and clean are targets of their own.  Every tool and script here says "make sd", which is unchanged.
+$(shell mkdir -p $(GPLOBJ) $(GPLBIN))
+all: check-includes sd
+
 sd: ARCH :=
 sd: BITSIZE := 64
 # rev 0.9.0 python
@@ -207,6 +214,19 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
 .PHONY: sdclilib sdsvc sdtlsrelay sd-ai sdpy terminfo check-local check-remote check-api-admin build-api-identity
+.PHONY: all clean check-includes
+
+# 17 Nov 26 Windows port - four-version audit round 1 (P-3218), Linux's two targets: the generated BASIC includes (err.h, errtext.h,
+#           opcodes.h, revstamp.h) checked against the C headers, and clean, with this port's binary names (.exe and the four
+#           client DLLs and import libraries; bin/client32 and bin/client64 are left to their own targets).
+check-includes:
+	@python gplbld/gen_includes.py --check
+
+clean:
+	@echo Cleaning build files
+	@$(RM) -f $(GPLOBJ)*.o
+	@$(RM) -f $(GPLBIN)*.exe $(GPLBIN)*.dll $(GPLBIN)*.dll.a
+	@$(RM) -Rf $(TERMINFO)
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -460,7 +480,7 @@ sdwind: sdwind.o sdsem.o win32sem.o win32peer.o exepath.o inipath.o
 terminfo:
 	@echo Compiling terminfo library
 	@rm -Rf $(TERMINFO)
-	@mkdir $(TERMINFO)
+	@mkdir -p $(TERMINFO)
 	@$(GPLBIN)sdtic -pterminfo $(MAIN)terminfo.src
 
 

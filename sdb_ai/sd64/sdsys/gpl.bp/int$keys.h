@@ -18,6 +18,7 @@
   	  * 
   	  * 
 	  * START-HISTORY:
+	  * 17 Nov 26 Windows port - four-version audit round 1 (P-1965): K$OS.ADMINISTRATOR (63) is retired, as gplsrc/keys.h; nothing asked it.
 	  * 13 Nov 26 Windows port - K$RUNIN.CHILD (84) and K$RUNIN.DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)).
 	  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K$LOCK.TRACE (115), LOCK.TRACER.
 	  * 13 Nov 26 Windows port - RELEASE_1.1 246: the four AI keys answer as Linux's do now (op_ai.c); their "nohelper" notes are gone.
@@ -163,7 +164,8 @@
 *   SESSION flag, set on entering SDSYS and cleared on the way out; this one
 *   is the PERSON, asked of Windows each time, and a LOGTO does not move it.
 *   Nothing in SD can set or forge it.  keys.h carries the same note.
-      $define K$OS.ADMINISTRATOR 63      ;* Is the signed-in person an OS administrator?
+* 17 Nov 26 Windows port - RETIRED, four-version audit round 1 (P-1965): nothing asked it (the last caller went with RELEASE_1.1 64), and
+*   Linux has no such key.  63 stays reserved and unused; gplsrc/keys.h says the same.
 * 05 Sep 26 Windows port - PRE_RELEASE_FIXES 167.  HOW DID THIS SESSION ARRIVE?
 *   The third of the trio and the one about the ROUTE: 26 is what this session
 *   may DO, 63 is WHO signed in, and this is HOW they got here.  True at the

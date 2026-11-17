@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 400500c: SOCKVAR gains trace_fd (SKT$INFO.TRACE), after found.
  * 18 Oct 26 dm S.65 slice 3e: the NET member of the FILE_VAR union gains write (the handle was opened in write mode) and edit_kind (the S.64
  *           kind of the remote file's name), after server; 16 + 2 + 2 + 17 + 2 = 39 bytes, within the union's 40.
  * 17 Oct 26 dm S.65 slice 3c: NET_FILE (4) is back, for a file on another SD server (SDNet, stage 1); its member of the FILE_VAR union holds the
@@ -493,6 +494,9 @@ struct SOCKVAR {
      SKT_EXCEPTION_EVENT 4) and those the last SELECT.SOCKET() found.  Every k_alloc of a SOCKVAR must set both. */
   int16_t events;
   int16_t found;
+  /* 17 Nov 26 Windows port - from Linux 400500c (15 Oct 26) - SKT$INFO.TRACE: the file descriptor of the trace log, or -1 for
+     none.  Every k_alloc of a SOCKVAR must set it to -1 (k_alloc does not zero); close_skt() closes it. */
+  int trace_fd;
 };
 
 /* --------------------- COLL (data collection) --------------------- */

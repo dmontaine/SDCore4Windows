@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux c359f30b (S.62, four-version audit round 1): -TERM's value is bounded (32), refused by name when longer.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): main() calls xfer_detect() first; an sftp request sshd sent here
  *           is the file transfer server (sd_sftp.c), and it never opens SD's own window.
  * 14 Nov 26 Windows port - RELEASE_1.1 311: after "Error 5 getting semaphores", two lines say what it means (not an SD user, or made one
@@ -398,8 +399,14 @@ Private bool comlin(int argc, char *argv[]) {
     } else if (!stricmp(argv[arg], "-QUIET")) {
       command_options |= CMD_QUIET;
     } else if (!stricmp(argv[arg], "-TERM")) {
-      if (++arg < argc)
+      if (++arg < argc) {
+        /* 17 Nov 26 Windows port - from Linux c359f30b (S.62): bounded; an unbounded strcpy into the 32 + 1 byte term_type overran struct tio. */
+        if (strlen(argv[arg]) > sizeof(tio.term_type) - 1) {
+          fprintf(stderr, "sd: the terminal type is longer than %d characters\n", (int)(sizeof(tio.term_type) - 1));
+          exit(1);
+        }
         strcpy(tio.term_type, argv[arg]);
+      }
     } else if (!stricmp(argv[arg], "-RUNIN")) {
 /* 13 Nov 26 Windows port - RELEASE_1.1 253(b).  "sd -RUNIN account ... debug file program": run.in's debugged child, which the SD
    service starts (gplsrc/sdsvc/sdrunin.c) as the bare account sdrunin.  Anybody may TYPE it; runin_door() below lets it through only

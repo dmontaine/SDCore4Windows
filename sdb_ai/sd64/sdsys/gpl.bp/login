@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1, owner's answer 1: run.in's debugged child enters a suspended account, as the
+*   plain run.in always did (the administrator's maintenance tool); every other session is still refused 10107.  (P-3360, P-3371)
+*   UPDATE.ACCOUNTS ALL's refusal outside SDSYS (10172) is asked before the walk, as Linux's; same condition, same message.
 * 17 Nov 26 Windows port - four-version audit round 1: Linux's audit reasons for six refusals that said "unspecified" (the register
 *   or the VOC could not be opened, not an SD account, a network or serial connection, $release missing, the revision cross-check);
 *   "not in the register" in Linux's words; a refusal that set no audit.account names initial.account; the success record is
@@ -422,6 +425,14 @@ deffun radmin_open(arg) calling '!radmin_open'
          close update.voc.f
       end
 
+* 04 Sep 26 Windows port - THE NULL CASE, REFUSED OUT LOUD.  PRE_RELEASE_FIXES 70.  Mode 4 is only ever asked for by something that
+*   wants every registered account refreshed, so a session that is not SDSYS under an administrator says the walk did NOT run.  Modes
+*   2 and 3 stay silent there - the normal case for them.  17 Nov 26 (four-version audit round 1, P-3360, P-3371): asked here, before
+*   the walk, as Linux's login asks it; it was the else of the walk's own test, the same condition.
+      if mode = 4 and not(@who = 'sdsys' and kernel(K$ADMINISTRATOR,-1)) then
+         display sysmsg(10172) ;* Cannot update every account from here
+      end
+
       if @who = 'sdsys' and kernel(K$ADMINISTRATOR,-1) then
 * 04 Sep 26 Windows port - MODE 4 DOES NOT ASK, AND IT SAYS SO RATHER THAN GOING
 *   QUIET.  PRE_RELEASE_FIXES 70.  The installer runs this from ssPostInstall,
@@ -504,16 +515,6 @@ deffun radmin_open(arg) calling '!radmin_open'
             end else
                display sysmsg(2200) ;* Cannot open accounts register
             end
-         end
-      end else
-* 04 Sep 26 Windows port - THE NULL CASE, REFUSED OUT LOUD.  PRE_RELEASE_FIXES
-*   70.  Mode 4 is only ever asked for by something that wants every registered
-*   account refreshed, so arriving here means this session is not in SDSYS or is
-*   not an administrator and the walk did NOT run.  Modes 2 and 3 reach this
-*   arm on every ordinary account and must stay silent - that is the normal
-*   case for them and says nothing is wrong.
-         if mode = 4 then
-            display sysmsg(10172) ;* Cannot update every account from here
          end
       end
 
@@ -1059,7 +1060,11 @@ deffun radmin_open(arg) calling '!radmin_open'
 *
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
-   if upcase(trim(acc.rec<ACC$SUSPENDED>, ' ', 'B')) = 'SUSPENDED' then
+* 17 Nov 26 Windows port - four-version audit round 1 (owner's answer 1, 17 Nov, relayed by Linux): RUN.IN KEEPS WORKING INTO A
+*   SUSPENDED ACCOUNT - "it is the administrator's maintenance tool and a suspended account is when you would use it".  RUN.IN's plain
+*   form never asked; its DEBUG form's child (runin.info, the SD service's "sd -RUNIN account", started only for the administrator's
+*   run.in) came through here and was refused.  It is let through; every other session is refused as before.
+   if runin.info = '' and upcase(trim(acc.rec<ACC$SUSPENDED>, ' ', 'B')) = 'SUSPENDED' then
       display sysmsg(10107, initial.account) ;* Account %1 is suspended
       audit.reason = 'the account is suspended'
       goto terminate.connection

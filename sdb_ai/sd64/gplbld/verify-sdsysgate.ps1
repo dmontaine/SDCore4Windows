@@ -383,8 +383,9 @@ try {
     # correctly, the test's expected string had not been updated.  See
     # HISTORY.md, 22 Sep 2026, and verify-elevdoor.ps1, which had the identical
     # staleness.
-    Note 'refused at the door (reason=SDSYS is not reachable by LOGTO)' $true `
-         ($tail -match 'LOGTO REFUSED account=SDSYS reason=SDSYS is not reachable by LOGTO') $true
+    # 17 Nov 26 - four-version audit round 1 (P-3266, owner's ruling D7): CPROC writes Linux's words for the same refusal now.
+    Note 'refused at the door (reason=sdsys is entered by its own session only)' $true `
+         ($tail -match 'logto refused account=sdsys reason=sdsys is entered by its own session only') $true
     # CONTROL: not an older gate's reason - neither pre-45's nor 45's own -
     # which would mean the withdrawal had not taken (verify-elevdoor.ps1 makes
     # the same three-way check for an administrator).

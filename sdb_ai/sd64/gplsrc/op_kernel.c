@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1, second pass (P-1969): the K_OS_ADMINISTRATOR case is gone with the key (keys.h).
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3088, P-3089, P-3090): op_login() discards its arguments unread, as Linux's
  *           does; the password was copied to a stack buffer and never wiped.  (P-3087) K_SHOW_SAFE before K_AI_*, as Linux orders them.
  * 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): K_API_PREAUTH gives a third field, whether a pre-authenticated session's own token is
@@ -973,16 +974,7 @@ void op_kernel() {
        still fails closed; what is new is that the log now says which of the
        two happened.                                                        */
 
-    case K_OS_ADMINISTRATOR: {
-      PRIV_WHY why;
-      bool is_admin = IsAdmin(&why);
-
-      if (why != PRIV_ANSWERED)
-        priv_log_undetermined("K$OS.ADMINISTRATOR", why);
-
-      result.data.value =
-          (is_admin && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
-    } break;
+    /* 17 Nov 26 Windows port - K_OS_ADMINISTRATOR (63) is retired (four-version audit round 1, P-1969; keys.h): nothing asked it. */
 
     /* 14 Oct 26 dm - sheet items 24, 29 and 38.  K_SET_ACCOUNT: the account the session is in, for the user table
        (LISTU, !LISTU).  Set only from a $internal program, like K_SET_USERNAME; the name as it stands is returned,

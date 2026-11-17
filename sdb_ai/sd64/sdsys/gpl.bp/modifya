@@ -19,6 +19,8 @@
 * 
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3215; owner's answer 5b): 10159, printed after 10193 on a suspend, keeps only
+*   the Windows fact (the Windows account, password, groups and rights are left as they were); the rest is gone, as Linux prints 10193 alone.
 * 14 Nov 26 Windows port - RELEASE_1.1 306, from Linux c4ce87e9: the group ADD/DELETE arm sets @system.return.code on all seven outcomes (0 on
 *   10017, 10018, 10021, 10023; -ER$FAILED on 10019, 10020, 10022); a success left the -ER$ARGS preset, so remote.sdsys audited status=-1.
 * 13 Nov 26 Windows port - RELEASE_1.1 288: the account name is downcased, not upcased, as Linux's MODIFY.ACCOUNT (13 Sep 26, plan M)
@@ -1648,6 +1650,9 @@ tier.set:
 *
 *  SUSPENDED ONLY.  Unsuspending obviously lifts access; there is nothing to
 *  explain.
+*  17 Nov 26 Windows port - four-version audit round 1 (P-3215; owner's answer 5b of 17 Nov): Linux prints 10193 alone, so 10159
+*  keeps only the words that state a Windows fact - that suspending leaves the Windows account, its password, its groups and any
+*  administrator rights as they were.  The rest (what is refused, how to lift it, the VOC) is gone, as on Linux; 10193 above says it.
    if want.tier = 'SUSPENDED' then
 *     6 Oct 26 Windows port - 10159 IS SEVERAL LINES, and the newlines in a message
 *     file become field marks (messages.c), so it is shown a line at a time, the

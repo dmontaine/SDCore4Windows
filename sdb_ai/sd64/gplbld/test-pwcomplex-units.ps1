@@ -251,6 +251,31 @@ foreach ($f in @('set_acc_password', 'set_passwd', 'login')) {
 }
 
 # --------------------------------------------------------------------------
+Section '4b. the prompt flow is Linux''s (owner''s answer 7, 17 Nov 2026)'
+# The rule is judged BEFORE the repeat is asked for, each failure names itself and counts the attempt (10921's words), and the
+# 21 Sep flow's three texts are gone.  Read in MODIFY.PASSWORD (set_acc_password), CREATE.ACCOUNT's prompt (set_passwd) and the
+# installer's SDSYS step (finish-install.ps1), on text with whole-line comments dropped, so a comment that names an old text is
+# not read as the code.
+function Get-CodeOnly([string]$path, [string]$commentRe) {
+    return ((Get-Content -LiteralPath $path) | Where-Object { $_ -notmatch $commentRe }) -join "`n"
+}
+$flow = @(
+    @{ Name = 'set_acc_password'; Text = (Get-CodeOnly "$sd64/sdsys/gpl.bp/set_acc_password" '^\s*\*'); Rule = 'if not\(pw_complex\(pw1\)\) then'; Repeat = "display 'Repeat new password: '"; Count = 'sysmsg\(10921, tries, max\.tries\)' }
+    @{ Name = 'set_passwd';       Text = (Get-CodeOnly "$sd64/sdsys/gpl.bp/set_passwd" '^\s*\*');       Rule = 'if not\(pw_complex\(pw1\)\) then'; Repeat = "display 'Retype new password: '"; Count = 'sysmsg\(10921, tries, max\.tries\)' }
+    @{ Name = 'finish-install.ps1'; Text = (Get-CodeOnly $finish '^\s*#');                              Rule = 'if \(\$weak\) \{';                  Repeat = "Read-Host 'Repeat new password'";  Count = "'That was attempt ' \+ \`$tries \+ ' of 3\.'" }
+)
+foreach ($f in $flow) {
+    $ri = $f.Text.IndexOf(($f.Rule -replace '\\', ''))
+    $pi = $f.Text.IndexOf($f.Repeat)
+    Check ("$($f.Name): the rule is judged before the repeat is asked for") (($ri -ge 0) -and ($pi -gt $ri)) "rule at $ri, repeat prompt at $pi"
+    Check ("$($f.Name): each failure counts the attempt (10921)") ($f.Text -match $f.Count) 'no attempt count of the 10921 form'
+    $old = @('Type it again', 'invalid or entries do not match', "'Attempt '") | Where-Object { $f.Text.Contains($_) }
+    Check ("$($f.Name): the 21 Sep flow's texts are gone") (@($old).Count -eq 0) ("still there: " + (@($old) -join ', '))
+}
+$m10921 = (Get-Content -LiteralPath "$sd64/sdsys/messages/10921" -Raw).Trim()
+Check 'message 10921 is "That was attempt %1 of %2." (finish-install.ps1 prints its words)' ($m10921 -eq 'That was attempt %1 of %2.') "10921: '$m10921'"
+
+# --------------------------------------------------------------------------
 Section '5. MUTANTS, on text - the live files are never edited'
 $before = (Get-FileHash -LiteralPath $bas -Algorithm SHA256).Hash
 $tab = "Abcdef1" + [char]9

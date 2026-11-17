@@ -89,10 +89,12 @@ def checks(s):
     cp = code_b(s["cproc"])
     lg = between(cp, "\nint.logto:", "\nlogto.authorised:")
     ri = lg.find("if ri.active then")
-    gate = lg.find("into.sdsys = (upcase(new.account) = \"SDSYS\")")
+    # 17 Nov 26 - four-version audit round 1 (P-3266): Linux's forms - the name compared lower case, 10002 shown a line at a time
+    # (lg.msg), and Linux's audit words.
+    gate = lg.find("into.sdsys = (downcase(new.account) = \"sdsys\")")
     refuse = lg.find("if into.sdsys and not(kernel(K$OS.SDSYS.USER, -1)) then")
-    msg = lg.find("display sysmsg(10002)", refuse)
-    audit = lg.find("void kernel(K$AUDIT, 'logto refused account=SDSYS", refuse)
+    msg = lg.find("lg.msg = sysmsg(10002)", refuse)
+    audit = lg.find("void kernel(K$AUDIT, 'logto refused account=sdsys reason=sdsys is entered by its own session only')", refuse)
     reg = lg.find("openpath @sdsys:@ds:'accounts' to acc.f then")
     ck("C1 cproc refuses LOGTO SDSYS unless K$OS.SDSYS.USER, before the register is read (10002, audited)",
        0 <= gate < refuse < msg < audit < reg and lg.count("K$OS.SDSYS.USER") == 1, "gate %d refuse %d msg %d audit %d reg %d" % (gate, refuse, msg, audit, reg))

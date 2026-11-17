@@ -20,8 +20,9 @@
 # administrator at the log.
 #
 # Exit 0 clean (converted what it could, no duplicates), 2 completed but some
-# files hold a case-only duplicate and were left (see the log), 1 a real
-# failure, 3 SD would not start.
+# files were left - a case-only duplicate, an index, or a file outside its
+# account (17 Nov 26) - and the log names each one, 1 a real failure, 3 SD
+# would not start.
 
 [CmdletBinding()]
 param(
@@ -53,12 +54,23 @@ function Get-NocaseVerdict([string] $Text) {
     $m = [regex]::Match($Text, 'WARNING:\s+(\d+)\s+file\(s\)\s+hold\s+(\d+)\s+record id')
     if ($m.Success) { $dupFiles = [int]$m.Groups[1].Value; $dupIds = [int]$m.Groups[2].Value }
     $couldNot = ($Text -match 'could not be read or rebuilt')
+    # 17 Nov 26 - four-version audit round 1 (owner's ruling D4): EVERY FILE THE WALK LEFT IS A WARNING, not only a duplicate pair, so
+    # the installer points the administrator at the log that names it.  12041: "<n> file(s) named by an account's VOC lie outside ...";
+    # 10186: "<n> indexed file(s) were left for manual configure.file".  Before this a run that left only these exited 0, "no duplicates".
+    $outside = 0
+    $m = [regex]::Match($Text, '(\d+)\s+file\(s\)\s+named by an account''s VOC lie outside')
+    if ($m.Success) { $outside = [int]$m.Groups[1].Value }
+    $akLeft = 0
+    $m = [regex]::Match($Text, '(\d+)\s+indexed file\(s\)\s+were left')
+    if ($m.Success) { $akLeft = [int]$m.Groups[1].Value }
     return [pscustomobject]@{
         Complete = $complete
         Converted = $converted
         Scanned = $scanned
         DupFiles = $dupFiles
         DupIds = $dupIds
+        OutsideFiles = $outside
+        AkLeft = $akLeft
         HadTrouble = $couldNot
     }
 }
@@ -127,8 +139,8 @@ try {
     Say '  --- end ---'
 
     $v = Get-NocaseVerdict $w.Text
-    Say ("upgrade-nocase: complete={0} converted={1}/{2} dupFiles={3} dupIds={4} trouble={5}" -f
-         $v.Complete, $v.Converted, $v.Scanned, $v.DupFiles, $v.DupIds, $v.HadTrouble)
+    Say ("upgrade-nocase: complete={0} converted={1}/{2} dupFiles={3} dupIds={4} outside={5} akLeft={6} trouble={7}" -f
+         $v.Complete, $v.Converted, $v.Scanned, $v.DupFiles, $v.DupIds, $v.OutsideFiles, $v.AkLeft, $v.HadTrouble)
 
     if (-not $v.Complete) {
         Say 'upgrade-nocase: UPGRADE_NOCASE did not reach COMPLETE'
@@ -144,7 +156,13 @@ try {
         Say ("  The full list is in {0}. Rename or delete one id of each pair, then convert that file with CONFIGURE.FILE NO.CASE." -f $LogFile)
         $result = 2
     }
-    else {
+    if (($v.OutsideFiles + $v.AkLeft) -gt 0) {
+        Say ("upgrade-nocase: DONE with a WARNING - {0} file(s) outside their account or under SDSYS and {1} indexed file(s) were left unchanged." -f
+             $v.OutsideFiles, $v.AkLeft)
+        Say ("  The full list is in {0}. Convert each one as its owner with CONFIGURE.FILE NO.CASE." -f $LogFile)
+        $result = 2
+    }
+    if ($result -ne 2) {
         Say ("upgrade-nocase: DONE - converted {0} of {1} file(s); no duplicates found." -f $v.Converted, $v.Scanned)
         $result = 0
     }

@@ -3,6 +3,33 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+17 Nov 26  GRANT, REVOKE AND LIST.GRANTS ARE GONE; THE PASSWORD PROMPTS, THE SOCKET TRACE AND THE UPGRADE'S CASE CONVERSION FOLLOW
+           SD CORE FOR LINUX.
+
+             What        - GRANT, REVOKE and LIST.GRANTS are removed: modify.account <account> add <user> and
+                           modify.account <account> delete <user> make the same change to the account's Windows group,
+                           and an update takes the three records out of an existing VOC (list.voc.removed shows them).
+                           Every prompt that sets a password - create.account, modify.password and the installer's
+                           SDSYS step - says the password rule first, checks a new password against it BEFORE asking
+                           for it again, and says which way an attempt failed ("Passwords do not match." or the rule)
+                           and "That was attempt N of 3."; the one "invalid or entries do not match" line, "Type it
+                           again" and "Attempt N of 3" are gone.  create.account now gives three attempts too (it gave
+                           one).  SET.SOCKET.MODE takes SKT$INFO.TRACE: a pathname to log the data a socket sends and
+                           receives (made readable only by the session's own Windows user, SYSTEM and Administrators;
+                           the gates of OPENSEQ apply).  run.in ... DEBUG works into a suspended account, as run.in
+                           always did.  Suspending an account prints "Account X is now suspended" and one line saying
+                           that nothing on Windows changed.  An upgrade's case conversion names each account it walks
+                           and every file it leaves (a file outside its account and an indexed file now count as a
+                           warning in the installer's closing box, as a case-only duplicate did), and leaves the files
+                           of SDSYS itself as they are.  A LOGTO refused for a suspended account is audited
+                           "reason=suspended", and LOGTO SDSYS's refusal "reason=sdsys is entered by its own session
+                           only".  "sd -term" refuses a terminal type longer than 32 characters.  The licence notice
+                           says that the install and delete scripts are under the Blue Oak Model License.
+             Why         - The four-version parity audit (round 1) and the owner's answers of 17 Nov: SD Core for Linux
+                           is the template.
+             Does NOT    - Remove any access: what GRANT did is still done with modify.account.  NOT YET TESTED ON AN
+                           INSTALLED SYSTEM; the socket trace's Windows file protection has not been run at all.
+
 17 Nov 26  MESSAGES, A HELP PAGE AND TWO SMALL FIXES BROUGHT INTO LINE WITH SD CORE FOR LINUX.
 
              What        - A program that opens a socket and fails to connect no longer leaves the socket open, so one

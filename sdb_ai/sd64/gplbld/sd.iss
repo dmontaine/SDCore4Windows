@@ -3469,7 +3469,8 @@ end;
   it was and named in nocase-upgrade.log, for the administrator to resolve.
 
   Exit codes, from upgrade-nocase.ps1's header: 0 clean, 2 done but some files
-  hold a duplicate and were left (a WARNING, not a failure), 1 a real failure,
+  were left - a duplicate, an index, or a file outside its account, each named
+  in the log (a WARNING, not a failure; 17 Nov 26, owner's ruling D4), 1 a real failure,
   3 SD would not start.  A first install has nothing to do and returns at once.
 
   Ordering: after RefreshAccountVocs, so the account register it walks is the
@@ -3501,10 +3502,8 @@ begin
 
   case Code of
     0: ;
-    2: Result := 'Some files hold two record ids that differ only by case and were ' +
-                 'not converted (nocase-upgrade.log in the SD Core data folder names ' +
-                 'each one). Rename or delete one id of each pair, then run ' +
-                 'CONFIGURE.FILE NO.CASE on that file.' + #13#10#13#10;
+    2: Result := 'Some files were not converted to case-insensitive record ids. ' +
+                 'nocase-upgrade.log in the SD Core data folder names each one.' + #13#10#13#10;
     3: Result := 'SD Core would not start during the upgrade, so your files were ' +
                  'not converted. Run upgrade-nocase.ps1 ' +
                  'from the SD Core program folder, as an administrator, once SD ' +

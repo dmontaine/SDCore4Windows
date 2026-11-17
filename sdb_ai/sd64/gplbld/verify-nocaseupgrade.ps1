@@ -14,29 +14,37 @@
 # sd -internal (the only maker of a case-sensitive file) and runs the INSTALLED
 # driver, the very script the installer runs - verify-dictrename's technique.
 #
-# THE FIXTURES, all in SDSYS, each with a DATA and a DICT part:
+# THE FIXTURES, each with a DATA and a DICT part.  17 Nov 26 - four-version audit
+# round 1, P-3482 (owner's ruling D7): the walk skips SDSYS altogether, as Linux's,
+# so the four that must be walked live in a FIXTURE ACCOUNT, ZZNUACCT, at
+# C:\ProgramData\SD\zznuacct: a directory, a VOC naming them (relative, as
+# CREATE.FILE writes them) and a register record, nothing else (no Windows user
+# or group - the walk reads only the register path and the VOC there).  SDSYS's
+# VOC names them too, by absolute path, so COPY, CREATE.INDEX and the probe reach
+# them from the seat.
 #   zznuclean   case sensitive, holds jack          -> must be CONVERTED
 #   zznutwin    case sensitive, holds jack and JACK -> DATA must be LEFT, both
 #                                                      records kept, pair named
 #   zznuak      case sensitive, holds jack, index f1 -> DATA must be LEFT, named
 #                                                      as indexed (10185)
 #   zznunc      made the ordinary way (NOCASE)      -> CONTROL, untouched
-# Each DICT part that starts case sensitive and holds no pair is expected to be
-# converted too.  THE DECISIVE READ IS A PROBE PROGRAM that opens each part and
-# prints FL$NOCASE (1008), FL$AK (13) and every id as STORED (select/readnext),
-# before and after.  "Nothing lost" is the id list, compared case-sensitively.
+#   zznusys     case sensitive, holds jack, IN SDSYS -> LEFT and not named: the
+#                                                      walk does not enter SDSYS
+# Each DICT part in the account that starts case sensitive and holds no pair is
+# expected to be converted too.  THE DECISIVE READ IS A PROBE PROGRAM that opens
+# each part and prints FL$NOCASE (1008), FL$AK (13) and every id as STORED
+# (select/readnext), before and after.  "Nothing lost" is the id list, compared
+# case-sensitively.
 #
 # WHAT IT CANNOT REACH, SAID HERE SO A GREEN RUN IS NOT READ AS MORE:
-#   - SDSYS's OWN live VOC.  On a fresh install it is already NOCASE, so the
-#     walk skips it whatever it would have done to a case-sensitive one.  Found
-#     by reading 14 Sep 2026: SDSYS's VOC has an F-record 'voc' naming itself,
-#     so the walk queues the live VOC through its file list despite skipping it
-#     by design.  Witnessed only by a real W1.0-0 -> current upgrade.
-#   - the installer's own call (RefreshNocase) and a real account's VOC.  Same.
+#   - a real account's VOC (ZZNUACCT's is made NOCASE) and the installer's own
+#     call (RefreshNocase).  Witnessed only by a real W1.0-0 -> current upgrade.
 #   - it ASSUMES A FRESH D2 INSTALL, where every other hashed file is already
-#     NOCASE, so the walk touches only these fixtures.  assert-current guards
+#     NOCASE, so the walk converts only these fixtures.  assert-current guards
 #     that the install matches source; the converted count row would name any
 #     other file the walk converted.
+#   - 17 Nov 26: the fixture-account form has NOT been run yet (written in the
+#     audit's second pass, parse-checked only).
 #
 # RED BEFORE THE FIX, MEASURED 14 Sep 2026 (the owner's second run; the first
 # refused its precondition on this script's own Get-Probe defect).  PREDICTED
@@ -79,14 +87,21 @@ $probeObj  = Join-Path (Join-Path $sdsys 'bp.out') $probeName
 $buildName = 'zznubuild'
 $buildSrc  = Join-Path (Join-Path $sdsys 'bp') $buildName
 $buildObj  = Join-Path (Join-Path $sdsys 'bp.out') $buildName
-$fixtures  = @('zznuclean', 'zznutwin', 'zznuak', 'zznunc')
+# 17 Nov 26 - P-3482: the fixture account (see the header).  $acctFwd is the path SD is given: one separator throughout.
+$acctName  = 'ZZNUACCT'
+$acctDir   = Join-Path $dataDir 'zznuacct'
+$acctFwd   = $acctDir.Replace([string][char]92, '/')
+$acctFixtures = @('zznuclean', 'zznutwin', 'zznuak', 'zznunc')
+$sysFixture   = 'zznusys'
+$fixtures  = @($acctFixtures + $sysFixture)
 
 Write-Output '===== verify-nocaseupgrade.ps1 ====='
 Write-Output ("  sd.exe   : " + $sdExe)
 Write-Output ("  driver   : " + $driver + " -AppDir " + $appDir + " -DataDir " + $dataDir)
 Write-Output ("  sdsys    : " + $sdsys)
+Write-Output ("  account  : " + $acctName + " at " + $acctDir + " (given to SD as " + $acctFwd + ")")
 Write-Output ("  log      : " + $logFile)
-Write-Output ("  fixtures : " + ($fixtures -join ', ') + "; probe " + $probeSrc)
+Write-Output ("  fixtures : " + ($acctFixtures -join ', ') + " in " + $acctName + "; " + $sysFixture + " in SDSYS; probe " + $probeSrc)
 foreach ($p in @($sdExe, $driver, (Join-Path $sdsys 'bp'))) {
     if (-not (Test-Path -LiteralPath $p)) { Write-Output ("verify-nocaseupgrade: missing " + $p); exit 2 }
 }
@@ -139,17 +154,35 @@ function Show([string]$label, [string]$text) {
 # sd -internal).  Both parts are made case sensitive, as the verb's CASE made them, and the VOC record is the one CREATE.FILE
 # writes for a plain name (F, the name, the name.DIC), so COPY, CREATE.INDEX and DELETE.FILE treat them as before.  A part that
 # cannot be made stops the program with a BUILD line, which the precondition row below then names.
+# 17 Nov 26 - P-3482: four parts go into the fixture account (zznunc made NOCASE, the control), named by the account's own VOC
+# relative to it and by SDSYS's VOC by absolute path; zznusys goes into SDSYS as before; the register record comes last, so a build
+# that stops part way leaves no account for the walk to visit.  @@ACCT@@ is replaced with $acctFwd before the file is written.
 $buildBasic = @'
 * zznubuild - written by verify-nocaseupgrade.ps1.  Safe to delete.
+   acct = '@@ACCT@@'
    open 'VOC' to v else crt 'BUILD no VOC' ; stop
-   names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak'
-   for i = 1 to 3
+   create.file acct : '/voc' dynamic on error crt 'BUILD create failed ' : acct : '/voc' ; stop
+   openpath acct : '/voc' to av else crt 'BUILD cannot open ' : acct : '/voc' ; stop
+   names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak' : @fm : 'zznunc'
+   for i = 1 to 4
       n = names<i>
-      create.file n : '.DIC' dynamic flags 4 on error crt 'BUILD create failed ' : n : '.DIC' ; stop
-      create.file n dynamic flags 4 on error crt 'BUILD create failed ' : n ; stop
-      write 'F' : @fm : n : @fm : n : '.DIC' to v, n
-      crt 'BUILD made ' : n
+      p = acct : '/' : n
+      if n = 'zznunc' then fl = 0 else fl = 4
+      create.file p : '.DIC' dynamic flags fl on error crt 'BUILD create failed ' : p : '.DIC' ; stop
+      create.file p dynamic flags fl on error crt 'BUILD create failed ' : p ; stop
+      write 'F' : @fm : n : @fm : n : '.DIC' to av, n
+      write 'F' : @fm : p : @fm : p : '.DIC' to v, n
+      crt 'BUILD made ' : p
    next i
+   close av
+   n = 'zznusys'
+   create.file n : '.DIC' dynamic flags 4 on error crt 'BUILD create failed ' : n : '.DIC' ; stop
+   create.file n dynamic flags 4 on error crt 'BUILD create failed ' : n ; stop
+   write 'F' : @fm : n : @fm : n : '.DIC' to v, n
+   crt 'BUILD made ' : n
+   openpath @sdsys : @ds : 'accounts' to acc.f else crt 'BUILD cannot open the register' ; stop
+   write acct to acc.f, 'ZZNUACCT'
+   crt 'BUILD registered ZZNUACCT at ' : acct
    crt 'BUILD done'
 end
 '@
@@ -157,8 +190,8 @@ end
 # The probe: one line per fixture part, ids as stored.
 $probeBasic = @'
 * zznuprobe - written by verify-nocaseupgrade.ps1.  Safe to delete.
-   names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak' : @fm : 'zznunc'
-   for i = 1 to 4
+   names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak' : @fm : 'zznunc' : @fm : 'zznusys'
+   for i = 1 to 5
       n = names<i>
       for p = 1 to 2
          if p = 1 then
@@ -207,15 +240,24 @@ function Get-Probe {
     }
     return [pscustomobject]@{ Text = $t; Map = $map; Lines = $map.Count }
 }
+# 17 Nov 26 - P-3482: the walk makes its work files beside the file it converts, so the fixture account's directory is looked in too.
 function Get-TempLeftovers {
-    return @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
-             Where-Object { $_.Name -match '^~SD(SCAN|NOCASE)\.' } | ForEach-Object { $_.Name })
+    return @(foreach ($d in @($sdsys, $acctDir)) {
+        Get-ChildItem -LiteralPath $d -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^~SD(SCAN|NOCASE)\.' } | ForEach-Object { $_.FullName }
+    })
 }
+# 17 Nov 26 - P-3482: the account's four are dropped from SDSYS's VOC (DELETE, not DELETE.FILE: their pointers are absolute paths
+# outside SDSYS) and the register, then the account's directory goes as a whole; zznusys is deleted as before.  Returns what is left:
+# SDSYS entries named zznu*, and the account's directory if it is still there.
 function Remove-Fixtures {
-    $null = Invoke-Bounded @($fixtures | ForEach-Object { "DELETE.FILE $_ FORCE" }) $false
+    $null = Invoke-Bounded @(("DELETE VOC " + ($acctFixtures -join ' ')), "DELETE accounts $acctName", "DELETE.FILE $sysFixture FORCE") $false
+    if (Test-Path -LiteralPath $acctDir) { Remove-Item -LiteralPath $acctDir -Recurse -Force -ErrorAction SilentlyContinue }
     foreach ($f in @($probeSrc, $probeObj, $buildSrc, $buildObj)) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force } }
-    return @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
-             Where-Object { $_.Name -match '^(?i)zznu' } | ForEach-Object { $_.Name })
+    $left = @(Get-ChildItem -LiteralPath $sdsys -Force -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '^(?i)zznu' } | ForEach-Object { $_.Name })
+    if (Test-Path -LiteralPath $acctDir) { $left += $acctDir }
+    return $left
 }
 
 # 20 Sep 26 - RELEASE_1.1 76: PROVE BOTH SEAT DOORS BEFORE BUILDING ANYTHING, so a
@@ -233,9 +275,11 @@ try {
     $tempBefore = Get-TempLeftovers
     if ($tempBefore.Count) { Write-Output ("verify-nocaseupgrade: walk temp files already in sdsys, not this run's: " + ($tempBefore -join ', ')); exit 2 }
 
-    # ---- build: one sd -internal session for every case-sensitive fixture ----
-    [IO.File]::WriteAllText($buildSrc, ($buildBasic -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
-    Write-Output ("  wrote " + $buildSrc)
+    # ---- build: one sd -internal session for every fixture, the account and its register record ----
+    $null = New-Item -ItemType Directory -Path $acctDir -Force
+    Write-Output ("  made " + $acctDir)
+    [IO.File]::WriteAllText($buildSrc, ($buildBasic.Replace('@@ACCT@@', $acctFwd) -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
+    Write-Output ("  wrote " + $buildSrc + " (account path " + $acctFwd + ")")
     $mk = Invoke-Bounded @(
         "BASIC bp $buildName",
         "RUN bp $buildName",
@@ -245,23 +289,25 @@ try {
         'COPY FROM VOC TO zznuak who,jack',
         'COPY FROM DICT VOC TO DICT zznuak f1,f1',
         'CREATE.INDEX zznuak f1',
-        'BUILD.INDEX zznuak f1') $true
+        'BUILD.INDEX zznuak f1',
+        'COPY FROM VOC TO zznunc who,jack',
+        "COPY FROM VOC TO $sysFixture who,jack") $true
     Show 'build (sd -internal)' $mk
-    $mk2 = Invoke-Bounded @('CREATE.FILE zznunc', 'COPY FROM VOC TO zznunc who,jack') $false
-    Show 'build the NOCASE control' $mk2
+    if ($mk -notmatch 'BUILD done') { Write-Output '  verify-nocaseupgrade: the build program did not reach "BUILD done" - see its output above'; exit 2 }
     [IO.File]::WriteAllText($probeSrc, ($probeBasic -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
     Write-Output ("  wrote " + $probeSrc)
 
     $bp = Get-Probe
     Show 'probe BEFORE' $bp.Text
-    Write-Output ("  probe lines read: " + $bp.Lines + " of 8")
-    if ($bp.Lines -ne 8) { Write-Output '  verify-nocaseupgrade: the probe did not report all 8 fixture parts - see its output above; nothing measured'; exit 2 }
+    Write-Output ("  probe lines read: " + $bp.Lines + " of 10")
+    if ($bp.Lines -ne 10) { Write-Output '  verify-nocaseupgrade: the probe did not report all 10 fixture parts - see its output above; nothing measured'; exit 2 }
     $b = $bp.Map
     $want = @{
         'zznuclean/DATA' = @{ NoCase = 0; Ak = 0; Ids = 'jack' }
         'zznutwin/DATA'  = @{ NoCase = 0; Ak = 0; Ids = 'JACK,jack' }
         'zznuak/DATA'    = @{ NoCase = 0; Ak = 1; Ids = 'jack' }
         'zznunc/DATA'    = @{ NoCase = 1; Ak = 0; Ids = 'jack' }
+        'zznusys/DATA'   = @{ NoCase = 0; Ak = 0; Ids = 'jack' }
     }
     $setupOk = $true
     foreach ($k in $want.Keys) {
@@ -272,11 +318,11 @@ try {
         }
     }
     foreach ($n in $fixtures) { if ($null -eq $b["$n/DICT"] -or $b["$n/DICT"].NoFile) { Write-Output "  fixture $n has no DICT part"; $setupOk = $false } }
-    Row 'precondition: three case-sensitive fixtures (one twinned, one indexed) and a NOCASE control, as built' $setupOk
+    Row 'precondition: three case-sensitive fixtures in ZZNUACCT (one twinned, one indexed), a NOCASE control, and a case-sensitive one in SDSYS, as built' $setupOk
     if (-not $setupOk) { Write-Output '  nothing below would be measured'; exit 2 }
 
-    # Which parts the walk should convert: case sensitive, no pair, no index.
-    $expectConvert = @($b.Keys | Where-Object { $b[$_].NoCase -eq 0 -and $_ -ne 'zznutwin/DATA' -and $_ -ne 'zznuak/DATA' } | Sort-Object)
+    # Which parts the walk should convert: in the fixture account, case sensitive, no pair, no index.  Nothing in SDSYS (P-3482).
+    $expectConvert = @($b.Keys | Where-Object { $b[$_].NoCase -eq 0 -and $_ -ne 'zznutwin/DATA' -and $_ -ne 'zznuak/DATA' -and $_ -notlike "$sysFixture/*" } | Sort-Object)
     Write-Output ("  expected to convert: " + ($expectConvert -join ', ') + " (" + $expectConvert.Count + ")")
 
     # ---- run the installed driver, bounded ----------------------------------
@@ -324,12 +370,16 @@ try {
     Row ("the walk converted exactly the " + $expectConvert.Count + " fixture part(s) expected, and nothing else (10179)") `
         ($conv.Success -and ([int]$conv.Groups[1].Value -eq $expectConvert.Count)) $(if ($conv.Success) { "converted $($conv.Groups[1].Value) of $($conv.Groups[2].Value)" } else { 'no 10179 line' })
     Row 'the log names zznutwin' ($logNew -match 'zznutwin') 'nocase-upgrade.log did not receive the report'
+    # 17 Nov 26 - P-3482 and the owner's ruling D4: the account walked is named (12035), and SDSYS is not walked, so its fixture
+    # appears nowhere in the report.
+    Row ("the report names the fixture account (12035: Account " + $acctName + ")") ($drv -match ("(?m)Account " + $acctName + "\s*$")) 'no Account line for the fixture account'
+    Row ("the report does not name SDSYS's own fixture " + $sysFixture + " (SDSYS is not walked)") ($drv -notmatch $sysFixture) 'the walk reached into SDSYS'
 
     # ---- after: every part's flags and stored ids ---------------------------
     $ap = Get-Probe
     Show 'probe AFTER' $ap.Text
-    Write-Output ("  probe lines read: " + $ap.Lines + " of 8")
-    Row 'the AFTER probe reported all 8 fixture parts' ($ap.Lines -eq 8) "read $($ap.Lines)"
+    Write-Output ("  probe lines read: " + $ap.Lines + " of 10")
+    Row 'the AFTER probe reported all 10 fixture parts' ($ap.Lines -eq 10) "read $($ap.Lines)"
     $a = $ap.Map
     foreach ($k in ($b.Keys | Sort-Object)) {
         $g0 = $b[$k]; $g1 = $a[$k]
@@ -343,21 +393,25 @@ try {
     }
     Row 'zznuak/DATA still has its index' ($a['zznuak/DATA'].Ak -eq 1) "AK=$($a['zznuak/DATA'].Ak)"
     $tempAfter = Get-TempLeftovers
-    Row 'the walk left no ~SDSCAN or ~SDNOCASE temp file in sdsys' ($tempAfter.Count -eq 0) ($tempAfter -join ', ')
+    Row 'the walk left no ~SDSCAN or ~SDNOCASE temp file in sdsys or the fixture account' ($tempAfter.Count -eq 0) ($tempAfter -join ', ')
 
     $exit = $(if ($fail -eq 0) { 0 } else { 1 })
 }
 finally {
     Write-Output '  --- cleanup ---'
-    foreach ($t in @(Get-TempLeftovers)) { Remove-Item -LiteralPath (Join-Path $sdsys $t) -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "  removed walk temp $t" }
-    $left = Remove-Fixtures
+    foreach ($t in @(Get-TempLeftovers)) { Remove-Item -LiteralPath $t -Recurse -Force -ErrorAction SilentlyContinue; Write-Output "  removed walk temp $t" }
+    $left = @(Remove-Fixtures)
     $vocLeft = Invoke-Bounded @('LIST VOC WITH @ID LIKE "zznu..."') $false
     $vocOk = $vocLeft -match '(?m)^0 record\(s\) listed'
-    Write-Output ("  sdsys entries left: " + $(if ($left.Count) { $left -join ', ' } else { '(none)' }) + "; VOC zznu* records: " + $(if ($vocOk) { 'none' } else { 'SOME - see below' }))
+    $regLeft = Invoke-Bounded @("LIST accounts WITH @ID LIKE `"ZZNU...`"") $false
+    $regOk = $regLeft -match '(?m)^0 record\(s\) listed'
+    Write-Output ("  entries left: " + $(if ($left.Count) { $left -join ', ' } else { '(none)' }) + "; VOC zznu* records: " + $(if ($vocOk) { 'none' } else { 'SOME - see below' }) +
+                  "; register ZZNU* records: " + $(if ($regOk) { 'none' } else { 'SOME - see below' }))
     if (-not $vocOk) { Show 'LIST VOC zznu...' $vocLeft }
-    $cleanOk = ($left.Count -eq 0) -and $vocOk -and -not (Test-Path -LiteralPath $probeSrc) -and -not (Test-Path -LiteralPath $probeObj) -and
+    if (-not $regOk) { Show 'LIST accounts ZZNU...' $regLeft }
+    $cleanOk = ($left.Count -eq 0) -and $vocOk -and $regOk -and -not (Test-Path -LiteralPath $probeSrc) -and -not (Test-Path -LiteralPath $probeObj) -and
                -not (Test-Path -LiteralPath $buildSrc) -and -not (Test-Path -LiteralPath $buildObj)
-    Row 'cleanup: no fixture, VOC record or probe left in SDSYS' $cleanOk
+    Row 'cleanup: no fixture, VOC record, register record, fixture account directory or probe left' $cleanOk
     if (-not $cleanOk -and $exit -eq 0) { $exit = 1 }
     if ($logLenBefore -lt 0 -and (Test-Path -LiteralPath $logFile)) {
         Remove-Item -LiteralPath $logFile -Force -ErrorAction SilentlyContinue

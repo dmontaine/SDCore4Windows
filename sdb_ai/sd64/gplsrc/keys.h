@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1, owner's answer 5a: SKT_INFO_TRACE (10) is carried from Linux 400500c.
+ *           (P-1969) K_OS_ADMINISTRATOR (63) is retired: nothing asked it; 63 stays reserved.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3078 to P-3081): K_WINSIZE and K_SH..K_PATH_IN before K_SET_ACCOUNT, and
  *           K_NON_DURABLE_TXN after K_USER_STATS (where a stale "113 left free" note stood), in Linux's order.  Order only.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server.
@@ -266,8 +268,10 @@
    above: it reports a fact about the signed-in user that Windows already
    exposes, and reading it grants nothing.  BCOMP refuses KERNEL to anything
    not $internal in any case.  See op_kernel.c for the CN_SOCKET guard, which
-   is not optional.                                                          */
-#define K_OS_ADMINISTRATOR   63
+   is not optional.
+   17 Nov 26 Windows port - RETIRED, four-version audit round 1 (P-1965, P-1969): nothing asked it any more (RELEASE_1.1 64 took
+   the last caller, LOGTO's SDSYS gate, on 18 Sep), and Linux has no such key.  63 stays reserved, unused, so that it is never
+   given to another key; the notes on it in this file and in op_kernel.c are its history.                                      */
 
 /* 05 Sep 26 Windows port - PRE_RELEASE_FIXES.md 167.  DOES THIS SESSION HAVE A
    DESKTOP UAC COULD RENDER ON?  The third question about a session, and it is
@@ -781,7 +785,9 @@
 /* 15 Oct 26 dm - QM4 gaps Q-5, SELECT.SOCKET().  The key (SD's own number: openQM's list does not give one) and the events
    a program can watch for.  Mirrored in sdsys/syscom/keys.h. */
 #define SKT_INFO_EVENTS          9    /* Events to watch (SET.SOCKET.MODE) / events last found (SOCKET.INFO) */
-/* 17 Oct 26 dm - S.65 slice 2.  (Linux's SKT_INFO_TRACE 10 is not carried here, see op_skt.c; 11 is kept as Linux has it.)  SOCKET.INFO only: the SHA-256 of the SubjectPublicKeyInfo of the certificate the server of a socket opened with
+/* 17 Nov 26 Windows port - from Linux 400500c (15 Oct 26); four-version audit round 1, owner's answer 5a.  Mirrored in sdsys/syscom/keys.h. */
+#define SKT_INFO_TRACE          10    /* SET.SOCKET.MODE: the pathname of a log of the data sent and received; null turns it off */
+/* 17 Oct 26 dm - S.65 slice 2.  (11 is kept as Linux has it; 10 is SKT_INFO_TRACE, carried 17 Nov 26.)  SOCKET.INFO only: the SHA-256 of the SubjectPublicKeyInfo of the certificate the server of a socket opened with
    SKT$TLS presented, as 64 lower case hex digits; "" for any other socket.  What a server definition pins.  Mirrored in sdsys/syscom/keys.h. */
 #define SKT_INFO_TLS_SPKI       11
 #define SKT_READ_EVENT           1    /* Data can be read, or a connection is waiting on a server socket, or it was closed */

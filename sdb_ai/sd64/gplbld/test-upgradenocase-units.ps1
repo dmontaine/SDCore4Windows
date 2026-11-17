@@ -81,6 +81,32 @@ Converted 3 of 42 file(s) to case insensitive ids.
 $v = Get-NocaseVerdict $incomplete
 Check 'incomplete: Complete is false'      (-not $v.Complete)
 
+# --- 17 Nov 26 (owner's ruling D4): a run that left files OUTSIDE their account, or INDEXED ones, and no pair -----------------
+# Both are warnings now (the driver exits 2 and the installer points at the log that names them); before, only a pair was.
+$left = @'
+Checking every file for record ids that differ only by case...
+Account ACME
+File has indices, so convert it by hand with configure.file no.case: C:/ProgramData/SD/user_accounts/acme/parts
+
+2 file(s) named by an account's VOC lie outside that account's directory, or under SDSYS, and were left as they are. Convert each one as its owner with configure.file no.case:
+File: C:/ProgramData/SD/user_accounts/other/customers
+File: C:/ProgramData/SD/sdsys/accounts
+Converted 9 of 12 file(s) to case insensitive ids.
+1 indexed file(s) were left for manual configure.file; see the lines above.
+COMPLETE
+'@
+$v = Get-NocaseVerdict $left
+Check 'left: counts 2 files outside (12041)'   ($v.OutsideFiles -eq 2) "got $($v.OutsideFiles)"
+Check 'left: counts 1 indexed file left (10186)' ($v.AkLeft -eq 1) "got $($v.AkLeft)"
+Check 'left: no duplicate files'               ($v.DupFiles -eq 0)
+Check 'left: no trouble'                       (-not $v.HadTrouble)
+$vc0 = Get-NocaseVerdict $clean
+Check 'clean: nothing outside, no index left'  ($vc0.OutsideFiles -eq 0 -and $vc0.AkLeft -eq 0) "outside=$($vc0.OutsideFiles) ak=$($vc0.AkLeft)"
+# MUTANT CONTROL for the two new counts: the same text with the two count lines removed must read 0 and 0.
+$leftMut = ($left -split "`r?`n" | Where-Object { $_ -notmatch 'lie outside|indexed file\(s\) were left' }) -join "`n"
+$vm = Get-NocaseVerdict $leftMut
+Check 'MUTANT: without the 12041 and 10186 lines both counts are 0' ($vm.OutsideFiles -eq 0 -and $vm.AkLeft -eq 0) "outside=$($vm.OutsideFiles) ak=$($vm.AkLeft)"
+
 # --- MUTANT CONTROL: the warning path must NOT read as clean ---------------
 # If the verdict ignored the WARNING line, the dup fixture would look like a
 # clean run and the installer would never surface it.  Assert the two verdicts

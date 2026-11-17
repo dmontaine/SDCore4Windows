@@ -39,8 +39,10 @@
     nothing about which gate fired.  Three generations of reason text exist:
     pre-45 wrote 'not an administrator' or 'elevation refused or unavailable';
     45 (15-18 Sep) wrote 'reason=session did not start elevated'; 64 (18 Sep
-    onward) writes 'reason=SDSYS is not reachable by LOGTO'.  The elevated half
-    anchors on 64's current wording, checks it is NEITHER older reason, and
+    to 17 Nov) wrote 'reason=SDSYS is not reachable by LOGTO'; from 17 Nov
+    (P-3266, Linux's words) 'reason=sdsys is entered by its own session only'.
+    The elevated half anchors on the current wording, checks it is NONE of the
+    older reasons, and
     REFUSES THE NULL CASE: if no such line is in the audit, it says the
     discriminator was not witnessed rather than passing.
 
@@ -169,7 +171,7 @@ if (-not $elevated) {
     Note 'the refusal is 10002' $true ($out -match [regex]::Escape((Get-SysMsg 10002)))
 
     Write-Host ''
-    Write-Host '   The DECISIVE audit reason ("SDSYS is not reachable by LOGTO") cannot be'
+    Write-Host '   The DECISIVE audit reason ("sdsys is entered by its own session only") cannot be'
     Write-Host '   read from an unelevated token - run this again ELEVATED to witness it.'
 }
 else {
@@ -211,15 +213,17 @@ else {
         } else {
             $last = $refusals[$refusals.Count - 1].Value
             Write-Host ('   last SDSYS refusal in the audit: ' + $last)
-            Note 'the newest SDSYS refusal reason is 64''s (not reachable by LOGTO)' $true (
-                $last -match 'reason=SDSYS is not reachable by LOGTO')
+            # 17 Nov 26 - four-version audit round 1 (P-3266, owner's ruling D7): the reason is Linux's words now, the same gate.
+            Note 'the newest SDSYS refusal reason is Linux''s (sdsys is entered by its own session only)' $true (
+                $last -match 'reason=sdsys is entered by its own session only')
             # CONTROL: it must NOT be an older gate's reason - neither 45's
             # ("elevation is the only door") nor pre-45's - which would mean
             # the withdrawal did not take.
             Note 'and NOT an older-gate reason' $false (
                 ($last -match 'reason=not an administrator') -or
                 ($last -match 'reason=elevation refused or unavailable') -or
-                ($last -match 'reason=session did not start elevated'))
+                ($last -match 'reason=session did not start elevated') -or
+                ($last -match 'reason=SDSYS is not reachable by LOGTO'))
         }
     }
 }

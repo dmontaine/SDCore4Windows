@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: "'id' invalid name" is message 15140, Linux c359f30b's 14140 + 1000 (Linux took
+*           this port's behaviour of 2 Sep 26 under its own number); it was 10164, which Linux does not have.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused sorted.sample.done and json.count are gone.
 * 8 Nov 26 Windows port - from Linux 022760f2 (Opus 10c): SELECT / LIST / COUNT ... BY end with the record id as the last ascending key, as SORT always had it, so equal keys come out in id order and not in file order; not with SAVING UNIQUE.
 * 8 Nov 26 Windows port - from Linux f2a97507 (S.93): the A and S dictionary item types are gone: such an item is 'unexpected type' (7275) like a C one, and an index made from one is never used, so a query on its field scans.
@@ -2392,7 +2394,7 @@ done:
 *  different answer: the file IS there and its name is the problem.
    if (list.command or count.command or reformat.command) and len(invalid.name.list) then
       loop
-         printline = sysmsg(10164, remove(invalid.name.list, invalid.name.delim))
+         printline = sysmsg(15140, remove(invalid.name.list, invalid.name.delim)) ;* '%1' invalid name - Linux 14140 + 1000 (17 Nov 26; was 10164)
          if qdisp(QD$EMIT, printline, 'X') then goto qdisp.error
       while invalid.name.delim
       repeat

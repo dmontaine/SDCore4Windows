@@ -5,10 +5,11 @@ Linux's MODIFY.ACCOUNT downcases the account name (13 Sep 26, plan M); here CREA
 MODIFY.ACCOUNT and GRANT/REVOKE upcased it, so their messages and audit lines named ZZWITSH (found in the VM sitting, 13 Nov).
 FREE CHECK: the source read as text; no install, no sd.
 
-  A1  each of create_account, delacc, modifya and granta sets acc.name = downcase(acc.name), and none sets it with upcase
+  A1  each of create_account, delacc and modifya sets acc.name = downcase(acc.name), and none sets it with upcase
+      (granta left with GRANT / REVOKE / LIST.GRANTS, 17 Nov 26: four-version audit round 1, P-3354, owner's ruling D5)
   A2  modifya's literal account tests are lower case ('sdsys', 'sdradmin'), and the suspend-yourself test compares with
       downcase(@logname) and downcase(@who), never upcase
-  CONTROL  the four programs were found and read (a check over nothing must fail)
+  CONTROL  the three programs were found and read (a check over nothing must fail)
 
   python sdb_ai/sd64/gplbld/test-accnamecase-units.py
   python sdb_ai/sd64/gplbld/test-accnamecase-units.py --selftest   (mutants in memory, each must turn its row red)
@@ -20,7 +21,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BP = os.path.normpath(os.path.join(HERE, "..", "sdsys", "gpl.bp"))
-PROGS = ("create_account", "delacc", "modifya", "granta")
+PROGS = ("create_account", "delacc", "modifya")
 
 
 def code(text):
@@ -58,7 +59,7 @@ def load():
 
 def run(src):
     print("reading %s from %s" % (", ".join(PROGS), BP))
-    print("  [%s] CONTROL the four programs were read (%s characters)" % ("PASS" if all(src.values()) else "FAIL", sum(len(v) for v in src.values())))
+    print("  [%s] CONTROL the three programs were read (%s characters)" % ("PASS" if all(src.values()) else "FAIL", sum(len(v) for v in src.values())))
     bad = 0 if all(src.values()) else 1
     for name, ok, detail in checks(src):
         print("  [%s] %s  %s" % ("PASS" if ok else "FAIL", name, detail))
@@ -73,7 +74,7 @@ def selftest(src):
         return 1
     mutants = [
         ("modifya upcases again", "A1", "modifya", "acc.name = downcase(acc.name)", "acc.name = upcase(acc.name)"),
-        ("granta upcases again", "A1", "granta", "acc.name = downcase(acc.name)", "acc.name = upcase(acc.name)"),
+        ("create_account upcases again", "A1", "create_account", "acc.name = downcase(acc.name)", "acc.name = upcase(acc.name)"),
         ("delacc keeps the case typed", "A1", "delacc", "acc.name = downcase(acc.name)", "acc.name = acc.name"),
         ("modifya tests 'SDSYS'", "A2", "modifya", "if acc.name = 'sdsys' then", "if acc.name = 'SDSYS' then"),
         ("modifya tests 'SDRADMIN'", "A2", "modifya", "if acc.name = 'sdradmin' then", "if acc.name = 'SDRADMIN' then"),

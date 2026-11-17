@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1, second pass (P-3266; owner's ruling D7): LOGTO SDSYS's refusal is audited in
+*           Linux's words ('logto refused account=sdsys reason=sdsys is entered by its own session only') and 10002 is shown a line at
+*           a time; a LOGTO refused for a suspended account is audited 'reason=suspended', as Linux (it said 'not granted').
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3269, P-3272, P-3273): the SH verb asks K$SH in its test, as Linux's (sh.listed
 *           was left from the withdrawn sh-on filter lift); LOGOUT's two lo.rc tests are Linux's two ifs; no change in effect.
 * 15 Nov 26 Windows port - RELEASE_1.1 310, from Linux b9e63f17 (S.246) in the Windows form: LOGTO SDSYS is taken by the process that signed in
@@ -2859,7 +2862,7 @@ int.logto:
 *   form, same outcome; Linux agreed, mail T1625).  Every other session is refused exactly as before (10002, audited), whatever account
 *   it is in: an ordinary user, an elevated administrator who is not SDSYS, an ssh or API session (a network logon).  run.in's command
 *   is refused above, before this.  The way back enters @sdsys itself, never a path from the register (below).
-   into.sdsys = (upcase(new.account) = "SDSYS")
+   into.sdsys = (downcase(new.account) = "sdsys")
    if into.sdsys and not(kernel(K$OS.SDSYS.USER, -1)) then
 
 * 29 Aug 26 Windows port - PRE_RELEASE_FIXES 56.  A NON-ADMINISTRATOR IS NOT
@@ -2936,8 +2939,12 @@ int.logto:
 *   AND THE INTERNAL DOOR IS NOT THIS.  "sd -internal" is forced to SDSYS by
 *   sd.c and never reaches int.logto at all, so it is unaffected by this
 *   refusal.  Binding IT to the Windows SDSYS identity is the other half of 64.
-      display sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
-      void kernel(K$AUDIT, 'logto refused account=SDSYS reason=SDSYS is not reachable by LOGTO')
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3266): the audit words are Linux's, word for word.
+      lg.msg = sysmsg(10002) ;* SDSYS Account access is restricted to privileged users
+      for lg.i = 1 to dcount(lg.msg, @fm)
+         display lg.msg<lg.i>
+      next lg.i
+      void kernel(K$AUDIT, 'logto refused account=sdsys reason=sdsys is entered by its own session only')
       unwinding = 2
       return
    end
@@ -3029,7 +3036,7 @@ int.logto:
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  The account exists and
 *   the caller is not in its ACC$GROUP - a refused grant, which is the other
 *   half of "who used the access" and the one an investigation starts from.
-      void kernel(K$AUDIT, 'logto refused account=' : downcase(new.account) : ' reason=not granted')
+      void kernel(K$AUDIT, 'logto refused account=' : downcase(new.account) : ' reason=' : logto.why)  ;* 17 Nov 26: suspended or not granted, as Linux
       if ospath(account.path, OS$CD) then return
       display sysmsg(5162) ;* Fatal error : Cannot return to previous account
       return to abort.cproc
@@ -4822,6 +4829,7 @@ get.voc.parser.rec:
 
 logto.authorised:
    logto.ok = @false
+   logto.why = 'not granted'       ;* 17 Nov 26 - the audit reason int.logto writes on a refusal; 'suspended' below, as Linux
 
 * An administrator running an internal command is the install and maintenance
 * path, as it is at LOGIN.  The bootstrap has no terminal and cannot be made to
@@ -4898,6 +4906,7 @@ logto.authorised:
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.
    if upcase(trim(acc.record<ACC$SUSPENDED>, ' ', 'B')) = 'SUSPENDED' then
       display sysmsg(10107, new.account) ;* Account %1 is suspended
+      logto.why = 'suspended'
       return
    end
 

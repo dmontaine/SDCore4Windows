@@ -393,57 +393,36 @@ function Set-SdsysPassword {
             }
             return
         }
-        # 21 Sep 26 - THE RULE IS NOW CHECKED AFTER BOTH ENTRIES, NOT BEFORE
-        # THE REPEAT IS ASKED FOR - owner's ruling: validity is only judged
-        # once both attempts are in, so a weak first entry no longer skips
-        # asking for the confirmation. Both SecureStrings are converted to
-        # plain text together, compared, checked, and dropped in the same few
-        # lines - the same bounded exception the password-setting call below
-        # documents. A weak or mismatched pair counts as one of the three
-        # attempts either way.
-        $b = Read-Host 'Type it again' -AsSecureString
-        # A BLANK LINE ALWAYS FOLLOWS "Type it again", whichever way this
-        # turns out - owner's rule, so a person is never left wondering
-        # whether more output is still coming.
+        # 17 Nov 26 - four-version audit round 1 (owner's answer 7 of 17 Nov): SD CORE FOR LINUX'S FLOW, as MODIFY.PASSWORD
+        # (set_acc_password) now asks.  The rule is judged BEFORE the repeat is asked for (the 21 Sep order, both entries
+        # first, is withdrawn), and each failure names itself - the rule (10920's words, $script:PwRuleText) or "Passwords do
+        # not match." - followed by "That was attempt N of 3." (10921's words).  The one "invalid or entries do not match"
+        # line, "Type it again" and "Attempt N of 3" are gone.  The owner's 21 Sep rulings stand: "ERROR: " on a failure line,
+        # no colour, nothing indented, and a blank line after each answer.
+        # ***THE PASSWORD IS READ AS PLAIN TEXT ONLY FOR THE RULE AND THE COMPARISON, WHICH IS THE ONLY WAY A SecureString
+        # CAN BE CHECKED AT ALL.***  A deliberate, bounded exception: the strings exist in this process for the length of the
+        # test and are dropped on the next lines.  Everything else here keeps them as SecureStrings, including the call that
+        # sets the account's password - so nothing is passed as an argument, which is the exposure sd-elevate.ps1 measured
+        # (Win32_Process.CommandLine shows it verbatim).
+        $pa = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
+        $weak = -not (Test-PasswordComplex -Password $pa)
+        $pa = $null
+        if ($weak) {
+            Write-Host ''
+            Write-Host ('ERROR: ' + $script:PwRuleText)
+            Write-Host ('That was attempt ' + $tries + ' of 3.')
+            Write-Host ''
+            continue
+        }
+        $b = Read-Host 'Repeat new password' -AsSecureString
         Write-Host ''
-
-        # ***THE TWO ARE COMPARED AS PLAIN TEXT, WHICH IS THE ONLY WAY TWO
-        # SecureStrings CAN BE COMPARED AT ALL.***  It is a deliberate, bounded
-        # exception: the strings exist in this process for the length of the
-        # comparison and are dropped on the next few lines.  Everything else
-        # here keeps them as SecureStrings, including the call that sets the
-        # account's password - so nothing is passed as an argument, which is
-        # the exposure sd-elevate.ps1 measured (Win32_Process.CommandLine
-        # shows it verbatim).
         $pa = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($a))
         $pb = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($b))
         $same = ($pa -ceq $pb)
-        $weak = -not (Test-PasswordComplex -Password $pa)
         $pa = $null; $pb = $null
-
-        if ($weak -or -not $same) {
-            # 21 Sep 26 - ONE STANDARD MESSAGE FOR BOTH CAUSES, owner's ruling
-            # - a mismatch and a rule violation are both "try again", and the
-            # rule itself was already shown once in the PASSWORDS manifest
-            # above, so there is nothing case-specific left worth saying here.
-            # 21 Sep 26, LATER - NO COLOUR, "ERROR: " INSTEAD.  A real cycle
-            # showed BASIC's matching message in the plain console default -
-            # the ANSI bytes 93 added did not render as yellow on this port's
-            # console - so a coloured PowerShell line next to an uncoloured
-            # BASIC one would be the SAME inconsistency 89/90 already fixed
-            # once, in the other direction. "ERROR: " stands out regardless of
-            # what the console does with colour, on both sides alike.
-            Write-Host 'ERROR: Entered password is invalid or entries do not match.'
+        if (-not $same) {
+            Write-Host ('ERROR: Passwords do not match.  That was attempt ' + $tries + ' of 3.')
             Write-Host ''
-            # THE ATTEMPT COUNT NAMES THE ENTRY ABOUT TO BE TYPED, NOT THE ONE
-            # JUST REJECTED - owner's ruling - so it is skipped entirely once
-            # there is no next entry to name (the third attempt falls straight
-            # through to the loop's own closing message instead).  Not an
-            # error itself, so no prefix - just no colour, matching the rest.
-            if ($tries -lt 3) {
-                Write-Host ('Attempt ' + ($tries + 1) + ' of 3')
-                Write-Host ''
-            }
             continue
         }
         try {
@@ -454,11 +433,8 @@ function Set-SdsysPassword {
             # a lockout - kept distinct from the standard message above, which
             # only covers what THIS script itself checked.
             Write-Host ('ERROR: Windows refused that password: ' + $_.Exception.Message)
+            Write-Host ('That was attempt ' + $tries + ' of 3.')
             Write-Host ''
-            if ($tries -lt 3) {
-                Write-Host ('Attempt ' + ($tries + 1) + ' of 3')
-                Write-Host ''
-            }
             continue
         }
         # 21 Sep 26 - "Password accepted." IS THE ONE STANDARD ACCEPTANCE

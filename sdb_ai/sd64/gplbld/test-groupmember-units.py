@@ -186,12 +186,8 @@ FAIL_CLOSED = {
         "reaches this site with attach set the answer cannot matter - and "
         "that is the point, since taking a logon right from somebody who "
         "already signs in at this console is the 15 Aug 2026 lockout",
-    ("granta", "if is_grp_member(user, grp) then"):
-        "grant: a could-not-tell falls through to os_group ADDMEM, which "
-        "reports its own failure rather than claiming success",
-    ("granta", "if not(is_grp_member(user, grp)) then"):
-        "revoke: a could-not-tell reports 'has not been granted', which the "
-        "site's own comment already accepts for an orphaned SID",
+    # 17 Nov 26 - four-version audit round 1 (P-3354, owner's ruling D5): GRANT, REVOKE and LIST.GRANTS are removed with
+    # gpl.bp/granta, and its two sites (grant, revoke) with them; MODIFY.ACCOUNT's add / delete sites below are the same act.
     ("tool_mygates", "s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)"):
         "tool.gates for the account holder (S.75, carried 25 Oct 26 from Linux c849346): a read-only page of the person's own route gates; "
         "a could-not-tell shows the gate as off, never as on, and nothing is granted or changed from it",

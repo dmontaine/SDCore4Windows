@@ -23,12 +23,14 @@
 * It runs as sd -internal in SDSYS (upgrade-nocase.ps1), walking the account
 * register by path.  It never LOGTOs another account: a file is opened by its
 * pathname, converted, and swapped, exactly as CONFIGURE.FILE's convert.file
-* does - which is why converting a VOC nobody is logged into is safe, and why
-* SDSYS's OWN live VOC is deliberately left (converting the VOC this session is
-* running from is not safe; it holds only shipped lower-case ids, so it has no
-* pair, and the lookup fold serves it).
+* does - which is why converting a VOC nobody is logged into is safe.  SDSYS is
+* not walked at all (17 Nov 26, as Linux): its live VOC is the one file this
+* must never rebuild (the session runs from it).
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1, second pass (P-3482; owner's rulings D4 and D7): SDSYS is skipped altogether, as
+*           Linux (its own data files were walked first); each account walked is named (12035, Linux 11030 + 1005); a file left because
+*           its work file could not be made or cleared is named (10184) beside the work file, so the report names every file it left.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3479, P-3480, P-3481): the outside guard of Linux 400500c is carried in fact
 *           (the 07 Oct entries below describe it; the code never had it).  convert.one judges the real path first: a file a VOC names
 *           outside its account, or under SDSYS while another account is walked, is left and listed under 12041 (Linux 11036 + 1005);
@@ -108,27 +110,22 @@ $include err.h
    sds.real = upcase(convert('\', '/', sds.real))
    sds.raw = upcase(convert('\', '/', @sdsys))
 
-   * SDSYS's own data files (its VOC's F-records), but NOT its live VOC.
-   gosub do.account
-
+* 17 Nov 26 - SDSYS IS SKIPPED ALTOGETHER, AS ON LINUX (four-version audit round 1, P-3482; owner's ruling D7).  This walked SDSYS's
+*   own data files first (a gosub do.account here); Linux leaves everything under SDSYS, and so does this now.  Each account walked
+*   is named first (12035, Linux 11030 + 1005), so every file the report names below sits under the account it belongs to.
+   this.is.sdsys = @false
    openpath @sdsys:@ds:'accounts' to acc.f then
       select acc.f to 12
       loop
          readnext reg.name from 12 else exit
          read acc.rec from acc.f, reg.name then
             acc.path = parse.pathname.tokens(acc.rec<ACC$PATH>)
-            if acc.path # '' then
-               * SDSYS is detected by its register NAME, not by comparing
-               * paths - a path spelling that did not match would send the
-               * walk into converting SDSYS's OWN live VOC, which is the one
-               * file this must never rebuild.  SDSYS's data files were already
-               * done by the explicit gosub do.account above, so its register
-               * entry is skipped entirely here.
-               if upcase(reg.name) # 'SDSYS' then
-                  this.acct = acc.path
-                  this.is.sdsys = @false
-                  gosub do.account.at
-               end
+            * SDSYS is detected by its register NAME, not by comparing paths - a path spelling that did not match would send the
+            * walk into converting SDSYS's OWN live VOC, which is the one file this must never rebuild.
+            if acc.path # '' and downcase(reg.name) # 'sdsys' then
+               crt sysmsg(12035, reg.name)   ;* Account %1
+               this.acct = acc.path
+               gosub do.account.at
             end
          end
       repeat
@@ -172,15 +169,6 @@ $include err.h
    stop
 
 * ==========================================================================
-* do.account - SDSYS's own files.  @sdsys is the current account, so its live
-*   VOC is left; its data files (dictionaries and the register files named as
-*   F-records in its VOC) are converted by path like any other.
-do.account:
-   this.acct = @sdsys
-   this.is.sdsys = @true
-   gosub do.account.at
-   return
-
 * do.account.at - convert every data/dict file named by this.acct's VOC, then
 *   (unless this.acct is SDSYS) the VOC itself.  this.acct is the account path;
 *   this.is.sdsys says whether its VOC is the live one.
@@ -271,7 +259,7 @@ convert.one:
 *   400500c guard, which this file's 07 Oct history claims and the code did not carry).  A file a VOC names outside its account's own
 *   directory, or under SDSYS while another account is walked, is never rebuilt - the walk runs elevated, so a VOC F-pointer must not
 *   steer it at somebody else's file - and is named in the report (12041) for its owner to convert with configure.file no.case.
-*   SDSYS's own walk keeps its own files (in.acct), as this port's RELEASE_1.1 5 design converts them.
+*   SDSYS itself is no longer walked (17 Nov 26, P-3482), so a path under SDSYS is always one another account's VOC names.
    one.real = ospath(one.path, OS$FULLPATH)
    if one.real = '' then one.real = one.path
    one.real = convert('\', '/', one.real)
@@ -370,6 +358,7 @@ convert.one:
    create.file scan.path dynamic flags FL$FLAGS.NOCASE on error null
    openpath scan.path to scan.fu else
       crt sysmsg(6170) : ' (' : scan.path : ')'
+      crt sysmsg(10184, one.path)   ;* File: %1 - 17 Nov 26: name the file that was left, not only the work file that failed
       close old.fu
       err.count += 1
       return
@@ -434,6 +423,7 @@ convert.one:
       close new.fu
       if not(ospath(new.path, OS$DELETE)) then
          crt sysmsg(6168) : ' (' : new.path : ')'
+         crt sysmsg(10184, one.path)   ;* File: %1 - 17 Nov 26: and the file it left
          close old.fu
          err.count += 1
          return
@@ -443,6 +433,7 @@ convert.one:
    create.file new.path dynamic flags FL$FLAGS.NOCASE on error null
    openpath new.path to new.fu else
       crt sysmsg(6170) : ' (' : new.path : ')'
+      crt sysmsg(10184, one.path)   ;* File: %1 - 17 Nov 26: and the file it left
       close old.fu
       err.count += 1
       return

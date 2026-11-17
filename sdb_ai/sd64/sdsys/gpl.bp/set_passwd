@@ -18,6 +18,8 @@
 * 
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3469 to P-3471; owner's answer 4): Linux's prompt loop - the rule said first
+*           (10920), judged before the repeat is asked, three attempts counted (10921); the one prompt still sets both stores.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 14 Sep 26 Windows port - comment only: LOGIN no longer sets PT$INVERT.
 * 28 Aug 26 Windows port - the same prompt now also writes SD's own credential
@@ -61,10 +63,11 @@
 *   0 success
 *   1 the password could not be set
 *   2 the name is not a valid OS user name
-*   3 no password entered, or the two did not match
+*   3 no password entered, or three attempts, the last two that did not match
 *   5 access denied: SD is not running elevated
 *   6 the Windows password was set, but SD's own credential could not be
 *     written - the account would be reachable over ssh and refused by the API
+*   7 three attempts, the last refused by SD's password rule (10920)
 *
 * END-DESCRIPTION
 *
@@ -97,39 +100,50 @@ end
 * 14 Aug 26 Windows port - was: OS.EXECUTE "sudo passwd " : username
 *   Ask here rather than letting the OS ask.
 * 8 Nov 26 Windows port - from Linux cf405b48 (S.87 batch 14): the PT$INVERT save and restore around the reads are gone with case inversion.
-   display 'New Windows password for ' : username : ': ' :
-   input pw1 HIDDEN
-   display
-
-   display 'Repeat password: ' :
-   input pw2 HIDDEN
-   display
-
-   if pw1 = '' or pw1 # pw2 then
-      set.status 3
-      return pass_set
-   end
-
-* 19 Sep 26 Windows port - RELEASE_1.1 75.  SD'S OWN RULE, CHECKED BEFORE THE
-*   PASSWORD GOES ANYWHERE.  Owner's ruling, taken on the Linux side and
-*   binding in both ports: SD requires a complex password "even if the OS does
-*   not", for SDSYS and for every other account.
-*
-*   STATUS 7 RATHER THAN REUSING 1.  Status 1 means WINDOWS refused it, and
-*   the caller already tells the two apart for a reason recorded at
-*   createa:813 - a mistyped pair is fixed by retyping, a refusal never is.
-*   "SD refused it" is a third thing again: retyping the SAME password will
-*   not help, but a DIFFERENT one will, and only a distinct status can say so.
-*
-*   AFTER THE MATCH TEST, DELIBERATELY.  This prompt has no retry loop of its
-*   own - the caller owns that - so the order only decides which reason is
-*   reported when a password is both mistyped and weak, and "they did not
-*   match" is the one the typist can act on without knowing the rule.
-   if not(pw_complex(pw1)) then
-      pw1 = '' ; pw2 = ''
-      set.status 7
-      return pass_set
-   end
+* 19 Sep 26 Windows port - RELEASE_1.1 75.  SD'S OWN RULE, CHECKED BEFORE THE PASSWORD GOES ANYWHERE.  Owner's ruling, taken on the
+*   Linux side and binding in both ports: SD requires a complex password "even if the OS does not", for SDSYS and for every other
+*   account.  STATUS 7 RATHER THAN REUSING 1: status 1 means WINDOWS refused it (retyping never helps); SD refusing it is fixed by a
+*   DIFFERENT password, and only a distinct status can say so.
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3469 to P-3471; owner's answer 4 of 17 Nov, "follow Linux's retry"):
+*   LINUX'S PROMPT LOOP, word for word.  The rule is said first (10920); the new password is asked, judged by the rule BEFORE the
+*   repeat is asked for, then asked again; three attempts, each failure counted (10921, "That was attempt %1 of %2.").  It was one
+*   try, the repeat asked even for a password the rule would refuse.  The statuses the caller reads keep their meaning: 3 nothing
+*   entered or three attempts that ended on a mismatch, 7 three attempts that ended on the rule.  The one prompt still sets both
+*   stores, the Windows password and SD's own credential (the owner's ruling of 28 Aug, below).
+   crt sysmsg(10920)  ;* the rule, said before it is applied
+   max.tries = 3
+   tries = 0
+   pw1 = ''
+   loop
+      tries += 1
+      display 'New password: ' :
+      input pw1 HIDDEN
+      display
+      if pw1 = '' then
+         set.status 3
+         return pass_set
+      end
+      if not(pw_complex(pw1)) then
+         pw1 = ''
+         last.why = 7
+         crt sysmsg(10920)
+         crt sysmsg(10921, tries, max.tries)  ;* That was attempt %1 of %2.
+      end else
+         display 'Retype new password: ' :
+         input pw2 HIDDEN
+         display
+         if pw1 = pw2 then exit
+         pw1 = ''
+         last.why = 3
+         crt 'Passwords do not match.  ' : sysmsg(10921, tries, max.tries)
+      end
+      pw2 = ''
+      if tries >= max.tries then
+         set.status last.why
+         return pass_set
+      end
+   repeat
+   pw2 = ''
 
 *  A password is arbitrary text and must not be interpolated.  PowerShell
 *  expands $name and backticks inside DOUBLE quotes, so a password containing

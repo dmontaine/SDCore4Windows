@@ -1,9 +1,1 @@
-%1 has lost all access to SD: local login, ssh, the API and logto are refused
-until the account is unsuspended.
-
-Nothing on Windows has changed. %1 keeps its Windows account, its password and
-every group it belongs to, including any administrator rights it had.
-
-    modify.account %1 unsuspended
-
-%1's VOC is left exactly as it was, so it comes back with it.
+Nothing on Windows has changed: %1 keeps its Windows account, its password and every group it belongs to, including any administrator rights it had.
