@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3076): op_akclear() asks net_refuse() before the shared-account refusal, in Linux's order.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed truncate in an index clear is an error.
  * 12 Nov 26 Windows port - from Linux 413312f3 (RELEASE_1.1 251): get_ak_node() checks the chsize64() that makes room for a new node.
  * 12 Nov 26 Windows port - from Linux 3d3890e3 (25 Oct 26; RELEASE_1.1 240 b): a right justified index made now has the magic DH_INDEX2 and the flag AK_V2,
@@ -513,11 +514,11 @@ void op_akclear() {
   descr = e_stack - 2;
   k_get_file(descr);
   fvar = descr->data.fvar;
+  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
+    net_refuse(fvar, "CLEAR.AK");
   /* 18 Oct 26 S.66: emptying an index of a file in the shared account is a structure change, SDSYS's alone ($internal is not exempt) */
   if (shared_structure_refusal(fvar) != EDIT_NONE)
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */
-    net_refuse(fvar, "CLEAR.AK");
   if (fvar->type != DYNAMIC_FILE)
     goto exit_op_akclear; /* Not DH file */
   dh_file = fvar->access.dh.dh_file;

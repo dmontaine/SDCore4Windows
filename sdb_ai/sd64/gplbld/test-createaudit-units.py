@@ -36,7 +36,7 @@ PAIRS = [("CA$ROUTE.SSH", "ssh"), ("CA$ROUTE.API", "api"), ("CA$OS.SH", "sh-on")
 # went lower case; VM sit3's trail said account=ZZWITPU).
 AUDIT = "void kernel(K$AUDIT, 'create.account account=' : acc.name : ' type=' : downcase(acc.type) : ' gates=' : gates : start.audit)"
 START_WORDS = {"START-MENU", "START-TERMINAL"}       # 28 Oct 26, S.75: where the account starts, not an access: they have a tail of their own (start=), not a place in gates=
-CREATE_CALL = "call !create_account(upcase(acc.type), acc.name, settings, err)"
+CREATE_CALL = "call !create_account(acc.type, acc.name, settings, err)"   # 17 Nov 26 (audit round 1): acc.type is upcased once after it is read, as Linux
 
 
 def strip(src):
@@ -108,8 +108,8 @@ MUTANTS = [
     ("voc-on is named bp-on", "settings<CA$VOC.EDIT> = 1 then gates<-1> = 'voc-on'", "settings<CA$VOC.EDIT> = 1 then gates<-1> = 'bp-on'"),
     ("an empty list is not none", "if gates = '' then gates = 'none' else", "if gates = '' then gates = '' else"),
     ("the words are not separated", "gates = convert(@fm, ',', gates)", "gates = convert(@fm, '', gates)"),
-    ("settings is emptied again after the parser (the audit round 1 defect)", "   if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname\n",
-     "   settings = ''\n   if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname\n"),
+    ("settings is emptied again after the parser (the audit round 1 defect)", "   err = ''\n   " + CREATE_CALL + "\n",
+     "   settings = ''\n   err = ''\n   " + CREATE_CALL + "\n"),
     ("settings is never emptied", "   settings = ''      ;* before more.args writes into it (Linux createa:236)\n", ""),
     ("a new gate word is accepted and not audited", "         case upcase(token) = 'DICT-ON'\n", "         case upcase(token) = 'DICT-OK'\n            settings<CA$NET> = 1\n         case upcase(token) = 'DICT-ON'\n"),
 ]

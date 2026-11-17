@@ -73,6 +73,11 @@ server with one request each and no command parsing in the way):
 A refused open or write does NOT change the exit code: each is its own verdict
 line, and the caller reads the line.
 
+--open-sdnet ACCOUNT;FILE (added 3 Nov 2026, S.73 item 1; carried from Linux
+17 Nov 2026) sends request 29, the SDNet open of an 'account;file' file, after
+the login and the account, and prints
+"open-sdnet X: OPENED ..." or "open-sdnet X: REFUSED server_error E status S: text".
+
 THE WIRE LINE.  Every session ends with one of
   wire     : password absent from the <n> plaintext byte(s) this client sent
   wire     : password FOUND IN the <n> plaintext byte(s) this client sent
@@ -112,6 +117,7 @@ REQ_GETERROR = 2
 REQ_ACCOUNT = 3
 REQ_OPEN = 4
 REQ_WRITE = 16
+REQ_OPEN_SDNET = 29                 # 3 Nov 26 (S.73 item 1): --open-sdnet; carried 17 Nov 26 (audit P-3075)
 REQ_EXECUTE = 21
 REQ_LOGIN = 24
 REQ_SCRAM_FIRST = 47
@@ -149,6 +155,11 @@ class Tls:
     def __init__(self, sock):
         # Every plaintext byte handed to SSL_write, for the wire line.
         self.sent = bytearray()
+        # 17 Nov 26 (audit P-3065, P-3074), as Linux's: set before a load that
+        # may fail, so a close() after a failed start finds them.
+        self.ssl = None
+        self.ctx = None
+        self.sock = sock
         self.lib_name, lib = self._load()
         vp, i, sz = ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t
         sig = {
@@ -174,7 +185,6 @@ class Tls:
             fn.argtypes = args
             fn.restype = res
         self.lib = lib
-        self.sock = sock
         self.ctx = lib.SSL_CTX_new(lib.TLS_client_method())
         if not self.ctx:
             raise ConnectionError("TLS: cannot create a context")
@@ -512,6 +522,18 @@ def after_login(sock, a):
     for name, rid, text in a.write:
         write_record(sock, name, rid, text, files)
 
+    # 3 Nov 26 (track G, S.73 item 1): request 29, open an 'account;file' file - the SDNet open no client library sends.  The answer is
+    #   printed as it came: server_error, status (3035 is the OS gate's refusal) and, on a refusal, the server's error text (request 2).  Judging it is the caller's.
+    #   17 Nov 26 - carried from Linux (four-version audit round 1, P-3072, P-3075).
+    for target in a.open_sdnet:
+        say("> request 29 (open SDNet file) %s" % target)
+        err, status, text = request(sock, REQ_OPEN_SDNET, target)
+        if err != 0:
+            _, _, detail = request(sock, REQ_GETERROR, "")
+            say("open-sdnet %s: REFUSED server_error %d status %d: %s" % (target, err, status, detail or text))
+        else:
+            say("open-sdnet %s: OPENED server_error 0 status %d file number %r" % (target, status, text))
+
     if a.pause > 0:
         say("pausing %gs before the commands" % a.pause)
         time.sleep(a.pause)
@@ -618,6 +640,8 @@ def main(argv):
     ap.add_argument("--write", action="append", default=[], nargs=3,
                     metavar=("NAME", "ID", "DATA"),
                     help="after login and account, write a record (request 16)")
+    ap.add_argument("--open-sdnet", action="append", default=[], metavar="ACCOUNT;FILE",
+                    help="after the login and the account, send request 29 for ACCOUNT;FILE (repeatable; 3 Nov 26, S.73 item 1)")
     ap.add_argument("commands", nargs="*")
     a = ap.parse_args(argv)
 
@@ -643,6 +667,8 @@ def main(argv):
         say("  open     : %s" % name)
     for name, rid, _ in a.write:
         say("  write    : %s %s" % (name, rid))
+    for target in a.open_sdnet:
+        say("  open-sdnet: %s" % target)
     if pw is None or pw == "":
         say("scram-probe: CANNOT RUN - SD_SCRAM_PASSWORD is not set or empty.")
         return 2

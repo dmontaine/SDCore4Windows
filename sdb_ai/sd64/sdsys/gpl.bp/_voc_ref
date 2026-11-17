@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3225): the register is read with downcase(qpath), as Linux _voc_ref:258; its keys
+*               are lower case, and the file's NOCASE default was the only thing that found an upper-case Q-pointer's account.
 * 10 Nov 26 Windows port - from Linux ca137620 (S.213; RELEASE_1.1 230): while RUN.IN is running a command (ri.active of the /$runin/ common) a Q-pointer, and so the
 *               Account:File form, leads only into the run's own account by its register name; anything else is ER$PERM.  Here the session's token is elevated
 *               whatever the administrator flag says, so a Q-pointer out would let a compile RUN.IN started read with the Windows administrator's reach.
@@ -274,7 +276,7 @@ parse.as.q.pointer:
                if index(qpath, @ds, 1) = 0 then  ;* Try lookup in ACCOUNTS file
                   if len(qpath) < 64 then
                      openpath @sdsys:@ds:'accounts' to acc.f then
-                        read acc.rec from acc.f, qpath then
+                        read acc.rec from acc.f, downcase(qpath) then
                            qpath = acc.rec<ACC$PATH>
                            q.registered = @true
                            q.group = acc.rec<ACC$GROUP>

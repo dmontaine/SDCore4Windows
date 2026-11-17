@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3095, P-3096): audit_rotate() declared after k_ai(), in Linux's order.
  * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): k_ai() (op_ai.c), the AI helper's transport.
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): log_termination_signal() (linuxio.c).
  * 8 Nov 26 Windows port - from Linux 14ddc2cf (S.152): the prototypes of the functions it removed are gone.
@@ -255,8 +256,8 @@ void txn_rollback_to(int depth);                 /* txn.c: roll back the transac
 char * k_var_name(DESCRIPTOR * descr);
 void log_message(char * msg);
 void audit_message(char * msg);
-void audit_rotate(void);
 void k_ai(int action, DESCRIPTOR * descr, DESCRIPTOR * result);   /* op_ai.c: KERNEL(K$AI.START / POLL / CANCEL / STATUS), the in-SD AI helper's transport (13 Nov 26 Windows port, Linux S.69 step 2; RELEASE_1.1 246) */
+void audit_rotate(void);
 int log_printf(char * str, ...);
 void log_permissions_error(FILE_VAR * fvar);
 

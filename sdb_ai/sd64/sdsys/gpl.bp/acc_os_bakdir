@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3226): keys.h is included before int$keys.h, as Linux's acc_os_bakdir.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 01 Oct 26 Windows port - written, with SET.BACKUP.DIRECTORY (owner's ruling,
 *           1 Oct 2026).  Messages 12010 and 13046 (shared; Linux decided that
@@ -52,6 +53,7 @@ $internal
 subroutine acc_os_bakdir(mode, dir, err)
 $catalog !acc_os_bakdir
 
+$include keys.h
 $include int$keys.h
 
 deffun ps_script_out(script, want.out) calling '!ps_script_out'

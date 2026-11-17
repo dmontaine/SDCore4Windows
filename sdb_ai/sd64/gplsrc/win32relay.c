@@ -84,7 +84,7 @@ int win32_relay_spawn(const char* account, int net_fd, int sp_fd, int ctl_fd,
 int win32_relay_exit_code(void* proc, int wait_ms);
 int win32_my_sid(char* out, size_t outlen, char* why, size_t whylen);
 
-#define RELAY_EXE_NAME "sdtlsrelay.exe"        /* SD_RELAY_EXE in sd_tls.h */
+#define RELAY_EXE_NAME "sdtlsrelay.exe"        /* beside sd.exe, like sdpy */
 
 /* ====================================================================== */
 

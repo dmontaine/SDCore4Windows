@@ -397,8 +397,9 @@ def checks(srcs):
     # Windows: the structure test comes just BEFORE the NET_FILE refusal (Linux: just after); both refuse before anything changes.
     ck("K11 op_configfl asks the structure test beside the NET_FILE refusal and BEFORE the read-only test and dh_configure", ordered(cfl, SREF, "net_refuse(fvar", "FV_RDONLY", "dh_configure("), "")
     akc, ake = func_body(dk, "void op_akclear()"), func_body(dk, "void op_akenable()")
+    # 17 Nov 26 (four-version audit P-3076): op_akclear asks it just AFTER the NET_FILE refusal, in Linux's order.
     ck("K11b op_akclear asks it before the type test and ak_clear; op_akenable before its first change",
-       ordered(akc, SREF, "net_refuse(fvar", "fvar->type != DYNAMIC_FILE", "ak_clear(") and ordered(ake, SREF, "net_refuse(fvar", "fvar->type == DYNAMIC_FILE && akno < MAX_INDICES"), "")
+       ordered(akc, "net_refuse(fvar", SREF, "fvar->type != DYNAMIC_FILE", "ak_clear(") and ordered(ake, SREF, "net_refuse(fvar", "fvar->type == DYNAMIC_FILE && akno < MAX_INDICES"), "")
     cra, dka = func_body(dk, "void op_createak()"), func_body(dk, "void op_deleteak()")
     ck("K11c op_createak and op_deleteak are given PATHNAMES, so they ask path_resolved_in_shared (the data path and the index path; the file's path) before create_ak / delete_ak; the administrator passes",
        ordered(cra, "MY_ADMIN()", "path_resolved_in_shared(data_path)", "path_resolved_in_shared(ak_path)", "edit_refused_message(EDIT_SHARED_STRUCT)", "create_ak(")
@@ -526,14 +527,14 @@ def checks(srcs):
     ck("G1 BLANK MEANS ON, in LOGIN: shared.read is loaded as 'not no' (# 'NO') and shared.write as 'yes' (= 'YES'), after K$NET and before the S.64 edit gates, each once",
        re.search(r"void kernel\(K\$SHARED\.READ,\s*" + rd % r"acc\.rec" + r"\)", lg) is not None and re.search(r"void kernel\(K\$SHARED\.WRITE,\s*upcase\(trim\(acc\.rec<ACC\$SHARED\.WRITE>\)\) = 'YES'\)", lg) is not None
        and ordered(lg, "void kernel(K$NET,", "void kernel(K$SHARED.READ,", "void kernel(K$SHARED.WRITE,", "void kernel(K$VOC.EDIT,") and lg.count("kernel(K$SHARED.READ,") == 1 and lg.count("kernel(K$SHARED.WRITE,") == 1, "")
-    # Windows: the register is read by new.account, and the two loads follow K$NET (Linux: just before it); every entry, outside master.login.done, either way.
+    # 17 Nov 26 Windows port (four-version audit round 1): Linux's G1b - the register is read by downcase(new.account) and the two loads come just before K$NET.
     ck("G1b ...in the API server: both grants start false (fail closed), are read from the register INSIDE the block that read it ('not no' for read, 'yes' for write), and are loaded at EVERY entry "
-       "(outside master.login.done) beside K$NET",
+       "(outside master.login.done) immediately BEFORE K$NET",
        re.search(r"api\.shared\.read\.grant = @false\s*\napi\.shared\.write\.grant = @false", ap) is not None
        and re.search(r"api\.shared\.read\.grant = \(" + rd % r"acc\.rec" + r"\)", ap) is not None
        and re.search(r"api\.shared\.write\.grant = \(upcase\(trim\(acc\.rec<ACC\$SHARED\.WRITE>\)\) = 'YES'\)", ap) is not None
-       and ordered(ap, "api.shared.read.grant = @false", "read acc.rec from acc.f, new.account then", "api.shared.read.grant = (", "api.shared.write.grant = (",
-                   "void kernel(K$NET, api.net.grant)", "void kernel(K$SHARED.READ,  api.shared.read.grant)", "void kernel(K$SHARED.WRITE, api.shared.write.grant)")
+       and ordered(ap, "api.shared.read.grant = @false", "read acc.rec from acc.f, downcase(new.account) then", "api.shared.read.grant = (", "api.shared.write.grant = (",
+                   "void kernel(K$SHARED.READ,  api.shared.read.grant)", "void kernel(K$SHARED.WRITE, api.shared.write.grant)", "void kernel(K$NET, api.net.grant)")
        and 0 <= at(ap, "void kernel(K$SHARED.READ,  api.shared.read.grant)") < at(ap, "if not(master.login.done) then\n   void kernel(K$VOC.EDIT"), "")
     # Linux G1c (the OS user sdsys entering sdsys over the API holds both gates ON) is not carried: the API is never open to SDSYS here
     # (modify.account refuses it and sdsys is denied network sign-in; apisrvr's 23 Oct 26 note).
@@ -557,8 +558,9 @@ def checks(srcs):
     ai = B("acc_os_info")
     mo = B("modifya")
     # Windows: the gate keys are written in one 'if typ = USER' block after the type is decided (Linux: in the USER arm of the case), net after them.
-    ck("G3 the manifest carries shared.read ('not no': 1 unless the field says no) and shared.write (1 only for yes) for a USER account only, after the type is decided",
-       ordered(ai, "case downcase(grp[1, 4]) = 'sdg_'", "if typ = 'USER' then\n      info<-1> = 'os.sh: '", "'shared.read: '", "'shared.write: '", "'net: '")
+    # 17 Nov 26 Windows port (four-version audit round 1, P-3228): net: comes before shared.read, as Linux's G3
+    ck("G3 the manifest carries shared.read ('not no': 1 unless the field says no) and shared.write (1 only for yes) for a USER account only, after the type is decided and after net:",
+       ordered(ai, "case downcase(grp[1, 4]) = 'sdg_'", "if typ = 'USER' then\n      info<-1> = 'os.sh: '", "'net: '", "'shared.read: '", "'shared.write: '")
        and re.search(r"info<-1> = 'shared\.read: ':\(if " + rd % r"acc\.rec" + r" then 1 else 0\)", ai) is not None
        and re.search(r"info<-1> = 'shared\.write: ':\(if upcase\(trim\(acc\.rec<ACC\$SHARED\.WRITE>\)\) = 'YES' then 1 else 0\)", ai) is not None, "")
     rs = B("restorea")
@@ -587,10 +589,10 @@ def checks(srcs):
                "/grant ' : sad.grant") and "acc.rec<ACC$GROUP> = group_name" in ca2, "")
     # Windows: the syntax text names the two words on its second line, after {files-admin-on} (Linux: between {dict-on} and {net-on}).
     # 15 Nov 26 (from Linux d15ace15, S.242, RELEASE_1.1 299): the tail gains {xfer-on}.
-    ck("G7 createa: the syntax text names {shared-read-off} {shared-write-on} (before the {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query} tail), and ONLY those two words are "
+    # 17 Nov 26 Windows port (four-version audit round 1, P-3338): createa's syntax line is Linux's word for word, so Linux's G7
+    ck("G7 createa: the syntax line puts {shared-read-off} {shared-write-on} between {dict-on} and {net-on} (so the {net-on} {files-on} {no.query} tail still matches), and ONLY those two words are "
        "taken (SHARED-READ-OFF sets CA$SHARED.READ.OFF, SHARED-WRITE-ON sets CA$SHARED.WRITE): the other two restate the default",
-       "{dict-on} {net-on} {files-on} {files-write-on} {files-admin-on}" in cr
-       and "{shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}" in cr
+       "{dict-on} {shared-read-off} {shared-write-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}" in cr
        and re.search(r"case upcase\(token\) = 'SHARED-READ-OFF'\s*\n\s*settings<CA\$SHARED\.READ\.OFF> = 1\s*\n\s*case upcase\(token\) = 'SHARED-WRITE-ON'\s*\n\s*settings<CA\$SHARED\.WRITE> = 1", cr) is not None
        and "SHARED-READ-ON" not in cr and "SHARED-WRITE-OFF" not in cr, "")
     # Windows: each word is 'case upcase(action) = ...' with os.field and os.want on lines of their own, and no return after gosub os.set.
@@ -613,8 +615,9 @@ def checks(srcs):
                "crt sysmsg(12520, acc.name, sh.read.now, sh.write.now)"), "")
     da = B("delacc")
     # Windows: the shared refusal comes just BEFORE the sdsys refusal (Linux: just after); both before the own-account test and anything else.
-    ck("G9 delacc refuses the account named shared (12522) beside the sdsys refusal and BEFORE the own-account test, the register read, any prompt and any removal",
-       ordered(da, "if acc.name = 'shared' then", "stop sysmsg(12522)", "stop sysmsg(6025)", "if acc.name = downcase(@who) then", "stop sysmsg(6026)")
+    # 17 Nov 26 Windows port (four-version audit round 1, P-3346): after the sdsys refusal, as Linux's G9
+    ck("G9 delacc refuses the account named shared (12522) after the sdsys refusal and BEFORE the own-account test, the register read, any prompt and any removal",
+       ordered(da, "stop sysmsg(6025)", "if acc.name = 'shared' then", "stop sysmsg(12522)", "if acc.name = downcase(@who) then", "stop sysmsg(6026)")
        and ordered(da, "acc.name = downcase(acc.name)", "stop sysmsg(12522)", "openpath @sdsys:@ds:'accounts' to acc.f else", "readu acc.rec from acc.f, acc.name locked", "input yn", "delete acc.f, acc.name"), "")
 
     # ---- I. the installer and the remover ----------------------------------------------------------------------------------------
@@ -720,8 +723,8 @@ MUTANTS = [
     ("message 12519 loses its words", "msg:12519", "can only be changed by SDSYS", "can be changed by anyone"),
     ("message 12525 is deleted", "msg:12525", X(r"(?s).*"), ""),
     ("a program cites 12518 that is not !edit_msg", "bp:edit_guard", "   kind = kernel(K$EDIT.KIND, p)\n   display edit_msg(kind)", "   kind = kernel(K$EDIT.KIND, p)\n   display sysmsg(12518)"),
-    ("a kernel refusal says 12519 as a number", "c:dh_ak.c", "k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"CLEAR.AK\");",
-     "k_error(sysmsg(12519));\n  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"CLEAR.AK\");"),
+    ("a kernel refusal says 12519 as a number", "c:dh_ak.c", "k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n  if (fvar->type != DYNAMIC_FILE)\n    goto exit_op_akclear;",
+     "k_error(sysmsg(12519));\n  if (fvar->type != DYNAMIC_FILE)\n    goto exit_op_akclear;"),
     # ---- the root ----
     ("a miss is final (never retried)", "c:op_sh.c", "((now - last_try) < SHARED_RETRY_SECONDS)", "1"),
     ("a miss is retried at every call", "c:op_sh.c", "  last_try = now;\n", ""),
@@ -772,8 +775,8 @@ MUTANTS = [
     ("CLEARFILE of a shared file says the program message", "c:op_dio3.c", "k_error(sysmsg(EDIT_REFUSED_MSG(EDIT_SHARED_STRUCT)));\n    process.status = -ER_PERM;", "k_error(sysmsg(EDIT_REFUSED_MSG(EDIT_PROG)));\n    process.status = -ER_PERM;"),
     ("CONFIGURE.FILE is not asked", "c:op_dio1.c", "  if (shared_structure_refusal(fvar) != EDIT_NONE)\n    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file is not configured",
      "  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file is not configured"),
-    ("CLEAR.AK is not asked", "c:dh_ak.c", "  if (shared_structure_refusal(fvar) != EDIT_NONE)\n    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"CLEAR.AK\");",
-     "  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"CLEAR.AK\");"),
+    ("CLEAR.AK is not asked", "c:dh_ak.c", "    net_refuse(fvar, \"CLEAR.AK\");\n  /* 18 Oct 26 S.66: emptying an index of a file in the shared account is a structure change, SDSYS's alone ($internal is not exempt) */\n  if (shared_structure_refusal(fvar) != EDIT_NONE)\n    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n",
+     "    net_refuse(fvar, \"CLEAR.AK\");\n"),
     ("AKENABLE is not asked", "c:dh_ak.c", "  if (shared_structure_refusal(fvar) != EDIT_NONE)\n    k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));\n  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"AKENABLE\");",
      "  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65 */\n    net_refuse(fvar, \"AKENABLE\");"),
     ("CREATE.AK forgets the index path", "c:dh_ak.c", "(path_resolved_in_shared(data_path) || path_resolved_in_shared(ak_path))", "(path_resolved_in_shared(data_path))"),
@@ -860,7 +863,7 @@ MUTANTS = [
     ("modifya refuses the account named shared", "bp:modifya", "os.set:\n", "os.set:\n   if acc.name = 'shared' then return\n"),
     ("modifya reports read as yes unless the field says yes", "bp:modifya", "if upcase(trim(acc.new<ACC$SHARED.READ>)) = 'NO' then sh.read.now = 'no'", "if upcase(trim(acc.new<ACC$SHARED.READ>)) # 'YES' then sh.read.now = 'no'"),
     ("create.account takes shared-read-on too", "bp:createa", "         case upcase(token) = 'SHARED-READ-OFF'", "         case upcase(token) = 'SHARED-READ-ON'\n            null\n         case upcase(token) = 'SHARED-READ-OFF'"),
-    ("create.account's syntax drops the shared words", "bp:createa", "{shared-read-off} {shared-write-on} {start-menu", "{start-menu"),
+    ("create.account's syntax drops the shared words", "bp:createa", "{dict-on} {shared-read-off} {shared-write-on} {net-on}", "{dict-on} {net-on}"),   # 17 Nov 26: Linux's syntax line
     ("create_account writes a USER's read as blank", "bp:create_account", "     acc.rec<ACC$SHARED.READ> = if shared.read.off then 'no' else 'yes'\n", ""),
     ("create_account asks the setting loosely", "bp:create_account", "shared.write.want = (settings<CA$SHARED.WRITE> = 1)", "shared.write.want = (settings<CA$SHARED.WRITE> # '')"),
     ("create_account does not report the shared gates", "bp:create_account", "      crt sysmsg(12520, acc.name, acc.rec<ACC$SHARED.READ>, acc.rec<ACC$SHARED.WRITE>)  ;* Account %1 has shared.read %2, shared.write %3\n", ""),

@@ -280,20 +280,6 @@ cited by: `delacc`
 No memory for PROGRAM control area
 ```
 
-### msg:10030
-> kind=message tier=reference since=- src=sdsys/messages/10030:1#fc903a34
-
-```
-Entering SDSYS requires your own password
-```
-
-### msg:10031
-> kind=message tier=reference since=- src=sdsys/messages/10031:1#2409c9a9
-
-```
-Incorrect password
-```
-
 ### msg:10034
 > kind=message tier=reference since=- src=sdsys/messages/10034:1#379ba821
 
@@ -311,10 +297,10 @@ Unable to restrict %1 to ssh, status: %2
 ```
 
 ### msg:10036
-> kind=message tier=reference since=- src=sdsys/messages/10036:1#22e587e5
+> kind=message tier=reference since=- src=sdsys/messages/10036:1#6aa7dfaa
 
 ```
-Windows account %1 was not created by SD, leaving it in place
+Windows account %1 was not created by SD (it has no "SD account" stamp), leaving it in place
 ```
 
 cited by: `delacc`
@@ -763,21 +749,12 @@ Account %1 has SH %2, OS.EXECUTE %3
 
 cited by: `create_account`, `modifya`
 
-### msg:10103
-> kind=message tier=reference since=- src=sdsys/messages/10103:1#e05acace
-
-```
-%1 already has an os.users record, so it was left exactly as it was
-```
-
 ### msg:10104
 > kind=message tier=reference since=- src=sdsys/messages/10104:1#3165e969
 
 ```
 Unable to change operating-system access for %1; the register could not be updated,\nso nothing has changed.
 ```
-
-cited by: `modifya`
 
 ### msg:10105
 > kind=message tier=reference since=- src=sdsys/messages/10105:1#3ad02f63
@@ -803,8 +780,6 @@ cited by: `cproc`, `login`, `xfersrv`
 ```
 Account %1 is now %2
 ```
-
-cited by: `modifya`
 
 ### msg:1011
 > kind=message tier=reference since=- src=sdsys/messages/1011:1#94014939
@@ -839,13 +814,6 @@ Unable to change the state of %1; its state in the register is unchanged
 ```
 
 cited by: `modifya`
-
-### msg:10115
-> kind=message tier=reference since=- src=sdsys/messages/10115:1#d7b96b21
-
-```
-os.users: the record for %1 is removed
-```
 
 ### msg:10116
 > kind=message tier=reference since=- src=sdsys/messages/10116:1#8b285a4e
@@ -955,10 +923,10 @@ The Windows account %1 was created, and removing it again FAILED - so it is stil
 ```
 
 ### msg:10131
-> kind=message tier=reference since=- src=sdsys/messages/10131:1#369fc1b2
+> kind=message tier=reference since=- src=sdsys/messages/10131:1#b1c2d37b
 
 ```
-remote.api on | local | off {restart | no.restart}\n\nON     SD listens on port 4247 and other computers may connect.\nLOCAL  SD listens on port 4247 at 127.0.0.1 only: only this computer may connect.\nOFF    SD opens no API socket at all.\n\nWith no keyword it reports the current setting and changes nothing.\n\nSD opens its socket when it starts, so moving between ON, LOCAL and OFF\noffers to restart SD. RESTART or NO.RESTART answers that offer in advance.
+remote.api on | local | off {restart | no.restart}\n\nON     SD listens on port 4247 on every address and the firewall allows it:\n       other computers may connect.\nLOCAL  SD listens on 127.0.0.1:4247 only: only this computer may connect.\nOFF    SD opens no API socket at all.\n\nWith no keyword it reports the current setting and changes nothing.\n\nSD opens its socket when it starts, so moving between ON, LOCAL and OFF\noffers to restart SD. RESTART or NO.RESTART answers that offer in advance.
 ```
 
 cited by: `remoteapi`
@@ -1009,10 +977,10 @@ SD was not restarted. The setting is written and takes effect when SD is next\ns
 cited by: `remoteapi`
 
 ### msg:10137
-> kind=message tier=reference since=- src=sdsys/messages/10137:1#3e6be47a
+> kind=message tier=reference since=- src=sdsys/messages/10137:1#afa2c021
 
 ```
-remote.ssh on | off\n\nON   other computers on your network may connect to this one over ssh.\nOFF  only this computer may connect.\n\nWith no keyword it reports the current setting and changes nothing.\n\nIt takes effect at once and nobody is disconnected. OFF does not stop the ssh\nserver - it scopes the firewall rule - because SD accounts sign in at this\nkeyboard by "ssh localhost" and that has to keep working. To remove the server\naltogether, use "ssh.server remove".
+remote.ssh on | off\n\nON   the firewall allows port 22: other computers may connect over ssh.\nOFF  it does not: only this computer may connect.\n\nWith no keyword it reports the current setting and changes nothing.\n\nIt takes effect at once and nobody is disconnected. OFF does not stop the ssh\nserver - it scopes the firewall rule - because SD accounts sign in at this\nkeyboard by "ssh localhost" and that has to keep working. To remove the server\naltogether, use "ssh.server remove".
 ```
 
 cited by: `remotessh`
@@ -1201,10 +1169,10 @@ SD's program directory is no longer on the system PATH. "sd" still runs from\nit
 cited by: `apndpath`
 
 ### msg:10158
-> kind=message tier=reference since=- src=sdsys/messages/10158:1#21bb39c6
+> kind=message tier=reference since=- src=sdsys/messages/10158:1#6b265f22
 
 ```
-Deleting %1 removes everything the account holds. Its files and the data in\nthem go with it, and this cannot be undone.\n\nIf you only want to stop %1 using SD, suspend it instead:\n\n    modify.account %1 suspended\n\nA suspended account keeps its files, and modify.account %1 unsuspended\nlets it back in.\n
+Deleting %1 removes everything the account holds. Its files and the data in\nthem go with it, and this cannot be undone.\n\nIf you only want to stop %1 using SD, suspend it instead:\n\n    modify.account %1 suspended\n\nA suspended account keeps its files, and modify.account %1 unsuspended lets it back in.\n
 ```
 
 cited by: `delacc`, `radmin`
@@ -1525,6 +1493,24 @@ cited by: `apisrvr`
 ```
 Error %d restoring stdin
 ```
+
+### msg:10192
+> kind=message tier=reference since=- src=sdsys/messages/10192:1#91074107
+
+```
+Account %1 is no longer suspended
+```
+
+cited by: `modifya`
+
+### msg:10193
+> kind=message tier=reference since=- src=sdsys/messages/10193:1#5f6faa69
+
+```
+Account %1 is now suspended
+```
+
+cited by: `modifya`
 
 ### msg:1020
 > kind=message tier=reference since=- src=sdsys/messages/1020:1#68046ac2
@@ -2024,6 +2010,15 @@ cited by: `acc_archive`
 ```
 Inappropriate data type for GETREM()
 ```
+
+### msg:12041
+> kind=message tier=reference since=- src=sdsys/messages/12041:1#905ef9be
+
+```
+%1 file(s) named by an account's VOC lie outside that account's directory, or under SDSYS, and were left as they are. Convert each one as its owner with configure.file no.case:
+```
+
+cited by: `upgrade_nocase`
 
 ### msg:12043
 > kind=message tier=reference since=- src=sdsys/messages/12043:1#c5871e66
@@ -4556,10 +4551,10 @@ The next sequential record id of the file cannot be taken
 cited by: `seqkey`
 
 ### msg:12359
-> kind=message tier=reference since=- src=sdsys/messages/12359:1#e30c7561
+> kind=message tier=reference since=- src=sdsys/messages/12359:1#e688ad05
 
 ```
-FCONTROL cannot do this action in SD: it has no forced write mode and no line terminator modes
+FCONTROL cannot do this action in SD: it has no line terminator modes
 ```
 
 ### msg:1236
@@ -11967,10 +11962,10 @@ This command is not available on Windows
 ```
 
 ### msg:2005
-> kind=message tier=reference since=- src=sdsys/messages/2005:1#c3a8c332
+> kind=message tier=reference since=- src=sdsys/messages/2005:1#974642ec
 
 ```
-This command is not available on Windows
+This command is not available on this platform
 ```
 
 ### msg:2007
@@ -14978,10 +14973,10 @@ Mapping aborted
 cited by: `mapcat`
 
 ### msg:3046
-> kind=message tier=reference since=- src=sdsys/messages/3046:1#454743bb
+> kind=message tier=reference since=- src=sdsys/messages/3046:1#7cfa7b53
 
 ```
-System catalog map at %1 on %2 'G'Page 'SLL'  Catalog name..................  Compiled.  Time....  ...Obj  ..Xref  ..Size
+System catalog map at %1 on %2 'G'Page 'SLL'  Catalog name....................  Compiled.  Time....  ...Obj  ..Xref  ..Size
 ```
 
 cited by: `mapcat`
@@ -18267,10 +18262,10 @@ Invalid user name
 cited by: `granta`
 
 ### msg:6075
-> kind=message tier=reference since=- src=sdsys/messages/6075:1#e2b5c6ce
+> kind=message tier=reference since=- src=sdsys/messages/6075:1#62626ec3
 
 ```
-Passwords are set with Windows tools on this platform
+Passwords are set using Windows tools on this platform
 ```
 
 ### msg:6076

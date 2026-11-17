@@ -31,6 +31,7 @@
 * installer matches on that word and nothing else.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3478): $include syscom keys.h, Linux's spelling of the same file.
 * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): CLOSESEQ and EQU are gone as statements: this program says CLOSE and EQUATE.
 * 23 Oct 26 Windows port - from Linux d7cda81: carried; the include is keys.h and the sdu_ test folds case.  Run by upgrade-gates.ps1 after
 *               upgrade_gates.  RELEASE_1.1 170.
@@ -44,7 +45,7 @@
 $internal
 program upgrade_editgates
 
-$include keys.h
+$include syscom keys.h
 $include int$keys.h
 
    marker = @sdsys:@ds:'$editgates.done'

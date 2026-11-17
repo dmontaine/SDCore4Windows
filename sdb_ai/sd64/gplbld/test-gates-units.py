@@ -370,12 +370,12 @@ def checks(srcs, messages_dir):
     ck("B1a ... and K$SD.ACCOUNTS (16 Oct 26) from field 9, 'YES' only, in the same routine, called before the audit line (28 Oct 26: STACKED.ACCOUNT and its stk.* variables are gone; 3 Nov 26: revert.account is RUN.IN's own, which puts back what it kept in the /runin/ common)",
        0 < ld < aud and sdl > ldr and "stk.sd.accounts" not in cp and "OPT.STACKED.ACCOUNT" not in cp)
     oc = at(cp, "os.command.text = trimf(voc.rec<3>")
-    # 13 Nov 26 Windows port: the grant is read into sh.listed first, then tested
-    gate_ = at(cp, "if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then", oc)
+    # 17 Nov 26 Windows port (four-version audit round 1, P-3269): the grant is asked in the test itself, as Linux's (sh.listed is gone)
+    gate_ = at(cp, "if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then", oc)
     meta = at(cp, "if not(valid_shell_cmd(os.command.text)) then", oc)
     osx = at(cp, "os.execute os.command.text", oc)
     ck("B2 the SH verb refuses (10053) BEFORE the metacharacter test and BEFORE it runs the command",
-       0 < oc < at(cp, "sh.listed = kernel(K$SH, -1)", oc) < gate_ < meta < osx and "sysmsg(10053, @logname)" in cp[gate_:meta],
+       0 < oc < gate_ < meta < osx and "sysmsg(10053, @logname)" in cp[gate_:meta],
        "gate %s, filter %s, run %s" % (line_of(cp, gate_), line_of(cp, meta), line_of(cp, osx)))
 
     lg = c["login"]
@@ -418,10 +418,9 @@ def checks(srcs, messages_dir):
        and 0 < usr < at(ca, "acc.rec<ACC$OS.EXEC> = if os.exec then 'yes' else 'no'", usr) < wr, "user %s, write %s" % (usr, wr))
 
     cr = c["createa"]
-    # 13 Nov 26 Windows port: Core's parse sets os.sh / os.exec, and the settings are filled from them after the parse
+    # 17 Nov 26 Windows port (four-version audit round 1): createa's parse writes settings at once, as Linux's - Linux's B9
     ck("B9 CREATE.ACCOUNT accepts SH-ON and OS-ON, each setting only its own field",
-       re.search(r"upcase\(token\) = 'SH-ON'\s*os\.sh = @true\s*case", cr) and re.search(r"upcase\(token\) = 'OS-ON'\s*os\.exec = @true\s*case", cr)
-       and "if os.sh then settings<CA$OS.SH> = 1" in cr and "if os.exec then settings<CA$OS.EXECUTE> = 1" in cr)
+       re.search(r"upcase\(token\) = 'SH-ON'\s*settings<CA\$OS\.SH> = 1", cr) and re.search(r"upcase\(token\) = 'OS-ON'\s*settings<CA\$OS\.EXECUTE> = 1", cr))
     ck("B10 its usage says what the default is and names the words",
        "sh-on" in srcs["createa"] and "no ssh, no API, no shell" in srcs["createa"])
 
@@ -436,9 +435,9 @@ def checks(srcs, messages_dir):
     osset = osset[:nxt.start() + 1] if nxt else osset
     rd = at(osset, "readu acc.new from acc.f, acc.name")
     wt = at(osset, "write acc.new to acc.f, acc.name")
-    # 13 Nov 26 Windows port: Core's os.set says 10104 for a failed write (Linux 10114, which Core keeps for a failed state change)
+    # 17 Nov 26 Windows port (four-version audit round 1, P-3212): os.set says Linux's 10114 for a failed write (it said 10104)
     ck("B12 os.set writes the register under a lock (readu before write) and reports a failed write",
-       0 < rd < wt and "sysmsg(10104, acc.name)" in osset[wt:])
+       0 < rd < wt and "sysmsg(10114, acc.name)" in osset[wt:])
     ck("B13 os.set reports both fields afterwards (10102), refuses a non-sdu_ account (10105) and says 'no change' (10080)",
        "sysmsg(10102, acc.name, osu.sh, osu.ex)" in osset and "sysmsg(10105, acc.name)" in osset and "sysmsg(10080, acc.name)" in osset)
 
@@ -713,9 +712,9 @@ MUTANTS = [
     ("the SD.ACCOUNTS test ignores the user's groups", sub("op_dio2.c", "if (!win32_group_has_member(process.username, line[2], &member, why, sizeof(why)) || !member)\n      continue;", "")),
     ("the SD.ACCOUNTS test opens the VOC of the account", sub("op_dio2.c", "      found = FALSE;\n    else\n      found = TRUE;", "      found = TRUE;\n    else\n      found = TRUE;")),
     ("the SD.ACCOUNTS test trusts an unexpanded @ token", sub("op_dio2.c", "    } else if (line[0][0] == '@') {\n      continue;", "    } else if (0) {\n      continue;")),
-    ("the SH verb gate is removed", sub("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then\n      display sysmsg(10053, @logname)", "   if @false then\n      display sysmsg(10053, @logname)")),
-    ("the SH verb gate no longer reads the account's grant", sub("cproc", "   sh.listed = kernel(K$SH, -1)\n", "   sh.listed = @true\n")),
-    ("the SH verb gate comes after the command has run", swap("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then\n      display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell\n      return\n   end\n", "   os.execute os.command.text\n")),
+    ("the SH verb gate is removed", sub("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then\n      display sysmsg(10053, @logname)", "   if @false then\n      display sysmsg(10053, @logname)")),
+    ("the SH verb gate no longer reads the account's grant", sub("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then\n      display sysmsg(10053, @logname)", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(@true) then\n      display sysmsg(10053, @logname)")),
+    ("the SH verb gate comes after the command has run", swap("cproc", "   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then\n      display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell\n      return\n   end\n", "   os.execute os.command.text\n")),
     ("LOGIN grants everyone both", sub("login", "void kernel(K$SH,      upcase(trim(acc.rec<ACC$SH>)) = 'YES')", "void kernel(K$SH,      1)")),
     ("a new account is on both routes by default again", sub("create_account", "access.ssh = (settings<CA$ROUTE.SSH> = 1)", "access.ssh = settings<CA$ROUTE.SSH> # '0'")),
     ("a new account gets the shell by default", sub("create_account", "os.sh   = settings<CA$OS.SH> = 1", "os.sh   = settings<CA$OS.SH> # '0'")),
@@ -724,8 +723,8 @@ MUTANTS = [
     ("a GROUP account may be given a route", sub("create_account", "     if access.given then\n       @system.return.code = -ER$ARGS\n       err = 10087", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10087")),
     ("an OTHER account may be given a shell", sub("create_account", "     if os.sh or os.exec then\n       @system.return.code = -ER$ARGS\n       err = 10105", "     if @false then\n       @system.return.code = -ER$ARGS\n       err = 10105")),
     ("the register is written without the gate fields", sub("create_account", "      acc.rec<ACC$SH> = if os.sh then 'yes' else 'no'\n", "")),
-    ("CREATE.ACCOUNT OS-ON sets the wrong field", sub("createa", "         case upcase(token) = 'OS-ON'\n            os.exec = @true", "         case upcase(token) = 'OS-ON'\n            os.sh = @true")),
-    ("CREATE.ACCOUNT never passes OS-ON on", sub("createa", "if os.exec then settings<CA$OS.EXECUTE> = 1", "if @false then settings<CA$OS.EXECUTE> = 1")),
+    ("CREATE.ACCOUNT OS-ON sets the wrong field", sub("createa", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.EXECUTE> = 1", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.SH> = 1")),
+    ("CREATE.ACCOUNT never passes OS-ON on", sub("createa", "         case upcase(token) = 'OS-ON'\n            settings<CA$OS.EXECUTE> = 1", "         case upcase(token) = 'OS-ON'\n            null")),
     ("MODIFY.ACCOUNT SH-OFF turns the shell on", sub("modifya", "case upcase(action) = 'SH-OFF'\n            os.field = ACC$SH\n            os.want  = @false", "case upcase(action) = 'SH-OFF'\n            os.field = ACC$SH\n            os.want  = @true")),
     ("MODIFY.ACCOUNT OS-ON changes the shell field", sub("modifya", "case upcase(action) = 'OS-ON'\n            os.field = ACC$OS.EXEC", "case upcase(action) = 'OS-ON'\n            os.field = ACC$SH")),
     ("os.set writes without the lock", sub("modifya", "   readu acc.new from acc.f, acc.name else acc.new = acc.rec\n   if os.want", "   acc.new = acc.rec\n   if os.want")),

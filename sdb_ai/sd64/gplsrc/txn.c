@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3196): layout of one ternary as Linux's.
  * 12 Nov 26 Windows port - as Linux (RELEASE_1.1 251): saved_status is int32_t, as process.status is; an int16_t cut a large STATUS() value.
  * 18 Oct 26 Windows port - from Linux bafe928 (17 Oct 26): txn_rollback_to(): an exception thrown out of a TRY clause rolls back the
  *           transactions begun inside it (op_jumps.c exc_raise(), QM4 Fixes 354).
@@ -1373,8 +1374,9 @@ Private void replay_undo(void) {
                "Transaction commit failed and record '%.*s' in %s could not be "
                "put back as it was (%s)",
                (int)u->id_len, u->id, (char*)(fptr->pathname),
-               (u->mode == UNDO_UNREADABLE) ? "its prior content could not be read"
-                                            : "the undo itself failed");
+               (u->mode == UNDO_UNREADABLE)
+                   ? "its prior content could not be read"
+                   : "the undo itself failed");
       log_message(msg);
     }
 

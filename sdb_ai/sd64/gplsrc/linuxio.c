@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3082 to P-3085): a TCP peer whose family is not AF_INET reads as "?", and the
+ *            connection is logged "API connection over TCP from ... (SD login required)", as Linux's start_connection() does.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): socket_byte() gives a NUL on an ended read, the key
  *            written to a child's pipe is tested, and the Unix-socket path is copied with its terminator always set.
  * 12 Nov 26 Windows port - from Linux e79f6499 (RELEASE_1.1 252, P-23): a TCP connection to a session that is not the API server is
@@ -322,8 +324,10 @@ bool start_connection(int unused) {
           socklen_t palen = sizeof(pa);
 
           /* The PEER address, not our own - getsockname() above answered the
-             family, and what is worth logging is who connected. */
-          if (getpeername(0, (struct sockaddr *)&pa, &palen) == 0) {
+             family, and what is worth logging is who connected.
+             17 Nov 26 Windows port - as Linux: a peer whose family is not
+             AF_INET is "?" too, never read as a sockaddr_in. */
+          if ((getpeername(0, (struct sockaddr *)&pa, &palen) == 0) && (pa.ss_family == AF_INET)) {
             struct sockaddr_in* s = (struct sockaddr_in*)&pa;
             port_no = ntohs(s->sin_port);
             /* MAX_SOCKET_ADDR_STR_LEN, not the MAX_IP_ADDR_STR_LEN the dead
@@ -346,7 +350,7 @@ bool start_connection(int unused) {
             syslog(LOG_INFO, "Refusing PF_INET connection (not API server) from %s", ip_addr);
             return FALSE; /* Error */
           }
-          syslog(LOG_INFO, "API connection from %s port %d", ip_addr,
+          syslog(LOG_INFO, "API connection over TCP from %s port %d (SD login required)", ip_addr,
                  (int)port_no);
         }
         break;

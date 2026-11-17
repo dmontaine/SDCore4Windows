@@ -3,6 +3,24 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+17 Nov 26  MESSAGES, A HELP PAGE AND TWO SMALL FIXES BROUGHT INTO LINE WITH SD CORE FOR LINUX.
+
+             What        - A program that opens a socket and fails to connect no longer leaves the socket open, so one
+                           that retries in a loop does not run out of them.  The MAP heading's "Catalog name" column is
+                           two characters wider and lines up with the names under it.  list.voc.removed shows 2.0-0 as
+                           the release that removed each entry (it said 1.2-0).  The help of the Sessions and locks page
+                           describes what the page already does: "sdsys x2" when SDSYS is signed on in more than one
+                           place, the AI line on F6, and "/" to find a row.  Reworded as SD Core for Linux words them:
+                           the help of remote.api and remote.ssh (what ON and LOCAL mean), the message when
+                           delete.account leaves a Windows account SD did not make (it now says why: no "SD account"
+                           stamp), the suggestion to suspend instead of delete, "not available on this platform",
+                           FCONTROL's refusal, and the description of modify.password in a new account's VOC ("set your
+                           own SD password").  The Windows event log line for an API connection reads "API connection
+                           over TCP from ... (SD login required)".  Four messages nothing displayed any more (10030,
+                           10031, 10103, 10115) are gone.
+             Why         - The four-version parity audit (round 1): SD Core for Linux is the template.
+             Does NOT    - Change what any verb does, or any access rule.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 16 Nov 26  EVERY ACCOUNT HAS EXAMPLE PROGRAMS: THE FILE EXAMPLES.BP AND THE LOAD.EXAMPLES AND REMOVE.EXAMPLES VERBS.
 
              What        - every account now has its own file examples.bp of example programs, already compiled, so

@@ -210,7 +210,7 @@ def checks(raw):
        and "reason=remote administration session" in lt, "")
     ck("A1", "the console verbs keep their hands off SDRADMIN: CREATE.ACCOUNT refuses the name, MODIFY.ACCOUNT refuses it and refuses to ADD it to a group, DELETE.ACCOUNT refuses it while remote administration is open (12704 each)",
        re.search(r"if downcase\(trim\(acc\.name\)\) = 'sdradmin' then\s*\n\s*stop sysmsg\(12704\)", raw["createa"]) is not None
-       and raw["createa"].find("if downcase(trim(acc.name)) = 'sdradmin' then") < raw["createa"].find("   call !create_account(upcase(acc.type), acc.name, settings, err)")   # 17 Nov 26: settings is emptied before the parser now (audit round 1)
+       and raw["createa"].find("if downcase(trim(acc.name)) = 'sdradmin' then") < raw["createa"].find("   call !create_account(acc.type, acc.name, settings, err)")   # 17 Nov 26: settings is emptied before the parser now, and acc.type upcased once (audit round 1)
        and re.search(r"if acc\.name = 'sdradmin' then\s*\n\s*stop sysmsg\(12704\)", raw["modifya"]) is not None   # 13 Nov 26: names are lower case (row 288)
        and "if upcase(action) = 'ADD' and upcase(user.name) = 'SDRADMIN' then" in raw["modifya"]
        and re.search(r"if acc\.name = 'sdradmin' then\s*\n\s*if radmin_open\(0\) then stop sysmsg\(12704\)", raw["delacc"]) is not None, "")

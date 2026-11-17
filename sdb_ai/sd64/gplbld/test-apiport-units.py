@@ -164,7 +164,8 @@ def ports_in(t, rx):
 
 
 def help_problems(name, t, want, minimum):
-    got = ports_in(t, r"listens on port (\d+)")
+    # 17 Nov 26 (four-version audit P-3202): message 10131 takes Linux's LOCAL line, "listens on 127.0.0.1:4247", so that form counts too.
+    got = ports_in(t, r"listens on (?:port |127\.0\.0\.1:)(\d+)")
     if len(got) < minimum:
         return ["%s names the port %d time(s), want at least %d" % (name, len(got), minimum)]
     return ["%s says %d, want %d" % (name, p, want) for p in got if p != want]

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3195): parentheses as Linux's, no change in effect.
  * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local copied to the segment for sdwind.
  * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): release_pipe_fds() - sdwind gives back a caller's pipe on fds 0-2.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): sdwind's failed daemon() is said, not ignored.
@@ -991,7 +992,7 @@ bool stop_sd_ex(bool kill_survivors) {
          is just as bad - kill(-n) signals a process group too.
          The liveness poll below always had this test; this loop did not.   */
 
-      if (uptr->uid && uptr->pid > 0) {
+      if (uptr->uid && (uptr->pid > 0)) {
         kill(uptr->pid, SIGTERM);
       }
     }

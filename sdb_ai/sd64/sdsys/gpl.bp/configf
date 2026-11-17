@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3262 to P-3265): written as Linux's - display and @fm, and the two
+*           reporting defaults after next.value; no change in effect.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone; the parser key PARSER$MFILE is retired and this program asks for PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): the VERSION keyword is gone (a file keeps the format it has); message 6117 goes with it.
 * 18 Oct 26 Windows port - from Linux fa146d9 (16 Oct 26): QM4 Fixes 172: REPORTING shows how far a type conversion and an IMMEDIATE resize have got (messages 12391, 12392).
@@ -84,10 +86,10 @@ $include err.h
    immediate = @false
    no.resize = -1
    binary = @false
-   reporting = @false                ;* REPORTING: a progress line every REPORT.EVERY records, and the total (16 Oct 26)
-   report.every = 1000
    next.value = -1                   ;* NEXT n: the next id WRITE ... CREATING.SEQKEY gives out (15 Oct 26)
    next.query = @false
+   reporting = @false                ;* REPORTING: a progress line every REPORT.EVERY records, and the total (16 Oct 26)
+   report.every = 1000
 
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb
@@ -172,8 +174,8 @@ $include err.h
             *   (messages.c), so it is shown a line at a time (Linux, mail T0230).
             if not(kernel(K$INTERNAL, -1)) then
                case.msg = sysmsg(10176)
-               for case.i = 1 to dcount(case.msg, @FM)
-                  crt case.msg<case.i>
+               for case.i = 1 to dcount(case.msg, @fm)
+                  display case.msg<case.i>
                next case.i
                stop
             end
@@ -433,7 +435,7 @@ convert.file:
 *              6 Oct 26 Windows port - 10177 IS SEVERAL LINES (field marks, see
 *              10176 above): shown a line at a time.
                twin.msg = sysmsg(10177, id, other, trimf(dict.flag : ' ' : file.name))
-               for twin.i = 1 to dcount(twin.msg, @FM)
+               for twin.i = 1 to dcount(twin.msg, @fm)
                   display twin.msg<twin.i>
                next twin.i
                if fileinfo(new.fu, FL$OPEN) then close new.fu

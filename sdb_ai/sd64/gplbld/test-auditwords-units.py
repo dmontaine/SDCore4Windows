@@ -175,7 +175,7 @@ def selftest():
             return 1
         # 8 Oct 26 - FOUR MUTANTS RE-AIMED AT THIS PORT'S LINES: Linux's name text that exists only in its source (login's
         # 'initial.account', cproc's 'reason=sdsys login', delacc's PAL-24 comment).  The checker above is Linux's, untouched.
-        mutant("event-name-upper", "login", "'login account=' : audit.account)", "'LOGIN account=' : audit.account)")
+        mutant("event-name-upper", "login", "'login account=' : initial.account)", "'LOGIN account=' : initial.account)")   # 17 Nov 26 (audit round 1): login names initial.account again, as Linux
         mutant("command-upper", "delacc", "'delete.account account='", "'DELETE.ACCOUNT account='")
         mutant("label-half-upper", "login", "'elevation granted account=SDSYS'", "'ELEVATION granted account=SDSYS'")
         mutant("variable-not-downcased", "remoteapi", "'remote.api ' : downcase(action)", "'remote.api ' : action")

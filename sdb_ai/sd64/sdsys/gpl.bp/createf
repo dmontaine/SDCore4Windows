@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3341, P-3342): a new file's dictionary is <name>.dic, as Linux (it was <name>.DIC).
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused no.query is gone.
 * 12 Nov 26 Windows port - from Linux 41d8817d (RELEASE_1.1 252, audit P-22): the name is looked up (as typed, lower, upper) before it is folded.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  CREATE.FILE name,part and the MULTIFILE word are refused (a comma after the name is an unexpected token, 2018), a file that already has a data part is no longer converted or extended, field 4 of an existing record is ignored, and edit.check.existing and messages 6103, 6124, 6162, 6195, 6197 and 6201 go with them.  PARSER$MFILE is now PARSER$GET.TOKEN.
@@ -360,12 +361,16 @@ $define default.split.load 80
 
    * Form operating system file name from VOC record name
 
-   os.name = ospath(file.name, OS$MAPPED.NAME)  ;* file.name already canonical - RELEASE_1.1 5
+   os.name = ospath(downcase(file.name), OS$MAPPED.NAME)   ;* 17 Nov 26: as Linux (plan M3 D4); file.name is already canonical - RELEASE_1.1 5
 
    * Check if operating system components already exist
 
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3342): the suffix is lower case, as Linux's plan M3 D4 - a literal ".DIC" on a
+*   lower-case name is a mixed name.  NTFS opened either; the name on disk is what the person sees in 6121 and in a directory listing.
+   dict.suffix = '.dic'
+
    if create.dict and not(using.dict) then
-      dict.path = dir.name.with.delimiter : os.name : ".DIC"
+      dict.path = dir.name.with.delimiter : os.name : dict.suffix
       if ospath(dict.path, OS$EXISTS) then        ;* Already exists
          stop sysmsg(6121, dict.path) ;* Dictionary pathname 'xx' already exists
       end

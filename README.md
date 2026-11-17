@@ -9,14 +9,15 @@ which runs on Linux only. SD Core for Windows is SD rebuilt for Windows: a
 Windows service, a Windows installer, and Windows security in place of the
 Linux users, groups and permissions it relied on.
 
-**Current release: W1.1-1** (29 Sep 2026), distributed as a zip on SourceForge.
-It replaces W1.1-0, which carried non-English language support that should not
-have been in it; SD Core is English only. See `sdb_ai/sd64/sdsys/changelog` for
-what has changed.
+**Current release: W1.1-3** (10 Oct 2026), distributed as a zip on SourceForge,
+paired with SD Core for Linux L1.1-3. The next release of all four SD Core
+versions is 2.0-0. See `sdb_ai/sd64/sdsys/changelog` for what each contains.
+
+SD Core is English only: it has no support for other languages or locales.
 
 ## What you get
 
-- **A single installer**, `sd-setup-W1.1-1.exe`. Nothing to compile and no
+- **A single installer**, `sd-setup-W1.1-3.exe`. Nothing to compile and no
   dependencies to resolve; SD carries its own runtime beside `sd.exe`.
 - **Fixed install locations** — programs in `C:\Program Files\SD`, data and
   configuration in `C:\ProgramData\SD` (the SDSYS account and
@@ -35,7 +36,7 @@ already installed or Windows' ssh server has been reconfigured.
 
 ## Requirements
 
-Windows 10 or 11, 64-bit.
+Windows 11, 64-bit.
 
 ## Documentation
 
@@ -62,10 +63,10 @@ This repository contains no binaries; everything is built from source.
 - [SDCore4WindowsSolo](https://github.com/dmontaine/SDCore4WindowsSolo) — a
   single-user edition that installs under one Windows user's home directory.
 - [SDCore4Linux](https://github.com/dmontaine/SDCore4Linux) — SD Core for
-  Linux, which tracks this project.
+  Linux.
 
 ## Licence
 
-SD, including the API, is licensed under the GPL v3.0. The install and delete
-scripts are licensed under the Blue Oak Model License 1.0.0. The header of each
-source file says which applies; see `sdb_ai/LICENSE`.
+Most of SD is licensed under the GPL v3.0; the install and delete scripts are
+licensed under the Blue Oak Model License 1.0.0. The header of each source file
+says which applies; see `sdb_ai/LICENSE`.

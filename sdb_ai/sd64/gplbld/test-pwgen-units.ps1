@@ -91,12 +91,13 @@ function Get-GuaranteedClasses([string[]]$literals) {
 $bp = Join-Path $Gplbld '../sdsys/gpl.bp/pw_complex'
 if (-not (Test-Path -LiteralPath $bp)) { Write-Output ('REFUSED: ' + $bp + ' not found - cannot tie the rule to SD''s BASIC.'); exit 2 }
 $bpText = [IO.File]::ReadAllText($bp)
-Check 'the BASIC still says: length below 8 is refused' ($bpText -match 'pw\.len\s*<\s*8') 'the minimum changed - re-derive this file''s rule'
-Check 'the BASIC still says: lower is 97-122' ($bpText -match 'pw\.c\s*>=\s*97\s+and\s+pw\.c\s*<=\s*122') 'the lower range changed'
-Check 'the BASIC still says: upper is 65-90' ($bpText -match 'pw\.c\s*>=\s*65\s+and\s+pw\.c\s*<=\s*90') 'the upper range changed'
-Check 'the BASIC still says: digit is 48-57' ($bpText -match 'pw\.c\s*>=\s*48\s+and\s+pw\.c\s*<=\s*57') 'the digit range changed'
-Check 'the BASIC still says: other printable 32-126 is a symbol' ($bpText -match 'pw\.c\s*>=\s*32\s+and\s+pw\.c\s*<=\s*126') 'the symbol range changed'
-Check 'the BASIC still requires all four classes' (($bpText -match 'not\(got\.lower\)') -and ($bpText -match 'not\(got\.upper\)') -and ($bpText -match 'not\(got\.digit\)') -and ($bpText -match 'not\(got\.symbol\)')) 'a class is no longer required'
+# 17 Nov 26 - four-version audit round 1: pw_complex is Linux's text word for word (len(pw), c, has.*, one closing return).
+Check 'the BASIC still says: length below 8 is refused' ($bpText -match 'len\(pw\)\s*<\s*8') 'the minimum changed - re-derive this file''s rule'
+Check 'the BASIC still says: lower is 97-122' ($bpText -match '\bc\s*>=\s*97\s+and\s+c\s*<=\s*122') 'the lower range changed'
+Check 'the BASIC still says: upper is 65-90' ($bpText -match '\bc\s*>=\s*65\s+and\s+c\s*<=\s*90') 'the upper range changed'
+Check 'the BASIC still says: digit is 48-57' ($bpText -match '\bc\s*>=\s*48\s+and\s+c\s*<=\s*57') 'the digit range changed'
+Check 'the BASIC still says: other printable 32-126 is a symbol' ($bpText -match '\bc\s*>=\s*32\s+and\s+c\s*<=\s*126') 'the symbol range changed'
+Check 'the BASIC still requires all four classes' ($bpText -match 'return\s*\(\s*has\.lower\s+and\s+has\.upper\s+and\s+has\.digit\s+and\s+has\.symbol\s*\)') 'a class is no longer required'
 
 # --- the finder -----------------------------------------------------------
 function Get-PlusOperands($node) {

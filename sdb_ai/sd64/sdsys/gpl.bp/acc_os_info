@@ -18,6 +18,9 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3227 to P-3229): a GROUP account's manifest no longer carries os.user and six
+*           route lines of 0, nor an OTHER account's os.user, os.group and routes (Linux has type alone for OTHER); net: comes before
+*           shared.read; int$keys.h is included as on Linux.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): the manifest key route.ai (1 if the user is in the group sdaiusers, the right to use the
 *               AI provider's API), after route.files.admin; same reading (no such group is "not a member").
 * 25 Oct 26 Windows port - from Linux ef9d594 (21 Oct 26) S.73 item 3: the manifest key route.files.admin (1 if the user is in the group sdfilesadmin, which lets the files-only login
@@ -78,6 +81,7 @@ subroutine acc_os_info(acc.name, acc.rec, info, err)
 $catalog !acc_os_info
 
 $include keys.h
+$include int$keys.h
 
 deffun is_grp_member(user, group) calling '!is_grp_member'
 deffun os_group(action, group, member) calling '!os_group'
@@ -119,9 +123,11 @@ deffun os_group(action, group, member) calling '!os_group'
    uname = ''
    if typ = 'USER' then uname = grp[5, len(grp)]
 
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3227, P-3228): the manifest has Linux's lines for each type - os.user and the
+*   route.* lines for a USER account only, os.group for a USER or GROUP account, type alone for OTHER - and net: before shared.read.
    info<-1> = 'type: ' : typ
-   info<-1> = 'os.user: ' : uname
-   info<-1> = 'os.group: ' : grp
+   if typ = 'USER' then info<-1> = 'os.user: ' : uname
+   if typ # 'OTHER' then info<-1> = 'os.group: ' : grp
 
    ssh = 0
    api = 0
@@ -156,12 +162,14 @@ deffun os_group(action, group, member) calling '!os_group'
       m = is_grp_member(uname, 'sdaiusers')
       if m and status() = 0 then aiuse = 1
    end
-   info<-1> = 'route.ssh: ' : ssh
-   info<-1> = 'route.api: ' : api
-   info<-1> = 'route.files: ' : files     ;* NOT `files`: the backup writes `files: N` (the file count) into the same section
-   info<-1> = 'route.files.write: ' : fwrite
-   info<-1> = 'route.files.admin: ' : fadmin
-   info<-1> = 'route.ai: ' : aiuse     ;* 13 Nov 26 (Linux S.69 step 2): membership of sdaiusers, the right to use the AI provider's API
+   if typ = 'USER' then
+      info<-1> = 'route.ssh: ' : ssh
+      info<-1> = 'route.api: ' : api
+      info<-1> = 'route.files: ' : files     ;* NOT `files`: the backup writes `files: N` (the file count) into the same section
+      info<-1> = 'route.files.write: ' : fwrite
+      info<-1> = 'route.files.admin: ' : fadmin
+      info<-1> = 'route.ai: ' : aiuse     ;* 13 Nov 26 (Linux S.69 step 2): membership of sdaiusers, the right to use the AI provider's API
+   end
 
    if typ = 'GROUP' then
       members = ''
@@ -181,9 +189,9 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'edit.voc: ' : (if upcase(trim(acc.rec<ACC$VOC.EDIT>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.64 (Linux d7cda81)
       info<-1> = 'edit.bp: ' : (if upcase(trim(acc.rec<ACC$BP.EDIT>)) = 'YES' then 1 else 0)
       info<-1> = 'edit.dict: ' : (if upcase(trim(acc.rec<ACC$DICT.EDIT>)) = 'YES' then 1 else 0)
+      info<-1> = 'net: ':(if upcase(trim(acc.rec<ACC$NET>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.65 slice 1: the NET gate (does nothing yet)
       info<-1> = 'shared.read: ':(if upcase(trim(acc.rec<ACC$SHARED.READ>)) # 'NO' then 1 else 0)     ;* 18 Oct 26, S.66: BLANK MEANS ON, so only the word no gives 0
       info<-1> = 'shared.write: ':(if upcase(trim(acc.rec<ACC$SHARED.WRITE>)) = 'YES' then 1 else 0)
-      info<-1> = 'net: ':(if upcase(trim(acc.rec<ACC$NET>)) = 'YES' then 1 else 0)     ;* 17 Oct 26, S.65 slice 1: the NET gate (does nothing yet)
       info<-1> = 'recovery: ':(if upcase(trim(acc.rec<ACC$RECOVERY>)) = 'YES' then 1 else 0)     ;* 10 Nov 26 (Linux 44807a43, S.88 plan 2.9): the recovery copy (blank means off)
       info<-1> = 'xfer: ':(if upcase(trim(acc.rec<ACC$XFER>)) = 'YES' then 1 else 0)     ;* 15 Nov 26 (Linux e080527e, S.242): file transfer over ssh (blank means off)
    end

@@ -22,6 +22,8 @@
 *           declared here so the documented $include route reaches it.
 * 06 Oct 26 Windows port - PY_LISTCRTE, SD Core for Linux's name for the same
 *           function, declared too (parity audit PAL-8 / PAW-2).
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3491, P-3492): the
+*           two after PY_LISTCLR, as Linux orders them.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -49,9 +51,9 @@ deffun PY_DICTGETVALUES(dictname) calling '!PY_DICTGETVALUES'
 deffun PY_STRSET(strname,value) calling '!PY_STRSET'
 deffun PY_STRGET(strname) calling '!PY_STRGET'
 *
-deffun PY_LISTCREATE(listname) calling '!PY_LISTCREATE'
-deffun PY_LISTCRTE(listname) calling '!PY_LISTCRTE'
 deffun PY_LISTAPPD(listname,objname) calling '!PY_LISTAPPD'
 deffun PY_LISTGETS(listname) calling '!PY_LISTGETS'
 deffun PY_LISTCLR(listname) calling '!PY_LISTCLR'
+deffun PY_LISTCREATE(listname) calling '!PY_LISTCREATE'
+deffun PY_LISTCRTE(listname) calling '!PY_LISTCRTE'
 *

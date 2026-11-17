@@ -1,0 +1,1 @@
+%1 file(s) named by an account's VOC lie outside that account's directory, or under SDSYS, and were left as they are. Convert each one as its owner with configure.file no.case:

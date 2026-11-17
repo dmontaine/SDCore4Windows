@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3343 to P-3347): laid out as Linux's - the SDSYS refusal before the shared
+*           account's, crt for 10919, Linux's spacing, the is_grp_member deffun after is_sd_user; no change in effect.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: sdradmin, the remote administration account, is refused (12704) while remote administration is open.
 * 12 Nov 26 Windows port - RELEASE_1.1 260: the name is lower case, as Linux, so the 'shared' guard (dead behind upcase) holds, the walk skips the account
 *           itself (register ids are lower case) and a Q pointer is compared lower case.  @who is still upper case here (row 266), so the own-account
@@ -115,9 +117,9 @@ deffun is_group(group) calling '!is_group'
 deffun os_group(action,group,member) calling '!os_group'
 deffun delete_user(username) calling '!delete_user'
 deffun valid_os_name(name) calling '!valid_os_name'
-deffun is_grp_member(user,group) calling '!is_grp_member'
 * 14 Aug 26 Windows port - did SD create the OS account behind this account?
 deffun is_sd_user(username) calling '!is_sd_user'
+deffun is_grp_member(user,group) calling '!is_grp_member'
 deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
    prompt ''
 
@@ -174,12 +176,12 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 
 * 18 Oct 26 dm - S.66: the shared account is part of the system, like SDSYS: the installer makes it and the remover takes it away.  Refused before the
 *   own-account test, the register is read, any prompt is shown or anything is removed.
-   if acc.name = 'shared' then
-      stop sysmsg(12522) ;* The shared account cannot be deleted
-   end
-
    if acc.name = 'sdsys' then
       stop sysmsg(6025) ;* Cannot delete SDSYS account
+   end
+
+   if acc.name = 'shared' then
+      stop sysmsg(12522) ;* The shared account cannot be deleted
    end
 
 * 13 Nov 26 Windows port - RELEASE_1.1 202: SDRADMIN, the remote administration account, is deleted only while remote administration is
@@ -386,7 +388,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
    if dir.exists then
       void ospath(pathname, OS$DELETE)   ;* 14 Nov 26 RELEASE_1.1 286: the answer was assigned and never read; the EXISTS test below is the check
       if ospath(pathname, OS$EXISTS) then
-         display sysmsg(10919, pathname) ;* Account directory %1 was not removed
+         crt sysmsg(10919, pathname) ;* Account directory %1 was not removed
       end
    end
 
@@ -444,7 +446,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
 *   be deleted having never been named.
    if os.user # '' then
       if not(valid_os_name(os.user)) then
-         crt sysmsg(10029,os.user, 2) ;* Warning unable to delete OS User: %1 error: %2
+         crt sysmsg(10029, os.user, 2) ;* Warning unable to delete OS User: %1 error: %2
       end else
          begin case
             case lookup.stat # 0
@@ -465,7 +467,7 @@ deffun radmin_open(arg) calling '!radmin_open'    ;* 13 Nov 26 - RELEASE_1.1 202
                *   Windows login of this name exists, so there is nobody to take
                *   a permission away from - and a yes|yes keyed on a name Windows
                *   may one day reissue is the reason to take it away now.
-               crt sysmsg(10037,os.user) ;* Windows account %1 does not exist
+               crt sysmsg(10037, os.user) ;* Windows account %1 does not exist
 
             case sd.made.it
 * 21 Aug 26 Windows port - THE Y/N PROMPT IS GONE.  Owner's decision, 21 Aug

@@ -293,6 +293,8 @@ def run_checks(raw):
     # so it works the mark out for itself at start, by its own logname, in the first-time block (sess below); the front (vb.scram.final) reads the same groups only for the
     # login's audit line.  A write or administration group that cannot be read is "no write" / "no administration" (fail closed: Windows cannot tell "no such group" from
     # "could not read"), where Linux refuses the login with 10073; the sdapi and sdfiles lookups still refuse (connection.failed, 10073).  No K$ASSUME.USER here.
+    # 17 Nov 26 Windows port - four-version audit round 1 (P-3239): THE FRONT now refuses as Linux does - a write or administration group that cannot be read
+    # refuses the login with 10073 and its own reason (apisrvr vb.scram.final); the session's own re-read keeps the fail-closed "no write" form, behind that refusal.
     si = ap.find("if api.preauth<1> = 1 and downcase(logname) # 'sdsys' then")
     sess = ap[si: ap.find('openpath "voc" to voc else', si)] if si >= 0 else ""
     ck("F4 THE READ: the session reads the group sdfileswrite ONCE, by its own logname, INSIDE the sdfiles route - after sdapi is read and found false, after sdfiles is read and found, "
@@ -305,7 +307,7 @@ def run_checks(raw):
        and re.search(r"api\.write\.in = is_grp_member\(logname, 'sdfileswrite'\)\s*\n\s*api\.write\.stat = status\(\)\s*\n\s*files\.write = \(api\.write\.in and api\.write\.stat = 0\)\s*\n", sess) is not None
        and ordered(fin, "api.files.login = @false", "api.files.write = @false", "api.in.sdapi = is_grp_member(scram.user, 'sdapi')", "if not(api.in.sdapi) then",
                    "api.files.login = @true", "api.files.write = is_grp_member(scram.user, 'sdfileswrite')")
-       and re.search(r"api\.files\.write = is_grp_member\(scram\.user, 'sdfileswrite'\)\s*\n\s*api\.write\.stat = status\(\)\s*\n\s*if api\.write\.stat # 0 then api\.files\.write = @false\s*\n", fin) is not None, "")
+       and re.search(r"api\.files\.write = is_grp_member\(scram\.user, 'sdfileswrite'\)\s*\n\s*api\.write\.stat = status\(\)\s*\n\s*if api\.write\.stat # 0 then\s*\n\s*scram\.refuse\.reason = 'the sdfileswrite route could not be read, status ' : api\.write\.stat\s*\n\s*abort\.message = sysmsg\(10073, scram\.user\)[^\n]*\n\s*server\.error = SV\$ON\.ERROR\s*\n\s*goto exit\.vb\.scram\.fail\s*\n", fin) is not None, "")
     ck("F5 THE MARK: files.write is set in the one place files.only is made true (the session's own test, inside `if not(api.in.sdapi) then`), from that session's own read, "
        "is never cleared, and is assigned in exactly two places (the initialisation and that one); the front never sets it (a mark in the front's variables never reaches the session); "
        "no other program mentions it",
@@ -535,7 +537,7 @@ def run_checks(raw):
        and re.search(r"api\.admin\.in = is_grp_member\(logname, 'sdfilesadmin'\)\s*\n\s*api\.admin\.stat = status\(\)\s*\n\s*files\.admin = \(api\.admin\.in and api\.admin\.stat = 0\)\s*\n", sess) is not None
        and ordered(fin, "api.files.login = @false", "api.files.write = @false", "api.files.admin = @false", "api.in.sdapi = is_grp_member(scram.user, 'sdapi')", "if not(api.in.sdapi) then",
                    "api.files.login = @true", "api.files.write = is_grp_member(scram.user, 'sdfileswrite')", "api.files.admin = is_grp_member(scram.user, 'sdfilesadmin')")
-       and re.search(r"api\.files\.admin = is_grp_member\(scram\.user, 'sdfilesadmin'\)\s*\n\s*api\.admin\.stat = status\(\)\s*\n\s*if api\.admin\.stat # 0 then api\.files\.admin = @false\s*\n", fin) is not None
+       and re.search(r"api\.files\.admin = is_grp_member\(scram\.user, 'sdfilesadmin'\)\s*\n\s*api\.admin\.stat = status\(\)\s*\n\s*if api\.admin\.stat # 0 then\s*\n\s*scram\.refuse\.reason = 'the sdfilesadmin route could not be read, status ' : api\.admin\.stat\s*\n\s*abort\.message = sysmsg\(10073, scram\.user\)[^\n]*\n\s*server\.error = SV\$ON\.ERROR\s*\n\s*goto exit\.vb\.scram\.fail\s*\n", fin) is not None
        and len(re.findall(r"(?<![\w.])files\.admin\s*=(?!=)", ap)) == 2
        and not any(re.search(r"(?<![\w.])files\.admin(?![\w.])", t) for n, t in c.items() if n not in ("apisrvr",) and n in BP), "")
     m24, m25, m26 = (raw["msg:%d" % n].strip("\n") for n in (12529, 12530, 12531))

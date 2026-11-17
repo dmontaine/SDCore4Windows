@@ -19,6 +19,7 @@
 * 28 Oct 26 dm S.88 plan 2.9 (D2): CA$RECOVERY (44), Linux only, whether a new user account's editors keep a recovery copy of unsaved text.  Same block, same deferral.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux (S.69 step 2, 23 Oct 26): CA$AI (41), membership of the Windows group sdaiusers, the AI gate.
 * 15 Nov 26 Windows port - RELEASE_1.1 299, from Linux e080527e (S.242): CA$XFER (45), whether a new user account may move files over the ssh login (RECEIVE / SEND).
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3483, P-3484): CA$NET and CA$FILES before CA$SHARED.READ.OFF, as Linux orders them.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -63,14 +64,15 @@ $define CA$VOC.EDIT       32     ;* ACC$VOC.EDIT  'yes'
 $define CA$BP.EDIT        33     ;* ACC$BP.EDIT   'yes'
 $define CA$DICT.EDIT      34     ;* ACC$DICT.EDIT 'yes'
 
-* Linux only (18 Oct 26, S.66, the shared account).  Both are requests only when exactly 1; anything else leaves the default.
-* CA$SHARED.READ.OFF is INVERTED because the delivered default of shared.read is ON (a blank register field means yes).
-$define CA$SHARED.READ.OFF 37    ;* 1 = the new account starts with ACC$SHARED.READ 'no' (withdrawn)
-$define CA$SHARED.WRITE    38    ;* 1 = the new account starts with ACC$SHARED.WRITE 'yes'
 * Linux only (17 Oct 26, S.65 slice 1, the NET gate for SDNet): 1 = the new account starts with the gate on.  A blank or a 0 is off.
 * The gate takes effect for the remote-file slices that follow and does nothing yet.
 $define CA$NET            35     ;* ACC$NET 'yes'
 $define CA$FILES          36     ;* 1 = start in the group sdfiles, the SDNet files-only API route (Linux only; S.65 slice 2c)
+
+* Linux only (18 Oct 26, S.66, the shared account).  Both are requests only when exactly 1; anything else leaves the default.
+* CA$SHARED.READ.OFF is INVERTED because the delivered default of shared.read is ON (a blank register field means yes).
+$define CA$SHARED.READ.OFF 37    ;* 1 = the new account starts with ACC$SHARED.READ 'no' (withdrawn)
+$define CA$SHARED.WRITE    38    ;* 1 = the new account starts with ACC$SHARED.WRITE 'yes'
 
 * Linux only (18 Oct 26, S.65 write group): 1 = also join the Linux group sdfileswrite, so a files-only login can change files on this server.  Needs CA$FILES.
 $define CA$FILESWRITE      39    ;* 1 = start in the group sdfileswrite (with CA$FILES; S.65 write group)

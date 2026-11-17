@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3255, P-3256): common /$runin/ is declared after the includes and the $EXECUTE
+*           refusal puts the execute in an else, both as Linux's; no change in effect.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): "assigned a value but never used" only for a value an
 *            assignment gave (SYM.PLAIN); a statement's own target (READU, LOCATE SETTING, CAPTURING) is not warned about.
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-05): after 15072 the include search is marked reported, as Linux, so no second error follows.
@@ -227,6 +229,9 @@ $include bcomp.h
 $include err.h
 $include keys.h
 
+* 10 Nov 26 Windows port (S.96, RELEASE_1.1 201): RUN.IN's common - see the note further down; here since 17 Nov 26, as Linux's.
+   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.account
+
 $define max.levels   10
 
 
@@ -314,8 +319,7 @@ mode.names<1,45> = ""                   ;* retired 27 Oct 26 (was AUTOLOCK)
 *****************************************************************************
 
 * 10 Nov 26 Windows port (S.96, RELEASE_1.1 201): RUN.IN's common, joined only to read ri.active (the $EXECUTE directive below).  Same six names, same order,
-*   as the command processor declares it; a $ name, so only an internal program can join it.
-   common /$runin/ ri.active, ri.path, ri.account.path, ri.who, ri.sw, ri.account
+*   as the command processor declares it; a $ name, so only an internal program can join it.  17 Nov 26: declared after the includes, where Linux's stands.
 
    * The {name} construct is not available until the $DICT directive is used.
 
@@ -3218,10 +3222,9 @@ proc.directive:
          if ri.active then
             err.msg = sysmsg(15071) ;* $execute is refused in a compile started by run.in: it would run a command from the administrator's session
             gosub error
-            goto exit.proc.directive
+         end else
+            execute token.string
          end
-
-         execute token.string
 
       ************************* EXPLIST *************************
 

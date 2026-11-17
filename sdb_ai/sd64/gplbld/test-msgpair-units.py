@@ -43,14 +43,17 @@ ALLOWED = {
     ('10003', '10051'): 'OS: two different refusals that sit on the same LOGIN line; ours names LOGTO (RELEASE_1.1 64)',
     ('10084', '10084'): 'OS: the Windows account, not a Linux user',
     ('10114', '10087'): 'OS: modifya is the Windows program; different messages line up on a matching line (group account, no remote access)',
-    ('10114', '10104'): 'OS: modifya is the Windows program; the OS-access change has its own refusal here',
+    # 17 Nov 2026 (four-version audit round 1, P-3212): modifya's os.set says Linux's 10114 now, so the 10114 / 10104 row left.
     ('10105', '10105'): 'OS: a Windows user, not a Linux user',
     ('10909', '10122'): 'OS: create_account sets a Windows password, then SD\'s credential; different failures on a matching line',
     ('10130', '10130'): 'OS: the Windows account and its removal, not a Linux user',
     ('10133', '10133'): 'OS: api-listener.ps1 and its statuses, not the root helper',
-    ('10139', '10139'): 'OS: the Windows firewall rule and its statuses, not ufw',
-    ('10137', '10140'): 'OS: Windows has a "no ssh server" answer (exit 2) where Linux shows the syntax; different messages on a matching line',
-    ('10158', '10158'): 'OS: the same words, wrapped at another place (RELEASE_1.1 128)',
+    # 17 Nov 2026 (four-version audit round 1): 10158 takes Linux's line break (P-3204) and 10137 Linux's ON / OFF lines (P-3203), so the
+    # 10158 and 10137/10140 rows left; remotessh and delacc now line up with Linux's (the programs' audit fixes), which pairs 10137, 10037
+    # and 10919 with Linux's own and leaves 10139/10139 matching.
+    ('10137', '10137'): 'OS: the last paragraph - OFF scopes the firewall rule because SD accounts sign in by "ssh localhost", and "ssh.server remove" (a Windows-only verb) removes the server',
+    ('10037', '10037'): 'OS: a Windows account, not a Linux user',
+    ('10919', '10919'): 'OS: the usual reasons a Windows directory is not removed (a file still open in it, an access rule), where Linux names a mounted file system',
     ('10910', '10920'): 'OS: create_account checks the password rule itself (pw_complex) where Linux reports PAM\'s refusal',
     ('11904', '11904'): 'sl_put\'s 11904 is a character code (CJK radicals), not a message id; Linux has the same literal (RELEASE_1.1 258)',
     ('11010', '12007'): 'OS: a Windows account SD made is reused with a new password; Linux keeps the Linux password',

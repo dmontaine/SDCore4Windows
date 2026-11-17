@@ -87,7 +87,7 @@ name rather than by path.
 This is a keyword record. Field 2 is the keyword number the query
 processor uses. Keywords are not commands in their own right; they are
 the words the query processor — `LIST`, `SELECT`, `SORT` and the rest —
-recognises inside a command line. `all` is `K` with number 5; `and` is `K`.
+recognizes inside a command line. `all` is `K` with number 5; `and` is `K`.
 
 **A K record can also be a command.** When its fields 3 onwards are another
 VOC record (a `V` record, say), typing the K record's name runs that record as
@@ -101,9 +101,9 @@ if it had been typed instead:
 005  /cygdrive/c/ProgramData/SD/user_accounts/app/bp.out/report
 ```
 
-This works for a locally catalogued subroutine too. The object is found by the
-last part of the pathname in field 5, which is the name it was catalogued
-under, so a program catalogued under a call name different from its program
+This works for a locally cataloged subroutine too. The object is found by the
+last part of the pathname in field 5, which is the name it was cataloged
+under, so a program cataloged under a call name different from its program
 name is not reached this way.
 
 The 218 K-records in a stock VOC are the query processor's vocabulary,
@@ -147,7 +147,7 @@ The record above is a phrase a site might add: named `gt.l`, say, it
 expands to `grand.total "'L'"` wherever `gt.l` appears in a query.
 
 **No phrase ships in the VOC.** The two that did, `no.grand.total` and
-`without`, were removed in 1.2-0; write `grand.total "'L'"` and `with no`
+`without`, were removed in 2.0-0; write `grand.total "'L'"` and `with no`
 in the command instead.
 
 
@@ -170,7 +170,7 @@ The record above is a phrase a site might add: named `gt.l`, say, it
 expands to `grand.total "'L'"` wherever `gt.l` appears in a query.
 
 **No phrase ships in the VOC.** The two that did, `no.grand.total` and
-`without`, were removed in 1.2-0; write `grand.total "'L'"` and `with no`
+`without`, were removed in 2.0-0; write `grand.total "'L'"` and `with no`
 in the command instead.
 
 
@@ -210,7 +210,7 @@ every time it is used**, so editing the referenced record changes what the
 command does without touching the VOC entry. **SD ships no R-record any more**:
 the ten ready-made `list` sentences (`listf`, `listfl`, `listfr`, `listk`,
 `listpa`, `listph`, `listq`, `listr`, `lists`, `listv`) and the `sd.voclib` file
-that held them were removed in 1.2-0. To list the records of one type, ask the
+that held them were removed in 2.0-0. To list the records of one type, ask the
 query processor: `list voc with type = "V"` (`"F"` for files, `"K"` for
 keywords, `"PA"` paragraphs, `"PH"` phrases, `"Q"` Q-pointers, `"R"` R-records,
 `"S"` sentences).
@@ -250,13 +250,13 @@ target, and the remaining fields carry options.
 
 | Field 2 | Field 3 | What it does |
 |---|---|---|
-| `CA` | *catalogue name* | a catalogued program — 171 of the shipped verbs |
+| `CA` | *catalog name* | a cataloged program — 173 of the shipped verbs |
 | `IN` | *number* | internal verb *n*, handled by the command processor itself — 38 verbs |
 | `OS` | *text* | an operating-system command — `sh`, and nothing else |
-| `CS` | *path* | a locally catalogued function |
+| `CS` | *path* | a locally cataloged function |
 
-The first three rows account for all 210 of SDSYS's `V` records (none shipped
-is `CS`). The other four of its 214 verbs are the keyword records described
+The first three rows account for all 212 of SDSYS's `V` records (none shipped
+is `CS`). The other four of its 216 verbs are the keyword records described
 above — `break`, `count`, `display` and `off` — where field 2 holds a keyword
 number rather than a dispatch type, and it is field 3 that marks the record as
 a verb.
@@ -275,7 +275,7 @@ processor's dispatch list. Several names share one: `off` and `quit` are
 both internal verb 1, and `clr` is internal verb 2. (`cs` for `clr`, and the
 run-together `cleardata`, `clearinput`, `clearprompts` and `clearselect` for
 `clear.data` and the rest, were second names for the same numbers and were
-removed in 1.2-0.)
+removed in 2.0-0.)
 
 **The four keyword-verbs**
 
@@ -297,16 +297,21 @@ a marginal verb.
 
 ```
 001  X
-002  SD, including the API, is licensed under the GPL v3.0.
+002  W2.0-0
 ```
 
-This is `$licence`. An X-record is **not a command** — it is miscellaneous
-data the VOC holds so that a program or a user can read it by name.
-`$contrib` and `$RELEASE` are also X-records. Nobody dispatches them; they
-are read with `read` from BASIC or with `ct` from the command line.
+This is `$release`, and it is SDSYS's **only** X-record. An X-record is
+**not a command** — it is miscellaneous data the VOC holds so that a program
+can read it by name with `read` from BASIC or `ct` from the command line.
 Two X-records that an account may add are read by SD itself and change what
 a command line does: `$private.voc` and `$voc.parser`, described on the next
 pages.
+
+**The license and the contributor list are not VOC records at all**, despite
+looking like the obvious candidates. `config gpl` and `config contrib` shell
+out to `less` against two plain files in the system directory,
+`sdsys\licence` and `sdsys\contrib` — see *Account Maintenance* in the
+Administrator set.
 
 
 ### voc:types

@@ -669,6 +669,10 @@ $szCproc = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$cproc')) {
                (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$cproc')).Length } else { -1 }
 $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')) {
                (Get-Item -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')).Length } else { -1 }
+# 17 Nov 26 - four-version audit round 1 (P-3055, P-3058), as Solo's cycle: the
+# stage's $cred must be EMPTY (stage.py makes it an empty directory).  A record
+# there means a probe ran on the stage, and sd.iss would ship it to every install.
+$nCred   = CountIn '$cred'
 
 # 18 Aug 26 - 129/190, NOT 132/193.  Removing SDNet took three programs with it
 # (commit c893308), so the old figures have read three high since the 17:21
@@ -680,10 +684,10 @@ $szBcomp = if (Test-Path -LiteralPath (Join-Path $Sdsys 'gcat\$bcomp')) {
 # xterm, vt100, ansi, the vt2xx-5xx family, wyse50/60 and the rest.  The first
 # -SkipInstall after the carry stopped here on 37, with the tree whole.
 Write-Host ("   gcat {0} (want ~129)   gpl.bp.out {1} (want ~190)   terminfo {2} (want ~37)" -f $nGcat, $nOut, $nTinfo)
-Write-Host ("   `$cproc {0} bytes (want >0)   `$bcomp {1} (want ~88,000 - under 80,000 is bbcmp.py's seed, ~70,900)" -f $szCproc, $szBcomp)
+Write-Host ("   `$cproc {0} bytes (want >0)   `$bcomp {1} (want ~88,000 - under 80,000 is bbcmp.py's seed, ~70,900)   `$cred {2} (want 0)" -f $szCproc, $szBcomp, $nCred)
 
 $faults = @()
-if ($szCproc -le 0)   { $faults += '$CPROC is the 0-byte placeholder - the bootstrap never reached the last step' }
+if ($szCproc -le 0)   { $faults += '$cproc is the 0-byte placeholder - the bootstrap never reached the last step' }
 if ($nGcat   -lt 100) { $faults += "gcat holds $nGcat entries" }
 if ($nOut    -lt 150) { $faults += "gpl.bp.out holds $nOut objects" }
 if ($nTinfo  -lt 30)  { $faults += "terminfo holds $nTinfo entries - run 'make terminfo'; no terminal type would resolve" }
@@ -696,6 +700,7 @@ if ($nTinfo  -lt 30)  { $faults += "terminfo holds $nTinfo entries - run 'make t
 # (88,179 on the b158 install); the gap is 17,000 bytes either way.
 if ($szBcomp -ge 0 -and $szBcomp -lt 80000) { $faults += "`$bcomp is $szBcomp bytes - bbcmp.py's seed, not BCOMP's own object" }
 if (-not (Test-Path -LiteralPath (Join-Path $Sdsys 'voc'))) { $faults += "voc is absent - 'sd -i' did not complete" }
+if ($nCred -gt 0)     { $faults += "the stage holds $nCred credential record(s) - a probe ran on it; the installer would ship them" }
 if ($faults) { Fail ("the staged tree is not whole:`n  - " + ($faults -join "`n  - ")) }
 Write-Host "   staged tree is whole"
 
@@ -810,11 +815,12 @@ foreach ($t in @($PfTree, $PdTree)) {
 }
 
 # ---------------------------------------------------------------------------
-Step 7 "Installing"
+Step 7 "Installing - answer the wizard"
 
 # 23 Aug 26 - NO SILENT SWITCH, and sd.iss would refuse one anyway.  The wizard
 # runs, a person answers it, and the install ends by collecting a password.
-$installArgs = @()
+# 17 Nov 26 - four-version audit round 1 (P-3059): the $installArgs branch that
+# stood below, always empty since -Silent went, is gone, as in Solo's cycle.
 
 # 17 Aug 26 - Start-Process -Wait, NOT "& $setup".  THE CALL OPERATOR DOES NOT
 # WAIT FOR A GUI-SUBSYSTEM PROCESS, and Setup.exe is one - PE subsystem 2,
@@ -839,11 +845,7 @@ $installArgs = @()
 # THE COUNT DEADLINE BELOW IS KEPT AS THE BACKSTOP, not replaced.  If Inno ever
 # does respawn itself for elevation this returns early again, and the tree
 # stays what decides - the same rule adopt-account.ps1 follows.
-if ($installArgs.Count -gt 0) {
-    Start-Process -FilePath $setup.FullName -ArgumentList $installArgs -Wait
-} else {
-    Start-Process -FilePath $setup.FullName -Wait
-}
+Start-Process -FilePath $setup.FullName -Wait
 
 # THE WAIT IS FOR THE TREE TO MATCH THE STAGE, NOT FOR ONE FILE TO EXIST.  This
 # waited for gcat\$CPROC and then counted immediately, and $CPROC is nowhere near

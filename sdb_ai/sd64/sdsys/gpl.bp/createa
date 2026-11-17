@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: the verb takes Linux createa's shape - acc.type is upcased once, more.args writes
+*           every word straight into settings (the flags os.sh, os.exec, edit.*, access.*, no.query and attach are gone), the syntax
+*           text is Linux's word for word, and the unused deffuns and umask(002) are gone.  It still ends with @system.return.code = 0
+*           and stop: Linux's return leaves the code load.examples set.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-finding 1): settings is emptied BEFORE the parser, as Linux
 *           createa:236.  It was emptied after it, so shared-read-off, shared-write-on, net-on, files-*, ai-on, the start
 *           word, pins-on, recovery-on and xfer-on never reached !create_account (a lost shared-read-off left shared read on).
@@ -472,23 +476,8 @@ $include int$keys.h
 $include parser.h
 $include err.h
 $include createacc.h
-* 20240219 mab user must be member of sdusers  
-deffun is_grp_member(user,group) calling '!is_grp_member'
-deffun os_group(action,group,member) calling '!os_group'
-* rev 0.9.0 *
-deffun is_group(group) calling '!is_group'
-deffun is_user(uname) calling '!is_user'
-deffun create_user(uname) calling '!create_user'
-deffun set_passwd(uname)  calling '!set_passwd'
-* 21 Aug 26 Windows port - for the unwind when no password is set.  An account
-*   cannot be created without one (owner's rule), and the Windows user is made
-*   BEFORE the password is asked for, so refusing has to take it back.
-deffun delete_user(uname) calling '!delete_user'
-* 28 Aug 26 Windows port - for the refusal below.  PRE_RELEASE_FIXES.md 36.
-deffun profile_dir(uname) calling '!profile_dir'
-deffun valid_os_name(name) calling '!valid_os_name'
-deffun valid_os_path(path) calling '!valid_os_path'
-deffun ps_script(script) calling '!ps_script'
+* 17 Nov 26 Windows port - four-version audit round 1: the deffuns of the functions !create_account calls (moved there 2 Oct, RELEASE_1.1
+*   116) are gone from here, as Linux createa has none; so are umask(002), which does nothing on Windows, and the flags below (see more.args).
 
    prompt ''
 
@@ -496,12 +485,11 @@ deffun ps_script(script) calling '!ps_script'
    if not(kernel(K$ADMINISTRATOR, -1)) then
       stop sysmsg(2001)  ;* Command requires administrator privileges
    end
-      
-* we run as root, and the root umask is usually 022, that will not work for us
-   if umask(002) then null
 
    parser = "!PARSER"
-   no.query = @false
+   settings = ''      ;* before more.args writes into it (Linux createa:236)
+* 17 Nov 26 Windows port - four-version audit round 1: THE FLAGS DESCRIBED BELOW ARE GONE.  more.args writes each word into settings at once,
+*   as Linux createa does, so os.sh, os.exec, edit.*, access.*, no.query and attach no longer exist; the history is kept as it was written.
 * 20 Sep 26 Windows port - RELEASE_1.1 64.  make.admin IS GONE.  It could only
 *   ever be @true inside the ADMINISTRATOR case below, which stops with 2018
 *   before create_user is reached - so the branch that joined an account into
@@ -554,11 +542,6 @@ deffun ps_script(script) calling '!ps_script'
 *   An ADMINISTRATOR gets both without asking - see the block at the end of
 *   more.args - and can be narrowed afterwards, because this is a DEFAULT and
 *   not the rule that ssh and the API are.
-   os.sh   = @false
-   os.exec = @false
-   edit.voc = @false     ;* 23 Oct 26, Linux d7cda81 (S.64): VOC-ON, BP-ON and DICT-ON
-   edit.bp = @false
-   edit.dict = @false
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE ADOPT FLAG IS GONE WITH THE
 *   KEYWORD AND THE MARKER.  ADOPT attached an SD account to an OS account that
 *   already existed, and its only caller was the install - which is precisely
@@ -578,9 +561,6 @@ deffun ps_script(script) calling '!ps_script'
 *   ASSIGNED HERE RATHER THAN IN more.args because BCOMP's "is not assigned a
 *   value" is what bootstrap.py:229 fails the bootstrap on, and all three are
 *   read below the subroutine that sets them.
-   access.given = @false
-   access.ssh = @false
-   access.api = @false
 
 * 21 Aug 26 Windows port - THE ONE-SHOT MARKER THAT MAKES ADOPT INSTALL-ONLY.
 *   gplbld/adopt-account.ps1 writes this file immediately before running the
@@ -637,9 +617,7 @@ deffun ps_script(script) calling '!ps_script'
 *   for it like any other: RELEASE_1.1 68 made silence mean BOTH, so the
 *   install no longer passes one.  (It was REQUIRED when this was written,
 *   which is why attach-account.ps1 used to say BOTH.)
-   attach = @false
    attach.marker = @sdsys:@ds:'$attach'
-
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -653,48 +631,45 @@ deffun ps_script(script) calling '!ps_script'
    call @parser(PARSER$RESET, 0, @sentence, 0)
    call @parser(PARSER$GET.TOKEN, token.type, token, keyword) ;* Verb create-account
    call @parser(PARSER$GET.TOKEN, token.type, acc.type, keyword)
+   acc.type = upcase(acc.type)
 
    acc.name = ''
-   pathname = ''
-   settings = ''      ;* before more.args writes into it (Linux createa:236)
    begin case
-   case upcase(acc.type) = 'USER'
+   case acc.type = 'USER'
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
      if token.type = PARSER$END then stop
      attach.marker = @sdsys:@ds:'$attach.':downcase(acc.name)
      gosub more.args
 
-   case upcase(acc.type) = 'GROUP'
+   case acc.type = 'GROUP'
 *    CREATE.ACCOUNT GROUP <grp acct name>  {NO.QUERY}
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
      if token.type = PARSER$END then stop
      gosub more.args
 
-   case upcase(acc.type) = 'OTHER'
+   case acc.type = 'OTHER'
 *    get account name, then pathname
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)
      if token.type = PARSER$END then stop
      call @parser(parser$get.token, token.type, pathname, keyword)
      if token.type = PARSER$END then stop
-     pathname = trim(pathname)
+     settings<CA$PATH> = trim(pathname)
      gosub more.args
 
    case 1
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on}'
-    crt '                  {shared-read-off} {shared-write-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}'
-    crt '                  A new user account starts with no ssh, no API, no shell (sh), no os.execute, no right to change'
-    crt '                  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers'
-    crt '                  (net-on), no files-only login (files-on; it cannot change files here without files-write-on), and no use of the AI'
-    crt '                  (ai-on); it can open and read the files'
-    crt '                  of the shared account by name unless shared-read-off is typed, and cannot write them unless'
-    crt '                  shared-write-on is typed;'
-    crt '                  the words above give them, and modify.account changes any of them afterwards, either way.'
-    crt '                  It starts where the system default says (set.start.default) unless start-menu or start-terminal is typed,'
-    crt '                  and cannot add programs of its own to its home screen unless pins-on is typed.'
-    crt '                  Its editors keep no recovery copy of unsaved text unless recovery-on is typed (a user account only).'
-    crt '                  It cannot move files over its ssh login (receive / send) unless xfer-on is typed (a user account only).'
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3326, P-3338): Linux createa's syntax text, word for word.
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {shared-read-off} {shared-write-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}'
     crt '                create.account group <group name> {start-menu | start-terminal} {pins-on} {no.query}'
     crt '                create.account other <account name> <pathname> {start-menu | start-terminal} {pins-on} {no.query}'
+    crt '  A new user account starts with no ssh, no API, no shell (sh), no os.execute, and no right to change'
+    crt '  the VOC (voc-on), a program file (bp-on) or a dictionary (dict-on), no files on other SD servers (net-on),'
+    crt '  and no files-only login (files-on; it cannot change files here without files-write-on); it can open and read the files of the shared account by name unless'
+    crt '  shared-read-off is typed, and cannot write them unless shared-write-on is typed;'
+    crt '  the words above give them, and modify.account changes any of them afterwards, either way.'
+    crt '  It starts where the system default says (set.start.default) unless start-menu or start-terminal is typed,'
+    crt '  and cannot add programs of its own to its home screen unless pins-on is typed.'
+    crt '  Its editors keep no recovery copy of unsaved text unless recovery-on is typed (a user account only).'
+    crt '  It cannot move files over its ssh login (receive / send) unless xfer-on is typed (a user account only).'
     @system.return.code = -ER$ARGS
     stop
    end case
@@ -704,22 +679,11 @@ deffun ps_script(script) calling '!ps_script'
       stop sysmsg(12704) ;* SDRADMIN is the remote administration account
    end
 
-   if upcase(acc.type) = 'OTHER' then settings<CA$PATH> = pathname
-   if access.given then
-      if access.ssh then settings<CA$ROUTE.SSH> = 1 else settings<CA$ROUTE.SSH> = 0
-      if access.api then settings<CA$ROUTE.API> = 1 else settings<CA$ROUTE.API> = 0
-   end
-   if attach then settings<CA$ATTACH> = 1
-   if no.query then settings<CA$NO.QUERY> = 1
-   if os.sh then settings<CA$OS.SH> = 1
-   if os.exec then settings<CA$OS.EXECUTE> = 1
-   if edit.voc then settings<CA$VOC.EDIT> = 1
-   if edit.bp then settings<CA$BP.EDIT> = 1
-   if edit.dict then settings<CA$DICT.EDIT> = 1
-
    err = ''
-   call !create_account(upcase(acc.type), acc.name, settings, err)
-   if err # '' then stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   call !create_account(acc.type, acc.name, settings, err)
+   if err # '' then
+      stop sysmsg(err<1,1>, err<1,2>, err<1,3>, err<1,4>)
+   end
 
 *  6 Oct 26 Windows port - RELEASE_1.1 128 / parity audit J-3.  Audited only after
 *  !create_account reported no error, so only an account that was made is
@@ -775,7 +739,7 @@ more.args:
    until token.type = PARSER$END
       begin case
          case keyword = KW$NO.QUERY
-            no.query = @true
+            settings<CA$NO.QUERY> = 1
 
 * 14 Aug 26 Windows port - ADMINISTRATOR makes the account an SD administrator,
 *   which since PROJECT_STATUS.md 5.6.1 means a Windows administrator.  Without
@@ -883,21 +847,13 @@ more.args:
 *   ladder, so "BOTH NONE" is simply NONE - the caller said two things and the
 *   second is the one they left.
          case upcase(token) = 'SSH'
-            access.given = @true
-            access.ssh = @true
-            access.api = @false
+            settings<CA$ROUTE.SSH> = 1 ; settings<CA$ROUTE.API> = 0
          case upcase(token) = 'API'
-            access.given = @true
-            access.ssh = @false
-            access.api = @true
+            settings<CA$ROUTE.SSH> = 0 ; settings<CA$ROUTE.API> = 1
          case upcase(token) = 'BOTH'
-            access.given = @true
-            access.ssh = @true
-            access.api = @true
+            settings<CA$ROUTE.SSH> = 1 ; settings<CA$ROUTE.API> = 1
          case upcase(token) = 'NONE'
-            access.given = @true
-            access.ssh = @false
-            access.api = @false
+            settings<CA$ROUTE.SSH> = 0 ; settings<CA$ROUTE.API> = 0
 
 * 27 Aug 26 Windows port - THE OPERATING-SYSTEM PAIR.  Owner, 27 Aug 2026.
 *   Matched on the token text like every other keyword this verb added, and
@@ -914,17 +870,17 @@ more.args:
 *   over two independent fields, so "sh-on os-on" is both and neither cancels
 *   the other.
          case upcase(token) = 'SH-ON'
-            os.sh = @true
+            settings<CA$OS.SH> = 1
          case upcase(token) = 'OS-ON'
-            os.exec = @true
+            settings<CA$OS.EXECUTE> = 1
 * 23 Oct 26 Windows port - from Linux d7cda81 (17 Oct 26), S.64: VOC-ON, BP-ON and DICT-ON, the edit gates.  Independent switches like the two
 *   above; off unless typed.
          case upcase(token) = 'VOC-ON'
-            edit.voc = @true
+            settings<CA$VOC.EDIT> = 1
          case upcase(token) = 'BP-ON'
-            edit.bp = @true
+            settings<CA$BP.EDIT> = 1
          case upcase(token) = 'DICT-ON'
-            edit.dict = @true
+            settings<CA$DICT.EDIT> = 1
 
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66): SHARED-READ-OFF and SHARED-WRITE-ON, the shared-account gates.  Only the two words that differ from
 *   the delivered default (read ON, write OFF); MODIFY.ACCOUNT has all four.  Matched on token text.
@@ -1036,7 +992,7 @@ more.args:
 *   fall-through is "Unexpected token (ATTACH)".  A refusal naming the keyword
 *   would confirm to whoever guessed it that it exists.
          case upcase(token) = 'ATTACH' and kernel(K$INTERNAL, -1) and ospath(attach.marker, OS$EXISTS)
-            attach = @true
+            settings<CA$ATTACH> = 1
 *           02 Oct 26 Windows port - RELEASE_1.1 116.  THE MARKER IS NO LONGER
 *           CONSUMED HERE: !create_account checks both gates again and consumes
 *           it, because it is catalogued and cannot trust its caller.  Deleting

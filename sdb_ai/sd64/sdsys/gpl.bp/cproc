@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3269, P-3272, P-3273): the SH verb asks K$SH in its test, as Linux's (sh.listed
+*           was left from the withdrawn sh-on filter lift); LOGOUT's two lo.rc tests are Linux's two ifs; no change in effect.
 * 15 Nov 26 Windows port - RELEASE_1.1 310, from Linux b9e63f17 (S.246) in the Windows form: LOGTO SDSYS is taken by the process that signed in
 *           as SDSYS at a desktop (K$OS.SDSYS.USER, 174), so the administrator can come back from a user's account without signing out; it
 *           enters @sdsys itself and skips the group test (SDSYS's register group is not a Windows group).  Every other session is refused (10002).
@@ -4109,13 +4111,13 @@ int.logout:
 *           this, that case set USR$LOGOUT on a slot nobody would ever clear
 *           and LISTU read "(logout pending)" for ever.
             lo.rc = logout(i, @false)
-            begin case
-               case lo.rc = 0
-                  display sysmsg(2100) ;* Invalid user number
-                  return
-               case lo.rc = 2
-                  display sysmsg(10167, i) ;* was not running - slot reclaimed
-            end case
+            if lo.rc = 2 then
+               display sysmsg(10167, i) ;* was not running - slot reclaimed
+            end
+            if not(lo.rc) then
+               display sysmsg(2100) ;* Invalid user number
+               return
+            end
       
             call @parser(PARSER$GET.TOKEN, token.type, s, keyword)
 
@@ -4555,9 +4557,9 @@ os.command:
 *   23 Oct 26 - S.63, Linux 215ce2c, ON THE OWNER'S ANSWER OF 23 OCT: OS.USERS IS RETIRED AND THE GRANT IS THE ACCOUNT'S.
 *   The paragraph above (the person, not the account; the file and its ACL) is history.  K$SH is loaded at sign-on and at
 *   LOGTO from the register's ACC$SH (LOGIN, int.logto), so the permission follows the account the session stands in.
-   sh.listed = kernel(K$SH, -1)
-
-   if not(kernel(K$ADMINISTRATOR, -1)) and not(sh.listed) then
+*   17 Nov 26 - four-version audit round 1 (P-3269): K$SH is asked in the test itself, as Linux's; sh.listed was kept for the sh-on
+*   filter lift that the 24 Oct note below withdrew.
+   if not(kernel(K$ADMINISTRATOR, -1)) and not(kernel(K$SH, -1)) then
       display sysmsg(10053, @logname) ;* %1 is not permitted to use the shell
       return
    end
@@ -4922,10 +4924,8 @@ logto.authorised:
 * so by the time LOGTO names SDSYS the caller has already been through it and
 * there is nothing to step up into.
 *
-* sysmsg 10030 and 10031 lose their only callers with it.  They are left in
-* MESSAGES rather than removed - see PROJECT_STATUS.md section 5.6 for what
-* else the reversal left callerless, and section 8 for the API, which is where
-* the credential machinery goes next.
+* sysmsg 10030 and 10031 lost their only callers with it, and have since been
+* deleted from MESSAGES (17 Nov 26: this note said they were kept).
 
 end
 

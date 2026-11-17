@@ -1610,6 +1610,17 @@ name_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.$%_"
 # Used in locates as indexes, case statement to output correct pcode ....
 
 
+def include_dir(name):
+    """The sdsys directory a three-token $include names, as spelled on disk.
+    13 Sep 26 dm - plan M3 D1 and D2: every sdsys directory an $include can
+    name (syscom, gpl.bp) is lower case, so the name is lowered whatever case
+    the source typed.  17 Nov 26 Windows port - four-version audit round 1
+    (P-3044 to P-3047), from Linux: NTFS ignores case, so the upper-cased names
+    this port used found the files anyway; the caller lowers the RECORD name
+    too, as Linux's does (plan M: include record names are lower case on disk)."""
+    return name.lower()
+
+
 ###################################################################################################
 # @variable names and called funtion.  
 # we must define the functions prior to referencing them in the via calling at_constants_func lists
@@ -7161,12 +7172,15 @@ def pass1(sfn):
                     case 2:
                         # second item should be file in this directory or syscom
 
-                        incfn = sdir + os.sep + tokens[1].upper()
+                        # 13 Sep 26 dm - include RECORD names are lower case on
+                        # disk (plan M), so the name is lowered, as the
+                        # directory already was (include_dir).
+                        incfn = sdir + os.sep + tokens[1].lower()
                         if os.path.isfile(incfn):
                             insert_inc(incfn,pss1src)
                         else:
                             # look in syscom
-                            incfn = os.path.dirname(sdir) + os.sep + 'SYSCOM' + os.sep + tokens[1].upper()
+                            incfn = os.path.dirname(sdir) + os.sep + 'syscom' + os.sep + tokens[1].lower()
                             if os.path.isfile(incfn):
                                 insert_inc(incfn,pss1src)
                             else:   
@@ -7174,7 +7188,7 @@ def pass1(sfn):
                                 sys.exit('abort!')
                     # there is the third case include file_name rec_name 
                     case 3:
-                            incfn = os.path.dirname(sdir) + os.sep + tokens[1].upper()+ os.sep + tokens[2].upper()
+                            incfn = os.path.dirname(sdir) + os.sep + include_dir(tokens[1]) + os.sep + tokens[2].lower()
                             if os.path.isfile(incfn):
                                 insert_inc(incfn,pss1src)
                             else:   

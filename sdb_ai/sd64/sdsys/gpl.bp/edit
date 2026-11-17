@@ -15,6 +15,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3349 to P-3351): check.permitted stands before compile.record.query, as Linux's
+*           (and the alphabetical order the subroutines claim); the same words.
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-03; Linux S.64, 17 Oct): the record's file is asked (!edit_guard) before the editor is
 *           started; an account without voc.edit, bp.edit or dict.edit could change a VOC record, a program or a dictionary with EDIT or MICRO.
 * 06 Oct 26 Windows port - RELEASE_1.1 127.  The working-copy path, the editor's
@@ -392,55 +394,8 @@ end.program:
 * ===========================================================================
 
 * ---------------------------------------------------------------------------
-* compile.record.query  -  a DICT record is always re-compiled; a BP record is
-* offered the compile and the catalogue, exactly as MICRO offered them.
-* ---------------------------------------------------------------------------
-compile.record.query:
-   if compiled.dict then
-      execute 'COMPILE.DICT ' : in.file.name : ' ' : in.record.name
-      return
-   end
-
-   if dict.text = 'DICT' then return
-   if upcase(in.file.name[-2, 2]) # 'BP' then return
-
-   prompt ''
-   response = ''
-   crt
-   loop
-      crt 'Compile ' : in.file.name : ' ' : in.record.name : '?  <Y>es, <N>o : ' :
-      input response, 1 :
-      crt
-      response = upcase(response)
-   until index('YN', response, 1) > 0 repeat
-   if response # 'Y' then return
-
-   execute 'BASIC ' : in.file.name : ' ' : in.record.name
-   crt
-
-   response = ''
-   crt
-   loop
-      crt 'Catalog?  <L>ocal, <P>rivate, <G>lobal, <N>o : ' :
-      input response, 1 :
-      crt
-      response = upcase(response)
-   until index('LPGN', response, 1) > 0 repeat
-
-   begin case
-      case response = 'L'
-         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' LOCAL'
-      case response = 'P'
-         execute 'CATALOG ' : in.file.name : ' ' : in.record.name
-      case response = 'G'
-         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' GLOBAL'
-      case response = 'N'
-         crt in.file.name : ' ' : in.record.name : ' not cataloged'
-   end case
-return
-
-* ---------------------------------------------------------------------------
-* check.permitted  -  THE SECOND GATE.
+* check.permitted  -  THE SECOND GATE.  (17 Nov 26, four-version audit round 1: here, before compile.record.query, as in Linux's
+* edit and as the alphabetical order above says.)
 *
 * Owner, 26 Aug 2026: *"these commands will only work if the user has
 * OS.EXECUTE privileges.  If not, they should get a message that the command
@@ -496,6 +451,54 @@ check.permitted:
    error.text := ' permission, which an administrator grants with' : char(10)
    error.text := '   modify.account <account> os-on' : char(10)
    error.text := 'ed, the line editor, needs none of this.'
+return
+
+* ---------------------------------------------------------------------------
+* compile.record.query  -  a DICT record is always re-compiled; a BP record is
+* offered the compile and the catalogue, exactly as MICRO offered them.
+* ---------------------------------------------------------------------------
+compile.record.query:
+   if compiled.dict then
+      execute 'COMPILE.DICT ' : in.file.name : ' ' : in.record.name
+      return
+   end
+
+   if dict.text = 'DICT' then return
+   if upcase(in.file.name[-2, 2]) # 'BP' then return
+
+   prompt ''
+   response = ''
+   crt
+   loop
+      crt 'Compile ' : in.file.name : ' ' : in.record.name : '?  <Y>es, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('YN', response, 1) > 0 repeat
+   if response # 'Y' then return
+
+   execute 'BASIC ' : in.file.name : ' ' : in.record.name
+   crt
+
+   response = ''
+   crt
+   loop
+      crt 'Catalog?  <L>ocal, <P>rivate, <G>lobal, <N>o : ' :
+      input response, 1 :
+      crt
+      response = upcase(response)
+   until index('LPGN', response, 1) > 0 repeat
+
+   begin case
+      case response = 'L'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' LOCAL'
+      case response = 'P'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name
+      case response = 'G'
+         execute 'CATALOG ' : in.file.name : ' ' : in.record.name : ' GLOBAL'
+      case response = 'N'
+         crt in.file.name : ' ' : in.record.name : ' not cataloged'
+   end case
 return
 
 * ---------------------------------------------------------------------------

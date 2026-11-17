@@ -29,6 +29,10 @@
 * pair, and the lookup fold serves it).
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3479, P-3480, P-3481): the outside guard of Linux 400500c is carried in fact
+*           (the 07 Oct entries below describe it; the code never had it).  convert.one judges the real path first: a file a VOC names
+*           outside its account, or under SDSYS while another account is walked, is left and listed under 12041 (Linux 11036 + 1005);
+*           a directory file is returned silently before that test.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused already count is gone.
 * 07 Oct 26 Windows port - parity audit, Linux T1215.  A path is judged once per
 *           account, so "Converted N of M" counts distinct files: the account's own
@@ -96,6 +100,13 @@ $include err.h
    twin.dups  = ''                 ;* @fm parallel: that file's pairs, @vm joined
    ak.skipped = 0                  ;* AK files left for manual CONFIGURE.FILE
    err.count = 0                   ;* files that could not be read or rebuilt
+   outside.count = 0               ;* files a VOC names outside its account, or under SDSYS: left
+   outside.files = ''              ;* @fm: their real paths (capped like the twin list)
+   * 17 Nov 26 - real paths are compared upper cased with one separator: NTFS folds case, and @sdsys carries backslashes where @ds is '/'.
+   sds.real = ospath(@sdsys, OS$FULLPATH)
+   if sds.real = '' then sds.real = @sdsys
+   sds.real = upcase(convert('\', '/', sds.real))
+   sds.raw = upcase(convert('\', '/', @sdsys))
 
    * SDSYS's own data files (its VOC's F-records), but NOT its live VOC.
    gosub do.account
@@ -144,6 +155,12 @@ $include err.h
       next i
       crt sysmsg(10181)            ;* Rename or delete one id of each pair, then convert that file with CONFIGURE.FILE NO.CASE.
    end
+   if outside.count then
+      crt sysmsg(12041, outside.count)         ;* %1 file(s) named by an account's VOC lie outside it or under SDSYS and were left:
+      for i = 1 to dcount(outside.files, @fm)
+         crt sysmsg(10184, outside.files<i>)   ;* File: %1
+      next i
+   end
    if check.only then
       crt sysmsg(10182, scanned, twin.count)   ;* Checked %1 file(s); %2 hold a case-only duplicate record id.
    end else
@@ -170,6 +187,9 @@ do.account:
 do.account.at:
    file.list = ''
    seen.list = ''                  ;* paths already visited in THIS account (see convert.one)
+   acct.real = ospath(this.acct, OS$FULLPATH)
+   if acct.real = '' then acct.real = this.acct
+   acct.real = upcase(convert('\', '/', acct.real))
 * 07 Oct 26 - ON ERROR (parity audit, from Linux's first install run).  A failed open
 *   of a DH file's primary subfile gives a NEGATIVE status, and without ON ERROR that
 *   is a runtime abort (op_dio1.c exit_op_open), not the ELSE branch: one unopenable
@@ -247,6 +267,25 @@ convert.one:
 *   path carry backslashes and @ds is '/', so the report printed
 *   "C:\ProgramData\SD\sdsys/zznutwin" (verify-nocaseupgrade, 31/0 run).
    one.path = convert('\', '/', one.path)
+* 17 Nov 26 - THE PATH IS JUDGED BEFORE THE FILE IS OPENED (four-version audit round 1, P-3480; Linux upgrade_nocase convert.one, its
+*   400500c guard, which this file's 07 Oct history claims and the code did not carry).  A file a VOC names outside its account's own
+*   directory, or under SDSYS while another account is walked, is never rebuilt - the walk runs elevated, so a VOC F-pointer must not
+*   steer it at somebody else's file - and is named in the report (12041) for its owner to convert with configure.file no.case.
+*   SDSYS's own walk keeps its own files (in.acct), as this port's RELEASE_1.1 5 design converts them.
+   one.real = ospath(one.path, OS$FULLPATH)
+   if one.real = '' then one.real = one.path
+   one.real = convert('\', '/', one.real)
+   one.key = upcase(one.real)
+   if not(ospath(one.real : '/%0', OS$EXISTS)) then return   ;* a directory file, or nothing there: silent, as Linux
+   in.sds = (one.key[1, len(sds.real) + 1] = sds.real : '/') or (one.key[1, len(sds.raw) + 1] = sds.raw : '/')
+   in.acct = (one.key[1, len(acct.real) + 1] = acct.real : '/')
+   if not(in.acct) or (in.sds and not(this.is.sdsys)) then
+      locate one.real in outside.files<1> setting out.at else
+         outside.count += 1
+         if dcount(outside.files, @fm) < twin.list.cap then outside.files<-1> = one.real
+      end
+      return
+   end
 * 07 Oct 26 - ON ERROR, for the same reason as the VOC open in do.account.at.
    openpath one.path to old.fu on error
       crt sysmsg(12013, one.path, status())   ;* Cannot open %1 (error %2). It was left as it is.

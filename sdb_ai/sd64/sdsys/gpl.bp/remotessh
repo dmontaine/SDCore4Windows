@@ -18,6 +18,7 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3449): a word after on or off is refused with 10137, as Linux's.
 * 12 Nov 26 Windows port - RELEASE_1.1 243 (owner: a line before any wait over 2 s): 12950 before the report, 12944 before a change.
 * 06 Oct 26 Windows port - RELEASE_1.1 128 (parity audit PAW-8).  A completed
 *           change writes an audit record, 'REMOTE.SSH ON|OFF', as SD Core for
@@ -84,6 +85,7 @@ $include err.h
    rc     = 0
    report = ''
    both   = ''
+   extra  = ''
    r.i    = 0
    rpt    = ''
    rpt.cp = 0
@@ -107,6 +109,12 @@ $include err.h
             @system.return.code = -ER$ARGS
             stop sysmsg(10137)  ;* remote.ssh on | off
       end case
+*     17 Nov 26 Windows port - four-version audit round 1 (P-3449): a word after on or off is refused (10137), as Linux remotessh:100-104.
+      call @parser(PARSER$GET.TOKEN, token.type, extra, keyword)
+      if token.type # PARSER$END then
+         @system.return.code = -ER$ARGS
+         stop sysmsg(10137)
+      end
    end
 
    ps  =       '& ' : char(39) : kernel(K$WINPATH, '/ssh-firewall.ps1') : char(39) : ' ' : want

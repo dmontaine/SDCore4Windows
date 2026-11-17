@@ -123,7 +123,7 @@ def checks(raw):
        and da.count("typed = 'open'") == 1 and ds.count("typed = 'open'") == 1 and "'OPEN'" not in pg
        and re.search(r"case aw = 'on'\s*\n\s*typed = 'open'", da) is not None and re.search(r"if sw = 'on' then\s*\n\s*typed = 'open'", ds) is not None
        and 0 < da.find("call $tk_form('close'") < da.find("if (aw # 'on'") < da.find("sent = ") and 0 < ds.find("if pk < 1") < ds.find("sent = ")
-       and "other computers on the network may connect" in da and "firewall" in ds and "ends every session" in da
+       and "other computers may connect to the API" in da and "firewall" in ds and "ends every session" in da   # 17 Nov 26 (audit round 1, P-3477): Linux's words
        and da.count("gosub confirm.and.run") == 1 and "confirm.and.hand.over" not in da
        and ds.count("gosub confirm.and.run") == 1 and "gosub confirm.and.hand.over" not in ds, da[:200])
     dx = block(pg, "do.delete")

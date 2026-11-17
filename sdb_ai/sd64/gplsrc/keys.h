@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3078 to P-3081): K_WINSIZE and K_SH..K_PATH_IN before K_SET_ACCOUNT, and
+ *           K_NON_DURABLE_TXN after K_USER_STATS (where a stale "113 left free" note stood), in Linux's order.  Order only.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server.
  * 13 Nov 26 Windows port - K_RUNIN_CHILD (84) and K_RUNIN_DEBUG (85), run.in WITH debug (RELEASE_1.1 253(b)); Windows only.
  * 13 Nov 26 Windows port - from Linux 7f7a4fd4 (RELEASE_1.1 182): K_LOCK_TRACE (115), LOCK.TRACER.
@@ -383,6 +385,29 @@
    answers about Windows groups, which any caller can already read.        */
 #define K_GROUP_MEMBER       68
 
+/* 13 Oct 26 dm (Linux 7ff476f) - THE TERMINAL'S OWN SIZE.  kernel(K$WINSIZE, '') answers the terminal's width, a field mark and
+   its height, as the kernel last read them from the tty (TIOCGWINSZ, at start-up and again whenever the terminal is resized:
+   SIGWINCH), or null when it has not been able to - no tty (a phantom, a pipe, the API) or a terminal that reports 0 by 0.  LOGIN
+   keeps what the kernel read and no longer overrides it with terminfo's 120 by 36.  Linux's number (its block 90-99), kept exactly;
+   GPL.BP/INT$KEYS.H carries the same number. */
+#define K_WINSIZE            92
+/* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates, Linux's numbers.  K_REAL_USER 90 and
+   K_LOGIN_UID 91 are Linux's own and are not carried (this port has K_OS_ADMINISTRATOR and K_ASSUME_USER for the same questions).
+   GPL.BP/INT$KEYS.H must carry the same numbers.
+     K_SH       the session may use SH and "!".  Set only from a $internal program, like K_ADMINISTRATOR.
+     K_OS_EXEC  the session may use OS.EXECUTE and reach OS paths outside its own account.  Same rule.
+     K_PATH_OK  the argument is a pathname; the answer is 1 if THIS ACCOUNT may open it - whoever asks.
+                An $internal program (SED) is exempt from the gate itself, so it must ask on the user's
+                behalf; it cannot be allowed to be the way round the gate.
+     K_PATH_IN  (second sitting, 13 Oct) the argument is a directory, a field mark and a pathname; the
+                answer is 1 if the pathname is inside that directory (realpath, so .. and links out do not
+                count).  The geometry only: it does not ask the gate.  _VOC_REF uses it for a file reached
+                through a Q-pointer into an account the user may enter.                                */
+#define K_SH                 93
+#define K_OS_EXEC            94
+#define K_PATH_OK            95
+#define K_PATH_IN            96
+
 /* 18 Oct 26 Windows port - from Linux 0b6a207 (14 Oct 26 dm): 1.2-0 sheet items 24, 29 and 38 (LISTU).
    THE NUMBERS ARE LINUX'S, in its own block 90-99, and are kept exactly (kernel key numbers are
    compiled into BASIC programs shared byte for byte).  This port keeps 58-89 for its own keys.  90 and 91
@@ -444,7 +469,11 @@
                        then opens, reads, writes, deletes, clears, selects, AK reads, AK writes, AK deletes, splits, merges and
                        the sdtime() the counts started at, as values, and the login name last. */
 #define K_USER_STATS         112
-/* 113 is Linux's K_NON_DURABLE_TXN (QMClient SDTxn mode 4, held with the QMClient requests); left free so the numbers agree. */
+/* 15 Oct 26 dm - QM4 gaps Q-16 and sheet 442 (NON.DURABLE.TXN, QMTxn mode 4).
+     K_NON_DURABLE_TXN 1 makes the next COMMIT of this process non-durable: if the transaction is nested in another, its cached
+                       updates and its locks go to the parent instead of to the files.  The COMMIT clears it, used or not.
+                       A program compiled with $MODE NON.DURABLE.TXN sets it before each COMMIT. */
+#define K_NON_DURABLE_TXN    113
 /* 16 Oct 26 dm - QM4 gaps (PHANTOM USER n and the PHANTOMS parameter).
      K_PHANTOM_USER    n: the next phantom() of this process is to be user number n, and no other.  The number has to be one of
                        those the PHANTOMS parameter keeps and not be in use, or phantom() returns 0.  0 cancels.  phantom() clears
@@ -524,33 +553,6 @@
 #define K_SHARED_ONCE        131
 #define K_PROFILER           116
 #define K_PROFILER_USER      117
-/* 13 Oct 26 dm (Linux 7ff476f) - THE TERMINAL'S OWN SIZE.  kernel(K$WINSIZE, '') answers the terminal's width, a field mark and
-   its height, as the kernel last read them from the tty (TIOCGWINSZ, at start-up and again whenever the terminal is resized:
-   SIGWINCH), or null when it has not been able to - no tty (a phantom, a pipe, the API) or a terminal that reports 0 by 0.  LOGIN
-   keeps what the kernel read and no longer overrides it with terminfo's 120 by 36.  Linux's number (its block 90-99), kept exactly;
-   GPL.BP/INT$KEYS.H carries the same number. */
-#define K_WINSIZE            92
-/* 23 Oct 26 Windows port - from Linux 215ce2c (13 Oct 26), S.63.  The per-account OS-access gates, Linux's numbers.  K_REAL_USER 90 and
-   K_LOGIN_UID 91 are Linux's own and are not carried (this port has K_OS_ADMINISTRATOR and K_ASSUME_USER for the same questions).
-   GPL.BP/INT$KEYS.H must carry the same numbers.
-     K_SH       the session may use SH and "!".  Set only from a $internal program, like K_ADMINISTRATOR.
-     K_OS_EXEC  the session may use OS.EXECUTE and reach OS paths outside its own account.  Same rule.
-     K_PATH_OK  the argument is a pathname; the answer is 1 if THIS ACCOUNT may open it - whoever asks.
-                An $internal program (SED) is exempt from the gate itself, so it must ask on the user's
-                behalf; it cannot be allowed to be the way round the gate.
-     K_PATH_IN  (second sitting, 13 Oct) the argument is a directory, a field mark and a pathname; the
-                answer is 1 if the pathname is inside that directory (realpath, so .. and links out do not
-                count).  The geometry only: it does not ask the gate.  _VOC_REF uses it for a file reached
-                through a Q-pointer into an account the user may enter.                                */
-#define K_SH                 93
-#define K_OS_EXEC            94
-#define K_PATH_OK            95
-#define K_PATH_IN            96
-/* 15 Oct 26 dm - QM4 gaps Q-16 and sheet 442 (NON.DURABLE.TXN, QMTxn mode 4).
-     K_NON_DURABLE_TXN 1 makes the next COMMIT of this process non-durable: if the transaction is nested in another, its cached
-                       updates and its locks go to the parent instead of to the files.  The COMMIT clears it, used or not.
-                       A program compiled with $MODE NON.DURABLE.TXN sets it before each COMMIT. */
-#define K_NON_DURABLE_TXN    113
 /* 10 Nov 26 Windows port - from Linux (S.69 step 2): the in-SD AI helper's keys, so the screen library's AI routines ($tk_ai) carry
    unchanged.  13 Nov 26 (RELEASE_1.1 246): the helper is here now, and op_kernel.c sends all four to k_ai() (op_ai.c), as Linux does. */
 /* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2, the readers of $IPC).  K_SHOW_SAFE: the argument is any text; the answer is

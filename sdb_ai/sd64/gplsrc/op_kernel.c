@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3088, P-3089, P-3090): op_login() discards its arguments unread, as Linux's
+ *           does; the password was copied to a stack buffer and never wiped.  (P-3087) K_SHOW_SAFE before K_AI_*, as Linux orders them.
  * 16 Nov 26 Windows port - RELEASE_1.1 331 (Linux S.256): K_API_PREAUTH gives a third field, whether a pre-authenticated session's own token is
  *           elevated, so APISRVR can make an SDSYS session admitted by its remote door the administrator.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): K_XFER (173), the file transfer slot and server (sd_sftp.c k_xfer()).
@@ -1839,15 +1841,6 @@ void op_kernel() {
           (int32_t)cygwin_internal(CW_CYGWIN_PID_TO_WINPID, getpid());
       break;
 
-    /* 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the in-SD AI helper (op_ai.c), a transport
-       that only a $internal program may use, as Linux's.  Its pipe is \\.\pipe\sd-ai (win32ai.c). */
-    case K_AI_START:
-    case K_AI_POLL:
-    case K_AI_CANCEL:
-    case K_AI_STATUS:
-      k_ai(action, descr, &result);
-      break;
-
     /* 10 Nov 26 Windows port - from Linux d35f5e31 (S.88 phase 2): K_SHOW_SAFE, the text with every byte of the one rule as '?'
        (show_ts_safe(), op_lock.c), chunk by chunk, the same length.  The BASIC readers of $IPC (PSTAT, PROFILER, HSM) ask this. */
     case K_SHOW_SAFE: {
@@ -1861,6 +1854,15 @@ void op_kernel() {
         show_ts_safe(safe_chunk->data, (int)(safe_chunk->bytes));
       (void)ts_terminate();
     } break;
+
+    /* 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the in-SD AI helper (op_ai.c), a transport
+       that only a $internal program may use, as Linux's.  Its pipe is \\.\pipe\sd-ai (win32ai.c). */
+    case K_AI_START:
+    case K_AI_POLL:
+    case K_AI_CANCEL:
+    case K_AI_STATUS:
+      k_ai(action, descr, &result);
+      break;
 
     /* 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the file transfer slot (RECEIVE / SEND) and the
        transfer server's side of it; $internal only (sd_sftp.c). */
@@ -2131,25 +2133,6 @@ void op_login() {
      |================================|=============================|
  */
 
-  bool ok;
-  DESCRIPTOR *descr;
-  char username[32 + 1];
-  char password[32 + 1];
-
-  /* Get password */
-
-  descr = e_stack - 1;
-  (void)k_get_c_string(descr, password, 32);
-  k_dismiss();
-
-  /* Get username */
-
-  descr = e_stack - 1;
-  (void)k_get_c_string(descr, username, 32);
-  k_dismiss();
-
-  InitDescr(e_stack, INTEGER);
-
 /* 17 Aug 26 Windows port - FAILS CLOSED, and the opcode is kept only because
    opcodes.h is positional (section 6: retire in place, never delete a line -
    and BCOMP's int.intrinsics and its "on i goto" list are matched to it by
@@ -2163,23 +2146,17 @@ void op_login() {
    against $CRED in APISRVR now and sets its identity with K$SET.USERNAME.
 
    Anything still calling login() is therefore using a route that was broken
-   and is now absent, so FALSE is the honest answer rather than a silent one. */
-  ok = FALSE;
-/* 20240219 mab move to only allow AF_UNIX socket types                                                           */
-/*   As part of this mod:                                                                                         */
-/*     if config APILOGIN = 0 (ignor)                                                                             */
-/*       we pull username, user id and group id from peer in start_connection                                     */
-/*       If these are populated, we ignore the passed user name (either came in as a local user using the API     */
-/*       or as a remote user using ssh and the API) Either way we have already gone through username and password */
-/*       verification                                                                                             */
-/*     if config APILOGIN = 1 (require)                                                                           */
-/*       require valid username and password from api connection                                                  */
- 
-/* 06 Oct 26 Windows port - the block that copied the user name after a good
-   login, and chose between two paths on pcfg.api_login, is gone with APILOGIN
-   (parity audit PAW-5).  ok is FALSE above, so it never ran; the comment above
-   about APILOGIN = 0 and 1 describes the retired setting.                    */
-  (e_stack++)->data.value = ok;
+   and is now absent, so FALSE is the honest answer rather than a silent one.
+
+   17 Nov 26 Windows port - as Linux S.18: the arguments are discarded unread.
+   The password is never copied into a buffer, so there is nothing to wipe
+   (it used to be copied to the stack and left there).                      */
+
+  k_dismiss();   /* Password */
+  k_dismiss();   /* User name */
+
+  InitDescr(e_stack, INTEGER);
+  (e_stack++)->data.value = FALSE;
 }
 
 /* ======================================================================

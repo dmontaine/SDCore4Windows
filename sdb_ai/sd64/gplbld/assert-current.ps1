@@ -210,7 +210,7 @@ $neverShipped = @(
     'interop-account.ps1', 'stage-apiremote.ps1', 'python-detect.ps1',
     # generators and build tools that run from source
     'build-sdpy.ps1', 'build-sdpyclient.ps1', 'gen_includes.py', 'mkbasicsyntax.py',
-    'mkvocdoc.py', 'checksyntax.py', 'scan-msgdiff.py', 'reword-yn-prompts.ps1',
+    'checksyntax.py', 'scan-msgdiff.py',   # 17 Nov 26: mkvocdoc.py and reword-yn-prompts.ps1 deleted (audit P-3060, P-3062)
     'mkrelease.ps1',   # 13 Nov 26: packages a built installer (RELEASE_1.1 268); runs after a cycle, never installed
     # fixtures and measurement stubs without the probe- prefix
     'apiadminprobe.sb', 'apiosexecprobe.sb', 'basicfuncs.sb', 'testsdcli.bp',

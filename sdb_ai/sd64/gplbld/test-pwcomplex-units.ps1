@@ -102,7 +102,9 @@ $basText = Get-Content -LiteralPath $bas -Raw
 # QUOTES the ranges in prose.
 $basCode = (($basText -split "`n") | Where-Object { $_ -notmatch '^\s*\*' }) -join "`n"
 
-$wantLen = [regex]::Match($basCode, 'pw\.len\s*<\s*(\d+)')
+# 17 Nov 26 - four-version audit round 1: pw_complex is Linux's text word for word now - len(pw) < 8, one-line arms
+# ("case c >= 97 and c <= 122 ; has.lower = @true", "case 1 ; return @false") and one closing return of the four has.* flags.
+$wantLen = [regex]::Match($basCode, 'len\(pw\)\s*<\s*(\d+)')
 Check ("minimum length comes from the file (got '$($wantLen.Groups[1].Value)')") `
       ($wantLen.Success -and $wantLen.Groups[1].Value -eq '8') `
       'pw_complex no longer tests a minimum length of 8'
@@ -125,8 +127,8 @@ Check ("the SYMBOL arm names its own range 32-126 (got $($symbolArm.Count))") ($
       'no arm tests 32-126, so the catch-all is deciding what a symbol is'
 if ($cases.Count -eq 5) {
     Check 'the LAST arm is the catch-all and it RETURNS FALSE' `
-          ($cases[4].Groups[1].Value -match '^1$' -and
-           $basCode -match '(?ms)case\s+1\s*\r?\n\s*return\s+@false') `
+          ($cases[4].Groups[1].Value -match '^1\s*;\s*return\s+@false' -and
+           $basCode -match '(?m)case\s+1\s*;\s*return\s+@false') `
           ("a character matching no arm must be refused.  If the catch-all marks a symbol " +
            "instead, an out-of-range byte SATISFIES the requirement it exists to fail. " +
            "last arm reads: " + $cases[4].Groups[1].Value)
@@ -136,9 +138,10 @@ if ($cases.Count -eq 5) {
               'the range is missing or written twice'
     }
 }
-foreach ($n in @('got.lower', 'got.upper', 'got.digit', 'got.symbol')) {
+$finalReturn = [regex]::Match($basCode, '(?m)^\s*return\s*\((.+)\)\s*$')
+foreach ($n in @('has.lower', 'has.upper', 'has.digit', 'has.symbol')) {
     Check ("all four requirements are asserted at the end: $n") `
-          ($basCode -match ('not\(\s*' + [regex]::Escape($n) + '\s*\)')) `
+          ($finalReturn.Success -and ($finalReturn.Groups[1].Value -split '\s+and\s+' | ForEach-Object { $_.Trim() }) -contains $n) `
           'a requirement is collected and then never tested, so it is not required at all'
 }
 
@@ -277,8 +280,8 @@ Check 'dropping the minimum to 7 accepts the 7-character row' `
       'the length test is not what refuses it, so the extracted minimum guards nothing'
 
 # (d) a catch-all that marks a symbol is caught by the section-1 reader.
-$mutText = $basCode -replace '(?ms)case\s+1\s*\r?\n\s*return\s+@false', "case 1`n         got.symbol = @true"
-$caught = -not ($mutText -match '(?ms)case\s+1\s*\r?\n\s*return\s+@false')
+$mutText = $basCode -replace '(?m)case\s+1\s*;\s*return\s+@false', "case 1 ; has.symbol = @true"
+$caught = ($mutText -ne $basCode) -and -not ($mutText -match '(?m)case\s+1\s*;\s*return\s+@false')
 Check 'a catch-all changed to mark a symbol is caught by the section-1 reader' $caught `
       'the reader would not notice the catch-all failing open'
 

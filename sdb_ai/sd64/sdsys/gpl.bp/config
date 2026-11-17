@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: CONFIG GPL and CONFIG CONTRIB show the shipped files @sdsys/licence and
+*           @sdsys/contrib, as Linux does, read and paged by SD (no less on Windows); they read the $licence and $contrib VOC
+*           records, which left the VOC set on 16 Nov (RELEASE_1.1 255), so both answered "not in the SDSYS VOC".
 * 14 Nov 26 dm  S.242 stage 1: the listing gains XFER, XFERFILE, XFERSLOT, XFERWAIT, XFERIDLE, XFERMAX and XFERKIND.
 * 28 Oct 26 dm  S.87: FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
 * 28 Oct 26 dm  S.87: the contrib and licence pages are shown with sh less (the ! verb is gone).
@@ -196,23 +199,28 @@ report.params:
 *   the administrative superset that becomes SDSYS's VOC; newvoc is what
 *   CREATEA copies into every account.  The licence is 44 KB, so in newvoc it
 *   would land in every account's VOC and be copied again by every
-*   UPDATE.ACCOUNTS.  gplbld/mkvocdoc.py generates both records FROM the files
-*   that still ship in the data tree, so the two cannot drift; --check asserts
-*   it.
+*   UPDATE.ACCOUNTS.  (17 Nov 26: gplbld/mkvocdoc.py, which generated both
+*   records from the files, is deleted; $contrib and $licence left the VOC set
+*   with RELEASE_1.1 255, so this paragraph is history.)
 *
 *   THE FILES STILL SHIP, and that is not redundancy: SD is GPL-3,
 *   sdsys/licence is the only copy of the licence in the distribution, and
 *   sd.iss has no LicenseFile - so a GPL program with no readable licence for
 *   anyone who has not started SD is what deleting it would produce.
 
+* 17 Nov 26 Windows port - THE FILES, NOT VOC RECORDS (four-version audit round 1).  $contrib and $licence left the VOC set on 16 Nov
+*   (RELEASE_1.1 255, 4016e7db; they are in voc_removed), so show.doc read records that are no longer there and CONFIG GPL / CONFIG
+*   CONTRIB answered "not in the SDSYS VOC".  Linux Core shows @sdsys/contrib and @sdsys/licence with "sh less"; Windows has no less
+*   (OS) and SH needs the sh-on gate, so the same two shipped files are read here and paged by SD.  This program is $internal, so the
+*   OS-path gates of OPENSEQ do not stand in the way.
 show.contrib:
    * added contributor display (dsm) 2024-01-22
-   doc.name = '$contrib'
+   doc.name = 'contrib'
    gosub show.doc
 return
 
 show.gpl:
-   doc.name = '$licence'
+   doc.name = 'licence'
    gosub show.doc
 return
 
@@ -230,21 +238,23 @@ return
 * ----------------------------------------------------------------------
 
 show.doc:
-   openpath @sdsys : @ds : 'voc' to sdsys.voc else
-      display 'Cannot open the SDSYS VOC, so ' : doc.name : ' cannot be shown.'
+*  17 Nov 26 - the shipped file @sdsys/<doc.name>, a line at a time (see show.contrib).  doc.rec starts with 'X' in field 1 so the
+*  loop below, written for an X record whose text started at field 2, is unchanged.
+   doc.path = @sdsys : @ds : doc.name
+   openseq doc.path to doc.f else
+      display 'Cannot open ' : doc.path : ', so it cannot be shown.'
       return
    end
-
-   read doc.rec from sdsys.voc, doc.name else
-      close sdsys.voc
-      display doc.name : ' is not in the SDSYS VOC.'
-      return
-   end
-   close sdsys.voc
+   doc.rec = 'X'
+   loop
+      readseq doc.line from doc.f else exit
+      doc.rec<-1> = doc.line
+   repeat
+   close doc.f
 
    doc.lines = dcount(doc.rec, @fm)
    if doc.lines < 2 then
-      display doc.name : ' holds no text.'
+      display doc.path : ' holds no text.'
       return
    end
 

@@ -17,6 +17,8 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-1967, P-1968, P-3077): ER_SRVRERR 4100 and ER_INV_NBR 4101 (from sdb64
+*           dev 1.0-3, 15 Aug 26) removed; nothing in the server reads them, and Linux has neither.  The client library's own err.h keeps them.
 * 31 Dec 23 SD launch - prior history suppressed
 * 01 Jul 24 mab define max string size error ER_MAX_STRING
 * 30 Jul 24 mab add error codes for SD_ENCRYPT_SODIUM
@@ -166,9 +168,6 @@ $define ER$MAXRLOCK    3060    ;* MAXRLOCK record lock limit reached
 
 * 4000 - 4999   SDClient errors
 $define ER$SRVRMEM     4000    ;* Insufficient memory for packet buffer
-* 15 Aug 26 Windows port - from sdb64 dev (1.0-3).
-$define ER$SRVRERR     4100    ;* Undefined Server Error
-$define ER$INV.NBR     4101    ;* Invalid File Number
 
 * 5000 - 5999   Operating system related issues
 $define ER$NO.DLL      5000    ;* DLL not found

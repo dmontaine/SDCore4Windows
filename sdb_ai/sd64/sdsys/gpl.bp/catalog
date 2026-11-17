@@ -18,6 +18,7 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3257, P-3258): two administrator tests spaced as Linux's; no change in effect.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  The program file's name is always name.out (the file,part form is not split); PARSER$MFILE is now PARSER$GET.TOKEN.
 * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): * and - are no longer global prefix characters (! $ and _ are).
 * 8 Nov 26 Windows port - from Linux e150c47e (S.87 batch 8): OPTION CATALOGUE.LOCAL is gone; CATALOG with no word catalogues privately, and LOCAL says local.
@@ -150,7 +151,7 @@ $define CAT_PCODE  3
             * rev 0.9.0 must be admin for Global
             * 13 Aug 26 Windows port - was system(27) # 0.  There is no uid zero
             *   on Windows, so CATALOG GLOBAL was always refused.
-            if not(kernel(K$ADMINISTRATOR, -1)) then
+            if not(kernel(K$ADMINISTRATOR,-1)) then
               stop sysmsg(2001)  ;* Command requires administrator privileges
             end
 
@@ -247,7 +248,7 @@ $define CAT_PCODE  3
 *   left where it is: it reports while parsing, before the object file is
 *   opened, which is the better message for the common mistake.
 
-   if mode = CAT_GLOBAL and not(kernel(K$ADMINISTRATOR, -1)) then
+   if mode = CAT_GLOBAL and not(kernel(K$ADMINISTRATOR,-1)) then
       stop sysmsg(2001)  ;* Command requires administrator privileges
    end
 

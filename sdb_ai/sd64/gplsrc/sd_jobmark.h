@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-1970): SD_JOB_DIR_REL removed; nothing read it (win32jobmark.c, which includes
+ *               no SD header, names <ProgramData>/SD/sd-jobs itself).
  * 10 Nov 26 Windows port - from Linux 5162a5d1 (S.102 stage 3), carry area 14.  Linux reads the name from the process's systemd cgroup, which
  *               only root can enter; Windows has no cgroup, so the name is the claim the task's own command line makes ("sd -job <name> ..."),
  *               and what makes it a job is the PROCESS TOKEN (win32jobmark.c): the Windows account SDSYS, a batch logon, elevated, not a network
@@ -31,7 +33,6 @@
 
 #include <stddef.h>
 
-#define SD_JOB_DIR_REL      "SD/sd-jobs"   /* under the machine's ProgramData folder, from the registry (never SD_CONFIG or %ProgramData%) */
 #define SD_JOB_NAME_MAX     32
 
 /* Answers 1 when PATH (a directory when WANT_DIR, else a regular file) may be trusted as an administrator's record, 0 otherwise.  The kernel passes

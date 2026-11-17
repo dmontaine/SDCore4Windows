@@ -3,6 +3,8 @@
       * Copyright (c) 2004, Ladybridge Systems, All Rights Reserved
       
       $list off
+      * 17 Nov 26 Windows port - four-version audit round 1 (P-3485 to P-3490): ACC$PRIOR.TIER (6) is back as Linux keeps it, a retired
+      *   placeholder so field 6 is not reused; ACC$NET (15) before fields 13 and 14 and SD_KEYRING after SD_USER_HOME, in Linux's order.
       * 10 Nov 26 Windows port - from Linux S.88 (2.9, D2): ACC$RECOVERY (19), whether the editors keep a recovery copy of unsaved text (off as delivered).
       * 9 Nov 26 Windows port - from Linux debd0698 / S.88: SD_USER_HOME (112), the running user's home and a private directory below it.
       * 25 Oct 26 Windows port - from Linux fc4030a (S.66): ACC$SHARED.READ (13) and ACC$SHARED.WRITE (14), the shared-account gates.
@@ -387,6 +389,8 @@
       *   as data of the new kind.  Start at field 5.
       $define ACC$SUSPENDED    5     ;* 'SUSPENDED' or '' - whether the
       *                              ;*   account is temporarily denied entry
+      $define ACC$PRIOR.TIER   6     ;* retired with the tier model (18 Sep 26);
+      *                              ;*   nothing writes or reads it - do not reuse field 6
       * 18 Sep 26 Windows port - RELEASE_1.1 64.  THE TIERS ARE GONE, AND FIELD 5
       *   IS THE SUSPENSION STATE RATHER THAN A FOURTH TIER.  It holds the word
       *   SUSPENDED while the account is denied entry and '' otherwise.
@@ -424,6 +428,12 @@
       $define ACC$VOC.EDIT     10    ;* may save changes to a VOC (yes/no)
       $define ACC$BP.EDIT      11    ;* may save changes to a program file, and compile and catalogue (yes/no)
       $define ACC$DICT.EDIT    12    ;* may save changes to a dictionary (yes/no)
+      * 17 Oct 26 dm - FIELD 15: the NET gate (S.65 slice 1, SDNet; owner's rulings of 17 Oct).  Whether the account may open a file on
+      *   another SD server.  yes/no; BLANK MEANS NO.  ACCOUNT-SCOPED like ACC$SD.ACCOUNTS: loaded as K$NET at sign-on, at LOGTO (restored
+      *   when LOGTO returns) and by the API server.  No upgrade walk: nothing existing used it, so every existing account stays off.
+      *   SDSYS switches it (MODIFY.ACCOUNT NET-ON / NET-OFF; CREATE.ACCOUNT takes NET-ON).  The gate takes effect for the remote-file
+      *   slices that follow and does nothing yet.  Fields 13 and 14 are the shared-account gates (S.66).
+      $define ACC$NET          15    ;* may open a file on another SD server (yes/no)
       * 18 Oct 26 dm - FIELDS 13 AND 14: the shared-account gates (S.66; owner's rulings of 17 Oct).  Whether the account may open the
       *   files of the group account named SHARED by file name, with no LOGTO and no Q-pointer (13), and whether it may write records in
       *   them (14).  yes/no.  FIELD 13 IS THE ONE GATE WHOSE BLANK MEANS YES: only the word NO withdraws it, so every account that
@@ -435,12 +445,6 @@
       *   SHARED-READ-OFF and SHARED-WRITE-ON.
       $define ACC$SHARED.READ  13    ;* may open the files of the shared account by name (yes/no; BLANK = yes)
       $define ACC$SHARED.WRITE 14    ;* may write records in the files of the shared account (yes/no; blank = no)
-      * 17 Oct 26 dm - FIELD 15: the NET gate (S.65 slice 1, SDNet; owner's rulings of 17 Oct).  Whether the account may open a file on
-      *   another SD server.  yes/no; BLANK MEANS NO.  ACCOUNT-SCOPED like ACC$SD.ACCOUNTS: loaded as K$NET at sign-on, at LOGTO (restored
-      *   when LOGTO returns) and by the API server.  No upgrade walk: nothing existing used it, so every existing account stays off.
-      *   SDSYS switches it (MODIFY.ACCOUNT NET-ON / NET-OFF; CREATE.ACCOUNT takes NET-ON).  The gate takes effect for the remote-file
-      *   slices that follow and does nothing yet.  Fields 13 and 14 are the shared-account gates (S.66).
-      $define ACC$NET          15    ;* may open a file on another SD server (yes/no)
       * 22 Oct 26 dm - FIELD 16: where a session of the account starts (S.75, plan section 13.5; owner, 22 Oct: "terminal or menu determined by admin
       *   for each account (another gate) - default menu"; "default for new accounts can be set by admin and then overridden for specific
       *   accounts").  The word menu (the home screen) or terminal (the command prompt); BLANK MEANS FOLLOW THE SYSTEM DEFAULT, the one word in the
@@ -504,15 +508,15 @@
       *   this API session's SCRAM c= value, base64("p=tls-exporter,," +
       *   binding), or "" with no TLS.  Same number as Linux (S.19).
       $define SD_TLS_CBIND    110  ;* sd_tlssrv channel binding, 0 args
-      * 20 Oct 26 Windows port - from Linux 00a5888, mirrored from gplsrc/keys.h: encryption layer 3, the key ring of the XE conversion.
-      *   Args: 'set', name, base64 key (answers the key id, 8 hex digits) / 'clear', name or * (answers how many) / 'list'.
-      $define SD_KEYRING      120  ;* sd_keyring key ring: set, clear, list
       * 25 Oct 26 Windows port - from Linux 71eb0aa (17 Oct 26), S.65 slice 2b, mirrored from gplsrc/keys.h: is a path a file or directory only the
       *   running user can touch (Windows: owned by the running user, nobody else but SYSTEM and Administrators in its ACL).  Args: path, FILE or DIR.
       $define SD_FILE_PRIVATE 111  ;* op_sdext private-file test, 2 args: path, FILE|DIR
       * 9 Nov 26 Windows port - from Linux debd0698 / S.88, mirrored from gplsrc/keys.h: the running user's home (AppData\Local) and a
       *   trusted directory below it, made private when missing.  Arg: relative path, '' for the home.  Answers the path or ''.
       $define SD_USER_HOME    112  ;* op_sdext the user's home (+ a trusted directory below it), 1 arg: relative path
+      * 20 Oct 26 Windows port - from Linux 00a5888, mirrored from gplsrc/keys.h: encryption layer 3, the key ring of the XE conversion.
+      *   Args: 'set', name, base64 key (answers the key id, 8 hex digits) / 'clear', name or * (answers how many) / 'list'.
+      $define SD_KEYRING      120  ;* sd_keyring key ring: set, clear, list
 
       * 13 Aug 26 Windows port - embedded python keys removed with the
       *   interpreter.  See PROJECT_STATUS.md 5.15.

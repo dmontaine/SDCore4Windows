@@ -1491,7 +1491,7 @@ os.set:
    if not(osu.ok) then
       release acc.f, acc.name
       @system.return.code = -ER$FAILED
-      crt sysmsg(10104, acc.name)  ;* Unable to change operating-system access for %1; the register could not be updated
+      crt sysmsg(10114, acc.name)  ;* Unable to change the state of %1; its state in the register is unchanged (17 Nov 26, audit round 1 P-3212: Linux's 10114, was 10104)
       return
    end
 
@@ -1602,6 +1602,7 @@ tier.set:
    readu tier.rec.new from acc.f, acc.name else tier.rec.new = acc.rec
 
    tier.rec.new<ACC$SUSPENDED> = new.state
+   tier.rec.new<ACC$PRIOR.TIER> = ''     ;* 17 Nov 26 (audit round 1, P-1976): the retired field 6 is cleared both ways, as Linux modifya:840,870
 
    tier.written = @true
    write tier.rec.new to acc.f, acc.name on error tier.written = @false
@@ -1622,7 +1623,12 @@ tier.set:
       void kernel(K$AUDIT, 'modify.account unsuspended account=' : acc.name)
    end
 
-   crt sysmsg(10109, acc.name, want.tier) ;* Account %1 is now %2
+*  17 Nov 26 Windows port - four-version audit round 1 (P-3213): Linux's two messages, 10193 and 10192 (it was 10109 "Account %1 is now %2").
+   if want.tier = 'SUSPENDED' then
+      crt sysmsg(10193, acc.name) ;* Account %1 is now suspended
+   end else
+      crt sysmsg(10192, acc.name) ;* Account %1 is no longer suspended
+   end
 
 *  1 Sep 26 Windows port - SUSPENDED SAYS WHAT IT DID *AND WHAT IT DID NOT DO*.
 *  PRE_RELEASE_FIXES.md 111, owner's ruling 1 Sep 2026: "suspend an account and

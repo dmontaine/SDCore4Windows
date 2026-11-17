@@ -151,7 +151,7 @@ MUTANTS = [
     ("the sessions page can run another command", "SV7", sub("ts", "allow = 'logout unlock inhibit.login'", "allow = 'logout unlock inhibit.login sh'")),
     ("the home tile says it for one session", "SV8", sub("th", "if sdn > 1 then txt", "if sdn > 0 then txt")),
     ("the home tile loses the old text", "SV8", sub("th", "   txt = n : ' signed on'\n   call !sdsysn(", "   txt = n : ' on'\n   call !sdsysn(")),
-    ("the routine is not on the bootstrap list", "SV9", sub("bb", "src.list<-1> = '_SDSYSN'\n", "")),
+    ("the routine is not on the bootstrap list", "SV9", sub("bb", "src.list<-1> = '_sdsysn'\n", "")),   # 17 Nov 26 (audit round 1): the list is lower case, as Linux
     ("the routine is not found", "SV0", setkey("rt", "")),
 ]
 

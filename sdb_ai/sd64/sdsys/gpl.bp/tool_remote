@@ -5,6 +5,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3477): the API "on" confirmation line is Linux's words.
 * 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): A is one form, the door and restart
 *               now or later, and runs REMOTE.API ... RESTART | NO.RESTART through the routine; the terminal is no longer given to it.
 * 13 Nov 26 Windows port - RELEASE_1.1 202: the sixth view is back, as Linux's (S.95, S.106), for the remote administration account SDRADMIN:
@@ -726,7 +727,7 @@ do.api:
    begin case
       case aw = 'on'
          typed = 'open'
-         el<-1> = 'SD listens on port 4247 and the firewall rule is opened for it: other computers on the network may connect to the API of this machine.'
+         el<-1> = 'SD listens on port 4247 on EVERY address and the firewall is opened for it: other computers may connect to the API of this machine.'
       case aw = 'local'
          el<-1> = 'SD listens on 127.0.0.1:4247 only and the firewall rule lets only this computer connect.'
       case 1

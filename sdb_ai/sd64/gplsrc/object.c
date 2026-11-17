@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3086): the bounded program_name copy written as Linux's (the same tail, no change in effect).
  * 9 Nov 26 Windows port - from Linux 07b4f0cd (S.125, S.195): load_object()'s object_bytes and convert start
  *           at 0 / FALSE; the object file is closed on the three failure exits (header unreadable, bad
  *           magic number, code unreadable), which lost a file handle each time.
@@ -341,10 +342,11 @@ found:
      call passes, so the LRU search above cannot return a different program:
      the file is simply reloaded, which is correct.                         */
   {
-    size_t n = strlen(name);
-    const char* src = (n > MAX_PROGRAM_NAME_LEN) ? name + (n - MAX_PROGRAM_NAME_LEN) : name;
-    strncpy(obj->code.ext_hdr.prog.program_name, src, MAX_PROGRAM_NAME_LEN);
-    obj->code.ext_hdr.prog.program_name[MAX_PROGRAM_NAME_LEN] = '\0';
+    size_t name_len = strlen(name);
+    strcpy(obj->code.ext_hdr.prog.program_name,
+           (name_len > MAX_PROGRAM_NAME_LEN)
+               ? name + (name_len - MAX_PROGRAM_NAME_LEN)
+               : name);
   }
 
   if (is_runfile)

@@ -18,6 +18,11 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: Linux's audit reasons for six refusals that said "unspecified" (the register
+*   or the VOC could not be opened, not an SD account, a network or serial connection, $release missing, the revision cross-check);
+*   "not in the register" in Linux's words; a refusal that set no audit.account names initial.account; the success record is
+*   mode 0 only and names initial.account; the dead tier omit loop in update.voc is gone; 12012 is framed by two rules of
+*   79 dashes, as Linux frames its administrator notice.
 * 13 Nov 26 Windows port - RELEASE_1.1 266, later the same night: folding case and slashes was not enough.  Measured in the VM, @PATH is
 *   /cygdrive/c/ProgramData/SD/sdsys, so the walk still re-updated SDSYS.  Both sides now go through path.key (accountpath's form).
 * 13 Nov 26 Windows port - RELEASE_1.1 266: UPDATE.ACCOUNTS ALL's walk compares account paths with the case and the slashes folded (as restorea does).
@@ -274,6 +279,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   vague line in the trail is recoverable, a missing one is not.
    audit.reason = 'unspecified'
    audit.account = ''
+   initial.account = ''      ;* 17 Nov 26: assigned here, as Linux login:156, so terminate.connection may fall back to it
 
 * 22 Aug 26 Windows port - PROJECT_STATUS.md 7 step 9.  ASSIGNED HERE, not at
 *   the gate, for the reason the block below gives: it is read by the audit
@@ -542,6 +548,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 
    openpath @sdsys:@ds:'accounts' to acc.f else
       display sysmsg(2200) ;* Cannot open accounts register
+      audit.reason = 'the accounts register could not be opened'
       goto terminate.connection
    end
 
@@ -553,6 +560,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 
   if system(42) or system(1027) then   ;* Network/serial connection
     logmsg sysmsg(5063, 'security test')  ;* Failed login authentication from %1
+    audit.reason = 'network or serial connection'
     goto terminate.connection
   end else
 * 14 Aug 26 Windows port - the sdusers gate is back, and with it the operating
@@ -687,7 +695,7 @@ deffun radmin_open(arg) calling '!radmin_open'
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
             audit.account = initial.account
-            audit.reason = 'no such account in the register'
+            audit.reason = 'not in the register'
             goto terminate.connection
          end
          runin.groups = ',' : downcase(runin.info<3>) : ','
@@ -706,7 +714,7 @@ deffun radmin_open(arg) calling '!radmin_open'
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
             audit.account = initial.account
-            audit.reason = 'no such account in the register'
+            audit.reason = 'not in the register'
             goto terminate.connection
          end
 
@@ -988,7 +996,7 @@ deffun radmin_open(arg) calling '!radmin_open'
          read acc.rec from acc.f, initial.account else
             display sysmsg(5018, initial.account) ;* Account %1 not in register
             audit.account = initial.account
-            audit.reason = 'no such account in the register'
+            audit.reason = 'not in the register'
             goto terminate.connection
          end
    end case
@@ -1181,8 +1189,14 @@ deffun radmin_open(arg) calling '!radmin_open'
 *     Quiet-aware like the internal-session notice below, and ONLY ON A TERMINAL
 *     (the test require.credential uses): a scripted SDSYS session, such as the
 *     verifiers' seat, gets no extra line to trip an anchor.
+*     17 Nov 26 Windows port - four-version audit round 1 (P-3270): framed as Linux's display.admin.notice frames its 10916 - a blank
+*     line and a rule of 79 dashes above and below.
       if kernel(K$TTY, 0) # '' and not(bitand(kernel(K$COMMAND.OPTIONS, 0), CMD.QUIET)) then
+         crt
+         crt str('-', 79)
          display sysmsg(12012) ;* SD administration granted: this session is the SDSYS Windows account, elevated
+         crt str('-', 79)
+         crt
       end
    end
 * 13 Nov 26 Windows port - RELEASE_1.1 202: the remote administration session says what it is, as Linux's remote sdsys does (11795, carried
@@ -1210,11 +1224,13 @@ deffun radmin_open(arg) calling '!radmin_open'
 
    openpath "voc" to voc on error
       display 'Error ' : status() : ' opening VOC file. Check access rights.'
+      audit.reason = 'the VOC could not be opened'
       goto terminate.connection
    end else
    * 20240219 mab as part of the security changes, do not allow auto creation of account !
    *   gosub create.account
        display sysmsg(5163)    ;* Directory is not a  sd account
+       audit.reason = 'not an SD account'
        goto terminate.connection
    end
 
@@ -1282,6 +1298,7 @@ deffun radmin_open(arg) calling '!radmin_open'
          clear.on.data = not(index(s, 'X', 1)) and not(cursor.at.end)
       end else
          display sysmsg(5028) ;* $RELEASE VOC record not found
+         audit.reason = 'the $release VOC record is missing'
          goto terminate.connection
       end
 
@@ -1289,6 +1306,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 
       if compare(system(1012), SD.REV.STAMP) then
          display sysmsg(5029) ;* Revision level cross-check error
+         audit.reason = 'revision level cross-check error'
          if not(kernel(K$INTERNAL,-1)) then goto terminate.connection
       end
 
@@ -1450,12 +1468,16 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   22 Aug 26 - THE COMMAND IS NAMED IN THE RECORD when there is one, because
 *   "LOGIN account=x" alone cannot distinguish a person signing in from a job
 *   that ran something.  It is empty for every interactive session.
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3367): the success record is mode 0 only, as Linux login:674-678 (the update
+*   modes reach here too and are not sign-ons), and names initial.account as Linux does.
    if runin.info # '' then
       void kernel(K$AUDIT, 'run.in child account=' : audit.account : ' command=' : batch.command)   ;* 13 Nov 26 (RELEASE_1.1 253(b))
-   end else if batch.command = '' then
-      void kernel(K$AUDIT, 'login account=' : audit.account)
-   end else
-      void kernel(K$AUDIT, 'login account=' : audit.account : ' command=' : batch.command)
+   end else if mode = 0 then
+      if batch.command = '' then
+         void kernel(K$AUDIT, 'login account=' : initial.account)
+      end else
+         void kernel(K$AUDIT, 'login account=' : initial.account : ' command=' : batch.command)
+      end
    end
 
 * 12 Nov 26 Windows port - from Linux (26 Oct 26, S.76; RELEASE_1.1 252, P-15): SDSYS may have more than one session at a time and a
@@ -1475,6 +1497,9 @@ terminate.connection:
 * 16 Aug 26 Windows port - PROJECT_STATUS.md 7 step 4.  EVERY refused login
 *   leaves through here, so one record covers all of them and a refusal added
 *   later is recorded whether or not whoever adds it thinks about the trail.
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3368): a refusal that set no audit.account names initial.account, as Linux
+*   login:691 does, rather than account= empty.
+   if audit.account = '' then audit.account = initial.account
    void kernel(K$AUDIT, 'login refused account=' : audit.account : ' reason=' : audit.reason)
 
    display sysmsg(5024) ;* Connection terminated
@@ -1984,17 +2009,12 @@ update.voc:
 *   compiler, the cataloguer, both editors, COPY and DELETE.CATALOG, reachable
 *   through UPDATE.ACCOUNTS or the $RELEASE prompt with no privilege at all.
 *   It has no subject now.  The history is in HISTORY.md, not here.
-   omit.rec = ''
-*  18 Sep 26 - omit.count is STILL ASSIGNED because the loop at the end of this
-*  select reads it, and BCOMP's ERRGEN dies on a use with no assignment.  Zero
-*  is what makes that loop a no-op; do not delete this line.
-   omit.count = 0
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3366): the omit loop that read omit.count = 0 is gone with omit.rec and
+*   omit.count, as Linux login has none; the history below is kept as it was written.
 
    select sdsys.file to 11
    loop
       readnext id from 11 else exit
-
-      copy.it = @true
 
 * 13 Sep 26 Windows port - RELEASE_1.1 5.  The two copy.it = @false tests that
 *     stood here - skipping TIER.OMIT.STANDARD and TIER.ADD.ADMINISTRATOR so the
@@ -2008,18 +2028,6 @@ update.voc:
 *     built the other way up from what they appear to search, and a membership
 *     test that silently matched nothing would omit nothing here and look
 *     exactly like a filter that had worked.
-      if copy.it and omit.count > 1 then
-         for omit.i = 2 to omit.count       ;* field 1 is the description
-*           18 Aug 26 Windows port - AND SO IS THIS ONE, and it is the one that
-*           matters: the list holds verb ids and id is a verb id, so if either
-*           side is lower-cased without the other NOTHING is omitted and a
-*           standard account silently gets the full VOC.  5.12 (b).
-            if upcase(omit.rec<omit.i>) = upcase(id) then
-               copy.it = @false
-               omit.i = omit.count          ;* stop looking
-            end
-         next omit.i
-      end
 
 * 17 Aug 26 Windows port - CONTINUE, and it is demonstrated 30 lines below in
 *   this same loop, where a declined type change skips the write.  CREATEA's
@@ -2027,7 +2035,6 @@ update.voc:
 *   demonstrated anywhere here" and uses a flag round the write instead - that
 *   note was wrong about this file, and is left standing there because the flag
 *   it chose is not worth a second uncompiled change to correct.
-      if not(copy.it) then continue
 
       read rec from sdsys.file,id then
          new.type = upcase(rec[1,1])

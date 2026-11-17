@@ -7,6 +7,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3476): the certificate question says "for a private CA, ... a dash for the system
+*           store" as Linux's; "written with /" stays (a Windows path is written with forward slashes here).
 * 13 Nov 26 Windows port - the no-answer line names the program sd-ai.exe: the helper is native C, not Python (the owner's ruling of the same day).
 * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): the messages renumbered (11249 -> 12254, 11607 -> 12612); the Accounts box says Windows user;
 *              the no-answer line names the service sd-ai and its pipe; hand.key makes the hand-over directory $aikey with PowerShell and icacls (SDSYS and SYSTEM
@@ -1283,7 +1285,7 @@ do.dropcustom:
 do.ca:
    * S.244 (2): the field opens empty, the file in force is shown in the question and Ctrl-R puts it in; an empty answer changes nothing
    ca.now = (if ca = '' then '-' else ca)
-   screen ask 'File of certificate authorities, written with / (a dash is the system store) ' : sysmsg(15115, ca.now) width 100 value '' title 'Certificate authorities' history ca.now returning cv else return
+   screen ask 'File of certificate authorities for a private CA, written with /, a dash for the system store ' : sysmsg(15115, ca.now) width 100 value '' title 'Certificate authorities' history ca.now returning cv else return
    cv = trim(cv)
    if cv = '' then
       msg = 'nothing changed'

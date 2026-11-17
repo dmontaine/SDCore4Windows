@@ -12,6 +12,7 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3097): "cannot build the certificate name", Linux's words.
  * 17 Sep 26 Windows port - RELEASE_1.1 55: a second socketpair is made before
  *           the spawn and kept as the CONTROL channel to the relay, and
  *           sd_tls_relay_pipe() is the front's one use of it - stand up the
@@ -233,7 +234,7 @@ static bool create_identity(const char* path, char* errmsg, size_t errlen) {
      freed unconditionally at done:. */
   name = X509_NAME_new();
   if (name == NULL) {
-    sd_tls_error_text("cannot allocate the certificate name", errmsg, errlen);
+    sd_tls_error_text("cannot build the certificate name", errmsg, errlen);
     goto done;
   }
   if (X509_set_version(cert, 2) != 1 ||

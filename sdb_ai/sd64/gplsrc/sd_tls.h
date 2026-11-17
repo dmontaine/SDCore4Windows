@@ -12,6 +12,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-1971): SD_RELAY_EXE removed; nothing read it (win32relay.c, which includes no
+ *           SD header, names sdtlsrelay.exe itself).  SD_RELAY_EXIT_PRIVILEGE stays: it holds Linux's relay exit code 3.
  * 17 Sep 26 Windows port - RELEASE_1.1 55: the relay gains a THIRD inherited
  *           descriptor, a control socketpair to the front, and its argv grows
  *           by one.  The front uses it once, after SCRAM, to have the relay
@@ -140,7 +142,6 @@ int win32_admin_only(const char* path, char* why, size_t whylen);
                       relay exits with the same one.
 
    Then bytes flow: decrypted network -> socketpair, socketpair -> network. */
-#define SD_RELAY_EXE          "sdtlsrelay.exe"    /* beside sd.exe, like sdpy */
 #define SD_RELAY_ACCOUNT      "sdrelay"           /* install-service.ps1 */
 #define SD_RELAY_IDENTITY_MAX 65536
 #define SD_RELAY_OK             0

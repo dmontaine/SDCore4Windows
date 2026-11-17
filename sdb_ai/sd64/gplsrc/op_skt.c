@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-3094), from Linux (14 Oct 26): op_openskt() closes the socket and frees the
+ *            address list after a failed connect, so a program that retries in a loop does not run out of descriptors.
  * 8 Nov 26 Windows port - from Linux 8048c3a3 (S.125): the noreturn redeclaration of k_error() is gone; k_error() RETURNS for a message beginning '!', and an optimising compiler would drop the code after those calls.
  * 20 Oct 26 Windows port - from Linux b052346 - S.73 item 2, THE SILENT SERVER.  (1) READ.SOCKET on a TLS socket gave up after its timeout only while the descriptor held nothing: the session tickets a
  *           TLS 1.3 server sends after the handshake, or half of a record, made the descriptor readable, and the blocking SSL_read behind it then waited for the rest with
@@ -572,6 +574,14 @@ void op_openskt() {
         process.os_error = NetError;
       }
     }
+  }
+
+  /* 17 Nov 26 Windows port - from Linux (14 Oct 26), four-version audit round 1 (P-3094): a failed connect left the socket open (and
+     the address list unfreed); a program that retries in a loop with a timeout would run out of descriptors */
+
+  if (process.status == ER_CONNECT) {
+    closesocket(skt);
+    freeaddrinfo(res);
   }
 
   /* Create socket descriptor and SOCKVAR structure */

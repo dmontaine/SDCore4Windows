@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - the two refusal lines of 15 Nov taken back out of the error log: log_message() needs the segment and
+ *               ERRLOG_SEM, the very things those refusals lack (a NULL sysseg).  The no-lost-session line stays.
  * 15 Nov 26 Windows port - RELEASE_1.1 302 (b): cleanup() writes its two refusals (not active, no semaphores) and a run that removed nothing
  *               to the error log; they went only to stderr, which nobody reads when sdwind runs "sd -cleanup".
  * 18 Oct 26 Windows port - from Linux ff49d57 (15 Oct 26): show_status(): the buffer for the start time was one byte short for its "not recorded" text (gcc warned on every
@@ -371,15 +373,17 @@ void cleanup() {
      refusals went to stderr, which goes nowhere there, and exited 0: sdwind's log said "Lost user 113 ... running sd -cleanup" and then
      nothing, so which of them (or neither) had happened could not be told.  Each is written to the error log as well now, and so is a run
      that found no slot to remove. */
+  /* 17 Nov 26 Windows port - four-version audit round 1 (found carrying to Solo): the two refusals NO LONGER call log_printf.  It
+     writes through log_message(), which reads sysseg->errlog and takes ERRLOG_SEM - so with the segment not attached it dereferenced
+     a NULL sysseg, and with no semaphores it waited on one that is not there.  They say so on stderr only, as before 15 Nov; the
+     no-lost-session line below runs after both succeeded and stays. */
   if (!attach_shared_memory()) {
     fprintf(stderr, "SD is not active.\n");
-    log_printf("Cleanup not done: SD is not active (the shared segment could not be attached).\n");
     return;
   }
 
   if (!get_semaphores(FALSE, errmsg)) {
     fprintf(stderr, "Cannot access semaphores.\n");
-    log_printf("Cleanup not done: cannot access the semaphores (%s).\n", errmsg);
     return;
   }
 

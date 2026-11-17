@@ -6,6 +6,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3474, P-3475): entry.cursor stands before on.key, as Linux's; no change in effect.
 * 15 Nov 26 Windows port - RELEASE_1.1 326 (the owner: follow set.ai limit max-tokens): a request asks for 100000 tokens, the kernel's ceiling, so
 *               the administrator's max-tokens decides; say is cut at 65536 (the helper's bytes-reply bounds it), not 6000.
 * 15 Nov 26 Windows port - RELEASE_1.1 325 (the owner: "that is supposed to be a scrolling field, so it should display the whole response"): the
@@ -380,6 +381,14 @@ paint:
    if not(ai.focus) then call $sl_curat('back', keep.cur)
    return
 
+* 15 Nov 26 (Windows RELEASE_1.1 324, the owner on HOME: "the cursor stays at the first position, the typed characters do appear"): the screen's own
+* cursor is where the entry's is.  The label's SCREEN TEXT left SL.S.CUR just after the label - the entry's first cell - and the put that follows
+* the entry's $sl_curat wrote the cursor there again (sl_scr put.cursor), as did a later flush of a put that was owed.
+* 17 Nov 26 (four-version audit round 1, P-3474/P-3475): placed before on.key, where Linux's stands.
+entry.cursor:
+   if ai.focus then scr<SL.S.CUR> = (ai.w{'ax'} + ai.w{'pos'} - ai.w{'pan'}) : @vm : (ai.w{'ay'} + 0)
+   return
+
 on.key:
    begin case
       case nm = 'esc'
@@ -399,13 +408,6 @@ on.key:
          gosub entry.cursor
          call $sl_scr('put', scr)
    end case
-   return
-
-* 15 Nov 26 (Windows RELEASE_1.1 324, the owner on HOME: "the cursor stays at the first position, the typed characters do appear"): the screen's own
-* cursor is where the entry's is.  The label's SCREEN TEXT left SL.S.CUR just after the label - the entry's first cell - and the put that follows
-* the entry's $sl_curat wrote the cursor there again (sl_scr put.cursor), as did a later flush of a put that was owed.
-entry.cursor:
-   if ai.focus then scr<SL.S.CUR> = (ai.w{'ax'} + ai.w{'pos'} - ai.w{'pan'}) : @vm : (ai.w{'ay'} + 0)
    return
 
 * ------------------------------------------------------------------------------------------------- the whole sequence

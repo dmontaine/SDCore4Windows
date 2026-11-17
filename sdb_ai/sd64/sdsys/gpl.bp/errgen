@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1 (P-3352, P-3353): writes errtext.h and err.h by their lower-case record
+*            names, as Linux errgen (the names on disk; NTFS matched the upper-case ones only by folding).
 * 19 Aug 26 Windows port - the F/Q file-pointer VOC ids are lower case:
 *            voc, newvoc, accounts, messages, syscom, qfile, dict.dict, md,
 *            sd.accounts, os.users.  PROJECT_STATUS.md 5.12 (b).
@@ -39,12 +41,12 @@
 program errgen
 $include err.h
 
-   openseq 'gpl.bp', 'ERRTEXT.H' to out.f else
+   openseq 'gpl.bp', 'errtext.h' to out.f else
       if status() then abort 'Cannot open BP errtext.h'
    end
    weofseq out.f
 
-   openseq 'syscom', 'ERR.H' to syscom.f else
+   openseq 'syscom', 'err.h' to syscom.f else
       if status() then abort 'Cannot open SYSCOM err.h'
    end
    weofseq syscom.f

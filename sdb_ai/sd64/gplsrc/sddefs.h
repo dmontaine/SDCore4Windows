@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 1 (P-1973): SD_POSIX_SEM_FMT removed; nothing read it (the semaphores are Win32 ones).
  * 15 Nov 26 Windows port - RELEASE_1.1 299: _XOPEN_CRYPT is defined only when MSYS2's headers have not (sd_sftp.c's include order).
  * 01 Oct 26 Windows port - SD_API_PORT, 4247, fixed (owner's port ruling)
  * 02 Oct 26 Windows port - SD Core's own IPC keys, 0x53435701/02, and the
@@ -205,10 +206,10 @@
  */
 
 #define SD_POSIX_SHM_NAME "/sd_shm_53435701"
-#define SD_POSIX_SEM_FMT  "/sd_sem_716d0302_%d"
 
-/* 16 Aug 26 Windows port - THE SEMAPHORES ARE NATIVE Win32 OBJECTS NOW, and
- * the POSIX name above is kept only for removing sets left by older builds.
+/* 16 Aug 26 Windows port - THE SEMAPHORES ARE NATIVE Win32 OBJECTS NOW.
+ * (17 Nov 26: the POSIX semaphore name that stood above, SD_POSIX_SEM_FMT, is
+ * gone; nothing read it.)
  *
  * WHY.  POSIX sem_open() on the MSYS2 runtime does not work in session 0: as
  * LocalSystem it BLOCKS FOR TEN SECONDS AND FAILS WITH ETIMEDOUT, measured
