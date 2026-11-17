@@ -379,6 +379,22 @@ if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]:
 }
 
 # ---------------------------------------------------------------------------
+# 16 Nov 26 - RELEASE_1.1 333.  SSH IS WINDOWS' OPENSSH, OR NOTHING RUNS.  The verifiers call bare ssh.  Started from Git Bash,
+# this process's PATH found Git's MSYS ssh.exe first (suite b338): UserKnownHostsFile=NUL then wrote a FILE gplbld\NUL, and the
+# ssh steps measured a client the product never meets.  So OpenSSH's folder goes first on this process's PATH, which every step
+# inherits, and a run whose ssh still resolves anywhere else is refused before anything is spent.  The same block is in
+# VerifyInstall2.ps1; test-sshpin-units.py holds both.
+$openSshExe = Join-Path $env:SystemRoot 'System32\OpenSSH\ssh.exe'
+$env:PATH = (Split-Path -Parent $openSshExe) + ';' + $env:PATH
+$sshNow = (Get-Command ssh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+Write-Output ('VerifyInstall1: ssh is ' + $sshNow)
+if ((-not $sshNow) -or ($sshNow -ne $openSshExe)) {
+    Write-Output ('VerifyInstall1: REFUSING - ssh resolves to "' + $sshNow + '", not Windows OpenSSH (' + $openSshExe + ').')
+    Write-Output '  Install the OpenSSH Client optional feature (Settings > System > Optional features).  Nothing was run.'
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
 # 22 Aug 26 - IS SD ACTUALLY RUNNING?  The same guard as the elevated runner and
 # for the same reason: assert-current compares hashes and mtimes, so a STOPPED
 # server is perfectly "current" and every verifier prints a green

@@ -432,6 +432,19 @@ if ($claimed.Count -gt 0) {
 }
 
 # ---------------------------------------------------------------------------
+# 16 Nov 26 - RELEASE_1.1 333.  SSH IS WINDOWS' OPENSSH, OR NOTHING RUNS.  The same block as VerifyInstall1.ps1 (its comment says
+# why: suite b338 started from Git Bash measured Git's MSYS ssh and wrote a file gplbld\NUL); this half can be started on its own.
+$openSshExe = Join-Path $env:SystemRoot 'System32\OpenSSH\ssh.exe'
+$env:PATH = (Split-Path -Parent $openSshExe) + ';' + $env:PATH
+$sshNow = (Get-Command ssh -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+Write-Output ('VerifyInstall2: ssh is ' + $sshNow)
+if ((-not $sshNow) -or ($sshNow -ne $openSshExe)) {
+    Write-Output ('VerifyInstall2: REFUSING - ssh resolves to "' + $sshNow + '", not Windows OpenSSH (' + $openSshExe + ').')
+    Write-Output '  Install the OpenSSH Client optional feature (Settings > System > Optional features).  Nothing was run.'
+    exit 2
+}
+
+# ---------------------------------------------------------------------------
 # 22 Aug 26 - IS SD ACTUALLY RUNNING?  assert-current DOES NOT ANSWER THIS, and
 # the difference cost a run on the day this was written.
 #
