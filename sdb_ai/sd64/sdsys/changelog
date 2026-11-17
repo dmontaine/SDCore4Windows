@@ -3,6 +3,13 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+16 Nov 26  THE VOC RECORDS $CONTRIB AND $LICENCE ARE GONE; THE TEXTS ARE IN THE SYSTEM FOLDER.
+
+             What        - The administrator's VOC set no longer has $contrib and $licence, two records holding the list of
+                           contributors and the licence notice.  The same texts are the files contrib and licence in the
+                           system folder, as on SD Core for Linux, which has never had the records.
+             Does NOT    - Remove them from an account that already has them, or change the licence.
+
 16 Nov 26  A FULL-SCREEN PAGE NO LONGER TURNS TO GARBAGE WHILE SD'S WINDOW IS DRAGGED WIDER OR NARROWER.
 
              What        - In SD's own window, the home screen, the toolkit's pages, the IDE (and SED), CED and any SCREEN

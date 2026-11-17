@@ -1,5 +1,5 @@
 {
- "chunk_count": 4271,
+ "chunk_count": 4269,
  "development": "the changelog's 'Next release - in progress' section is part of this tree",
  "gaps": {
   "basic_names_without_a_docs_syntax_line": []
@@ -115,12 +115,12 @@
    "sha256": "e458dc52d443eb3544ba1ac64c548352b7533cf70ab02829beea28301531fd83"
   },
   "voc.entry": {
-   "chunks": 23,
-   "sha256": "579224e67ffdb8a2c75c8446f3eb5ca7723a35369f8c823d920c45144a659737"
+   "chunks": 21,
+   "sha256": "4e9666af239a59f9dd13c7036b848ad5c08677d5c9f54551cda60b0ae36a6dc6"
   },
   "voc.layer": {
    "chunks": 2,
-   "sha256": "c8c3aed9cbd4f9ed703a2f824d80d94f7f1eb34449c934c86be4f313e2d2d674"
+   "sha256": "a5469217aef5d2f961bae1ee017afb9b96cce25ce602f966e5ee3d05d8ec6473"
   },
   "voc.type": {
    "chunks": 9,
@@ -145,12 +145,12 @@
    "words": 1590
   },
   "examples/voc-entries.md": {
-   "chunks": 23,
-   "sha256": "155eb8a2f02055eac7b174c8bb8e1cb6cd4f19f719eff0ece4ed2a385f501e8a",
-   "words": 6613
+   "chunks": 21,
+   "sha256": "7d012e7386065eafc20ce402a2cb7c12f58e5ba449c4e1b747293fda8e6b6e7b",
+   "words": 571
   },
   "index.json": {
-   "sha256": "2472343794e44c18aa742e9a1e7520965d0496d132030c30e228cd5377160e2d"
+   "sha256": "81760ca7874448bfd298b864b9baaf34ece9e5207c5dc4a3197723357a74acba"
   },
   "reference/basic-functions.md": {
    "chunks": 267,
@@ -199,8 +199,8 @@
   },
   "reference/voc.md": {
    "chunks": 12,
-   "sha256": "29aae977292f2bac917c50cbc928751001213d69a96cd0b8a4c4c7ce745c6145",
-   "words": 1906
+   "sha256": "fefd4559659ccfc866c673652090d8e88ef9849415b77c4d9d57658cd61c31fa",
+   "words": 1904
   }
  },
  "product": "SD Core for Windows",

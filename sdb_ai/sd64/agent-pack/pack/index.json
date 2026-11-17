@@ -29659,26 +29659,12 @@
 "tier": "examples",
 "words": 49
 },
-"voc:entry:$contrib": {
-"kind": "voc.entry",
-"part": "examples/voc-entries.md",
-"since": "-",
-"tier": "examples",
-"words": 98
-},
 "voc:entry:$hold": {
 "kind": "voc.entry",
 "part": "examples/voc-entries.md",
 "since": "-",
 "tier": "examples",
 "words": 18
-},
-"voc:entry:$licence": {
-"kind": "voc.entry",
-"part": "examples/voc-entries.md",
-"since": "-",
-"tier": "examples",
-"words": 5944
 },
 "voc:entry:$map": {
 "kind": "voc.entry",
@@ -29825,7 +29811,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 107
+"words": 105
 },
 "voc:type:F": {
 "kind": "voc.type",

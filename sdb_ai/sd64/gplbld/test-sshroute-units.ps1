@@ -32,6 +32,9 @@ Write-Host "test-sshroute-units: scripts in $here"
 # sshd_config_default; it is covered when it also names the Program Files location (ProgramW6432 or the folder).
 function Test-Covered([string]$path) {
     $t = [System.IO.File]::ReadAllText($path)
+    # 16 Nov 26 - RELEASE_1.1 333: the CLIENT, System32\OpenSSH\ssh.exe, is not a server lookup and always lives in System32
+    #   (the verify runners pin it); it is taken out before the test, so every other System32\OpenSSH still counts.
+    $t = $t -replace '(?i)System32\\OpenSSH\\ssh\.exe', 'the-openssh-client'
     $sys = $t -match '(?i)System32\\OpenSSH'
     if (-not $sys) { return $true }
     return ($t -match '(?i)ProgramW6432') -or ($t -match '(?i)Program Files\\OpenSSH')
