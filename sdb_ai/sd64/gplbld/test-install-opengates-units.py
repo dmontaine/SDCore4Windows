@@ -41,7 +41,9 @@ KEYS = os.path.join(SD64, "sdsys", "syscom", "keys.h")
 # modifya on-words that are NOT access gates for this purpose, and why (see the header)
 # 15 Nov 26 (RELEASE_1.1 299, from Linux S.242): XFER-ON was left out, as Linux's open_installer_gates did.  16 Nov 26 (Linux db29dcc7, the owner's
 # "Every gate"): Linux added it, so it is a gate here too (field 22); sd.conf's XFER=1 stays off, so the account's switch alone moves nothing.
-NOT_GATES = {"SHARED-READ-ON"}
+# 17 Nov 26 (Linux 1557e270, S.62 LC3; Linux's S2d): SSH-KEY-ON is left out as well - the installing user is ATTACHED, not made by SD, and keeps its
+# own keys; modify.account refuses the word for it (15170).  Row S2d holds it out and asks attach-account.ps1 to say why.
+NOT_GATES = {"SHARED-READ-ON", "SSH-KEY-ON"}
 EXPECT_WORDS = ["both", "sh-on", "os-on", "sd-on", "voc-on", "bp-on", "dict-on", "recovery-on", "net-on", "shared-write-on", "files-on", "files-write-on",
                 "files-admin-on", "ai-on", "pins-on", "xfer-on"]      # 10 Nov 26: recovery-on (ACC$RECOVERY 19, Linux S.88 plan 2.9); 13 Nov 26: ai-on (sdaiusers, RELEASE_1.1 246, Linux 277/308); 16 Nov 26: xfer-on (Linux db29dcc7)
 EXPECT_FIELDS = {7: "ACC$SH", 8: "ACC$OS.EXEC", 9: "ACC$SD.ACCOUNTS", 10: "ACC$VOC.EDIT", 11: "ACC$BP.EDIT", 12: "ACC$DICT.EDIT",
@@ -179,6 +181,8 @@ def checks(att, iss, mod, keys):
     gates = [w for w in mod_on if w not in NOT_GATES]
     row("S2 the list is both (ssh and the API) and every on-word modify.account accepts, less shared-read-on (a gate added later fails here)",
         sorted(["both"] + [w.lower() for w in gates]) == sorted(words), "modifya %s, list %s" % (sorted(w.lower() for w in gates), sorted(words)))
+    row("S2d ssh-key-on is a word modify.account accepts and is NOT in the list: the installing user is attached, not made by SD, so the word does not apply to it, and attach-account.ps1 says why",
+        "SSH-KEY-ON" in mod_on and "ssh-key-on" not in words and "ssh-key-on is NOT in the list" in att, "modifya on-words %s, list %s" % (mod_on, words))
     row("S3 files-admin-on comes after files-write-on and files-on, which modify.account requires first (messages 12528 and 12531)",
         "files-admin-on" in words and words.index("files-on") < words.index("files-write-on") < words.index("files-admin-on"), "%s" % words)
     kn = keys_numbers(keys)
@@ -256,6 +260,8 @@ MUTANTS = [
     ("sdfilesadmin is not read back", "att", "; 'sdfilesadmin' = 'files-admin-on';", ";"),
     ("ai-on is not in the list (13 Nov 26, RELEASE_1.1 246)", "att", "'files-admin-on', 'ai-on', 'pins-on', 'xfer-on')", "'files-admin-on', 'pins-on', 'xfer-on')"),
     ("xfer-on is not in the list (16 Nov 26, Linux db29dcc7)", "att", "'pins-on', 'xfer-on')", "'pins-on')"),
+    ("ssh-key-on is in the list (17 Nov 26, Linux 1557e270 S2d)", "att", "'pins-on', 'xfer-on')", "'pins-on', 'xfer-on', 'ssh-key-on')"),
+    ("the reason ssh-key-on is left out is gone", "att", "ssh-key-on is NOT in the list", "ssh-key-on is not listed"),
     ("register field 22 is not read back", "att", ", @(22, 'xfer-on'))", ")"),
     ("sdaiusers is not read back (13 Nov 26, RELEASE_1.1 246)", "att", "; 'sdaiusers' = 'ai-on' }", " }"),
     ("register field 18 is not read back", "att", ", @(18, 'pins-on'), @(19", ", @(19"),      # 13 Nov 26: field 19 follows it since 10 Nov

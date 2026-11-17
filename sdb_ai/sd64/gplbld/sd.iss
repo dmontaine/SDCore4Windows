@@ -905,6 +905,21 @@ Filename: "{sys}\net.exe"; Parameters: "localgroup sdusers ""{username}"" /add";
 Filename: "{sys}\net.exe"; Parameters: "localgroup sdsshonly /add /comment:""SD accounts restricted to ssh"""; \
     Flags: runhidden skipifdoesntexist; StatusMsg: "Creating the sdsshonly group..."
 
+; 17 Nov 26 - from Linux 1557e270 (S.62 LC3; the owner's decision of 17 Nov 2026:
+; key sign-in over ssh is off as delivered for the accounts SD makes, and the
+; administrator turns it on per account with modify.account <name> ssh-key-on).
+; sdsshnokey is the group whose members sshd offers no key sign-in
+; (allow-ssh-groups.ps1's key arm).  It is made EMPTY here, and THIS INSTALLER
+; PUTS NOBODY IN IT, on a fresh install or an upgrade: CREATE.ACCOUNT puts in each
+; Windows user it makes from now on, and nothing else does.  So an upgrade changes
+; no existing account's key sign-in, and a second upgrade does not either: "net
+; localgroup /add" fails on a group that exists and leaves its members alone.  The
+; installing user is attached, not made by SD, and is never in it.  A DENY group:
+; one that is missing matches nobody, which is why the uninstaller removes it only
+; with the accounts (OfferAccountRemoval), never with the route groups.
+Filename: "{sys}\net.exe"; Parameters: "localgroup sdsshnokey /add /comment:""SD accounts offered no ssh key sign-in"""; \
+    Flags: runhidden skipifdoesntexist; StatusMsg: "Creating the sdsshnokey group..."
+
 ; AND THIS IS WHAT MAKES THAT GROUP MEAN ANYTHING.  Applied ONCE, here, rather
 ; than per account: Windows has no cmdlet for user rights assignment, so doing
 ; it per account would need an LsaAddAccountRights P/Invoke or a secedit
@@ -6500,7 +6515,7 @@ end;
 procedure OfferAccountRemoval;
 var
   Ps, LogPath, KeepUser: String;
-  Code: Integer;
+  Code, NetCode: Integer;
 begin
   if SdAccountsScript = '' then
     Exit;
@@ -6528,6 +6543,12 @@ begin
            '" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
            SdAccountsScript + '" -Remove -Keep "' + KeepUser + '" > "' + LogPath + '" 2>&1"',
        '', SW_HIDE, ewWaitUntilTerminated, Code);
+
+  { 17 Nov 26 - from Linux 1557e270 (S.62 LC3): sdsshnokey goes with the accounts, and only with them.  On a keep its members ARE the
+    accounts whose key sign-in is off, and removing it would give every one of them key sign-in back (a deny group that is missing
+    matches nobody), which is why RemoveSdGroups does not take it.  Absent is not an error; the exit code is not tested. }
+  if Code = 0 then
+    Exec(ExpandConstant('{sys}\net.exe'), 'localgroup sdsshnokey /delete', '', SW_HIDE, ewWaitUntilTerminated, NetCode);
 
   if Code = 0 then
     MsgBox('The Windows accounts SD Core created were removed; ' + KeepUser +

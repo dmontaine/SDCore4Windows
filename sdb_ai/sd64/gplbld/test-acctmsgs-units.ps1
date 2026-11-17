@@ -117,6 +117,9 @@ foreach ($p in @(@(0,0), @(0,-1), @(-1,-1), @(1,0))) {
     $c = Select-RefusedPassword $p[0] $p[1]
     T ("min $($p[0]) cx $($p[1]) -> the 150-character attempt") 150 $c.Password.Length
     T ("min $($p[0]) cx $($p[1]) -> expects ACCEPTANCE")        'accepted' $c.Expect
+    # 17 Nov 26 - b341: 'Aa1' * 50 had no symbol, SD's pw_complex refused it, and the arm's SKIP
+    # described a password Windows never saw.  It must clear SD's rule to reach Windows at all.
+    T ("min $($p[0]) cx $($p[1]) -> clears all four classes")   $true (Test-AllFourClasses $c.Password)
 }
 
 # --- the seed cannot be overrun ----------------------------------------------

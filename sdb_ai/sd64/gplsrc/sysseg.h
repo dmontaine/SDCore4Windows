@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62): MAX_NETDIRS_LEN 191 (Linux's; what one sd.conf line leaves); a layout change, as APILOCAL's was.
  * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local after api_port (APILOCAL; a layout change, as APIPORT's was).
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): the user table gains the file transfer slot (xfer_dir, xfer_flags,
  *               xfer_files, xfer_opened, xfer_last, xfer_bytes); the layout of the shared memory changes, so a running SD must be restarted after an upgrade.
@@ -47,7 +48,10 @@
    pulls in sysseg.h, and config.h is included AFTER sd.h by every file that
    wants it, so a definition in config.h is not in scope for the struct
    below.  config.h uses this one.                                         */
-#define MAX_NETDIRS_LEN 1023
+/* 17 Nov 26 Windows port - from Linux 1557e270 (S.62): 191, Linux's number.  read_config() reads a line of at most 199 characters, so
+   191 is all "NETDIRS=" leaves; 1023 could never be reached, and a longer line was CUT at 191 (the rest read as a line of its own).
+   A longer value is refused by name now (config.c).  THE SEGMENT LAYOUT CHANGES with it - see the netdirs field below. */
+#define MAX_NETDIRS_LEN 191
 
 /* System shared segment. */
 

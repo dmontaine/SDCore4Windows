@@ -30,7 +30,8 @@ PAIRS = [("CA$ROUTE.SSH", "ssh"), ("CA$ROUTE.API", "api"), ("CA$OS.SH", "sh-on")
          ("CA$SHARED.READ.OFF", "shared-read-off"), ("CA$SHARED.WRITE", "shared-write-on"),
          ("CA$PINS", "pins-on"),   # 28 Oct 26, S.75 (from Linux ec8459b): the person may add programs of their own to their home screen
          ("CA$RECOVERY", "recovery-on"),   # 10 Nov 26 (from Linux 44807a43, S.88 plan 2.9): the editors keep a recovery copy of unsaved text
-         ("CA$XFER", "xfer-on")]   # 15 Nov 26 (from Linux e080527e, S.242 stage 1, RELEASE_1.1 299): file transfer over the ssh login
+         ("CA$XFER", "xfer-on"),   # 15 Nov 26 (from Linux e080527e, S.242 stage 1, RELEASE_1.1 299): file transfer over the ssh login
+         ("CA$SSH.KEY", "ssh-key-on")]   # 17 Nov 26 (from Linux 1557e270, S.62 LC3): a Windows user SD makes keeps key sign-in over ssh
 # 25 Oct 26 Windows port: the list is Linux's, files-admin-on (S.73 item 3) included; the create call passes the type upcased.
 # 15 Nov 26 (RELEASE_1.1 315): the account name on the audit line is as given, as Linux (it was upcased, the port's case before names
 # went lower case; VM sit3's trail said account=ZZWITPU).

@@ -84,7 +84,11 @@ $KnownUnlisted = 0
 # per-account file pointers CREATEA makes - pinned from the first measured run (b213,
 # 21 Sep 2026: 394 listed NEWVOC ids + these 4 = the account's 398).  $null would mean
 # "not measured yet": the run prints them and the row reads SKIP rather than passing on a guess.
-$ExpectedExtras = @('$command.stack', '$hold', '$savedlists', 'bp')
+# 17 Nov 2026 (RELEASE_1.1 335, measured in b341): every new account also gets examples.bp and
+# examples.bp.out - CREATEA runs LOAD.EXAMPLES for it (gpl.bp/createa, the EXAMPLE PROGRAMS block;
+# gpl.bp/loadexamples writes the two VOC pointers); b341 measured 386 NEWVOC ids + these 6 = 392.  The comparison is an
+# exact string match of the sorted set, so any OTHER extra still fails the row.
+$ExpectedExtras = @('$command.stack', '$hold', '$savedlists', 'bp', 'examples.bp', 'examples.bp.out')
 
 $logDir = Join-Path $env:LOCALAPPDATA 'SD-verify'
 if (-not (Test-Path -LiteralPath $logDir)) { $null = New-Item -ItemType Directory -Path $logDir -Force }

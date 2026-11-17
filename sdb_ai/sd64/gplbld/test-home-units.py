@@ -188,7 +188,8 @@ def checks(s):
     sl = slots.group(1).split(",") if slots else []
     ck("H14 modify.account: START-MENU, START-TERMINAL and START-DEFAULT are in the word list between the ai words (23 Oct 26, S.69 step 2) and the pins, and share the slot ST",
        # 13 Nov 26 Windows: AI-ON/AI-OFF are in with RELEASE_1.1 246; no SDSYS-ON/SDSYS-OFF (an OS deviation: SDSYS reaches every account by ACL), so the ai words come straight before.
-       "FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED" in ",".join(w) and len(w) == len(sl)
+       # 17 Nov 26 (Linux 1557e270, S.62 LC3): SSH-KEY-ON / SSH-KEY-OFF come between the ai words and the start words, as Linux.
+       "FILES-ADMIN-OFF,AI-ON,AI-OFF,SSH-KEY-ON,SSH-KEY-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED" in ",".join(w) and len(w) == len(sl)
        and [sl[w.index(x)] for x in ("START-MENU", "START-TERMINAL", "START-DEFAULT")] == ["ST", "ST", "ST"] and [sl[w.index(x)] for x in ("PINS-ON", "PINS-OFF")] == ["PN", "PN"])
     # 13 Nov 26 Windows: H14b and H24d read Core's dispatch, one CASE upcase(action) in the main loop with no RETURN.
     ck("H14b ...do.action has the three cases and start.set writes only field 16, says 12873, audits, and says 12874 when nothing changes",

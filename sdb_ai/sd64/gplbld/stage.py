@@ -818,21 +818,15 @@ ERRLOG=50
 # TO TURN IT OFF, comment the line below out.  Changing it takes effect when
 # SD is next started, not when a session begins.
 APIPORT=4247
-# NETDIRS says which directories OUTSIDE ITS OWN ACCOUNT a session that arrived
-# over the API may reach.  IT IS COMMENTED OUT ON PURPOSE and the empty value is
-# the strict one: with nothing here, an API session can open files in the
-# account it is standing in, and nothing else.
-#
-# 21 Aug 26 Windows port - WHY IT EXISTS.  Until now a session arriving over the
-# API could open any file on the machine, including SDSYS/$cred, the credential
-# store - measured, from a remote client, holding nothing but an ordinary
-# account's password.  Sessions at the keyboard and over ssh are unaffected by
-# this parameter; only API sessions are confined.
+# NETDIRS says which directories OUTSIDE ITS OWN ACCOUNT a session without os-on
+# may still read and write.  IT IS COMMENTED OUT ON PURPOSE and the empty value
+# is the strict one: with nothing here, such a session can open files in the
+# account it is standing in, and nothing else.  The administrator and an account
+# with os-on are not held, so they need nothing here.
 #
 # THE SHIPPED SDSYS FILES A NORMAL ACCOUNT NEEDS ARE ALWAYS REACHABLE and do not
 # have to be listed - the VOC entries every account has (messages, syscom, the
-# dictionaries, sd.voclib) keep working.  $cred, gcat, os.users and the account
-# register are never reachable, and cannot be added here.
+# dictionaries, sd.voclib) keep working.
 #
 # LIST A DIRECTORY HERE ONLY IF YOUR DATA LIVES OUTSIDE AN ACCOUNT - a shared
 # data directory that VOC F-records point at, typically.  Separate several with
@@ -840,8 +834,14 @@ APIPORT=4247
 #
 #     NETDIRS=D:\\shared\\data;E:\\archive
 #
-# A directory named here is reachable by EVERY API session in every account, so
-# it is a decision about the machine and not about one account.
+# AN ENTRY IS IGNORED, and named in the error log when SD starts, when it is not
+# an absolute path, is not an existing directory, is the root of a drive, holds
+# or lies inside the SD system directory, the directory of this file, USRDIR,
+# GRPDIR or any registered account, or comes after the first 16.  The whole
+# value may be at most 191 characters; a longer one stops SD starting, by name.
+#
+# A directory named here is reachable by EVERY such session in every account,
+# so it is a decision about the machine and not about one account.
 #
 # Changing it takes effect when SD is next started, not when a session begins.
 # NETDIRS=

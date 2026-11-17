@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the manifest key ssh.key (1 if the Windows user is NOT in sdsshnokey, i.e. it may sign in over ssh with a
+*           key), USER arm only, after route.ai, so RESTORE.ACCOUNT gives a restored account the key sign-in it had.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3227 to P-3229): a GROUP account's manifest no longer carries os.user and six
 *           route lines of 0, nor an OTHER account's os.user, os.group and routes (Linux has type alone for OTHER); net: comes before
 *           shared.read; int$keys.h is included as on Linux.
@@ -61,7 +63,7 @@
 *    os.execute  the register's ACC$OS.EXEC "yes" -> 1, else 0  } os.users is retired)
 *    acc.name ''  - the system keys: product, host, accounts.root, sd.version.
 *    acc.name set - the account's keys, from its ACCOUNTS record (acc.rec):
-*                   type, os.user, os.group, route.ssh, route.api, route.files, route.files.write, route.files.admin, route.ai, os.sh,
+*                   type, os.user, os.group, route.ssh, route.api, route.files, route.files.write, route.files.admin, route.ai, ssh.key, os.sh,
 *                   os.execute, and for a GROUP account its members.
 *
 * WITH acc.name EMPTY, the system keys: product, host, accounts.root (the
@@ -85,6 +87,7 @@ $include int$keys.h
 
 deffun is_grp_member(user, group) calling '!is_grp_member'
 deffun os_group(action, group, member) calling '!os_group'
+deffun is_group(group) calling '!is_group'
 
    info = ''
    err  = ''
@@ -161,6 +164,19 @@ deffun os_group(action, group, member) calling '!os_group'
 *     13 Nov 26 Windows port - from Linux S.69 step 2 (RELEASE_1.1 246): and sdaiusers, the right to use the AI provider's API; it stands alone; same reading.
       m = is_grp_member(uname, 'sdaiusers')
       if m and status() = 0 then aiuse = 1
+*     17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): key sign-in is NOT being in sdsshnokey.  A machine without the group (an install from before
+*     this release) denies nobody a key, so that reads as 1; a lookup that fails while the group is there is an error, as for sdssh above.
+      sshkey = 1
+      m = is_grp_member(uname, 'sdsshnokey')
+      if status() then
+*        !is_group answers @false (status 1) both for "no such group" and for "could not ask"; only a group it can see makes the failed lookup an error.
+         if is_group('sdsshnokey') then
+            err = 12005 : @vm : acc.name : @vm : 'sdsshnokey'
+            return
+         end
+      end else
+         if m then sshkey = 0
+      end
    end
    if typ = 'USER' then
       info<-1> = 'route.ssh: ' : ssh
@@ -169,6 +185,7 @@ deffun os_group(action, group, member) calling '!os_group'
       info<-1> = 'route.files.write: ' : fwrite
       info<-1> = 'route.files.admin: ' : fadmin
       info<-1> = 'route.ai: ' : aiuse     ;* 13 Nov 26 (Linux S.69 step 2): membership of sdaiusers, the right to use the AI provider's API
+      info<-1> = 'ssh.key: ' : sshkey     ;* 17 Nov 26 (Linux 1557e270, S.62 LC3): key sign-in is NOT being in sdsshnokey
    end
 
    if typ = 'GROUP' then

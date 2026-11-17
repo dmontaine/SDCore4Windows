@@ -43,8 +43,9 @@
 #     NOCASE, so the walk converts only these fixtures.  assert-current guards
 #     that the install matches source; the converted count row would name any
 #     other file the walk converted.
-#   - 17 Nov 26: the fixture-account form has NOT been run yet (written in the
-#     audit's second pass, parse-checked only).
+#   - 17 Nov 26: the fixture-account form has NOT completed a run yet: its first
+#     (suite b341) hung in the build program (see $buildBasic); the step-traced
+#     builder written after it is parse-checked only.
 #
 # RED BEFORE THE FIX, MEASURED 14 Sep 2026 (the owner's second run; the first
 # refused its precondition on this script's own Get-Probe defect).  PREDICTED
@@ -139,9 +140,16 @@ function Invoke-Bounded([string[]]$lines, [bool]$internal, [int]$TimeoutSec = 18
         return [string]("`n*** THE SDSYS SEAT DID NOT RUN: " + $_.Exception.Message)
     }
 }
+# 17 Nov 26 - b341: THE SEAT'S FAILURE LINE WAS FILTERED OUT.  It is one line ("*** THE SDSYS SEAT DID NOT RUN: ... WHAT SD HAD
+# PRINTED WHEN IT WAS STOPPED (last lines): <banner> | ... | :RUN bp zznubuild"), and it carries the banner's "free software", so the
+# banner filter dropped it whole and "--- build (sd -internal) ---" printed NOTHING.  It is now printed in full, one SD line per row.
 function Show([string]$label, [string]$text) {
     Write-Output ("  --- " + $label + " ---")
     foreach ($l in ($text -split "`r?`n")) {
+        if ($l -match '\*\*\* THE SDSYS SEAT DID NOT RUN') {
+            foreach ($part in ($l -split ' \| ')) { Write-Output ("    " + $part) }
+            continue
+        }
         if ($l -match '^\s*:?\s*$|Ladybridge|free software|welcome to modify|conditions\.  For|^SD Core for') { continue }
         Write-Output ("    " + $l)
     }
@@ -155,34 +163,53 @@ function Show([string]$label, [string]$text) {
 # writes for a plain name (F, the name, the name.DIC), so COPY, CREATE.INDEX and DELETE.FILE treat them as before.  A part that
 # cannot be made stops the program with a BUILD line, which the precondition row below then names.
 # 17 Nov 26 - P-3482: four parts go into the fixture account (zznunc made NOCASE, the control), named by the account's own VOC
-# relative to it and by SDSYS's VOC by absolute path; zznusys goes into SDSYS as before; the register record comes last, so a build
-# that stops part way leaves no account for the walk to visit.  @@ACCT@@ is replaced with $acctFwd before the file is written.
+# relative to it and by SDSYS's VOC by absolute path; zznusys goes into SDSYS as before; the register record comes last (since
+# 17 Nov, written by this script after BUILD done), so a build that stops part way leaves no account for the walk to visit.  @@ACCT@@ is replaced with $acctFwd before the file is written.
+# 17 Nov 26 - SUITE b341: THE FIRST RUN OF THIS BUILDER NEVER ENDED.  "RUN bp zznubuild" was SD's last line for 180 s (the seat's
+# task still running, LastTaskResult 267009) and not one BUILD line came back, though crt reaches the seat unbuffered (a console
+# session's output is written straight to fd 1, linuxio.c write_console; verify-twins' "FIX done" from the same door 15 s earlier).
+# So it stopped inside the first seven statements, before the first crt.  Reading them - op_create_dh, create_edit_refusal and
+# edit_os_path_refusal (both return at once for SDSYS), make_path (drive letters handled), dh_create_file, the write gates - found
+# NOTHING THAT ASKS A QUESTION OR READS INPUT, and no wait that reading alone can prove; NOT FOUND, not guessed at.  What changed:
+#   1. A "BUILD step" line BEFORE every statement that touches a file, so a run that hangs again names the statement it is in
+#      (the seat's timeout text carries SD's last lines, and Show now prints them - it used to filter the whole line away).
+#   2. No statement can ask: every CREATE.FILE has ON ERROR, every OPEN/OPENPATH an ELSE, and the program reads nothing.
+#   3. The register record is written by this script after BUILD done, as Linux's sandbox-upgradenocase.py does (reg()), not by
+#      the program through OPENPATH @SDSYS : @DS : 'accounts' (a backslash path joined to '/'); one statement fewer in SD.
 $buildBasic = @'
 * zznubuild - written by verify-nocaseupgrade.ps1.  Safe to delete.
    acct = '@@ACCT@@'
+   crt 'BUILD step open VOC'
    open 'VOC' to v else crt 'BUILD no VOC' ; stop
+   crt 'BUILD step create ' : acct : '/voc'
    create.file acct : '/voc' dynamic on error crt 'BUILD create failed ' : acct : '/voc' ; stop
+   crt 'BUILD step openpath ' : acct : '/voc'
    openpath acct : '/voc' to av else crt 'BUILD cannot open ' : acct : '/voc' ; stop
    names = 'zznuclean' : @fm : 'zznutwin' : @fm : 'zznuak' : @fm : 'zznunc'
    for i = 1 to 4
       n = names<i>
       p = acct : '/' : n
       if n = 'zznunc' then fl = 0 else fl = 4
+      crt 'BUILD step create ' : p : '.DIC flags ' : fl
       create.file p : '.DIC' dynamic flags fl on error crt 'BUILD create failed ' : p : '.DIC' ; stop
+      crt 'BUILD step create ' : p : ' flags ' : fl
       create.file p dynamic flags fl on error crt 'BUILD create failed ' : p ; stop
+      crt 'BUILD step write the account VOC record ' : n
       write 'F' : @fm : n : @fm : n : '.DIC' to av, n
+      crt 'BUILD step write the SDSYS VOC record ' : n
       write 'F' : @fm : p : @fm : p : '.DIC' to v, n
       crt 'BUILD made ' : p
    next i
+   crt 'BUILD step close the account VOC'
    close av
    n = 'zznusys'
+   crt 'BUILD step create ' : n : '.DIC flags 4'
    create.file n : '.DIC' dynamic flags 4 on error crt 'BUILD create failed ' : n : '.DIC' ; stop
+   crt 'BUILD step create ' : n : ' flags 4'
    create.file n dynamic flags 4 on error crt 'BUILD create failed ' : n ; stop
+   crt 'BUILD step write the SDSYS VOC record ' : n
    write 'F' : @fm : n : @fm : n : '.DIC' to v, n
    crt 'BUILD made ' : n
-   openpath @sdsys : @ds : 'accounts' to acc.f else crt 'BUILD cannot open the register' ; stop
-   write acct to acc.f, 'ZZNUACCT'
-   crt 'BUILD registered ZZNUACCT at ' : acct
    crt 'BUILD done'
 end
 '@
@@ -293,7 +320,27 @@ try {
         'COPY FROM VOC TO zznunc who,jack',
         "COPY FROM VOC TO $sysFixture who,jack") $true
     Show 'build (sd -internal)' $mk
+    # 17 Nov 26 - b341: A HANG IS SAID AS A HANG, WITH THE STATEMENT IT WAS IN.  The seat stops a session that does not end within the
+    # bound and returns its failure as text (Invoke-Bounded); the last "BUILD step" line SD printed names the statement.
+    if ($mk -match '\*\*\* THE SDSYS SEAT DID NOT RUN') {
+        $steps = @([regex]::Matches($mk, 'BUILD (?:step|made) [^|\r\n]*') | ForEach-Object { $_.Value.Trim() })
+        Write-Output '  verify-nocaseupgrade: THE BUILD SESSION DID NOT END within 180 s - it was stopped, and nothing was measured.'
+        Write-Output ('  the last BUILD line SD printed: ' + $(if ($steps.Count) { $steps[$steps.Count - 1] } else { '(none - it stopped before the first statement, or in RUN itself)' }))
+        Write-Output '  the statement after that line is the one that did not return; SD''s last lines are printed above.'
+        exit 2
+    }
     if ($mk -notmatch 'BUILD done') { Write-Output '  verify-nocaseupgrade: the build program did not reach "BUILD done" - see its output above'; exit 2 }
+    # The register record, as Linux's sandbox writes it (reg(): a file in the register directory), and only now: a build that
+    # stopped part way leaves no account for the walk to visit.  Field 1 is the account's path, the one field the walk reads.
+    $regRec = Join-Path (Join-Path $sdsys 'accounts') $acctName
+    try {
+        [IO.File]::WriteAllText($regRec, $acctFwd, (New-Object Text.ASCIIEncoding))
+    } catch {
+        Write-Output ('  verify-nocaseupgrade: could not write the register record ' + $regRec + ': ' + $_.Exception.Message); exit 2
+    }
+    $regBack = [IO.File]::ReadAllText($regRec)
+    Write-Output ('  registered ' + $acctName + ' at ' + $regBack + ' (' + $regRec + ')')
+    if ($regBack -cne $acctFwd) { Write-Output '  verify-nocaseupgrade: the register record does not read back as written'; exit 2 }
     [IO.File]::WriteAllText($probeSrc, ($probeBasic -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
     Write-Output ("  wrote " + $probeSrc)
 

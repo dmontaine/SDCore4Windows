@@ -20,6 +20,8 @@
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux (S.69 step 2, 23 Oct 26): CA$AI (41), membership of the Windows group sdaiusers, the AI gate.
 * 15 Nov 26 Windows port - RELEASE_1.1 299, from Linux e080527e (S.242): CA$XFER (45), whether a new user account may move files over the ssh login (RECEIVE / SEND).
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3483, P-3484): CA$NET and CA$FILES before CA$SHARED.READ.OFF, as Linux orders them.
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): CA$SSH.KEY (46), whether a Windows user SD makes for a new user account may sign in over ssh with a key
+*              (off as delivered: it joins the Windows group sdsshnokey).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -96,5 +98,10 @@ $define CA$RECOVERY        44    ;* 1 = the new account starts with ACC$RECOVERY
 * Linux only (14 Nov 26, S.242): 1 = the new USER account starts with ACC$XFER 'yes' (file transfer over the ssh login, RECEIVE / SEND).  Blank or 0 leaves it off.
 *   Refused for a group or other account (15075).
 $define CA$XFER            45    ;* 1 = the new account starts with ACC$XFER 'yes'
+
+* Both ports (17 Nov 26, Linux S.62 LC3; Windows from Linux 1557e270): 1 = an OS user SD makes (or a restore takes over: CA$REUSE.SD.USER) is NOT put in the group
+*   sdsshnokey, so it may sign in over ssh with a key.  Blank or 0: it is put in the group, and is offered no key sign-in (the delivered state).  It never applies to an
+*   attached OS user or to one SD did not make, whose keys are its own; refused for a group or other account (10087, 10081), which has no OS user of its own.
+$define CA$SSH.KEY         46    ;* 1 = an OS user SD makes keeps key sign-in (not in sdsshnokey)
 
 * END-CODE

@@ -3,6 +3,38 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+17 Nov 26  SSH KEY SIGN-IN IS OFF FOR THE ACCOUNTS SD MAKES; NETDIRS IS STRICTER; A FAILED PHANTOM SAYS WHY.
+
+             What        - A Windows user that create.account makes (or that restore.account takes over) can sign
+                           in over ssh with its password but not with a key, unless create.account ... ssh-key-on is
+                           typed or the administrator runs modify.account <account> ssh-key-on (ssh-key-off takes it
+                           away again; "Account X may sign in over ssh with a key: yes|no").  It is the Windows group
+                           sdsshnokey, which the installer makes empty, and an arm SD's block in sshd_config now
+                           ends with ("Match Group sdsshnokey ... PubkeyAuthentication no").  An account whose Windows user SD
+                           did not make (the installing user, an attached one) keeps its own keys and is refused the
+                           two words.  tool.gates has a key column and the holder's own gates page a key row ("own"
+                           for a user SD did not make); a backup records it and a restore gives it back (a backup
+                           from before this release restores it off).  NETDIRS: an entry is ignored, and named in the
+                           error log when SD starts, when it is not an absolute path, not an existing directory, a
+                           drive root, holds or lies inside the SD system directory, sd.conf's directory, USRDIR,
+                           GRPDIR or any registered account, or comes after the first 16; the value may be at most 191
+                           characters, and a longer one stops SD starting, by name (it was cut); a path still holding
+                           "." or ".." is refused; NETDIRS is asked after the account's own directory and the
+                           sd-on gate, and CONFIG('NETDIRS') no longer answers.  LOAD.EXAMPLES run for SDSYS locks
+                           SDSYS's examples.bp and examples.bp.out itself.  A phantom that cannot start writes
+                           "phantom: cannot start a phantom from <path> - <reason>" to the error log and its process
+                           ends (it ran on as a second copy of the session that started it).  CNAME refuses a new name
+                           that differs from the old only in case (it lost the file's VOC entry).  tool.remote and
+                           tool.config say "Reading the settings (a few seconds)...".  Four VOC entries have their
+                           descriptions (backup.account, restore.account, settings.report, tool.jobs).
+             Why         - The owner's decisions of 17 Nov 2026 (key sign-in forbidden as delivered for the accounts
+                           SD makes, a documented loosening for the administrator; NETDIRS as SD Core for Linux built
+                           it), carried from SD Core for Linux 1557e270.
+             Does NOT    - Change any account that exists at an upgrade: the group starts empty and an upgrade puts
+                           nobody in it.  Win if an administrator's own rule read earlier in sshd_config allows keys,
+                           or if the group is missing (then keys are offered as the machine's settings say).
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 17 Nov 26  THE AI LINE'S DOCUMENTATION IS INSTALLED; SDSYS'S EXAMPLE PROGRAMS ARE LOCKED; SET.AI KEY NEVER SENDS AN EMPTY KEY.
 
              What        - The install puts the User and Administrator pages (markdown) into

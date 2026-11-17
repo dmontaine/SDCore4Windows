@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62): CONFIG('NETDIRS') is gone, as Linux offers it not.
  * 15 Nov 26 Windows port - RELEASE_1.1 317: CONFIG('APILOCAL') reads the segment, as APIPORT.
  * 8 Nov 26 Windows port - from Linux 2930d92f (S.87): FILERULE is gone, with the Account:File and PATH:pathname forms of file name; the installer strips the line from a restored sd.conf.
  * 18 Oct 26 Windows port - from Linux 3b43525 (15 Oct 26): TIMEZONE, a private parameter: the zone of the epoch functions (QM4 gaps Q-3, SET.TIMEZONE).
@@ -175,13 +176,9 @@ void op_config() {
     result.data.value = pcfg.maxrlock;
   else if (!strcmp(param, "MUSTLOCK"))
     result.data.value = pcfg.must_lock;
-/* 21 Aug 26 Windows port - NETDIRS.  Read only, and from the SEGMENT rather
-   than from pcfg, for the same reason as APIPORT below: it is a system-wide
-   containment root and a per-process copy would be one the session could be
-   given a different view of.  net_path_permitted() reads the same bytes, so
-   what this prints is what is actually enforced.                          */
-  else if (!strcmp(param, "NETDIRS"))
-    k_put_c_string((char*)(sysseg->netdirs), &result);
+/* 17 Nov 26 Windows port - from Linux 1557e270 (S.62): NETDIRS is no longer offered to CONFIG(), as Linux's is not ("Not offered to
+   CONFIG(), not changed by set.config"): a list of the directories outside the accounts that sessions may reach is the administrator's,
+   read in sd.conf.  It was read here from the segment since 21 Aug 26; nothing in SD asked it.                                      */
   else if (!strcmp(param, "NETFILES"))
     result.data.value = sysseg->netfiles;
   else if (!strcmp(param, "NETWAIT"))

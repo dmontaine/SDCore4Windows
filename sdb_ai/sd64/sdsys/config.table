@@ -45,7 +45,7 @@ MAXCALL|int|10000|10|1000000|session|live|The deepest nesting of subroutine call
 MAXIDLEN|int|63|63|255|restart|live|The longest record id. 63 is also the lowest value allowed.|no|Structural: the longest record id of the whole system, which reaches every file and program.
 MAXRLOCK|int|0|0|100000|session|live|How many record locks one process may hold; 0 sets no limit.|yes|
 MUSTLOCK|flag|0|||session|live|1 makes a write or delete fail unless the record is locked first.|no|Makes a write fail unless the record is locked first, which can stop programs that exist.
-NETDIRS|text||||restart|live|Directories outside its own account, separated by semicolons, that a session held to its own account may reach; empty confines it to its account.|no|A door: it widens what a session held to its own account may reach beyond it.
+NETDIRS|text||||restart|live|Directories outside its own account, separated by semicolons, that a session without os-on may still read and write; empty keeps it to its account. Not readable with the CONFIG function.|no|A door: it widens what an account without os-on may reach beyond its own directory.
 NETFILES|bits|0|||restart|live|Bit 2 gates one old API request (number 29); SDNet does not read it. Leave it at 0.|no|A door: bit 2 gates API request 29, a remote open of an account.
 NETREPLY|int|30|1|3600|session|live|Seconds to wait for each reply from another SD server once connected; a slower server is treated as lost.|yes|
 NETWAIT|int|5|1|3600|session|live|Seconds to wait for a connection to another SD server, for the TCP connect and again for the TLS handshake. 0 is refused.|yes|

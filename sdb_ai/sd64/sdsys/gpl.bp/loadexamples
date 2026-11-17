@@ -4,6 +4,9 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - Linux 1557e270's reply ("close it in the verb"): when it runs for SDSYS, its examples.bp and examples.bp.out are given bp.out's
+*               rights (SYSTEM and Administrators full, sdusers read; secure-sysdirs.ps1's directory grants) through !ps_script (lock.sdsys); they inherited
+*               sdsys's sdusers Modify.  A failure is said with 10055.
 * 16 Nov 26 Windows port - from Linux 657da3de (S.261) and cc7e41c6: new.  NO LOGTO: each account's examples.bp is reached by the pathname the register holds,
 *               as LOAD.HELP reaches the shared account (RELEASE_1.1 187), because on this port LOGTO out of SDSYS gives up the administrator right and an
 *               installer's internal session cannot LOGTO back (RELEASE_1.1 310 lets only a desktop SDSYS sign-in do that).  The compile is given two
@@ -48,6 +51,8 @@ $catalog $loadexamples
 $include int$keys.h
 $include keys.h
 $include err.h
+
+deffun ps_script(script) calling '!ps_script'
 
    @system.return.code = -ER$ARGS
    if not(kernel(K$ADMINISTRATOR, -1)) then
@@ -223,6 +228,33 @@ do.account:
       end
    next p
    gosub drop.pointers
+   if acct = 'sdsys' then gosub lock.sdsys
+   return
+
+* ------------------------------------------------------------------------------------------------- SDSYS's own two files, closed in the verb
+
+* 17 Nov 26 Windows port - Linux 1557e270 asked it closed in the verb ("close it in the verb").  SDSYS's examples.bp and examples.bp.out are in sdsys, SDSYS's
+*  account directory, so a file this verb makes there inherits the folder's inherit-only sdusers Modify (found on the fresh install of 17 Nov, icacls), where
+*  bp.out beside them reads sdusers (RX).  Each time it runs for SDSYS both are given bp.out's rights - SYSTEM and Administrators full, sdusers read - with the
+*  grants secure-sysdirs.ps1 gives a directory (sd.iss LockSdsysExamples, after the installer's LOAD.EXAMPLES, does the same through that script), through
+*  !ps_script like create_account's secure.account.dir, so an unelevated SDSYS session does it through its elevated helper.  SDSYS's own later runs keep
+*  their write through Administrators.  A failure is named (10055) and counted; the programs stay loaded.  Single-quoted paths: PowerShell does not expand them.
+lock.sdsys:
+   q = char(39)
+   for li = 1 to 2
+      lp = convert('/', bs, (if li = 1 then x.path else o.path))
+      ls.ps = 'if (-not (New-Object Security.Principal.WindowsPrincipal('
+      ls.ps := '[Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole('
+      ls.ps := '[Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 5 }; '
+      ls.ps := '& icacls.exe ' : q : change(lp, q, q:q) : q : ' /inheritance:r'
+      ls.ps := ' /grant "*S-1-5-18:(OI)(CI)(F)" /grant "*S-1-5-32-544:(OI)(CI)(F)" /grant "sdusers:(OI)(CI)(RX)" | Out-Null; '
+      ls.ps := 'exit $LASTEXITCODE'
+      ls.rc = ps_script(ls.ps)
+      if ls.rc # 0 then
+         display sysmsg(10055, lp, ls.rc)                        ;* Could not secure account directory %1 (%2)
+         n.bad += 1
+      end
+   next li
    return
 
 * ------------------------------------------------------------------------------------------------- the account's directory, from its register record

@@ -238,6 +238,8 @@ function Wait-SdRunning {
 # The words, in the order modify.account carries them out.  test-install-opengates-units.py holds this list to modifya's on-words.
 # 16 Nov 26 - from Linux db29dcc7 (owner's "Every gate"): xfer-on (ACC$XFER, field 22, file transfer over the ssh login) joins the list, last as
 #   on Linux.  The system's own switch, XFER=1 in sd.conf, stays off, so the account's switch alone moves nothing.
+# 17 Nov 26 - from Linux 1557e270 (S.62 LC3): ssh-key-on is NOT in the list, because it does not apply to this user: the installing user is ATTACHED, not
+#   made by SD, so it is never put in sdsshnokey and keeps the keys it set up outside SD; modify.account refuses ssh-key-on for it (15170).
 $GateWords = @('both', 'sh-on', 'os-on', 'sd-on', 'voc-on', 'bp-on', 'dict-on', 'recovery-on', 'net-on', 'shared-write-on', 'files-on', 'files-write-on', 'files-admin-on', 'ai-on', 'pins-on', 'xfer-on')
 
 # Register field (keys.h ACC$..., one line each in the record) -> the word that sets it.

@@ -1,0 +1,1 @@
+%1: its Windows user %2 was not made by SD, so its ssh keys are its own and ssh-key-on and ssh-key-off do not apply to it; nothing was changed

@@ -66,7 +66,7 @@ def checks(raw):
     built = [r for r in rows if len(r) == len(FIELDS) and r[14] == "built"]
     planned = [r for r in rows if len(r) == len(FIELDS) and r[14] == "planned"]
     add("G2", "a built gate has both words, a kind, a slot and two sentences; a planned gate has no word, no field, no group and no key (it shows as not yet built)",
-        all(r[2] and r[3] and r[4] in ("register", "group", "start", "record") and r[10] and r[11] and r[12] for r in built) and all(not (r[2] or r[3] or r[5] or r[6] or r[7]) for r in planned),
+        all(r[2] and r[3] and r[4] in ("register", "group", "start", "record", "nokey") and r[10] and r[11] and r[12] for r in built) and all(not (r[2] or r[3] or r[5] or r[6] or r[7]) for r in planned),
         [r[0] for r in built if not (r[2] and r[3] and r[10])])
 
     hdr = re.search(r"^\* id\|(\S+)$", raw["info"], re.M)
@@ -115,7 +115,15 @@ def checks(raw):
         and (st[0][2], st[0][3], st[0][10]) == ("start-menu", "start-terminal", "ST")
         and "case gi<TK.G.KIND> = 'start'" in raw["gates"] and "call $tk_startof(rec<ACC$START>, state)" in raw["gates"], [r[0] for r in st])
     add("G11", "a gate that reaches beyond SD is marked as one wherever the operating system, the network or another server is reached: sh os sd net ssh api files files-write files-admin sockets xfer (file transfer, S.242: it opens a door from the network into the account's folders)",
-        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "ai", "sockets", "xfer"}, sorted(r[0] for r in rows if r[13] == "1"))
+        {r[0] for r in rows if r[13] == "1"} == {"sh", "os", "sd", "net", "ssh", "api", "files", "files-write", "files-admin", "ai", "sockets", "xfer", "ssh-key"}, sorted(r[0] for r in rows if r[13] == "1"))
+    # 17 Nov 26 (from Linux 1557e270, S.62 LC3): the key sign-in gate, kind 'nokey'
+    nk = [r for r in built if r[4] == "nokey"]
+    add("G16", "S.62 LC3: the one 'nokey' gate is ssh-key: the group sdsshnokey (modifya names it, the installer makes it), no field and no kernel key, words ssh-key-on / ssh-key-off in "
+        "slot KY, off as delivered; $tk_gates reads it the other way round (ON when NOT a member) and only for a USER account whose Windows user has SD's description, 'na' otherwise",
+        [r[0] for r in nk] == ["ssh-key"] and nk[0][6] == "sdsshnokey" and nk[0][5] == "" and nk[0][7] == "" and (nk[0][2], nk[0][3], nk[0][10], nk[0][9]) == ("ssh-key-on", "ssh-key-off", "KY", "off")
+        and "'sdsshnokey'" in raw["modifya"] and "localgroup sdsshnokey /add" in raw["installer"]
+        and re.search(r"case gi<TK\.G\.KIND> = 'nokey'[^\n]*\n\s*state = 'na'\s*\n\s*if atype = 'USER' then\s*\n\s*k\.made = is_sd_user\(user\)\s*\n\s*if status\(\) = 0 and k\.made then state = "
+                      r"\(if is_grp_member\(user, gi<TK\.G\.GROUP>\) then 0 else 1\)", raw["gates"]) is not None, [r[0] for r in nk])
     rc = [r for r in built if r[4] == "record"]
     add("G15", "S.242 stage 6: the one 'record' gate is xfer: its field is ACC$XFER (defined in keys.h), it has no group and no kernel key (the transfer server reads the register at each connection), "
         "its words are xfer-on / xfer-off in slot XF, it is off as delivered, and $tk_gates reads exactly that field, yes or no",
@@ -161,6 +169,10 @@ MUT = [
     ("info", "the file transfer gate holds a kernel key", "|record|ACC$XFER|||next connection|", "|record|ACC$XFER||K$SH|next connection|"),
     ("gates", "the file transfer gate reads another field", "state = (if upcase(trim(rec<ACC$XFER>)) = 'YES'", "state = (if upcase(trim(rec<ACC$SH>)) = 'YES'"),
     ("gates", "the file transfer gate is on unless it says no", "state = (if upcase(trim(rec<ACC$XFER>)) = 'YES' then 1 else 0)", "state = (if upcase(trim(rec<ACC$XFER>)) # 'NO' then 1 else 0)"),
+    ("gates", "the key gate is read the right way round", "then state = (if is_grp_member(user, gi<TK.G.GROUP>) then 0 else 1)", "then state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)"),
+    ("gates", "the key gate is shown for a user SD did not make", "if status() = 0 and k.made then state =", "if status() = 0 then state ="),
+    ("info", "the key gate is on by delivery", "|next ssh connection|off|KY|", "|next ssh connection|on|KY|"),
+    ("info", "the key gate is not marked as reaching beyond SD", "when the ssh gate is on|1|built", "when the ssh gate is on|0|built"),
     ("tkh", "a TK.G number is out of order", "$define TK.G.TITLE     2", "$define TK.G.TITLE     3"),
 ]
 

@@ -202,7 +202,9 @@ def checks(srcs, messages_dir):
     d2 = c["op_dio2.c"]
     pw = d2[at(d2, "Private bool path_within(char* cand, char* root) {"):]
     pw = pw[:pw.find("\n}") + 2]
-    app = d2[at(d2, "bool account_path_permitted(char* path,"):]
+    # 17 Nov 26 (Linux 1557e270, S.62): the containment comparison is account_path_own(); account_path_permitted() is it, then NETDIRS LAST
+    # (test-netdirs-units.py holds NETDIRS).
+    app = d2[at(d2, "bool account_path_own(char* path,"):]
     app = app[:app.find("\n}") + 2]
     okfa = sh[at(sh, "bool os_path_ok_for_account(const char *name) {"):]
     okfa = okfa[:okfa.find("\n}") + 2]
@@ -214,11 +216,11 @@ def checks(srcs, messages_dir):
        0 < hp < at(app, "path_within(") and re.search(r"if \(has_parent_ref\(cand\)\)\s*return FALSE;", app))
     # Linux C6's second half (an account rooted at "/" is refused, Linux op_sh.c:283) is held at C14d below, in os_path_inside() (13 Nov 26).
     # account_path_permitted() (the session's own account) still has no such test: path_within() keeps a "/" root (op_dio2.c:1985).
-    ck("C7 os_path_ok_for_account: the gate opens everything, otherwise containment, then (16 Oct 26) the SD.ACCOUNTS gate",
-       re.search(r"if \(os_gate_open\(\)\)\s*return TRUE;.*?if \(account_path_permitted\(resolved, TRUE\)\)\s*return TRUE;.*?"
-                 r"return MY_PRIV\(USR_SD_ACCOUNTS\) && path_in_enterable_account\(resolved\);", okfa, re.S))
+    ck("C7 os_path_ok_for_account: the gate opens everything, otherwise containment, then (16 Oct 26) the SD.ACCOUNTS gate, then (17 Nov 26) NETDIRS last",
+       re.search(r"if \(os_gate_open\(\)\)\s*return TRUE;.*?if \(account_path_own\(resolved, TRUE\)\)\s*return TRUE;.*?"
+                 r"if \(MY_PRIV\(USR_SD_ACCOUNTS\) && path_in_enterable_account\(resolved\)\)\s*return TRUE;.*?path_in_netdirs\(cand\);", okfa, re.S))
     pea = at(d2, "bool path_in_enterable_account(char* resolved)")
-    pea_end = at(d2, "bool account_path_permitted(", pea)
+    pea_end = at(d2, "bool account_path_own(", pea)
     pea_body = d2[pea:pea_end] if pea > 0 and pea_end > pea else ""
     # 13 Nov 26 Windows port: group membership is a live SAM query (win32_group_has_member), not Linux's user_in_group()
     ck("C7a SD.ACCOUNTS: an account counts only if the user is in its register group and it is not suspended",
@@ -679,7 +681,7 @@ MUTANTS = [
     ("containment compares prefixes without a component boundary", sub("op_dio2.c", "return ((cand[root_len] == '" + chr(92) + "0') || (cand[root_len] == '/'));", "return 1;")),
     ("containment no longer resolves the name (links, relative names)", sub("op_sh.c", "if (!fullpath(resolved, (char *)name))", "if (!strcpy(resolved, name))")),
     ("containment no longer folds the candidate into the account's namespace", sub("op_dio2.c", "  if (!net_normalise(path, cand))\n    return FALSE;\n", "  strcpy(cand, path);\n")),
-    ("an unresolved .. is allowed", sub_after("op_dio2.c", "bool account_path_permitted(char* path,", "if (has_parent_ref(cand))", "if (0)")),
+    ("an unresolved .. is allowed", sub_after("op_dio2.c", "bool account_path_own(char* path,", "if (has_parent_ref(cand))", "if (0)")),      # 17 Nov 26: the comparison moved to account_path_own (Linux 1557e270)
     ("OPENSEQ hook moved below the port test", lambda srcs: _move_seq_hook(srcs)),
     ("OPENPATH hook removed", sub("op_dio1.c", "if (!net_may_write && !(map_name ? net_vocpath_permitted(pathname, FALSE) : net_path_permitted(pathname, FALSE))) {", "if (0) {")),
     ("OPENPATH asks only the network sessions' question", sub("op_dio1.c", "net_may_write = map_name ? net_vocpath_permitted(pathname, TRUE) : net_path_permitted(pathname, TRUE);", "net_may_write = net_vocpath_permitted(pathname, TRUE);")),

@@ -18,6 +18,11 @@
 * 
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - THREE ANSWERS, as its callers already read it: a group Windows says does not exist is @false with status
+*           0, and only a lookup that could not be made is status 1.  Both were status 1, so create_account check.files.group, modifya
+*           (files, ai, route and key groups) and set.ai reported a missing group as 10081 "unable to change ... status 1" where they
+*           meant 10024 "not a valid Windows group" (found by the audit's second pass).  The caller's fail-closed result is unchanged:
+*           @false either way.
 * 14 Aug 26 Windows port - ask Windows instead of reading /etc/group, which
 *           does not exist on the MSYS2 runtime.  See the description.
 * rev 0.9.0 Jan 25 mab initial commit
@@ -73,18 +78,23 @@ if not(valid_os_name(group)) then
 end
 
 * 14 Aug 26 Windows port - SH1 names PowerShell, so the command IS the script.
-   ps = 'if (Get-LocalGroup -Name "' : group
-   ps := '" -ErrorAction SilentlyContinue) { exit 0 }; exit 1'
+*  17 Nov 26: exit 0 found, 3 Windows says there is no such group (GroupNotFoundException), anything else could not tell.
+*  3 rather than 1 so that PowerShell failing to start or to parse (which exits 1) is never read as "no such group".
+   ps = 'try { if (Get-LocalGroup -Name "' : group
+   ps := '" -ErrorAction Stop) { exit 0 } } catch [Microsoft.PowerShell.Commands.GroupNotFoundException] { exit 3 } catch { exit 2 }; exit 2'
 
    os.execute ps
 
-   if os.error() = 0 then
-      group_found = @true
-   end else
-      * No such group, or PowerShell could not be run.  Reported the same way:
-      * a caller that cannot confirm a group exists should not act on it.
-      set.status 1
-   end
+   gf.rc = os.error()
+   begin case
+      case gf.rc = 0
+         group_found = @true
+      case gf.rc = 3
+         null      ;* no such group: @false, status 0
+      case 1
+         * PowerShell could not be run, or the lookup failed: the caller cannot confirm the group and must not act on it.
+         set.status 1
+   end case
 
 return group_found
 end

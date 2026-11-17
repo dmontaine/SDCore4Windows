@@ -7,6 +7,10 @@
 #
 # Exit 0 done (or nothing to do), 1 failed, 2 refused - see "WHEN IT REFUSES".
 #
+# 17 Nov 26 - from Linux 1557e270 (S.62 LC3): the block ends with a key arm,
+# "Match Group sdsshnokey ... / PubkeyAuthentication no" - see "KEY SIGN-IN"
+# above Get-KeyArm.
+#
 # 27 Aug 26 - -Installed ADDED TO THE FIRST LINE ABOVE, WHICH HAD BEEN WRONG
 # since the 21 Aug change of what that switch asserts.  The bare form documented
 # here writes nothing: the test at the foot of this file exits 2 without it.
@@ -315,23 +319,59 @@ function Remove-OurBlock([string[]]$lines) {
 # scp and sftp stop working for everyone as a consequence - the command is
 # forced, so there is no subsystem left to run.  That follows from the
 # decision; it is not a side effect that was missed.
+#
+# 17 Nov 26 - KEY SIGN-IN, from Linux 1557e270 (S.62 LC3; the owner's decision
+# of 17 Nov 2026: key sign-in over ssh is off as delivered for the accounts SD
+# makes, and the administrator turns it on per account with modify.account
+# <name> ssh-key-on).  Membership of the Windows group sdsshnokey means "this
+# Windows user may NOT sign in with a key"; the arm sets PubkeyAuthentication no
+# and nothing else, so a member still signs in with its password and every other
+# setting comes from where it came before.  create.account puts a Windows user
+# it MAKES in the group (an attached user - the installing user - never), and
+# the installer makes the group EMPTY, so an upgrade changes nobody.
+#
+# A GROUP OF ITS OWN, NOT sdsshonly: sdsshonly carries the deny-logon rights
+# (deny-logon.ps1) that no verb may lift, and ssh-key-on has to take an account
+# out of this group.  A DENY GROUP, unlike sdssh: an allow group for keys would
+# take keys away from every attached user too.  The price is the deny group's:
+# if the group is missing or cannot be read, sshd matches nobody and keys are
+# offered as the machine's own settings say.
+#
+# WHERE IT GOES: the last lines of SD's block, so it is the FIRST Match block of
+# the file (SD's block is written before the first Match) - Linux puts it right
+# after its sdsys arm and before the sdusers arms; here the SDRADMIN arm
+# (remote-admin.ps1) is written LAST, after every Match, and is named out of
+# this one.  sshd keeps the first value of a keyword; no other arm SD writes sets
+# PubkeyAuthentication for anybody but SDRADMIN, and the stock "Match Group
+# administrators" arm sets only AuthorizedKeysFile, so the arm decides the
+# keyword for its members and nothing changes for anybody else.  WHAT IT CANNOT
+# WIN AGAINST: an administrator's own Match block read earlier that sets
+# PubkeyAuthentication yes for the same user - that is the administrator's policy.
+# Both spellings of the group, as AllowGroups and remote-admin.ps1's Match line
+# give theirs: Win32-OpenSSH may hand a local name over as "name" or "host\name".
+function Get-KeyArm {
+    $h = ([string]$env:COMPUTERNAME).ToLowerInvariant()
+    return @(('Match Group sdsshnokey,' + $h + '\sdsshnokey User *,!sdsys,!' + $h + '\sdsys,!sdradmin,!' + $h + '\sdradmin'),
+             '    PubkeyAuthentication no')
+}
+
 function Add-OurBlock([string[]]$lines, [string[]]$patterns, [string]$sdexe = '') {
     # 18 Sep 26 - DisableForwarding IN BOTH ARMS.  It does not depend on whether
     # SdExe resolved: a build that could not find sd.exe still must not leave
     # port forwarding open, and putting it in one arm only is how the two arms
     # drift.  See the header for why it is here at all.
+    # 17 Nov 26 - from Linux 1557e270 (S.62 LC3): and the key arm LAST in the
+    # block, in both arms, for the same reason (see "KEY SIGN-IN" above Get-KeyArm).
     if ($sdexe) {
         $block = @($begin,
                    ('AllowGroups ' + ($patterns -join ' ')),
                    ('ForceCommand "' + $sdexe + '"'),
-                   'DisableForwarding yes',
-                   $end)
+                   'DisableForwarding yes') + @(Get-KeyArm) + @($end)
     }
     else {
         $block = @($begin,
                    ('AllowGroups ' + ($patterns -join ' ')),
-                   'DisableForwarding yes',
-                   $end)
+                   'DisableForwarding yes') + @(Get-KeyArm) + @($end)
     }
     $at = -1
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -352,6 +392,7 @@ try {
         # inspected without elevation, and the group names are the half that
         # can be wrong.
         Write-Output ("allow-ssh-groups: would write:  AllowGroups " + ($patterns -join ' '))
+        Write-Output ("allow-ssh-groups: and the key arm:  " + ((Get-KeyArm) -join ' / '))
         Write-Output ("allow-ssh-groups: administrators group resolves to '" + (Get-LocalGroup -SID 'S-1-5-32-544').Name + "' on this machine")
         Write-Output ("allow-ssh-groups: target " + $cfg)
         exit 0
@@ -420,6 +461,7 @@ try {
 
     Restart-Service sshd
     Write-Log ("allow-ssh-groups: wrote  AllowGroups " + ($patterns -join ' '))
+    Write-Log ("allow-ssh-groups: and    " + ((Get-KeyArm) -join ' / ') + "  (members of sdsshnokey are offered no key sign-in)")
     Write-Log ("allow-ssh-groups: original kept at " + $backup)
     Write-Log ("allow-ssh-groups: sshd is " + (Get-Service sshd).Status)
     exit 0

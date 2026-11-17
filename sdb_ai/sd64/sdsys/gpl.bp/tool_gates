@@ -25,6 +25,10 @@
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
 *              '/' finds an account on show by typing ($tk_findrow; the owner: "Letters stay, '/' finds").
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the key sign-in gate (ssh-key, heading key) is a column: ON when the account's Windows user may sign in over
+*              ssh with a key, '-' for a group or other account and for a user account whose Windows user SD did not make (its keys are its own; the cell and the refusal
+*              say so).  It reaches beyond SD, so turning it ON asks for the account's name.  Nineteen cells: the name column is 10 wide (the cell box has it whole) and
+*              the suspension mark is 'susp' with no space before it (the last cell is padded), so the row still fits the 134 columns.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -208,6 +212,8 @@ header.of:
          hd = 'f-adm'
       case gid = 'sockets'
          hd = 'sock'
+      case gid = 'ssh-key'
+         hd = 'key'
       case 1
          hd = gid[1, 5]
    end case
@@ -343,7 +349,7 @@ get.rects:
    VIS = mat.h - 5                                               ;* the heading, the account rows, the two lines of counts and the border: 14 rows of 19
    CL = cel.h - 2                                                ;* the lines about the cell: 9 rows of 11
    RW = rea.h - 2                                                ;* the rows of each list under the cell: 7 of 9 (the last of them holds the "..." of the first list)
-   X0 = mat.x + 23                                               ;* the column of the first cell (2 inside the box + the 21 of name and kind)
+   X0 = mat.x + 18                                               ;* the column of the first cell (2 inside the box + the 16 of name and kind; 17 Nov 26, Linux S.62 LC3: the name is 10 wide for nineteen cells)
    return
 
 * After a resize the rows scrolled off the top are not more than the accounts shown less the rows that fit
@@ -367,7 +373,7 @@ draw.all:
    return
 
 draw.matrix:
-   s = fmt('Account', '15L') : fmt('Kind', '6L')
+   s = fmt('Account', '10L') : fmt('Kind', '6L')
    for k = 1 to NG
       s := fmt(ghdr<k>, CW : 'L')
    next k
@@ -380,12 +386,12 @@ draw.matrix:
       s = ''
       if kk <= nv then
          av = view<kk>
-         s = fmt(anm<av>, '15L') : fmt(downcase(aty<av>), '6L')           ;* S.242: eighteen cells leave room for 15 letters of a name (the cell box below has it whole)
+         s = fmt(anm<av>, '10L') : fmt(downcase(aty<av>), '6L')           ;* 17 Nov 26 (Linux S.62 LC3): nineteen cells leave room for 10 letters of a name (the cell box below has it whole)
          for k = 1 to NG
             gosub cell.text
             s := fmt(ct, CW : 'L')
          next k
-         if asu<av> then s := ' susp'                    ;* S.166: the cells leave five columns (S.242: eighteen of them, after the name was cut to 15 letters; the cell box below says "suspended" in full)
+         if asu<av> then s := 'susp'                     ;* 17 Nov 26 (Linux S.62 LC3): no space before it, the last cell is padded to 6;  S.166: the cells leave five columns (S.242: eighteen of them, after the name was cut to 15 letters; the cell box below says "suspended" in full)
       end
       screen text s at mat.x + 2,mat.y + 1 + r attr (if kk = ci and kk <= nv then 'bold' else 'normal') width mtw
    next r
@@ -454,6 +460,8 @@ draw.cell:
       begin case
          case gstat<k> # 'built'
             lines<-1> = 'This gate is planned and not built yet: it has no words and nothing to switch.'
+         case s0 = 'na' and gids<k> = 'ssh-key' and aty<av> = 'USER'           ;* 17 Nov 26 (Linux S.62 LC3)
+            lines<-1> = 'The Windows user of this account was not made by SD, so the ssh keys it set up outside SD are its own: modify.account refuses ' : gon<k> : ' and ' : goff<k> : ' for it, and its key sign-in is what the machine allows.'
          case s0 = 'na'
             lines<-1> = 'This gate does not apply to a ' : downcase(aty<av>) : ' account: it is a route for a person, and the account has no Windows user of its own.'
          case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer
@@ -464,6 +472,7 @@ draw.cell:
             lines<-1> = 'OFF still allows: ' : gstill<k>
             lines<-1> = 'A change reaches the person: ' : gwhen<k> : '.  It does not touch a session that is already running.' : (if gbey<k> = 1 then '  This gate reaches BEYOND SD.' else '')
             if gids<k> = 'ssh' or gids<k> = 'api' then lines<-1> = 'ssh and api are ONE setting in modify.account (the words ssh, api, both and none set it): the page sends the one word that gives the pair you queue.'
+            if gids<k> = 'ssh-key' then lines<-1> = 'ssh-key is the Windows group sdsshnokey read the other way round: a member is offered no key sign-in.  create.account puts every Windows user it makes in it; an account made before this release is not in it.'
             if gids<k> = 'xfer' then lines<-1> = 'xfer also needs the system switch XFER (sd.conf, off as delivered), the ssh gate and a free transfer slot; the server reads this gate at each connection.'
             if gids<k> = 'files-write' then lines<-1> = 'files-write needs files; files-off takes it away too.'
             if gids<k> = 'files-admin' then lines<-1> = 'files-admin needs files-write; files-write-off and files-off take it away too.'
@@ -689,6 +698,8 @@ cell.why:
    begin case
       case gstat<k> # 'built'
          why = gti<k> : ' is planned and not built yet'
+      case ast<av, k> = 'na' and gids<k> = 'ssh-key' and aty<av> = 'USER'      ;* 17 Nov 26 (Linux S.62 LC3): a Windows user SD did not make keeps its own keys
+         why = 'the Windows user of ' : anm<av> : ' was not made by SD, so its ssh keys are its own and modify.account refuses ' : gids<k> : ' for it'
       case ast<av, k> = 'na'
          why = gti<k> : ' does not apply to a ' : downcase(aty<av>) : ' account'
       case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer

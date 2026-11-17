@@ -10,7 +10,7 @@ on this port:
   T1  sdsys/config.table names exactly the parameters gplsrc/config.c accepts in [sd] (STARTUP is refused by name here);
   T2  every range in the table is config.c's rangecheck, and every write=yes row is range-checked;
   T3  every default the table states for a number is the value config.c sets before it reads the file;
-  T4  every parameter but BACKUPDIR and SDSYS is readable with CONFIG() (op_config.c), and the buffer takes the longest name;
+  T4  every parameter but BACKUPDIR, NETDIRS (17 Nov 26, as Linux 1557e270) and SDSYS is readable with CONFIG() (op_config.c), and the buffer takes the longest name;
   T5  the page reads the table and the file the kernel read (K$INIPATH), runs only set.config, and writes one audit line;
   T6  the verb: administrator only, its messages 12936-12942 exist, it runs sd-confset.ps1 through !ps_script_out, anchors on the
       helper's own success line, and audits once on both paths;
@@ -42,7 +42,7 @@ FILES = {
 HEADERS = ["gplsrc/config.h", "gplsrc/dh.h", "gplsrc/sddefs.h", "gplsrc/sysseg.h"]
 MSGS = list(range(12936, 12943))
 REFUSED = {"STARTUP"}
-UNREADABLE = {"BACKUPDIR", "SDSYS"}
+UNREADABLE = {"BACKUPDIR", "SDSYS", "NETDIRS"}   # 17 Nov 26 (Linux 1557e270, S.62): NETDIRS is not offered to CONFIG(), as on Linux
 
 
 def read(rel):
@@ -171,7 +171,7 @@ def run(raw, quiet=False):
     missing = sorted(set(tk) - set(rd) - UNREADABLE)
     longest = max(len(k) for k in tk)
     m = re.search(r"char param\[(\d+) \+ 1\];[^\n]*\n(?:.*\n){0,40}?.*k_get_c_string\(descr, param, (\d+)\) < 1", raw["opconfig"])
-    ck("T4", "every parameter but BACKUPDIR and SDSYS is readable with CONFIG(), whose buffer takes %d characters" % longest,
+    ck("T4", "every parameter but BACKUPDIR, NETDIRS and SDSYS is readable with CONFIG(), whose buffer takes %d characters" % longest,
        not missing and not (UNREADABLE & set(rd)) and m and int(m.group(1)) >= longest and int(m.group(2)) >= longest, (missing, m and m.groups()))
 
     pg = strip_bas(raw["page"])

@@ -64,6 +64,7 @@ ALLOWED = {
     ('11609', '12614'): 'OS: SET.AI CA takes a Windows path, written C:/... (a set.ai word cannot hold a backslash) (RELEASE_1.1 246)',
     ('11983', '12988'): 'OS: Windows has no sdsys group; SDSYS reaches every account by ACL, and the upgrade updates every account (CLAUDE.md, S.103)',
     ('11930', '12935'): 'OS: a Windows file\'s rights are its access list, not chmod modes; the cure names the principals win32gcat.c judges (RELEASE_1.1 249)',
+    ('11979', '10087'): 'OS: Windows has no sdsys-on / sdsys-off (no sdsys group; SDSYS reaches every account by ACL, S.103), so in modifya the 10087 of set.sshkey (Linux 1557e270) stands where Linux\'s set.sdsys says 11979',
 }
 
 MSG = re.compile(r'\b1[0-5]\d{3}\b')

@@ -3,7 +3,8 @@
 
     python3 /home/don/Projects/SDCore4Linux/sdb_ai/sd64/gplbld/test-toolgates-units.py [--selftest [--from=N]]
 
-TG18-TG20 (2 Nov 26, S.88 p5-U2b P10): Ctrl-Q asks before it drops a queue; the first of their mutants is M_P10 (37), so --selftest --from=37 runs only those.
+TG18-TG20 (2 Nov 26, S.88 p5-U2b P10): Ctrl-Q asks before it drops a queue; the first of their mutants is M_P10 (39 since S.62 LC3 added two before it), so --selftest --from=39 runs only those.
+TG21 (17 Nov 26, from Linux 1557e270, S.62 LC3): the key sign-in column; TG15 holds the new layout (name 10 wide, 'susp' with no space before it) for nineteen cells.
 
 WHAT THIS IS, AND WHAT IT IS NOT.  It reads the page's BASIC as text, with comments removed.  ***IT RUNS NOTHING, SO IT CANNOT SAY THAT A CELL CHANGES OR THAT THE VERB ACCEPTS WHAT THE PAGE
 SENDS***: that is `sandbox-tool-gates.py` (a private SD, the real modify.account, the disk as the evidence).  What a text check is for: the properties that make the page a FRONT END and
@@ -119,9 +120,16 @@ def checks(raw):
         m = re.search(r"case gid = '%s'\s*\n\s*hd = '([^']*)'" % re.escape(gid), pg)
         heads[gid] = m.group(1) if m else gid[:5]
     n = len(info_rows)
-    ck("TG15", "the layout fits: the first cell is at column 3 + 15 + 6 (S.242: the name was 20 wide until eighteen cells needed the room), the cells are 6 wide, every gate of the table has a heading of at most 5 characters "
-       "and the headings differ, and the cells and the ' susp' mark fit the 134 columns",
-       "X0 = mat.x + 23" in pg and "CW = 6" in pg and "fmt('Account', '15L') : fmt('Kind', '6L')" in pg and "fmt(anm<av>, '15L')" in pg and 21 + 6 * n + 5 <= 134 and len(set(heads.values())) == len(heads) and all(len(h) <= 5 for h in heads.values()) and len(heads) == n, repr(heads))
+    ck("TG15", "the layout fits: the first cell is at column 3 + 10 + 6 (17 Nov 26, Linux S.62 LC3: the name was 15 wide until nineteen cells needed the room; 20 before S.242), the cells are 6 wide, every gate of the table has a heading of at most 5 "
+       "characters and the headings differ, and the cells and the 'susp' mark (no space before it: the last cell is padded) fit the 134 columns",
+       "X0 = mat.x + 18" in pg and "CW = 6" in pg and "fmt('Account', '10L') : fmt('Kind', '6L')" in pg and "fmt(anm<av>, '10L')" in pg and "if asu<av> then s := 'susp'" in pg and 16 + 6 * n + 4 <= 134
+       and len(set(heads.values())) == len(heads) and all(len(h) <= 5 for h in heads.values()) and len(heads) == n, repr(heads))
+    # 17 Nov 26 (from Linux 1557e270, S.62 LC3): the key sign-in gate on a user account whose Windows user SD did not make
+    ck("TG21", "S.62 LC3: a '-' key cell on a USER account (its Windows user was not made by SD) is not queued, and the reason says its keys are its own, BEFORE the general 'does not apply' test; "
+       "the cell box says the same; the column's heading is key",
+       re.search(r"case ast<av, k> = 'na' and gids<k> = 'ssh-key' and aty<av> = 'USER'\s*\n\s*why = 'the Windows user of ' : anm<av> : ' was not made by SD, so its ssh keys are its own", cw) is not None
+       and 0 < cw.find("gids<k> = 'ssh-key'") < cw.find("case ast<av, k> = 'na'\n")
+       and "case s0 = 'na' and gids<k> = 'ssh-key' and aty<av> = 'USER'" in pg and re.search(r"case gid = 'ssh-key'\s*\n\s*hd = 'key'", pg) is not None, "")
     ck("TG16", "the filter has three modes and names them; the sessions are read with !listu and shown only for the account under the cursor", "flt = mod(flt + 1, 3)" in pg and pg.count("accounts of persons") == 1 and "call !listu(udata)" in pg and "if v<1, 9> = anm<av> then" in pg)
     ck("TG17", "the matrix has a [?] and F1, ? and a click show tool.gates.matrix, whose record exists", "call $tk_help('box', 'tool.gates.matrix', hm, 0, 0)" in pg and pg.count("tool.gates.matrix") == 2 and "call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)" in pg and raw["help"].split("\n")[0].strip() != "")
     # S.88 p5-U2b P10 (2 Nov 26): Ctrl-Q dropped the queue without a word
@@ -169,10 +177,11 @@ MUTANTS = [
     ("a word comes from somewhere else", "TG4", sub("page", "words<-1> = (if aq<av, k> = 1 then gon<k> else goff<k>)", "words<-1> = (if aq<av, k> = 1 then gon<k> else gall<k>)")),
     ("the sentence names another account", "TG4", sub("page", "sent = 'modify.account ' : anm<av> : ' '", "sent = 'modify.account ' : anm<1> : ' '")),
     ("a key queues every cell on, past the test", "TG5", sub("page", "      case nm = 'u'\n         gosub drop.queue\n", "      case nm = 'u'\n         gosub drop.queue\n      case nm = 'k'\n         for ai.k = 1 to NG\n            aq<view<ci>, ai.k> = 1\n         next ai.k\n")),
-    ("all on skips the test of a cell", "TG5", sub("page", "      gosub cell.why\n      if why = '' then\n         aq<av, k> = (if ast<av, k> = tv", "      why = ''\n      if why = '' then\n         aq<av, k> = (if ast<av, k> = tv")),
+    # 17 Nov 26: three anchors had gone stale (the home line of S.166 and the xfer comment of 15 Nov sit in them now; "the mutant cannot be made"), re-anchored on the page as it is
+    ("all on skips the test of a cell", "TG5", sub("page", "      gosub cell.why\n      if gids<k> = 'home' then why =", "      why = ''\n      if gids<k> = 'home' then why =")),
     ("all on runs the queue at once", "TG5", sub("page", "   gosub redraw\n   w.st = ", "   gosub run.queue\n   w.st = ")),
     ("all off queues on", "TG5", sub("page", "      case nm = 'n'\n         tv = 0", "      case nm = 'n'\n         tv = 1")),
-    ("cell.why lets sh through for a group account", "TG5", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'\n         why =", "      case 0\n         why =")),
+    ("cell.why lets sh through for a group account", "TG5", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer\n         why =", "      case 0\n         why =")),
     ("a gate already on is queued again", "TG5", sub("page", "aq<av, k> = (if ast<av, k> = tv then '' else tv)", "aq<av, k> = tv")),
     ("tighten queues ON", "TG5", sub("page", "         aq<av, k> = 0\n         n.q += 1", "         aq<av, k> = 1\n         n.q += 1")),
     ("tighten takes a gate that is on as delivered", "TG6", sub("page", "gstat<k> = 'built' and gdef<k> = 'off' and ast<av, k> = 1", "gstat<k> = 'built' and ast<av, k> = 1")),
@@ -185,14 +194,16 @@ MUTANTS = [
     ("the route columns are also sent as words of their own", "TG9", sub("page", "if aq<av, k> # '' and k # rs and k # ra then", "if aq<av, k> # '' then")),
     ("files-write is allowed without files", "TG10", sub("page", "if fin<fw> = 1 and fin<fi> # 1 then bad =", "if fin<fw> = 1 and fin<fi> = 7 then bad =")),
     ("files-admin is allowed without files-write", "TG10", sub("page", "if fin<fa> = 1 and fin<fw> # 1 then bad =", "if @false then bad =")),
-    ("sh is queued for a group account", "TG11", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'\n         why =", "      case @false\n         why =")),
+    ("sh is queued for a group account", "TG11", sub("page", "      case (gids<k> = 'sh' or gids<k> = 'os' or gids<k> = 'xfer') and aty<av> # 'USER'          ;* 15 Nov 26 (Linux b9e63f17, S.242): and xfer\n         why =", "      case @false\n         why =")),
     ("Enter queues without the test", "TG11", sub("page", "   s0 = ast<av, k>\n   gosub cell.why\n", "   s0 = ast<av, k>\n   why = ''\n")),
     ("SDSYS is a row", "TG12", sub("page", "if id # 'sdsys' then", "if id # 'sdsysx' then")),
     ("the page is not drawn again after a command", "TG13", sub("page", "      gosub read.all\n      gosub draw.all\n   end else\n      msg = cmsg", "      msg = msg\n   end else\n      msg = cmsg")),
     ("the cell shows the queue as the state", "TG14", sub("page", "ct = (if d = 1 then 'ON' else 'off') : (if aq<av, k> # '' then '*' else '')", "ct = (if d = 1 then 'ON' else 'off')")),
     ("two gates have the same heading", "TG15", sub("page", "         hd = 'sh-wr'", "         hd = 'sh-rd'")),
     ("a heading is too long", "TG15", sub("page", "         hd = 'f-adm'", "         hd = 'files-admin'")),
-    ("the cells start in another column", "TG15", sub("page", "X0 = mat.x + 23", "X0 = mat.x + 24")),
+    ("the cells start in another column", "TG15", sub("page", "X0 = mat.x + 18", "X0 = mat.x + 19")),
+    ("the suspension mark has its space back and runs past the box", "TG15", sub("page", "if asu<av> then s := 'susp'", "if asu<av> then s := ' susp'")),
+    ("a key cell of an attached user is called not applicable to a user account", "TG21", sub("page", "      case ast<av, k> = 'na' and gids<k> = 'ssh-key' and aty<av> = 'USER'", "      case @false")),
     ("the filter has a fourth mode", "TG16", sub("page", "flt = mod(flt + 1, 3)", "flt = mod(flt + 1, 4)")),
     ("the matrix has no [?]", "TG17", sub("page", "   call $tk_help('mark', mat.x + mat.w - 5, mat.y + 1, 0, 0)\n", "")),
 ]

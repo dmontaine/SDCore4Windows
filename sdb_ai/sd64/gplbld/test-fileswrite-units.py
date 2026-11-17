@@ -453,11 +453,12 @@ def run_checks(raw):
        # the look-ups all come BEFORE the Linux user is made and the joins AFTER
        # 13 Nov 26 Windows port: the joins are !os_group ADDMEM in set.access (after create_user), typed out once per group, each stopping the verb with 10081 and its
        # status; Linux's join.files.group subroutine is the same steps.  Four look-ups (the fourth is sdaiusers, RELEASE_1.1 246; test-ai-units.py holds its rows) and three files joins
+       # 17 Nov 26 (Linux 1557e270, S.62 LC3): five look-ups; the fifth is sdsshnokey (test-sshkey-units.py holds its rows)
        and ordered(ca2, "files.grp.name = 'sdfiles'", "gosub check.files.group", "if files.write.want then", "err = 12528:@vm:acc.name", "files.grp.name = 'sdfileswrite'", "gosub check.files.group",
                    "if files.admin.want then", "err = 12531:@vm:acc.name", "files.grp.name = 'sdfilesadmin'", "gosub check.files.group",
                    "if not(create_user(acc.uname)) then", "if files.want then", 'stat = os_group("ADDMEM", "sdfiles", acc.uname)', "if files.write.want then", 'stat = os_group("ADDMEM", "sdfileswrite", acc.uname)',
                    "if files.admin.want then", 'stat = os_group("ADDMEM", "sdfilesadmin", acc.uname)')
-       and ca2.count("gosub check.files.group") == 4 and all(ca2.count('os_group("ADDMEM", "%s", acc.uname)' % g_) == 1 for g_ in ("sdfiles", "sdfileswrite", "sdfilesadmin"))
+       and ca2.count("gosub check.files.group") == 5 and all(ca2.count('os_group("ADDMEM", "%s", acc.uname)' % g_) == 1 for g_ in ("sdfiles", "sdfileswrite", "sdfilesadmin"))
        and all(re.search(r'if %s then\s*\n\s*stat = os_group\("ADDMEM", "%s", acc\.uname\)\s*\n\s*if stat # 0 then\s*\n\s*@system\.return\.code = -ER\$FAILED\s*\n'
                          r"\s*err = 10081:@vm:acc\.uname:@vm:stat ; return\s*\n\s*end\s*\n\s*end" % (re.escape(w_), g_), ca2) is not None
                for w_, g_ in (("files.want", "sdfiles"), ("files.write.want", "sdfileswrite"), ("files.admin.want", "sdfilesadmin")))

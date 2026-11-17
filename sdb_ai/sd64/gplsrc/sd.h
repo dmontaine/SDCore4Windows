@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): account_path_own(), path_in_netdirs() and netdirs_report() (op_dio2.c).
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3095, P-3096): audit_rotate() declared after k_ai(), in Linux's order.
  * 13 Nov 26 Windows port - from Linux b1d496df (RELEASE_1.1 246): k_ai() (op_ai.c), the AI helper's transport.
  * 9 Nov 26 Windows port - from Linux ff779018 (S.196): log_termination_signal() (linuxio.c).
@@ -519,6 +520,9 @@ bool make_path(char * tgt);
    See op_dio2.c.                                                           */
 bool net_path_permitted(char * path, bool for_write);
 bool account_path_permitted(char * path, bool for_write);
+bool account_path_own(char * path, bool for_write);  /* 17 Nov 26 (Linux 1557e270): the account and the shared SDSYS entries, no NETDIRS */
+bool path_in_netdirs(char * cand);                     /* 17 Nov 26: NETDIRS, asked last; CAND normalised */
+void netdirs_report(void);                             /* 17 Nov 26: NETDIRS judged when SD starts, each entry it ignores named */
 bool net_vocpath_permitted(char * path, bool for_write);
 bool path_in_enterable_account(char * resolved);
 bool path_view_for_edit(char * resolved, char * rel, size_t rel_size);

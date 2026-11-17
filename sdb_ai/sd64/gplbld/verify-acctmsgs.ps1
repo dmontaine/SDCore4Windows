@@ -42,8 +42,9 @@
 # SO THE TWO ARMS ARE DRIVEN SEPARATELY AND ONLY ONE OF THEM DEPENDS ON POLICY:
 #
 #   A  MISMATCH -> 10118.  Two different passwords.  Deterministic: SET_PASSWD
-#      compares them itself (:101) before Windows is involved at all, so no
-#      machine setting can change the answer.
+#      compares them itself before Windows is involved at all, so no
+#      machine setting can change the answer.  Since 17 Nov 2026 (Linux's
+#      loop, three attempts) it takes THREE mismatched pairs to reach 10118.
 #   B  WINDOWS REFUSED -> 10119.  ***THIS ARM HAS NEVER RUN, AND THE REASON IS
 #      A PREMISE OF MINE THAT WAS WRONG.***  It sends a 150-character password
 #      on the stated grounds that this is past "the 127-character limit the SAM
@@ -468,8 +469,12 @@ function Select-RefusedPassword([int]$min, [int]$complexity) {
             Expect   = 'accepted'
         }
     }
+    # 17 Nov 26 - THE SAME RELEASE_1.1 83 BUG, IN THE BRANCH 83 DID NOT TOUCH: 'Aa1' * 50 has no
+    # symbol, so SD's own pw_complex refused it and Windows never saw it.  b341's transcript shows
+    # 10920 after each 150-character attempt, then "attempt 3 of 3" - the SKIP that followed said
+    # "this machine accepted" a password nothing had sent to Windows.  All four classes now.
     return [pscustomobject]@{
-        Password = ('Aa1' * 50)
+        Password = ('Aa1!' * 38).Substring(0, 150)
         Why      = '150 characters - NO RULE IS IN FORCE TO BREAK, so this is expected to be ACCEPTED and the arm to SKIP'
         Expect   = 'accepted'
     }
@@ -498,10 +503,21 @@ Write-Output '=== PRE_RELEASE 22 arm A: a mismatched pair says so (10118) ======
 # command, so every one of these entries would have measured a message that
 # was never printed.  BOTH is untouched - the route is what these entries are
 # about.  test-acctkeywords-units.py is the guard.
+#
+# 17 Nov 26 - THREE MISMATCHED PAIRS, NOT ONE.  SET_PASSWD took Linux's prompt loop that day
+# (gpl.bp/set_passwd:113-145, commit bc1eb7b1): the rule is said first (10920), each new password
+# is judged by it before the repeat is asked, and a mismatch prints the literal "Passwords do not
+# match.  " + 10921 "That was attempt %1 of %2." and ASKS AGAIN, up to three tries.  Only the
+# third failure returns, with status 3 for a mismatch, and only then does create_account:537 print
+# 10118.  b341 sent ONE pair and an N: the N was read as attempt 2's password (refused by the rule),
+# the trailing OFF as attempt 3's, status 7 came back, 10920 was printed where 10118 was expected,
+# and 10008 took end-of-input as "n" - so the unwind rows passed and the 10118 row failed.  Three
+# complex pairs that differ keep every attempt on the mismatch path, so the status IS 3.
 Show-SD 'entry 22 arm A' @(
     ('CREATE.ACCOUNT USER ' + $acctMis + ' BOTH'),
-    $pw1,
-    $pw2,
+    $pw1, $pw2,
+    $pw1, $pw2,
+    $pw1, $pw2,
     'N') @($pw1, $pw2)
 $a22a = $lastSD
 
@@ -509,6 +525,17 @@ $a22a = $lastSD
 # every row below would be describing a session that did nothing.
 Note '22A null case: the Windows user was created' $true `
      (Test-Say $a22a ('User ' + [regex]::Escape($acctMis) + ' Created')) $true
+
+# THE LOOP'S OWN SUCCESS WORDING FOR THE CASE: the third mismatch, counted.  It appears only
+# when SET_PASSWD compared a third pair and found them different.
+Note '22A: the third mismatch was counted (attempt 3 of 3)' $true `
+     (Test-Say $a22a 'Passwords do not match\.  That was attempt 3 of 3\.') $true
+# DISQUALIFIER: SD's rule refusing any of the six passwords.  10920 is said ONCE before the
+# first prompt; a second copy means an attempt ended on the rule, not on a mismatch, and the
+# status that reaches CREATE.ACCOUNT is then 7, not 3 - the b341 failure.
+$ruleSaid = [regex]::Matches($a22a, 'A password needs at least 8 characters, with a lower-case letter').Count
+Write-Output ("    10920 (the password rule) printed {0} time(s); 1 is the statement before the first prompt" -f $ruleSaid)
+Note '22A: SD''s password rule refused none of the attempts (10920 printed once)' 1 $ruleSaid $true
 
 Note '22A: the mismatch was named (10118)' $true `
      (Test-Say $a22a 'The two passwords did not match, or none was entered\.') $true
@@ -543,6 +570,13 @@ $a22b = $lastSD
 
 Note '22B null case: the Windows user was created' $true `
      (Test-Say $a22b ('User ' + [regex]::Escape($acctLong) + ' Created')) $true
+
+# 17 Nov 26 - THE ARM'S OWN NULL CASE: the password must have got PAST SD's rule, or Windows was
+# never asked and neither the refusal rows nor the SKIP below say anything about Windows.  10920
+# is said once before the first prompt; a second copy is SD's rule refusing the password (b341).
+$ruleSaidB = [regex]::Matches($a22b, 'A password needs at least 8 characters, with a lower-case letter').Count
+Write-Output ("    10920 (the password rule) printed {0} time(s); 1 is the statement before the first prompt" -f $ruleSaidB)
+Note '22B: SD''s password rule passed the password on to Windows (10920 printed once)' 1 $ruleSaidB $true
 
 if (Test-Say $a22b 'Windows refused that password') {
     # THE MESSAGE NAMES THE ACCOUNT, which is what 10119's %1 is for, and it is

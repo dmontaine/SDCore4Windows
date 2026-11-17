@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): a value over MAX_NETDIRS_LEN (191), or a NETDIRS line too long for the
+ *           199-character line buffer, is refused by name and never cut (a longer line was cut at 191 and the rest read as a line).
  * 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1 (the API listener binds the loopback address only).
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): copy_section_name() bounds and terminates a [section] name.
  * 12 Nov 26 Windows port - as Linux (RELEASE_1.1 251): an empty TMP is treated as unset, and TEMPDIR's default is copied with a bound.
@@ -134,6 +136,7 @@ struct CONFIG* read_config(char* errmsg) {
   int n;
   int numlocks_asked = 100; /* NUMLOCKS as written: cfg->numlocks is int16 and would wrap before it was checked */
   bool status = FALSE;
+  bool line_whole;   /* 17 Nov 26 (Linux 1557e270): the line fitted in rec (NETDIRS is refused when it did not) */
   int n2;
   int hi_user;
   struct stat statbuf;
@@ -220,8 +223,21 @@ struct CONFIG* read_config(char* errmsg) {
   }
 
   while (fgets(rec, 200, fu) != NULL) {
+    /* 17 Nov 26 Windows port - from Linux 1557e270 (S.62, NETDIRS): was the whole line read?  fgets() stops at 199 characters and the
+       rest of a longer line comes back as the next record.  A line of exactly 199 has its line end still waiting, which is taken here
+       (CR LF or LF), so only a longer line is "not whole".  Only NETDIRS acts on it (refused by name below). */
+    line_whole = TRUE;
     if ((p = strchr(rec, '\n')) != NULL)
       *p = '\0';
+    else {
+      int c = getc(fu);
+      if (c == '\r')
+        c = getc(fu);
+      if ((c != EOF) && (c != '\n')) {
+        ungetc(c, fu);
+        line_whole = FALSE;
+      }
+    }
 
     /* 14 Aug 26 Windows port - strip the carriage return too.  Only '\n' was
        removed, which is correct for a Unix file and wrong for every
@@ -328,7 +344,7 @@ struct CONFIG* read_config(char* errmsg) {
    truncated pathname is a SHORTER one, which as a containment root would
    match MORE than the administrator asked for, not less.                   */
       else if (strncmp(rec, "NETDIRS=", 8) == 0) {
-        if (strlen(rec + 8) > MAX_NETDIRS_LEN) {
+        if (!line_whole || (strlen(rec + 8) > MAX_NETDIRS_LEN)) {   /* 17 Nov 26 (Linux 1557e270): a line too long for rec is refused, not cut */
           sprintf(errmsg, "NETDIRS value is longer than %d characters.",
                   MAX_NETDIRS_LEN);
           goto exit_read_config;

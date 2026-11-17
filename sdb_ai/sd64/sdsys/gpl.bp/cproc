@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - Linux 1557e270 (P-4645): comment only - logto.authorised's suspended note now says what the code does (the
+*           installer's internal session is the one exemption; the administrator is refused), which Linux now does too.
 * 17 Nov 26 Windows port - four-version audit round 1, second pass (P-3266; owner's ruling D7): LOGTO SDSYS's refusal is audited in
 *           Linux's words ('logto refused account=sdsys reason=sdsys is entered by its own session only') and 10002 is shown a line at
 *           a time; a LOGTO refused for a suspended account is audited 'reason=suspended', as Linux (it said 'not granted').
@@ -4901,6 +4903,10 @@ logto.authorised:
 *
 *   IF THAT IS WRONG, THE FIX IS TO MOVE THIS BLOCK ABOVE THE INTERNAL TEST at
 *   the top of the routine, not to add a second test here.
+* 17 Nov 26 Windows port - THE TWO PARAGRAPHS ABOVE ARE HISTORY (Linux 1557e270, P-4645, made Linux the same):
+*   the privileged bypass they stand after went on 31 Aug (PRE_RELEASE 91), so the ONE exemption is the internal-mode
+*   session holding the administrator flag at the top of the routine (the installer's sd -internal load.help into a kept,
+*   suspended shared account); every other session, the administrator's included, is refused here (10107, reason=suspended).
 *
 * 18 Sep 26 Windows port - RELEASE_1.1 64.  SUSPENDED IS A STATE, NOT A FOURTH
 *   TIER: it lives in ACC$SUSPENDED (field 5) and the tier fields are gone.

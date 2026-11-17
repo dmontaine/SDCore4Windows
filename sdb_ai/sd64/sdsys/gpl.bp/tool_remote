@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1, Linux 1557e270: read.all's status line is 15150 (Linux's 14150, "Reading the settings (a few
+*               seconds)..."), the message Linux gave its own copy of this line; 12950 stays the verbs' wait line, which read.all still strips.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3477): the API "on" confirmation line is Linux's words.
 * 15 Nov 26 Windows port - RELEASE_1.1 314 (owner: "put the restart question in the page's dialog"): A is one form, the door and restart
 *               now or later, and runs REMOTE.API ... RESTART | NO.RESTART through the routine; the terminal is no longer given to it.
@@ -194,7 +196,7 @@ read.all:
 *  12 Nov 26 (RELEASE_1.1 243): the two reports start PowerShell, a few seconds: the status line says so first (owner, 12 Nov 26, a line
 *  before any wait over 2 s; SD Core Solo's tool_remote does the same), and the page's own message comes back after.
    held.msg = msg
-   msg = sysmsg(12950)                                          ;* Reading the setting (a few seconds)...
+   msg = sysmsg(15150)                                          ;* Reading the settings (a few seconds)...  (17 Nov 26: Linux's 14150, as Linux's read.all)
    call $tk_frame(ctx, keys, panes<view>, msg)
    msg = held.msg
    sel.t = ''

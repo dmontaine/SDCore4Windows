@@ -3,6 +3,9 @@
 * Copyright (c) String Database
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the manifest key ssh.key (acc_os_info) is read and handed to !create_account (CA$SSH.KEY) when it is
+*              exactly 1; a manifest that has none (one written before this release) restores the account with key sign-in off, the delivered state for a
+*              Windows user SD makes.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3451 to P-3454): the net key is read and handed on before the shared ones, as Linux's order.
 * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): the unused lat.bstamp is gone.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): the manifest key route.ai (acc_os_info) is read and handed to !create_account (CA$AI); a
@@ -452,6 +455,8 @@ restore.one:
       if m.route.files = '1' and m.route.files.write = '1' and m.route.files.admin = '1' then settings<CA$FILESADMIN> = 1
 *     13 Nov 26 Windows port (Linux S.69 step 2, RELEASE_1.1 246): sdaiusers as it was (it stands alone); a manifest with none, or from before this release, restores as not in the AI group.
       if m.route.ai = '1' then settings<CA$AI> = 1
+*     17 Nov 26 Windows port (Linux 1557e270, S.62 LC3): key sign-in as it was; only an explicit 1 (a manifest with none, or from before this release: off, the delivered state).
+      if m.ssh.key = '1' then settings<CA$SSH.KEY> = 1
       settings<CA$REUSE.SD.USER> = 1
       call !create_account(m.type, acc.name, settings, err)
       if err # '' then gosub show.err ; return
@@ -741,6 +746,7 @@ load.section:
    m.shared.read = '' ; m.shared.write = ''     ;* 18 Oct 26, S.66
    m.recovery = ''                              ;* 28 Oct 26, S.88 plan 2.9
    m.xfer = ''                                  ;* 14 Nov 26, S.242
+   m.ssh.key = ''                               ;* 17 Nov 26, Linux S.62 LC3
    m.files = '' ; m.bytes = '' ; m.dirs = ''
    for kp = 1 to dcount(sec.keys<s.idx>, @vm)
       kv = sec.vals<s.idx,kp>
@@ -766,6 +772,7 @@ load.section:
          case sec.keys<s.idx,kp> = 'route.files.write' ; m.route.files.write = kv
          case sec.keys<s.idx,kp> = 'route.files.admin' ; m.route.files.admin = kv
          case sec.keys<s.idx,kp> = 'route.ai' ; m.route.ai = kv
+         case sec.keys<s.idx,kp> = 'ssh.key'  ; m.ssh.key = kv
          case sec.keys<s.idx,kp> = 'files'       ; m.files = kv
          case sec.keys<s.idx,kp> = 'bytes'       ; m.bytes = kv
          case sec.keys<s.idx,kp> = 'dirs'        ; m.dirs = kv

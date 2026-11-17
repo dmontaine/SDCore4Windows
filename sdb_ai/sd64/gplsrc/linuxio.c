@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4606): the TLS-directory refusal says what api_tls_dir() does ("cannot derive the
+ *            TLS directory beside %s"), Linux's words; it said "no usable data directory in %s".
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3082 to P-3085): a TCP peer whose family is not AF_INET reads as "?", and the
  *            connection is logged "API connection over TCP from ... (SD login required)", as Linux's start_connection() does.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): socket_byte() gives a NUL on an ended read, the key
@@ -389,7 +391,8 @@ bool start_connection(int unused) {
       char tls_err[512];
 
       if (!api_tls_dir(tls_dir, sizeof(tls_dir))) {
-        syslog(LOG_ERR, "API connection refused: no usable data directory in %s",
+        /* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4606): api_tls_dir() takes the directory of config_path. */
+        syslog(LOG_ERR, "API connection refused: cannot derive the TLS directory beside %s",
                config_path);
         return FALSE;
       }

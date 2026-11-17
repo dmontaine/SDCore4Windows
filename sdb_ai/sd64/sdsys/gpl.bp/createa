@@ -18,6 +18,9 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON, a Windows user SD makes for the account keeps key sign-in over ssh (off unless typed: the
+*           user is put in sdsshnokey); CA$SSH.KEY in createacc.h; !create_account refuses it for a group or other account; the audit gates= list names it; the
+*           usage says it.
 * 17 Nov 26 Windows port - four-version audit round 1: the verb takes Linux createa's shape - acc.type is upcased once, more.args writes
 *           every word straight into settings (the flags os.sh, os.exec, edit.*, access.*, no.query and attach are gone), the syntax
 *           text is Linux's word for word, and the unused deffuns and umask(002) are gone.  It still ends with @system.return.code = 0
@@ -433,7 +436,10 @@
 *               lose it.  Off unless typed.  A user account only (12776).  RECOVERY-OFF restates the default and is not accepted here.
 *   XFER-ON     (15 Nov 26, from Linux S.242) the account's person may move plain-text files in and out with an sftp client over their ssh login (RECEIVE /
 *               SEND), when XFER=1 in sd.conf.  Off unless typed.  A user account only (15075).  XFER-OFF restates the default and is not accepted here.
-*   AI-ON       (13 Nov 26, from Linux S.69 step 2) the person joins the Windows group sdaiusers: the right to use the AI provider's API through the helper sd-ai (one
+*   SSH-KEY-ON  (17 Nov 26, from Linux S.62 LC3) the Windows user SD makes for the account may sign in over ssh with a key.  Off unless typed: the user is put in
+*               sdsshnokey, and sshd offers it no key sign-in.  It never applies to an attached user, whose keys are its own.  SSH-KEY-OFF restates the default and
+*               is not accepted here.
+*   AI-ON      (13 Nov 26, from Linux S.69 step 2) the person joins the Windows group sdaiusers: the right to use the AI provider's API through the helper sd-ai (one
 *               provider and model for every account, chosen by SDSYS with set.ai).  Stands alone; off unless typed; a user account only (10087, 10081).
 *                        - the route defaults to BOTH when nothing is said
 *                          (RELEASE_1.1 68); the tier words went with 64
@@ -658,7 +664,7 @@ $include createacc.h
 
    case 1
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3326, P-3338): Linux createa's syntax text, word for word.
-    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {shared-read-off} {shared-write-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}'
+    crt 'Command Syntax: create.account user <user name> {ssh | api | both | none} {ssh-key-on} {sh-on} {os-on} {voc-on} {bp-on} {dict-on} {shared-read-off} {shared-write-on} {net-on} {files-on} {files-write-on} {files-admin-on} {ai-on} {start-menu | start-terminal} {pins-on} {recovery-on} {xfer-on} {no.query}'
     crt '                create.account group <group name> {start-menu | start-terminal} {pins-on} {no.query}'
     crt '                create.account other <account name> <pathname> {start-menu | start-terminal} {pins-on} {no.query}'
     crt '  A new user account starts with no ssh, no API, no shell (sh), no os.execute, and no right to change'
@@ -670,6 +676,7 @@ $include createacc.h
     crt '  and cannot add programs of its own to its home screen unless pins-on is typed.'
     crt '  Its editors keep no recovery copy of unsaved text unless recovery-on is typed (a user account only).'
     crt '  It cannot move files over its ssh login (receive / send) unless xfer-on is typed (a user account only).'
+    crt '  The Windows user SD makes for it cannot sign in over ssh with a key unless ssh-key-on is typed (a user account only).'
     @system.return.code = -ER$ARGS
     stop
    end case
@@ -713,6 +720,7 @@ $include createacc.h
    if settings<CA$PINS> = 1 then gates<-1> = 'pins-on'
    if settings<CA$RECOVERY> = 1 then gates<-1> = 'recovery-on'     ;* 10 Nov 26 (Linux 44807a43, S.88 plan 2.9, D2)
    if settings<CA$XFER> = 1 then gates<-1> = 'xfer-on'             ;* 15 Nov 26 (Linux e080527e, S.242)
+   if settings<CA$SSH.KEY> = 1 then gates<-1> = 'ssh-key-on'       ;* 17 Nov 26 (Linux 1557e270, S.62 LC3)
    if gates = '' then gates = 'none' else gates = convert(@fm, ',', gates)
 *  28 Oct 26 (from Linux ec8459b) - S.75, home: where the account was told to start is a tail of its own, only when a start word was typed (start=menu or start=terminal); an account that follows
 *    the system default has the line it always had.
@@ -934,6 +942,11 @@ more.args:
 *   it for a group or other account (15075) before anything is made.  XFER-OFF restates the default and is not accepted.
          case upcase(token) = 'XFER-ON'
             settings<CA$XFER> = 1
+
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON, the Windows user SD makes keeps key sign-in over ssh; off unless typed.  !create_account
+*   refuses it for a group or other account before anything is made.  SSH-KEY-OFF restates the default and is not accepted.
+         case upcase(token) = 'SSH-KEY-ON'
+            settings<CA$SSH.KEY> = 1
 
 * SUPERSEDED 21 Aug 2026, kept because it is the reasoning the change argues
 * against:

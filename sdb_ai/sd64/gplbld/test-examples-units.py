@@ -54,7 +54,7 @@ def load():
            "vt": rd(os.path.join(SDSYS, "voc_template", "load.examples")),
            "nv": rd(os.path.join(SDSYS, "newvoc", "load.examples")),
            "rm": rd(os.path.join(SDSYS, "gpl.bp", "removeexamples")), "vtr": rd(os.path.join(SDSYS, "voc_template", "remove.examples")),
-           "nvr": rd(os.path.join(SDSYS, "newvoc", "remove.examples"))}
+           "nvr": rd(os.path.join(SDSYS, "newvoc", "remove.examples")), "sec": rd(os.path.join(HERE, "secure-sysdirs.ps1"))}
     raw["files"] = {n: rd(os.path.join(EX, n)) for n in sorted(os.listdir(EX))} if os.path.isdir(EX) else {}
     raw["guide"] = {n: rd(os.path.join(GUIDE, p + ".md")) for n, p in PAGES}
     return raw
@@ -128,7 +128,7 @@ def checks(raw):
     ck("X6", "the installer: sd.iss runs LoadExamples once, after SharedDocs, and puts its message in the closing box; load-examples.ps1 starts LOAD.EXAMPLES "
              "internally with the marker and judges it on 15124's wording; stage.py ships examples and the script; SecureSysdirs locks examples",
        iss.count("ExamplesMsg := LoadExamples;") == 1 and 0 < iss.find("DocsMsg := SharedDocs;") < iss.find("ExamplesMsg := LoadExamples;")
-       and "ExamplesMsg +" in iss and "load-examples.ps1" in iss
+       and re.search(r"(?m)^\s+ExamplesMsg \+\s*$", iss) is not None and "load-examples.ps1" in iss      # 17 Nov 26: the closing box's own line (":= ExamplesMsg + LockSdsysExamples" also holds the words)
        and "Invoke-Sd @('-internal', 'LOAD.EXAMPLES')" in ps1 and "Set-SdInternalMarker" in ps1
        and "'(?m)^Example programs in examples\\.bp of [1-9][0-9]* account\\(s\\)'" in ps1
        and "('examples'," in py_list(st, "SDSYS_SHIP") and "('examples'," in py_list(st, "SDSYS_MIRROR") and "'load-examples.ps1'," in st
@@ -155,6 +155,19 @@ def checks(raw):
     gone_r = sorted(n for n in cited_r if not os.path.exists(os.path.join(SDSYS, "messages", n)))
     ck("X11", "remove.examples is in voc_template (V CA $removeexamples) and not in newvoc; the %d messages it cites exist" % len(cited_r),
        (raw["vtr"] or "").split("\n")[:3] == ["V", "CA", "$removeexamples"] and raw["nvr"] is None and cited_r and not gone_r, repr(gone_r))
+    # 17 Nov 26 (Linux 1557e270's reply, "close it in the verb"): SDSYS's two files get bp.out's rights from the verb itself, with the grants
+    # secure-sysdirs.ps1 gives a directory, and the installer still locks them after its own LOAD.EXAMPLES (LockSdsysExamples).
+    sec = raw.get("sec") or ""
+    m = re.search(r"\$kind\s+=\s+'directory'\s*\n\s*\$grants = @\((.*?')\)", sec, re.S)
+    dgr = re.findall(r"'([^']+)'", m.group(1)) if m else []
+    lk = ld[ld.find("\nlock.sdsys:"):]
+    want = " ".join('/grant "%s"' % g for g in dgr)
+    ck("X12", "LOAD.EXAMPLES run for SDSYS gives its examples.bp and examples.bp.out secure-sysdirs.ps1's directory grants (SYSTEM and Administrators full, "
+              "sdusers read), /inheritance:r, through !ps_script, both files, a failure said; the installer's LockSdsysExamples locks both after its own run",
+       len(dgr) == 3 and "sdusers:(OI)(CI)(RX)" in dgr and "if acct = 'sdsys' then gosub lock.sdsys" in ld and lk.startswith("\nlock.sdsys:")
+       and want in lk and "/inheritance:r" in lk and "ls.rc = ps_script(ls.ps)" in lk and "for li = 1 to 2" in lk and "x.path else o.path" in lk
+       and "display sysmsg(10055, lp, ls.rc)" in lk
+       and "ExamplesMsg := ExamplesMsg + LockSdsysExamples;" in iss and "Rest := 'examples.bp/examples.bp.out';" in iss, repr(dgr))
     return rows
 
 
@@ -213,6 +226,11 @@ MUTANTS = [
                                                              "      if 0 then\n         display sysmsg(15129, acct : ' examples.bp', 'the file could not be deleted')")),
     ("remove.examples enters the account with LOGTO, as on Linux", "X10", sub("rm", "   x.path = acct.dir : '/examples.bp'", "   execute 'logto ' : acct capturing lt\n   x.path = acct.dir : '/examples.bp'")),
     ("remove.examples is given to every account", "X11", lambda raw: dict(raw, nvr="V\nCA\n$removeexamples\n")),
+    ("SDSYS's examples are not locked by the verb", "X12", sub("load", "   if acct = 'sdsys' then gosub lock.sdsys\n", "")),
+    ("the verb leaves sdusers Modify on them", "X12", sub("load", '/grant "sdusers:(OI)(CI)(RX)"', '/grant "sdusers:(OI)(CI)(M)"')),
+    ("the verb keeps the inherited rights", "X12", sub("load", "' /inheritance:r'", "''")),
+    ("only examples.bp is locked", "X12", sub("load", "for li = 1 to 2", "for li = 1 to 1")),
+    ("the installer no longer locks them", "X12", sub("iss", "    ExamplesMsg := ExamplesMsg + LockSdsysExamples;", "    ExamplesMsg := ExamplesMsg;")),
 ]
 
 

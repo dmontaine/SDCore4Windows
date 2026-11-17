@@ -18,6 +18,9 @@
 * 8 Nov 26 dm   S.176: F6 / Shift-F6 are the box keys of every page ($tk_aipage 'ring'): from the list to the AI line and back; AI > Ask the AI is a menu entry of its own.
 * 8 Nov 26 dm  S.179: Ctrl-T the theme (View > Theme) and Ctrl-K the keys of the page (Help > Keys), through $tk_std as on every page.
 * 9 Nov 26 dm  S.186: View > Mouse and Ctrl-O (the log of the commands run), the same on every page (the cases act:std.mouse and ctrl-o, through $tk_std).
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the key sign-in gate (kind 'nokey'): ON when the person's login name is NOT in sdsshnokey, read only for a
+*               Windows user SD made (!is_sd_user); for one SD did not make it shows 'own' and is not counted as on.  Nineteen gates: the gate box is 24 rows and the
+*               row box 9, so every gate still shows on one screen.
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -53,6 +56,7 @@ $include sl.h
 $include tk.h
 
 deffun is_grp_member(user,group) calling '!is_grp_member'
+deffun is_sd_user(username) calling '!is_sd_user'
 
    prompt ''
 
@@ -76,7 +80,7 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
    call $tk_keys('ai', keys, 'refresh', '', '', '', '')
    call $tk_aipage('init', ctx, keys, '', '', aout)
 
-   VIS = 18                                                     ;* gate rows on the screen (the gate pane's height less 5: set by get.rects)
+   VIS = 19                                                     ;* gate rows on the screen (the gate pane's height less 5: set by get.rects)
    perr = ''
    gosub declare.layout
    call $tk_gate_info('list', gids)
@@ -164,6 +168,10 @@ read.all:
       begin case
          case gstat<k> # 'built'
             s = ''
+         case gkind<k> = 'nokey'                         ;* 17 Nov 26 (Linux 1557e270, S.62 LC3): key sign-in is NOT being in the group, and only a Windows user SD made is in SD's hands
+            s = 'own'
+            k.made = is_sd_user(@logname)
+            if status() = 0 and k.made then s = (if is_grp_member(@logname, ggrp<k>) then 0 else 1)
          case gkind<k> = 'group'
             s = (if is_grp_member(@logname, ggrp<k>) then 1 else 0)
          case gkind<k> = 'record'                        ;* S.242 stage 6: the file transfer gate is the account's register field, which the transfer server reads at each connection (no session holds it)
@@ -200,8 +208,8 @@ read.all:
 * Out: g.x g.y g.w g.h (the gates), c.x c.y c.w c.h (the row under the cursor), s.x s.y s.w s.h (where this comes from), the text width of each, VIS.
 declare.layout:
    d = ''
-   d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 23 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1      ;* S.242: 23 rows for 18 gates (S.166: 22 for 17, was 21)
-   d<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 10 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
+   d<1> = 'gates' : @vm : 1 : @vm : 1 : @vm : 24 : @vm : 138 : @vm : '' : @vm : 'stretch' : @vm : 1 : @vm : 'stretch' : @vm : 1      ;* 17 Nov 26 (Linux S.62 LC3): 24 rows for 19 gates (S.242: 23 for 18; S.166: 22 for 17, was 21)
+   d<2> = 'cell' : @vm : 2 : @vm : 1 : @vm : 9 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
    d<3> = 'note' : @vm : 3 : @vm : 1 : @vm : 6 : @vm : 138 : @vm : '' : @vm : '' : @vm : '' : @vm : 'stretch' : @vm : 1
    call $tk_layout('declare', ctx, d, perr)
    gosub get.rects
@@ -243,6 +251,8 @@ draw.list:
          begin case
             case gstat<kk> # 'built'
                nowtxt = 'plan'
+            case gst<kk> = 'own'                         ;* 17 Nov 26 (Linux S.62 LC3): key sign-in of a Windows user SD did not make
+               nowtxt = 'own'
             case gst<kk> = 1
                nowtxt = 'ON'
             case 1
@@ -270,6 +280,9 @@ draw.row:
       begin case
          case gstat<k> # 'built'
             lines<-1> = gti<k> : ' is planned and not built yet: there is nothing to switch.'
+         case gst<k> = 'own'                             ;* 17 Nov 26 (Linux S.62 LC3)
+            lines<-1> = gti<k> : ' [' : gids<k> : ']  -  your own.  Your Windows user, ' : @logname : ', was not made by SD, so the ssh keys you set up outside SD are yours: SD does not take key sign-in away from you, and the machine' : "'" : 's own ssh settings decide it.'
+            lines<-1> = 'The administrator' : "'" : 's words ' : gon<k> : ' and ' : goff<k> : ' do not apply to your account.'
          case 1
             if gst<k> = 1 then
                lines<-1> = gti<k> : ' [' : gids<k> : ']  -  ON for you.  You can ' : gall<k> : '.'
@@ -283,6 +296,9 @@ draw.row:
             lines<-1> = 'As delivered it is ' : gdef<k> : '.  A change reaches you: ' : gwhen<k> : '.'
             if gkind<k> = 'group' then
                lines<-1> = 'This one is about you as a person, not about the account: it is membership of the Windows group ' : ggrp<k> : ' by your login name, ' : @logname : '.'
+            end
+            if gkind<k> = 'nokey' then
+               lines<-1> = 'This one is about you as a person: your login name, ' : @logname : ', is in the Windows group ' : ggrp<k> : ' when key sign-in is OFF.  It is read at each ssh connection.'
             end
             if gids<k> = 'xfer' then
                lines<-1> = 'This one is read at each connection, not once when you sign on, and it works only while the system switch XFER is on and you have the ssh gate.'
@@ -302,7 +318,7 @@ draw.row:
 draw.source:
    lines = ''
    lines<-1> = "Gates are the administrator's: every account starts with them off except the right to read the shared account.  What you are told here is what this session holds right now, asked of the system - nothing is tried to find out."
-   lines<-1> = 'sh, os, sd, net and the shared account were loaded when you entered this account; voc, bp and dict when you signed on; the route gates (ssh, api, files, files-write, files-admin, ai) are read from the system each time.'
+   lines<-1> = 'sh, os, sd, net and the shared account were loaded when you entered this account; voc, bp and dict when you signed on; the route gates (ssh, api, files, files-write, files-admin, ai) and ssh-key are read from the system each time.'
    wtw = s.tw
    gosub wrap.lines
    for r = 1 to s.h - 2

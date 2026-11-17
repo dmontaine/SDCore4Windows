@@ -78,7 +78,8 @@ Show 'it is BEFORE the first Match'       'yes' $(if ($ai -and $mi -and $ai -lt 
 # 58).  Add-OurBlock is called here WITHOUT an sdexe, so the arm under test is
 # begin + AllowGroups + DisableForwarding + end.  The five-line arm is the
 # installed one and is covered by the row below it.
-Show 'four lines added and nothing lost'  ($default.Count + 4) $new.Count
+# 17 Nov 26 - SIX: the key arm (Match Group sdsshnokey ... / PubkeyAuthentication no, Linux 1557e270) is the last two lines of the block, in both arms.
+Show 'six lines added and nothing lost'   ($default.Count + 6) $new.Count
 Write-Output ("  wrote: " + ($new | Where-Object { $_ -like 'AllowGroups*' -or $_ -like 'DisableForwarding*' }))
 
 # 18 Sep 26 - THE FORWARDING ROWS.  RELEASE_1.1 58.  ForceCommand does not
@@ -94,7 +95,7 @@ Show 'and BEFORE the first Match'         'yes' $(if ($di -and $mi -and $di -lt 
 # Both arms carry it, so a build that could not resolve sd.exe still closes
 # forwarding.  This is the arm the installer actually writes.
 $withExe = Add-OurBlock $default $patterns 'C:\Program Files\SD\usr\bin\sd.exe'
-Show 'five lines with ForceCommand'       ($default.Count + 5) $withExe.Count
+Show 'seven lines with ForceCommand'      ($default.Count + 7) $withExe.Count   # 17 Nov 26: + the two-line key arm
 Show 'ForceCommand arm forwards too'      1     ($withExe | Select-String -Pattern '^DisableForwarding yes$').Count
 Show 'and it is removable'                'yes' $(if (((Remove-OurBlock $withExe) -join "`n") -eq ($default -join "`n")) { 'yes' } else { 'no' })
 

@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (P-4641): a rename whose new name differs from the old only in case is refused (6151) whatever
+*           case the old id was found in, and every spelling of the new name is asked; "CNAME MYFILE TO myfile" lost the record on the case-blind VOC.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  The refusal "Renaming of multifiles is not supported" (6148) goes, and the parser key PARSER$MFILE is now PARSER$GET.TOKEN, so old,new always splits at the comma.
 * 14 Sep 26 Windows port - RELEASE_1.1 5 stage 2a: the dictionary's @ID record
 *           is updated whether it is @ID or @id.
@@ -166,16 +168,19 @@ rename.file:
 *  AND A NEW NAME THAT FOLDS TO THE OLD ONE IS REFUSED, OR THE RECORD IS LOST.
 *  "CNAME myfile TO MYFILE" gives new.file.name = old.file.name, the write below
 *  lands on the old record, and the delete after it removes the only copy.
-   if new.file.name = old.file.name then
+* 17 Nov 26 Windows port - from Linux 1557e270 (P-4641): AND A NEW NAME THAT DIFFERS FROM THE OLD ONLY IN CASE IS REFUSED
+*  TOO.  The test compared the old name as found, so "CNAME MYFILE TO myfile" (an upper-case id) passed it, and the loop skipped
+*  the old id; on the case-blind VOC the write lands on the old record and the delete after it removes the only copy (the NOCASE
+*  write-then-delete trap).  Linux compares the folded names and asks all three spellings, so an old upper-case id is no longer
+*  brought into line by CNAME: rename it to a different name.
+   if new.file.name = downcase(old.file.name) then
       stop sysmsg(6151, new.file.name) ;* xx is already defined in your VOC
    end
 
    clash.ids = new.typed : @fm : new.file.name : @fm : upcase(new.typed)
    for clash.i = 1 to 3
-      if clash.ids<clash.i> # old.file.name then
-         readvu s from voc.f, clash.ids<clash.i>, 0 then
-            stop sysmsg(6151, clash.ids<clash.i>) ;* xx is already defined in your VOC
-         end
+      readvu s from voc.f, clash.ids<clash.i>, 0 then
+         stop sysmsg(6151, clash.ids<clash.i>) ;* xx is already defined in your VOC
       end
    next clash.i
 

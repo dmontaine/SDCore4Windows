@@ -19,6 +19,11 @@
 * 
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner's decision of 17 Nov 2026: key sign-in is off as delivered for the accounts SD makes, a
+*           documented loosening for the administrator): SSH-KEY-ON / SSH-KEY-OFF take the account's Windows user out of the Windows group sdsshnokey and put it
+*           back.  set.sshkey is the one routine: a group or other account is refused (10087, 10081), and so is a USER account whose Windows user SD did not make
+*           (15170: its keys are its own); the membership is read three-valued, changed through change.files.group and read back; the audit line is
+*           "modify.account ssh-key-on|ssh-key-off account=<name>"; the state line is 15171.  Slot KY, carried out after ai-on / ai-off.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3215; owner's answer 5b): 10159, printed after 10193 on a suspend, keeps only
 *   the Windows fact (the Windows account, password, groups and rights are left as they were); the rest is gone, as Linux prints 10193 alone.
 * 14 Nov 26 Windows port - RELEASE_1.1 306, from Linux c4ce87e9: the group ADD/DELETE arm sets @system.return.code on all seven outcomes (0 on
@@ -192,7 +197,16 @@
 * MODIFY.ACCOUNT account SH-ON | SH-OFF    - the SH verb and "!"
 * MODIFY.ACCOUNT account OS-ON | OS-OFF    - OS.EXECUTE and the screen editors
 * MODIFY.ACCOUNT account AI-ON | AI-OFF    - membership of the Windows group sdaiusers, the right to use the AI (13 Nov 26)
+* MODIFY.ACCOUNT account SSH-KEY-ON | SSH-KEY-OFF - membership of the Windows group sdsshnokey, key sign-in over ssh (17 Nov 26)
 * MODIFY.ACCOUNT account SUSPENDED | UNSUSPENDED
+*
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3).  SSH-KEY-ON / SSH-KEY-OFF take the account's Windows user out of the Windows group sdsshnokey or put it
+*   in.  sshd offers a member of the group no key sign-in (allow-ssh-groups.ps1's arm, PubkeyAuthentication no and nothing else): it signs in with its password, if
+*   its ssh gate is on.  create.account puts every Windows user it MAKES in the group, so key sign-in is off as delivered for those accounts; SSH-KEY-ON is the
+*   administrator's loosening, account by account, and SSH-KEY-OFF takes it back.  A user account only, and only one whose Windows user carries SD's "SD account"
+*   description (!is_sd_user): an attached user - the installing user, a sign-in that was there before SD - is refused (15170), because the keys it set up outside
+*   SD are its own.  The line printed is "Account %1 may sign in over ssh with a key: yes|no", read back from the group.  It takes effect at the next ssh
+*   connection: sshd reads the groups each time.  An account that existed before this release is not in the group, and an upgrade does not put it there.
 *
 * 13 Nov 26 Windows port - from Linux S.69 step 2 (23 Oct 26), RELEASE_1.1 246.  AI-ON / AI-OFF add or remove the account's person from the Windows group sdaiusers.
 *   A person in it may use the AI provider the administrator chose (set.ai, the same provider and model for every account) through the helper sd-ai; a person
@@ -259,6 +273,7 @@ deffun os_group(action,group,member) calling '!os_group'
 deffun is_group(group) calling '!is_group'
 deffun valid_os_name(name) calling '!valid_os_name'
 deffun ps_script(script) calling '!ps_script'
+deffun is_sd_user(username) calling '!is_sd_user'
 
    prompt ''
 
@@ -539,6 +554,14 @@ do.action:
          case upcase(action) = 'AI-OFF'
             ai.want = @false
             gosub set.ai
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON / SSH-KEY-OFF, key sign-in over ssh for a Windows user SD made: out of / into the Windows group
+*   sdsshnokey (in it as delivered).
+         case upcase(action) = 'SSH-KEY-ON'
+            key.want = @true
+            gosub set.sshkey
+         case upcase(action) = 'SSH-KEY-OFF'
+            key.want = @false
+            gosub set.sshkey
 * 25 Oct 26 Windows port - from Linux fc4030a (S.66, the shared account): SHARED-READ-ON / SHARED-READ-OFF and SHARED-WRITE-ON / SHARED-WRITE-OFF, the two
 *   gates for the files of the group account named shared.  Allowed on a group account (and on the account shared itself: the words on THAT account decide
 *   what the members of its group can do inside it).  Account-scoped: they take effect at the person's next account entry.  The register says 'yes' or
@@ -732,6 +755,7 @@ add.delete.arm:
          crt '   sh-on, sh-off, os-on, os-off, sd-on, sd-off, voc-on, voc-off, bp-on, bp-off, dict-on, dict-off, recovery-on, recovery-off, xfer-on, xfer-off, net-on, net-off,'
          crt '   files-on, files-off, files-write-on, files-write-off, files-admin-on, files-admin-off, ai-on, ai-off, shared-read-on, shared-read-off, shared-write-on, shared-write-off,'
          crt '   start-menu, start-terminal, start-default, pins-on, pins-off,'
+         crt '   ssh-key-on, ssh-key-off,'
          crt '   suspended or unsuspended'
       end
       end       ;* not(route.done)
@@ -759,6 +783,7 @@ show.usage:
    crt '                  modify.account <account> net-on | net-off'
    crt '                  modify.account <account> files-on | files-off | files-write-on | files-write-off | files-admin-on | files-admin-off'
    crt '                  modify.account <account> ai-on | ai-off'
+   crt '                  modify.account <account> ssh-key-on | ssh-key-off'
    crt '                  modify.account <account> shared-read-on | shared-read-off | shared-write-on | shared-write-off'
    crt '                  modify.account <account> start-menu | start-terminal | start-default'
    crt '                  modify.account <account> pins-on | pins-off'
@@ -782,8 +807,8 @@ show.usage:
 *   last of them, ai-on / ai-off, on 13 Nov 26.)  The conflict test compares DIFFERENT words only: the same word twice is one action (want.at is set once).
 
 validate.actions:
-   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,XFER-ON,XFER-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,AI-ON,AI-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
-   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,XF,XF,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,AI,AI,ST,ST,ST,PN,PN,S,S')
+   word.arr = convert(',', @fm, 'SSH,API,BOTH,NONE,SH-ON,SH-OFF,OS-ON,OS-OFF,SD-ON,SD-OFF,VOC-ON,VOC-OFF,BP-ON,BP-OFF,DICT-ON,DICT-OFF,RECOVERY-ON,RECOVERY-OFF,XFER-ON,XFER-OFF,NET-ON,NET-OFF,SHARED-READ-ON,SHARED-READ-OFF,SHARED-WRITE-ON,SHARED-WRITE-OFF,FILES-ON,FILES-OFF,FILES-WRITE-ON,FILES-WRITE-OFF,FILES-ADMIN-ON,FILES-ADMIN-OFF,AI-ON,AI-OFF,SSH-KEY-ON,SSH-KEY-OFF,START-MENU,START-TERMINAL,START-DEFAULT,PINS-ON,PINS-OFF,SUSPENDED,UNSUSPENDED')
+   slot.arr = convert(',', @fm, 'R,R,R,R,SH,SH,OS,OS,SD,SD,VOC,VOC,BP,BP,DICT,DICT,RC,RC,XF,XF,NET,NET,SR,SR,SW,SW,F,F,FW,FW,FA,FA,AI,AI,KY,KY,ST,ST,ST,PN,PN,S,S')
    n.words = dcount(actions, @fm)
    pos.of = ''
    want.at = ''
@@ -1366,6 +1391,98 @@ set.ai:
    @system.return.code = 0
    void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
    crt sysmsg(12611, acc.name, if cg.now then 'yes' else 'no')  ;* Account %1 has ai %2
+   return
+
+*****************************************************************************
+* SET.SSHKEY  -  MODIFY.ACCOUNT <account> SSH-KEY-ON | SSH-KEY-OFF
+*
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner, 17 Nov 2026: "key sign-in is FORBIDDEN as delivered ... a documented loosening for the
+*   administrator", and only the accounts SD itself made lose it).  key.want is set by the caller.  Membership of the Windows group sdsshnokey means NO key sign-in
+*   (allow-ssh-groups.ps1's "Match Group sdsshnokey" arm, PubkeyAuthentication no), so SSH-KEY-ON takes the person OUT of the group and SSH-KEY-OFF puts the person IN:
+*   the opposite of the route words.  Nothing is written to the register.
+*
+* THE REFUSALS, IN ORDER, each before anything changes: a group (sdg_) or other account has no Windows user (10087, 10081, as set.ai says it); a Windows user name that
+*   is not valid (10081); a Windows user SD did not make - no "SD account" description, read by !is_sd_user, three-valued like the groups - is refused with 15170,
+*   because the keys it set up outside SD are its own; a membership that cannot be read (10081 with the status); SSH-KEY-OFF when the group does not exist on this
+*   machine (10024: an install from before this release).  The state line (15171) is read back from the group by change.files.group, and a read back that does not
+*   show the wanted state is a failure (10081), never a success.
+*   NOTE: sshd's deny group fails OPEN where the group cannot be read; that is the price of not taking keys away from users SD did not make.
+
+set.sshkey:
+   if group.name[1,4] # 'sdu_' then
+      @system.return.code = -ER$FAILED
+      if group.name[1,4] = 'sdg_' then
+         crt sysmsg(10087, acc.name)  ;* %1 is a group account and has no remote access; reach it with logto
+      end else
+         crt sysmsg(10081, acc.name, 2)  ;* Unable to change remote access for %1, status: %2
+      end
+      return
+   end
+   files.user = group.name[5,999]
+   if not(valid_os_name(files.user)) then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, 2)
+      return
+   end
+
+   key.made = is_sd_user(files.user)
+   files.stat = status()
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+   if not(key.made) then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(15170, acc.name, files.user)  ;* %1: its Windows user %2 was not made by SD, so its ssh keys are its own ...; nothing was changed
+      return
+   end
+
+   has.nokey = is_grp_member(files.user, 'sdsshnokey')
+   files.stat = status()
+   if files.stat # 0 then
+*     A machine with no group sdsshnokey: nobody is in it, so SSH-KEY-ON has nothing to take away and SSH-KEY-OFF is refused below with 10024, as Linux
+*     (the lookup's status 1 there is "no such group").
+*     !is_group answers @false with status 1 for "no such group" and for "could not ask" alike, so only a group it can see keeps the failure.
+      if not(is_group('sdsshnokey')) then
+         files.stat = 0
+         has.nokey = @false
+      end
+   end
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   if has.nokey = not(key.want) then
+      @system.return.code = 0
+      crt sysmsg(10080, acc.name)  ;* %1 already had that access; nothing changed
+      return
+   end
+
+   if not(key.want) then
+*     !is_group's @false is "no such group" or "could not ask" (status 1 for both, by its design): either way the group cannot be joined, and 10024 names it.
+      key.found = is_group('sdsshnokey')
+      if not(key.found) then
+         @system.return.code = -ER$FAILED
+         crt sysmsg(10024, 'sdsshnokey')  ;* %1 is not a valid Windows group
+         return
+      end
+   end
+
+   cg.group = 'sdsshnokey'
+   cg.want = not(key.want)
+   gosub change.files.group
+   if files.stat # 0 then
+      @system.return.code = -ER$FAILED
+      crt sysmsg(10081, acc.name, files.stat)
+      return
+   end
+
+   @system.return.code = 0
+   void kernel(K$AUDIT, 'modify.account ' : downcase(action) : ' account=' : acc.name)
+   crt sysmsg(15171, acc.name, if cg.now then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2
    return
 
 * ======================================================================

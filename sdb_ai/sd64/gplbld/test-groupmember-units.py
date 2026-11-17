@@ -154,6 +154,15 @@ READS_STATUS = {
     ("modifya", "has.ai = is_grp_member(files.user, 'sdaiusers')"):
         "ai-on / ai-off: files.stat = status() on the next line; a lookup that cannot tell is followed by is_group() (no such group: ai-off has "
         "nothing to take away, ai-on is 10024), and a group that is there and cannot be read stops the command with 10081",
+    # 17 Nov 26 - from Linux 1557e270 (S.62 LC3): sdsshnokey, the DENY group of key sign-in, the same shapes as sdaiusers.
+    ("acc_os_info", "m = is_grp_member(uname, 'sdsshnokey')"):
+        "backup manifest ssh.key: 'if status() then' on the next line; a group that is missing reads as 1 (nobody is denied a key), "
+        "a group that is there and cannot be read is 12005",
+    ("create_account", "rm.member = is_grp_member(acc.uname, 'sdsshnokey')"):
+        "a reused user given ssh-key-on leaves the group: rm.told = status() on the next line; only a lookup that answers is acted on",
+    ("modifya", "has.nokey = is_grp_member(files.user, 'sdsshnokey')"):
+        "ssh-key-on / ssh-key-off: files.stat = status() on the next line; a lookup that cannot tell is followed by is_group() (no such "
+        "group: ssh-key-on has nothing to take away, ssh-key-off is 10024), and a group that is there and cannot be read is 10081",
 }
 FAIL_CLOSED = {
     # 25 Oct 26 - the SCRAM sdapi gate moved to READS_STATUS with the sdfiles route (it reads status() now).
@@ -165,6 +174,15 @@ FAIL_CLOSED = {
         "the same state line for sdfilesadmin: display only",
     ("create_account", "ai.now = is_grp_member(acc.uname, 'sdaiusers')"):
         "the same state line for sdaiusers (12611, RELEASE_1.1 246): display only",
+    # 17 Nov 26 - from Linux 1557e270 (S.62 LC3): the three displays of the key sign-in gate.  sdsshnokey is a DENY group, so a could-not-tell
+    # reads as "not a member" and shows key sign-in ON - which is what sshd itself does with a group it cannot read (a deny group fails open);
+    # nothing is granted or changed from any of them.
+    ("create_account", "if not(attach) then crt sysmsg(15171, acc.name, if is_grp_member(acc.uname, 'sdsshnokey') then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2"):
+        "the key sign-in state line after the account is made (15171): display only",
+    ("tk_gates", "if status() = 0 and k.made then state = (if is_grp_member(user, gi<TK.G.GROUP>) then 0 else 1)"):
+        "tool.gates' key column for an administrator: display only; shown only for a Windows user SD made",
+    ("tool_mygates", "if status() = 0 and k.made then s = (if is_grp_member(@logname, ggrp<k>) then 0 else 1)"):
+        "the holder's key sign-in row: display only; shown only for a Windows user SD made",
     ("cproc", "if not(is_grp_member(@logname,acc.record<ACC$GROUP>)) then"):
         "the logto gate: an access check fails closed with 10003",
     # 15 Nov 26 - RELEASE_1.1 299 (Linux d15ace15, S.242 stage 3): the file transfer server's two membership tests, each a refusal.

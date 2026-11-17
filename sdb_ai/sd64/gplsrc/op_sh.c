@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62): os_path_ok_for_account() asks NETDIRS (path_in_netdirs()) LAST, after the account's own
+ *           directory and the SD.ACCOUNTS gate, as Linux's does; it was asked before SD.ACCOUNTS, inside account_path_permitted().
  * 13 Nov 26 Windows (RELEASE_1.1 254, as Linux): shared_root_get() and shared_ref_ok() refuse a path that is not absolute
  *           (sh_path_absolute()); they handed a relative one to fullpath().
  * 25 Oct 26 Windows port - from Linux 2a68b2f (24 Oct 26) W.11 F9: every privilege and gate test reads the process's own words (MY_ADMIN, MY_PRIV, MY_GATE: sysseg.h), not the user
@@ -319,10 +321,16 @@ bool os_path_ok_for_account(const char *name) {
     return FALSE;
   if (!fullpath(resolved, (char *)name))
     return FALSE;
-  if (account_path_permitted(resolved, TRUE))
+  if (account_path_own(resolved, TRUE))
     return TRUE;
   /* 23 Oct 26, Linux 7ceb50d: the SD.ACCOUNTS gate, between the own account and OS.EXECUTE (op_dio2.c) */
-  return MY_PRIV(USR_SD_ACCOUNTS) && path_in_enterable_account(resolved);
+  if (MY_PRIV(USR_SD_ACCOUNTS) && path_in_enterable_account(resolved))
+    return TRUE;
+  /* 17 Nov 26, Linux 1557e270 (S.62): the directories the administrator listed in NETDIRS, asked LAST */
+  {
+    char cand[MAX_PATHNAME_LEN + 1];
+    return path_fold(resolved, cand) && path_in_netdirs(cand);
+  }
 }
 
 /* os_path_open_ok()  -  the same for a caller: an $internal program is trusted, anyone else is asked. */

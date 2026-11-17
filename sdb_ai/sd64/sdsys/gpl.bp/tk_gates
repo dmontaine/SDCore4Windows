@@ -8,6 +8,8 @@
 * 22 Oct 26 dm  New (S.75, TK-0.3).
 * 7 Nov 26 dm   S.166: the home gate (kind 'start') is read by $tk_startof from ACC$START.
 * 15 Nov 26 dm  S.242 stage 6: the file transfer gate (kind 'record') is the register field ACC$XFER, yes or no.
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the key sign-in gate (kind 'nokey') is ON when the account's Windows user is NOT in sdsshnokey, and 'na' for
+*               a group or other account and for a Windows user SD did not make (no "SD account" description, !is_sd_user, or one that could not be read).
 * END-HISTORY
 *
 * START-DESCRIPTION:
@@ -42,6 +44,7 @@ $include int$keys.h
 $include tk.h
 
 deffun is_grp_member(user,group) calling '!is_grp_member'
+deffun is_sd_user(username) calling '!is_sd_user'
 
    g = ''
    info = ''
@@ -103,6 +106,12 @@ deffun is_grp_member(user,group) calling '!is_grp_member'
             call $tk_startof(rec<ACC$START>, state)
          case gi<TK.G.KIND> = 'record'               ;* S.242 stage 6: the file transfer gate, a register field no kernel key holds (the transfer server reads it at each connection)
             state = (if upcase(trim(rec<ACC$XFER>)) = 'YES' then 1 else 0)
+         case gi<TK.G.KIND> = 'nokey'                ;* 17 Nov 26 (Linux 1557e270, S.62 LC3): key sign-in, ON when NOT in the group; only for a Windows user SD made
+            state = 'na'
+            if atype = 'USER' then
+               k.made = is_sd_user(user)
+               if status() = 0 and k.made then state = (if is_grp_member(user, gi<TK.G.GROUP>) then 0 else 1)
+            end
          case gi<TK.G.KIND> = 'group'
             if atype = 'USER' then
                state = (if is_grp_member(user, gi<TK.G.GROUP>) then 1 else 0)

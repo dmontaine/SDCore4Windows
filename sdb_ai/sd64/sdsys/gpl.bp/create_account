@@ -18,6 +18,11 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner's decision of 17 Nov 2026: key sign-in is off as delivered for the accounts SD makes): a Windows
+*              user this routine MAKES (or that a restore takes over, which is SD-made by the reuse rule) joins the Windows group sdsshnokey, so sshd offers it no key
+*              sign-in, unless CA$SSH.KEY is exactly 1; a reused user given CA$SSH.KEY leaves the group.  An ATTACHed user (the installing user) is never put in it.
+*              The group is looked for before anything is made (10024); CA$SSH.KEY on a group or other account is refused (10087, 10081); the state line is 15171.
+*              A group of its own, not sdsshonly, which carries the deny-logon rights no verb may lift.
 * 15 Nov 26 Windows port - RELEASE_1.1 299, from Linux e080527e (S.242 stage 1): CA$XFER (exactly 1) writes ACC$XFER 'yes' for a user account ('no' otherwise,
 *              written explicitly) and is said with 15074; a group or other account is refused (15075) before anything is made.
 * 13 Nov 26 Windows port - RELEASE_1.1 246, from Linux S.69 step 2 (23 Oct 26): CA$AI joins the new user to the Windows group sdaiusers, the right to use the AI
@@ -191,6 +196,9 @@ deffun ps_script(script) calling '!ps_script'
    recovery.want = (settings<CA$RECOVERY> = 1)
 * 15 Nov 26 Windows port - from Linux e080527e (S.242): XFER-ON, file transfer over the ssh login; the same rule, exactly 1 to be a request; a user account only.
    xfer.want = (settings<CA$XFER> = 1)
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON, key sign-in over ssh for a Windows user SD makes; the same rule, exactly 1 to be a request; a user
+*   account only.  Off (the user is put in sdsshnokey) unless named.
+   ssh.key.want = (settings<CA$SSH.KEY> = 1)
 * 18 Oct 26 dm - S.66: the shared-account gates.  Read is ON by default (a blank field means yes), so its setting is inverted: exactly 1 withdraws it.
 *   Write is OFF by default: exactly 1 grants it.
    shared.read.off = (settings<CA$SHARED.READ.OFF> = 1)
@@ -266,6 +274,15 @@ deffun ps_script(script) calling '!ps_script'
 * 23 Oct 26 dm - S.69 step 2 (Windows port 13 Nov 26, RELEASE_1.1 246): AI-ON needs nothing else, but the group sdaiusers is looked for before anything is made, as the others are.
      if ai.want then
        files.grp.name = 'sdaiusers'
+       gosub check.files.group
+       if files.bad then goto exit.create
+     end
+
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): a Windows user SD makes is put in sdsshnokey (key sign-in off), so the group is looked for before anything is
+*   made, as the others are: on a machine without it (an install from before this release) the account is refused and nothing is created, rather than made with keys it
+*   should not have.  An attached user is never put in it, so the group is not asked for then.
+     if not(attach) and not(ssh.key.want) then
+       files.grp.name = 'sdsshnokey'
        gosub check.files.group
        if files.bad then goto exit.create
      end
@@ -646,6 +663,12 @@ PW.TRY.AGAIN:
        err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
        goto exit.create
      end
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): nor key sign-in, which belongs to a Windows user, for the same reason.
+     if ssh.key.want then
+       @system.return.code = -ER$ARGS
+       err = 10087:@vm:acc.name ;* %1 is a group account and has no remote access
+       goto exit.create
+     end
 * 10 Nov 26 Windows port - from Linux 44807a43 (S.88 plan 2.9, D2): nor a recovery copy: it is kept in the account's directory, where every member can rename entries (12776).
      if recovery.want then
        @system.return.code = -ER$ARGS
@@ -673,6 +696,12 @@ PW.TRY.AGAIN:
      end
 * 17 Oct 26 dm - S.65 slice 2c: nor a files-only login (10081 with status 2, as MODIFY.ACCOUNT says it for an account with no Windows user).
      if files.want or files.write.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): nor an AI gate
+       @system.return.code = -ER$ARGS
+       err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
+       goto exit.create
+     end
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): nor key sign-in.
+     if ssh.key.want then
        @system.return.code = -ER$ARGS
        err = 10081:@vm:acc.name:@vm:2 ;* Unable to change remote access for %1, status: 2
        goto exit.create
@@ -1124,6 +1153,8 @@ PW.TRY.AGAIN:
       crt sysmsg(12775, acc.name, acc.rec<ACC$RECOVERY>)  ;* Account %1 keeps a recovery copy of unsaved editor text: %2
 *     15 Nov 26 (from Linux e080527e, S.242, RELEASE_1.1 299): file transfer, in the words MODIFY.ACCOUNT says it with.
       crt sysmsg(15074, acc.name, acc.rec<ACC$XFER>)  ;* Account %1 may move files over its ssh login (receive / send): %2
+*     17 Nov 26 (from Linux 1557e270, S.62 LC3): key sign-in is NOT being in sdsshnokey, read off the group.  Not said for an attached user, whose keys SD does not manage.
+      if not(attach) then crt sysmsg(15171, acc.name, if is_grp_member(acc.uname, 'sdsshnokey') then 'no' else 'yes')  ;* Account %1 may sign in over ssh with a key: %2
    end
 *  28 Oct 26, S.75, home: the two settings are said when they were asked for, in the words MODIFY.ACCOUNT says them with.
    if start.want # '' then crt sysmsg(12873, acc.name, start.want)  ;* Account %1 starts at: %2
@@ -1792,6 +1823,33 @@ set.access:
          rm.told = status()
          stat = 0
          if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdaiusers", acc.uname)
+         if stat # 0 then
+            @system.return.code = -ER$FAILED
+            err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+         end
+      end
+   end
+
+* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3; the owner, 17 Nov 2026: "key sign-in is FORBIDDEN as delivered ... only the accounts SD itself made lose key
+*   sign-in").  A Windows user this routine made, or a restore took over (SD made it: !is_sd_user, CA$REUSE.SD.USER), is put in sdsshnokey, the group whose members sshd
+*   offers no key sign-in (allow-ssh-groups.ps1's "Match Group sdsshnokey" arm), unless SSH-KEY-ON was asked; a reused user given SSH-KEY-ON is taken out of it.  AN
+*   ATTACHED USER IS NEVER TOUCHED: it is the installing user's own sign-in, and the keys it set up outside SD are its own.  A failure is reported (10081) and the account
+*   stops here, as for a route.  This is the only place a Windows user joins the group unasked, so an upgrade, which makes no account, changes nobody's key sign-in.
+*   NOT sdsshonly: that group carries the deny-logon rights (deny-logon.ps1), which no verb may lift, and ssh-key-on must be able to take an account out of this one.
+   if not(attach) then
+      if ssh.key.want then
+         if reuse.sd.user then
+            rm.member = is_grp_member(acc.uname, 'sdsshnokey')
+            rm.told = status()
+            stat = 0
+            if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdsshnokey", acc.uname)
+            if stat # 0 then
+               @system.return.code = -ER$FAILED
+               err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
+            end
+         end
+      end else
+         stat = os_group("ADDMEM", "sdsshnokey", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

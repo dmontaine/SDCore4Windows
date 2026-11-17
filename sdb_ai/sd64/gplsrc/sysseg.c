@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): start_sd() calls netdirs_report() after audit_rotate(), so each NETDIRS
+ *           entry SD ignores is named once at start.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3195): parentheses as Linux's, no change in effect.
  * 15 Nov 26 Windows port - RELEASE_1.1 317: api_local copied to the segment for sdwind.
  * 14 Nov 26 Windows port - from Linux e99979d6 (S.241, RELEASE_1.1 284): release_pipe_fds() - sdwind gives back a caller's pipe on fds 0-2.
@@ -744,6 +746,11 @@ bool start_sd() {
      bind_sysseg(), which is what makes sysseg->sysdir readable.             */
 
   audit_rotate();
+
+  /* 17 Nov 26 Windows port - from Linux 1557e270 (S.62): NETDIRS is judged here once and each entry it ignores is named in the error
+     log.  A session judges the list again itself (op_dio2.c) and ignores the same entries without a word. */
+
+  netdirs_report();
 
   /* Start sdwind daemon */
 

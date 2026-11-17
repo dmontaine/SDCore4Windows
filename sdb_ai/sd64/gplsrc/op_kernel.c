@@ -17,6 +17,9 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4608): a phantom child that cannot start writes "phantom: cannot start a phantom
+ *           from <path> - <reason>" (or why there is no path) to the error log and ends; it called k_error(), whose longjmp() left the
+ *           child running as a second copy of the session.
  * 17 Nov 26 Windows port - four-version audit round 1, second pass (P-1969): the K_OS_ADMINISTRATOR case is gone with the key (keys.h).
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3088, P-3089, P-3090): op_login() discards its arguments unread, as Linux's
  *           does; the password was copied to a stack buffer and never wiped.  (P-3087) K_SHOW_SAFE before K_AI_*, as Linux orders them.
@@ -2062,17 +2065,25 @@ void op_phantom() {
        counter - and PHANTOM still answered the reserved user number as if a phantom
        had started.  _exit(), never return, from every failure below.            */
 
+    /* 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4608), as SD Core Solo: each failure below is written to the error log
+       with log_message() and the child ends.  k_error() was called here, and a fatal k_error() does not return: it longjmp()s to
+       the caller's command loop, so the child ran on as a second copy of the session and the _exit() after it was never reached.
+       The child has no terminal of its own; the error log is where the reason can be read. */
     if (!exe_directory(bindir, sizeof(bindir))) {
-      k_error("Cannot locate the SD program directory - phantom not started");
+      log_message("phantom: cannot start a phantom - the SD program directory cannot be found");
       _exit(1);
     }
     if (snprintf(path, sizeof(path), "%s/sd", bindir) >= (int)sizeof(path)) {
-      k_error("Overflowed path/filename length in op_phantom()!");
+      log_message("phantom: cannot start a phantom - the path of sd is too long");
       _exit(1);
     }
     sprintf(option, "-p%d", phantom_user_index);
     execle(path, path, option, (char *)NULL, child_env); /* 28 Oct 26 F10: with the environment made above */
-    k_error("Cannot start a phantom from %s - %s", path, strerror(errno));
+    {
+      char phantom_msg[MAX_PATHNAME_LEN + 128];
+      snprintf(phantom_msg, sizeof(phantom_msg), "phantom: cannot start a phantom from %s - %s", path, strerror(errno));
+      log_message(phantom_msg);
+    }
     _exit(1);
   } else if (cpid == -1) { /* Error */
     *(UMap(uptr->uid)) = 0;

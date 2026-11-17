@@ -17,6 +17,11 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - from Linux 1557e270 (S.62, NETDIRS made stricter): path_in_netdirs() is asked last (account_path_permitted() is
+ *           account_path_own() then NETDIRS); entries are resolved once per process and ignored (named in the error log at start,
+ *           netdirs_report()) when not absolute, not an existing directory, a drive root or "/", at most 16, or overlapping the system
+ *           directory, sd.conf's directory, USRDIR, GRPDIR or any registered account (the register read at each admission; unreadable
+ *           refuses); a candidate still holding "." or ".." is refused.
  * 13 Nov 26 Windows (RELEASE_1.1 254, Linux path_inside_dir): os_path_inside() (K_PATH_IN) refuses a directory that is not absolute and one
  *           that holds the whole machine (a drive root, or "/", the runtime's root); account_path_permitted() refuses such an account root too.
  * 12 Nov 26 Windows port - from Linux 7aba47df (RELEASE_1.1 241): pub_ospath(), the public OSPATH() (Linux's x_ospath) with openQM's keys and Linux's
@@ -68,6 +73,7 @@
  */
 
 #include "sd.h"
+#include "config.h" /* 17 Nov 26: pcfg.usrdir and pcfg.grpdir, which NETDIRS keeps clear of */
 #include "keys.h"
 #include "dh_int.h"
 #include "header.h"
@@ -2356,8 +2362,8 @@ bool path_in_enterable_account(char* resolved) /* Absolute, as left by fullpath(
   return found;
 }
 
-bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() */
-                            bool for_write) /* Asking to modify, not just read? */
+bool account_path_own(char* path,     /* Absolute, as left by fullpath() */
+                      bool for_write) /* Asking to modify, not just read? */
 {
   char cand[MAX_PATHNAME_LEN + 1];
   char root[MAX_PATHNAME_LEN + 1];
@@ -2404,33 +2410,236 @@ bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() *
     }
   }
 
-  /* NETDIRS: site data directories outside any account.  Semicolon
-    separated, because a Windows pathname contains a colon.               */
+  return FALSE;
+}
 
-  if (sysseg->netdirs[0] != '\0') {
-    char* p;
-    char* q;
+/* 17 Nov 26 Windows port - from Linux 1557e270 (S.62): account_path_permitted() is the account's own directory and the shared SDSYS
+   entries (account_path_own()), then NETDIRS, asked LAST (path_in_netdirs()).  os_path_ok_for_account() asks the SD.ACCOUNTS gate
+   between the two, as Linux's does.                                                                                              */
 
-    p = (char*)(sysseg->netdirs);
-    while (*p != '\0') {
-      q = item;
-      while ((*p != '\0') && (*p != ';') &&
-             ((q - item) < MAX_PATHNAME_LEN))
-        *(q++) = *(p++);
-      *q = '\0';
+bool account_path_permitted(char* path,     /* Absolute, as left by fullpath() */
+                            bool for_write) /* Asking to modify, not just read? */
+{
+  char cand[MAX_PATHNAME_LEN + 1];
 
-      while ((*p != '\0') && (*p != ';'))
-        p++; /* Discard an over-long element rather than truncating into a
-                shorter directory that would then match more than it should */
-      if (*p == ';')
-        p++;
+  if (account_path_own(path, for_write))
+    return TRUE;
+  if (!net_normalise(path, cand) || has_parent_ref(cand))
+    return FALSE;
+  return path_in_netdirs(cand);
+}
 
-      if ((item[0] != '\0') && net_normalise(item, root) &&
-          path_within(cand, root))
-        return TRUE;
+/* ======================================================================
+   NETDIRS (21 Aug 26 Windows port; made stricter 17 Nov 26 from Linux 1557e270, S.62, the owner's decision of 17 Nov).  sd.conf's
+   NETDIRS= names directories, separated by ";" (a Windows pathname holds a colon), OUTSIDE ITS OWN ACCOUNT that a session held to its
+   account may still reach, to read and to write.  Empty as delivered: nothing is added.  The list is read at start into the shared
+   segment (sysseg->netdirs), as it always was here (Linux reads it per session; the mail of 18 Nov: "Yours reads at start: keep").
+
+   WHO IT REACHES: only a session the gate would refuse - not the administrator or an account with os-on (net_path_permitted() and
+   os_path_ok_for_account() pass them before), not an $internal program.  Asked LAST, after the account's own directory (and, in
+   os_path_ok_for_account(), the SD.ACCOUNTS gate).
+
+   THE PATH comes resolved as the gate resolves it (fullpath(), then net_normalise()), and one that still holds a "." or ".." component
+   is refused before any comparison.  The comparison ignores case (NTFS, path_within()) and ends at a component boundary.
+
+   AN ENTRY is resolved once per process (fullpath(), net_normalise()) when the list is first asked, and IGNORED - named in the error log
+   once, when SD starts (netdirs_report(), start_sd()) - when it is not absolute, is not an existing directory, is "/" or a drive root,
+   holds or lies inside the SD system directory, the directory of sd.conf, USRDIR or GRPDIR, or holds or lies inside the directory of ANY
+   registered account (the register is read again at every admission, so an account made later inside a listed directory closes that
+   entry at once; a register that cannot be read refuses), or when more than MAX_NETDIRS are listed.  An element longer than a pathname
+   is discarded whole, never cut: a cut path is a SHORTER directory, which would admit more than was written.                        */
+
+#define MAX_NETDIRS 16
+
+Private char netdirs_root[MAX_NETDIRS][MAX_PATHNAME_LEN + 1];
+Private int netdirs_count = -1; /* -1: the list has not been read in this process */
+
+Private bool netdir_overlap(char* a, char* b) {
+  return path_within(a, b) || path_within(b, a);
+}
+
+/* A "." or ".." component left in a normalised name: the prefix test would mean nothing. */
+Private bool netdir_dot_component(char* p) {
+  char* q;
+
+  for (q = p; *q != '\0'; q++) {
+    if ((q != p) && (*(q - 1) != '/'))
+      continue;
+    if ((q[0] == '.') && ((q[1] == '\0') || (q[1] == '/') || ((q[1] == '.') && ((q[2] == '\0') || (q[2] == '/')))))
+      return TRUE;
+  }
+  return FALSE;
+}
+
+/* A directory SD keeps a listed directory clear of, resolved and normalised; FALSE when there is none to keep clear of. */
+Private bool netdir_resolved(const char* dir, char* out) {
+  char r[MAX_PATHNAME_LEN + 1];
+
+  if ((dir == NULL) || (dir[0] == '\0') || !os_root_absolute(dir))
+    return FALSE;
+  if (!fullpath(r, (char*)dir))
+    return FALSE;
+  return net_normalise(r, out);
+}
+
+/* Does ROOT hold, or lie inside, the directory of a registered account?  1 yes (its name in WHICH), 0 no, -1 the register cannot be
+   read (taken as yes by every caller).  Read as path_in_enterable_account() reads it: line 1 of each record is the account's path. */
+Private int netdir_account_clash(char* root, char* which, size_t which_len) {
+  char regdir[MAX_PATHNAME_LEN + 1];
+  char recpath[MAX_PATHNAME_LEN + 1];
+  char acct[MAX_PATHNAME_LEN + 1];
+  char norm[MAX_PATHNAME_LEN + 1];
+  char body[4096];
+  char* p;
+  DIR* d;
+  struct dirent* ent;
+  FILE* fp;
+  size_t got;
+  int clash = 0;
+
+  if (snprintf(regdir, sizeof(regdir), "%s%caccounts", sd_sysdir(), DS) >= (int)sizeof(regdir))
+    return -1;
+  if ((d = opendir(regdir)) == NULL)
+    return -1;
+  while ((clash == 0) && ((ent = readdir(d)) != NULL)) {
+    if ((ent->d_name[0] == '.') || (ent->d_name[0] == '%') || (strchr(ent->d_name, '/') != NULL))
+      continue;
+    if (snprintf(recpath, sizeof(recpath), "%s%c%s", regdir, DS, ent->d_name) >= (int)sizeof(recpath))
+      continue;
+    if ((fp = fopen(recpath, "r")) == NULL)
+      continue;
+    got = fread(body, 1, sizeof(body) - 1, fp);
+    fclose(fp);
+    body[got] = '\0';
+    if ((p = strchr(body, '\n')) != NULL)
+      *p = '\0';
+    if ((p = strchr(body, '\r')) != NULL)
+      *p = '\0';
+    if (strncasecmp(body, "@SDSYS", 6) == 0) {
+      if (snprintf(acct, sizeof(acct), "%s%s", sd_sysdir(), body + 6) >= (int)sizeof(acct))
+        continue;
+    } else {
+      snprintf(acct, sizeof(acct), "%s", body);
+    }
+    if (!netdir_resolved(acct, norm))
+      continue; /* no directory there to protect */
+    if (netdir_overlap(root, norm)) {
+      clash = 1;
+      if (which != NULL)
+        snprintf(which, which_len, "%.64s", ent->d_name); /* only reported */
     }
   }
+  closedir(d);
+  return clash;
+}
 
+/* Say why an entry is ignored, when SD starts; a session ignores it without a word. */
+Private void netdir_note(bool report, const char* entry, const char* why) {
+  char msg[MAX_PATHNAME_LEN + 200];
+
+  if (!report)
+    return;
+  snprintf(msg, sizeof(msg), "NETDIRS: %s is ignored - %s", entry, why);
+  log_message(msg);
+}
+
+Private void netdirs_load(bool report) {
+  char item[MAX_PATHNAME_LEN + 1];
+  char resolved[MAX_PATHNAME_LEN + 1];
+  char root[MAX_PATHNAME_LEN + 1];
+  char sysdir[MAX_PATHNAME_LEN + 1];
+  char confdir[MAX_PATHNAME_LEN + 1];
+  char other[MAX_PATHNAME_LEN + 1];
+  char which[64 + 1];
+  char why[128 + 1];
+  const char* p;
+  char* fs;
+  char* bs;
+  char* sep;
+  size_t n;
+  int clash;
+  struct stat st;
+  bool have_sys, have_conf;
+
+  netdirs_count = 0;
+  if (sysseg->netdirs[0] == '\0')
+    return;
+
+  have_sys = netdir_resolved(sd_sysdir(), sysdir);
+  snprintf(other, sizeof(other), "%s", config_path);
+  fs = strrchr(other, '/');
+  bs = strrchr(other, '\\');
+  sep = (fs > bs) ? fs : bs;
+  have_conf = FALSE;
+  if ((sep != NULL) && (sep != other)) {
+    *sep = '\0';
+    have_conf = netdir_resolved(other, confdir) && !os_root_whole_machine(confdir);  /* sd.conf at a drive root: no entry is taken */
+  }
+
+  p = (const char*)(sysseg->netdirs);
+  while (*p != '\0') {
+    n = strcspn(p, ";");
+    if (n > MAX_PATHNAME_LEN) {
+      snprintf(item, sizeof(item), "%.40s...", p);
+      netdir_note(report, item, "it is longer than a pathname may be");
+    } else if (n > 0) {
+      memcpy(item, p, n);
+      item[n] = '\0';
+      why[0] = '\0';
+      if (!os_root_absolute(item))
+        strcpy(why, "it is not an absolute path");
+      else if (!fullpath(resolved, item) || !net_normalise(resolved, root) || has_parent_ref(root) || netdir_dot_component(root)
+               || (stat(resolved, &st) != 0) || !S_ISDIR(st.st_mode))
+        strcpy(why, "it is not an existing directory");
+      else if (os_root_whole_machine(root))
+        strcpy(why, "it is the root of a drive, which holds the whole machine");
+      else if (!have_sys || netdir_overlap(root, sysdir))
+        strcpy(why, "it holds, or lies inside, the SD system directory");
+      else if (!have_conf || netdir_overlap(root, confdir))
+        strcpy(why, "it holds, or lies inside, the directory of sd.conf");
+      else if (netdir_resolved(pcfg.usrdir, other) && netdir_overlap(root, other))
+        strcpy(why, "it holds, or lies inside, the directory of user accounts (USRDIR)");
+      else if (netdir_resolved(pcfg.grpdir, other) && netdir_overlap(root, other))
+        strcpy(why, "it holds, or lies inside, the directory of group accounts (GRPDIR)");
+      else if ((clash = netdir_account_clash(root, which, sizeof(which))) != 0) {
+        if (clash < 0)
+          strcpy(why, "the account register cannot be read");
+        else
+          snprintf(why, sizeof(why), "it holds, or lies inside, the account %s", which);
+      } else if (netdirs_count >= MAX_NETDIRS)
+        snprintf(why, sizeof(why), "only %d directories are taken", MAX_NETDIRS);
+
+      if (why[0] != '\0')
+        netdir_note(report, item, why);
+      else
+        strcpy(netdirs_root[netdirs_count++], root);
+    }
+    p += n;
+    if (*p == ';')
+      p++;
+  }
+}
+
+/* start_sd(): the list judged once when SD starts, each entry it ignores named in the error log. */
+void netdirs_report(void) {
+  netdirs_load(TRUE);
+  netdirs_count = -1; /* the starter's view is the service's: a session judges again as itself */
+}
+
+/* Is CAND (normalised, as account_path_permitted() leaves it) inside a directory NETDIRS lists?  Asked last. */
+bool path_in_netdirs(char* cand) {
+  int i;
+
+  if (sysseg->netdirs[0] == '\0')
+    return FALSE;
+  if ((cand == NULL) || (cand[0] == '\0') || has_parent_ref(cand) || netdir_dot_component(cand))
+    return FALSE;
+  if (netdirs_count < 0)
+    netdirs_load(FALSE);
+  for (i = 0; i < netdirs_count; i++) {
+    if (path_within(cand, netdirs_root[i]) && (netdir_account_clash(netdirs_root[i], NULL, 0) == 0))
+      return TRUE;
+  }
   return FALSE;
 }
 
