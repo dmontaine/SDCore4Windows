@@ -168,7 +168,7 @@ def load():
     for n in IDE_MENU_MESSAGES:
         with open(os.path.join(MSG, str(n)), "r", encoding="latin-1") as fh:
             raw["msg:%d" % n] = fh.read()
-    for n in range(12191, 12195):
+    for n in range(12193, 12195):
         p = os.path.join(MSG, str(n))
         if os.path.exists(p):
             with open(p, "r", encoding="latin-1") as fh:
@@ -529,9 +529,9 @@ def run_b(raw):
         res["fkeys"].append("tk_fkeys does not skip ROW = 0")
     if "keys<i, TK.K.KEY> # ''" not in fk:
         res["fkeys"].append("tk_fkeys does not skip an empty key")
-    # the messages 12191 to 12194
+    # the messages 12193 and 12194 (17 Nov 26: 12191 and 12192, which nothing printed, deleted as Linux Core deleted 11186 and 11187)
     res["messages"] = []
-    for n in (12191, 12192, 12193, 12194):
+    for n in (12193, 12194):
         t = raw.get("msg:%d" % n)
         if t is None:
             res["messages"].append("message %d is missing" % n)
@@ -703,7 +703,7 @@ B_TEXT = {
     "keyof": "'keyof' returns the key of the first enabled binding for the pane",
     "name": "'name' knows PgUp, PgDn, ^, Shift- and Alt-",
     "fkeys": "tk_fkeys leaves a key-less row and a ROW = 0 row off the function-key row",
-    "messages": "messages 12191 to 12194 exist, are one line each, 12193 holds %1; only tk_keys cites 12193 and only tool_tktest 12194",
+    "messages": "messages 12193 and 12194 exist, are one line each, 12193 holds %1; only tk_keys cites 12193 and only tool_tktest 12194",
     "norun": "OWNER ANSWER 25: tk_keys and tk_fkeys contain no word that runs, opens, writes, calls or stops anything (and gosub only act.state and key.name): the registry cannot run an action",
     "samehandler": "OWNER ANSWER 25: in a page that puts actions in a menu, every such action has exactly one `case act` handler and the menu answer is used only as `act = answer`, before that case",
     "regmenu": "the registry's own menus: one & in every title and entry, no letter twice in a menu or among the titles",

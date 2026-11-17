@@ -2719,13 +2719,6 @@ Collection editor\n\nCursor up/down   Select the previous/next element\nPage up/
 
 cited by: `ced_core`
 
-### msg:12142
-> kind=message tier=reference since=- src=sdsys/messages/12142:1#816df5fc
-
-```
-Press any key to continue
-```
-
 ### msg:12143
 > kind=message tier=reference since=- src=sdsys/messages/12143:1#c073dc83
 
@@ -2779,13 +2772,6 @@ The elements of an array have no names to change
 ```
 
 cited by: `ced_core`
-
-### msg:12149
-> kind=message tier=reference since=- src=sdsys/messages/12149:1#0281bfc8
-
-```
-Change type to: %1 (Esc cancels)
-```
 
 ### msg:12150
 > kind=message tier=reference since=- src=sdsys/messages/12150:1#f6c3eb3a
@@ -3148,20 +3134,6 @@ cited by: `sl_out`
 
 cited by: `sl_out`
 
-### msg:12191
-> kind=message tier=reference since=- src=sdsys/messages/12191:1#7f56d213
-
-```
-Find an action
-```
-
-### msg:12192
-> kind=message tier=reference since=- src=sdsys/messages/12192:1#9b8066b4
-
-```
-No action matches
-```
-
 ### msg:12193
 > kind=message tier=reference since=- src=sdsys/messages/12193:1#c18cf684
 
@@ -3239,13 +3211,6 @@ MOUSE takes ON or OFF
 ```
 
 cited by: `sl_need`
-
-### msg:12203
-> kind=message tier=reference since=- src=sdsys/messages/12203:1#2b75eb0e
-
-```
-The IDE needs a terminal of at least %1 columns by %2 lines
-```
 
 ### msg:12204
 > kind=message tier=reference since=- src=sdsys/messages/12204:1#2d4eb512
@@ -6716,13 +6681,6 @@ The AI did not answer in the form that was asked for; its words follow, and noth
 
 cited by: `tk_ai`
 
-### msg:12657
-> kind=message tier=reference since=- src=sdsys/messages/12657:1#31bfb643
-
-```
-The AI line is not available: %1
-```
-
 ### msg:12658
 > kind=message tier=reference since=- src=sdsys/messages/12658:1#634c14f6
 
@@ -6875,20 +6833,6 @@ The selected text: %1 bytes
 ```
 
 cited by: `tk_ai`
-
-### msg:12675
-> kind=message tier=reference since=- src=sdsys/messages/12675:1#79275020
-
-```
-The AI is not available here: it is off for this account, or no provider, model and key have been set
-```
-
-### msg:12676
-> kind=message tier=reference since=- src=sdsys/messages/12676:1#473b6fec
-
-```
-Nothing is selected: set the mark (Esc .) where the text starts, move to where it ends, then ask
-```
 
 ### msg:12677
 > kind=message tier=reference since=- src=sdsys/messages/12677:1#5f20f247
@@ -7610,20 +7554,6 @@ Idle: signing out in %1 s
 
 cited by: `ide`
 
-### msg:12758
-> kind=message tier=reference since=- src=sdsys/messages/12758:1#585c4a5f
-
-```
-[read-only: characters outside ASCII]
-```
-
-### msg:12759
-> kind=message tier=reference since=- src=sdsys/messages/12759:1#b6976128
-
-```
-%1 %2 holds characters outside ASCII (bytes 128 to 247), so it is read-only in the IDE: it cannot be saved, saved as, written as a copy, changed by Replace or an AI edit, or edited as fields.  The editor shows such a character a byte at a time and could not be trusted to keep it as it is.
-```
-
 ### msg:12760
 > kind=message tier=reference since=- src=sdsys/messages/12760:1#451a91b5
 
@@ -7677,13 +7607,6 @@ cited by: `tk_ownfile`
 ```
 
 cited by: `tool_query`
-
-### msg:12766
-> kind=message tier=reference since=- src=sdsys/messages/12766:1#8c656d20
-
-```
-%1 %2 is open read-only: it holds characters outside ASCII
-```
 
 ### msg:12767
 > kind=message tier=reference since=- src=sdsys/messages/12767:1#79fafe6e
@@ -9375,27 +9298,6 @@ cited by: `login`
 ```
 
 cited by: `login`
-
-### msg:12990
-> kind=message tier=reference since=- src=sdsys/messages/12990:1#99993e56
-
-```
-split.up and split.down take a number of lines
-```
-
-### msg:12991
-> kind=message tier=reference since=- src=sdsys/messages/12991:1#6deeaca4
-
-```
-View lines containing:
-```
-
-### msg:12992
-> kind=message tier=reference since=- src=sdsys/messages/12992:1#b700615f
-
-```
-No line holds that text
-```
 
 ### msg:12993
 > kind=message tier=reference since=- src=sdsys/messages/12993:1#49c7d49a

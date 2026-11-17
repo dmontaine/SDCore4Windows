@@ -236,7 +236,8 @@ def check_a(t):
         len(models) == 4 and all(re.match(r"^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,99}$", m) for m in models) and not re.search(r"^key", p, re.M | re.I), repr(models))
     k = shipped(t["ctl"])
     kb = between(k, 'strcmp(cmd, "key") == 0 && nr == 1', "return usage();")
-    rc = func(k, "static char* read_key_console(")
+    rc = func(k, "static char* read_key_stars(")      # 17 Nov 26: the star reader, lifted out of read_key_console for the CONIN$ fallback
+    rf = func(k, "static char* read_key_console(")
     row("the client never takes a key as an argument: in the key branch the key comes from the console (echo off, then restored) or standard input only (rest holds the provider and nothing "
         "else), and it is never printed", "key = read_key_console(rest[0]);" in kb and "rest[1]" not in kb and "argv" not in kb
         and ordered(rc, "GetConsoleMode(in, &mode)", "& ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT)", "ReadConsoleInputW(", "SetConsoleMode(in, mode);") and not re.search(r"\bsayf?\((?:[^;]*,\s*)?key\s*[,)]", k)
@@ -248,6 +249,14 @@ def check_a(t):
         and "c == 0x08 || c == 0x7f" in rc and "c == 0x15" in rc and "c == 0x1b" in rc and "esc = (c == L'[' || c == L'O') ? 2 : 0;" in rc
         and "if (c >= 0x40 && c <= 0x7e)" in rc and "is set" not in k and "| ENABLE_PROCESSED_INPUT)" in rc,
         repr(re.findall(r"WriteFile\(out, ([^,]+),", rc)))
+    # 17 Nov 26 (Linux mail 2026-11-17T2200: "a client that reads nothing must never return to SD silently"): the console first, then a pipe or file that
+    # holds a line, then CONIN$ with the stars; nothing read is exit 2 with a sentence, never an empty key.
+    row("(17 Nov 26) the key's CONIN$ fallback: the console's star reader first; a pipe (once it holds data or is closed) or a file gives its first line; otherwise CONIN$ is read "
+        "with the stars; an empty key is never returned, and the key branch says so and exits 2 before any request is made",
+        ordered(rf, "key = read_key_stars(in, provider);", "kind = GetFileType(in);", "if (kind == FILE_TYPE_DISK)", "} else if (kind == FILE_TYPE_PIPE)",
+                "PeekNamedPipe(in, NULL, 0, NULL, &avail, NULL)", 'CreateFileW(L"CONIN$"', "key = read_key_stars(con, provider);")
+        and rf.count("return NULL;") == 1 and "if (k.n == 0) {" in func(k, "static char* read_key_line(")
+        and ordered(kb, "key = read_key_console(rest[0]);", "if (key == NULL) {", "return 2;", '"keyset"'), "")
     hb = between(k, 'strcmp(cmd, "key") == 0 && nr == 3 && strcmp(rest[1], "--handover") == 0', 'strcmp(cmd, "key") == 0 && nr == 1')
     hk = func(k, "static char* handover_key(")
     row("(Windows) the client's key --handover: the key is the FILE's (named by the third word), read and removed BEFORE the provider is even checked, and never printed",
@@ -317,7 +326,8 @@ def check_b(t):
     row("(S.170, Windows) set.ai key p handover: the file is FIXED (the hand-over directory in the sdsys directory, not a word of the sentence); the client is given its path (--handover), the "
         "file is removed after the client ran and on a refused provider, and the key is read back, not assumed; SD never reads the file itself",
         ordered(hb, "hand.f = @sdsys : @ds : '$aikey' : @ds : 'key'", "gosub drop.handover", "stop sysmsg(12615",
-                "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"' '--handover' '\" : hand.f : \"'\" capturing out", "gosub drop.handover", "gosub check.key", "if not(key.found) then")
+                "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"' '--handover' '\" : hand.f : \"'; exit $LASTEXITCODE\" capturing out",
+                "ctl.rc = os.error()", "gosub drop.handover", "if ctl.rc then", "stop sysmsg(12613, 'nokey'", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: a client that read no key is refused
         and "drop.handover: os.execute \"Remove-Item -LiteralPath '\" : hand.f : \"' -Force -ErrorAction SilentlyContinue\" return" in re.sub(r"\s+", " ", sa)
         and not re.search(r"\b(openseq|readseq|readblk|osread)\b", sa), "")
     safe = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._:/@+,-")
@@ -325,7 +335,8 @@ def check_b(t):
         set(re.search(r"okc = '([^']*)'", sa).group(1)) == safe and sa.count("qargs") >= 8
         and "qargs = \"'provider' '\"" in sa and 'os.execute "& \'" : ctl' in sa, "")
     row("set.ai key: the console is handed to the client (os.execute, no capturing, nothing redirected), the key is never in a variable of SD's, and the result is read back, not assumed",
-        ordered(sa, "case sub = 'key' and n.words = 3", "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\"\n", "qargs = \"'show'\"", "gosub run.ctl", "gosub check.key", "if not(key.found) then")
+        ordered(sa, "case sub = 'key' and n.words = 3", "os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'; exit $LASTEXITCODE\"\n",
+                "if os.error() then", "stop sysmsg(12613, 'nokey'", "qargs = \"'show'\"", "gosub run.ctl", "gosub check.key", "if not(key.found) then")   # 17 Nov 26: exit code read
         and not re.search(r"\binput\b|readline", sa) and "2>&1" not in sa, "")
     rc = between(sa, "run.ctl:", "need.ok:")
     row("(Windows) run.ctl: the client is run with its words quoted and NOTHING redirected, its carriage returns are taken out, and only then is an unreachable helper judged; no Python is "
@@ -636,6 +647,8 @@ GROUP_A_MUTANTS = [
     ("providers", "an http URL in the table", "url=https://api.openai.com", "url=http://api.openai.com"),
     ("providers", "a model in the table", "[openai]\n", "[openai]\nmodel=gpt\n"),
     ("ctl", "the key is taken from the command line", "    key = read_key_console(rest[0]);", "    key = (argc > 3) ? argv[3] : read_key_console(rest[0]);"),
+    ("ctl", "(17 Nov 26) nothing read goes on as an empty key", "    if (key == NULL) {\n", "    if (key == NULL && 0) {\n"),
+    ("ctl", "(17 Nov 26) no CONIN$ fallback", 'CreateFileW(L"CONIN$"', 'CreateFileW(L"NUL"'),
     ("ctl", "--handover reads the file only for a known provider",
      '    key = handover_key(rest[2]); /* removed first, whatever follows */\n    if (!is_provider(rest[0])) {\n      say("sd-ai-ctl: the provider is one of anthropic, openai, google, deepseek, custom");\n      return 2;\n    }\n',
      '    if (!is_provider(rest[0])) {\n      say("sd-ai-ctl: the provider is one of anthropic, openai, google, deepseek, custom");\n      return 2;\n    }\n    key = handover_key(rest[2]);\n'),
@@ -664,7 +677,8 @@ GROUP_B_MUTANTS = [
     ("restorea", "route.ai is not restored", "      if m.route.ai = '1' then settings<CA$AI> = 1\n", ""),
     ("setai", "the administrator is not asked first", "   if not(kernel(K$ADMINISTRATOR, -1)) then\n      stop sysmsg(2001) ;* Command requires administrator privileges\n   end\n", ""),
     ("setai", "a semicolon is an allowed character", "0123456789._:/@+,-'", "0123456789._:/@+,-;'"),
-    ("setai", "the key is captured by SD", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\"\n", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'\" capturing keyout\n"),
+    ("setai", "the key is captured by SD", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'; exit $LASTEXITCODE\"\n", "         os.execute \"& '\" : ctl : \"' 'key' '\" : prov : \"'; exit $LASTEXITCODE\" capturing keyout\n"),
+    ("setai", "a client that read no key is not refused (17 Nov 26)", "         if os.error() then\n", "         if @false then\n"),
     ("setai", "the whole URL goes to the audit trail", "' host=' : chost)", "' host=' : curl)"),
     ("setai", "the client is looked for in the SD system directory", "if ctl = '' then ctl = kernel(K$WINPATH, '/lib/sd-ai/sd-ai.exe')", "if ctl = '' then ctl = @sdsys : @ds : 'bin' : @ds : 'sd-ai.exe'"),
     ("setai", "the carriage returns are left in", "   out = convert(char(13), '', out)\n*  8 Nov 26", "*  8 Nov 26"),

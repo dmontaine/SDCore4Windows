@@ -104,8 +104,16 @@ $readOnly = @(
     (Join-Path $sysDir 'accounts.dic'),
     (Join-Path $sysDir '$hold'),        (Join-Path $sysDir '$hold.dic'),
     # 14 Nov 26 - RELEASE_1.1 301: SDSYS's command history, made by the installer so it can be locked.
-    (Join-Path $sysDir 'stacks')
+    (Join-Path $sysDir 'stacks'),
+    # 17 Nov 26 - with the same change to sd.iss: SDSYS's own example programs (LockSdsysExamples, after LoadExamples; found
+    # writable by sdusers on the fresh install of 17 Nov) and the AI line's documentation (P-2914, Linux S.100; docs\user
+    # inherits docs's read-only grant).
+    (Join-Path $sysDir 'examples.bp'),  (Join-Path $sysDir 'examples.bp.out'),
+    (Join-Path $sysDir 'docs'),         (Join-Path $sysDir 'docs\user')
 )
+# 17 Nov 26 - P-2914: the administrator's documentation, administrators only (Linux: 700 / 600).  An ordinary user may
+# neither read nor write it.
+$adminOnly = @((Join-Path $sysDir 'docs\admin'))
 $ipc = Join-Path $sysDir '$ipc'
 # 14 Nov 26 - RELEASE_1.1 293: two more controls, because the sdsys folder is now
 # locked and these are children that must KEEP the Modify they inherit: every
@@ -172,7 +180,7 @@ if (-not (Test-Path -LiteralPath $startDefault)) {
     Write-Output "verify-sysdiracl: $startDefault is absent (the home screen is the start; nothing to lock) - not measured."
     $readOnly = @($readOnly | Where-Object { $_ -ne $startDefault })
 }
-$absent = @(@($readOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
+$absent = @(@($readOnly + $adminOnly + $ipc + $moreControls) | Where-Object { -not (Test-Path -LiteralPath $_) })
 if ($absent.Count -gt 0) {
     Write-Output 'verify-sysdiracl: these paths do not exist, so nothing could be measured:'
     $absent | ForEach-Object { Write-Output "    $_" }
@@ -236,6 +244,18 @@ foreach ($p in $readOnly) {
     Note "sdusers can read $leaf" $canRead $true $true
 
     $canWrite = Test-CanWrite $p
+    if ($canWrite) { $tooLittle = $true }
+    Note "sdusers can WRITE $leaf" $canWrite $false $true
+}
+
+# 17 Nov 26 - P-2914: the administrator's documentation.  NOT READABLE is the pass here.
+foreach ($p in $adminOnly) {
+    $leaf = 'docs\' + (Split-Path -Leaf $p)
+    $canRead = Test-CanRead $p
+    if ($canRead) { $tooLittle = $true }
+    Note "sdusers can read $leaf" $canRead $false $true
+    $canWrite = $false
+    try { $canWrite = Test-CanWrite $p } catch { $canWrite = $false }
     if ($canWrite) { $tooLittle = $true }
     Note "sdusers can WRITE $leaf" $canWrite $false $true
 }

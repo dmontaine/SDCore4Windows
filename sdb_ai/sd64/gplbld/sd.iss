@@ -3994,6 +3994,17 @@ begin
   Result := (Code = 0);
 end;
 
+{ 17 Nov 26 - P-2914 (Linux S.100).  The same call with -AdminOnly, for sdsys\docs\admin: SYSTEM and Administrators only, no sdusers
+  ACE at all, as Linux's docs/admin is 700 / 600 and owned by sdsys.  secure-sysdirs.ps1 has the grants. }
+function LockAdminOnlyPath(Ps, Script, Target: String; var Code: Integer): Boolean;
+begin
+  if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+                  Script + '" -Path "' + Target + '" -AdminOnly',
+              '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := -1;
+  Result := (Code = 0);
+end;
+
 { 14 Nov 26 - RELEASE_1.1 293.  Locks each sdsys entry in Names ('/' between
   them: no name has one, and test-usspelling reads a name between slashes as a
   name, not a word) with LockOsUsersPath, one call apiece as SecureSysdirs does, and returns
@@ -4322,6 +4333,7 @@ var
   Accounts, Map, Messages, Newvoc, Bp, Cat, Conf, Voc, VocRm, VocRmSaved, ConfTable, VocTpl: String;
   ErrLog, Root: String;   { 14 Nov 26 - RELEASE_1.1 293 }
   Stacks: String;         { 14 Nov 26 - RELEASE_1.1 301 }
+  DocsAdmin, AdminSwitch: String;   { 17 Nov 26 - P-2914 }
 begin
   Result := '';
   Code := 0;
@@ -4439,7 +4451,17 @@ begin
       'syscom/terminfo/terminfo.src/helptext/dir_dict/licence/contrib/' +
       'agent-pack/bp.out/pcode.out/stacks/' +
       'examples/' +
+      'docs/' +
       'dict.dic/voc.dic/$map.dic/accounts.dic/$hold/$hold.dic', Code);
+
+  { 17 Nov 26 - P-2914, THE AI LINE'S DOCUMENTATION (Linux S.100; owner, 1 Nov 2026: "install the user/admin docs too ... with the
+    caveat that the admin doc should only be available to the admin").  stage.py ships docs\user and docs\admin from the documentation
+    repository; docs is locked above like agent-pack (sdusers read, administrators write), which docs\user inherits.  docs\admin is then
+    taken from sdusers altogether: SYSTEM and Administrators only, as Linux's is 700 / 600 for the sdsys user.  gpl.bp tk_aidocs also asks
+    the kernel for the administrator before it looks there.  On an upgrade upgrade.iss replaces docs whole, and this re-locks it. }
+  DocsAdmin := ExpandConstant('{#DataDir}\sdsys\docs\admin');
+  if (Failed = '') and not LockAdminOnlyPath(Ps, Script, DocsAdmin, Code) then
+    Failed := DocsAdmin;
 
   { errlog is not shipped: the first process that logs creates it, in sdsys.
     Once the folder is locked an ordinary session could not, so it is made here,
@@ -4467,9 +4489,13 @@ begin
     voc_removed.saved from 7 Nov 2026 - RELEASE_1.1 197; config.table from 10 Nov
     2026 - RELEASE_1.1 218; voc_template from 12 Nov 2026 - RELEASE_1.1 266) and the manual command
     below is only worth anything if it says which one. }
+  if Failed = DocsAdmin then
+    AdminSwitch := ' -AdminOnly'
+  else
+    AdminSwitch := '';
   Result := 'An SD Core system directory was NOT locked (code ' + IntToStr(Code) + '): ' +
             Failed + '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
-            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + #13#10#13#10;
+            '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Failed + '"' + AdminSwitch + #13#10#13#10;
 end;
 
 { 14 Nov 26 - RELEASE_1.1 293, FOUND BY THE FIRST RUN OF verify-sysdiracl ON THE 15:38 INSTALL.  start.default is the one name of
@@ -4493,6 +4519,44 @@ begin
     Result := 'The SD Core start setting was NOT locked (code ' + IntToStr(Code) + '): ' + Target +
               '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
               '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
+end;
+
+{ 17 Nov 26 - FOUND ON THE FRESH INSTALL OF 17 Nov (icacls): SDSYS's OWN examples.bp AND examples.bp.out were writable by every SD user.
+  LOAD.EXAMPLES (LoadExamples, AFTER SecureSysdirs) makes them in sdsys, SDSYS's account directory, so they inherited the folder's
+  inherit-only sdusers Modify, while bp.out beside them reads sdusers (RX).  Linux's sdsys is the sdsys user's, 755, so no other user can
+  write them there.  Locked HERE, after LoadExamples, as bp.out is (sdusers read, administrators write), on every install and upgrade,
+  each only when it exists (LOAD.EXAMPLES may have failed; secure-sysdirs.ps1 refuses a missing path), as LockStartDefault does.
+  SDSYS's own LOAD.EXAMPLES and REMOVE.EXAMPLES run elevated and keep their write through Administrators. }
+function LockSdsysExamples: String;
+var
+  Code: Integer;
+  Ps, Script, Rest, Name, Target: String;
+  P: Integer;
+begin
+  Result := '';
+  Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Script := ExpandConstant('{app}\secure-sysdirs.ps1');
+  Rest := 'examples.bp/examples.bp.out';
+  while Rest <> '' do
+  begin
+    P := Pos('/', Rest);
+    if P = 0 then
+    begin
+      Name := Rest;
+      Rest := '';
+    end
+    else
+    begin
+      Name := Copy(Rest, 1, P - 1);
+      Rest := Copy(Rest, P + 1, Length(Rest));
+    end;
+    Target := ExpandConstant('{#DataDir}\sdsys\') + Name;
+    if DirExists(Target) then
+      if not LockOsUsersPath(Ps, Script, Target, Code) then
+        Result := Result + 'SDSYS''s example programs were NOT locked (code ' + IntToStr(Code) + '): ' + Target +
+                  '. Run from an ELEVATED PowerShell prompt:' + #13#10#13#10 +
+                  '    powershell -ExecutionPolicy Bypass -File "' + Script + '" -Path "' + Target + '"' + #13#10#13#10;
+  end;
 end;
 
 { LOCK THE CREDENTIAL STORE, and return what to tell the user if it did not
@@ -5210,6 +5274,7 @@ begin
     { 16 Nov 26 - the example programs (Linux cc7e41c6, S.261): every account's examples.bp, after the shared account's content as on Linux.
       See LoadExamples. }
     ExamplesMsg := LoadExamples;
+    ExamplesMsg := ExamplesMsg + LockSdsysExamples;   { 17 Nov 26 - after the files exist, see LockSdsysExamples }
 
     case SdsysCode of
       0: begin

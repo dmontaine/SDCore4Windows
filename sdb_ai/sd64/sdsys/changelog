@@ -3,6 +3,22 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+17 Nov 26  THE AI LINE'S DOCUMENTATION IS INSTALLED; SDSYS'S EXAMPLE PROGRAMS ARE LOCKED; SET.AI KEY NEVER SENDS AN EMPTY KEY.
+
+             What        - The install puts the User and Administrator pages (markdown) into
+                           C:\ProgramData\SD\sdsys\docs\user and docs\admin, and an upgrade replaces them, so the AI
+                           line can show passages of them with a request.  docs\user is readable by every SD user and
+                           writable by administrators only; docs\admin is readable by administrators only.  SDSYS's own
+                           examples.bp and examples.bp.out are now readable by SD users and writable by administrators
+                           only, as bp.out is (every SD user could change them).  SET.AI KEY: when the key cannot be
+                           typed at the console, a key piped from a script is still read; otherwise it is asked for at
+                           the console window; and when no key is read at all, the client says so and sends nothing
+                           (before, an empty key was sent and refused).  Fourteen messages nothing printed are removed.
+             Why         - The four-version parity audit: SD Core for Linux installs the documentation (owner, 1 Nov:
+                           "install the user/admin docs too"), keeps its system directory writable by the system user
+                           only, and has the same key fallback.
+             Does NOT    - Change the examples in any other account.  NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 17 Nov 26  GRANT, REVOKE AND LIST.GRANTS ARE GONE; THE PASSWORD PROMPTS, THE SOCKET TRACE AND THE UPGRADE'S CASE CONVERSION FOLLOW
            SD CORE FOR LINUX.
 

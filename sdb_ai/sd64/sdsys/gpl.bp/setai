@@ -5,6 +5,8 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 1: SET.AI KEY reads the client's exit code (os.error(), "; exit $LASTEXITCODE" on the command); a
+*              client that read no key (sdai_ctl.c exits 2) is refused with 12613 and nothing is audited - a key stored earlier read as "set" before.
 * 13 Nov 26 Windows port - the client is the native helper itself, <program folder>\lib\sd-ai\sd-ai.exe (K$WINPATH of /lib/sd-ai/sd-ai.exe), the
 *              owner's ruling of the same day ("python not being an integral part of windows argues for the c helper"): no PowerShell wrapper, no Python,
 *              so no "error: nopython:" and no 12934 (deleted).  Its words, its printed lines and its exit codes are the Python client's.
@@ -156,8 +158,13 @@ $include err.h
 *        command line; the client removes the file whatever happens, and so does this verb, BEFORE anything else is looked at (run.ctl's stops would otherwise leave it).
 *        What happened is read back from the helper, as for the typed key; the client's own words are not trusted for it.
          out = ''
-         os.execute "& '" : ctl : "' 'key' '" : prov : "' '--handover' '" : hand.f : "'" capturing out
+         os.execute "& '" : ctl : "' 'key' '" : prov : "' '--handover' '" : hand.f : "'; exit $LASTEXITCODE" capturing out
+         ctl.rc = os.error()                                                              ;* 17 Nov 26: see the typed-key case below
          gosub drop.handover
+         if ctl.rc then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12613, 'nokey', 'no key was read; the key was not changed')        ;* The AI helper refused: %1 (%2)
+         end
          out = convert(char(13), '', out)                                                ;* PowerShell's line ends (see run.ctl)
          qargs = "'show'"
          gosub run.ctl
@@ -185,7 +192,13 @@ $include err.h
          if index(providers, ' ' : prov : ' ', 1) = 0 then stop sysmsg(12615, prov[1, 40])
 *        The console is handed to the helper's client and nothing is captured: the key is typed there, never read by SD.  What happened is then read back, not assumed.
 *        Nothing is redirected: the client writes to standard output only.
-         os.execute "& '" : ctl : "' 'key' '" : prov : "'"
+         os.execute "& '" : ctl : "' 'key' '" : prov : "'; exit $LASTEXITCODE"
+*        17 Nov 26 Windows port - audit round 1 (Linux: "a client that reads nothing must never return to SD silently"): the client exits non-zero when
+*        it read no key (sdai_ctl.c), and then nothing was changed - a key stored EARLIER would otherwise read as "set" below.  Refused, and not audited.
+         if os.error() then
+            @system.return.code = -ER$FAILED
+            stop sysmsg(12613, 'nokey', 'no key was read; the key was not changed')        ;* The AI helper refused: %1 (%2)
+         end
          qargs = "'show'"
          gosub run.ctl
          gosub check.key

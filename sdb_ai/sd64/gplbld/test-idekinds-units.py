@@ -9,7 +9,7 @@ No sudo, no install, no sd.  Exit 0 every check passed, 1 a check failed, 2 it c
 START-HISTORY:
 28 Oct 26 dm  New with stage B.
 28 Oct 26 dm  Two of the owner's approved items of 28 Oct: K30-K32 a record holding bytes 128 to 247 is read-only (na.mark, ro.check 'ascii', ro.box, na.check) and
-              K33-K36 the AUTOLOGOUT countdown (idle.count, idle.text, messages 12755-12759 and 12766); K20 follows ro.box; 20 mutants from M_NA.  On a screen these
+              K33-K36 the AUTOLOGOUT countdown (idle.count, idle.text, messages 12755-12757); K20 follows ro.box; 20 mutants from M_NA.  On a screen these
               are rows of sandbox-ide-kinds.py (NA) and sandbox-ide.py (IDLE), written, not run.
 28 Oct 26 dm  Review fixes (findings 4 and 9 of the L2 review): K24 follows do.compile saving first only when there is something to save (is.dirty, untitled, new), two mutants;
               K33 and K34 follow the countdown reading the KERNEL's inactivity clock (kernel(K$AUTOLOGOUT, -2)) - the IDE's own bookkeeping (idle.count, IDL.SLACK, idl.t0/fp) is gone;
@@ -41,7 +41,7 @@ SDSYS = os.path.normpath(os.path.join(HERE, "..", "sdsys"))
 GPL = os.path.join(SDSYS, "gpl.bp")
 MSG = os.path.join(SDSYS, "messages")
 NEWMSG = list(range(12689, 12704))
-NEWMSG2 = [12755, 12756, 12757, 12758, 12759, 12766]     # 28 Oct 26: the AUTOLOGOUT countdown and the read-only tab for bytes outside ASCII
+NEWMSG2 = [12755, 12756, 12757]     # 28 Oct 26: the AUTOLOGOUT countdown (17 Nov 26: 12758, 12759 and 12766, the read-only tab's, which nothing printed, deleted as Linux Core deleted 11753, 11754 and 11761)
 FIELDS_LABELS = ("fields.enter", "fields.leave", "fields.view.on", "fields.form", "fields.apply", "fields.sync", "fields.sync.tab", "fields.parse", "fields.rebuild", "fields.drop", "fields.esc",
                  "fields.key", "fields.after", "fields.writeback", "fields.fill", "fields.pull", "fields.show", "fields.label")     # 30 Oct 26 (stage 2b): the pane's labels in gpl.bp/ide
 NEWMSG3 = [12748, 12749, 12750]                         # 29 Oct 26 (stage F): JSON that will not parse, a collection record is not a program, a text is not saved into a collection file
@@ -321,12 +321,11 @@ def checks(src):
     ck("K41", "stage F: messages 12748-12750 are there, one line each; 12748 takes the character the parse stopped at (%3), 12749 and 12750 are cited by the IDE and the name form",
        all(src["m%d" % n].strip() and src["m%d" % n].count("\n") == 1 for n in NEWMSG3) and "%3" in src["m12748"] and "%2" in src["m12749"] and "sysmsg(12748" in ide and "sysmsg(12749" in ide
        and "sysmsg(12750" in strip(src["ide_name"]), "")
-    ck("K36", "messages 12755-12759 and 12766 are there, one line each; the countdown's three begin 'Idle: signing out in %1 s' and say what happens to the changes; the refusal "
-       "and the open note name the record (%1 %2); the help names the read-only rule and the countdown",
+    ck("K36", "messages 12755-12757 are there, one line each; the countdown's three begin 'Idle: signing out in %1 s' and say what happens to the changes; "
+       "the help names the read-only rule and the countdown",
        all(t.count("\n") == 1 and t.endswith("\n") for t in m2.values())
        and all(m2[n].startswith("Idle: signing out in %1 s") for n in (12755, 12756, 12757))
        and "unsaved changes will be lost" in m2[12755] and "recovery copy is kept" in m2[12756]
-       and "%1 %2" in m2[12759] and "%1 %2" in m2[12766] and "ASCII" in m2[12758]
        and "outside ASCII" in src["m12220"] and "counts down" in src["m12220"] and "AUTOLOGOUT" not in "".join(m2.values()) + src["m12220"], repr({n: t[:30] for n, t in m2.items()}))
     return rows
 

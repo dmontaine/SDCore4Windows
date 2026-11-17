@@ -368,7 +368,55 @@ SDSYS_SHIP = [
     # works.  Nothing in SD reads it.  Its source is sd64/agent-pack/{guide,pack}, not sdsys (SDSYS_SHIP_SOURCE below);
     # replaced on upgrade like every ship name; the sysdir's own rights keep it writable by the administrators only.
     ('agent-pack',    'the AI guide and the knowledge pack of this version, as text'),
+    # 17 Nov 26 - P-2914 (Linux S.100; owner, 1 Nov 2026: "install the user/admin docs too ... with the caveat that the admin
+    # doc should only be available to the admin").  The markdown pages gpl.bp tk_aidocs reads for the AI line's passages:
+    # docs\user from the documentation repository's User\markdown, docs\admin from its Administrator\markdown (*.md only,
+    # as Linux's installer copies them).  Its source is the documentation repository, not this tree (stage_docs below).
+    # Replaced on upgrade; locked by sd.iss SecureSysdirs: docs read-only to sdusers, docs\admin administrators only.
+    ('docs',          "the User and Administrator pages the AI line's passages are chosen from (S.100)"),
 ]
+
+# 17 Nov 26 - P-2914.  THE DOCUMENTATION REPOSITORY, found as Linux's mkrelease.sh finds its own: DOCS_REPO if it is set, else
+# SDCore4WindowsDocs beside this repository (<projects>\SDCore4Windows\sdb_ai\sd64\gplbld\stage.py -> <projects>\SDCore4WindowsDocs).
+# The working tree is read, the way the rest of the stage reads this repository's.  The two folders each staged page comes from:
+DOCS_SOURCES = [('User', 'user'), ('Administrator', 'admin')]
+
+
+def docs_repo():
+    # Not abspath'd: cycle.ps1 runs this under MSYS2's python, where C:/... is a path it opens but not one abspath knows.
+    env = os.environ.get('DOCS_REPO', '').strip()
+    if env:
+        return env
+    here = os.path.dirname(os.path.abspath(__file__))
+    projects = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(here))))
+    return os.path.join(projects, 'SDCore4WindowsDocs')
+
+
+def stage_docs(sdsys, staged, stage_root):
+    """Copy <docs>\\User\\markdown\\*.md to sdsys\\docs\\user and <docs>\\Administrator\\markdown\\*.md to sdsys\\docs\\admin.
+
+    REFUSES, never ships without: Linux's installer skips the corpus with a note when it cannot fetch it, but here the
+    documentation repository is on the build machine, so a missing one is a build that is not set up, and an install
+    without the pages would leave the AI line answering without them and nobody told."""
+    repo = docs_repo()
+    counts = []
+    for sub, dname in DOCS_SOURCES:
+        src = os.path.join(repo, sub, 'markdown')
+        if not os.path.isdir(src):
+            die('the documentation repository is not where it was looked for: there is no %s\n'
+                '  The install ships its User and Administrator pages for the AI line (sdsys\\docs).\n'
+                '  Clone SDCore4WindowsDocs beside this repository, or set DOCS_REPO to it.' % src)
+        pages = sorted(n for n in os.listdir(src)
+                       if n.endswith('.md') and os.path.isfile(os.path.join(src, n)))
+        if not pages:
+            die('%s holds no .md page - refusing to ship an empty sdsys\\docs\\%s' % (src, dname))
+        dst = os.path.join(sdsys, 'docs', dname)
+        os.makedirs(dst)
+        for n in pages:
+            shutil.copy2(os.path.join(src, n), os.path.join(dst, n))
+            staged.add(stage_root, os.path.join(dst, n))
+        counts.append('%d %s' % (len(pages), dname))
+    print('  docs: %s pages from %s' % (', '.join(counts), repo))
 
 # 13 Nov 26 - A SHIP NAME WHOSE SOURCE IS NOT sdsys/<name>.  Each entry is the staged name and the (source, staged
 # sub-path) pairs that make it.  agent-pack takes only guide/ and pack/: the skill, the templates, the recipe, the
@@ -2050,6 +2098,9 @@ def main():
     # SDSYS_BUILD_SEED is copied like a ship name - BBPROC reads it during the
     # bootstrap below - and deleted again once that has finished.
     for name, _why in SDSYS_SHIP + SDSYS_BUILD_SEED:
+        if name == 'docs':              # 17 Nov 26 - P-2914: from the documentation repository, see stage_docs
+            stage_docs(sdsys, staged, stage)
+            continue
         if name in SDSYS_SHIP_SOURCE:   # 13 Nov 26: staged from elsewhere in the tree (agent-pack)
             for s, d in SDSYS_SHIP_SOURCE[name]:
                 if not os.path.isdir(s):

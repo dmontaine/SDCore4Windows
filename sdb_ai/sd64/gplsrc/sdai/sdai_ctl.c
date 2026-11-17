@@ -13,6 +13,9 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit (Linux mail 2026-11-17T2200, the AI key prompt): the CONIN$ fallback.  key reads the console;
+ *           else the first line of a pipe or file (GetFileType) that holds one; else CONIN$ with the stars; and when none gives a key it says
+ *           so and exits 2 - an empty key is never sent and the client never returns to SD having read nothing (read_key_console).
  * 13 Nov 26 Windows port - New (RELEASE_1.1 246): the Python client gplbld/sd-ai-ctl (from Linux b1d496df) and its wrapper sd-ai-ctl.ps1 in
  *           C, in the helper's own program: the same words, the same lines printed, the same exit codes.  No Python, so no "error: nopython:".
  * 14 Nov 26 Windows port - RELEASE_1.1 309, from Linux c4ce87e9: key shows one * per character typed or pasted (Backspace, Ctrl-U; escape
@@ -28,7 +31,8 @@
  *   sd-ai.exe [--pipe NAME] custom-clear
  *   sd-ai.exe [--pipe NAME] ca PATH                         (PATH - for the Windows certificate store; a drive path written with /, C:/...)
  *   sd-ai.exe [--pipe NAME] limit NAME NUMBER
- *   sd-ai.exe [--pipe NAME] key PROVIDER                    (read from the console, shown as one * per character; from standard input when it is not a console)
+ *   sd-ai.exe [--pipe NAME] key PROVIDER                    (read from the console, shown as one * per character; when standard input is not a console, its
+ *                                                            first line if it is a pipe or file that holds one, else CONIN$; none: exit 2)
  *   sd-ai.exe [--pipe NAME] key PROVIDER --handover FILE    (the key is the first line of FILE, which is removed whatever happens)
  *   sd-ai.exe [--pipe NAME] key-clear PROVIDER
  *   sd-ai.exe [--pipe NAME] context HEX | -
@@ -313,12 +317,31 @@ static char* handover_key(const char* path) {
    still the system's (ENABLE_PROCESSED_INPUT), and on_ctrl gives the console its mode back.  A key event's repeat count is honoured.  At most
    KEYMAX UTF-16 units are kept; more are ignored (a key is far shorter). */
 #define KEYMAX 4096
-static char* read_key_console(const char* provider) {
-  HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
+
+/* Restore the console's echo if Ctrl+C ends the program while a key is being typed: the console is SD's session's afterwards.  17 Nov 26: the
+   handle is the one being read (standard input, or CONIN$ opened by read_key_console), not always standard input. */
+static DWORD saved_mode;
+static HANDLE saved_in = NULL;
+static int have_saved = 0;
+static BOOL WINAPI on_ctrl(DWORD t) {
+  (void)t;
+  if (have_saved)
+    SetConsoleMode(saved_in, saved_mode);
+  return FALSE;
+}
+
+/* The star reader, on a console input handle (17 Nov 26: lifted out of read_key_console so that CONIN$ is read the same way).  NULL when in is
+   not a console. */
+static char* read_key_stars(HANDLE in, const char* provider) {
   DWORD mode;
   sbuf k;
+  if (in == NULL || in == INVALID_HANDLE_VALUE || !GetConsoleMode(in, &mode))
+    return NULL;
   sb_init(&k);
-  if (in != NULL && in != INVALID_HANDLE_VALUE && GetConsoleMode(in, &mode)) {
+  saved_mode = mode;
+  saved_in = in;
+  have_saved = 1;
+  {
     static wchar_t wb[KEYMAX + 1];
     size_t got = 0;
     int esc = 0; /* 0 none, 1 after ESC, 2 inside ESC [ or ESC O */
@@ -336,7 +359,7 @@ static char* read_key_console(const char* provider) {
       WORD rep;
       wchar_t c;
       if (!ReadConsoleInputW(in, &r, 1, &nread) || nread == 0)
-        break; /* the input ended: what was typed so far (nothing is an empty key, which the helper refuses) */
+        break; /* the input ended: what was typed so far (nothing is no key: read_key_console's caller says so and sends none) */
       if (r.EventType != KEY_EVENT || !r.Event.KeyEvent.bKeyDown)
         continue;
       c = r.Event.KeyEvent.uChar.UnicodeChar;
@@ -393,31 +416,83 @@ static char* read_key_console(const char* provider) {
       SecureZeroMemory(wb, sizeof wb);
     }
     SetConsoleMode(in, mode);
+    have_saved = 0;
     if (out != INVALID_HANDLE_VALUE) {
       WriteFile(out, "\r\n", 2, &w, NULL);
       CloseHandle(out);
     }
     return k.p;
   }
-  { /* not a console: the first line of standard input */
-    char c;
-    DWORD got;
-    while (ReadFile(in, &c, 1, &got, NULL) && got == 1 && c != '\n')
-      sb_add(&k, &c, 1);
-    while (k.n > 0 && k.p[k.n - 1] == '\r')
-      k.p[--k.n] = '\0';
-    return k.p;
-  }
 }
 
-/* Restore the console's echo if Ctrl+C ends the program while a key is being typed: the console is SD's session's afterwards. */
-static DWORD saved_mode;
-static int have_saved = 0;
-static BOOL WINAPI on_ctrl(DWORD t) {
-  (void)t;
-  if (have_saved)
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), saved_mode);
-  return FALSE;
+/* The first line of a pipe or a file (a key piped from a script), without its line end.  NULL when nothing was read. */
+static char* read_key_line(HANDLE in) {
+  sbuf k;
+  char c;
+  DWORD got;
+  sb_init(&k);
+  while (ReadFile(in, &c, 1, &got, NULL) && got == 1 && c != '\n')
+    sb_add(&k, &c, 1);
+  while (k.n > 0 && k.p[k.n - 1] == '\r')
+    k.p[--k.n] = '\0';
+  if (k.n == 0) {
+    free(k.p);
+    return NULL;
+  }
+  return k.p;
+}
+
+/* 17 Nov 26 Windows port - THE CONIN$ FALLBACK (Linux, mail 2026-11-17T2200: "build the CONIN$ fallback ... a client that reads nothing must
+   never return to SD silently"; Linux 3f44253d, S.62).  Until now a standard input that was not a console was read for its first line whatever it
+   was, and nothing read was sent as an empty key.  Now:
+     a console                     the star reader, as before;
+     a pipe or a file (GetFileType) its first line, so a key piped from a script still works - a pipe is read only once it holds data or its
+                                   writer has closed it (up to KEYWAIT_MS), so a pipe nobody writes to is not waited on for ever;
+     anything else, or nothing read: the key is read at CONIN$, the console this process is attached to, with the star reader.
+   NULL when none of them gave a key: the caller says so and exits 2, and no empty key is ever sent. */
+#define KEYWAIT_MS 3000
+static char* read_key_console(const char* provider) {
+  HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
+  char* key = NULL;
+  DWORD kind = FILE_TYPE_UNKNOWN;
+  key = read_key_stars(in, provider);
+  if (key != NULL) {
+    if (key[0] != '\0')
+      return key;
+    free(key);
+    return NULL; /* typed at the console and empty: there is no other place to look */
+  }
+  if (in != NULL && in != INVALID_HANDLE_VALUE)
+    kind = GetFileType(in);
+  if (kind == FILE_TYPE_DISK) {
+    key = read_key_line(in);
+  } else if (kind == FILE_TYPE_PIPE) {
+    DWORD avail = 0, waited = 0;
+    BOOL alive;
+    for (;;) {
+      alive = PeekNamedPipe(in, NULL, 0, NULL, &avail, NULL);
+      if (!alive || avail > 0 || waited >= KEYWAIT_MS)
+        break;
+      Sleep(50);
+      waited += 50;
+    }
+    if (alive && avail > 0)
+      key = read_key_line(in);
+  }
+  if (key != NULL)
+    return key;
+  {
+    HANDLE con = CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+    if (con != INVALID_HANDLE_VALUE) {
+      key = read_key_stars(con, provider);
+      CloseHandle(con);
+      if (key != NULL && key[0] == '\0') {
+        free(key);
+        key = NULL;
+      }
+    }
+  }
+  return key;
 }
 
 static int hexval(int c) {
@@ -560,10 +635,12 @@ int ctl_main(int argc, char** argv) {
       say("sd-ai-ctl: the provider is one of anthropic, openai, google, deepseek, custom");
       return 2;
     }
-    if (GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &saved_mode))
-      have_saved = 1;
     key = read_key_console(rest[0]);
-    have_saved = 0;
+    if (key == NULL) {
+      /* 17 Nov 26: never an empty key sent, never a silent return to SD */
+      say("sd-ai-ctl: no key was read (none was typed, and standard input gave none); the key was not changed");
+      return 2;
+    }
     kstr(&req, &first, "op", "keyset");
     kstr(&req, &first, "provider", rest[0]);
     kstr(&req, &first, "key", key);

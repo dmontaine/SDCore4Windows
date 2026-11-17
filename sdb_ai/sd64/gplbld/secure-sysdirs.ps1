@@ -70,12 +70,18 @@
 # (I)(OI)(CI)(M), a child file (I)(M), and an unelevated token is refused a new
 # file in the folder.  Directories only: a file has no children to keep anything.
 #
+# 17 Nov 26 - -AdminOnly, FOR sdsys\docs\admin (P-2914, Linux S.100: there docs/admin
+# is 700 with 600 files, owned by sdsys).  SYSTEM and Administrators Full, inherited by
+# everything under it, and NO sdusers ACE: an ordinary session cannot list or read the
+# administrator's pages.  Directories only.  It and -KeepChildren are exclusive.
+#
 # Exit 0 done, 1 failed, 2 could not be attempted.
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string[]] $Path,
-    [switch] $KeepChildren
+    [switch] $KeepChildren,
+    [switch] $AdminOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,6 +109,11 @@ try {
     $wanted = @($Path | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($wanted.Count -eq 0) {
         Write-Output 'secure-sysdirs: -Path resolved to nothing - no directory was secured'
+        exit 2
+    }
+
+    if ($KeepChildren -and $AdminOnly) {
+        Write-Output 'secure-sysdirs: -KeepChildren and -AdminOnly are exclusive - nothing secured'
         exit 2
     }
 
@@ -136,6 +147,14 @@ try {
                         '*S-1-5-32-544:(OI)(CI)(F)',
                         'sdusers:(RX)',
                         'sdusers:(OI)(CI)(IO)(M)')
+        } elseif ($AdminOnly) {
+            if (-not $item.PSIsContainer) {
+                Write-Output "secure-sysdirs: -AdminOnly is for a directory and $($item.FullName) is a file - nothing secured"
+                exit 2
+            }
+            $kind   = 'directory, administrators only'
+            $grants = @('*S-1-5-18:(OI)(CI)(F)',
+                        '*S-1-5-32-544:(OI)(CI)(F)')
         } elseif ($item.PSIsContainer) {
             $kind   = 'directory'
             $grants = @('*S-1-5-18:(OI)(CI)(F)',
@@ -182,6 +201,9 @@ try {
 
         if ($KeepChildren) {
             Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; its inheriting children keep Modify" -f
+                          $item.FullName)
+        } elseif ($AdminOnly) {
+            Write-Output ("secure-sysdirs: {0} is readable and writable by administrators only" -f
                           $item.FullName)
         } else {
             Write-Output ("secure-sysdirs: {0} is readable by sdusers, writable only by administrators" -f

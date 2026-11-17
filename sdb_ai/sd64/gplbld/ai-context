@@ -8,7 +8,7 @@ About this system: SD Core for Windows, a multivalue database descended from ope
 
 Where SD's help is:
 - Inside SD: F1, ? or the [?] buttons on a full-screen page explain it; the documentation's PDF files are in the pdf directory of the shared account, to be copied and read elsewhere.
-- For an agent that can read files on this machine: the SD BASIC guide is C:\ProgramData\SD\sdsys\agent-pack\guide\sd-basic-guide.md, and the knowledge pack (every command, message and dictionary item) is under C:\ProgramData\SD\sdsys\agent-pack\pack.
+- For an agent that can read files on this machine: the SD BASIC guide is C:\ProgramData\SD\sdsys\agent-pack\guide\sd-basic-guide.md, the knowledge pack (every command, message and dictionary item) is under C:\ProgramData\SD\sdsys\agent-pack\pack, and the user documentation pages are in C:\ProgramData\SD\sdsys\docs\user.
 - On the web: https://github.com/dmontaine/SDCore4WindowsDocs
 
 Answer briefly and plainly.
