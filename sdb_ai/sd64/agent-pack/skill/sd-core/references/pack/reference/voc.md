@@ -12,9 +12,9 @@ Every ordinary account's VOC is `newvoc` in full (`create.account` copies it; `u
 ### voc:layer:voc_template
 > kind=voc.layer tier=reference since=- src=sdsys/voc_template/$acc:1#e69f20e9
 
-451 records in `sdsys/voc_template`, by the type letter of field 1: F 14, K 218, PA 4, Q 1, S 1, V 212, X 1.
+448 records in `sdsys/voc_template`, by the type letter of field 1: F 14, K 218, PA 4, Q 1, S 1, V 209, X 1.
 
-SDSYS's own VOC is `voc_template` in full: a superset of `newvoc`. The records only SDSYS has (65): `$hold`, `accounts`, `append.sd.path`, `backup.account`, `bp`, `bp.out`, `clean.account`, `clear.locks`, `config`, `create.account`, `delete.account`, `delete.server`, `docs.install`, `first.compile`, `gpl.bp`, `gpl.bp.out`, `grant`, `inhibit.login`, `list.grants`, `list.locks`, `list.readu`, `list.servers`, `list.shared`, `list.voc.removed`, `listu`, `load.examples`, `load.help`, `lock`, `lock.tracer`, `messages`, `modify.account`, `qfile`, `remote.api`, `remote.sdsys`, `remote.ssh`, `remove.examples`, `restore.account`, `restore.voc`, `revoke`, `run.in`, `second.compile`, `set.ai`, `set.backup.directory`, `set.batch`, `set.config`, `set.date`, `set.job`, `set.server`, `set.start.default`, `set.tile`, `settings.report`, `ssh.server`, `third.compile`, `tool.accounts`, `tool.ai`, `tool.audit`, `tool.backups`, `tool.config`, `tool.entries`, `tool.jobs`, `tool.menus`, `tool.remote`, `tool.sessions`, `unlock`, `update.accounts`.
+SDSYS's own VOC is `voc_template` in full: a superset of `newvoc`. The records only SDSYS has (62): `$hold`, `accounts`, `append.sd.path`, `backup.account`, `bp`, `bp.out`, `clean.account`, `clear.locks`, `config`, `create.account`, `delete.account`, `delete.server`, `docs.install`, `first.compile`, `gpl.bp`, `gpl.bp.out`, `inhibit.login`, `list.locks`, `list.readu`, `list.servers`, `list.shared`, `list.voc.removed`, `listu`, `load.examples`, `load.help`, `lock`, `lock.tracer`, `messages`, `modify.account`, `qfile`, `remote.api`, `remote.sdsys`, `remote.ssh`, `remove.examples`, `restore.account`, `restore.voc`, `run.in`, `second.compile`, `set.ai`, `set.backup.directory`, `set.batch`, `set.config`, `set.date`, `set.job`, `set.server`, `set.start.default`, `set.tile`, `settings.report`, `ssh.server`, `third.compile`, `tool.accounts`, `tool.ai`, `tool.audit`, `tool.backups`, `tool.config`, `tool.entries`, `tool.jobs`, `tool.menus`, `tool.remote`, `tool.sessions`, `unlock`, `update.accounts`.
 
 ### voc:type:F
 > kind=voc.type tier=reference since=- src=docs:User/markdown/32-sd-voc-structure-and-usage.md:80#98baf5a6
@@ -250,13 +250,13 @@ target, and the remaining fields carry options.
 
 | Field 2 | Field 3 | What it does |
 |---|---|---|
-| `CA` | *catalog name* | a cataloged program — 173 of the shipped verbs |
+| `CA` | *catalog name* | a cataloged program — 170 of the shipped verbs |
 | `IN` | *number* | internal verb *n*, handled by the command processor itself — 38 verbs |
 | `OS` | *text* | an operating-system command — `sh`, and nothing else |
 | `CS` | *path* | a locally cataloged function |
 
-The first three rows account for all 212 of SDSYS's `V` records (none shipped
-is `CS`). The other four of its 216 verbs are the keyword records described
+The first three rows account for all 209 of SDSYS's `V` records (none shipped
+is `CS`). The other four of its 213 verbs are the keyword records described
 above — `break`, `count`, `display` and `off` — where field 2 holds a keyword
 number rather than a dispatch type, and it is field 3 that marks the record as
 a verb.

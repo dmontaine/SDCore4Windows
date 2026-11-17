@@ -2099,7 +2099,7 @@ clause of `loop`: `loop` … `while` *condition* … `repeat`
 `writepkt` *data*
 
 - a RESTRICTED statement: it compiles only in a program with `$internal`, which an ordinary account cannot make; an ordinary program is told "Unrecognised statement"
-- docs: `User/markdown/15-sd-basic-sockets.md` line 301
+- docs: `User/markdown/15-sd-basic-sockets.md` line 317
 
 ### basic:stmt:writeseq
 > kind=basic.statement tier=reference since=- src=sdsys/gpl.bp/bcomp:528#bfa4d305 src2=docs:tools/syntax-shapes.txt:254#98338a11

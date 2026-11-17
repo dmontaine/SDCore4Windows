@@ -165,7 +165,7 @@ cited by: `modifya`
 %1 is already a member of group %2
 ```
 
-cited by: `granta`, `modifya`
+cited by: `modifya`
 
 ### msg:10018
 > kind=message tier=reference since=- src=sdsys/messages/10018:1#74caba62
@@ -344,102 +344,12 @@ Insufficient memory for program variables
 
 cited by: `create_account`
 
-### msg:10041
-> kind=message tier=reference since=- src=sdsys/messages/10041:1#578bd286
-
-```
-%1 may now use account %2
-```
-
-cited by: `granta`
-
-### msg:10042
-> kind=message tier=reference since=- src=sdsys/messages/10042:1#d034e266
-
-```
-%1 no longer has account %2
-```
-
-cited by: `granta`
-
-### msg:10043
-> kind=message tier=reference since=- src=sdsys/messages/10043:1#8e18b61c
-
-```
-%1 must sign out of Windows and back in before this takes effect
-```
-
-cited by: `granta`
-
-### msg:10044
-> kind=message tier=reference since=- src=sdsys/messages/10044:1#25a8e559
-
-```
-Account %1 has no Windows group recorded, so it cannot be granted
-```
-
-cited by: `granta`
-
-### msg:10045
-> kind=message tier=reference since=- src=sdsys/messages/10045:1#06e437ed
-
-```
-There is no Windows account named %1
-```
-
-cited by: `granta`
-
-### msg:10046
-> kind=message tier=reference since=- src=sdsys/messages/10046:1#105abc2e
-
-```
-Nobody has been granted account %1
-```
-
-cited by: `granta`
-
-### msg:10047
-> kind=message tier=reference since=- src=sdsys/messages/10047:1#6481f14a
-
-```
-Windows accounts granted %1:
-```
-
-cited by: `granta`
-
-### msg:10048
-> kind=message tier=reference since=- src=sdsys/messages/10048:1#feeeac1c
-
-```
-Cannot read the members of group %1, status: %2
-```
-
-cited by: `granta`
-
-### msg:10049
-> kind=message tier=reference since=- src=sdsys/messages/10049:1#e01af2f1
-
-```
-%1 has not been granted account %2
-```
-
-cited by: `granta`
-
 ### msg:1005
 > kind=message tier=reference since=- src=sdsys/messages/1005:1#6d1c1591
 
 ```
 Argument count mismatch calling %s (Call=%d, subr=%d)
 ```
-
-### msg:10050
-> kind=message tier=reference since=- src=sdsys/messages/10050:1#10691a44
-
-```
-Cannot change the members of group %1, status: %2
-```
-
-cited by: `granta`
 
 ### msg:10051
 > kind=message tier=reference since=- src=sdsys/messages/10051:1#7ae9cd73
@@ -1178,18 +1088,10 @@ Deleting %1 removes everything the account holds. Its files and the data in\nthe
 cited by: `delacc`, `radmin`
 
 ### msg:10159
-> kind=message tier=reference since=- src=sdsys/messages/10159:1#077e4554
+> kind=message tier=reference since=- src=sdsys/messages/10159:1#23f82f20
 
 ```
-%1 has lost all access to SD: local login, ssh, the API and logto are refused
-until the account is unsuspended.
-
-Nothing on Windows has changed. %1 keeps its Windows account, its password and
-every group it belongs to, including any administrator rights it had.
-
-    modify.account %1 unsuspended
-
-%1's VOC is left exactly as it was, so it comes back with it.
+Nothing on Windows has changed: %1 keeps its Windows account, its password and every group it belongs to, including any administrator rights it had.
 ```
 
 cited by: `modifya`
@@ -1236,15 +1138,6 @@ Installing the OpenSSH server downloads it from Windows Update, which can take s
 ```
 
 cited by: `sshsrvr`
-
-### msg:10164
-> kind=message tier=reference since=- src=sdsys/messages/10164:1#c35ec60e
-
-```
-'%1' invalid name
-```
-
-cited by: `qproc`
 
 ### msg:10165
 > kind=message tier=reference since=- src=sdsys/messages/10165:1#22b524aa
@@ -1317,10 +1210,10 @@ cited by: `login`
 cited by: `login`
 
 ### msg:10172
-> kind=message tier=reference since=- src=sdsys/messages/10172:1#2609ed10
+> kind=message tier=reference since=- src=sdsys/messages/10172:1#eb26785d
 
 ```
-Cannot update every registered account from here, so NOTHING has been updated.\n\nupdate.accounts all walks the account register. Only SDSYS can do that, and only for an administrator, and this session is not both. Start SD as an administrator - that lands you in SDSYS - and run it again.
+Cannot update every registered account from here, so NOTHING has been updated.\n\nupdate.accounts all walks the account register. Only SDSYS can do that, and only for an administrator, and this session is not both. Log in as sdsys at the machine's keyboard (or a desktop-sharing view of it), run sd from that session, and run it again.
 ```
 
 cited by: `login`
@@ -1591,7 +1484,7 @@ cited by: `delacc`
 A password needs at least 8 characters, with a lower-case letter, an upper-case letter, a digit and a symbol.
 ```
 
-cited by: `create_account`, `login`, `radmin`, `set_acc_password`
+cited by: `create_account`, `login`, `radmin`, `set_acc_password`, `set_passwd`
 
 ### msg:10921
 > kind=message tier=reference since=- src=sdsys/messages/10921:1#5ac6a81c
@@ -1600,7 +1493,7 @@ cited by: `create_account`, `login`, `radmin`, `set_acc_password`
 That was attempt %1 of %2.
 ```
 
-cited by: `login`
+cited by: `login`, `set_acc_password`, `set_passwd`
 
 ### msg:1100
 > kind=message tier=reference since=- src=sdsys/messages/1100:1#3d4de48f
@@ -2010,6 +1903,15 @@ cited by: `acc_archive`
 ```
 Inappropriate data type for GETREM()
 ```
+
+### msg:12035
+> kind=message tier=reference since=- src=sdsys/messages/12035:1#a2eb7f6a
+
+```
+Account %1
+```
+
+cited by: `upgrade_nocase`
 
 ### msg:12041
 > kind=message tier=reference since=- src=sdsys/messages/12041:1#905ef9be
@@ -11597,6 +11499,15 @@ Could not enter the account %1; its example programs were left as they are
 
 cited by: `removeexamples`
 
+### msg:15140
+> kind=message tier=reference since=- src=sdsys/messages/15140:1#c35ec60e
+
+```
+'%1' invalid name
+```
+
+cited by: `qproc`
+
 ### msg:15995
 > kind=message tier=reference since=- src=sdsys/messages/15995:1#32ac8f74
 
@@ -11936,7 +11847,7 @@ User is not an administrator
 Command requires administrator privileges
 ```
 
-cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 28 more
+cited by: `apndpath`, `audit_read`, `backupa`, `catalog`, `cproc`, `createa`, `delacc`, `delcat` and 27 more
 
 ### msg:2002
 > kind=message tier=reference since=- src=sdsys/messages/2002:1#b8493524
@@ -12059,7 +11970,7 @@ cited by: `findfile`
 Unexpected token (%1)
 ```
 
-cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 61 more
+cited by: `analyseidx`, `autologout`, `backupa`, `catalog`, `cd`, `cleanac`, `clearfl`, `cmdlog` and 60 more
 
 ### msg:2019
 > kind=message tier=reference since=- src=sdsys/messages/2019:1#a22e9c3b
@@ -17837,7 +17748,7 @@ Authentication succeeded but the session could not take your Windows identity
 Cannot open ACCOUNTS file in SDSYS account
 ```
 
-cited by: `backupa`, `delacc`, `granta`, `modifya`, `remotesdsys`, `restorea`, `setserver`, `settingsr`
+cited by: `backupa`, `delacc`, `modifya`, `remotesdsys`, `restorea`, `setserver`, `settingsr`
 
 ### msg:6001
 > kind=message tier=reference since=- src=sdsys/messages/6001:1#3e29c383
@@ -17846,7 +17757,7 @@ cited by: `backupa`, `delacc`, `granta`, `modifya`, `remotesdsys`, `restorea`, `
 Account name: 
 ```
 
-cited by: `delacc`, `granta`
+cited by: `delacc`
 
 ### msg:6002
 > kind=message tier=reference since=- src=sdsys/messages/6002:1#452864f7
@@ -18039,7 +17950,7 @@ cited by: `delacc`
 Account not registered in ACCOUNTS file
 ```
 
-cited by: `delacc`, `granta`, `restorea`
+cited by: `delacc`, `restorea`
 
 ### msg:6028
 > kind=message tier=reference since=- src=sdsys/messages/6028:1#4bb74082
@@ -18258,8 +18169,6 @@ User Administration
 ```
 Invalid user name
 ```
-
-cited by: `granta`
 
 ### msg:6075
 > kind=message tier=reference since=- src=sdsys/messages/6075:1#62626ec3
