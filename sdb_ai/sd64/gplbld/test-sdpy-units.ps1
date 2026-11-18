@@ -209,7 +209,8 @@ try {
     # --- type and delete ----------------------------------------------------
     Send-Frame 'OBJTYPE' $null $null (Latin 'greeting')
     $r = Read-Frame
-    Row 'OBJTYPE names the Python type' ($r.Text -eq 'str') "got '$($r.Text)'"
+    # 17 Nov 26 - four-version audit round 3 (P-7004): Linux's numeric code, SD_Obj_Str 1, not the type's name.
+    Row 'OBJTYPE answers the code of a str (SD_Obj_Str 1)' ($r.Status -eq 0 -and $r.Text -eq '1') "status $($r.Status), got '$($r.Text)'"
 
     Send-Frame 'OBJTYPE' $null $null (Latin 'no_such_object')
     $r = Read-Frame

@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY):
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-1223): the node-0 test after the first get_ak_node() is laid out as Linux's (no braces).
  * 18 Nov 26 Windows port - four-version audit round 2 (P-3076): op_akenable() too asks net_refuse() first, in Linux's order.
  * 17 Nov 26 Windows port - four-version audit round 1 (P-3076): op_akclear() asks net_refuse() before the shared-account refusal, in Linux's order.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): a failed truncate in an index clear is an error.
@@ -2607,12 +2608,11 @@ Private bool ak_write(DH_FILE *dh_file, /* File descriptor */
 
   /* Create leftmost new node */
 
+  /* PRE_RELEASE 100: get_ak_node() answers "I could not" with 0, and node 0 is the AK header, not a node. */
   new_node1_num = get_ak_node(dh_file, subfile);
-  if (new_node1_num == 0) { /* PRE_RELEASE 100: 0 is the AK header, not a node */
+  if (new_node1_num == 0)
     goto exit_ak_write;
-  }
-
-  new_node1 = (DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
+  new_node1 =(DH_TERM_NODE *)k_alloc(50, DH_AK_NODE_SIZE);
   memset((char *)new_node1, '\0', DH_AK_NODE_SIZE);
   new_node1->node_type = AK_TERM_NODE;
 

@@ -44,7 +44,9 @@ ABS = '"Q":@ds:"Q0X":@vm:"1AQ:BQ0X":@vm:"1AQ:/Q0X"'.replace("Q", chr(39)).replac
 # the exact texts of the spec (.claude/s66-design.md 1.6)
 MSG = {
     12518: "A file in the shared account can only be changed by an account that has shared.write (SDSYS can give it: modify.account <account> shared-write-on)",
-    12519: "The structure of a file in the shared account (making, clearing, configuring, indexing, triggers, renaming or deleting it) can only be changed by SDSYS, signed on at a terminal",
+    # 17 Nov 26: "the administrator", not "signed on at a terminal" - SDSYS through the API's remote door is the administrator too
+    #   (apisrvr grants K$ADMINISTRATOR; op_dio3.c shared_structure_refusal asks MY_ADMIN).
+    12519: "The structure of a file in the shared account (making, clearing, configuring, indexing, triggers, renaming or deleting it) can only be changed by SDSYS, the administrator",
     12520: "Account %1 has shared.read %2, shared.write %3",
     12521: "The account name shared is reserved for the shared account, which the installer makes: it cannot be created, restored or attached by hand",
     12522: "The shared account cannot be deleted",
@@ -395,7 +397,8 @@ def checks(srcs):
     SREF = "shared_structure_refusal(fvar) != EDIT_NONE"
     cfl = func_body(d1, "void op_configfl()")
     # Windows: the structure test comes just BEFORE the NET_FILE refusal (Linux: just after); both refuse before anything changes.
-    ck("K11 op_configfl asks the structure test beside the NET_FILE refusal and BEFORE the read-only test and dh_configure", ordered(cfl, SREF, "net_refuse(fvar", "FV_RDONLY", "dh_configure("), "")
+    # 17 Nov 26 (four-version audit round 3, P-3076): op_configure asks it just AFTER the NET_FILE refusal, in Linux's order.
+    ck("K11 op_configfl asks the structure test just after the NET_FILE refusal and BEFORE the read-only test and dh_configure", ordered(cfl, "net_refuse(fvar", SREF, "FV_RDONLY", "dh_configure("), "")
     akc, ake = func_body(dk, "void op_akclear()"), func_body(dk, "void op_akenable()")
     # 17 Nov 26 (four-version audit P-3076): op_akclear asks it just AFTER the NET_FILE refusal, in Linux's order.
     ck("K11b op_akclear asks it before the type test and ak_clear; op_akenable before its first change",

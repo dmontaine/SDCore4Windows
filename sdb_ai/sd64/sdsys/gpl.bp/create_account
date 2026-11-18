@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-7027), as Linux's leave.route.group: for a reused user, a membership of sdfilesadmin,
+*              sdfileswrite, sdfiles, sdaiusers or sdsshnokey that cannot be read stops the verb (10081), as it did for sdssh and sdapi.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5470), as Linux S.62 (P-1284): a Windows user SD made that a restore takes over again
 *              (CA$REUSE.SD.USER) also leaves sdfilesadmin and sdfileswrite when the request does not name them, as it already left sdssh, sdapi, sdfiles and
 *              sdaiusers: it kept the files-write and files-admin rights of its earlier account.
@@ -1812,8 +1814,8 @@ set.access:
       if not(files.admin.want) then
          rm.member = is_grp_member(acc.uname, 'sdfilesadmin')
          rm.told = status()
-         stat = 0
-         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfilesadmin", acc.uname)
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfilesadmin", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
@@ -1822,20 +1824,22 @@ set.access:
       if not(files.write.want) then
          rm.member = is_grp_member(acc.uname, 'sdfileswrite')
          rm.told = status()
-         stat = 0
-         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfileswrite", acc.uname)
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfileswrite", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
          end
       end
-*     25 Oct 26 Windows port - S.65 slice 2c: the same for sdfiles.  A machine without the group has nothing to take away (status 1 from
-*     the lookup is "no such group" there), so only a lookup that fails for another reason stops the verb.
+*     25 Oct 26 Windows port - S.65 slice 2c: the same for sdfiles.
+*     17 Nov 26 Windows port - four-version audit round 3 (P-7027), as Linux's leave.route.group: for sdfilesadmin, sdfileswrite, sdfiles,
+*     sdaiusers and sdsshnokey too, a membership that cannot be read stops the verb (10081), as for sdssh and sdapi; it is not read as
+*     "not a member" (a reused user then kept its files and AI routes).  The installer makes every one of the groups.
       if not(files.want) then
          rm.member = is_grp_member(acc.uname, 'sdfiles')
          rm.told = status()
-         stat = 0
-         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdfiles", acc.uname)
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdfiles", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
@@ -1846,8 +1850,8 @@ set.access:
       if not(ai.want) then
          rm.member = is_grp_member(acc.uname, 'sdaiusers')
          rm.told = status()
-         stat = 0
-         if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdaiusers", acc.uname)
+         stat = rm.told
+         if stat = 0 and rm.member then stat = os_group("DELMEM", "sdaiusers", acc.uname)
          if stat # 0 then
             @system.return.code = -ER$FAILED
             err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1
@@ -1866,8 +1870,8 @@ set.access:
          if reuse.sd.user then
             rm.member = is_grp_member(acc.uname, 'sdsshnokey')
             rm.told = status()
-            stat = 0
-            if rm.told = 0 and rm.member then stat = os_group("DELMEM", "sdsshnokey", acc.uname)
+            stat = rm.told
+            if stat = 0 and rm.member then stat = os_group("DELMEM", "sdsshnokey", acc.uname)
             if stat # 0 then
                @system.return.code = -ER$FAILED
                err = 10081:@vm:acc.uname:@vm:stat ; return ;* Unable to change remote access for %1

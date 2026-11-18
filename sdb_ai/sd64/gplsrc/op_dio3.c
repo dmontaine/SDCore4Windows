@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-1775): op_delete's else-if around k_error(sysmsg(1405)) is braced, as Linux's.
  * 13 Nov 26 Windows port - RELEASE_1.1 279: dir_write() writes LF for an explicit FC$CRLF mode 0, 2 or 3; CR LF stays for mode 1 and a
  *           file with no mode (RELEASE_1.1 271).
  * 8 Nov 26 Windows port - from Linux fb98cfb5 (S.87): net_pre_change_lock() can no longer ask a caller to wait (that was AUTOLOCK's): NETL_WAIT, its two arms and the retry_pc of op_write and op_delete are gone.
@@ -281,8 +282,8 @@ Private void net_reload_read_operands(DESCRIPTOR **rid_descr, DESCRIPTOR **fvar_
 
 /* ======================================================================
    shared_structure_refusal()  -  18 Oct 26 dm, S.66.  A STRUCTURE change (CLEARFILE, CONFIGURE.FILE, an index made or deleted, a
-   trigger set, a header setting) to a file inside the shared account's directory is SDSYS's alone, signed on at a terminal
-   (USR_ADMIN).  HDR_INTERNAL is NOT an exemption: no sanctioned internal path changes the structure of a shared file for anyone else.
+   trigger set, a header setting) to a file inside the shared account's directory is SDSYS's alone, as the administrator
+   (USR_ADMIN: the console's elevated SDSYS, or SDSYS through the API's remote door; 17 Nov 26, message 12519 says so).  HDR_INTERNAL is NOT an exemption: no sanctioned internal path changes the structure of a shared file for anyone else.
    EDIT_SHARED_STRUCT or EDIT_NONE.  A file that is not a hashed or a directory file has no pathname here and is none of them.      */
 
 int shared_structure_refusal(FILE_VAR *fvar) {
@@ -787,8 +788,9 @@ exit_op_delete:
     if (!keep_lock && (txn_id == 0) && (id_len != 0)) {
       unlock_record(fvar, id, id_len);
     }
-  } else if (!(op_flags & P_ON_ERROR))
+  } else if (!(op_flags & P_ON_ERROR)) {
     k_error(sysmsg(1405), process.status);
+  }
 }
 
 /* ======================================================================

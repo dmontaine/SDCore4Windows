@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-3076): op_configure asks net_refuse before the shared-structure refusal, as Linux.
  * 14 Nov 26 Windows port - from Linux 64561d81 (S.230, RELEASE_1.1 286): lchown()'s result is tested (best effort, as before).
  * 8 Nov 26 Windows port - from Linux 3bb38ca1 (S.87 batch 9): $MODE OPEN.FAIL.ZERO.FVAR is gone; the file variable of a failed open stays as the open left it (unassigned).
  * 7 Nov 26 Windows port - from Linux 71db6b70 (S.87 batch 5): the comment about a name containing ';' no longer being a network file reference
@@ -220,11 +221,12 @@ void op_configfl() {
   k_get_file(descr);
   fvar = descr->data.fvar;
 
+  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file is not configured from here (it would be told "read only" or status 1 silently) */
+    net_refuse(fvar, "CONFIGURE.FILE");
+
   /* 18 Oct 26 S.66: the structure of a file in the shared account is SDSYS's alone ($internal is not exempt); before anything is changed */
   if (shared_structure_refusal(fvar) != EDIT_NONE)
     k_error(sysmsg(edit_refused_message(EDIT_SHARED_STRUCT)));
-  if (fvar->type == NET_FILE) /* 17 Oct 26 S.65: a remote file is not configured from here (it would be told "read only" or status 1 silently) */
-    net_refuse(fvar, "CONFIGURE.FILE");
 
   if (fvar->flags & FV_RDONLY)
     k_error(sysmsg(1400));

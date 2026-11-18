@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3, the case fallbacks (D4): .S reads the sentence name once and saves a
+*           new one lower case, and the command stack is read as $command.stack only, as Linux and Windows Solo.
 * 17 Nov 26 Windows port - Linux 1557e270 (P-4645): comment only - logto.authorised's suspended note now says what the code does (the
 *           installer's internal session is the one exemption; the administrator is refused), which Linux now does too.
 * 17 Nov 26 Windows port - four-version audit round 1, second pass (P-3266; owner's ruling D7): LOGTO SDSYS's refusal is audited in
@@ -1577,19 +1579,12 @@ stack.manipulation:
 *   one rather than ask 5045.  So: as typed, then down, then up (the fold .D
 *   uses above) - a hit keeps the id it matched and asks 5045 about it (owner,
 *   14 Sep 2026: "treat it as the same id"); no hit saves under downcase().
+* 17 Nov 26 Windows port - four-version audit round 3 (P-4649, P-5468, P-7024, P-7025; the case fallbacks, the Linux audit
+*   session's D4): ONE READ, as Linux and Windows Solo.  The VOC folds case itself (NOCASE), so an existing sentence is found
+*   in any case by this read, and a new one is saved lower case; the as-typed / lower / upper retries above it are gone.
          readvu voc.rec from voc, arg1, 0 else
             release voc, arg1
-            readvu voc.rec from voc, downcase(arg1), 0 then
-               arg1 = downcase(arg1)
-            end else
-               release voc, downcase(arg1)
-               readvu voc.rec from voc, upcase(arg1), 0 then
-                  arg1 = upcase(arg1)
-               end else
-                  release voc, upcase(arg1)
-                  arg1 = downcase(arg1)
-               end
-            end
+            arg1 = downcase(arg1)
          end
 
          readvu voc.rec from voc, arg1, 0 then
@@ -4670,23 +4665,12 @@ exit.actions:
          * an X type record.
 
          if not(fileinfo(voc, FL$READONLY)) then
-* 19 Aug 26 Windows port - THE ID IS LOWER CASE FROM THIS RELEASE AND THIS IS A
-*   RECORD READ, WHICH HAS NO FOLD.  _VOC_REF folds a FILE name; reading a
-*   record out of an already-open file matches the id exactly, so the two
-*   spellings have to be tried here by hand.  An account created before the
-*   rename still holds $COMMAND.STACK, and both must go on working - the
-*   changelog promises it.  PROJECT_STATUS.md 5.12 (b).
-*   cs.id KEEPS WHICHEVER ONE MATCHED because the release below has to name the
-*   record the readu locked; releasing the other spelling would leave the lock
-*   held for the life of the session.
-            cs.id = '$command.stack'
-            readu voc.rec from voc,cs.id else
-               cs.id = '$COMMAND.STACK'
-               readu voc.rec from voc,cs.id else
-                  voc.rec = ''
-               end
-            end
-            if voc.rec[1,1] = "X" then
+* 17 Nov 26 Windows port - four-version audit round 3 (P-3267, P-3268, P-7026; the case fallbacks, the Linux audit session's
+*   D4 "DO remove, to match"): ONE READ of $command.stack, as Linux and Windows Solo.  The VOC is NOCASE, so an account
+*   created before the 19 Aug 26 rename finds its $COMMAND.STACK by this read, and the upgrade's upgrade_nocase converts
+*   every VOC or names the one it left in nocase-upgrade.log; the second spelling and cs.id are gone.
+            readu voc.rec from voc,"$command.stack" then
+               if voc.rec[1,1] = "X" then
 						s = initial.account.path:@ds:'stacks'
 						openpath s to stk.f else
 							create.file s directory on error null
@@ -4695,8 +4679,9 @@ exit.actions:
 							write command.stack to stk.f, @logname
 							close stk.f
 						end
+               end
             end
-            release voc, cs.id   ;* Catch all exit paths
+            release voc, '$command.stack'   ;* Catch all exit paths - the id the readu locked
          end
 
          if not(ospath(initial.account.path, OS$CD)) then

@@ -3,6 +3,37 @@ W2.0-0 - in progress
 Changes since W1.1-3.  NOTHING IN THIS SECTION HAS BEEN RELEASED.  (This section was W1.2-0 until 10 Nov 26: the next release of
 both Windows products is 2.0-0, as all four SD Core versions will be.)
 
+18 Nov 26  A RECORD ID IS FOUND AS TYPED; A GROUP THAT CANNOT BE READ STOPS A BACKUP OR A RESTORE; AN OLD SYSTEM KEEPS THE PROMPT.
+
+             What        - A query (LIST, SELECT and the rest) finds a record by its id as typed: in a file of your own,
+                           SUE and sue are two records, and LIST file SUE no longer shows sue's when there is no SUE.
+                           The VOC is case blind, so its names are still found in any case; CNAME, the .S command,
+                           SET.FILE and the sign-on read each VOC name once, with no second try in another case.
+                           SET.FILE names an account that is not in the register in lower case.  backup.account stops
+                           (12005) when it cannot read the account's membership of any of its seven groups (it did
+                           for three; for the files, AI and key groups it recorded "not a member"), and a restore that
+                           reuses a Windows user stops (10081) when it cannot read the user's membership of a group it
+                           would take it out of.  An upgrade of a system from W1.1-3 or earlier, where every session
+                           started at the command prompt, keeps the prompt as the start (it moved every account to the
+                           home screen), and the installer says so.  PY_OBJTYPE returns the type as a number
+                           (1 string, 2 list, 3 dictionary, 4 integer, 5 float, 0 anything else), as SD's own PY_JSON
+                           and PY_TEST expect; it returned the type's name.  PY_OBJLEN answers -10302 for a length too
+                           big for a 32-bit number.  An upgrade that keeps sd.conf adds SCREENTHEME=paper when the file
+                           has no SCREENTHEME line and changes SCREENTHEME=blue (W2.0-0-rc1's default) to paper once,
+                           leaving a comment line so that blue set again afterwards is kept.  The refusal of a change to
+                           a shared file's structure says "SDSYS, the administrator": SDSYS through the API is the
+                           administrator too.  MODIFY.PASSWORD run with -QUIET (the
+                           installer's step) asks "<account> SD password:" and "Enter password again:".  The three
+                           batch-gate refusals are shown a line at a time, and "sd: -internal may only be used with
+                           the SDSYS account" is in lower case.  CONFIGURE.FILE of a remote file is refused as remote
+                           before any other test.
+             Why         - The four-version parity audit, round 3: SD Core for Linux reads each name once (the VOC is
+                           case blind and the upgrade converts it), stops on a group it cannot read, keeps the prompt on
+                           an upgrade from before the home screen, and returns the numeric type.
+             Does NOT    - Change a record id in a file, the case-blind VOC, or an account's own start setting.  An
+                           upgrade from a release with the home screen keeps the start it had.
+                           NOT YET TESTED ON AN INSTALLED SYSTEM.
+
 18 Nov 26  EVERY AUDIT RECORD ALSO GOES TO THE WINDOWS EVENT LOG; A NETWORK SHARE'S ROOT IS NOT A NETDIRS ENTRY; A RESTORE'S USER
            KEEPS NO FILE RIGHTS IT WAS NOT GIVEN.
 

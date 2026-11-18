@@ -476,7 +476,9 @@ def run_checks(raw):
     ck("F13 the manifest: route.files.write: 1|0 for a USER account from membership of sdfileswrite, right after route.files and before os.sh; RESTORE.ACCOUNT reads it (and clears it for each "
        "section), hands it on as CA$FILESWRITE only when route.files is 1 too, so a manifest without the key, or with the write group and no files route, restores as NOT in the group",
        # 13 Nov 26 Windows port: the membership is read first into fwrite / fadmin (0 unless the lookup answered yes, so a group an older install has not got is "not a member")
-       ordered(ai, "fwrite = 0", "fadmin = 0", "m = is_grp_member(uname, 'sdfileswrite')", "if m and status() = 0 then fwrite = 1", "m = is_grp_member(uname, 'sdfilesadmin')", "if m and status() = 0 then fadmin = 1",
+       # 17 Nov 26 (four-version audit round 3, P-7021, Linux 10767826): a lookup that could not be made stops the manifest (12005) first.
+       ordered(ai, "fwrite = 0", "fadmin = 0", "m = is_grp_member(uname, 'sdfileswrite')", "err = 12005 : @vm : acc.name : @vm : 'sdfileswrite'", "if m then fwrite = 1",
+               "m = is_grp_member(uname, 'sdfilesadmin')", "err = 12005 : @vm : acc.name : @vm : 'sdfilesadmin'", "if m then fadmin = 1",
                "info<-1> = 'route.files: ' : files", "info<-1> = 'route.files.write: ' : fwrite", "info<-1> = 'route.files.admin: ' : fadmin", "'os.sh: '")
        and ai.count("fwrite = 1") == 1 and ai.count("fadmin = 1") == 1
        and re.search(r"= 'route\.files\.write'\s*; m\.route\.files\.write = kv", rs) is not None and "m.route.files = '' ; m.route.files.write = ''" in rs
@@ -716,7 +718,7 @@ def mutants(raw):
       "     if files.want or files.admin.want or ai.want then      ;* 13 Nov 26 (Linux S.69 step 2): and no AI gate")
     m("the manifest has no write key", "acc_os_info", "   info<-1> = 'route.files.write: ' : fwrite\n", "")      # 13 Nov 26 Windows port: the key is built from fwrite (F13)
     m("the manifest's write key is read off the wrong group (13 Nov 26 Windows port)", "acc_os_info", "m = is_grp_member(uname, 'sdfileswrite')", "m = is_grp_member(uname, 'sdfiles')")
-    m("a write group that cannot be read is a member in the manifest (13 Nov 26 Windows port)", "acc_os_info", "if m and status() = 0 then fwrite = 1", "if m then fwrite = 1")
+    m("a write group that cannot be read does not stop the manifest (17 Nov 26, P-7021)", "acc_os_info", "err = 12005 : @vm : acc.name : @vm : 'sdfileswrite'", "err = ''")
     m("the restore gives the write group without the files route", "restorea", "if m.route.files = '1' and m.route.files.write = '1' then settings<CA$FILESWRITE> = 1", "if m.route.files.write = '1' then settings<CA$FILESWRITE> = 1")
     # S.73 item 3 (21 Oct 26): the administration group at creation, in the manifest and in the restore
     m("FILES-ADMIN-ON sets nothing", "createa", "'FILES-ADMIN-ON'\n            settings<CA$FILESADMIN> = 1", "'FILES-ADMIN-ON'\n            settings<CA$FILES> = 1")

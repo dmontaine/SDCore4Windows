@@ -7,6 +7,7 @@
 * it and/or modify it under the terms of the GNU General Public License, version 3 or later.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-1938, P-7041): Custom's confirmation says "set its key and model (S)", as Linux's.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5499, P-5500), as Linux S.62 (P-1293, P-1294): the page's text names no M key
 *           (gone with S.170); a model is chosen with S.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3476): the certificate question says "for a private CA, ... a dash for the system
@@ -1264,7 +1265,7 @@ do.custom:
    typed = 'custom'
    el = ''
    el<-1> = 'Custom will go to ' : field(v2, '/', 3) : ' over https, with the certificate checked, and the key is sent only to that address.'
-   el<-1> = 'The helper checks the address again.  It is not used until you check Custom, set a model and a key.'
+   el<-1> = 'The helper checks the address again.  It is not used until you check Custom and set its key and model (S).'      ;* 17 Nov 26 (P-1938, P-7041): Linux's words; S is the one setup dialog
    use.x = 1
    gosub confirm.and.run
    return

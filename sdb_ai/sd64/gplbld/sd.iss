@@ -555,7 +555,8 @@ Name: "opengates"; Description: "Open every access gate for your SD Core account
 ; question"; found missing here by the owner, 10 Nov).  The home screen is the delivered start and needs nothing (no start.default means
 ; the home screen); the command prompt runs set-start-default.ps1 (SET.START.DEFAULT TERMINAL).  The tasks page is skipped on an upgrade,
 ; so an upgrade keeps the start.default the site already has.  /TASKS=startprompt answers it on a silent install.  Options only on the
-; screen; what each means is in the installation document.
+; screen; what each means is in the installation document.  17 Nov 26 (audit round 3, P-1435, P-2329): an upgrade of a tree from before
+; the home screen (W1.1-3 and earlier) keeps the prompt, as Linux's; see SetStartDefault.
 ; 10 Nov 26 - ONE BOX, NOT A GROUP OF TWO: the two radio choices under a heading of their own (box 6) were three lines, and the last one,
 ;   Command prompt, fell below the bottom of the list at the wizard's tallest (WizardSizePercent 150 is Inno's most).  Unticked is the home
 ;   screen, as delivered; it sits in group 5 with the account's other box.
@@ -1332,6 +1333,10 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
 
 var
   DataTreeWasAbsent: Boolean;
+  { 17 Nov 26 - four-version audit round 3 (P-1435, P-2329), Linux's 14 Nov 26 "an upgrade does not ask where sessions start":
+    the data tree is kept from a release before the home screen (W1.1-3 and earlier: its newvoc has no set.start.default),
+    where every session started at the prompt.  Sampled with DataTreeWasAbsent, before [Files] replaces newvoc. }
+  DataTreeBeforeHome: Boolean;
   SshWasAbsent: Boolean;
   { 13 Nov 26 - RELEASE_1.1 213.  THE API RULE IS MADE BEFORE SD STARTS.  The service entry in [Run] starts SD,
     whose listener opens at once when sd.conf turns the API on; the rule used to come at ssPostInstall, seconds
@@ -1776,6 +1781,9 @@ begin
      whole set consistently and so looks identical either way.  Only a genuine
      first install exposes it.  Measured 14 Aug 2026. *)
   DataTreeWasAbsent := not DirExists(ExpandConstant('{#DataDir}\sdsys'));
+  DataTreeBeforeHome := (not DataTreeWasAbsent) and
+                        DirExists(ExpandConstant('{#DataDir}\sdsys\newvoc')) and
+                        not FileExists(ExpandConstant('{#DataDir}\sdsys\newvoc\set.start.default'));
 
   (* 31 Aug 26 - IS SD INSTALLED RIGHT NOW?  PRE_RELEASE_FIXES 88.  Sampled
      here and never again, because Inno writes this very key at the end of the
@@ -2380,6 +2388,57 @@ begin
     Log('RetiredConf: removed from sd.conf:' + Removed)
   else
     Log('RetiredConf: COULD NOT rewrite sd.conf, which still names:' + Removed);
+end;
+
+{ 17 Nov 26 - four-version audit round 3 (P-4944), Linux's installer SCREENTHEME block (S.172, owner 8 Nov 2026: "Change the
+  default theme to more monochrome so that the text is always readable").  THE DELIVERED SCREEN THEME IS PAPER, and a kept
+  sd.conf may be older: a kept file with no SCREENTHEME line gets SCREENTHEME=paper; a kept SCREENTHEME=blue (W2.0-0-rc1's
+  delivered default, not a choice) is changed to paper ONCE - the change leaves the comment line ScreenThemeMark in the file,
+  and a file that has it is not changed again, so an administrator who sets blue afterwards keeps it.  Any other value is the
+  administrator's choice and is left alone.  Beside RemoveRetiredConf and for the same reason (sd.conf is onlyifdoesntexist,
+  so only a kept file can be old); a fresh install has no file yet and nothing is done.  Written to the setup log only. }
+const
+  ScreenThemeMark = '# SCREENTHEME blue was changed to paper by the installer (S.172); set it back to blue to keep the old look';
+
+procedure UpgradeScreenTheme;
+var
+  Lines: TArrayOfString;
+  I, N, Found: Integer;
+  Conf, L: String;
+  HasMark: Boolean;
+begin
+  Conf := ExpandConstant('{#DataDir}\sd.conf');
+  if not LoadStringsFromFile(Conf, Lines) then
+    Exit;
+  N := GetArrayLength(Lines);
+  Found := -1;
+  HasMark := False;
+  for I := 0 to N - 1 do
+  begin
+    if (Found < 0) and (Copy(Lines[I], 1, 12) = 'SCREENTHEME=') then
+      Found := I;
+    if Lines[I] = ScreenThemeMark then
+      HasMark := True;
+  end;
+  if Found < 0 then
+  begin
+    SetArrayLength(Lines, N + 1);
+    Lines[N] := 'SCREENTHEME=paper';
+    L := 'added SCREENTHEME=paper (the kept file had no SCREENTHEME line)';
+  end
+  else if (TrimRight(Lines[Found]) = 'SCREENTHEME=blue') and not HasMark then
+  begin
+    Lines[Found] := 'SCREENTHEME=paper';
+    SetArrayLength(Lines, N + 1);
+    Lines[N] := ScreenThemeMark;
+    L := 'changed SCREENTHEME=blue to SCREENTHEME=paper (the new delivered look)';
+  end
+  else
+    Exit;
+  if SaveStringsToFile(Conf, Lines, False) then
+    Log('ScreenTheme: ' + L)
+  else
+    Log('ScreenTheme: COULD NOT rewrite sd.conf; it was not ' + L);
 end;
 
 { 30 Aug 26 - MAY OTHER COMPUTERS REACH IT?  PRE_RELEASE_FIXES 75.
@@ -3725,10 +3784,19 @@ begin
   Result := '';
   { A FRESH INSTALL ONLY.  Inno remembers the tasks of the last install (UsePreviousTasks), so on an upgrade startprompt
     could read as chosen again and put back a start the administrator has since changed with SET.START.DEFAULT MENU.
-    An upgrade keeps the start.default the site has, as Linux's offers what the site had. }
+    An upgrade keeps the start.default the site has, as Linux's offers what the site had.
+    17 Nov 26 - four-version audit round 3 (P-1435, P-2329), as Linux's 14 Nov 26 upgrade: AND AN UPGRADE OF A TREE FROM BEFORE
+    THE HOME SCREEN (DataTreeBeforeHome) KEEPS THE PROMPT, where every session of that release started; it used to send every
+    account to the home screen.  Only when the tree has no start.default (that release wrote none); an account's own start
+    setting is not touched.  The installer says which. }
   if not DataTreeWasAbsent then
-    Exit;
-  if not WizardIsTaskSelected('startprompt') then
+  begin
+    if not DataTreeBeforeHome then
+      Exit;
+    if FileExists(ExpandConstant('{#DataDir}\sdsys\start.default')) then
+      Exit;
+  end
+  else if not WizardIsTaskSelected('startprompt') then
     Exit;
   Ps := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if not Exec(Ps, '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
@@ -3739,7 +3807,11 @@ begin
     Code := -1;
   Log('SD: set-start-default.ps1 exited ' + IntToStr(Code));
   if Code = 0 then
+  begin
+    if not DataTreeWasAbsent then
+      Result := 'New sessions start at the command prompt, as before this upgrade.' + #13#10#13#10;
     Exit;
+  end;
   Result := 'New sessions still start at the home screen (code ' + IntToStr(Code) + '). See ' +
             ExpandConstant('{#DataDir}') + '\set-start-default.log' + #13#10#13#10;
 end;
@@ -5002,6 +5074,9 @@ begin
     anything can start SD (see RemoveRetiredConf). }
   if CurStep = ssInstall then
     RemoveRetiredConf;
+  { 17 Nov 26 - P-4944: and an old kept SCREENTHEME is brought to the delivered paper (see UpgradeScreenTheme). }
+  if CurStep = ssInstall then
+    UpgradeScreenTheme;
 
   if CurStep = ssPostInstall then
   begin
@@ -5580,7 +5655,8 @@ begin
            ExamplesMsg +
            { 13 Nov 26 - RELEASE_1.1 246: empty unless install-aihelper.ps1 could not set up the AI helper service. }
            AiMsg +
-           { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it. }
+           { Empty unless the command prompt was chosen and set-start-default.ps1 could not write it, or an upgrade of a tree from
+             before the home screen kept the prompt (one line saying so). }
            StartMsg +
            { Empty on every first install and on every upgrade that worked. }
            DictMsg +

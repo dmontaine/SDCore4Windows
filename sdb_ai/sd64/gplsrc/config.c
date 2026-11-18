@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-7016): the BACKUPDIR= branch sits before SDSYS=, as Linux's (layout only).
  * 18 Nov 26 Windows port - four-version audit round 2 (P-1222, P-5444 to P-5447): BACKUPDIR= is accepted and ignored with no length test
  *           (fgets() leaves at most 189 characters, so the test could never refuse), and the NETDIRS / SH / SH1 refusals are laid out as Linux's.
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 NETDIRS): a value over MAX_NETDIRS_LEN (191), or a NETDIRS line too long for the
@@ -276,20 +277,6 @@ struct CONFIG* read_config(char* errmsg) {
          CREATUSR are gone.  CREATUSR was accepted and discarded here so that a
          file carrying it still loaded; now, as on Linux, the installer removes a
          retired parameter's line from a kept sd.conf (sd.iss, RetiredConf). */
-      /* 01 Oct 26 Windows port - BACKUPDIR, THE DIRECTORY BACKUP.ACCOUNT AND
-         RESTORE.ACCOUNT USE WHEN THEY ARE NOT GIVEN ONE.  SET.BACKUP.DIRECTORY
-         writes this line; the CHAIN BELOW ENDS IN "Unrecognised configuration
-         parameter", which aborts read_config() and stops SD starting, so a
-         file carrying the line would not start without this branch.  It is
-         accepted and NOT stored: SD BASIC reads the file itself, through
-         !acc_os_bakdir, each time it needs the value, so a change takes
-         effect without restarting SD.  18 Nov 26 (audit round 2, P-1222): its
-         length test is gone, as Linux has none - fgets() into rec leaves at most
-         189 characters after BACKUPDIR=, below MAX_PATHNAME_LEN, so it could
-         never refuse anything.                                                 */
-      else if (strncmp(rec, "BACKUPDIR=", 10) == 0) {
-        /* ignored */
-      }
       else if (sscanf(rec, "DEADLOCK=%d", &n) == 1)
         cfg->deadlock = n; /* 0, 1 or 2: rangecheck below (openQM item 500) */
       else if (sscanf(rec, "DEBUG=%d", &n) == 1)
@@ -391,6 +378,21 @@ struct CONFIG* read_config(char* errmsg) {
       /* 15 Nov 26 Windows port - RELEASE_1.1 317: APILOCAL=1 binds the listener to 127.0.0.1 only (remote.api local). */
       else if (sscanf(rec, "APILOCAL=%d", &n) == 1)
         cfg->api_local = (n != 0);
+      /* 01 Oct 26 Windows port - BACKUPDIR, THE DIRECTORY BACKUP.ACCOUNT AND
+         RESTORE.ACCOUNT USE WHEN THEY ARE NOT GIVEN ONE.  SET.BACKUP.DIRECTORY
+         writes this line; the CHAIN BELOW ENDS IN "Unrecognised configuration
+         parameter", which aborts read_config() and stops SD starting, so a
+         file carrying the line would not start without this branch.  It is
+         accepted and NOT stored: SD BASIC reads the file itself, through
+         !acc_os_bakdir, each time it needs the value, so a change takes
+         effect without restarting SD.  18 Nov 26 (audit round 2, P-1222): its
+         length test is gone, as Linux has none - fgets() into rec leaves at most
+         189 characters after BACKUPDIR=, below MAX_PATHNAME_LEN, so it could
+         never refuse anything.  17 Nov 26 (audit round 3, P-7016): placed
+         before SDSYS=, where Linux has it.                                     */
+      else if (strncmp(rec, "BACKUPDIR=", 10) == 0) {
+        /* ignored */
+      }
       else if (strncmp(rec, "SDSYS=", 6) == 0) {
         if (!(command_options & CMD_FLASH))
           strcpy(cfg->sysdir, rec + 6);

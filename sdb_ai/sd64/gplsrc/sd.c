@@ -17,6 +17,8 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-7017, P-7018, P-7019): "sd: -internal may only be used ..." in lower case, as Linux;
+ *           the one-SD-per-session guard sits after comlin()'s declarations, where Linux has it.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-5452): the one-SD-per-session guard says "type exit", lower case, as Linux sd.c:333-336.
  * 17 Nov 26 Windows port - from Linux c359f30b (S.62, four-version audit round 1): -TERM's value is bounded (32), refused by name when longer.
  * 15 Nov 26 Windows port - from Linux d15ace15 (S.242 stage 3, RELEASE_1.1 299): main() calls xfer_detect() first; an sftp request sshd sent here
@@ -353,20 +355,6 @@ Private void sd_init(int argc, char *argv[]) {
 /* ====================================================================== */
 
 Private bool comlin(int argc, char *argv[]) {
-/* 15 Aug 26 Windows port - ONE SD PER SESSION.  Owner's rule, 15 Aug 2026:
-   somebody who shells out of SD with SH must not be able to start a second
-   one.  op_sh.c marks the shell it launches with SD_SESSION, and that is what
-   this reads; the comment there explains why it is a guard rather than a
-   boundary, and what the real boundary is.
-
-   Before everything, so it applies to every form of the command, and worded
-   for a user rather than an administrator: the way back is the shell they are
-   standing in.                                                             */
-  if (getenv("SD_SESSION") != NULL) {
-    fprintf(stderr, "SD is already running in this session - type exit to return to it.\n");  /* 18 Nov 26: lower case, as Linux */
-    exit(1);
-  }
-
   int arg;
   int socket_handle = 0;
   char c;
@@ -374,6 +362,21 @@ Private bool comlin(int argc, char *argv[]) {
   int n; /* Fix for Issue #15 - 11Jan22 gwb */
   int RxPipe;
   int TxPipe;
+
+/* 15 Aug 26 Windows port - ONE SD PER SESSION.  Owner's rule, 15 Aug 2026:
+   somebody who shells out of SD with SH must not be able to start a second
+   one.  op_sh.c marks the shell it launches with SD_SESSION, and that is what
+   this reads; the comment there explains why it is a guard rather than a
+   boundary, and what the real boundary is.
+
+   Before any option is read, so it applies to every form of the command, and
+   worded for a user rather than an administrator: the way back is the shell
+   they are standing in.  17 Nov 26 (audit round 3, P-7019): after the
+   declarations, where Linux has it.                                        */
+  if (getenv("SD_SESSION") != NULL) {
+    fprintf(stderr, "SD is already running in this session - type exit to return to it.\n");  /* 18 Nov 26: lower case, as Linux */
+    exit(1);
+  }
 
   for (arg = 1; (arg < argc) && (argv[arg][0] == '-'); arg++) {
     /* 8 Nov 26 Windows port - from Linux 843344ba (S.87 batch 15): sd -<n>, the forced user number, is gone with FIXUSERS / PORTMAP. */
@@ -673,7 +676,7 @@ Private bool comlin(int argc, char *argv[]) {
 
   if (internal_mode) {
     if ((forced_account != NULL) && stricmp(forced_account, "SDSYS")) {
-      fprintf(stderr, "sd: -INTERNAL may only be used with the SDSYS account\n");
+      fprintf(stderr, "sd: -internal may only be used with the SDSYS account\n");  /* 17 Nov 26: lower case, as Linux */
       exit(1);
     }
     forced_account = "SDSYS";

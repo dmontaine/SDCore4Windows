@@ -18,6 +18,8 @@
 * 
 *  
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-3444, P-7037): check.record reads the record id once, as Linux and
+*           Windows Solo; the lower / upper retries that let SUE find sue's record in any file are gone.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5489), as Linux S.62 (P-1258): after a failed read the file system is asked
 *           about the id only when it names an entry of the directory itself (not empty, no '/' or '\', not . or ..).
 * 17 Nov 26 Windows port - four-version audit round 1: "'id' invalid name" is message 15140, Linux c359f30b's 14140 + 1000 (Linux took
@@ -4635,19 +4637,14 @@ check.record:
 *
 *   ADDITIVE: an exact match still wins, so nothing that works today changes.
 *   Only a lookup that fails outright gets the two extra attempts.
+* 17 Nov 26 Windows port - four-version audit round 3 (P-3444, P-7037; the case fallbacks, the Linux audit session's D4):
+*   ONE READ, as Linux and Windows Solo.  The VOC is NOCASE, so LIST VOC $HOLD finds $hold without a retry; for any other
+*   file the id is user data and SUE and sue are two records (the owner's plan M ruling of 12 Sep), so it is not folded.
    record.found = @true
    readv s from data.f, id, 0 else
-      readv s from data.f, downcase(id), 0 then
-         id = downcase(id)
-      end else
-         readv s from data.f, upcase(id), 0 then
-            id = upcase(id)
-         end else
-            if not(absent.null) then
-               gosub record.not.found
-               record.found = @false
-            end
-         end
+      if not(absent.null) then
+         gosub record.not.found
+         record.found = @false
       end
    end
 

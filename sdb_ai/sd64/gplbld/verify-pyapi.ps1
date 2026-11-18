@@ -297,7 +297,8 @@ Row ($run -match 'PYPRB-FIN=0')    'PY_FINALIZE returned 0'
 Row ($run -match 'PYPRB-LCREATE=0') 'PY_LISTCREATE returned 0'
 Row ($run -match 'PYPRB-LAPPD=0')   'PY_LISTAPPD appended to the created list (0)'
 Row ($run -match 'PYPRB-LGET=\[[^\]]*SDPY-42') 'PY_LISTGETS read the created list back holding SDPY-42'
-Row ($run -match 'PYPRB-LTYPE=list') 'PY_OBJTYPE says the created object is a list'
+# 17 Nov 26 - four-version audit round 3 (P-7004): Linux's numeric code, SD_Obj_List 2, not the type's name.
+Row ($run -match 'PYPRB-LTYPE=2(\D|$)') 'PY_OBJTYPE says the created object is a list (SD_Obj_List 2)'
 Row (($run -match 'PYPRB-NOLIST=\[') -and ($run -notmatch 'PYPRB-NOLIST=\[[^\]]*SDPY-42')) `
     'CONTROL: a list never created does not read back SDPY-42'
 # 07 Oct 26 - the alias PY_LISTCRTE.  Same decisive row as above on a list it made, and the

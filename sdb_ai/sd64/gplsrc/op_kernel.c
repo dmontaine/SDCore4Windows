@@ -17,6 +17,7 @@
  * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  * 
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-4609): case K_SH / K_OS_EXEC sit after K_MAXMIN_POS_SET, as Linux's (layout only).
  * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 P-4608): a phantom child that cannot start writes "phantom: cannot start a phantom
  *           from <path> - <reason>" (or why there is no path) to the error log and ends; it called k_error(), whose longjmp() left the
  *           child running as a second copy of the session.
@@ -1071,6 +1072,32 @@ void op_kernel() {
         maxmin_pos[0] = '\0';
       break;
 
+    /* 13 Oct 26 dm - S.63.  The per-account OS-access gates, back.  Set exactly like K_ADMINISTRATOR:
+       only a $internal program (LOGIN, CPROC - the two that own entry to an account) may change them, and
+       they are loaded there from ACC$SH / ACC$OS.EXEC.  A non-internal caller cannot reach KERNEL at all
+       (BCOMP), and an internal one that is not LOGIN or CPROC has no reason to call it with a positive
+       argument.  USR_OS_EXEC is what op_sh.c reads; USR_SH is read by CPROC's SH gate through
+       kernel(K$SH, -1).  17 Nov 26 (audit round 3, P-4609): placed after K_MAXMIN_POS_SET, as Linux's.   */
+    case K_SH:
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_SH, n > 0);
+      }
+      result.data.value = MY_PRIV(USR_SH);
+      break;
+
+    case K_OS_EXEC:
+      GetInt(descr);
+      n = descr->data.value;
+      if (n >= 0) {
+        if (process.program.flags & HDR_INTERNAL)
+          SET_MY_PRIV(USR_OS_EXEC, n > 0);
+      }
+      result.data.value = MY_PRIV(USR_OS_EXEC);
+      break;
+
     case K_CLASS_MAIN: /* 16 Oct 26, QM4 Fixes item 484: see keys.h */
       GetInt(descr);
       class_main_ok = (descr->data.value != 0);
@@ -1160,33 +1187,6 @@ void op_kernel() {
       result.data.value =
           (elevated && (connection_type != CN_SOCKET)) ? TRUE : FALSE;
     } break;
-
-    /* 13 Oct 26 dm - S.63.  The per-account OS-access gates, back.  Set exactly like K_ADMINISTRATOR above:
-       only a $internal program (LOGIN, CPROC - the two that own entry to an account) may change them, and
-       they are loaded there from ACC$SH / ACC$OS.EXEC.  A non-internal caller cannot reach KERNEL at all
-       (BCOMP), and an internal one that is not LOGIN or CPROC has no reason to call it with a positive
-       argument.  USR_OS_EXEC is what op_sh.c reads; USR_SH is read by CPROC's SH gate through
-       kernel(K$SH, -1).                                                                                 */
-
-    case K_SH:
-      GetInt(descr);
-      n = descr->data.value;
-      if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL)
-          SET_MY_PRIV(USR_SH, n > 0);
-      }
-      result.data.value = MY_PRIV(USR_SH);
-      break;
-
-    case K_OS_EXEC:
-      GetInt(descr);
-      n = descr->data.value;
-      if (n >= 0) {
-        if (process.program.flags & HDR_INTERNAL)
-          SET_MY_PRIV(USR_OS_EXEC, n > 0);
-      }
-      result.data.value = MY_PRIV(USR_OS_EXEC);
-      break;
 
     case K_SD_ACCOUNTS: /* 16 Oct 26, QM4 gap 22: the SD.ACCOUNTS gate, set as K_OS_EXEC is */
       GetInt(descr);

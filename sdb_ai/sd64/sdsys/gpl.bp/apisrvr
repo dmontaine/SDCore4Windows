@@ -19,6 +19,8 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-4639, P-4911): SrvrAccount's group refusal is one block, as Linux's
+*           (group.lookup.failed or not.in.group, then 10003); the same refusals and audit lines as before.
 * 18 Nov 26 Windows port - four-version audit round 2 (P-1274, P-5463, P-5465 to P-5467), as Linux S.62: SrvrAccount clears acc.rec
 *           before the register read, looks up no name with a separator ('/', or '\' here) and refuses it as having no record, sets
 *           abort.message on that refusal (an ON ERROR reply carried no text), and clears the NET gate after the shared ones, as Linux.
@@ -885,17 +887,14 @@ end else
    ent.told = status()
 end
 
-if ent.told # 0 then
-   void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed status=' : ent.told : ' user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
-   server.error = SV$ERROR
-   error.msg = sysmsg(10003) ;* User not allowed in requested account
-   abort.message = error.msg
-   ent.refused = @true
-   return
-end
-
+* 17 Nov 26 Windows port - four-version audit round 3 (P-4639, P-4911): one refusal block, as Linux's: a lookup that could not be made
+*   (!is_grp_member answers @false with STATUS() set) is audited group.lookup.failed with its status, otherwise not.in.group; both 10003.
 if not(ent.member) then
-   void kernel(K$AUDIT, 'account refused branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   if ent.told # 0 then
+      void kernel(K$AUDIT, 'account refused branch=4 group.lookup.failed status=' : ent.told : ' user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   end else
+      void kernel(K$AUDIT, 'account refused branch=4 not.in.group user=' : kernel(K$USERNAME, 0) : ' group=' : ent.group : ' account=' : ent.name)
+   end
    server.error = SV$ERROR
    error.msg = sysmsg(10003) ;* User not allowed in requested account
    abort.message = error.msg

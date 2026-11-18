@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3: the old name is read once (the VOC is NOCASE), as Linux and Windows
+*           Solo; the as-typed / lower / upper retries are gone.
 * 17 Nov 26 Windows port - from Linux 1557e270 (P-4641): a rename whose new name differs from the old only in case is refused (6151) whatever
 *           case the old id was found in, and every spelling of the new name is asked; "CNAME MYFILE TO myfile" lost the record on the case-blind VOC.
 * 8 Nov 26 Windows port - from Linux d241df26 (S.87): multifiles are gone.  The refusal "Renaming of multifiles is not supported" (6148) goes, and the parser key PARSER$MFILE is now PARSER$GET.TOKEN, so old,new always splits at the comma.
@@ -127,25 +129,16 @@ rename.file:
       stop sysmsg(2027) ;* Null file name not allowed
    end
 
-* 14 Sep 26 Windows port - RELEASE_1.1 5.  THE OLD NAME FOLDS.  This read was
-*   exact, so once CREATE.FILE stores new ids lower case "CNAME ZZX TO ZZY"
-*   answered 2014 for a file that exists.  As typed, then down, then up.
+* 17 Nov 26 Windows port - four-version audit round 3 (P-3260, P-3261, P-7022, P-7023; the case fallbacks, the Linux audit
+*   session's D4 "DO remove, to match"): ONE READ, as Linux and Windows Solo.  The VOC folds case itself (NOCASE), and the
+*   upgrade's upgrade_nocase converts every VOC or names in nocase-upgrade.log the file it left, so the as-typed / lower /
+*   upper retries of 14 Sep 26 (RELEASE_1.1 5) are gone.
    readu rec from voc.f, old.file.name else
-      release voc.f, old.file.name
-      readu rec from voc.f, downcase(old.file.name) then
-         old.file.name = downcase(old.file.name)
+      @system.return.code = -status()
+      if status() = ER$RNF then
+         stop sysmsg(2014, old.file.name) ;* xx is not defined in your VOC
       end else
-         release voc.f, downcase(old.file.name)
-         readu rec from voc.f, upcase(old.file.name) then
-            old.file.name = upcase(old.file.name)
-         end else
-            @system.return.code = -status()
-            if status() = ER$RNF then
-               stop sysmsg(2014, old.file.name) ;* xx is not defined in your VOC
-            end else
 
-            end
-         end
       end
    end
 

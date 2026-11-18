@@ -33,6 +33,10 @@ LINUX = os.environ.get('SD_LINUX_SD64') or os.path.normpath(os.path.join(HERE, '
 # (Linux id, our id): reason.  Each reason cites its evidence.  Read 12 Nov 2026 (RELEASE_1.1 257), text against text.
 # 13 Nov 2026 (RELEASE_1.1 253(b)): 11447/12452 and 11448/12453 left this list - run.in debugs on Windows too, so the texts are Linux's.
 ALLOWED = {
+    # 17 Nov 2026 (four-version audit round 3, the Administrator docs' consistency fix): "signed on at a terminal" was false here - SDSYS through
+    # the API's remote door is the administrator too (apisrvr kernel(K$ADMINISTRATOR, 1); op_dio3.c shared_structure_refusal asks MY_ADMIN).
+    # Linux's 11514 says the same false thing (its API grants K$ADMINISTRATOR as well); reported to Linux to take "the administrator".
+    ('11514', '12519'): 'Linux to take: 12519 says "SDSYS, the administrator"; "signed on at a terminal" is false where SDSYS over the API is the administrator (apisrvr grant of RELEASE_1.1 331, op_dio3.c MY_ADMIN); audit round 3',
     ('11923', '12928'): 'OS: remote.sdsys opens a separate account, SDRADMIN, because SDSYS is an elevated Windows administrator; the remote session reads AUDIT and ACCOUNTS through it, having no shell (RELEASE_1.1 202)',
     # 16 Nov 2026 (RELEASE_1.1 331): Windows' api.request also runs in the SDRADMIN broker's job, so a refusal sets the code and RETURNS (crt + return)
     # where Linux's stops; the two programs' lines then align with our syntax refusal (12928) beside Linux's count refusal (14119), which is

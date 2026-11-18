@@ -18,6 +18,10 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3, the case fallbacks (the Linux audit session's D4): $release and
+*   $command.stack are read once, and update.voc reads each id once, with no upper-case takeover and no delete of an old id,
+*   as Linux and Windows Solo.  10096, 10097 and 10098 have real line ends, as Linux's 11000-11002, and the batch gate
+*   shows them a line at a time (show.msg, P-4615 to P-4617); batch.command is assigned beside its use (P-3379).
 * 18 Nov 26 Windows port - four-version audit round 2 (P-3368, P-4428): audit.account is gone; every refusal's line names initial.account,
 *   Linux's terminate.connection line, and the unelevated SDSYS refusal sets initial.account to sdsys first.  The run.in child line names
 *   initial.account too (as found by then, not as it stood before the account was looked up).
@@ -286,13 +290,10 @@ deffun radmin_open(arg) calling '!radmin_open'
    audit.reason = 'unspecified'
    initial.account = ''      ;* 17 Nov 26: assigned here, as Linux login:156; terminate.connection names it (18 Nov 26: no audit.account beside it, P-4428)
 
-* 22 Aug 26 Windows port - PROJECT_STATUS.md 7 step 9.  ASSIGNED HERE, not at
-*   the gate, for the reason the block below gives: it is read by the audit
-*   line at the end of this subroutine, which is reached on paths that never
-*   run the gate at all, and BCOMP's "is not assigned a value" fails the whole
-*   bootstrap.  '' is also the value that means "no command was given", which
-*   is the interactive session and the common case.
-   batch.command = ''
+* 22 Aug 26 Windows port - PROJECT_STATUS.md 7 step 9.  batch.command is read by the audit line at the end of this subroutine,
+*   which is reached on paths that never run the gate, so it must be assigned on every path ('' means "no command was given").
+*   17 Nov 26 (audit round 3, P-3379): assigned beside its use, just before the credential and batch gates, as Linux's login:656;
+*   nothing reads it before there.
 
 * 21 Aug 26 Windows port - and cred.ok for the same reason and in the same
 *   place: require.credential assigns it, and it is READ at the call site,
@@ -1271,10 +1272,10 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   session (5028), so an exact read of the new id would lock every older
 *   account out at its next login.  Lower, then upper; update.voc renames the
 *   upper one when this account is next refreshed.
+*   17 Nov 26 Windows port - four-version audit round 3 (P-3369, P-7034; the case fallbacks, D4): ONE READ, as Linux and
+*   Windows Solo.  The VOC is NOCASE, so $RELEASE is the same record.
       release.found = @true
-      read voc.rec from voc, "$release" else
-         read voc.rec from voc, "$RELEASE" else release.found = @false
-      end
+      read voc.rec from voc, "$release" else release.found = @false
       if release.found then
 * 16 Sep 26 Windows port - RELEASE_1.1 39.  THE OLD PER-LOGIN RELEASE-MISMATCH
 *   PROMPT (5025/5026/5027, Field 2) IS REMOVED.  It ran an unguarded `input` on
@@ -1315,10 +1316,10 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   fold on it - and an account created before the rename still holds the upper
 *   case one.  See CPROC's copy of this for the full reasoning.
 *   PROJECT_STATUS.md 5.12 (b).
+*   17 Nov 26 Windows port - four-version audit round 3 (P-3376, P-7033; the case fallbacks, D4): one read, as Linux and
+*   Windows Solo (the VOC is NOCASE).
       read voc.rec from voc,'$command.stack' else
-         read voc.rec from voc,'$COMMAND.STACK' else
-            voc.rec = ''
-         end
+         voc.rec = ''
       end
       if upcase(voc.rec[1,1]) = "X" THEN
 
@@ -1410,6 +1411,7 @@ deffun radmin_open(arg) calling '!radmin_open'
 *   signing in gets a password set so the account is reachable from the API
 *   and from another machine.  Nothing here lets anybody IN; it asks for a
 *   password to be SET.
+   batch.command = ''      ;* assigned on every path: the success record reads it (17 Nov 26, P-3379: here, as Linux)
    if mode = 0 and not(is.phantom) and not(kernel(K$INTERNAL,-1)) then
       batch.command = trim(system(1026))
       if kernel(K$ADMINISTRATOR,-1) and kernel(K$TTY,0) # '' and batch.command = '' then
@@ -1851,6 +1853,15 @@ require.credential:
    display sysmsg(10095) ;* No password was set...
    return
 
+* show.msg - 17 Nov 26 Windows port, four-version audit round 3 (P-4615 to P-4617), as Linux's login show.msg.  10096, 10097
+*   and 10098 have real line ends now, as Linux's 11000-11002, and come back from sysmsg() with their lines joined by field
+*   marks; one DISPLAY of that puts the raw marks on the screen, so it is shown a line at a time.  msg.text is the message.
+show.msg:
+   for msg.i = 1 to dcount(msg.text, @fm)
+      display msg.text<msg.i>
+   next msg.i
+   return
+
 *
 * ======================================================================
 * BATCH.PERMITTED  -  may this account run this command from the command line?
@@ -1880,13 +1891,15 @@ batch.permitted:
 *  verb is a VOC item - it is the absence of arguments that stops a listed
 *  name being turned into something else.
    if index(batch.command, ' ', 1) then
-      display sysmsg(10097)  ;* A command run this way takes no arguments
+      msg.text = sysmsg(10097)  ;* A command run this way takes no arguments
+      gosub show.msg
       audit.reason = 'command line carried arguments'
       return
    end
 
    openpath @sdsys:@ds:'batch.jobs' to batch.f else
-      display sysmsg(10096, batch.command, initial.account)
+      msg.text = sysmsg(10096, batch.command, initial.account)
+      gosub show.msg
       audit.reason = 'batch.jobs could not be opened'
       return
    end
@@ -1910,7 +1923,8 @@ batch.permitted:
    next batch.i
 
    if not(batch.listed) then
-      display sysmsg(10096, batch.command, initial.account)
+      msg.text = sysmsg(10096, batch.command, initial.account)
+      gosub show.msg
       audit.reason = 'command is not on the account list'
       return
    end
@@ -1925,7 +1939,8 @@ batch.permitted:
    read batch.voc.rec from voc, batch.command else
       read batch.voc.rec from voc, downcase(batch.command) else
          read batch.voc.rec from voc, upcase(batch.command) else
-            display sysmsg(10098, batch.command)
+            msg.text = sysmsg(10098, batch.command)
+            gosub show.msg
             audit.reason = 'no VOC record for the command'
             return
          end
@@ -1938,7 +1953,8 @@ batch.permitted:
 *  leading characters, which is what SD itself dispatches on.
    batch.type = upcase(trim(batch.voc.rec<1>))
    if batch.type[1,2] # 'PA' and batch.type[1,1] # 'S' then
-      display sysmsg(10098, batch.command)
+      msg.text = sysmsg(10098, batch.command)
+      gosub show.msg
       audit.reason = 'VOC type is not PA or S'
       return
    end
@@ -2063,21 +2079,12 @@ update.voc:
 *   takes the same lock, type and [locked] tests as an exact match, and the
 *   write below then stores the new id and deletes old.id.  Only the upper
 *   variant is tried: it is the only other case SD ever shipped.
-         old.id = id
-         old.found = @false
+* 17 Nov 26 Windows port - four-version audit round 3 (P-3362 to P-3374, P-7029 to P-7036; the case fallbacks, the Linux
+*   audit session's D4 "DO remove, to match"): ONE READ, as Linux and Windows Solo.  The VOC is NOCASE, so the exact read
+*   already finds a record held under the upper-case id, and the upgrade's upgrade_nocase converts every VOC or names the
+*   one it left in nocase-upgrade.log; the old.id takeover (and its delete, which on a case-blind file would remove the
+*   record just written) is gone.
          readu old.rec from update.voc.f, id then
-            old.found = @true
-         end else
-            if upcase(id) # id then
-               readu old.rec from update.voc.f, upcase(id) then
-                  old.found = @true
-                  old.id = upcase(id)
-               end else
-                  release update.voc.f, upcase(id)
-               end
-            end
-         end
-         if old.found then
 * 02 Sep 26 Windows port - PRE_RELEASE_FIXES 70, THE LOCK, AND IT IS TESTED
 *   HERE BECAUSE HERE IS THE ONLY PLACE THAT HAS THE ACCOUNT'S OWN RECORD.
 *   Owner's design: a site marks a VOC record it has customised by putting
@@ -2126,9 +2133,8 @@ update.voc:
                   overridden.ids<-1> = id
                end else
                   locked.count += 1
-                  locked.ids<-1> = old.id
+                  locked.ids<-1> = id
                   release update.voc.f, id
-                  if old.id # id then release update.voc.f, old.id
                   continue
                end
             end
@@ -2157,7 +2163,6 @@ update.voc:
                   repeat
                   if yn = 'N' then
                      release update.voc.f, id
-                     if old.id # id then release update.voc.f, old.id
                      continue
                   end
                end
@@ -2187,10 +2192,7 @@ update.voc:
 *   on it every day.  CPROC:1194 and :1282 read [1,1] and [1,2] and tolerate
 *   everything after, which is why new.type is still derived that way above.
 
-*        14 Sep 26 - RELEASE_1.1 5: a record found under its old upper-case id
-*        is written under the new id and the old one deleted, even when the
-*        contents already match - the rename IS the change.
-         if compare(old.rec, rec) or old.id # id then
+         if compare(old.rec, rec) then
 * 7 Nov 26 Windows port - from Linux 69533c53 (26 Oct 26): A REFUSED WRITE ENDS THIS ACCOUNT'S UPDATE, NOT THE COMMAND.  A write the session may not
 *   make (an account folder whose ACL does not let this session write its VOC) used to stop the whole UPDATE.ACCOUNTS with "Error 3018 ... (Possible
 *   full disk?)" and the other accounts and the count were lost.  Now the account is left as it was, the caller says why (12988), the walk goes on and
@@ -2198,7 +2200,6 @@ update.voc:
             upd.wrote = @true
             write rec to update.voc.f, id on error upd.wrote = @false
             if upd.wrote then
-               if old.id # id then delete update.voc.f, old.id
                display '.' :
             end else
                upd.denied = 1

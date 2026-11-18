@@ -14,7 +14,7 @@ Binary Free Install process.
       File name structure: "dynamic_file_name" ^ "dictionary_record_id"
       Note: The system files processed are hardcoded in CREATE_INSTALL_DICT_FILE
       
-    WRITE_INSTALL_DICTS (found in GPL.BP):
+    WRITE_INSTALL_DICTS (found in gpl.bp):
       Program writes the dictionary items found in "FILES_DICTS" to associated system files.
       Executed as part of the install script.
     
@@ -45,7 +45,7 @@ Binary Free Install process.
       BASIC source is deleted.
 
 
-    BBPROC - BootStrap Command Processor (found in GPL.BP).
+    BBPROC - BootStrap Command Processor (found in gpl.bp).
       This program is a stripped down command processor based on VBSRVR.
       It compiles the following programs (hardcoded list) using BCOMP compiled by bbcmp.py.
 
@@ -81,7 +81,7 @@ Binary Free Install process.
 
 
     Basic setup:
-    No program object in GPL.BP.OUT / BP.OUT / gcat
+    No program object in gpl.bp.out / bp.out / gcat
     No binaries in bin, including pcode file
     No object files in gplobj
     No dynamic files.
@@ -103,7 +103,7 @@ Binary Free Install process.
         This step runs the BBPROC command processor, currently requires a <CR> to continue
         
     install runs second compile
-      sudo /usr/local/sdsys/bin/sd -asdsys -internal SECOND.COMPILE   
+      sudo /usr/local/sdsys/bin/sd -internal SECOND.COMPILE
 	  
 	install runs WRITE_INSTALL_DICTS to create system dictionary items.
       sudo bin/sd RUN gpl.bp write_install_dicts NO.PAGE

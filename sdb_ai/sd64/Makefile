@@ -214,19 +214,6 @@ UCRT_BIN := $(dir $(UCRT_CC))
 # finds the gplsrc/sdclilib directory (and the generated terminfo directory)
 # and decides the target is already satisfied.
 .PHONY: sdclilib sdsvc sdtlsrelay sd-ai sdpy terminfo check-local check-remote check-api-admin build-api-identity
-.PHONY: all clean check-includes
-
-# 17 Nov 26 Windows port - four-version audit round 1 (P-3218), Linux's two targets: the generated BASIC includes (err.h, errtext.h,
-#           opcodes.h, revstamp.h) checked against the C headers, and clean, with this port's binary names (.exe and the four
-#           client DLLs and import libraries; bin/client32 and bin/client64 are left to their own targets).
-check-includes:
-	@python gplbld/gen_includes.py --check
-
-clean:
-	@echo Cleaning build files
-	@$(RM) -f $(GPLOBJ)*.o
-	@$(RM) -f $(GPLBIN)*.exe $(GPLBIN)*.dll $(GPLBIN)*.dll.a
-	@$(RM) -Rf $(TERMINFO)
 
 # 04 Sep 26 - ALL FOUR CLIENT DLLs, NOT ONE.  PRE_RELEASE_FIXES 161, the
 # owner's ruling: "let's get rid of the client installers all together and just
@@ -544,4 +531,19 @@ $(OBJS): $(SDHDRS)
 .c.o:
 	@echo Compiling $@, $(BITSIZE) bit target.
 	@$(COMP) $(C_FLAGS) -c $< -o $(GPLOBJ)$@
+
+# 17 Nov 26 Windows port - four-version audit round 1 (P-3218), Linux's two targets: the generated BASIC includes (err.h, errtext.h,
+#           opcodes.h, revstamp.h) checked against the C headers, and clean, with this port's binary names (.exe and the four
+#           client DLLs and import libraries; bin/client32 and bin/client64 are left to their own targets).
+# 17 Nov 26 Windows port - four-version audit round 3 (P-3218): at the end of the file, where Linux has them (layout only).
+.PHONY: all clean check-includes
+
+check-includes:
+	@python gplbld/gen_includes.py --check
+
+clean:
+	@echo Cleaning build files
+	@$(RM) -f $(GPLOBJ)*.o
+	@$(RM) -f $(GPLBIN)*.exe $(GPLBIN)*.dll $(GPLBIN)*.dll.a
+	@$(RM) -Rf $(TERMINFO)
 	

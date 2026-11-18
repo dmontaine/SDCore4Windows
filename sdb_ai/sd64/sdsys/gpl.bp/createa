@@ -18,6 +18,8 @@
 * 
 * 
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-5471, P-5473): attach.marker's fallback is set just before the type's begin case,
+*           as Linux's (layout only).
 * 18 Nov 26 Windows port - four-version audit round 2 (P-5472, P-5474): ADMINISTRATOR and PROGRAMMER are no longer matched; case 1 refuses them
 *           with 2018 as every unknown token, as Linux's; the verb ends with RETURN, as Linux's.
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): SSH-KEY-ON, a Windows user SD makes for the account keeps key sign-in over ssh (off unless typed: the
@@ -625,7 +627,7 @@ $include createacc.h
 *   for it like any other: RELEASE_1.1 68 made silence mean BOTH, so the
 *   install no longer passes one.  (It was REQUIRED when this was written,
 *   which is why attach-account.ps1 used to say BOTH.)
-   attach.marker = @sdsys:@ds:'$attach'
+*   17 Nov 26 (audit round 3, P-5471, P-5473): the assignment is just before the type's begin case below, where Linux has it.
 
    @system.return.code = -ER$ARGS     ;* Preset for argument errors
 
@@ -642,6 +644,7 @@ $include createacc.h
    acc.type = upcase(acc.type)
 
    acc.name = ''
+   attach.marker = @sdsys:@ds:'$attach'     ;* the fallback for GROUP and OTHER (see the paragraphs above); USER names its own
    begin case
    case acc.type = 'USER'
      call @parser(PARSER$GET.TOKEN, token.type, acc.name, keyword)

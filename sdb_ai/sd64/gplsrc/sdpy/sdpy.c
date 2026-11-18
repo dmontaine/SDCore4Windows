@@ -438,30 +438,38 @@ static void verb_strget(const char* name) {
   Py_DECREF(enc);
 }
 
+/* 17 Nov 26 Windows port - four-version audit round 3 (P-7004): OBJTYPE ANSWERS LINUX'S NUMERIC CODE, NOT THE TYPE'S NAME.
+ * Linux's PyObjType (sdext_py.c) returns SD_Obj_Str 1, SD_Obj_List 2, SD_Obj_Dict 3, SD_Obj_Long 4, SD_Obj_Float 5, else
+ * SD_Obj_Unkn 0 (gplsrc/keys.h, sdsys/syscom/keys.h), tested in that order (str, dict, list, int, float), and SD's own
+ * PY_JSON and PY_TEST compare PY_OBJTYPE() with those codes; this answered "str", "list" and so on, which none of them
+ * matched.  The code travels as text, as OBJLEN's length does, and op_sdpyobj.c makes it a number. */
+#define SD_Obj_Unkn   0
+#define SD_Obj_Str    1
+#define SD_Obj_List   2
+#define SD_Obj_Dict   3
+#define SD_Obj_Long   4
+#define SD_Obj_Float  5
+
 static void verb_objtype(const char* name) {
+  static const char* const names[] = {"str", "dict", "list", "int", "float"};
+  static const int codes[] = {SD_Obj_Str, SD_Obj_Dict, SD_Obj_List, SD_Obj_Long, SD_Obj_Float};
   PyObject* obj;
-  PyObject* builtins;
-  PyObject* ty;
-  PyObject* nm;
-  PyObject* enc;
+  int code = SD_Obj_Unkn;
+  int i;
+  int is;
+  char buf[16];
 
   if (!Py_IsInitialized()) { respond_str(SD_PyEr_NotInit, ""); return; }
   obj = lookup(name);
   if (obj == NULL) { respond_str(SD_PyErr_ObjNOF, ""); return; }
 
-  builtins = PyImport_ImportModule("builtins");
-  if (builtins == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
-  ty = PyObject_CallMethod(builtins, "type", "O", obj);
-  Py_DECREF(builtins);
-  if (ty == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
-  nm = PyObject_GetAttrString(ty, "__name__");
-  Py_DECREF(ty);
-  if (nm == NULL) { respond_python_error(SD_PyEr_Excpt); return; }
-  enc = PyUnicode_AsUTF8String(nm);
-  Py_DECREF(nm);
-  if (enc == NULL) { PyErr_Clear(); respond_str(SD_PyEr_Excpt, ""); return; }
-  respond(0, PyBytes_AsString(enc), (size_t)PyBytes_Size(enc));
-  Py_DECREF(enc);
+  for (i = 0; i < 5; i++) {
+    is = is_instance_of(obj, names[i]);
+    if (is < 0) { respond_python_error(SD_PyEr_Excpt); return; }
+    if (is > 0) { code = codes[i]; break; }
+  }
+  (void)snprintf(buf, sizeof(buf), "%d", code);
+  respond_str(0, buf);
 }
 
 static void verb_objlen(const char* name) {

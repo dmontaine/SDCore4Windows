@@ -12,6 +12,8 @@
  * GNU General Public License for more details.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-5130): SD_RELAY_EXIT_PRIVILEGE removed; nothing used it (exit code 3 stays unused,
+ *           the privilege drop is sd's, before the spawn).
  * 17 Nov 26 Windows port - four-version audit round 1 (P-1971): SD_RELAY_EXE removed; nothing read it (win32relay.c, which includes no
  *           SD header, names sdtlsrelay.exe itself).  SD_RELAY_EXIT_PRIVILEGE stays: it holds Linux's relay exit code 3.
  * 17 Sep 26 Windows port - RELEASE_1.1 55: the relay gains a THIRD inherited
@@ -146,7 +148,6 @@ int win32_admin_only(const char* path, char* why, size_t whylen);
 #define SD_RELAY_IDENTITY_MAX 65536
 #define SD_RELAY_OK             0
 #define SD_RELAY_EXIT_IDENTITY  2
-#define SD_RELAY_EXIT_PRIVILEGE 3    /* unused here: the drop is sd's, before the spawn */
 #define SD_RELAY_EXIT_HANDSHAKE 4
 #define SD_RELAY_EXIT_BINDING   5
 #define SD_RELAY_EXIT_USAGE     6    /* bad argv or handles: a bug, not a peer */

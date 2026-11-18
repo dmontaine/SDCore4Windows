@@ -18,6 +18,7 @@ builds it and makes the installer.
 | `sd64/sdsys/` | the SDSYS system account as shipped: `gpl.bp` (the SD BASIC system programs), `messages`, `newvoc`, `voc_template`, and the `changelog` |
 | `sd64/gplbld/` | the build: the Python tooling that compiles the SD BASIC system programs, the Inno Setup installer script `sd.iss`, the PowerShell scripts the installer places on the machine, and `cycle.ps1`, which builds and installs everything |
 | `sd64/Makefile` | builds the C half — `make sd`, run from `sd64` |
+| `sd64/agent-pack/` | the SD BASIC guide and knowledge pack for an AI agent; the installer copies `guide/` and `pack/` into the installation |
 | `sd64/examples/` | example programs, including embedded Python |
 | `sd64/terminfo.src/` | terminal definitions |
 | `sd64/bin/`, `sd64/gplobj/` | build output, not tracked |

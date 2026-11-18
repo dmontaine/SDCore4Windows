@@ -15,6 +15,7 @@
 * Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-7028): open.files opens once through an open.ok flag, as Linux's (layout only).
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3349 to P-3351): check.permitted stands before compile.record.query, as Linux's
 *           (and the alphabetical order the subroutines claim); the same words.
 * 12 Nov 26 Windows port - RELEASE_1.1 263 (parity re-audit N-03; Linux S.64, 17 Oct): the record's file is asked (!edit_guard) before the editor is
@@ -797,7 +798,10 @@ return
 * open.files  -  the record's file, and $hold for the working copy.
 * ---------------------------------------------------------------------------
 open.files:
-   open dict.text, in.file.name to input.file then
+   open.ok = @false
+   open dict.text, in.file.name to input.file then open.ok = @true
+
+   if open.ok then
 * 12 Nov 26 (RELEASE_1.1 263; Linux S.64, 17 Oct): an editor that saves into a VOC, a dictionary or a program file needs the gate.  This
 *   program is $internal, which the kernel's write test lets through, so it asks !edit_guard (which says why) BEFORE the editor is started,
 *   so the person does not edit and then lose the work at the save.

@@ -18,6 +18,8 @@
 *
 *
 * START-HISTORY:
+* 17 Nov 26 Windows port - four-version audit round 3 (P-7021), from Linux 10767826: a group lookup of the USER arm that could not be made stops
+*           the manifest with 12005 for all seven groups (it did for sdssh, sdapi and a present sdsshnokey only).
 * 17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): the manifest key ssh.key (1 if the Windows user is NOT in sdsshnokey, i.e. it may sign in over ssh with a
 *           key), USER arm only, after route.ai, so RESTORE.ACCOUNT gives a restored account the key sign-in it had.
 * 17 Nov 26 Windows port - four-version audit round 1 (P-3227 to P-3229): a GROUP account's manifest no longer carries os.user and six
@@ -87,7 +89,6 @@ $include int$keys.h
 
 deffun is_grp_member(user, group) calling '!is_grp_member'
 deffun os_group(action, group, member) calling '!os_group'
-deffun is_group(group) calling '!is_group'
 
    info = ''
    err  = ''
@@ -151,32 +152,45 @@ deffun is_group(group) calling '!is_group'
          return
       end
       if m then api = 1
-*     25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: membership of sdfiles, the files-only login.  An install from before
-*     this release has no such group: that reads as "not a member", not as a failure, so BACKUP.ACCOUNT still works there.
+*     25 Oct 26 Windows port - from Linux 96d8be8 (17 Oct 26), S.65 slice 2c: membership of sdfiles, the files-only login.
+*     17 Nov 26 Windows port - four-version audit round 3 (P-7021), from Linux 10767826 (S.62 P-4906): a lookup of ANY of the seven groups that
+*     could not be made stops the manifest (12005), as for sdssh above; it no longer reads as "not a member" (a backup then lost the account's
+*     files and AI routes without a word).  The installer makes every one of the groups on a fresh install and on an upgrade.
       m = is_grp_member(uname, 'sdfiles')
-      if m and status() = 0 then files = 1
-*     25 Oct 26 Windows port - from Linux 3fbfc0d (S.65 write group): and membership of sdfileswrite, only meaningful with sdfiles; same reading.
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdfiles'
+         return
+      end
+      if m then files = 1
+*     25 Oct 26 Windows port - from Linux 3fbfc0d (S.65 write group): and membership of sdfileswrite, only meaningful with sdfiles.
       m = is_grp_member(uname, 'sdfileswrite')
-      if m and status() = 0 then fwrite = 1
-*     25 Oct 26 Windows port - from Linux ef9d594 (S.73 item 3): and sdfilesadmin, only meaningful with both; same reading.
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdfileswrite'
+         return
+      end
+      if m then fwrite = 1
+*     25 Oct 26 Windows port - from Linux ef9d594 (S.73 item 3): and sdfilesadmin, only meaningful with both.
       m = is_grp_member(uname, 'sdfilesadmin')
-      if m and status() = 0 then fadmin = 1
-*     13 Nov 26 Windows port - from Linux S.69 step 2 (RELEASE_1.1 246): and sdaiusers, the right to use the AI provider's API; it stands alone; same reading.
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdfilesadmin'
+         return
+      end
+      if m then fadmin = 1
+*     13 Nov 26 Windows port - from Linux S.69 step 2 (RELEASE_1.1 246): and sdaiusers, the right to use the AI provider's API; it stands alone.
       m = is_grp_member(uname, 'sdaiusers')
-      if m and status() = 0 then aiuse = 1
-*     17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): key sign-in is NOT being in sdsshnokey.  A machine without the group (an install from before
-*     this release) denies nobody a key, so that reads as 1; a lookup that fails while the group is there is an error, as for sdssh above.
+      if status() then
+         err = 12005 : @vm : acc.name : @vm : 'sdaiusers'
+         return
+      end
+      if m then aiuse = 1
+*     17 Nov 26 Windows port - from Linux 1557e270 (S.62 LC3): key sign-in is NOT being in sdsshnokey.
       sshkey = 1
       m = is_grp_member(uname, 'sdsshnokey')
       if status() then
-*        !is_group answers @false (status 1) both for "no such group" and for "could not ask"; only a group it can see makes the failed lookup an error.
-         if is_group('sdsshnokey') then
-            err = 12005 : @vm : acc.name : @vm : 'sdsshnokey'
-            return
-         end
-      end else
-         if m then sshkey = 0
+         err = 12005 : @vm : acc.name : @vm : 'sdsshnokey'
+         return
       end
+      if m then sshkey = 0
    end
    if typ = 'USER' then
       info<-1> = 'route.ssh: ' : ssh

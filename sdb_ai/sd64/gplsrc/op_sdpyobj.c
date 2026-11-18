@@ -30,6 +30,9 @@
  * sentence is already true of SDEXT - see the SCRAM note in keys.h.
  *
  * START-HISTORY:
+ * 17 Nov 26 Windows port - four-version audit round 3 (P-7004): PY_OBJTYPE returns Linux's numeric type code (SD_Obj_*, 0 to 5),
+ *           as an integer, where it returned the Python type's name; sdpy.c's OBJTYPE answers the code.  PY_OBJLEN answers
+ *           SD_INT_OVERFLW (-10302) for a length over 32 bits, as Linux's.
  * 18 Nov 26 Windows port - four-version audit round 2 (P-3091 to P-3093): getarg() and freeArg() are Linux's (malloc / free).
  * 12 Sep 26 Windows port - written for the helper process, 5.27.  The file it
  *           replaces loaded Python into sd.exe and was removed at 489b18e.
@@ -198,17 +201,32 @@ void op_sdpyobj() {
       /* The helper answers with the length as text; BASIC wants a number. */
       status = py_call("OBJLEN", NULL, NULL, Arg1, &payload, &plen);
       if (status == 0 && payload != NULL) {
+        /* 17 Nov 26 (audit round 3, P-7004): a length that does not fit a 32-bit int answers SD_INT_OVERFLW (-10302), as
+           Linux's PyObjLen; it was cut to 32 bits. */
+        long long objlen = strtoll(payload, NULL, 10);
+        if (objlen > 0x7FFFFFFFLL) {
+          py_return_int(SD_INT_OVERFLW);
+          break;
+        }
         process.status = 0;
         InitDescr(e_stack, INTEGER);
-        (e_stack++)->data.value = (int32_t)strtol(payload, NULL, 10);
+        (e_stack++)->data.value = (int32_t)objlen;
       } else {
         py_return_int(status);
       }
       break;
 
     case SD_PyObjType:
+      /* 17 Nov 26 (audit round 3, P-7004): the helper answers Linux's numeric type code (SD_Obj_*) as text; BASIC wants a
+         number, as for OBJLEN. */
       status = py_call("OBJTYPE", NULL, NULL, Arg1, &payload, &plen);
-      py_return_str(status, payload, plen);
+      if (status == 0 && payload != NULL) {
+        process.status = 0;
+        InitDescr(e_stack, INTEGER);
+        (e_stack++)->data.value = (int32_t)strtol(payload, NULL, 10);
+      } else {
+        py_return_int(status);
+      }
       break;
 
     case SD_PyListCrte:
