@@ -8,35 +8,35 @@
  "kinds": {
   "basic.clause": {
    "chunks": 33,
-   "sha256": "c9b94d4b3e9540e84f88b24234e5e8e12f6fc8cf5250beadeb65872ee1b28cb0"
+   "sha256": "c8796acc8236187c9dc953b8993470d3a674a0130b3b4bbe9e2574ab120cc298"
   },
   "basic.function": {
    "chunks": 230,
-   "sha256": "885ebc7e5d19887660c4ec8972929f6455e2d855cd6799f81aeb94c4f4338125"
+   "sha256": "75ae84ecf39e4b19934c495ab8ae71a3c166449e3e993f7d55ddb317d9b8b364"
   },
   "basic.internal": {
    "chunks": 37,
-   "sha256": "c9893b23df3e12ea9d3a96a6e313c70db77c358869eaa90e5f17619958981eb3"
+   "sha256": "598e99eb510a1e817b58eb19ecc15bcb6cf492de8b14fc553e94fa624099ebff"
   },
   "basic.mode": {
    "chunks": 9,
-   "sha256": "83958e5b37aefdbfb2aaee5c5c50a9681f8c5e872c46ec812c7d2b6572bb84da"
+   "sha256": "0e17f624d0c95c2da805c7c05100ae90cc07b1789e3a248d2c2289973a824bef"
   },
   "basic.option": {
    "chunks": 8,
-   "sha256": "739706a9f14eed5c6b7530b40a14f9577b3bf87c10f0bb47d628804530f28e01"
+   "sha256": "b02728af95fd67d0c5f9cd50bbf40ec82dff21a04fa6ba8beb3b5952412e43b4"
   },
   "basic.restricted": {
    "chunks": 34,
-   "sha256": "f7843dfd989e9c659ebfb7f61df2fb7e925d3cfa99b30d35322b95e778a80c17"
+   "sha256": "ce814a92ea947a279e246c438bd435a50aad1cfc3cac30a97152861689e7542a"
   },
   "basic.statement": {
    "chunks": 203,
-   "sha256": "ac0e13d58e1e09b43afff0fc57ff2b7ed24f09eb57dfb7b251d831e1f68cbaab"
+   "sha256": "814defbc1ed58f438b816bce37abcd0efb0f5a4e6f6a176a7a264e09ab31a6c8"
   },
   "core.digest": {
    "chunks": 5,
-   "sha256": "4f46f22e71548f7eb7cab4a25712aa1876dd0d089a529a1373232b2aa29c3fc6"
+   "sha256": "d9284747180d11f9a10701335ded0243ebe657320a51ec39b9688c8b27a92374"
   },
   "core.start": {
    "chunks": 1,
@@ -80,7 +80,7 @@
   },
   "message": {
    "chunks": 2950,
-   "sha256": "343ef6c67a9e7709c5d9dc0bc0fcc5c93f8562079b20951f00095c8fcf7b459f"
+   "sha256": "8b1d05d41d646ad3f632ddc1936caeb87c6cb4e78f5936581a612c8061e6d336"
   },
   "sys.keys": {
    "chunks": 41,
@@ -88,7 +88,7 @@
   },
   "sys.param": {
    "chunks": 60,
-   "sha256": "f37aaf6c852040f67479a207e96fd8f02f57aec6545be205e5da51c61d56fa78"
+   "sha256": "a5bf2b8263ba3bc863965c4b4e2db077dd8617a723b5be9d79a524116f106588"
   },
   "sys.releases": {
    "chunks": 1,
@@ -100,19 +100,19 @@
   },
   "sys.word": {
    "chunks": 45,
-   "sha256": "5a7376fdfb8872d424dfbdc9db7313ce2852dc1499e8fd3eff78eb7b835563d2"
+   "sha256": "c4910a0df96fd238fbd04942b0c8e68c34f6d5eeafa4c148b7b82abca49bc7fc"
   },
   "tcl.keyword": {
    "chunks": 214,
-   "sha256": "e8203ce74728740cd3814abe0b5d7ba1aecec14975de3f5cba12fbbbf11fdc72"
+   "sha256": "a002b5a051308dd3f0f023c281be6b90c6318b19383968bf93138496f07e5767"
   },
   "tcl.verb": {
    "chunks": 209,
-   "sha256": "7c615abf60c0fee14468437f869bca7a1ec21585cd514ffd6867648d65cd4821"
+   "sha256": "d325caee61f8620412d565996880b4d1a63bf1b39d83235089b5a6f712280eef"
   },
   "tcl.verb+keyword": {
    "chunks": 4,
-   "sha256": "9aeda8dc4d30c0ba4f74f4ad75d48968544c75a1a33d44d35e3ee846e2a3b5ac"
+   "sha256": "c973190d6e0b4482d4ba818e288502f8b3e0cc016bfb54f6d267ec0e896d0d17"
   },
   "voc.entry": {
    "chunks": 21,
@@ -124,7 +124,7 @@
   },
   "voc.type": {
    "chunks": 9,
-   "sha256": "e3dae3a4024ae86337855ce76e246ea094815e4637e71dde4db4468aba99a4a9"
+   "sha256": "09f5c243a3912bdcba3bef7684a762beb89dfa0944eafcbbcae2df229090eec9"
   },
   "voc.types": {
    "chunks": 1,
@@ -136,8 +136,8 @@
  "parts": {
   "core.md": {
    "chunks": 6,
-   "sha256": "0302a5e91750ef467c25c773d75d210395936729707d9339a01eca03bb776a27",
-   "words": 1409
+   "sha256": "6496afdb7f1c37da9532ab009bd6daa4b457036ebb680e011e7b13bb96d70a6b",
+   "words": 1424
   },
   "examples/dictionary-items.md": {
    "chunks": 72,
@@ -150,22 +150,22 @@
    "words": 571
   },
   "index.json": {
-   "sha256": "0bfd6946bc51b8a6c3e8e34879e0c59c2171866603e295ff43625f1854056916"
+   "sha256": "e5136e985615d44597e832249660e63e32b324e1da0a62b273df2637b3633bae"
   },
   "reference/basic-functions.md": {
    "chunks": 267,
-   "sha256": "ae026a12c1c2fc94c752c61551ff8e8b7f4e6c755cbba1ef84de533d149cecca",
-   "words": 4451
+   "sha256": "8edfb37ec8323af5c17e1e301a62b049c67f9da9a3ad3521e59daa6b4da0834d",
+   "words": 4463
   },
   "reference/basic-modes.md": {
    "chunks": 17,
-   "sha256": "b5c5f679fa052f69bf4fa887b01dc765eefb2f6c70a5ec4eeaf26bda4ccf1d7e",
+   "sha256": "f246b070678d6a148346a0db721a4ef91aec3a9d265385fa2469352dae3c2fb6",
    "words": 564
   },
   "reference/basic-statements.md": {
    "chunks": 270,
-   "sha256": "24c84c75714a5baab60641ed23d493bd7dc0f5b90cc53df1dc936a5a78aee3bf",
-   "words": 5976
+   "sha256": "34d8886472ad4d10d1b89e05b3daf29225137ace8fde9ba44873a295c52dbabe",
+   "words": 6040
   },
   "reference/dictionaries.md": {
    "chunks": 50,
@@ -174,8 +174,8 @@
   },
   "reference/messages.md": {
    "chunks": 2950,
-   "sha256": "bc6922747e5c43ffad01c2c485049977f2eb7a5ec0c20bfbc3fc44116ebece49",
-   "words": 40725
+   "sha256": "e524579d5d4431a5adf7b1083503f586a608b9aa7add86229016e9713fcf9d89",
+   "words": 40722
   },
   "reference/system-keys.md": {
    "chunks": 41,
@@ -184,23 +184,23 @@
   },
   "reference/system.md": {
    "chunks": 107,
-   "sha256": "c9e5f8641dcdf21136c623506420a599a0add46fa9fc52564fbc11751e18245f",
+   "sha256": "12c1faac6a0f5ca611e3c0762c3b9561a7faa7e2af4fd38617632bfa9b0ab141",
    "words": 3006
   },
   "reference/tcl-keywords.md": {
    "chunks": 214,
-   "sha256": "44b0e011e721fa5430ceba12798b64cbb3346ea1c103ffd3c50d24b655ef9124",
-   "words": 10206
+   "sha256": "064c89ff620e0cdab201f5621c2325c49057dd38986489eadd2e872eaeec4d2f",
+   "words": 10204
   },
   "reference/tcl-verbs.md": {
    "chunks": 213,
-   "sha256": "c8cdb2c39d00d71741b3376db37bc5badd0027f1d7669a76d81c869cb589ca0a",
-   "words": 10142
+   "sha256": "52d03bff2653b642a6eb4d581758b81bd41dcb0abe94f475ab63e85d55a1437e",
+   "words": 10159
   },
   "reference/voc.md": {
    "chunks": 12,
-   "sha256": "96bcb5125da4f0c2d3ff772411af4531836cf0b762de36a5abacfb6ca0a08a6d",
-   "words": 1924
+   "sha256": "0b5d758c7967f1555f8f0640373a0da29dc2c0131eae2b2156e472422ffd900a",
+   "words": 1898
   }
  },
  "product": "SD Core for Windows",

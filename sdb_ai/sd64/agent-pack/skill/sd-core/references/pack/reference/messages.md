@@ -599,28 +599,34 @@ No password was set, and one is required, so this session cannot go on.\n\nYou a
 cited by: `login`
 
 ### msg:10096
-> kind=message tier=reference since=- src=sdsys/messages/10096:1#f899b188
+> kind=message tier=reference since=- src=sdsys/messages/10096:1#30ea8e54
 
 ```
-%1 is not a command that account %2 may run from the command line.\n\nAn administrator grants it by adding the name to the account's record in\nthe SD system file batch.jobs, which only an administrator can change.
+%1 is not a command that account %2 may run from the command line.
+
+An administrator grants it by adding the name to the account's record in
+the SD system file batch.jobs, which only an administrator can change.
 ```
 
 cited by: `login`
 
 ### msg:10097
-> kind=message tier=reference since=- src=sdsys/messages/10097:1#206e8eff
+> kind=message tier=reference since=- src=sdsys/messages/10097:1#0a12f826
 
 ```
-A command run from the command line must be a single name with nothing\nafter it.  Put anything the job needs to vary inside the paragraph or\nsentence being run.
+A command run from the command line must be a single name with nothing
+after it.  Put anything the job needs to vary inside the paragraph or
+sentence being run.
 ```
 
 cited by: `login`
 
 ### msg:10098
-> kind=message tier=reference since=- src=sdsys/messages/10098:1#e8227258
+> kind=message tier=reference since=- src=sdsys/messages/10098:1#f207a01f
 
 ```
-%1 has to be a paragraph or a sentence in this account to be run from the\ncommand line, and it is neither.
+%1 has to be a paragraph or a sentence in this account to be run from the
+command line, and it is neither.
 ```
 
 cited by: `login`
@@ -5735,10 +5741,10 @@ A file in the shared account can only be changed by an account that has shared.w
 cited by: `edit_msg`
 
 ### msg:12519
-> kind=message tier=reference since=- src=sdsys/messages/12519:1#9a412c5b
+> kind=message tier=reference since=- src=sdsys/messages/12519:1#74d5d9f6
 
 ```
-The structure of a file in the shared account (making, clearing, configuring, indexing, triggers, renaming or deleting it) can only be changed by SDSYS, signed on at a terminal
+The structure of a file in the shared account (making, clearing, configuring, indexing, triggers, renaming or deleting it) can only be changed by SDSYS, the administrator
 ```
 
 cited by: `edit_msg`
@@ -6138,19 +6144,19 @@ Cannot be imported into the text: %1 %2 holds value marks, subvalue marks, text 
 cited by: `ide`
 
 ### msg:12566
-> kind=message tier=reference since=- src=sdsys/messages/12566:1#0e1e8ac2
+> kind=message tier=reference since=- src=sdsys/messages/12566:1#6a5162f5
 
 ```
-%1 in account %2 has a trigger function; run.in did not run the command
+run.in: %1 in account %2 has a trigger; nothing was run
 ```
 
 cited by: `cproc`
 
 ### msg:12567
-> kind=message tier=reference since=- src=sdsys/messages/12567:1#4b497a39
+> kind=message tier=reference since=- src=sdsys/messages/12567:1#61633e6a
 
 ```
-%1 in account %2 names a path outside the account; run.in did not run the command
+run.in: %1 in account %2 names a path outside the account; nothing was run
 ```
 
 cited by: `cproc`

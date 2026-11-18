@@ -48,7 +48,7 @@ The dictionary item types (field 1 starts with the letter). Each type is the chu
 | `8` | user | free for the application — SD does not read it |
 
 ### core:gates
-> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:669#b989bd5a
+> kind=core.digest tier=core since=- src=sdsys/gpl.bp/createa:672#b989bd5a
 
 A new user account starts with every gate OFF. Only SDSYS, the one administrator, turns one on, with these words (`create.account`, then `modify.account <account> <word>`). Each word is the chunk `sys:word:<word>`. This is what `create.account` prints:
 
@@ -82,7 +82,7 @@ Command Syntax: create.account user <user name> {ssh | api | both | none} {ssh-k
 7. A statement in this pack that the guide marks `unverified` has no probe behind it. Compile and run a small test before you rely on it.
 
 ### core:tcl-verbs
-> kind=core.digest tier=core since=- src=docs:tools/tcl-syntax-shapes.txt:27#8b8501a6
+> kind=core.digest tier=core since=- src=docs:tools/tcl-syntax-shapes.txt:26#8b8501a6
 
 The 30 verbs the User pages 19-24 and the tutorial use most (counted in their examples), each as its syntax line; a verb's full chunk is `tcl:<verb>`.
 
@@ -90,8 +90,8 @@ The 30 verbs the User pages 19-24 and the tutorial use most (counted in their ex
 - **`basic`** {*file*} *record* {*record* …}
 - **`build.index`** *file* *field* … | **`all`**
 - **`catalog`** {*file* {*call.name*}} {*program*} {**`local`** | **`global`** | **`pcode`**} {**`no.xref`**}
-- **`clear.file`** {**`data`** | **`dict`**} *file*
 - **`compile.dict`** *file* {*i-type* …} {**`no.query`**} {**`no.page`**}  ·  **`compile.dict data`** *file* {*i-type* …}  ·  **`compile.dict local`**  ·  **`compile.dict all`**
+- **`copy from`** {**`dict`**} *src* {**`to`** {**`dict`**} *tgt*} {*id* …} {**`(options`**}
 - **`count`** {**`dict`**} *file* {*selection*}
 - **`create.file`** {**`dict`**} *voc.name* {**`directory`**} {*parameters*} {**`server`** *server* {**`as`** *remote.name*}}
 - **`create.index`** *file* *field* … {**`no.nulls`**} {**`pathname`** *path*}
@@ -108,13 +108,13 @@ The 30 verbs the User pages 19-24 and the tutorial use most (counted in their ex
 - **`list.index`** *file* {*field* …}
 - **`logto`** *account* {**`reset`** {**`all`**}}
 - **`off`**
+- **`profiler on`** {**`user`** *n*} {*event* …} | **`off`** {**`user`** *n*} | {**`display`**} {**`user`** *n*}
 - **`run`** {*file*} *record* {*arguments*}
 - **`save.list`** *list* {**`from`** *list.no*}
 - **`scan`** {**`dict`**} *file* {*selection*} {*id* …} {**`all`**} {**`no.case`**} {**`all.match`** | **`no.match`**} {**`strings`** *file* *record*} **`for`** *"text"* …
 - **`search`** {**`dict`**} *file* {*selection*}
 - **`select`** {**`dict`**} *file* {*selection*} {*list.no*}
 - **`selectindex`** {**`dict`**} *file* *index* {*value*} {**`to`** *n*}
-- **`set.trigger`** *file* *name* {*modes*}
 - **`sort`** {**`dict`**} *file* {*selection*} {*fields*} {*options*}
 
 ### core:voc-types

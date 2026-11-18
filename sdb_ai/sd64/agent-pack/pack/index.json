@@ -390,7 +390,7 @@
 "part": "reference/basic-functions.md",
 "since": "-",
 "tier": "reference",
-"words": 29
+"words": 41
 },
 "basic:func:dir": {
 "kind": "basic.function",
@@ -2420,7 +2420,7 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 11
+"words": 16
 },
 "basic:stmt:dparse": {
 "kind": "basic.statement",
@@ -2959,7 +2959,7 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 23
+"words": 43
 },
 "basic:stmt:os.execute": {
 "kind": "basic.statement",
@@ -2973,21 +2973,21 @@
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 13
+"words": 26
 },
 "basic:stmt:osread": {
 "kind": "basic.statement",
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 19
+"words": 32
 },
 "basic:stmt:oswrite": {
 "kind": "basic.statement",
 "part": "reference/basic-statements.md",
 "since": "-",
 "tier": "reference",
-"words": 15
+"words": 28
 },
 "basic:stmt:overlay": {
 "kind": "basic.clause",
@@ -3911,7 +3911,7 @@
 "part": "core.md",
 "since": "-",
 "tier": "core",
-"words": 249
+"words": 264
 },
 "core:voc-types": {
 "kind": "core.digest",
@@ -5283,21 +5283,21 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 41
+"words": 43
 },
 "msg:10097": {
 "kind": "message",
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 33
+"words": 35
 },
 "msg:10098": {
 "kind": "message",
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 27
+"words": 28
 },
 "msg:10099": {
 "kind": "message",
@@ -9511,7 +9511,7 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 34
+"words": 31
 },
 "msg:12520": {
 "kind": "message",
@@ -9826,14 +9826,14 @@
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 19
+"words": 16
 },
 "msg:12567": {
 "kind": "message",
 "part": "reference/messages.md",
 "since": "-",
 "tier": "reference",
-"words": 21
+"words": 19
 },
 "msg:12599": {
 "kind": "message",
@@ -27039,7 +27039,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "0.6.3",
 "tier": "reference",
-"words": 78
+"words": 79
 },
 "tcl:create.file": {
 "kind": "tcl.verb",
@@ -27690,7 +27690,7 @@
 "part": "reference/tcl-keywords.md",
 "since": "-",
 "tier": "reference",
-"words": 65
+"words": 63
 },
 "tcl:inform": {
 "kind": "tcl.keyword",
@@ -28096,7 +28096,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "0.9.0",
 "tier": "reference",
-"words": 146
+"words": 151
 },
 "tcl:modify.password": {
 "kind": "tcl.verb",
@@ -28719,7 +28719,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 137
+"words": 149
 },
 "tcl:said": {
 "kind": "tcl.keyword",
@@ -29216,7 +29216,7 @@
 "part": "reference/tcl-verbs.md",
 "since": "-",
 "tier": "reference",
-"words": 120
+"words": 119
 },
 "tcl:tool.entries": {
 "kind": "tcl.verb",
@@ -29615,7 +29615,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 268
+"words": 255
 },
 "voc:type:K": {
 "kind": "voc.type",
@@ -29664,7 +29664,7 @@
 "part": "reference/voc.md",
 "since": "-",
 "tier": "reference",
-"words": 384
+"words": 371
 },
 "voc:type:X": {
 "kind": "voc.type",
