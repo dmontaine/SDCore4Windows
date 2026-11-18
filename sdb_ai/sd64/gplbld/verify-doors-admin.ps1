@@ -504,8 +504,10 @@ if ($Phase -eq 'Suspend') {
     # 16 Nov 26 (b339): the account name in 10109 is matched in either case.  Account ids are lower case since RELEASE_1.1 260/266
     # (12 Nov, as Linux), so SD prints "Account sddrb339a is now SUSPENDED" for MODIFY.ACCOUNT SDDRB339A; the upper-case name never
     # matched and the leg went red with the product right.  The success word SUSPENDED stays case-sensitive.
-    Note 'suspend says 10109 "Account X is now SUSPENDED"' 'said' `
-         (Get-Said $lastSD ('Account\s+(?i:' + [regex]::Escape($acctU) + ')\s+is now\s+SUSPENDED')) $true
+    # 17 Nov 26 (b342): the suspend message is Linux's 10193 "Account %1 is now suspended" since bc1eb7b1 (audit P-3213; it was 10109
+    # "Account %1 is now %2" with SUSPENDED).  Anchored on 10193's own words, case and all; the name stays case-blind.
+    Note 'suspend says 10193 "Account X is now suspended"' 'said' `
+         (Get-Said $lastSD ('Account\s+(?i:' + [regex]::Escape($acctU) + ')\s+is now suspended')) $true
     Note 'after: ACC$SUSPENDED is SUSPENDED' 'SUSPENDED' (Get-AccountSuspended $acct) $true
     # 19 Sep 26 - THE ACC$PRIOR.TIER ROW IS DELETED WITH THE FIELD, RELEASE_1.1
     # 64.  It proved the round trip was lossless because a suspension used to
