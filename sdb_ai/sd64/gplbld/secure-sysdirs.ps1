@@ -70,8 +70,8 @@
 # (I)(OI)(CI)(M), a child file (I)(M), and an unelevated token is refused a new
 # file in the folder.  Directories only: a file has no children to keep anything.
 #
-# 18 Nov 26 - -KeepChildren NO LONGER HANDS MODIFY TO NEW CHILDREN (Linux S.268, e01214ea): $ipc, prt, errlog, dumps and
-# $hold get their own sdusers (OI)(CI)(M) (a file: (M)) first, and the folder's inherit-only grant is (RX), so a file or
+# 18 Nov 26 - -KeepChildren NO LONGER HANDS MODIFY TO NEW CHILDREN (Linux S.268, e01214ea): $ipc, prt, errlog and dumps
+# (Linux's list; $hold stays read-only) get their own sdusers (OI)(CI)(M) (a file: (M)) first, and the folder's inherit-only grant is (RX), so a file or
 # folder an SDSYS session or load.examples makes in sdsys later is read-only to SD users.
 #
 # 17 Nov 26 - -AdminOnly, FOR sdsys\docs\admin (P-2914, Linux S.100: there docs/admin
@@ -149,9 +149,9 @@ try {
             # 18 Nov 26 - Linux S.268 (template e01214ea, mail T1825): NOTHING AN SDSYS SESSION MAKES IN SDSYS IS WRITABLE BY THE
             # USERS GROUP.  The inherit-only Modify of 14 Nov handed Modify to every NEW child too, so a file or folder an SDSYS
             # session (or load.examples) created in sdsys later was sdusers-writable.  Now the places sessions must write - Linux's
-            # errlog, prt, dumps and $ipc, and $hold - get their OWN Modify first (whichever exist), and the folder hands down only
+            # errlog, prt, dumps and $ipc (NOT $hold: locked read-only since 14 Nov, verify-sysdiracl) - get their OWN Modify first (whichever exist), and the folder hands down only
             # read (RX).  Granted before the folder is restamped, so the children never pass through a state without Modify.
-            foreach ($w in @('$ipc', 'prt', 'errlog', 'dumps', '$hold')) {
+            foreach ($w in @('$ipc', 'prt', 'errlog', 'dumps')) {
                 $wp = Join-Path $item.FullName $w
                 if (-not (Test-Path -LiteralPath $wp)) { continue }
                 $wi = Get-Item -LiteralPath $wp -Force
@@ -223,7 +223,7 @@ try {
         }
 
         if ($KeepChildren) {
-            Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; `$ipc, prt, errlog, dumps and `$hold keep Modify; anything else in it is read-only to sdusers" -f
+            Write-Output ("secure-sysdirs: {0} takes no new name from sdusers; `$ipc, prt, errlog and dumps keep Modify; anything else in it is read-only to sdusers" -f
                           $item.FullName)
         } elseif ($AdminOnly) {
             Write-Output ("secure-sysdirs: {0} is readable and writable by administrators only" -f

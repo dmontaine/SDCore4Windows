@@ -20,7 +20,7 @@
 #   L5  errlog is created (SaveStringToFile) BEFORE the folder is locked
 #   L6  secure-sysdirs.ps1's -KeepChildren grants sdusers (RX) and
 #       (OI)(CI)(IO)(RX) and no other sdusers ACE on the folder, and gives
-#       $ipc, prt, errlog, dumps and $hold their own Modify first (18 Nov 26,
+#       $ipc, prt, errlog and dumps (not $hold) their own Modify first (18 Nov 26,
 #       Linux S.268: a new child of sdsys is read-only to sdusers)
 #   L7  if an installed tree exists, every entry in it is in one class below;
 #       a name in none of them is a new entry nobody decided about
@@ -104,7 +104,7 @@ function Test-All([string]$issT, [string]$scrT) {
         $g = @([regex]::Matches($kb.Groups[1].Value, "'(sdusers:[^']*)'") | ForEach-Object { $_.Groups[1].Value })
         # 18 Nov 26 (Linux S.268): the folder hands down READ only; the places sessions write keep their own Modify.
         $want = @('sdusers:(RX)', 'sdusers:(OI)(CI)(IO)(RX)')
-        $wl = [regex]::Match($scrT, "foreach \(\`$w in @\('\`$ipc', 'prt', 'errlog', 'dumps', '\`$hold'\)\)")
+        $wl = [regex]::Match($scrT, "foreach \(\`$w in @\('\`$ipc', 'prt', 'errlog', 'dumps'\)\)")
         $r['L6'] = $(if (($g.Count -eq 2) -and ($g -contains $want[0]) -and ($g -contains $want[1]) -and $wl.Success -and
                          ($scrT.IndexOf("'sdusers:(OI)(CI)(M)'") -ge 0)) { '' }
                      else { 'sdusers grants are: ' + ($g -join ' ') + $(if (-not $wl.Success) { '; the writable places are not granted their own Modify' } else { '' }) }) }
@@ -190,7 +190,7 @@ $mutants = @(
     @{ n='errlog not created';                k='L5'; t='iss'; a='SaveStringToFile(ErrLog'; b='{SaveStringToFile}(ErrLog' }
     @{ n='children lose inherit-only';        k='L6'; t='scr'; a="'sdusers:(OI)(CI)(IO)(RX)'"; b="'sdusers:(OI)(CI)(RX)'" }
     @{ n='new children inherit Modify again'; k='L6'; t='scr'; a="'sdusers:(OI)(CI)(IO)(RX)'"; b="'sdusers:(OI)(CI)(IO)(M)'" }
-    @{ n='the writable places lose Modify';   k='L6'; t='scr'; a="foreach (`$w in @('`$ipc', 'prt', 'errlog', 'dumps', '`$hold'))"; b="foreach (`$w in @())" }
+    @{ n='the writable places lose Modify';   k='L6'; t='scr'; a="foreach (`$w in @('`$ipc', 'prt', 'errlog', 'dumps'))"; b="foreach (`$w in @())" }
     @{ n='folder keeps Modify';               k='L6'; t='scr'; a="'sdusers:(RX)',"; b="'sdusers:(M)'," }
 )
 $mfail = 0
